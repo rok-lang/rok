@@ -95,6 +95,9 @@ jobs:
       jobs: ${{ steps.plan.outputs.jobs }}
       filter: ${{ steps.plan.outputs.filter }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
       - id: plan
         env:
           EVENT: ${{ github.event_name }}
@@ -105,6 +108,11 @@ jobs:
           FORK: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
           LINUX_RUNNER: ${{ vars.ROK_LINUX_RUNNER }}
           WINDOWS_RUNNER: ${{ vars.ROK_WINDOWS_RUNNER }}
+          DRAFT: ${{ github.event.pull_request.draft }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
         run: |
           all='[
             {"name": "linux-x64", "os": "ubuntu-24.04", "gate": true},
@@ -137,6 +145,41 @@ jobs:
             [ "$jobs" = all ] && jobs="gate cross wasm bindgen dist"
             ;;
           esac
+          # Change-aware / draft-aware gate skip: run only lint (blank hosts
+          # and jobs so gate/cross/bindgen/dist/prefixes all come out empty)
+          # when the change cannot affect the build -- an inert change (docs,
+          # *.md or CI config only) or a draft PR. Never for nightly, the merge
+          # queue, or a new branch's first push, and fail safe toward running
+          # when the diff is unavailable. Safe because no check is a required
+          # status check and nightly/merge_group/dispatch always run the gate.
+          if [ "$tier" != nightly ] && [ "$EVENT" != merge_group ]; then
+            changed=""
+            if [ "$EVENT" = pull_request ]; then
+              changed=$(git diff --name-only "$PR_BASE...$PR_HEAD" 2> /dev/null) || changed=""
+            elif [ "$EVENT" = push ] && [ "$PUSH_BEFORE" != 0000000000000000000000000000000000000000 ]; then
+              changed=$(git diff --name-only "$PUSH_BEFORE" "$PUSH_AFTER" 2> /dev/null) || changed=""
+            fi
+            skip=""
+            if [ "$DRAFT" = true ]; then
+              skip="draft PR"
+            elif [ -n "$changed" ]; then
+              relevant=$(printf '%s\n' "$changed" | while IFS= read -r f; do
+                [ -n "$f" ] || continue
+                case $f in
+                docs/* | *.md | LICENSE* | assets/* | .gitignore | .github/ISSUE_TEMPLATE/* | .github/pull_request_template.md | .github/dependabot.yml | .github/CODEOWNERS | .github/workflows/*) ;;
+                *)
+                  echo relevant
+                  break
+                  ;;
+                esac
+              done)
+              [ -z "$relevant" ] && skip="inert change (docs / CI config only)"
+            fi
+            [ -z "$skip" ] || {
+              hosts="" jobs=""
+              echo "gate skipped: $skip -- lint only"
+            }
+          fi
           picked=$(echo "$all" | jq -c --arg h "$hosts" '[.[] | select(.name | IN($h | splits("[\\s,]+")))]')
           gate='[]'
           case " $jobs " in *" gate "*) gate=$(echo "$picked" | jq -c '[.[] | select(.gate) | .name]') ;; esac
