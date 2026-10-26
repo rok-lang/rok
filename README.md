@@ -40,14 +40,25 @@ rok jupyter install  # Rok kernel for Jupyter / VS Code
 
 ## Building from source
 
+Building needs Rust, plus a C compiler and linker for the runtime step below.
+
 ```sh
-cargo build --release    # target/release/{rok,rokc,rokls} and librokr.a
+cargo build --release                                     # the compiler: target/release/{rok,rokc,rokls}
+targets/build.sh "$(rustc -vV | sed -n 's/^host: //p')"   # the host runtime, so rokc can build programs
 ```
 
-Building needs Rust. For anything above `-O0`, `rokc` needs the pinned LLVM:
-`llvm/build.sh` builds it once into `~/.cache/rok` (see `llvm/README.md`); without
-it `rokc` uses its native `-O0` backend. `targets/build.sh` builds what `--target`
-links. Checks:
+`cargo build` produces only the compiler binaries. Before `rokc` can compile or
+run a program it needs that target's runtime (`librokr.a` and the target's C
+library) under `target/lib/rok/targets/<triple>/`, which `targets/build.sh
+<triple>` builds; without it `rokc` reports `no runtime for <triple>`. Build the
+host triple to run programs locally, and any other shipped triple to
+cross-compile to it (no triple builds every one the host can).
+
+For anything above `-O0`, `rokc` also needs the pinned LLVM: `llvm/build.sh`
+builds it once into `~/.cache/rok` (see `llvm/README.md`); without it `rokc` uses
+its native `-O0` backend.
+
+Checks:
 
 ```sh
 cargo fmt --all --check
