@@ -75,22 +75,3 @@ nothing without `--publish`.
    checksum and `rok-version` with the `gh` CLI. `install.sh` /
    `install.ps1` download `v<version>` by default, and `rok-version` is
    served from `releases/latest/`.
-
-## Stones
-
-Publish the libraries under `../stones` to the index, so their
-`"<name>": "0.1"` dependency resolves. For each of `json`, `toml`, `http`,
-`markdown`, `rok-syntax`:
-
-1. Push the repository to `github.com/rok-lang/<name>`.
-2. In a [rokstones.io-index](https://github.com/rok-lang/rokstones.io-index)
-   checkout: `rok publish` to preview the index line, then `rok publish
-   --index <checkout> --commit`, and open a pull request.
-3. Once merged, switch the sites (`rok-lang.org`, `playground`,
-   `rokstones.io`) from `Dep::path("../stones/<name>")` to `"<name>":
-   "0.1"`.
-
-## Sites
-
-Deploy `rok-lang.org` (home + docs) and `playground.rok-lang.org` from
-their own repositories after the release and the stones are up.
