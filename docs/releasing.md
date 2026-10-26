@@ -7,11 +7,12 @@ its own; a release happens only when it is meant to.
 
 ## Versioning and cadence
 
-rok uses semantic versioning, read one step down while the major version
-is 0: a minor bump (`0.2.0`) may add features and may break compatibility,
-and a patch bump (`0.1.1`) carries only fixes, with no new features and no
-breaking changes. 1.0 waits until the language and standard library are
-meant to be stable.
+rok shifts semantic versioning down one level while the major version is 0,
+the way Cargo treats 0.x crates: the minor number is the breaking slot and
+the patch number carries features and fixes. A minor bump (`0.2.0`) is for
+breaking changes; a patch bump (`0.1.1`, `0.1.2`, ...) adds
+backward-compatible features and fixes. 1.0 waits until the language and
+standard library are meant to be stable.
 
 Releases are cut on demand, when a version's work is ready; there is no
 fixed schedule. A release is cut from `main` and tagged `v<version>`.
