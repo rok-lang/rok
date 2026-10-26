@@ -1,13 +1,15 @@
 // rok::core::print - `print` / `println` / `eprint` / `eprintln`
 // (stdlib 3.5.2: they live in core so the implicit `use rok::core::**`
-// exposes them). Use an f-string for anything that is not a `str`:
+// exposes them). Each takes one value and renders it with `Display`; the
+// argument defaults to the empty string, so `println()` writes a blank line.
+// Format or combine several values with an f-string:
 // `println(f"total = {total}")`.
 //
 // They share the runtime's stream writers with `io::stdout()` /
 // `io::stderr()`; one call writes its line whole, so lines from
 // different threads never interleave. Write errors are dropped.
 
-pub fn print(s: str) { unsafe { rok_stdio_write(1, s, 0) }; }
-pub fn println(s: str) { unsafe { rok_stdio_write(1, s, 1) }; }
-pub fn eprint(s: str) { unsafe { rok_stdio_write(2, s, 0) }; }
-pub fn eprintln(s: str) { unsafe { rok_stdio_write(2, s, 1) }; }
+pub fn print<T: Display>(v: T = "")    { unsafe { rok_stdio_write(1, f"{v}", 0) }; }
+pub fn println<T: Display>(v: T = "")  { unsafe { rok_stdio_write(1, f"{v}", 1) }; }
+pub fn eprint<T: Display>(v: T = "")   { unsafe { rok_stdio_write(2, f"{v}", 0) }; }
+pub fn eprintln<T: Display>(v: T = "") { unsafe { rok_stdio_write(2, f"{v}", 1) }; }

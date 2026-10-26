@@ -2440,3 +2440,44 @@ fn main() -> i32 {{
     assert!(!versioned("f();"));
     assert!(!versioned("run(f);"));
 }
+
+/// `print` / `println` take any `Display` value and default the argument to
+/// the empty string, so `println()` writes a blank line (0.1.1, #1 / #2).
+const PRINTING: &str = "fn main() {
+    println(\"line\");
+    println(42);
+    println(3.5f64);
+    println(true);
+    print(\"a\");
+    print(\"b\");
+    println();
+    println(f\"x={1 + 2}\");
+    println();
+}
+";
+
+#[test]
+fn printing_display_and_blank_line() {
+    let Some(env) = setup() else { return };
+    let dir = scratch("printing");
+    fs::write(dir.join("main.rok"), PRINTING).unwrap();
+    let exe = dir.join("out");
+    let out = Command::new(ROKC)
+        .args(["-q", "build"])
+        .arg(dir.join("main.rok"))
+        .arg("--bootstrap")
+        .arg(&env.bootstrap)
+        .arg("--bootstrap")
+        .arg(env.workspace.join("library/std/src/lib.rok"))
+        .arg("--rokr")
+        .arg(&env.rokr)
+        .args(std::env::var("ROK_TEST_OPT").ok().filter(|o| !o.is_empty()))
+        .arg("-o")
+        .arg(&exe)
+        .output()
+        .unwrap();
+    ok(&out);
+    let run = Command::new(&exe).output().unwrap();
+    ok(&run);
+    assert_eq!(text(&run.stdout), "line\n42\n3.5\ntrue\nab\nx=3\n\n");
+}
