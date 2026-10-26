@@ -8,7 +8,10 @@ name: ci
 #            targets, wasm, bindgen, dist; a manual run's inputs pick a
 #            subset
 on:
+  # Only main on push; a branch is tested through its pull request, so a PR
+  # branch does not run twice (once for the push, once for the PR).
   push:
+    branches: [main]
     paths-ignore: ["**/*.md"]
   pull_request:
     paths-ignore: ["**/*.md"]
