@@ -14,20 +14,18 @@ same branch and event cancels the older one.
 A manual run (`workflow_dispatch`) takes `hosts` (all, or some of `linux-x64 linux-arm64 macos-arm64
 windows-x64 windows-arm64`), `jobs` (all, or some of `gate cross wasm bindgen dist`; `none`: prefixes only) and `filter`
 (`ROK_TEST_FILTER`: the integration cases to run; the differential suites always run). Hosts: `ubuntu-24.04` x86_64, `ubuntu-24.04-arm` aarch64, `macos-26`
-arm64, `windows-2022` x86_64, `windows-11-arm` aarch64 (cross only). x86_64-apple-darwin is a cross target only — no native Intel-macOS host (GitHub's Intel runners are being retired).
+arm64, `windows-2022` x86_64, `windows-11-arm` aarch64 (cross only). x86_64-apple-darwin is a cross target only -- no native Intel-macOS host (GitHub's Intel runners are being retired).
 
 ## Jobs
 
-- `llvm`, per host: the pinned LLVM prefix (`.github/actions/llvm-prefix`), built by `llvm/build.sh` (Windows
-  `llvm/build.ps1`) only when none exists for the hash of the build script and its PGO profile, then stripped
-  of what `rokc_llvm` does not link. A GitHub-hosted runner keeps it in the actions cache (120-175 MB per
-  host; an entry made on a branch serves that branch only, so the first push to `main` builds every host
-  once). On a private repository's standard runners a build took 0.5 h (macOS arm64), 2.2 h (macOS x86_64,
-  Linux aarch64), 4.5 h (Linux x86_64) and 6.0 h (Windows: at the 6 h job limit). Linux needs clang 19+ to
-  read `rok.profdata.xz`; a build without PGO fails. Windows builds with the pinned release's clang-cl
-  (22.1.8: `clang-cl.exe` and its resource headers, ~140 MB, unpacked into the runner's temp directory; its
-  version is part of the cache key), which reads `rok-msvc.profdata.tar.xz`; a build without PGO fails there
-  too (`cl` reads no clang profile; llvm/README.md).
+- `llvm`, per host: the pinned LLVM prefix (`.github/actions/llvm-prefix`), downloaded from the public
+  `rok-lang-artifacts` S3 bucket (`llvm/<version>/<triple>/llvm.tar.gz`, SHA-256 verified) and no longer
+  built here. A GitHub-hosted runner keeps it in the actions cache as a fast layer over the download (120-175
+  MB per host; a cache entry made on a branch serves that branch only, so the first run on a new branch falls
+  through to the download). A self-hosted runner keeps it in `ROK_CI_HOME` and downloads only when none is
+  there. The prefixes are built and published out of band by `prefixes.yml` (manual: once per version, or
+  when a build script or PGO profile changes); that build is the slow part (roughly 0.5 h on macOS arm64 up
+  to 6.0 h on Windows, at the 6 h job limit), paid once, not on every CI run.
 - `check`, per host: fmt, clippy, every test but the two corpora (`-- --exact --skip end_to_end_cases --skip
   differential`), `rokc fmt --check library`, and the compiler / runtime crate isolation check; every step
   runs even after one fails. On Linux after `targets/build.sh <host>`.
@@ -58,7 +56,7 @@ arm64, `windows-2022` x86_64, `windows-11-arm` aarch64 (cross only). x86_64-appl
 ## Self-hosted runners
 
 linux-x64 and windows-x64 run on a self-hosted runner when the repository variable `ROK_LINUX_RUNNER` /
-`ROK_WINDOWS_RUNNER` is `self-hosted` (Settings → Secrets and variables → Actions → Variables); otherwise on
+`ROK_WINDOWS_RUNNER` is `self-hosted` (Settings -> Secrets and variables -> Actions -> Variables); otherwise on
 GitHub's.
 
 - Labels: `self-hosted, linux, x64` / `self-hosted, windows, x64` (the runner's defaults on that OS and
@@ -70,14 +68,15 @@ GitHub's.
   (`llvm-<version>-<arch>-<hash>`, marked complete by `.complete`; delete old ones by hand) and one cargo
   target directory per runner (`target/<runner name>`), outside the workspace and instead of the actions
   cache. Runners on one machine share the prefixes; give each its own name.
-- Prerequisites: Linux: rustup, clang-19, curl, xz, make, python3, cmake and ninja (`llvm/build.sh`), and for
-  the cross targets `libc6-i386 libc6-armhf-cross qemu-user-binfmt`, node 18+ for wasm. Windows: rustup,
-  Git for Windows (bash), Visual Studio or its Build Tools with `VC.Tools.x86.x64` (the MSVC environment comes from
-  `vswhere`), clang (`targets/build.sh`), cmake and ninja (`llvm/build.ps1`), python3 and make for `dist`.
+- Prerequisites: Linux: rustup, clang, curl, xz, make, python3, and for the cross targets `libc6-i386
+  libc6-armhf-cross qemu-user-binfmt`, node 18+ for wasm. Windows: rustup, Git for Windows (bash), Visual
+  Studio or its Build Tools with `VC.Tools.x86.x64` (the MSVC environment comes from `vswhere`), clang
+  (`targets/build.sh`), python3 and make for `dist`. cmake and ninja are needed only to build an LLVM prefix
+  (`prefixes.yml`), not for a normal CI run, which downloads it.
 - Security: a self-hosted runner runs whatever a workflow gives it. Pull requests from forks never get one:
   the plan job forces GitHub-hosted runners when `github.event.pull_request.head.repo.full_name !=
   github.repository`, and today no pull request job runs on Windows. On a public repository also keep
-  "Require approval for all outside collaborators" (Settings → Actions → General) and put the runners in a
+  "Require approval for all outside collaborators" (Settings -> Actions -> General) and put the runners in a
   runner group limited to this repository.
 
 ## Nightly schedule
