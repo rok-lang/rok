@@ -69,12 +69,12 @@ host CI cannot build:
 
 | Host | Machine | Command |
 |---|---|---|
-| `aarch64-apple-darwin` | an Apple-silicon Mac | `./dist-native.sh --out dist` |
-| `x86_64-unknown-linux-gnu` | x86_64 Linux | `./dist-linux-gnu.sh --out dist` |
-| `aarch64-unknown-linux-gnu` | arm64 Linux | `./dist-linux-gnu.sh --out dist` |
-| `x86_64-pc-windows-msvc` | Windows x86_64 | `./dist-native.sh --out dist` (Git Bash, MSVC environment) |
-| `x86_64-unknown-linux-musl` | x86_64 Linux | `./dist-linux-musl.sh --out dist` (Alpine container; static, no libclang / dev bundle) |
-| `aarch64-unknown-linux-musl` | arm64 Linux | `./dist-linux-musl.sh --out dist` |
+| `aarch64-apple-darwin` | an Apple-silicon Mac | `scripts/dist-native.sh --out dist` |
+| `x86_64-unknown-linux-gnu` | x86_64 Linux | `scripts/dist-linux-gnu.sh --out dist` |
+| `aarch64-unknown-linux-gnu` | arm64 Linux | `scripts/dist-linux-gnu.sh --out dist` |
+| `x86_64-pc-windows-msvc` | Windows x86_64 | `scripts/dist-native.sh --out dist` (Git Bash, MSVC environment) |
+| `x86_64-unknown-linux-musl` | x86_64 Linux | `scripts/dist-linux-musl.sh --out dist` (Alpine container; static, no libclang / dev bundle) |
+| `aarch64-unknown-linux-musl` | arm64 Linux | `scripts/dist-linux-musl.sh --out dist` |
 
 `dist-linux-gnu.sh` and `dist-linux-musl.sh` run in a container, so one
 x86_64 and one arm64 Linux box build four of the six. Intel Macs and
@@ -82,7 +82,7 @@ Windows on arm64 get no archive; they build from source. Gather the output
 of every host into one `dist/` directory and check it with:
 
 ```sh
-./release.sh --dir dist
+scripts/release.sh --dir dist
 ```
 
 It verifies that all six triples' archives and checksums are present and

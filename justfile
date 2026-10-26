@@ -44,4 +44,4 @@ clippy:
 
 # Fail if the release version disagrees across Cargo.toml and the install scripts.
 version-check:
-    ./check-version.sh
+    scripts/check-version.sh

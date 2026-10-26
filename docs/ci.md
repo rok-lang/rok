@@ -47,7 +47,7 @@ arm64, `windows-2022` x86_64, `windows-11-arm` aarch64 (cross only). x86_64-appl
   self-hosted runner kept in the default cache directory). Then the `rokc bindgen` tests (`cargo test --test
   cli -- bindgen`) with `ROK_REQUIRE_LIBCLANG=1`. Elsewhere those tests skip with a notice when no libclang
   is built.
-- `dist` (windows-x64, nightly and manual runs only): `./dist-native.sh` (Git Bash with the MSVC environment of
+- `dist` (windows-x64, nightly and manual runs only): `scripts/dist-native.sh` (Git Bash with the MSVC environment of
   `llvm-prefix`, the LLVM and libclang prefixes above; `targets/build.sh` falls back to the image's `python`
   / `mingw32-make`), then `install.ps1 -NoModifyPath` into a scratch `ROK_HOME` and, with only
   its `bin\` on PATH, `rok run` of a file and a `rok new --lib --bin` package's build / run / `--release`

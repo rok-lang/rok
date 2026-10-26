@@ -25,19 +25,19 @@
 #
 # plus their .sha256 and dist/rok-version; every file is a release asset.
 #
-#   ./dist-native.sh [--out <dir>]    (Windows: Git Bash in a Developer prompt)
+#   scripts/dist-native.sh [--out <dir>]    (Windows: Git Bash in a Developer prompt)
 #
 # LLVM comes from ROK_LLVM_PREFIX, libclang from ROK_LIBCLANG_PREFIX,
 # else llvm/build*.sh's (.ps1 on Windows), built here when missing.
 set -eu
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 out=dist
 case "${1-}" in
   --out) out=$2 ;;
   "") ;;
   *)
-    echo "usage: ./dist-native.sh [--out <dir>]" >&2
+    echo "usage: scripts/dist-native.sh [--out <dir>]" >&2
     exit 2
     ;;
 esac
@@ -191,7 +191,7 @@ if [ "$(uname -s)" = Linux ] && [ -z "$static" ]; then
   done
   [ -z "$bad" ] || {
     printf 'dist-native.sh: these need a glibc newer than 2.34:\n%b' "$bad" >&2
-    echo "dist-native.sh: build the Linux archives with ./dist-linux-gnu.sh (in a container with an old glibc)" >&2
+    echo "dist-native.sh: build the Linux archives with scripts/dist-linux-gnu.sh (in a container with an old glibc)" >&2
     exit 1
   }
 fi

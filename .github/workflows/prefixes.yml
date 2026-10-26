@@ -168,7 +168,7 @@ jobs:
       - name: Build and publish the container prefix
         run: |
           v=$(sed -n 's/^VERSION=//p' llvm/build.sh)
-          ./dist-llvm-prefix.sh "$KIND" --out "$RUNNER_TEMP/dist-llvm"
+          scripts/dist-llvm-prefix.sh "$KIND" --out "$RUNNER_TEMP/dist-llvm"
           pkg=$RUNNER_TEMP/dist-llvm/pkg
           for f in llvm.tar.gz llvm.tar.gz.sha256; do
             aws s3 cp "$pkg/$f" "s3://$BUCKET/dist-llvm/$v/$TRIPLE/$f"

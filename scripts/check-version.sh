@@ -6,7 +6,7 @@
 # `version-check`).
 set -eu
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 
 cargo=$(sed -n '/^\[workspace\.package\]/,/^\[/ s/^version = "\(.*\)"/\1/p' Cargo.toml)
 sh_v=$(sed -n 's/^version="${ROK_VERSION:-\(.*\)}"/\1/p' install.sh)

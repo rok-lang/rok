@@ -4,7 +4,7 @@
 # librokr.a need at most glibc 2.34, as the -gnu targets' programs do.
 # A newer host's glibc leaks its symbol versions into them.
 #
-#   ./dist-linux-gnu.sh [--out <dir>]
+#   scripts/dist-linux-gnu.sh [--out <dir>]
 #
 # For the host's architecture (x86_64 or aarch64), with podman, else
 # docker. The checkout is mounted read-only; rustup, cargo, LLVM,
@@ -13,13 +13,13 @@
 # Then the installed toolchain builds and runs a program on Rocky Linux 9.
 set -eu
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 out=dist
 case "${1-}" in
   --out) out=$2 ;;
   "") ;;
   *)
-    echo "usage: ./dist-linux-gnu.sh [--out <dir>]" >&2
+    echo "usage: scripts/dist-linux-gnu.sh [--out <dir>]" >&2
     exit 2
     ;;
 esac
@@ -93,7 +93,7 @@ $engine run --rm $user \
     done
     if [ -f "/cache/rok/llvm-$v/.complete" ]; then export ROK_LLVM_PREFIX=/cache/rok/llvm-$v; fi
     if [ -f "/cache/rok/libclang-$v/.complete" ]; then export ROK_LIBCLANG_PREFIX=/cache/rok/libclang-$v; fi
-    ./dist-native.sh --out /out'
+    scripts/dist-native.sh --out /out'
 
 # dist-native.sh's check programs need glibc 2.34, newer than the image's: the
 # installed archive builds and runs them on Rocky Linux 9 (glibc 2.34),

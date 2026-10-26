@@ -49,17 +49,17 @@ jobs:
       - name: dist-native.sh
         if: matrix.kind == 'native'
         shell: bash
-        run: ./dist-native.sh --out "$PWD/dist"
+        run: scripts/dist-native.sh --out "$PWD/dist"
 
       # --- linux gnu/musl (dist-linux-{gnu,musl}.sh in a container) ---
       # The container LLVM/libclang is downloaded from S3 (dist-llvm/,
       # published by prefixes.yml); the scripts fall back to building it.
       - name: dist-linux-gnu.sh
         if: matrix.kind == 'gnu'
-        run: ./dist-linux-gnu.sh --out "$PWD/dist"
+        run: scripts/dist-linux-gnu.sh --out "$PWD/dist"
       - name: dist-linux-musl.sh
         if: matrix.kind == 'musl'
-        run: ./dist-linux-musl.sh --out "$PWD/dist"
+        run: scripts/dist-linux-musl.sh --out "$PWD/dist"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -80,9 +80,9 @@ jobs:
       - name: list
         run: ls -la dist
       - name: verify
-        run: ./release.sh --dir dist
+        run: scripts/release.sh --dir dist
       - name: publish (tag only)
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
-        run: ./release.sh --dir dist --publish
+        run: scripts/release.sh --dir dist --publish

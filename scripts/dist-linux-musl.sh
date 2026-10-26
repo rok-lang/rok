@@ -5,7 +5,7 @@
 # rokc ships no libclang (`rokc bindgen` is unavailable) and no MLIR dev
 # bundle; dist-native.sh handles that when the host is musl.
 #
-#   ./dist-linux-musl.sh [--out <dir>]
+#   scripts/dist-linux-musl.sh [--out <dir>]
 #
 # For the host's architecture (x86_64 or aarch64), with podman, else
 # docker. The checkout is mounted read-only; rustup, cargo, LLVM and the
@@ -14,13 +14,13 @@
 # builds and runs a program in a bare Alpine.
 set -eu
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 out=dist
 case "${1-}" in
   --out) out=$2 ;;
   "") ;;
   *)
-    echo "usage: ./dist-linux-musl.sh [--out <dir>]" >&2
+    echo "usage: scripts/dist-linux-musl.sh [--out <dir>]" >&2
     exit 2
     ;;
 esac
@@ -93,7 +93,7 @@ $engine run --rm $user \
       fi
     fi
     if [ -f "$pfx/.complete" ]; then export ROK_LLVM_PREFIX=$pfx; fi
-    ./dist-native.sh --out /out'
+    scripts/dist-native.sh --out /out'
 
 # The installed static archive builds and runs a program in a bare
 # Alpine, with nothing else there.

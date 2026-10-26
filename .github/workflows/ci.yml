@@ -60,7 +60,7 @@ jobs:
       - name: shellcheck
         run: find . -name '*.sh' -not -path './target/*' -exec shellcheck --severity=warning {} +
       - name: version consistency
-        run: ./check-version.sh
+        run: scripts/check-version.sh
       - name: PSScriptAnalyzer
         shell: pwsh
         run: |
@@ -386,7 +386,7 @@ jobs:
       - name: toolchain (rust-toolchain.toml)
         run: rustup toolchain install && rustc -vV
       - name: dist-native.sh
-        run: ./dist-native.sh --out "$RUNNER_TEMP/dist"
+        run: scripts/dist-native.sh --out "$RUNNER_TEMP/dist"
       - name: install.ps1, then rok alone
         shell: pwsh
         run: |

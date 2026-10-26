@@ -2,7 +2,7 @@
 # Check a collected set of 0.1.0 release archives and, only with
 # --publish, cut the GitHub release (spec 9.2.19, docs/releasing.md).
 #
-#   ./release.sh [--dir <dir>] [--publish]
+#   scripts/release.sh [--dir <dir>] [--publish]
 #
 # Build every host's archives first (docs/releasing.md) and gather them,
 # with their .sha256 sidecars and the rok-version file, into one <dir>
@@ -29,7 +29,7 @@ while [ $# -gt 0 ]; do
       shift
       ;;
     *)
-      echo "usage: ./release.sh [--dir <dir>] [--publish]" >&2
+      echo "usage: scripts/release.sh [--dir <dir>] [--publish]" >&2
       exit 2
       ;;
   esac

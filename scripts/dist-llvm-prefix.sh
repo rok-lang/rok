@@ -6,18 +6,18 @@
 # (prefixes.yml) does not fit; this one is built in the same image.
 # Published by prefixes.yml at dist-llvm/<version>/<triple>/{llvm,libclang}.tar.gz.
 #
-#   ./dist-llvm-prefix.sh <gnu|musl> [--out <dir>]
+#   scripts/dist-llvm-prefix.sh <gnu|musl> [--out <dir>]
 #
 # Writes <dir>/pkg/{llvm,libclang}.tar.gz and their .sha256 (default <dir>
 # dist-llvm). For the host's architecture, with podman, else docker.
 set -eu
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 kind=${1:-}
 case $kind in
   gnu | musl) shift ;;
   *)
-    echo "usage: ./dist-llvm-prefix.sh <gnu|musl> [--out <dir>]" >&2
+    echo "usage: scripts/dist-llvm-prefix.sh <gnu|musl> [--out <dir>]" >&2
     exit 2
     ;;
 esac
@@ -26,7 +26,7 @@ case "${1-}" in
   --out) out=$2 ;;
   "") ;;
   *)
-    echo "usage: ./dist-llvm-prefix.sh <gnu|musl> [--out <dir>]" >&2
+    echo "usage: scripts/dist-llvm-prefix.sh <gnu|musl> [--out <dir>]" >&2
     exit 2
     ;;
 esac
