@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.1 (unreleased)
+## 0.1.1 (2026-10-26)
 
 - `print` and `println` take a value of any `Display` type directly (`println(x)`), and `eprint` and
   `eprintln` do the same for standard error; a no-argument `println()` or `eprintln()` writes a blank line.
