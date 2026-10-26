@@ -452,3 +452,27 @@ jobs:
           Must run
           Must build --release
           Must test
+
+  # The single required status check for branch protection and the merge queue.
+  # It passes when the gate jobs (llvm restore, check, corpus) passed or were
+  # skipped -- an inert or draft change runs none of them -- and fails if any
+  # failed or was cancelled. Requiring this one job, not each matrix job, keeps
+  # a skipped job from leaving a required check stuck pending.
+  gate-passed:
+    needs: [llvm, check, corpus]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: gate result
+        run: |
+          echo "llvm=${{ needs.llvm.result }} check=${{ needs.check.result }} corpus=${{ needs.corpus.result }}"
+          for r in "${{ needs.llvm.result }}" "${{ needs.check.result }}" "${{ needs.corpus.result }}"; do
+            case "$r" in
+              success | skipped) ;;
+              *)
+                echo "::error::a gate job did not pass: $r"
+                exit 1
+                ;;
+            esac
+          done
+          echo "gate passed"
