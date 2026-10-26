@@ -69,7 +69,16 @@ jobs:
       - name: PSScriptAnalyzer
         shell: pwsh
         run: |
-          Install-Module PSScriptAnalyzer -RequiredVersion 1.25.0 -Force -Scope CurrentUser -SkipPublisherCheck
+          # The PSGallery download fails intermittently; retry before giving up.
+          for ($i = 1; $i -le 3; $i++) {
+            try {
+              Install-Module PSScriptAnalyzer -RequiredVersion 1.25.0 -Force -Scope CurrentUser -SkipPublisherCheck
+              break
+            } catch {
+              if ($i -eq 3) { throw }
+              Start-Sleep ($i * 10)
+            }
+          }
           just lint-ps
 
   # Decide what runs. Outputs: hosts (gate hosts), prefixes (hosts whose LLVM
