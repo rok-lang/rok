@@ -1,12 +1,20 @@
 version: 2
 
-# Controlled updates for the SHA-pinned GitHub Actions (the counterpart to
-# pinning: dependabot bumps the pins in reviewed PRs) and the Rust workspace.
+# Minor and patch bumps are grouped into one PR per ecosystem (low-risk, low
+# churn); a major bump comes as its own PR so a breaking update is reviewed on
+# its own. github-actions keeps the SHA-pinned actions current (the controlled
+# counterpart to pinning); cargo tracks the Rust workspace.
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: ci
+      include: scope
+    labels:
+      - "area: ci"
     groups:
       actions:
         update-types:
@@ -17,7 +25,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: build
+      include: scope
     groups:
       cargo:
         update-types:
