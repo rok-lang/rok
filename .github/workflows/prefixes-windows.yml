@@ -10,8 +10,9 @@ name: prefixes (windows)
 # (OIDC -> rok-ci-artifacts).
 #
 # REQUIRES a larger Windows hosted runner, named by the repository variable
-# ROK_WINDOWS_XL_RUNNER (set it to the org's larger-runner label, e.g. a
-# 16- or 32-core Windows runner). Without a larger runner the job either
+# ROK_WINDOWS_X64_XL_RUNNER (set it to the org's larger-runner label, e.g. a
+# 16-core Windows runner labelled rok-windows-x64-16core). A future arm64
+# build would use ROK_WINDOWS_ARM64_XL_RUNNER. Without a larger runner the job
 # cannot be scheduled or times out at 6 h on the 2-core default.
 on:
   workflow_dispatch:
@@ -28,7 +29,7 @@ env:
 
 jobs:
   build:
-    runs-on: ${{ vars.ROK_WINDOWS_XL_RUNNER || 'windows-latest' }}
+    runs-on: ${{ vars.ROK_WINDOWS_X64_XL_RUNNER || 'windows-latest' }}
     timeout-minutes: 350
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
