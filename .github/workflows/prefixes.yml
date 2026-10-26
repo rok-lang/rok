@@ -13,6 +13,21 @@ on:
       what:
         description: "llvm, libclang or both."
         default: both
+  # A pull request that changes a prefix build input does not rebuild here
+  # (that needs OIDC write and hours); only the notice job runs, to flag that
+  # the published S3 prefixes are now stale and must be refreshed by hand.
+  pull_request:
+    paths:
+      - llvm/build.sh
+      - llvm/build.ps1
+      - llvm/build-libclang.sh
+      - llvm/build-libclang.ps1
+      - llvm/rok.profdata.xz
+      - llvm/rok-msvc.profdata.tar.xz
+      - llvm/patches/**
+      - dist-linux-gnu.Containerfile
+      - dist-linux-musl.Containerfile
+      - .github/workflows/prefixes.yml
 
 # Rebuild a subset by re-running only the failed jobs of a run
 # (gh run rerun --failed), or re-dispatch with what=llvm / what=libclang.
@@ -27,7 +42,30 @@ env:
   BUCKET: rok-lang-artifacts
 
 jobs:
+  # On a pull request (a prefix build input changed) this is the only job that
+  # runs: it does not rebuild, it fails loudly so the stale S3 prefixes are not
+  # forgotten. Refresh them with a manual run (Run workflow, what=both) before
+  # the next release. Not a required check, so it does not block the merge.
+  notice:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Prefixes are stale
+        run: |
+          {
+            echo "## Prefix build inputs changed"
+            echo
+            echo "The pinned LLVM / libclang prefix inputs changed, so the prefixes"
+            echo "published to \`s3://$BUCKET/llvm/<version>/\` and"
+            echo "\`dist-llvm/<version>/\` are now stale."
+            echo
+            echo "Re-run this workflow by hand (Actions > prefixes > Run workflow,"
+            echo "what=both) to rebuild and republish them before the next release."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning::prefix build inputs changed; re-run prefixes.yml (what=both) to refresh the S3 prefixes before releasing"
+
   build:
+    if: github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:
@@ -102,7 +140,7 @@ jobs:
   # (publish it first with prefixes-windows.yml).
   libclang-windows:
     name: build (windows-x64 libclang)
-    if: ${{ inputs.what == 'both' || inputs.what == 'libclang' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.what == 'both' || inputs.what == 'libclang') }}
     runs-on: windows-latest
     timeout-minutes: 120
     steps:
@@ -140,7 +178,7 @@ jobs:
   # CI host's, so these cannot be the host prefixes above. Run once per
   # version (and whenever the build scripts or Containerfiles change).
   dist-llvm:
-    if: ${{ inputs.what == 'both' || inputs.what == 'llvm' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.what == 'both' || inputs.what == 'llvm') }}
     strategy:
       fail-fast: false
       matrix:
