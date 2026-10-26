@@ -59,6 +59,8 @@ jobs:
           find . -name '*.sh' -not -path './target/*' -exec shfmt -d {} +
       - name: shellcheck
         run: find . -name '*.sh' -not -path './target/*' -exec shellcheck --severity=warning {} +
+      - name: version consistency
+        run: ./check-version.sh
       - name: PSScriptAnalyzer
         shell: pwsh
         run: |
@@ -165,10 +167,10 @@ jobs:
           } | tee -a "$GITHUB_OUTPUT"
           echo "tier: $tier"
 
-  # The pinned LLVM prefix per host (llvm/build.sh, ~1-1.5 h), built
-  # once per content of the build script and PGO profile: cached on a
-  # GitHub-hosted runner, kept in ROK_CI_HOME on a self-hosted one. A
-  # hit only looks it up.
+  # Restore the pinned LLVM prefix per host: the llvm-prefix action
+  # downloads it from the rok-lang-artifacts S3 bucket (built and published
+  # by prefixes.yml), with the Actions cache as a fast layer on a
+  # GitHub-hosted runner and ROK_CI_HOME on a self-hosted one.
   llvm:
     needs: plan
     if: needs.plan.outputs.prefixes != '[]'
@@ -178,12 +180,10 @@ jobs:
         host: ${{ fromJSON(needs.plan.outputs.prefixes) }}
     name: llvm (${{ matrix.host }})
     runs-on: ${{ fromJSON(needs.plan.outputs.runners)[matrix.host] }}
-    timeout-minutes: 360
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/llvm-prefix
-        with:
-          build: "true"
 
   # The local gate (README "Checks") but the corpora, every step even
   # after a failure.

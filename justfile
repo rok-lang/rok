@@ -41,3 +41,7 @@ lint-ps:
 
 clippy:
     cargo clippy --all-targets -- -D warnings
+
+# Fail if the release version disagrees across Cargo.toml and the install scripts.
+version-check:
+    ./check-version.sh
