@@ -42,18 +42,13 @@ done
 version=$(cat "$dir/rok-version")
 tag=v$version
 
-# <triple> <kind>. unix: .tar.gz + .tar.xz + the rok-mlir-dev .tar.gz.
+# <triple> <archive> per target, from release-targets.json (the single
+# source of truth). unix: .tar.gz + .tar.xz + the rok-mlir-dev .tar.gz.
 # win: .zip + the rok-mlir-dev .zip. musl: .tar.gz + .tar.xz, static, no
-# dev bundle. These six are what 0.1.0 ships; Intel Mac and Windows on
-# arm64 have no archive (build from source).
-targets="
-aarch64-apple-darwin unix
-x86_64-unknown-linux-gnu unix
-aarch64-unknown-linux-gnu unix
-x86_64-pc-windows-msvc win
-x86_64-unknown-linux-musl musl
-aarch64-unknown-linux-musl musl
-"
+# dev bundle. Intel Mac and Windows on arm64 have no archive (build from
+# source).
+targets=$(jq -r '.targets[] | "\(.triple) \(.archive)"' \
+  "$(dirname "$0")/../release-targets.json")
 
 problems=0
 want() {

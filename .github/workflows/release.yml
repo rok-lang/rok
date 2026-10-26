@@ -20,17 +20,23 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The six host archives come from release-targets.json, the single source
+  # of truth (release.sh and scripts/check-targets.sh read it too).
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      targets: ${{ steps.targets.outputs.targets }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: targets
+        run: echo "targets=$(jq -c '.targets' release-targets.json)" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: plan
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { name: macos,            runs-on: macos-26,         kind: native }
-          - { name: windows,          runs-on: windows-2022,     kind: native }
-          - { name: linux-gnu-x64,    runs-on: ubuntu-24.04,      kind: gnu }
-          - { name: linux-gnu-arm64,  runs-on: ubuntu-24.04-arm,  kind: gnu }
-          - { name: linux-musl-x64,   runs-on: ubuntu-24.04,      kind: musl }
-          - { name: linux-musl-arm64, runs-on: ubuntu-24.04-arm,  kind: musl }
+        include: ${{ fromJSON(needs.plan.outputs.targets) }}
     name: build (${{ matrix.name }})
     runs-on: ${{ matrix.runs-on }}
     timeout-minutes: 360

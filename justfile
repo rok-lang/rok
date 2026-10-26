@@ -48,3 +48,8 @@ clippy:
 # Fail if the release version disagrees across Cargo.toml and the install scripts.
 version-check:
     scripts/check-version.sh
+
+# Fail if the release target triples disagree across release-targets.json and
+# the install scripts.
+check-targets:
+    scripts/check-targets.sh

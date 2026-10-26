@@ -64,6 +64,8 @@ jobs:
         run: just lint-sh
       - name: version consistency
         run: just version-check
+      - name: target consistency
+        run: just check-targets
       - name: PSScriptAnalyzer
         shell: pwsh
         run: |
