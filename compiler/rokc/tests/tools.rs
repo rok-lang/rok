@@ -1150,11 +1150,6 @@ error[E200]: operator `+` cannot be applied to `i32` and `bool`
    |
  1 | let é = \"é\"; let w = 3; w + true
    |                         ^^^^^^^^
-error[E200]: mismatched types: argument `s` of `rok::core::print::println` expects `str`, found `i32`
-  --> <repl>:2:15
-   |
- 2 |   2); println(p); f() + p
-   |               ^
 error[E200]: mismatched types: the right operand of `+` expects `str`, found `i32`
   --> <repl>:2:19
    |
