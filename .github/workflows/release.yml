@@ -4,8 +4,9 @@ name: release
 # release. macOS/Windows use dist-native.sh with the pinned LLVM/libclang prefixes,
 # which the prefix actions download from the rok-lang-artifacts S3 bucket
 # (built by prefixes.yml; Windows published by prefixes-windows.yml).
-# Linux gnu/musl use the container scripts, whose in-container LLVM is cached
-# per build-script content. A tag push publishes; a manual run only verifies.
+# Linux gnu/musl use the container scripts, whose LLVM is downloaded from the
+# same bucket (dist-llvm/, published by prefixes.yml). A tag push publishes;
+# a manual run only verifies.
 on:
   push:
     tags: ["v*"]
@@ -24,17 +25,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: macos,            runs-on: macos-latest,     kind: native }
-          - { name: windows,          runs-on: windows-latest,   kind: native }
-          - { name: linux-gnu-x64,    runs-on: ubuntu-latest,     kind: gnu }
+          - { name: macos,            runs-on: macos-26,         kind: native }
+          - { name: windows,          runs-on: windows-2022,     kind: native }
+          - { name: linux-gnu-x64,    runs-on: ubuntu-24.04,      kind: gnu }
           - { name: linux-gnu-arm64,  runs-on: ubuntu-24.04-arm,  kind: gnu }
-          - { name: linux-musl-x64,   runs-on: ubuntu-latest,     kind: musl }
+          - { name: linux-musl-x64,   runs-on: ubuntu-24.04,      kind: musl }
           - { name: linux-musl-arm64, runs-on: ubuntu-24.04-arm,  kind: musl }
     name: build (${{ matrix.name }})
     runs-on: ${{ matrix.runs-on }}
     timeout-minutes: 360
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # --- native hosts: macOS + Windows (dist-native.sh, host LLVM/libclang) ---
       # The prefixes are downloaded from the rok-lang-artifacts S3 bucket
@@ -61,7 +62,7 @@ jobs:
         if: matrix.kind == 'musl'
         run: scripts/dist-linux-musl.sh --out "$PWD/dist"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: dist-${{ matrix.name }}
           path: dist
@@ -69,10 +70,10 @@ jobs:
 
   publish:
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: dist-*
           path: dist
