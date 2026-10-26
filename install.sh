@@ -11,7 +11,7 @@
 # releases are downloaded from).
 set -eu
 
-version="${ROK_VERSION:-0.1.0}"
+version="${ROK_VERSION:-0.1.1}"
 dist="${ROK_DIST:-https://github.com/rok-lang/rok/releases}"
 home="${ROK_HOME:-$HOME/.rok}"
 archive=""
