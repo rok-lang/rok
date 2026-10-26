@@ -338,7 +338,10 @@ fn plugin_dev(prefix: &Path, out: &Path) -> PathBuf {
     let stamp = dev.join("prefix");
     let from = prefix.display().to_string();
     if std::fs::read_to_string(&stamp).ok().as_deref() != Some(from.as_str()) {
-        let _ = std::fs::remove_dir_all(&dev);
+        // Refresh only the headers; leaving lib/ in place avoids churning
+        // rokc's import library while a concurrent rokc link writes it (a
+        // Windows LNK1104 on rokc.exp).
+        let _ = std::fs::remove_dir_all(&inc);
         for d in ["llvm", "llvm-c", "mlir", "mlir-c"] {
             copy_tree(&prefix.join("include").join(d), &inc.join(d));
         }
