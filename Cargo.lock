@@ -10,7 +10,7 @@ checksum = "68ab91017fe16c622486840e4c83c9a37afeff978bd239b5293d61ece587de66"
 
 [[package]]
 name = "rok"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "rokc_core",
  "rokc_diagnostic",
@@ -22,7 +22,7 @@ dependencies = [
 
 [[package]]
 name = "rokc"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "libc",
  "rokc_core",
@@ -40,7 +40,7 @@ dependencies = [
 
 [[package]]
 name = "rokc_ast"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "rokc_core",
  "rokc_diagnostic",
@@ -48,7 +48,7 @@ dependencies = [
 
 [[package]]
 name = "rokc_codegen_mlir"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "rokc_core",
  "rokc_diagnostic",
@@ -58,7 +58,7 @@ dependencies = [
 
 [[package]]
 name = "rokc_codegen_native"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "rokc_codegen_mlir",
  "rokc_core",
@@ -69,18 +69,18 @@ dependencies = [
 
 [[package]]
 name = "rokc_core"
-version = "0.1.0"
+version = "0.1.1"
 
 [[package]]
 name = "rokc_diagnostic"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "rokc_core",
 ]
 
 [[package]]
 name = "rokc_driver"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "rokc_ast",
  "rokc_codegen_mlir",
@@ -99,7 +99,7 @@ dependencies = [
 
 [[package]]
 name = "rokc_fmt"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "rokc_core",
  "rokc_diagnostic",
@@ -110,11 +110,11 @@ dependencies = [
 
 [[package]]
 name = "rokc_harness"
-version = "0.1.0"
+version = "0.1.1"
 
 [[package]]
 name = "rokc_hir"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "rokc_ast",
  "rokc_core",
@@ -126,7 +126,7 @@ dependencies = [
 
 [[package]]
 name = "rokc_interface"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "rokc_ast",
  "rokc_core",
@@ -137,14 +137,14 @@ dependencies = [
 
 [[package]]
 name = "rokc_ir_common"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "rokc_core",
 ]
 
 [[package]]
 name = "rokc_lexer"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "rokc_ast",
  "rokc_core",
@@ -153,7 +153,7 @@ dependencies = [
 
 [[package]]
 name = "rokc_llvm"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "rokc_core",
  "rokc_target",
@@ -161,7 +161,7 @@ dependencies = [
 
 [[package]]
 name = "rokc_mir"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "rokc_core",
  "rokc_diagnostic",
@@ -172,7 +172,7 @@ dependencies = [
 
 [[package]]
 name = "rokc_parser"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "rokc_ast",
  "rokc_core",
@@ -182,7 +182,7 @@ dependencies = [
 
 [[package]]
 name = "rokc_rokon"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "rokc_ast",
  "rokc_diagnostic",
@@ -192,7 +192,7 @@ dependencies = [
 
 [[package]]
 name = "rokc_target"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "rokc_core",
  "rokc_rokon",
@@ -200,7 +200,7 @@ dependencies = [
 
 [[package]]
 name = "rokc_tools"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "rokc_ast",
  "rokc_core",
@@ -216,14 +216,14 @@ dependencies = [
 
 [[package]]
 name = "rokc_wit"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "rokc_lexer",
 ]
 
 [[package]]
 name = "rokr"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "libc",
  "rokr_common",
@@ -232,14 +232,14 @@ dependencies = [
 
 [[package]]
 name = "rokr_common"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "libc",
 ]
 
 [[package]]
 name = "rokr_gc"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "libc",
  "rokr_common",

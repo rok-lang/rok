@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.1 (unreleased)
+
+- `print` and `println` take a value of any `Display` type directly (`println(x)`), and `eprint` and
+  `eprintln` do the same for standard error; a no-argument `println()` or `eprintln()` writes a blank line.
+  A value no longer has to be wrapped in an f-string first.
+- The REPL prints a bare expression's value with `Display`; a trailing `?` (`x?`) prints its `Debug` form,
+  and `:type x` prints its type.
+
 ## 0.1.0 (2026-10-25)
 
 First release.
