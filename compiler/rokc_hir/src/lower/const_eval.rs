@@ -1762,7 +1762,15 @@ impl Bodies for CtxBodies<'_, '_> {
             return Callee::Body(Rc::clone(f), *std);
         }
         let env = self.ctx.env;
-        let name = |f: &str| leaf_name(f).to_owned();
+        // Report the source name, not a generic instance's mangled
+        // `name__mono__..`; the message is user-facing.
+        let name = |f: &str| {
+            let leaf = leaf_name(f);
+            leaf.split(rokc_ir_common::MONO_MARK)
+                .next()
+                .unwrap_or(leaf)
+                .to_owned()
+        };
         let found = env
             .sink
             .extras
