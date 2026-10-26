@@ -16,8 +16,11 @@ fmt-sh:
     find . -name '*.sh' -not -path './target/*' -exec shfmt -w {} +
 
 # Fail if anything is unformatted (for CI).
-fmt-check:
+fmt-check: fmt-check-sh
     cargo fmt --all --check
+
+# shfmt check only; the CI lint job reuses this (it has no Rust toolchain).
+fmt-check-sh:
     find . -name '*.sh' -not -path './target/*' -exec shfmt -d {} +
 
 # The rok standard library, formatted by rokc itself (needs a built rokc).
