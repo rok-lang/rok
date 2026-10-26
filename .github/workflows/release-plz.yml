@@ -1,0 +1,87 @@
+name: release-plz
+
+# Automated release PRs. On a push to main, release-plz opens or updates a PR
+# that bumps the workspace version + Cargo.lock + CHANGELOG.md from the
+# conventional commits; this workflow then bumps the install-script version
+# defaults to match (scripts/check-version.sh enforces they agree). Merging
+# that PR lands the version bump on main, and the release job tags it
+# `v<version>`, which release.yml builds the archives from and publishes.
+#
+# REQUIRES a repository secret RELEASE_PLZ_TOKEN: a fine-grained PAT with
+# contents:write and pull-requests:write. It is used instead of the default
+# GITHUB_TOKEN so the opened release PR triggers ci.yml -- GitHub does not run
+# workflows on a PR opened with GITHUB_TOKEN. Without the secret these jobs
+# fail at checkout; add it under Settings > Secrets > Actions.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-plz-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Open or update the release PR, then sync the install-script versions onto
+  # its branch so the PR's own CI (check-version) passes.
+  release-pr:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_PLZ_TOKEN }}
+      - name: rust toolchain
+        run: rustup toolchain install && rustc -vV
+      - name: release-plz release-pr
+        id: pr
+        uses: release-plz/action@436af255fc09c66d1787b4c2bad4fc00f267d6e1 # v0.5.146
+        with:
+          command: release-pr
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+      - name: sync install-script versions onto the release PR
+        if: steps.pr.outputs.prs_created == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+        run: |
+          branch=$(echo '${{ steps.pr.outputs.pr }}' | jq -r '.head_branch // empty')
+          [ -n "$branch" ] || { echo "no release PR branch in the action output"; exit 0; }
+          git fetch origin "$branch"
+          git checkout "$branch"
+          # The version release-plz just wrote to Cargo.toml on this branch.
+          v=$(sed -n '/^\[workspace.package\]/,/^\[/ s/^version = "\(.*\)"/\1/p' Cargo.toml)
+          [ -n "$v" ] || { echo "no workspace version in Cargo.toml"; exit 1; }
+          # Rewrite the ROK_VERSION default in both install scripts (idempotent).
+          perl -pi -e 's/^(version="\$\{ROK_VERSION:-)[^}]*(\}")/${1}'"$v"'${2}/' install.sh
+          perl -pi -e "s/(else \{ ')[0-9][^']*(' \})/\${1}$v\${2}/ if /ROK_VERSION/" install.ps1
+          if git diff --quiet install.sh install.ps1; then
+            echo "install scripts already at $v"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "release: sync install-script version to $v" install.sh install.ps1
+            git push origin "$branch"
+          fi
+
+  # After the release PR merges to main, create the v<version> tag; release.yml
+  # takes it from there.
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_PLZ_TOKEN }}
+      - name: rust toolchain
+        run: rustup toolchain install && rustc -vV
+      - name: release-plz release
+        uses: release-plz/action@436af255fc09c66d1787b4c2bad4fc00f267d6e1 # v0.5.146
+        with:
+          command: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}

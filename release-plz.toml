@@ -1,0 +1,29 @@
+# release-plz config (.github/workflows/release-plz.yml drives it).
+#
+# rok ships toolchain binaries, not crates.io libraries, so nothing is
+# published to the registry: release-plz only bumps the version + CHANGELOG and
+# creates the git tag. release.yml (tag trigger) builds the six archives and
+# cuts the GitHub release, so release-plz must not create the release itself.
+#
+# 0.x versioning is shifted one level: the minor is the breaking slot and the
+# patch carries features + fixes. release-plz follows conventional-commit
+# SemVer, which under 0.x bumps the patch for fix/feat and the minor for a
+# breaking change -- that matches this scheme, so no override is needed. For a
+# release that is breaking on purpose, set the version explicitly.
+
+[workspace]
+# Never publish to crates.io.
+publish = false
+# release.yml creates the GitHub release on the tag; do not create it here.
+git_release_enable = false
+# Every crate shares the workspace version, so tag the repo once as
+# `v<version>` (release.yml triggers on `v*`). Only the `rok` package carries
+# that tag; the other crates do not tag, which avoids one identical tag per
+# crate. (Validate on the first real run: a many-crate single-version
+# workspace is the shape release-plz is least prescriptive about.)
+git_tag_enable = false
+
+[[package]]
+name = "rok"
+git_tag_enable = true
+git_tag_name = "v{{ version }}"
