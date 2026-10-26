@@ -45,6 +45,12 @@ cache=${ROK_DIST_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/rok/dist-linux}
 mkdir -p "$out" "$cache"
 out=$(cd "$out" && pwd)
 
+# The container's LLVM/libclang: dist-llvm-prefix.sh publishes a prefix built
+# in this same container to the rok-lang-artifacts bucket, and the build below
+# downloads it instead of building (the image's glibc is older than a CI
+# host's, so the native prefix does not fit). A miss falls back to building.
+base=${ROK_DIST_LLVM_BASE:-https://rok-lang-artifacts.s3.us-east-1.amazonaws.com}
+
 # The image is named after its definition.
 tag=rok-dist-linux:$(sha256sum dist-linux-gnu.Containerfile | cut -c1-12)
 $engine image inspect "$tag" > /dev/null 2>&1 ||
@@ -59,7 +65,7 @@ $engine run --rm $user \
   -v "$PWD:/src:ro" -v "$cache:/cache" -v "$out:/out" -w /src \
   -e HOME=/cache/home -e RUSTUP_HOME=/cache/rustup -e CARGO_HOME=/cache/cargo \
   -e ROK_LLVM_CACHE=/cache/rok -e CARGO_TARGET_DIR=/cache/target -e TMPDIR=/cache/tmp \
-  -e ROK_LLVM_JOBS="${ROK_LLVM_JOBS-}" \
+  -e ROK_LLVM_JOBS="${ROK_LLVM_JOBS-}" -e ROK_DIST_LLVM_BASE="$base" \
   -e ROK_COMMIT_HASH="$ROK_COMMIT_HASH" -e ROK_COMMIT_DATE="$ROK_COMMIT_DATE" \
   "$tag" sh -euc '
     mkdir -p "$HOME" "$TMPDIR"
@@ -68,6 +74,25 @@ $engine run --rm $user \
     PATH=$CARGO_HOME/bin:$PATH
     rustup toolchain install
     [ -n "$ROK_LLVM_JOBS" ] || unset ROK_LLVM_JOBS
+    # Download the prebuilt LLVM/libclang prefix from S3; on any miss
+    # dist-native.sh builds it, as before.
+    v=$(sed -n "s/^VERSION=//p" llvm/build.sh)
+    triple=$(uname -m)-unknown-linux-gnu
+    mkdir -p /cache/rok
+    for n in llvm libclang; do
+      pfx=/cache/rok/$n-$v
+      if [ ! -f "$pfx/.complete" ]; then
+        u=$ROK_DIST_LLVM_BASE/dist-llvm/$v/$triple/$n.tar.gz
+        if curl -fsSL "$u" -o "$TMPDIR/$n.tar.gz" &&
+          curl -fsSL "$u.sha256" -o "$TMPDIR/$n.tar.gz.sha256" &&
+          ( cd "$TMPDIR" && sha256sum -c "$n.tar.gz.sha256" >/dev/null ) &&
+          tar -xzf "$TMPDIR/$n.tar.gz" -C /cache/rok; then
+          echo "$n: downloaded $pfx"
+        fi
+      fi
+    done
+    if [ -f "/cache/rok/llvm-$v/.complete" ]; then export ROK_LLVM_PREFIX=/cache/rok/llvm-$v; fi
+    if [ -f "/cache/rok/libclang-$v/.complete" ]; then export ROK_LIBCLANG_PREFIX=/cache/rok/libclang-$v; fi
     ./dist-native.sh --out /out'
 
 # dist-native.sh's check programs need glibc 2.34, newer than the image's: the

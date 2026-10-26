@@ -51,24 +51,12 @@ jobs:
         shell: bash
         run: ./dist-native.sh --out "$PWD/dist"
 
-      # --- linux gnu (dist-linux-gnu.sh in a container; cache its LLVM prefix) ---
-      - name: cache container prefix (gnu)
-        if: matrix.kind == 'gnu'
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/rok/dist-linux
-          key: dist-linux-${{ runner.arch }}-${{ hashFiles('llvm/build.sh', 'llvm/rok.profdata.xz', 'llvm/patches/*.patch', 'dist-linux-gnu.Containerfile') }}
+      # --- linux gnu/musl (dist-linux-{gnu,musl}.sh in a container) ---
+      # The container LLVM/libclang is downloaded from S3 (dist-llvm/,
+      # published by prefixes.yml); the scripts fall back to building it.
       - name: dist-linux-gnu.sh
         if: matrix.kind == 'gnu'
         run: ./dist-linux-gnu.sh --out "$PWD/dist"
-
-      # --- linux musl (dist-linux-musl.sh in a container) ---
-      - name: cache container prefix (musl)
-        if: matrix.kind == 'musl'
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/rok/dist-musl
-          key: dist-musl-${{ runner.arch }}-${{ hashFiles('llvm/build.sh', 'llvm/rok.profdata.xz', 'llvm/patches/*.patch', 'dist-linux-musl.Containerfile') }}
       - name: dist-linux-musl.sh
         if: matrix.kind == 'musl'
         run: ./dist-linux-musl.sh --out "$PWD/dist"

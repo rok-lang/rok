@@ -48,6 +48,12 @@ cache=${ROK_DIST_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/rok/dist-musl}
 mkdir -p "$out" "$cache"
 out=$(cd "$out" && pwd)
 
+# The container's LLVM: dist-llvm-prefix.sh publishes a prefix built in this
+# same container to the rok-lang-artifacts bucket, and the build below
+# downloads it instead of building (the image's libc differs from a CI
+# host's, so the native prefix does not fit). A miss falls back to building.
+base=${ROK_DIST_LLVM_BASE:-https://rok-lang-artifacts.s3.us-east-1.amazonaws.com}
+
 # The image is named after its definition.
 tag=rok-dist-musl:$(sha256sum dist-linux-musl.Containerfile | cut -c1-12)
 $engine image inspect "$tag" > /dev/null 2>&1 ||
@@ -62,7 +68,7 @@ $engine run --rm $user \
   -v "$PWD:/src:ro" -v "$cache:/cache" -v "$out:/out" -w /src \
   -e HOME=/cache/home -e RUSTUP_HOME=/cache/rustup -e CARGO_HOME=/cache/cargo \
   -e ROK_LLVM_CACHE=/cache/rok -e CARGO_TARGET_DIR=/cache/target -e TMPDIR=/cache/tmp \
-  -e ROK_LLVM_JOBS="${ROK_LLVM_JOBS-}" \
+  -e ROK_LLVM_JOBS="${ROK_LLVM_JOBS-}" -e ROK_DIST_LLVM_BASE="$base" \
   -e ROK_COMMIT_HASH="$ROK_COMMIT_HASH" -e ROK_COMMIT_DATE="$ROK_COMMIT_DATE" \
   "$tag" sh -euc '
     mkdir -p "$HOME" "$TMPDIR"
@@ -71,6 +77,22 @@ $engine run --rm $user \
     PATH=$CARGO_HOME/bin:$PATH
     rustup toolchain install
     [ -n "$ROK_LLVM_JOBS" ] || unset ROK_LLVM_JOBS
+    # Download the prebuilt LLVM prefix from S3 (static musl ships no
+    # libclang); on a miss dist-native.sh builds it, as before.
+    v=$(sed -n "s/^VERSION=//p" llvm/build.sh)
+    triple=$(uname -m)-unknown-linux-musl
+    mkdir -p /cache/rok
+    pfx=/cache/rok/llvm-$v
+    if [ ! -f "$pfx/.complete" ]; then
+      u=$ROK_DIST_LLVM_BASE/dist-llvm/$v/$triple/llvm.tar.gz
+      if curl -fsSL "$u" -o "$TMPDIR/llvm.tar.gz" &&
+        curl -fsSL "$u.sha256" -o "$TMPDIR/llvm.tar.gz.sha256" &&
+        ( cd "$TMPDIR" && sha256sum -c "llvm.tar.gz.sha256" >/dev/null ) &&
+        tar -xzf "$TMPDIR/llvm.tar.gz" -C /cache/rok; then
+        echo "llvm: downloaded $pfx"
+      fi
+    fi
+    if [ -f "$pfx/.complete" ]; then export ROK_LLVM_PREFIX=$pfx; fi
     ./dist-native.sh --out /out'
 
 # The installed static archive builds and runs a program in a bare

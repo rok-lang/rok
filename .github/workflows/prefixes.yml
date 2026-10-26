@@ -4,7 +4,7 @@ name: prefixes
 # upload it, SHA-256 verified, to the public rok-lang-artifacts S3 bucket at
 # llvm/<version>/<host>/{llvm,libclang}.tar.gz, which the
 # .github/actions/{llvm,libclang}-prefix actions download. Run once per
-# version, or when the build scripts change. Upload auth is keyless (OIDC →
+# version, or when the build scripts change. Upload auth is keyless (OIDC ->
 # rok-ci-artifacts). Windows's LLVM is published from the box by
 # prefixes-windows.yml (it exceeds the 6 h job limit here).
 on:
@@ -132,3 +132,49 @@ jobs:
           ( cd "$tmp/out" && { command -v sha256sum >/dev/null 2>&1 && sha256sum "$a" || shasum -a 256 "$a"; } > "$a.sha256" )
           aws s3 cp "$tmp/out/$a"        "s3://$BUCKET/llvm/$V/$TRIPLE/libclang.tar.gz"
           aws s3 cp "$tmp/out/$a.sha256" "s3://$BUCKET/llvm/$V/$TRIPLE/libclang.tar.gz.sha256"
+
+  # The Linux container LLVM (and, for gnu, libclang): built inside the
+  # Debian 11 / Alpine release image by dist-llvm-prefix.sh and published to
+  # dist-llvm/<version>/<triple>/, which dist-linux-{gnu,musl}.sh download
+  # instead of building in-container. The image's glibc/libc is older than a
+  # CI host's, so these cannot be the host prefixes above. Run once per
+  # version (and whenever the build scripts or Containerfiles change).
+  dist-llvm:
+    if: ${{ inputs.what == 'both' || inputs.what == 'llvm' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { kind: gnu, arch: x64, runs-on: ubuntu-latest, triple: x86_64-unknown-linux-gnu }
+          - { kind: gnu, arch: arm64, runs-on: ubuntu-24.04-arm, triple: aarch64-unknown-linux-gnu }
+          - { kind: musl, arch: x64, runs-on: ubuntu-latest, triple: x86_64-unknown-linux-musl }
+          - { kind: musl, arch: arm64, runs-on: ubuntu-24.04-arm, triple: aarch64-unknown-linux-musl }
+    name: build (${{ matrix.triple }} container)
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 360
+    env:
+      KIND: ${{ matrix.kind }}
+      TRIPLE: ${{ matrix.triple }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Free disk
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/share/swift
+          df -h "$HOME"
+      - name: Build and publish the container prefix
+        run: |
+          v=$(sed -n 's/^VERSION=//p' llvm/build.sh)
+          ./dist-llvm-prefix.sh "$KIND" --out "$RUNNER_TEMP/dist-llvm"
+          pkg=$RUNNER_TEMP/dist-llvm/pkg
+          for f in llvm.tar.gz llvm.tar.gz.sha256; do
+            aws s3 cp "$pkg/$f" "s3://$BUCKET/dist-llvm/$v/$TRIPLE/$f"
+          done
+          if [ "$KIND" = gnu ]; then
+            for f in libclang.tar.gz libclang.tar.gz.sha256; do
+              aws s3 cp "$pkg/$f" "s3://$BUCKET/dist-llvm/$v/$TRIPLE/$f"
+            done
+          fi
