@@ -1,47 +1,92 @@
 name: prefixes (windows)
 
-# Publish the Windows LLVM prefix to the rok-lang-artifacts S3 bucket at
-# llvm/<version>/x86_64-pc-windows-msvc/llvm.tar.gz, which .github/actions/llvm-prefix
-# downloads. The prefix is box-built (a cold Windows build exceeds the 6 h
-# job limit) and dropped at llvm/<version>/x86_64-pc-windows-msvc/llvm-src.tar.gz (the
-# llvm-<v>/ tree); this re-packs it to the common layout, SHA-256 verified.
-# Run once per version (and whenever the box rebuilds the prefix). Upload
-# auth is keyless (OIDC -> rok-ci-artifacts).
+# Build the pinned Windows LLVM prefix in CI and publish it to the
+# rok-lang-artifacts S3 bucket at llvm/<version>/x86_64-pc-windows-msvc/llvm.tar.gz
+# (the path .github/actions/llvm-prefix downloads). A cold Windows LLVM build
+# is about 6 h on a 2-core runner, at the GitHub job limit; a larger hosted
+# runner's extra cores finish it well under the limit, so this no longer needs
+# a physical box or a pre-staged llvm-src.tar.gz. Run once per version (and
+# when the build scripts or PGO profile change). Upload auth is keyless
+# (OIDC -> rok-ci-artifacts).
+#
+# REQUIRES a larger Windows hosted runner, named by the repository variable
+# ROK_WINDOWS_XL_RUNNER (set it to the org's larger-runner label, e.g. a
+# 16- or 32-core Windows runner). Without a larger runner the job either
+# cannot be scheduled or times out at 6 h on the 2-core default.
 on:
   workflow_dispatch:
 
 permissions:
-  id-token: write   # OIDC -> assume rok-ci-artifacts for the S3 upload
+  id-token: write # OIDC -> assume rok-ci-artifacts for the S3 upload
   contents: read
 
 env:
   AWS_ROLE: arn:aws:iam::893677554379:role/rok-ci-artifacts
   AWS_REGION: us-east-1
   BUCKET: rok-lang-artifacts
-  BASE: https://rok-lang-artifacts.s3.us-east-1.amazonaws.com
   TRIPLE: x86_64-pc-windows-msvc
 
 jobs:
-  publish:
-    runs-on: windows-latest
+  build:
+    runs-on: ${{ vars.ROK_WINDOWS_XL_RUNNER || 'windows-latest' }}
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ env.AWS_ROLE }}
           aws-region: ${{ env.AWS_REGION }}
-      - name: repack and publish
-        shell: bash
+
+      # The MSVC x64 developer environment for build.ps1 (same approach as
+      # .github/actions/llvm-prefix). VCINSTALLDIR / VSINSTALLDIR stay unset.
+      - name: MSVC environment
+        shell: pwsh
         run: |
-          v=$(sed -n 's/^VERSION=//p' llvm/build.sh)
-          tmp=$(cygpath -u "$RUNNER_TEMP")
-          mkdir -p "$tmp/x" "$tmp/out"
-          curl -fsSL "$BASE/llvm/$v/$TRIPLE/llvm-src.tar.gz" -o "$tmp/llvm-src.tar.gz"
-          tar -xzf "$tmp/llvm-src.tar.gz" -C "$tmp/x"
-          [ -d "$tmp/x/llvm-$v" ] || { echo "::error::llvm-src.tar.gz has no llvm-$v/ tree"; exit 1; }
-          touch "$tmp/x/llvm-$v/.complete"
-          a=rok-llvm-$v-windows-x64.tar.gz
-          tar -C "$tmp/x" -czf "$tmp/out/$a" "llvm-$v"
-          ( cd "$tmp/out" && { command -v sha256sum >/dev/null 2>&1 && sha256sum "$a" || shasum -a 256 "$a"; } > "$a.sha256" )
-          aws s3 cp "$tmp/out/$a"        "s3://$BUCKET/llvm/$v/$TRIPLE/llvm.tar.gz"
-          aws s3 cp "$tmp/out/$a.sha256" "s3://$BUCKET/llvm/$v/$TRIPLE/llvm.tar.gz.sha256"
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * `
+            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw 'no Visual Studio with the MSVC x64 tools' }
+          cmd /c "`"$vs\VC\Auxiliary\Build\vcvars64.bat`" >nul && set" | ForEach-Object {
+            if ($_ -match '^([^=]+)=(.*)$' -and $Matches[1] -notin 'VCINSTALLDIR', 'VSINSTALLDIR' -and
+                [Environment]::GetEnvironmentVariable($Matches[1]) -ne $Matches[2]) {
+              "$($Matches[1])=$($Matches[2])"
+            }
+          } | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+
+      # build.ps1 needs cmake, ninja, Python 3 and clang-cl on PATH. The
+      # hosted image has cmake, Python and LLVM (clang-cl under Program Files);
+      # ensure ninja and that LLVM's bin is on PATH.
+      - name: build tools
+        shell: pwsh
+        run: |
+          if (-not (Get-Command ninja -ErrorAction SilentlyContinue)) {
+            choco install ninja -y --no-progress
+          }
+          $llvm = "$env:ProgramFiles\LLVM\bin"
+          if (Test-Path "$llvm\clang-cl.exe") { Add-Content $env:GITHUB_PATH $llvm }
+
+      # clang-cl (not cl) reads rok-msvc.profdata.tar.xz, so PGO needs it.
+      - name: Build, strip and publish LLVM
+        shell: pwsh
+        env:
+          CXX: clang-cl
+        run: |
+          $v = ((Select-String -Path llvm/build.sh -Pattern '^VERSION=').Line -replace '^VERSION=', '').Trim()
+          $pfx = Join-Path $env:RUNNER_TEMP "llvm-$v"
+          $log = Join-Path $env:RUNNER_TEMP 'llvm-build.log'
+          & powershell -NoProfile -ExecutionPolicy Bypass -File llvm/build.ps1 $pfx 2>&1 | Tee-Object $log
+          if ($LASTEXITCODE) { throw "build.ps1 failed ($LASTEXITCODE)" }
+          if (Select-String -Quiet -Path $log -Pattern 'without PGO') {
+            throw 'the LLVM prefix was built without rok-msvc.profdata.tar.xz (clang-cl missing?)'
+          }
+          # Drop build intermediates rokc_llvm never links; mark it complete.
+          Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "$pfx\lib\objects-Release", "$pfx\share\opt-viewer"
+          New-Item -ItemType File -Force "$pfx\.complete" | Out-Null
+          $a = "rok-llvm-$v-windows-x64.tar.gz"
+          $out = Join-Path $env:RUNNER_TEMP 'out'
+          New-Item -ItemType Directory -Force $out | Out-Null
+          tar -C $env:RUNNER_TEMP -czf "$out\$a" "llvm-$v"
+          if ($LASTEXITCODE) { throw 'tar failed' }
+          $h = (Get-FileHash -Algorithm SHA256 "$out\$a").Hash.ToLower()
+          Set-Content -NoNewline -Path "$out\$a.sha256" -Value "$h  $a"
+          aws s3 cp "$out\$a"        "s3://$env:BUCKET/llvm/$v/$env:TRIPLE/llvm.tar.gz"
+          aws s3 cp "$out\$a.sha256" "s3://$env:BUCKET/llvm/$v/$env:TRIPLE/llvm.tar.gz.sha256"
