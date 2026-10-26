@@ -7,11 +7,12 @@ name: release-plz
 # that PR lands the version bump on main, and the release job tags it
 # `v<version>`, which release.yml builds the archives from and publishes.
 #
-# REQUIRES a repository secret RELEASE_PLZ_TOKEN: a fine-grained PAT with
-# contents:write and pull-requests:write. It is used instead of the default
-# GITHUB_TOKEN so the opened release PR triggers ci.yml -- GitHub does not run
-# workflows on a PR opened with GITHUB_TOKEN. Without the secret these jobs
-# fail at checkout; add it under Settings > Secrets > Actions.
+# REQUIRES the GitHub App rok-ci-release (installed on this repo), supplied as
+# two org secrets: RELEASE_PLZ_APP_ID and RELEASE_PLZ_APP_PRIVATE_KEY. Each job
+# mints an installation token from them; that token (not the default
+# GITHUB_TOKEN) opens the release PR so it triggers ci.yml -- GitHub does not
+# run workflows on a PR opened with GITHUB_TOKEN. Without the secrets the
+# app-token step fails first.
 on:
   push:
     branches: [main]
@@ -31,10 +32,16 @@ jobs:
   release-pr:
     runs-on: ubuntu-24.04
     steps:
+      - name: app token
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+        with:
+          app-id: ${{ secrets.RELEASE_PLZ_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PLZ_APP_PRIVATE_KEY }}
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_PLZ_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
       - name: rust toolchain
         run: rustup toolchain install && rustc -vV
       - name: release-plz release-pr
@@ -43,11 +50,11 @@ jobs:
         with:
           command: release-pr
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
       - name: sync install-script versions onto the release PR
         if: steps.pr.outputs.prs_created == 'true'
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           branch=$(echo '${{ steps.pr.outputs.pr }}' | jq -r '.head_branch // empty')
           [ -n "$branch" ] || { echo "no release PR branch in the action output"; exit 0; }
@@ -73,10 +80,16 @@ jobs:
   release:
     runs-on: ubuntu-24.04
     steps:
+      - name: app token
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+        with:
+          app-id: ${{ secrets.RELEASE_PLZ_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PLZ_APP_PRIVATE_KEY }}
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_PLZ_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
       - name: rust toolchain
         run: rustup toolchain install && rustc -vV
       - name: release-plz release
@@ -84,4 +97,4 @@ jobs:
         with:
           command: release
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
