@@ -38,7 +38,8 @@ const SHOWN: &str = "__rok_repl_out";
 const HOST_OBJ: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/repl_host.o"));
 
 const HELP: &str = "\
-  <expr>         evaluate and print `type: value`
+  <expr>         evaluate and print its value (`Display`)
+  <expr>?        evaluate and print its `Debug` form
   let x = ..;    bind (a top-level `let` may rebind a name, 907.3)
   fn / struct / enum / impl / trait / use ..   define (a new `fn f` /
                  `struct S` replaces the old one)
@@ -601,7 +602,7 @@ impl Repl {
         true
     }
 
-    /// One cell: what it shows (`type: value`, or the type), or `Err`
+    /// One cell: what it shows (the value, or its type), or `Err`
     /// after its errors went to stderr.
     #[allow(clippy::result_unit_err)]
     pub fn eval(&mut self, cell: &str) -> Result<Option<String>, ()> {
@@ -613,11 +614,22 @@ impl Repl {
         let (stmts, last) = split_last(cell);
         match classify(last) {
             // A statement (a `let` too) shows nothing (907.1).
-            Cell::Item(_) | Cell::Let | Cell::Stmt => self.run_once(cell, None),
+            Cell::Item(_) | Cell::Let | Cell::Stmt => self.run_once(cell, None, false),
             Cell::Expr => {
-                let r = self.run_once(&format!("{stmts}let {VALUE} = ({last});"), Some(VALUE));
+                // A trailing `?` on a bare top-level expression asks for the
+                // `Debug` form: error propagation needs a `throws` context,
+                // which a top-level expression has not, so the slot is free.
+                let (expr, debug) = match last.trim_end().strip_suffix('?') {
+                    Some(e) => (e.trim_end(), true),
+                    None => (last, false),
+                };
+                let r = self.run_once(
+                    &format!("{stmts}let {VALUE} = ({expr});"),
+                    Some(VALUE),
+                    debug,
+                );
                 if r.is_err() && self.diverged.take() {
-                    return self.run_once(&format!("{cell};"), None);
+                    return self.run_once(&format!("{stmts}{expr};"), None, false);
                 }
                 r
             }
@@ -804,9 +816,14 @@ impl Repl {
     }
 
     /// Build `cell` as a library, run it in the host, keep its top-level
-    /// bindings; `type: value` of `show` (`eval`).
-    fn run_once(&mut self, cell: &str, show: Option<&str>) -> Result<Option<String>, ()> {
-        self.run_cell(cell, show, &[]).map_err(|f| {
+    /// bindings; the `Display` (or `Debug`) of `show` (`eval`).
+    fn run_once(
+        &mut self,
+        cell: &str,
+        show: Option<&str>,
+        debug: bool,
+    ) -> Result<Option<String>, ()> {
+        self.run_cell(cell, show, debug, &[]).map_err(|f| {
             if let Fail::Unkept(_, e) = f {
                 eprintln!("error: {e}");
             }
@@ -819,18 +836,23 @@ impl Repl {
         &mut self,
         cell: &str,
         show: Option<&str>,
+        debug: bool,
         may_drop: &[String],
     ) -> Result<Option<String>, Fail> {
         self.start_host();
         let mut lap = Lap::start();
-        // 6.10.3: `{type_name_of}: {Debug}`, the type name alone without
-        // `Debug`; the plain build reports real errors.
+        // A bare expression prints its `Display`; a trailing `?` (`debug`)
+        // prints its `Debug`. Either falls back to the type name alone when
+        // the value does not implement that trait; the plain build reports
+        // real errors.
         let texts: Vec<String> = show
             .map(|n| {
-                vec![
-                    format!("f\"{{{n}.type_name_of()}}: {{{n}:?}}\""),
-                    format!("{n}.type_name_of()"),
-                ]
+                let value = if debug {
+                    format!("f\"{{{n}:?}}\"")
+                } else {
+                    format!("f\"{{{n}}}\"")
+                };
+                vec![value, format!("{n}.type_name_of()")]
             })
             .unwrap_or_default();
         let mut tries = texts.iter().map(Some).chain([None]);
@@ -1414,7 +1436,7 @@ impl Repl {
         if next.items.iter().any(|(k, _)| *k == main) {
             self.state = next.clone();
             next.items.retain(|(k, _)| *k != main);
-            let ok = self.run_cell("", None, &[]).is_ok();
+            let ok = self.run_cell("", None, false, &[]).is_ok();
             self.state = next;
             return ok;
         }
@@ -1428,7 +1450,7 @@ impl Repl {
             loop {
                 let text = &body[cells[i].0..cells[j].1];
                 self.set_cell(text, Some(cells[i].0));
-                match self.run_cell(text, None, &may_drop) {
+                match self.run_cell(text, None, false, &may_drop) {
                     Ok(_) => break,
                     // Merged through the last cell that names it.
                     Err(Fail::Unkept(name, _)) => {

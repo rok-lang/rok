@@ -1326,7 +1326,7 @@ fn build_run_and_repl_with_dependencies() {
         .write_all(b":type greet()\ngreet() + 1\n")
         .unwrap();
     let out = child.wait_with_output().unwrap();
-    assert_eq!(ok(&out), "2\ni32\ni32: 3\n", "{}", text(&out.stderr));
+    assert_eq!(ok(&out), "2\ni32\n3\n", "{}", text(&out.stderr));
     ok(&rok(&home, &app, &["-q", "build", "--release"]));
     assert!(app.join("target/release").join(exe("app")).is_file());
     ok(&rok(&home, &app, &["-q", "clean"]));
@@ -1353,11 +1353,7 @@ fn build_run_and_repl_with_dependencies() {
         .unwrap();
     let out = child.wait_with_output().unwrap();
     let stdout = ok(&out);
-    assert!(
-        stdout.contains("i32: 41"),
-        "{stdout}\n{}",
-        text(&out.stderr)
-    );
+    assert!(stdout.contains("41\n"), "{stdout}\n{}", text(&out.stderr));
     assert!(read(&home.join("envs/r/rok.rokon")).contains("\"g\": Dep::path("));
 }
 
@@ -2547,7 +2543,7 @@ fn native_in_tools(home: &Path, root: &Path, app: &Path, ext: &str) {
         let out = child.wait_with_output().unwrap();
         let stdout = ok(&out);
         assert!(
-            stdout.contains("i32: 43\ni32: 6\n"),
+            stdout.contains("43\n6\n"),
             "{stdout}\n{}",
             text(&out.stderr)
         );

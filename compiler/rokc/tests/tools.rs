@@ -83,14 +83,14 @@ a
     assert_eq!(
         stdout,
         "\
-i32: 3
+3
 sum 42
-P: P { x: 40, y: 2 }
+P
 i32
-str: \"rebound\"
-i32: 80
-List<i32>: [1, 2, 3]
-i32: 7
+rebound
+80
+List<i32>
+i32
 f64
 ",
         "stderr: {stderr}"
@@ -102,9 +102,9 @@ f64
     assert!(stderr.contains("cannot find value `x`"), "{stderr}");
 }
 
-/// Stdlib 2.10.11: the REPL prints an expression cell as `type: value`
-/// with `Debug`, only the type without it; `println` uses `Display`
-/// (`{x:?}`: `Debug`); a `let` cell prints nothing (9.7.1).
+/// The REPL prints an expression cell with `Display`, a trailing `?` with
+/// `Debug`, only the type when the value has neither; `println` uses
+/// `Display`; a `let` cell prints nothing.
 #[test]
 #[cfg_attr(
     not(any(
@@ -140,7 +140,7 @@ x
     assert_eq!(out.status.code(), Some(0), "{stderr}");
     assert_eq!(
         text(&out.stdout),
-        "str: \"hello\"\nQ\nQ=3\nD { v: 4 }\nD: D { v: 4 }\ni32: 42\n",
+        "hello\nQ=3\nQ=3\nD { v: 4 }\nD\n42\n",
         "stderr: {stderr}"
     );
 }
@@ -164,7 +164,7 @@ fn repl_reports_input_ending_inside_a_cell() {
     let rokr = env.rokr.display().to_string();
     let out = piped(ROKC, &["repl", "--rokr", &rokr], "1 + 2\nlet x = 40");
     let stderr = text(&out.stderr);
-    assert_eq!(text(&out.stdout), "i32: 3\n", "{stderr}");
+    assert_eq!(text(&out.stdout), "3\n", "{stderr}");
     assert!(
         stderr.contains("error: input ended inside a cell; not run")
             && stderr.contains("let x = 40"),
@@ -198,11 +198,7 @@ b
     let out = piped(ROKC, &["repl", "--rokr", &rokr], input);
     let stderr = text(&out.stderr);
     assert_eq!(out.status.code(), Some(0), "{stderr}");
-    assert_eq!(
-        text(&out.stdout),
-        "x\ni32: 2\ny\ni32: 3\n",
-        "stderr: {stderr}"
-    );
+    assert_eq!(text(&out.stdout), "x\n2\ny\n3\n", "stderr: {stderr}");
 }
 
 /// `repl <lib>` (9.1.2): the library is loaded and its items
@@ -238,7 +234,7 @@ fn repl_loads_and_uses_a_library() {
         "twice(21)\n:reset\ntwice(2)\n",
     );
     let stdout = text(&out.stdout);
-    assert_eq!(stdout, "i32: 42\ni32: 4\n", "{}", text(&out.stderr));
+    assert_eq!(stdout, "42\n4\n", "{}", text(&out.stderr));
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -274,7 +270,7 @@ fn repl_static_library_calls_a_dll_import() {
         &["repl", "--rokr", &rokr, "-L", &lib_dir, "-l", "static=imp"],
         "extern \"C\" { fn imp_pid() -> i32; }\nunsafe { imp_pid() }\n",
     );
-    assert_eq!(text(&out.stdout), "i32: 1\n", "{}", text(&out.stderr));
+    assert_eq!(text(&out.stdout), "1\n", "{}", text(&out.stderr));
 }
 
 /// A cell runs once, in one process: its side effects
@@ -321,10 +317,7 @@ p
     );
     let stdout = text(&out.stdout);
     let stderr = text(&out.stderr);
-    assert_eq!(
-        stdout, "once\ni32: 2\ni32: 42\nP: P { x: 21 }\n",
-        "stderr: {stderr}"
-    );
+    assert_eq!(stdout, "once\n2\n42\nP\n", "stderr: {stderr}");
     assert!(stderr.contains("boom"), "{stderr}");
     assert_eq!(std::fs::read_to_string(&log).ok().as_deref(), Some("x"));
     let _ = std::fs::remove_file(&log);
@@ -365,10 +358,7 @@ match q { x: Q => x.v, _ => 0 }
     let stdout = text(&out.stdout);
     let stderr = text(&out.stderr);
     // An `any` shows the type it holds (6.10.3).
-    assert_eq!(
-        stdout, "i32: 3\ni32: 5\nQ: Q { v: 9 }\ni32: 9\n",
-        "stderr: {stderr}"
-    );
+    assert_eq!(stdout, "3\ni32\nQ\n9\n", "stderr: {stderr}");
     assert!(
         stderr.contains("`h: Hid` cannot be kept for later cells (`geo::Hid` is private"),
         "{stderr}"
@@ -409,11 +399,7 @@ bump()
         &[("ROK_REPL_TIME", "1")],
     );
     let stderr = text(&out.stderr);
-    assert_eq!(
-        text(&out.stdout),
-        "i32: 1\ni32: 2\ni32: 2\ni32: 101\ni32: 102\n",
-        "stderr: {stderr}"
-    );
+    assert_eq!(text(&out.stdout), "1\n2\n2\n101\n102\n", "stderr: {stderr}");
     assert!(stderr.contains("[repl] jit + run"), "{stderr}");
 }
 
@@ -451,11 +437,7 @@ g()
         &[("ROK_REPL_TIME", "1")],
     );
     let stderr = text(&out.stderr);
-    assert_eq!(
-        text(&out.stdout),
-        "usize: 3\ni32: 11\ni32: 2\ni32: 12\n",
-        "stderr: {stderr}"
-    );
+    assert_eq!(text(&out.stdout), "3\n11\n2\n12\n", "stderr: {stderr}");
     let counts: Vec<(usize, usize, usize)> = stderr
         .lines()
         .filter_map(|l| l.strip_prefix("[repl] functions: "))
@@ -501,7 +483,7 @@ fn repl_collects_the_library_once() {
         &[("ROK_TIME_PASSES", "1")],
     );
     let stderr = text(&out.stderr);
-    assert_eq!(text(&out.stdout), "i32: 2\ni32: 3\n", "stderr: {stderr}");
+    assert_eq!(text(&out.stdout), "2\n3\n", "stderr: {stderr}");
     // Looked up in the store by the first cell only.
     let reads = stderr
         .lines()
@@ -555,10 +537,7 @@ let never = 0;
     let stderr = text(&out.stderr);
     assert_eq!(out.status.code(), Some(0), "{stdout}\n{stderr}");
     // `n += 100` ran in the cell that failed: `n` is as before it.
-    assert_eq!(
-        stdout, "ran 4\ni32: 1\nP\ni32: 6\nList<i32>: [1, 2, 3]\n",
-        "stderr: {stderr}"
-    );
+    assert_eq!(stdout, "ran 4\n1\nP\n6\nList<i32>\n", "stderr: {stderr}");
     assert!(stderr.contains(&format!("{path}:12:11")), "{stderr}");
     assert!(
         stderr.contains("the rest of the program did not run"),
@@ -580,7 +559,7 @@ let never = 0;
         "helper(5)\nlocal\n",
     );
     let stderr = text(&out.stderr);
-    assert_eq!(text(&out.stdout), "main 42\ni32: 10\n", "stderr: {stderr}");
+    assert_eq!(text(&out.stdout), "main 42\n10\n", "stderr: {stderr}");
     assert!(stderr.contains("cannot find value `local`"), "{stderr}");
 
     // A program that does not compile runs nothing; its errors point
@@ -588,7 +567,7 @@ let never = 0;
     std::fs::write(&prog, "println(\"no\");\nlet y = nope + 1;\n").unwrap();
     let out = piped(ROKC, &["repl", "--rokr", &rokr, &path], "1 + 1\n");
     let stderr = text(&out.stderr);
-    assert_eq!(text(&out.stdout), "i32: 2\n", "stderr: {stderr}");
+    assert_eq!(text(&out.stdout), "2\n", "stderr: {stderr}");
     assert!(stderr.contains(&format!("{path}:2:9")), "{stderr}");
 
     // A package: its `mod` files resolve.
@@ -606,7 +585,7 @@ let never = 0;
         &["repl", "--rokr", &rokr, &pkg_s],
         "k + util::three()\n",
     );
-    assert_eq!(text(&out.stdout), "i32: 6\n", "{}", text(&out.stderr));
+    assert_eq!(text(&out.stdout), "6\n", "{}", text(&out.stderr));
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -658,7 +637,7 @@ C.load()
     let stderr = text(&out.stderr);
     assert_eq!(
         text(&out.stdout),
-        "i32: 8\ni32: 9\ni32: 1\ni32: 1\ni32: 10\nList<i32>: [1, 2, 3]\ni64: 1\ni64: 1\n",
+        "8\n9\n1\n1\n10\nList<i32>\n1\n1\n",
         "stderr: {stderr}"
     );
     assert_eq!(
@@ -705,7 +684,7 @@ task::block_on(async { let ts = [task::spawn(async { 1 }), task::spawn(async { 2
     let stderr = text(&out.stderr);
     assert_eq!(
         stdout,
-        "i32: 21\ni32: 7\ni32: 42\ni32: 8\nthread join failed: the thread ended with a failed REPL cell\ni64: -1\ni32: 3\n",
+        "21\n7\n42\n8\nthread join failed: the thread ended with a failed REPL cell\n-1\n3\n",
         "stderr: {stderr}"
     );
     assert_eq!(
@@ -764,7 +743,7 @@ once.call_once(|| { println(\"ran again\"); });
     let again = if cfg!(windows) { "" } else { "ran again\n" };
     assert_eq!(
         stdout,
-        format!("(i64, i64): (1, 1)\ni32: 3\ni32: 5\ni32: 6\n{again}"),
+        format!("(i64, i64)\n3\n5\n6\n{again}"),
         "stderr: {stderr}"
     );
     assert_eq!(
@@ -988,7 +967,7 @@ fn repl_survives_a_compiler_panic() {
         &[("ROKC_TEST_ICE", "ice-here")],
     );
     let stderr = text(&out.stderr);
-    assert_eq!(text(&out.stdout), "i32: 42\n", "{stderr}");
+    assert_eq!(text(&out.stdout), "42\n", "{stderr}");
     assert!(
         stderr.contains("internal compiler error") && stderr.contains("ROKC_TEST_ICE"),
         "{stderr}"
@@ -1312,7 +1291,7 @@ fn jupyter_kernel_speaks_the_wire_protocol() {
     assert_eq!(reply.get("status").as_str(), Some("ok"), "{reply}");
     let (_, reply, published) = request(&mut shell, "execute_request", exec("x + 2"));
     assert_eq!(reply.get("execution_count"), &Json::num(2));
-    assert!(shows(&published, "i32: 42"), "{published:?}");
+    assert!(shows(&published, "42"), "{published:?}");
     assert!(
         published
             .iter()
@@ -1333,7 +1312,7 @@ fn jupyter_kernel_speaks_the_wire_protocol() {
     assert!(error.1.to_string().contains("boom"), "{}", error.1);
     // The session goes on, as it was before the failed cell.
     let (_, _, published) = request(&mut shell, "execute_request", exec("x"));
-    assert!(shows(&published, "i32: 40"), "{published:?}");
+    assert!(shows(&published, "40"), "{published:?}");
 
     completion_inspect_history(&mut shell, &mut request);
 
