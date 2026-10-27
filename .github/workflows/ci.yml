@@ -62,6 +62,14 @@ jobs:
           just fmt-check-sh
       - name: shellcheck
         run: just lint-sh
+      - name: actionlint
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/actionlint.tar.gz" \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $RUNNER_TEMP/actionlint.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP" actionlint
+          # SC2015 (A && B || C): the sha-tool fallbacks are intentional.
+          "$RUNNER_TEMP/actionlint" -shellcheck="shellcheck -e SC2015"
       - name: version consistency
         run: just version-check
       - name: target consistency
@@ -85,6 +93,9 @@ jobs:
   # prefix a later job restores), runners (host -> runs-on; a repo variable can
   # pick a self-hosted runner, never for a fork PR), cross (target + host).
   plan:
+    # Gate the whole build on lint: a formatting or lint failure skips plan and
+    # everything downstream, so no build runs for code that would not merge.
+    needs: [lint]
     # The nightly schedule runs only where the repository variable ROK_NIGHTLY is `on`.
     if: github.event_name != 'schedule' || vars.ROK_NIGHTLY == 'on'
     runs-on: ubuntu-24.04
@@ -167,7 +178,7 @@ jobs:
               relevant=$(printf '%s\n' "$changed" | while IFS= read -r f; do
                 [ -n "$f" ] || continue
                 case $f in
-                docs/* | *.md | LICENSE* | assets/* | .gitignore | .github/ISSUE_TEMPLATE/* | .github/pull_request_template.md | .github/dependabot.yml | .github/CODEOWNERS | .github/workflows/*) ;;
+                docs/* | *.md | LICENSE* | assets/* | .gitignore | .github/ISSUE_TEMPLATE/* | .github/dependabot.yml | .github/CODEOWNERS | .github/workflows/*) ;;
                 *)
                   echo relevant
                   break
@@ -217,14 +228,14 @@ jobs:
 
   # Restore each host's pinned LLVM prefix (llvm-prefix action: S3, with the
   # Actions cache on a hosted runner or ROK_CI_HOME on a self-hosted one).
-  llvm:
+  llvm-prefix:
     needs: plan
     if: needs.plan.outputs.prefixes != '[]'
     strategy:
       fail-fast: false
       matrix:
         host: ${{ fromJSON(needs.plan.outputs.prefixes) }}
-    name: llvm (${{ matrix.host }})
+    name: llvm-prefix (${{ matrix.host }})
     runs-on: ${{ fromJSON(needs.plan.outputs.runners)[matrix.host] }}
     timeout-minutes: 30
     steps:
@@ -234,7 +245,7 @@ jobs:
   # The local gate (README "Checks") but the corpora, every step even
   # after a failure.
   check:
-    needs: [plan, llvm]
+    needs: [plan, llvm-prefix]
     if: ${{ !cancelled() && needs.plan.outputs.hosts != '[]' }}
     strategy:
       fail-fast: false
@@ -277,8 +288,8 @@ jobs:
   # The integration and differential corpora, a job per host, level and
   # shard (ROK_TEST_SHARD).
   corpus:
-    needs: [plan, llvm]
-    if: ${{ !cancelled() && needs.plan.outputs.hosts != '[]' }}
+    needs: [plan, llvm-prefix, check]
+    if: ${{ !cancelled() && needs.check.result != 'failure' && needs.plan.outputs.hosts != '[]' }}
     strategy:
       fail-fast: false
       matrix:
@@ -307,8 +318,8 @@ jobs:
   # The sysroot link check of the non-wasm cross targets, from Linux
   # x86_64.
   cross-link:
-    needs: [plan, llvm]
-    if: ${{ !cancelled() && contains(needs.plan.outputs.cross, '"linux-x64"') }}
+    needs: [plan, llvm-prefix, check]
+    if: ${{ !cancelled() && needs.check.result != 'failure' && contains(needs.plan.outputs.cross, '"linux-x64"') }}
     runs-on: ${{ fromJSON(needs.plan.outputs.runners)['linux-x64'] }}
     timeout-minutes: 60
     steps:
@@ -326,8 +337,8 @@ jobs:
   # natively (the i386 loader and libc), armv7 under qemu-user, musl
   # static, i686 Windows under WOW64, arm64 Windows natively.
   cross:
-    needs: [plan, llvm]
-    if: ${{ !cancelled() && needs.plan.outputs.cross != '[]' }}
+    needs: [plan, llvm-prefix, check]
+    if: ${{ !cancelled() && needs.check.result != 'failure' && needs.plan.outputs.cross != '[]' }}
     strategy:
       fail-fast: false
       matrix:
@@ -371,8 +382,8 @@ jobs:
   # WebAssembly target, so wasm32-wasi's profile runtime and PGO test are
   # built too.
   wasm:
-    needs: [plan, llvm]
-    if: ${{ !cancelled() && contains(needs.plan.outputs.jobs, 'wasm') }}
+    needs: [plan, llvm-prefix, check]
+    if: ${{ !cancelled() && needs.check.result != 'failure' && contains(needs.plan.outputs.jobs, 'wasm') }}
     strategy:
       fail-fast: false
       matrix:
@@ -390,8 +401,8 @@ jobs:
   # rokc bindgen against the pinned libclang (.github/actions/libclang-prefix),
   # nightly on linux-x64 and windows-x64.
   bindgen:
-    needs: [plan, llvm]
-    if: ${{ !cancelled() && needs.plan.outputs.bindgen != '[]' }}
+    needs: [plan, llvm-prefix, check]
+    if: ${{ !cancelled() && needs.check.result != 'failure' && needs.plan.outputs.bindgen != '[]' }}
     strategy:
       fail-fast: false
       matrix:
@@ -416,8 +427,8 @@ jobs:
   # program, and a package's build / run / test, with nothing but the
   # installed toolchain on PATH.
   dist:
-    needs: [plan, llvm]
-    if: ${{ !cancelled() && needs.plan.outputs.dist != '[]' }}
+    needs: [plan, llvm-prefix, check, corpus, cross]
+    if: ${{ !cancelled() && needs.check.result != 'failure' && needs.corpus.result != 'failure' && needs.cross.result != 'failure' && needs.plan.outputs.dist != '[]' }}
     strategy:
       fail-fast: false
       matrix:
@@ -452,18 +463,19 @@ jobs:
           Must build --release
           Must test
 
-  # The one required status check. Passes when llvm/check/corpus passed or were
-  # skipped, fails if any failed or was cancelled. Requiring this instead of
-  # each matrix job keeps a skipped job from blocking the merge.
-  gate-passed:
-    needs: [llvm, check, corpus]
+  # The one required status check. Passes when lint/llvm-prefix/check/corpus passed or
+  # were skipped, fails if any failed or was cancelled. Requiring this instead
+  # of each matrix job keeps a skipped job from blocking the merge; including
+  # lint keeps a lint failure (which skips the rest) from passing the gate.
+  ci-gate:
+    needs: [lint, llvm-prefix, check, corpus]
     if: always()
     runs-on: ubuntu-24.04
     steps:
       - name: gate result
         run: |
-          echo "llvm=${{ needs.llvm.result }} check=${{ needs.check.result }} corpus=${{ needs.corpus.result }}"
-          for r in "${{ needs.llvm.result }}" "${{ needs.check.result }}" "${{ needs.corpus.result }}"; do
+          echo "lint=${{ needs.lint.result }} llvm-prefix=${{ needs['llvm-prefix'].result }} check=${{ needs.check.result }} corpus=${{ needs.corpus.result }}"
+          for r in "${{ needs.lint.result }}" "${{ needs['llvm-prefix'].result }}" "${{ needs.check.result }}" "${{ needs.corpus.result }}"; do
             case "$r" in
               success | skipped) ;;
               *)
