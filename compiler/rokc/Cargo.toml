@@ -9,6 +9,9 @@ authors.workspace = true
 [[bin]]
 name = "rokc"
 path = "src/main.rs"
+# No unit tests; a test harness link would write the same /IMPLIB
+# (build.rs) as the binary at once, a Windows LNK1104 on rokc.exp.
+test = false
 
 [dependencies]
 rokc_core = { workspace = true }
