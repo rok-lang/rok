@@ -278,10 +278,22 @@ pub struct ClientConfig {
 
 impl ClientConfig {
     /// The OS trust store, all suites, no ALPN, post-quantum on, no
-    /// client certificate, a new session cache, no early data.
+    /// client certificate, a new session cache, no early data. A trust
+    /// store that cannot be read leaves `root_certs` empty, so every
+    /// handshake fails; `try_new` reports that instead.
     pub fn new() -> ClientConfig {
+        ClientConfig::with_roots(try system_roots() catch _ { [] })
+    }
+
+    /// `new`, but throws the `system_roots` error (no trust store found
+    /// or readable) instead of leaving `root_certs` empty.
+    pub fn try_new() throws (TlsError) -> ClientConfig {
+        ClientConfig::with_roots(try system_roots())
+    }
+
+    fn with_roots(roots: List<Certificate>) -> ClientConfig {
         ClientConfig {
-            root_certs: try system_roots() catch _ { [] },
+            root_certs: roots,
             cipher_suites: CipherSuite::all(),
             alpn_protocols: [],
             enable_pq: true,

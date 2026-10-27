@@ -1,0 +1,58 @@
+// spec: std §2.7.10
+// expect-exit: 0
+// expect-stdout:
+// take 3 0
+// skip 1 0
+// zip 3 0
+// step_by 2 0
+// nested 2 0
+// exact 3 none 2
+// filter 2 4
+// from 100 5
+
+// `count()` through `take` / `skip` / `zip` / `step_by` over exact-size
+// iterators uses `exact_len`: `map`'s function is not called. An
+// iterator of unknown length (filter, an unbounded range) is stepped.
+
+struct Counter {
+    left: i32;
+}
+
+impl Iterator for Counter {
+    type Item = i32;
+    fn next(ref self) -> i32 | none {
+        if self.left == 0 {
+            return none;
+        }
+        self.left -= 1;
+        self.left
+    }
+}
+
+fn len_str(n: usize | none) -> str {
+    match n {
+        k: usize => f"{k}",
+        none => "none",
+    }
+}
+
+fn main() -> i32 {
+    let xs = [1, 2, 3, 4];
+    let calls = [0];
+    let f = |x: i32| { calls[0] = calls[0] + 1; x };
+    println(f"take {xs.iter().map(f).take(3).count()} {calls[0]}");
+    println(f"skip {xs.iter().map(f).skip(3).count()} {calls[0]}");
+    println(f"zip {xs.iter().map(f).zip(0..3).count()} {calls[0]}");
+    println(f"step_by {xs.iter().map(f).step_by(3).count()} {calls[0]}");
+    let n = xs.iter().map(f).enumerate().rev().skip(1).take(5).step_by(2).count();
+    println(f"nested {n} {calls[0]}");
+    let a = xs.iter().take(3).exact_len();
+    let b = xs.iter().filter(|x| x > 1).exact_len();
+    let c = (1..=10).step_by(5).exact_len();
+    println(f"exact {len_str(a)} {len_str(b)} {len_str(c)}");
+    println(f"filter {xs.iter().map(f).filter(|x| x % 2 == 0).take(5).count()} {calls[0]}");
+    let m = (0i64..).take(100).count();
+    let k = Counter { left: 5 }.map(|x| x).take(10).count();
+    println(f"from {m} {k}");
+    return 0;
+}
