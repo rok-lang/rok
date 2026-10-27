@@ -8,12 +8,15 @@ ARG RUSTUP=1.28.2
 ARG RUSTUP_SHA256_X86_64=e6599a1c7be58a2d8eaca66a80e0dc006d87bbcf780a58b7343d6e14c1605cb2
 ARG RUSTUP_SHA256_AARCH64=a97c8f56d7462908695348dd8c71ea6740c138ce303715793a690503a94fc9a9
 
-# llvm/build.sh: cmake, samurai (ninja), g++, curl, xz, patch,
-# linux-headers. targets/build.sh: clang, lld, make, python3. dist-native.sh:
-# git, tar, and strip (binutils, in build-base).
+# llvm/build.sh: cmake, ninja, g++, curl, xz, patch, linux-headers.
+# targets/build.sh: clang, lld, make, python3. dist-native.sh: git, tar, and
+# strip (binutils, in build-base). Real ninja from pip, not Alpine's samurai:
+# samurai races the tablegen outputs and leaves llvm/.../TargetLibraryInfo.inc
+# missing when a dependent compiles.
 RUN apk add --no-cache \
-	build-base clang lld cmake samurai curl xz patch linux-headers \
-	python3 git bash tar ca-certificates
+	build-base clang lld cmake curl xz patch linux-headers \
+	python3 py3-pip git bash tar ca-certificates && \
+	pip install --no-cache-dir --break-system-packages ninja
 
 RUN set -e; \
 	case $(uname -m) in \
