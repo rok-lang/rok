@@ -108,8 +108,10 @@ ar=$sysroot/lib/rustlib/$host/bin/llvm-ar
 LLVM=$(sed -n 's/^VERSION=//p' llvm/build.sh)
 LLVM_SHA256=$(sed -n 's/^SHA256=//p' llvm/build.sh)
 MINGW=$(sed -n 's/^COMMIT=//p' compiler/rokc_driver/windows/gen.sh)
-# LLVM-$LLVM-macOS-ARM64.tar.xz of the LLVM release.
+# LLVM-$LLVM-macOS-ARM64.tar.xz and clang+llvm-$LLVM-x86_64-pc-windows-msvc.tar.xz
+# of the LLVM release.
 CLANG_MACOS_SHA256=f260f4f7c0d430828a81ae8a3826a1d63fc0963ec2459489308cc23b1f7eab4f
+CLANG_WINDOWS_SHA256=d96c2cc1736f4eb7fa43cb9bbdf56d93551a9ae0a9aadb9c99c3c3b2b712a234
 
 # $1 downloaded from $2 into the cache, checked against SHA-256 $3.
 fetch() {
@@ -147,6 +149,28 @@ if [ "$(uname -s)" = Darwin ] && [ -z "${CC-}" ]; then
     rm -f "$cache/$n.tar.xz"
   fi
   other_cc=$c/bin/clang
+fi
+# Windows: the runner image's clang is an older LLVM release than the pinned
+# one and rejects its newer riscv codegen options, so the non-native targets
+# use the pinned clang (statically linked), unpacked once into the cache.
+if [ -z "$other_cc" ] && [ -z "${CC-}" ]; then
+  case $(uname -s) in
+    MINGW* | MSYS* | CYGWIN*)
+      c=$cache/clang-$LLVM
+      if [ ! -x "$c/bin/clang.exe" ]; then
+        n=clang+llvm-$LLVM-x86_64-pc-windows-msvc
+        fetch "$n.tar.xz" "https://github.com/llvm/llvm-project/releases/download/llvmorg-$LLVM/$n.tar.xz" \
+          "$CLANG_WINDOWS_SHA256"
+        rm -rf "$c.tmp"
+        mkdir -p "$c.tmp"
+        tar -xf "$cache/$n.tar.xz" -C "$c.tmp" "$n/bin/clang.exe" "$n/lib/clang"
+        mv "$c.tmp/$n" "$c"
+        rmdir "$c.tmp"
+        rm -f "$cache/$n.tar.xz"
+      fi
+      other_cc=$c/bin/clang.exe
+      ;;
+  esac
 fi
 
 # wasm-component-ld into $1: the release matching the component model
