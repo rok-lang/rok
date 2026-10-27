@@ -8,12 +8,12 @@ name: ci
 #            targets, wasm, bindgen, dist; a manual run's inputs pick a
 #            subset
 on:
-  # Push runs on main only; a branch is covered by its PR, not twice.
+  # Push runs on main only; a branch is covered by its PR, not twice. No
+  # paths filter: ci-gate is required, so a docs-only PR must still report
+  # it (plan runs lint only there).
   push:
     branches: [main]
-    paths-ignore: ["**/*.md"]
   pull_request:
-    paths-ignore: ["**/*.md"]
   merge_group:
   schedule:
     - cron: "17 3 * * *"
