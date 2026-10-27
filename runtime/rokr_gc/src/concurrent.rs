@@ -44,6 +44,10 @@ static ACTIVE: AtomicBool = AtomicBool::new(false);
 /// The running mark (`Heap::cycles`), so the marker finishes only its own.
 static CYCLE: AtomicU64 = AtomicU64::new(0);
 static SPAWNED: AtomicBool = AtomicBool::new(false);
+/// Tests: the marker keeps the mark open (never finishes it) while set,
+/// so a test may store mid-mark and finish it itself.
+#[cfg(test)]
+pub static HOLD: AtomicBool = AtomicBool::new(false);
 
 /// The mark lock (guards [`super::Mark`]) and its condvar (the marker
 /// waits on it for a mark).
@@ -144,6 +148,13 @@ extern "C" fn marker() {
                 break false;
             }
             if mark().len == 0 && !take_satb() {
+                #[cfg(test)]
+                if HOLD.load(Ordering::Relaxed) {
+                    unlock_mark();
+                    std::thread::yield_now();
+                    raw_lock();
+                    continue;
+                }
                 break true;
             }
         };

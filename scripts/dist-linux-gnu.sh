@@ -65,6 +65,7 @@ $engine run --rm $user \
   -e HOME=/cache/home -e RUSTUP_HOME=/cache/rustup -e CARGO_HOME=/cache/cargo \
   -e ROK_LLVM_CACHE=/cache/rok -e CARGO_TARGET_DIR=/cache/target -e TMPDIR=/cache/tmp \
   -e ROK_LLVM_JOBS="${ROK_LLVM_JOBS-}" -e ROK_DIST_LLVM_BASE="$base" \
+  -e ROK_MIRROR="${ROK_MIRROR-}" \
   -e ROK_COMMIT_HASH="$ROK_COMMIT_HASH" -e ROK_COMMIT_DATE="$ROK_COMMIT_DATE" \
   "$tag" sh -euc '
     mkdir -p "$HOME" "$TMPDIR"
@@ -104,7 +105,7 @@ $engine run --rm $user -v "$out:/out:ro" -e HOME=/tmp \
   sh -euc '
     cd /tmp
     tar -xzf "/out/$1.tar.gz"
-    "$1/install.sh" >/dev/null
+    "$1/install.sh" -q
     printf "fn main() {\n    println(\"ok\");\n}\n" >check.rok
     for o in -O0 -O2; do
       ~/.rok/bin/rokc -q build check.rok $o -o check

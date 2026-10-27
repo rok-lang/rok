@@ -532,20 +532,57 @@ fn update(home: &Path, version: Option<&str>, quiet: bool) -> Result<(), String>
     if fresh {
         let url = format!("{dist}/download/v{full}/rok-{full}-{HOST}.{ARCHIVE}");
         if !quiet {
-            eprintln!(" Downloading {url}");
+            status("Downloading", &format!("rok {full} ({HOST})"));
         }
         let (tmp, top, _) = stage(home, &full, &url)?;
         place(home, &tmp, &top, &full)?;
     }
     switch(home, &full, &dir, fresh)?;
-    if !quiet {
-        eprintln!("     Updated to rok {full} ({name})");
-        if let Some(old) = current.filter(|c| *c != dir) {
-            let old = old.file_name().unwrap_or_default().to_string_lossy();
-            eprintln!("        note: {old} stays installed (`rok toolchain remove {old}`)");
+    if quiet {
+        return Ok(());
+    }
+    let suffix = format!("-{HOST}");
+    let old = current
+        .as_deref()
+        .and_then(Path::file_name)
+        .map(|n| n.to_string_lossy().into_owned());
+    match &old {
+        // The default already, with broken proxies.
+        Some(n) if *n == name => status("Repaired", &format!("rok {full} proxies")),
+        Some(n) => {
+            let from = n.strip_suffix(&suffix).unwrap_or(n);
+            status("Updated", &format!("rok {from} -> {full}"));
         }
+        None => status("Installed", &format!("rok {full} to {}", shown(home))),
+    }
+    if let Some(old) = old.filter(|n| *n != name) {
+        eprintln!("        note: {old} stays installed (`rok toolchain remove {old}`)");
     }
     Ok(())
+}
+
+/// A status line on stderr: `word` right-aligned to 12 columns, then
+/// `msg`; `word` green and bold on a terminal unless `NO_COLOR` is set.
+/// install.sh and install.ps1 print the same.
+fn status(word: &str, msg: &str) {
+    use std::io::IsTerminal;
+    if std::io::stderr().is_terminal() && std::env::var_os("NO_COLOR").is_none() {
+        eprintln!("\x1b[1;32m{word:>12}\x1b[0m {msg}");
+    } else {
+        eprintln!("{word:>12} {msg}");
+    }
+}
+
+/// `path` as `~/..` when under the user's home, for display only.
+fn shown(path: &Path) -> String {
+    let user = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
+        .filter(|h| !h.is_empty());
+    match user.and_then(|h| path.strip_prefix(h).ok().map(Path::to_path_buf)) {
+        Some(rest) if !rest.as_os_str().is_empty() => {
+            format!("~{}{}", std::path::MAIN_SEPARATOR, rest.display())
+        }
+        _ => path.display().to_string(),
+    }
 }
 
 /// `rok toolchain clean`: remove every installed toolchain but the
@@ -568,7 +605,7 @@ fn clean(home: &Path, quiet: bool) -> Result<(), String> {
         std::fs::remove_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
         removed += 1;
         if !quiet {
-            eprintln!("     Removed toolchain {name}");
+            status("Removed", &format!("toolchain {name}"));
         }
     }
     if !quiet {
@@ -576,7 +613,7 @@ fn clean(home: &Path, quiet: bool) -> Result<(), String> {
         if removed == 0 {
             eprintln!("nothing to clean; only the default ({kept}) is installed");
         } else {
-            eprintln!("        Kept the default toolchain {kept}");
+            status("Kept", &format!("the default toolchain {kept}"));
         }
     }
     Ok(())
@@ -617,14 +654,14 @@ pub fn cmd(args: &[String], quiet: bool) -> Result<i32, String> {
             };
             let name = install(&h, version, from)?;
             if !quiet {
-                eprintln!("   Installed toolchain {name}");
+                status("Installed", &format!("toolchain {name}"));
             }
             // The first toolchain becomes the default; proxies once.
             let def = default_pin(&h)?;
             if def.is_none() {
                 set_default(&h, &name)?;
                 if !quiet {
-                    eprintln!("     Default toolchain {name}");
+                    status("Default", &format!("toolchain {name}"));
                 }
             } else if !h.join("bin").join(exe_name("rok")).is_file() {
                 let d = def.as_deref().and_then(|p| find(&h, p));
@@ -642,7 +679,7 @@ pub fn cmd(args: &[String], quiet: bool) -> Result<i32, String> {
             let dir = set_default(&h, pin)?;
             if !quiet {
                 let name = dir.file_name().unwrap_or_default().to_string_lossy();
-                eprintln!("     Default toolchain {pin} ({name})");
+                status("Default", &format!("toolchain {pin} ({name})"));
             }
         }
         ["remove", name] if !name.contains(['/', '\\']) && !name.starts_with('.') => {

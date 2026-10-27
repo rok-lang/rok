@@ -2075,7 +2075,11 @@ fn install_sh_checks_sums() {
         &sum,
         &format!("{}  rok.tar.gz\n", sha256_of(&root.join("rok.tar.gz"))),
     );
-    assert!(ok(&install()).contains("rok 9.9.1 is installed"));
+    let out = install();
+    assert_eq!(ok(&out), "");
+    let err = text(&out.stderr);
+    assert!(err.starts_with("   Installed rok 9.9.1 to "), "{err}");
+    assert!(err.contains("Next steps:\n  rok --version\n"), "{err}");
     let host = env!("ROK_HOST");
     assert!(
         home.join(format!("toolchains/9.9.1-{host}/bin/rokc"))
@@ -2083,7 +2087,8 @@ fn install_sh_checks_sums() {
     );
 }
 
-/// `install.sh --archive` takes a release's `.tar.xz` as well.
+/// `install.sh --archive` takes a release's `.tar.xz` as well; `-q`
+/// prints nothing.
 // spec: §9.10.6
 #[cfg(unix)]
 #[test]
@@ -2099,12 +2104,18 @@ fn install_sh_reads_tar_xz() {
     assert!(tar.success(), "tar -cJf (tar needs xz)");
     let out = Command::new("sh")
         .arg(workspace().join("install.sh"))
-        .args(["--archive", "rok.tar.xz"])
+        .args(["-q", "--archive", "rok.tar.xz"])
         .current_dir(&root)
         .env("ROK_HOME", &home)
         .output()
         .unwrap();
-    assert!(ok(&out).contains("rok 9.9.2 is installed"));
+    assert_eq!(ok(&out), "");
+    assert_eq!(text(&out.stderr), "");
+    let host = env!("ROK_HOST");
+    assert!(
+        home.join(format!("toolchains/9.9.2-{host}/bin/rokc"))
+            .is_file()
+    );
 }
 
 /// `rok toolchain update` against a local release server: the newest
@@ -2167,7 +2178,13 @@ fn update_toolchain() {
     release("9.9.1", None, false);
     let out = update(&[]);
     ok(&out);
-    assert!(text(&out.stderr).contains("Updated to rok 9.9.1"));
+    let err = text(&out.stderr);
+    assert!(
+        err.starts_with(&format!(
+            " Downloading rok 9.9.1 ({host})\n   Installed rok 9.9.1 to "
+        )),
+        "{err}"
+    );
     assert_eq!(list(), format!("9.9.1-{host} (default)\n"));
     assert_eq!(proxy(&["x"]), "rokc 9.9.1: x\n");
     let out = update(&[]);
@@ -2183,10 +2200,12 @@ fn update_toolchain() {
         .args(["toolchain", "update"]);
     let out = c.output().unwrap();
     ok(&out);
-    assert!(
-        text(&out.stderr).contains(&format!("note: 9.9.1-{host} stays installed")),
-        "{}",
-        text(&out.stderr)
+    assert_eq!(
+        text(&out.stderr),
+        format!(
+            " Downloading rok 9.10.0 ({host})\n     Updated rok 9.9.1 -> 9.10.0\n        note: \
+             9.9.1-{host} stays installed (`rok toolchain remove 9.9.1-{host}`)\n"
+        )
     );
     assert_eq!(list(), format!("9.9.1-{host}\n9.10.0-{host} (default)\n"));
     assert_eq!(proxy(&["x"]), "rokc 9.10.0: x\n");
@@ -2218,7 +2237,13 @@ fn update_toolchain() {
         "rok toolchain update: `greet` is not a version",
     );
     fs::remove_dir_all(dist.join("download/v9.9.1")).unwrap();
-    ok(&update(&["9.9.1"]));
+    let out = update(&["9.9.1"]);
+    ok(&out);
+    assert!(
+        text(&out.stderr).starts_with("     Updated rok 9.10.0 -> 9.9.1\n"),
+        "{}",
+        text(&out.stderr)
+    );
     assert_eq!(list(), format!("9.9.1-{host} (default)\n9.10.0-{host}\n"));
     assert_eq!(proxy(&["x"]), "rokc 9.9.1: x\n");
     assert_eq!(update(&["9.9.1", "x"]).status.code(), Some(2));

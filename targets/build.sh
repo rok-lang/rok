@@ -113,15 +113,25 @@ MINGW=$(sed -n 's/^COMMIT=//p' compiler/rokc_driver/windows/gen.sh)
 CLANG_MACOS_SHA256=f260f4f7c0d430828a81ae8a3826a1d63fc0963ec2459489308cc23b1f7eab4f
 CLANG_WINDOWS_SHA256=d96c2cc1736f4eb7fa43cb9bbdf56d93551a9ae0a9aadb9c99c3c3b2b712a234
 
-# $1 downloaded from $2 into the cache, checked against SHA-256 $3.
+# The artifacts bucket's copy of every download, keyed by SHA-256
+# (scripts/mirror-sources.sh fills it): upstream hosts go down.
+mirror=${ROK_MIRROR:-https://rok-lang-artifacts.s3.us-east-1.amazonaws.com/mirror}
+
+sha256() { (shasum -a 256 "$1" 2> /dev/null || sha256sum "$1") | cut -d' ' -f1; }
+
+# $1 downloaded into the cache, checked against SHA-256 $3: from the
+# mirror, else from $2.
 fetch() {
   file=$cache/$1
   if [ ! -f "$file" ]; then
     mkdir -p "$(dirname "$file")"
-    curl -fsSL --retry 3 -o "$file.part" "$2"
+    if ! curl -fsSL --retry 3 -o "$file.part" "$mirror/$3" 2> /dev/null ||
+      [ "$(sha256 "$file.part")" != "$3" ]; then
+      curl -fsSL --retry 3 -o "$file.part" "$2"
+    fi
     mv "$file.part" "$file"
   fi
-  got=$( (shasum -a 256 "$file" 2> /dev/null || sha256sum "$file") | cut -d' ' -f1)
+  got=$(sha256 "$file")
   if [ "$got" != "$3" ]; then
     echo "checksum mismatch for $file: $got" >&2
     exit 1
