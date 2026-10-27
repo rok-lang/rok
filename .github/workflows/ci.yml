@@ -1,9 +1,9 @@
 name: ci
 
 # Three tiers (docs/ci.md):
-#   fast     push to a branch but main, pull request: linux-x64, -O0
-#   main     push to main, merge queue: linux-x64, linux-arm64,
-#            windows-x64, -O0
+#   fast     pull request: linux-x64 and windows-x64, -O0
+#   main     merge queue, push to main: every gate host at -O0 and -O2; a
+#            push the merge queue already passed runs lint only
 #   nightly  schedule, manual run: every host at -O0 and -O2, cross
 #            targets, wasm, bindgen, dist; a manual run's inputs pick a
 #            subset
@@ -39,6 +39,9 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  # Writes to the sccache bucket (.github/actions/sccache); assumed only
+  # outside pull requests.
+  SCCACHE_ROLE: arn:aws:iam::893677554379:role/rok-ci-sccache
 
 defaults:
   run:
@@ -99,6 +102,10 @@ jobs:
     # The nightly schedule runs only where the repository variable ROK_NIGHTLY is `on`.
     if: github.event_name != 'schedule' || vars.ROK_NIGHTLY == 'on'
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      # The merge queue's runs of this commit (a push it already tested).
+      actions: read
     outputs:
       hosts: ${{ steps.plan.outputs.hosts }}
       prefixes: ${{ steps.plan.outputs.prefixes }}
@@ -128,6 +135,8 @@ jobs:
           PR_HEAD: ${{ github.event.pull_request.head.sha }}
           PUSH_BEFORE: ${{ github.event.before }}
           PUSH_AFTER: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           all='[
             {"name": "linux-x64", "os": "ubuntu-24.04", "gate": true},
@@ -152,8 +161,8 @@ jobs:
           esac
           filter=
           case $tier in
-          fast) hosts=linux-x64 jobs=gate opts='["-O0"]' ;;
-          main) hosts="linux-x64 linux-arm64 windows-x64" jobs=gate opts='["-O0"]' ;;
+          fast) hosts="linux-x64 windows-x64" jobs=gate opts='["-O0"]' ;;
+          main) hosts="linux-x64 linux-arm64 macos-arm64 windows-x64" jobs=gate opts='["-O0", "-O2"]' ;;
           nightly)
             hosts=${IN_HOSTS:-all} jobs=${IN_JOBS:-all} opts='["-O0", "-O2"]' filter=$IN_FILTER
             [ "$hosts" = all ] && hosts=$(echo "$all" | jq -r '.[].name')
@@ -174,6 +183,9 @@ jobs:
             skip=""
             if [ "$DRAFT" = true ]; then
               skip="draft PR"
+            elif [ "$EVENT" = push ] &&
+              [ -n "$(gh api "repos/$GH_REPO/actions/workflows/ci.yml/runs?head_sha=$PUSH_AFTER&event=merge_group&status=success" --jq '.workflow_runs[0].id // empty')" ]; then
+              skip="the merge queue passed this commit"
             elif [ -n "$changed" ]; then
               relevant=$(printf '%s\n' "$changed" | while IFS= read -r f; do
                 [ -n "$f" ] || continue
@@ -243,7 +255,7 @@ jobs:
       - uses: ./.github/actions/llvm-prefix
 
   # The local gate (README "Checks") but the corpora, every step even
-  # after a failure.
+  # after a failure; then the corpora's test binaries, archived for corpus.
   check:
     needs: [plan, llvm-prefix]
     if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.hosts != '[]' }}
@@ -254,11 +266,22 @@ jobs:
     name: check (${{ matrix.host }})
     runs-on: ${{ fromJSON(needs.plan.outputs.runners)[matrix.host] }}
     timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write # OIDC -> rok-ci-sccache
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/llvm-prefix
       - name: toolchain (rust-toolchain.toml)
         run: rustup toolchain install && rustc -vV
+      - name: AWS credentials (sccache writes)
+        if: github.event_name != 'pull_request'
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ env.SCCACHE_ROLE }}
+          aws-region: us-east-1
+      - uses: ./.github/actions/sccache
+      - uses: ./.github/actions/nextest
       # A Linux build, native too, links the toolchain's C library.
       - name: host C library (Linux)
         if: runner.os == 'Linux'
@@ -269,9 +292,19 @@ jobs:
       - name: clippy
         if: ${{ !cancelled() }}
         run: cargo clippy --all-targets -- -D warnings
+      # What the tests link and run, built once up front: a test process
+      # running its own `cargo build` relinks librokr.a under the others
+      # (ROK_TEST_PREBUILT, compiler/rokc/tests/common/mod.rs).
       - name: test (but the corpora)
         if: ${{ !cancelled() }}
-        run: ROK_REQUIRE_LLVM=1 cargo test --no-fail-fast -- --exact --skip end_to_end_cases --skip differential
+        run: |
+          cargo build -p rokc -p rokr
+          cargo build -p rokr
+          ROK_TEST_PREBUILT=1 ROK_REQUIRE_LLVM=1 cargo nextest run --no-fail-fast -E 'not (test(=end_to_end_cases) | test(=differential))'
+      # nextest does not run doctests.
+      - name: doctests
+        if: ${{ !cancelled() }}
+        run: cargo test --doc
       - name: fmt library
         if: ${{ !cancelled() }}
         run: '"${CARGO_TARGET_DIR:-target}/debug/rokc" fmt --check library'
@@ -284,12 +317,27 @@ jobs:
           if cargo tree -p rokr -e normal | grep -E '\brokc(_[a-z]+)?\b'; then
             echo "rokr depends on compiler crates"; exit 1
           fi
+      # rokc and the corpora's test binaries, built above; corpus runs them
+      # without a build. Their compile-time paths (CARGO_BIN_EXE_rokc,
+      # CARGO_MANIFEST_DIR) hold because every job checks out at the same
+      # path on a GitHub-hosted runner.
+      - name: corpus archive
+        run: cargo nextest archive -p rokc --test integration --test differential --archive-file "$RUNNER_TEMP/corpus.tar.zst"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: corpus-${{ matrix.host }}
+          path: ${{ runner.temp }}/corpus.tar.zst
+          retention-days: 1
+          compression-level: 0
+      - name: sccache stats
+        if: ${{ !cancelled() }}
+        run: '"$SCCACHE" --show-stats'
 
-  # The integration and differential corpora, a job per host, level and
-  # shard (ROK_TEST_SHARD).
+  # The integration and differential corpora from check's archive, a job
+  # per host, level and shard (ROK_TEST_SHARD).
   corpus:
     needs: [plan, llvm-prefix, check]
-    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.check.result != 'failure' && needs.plan.outputs.hosts != '[]' }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.check.result == 'success' && needs.plan.outputs.hosts != '[]' }}
     strategy:
       fail-fast: false
       matrix:
@@ -299,6 +347,9 @@ jobs:
     name: corpus (${{ matrix.host }} ${{ matrix.opt }} ${{ matrix.shard }}/4)
     runs-on: ${{ fromJSON(needs.plan.outputs.runners)[matrix.host] }}
     timeout-minutes: 120
+    permissions:
+      contents: read
+      id-token: write # OIDC -> rok-ci-sccache
     env:
       ROK_REQUIRE_LLVM: "1"
       ROK_TEST_OPT: ${{ matrix.opt != '-O0' && matrix.opt || '' }}
@@ -313,7 +364,25 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           targets/build.sh "$(rustc -vV | sed -n 's/^host: //p')"
-      - run: cargo test --test integration --test differential
+      - name: AWS credentials (sccache writes)
+        if: github.event_name != 'pull_request'
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ env.SCCACHE_ROLE }}
+          aws-region: us-east-1
+      - uses: ./.github/actions/sccache
+      - uses: ./.github/actions/nextest
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: corpus-${{ matrix.host }}
+          path: ${{ runner.temp }}
+      # Into the workspace, where check built it (the baked paths); only
+      # librokr.a is built here.
+      - name: corpora
+        run: |
+          cargo build -p rokr
+          ROK_TEST_PREBUILT=1 cargo nextest run --archive-file "$RUNNER_TEMP/corpus.tar.zst" \
+            --workspace-remap . --extract-to . --extract-overwrite --no-fail-fast
 
   # The sysroot link check of the non-wasm cross targets, from Linux
   # x86_64.
@@ -322,11 +391,21 @@ jobs:
     if: ${{ !cancelled() && needs.plan.result == 'success' && needs.check.result != 'failure' && contains(needs.plan.outputs.cross, '"linux-x64"') }}
     runs-on: ${{ fromJSON(needs.plan.outputs.runners)['linux-x64'] }}
     timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write # OIDC -> rok-ci-sccache
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/llvm-prefix
       - name: toolchain (rust-toolchain.toml)
         run: rustup toolchain install && rustc -vV
+      - name: AWS credentials (sccache writes)
+        if: github.event_name != 'pull_request'
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ env.SCCACHE_ROLE }}
+          aws-region: us-east-1
+      - uses: ./.github/actions/sccache
       - name: targets/build.sh
         run: |
           targets/build.sh x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-unknown-linux-musl \
@@ -347,6 +426,9 @@ jobs:
     name: cross (${{ matrix.entry.target }} ${{ matrix.opt }})
     runs-on: ${{ fromJSON(needs.plan.outputs.runners)[matrix.entry.host] }}
     timeout-minutes: 180
+    permissions:
+      contents: read
+      id-token: write # OIDC -> rok-ci-sccache
     env:
       QEMU_LD_PREFIX: /usr/arm-linux-gnueabihf
       ROK_REQUIRE_LLVM: "1"
@@ -373,6 +455,13 @@ jobs:
           rustup toolchain install "$t" --profile minimal --force-non-host
           echo "RUSTUP_TOOLCHAIN=$t" >>"$GITHUB_ENV"
           RUSTUP_TOOLCHAIN=$t rustc -vV
+      - name: AWS credentials (sccache writes)
+        if: github.event_name != 'pull_request'
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ env.SCCACHE_ROLE }}
+          aws-region: us-east-1
+      - uses: ./.github/actions/sccache
       - name: targets/build.sh
         run: targets/build.sh "$ROK_TEST_TARGET"
       - run: cargo test --test integration --test differential
@@ -410,12 +499,22 @@ jobs:
     name: bindgen (${{ matrix.host }})
     runs-on: ${{ fromJSON(needs.plan.outputs.runners)[matrix.host] }}
     timeout-minutes: 90
+    permissions:
+      contents: read
+      id-token: write # OIDC -> rok-ci-sccache
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/llvm-prefix
       - uses: ./.github/actions/libclang-prefix
       - name: toolchain (rust-toolchain.toml)
         run: rustup toolchain install && rustc -vV
+      - name: AWS credentials (sccache writes)
+        if: github.event_name != 'pull_request'
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ env.SCCACHE_ROLE }}
+          aws-region: us-east-1
+      - uses: ./.github/actions/sccache
       - name: host C library (Linux)
         if: runner.os == 'Linux'
         run: |

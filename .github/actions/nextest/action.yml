@@ -1,0 +1,34 @@
+name: nextest
+description: >
+  cargo-nextest on PATH: the test runner of check (one process per test)
+  and corpus (the archive check builds, run without rebuilding).
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        V: "0.9.148"
+      run: |
+        case "$RUNNER_OS-$RUNNER_ARCH" in
+          Linux-X64) t=x86_64-unknown-linux-gnu sum=223ba936714cc861a9cdedad5a8eb664dfdd69d6fbdf6cea6aa8184f523290dc ;;
+          Linux-ARM64) t=aarch64-unknown-linux-gnu sum=81469eb963ef883fd590e60189e77d6aba3d91b418591d3391f50fe3e9480d2b ;;
+          macOS-ARM64) t=universal-apple-darwin sum=6c23b7fb4ca82c571fc8dfedbab45bfa773d45918f933170c85d21cd7f4b852b ;;
+          Windows-X64 | Windows-ARM64) t=x86_64-pc-windows-msvc sum=bef17504bed9d4994cf860c122e84a90d613b92e6d89584fa9e28bd53ad42e15 ;;
+          *)
+            echo "::error::no cargo-nextest build for $RUNNER_OS-$RUNNER_ARCH"
+            exit 1
+            ;;
+        esac
+        tmp=$RUNNER_TEMP
+        [ "$RUNNER_OS" = Windows ] && tmp=$(cygpath -u "$RUNNER_TEMP")
+        a=cargo-nextest-$V-$t.tar.gz
+        curl -fsSL -o "$tmp/$a" "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-$V/$a"
+        if command -v sha256sum > /dev/null 2>&1; then got=$(sha256sum "$tmp/$a"); else got=$(shasum -a 256 "$tmp/$a"); fi
+        [ "${got%% *}" = "$sum" ] || {
+          echo "::error::sha256 mismatch for $a"
+          exit 1
+        }
+        mkdir -p "$tmp/nextest"
+        tar -xzf "$tmp/$a" -C "$tmp/nextest"
+        if [ "$RUNNER_OS" = Windows ]; then cygpath -w "$tmp/nextest"; else echo "$tmp/nextest"; fi >> "$GITHUB_PATH"
