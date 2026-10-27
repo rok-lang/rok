@@ -246,7 +246,7 @@ jobs:
   # after a failure.
   check:
     needs: [plan, llvm-prefix]
-    if: ${{ !cancelled() && needs.plan.outputs.hosts != '[]' }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.hosts != '[]' }}
     strategy:
       fail-fast: false
       matrix:
@@ -289,7 +289,7 @@ jobs:
   # shard (ROK_TEST_SHARD).
   corpus:
     needs: [plan, llvm-prefix, check]
-    if: ${{ !cancelled() && needs.check.result != 'failure' && needs.plan.outputs.hosts != '[]' }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.check.result != 'failure' && needs.plan.outputs.hosts != '[]' }}
     strategy:
       fail-fast: false
       matrix:
@@ -319,7 +319,7 @@ jobs:
   # x86_64.
   cross-link:
     needs: [plan, llvm-prefix, check]
-    if: ${{ !cancelled() && needs.check.result != 'failure' && contains(needs.plan.outputs.cross, '"linux-x64"') }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.check.result != 'failure' && contains(needs.plan.outputs.cross, '"linux-x64"') }}
     runs-on: ${{ fromJSON(needs.plan.outputs.runners)['linux-x64'] }}
     timeout-minutes: 60
     steps:
@@ -338,7 +338,7 @@ jobs:
   # static, i686 Windows under WOW64, arm64 Windows natively.
   cross:
     needs: [plan, llvm-prefix, check]
-    if: ${{ !cancelled() && needs.check.result != 'failure' && needs.plan.outputs.cross != '[]' }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.check.result != 'failure' && needs.plan.outputs.cross != '[]' }}
     strategy:
       fail-fast: false
       matrix:
@@ -383,7 +383,7 @@ jobs:
   # built too.
   wasm:
     needs: [plan, llvm-prefix, check]
-    if: ${{ !cancelled() && needs.check.result != 'failure' && contains(needs.plan.outputs.jobs, 'wasm') }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.check.result != 'failure' && contains(needs.plan.outputs.jobs, 'wasm') }}
     strategy:
       fail-fast: false
       matrix:
@@ -402,7 +402,7 @@ jobs:
   # nightly on linux-x64 and windows-x64.
   bindgen:
     needs: [plan, llvm-prefix, check]
-    if: ${{ !cancelled() && needs.check.result != 'failure' && needs.plan.outputs.bindgen != '[]' }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.check.result != 'failure' && needs.plan.outputs.bindgen != '[]' }}
     strategy:
       fail-fast: false
       matrix:
@@ -428,7 +428,7 @@ jobs:
   # installed toolchain on PATH.
   dist:
     needs: [plan, llvm-prefix, check, corpus, cross]
-    if: ${{ !cancelled() && needs.check.result != 'failure' && needs.corpus.result != 'failure' && needs.cross.result != 'failure' && needs.plan.outputs.dist != '[]' }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.check.result != 'failure' && needs.corpus.result != 'failure' && needs.cross.result != 'failure' && needs.plan.outputs.dist != '[]' }}
     strategy:
       fail-fast: false
       matrix:
@@ -468,14 +468,14 @@ jobs:
   # of each matrix job keeps a skipped job from blocking the merge; including
   # lint keeps a lint failure (which skips the rest) from passing the gate.
   ci-gate:
-    needs: [lint, llvm-prefix, check, corpus]
+    needs: [lint, plan, llvm-prefix, check, corpus]
     if: always()
     runs-on: ubuntu-24.04
     steps:
       - name: gate result
         run: |
-          echo "lint=${{ needs.lint.result }} llvm-prefix=${{ needs['llvm-prefix'].result }} check=${{ needs.check.result }} corpus=${{ needs.corpus.result }}"
-          for r in "${{ needs.lint.result }}" "${{ needs['llvm-prefix'].result }}" "${{ needs.check.result }}" "${{ needs.corpus.result }}"; do
+          echo "lint=${{ needs.lint.result }} plan=${{ needs.plan.result }} llvm-prefix=${{ needs['llvm-prefix'].result }} check=${{ needs.check.result }} corpus=${{ needs.corpus.result }}"
+          for r in "${{ needs.lint.result }}" "${{ needs.plan.result }}" "${{ needs['llvm-prefix'].result }}" "${{ needs.check.result }}" "${{ needs.corpus.result }}"; do
             case "$r" in
               success | skipped) ;;
               *)
