@@ -1,7 +1,7 @@
 # CI
 
-`.github/workflows/ci.yml` (GitHub Actions). Changes to Markdown files alone run nothing; a newer run of the
-same branch and event cancels the older one.
+`.github/workflows/ci.yml` (GitHub Actions). Changes to docs or Markdown alone run `lint` only; a newer run of
+the same branch and event cancels the older one.
 
 ## Tiers
 
