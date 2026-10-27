@@ -1,0 +1,22 @@
+// spec: §5.5.11
+// expect-exit: 0
+// expect-stdout:
+// 3
+
+// Spec 5.5.11: one item imported by its path and through a re-export
+// (named or glob) is one import, not a conflict.
+mod a {
+    pub fn f() -> i32 { 1 }
+    pub struct Item { pub n: i32 }
+}
+mod b {
+    pub use sup::a::f;
+    pub use sup::a::*;
+}
+
+use a::f;
+use b::f;
+use a::Item;
+use b::Item;
+let i = Item { n: 2 };
+println(f"{f() + i.n}");

@@ -1026,10 +1026,9 @@ fn compile_unit_in(
 
     // Use trees → per-module resolution tables, plus the `pub use`
     // re-exports.
-    let (use_table, reexports, mut use_diags) = rokc_diagnostic::time("use table", || {
+    let (use_table, reexports) = rokc_diagnostic::time("use table", || {
         rokc_hir::build_use_table(&all_uses, &input.packages)
     });
-    diags.append(&mut use_diags);
     let mut libs = Vec::new();
     native_libs(&program.items, &mut libs);
     if kept && !verify {

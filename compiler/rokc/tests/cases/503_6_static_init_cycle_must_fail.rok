@@ -1,0 +1,15 @@
+// spec: §5.3.6
+// expect-error: 9:1: static `A` is initialized from itself: `A -> B -> A`
+// expect-error: give `A` a value that does not read `B`, such as a literal or a `const`
+// expect-error: 11:1: static `S` is initialized from itself: `S -> S`
+
+// Spec 5.3.6: statics whose initializers name each other directly have
+// no order to run in. A cycle through a call panics at run time instead.
+
+static A: i32 = B + 1;
+static B: i32 = A * 2;
+static S: i32 = S;
+
+fn main() {
+    println(f"{A} {S}");
+}

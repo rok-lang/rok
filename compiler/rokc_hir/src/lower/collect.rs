@@ -526,6 +526,7 @@ fn collect<'a>(
         input.lib.is_none().then_some(missing),
     );
     early.extend(use_diags);
+    early.extend(crate::uses::check_use_clashes(raw_uses, uses, &reexports));
     let (hiding_diags, hiding): (Vec<_>, Vec<_>) = hiding.into_iter().unzip();
     pre_diags.extend(hiding_diags);
     early.extend(check_tiers(raw_uses, &owned.items, item_modules));
@@ -2649,6 +2650,7 @@ fn finish<'a>(
         sources,
         &names,
     );
+    check_static_cycles(&mut module);
     check_value_types(&mut module);
     check_packed(&mut module);
     // One cause can be reached from several passes; report each message
@@ -3228,6 +3230,7 @@ pub(super) fn check_unresolved_types(
         .chain(super::PRIM_NAMES.iter().copied())
         .collect();
     let mut diags = Vec::new();
+    let mut reported = Vec::new();
     for (t, span, at) in unknown_types {
         let span = spans.get(&t).copied().unwrap_or(span);
         // A generic type written bare: it exists, it lacks its arguments.
@@ -3238,6 +3241,7 @@ pub(super) fn check_unresolved_types(
                 rokc_diagnostic::RokDiagnostic::error(rokc_diagnostic::ErrorKind::Resolve, at, msg)
                     .with_help(help),
             );
+            reported.push(t);
             continue;
         }
         let elsewhere = named
@@ -3297,8 +3301,20 @@ pub(super) fn check_unresolved_types(
             }
         };
         diags.push(d);
+        reported.push(t);
     }
-    module.diagnostics.extend(diags);
+    // A type error naming an unknown type follows from it: report the
+    // name first and alone. A block item's capture error says why the
+    // name is unknown; it stays.
+    module.diagnostics.retain(|d| {
+        d.kind != rokc_diagnostic::ErrorKind::Type
+            || d.message.contains(" and can't use `")
+            || !reported
+                .iter()
+                .filter(|t| t.starts_with(char::is_alphabetic))
+                .any(|t| names_type(&d.message, t))
+    });
+    module.diagnostics.splice(0..0, diags);
     if module
         .diagnostics
         .iter()
@@ -3326,6 +3342,19 @@ pub(super) fn check_unresolved_types(
     }
 }
 
+/// Whether a quoted type in `msg` names the path `t`: `ConstPtr` in
+/// "no method `is_null` found for type `ConstPtr`" or "`[ConstPtr; 2]`".
+fn names_type(msg: &str, t: &str) -> bool {
+    let word = |c: char| c.is_alphanumeric() || c == '_' || c == ':';
+    msg.split('`').skip(1).step_by(2).any(|quoted| {
+        quoted.match_indices(t).any(|(i, _)| {
+            let before = quoted[..i].chars().next_back();
+            let after = quoted[i + t.len()..].chars().next();
+            !before.is_some_and(word) && !after.is_some_and(word)
+        })
+    })
+}
+
 /// Most scalar slots one value type may flatten to: nesting a generic
 /// that doubles its payload (`W<W<..>>`) grows exponentially.
 const MAX_VALUE_LEAVES: u64 = 1 << 16;
@@ -3334,6 +3363,86 @@ const MAX_VALUE_BYTES: u64 = 1 << 32;
 
 /// A struct / enum containing itself by value has no finite size; one past
 /// the layout caps is refused before MIR expands it.
+/// Statics whose initializers name each other directly form a cycle no
+/// order can initialize (spec 5.3.6). A cycle through a function call
+/// stays the run-time panic.
+fn check_static_cycles(module: &mut HirModule) {
+    use std::collections::HashMap;
+    let bodies: HashMap<FunctionId, &crate::HirFunction> =
+        module.functions.iter().map(|f| (f.id, f)).collect();
+    let index: HashMap<&str, usize> = (module.statics.iter().enumerate())
+        .map(|(i, s)| (s.name.as_str(), i))
+        .collect();
+    let reads: Vec<Vec<usize>> = (module.statics.iter())
+        .map(|s| {
+            let mut out = Vec::new();
+            let body = s.init_fn.and_then(|id| bodies.get(&id)?.body.as_ref());
+            if let Some(b) = body {
+                crate::each_block(b, &mut |e| {
+                    if let HirExprKind::StaticRef(n) = &e.kind {
+                        if let Some(&j) = index.get(n.as_str()) {
+                            if !out.contains(&j) {
+                                out.push(j);
+                            }
+                        }
+                    }
+                });
+            }
+            out
+        })
+        .collect();
+    // 0 unvisited, 1 on the path, 2 done.
+    let mut state = vec![0u8; reads.len()];
+    let mut diags = Vec::new();
+    for start in 0..reads.len() {
+        if state[start] != 0 {
+            continue;
+        }
+        let mut path = vec![start];
+        let mut next = vec![0usize];
+        state[start] = 1;
+        while let Some(&at) = path.last() {
+            let k = next.last_mut().expect("parallel to path");
+            let Some(&to) = reads[at].get(*k) else {
+                state[at] = 2;
+                path.pop();
+                next.pop();
+                continue;
+            };
+            *k += 1;
+            if state[to] == 0 {
+                state[to] = 1;
+                path.push(to);
+                next.push(0);
+            } else if state[to] == 1 {
+                let from = path.iter().position(|&p| p == to).unwrap_or(0);
+                let cycle: Vec<&str> = path[from..]
+                    .iter()
+                    .chain(std::iter::once(&to))
+                    .map(|&i| leaf_name(&module.statics[i].name))
+                    .collect();
+                diags.push(
+                    rokc_diagnostic::RokDiagnostic::error(
+                        rokc_diagnostic::ErrorKind::Type,
+                        module.statics[to].span,
+                        format!(
+                            "static `{}` is initialized from itself: `{}`",
+                            cycle[0],
+                            cycle.join(" -> ")
+                        ),
+                    )
+                    .with_help(format!(
+                        "give `{}` a value that does not read `{}`, such as a literal or a \
+                         `const`",
+                        cycle[0], cycle[1]
+                    )),
+                );
+            }
+        }
+    }
+    module.diagnostics.extend(diags);
+}
+
 fn check_value_types(module: &mut HirModule) {
     use std::collections::{HashMap, HashSet};
     #[derive(Clone, Copy, PartialEq, Eq, Hash)]
