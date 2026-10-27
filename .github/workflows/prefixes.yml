@@ -77,10 +77,6 @@ jobs:
       TRIPLE: ${{ matrix.triple }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: ${{ env.AWS_ROLE }}
-          aws-region: ${{ env.AWS_REGION }}
 
       # The build tree needs ~15 GB more than a runner's free disk.
       - name: Free disk (Linux)
@@ -92,7 +88,7 @@ jobs:
 
       # clang reads llvm/rok.profdata.xz (indexed format 12: clang 19+);
       # Ubuntu 24.04's default clang is 18 and its c++ is gcc.
-      - name: Build, strip and publish LLVM
+      - name: Build and strip LLVM
         if: inputs.what == 'both' || inputs.what == 'llvm'
         shell: bash
         run: |
@@ -113,10 +109,9 @@ jobs:
           a=rok-llvm-$v-$HOST.tar.gz
           tar -C "$RUNNER_TEMP" -czf "out/$a" "llvm-$v"
           ( cd out && { command -v sha256sum >/dev/null 2>&1 && sha256sum "$a" || shasum -a 256 "$a"; } > "$a.sha256" )
-          aws s3 cp "out/$a"        "s3://$BUCKET/llvm/$v/$TRIPLE/llvm.tar.gz"
-          aws s3 cp "out/$a.sha256" "s3://$BUCKET/llvm/$v/$TRIPLE/llvm.tar.gz.sha256"
+          { echo "LLVM_OUT=$a"; echo "LLVM_V=$v"; } >> "$GITHUB_ENV"
 
-      - name: Build and publish libclang
+      - name: Build libclang
         if: inputs.what == 'both' || inputs.what == 'libclang'
         shell: bash
         run: |
@@ -128,8 +123,26 @@ jobs:
           a=rok-libclang-$v-$HOST.tar.gz
           tar -C "$RUNNER_TEMP" -czf "out/$a" "libclang-$v"
           ( cd out && { command -v sha256sum >/dev/null 2>&1 && sha256sum "$a" || shasum -a 256 "$a"; } > "$a.sha256" )
-          aws s3 cp "out/$a"        "s3://$BUCKET/llvm/$v/$TRIPLE/libclang.tar.gz"
-          aws s3 cp "out/$a.sha256" "s3://$BUCKET/llvm/$v/$TRIPLE/libclang.tar.gz.sha256"
+          { echo "LIBCLANG_OUT=$a"; echo "LIBCLANG_V=$v"; } >> "$GITHUB_ENV"
+
+      # Fresh OIDC credentials just before upload: the builds above exceed the
+      # default 1 h role session, so configuring at job start would expire.
+      - name: AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.AWS_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Publish prefixes to S3
+        shell: bash
+        run: |
+          if [ -n "${LLVM_OUT:-}" ]; then
+            aws s3 cp "out/$LLVM_OUT"        "s3://$BUCKET/llvm/$LLVM_V/$TRIPLE/llvm.tar.gz"
+            aws s3 cp "out/$LLVM_OUT.sha256" "s3://$BUCKET/llvm/$LLVM_V/$TRIPLE/llvm.tar.gz.sha256"
+          fi
+          if [ -n "${LIBCLANG_OUT:-}" ]; then
+            aws s3 cp "out/$LIBCLANG_OUT"        "s3://$BUCKET/llvm/$LIBCLANG_V/$TRIPLE/libclang.tar.gz"
+            aws s3 cp "out/$LIBCLANG_OUT.sha256" "s3://$BUCKET/llvm/$LIBCLANG_V/$TRIPLE/libclang.tar.gz.sha256"
+          fi
 
   # Windows libclang builds within the job limit (unlike LLVM), so it is built
   # here. Needs the Windows LLVM prefix (publish it first).
@@ -140,10 +153,6 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: ${{ env.AWS_ROLE }}
-          aws-region: ${{ env.AWS_REGION }}
       - uses: ./.github/actions/llvm-prefix
       - id: lc
         shell: bash
@@ -151,6 +160,11 @@ jobs:
       - name: Build libclang
         shell: pwsh
         run: '& llvm/build-libclang.ps1 "$env:RUNNER_TEMP\libclang-${{ steps.lc.outputs.v }}"'
+      - name: AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.AWS_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
       - name: Publish libclang
         shell: bash
         env:
@@ -188,24 +202,29 @@ jobs:
       TRIPLE: ${{ matrix.triple }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: ${{ env.AWS_ROLE }}
-          aws-region: ${{ env.AWS_REGION }}
       - name: Free disk
         run: |
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/share/swift
           df -h "$HOME"
-      - name: Build and publish the container prefix
+      - name: Build the container prefix
         run: |
           v=$(sed -n 's/^VERSION=//p' llvm/build.sh)
           scripts/dist-llvm-prefix.sh "$KIND" --out "$RUNNER_TEMP/dist-llvm"
+          echo "DIST_V=$v" >> "$GITHUB_ENV"
+      # Fresh OIDC credentials just before upload (the build exceeds 1 h).
+      - name: AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.AWS_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Publish the container prefix
+        run: |
           pkg=$RUNNER_TEMP/dist-llvm/pkg
           for f in llvm.tar.gz llvm.tar.gz.sha256; do
-            aws s3 cp "$pkg/$f" "s3://$BUCKET/dist-llvm/$v/$TRIPLE/$f"
+            aws s3 cp "$pkg/$f" "s3://$BUCKET/dist-llvm/$DIST_V/$TRIPLE/$f"
           done
           if [ "$KIND" = gnu ]; then
             for f in libclang.tar.gz libclang.tar.gz.sha256; do
-              aws s3 cp "$pkg/$f" "s3://$BUCKET/dist-llvm/$v/$TRIPLE/$f"
+              aws s3 cp "$pkg/$f" "s3://$BUCKET/dist-llvm/$DIST_V/$TRIPLE/$f"
             done
           fi
