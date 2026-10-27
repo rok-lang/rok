@@ -2,7 +2,7 @@
 # Copy every source targets/build.sh downloads to the artifacts bucket,
 # keyed by SHA-256, where its fetch() looks first. Each file comes from
 # its upstream URL and is checked before the upload; one already in the
-# bucket is skipped. Rerun after changing a pin in targets/build.sh.
+# bucket is skipped. CI runs it when a pin changes (mirror.yml).
 #
 #   scripts/mirror-sources.sh [--check]
 #
