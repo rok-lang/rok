@@ -2,3 +2,10 @@
 # costs one job, not the 6 h job limit.
 [profile.default]
 slow-timeout = { period = "60s", terminate-after = 8 }
+
+# rokc_llvm::PLUGIN_DEV, the plugin test's headers and import library.
+[[profile.default.archive.include]]
+path = "debug/mlir-plugin-dev"
+relative-to = "target"
+depth = "infinite"
+on-missing = "warn"
