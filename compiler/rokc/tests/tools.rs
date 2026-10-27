@@ -134,13 +134,17 @@ println(f\"{d:?}\");
 d
 let x = 42;
 x
+let xs = [1, 2, 3];
+xs?
+\"hello\"?
+d?
 ";
     let out = piped(ROKC, &["repl", "--rokr", &rokr], input);
     let stderr = text(&out.stderr);
     assert_eq!(out.status.code(), Some(0), "{stderr}");
     assert_eq!(
         text(&out.stdout),
-        "hello\nQ=3\nQ=3\nD { v: 4 }\nD\n42\n",
+        "hello\nQ=3\nQ=3\nD { v: 4 }\nD\n42\n[1, 2, 3]\n\"hello\"\nD { v: 4 }\n",
         "stderr: {stderr}"
     );
 }

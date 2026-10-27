@@ -31,7 +31,7 @@ pub struct Lexer<'src> {
     /// `MAX + 1`.
     prev_minus: bool,
     /// First occurrence of each distinct (normalized) identifier, for
-    /// the confusable check (spec 1.4.3); `any_non_ascii` gates it.
+    /// the confusable check (spec 1.4.2); `any_non_ascii` gates it.
     idents: Vec<(String, Span)>,
     seen: std::collections::HashSet<String>,
     any_non_ascii: bool,
@@ -182,7 +182,7 @@ impl<'src> Lexer<'src> {
         }
     }
 
-    /// Spec 1.4.3: warn about distinct identifiers that share a
+    /// Spec 1.4.2: warn about distinct identifiers that share a
     /// confusable skeleton (`σ²` / `σ2`, Latin `a` / Cyrillic `а`).
     fn check_confusables(&mut self) {
         if !self.any_non_ascii {
