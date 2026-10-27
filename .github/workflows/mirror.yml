@@ -1,0 +1,34 @@
+name: mirror
+
+# Copy the third-party sources targets/build.sh downloads into the
+# artifacts bucket (mirror/<sha256>), where its fetch() looks first.
+# Runs when a pin changes on main; files already there are skipped.
+on:
+  push:
+    branches: [main]
+    paths:
+      - targets/build.sh
+      - llvm/build.sh
+      - scripts/mirror-sources.sh
+      - .github/workflows/mirror.yml
+  workflow_dispatch:
+
+permissions:
+  id-token: write # OIDC -> rok-ci-artifacts
+  contents: read
+
+concurrency:
+  group: mirror
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::893677554379:role/rok-ci-artifacts
+          aws-region: us-east-1
+      - run: scripts/mirror-sources.sh
