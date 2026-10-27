@@ -35,6 +35,7 @@ or decorative headers, ASCII only. Match the conventions of the file you edit.
 
 ## Submitting
 
-Open a pull request against `main` with the checks above passing. By
-contributing you agree that your work is licensed under both MIT and Apache-2.0,
-the project's dual license.
+Open a pull request against `main` with the checks above passing. Leave
+`CHANGELOG.md` alone: it is written at release time from the merged pull
+requests. By contributing you agree that your work is licensed under both MIT
+and Apache-2.0, the project's dual license.
