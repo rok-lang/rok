@@ -17,9 +17,44 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # A tag publishes only a commit whose main `ci` run passed `ci-gate`;
+  # a run still in progress is waited for.
+  ci-green:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    permissions:
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: main ci-gate on this commit
+        run: |
+          runs="repos/$GH_REPO/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&branch=main&event=push"
+          while :; do
+            read -r id status < <(gh api "$runs" --jq '.workflow_runs[0] | "\(.id // "") \(.status // "")"')
+            if [ -z "$id" ]; then
+              echo "::error::no main ci run for $GITHUB_SHA; push the commit to main first"
+              exit 1
+            fi
+            [ "$status" = completed ] && break
+            echo "ci run $id: $status"
+            sleep 60
+          done
+          gate=$(gh api "repos/$GH_REPO/actions/runs/$id/jobs?per_page=100" --jq '.jobs[] | select(.name == "ci-gate") | .conclusion')
+          if [ "$gate" != success ]; then
+            echo "::error::ci-gate of run $id is '${gate:-missing}'; fix main (or rerun it) before tagging"
+            exit 1
+          fi
+          echo "ci-gate passed in run $id"
+
   # The six host archives come from release-targets.json, the single source
   # of truth (release.sh and scripts/check-targets.sh read it too).
   plan:
+    needs: ci-green
+    # A manual run skips ci-green and only verifies.
+    if: ${{ !cancelled() && needs.ci-green.result != 'failure' }}
     runs-on: ubuntu-24.04
     outputs:
       targets: ${{ steps.targets.outputs.targets }}
