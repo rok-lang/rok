@@ -592,6 +592,7 @@ jobs:
           $env:ROK_HOME = "$env:RUNNER_TEMP\rok-home"
           $zip = Get-ChildItem "$env:RUNNER_TEMP\dist" -Filter 'rok-*-x86_64-pc-windows-msvc.zip' | Select-Object -First 1
           & ./install.ps1 -Archive $zip.FullName -NoModifyPath
+          if ($LASTEXITCODE) { throw 'install.ps1 failed' }
           $env:PATH = "$env:ROK_HOME\bin;$env:SystemRoot\System32"
           function Must { rok.exe @args; if ($LASTEXITCODE) { throw "rok $args failed" } }
           Set-Location $env:RUNNER_TEMP

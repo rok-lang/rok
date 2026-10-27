@@ -8,21 +8,38 @@
 #   rok-<version>-<triple>/install.sh          (from an unpacked archive)
 #
 # Environment: ROK_HOME, ROK_VERSION (default below), ROK_DIST (where
-# releases are downloaded from).
+# releases are downloaded from), NO_COLOR.
+#
+# Output goes to stderr in the style of `rok toolchain update`: status
+# words right-aligned, green and bold on a terminal unless NO_COLOR is
+# set. -q prints errors only, -v adds notes (URLs, paths).
 set -eu
 
 version="${ROK_VERSION:-0.1.1}"
 dist="${ROK_DIST:-https://github.com/rok-lang/rok/releases}"
 home="${ROK_HOME:-$HOME/.rok}"
 archive=""
+quiet=""
+verbose=""
+
+if [ -t 2 ] && [ -z "${NO_COLOR-}" ]; then
+  green=$(printf '\033[1;32m') red=$(printf '\033[1;31m') reset=$(printf '\033[0m')
+else
+  green="" red="" reset=""
+fi
 
 say() { printf '%s\n' "$*"; }
+# A status line: $1 right-aligned, then $2.
+status() { [ -n "$quiet" ] || printf '%s%12s%s %s\n' "$green" "$1" "$reset" "$2" >&2; }
+note() { [ -z "$verbose" ] || printf '        note: %s\n' "$*" >&2; }
+info() { [ -n "$quiet" ] || printf '%s\n' "$*" >&2; }
+err() { printf 'install.sh: %serror%s: %s\n' "$red" "$reset" "$*" >&2; }
 die() {
-  printf 'install.sh: error: %s\n' "$*" >&2
+  err "$*"
   exit 1
 }
 usage() {
-  say "usage: install.sh [--archive <rok-*.tar.xz | rok-*.tar.gz>] [--version <version>]"
+  say "usage: install.sh [-q | --quiet] [-v | --verbose] [--archive <rok-*.tar.xz | rok-*.tar.gz>] [--version <version>]"
   say "installs into \$ROK_HOME (now $home)"
 }
 
@@ -43,6 +60,14 @@ while [ $# -gt 0 ]; do
       }
       version=$2
       shift 2
+      ;;
+    -q | --quiet)
+      quiet=1
+      shift
+      ;;
+    -v | --verbose)
+      verbose=1
+      shift
       ;;
     -h | --help)
       usage
@@ -110,7 +135,7 @@ no_archive() {
       die "rok $version has no release archive at $url; check the version (--version, ROK_VERSION)"
       ;;
   esac
-  printf 'install.sh: error: there is no rok %s release archive for %s\n' "$version" "$triple" >&2
+  err "there is no rok $version release archive for $triple"
   printf '  release archives are built for: %s\n' "$supported" >&2
   printf '  on this host, build rok from source: see "Building from source" in\n' >&2
   printf '  https://github.com/rok-lang/rok#building-from-source\n' >&2
@@ -128,27 +153,30 @@ else
   if [ -z "$archive" ]; then
     triple=$(host_triple)
     base="$dist/download/v$version/rok-$version-$triple"
+    status Downloading "rok $version ($triple)"
     # The .tar.xz is about half the .tar.gz; tar needs xz for it on Linux
     # (macOS's tar reads it itself). A release without one gets the .tar.gz.
     url=""
     if [ "$(uname -s)" = Darwin ] || command -v xz > /dev/null 2>&1; then
       url="$base.tar.xz"
       archive="$tmp/rok.tar.xz"
-      say "downloading $url"
       download "$url" "$archive" || url=""
     fi
     if [ -z "$url" ]; then
       url="$base.tar.gz"
       archive="$tmp/rok.tar.gz"
-      say "downloading $url"
       download "$url" "$archive" || no_archive
     fi
+    note "from $url"
     download "$url.sha256" "$archive.sha256" || die "$url.sha256 is missing (HTTP 404), so the archive cannot be checked; report it at https://github.com/rok-lang/rok/issues"
   fi
   [ -f "$archive" ] || die "$archive does not exist"
   # A download is checked against its release's .sha256, an archive
   # file against the one beside it, if any.
-  if [ -f "$archive.sha256" ]; then check_sum "$archive" "$archive.sha256"; fi
+  if [ -f "$archive.sha256" ]; then
+    check_sum "$archive" "$archive.sha256"
+    note "SHA-256 matches $archive.sha256"
+  fi
   mkdir "$tmp/files"
   case $archive in
     *.tar.xz | *.txz) tar -xJf "$archive" -C "$tmp/files" || die "cannot unpack $archive (tar needs xz for a .tar.xz: install xz, or use the .tar.gz)" ;;
@@ -165,22 +193,33 @@ ROK_HOME=$home "$src/bin/rok" -q toolchain install "$full" --from "$src"
 ROK_HOME=$home "$src/bin/rok" -q toolchain default "$full"
 "$home/bin/rok" --version > /dev/null || die "the installed proxy $home/bin/rok does not run"
 
-say ""
-say "rok $full is installed in $home"
+# $home as ~/.. when under $HOME, for display only.
+shown=$home
+case ${HOME:+$home} in "${HOME-}"/*)
+  tilde='~'
+  shown=$tilde${home#"$HOME"}
+  ;;
+esac
+status Installed "rok $full to $shown"
+note "toolchain in $home/toolchains, proxies in $home/bin"
+
+info ""
 case ":${PATH-}:" in
   *":$home/bin:"*) ;;
   *)
-    say ""
-    say "Add $home/bin to PATH:"
-    say "  bash / zsh:  echo 'export PATH=\"$home/bin:\$PATH\"' >> ~/.zshrc   (or ~/.bashrc)"
-    say "  fish:        fish_add_path $home/bin"
+    info "Add $shown/bin to PATH (then open a new shell):"
+    info "  bash / zsh:  echo 'export PATH=\"$home/bin:\$PATH\"' >> ~/.zshrc   (or ~/.bashrc)"
+    info "  fish:        fish_add_path $home/bin"
+    info ""
     ;;
 esac
-
 # rokc links its own LLVM and linker, and on Linux its own C library
 # files (lib/rok/targets); on macOS the link needs the SDK of Xcode's
 # command line tools.
 if [ "$(uname -s)" = Darwin ] && ! xcrun --show-sdk-path > /dev/null 2>&1; then
-  say ""
-  say "rok needs the macOS SDK to link programs: xcode-select --install"
+  info "rok needs the macOS SDK to link programs: xcode-select --install"
+  info ""
 fi
+info "Next steps:"
+info "  rok --version"
+info "  rok new hello && cd hello && rok run"

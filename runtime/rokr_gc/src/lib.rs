@@ -2782,14 +2782,17 @@ mod tests {
             // object younger than the mark (never scanned), it survives.
             set(a, 16, 0);
             heap().concurrent = Concurrent::Always;
+            concurrent::HOLD.store(true, Ordering::Relaxed);
             world::lock();
             collect_locked(true, true);
             world::unlock();
+            assert!(heap().marking);
             concurrent::lock_mark();
             let c = alloc(32, 8, USER_TYPE_BASE);
             set(c, 16, weak_get(cy) as usize);
             *frame.2 = c as usize;
             concurrent::unlock_mark();
+            concurrent::HOLD.store(false, Ordering::Relaxed);
             world::lock();
             if heap().marking {
                 concurrent::finish(false);
@@ -2960,6 +2963,7 @@ mod tests {
             // `b` may have moved (evacuation); `a` is rooted.
             let b = word(a, 16) as *mut u8;
             heap().concurrent = Concurrent::Always;
+            concurrent::HOLD.store(true, Ordering::Relaxed);
             world::lock();
             collect_locked(true, true);
             world::unlock();
@@ -2975,6 +2979,7 @@ mod tests {
             write_barrier(a, a.add(16));
             set(a, 16, d as usize);
             concurrent::unlock_mark();
+            concurrent::HOLD.store(false, Ordering::Relaxed);
             world::lock();
             if heap().marking {
                 concurrent::finish(false);
