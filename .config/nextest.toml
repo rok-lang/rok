@@ -1,0 +1,4 @@
+# A test that runs past 8 minutes is killed and fails, so a hang (#91)
+# costs one job, not the 6 h job limit.
+[profile.default]
+slow-timeout = { period = "60s", terminate-after = 8 }
