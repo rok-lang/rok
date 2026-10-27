@@ -137,6 +137,8 @@ impl<T> ManyPtr<T> {
     }
     /// The first element as a single-element pointer.
     pub const fn as_one(self) -> Ptr<T> { Ptr { address: self.address } }
+    /// The same address as a pointer to `U`s (alignment is the caller's).
+    pub const fn cast<U>(self) -> ManyPtr<U> { ManyPtr { address: self.address } }
     pub fn as_const(self) -> ConstPtr<T> { ConstPtr { address: self.address } }
     /// Element `idx` (no bounds: the caller knows the length).
     pub unsafe fn read(self, idx: usize) -> T {

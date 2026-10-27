@@ -1,0 +1,46 @@
+// spec: std 302-net §3.2.5
+// expect-exit: 0
+// expect-stdout:
+// unreadable: new 0 roots, try_new Certificate
+// bundle: new 1 roots, try_new 1 roots
+
+// `ClientConfig::try_new` throws when the trust store cannot be read,
+// where `new` leaves `root_certs` empty. `SSL_CERT_FILE` picks the
+// store, so neither network nor an OS store is needed.
+use rok::std::env;
+use rok::std::fs;
+use rok::std::path::Path;
+use rok::std::process;
+use rok::std::net::tls::ClientConfig;
+
+const CA: str = "-----BEGIN CERTIFICATE-----
+MIIBUzCCAQWgAwIBAgIUHuDQmdyLUvVYGHs5rDw1vYU8bIIwBQYDK2VwMBYxFDAS
+BgNVBAMMC3JvayB0ZXN0IENBMCAXDTI2MTAxNTA3MzYwN1oYDzIxMjYwOTIxMDcz
+NjA3WjAWMRQwEgYDVQQDDAtyb2sgdGVzdCBDQTAqMAUGAytlcAMhAPEMYwkJArdk
+aV3E4nOSir4hNCOt5rCjhq6U1sYe6lTWo2MwYTAdBgNVHQ4EFgQUqTSORZgmA5IP
+oVjCUMKRtKdC4BkwHwYDVR0jBBgwFoAUqTSORZgmA5IPoVjCUMKRtKdC4BkwDwYD
+VR0TAQH/BAUwAwEB/zAOBgNVHQ8BAf8EBAMCAgQwBQYDK2VwA0EAp7tJ5xbNuoRw
+zTq/y0kOz917MctSi+O2E5DLqAoAjtPGehC8163+j0KTLVeOwoTW1dtCRoWHyyYj
+gDBrha3fDQ==
+-----END CERTIFICATE-----
+";
+
+fn check(label: str, path: Path) {
+    env::set_var("SSL_CERT_FILE", path.as_str());
+    let n = ClientConfig::new().root_certs.len();
+    let c = try ClientConfig::try_new() catch e {
+        println(f"{label}: new {n} roots, try_new {e.kind:?}");
+        return;
+    };
+    println(f"{label}: new {n} roots, try_new {c.root_certs.len()} roots");
+}
+
+fn main() {
+    let dir = env::temp_dir();
+    let pid = process::id();
+    check("unreadable", dir.join(Path::from(f"rok-tls-try-new-missing-{pid}.pem")));
+    let bundle = dir.join(Path::from(f"rok-tls-try-new-{pid}.pem"));
+    try! fs::write(bundle, CA);
+    check("bundle", bundle);
+    try! fs::remove_file(bundle);
+}

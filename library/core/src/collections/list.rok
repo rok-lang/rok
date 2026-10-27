@@ -418,6 +418,8 @@ impl<T> Iterator for ListIter<T> {
         self.list.get(i)
     }
 
+    const fn exact_len(self) -> usize | none { self.len() }
+
     /// `ExactSizeIterator`: O(1) (2.7.10).
     const fn count(self) -> usize { self.len() }
 }

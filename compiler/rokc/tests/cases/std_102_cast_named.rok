@@ -5,11 +5,13 @@
 // u8 view: 1
 // align_cast: 258 none
 // unchecked: 258
+// method cast: 1 2 1
 
 // stdlib 1.2: every pointer cast is a named function - `ptr_cast`
 // retypes (same address), `align_cast` checks the alignment first
 // (`none` when misaligned), `align_cast_unchecked` trusts the caller.
-use rok::bare::ptr::{Ptr, addr_of};
+// `ConstPtr` and `ManyPtr` retype with their own `cast` method.
+use rok::bare::ptr::{Ptr, ConstPtr, ManyPtr, addr_of, many_addr_of};
 use rok::bare::{align_cast, align_cast_unchecked, ptr_cast};
 
 struct A { x: u32; }
@@ -39,4 +41,9 @@ fn main() {
     println(f"align_cast: {good} {bad}");
     let u: Ptr<u32> = align_cast_unchecked::<u32>(at4);
     println(f"unchecked: {unsafe { u.read() }}");
+
+    let cw: ConstPtr<u8> = pw.as_const().cast::<u8>();
+    let mw: ManyPtr<u32> = many_addr_of(words[0]);
+    let mb: ManyPtr<u8> = mw.cast::<u8>();
+    println(f"method cast: {unsafe { cw.read() }} {unsafe { mb.read(4) }} {unsafe { mb.cast::<u32>().read(0) }}");
 }

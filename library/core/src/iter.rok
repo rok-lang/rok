@@ -76,7 +76,15 @@ pub trait Iterator {
         Peekable { it: self, peeked: none, has: false }
     }
 
+    /// The number of items left when that is known without stepping
+    /// (no item is computed), else `none`. `count` uses it.
+    const fn exact_len(self) -> usize | none { none }
+
+    /// The number of items left: `exact_len` when known, else stepped.
     const fn count(self) -> usize {
+        if let k: usize = self.exact_len() {
+            return k;
+        }
         let n: usize = 0;
         for _ in self {
             n += 1;
@@ -316,6 +324,8 @@ impl<I: Iterator, U> Iterator for Map<I, U> {
         (self.f)(self.it.next()?)
     }
 
+    const fn exact_len(self) -> usize | none { self.it.exact_len() }
+
     /// As many as the inner iterator: O(1) over an `ExactSizeIterator` (2.7.10).
     const fn count(self) -> usize { self.it.count() }
 }
@@ -372,6 +382,8 @@ impl<I: Iterator> Iterator for Enumerate<I> {
         (at, x)
     }
 
+    const fn exact_len(self) -> usize | none { self.it.exact_len() }
+
     /// As many as the inner iterator: O(1) over an `ExactSizeIterator` (2.7.10).
     const fn count(self) -> usize { self.it.count() }
 }
@@ -398,6 +410,11 @@ impl<I: Iterator, J: Iterator> Iterator for Zip<I, J> {
     const fn next(ref self) -> (I::Item, J::Item) | none {
         let x = self.a.next()?;
         (x, self.b.next()?)
+    }
+
+    const fn exact_len(self) -> usize | none {
+        let n = self.a.exact_len()?;
+        n.min(self.b.exact_len()?)
     }
 }
 
@@ -460,6 +477,14 @@ impl<I: Iterator> Iterator for StepBy<I> {
         }
         self.it.nth(self.step - 1)
     }
+
+    const fn exact_len(self) -> usize | none {
+        let n = self.it.exact_len()?;
+        if !self.first {
+            return n / self.step;
+        }
+        if n == 0 { 0 } else { 1 + (n - 1) / self.step }
+    }
 }
 
 impl<I: ExactSizeIterator> ExactSizeIterator for StepBy<I> {
@@ -500,6 +525,8 @@ impl<I: DoubleEndedIterator> Iterator for Rev<I> {
     const fn next(ref self) -> I::Item | none {
         self.it.next_back()
     }
+
+    const fn exact_len(self) -> usize | none { self.it.exact_len() }
 
     /// As many as the inner iterator: O(1) over an `ExactSizeIterator` (2.7.10).
     const fn count(self) -> usize { self.it.count() }
@@ -610,6 +637,13 @@ impl<I: Iterator> Iterator for Take<I> {
         self.left -= 1;
         self.it.next()
     }
+
+    const fn exact_len(self) -> usize | none {
+        if self.left == 0 {
+            return 0;
+        }
+        self.it.exact_len()?.min(self.left)
+    }
 }
 
 impl<I: ExactSizeIterator> ExactSizeIterator for Take<I> {
@@ -643,6 +677,8 @@ impl<I: Iterator> Iterator for Skip<I> {
         }
         self.it.next()
     }
+
+    const fn exact_len(self) -> usize | none { self.it.exact_len()?.saturating_sub(self.n) }
 }
 
 impl<I: ExactSizeIterator> ExactSizeIterator for Skip<I> {
