@@ -696,14 +696,17 @@ fn lower_stmt_inner(ctx: &mut LowerCtx<'_>, stmt: &Stmt) -> Option<HirStmt> {
                     None => {
                         ctx.break_tys.insert(depth, (HirTy::Unit, true));
                     }
-                    Some((t, _)) if t != HirTy::Unit => ctx.emit_error(
-                        rokc_diagnostic::ErrorKind::Type,
-                        format!(
-                            "`break` without a value, but this loop's `break` values are \
-                             `{}` (spec 3.13.1)",
-                            ctx.ty_name(&t)
-                        ),
-                    ),
+                    Some((t, _)) if t != HirTy::Unit => {
+                        let t = ctx.ty_name(&t);
+                        ctx.emit_error(
+                            rokc_diagnostic::ErrorKind::Type,
+                            format!(
+                                "`break` without a value, but this loop's `break` values are \
+                                 `{t}` (spec 3.13.1)"
+                            ),
+                        );
+                        ctx.help_last(Some(format!("write `break <value>;` with a `{t}` value")));
+                    }
                     Some(_) => {}
                 }
                 None
@@ -2068,6 +2071,24 @@ pub(super) fn lower_break_value(ctx: &mut LowerCtx<'_>, depth: usize, e: &Expr) 
             }
             v
         }
+        // An earlier bare `break;` made the loop's value `()`.
+        Some((HirTy::Unit, true))
+            if !matches!(v.ty, HirTy::Unknown | HirTy::Unit) && !hir_expr_diverges(&v) =>
+        {
+            let t = ctx.ty_name(&v.ty);
+            let h = ctx.error_expr(
+                v.span,
+                format!(
+                    "`break` with a `{t}` value, but an earlier `break` of this loop has no \
+                     value (spec 3.13.1)"
+                ),
+            );
+            ctx.help_last(Some(format!(
+                "write `break <value>;` with a `{t}` value for the bare `break`, or remove \
+                 this value"
+            )));
+            h
+        }
         Some((t, true)) if v.ty != HirTy::Unknown && !coercible(ctx, &t, &v.ty) => ctx.error_expr(
             v.span,
             format!(
@@ -3010,9 +3031,26 @@ pub(super) fn lower_if(
         then_ty
     } else if then_ty == HirTy::Unknown || else_ty == HirTy::Unknown {
         HirTy::Unknown
-    } else if let Some(t) =
-        expected.filter(|t| coercible(ctx, t, &then_ty) && coercible(ctx, t, &else_ty))
-    {
+    } else if let Some(t) = expected.filter(|t| !super::infer::has_var(ctx, t)) {
+        // A typed slot: each branch must fit it, as a `match` arm does.
+        if !then_div {
+            then_h.trailing = fit_if_branch(ctx, &t, then_h.trailing.take(), "then", &else_ty);
+        }
+        if !else_div {
+            else_h = match else_h.kind {
+                HirExprKind::Block(mut b) => {
+                    b.trailing = fit_if_branch(ctx, &t, b.trailing.take(), "else", &then_ty);
+                    HirExpr {
+                        ty: t.clone(),
+                        kind: HirExprKind::Block(b),
+                        span: else_h.span,
+                    }
+                }
+                _ => {
+                    fit_if_branch(ctx, &t, Some(else_h), "else", &then_ty).expect("a branch value")
+                }
+            };
+        }
         t
     } else {
         // Branches of different types are an error, not an inferred
@@ -3050,6 +3088,60 @@ pub(super) fn lower_if(
         };
     }
     build(cond_h, then_h, Some(else_h), result_ty)
+}
+
+/// The `which` (`then` / `else`) branch value of an `if` in a slot of
+/// type `t`: coerced, or reported naming the branch (`other` the other
+/// branch's type, for the help). `None` is a unit branch.
+fn fit_if_branch(
+    ctx: &mut LowerCtx<'_>,
+    t: &HirTy,
+    v: Option<HirExpr>,
+    which: &str,
+    other: &HirTy,
+) -> Option<HirExpr> {
+    let before = ctx.env.sink.diagnostics.borrow().len();
+    let what = || format!("the `{which}` branch of `if`");
+    let v = match v {
+        Some(v) => {
+            let at = if v.span.is_dummy() {
+                ctx.here()
+            } else {
+                v.span
+            };
+            let outer = ctx.at.replace(at);
+            let v = coerce(ctx, t, v, &what);
+            ctx.at.set(outer);
+            Some(v)
+        }
+        None if !coercible(ctx, t, &HirTy::Unit) => {
+            ctx.emit_error(
+                rokc_diagnostic::ErrorKind::Type,
+                format!(
+                    "mismatched types: {} expects `{}`, found `()`",
+                    what(),
+                    ctx.ty_name(t)
+                ),
+            );
+            None
+        }
+        None => None,
+    };
+    if ctx.env.sink.diagnostics.borrow().len() > before {
+        let have = v.as_ref().map_or(HirTy::Unit, |v| v.ty.clone());
+        let t_name = ctx.ty_name(t);
+        let mut help = format!(
+            "the slot is typed `{t_name}`; give the `{which}` branch a value of type `{t_name}`"
+        );
+        if coercible(ctx, t, other) {
+            help += &format!(
+                ", or widen the slot's type to `{t_name} | {}`",
+                ctx.ty_name(&have)
+            );
+        }
+        ctx.help_last(Some(help));
+    }
+    v
 }
 
 /// Spec 2.2.6: the `x is T` conjuncts of `cond` (`a && b && ..`): locals
@@ -3314,7 +3406,7 @@ fn with_trailing_closure(args: &[CallArg], tc: Option<&Expr>) -> Vec<CallArg> {
     all
 }
 
-/// Lower arguments against a signature (spec 4.1): named ones to their
+/// Lower arguments against a signature (spec 4.2): named ones to their
 /// slot, tuple spreads to consecutive slots, missing trailing ones to
 /// defaults, each checked. `receiver` fills slot 0.
 pub(super) fn lower_args_for(
@@ -3361,7 +3453,7 @@ pub(super) fn lower_args_ref(
     // Slot → its argument's written position (spec 4.2.8).
     let mut written: Vec<Option<usize>> = vec![None; n];
     // `..d` with `d: Dict<str, V>`: its temp and written position.
-    let mut dicts: Vec<(String, usize)> = Vec::new();
+    let mut dicts: Vec<(String, usize, HirTy)> = Vec::new();
     for (k, a) in args.iter().enumerate() {
         match a {
             CallArg::Positional(e) | CallArg::Ref(e) | CallArg::Spread(e) if next >= var_at => {
@@ -3401,21 +3493,22 @@ pub(super) fn lower_args_ref(
                         slots[i] = Some(ArgSrc::Ast(value));
                         written[i] = Some(k);
                     }
-                    Some(i) => ctx.emit_error(
-                        rokc_diagnostic::ErrorKind::Type,
-                        format!(
-                            "argument `{}` provided more than once (spec 4.1)",
-                            sig.param_names.get(i).map_or(name.as_str(), String::as_str)
-                        ),
-                    ),
+                    Some(i) => {
+                        let p = sig.param_names.get(i).map_or(name.as_str(), String::as_str);
+                        ctx.emit_error(
+                            rokc_diagnostic::ErrorKind::Type,
+                            format!("argument `{p}` provided more than once (spec 4.2.4)"),
+                        );
+                        ctx.help_last(Some(twice_help(p)));
+                    }
                     None => ctx.emit_error(
                         rokc_diagnostic::ErrorKind::Type,
-                        format!("`{callee}` has no parameter named `{name}` (spec 4.1)"),
+                        format!("`{callee}` has no parameter named `{name}` (spec 4.2.4)"),
                     ),
                 }
             }
             CallArg::Spread(e) => {
-                // `f(..t)` with a tuple value (spec 4.1).
+                // `f(..t)` with a tuple value (spec 4.2.6).
                 let lh = lower_expected(ctx, e, HirTy::Unknown);
                 match lh.ty.clone() {
                     HirTy::Tuple(parts) => {
@@ -3511,9 +3604,10 @@ pub(super) fn lower_args_ref(
                     }
                     ty if is_str_dict(ctx, &ty) => {
                         let name = format!("#spread{}", ctx.locals.len());
+                        let v = dict_value_ty(ctx, &ty);
                         let local = ctx.declare(Some(name.clone()), ty);
                         lets.push(HirStmt::Let { local, init: lh });
-                        dicts.push((name, k));
+                        dicts.push((name, k, v));
                     }
                     other => ctx.emit_error(
                         rokc_diagnostic::ErrorKind::Type,
@@ -3532,10 +3626,10 @@ pub(super) fn lower_args_ref(
         .filter(|i| slots[*i].is_none())
         .map(|i| {
             let d = sig.param_defaults.get(i).cloned().flatten();
-            (i, sig.param_names[i].clone(), d)
+            (i, sig.param_names[i].clone(), d, sig.param_tys[i].clone())
         })
         .collect();
-    let names: Vec<String> = dicts.iter().map(|d| d.0.clone()).collect();
+    let names: Vec<(String, HirTy)> = dicts.iter().map(|d| (d.0.clone(), d.2.clone())).collect();
     let mut dict_slots = Vec::new();
     for (i, e) in dict_spread(ctx, &names, empty, &mut lets, span) {
         slots[i] = Some(ArgSrc::Dict(dict_slots.len()));
@@ -3654,11 +3748,12 @@ pub(super) fn lower_args_ref(
 /// Spec 4.2.6: dict spreads as named arguments. Each parameter in `empty`
 /// reads `#d["p"]` from the first dict with key `p`, else its default (or
 /// panics in `Dict::index`); every key must name one (`spread_names`,
-/// checked at run time).
+/// checked at run time). A defaulted parameter skips a dict whose value
+/// type does not fit it; that dict holding its key panics (`spread_misfit`).
 fn dict_spread(
     ctx: &mut LowerCtx<'_>,
-    dicts: &[String],
-    empty: Vec<(usize, String, Option<Expr>)>,
+    dicts: &[(String, HirTy)],
+    empty: Vec<(usize, String, Option<Expr>, HirTy)>,
     lets: &mut Vec<HirStmt>,
     span: rokc_diagnostic::Span,
 ) -> Vec<(usize, Expr)> {
@@ -3670,12 +3765,32 @@ fn dict_spread(
         span,
     };
     let mut names = Vec::new();
+    let mut misfits = Vec::new();
     let mut out = Vec::new();
-    for (i, pname, default) in empty {
+    for (i, pname, default, pty) in empty {
+        names.push(lit(&pname));
+        let fill: Vec<&String> = dicts
+            .iter()
+            .filter(|(d, v)| {
+                let fits = default.is_none() || dict_value_fits(ctx, &pty, v);
+                if !fits {
+                    let why = format!(
+                        "whose value type `{}` does not fit parameter `{pname}: {}`",
+                        ctx.ty_name(v),
+                        ctx.ty_name(&pty)
+                    );
+                    misfits.push((d.clone(), pname.clone(), why));
+                }
+                fits
+            })
+            .map(|(d, _)| d)
+            .collect();
+        let Some(last) = fill.last() else {
+            continue;
+        };
         let skip_last = usize::from(default.is_none());
-        let mut e =
-            default.unwrap_or_else(|| spread_item_at(&dicts[dicts.len() - 1], &lit(&pname), span));
-        for d in dicts.iter().rev().skip(skip_last) {
+        let mut e = default.unwrap_or_else(|| spread_item_at(last, &lit(&pname), span));
+        for d in fill.iter().rev().skip(skip_last) {
             let has = Expr {
                 kind: ExprKind::MethodCall {
                     receiver: Box::new(super::throws::path_expr(d, span)),
@@ -3700,14 +3815,21 @@ fn dict_spread(
                 span,
             };
         }
-        names.push(lit(&pname));
         out.push((i, e));
+    }
+    for (d, pname, why) in misfits {
+        let check = index_fn(
+            "spread_misfit",
+            vec![super::throws::path_expr(&d, span), lit(&pname), lit(&why)],
+            span,
+        );
+        lets.push(HirStmt::Expr(lower_expected(ctx, &check, HirTy::Unit)));
     }
     let names = Expr {
         kind: ExprKind::List(names),
         span,
     };
-    for d in dicts {
+    for (d, _) in dicts {
         let check = index_fn(
             "spread_names",
             vec![super::throws::path_expr(d, span), names.clone()],
@@ -3716,6 +3838,56 @@ fn dict_spread(
         lets.push(HirStmt::Expr(lower_expected(ctx, &check, HirTy::Unit)));
     }
     out
+}
+
+/// Can a dict value of type `v` fill a parameter of type `p`? An open
+/// type (generic, not yet inferred) is taken to fit.
+fn dict_value_fits(ctx: &LowerCtx<'_>, p: &HirTy, v: &HirTy) -> bool {
+    let open = |t: &HirTy| {
+        super::bounds::mentions(ctx, t, &|t| {
+            matches!(
+                t,
+                HirTy::Unknown
+                    | HirTy::Path(_)
+                    | HirTy::Param(_)
+                    | HirTy::Var(_)
+                    | HirTy::OpenConst(_)
+            )
+        })
+    };
+    open(p) || open(v) || coercible(ctx, p, v)
+}
+
+/// What to write for an argument `p` given twice.
+fn twice_help(p: &str) -> String {
+    format!("pass `{p}` once: remove the extra `{p}: ..` (or the positional argument it repeats)")
+}
+
+/// A generic fn's parameter type, when it is plain (primitives, unit and
+/// tuples of them) and so known before inference; else `Unknown`.
+fn plain_param_ty(ty: &Ty) -> HirTy {
+    fn plain(t: &HirTy) -> bool {
+        match t {
+            HirTy::Prim(_) | HirTy::Unit => true,
+            HirTy::Tuple(ps) => ps.iter().all(plain),
+            _ => false,
+        }
+    }
+    let t = crate::ty::resolve_ty(ty);
+    if plain(&t) { t } else { HirTy::Unknown }
+}
+
+/// `V` of a `Dict<str, V>`.
+fn dict_value_ty(ctx: &LowerCtx<'_>, ty: &HirTy) -> HirTy {
+    match ty {
+        HirTy::Struct(id) => ctx
+            .struct_def(*id)
+            .generic_args
+            .get(1)
+            .cloned()
+            .unwrap_or(HirTy::Unknown),
+        _ => HirTy::Unknown,
+    }
 }
 
 /// `Dict<str, V>`: what `..d` spreads as named arguments.
@@ -6997,7 +7169,7 @@ pub(super) fn call_value(
     if args.iter().any(|a| !matches!(a, CallArg::Positional(_))) {
         return ctx.error_expr(
             span,
-            "named / spread arguments need a statically known callee (spec 4.1)".to_owned(),
+            "named / spread arguments need a statically known callee (spec 4.2.4)".to_owned(),
         );
     }
     let sig = FnSig {
@@ -7105,7 +7277,7 @@ pub(super) fn call_generic_on(
 }
 
 /// A generic call's named and spread arguments as positional ones (spec
-/// 4.1): skipped parameters take defaults, a spread tuple goes through a
+/// 4.2): skipped parameters take defaults, a spread tuple goes through a
 /// temp in `lets`, a trailing closure fills the last parameter (4.8.3);
 /// `offset` receiver slots first. `None` after an error.
 fn generic_positional_args(
@@ -7125,7 +7297,7 @@ fn generic_positional_args(
     let variadic = params.last().is_some_and(|p| p.variadic);
     let mut rest: Vec<CallArg> = Vec::new();
     let mut ok = true;
-    let mut dicts: Vec<String> = Vec::new();
+    let mut dicts: Vec<(String, HirTy)> = Vec::new();
     for (k, a) in args.iter().enumerate() {
         match a {
             CallArg::Positional(e)
@@ -7150,14 +7322,15 @@ fn generic_positional_args(
                     ok = false;
                     ctx.emit_error(
                         rokc_diagnostic::ErrorKind::Type,
-                        format!("argument `{name}` provided more than once (spec 4.1)"),
+                        format!("argument `{name}` provided more than once (spec 4.2.4)"),
                     );
+                    ctx.help_last(Some(twice_help(name)));
                 }
                 None => {
                     ok = false;
                     ctx.emit_error(
                         rokc_diagnostic::ErrorKind::Type,
-                        format!("`{callee}` has no parameter named `{name}` (spec 4.1)"),
+                        format!("`{callee}` has no parameter named `{name}` (spec 4.2.4)"),
                     );
                 }
             },
@@ -7192,9 +7365,10 @@ fn generic_positional_args(
                     HirTy::Unknown => return None,
                     t if is_str_dict(ctx, t) => {
                         let name = format!("#spread{}", ctx.locals.len());
+                        let vty = dict_value_ty(ctx, &h.ty);
                         let local = ctx.declare(Some(name.clone()), h.ty.clone());
                         lets.push(HirStmt::Let { local, init: h });
-                        dicts.push(name);
+                        dicts.push((name, vty));
                         continue;
                     }
                     other => {
@@ -7273,7 +7447,12 @@ fn generic_positional_args(
                 .default
                 .clone()
                 .map(|d| in_module(&module_of(&def.name), d));
-            (i, p.name.clone(), d)
+            (
+                i,
+                p.name.clone(),
+                d,
+                p.ty.as_ref().map_or(HirTy::Unknown, plain_param_ty),
+            )
         })
         .collect();
     let span = args

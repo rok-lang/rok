@@ -1,0 +1,13 @@
+// spec: §5.4.4
+// expect-error: module `bar` body not found at
+// expect-error: there is no
+// expect-error: help: create
+// expect-error: or write `mod bar { .. }` in place of `mod bar;`
+
+// A single-file module's `mod bar;` names `single/bar.rok`; with no
+// `single/` folder the error says so.
+mod single;
+
+fn main() {
+    println(f"{single::bar::n()}");
+}

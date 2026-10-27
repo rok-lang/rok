@@ -1,0 +1,17 @@
+// spec: §4.2.4
+// expect-error: argument `a` provided more than once (spec 4.2.4)
+// expect-error: help: pass `a` once
+// expect-error: argument `x` provided more than once (spec 4.2.4)
+// expect-error: `f` has no parameter named `z` (spec 4.2.4)
+
+// A parameter given both positionally and by name is an error, in a
+// plain call and in a generic one.
+fn f(a: i32, b: i32 = 0) -> i32 { a + b }
+
+fn g<T>(x: T, y: T) -> T { x }
+
+fn main() {
+    _ = f(1, a: 2);
+    _ = g(1, y: 2, x: 3);
+    _ = f(1, z: 3);
+}

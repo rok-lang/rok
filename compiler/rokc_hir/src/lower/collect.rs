@@ -1812,7 +1812,7 @@ fn collect<'a>(
                         here,
                         format!("method `{leaf}` is not a member of trait `{}`", td.name),
                     ),
-                    // Spec 4.4.9: a throwing fn can't fill a non-throwing
+                    // Spec 4.14.11: a throwing fn can't fill a non-throwing
                     // slot. The operator traits (stdlib 2.3) never throw.
                     Some(tm) if is_throwing(&m.throws) && !is_throwing(&tm.throws) => {
                         err(
@@ -1820,7 +1820,7 @@ fn collect<'a>(
                             here,
                             format!(
                                 "`{leaf}` throws but `{}::{leaf}` is declared without \
-                                 `throws`, so an impl can't add one (spec 4.4.9){}",
+                                 `throws`, so an impl can't add one (spec 4.14.11){}",
                                 td.name,
                                 if td.attrs.iter().any(|a| a.path == ["lang"]) {
                                     " - operators don't throw; return a `Result` or use \

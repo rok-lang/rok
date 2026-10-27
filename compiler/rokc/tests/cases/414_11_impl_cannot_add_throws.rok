@@ -1,5 +1,5 @@
 // spec: §4.14.11
-// expect-error: `m` throws but `T::m` is declared without `throws`, so an impl can't add one
+// expect-error: `m` throws but `T::m` is declared without `throws`, so an impl can't add one (spec 4.14.11)
 
 // Spec 4.14.11: an impl method's `throws` must be the trait method's.
 trait T { fn m(self) -> i32; }

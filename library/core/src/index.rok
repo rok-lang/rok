@@ -54,6 +54,15 @@ pub const fn spread_names<V>(d: rok::core::collections::dict::Dict<str, V>, name
     }
 }
 
+/// Spec 4.2.6: a defaulted parameter the dict's value type does not fit
+/// takes its default; a key naming it is an error.
+#[track_caller]
+pub const fn spread_misfit<V>(d: rok::core::collections::dict::Dict<str, V>, key: str, why: str) {
+    if d.contains_key(key) {
+        panic(f"spread of key {key:?}, {why}");
+    }
+}
+
 #[track_caller]
 pub const fn index_from_end(i: isize, len: usize) -> usize {
     if i >= 0 {
