@@ -22,6 +22,8 @@ struct Doc {
     text: String,
     /// Needs a compile (changed since the last one).
     dirty: bool,
+    /// Inputs of the last check, including one that reported errors.
+    inputs: Vec<PathBuf>,
     /// The last compile that type-checked: hover / definition /
     /// completion keep working while the buffer has errors.
     good: Option<Analysis>,
@@ -206,18 +208,22 @@ impl<W: Write> Server<W> {
                     }
                 };
                 if let Some(text) = text.as_str() {
+                    let path = uri_path(&uri);
                     let doc = self.docs.entry(uri).or_insert(Doc {
                         text: String::new(),
                         dirty: true,
+                        inputs: vec![path.clone()],
                         good: None,
                     });
                     text.clone_into(&mut doc.text);
                     doc.dirty = true;
+                    self.invalidate(&path);
                 }
                 return None;
             }
             "textDocument/didClose" => {
                 self.docs.remove(&uri);
+                self.invalidate(&uri_path(&uri));
                 self.publish(&uri, Vec::new());
                 return None;
             }
@@ -286,6 +292,15 @@ impl<W: Write> Server<W> {
         };
         self.reply(id, result);
         None
+    }
+
+    /// An edited or closed buffer changes every check that read it.
+    fn invalidate(&mut self, path: &Path) {
+        for doc in self.docs.values_mut() {
+            if doc.inputs.iter().any(|p| p == path) {
+                doc.dirty = true;
+            }
+        }
     }
 
     fn session(&self, anonymous: bool) -> Session {
@@ -390,6 +405,14 @@ impl<W: Write> Server<W> {
             .collect();
         let doc = self.docs.get_mut(uri).expect("checked above");
         doc.dirty = false;
+        if !a.source_map.files().is_empty() {
+            doc.inputs = a
+                .source_map
+                .files()
+                .iter()
+                .map(|(p, _)| PathBuf::from(p))
+                .collect();
+        }
         if a.hir.is_some() {
             doc.good = Some(a);
         }

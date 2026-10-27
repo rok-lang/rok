@@ -515,6 +515,84 @@ fn unsaved_submodule_buffer() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+#[test]
+fn submodule_changes_and_closes_refresh_dependents() {
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let bootstrap = workspace.join("library/core/src/lib.rok");
+    let dir = rokc_core::tmp::test_dir("lsp-dependent-buffers");
+    std::fs::create_dir_all(dir.join("src")).unwrap();
+    let main = "mod m;\n\nlet x = m::v() + 1;\n";
+    let disk = "pub fn v() -> i32 {\n    1\n}\n";
+    let edited = "pub fn v() -> i64 {\n    2\n}\n";
+    std::fs::write(dir.join("src/main.rok"), main).unwrap();
+    std::fs::write(dir.join("src/m.rok"), disk).unwrap();
+    let uri = path_to_uri(
+        &dir.join("src/main.rok").display().to_string(),
+        cfg!(windows),
+    );
+    let sub = path_to_uri(&dir.join("src/m.rok").display().to_string(), cfg!(windows));
+    let open = |uri: &str, text: &str| {
+        notify(
+            "textDocument/didOpen",
+            Json::obj([(
+                "textDocument",
+                Json::obj([("uri", Json::str(uri)), ("text", Json::str(text))]),
+            )]),
+        )
+    };
+    let script = [
+        open(&sub, "pub fn v() -> bool {\n    true\n}\n"),
+        open(&uri, main),
+        request(1, "textDocument/hover", at(&uri, 2, 4)),
+        change(&sub, edited),
+        request(2, "textDocument/hover", at(&uri, 2, 4)),
+        notify(
+            "textDocument/didClose",
+            Json::obj([("textDocument", doc(&sub))]),
+        ),
+        request(3, "textDocument/hover", at(&uri, 2, 4)),
+        open(&sub, edited),
+        request(4, "textDocument/hover", at(&uri, 2, 4)),
+        request(5, "shutdown", Json::Null),
+        notify("exit", Json::Null),
+    ];
+    let input: String = script.iter().map(frame).collect();
+    let mut out = Vec::new();
+    assert_eq!(
+        serve(
+            Cursor::new(input.into_bytes()),
+            &mut out,
+            vec![bootstrap],
+            Vec::new(),
+            Vec::new()
+        ),
+        0
+    );
+    let msgs = messages(&out);
+    let result = |id| {
+        msgs.iter()
+            .find(|m| m.get("id") == &Json::num(id))
+            .unwrap()
+            .get("result")
+    };
+    assert_eq!(result(1), &Json::Null);
+    for (id, ty) in [(2, "i64"), (3, "i32"), (4, "i64")] {
+        let value = result(id).get("contents").get("value").as_str().unwrap();
+        assert!(value.contains(ty), "{id}: {value}");
+    }
+    let diagnostics: Vec<_> = msgs
+        .iter()
+        .filter(|m| {
+            m.get("method").as_str() == Some("textDocument/publishDiagnostics")
+                && m.get("params").get("uri").as_str() == Some(uri.as_str())
+        })
+        .map(|m| m.get("params").get("diagnostics"))
+        .collect();
+    let has_error = |diags: &Json| matches!(diags, Json::Arr(ds) if ds.iter().any(|d| d.get("severity") == &Json::num(1)));
+    assert!(has_error(diagnostics[0]));
+    assert!(!has_error(diagnostics.last().unwrap()));
+}
+
 /// A package with both root files (spec 0.3.1): a file the library
 /// reaches is checked as the library's (its unsaved text included); the
 /// executable's own files see the library as the package's name, its
