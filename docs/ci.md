@@ -7,9 +7,11 @@ same branch and event cancels the older one.
 
 | Event | Hosts | Jobs |
 |---|---|---|
-| push to a branch but `main`, pull request | linux-x64 | `check`, `corpus` at `-O0` |
-| push to `main`, merge queue (`merge_group`) | linux-x64, linux-arm64, windows-x64 | `check`, `corpus` at `-O0` |
-| nightly (`schedule`, 03:17 UTC), manual run | every host | `check`, `corpus` at `-O0` and `-O2`, `cross-link`, `cross`, `wasm`, `bindgen`, `dist` |
+| pull request | linux-x64, windows-x64 | `check`, `test`, `corpus` at `-O0` |
+| merge queue (`merge_group`), push to `main` | linux-x64, linux-arm64, macos-arm64, windows-x64 | `check`, `test`, `corpus` at `-O0` and `-O2` |
+| nightly (`schedule`, 03:17 UTC), manual run | every host | `check`, `test`, `corpus` at `-O0` and `-O2`, `cross-link`, `cross`, `wasm`, `bindgen`, `dist` |
+
+A push to `main` that the merge queue already passed runs `lint` only.
 
 A manual run (`workflow_dispatch`) takes `hosts` (all, or some of `linux-x64 linux-arm64 macos-arm64
 windows-x64 windows-arm64`), `jobs` (all, or some of `gate cross wasm bindgen dist`; `none`: prefixes only) and `filter`
@@ -26,12 +28,19 @@ arm64, `windows-2022` x86_64, `windows-11-arm` aarch64 (cross only). x86_64-appl
   there. The prefixes are built and published out of band by `prefixes.yml` (manual: once per version, or
   when a build script or PGO profile changes); that build is the slow part (roughly 0.5 h on macOS arm64 up
   to 6.0 h on Windows, at the 6 h job limit), paid once, not on every CI run.
-- `check`, per host: fmt, clippy, every test but the two corpora (`-- --exact --skip end_to_end_cases --skip
-  differential`), `rokc fmt --check library`, and the compiler / runtime crate isolation check; every step
-  runs even after one fails. On Linux after `targets/build.sh <host>`.
-- `corpus`, per host, level and shard: `cargo test --test integration --test differential` with
-  `ROK_TEST_SHARD=i/4`. A shard takes every fourth integration case of the sorted list (and every fourth
+- `check`, per host: fmt, clippy, every test binary built and archived (`cargo nextest archive --workspace`,
+  uploaded as `tests-<host>`), doctests, `rokc fmt --check library`, and the compiler / runtime crate
+  isolation check; every step runs even after one fails. On Linux after `targets/build.sh <host>`.
+- `test`, per host and part: every test but the two corpora from that archive, `nextest --partition
+  hash:i/3`, with no build but `librokr.a` (`ROK_TEST_PREBUILT=1`).
+- `corpus`, per host, level and shard: the `integration` and `differential` binaries from the same archive
+  with `ROK_TEST_SHARD=i/4`. A shard takes every fourth integration case of the sorted list (and every fourth
   differential suite); unset, the tests run everything.
+- rustc runs through sccache (`.github/actions/sccache`), cached in the `rok-lang-artifacts` bucket under
+  `sccache/<os>-<arch>/` (expired after 14 days). Pull requests read it; other events write it through the
+  `rok-ci-sccache` role. A cache error builds without it.
+- nextest (`.config/nextest.toml`) kills a test that runs past 8 minutes. The archive's baked paths assume
+  every job checks out at the same path, true on GitHub-hosted runners.
 - `cross-link` (linux-x64): `targets/build.sh` for the Linux targets and `i686-pc-windows-msvc`, then the
   sysroot link test.
 - `cross`, per target and level: the corpora for `ROK_TEST_TARGET` on a host that runs it:
@@ -75,7 +84,7 @@ GitHub's.
   (`prefixes.yml`), not for a normal CI run, which downloads it.
 - Security: a self-hosted runner runs whatever a workflow gives it. Pull requests from forks never get one:
   the plan job forces GitHub-hosted runners when `github.event.pull_request.head.repo.full_name !=
-  github.repository`, and today no pull request job runs on Windows. On a public repository also keep
+  github.repository`. On a public repository also keep
   "Require approval for all outside collaborators" (Settings -> Actions -> General) and put the runners in a
   runner group limited to this repository.
 
