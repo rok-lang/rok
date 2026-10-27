@@ -233,11 +233,24 @@ const CONFIG_FIELDS: [&str; 2] = ["registry", "toolchain"];
 /// String field `field` of `$ROK_HOME/config.rokon`.
 fn config(home: &Path, field: &str) -> Result<Option<String>, String> {
     let path = home.join("config.rokon");
-    let Ok(text) = std::fs::read_to_string(&path) else {
-        return Ok(None);
-    };
-    let file = path.display().to_string();
-    let doc = rokc_rokon::Doc::parse(&text, &file)?;
+    let text = config_text(&path)?;
+    config_field(&text, &path.display().to_string(), field)
+}
+
+fn config_text(path: &Path) -> Result<String, String> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => Ok(text),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok("Config {}\n".to_owned()),
+        Err(e) => Err(format!(
+            "cannot read {}: {e}\nhelp: check the file's permissions and save it as UTF-8; \
+             rename it and retry to use default settings",
+            path.display()
+        )),
+    }
+}
+
+fn config_field(text: &str, file: &str, field: &str) -> Result<Option<String>, String> {
+    let doc = rokc_rokon::Doc::parse(text, file)?;
     let c = doc.root().record("Config")?;
     c.only(&CONFIG_FIELDS)?;
     c.opt(field).map(|r| r.string()).transpose()
@@ -248,8 +261,8 @@ fn set_config(home: &Path, field: &str, value: &str) -> Result<(), String> {
     let path = home.join("config.rokon");
     let file = path.display().to_string();
     std::fs::create_dir_all(home).map_err(|e| format!("{}: {e}", home.display()))?;
-    let old = std::fs::read_to_string(&path).unwrap_or_else(|_| "Config {}\n".to_owned());
-    config(home, field)?;
+    let old = config_text(&path)?;
+    config_field(&old, &file, field)?;
     let step = [rokc_rokon::edit::Step::Field(field)];
     let text = rokc_rokon::edit::set(&old, &step, &rokc_rokon::quote(value))
         .map_err(|e| e.render(&old, &file))?;
@@ -2485,6 +2498,47 @@ mod echo {
             tcsetattr(0, TCSANOW, (&raw const SAVED).cast());
             signal(SIGINT, HANDLER.load(Ordering::Relaxed));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn config_updates_keep_other_fields() {
+        let home = rokc_core::tmp::test_dir("config-fields");
+        assert_eq!(config(&home, "toolchain").unwrap(), None);
+        set_config(&home, "registry", "https://example.test/index").unwrap();
+        set_config(&home, "toolchain", "0.1.1").unwrap();
+        assert_eq!(
+            config(&home, "toolchain").unwrap().as_deref(),
+            Some("0.1.1")
+        );
+        assert_eq!(
+            config(&home, "registry").unwrap().as_deref(),
+            Some("https://example.test/index")
+        );
+    }
+
+    #[test]
+    fn config_read_errors_preserve_existing_bytes() {
+        let home = rokc_core::tmp::test_dir("config-read-error");
+        let path = home.join("config.rokon");
+        let bytes = b"Config { registry: \"index\" }\n\xff";
+        std::fs::write(&path, bytes).unwrap();
+        let error = config(&home, "toolchain").unwrap_err();
+        assert!(error.contains("cannot read"));
+        assert!(error.contains(&path.display().to_string()));
+        assert!(error.contains("permissions") && error.contains("UTF-8"));
+        assert!(error.contains("rename it and retry to use default settings"));
+        assert_eq!(set_config(&home, "toolchain", "0.1.1").unwrap_err(), error);
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        std::fs::remove_file(&path).unwrap();
+        std::fs::create_dir(&path).unwrap();
+        assert!(config(&home, "toolchain").is_err());
+        assert!(set_config(&home, "toolchain", "0.1.1").is_err());
+        assert!(path.is_dir());
     }
 }
 
