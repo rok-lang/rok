@@ -292,15 +292,14 @@ jobs:
       - name: clippy
         if: ${{ !cancelled() }}
         run: cargo clippy --all-targets -- -D warnings
-      # What the tests link and run, built once up front: a test process
-      # running its own `cargo build` relinks librokr.a under the others
-      # (ROK_TEST_PREBUILT, compiler/rokc/tests/common/mod.rs).
-      - name: test (but the corpora)
+      # Every test binary, with rokc, rok and rokls, for the test and
+      # corpus jobs, which run it without a build. Its compile-time paths
+      # (CARGO_BIN_EXE_*, CARGO_MANIFEST_DIR, rokc_llvm::PLUGIN_DEV) hold
+      # because every job checks out at the same path on a GitHub-hosted
+      # runner.
+      - name: build the tests
         if: ${{ !cancelled() }}
-        run: |
-          cargo build -p rokc -p rokr
-          cargo build -p rokr
-          ROK_TEST_PREBUILT=1 ROK_REQUIRE_LLVM=1 cargo nextest run --no-fail-fast -E 'not (test(=end_to_end_cases) | test(=differential))'
+        run: cargo nextest archive --workspace --archive-file "$RUNNER_TEMP/tests.tar.zst"
       # nextest does not run doctests.
       - name: doctests
         if: ${{ !cancelled() }}
@@ -317,16 +316,10 @@ jobs:
           if cargo tree -p rokr -e normal | grep -E '\brokc(_[a-z]+)?\b'; then
             echo "rokr depends on compiler crates"; exit 1
           fi
-      # rokc and the corpora's test binaries, built above; corpus runs them
-      # without a build. Their compile-time paths (CARGO_BIN_EXE_rokc,
-      # CARGO_MANIFEST_DIR) hold because every job checks out at the same
-      # path on a GitHub-hosted runner.
-      - name: corpus archive
-        run: cargo nextest archive -p rokc --test integration --test differential --archive-file "$RUNNER_TEMP/corpus.tar.zst"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: corpus-${{ matrix.host }}
-          path: ${{ runner.temp }}/corpus.tar.zst
+          name: tests-${{ matrix.host }}
+          path: ${{ runner.temp }}/tests.tar.zst
           retention-days: 1
           compression-level: 0
       - name: sccache stats
@@ -374,15 +367,65 @@ jobs:
       - uses: ./.github/actions/nextest
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: corpus-${{ matrix.host }}
+          name: tests-${{ matrix.host }}
           path: ${{ runner.temp }}
       # Into the workspace, where check built it (the baked paths); only
       # librokr.a is built here.
       - name: corpora
         run: |
           cargo build -p rokr
-          ROK_TEST_PREBUILT=1 cargo nextest run --archive-file "$RUNNER_TEMP/corpus.tar.zst" \
-            --workspace-remap . --extract-to . --extract-overwrite --no-fail-fast
+          ROK_TEST_PREBUILT=1 cargo nextest run --archive-file "$RUNNER_TEMP/tests.tar.zst" \
+            --workspace-remap . --extract-to . --extract-overwrite --no-fail-fast \
+            -E 'binary(integration) | binary(differential)'
+
+  # Every other test from check's archive, split over three jobs per host
+  # (nextest --partition).
+  test:
+    needs: [plan, llvm-prefix, check]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.check.result == 'success' && needs.plan.outputs.hosts != '[]' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        host: ${{ fromJSON(needs.plan.outputs.hosts) }}
+        part: [1, 2, 3]
+    name: test (${{ matrix.host }} ${{ matrix.part }}/3)
+    runs-on: ${{ fromJSON(needs.plan.outputs.runners)[matrix.host] }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write # OIDC -> rok-ci-sccache
+    env:
+      ROK_REQUIRE_LLVM: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/llvm-prefix
+      - name: toolchain (rust-toolchain.toml)
+        run: rustup toolchain install && rustc -vV
+      - name: host C library (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          targets/build.sh "$(rustc -vV | sed -n 's/^host: //p')"
+      - name: AWS credentials (sccache writes)
+        if: github.event_name != 'pull_request'
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ env.SCCACHE_ROLE }}
+          aws-region: us-east-1
+      - uses: ./.github/actions/sccache
+      - uses: ./.github/actions/nextest
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: tests-${{ matrix.host }}
+          path: ${{ runner.temp }}
+      # librokr.a built once before the tests: a test process running its
+      # own `cargo build` relinks it under the others (ROK_TEST_PREBUILT,
+      # compiler/rokc/tests/common/mod.rs).
+      - name: tests
+        run: |
+          cargo build -p rokr
+          ROK_TEST_PREBUILT=1 cargo nextest run --archive-file "$RUNNER_TEMP/tests.tar.zst" \
+            --workspace-remap . --extract-to . --extract-overwrite --no-fail-fast \
+            --partition hash:${{ matrix.part }}/3 -E 'not (binary(integration) | binary(differential))'
 
   # The sysroot link check of the non-wasm cross targets, from Linux
   # x86_64.
@@ -562,19 +605,19 @@ jobs:
           Must build --release
           Must test
 
-  # The one required status check. Passes when lint/llvm-prefix/check/corpus passed or
+  # The one required status check. Passes when lint/plan/llvm-prefix/check/test/corpus passed or
   # were skipped, fails if any failed or was cancelled. Requiring this instead
   # of each matrix job keeps a skipped job from blocking the merge; including
   # lint keeps a lint failure (which skips the rest) from passing the gate.
   ci-gate:
-    needs: [lint, plan, llvm-prefix, check, corpus]
+    needs: [lint, plan, llvm-prefix, check, test, corpus]
     if: always()
     runs-on: ubuntu-24.04
     steps:
       - name: gate result
         run: |
-          echo "lint=${{ needs.lint.result }} plan=${{ needs.plan.result }} llvm-prefix=${{ needs['llvm-prefix'].result }} check=${{ needs.check.result }} corpus=${{ needs.corpus.result }}"
-          for r in "${{ needs.lint.result }}" "${{ needs.plan.result }}" "${{ needs['llvm-prefix'].result }}" "${{ needs.check.result }}" "${{ needs.corpus.result }}"; do
+          echo "lint=${{ needs.lint.result }} plan=${{ needs.plan.result }} llvm-prefix=${{ needs['llvm-prefix'].result }} check=${{ needs.check.result }} test=${{ needs.test.result }} corpus=${{ needs.corpus.result }}"
+          for r in "${{ needs.lint.result }}" "${{ needs.plan.result }}" "${{ needs['llvm-prefix'].result }}" "${{ needs.check.result }}" "${{ needs.test.result }}" "${{ needs.corpus.result }}"; do
             case "$r" in
               success | skipped) ;;
               *)
