@@ -24,11 +24,13 @@ impl<T> BinaryHeap<T> {
         BinaryHeap { items: List::new(), before }
     }
 
+    /// The number of items.
     pub const fn len(self) -> usize {
         self.items.len()
     }
 
-    pub fn is_empty(self) -> bool {
+    /// `true` when the heap holds no item.
+    pub const fn is_empty(self) -> bool {
         self.items.len() == 0
     }
 
@@ -37,6 +39,7 @@ impl<T> BinaryHeap<T> {
         self.items.get(0)
     }
 
+    /// Add `x`; O(log n).
     pub const fn push(self, x: T) {
         let xs = self.items;
         xs.push(x);
@@ -51,7 +54,7 @@ impl<T> BinaryHeap<T> {
         }
     }
 
-    /// Remove and return the top item.
+    /// Remove and return the top item; O(log n).
     pub const fn pop(self) -> T | none {
         let xs = self.items;
         let n = xs.len();
@@ -64,24 +67,25 @@ impl<T> BinaryHeap<T> {
         top
     }
 
-    pub fn clear(self) {
+    /// Drop every item.
+    pub const fn clear(self) {
         self.items.clear();
     }
 
-    /// Keep only the items `keep` accepts; O(n).
+    /// Keep only the items `keep` accepts, in place; O(n).
     pub const fn retain(self, keep: fn(T) -> bool) {
         let xs = self.items;
-        let kept: List<T> = List::new();
-        for x in xs {
-            if keep(x) { kept.push(x); }
+        let n = xs.len();
+        let w: usize = 0;
+        for r in 0..n {
+            let x = xs[r];
+            if keep(x) {
+                xs[w] = x;
+                w += 1;
+            }
         }
-        xs.clear();
-        xs.extend(kept);
-        let i = xs.len() / 2;
-        while i > 0 {
-            i -= 1;
-            self.sift_down(i);
-        }
+        xs.truncate(w);
+        self.heapify();
     }
 
     /// Every item, in no particular order.
@@ -94,6 +98,15 @@ impl<T> BinaryHeap<T> {
         let t = xs[i];
         xs[i] = xs[j];
         xs[j] = t;
+    }
+
+    /// Restore the heap order over the whole list; O(n).
+    const fn heapify(self) {
+        let i = self.items.len() / 2;
+        while i > 0 {
+            i -= 1;
+            self.sift_down(i);
+        }
     }
 
     const fn sift_down(self, from: usize) {
@@ -116,5 +129,45 @@ impl<T> BinaryHeap<T> {
             self.swap(i, m);
             i = m;
         }
+    }
+}
+
+/// `for x in h`, in no particular order (2.9.9).
+impl<T> IntoIterator for BinaryHeap<T> {
+    type IntoIter = ListIter<T>;
+    type Item = T;
+    const fn into_iter(self) -> ListIter<T> {
+        self.iter()
+    }
+}
+
+/// An empty max-heap.
+impl<T: Ord> Default for BinaryHeap<T> {
+    fn default() -> BinaryHeap<T> { BinaryHeap::new() }
+}
+
+/// A new heap with every item cloned and the same order.
+impl<T: Clone> Clone for BinaryHeap<T> {
+    const fn clone(self) -> BinaryHeap<T> {
+        BinaryHeap { items: self.items.clone(), before: self.before }
+    }
+}
+
+/// `it.collect()` into a max-heap; O(n).
+impl<T: Ord> FromIterator<T> for BinaryHeap<T> {
+    const fn from_iter<I: IntoIterator<Item = T>>(it: I) -> BinaryHeap<T> {
+        let h: BinaryHeap<T> = BinaryHeap::new();
+        for x in it {
+            h.items.push(x);
+        }
+        h.heapify();
+        h
+    }
+}
+
+/// `[a, b, ..]` in storage order (the top first).
+impl<T: Debug> Debug for BinaryHeap<T> {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) {
+        try Debug::fmt(self.items, ref f)
     }
 }

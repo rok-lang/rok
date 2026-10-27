@@ -10,6 +10,7 @@ pub struct OrderedSet<T> {
 impl<T> !Sync for OrderedSet<T> {}
 
 impl<T: Hash> OrderedSet<T> {
+    /// An empty set.
     pub const fn new() -> OrderedSet<T> {
         OrderedSet { d: OrderedDict::new() }
     }
@@ -23,11 +24,13 @@ impl<T: Hash> OrderedSet<T> {
         s
     }
 
+    /// The number of members.
     pub const fn len(self) -> usize {
         self.d.len()
     }
 
-    pub fn is_empty(self) -> bool {
+    /// `true` when the set has no member.
+    pub const fn is_empty(self) -> bool {
         self.d.is_empty()
     }
 
@@ -41,8 +44,14 @@ impl<T: Hash> OrderedSet<T> {
         !(self.d.remove(x) is none)
     }
 
+    /// `true` when `x` is a member.
     pub const fn contains(self, x: T) -> bool {
         self.d.contains_key(x)
+    }
+
+    /// Drop every member.
+    pub const fn clear(self) {
+        self.d.clear();
     }
 
     /// The members in insertion order, lazily.
@@ -50,6 +59,7 @@ impl<T: Hash> OrderedSet<T> {
         self.d.keys()
     }
 
+    /// The members in a new list, in insertion order.
     pub const fn to_list(self) -> List<T> {
         self.iter().collect()
     }
@@ -63,27 +73,33 @@ impl<T: Hash> OrderedSet<T> {
         out
     }
 
+    /// The members of both sets, in `self`'s order.
     pub const fn intersection(self, other: OrderedSet<T>) -> OrderedSet<T> {
         self.iter().filter(|x: T| other.contains(x)).collect()
     }
 
+    /// The members of `self` not in `other`, in `self`'s order.
     pub const fn difference(self, other: OrderedSet<T>) -> OrderedSet<T> {
         self.iter().filter(|x: T| !other.contains(x)).collect()
     }
 
-    pub fn symmetric_difference(self, other: OrderedSet<T>) -> OrderedSet<T> {
+    /// The members of exactly one set, `self`'s first.
+    pub const fn symmetric_difference(self, other: OrderedSet<T>) -> OrderedSet<T> {
         self.difference(other).union(other.difference(self))
     }
 
+    /// `true` when every member of `self` is in `other`.
     pub const fn is_subset(self, other: OrderedSet<T>) -> bool {
         self.iter().all(|x: T| other.contains(x))
     }
 
-    pub fn is_superset(self, other: OrderedSet<T>) -> bool {
+    /// `true` when every member of `other` is in `self`.
+    pub const fn is_superset(self, other: OrderedSet<T>) -> bool {
         other.is_subset(self)
     }
 
-    pub fn is_disjoint(self, other: OrderedSet<T>) -> bool {
+    /// `true` when no member is in both sets.
+    pub const fn is_disjoint(self, other: OrderedSet<T>) -> bool {
         !self.iter().any(|x: T| other.contains(x))
     }
 }
@@ -92,8 +108,9 @@ impl<T: Hash> Default for OrderedSet<T> {
     fn default() -> OrderedSet<T> { OrderedSet::new() }
 }
 
+/// A new set with every member cloned, in the same order.
 impl<T: Hash + Clone> Clone for OrderedSet<T> {
-    fn clone(self) -> OrderedSet<T> {
+    const fn clone(self) -> OrderedSet<T> {
         let r: OrderedSet<T> = OrderedSet::new();
         for x in self {
             r.insert(x.clone());
@@ -111,6 +128,7 @@ impl<T: Hash> IntoIterator for OrderedSet<T> {
     }
 }
 
+/// `it.collect()` into a set, in first-seen order.
 impl<T: Hash> FromIterator<T> for OrderedSet<T> {
     const fn from_iter<I: IntoIterator<Item = T>>(it: I) -> OrderedSet<T> {
         let out: OrderedSet<T> = OrderedSet::new();
@@ -121,12 +139,30 @@ impl<T: Hash> FromIterator<T> for OrderedSet<T> {
     }
 }
 
+/// `s += x`: insert `x` at the end when new (stdlib 2.4.6).
+impl<T: Hash> AddAssign<T> for OrderedSet<T> {
+    const fn add_assign(ref self, rhs: T) {
+        self.insert(rhs);
+    }
+}
+
 /// Same members (order does not matter, as for `Set`).
 impl<T: Hash> PartialEq for OrderedSet<T> {
-    fn eq(self, rhs: OrderedSet<T>) -> bool {
+    const fn eq(self, rhs: OrderedSet<T>) -> bool {
         self.len() == rhs.len() && self.is_subset(rhs)
     }
     fn ne(self, rhs: OrderedSet<T>) -> bool { !self.eq(rhs) }
+}
+
+impl<T: Hash> Eq for OrderedSet<T> {}
+
+/// Order-independent, matching `eq`: member hashes combine by xor.
+impl<T: Hash> Hash for OrderedSet<T> {
+    const fn hash(self) -> u64 {
+        let h = self.len() as u64;
+        for x in self { h ^= x.hash(); }
+        h
+    }
 }
 
 /// `{a, b, ..}` in insertion order.

@@ -11,10 +11,12 @@ pub struct OrderedDict<K, V> {
 impl<K, V> !Sync for OrderedDict<K, V> {}
 
 impl<K: Hash, V> OrderedDict<K, V> {
+    /// An empty dict.
     pub const fn new() -> OrderedDict<K, V> {
         OrderedDict { d: Dict::new() }
     }
 
+    /// Room for `cap` entries before the first growth.
     pub const fn with_capacity(cap: usize) -> OrderedDict<K, V> {
         OrderedDict { d: Dict::with_capacity(cap) }
     }
@@ -29,10 +31,12 @@ impl<K: Hash, V> OrderedDict<K, V> {
         d
     }
 
+    /// The number of entries.
     pub const fn len(self) -> usize {
         self.d.len()
     }
 
+    /// `true` when the dict has no entry.
     pub const fn is_empty(self) -> bool {
         self.d.is_empty()
     }
@@ -42,18 +46,22 @@ impl<K: Hash, V> OrderedDict<K, V> {
         self.d.insert(k, v)
     }
 
+    /// `k`'s value, or `none`.
     pub const fn get(self, k: K) -> V | none {
         self.d.get(k)
     }
 
+    /// `true` when `k` is present.
     pub const fn contains_key(self, k: K) -> bool {
         self.d.contains_key(k)
     }
 
+    /// Remove `k`; its value, or `none`.
     pub const fn remove(self, k: K) -> V | none {
         self.d.remove(k)
     }
 
+    /// Drop every entry.
     pub const fn clear(self) {
         self.d.clear();
     }
@@ -133,6 +141,30 @@ impl<K: Hash, V: PartialEq> PartialEq for OrderedDict<K, V> {
         true
     }
     fn ne(self, rhs: OrderedDict<K, V>) -> bool { !self.eq(rhs) }
+}
+
+impl<K: Hash, V: Eq> Eq for OrderedDict<K, V> {}
+
+/// Order-independent, matching `eq`: entries combine by xor.
+impl<K: Hash, V: Hash> Hash for OrderedDict<K, V> {
+    const fn hash(self) -> u64 {
+        let h = self.len() as u64;
+        for (k, v) in self {
+            let vh = v.hash();
+            h ^= k.hash() ^ ((vh << 17u64) | (vh >> 47u64));
+        }
+        h
+    }
+}
+
+/// `d += e`: merge `e` in place; its values win, new keys go last
+/// (stdlib 2.4.6).
+impl<K: Hash, V> AddAssign<OrderedDict<K, V>> for OrderedDict<K, V> {
+    const fn add_assign(ref self, rhs: OrderedDict<K, V>) {
+        for (k, v) in rhs {
+            self.insert(k, v);
+        }
+    }
 }
 
 /// `{k: v, ..}` in insertion order.

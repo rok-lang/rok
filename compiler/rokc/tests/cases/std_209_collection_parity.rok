@@ -1,0 +1,161 @@
+// spec: std 209-collections §2.9.3 §2.9.4 §2.9.5 §2.9.5a §2.9.5b §2.9.9 / std 204-ops-assign §2.4.6
+// expect-exit: 0
+// expect-stdout:
+// const heap 2 deque 128 oset true
+// heap for 5 sum 25 first 9
+// heap collect [9, 7, 5, 3, 1]
+// heap clone [1, 2, 3] [0, 1, 2, 3]
+// heap default true 4 3
+// heap debug [9, 5]
+// heap retain [8, 6, 4, 2, 0] len 5
+// clear dict 0 true set 0 true oset 0 true
+// set += 3 true dup 3
+// set from 3 true
+// dict from 2 20
+// oset += [3, 1, 2]
+// odict += {"a": 1, "b": 20, "c": 3}
+// deque += [0, 1, 2]
+// deque collect [1, 2, 3] eq true ne false len-diff false
+// deque clone [1, 2, 3, 4] [1, 2, 3]
+// oset key 2 hash-eq true
+// odict key 7 hash-eq true
+
+// Sibling parity: `BinaryHeap` as a container (for, collect, clone,
+// default, debug, in-place retain), `clear` on keyed collections, `+=`
+// on sets / deques / ordered dicts, `Dict::from` / `Set::from`, deque
+// equality and collect, ordered collections as keys, and the sibling
+// methods made `const fn` used in a `const`.
+const fn heap_c() -> i32 {
+    let h: BinaryHeap<i32> = BinaryHeap::new();
+    h.push(1);
+    h.push(2);
+    h.retain(|x: i32| x > 1);
+    let top = h.peek() ?? 0;
+    h.clear();
+    if h.is_empty() { top } else { -1 }
+}
+
+const fn deque_c() -> i32 {
+    let d: Deque<i32> = Deque::with_capacity(8);
+    d.push_back(2);
+    d.push_front(1);
+    let r = (d.front() ?? 0) * 100 + (d.back() ?? 0) * 10 + d.capacity() as i32;
+    d.clear();
+    if d.is_empty() { r } else { -1 }
+}
+
+const fn oset_c() -> bool {
+    let a = OrderedSet::from([1, 2, 3]);
+    let b = OrderedSet::from([3, 4]);
+    let s = a.symmetric_difference(b);
+    let c = a.clone();
+    let ok = s.len() == 3 && a.is_superset(OrderedSet::from([1])) && !a.is_disjoint(b) && c.eq(a);
+    c.clear();
+    ok && c.is_empty() && !a.is_empty()
+}
+
+const HEAP_C: i32 = heap_c();
+const DEQUE_C: i32 = deque_c();
+const OSET_C: bool = oset_c();
+
+fn main() {
+    println(f"const heap {HEAP_C} deque {DEQUE_C} oset {OSET_C}");
+    let h: BinaryHeap<i32> = BinaryHeap::new();
+    for x in [5, 3, 9, 7, 1] { h.push(x); }
+    let n = 0;
+    let sum = 0;
+    for x in h {
+        n += 1;
+        sum += x;
+    }
+    println(f"heap for {n} sum {sum} first {h.peek() ?? 0}");
+
+    let c: BinaryHeap<i32> = [3, 9, 1, 7, 5].into_iter().collect();
+    let out: List<i32> = [];
+    while let x: i32 = c.pop() { out.push(x); }
+    println(f"heap collect {out:?}");
+
+    let m: BinaryHeap<i32> = BinaryHeap::by(|a: i32, b: i32| a < b);
+    for x in [3, 1, 2] { m.push(x); }
+    let k = m.clone();
+    k.push(0);
+    let a: List<i32> = [];
+    let b: List<i32> = [];
+    while let x: i32 = m.pop() { a.push(x); }
+    while let x: i32 = k.pop() { b.push(x); }
+    println(f"heap clone {a:?} {b:?}");
+
+    let d: BinaryHeap<i32> = BinaryHeap::default();
+    let was = d.is_empty();
+    d.push(3);
+    d.push(4);
+    println(f"heap default {was} {d.pop() ?? 0} {d.pop() ?? 0}");
+
+    let g: BinaryHeap<i32> = BinaryHeap::new();
+    g.push(5);
+    g.push(9);
+    println(f"heap debug {g:?}");
+
+    let r: BinaryHeap<i32> = (0..10).collect();
+    r.retain(|x: i32| x % 2 == 0);
+    let rs: List<i32> = [];
+    let rl = r.len();
+    while let x: i32 = r.pop() { rs.push(x); }
+    println(f"heap retain {rs:?} len {rl}");
+
+    let dd: Dict<str, i32> = {"a": 1, "b": 2};
+    dd.clear();
+    let ss: Set<i32> = {1, 2};
+    ss.clear();
+    let os = OrderedSet::from([1, 2]);
+    os.clear();
+    os.insert(5);
+    os.remove(5);
+    println(f"clear dict {dd.len()} {dd.is_empty()} set {ss.len()} {ss.is_empty()} oset {os.len()} {os.is_empty()}");
+
+    let s: Set<i32> = {1, 2};
+    s += 3;
+    let had = s.contains(3);
+    s += 3;
+    println(f"set += 3 {had} dup {s.len()}");
+
+    let sf: Set<i32> = Set::from([1, 2, 2, 3]);
+    println(f"set from {sf.len()} {sf.contains(2)}");
+    let df: Dict<str, i32> = Dict::from([("x", 1), ("y", 2), ("y", 20)]);
+    println(f"dict from {df.len()} {df["y"]}");
+
+    let o = OrderedSet::from([3, 1]);
+    o += 2;
+    o += 3;
+    println(f"oset += {o.to_list():?}");
+    let od = OrderedDict::from([("a", 1), ("b", 2)]);
+    od += OrderedDict::from([("c", 3), ("b", 20)]);
+    println(f"odict += {od:?}");
+
+    let q: Deque<i32> = Deque::new();
+    q += 1;
+    q += 2;
+    q.push_front(0);
+    println(f"deque += {q:?}");
+
+    let q1: Deque<i32> = [1, 2, 3].into_iter().collect();
+    let q2: Deque<i32> = Deque::new();
+    for x in [1, 2, 3] { q2.push_back(x); }
+    let q3: Deque<i32> = [1, 2].into_iter().collect();
+    println(f"deque collect {q1:?} eq {q1 == q2} ne {q1 != q2} len-diff {q1 == q3}");
+    let qc = q1.clone();
+    qc.push_back(4);
+    println(f"deque clone {qc:?} {q1:?}");
+
+    let byset: Dict<OrderedSet<i32>, i32> = Dict::new();
+    byset.insert(OrderedSet::from([1, 2]), 1);
+    byset.insert(OrderedSet::from([2, 1]), 2);
+    let x1 = OrderedSet::from([4, 5]);
+    let x2 = OrderedSet::from([5, 4]);
+    println(f"oset key {byset[OrderedSet::from([1, 2])]} hash-eq {x1.hash() == x2.hash()}");
+    let bydict: Set<OrderedDict<str, i32>> = Set::new();
+    bydict.insert(OrderedDict::from([("a", 1), ("b", 2)]));
+    let y1 = OrderedDict::from([("a", 1), ("b", 2)]);
+    let y2 = OrderedDict::from([("b", 2), ("a", 1)]);
+    println(f"odict key {if bydict.contains(y2) { 7 } else { 0 }} hash-eq {y1.hash() == y2.hash()}");
+}

@@ -239,7 +239,7 @@ impl<K: Hash, V> Dict<K, V> {
     }
 
     /// Drop every entry (a fresh small table).
-    pub(pkg) const fn clear(self) {
+    pub const fn clear(self) {
         unsafe {
             self.h[0] = new_table(4);
         }
@@ -400,6 +400,17 @@ impl<K: Hash + Clone, V: Clone> Clone for Dict<K, V> {
             r.insert(k.clone(), v.clone());
         }
         r
+    }
+}
+
+/// The pairs of a list; a later pair's value wins.
+impl<K: Hash, V> From<List<(K, V)>> for Dict<K, V> {
+    const fn from(pairs: List<(K, V)>) -> Dict<K, V> {
+        let d: Dict<K, V> = Dict::with_capacity(pairs.len());
+        for (k, v) in pairs {
+            d.insert(k, v);
+        }
+        d
     }
 }
 

@@ -16,10 +16,12 @@ pub struct Deque<T> {
 impl<T> !Sync for Deque<T> {}
 
 impl<T> Deque<T> {
+    /// An empty deque.
     pub const fn new() -> Deque<T> {
         Deque::with_capacity(8)
     }
 
+    /// Room for `cap` items before the first growth.
     #[track_caller]
     pub const fn with_capacity(cap: usize) -> Deque<T> {
         unsafe {
@@ -32,19 +34,22 @@ impl<T> Deque<T> {
         }
     }
 
+    /// The number of items.
     pub const fn len(self) -> usize {
         unsafe {
             self.meta[1]
         }
     }
 
-    pub fn is_empty(self) -> bool {
+    /// `true` when the deque holds no item.
+    pub const fn is_empty(self) -> bool {
         unsafe {
             self.meta[1] == 0
         }
     }
 
-    pub fn capacity(self) -> usize {
+    /// The items the ring holds before it grows.
+    pub const fn capacity(self) -> usize {
         unsafe {
             self.meta[2]
         }
@@ -77,6 +82,7 @@ impl<T> Deque<T> {
         }
     }
 
+    /// Add `x` at the back.
     pub const fn push_back(self, x: T) {
         unsafe {
             self.grow();
@@ -86,6 +92,7 @@ impl<T> Deque<T> {
         }
     }
 
+    /// Add `x` at the front.
     pub const fn push_front(self, x: T) {
         unsafe {
             self.grow();
@@ -97,6 +104,7 @@ impl<T> Deque<T> {
         }
     }
 
+    /// Remove and return the front item.
     pub const fn pop_front(self) -> T | none {
         unsafe {
             let n = self.meta[1];
@@ -113,6 +121,7 @@ impl<T> Deque<T> {
         }
     }
 
+    /// Remove and return the back item.
     pub const fn pop_back(self) -> T | none {
         unsafe {
             let n = self.meta[1];
@@ -148,11 +157,13 @@ impl<T> Deque<T> {
         }
     }
 
-    pub fn front(self) -> T | none {
+    /// The front item.
+    pub const fn front(self) -> T | none {
         self.get(0)
     }
 
-    pub fn back(self) -> T | none {
+    /// The back item.
+    pub const fn back(self) -> T | none {
         unsafe {
             let n = self.meta[1];
             if n == 0 {
@@ -162,7 +173,8 @@ impl<T> Deque<T> {
         }
     }
 
-    pub fn clear(self) {
+    /// Drop every item.
+    pub const fn clear(self) {
         unsafe {
             let store = self.data[0];
             for i in 0..self.meta[1] {
@@ -173,6 +185,7 @@ impl<T> Deque<T> {
         }
     }
 
+    /// The items, front to back, lazily.
     pub const fn iter(self) -> DequeIter<T> {
         unsafe {
             let pos: GcBuf<usize> = buf_new(1);
@@ -212,6 +225,49 @@ impl<T> IntoIterator for Deque<T> {
 impl<T> Default for Deque<T> {
     fn default() -> Deque<T> { Deque::new() }
 }
+
+/// A new deque with every item cloned.
+impl<T: Clone> Clone for Deque<T> {
+    const fn clone(self) -> Deque<T> {
+        let r: Deque<T> = Deque::with_capacity(self.len());
+        for x in self {
+            r.push_back(x.clone());
+        }
+        r
+    }
+}
+
+/// `it.collect()` into a deque, front to back.
+impl<T> FromIterator<T> for Deque<T> {
+    const fn from_iter<I: IntoIterator<Item = T>>(it: I) -> Deque<T> {
+        let out: Deque<T> = Deque::new();
+        for x in it {
+            out.push_back(x);
+        }
+        out
+    }
+}
+
+/// `d += x`: push `x` at the back (stdlib 2.4.6).
+impl<T> AddAssign<T> for Deque<T> {
+    const fn add_assign(ref self, rhs: T) {
+        self.push_back(rhs);
+    }
+}
+
+/// Equal items, front to back.
+impl<T: PartialEq> PartialEq for Deque<T> {
+    const fn eq(self, rhs: Deque<T>) -> bool {
+        if self.len() != rhs.len() { return false; }
+        for i in 0..self.len() {
+            if self[i] != rhs[i] { return false; }
+        }
+        true
+    }
+    fn ne(self, rhs: Deque<T>) -> bool { !self.eq(rhs) }
+}
+
+impl<T: Eq> Eq for Deque<T> {}
 
 /// `d[i]`; panics out of bounds.
 impl<T> Index<usize> for Deque<T> {

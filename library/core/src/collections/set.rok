@@ -9,14 +9,17 @@ pub struct Set<T> {
 impl<T> !Sync for Set<T> {}
 
 impl<T: Hash> Set<T> {
+    /// An empty set.
     pub const fn new() -> Set<T> {
         Set { d: Dict::new() }
     }
 
+    /// The number of members.
     pub const fn len(self) -> usize {
         self.d.len()
     }
 
+    /// `true` when the set has no member.
     pub const fn is_empty(self) -> bool {
         self.d.is_empty()
     }
@@ -31,10 +34,17 @@ impl<T: Hash> Set<T> {
         !(self.d.remove(x) is none)
     }
 
+    /// `true` when `x` is a member.
     pub const fn contains(self, x: T) -> bool {
         self.d.contains_key(x)
     }
 
+    /// Drop every member.
+    pub const fn clear(self) {
+        self.d.clear();
+    }
+
+    /// The members of either set.
     pub const fn union(self, other: Set<T>) -> Set<T> {
         let out: Set<T> = Set::new();
         for x in self.d.keys() {
@@ -46,6 +56,7 @@ impl<T: Hash> Set<T> {
         out
     }
 
+    /// The members of both sets.
     pub const fn intersection(self, other: Set<T>) -> Set<T> {
         let out: Set<T> = Set::new();
         for x in self.d.keys() {
@@ -56,6 +67,7 @@ impl<T: Hash> Set<T> {
         out
     }
 
+    /// The members of `self` not in `other`.
     pub const fn difference(self, other: Set<T>) -> Set<T> {
         let out: Set<T> = Set::new();
         for x in self.d.keys() {
@@ -66,10 +78,12 @@ impl<T: Hash> Set<T> {
         out
     }
 
+    /// The members of exactly one set.
     pub const fn symmetric_difference(self, other: Set<T>) -> Set<T> {
         self.difference(other).union(other.difference(self))
     }
 
+    /// `true` when every member of `self` is in `other`.
     pub const fn is_subset(self, other: Set<T>) -> bool {
         for x in self.d.keys() {
             if !other.contains(x) {
@@ -79,19 +93,23 @@ impl<T: Hash> Set<T> {
         true
     }
 
+    /// `true` when every member of `other` is in `self`.
     pub const fn is_superset(self, other: Set<T>) -> bool {
         other.is_subset(self)
     }
 
+    /// `true` when no member is in both sets.
     pub const fn is_disjoint(self, other: Set<T>) -> bool {
         self.intersection(other).is_empty()
     }
 
+    /// The members in a new list, in iteration order.
     pub const fn to_list(self) -> List<T> {
         self.d.keys().collect()
     }
 
-    pub fn iter(self) -> KeysIter<T, bool> {
+    /// The members, lazily.
+    pub const fn iter(self) -> KeysIter<T, bool> {
         self.d.keys()
     }
 }
@@ -128,6 +146,24 @@ impl<T: Hash> FromIterator<T> for Set<T> {
             out.insert(x);
         }
         out
+    }
+}
+
+/// The items of a list (duplicates dropped).
+impl<T: Hash> From<List<T>> for Set<T> {
+    const fn from(items: List<T>) -> Set<T> {
+        let s: Set<T> = Set { d: Dict::with_capacity(items.len()) };
+        for x in items {
+            s.insert(x);
+        }
+        s
+    }
+}
+
+/// `s += x`: insert `x` (stdlib 2.4.6).
+impl<T: Hash> AddAssign<T> for Set<T> {
+    const fn add_assign(ref self, rhs: T) {
+        self.insert(rhs);
     }
 }
 

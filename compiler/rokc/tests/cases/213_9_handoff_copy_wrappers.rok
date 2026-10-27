@@ -1,0 +1,56 @@
+// gc-stress: 5
+// expect-exit: 0
+// spec: std 213-marker §2.13.9 / std 209-collections §2.9.4 §2.9.5
+// expect-stdout:
+// set 3 true 2
+// odict {"a": [1, 2], "b": []} 1 [1]
+// oset {3, 1, 2} {3, 1}
+// pair 1 true
+
+// The collections that wrap another (`Set`, `OrderedDict`, `OrderedSet`)
+// hand off as copies too: their inner dict is copied field by field,
+// what the sender kept is left alone.
+struct Two {
+    a: Set<i32>;
+    b: Set<i32>;
+}
+
+fn main() {
+    unsafe {
+        let (ts, rs) = channel::<Set<i32>>();
+        let s: Set<i32> = {1, 2};
+        try! ts.send(s);
+        if let r: Set<i32> = rs.recv() {
+            r.insert(3);
+            println(f"set {r.len()} {r.contains(3)} {s.len()}");
+        }
+
+        let (td, rd) = channel::<OrderedDict<str, List<i32>>>();
+        let dl: List<i32> = [1];
+        let d: OrderedDict<str, List<i32>> = OrderedDict::new();
+        d["a"] = dl;
+        try! td.send(d);
+        if let r: OrderedDict<str, List<i32>> = rd.recv() {
+            r["a"].push(2);
+            r["b"] = [];
+            println(f"odict {r:?} {d.len()} {dl:?}");
+        }
+
+        let (to, ro) = channel::<OrderedSet<i32>>();
+        let o = OrderedSet::from([3, 1]);
+        try! to.send(o);
+        if let r: OrderedSet<i32> = ro.recv() {
+            r.insert(2);
+            println(f"oset {r:?} {o:?}");
+        }
+
+        // One set twice in the value stays one set in the copy.
+        let (tp, rp) = channel::<Two>();
+        let one: Set<i32> = {7,};
+        try! tp.send(Two { a: one, b: one });
+        if let p: Two = rp.recv() {
+            p.a.insert(8);
+            println(f"pair {one.len()} {p.b.contains(8)}");
+        }
+    }
+}
