@@ -50,3 +50,14 @@ runs:
           [ -n "${AWS_ACCESS_KEY_ID:-}" ] || echo "SCCACHE_S3_NO_CREDENTIALS=true"
         } >> "$GITHUB_ENV"
         if [ -n "${AWS_ACCESS_KEY_ID:-}" ]; then echo "sccache: read-write"; else echo "sccache: read-only"; fi
+        # Start the server here, so a bucket error costs the cache, not the
+        # build (one 403 SignatureDoesNotMatch in 32 jobs failed a corpus).
+        export SCCACHE_BUCKET=rok-lang-artifacts SCCACHE_REGION=us-east-1 SCCACHE_S3_KEY_PREFIX=sccache/$os-$arch SCCACHE_IDLE_TIMEOUT=0
+        [ -n "${AWS_ACCESS_KEY_ID:-}" ] || export SCCACHE_S3_NO_CREDENTIALS=true
+        for i in 1 2 3; do
+          "$tmp/$a/sccache" --start-server > /dev/null 2>&1 && exit 0
+          "$tmp/$a/sccache" --stop-server > /dev/null 2>&1 || true
+          sleep $((i * 5))
+        done
+        echo "::warning::sccache did not start; building without it"
+        echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
