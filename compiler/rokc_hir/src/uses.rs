@@ -35,46 +35,26 @@ pub struct ReExport {
 }
 
 /// Per-module use table and re-export list from `(module, vis, UseTree)`.
-/// A `pub use` gives both an entry and a re-export. One short name imported
-/// from two paths in a module is an error (spec 5.5.12).
+///
+/// A `pub use` gives both an entry and a re-export. A short name imported
+/// from two paths keeps its first entry; `check_use_clashes` reports it
+/// once the re-exports are known (spec 5.5.12).
 #[must_use]
 pub fn build_use_table(
     raw: &[(String, Visibility, UseTree)],
     packages: &[String],
-) -> (UseTable, Vec<ReExport>, Vec<RokDiagnostic>) {
+) -> (UseTable, Vec<ReExport>) {
     crate::lower::set_packages(packages.to_vec());
     let mut table: UseTable = HashMap::new();
     let mut reexports: Vec<ReExport> = Vec::new();
-    let mut diags: Vec<RokDiagnostic> = Vec::new();
     for (module_path, vis, tree) in raw {
         let mut entries = Vec::new();
         let existing = table.entry(module_path.clone()).or_default();
         flatten_tree(tree, None, module_path, existing, &mut entries);
         // The same full path imported twice is fine (spec 5.5.11).
         let existing = table.entry(module_path.clone()).or_default();
-        for (entry, span) in entries {
+        for (entry, _) in entries {
             if let UseEntry::Single { local, full } = &entry {
-                if let Some(prev) = existing.iter().find_map(|e| match e {
-                    UseEntry::Single { local: l, full: f } if l == local => Some(f.clone()),
-                    _ => None,
-                }) {
-                    if &prev != full {
-                        diags.push(RokDiagnostic::error(
-                            ErrorKind::Module,
-                            span,
-                            format!(
-                                "name `{local}` imported twice with different targets: \
-                                 `{prev}` and `{full}` in module `{}`",
-                                if module_path.is_empty() {
-                                    "<root>"
-                                } else {
-                                    module_path
-                                },
-                            ),
-                        ));
-                        continue;
-                    }
-                }
                 if *vis != Visibility::Private {
                     reexports.push(ReExport {
                         module_path: module_path.clone(),
@@ -83,11 +63,114 @@ pub fn build_use_table(
                         vis: *vis,
                     });
                 }
+                let taken = existing
+                    .iter()
+                    .any(|e| matches!(e, UseEntry::Single { local: l, .. } if l == local));
+                if taken {
+                    continue;
+                }
             }
             existing.push(entry);
         }
     }
-    (table, reexports, diags)
+    (table, reexports)
+}
+
+/// A short name imported twice in one module whose paths reach different
+/// items (spec 5.5.12). Two paths to one item, as through a `pub use`, are
+/// one import (5.5.11).
+#[must_use]
+pub fn check_use_clashes(
+    raw: &[(String, Visibility, UseTree)],
+    table: &UseTable,
+    reexports: &[ReExport],
+) -> Vec<RokDiagnostic> {
+    let mut diags = Vec::new();
+    let mut first: HashMap<(&str, String), String> = HashMap::new();
+    for (module_path, _, tree) in raw {
+        let earlier = table.get(module_path).map_or(&[][..], Vec::as_slice);
+        let mut leaves = Vec::new();
+        flatten_tree(tree, None, module_path, earlier, &mut leaves);
+        for (entry, span) in leaves {
+            let UseEntry::Single { local, full } = entry else {
+                continue;
+            };
+            let prev = first
+                .entry((module_path.as_str(), local.clone()))
+                .or_insert_with(|| full.clone());
+            if *prev == full || reexport_end(reexports, prev) == reexport_end(reexports, &full) {
+                continue;
+            }
+            let module = if module_path.is_empty() {
+                "<root>"
+            } else {
+                module_path
+            };
+            diags.push(
+                RokDiagnostic::error(
+                    ErrorKind::Module,
+                    span,
+                    format!(
+                        "name `{local}` imported twice with different targets: `{prev}` and \
+                         `{full}` in module `{module}`"
+                    ),
+                )
+                .with_help(format!(
+                    "alias one: `use {full} as {};`",
+                    alias_for(&full, &local)
+                )),
+            );
+        }
+    }
+    diags
+}
+
+/// `Module::name` keyed as the fn table spells it.
+fn reexport_key(module: &str, name: &str) -> String {
+    if module.is_empty() {
+        name.to_owned()
+    } else {
+        format!("{module}::{name}")
+    }
+}
+
+/// The item `path` names once re-exports are followed.
+fn reexport_end(out: &[ReExport], path: &str) -> String {
+    let mut path = path.to_owned();
+    for _ in 0..out.len() {
+        match out
+            .iter()
+            .find(|r| reexport_key(&r.module_path, &r.short_name) == path)
+        {
+            Some(r) => path.clone_from(&r.full_path),
+            None => break,
+        }
+    }
+    path
+}
+
+/// A name for `use full as ..;` that keeps both: `bar::Item` gives
+/// `BarItem`, `bar::f` gives `bar_f`.
+fn alias_for(full: &str, local: &str) -> String {
+    let parent = full
+        .rsplit("::")
+        .nth(1)
+        .filter(|m| !m.is_empty())
+        .unwrap_or("other");
+    if local.starts_with(char::is_uppercase) {
+        let camel: String = parent
+            .split('_')
+            .map(|w| {
+                let mut c = w.chars();
+                c.next()
+                    .map(|f| f.to_uppercase().chain(c).collect::<String>())
+                    .unwrap_or_default()
+            })
+            .collect();
+        format!("{camel}{local}")
+    } else {
+        format!("{parent}_{local}")
+    }
 }
 
 /// `reexports` plus one per item a `pub use p::*` / `p::**` reaches (spec
@@ -160,26 +243,9 @@ pub fn glob_reexports(
             _ => None,
         })
         .collect();
-    let key = |module: &str, name: &str| {
-        if module.is_empty() {
-            name.to_owned()
-        } else {
-            format!("{module}::{name}")
-        }
-    };
+    let key = reexport_key;
     // Re-exports chain to an item: two paths to it are one name.
-    let end = |out: &[ReExport], mut path: String| {
-        for _ in 0..out.len() {
-            match out
-                .iter()
-                .find(|r| key(&r.module_path, &r.short_name) == path)
-            {
-                Some(r) => path.clone_from(&r.full_path),
-                None => break,
-            }
-        }
-        path
-    };
+    let end = |out: &[ReExport], path: String| reexport_end(out, &path);
     // The modules each re-export was read through; a named one starts
     // at its module.
     let mut chains: HashMap<String, Vec<String>> = out

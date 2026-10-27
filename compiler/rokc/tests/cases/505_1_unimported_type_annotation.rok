@@ -1,0 +1,15 @@
+// spec: §5.5.1
+// expect-error: 11:12: cannot find type `ConstPtr` in this scope
+// expect-error: add `use rok::bare::ptr::ConstPtr;`
+
+// Spec 5.5.1: a type is in scope only once imported. The missing import
+// is the one error; nothing that follows from it is reported.
+use rok::bare::ptr::addr_of;
+
+fn main() -> i32 {
+    let x: u8 = 5;
+    let p: ConstPtr<u8> = addr_of(x).as_const();
+    if p.is_null() { return 1; }
+    let q: ConstPtr<u8> = 0 as ConstPtr<u8>;
+    return 0;
+}
