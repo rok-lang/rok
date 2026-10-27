@@ -2,9 +2,8 @@
 
 ## Unreleased
 
-- `rok` now reports an error when an existing `config.rokon` cannot be read, including invalid UTF-8,
-  instead of using default settings or overwriting the file. The error explains how to repair the file
-  or rename it to resume with defaults.
+- An unreadable `config.rokon` (permissions, not UTF-8) is an error, no longer read as empty or
+  overwritten by `rok toolchain default`.
 
 ## 0.1.1 (2026-10-27)
 

@@ -237,18 +237,21 @@ fn config(home: &Path, field: &str) -> Result<Option<String>, String> {
     config_field(&text, &path.display().to_string(), field)
 }
 
+/// `path`'s text; an empty config when there is none. Any other read
+/// error is fatal, so the file is never replaced by defaults.
 fn config_text(path: &Path) -> Result<String, String> {
     match std::fs::read_to_string(path) {
         Ok(text) => Ok(text),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok("Config {}\n".to_owned()),
         Err(e) => Err(format!(
-            "cannot read {}: {e}\nhelp: check the file's permissions and save it as UTF-8; \
-             rename it and retry to use default settings",
+            "cannot read {}: {e}\nhelp: fix its permissions or save it as UTF-8, \
+             or move it aside to start from the defaults",
             path.display()
         )),
     }
 }
 
+/// String field `field` of the config text `text`, read from `file`.
 fn config_field(text: &str, file: &str, field: &str) -> Result<Option<String>, String> {
     let doc = rokc_rokon::Doc::parse(text, file)?;
     let c = doc.root().record("Config")?;
@@ -2501,47 +2504,6 @@ mod echo {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn config_updates_keep_other_fields() {
-        let home = rokc_core::tmp::test_dir("config-fields");
-        assert_eq!(config(&home, "toolchain").unwrap(), None);
-        set_config(&home, "registry", "https://example.test/index").unwrap();
-        set_config(&home, "toolchain", "0.1.1").unwrap();
-        assert_eq!(
-            config(&home, "toolchain").unwrap().as_deref(),
-            Some("0.1.1")
-        );
-        assert_eq!(
-            config(&home, "registry").unwrap().as_deref(),
-            Some("https://example.test/index")
-        );
-    }
-
-    #[test]
-    fn config_read_errors_preserve_existing_bytes() {
-        let home = rokc_core::tmp::test_dir("config-read-error");
-        let path = home.join("config.rokon");
-        let bytes = b"Config { registry: \"index\" }\n\xff";
-        std::fs::write(&path, bytes).unwrap();
-        let error = config(&home, "toolchain").unwrap_err();
-        assert!(error.contains("cannot read"));
-        assert!(error.contains(&path.display().to_string()));
-        assert!(error.contains("permissions") && error.contains("UTF-8"));
-        assert!(error.contains("rename it and retry to use default settings"));
-        assert_eq!(set_config(&home, "toolchain", "0.1.1").unwrap_err(), error);
-        assert_eq!(std::fs::read(&path).unwrap(), bytes);
-        std::fs::remove_file(&path).unwrap();
-        std::fs::create_dir(&path).unwrap();
-        assert!(config(&home, "toolchain").is_err());
-        assert!(set_config(&home, "toolchain", "0.1.1").is_err());
-        assert!(path.is_dir());
-    }
-}
-
 #[cfg(windows)]
 mod echo {
     use std::sync::atomic::{AtomicU32, Ordering};
@@ -2592,5 +2554,45 @@ mod echo {
         restore();
         // SAFETY: removes the handler `off` added.
         unsafe { SetConsoleCtrlHandler(Some(interrupted), 0) };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn config_updates_keep_other_fields() {
+        let home = rokc_core::tmp::test_dir("config-fields");
+        assert_eq!(config(&home, "toolchain").unwrap(), None);
+        set_config(&home, "registry", "https://example.test/index").unwrap();
+        set_config(&home, "toolchain", "0.1.1").unwrap();
+        assert_eq!(
+            config(&home, "toolchain").unwrap().as_deref(),
+            Some("0.1.1")
+        );
+        assert_eq!(
+            config(&home, "registry").unwrap().as_deref(),
+            Some("https://example.test/index")
+        );
+    }
+
+    #[test]
+    fn config_read_errors_preserve_existing_bytes() {
+        let home = rokc_core::tmp::test_dir("config-read-error");
+        let path = home.join("config.rokon");
+        let bytes = b"Config { registry: \"index\" }\n\xff";
+        std::fs::write(&path, bytes).unwrap();
+        let error = config(&home, "toolchain").unwrap_err();
+        assert!(error.contains("cannot read"));
+        assert!(error.contains(&path.display().to_string()));
+        assert!(error.contains("help: fix its permissions or save it as UTF-8"));
+        assert_eq!(set_config(&home, "toolchain", "0.1.1").unwrap_err(), error);
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        std::fs::remove_file(&path).unwrap();
+        std::fs::create_dir(&path).unwrap();
+        assert!(config(&home, "toolchain").is_err());
+        assert!(set_config(&home, "toolchain", "0.1.1").is_err());
+        assert!(path.is_dir());
     }
 }
