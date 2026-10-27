@@ -1,0 +1,23 @@
+// spec: §3.13.1
+// A bare `break;` mixed with `break <value>` names the bare one.
+// expect-error: 12:9: `break` with a `i32` value, but an earlier `break` of this loop has no value (spec 3.13.1)
+// expect-error: help: write `break <value>;` with a `i32` value for the bare `break`, or remove this value
+// expect-error: 19:9: `break` without a value, but this loop's `break` values are `i32` (spec 3.13.1)
+// expect-error: help: write `break <value>;` with a `i32` value
+
+fn main() {
+    let c = true;
+    let a = loop {
+        if c { break; }
+        break 5i32;
+    };
+    let b = loop {
+        if c {
+            break 5i32;
+        }
+        println("x");
+        break;
+    };
+    _ = a;
+    _ = b;
+}

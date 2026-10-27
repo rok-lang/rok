@@ -3053,19 +3053,40 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_fn(&mut self, vis: Visibility, attrs: Vec<Attribute>) -> Option<FnDef> {
-        let mut is_async = false;
-        let mut is_generator = false;
+        // Modifiers in fixed order `unsafe async yield` (spec 4.1.11); a
+        // misordered or repeated one is reported and kept.
+        const MODS: [&str; 3] = ["unsafe", "async", "yield"];
         let start = self.peek_span();
-        // Modifiers in fixed order `unsafe async yield` (spec 4.1.11).
-        let is_unsafe = self.eat(&TokenKind::Unsafe);
-        if matches!(self.peek(), TokenKind::Async) {
-            is_async = true;
+        let mut seen: Vec<(usize, Span)> = Vec::new();
+        loop {
+            let rank = match self.peek() {
+                TokenKind::Unsafe => 0,
+                TokenKind::Async => 1,
+                TokenKind::Yield => 2,
+                _ => break,
+            };
+            seen.push((rank, self.peek_span()));
             self.bump();
         }
-        if matches!(self.peek(), TokenKind::Yield) {
-            is_generator = true;
-            self.bump();
+        if let Some(w) = seen.windows(2).find(|w| w[1].0 <= w[0].0) {
+            let (this, prev) = (MODS[w[1].0], MODS[w[0].0]);
+            let mut ranks: Vec<usize> = seen.iter().map(|m| m.0).collect();
+            ranks.sort_unstable();
+            ranks.dedup();
+            let fixed: Vec<&str> = ranks.iter().map(|r| MODS[*r]).collect();
+            let msg = if w[1].0 == w[0].0 {
+                format!("fn modifier `{this}` written twice (spec 4.1.11)")
+            } else {
+                format!(
+                    "fn modifier `{this}` after `{prev}`: modifiers go in the order `unsafe \
+                     async yield` (spec 4.1.11)"
+                )
+            };
+            self.error_help(w[1].1, msg, format!("write `{} fn`", fixed.join(" ")));
         }
+        let is_unsafe = seen.iter().any(|m| m.0 == 0);
+        let is_async = seen.iter().any(|m| m.0 == 1);
+        let is_generator = seen.iter().any(|m| m.0 == 2);
         self.expect(&TokenKind::Fn, "`fn`")?;
         let name = self.fn_name()?;
         // Optional generic parameters.

@@ -1560,13 +1560,26 @@ fn mod_file(
         } else {
             String::new()
         };
-        return Err(err(format!(
-            "module `{name}` body not found at `{}`{hint}",
+        // A single-file module's submodules go in a folder not made yet.
+        let missing = body.parent().filter(|d| !source_dir_exists(d));
+        let msg = match missing {
+            Some(d) => format!(
+                "module `{name}` body not found at `{}`: there is no `{}/` folder (spec 5.4.4)",
+                body.display(),
+                d.display()
+            ),
+            None => format!(
+                "module `{name}` body not found at `{}`{hint}",
+                body.display()
+            ),
+        };
+        return Err(err(msg).with_help(format!(
+            "create `{}`, or write `mod {name} {{ .. }}` in place of `mod {name};`",
             body.display()
         )));
     }
-    let next = source_dir_exists(&folder).then_some(folder);
-    Ok((body, next))
+    // Kept when missing too: a `mod x;` inside then names `folder/x.rok`.
+    Ok((body, Some(folder)))
 }
 
 /// A file that defines meta blocks (`@`), keywords or literals: the
