@@ -88,11 +88,14 @@ yield fn sums(xs: List<List<i64>>, rounds: i64) -> i64 {
 }
 
 fn churn(stop: Atomic<bool>) -> i64 {
+    // At least one round, so a fast main cannot finish before a
+    // churner is scheduled.
     let n: i64 = 0;
-    while !stop.load() {
+    loop {
         let ys: List<str> = [];
         for i in 0..40 { ys.push(f"{i}-{n}-padding-padding"); }
         n += ys.len() as i64;
+        if stop.load() { break; }
     }
     n
 }
