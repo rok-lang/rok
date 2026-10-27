@@ -73,6 +73,10 @@
 //!     executables through it (split on whitespace), e.g.
 //!     `qemu-aarch64 -L <sysroot>` or `wine` where no binfmt handler
 //!     is registered.
+//!   - `ROK_TEST_PREBUILT=1` - `librokr.a` (and for `rok`'s tests rokc)
+//!     is built already, so no test runs `cargo build`: under nextest,
+//!     one process per test, a concurrent build relinks the archive
+//!     while another test links against it.
 //!   - `ROK_TEST_TMP=<dir>` - where each test binary's scratch root
 //!     `rok-test-<pid>` goes (default: the temp directory); the root is
 //!     removed at exit, unless `ROK_KEEP_TEST_TMP` is set.
@@ -170,6 +174,9 @@ pub fn setup_runtime() -> Env {
     #[allow(clippy::items_after_statements)]
     static BUILT: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     let ok = *BUILT.get_or_init(|| {
+        if env::var_os("ROK_TEST_PREBUILT").is_some() {
+            return true;
+        }
         let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".into());
         Command::new(cargo)
             .args(["build", "-p", "rokr"])

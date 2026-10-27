@@ -20,10 +20,14 @@ fn workspace() -> PathBuf {
 }
 
 /// `rok` runs the `rokc` beside it (and tests that link want the
-/// runtime): build both once.
+/// runtime): build both once, unless `ROK_TEST_PREBUILT` says they are
+/// (rokc's tests/common/mod.rs).
 fn build_rokc() {
     static BUILT: OnceLock<bool> = OnceLock::new();
     let ok = *BUILT.get_or_init(|| {
+        if std::env::var_os("ROK_TEST_PREBUILT").is_some() {
+            return true;
+        }
         let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
         Command::new(cargo)
             .args(["build", "-p", "rokc", "-p", "rokr"])
