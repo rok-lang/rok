@@ -91,10 +91,13 @@ pub struct MetaTable {
 }
 
 /// Attributes the compiler owns (6.2 - 6.7); `#[impl_attribute]` can't
-/// take their names.
-const BUILTIN_ATTRS: &[&str] = &[
+/// take their names. Every name the driver checks is here (a driver test
+/// holds it).
+pub const BUILTIN_ATTRS: &[&str] = &[
     "allow",
+    "bench",
     "cfg",
+    "cfg_attr",
     "cold",
     "deny",
     "deprecated",
@@ -114,14 +117,29 @@ const BUILTIN_ATTRS: &[&str] = &[
     "link_name",
     "literal",
     "must_use",
+    "niche",
+    "no_implicit_rok",
     "no_mangle",
+    "no_safepoint",
     "non_exhaustive",
+    "path",
     "postfix",
     "prefix",
     "repr",
     "test",
     "track_caller",
     "warn",
+];
+
+/// Built-in names a meta block could take before 0.1.2: taking one is
+/// only a warning (the block still expands) until 0.2.0 makes it an error.
+const LATE_RESERVED_ATTRS: &[&str] = &[
+    "bench",
+    "cfg_attr",
+    "niche",
+    "no_implicit_rok",
+    "no_safepoint",
+    "path",
 ];
 
 /// Compiler built-in `!`-forms ([6.3](603)/[6.11](611)); a macro cannot
@@ -174,7 +192,8 @@ impl MetaTable {
     }
 
     /// Register `def`; a second block for the same name, or one taking a
-    /// built-in derive / attribute name, is an error.
+    /// built-in derive / attribute name, is an error (a warning for a name
+    /// in `LATE_RESERVED_ATTRS`; the block is still registered).
     pub fn add(&mut self, def: MetaDef) -> Option<RokDiagnostic> {
         let clash = |msg: String| RokDiagnostic::error(ErrorKind::Meta, def.span, msg);
         if let Some(old) = self.find(def.kind, &def.name) {
@@ -198,6 +217,20 @@ impl MetaTable {
                 "`{}` is a built-in derive; a meta block cannot redefine it (spec 6.2.1)",
                 def.name
             )));
+        }
+        if def.kind == MetaKind::Attribute && LATE_RESERVED_ATTRS.contains(&def.name.as_str()) {
+            let warn = RokDiagnostic::warning(
+                ErrorKind::Meta,
+                def.span,
+                format!(
+                    "`#[{0}]` is a built-in attribute; a meta block taking its name \
+                     becomes an error in 0.2.0: rename it, e.g. \
+                     `#[impl_attribute(my_{0})]` (spec 6.2)",
+                    def.name
+                ),
+            );
+            self.defs.push(def);
+            return Some(warn);
         }
         if def.kind == MetaKind::Attribute && BUILTIN_ATTRS.contains(&def.name.as_str()) {
             return Some(clash(format!(

@@ -9,3 +9,5 @@ Cargo.lock.bak
 /dist
 # rokc build fingerprints (beside -o outputs)
 .*.fp
+# build output of directory test cases
+/compiler/rokc/tests/cases/*/target/

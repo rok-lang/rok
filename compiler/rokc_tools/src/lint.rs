@@ -99,7 +99,7 @@ pub const LINTS: &[Lint] = &[
     ),
     warn(
         "confusable_idents",
-        "identifiers that look alike (spec 1.4.3)",
+        "identifiers that look alike (spec 1.4.2)",
     ),
     warn("deprecated", "use of a `#[deprecated]` function"),
     warn(

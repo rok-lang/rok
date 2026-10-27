@@ -123,7 +123,7 @@ pub enum TokenKind {
     Star,
     Slash,
     Percent,
-    /// `%%` Euclidean modulo (spec 1.10.3).
+    /// `%%` floored modulo (spec 1.10.3).
     PercentPercent,
     EqEq,
     NotEq,

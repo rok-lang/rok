@@ -324,3 +324,36 @@ fn words(a: &Attribute, allow_empty: bool) -> Option<&'static str> {
     };
     (!ok).then_some("a list of names")
 }
+
+#[cfg(test)]
+mod tests {
+    /// Every name `problem` matches (or treats as magic) is reserved
+    /// against meta blocks.
+    #[test]
+    fn checked_names_are_reserved() {
+        let src = include_str!("attrs.rs");
+        let start = src.find("fn problem(").expect("problem");
+        let end = src[start..].find("\nfn empty(").expect("empty") + start;
+        let mut names: Vec<&str> = super::MAGIC.to_vec();
+        for line in src[start..end].lines().map(str::trim) {
+            let Some((pat, _)) = line.split_once("=>") else {
+                continue;
+            };
+            if !line.starts_with('"') {
+                continue;
+            }
+            let pat = pat.split(" if ").next().unwrap_or(pat);
+            names.extend(pat.split('|').map(|n| n.trim().trim_matches('"')));
+        }
+        assert!(names.contains(&"bench") && names.contains(&"no_safepoint"));
+        for n in names {
+            // A path attribute (`wit::export`) has no single name to take.
+            if !n.contains("::") {
+                assert!(
+                    rokc_parser::BUILTIN_ATTRS.contains(&n),
+                    "`#[{n}]` is checked by the driver but missing from BUILTIN_ATTRS"
+                );
+            }
+        }
+    }
+}

@@ -346,7 +346,7 @@ pub fn spec(name: &str) -> Option<TargetSpec> {
             profile_runtime: s(""),
             ..wasm32(name, "wasm32-wasip1")
         },
-        // Spec 0.6.2: no guarantee.
+        // Spec 0.6.1: Tier 1.
         "riscv64gc-unknown-linux-gnu" => TargetSpec {
             llvm_target: s("riscv64-unknown-linux-gnu"),
             c_abi: CAbi::Riscv64,
@@ -361,6 +361,7 @@ pub fn spec(name: &str) -> Option<TargetSpec> {
                 "/lib/ld-linux-riscv64-lp64d.so.1",
             )
         },
+        // Spec 0.6.2: no guarantee.
         "powerpc64le-unknown-linux-gnu" => TargetSpec {
             data_layout: s("e-m:e-Fn32-i64:64-i128:128-n32:64-S128-v256:256:256-v512:512:512"),
             cpu: s("ppc64le"),
