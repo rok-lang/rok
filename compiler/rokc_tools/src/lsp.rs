@@ -2,7 +2,7 @@
 //! framing). Full-text sync; every query runs on the last check of the
 //! buffer (`analysis::check`: front end and lints, no codegen).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
@@ -596,6 +596,7 @@ pub(crate) fn complete(
             });
         if let Some((a, ty)) = found {
             let hir = a.hir.as_ref().expect("find_expr needs HIR");
+            let hidden = a.hidden_spans();
             if let HirTy::Struct(id) = &ty {
                 if let Some(s) = hir.structs.iter().find(|s| s.id == *id) {
                     for f in &s.fields {
@@ -607,6 +608,7 @@ pub(crate) fn complete(
                 if f.params
                     .first()
                     .is_some_and(|p| p.name == "self" && p.ty == ty)
+                    && !hidden.contains(&f.span)
                 {
                     push(short_name(&f.name), 2, signature(hir, f));
                 }
@@ -619,26 +621,45 @@ pub(crate) fn complete(
         let segs: Vec<&str> = prefix[start..].split("::").collect();
         // Item names only: the last good compile has them (the
         // buffer with a dangling `a::` does not compile).
-        if let Some(hir) = good.and_then(|a| a.hir.as_ref()) {
-            path_completions(hir, &segs, &mut push);
+        if let Some(a) = good {
+            if let Some(hir) = &a.hir {
+                path_completions(hir, &a.hidden_spans(), &segs, &mut push);
+            }
         }
     }
     (off - partial.len(), out)
 }
 
 /// `a::b::` → the next segments of every item path under it, plus the
-/// associated functions / variants of a type named by the path.
-fn path_completions(hir: &HirModule, segs: &[&str], push: &mut impl FnMut(&str, u32, String)) {
+/// associated functions / variants of a type named by the path. Items
+/// at a `hidden` span (`#[doc(hidden)]`) are left out.
+fn path_completions(
+    hir: &HirModule,
+    hidden: &HashSet<Span>,
+    segs: &[&str],
+    push: &mut impl FnMut(&str, u32, String),
+) {
     let n = segs.len();
+    let shown = |span: &Span| !hidden.contains(span);
     let mut names: Vec<(&str, u32)> = Vec::new();
     names.extend(
         hir.functions
             .iter()
-            .filter(|f| !f.name.contains("__") && !f.name.contains('.'))
+            .filter(|f| !f.name.contains("__") && !f.name.contains('.') && shown(&f.span))
             .map(|f| (f.name.as_str(), 3)),
     );
-    names.extend(hir.structs.iter().map(|s| (s.name.as_str(), 22)));
-    names.extend(hir.enums.iter().map(|e| (e.name.as_str(), 13)));
+    names.extend(
+        hir.structs
+            .iter()
+            .filter(|s| shown(&s.span))
+            .map(|s| (s.name.as_str(), 22)),
+    );
+    names.extend(
+        hir.enums
+            .iter()
+            .filter(|e| shown(&e.span))
+            .map(|e| (e.name.as_str(), 13)),
+    );
     for (name, kind) in names {
         let name = name.split("__").next().unwrap_or(name);
         let parts: Vec<&str> = name.split("::").collect();
@@ -663,7 +684,7 @@ fn path_completions(hir: &HirModule, segs: &[&str], push: &mut impl FnMut(&str, 
             }
         }
     }
-    for f in &hir.functions {
+    for f in hir.functions.iter().filter(|f| shown(&f.span)) {
         if let Some((key, method)) = f.name.split_once("__") {
             if keys.iter().any(|k| k == key) {
                 push(method, 3, signature(hir, f));

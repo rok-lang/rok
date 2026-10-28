@@ -8,7 +8,9 @@
 // check of `str::from_utf8`.
 //
 // `write_fmt` takes the formatted `str` (an f-string), not `FmtArgs`
-// (f-strings desugar to `str`).
+// (f-strings desugar to `str`); `write_display` writes a value through
+// `Display` straight into the writer, in chunks, with no `str` of the
+// whole built first.
 
 // The runtime's numbering of the kinds (`rok_os_errno_kind`).
 const KIND_OTHER: i32 = 0;
@@ -398,6 +400,32 @@ pub trait Writer {
     /// Write formatted text: `try w.write_fmt(f"{x}\n")`.
     fn write_fmt(ref self, s: str) throws (IoError) {
         try self.write_str(s);
+    }
+
+    /// Write `x` as `print` would show it (`Display`): `try w.write_display(p)`.
+    /// The text goes to `write_str` in chunks as it is made, so a large
+    /// value is never held whole as a `str`. For several values, write
+    /// an f-string (`try w.write_display(f"total = {n}\n")`) or call once
+    /// per value. A failed write is thrown as it is; a `Display` that
+    /// fails on its own is `IoErrorKind::Other`.
+    fn write_display<T: Display>(ref self, x: T) throws (IoError) {
+        // The closure writes to a copy: a captured `ref` parameter would
+        // not carry its changes back to the caller.
+        let w = self;
+        let failed: IoError | none = none;
+        let out = Formatter::to_sink([ref w, ref failed] |s: str| -> bool {
+            try w.write_str(s) catch err {
+                failed = err;
+                return false;
+            };
+            true
+        });
+        let ok = true;
+        try Display::fmt(x, ref out) catch _ { ok = false; };
+        if ok { try out.flush() catch _ { ok = false; }; }
+        self = w;
+        if let err: IoError = failed { throw err; }
+        if !ok { throw IoError::new("a `Display` implementation failed (FmtError)"); }
     }
 }
 

@@ -1,0 +1,98 @@
+// needs: fs
+// expect-exit: 0
+// expect-stdout:
+// stdout: (1, -2)
+// p = (3, 4), n = 42, x = 2.5!
+// file: [ab (5, 6) 7 true]
+// memory: 44669 bytes in 11 writes, counted 11
+// largest write under 4200: true
+// last: [row 1999: (1999, -1999)]
+
+// Spec 305.1a: `Writer::write_display` writes a value through `Display`
+// into any writer (stdout, a file, a user writer in memory) in chunks
+// rather than one `str` of the whole text; several values go in an
+// f-string or one call each.
+
+use rok::std::io;
+use rok::std::io::{IoError, Writer};
+use rok::std::fs;
+use rok::std::env;
+
+struct Point { x: i32; y: i32; }
+
+impl Display for Point {
+    fn fmt(self, ref f: Formatter) throws (FmtError) {
+        try f.write_str("(");
+        try Display::fmt(self.x, ref f);
+        try f.write_str(", ");
+        try Display::fmt(self.y, ref f);
+        try f.write_str(")");
+    }
+}
+
+/// `n` numbered lines: about 12 bytes each.
+struct Rows { n: i32; }
+
+impl Display for Rows {
+    fn fmt(self, ref f: Formatter) throws (FmtError) {
+        let i = 0;
+        while i < self.n {
+            try f.write_str("row ");
+            try Display::fmt(i, ref f);
+            try f.write_str(": ");
+            try Display::fmt(Point { x: i, y: -i }, ref f);
+            try f.write_str("\n");
+            i += 1;
+        }
+    }
+}
+
+/// Keeps every write in memory; `count` is plain data, so it shows the
+/// writer's own changes reach the caller.
+struct Memory { writes: List<str>; count: i32; }
+
+impl Writer for Memory {
+    fn write(ref self, buf: List<u8>) throws (IoError) -> usize {
+        try self.write_str(try str::from_utf8(buf) catch _ { throw IoError::new("not UTF-8"); });
+        buf.len()
+    }
+    fn write_str(ref self, s: str) throws (IoError) {
+        self.writes.push(s);
+        self.count += 1;
+    }
+    fn flush(ref self) throws (IoError) {}
+}
+
+fn main() throws (IoError) {
+    let out = io::stdout();
+    try out.write_display("stdout: ");
+    try out.write_display(Point { x: 1, y: -2 });
+    try out.write_display('\n');
+    let (q, n, x) = (Point { x: 3, y: 4 }, 42, 2.5);
+    try out.write_display(f"p = {q}, n = {n}, x = {x}!\n");
+
+    let p = env::temp_dir() / f"rok_std_io_write_display_{env::pid()}.txt";
+    using file = try fs::create(p) {
+        try file.write_display("ab ");
+        try file.write_display(Point { x: 5, y: 6 });
+        try file.write_display(f" {7u8} {true}");
+    }
+    println("file: [" + (try fs::read_to_str(p)) + "]");
+    try fs::remove_file(p);
+
+    let m = Memory { writes: [], count: 0 };
+    try m.write_display(Rows { n: 2000 });
+    let total = 0usize;
+    let largest = 0usize;
+    for w in m.writes {
+        total += w.len();
+        if w.len() > largest { largest = w.len(); }
+    }
+    println(f"memory: {total} bytes in {m.writes.len()} writes, counted {m.count}");
+    println(f"largest write under 4200: {largest < 4200}");
+    let tail = m.writes[m.writes.len() - 1];
+    println("last: [" + tail[tail.rfind("row ") ?? 0:].trim_end() + "]");
+}
+
+// spec: std 305-io §3.5.1
+// spec: std 210-fmt §2.10.2
