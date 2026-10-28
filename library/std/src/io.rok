@@ -409,12 +409,9 @@ pub trait Writer {
     /// per value. A failed write is thrown as it is; a `Display` that
     /// fails on its own is `IoErrorKind::Other`.
     fn write_display<T: Display>(ref self, x: T) throws (IoError) {
-        // The closure writes to a copy: a captured `ref` parameter would
-        // not carry its changes back to the caller.
-        let w = self;
         let failed: IoError | none = none;
-        let out = Formatter::to_sink([ref w, ref failed] |s: str| -> bool {
-            try w.write_str(s) catch err {
+        let out = Formatter::to_sink([ref self, ref failed] |s: str| -> bool {
+            try self.write_str(s) catch err {
                 failed = err;
                 return false;
             };
@@ -423,7 +420,6 @@ pub trait Writer {
         let ok = true;
         try Display::fmt(x, ref out) catch _ { ok = false; };
         if ok { try out.flush() catch _ { ok = false; }; }
-        self = w;
         if let err: IoError = failed { throw err; }
         if !ok { throw IoError::new("a `Display` implementation failed (FmtError)"); }
     }

@@ -948,11 +948,12 @@ pub(super) fn lower_assign(
             let v = lower_expected(ctx, value, HirTy::Unknown);
             Some(ctx.declare_var(name, v.ty.clone(), v, span))
         }
-        // Spec 4.7: `ref self` names the caller's slot; `self = v` writes it.
+        // Spec 4.7: `ref self` names the caller's slot; `self = v` writes it
+        // (from a `[ref self]` closure too, through the shared cell).
         ExprKind::SelfLower
-            if ctx
-                .lookup("self")
-                .is_some_and(|l| ctx.ref_params.iter().any(|(r, _)| *r == l)) =>
+            if ctx.lookup("self").is_some_and(|l| {
+                ctx.is_boxed(l) || ctx.ref_params.iter().any(|(r, _)| *r == l)
+            }) =>
         {
             let local = ctx.lookup("self")?;
             let slot_ty = ctx.var_ty(local);
@@ -1647,11 +1648,7 @@ fn lower_expr_inner(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
         ExprKind::Path(p) => lower_path(ctx, p, span),
         ExprKind::QPath(q) => lower_qpath_value(ctx, expr, q, span),
         ExprKind::SelfLower => match ctx.lookup("self") {
-            Some(local) => HirExpr {
-                kind: HirExprKind::Local(local),
-                ty: ctx.local_ty(local),
-                span,
-            },
+            Some(local) => ctx.read_local(local, span),
             None => ctx.error_expr(span, "`self` is only available inside methods".to_owned()),
         },
         ExprKind::SelfUpper => ctx.error_expr(span, "`Self` is a type, not a value".to_owned()),

@@ -1,0 +1,75 @@
+// spec: §6.8.2 §6.9.9
+// expect-exit: 0
+// expect-stdout:
+// 42
+// 7 -1
+// 6
+// 12
+// 5
+
+// Hygiene renames a template local only where it is in scope: a `let v`
+// in one method leaves a match-arm `v:` in another (and one before it in
+// the same block) as written.
+
+trait Probe {
+    fn first() -> i32;
+    fn pick(x: i32 | none) -> i32;
+    fn sum(self) -> i32;
+    fn scaled(self) -> i32;
+    fn late(x: i32 | none) -> i32;
+}
+
+#[impl_derive(Probe)]
+pub @derive {
+    impl Probe for @Self {
+        fn first() -> i32 {
+            let v = 40;
+            return v + 2;
+        }
+
+        fn pick(x: i32 | none) -> i32 {
+            match x {
+                v: i32 => {
+                    return v;
+                },
+                none => {
+                    return -1;
+                },
+            }
+        }
+
+        fn sum(self) -> i32 {
+            let total = 0;
+            for v in 1..4 {
+                total += v;
+            }
+            return total;
+        }
+
+        fn scaled(self) -> i32 {
+            let f = |v: i32| v * 2;
+            return f(6);
+        }
+
+        fn late(x: i32 | none) -> i32 {
+            let r = match x {
+                v: i32 => v,
+                none => 0,
+            };
+            let v = r;
+            return v;
+        }
+    }
+}
+
+#[derive(Probe)]
+struct S { v: i32; }
+
+fn main() {
+    let s = S { v: 1 };
+    println(S::first());
+    println(f"{S::pick(7)} {S::pick(none)}");
+    println(s.sum());
+    println(s.scaled());
+    println(S::late(5));
+}

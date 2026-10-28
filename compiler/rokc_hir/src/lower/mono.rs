@@ -1235,14 +1235,28 @@ fn lower_fn_with(
     let mut prelude = Vec::new();
     for (p, ap) in params.iter().zip(&fn_def.params) {
         if ctx.ref_captured.contains(&(p.name.clone(), ap.span)) {
+            // A by-value `self` is not a slot to write.
+            if p.name == "self" && !p.by_ref {
+                ctx.emit_error_at(
+                    rokc_diagnostic::ErrorKind::Type,
+                    ap.span,
+                    "`[ref self]` needs a `ref self` method (spec 4.7.4)".to_owned(),
+                );
+                ctx.help_last(Some(
+                    "write `ref self` in the method's parameters, or capture `self` by value \
+                     (drop it from the list)"
+                        .to_owned(),
+                ));
+            }
             let init = hir_local(p.local, &p.ty, fn_def.span);
             prelude.push(ctx.cell_let(&p.name, p.ty.clone(), init));
         }
     }
+    // A captured `ref` parameter hands back its cell, where the writes go.
     ctx.ref_params = params
         .iter()
         .filter(|p| p.by_ref)
-        .map(|p| (p.local, p.ty.clone()))
+        .map(|p| (ctx.lookup(&p.name).unwrap_or(p.local), p.ty.clone()))
         .collect();
 
     let mut ret_ty = ctx.resolve_ast_ty(&sig_ret_ast(fn_def));
