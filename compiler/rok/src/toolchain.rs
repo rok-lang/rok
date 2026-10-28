@@ -65,12 +65,12 @@ fn not_installed(pin: &str, why: &str) -> String {
     )
 }
 
-/// The nearest `rok.rokon` and its `toolchain` (unloadable manifests pin
+/// The nearest `rok.rokon` and its `toolchain` (unparsable manifests pin
 /// nothing).
 fn manifest_pin() -> Option<(PathBuf, String)> {
     let cwd = std::env::current_dir().ok()?;
     let path = cwd.ancestors().find_map(manifest::find)?;
-    let pin = manifest::load(&path).ok()?.toolchain?;
+    let pin = manifest::toolchain_pin(&std::fs::read_to_string(&path).ok()?)?;
     Some((path, pin))
 }
 

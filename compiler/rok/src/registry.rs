@@ -106,20 +106,11 @@ pub struct Entry {
 /// Manifest metadata an entry carries, in line order.
 const META: [&str; 3] = ["description", "license", "repository"];
 
+// Unknown fields of `Stone` and `Req` are skipped, not rejected: a newer
+// rok may add fields, and one such line must not hide a stone's other
+// versions from this one.
 fn entry(d: Decoder<'_>) -> Result<Entry, String> {
     let r = d.record("Stone")?;
-    r.only(&[
-        "name",
-        "vers",
-        "deps",
-        "features",
-        "source",
-        "cksum",
-        "yanked",
-        "description",
-        "license",
-        "repository",
-    ])?;
     let string = |k: &str| r.req(k).and_then(|d| d.string());
     let name = string("name")?;
     manifest::check_name(&name).map_err(|e| r.field_error("name", &e))?;
@@ -132,15 +123,6 @@ fn entry(d: Decoder<'_>) -> Result<Entry, String> {
         .unwrap_or_default()
     {
         let q = item.record("Req")?;
-        q.only(&[
-            "name",
-            "req",
-            "kind",
-            "registry",
-            "optional",
-            "features",
-            "default_features",
-        ])?;
         let name = q.req("name")?.string()?;
         manifest::check_name(&name).map_err(|e| q.field_error("name", &e))?;
         let req = q.req("req")?.string()?;
@@ -388,6 +370,7 @@ pub fn open(home: &Path, url: &str, offline: bool, quiet: bool) -> Result<Cache,
 /// The index entry for the package at `dir`: `origin`, HEAD commit and
 /// tree. The tree must be clean, the package at the repository root.
 pub fn entry_for(dir: &Path, m: &Manifest) -> Result<Entry, String> {
+    m.check_publish()?;
     let name = m.name.clone().ok_or("rok.rokon has no `name`")?;
     manifest::check_name(&name)?;
     let vers = Version::parse(m.version.as_deref().ok_or("rok.rokon has no `version`")?)?;
@@ -398,6 +381,7 @@ pub fn entry_for(dir: &Path, m: &Manifest) -> Result<Entry, String> {
              executable)"
         ));
     }
+    m.readme_path(dir)?;
     let mut deps = Vec::new();
     for d in &m.native {
         let manifest::NativeSource::Registry { req, registry } = &d.source else {
@@ -982,6 +966,19 @@ mod tests {
         let bad = fl.replace("\"dep:num\"", "\"dep:nope\"");
         let err = parse_file(&bad, "f").unwrap_err();
         assert!(err.contains("there is no dependency `nope`"), "{err}");
+        // A newer rok's fields, on the stone and on a dependency, are skipped.
+        let newer = line
+            .replace(
+                "kind: \"normal\" }",
+                "kind: \"normal\", public: true, why: { \"a\": [1] } }",
+            )
+            .replace(
+                "license: \"MIT\" }",
+                "license: \"MIT\", authors: [\"Ann <a@x.org>\"], keywords: [\"geo\"], rust: \
+                 Dep::x(1) }",
+            );
+        assert_ne!(newer, line);
+        assert_eq!(parse_file(&newer, "f").unwrap()[0], back[0]);
         let e = parse_file(&format!("\n{}", line.replace("rev:", "tag:")), "f").unwrap_err();
         assert!(e.contains("--> f (line 2):1:"), "{e}");
         assert!(e.contains("a stone's source"), "{e}");

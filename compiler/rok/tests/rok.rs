@@ -1057,6 +1057,12 @@ fn pinned_toolchains() {
         .output()
         .unwrap();
     fails(&out, "toolchain 9.8 (pinned by ");
+    // A field the proxy does not know (a newer rok's) keeps the pin.
+    write(
+        &app.join("rok.rokon"),
+        "Package { toolchain: \"9.9\", from_a_newer_rok: true }\n",
+    );
+    assert_eq!(proxy("rokc", &app, None, &["x"]), "rokc 9.9.1: x\n");
 
     ok(&tc(&["remove", "9.9.1"]));
     fails(&tc(&["remove", "9.9.1"]), "is not installed");
@@ -1648,6 +1654,79 @@ fn publish_stones(root: &Path, home: &Path, index: &Path) -> String {
     );
 
     tree1
+}
+
+/// Package metadata (`authors`, `homepage`, `documentation`, `readme`,
+/// `keywords`, `publish`) is checked at publish; index entries from a
+/// newer rok, with fields this one does not know, still resolve.
+// spec: §9.10.3 §9.10.4a
+#[test]
+fn package_metadata_and_publish() {
+    let root = scratch("pkg_meta");
+    let home = root.join("home");
+    let index = root.join("index");
+    commit(
+        &index,
+        &[("config.rokon", "Config { api: \"https://rokstones.io\" }\n")],
+    );
+    let reg = index.display().to_string();
+    write(
+        &home.join("config.rokon"),
+        &format!("Config {{ registry: {} }}\n", q(&reg)),
+    );
+    let meta = root.join("meta");
+    let fields = "authors: [\"Ann <a@x.org>\"], homepage: \"https://x.org\", documentation: \
+                  \"https://x.org/doc\", keywords: [\"geo\", \"math\"], license: \"MIT\", ";
+    let files = [("src/lib.rok", ONE), ("README.md", "# meta\n")];
+    // `fields` with `extra`; `extra` keywords replace the default ones.
+    let publish = |extra: &str| {
+        let base = if extra.starts_with("keywords") {
+            fields.replace("keywords: [\"geo\", \"math\"], ", "")
+        } else {
+            fields.to_owned()
+        };
+        stone_meta(
+            &meta,
+            "meta",
+            "0.1.0",
+            "",
+            &format!("{base}{extra}"),
+            &files,
+        );
+        rok(&home, &meta, &["publish"])
+    };
+    // Checked, not in the entry: rok 0.1.1 and older reject unknown fields.
+    let line = ok(&publish(""));
+    assert!(
+        line.ends_with("yanked: false, license: \"MIT\" }\n"),
+        "{line}"
+    );
+    fails(&publish("readme: \"doc/R.md\", "), "`readme: \"doc/R.md\"`");
+    fails(
+        &publish("readme: \"../meta/README.md\", "),
+        "is outside the package; write a path inside it",
+    );
+    ok(&publish("readme: \"README.md\", "));
+    fails(
+        &publish("keywords: [\"a\", \"b\", \"c\", \"d\", \"e\", \"f\"], "),
+        "`keywords` has 6 entries; keep at most 5",
+    );
+    fails(
+        &publish("publish: false, "),
+        "`meta` has `publish: false` in rok.rokon, so it is not published; remove that line \
+         (or write `publish: true`)",
+    );
+    // An entry as a newer rok may write it.
+    let newer = line.replace(
+        "license: \"MIT\" }",
+        "license: \"MIT\", authors: [\"Ann <a@x.org>\"], keywords: [\"geo\"] }",
+    );
+    commit(&index, &[("me/ta/meta", &newer)]);
+    let app = root.join("app");
+    write(&app.join("src/main.rok"), "println(\"x\");\n");
+    write(&app.join("rok.rokon"), APP0);
+    ok(&rok(&home, &app, &["add", "meta"]));
+    assert_eq!(locked_stones(&read(&app.join("rok.lock"))), ["meta@0.1.0"]);
 }
 
 /// A dependency on the package itself (here a test-only one) is an
