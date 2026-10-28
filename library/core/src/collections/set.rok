@@ -44,6 +44,18 @@ impl<T: Hash> Set<T> {
         self.d.clear();
     }
 
+    /// Keep only the members `keep` accepts, in place; O(n).
+    pub const fn retain(self, keep: fn(T) -> bool) {
+        self.d.retain(|x: T, _: bool| keep(x));
+    }
+
+    /// Insert every item of `items`.
+    pub const fn extend<I: IntoIterator<Item = T>>(self, items: I) {
+        for x in items {
+            self.insert(x);
+        }
+    }
+
     /// The members of either set.
     pub const fn union(self, other: Set<T>) -> Set<T> {
         let out: Set<T> = Set::new();

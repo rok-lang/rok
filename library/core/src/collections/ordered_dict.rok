@@ -66,6 +66,17 @@ impl<K: Hash, V> OrderedDict<K, V> {
         self.d.clear();
     }
 
+    /// Keep only the entries `keep` accepts, in place, in order; O(n).
+    pub const fn retain(self, keep: fn(K, V) -> bool) {
+        self.d.retain(keep);
+    }
+
+    /// Insert every `(key, value)` pair of `pairs`, in order: new keys go
+    /// last, a present key keeps its place and takes the later value.
+    pub const fn extend<I: IntoIterator<Item = (K, V)>>(self, pairs: I) {
+        self.d.extend(pairs);
+    }
+
     /// The keys in insertion order, lazily.
     pub const fn keys(self) -> KeysIter<K, V> {
         self.d.keys()

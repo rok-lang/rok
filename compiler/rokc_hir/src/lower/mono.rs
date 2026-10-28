@@ -161,63 +161,206 @@ pub(super) fn bind_from_arg(
         })
         .collect();
     unify_param_ty_with(t, arg_ty, &generic_names, subst, ctx);
-    bind_assoc_bindings(ctx, fn_def, subst);
+    bind_assoc_bindings(ctx, fn_def, self_param.map(|_| arg_ty), subst);
 }
 
-/// `I: IntoIterator<Item = T>` with `I` bound: `T = I::Item`, so a later
-/// closure argument `fn(T) -> U` learns its parameter type.
-fn bind_assoc_bindings(ctx: &LowerCtx<'_>, fn_def: &FnDef, subst: &mut HashMap<String, HirTy>) {
-    for gp in &fn_def.generics.params {
-        let rokc_ast::GenericParam::Type { name, bounds, .. } = gp else {
-            continue;
-        };
-        if !subst.contains_key(name) {
-            continue;
-        }
+/// The type parameter names of `fn_def`.
+fn type_param_names(fn_def: &FnDef) -> std::collections::HashSet<String> {
+    fn_def
+        .generics
+        .params
+        .iter()
+        .filter_map(|gp| match gp {
+            rokc_ast::GenericParam::Type { name, .. } => Some(name.clone()),
+            rokc_ast::GenericParam::Const { .. } => None,
+        })
+        .collect()
+}
+
+/// Each `Assoc = T` binding in `fn_def`'s bounds and `where` clause on a
+/// bare parameter or `Self`: `(subject, assoc, T, bound span)`.
+fn assoc_bindings(fn_def: &FnDef) -> Vec<(String, &str, &Ty, rokc_diagnostic::Span)> {
+    let bare = |t: &Ty| match &t.kind {
+        rokc_ast::TyKind::Path(p) => match p.segments.as_slice() {
+            [s] if s.generics.is_empty() => Some(s.name.clone()),
+            _ => None,
+        },
+        rokc_ast::TyKind::SelfUpper => Some("Self".to_owned()),
+        _ => None,
+    };
+    let preds = fn_def
+        .generics
+        .params
+        .iter()
+        .filter_map(|gp| match gp {
+            rokc_ast::GenericParam::Type { name, bounds, .. } => {
+                Some((name.clone(), bounds.as_slice()))
+            }
+            rokc_ast::GenericParam::Const { .. } => None,
+        })
+        .chain(
+            fn_def
+                .where_clause
+                .iter()
+                .filter_map(|w| Some((bare(&w.ty)?, w.bounds.as_slice()))),
+        );
+    let mut out = Vec::new();
+    for (subject, bounds) in preds {
         for b in bounds {
             let rokc_ast::TyKind::Path(bp) = &b.kind else {
                 continue;
             };
             for g in bp.segments.iter().flat_map(|s| &s.generics) {
-                let Some((
-                    assoc,
-                    rokc_ast::Ty {
-                        kind: rokc_ast::TyKind::Path(tp),
-                        ..
-                    },
-                )) = rokc_ast::as_assoc_binding(g)
-                else {
-                    continue;
-                };
-                let [target] = tp.segments.as_slice() else {
-                    continue;
-                };
-                let is_param = fn_def.generics.params.iter().any(
-                    |p| matches!(p, rokc_ast::GenericParam::Type { name, .. } if *name == target.name),
-                );
-                if !is_param || !target.generics.is_empty() || subst.contains_key(&target.name) {
-                    continue;
-                }
-                let seg = |n: &str| rokc_ast::PathSegment {
-                    name: n.to_owned(),
-                    generics: Vec::new(),
-                };
-                let proj = Ty {
-                    kind: rokc_ast::TyKind::Path(rokc_ast::Path {
-                        segments: vec![seg(name), seg(assoc)],
-                        span: b.span,
-                    }),
-                    span: b.span,
-                };
-                let t = resolve_in_mono(ctx, fn_def, subst, None, &proj);
-                let mut open = Vec::new();
-                collect_unknown_paths(&t, &mut open);
-                if t != HirTy::Unknown && open.is_empty() {
-                    subst.insert(target.name.clone(), t);
+                if let Some((assoc, target)) = rokc_ast::as_assoc_binding(g) {
+                    out.push((subject.clone(), assoc, target, b.span));
                 }
             }
         }
     }
+    out
+}
+
+/// `subject::assoc` resolved, if `subject` is known and the result is
+/// fully concrete. `Self` is the receiver's type `self_hir`.
+fn project_assoc(
+    ctx: &LowerCtx<'_>,
+    fn_def: &FnDef,
+    subst: &HashMap<String, HirTy>,
+    self_hir: Option<&HirTy>,
+    subject: &str,
+    assoc: &str,
+    span: rokc_diagnostic::Span,
+) -> Option<HirTy> {
+    let self_hir = self_hir.filter(|_| subject == "Self");
+    if self_hir.is_none() && !subst.contains_key(subject) {
+        return None;
+    }
+    let seg = |n: &str| rokc_ast::PathSegment {
+        name: n.to_owned(),
+        generics: Vec::new(),
+    };
+    let proj = Ty {
+        kind: rokc_ast::TyKind::Path(rokc_ast::Path {
+            segments: vec![seg(subject), seg(assoc)],
+            span,
+        }),
+        span,
+    };
+    let t = resolve_in_mono(ctx, fn_def, subst, self_hir.cloned(), &proj);
+    let mut unknown = Vec::new();
+    collect_unknown_paths(&t, &mut unknown);
+    (t != HirTy::Unknown && unknown.is_empty()).then_some(t)
+}
+
+/// `I: IntoIterator<Item = T>` with `I` bound: `T = I::Item`, so a later
+/// closure argument `fn(T) -> U` learns its parameter type. The binding
+/// may be structured (`Item = (A, B)`), from a bound or a `where`;
+/// `where Self: ..` binds once the receiver's type `self_hir` is known.
+fn bind_assoc_bindings(
+    ctx: &LowerCtx<'_>,
+    fn_def: &FnDef,
+    self_hir: Option<&HirTy>,
+    subst: &mut HashMap<String, HirTy>,
+) {
+    let names = type_param_names(fn_def);
+    for (subject, assoc, target, span) in assoc_bindings(fn_def) {
+        let open = names
+            .iter()
+            .any(|n| !subst.contains_key(n) && super::expr::ast_ty_mentions(target, n));
+        if !open {
+            continue;
+        }
+        if let Some(t) = project_assoc(ctx, fn_def, subst, self_hir, &subject, assoc, span) {
+            unify_param_ty_with(target, &t, &names, subst, ctx);
+        }
+    }
+}
+
+/// Does `ty` have another shape than `want` (a tuple of another arity, or
+/// no tuple / fn at all)? Parameters and open types fit anything.
+fn shape_differs(want: &Ty, ty: &HirTy) -> bool {
+    match (&want.kind, ty) {
+        (rokc_ast::TyKind::Tuple(ws), HirTy::Tuple(ts)) => {
+            ws.len() != ts.len() || ws.iter().zip(ts).any(|(w, t)| shape_differs(w, t))
+        }
+        (rokc_ast::TyKind::Fn(wa, _, _), HirTy::Fn(ta, _, _) | HirTy::Closure { args: ta, .. }) => {
+            wa.len() != ta.len()
+        }
+        (rokc_ast::TyKind::Tuple(_) | rokc_ast::TyKind::Fn(..), t) => matches!(
+            t,
+            HirTy::Unit
+                | HirTy::Prim(_)
+                | HirTy::None
+                | HirTy::Sum(_)
+                | HirTy::Tuple(_)
+                | HirTy::Struct(_)
+                | HirTy::Enum(_)
+                | HirTy::Array(..)
+                | HirTy::Fn(..)
+                | HirTy::Closure { .. }
+                | HirTy::GcBuf(_)
+        ),
+        _ => false,
+    }
+}
+
+/// A call's `Assoc = (A, B)` binding that the argument's associated type
+/// cannot take (`unzip` on items that are not pairs), as an error naming
+/// the form to give.
+fn assoc_shape_error(
+    ctx: &LowerCtx<'_>,
+    fn_def: &FnDef,
+    self_hir: Option<&HirTy>,
+    subst: &HashMap<String, HirTy>,
+) -> Option<String> {
+    let names = type_param_names(fn_def);
+    assoc_bindings(fn_def)
+        .into_iter()
+        .find_map(|(subject, assoc, target, span)| {
+            // Only a tuple or fn form can mismatch in shape; a bare `T`
+            // is left to the bound check.
+            let shaped = matches!(
+                target.kind,
+                rokc_ast::TyKind::Tuple(_) | rokc_ast::TyKind::Fn(..)
+            );
+            if !shaped
+                || !names
+                    .iter()
+                    .any(|n| super::expr::ast_ty_mentions(target, n))
+            {
+                return None;
+            }
+            let owner = match subject.as_str() {
+                "Self" => self_hir,
+                s => subst.get(s),
+            };
+            // A generic body's call: the owner is still a parameter.
+            if owner.is_none_or(|o| super::bounds::has_param(ctx, o)) {
+                return None;
+            }
+            let t = project_assoc(ctx, fn_def, subst, self_hir, &subject, assoc, span)?;
+            if !shape_differs(target, &t) {
+                return None;
+            }
+            let owner = owner.map_or_else(|| subject.clone(), |o| ctx.ty_name(o));
+            let leaf = leaf_name(&fn_def.name);
+            // An impl's copy of a trait method is `__impl<tag>_<name>`.
+            let shown = leaf
+                .strip_prefix("__impl")
+                .and_then(|r| r.split_once('_'))
+                .map_or(leaf, |(_, m)| m);
+            let want = rokc_ast::print::print_ty(target);
+            let fix = if assoc == "Item" {
+                format!(" - turn each item into `{want}` first, e.g. with `.map(|x| ..)`")
+            } else {
+                format!(" - pass a type whose `{assoc}` is `{want}`")
+            };
+            Some(format!(
+                "`{shown}` needs `{assoc}` of the form `{want}`, but `{owner}` has \
+                 `{assoc} = {}`{fix}",
+                ctx.ty_name(&t)
+            ))
+        })
 }
 
 /// Resolve `ty` under the substitution of a monomorphization in
@@ -357,6 +500,11 @@ pub(super) fn monomorphize_on(
                 subst.insert(name.clone(), resolved);
             }
         }
+    }
+
+    if let Some(msg) = assoc_shape_error(ctx, fn_def, self_hint, &subst) {
+        ctx.emit_error(rokc_diagnostic::ErrorKind::Type, msg);
+        return None;
     }
 
     // Every generic param must be inferable.

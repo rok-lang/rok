@@ -396,12 +396,7 @@ pub trait Intersect<Rhs = Self> {
 // bodies over them.
 
 impl<T: PartialEq> Contains<T> for List<T> {
-    const fn contains(self, item: T) -> bool {
-        for x in self {
-            if x == item { return true; }
-        }
-        false
-    }
+    const fn contains(self, item: T) -> bool { List::contains(self, item) }
 }
 
 impl<T: Hash> Contains<T> for Set<T> {

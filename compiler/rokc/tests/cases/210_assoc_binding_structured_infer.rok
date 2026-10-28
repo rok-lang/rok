@@ -1,0 +1,63 @@
+// spec: §2.10.3 §2.10.4
+// expect-exit: 0
+// expect-stdout:
+// pairs [1, 2] ["a", "b"]
+// nested ["a", "b"] [1, 2, 3]
+// where [true, false] [1.5, 2.5]
+// fns ["8", "8"]
+
+// A parameter named only inside a structured associated-type binding
+// (`Item = (A, B)`, `Item = (A, List<B>)`, `Item = fn(A) -> B`) is
+// inferred from the bound parameter's projection, in a bound or a
+// `where` clause.
+
+fn unzip2<I: Iterator<Item = (A, B)>, A, B>(it: I) -> (List<A>, List<B>) {
+    let l: List<A> = List::new();
+    let r: List<B> = List::new();
+    for (a, b) in it {
+        l.push(a);
+        r.push(b);
+    }
+    (l, r)
+}
+
+fn flatten2<I: Iterator<Item = (A, List<B>)>, A, B>(it: I) -> (List<A>, List<B>) {
+    let l: List<A> = List::new();
+    let r: List<B> = List::new();
+    for (a, bs) in it {
+        l.push(a);
+        for b in bs {
+            r.push(b);
+        }
+    }
+    (l, r)
+}
+
+fn split_where<I, A, B>(it: I) -> (List<A>, List<B>) where I: Iterator<Item = (A, B)> {
+    unzip2(it)
+}
+
+fn apply_all<I: Iterator<Item = fn(A) -> B>, A, B>(it: I, x: A) -> List<B> {
+    let out: List<B> = List::new();
+    for f in it {
+        out.push(f(x));
+    }
+    out
+}
+
+fn twice(x: i32) -> str { f"{x * 2}" }
+
+fn main() {
+    let (ns, cs) = unzip2([(1, "a"), (2, "b")].iter());
+    println(f"pairs {ns:?} {cs:?}");
+
+    let groups: List<(str, List<i64>)> = [("a", [1, 2]), ("b", [3])];
+    let (ks, vs) = flatten2(groups.iter());
+    println(f"nested {ks:?} {vs:?}");
+
+    let (bs, fs) = split_where([(true, 1.5), (false, 2.5)].iter());
+    println(f"where {bs:?} {fs:?}");
+
+    let fns: List<fn(i32) -> str> = [twice, twice];
+    println(f"fns {apply_all(fns.iter(), 4):?}");
+}

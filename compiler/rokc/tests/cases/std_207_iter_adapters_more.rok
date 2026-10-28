@@ -1,0 +1,100 @@
+// spec: std 207-iter §2.7.1 §2.7.10
+// expect-exit: 0
+// expect-stdout:
+// take_while [1, 2, 3] [] [] pulled 4
+// skip_while [4, 1, 5] [] [] [1, 2]
+// scan [1, 3, 6, 10] [] ["a", "ab", "abc"]
+// inspect [1, 2, 3] seen 3 rev [3, 2, 1]
+// cycle [1, 2, 1, 2, 1] [] 0
+// chunks [[1, 2], [3, 4], [5]] [] [[1, 2, 3]]
+// windows [[1, 2, 3], [2, 3, 4]] [] []
+// partition [2, 4] [1, 3, 5] [] []
+// unzip [1, 2] ["a", "b"] [] []
+// exact 4 4 4 2 2 2 0 0 none none
+// left 3 2 1
+// count 4 0 3 4
+
+// The adapters past `peekable`: take_while / skip_while / scan / inspect
+// / cycle / chunks / windows and the consumers partition / unzip, on
+// empty iterators, with early stops, and their `exact_len`.
+
+fn len_str(n: usize | none) -> str {
+    match n {
+        k: usize => f"{k}",
+        none => "none",
+    }
+}
+
+fn main() {
+    let xs: List<i32> = [1, 2, 3, 4, 1];
+    let none_: List<i32> = [];
+    let pulled = [0];
+    let tw: List<i32> = xs.iter().inspect(|_x| { pulled[0] = pulled[0] + 1; }).take_while(|x| x < 4).collect();
+    let tw0: List<i32> = none_.iter().take_while(|x| x < 4).collect();
+    let tw1: List<i32> = xs.iter().take_while(|x| x > 9).collect();
+    println(f"take_while {tw:?} {tw0:?} {tw1:?} pulled {pulled[0]}");
+
+    let sw: List<i32> = [1, 2, 4, 1, 5].iter().skip_while(|x| x < 3).collect();
+    let sw0: List<i32> = none_.iter().skip_while(|x| x < 3).collect();
+    let sw1: List<i32> = xs.iter().skip_while(|x| x > 0).collect();
+    let sw2: List<i32> = [1, 2].iter().skip_while(|x| x > 5).collect();
+    println(f"skip_while {sw:?} {sw0:?} {sw1:?} {sw2:?}");
+
+    let sc: List<i32> = [1, 2, 3, 4].iter().scan(0, |acc, x| acc + x).collect();
+    let sc0: List<i32> = none_.iter().scan(0, |acc, x| acc + x).collect();
+    let ss: List<str> = ["a", "b", "c"].iter().scan("", |acc: str, x: str| acc + x).collect();
+    println(f"scan {sc:?} {sc0:?} {ss:?}");
+
+    let seen = [0];
+    let ins: List<i32> = [1, 2, 3].iter().inspect(|_x| { seen[0] = seen[0] + 1; }).collect();
+    let back: List<i32> = [1, 2, 3].iter().inspect(|_x| {}).rev().collect();
+    println(f"inspect {ins:?} seen {seen[0]} rev {back:?}");
+
+    let cy: List<i32> = [1, 2].iter().cycle().take(5).collect();
+    let cy0: List<i32> = none_.iter().cycle().take(5).collect();
+    println(f"cycle {cy:?} {cy0:?} {none_.iter().cycle().count()}");
+
+    let ch: List<List<i32>> = (1..6).chunks(2).collect();
+    let ch0: List<List<i32>> = none_.iter().chunks(2).collect();
+    let ch1: List<List<i32>> = (1..4).chunks(5).collect();
+    println(f"chunks {ch:?} {ch0:?} {ch1:?}");
+
+    let wi: List<List<i32>> = (1..5).windows(3).collect();
+    let wi0: List<List<i32>> = none_.iter().windows(1).collect();
+    let wi1: List<List<i32>> = (1..3).windows(3).collect();
+    println(f"windows {wi:?} {wi0:?} {wi1:?}");
+
+    let (ev, od) = (1..6).partition(|x| x % 2 == 0);
+    let (e0, o0) = none_.iter().partition(|x| x % 2 == 0);
+    println(f"partition {ev:?} {od:?} {e0:?} {o0:?}");
+
+    let (ns, cs) = [(1, "a"), (2, "b")].iter().unzip();
+    let (n0, c0) = none_.iter().map(|x| (x, f"{x}")).unzip();
+    println(f"unzip {ns:?} {cs:?} {n0:?} {c0:?}");
+
+    let ys: List<i32> = [1, 2, 3, 4];
+    let a = ys.iter().scan(0, |s, x| s + x).exact_len();
+    let b = ys.iter().inspect(|_x| {}).exact_len();
+    let c = ys.iter().chunks(2).exact_len();
+    let d = ys.iter().chunks(3).exact_len();
+    let w = ys.iter().windows(3).exact_len();
+    let w5 = ys.iter().windows(5).exact_len();
+    let cyc0 = none_.iter().cycle().exact_len();
+    let cyc = ys.iter().cycle().exact_len();
+    let tw2 = ys.iter().take_while(|x| x < 3).exact_len();
+    println(f"exact {len_str(a)} {len_str(b)} {ys.iter().scan(0, |s, x| s + x).len()} {len_str(w)} {len_str(c)} {len_str(d)} {len_str(w5)} {len_str(cyc0)} {len_str(cyc)} {len_str(tw2)}");
+
+    let wit = ys.iter().windows(2);
+    let l0 = len_str(wit.exact_len());
+    wit.next();
+    let l1 = len_str(wit.exact_len());
+    wit.next();
+    println(f"left {l0} {l1} {len_str(wit.exact_len())}");
+
+    let calls = [0];
+    let f = |x: i32| -> i32 { calls[0] = calls[0] + 1; x };
+    let n = ys.iter().scan(0, |s, x| s + f(x)).count();
+    let after_scan = calls[0];
+    let m = ys.iter().inspect(|x| { f(x); }).filter(|x| x > 1).count();
+    println(f"count {n} {after_scan} {m} {calls[0]}");
+}

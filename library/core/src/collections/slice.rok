@@ -81,6 +81,36 @@ impl<T> Slice<T> {
         SliceIter { s: self, i: 0 }
     }
 
+    /// Views of `[0, mid)` and `[mid, len)`; panics if `mid` is past the
+    /// length.
+    #[track_caller]
+    pub const fn split_at(self, mid: usize) -> (Slice<T>, Slice<T>) {
+        if mid > self.len {
+            index_oob("split_at index", mid, self.len);
+        }
+        (self.slice(0..mid), self.slice(mid..self.len))
+    }
+
+    /// Views of `size` consecutive elements, sliding by one (`size` > 0);
+    /// nothing when the view is shorter than `size`.
+    #[track_caller]
+    pub const fn windows(self, size: usize) -> SliceWindows<T> {
+        if size == 0 {
+            panic("windows: size must be positive, e.g. `windows(2)`");
+        }
+        SliceWindows { s: self, size: size, i: 0 }
+    }
+
+    /// Views of `size` elements in order, the last one shorter
+    /// (`size` > 0).
+    #[track_caller]
+    pub const fn chunks(self, size: usize) -> SliceChunks<T> {
+        if size == 0 {
+            panic("chunks: size must be positive, e.g. `chunks(2)`");
+        }
+        SliceChunks { s: self, size: size, i: 0 }
+    }
+
     /// `(buffer, start, len)` of the viewed elements as one contiguous
     /// run, for runtime calls on a buffer region. A strided view is
     /// copied first, so writes through its run do not reach the view.
@@ -155,6 +185,82 @@ impl<T> IntoIterator for Slice<T> {
     type Item = T;
     const fn into_iter(self) -> SliceIter<T> {
         self.iter()
+    }
+}
+
+impl<T: PartialEq> Slice<T> {
+    /// `true` when an element equals `x`.
+    pub const fn contains(self, x: T) -> bool {
+        for y in self {
+            if y == x {
+                return true;
+            }
+        }
+        false
+    }
+}
+
+/// `s.windows(size)`: each window is a view of `s`, no copy.
+pub struct SliceWindows<T> {
+    s: Slice<T>;
+    size: usize;
+    /// Start of the next window.
+    i: usize;
+}
+
+impl<T> Iterator for SliceWindows<T> {
+    type Item = Slice<T>;
+    const fn next(ref self) -> Slice<T> | none {
+        if self.s.len - self.i < self.size {
+            return none;
+        }
+        let w = self.s.slice(self.i..self.i + self.size);
+        self.i += 1;
+        w
+    }
+
+    const fn exact_len(self) -> usize | none { self.len() }
+
+    /// `ExactSizeIterator`: O(1) (2.7.10).
+    const fn count(self) -> usize { self.len() }
+}
+
+impl<T> ExactSizeIterator for SliceWindows<T> {
+    const fn len(self) -> usize {
+        if self.s.len - self.i < self.size { 0 } else { self.s.len - self.size - self.i + 1 }
+    }
+}
+
+/// `s.chunks(size)`: each chunk is a view of `s`, no copy.
+pub struct SliceChunks<T> {
+    s: Slice<T>;
+    size: usize;
+    /// Start of the next chunk.
+    i: usize;
+}
+
+impl<T> Iterator for SliceChunks<T> {
+    type Item = Slice<T>;
+    const fn next(ref self) -> Slice<T> | none {
+        if self.i >= self.s.len {
+            return none;
+        }
+        let end = self.i + self.size.min(self.s.len - self.i);
+        let c = self.s.slice(self.i..end);
+        self.i = end;
+        c
+    }
+
+    const fn exact_len(self) -> usize | none { self.len() }
+
+    /// `ExactSizeIterator`: O(1) (2.7.10).
+    const fn count(self) -> usize { self.len() }
+}
+
+impl<T> ExactSizeIterator for SliceChunks<T> {
+    const fn len(self) -> usize {
+        let n = self.s.len - self.i;
+        n / self.size + if n % self.size == 0 { 0 } else { 1 }
     }
 }
 
