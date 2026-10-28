@@ -734,6 +734,22 @@ const fn digit_of(c: u8) -> u32 {
     v - 55u32
 }
 
+/// Zero bits below the lowest one bit of `m != 0`.
+const fn mag_trailing_zeros(m: IntMag) -> u64 {
+    unsafe {
+        let i = 0usize;
+        while m.d[i] == 0u32 { i += 1; }
+        (i as u64) * 32u64 + (m.d[i].trailing_zeros() as u64)
+    }
+}
+
+/// Bit `n` of `m`, 0 past the top.
+const fn mag_bit(m: IntMag, n: u64) -> bool {
+    let i = n / 32u64;
+    if i >= m.n as u64 { return false; }
+    (m.limb(i as usize) >> (n % 32u64)) & 1u64 == 1u64
+}
+
 impl Int {
     /// Zero.
     pub const fn new() -> Int { Int::from_i64(0) }
@@ -856,6 +872,147 @@ impl Int {
     pub const fn bit_length(self) -> u64 {
         let (_, m) = self.parts();
         m.bits()
+    }
+
+    /// One bits of `|self|` (Python's `bit_count`): a negative number
+    /// has infinitely many in two's complement.
+    pub const fn count_ones(self) -> u64 {
+        unsafe {
+            if self.big is none { return self.small.unsigned_abs().count_ones() as u64; }
+            let (_, m) = self.parts();
+            let c = 0u64;
+            let i = 0usize;
+            while i < m.n {
+                c += m.d[i].count_ones() as u64;
+                i += 1;
+            }
+            c
+        }
+    }
+
+    /// Zero bits below the lowest one bit, the same for `self` and
+    /// `-self`; `none` for zero, which has no one bit.
+    pub const fn trailing_zeros(self) -> u64 | none {
+        if self.is_zero() { return none; }
+        if self.big is none { return self.small.trailing_zeros() as u64; }
+        let (_, m) = self.parts();
+        mag_trailing_zeros(m)
+    }
+
+    /// Bit `n` of `self` in two's complement, sign-extended forever: a
+    /// negative number has every high bit set.
+    pub const fn bit(self, n: u64) -> bool {
+        if self.big is none {
+            if n >= 63u64 { return self.small < 0; }
+            return (self.small >> (n as i64)) & 1 == 1;
+        }
+        let (neg, m) = self.parts();
+        if !neg { return mag_bit(m, n); }
+        // -m = ~(m - 1): bits below m's lowest one are 0, that one is 1,
+        // the rest are m's flipped.
+        let tz = mag_trailing_zeros(m);
+        if n < tz { return false; }
+        if n == tz { return true; }
+        !mag_bit(m, n)
+    }
+
+    /// Sets bit `n` (as `bit` reads it) to `value`.
+    pub const fn set_bit(ref self, n: u64, value: bool) {
+        if self.bit(n) == value { return; }
+        let p = Int::from_parts(false, IntMag::from_u64(1u64).shl(n));
+        self = if value { self + p } else { self - p };
+    }
+
+    /// `self == 2^k` for some `k`; false for zero and negatives.
+    pub const fn is_power_of_two(self) -> bool { self.is_positive() && self.count_ones() == 1u64 }
+
+    /// The smallest power of two `>= self`; `1` for `self <= 1`.
+    pub const fn next_power_of_two(self) -> Int {
+        if self <= Int::from_i64(1) { return Int::from_i64(1); }
+        if self.is_power_of_two() { return self; }
+        Int::from_parts(false, IntMag::from_u64(1u64).shl(self.bit_length()))
+    }
+
+    /// `floor(log2(self))`; panics unless `self > 0`.
+    #[track_caller]
+    pub const fn ilog2(self) -> u64 { self.checked_ilog2() ?? panic("ilog2 of a non-positive number") }
+
+    pub const fn checked_ilog2(self) -> u64 | none {
+        if !self.is_positive() { return none; }
+        self.bit_length() - 1u64
+    }
+
+    /// Bytes, least significant first. `signed`: the shortest two's
+    /// complement (the top bit is the sign, `-1` is `[255]`); otherwise
+    /// the magnitude, which panics on a negative number. Zero is `[0]`.
+    #[track_caller]
+    pub fn to_le_bytes(self, signed: bool = true) -> List<u8> { self.bytes(signed, false, "to_le_bytes") }
+
+    /// As `to_le_bytes`, most significant first.
+    #[track_caller]
+    pub fn to_be_bytes(self, signed: bool = true) -> List<u8> { self.bytes(signed, true, "to_be_bytes") }
+
+    /// The `int` of `bytes`, least significant first: two's complement
+    /// when `signed` (a set top bit is negative), else a magnitude. No
+    /// bytes is zero.
+    pub fn from_le_bytes(bytes: List<u8> | Slice<u8>, signed: bool = true) -> Int {
+        Int::from_bytes(bytes, signed, false)
+    }
+
+    /// As `from_le_bytes`, most significant first.
+    pub fn from_be_bytes(bytes: List<u8> | Slice<u8>, signed: bool = true) -> Int {
+        Int::from_bytes(bytes, signed, true)
+    }
+
+    #[track_caller]
+    fn bytes(self, signed: bool, be: bool, name: str) -> List<u8> {
+        unsafe {
+            let (neg, m) = self.parts();
+            if neg && !signed {
+                panic(f"{name}(signed: false) of a negative int; use signed: true for two's complement or take .abs() first");
+            }
+            // Sign bit included: -m needs the bits of m - 1, plus one.
+            let nb = if !signed {
+                if m.n == 0 { 1usize } else { ((m.bits() + 7u64) / 8u64) as usize }
+            } else if neg {
+                (m.minus(IntMag::from_u64(1u64)).bits() / 8u64) as usize + 1
+            } else {
+                (m.bits() / 8u64) as usize + 1
+            };
+            let limbs = self.twos(nb / 4 + 1);
+            let out: List<u8> = List::with_capacity(nb);
+            let i = 0usize;
+            while i < nb {
+                let k = if be { nb - 1 - i } else { i };
+                out.push((limbs[k / 4] >> ((k % 4) as u32 * 8u32)) as u8);
+                i += 1;
+            }
+            out
+        }
+    }
+
+    fn from_bytes(bytes: List<u8> | Slice<u8>, signed: bool, be: bool) -> Int {
+        unsafe {
+            let v = match bytes {
+                l: List<u8> => l[0:l.len()],
+                s: Slice<u8> => s,
+            };
+            let n = v.len();
+            if n == 0 { return Int::from_i64(0); }
+            // One spare byte or more: room for the sign extension.
+            let k = n / 4 + 1;
+            let top = if be { v[0] } else { v[n - 1] };
+            let fill = if signed && top >= 0x80u8 { 0xFFu8 } else { 0u8 };
+            let r: GcBuf<u32> = buf_new(k);
+            let i = 0usize;
+            while i < 4 * k {
+                let b = if i < n { (if be { v[n - 1 - i] } else { v[i] }) } else { fill };
+                let w = if i % 4 == 0 { 0u32 } else { r[i / 4] };
+                r[i / 4] = w | ((b as u32) << ((i % 4) as u32 * 8u32));
+                i += 1;
+            }
+            if signed { Int::from_twos(r, k) } else { Int::from_parts(false, IntMag::trim(r, k)) }
+        }
     }
 
     /// `self^exp` (square and multiply).

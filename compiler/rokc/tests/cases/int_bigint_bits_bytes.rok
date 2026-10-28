@@ -1,0 +1,87 @@
+// spec: std §2.1.2
+// expect-exit: 0
+// expect-stdout:
+// 0: ones 0 tz none bits 000 pow2 false next 1 ilog2 none le [0] be [0]
+// 1: ones 1 tz 0 bits 100 pow2 true next 1 ilog2 0 le [1] be [1]
+// -1: ones 1 tz 0 bits 111 pow2 false next 1 ilog2 none le [255] be [255]
+// 127: ones 7 tz 0 bits 100 pow2 false next 128 ilog2 6 le [127] be [127]
+// 128: ones 1 tz 7 bits 000 pow2 true next 128 ilog2 7 le [128, 0] be [0, 128]
+// -128: ones 1 tz 7 bits 011 pow2 false next 1 ilog2 none le [128] be [128]
+// -129: ones 2 tz 0 bits 111 pow2 false next 1 ilog2 none le [127, 255] be [255, 127]
+// 255: ones 8 tz 0 bits 100 pow2 false next 256 ilog2 7 le [255, 0] be [0, 255]
+// 9223372036854775807: ones 63 tz 0 bits 100 pow2 false next 9223372036854775808 ilog2 62 le [255, 255, 255, 255, 255, 255, 255, 127] be [127, 255, 255, 255, 255, 255, 255, 255]
+// -9223372036854775808: ones 1 tz 63 bits 011 pow2 false next 1 ilog2 none le [0, 0, 0, 0, 0, 0, 0, 128] be [128, 0, 0, 0, 0, 0, 0, 0]
+// 9223372036854775808: ones 1 tz 63 bits 000 pow2 true next 9223372036854775808 ilog2 63 le [0, 0, 0, 0, 0, 0, 0, 128, 0] be [0, 128, 0, 0, 0, 0, 0, 0, 0]
+// -9223372036854775809: ones 2 tz 0 bits 111 pow2 false next 1 ilog2 none le [255, 255, 255, 255, 255, 255, 255, 127, 255] be [255, 127, 255, 255, 255, 255, 255, 255, 255]
+// 18446744073709551616: ones 1 tz 64 bits 010 pow2 true next 18446744073709551616 ilog2 64 le [0, 0, 0, 0, 0, 0, 0, 0, 1] be [1, 0, 0, 0, 0, 0, 0, 0, 0]
+// -18446744073709551616: ones 1 tz 64 bits 011 pow2 false next 1 ilog2 none le [0, 0, 0, 0, 0, 0, 0, 0, 255] be [255, 0, 0, 0, 0, 0, 0, 0, 0]
+// 18446744073709551617: ones 2 tz 0 bits 110 pow2 false next 36893488147419103232 ilog2 64 le [1, 0, 0, 0, 0, 0, 0, 0, 1] be [1, 0, 0, 0, 0, 0, 0, 0, 1]
+// round trip ok
+// unsigned [255] [0] [1, 0, 0, 0, 0, 0, 0, 0, 0] [0, 0, 0, 0, 0, 0, 0, 0, 1]
+// from 65535 -1 0 0 128 -128 18446744073709551615 -1 255 -1
+// set 1267650600228229401496703205376 true 0 -1180591620717411303425 false -1 5 7
+// 1267650600228229401496703205377 0 3
+// 128 4 1 true 340282366920938463463374607431768211456
+
+// `int` bit queries (two's complement, sign-extended forever) and byte
+// conversions; Python-computed results.
+
+fn p2(e: u32) -> int { int::from(1) << e }
+
+fn main() {
+    let xs: List<int> = [0, 1, -1, 127, 128, -128, -129, 255, 9223372036854775807, -9223372036854775808, 9223372036854775808, -9223372036854775809, p2(64), -p2(64), p2(64) + int::from(1)];
+    for x in xs {
+        // Bits 0, 64 and 200.
+        let b = f"{x.bit(0) as i32}{x.bit(64) as i32}{x.bit(200) as i32}";
+        println(f"{x}: ones {x.count_ones()} tz {x.trailing_zeros():?} bits {b} pow2 {x.is_power_of_two()} next {x.next_power_of_two()} ilog2 {x.checked_ilog2():?} le {x.to_le_bytes():?} be {x.to_be_bytes():?}");
+    }
+
+    // Every size around the byte and limb edges, both signs, both orders.
+    let ok = true;
+    let e = 0u32;
+    while e < 140u32 {
+        for d in [-1, 0, 1] {
+            for s in [int::from(1), int::from(-1)] {
+                let x = s * (p2(e) + int::from(d));
+                ok = ok && int::from_le_bytes(x.to_le_bytes()) == x && int::from_be_bytes(x.to_be_bytes()) == x;
+                let a = x.abs();
+                ok = ok && int::from_le_bytes(a.to_le_bytes(signed: false), signed: false) == a;
+                ok = ok && int::from_be_bytes(a.to_be_bytes(signed: false), signed: false) == a;
+                // Shortest: one byte fewer would lose the value.
+                let n = x.to_le_bytes().len();
+                ok = ok && (n == 1 || int::from_le_bytes(x.to_le_bytes()[0:n - 1]) != x);
+            }
+        }
+        e += 1u32;
+    }
+    println(if ok { "round trip ok" } else { "round trip FAILED" });
+
+    let z: int = 0;
+    println(f"unsigned {int::from(255).to_le_bytes(signed: false):?} {z.to_le_bytes(signed: false):?} {p2(64).to_be_bytes(signed: false):?} {p2(64).to_le_bytes(signed: false):?}");
+
+    let none_: List<u8> = List::new();
+    let ff: List<u8> = [255u8, 255u8];
+    let top: List<u8> = [128u8];
+    let wide: List<u8> = [255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8];
+    println(f"from {int::from_be_bytes(ff, signed: false)} {int::from_be_bytes(ff)} {int::from_le_bytes(none_)} {int::from_le_bytes(none_, signed: false)} {int::from_le_bytes(top, signed: false)} {int::from_le_bytes(top)} {int::from_le_bytes(wide, signed: false)} {int::from_le_bytes(wide)} {int::from_be_bytes(ff[1:2], signed: false)} {int::from_be_bytes(ff[1:2])}");
+
+    let y: int = 0;
+    y.set_bit(100, true);
+    let a = y;
+    let had = y.bit(100);
+    y.set_bit(100, false);
+    let m: int = -1;
+    m.set_bit(70, false);
+    let gone = m.bit(70);
+    let k: int = -1;
+    k.set_bit(3, true);
+    let q: int = 5;
+    q.set_bit(0, true);
+    let r: int = 5;
+    r.set_bit(1, true);
+    println(f"set {a} {had} {y} {m} {gone} {k} {q} {r}");
+    let big = a;
+    big.set_bit(0, true);
+    println(f"{big} {big.trailing_zeros() ?? 99} {int::from(-8).trailing_zeros() ?? 99}");
+    println(f"{int::from(65).next_power_of_two()} {int::from(4).next_power_of_two()} {int::from(-7).next_power_of_two()} {p2(127).is_power_of_two()} {(p2(127) + int::from(1)).next_power_of_two()}");
+}

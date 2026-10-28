@@ -3141,6 +3141,9 @@ fn habit_type_help(
     span: rokc_diagnostic::Span,
     sources: &rokc_diagnostic::SourceMap,
 ) -> Option<String> {
+    if let Some(h) = super::wide_int_help(name) {
+        return Some(h);
+    }
     let (_, text) = sources.file(span.file)?;
     let rest = text.get(span.start as usize..)?.strip_prefix(name)?;
     let args = rest.strip_prefix('<').and_then(|r| {

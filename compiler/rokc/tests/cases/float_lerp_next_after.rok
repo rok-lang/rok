@@ -1,0 +1,49 @@
+// spec: std §2.1.4
+// expect-exit: 0
+// expect-stdout:
+// lerp 2.5 1 3 5 -1 0 2
+// lerp nan true true true inf
+// lerp ends true true 0x3fb99999999999a0 0x3fb999999999999a
+// lerp monotonic true
+// up 0x3ff0000000000001 0x1 0x1 0x7ff0000000000000 0x7ff0000000000000 0xffefffffffffffff 0x800fffffffffffff
+// down 0x3fefffffffffffff 0x8000000000000001 0x8000000000000001 0xfff0000000000000 0xfff0000000000000 0x7fefffffffffffff
+// after 0x3ff0000000000001 0x3fefffffffffffff 0xbfefffffffffffff 0xbff0000000000001 0x8000000000000000 0x0 0x4014000000000000 true true true
+// round trip true true true
+// f32 3 3 true 0x3f800001 0x1 0x80000001 0x7f800000 0x7f7fffff 0x3f7fffff true
+
+// `lerp` (exact ends, monotonic, NaN in NaN out) and `next_after` /
+// `next_up` / `next_down` stepping one bit pattern, over zeros,
+// subnormals, the finite edge and infinities. Bits in hex.
+
+fn h(x: f64) -> str { f"{x.to_bits():#x}" }
+fn h32(x: f32) -> str { f"{x.to_bits():#x}" }
+
+fn main() {
+    let nan = f64::NAN;
+    let inf = f64::INFINITY;
+    println(f"lerp {0.0f64.lerp(10.0, 0.25)} {1.0f64.lerp(3.0, 0.0)} {1.0f64.lerp(3.0, 1.0)} {1.0f64.lerp(3.0, 2.0)} {1.0f64.lerp(3.0, -1.0)} {(-2.0f64).lerp(2.0, 0.5)} {3.0f64.lerp(1.0, 0.5)}");
+    println(f"lerp nan {1.0f64.lerp(3.0, nan).is_nan()} {nan.lerp(3.0, 0.5).is_nan()} {1.0f64.lerp(nan, 0.5).is_nan()} {0.0f64.lerp(inf, 0.5)}");
+    // Exact at t = 1 where a + t (b - a) rounds off b.
+    let a = 3.0f64;
+    let b = 0.1f64;
+    println(f"lerp ends {a.lerp(b, 1.0) == b} {a.lerp(b, 0.0) == a} {h(a + 1.0 * (b - a))} {h(b)}");
+    // Monotonic across t: b < a, so never steps up.
+    let mono = true;
+    let prev = a.lerp(b, 0.0);
+    let i = 1;
+    while i <= 1000 {
+        let x = a.lerp(b, (i as f64) / 1000.0);
+        mono = mono && x <= prev;
+        prev = x;
+        i += 1;
+    }
+    println(f"lerp monotonic {mono}");
+
+    println(f"up {h(1.0f64.next_up())} {h(0.0f64.next_up())} {h((-0.0f64).next_up())} {h(f64::MAX.next_up())} {h(inf.next_up())} {h((-inf).next_up())} {h((-f64::MIN_POSITIVE).next_up())}");
+    println(f"down {h(1.0f64.next_down())} {h(0.0f64.next_down())} {h((-0.0f64).next_down())} {h(f64::MIN.next_down())} {h((-inf).next_down())} {h(inf.next_down())}");
+    println(f"after {h(1.0f64.next_after(2.0))} {h(1.0f64.next_after(0.0))} {h((-1.0f64).next_after(0.0))} {h((-1.0f64).next_after(-2.0))} {h(0.0f64.next_after(-0.0))} {h((-0.0f64).next_after(0.0))} {h(5.0f64.next_after(5.0))} {1.0f64.next_after(nan).is_nan()} {nan.next_after(1.0).is_nan()} {nan.next_up().is_nan()}");
+    println(f"round trip {1.0f64.next_up().next_down() == 1.0} {(1.0f64.next_up() - 1.0) == f64::EPSILON} {0.0f64.next_up().next_down() == 0.0}");
+
+    let n32 = f32::NAN;
+    println(f"f32 {2.0f32.lerp(4.0, 0.5)} {1.0f32.lerp(3.0, 1.0)} {1.0f32.lerp(3.0, n32).is_nan()} {h32(1.0f32.next_up())} {h32(0.0f32.next_up())} {h32((-0.0f32).next_down())} {h32(f32::MAX.next_up())} {h32(f32::INFINITY.next_down())} {h32(1.0f32.next_after(0.0))} {(1.0f32.next_up() - 1.0) == f32::EPSILON}");
+}

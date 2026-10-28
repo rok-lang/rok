@@ -10,6 +10,7 @@ use crate::unicode::{
     normalize_ident, skeleton,
 };
 
+// `i128` / `u128` lex as suffixes so HIR can say what to write instead.
 pub const INT_SUFFIXES: &[&str] = &[
     "i8", "i16", "i32", "i64", "i128", "isize", "u8", "u16", "u32", "u64", "u128", "usize",
     "c_char",
@@ -754,7 +755,6 @@ impl<'src> Lexer<'src> {
             "i16" => (16, true),
             "i32" => (32, true),
             "i64" | "isize" => (64, true),
-            "i128" => (128, true),
             "u8" => (8, false),
             "u16" => (16, false),
             "u32" => (32, false),
@@ -765,8 +765,6 @@ impl<'src> Lexer<'src> {
         // `MAX + 1` (`-128i8`); in `a - 128i8` the literal is out of range.
         let max = if signed {
             (1u128 << (bits - 1)) - u128::from(!self.prev_minus)
-        } else if bits == 128 {
-            u128::MAX
         } else {
             (1u128 << bits) - 1
         };

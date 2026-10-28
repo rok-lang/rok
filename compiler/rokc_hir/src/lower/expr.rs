@@ -1583,6 +1583,10 @@ fn lower_cast(
         || matches!(to_ty, HirTy::Unknown)
         || (castable(&from_ty) && castable(&to_ty)))
     {
+        let to_name = ctx.ty_name(&to_ty);
+        if let Some(h) = super::wide_int_help(&to_name) {
+            return ctx.error_expr(span, format!("cannot cast to `{to_name}`: {h}"));
+        }
         return ctx.error_expr(
             span,
             format!(
@@ -11675,6 +11679,31 @@ pub(super) fn lower_literal(
     };
     match lit {
         AstLit::Int(text) => {
+            if let Some((digits, wide, narrow)) = ["i128", "u128"]
+                .into_iter()
+                .find_map(|w| Some((text.strip_suffix(w)?, w, super::wide_int_narrow(w)?)))
+            {
+                // Offer the 64-bit suffix only where the value fits it.
+                let max = if narrow == "u64" {
+                    u64::MAX.into()
+                } else {
+                    i128::from(i64::MAX)
+                };
+                let fits = parse_int_literal(digits)
+                    .is_some_and(|(v, _)| v <= max + i128::from(negate && narrow == "i64"));
+                let narrow = if fits {
+                    format!("`{digits}{narrow}`, or ")
+                } else {
+                    String::new()
+                };
+                return ctx.error_expr(
+                    span,
+                    format!(
+                        "integer literal `{text}`: rok has no `{wide}`; write {narrow}`{digits}` \
+                         where an `int` is expected (any size)"
+                    ),
+                );
+            }
             let Some((value, suffix_ty)) = parse_int_literal(text) else {
                 return ctx.error_expr(
                     span,
