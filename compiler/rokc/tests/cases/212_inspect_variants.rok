@@ -1,0 +1,75 @@
+// spec: std §2.12.3
+// expect-exit: 0
+// expect-stdout:
+// ["Circle", "Rect", "Label", "Empty"] 0 []
+// Circle ["0"] 0=f64 false
+// Rect ["w", "h"] w=f64 h=f64 false
+// Label ["0", "1"] 0=str 1=none false
+// Empty [] false
+// none
+// Rect 2
+// Some ["0"] i32
+// None []
+// Circle
+// Shape
+
+// Stdlib 2.12.3: on an enum, `variant_names()` lists the variants and a
+// value's `variant_name()` / `field_names_of()` / `get_field` look at the
+// variant it holds; `set_field` on an enum is `false`. Generic enums and
+// a sum holding an `Inspect` value.
+#[derive(Inspect)]
+enum Shape {
+    Circle(f64),
+    Rect { w: f64; h: f64; },
+    Label(str, i32 | none),
+    Empty,
+}
+
+#[derive(Inspect)]
+enum Maybe<T> { Some(T), None }
+
+fn describe(s: Shape) {
+    print(f"{s.variant_name()} {s.field_names_of():?}");
+    for n in s.field_names_of() {
+        match s.get_field(n) {
+            v: any => print(f" {n}={v.type_name_of()}"),
+            none => print(f" {n}=?"),
+        }
+    }
+    println(f" {s.set_field("0", 2.0)}");
+}
+
+println(f"{Shape::variant_names():?} {Shape::fields().len()} {Shape::field_names():?}");
+let all: List<Shape> = [
+    Shape::Circle(1.5),
+    Shape::Rect { w: 2.0, h: 3.0 },
+    Shape::Label("x", none),
+    Shape::Empty,
+];
+for s in all {
+    describe(s);
+}
+match Shape::Circle(1.0).get_field("w") {
+    v: any => println(v.type_name_of()),
+    none => println("none"),
+}
+let r = Shape::Rect { w: 2.0, h: 3.0 };
+match r.get_field("w") {
+    v: any => println(f"{r.variant_name()} {rok::core::reflect::cast::<f64>(v) ?? 0.0}"),
+    none => println("none"),
+}
+let m: Maybe<i32> = Maybe::Some(4);
+match m.get_field("0") {
+    v: any => println(f"{m.variant_name()} {m.field_names_of():?} {v.type_name_of()}"),
+    none => println("none"),
+}
+let n: Maybe<i32> = Maybe::None;
+println(f"{n.variant_name()} {n.field_names_of():?}");
+let held: Shape | none = Shape::Circle(1.0);
+match held {
+    s: Shape => println(s.variant_name()),
+    none => println("none"),
+}
+println(held.type_name_of());
+
+// spec: §6.10.2

@@ -765,6 +765,9 @@ fn check_call_bounds(
                         }
                     ),
                 );
+                if want.path == super::reflect::INSPECT {
+                    ctx.help_last(super::reflect::derive_inspect_help(ctx, concrete));
+                }
             }
         }
     }

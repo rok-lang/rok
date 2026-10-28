@@ -6157,6 +6157,7 @@ pub(super) fn method_call_on(
         let format = (method == "format" && recv_h.ty == HirTy::Prim(PrimTy::Str))
             .then(|| format_help(ctx, args, span));
         let help = format
+            .or_else(|| super::reflect::inspect_help(ctx, &recv_h.ty, method))
             .or_else(|| ctx.method_help(&recv_h.ty, method))
             .unwrap_or_else(|| {
                 format!(
@@ -8343,10 +8344,12 @@ fn lower_path_call(
                             }
                             discard_args(ctx, rest);
                         }
-                        return ctx.error_expr(
+                        let e = ctx.error_expr(
                             span,
                             format!("no associated function `{method}` on `{full}`"),
                         );
+                        ctx.help_last(super::reflect::inspect_help_key(ctx, &full, &method));
+                        return e;
                     }
                     _ => {
                         return ctx.error_expr(
@@ -8529,10 +8532,7 @@ fn qpath_member_call(
         .or_else(|| super::reflect::static_call(ctx, &t, method, args, span))
         .unwrap_or_else(|| {
             discard_args(ctx, args);
-            ctx.error_expr(
-                span,
-                format!("no associated function `{method}` on `{}`", ctx.ty_name(&t)),
-            )
+            super::reflect::no_assoc_fn(ctx, &t, method, span)
         })
 }
 
@@ -8795,10 +8795,7 @@ fn path_call_via_impls(
     .or_else(|| super::reflect::static_call(ctx, &t, method, args, span));
     Some(call.unwrap_or_else(|| {
         discard_args(ctx, args);
-        ctx.error_expr(
-            span,
-            format!("no associated function `{method}` on `{}`", ctx.ty_name(&t)),
-        )
+        super::reflect::no_assoc_fn(ctx, &t, method, span)
     }))
 }
 
@@ -9448,8 +9445,8 @@ fn lower_intrinsic(
     span: rokc_diagnostic::Span,
 ) -> HirExpr {
     match op {
-        Intrinsic::AnyCast | Intrinsic::MethodTable => {
-            super::reflect::intrinsic(ctx, op == Intrinsic::MethodTable, name, targs, args, span)
+        Intrinsic::AnyCast | Intrinsic::MethodTable | Intrinsic::FieldTable => {
+            super::reflect::intrinsic(ctx, op, name, targs, args, span)
         }
         Intrinsic::MlirOp => lower_mlir_op(ctx, targs, args, span),
         Intrinsic::Transfer

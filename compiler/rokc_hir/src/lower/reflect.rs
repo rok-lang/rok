@@ -1,8 +1,8 @@
 //! `Reflect` (refs-lang 6.10.1, stdlib 2.12.2): every type has it without
 //! an impl. Calls nothing else answers land here: `T::type_name()` /
 //! `size()` / `align()` are constants; `x.type_name_of()` / `x.size_of()`
-//! switch on an `any` or sum's held variant. Also `rok.any_cast` and
-//! `rok.method_table`, behind `#[derive(Inspect)]`.
+//! switch on an `any` or sum's held variant. Also `rok.any_cast`,
+//! `rok.method_table` and `rok.field_table`, behind `#[derive(Inspect)]`.
 
 #[allow(clippy::wildcard_imports)]
 use super::*;
@@ -11,6 +11,9 @@ use super::expr::{any_dispatcher, discard_args, enum_base_name, hir_local};
 
 /// The trait key of `Reflect`.
 pub(super) const REFLECT: &str = "rok::core::reflect::Reflect";
+
+/// The trait key of `Inspect`.
+pub(super) const INSPECT: &str = "rok::core::reflect::Inspect";
 
 const INTS: [PrimTy; 10] = [
     PrimTy::I8,
@@ -46,6 +49,53 @@ pub(super) fn type_name(ctx: &LowerCtx<'_>, ty: &HirTy) -> String {
         }
     }
     out + &word
+}
+
+/// Help for a missing `method` on `ty` when `Inspect` declares it and
+/// `ty` is a struct or enum without the derive.
+pub(super) fn inspect_help(ctx: &LowerCtx<'_>, ty: &HirTy, method: &str) -> Option<String> {
+    let declares = ctx
+        .env
+        .trait_of(INSPECT)
+        .is_some_and(|t| t.methods.iter().any(|m| m == method));
+    if !declares {
+        return None;
+    }
+    derive_inspect_help(ctx, ty).map(|h| format!("{h} to use `{method}`"))
+}
+
+/// "add `#[derive(Inspect)]` to `Point`" for a struct or enum lacking it.
+pub(super) fn derive_inspect_help(ctx: &LowerCtx<'_>, ty: &HirTy) -> Option<String> {
+    if !matches!(ty, HirTy::Struct(_) | HirTy::Enum(_)) || ctx.has_trait(ty, INSPECT) {
+        return None;
+    }
+    let name = type_name(ctx, ty);
+    let base = name.split('<').next().unwrap_or(&name);
+    Some(format!("add `#[derive(Inspect)]` to `{base}`"))
+}
+
+/// `inspect_help` for a type named by its key (`pkg::Point`).
+pub(super) fn inspect_help_key(ctx: &LowerCtx<'_>, key: &str, method: &str) -> Option<String> {
+    let ty = ctx
+        .lookup_struct(key)
+        .map(HirTy::Struct)
+        .or_else(|| ctx.lookup_enum(key).map(HirTy::Enum))?;
+    inspect_help(ctx, &ty, method)
+}
+
+/// "no associated function" on `ty`, with the `Inspect` derive help.
+pub(super) fn no_assoc_fn(
+    ctx: &LowerCtx<'_>,
+    ty: &HirTy,
+    method: &str,
+    span: rokc_diagnostic::Span,
+) -> HirExpr {
+    let e = ctx.error_expr(
+        span,
+        format!("no associated function `{method}` on `{}`", ctx.ty_name(ty)),
+    );
+    ctx.help_last(inspect_help(ctx, ty, method));
+    e
 }
 
 const fn str_const(s: String, span: rokc_diagnostic::Span) -> HirExpr {
@@ -190,11 +240,11 @@ pub(super) fn dynamic(ctx: &mut LowerCtx<'_>, recv: HirExpr, method: &str) -> Hi
     }
 }
 
-/// `rok.method_table` (`table`) / `rok.any_cast` (`core/reflect.rok`),
-/// called as `name`.
+/// `rok.method_table` / `rok.field_table` / `rok.any_cast`
+/// (`core/reflect.rok`), called as `name`.
 pub(super) fn intrinsic(
     ctx: &mut LowerCtx<'_>,
-    table: bool,
+    op: super::collect::Intrinsic,
     name: &str,
     targs: &[Ty],
     args: &[CallArg],
@@ -205,9 +255,14 @@ pub(super) fn intrinsic(
         return ctx.error_expr(span, format!("`{name}` is called as `{name}::<T>(..)`"));
     };
     let t = ctx.resolve_ast_ty(t);
-    if table {
+    let table = match op {
+        super::collect::Intrinsic::MethodTable => Some(method_table(ctx, &t)),
+        super::collect::Intrinsic::FieldTable => Some(field_table(ctx, &t)),
+        _ => None,
+    };
+    if let Some(table) = table {
         discard_args(ctx, args);
-        return str_const(method_table(ctx, &t), span);
+        return str_const(table, span);
     }
     let [CallArg::Positional(arg)] = args else {
         discard_args(ctx, args);
@@ -399,4 +454,34 @@ fn method_table(ctx: &LowerCtx<'_>, ty: &HirTy) -> String {
     }
     rows.sort();
     rows.into_iter().map(|(_, r)| r + "\n").collect()
+}
+
+/// `ty`'s fields in declaration order, `name \t pub \t type` per line;
+/// empty unless `ty` is a struct. A generic instance shows its argument
+/// types (`f64`, not `T`).
+fn field_table(ctx: &LowerCtx<'_>, ty: &HirTy) -> String {
+    let HirTy::Struct(id) = ty else {
+        return String::new();
+    };
+    let def = ctx.struct_def(*id);
+    if def.union_kind.is_some() {
+        return String::new();
+    }
+    let base = if def.generic_args.is_empty() {
+        def.name.as_str()
+    } else {
+        def.name.split("__").next().unwrap_or(&def.name)
+    };
+    let vis = ctx.env.fields_vis(base);
+    let mut out = String::new();
+    for f in &def.fields {
+        let is_pub = vis.and_then(|v| v.get(&f.name)) == Some(&Visibility::Pub);
+        out.push_str(&format!(
+            "{}\t{}\t{}\n",
+            f.name,
+            u8::from(is_pub),
+            type_name(ctx, &f.ty)
+        ));
+    }
+    out
 }
