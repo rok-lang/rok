@@ -24,13 +24,15 @@ fn main() -> i32 {
     // Rendezvous: `send` returns only after `recv` took the value.
     let (tx, rx) = channel_bounded::<i64>(0);
     // The receiver starts after 20 ms, so a rendezvous `send` waits for it.
+    // The clock starts before the spawn: a main thread descheduled after it
+    // would otherwise see less than the receiver's 20 ms.
+    let t0 = Instant::now();
     let h = thread::spawn(|| {
         thread::sleep(Duration::ms(20));
         let total: i64 = 0;
         for v in rx { total += v; }
         total
     });
-    let t0 = Instant::now();
     try! tx.send(5);
     println(f"waited {t0.elapsed() >= Duration::ms(15)}");
     // Nobody is waiting in `recv`: a rendezvous `try_send` is `Full`.
