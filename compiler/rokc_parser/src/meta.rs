@@ -325,6 +325,56 @@ fn close_of(toks: &[Token], open: usize) -> Option<usize> {
     None
 }
 
+/// Index of the token closing the innermost group around `at` (a `{..}`
+/// only, with `braces`); the end of `toks` when there is none.
+fn enclosing_close(toks: &[Token], at: usize, braces: bool) -> usize {
+    let mut depth = 0u32;
+    for k in (0..at).rev() {
+        match toks[k].kind {
+            TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace => depth += 1,
+            TokenKind::LBrace if depth == 0 => return close_of(toks, k).unwrap_or(toks.len()),
+            TokenKind::LParen
+            | TokenKind::LBracket
+            | TokenKind::HashLBracket
+            | TokenKind::HashBangLBracket
+                if depth == 0 =>
+            {
+                if !braces {
+                    return close_of(toks, k).unwrap_or(toks.len());
+                }
+            }
+            TokenKind::LParen
+            | TokenKind::LBracket
+            | TokenKind::LBrace
+            | TokenKind::HashLBracket
+            | TokenKind::HashBangLBracket => depth -= 1,
+            _ => {}
+        }
+    }
+    toks.len()
+}
+
+/// Index of the token closing the first `{..}` at or after `from` outside
+/// any other group (a `for` loop's body after its `in`).
+fn block_after(toks: &[Token], from: usize) -> Option<usize> {
+    let mut depth = 0u32;
+    for (k, t) in toks.iter().enumerate().skip(from) {
+        match t.kind {
+            TokenKind::LBrace if depth == 0 => return close_of(toks, k),
+            TokenKind::LParen
+            | TokenKind::LBracket
+            | TokenKind::LBrace
+            | TokenKind::HashLBracket
+            | TokenKind::HashBangLBracket => depth += 1,
+            TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace => {
+                depth = depth.checked_sub(1)?;
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
 /// First token at or after `from` written at `span`.
 fn find_span(toks: &[Token], from: usize, span: Span) -> Option<usize> {
     (from..toks.len()).find(|&k| toks[k].span == span)
@@ -414,9 +464,9 @@ struct Expander<'a> {
     diags: Vec<RokDiagnostic>,
     /// `@where_all(Tr)` bounds for the type parameters of later impls.
     where_all: Vec<Vec<Token>>,
-    /// Hygiene: names the template binds, and token indices that are
-    /// binding positions.
-    bound: HashSet<String>,
+    /// Hygiene: names the template binds (with the token range each is
+    /// in scope over), and token indices that are binding positions.
+    bound: Vec<(String, usize, usize)>,
     bind_pos: HashSet<usize>,
 }
 
@@ -565,15 +615,16 @@ impl Expander<'_> {
     }
 
     /// Hygiene pre-scan: names bound by `let` / `for` / closure params
-    /// written in the template itself (not those spliced in by `@..`).
+    /// written in the template itself (not those spliced in by `@..`),
+    /// each with the token range it is in scope over.
     fn scan_binders(&mut self) {
         let body = &self.def.body;
-        let mut names = HashSet::new();
+        let mut names = Vec::new();
         let mut pos = HashSet::new();
-        let mut mark = |k: usize, names: &mut HashSet<String>| {
+        let mut mark = |k: usize, end: usize, names: &mut Vec<(String, usize, usize)>| {
             if let TokenKind::Ident(n) = &body[k].kind {
                 if n != "mut" && n != "in" && n != "_" {
-                    names.insert(n.clone());
+                    names.push((n.clone(), k, end));
                     pos.insert(k);
                 }
             }
@@ -599,8 +650,16 @@ impl Expander<'_> {
                     if body[k].kind == TokenKind::For && !is_in {
                         continue;
                     }
+                    // A `let` holds to the end of its block, a `for`
+                    // binding over the loop body.
+                    let scope = if body[k].kind == TokenKind::For {
+                        after.and_then(|a| block_after(body, a))
+                    } else {
+                        None
+                    }
+                    .unwrap_or_else(|| enclosing_close(body, k, true));
                     match body.get(j).map(|t| &t.kind) {
-                        Some(TokenKind::Ident(_)) => mark(j, &mut names),
+                        Some(TokenKind::Ident(_)) => mark(j, scope, &mut names),
                         Some(TokenKind::LParen) => {
                             let end = close_of(body, j).unwrap_or(j);
                             for m in j + 1..end {
@@ -610,7 +669,7 @@ impl Expander<'_> {
                                 ) && body[m - 1].kind != TokenKind::At
                                     && body[m - 1].kind != TokenKind::Dot
                                 {
-                                    mark(m, &mut names);
+                                    mark(m, scope, &mut names);
                                 }
                             }
                         }
@@ -631,18 +690,29 @@ impl Expander<'_> {
                                 | TokenKind::Return
                         ) =>
                 {
+                    let mut params = Vec::new();
                     let mut m = k + 1;
                     let mut expect_name = true;
                     while m < body.len() && body[m].kind != TokenKind::Pipe {
                         match body[m].kind {
                             TokenKind::Ident(_) if expect_name => {
-                                mark(m, &mut names);
+                                params.push(m);
                                 expect_name = false;
                             }
                             TokenKind::Comma => expect_name = true,
                             _ => {}
                         }
                         m += 1;
+                    }
+                    // The closure body: a block, else up to the end of the
+                    // group the closure is written in.
+                    let scope = match body.get(m + 1).map(|t| &t.kind) {
+                        Some(TokenKind::LBrace) => close_of(body, m + 1),
+                        _ => None,
+                    }
+                    .unwrap_or_else(|| enclosing_close(body, k, false));
+                    for p in params {
+                        mark(p, scope, &mut names);
                     }
                 }
                 _ => {}
@@ -656,7 +726,13 @@ impl Expander<'_> {
     fn emit_plain(&mut self, k: usize, ctx: Ctx) {
         let t = self.body()[k].clone();
         let kind = match &t.kind {
-            TokenKind::Ident(n) if self.bound.contains(n) && self.renames(k) => {
+            TokenKind::Ident(n)
+                if self
+                    .bound
+                    .iter()
+                    .any(|(b, from, to)| b == n && (*from..=*to).contains(&k))
+                    && self.renames(k) =>
+            {
                 TokenKind::Ident(hygienic(n))
             }
             TokenKind::StrLit(s) => TokenKind::StrLit(self.string_text(s, ctx)),
@@ -1589,7 +1665,7 @@ impl Parser<'_> {
             out: Vec::new(),
             diags: Vec::new(),
             where_all: Vec::new(),
-            bound: HashSet::new(),
+            bound: Vec::new(),
             bind_pos: HashSet::new(),
         };
         ex.scan_binders();

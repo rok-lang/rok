@@ -3965,12 +3965,32 @@ impl<'a> LowerCtx<'a> {
     /// Canonical type-namespace name of a path, from this module and its
     /// `use`s.
     fn canon_type(&self, segments: &[&str]) -> Option<String> {
+        if let Some(key) = self.self_key(segments) {
+            return Some(key);
+        }
         self.env.names.canon(
             segments,
             &self.current_module,
             &self.local_uses,
             self.here(),
         )
+    }
+
+    /// The key of `Self` when `segments` is the absolute path a `Self::..`
+    /// rewrites to. `Self` is the impl's target, visible from the impl's
+    /// module: a library trait's default may name a user's private type.
+    fn self_key(&self, segments: &[&str]) -> Option<String> {
+        let key = match segments {
+            ["pkg", rest @ ..] => rest.join("::"),
+            ["rok", ..] => segments.join("::"),
+            _ => return None,
+        };
+        let is_self = match &self.self_ty {
+            Some(HirTy::Struct(id)) => self.lookup_struct(&key) == Some(*id),
+            Some(HirTy::Enum(id)) => self.lookup_enum(&key) == Some(*id),
+            _ => false,
+        };
+        is_self.then_some(key)
     }
 
     /// Split `a::E::V` into (`a::E`, `V`) when the prefix is an enum; a

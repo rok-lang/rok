@@ -6737,10 +6737,7 @@ impl<'a> Parser<'a> {
         let mut captures: Vec<rokc_ast::CaptureSpec> = Vec::new();
         while !matches!(self.peek(), TokenKind::RBracket | TokenKind::Eof) {
             if self.eat(&TokenKind::Ref) {
-                let name = if let TokenKind::Ident(n) = self.peek().clone() {
-                    self.bump();
-                    n
-                } else {
+                let Some(name) = self.capture_name() else {
                     let s = self.peek_span();
                     self.error(
                         s,
@@ -6752,8 +6749,7 @@ impl<'a> Parser<'a> {
                     return None;
                 };
                 captures.push(rokc_ast::CaptureSpec::Ref(name));
-            } else if let TokenKind::Ident(n) = self.peek().clone() {
-                self.bump();
+            } else if let Some(n) = self.capture_name() {
                 captures.push(rokc_ast::CaptureSpec::Value(n));
             } else {
                 let s = self.peek_span();
@@ -6775,6 +6771,17 @@ impl<'a> Parser<'a> {
             *c = captures;
         }
         Some(closure_kind)
+    }
+
+    /// A capture-list name: a variable, or a method's `self`.
+    fn capture_name(&mut self) -> Option<String> {
+        let name = match self.peek() {
+            TokenKind::Ident(n) => n.clone(),
+            TokenKind::SelfLower => "self".to_owned(),
+            _ => return None,
+        };
+        self.bump();
+        Some(name)
     }
 
     /// `async ||` / `yield ||` / `async yield ||` closure.

@@ -1,0 +1,62 @@
+// spec: §2.8.1 §5.6.2 §5.6.10
+// expect-exit: 0
+// expect-stdout:
+// hihi
+// hi!
+// ["x", "y"] 2
+// 3
+
+// A trait default calling `Self::f()` names the impl's type: it is
+// checked from the impl's module, so a default of a trait in another
+// module (or a library's) works for a private type.
+
+use rok::core::reflect::Inspect;
+
+mod greet {
+    pub trait Greet {
+        fn hello() -> str;
+
+        fn twice() -> str {
+            return Self::hello() + Self::hello();
+        }
+
+        fn shout(self) -> str {
+            return Self::hello() + "!";
+        }
+    }
+
+    pub trait Count {
+        const N: i32;
+
+        fn size() -> i32;
+
+        fn total() -> i32 {
+            return Self::size() + Self::N - Self::N;
+        }
+    }
+}
+
+struct Hid { }
+
+impl greet::Greet for Hid {
+    fn hello() -> str { return "hi"; }
+}
+
+enum Kind { A, B, C }
+
+impl greet::Count for Kind {
+    const N: i32 = 5;
+
+    fn size() -> i32 { return 3; }
+}
+
+#[derive(Inspect)]
+struct Pt { x: i32; y: i32; }
+
+fn main() {
+    println(Hid::twice());
+    println(Hid {}.shout());
+    let p = Pt { x: 1, y: 2 };
+    println(f"{Pt::field_names():?} {p.field_names_of().len()}");
+    println(Kind::total());
+}

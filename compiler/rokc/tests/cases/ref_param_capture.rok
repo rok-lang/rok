@@ -1,0 +1,125 @@
+// spec: §4.7.2 §4.7.4 §4.7.5 §4.6.2
+// expect-exit: 0
+// expect-stdout:
+// 6
+// 6
+// 10 10
+// 9
+// 4 1
+// 7 x
+// 3 caught
+// 12
+// 3
+// late 3
+
+// A `ref` parameter captured by `[ref x]` (or `[ref self]`) is one slot
+// with the parameter: the closure's writes are part of its final value,
+// written back to the caller.
+
+struct Cnt { n: i32; }
+
+fn bump(ref c: Cnt) {
+    let add = [ref c] |x: i32| { c.n += x; };
+    add(5);
+    println(c.n);
+}
+
+// Two closures share the one slot.
+fn twice(ref n: i32) {
+    let inc = [ref n] || { n = n + 1; };
+    let dbl = [ref n] || { n = n * 2; };
+    inc();
+    dbl();
+    println(f"{n} {n}");
+}
+
+// A closure inside a closure, both capturing the parameter.
+fn nested(ref n: i32) {
+    let outer = [ref n] || {
+        let inner = [ref n] |d: i32| { n = n + d; };
+        inner(4);
+        inner(3);
+    };
+    outer();
+}
+
+fn generic_swap<T>(ref a: T, ref b: T) {
+    let swap = [ref a, ref b] || {
+        let t = a;
+        a = b;
+        b = t;
+    };
+    swap();
+}
+
+fn tag(ref s: str) -> i32 {
+    let f = [ref s] || { s = s + "x"; };
+    f();
+    return 7;
+}
+
+fn fail(ref n: i32) throws (str) {
+    let f = [ref n] || { n = n + 3; };
+    f();
+    throw "no";
+}
+
+fn each(xs: List<i32>, f: fn(i32)) {
+    for x in xs {
+        f(x);
+    }
+}
+
+struct Acc { total: i32; }
+
+impl Acc {
+    fn add_all(ref self, xs: List<i32>) {
+        each(xs, [ref self] |x: i32| { self.total += x; });
+    }
+
+    fn reset_via_closure(ref self) {
+        let r = [ref self] || { self = Acc { total: 3 }; };
+        r();
+    }
+}
+
+// The closure outlives the call: a write after the call is not seen.
+fn keep(ref n: i32) -> fn() {
+    n = n + 3;
+    return [ref n] || { n = 99; };
+}
+
+fn main() {
+    let c = Cnt { n: 1 };
+    bump(ref c);
+    println(c.n);
+
+    let k = 4;
+    twice(ref k);
+    let m = 2;
+    nested(ref m);
+    println(m);
+
+    let g = 1;
+    let h = 4;
+    generic_swap(ref g, ref h);
+    println(f"{g} {h}");
+
+    let s = "";
+    let r = tag(ref s);
+    println(f"{r} {s}");
+
+    let e = 0;
+    try fail(ref e) catch _ { println(f"{e} caught"); };
+
+    let a = Acc { total: 0 };
+    a.add_all([3, 4, 5]);
+    println(a.total);
+    a.reset_via_closure();
+    println(a.total);
+
+    let late = 0;
+    let f = keep(ref late);
+    f();
+    println(f"late {late}");
+}

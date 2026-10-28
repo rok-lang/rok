@@ -1,0 +1,21 @@
+// spec: §4.7.4 §4.7.5
+// expect-error: 12:18: `[ref self]` needs a `ref self` method (spec 4.7.4)
+
+// `[ref self]` shares the caller's receiver slot; a by-value `self` has
+// none to write back to.
+
+struct Acc { total: i32; }
+
+impl Acc {
+    fn add(ref self, x: i32) { self.total += x; }
+
+    fn add_later(self) -> fn(i32) {
+        return [ref self] |x: i32| { self.add(x); };
+    }
+}
+
+fn main() {
+    let a = Acc { total: 0 };
+    let f = a.add_later();
+    f(1);
+}
