@@ -1,2 +1,24 @@
-# Default owner for everything in the repo.
-* @miniex
+# Review routing: each area's team. A later line wins.
+*                              @rok-lang/rok
+
+/compiler/                     @rok-lang/rok-compiler
+/compiler/rok/                 @rok-lang/rok-tooling
+/compiler/rokc_tools/          @rok-lang/rok-tooling
+/compiler/rokc_fmt/            @rok-lang/rok-tooling
+/install.sh                    @rok-lang/rok-tooling
+/install.ps1                   @rok-lang/rok-tooling
+
+/runtime/                      @rok-lang/rok-runtime
+
+/library/                      @rok-lang/rok-stdlib
+
+/.github/                      @rok-lang/rok-infra
+/scripts/                      @rok-lang/rok-infra
+/targets/                      @rok-lang/rok-infra
+/llvm/                         @rok-lang/rok-infra
+/nix/                          @rok-lang/rok-infra
+/flake.nix                     @rok-lang/rok-infra
+/dist-linux-gnu.Containerfile  @rok-lang/rok-infra
+/dist-linux-musl.Containerfile @rok-lang/rok-infra
+/release-targets.json          @rok-lang/rok-infra
+/justfile                      @rok-lang/rok-infra
