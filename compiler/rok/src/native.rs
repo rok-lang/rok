@@ -89,9 +89,11 @@ fn inner(d: Decoder<'_>) -> Result<String, String> {
     Ok(s)
 }
 
-fn artifact(d: Decoder<'_>) -> Result<Artifact, String> {
+fn artifact(d: Decoder<'_>, strict: bool) -> Result<Artifact, String> {
     let r = d.record("Artifact")?;
-    r.only(&["url", "sha256", "links", "runtime"])?;
+    if strict {
+        r.only(&["url", "sha256", "links", "runtime"])?;
+    }
     let mut links = Vec::new();
     for (k, v) in r
         .opt("links")
@@ -121,24 +123,29 @@ fn artifact(d: Decoder<'_>) -> Result<Artifact, String> {
     })
 }
 
-fn entry(d: Decoder<'_>) -> Result<Entry, String> {
+// `strict`: reject unknown fields. Index lines are read with it off, so
+// fields a newer rok adds do not hide a package's other versions; a
+// single file (`parse_one`) is someone's own and keeps it on.
+fn entry(d: Decoder<'_>, strict: bool) -> Result<Entry, String> {
     let r = d.record("Native")?;
-    r.only(&[
-        "name",
-        "vers",
-        "deps",
-        "targets",
-        "yanked",
-        "description",
-        "license",
-        "repository",
-    ])?;
+    if strict {
+        r.only(&[
+            "name",
+            "vers",
+            "deps",
+            "targets",
+            "yanked",
+            "description",
+            "license",
+            "repository",
+        ])?;
+    }
     let name = r.req("name")?.string()?;
     manifest::check_name(&name).map_err(|e| r.field_error("name", &e))?;
     let vers = Version::parse(&r.req("vers")?.string()?).map_err(|e| r.field_error("vers", &e))?;
     let mut targets = Vec::new();
     for (k, v) in r.req("targets")?.dict()? {
-        targets.push((k.string()?, artifact(v)?));
+        targets.push((k.string()?, artifact(v, strict)?));
     }
     Ok(Entry {
         name,
@@ -163,7 +170,7 @@ pub fn parse_file(text: &str, file: &str) -> Result<Vec<Entry>, String> {
     for (i, line) in text.lines().enumerate() {
         if !line.trim().is_empty() {
             let at = format!("{file} (line {})", i + 1);
-            out.push(entry(Doc::parse(line, &at)?.root())?);
+            out.push(entry(Doc::parse(line, &at)?.root(), false)?);
         }
     }
     Ok(out)
@@ -171,7 +178,7 @@ pub fn parse_file(text: &str, file: &str) -> Result<Vec<Entry>, String> {
 
 /// A file holding one `Native { .. }`.
 pub fn parse_one(text: &str, file: &str) -> Result<Entry, String> {
-    entry(Doc::parse(text, file)?.root())
+    entry(Doc::parse(text, file)?.root(), true)
 }
 
 impl Entry {
@@ -783,6 +790,26 @@ pub fn publish(
 mod tests {
     use super::*;
 
+    /// A newer rok's fields: skipped in an index line, rejected in a file
+    /// of one's own.
+    #[test]
+    fn unknown_fields() {
+        let line = format!(
+            "Native {{ name: \"zz\", vers: \"1.0.0\", targets: {{ \"aarch64-apple-darwin\": \
+             Artifact {{ url: \"https://x/zz.tar.gz\", sha256: \"{}\" }} }}, yanked: false }}",
+            "ab".repeat(32)
+        );
+        let e = parse_file(&line, "f").unwrap();
+        let abi = line.replace("\" } }", "\", abi: \"c\" } }");
+        let newer = abi.replace("false }", "false, keywords: [\"z\"] }");
+        assert!(abi != line && newer != abi);
+        assert_eq!(parse_file(&newer, "f").unwrap(), e);
+        let err = parse_one(&newer, "f").unwrap_err();
+        assert!(err.contains("unknown field `keywords`"), "{err}");
+        let err = parse_one(&abi, "f").unwrap_err();
+        assert!(err.contains("unknown field `abi`"), "{err}");
+    }
+
     #[test]
     fn lines_paths_and_names() {
         let h = "ab".repeat(32);
@@ -808,7 +835,7 @@ mod tests {
             (line.replace("static", "shared"), "\"static\" or \"dylib\""),
             (line.replace(&h, "ab"), "64 hex digits"),
             (line.replace("[]", "[\"../x\"]"), "relative, no `..`"),
-            (line.replace("targets", "builds"), "unknown field `builds`"),
+            (line.replace("targets", "builds"), "missing field `targets`"),
         ] {
             let e = parse_file(&bad, "f").unwrap_err();
             assert!(e.contains(want), "{e}");

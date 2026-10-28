@@ -10,6 +10,12 @@
 //!     description: "A JSON app",
 //!     license: "MIT OR Apache-2.0",
 //!     repository: "https://example.com/app.git",
+//!     authors: ["Ann <ann@example.com>"],
+//!     homepage: "https://example.com/app",
+//!     documentation: "https://example.com/app/docs",
+//!     readme: "README.md",              // the default when README.md exists
+//!     keywords: ["json", "parser"],     // at most 5
+//!     publish: true,                    // false: `rok publish` refuses
 //!     deps: {
 //!         "json": Dep::git("https://example.com/json.git", tag: "v1.2"),
 //!         "util": Dep::path("../util"),
@@ -38,13 +44,22 @@ pub const LOCK: &str = "rok.lock";
 /// A manifest with nothing in it, for `rok add` to fill.
 pub const EMPTY: &str = "Package {\n    deps: {},\n}\n";
 
-const FIELDS: [&str; 12] = [
+/// `keywords` holds at most this many.
+pub const MAX_KEYWORDS: usize = 5;
+
+const FIELDS: [&str; 18] = [
     "name",
     "version",
     "toolchain",
     "description",
     "license",
     "repository",
+    "authors",
+    "homepage",
+    "documentation",
+    "readme",
+    "keywords",
+    "publish",
     "deps",
     "dev_deps",
     "lints",
@@ -369,6 +384,22 @@ pub struct Manifest {
     /// An SPDX license expression.
     pub license: Option<String>,
     pub repository: Option<String>,
+    // authors, homepage, documentation, keywords: checked, not yet in the
+    // index entry (older rok rejects unknown entry fields).
+    /// `"Name <email>"` each.
+    #[allow(dead_code)]
+    pub authors: Vec<String>,
+    #[allow(dead_code)]
+    pub homepage: Option<String>,
+    #[allow(dead_code)]
+    pub documentation: Option<String>,
+    /// As written: relative to the manifest's directory (`readme_path`).
+    pub readme: Option<String>,
+    /// At most `MAX_KEYWORDS`, none empty.
+    #[allow(dead_code)]
+    pub keywords: Vec<String>,
+    /// `publish: false`: `rok publish` refuses the package (`None`: true).
+    pub publish: Option<bool>,
     pub deps: Vec<Dep>,
     pub dev_deps: Vec<Dep>,
     /// `lints`: `"name": "allow" | "warn" | "deny"`, in file order
@@ -503,6 +534,63 @@ pub fn load(path: &Path) -> Result<Manifest, String> {
     parse(&text, &path.display().to_string())
 }
 
+/// `toolchain` of the manifest text, read alone: fields this version does
+/// not know (a newer toolchain's) do not drop the pin.
+pub fn toolchain_pin(text: &str) -> Option<String> {
+    let doc = Doc::parse(text, MANIFEST).ok()?;
+    let pkg = doc.root().record("Package").ok()?;
+    pkg.opt("toolchain")?.string().ok()
+}
+
+impl Manifest {
+    /// The readme `rok publish` takes: `readme` (a file inside the
+    /// package), else `README.md` when there is one.
+    pub fn readme_path(&self, dir: &Path) -> Result<Option<PathBuf>, String> {
+        let Some(r) = &self.readme else {
+            return Ok(Some(dir.join("README.md")).filter(|p| p.is_file()));
+        };
+        // Lexical: `a/../b` stays inside, `../x` and `/x` do not.
+        let mut depth = 0usize;
+        let inside = Path::new(r).components().all(|c| match c {
+            std::path::Component::Normal(_) => {
+                depth += 1;
+                true
+            }
+            std::path::Component::CurDir => true,
+            std::path::Component::ParentDir => depth.checked_sub(1).map(|d| depth = d).is_some(),
+            std::path::Component::RootDir | std::path::Component::Prefix(_) => false,
+        });
+        if !inside || r.is_empty() {
+            return Err(format!(
+                "`readme: {r:?}` in {MANIFEST} is outside the package; write a path inside it, \
+                 relative to {MANIFEST} (e.g. `readme: \"README.md\"`)"
+            ));
+        }
+        let p = dir.join(r);
+        if p.is_file() {
+            Ok(Some(p))
+        } else {
+            Err(format!(
+                "`readme: {r:?}` in {MANIFEST}: {} is not a file; write the path relative to \
+                 {MANIFEST}, or remove `readme` to use README.md",
+                p.display()
+            ))
+        }
+    }
+
+    /// `Err` with how to change it when `publish: false`.
+    pub fn check_publish(&self) -> Result<(), String> {
+        if self.publish == Some(false) {
+            let name = self.name.as_deref().unwrap_or("this package");
+            return Err(format!(
+                "`{name}` has `publish: false` in {MANIFEST}, so it is not published; remove \
+                 that line (or write `publish: true`) to publish it"
+            ));
+        }
+        Ok(())
+    }
+}
+
 /// Parse manifest text; `file` names it in errors.
 pub fn parse(text: &str, file: &str) -> Result<Manifest, String> {
     // TOML (`name = "app"`) or JSON (`{"name": ..}`): show the one value.
@@ -527,6 +615,36 @@ pub fn parse(text: &str, file: &str) -> Result<Manifest, String> {
         pkg.opt(f)
             .map_or(Ok(Vec::new()), |d| deps(d, f == "dev_deps"))
     };
+    // A list of non-empty strings.
+    let list = |f: &str| -> Result<Vec<String>, String> {
+        let mut out = Vec::new();
+        for d in pkg
+            .opt(f)
+            .map(|d| d.list())
+            .transpose()?
+            .unwrap_or_default()
+        {
+            let s = d.string()?;
+            if s.trim().is_empty() {
+                return Err(d.error(&format!(
+                    "an entry of `{f}` is empty; remove it or write a value"
+                )));
+            }
+            out.push(s);
+        }
+        Ok(out)
+    };
+    let keywords = list("keywords")?;
+    if let Some(d) = pkg
+        .opt("keywords")
+        .filter(|_| keywords.len() > MAX_KEYWORDS)
+    {
+        return Err(d.error(&format!(
+            "`keywords` has {} entries; keep at most {MAX_KEYWORDS}, e.g. `keywords: [\"json\", \
+             \"parser\"]`",
+            keywords.len()
+        )));
+    }
     let mut lints = Vec::new();
     if let Some(d) = pkg.opt("lints") {
         for (k, v) in d.dict()? {
@@ -573,6 +691,12 @@ pub fn parse(text: &str, file: &str) -> Result<Manifest, String> {
         description: string("description")?,
         license: string("license")?,
         repository: string("repository")?,
+        authors: list("authors")?,
+        homepage: string("homepage")?,
+        documentation: string("documentation")?,
+        readme: string("readme")?,
+        keywords,
+        publish: pkg.opt("publish").map(|d| d.bool()).transpose()?,
         deps: normal,
         dev_deps: deps("dev_deps")?,
         lints,
@@ -934,6 +1058,87 @@ mod tests {
                        deps: {\n        \"a\": Dep::path(\"../a\"), // local\n        \"b\": \
                        Dep::git(\"u\", tag: \"v1\"),\n    },\n    dev_deps: { \"c\": \
                        Dep::git(\"u2\") },\n}\n";
+
+    #[test]
+    fn package_metadata() {
+        let m = parse(
+            "Package { name: \"app\", authors: [\"Ann <a@x.org>\"], homepage: \"https://x.org\", \
+             documentation: \"https://x.org/doc\", readme: \"doc/README.md\", keywords: [\"a\", \
+             \"b\", \"c\", \"d\", \"e\"], publish: false }",
+            "f",
+        )
+        .unwrap();
+        assert_eq!(m.authors, ["Ann <a@x.org>"]);
+        assert_eq!(m.homepage.as_deref(), Some("https://x.org"));
+        assert_eq!(m.documentation.as_deref(), Some("https://x.org/doc"));
+        assert_eq!(m.readme.as_deref(), Some("doc/README.md"));
+        assert_eq!(m.keywords.len(), MAX_KEYWORDS);
+        assert_eq!(m.publish, Some(false));
+        let e = m.check_publish().unwrap_err();
+        assert!(e.contains("`app` has `publish: false`"), "{e}");
+        assert!(e.contains("write `publish: true`"), "{e}");
+        let d = parse("Package {}", "f").unwrap();
+        assert!(d.authors.is_empty() && d.keywords.is_empty() && d.publish.is_none());
+        d.check_publish().unwrap();
+        for (src, want) in [
+            (
+                "Package { keywords: [\"a\", \"b\", \"c\", \"d\", \"e\", \"f\"] }",
+                "`keywords` has 6 entries; keep at most 5",
+            ),
+            (
+                "Package { keywords: [\"a\", \"\"] }",
+                "an entry of `keywords` is empty",
+            ),
+            (
+                "Package { authors: [\" \"] }",
+                "an entry of `authors` is empty",
+            ),
+            ("Package { keywords: \"a\" }", "must be a list"),
+            ("Package { publish: \"no\" }", "must be a bool"),
+        ] {
+            let e = parse(src, "f").unwrap_err();
+            assert!(e.contains(want), "{src}: {e}");
+        }
+        // readme: as written, else README.md when present.
+        let dir = rokc_core::tmp::test_dir("manifest-readme");
+        assert_eq!(d.readme_path(&dir).unwrap(), None);
+        std::fs::write(dir.join("README.md"), "x").unwrap();
+        assert_eq!(d.readme_path(&dir).unwrap(), Some(dir.join("README.md")));
+        let e = m.readme_path(&dir).unwrap_err();
+        assert!(e.contains("`readme: \"doc/README.md\"`"), "{e}");
+        assert!(e.contains("remove `readme` to use README.md"), "{e}");
+        let at = |r: &str| {
+            Manifest {
+                readme: Some(r.into()),
+                ..Manifest::default()
+            }
+            .readme_path(&dir)
+        };
+        std::fs::create_dir(dir.join("doc")).unwrap();
+        assert_eq!(
+            at("doc/../README.md").unwrap(),
+            Some(dir.join("doc/../README.md"))
+        );
+        assert_eq!(at("./README.md").unwrap(), Some(dir.join("./README.md")));
+        let abs = dir.join("README.md").display().to_string();
+        for r in ["../README.md", "doc/../../README.md", abs.as_str(), ""] {
+            let e = at(r).unwrap_err();
+            assert!(
+                e.contains("is outside the package; write a path inside it"),
+                "{r}: {e}"
+            );
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn toolchain_pin_skips_unknown_fields() {
+        let text = "Package { toolchain: \"0.3\", from_a_newer_rok: [1], deps: {} }";
+        assert!(parse(text, "f").is_err());
+        assert_eq!(toolchain_pin(text).as_deref(), Some("0.3"));
+        assert_eq!(toolchain_pin("Package { deps: {} }"), None);
+        assert_eq!(toolchain_pin("not rokon {"), None);
+    }
 
     #[test]
     fn manifest_forms_and_errors() {
