@@ -14,16 +14,22 @@ standard library (`library/{core,std,bare}`).
 
 ## Install
 
+macOS and Linux:
+
 ```sh
 curl -fsSL https://rok-lang.org/install.sh | sh
 ```
+
+Windows, in PowerShell:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -c "irm https://rok-lang.org/install.ps1 | iex"
 ```
 
+Nix:
+
 ```sh
-nix profile install github:rok-lang/rok   # or: nix run github:rok-lang/rok -- --version
+nix profile install github:rok-lang/rok
 ```
 
 The [Download page](https://rok-lang.org/download.html) has the release archives,
