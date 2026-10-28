@@ -1,0 +1,75 @@
+// expect-exit: 0
+// expect-stdout:
+// write failed: BrokenPipe after 1 writes: pipe closed
+// fmt failed: Other: a `Display` implementation failed (FmtError)
+// thrown: BrokenPipe
+
+// Spec 305.1a: an I/O error while `write_display` formats is thrown as
+// the writer's `IoError`, with the writes before it kept and nothing
+// formatted after it; a `Display` that fails by itself is `Other`.
+
+use rok::std::io::{IoError, IoErrorKind, Writer};
+
+/// Takes `room` writes, then fails like a closed pipe.
+struct Closing { room: i32; taken: i32; }
+
+impl Writer for Closing {
+    fn write(ref self, buf: List<u8>) throws (IoError) -> usize {
+        try self.write_str("");
+        buf.len()
+    }
+    fn write_str(ref self, s: str) throws (IoError) {
+        if self.taken == self.room {
+            throw IoError::with_kind(IoErrorKind::BrokenPipe, "pipe closed");
+        }
+        self.taken += 1;
+    }
+    fn flush(ref self) throws (IoError) {}
+}
+
+/// Long enough to need several writes; counts how far it got.
+struct Big { done: List<i32>; }
+
+impl Display for Big {
+    fn fmt(self, ref f: Formatter) throws (FmtError) {
+        let i = 0;
+        while i < 5000 {
+            try f.write_str("0123456789");
+            self.done.push(i);
+            i += 1;
+        }
+    }
+}
+
+struct Broken;
+
+impl Display for Broken {
+    fn fmt(self, ref f: Formatter) throws (FmtError) {
+        try f.write_str("partial");
+        throw FmtError;
+    }
+}
+
+fn send(ref w: Closing) throws (IoError) {
+    try w.write_display(Big { done: [] });
+}
+
+fn main() {
+    let w = Closing { room: 1, taken: 0 };
+    let big = Big { done: [] };
+    try w.write_display(big) catch e {
+        println(f"write failed: {e.kind():?} after {w.taken} writes: {e}");
+    };
+    if big.done.len() >= 5000 { println("formatted past the error"); }
+
+    let ok = Closing { room: 100, taken: 0 };
+    try ok.write_display(Broken) catch e {
+        println(f"fmt failed: {e.kind():?}: {e}");
+    };
+
+    let w2 = Closing { room: 0, taken: 0 };
+    try send(ref w2) catch e { println(f"thrown: {e.kind():?}"); };
+}
+
+// spec: std 305-io §3.5.0 §3.5.1
+// spec: std 210-fmt §2.10.12

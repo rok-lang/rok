@@ -251,8 +251,8 @@ impl Cx<'_> {
                 (!matches!(
                     &a.body,
                     AttrBody::Value(Literal::Str(_) | Literal::RawStr(_))
-                ))
-                .then_some("`#[doc = \"..\"]`"),
+                ) && !a.is_doc_hidden())
+                .then_some("`#[doc = \"..\"]` or `#[doc(hidden)]`"),
             ),
             "allow" | "warn" | "deny" => (anywhere, words(a, false)),
             "cfg" => return rokc_parser::cfg::attr_problem(a),

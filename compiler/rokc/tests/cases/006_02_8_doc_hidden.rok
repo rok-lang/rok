@@ -1,0 +1,31 @@
+// expect-exit: 0
+// forbid-warning: warning
+// expect-stdout:
+// 3 4 7
+
+// Spec 6.2.8: `#[doc(hidden)]` keeps a public item out of the API docs
+// and completion; it compiles and calls as before, without a warning.
+
+/// Only lowered code should call this.
+#[doc(hidden)]
+pub fn hook(x: i32) -> i32 { x + 1 }
+
+#[doc(hidden)]
+pub struct Raw { pub n: i32; }
+
+impl Raw {
+    /// Internal.
+    #[doc(hidden)]
+    pub fn get(self) -> i32 { self.n }
+}
+
+#[doc(hidden)]
+pub mod internals {
+    pub fn seven() -> i32 { 7 }
+}
+
+fn main() {
+    println(f"{hook(2)} {Raw { n: 4 }.get()} {internals::seven()}");
+}
+
+// spec: 006.02-built-in-attributes §6.2.8

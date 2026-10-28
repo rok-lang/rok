@@ -1,9 +1,10 @@
 //! The check pipeline (`rokc check`, `rokc lint`, the language server)
 //! and the queries the language server and the REPL run on its result.
 
+use std::collections::HashSet;
 use std::path::Path;
 
-use rokc_ast::{ImplItem, Item, TraitItem};
+use rokc_ast::{ImplItem, Item, TraitItem, doc_hidden};
 use rokc_diagnostic::{RokDiagnostic, Span};
 pub use rokc_hir::each_block;
 use rokc_hir::{HirExpr, HirFunction, HirModule, HirTy};
@@ -179,6 +180,53 @@ impl Analysis {
 
     pub(crate) fn in_file(&self, span: Span, path: &str) -> bool {
         self.file(span).is_some_and(|(p, _)| p == path)
+    }
+
+    /// Spans of the functions and types marked `#[doc(hidden)]`, or
+    /// inside a module so marked: compiler hooks completion leaves out.
+    pub fn hidden_spans(&self) -> HashSet<Span> {
+        fn walk(items: &[Item], all: bool, out: &mut HashSet<Span>) {
+            for item in items {
+                let mut mark = |attrs: &[rokc_ast::Attribute], span: Span| {
+                    if all || doc_hidden(attrs) {
+                        out.insert(span);
+                    }
+                };
+                match item {
+                    Item::Fn(f) => mark(&f.attrs, f.span),
+                    Item::Struct(x) => mark(&x.attrs, x.span),
+                    Item::Enum(x) => mark(&x.attrs, x.span),
+                    Item::Impl(i) => {
+                        for ii in &i.items {
+                            if let ImplItem::Method(m) = ii {
+                                mark(&m.attrs, m.span);
+                            }
+                        }
+                    }
+                    Item::Trait(t) => {
+                        for ti in &t.items {
+                            if let TraitItem::Method(m) = ti {
+                                mark(&m.attrs, m.span);
+                            }
+                        }
+                    }
+                    Item::Mod(m) => walk(
+                        m.items.as_deref().unwrap_or_default(),
+                        all || doc_hidden(&m.attrs),
+                        out,
+                    ),
+                    _ => {}
+                }
+            }
+        }
+        let mut out = HashSet::new();
+        for f in &self.sources {
+            walk(&f.items, false, &mut out);
+        }
+        if let Some(p) = self.library {
+            walk(&p.items, false, &mut out);
+        }
+        out
     }
 
     /// The doc comment of the function defined at `span`.

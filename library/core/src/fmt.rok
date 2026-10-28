@@ -6,7 +6,8 @@
 // such text: literal pieces and primitive holes go to the runtime
 // directly, any other hole through `Display::fmt` / `Debug::fmt`
 // (`fstr_*` below), and `rok_fmt_finish` hands the text over as the
-// `str` without a copy.
+// `str` without a copy. A formatter made by `to_sink` instead hands its
+// text out in chunks as it grows (io's `Writer::write_display`).
 
 use rok::core::collections::raw::{GcBuf, buf_new};
 
@@ -134,7 +135,12 @@ pub struct Formatter {
     pub(pkg) t: str;
     pub(pkg) flags: u64;
     pub(pkg) counts: u64;
+    /// Where full chunks go (`to_sink`); `none` keeps all the text.
+    sink: (fn(str) -> bool) | none;
 }
+
+/// The text a sink formatter holds before handing it on.
+const SINK_CHUNK: usize = 4096;
 
 /// The packed words of no spec.
 const PLAIN_FLAGS: u64 = 32;
@@ -153,7 +159,31 @@ impl Formatter {
 
     /// Empty, with room for `cap` bytes.
     pub const fn with_capacity(cap: usize) -> Formatter {
-        Formatter { t: unsafe { rok_fmt_new(cap) }, flags: PLAIN_FLAGS, counts: PLAIN_COUNTS }
+        Formatter { t: unsafe { rok_fmt_new(cap) }, flags: PLAIN_FLAGS, counts: PLAIN_COUNTS, sink: none }
+    }
+
+    /// Empty, handing its text to `sink` in chunks as it is written, so
+    /// the whole text is never held at once. `sink` returns `false` when
+    /// it cannot take a chunk; the write then fails with `FmtError`.
+    /// Call `flush` after the last write.
+    pub fn to_sink(sink: fn(str) -> bool) -> Formatter {
+        Formatter { t: unsafe { rok_fmt_new(SINK_CHUNK) }, flags: PLAIN_FLAGS, counts: PLAIN_COUNTS, sink: sink }
+    }
+
+    /// Hand what a `to_sink` formatter holds to its sink; nothing for
+    /// any other.
+    pub const fn flush(ref self) throws (FmtError) {
+        let k: fn(str) -> bool = self.sink else { return; };
+        if unsafe { rok_fmt_len(self.t) } == 0 { return; }
+        let chunk = unsafe { rok_fmt_finish(self.t) };
+        self.t = unsafe { rok_fmt_new(SINK_CHUNK) };
+        if !k(chunk) { throw FmtError; }
+    }
+
+    /// Flush a sink formatter that holds a full chunk. Only between
+    /// writes: `pad` measures from where its own text starts.
+    const fn spill(ref self) throws (FmtError) {
+        if unsafe { rok_fmt_len(self.t) } >= SINK_CHUNK { try self.flush(); }
     }
 
     /// Empty, writing values per `spec`.
@@ -174,7 +204,10 @@ impl Formatter {
     /// The text written, as a `str` (no copy); the formatter is spent.
     pub const fn finish(self) -> str { unsafe { rok_fmt_finish(self.t) } }
 
-    pub const fn write_str(ref self, s: str) throws (FmtError) { self.t = unsafe { rok_fmt_str(self.t, s) }; }
+    pub const fn write_str(ref self, s: str) throws (FmtError) {
+        self.t = unsafe { rok_fmt_str(self.t, s) };
+        try self.spill();
+    }
 
     pub const fn write_char(ref self, c: char) throws (FmtError) { self.t = unsafe { rok_fmt_char(self.t, c as u32) }; }
 
@@ -184,6 +217,7 @@ impl Formatter {
         let start = unsafe { rok_fmt_len(self.t) };
         self.t = unsafe { rok_fmt_str(self.t, s) };
         self.t = unsafe { rok_fmt_pad(self.t, self.flags, self.counts, start, start, 0u32) };
+        try self.spill();
     }
 
     /// An integer: the sign, `prefix` (`"0x"` ..) under `#`, the digits
@@ -222,28 +256,32 @@ const fn count_of(v: u64) -> usize | none {
 // `t`; each returns it, maybe moved). Formatting to memory never fails.
 
 /// `{v}`.
+#[doc(hidden)]
 pub const fn fstr_display<T: Display>(t: str, v: T) -> str {
-    let f = Formatter { t: t, flags: PLAIN_FLAGS, counts: PLAIN_COUNTS };
+    let f = Formatter { t: t, flags: PLAIN_FLAGS, counts: PLAIN_COUNTS, sink: none };
     try! Display::fmt(v, ref f);
     f.t
 }
 
 /// `{v:?}`.
+#[doc(hidden)]
 pub const fn fstr_debug<T: Debug>(t: str, v: T) -> str {
-    let f = Formatter { t: t, flags: PLAIN_FLAGS, counts: PLAIN_COUNTS };
+    let f = Formatter { t: t, flags: PLAIN_FLAGS, counts: PLAIN_COUNTS, sink: none };
     try! Debug::fmt(v, ref f);
     f.t
 }
 
 /// A number under a spec (`flags`, `counts`).
+#[doc(hidden)]
 pub fn fstr_num<T: Display>(t: str, v: T, flags: u64, counts: u64) -> str {
-    let f = Formatter { t: t, flags: flags, counts: counts };
+    let f = Formatter { t: t, flags: flags, counts: counts, sink: none };
     try! Display::fmt(v, ref f);
     f.t
 }
 
 /// A dynamic spec's packed words; panics when malformed, or when
 /// `text_only` and it has a number's type letter.
+#[doc(hidden)]
 pub const fn fstr_pack(spec: str, text_only: bool) -> (u64, u64) {
     unsafe {
         let out: GcBuf<u64> = buf_new(2);
@@ -254,6 +292,7 @@ pub const fn fstr_pack(spec: str, text_only: bool) -> (u64, u64) {
 
 /// A dynamic spec on a value with both: `?` picks the Debug; then cut
 /// and padded as text.
+#[doc(hidden)]
 pub const fn fstr_text_any<T: Display + Debug>(t: str, v: T, spec: str) -> str {
     let (flags, counts) = fstr_pack(spec, true);
     let start = unsafe { rok_fmt_len(t) };

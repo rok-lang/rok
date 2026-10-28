@@ -12,7 +12,8 @@
 //! ```
 //!
 //! Documented: the user package, its `--extern` deps and, with `--std`,
-//! the standard library; `pub` items in `pub` modules. Doc text comes from
+//! the standard library; `pub` items in `pub` modules, but not those
+//! marked `#[doc(hidden)]` (compiler hooks). Doc text comes from
 //! `#[doc]` (`///`, `//!`) in a markdown subset: headings, fenced code,
 //! inline code, links, `**bold**`, lists, paragraphs. Type names in
 //! signatures and code that name a documented item link to it.
@@ -25,7 +26,7 @@ use std::path::{Path, PathBuf};
 use rokc_ast::escape::{EscapeMode, unescape};
 use rokc_ast::{
     AttrBody, Attribute, ConstExpr, EnumVariantKind, FnDef, GenericParam, Generics, ImplItem, Item,
-    Literal, NamedField, StructKind, ThrowsKind, TraitItem, Ty, TyKind,
+    Literal, NamedField, StructKind, ThrowsKind, TraitItem, Ty, TyKind, doc_hidden,
 };
 use rokc_core::Visibility;
 use rokc_diagnostic::Json;
@@ -213,7 +214,7 @@ impl Docs {
             if kind == "mod" {
                 let mut child = rel.to_vec();
                 child.push(name.to_owned());
-                if vis != Visibility::Pub {
+                if vis != Visibility::Pub || doc_hidden(attrs) {
                     self.private.push((pkg.to_owned(), child.clone()));
                 }
                 let doc = doc_text(attrs);
@@ -228,7 +229,7 @@ impl Docs {
                         format!("{doc}\n\n{}", m.doc)
                     };
                 }
-                if vis == Visibility::Pub {
+                if vis == Visibility::Pub && !doc_hidden(attrs) {
                     let parent = self
                         .modules
                         .entry((pkg.to_owned(), rel.to_vec()))
@@ -245,7 +246,7 @@ impl Docs {
                         self.scan(pkg, &child, inner);
                     }
                 }
-            } else if vis == Visibility::Pub {
+            } else if vis == Visibility::Pub && !doc_hidden(attrs) {
                 self.links
                     .entry(name.to_owned())
                     .or_insert_with(|| format!("{}#{kind}.{name}", page(pkg, rel)));
@@ -267,7 +268,7 @@ impl Docs {
             let Some((kind, name, vis, attrs)) = item_info(item) else {
                 continue;
             };
-            if vis != Visibility::Pub {
+            if vis != Visibility::Pub || doc_hidden(attrs) {
                 continue;
             }
             let doc = doc_text(attrs);
@@ -301,7 +302,7 @@ impl Docs {
                     )
                 }
                 Item::Enum(e) => {
-                    for v in &e.variants {
+                    for v in e.variants.iter().filter(|v| !doc_hidden(&v.attrs)) {
                         let shape = match &v.kind {
                             EnumVariantKind::Unit => String::new(),
                             EnumVariantKind::Tuple(ts) => format!(
@@ -328,6 +329,7 @@ impl Docs {
                 Item::Trait(t) => {
                     for ti in &t.items {
                         match ti {
+                            TraitItem::Method(m) if doc_hidden(&m.attrs) => {}
                             TraitItem::Method(m) => members.push((
                                 format!("tymethod.{name}.{}", m.name),
                                 self.fn_sig(m),
@@ -407,7 +409,7 @@ impl Docs {
             }
             for ii in &im.items {
                 if let ImplItem::Method(m) = ii {
-                    if m.vis == Visibility::Pub {
+                    if m.vis == Visibility::Pub && !doc_hidden(&m.attrs) {
                         e.members.push((
                             format!("method.{ty_name}.{}", m.name),
                             self.fn_sig(m),
@@ -426,7 +428,7 @@ impl Docs {
 
     fn fields(&self, kind: &str, owner: &str, fs: &[NamedField]) -> Vec<(String, String, String)> {
         fs.iter()
-            .filter(|f| f.vis == Visibility::Pub)
+            .filter(|f| f.vis == Visibility::Pub && !doc_hidden(&f.attrs))
             .map(|f| {
                 (
                     format!("{kind}field.{owner}.{}", f.name),
@@ -1051,5 +1053,32 @@ mod tests {
         assert_eq!(names, ["Show", "P", "f"]);
         let p = m.entries.iter().find(|e| e.name == "P").unwrap();
         assert!(p.members.is_empty(), "{:?}", p.members);
+    }
+
+    /// `#[doc(hidden)]` items, members and modules stay out of the docs.
+    #[test]
+    fn doc_hidden_is_not_documented() {
+        let src = "/// A hook.\n#[doc(hidden)]\npub fn hook() {}\npub fn shown() {}\n\
+                   pub struct P { pub x: i32; #[doc(hidden)] pub raw: i32; }\n\
+                   impl P { pub fn get(self) {} #[doc(hidden)] pub fn peek(self) {} }\n\
+                   #[doc(hidden)]\npub mod inner { pub fn deep() {} }\n";
+        let (tokens, _) = rokc_lexer::Lexer::new(src, "a.rok").lex_all();
+        let (p, diags) = rokc_parser::parse_program(&tokens, "a.rok");
+        assert!(diags.is_empty(), "{diags:?}");
+        let mut d = docs();
+        d.scan("app", &[], &p.items);
+        d.module("app", &[], &p.items);
+        let m = &d.modules[&("app".to_owned(), Vec::new())];
+        let names: Vec<&str> = m.entries.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(names, ["shown", "P"]);
+        let p = m.entries.iter().find(|e| e.name == "P").unwrap();
+        let members: Vec<&str> = p.members.iter().map(|(a, ..)| a.as_str()).collect();
+        assert_eq!(members, ["structfield.P.x", "method.P.get"]);
+        assert!(m.children.is_empty(), "{:?}", m.children);
+        assert!(!d.links.contains_key("hook"));
+        assert!(
+            d.private
+                .contains(&("app".to_owned(), vec!["inner".to_owned()]))
+        );
     }
 }

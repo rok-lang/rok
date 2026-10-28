@@ -850,6 +850,7 @@ pub fn cancel_requested(ctx: Context) -> bool {
 /// after a ready poll checks this, not the bare flag, so a value a
 /// hand-written future handed over (a message, a guard) is kept when the
 /// cancel lands meanwhile - the next cancellation point leaves.
+#[doc(hidden)]
 pub fn unwinding(ctx: Context) -> bool {
     unsafe {
         let t = ctx.waker.task;

@@ -78,6 +78,20 @@ impl Attribute {
             ""
         }
     }
+
+    /// `#[doc(hidden)]`: public for the compiler's own use, left out of
+    /// the API docs and completion.
+    #[must_use]
+    pub fn is_doc_hidden(&self) -> bool {
+        self.name() == "doc"
+            && matches!(&self.body, AttrBody::Args(xs) if matches!(xs.as_slice(), [AttrArg::Word(w)] if w == "hidden"))
+    }
+}
+
+/// Whether `attrs` hide their item (`#[doc(hidden)]`).
+#[must_use]
+pub fn doc_hidden(attrs: &[Attribute]) -> bool {
+    attrs.iter().any(Attribute::is_doc_hidden)
 }
 
 #[derive(Clone, Debug)]
