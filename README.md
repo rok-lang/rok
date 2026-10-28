@@ -22,6 +22,10 @@ curl -fsSL https://rok-lang.org/install.sh | sh
 powershell -ExecutionPolicy Bypass -c "irm https://rok-lang.org/install.ps1 | iex"
 ```
 
+```sh
+nix profile install github:rok-lang/rok   # or: nix run github:rok-lang/rok -- --version
+```
+
 The [Download page](https://rok-lang.org/download.html) has the release archives,
 their checksums, and the cross-compilation targets. No LLVM install is needed: a
 toolchain links its own LLVM and ships every target's runtime, so
