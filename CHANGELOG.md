@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.1.3 (2026-10-29)
+
+- `rok::core::encoding`: `hex_encode`, `hex_decode`, `base64_encode`, `base64_decode`;
+  standard or url-safe, padded or not; a decode error names the byte and the fix.
+- `str` gains `splitn`, `rsplit`, `rsplitn`, `match_indices`, `trim_matches`,
+  `trim_start_matches` and `trim_end_matches`, all sharing the source's bytes.
+- Iterator adapters `take_while`, `skip_while`, `scan`, `inspect`, `cycle`, `chunks`,
+  `windows`; consumers `try_fold`, `try_for_each`, `partition`, `unzip`.
+- `List` gains `contains`, `retain`, `dedup`, `fill`, `swap`, `split_at`, `binary_search`,
+  `windows`, `chunks`; `Slice` gains `contains`, `split_at`, `windows`, `chunks`; `retain` and
+  `extend` on `Dict`, `Set`, `OrderedDict`, `OrderedSet`; arrays gain `iter`, `first`, `last`,
+  `contains`, `map`, `fill`.
+- Type parameters inside an associated-type binding are inferred, also from a `where`:
+  `Iterator<Item = (A, B)>` binds `A` and `B`.
+- `Writer::write_display` writes a value through `Display` in chunks, with no intermediate
+  `str`.
+- `Inspect` gains `fields`, `variant_names`, `variant_name`, `field_names_of`, with `FieldInfo`
+  and `fields_of`; `get_field` reads an enum value's payload; a missing derive says to add
+  `#[derive(Inspect)]`.
+- `int` gains `count_ones`, `trailing_zeros`, `bit`, `set_bit`, `is_power_of_two`,
+  `next_power_of_two`, `ilog2`, `checked_ilog2` and little- and big-endian bytes; `f64` and
+  `f32` gain `lerp`, `next_after`, `next_up`, `next_down`.
+- `i128` and `u128` are an error that names `int` or the 64-bit type to write.
+- `#[doc(hidden)]` keeps an item out of completion and `rokc doc`; the compiler hooks carry it.
+- A closure that captures a `ref` parameter writes back to the caller; `[ref self]` captures
+  in a `ref self` method.
+- `Self::f()` in a trait default works for a private type.
+- A binding in a meta template renames only within its own scope.
+
 ## 0.1.2 (2026-10-28)
 
 - Dict spread: a defaulted parameter the dict's value type cannot fill takes its default;
