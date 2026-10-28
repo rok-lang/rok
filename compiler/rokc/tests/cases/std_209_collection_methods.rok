@@ -1,0 +1,141 @@
+// spec: std 209-collections §2.9.2 §2.9.3 §2.9.4 §2.9.5 §2.9.7
+// expect-exit: 0
+// expect-stdout:
+// contains true false false
+// retain [2, 4, 4] [] [] len 3
+// dedup [1, 2, 3, 1] [7] [] [5]
+// fill [0, 0, 0] []
+// swap [3, 2, 1] [1]
+// split_at [1] [2, 3] [] [1, 2, 3] [1, 2, 3] []
+// binary_search 0 2 4 none none none
+// windows ["[1, 2]", "[2, 3]", "[3, 4]"] 3 [] 0
+// chunks ["[1, 2]", "[3, 4]", "[5]"] 3 [] 0
+// slice [2, 3] [4] true false
+// dict retain 2 true false true extend 4 10 26
+// set retain 2 true false extend 3 true
+// odict {"a": 1, "c": 3, "d": 4, "b": 20}
+// oset {3, 5, 4, 2}
+// empty 0 0 0 0
+// array 4 6 true false [16, 25, 36] 15 [4, 5, 6]
+// array fill [9, 9, 9] [6, 5, 4]
+// array empty -1 -1 false 0 []
+
+// The collection methods List, Dict, Set, the ordered ones and arrays
+// share: contains / retain / dedup / fill / swap / split_at /
+// binary_search / windows / chunks on lists and views, retain / extend
+// on keyed collections (insertion order kept by the ordered ones), and
+// iter / first / last / contains / map / fill on arrays.
+
+fn main() {
+    let xs: List<i32> = [1, 2, 3];
+    let none_: List<i32> = [];
+    println(f"contains {xs.contains(2)} {xs.contains(9)} {none_.contains(0)}");
+
+    let r: List<i32> = [1, 2, 3, 4, 4, 5];
+    r.retain(|x| x % 2 == 0);
+    let r0: List<i32> = [];
+    r0.retain(|x| x > 0);
+    let r1: List<i32> = [1, 3];
+    r1.retain(|x| x % 2 == 0);
+    println(f"retain {r:?} {r0:?} {r1:?} len {r.len()}");
+
+    let d: List<i32> = [1, 1, 2, 3, 3, 3, 1];
+    d.dedup();
+    let d1: List<i32> = [7, 7, 7];
+    d1.dedup();
+    let d0: List<i32> = [];
+    d0.dedup();
+    let d2: List<i32> = [5];
+    d2.dedup();
+    println(f"dedup {d:?} {d1:?} {d0:?} {d2:?}");
+
+    let f: List<i32> = [1, 2, 3];
+    f.fill(0);
+    let f0: List<i32> = [];
+    f0.fill(1);
+    println(f"fill {f:?} {f0:?}");
+
+    let s: List<i32> = [1, 2, 3];
+    s.swap(0, 2);
+    let s1: List<i32> = [1];
+    s1.swap(0, 0);
+    println(f"swap {s:?} {s1:?}");
+
+    let (a, b) = xs.split_at(1);
+    let (c, e) = xs.split_at(0);
+    let (g, h) = xs.split_at(3);
+    println(f"split_at {a:?} {b:?} {c:?} {e:?} {g:?} {h:?}");
+
+    let sorted: List<i32> = [1, 3, 5, 7, 9];
+    let bs = |x: i32| -> str {
+        match sorted.binary_search(x) {
+            i: usize => f"{i}",
+            none => "none",
+        }
+    };
+    let b0 = match none_.binary_search(1) {
+        i: usize => f"{i}",
+        none => "none",
+    };
+    println(f"binary_search {bs(1)} {bs(5)} {bs(9)} {bs(0)} {bs(4)} {b0}");
+
+    let ws: List<i32> = [1, 2, 3, 4];
+    let wl: List<str> = ws.windows(2).map(|v| f"{v:?}").collect();
+    let w0: List<str> = ws.windows(5).map(|v| f"{v:?}").collect();
+    println(f"windows {wl:?} {ws.windows(2).len()} {w0:?} {none_.windows(1).count()}");
+    let cs: List<i32> = [1, 2, 3, 4, 5];
+    let cl: List<str> = cs.chunks(2).map(|v| f"{v:?}").collect();
+    let c0: List<str> = none_.chunks(3).map(|v| f"{v:?}").collect();
+    println(f"chunks {cl:?} {cs.chunks(2).len()} {c0:?} {none_.chunks(3).len()}");
+
+    let view = cs[1:4];
+    let (v1, v2) = view.split_at(2);
+    println(f"slice {v1:?} {v2:?} {view.contains(4)} {view.contains(5)}");
+
+    let dd: Dict<str, i32> = {"a": 1, "b": 2, "c": 3};
+    dd.retain(|_k, v| v != 2);
+    let dr = dd.len();
+    dd.extend([("z", 26), ("a", 10), ("y", 25)]);
+    println(f"dict retain {dr} {dd.contains_key("a")} {dd.contains_key("b")} {dd.contains_key("c")} extend {dd.len()} {dd["a"]} {dd["z"]}");
+
+    let st: Set<i32> = {1, 2, 3, 4};
+    st.retain(|x| x % 2 == 0);
+    let sr = st.len();
+    let had = st.contains(2);
+    let odd = st.contains(3);
+    st.extend([8, 2, 4]);
+    println(f"set retain {sr} {had} {odd} extend {st.len()} {st.contains(8)}");
+
+    let od = OrderedDict::from([("a", 1), ("b", 2), ("c", 3)]);
+    od.retain(|k, _v| k != "b");
+    od.extend([("d", 4), ("b", 20), ("a", 1)]);
+    println(f"odict {od:?}");
+
+    let os = OrderedSet::from([3, 1, 5]);
+    os.retain(|x| x != 1);
+    os.extend([4, 3, 2, 5]);
+    println(f"oset {os:?}");
+
+    let ed: Dict<str, i32> = Dict::new();
+    ed.retain(|_k, _v| false);
+    ed.extend(none_.iter().map(|x| (f"{x}", x)));
+    let es: Set<i32> = Set::new();
+    es.retain(|_x| true);
+    es.extend(none_);
+    let eod: OrderedDict<str, i32> = OrderedDict::new();
+    eod.retain(|_k, _v| true);
+    let eos: OrderedSet<i32> = OrderedSet::new();
+    eos.extend(none_);
+    println(f"empty {ed.len()} {es.len()} {eod.len()} {eos.len()}");
+
+    let arr: [i32; 3] = [4, 5, 6];
+    let sq = arr.map(|x| x * x);
+    println(f"array {arr.first() ?? 0} {arr.last() ?? 0} {arr.contains(5)} {arr.contains(7)} {sq:?} {arr.iter().sum()} {arr:?}");
+    let filled = arr;
+    filled.fill(9);
+    let rev: List<i32> = arr.iter().rev().collect();
+    println(f"array fill {filled:?} {rev:?}");
+    let ea: [i32; 0] = [];
+    let em = ea.map(|x| f"{x}");
+    println(f"array empty {ea.first() ?? -1} {ea.last() ?? -1} {ea.contains(0)} {ea.iter().count()} {em:?}");
+}

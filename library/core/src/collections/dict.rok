@@ -228,13 +228,42 @@ impl<K: Hash, V> Dict<K, V> {
             if at == ABSENT {
                 return none;
             }
-            let s = self.h[0];
-            let v = s.vals[at];
-            s.keys[at] = s.keys[s.cap];
-            s.vals[at] = s.vals[s.cap];
-            s.meta[at] = 0u64;
-            self.h[0].len -= 1;
+            let v = self.h[0].vals[at];
+            self.hole(at);
             v
+        }
+    }
+
+    /// Turn live entry `at` into a hole.
+    const unsafe fn hole(self, at: usize) {
+        let s = self.h[0];
+        s.keys[at] = s.keys[s.cap];
+        s.vals[at] = s.vals[s.cap];
+        s.meta[at] = 0u64;
+        self.h[0].len -= 1;
+    }
+
+    /// Keep only the entries `keep` accepts, in place; O(n).
+    pub const fn retain(self, keep: fn(K, V) -> bool) {
+        unsafe {
+            let i: usize = 0;
+            while i < self.h[0].n {
+                let s = self.h[0];
+                // Re-read after `keep`: it may have changed the dict
+                // (unspecified, as for the iterators), not memory or `len`.
+                if s.meta[i] != 0u64 && !keep(s.keys[i], s.vals[i]) && i < self.h[0].n && self.h[0].meta[i] != 0u64 {
+                    self.hole(i);
+                }
+                i += 1;
+            }
+        }
+    }
+
+    /// Insert every `(key, value)` pair of `pairs`, in order; a later
+    /// pair's value wins.
+    pub const fn extend<I: IntoIterator<Item = (K, V)>>(self, pairs: I) {
+        for (k, v) in pairs {
+            self.insert(k, v);
         }
     }
 

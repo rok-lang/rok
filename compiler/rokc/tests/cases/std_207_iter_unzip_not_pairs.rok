@@ -1,0 +1,8 @@
+// spec: std 207-iter §2.7.1
+// expect-error: `unzip` needs `Item` of the form `(A, B)`, but `ListIter<i32>` has `Item = i32` - turn each item into `(A, B)` first
+
+// `unzip` takes an iterator of pairs; other items say how to make pairs.
+fn main() {
+    let xs: List<i32> = [1, 2, 3];
+    let (a, b) = xs.iter().unzip();
+}

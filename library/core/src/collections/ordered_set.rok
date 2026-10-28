@@ -54,6 +54,18 @@ impl<T: Hash> OrderedSet<T> {
         self.d.clear();
     }
 
+    /// Keep only the members `keep` accepts, in place, in order; O(n).
+    pub const fn retain(self, keep: fn(T) -> bool) {
+        self.d.retain(|x: T, _: bool| keep(x));
+    }
+
+    /// Insert every item of `items`, new ones at the end in order.
+    pub const fn extend<I: IntoIterator<Item = T>>(self, items: I) {
+        for x in items {
+            self.insert(x);
+        }
+    }
+
     /// The members in insertion order, lazily.
     pub const fn iter(self) -> KeysIter<T, bool> {
         self.d.keys()

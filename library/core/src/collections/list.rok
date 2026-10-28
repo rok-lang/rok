@@ -311,6 +311,104 @@ impl<T> List<T> {
     pub const fn iter(self) -> ListIter<T> {
         ListIter { list: self, front: 0, back: 0 }
     }
+
+    /// Keep only the elements `keep` accepts, in order, in place; O(n).
+    pub const fn retain(self, keep: fn(T) -> bool) {
+        unsafe {
+            let store = self.h[0].buf;
+            let n = self.len();
+            let w: usize = 0;
+            for r in 0..n {
+                let x = store[r];
+                if keep(x) {
+                    store[w] = x;
+                    w += 1;
+                }
+            }
+            self.truncate(w);
+        }
+    }
+
+    /// Overwrite every element with `x`.
+    pub const fn fill(self, x: T) {
+        unsafe {
+            let store = self.h[0].buf;
+            for i in 0..self.len() {
+                store[i] = x;
+            }
+        }
+    }
+
+    /// Exchange elements `i` and `j`; panics out of bounds.
+    #[track_caller]
+    pub const fn swap(self, i: usize, j: usize) {
+        unsafe {
+            let n = self.len();
+            if i >= n {
+                index_oob("List::swap index", i, n);
+            }
+            if j >= n {
+                index_oob("List::swap index", j, n);
+            }
+            let store = self.h[0].buf;
+            let x = store[i];
+            store[i] = store[j];
+            store[j] = x;
+        }
+    }
+
+    /// Views of `[0, mid)` and `[mid, len)`; panics if `mid` is past the
+    /// length.
+    #[track_caller]
+    pub const fn split_at(self, mid: usize) -> (Slice<T>, Slice<T>) {
+        self[:].split_at(mid)
+    }
+
+    /// Views of `size` consecutive elements, sliding by one (`size` > 0).
+    #[track_caller]
+    pub const fn windows(self, size: usize) -> SliceWindows<T> {
+        self[:].windows(size)
+    }
+
+    /// Views of `size` elements in order, the last one shorter
+    /// (`size` > 0).
+    #[track_caller]
+    pub const fn chunks(self, size: usize) -> SliceChunks<T> {
+        self[:].chunks(size)
+    }
+}
+
+impl<T: PartialEq> List<T> {
+    /// `true` when an element equals `x`.
+    pub const fn contains(self, x: T) -> bool {
+        for y in self {
+            if y == x {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Drop each element equal to the one before it, in place: a sorted
+    /// list keeps one of each value.
+    pub const fn dedup(self) {
+        unsafe {
+            let n = self.len();
+            if n < 2 {
+                return;
+            }
+            let store = self.h[0].buf;
+            let w: usize = 1;
+            for r in 1..n {
+                let x = store[r];
+                if x != store[w - 1] {
+                    store[w] = x;
+                    w += 1;
+                }
+            }
+            self.truncate(w);
+        }
+    }
 }
 
 /// Runs this short are insertion-sorted before merging.
@@ -320,6 +418,25 @@ impl<T: Ord> List<T> {
     /// Ascending, stable.
     pub const fn sort(self) {
         self.sort_by(|a: T, b: T| a.cmp(b));
+    }
+
+    /// The index of an element equal to `x` in an ascending list, or
+    /// `none`; O(log n). Which of several equal ones is unspecified.
+    pub const fn binary_search(self, x: T) -> usize | none {
+        let lo: usize = 0;
+        let hi = self.len();
+        while lo < hi {
+            let mid = lo + (hi - lo) / 2;
+            let c = self[mid].cmp(x);
+            if c.is_lt() {
+                lo = mid + 1;
+            } else if c.is_gt() {
+                hi = mid;
+            } else {
+                return mid;
+            }
+        }
+        none
     }
 }
 

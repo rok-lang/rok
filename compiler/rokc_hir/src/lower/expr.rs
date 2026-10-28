@@ -4727,7 +4727,7 @@ fn generic_fn_args_from_slot(ctx: &LowerCtx<'_>, def: &FnDef) -> Option<HashMap<
 }
 
 /// Does AST type `ty` name `name` (a type parameter)?
-fn ast_ty_mentions(ty: &Ty, name: &str) -> bool {
+pub(super) fn ast_ty_mentions(ty: &Ty, name: &str) -> bool {
     let rec = |t: &Ty| ast_ty_mentions(t, name);
     match &ty.kind {
         AstTyKind::Path(p) => p

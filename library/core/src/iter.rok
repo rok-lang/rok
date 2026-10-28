@@ -76,6 +76,54 @@ pub trait Iterator {
         Peekable { it: self, peeked: none, has: false }
     }
 
+    /// The items before the first one `pred` rejects; that one is used
+    /// up and nothing after it is taken.
+    const fn take_while(self, pred: fn(Item) -> bool) -> TakeWhile<Self> {
+        TakeWhile { it: self, pred: pred, done: false }
+    }
+
+    /// The items from the first one `pred` rejects on.
+    const fn skip_while(self, pred: fn(Item) -> bool) -> SkipWhile<Self> {
+        SkipWhile { it: self, pred: pred, done: false }
+    }
+
+    /// The running state: `f(init, x0)`, then `f` of that and `x1`, and
+    /// so on (`fold` that yields each step).
+    const fn scan<S>(self, init: S, f: fn(S, Item) -> S) -> Scan<Self, S> {
+        Scan { it: self, state: init, f: f }
+    }
+
+    /// The same items, each passed to `f` first (for side effects).
+    const fn inspect(self, f: fn(Item)) -> InspectIter<Self> {
+        InspectIter { it: self, f: f }
+    }
+
+    /// The items over and over, restarting from a copy of this
+    /// iterator; empty if it is empty.
+    const fn cycle(self) -> Cycle<Self> {
+        Cycle { orig: self, it: self }
+    }
+
+    /// Lists of `size` items in order, the last one shorter when the
+    /// items run out (`size` > 0).
+    #[track_caller]
+    const fn chunks(self, size: usize) -> Chunks<Self> {
+        if size == 0 {
+            panic("Iterator::chunks: size must be positive, e.g. `chunks(2)`");
+        }
+        Chunks { it: self, size: size }
+    }
+
+    /// Lists of `size` consecutive items, sliding by one (`size` > 0);
+    /// nothing when there are fewer than `size` items.
+    #[track_caller]
+    const fn windows(self, size: usize) -> Windows<Self> {
+        if size == 0 {
+            panic("Iterator::windows: size must be positive, e.g. `windows(2)`");
+        }
+        Windows { it: self, size: size, win: List::new(), started: false }
+    }
+
     /// The number of items left when that is known without stepping
     /// (no item is computed), else `none`. `count` uses it.
     const fn exact_len(self) -> usize | none { none }
@@ -116,6 +164,49 @@ pub trait Iterator {
             acc = f(acc, x);
         }
         acc
+    }
+
+    /// `fold` with a throwing `f`: the first error stops the loop and is
+    /// thrown.
+    const fn try_fold<B, E>(self, init: B, f: fn(B, Item) throws (E) -> B) throws (E) -> B {
+        let acc = init;
+        for x in self {
+            acc = try f(acc, x);
+        }
+        acc
+    }
+
+    /// `for_each` with a throwing `f`: the first error stops the loop and
+    /// is thrown.
+    const fn try_for_each<E>(self, f: fn(Item) throws (E)) throws (E) {
+        for x in self {
+            try f(x);
+        }
+    }
+
+    /// The items `pred` accepts, then the rest, each in order.
+    const fn partition(self, pred: fn(Item) -> bool) -> (List<Item>, List<Item>) {
+        let yes: List<Item> = List::new();
+        let no: List<Item> = List::new();
+        for x in self {
+            if pred(x) {
+                yes.push(x);
+            } else {
+                no.push(x);
+            }
+        }
+        (yes, no)
+    }
+
+    /// The pairs split into a list of firsts and a list of seconds.
+    const fn unzip<A, B>(self) -> (List<A>, List<B>) where Self: Iterator<Item = (A, B)> {
+        let left: List<A> = List::new();
+        let right: List<B> = List::new();
+        for (a, b) in self {
+            left.push(a);
+            right.push(b);
+        }
+        (left, right)
     }
 
     /// The items combined left to right with `f`; `none` for none.
@@ -691,6 +782,213 @@ impl<I: DoubleEndedIterator + ExactSizeIterator> DoubleEndedIterator for Skip<I>
             return none;
         }
         self.it.next_back()
+    }
+}
+
+pub struct TakeWhile<I> {
+    it: I;
+    pred: fn(I::Item) -> bool;
+    /// `pred` rejected an item: no more are taken.
+    done: bool;
+}
+
+impl<I: Iterator> Iterator for TakeWhile<I> {
+    type Item = I::Item;
+    const fn next(ref self) -> I::Item | none {
+        if self.done {
+            return none;
+        }
+        let x = self.it.next()?;
+        if (self.pred)(x) {
+            return x;
+        }
+        self.done = true;
+        none
+    }
+}
+
+pub struct SkipWhile<I> {
+    it: I;
+    pred: fn(I::Item) -> bool;
+    /// An item passed `pred`'s test: the rest go through unchecked.
+    done: bool;
+}
+
+impl<I: Iterator> Iterator for SkipWhile<I> {
+    type Item = I::Item;
+    const fn next(ref self) -> I::Item | none {
+        if self.done {
+            return self.it.next();
+        }
+        while let x: I::Item = self.it.next() {
+            if !(self.pred)(x) {
+                self.done = true;
+                return x;
+            }
+        }
+        none
+    }
+}
+
+pub struct Scan<I, S> {
+    it: I;
+    state: S;
+    f: fn(S, I::Item) -> S;
+}
+
+impl<I: Iterator, S> Iterator for Scan<I, S> {
+    type Item = S;
+    const fn next(ref self) -> S | none {
+        let s = (self.f)(self.state, self.it.next()?);
+        self.state = s;
+        s
+    }
+
+    const fn exact_len(self) -> usize | none { self.it.exact_len() }
+
+    /// As many as the inner iterator: O(1) over an `ExactSizeIterator` (2.7.10).
+    const fn count(self) -> usize { self.it.count() }
+}
+
+impl<I: ExactSizeIterator, S> ExactSizeIterator for Scan<I, S> {
+    const fn len(self) -> usize { self.it.len() }
+}
+
+/// `inspect`'s adapter (`Inspect` is the reflection trait).
+pub struct InspectIter<I> {
+    it: I;
+    f: fn(I::Item);
+}
+
+// No `count` override: counting a stepped inner iterator runs `f`.
+impl<I: Iterator> Iterator for InspectIter<I> {
+    type Item = I::Item;
+    const fn next(ref self) -> I::Item | none {
+        let x = self.it.next()?;
+        (self.f)(x);
+        x
+    }
+
+    const fn exact_len(self) -> usize | none { self.it.exact_len() }
+}
+
+impl<I: DoubleEndedIterator> DoubleEndedIterator for InspectIter<I> {
+    const fn next_back(ref self) -> I::Item | none {
+        let x = self.it.next_back()?;
+        (self.f)(x);
+        x
+    }
+}
+
+impl<I: ExactSizeIterator> ExactSizeIterator for InspectIter<I> {
+    const fn len(self) -> usize { self.it.len() }
+}
+
+pub struct Cycle<I> {
+    /// The iterator as `cycle` got it: each round restarts from a copy.
+    orig: I;
+    it: I;
+}
+
+impl<I: Iterator> Iterator for Cycle<I> {
+    type Item = I::Item;
+    const fn next(ref self) -> I::Item | none {
+        if let x: I::Item = self.it.next() {
+            return x;
+        }
+        // One restart per call: an empty iterator ends the cycle.
+        self.it = self.orig;
+        self.it.next()
+    }
+
+    /// 0 for an empty iterator; else endless.
+    const fn exact_len(self) -> usize | none {
+        if let n: usize = self.orig.exact_len() {
+            if n == 0 {
+                return 0;
+            }
+        }
+        none
+    }
+}
+
+pub struct Chunks<I> {
+    it: I;
+    size: usize;
+}
+
+impl<I: Iterator> Iterator for Chunks<I> {
+    type Item = List<I::Item>;
+    const fn next(ref self) -> List<I::Item> | none {
+        let first = self.it.next()?;
+        let out: List<I::Item> = List::with_capacity(self.size);
+        out.push(first);
+        while out.len() < self.size {
+            if let x: I::Item = self.it.next() {
+                out.push(x);
+            } else {
+                break;
+            }
+        }
+        out
+    }
+
+    const fn exact_len(self) -> usize | none {
+        let n = self.it.exact_len()?;
+        n / self.size + if n % self.size == 0 { 0 } else { 1 }
+    }
+}
+
+impl<I: ExactSizeIterator> ExactSizeIterator for Chunks<I> {
+    const fn len(self) -> usize {
+        let n = self.it.len();
+        n / self.size + if n % self.size == 0 { 0 } else { 1 }
+    }
+}
+
+pub struct Windows<I> {
+    it: I;
+    size: usize;
+    /// The last window yielded; each step builds a new list, so a
+    /// yielded window never changes.
+    win: List<I::Item>;
+    started: bool;
+}
+
+impl<I: Iterator> Iterator for Windows<I> {
+    type Item = List<I::Item>;
+    const fn next(ref self) -> List<I::Item> | none {
+        if !self.started {
+            self.started = true;
+            let w: List<I::Item> = List::with_capacity(self.size);
+            while w.len() < self.size {
+                w.push(self.it.next()?);
+            }
+            self.win = w;
+            return w;
+        }
+        if self.win.len() < self.size {
+            return none;
+        }
+        let x = self.it.next()?;
+        let w: List<I::Item> = List::with_capacity(self.size);
+        for i in 1..self.size {
+            w.push(self.win[i]);
+        }
+        w.push(x);
+        self.win = w;
+        w
+    }
+
+    const fn exact_len(self) -> usize | none {
+        if self.started {
+            if self.win.len() < self.size {
+                return 0;
+            }
+            return self.it.exact_len();
+        }
+        let n = self.it.exact_len()?;
+        if n < self.size { 0 } else { n - self.size + 1 }
     }
 }
 

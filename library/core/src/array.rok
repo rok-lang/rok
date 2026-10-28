@@ -86,4 +86,56 @@ impl<T, const N: usize> [T; N] {
     /// The element count `N`.
     pub const fn len(self) -> usize { N }
     pub const fn is_empty(self) -> bool { N == 0 }
+
+    /// The elements front to back, over a copy (arrays are values).
+    pub const fn iter(self) -> SliceIter<T> {
+        self[:].iter()
+    }
+
+    pub const fn first(self) -> T | none {
+        if N == 0 {
+            return none;
+        }
+        self[0]
+    }
+
+    pub const fn last(self) -> T | none {
+        if N == 0 {
+            return none;
+        }
+        // `N - 1` is a constant overflow at `N = 0`, even behind the check.
+        self[N.saturating_sub(1)]
+    }
+
+    /// A new array of `f` applied to each element, in order.
+    pub const fn map<U>(self, f: fn(T) -> U) -> [U; N] {
+        unsafe {
+            // A zero `U` fills the slots until `f` writes each one.
+            let zero: GcBuf<U> = buf_new(1);
+            let out = [zero[0]; N];
+            for i in 0..N {
+                out[i] = f(self[i]);
+            }
+            out
+        }
+    }
+
+    /// Overwrite every element with `x`, in place.
+    pub const fn fill(ref self, x: T) {
+        for i in 0..N {
+            self[i] = x;
+        }
+    }
+}
+
+impl<T: PartialEq, const N: usize> [T; N] {
+    /// `true` when an element equals `x`.
+    pub const fn contains(self, x: T) -> bool {
+        for i in 0..N {
+            if self[i] == x {
+                return true;
+            }
+        }
+        false
+    }
 }
