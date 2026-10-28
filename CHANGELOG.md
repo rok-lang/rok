@@ -1,12 +1,5 @@
 # Changelog
 
-## Unreleased
-
-- `rok::core::encoding`: `hex_encode`, `hex_decode`, `base64_encode` and `base64_decode`,
-  standard or url-safe, padded or not; a decode error names the byte offset and the fix.
-- `str` gains `splitn`, `rsplit`, `rsplitn`, `match_indices`, `trim_matches`,
-  `trim_start_matches` and `trim_end_matches`, all sharing the source's bytes.
-
 ## 0.1.2 (2026-10-28)
 
 - Dict spread: a defaulted parameter the dict's value type cannot fill takes its default;
