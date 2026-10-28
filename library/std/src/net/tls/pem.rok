@@ -3,43 +3,6 @@
 
 use sup::TlsError;
 
-const fn sextet(c: u8) -> i32 {
-    if c >= 0x41u8 && c <= 0x5au8 { return (c - 0x41u8) as i32; }
-    if c >= 0x61u8 && c <= 0x7au8 { return (c - 0x61u8) as i32 + 26; }
-    if c >= 0x30u8 && c <= 0x39u8 { return (c - 0x30u8) as i32 + 52; }
-    if c == 0x2bu8 { return 62; }
-    if c == 0x2fu8 { return 63; }
-    -1
-}
-
-/// Standard base64 with padding; whitespace is skipped.
-pub(pkg) fn base64_decode(s: str) throws (TlsError) -> List<u8> {
-    let out: List<u8> = [];
-    let acc = 0u32;
-    let bits = 0u32;
-    let pad = 0;
-    for c in s.bytes() {
-        if c == 0x20u8 || c == 0x0au8 || c == 0x0du8 || c == 0x09u8 { continue; }
-        if c == 0x3du8 {
-            pad += 1;
-            continue;
-        }
-        let v = sextet(c);
-        if v < 0 || pad > 0 { throw TlsError::certificate("PEM: bad base64"); }
-        acc = (acc << 6) | (v as u32);
-        bits += 6;
-        if bits >= 8 {
-            bits -= 8;
-            out.push((acc >> bits) as u8);
-            acc = acc & ((1u32 << bits) - 1u32);
-        }
-    }
-    if bits != 2u32 * (pad as u32) || pad > 2 {
-        throw TlsError::certificate("PEM: bad base64 padding");
-    }
-    out
-}
-
 /// The DER of every block labelled `label`, in order.
 pub(pkg) fn blocks(text: str, label: str) throws (TlsError) -> List<List<u8>> {
     let begin = f"-----BEGIN {label}-----";
@@ -54,7 +17,8 @@ pub(pkg) fn blocks(text: str, label: str) throws (TlsError) -> List<List<u8>> {
         let stop = tail.find(end);
         if stop is none { throw TlsError::certificate(f"PEM: unterminated {label}"); }
         let s = stop ?? 0;
-        out.push(try base64_decode(tail[0:s]));
+        let body: str = tail[0:s].split_whitespace().collect();
+        out.push(try base64_decode(body) catch e { throw TlsError::certificate(f"PEM {label}: {e.msg}"); });
         rest = tail[s + end.len():tail.len()];
     }
     out

@@ -2,8 +2,8 @@
 //
 // `str` is an immutable `(ptr, len)` value (2.15.1): literals are static
 // bytes, run-time strings GC objects, and a slice shares its source's
-// bytes, so slicing, `lines`, `split*`, `trim*` and `strip_*` copy
-// nothing. `StrBuf` is the growable buffer.
+// bytes, so slicing, `lines`, `split*`, `match_indices`, `trim*` and
+// `strip_*` copy nothing. `StrBuf` is the growable buffer.
 
 use rok::core::marker::{Memo, Transfer, buf_is_null};
 
@@ -126,6 +126,22 @@ impl str {
     pub const fn trim(self) -> str { unsafe { rok_str_trim(self, 0) } }
     pub const fn trim_start(self) -> str { unsafe { rok_str_trim(self, 1) } }
     pub const fn trim_end(self) -> str { unsafe { rok_str_trim(self, 2) } }
+    /// `self` without every leading and trailing repeat of `pat`.
+    pub const fn trim_matches(self, pat: str) -> str { self.trim_start_matches(pat).trim_end_matches(pat) }
+    pub const fn trim_start_matches(self, pat: str) -> str {
+        let m = pat.len();
+        if m == 0 { return self; }
+        let i = 0usize;
+        while i + m <= self.len() && unsafe { rok_str_eq_at(self, i, pat) } != 0 { i += m; }
+        self[i:]
+    }
+    pub const fn trim_end_matches(self, pat: str) -> str {
+        let m = pat.len();
+        if m == 0 { return self; }
+        let j = self.len();
+        while j >= m && unsafe { rok_str_eq_at(self, j - m, pat) } != 0 { j -= m; }
+        self[:j]
+    }
 
     /// Full Unicode case mapping (`"ß"` → `"SS"`, final `σ` → `ς`); no
     /// locale rules.
@@ -140,6 +156,19 @@ impl str {
     /// The pieces between occurrences of `sep` (all of them, empty ones
     /// included).
     pub const fn split(self, sep: str) -> SplitIter { SplitIter { rest: self, sep: sep, done: false } }
+    /// At most `n` pieces split on `sep` from the start; the last one is
+    /// the unsplit rest (`n == 0` yields nothing).
+    pub const fn splitn(self, n: usize, sep: str) -> SplitNIter { SplitNIter { rest: self, sep: sep, left: n } }
+    /// The pieces `split` yields, last first.
+    pub const fn rsplit(self, sep: str) -> RSplitIter { RSplitIter { rest: self, sep: sep, done: false } }
+    /// At most `n` pieces split on `sep` from the end, last first; the
+    /// final one is the unsplit start.
+    pub const fn rsplitn(self, n: usize, sep: str) -> RSplitNIter { RSplitNIter { rest: self, sep: sep, left: n } }
+    /// `(byte offset, match)` for each non-overlapping `pat`, left to
+    /// right; an empty `pat` matches nothing.
+    pub const fn match_indices(self, pat: str) -> MatchIndicesIter {
+        MatchIndicesIter { s: self, pat: pat, pos: 0 }
+    }
     /// Lines without their `\n` / `\r\n`; a final line ending adds no
     /// empty line.
     pub const fn lines(self) -> LinesIter { LinesIter { rest: self } }
@@ -257,6 +286,101 @@ impl Iterator for SplitIter {
         let piece = self.rest[:i];
         self.rest = self.rest[i + self.sep.len():];
         piece
+    }
+}
+
+pub struct SplitNIter {
+    rest: str;
+    sep: str;
+    left: usize;
+}
+
+impl Iterator for SplitNIter {
+    type Item = str;
+    const fn next(ref self) -> str | none {
+        if self.left == 0 { return none; }
+        self.left -= 1;
+        let at = unsafe { rok_str_find(self.rest, self.sep) };
+        if self.left == 0 || at < 0 || self.sep.len() == 0 {
+            self.left = 0;
+            return self.rest;
+        }
+        let i = at as usize;
+        let piece = self.rest[:i];
+        self.rest = self.rest[i + self.sep.len():];
+        piece
+    }
+}
+
+pub struct RSplitIter {
+    rest: str;
+    sep: str;
+    done: bool;
+}
+
+impl Iterator for RSplitIter {
+    type Item = str;
+    const fn next(ref self) -> str | none {
+        if self.done { return none; }
+        if self.sep.len() == 0 {
+            self.done = true;
+            return self.rest;
+        }
+        let at = unsafe { rok_str_rfind(self.rest, self.sep) };
+        if at < 0 {
+            self.done = true;
+            return self.rest;
+        }
+        let i = at as usize;
+        let piece = self.rest[i + self.sep.len():];
+        self.rest = self.rest[:i];
+        piece
+    }
+}
+
+pub struct RSplitNIter {
+    rest: str;
+    sep: str;
+    left: usize;
+}
+
+impl Iterator for RSplitNIter {
+    type Item = str;
+    const fn next(ref self) -> str | none {
+        if self.left == 0 { return none; }
+        self.left -= 1;
+        if self.left == 0 || self.sep.len() == 0 {
+            self.left = 0;
+            return self.rest;
+        }
+        let at = unsafe { rok_str_rfind(self.rest, self.sep) };
+        if at < 0 {
+            self.left = 0;
+            return self.rest;
+        }
+        let i = at as usize;
+        let piece = self.rest[i + self.sep.len():];
+        self.rest = self.rest[:i];
+        piece
+    }
+}
+
+pub struct MatchIndicesIter {
+    s: str;
+    pat: str;
+    pos: usize;
+}
+
+impl Iterator for MatchIndicesIter {
+    type Item = (usize, str);
+    const fn next(ref self) -> (usize, str) | none {
+        let m = self.pat.len();
+        if m == 0 { return none; }
+        let at = unsafe { rok_str_find(self.s[self.pos:], self.pat) };
+        if at < 0 { return none; }
+        let i = self.pos + at as usize;
+        self.pos = i + m;
+        (i, self.s[i:i + m])
     }
 }
 

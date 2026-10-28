@@ -1,0 +1,69 @@
+// spec: std 215-string §2.15.2
+// expect-exit: 0
+// expect-stdout:
+// splitn 0:
+// splitn 1: [a,b,c]
+// splitn 2: [a] [b,c]
+// splitn 9: [a] [b] [c]
+// splitn empty: [] | sep "": [abc] | miss: [abc]
+// rsplit: [c] [] [a] | empty: [] | miss: [abc]
+// rsplitn 0:
+// rsplitn 1: [a.b.c]
+// rsplitn 2: [c] [a.b]
+// rsplitn 9: [c] [b] [a]
+// rsplitn utf8: [밤] [낮,해]
+// match: 0:ab 3:ab 6:ab
+// overlap: 0:aa 2:aa
+// match empty pat: | none: | utf8: 3:세 9:세
+// trim [x] start [x--] end [--x]
+// all [] [] [] | none [abc] | empty pat [aa] | pair [a]
+// trim utf8 [가] [가나나] [나나가]
+// shared true
+
+// spec 2.15.2: `splitn` / `rsplitn` cap the piece count and leave the
+// rest unsplit, `rsplit` walks from the end, `match_indices` yields
+// non-overlapping byte offsets, `trim*_matches` strip repeats of a str.
+fn show<I: Iterator<Item = str>>(it: I) -> str {
+    let out = "";
+    for p in it { out += f" [{p}]"; }
+    out
+}
+
+fn main() {
+    println(f"splitn 0:{show("a,b,c".splitn(0, ","))}");
+    println(f"splitn 1:{show("a,b,c".splitn(1, ","))}");
+    println(f"splitn 2:{show("a,b,c".splitn(2, ","))}");
+    println(f"splitn 9:{show("a,b,c".splitn(9, ","))}");
+    println(f"splitn empty:{show("".splitn(3, ","))} | sep \"\":{show("abc".splitn(3, ""))} | miss:{show("abc".splitn(3, ","))}");
+    println(f"rsplit:{show("a,,c".rsplit(","))} | empty:{show("".rsplit(","))} | miss:{show("abc".rsplit(","))}");
+    println(f"rsplitn 0:{show("a.b.c".rsplitn(0, "."))}");
+    println(f"rsplitn 1:{show("a.b.c".rsplitn(1, "."))}");
+    println(f"rsplitn 2:{show("a.b.c".rsplitn(2, "."))}");
+    println(f"rsplitn 9:{show("a.b.c".rsplitn(9, "."))}");
+    println(f"rsplitn utf8:{show("낮,해,밤".rsplitn(2, ","))}");
+
+    let out = "match:";
+    for (i, m) in "ab-ab-ab".match_indices("ab") { out += f" {i}:{m}"; }
+    println(out);
+    out = "overlap:";
+    for (i, m) in "aaaaa".match_indices("aa") { out += f" {i}:{m}"; }
+    println(out);
+    out = "match empty pat:";
+    for (i, m) in "abc".match_indices("") { out += f" {i}:{m}"; }
+    out += " | none:";
+    for (i, m) in "abc".match_indices("z") { out += f" {i}:{m}"; }
+    out += " | utf8:";
+    for (i, m) in "가세나세".match_indices("세") { out += f" {i}:{m}"; }
+    println(out);
+
+    let s = "--x--";
+    println(f"trim [{s.trim_matches("-")}] start [{s.trim_start_matches("-")}] end [{s.trim_end_matches("-")}]");
+    println(f"all [{"----".trim_matches("-")}] [{"abab".trim_start_matches("ab")}] [{"abab".trim_end_matches("ab")}] | none [{"abc".trim_matches("x")}] | empty pat [{"aa".trim_matches("")}] | pair [{"aaa".trim_matches("aa")}]");
+    println(f"trim utf8 [{"나나가나나".trim_matches("나")}] [{"가나나".trim_start_matches("나")}] [{"나나가".trim_end_matches("나")}]");
+
+    // A piece shares the source's bytes: its address is inside them.
+    let src = "key=value=more";
+    let tail = "";
+    for p in src.splitn(2, "=") { tail = p; }
+    println(f"shared {tail.as_ptr().addr() == src.as_ptr().addr() + 4}");
+}

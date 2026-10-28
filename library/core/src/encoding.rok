@@ -1,0 +1,142 @@
+// rok::core::encoding - bytes as text: hex and base64 (RFC 4648).
+// Encoders return `str`; decoders return `List<u8>` and throw
+// `ValueError` naming the byte offset of the first bad character.
+
+const HEX_DIGITS: str = "0123456789abcdef";
+const BASE64_STD: str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+const BASE64_URL: str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+/// `data` as lowercase hex, two digits per byte.
+pub fn hex_encode(data: List<u8> | Slice<u8> | str) -> str {
+    let b = bytes_of(data);
+    let out = StrBuf::with_capacity(2 * b.len());
+    for x in b {
+        out.push(HEX_DIGITS.byte((x >> 4) as usize) as char);
+        out.push(HEX_DIGITS.byte((x & 0x0fu8) as usize) as char);
+    }
+    out.to_str()
+}
+
+/// The bytes `text` spells in hex, two digits each (either case).
+pub fn hex_decode(text: List<u8> | Slice<u8> | str) throws (ValueError) -> List<u8> {
+    let t = bytes_of(text);
+    let n = t.len();
+    if n % 2 != 0 {
+        throw ValueError { msg: f"hex: odd length {n}; every byte takes two digits, so write \"0f\" rather than \"f\"" };
+    }
+    let out: List<u8> = List::with_capacity(n / 2);
+    let i = 0usize;
+    while i < n {
+        let hi = hex_value(t[i]);
+        if hi < 0 { throw bad_hex(t[i], i); }
+        let lo = hex_value(t[i + 1]);
+        if lo < 0 { throw bad_hex(t[i + 1], i + 1); }
+        out.push(((hi << 4) | lo) as u8);
+        i += 2;
+    }
+    out
+}
+
+/// `data` in base64: the standard alphabet (`+` `/`), or with
+/// `url_safe` the URL and file name one (`-` `_`); `=` pads the last
+/// group to four characters unless `pad` is false.
+pub fn base64_encode(data: List<u8> | Slice<u8> | str, url_safe: bool = false, pad: bool = true) -> str {
+    let b = bytes_of(data);
+    let abc = if url_safe { BASE64_URL } else { BASE64_STD };
+    let n = b.len();
+    let out = StrBuf::with_capacity((n + 2) / 3 * 4);
+    let i = 0usize;
+    while i + 3 <= n {
+        let w = ((b[i] as u32) << 16) | ((b[i + 1] as u32) << 8) | (b[i + 2] as u32);
+        for k in 0..4 { out.push(abc.byte(((w >> (18 - 6 * k) as u32) & 63u32) as usize) as char); }
+        i += 3;
+    }
+    let rest = n - i;
+    if rest > 0 {
+        let w = (b[i] as u32) << 16;
+        if rest == 2 { w = w | ((b[i + 1] as u32) << 8); }
+        for k in 0..rest + 1 { out.push(abc.byte(((w >> (18 - 6 * k) as u32) & 63u32) as usize) as char); }
+        if pad {
+            for _ in rest..3 { out.push('='); }
+        }
+    }
+    out.to_str()
+}
+
+/// The bytes `text` spells in base64, padded or not; `url_safe` picks
+/// the alphabet as for `base64_encode`. Whitespace is not skipped.
+pub fn base64_decode(text: List<u8> | Slice<u8> | str, url_safe: bool = false) throws (ValueError) -> List<u8> {
+    let t = bytes_of(text);
+    let n = t.len();
+    let end = n;
+    // At most two `=`: a third is reported where it stands.
+    while end > 0 && n - end < 2 && t[end - 1] == 0x3du8 { end -= 1; }
+    let out: List<u8> = List::with_capacity(end / 4 * 3 + 2);
+    let acc = 0u32;
+    let bits = 0u32;
+    for i in 0..end {
+        let v = sextet(t[i], url_safe);
+        if v < 0 { throw bad_base64(t[i], i, url_safe); }
+        acc = (acc << 6) | (v as u32);
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((acc >> bits) as u8);
+            acc = acc & ((1u32 << bits) - 1u32);
+        }
+    }
+    if end < n && n % 4 != 0 {
+        throw ValueError { msg: f"base64: padded text must be a multiple of 4 characters long, not {n}; fix the '=' count or drop the padding" };
+    }
+    if end % 4 == 1 {
+        throw ValueError { msg: f"base64: text is cut short at byte {end - 1}; a last group needs 2 to 4 characters" };
+    }
+    out
+}
+
+const fn bytes_of(b: List<u8> | Slice<u8> | str) -> Slice<u8> {
+    match b {
+        l: List<u8> => l[0:l.len()],
+        s: Slice<u8> => s,
+        t: str => t.as_bytes(),
+    }
+}
+
+const fn hex_value(c: u8) -> i32 {
+    if c >= 0x30u8 && c <= 0x39u8 { return (c - 0x30u8) as i32; }
+    if c >= 0x61u8 && c <= 0x66u8 { return (c - 0x61u8) as i32 + 10; }
+    if c >= 0x41u8 && c <= 0x46u8 { return (c - 0x41u8) as i32 + 10; }
+    -1
+}
+
+const fn sextet(c: u8, url_safe: bool) -> i32 {
+    if c >= 0x41u8 && c <= 0x5au8 { return (c - 0x41u8) as i32; }
+    if c >= 0x61u8 && c <= 0x7au8 { return (c - 0x61u8) as i32 + 26; }
+    if c >= 0x30u8 && c <= 0x39u8 { return (c - 0x30u8) as i32 + 52; }
+    if c == (if url_safe { 0x2du8 } else { 0x2bu8 }) { return 62; }
+    if c == (if url_safe { 0x5fu8 } else { 0x2fu8 }) { return 63; }
+    -1
+}
+
+/// `c` for a message: quoted when printable ASCII, else its value.
+const fn shown(c: u8) -> str {
+    if c > 0x20u8 && c < 0x7fu8 { return f"'{c as char}'"; }
+    f"byte 0x{c:02x}"
+}
+
+const fn bad_hex(c: u8, at: usize) -> ValueError {
+    ValueError { msg: f"hex: {shown(c)} at byte {at} is not a hex digit; use 0-9, a-f or A-F" }
+}
+
+const fn bad_base64(c: u8, at: usize, url_safe: bool) -> ValueError {
+    let head = f"base64: {shown(c)} at byte {at}";
+    if c == 0x3du8 { return ValueError { msg: f"{head}: '=' pads only the end of the text" }; }
+    if !url_safe && (c == 0x2du8 || c == 0x5fu8) {
+        return ValueError { msg: f"{head} is url-safe base64; decode with url_safe: true" };
+    }
+    if url_safe && (c == 0x2bu8 || c == 0x2fu8) {
+        return ValueError { msg: f"{head} is standard base64; decode with url_safe: false" };
+    }
+    let extra = if url_safe { "- and _" } else { "+ and /" };
+    ValueError { msg: f"{head} is not base64; use A-Z, a-z, 0-9, {extra}" }
+}

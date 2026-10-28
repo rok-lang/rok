@@ -1,0 +1,62 @@
+// spec: std 222-encoding §2.22.1 §2.22.2
+// expect-exit: 0
+// expect-stdout:
+// hex [] [66] [666f] [666f6f] [666f6f62] [666f6f6261] [666f6f626172]
+// hex bytes 00ff10 00ff10 e29c93
+// unhex [] [f] [fo] [foo] [foob] [fooba] [foobar]
+// unhex upper foobar mixed [222, 173, 190, 239]
+// b64 [] [Zg==] [Zm8=] [Zm9v] [Zm9vYg==] [Zm9vYmE=] [Zm9vYmFy]
+// nopad [] [Zg] [Zm8] [Zm9v] [Zm9vYg] [Zm9vYmE] [Zm9vYmFy]
+// unb64 [] [f] [fo] [foo] [foob] [fooba] [foobar]
+// unb64 nopad [] [f] [fo] [foo] [foob] [fooba] [foobar]
+// url +/+/ -_-_ -_-_ [251, 255, 191] [251, 255, 191]
+// url pad +/8= -_8= -_8
+// round 256 true true true true
+// utf8 7JWI64WV 안녕
+
+// RFC 4648 section 10 vectors for base16 and base64, padded and not,
+// the url-safe alphabet (section 5), and all 256 byte values round trip.
+fn utf8(b: List<u8>) -> str { try! str::from_utf8(b) }
+
+fn main() {
+    let words = ["", "f", "fo", "foo", "foob", "fooba", "foobar"];
+    let out = "hex";
+    for w in words { out += f" [{hex_encode(w)}]"; }
+    println(out);
+    let raw: List<u8> = [0u8, 255u8, 16u8];
+    println(f"hex bytes {hex_encode(raw)} {hex_encode(raw[0:3])} {hex_encode("✓")}");
+    out = "unhex";
+    for w in words { out += f" [{utf8(try! hex_decode(hex_encode(w)))}]"; }
+    println(out);
+    println(f"unhex upper {utf8(try! hex_decode("666F6F626172"))} mixed {try! hex_decode("dEaDbEeF"):?}");
+
+    out = "b64";
+    for w in words { out += f" [{base64_encode(w)}]"; }
+    println(out);
+    out = "nopad";
+    for w in words { out += f" [{base64_encode(w, pad: false)}]"; }
+    println(out);
+    out = "unb64";
+    for w in words { out += f" [{utf8(try! base64_decode(base64_encode(w)))}]"; }
+    println(out);
+    out = "unb64 nopad";
+    for w in words { out += f" [{utf8(try! base64_decode(base64_encode(w, pad: false)))}]"; }
+    println(out);
+
+    let u: List<u8> = [251u8, 255u8, 191u8];
+    let std = base64_encode(u);
+    let url = base64_encode(u, url_safe: true);
+    let url2 = base64_encode(u, true, false);
+    println(f"url {std} {url} {url2} {try! base64_decode(std):?} {try! base64_decode(url, url_safe: true):?}");
+    let v: List<u8> = [251u8, 255u8];
+    println(f"url pad {base64_encode(v)} {base64_encode(v, url_safe: true)} {base64_encode(v, url_safe: true, pad: false)}");
+
+    let all: List<u8> = [];
+    for i in 0..256 { all.push(i as u8); }
+    let h = try! hex_decode(hex_encode(all)) == all;
+    let b = try! base64_decode(base64_encode(all)) == all;
+    let bu = try! base64_decode(base64_encode(all, url_safe: true, pad: false), url_safe: true) == all;
+    let sl = try! base64_decode(base64_encode(all[1:255])) == all[1:255].to_list();
+    println(f"round {all.len()} {h} {b} {bu} {sl}");
+    println(f"utf8 {base64_encode("안녕")} {utf8(try! base64_decode("7JWI64WV".as_bytes()))}");
+}
