@@ -20,7 +20,7 @@
 param([string]$Archive, [string]$Version, [switch]$NoModifyPath, [switch]$Quiet, [switch]$Verbose)
 $ErrorActionPreference = 'Stop'
 
-if (-not $Version) { $Version = if ($env:ROK_VERSION) { $env:ROK_VERSION } else { '0.1.1' } }
+if (-not $Version) { $Version = if ($env:ROK_VERSION) { $env:ROK_VERSION } else { '0.1.2' } }
 $dist = if ($env:ROK_DIST) { $env:ROK_DIST } else { 'https://github.com/rok-lang/rok/releases' }
 $home_ = if ($env:ROK_HOME) { $env:ROK_HOME } else { Join-Path $env:USERPROFILE '.rok' }
 $color = -not $env:NO_COLOR

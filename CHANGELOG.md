@@ -1,9 +1,35 @@
 # Changelog
 
-## Unreleased
+## 0.1.2 (2026-10-28)
 
-- An unreadable `config.rokon` (permissions, not UTF-8) is an error, no longer read as empty or
-  overwritten by `rok toolchain default`.
+- Dict spread: a defaulted parameter the dict's value type cannot fill takes its default;
+  a key naming it panics.
+- Clearer errors: an `if` in a typed slot names the branch that does not fit; a bare `break`
+  mixed with `break <value>`, misordered fn modifiers and `mod x;` without a folder say what
+  to write.
+- One item imported through a re-export and directly is no longer a conflict; a real clash
+  suggests an alias.
+- An unimported type in an annotation is one error, without its cascade.
+- A static initialized from itself through other statics is a compile error.
+- A meta attribute named like a built-in (`bench`, `path`, ...) warns; it becomes an error
+  in 0.2.0.
+- Collections: `BinaryHeap` gains `IntoIterator`, `Debug`, `Clone`, `Default`, `FromIterator`
+  and an in-place `retain`; `clear` on `Dict`, `Set`, `OrderedSet`; `+=` on `Set`,
+  `OrderedSet`, `Deque`, `OrderedDict`; `Deque` gains `Clone`, `PartialEq`, `Eq`,
+  `FromIterator`; `OrderedDict` and `OrderedSet` gain `Eq` and `Hash`; `Dict::from` and
+  `Set::from` through `From`.
+- `Iterator::exact_len`; `count()` on exact-size adapters no longer runs the pipeline.
+- `ManyPtr::cast`; `ClientConfig::try_new` throws when the system roots cannot be read.
+- Package metadata in `rok.rokon`: `authors`, `homepage`, `documentation`, `readme`,
+  `keywords`, `publish`; `publish: false` refuses `rok publish`.
+- An unreadable `config.rokon` (permissions, not UTF-8) is an error, no longer read as empty
+  or overwritten by `rok toolchain default`.
+- The install scripts and `rok toolchain update` print rok's status lines; `-q` and `-v`.
+- The language server refreshes documents after a dependency's buffer changes.
+- The build cache rebuilds when an `include_str!` input disappears.
+- Install through Nix: `nix profile install github:rok-lang/rok`.
+- A read-only toolchain (Nix, system packages) keeps its build cache in the user's cache
+  directory.
 
 ## 0.1.1 (2026-10-27)
 
