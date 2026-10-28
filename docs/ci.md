@@ -8,8 +8,8 @@ the same branch and event cancels the older one.
 | Event | Hosts | Jobs |
 |---|---|---|
 | pull request | linux-x64, windows-x64 | `check`, `test`, `corpus` at `-O0` |
-| merge queue (`merge_group`), push to `main` | linux-x64, linux-arm64, macos-arm64, windows-x64 | `check`, `test`, `corpus` at `-O0` and `-O2` |
-| nightly (`schedule`, 03:17 UTC), manual run | every host | `check`, `test`, `corpus` at `-O0` and `-O2`, `cross-link`, `cross`, `wasm`, `bindgen`, `dist` |
+| merge queue (`merge_group`), push to `main` | linux-x64, linux-arm64, macos-arm64, windows-x64 | `check`, `test`, `corpus` at `-O0` |
+| nightly (`schedule`, 21:00 UTC), manual run | every host | `check`, `test`, `corpus` at `-O0` and `-O2`, `cross-link`, `cross`, `wasm`, `bindgen`, `dist` |
 
 A push to `main` that the merge queue already passed runs `lint` only.
 
@@ -90,4 +90,4 @@ GitHub's.
 
 ## Nightly schedule
 
-The cron schedule runs only where the repository variable `ROK_NIGHTLY` is `on`, so a private copy pays for nightly runs (macOS included) only when it opts in.
+The cron schedule runs only where the repository variable `ROK_NIGHTLY` is `on`, so a private copy pays for nightly runs (macOS included) only when it opts in. rok-lang/rok has it on: `-O2` runs there, not in the merge queue.
