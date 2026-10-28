@@ -1,0 +1,83 @@
+// spec: std §2.12.3
+// expect-exit: 0
+// expect-stdout:
+// owner: str pub=true
+// balance: i64 pub=false
+// i64 9
+// v: f64
+// items: List<f64>
+// v: List<str>
+// items: List<List<str>>
+// 0: i32
+// 1: str | none
+// 0 []
+// inner: Box<Pair>
+// tags: Dict<str, i32>
+// Account Pair Unit
+// ["owner", "balance"] ["0", "1"]
+// 2 owner
+// Box<f64>
+// ["k"] Manual [] 1
+
+// Stdlib 2.12.3: `fields()` lists each field with its instantiated type
+// and whether it is `pub`; private fields are listed too (deriving
+// `Inspect` is the type's consent). Named, tuple, unit, generic and
+// nested structs; a struct's `variant_name()` is its type name. A hand
+// impl of the four original methods gets the rest by default.
+mod bank {
+    #[derive(Inspect)]
+    pub struct Account { pub owner: str; balance: i64; }
+    impl Account {
+        pub fn open(owner: str) -> Account { Account { owner: owner, balance: 9 } }
+    }
+}
+
+#[derive(Inspect)]
+struct Box<T> { v: T; items: List<T>; }
+
+#[derive(Inspect)]
+struct Pair(i32, str | none);
+
+#[derive(Inspect)]
+struct Unit;
+
+#[derive(Inspect)]
+struct Outer { inner: Box<Pair>; tags: Dict<str, i32>; }
+
+struct Manual { k: i32; }
+impl Inspect for Manual {
+    fn field_names() -> List<str> { ["k"] }
+    fn get_field(self, name: str) -> any | none { none }
+    fn set_field(ref self, name: str, value: any) -> bool { false }
+    fn methods() -> List<MethodInfo> { [] }
+}
+
+fn show<T: Inspect>() {
+    for f in T::fields() {
+        println(f"{f.name}: {f.type_name}");
+    }
+}
+
+for f in bank::Account::fields() {
+    println(f"{f.name}: {f.type_name} pub={f.is_pub}");
+}
+let a = bank::Account::open("ann");
+match a.get_field("balance") {
+    v: any => println(f"{v.type_name_of()} {rok::core::reflect::cast::<i64>(v) ?? 0}"),
+    none => println("none"),
+}
+show::<Box<f64>>();
+show::<Box<List<str>>>();
+show::<Pair>();
+println(f"{Unit::fields().len()} {Unit::field_names():?}");
+show::<Outer>();
+println(f"{a.variant_name()} {Pair(1, none).variant_name()} {Unit.variant_name()}");
+println(f"{a.field_names_of():?} {Pair(1, "x").field_names_of():?}");
+let fs = fields_of::<bank::Account>();
+println(f"{fs.len()} {fs[0].name}");
+let b = Box { v: 1.5, items: [2.5] };
+println(b.variant_name());
+let m = Manual { k: 1 };
+println(f"{m.field_names_of():?} {m.variant_name()} {Manual::variant_names():?} {Manual::fields().len()}");
+
+// spec: §6.10.2

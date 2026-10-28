@@ -5535,6 +5535,10 @@ fn unmet_bounds(
             if let (HirTy::Param(_), Some(o)) = (&ty, owner(&name)) {
                 let bound = want.render(leaf_name(&want.path), |t| rcx.ty_name(t));
                 d.notes.push(format!("help: add `{name}: {bound}` to {o}"));
+            } else if want.path == super::reflect::INSPECT {
+                if let Some(h) = super::reflect::derive_inspect_help(&rcx, &ty) {
+                    d.notes.push(format!("help: {h}"));
+                }
             }
             out.push(d);
         }
@@ -6745,6 +6749,7 @@ pub(super) enum Intrinsic {
     Atomic(&'static str),
     AnyCast,
     MethodTable,
+    FieldTable,
     MlirOp,
     MlirAttr,
     /// `rok.transfer`: a hand-off copy of the value (stdlib 2.13.9).
@@ -6786,6 +6791,7 @@ impl Intrinsic {
             "drop_in_place" => Self::DropInPlace,
             "any_cast" => Self::AnyCast,
             "method_table" => Self::MethodTable,
+            "field_table" => Self::FieldTable,
             "mlir.op" => Self::MlirOp,
             "mlir.attr" => Self::MlirAttr,
             "transfer" => Self::Transfer,
