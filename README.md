@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/rok.svg" alt="rok" width="96" height="96">
+  <img src="assets/rok.svg" alt="Rok" width="96" height="96">
 </p>
 
 # Rok

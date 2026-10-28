@@ -909,8 +909,8 @@ fn html_page(title: &str, root: &str, side: &str, body: &str) -> String {
     format!(
         "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n\
          <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n\
-         <title>{} - rok docs</title>\n<link rel=\"stylesheet\" href=\"{root}style.css\">\n\
-         </head>\n<body data-root=\"{root}\">\n<nav class=\"side\"><a class=\"home\" href=\"{root}index.html\">rok docs</a>{side}</nav>\n\
+         <title>{} - Rok docs</title>\n<link rel=\"stylesheet\" href=\"{root}style.css\">\n\
+         </head>\n<body data-root=\"{root}\">\n<nav class=\"side\"><a class=\"home\" href=\"{root}index.html\">Rok docs</a>{side}</nav>\n\
          <main>\n<input id=\"search\" type=\"search\" placeholder=\"Search (type a name)\" autocomplete=\"off\">\n\
          <div id=\"results\"></div>\n<div id=\"content\">\n{body}</div>\n</main>\n\
          <script src=\"{root}search-index.js\"></script>\n<script src=\"{root}search.js\"></script>\n\
