@@ -134,6 +134,37 @@ impl f64 {
         let r = self % rhs;
         if r < 0.0 { r + rhs.abs() } else { r }
     }
+    /// `self` at `t = 0`, `other` at `t = 1`, a straight line between
+    /// and past them: exact at both ends and monotonic in `t` (C++
+    /// `std::lerp`).
+    pub const fn lerp(self, other: f64, t: f64) -> f64 {
+        if (self <= 0.0 && other >= 0.0) || (self >= 0.0 && other <= 0.0) {
+            return t * other + (1.0 - t) * self;
+        }
+        if t == 1.0 { return other; }
+        let x = self + t * (other - self);
+        if x != x { return x; }
+        if (t > 1.0) == (other > self) {
+            if other > x { other } else { x }
+        } else {
+            if other < x { other } else { x }
+        }
+    }
+    /// The next representable value after `self` in the direction of
+    /// `toward` (C `nextafter`); `toward` itself when equal, NaN if
+    /// either is.
+    pub const fn next_after(self, toward: f64) -> f64 {
+        if self != self || toward != toward { return self + toward; }
+        if self == toward { return toward; }
+        if self == 0.0 { return f64::from_bits(1u64).copysign(toward); }
+        let b = self.to_bits();
+        // Away from zero is one bit pattern up, toward zero one down.
+        f64::from_bits(if (toward > self) == (self > 0.0) { b + 1u64 } else { b - 1u64 })
+    }
+    /// The least value greater than `self`; infinity and NaN stay.
+    pub const fn next_up(self) -> f64 { self.next_after(f64::INFINITY) }
+    /// The greatest value less than `self`; -infinity and NaN stay.
+    pub const fn next_down(self) -> f64 { self.next_after(f64::NEG_INFINITY) }
 }
 
 // f32
@@ -266,4 +297,35 @@ impl f32 {
         let r = self % rhs;
         if r < 0.0 { r + rhs.abs() } else { r }
     }
+    /// `self` at `t = 0`, `other` at `t = 1`, a straight line between
+    /// and past them: exact at both ends and monotonic in `t` (C++
+    /// `std::lerp`).
+    pub const fn lerp(self, other: f32, t: f32) -> f32 {
+        if (self <= 0.0 && other >= 0.0) || (self >= 0.0 && other <= 0.0) {
+            return t * other + (1.0 - t) * self;
+        }
+        if t == 1.0 { return other; }
+        let x = self + t * (other - self);
+        if x != x { return x; }
+        if (t > 1.0) == (other > self) {
+            if other > x { other } else { x }
+        } else {
+            if other < x { other } else { x }
+        }
+    }
+    /// The next representable value after `self` in the direction of
+    /// `toward` (C `nextafter`); `toward` itself when equal, NaN if
+    /// either is.
+    pub const fn next_after(self, toward: f32) -> f32 {
+        if self != self || toward != toward { return self + toward; }
+        if self == toward { return toward; }
+        if self == 0.0 { return f32::from_bits(1u32).copysign(toward); }
+        let b = self.to_bits();
+        // Away from zero is one bit pattern up, toward zero one down.
+        f32::from_bits(if (toward > self) == (self > 0.0) { b + 1u32 } else { b - 1u32 })
+    }
+    /// The least value greater than `self`; infinity and NaN stay.
+    pub const fn next_up(self) -> f32 { self.next_after(f32::INFINITY) }
+    /// The greatest value less than `self`; -infinity and NaN stay.
+    pub const fn next_down(self) -> f32 { self.next_after(f32::NEG_INFINITY) }
 }

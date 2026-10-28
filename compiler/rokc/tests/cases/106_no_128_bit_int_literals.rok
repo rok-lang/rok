@@ -1,0 +1,16 @@
+// spec: refs-lang 001.06 §1.6.2
+// expect-error: 11:13: integer literal `7u128`: rok has no `u128`; write `7u64`, or `7` where an `int` is expected (any size)
+// expect-error: 12:13: integer literal `0xFFi128`: rok has no `i128`; write `0xFFi64`, or `0xFF` where an `int` is expected (any size)
+// expect-error: 13:13: cannot cast to `u128`: rok has no `u128`; use `int` for integers of any size, or `u64`
+// expect-error: 14:13: integer literal `170141183460469231731687303715884105728i128`: rok has no `i128`; write `170141183460469231731687303715884105728` where an `int` is expected (any size)
+// expect-error: 15:13: integer literal `9223372036854775808i128`: rok has no `i128`; write `9223372036854775808i64`, or `9223372036854775808` where an `int` is expected (any size)
+
+// A 128-bit suffix or cast target: what to write instead, not "too
+// large" or a cast rule; the 64-bit suffix only where the value fits.
+fn main() {
+    let a = 7u128;
+    let b = -0xFFi128;
+    let c = 3 as u128;
+    let d = 170141183460469231731687303715884105728i128;
+    let e = -9223372036854775808i128;
+}

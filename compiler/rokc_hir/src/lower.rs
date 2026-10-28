@@ -3100,6 +3100,9 @@ impl<'a> LowerCtx<'a> {
     /// module and the primitives.
     fn type_help(&self, segs: &[&str]) -> Option<String> {
         let name = segs.last()?;
+        if let (1, Some(h)) = (segs.len(), wide_int_help(name)) {
+            return Some(h);
+        }
         let module = self.current_module.as_str();
         let defs = &self.env.defs;
         let (structs, enums) = (defs.struct_table.borrow(), defs.enum_table.borrow());
@@ -3126,6 +3129,13 @@ impl<'a> LowerCtx<'a> {
     /// scope, then functions / constants / statics of the current module.
     fn value_help(&self, segs: &[&str]) -> Option<String> {
         let [name] = segs else {
+            if let Some(h) = segs
+                .first()
+                .filter(|_| segs.len() == 2)
+                .and_then(|t| wide_int_help(t))
+            {
+                return Some(h);
+            }
             // `T::f` with `T` a type not imported.
             let names = &self.env.names;
             return self.import_help(segs).or_else(|| match segs {
@@ -5001,9 +5011,27 @@ impl<'a> LowerCtx<'a> {
 
 /// Primitive type names, for "did you mean" hints.
 const PRIM_NAMES: &[&str] = &[
-    "i8", "i16", "i32", "i64", "i128", "isize", "u8", "u16", "u32", "u64", "u128", "usize", "f32",
-    "f64", "bool", "char", "str", "int", "float",
+    "i8", "i16", "i32", "i64", "isize", "u8", "u16", "u32", "u64", "usize", "f32", "f64", "bool",
+    "char", "str", "int", "float",
 ];
+
+/// The 64-bit type to suggest for a 128-bit integer name, which rok
+/// does not have.
+fn wide_int_narrow(name: &str) -> Option<&'static str> {
+    match name {
+        "i128" => Some("i64"),
+        "u128" => Some("u64"),
+        _ => None,
+    }
+}
+
+/// Help for a 128-bit integer type name.
+fn wide_int_help(name: &str) -> Option<String> {
+    let narrow = wide_int_narrow(name)?;
+    Some(format!(
+        "rok has no `{name}`; use `int` for integers of any size, or `{narrow}`"
+    ))
+}
 
 /// Placeholder for a failed expression (already reported). Never reaches
 /// MIR: the driver stops on errors and `check_unresolved_types` refuses
