@@ -1,8 +1,8 @@
 {
-  "version": "0.1.2",
+  "version": "0.1.3",
   "archives": {
-    "aarch64-darwin": { "url": "https://github.com/rok-lang/rok/releases/download/v0.1.2/rok-0.1.2-aarch64-apple-darwin.tar.xz", "sha256": "a06ae64fad851249fdbca0a818822774bcdfc91a56723c27e650c5f2283518ee" },
-    "aarch64-linux": { "url": "https://github.com/rok-lang/rok/releases/download/v0.1.2/rok-0.1.2-aarch64-unknown-linux-musl.tar.xz", "sha256": "51f91d4412b7927a17b3afd1fd6de3183df77089305c39a26981f27969996bfd" },
-    "x86_64-linux": { "url": "https://github.com/rok-lang/rok/releases/download/v0.1.2/rok-0.1.2-x86_64-unknown-linux-musl.tar.xz", "sha256": "8e3def5d1e103d886e9048788158627c0c2dcfc0046885325f5cb727b91b6ef6" }
+    "aarch64-darwin": { "url": "https://github.com/rok-lang/rok/releases/download/v0.1.3/rok-0.1.3-aarch64-apple-darwin.tar.xz", "sha256": "0ce300115e490caa0f7cb8f5bf6dee2571c51edc205306bd0e1fb49316c795cd" },
+    "aarch64-linux": { "url": "https://github.com/rok-lang/rok/releases/download/v0.1.3/rok-0.1.3-aarch64-unknown-linux-musl.tar.xz", "sha256": "90461f0ab9deabffd70a4f03f034356d5d489dc42f29250f33315de65e0d0c95" },
+    "x86_64-linux": { "url": "https://github.com/rok-lang/rok/releases/download/v0.1.3/rok-0.1.3-x86_64-unknown-linux-musl.tar.xz", "sha256": "2fd881c9c03b9acf13e802f5b57bb504e1b6cd057572b151a8c0970b48979b8c" }
   }
 }
