@@ -1,0 +1,9 @@
+// spec: std 213-marker §2.13.9 / std 209-collections §2.9.5b
+// expect-error: type `BinaryHeap<i32>` does not satisfy trait bound `rok::core::marker::Send` required by `rok::core::channel::channel` (its comparator is a `fn` without `+ Send`: send the items as a `List` and `collect()` a `BinaryHeap` on the other side)
+
+// A heap keeps its comparator, a plain `fn`, so it stays on its thread.
+use rok::core::channel;
+
+fn main() {
+    let (tx, rx) = channel::channel::<BinaryHeap<i32>>();
+}

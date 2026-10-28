@@ -1,0 +1,21 @@
+// expect-exit: 0
+// spec: std 213-marker §2.13.9 / std 209-collections §2.9.5b
+// expect-stdout:
+// 9 5 1
+
+// The items cross as a `List`; the receiver builds its own heap.
+use rok::core::channel;
+use rok::std::thread;
+
+fn main() {
+    let (tx, rx) = channel::channel::<List<i32>>();
+    let t = thread::spawn(|| {
+        let items: List<i32> = try! rx.recv() ?? [];
+        let h: BinaryHeap<i32> = items.into_iter().collect();
+        let out: List<i32> = [];
+        while let x: i32 = h.pop() { out.push(x); }
+        println(f"{out[0]} {out[1]} {out[2]}");
+    });
+    try! tx.send([5, 1, 9]);
+    try! t.join();
+}

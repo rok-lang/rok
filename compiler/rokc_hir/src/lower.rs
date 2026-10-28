@@ -3524,6 +3524,13 @@ impl<'a> LowerCtx<'a> {
             HirTy::Struct(id) => {
                 let def = self.struct_def(*id);
                 let base = def.name.split("__").next().unwrap_or(&def.name);
+                if base == "rok::core::collections::heap::BinaryHeap"
+                    && key == self.lang("send_trait")
+                {
+                    return " (its comparator is a `fn` without `+ Send`: send the items as a \
+                            `List` and `collect()` a `BinaryHeap` on the other side)"
+                        .to_owned();
+                }
                 if base.starts_with("rok::core::collections::") {
                     return format!(
                         " (collections are not `{tr}`; share one through a `Mutex`, or use an \
