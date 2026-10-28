@@ -46,6 +46,11 @@ Pushing a `v<version>` tag runs `release.yml`:
    release and upload every asset with the `gh` CLI. `install.sh` /
    `install.ps1` download `v<version>` by default; `rok-version` is served
    from `releases/latest/`.
+3. `nix-sources`, `nix-verify`, `nix-push`: on a tag, regenerate
+   `nix/sources.json` from the published `.sha256` assets
+   (`scripts/nix-sources.sh`), build and run the flake with it on each Nix
+   system (`nix.yml`), then push `chore(nix): install <version>` straight
+   to main.
 
 A `workflow_dispatch` run stops after the verify; it never publishes.
 
