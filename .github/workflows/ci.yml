@@ -2,8 +2,8 @@ name: ci
 
 # Three tiers (docs/ci.md):
 #   fast     pull request: linux-x64 and windows-x64, -O0
-#   main     merge queue, push to main: every gate host at -O0 and -O2; a
-#            push the merge queue already passed runs lint only
+#   main     merge queue, push to main: every gate host at -O0; a push
+#            the merge queue already passed runs lint only
 #   nightly  schedule, manual run: every host at -O0 and -O2, cross
 #            targets, wasm, bindgen, dist; a manual run's inputs pick a
 #            subset
@@ -16,7 +16,7 @@ on:
   pull_request:
   merge_group:
   schedule:
-    - cron: "17 3 * * *"
+    - cron: "0 21 * * *" # 06:00 KST
   workflow_dispatch:
     inputs:
       hosts:
@@ -162,7 +162,7 @@ jobs:
           filter=
           case $tier in
           fast) hosts="linux-x64 windows-x64" jobs=gate opts='["-O0"]' ;;
-          main) hosts="linux-x64 linux-arm64 macos-arm64 windows-x64" jobs=gate opts='["-O0", "-O2"]' ;;
+          main) hosts="linux-x64 linux-arm64 macos-arm64 windows-x64" jobs=gate opts='["-O0"]' ;;
           nightly)
             hosts=${IN_HOSTS:-all} jobs=${IN_JOBS:-all} opts='["-O0", "-O2"]' filter=$IN_FILTER
             [ "$hosts" = all ] && hosts=$(echo "$all" | jq -r '.[].name')
