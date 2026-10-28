@@ -1,0 +1,35 @@
+name: nix
+
+# The flake installs the release named in nix/sources.json and builds and
+# runs a program with it, on each Nix system the flake covers.
+on:
+  push:
+    branches: [main]
+    paths: [flake.nix, flake.lock, nix/**, .github/workflows/nix.yml]
+  pull_request:
+    paths: [flake.nix, flake.lock, nix/**, .github/workflows/nix.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  flake:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-26]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      - name: nix build
+        run: nix build .#rok
+      - name: rok run, from the read-only store path
+        run: |
+          cd "$RUNNER_TEMP"
+          printf 'fn main() { println("hello from nix"); }\n' > hello.rok
+          out=$(nix run "$GITHUB_WORKSPACE" -- run hello.rok)
+          echo "$out"
+          [ "$(printf '%s\n' "$out" | tail -n 1)" = "hello from nix" ]

@@ -976,18 +976,58 @@ fn c_compiler() -> Option<OsString> {
         .or_else(|| (!rokc_llvm::AVAILABLE).then(|| "cc".into()))
 }
 
-/// rokc's build cache: `<sysroot>/lib/rok-cache` when installed, else
-/// `rok-cache/` beside `rokc`.
+/// rokc's build cache, beside the toolchain when writable.
+///
+/// `<sysroot>/lib/rok-cache` when installed, else `rok-cache/` beside
+/// `rokc`. A read-only install (a Nix store path, a system package) uses
+/// `rok/rokc-<hash of the sysroot>` in the user's cache directory.
 #[must_use]
 pub fn cache_dir() -> Option<PathBuf> {
-    let exe = rokc_core::current_exe()?;
-    let bin = exe.parent()?;
-    let sysroot = bin.parent()?;
-    Some(if sysroot.join("lib/rok/core/src").is_dir() {
-        sysroot.join("lib/rok-cache")
-    } else {
-        bin.join("rok-cache")
+    static DIR: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock::new();
+    DIR.get_or_init(|| {
+        let exe = rokc_core::current_exe()?;
+        let bin = exe.parent()?;
+        let sysroot = bin.parent()?;
+        let own = if sysroot.join("lib/rok/core/src").is_dir() {
+            sysroot.join("lib/rok-cache")
+        } else {
+            bin.join("rok-cache")
+        };
+        if writable(&own) {
+            return Some(own);
+        }
+        let key = rokc_core::hash::fnv(sysroot.as_os_str().as_encoded_bytes());
+        Some(user_cache()?.join(format!("rokc-{key:016x}")))
     })
+    .clone()
+}
+
+/// `dir` exists or can be made, and takes a new file.
+fn writable(dir: &Path) -> bool {
+    if std::fs::create_dir_all(dir).is_err() {
+        return false;
+    }
+    let probe = dir.join(format!(".probe-{}", std::process::id()));
+    let ok = std::fs::write(&probe, b"").is_ok();
+    let _ = std::fs::remove_file(&probe);
+    ok
+}
+
+/// `rok/` in the user's cache directory.
+fn user_cache() -> Option<PathBuf> {
+    let env = |k: &str| {
+        std::env::var_os(k)
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from)
+    };
+    let base = if cfg!(windows) {
+        env("LOCALAPPDATA")
+    } else if cfg!(target_os = "macos") {
+        env("HOME").map(|h| h.join("Library/Caches"))
+    } else {
+        env("XDG_CACHE_HOME").or_else(|| env("HOME").map(|h| h.join(".cache")))
+    };
+    Some(base?.join("rok"))
 }
 
 fn run(cmd: &mut Command, what: &str) -> Result<(), RokDiagnostic> {
