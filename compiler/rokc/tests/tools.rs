@@ -166,15 +166,102 @@ d?
 fn repl_reports_input_ending_inside_a_cell() {
     let env = setup_runtime();
     let rokr = env.rokr.display().to_string();
-    let out = piped(ROKC, &["repl", "--rokr", &rokr], "1 + 2\nlet x = 40");
+    let out = piped(ROKC, &["repl", "--rokr", &rokr], "1 + 2\nlet x = f(40,");
     let stderr = text(&out.stderr);
     assert_eq!(text(&out.stdout), "3\n", "{stderr}");
     assert!(
         stderr.contains("error: input ended inside a cell; not run")
-            && stderr.contains("let x = 40"),
+            && stderr.contains("let x = f(40,"),
         "{stderr}"
     );
     assert_eq!(out.status.code(), Some(1), "{stderr}");
+}
+
+/// A cell ends by tokens: brackets in char literals and comments do not
+/// count, a balanced line ends the cell (a last `let` needs no `;`), and
+/// an item header or a trailing operator asks for the next line.
+#[test]
+#[cfg_attr(
+    not(any(
+        all(
+            any(target_os = "macos", target_os = "linux"),
+            any(target_arch = "aarch64", target_arch = "x86_64")
+        ),
+        windows
+    )),
+    ignore = "the REPL host runs on macOS, Linux and Windows (arm64, x86_64)"
+)]
+// spec: §9.7.8
+fn repl_cells_end_by_tokens() {
+    let env = setup_runtime();
+    let rokr = env.rokr.display().to_string();
+    let input = "\
+'('
+'\"'
+/* ( */ 1
+1 + 1 /* c */
+fn g(x: i32)
+    -> i32 { x * 2 }
+g(4)
+let x = 1
+2 + 2
+x
+let y = 1 +
+    2 *
+    3 // no `;`
+y
+y += 2
+y
+let zs = [1, 2]
+zs[0] -= 1
+zs?
+{ let q = 2; q * 3 }
+if y > 1 { 1 } else { 2 }
+match y { 9 => 10, _ => 0 }
+// done
+";
+    let out = piped(ROKC, &["repl", "--rokr", &rokr], input);
+    let stderr = text(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "{stderr}");
+    assert_eq!(
+        text(&out.stdout),
+        "(\n\"\n1\n2\n8\n4\n1\n7\n9\n[0, 2]\n6\n1\n10\n",
+        "stderr: {stderr}"
+    );
+    assert!(!stderr.contains("error"), "{stderr}");
+}
+
+/// Errors quote a cell as typed, without the `;` the REPL supplies.
+#[test]
+#[cfg_attr(
+    not(any(
+        all(
+            any(target_os = "macos", target_os = "linux"),
+            any(target_arch = "aarch64", target_arch = "x86_64")
+        ),
+        windows
+    )),
+    ignore = "the REPL host runs on macOS, Linux and Windows (arm64, x86_64)"
+)]
+// spec: §9.7.5 §9.7.8
+fn repl_quotes_cells_as_typed() {
+    let env = setup_runtime();
+    let rokr = env.rokr.display().to_string();
+    let out = piped(ROKC, &["repl", "--rokr", &rokr], "let a = 1 a\nk += 1\n");
+    let stderr = text(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "{stderr}");
+    assert!(
+        stderr.contains("expected `;`, found identifier `a`") && stderr.contains("| let a = 1 a\n"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("cannot find value `k`") && stderr.contains("| k += 1\n"),
+        "{stderr}"
+    );
+    assert!(
+        !stderr.contains("1 a;") && !stderr.contains("+= 1;"),
+        "{stderr}"
+    );
 }
 
 /// A cell of several statements shows its last one's value.

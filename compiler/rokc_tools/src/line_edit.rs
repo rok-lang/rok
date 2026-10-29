@@ -56,13 +56,18 @@ impl Editor {
         }
     }
 
-    /// Read one line after `prompt`; plain `read_line` when stdin is not
-    /// a terminal raw mode can be set on.
+    /// Read one line after `prompt`, on a line of its own; plain
+    /// `read_line` when stdin is not a terminal raw mode can be set on.
     pub fn read_line(&self, prompt: &str) -> Input {
+        use std::io::IsTerminal;
         let mut out = std::io::stdout();
+        let raw = Raw::enter();
+        if raw.is_some() && out.is_terminal() {
+            let _ = write!(out, "{}", fresh_line(columns()));
+        }
         let _ = write!(out, "{prompt}");
         let _ = out.flush();
-        let Some(_raw) = Raw::enter() else {
+        let Some(_raw) = raw else {
             let mut line = String::new();
             return match std::io::stdin().read_line(&mut line) {
                 Ok(0) | Err(_) => Input::Eof,
@@ -206,6 +211,14 @@ impl State {
         }
         let _ = out.flush();
     }
+}
+
+/// Move to column 0 of a fresh line without asking the terminal where
+/// the cursor is (zsh `PROMPT_SP`): a reverse `%` and spaces up to the
+/// last column wrap only after output that did not end its line, and
+/// mark it; `\r` and clearing the line then erase the rest.
+fn fresh_line(width: usize) -> String {
+    format!("\x1b[7m%\x1b[27m{:1$}\r\x1b[K", "", width.saturating_sub(1))
 }
 
 /// The terminal's width in columns (80 when unknown).
@@ -402,6 +415,8 @@ impl Raw {
         const ECHO_INPUT: u32 = 0x4;
         const VT_INPUT: u32 = 0x200;
         const VT_PROCESSING: u32 = 0x4;
+        // Defer the wrap at the last column, as VT terminals do (`fresh_line`).
+        const NO_AUTO_RETURN: u32 = 0x8;
         let mode = |which| {
             // SAFETY: a std handle and an out parameter.
             let h = unsafe { GetStdHandle(which) };
@@ -417,7 +432,8 @@ impl Raw {
             unsafe { SetConsoleMode(h, m) != 0 }
         };
         let raw_in = (input.1 & !(PROCESSED_INPUT | LINE_INPUT | ECHO_INPUT)) | VT_INPUT;
-        (set((input.0, raw_in)) && set((output.0, output.1 | VT_PROCESSING))).then_some(raw)
+        (set((input.0, raw_in)) && set((output.0, output.1 | VT_PROCESSING | NO_AUTO_RETURN)))
+            .then_some(raw)
     }
 }
 
@@ -464,10 +480,16 @@ mod tests {
 
     #[test]
     fn long_lines_scroll_to_the_cursor() {
-        // `> ` and 10 columns: 7 characters fit before the cursor's column.
+        // A 2-column prompt and 10 columns: 7 characters fit before the cursor's column.
         assert_eq!(state("abc", 3).window(2, 10), 0..3);
         assert_eq!(state("abcdefghijkl", 12).window(2, 10), 6..12);
         assert_eq!(state("abcdefghijkl", 0).window(2, 10), 0..7);
         assert_eq!(state("abcdefghijkl", 9).window(2, 10), 3..10);
+    }
+
+    #[test]
+    fn prompt_starts_a_fresh_line() {
+        assert_eq!(fresh_line(4), "\x1b[7m%\x1b[27m   \r\x1b[K");
+        assert_eq!(fresh_line(0), "\x1b[7m%\x1b[27m\r\x1b[K");
     }
 }
