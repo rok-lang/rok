@@ -177,6 +177,160 @@ fn repl_reports_input_ending_inside_a_cell() {
     assert_eq!(out.status.code(), Some(1), "{stderr}");
 }
 
+/// `Rok <version> on <host>` as `rokc --version --verbose` reports them.
+fn toolchain_line() -> String {
+    let out = Command::new(ROKC)
+        .args(["--version", "--verbose"])
+        .output()
+        .unwrap();
+    let out = text(&out.stdout);
+    let version = out.lines().next().unwrap().strip_prefix("rokc ").unwrap();
+    let host = out.lines().find_map(|l| l.strip_prefix("host: ")).unwrap();
+    format!("Rok {version} on {host}")
+}
+
+/// A pseudo-terminal: the master side, and the slave for a child's
+/// stdio.
+#[cfg(unix)]
+fn pty() -> (std::fs::File, std::fs::File) {
+    // SAFETY: plain libc calls on a pseudo-terminal the caller owns.
+    unsafe {
+        let m = libc::posix_openpt(libc::O_RDWR | libc::O_NOCTTY);
+        assert!(m >= 0 && libc::grantpt(m) == 0 && libc::unlockpt(m) == 0);
+        let name = std::ffi::CStr::from_ptr(libc::ptsname(m)).to_owned();
+        let master = <std::fs::File as std::os::fd::FromRawFd>::from_raw_fd(m);
+        let slave = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(name.to_str().unwrap())
+            .unwrap();
+        (master, slave)
+    }
+}
+
+/// `rokc args` on a pseudo-terminal with `ROK_HOME` at `home`: each of
+/// `steps` typed at the next prompt. What it wrote; it must succeed.
+#[cfg(unix)]
+fn on_tty(args: &[&str], home: &std::path::Path, steps: &[&[u8]]) -> String {
+    use std::sync::mpsc;
+    use std::time::{Duration, Instant};
+    let (master, slave) = pty();
+    let mut child = Command::new(ROKC)
+        .args(args)
+        .env("ROK_HOME", home)
+        .env("TERM", "xterm")
+        .env_remove("NO_COLOR")
+        .stdin(slave.try_clone().unwrap())
+        .stdout(slave.try_clone().unwrap())
+        .stderr(slave)
+        .spawn()
+        .unwrap();
+    let mut keys = master.try_clone().unwrap();
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut master = master;
+        let mut b = [0u8; 4096];
+        // EIO once the child is gone.
+        while let Ok(n @ 1..) = master.read(&mut b) {
+            if tx.send(b[..n].to_vec()).is_err() {
+                break;
+            }
+        }
+    });
+    let mut out = String::new();
+    // Each prompt turns bracketed paste on: wait for the `n`th, as keys
+    // typed before raw mode would meet the line discipline.
+    let wait = |out: &mut String, n: usize| {
+        let deadline = Instant::now() + Duration::from_secs(120);
+        while out.matches("\x1b[?2004h").count() < n {
+            let left = deadline.saturating_duration_since(Instant::now());
+            let Ok(b) = rx.recv_timeout(left) else {
+                panic!("no prompt {n}: {out:?}");
+            };
+            out.push_str(&String::from_utf8_lossy(&b));
+        }
+    };
+    for (i, keys_in) in steps.iter().enumerate() {
+        wait(&mut out, i + 1);
+        keys.write_all(keys_in).unwrap();
+    }
+    assert!(child.wait().unwrap().success(), "{out:?}");
+    while let Ok(b) = rx.recv_timeout(Duration::from_millis(200)) {
+        out.push_str(&String::from_utf8_lossy(&b));
+    }
+    out
+}
+
+/// On a terminal: the session starts with the toolchain line, Tab
+/// completes core names, a paste is one cell, Up and `C-r` recall whole
+/// cells, the input is coloured, and the history file keeps the cells.
+#[test]
+#[cfg_attr(
+    not(all(
+        any(target_os = "macos", target_os = "linux"),
+        any(target_arch = "aarch64", target_arch = "x86_64")
+    )),
+    ignore = "a pty test: the REPL host on macOS and Linux (arm64, x86_64)"
+)]
+#[cfg(unix)]
+// spec: §9.7.8
+fn repl_edits_lines_on_a_terminal() {
+    let env = setup_runtime();
+    let rokr = env.rokr.display().to_string();
+    let home = scratch("repl-line-edit");
+    let steps: [&[u8]; 7] = [
+        b"let x = 4\r",
+        b"\x1b[200~fn f(a: i32) -> i32 {\r\n    a * 2\r\n}\r\n\x1b[201~\r",
+        b"f(x)\r",
+        b"prin\tln(f(1))\r",
+        b"\x1b[A\r",
+        b"\x12f(x\r",
+        b":exit\r",
+    ];
+    let out = on_tty(&["repl", "--rokr", &rokr], &home, &steps);
+    let banner = format!(
+        "{}\r\nType :help for help, :exit to quit.\r\n",
+        toolchain_line()
+    );
+    assert!(out.starts_with(&banner), "{out:?}");
+    let lines: Vec<&str> = out.split("\r\n").collect();
+    let shown = |v: &str| {
+        let lines = lines
+            .iter()
+            .map(|l| l.strip_prefix("\x1b[?2004l").unwrap_or(l));
+        lines.filter(|l| *l == v).count()
+    };
+    assert_eq!((shown("8"), shown("2")), (2, 2), "{out:?}");
+    // The pasted cell is shown as its lines, coloured.
+    assert!(out.contains("\n... }\x1b[K"), "{out:?}");
+    assert!(out.contains("\x1b[35mfn\x1b[0m"), "{out:?}");
+    let history = std::fs::read_to_string(home.join("repl_history")).unwrap();
+    assert_eq!(
+        history,
+        "#rok repl_history 2\nlet x = 4\nfn f(a: i32) -> i32 {\\n    a * 2\\n}\nf(x)\n\
+         println(f(1))\nf(x)\n:exit\n"
+    );
+}
+
+/// `-q` leaves the toolchain line and the hint out.
+#[test]
+#[cfg_attr(
+    not(all(
+        any(target_os = "macos", target_os = "linux"),
+        any(target_arch = "aarch64", target_arch = "x86_64")
+    )),
+    ignore = "a pty test: the REPL host on macOS and Linux (arm64, x86_64)"
+)]
+#[cfg(unix)]
+// spec: §9.7.8
+fn repl_quiet_starts_without_a_banner() {
+    let env = setup_runtime();
+    let rokr = env.rokr.display().to_string();
+    let home = scratch("repl-quiet");
+    let out = on_tty(&["repl", "-q", "--rokr", &rokr], &home, &[b"quit\r"]);
+    assert!(!out.contains("Rok ") && !out.contains(":help"), "{out:?}");
+}
+
 /// A cell ends by tokens: brackets in char literals and comments do not
 /// count, a balanced line ends the cell (a last `let` needs no `;`), and
 /// an item header or a trailing operator asks for the next line.
@@ -1433,7 +1587,7 @@ fn add(a: i32, b: i32) -> i32
         ":add <name>[@<req>]",
         ":type <expr>, :t <expr>",
         ":help, :h",
-        ":quit, :q, :exit, exit, quit",
+        ":exit, :quit, :q, exit, quit",
     ] {
         assert!(stdout.contains(cmd), "{cmd}: {stdout}");
     }
@@ -1822,19 +1976,7 @@ fn repl_cells_read_the_terminal() {
 
     let env = setup_runtime();
     let rokr = env.rokr.display().to_string();
-    // SAFETY: plain libc calls on a pseudo-terminal this test owns.
-    let (mut master, slave) = unsafe {
-        let m = libc::posix_openpt(libc::O_RDWR | libc::O_NOCTTY);
-        assert!(m >= 0 && libc::grantpt(m) == 0 && libc::unlockpt(m) == 0);
-        let name = std::ffi::CStr::from_ptr(libc::ptsname(m)).to_owned();
-        let master = <std::fs::File as std::os::fd::FromRawFd>::from_raw_fd(m);
-        let slave = std::fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(name.to_str().unwrap())
-            .unwrap();
-        (master, slave)
-    };
+    let (mut master, slave) = pty();
     // Its own home: the line editor keeps its history there.
     let home = scratch("repl-tty");
     let mut cmd = Command::new(ROKC);
@@ -2058,6 +2200,7 @@ fn jupyter_kernel_speaks_the_wire_protocol() {
     let (kind, info, _) = request(&mut shell, "kernel_info_request", Json::obj([]));
     assert_eq!(kind, "kernel_info_reply");
     assert_eq!(info.get("language_info").get("name").as_str(), Some("rok"));
+    assert_eq!(info.get("banner").as_str(), Some(toolchain_line().as_str()));
 
     let (_, reply, _) = request(&mut shell, "execute_request", exec("let x = 40i32;"));
     assert_eq!(reply.get("status").as_str(), Some("ok"), "{reply}");

@@ -65,7 +65,7 @@ const HELP: &str = "  <expr>         evaluate and print its value (`Display`, el
                  in a package `rok add` (`rok repl`)
   :reset         forget every cell
   :help, :h      print this help
-  :quit, :q, :exit, exit, quit
+  :exit, :quit, :q, exit, quit
                  leave (also end of input; a binding named `exit` or
                  `quit` wins)
 A line ends the cell (`>>>`) unless a bracket, string or comment is still
@@ -548,6 +548,9 @@ pub struct Repl {
     /// Called with `true` before a cell runs in the host and `false`
     /// after it ends (the kernel streams the output written meanwhile).
     pub live: Option<fn(bool)>,
+    /// The check of the session source completion last used: the
+    /// source, its analysis and the path its spans name.
+    checked: std::cell::RefCell<Option<(String, Analysis, String)>>,
 }
 
 /// A running cell's stdin (907.10).
@@ -654,6 +657,7 @@ impl Repl {
             package: None,
             stdin: CellStdin::Null,
             live: None,
+            checked: std::cell::RefCell::default(),
         })
     }
 
@@ -707,17 +711,21 @@ impl Repl {
         let mut buf = String::new();
         loop {
             let prompt = if buf.is_empty() { ">>> " } else { "... " };
-            match ed.read_line(prompt) {
+            let complete = &mut |line: &str, at: usize| {
+                let (start, found) = self.complete(&format!("{buf}{line}"), buf.len() + at);
+                (start.saturating_sub(buf.len()), found)
+            };
+            match ed.read_line(prompt, complete) {
                 crate::line_edit::Input::Eof => return,
                 crate::line_edit::Input::Interrupt => buf.clear(),
                 crate::line_edit::Input::Line(line) => {
-                    ed.add(&line);
                     buf.push_str(&line);
                     buf.push('\n');
                     if incomplete(&buf) {
                         continue;
                     }
                     let cell = std::mem::take(&mut buf);
+                    ed.add(cell.trim_end());
                     if !self.cell(cell.trim()) {
                         return;
                     }
@@ -1096,7 +1104,7 @@ impl Repl {
     }
 
     /// The names the session defines: bindings, then items.
-    pub fn names(&self) -> Vec<&str> {
+    fn names(&self) -> Vec<&str> {
         let items = self.state.items.iter().filter_map(|i| i.key.as_deref());
         let items = items
             .filter(|k| !k.starts_with("impl "))
@@ -1106,6 +1114,46 @@ impl Repl {
             .map(|b| b.name.as_str())
             .chain(items)
             .collect()
+    }
+
+    /// Completions of the word ending at byte `end` of the cell `code`:
+    /// where the word starts and the candidates, sorted. After `.` or
+    /// `::` the members or path items (the language server's completion);
+    /// else the session's names, the core library's, those its `use`
+    /// items import, and keywords. The terminal and the kernel share it.
+    pub fn complete(&self, code: &str, end: usize) -> (usize, Vec<String>) {
+        let ident = |c: char| c.is_alphanumeric() || c == '_';
+        let head = code[..end].trim_end_matches(ident);
+        let session = self.source("").0;
+        let mut checked = self.checked.borrow_mut();
+        if checked.as_ref().is_none_or(|(s, ..)| *s != session) {
+            let (a, key) = self.analyze(&session);
+            *checked = Some((session, a, key));
+        }
+        let (_, good, key) = checked.as_ref().expect("checked above");
+        if head.ends_with('.') || head.ends_with("::") {
+            let (src, at) = self.source(code);
+            let compile = |t: &str| self.analyze(t).0;
+            let (start, found) = crate::lsp::complete(&src, key, at + end, compile, Some(good));
+            let mut found: Vec<String> = found.into_iter().map(|(l, ..)| l).collect();
+            found.sort();
+            return (start - at, found);
+        }
+        let word = &code[head.len()..end];
+        let keywords = rokc_lexer::token::RESERVED
+            .iter()
+            .chain(crate::line_edit::CONTEXTUAL);
+        let mut names: Vec<String> = self
+            .names()
+            .into_iter()
+            .chain(keywords.copied())
+            .map(str::to_owned)
+            .chain(good.scope_names())
+            .filter(|n| n.starts_with(word) && !n.starts_with("__"))
+            .collect();
+        names.sort();
+        names.dedup();
+        (head.len(), names)
     }
 
     /// `:add <args>`: `rok install --env` in an environment's session, else
@@ -2992,6 +3040,9 @@ pub struct Start<'a> {
     /// The source directory of the package the session runs in, not
     /// loaded (`Repl::package`).
     pub package: Option<PathBuf>,
+    /// The toolchain line (`Rok <version> on <host>`): a terminal session
+    /// prints it first, the Jupyter kernel names itself with it.
+    pub banner: Option<String>,
 }
 
 impl Repl {
@@ -3023,6 +3074,9 @@ pub fn main(
             r.deps_dir = deps_dir;
             if interactive {
                 r.stdin = CellStdin::Tty;
+            }
+            if let Some(b) = start.banner.as_ref().filter(|_| interactive) {
+                println!("{b}\nType :help for help, :exit to quit.");
             }
             r.start(start);
             if interactive {
@@ -3259,6 +3313,60 @@ mod tests {
         assert!(r.cell(":opt 2"));
         assert_eq!(r.opts.opt_level, "2");
         assert!(r.cell(":reload"));
+    }
+
+    #[test]
+    fn completion_knows_core_imported_and_session_names() {
+        let lib = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../library");
+        let roots = [lib.join("core/src/lib.rok"), lib.join("std/src/lib.rok")];
+        let mut r = Repl::new(
+            rokc_interface::bootstrap_tiers(&roots),
+            BuildOptions::default(),
+        )
+        .unwrap();
+        let has = |r: &Repl, code: &str, name: &str| {
+            let (start, found) = r.complete(code, code.len());
+            assert!(
+                found.iter().all(|f| f.starts_with(&code[start..])),
+                "{found:?}"
+            );
+            found.iter().any(|f| f == name)
+        };
+        assert!(has(&r, "pri", "println"));
+        assert!(has(&r, "let xs = Lis", "List"));
+        assert!(has(&r, "whi", "while") && has(&r, "x = typ", "type"));
+        assert!(!has(&r, "Comm", "Command"));
+        r.state
+            .items
+            .push(Item::new(None, "use rok::std::process::*;".to_owned()));
+        r.state
+            .items
+            .push(Item::new(None, "use rok::std::fs as files;".to_owned()));
+        r.state.items.push(Item::new(
+            Some("fn twice".to_owned()),
+            "fn twice(x: i32) -> i32 { x * 2 }".to_owned(),
+        ));
+        assert!(has(&r, "Comm", "Command"));
+        assert!(has(&r, "fil", "files"));
+        assert!(has(&r, "1 + tw", "twice"));
+        assert!(!has(&r, "x", "x25519") && has(&r, "tas", "task"));
+        // Members after `x.` when x's type is known.
+        r.state.items.push(Item::new(
+            Some("struct P".to_owned()),
+            "struct P { x: i32; y: i32; }".to_owned(),
+        ));
+        r.state.items.push(Item::new(
+            None,
+            "impl P { fn sum(self) -> i32 { self.x + self.y } }".to_owned(),
+        ));
+        let code = "let p = P { x: 1, y: 2 };\np.";
+        assert_eq!(
+            r.complete(code, code.len()),
+            (
+                code.len(),
+                vec!["sum".to_owned(), "x".to_owned(), "y".to_owned()]
+            )
+        );
     }
 
     #[test]

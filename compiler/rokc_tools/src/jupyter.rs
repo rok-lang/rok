@@ -20,8 +20,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use rokc_core::hash::{hex, hmac_sha256};
 use rokc_interface::BuildOptions;
 
-use crate::analysis::Analysis;
-use crate::lsp::complete;
 use crate::repl::{CellStdin, Repl, Start, incomplete, open_brackets, split_cells};
 use rokc_diagnostic::Json;
 
@@ -566,11 +564,10 @@ struct Kernel {
     taps: Rc<Taps>,
     /// `input_reply` values; `None` when a cell is interrupted.
     input: Rc<mpsc::Receiver<Option<String>>>,
-    /// The session's check without a cell (path completion), until the
-    /// next cell runs.
-    checked: Option<(Analysis, String)>,
     /// The output of loading the package, shown with the first cell's.
     startup: (String, String),
+    /// `kernel_info_reply`'s banner: the toolchain line.
+    banner: String,
 }
 
 impl Kernel {
@@ -578,7 +575,6 @@ impl Kernel {
     /// first failing cell (earlier cells keep their effects). As `IPython`,
     /// only the last value is shown.
     fn run(&mut self, code: &str) -> (String, String, Result<Option<String>, ()>) {
-        self.checked = None;
         let mut result = Ok(None);
         for cell in split_cells(code) {
             result = if cell.starts_with(':') {
@@ -705,7 +701,7 @@ impl Kernel {
                         Json::str(env!("CARGO_PKG_VERSION")),
                     ),
                     ("language_info", language_info()),
-                    ("banner", Json::str("rok (rokc jupyter)")),
+                    ("banner", Json::str(&self.banner)),
                     (
                         "help_links",
                         Json::Arr(
@@ -737,26 +733,7 @@ impl Kernel {
                 let code = c.get("code").as_str().unwrap_or("");
                 let pos = c.get("cursor_pos").as_u32().unwrap_or(0) as usize;
                 let end = code.char_indices().nth(pos).map_or(code.len(), |(i, _)| i);
-                let head = code[..end].trim_end_matches(ident);
-                let (start, matches) = if head.ends_with('.') || head.ends_with("::") {
-                    // Members and paths: the language server's completion
-                    // on the session source with this cell in it.
-                    let (src, at) = self.repl.source(code);
-                    if self.checked.is_none() {
-                        self.checked = Some(self.repl.analyze(&self.repl.source("").0));
-                    }
-                    let (good, key) = self.checked.as_ref().expect("checked above");
-                    let compile = |t: &str| self.repl.analyze(t).0;
-                    let (start, found) = complete(&src, key, at + end, compile, Some(good));
-                    (start - at, found.into_iter().map(|(l, ..)| l).collect())
-                } else {
-                    // A name: the session's, or a keyword.
-                    let word = &code[head.len()..end];
-                    let mut names = self.repl.names();
-                    names.extend(rokc_lexer::token::RESERVED);
-                    let names = names.into_iter().filter(|n| n.starts_with(word));
-                    (head.len(), names.map(str::to_owned).collect::<Vec<_>>())
-                };
+                let (start, matches) = self.repl.complete(code, end);
                 (
                     "complete_reply",
                     Json::obj([
@@ -987,8 +964,8 @@ fn start(
         history: Vec::new(),
         taps: Rc::new(Taps { out, err }),
         input: Rc::new(input),
-        checked: None,
         startup: (String::new(), String::new()),
+        banner: load.banner.clone().unwrap_or_else(|| "Rok".to_owned()),
     };
     // The package the kernel starts in, as `rok repl .` loads it. After
     // the capture: the session host it starts inherits the streams.

@@ -37,10 +37,10 @@ commands:
                          (`-`: source on stdin)
   lint [path]            front end and lints; exit 1 if a `deny` lint fires
   repl [path]            interactive session, each cell compiled and run
-                         (:type <expr>, :reset, :quit); a program
-                         path runs in the session first, its bindings and
-                         items staying in scope; a library is loaded and
-                         `use`d
+                         (:type <expr>, :reset, :exit; -q: no banner); a
+                         program path runs in the session first, its
+                         bindings and items staying in scope; a library is
+                         loaded and `use`d
   lsp                    language server on stdio (`rok lsp` / `rokls` run it)
   jupyter --connection-file <file>
                          Jupyter kernel (Jupyter starts it; `rok jupyter
@@ -711,6 +711,7 @@ fn real_main() {
                 prelude: prelude.as_deref(),
                 program: program.as_ref().map(|(p, anon)| (p.as_path(), *anon)),
                 package: None,
+                banner: Some(banner()),
             };
             process::exit(rokc_tools::jupyter::serve(
                 &file,
@@ -1480,19 +1481,26 @@ fn cmd_repl(mut a: Args) {
     let package = here
         .filter(|_| pkg.is_none())
         .and_then(|h| h.root.parent().map(Path::to_path_buf));
+    let interactive = std::io::stdin().is_terminal();
     let start = rokc_tools::repl::Start {
         prelude: prelude.as_deref(),
         program: program.as_ref().map(|(p, anon)| (p.as_path(), *anon)),
         package,
+        banner: (interactive && std::io::stdout().is_terminal() && !a.quiet).then(banner),
     };
     process::exit(rokc_tools::repl::main(
         a.bootstrap,
         a.externs,
         deps,
         a.opts,
-        std::io::stdin().is_terminal(),
+        interactive,
         start,
     ));
+}
+
+/// The REPL's and kernel's first line: the `--version` text and the host.
+fn banner() -> String {
+    format!("Rok {VERSION} on {}", env!("ROK_HOST"))
 }
 
 /// What a session on `pkg` loads: a library becomes a session dependency

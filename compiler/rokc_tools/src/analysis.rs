@@ -277,6 +277,122 @@ impl Analysis {
             .unwrap_or_default()
     }
 
+    /// Names the root file can use without a path besides its own: the
+    /// core library's (implicit `use rok::core::**;`) and those its `use`
+    /// items bring in. Sorted, without duplicates.
+    pub fn scope_names(&self) -> Vec<String> {
+        /// `(module path, name, is a module)` of each public item.
+        type Names = Vec<(String, String, bool)>;
+        fn shown(item: &Item) -> Option<&str> {
+            use rokc_core::Visibility::Pub;
+            let (vis, attrs, name) = match item {
+                Item::Fn(x) => (x.vis, &x.attrs, &x.name),
+                Item::Struct(x) => (x.vis, &x.attrs, &x.name),
+                Item::Enum(x) => (x.vis, &x.attrs, &x.name),
+                Item::Union(x) => (x.vis, &x.attrs, &x.name),
+                Item::Trait(x) => (x.vis, &x.attrs, &x.name),
+                Item::Const(x) => (x.vis, &x.attrs, &x.name),
+                Item::Static(x) => (x.vis, &x.attrs, &x.name),
+                Item::TypeAlias(x) => (x.vis, &x.attrs, &x.name),
+                Item::Mod(x) => (x.vis, &x.attrs, &x.name),
+                _ => return None,
+            };
+            (vis == Pub && !doc_hidden(attrs)).then_some(name.as_str())
+        }
+        fn walk(items: &[Item], path: &str, out: &mut Names) {
+            for item in items {
+                let Some(name) = shown(item) else { continue };
+                out.push((
+                    path.to_owned(),
+                    name.to_owned(),
+                    matches!(item, Item::Mod(_)),
+                ));
+                if let Item::Mod(m) = item {
+                    let sub = m.items.as_deref().unwrap_or_default();
+                    walk(sub, &format!("{path}::{name}"), out);
+                }
+            }
+        }
+        // `**` brings in the items of every module below, but only the
+        // modules right below by name.
+        fn glob(names: &Names, path: &str, deep: bool, out: &mut Vec<String>) {
+            let under = format!("{path}::");
+            for (m, n, is_mod) in names {
+                if m == path || (deep && !is_mod && m.starts_with(&under)) {
+                    out.push(n.clone());
+                }
+            }
+        }
+        fn uses(names: &Names, t: &rokc_ast::UseTree, base: &str, out: &mut Vec<String>) {
+            let mut path = base.to_owned();
+            for s in &t.prefix.segments {
+                if !path.is_empty() {
+                    path.push_str("::");
+                }
+                path.push_str(&s.name);
+            }
+            match &t.kind {
+                rokc_ast::UseTreeKind::Simple(alias) => {
+                    let last = t.prefix.segments.last().map(|s| s.name.clone());
+                    out.extend(alias.clone().or(last));
+                }
+                rokc_ast::UseTreeKind::Glob => glob(names, &path, false, out),
+                rokc_ast::UseTreeKind::GlobRecursive => glob(names, &path, true, out),
+                rokc_ast::UseTreeKind::Group(ts) => {
+                    for t in ts {
+                        uses(names, t, &path, out);
+                    }
+                }
+            }
+        }
+        let mut names = Names::new();
+        // The library's items are flat, named by their full path; a
+        // module's stub carries its visibility.
+        let library = self.library.map(|p| p.items.as_slice()).unwrap_or_default();
+        let hidden: HashSet<&str> = library
+            .iter()
+            .filter_map(|i| match i {
+                Item::Mod(m) if shown(i).is_none() => Some(m.name.as_str()),
+                _ => None,
+            })
+            .collect();
+        for item in library {
+            let Some((module, name)) = shown(item).and_then(|n| n.rsplit_once("::")) else {
+                continue;
+            };
+            let mut up = Some(module);
+            while let Some(m) = up {
+                if hidden.contains(m) {
+                    break;
+                }
+                up = m.rsplit_once("::").map(|(p, _)| p);
+            }
+            if up.is_none() {
+                names.push((
+                    module.to_owned(),
+                    name.to_owned(),
+                    matches!(item, Item::Mod(_)),
+                ));
+            }
+        }
+        for f in &self.sources {
+            walk(&f.items, &f.module.join("::"), &mut names);
+        }
+        let mut out = Vec::new();
+        glob(&names, "rok::core", true, &mut out);
+        let root = self.sources.iter().filter(|f| f.package.is_empty());
+        if let Some(f) = root.min_by_key(|f| f.module.len()) {
+            for item in &f.items {
+                if let Item::Use(u) = item {
+                    uses(&names, &u.tree, "", &mut out);
+                }
+            }
+        }
+        out.sort();
+        out.dedup();
+        out
+    }
+
     /// The path a diagnostic belongs to (explicit, else its primary span's).
     pub fn diag_path(&self, d: &RokDiagnostic) -> Option<String> {
         d.file
