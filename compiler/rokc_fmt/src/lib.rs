@@ -217,12 +217,13 @@ pub fn line_diff(old: &str, new: &str) -> String {
         if i < a.len() && j < b.len() && a[i] == b[j] {
             i += 1;
             j += 1;
-        } else if j < b.len() && (i == a.len() || lcs[i][j + 1] >= lcs[i + 1][j]) {
-            out.push_str(&format!("+{:>5} {}\n", j + 1, b[j]));
-            j += 1;
-        } else {
+        } else if i < a.len() && (j == b.len() || lcs[i + 1][j] >= lcs[i][j + 1]) {
+            // The old line first, as `diff` prints it.
             out.push_str(&format!("-{:>5} {}\n", i + 1, a[i]));
             i += 1;
+        } else {
+            out.push_str(&format!("+{:>5} {}\n", j + 1, b[j]));
+            j += 1;
         }
     }
     out
@@ -282,7 +283,7 @@ mod tests {
 
     #[test]
     fn diff_marks_changed_lines() {
-        assert_eq!(line_diff("a\nb\n", "a\nc\n"), "+    2 c\n-    2 b\n");
+        assert_eq!(line_diff("a\nb\n", "a\nc\n"), "-    2 b\n+    2 c\n");
     }
 
     /// Idempotent and token-preserving over every `.rok` in the repo.

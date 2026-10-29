@@ -469,6 +469,7 @@ fn bench_times_each_bench() {
         filter: Some("fib"),
         iters: Some(3),
         samples: 2,
+        rokbench: false,
     };
     let ok = rokc_harness::bench::run(exe, cases, &opts, &mut buf);
     let s = text(&buf);
@@ -485,6 +486,7 @@ fn bench_times_each_bench() {
         filter: None,
         iters: Some(3),
         samples: 2,
+        rokbench: false,
     };
     let ok = rokc_harness::bench::run(exe, cases, &opts, &mut buf);
     let s = text(&buf);

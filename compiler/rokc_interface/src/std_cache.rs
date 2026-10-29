@@ -54,11 +54,12 @@ fn last_use(dir: &Path) -> SystemTime {
 
 /// `rok.rokhir` of the prebuilt std for `key`, built now if missing; a
 /// build in another process is waited for, so fingerprints stay put.
+/// `on_build` runs just before this process starts a build.
 ///
 /// `None` (compile from source) when ruled out by options, the cache is
 /// read-only, or the build fails.
 #[must_use]
-pub fn prebuilt_std(key: &StdKey<'_>) -> Option<PathBuf> {
+pub fn prebuilt_std(key: &StdKey<'_>, on_build: &dyn Fn()) -> Option<PathBuf> {
     let o = key.opts;
     let plain = o.repl.is_none()
         && o.mlir_dialect_plugins.is_empty()
@@ -162,6 +163,7 @@ pub fn prebuilt_std(key: &StdKey<'_>) -> Option<PathBuf> {
             }
         }
     });
+    on_build();
     let built = build(key, &root, &dir);
     drop(stop);
     let _ = heartbeat.join();

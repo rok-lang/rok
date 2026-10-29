@@ -95,13 +95,19 @@ fn test_main(tests: &[(String, bool)]) -> String {
     src
 }
 
-/// `rokc bench`'s `main`, `argv` = `name iters samples tty width`: builds
-/// the `Bench` handle and hands it to the named benchmark, which measures
-/// and reports itself (`rok::core::bench`).
+/// `rokc bench`'s `main`, `argv` = `name iters samples tty width` (`tty`
+/// 1: the human line, 0: the `#rokbench` one): builds the `Bench` handle
+/// and hands it to the named benchmark, which measures and reports itself
+/// (`rok::core::bench`). Exit 3: it never called `b.iter` (the runner
+/// says so).
 fn bench_main(benches: &[(String, bool)]) -> String {
-    let mut src = String::from(
-        "fn main() {\n\
-         \x20   let argv = rok::std::env::args();\n\
+    let mut src = String::from(if benches.is_empty() {
+        "fn main() {\n"
+    } else {
+        "fn main() -> i32 {\n"
+    });
+    src.push_str(
+        "\x20   let argv = rok::std::env::args();\n\
          \x20   let name = argv[1];\n\
          \x20   let iters: i64 = try! argv[2].parse();\n\
          \x20   let samples: i64 = try! argv[3].parse();\n\
@@ -119,6 +125,10 @@ fn bench_main(benches: &[(String, bool)]) -> String {
     if !benches.is_empty() {
         src.push_str("    else ");
     }
-    src.push_str("{ panic(\"rokc bench: unknown bench name\"); }\n}\n");
+    src.push_str("{ panic(\"rokc bench: unknown bench name\"); }\n");
+    if !benches.is_empty() {
+        src.push_str("    if rok::core::bench::measured() { 0 } else { 3 }\n");
+    }
+    src.push_str("}\n");
     src
 }

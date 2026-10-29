@@ -4961,3 +4961,147 @@ fn rok_leaves_no_temporaries() {
         .collect();
     assert!(left.is_empty(), "left behind: {left:?}");
 }
+
+/// `rok new` / `init` end with what to run next; `rok add` names the
+/// version it added.
+// spec: §9.10.2 §9.10.4
+#[test]
+fn new_and_add_say_what_happened() {
+    let root = scratch("new-next");
+    let home = root.join("home");
+    let err = |cwd: &Path, args: &[&str]| {
+        let out = rok(&home, cwd, args);
+        ok(&out);
+        text(&out.stderr)
+    };
+    // Windows PowerShell 5.1 has no `&&`: one command per line there.
+    let next = |dir: &str, then: &str| {
+        if cfg!(windows) {
+            format!("             cd {dir}\n             {then}\n")
+        } else {
+            format!("             cd {dir} && {then}\n")
+        }
+    };
+    assert_eq!(
+        err(&root, &["new", "app"]),
+        format!(
+            "     Created executable package (app)\n{}",
+            next("app", "rok run")
+        )
+    );
+    assert!(err(&root, &["new", "--lib", "geo"]).ends_with(&next("geo", "rok test")));
+    fs::create_dir_all(root.join("here")).unwrap();
+    assert!(err(&root.join("here"), &["init"]).ends_with("\n             rok run\n"));
+    assert_eq!(err(&root, &["-q", "new", "quiet"]), "");
+
+    let app = root.join("app");
+    write(&root.join("u/src/lib.rok"), LIB_V1);
+    write(
+        &root.join("u/rok.rokon"),
+        "Package { name: \"u\", version: \"1.2.3\" }\n",
+    );
+    assert_eq!(
+        err(&app, &["add", "u", "--path", "../u"]),
+        "       Added u v1.2.3\n"
+    );
+    assert_eq!(
+        err(&app, &["add", "geo", "--path", "../geo", "--dev"]),
+        "       Added geo v0.1.0 (dev_deps)\n"
+    );
+    // No `version`: the name alone.
+    write(&root.join("v/src/lib.rok"), LIB_V1);
+    assert_eq!(
+        err(&app, &["add", "v", "--path", "../v"]),
+        "       Added v\n"
+    );
+}
+
+/// A dependency rok fetched builds as `<name> v<version>`, not as its
+/// directory in the cache; a local one shows its directory.
+// spec: §9.1.8 §9.10.4
+#[test]
+fn fetched_dependency_builds_by_version() {
+    if !llvm() {
+        return;
+    }
+    let root = scratch("dep-version");
+    let home = root.join("home");
+    let repo = root.join("greet");
+    commit(
+        &repo,
+        &[
+            ("src/lib.rok", LIB_V2),
+            (
+                "rok.rokon",
+                "Package { name: \"greet\", version: \"0.3.0\" }\n",
+            ),
+        ],
+    );
+    ok(&rok(&home, &root, &["new", "app"]));
+    let app = root.join("app");
+    write(&app.join("local/src/lib.rok"), LIB_V1);
+    write(
+        &app.join("src/main.rok"),
+        "println(f\"{greet::greet()} {local::greet()}\");\n",
+    );
+    ok(&rok(
+        &home,
+        &app,
+        &["add", "greet", "--git", &repo.display().to_string()],
+    ));
+    ok(&rok(&home, &app, &["add", "local", "--path", "local"]));
+    let out = rok(&home, &app, &["build"]);
+    ok(&out);
+    let err = text(&out.stderr).replace('\\', "/");
+    assert!(err.contains("   Compiling greet v0.3.0\n"), "{err}");
+    assert!(err.contains("   Compiling local (local)\n"), "{err}");
+    assert!(!err.contains("checkouts"), "{err}");
+}
+
+/// `rok bench` prints the human line whatever stdout is; `--format
+/// rokbench` the machine one. A bench that never calls `b.iter` is named,
+/// not counted as run.
+// spec: §9.1.2 §9.9.11
+#[test]
+fn bench_output_is_human_when_piped() {
+    if !llvm() {
+        return;
+    }
+    let root = scratch("bench-piped");
+    let home = root.join("home");
+    ok(&rok(&home, &root, &["new", "b"]));
+    let dir = root.join("b");
+    write(
+        &dir.join("src/main.rok"),
+        "use rok::core::bench::Bench;\nuse rok::core::hint::black_box;\n\
+         #[bench]\nfn sum(b: Bench) { b.iter(|| black_box(1i64 + 2i64)); }\n\
+         #[bench]\nfn idle(b: Bench) { let _ = b; }\n",
+    );
+    let args = ["-q", "bench", "--iters=3", "--samples=2"];
+    let out = rok(&home, &dir, &args);
+    let s = ok(&out);
+    assert!(s.contains("  sum   ") && s.contains(" +/- "), "{s}");
+    assert!(!s.contains("#rokbench"), "{s}");
+    assert!(
+        s.contains("  idle  warning: measured nothing: time the code with `b.iter(|| ..)`"),
+        "{s}"
+    );
+    assert!(
+        s.contains("bench result: ok. 1 run; 0 failed; 1 measured nothing; 0 filtered out"),
+        "{s}"
+    );
+    let out = rok(
+        &home,
+        &dir,
+        &[&args[..], &["--format", "rokbench"]].concat(),
+    );
+    let s = ok(&out);
+    assert!(s.contains("#rokbench name=sum median_ns="), "{s}");
+    let out = rok(&home, &dir, &["bench", "--format=csv"]);
+    assert_eq!(out.status.code(), Some(2));
+    assert!(
+        text(&out.stderr).contains("`--format` takes human or rokbench, not `csv`"),
+        "{}",
+        text(&out.stderr)
+    );
+}

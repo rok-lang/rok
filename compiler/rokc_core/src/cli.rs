@@ -159,11 +159,14 @@ build options:
 check options:  --check-library (check every library body, reached or not)
 test options:   --threads=N, --show-output
 bench options:  --iters=N (calls per sample; default: calibrated to ~10ms),
-                --samples=N (timed samples, default 10)
+                --samples=N (timed samples, default 10),
+                --format=human|rokbench (rokbench: one `#rokbench` line
+                per benchmark for tools; default human, piped or not)
 harness:        --emit-harness <file> (write the built harness and its cases
                 to <file> for `rok` to run, instead of naming it)
 doc options:    --std (document the standard library too; without a path,
-                only it, into ./target/doc/)
+                only it, into ./target/doc/),
+                --open (open the index in $BROWSER or the system's browser)
 lint options:   --list
 fmt options:    --check (exit 1 if a file would change), --diff
 
@@ -277,7 +280,8 @@ Build the package at <path> (default: the current directory). src/main.rok
 becomes the executable target/<profile>/<name>, src/lib.rok the library
 target/<profile>/lib<name>.a and <name>.rokhir. <profile> is debug, or
 release with --release, -O2, -O3 or -Os. A lone .rok file outside a
-package's src/ builds as a one-file program.",
+package's src/ builds as a one-file program, its executable beside it
+(hello.rok: hello) unless -o names another file.",
         examples: &[
             ("{tool} build", "debug build of the package here"),
             ("{tool} build --release", "optimized build"),
@@ -446,6 +450,7 @@ dependencies, in target/doc/.",
         examples: &[
             ("{tool} doc", "docs of the package here"),
             ("{tool} doc --std", "with the standard library"),
+            ("{tool} doc --open", "then open them in a browser"),
         ],
         sections: &["doc options"],
         ..CmdHelp::EMPTY
