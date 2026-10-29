@@ -3955,11 +3955,15 @@ fn completions_follow_help() {
             assert!(script.contains(&want), "{shell} lacks {want}");
         }
     }
-    let out = rokc(None, &dir, &["completions", "bash"]);
-    let file = dir.join("rokc.bash");
-    fs::write(&file, &out.stdout).unwrap();
-    let check = Command::new("bash").arg("-n").arg(&file).output().unwrap();
-    assert!(check.status.success(), "{}", text(&check.stderr));
+    // Windows runners may resolve `bash` to WSL, which cannot read the path.
+    #[cfg(unix)]
+    {
+        let out = rokc(None, &dir, &["completions", "bash"]);
+        let file = dir.join("rokc.bash");
+        fs::write(&file, &out.stdout).unwrap();
+        let check = Command::new("bash").arg("-n").arg(&file).output().unwrap();
+        assert!(check.status.success(), "{}", text(&check.stderr));
+    }
     assert_exit(&rokc(None, &dir, &["completions", "tcsh"]), 2);
     assert_exit(&rokc(None, &dir, &["completions"]), 2);
 }
