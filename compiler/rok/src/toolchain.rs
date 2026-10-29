@@ -88,6 +88,11 @@ fn default_pin(home: &Path) -> Result<Option<String>, String> {
 
 /// `+<version>`, else `ROK_TOOLCHAIN`, else the manifest's, else default.
 fn active(home: &Path, plus: Option<&str>) -> Result<PathBuf, String> {
+    chosen(home, plus).map(|(dir, _)| dir)
+}
+
+/// `active`'s toolchain and why it is the one.
+fn chosen(home: &Path, plus: Option<&str>) -> Result<(PathBuf, String), String> {
     let env = std::env::var("ROK_TOOLCHAIN")
         .ok()
         .filter(|t| !t.is_empty());
@@ -106,7 +111,124 @@ fn active(home: &Path, plus: Option<&str>) -> Result<PathBuf, String> {
                 .to_owned(),
         );
     };
-    find(home, &pin).ok_or_else(|| not_installed(&pin, &why))
+    match find(home, &pin) {
+        Some(dir) => Ok((dir, why)),
+        None => Err(not_installed(&pin, &why)),
+    }
+}
+
+/// The first `tool` on `PATH`, as the shell finds it (on Windows, with
+/// each `PATHEXT` extension).
+fn first_on_path(tool: &str) -> Option<PathBuf> {
+    let path = std::env::var_os("PATH")?;
+    let names: Vec<String> = if cfg!(windows) {
+        let exts = std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_owned());
+        exts.split(';')
+            .filter(|e| !e.is_empty())
+            .map(|e| format!("{tool}{}", e.to_ascii_lowercase()))
+            .collect()
+    } else {
+        vec![tool.to_owned()]
+    };
+    std::env::split_paths(&path)
+        .filter(|d| !d.as_os_str().is_empty())
+        .flat_map(|d| names.iter().map(move |n| d.join(n)))
+        .find(|p| runnable(p))
+}
+
+#[cfg(unix)]
+fn runnable(p: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::metadata(p).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+}
+
+#[cfg(not(unix))]
+fn runnable(p: &Path) -> bool {
+    p.is_file()
+}
+
+/// Warn when the shell's `rok` is not `home`'s proxy: an update or a new
+/// default would not take. Not with `-q`, as the installers run it.
+fn path_warning(home: &Path, quiet: bool) {
+    if quiet {
+        return;
+    }
+    let ours = home.join("bin").join(exe_name("rok"));
+    let Some(first) = first_on_path("rok") else {
+        return;
+    };
+    let real = |p: &Path| rokc_core::real_path(p).unwrap_or_else(|_| p.to_path_buf());
+    if real(&first) == real(&ours) {
+        return;
+    }
+    let version = version_of(&first).map_or_else(String::new, |v| format!(" (rok {v})"));
+    let bin = shown(&home.join("bin"));
+    eprintln!(
+        "rok: {} your shell runs {}{version} before {}; put {bin} first on PATH or remove the \
+         other one",
+        term::label(Stream::Stderr, Role::Warning),
+        first.display(),
+        shown(&ours),
+    );
+}
+
+/// `<exe> --version`'s version, given a few seconds.
+fn version_of(exe: &Path) -> Option<String> {
+    let mut child = Command::new(exe)
+        .arg("--version")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .ok()?;
+    let start = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if start.elapsed() < std::time::Duration::from_secs(3) => {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    }
+    let mut out = String::new();
+    std::io::Read::read_to_string(&mut child.stdout.take()?, &mut out).ok()?;
+    // `rok 0.1.4 (..)`.
+    let mut words = out.lines().next()?.split_whitespace();
+    (words.next() == Some("rok")).then(|| words.next().map(str::to_owned))?
+}
+
+/// `rok --version -v`: this binary, the toolchain it resolves and why,
+/// the `rokc` it runs, and the host.
+pub fn describe(plus: Option<&str>) -> String {
+    let home = home();
+    let toolchain = match chosen(&home, plus) {
+        Ok((dir, why)) => format!(
+            "{} ({why})",
+            dir.file_name().unwrap_or_default().to_string_lossy()
+        ),
+        Err(_) => format!(
+            "none (this rok is {VERSION}, not from {})",
+            shown(&root(&home))
+        ),
+    };
+    let pin = manifest_pin().map(|(_, p)| p);
+    let rokc = rokc_for(plus, pin.as_deref()).map_or_else(|e| e, |p| p.display().to_string());
+    let binary = rokc_core::current_exe()
+        .or_else(|| std::env::current_exe().ok())
+        .map_or_else(|| "unknown".to_owned(), |p| p.display().to_string());
+    let rows = [
+        ("binary", binary),
+        ("toolchain", toolchain),
+        ("rokc", rokc),
+        ("host", HOST.to_owned()),
+    ]
+    .map(|(k, v)| (k.to_owned(), v));
+    term::list(&rows, None, "")
 }
 
 /// If this executable is a proxy (`$ROK_HOME/bin/<tool>` beside
@@ -763,8 +885,14 @@ pub fn cmd(args: &[String], quiet: bool, verbose: bool) -> Result<i32, String> {
                 write_proxies(&h, &d.unwrap_or_else(|| root(&h).join(&name)))?;
             }
         }
-        ["update"] => update(&h, None, quiet, verbose)?,
-        ["update", v] if !v.starts_with('-') => update(&h, Some(v), quiet, verbose)?,
+        ["update"] => {
+            update(&h, None, quiet, verbose)?;
+            path_warning(&h, quiet);
+        }
+        ["update", v] if !v.starts_with('-') => {
+            update(&h, Some(v), quiet, verbose)?;
+            path_warning(&h, quiet);
+        }
         ["clean"] => clean(&h, quiet)?,
         ["default"] => match default_pin(&h)? {
             Some(p) => println!("{p}"),
@@ -778,6 +906,7 @@ pub fn cmd(args: &[String], quiet: bool, verbose: bool) -> Result<i32, String> {
                 term::status("Default", &format!("toolchain {pin} ({name})"));
                 report_completions(&refreshed, verbose);
             }
+            path_warning(&h, quiet);
         }
         ["remove", name] if !name.contains(['/', '\\']) && !name.starts_with('.') => {
             let dir = [root(&h).join(name), root(&h).join(format!("{name}-{HOST}"))]

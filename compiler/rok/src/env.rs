@@ -85,6 +85,10 @@ pub fn cmd(g: &Global, args: &[String]) -> Result<i32, String> {
         ["list"] => {
             let active = ambient_env();
             let names = names();
+            if names.is_empty() {
+                term::note("no environments; make one with `rok env create <name>`");
+                return Ok(0);
+            }
             let current = names.iter().position(|n| *n == active);
             let rows: Vec<(String, String)> =
                 names.into_iter().map(|n| (n, String::new())).collect();

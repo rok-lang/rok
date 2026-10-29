@@ -80,7 +80,10 @@ pub fn isolate<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> Res
             let fail = lock(&FAIL).take();
             match fail {
                 Some(fail) => fail(info.to_string()),
-                None => eprintln!("rokc: internal compiler error: {info}"),
+                None => eprintln!(
+                    "{}: internal compiler error: {info}",
+                    rokc_core::cli::invoked_as()
+                ),
             }
             loop {
                 std::thread::park();

@@ -232,7 +232,11 @@ impl TempDir {
 impl Drop for TempDir {
     fn drop(&mut self) {
         if self.keep {
-            eprintln!("rokc: kept temporaries in {}", self.path.display());
+            eprintln!(
+                "{}: kept temporaries in {}",
+                rokc_core::cli::invoked_as(),
+                self.path.display()
+            );
         } else if self.entry.is_none() {
             let _ = std::fs::remove_dir_all(&self.path);
         }
