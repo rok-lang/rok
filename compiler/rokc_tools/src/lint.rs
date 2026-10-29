@@ -16,9 +16,9 @@
 use std::collections::{HashMap, HashSet};
 
 use rokc_ast::{
-    AccessTail, AttrArg, AttrBody, Attribute, Block, CallArg, Expr, ExprKind, ExternItem, FnDef,
-    ImplItem, Item, Literal, Pattern, PatternKind, Stmt, StmtKind, TraitItem, TryKind, Ty, TyKind,
-    UseTree, UseTreeKind,
+    AccessTail, AttrArg, AttrBody, Attribute, Block, CallArg, CaptureSpec, Expr, ExprKind,
+    ExternItem, FnDef, ImplItem, Item, Literal, Pattern, PatternKind, Stmt, StmtKind, TraitItem,
+    TryKind, Ty, TyKind, UseTree, UseTreeKind,
 };
 use rokc_core::Visibility;
 use rokc_diagnostic::{ErrorKind, RokDiagnostic, Span};
@@ -669,6 +669,8 @@ struct Binding {
     span: Span,
     used: bool,
     is_loop: bool,
+    /// A `ref` parameter: a write reaches the caller, so it is a use.
+    by_ref: bool,
 }
 
 struct Scope {
@@ -685,6 +687,8 @@ struct Cx<'a> {
     exempt_next: bool,
     /// Plain-assignment targets (`x = ..`): not reads.
     assign_targets: HashSet<(u32, u32)>,
+    /// Spans of `ref` parameters.
+    ref_params: HashSet<(u32, u32)>,
     /// Spans of `for` patterns and their parts.
     loop_pats: HashSet<(u32, u32)>,
     /// Names mentioned in the current file / any user file.
@@ -737,6 +741,7 @@ impl<'a> Cx<'a> {
             scopes: Vec::new(),
             exempt_next: false,
             assign_targets: HashSet::new(),
+            ref_params: HashSet::new(),
             loop_pats: HashSet::new(),
             file_names: HashSet::new(),
             all_names: HashSet::new(),
@@ -937,6 +942,8 @@ impl<'a> Cx<'a> {
     /// A function body; `fixed`: its signature comes from a trait.
     fn func(&mut self, f: &FnDef, fixed: bool) {
         self.exempt_next = fixed || f.body.is_none();
+        self.ref_params
+            .extend(f.params.iter().filter(|p| p.by_ref).map(|p| key(p.span)));
         walk_fn(self, f);
         self.lost_writes(crate::copy_write::check_fn(f));
         if let Some(b) = &f.body {
@@ -1244,6 +1251,17 @@ impl<'a> Cx<'a> {
         for s in self.scopes.iter_mut().rev() {
             if let Some(b) = s.bindings.iter_mut().rev().find(|b| b.name == name) {
                 b.used = true;
+                return;
+            }
+        }
+    }
+
+    /// `name` written (assigned, or captured by `ref`): a use when it is a
+    /// `ref` parameter.
+    fn mark_written(&mut self, name: &str) {
+        for s in self.scopes.iter_mut().rev() {
+            if let Some(b) = s.bindings.iter_mut().rev().find(|b| b.name == name) {
+                b.used |= b.by_ref;
                 return;
             }
         }
@@ -1752,6 +1770,7 @@ impl AstVisitor for Cx<'_> {
                 span: at,
                 used: false,
                 is_loop,
+                by_ref: self.ref_params.contains(&key(at)),
             });
         }
     }
@@ -1769,6 +1788,7 @@ impl AstVisitor for Cx<'_> {
                 if let ExprKind::Path(p) = &target.kind {
                     if let [seg] = p.segments.as_slice() {
                         self.assign_targets.insert(key(target.span));
+                        self.mark_written(&seg.name);
                         if matches!(&value.kind, ExprKind::Path(q)
                             if q.segments.len() == 1 && q.segments[0].name == seg.name)
                         {
@@ -1847,6 +1867,17 @@ impl AstVisitor for Cx<'_> {
             ExprKind::StructInit { path, .. } => {
                 self.file_names
                     .extend(path.segments.iter().map(|s| s.name.clone()));
+            }
+            ExprKind::Closure {
+                captures, params, ..
+            } => {
+                for c in captures {
+                    if let CaptureSpec::Ref(n) = c {
+                        self.mark_written(n);
+                    }
+                }
+                self.ref_params
+                    .extend(params.iter().filter(|p| p.by_ref).map(|p| key(p.span)));
             }
             ExprKind::Cast(_, ty) => {
                 let genuine = self

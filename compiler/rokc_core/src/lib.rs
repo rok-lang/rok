@@ -78,6 +78,84 @@ pub fn real_path(p: impl AsRef<Path>) -> std::io::Result<PathBuf> {
     Ok(real)
 }
 
+/// An exclusive lock on the file at `path` (created, with its directory,
+/// if missing), held until the returned file is dropped. Blocks while
+/// another process holds it.
+pub fn lock_file(path: &Path) -> std::io::Result<std::fs::File> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let f = std::fs::File::options()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::io::AsRawFd;
+        unsafe extern "C" {
+            fn flock(fd: i32, op: i32) -> i32;
+        }
+        const LOCK_EX: i32 = 2;
+        loop {
+            // SAFETY: `f` is an open file.
+            if unsafe { flock(f.as_raw_fd(), LOCK_EX) } == 0 {
+                break;
+            }
+            let e = std::io::Error::last_os_error();
+            if e.kind() != std::io::ErrorKind::Interrupted {
+                return Err(e);
+            }
+        }
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::io::AsRawHandle;
+        #[repr(C)]
+        struct Overlapped {
+            internal: usize,
+            internal_high: usize,
+            offset: u32,
+            offset_high: u32,
+            event: *mut std::ffi::c_void,
+        }
+        unsafe extern "system" {
+            fn LockFileEx(
+                file: *mut std::ffi::c_void,
+                flags: u32,
+                reserved: u32,
+                low: u32,
+                high: u32,
+                ov: *mut Overlapped,
+            ) -> i32;
+        }
+        const LOCKFILE_EXCLUSIVE_LOCK: u32 = 2;
+        let mut ov = Overlapped {
+            internal: 0,
+            internal_high: 0,
+            offset: 0,
+            offset_high: 0,
+            event: std::ptr::null_mut(),
+        };
+        // SAFETY: `f` is an open synchronous handle; `ov` outlives the call.
+        let ok = unsafe {
+            LockFileEx(
+                f.as_raw_handle(),
+                LOCKFILE_EXCLUSIVE_LOCK,
+                0,
+                u32::MAX,
+                u32::MAX,
+                &raw mut ov,
+            )
+        };
+        if ok == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+    }
+    Ok(f)
+}
+
 /// A stamp that changes whenever the file at `p` is written or replaced.
 ///
 /// Size, mtime, inode and ctime, without reading the file (Windows: file

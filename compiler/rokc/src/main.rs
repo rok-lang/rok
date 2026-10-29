@@ -1341,8 +1341,10 @@ const SCRIPT_KEPT: std::time::Duration = std::time::Duration::from_secs(24 * 360
 
 /// Lone file `pkg`'s executable, cached (spec 9.10.7) at
 /// `scripts/<key>/<name>`, `<key>` hashing everything the build reads. A
-/// hit compiles nothing and reprints the warnings. Linking to a scratch
-/// name and renaming keeps racing runs safe.
+/// hit compiles nothing and reprints the warnings. Racing runs build one
+/// at a time, under a lock beside the file's units, and a waiter finds
+/// the build fresh; linking to a scratch name and renaming keeps a
+/// running executable safe.
 fn script_exe(a: &Args, pkg: &Package) -> PathBuf {
     let root = out_dir(a, None).join("scripts");
     let name = exe_file(a, &pkg.name);
@@ -1350,6 +1352,14 @@ fn script_exe(a: &Args, pkg: &Package) -> PathBuf {
     let dir = root.join(fp.key());
     let exe = dir.join(&name);
     let fp = fp.moved_to(&exe, also(a, pkg, &exe));
+    let mut lock = unit_opts(a, pkg, &pkg.name)
+        .incremental
+        .unwrap_or_default()
+        .into_os_string();
+    lock.push(".lock");
+    let lock = PathBuf::from(lock);
+    let _held = rokc_core::lock_file(&lock)
+        .unwrap_or_else(|e| fail(&format!("cannot lock {}: {e}", lock.display())));
     let mut built = false;
     build_fresh(a, pkg, fp, |a, result| {
         create_dir(&dir);

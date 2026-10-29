@@ -1,0 +1,41 @@
+// expect-exit: 0
+// spec: §6.2.9
+// expect-lint: 30:9 unused variable `n`
+// expect-stdout:
+// 3
+// 5
+// 7
+
+// A `ref` parameter only written, directly or through a `[ref n]`
+// capture, is used: the write reaches the caller. One never touched is
+// still unused.
+
+fn set(ref n: i32) {
+    n = 3;
+}
+
+fn set_late(ref n: i32) {
+    let put = [ref n] || { n = 5; };
+    put();
+}
+
+fn pass(ref n: i32) {
+    let put = [ref n] |v: i32| {
+        let inner = [ref n] || { n = v; };
+        inner();
+    };
+    put(7);
+}
+
+fn idle(ref n: i32) {}
+
+fn main() {
+    let x = 0;
+    set(ref x);
+    println(x);
+    set_late(ref x);
+    println(x);
+    pass(ref x);
+    println(x);
+    idle(ref x);
+}
