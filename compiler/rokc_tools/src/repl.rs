@@ -39,13 +39,16 @@ const SHOWN: &str = "__rok_repl_out";
 /// empty where no host runs.
 const HOST_OBJ: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/repl_host.o"));
 
-const HELP: &str = "  <expr>         evaluate and print its value (`Display`); `it` holds the
-                 last value shown (a binding named `it` wins)
+const HELP: &str = "  <expr>         evaluate and print its value (`Display`, else `Debug`,
+                 else its type); `it` holds the last value shown (a
+                 binding named `it` wins)
   <expr>?        evaluate and print its `Debug` form
   let x = ..     bind (a top-level `let` may rebind a name, 907.3; a
                  cell's last `let` or assignment needs no `;`)
-  fn / struct / enum / impl / trait / use ..   define (a new `fn f` /
-                 `struct S` replaces the old one)
+  fn / struct / enum / impl / trait / use ..   define (a new `fn f`,
+                 `struct S` or `impl Tr for S` replaces the old one, an
+                 `impl S` the one with its methods; one cell may define
+                 several)
   :type <expr>, :t <expr>   print the type of an expression
   :doc <name>    print its signature and doc comment
   :time <expr>   evaluate it; print the time of each phase and the total
@@ -73,8 +76,38 @@ its body: then `...` asks for the next line.
 /// The items of the session, as source.
 #[derive(Clone, Default)]
 struct State {
-    /// Items with their replace key (`fn f`, `struct S`; `None` for impls).
-    items: Vec<(Option<String>, String)>,
+    items: Vec<Item>,
+}
+
+/// An item of the session.
+#[derive(Clone)]
+struct Item {
+    /// What a redefinition replaces (`fn f`, `struct S`, `impl Tr for S`;
+    /// `None` for an inherent impl, see `replaces`).
+    key: Option<String>,
+    text: String,
+    /// The cell that defined it (0: a loaded program or the prelude), its
+    /// text, and the item's offset there.
+    cell: u32,
+    source: Arc<str>,
+    at: usize,
+}
+
+impl Item {
+    fn new(key: Option<String>, text: String) -> Self {
+        Self {
+            key,
+            source: Arc::from(text.as_str()),
+            text,
+            cell: 0,
+            at: 0,
+        }
+    }
+
+    /// How messages name it: `fn f`, `impl Display for P`.
+    fn name(&self) -> String {
+        self.key.clone().unwrap_or_else(|| impl_header(&self.text))
+    }
 }
 
 /// A program loaded into the session (`repl <path>`).
@@ -133,7 +166,7 @@ impl Lap {
 }
 
 /// The host's reply to a cell: its shown value, or `None` when it
-/// failed (reported; the session is as before it).
+/// failed (reported; the session is unchanged).
 type Loaded = Option<String>;
 
 /// A top-level binding.
@@ -489,6 +522,12 @@ pub struct Repl {
     /// The text the user typed for the cell being built: diagnostics
     /// point into it, not into the generated session source.
     input: String,
+    /// The number of the cell being built, `<repl cell N>` in runtime
+    /// locations (0: none, as for the prelude).
+    pub cell_no: u32,
+    /// The cell being built defines items (those with its number): errors
+    /// in earlier ones say how to go on.
+    defining: bool,
     /// The last compile failed only because an expression cell never
     /// yields a value (`panic(..)`).
     diverged: std::cell::Cell<bool>,
@@ -537,6 +576,8 @@ impl Repl {
             gc_tables: Vec::new(),
             known: HashMap::new(),
             input: String::new(),
+            cell_no: 0,
+            defining: false,
             diverged: std::cell::Cell::new(false),
             running: Arc::default(),
             timing: false,
@@ -628,6 +669,7 @@ impl Repl {
                 return self.command(cmd, arg);
             }
             _ => {
+                self.cell_no += 1;
                 if let Ok(Some(shown)) = self.eval(cell) {
                     println!("{shown}");
                 }
@@ -674,6 +716,7 @@ impl Repl {
             ":time" => {
                 let t = std::time::Instant::now();
                 self.timing = true;
+                self.cell_no += 1;
                 let r = self.eval(arg);
                 self.timing = false;
                 if let Ok(Some(shown)) = r {
@@ -722,7 +765,7 @@ impl Repl {
         self.any_types.clear();
         self.history.clear();
         if let Some(p) = self.prelude.clone() {
-            self.cell(&p);
+            self.run_prelude(&p);
         }
     }
 
@@ -730,9 +773,9 @@ impl Repl {
     /// an item, or a `use` of it.
     fn defines(&self, name: &str) -> bool {
         self.bindings.iter().any(|b| b.name == name && !b.is_it)
-            || self.state.items.iter().any(|(k, t)| match k {
-                Some(k) => k.split(' ').nth(1) == Some(name),
-                None => t.starts_with("use ") && names(t, name),
+            || self.state.items.iter().any(|i| match &i.key {
+                Some(k) => !k.starts_with("impl ") && k.split(' ').nth(1) == Some(name),
+                None => i.text.starts_with("use ") && names(&i.text, name),
             })
     }
 
@@ -757,8 +800,13 @@ impl Repl {
         for b in &self.bindings {
             println!("{}: {}", b.name, b.shown_ty);
         }
-        for (_, item) in self.state.items.iter().filter(|(k, _)| k.is_some()) {
-            println!("{}", header(item));
+        let named = self
+            .state
+            .items
+            .iter()
+            .filter(|i| i.key.as_deref().is_some_and(|k| !k.starts_with("impl ")));
+        for item in named {
+            println!("{}", header(&item.text));
         }
     }
 
@@ -799,6 +847,7 @@ impl Repl {
                 }
                 Ok(None)
             } else {
+                self.cell_no += 1;
                 self.eval(&c)
             };
             match r {
@@ -827,8 +876,8 @@ impl Repl {
     /// to the end.
     fn script(&self) -> String {
         let mut out = String::new();
-        for (_, item) in &self.state.items {
-            out.push_str(item);
+        for item in &self.state.items {
+            out.push_str(&item.text);
             out.push('\n');
         }
         let mut scope: HashMap<&str, &str> = HashMap::new();
@@ -899,6 +948,15 @@ impl Repl {
         mine.map(|b| (b.name.clone(), b.ty.clone())).collect()
     }
 
+    /// Run the prelude (`repl <lib>`), as no numbered cell.
+    pub fn run_prelude(&mut self, cell: &str) {
+        let n = std::mem::take(&mut self.cell_no);
+        if let Ok(Some(shown)) = self.eval(cell) {
+            println!("{shown}");
+        }
+        self.cell_no = n;
+    }
+
     /// One cell: what it shows (the value, or its type), or `Err`
     /// after its errors went to stderr.
     #[allow(clippy::result_unit_err)]
@@ -906,8 +964,8 @@ impl Repl {
         // Diagnostics quote the cell as typed (`regions`).
         cell.clone_into(&mut self.input);
         let cell = &close_stmt(cell);
-        if let Cell::Item(key) = classify(cell) {
-            return self.item(cell, key).then_some(None).ok_or(());
+        if let Cell::Item(_) = classify(cell) {
+            return self.item(cell).then_some(None).ok_or(());
         }
         // The cell's value is its last top-level statement's (907.7).
         let (stmts, last) = split_last(cell);
@@ -962,14 +1020,16 @@ impl Repl {
     /// keeps its errors unreported.
     fn type_of(&self, expr: &str, quiet: bool) -> Option<String> {
         let src = self.session(&self.state, &format!("let {VALUE} = ({expr});"), None);
-        self.compile(&src, quiet)
+        self.compile(&self.state, &src, quiet)
             .and_then(|r| binding_ty(&r, VALUE))
     }
 
     /// The names the session defines: bindings, then items.
     pub fn names(&self) -> Vec<&str> {
-        let items = self.state.items.iter();
-        let items = items.filter_map(|(k, _)| k.as_deref()?.split(' ').nth(1));
+        let items = self.state.items.iter().filter_map(|i| i.key.as_deref());
+        let items = items
+            .filter(|k| !k.starts_with("impl "))
+            .filter_map(|k| k.split(' ').nth(1));
         self.bindings
             .iter()
             .map(|b| b.name.as_str())
@@ -1043,28 +1103,52 @@ impl Repl {
         }
     }
 
-    fn item(&mut self, cell: &str, key: Option<String>) -> bool {
-        // A new definition replaces the old one of the same name.
+    fn item(&mut self, cell: &str) -> bool {
+        // A new definition replaces the old one of the same name; a cell
+        // may define several, so dependents can be redefined with it.
+        let source: Arc<str> = Arc::from(cell);
+        let new: Vec<Item> = items_of(cell)
+            .into_iter()
+            .map(|(key, at, end)| Item {
+                key,
+                text: cell[at..end].to_owned(),
+                cell: self.cell_no,
+                source: Arc::clone(&source),
+                at,
+            })
+            .collect();
         let mut next = self.state.clone();
-        next.items.retain(|(k, _)| key.is_none() || *k != key);
-        next.items.push((key.clone(), cell.to_owned()));
-        let Some(r) = self.compile(&self.session(&next, "", None), false) else {
-            return false;
-        };
+        next.items
+            .retain(|old| !new.iter().any(|n| replaces(n, old)));
+        next.items.extend(new.iter().cloned());
+        self.defining = true;
+        let r = self.compile(&next, &self.session(&next, "", None), false);
+        self.defining = false;
+        let Some(r) = r else { return false };
         // Codegen too, like `check`: it rejects what cannot be lowered.
         if let Err(d) = r.emit(EmitKind::Mlir, &self.opts) {
             r.report(&d);
             return false;
         }
+        for key in new.iter().filter_map(|n| n.key.as_deref()) {
+            self.forget(key);
+            // A user's `it` wins over the session's.
+            if key.split(' ').nth(1) == Some("it") {
+                self.bindings.retain(|b| !b.is_it);
+            }
+        }
+        self.state = next;
+        true
+    }
+
+    /// Bindings and statics the redefinition of `key` makes stale.
+    fn forget(&mut self, key: &str) {
         // A binding of a redefined type would be read with the new
         // layout: forget it.
-        let old = key.as_deref().filter(|k| {
+        let old = Some(key).filter(|k| {
             !k.starts_with("fn ")
-                && self
-                    .state
-                    .items
-                    .iter()
-                    .any(|(o, _)| o.as_deref() == Some(k))
+                && !k.starts_with("impl ")
+                && self.state.items.iter().any(|o| o.key.as_deref() == Some(k))
         });
         if let Some(ty) = old.and_then(|k| k.split(' ').nth(1)) {
             self.bindings.retain(|b| {
@@ -1087,7 +1171,7 @@ impl Repl {
             });
         }
         // A redefined static starts over: the next cell defines it anew.
-        if let Some(name) = key.as_deref().and_then(|k| k.strip_prefix("static ")) {
+        if let Some(name) = key.strip_prefix("static ") {
             let lib = |s: &str| {
                 s.starts_with("rok::")
                     || self
@@ -1098,20 +1182,14 @@ impl Repl {
             self.statics
                 .retain(|s| lib(s) || s.rsplit("::").next() != Some(name));
         }
-        // A user's `it` wins over the session's.
-        if key.as_deref().and_then(|k| k.split(' ').nth(1)) == Some("it") {
-            self.bindings.retain(|b| !b.is_it);
-        }
-        self.state = next;
-        true
     }
 
     /// Cell source: items, binding slots, `body`, and the store of `show`
     /// to the host. `keep` adds the slot stores to the HIR.
     fn session(&self, state: &State, body: &str, show: Option<&str>) -> String {
         let mut src = String::new();
-        for (_, item) in &state.items {
-            src.push_str(item);
+        for item in &state.items {
+            src.push_str(&item.text);
             src.push('\n');
         }
         // Every type earlier cells stored in `any` slots: stored here too.
@@ -1167,28 +1245,23 @@ impl Repl {
     ) -> Result<Option<String>, Fail> {
         self.start_host();
         let mut lap = Lap::start(self.timing);
-        // A bare expression prints its `Display`; a trailing `?` (`debug`)
-        // prints its `Debug`. Either falls back to the type name alone when
-        // the value does not implement that trait; the plain build reports
-        // real errors.
-        let texts: Vec<String> = show
-            .map(|n| {
-                let value = if debug {
-                    format!("f\"{{{n}:?}}\"")
-                } else {
-                    format!("f\"{{{n}}}\"")
-                };
-                vec![value, format!("{n}.type_name_of()")]
-            })
-            .unwrap_or_default();
-        let mut tries = texts.iter().map(Some).chain([None]);
-        let (mut r, shown) = loop {
-            let text = tries.next().flatten();
-            let src = self.session(&self.state, cell, text.map(String::as_str));
-            match self.compile(&src, text.is_some()) {
-                Some(r) => break (r, text.is_some()),
-                None if text.is_some() => {}
-                None => return Err(Fail::Reported),
+        // A bare expression shows its `Display`, else its `Debug`, else its
+        // type; a trailing `?` (`debug`) its `Debug`, else its type. The
+        // first build's errors say which traits the type lacks.
+        let mut fmt = show.map(|_| if debug { Fmt::Debug } else { Fmt::Display });
+        let mut r = loop {
+            let text = show.zip(fmt).map(|(n, f)| f.text(n));
+            let src = self.session(&self.state, cell, text.as_deref());
+            let lacks = std::cell::Cell::new(None);
+            let claim = |r: &CompileResult, file: u32| {
+                let next = fmt.and_then(|f| unformattable(r, &src, file, f));
+                lacks.set(next);
+                next.is_some()
+            };
+            match self.front(&self.state, &src, false, claim) {
+                Ok(r) => break r,
+                Err(true) => fmt = lacks.get(),
+                Err(false) => return Err(Fail::Reported),
             }
         };
         lap.mark("front end");
@@ -1267,7 +1340,7 @@ impl Repl {
         Ok(show
             .and_then(|n| binding_ty(&r, n))
             .filter(|ty| ty != "()")
-            .map(|ty| if shown { value } else { ty }))
+            .map(|_| value))
     }
 
     /// Adds slots for the cell's new top-level `let`s (last of each name)
@@ -1526,20 +1599,24 @@ impl Repl {
             line.clear();
             rd.read_line(&mut line)?;
             self.running.store(0, Ordering::Relaxed);
-            let Some(n) = line.strip_prefix("ok ") else {
-                return Ok(line);
+            // `ok <n>` and the shown value, or `err <n>` and why it failed.
+            let (ok, n) = match line.trim_end().split_once(' ') {
+                Some(("ok", n)) => (true, n),
+                Some(("err", n)) => (false, n),
+                _ => return Err(std::io::ErrorKind::InvalidData.into()),
             };
-            let mut value = vec![0; n.trim().parse().unwrap_or(0)];
-            rd.read_exact(&mut value)?;
-            Ok::<_, std::io::Error>(format!("ok {}", String::from_utf8_lossy(&value)))
+            let mut text = vec![0; n.parse().unwrap_or(0)];
+            rd.read_exact(&mut text)?;
+            let text = String::from_utf8_lossy(&text).into_owned();
+            Ok::<_, std::io::Error>(if ok { Ok(text) } else { Err(text) })
         })();
         match reply {
-            Ok(r) if r.starts_with("ok ") => Some(r[3..].to_owned()),
-            Ok(r) if r == "err\n" => {
-                eprintln!("error: the cell failed; the session is as it was before it");
+            Ok(Ok(value)) => Some(value),
+            Ok(Err(why)) => {
+                eprintln!("error: {}", failure(&why));
                 None
             }
-            _ => {
+            Err(_) => {
                 eprintln!("error: the session host is gone; the bindings are lost");
                 self.host = None;
                 self.linked.clear();
@@ -1553,19 +1630,32 @@ impl Repl {
         }
     }
 
-    /// Front end; errors unless `quiet`. Locations map to `<repl>:line:col`
-    /// or the loaded program's own.
-    fn compile(&self, src: &str, quiet: bool) -> Option<CompileResult> {
+    /// Front end of `src`, the session source of `state`; errors unless
+    /// `quiet`. Diagnostics name the cell `<repl>:line:col`, an earlier
+    /// cell `<repl cell N>:line:col`, a loaded program its own file.
+    fn compile(&self, state: &State, src: &str, quiet: bool) -> Option<CompileResult> {
+        self.front(state, src, quiet, |_, _| false).ok()
+    }
+
+    /// `compile`; a failed build that `mine` claims (given the session
+    /// source's file id) is `Err(true)`, unreported.
+    fn front(
+        &self,
+        state: &State,
+        src: &str,
+        quiet: bool,
+        mine: impl Fn(&CompileResult, u32) -> bool,
+    ) -> Result<CompileResult, bool> {
         let (s, path) = self.compiler();
         // Added first so the views are in place while HIR lowering
         // writes caller locations (`#[track_caller]`).
         let mut map = SourceMap::new();
         let session = map.add(path.display().to_string(), src.to_owned());
-        let regions = self.regions(src, &mut map);
+        let regions = self.regions(state, src, &mut map);
         for r in &regions {
             let (line, col) = line_col(src, r.off);
-            let last =
-                line + u32::try_from(src[r.off..r.off + r.len].matches('\n').count()).ok()?;
+            let lines = src[r.off..r.off + r.len].matches('\n').count();
+            let last = line + u32::try_from(lines).map_err(|_| false)?;
             let at = line_col(&r.text, r.at);
             map.view(
                 session,
@@ -1580,28 +1670,38 @@ impl Repl {
             Ok(r) => r,
             Err(e) => {
                 SourceMap::new().report(&crate::analysis::ice(&e));
-                return None;
+                return Err(false);
             }
         };
         if !r.has_errors() {
-            return Some(r);
+            return Ok(r);
         }
         // A diverging expression cell (`panic(..)`) has no value to show:
-        // `eval` runs it again as a statement.
+        // `eval` runs it again as a statement, which reports the rest.
         let never = format!("`{VALUE}`: the initializer never produces a value");
-        if let [d] = r.errors.as_slice() {
-            if d.message.contains(&never) {
-                self.diverged.set(true);
-                return None;
-            }
+        if r.errors.iter().any(|d| d.message.contains(&never)) {
+            self.diverged.set(true);
+            return Err(false);
+        }
+        if mine(&r, session) {
+            return Err(true);
         }
         if !quiet {
             let path = path.display().to_string();
-            for d in &r.errors {
-                r.report(&self.package_hint(localize(d, session, &path, &regions)));
+            // The shown value's errors come with the cell's own.
+            let user = r.errors.iter().filter(|d| !in_show(d, src, session));
+            for d in user {
+                let (mut d, owner) = localize(d, session, &path, &regions);
+                if let Some(owner) = owner.filter(|_| self.defining) {
+                    d.notes.push(format!(
+                        "help: {owner} no longer compiles with this definition: redefine it \
+                         in this cell too, or `:reset` to start over"
+                    ));
+                }
+                r.report(&self.package_hint(d));
             }
         }
-        None
+        Err(false)
     }
 
     /// `d`, with a hint when the name it cannot find is one the package
@@ -1660,9 +1760,10 @@ impl Repl {
         (a, path.display().to_string())
     }
 
-    /// Where the user's text is in the session source `src`: the cell
-    /// being built, and the loaded program's items.
-    fn regions(&self, src: &str, map: &mut SourceMap) -> Vec<Region> {
+    /// Where the user's text is in `src`, the session source of `state`:
+    /// the cell being built, earlier cells' items, and the loaded program's
+    /// items.
+    fn regions(&self, state: &State, src: &str, map: &mut SourceMap) -> Vec<Region> {
         let program = self.program.as_ref();
         let shown = |map: &mut SourceMap, p: &Program, off: usize, len: usize, at: usize| Region {
             off,
@@ -1671,16 +1772,56 @@ impl Repl {
             path: p.path.clone(),
             text: Arc::clone(&p.text),
             at,
+            owner: None,
         };
+        let now = cell_path(self.cell_no);
         let mut regions = Vec::new();
-        // An expression cell is `{stmts}let VALUE = ({last});`.
+        // Items, which the session source starts with.
+        let mut off = 0;
+        for it in &state.items {
+            if !src[off..].starts_with(it.text.as_str()) {
+                continue;
+            }
+            if it.cell > 0 {
+                let (file, owner) = if self.defining && it.cell == self.cell_no {
+                    (map.add(REPL_FILE.to_owned(), it.source.to_string()), None)
+                } else {
+                    let owner = format!("`{}` from cell {}", it.name(), it.cell);
+                    (
+                        map.add(cell_path(it.cell), it.source.to_string()),
+                        Some(owner),
+                    )
+                };
+                regions.push(Region {
+                    off,
+                    len: it.text.len(),
+                    file,
+                    path: cell_path(it.cell),
+                    text: Arc::clone(&it.source),
+                    at: it.at,
+                    owner,
+                });
+            }
+            off += it.text.len() + 1;
+        }
+        // An expression cell is `{stmts}let VALUE = ({last});`, `{stmts}let
+        // VALUE = ({expr});` for `{expr}?`; the shown value's store follows.
+        let body = &src[..src.rfind(&format!("\n{SHOWN} = ")).unwrap_or(src.len())];
         let (stmts, last) = split_last(&self.input);
-        let last_off = src.rfind(last).filter(|_| !last.is_empty());
-        let stmts_off = last_off
-            .and_then(|o| src[..o].rfind(stmts))
+        let expr = last.trim_end().strip_suffix('?').map(str::trim_end);
+        let found = [Some(last), expr]
+            .into_iter()
+            .flatten()
+            .filter(|t| !t.is_empty())
+            .find_map(|t| Some((body.rfind(t)?, t)));
+        let stmts_off = found
+            .and_then(|(o, _)| body[..o].rfind(stmts))
             .filter(|_| !stmts.is_empty());
-        for (off, part, at) in [(stmts_off, stmts, 0), (last_off, last, stmts.len())] {
-            let Some(off) = off else { continue };
+        let cell = [
+            stmts_off.map(|o| (o, stmts, 0)),
+            found.map(|(o, t)| (o, t, stmts.len())),
+        ];
+        for (off, part, at) in cell.into_iter().flatten() {
             let len = part.len();
             regions.push(match program.and_then(|p| Some((p, p.cell?))) {
                 Some((p, cell)) => shown(map, p, off, len, cell + at),
@@ -1688,9 +1829,10 @@ impl Repl {
                     off,
                     len,
                     file: map.add(REPL_FILE.to_owned(), self.input.clone()),
-                    path: REPL_FILE.to_owned(),
+                    path: now.clone(),
                     text: Arc::from(self.input.as_str()),
                     at,
+                    owner: None,
                 },
             });
         }
@@ -1782,15 +1924,16 @@ impl Repl {
         let mut next = self.state.clone();
         // Its items replace the session's of the same name (`:reload`).
         next.items
-            .retain(|(k, _)| k.is_none() || !items.iter().any(|(n, ..)| n == k));
-        next.items.extend(items.into_iter().map(|(k, t, _)| (k, t)));
+            .retain(|i| i.key.is_none() || !items.iter().any(|(n, ..)| *n == i.key));
+        next.items
+            .extend(items.into_iter().map(|(k, t, _)| Item::new(k, t)));
         let all = match (cells.first(), cells.last()) {
             (Some(f), Some(l)) => &body[f.0..l.1],
             _ => "",
         };
         self.set_cell(all, cells.first().map(|c| c.0));
         let checked = self
-            .compile(&self.session(&next, all, None), false)
+            .compile(&next, &self.session(&next, all, None), false)
             .is_some();
         self.set_cell("", None);
         if !checked {
@@ -1800,9 +1943,9 @@ impl Repl {
             return false;
         }
         let main = Some("fn main".to_owned());
-        if next.items.iter().any(|(k, _)| *k == main) {
+        if next.items.iter().any(|i| i.key == main) {
             self.state = next.clone();
-            next.items.retain(|(k, _)| *k != main);
+            next.items.retain(|i| i.key != main);
             let ok = self.run_cell("", None, false, &[]).is_ok();
             self.state = next;
             return ok;
@@ -1985,6 +2128,18 @@ struct Region {
     path: String,
     text: Arc<str>,
     at: usize,
+    /// An earlier cell's item, as messages name it (`` `impl P` from cell
+    /// 2 ``).
+    owner: Option<String>,
+}
+
+/// How runtime locations name cell `n`'s text.
+fn cell_path(n: u32) -> String {
+    if n == 0 {
+        REPL_FILE.to_owned()
+    } else {
+        format!("<repl cell {n}>")
+    }
 }
 
 /// 1-based line of byte `off` in `src`, and how many chars precede it
@@ -1999,24 +2154,35 @@ fn line_col(src: &str, off: usize) -> (u32, u32) {
 }
 
 /// `d` as the user sees it: spans in the user's text move to their file
-/// (`regions`); spans in the generated wrapper are dropped.
-fn localize(d: &RokDiagnostic, session: u32, path: &str, regions: &[Region]) -> RokDiagnostic {
+/// (`regions`); spans in the generated wrapper are dropped. Also the
+/// owner of the region its primary span is in.
+fn localize(
+    d: &RokDiagnostic,
+    session: u32,
+    path: &str,
+    regions: &[Region],
+) -> (RokDiagnostic, Option<String>) {
     let mut d = d.clone();
-    // `None`: in the wrapper. A span touching a region's edge (the `(`
-    // around an expression cell) snaps into it.
-    let map = |s: Span| -> Option<Span> {
-        if s.file != session {
-            return Some(s);
-        }
-        let (start, end) = (s.start as usize, (s.end as usize).max(s.start as usize));
-        let r = regions
+    // A span touching a region's edge (the `(` around an expression cell)
+    // snaps into it.
+    let region = |s: Span| -> Option<&Region> {
+        let start = s.start as usize;
+        regions
             .iter()
             .find(|r| (r.off..r.off + r.len).contains(&start))
             .or_else(|| {
                 regions
                     .iter()
                     .find(|r| start + 1 >= r.off && start <= r.off + r.len)
-            })?;
+            })
+    };
+    // `None`: in the wrapper.
+    let map = |s: Span| -> Option<Span> {
+        if s.file != session {
+            return Some(s);
+        }
+        let (start, end) = (s.start as usize, (s.end as usize).max(s.start as usize));
+        let r = region(s)?;
         let shown = |b: usize| r.at + b.saturating_sub(r.off).min(r.len);
         let (start, end) = (shown(start), shown(end));
         let (line, col) = line_col(&r.text, start);
@@ -2031,6 +2197,11 @@ fn localize(d: &RokDiagnostic, session: u32, path: &str, regions: &[Region]) -> 
     if d.file.as_deref() == Some(path) {
         d.file = None;
     }
+    let owner = d
+        .primary
+        .as_ref()
+        .filter(|p| p.span.file == session)
+        .and_then(|p| region(p.span)?.owner.clone());
     if let Some(p) = d.primary.take() {
         d.primary = map(p.span).map(|span| Box::new(Label { span, ..*p }));
     }
@@ -2046,7 +2217,160 @@ fn localize(d: &RokDiagnostic, session: u32, path: &str, regions: &[Region]) -> 
     d.message = d
         .message
         .replace(&format!("`let {VALUE}`"), "the expression");
-    d
+    (d, owner)
+}
+
+/// How a cell's value shows.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Fmt {
+    Display,
+    Debug,
+    /// Its type name (an `any` or sum value's: the held type's).
+    Type,
+}
+
+impl Fmt {
+    /// The text the host gets for value `n`.
+    fn text(self, n: &str) -> String {
+        match self {
+            Self::Display => format!("f\"{{{n}}}\""),
+            Self::Debug => format!("f\"{{{n}:?}}\""),
+            Self::Type => format!("{n}.type_name_of()"),
+        }
+    }
+}
+
+/// Whether `r`, built showing the value with `fmt`, failed only because
+/// the value's type lacks that trait; then how to show it instead.
+/// `file` is the id of `src`, the session source.
+fn unformattable(r: &CompileResult, src: &str, file: u32, fmt: Fmt) -> Option<Fmt> {
+    let only = r
+        .errors
+        .iter()
+        .all(|d| d.message.contains("` cannot be formatted with `") && in_show(d, src, file));
+    if r.errors.is_empty() || !only {
+        return None;
+    }
+    // The error's help names `{:?}` when the type has `Debug`.
+    let hint = concat!("format it with `{", ":?}`");
+    let debug = r
+        .errors
+        .iter()
+        .any(|d| d.notes.iter().any(|n| n.contains(hint)));
+    match fmt {
+        Fmt::Display if debug => Some(Fmt::Debug),
+        Fmt::Display | Fmt::Debug => Some(Fmt::Type),
+        Fmt::Type => None,
+    }
+}
+
+/// Whether `d` is about the store of the shown value in `src`, the
+/// session source (file id `file`).
+fn in_show(d: &RokDiagnostic, src: &str, file: u32) -> bool {
+    let Some(store) = src.rfind(&format!("\n{SHOWN} = ")) else {
+        return false;
+    };
+    d.primary
+        .as_ref()
+        .is_some_and(|p| p.span.file == file && p.span.start as usize > store)
+}
+
+/// What a failed cell's host reply `why` (`repl_host.c`) tells the user.
+fn failure(why: &str) -> String {
+    const SAME: &str = "the session is unchanged";
+    if let Some(code) = why.strip_prefix("exit ") {
+        return format!(
+            "the cell called exit({code}); {SAME} (`exit` or `:quit` ends the session)"
+        );
+    }
+    if let Some(t) = why.strip_prefix("throw\n") {
+        let (at, value) = t.split_once('\n').unwrap_or(("", t));
+        let mut m = format!("the cell threw `{value}`; {SAME}");
+        if !at.is_empty() {
+            let _ = write!(m, "\n  --> {at}");
+        }
+        return m;
+    }
+    match why {
+        "interrupted" => format!("interrupted (Ctrl-C); {SAME}"),
+        "panic" => format!("the cell panicked; {SAME}"),
+        _ => format!("the cell failed; {SAME}"),
+    }
+}
+
+/// The items of an item cell: (replace key, start, end). A cell that is
+/// not only items is one, as written.
+fn items_of(cell: &str) -> Vec<(Option<String>, usize, usize)> {
+    let (tokens, _) = rokc_lexer::Lexer::new(cell, REPL_FILE).lex_all();
+    let tops = rokc_parser::parse_program(&tokens, REPL_FILE).0.tops;
+    let key = |text: &str| match classify(text) {
+        Cell::Item(None) if impl_trait(text) => Some(impl_header(text)),
+        Cell::Item(k) => k,
+        _ => None,
+    };
+    if tops.len() < 2 || !tops.iter().all(|t| t.1) {
+        return vec![(key(cell), 0, cell.len())];
+    }
+    tops.iter()
+        .enumerate()
+        .map(|(i, &(start, _))| {
+            let start = start as usize;
+            let end = tops.get(i + 1).map_or(cell.len(), |t| t.0 as usize);
+            let end = start + cell[start..end].trim_end().len();
+            (key(&cell[start..end]), start, end)
+        })
+        .collect()
+}
+
+/// `impl ..` up to its body, spaces collapsed: `impl Display for P`.
+fn impl_header(text: &str) -> String {
+    let head = text.split('{').next().unwrap_or(text);
+    head.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// `text` is a trait's impl, `impl Tr for T`.
+fn impl_trait(text: &str) -> bool {
+    let head = impl_header(text);
+    head.starts_with("impl") && head.split(' ').any(|w| w == "for")
+}
+
+/// The methods an inherent `impl T { .. }` defines, if `text` is one, with
+/// its header.
+fn inherent(text: &str) -> Option<(String, Vec<String>)> {
+    use rokc_lexer::TokenKind as T;
+    let head = impl_header(text);
+    if !head.starts_with("impl") || impl_trait(text) || !matches!(classify(text), Cell::Item(None))
+    {
+        return None;
+    }
+    let (tokens, _) = rokc_lexer::Lexer::new(text, REPL_FILE).lex_all();
+    let mut depth = 0;
+    let mut methods = Vec::new();
+    for w in tokens.windows(2) {
+        match &w[0].kind {
+            T::LBrace => depth += 1,
+            T::RBrace => depth -= 1,
+            T::Fn if depth == 1 => {
+                if let T::Ident(n) = &w[1].kind {
+                    methods.push(n.clone());
+                }
+            }
+            _ => {}
+        }
+    }
+    Some((head, methods))
+}
+
+/// Whether `new` replaces `old`: the same key, or inherent impls of one
+/// type where the new one defines one of the old one's methods.
+fn replaces(new: &Item, old: &Item) -> bool {
+    if new.key.is_some() {
+        return new.key == old.key;
+    }
+    match (inherent(&new.text), inherent(&old.text)) {
+        (Some((a, ms)), Some((b, old_ms))) => a == b && ms.iter().any(|m| old_ms.contains(m)),
+        _ => false,
+    }
 }
 
 /// Native libraries for the host, in load order: shared ones (runtime
@@ -2267,13 +2591,17 @@ fn classify(cell: &str) -> Cell {
         "extern", "pub", "async", "unsafe",
     ];
     if item_kw.contains(&first) && !(first == "unsafe" && rest[6..].trim_start().starts_with('{')) {
-        // `fn f` / `struct S` / `pub fn f` name what a redefinition replaces.
-        let named = words.windows(2).find(|w| {
-            [
-                "fn", "struct", "enum", "union", "trait", "type", "const", "static",
-            ]
-            .contains(&w[0])
-        });
+        // `fn f` / `struct S` / `pub fn f` name what a redefinition replaces;
+        // an impl's methods do not name it.
+        let named = words
+            .windows(2)
+            .find(|w| {
+                [
+                    "fn", "struct", "enum", "union", "trait", "type", "const", "static", "impl",
+                ]
+                .contains(&w[0])
+            })
+            .filter(|w| w[0] != "impl");
         return Cell::Item(named.map(|w| format!("{} {}", w[0], w[1])));
     }
     if first == "let" {
@@ -2564,7 +2892,7 @@ impl Repl {
         self.package = s.package;
         if let Some(p) = s.prelude {
             self.prelude = Some(p.to_owned());
-            self.cell(p);
+            self.run_prelude(p);
         }
         if let Some((path, anonymous)) = s.program {
             self.load_program(path, anonymous);
@@ -2799,14 +3127,15 @@ mod tests {
         assert!(!r.defines("it"));
         r.bindings.push(binding("exit", false));
         assert!(r.defines("exit") && !r.defines("quit"));
-        r.state
-            .items
-            .push((Some("fn quit".to_owned()), "fn quit() {}".to_owned()));
+        r.state.items.push(Item::new(
+            Some("fn quit".to_owned()),
+            "fn quit() {}".to_owned(),
+        ));
         assert!(r.defines("quit"));
         r.bindings.clear();
         r.state
             .items
-            .push((None, "use rok::std::env::exit;".to_owned()));
+            .push(Item::new(None, "use rok::std::env::exit;".to_owned()));
         assert!(r.defines("exit"));
         // Without one the bare word ends the session, as `:q` does.
         let mut r = repl();
@@ -2824,7 +3153,7 @@ mod tests {
     #[test]
     fn save_writes_a_script_that_declares_each_name_once() {
         let mut r = repl();
-        r.state.items.push((
+        r.state.items.push(Item::new(
             Some("fn twice".to_owned()),
             "fn twice(x: i32) -> i32 { x * 2 }".to_owned(),
         ));
@@ -2896,5 +3225,71 @@ a;
         );
         assert!(r.package_hint(missing("value `nope`")).notes.is_empty());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn failures_say_what_happened() {
+        let same = "the session is unchanged";
+        assert_eq!(
+            failure("exit 3"),
+            format!("the cell called exit(3); {same} (`exit` or `:quit` ends the session)")
+        );
+        assert_eq!(
+            failure("throw\n<repl cell 2>:1:5\nbad"),
+            format!("the cell threw `bad`; {same}\n  --> <repl cell 2>:1:5")
+        );
+        assert_eq!(
+            failure("throw\n\nbad"),
+            format!("the cell threw `bad`; {same}")
+        );
+        assert_eq!(
+            failure("interrupted"),
+            format!("interrupted (Ctrl-C); {same}")
+        );
+        assert_eq!(failure("panic"), format!("the cell panicked; {same}"));
+        assert_eq!(failure(""), format!("the cell failed; {same}"));
+        for why in ["exit 3", "throw\n\nbad", "interrupted", "panic", ""] {
+            assert!(!failure(why).contains("main"), "{why}");
+        }
+    }
+
+    #[test]
+    fn a_cell_defines_items_one_by_one() {
+        let cell = "struct P { y: i32 } impl P { fn y(self) -> i32 { self.y } }";
+        let items = items_of(cell);
+        let keys: Vec<_> = items.iter().map(|i| i.0.as_deref()).collect();
+        assert_eq!(keys, [Some("struct P"), None]);
+        assert_eq!(
+            &cell[items[1].1..items[1].2],
+            "impl P { fn y(self) -> i32 { self.y } }"
+        );
+        assert_eq!(
+            items_of("impl Display for P { fn fmt(self) {} }")[0]
+                .0
+                .as_deref(),
+            Some("impl Display for P")
+        );
+        // Not only items: one, as written.
+        assert_eq!(items_of("fn f() {} f()").len(), 1);
+        assert!(matches!(
+            classify("impl P { fn y(self) {} }"),
+            Cell::Item(None)
+        ));
+    }
+
+    #[test]
+    fn an_inherent_impl_replaces_those_it_redefines() {
+        let item = |t: &str| Item::new(classify_key(t), t.to_owned());
+        let old = item("impl P { fn a(self) {} fn b(self) {} }");
+        assert!(replaces(&item("impl P { fn b(self) {} }"), &old));
+        assert!(!replaces(&item("impl P { fn c(self) {} }"), &old));
+        assert!(!replaces(&item("impl Q { fn a(self) {} }"), &old));
+        assert!(!replaces(&item("fn a() {}"), &old));
+        assert!(replaces(&item("fn a() {}"), &item("fn a() -> i32 { 1 }")));
+        assert_eq!(old.name(), "impl P");
+    }
+
+    fn classify_key(t: &str) -> Option<String> {
+        items_of(t).remove(0).0
     }
 }

@@ -392,6 +392,7 @@ impl Kernel {
                 self.repl.cell(&cell);
                 Ok(None)
             } else {
+                self.repl.cell_no += 1;
                 self.repl.eval(&cell)
             };
             if result.is_err() {
