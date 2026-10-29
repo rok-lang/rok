@@ -1,0 +1,13 @@
+// spec: §2.6.4 §3.8.4
+// A `T | none` where a `T` is wanted: the help gives a default with
+// `??`, or the `if let` that reaches the value.
+// expect-error: 11:1: mismatched types: `let w` expects `i32`, found `i32 | none`
+// expect-error: help: `v` may be none: write `v ?? 0`, or `if let x: i32 = v { .. }`
+// expect-error: 13:7: mismatched types: argument `s` of `greet` expects `str`, found `str | none`
+// expect-error: help: `n` may be none: write `n ?? ""`
+fn greet(s: str) { println(s); }
+let xs: List<i32> = [1, 2];
+let v = xs.pop();
+let w: i32 = v;
+let n: str | none = none;
+greet(n);

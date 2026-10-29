@@ -1154,10 +1154,42 @@ pub(super) fn lower_try(
             ctx.emit_warning("this `try` covers no throwing call (spec 3.14.2)".to_owned());
         }
     };
+    // `try! xs.pop()`: no throwing call, an optional value.
+    let optional = |ctx: &LowerCtx<'_>, e: &HirExpr| {
+        if ctx.throwing_calls != calls {
+            return None;
+        }
+        let some = super::suggest::some_part(&e.ty)?;
+        let op = super::suggest::short_src(ctx, operand.span).unwrap_or("value");
+        let t = ctx.ty_name(&e.ty);
+        let d = super::suggest::default_lit(&some).unwrap_or("default");
+        let word = if kind == TryKind::Force {
+            "try!"
+        } else {
+            "try"
+        };
+        let fix = format!("{op} ?? {d}");
+        ctx.emit_diag(
+            rokc_diagnostic::RokDiagnostic::error(
+                rokc_diagnostic::ErrorKind::Type,
+                span,
+                format!("`{word}` is for calls that throw; `{op}` gives `{t}`, which may be none"),
+            )
+            .with_help(format!(
+                "write `{fix}`, or `if let x: {} = {op} {{ .. }}`",
+                ctx.ty_name(&some)
+            ))
+            .with_fix(span, fix.clone(), format!("use `{fix}`")),
+        );
+        Some(poison(span))
+    };
     if kind == TryKind::Plain {
         ctx.try_depth += 1;
         let e = lower_expected(ctx, operand, expected);
         ctx.try_depth -= 1;
+        if let Some(p) = optional(ctx, &e) {
+            return p;
+        }
         warn_if_idle(ctx, &e);
         return e;
     }
@@ -1185,6 +1217,12 @@ pub(super) fn lower_try(
         }
     }
     ctx.try_depth -= 1;
+    if kind == TryKind::Force {
+        if let Some(p) = optional(ctx, &body) {
+            pop_catch(ctx);
+            return p;
+        }
+    }
     warn_if_idle(ctx, &body);
     let frame = pop_catch(ctx);
     if kind == TryKind::Force {

@@ -1,0 +1,9 @@
+// spec: §3.5.2
+// The methods a standard type's help lists are ones a user calls:
+// `#[doc(hidden)]` hooks (`gc_object`) stay out.
+// expect-error: 9:9: no method `foo` found for type `str`
+// expect-error: help: `str` is a standard type; call one of its methods, such as
+// forbid-error: gc_object
+// forbid-error: in an `impl str
+let s = "text";
+let n = s.foo();

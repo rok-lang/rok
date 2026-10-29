@@ -1,0 +1,19 @@
+// spec: §2.6.4 §3.8.4
+// `unwrap` and kin on `T | none`: rok has none of them; the help shows
+// `??`, `if let` and `match`, or the direct form.
+// expect-error: 15:9: `v` is `i32 | none` and may be none; rok has no `unwrap`
+// expect-error: help: write `v ?? 0`, `if let x: i32 = v { .. }`, or `match v { x: i32 => .., none => .. }`
+// expect-error: 16:9: `v` is `i32 | none` and may be none; rok has no `unwrap_or`
+// expect-error: help: write `v ?? 7`
+// expect-error: 17:9: `v` is `i32 | none` and may be none; rok has no `is_none`
+// expect-error: help: write `v is none`
+// expect-error: 19:9: `s` is `str | none` and may be none; rok has no `expect`
+// expect-error: help: write `s ?? ""`
+// forbid-error: in an `impl
+let xs: List<i32> = [1, 2];
+let v = xs.pop();
+let a = v.unwrap();
+let b = v.unwrap_or(7);
+let c = v.is_none();
+let s: str | none = none;
+let d = s.expect("set");

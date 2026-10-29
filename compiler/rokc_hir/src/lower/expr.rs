@@ -3640,9 +3640,11 @@ pub(super) fn lower_args_ref(
     }
     if sig.variadic && slots[var_at].is_none() {
         let elem = variadic_elem(ctx, &sig.param_tys[var_at]);
-        slots[var_at] = Some(ArgSrc::Lowered(lower_variadic(ctx, elem, var_parts, span)));
+        slots[var_at] = Some(ArgSrc::Lowered(lower_variadic(
+            ctx, callee, elem, var_parts, span,
+        )));
     }
-    let c_varargs = check_arity(ctx, sig, callee, extra, c_varargs);
+    let c_varargs = check_arity(ctx, sig, callee, has_receiver, extra, c_varargs);
     let mut out = Vec::with_capacity(n);
     let mut places: Vec<Option<HirExpr>> = vec![None; n];
     // Places other (non-`ref`) arguments read, for the exclusivity check.
@@ -3705,6 +3707,8 @@ pub(super) fn lower_args_ref(
                         rokc_diagnostic::ErrorKind::Type,
                         format!("missing argument `{pname}` in call to `{callee}`"),
                     );
+                    let sig = sig_of(ctx, callee, sig);
+                    ctx.help_last(Some(format!("it is declared `{sig}`; pass `{pname}` too")));
                     poison(span)
                 }
             }
@@ -4027,10 +4031,14 @@ pub(super) fn variadic_elem(ctx: &LowerCtx<'_>, ty: &HirTy) -> HirTy {
 /// `List`.
 pub(super) fn lower_variadic(
     ctx: &mut LowerCtx<'_>,
+    callee: &str,
     mut elem: HirTy,
     parts: Vec<VarPart<'_>>,
     span: rokc_diagnostic::Span,
 ) -> HirExpr {
+    // `[1, 2, 3]` calls `list_literal(...T)`: name the element, not the
+    // argument.
+    let list = leaf_name(callee) == "list_literal";
     let mut stmts: Vec<HirStmt> = Vec::new();
     // Each argument once into a temp, in order: (is a spread collection, temp).
     let mut temps: Vec<(bool, String, HirTy)> = Vec::new();
@@ -4041,12 +4049,17 @@ pub(super) fn lower_variadic(
         stmts.push(HirStmt::Let { local, init });
         (name, ty)
     };
+    let what = if list {
+        "list element"
+    } else {
+        "variadic argument"
+    };
     let one = |ctx: &mut LowerCtx<'_>, elem: &mut HirTy, v: HirExpr| {
         if *elem == HirTy::Unknown {
             elem.clone_from(&v.ty);
             v
         } else {
-            coerce(ctx, elem, v, &|| "variadic argument".to_owned())
+            coerce(ctx, elem, v, &|| what.to_owned())
         }
     };
     for part in parts {
@@ -4222,12 +4235,39 @@ fn spread_item(name: &str, i: usize, span: rokc_diagnostic::Span) -> Expr {
     }
 }
 
+/// `f(a: i32, b: i32)` of a resolved signature.
+fn sig_of(ctx: &LowerCtx<'_>, callee: &str, sig: &FnSig) -> String {
+    let tys = sig.param_tys.iter().map(|t| ctx.ty_name(t));
+    super::sig_text(callee, sig.param_names.iter().map(String::as_str).zip(tys))
+}
+
+/// `f(a: i32, b: i32)` of a declaration.
+fn sig_of_def(callee: &str, def: &FnDef) -> String {
+    let params = def.params.iter().map(|p| {
+        let t =
+            p.ty.as_ref()
+                .map_or("_".to_owned(), rokc_ast::print::print_ty);
+        let t = if p.variadic { format!("...{t}") } else { t };
+        (p.name.as_str(), t)
+    });
+    super::sig_text(callee, params)
+}
+
+/// Report a wrong argument count, with the signature as help.
+fn arity_error(ctx: &LowerCtx<'_>, callee: &str, want: usize, got: usize, sig: Option<String>) {
+    let (msg, help) = super::arity_msg(callee, want, got, sig);
+    ctx.emit_error(rokc_diagnostic::ErrorKind::Type, msg);
+    ctx.help_last(help);
+}
+
 /// Report surplus arguments, unless `sig` is C variadic: then `surplus`
-/// are its `...` arguments, returned promoted.
+/// are its `...` arguments, returned promoted. A method's receiver
+/// (`recv`) is not counted.
 fn check_arity(
     ctx: &LowerCtx<'_>,
     sig: &FnSig,
     callee: &str,
+    recv: bool,
     extra: usize,
     surplus: Vec<HirExpr>,
 ) -> Vec<HirExpr> {
@@ -4239,14 +4279,8 @@ fn check_arity(
     }
     let extra = extra + surplus.len();
     if extra > 0 {
-        let n = sig.param_tys.len();
-        ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
-            format!(
-                "`{callee}` takes {n} argument(s) but {} were supplied",
-                n + extra
-            ),
-        );
+        let n = sig.param_tys.len() - usize::from(recv && !sig.param_tys.is_empty());
+        arity_error(ctx, callee, n, n + extra, Some(sig_of(ctx, callee, sig)));
     }
     Vec::new()
 }
@@ -5783,7 +5817,8 @@ fn sum_min_max(
     let want = if method == "clamp" { 2 } else { 1 };
     if args.len() != want || args.iter().any(|a| !matches!(a, CallArg::Positional(_))) {
         discard_args(ctx, args);
-        return ctx.error_expr(span, format!("`{method}` takes {want} argument(s)"));
+        let (msg, _) = super::arity_msg(method, want, args.len(), None);
+        return ctx.error_expr(span, msg);
     }
     let mut stmts = Vec::new();
     let mut local = |ctx: &mut LowerCtx<'_>, init: HirExpr| {
@@ -5949,8 +5984,16 @@ fn str_index_help(ctx: &LowerCtx<'_>, s: &Expr, i: &Expr) {
 
 /// Python's `println("x =", x)` as one f-string, `println(f"x = {x}")`.
 fn print_args_help(ctx: &LowerCtx<'_>, callee: &Expr, args: &[CallArg], since: usize) {
-    if let Some(help) = print_args_text(ctx, callee, args) {
-        ctx.help_since(since, help);
+    let Some(help) = print_args_text(ctx, callee, args) else {
+        return;
+    };
+    // It replaces the generic help showing the signature.
+    let mut diags = ctx.env.sink.diagnostics.borrow_mut();
+    if diags.len() > since {
+        if let Some(d) = diags.last_mut().filter(|d| d.is_error()) {
+            d.notes.retain(|n| !n.starts_with("help: "));
+            d.notes.push(format!("help: {help}"));
+        }
     }
 }
 
@@ -6116,6 +6159,7 @@ pub(super) fn method_call_on(
                 span,
             );
         }
+        let since = ctx.env.sink.diagnostics.borrow().len();
         lower_args_only(ctx);
         // A generic impl that would provide it but whose bound fails:
         // name the bound rather than "no method".
@@ -6152,21 +6196,23 @@ pub(super) fn method_call_on(
         if let HirTy::Param(p) = recv_h.ty {
             return super::bounds::no_method(ctx, p, method, span);
         }
+        if let Some(e) = super::suggest::optional_method(ctx, &recv_h, method, args, span) {
+            return e;
+        }
         if let Some(e) = sum_no_method(ctx, &recv_h, method, args.is_empty(), span) {
             return e;
         }
+        // No method, so no parameter types for its closures: drop the
+        // "cannot infer" errors they gave.
+        retain_since(ctx, since, |d| {
+            d.tag != rokc_diagnostic::Tag::ClosureParamInfer
+        });
         let e = ctx.error_expr(span, format!("no method `{method}` found for type `{ty}`"));
         let format = (method == "format" && recv_h.ty == HirTy::Prim(PrimTy::Str))
             .then(|| format_help(ctx, args, span));
         let help = format
             .or_else(|| super::reflect::inspect_help(ctx, &recv_h.ty, method))
-            .or_else(|| ctx.method_help(&recv_h.ty, method))
-            .unwrap_or_else(|| {
-                format!(
-                    "add `fn {method}(self, ..)` in an `impl {ty} {{ .. }}` block, or import a \
-                 trait that provides it"
-                )
-            });
+            .unwrap_or_else(|| super::suggest::no_method_help(ctx, &recv_h, method, span));
         ctx.help_last(Some(help));
         return e;
     };
@@ -6188,6 +6234,19 @@ pub(super) fn method_call_on(
         );
     }
     call_sig(ctx, &sig, method, Some(recv_h), args, span)
+}
+
+/// Keep only the diagnostics after the first `since` that `keep` accepts.
+fn retain_since(
+    ctx: &LowerCtx<'_>,
+    since: usize,
+    keep: impl Fn(&rokc_diagnostic::RokDiagnostic) -> bool,
+) {
+    let mut diags = ctx.env.sink.diagnostics.borrow_mut();
+    if since < diags.len() {
+        let tail = diags.split_off(since);
+        diags.extend(tail.into_iter().filter(keep));
+    }
 }
 
 /// Stdlib 2.4.1: `a op= b` is `a.op_assign(b)` when `a`'s type implements
@@ -7432,13 +7491,7 @@ fn generic_positional_args(
         }
     }
     if extra > 0 {
-        ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
-            format!(
-                "`{callee}` takes {n} argument(s) but {} were supplied",
-                n + extra
-            ),
-        );
+        arity_error(ctx, callee, n, n + extra, Some(sig_of_def(callee, def)));
         return None;
     }
     let empty = params
@@ -7483,6 +7536,11 @@ fn generic_positional_args(
                     rokc_diagnostic::ErrorKind::Type,
                     format!("missing argument `{}` in call to `{callee}`", p.name),
                 );
+                let sig = sig_of_def(callee, def);
+                ctx.help_last(Some(format!(
+                    "it is declared `{sig}`; pass `{}` too",
+                    p.name
+                )));
                 ok = false;
             }
         }
@@ -7701,20 +7759,15 @@ fn call_generic_positional(
                 CallArg::Named { .. } => None,
             })
             .collect();
-        let h = lower_variadic(ctx, elem, parts, span);
+        let h = lower_variadic(ctx, callee, elem, parts, span);
         bind_from_arg(ctx, def, self_ty, i, &h.ty, &mut subst);
         lowered.push(h);
     }
     check_ref_exclusive(ctx, callee, &lowered, &places, &reads, has_receiver);
     if lowered.len() != def.params.len() {
-        return ctx.error_expr(
-            span,
-            format!(
-                "`{callee}` takes {} argument(s) but {} were supplied",
-                def.params.len(),
-                lowered.len()
-            ),
-        );
+        let sig = sig_of_def(callee, def);
+        arity_error(ctx, callee, def.params.len(), lowered.len(), Some(sig));
+        return poison(span);
     }
     ctx.explicit_generics = explicit;
     let mono = monomorphize_on(ctx, def, self_ty, self_hint, &lowered, span);
@@ -8222,14 +8275,10 @@ fn lower_path_call(
             let mut lets = Vec::new();
             let args_h = if let Some(pre) = pre_args {
                 if pre.len() != slots.len() {
-                    return ctx.error_expr(
-                        span,
-                        format!(
-                            "`{display}` takes {} argument(s) but {} were supplied",
-                            slots.len(),
-                            pre.len()
-                        ),
-                    );
+                    let tys = slots.iter().map(|t| ("", ctx.ty_name(t)));
+                    let sig = super::sig_text(&display, tys);
+                    arity_error(ctx, &display, slots.len(), pre.len(), Some(sig));
+                    return poison(span);
                 }
                 pre.into_iter()
                     .zip(&slots)

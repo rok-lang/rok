@@ -1,0 +1,15 @@
+// spec: §3.5.2
+// An unknown method of a standard type lists methods it has; it never
+// says to add an impl to the standard type. A user type keeps that help.
+// expect-error: 13:9: no method `zzqx` found for type `List<i32>`
+// expect-error: help: `List<i32>` is a standard type; call one of its methods, such as
+// expect-error: 14:9: no method `zzqx` found for type `str`
+// expect-error: help: `str` is a standard type; call one of its methods, such as
+// expect-error: 15:9: no method `zzqx` found for type `P`
+// expect-error: help: add `fn zzqx(self, ..)` in an `impl P { .. }` block
+// forbid-error: in an `impl List
+// forbid-error: in an `impl str
+struct P { x: i32; }
+let a = [1, 2].zzqx();
+let b = "s".zzqx();
+let c = P { x: 1 }.zzqx();

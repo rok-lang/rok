@@ -749,6 +749,7 @@ codec_struct!(ClosureSink {
     bodies,
     assumed,
     const_names,
+    dropped_at,
 });
 codec_struct!(InstanceWarns { instances, warns });
 codec_struct!(Impl {
