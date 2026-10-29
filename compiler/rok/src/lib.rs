@@ -1329,6 +1329,19 @@ fn install_kernel(g: &Global, args: &[String]) -> Result<i32, String> {
     let file = dir.join("kernel.json");
     std::fs::write(&file, format!("{}\n", Json::Obj(spec)))
         .map_err(|e| format!("{}: {e}", file.display()))?;
+    for (logo, png) in [
+        (
+            "logo-32x32.png",
+            &include_bytes!("../assets/logo-32x32.png")[..],
+        ),
+        (
+            "logo-64x64.png",
+            &include_bytes!("../assets/logo-64x64.png")[..],
+        ),
+    ] {
+        let logo = dir.join(logo);
+        std::fs::write(&logo, png).map_err(|e| format!("{}: {e}", logo.display()))?;
+    }
     if !g.quiet {
         eprintln!("   Installed kernel `{name}` ({})", file.display());
     }

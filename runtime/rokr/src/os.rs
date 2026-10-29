@@ -239,6 +239,9 @@ pub extern "C" fn rok_os_close(fd: i32) -> i32 {
 pub unsafe extern "C" fn rok_os_read(fd: i32, buf: *mut u8, off: usize, len: usize) -> isize {
     // SAFETY: caller contract.
     let dst = unsafe { region(buf, off) };
+    if fd == 0 {
+        return crate::stdio::read0(dst, len);
+    }
     native(|| {
         loop {
             // SAFETY: `dst` is writable for `len` bytes.
