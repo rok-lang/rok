@@ -131,7 +131,7 @@ impl DepBuild<'_> {
             } else {
                 dir
             };
-            rokc_core::term::status("Compiling", &format!("{name} ({})", dir.display()));
+            rokc_core::term::status("Compiling", &shown(name, dir));
         }
         let mut s = Session::new();
         for b in self.bootstrap {
@@ -159,5 +159,72 @@ impl DepBuild<'_> {
             failed()
         })?;
         Ok((r.files, warnings))
+    }
+}
+
+/// Dependency `name` in `dir` for its `Compiling` line: `json v0.1.0` when
+/// rok fetched it (under `$ROK_HOME/cache/`), else `json (<dir>)`, relative
+/// to the current directory when they share more than the root.
+fn shown(name: &str, dir: &Path) -> String {
+    let real = |p: &Path| rokc_core::real_path(p).unwrap_or_else(|_| p.to_path_buf());
+    let at = real(dir);
+    let fetched = rokc_core::rok_home().is_some_and(|h| at.starts_with(real(&h.join("cache"))));
+    if let Some(v) = fetched.then(|| version(&at)).flatten() {
+        return format!("{name} v{v}");
+    }
+    let rel = std::env::current_dir()
+        .ok()
+        .and_then(|c| relative(&real(&c), &at));
+    format!("{name} ({})", rel.as_deref().unwrap_or(dir).display())
+}
+
+/// `to` from directory `from` (both real), with `..` steps; `None` when
+/// they share no more than the root (another drive, `/tmp` from `/home`).
+fn relative(from: &Path, to: &Path) -> Option<PathBuf> {
+    if !to.is_absolute() {
+        return Some(to.to_path_buf());
+    }
+    let f: Vec<_> = from.components().collect();
+    let t: Vec<_> = to.components().collect();
+    let common = f.iter().zip(&t).take_while(|(a, b)| a == b).count();
+    let root = t
+        .iter()
+        .take_while(|c| !matches!(c, std::path::Component::Normal(_)))
+        .count();
+    if common <= root {
+        return None;
+    }
+    let mut out: PathBuf = f[common..].iter().map(|_| "..").collect();
+    out.extend(&t[common..]);
+    if out.as_os_str().is_empty() {
+        out.push(".");
+    }
+    Some(out)
+}
+
+/// The `version` of the rok.rokon in `dir`.
+fn version(dir: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(dir.join("rok.rokon")).ok()?;
+    let rokc_rokon::Kind::Struct { fields, .. } = rokc_rokon::parse(&text).ok()?.kind else {
+        return None;
+    };
+    fields.into_iter().find_map(|f| match f.value.kind {
+        rokc_rokon::Kind::Str(v) if f.name == "version" => Some(v),
+        _ => None,
+    })
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn relative_dirs() {
+        let rel =
+            |a: &str, b: &str| relative(Path::new(a), Path::new(b)).map(PathBuf::into_os_string);
+        assert_eq!(rel("/h/w/app", "/h/w/app/local"), Some("local".into()));
+        assert_eq!(rel("/h/w/app", "/h/w/geom"), Some("../geom".into()));
+        assert_eq!(rel("/h/w/app", "/h/w/app"), Some(".".into()));
+        assert_eq!(rel("/h/w/app", "/tmp/geom"), None);
     }
 }

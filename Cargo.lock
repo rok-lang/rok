@@ -112,6 +112,9 @@ dependencies = [
 [[package]]
 name = "rokc_harness"
 version = "0.1.4"
+dependencies = [
+ "rokc_core",
+]
 
 [[package]]
 name = "rokc_hir"
@@ -133,6 +136,7 @@ dependencies = [
  "rokc_core",
  "rokc_diagnostic",
  "rokc_driver",
+ "rokc_rokon",
  "rokc_target",
 ]
 

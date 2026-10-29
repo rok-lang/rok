@@ -1475,10 +1475,12 @@ fn lone_file_is_an_anonymous_package() {
     let out = rokc(Some(&env), &dir, &["run", "hello.rok"]);
     assert_exit(&out, 0);
     assert_eq!(text(&out.stdout), "hi\n");
-    // `run` of a lone file leaves no target/ behind; `build` uses one.
+    // A lone file leaves no target/ behind; `build` puts the executable
+    // beside it.
     assert!(!dir.join("target").exists());
     assert_exit(&rokc(Some(&env), &dir, &["build", "hello.rok"]), 0);
-    assert!(dir.join("target/debug").join(exe_name("hello")).is_file());
+    assert!(!dir.join("target").exists());
+    assert!(dir.join(exe_name("hello")).is_file());
 
     // Spec 4.16.8: `mod m;` loads m.rok beside the file, as in a
     // package's src/, and a change to it is a new build.
@@ -4201,6 +4203,196 @@ fn run_passes_arguments_codes_and_progress() {
         .output()
         .unwrap();
     assert_exit(&out, 101);
+}
+
+/// A failed build ends with what failed and the counts, as `check` does;
+/// `-q` and JSON output leave the line out.
+// spec: §9.1.8
+#[test]
+fn build_error_ends_with_summary() {
+    let dir = scratch("build-summary");
+    let app = new_package(&dir, "app", false);
+    put(
+        app.join("src/main.rok"),
+        "fn main() {\n    println(y);\n}\n",
+    )
+    .unwrap();
+    for cmd in ["build", "run"] {
+        let out = rokc(None, &app, &[cmd]);
+        assert_exit(&out, 1);
+        let err = text(&out.stderr);
+        assert!(
+            err.ends_with("\nerror: could not build app (1 error, 0 warnings)\n"),
+            "{err}"
+        );
+    }
+    for quiet in [&["-q"][..], &["--message-format=json"][..]] {
+        let out = rokc(None, &app, &[&["build"][..], quiet].concat());
+        assert_exit(&out, 1);
+        assert!(!text(&out.stderr).contains("could not build"), "{quiet:?}");
+    }
+    // Denied lints are the errors; the others the warnings.
+    put(
+        app.join("src/main.rok"),
+        "fn main() {\n    let a = 1;\n    let b = 2;\n}\n",
+    )
+    .unwrap();
+    let out = rokc(None, &app, &["build", "-D", "unused_variables"]);
+    assert_exit(&out, 1);
+    let err = text(&out.stderr);
+    assert!(
+        err.ends_with("\nerror: could not build app (2 errors, 0 warnings)\n"),
+        "{err}"
+    );
+}
+
+/// An up-to-date build says `Fresh`, then repeats its warnings.
+// spec: §9.1.2 §9.1.8
+#[test]
+fn fresh_build_prints_warnings_after_status() {
+    let Some(env) = setup() else { return };
+    let dir = scratch("fresh-warnings");
+    let app = new_package(&dir, "app", false);
+    put(app.join("src/main.rok"), "fn main() {\n    let a = 1;\n}\n").unwrap();
+    assert_exit(&rokc(Some(&env), &app, &["build"]), 0);
+    let out = rokc(Some(&env), &app, &["build"]);
+    assert_exit(&out, 0);
+    let err = text(&out.stderr);
+    let fresh = err.find("       Fresh app").expect(&err);
+    let warning = err.find("warning[").expect(&err);
+    assert!(fresh < warning, "{err}");
+}
+
+/// The first build at a level builds the standard library and says so,
+/// once; `Finished` counts it.
+// spec: §9.1.8
+#[test]
+fn first_std_build_is_announced() {
+    let dir = scratch("std-announce");
+    let core = dir.join("core/src/lib.rok");
+    // A library of its own, new on every run: nothing cached.
+    let fresh_core = || {
+        let t = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        put(&core, format!("// {t}\n")).unwrap();
+    };
+    put(dir.join("x.rok"), "fn main() {}\n").unwrap();
+    let core_s = core.display().to_string();
+    let build = |extra: &[&str]| {
+        let args = ["build", "-O0", "x.rok", "-o", "x", "--bootstrap", &core_s];
+        text(&rokc(None, &dir, &[&args[..], extra].concat()).stderr)
+    };
+    fresh_core();
+    let err = build(&[]);
+    assert!(
+        err.starts_with("   Compiling std (-O0, cached for next builds)\n   Compiling x (.)\n"),
+        "{err}"
+    );
+    assert!(!build(&[]).contains("Compiling std"));
+    fresh_core();
+    assert!(!build(&["-q"]).contains("Compiling std"));
+}
+
+/// A lone file runs as itself; it builds beside itself, over its own
+/// earlier build but never over another file.
+// spec: §9.1.2 §9.1.8
+#[test]
+fn lone_file_run_and_build_output() {
+    let Some(env) = setup() else { return };
+    let dir = scratch("lone-output");
+    put(dir.join("hi.rok"), "println(\"hi\");\n").unwrap();
+    let out = rokc(Some(&env), &dir, &["run", "hi.rok"]);
+    assert_exit(&out, 0);
+    assert!(
+        text(&out.stderr).contains("     Running hi.rok\n"),
+        "{}",
+        text(&out.stderr)
+    );
+    // `-v` names the cached executable.
+    let out = rokc(Some(&env), &dir, &["run", "-v", "hi.rok"]);
+    assert!(
+        text(&out.stderr).contains("     Running `"),
+        "{}",
+        text(&out.stderr)
+    );
+
+    let hi = exe_name("hi");
+    for _ in 0..2 {
+        let out = rokc(Some(&env), &dir, &["build", "hi.rok"]);
+        assert_exit(&out, 0);
+        let err = text(&out.stderr);
+        assert!(
+            err.ends_with(&format!("       Built {hi} (use -o to put it elsewhere)\n")),
+            "{err}"
+        );
+    }
+    let out = Command::new(dir.join(&hi)).output().unwrap();
+    assert_eq!(text(&out.stdout), "hi\n");
+
+    put(dir.join("ho.rok"), "println(\"ho\");\n").unwrap();
+    let ho = dir.join(exe_name("ho"));
+    put(&ho, "mine").unwrap();
+    let out = rokc(Some(&env), &dir, &["build", "ho.rok"]);
+    assert_exit(&out, 1);
+    let err = text(&out.stderr);
+    assert!(err.contains("build ho.rok -o <file>`"), "{err}");
+    assert_eq!(fs::read_to_string(&ho).unwrap(), "mine");
+    let other = dir.join(exe_name("other"));
+    let out = rokc(
+        Some(&env),
+        &dir,
+        &["build", "ho.rok", "-o", other.to_str().unwrap()],
+    );
+    assert_exit(&out, 0);
+    assert!(other.is_file());
+}
+
+/// `fmt --diff` shows the old line before the new one.
+// spec: §9.1.2
+#[test]
+fn fmt_diff_old_before_new() {
+    let dir = scratch("fmt-diff-order");
+    put(dir.join("a.rok"), "fn f() {\nlet x = 1;\n}\n").unwrap();
+    let out = rokc(None, &dir, &["fmt", "--diff", "a.rok"]);
+    let s = text(&out.stdout);
+    let old = s.find("-    2 let x = 1;\n").expect(&s);
+    let new = s.find("+    2     let x = 1;\n").expect(&s);
+    assert!(old < new, "{s}");
+}
+
+/// `doc --open` opens the index in `$BROWSER`; one that cannot start
+/// is a warning naming the file.
+// spec: §9.1.2
+#[test]
+fn doc_open_accepted() {
+    let dir = scratch("doc-open");
+    let app = new_package(&dir, "app", true);
+    let doc = |browser: &Path| {
+        Command::new(ROKC)
+            .current_dir(&app)
+            .env("ROK_HOME", workspace())
+            .env("BROWSER", browser)
+            .args(["doc", "--open"])
+            .output()
+            .unwrap()
+    };
+    // Any program that starts will do: rokc itself.
+    let out = doc(Path::new(ROKC));
+    assert_exit(&out, 0);
+    assert!(
+        !text(&out.stderr).contains("cannot open"),
+        "{}",
+        text(&out.stderr)
+    );
+    let out = doc(&dir.join("no-such-browser"));
+    assert_exit(&out, 0);
+    let err = text(&out.stderr);
+    assert!(
+        err.contains("warning: cannot open a browser") && err.contains("index.html in one"),
+        "{err}"
+    );
 }
 
 /// `rokc completions <shell>`: rokc's commands and their flags, from the

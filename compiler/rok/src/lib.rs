@@ -893,7 +893,7 @@ fn rokc_command(
 }
 
 /// rokc's options that take a separate value (`--target x86_64-..`).
-const VALUE_OPTIONS: [&str; 35] = [
+const VALUE_OPTIONS: [&str; 36] = [
     "--color",
     "--cwd",
     "--message-format",
@@ -928,6 +928,7 @@ const VALUE_OPTIONS: [&str; 35] = [
     "--deny",
     "--iters",
     "--samples",
+    "--format",
     "--threads",
 ];
 
@@ -1150,6 +1151,23 @@ fn cmd_new(g: &Global, cmd: &str, args: &[String]) -> Result<i32, String> {
             _ => "executable",
         };
         term::status("Created", &format!("{what} package ({})", dir.display()));
+        // What to type next, under the message. Windows PowerShell 5.1
+        // has no `&&`: one command per line there.
+        let then = if bin { "rok run" } else { "rok test" };
+        let d = dir.display().to_string();
+        let cd = match d.as_str() {
+            "." => None,
+            d if d.contains(char::is_whitespace) => Some(format!("cd \"{d}\"")),
+            d => Some(format!("cd {d}")),
+        };
+        let lines = match cd {
+            None => vec![then.to_owned()],
+            Some(cd) if cfg!(windows) => vec![cd, then.to_owned()],
+            Some(cd) => vec![format!("{cd} && {then}")],
+        };
+        for l in lines {
+            eprintln!("{:>12} {l}", "");
+        }
     }
     Ok(0)
 }
@@ -1466,20 +1484,35 @@ fn relative(from: &Path, a: &Path) -> PathBuf {
 }
 
 /// Write `text` and resolve; restore `old` if resolution fails.
-fn write_and_resolve(g: &Global, path: &Path, old: Option<&str>, text: &str) -> Result<(), String> {
+fn write_and_resolve(
+    g: &Global,
+    path: &Path,
+    old: Option<&str>,
+    text: &str,
+) -> Result<resolve::Graph, String> {
     let text = canonical_edit(old.unwrap_or(manifest::EMPTY), text);
     std::fs::write(path, text).map_err(|e| format!("cannot write {}: {e}", path.display()))?;
     let dir = path.parent().unwrap_or_else(|| Path::new("."));
     let r = load_dir(dir).and_then(|ctx| resolve::resolve(&home(), &ctx, &options(g)));
-    if let Err(e) = r {
+    r.or_else(|e| {
         match old {
             Some(o) => std::fs::write(path, o),
             None => std::fs::remove_file(path),
         }
         .map_err(|e2| format!("{e}\n(and cannot restore {}: {e2})", path.display()))?;
-        return Err(e);
-    }
-    Ok(())
+        Err(e)
+    })
+}
+
+/// The `version` in the rok.rokon of resolved dependency `name`.
+fn dep_version(graph: &resolve::Graph, name: &str) -> Option<String> {
+    let p = graph
+        .packages
+        .iter()
+        .find(|p| manifest::same(&p.name, name))?;
+    // `<dir>/src/lib.rok`
+    let dir = p.root.parent()?.parent()?;
+    manifest::load(&manifest::find(dir)?).ok()?.version
 }
 
 /// `--native <name>[@<req>] [--registry <url>]` into the package's,
@@ -1701,21 +1734,33 @@ fn add_dep(g: &Global, mut dep: Dep, dev: bool, env: Option<&str>) -> Result<i32
         section,
         &dep,
     )?;
-    write_and_resolve(g, &path, old.as_deref(), &text)?;
+    let graph = write_and_resolve(g, &path, old.as_deref(), &text)?;
     if !g.quiet {
-        match env {
-            Some(e) => term::status(
+        if let Some(e) = env {
+            term::status(
                 "Installed",
                 &format!(
                     "{n} into environment `{e}` (for `rok repl` / `rok jupyter`; a script gets \
                      it with `rok add {n} <file.rok>`)",
                     n = dep.name
                 ),
-            ),
-            None => term::status(
-                "Added",
-                &format!("{} to {section} of {}", dep.name, path.display()),
-            ),
+            );
+        } else {
+            // A dev dependency is not in the resolved graph: its pin, or
+            // its directory's manifest.
+            let pinned = || match &dep.source {
+                Source::Registry { req, .. } => req.strip_prefix('^').map(str::to_owned),
+                Source::Path(p) => {
+                    let dir = path.parent()?.join(p);
+                    manifest::load(&manifest::find(&dir)?).ok()?.version
+                }
+                Source::Git { .. } => None,
+            };
+            let v = dep_version(&graph, &dep.name)
+                .or_else(pinned)
+                .map_or_else(String::new, |v| format!(" v{v}"));
+            let dev = if dev { " (dev_deps)" } else { "" };
+            term::status("Added", &format!("{}{v}{dev}", dep.name));
         }
     }
     Ok(0)

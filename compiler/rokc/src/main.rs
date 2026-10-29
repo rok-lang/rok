@@ -71,6 +71,10 @@ struct Args {
     connection_file: Option<PathBuf>,
     iters: Option<u64>,
     samples: Option<u64>,
+    /// `bench --format=rokbench`: the machine lines, not the human ones.
+    rokbench: bool,
+    /// `doc --open`.
+    open: bool,
     /// `--emit-harness <file>`: write the test / bench harness manifest
     /// (built executables and their cases) to `<file>` instead of running;
     /// `rok` reads it and runs the cases (its runner, spec 9.1).
@@ -94,6 +98,13 @@ const VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), env!("ROK_COMMIT_INFO")
 
 /// The command being run, once known, for usage errors.
 static CMD: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+/// When the command started: `Finished` counts the standard library build.
+static STARTED: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
+
+fn started() -> Instant {
+    *STARTED.get_or_init(Instant::now)
+}
 
 /// `rokc <cmd> --help` (`rok <cmd> --help` under rok).
 fn command_help(cmd: &str) -> String {
@@ -282,6 +293,14 @@ fn parse_args(raw: Vec<String>) -> Args {
                     a.samples = Some(n);
                 }
             }
+            "--format" => {
+                a.rokbench = match value(&name, inline, &mut it).as_str() {
+                    "rokbench" => true,
+                    "human" => false,
+                    v => usage_error(&format!("`--format` takes human or rokbench, not `{v}`")),
+                };
+            }
+            "--open" => a.open = true,
             "--threads" => {
                 let n = value(&name, inline, &mut it);
                 a.threads = Some(
@@ -450,6 +469,7 @@ fn main() {
 }
 
 fn real_main() {
+    started();
     let a = parse_args(std::env::args().skip(1).collect());
     term::set_choice(a.color);
     rokc_interface::set_report_depth(a.json, term::depth(Stream::Stderr));
@@ -779,13 +799,26 @@ fn prebuild(a: &mut Args, pkg: Option<&Package>) -> Result<PathBuf, String> {
     let dir = out_dir(a, pkg).join("deps");
     // A native build links the standard library prebuilt.
     if matches!(a.cmd.as_str(), "build" | "run" | "test" | "bench") && a.emit.is_empty() {
-        a.std_prebuilt = rokc_interface::prebuilt_std(&rokc_interface::StdKey {
-            bootstrap: &a.bootstrap,
-            cfg: &a.cfg,
-            opts: &a.opts,
-            target: a.spec(),
-            test: matches!(a.cmd.as_str(), "test" | "bench"),
-        });
+        let level = format!("-O{}", a.opts.opt_level);
+        let quiet = a.quiet;
+        let announce = move || {
+            if !quiet {
+                term::status(
+                    "Compiling",
+                    &format!("std ({level}, cached for next builds)"),
+                );
+            }
+        };
+        a.std_prebuilt = rokc_interface::prebuilt_std(
+            &rokc_interface::StdKey {
+                bootstrap: &a.bootstrap,
+                cfg: &a.cfg,
+                opts: &a.opts,
+                target: a.spec(),
+                test: matches!(a.cmd.as_str(), "test" | "bench"),
+            },
+            &announce,
+        );
         if a.verbose > 0 && !a.quiet {
             match &a.std_prebuilt {
                 Some(p) => term::status("Std", &format!("prebuilt ({})", p.display())),
@@ -867,9 +900,10 @@ fn progress(a: &Args, verb: &str, pkg: &Package) {
 }
 
 /// Front end for `pkg`: reports warnings (also returned, rendered), exits
-/// 1 on errors, prints the 901.8 progress line unless `-q`.
+/// 1 on errors, prints the 901.8 progress line unless `-q`. The instant
+/// is the command's start, for `finished`.
 fn compile(a: &Args, pkg: &Package, mode: Mode) -> (CompileResult, String, Instant) {
-    let started = Instant::now();
+    let t = Instant::now();
     progress(
         a,
         if mode == Mode::Doc {
@@ -901,7 +935,7 @@ fn compile(a: &Args, pkg: &Package, mode: Mode) -> (CompileResult, String, Insta
                 .collect::<String>(),
         );
         result.report_errors();
-        process::exit(1);
+        could_not_build(a, pkg, result.errors.len(), result.warnings.len());
     }
     let diags = if lints {
         rokc_tools::lint::run(&result, &a.lint_levels)
@@ -909,18 +943,42 @@ fn compile(a: &Args, pkg: &Package, mode: Mode) -> (CompileResult, String, Insta
         result.warnings.clone()
     };
     let (errors, warnings): (Vec<_>, Vec<_>) = diags.iter().partition(|d| d.is_error());
+    let n = warnings.len();
     let warnings: String = warnings.iter().map(|w| result.render(w)).collect();
     print_rendered(&warnings);
     if !errors.is_empty() {
         errors.iter().for_each(|d| result.report(d));
-        process::exit(1);
+        could_not_build(a, pkg, errors.len(), n);
     }
-    stage(a, "front end", started);
+    stage(a, "front end", t);
     reused(a, &result);
     if a.verbose > 1 && !a.quiet {
         eprint!("{}", result.trace());
     }
-    (result, warnings, started)
+    (result, warnings, started())
+}
+
+/// `error: could not build <name> (1 error, 2 warnings)`, then exit 1.
+fn could_not_build(a: &Args, pkg: &Package, errors: usize, warnings: usize) -> ! {
+    if !a.quiet && !a.json {
+        eprintln!(
+            "{} could not build {} ({})",
+            term::label(Stream::Stderr, Role::Error),
+            pkg.name,
+            counts(errors, warnings)
+        );
+    }
+    process::exit(1);
+}
+
+/// `1 error, 2 warnings`.
+fn counts(errors: usize, warnings: usize) -> String {
+    let s = |n: usize| if n == 1 { "" } else { "s" };
+    format!(
+        "{errors} error{}, {warnings} warning{}",
+        s(errors),
+        s(warnings)
+    )
 }
 
 /// Incremental directory (spec 9.2.16): `<out>/incremental/<name>-<hash>`,
@@ -1084,6 +1142,27 @@ fn cmd_build(mut a: Args) {
         finished(&a, started);
         return;
     }
+    // A lone file's executable goes beside it, built once with `run`'s.
+    if pkg.anonymous && a.output.is_none() {
+        let exe = script_exe(&a, &pkg);
+        let dest = pkg.root.with_file_name(exe_file(&a, &pkg.name));
+        place(&a, &pkg, &exe, &dest);
+        for f in also(&a, &pkg, &exe) {
+            place(
+                &a,
+                &pkg,
+                &f,
+                &dest.with_file_name(f.file_name().unwrap_or_default()),
+            );
+        }
+        if !a.quiet {
+            term::status(
+                "Built",
+                &format!("{} (use -o to put it elsewhere)", shown(&dest)),
+            );
+        }
+        return;
+    }
     let out = a.output.clone().unwrap_or_else(|| {
         create_dir(&target);
         target.join(exe_file(&a, &pkg.name))
@@ -1099,10 +1178,10 @@ fn cmd_build(mut a: Args) {
 /// Build unless up to date; a fresh build reprints its warnings.
 fn build_fresh(a: &Args, pkg: &Package, fp: Fingerprint, link: impl FnOnce(&Args, &CompileResult)) {
     if let Some(warnings) = fp.fresh() {
-        print_rendered(&warnings);
         if !a.quiet {
             term::status("Fresh", &format!("{} ({})", pkg.name, pkg.dir.display()));
         }
+        print_rendered(&warnings);
         return;
     }
     fp.clear();
@@ -1275,6 +1354,61 @@ fn script_exe(a: &Args, pkg: &Package) -> PathBuf {
     exe
 }
 
+/// Copy `from` to `to` for a lone file's build. A file at `to` that an
+/// earlier build did not put there stays: the build fails and names `-o`.
+/// A record per destination in the target directory's `placed/` holds
+/// the size and time of what was written.
+fn place(a: &Args, pkg: &Package, from: &Path, to: &Path) {
+    let root = a
+        .target_dir
+        .clone()
+        .or_else(|| std::env::var_os("ROKC_TARGET_DIR").map(PathBuf::from))
+        .unwrap_or_else(lone_target_dir);
+    let abs = std::path::absolute(to).unwrap_or_else(|_| to.to_path_buf());
+    let h = rokc_core::hash::fnv(abs.to_string_lossy().as_bytes());
+    let record = root.join("placed").join(format!("{h:016x}"));
+    let stamp = |p: &Path| {
+        let m = std::fs::symlink_metadata(p)
+            .ok()
+            .filter(std::fs::Metadata::is_file)?;
+        Some(format!("{} {:?}", m.len(), m.modified().ok()?))
+    };
+    if std::fs::symlink_metadata(to).is_ok() && std::fs::read_to_string(&record).ok() != stamp(to) {
+        fail(&format!(
+            "{} is in the way: it was not built from {}; to keep it, write the executable \
+             elsewhere: `{} build {} -o <file>`",
+            shown(to),
+            shown(&pkg.root),
+            cli::invoked_as(),
+            shown(&pkg.root),
+        ));
+    }
+    // A scratch copy renamed into place: a running executable stays.
+    let name = to.file_name().unwrap_or_default().to_string_lossy();
+    let tmp = to.with_file_name(format!(".{name}.{}", process::id()));
+    if let Err(e) = std::fs::copy(from, &tmp).and_then(|_| std::fs::rename(&tmp, to)) {
+        let _ = std::fs::remove_file(&tmp);
+        fail(&format!("cannot write {}: {e}", shown(to)));
+    }
+    if let Some(s) = stamp(to) {
+        create_dir(&root.join("placed"));
+        let _ = std::fs::write(&record, s);
+    }
+}
+
+/// `p` relative to the current directory when under it.
+fn shown(p: &Path) -> String {
+    let rel = std::env::current_dir().ok().and_then(|cwd| {
+        let cwd = rokc_core::real_path(cwd).ok()?;
+        let p = rokc_core::real_path(p).ok()?;
+        p.strip_prefix(&cwd).ok().map(Path::to_path_buf)
+    });
+    rel.filter(|r| !r.as_os_str().is_empty())
+        .unwrap_or_else(|| p.to_path_buf())
+        .display()
+        .to_string()
+}
+
 /// Remove the entries of `root` but `keep` unused for `SCRIPT_KEPT`.
 fn sweep_scripts(root: &Path, keep: &Path) {
     for e in std::fs::read_dir(root).into_iter().flatten().flatten() {
@@ -1303,7 +1437,7 @@ fn cmd_check(mut a: Args, codegen: bool) {
         discover_arg(&a)
     };
     prebuild(&mut a, Some(&pkg)).unwrap_or_else(|e| fail(&e));
-    let started = Instant::now();
+    let started = started();
     progress(&a, "Checking", &pkg);
     let source = stdin.then(|| {
         let mut src = String::new();
@@ -1338,12 +1472,7 @@ fn cmd_check(mut a: Args, codegen: bool) {
     if !a.quiet && !a.json {
         term::status(
             "Checked",
-            &format!(
-                "{}: {errors} error{}, {warnings} warning{}",
-                pkg.name,
-                if errors == 1 { "" } else { "s" },
-                if warnings == 1 { "" } else { "s" },
-            ),
+            &format!("{}: {}", pkg.name, counts(errors, warnings)),
         );
     }
     finished(&a, started);
@@ -1429,7 +1558,13 @@ fn cmd_run(mut a: Args) {
         }
     };
     if !a.quiet {
-        term::status("Running", &format!("`{}`", exe.display()));
+        // A lone file runs from the cache: name the file, `-v` the copy.
+        let what = match (pkg.anonymous && a.output.is_none(), a.verbose) {
+            (true, 0) => shown(&pkg.root),
+            (true, _) => format!("`{}`", exe.display()),
+            _ => format!("`{}`", shown(&exe)),
+        };
+        term::status("Running", &what);
     }
     let status = Command::new(&exe)
         .args(&a.run_args)
@@ -1544,6 +1679,9 @@ fn write_harness_manifest(
             m.push_str(&format!("iters {n}\n"));
         }
         m.push_str(&format!("samples {}\n", a.samples.unwrap_or(10)));
+        if a.rokbench {
+            m.push_str("format rokbench\n");
+        }
     } else {
         m.push_str(&format!("threads {}\n", threads.unwrap_or(1)));
         if a.show_output {
@@ -1606,6 +1744,50 @@ fn cmd_doc(mut a: Args) {
     finished(&a, started);
     if !a.quiet {
         term::status("Generated", &index.display().to_string());
+    }
+    if a.open {
+        open_in_browser(&index);
+    }
+}
+
+/// `doc --open`: `$BROWSER`, else the system's opener. A failure warns
+/// and leaves the path to open by hand.
+fn open_in_browser(page: &Path) {
+    let page = std::path::absolute(page).unwrap_or_else(|_| page.to_path_buf());
+    let browser = std::env::var_os("BROWSER").filter(|b| !b.is_empty());
+    let r = if let Some(b) = browser {
+        // A browser may run until closed: do not wait for it.
+        Command::new(&b).arg(&page).spawn().map(|_| ())
+    } else {
+        let mut c = if cfg!(windows) {
+            // `start`'s first quoted argument is a window title.
+            let mut c = Command::new("cmd");
+            c.args(["/C", "start", ""]);
+            c
+        } else if cfg!(target_os = "macos") {
+            Command::new("open")
+        } else {
+            Command::new("xdg-open")
+        };
+        c.arg(&page)
+            .stdout(process::Stdio::null())
+            .stderr(process::Stdio::null())
+            .status()
+            .and_then(|s| {
+                if s.success() {
+                    Ok(())
+                } else {
+                    Err(std::io::Error::other(format!("{s}")))
+                }
+            })
+    };
+    if let Err(e) = r {
+        eprintln!(
+            "{}: {} cannot open a browser ({e}); open {} in one, or set BROWSER",
+            cli::invoked_as(),
+            term::label(Stream::Stderr, Role::Warning),
+            page.display()
+        );
     }
 }
 

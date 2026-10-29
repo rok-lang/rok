@@ -15,7 +15,7 @@ pub mod test;
 ///
 /// The manifest is what `rokc test` / `rokc bench` write with
 /// `--emit-harness`: simple lines of `kind test|bench`, the resolved options
-/// (`threads`/`show_output` or `iters`/`samples`), an optional `filter`
+/// (`threads`/`show_output` or `iters`/`samples`/`format`), an optional `filter`
 /// (raw to end of line), then an `exe <path>` per built executable each
 /// followed by its `case <name>` lines. A package with both roots lists
 /// the library first; a failing library run ends the command (spec 9.1).
@@ -25,6 +25,7 @@ pub fn run_manifest(text: &str, out: &mut dyn Write) -> i32 {
     let mut show_output = false;
     let mut iters: Option<u64> = None;
     let mut samples = 10u64;
+    let mut rokbench = false;
     let mut filter: Option<String> = None;
     let mut harnesses: Vec<(PathBuf, Vec<String>)> = Vec::new();
     for line in text.lines() {
@@ -35,6 +36,7 @@ pub fn run_manifest(text: &str, out: &mut dyn Write) -> i32 {
             "show_output" => show_output = true,
             "iters" => iters = rest.parse().ok(),
             "samples" => samples = rest.parse().unwrap_or(10),
+            "format" => rokbench = rest == "rokbench",
             "filter" => filter = Some(rest.to_owned()),
             "exe" => harnesses.push((PathBuf::from(rest), Vec::new())),
             "case" => {
@@ -52,6 +54,7 @@ pub fn run_manifest(text: &str, out: &mut dyn Write) -> i32 {
                 filter: filter.as_deref(),
                 iters,
                 samples,
+                rokbench,
             };
             bench::run(exe, cases, &opts, out)
         } else {

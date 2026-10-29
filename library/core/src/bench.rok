@@ -8,6 +8,7 @@
 
 use rok::core::cmp::Ordering;
 use rok::core::hint::black_box;
+use rok::core::sync::Atomic;
 
 extern "C" {
     fn rok_time_now_ns() -> i64;
@@ -18,11 +19,19 @@ extern "C" {
 // read overhead are negligible.
 const TARGET_NS: i64 = 100_000_000;
 
+// Set by `iter`; a bench that never calls it measured nothing.
+static MEASURED: Atomic<bool> = Atomic::new(false);
+
+// Whether this process's bench called `iter`; the harness exits 3 when
+// not, and the runner says it measured nothing.
+#[doc(hidden)]
+pub fn measured() -> bool { MEASURED.load() }
+
 pub struct Bench {
     name: str;
     iters: i64; // 0: calibrate
     samples: i64;
-    tty: bool;
+    tty: bool;    // the human line, else the #rokbench one
     width: usize; // name-column width the driver computed
     bytes: i64;   // throughput numerator per call, 0: none
     items: i64;
@@ -50,6 +59,7 @@ impl Bench {
 
     // Measure `f`. Calibrate (unless fixed), warm up, sample, report.
     pub fn iter<T>(ref self, f: fn() -> T) {
+        MEASURED.store(true);
         let iters = if self.iters > 0 { self.iters } else { calibrate(f) };
         run(f, iters); // warm-up, discarded
 
