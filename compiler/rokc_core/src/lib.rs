@@ -7,6 +7,7 @@ pub mod def;
 pub mod hash;
 pub mod lint;
 pub mod local;
+pub mod suggest;
 pub mod tmp;
 
 use std::path::{Path, PathBuf};

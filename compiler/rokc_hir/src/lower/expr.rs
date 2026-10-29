@@ -2536,6 +2536,7 @@ pub(super) fn lower_struct_init(
                                      write `{}<...> {{ ... }}`",
                                     segs.join("::")
                                 ));
+                                ctx.tag_last(rokc_diagnostic::Tag::TypeParamInfer);
                                 return poison(span);
                             }
                         }

@@ -352,6 +352,7 @@ pub(super) fn closure_ctx<'a>(
                             p.name, p.name
                         ),
                     );
+                    ctx.tag_last(rokc_diagnostic::Tag::ClosureParamInfer);
                     HirTy::Unknown
                 }
             },
