@@ -48,6 +48,9 @@
 //!     `wac plug` (`ROK_TEST_WAC`; the case is skipped without it)
 //!     satisfies the case's imports with its exports; the composition
 //!     runs
+//!   - `// timeout: N`          - each build and run of the case may take
+//!     N seconds (default: `ROK_TEST_CASE_TIMEOUT`, else 600 to build and
+//!     300 to run); past it the process is killed and the case fails
 //!   - `// spec: <section>`     - the spec section a case checks (a tag)
 //!   - `native-run` is skipped when the target runs under CPU emulation
 //!     (a foreign arch executed through qemu-user), where some syscalls
@@ -78,17 +81,20 @@
 //!     is built already, so no test runs `cargo build`: under nextest,
 //!     one process per test, a concurrent build relinks the archive
 //!     while another test links against it.
+//!   - `ROK_TEST_CASE_TIMEOUT=<seconds>` - the limit of every build and
+//!     run of a case without `// timeout:` (wasmtime under load).
 //!   - `ROK_TEST_TMP=<dir>` - where each test binary's scratch root
 //!     `rok-test-<pid>` goes (default: the temp directory); the root is
 //!     removed at exit, unless `ROK_KEEP_TEST_TMP` is set.
 #![allow(dead_code)]
 
 use std::env;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
+use std::time::{Duration, Instant};
 
 use rokc_target::{Linker, ObjectFormat, TargetSpec};
 
@@ -223,11 +229,98 @@ pub fn optimized() -> bool {
     !matches!(opt_suffix().as_str(), "" | "-O0")
 }
 
-/// `rokc build <src> -o <exe>` with the harness bootstrap + runtime.
-pub fn rokc_build(env: &Env, src: &Path, exe: &Path) -> std::io::Result<Output> {
+/// What a case's time limit covers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Step {
+    Build,
+    Run,
+}
+
+/// The limit of one build or run of the case `source`: its `// timeout:`,
+/// else `ROK_TEST_CASE_TIMEOUT`, else 600 s to build and 300 s to run.
+pub fn case_timeout(source: &str, step: Step) -> Duration {
+    case_timeout_in(
+        env::var("ROK_TEST_CASE_TIMEOUT").ok().as_deref(),
+        source,
+        step,
+    )
+}
+
+/// [`case_timeout`] with `var` as `ROK_TEST_CASE_TIMEOUT`.
+pub fn case_timeout_in(var: Option<&str>, source: &str, step: Step) -> Duration {
+    let secs = |s: &str, what: &str| {
+        s.parse::<f64>()
+            .ok()
+            .filter(|s| s.is_finite() && *s > 0.0)
+            .map_or_else(
+                || panic!("{what} {s}: expected a positive number of seconds"),
+                Duration::from_secs_f64,
+            )
+    };
+    if let Some(d) = directive(source, "timeout:") {
+        return secs(d, "// timeout:");
+    }
+    if let Some(v) = var.map(str::trim).filter(|v| !v.is_empty()) {
+        return secs(v, "ROK_TEST_CASE_TIMEOUT=");
+    }
+    Duration::from_secs(match step {
+        Step::Build => 600,
+        Step::Run => 300,
+    })
+}
+
+/// `c.output()`, killed past `limit`: `Err("timed out after Ns")`.
+pub fn output_within(c: &mut Command, limit: Duration) -> Result<Output, String> {
+    let mut child = c
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("exec: {e}"))?;
+    let out = drain(child.stdout.take());
+    let err = drain(child.stderr.take());
+    let deadline = Instant::now() + limit;
+    let mut nap = Duration::from_millis(1);
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(s)) => break s,
+            Ok(None) if Instant::now() < deadline => {
+                thread::sleep(nap);
+                nap = (nap * 2).min(Duration::from_millis(50));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                // The readers are left: a grandchild may still hold the pipes.
+                return Err(format!("timed out after {}s", limit.as_secs_f64()));
+            }
+            Err(e) => return Err(format!("wait: {e}")),
+        }
+    };
+    Ok(Output {
+        status,
+        stdout: out.join().unwrap_or_default(),
+        stderr: err.join().unwrap_or_default(),
+    })
+}
+
+/// A thread reading `pipe` to its end.
+fn drain<R: Read + Send + 'static>(pipe: Option<R>) -> thread::JoinHandle<Vec<u8>> {
+    thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(mut p) = pipe {
+            let _ = p.read_to_end(&mut buf);
+        }
+        buf
+    })
+}
+
+/// `rokc build <src> -o <exe>` with the harness bootstrap + runtime,
+/// within the case's [`case_timeout`].
+pub fn rokc_build(env: &Env, src: &Path, exe: &Path) -> Result<Output, String> {
     let source = std::fs::read_to_string(src).unwrap_or_default();
-    Command::new(ROKC)
-        .args(directives(&source, "rokc-arg:").flat_map(str::split_whitespace))
+    let mut c = Command::new(ROKC);
+    c.args(directives(&source, "rokc-arg:").flat_map(str::split_whitespace))
         .arg("build")
         .arg(src)
         .arg("--bootstrap")
@@ -244,8 +337,8 @@ pub fn rokc_build(env: &Env, src: &Path, exe: &Path) -> std::io::Result<Output> 
         .arg("--target-dir")
         .arg(exe.with_file_name("target"))
         .arg("-o")
-        .arg(exe)
-        .output()
+        .arg(exe);
+    output_within(&mut c, case_timeout(&source, Step::Build))
 }
 
 /// `rokc lint src`, with the build's library and target.

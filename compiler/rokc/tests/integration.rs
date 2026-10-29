@@ -1,7 +1,8 @@
 //! End to end: `rokc build` each `tests/cases/*.rok` (or the package
 //! `tests/cases/<dir>/`, `src/main.rok`), then run it. A case has
 //! `// expect-exit: N` (optionally `// expect-stdout:`), or
-//! `// expect-error: text` when it must fail to build. Directives:
+//! `// expect-error: text` when it must fail to build. Each build and run
+//! has a time limit (`case_timeout`); past it the case fails. Directives:
 //! `common/mod.rs`.
 
 mod common;
@@ -118,14 +119,14 @@ fn run_case(
             ));
         }
         let composed = case_dir.join(exe_name("composed"));
-        let c = std::process::Command::new(wac)
-            .arg("plug")
+        let mut c = std::process::Command::new(wac);
+        c.arg("plug")
             .arg(&exe)
             .arg("--plug")
             .arg(&plugged)
             .arg("-o")
-            .arg(&composed)
-            .output()
+            .arg(&composed);
+        let c = output_within(&mut c, case_timeout(&source, Step::Build))
             .map_err(|e| format!("wac: {e}"))?;
         if !c.status.success() {
             return Err(format!(
@@ -160,9 +161,11 @@ fn run_case(
         let (call, want) = inv
             .split_once(" => ")
             .ok_or("`// wasm-invoke: call => value`")?;
-        let run = invoke_command(&exe, call.trim())
-            .output()
-            .map_err(|e| format!("exec: {e}"))?;
+        let run = output_within(
+            &mut invoke_command(&exe, call.trim()),
+            case_timeout(&source, Step::Run),
+        )
+        .map_err(|e| format!("--invoke {call}: {e}"))?;
         let got = String::from_utf8_lossy(&run.stdout);
         if !run.status.success() || got.trim_end() != want.trim() {
             return Err(format!(
@@ -247,11 +250,9 @@ fn check_run(
 ) -> Result<(), String> {
     // `// run-env: KEY=VALUE`: the case's own environment.
     let own = directives(source, "run-env:").filter_map(|d| d.split_once('='));
-    let run = run_command(exe)
-        .envs(own)
-        .envs(env.iter().copied())
-        .output()
-        .map_err(|e| format!("exec: {e}"))?;
+    let mut c = run_command(exe);
+    c.envs(own).envs(env.iter().copied());
+    let run = output_within(&mut c, case_timeout(source, Step::Run))?;
     let exit = run.status.code().ok_or("no exit code")?;
     if !exit_matches(exit, expected) {
         return Err(format!("exit={exit} (expected {expected})"));
@@ -312,4 +313,35 @@ fn glob(pat: &str, line: &str) -> bool {
         }
     }
     rest.ends_with(last)
+}
+
+/// A case that never ends fails at its limit instead of holding the job.
+#[test]
+fn hung_case_times_out() {
+    let Some(env) = setup() else { return };
+    let dir = scratch("hung");
+    let src = dir.join("hung.rok");
+    put(&src, "fn main() {\n    loop {}\n}\n").unwrap();
+    let exe = dir.join(exe_name("hung"));
+    let build = rokc_build(&env, &src, &exe).unwrap();
+    assert_exit(&build, 0);
+    let limit = case_timeout_in(Some("1"), "", Step::Run);
+    assert_eq!(limit, std::time::Duration::from_secs(1));
+    let start = std::time::Instant::now();
+    let got = output_within(&mut run_command(&exe), limit);
+    assert_eq!(got.err().as_deref(), Some("timed out after 1s"));
+    assert!(start.elapsed() < std::time::Duration::from_secs(30));
+}
+
+#[test]
+fn case_timeout_sources() {
+    let d = std::time::Duration::from_secs;
+    assert_eq!(case_timeout_in(None, "", Step::Build), d(600));
+    assert_eq!(case_timeout_in(None, "", Step::Run), d(300));
+    assert_eq!(case_timeout_in(Some("900"), "", Step::Run), d(900));
+    assert_eq!(case_timeout_in(Some(""), "", Step::Run), d(300));
+    assert_eq!(
+        case_timeout_in(Some("900"), "// timeout: 5\n", Step::Build),
+        d(5)
+    );
 }

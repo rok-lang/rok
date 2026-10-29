@@ -39,6 +39,10 @@ arm64, `windows-2022` x86_64, `windows-11-arm` aarch64 (cross only). x86_64-appl
 - rustc runs through sccache (`.github/actions/sccache`), cached in the `rok-lang-artifacts` bucket under
   `sccache/<os>-<arch>/` (expired after 14 days). Pull requests read it; other events write it through the
   `rok-ci-sccache` role. A cache error builds without it.
+- Each build and run of an `integration` case, and each run of a `differential` suite, has its own limit:
+  600 s to build and 300 s to run, `ROK_TEST_CASE_TIMEOUT=<seconds>` for both, or a case's `// timeout: N`.
+  Past it the process is killed and that case fails as `<case>: timed out after Ns`; the other cases go on.
+  `targets/test-wasm.sh` sets 900 s.
 - nextest (`.config/nextest.toml`) kills a test that runs past 8 minutes. The archive's baked paths assume
   every job checks out at the same path, true on GitHub-hosted runners.
 - `cross-link` (linux-x64): `targets/build.sh` for the Linux targets and `i686-pc-windows-msvc`, then the

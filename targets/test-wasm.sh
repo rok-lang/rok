@@ -88,6 +88,8 @@ fi
 "$here/build.sh" "$@"
 
 export ROK_REQUIRE_LLVM=1 ROK_TEST_WASM_RUNNER="$runner" ROK_TEST_WAC
+# wasmtime under load is slow; a hung case still fails, not the job.
+export ROK_TEST_CASE_TIMEOUT="${ROK_TEST_CASE_TIMEOUT:-900}"
 for t in "$@"; do
   for o in "" -O2; do
     echo "== $t ${o:--O0}"
