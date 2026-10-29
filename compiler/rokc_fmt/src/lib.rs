@@ -258,6 +258,15 @@ mod tests {
     }
 
     #[test]
+    fn keeps_optional_last_semi() {
+        let src = "fn f() {\n  while i < 2 { i += 1 }\n    { let x = 1; }\n  let y = 2\n}\n";
+        assert_eq!(
+            format_source(src).unwrap(),
+            "fn f() {\n    while i < 2 { i += 1 }\n    { let x = 1; }\n    let y = 2\n}\n"
+        );
+    }
+
+    #[test]
     fn rokon_files() {
         let src = "// cfg\nCfg {\n  tags: [\n      \"a\", // first\n  ],\n}\n";
         assert_eq!(
