@@ -1,0 +1,11 @@
+// spec: §9.9.4
+// Messages name library items as they are written (`List::sort`,
+// `Ord`, `print`), and cite no spec sections.
+// expect-error: 10:1: type `f64` does not satisfy trait bound `Ord` required by `List::sort`
+// expect-error: 11:1: `print` takes 1 argument but 2 were supplied
+// expect-error: help: `print` takes one string
+// forbid-error: rok::
+// forbid-error: (spec
+let xs: List<f64> = [1.5, 0.5];
+xs.sort();
+print(1, 2);

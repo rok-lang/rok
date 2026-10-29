@@ -1,5 +1,5 @@
 // spec: §6.6.4
-// expect-error: 9:1: keyword `twice` is registered twice (spec 6.6.4)
+// expect-error: 9:1: keyword `twice` is registered twice
 
 // Spec 6.6.4: one keyword registered twice in a build is an error.
 #[keyword("twice")]

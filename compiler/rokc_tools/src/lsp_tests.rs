@@ -670,7 +670,7 @@ fn library_and_executable_package() {
         of("src/main.rok"),
         [
             "function `app::hidden` is private to module `app` and cannot be used from `<root>` \
-             (spec 5.6 - add `pub` to expose it)\nhelp: `src/main.rok` uses its package's \
+             (add `pub` to expose it)\nhelp: `src/main.rok` uses its package's \
              library `src/lib.rok` as the package `app`, like a dependency: it sees only the \
              library's `pub` items"
         ]

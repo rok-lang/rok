@@ -1,4 +1,4 @@
-// expect-error: 14:15: a struct literal can't start a block's head: its `{` would open the body (spec 3.10.3)
+// expect-error: 14:15: a struct literal can't start a block's head: its `{` would open the body
 // expect-error: help: wrap the struct literal in parentheses: `(R { n: 2 })`
 
 // `using` takes the same top-level struct-literal restriction as `if` /

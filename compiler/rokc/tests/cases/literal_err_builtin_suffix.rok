@@ -1,4 +1,4 @@
-// expect-error: `i32` is a built-in numeric suffix and can't be registered (spec 1.6.2)
+// expect-error: `i32` is a built-in numeric suffix and can't be registered
 #[literal(number "i32")]
 fn my_i32(n: i32) -> i32 {
     return n;

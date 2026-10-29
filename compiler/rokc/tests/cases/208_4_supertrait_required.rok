@@ -1,6 +1,6 @@
 // spec: 002.08.4-supertraits
 // Implementing a trait needs its supertraits implemented too.
-// expect-error: 12:1: `X` implements `Sub` but not its supertrait `Base` (spec 2.8.4)
+// expect-error: 12:1: `X` implements `Sub` but not its supertrait `Base`
 // forbid-warning: `Y` implements
 
 trait Base { fn b(self) -> i32; }

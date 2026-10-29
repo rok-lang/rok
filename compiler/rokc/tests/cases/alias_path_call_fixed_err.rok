@@ -1,6 +1,6 @@
 // spec: §2.6.9
-// expect-error: alias_path_call_fixed_err.rok:13:13: `Names::new` can't infer `Names`'s arguments: its aliased type's arguments are not its distinct parameters (spec 2.6.9) - write `Names::<..>::new`
-// expect-error: alias_path_call_fixed_err.rok:14:13: `Same::mk` can't infer `Same`'s arguments: its aliased type's arguments are not its distinct parameters (spec 2.6.9) - write `Same::<..>::mk`
+// expect-error: alias_path_call_fixed_err.rok:13:13: `Names::new` can't infer `Names`'s arguments: its aliased type's arguments are not its distinct parameters - write `Names::<..>::new`
+// expect-error: alias_path_call_fixed_err.rok:14:13: `Same::mk` can't infer `Same`'s arguments: its aliased type's arguments are not its distinct parameters - write `Same::<..>::mk`
 // `Al::f` leaves the alias's arguments to inference only when the
 // aliased type's are its distinct parameters.
 type Names<V> = Dict<str, V>;

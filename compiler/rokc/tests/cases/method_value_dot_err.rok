@@ -1,5 +1,5 @@
 // spec: §3.5.4
-// expect-error: 14:13: `p.get` names a method without calling it; `.method` is not a function value (spec 3.5.4)
+// expect-error: 14:13: `p.get` names a method without calling it; `.method` is not a function value
 // expect-error: or use the method path `P::get`
 // expect-error: 15:13: `[1, 2].len` names a method without calling it
 

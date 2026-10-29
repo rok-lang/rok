@@ -1,7 +1,7 @@
 // spec: 005.02-const
-// expect-error: 13:20: `A` is declared inside `main` and can't use `n`, a local of `main`; a `const` is computed at compile time, so it can use only items (spec 3.9.1)
+// expect-error: 13:20: `A` is declared inside `main` and can't use `n`, a local of `main`; a `const` is computed at compile time, so it can use only items
 // expect-error: 14:20: const `B` cannot be evaluated at compile time: calls `g`, which is not a `const fn`
-// expect-error: 16:5: cannot assign to const `C` (spec 5.2)
+// expect-error: 16:5: cannot assign to const `C`
 // expect-error: 17:19: constant expression overflows `u8`: the result is 400
 
 // Spec 5.2.4 / 3.9.1: a body `const` is an item: it reads no `let`

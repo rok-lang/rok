@@ -1,6 +1,6 @@
 // expect-error: error[E202]: `ys` shares `xs`, which was moved into the `Mutex` at line 29
 // expect-error: handoff_alias_errors.rok:30:5: `ys` shares `xs`, which was moved into the `Mutex` at line 29
-// expect-error: help: it belongs to the `Mutex` now; use it through the lock: `using g = _m.lock() { g.get().len() }`, or hand over `xs.clone()` to keep a separate copy (stdlib 2.13.9)
+// expect-error: help: it belongs to the `Mutex` now; use it through the lock: `using g = _m.lock() { g.get().len() }`, or hand over `xs.clone()` to keep a separate copy
 // expect-error: handoff_alias_errors.rok:37:5: `xs` shares `ys`, which was moved into the `Mutex` at line 36
 // expect-error: handoff_alias_errors.rok:43:5: `s.items` was moved into the `Mutex` at line 42
 // expect-error: handoff_alias_errors.rok:50:5: `xs` shares `s`, which was moved into the `Mutex` at line 49

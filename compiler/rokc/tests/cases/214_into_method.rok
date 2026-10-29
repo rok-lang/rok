@@ -1,5 +1,5 @@
 // spec: 002.14-into-method
-// expect-error: does not satisfy trait bound `rok::core::convert::From<i64>`
+// expect-error: does not satisfy trait bound `From<i64>`
 // stdlib 2.11.3: `into` is lossless only; there is no `From<i64> for i32`,
 // so use try_into / saturating_into / as.
 

@@ -1,5 +1,5 @@
 // spec: §6.7.12
-// expect-error: 8:5: operator aliases of `before` must share one precedence level (spec 6.7.12)
+// expect-error: 8:5: operator aliases of `before` must share one precedence level
 
 // Spec 6.7.12: aliases of one method are tokens of one level (`<` is a
 // comparison, `+` an additive level).

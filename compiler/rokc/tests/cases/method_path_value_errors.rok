@@ -1,6 +1,6 @@
 // expect-error: 24:13: `Point::bump` has a `ref` parameter (or `ref self`) and cannot be used as a `fn` value
 // expect-error: 25:13: `Point::set` has a `ref` parameter
-// expect-error: 26:13: `p.norm` names a method without calling it; `.method` is not a function value (spec 3.5.4)
+// expect-error: 26:13: `p.norm` names a method without calling it; `.method` is not a function value
 // expect-error: 27:5: type annotations needed: cannot infer the type of `d` (`fn(_) -> _
 // expect-error: 28:5: type annotations needed: cannot infer the type of `e`
 

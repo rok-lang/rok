@@ -4,9 +4,9 @@
 // expect-error: = help: the library `src/lib.rok` has `app::add`, and `src/main.rok` sees it by the package's name: add `use app::add;`
 // expect-error: error[E100]: cannot find type `Square` in this scope
 // expect-error: = help: the library `src/lib.rok` has `app::shapes::Square`, and `src/main.rok` sees it by the package's name: add `use app::shapes::Square;`
-// expect-error: error[E102]: function `app::secret` is private to module `app` and cannot be used from `<root>` (spec 5.6 - add `pub` to expose it)
+// expect-error: error[E102]: function `app::secret` is private to module `app` and cannot be used from `<root>` (add `pub` to expose it)
 // expect-error: = help: `src/main.rok` uses its package's library `src/lib.rok` as the package `app`, like a dependency: it sees only the library's `pub` items
-// expect-error: error[E102]: function `app::inside` is `pub(pkg)`: visible only inside its package `app` (spec 5.6.4)
+// expect-error: error[E102]: function `app::inside` is `pub(pkg)`: visible only inside its package `app`
 // expect-error: error[E200]: type `app::Hidden` is private to module `app` and cannot be used from `<root>`
 
 // The executable sees only the library's `pub` items, and only by the

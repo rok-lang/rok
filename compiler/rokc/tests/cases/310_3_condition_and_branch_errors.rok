@@ -1,5 +1,5 @@
 // spec: §3.10.2 §3.10.3
-// expect-error: 9:5: mismatched types: the condition expects `bool`, found `i32`
+// expect-error: 9:8: mismatched types: the condition expects `bool`, found `i32`
 // expect-error: 10:44: mismatched types: the `else` branch of `if` expects `i32`, found `f64`
 
 // spec 3.10.3: no truthy conversion, a condition is `bool`. 3.10.2:

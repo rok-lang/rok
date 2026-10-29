@@ -330,6 +330,28 @@ fn text_at(texts: &[(String, String)], span: Span) -> Option<&str> {
     Some(rest.split('\n').next().unwrap_or(rest))
 }
 
+/// The name `name` a `let` at `at` binds (`at` covers `let` only).
+fn name_span(texts: &[(String, String)], at: Span, name: &str) -> Option<Span> {
+    let line = text_at(texts, at)?;
+    let rest = line.strip_prefix("let")?;
+    let off = 3 + rest.find(|c: char| !c.is_whitespace())?;
+    let word = line.get(off..)?;
+    let end = word
+        .find(|c: char| !c.is_alphanumeric() && c != '_')
+        .unwrap_or(word.len());
+    if &word[..end] != name {
+        return None;
+    }
+    let skip = u32::try_from(line[..off].chars().count()).ok()?;
+    let off = u32::try_from(off).ok()?;
+    Some(Span {
+        start: at.start + off,
+        end: at.start + off + u32::try_from(name.len()).ok()?,
+        col: at.col + skip,
+        ..at
+    })
+}
+
 /// `(level, lint, attribute span)` for each lint an `allow` / `warn` /
 /// `deny` attribute names; unknown names are reported to `out`.
 fn levels_of(
@@ -1197,10 +1219,11 @@ impl<'a> Cx<'a> {
                     };
                     let name = demangle(name);
                     let (head, fix) = split(&msg, name);
+                    let at = name_span(self.texts, *at, name).unwrap_or(*at);
                     let unused = self
                         .findings
                         .iter_mut()
-                        .find(|f| f.lint == "unused_variables" && f.span == *at);
+                        .find(|f| f.lint == "unused_variables" && f.span == at);
                     if let Some(f) = unused {
                         f.msg = format!("`{name}` is never used: the {head}");
                         f.notes.splice(0..0, fix);
@@ -1732,9 +1755,10 @@ impl AstVisitor for Cx<'_> {
         for b in s.bindings {
             if !b.used {
                 let name = demangle(&b.name);
+                let span = name_span(self.texts, b.span, name).unwrap_or(b.span);
                 self.findings.push(Finding {
                     lint: "unused_variables",
-                    span: b.span,
+                    span,
                     msg: format!("unused variable `{name}`"),
                     notes: vec![format!(
                         "if this is intentional, prefix it with an underscore: `_{name}`"

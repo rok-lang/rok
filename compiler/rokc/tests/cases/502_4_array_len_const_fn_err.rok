@@ -1,8 +1,8 @@
 // Spec 5.2.4: an item-level array length the const evaluator rejects is
 // an error, wherever the type is written.
-// expect-error: array length must be a compile-time integer (spec 2.11.5): calls `plain`, which is not a `const fn` (spec 5.2.5)
-// expect-error: array length must be a compile-time integer (spec 2.11.5): length -1 is out of range
-// expect-error: array length must be a compile-time integer (spec 2.11.5): attempt to multiply with overflow
+// expect-error: array length must be a compile-time integer: calls `plain`, which is not a `const fn`
+// expect-error: array length must be a compile-time integer: length -1 is out of range
+// expect-error: array length must be a compile-time integer: attempt to multiply with overflow
 fn plain() -> usize {
     3
 }

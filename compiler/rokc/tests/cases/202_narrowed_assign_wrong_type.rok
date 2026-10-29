@@ -1,5 +1,5 @@
 // spec: 002.02.6-narrowing
-// expect-error: 9:19: mismatched types: assignment to `v` expects `i32 | str`, found `bool`
+// expect-error: 9:23: mismatched types: assignment to `v` expects `i32 | str`, found `bool`
 
 // Inside the narrowed block `v` is `i32`; a value of another member of the
 // declared type ends the narrowing (spec 2.2.6), but one outside the

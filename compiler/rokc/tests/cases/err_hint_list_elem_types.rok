@@ -1,9 +1,12 @@
 // spec: §4.2.5
 // A List of other elements gets a conversion; a list literal's wrong
 // element is named as such, not as a variadic argument.
-// expect-error: 10:7: mismatched types: argument `xs` of `total` expects `List<i64>`, found `List<i32>`
+// expect-error: 13:7: mismatched types: argument `xs` of `total` expects `List<i64>`, found `List<i32>`
 // expect-error: help: convert the elements: `xs.iter().map(|x| x as i64).collect()`
-// expect-error: 11:21: mismatched types: list element expects `str`, found `i32`
+// expect-error: 14:22: mismatched types: list element expects `str`, found `i32`
+// expect-error: help: to make text from it, write `f"{1}"`
+// expect-error: 14:25: mismatched types: list element
+// expect-error: 14:28: mismatched types: list element
 // forbid-error: variadic argument
 fn total(xs: List<i64>) -> i64 { 0 }
 let xs: List<i32> = [1, 2, 3];

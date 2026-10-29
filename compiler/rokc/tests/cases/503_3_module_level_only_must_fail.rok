@@ -1,7 +1,7 @@
 // spec: refs-lang §5.3.8 §5.4.10 §5.9.8
-// expect-error: 13:5: a `mod` (spec 5.4.10) is declared only at module level, not in a function body
-// expect-error: 17:5: an `extern` block (spec 5.9.8) is declared only at module level, not in a function body
-// expect-error: 22:5: a `static` is declared only at module level, not in an `impl`; an associated `const` goes there (spec 5.3.8)
+// expect-error: 13:5: a `mod` is declared only at module level, not in a function body
+// expect-error: 17:5: an `extern` block is declared only at module level, not in a function body
+// expect-error: 22:5: a `static` is declared only at module level, not in an `impl`; an associated `const` goes there
 
 // `mod` and `extern` blocks are module-level items: one in a function
 // body is an error. A `static` is not an `impl` item (an associated

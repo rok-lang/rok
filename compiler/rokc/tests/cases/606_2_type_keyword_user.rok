@@ -1,5 +1,5 @@
 // spec: §6.6.2
-// expect-error: 6:1: `#[keyword("vec2")]` must be on a function - its handler (spec 6.6.2); only the standard library names a type with it
+// expect-error: 6:1: `#[keyword("vec2")]` must be on a function - its handler; only the standard library names a type with it
 
 // Spec 6.6.2: only the standard library registers type keywords (a
 // `#[keyword]` on a struct).

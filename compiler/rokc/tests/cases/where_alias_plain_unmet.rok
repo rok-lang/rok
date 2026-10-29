@@ -1,4 +1,4 @@
-// expect-error: type `Tok` does not satisfy trait bound `rok::core::fmt::Display` required by `TokBox`
+// expect-error: type `Tok` does not satisfy trait bound `Display` required by `TokBox`
 // Spec 2.10.4: a non-generic alias's `where` is checked too.
 struct Tok { v: i32; }
 struct W<T> { v: T; }

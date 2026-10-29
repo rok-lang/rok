@@ -1,4 +1,4 @@
-// expect-error: type `Cell<i32>` does not satisfy trait bound `rok::core::marker::Send` required by `rok::core::task::spawn`
+// expect-error: type `Cell<i32>` does not satisfy trait bound `Send` required by `task::spawn`
 
 // 2.18.1 `spawn(..) where F::Output: Send`: a `Send` future whose
 // output is not `Send` (a hand-written one: `AsyncFuture<T>` is only

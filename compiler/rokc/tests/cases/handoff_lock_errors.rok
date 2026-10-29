@@ -1,6 +1,6 @@
 // expect-error: error[E202]: `xs` was moved into the `Mutex` at line 21
 // expect-error: handoff_lock_errors.rok:22:5: `xs` was moved into the `Mutex` at line 21
-// expect-error: help: it belongs to the `Mutex` now; use it through the lock: `using g = m.lock() { g.get().push(3) }`, or hand over `xs.clone()` to keep a separate copy (stdlib 2.13.9)
+// expect-error: help: it belongs to the `Mutex` now; use it through the lock: `using g = m.lock() { g.get().push(3) }`, or hand over `xs.clone()` to keep a separate copy
 // expect-error: handoff_lock_errors.rok:28:5: `ys` was moved into the `RwLock` at line 27
 // expect-error: handoff_lock_errors.rok:36:5: `xs` was moved into the `Mutex` at line 34
 // expect-error: handoff_lock_errors.rok:43:29: `xs` was already moved into the `Mutex` by this call, on an earlier pass of the loop

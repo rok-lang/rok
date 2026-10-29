@@ -1,5 +1,5 @@
 // spec: §5.8.6
-// expect-error: 9:9: glob re-export of `b::f` as `f` conflicts with `a::f` (spec 5.8.6)
+// expect-error: 9:9: glob re-export of `b::f` as `f` conflicts with `a::f`
 
 // 5.8.6: a name two glob re-exports both bring is an error at the
 // re-export.

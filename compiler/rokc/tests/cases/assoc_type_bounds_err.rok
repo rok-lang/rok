@@ -1,5 +1,5 @@
-// expect-error: 22:1: associated type `Label` = `NoDisp` does not implement `Display`, a bound of `Shape::Label` (spec 2.8.3)
-// expect-error: 29:1: associated type `Label` = `T` does not implement `Display` for every `T` the impl allows, a bound of `Shape::Label` (spec 2.8.3)
+// expect-error: 22:1: associated type `Label` = `NoDisp` does not implement `Display`, a bound of `Shape::Label`
+// expect-error: 29:1: associated type `Label` = `T` does not implement `Display` for every `T` the impl allows, a bound of `Shape::Label`
 
 // An impl's associated type must meet the bounds the trait declares on
 // it (2.8.3), whether written or taken from the default; a generic

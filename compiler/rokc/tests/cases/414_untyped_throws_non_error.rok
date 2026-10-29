@@ -1,6 +1,6 @@
 // spec: 004.14-throws
 // Untyped `throws` is `throws (any Error)`: a value not implementing Error can't be thrown.
-// expect-error: 7:24: `Plain` can't be thrown: it does not implement `Error` (spec 4.14)
+// expect-error: 7:24: `Plain` can't be thrown: it does not implement `Error`
 // expect-error: help: add `impl Error for Plain {}` (it needs `Display` and `Debug`), or throw a `ValueError`: `throw ValueError { msg: .. };`
 
 struct Plain { x: i32; }

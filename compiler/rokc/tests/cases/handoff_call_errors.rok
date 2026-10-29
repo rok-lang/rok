@@ -1,6 +1,6 @@
 // expect-error: error[E202]: `xs` was moved into the `Mutex` at line 71
 // expect-error: handoff_call_errors.rok:72:5: `xs` was moved into the `Mutex` at line 71
-// expect-error: help: it belongs to the `Mutex` now; use it through the lock: `using g = m.lock() { .. g.get() .. }`, or hand over `xs.clone()` to keep a separate copy (stdlib 2.13.9)
+// expect-error: help: it belongs to the `Mutex` now; use it through the lock: `using g = m.lock() { .. g.get() .. }`, or hand over `xs.clone()` to keep a separate copy
 // expect-error: handoff_call_errors.rok:79:5: `xs` shares the value the `Mutex` protects (`peek(g)`) at line 78, and `g`'s `using` block released the lock
 // expect-error: handoff_call_errors.rok:85:5: `xs` was sent through a channel by `post(tx, xs)` at line 84 (inside `post`, line 37)
 // expect-error: handoff_call_errors.rok:92:5: `xs` was moved into the `Mutex` at line 91

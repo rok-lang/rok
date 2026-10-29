@@ -1,5 +1,5 @@
 // spec: §2.10.4 std §2.13.9
-// expect-error: type `Tok` does not satisfy trait bound `rok::core::marker::Sync` required by `need`
+// expect-error: type `Tok` does not satisfy trait bound `Sync` required by `need`
 // A generic function's `where` bounds are checked like inline ones.
 struct Tok { v: i32; }
 impl !Sync for Tok {}

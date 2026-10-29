@@ -1,8 +1,8 @@
 // spec: §4.2.4
-// expect-error: argument `a` provided more than once (spec 4.2.4)
+// expect-error: argument `a` provided more than once
 // expect-error: help: pass `a` once
-// expect-error: argument `x` provided more than once (spec 4.2.4)
-// expect-error: `f` has no parameter named `z` (spec 4.2.4)
+// expect-error: argument `x` provided more than once
+// expect-error: `f` has no parameter named `z`
 
 // A parameter given both positionally and by name is an error, in a
 // plain call and in a generic one.

@@ -1,15 +1,15 @@
 // spec: §2.10.9
-// expect-error: no method `area` on type parameter `B::Elem`: it has no bounds (spec 2.10.9)
+// expect-error: no method `area` on type parameter `B::Elem`: it has no bounds
 // expect-error: operator `+` cannot be applied to `i64` and `I::Item`
 // expect-error: mismatched types: the return value expects `T`, found `T::Output`
-// expect-error: no method `title` on type parameter `Self`: its bounds (`Greet`) do not declare it (spec 2.10.9)
-// expect-error: no method `clone` on type parameter `B`: it has no bounds (spec 2.10.9)
-// expect-error: operator `*` on `T` needs a `Mul` bound on `T` (spec 2.10.9)
-// expect-error: type `T` does not satisfy trait bound `rok::core::cmp::Ord` required by `rok::core::collections::list::List__sort`
-// expect-error: type `T` does not satisfy trait bound `rok::core::marker::Send` required by `rok::core::task::spawn`
+// expect-error: no method `title` on type parameter `Self`: its bounds (`Greet`) do not declare it
+// expect-error: no method `clone` on type parameter `B`: it has no bounds
+// expect-error: operator `*` on `T` needs a `Mul` bound on `T`
+// expect-error: type `T` does not satisfy trait bound `Ord` required by `List::sort`
+// expect-error: type `T` does not satisfy trait bound `Send` required by `task::spawn`
 // expect-error: mismatched types: the body of `resize` expects `[T; M]`, found `[T; N]`
 // expect-error: mismatched types: the right operand of `<` expects `T`, found `U`
-// expect-error: no method `len` on type parameter `T`: it has no bounds (spec 2.10.9)
+// expect-error: no method `len` on type parameter `T`: it has no bounds
 // forbid-error: found `usize`
 // forbid-error: no method `title` found for type `Plain`
 

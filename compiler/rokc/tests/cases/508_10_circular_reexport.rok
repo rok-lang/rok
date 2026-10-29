@@ -1,5 +1,5 @@
 // spec: §5.8.10
-// expect-error: 6:13: circular re-export: `a::Item` -> `b::Item` -> `a::Item` (spec 5.8.10)
+// expect-error: 6:13: circular re-export: `a::Item` -> `b::Item` -> `a::Item`
 
 // 5.8.10: re-exports that point at each other are an error.
 mod a {
@@ -10,4 +10,4 @@ mod b {
 }
 
 println("unreached");
-// expect-error: 9:13: circular re-export: `b::Item` -> `a::Item` -> `b::Item` (spec 5.8.10)
+// expect-error: 9:13: circular re-export: `b::Item` -> `a::Item` -> `b::Item`

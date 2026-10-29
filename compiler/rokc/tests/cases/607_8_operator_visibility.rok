@@ -1,5 +1,5 @@
 // spec: 006.07-operator-magic
-// expect-error: 24:5: operator `⊕` needs trait `ops::Combine`, which is not visible here (spec 6.7.8)
+// expect-error: 24:5: operator `⊕` needs trait `ops::Combine`, which is not visible here
 
 // Spec 6.7.8: an operator binding works only where its trait is
 // visible (spec 5.6): a private trait's operator works in its module
