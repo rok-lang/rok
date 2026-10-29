@@ -1154,13 +1154,10 @@ impl Repl {
     }
 
     /// Completions of the word ending at byte `end` of the cell `code`:
-    /// where the word starts and the candidates, sorted. After `.` or
-    /// `::` the members or path items (the language server's completion);
-    /// else the session's names, the core library's, those its `use`
-    /// items import, and keywords. The terminal and the kernel share it.
+    /// where the word starts and the candidates, sorted: the language
+    /// server's completion, with the session's names. The terminal and
+    /// the kernel share it.
     pub fn complete(&self, code: &str, end: usize) -> (usize, Vec<String>) {
-        let ident = |c: char| c.is_alphanumeric() || c == '_';
-        let head = code[..end].trim_end_matches(ident);
         let session = self.source("").0;
         let mut checked = self.checked.borrow_mut();
         if checked.as_ref().is_none_or(|(s, ..)| *s != session) {
@@ -1168,29 +1165,14 @@ impl Repl {
             *checked = Some((session, a, key));
         }
         let (_, good, key) = checked.as_ref().expect("checked above");
-        if head.ends_with('.') || head.ends_with("::") {
-            let (src, at) = self.source(code);
-            let compile = |t: &str| self.analyze(t).0;
-            let (start, found) = crate::lsp::complete(&src, key, at + end, compile, Some(good));
-            let mut found: Vec<String> = found.into_iter().map(|(l, ..)| l).collect();
-            found.sort();
-            return (start - at, found);
-        }
-        let word = &code[head.len()..end];
-        let keywords = rokc_lexer::token::RESERVED
-            .iter()
-            .chain(crate::line_edit::CONTEXTUAL);
-        let mut names: Vec<String> = self
-            .names()
-            .into_iter()
-            .chain(keywords.copied())
-            .map(str::to_owned)
-            .chain(good.scope_names())
-            .filter(|n| n.starts_with(word) && !n.starts_with("__"))
-            .collect();
-        names.sort();
-        names.dedup();
-        (head.len(), names)
+        let (src, at) = self.source(code);
+        let compile = |t: &str| self.analyze(t).0;
+        let names = self.names();
+        let (start, found) =
+            crate::complete::complete(&src, key, at + end, compile, Some(good), &names);
+        let mut found: Vec<String> = found.into_iter().map(|(l, ..)| l).collect();
+        found.sort();
+        (start - at, found)
     }
 
     /// `:add <args>`: `rok install --env` in an environment's session, else
@@ -3475,6 +3457,34 @@ mod tests {
                 code.len(),
                 vec!["sum".to_owned(), "x".to_owned(), "y".to_owned()]
             )
+        );
+    }
+
+    #[test]
+    fn bare_completion_includes_locals_and_prelude() {
+        let lib = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../library");
+        let roots = [lib.join("core/src/lib.rok"), lib.join("std/src/lib.rok")];
+        let mut r = Repl::new(
+            rokc_interface::bootstrap_tiers(&roots),
+            BuildOptions::default(),
+        )
+        .unwrap();
+        r.bindings.push(binding("total", false));
+        let code = "let width = 3;\nprintln(wi";
+        let (start, found) = r.complete(code, code.len());
+        assert_eq!(&code[start..], "wi");
+        assert!(found.iter().any(|f| f == "width"), "{found:?}");
+        let (_, found) = r.complete("pri", 3);
+        assert!(found.iter().any(|f| f == "println"), "{found:?}");
+        let (_, found) = r.complete("1 + to", 6);
+        assert!(found.iter().any(|f| f == "total"), "{found:?}");
+        // A list's methods, not its internals.
+        let code = "let xs: List<i32> = [1];\nxs.";
+        let (_, found) = r.complete(code, code.len());
+        assert!(found.iter().any(|f| f == "push"), "{found:?}");
+        assert!(
+            !found.iter().any(|f| f == "h" || f.contains('(')),
+            "{found:?}"
         );
     }
 

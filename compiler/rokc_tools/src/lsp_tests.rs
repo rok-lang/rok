@@ -1083,3 +1083,302 @@ fn semantic_tokens_all_user_defined() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Open `text` as a lone file with core and std, then send `steps(uri)`:
+/// the server's messages.
+fn std_session(name: &str, text: &str, steps: impl FnOnce(&str) -> Vec<Json>) -> Vec<Json> {
+    let lib = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../library");
+    let bootstrap = rokc_interface::bootstrap_tiers(&[
+        lib.join("core/src/lib.rok"),
+        lib.join("std/src/lib.rok"),
+    ]);
+    let dir = rokc_core::tmp::test_dir(name);
+    std::fs::create_dir_all(&dir).unwrap();
+    let uri = path_to_uri(&dir.join("main.rok").display().to_string(), cfg!(windows));
+    let mut script = vec![
+        request(
+            1000,
+            "initialize",
+            Json::obj([("capabilities", Json::obj([]))]),
+        ),
+        notify(
+            "textDocument/didOpen",
+            Json::obj([(
+                "textDocument",
+                Json::obj([
+                    ("uri", Json::str(&uri)),
+                    ("languageId", Json::str("rok")),
+                    ("version", Json::num(1)),
+                    ("text", Json::str(text)),
+                ]),
+            )]),
+        ),
+    ];
+    script.extend(steps(&uri));
+    script.push(request(1001, "shutdown", Json::Null));
+    script.push(notify("exit", Json::Null));
+    let input: String = script.iter().map(frame).collect();
+    let mut out = Vec::new();
+    let code = serve(
+        Cursor::new(input.into_bytes()),
+        &mut out,
+        bootstrap,
+        Vec::new(),
+        vec![(crate::lint::Level::Allow, "dead_code".to_owned())],
+    );
+    assert_eq!(code, 0);
+    let _ = std::fs::remove_dir_all(&dir);
+    messages(&out)
+}
+
+fn reply(msgs: &[Json], id: u32) -> Json {
+    msgs.iter()
+        .find(|m| m.get("id") == &Json::num(id))
+        .unwrap_or_else(|| panic!("no reply {id}"))
+        .get("result")
+        .clone()
+}
+
+fn labels(msgs: &[Json], id: u32) -> Vec<String> {
+    match reply(msgs, id) {
+        Json::Arr(items) => items
+            .iter()
+            .filter_map(|i| i.get("label").as_str().map(str::to_owned))
+            .collect(),
+        r => panic!("completion {id}: {r}"),
+    }
+}
+
+const LIST: &str = "\
+let xs: List<i32> = [1, 2];
+xs.push(3);
+println(f\"{xs.len()}\");
+";
+
+/// `xs.` offers the public methods of `List`, not its private field,
+/// helpers, operator hooks or a generic instance's name.
+#[test]
+fn completion_list_methods_not_internals() {
+    let msgs = std_session("lsp-list-members", LIST, |uri| {
+        vec![
+            request(1, "textDocument/hover", at(uri, 0, 4)),
+            change(uri, &format!("{LIST}let n = xs.\n")),
+            request(2, "textDocument/completion", at(uri, 3, 11)),
+        ]
+    });
+    let got = labels(&msgs, 2);
+    for m in ["push", "len", "pop", "iter", "clone"] {
+        assert!(got.iter().any(|l| l == m), "{m} not in {got:?}");
+    }
+    for m in [
+        "h",
+        "Prim(I32)",
+        "push_grown",
+        "dot_add",
+        "index",
+        "transfer_copy",
+    ] {
+        assert!(!got.iter().any(|l| l == m), "{m} in {got:?}");
+    }
+}
+
+#[test]
+fn completion_partial_method() {
+    let msgs = std_session("lsp-partial-member", LIST, |uri| {
+        vec![
+            request(1, "textDocument/hover", at(uri, 0, 4)),
+            change(uri, &format!("{LIST}xs.pu\n")),
+            request(2, "textDocument/completion", at(uri, 3, 5)),
+        ]
+    });
+    assert_eq!(labels(&msgs, 2), ["push"]);
+}
+
+#[test]
+fn completion_bare_prelude() {
+    let msgs = std_session("lsp-bare", "pri\n", |uri| {
+        vec![request(1, "textDocument/completion", at(uri, 0, 3))]
+    });
+    let got = labels(&msgs, 1);
+    assert!(got.iter().any(|l| l == "print"), "{got:?}");
+    assert!(got.iter().any(|l| l == "println"), "{got:?}");
+    assert!(got.iter().all(|l| l.starts_with("pri")), "{got:?}");
+}
+
+/// A bare word: the locals in scope at the cursor, the buffer's items
+/// and keywords; not another function's locals.
+#[test]
+fn completion_local() {
+    let src = "\
+fn helper() -> i32 {
+    let inner = 1;
+    inner
+}
+let count = helper();
+let total = co
+";
+    let msgs = std_session("lsp-local", src, |uri| {
+        vec![
+            request(1, "textDocument/completion", at(uri, 5, 14)),
+            request(2, "textDocument/completion", at(uri, 5, 12)),
+        ]
+    });
+    let got = labels(&msgs, 1);
+    assert!(got.iter().any(|l| l == "count"), "{got:?}");
+    assert!(got.iter().any(|l| l == "const"), "{got:?}");
+    let all = labels(&msgs, 2);
+    assert!(all.iter().any(|l| l == "helper"), "{all:?}");
+    assert!(!all.iter().any(|l| l == "inner"), "{all:?}");
+}
+
+/// `use a::b::` lists the modules below, even before the buffer has
+/// ever checked.
+#[test]
+fn completion_use_path() {
+    let msgs = std_session("lsp-use-path", "use rok::std::\n", |uri| {
+        vec![
+            request(1, "textDocument/completion", at(uri, 0, 14)),
+            change(uri, "use rok::std::fs::\n"),
+            request(2, "textDocument/completion", at(uri, 0, 18)),
+        ]
+    });
+    let got = labels(&msgs, 1);
+    for m in ["fs", "env", "process"] {
+        assert!(got.iter().any(|l| l == m), "{m} not in {got:?}");
+    }
+    let fs = labels(&msgs, 2);
+    assert!(fs.iter().any(|l| l == "read_to_str"), "{fs:?}");
+    assert!(!fs.iter().any(|l| l == "stat_at"), "{fs:?}");
+}
+
+/// Definition of a method goes by the receiver's type, and of a library
+/// function to its source.
+#[test]
+fn definition_by_receiver_type() {
+    let msgs = std_session("lsp-def-recv", LIST, |uri| {
+        vec![
+            request(1, "textDocument/definition", at(uri, 1, 4)),
+            request(2, "textDocument/definition", at(uri, 2, 14)),
+        ]
+    });
+    let uri = |id| {
+        reply(&msgs, id)
+            .get("uri")
+            .as_str()
+            .unwrap_or("")
+            .to_owned()
+    };
+    assert!(
+        uri(1).ends_with("collections/list.rok"),
+        "{}",
+        reply(&msgs, 1)
+    );
+    assert!(
+        uri(2).ends_with("collections/list.rok"),
+        "{}",
+        reply(&msgs, 2)
+    );
+}
+
+#[test]
+fn definition_println_not_null() {
+    let msgs = std_session("lsp-def-println", "println(\"hi\");\n", |uri| {
+        vec![request(1, "textDocument/definition", at(uri, 0, 2))]
+    });
+    let got = reply(&msgs, 1);
+    assert!(
+        got.get("uri")
+            .as_str()
+            .is_some_and(|u| u.ends_with("print.rok")),
+        "{got}"
+    );
+}
+
+/// Hover on a library method and function: its signature, then its doc.
+#[test]
+fn hover_library_signature_and_doc() {
+    let src = "let xs: List<i32> = [1];\nxs.extend([2, 3]);\nprintln(\"a\");\n";
+    let msgs = std_session("lsp-hover-lib", src, |uri| {
+        vec![
+            request(1, "textDocument/hover", at(uri, 1, 5)),
+            request(2, "textDocument/hover", at(uri, 2, 3)),
+        ]
+    });
+    let value = |id| {
+        reply(&msgs, id)
+            .get("contents")
+            .get("value")
+            .as_str()
+            .unwrap_or("")
+            .to_owned()
+    };
+    assert!(value(1).contains("fn extend("), "{}", value(1));
+    assert!(value(1).contains("Push every item"), "{}", value(1));
+    assert!(value(2).contains("fn println("), "{}", value(2));
+}
+
+/// A symbol's range covers the whole item; its selection range is the
+/// name.
+#[test]
+fn document_symbol_ranges_cover_item() {
+    let src = "\
+pub fn dist2(a: i32, b: i32) -> i32 {
+    a * a + b * b
+}
+struct P { x: i32; }
+impl P {
+    fn get(self) -> i32 { self.x }
+}
+";
+    let msgs = std_session("lsp-symbols", src, |uri| {
+        vec![request(
+            1,
+            "textDocument/documentSymbol",
+            Json::obj([("textDocument", doc(uri))]),
+        )]
+    });
+    let Json::Arr(syms) = reply(&msgs, 1) else {
+        panic!("{}", reply(&msgs, 1))
+    };
+    let pos = |r: &Json, end: &str| {
+        let p = r.get(end);
+        (
+            p.get("line").as_u32().unwrap(),
+            p.get("character").as_u32().unwrap(),
+        )
+    };
+    let f = &syms[0];
+    assert_eq!(pos(f.get("range"), "start"), (0, 0));
+    assert_eq!(pos(f.get("range"), "end"), (2, 1));
+    assert_eq!(pos(f.get("selectionRange"), "start"), (0, 7));
+    assert_eq!(pos(f.get("selectionRange"), "end"), (0, 12));
+    assert_eq!(pos(syms[1].get("range"), "end"), (3, 20));
+    assert_eq!(pos(syms[2].get("range"), "end"), (6, 1));
+    let Json::Arr(methods) = syms[2].get("children").clone() else {
+        panic!()
+    };
+    assert_eq!(pos(methods[0].get("range"), "start"), (5, 4));
+    assert_eq!(pos(methods[0].get("range"), "end"), (5, 34));
+    assert_eq!(pos(methods[0].get("selectionRange"), "start"), (5, 7));
+}
+
+/// A parse error's range is never empty: it covers a token.
+#[test]
+fn parse_diag_has_width() {
+    let msgs = std_session("lsp-diag-width", "let a = 1\nlet b = a;\n", |uri| {
+        vec![request(1, "textDocument/hover", at(uri, 0, 4))]
+    });
+    let diags: Vec<Json> = msgs
+        .iter()
+        .filter(|m| m.get("method").as_str() == Some("textDocument/publishDiagnostics"))
+        .flat_map(|m| match m.get("params").get("diagnostics") {
+            Json::Arr(v) => v.clone(),
+            _ => Vec::new(),
+        })
+        .collect();
+    assert!(!diags.is_empty());
+    for d in diags {
+        let r = d.get("range");
+        assert_ne!(r.get("start"), r.get("end"), "{d}");
+    }
+}

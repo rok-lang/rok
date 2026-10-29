@@ -172,6 +172,35 @@ pub(crate) fn doc_text(attrs: &[Attribute]) -> String {
     lines.join("\n")
 }
 
+/// `f`'s signature as plain text, under the name `name` (hover,
+/// completion).
+pub(crate) fn fn_sig_text(f: &FnDef, name: &str) -> String {
+    let mut f = f.signature();
+    name.clone_into(&mut f.name);
+    unesc(&plain().fn_sig(&f))
+}
+
+/// A type as written, plain text.
+pub(crate) fn ty_text(t: &Ty) -> String {
+    unesc(&plain().ty(t))
+}
+
+/// Docs without links: their HTML is escaped text alone.
+fn plain() -> Docs {
+    Docs {
+        modules: BTreeMap::new(),
+        links: HashMap::new(),
+        private: Vec::new(),
+    }
+}
+
+fn unesc(s: &str) -> String {
+    s.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&amp;", "&")
+}
+
 fn esc(s: &str) -> String {
     let mut o = String::with_capacity(s.len());
     for c in s.chars() {
