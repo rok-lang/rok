@@ -70,7 +70,7 @@ global options:
   -vv                          also the files read and the generic
                                instances made
   -q, --quiet                  no progress output
-  --color=auto|always|never    color diagnostics (--no-color = never)
+  --color=auto|always|never    color output (--no-color = never)
   --cwd=<path>                 change directory first
   --message-format=human|json  diagnostics as JSON lines on stdout
   -A|-W|-D <lint|group>        allow / warn / deny a lint (repeatable, later

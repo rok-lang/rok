@@ -9,6 +9,8 @@ use std::fmt;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU8, Ordering};
 
+use rokc_core::term::{Depth, Role};
+
 /// Source location as byte offsets plus 1-based line/column. `file` is
 /// a `SourceMap` id (0 = unknown).
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash, PartialOrd, Ord)]
@@ -521,20 +523,30 @@ fn underline(text: &str, span: Span, source: &str) -> (String, usize) {
     (lead, width)
 }
 
-/// How `report` prints (spec 901.8 / 909.4); set once by the CLI.
+/// How `report` prints (spec 901.8 / 909.4); set once by the CLI. JSON,
+/// else the colour depth of the text.
 static STYLE: AtomicU8 = AtomicU8::new(0);
-const STYLE_COLOR: u8 = 1;
 const STYLE_JSON: u8 = 2;
+/// Colour: this bit, and the depth code below it.
+const STYLE_COLOR: u8 = 0x10;
 
 /// `json`: one JSON object per line on stdout (`--message-format=json`);
-/// otherwise human text on stderr, ANSI-colored when `color`.
+/// otherwise human text on stderr, coloured when `color`.
 pub fn set_report_style(json: bool, color: bool) {
-    let style = if json {
-        STYLE_JSON
-    } else if color {
-        STYLE_COLOR
+    let depth = if color {
+        rokc_core::term::forced_depth()
     } else {
-        0
+        Depth::Off
+    };
+    set_report_depth(json, depth);
+}
+
+/// [`set_report_style`] with text in colour depth `depth`.
+pub fn set_report_depth(json: bool, depth: Depth) {
+    let style = match depth {
+        _ if json => STYLE_JSON,
+        Depth::Off => 0,
+        d => STYLE_COLOR | d.code(),
     };
     STYLE.store(style, Ordering::Relaxed);
 }
@@ -739,22 +751,17 @@ impl SourceMap {
         if style == STYLE_JSON {
             return format!("{}\n", self.json(diag));
         }
-        let paint = |code: &str, text: &str| {
-            if style == STYLE_COLOR {
-                format!("\x1b[{code}m{text}\x1b[0m")
-            } else {
-                text.to_owned()
-            }
-        };
+        let depth = Depth::from_code(style & !STYLE_COLOR);
+        let paint = |r: Role, text: &str| rokc_core::term::paint_in(depth, r, text);
         let color = match diag.severity {
-            Severity::Error | Severity::Fatal => "1;31",
-            Severity::Warning => "1;33",
-            Severity::Note => "1;36",
+            Severity::Error | Severity::Fatal => Role::Error,
+            Severity::Warning => Role::Warning,
+            Severity::Note => Role::Note,
         };
         let mut out = format!(
             "{}{}\n",
             paint(color, &format!("{}[{}]", diag.severity, diag.kind.code())),
-            paint("1", &format!(": {}", diag.message))
+            paint(Role::Emph, &format!(": {}", diag.message))
         );
         let path = self.diag_path(diag);
         let primary = diag.primary.as_deref();
@@ -816,13 +823,13 @@ impl SourceMap {
             .max()
             .map_or(1, |n| n.to_string().len());
         let pad = " ".repeat(width + 1);
-        let bar = paint("1;34", "|");
+        let bar = paint(Role::Gutter, "|");
         if let Some(file) = &path {
             let loc = match primary.map(|l| l.span) {
                 Some(s) if s.line != 0 => format!("{file}:{}:{}", s.line, s.col.max(1)),
                 _ => file.clone(),
             };
-            out.push_str(&format!("{pad}{} {loc}\n", paint("1;34", "-->")));
+            out.push_str(&format!("{pad}{} {loc}\n", paint(Role::Gutter, "-->")));
         }
         if !marks.is_empty() {
             out.push_str(&format!("{pad} {bar}\n"));
@@ -830,16 +837,16 @@ impl SourceMap {
             for m in &marks {
                 if last != Some(m.line) {
                     if last.is_some_and(|l| m.line > l + 1) {
-                        out.push_str(&format!(" {}\n", paint("1;34", "...")));
+                        out.push_str(&format!(" {}\n", paint(Role::Gutter, "...")));
                     }
                     let n = format!("{:>width$}", m.line);
-                    out.push_str(&format!(" {} {bar} {}\n", paint("1;34", &n), m.text));
+                    out.push_str(&format!(" {} {bar} {}\n", paint(Role::Gutter, &n), m.text));
                 }
                 last = Some(m.line);
                 let (ch, c) = if m.primary {
                     ('^', color)
                 } else {
-                    ('-', "1;34")
+                    ('-', Role::Gutter)
                 };
                 let mut under: String = std::iter::repeat_n(ch, m.width).collect();
                 if !m.label.is_empty() {
@@ -856,7 +863,7 @@ impl SourceMap {
             };
             out.push_str(&format!(
                 "{pad}{} {loc}: {}\n",
-                paint("1;34", ":::"),
+                paint(Role::Gutter, ":::"),
                 l.message
             ));
         }
@@ -864,14 +871,14 @@ impl SourceMap {
             out.push_str(&format!("{pad} {bar}\n"));
         }
         for note in &diag.notes {
-            let (kind, text) = match note.strip_prefix("help: ") {
-                Some(h) => ("help", h),
-                None => ("note", note.as_str()),
+            let (kind, role, text) = match note.strip_prefix("help: ") {
+                Some(h) => ("help", Role::Help, h),
+                None => ("note", Role::Note, note.as_str()),
             };
             out.push_str(&format!(
                 "{pad} {} {}: {text}\n",
-                paint("1;34", "="),
-                paint("1", kind)
+                paint(Role::Gutter, "="),
+                paint(role, kind)
             ));
         }
         out

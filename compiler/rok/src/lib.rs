@@ -36,6 +36,7 @@ use std::process::Command;
 use manifest::{Dep, GitRef, MANIFEST, Manifest, NativeSource, Source};
 use resolve::{Context, Options, Resolved};
 use rokc_core::completions::{Spec, Values};
+use rokc_core::term::{self, ColorChoice, Role, Stream};
 use rokc_core::tmp::TempEntry;
 use rokc_diagnostic::Json;
 use rokc_rokon::{Kind, Value};
@@ -198,6 +199,7 @@ options (anywhere before `--`):
   --offline       never fetch (git dependencies must be cached)
   --locked        fail instead of changing rok.lock
   --cwd <dir>     change directory first
+  --color <when>  auto|always|never: color output (--no-color = never)
   -q, --quiet     less output
   -v, --verbose   more output
   version, help
@@ -231,6 +233,8 @@ struct Global {
     verbose: bool,
     /// `+<version>`.
     toolchain: Option<String>,
+    /// `--color=<when>`, passed on to rokc.
+    color: Option<String>,
 }
 
 /// The user's rok directory (`rokc_core::rok_home`).
@@ -316,6 +320,21 @@ pub fn main_with(args: Vec<String>) -> i32 {
                 Some(v) => g.env = Some(v),
                 None => return usage("`--env` needs a name"),
             },
+            "--no-color" | "--color" => {
+                let when = if name == "--color" {
+                    value(&mut it)
+                } else {
+                    Some("never".to_owned())
+                };
+                let Some(when) = when else {
+                    return usage("`--color` needs a value");
+                };
+                let Some(c) = ColorChoice::parse(&when) else {
+                    return usage(&format!("`--color` takes auto|always|never, not `{when}`"));
+                };
+                term::set_choice(c);
+                g.color = Some(format!("--color={when}"));
+            }
             "--offline" => g.offline = true,
             "--locked" => g.locked = true,
             "--cwd" => {
@@ -405,11 +424,11 @@ fn help(g: &Global, cmd: &str) -> i32 {
         return match toolchain::rokc_for(g.toolchain.as_deref(), None) {
             Ok(rokc) => {
                 let mut c = Command::new(&rokc);
-                c.args([cmd, "--help"]);
+                c.args(&g.color).args([cmd, "--help"]);
                 exec(c, &rokc)
             }
             Err(e) => {
-                eprintln!("rok: error: {e}");
+                eprintln!("rok: {} {e}", term::label(Stream::Stderr, Role::Error));
                 1
             }
         };
@@ -476,7 +495,7 @@ fn run(g: &Global, cmd: &str, pre: &[String], post: &[String]) -> i32 {
         if e.starts_with("error[") {
             eprintln!("{e}");
         } else {
-            eprintln!("rok: error: {e}");
+            eprintln!("rok: {} {e}", term::label(Stream::Stderr, Role::Error));
         }
         1
     })
@@ -938,7 +957,7 @@ fn rokc_command(
             Ok(r) => r,
             // The language server still starts (without dependencies).
             Err(e) if cmd == "lsp" => {
-                eprintln!("rok: warning: {e}");
+                eprintln!("rok: {} {e}", term::label(Stream::Stderr, Role::Warning));
                 resolve::Graph {
                     packages: Vec::new(),
                     natives: Vec::new(),
@@ -979,7 +998,7 @@ fn rokc_command(
     }
     let rokc = toolchain::rokc_for(g.toolchain.as_deref(), t.ctx.manifest.toolchain.as_deref())?;
     let mut c = Command::new(&rokc);
-    c.args(pre).arg(cmd).args(&extra).args(post);
+    c.args(&g.color).args(pre).arg(cmd).args(&extra).args(post);
     if let Ok(me) = std::env::current_exe() {
         c.env("ROK", me);
     }
@@ -1088,7 +1107,11 @@ pub(crate) fn exec(mut c: Command, what: &Path) -> i32 {
     {
         use std::os::unix::process::CommandExt;
         let e = c.exec();
-        eprintln!("rok: error: cannot run {}: {e}", what.display());
+        eprintln!(
+            "rok: {} cannot run {}: {e}",
+            term::label(Stream::Stderr, Role::Error),
+            what.display()
+        );
         1
     }
     #[cfg(windows)]
@@ -1111,7 +1134,11 @@ pub(crate) fn exec(mut c: Command, what: &Path) -> i32 {
     match c.status() {
         Ok(s) => s.code().unwrap_or(1),
         Err(e) => {
-            eprintln!("rok: error: cannot run {}: {e}", what.display());
+            eprintln!(
+                "rok: {} cannot run {}: {e}",
+                term::label(Stream::Stderr, Role::Error),
+                what.display()
+            );
             1
         }
     }
@@ -1188,7 +1215,10 @@ fn cmd_new(g: &Global, cmd: &str, args: &[String]) -> Result<i32, String> {
             n.insert_str(0, "pkg-");
         }
         if n != dir_name && !g.quiet {
-            eprintln!("note: the package name is `{n}` (`{dir_name}` is not a package name)");
+            eprintln!(
+                "{} the package name is `{n}` (`{dir_name}` is not a package name)",
+                term::label(Stream::Stderr, Role::Note)
+            );
         }
         n
     } else {
@@ -1249,7 +1279,7 @@ fn cmd_new(g: &Global, cmd: &str, args: &[String]) -> Result<i32, String> {
             (true, false) => "library",
             _ => "executable",
         };
-        eprintln!("     Created {what} package ({})", dir.display());
+        term::status("Created", &format!("{what} package ({})", dir.display()));
     }
     Ok(0)
 }
@@ -1338,10 +1368,13 @@ fn init_script(g: &Global, file: &Path) -> Result<i32, String> {
         write(&ignore, "target/\n")?;
     }
     if !g.quiet {
-        eprintln!(
-            "     Created executable package `{name}` from {} ({})",
-            file.display(),
-            dir.display()
+        term::status(
+            "Created",
+            &format!(
+                "executable package `{name}` from {} ({})",
+                file.display(),
+                dir.display()
+            ),
         );
     }
     Ok(0)
@@ -1427,7 +1460,10 @@ fn install_kernel(g: &Global, args: &[String]) -> Result<i32, String> {
         std::fs::write(&logo, png).map_err(|e| format!("{}: {e}", logo.display()))?;
     }
     if !g.quiet {
-        eprintln!("   Installed kernel `{name}` ({})", file.display());
+        term::status(
+            "Installed",
+            &format!("kernel `{name}` ({})", file.display()),
+        );
     }
     Ok(0)
 }
@@ -1612,7 +1648,7 @@ fn add_native(
             manifest::set_dep(old, label, "native", name, &value).map(Some)
         })?;
         if !g.quiet {
-            eprintln!("       Added {name} to native of {}", file.display());
+            term::status("Added", &format!("{name} to native of {}", file.display()));
         }
         return Ok(0);
     }
@@ -1627,7 +1663,7 @@ fn add_native(
     )?;
     write_and_resolve(g, &path, old.as_deref(), &text)?;
     if !g.quiet {
-        eprintln!("       Added {name} to native of {}", path.display());
+        term::status("Added", &format!("{name} to native of {}", path.display()));
     }
     Ok(0)
 }
@@ -1749,7 +1785,7 @@ fn add_to_script(g: &Global, mut dep: Dep, dev: bool, file: &Path) -> Result<i32
         manifest::add_dep(old, label, "deps", &dep).map(Some)
     })?;
     if !g.quiet {
-        eprintln!("       Added {} to {}", dep.name, file.display());
+        term::status("Added", &format!("{} to {}", dep.name, file.display()));
     }
     Ok(0)
 }
@@ -1798,15 +1834,17 @@ fn add_dep(g: &Global, mut dep: Dep, dev: bool, env: Option<&str>) -> Result<i32
     write_and_resolve(g, &path, old.as_deref(), &text)?;
     if !g.quiet {
         match env {
-            Some(e) => eprintln!(
-                "   Installed {n} into environment `{e}` (for `rok repl` / `rok jupyter`; a \
-                 script gets it with `rok add {n} <file.rok>`)",
-                n = dep.name
+            Some(e) => term::status(
+                "Installed",
+                &format!(
+                    "{n} into environment `{e}` (for `rok repl` / `rok jupyter`; a script gets \
+                     it with `rok add {n} <file.rok>`)",
+                    n = dep.name
+                ),
             ),
-            None => eprintln!(
-                "       Added {} to {section} of {}",
-                dep.name,
-                path.display()
+            None => term::status(
+                "Added",
+                &format!("{} to {section} of {}", dep.name, path.display()),
             ),
         }
     }
@@ -1833,7 +1871,7 @@ fn cmd_remove(g: &Global, args: &[String]) -> Result<i32, String> {
             ));
         }
         if !g.quiet {
-            eprintln!("     Removed {name} from {}", file.display());
+            term::status("Removed", &format!("{name} from {}", file.display()));
         }
         return Ok(0);
     }
@@ -1845,7 +1883,7 @@ fn cmd_remove(g: &Global, args: &[String]) -> Result<i32, String> {
         ));
     }
     if !g.quiet {
-        eprintln!("     Removed {name} from {}", path.display());
+        term::status("Removed", &format!("{name} from {}", path.display()));
     }
     Ok(0)
 }
@@ -1986,8 +2024,9 @@ fn cmd_install(g: &Global, args: &[String]) -> Result<i32, String> {
         let code = install_bin(g, &dep, &dir, copy, again.as_deref())?;
         if has_lib && !g.quiet {
             eprintln!(
-                "note: `{name}` also has a library (src/lib.rok); `rok install --lib ..` puts \
-                 that into environment `{env}` (for `rok repl` / `rok jupyter`) instead"
+                "{} `{name}` also has a library (src/lib.rok); `rok install --lib ..` puts that \
+                 into environment `{env}` (for `rok repl` / `rok jupyter`) instead",
+                term::label(Stream::Stderr, Role::Note)
             );
         }
         return Ok(code);
@@ -2079,6 +2118,7 @@ fn install_bin(
     };
     let tmp = TempEntry::adopt(bin.join(format!(".{name}.{id}{}", std::env::consts::EXE_SUFFIX)));
     let mut c = Command::new(std::env::current_exe().map_err(|e| e.to_string())?);
+    c.args(&g.color);
     for (on, flag) in [
         (g.offline, "--offline"),
         (g.locked, "--locked"),
@@ -2108,16 +2148,16 @@ fn install_bin(
     std::fs::write(&record, text).map_err(|e| format!("cannot write {file}: {e}"))?;
     if !g.quiet {
         let new = installed_as(&dep.source);
-        let what = match prev.map(|p| installed_as(&p.source)) {
-            None => format!("   Installed {name} {new}"),
-            Some(old) if old == new => format!(" Reinstalled {name} {new}"),
+        let (verb, what) = match prev.map(|p| installed_as(&p.source)) {
+            None => ("Installed", format!("{name} {new}")),
+            Some(old) if old == new => ("Reinstalled", format!("{name} {new}")),
             Some(old) => match (semver::Version::parse(&old), semver::Version::parse(&new)) {
-                (Ok(a), Ok(b)) if a < b => format!("    Upgraded {name} from {old} to {new}"),
-                (Ok(a), Ok(b)) if a > b => format!("  Downgraded {name} from {old} to {new}"),
-                _ => format!("    Replaced {name} {old} with {new}"),
+                (Ok(a), Ok(b)) if a < b => ("Upgraded", format!("{name} from {old} to {new}")),
+                (Ok(a), Ok(b)) if a > b => ("Downgraded", format!("{name} from {old} to {new}")),
+                _ => ("Replaced", format!("{name} {old} with {new}")),
             },
         };
-        eprintln!("{what} ({})", exe.display());
+        term::status(verb, &format!("{what} ({})", exe.display()));
     }
     Ok(0)
 }
@@ -2190,7 +2230,7 @@ fn cmd_uninstall(g: &Global, args: &[String]) -> Result<i32, String> {
     for name in names {
         if remove_from(g, &manifest, native, name)? {
             if !g.quiet {
-                eprintln!("     Removed {name} from environment `{env}`");
+                term::status("Removed", &format!("{name} from environment `{env}`"));
             }
             continue;
         }
@@ -2215,7 +2255,7 @@ fn cmd_uninstall(g: &Global, args: &[String]) -> Result<i32, String> {
         }
         std::fs::write(&record, text).map_err(|e| format!("cannot write {file}: {e}"))?;
         if !g.quiet {
-            eprintln!("     Removed {}", exe.display());
+            term::status("Removed", &format!("{}", exe.display()));
         }
     }
     Ok(0)
@@ -2253,7 +2293,7 @@ fn cmd_update(g: &Global, names: &[String]) -> Result<i32, String> {
         if let Some(p) = &t.ctx.lock_path {
             let count = r.packages.len() + r.natives.len();
             let s = if count == 1 { "" } else { "s" };
-            eprintln!("     Updated {} ({count} package{s})", p.display());
+            term::status("Updated", &format!("{} ({count} package{s})", p.display()));
         }
     }
     Ok(0)
@@ -2423,13 +2463,17 @@ fn cmd_publish(g: &Global, args: &[String]) -> Result<i32, String> {
     println!("{line}");
     if !g.quiet {
         if write {
-            eprintln!("   Published {what}{name} {vers} to {to}");
+            term::status("Published", &format!("{what}{name} {vers} to {to}"));
         } else if index.is_some() {
-            eprintln!("note: dry run; --commit commits it to {to} as {rel} (not pushed)");
+            eprintln!(
+                "{} dry run; --commit commits it to {to} as {rel} (not pushed)",
+                term::label(Stream::Stderr, Role::Note)
+            );
         } else {
             eprintln!(
-                "note: dry run; --commit sends it to the registry API of {to} (needs `rok \
-                 login`), which adds it as {rel}"
+                "{} dry run; --commit sends it to the registry API of {to} (needs `rok login`), \
+                 which adds it as {rel}",
+                term::label(Stream::Stderr, Role::Note)
             );
         }
     }
@@ -2490,9 +2534,9 @@ fn cmd_login(g: &Global, args: &[String]) -> Result<i32, String> {
     }
     let file = registry::save_token(&home, &token)?;
     if !g.quiet {
-        eprintln!(
-            "   Logged in as {login} at {api} (token in {})",
-            file.display()
+        term::status(
+            "Logged in",
+            &format!("as {login} at {api} (token in {})", file.display()),
         );
     }
     Ok(0)
@@ -2505,14 +2549,11 @@ fn cmd_logout(g: &Global, args: &[String]) -> Result<i32, String> {
     }
     let had = registry::logout(&home())?;
     if !g.quiet {
-        eprintln!(
-            "{}",
-            if had {
-                "   Logged out"
-            } else {
-                "note: not logged in"
-            }
-        );
+        if had {
+            term::status("Logged out", "");
+        } else {
+            eprintln!("{} not logged in", term::label(Stream::Stderr, Role::Note));
+        }
     }
     Ok(0)
 }

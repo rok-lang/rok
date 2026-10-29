@@ -13,6 +13,7 @@ use std::path::PathBuf;
 
 pub use highlight::CONTEXTUAL;
 use highlight::Class;
+use rokc_core::term::{Depth, Stream, depth, sgr};
 
 /// What one `read_line` got.
 #[derive(Debug, PartialEq, Eq)]
@@ -46,15 +47,14 @@ pub struct Editor {
     file: Option<PathBuf>,
     /// The file is missing or in the one-line format: rewrite it whole.
     rewrite: bool,
-    color: bool,
+    color: Depth,
 }
 
 impl Editor {
     /// An editor with the history of earlier sessions.
     pub fn new() -> Self {
         let mut ed = Self::with_file(rokc_core::rok_home().map(|h| h.join("repl_history")));
-        ed.color = std::env::var_os("NO_COLOR").is_none()
-            && std::env::var_os("TERM").is_none_or(|t| t != "dumb");
+        ed.color = depth(Stream::Stdout);
         ed
     }
 
@@ -66,7 +66,7 @@ impl Editor {
             history,
             file,
             rewrite,
-            color: false,
+            color: Depth::Off,
         }
     }
 
@@ -120,7 +120,11 @@ impl Editor {
                 Ok(_) => Input::Line(line.trim_end_matches(['\n', '\r']).to_owned()),
             };
         }
-        let mut ed = Line::new(prompt, &self.history, tty && self.color);
+        let mut ed = Line::new(
+            prompt,
+            &self.history,
+            if tty { self.color } else { Depth::Off },
+        );
         let mut stdin = std::io::stdin().lock();
         let input = loop {
             let Some(k) = key(&mut stdin) else {
@@ -245,13 +249,13 @@ struct Search {
 struct Line<'a> {
     prompt: &'a str,
     history: &'a [String],
-    color: bool,
+    color: Depth,
     st: State,
     search: Option<Search>,
 }
 
 impl<'a> Line<'a> {
-    const fn new(prompt: &'a str, history: &'a [String], color: bool) -> Self {
+    const fn new(prompt: &'a str, history: &'a [String], color: Depth) -> Self {
         Self {
             prompt,
             history,
@@ -525,10 +529,11 @@ impl<'a> Line<'a> {
     }
 }
 
-/// Chars `range` of `buf` for the terminal, coloured with `color`. A
-/// line break is a dim `↵`, or with `cont` a new line after that prompt;
-/// Tab is a space.
-fn render(buf: &[char], range: std::ops::Range<usize>, color: bool, cont: Option<&str>) -> String {
+/// Chars `range` of `buf` for the terminal, coloured at `depth`. A line
+/// break is a dim `↵`, or with `cont` a new line after that prompt; Tab
+/// is a space.
+fn render(buf: &[char], range: std::ops::Range<usize>, depth: Depth, cont: Option<&str>) -> String {
+    let color = depth != Depth::Off;
     let mut class = vec![None; buf.len()];
     if color {
         let text: String = buf.iter().collect();
@@ -556,7 +561,7 @@ fn render(buf: &[char], range: std::ops::Range<usize>, color: bool, cont: Option
                 out.push_str("\x1b[0m");
             }
             if let Some(k) = class[i] {
-                out.push_str(k.sgr());
+                out.push_str(sgr(depth, k.role()));
             }
             cur = class[i];
         }
@@ -1040,7 +1045,7 @@ mod tests {
     /// they run out) and wrote.
     fn feed(bytes: &[u8], history: &[&str]) -> (Input, String) {
         let history: Vec<String> = history.iter().map(|&h| h.to_owned()).collect();
-        let mut ed = Line::new(">>> ", &history, false);
+        let mut ed = Line::new(">>> ", &history, Depth::Off);
         let mut out = Vec::new();
         let names = ["println", "print", "List", "len"];
         let complete = &mut |line: &str, at: usize| {
@@ -1215,19 +1220,27 @@ mod tests {
     #[test]
     fn colours_and_no_colour() {
         let buf = chars("let s = \"a\"");
+        let c16 = Depth::Ansi16;
         assert_eq!(
-            render(&buf, 0..buf.len(), true, None),
-            "\x1b[35mlet\x1b[0m s = \x1b[32m\"a\"\x1b[0m"
+            render(&buf, 0..buf.len(), c16, None),
+            "\x1b[95mlet\x1b[0m s = \x1b[32m\"a\"\x1b[0m"
         );
         assert_eq!(
-            render(&buf, 4..buf.len(), true, None),
+            render(&buf, 4..buf.len(), c16, None),
             "s = \x1b[32m\"a\"\x1b[0m"
         );
-        assert_eq!(render(&buf, 0..buf.len(), false, None), "let s = \"a\"");
-        let buf = chars("// a\n1");
         assert_eq!(
-            render(&buf, 0..buf.len(), true, Some(CONT)),
-            "\x1b[90m// a\x1b[0m\x1b[K\r\n... \x1b[33m1\x1b[0m"
+            render(&buf, 0..buf.len(), Depth::Off, None),
+            "let s = \"a\""
+        );
+        assert_eq!(
+            render(&buf, 0..buf.len(), Depth::Ansi256, None),
+            "\x1b[38;5;218mlet\x1b[0m s = \x1b[38;5;114m\"a\"\x1b[0m"
+        );
+        let buf = chars("// a\n1: i32");
+        assert_eq!(
+            render(&buf, 0..buf.len(), c16, Some(CONT)),
+            "\x1b[90m// a\x1b[0m\x1b[K\r\n... \x1b[33m1\x1b[0m: \x1b[96mi32\x1b[0m"
         );
     }
 

@@ -5,6 +5,8 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use rokc_core::term;
+
 use crate::manifest::{self, LOCK, MANIFEST, Source};
 use crate::{Global, ambient_env, env_dir, home};
 
@@ -74,14 +76,19 @@ pub fn cmd(g: &Global, args: &[String]) -> Result<i32, String> {
         ["create", name] => {
             let dir = create(name)?;
             if !g.quiet {
-                eprintln!("     Created environment `{name}` ({})", dir.display());
+                term::status(
+                    "Created",
+                    &format!("environment `{name}` ({})", dir.display()),
+                );
             }
         }
         ["list"] => {
             let active = ambient_env();
-            for n in names() {
-                println!("{} {n}", if n == active { "*" } else { " " });
-            }
+            let names = names();
+            let current = names.iter().position(|n| *n == active);
+            let rows: Vec<(String, String)> =
+                names.into_iter().map(|n| (n, String::new())).collect();
+            print!("{}", term::list(&rows, current, "(active)"));
         }
         ["remove", name] => {
             let dir = existing(name)?;

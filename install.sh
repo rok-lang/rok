@@ -8,7 +8,8 @@
 #   rok-<version>-<triple>/install.sh          (from an unpacked archive)
 #
 # Environment: ROK_HOME, ROK_VERSION (default below), ROK_DIST (where
-# releases are downloaded from), ROK_NO_MODIFY_PATH, NO_COLOR.
+# releases are downloaded from), ROK_NO_MODIFY_PATH, NO_COLOR,
+# CLICOLOR_FORCE.
 #
 # Like rustup, it writes $ROK_HOME/env (and env.fish), which put
 # $ROK_HOME/bin first on PATH, sources it from the shell startup files
@@ -17,8 +18,9 @@
 # ROK_NO_MODIFY_PATH=1) touches none of them and says what to add.
 #
 # Output goes to stderr in the style of `rok toolchain update`: status
-# words right-aligned, green and bold on a terminal unless NO_COLOR is
-# set. -q prints errors only, -v adds notes (URLs, paths).
+# words right-aligned, coloured as rok colours them (spec 9.1.8): on a
+# terminal or with CLICOLOR_FORCE, never with NO_COLOR or TERM=dumb.
+# -q prints errors only, -v adds notes (URLs, paths).
 set -eu
 
 version="${ROK_VERSION:-0.1.4}"
@@ -32,18 +34,41 @@ case ${ROK_NO_MODIFY_PATH-} in
   *) modify_path="" ;;
 esac
 
-if [ -t 2 ] && [ -z "${NO_COLOR-}" ]; then
-  green=$(printf '\033[1;32m') red=$(printf '\033[1;31m') reset=$(printf '\033[0m')
+# stderr is the test, so `curl .. | sh` colours too.
+if [ -n "${NO_COLOR-}" ]; then
+  color=""
+elif [ -n "${CLICOLOR_FORCE-}" ] && [ "$CLICOLOR_FORCE" != 0 ]; then
+  color=1
+elif [ "${TERM-}" = dumb ]; then
+  color=""
+elif [ -t 2 ]; then
+  color=1
 else
-  green="" red="" reset=""
+  color=""
+fi
+sky="" red="" dim_sky="" reset=""
+if [ -n "$color" ]; then
+  e=$(printf '\033')
+  case ${COLORTERM-}:${TERM-} in
+    truecolor:* | 24bit:*)
+      sky="${e}[1;38;2;56;189;248m" red="${e}[1;38;2;255;95;95m" dim_sky="${e}[38;2;56;189;248m"
+      ;;
+    *:*256color*)
+      sky="${e}[1;38;5;81m" red="${e}[1;38;5;203m" dim_sky="${e}[38;5;81m"
+      ;;
+    *)
+      sky="${e}[1;96m" red="${e}[1;91m" dim_sky="${e}[96m"
+      ;;
+  esac
+  reset="${e}[0m"
 fi
 
 say() { printf '%s\n' "$*"; }
 # A status line: $1 right-aligned, then $2.
-status() { [ -n "$quiet" ] || printf '%s%12s%s %s\n' "$green" "$1" "$reset" "$2" >&2; }
-note() { [ -z "$verbose" ] || printf '        note: %s\n' "$*" >&2; }
+status() { [ -n "$quiet" ] || printf '%s%12s%s %s\n' "$sky" "$1" "$reset" "$2" >&2; }
+note() { [ -z "$verbose" ] || printf '%s%12s:%s %s\n' "$dim_sky" note "$reset" "$*" >&2; }
 info() { [ -n "$quiet" ] || printf '%s\n' "$*" >&2; }
-err() { printf 'install.sh: %serror%s: %s\n' "$red" "$reset" "$*" >&2; }
+err() { printf 'install.sh: %serror:%s %s\n' "$red" "$reset" "$*" >&2; }
 die() {
   err "$*"
   exit 1

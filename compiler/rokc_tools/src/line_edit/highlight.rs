@@ -2,6 +2,7 @@
 //! docs and playground highlighter (`rok-syntax`): keyword, type, string,
 //! number, comment, attribute.
 
+use rokc_core::term::Role;
 use rokc_lexer::TokenKind as T;
 use std::ops::Range;
 
@@ -16,15 +17,15 @@ pub enum Class {
 }
 
 impl Class {
-    /// The ANSI SGR colour: terminal palette entries, so themes apply.
-    pub const fn sgr(self) -> &'static str {
+    /// The colour of the class in the rok palette.
+    pub const fn role(self) -> Role {
         match self {
-            Self::Keyword => "\x1b[35m",
-            Self::Type => "\x1b[36m",
-            Self::Str => "\x1b[32m",
-            Self::Number => "\x1b[33m",
-            Self::Comment => "\x1b[90m",
-            Self::Attribute => "\x1b[95m",
+            Self::Keyword => Role::Keyword,
+            Self::Type => Role::Type,
+            Self::Str => Role::Str,
+            Self::Number => Role::Number,
+            Self::Comment => Role::Comment,
+            Self::Attribute => Role::Attribute,
         }
     }
 }

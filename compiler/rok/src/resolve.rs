@@ -1012,7 +1012,7 @@ impl<'a> Resolver<'a> {
             ));
         }
         if !self.opts.quiet {
-            eprintln!("    Updating index {url}");
+            rokc_core::term::status("Updating", &format!("index {url}"));
         }
         self.index.fetch(url)?;
         self.fetched.push(url.to_owned());
@@ -1029,7 +1029,7 @@ impl<'a> Resolver<'a> {
             ));
         }
         if !self.opts.quiet {
-            eprintln!("    Fetching {url}");
+            rokc_core::term::status("Fetching", url);
         }
         self.cache.fetch(url)?;
         self.fetched.push(url.to_owned());

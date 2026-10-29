@@ -36,6 +36,7 @@
 use std::path::{Path, PathBuf};
 
 use rokc_core::lint::Level;
+use rokc_core::term::{self, Role, Stream};
 use rokc_rokon::edit::{self, Step};
 use rokc_rokon::{Decoder, Doc, Field, Kind, Value};
 
@@ -520,7 +521,8 @@ pub fn find(dir: &Path) -> Option<PathBuf> {
             found = Some(path);
         } else if name.eq_ignore_ascii_case(MANIFEST) {
             eprintln!(
-                "rok: warning: ignoring `{}`: the manifest is named `{MANIFEST}` (lowercase)",
+                "rok: {} ignoring `{}`: the manifest is named `{MANIFEST}` (lowercase)",
+                term::label(Stream::Stderr, Role::Warning),
                 path.display()
             );
         }

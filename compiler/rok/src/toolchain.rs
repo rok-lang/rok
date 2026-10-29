@@ -8,6 +8,8 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use rokc_core::term::{self, Role, Stream};
+
 use crate::{VERSION, home, manifest};
 
 /// The triple this `rok` runs on.
@@ -131,7 +133,7 @@ pub fn proxy(args: &[OsString]) -> Option<i32> {
     let dir = match active(h, plus) {
         Ok(d) => d,
         Err(e) => {
-            eprintln!("{tool}: error: {e}");
+            eprintln!("{tool}: {} {e}", term::label(Stream::Stderr, Role::Error));
             return Some(1);
         }
     };
@@ -490,9 +492,9 @@ fn refresh_completions(home: &Path, toolchain: &Path) -> Vec<Result<String, Stri
 fn report_completions(done: &[Result<String, String>], verbose: bool) {
     for r in done {
         match r {
-            Ok(m) if verbose => eprintln!("        note: refreshed {m}"),
+            Ok(m) if verbose => term::note(&format!("refreshed {m}")),
             Ok(_) => {}
-            Err(e) => eprintln!("rok: warning: {e}"),
+            Err(e) => eprintln!("rok: {} {e}", term::label(Stream::Stderr, Role::Warning)),
         }
     }
 }
@@ -635,7 +637,7 @@ fn update(home: &Path, version: Option<&str>, quiet: bool, verbose: bool) -> Res
     if fresh {
         let url = format!("{dist}/download/v{full}/rok-{full}-{HOST}.{ARCHIVE}");
         if !quiet {
-            status("Downloading", &format!("rok {full} ({HOST})"));
+            term::status("Downloading", &format!("rok {full} ({HOST})"));
         }
         let (tmp, top, _) = stage(home, &full, &url)?;
         place(home, &tmp, &top, &full)?;
@@ -652,30 +654,20 @@ fn update(home: &Path, version: Option<&str>, quiet: bool, verbose: bool) -> Res
         .map(|n| n.to_string_lossy().into_owned());
     match &old {
         // The default already, with broken proxies.
-        Some(n) if *n == name => status("Repaired", &format!("rok {full} proxies")),
+        Some(n) if *n == name => term::status("Repaired", &format!("rok {full} proxies")),
         Some(n) => {
             let from = n.strip_suffix(&suffix).unwrap_or(n);
-            status("Updated", &format!("rok {from} -> {full}"));
+            term::status("Updated", &format!("rok {from} -> {full}"));
         }
-        None => status("Installed", &format!("rok {full} to {}", shown(home))),
+        None => term::status("Installed", &format!("rok {full} to {}", shown(home))),
     }
     if let Some(old) = old.filter(|n| *n != name) {
-        eprintln!("        note: {old} stays installed (`rok toolchain remove {old}`)");
+        term::note(&format!(
+            "{old} stays installed (`rok toolchain remove {old}`)"
+        ));
     }
     report_completions(&refreshed, verbose);
     Ok(())
-}
-
-/// A status line on stderr: `word` right-aligned to 12 columns, then
-/// `msg`; `word` green and bold on a terminal unless `NO_COLOR` is set.
-/// install.sh and install.ps1 print the same.
-fn status(word: &str, msg: &str) {
-    use std::io::IsTerminal;
-    if std::io::stderr().is_terminal() && std::env::var_os("NO_COLOR").is_none() {
-        eprintln!("\x1b[1;32m{word:>12}\x1b[0m {msg}");
-    } else {
-        eprintln!("{word:>12} {msg}");
-    }
 }
 
 /// `path` as `~/..` when under the user's home, for display only.
@@ -710,7 +702,7 @@ fn clean(home: &Path, quiet: bool) -> Result<(), String> {
         std::fs::remove_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
         removed += 1;
         if !quiet {
-            status("Removed", &format!("toolchain {name}"));
+            term::status("Removed", &format!("toolchain {name}"));
         }
     }
     if !quiet {
@@ -718,7 +710,7 @@ fn clean(home: &Path, quiet: bool) -> Result<(), String> {
         if removed == 0 {
             eprintln!("nothing to clean; only the default ({kept}) is installed");
         } else {
-            status("Kept", &format!("the default toolchain {kept}"));
+            term::status("Kept", &format!("the default toolchain {kept}"));
         }
     }
     Ok(())
@@ -747,14 +739,12 @@ pub fn cmd(args: &[String], quiet: bool, verbose: bool) -> Result<i32, String> {
             if all.is_empty() {
                 println!("no toolchains installed (this rok is {VERSION})");
             }
-            for (name, _) in all {
-                let mark = if def.as_ref().is_some_and(|d| d.ends_with(&name)) {
-                    " (default)"
-                } else {
-                    ""
-                };
-                println!("{name}{mark}");
-            }
+            let current = all
+                .iter()
+                .position(|(name, _)| def.as_ref().is_some_and(|d| d.ends_with(name)));
+            let rows: Vec<(String, String)> =
+                all.into_iter().map(|(n, _)| (n, String::new())).collect();
+            print!("{}", term::list(&rows, current, "(default)"));
         }
         ["install", version, rest @ ..] => {
             let from = match rest {
@@ -764,14 +754,14 @@ pub fn cmd(args: &[String], quiet: bool, verbose: bool) -> Result<i32, String> {
             };
             let name = install(&h, version, from)?;
             if !quiet {
-                status("Installed", &format!("toolchain {name}"));
+                term::status("Installed", &format!("toolchain {name}"));
             }
             // The first toolchain becomes the default; proxies once.
             let def = default_pin(&h)?;
             if def.is_none() {
                 set_default(&h, &name)?;
                 if !quiet {
-                    status("Default", &format!("toolchain {name}"));
+                    term::status("Default", &format!("toolchain {name}"));
                 }
             } else if !h.join("bin").join(exe_name("rok")).is_file() {
                 let d = def.as_deref().and_then(|p| find(&h, p));
@@ -790,7 +780,7 @@ pub fn cmd(args: &[String], quiet: bool, verbose: bool) -> Result<i32, String> {
             let refreshed = refresh_completions(&h, &dir);
             if !quiet {
                 let name = dir.file_name().unwrap_or_default().to_string_lossy();
-                status("Default", &format!("toolchain {pin} ({name})"));
+                term::status("Default", &format!("toolchain {pin} ({name})"));
                 report_completions(&refreshed, verbose);
             }
         }

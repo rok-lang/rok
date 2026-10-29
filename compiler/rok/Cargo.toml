@@ -25,5 +25,9 @@ rokc_lexer = { workspace = true }
 rokc_rokon = { workspace = true }
 rokc_target = { workspace = true }
 
+[target.'cfg(unix)'.dev-dependencies]
+# tests/rok.rs: install.sh on a pseudo-terminal.
+libc = { workspace = true }
+
 [lints]
 workspace = true
