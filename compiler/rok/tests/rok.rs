@@ -2264,6 +2264,7 @@ fn fake_archive(root: &Path, version: &str) {
 }
 
 /// The line install.sh adds to a shell startup file.
+#[cfg(unix)]
 const PROFILE_LINE: &str = "[ -f \"$HOME/.rok/env\" ] && . \"$HOME/.rok/env\"";
 
 /// install.sh writes `$ROK_HOME/env`, sources it (guarded) from the
