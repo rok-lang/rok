@@ -21,7 +21,7 @@ use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use rokc_diagnostic::{Label, RokDiagnostic, Span};
+use rokc_diagnostic::{Label, RokDiagnostic, Span, Tag};
 use rokc_hir::{
     HirBlock, HirExpr, HirExprKind, HirFunction, HirModule, HirStaticDef, HirStmt, HirTy,
 };
@@ -79,6 +79,29 @@ struct State {
     items: Vec<Item>,
 }
 
+/// A cell's number: `N`, or `N.k` for the `k`th cell of a notebook
+/// cell that splits into several (0: none, as for the prelude).
+#[derive(Clone, Copy, Default, Eq, PartialEq)]
+pub struct CellNo {
+    pub n: u32,
+    pub sub: u16,
+}
+
+impl CellNo {
+    fn is_none(self) -> bool {
+        self == Self::default()
+    }
+}
+
+impl std::fmt::Display for CellNo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.sub {
+            0 => write!(f, "{}", self.n),
+            k => write!(f, "{}.{k}", self.n),
+        }
+    }
+}
+
 /// An item of the session.
 #[derive(Clone)]
 struct Item {
@@ -88,7 +111,7 @@ struct Item {
     text: String,
     /// The cell that defined it (0: a loaded program or the prelude), its
     /// text, and the item's offset there.
-    cell: u32,
+    cell: CellNo,
     source: Arc<str>,
     at: usize,
 }
@@ -99,7 +122,7 @@ impl Item {
             key,
             source: Arc::from(text.as_str()),
             text,
-            cell: 0,
+            cell: CellNo::default(),
             at: 0,
         }
     }
@@ -523,8 +546,10 @@ pub struct Repl {
     /// point into it, not into the generated session source.
     input: String,
     /// The number of the cell being built, `<repl cell N>` in runtime
-    /// locations (0: none, as for the prelude).
-    pub cell_no: u32,
+    /// locations.
+    pub cell_no: CellNo,
+    /// The number `next_cell` gives instead of the one after `cell_no`.
+    pub next: Option<CellNo>,
     /// The cell being built defines items (those with its number): errors
     /// in earlier ones say how to go on.
     defining: bool,
@@ -647,7 +672,8 @@ impl Repl {
             gc_tables: Vec::new(),
             known: HashMap::new(),
             input: String::new(),
-            cell_no: 0,
+            cell_no: CellNo::default(),
+            next: None,
             defining: false,
             diverged: std::cell::Cell::new(false),
             running: Arc::default(),
@@ -748,13 +774,19 @@ impl Repl {
                 return self.command(cmd, arg);
             }
             _ => {
-                self.cell_no += 1;
+                self.next_cell();
                 if let Ok(Some(shown)) = self.eval(cell) {
                     println!("{shown}");
                 }
             }
         }
         true
+    }
+
+    /// Number the cell about to be built.
+    pub fn next_cell(&mut self) {
+        let n = self.cell_no.n + 1;
+        self.cell_no = self.next.take().unwrap_or(CellNo { n, sub: 0 });
     }
 
     /// A `:` command; `false` to stop.
@@ -795,7 +827,7 @@ impl Repl {
             ":time" => {
                 let t = std::time::Instant::now();
                 self.timing = true;
-                self.cell_no += 1;
+                self.next_cell();
                 let r = self.eval(arg);
                 self.timing = false;
                 if let Ok(Some(shown)) = r {
@@ -929,7 +961,7 @@ impl Repl {
                 }
                 Ok(None)
             } else {
-                self.cell_no += 1;
+                self.next_cell();
                 self.eval(&c)
             };
             match r {
@@ -955,9 +987,10 @@ impl Repl {
     /// The session as a script (`:save`). A file may not declare a name
     /// twice in one scope (5.1.4): a cell that declares one again with
     /// the same type assigns it; otherwise it opens a block that lasts
-    /// to the end.
+    /// to the end. `SAVED` heads it and `CELL` marks each cell, so
+    /// `:load` replays the cells (`replay`) and keeps what a block hides.
     fn script(&self) -> String {
-        let mut out = String::new();
+        let mut out = format!("{SAVED}\n");
         for item in &self.state.items {
             out.push_str(&item.text);
             out.push('\n');
@@ -1004,6 +1037,7 @@ impl Repl {
                 (text, assign_it) = (stmts, false);
             }
             scope.extend(declares);
+            let _ = writeln!(out, "{CELL}");
             out.push_str(&text);
             match &s.expr {
                 Some(e) if assign_it => {
@@ -1376,7 +1410,7 @@ impl Repl {
             let src = self.session(&self.state, cell, text.as_deref());
             let lacks = std::cell::Cell::new(None);
             let claim = |r: &CompileResult, file: u32| {
-                let next = fmt.and_then(|f| unformattable(r, &src, file, f));
+                let next = fmt.and_then(|f| unformattable(&r.errors, &src, file, f));
                 lacks.set(next);
                 next.is_some()
             };
@@ -1930,7 +1964,7 @@ impl Repl {
             if !src[off..].starts_with(it.text.as_str()) {
                 continue;
             }
-            if it.cell > 0 {
+            if !it.cell.is_none() {
                 let (file, owner) = if self.defining && it.cell == self.cell_no {
                     (map.add(REPL_FILE.to_owned(), it.source.to_string()), None)
                 } else {
@@ -2010,6 +2044,9 @@ impl Repl {
             }
         };
         self.loaded = Some((path.to_owned(), anonymous));
+        if text.starts_with(SAVED) {
+            return self.replay(&text);
+        }
         let shown = path.display().to_string();
         let (tokens, _) = rokc_lexer::Lexer::new(&text, shown.clone()).lex_all();
         let tops = rokc_parser::parse_program(&tokens, shown.clone()).0.tops;
@@ -2142,6 +2179,19 @@ impl Repl {
         ok
     }
 
+    /// Run a `:save` script's cells (`saved_cells`) one by one, as
+    /// typed: a name declared again replaces the old binding.
+    fn replay(&mut self, text: &str) -> bool {
+        for c in saved_cells(text) {
+            self.next_cell();
+            if self.eval(&c).is_err() {
+                eprintln!("note: the rest of the session did not run");
+                return false;
+            }
+        }
+        true
+    }
+
     /// The cell being built is `text`, at `at` in the loaded program.
     fn set_cell(&mut self, text: &str, at: Option<usize>) {
         text.clone_into(&mut self.input);
@@ -2149,6 +2199,47 @@ impl Repl {
             p.cell = at;
         }
     }
+}
+
+/// The first line of a `:save` script, and the line before each cell.
+const SAVED: &str = "// rok repl session (:save); :load replays it cell by cell";
+const CELL: &str = "// :cell";
+
+/// The cells of a `:save` script (`Repl::script`): its items, then the
+/// text after each `CELL` line, without the blocks the script opens.
+fn saved_cells(text: &str) -> Vec<String> {
+    let mut cells = vec![String::new()];
+    for line in text.lines().skip(1) {
+        if line == CELL {
+            cells.push(String::new());
+        } else if let Some(c) = cells.last_mut() {
+            c.push_str(line);
+            c.push('\n');
+        }
+    }
+    // A block opens on its own line before a cell and closes at the end.
+    let mut open = 0;
+    for c in &mut cells {
+        while let Some(t) = c.strip_suffix("{\n") {
+            if !(t.is_empty() || t.ends_with('\n')) {
+                break;
+            }
+            c.truncate(t.len());
+            open += 1;
+        }
+    }
+    if let Some(last) = cells.last_mut() {
+        for _ in 0..open {
+            if let Some(t) = last.strip_suffix("}\n") {
+                last.truncate(t.len());
+            }
+        }
+    }
+    cells
+        .into_iter()
+        .filter(|c| !blank(c))
+        .map(|c| c.trim().to_owned())
+        .collect()
 }
 
 /// The name a cell's text goes by in locations.
@@ -2282,8 +2373,8 @@ struct Region {
 }
 
 /// How runtime locations name cell `n`'s text.
-fn cell_path(n: u32) -> String {
-    if n == 0 {
+fn cell_path(n: CellNo) -> String {
+    if n.is_none() {
         REPL_FILE.to_owned()
     } else {
         format!("<repl cell {n}>")
@@ -2369,7 +2460,7 @@ fn localize(
 }
 
 /// How a cell's value shows.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Fmt {
     Display,
     Debug,
@@ -2388,23 +2479,20 @@ impl Fmt {
     }
 }
 
-/// Whether `r`, built showing the value with `fmt`, failed only because
-/// the value's type lacks that trait; then how to show it instead.
-/// `file` is the id of `src`, the session source.
-fn unformattable(r: &CompileResult, src: &str, file: u32, fmt: Fmt) -> Option<Fmt> {
-    let only = r
-        .errors
-        .iter()
-        .all(|d| d.message.contains("` cannot be formatted with `") && in_show(d, src, file));
-    if r.errors.is_empty() || !only {
+/// Whether the `errors` of a build showing the value with `fmt` say
+/// only that the value's type lacks that trait; then how to show it
+/// instead. `file` is the id of `src`, the session source.
+fn unformattable(errors: &[RokDiagnostic], src: &str, file: u32, fmt: Fmt) -> Option<Fmt> {
+    let only = errors.iter().all(|d| {
+        matches!(
+            d.tag,
+            Tag::NoDisplay | Tag::NoDisplayHasDebug | Tag::NoDebug
+        ) && in_show(d, src, file)
+    });
+    if errors.is_empty() || !only {
         return None;
     }
-    // The error's help names `{:?}` when the type has `Debug`.
-    let hint = concat!("format it with `{", ":?}`");
-    let debug = r
-        .errors
-        .iter()
-        .any(|d| d.notes.iter().any(|n| n.contains(hint)));
+    let debug = errors.iter().any(|d| d.tag == Tag::NoDisplayHasDebug);
     match fmt {
         Fmt::Display if debug => Some(Fmt::Debug),
         Fmt::Display | Fmt::Debug => Some(Fmt::Type),
@@ -3413,17 +3501,39 @@ mod tests {
         assert_eq!(
             r.script(),
             "\
+// rok repl session (:save); :load replays it cell by cell
 fn twice(x: i32) -> i32 { x * 2 }
+// :cell
 let a = 1;
+// :cell
 let it = twice(a);
+// :cell
 it = it + 1;
+// :cell
 it * 2;
+// :cell
 a = 5;
 {
+// :cell
 let a = \"s\"; println(a);
+// :cell
 a;
 }
 "
+        );
+        // `:load` replays the cells, the blocks dropped.
+        assert_eq!(
+            saved_cells(&r.script()),
+            [
+                "fn twice(x: i32) -> i32 { x * 2 }",
+                "let a = 1;",
+                "let it = twice(a);",
+                "it = it + 1;",
+                "it * 2;",
+                "a = 5;",
+                "let a = \"s\"; println(a);",
+                "a;",
+            ]
         );
         let path = r.tmp.path().join("s.rok");
         r.save(&path.display().to_string());
@@ -3434,6 +3544,36 @@ a;
         );
         assert_eq!(assign_instead("{ let b = 2; }", "b"), None);
         assert_eq!(assign_instead("let b: i32 = 2;", "b"), None);
+    }
+
+    #[test]
+    fn unformattable_uses_tag() {
+        let src = format!("let a = 1;\n{SHOWN} = f\"{{v}}\";\n");
+        let show = src.find(SHOWN).unwrap() as u32;
+        let at = |start: u32| Span {
+            start,
+            end: start + 1,
+            line: 1,
+            col: 1,
+            file: 7,
+        };
+        // The message does not matter, only the tag.
+        let err = |tag: Tag, start: u32| {
+            RokDiagnostic::error(rokc_diagnostic::ErrorKind::Type, at(start), "reworded")
+                .with_tag(tag)
+        };
+        let one = |tag: Tag, fmt: Fmt| unformattable(&[err(tag, show + 4)], &src, 7, fmt);
+        assert_eq!(one(Tag::NoDisplayHasDebug, Fmt::Display), Some(Fmt::Debug));
+        assert_eq!(one(Tag::NoDisplay, Fmt::Display), Some(Fmt::Type));
+        assert_eq!(one(Tag::NoDebug, Fmt::Debug), Some(Fmt::Type));
+        assert_eq!(one(Tag::NoDebug, Fmt::Type), None);
+        assert_eq!(one(Tag::None, Fmt::Display), None);
+        // Outside the shown value's store, or in another file.
+        let before = err(Tag::NoDisplayHasDebug, 0);
+        assert_eq!(unformattable(&[before], &src, 7, Fmt::Display), None);
+        let elsewhere = err(Tag::NoDisplayHasDebug, show + 4);
+        assert_eq!(unformattable(&[elsewhere], &src, 8, Fmt::Display), None);
+        assert_eq!(unformattable(&[], &src, 7, Fmt::Display), None);
     }
 
     #[test]

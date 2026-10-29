@@ -20,7 +20,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use rokc_core::hash::{hex, hmac_sha256};
 use rokc_interface::BuildOptions;
 
-use crate::repl::{CellStdin, Repl, Start, incomplete, open_brackets, split_cells};
+use crate::repl::{CellNo, CellStdin, Repl, Start, incomplete, open_brackets, split_cells};
 use rokc_diagnostic::Json;
 
 const PROTOCOL: &str = "5.3";
@@ -559,6 +559,8 @@ struct Kernel {
     wire: Arc<Wire>,
     repl: Repl,
     count: u32,
+    /// The last sub-cell number given under `count` (`N.k`).
+    sub: u16,
     /// `(execution count, code)` of the cells stored in the history.
     history: Vec<(u32, String)>,
     taps: Rc<Taps>,
@@ -573,17 +575,29 @@ struct Kernel {
 impl Kernel {
     /// Run `code`: (stdout, stderr, what the last cell shows), `Err` at the
     /// first failing cell (earlier cells keep their effects). As `IPython`,
-    /// only the last value is shown.
-    fn run(&mut self, code: &str) -> (String, String, Result<Option<String>, ()>) {
+    /// only the last value is shown. Its cells are numbered after the
+    /// execution count: `N` alone when `counted` and it is one, else
+    /// `N.1`, `N.2`, ...
+    fn run(&mut self, code: &str, counted: bool) -> (String, String, Result<Option<String>, ()>) {
         let mut result = Ok(None);
-        for cell in split_cells(code) {
+        let cells = split_cells(code);
+        let whole = counted && cells.len() == 1;
+        for cell in cells {
+            let sub = if whole {
+                0
+            } else {
+                self.sub += 1;
+                self.sub
+            };
+            self.repl.next = Some(CellNo { n: self.count, sub });
             result = if cell.starts_with(':') {
                 self.repl.cell(&cell);
                 Ok(None)
             } else {
-                self.repl.cell_no += 1;
+                self.repl.next_cell();
                 self.repl.eval(&cell)
             };
+            self.repl.next = None;
             if result.is_err() {
                 break;
             }
@@ -616,8 +630,10 @@ impl Kernel {
         let c = &req.content;
         let code = c.get("code").as_str().unwrap_or("");
         let silent = c.get("silent") == &Json::Bool(true);
-        if !silent && c.get("store_history") != &Json::Bool(false) {
+        let counted = !silent && c.get("store_history") != &Json::Bool(false);
+        if counted {
             self.count += 1;
+            self.sub = 0;
             self.history.push((self.count, code.to_owned()));
         }
         let n = Json::num(self.count);
@@ -635,7 +651,7 @@ impl Kernel {
             self.repl.stdin = self.stdin(req);
             *wire.streaming.lock().unwrap() = Some(req.header.clone());
         }
-        let (out, err, result) = self.run(code);
+        let (out, err, result) = self.run(code, counted);
         *wire.streaming.lock().unwrap() = None;
         self.repl.stdin = CellStdin::Null;
         let stream = |name: &str, text: String| {
@@ -961,6 +977,7 @@ fn start(
         wire,
         repl,
         count: 0,
+        sub: 0,
         history: Vec::new(),
         taps: Rc::new(Taps { out, err }),
         input: Rc::new(input),

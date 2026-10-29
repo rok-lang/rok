@@ -764,11 +764,11 @@ fn window(buf: &[char], pos: usize, prompt: usize, width: usize) -> std::ops::Ra
 }
 
 /// Move to column 0 of a fresh line without asking the terminal where
-/// the cursor is (zsh `PROMPT_SP`): a reverse `%` and spaces up to the
-/// last column wrap only after output that did not end its line, and
-/// mark it; `\r` and clearing the line then erase the rest.
+/// the cursor is (zsh `PROMPT_SP`): spaces up to the last column wrap
+/// only after output that did not end its line; `\r` and clearing the
+/// line then erase the rest. Nothing is drawn.
 fn fresh_line(width: usize) -> String {
-    format!("\x1b[7m%\x1b[27m{:1$}\r\x1b[K", "", width.saturating_sub(1))
+    format!(" {:1$}\r\x1b[K", "", width.saturating_sub(1))
 }
 
 /// The terminal's width in columns (80 when unknown).
@@ -1278,7 +1278,7 @@ mod tests {
 
     #[test]
     fn prompt_starts_a_fresh_line() {
-        assert_eq!(fresh_line(4), "\x1b[7m%\x1b[27m   \r\x1b[K");
-        assert_eq!(fresh_line(0), "\x1b[7m%\x1b[27m\r\x1b[K");
+        assert_eq!(fresh_line(4), "    \r\x1b[K");
+        assert_eq!(fresh_line(0), " \r\x1b[K");
     }
 }
