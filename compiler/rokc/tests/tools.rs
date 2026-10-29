@@ -333,6 +333,28 @@ fn repl_quiet_starts_without_a_banner() {
     assert!(!out.contains("Rok ") && !out.contains(":help"), "{out:?}");
 }
 
+/// After output that does not end its line the prompt starts a fresh
+/// line, with no marker drawn.
+#[test]
+#[cfg_attr(
+    not(all(
+        any(target_os = "macos", target_os = "linux"),
+        any(target_arch = "aarch64", target_arch = "x86_64")
+    )),
+    ignore = "a pty test: the REPL host on macOS and Linux (arm64, x86_64)"
+)]
+#[cfg(unix)]
+// spec: §9.7.8
+fn repl_prompt_after_unended_output_has_no_marker() {
+    let env = setup_runtime();
+    let rokr = env.rokr.display().to_string();
+    let home = scratch("repl-fresh-line");
+    let steps: [&[u8]; 2] = [b"print(\"ab\")\r", b"quit\r"];
+    let out = on_tty(&["repl", "-q", "--rokr", &rokr], &home, &steps);
+    assert!(out.contains("ab "), "{out:?}");
+    assert!(!out.contains('%') && !out.contains("\x1b[7m"), "{out:?}");
+}
+
 /// A cell ends by tokens: brackets in char literals and comments do not
 /// count, a balanced line ends the cell (a last `let` needs no `;`), and
 /// an item header or a trailing operator asks for the next line.
@@ -1605,22 +1627,56 @@ fn add(a: i32, b: i32) -> i32
         assert!(stderr.contains(e), "{e}: {stderr}");
     }
     // The script declares each name once per scope; read back, it runs
-    // the cells again.
+    // the cells again, one by one: `xs` is the last one declared.
     let script = std::fs::read_to_string(&saved).unwrap();
     assert!(script.contains("\nbase = 40i32;\n"), "{script}");
     assert!(script.contains("\nlet it = add(base, 2);\n"), "{script}");
-    assert!(script.contains("\n{\nlet xs = \"s\";\n}\n"), "{script}");
+    assert!(
+        script.contains("\n{\n// :cell\nlet xs = \"s\";\n}\n"),
+        "{script}"
+    );
     let out = piped(
         ROKC,
         &["repl", "--rokr", &rokr, &saved_s],
-        "base + twice(1)\nit\n",
+        "base + twice(1)\nit\nxs\n",
     );
     let stderr = text(&out.stderr);
     assert_eq!(
         text(&out.stdout),
-        "loaded\nloaded\n42\n42\n",
+        "loaded\nloaded\n42\n42\ns\n",
         "{script}\n{stderr}"
     );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// `:load` of a `:save`d session replays its cells: a name declared
+/// again with another type keeps its last binding.
+#[test]
+#[cfg_attr(
+    not(any(
+        all(
+            any(target_os = "macos", target_os = "linux"),
+            any(target_arch = "aarch64", target_arch = "x86_64")
+        ),
+        windows
+    )),
+    ignore = "the REPL host runs on macOS, Linux and Windows (arm64, x86_64)"
+)]
+// spec: §9.9.9
+fn load_of_saved_session_keeps_redeclared_binding() {
+    let env = setup_runtime();
+    let rokr = env.rokr.display().to_string();
+    let dir = scratch("repl-save-load");
+    std::fs::create_dir_all(&dir).unwrap();
+    let saved = dir.join("s.rok").display().to_string();
+    let input = format!("let a = 1\nlet a = \"s\"\n:save {saved}\n:reset\n:load {saved}\na\n");
+    let out = piped(ROKC, &["repl", "--rokr", &rokr], &input);
+    let stderr = text(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "{stderr}");
+    assert_eq!(text(&out.stdout), "s\n", "{stderr}");
+    // `rok run` of the script still works: a block holds the new `a`.
+    let out = piped(ROKC, &["run", "-q", "--rokr", &rokr, &saved], "");
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out.stderr));
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -2214,6 +2270,7 @@ fn jupyter_kernel_speaks_the_wire_protocol() {
             .iter()
             .any(|(k, c)| k == "execute_input" && c.get("code").as_str() == Some("x + 2"))
     );
+    cells_follow_the_count(&mut shell, &mut request);
 
     let (_, _, published) = request(&mut shell, "execute_request", exec("println(f\"hi {x}\");"));
     assert!(
@@ -2391,6 +2448,30 @@ type Reply = (
 /// `complete` / `is_complete` / `inspect` / `history` against the
 /// session of `jupyter_kernel_speaks_the_wire_protocol` (`x: i32`, five
 /// cells run).
+/// Cells are numbered after the execution count (2 so far): `N.k` when
+/// one execute splits; a silent execute leaves the count as it is.
+fn cells_follow_the_count(
+    shell: &mut std::net::TcpStream,
+    request: &mut impl FnMut(&mut std::net::TcpStream, &str, rokc_interface::Json) -> Reply,
+) {
+    use rokc_interface::Json;
+    let exec = |code: &str| Json::obj([("code", Json::str(code)), ("silent", Json::Bool(false))]);
+    let panicked_in = |published: &[(String, Json)], cell: &str| {
+        published
+            .iter()
+            .any(|(k, c)| k == "stream" && c.to_string().contains(&format!("panicked at {cell}:")))
+    };
+    let code = "let y = 1;\npanic(\"two\");";
+    let (_, reply, published) = request(shell, "execute_request", exec(code));
+    assert_eq!(reply.get("execution_count"), &Json::num(3));
+    assert!(panicked_in(&published, "<repl cell 3.2>"), "{published:?}");
+    let silent = Json::obj([("code", Json::str("x;")), ("silent", Json::Bool(true))]);
+    request(shell, "execute_request", silent);
+    let (_, reply, published) = request(shell, "execute_request", exec("panic(\"four\");"));
+    assert_eq!(reply.get("execution_count"), &Json::num(4));
+    assert!(panicked_in(&published, "<repl cell 4>"), "{published:?}");
+}
+
 fn completion_inspect_history(
     shell: &mut std::net::TcpStream,
     request: &mut impl FnMut(&mut std::net::TcpStream, &str, rokc_interface::Json) -> Reply,
@@ -2451,10 +2532,10 @@ fn completion_inspect_history(
         &Json::Arr(vec![
             Json::Arr(vec![
                 Json::num(0),
-                Json::num(4),
+                Json::num(6),
                 Json::str("panic(\"boom\");")
             ]),
-            Json::Arr(vec![Json::num(0), Json::num(5), Json::str("x")]),
+            Json::Arr(vec![Json::num(0), Json::num(7), Json::str("x")]),
         ]),
         "{reply}"
     );
