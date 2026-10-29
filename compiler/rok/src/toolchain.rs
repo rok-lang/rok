@@ -726,12 +726,7 @@ usage: rok toolchain list
 
 pub fn cmd(args: &[String], quiet: bool, verbose: bool) -> Result<i32, String> {
     let h = home();
-    // `-q` and `-v` are rok's own options, taken already.
-    let args: Vec<&str> = args
-        .iter()
-        .map(String::as_str)
-        .filter(|a| !matches!(*a, "-q" | "--quiet" | "-v" | "--verbose"))
-        .collect();
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
     match args.as_slice() {
         ["list"] => {
             let def = default_pin(&h)?.and_then(|p| find(&h, &p));

@@ -259,9 +259,16 @@ pub fn best<'a>(entries: &'a [Entry], req: &Req) -> Option<&'a Entry> {
         .max_by(|a, b| a.vers.cmp(&b.vers))
 }
 
-pub fn no_match(entries: &[Entry], name: &str, req: &str, url: &str) -> String {
+pub fn no_match(
+    cache: &crate::git::Cache,
+    entries: &[Entry],
+    name: &str,
+    req: &str,
+    url: &str,
+) -> String {
     if entries.is_empty() {
-        return format!("no native package named `{name}` in {url}");
+        let help = registry::missing(cache, url, name, true);
+        return format!("no native package named `{name}` in {url}{help}");
     }
     let vs: Vec<String> = entries
         .iter()

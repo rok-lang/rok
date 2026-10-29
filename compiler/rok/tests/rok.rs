@@ -594,6 +594,144 @@ fn new_and_init_write_a_manifest() {
     );
 }
 
+/// The commands `rok --help` lists.
+fn listed_commands(home: &Path, cwd: &Path) -> Vec<String> {
+    let list = ok(&rok(home, cwd, &["--help"]));
+    let mut out = Vec::new();
+    for l in list.lines().skip_while(|l| !l.starts_with("packages:")) {
+        if l.starts_with("options") {
+            break;
+        }
+        if let Some(name) = l.strip_prefix("  ").and_then(|r| r.split(' ').next()) {
+            out.push(name.to_owned());
+        }
+    }
+    out
+}
+
+/// `rok help <cmd>` is that command's text alone: its usage, examples
+/// and options, written as `rok`.
+// spec: §9.10.1
+#[test]
+fn every_command_help_is_its_own() {
+    let root = scratch("help-own");
+    let home = root.join("home");
+    let cmds = listed_commands(&home, &root);
+    assert!(
+        cmds.len() > 30 && cmds.contains(&"toolchain".to_owned()),
+        "{cmds:?}"
+    );
+    for c in &cmds {
+        let help = ok(&rok(&home, &root, &["help", c]));
+        assert!(help.starts_with(&format!("usage: rok {c}")), "{c}:\n{help}");
+        assert!(help.contains("\nexamples:\n"), "{c}:\n{help}");
+        assert!(
+            !help.contains("rokc ") && !help.contains("rokc`"),
+            "{c}:\n{help}"
+        );
+        for other in cmds.iter().filter(|o| *o != c) {
+            for l in help.lines() {
+                let form = l.strip_prefix("usage: ").unwrap_or(l).trim_start();
+                assert!(
+                    !form.starts_with(&format!("rok {other} ")) || l.starts_with("  rok"),
+                    "{c} holds {other}'s usage:\n{help}"
+                );
+            }
+        }
+        assert_eq!(ok(&rok(&home, &root, &[c, "--help"])), help);
+    }
+}
+
+// spec: §9.10.1
+#[test]
+fn rok_help_is_short() {
+    let root = scratch("help-short");
+    let home = root.join("home");
+    let help = ok(&rok(&home, &root, &["--help"]));
+    assert!(help.lines().count() < 60, "{help}");
+    assert_eq!(ok(&rok(&home, &root, &["help"])), help);
+    assert!(help.contains("\n  build ") && help.contains("rok help <command>"));
+}
+
+/// rok's global options go anywhere before `--`, after the command too.
+// spec: §9.10.1
+#[test]
+fn global_options_after_command() {
+    let root = scratch("global-after");
+    let home = root.join("home");
+    let out = rok(&home, &root, &["new", "x", "-q"]);
+    ok(&out);
+    assert_eq!(text(&out.stderr), "");
+    assert!(root.join("x/src/main.rok").is_file());
+    fs::create_dir_all(root.join("y")).unwrap();
+    let out = rok(&home, &root.join("y"), &["init", "-v"]);
+    ok(&out);
+    assert!(
+        text(&out.stderr).contains("Created"),
+        "{}",
+        text(&out.stderr)
+    );
+    ok(&rok(&home, &root, &["toolchain", "list", "--quiet"]));
+}
+
+/// An unknown command or option names the closest one and the help to
+/// read.
+// spec: §9.10.1 §9.1.6
+#[test]
+fn unknown_command_suggests() {
+    let root = scratch("unknown-cmd");
+    let home = root.join("home");
+    for (typo, want) in [
+        ("biuld", "build"),
+        ("instal", "install"),
+        ("compile", "build"),
+        ("ls", "toolchain list"),
+    ] {
+        let out = rok(&home, &root, &[typo, "x"]);
+        assert_eq!(out.status.code(), Some(2));
+        let err = text(&out.stderr);
+        assert_eq!(
+            err,
+            format!(
+                "rok: unknown command `{typo}`; did you mean `{want}`?\nrun `rok help` for usage\n"
+            )
+        );
+    }
+    let out = rok(&home, &root, &["help", "biuld"]);
+    assert_eq!(out.status.code(), Some(2));
+    fails(&out, "did you mean `build`?");
+    let out = rok(&home, &root, &["new", "z", "--lbi"]);
+    assert_eq!(out.status.code(), Some(2));
+    assert_eq!(
+        text(&out.stderr),
+        "rok: unknown option `--lbi`; did you mean `--lib`?\nrun `rok help new` for usage\n"
+    );
+    let out = rok(&home, &root, &["add", "x", "--regstry", "u"]);
+    fails(&out, "did you mean `--registry`?");
+}
+
+/// rokc's usage errors under rok speak of rok.
+// spec: §9.10.1 §9.1.6 §9.1.7
+#[test]
+fn rokc_option_reported_as_rok() {
+    let root = scratch("rokc-as-rok");
+    let home = root.join("home");
+    ok(&rok(&home, &root, &["new", "app"]));
+    let app = root.join("app");
+    let out = rok(&home, &app, &["build", "--relase"]);
+    assert_eq!(out.status.code(), Some(2));
+    assert_eq!(
+        text(&out.stderr),
+        "rok: unknown option `--relase`; did you mean `--release`?\nrun `rok help build` for usage\n"
+    );
+    let out = rok(&home, &app, &["check", ".", "extra"]);
+    assert_eq!(out.status.code(), Some(2));
+    fails(
+        &out,
+        "rok: unexpected argument `extra`: `check` takes one path",
+    );
+}
+
 /// `rok args` in `cwd` with `TERM=xterm` (16 colours) and `vars`; its
 /// stderr.
 fn stderr_with(home: &Path, cwd: &Path, vars: &[(&str, &str)], args: &[&str]) -> String {
@@ -2260,6 +2398,15 @@ fn stones_publish_add_update_yank() {
     );
     fails(&rok(&home, &app, &["add", "nope"]), "no stone named `nope`");
     fails(
+        &rok(&home, &app, &["add", "nope"]),
+        "help: search the index: `rok search nope`",
+    );
+    // A near name: the stone it likely is.
+    fails(
+        &rok(&home, &app, &["add", "gemo"]),
+        "help: did you mean `geom`? (or search: `rok search gemo`)",
+    );
+    fails(
         &rok(&home, &app, &["add", "num@x.y"]),
         "is not a version requirement",
     );
@@ -2451,15 +2598,24 @@ fn completions_for_each_shell() {
                 .unwrap();
             ok(&out).trim().to_owned()
         };
-        assert_eq!(offer(&["rok", "toolc"]), "toolchain");
-        assert_eq!(offer(&["rok", "toolchain", "def"]), "default");
-        assert_eq!(offer(&["rok", "toolchain", "default", ""]), "9.9.1");
-        assert_eq!(offer(&["rok", "+"]), "+9.9.1");
-        assert_eq!(offer(&["rok", "--env", ""]), "dev");
-        assert_eq!(offer(&["rok", "--env", "dev", "env", "use", ""]), "dev");
-        assert_eq!(offer(&["rok", "build", "--rel"]), "--release");
-        assert_eq!(offer(&["rok", "add", "x", "--regi"]), "--registry");
-        assert_eq!(offer(&["rok", "help", "compl"]), "completions");
+        for (words, want) in [
+            (&["rok", "toolc"][..], "toolchain"),
+            (&["rok", "toolchain", "def"], "default"),
+            (&["rok", "toolchain", "default", ""], "9.9.1"),
+            (&["rok", "+"], "+9.9.1"),
+            (&["rok", "--env", ""], "dev"),
+            (&["rok", "--env", "dev", "env", "use", ""], "dev"),
+            (&["rok", "build", "--rel"], "--release"),
+            (&["rok", "add", "x", "--regi"], "--registry"),
+            (&["rok", "help", "compl"], "completions"),
+            (&["rok", "new", "x", "--li"], "--lib"),
+            (&["rok", "build", "--all-f"], "--all-features"),
+            (&["rok", "deps", "--no-def"], "--no-default-features"),
+            (&["rok", "env", "u"], "use"),
+            (&["rok", "toolchain", "install", "1", "--fr"], "--from"),
+        ] {
+            assert_eq!(offer(words), want, "{words:?}");
+        }
     }
 }
 

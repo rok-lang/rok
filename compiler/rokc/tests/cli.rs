@@ -1753,6 +1753,21 @@ fn demangle_and_usage_errors() {
     assert_exit(&rokc(None, &dir, &["demangle", "_ZN3foo"]), 1);
     assert_exit(&rokc(None, &dir, &["build", "--bogus"]), 2);
     assert_exit(&rokc(None, &dir, &["frobnicate"]), 2);
+    // An unknown command or option says what to write instead.
+    let out = rokc(None, &dir, &["fc.rok"]);
+    assert_exit(&out, 2);
+    assert_eq!(
+        text(&out.stderr),
+        "rokc: unknown command `fc.rok`; did you mean `rokc run fc.rok`?\nrun `rokc help` for usage\n"
+    );
+    let out = rokc(None, &dir, &["biuld"]);
+    assert!(text(&out.stderr).contains("did you mean `build`?"));
+    let out = rokc(None, &dir, &["build", "--relase"]);
+    assert_exit(&out, 2);
+    assert_eq!(
+        text(&out.stderr),
+        "rokc: unknown option `--relase`; did you mean `--release`?\nrun `rokc help build` for usage\n"
+    );
     // One path (`test`: and a filter); the REPL reads cells from stdin.
     assert_exit(&rokc(None, &dir, &["build", "a", "b"]), 2);
     assert_exit(&rokc(None, &dir, &["test", "a", "b", "c"]), 2);
