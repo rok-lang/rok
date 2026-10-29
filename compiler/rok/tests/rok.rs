@@ -90,6 +90,7 @@ fn rok_cmd(home: &Path, cwd: &Path, args: &[&str]) -> Command {
         .env_remove("ROK_ENV")
         .env_remove("ROK_REGISTRY")
         .env_remove("ROK_REGISTRY_TOKEN")
+        .env_remove("CLICOLOR_FORCE")
         .args(args);
     if cfg!(unix) {
         user_env(&mut c, &home.join("user"));
@@ -593,6 +594,120 @@ fn new_and_init_write_a_manifest() {
     );
 }
 
+/// `rok args` in `cwd` with `TERM=xterm` (16 colours) and `vars`; its
+/// stderr.
+fn stderr_with(home: &Path, cwd: &Path, vars: &[(&str, &str)], args: &[&str]) -> String {
+    let out = rok_cmd(home, cwd, args)
+        .env_remove("NO_COLOR")
+        .env_remove("COLORTERM")
+        .env("TERM", "xterm")
+        .envs(vars.iter().copied())
+        .output()
+        .unwrap();
+    text(&out.stderr)
+}
+
+// spec: §9.1.8 §9.10.1
+#[test]
+fn status_lines_coloured_when_forced() {
+    let root = scratch("colour-forced");
+    let home = root.join("home");
+    let err = stderr_with(&home, &root, &[("CLICOLOR_FORCE", "1")], &["new", "a"]);
+    assert!(err.starts_with("\x1b[1;96m     Created\x1b[0m "), "{err:?}");
+    let err = stderr_with(&home, &root, &[], &["--color=always", "new", "b"]);
+    assert!(err.starts_with("\x1b[1;96m     Created\x1b[0m "), "{err:?}");
+    let vars = [("CLICOLOR_FORCE", "1"), ("TERM", "xterm-256color")];
+    let err = stderr_with(&home, &root, &vars, &["new", "c"]);
+    assert!(
+        err.starts_with("\x1b[1;38;5;81m     Created\x1b[0m "),
+        "{err:?}"
+    );
+    let vars = [("CLICOLOR_FORCE", "1"), ("COLORTERM", "24bit")];
+    let err = stderr_with(&home, &root, &vars, &["new", "d"]);
+    assert!(
+        err.starts_with("\x1b[1;38;2;56;189;248m     Created\x1b[0m "),
+        "{err:?}"
+    );
+    // Labels are coloured, and there without colour.
+    let err = stderr_with(&home, &root, &[("CLICOLOR_FORCE", "1")], &["check"]);
+    assert!(
+        err.starts_with("rok: \x1b[1;91merror:\x1b[0m not inside a package"),
+        "{err:?}"
+    );
+}
+
+// spec: §9.1.8 §9.10.1
+#[test]
+fn no_colour_when_piped_or_no_color() {
+    let root = scratch("colour-off");
+    let home = root.join("home");
+    let force = ("CLICOLOR_FORCE", "1");
+    for (i, (vars, args)) in [
+        (&[][..], &[][..]),
+        (&[("NO_COLOR", "1"), force][..], &[][..]),
+        (&[("TERM", "dumb")][..], &[][..]),
+        (&[force][..], &["--color=never"][..]),
+        (&[force][..], &["--no-color"][..]),
+        (&[force][..], &["--color", "never"][..]),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let name = format!("p{i}");
+        let args = [args, &["new", &name]].concat();
+        let err = stderr_with(&home, &root, vars, &args);
+        assert!(err.starts_with("     Created "), "{args:?}: {err:?}");
+        assert!(!err.contains('\x1b'), "{vars:?} {args:?}: {err:?}");
+    }
+    ok(&rok(&home, &root, &["env", "create", "e1"]));
+    ok(&rok(&home, &root, &["env", "use", "e1"]));
+    let list = rok_cmd(&home, &root, &["env", "list"])
+        .env("CLICOLOR_FORCE", "1")
+        .env("TERM", "xterm")
+        .env_remove("NO_COLOR")
+        .env_remove("COLORTERM")
+        .output()
+        .unwrap();
+    assert_eq!(text(&list.stdout), "\x1b[1;96m*\x1b[0m e1 (active)\n");
+    let out = rok(&home, &root, &["--color=sometimes", "new", "x"]);
+    assert_eq!(out.status.code(), Some(2));
+    assert!(
+        text(&out.stderr).contains("`--color` takes auto|always|never, not `sometimes`"),
+        "{}",
+        text(&out.stderr)
+    );
+}
+
+// spec: §9.1.5 §9.10.1
+#[test]
+fn rok_passes_color_to_rokc() {
+    let root = scratch("colour-rokc");
+    let home = root.join("home");
+    ok(&rok(&home, &root, &["new", "app"]));
+    let app = root.join("app");
+    write(&app.join("src/main.rok"), "let x: i32 = nope;\n");
+    for args in [
+        &["--color=always", "check"][..],
+        &["check", "--color", "always"],
+    ] {
+        let err = stderr_with(&home, &app, &[], args);
+        assert!(
+            err.contains("\x1b[1;91merror[E100]\x1b[0m"),
+            "{args:?}: {err:?}"
+        );
+    }
+    let err = stderr_with(
+        &home,
+        &app,
+        &[("CLICOLOR_FORCE", "1")],
+        &["check", "--no-color"],
+    );
+    assert!(
+        err.contains("error[E100]") && !err.contains('\x1b'),
+        "{err:?}"
+    );
+}
+
 // spec: §9.10.4 / std §3.9.4
 #[test]
 fn rok_add_writes_canonical_rokon() {
@@ -886,7 +1001,7 @@ fn named_environments() {
         .unwrap();
     assert_eq!(ok(&out).split('=').next(), Some("d"));
     let list = ok(&rok(&home, &root, &["env", "list"]));
-    assert_eq!(list, "  default\n* work\n");
+    assert_eq!(list, "  default\n* work (active)\n");
 
     // Export, import elsewhere.
     let export = root.join("export");
@@ -1021,7 +1136,7 @@ fn pinned_toolchains() {
     // The first one became the default, with the proxies.
     assert_eq!(
         ok(&tc(&["list"])),
-        format!("9.9.1-{host} (default)\n9.10.0-{host}\n")
+        format!("* 9.9.1-{host} (default)\n  9.10.0-{host}\n")
     );
     assert!(home.join("bin/rok").is_file() && home.join("bin/rokc").is_file());
 
@@ -1081,7 +1196,7 @@ fn pinned_toolchains() {
 
     ok(&tc(&["remove", "9.9.1"]));
     fails(&tc(&["remove", "9.9.1"]), "is not installed");
-    assert_eq!(ok(&tc(&["list"])), format!("9.10.0-{host} (default)\n"));
+    assert_eq!(ok(&tc(&["list"])), format!("* 9.10.0-{host} (default)\n"));
     // Pinning this rok's own version runs the rokc beside it.
     let mine: String = env!("CARGO_PKG_VERSION")
         .split('.')
@@ -2362,7 +2477,8 @@ fn install_sh(root: &Path, user: &Path, shell: &str) -> Command {
         .env_remove("ROK_NO_MODIFY_PATH")
         .env_remove("XDG_CONFIG_HOME")
         .env_remove("XDG_DATA_HOME")
-        .env_remove("ZDOTDIR");
+        .env_remove("ZDOTDIR")
+        .env_remove("CLICOLOR_FORCE");
     c
 }
 
@@ -2633,6 +2749,114 @@ fn install_sh_checks_sums() {
     );
 }
 
+/// `c`'s stderr on a pseudo-terminal; it must succeed.
+#[cfg(unix)]
+fn stderr_on_tty(mut c: Command) -> String {
+    use std::io::Read;
+    // SAFETY: plain libc calls on a pseudo-terminal this function owns.
+    let (master, slave) = unsafe {
+        let m = libc::posix_openpt(libc::O_RDWR | libc::O_NOCTTY);
+        assert!(m >= 0 && libc::grantpt(m) == 0 && libc::unlockpt(m) == 0);
+        let name = std::ffi::CStr::from_ptr(libc::ptsname(m)).to_owned();
+        let master = <fs::File as std::os::fd::FromRawFd>::from_raw_fd(m);
+        let slave = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(name.to_str().unwrap())
+            .unwrap();
+        (master, slave)
+    };
+    let mut child = c.stderr(slave).spawn().unwrap();
+    // The slave closes with the child: the reader then sees EOF or EIO.
+    drop(c);
+    let reader = std::thread::spawn(move || {
+        let mut master = master;
+        let mut out = Vec::new();
+        let mut b = [0u8; 4096];
+        while let Ok(n @ 1..) = master.read(&mut b) {
+            out.extend_from_slice(&b[..n]);
+        }
+        out
+    });
+    assert!(child.wait().unwrap().success());
+    text(&reader.join().unwrap())
+}
+
+/// install.sh colours its status lines as rok does: on a terminal (its
+/// stderr, so `curl .. | sh` too) or with `CLICOLOR_FORCE`, never with
+/// `NO_COLOR` or `TERM=dumb` or when piped.
+// spec: §9.1.8 §9.10.6
+#[cfg(unix)]
+#[test]
+fn install_sh_colours() {
+    let root = scratch("install-sh-colour");
+    fake_archive(&root, "9.9.4");
+    let install = |vars: &[(&str, &str)]| {
+        let mut c = install_sh(&root, &root.join("user"), "/bin/sh");
+        c.args(["--no-modify-path", "--archive", "rok.tar.gz"])
+            .env("ROK_HOME", root.join("home"))
+            .env("TERM", "xterm")
+            .env_remove("NO_COLOR")
+            .env_remove("COLORTERM")
+            .envs(vars.iter().copied())
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null());
+        c
+    };
+    let sky = "\x1b[1;96m   Installed\x1b[0m rok 9.9.4 to ";
+    let err = stderr_on_tty(install(&[]));
+    assert!(err.starts_with(sky), "{err:?}");
+    let err = stderr_on_tty(install(&[("TERM", "xterm-256color")]));
+    assert!(
+        err.starts_with("\x1b[1;38;5;81m   Installed\x1b[0m "),
+        "{err:?}"
+    );
+    for vars in [&[("NO_COLOR", "1")][..], &[("TERM", "dumb")]] {
+        let err = stderr_on_tty(install(vars));
+        assert!(err.starts_with("   Installed rok 9.9.4 to "), "{err:?}");
+        assert!(!err.contains('\x1b'), "{vars:?}: {err:?}");
+    }
+    let piped = |vars: &[(&str, &str)]| {
+        let out = install(vars)
+            .stderr(std::process::Stdio::piped())
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        text(&out.stderr)
+    };
+    let err = piped(&[]);
+    assert!(
+        err.starts_with("   Installed rok 9.9.4 to ") && !err.contains('\x1b'),
+        "{err:?}"
+    );
+    let err = piped(&[("CLICOLOR_FORCE", "1"), ("COLORTERM", "truecolor")]);
+    assert!(
+        err.starts_with("\x1b[1;38;2;56;189;248m   Installed\x1b[0m "),
+        "{err:?}"
+    );
+    let err = piped(&[("CLICOLOR_FORCE", "1"), ("NO_COLOR", "1")]);
+    assert!(!err.contains('\x1b'), "{err:?}");
+    // Errors: the label is there either way.
+    let bad = |vars: &[(&str, &str)]| {
+        let out = install_sh(&root, &root.join("user"), "/bin/sh")
+            .args(["--archive", "missing.tar.gz"])
+            .env("TERM", "xterm")
+            .env_remove("NO_COLOR")
+            .env_remove("COLORTERM")
+            .envs(vars.iter().copied())
+            .output()
+            .unwrap();
+        assert_eq!(out.status.code(), Some(1));
+        text(&out.stderr)
+    };
+    assert!(bad(&[]).starts_with("install.sh: error: "), "{}", bad(&[]));
+    let err = bad(&[("CLICOLOR_FORCE", "1")]);
+    assert!(
+        err.starts_with("install.sh: \x1b[1;91merror:\x1b[0m "),
+        "{err:?}"
+    );
+}
+
 /// `install.sh --archive` takes a release's `.tar.xz` as well; `-q`
 /// prints nothing.
 // spec: §9.10.6
@@ -2729,7 +2953,7 @@ fn update_toolchain() {
         )),
         "{err}"
     );
-    assert_eq!(list(), format!("9.9.1-{host} (default)\n"));
+    assert_eq!(list(), format!("* 9.9.1-{host} (default)\n"));
     assert_eq!(proxy(&["x"]), "rokc 9.9.1: x\n");
     let out = update(&[]);
     assert_eq!(text(&out.stderr), "rok 9.9.1 is up to date\n");
@@ -2755,7 +2979,10 @@ fn update_toolchain() {
              9.9.1-{host} stays installed (`rok toolchain remove 9.9.1-{host}`)\n"
         )
     );
-    assert_eq!(list(), format!("9.9.1-{host}\n9.10.0-{host} (default)\n"));
+    assert_eq!(
+        list(),
+        format!("  9.9.1-{host}\n* 9.10.0-{host} (default)\n")
+    );
     assert_eq!(proxy(&["x"]), "rokc 9.10.0: x\n");
     assert_eq!(read(&zsh), "rokc 9.10.0: completions zsh\n");
 
@@ -2768,7 +2995,10 @@ fn update_toolchain() {
         &update(&[]),
         "rolled back: the default toolchain and the proxies are as they were",
     );
-    assert_eq!(list(), format!("9.9.1-{host}\n9.10.0-{host} (default)\n"));
+    assert_eq!(
+        list(),
+        format!("  9.9.1-{host}\n* 9.10.0-{host} (default)\n")
+    );
     assert_eq!(proxy(&["x"]), "rokc 9.10.0: x\n");
     let leftovers: Vec<_> = fs::read_dir(home.join("bin"))
         .unwrap()
@@ -2801,14 +3031,20 @@ fn update_toolchain() {
         "{err}"
     );
     assert_eq!(read(&zsh), "rokc 9.9.1: completions zsh\n");
-    assert_eq!(list(), format!("9.9.1-{host} (default)\n9.10.0-{host}\n"));
+    assert_eq!(
+        list(),
+        format!("* 9.9.1-{host} (default)\n  9.10.0-{host}\n")
+    );
     assert_eq!(proxy(&["x"]), "rokc 9.9.1: x\n");
     assert_eq!(update(&["9.9.1", "x"]).status.code(), Some(2));
     assert_eq!(update(&["--from", "x"]).status.code(), Some(2));
     // `clean` removes every installed toolchain but the default.
-    assert_eq!(list(), format!("9.9.1-{host} (default)\n9.10.0-{host}\n"));
+    assert_eq!(
+        list(),
+        format!("* 9.9.1-{host} (default)\n  9.10.0-{host}\n")
+    );
     ok(&rok(&home, &root, &["toolchain", "clean"]));
-    assert_eq!(list(), format!("9.9.1-{host} (default)\n"));
+    assert_eq!(list(), format!("* 9.9.1-{host} (default)\n"));
     assert_eq!(proxy(&["x"]), "rokc 9.9.1: x\n");
     // Idempotent: nothing left to remove.
     let out = rok_cmd(&home, &root, &["toolchain", "clean"])

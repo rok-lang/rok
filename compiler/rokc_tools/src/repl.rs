@@ -873,12 +873,15 @@ impl Repl {
         Some(lines.join("\n"))
     }
 
-    /// `:vars`: the bindings as `name: type`, then the named items'
-    /// headers.
+    /// `:vars`: the bindings as `name: type`, types aligned, then the
+    /// named items' headers.
     fn vars(&self) {
-        for b in &self.bindings {
-            println!("{}: {}", b.name, b.shown_ty);
-        }
+        let rows: Vec<(String, String)> = self
+            .bindings
+            .iter()
+            .map(|b| (format!("{}:", b.name), b.shown_ty.clone()))
+            .collect();
+        print!("{}", rokc_core::term::list(&rows, None, ""));
         let named = self
             .state
             .items

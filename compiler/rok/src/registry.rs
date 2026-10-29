@@ -356,7 +356,7 @@ pub fn open(home: &Path, url: &str, offline: bool, quiet: bool) -> Result<Cache,
     let cache = Cache::index(home);
     if !offline {
         if !quiet {
-            eprintln!("    Updating index {url}");
+            rokc_core::term::status("Updating", &format!("index {url}"));
         }
         cache.fetch(url)?;
     } else if !cache.has(url) {

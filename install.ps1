@@ -8,7 +8,8 @@
 #   rok-<version>-<triple>\install.ps1          (from an unpacked archive)
 #
 # Environment: ROK_HOME, ROK_VERSION (default below), ROK_DIST (where
-# releases are downloaded from), ROK_NO_MODIFY_PATH, NO_COLOR. Nothing
+# releases are downloaded from), ROK_NO_MODIFY_PATH, NO_COLOR,
+# CLICOLOR_FORCE. Nothing
 # else is needed: rokc links with its own linker and import libraries (no
 # MSVC or Windows SDK).
 #
@@ -18,8 +19,9 @@
 # alone and says what to add.
 #
 # Output is that of install.sh and `rok toolchain update`: status words
-# right-aligned, green on a console unless NO_COLOR is set. -Quiet prints
-# errors only, -Verbose adds notes (URLs, paths).
+# right-aligned, coloured as rok colours them (spec 9.1.8): on a console
+# that takes escapes or with CLICOLOR_FORCE, never with NO_COLOR or
+# TERM=dumb. -Quiet prints errors only, -Verbose adds notes (URLs, paths).
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '',
     Justification = 'Status lines for a person, colored on a console.')]
 param([string]$Archive, [string]$Version, [switch]$NoModifyPath, [switch]$Quiet, [switch]$Verbose)
@@ -29,31 +31,31 @@ if (-not $Version) { $Version = if ($env:ROK_VERSION) { $env:ROK_VERSION } else 
 $dist = if ($env:ROK_DIST) { $env:ROK_DIST } else { 'https://github.com/rok-lang/rok/releases' }
 $home_ = if ($env:ROK_HOME) { $env:ROK_HOME } else { Join-Path $env:USERPROFILE '.rok' }
 if ($env:ROK_NO_MODIFY_PATH -and $env:ROK_NO_MODIFY_PATH -ne '0') { $NoModifyPath = $true }
-$color = -not $env:NO_COLOR
+$color = if ($env:NO_COLOR) { $false }
+    elseif ($env:CLICOLOR_FORCE -and $env:CLICOLOR_FORCE -ne '0') { $true }
+    elseif ($env:TERM -eq 'dumb') { $false }
+    else { -not [Console]::IsOutputRedirected -and $Host.UI.SupportsVirtualTerminal }
+$e = [char]27
+$sgr = if (-not $color) { @{ Status = ''; Error = ''; Note = ''; Reset = '' } }
+    elseif ($env:COLORTERM -in 'truecolor', '24bit') {
+        @{ Status = "${e}[1;38;2;56;189;248m"; Error = "${e}[1;38;2;255;95;95m"; Note = "${e}[38;2;56;189;248m"; Reset = "${e}[0m" }
+    } elseif ($env:TERM -like '*256color*') {
+        @{ Status = "${e}[1;38;5;81m"; Error = "${e}[1;38;5;203m"; Note = "${e}[38;5;81m"; Reset = "${e}[0m" }
+    } else {
+        @{ Status = "${e}[1;96m"; Error = "${e}[1;91m"; Note = "${e}[96m"; Reset = "${e}[0m" }
+    }
 $quiet_ = [bool]$Quiet
 $verbose_ = [bool]$Verbose
 
 # A status line: $Word right-aligned, then $Text.
 function Status([string]$Word, [string]$Text) {
-    if ($quiet_) { return }
-    if ($color) {
-        Write-Host ('{0,12}' -f $Word) -ForegroundColor Green -NoNewline
-        Write-Host " $Text"
-    } else {
-        Write-Host ('{0,12} {1}' -f $Word, $Text)
-    }
+    if (-not $quiet_) { Write-Host ('{0}{1,12}{2} {3}' -f $sgr.Status, $Word, $sgr.Reset, $Text) }
 }
-function Note([string]$Text) { if ($verbose_) { Write-Host "        note: $Text" } }
+function Note([string]$Text) {
+    if ($verbose_) { Write-Host ('{0}{1,12}:{2} {3}' -f $sgr.Note, 'note', $sgr.Reset, $Text) }
+}
 function Info([string]$Text) { if (-not $quiet_) { Write-Host $Text } }
-function Err([string]$Text) {
-    if ($color) {
-        Write-Host 'install.ps1: ' -NoNewline
-        Write-Host 'error' -ForegroundColor Red -NoNewline
-        Write-Host ": $Text"
-    } else {
-        Write-Host "install.ps1: error: $Text"
-    }
-}
+function Err([string]$Text) { Write-Host ('install.ps1: {0}error:{1} {2}' -f $sgr.Error, $sgr.Reset, $Text) }
 
 function HostTriple {
     switch ($env:PROCESSOR_ARCHITECTURE) {

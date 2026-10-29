@@ -17,6 +17,7 @@ use rokc_interface::{
 use rokc_tools::lint::Level;
 
 use rokc_core::cli::ROKC_USAGE as USAGE;
+use rokc_core::term::{self, ColorChoice, Role, Stream};
 
 // One flag per CLI switch; an enum per group would only add plumbing.
 #[allow(clippy::struct_excessive_bools)]
@@ -50,7 +51,7 @@ struct Args {
     verbose: u8,
     quiet: bool,
     json: bool,
-    color: Option<bool>,
+    color: ColorChoice,
     check: bool,
     check_library: bool,
     /// `doc --std`: document the standard library tiers too.
@@ -121,7 +122,7 @@ fn usage_error(msg: &str) -> ! {
 }
 
 fn fail(msg: &str) -> ! {
-    eprintln!("rokc: error: {msg}");
+    eprintln!("rokc: {} {msg}", term::label(Stream::Stderr, Role::Error));
     process::exit(1);
 }
 
@@ -147,14 +148,12 @@ fn parse_args(raw: Vec<String>) -> Args {
             "-v" | "--verbose" => a.verbose += 1,
             "-vv" => a.verbose += 2,
             "-q" | "--quiet" => a.quiet = true,
-            "--no-color" => a.color = Some(false),
+            "--no-color" => a.color = ColorChoice::Never,
             "--color" => {
-                a.color = match value(&name, inline, &mut it).as_str() {
-                    "auto" => None,
-                    "always" => Some(true),
-                    "never" => Some(false),
-                    v => usage_error(&format!("`--color` takes auto|always|never, not `{v}`")),
-                };
+                let v = value(&name, inline, &mut it);
+                a.color = ColorChoice::parse(&v).unwrap_or_else(|| {
+                    usage_error(&format!("`--color` takes auto|always|never, not `{v}`"))
+                });
             }
             "--cwd" => {
                 let dir = value(&name, inline, &mut it);
@@ -428,10 +427,8 @@ fn main() {
 
 fn real_main() {
     let a = parse_args(std::env::args().skip(1).collect());
-    let color = a.color.unwrap_or_else(|| {
-        std::io::stderr().is_terminal() && std::env::var_os("NO_COLOR").is_none()
-    });
-    rokc_interface::set_report_style(a.json, color);
+    term::set_choice(a.color);
+    rokc_interface::set_report_depth(a.json, term::depth(Stream::Stderr));
     match a.print.as_deref() {
         None | Some("cfg") => {}
         Some("target-list") => {
@@ -508,7 +505,7 @@ fn real_main() {
             let pkg = rokc_interface::discover(Path::new(".")).ok();
             // The server starts without the dependencies it cannot build.
             if let Err(e) = prebuild(&mut a, pkg.as_ref()) {
-                eprintln!("rokc: warning: {e}");
+                eprintln!("rokc: {} {e}", term::label(Stream::Stderr, Role::Warning));
                 a.externs.clear();
             }
             let io = (
@@ -559,7 +556,7 @@ fn real_main() {
             let pkg = discover_arg(&a);
             let target = a.target_dir.clone().unwrap_or_else(|| pkg.target_dir());
             match std::fs::remove_dir_all(&target) {
-                Ok(()) if !a.quiet => eprintln!("     Removed {}", target.display()),
+                Ok(()) if !a.quiet => term::status("Removed", &target.display().to_string()),
                 Ok(()) => {}
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
                 Err(e) => fail(&format!("cannot remove {}: {e}", target.display())),
@@ -590,8 +587,12 @@ fn real_main() {
         "version" => {
             println!("rokc {}", VERSION);
             if a.verbose > 0 {
-                println!("host: {}", env!("ROK_HOST"));
-                println!("llvm: {}", rokc_interface::LLVM_VERSION.unwrap_or("none"));
+                let rows = [
+                    ("host:", env!("ROK_HOST")),
+                    ("llvm:", rokc_interface::LLVM_VERSION.unwrap_or("none")),
+                ]
+                .map(|(k, v)| (k.to_owned(), v.to_owned()));
+                print!("{}", term::list(&rows, None, ""));
             }
         }
         "help" => match a.positional.first() {
@@ -610,7 +611,9 @@ fn with_defaults(mut a: Args) -> Args {
         match sys.libs {
             Ok(roots) => a.bootstrap = roots,
             // The language server still starts.
-            Err(e) if a.cmd == "lsp" => eprintln!("rokc: warning: {e}"),
+            Err(e) if a.cmd == "lsp" => {
+                eprintln!("rokc: {} {e}", term::label(Stream::Stderr, Role::Warning));
+            }
             Err(e) => fail(&e),
         }
     }
@@ -691,8 +694,9 @@ fn with_defaults(mut a: Args) -> Args {
         && rokc_interface::native_backend(&a.opts)
     {
         eprintln!(
-            "rokc: warning: -C target-cpu / -C target-feature apply to the LLVM backend; the \
-             native backend (-O0) builds for the target's baseline CPU"
+            "rokc: {} -C target-cpu / -C target-feature apply to the LLVM backend; the native \
+             backend (-O0) builds for the target's baseline CPU",
+            term::label(Stream::Stderr, Role::Warning)
         );
     }
     a
@@ -739,8 +743,8 @@ fn prebuild(a: &mut Args, pkg: Option<&Package>) -> Result<PathBuf, String> {
         });
         if a.verbose > 0 && !a.quiet {
             match &a.std_prebuilt {
-                Some(p) => eprintln!("         Std prebuilt ({})", p.display()),
-                None => eprintln!("         Std from source"),
+                Some(p) => term::status("Std", &format!("prebuilt ({})", p.display())),
+                None => term::status("Std", "from source"),
             }
         }
     }
@@ -813,7 +817,7 @@ fn reused(a: &Args, result: &CompileResult) {
 
 fn progress(a: &Args, verb: &str, pkg: &Package) {
     if !a.quiet {
-        eprintln!("{verb:>12} {} ({})", pkg.name, pkg.dir.display());
+        term::status(verb, &format!("{} ({})", pkg.name, pkg.dir.display()));
     }
 }
 
@@ -928,7 +932,7 @@ fn build_lib(a: &Args, pkg: &Package, out: Option<PathBuf>) -> PathBuf {
     });
     build_fresh(a, pkg, fingerprint(a, pkg, &out), |a, result| {
         if !a.quiet {
-            eprintln!("    Building {}", out.display());
+            term::status("Building", &out.display().to_string());
         }
         let opts = unit_opts(a, pkg, &unit_name(pkg));
         let counts = fail_on(result.archive(&opts, &out), &result.source_map);
@@ -946,7 +950,10 @@ fn stage(a: &Args, what: &str, since: Instant) {
 
 fn finished(a: &Args, started: Instant) {
     if !a.quiet {
-        eprintln!("    Finished in {:.2}s", started.elapsed().as_secs_f64());
+        term::status(
+            "Finished",
+            &format!("in {:.2}s", started.elapsed().as_secs_f64()),
+        );
     }
 }
 
@@ -1026,7 +1033,7 @@ fn cmd_build(mut a: Args) {
             }
             stage(&a, &format!("emit {}", kind.extension()), t);
             if !a.quiet {
-                eprintln!("       Wrote {}", out.display());
+                term::status("Wrote", &out.display().to_string());
             }
         }
         finished(&a, started);
@@ -1038,7 +1045,7 @@ fn cmd_build(mut a: Args) {
     });
     build_fresh(&a, &pkg, fingerprint(&a, &pkg, &out), |a, result| {
         if !a.quiet {
-            eprintln!("    Building {}", out.display());
+            term::status("Building", &out.display().to_string());
         }
         link_exe(a, &pkg, result, &out, &pkg.name);
     });
@@ -1049,7 +1056,7 @@ fn build_fresh(a: &Args, pkg: &Package, fp: Fingerprint, link: impl FnOnce(&Args
     if let Some(warnings) = fp.fresh() {
         print_rendered(&warnings);
         if !a.quiet {
-            eprintln!("       Fresh {} ({})", pkg.name, pkg.dir.display());
+            term::status("Fresh", &format!("{} ({})", pkg.name, pkg.dir.display()));
         }
         return;
     }
@@ -1088,14 +1095,13 @@ fn report_units(a: &Args, counts: Option<rokc_interface::UnitCounts>) {
     let cached = c.cached.map_or_else(String::new, |k| {
         format!(" ({k} of {all} optimized objects cached)")
     });
-    eprintln!(
-        "       Units {} reused, {} compiled{cached}",
-        c.reused,
-        c.compiled.len()
+    term::status(
+        "Units",
+        &format!("{} reused, {} compiled{cached}", c.reused, c.compiled.len()),
     );
     if a.verbose > 1 {
         for u in &c.compiled {
-            eprintln!("    Compiled unit {u}");
+            term::status("Compiled", &format!("unit {u}"));
         }
     }
 }
@@ -1285,11 +1291,14 @@ fn cmd_check(mut a: Args, codegen: bool) {
         warnings += diags.len() - e;
     }
     if !a.quiet && !a.json {
-        eprintln!(
-            "     Checked {}: {errors} error{}, {warnings} warning{}",
-            pkg.name,
-            if errors == 1 { "" } else { "s" },
-            if warnings == 1 { "" } else { "s" },
+        term::status(
+            "Checked",
+            &format!(
+                "{}: {errors} error{}, {warnings} warning{}",
+                pkg.name,
+                if errors == 1 { "" } else { "s" },
+                if warnings == 1 { "" } else { "s" },
+            ),
         );
     }
     finished(&a, started);
@@ -1375,7 +1384,7 @@ fn cmd_run(mut a: Args) {
         }
     };
     if !a.quiet {
-        eprintln!("     Running `{}`", exe.display());
+        term::status("Running", &format!("`{}`", exe.display()));
     }
     let status = Command::new(&exe)
         .args(&a.run_args)
@@ -1469,9 +1478,13 @@ fn write_harness_manifest(
     let Some(path) = a.emit_harness.as_ref() else {
         if !a.quiet {
             for (exe, _) in harnesses {
-                eprintln!("       Built {}", exe.display());
+                term::status("Built", &exe.display().to_string());
             }
-            eprintln!("note: run the harness with `rok {}`", a.cmd);
+            eprintln!(
+                "{} run the harness with `rok {}`",
+                term::label(Stream::Stderr, Role::Note),
+                a.cmd
+            );
         }
         return;
     };
@@ -1547,7 +1560,7 @@ fn cmd_doc(mut a: Args) {
     drop(tmp);
     finished(&a, started);
     if !a.quiet {
-        eprintln!("   Generated {}", index.display());
+        term::status("Generated", &index.display().to_string());
     }
 }
 
@@ -1607,7 +1620,7 @@ fn cmd_fmt(a: &Args) {
                 fail(&format!("cannot write {}: {e}", f.display()));
             }
             if a.verbose > 0 {
-                eprintln!("   Formatted {}", f.display());
+                term::status("Formatted", &f.display().to_string());
             }
         }
     }
@@ -1667,14 +1680,20 @@ fn cmd_profdata(a: &Args) {
     let warnings = rokc_interface::profdata_merge(&refs, &out)
         .unwrap_or_else(|e| fail(&format!("profdata merge: {}", e.trim_end())));
     for w in warnings.lines() {
-        eprintln!("rokc: warning: profdata merge: {w}");
+        eprintln!(
+            "rokc: {} profdata merge: {w}",
+            term::label(Stream::Stderr, Role::Warning)
+        );
     }
     if !a.quiet {
-        eprintln!(
-            "       Wrote {} ({} input{})",
-            out.display(),
-            files.len(),
-            if files.len() == 1 { "" } else { "s" }
+        term::status(
+            "Wrote",
+            &format!(
+                "{} ({} input{})",
+                out.display(),
+                files.len(),
+                if files.len() == 1 { "" } else { "s" }
+            ),
         );
     }
 }

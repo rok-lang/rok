@@ -426,7 +426,7 @@ pub fn unpack(
         ));
     }
     if !quiet && remote(&loc) {
-        eprintln!(" Downloading {} {} ({triple})", e.name, e.vers);
+        rokc_core::term::status("Downloading", &format!("{} {} ({triple})", e.name, e.vers));
     }
     let tmp = scratch(home, &a.sha256)?;
     let _ = std::fs::remove_dir_all(&tmp);

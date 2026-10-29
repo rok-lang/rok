@@ -131,7 +131,7 @@ impl DepBuild<'_> {
             } else {
                 dir
             };
-            eprintln!("   Compiling {name} ({})", dir.display());
+            rokc_core::term::status("Compiling", &format!("{name} ({})", dir.display()));
         }
         let mut s = Session::new();
         for b in self.bootstrap {

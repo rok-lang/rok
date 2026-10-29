@@ -15,7 +15,10 @@ use rokc_target::{Libc, ObjectFormat, TargetSpec};
 /// freshly built runtime.
 fn rokc(env: Option<&Env>, cwd: &Path, args: &[&str]) -> Output {
     let mut cmd = Command::new(ROKC);
-    cmd.current_dir(cwd).env("ROK_HOME", workspace()).args(args);
+    cmd.current_dir(cwd)
+        .env("ROK_HOME", workspace())
+        .env_remove("CLICOLOR_FORCE")
+        .args(args);
     if let Some(env) = env {
         cmd.arg("--rokr").arg(&env.rokr);
     }
@@ -1521,10 +1524,49 @@ fn json_and_colored_diagnostics() {
     assert!(line.contains("\"file_name\":\"bad.rok\""), "{line}");
     assert!(line.contains("\"line_start\":1"), "{line}");
 
-    let out = rokc(Some(&env), &dir, &["--color=always", "build", "bad.rok"]);
-    assert!(text(&out.stderr).contains("\x1b[1;31merror[E100]\x1b[0m"));
-    let out = rokc(Some(&env), &dir, &["--color=never", "build", "bad.rok"]);
-    assert!(!text(&out.stderr).contains('\x1b'));
+    // Forced colour at each depth; none when piped, with NO_COLOR, with
+    // TERM=dumb or with --color=never.
+    let stderr = |vars: &[(&str, &str)], args: &[&str]| {
+        let mut c = Command::new(ROKC);
+        c.current_dir(&dir)
+            .env("ROK_HOME", workspace())
+            .env_remove("NO_COLOR")
+            .env_remove("CLICOLOR_FORCE")
+            .env_remove("COLORTERM")
+            .env("TERM", "xterm")
+            .envs(vars.iter().copied())
+            .args(args)
+            .args(["build", "bad.rok", "--rokr"])
+            .arg(&env.rokr);
+        text(&c.output().unwrap().stderr)
+    };
+    let always = ["--color=always"];
+    let err = stderr(&[], &always);
+    assert!(err.contains("\x1b[1;91merror[E100]\x1b[0m"), "{err:?}");
+    assert!(err.contains("\x1b[1;96m-->\x1b[0m"), "{err:?}");
+    let err = stderr(&[("TERM", "xterm-256color")], &always);
+    assert!(
+        err.contains("\x1b[1;38;5;203merror[E100]\x1b[0m"),
+        "{err:?}"
+    );
+    let err = stderr(&[("COLORTERM", "truecolor")], &always);
+    assert!(
+        err.contains("\x1b[1;38;2;255;95;95merror[E100]\x1b[0m"),
+        "{err:?}"
+    );
+    let err = stderr(&[("CLICOLOR_FORCE", "1")], &[]);
+    assert!(err.contains("\x1b[1;91merror[E100]\x1b[0m"), "{err:?}");
+    for (vars, args) in [
+        (&[][..], &[][..]),
+        (&[("NO_COLOR", "1"), ("CLICOLOR_FORCE", "1")][..], &[][..]),
+        (&[("TERM", "dumb")][..], &[][..]),
+        (&[("CLICOLOR_FORCE", "1")][..], &["--color=never"][..]),
+        (&[("CLICOLOR_FORCE", "1")][..], &["--no-color"][..]),
+    ] {
+        let err = stderr(vars, args);
+        assert!(err.contains("error[E100]"), "{err:?}");
+        assert!(!err.contains('\x1b'), "{vars:?} {args:?}: {err:?}");
+    }
 }
 
 // spec: §9.1.2 §9.1.11 / std §3.9.4

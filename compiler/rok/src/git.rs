@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use rokc_core::hash::fnv;
+use rokc_core::term::{self, Role, Stream};
 
 use crate::manifest::GitRef;
 
@@ -214,7 +215,8 @@ impl Cache {
                 return Ok((dir, tree));
             }
             eprintln!(
-                "rok: warning: {} was modified; checking it out again",
+                "rok: {} {} was modified; checking it out again",
+                term::label(Stream::Stderr, Role::Warning),
                 dir.display()
             );
             std::fs::remove_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;

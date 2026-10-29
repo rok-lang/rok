@@ -220,6 +220,8 @@ fn on_tty(args: &[&str], home: &std::path::Path, steps: &[&[u8]]) -> String {
         .env("ROK_HOME", home)
         .env("TERM", "xterm")
         .env_remove("NO_COLOR")
+        .env_remove("CLICOLOR_FORCE")
+        .env_remove("COLORTERM")
         .stdin(slave.try_clone().unwrap())
         .stdout(slave.try_clone().unwrap())
         .stderr(slave)
@@ -303,7 +305,7 @@ fn repl_edits_lines_on_a_terminal() {
     assert_eq!((shown("8"), shown("2")), (2, 2), "{out:?}");
     // The pasted cell is shown as its lines, coloured.
     assert!(out.contains("\n... }\x1b[K"), "{out:?}");
-    assert!(out.contains("\x1b[35mfn\x1b[0m"), "{out:?}");
+    assert!(out.contains("\x1b[95mfn\x1b[0m"), "{out:?}");
     let history = std::fs::read_to_string(home.join("repl_history")).unwrap();
     assert_eq!(
         history,
@@ -1567,8 +1569,8 @@ loaded
 42
 84
 base: i32
-it: i32
-xs: str
+it:   i32
+xs:   str
 fn twice(x: i32) -> i32
 fn add(a: i32, b: i32) -> i32
 -O0
