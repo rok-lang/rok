@@ -1057,6 +1057,20 @@ fn rokc_lsp_answers_over_stdio() {
     assert_eq!(out.status.code(), Some(1));
 }
 
+/// Input that ends before `initialize` (the server started by hand) is
+/// named on stderr, not a bare exit 1.
+// spec: §9.9.13
+#[test]
+fn rokls_eof_before_initialize_says_so() {
+    let out = piped(ROKC, &["lsp"], "");
+    assert_eq!(out.status.code(), Some(1));
+    let err = text(&out.stderr);
+    assert!(
+        err.contains("input ended before the editor sent `initialize`"),
+        "{err}"
+    );
+}
+
 /// The server builds its dependencies first and answers from their ROKHIR:
 /// hover shows a dependency function's doc comment, definition goes to
 /// its source.

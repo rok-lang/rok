@@ -113,6 +113,27 @@ pub fn isolate<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> Res
     r
 }
 
+/// `(module path, name, is a module)` of public items.
+pub type Names = Vec<(String, String, bool)>;
+
+/// The name of a `pub` item that is not `#[doc(hidden)]`.
+fn shown(item: &Item) -> Option<&str> {
+    use rokc_core::Visibility::Pub;
+    let (vis, attrs, name) = match item {
+        Item::Fn(x) => (x.vis, &x.attrs, &x.name),
+        Item::Struct(x) => (x.vis, &x.attrs, &x.name),
+        Item::Enum(x) => (x.vis, &x.attrs, &x.name),
+        Item::Union(x) => (x.vis, &x.attrs, &x.name),
+        Item::Trait(x) => (x.vis, &x.attrs, &x.name),
+        Item::Const(x) => (x.vis, &x.attrs, &x.name),
+        Item::Static(x) => (x.vis, &x.attrs, &x.name),
+        Item::TypeAlias(x) => (x.vis, &x.attrs, &x.name),
+        Item::Mod(x) => (x.vis, &x.attrs, &x.name),
+        _ => return None,
+    };
+    (vis == Pub && !doc_hidden(attrs)).then_some(name.as_str())
+}
+
 /// One check of a buffer.
 pub struct Analysis {
     pub diags: Vec<RokDiagnostic>,
@@ -281,38 +302,6 @@ impl Analysis {
     /// core library's (implicit `use rok::core::**;`) and those its `use`
     /// items bring in. Sorted, without duplicates.
     pub fn scope_names(&self) -> Vec<String> {
-        /// `(module path, name, is a module)` of each public item.
-        type Names = Vec<(String, String, bool)>;
-        fn shown(item: &Item) -> Option<&str> {
-            use rokc_core::Visibility::Pub;
-            let (vis, attrs, name) = match item {
-                Item::Fn(x) => (x.vis, &x.attrs, &x.name),
-                Item::Struct(x) => (x.vis, &x.attrs, &x.name),
-                Item::Enum(x) => (x.vis, &x.attrs, &x.name),
-                Item::Union(x) => (x.vis, &x.attrs, &x.name),
-                Item::Trait(x) => (x.vis, &x.attrs, &x.name),
-                Item::Const(x) => (x.vis, &x.attrs, &x.name),
-                Item::Static(x) => (x.vis, &x.attrs, &x.name),
-                Item::TypeAlias(x) => (x.vis, &x.attrs, &x.name),
-                Item::Mod(x) => (x.vis, &x.attrs, &x.name),
-                _ => return None,
-            };
-            (vis == Pub && !doc_hidden(attrs)).then_some(name.as_str())
-        }
-        fn walk(items: &[Item], path: &str, out: &mut Names) {
-            for item in items {
-                let Some(name) = shown(item) else { continue };
-                out.push((
-                    path.to_owned(),
-                    name.to_owned(),
-                    matches!(item, Item::Mod(_)),
-                ));
-                if let Item::Mod(m) = item {
-                    let sub = m.items.as_deref().unwrap_or_default();
-                    walk(sub, &format!("{path}::{name}"), out);
-                }
-            }
-        }
         // `**` brings in the items of every module below, but only the
         // modules right below by name.
         fn glob(names: &Names, path: &str, deep: bool, out: &mut Vec<String>) {
@@ -342,6 +331,39 @@ impl Analysis {
                     for t in ts {
                         uses(names, t, &path, out);
                     }
+                }
+            }
+        }
+        let names = self.public_items();
+        let mut out = Vec::new();
+        glob(&names, "rok::core", true, &mut out);
+        let root = self.sources.iter().filter(|f| f.package.is_empty());
+        if let Some(f) = root.min_by_key(|f| f.module.len()) {
+            for item in &f.items {
+                if let Item::Use(u) = item {
+                    uses(&names, &u.tree, "", &mut out);
+                }
+            }
+        }
+        out.sort();
+        out.dedup();
+        out
+    }
+
+    /// `(module path, name, is a module)` of each public item of the
+    /// library and the packages.
+    pub fn public_items(&self) -> Names {
+        fn walk(items: &[Item], path: &str, out: &mut Names) {
+            for item in items {
+                let Some(name) = shown(item) else { continue };
+                out.push((
+                    path.to_owned(),
+                    name.to_owned(),
+                    matches!(item, Item::Mod(_)),
+                ));
+                if let Item::Mod(m) = item {
+                    let sub = m.items.as_deref().unwrap_or_default();
+                    walk(sub, &format!("{path}::{name}"), out);
                 }
             }
         }
@@ -378,19 +400,7 @@ impl Analysis {
         for f in &self.sources {
             walk(&f.items, &f.module.join("::"), &mut names);
         }
-        let mut out = Vec::new();
-        glob(&names, "rok::core", true, &mut out);
-        let root = self.sources.iter().filter(|f| f.package.is_empty());
-        if let Some(f) = root.min_by_key(|f| f.module.len()) {
-            for item in &f.items {
-                if let Item::Use(u) = item {
-                    uses(&names, &u.tree, "", &mut out);
-                }
-            }
-        }
-        out.sort();
-        out.dedup();
-        out
+        names
     }
 
     /// The path a diagnostic belongs to (explicit, else its primary span's).
@@ -523,7 +533,10 @@ pub fn signature(hir: &HirModule, f: &HirFunction) -> String {
 /// The name a user writes for a HIR function: the last `::` segment, the
 /// method name of an `<Type>__method` (a dependency's
 /// `<module>::<Type>.method[__by_Trait]`), a nested fn's own name.
+///
+/// A generic instance (`<name>__mono__<args>`) goes by its function's.
 pub fn short_name(name: &str) -> &str {
+    let name = name.split_once("__mono__").map_or(name, |(f, _)| f);
     let last = name.rsplit("::").next().unwrap_or(name);
     let mut segs = last.rsplit('/');
     let mut last = segs.next().unwrap_or(last);

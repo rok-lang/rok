@@ -2,15 +2,15 @@
 //! framing). Full-text sync; every query runs on the last check of the
 //! buffer (`analysis::check`: front end and lints, no codegen).
 
-use std::collections::{HashMap, HashSet};
-use std::io::{BufRead, Write};
+use std::collections::HashMap;
+use std::io::{BufRead, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
 use rokc_ast::{Expr, ExprKind, ImplItem, Item, TraitItem};
 use rokc_diagnostic::{RokDiagnostic, Span};
 use rokc_hir::walk::{AstVisitor, walk_item, walk_stmt};
-use rokc_hir::{HirExprKind, HirModule, HirTy};
+use rokc_hir::{HirExprKind, HirTy};
 use rokc_interface::Session;
 
 use rokc_diagnostic::Json;
@@ -35,6 +35,8 @@ struct Server<W> {
     externs: Vec<(String, PathBuf)>,
     levels: Vec<(Level, String)>,
     docs: HashMap<String, Doc>,
+    /// `initialize` came.
+    initialized: bool,
     shutdown: bool,
 }
 
@@ -47,6 +49,12 @@ pub fn serve(
     externs: Vec<(String, PathBuf)>,
     levels: Vec<(Level, String)>,
 ) -> i32 {
+    if std::io::stdin().is_terminal() {
+        eprintln!(
+            "rokls speaks the language server protocol on stdin; start it from an editor \
+             (see `rok help lsp`)"
+        );
+    }
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
         let mut input = input;
@@ -62,6 +70,7 @@ pub fn serve(
         externs,
         levels,
         docs: HashMap::new(),
+        initialized: false,
         shutdown: false,
     };
     while let Ok(first) = rx.recv() {
@@ -82,6 +91,10 @@ pub fn serve(
         for uri in dirty {
             server.refresh(&uri);
         }
+    }
+    if !server.initialized {
+        eprintln!("rokls: input ended before the editor sent `initialize`");
+        return 1;
     }
     i32::from(!server.shutdown)
 }
@@ -141,6 +154,7 @@ impl<W: Write> Server<W> {
             .as_str()
             .unwrap_or("")
             .to_owned();
+        self.initialized |= method == "initialize";
         let result = match method {
             "initialize" => Json::obj([
                 (
@@ -482,11 +496,13 @@ impl<W: Write> Server<W> {
             }
             "textDocument/documentSymbol" => {
                 let program = parse_doc(text, &key);
+                let (toks, _) = rokc_lexer::Lexer::new(text, key).lex_all();
+                let shape = Shape { text, toks };
                 Some(Json::Arr(
                     program
                         .items
                         .iter()
-                        .filter_map(|i| symbol(i, text))
+                        .filter_map(|i| shape.symbol(i))
                         .collect(),
                 ))
             }
@@ -507,6 +523,12 @@ impl<W: Write> Server<W> {
                 if let Some(m) = good.and_then(|a| member_at(a, &key, text, ident, start)) {
                     let (file, def_text) = good?.file(m.def_span())?;
                     let (from, to) = m.name_range(def_text)?;
+                    return Some(location_at(&path_uri(Path::new(file)), def_text, from, to));
+                }
+                if let Some(m) = good.and_then(|a| indexed_member(a, &key, text, ident, start)) {
+                    let (file, def_text) = good?.file(m.span)?;
+                    let (from, to) = name_range(def_text, m.span.start as usize, ident)
+                        .unwrap_or((m.span.start as usize, m.span.end as usize));
                     return Some(location_at(&path_uri(Path::new(file)), def_text, from, to));
                 }
                 // A local: resolve through the scopes of the buffer's AST.
@@ -533,7 +555,8 @@ impl<W: Write> Server<W> {
             }
             "textDocument/completion" => {
                 let compile = |t: &str| self.compile(&path, t);
-                let (_, found) = complete(text, &key, off, compile, doc.good.as_ref());
+                let good = doc.good.as_ref();
+                let (_, found) = crate::complete::complete(text, &key, off, compile, good, &[]);
                 Some(Json::Arr(
                     found
                         .into_iter()
@@ -548,153 +571,6 @@ impl<W: Write> Server<W> {
                 ))
             }
             _ => None,
-        }
-    }
-}
-
-/// A completion candidate: label, LSP `CompletionItemKind`, detail.
-pub(crate) type Candidate = (String, u32, String);
-
-/// Completion at `off`: after `recv.` its fields and methods, after
-/// `a::b::` the items under it. `compile` checks the edited `text`; `good`
-/// is the last type-checked compile. Returns the word start and candidates.
-pub(crate) fn complete(
-    text: &str,
-    key: &str,
-    off: usize,
-    compile: impl Fn(&str) -> Analysis,
-    good: Option<&Analysis>,
-) -> (usize, Vec<Candidate>) {
-    let line_start = text[..off].rfind('\n').map_or(0, |i| i + 1);
-    let before = &text[line_start..off];
-    let head = before.trim_end_matches(is_ident_char);
-    let partial = &before[head.len()..];
-    let mut out: Vec<Candidate> = Vec::new();
-    let mut seen = std::collections::HashSet::new();
-    let mut push = |label: &str, kind: u32, detail: String| {
-        if label.starts_with(partial) && seen.insert(label.to_owned()) {
-            out.push((label.to_owned(), kind, detail));
-        }
-    };
-    if head.ends_with('.') && !head.ends_with("..") {
-        // Type the receiver: recompile without `.partial` and take
-        // the outermost expression starting where the receiver does.
-        let dot = line_start + head.len() - 1;
-        let start = receiver_start(text, dot);
-        // At a line end the receiver ends a statement: close it.
-        let rest = &text[off..];
-        let at_end = rest.split('\n').next().is_some_and(|l| l.trim().is_empty());
-        let edited = format!("{}{}{rest}", &text[..dot], if at_end { ";" } else { "" });
-        let fresh = compile(&edited);
-        let starts = |s: Span| s.start as usize == start;
-        let found = fresh
-            .find_expr(key, starts, true)
-            .map(|e| (&fresh, e.ty.clone()))
-            .or_else(|| {
-                let a = good?;
-                Some((a, a.find_expr(key, starts, true)?.ty.clone()))
-            });
-        if let Some((a, ty)) = found {
-            let hir = a.hir.as_ref().expect("find_expr needs HIR");
-            let hidden = a.hidden_spans();
-            if let HirTy::Struct(id) = &ty {
-                if let Some(s) = hir.structs.iter().find(|s| s.id == *id) {
-                    for f in &s.fields {
-                        push(&f.name, 5, ty_name(hir, &f.ty));
-                    }
-                }
-            }
-            for f in &hir.functions {
-                if f.params
-                    .first()
-                    .is_some_and(|p| p.name == "self" && p.ty == ty)
-                    && !hidden.contains(&f.span)
-                {
-                    push(short_name(&f.name), 2, signature(hir, f));
-                }
-            }
-        }
-    } else if let Some(prefix) = head.strip_suffix("::") {
-        let start = prefix
-            .rfind(|c: char| !(is_ident_char(c) || c == ':'))
-            .map_or(0, |i| i + 1);
-        let segs: Vec<&str> = prefix[start..].split("::").collect();
-        // Item names only: the last good compile has them (the
-        // buffer with a dangling `a::` does not compile).
-        if let Some(a) = good {
-            if let Some(hir) = &a.hir {
-                path_completions(hir, &a.hidden_spans(), &segs, &mut push);
-            }
-        }
-    }
-    (off - partial.len(), out)
-}
-
-/// `a::b::` → the next segments of every item path under it, plus the
-/// associated functions / variants of a type named by the path. Items
-/// at a `hidden` span (`#[doc(hidden)]`) are left out.
-fn path_completions(
-    hir: &HirModule,
-    hidden: &HashSet<Span>,
-    segs: &[&str],
-    push: &mut impl FnMut(&str, u32, String),
-) {
-    let n = segs.len();
-    let shown = |span: &Span| !hidden.contains(span);
-    let mut names: Vec<(&str, u32)> = Vec::new();
-    names.extend(
-        hir.functions
-            .iter()
-            .filter(|f| !f.name.contains("__") && !f.name.contains('.') && shown(&f.span))
-            .map(|f| (f.name.as_str(), 3)),
-    );
-    names.extend(
-        hir.structs
-            .iter()
-            .filter(|s| shown(&s.span))
-            .map(|s| (s.name.as_str(), 22)),
-    );
-    names.extend(
-        hir.enums
-            .iter()
-            .filter(|e| shown(&e.span))
-            .map(|e| (e.name.as_str(), 13)),
-    );
-    for (name, kind) in names {
-        let name = name.split("__").next().unwrap_or(name);
-        let parts: Vec<&str> = name.split("::").collect();
-        if parts.len() > n && parts[..n] == *segs {
-            let more = parts.len() > n + 1;
-            push(parts[n], if more { 9 } else { kind }, name.to_owned());
-        }
-    }
-    // `Type::` - its impl functions are named `<key>__<method>`.
-    let last = segs[n - 1];
-    let mut keys = vec![last.to_owned()];
-    for s in &hir.structs {
-        if short_name(&s.name) == last || s.name.rsplit("::").next() == Some(last) {
-            keys.push(format!("Struct{}", s.id.0));
-        }
-    }
-    for e in &hir.enums {
-        if e.name.rsplit("::").next() == Some(last) {
-            keys.push(format!("Enum{}", e.id.0));
-            for v in &e.variants {
-                push(&v.name, 20, e.name.clone());
-            }
-        }
-    }
-    for f in hir.functions.iter().filter(|f| shown(&f.span)) {
-        if let Some((key, method)) = f.name.split_once("__") {
-            if keys.iter().any(|k| k == key) {
-                push(method, 3, signature(hir, f));
-            }
-        }
-        // A dependency's method: `<module>::<Type>.<method>`.
-        if let Some((ty, _)) = f.name.rsplit("::").next().and_then(|l| l.split_once('.')) {
-            if ty == last {
-                push(short_name(&f.name), 3, signature(hir, f));
-            }
         }
     }
 }
@@ -729,7 +605,16 @@ pub(crate) fn hover(a: &Analysis, key: &str, text: &str, off: usize) -> Option<S
                     format!("{code}\n\n{doc}")
                 });
             }
-            None => {}
+            None => {
+                if let Some(m) = indexed_member(a, key, text, name, start) {
+                    let code = fenced(m.sig);
+                    return Some(if m.doc.is_empty() {
+                        code
+                    } else {
+                        format!("{code}\n\n{}", m.doc)
+                    });
+                }
+            }
         }
     }
     // Offsets into an older compile of an edited buffer point elsewhere.
@@ -824,16 +709,59 @@ fn definition(a: &Analysis, key: &str, ident: &str, off: usize) -> Option<Span> 
 
 /// Scope walk of the buffer's AST: the binding a one-segment path at
 /// `off` refers to.
-struct Locals {
+pub(crate) struct Locals {
     off: usize,
     scopes: Vec<Vec<(String, Span)>>,
     found: Option<Span>,
     /// Every binding: name and declaring span.
     binds: Vec<(String, Span)>,
+    /// The names in scope at the innermost expression around `off`.
+    around: Vec<String>,
+    /// The names in scope at the first construct after `off`.
+    after: Option<Vec<String>>,
+}
+
+impl Locals {
+    fn in_scope(&self) -> Vec<String> {
+        self.scopes
+            .iter()
+            .flatten()
+            .map(|(n, _)| n.clone())
+            .collect()
+    }
+
+    /// A construct at `span`: snapshot the scope the first time one
+    /// starts past `off`.
+    fn reach(&mut self, span: Span) {
+        if self.after.is_none() && span.start as usize >= self.off {
+            self.after = Some(self.in_scope());
+        }
+    }
+
+    /// The locals in scope at `off` (a statement the parser dropped
+    /// still sees what precedes it).
+    pub(crate) fn visible(&self) -> Vec<String> {
+        let mut v: Vec<String> = self
+            .around
+            .iter()
+            .chain(self.after.iter().flatten())
+            .cloned()
+            .collect();
+        v.sort();
+        v.dedup();
+        v
+    }
 }
 
 impl AstVisitor for Locals {
+    fn stmt(&mut self, s: &rokc_ast::Stmt) {
+        self.reach(s.span);
+    }
     fn expr(&mut self, e: &Expr) {
+        self.reach(e.span);
+        if (e.span.start as usize..=e.span.end as usize).contains(&self.off) {
+            self.around = self.in_scope();
+        }
         if let ExprKind::Path(p) = &e.kind {
             if let [seg] = p.segments.as_slice() {
                 if (e.span.start as usize..=e.span.end as usize).contains(&self.off) {
@@ -851,6 +779,7 @@ impl AstVisitor for Locals {
         }
     }
     fn bind_at(&mut self, name: &str, at: Span) {
+        self.reach(at);
         if let Some(s) = self.scopes.last_mut() {
             s.push((name.to_owned(), at));
         }
@@ -874,15 +803,21 @@ fn walk_items(v: &mut Locals, items: &[Item]) {
 }
 
 /// The scope walk of `program` for a path at `off`.
-fn locals(program: &rokc_ast::Program, off: usize) -> Locals {
+pub(crate) fn locals(program: &rokc_ast::Program, off: usize) -> Locals {
     let mut v = Locals {
         off,
         scopes: vec![Vec::new()],
         found: None,
         binds: Vec::new(),
+        around: Vec::new(),
+        after: None,
     };
     walk_items(&mut v, &program.items);
     program.stmts.iter().for_each(|s| walk_stmt(&mut v, s));
+    // Nothing past `off`: the top-level scope at the end.
+    if v.after.is_none() {
+        v.after = Some(v.in_scope());
+    }
     v
 }
 
@@ -904,6 +839,33 @@ fn name_range(text: &str, from: usize, name: &str) -> Option<(usize, usize)> {
         at = e;
     }
     None
+}
+
+/// `.name` (at byte `start` of `text`) by the receiver's type: its
+/// member in the index, called or not.
+fn indexed_member(
+    a: &Analysis,
+    key: &str,
+    text: &str,
+    name: &str,
+    start: usize,
+) -> Option<crate::members::Member> {
+    let dot = start.checked_sub(1)?;
+    if text.as_bytes().get(dot) != Some(&b'.') {
+        return None;
+    }
+    let recv = receiver_start(text, dot);
+    let e = a.find_expr(
+        key,
+        |s| s.start as usize == recv && s.end as usize <= dot,
+        true,
+    )?;
+    let ty = ty_name(a.hir.as_ref()?, &e.ty);
+    let found = crate::members::Members::of(a)
+        .get(&ty)
+        .find(|m| m.name == name)
+        .cloned();
+    found
 }
 
 /// What `.name` names: a struct field or a method.
@@ -1151,8 +1113,15 @@ fn diag_json(d: &RokDiagnostic, uri: &str, text: &str) -> Json {
             ])
         })
         .collect();
+    let (start, end) = (span.start as usize, span.end as usize);
+    // Some editors hide an empty range.
+    let (start, end) = if start == end && !span.is_dummy() {
+        widen(text, start)
+    } else {
+        (start, end)
+    };
     Json::obj([
-        ("range", range(text, span.start as usize, span.end as usize)),
+        ("range", range(text, start, end)),
         ("severity", Json::num(if d.is_error() { 1 } else { 2 })),
         ("code", Json::str(d.kind.code())),
         ("source", Json::str("rokc")),
@@ -1161,84 +1130,170 @@ fn diag_json(d: &RokDiagnostic, uri: &str, text: &str) -> Json {
     ])
 }
 
+/// The token a zero-width range at `at` points at: the next one on its
+/// line, else the one before it on the line, else one character.
+fn widen(text: &str, at: usize) -> (usize, usize) {
+    let at = at.min(text.len());
+    let line_start = text[..at].rfind('\n').map_or(0, |i| i + 1);
+    let line_end = text[at..].find('\n').map_or(text.len(), |i| at + i);
+    let (toks, _) = rokc_lexer::Lexer::new(text, String::new()).lex_all();
+    let spans = toks
+        .iter()
+        .map(|t| (t.span.start as usize, t.span.end as usize))
+        .filter(|&(s, e)| s < e && e <= text.len() && !text[s..e].trim().is_empty());
+    let mut before = None;
+    for (s, e) in spans {
+        if s >= at && s < line_end {
+            return (s, e);
+        }
+        if e <= at && s >= line_start {
+            before = Some((s, e));
+        }
+    }
+    before.unwrap_or_else(|| match text[at..].chars().next() {
+        Some(c) if c != '\n' => (at, at + c.len_utf8()),
+        _ => (at, at),
+    })
+}
+
 /// The buffer alone, parsed for its shape (no library operators).
-fn parse_doc(text: &str, file: &str) -> rokc_ast::Program {
+pub(crate) fn parse_doc(text: &str, file: &str) -> rokc_ast::Program {
     let (tokens, _) = rokc_lexer::Lexer::new(text, file.to_owned()).lex_all();
     rokc_parser::parse_program(&tokens, file).0
 }
 
-/// LSP `DocumentSymbol` of an item.
-fn symbol(item: &Item, text: &str) -> Option<Json> {
-    let fn_sym = |f: &rokc_ast::FnDef, kind: u32| sym(&f.name, kind, f.span, text, Vec::new());
-    let (name, kind, children): (String, u32, Vec<Json>) = match item {
-        Item::Fn(f) => return Some(fn_sym(f, 12)),
-        Item::Struct(s) => (s.name.clone(), 23, Vec::new()),
-        Item::Union(u) => (u.name.clone(), 23, Vec::new()),
-        Item::Enum(e) => (e.name.clone(), 10, Vec::new()),
-        Item::Trait(t) => (
-            t.name.clone(),
-            11,
-            t.items
-                .iter()
-                .filter_map(|i| match i {
-                    TraitItem::Method(f) => Some(fn_sym(f, 6)),
-                    _ => None,
+/// The buffer's tokens, for item extents.
+struct Shape<'t> {
+    text: &'t str,
+    toks: Vec<rokc_lexer::Token>,
+}
+
+impl Shape<'_> {
+    /// The item whose keyword is at `start`: from its modifiers to its
+    /// closing `}` or `;`.
+    fn extent(&self, start: usize) -> (usize, usize) {
+        use rokc_lexer::TokenKind as K;
+        let mut from = start;
+        loop {
+            let head = self.text[..from].trim_end();
+            let Some(m) = ["pub(pkg)", "pub", "const", "unsafe", "async", "extern"]
+                .into_iter()
+                .find(|m| {
+                    head.ends_with(m)
+                        && !head[..head.len() - m.len()]
+                            .chars()
+                            .next_back()
+                            .is_some_and(is_ident_char)
                 })
-                .collect(),
-        ),
-        Item::Impl(i) => {
-            // `impl Tr for T` as written, up to the body. A derive's
-            // generated impl (its span is the attribute's) is no symbol.
-            let head = text.get(i.span.start as usize..)?;
-            if !(head.starts_with("impl") || head.starts_with("unsafe")) {
-                return None;
+            else {
+                break;
+            };
+            from = head.len() - m.len();
+        }
+        let first = self
+            .toks
+            .partition_point(|t| (t.span.start as usize) < start);
+        let mut depth = 0u32;
+        for (i, t) in self.toks.iter().enumerate().skip(first) {
+            match &t.kind {
+                K::LParen | K::LBracket => depth += 1,
+                K::RParen | K::RBracket => depth = depth.saturating_sub(1),
+                K::LBrace if depth == 0 => {
+                    let end =
+                        balanced_close(&self.toks, i).map_or(t.span.end, |c| self.toks[c].span.end);
+                    return (from, end as usize);
+                }
+                K::Semi if depth == 0 => return (from, t.span.end as usize),
+                _ => {}
             }
-            let head = head.split('{').next().unwrap_or(head);
-            (
-                head.split_whitespace().collect::<Vec<_>>().join(" "),
-                5,
-                i.items
+        }
+        (from, self.text.len())
+    }
+
+    /// LSP `DocumentSymbol` of an item.
+    fn symbol(&self, item: &Item) -> Option<Json> {
+        let fn_sym = |f: &rokc_ast::FnDef, kind: u32| self.sym(&f.name, kind, f.span, Vec::new());
+        let (name, kind, children): (String, u32, Vec<Json>) = match item {
+            Item::Fn(f) => return Some(fn_sym(f, 12)),
+            Item::Struct(s) => (s.name.clone(), 23, Vec::new()),
+            Item::Union(u) => (u.name.clone(), 23, Vec::new()),
+            Item::Enum(e) => (e.name.clone(), 10, Vec::new()),
+            Item::Trait(t) => (
+                t.name.clone(),
+                11,
+                t.items
                     .iter()
                     .filter_map(|i| match i {
-                        ImplItem::Method(f) => Some(fn_sym(f, 6)),
+                        TraitItem::Method(f) => Some(fn_sym(f, 6)),
                         _ => None,
                     })
                     .collect(),
-            )
-        }
-        Item::Const(c) => (c.name.clone(), 14, Vec::new()),
-        Item::Static(s) => (s.name.clone(), 13, Vec::new()),
-        Item::TypeAlias(t) => (t.name.clone(), 26, Vec::new()),
-        Item::Mod(m) => (
-            m.name.clone(),
-            2,
-            m.items
-                .iter()
-                .flatten()
-                .filter_map(|i| symbol(i, text))
-                .collect(),
-        ),
-        Item::Use(_) | Item::Extern(_) => return None,
-    };
-    Some(sym(&name, kind, item.span(), text, children))
-}
+            ),
+            Item::Impl(i) => {
+                // `impl Tr for T` as written, up to the body. A derive's
+                // generated impl (its span is the attribute's) is no symbol.
+                let head = self.text.get(i.span.start as usize..)?;
+                if !(head.starts_with("impl") || head.starts_with("unsafe")) {
+                    return None;
+                }
+                let head = head.split('{').next().unwrap_or(head);
+                (
+                    head.split_whitespace().collect::<Vec<_>>().join(" "),
+                    5,
+                    i.items
+                        .iter()
+                        .filter_map(|i| match i {
+                            ImplItem::Method(f) => Some(fn_sym(f, 6)),
+                            _ => None,
+                        })
+                        .collect(),
+                )
+            }
+            Item::Const(c) => (c.name.clone(), 14, Vec::new()),
+            Item::Static(s) => (s.name.clone(), 13, Vec::new()),
+            Item::TypeAlias(t) => (t.name.clone(), 26, Vec::new()),
+            Item::Mod(m) => (
+                m.name.clone(),
+                2,
+                m.items
+                    .iter()
+                    .flatten()
+                    .filter_map(|i| self.symbol(i))
+                    .collect(),
+            ),
+            Item::Use(_) | Item::Extern(_) => return None,
+        };
+        Some(self.sym(&name, kind, item.span(), children))
+    }
 
-fn sym(name: &str, kind: u32, span: Span, text: &str, children: Vec<Json>) -> Json {
-    let r = range(text, span.start as usize, span.end as usize);
-    Json::obj([
-        ("name", Json::str(name)),
-        ("kind", Json::num(kind)),
-        ("range", r.clone()),
-        ("selectionRange", r),
-        ("children", Json::Arr(children)),
-    ])
+    /// A symbol whose keyword is at `span`: `range` covers the item,
+    /// `selectionRange` its name (an impl's head).
+    fn sym(&self, name: &str, kind: u32, span: Span, children: Vec<Json>) -> Json {
+        let start = span.start as usize;
+        let (from, to) = self.extent(start);
+        let (s, e) = if kind == 5 {
+            let head = self.text[start..to].split('{').next().unwrap_or_default();
+            (start, start + head.trim_end().len())
+        } else {
+            name_range(self.text, start, name)
+                .filter(|r| r.1 <= to)
+                .unwrap_or((start, span.end as usize))
+        };
+        Json::obj([
+            ("name", Json::str(name)),
+            ("kind", Json::num(kind)),
+            ("range", range(self.text, from, to.max(e))),
+            ("selectionRange", range(self.text, s, e)),
+            ("children", Json::Arr(children)),
+        ])
+    }
 }
 
 fn location_at(uri: &str, text: &str, start: usize, end: usize) -> Json {
     Json::obj([("uri", Json::str(uri)), ("range", range(text, start, end))])
 }
 
-fn is_ident_char(c: char) -> bool {
+pub(crate) fn is_ident_char(c: char) -> bool {
     c == '_' || c.is_alphanumeric()
 }
 
