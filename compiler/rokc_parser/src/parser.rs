@@ -829,6 +829,12 @@ impl<'a> Parser<'a> {
         )
         .with_file(self.file.clone());
         let prev = self.prev_span();
+        if let Some(help) = self.bang_help() {
+            return d
+                .with_span(here, "")
+                .with_help(help)
+                .with_fix(here, "", "delete `!`");
+        }
         match kind {
             TokenKind::Semi if prev.is_some_and(|p| p.line < here.line || here.is_dummy()) => {
                 let at = self.after_prev();
@@ -842,6 +848,13 @@ impl<'a> Parser<'a> {
                         .with_span(here, format!("expected {what}"))
                         .with_secondary(open, "unclosed delimiter");
                 }
+            }
+            // `if x = 3 {` (C): a comparison is `==`.
+            TokenKind::LBrace if matches!(found, TokenKind::Eq) && self.in_condition() => {
+                return d
+                    .with_span(here, "")
+                    .with_help("did you mean `==`? `=` assigns; `==` compares")
+                    .with_fix(here, "==", "use `==`");
             }
             TokenKind::FatArrow if matches!(found, TokenKind::Arrow) => {
                 return d
@@ -881,6 +894,38 @@ impl<'a> Parser<'a> {
             }
         }
         d.with_span(here, "")
+    }
+
+    /// The cursor is in an `if` or `while` condition.
+    fn in_condition(&self) -> bool {
+        self.tokens[..self.pos.min(self.tokens.len())]
+            .iter()
+            .rev()
+            .map(|t| &t.kind)
+            .take_while(|k| !matches!(k, TokenKind::Semi | TokenKind::LBrace | TokenKind::RBrace))
+            .any(|k| matches!(k, TokenKind::If | TokenKind::While))
+    }
+
+    /// `v!` (Swift, TypeScript): a postfix `!` to unwrap, which rok does
+    /// not have.
+    pub(crate) fn bang_help(&self) -> Option<String> {
+        if !matches!(self.peek(), TokenKind::Bang)
+            || matches!(
+                self.tokens.get(self.pos + 1).map(|t| &t.kind),
+                Some(TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace)
+            )
+        {
+            return None;
+        }
+        let v = match self.prev_kind()? {
+            TokenKind::Ident(v) => v.as_str(),
+            TokenKind::RParen | TokenKind::RBracket => "v",
+            _ => return None,
+        };
+        Some(format!(
+            "rok has no `!` to unwrap; for a value that may be none, write `{v} ?? default`, \
+             `if let x: T = {v} {{ .. }}`, or `match {v} {{ x: T => .., none => .. }}`"
+        ))
     }
 
     fn prev_span(&self) -> Option<Span> {

@@ -1,6 +1,6 @@
 // spec: 002.04-enum-variant
 // A wrong enum variant argument count is an error.
-// expect-error: `E::A` takes 1 argument(s) but 3 were supplied
+// expect-error: `E::A` takes 1 argument but 3 were supplied
 
 enum E { A(i32) }
 

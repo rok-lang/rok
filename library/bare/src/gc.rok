@@ -24,6 +24,7 @@ pub fn collect() { unsafe { rok_gc_collect() } }
 /// data, `none` when nothing can move (an empty list; a `str`, which
 /// stays in place while the `Pinned` holding it is in scope, 2.15.2).
 pub trait Pinnable {
+    #[doc(hidden)]
     fn gc_object(self) -> GcBuf<u8> | none;
 }
 

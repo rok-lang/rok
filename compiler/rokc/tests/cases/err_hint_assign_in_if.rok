@@ -1,0 +1,11 @@
+// spec: §3.10.1
+// `if x = 3` (C): a comparison is `==`.
+// expect-error: 7:10: expected `{`, found `=`
+// expect-error: help: did you mean `==`? `=` assigns; `==` compares
+fn main() -> i32 {
+    let x = 3;
+    if x = 3 {
+        return 1;
+    }
+    0
+}

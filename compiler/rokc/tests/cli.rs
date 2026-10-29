@@ -1569,6 +1569,36 @@ fn json_and_colored_diagnostics() {
     }
 }
 
+// spec: §9.9.4
+#[test]
+fn fixes_in_json() {
+    let Some(env) = setup() else { return };
+    let dir = scratch("diag-fix");
+    put(
+        dir.join("bad.rok"),
+        "let xs: List<i32> = [1];\nlet n = xs.length();\n",
+    )
+    .unwrap();
+    let out = rokc(
+        Some(&env),
+        &dir,
+        &["check", "--message-format=json", "bad.rok"],
+    );
+    assert_exit(&out, 1);
+    let stdout = text(&out.stdout);
+    let line = stdout
+        .lines()
+        .find(|l| l.contains("no method `length`"))
+        .unwrap_or_default();
+    // `length` at line 2, col 12, bytes 36..42.
+    assert!(
+        line.contains(
+            r#""fixes":[{"file_name":"bad.rok","line_start":2,"col_start":12,"byte_start":36,"byte_end":42,"text":"len","title":"use `len`"}]"#
+        ),
+        "{stdout}"
+    );
+}
+
 // spec: §9.1.2 §9.1.11 / std §3.9.4
 #[test]
 fn fmt_check_and_rewrite() {

@@ -3,6 +3,7 @@
 //! HIR reads the spec and formats by the hole's type (stdlib 2.10).
 
 use rokc_ast::{Expr, ExprKind, FStringPart, SpecPiece};
+use rokc_diagnostic::{ErrorKind, RokDiagnostic};
 use rokc_lexer::TokenKind;
 
 use super::Parser;
@@ -69,7 +70,16 @@ impl Parser<'_> {
         }
         if expr.is_some() {
             let at = self.peek_span();
-            self.error(at, "unexpected tokens in f-string hole (expected `}`)");
+            let d = RokDiagnostic::error(
+                ErrorKind::Parse,
+                at,
+                "unexpected tokens in f-string hole (expected `}`)",
+            )
+            .with_file(self.file.clone());
+            self.diagnostics.push(match self.bang_help() {
+                Some(help) => d.with_help(help).with_fix(at, "", "delete `!`"),
+                None => d,
+            });
         }
         let mut depth = 0u32;
         loop {

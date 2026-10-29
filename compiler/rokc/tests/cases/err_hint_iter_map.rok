@@ -1,0 +1,10 @@
+// spec: §3.5.2
+// `map` / `filter` belong to iterators: a List reaches them through
+// `.iter()`. The closures get no "cannot infer" error of their own.
+// expect-error: 9:10: no method `map` found for type `List<i32>`
+// expect-error: help: `List<i32>` is not an iterator: write `xs.iter().map(..)`
+// expect-error: 10:10: no method `filter` found for type `List<i32>`
+// expect-error: help: `List<i32>` is not an iterator: write `xs.iter().filter(..)`
+let xs: List<i32> = [1, 2, 3];
+let ys = xs.map(|x| x * 2);
+let zs = xs.filter(|x| x > 1);

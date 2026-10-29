@@ -1,0 +1,17 @@
+// spec: §4.2.1
+// A wrong argument count shows the signature and counts in words; a
+// method's receiver is not counted.
+// expect-error: 15:9: missing argument `b` in call to `add`
+// expect-error: help: it is declared `add(a: i32, b: i32)`; pass `b` too
+// expect-error: 16:9: `add` takes 2 arguments but 3 were supplied
+// expect-error: help: it is declared `add(a: i32, b: i32)`; pass 2 arguments
+// expect-error: 17:9: `scale` takes 1 argument but 2 were supplied
+// expect-error: help: it is declared `scale(k: i32)`; pass 1 argument
+fn add(a: i32, b: i32) -> i32 { a + b }
+struct P { x: i32; }
+impl P {
+    fn scale(self, k: i32) -> i32 { self.x * k }
+}
+let a = add(1);
+let b = add(1, 2, 3);
+let c = P { x: 1 }.scale(2, 3);

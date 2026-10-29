@@ -8,7 +8,7 @@
 // expect-error: help: the length is a method: `xs.len()`
 // expect-error: 18:15: cannot index into a value of type `str`
 // expect-error: help: a `str` is UTF-8 text, not an array of characters; take one with `name.chars().nth(0)`
-// expect-error: 19:1: `rok::core::print::println` takes 1 argument(s) but 2 were supplied
+// expect-error: 19:1: `println` takes 1 argument but 2 were supplied
 // expect-error: help: `println` takes one string; put the values in an f-string: `println(f"x = {n}")`
 let name = "ada";
 let n = 3;

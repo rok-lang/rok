@@ -42,6 +42,7 @@ mod resolve;
 pub use resolve::{CORE_PREFIX, is_dependency, root_path, set_packages, visible_from};
 pub use resolve::{hidden_module, hidden_module_msg, module_visibility, visibility_rank};
 mod send_check;
+mod suggest;
 mod throws;
 
 use collect::collect_unknown_paths;
@@ -1636,6 +1637,7 @@ impl ClosureSink {
             bodies: std::cell::RefCell::default(),
             assumed: std::cell::RefCell::default(),
             const_names: std::cell::RefCell::default(),
+            dropped_at: std::cell::Cell::new(None),
         }
     }
 }
@@ -2150,6 +2152,7 @@ fn coerce(
                 "`{{}}` is an empty block, not an empty `{base}`; write `{base}::new()`"
             )));
         }
+        mismatch_help(ctx, slot, &v);
         if let (Some(note), Some(d)) = (
             ctx.closure_bound_note(&v),
             ctx.env.sink.diagnostics.borrow_mut().last_mut(),
@@ -2158,6 +2161,100 @@ fn coerce(
         }
     }
     v
+}
+
+/// "`f` takes 2 arguments but 1 was supplied", and a help showing the
+/// signature `sig` (`f(a: i32, b: i32)`) when known.
+fn arity_msg(
+    callee: &str,
+    want: usize,
+    got: usize,
+    sig: Option<String>,
+) -> (String, Option<String>) {
+    let callee = short_callee(callee);
+    let args = |n: usize| {
+        if n == 1 {
+            "1 argument".to_owned()
+        } else {
+            format!("{n} arguments")
+        }
+    };
+    let was = if got == 1 { "was" } else { "were" };
+    let msg = format!("`{callee}` takes {} but {got} {was} supplied", args(want));
+    let help = sig.map(|s| format!("it is declared `{s}`; pass {}", args(want)));
+    (msg, help)
+}
+
+/// A standard library function by its own name (`println`).
+fn short_callee(callee: &str) -> &str {
+    if callee.starts_with("rok::") {
+        leaf_name(callee)
+    } else {
+        callee
+    }
+}
+
+/// `f(a: i32, b: i32)` from parameter names and types; `self` and
+/// unnamed (`#1`) parameters show their type only, or nothing.
+fn sig_text<'n>(callee: &str, params: impl IntoIterator<Item = (&'n str, String)>) -> String {
+    let parts: Vec<String> = params
+        .into_iter()
+        .filter(|(n, _)| *n != "self")
+        .map(|(n, t)| {
+            if n.starts_with('#') || n.is_empty() {
+                t
+            } else {
+                format!("{n}: {t}")
+            }
+        })
+        .collect();
+    format!("{}({})", short_callee(callee), parts.join(", "))
+}
+
+/// Help for a value of type `v.ty` in a `slot` it does not fit: an
+/// optional where its value is wanted, or a collection of other
+/// elements.
+fn mismatch_help(ctx: &LowerCtx<'_>, slot: &HirTy, v: &HirExpr) {
+    let src = suggest::short_src(ctx, v.span);
+    if suggest::some_part(&v.ty).as_ref() == Some(slot) {
+        let name = src.unwrap_or("v");
+        let help = match (src, suggest::default_lit(slot)) {
+            (Some(s), Some(d)) => {
+                let fix = format!("{s} ?? {d}");
+                ctx.fix_last(v.span, fix.clone(), format!("use `{fix}`"));
+                format!(
+                    "`{s}` may be none: write `{fix}`, or `if let x: {} = {s} {{ .. }}`",
+                    ctx.ty_name(slot)
+                )
+            }
+            _ => format!(
+                "`{name}` may be none: {}",
+                suggest::optional_forms(ctx, name, slot)
+            ),
+        };
+        ctx.help_last(Some(help));
+        return;
+    }
+    let (HirTy::Struct(a), HirTy::Struct(b)) = (slot, &v.ty) else {
+        return;
+    };
+    let (want, have) = (ctx.struct_def(*a), ctx.struct_def(*b));
+    let base = |n: &str| expr::enum_base_name(n).to_owned();
+    if base(&want.name) != base(&have.name) || want.generic_args.len() != 1 {
+        return;
+    }
+    let (Some(to), Some(from)) = (want.generic_args.first(), have.generic_args.first()) else {
+        return;
+    };
+    let num = |t: &HirTy| matches!(t, HirTy::Prim(p) if p.is_int() || p.is_float());
+    if !num(to) || !num(from) {
+        return;
+    }
+    let xs = src.unwrap_or("xs");
+    ctx.help_last(Some(format!(
+        "convert the elements: `{xs}.iter().map(|x| x as {}).collect()`",
+        ctx.ty_name(to)
+    )));
 }
 
 /// What to write instead of a `[ref name]` capture (`x` its variable's
@@ -2644,6 +2741,9 @@ struct ClosureSink {
     /// The `const` parameters of the body being checked, by the value
     /// standing for each (`bounds`).
     const_names: std::cell::RefCell<Vec<(i128, String)>>,
+    /// `diagnostics.len()` when `emit_diag` last dropped one: the
+    /// `*_last` helpers then leave the earlier diagnostic alone.
+    dropped_at: std::cell::Cell<Option<usize>>,
 }
 
 /// Per-function lowering state: scoped name → local-id map plus the
@@ -2951,6 +3051,27 @@ impl<'a> LowerCtx<'a> {
         text.get(span.start as usize..span.end as usize)
     }
 
+    /// Bytes `from..to` of `outer`'s text as a span of their own.
+    fn sub_span(&self, outer: Span, from: usize, to: usize) -> Option<Span> {
+        let text = self.src(outer)?;
+        let before = text.get(..from)?;
+        text.get(from..to)?;
+        let (line, col) = match before.rfind('\n') {
+            Some(nl) => (
+                outer.line + before.matches('\n').count() as u32,
+                before[nl + 1..].chars().count() as u32 + 1,
+            ),
+            None => (outer.line, outer.col + before.chars().count() as u32),
+        };
+        Some(Span {
+            start: outer.start + from as u32,
+            end: outer.start + to as u32,
+            line,
+            col,
+            file: outer.file,
+        })
+    }
+
     /// Add `help` to the last diagnostic if it is an error pushed after
     /// the sink held `since` of them.
     fn help_since(&self, since: usize, help: String) {
@@ -2975,11 +3096,14 @@ impl<'a> LowerCtx<'a> {
     /// An error built by the caller.
     fn emit_diag(&self, mut d: rokc_diagnostic::RokDiagnostic) {
         if bounds::in_failed(self.env) {
+            let len = self.env.sink.diagnostics.borrow().len();
+            self.env.sink.dropped_at.set(Some(len));
             return;
         }
         if let Some((callee, at)) = self.env.sink.call_sites.borrow().first() {
             d = d.with_secondary(*at, format!("in this call of `{}`", leaf_name(callee)));
         }
+        self.env.sink.dropped_at.set(None);
         self.env.sink.diagnostics.borrow_mut().push(d);
     }
 
@@ -3025,31 +3149,38 @@ impl<'a> LowerCtx<'a> {
         poison(span)
     }
 
+    /// The diagnostic just emitted, unless `emit_diag` dropped it.
+    fn with_last(&self, f: impl FnOnce(&mut rokc_diagnostic::RokDiagnostic)) {
+        let mut diags = self.env.sink.diagnostics.borrow_mut();
+        if self.env.sink.dropped_at.get() == Some(diags.len()) {
+            return;
+        }
+        if let Some(d) = diags.last_mut() {
+            f(d);
+        }
+    }
+
     /// Attach `help` to the diagnostic just emitted.
     fn help_last(&self, help: Option<String>) {
-        if let (Some(h), Some(d)) = (help, self.env.sink.diagnostics.borrow_mut().last_mut()) {
-            d.notes.push(format!("help: {h}"));
+        if let Some(h) = help {
+            self.with_last(|d| d.notes.push(format!("help: {h}")));
         }
     }
 
     /// Attach a fix (replace `span` with `text`) to the diagnostic just
     /// emitted.
-    #[expect(dead_code, reason = "no producer yet")]
     fn fix_last(&self, span: Span, text: impl Into<String>, title: impl Into<String>) {
-        if let Some(d) = self.env.sink.diagnostics.borrow_mut().last_mut() {
-            d.fixes.push(rokc_diagnostic::Fix {
-                span,
-                text: text.into(),
-                title: title.into(),
-            });
-        }
+        let fix = rokc_diagnostic::Fix {
+            span,
+            text: text.into(),
+            title: title.into(),
+        };
+        self.with_last(|d| d.fixes.push(fix));
     }
 
     /// Tag the diagnostic just emitted.
     fn tag_last(&self, tag: rokc_diagnostic::Tag) {
-        if let Some(d) = self.env.sink.diagnostics.borrow_mut().last_mut() {
-            d.tag = tag;
-        }
+        self.with_last(|d| d.tag = tag);
     }
 
     /// "struct `S` has no field `x`" plus the closest field name.
@@ -3082,14 +3213,17 @@ impl<'a> LowerCtx<'a> {
         let recv = self
             .src(span)
             .and_then(|t| t.strip_suffix(name)?.strip_suffix('.'));
-        let len = matches!(name, "length" | "size" | "count")
+        let len = suggest::is_synonym(name, "len")
             && matches!(
                 expr::pick_method(self, &HirTy::Struct(sid), "len", None),
                 Ok(Some(_))
             );
         let help = recv
             .filter(|_| len)
-            .map(|r| format!("the length is a method: `{r}.len()`"))
+            .map(|r| {
+                self.fix_last(span, format!("{r}.len()"), "call `len`");
+                format!("the length is a method: `{r}.len()`")
+            })
             .or_else(|| {
                 rokc_diagnostic::suggest(name, fields.iter().copied())
                     .map(|s| format!("did you mean `{s}`?"))
@@ -3102,18 +3236,6 @@ impl<'a> LowerCtx<'a> {
             });
         self.help_last(help);
         e
-    }
-
-    /// "did you mean" for an unknown method of `ty`.
-    fn method_help(&self, ty: &HirTy, method: &str) -> Option<String> {
-        let target = resolve::method_target_for(ty)?;
-        let names = self
-            .env
-            .method_table
-            .keys()
-            .filter(|(t, _)| *t == target)
-            .map(|(_, m)| m.as_str());
-        rokc_diagnostic::suggest(method, names).map(|s| format!("did you mean `{s}`?"))
     }
 
     /// "did you mean" for an unknown type path: types of the current

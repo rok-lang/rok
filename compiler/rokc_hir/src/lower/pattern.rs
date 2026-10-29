@@ -623,6 +623,7 @@ pub(super) fn check_match_exhaustiveness(
     if unguarded.iter().any(|p| hir_pattern_irrefutable(p)) {
         return;
     }
+    let arms_to_add = missing_arms(ctx, scrut_ty, &unguarded);
     let mut missing: Vec<String> = match scrut_ty {
         HirTy::Prim(PrimTy::Bool) => {
             fn bools(p: &HirPattern, seen: &mut [bool; 2]) {
@@ -686,15 +687,110 @@ pub(super) fn check_match_exhaustiveness(
             |w| format!("`{w}`"),
         ));
     }
-    {
-        ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
-            format!(
-                "non-exhaustive match on `{}`: {} not covered (spec 3.12.5)",
-                ctx.ty_name(scrut_ty),
-                missing.join(", ")
-            ),
-        );
+    ctx.emit_error(
+        rokc_diagnostic::ErrorKind::Type,
+        format!(
+            "non-exhaustive match on `{}`: {} not covered (spec 3.12.5)",
+            ctx.ty_name(scrut_ty),
+            missing.join(", ")
+        ),
+    );
+    // Else the cases named above, when each is a pattern (`false`); a
+    // nested witness is one of maybe several, so it gets no fix.
+    let arms_to_add = arms_to_add.filter(|a| !a.is_empty());
+    let complete = arms_to_add.is_some() || *scrut_ty == HirTy::Prim(PrimTy::Bool);
+    let arms = arms_to_add.unwrap_or_else(|| {
+        missing
+            .iter()
+            .filter_map(|m| m.strip_prefix('`')?.strip_suffix('`'))
+            .filter(|m| !m.contains('`'))
+            .map(str::to_owned)
+            .collect()
+    });
+    let (arms, complete) = if arms.is_empty() || arms.len() > 3 {
+        (vec!["_".to_owned()], true)
+    } else {
+        (arms, complete)
+    };
+    let list: Vec<String> = arms.iter().map(|a| format!("`{a} => ..`")).collect();
+    let help = if arms.len() == 1 {
+        format!("add {}", list[0])
+    } else {
+        format!("add the arms {}", list.join(", "))
+    };
+    ctx.help_last(Some(help));
+    if complete {
+        add_arms_fix(ctx, &arms);
+    }
+}
+
+/// Arm patterns for the cases of `ty` no unguarded arm covers; `None`
+/// when they are not cases (`bool` is, its literals).
+fn missing_arms(ctx: &LowerCtx<'_>, ty: &HirTy, unguarded: &[&HirPattern]) -> Option<Vec<String>> {
+    let mut covered = Vec::new();
+    for p in unguarded {
+        covered_variants(p, &mut covered);
+    }
+    let open = |i: usize| !covered.contains(&u32::try_from(i).expect("variant overflow"));
+    match ty {
+        HirTy::Enum(eid) => {
+            let def = ctx.enum_def(*eid);
+            let base = ctx.ty_name(ty);
+            let base = base.split('<').next().unwrap_or_default().to_owned();
+            Some(
+                def.variants
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| open(*i))
+                    .map(|(_, v)| {
+                        let n = super::expr::variant_arg_tys(v).len();
+                        if !v.named_fields.is_empty() {
+                            format!("{base}::{} {{ .. }}", v.name)
+                        } else if n > 0 {
+                            format!("{base}::{}({})", v.name, vec!["_"; n].join(", "))
+                        } else {
+                            format!("{base}::{}", v.name)
+                        }
+                    })
+                    .collect(),
+            )
+        }
+        HirTy::Sum(cases) => Some(
+            cases
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| open(*i))
+                .map(|(_, c)| match c {
+                    HirTy::None => "none".to_owned(),
+                    t => format!("x: {}", ctx.ty_name(t)),
+                })
+                .collect(),
+        ),
+        _ => None,
+    }
+}
+
+/// Insert `arms` before the closing brace of the match just reported,
+/// when it spans lines.
+fn add_arms_fix(ctx: &LowerCtx<'_>, arms: &[String]) {
+    let at = ctx.here();
+    let Some(text) = ctx.src(at) else {
+        return;
+    };
+    let Some(close) = text.strip_suffix('}').map(str::len) else {
+        return;
+    };
+    let line_start = text[..close].rfind('\n').map_or(0, |i| i + 1);
+    let indent = &text[line_start..close];
+    if line_start == 0 || !indent.chars().all(|c| c == ' ' || c == '\t') {
+        return;
+    }
+    let mut body = String::new();
+    for a in arms {
+        body.push_str(&format!("    {a} => panic(\"todo\"),\n{indent}"));
+    }
+    if let Some(span) = ctx.sub_span(at, close, close) {
+        ctx.fix_last(span, body, "add the missing arms");
     }
 }
 
