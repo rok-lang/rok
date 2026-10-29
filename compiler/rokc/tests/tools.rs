@@ -1236,6 +1236,303 @@ error[E100]: cannot find value `a` in this scope
     );
 }
 
+/// A cell with a top-level `await` keeps its bindings and shows its
+/// value; `it` holds the last value shown, and the user's `it` wins.
+#[test]
+#[cfg_attr(
+    not(any(
+        all(
+            any(target_os = "macos", target_os = "linux"),
+            any(target_arch = "aarch64", target_arch = "x86_64")
+        ),
+        windows
+    )),
+    ignore = "the REPL host runs on macOS, Linux and Windows (arm64, x86_64)"
+)]
+// spec: §4.16.5 §9.7.0 §9.7.1 §9.7.7
+fn repl_await_cells_and_it() {
+    let env = setup_runtime();
+    let rokr = env.rokr.display().to_string();
+    let input = "\
+async fn af() -> i32 { return 3; }
+let w = 10;
+let v = await af(); println(f\"got {v}\");
+v + w
+await af()
+it + 1
+it
+xs
+let it = 7;
+5
+it
+:reset
+fn it() -> i32 { 9 }
+2
+it()
+";
+    let out = piped(ROKC, &["repl", "--rokr", &rokr], input);
+    let stdout = text(&out.stdout);
+    let stderr = text(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "{stdout}\n{stderr}");
+    assert_eq!(
+        stdout, "got 3\n13\n3\n4\n4\n5\n7\n2\n9\n",
+        "stderr: {stderr}"
+    );
+    // A failed cell leaves `it` alone.
+    assert!(stderr.contains("cannot find value `xs`"), "{stderr}");
+}
+
+/// `exit` / `quit` alone end the session unless the session defines
+/// the name.
+#[test]
+#[cfg_attr(
+    not(any(
+        all(
+            any(target_os = "macos", target_os = "linux"),
+            any(target_arch = "aarch64", target_arch = "x86_64")
+        ),
+        windows
+    )),
+    ignore = "the REPL host runs on macOS, Linux and Windows (arm64, x86_64)"
+)]
+// spec: §9.9.9
+fn repl_exit_words_end_the_session() {
+    let env = setup_runtime();
+    let rokr = env.rokr.display().to_string();
+    let args = ["repl", "--rokr", &rokr];
+    for (input, want) in [
+        ("1\nexit\n2\n", "1\n"),
+        ("quit()\n2\n", ""),
+        ("let exit = 5;\nexit\nquit\n2\n", "5\n"),
+        ("fn quit() -> i32 { 6 }\nquit()\n:q\n2\n", "6\n"),
+    ] {
+        let out = piped(ROKC, &args, input);
+        let stderr = text(&out.stderr);
+        assert_eq!(out.status.code(), Some(0), "{stderr}");
+        assert_eq!(text(&out.stdout), want, "{input}: {stderr}");
+    }
+}
+
+/// `:doc`, `:time`, `:vars`, `:load`, `:reload`, `:opt`, `:save` (read back
+/// with `repl <file>`) and the commands' usage errors.
+#[test]
+#[cfg_attr(
+    not(any(
+        all(
+            any(target_os = "macos", target_os = "linux"),
+            any(target_arch = "aarch64", target_arch = "x86_64")
+        ),
+        windows
+    )),
+    ignore = "the REPL host runs on macOS, Linux and Windows (arm64, x86_64)"
+)]
+// spec: §9.7.7 §9.7.10 §9.9.9
+fn repl_session_commands() {
+    let env = setup_runtime();
+    let rokr = env.rokr.display().to_string();
+    let dir = scratch("repl-commands");
+    std::fs::create_dir_all(&dir).unwrap();
+    let prog = dir.join("p.rok");
+    std::fs::write(
+        &prog,
+        "let base = 40i32;\nfn add(a: i32, b: i32) -> i32 { a + b }\nprintln(\"loaded\");\n",
+    )
+    .unwrap();
+    let saved = dir.join("s.rok");
+    let (prog_s, saved_s) = (prog.display().to_string(), saved.display().to_string());
+    let input = format!(
+        "\
+/// Doubles it.
+fn twice(x: i32) -> i32 {{ x * 2 }}
+:doc twice
+:time twice(4)
+:load {prog_s}
+add(base, 2)
+:reload
+let xs = [1, 2];
+xs.push(3)
+it
+it * 2
+let xs = \"s\"
+:vars
+:opt
+:opt 9
+:opt 0
+:save {saved_s}
+:doc
+:load
+:load {dir}
+:frob
+:help
+",
+        dir = dir.display()
+    );
+    let out = piped(ROKC, &["repl", "--rokr", &rokr], &input);
+    let stdout = text(&out.stdout);
+    let stderr = text(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "{stdout}\n{stderr}");
+    let help = stdout.find("  <expr> ").unwrap_or(stdout.len());
+    assert_eq!(
+        &stdout[..help],
+        "\
+fn twice(x: i32) -> i32
+
+Doubles it.
+8
+loaded
+42
+loaded
+42
+84
+base: i32
+it: i32
+xs: str
+fn twice(x: i32) -> i32
+fn add(a: i32, b: i32) -> i32
+-O0
+",
+        "stderr: {stderr}"
+    );
+    for cmd in [
+        ":doc <name>",
+        ":time <expr>",
+        ":vars",
+        ":load <file>",
+        ":reload",
+        ":edit",
+        ":save <file>",
+        ":opt",
+        ":add <name>[@<req>]",
+        ":type <expr>, :t <expr>",
+        ":help, :h",
+        ":quit, :q, :exit, exit, quit",
+    ] {
+        assert!(stdout.contains(cmd), "{cmd}: {stdout}");
+    }
+    for e in [
+        "[repl] front end: ",
+        "[repl] total: ",
+        "`:opt` takes 0, 1, 2, 3, s or z",
+        "`:doc` takes a name: `:doc xs.len`",
+        "`:load` takes a file: `:load prog.rok`",
+        "`:load` takes a `.rok` file; for a package directory start `rok repl",
+        "unknown command `:frob`",
+    ] {
+        assert!(stderr.contains(e), "{e}: {stderr}");
+    }
+    // The script declares each name once per scope; read back, it runs
+    // the cells again.
+    let script = std::fs::read_to_string(&saved).unwrap();
+    assert!(script.contains("\nbase = 40i32;\n"), "{script}");
+    assert!(script.contains("\nlet it = add(base, 2);\n"), "{script}");
+    assert!(script.contains("\n{\nlet xs = \"s\";\n}\n"), "{script}");
+    let out = piped(
+        ROKC,
+        &["repl", "--rokr", &rokr, &saved_s],
+        "base + twice(1)\nit\n",
+    );
+    let stderr = text(&out.stderr);
+    assert_eq!(
+        text(&out.stdout),
+        "loaded\nloaded\n42\n42\n",
+        "{script}\n{stderr}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// `:edit` runs what the editor leaves in its file.
+#[test]
+#[cfg_attr(
+    not(all(
+        any(target_os = "macos", target_os = "linux"),
+        any(target_arch = "aarch64", target_arch = "x86_64")
+    )),
+    ignore = "the editor is `cp`: macOS and Linux, arm64 and x86_64"
+)]
+// spec: §9.9.9
+fn repl_edit_runs_the_editors_cells() {
+    let env = setup_runtime();
+    let rokr = env.rokr.display().to_string();
+    let dir = scratch("repl-edit");
+    std::fs::create_dir_all(&dir).unwrap();
+    let cells = dir.join("cells.rok");
+    std::fs::write(&cells, "fn g() -> i32 { 5 }\nlet b = g() + 1\nb * 2\n").unwrap();
+    // An editor that writes the cells into the file it is given.
+    let editor = format!("cp {}", cells.display());
+    let out = piped_env(
+        ROKC,
+        &["repl", "--rokr", &rokr],
+        ":edit\nb + g()\n",
+        &[("VISUAL", ""), ("EDITOR", &editor)],
+    );
+    let stderr = text(&out.stderr);
+    assert_eq!(text(&out.stdout), "12\n11\n", "{stderr}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// In a package the session does not load, a name the package defines
+/// gets a hint; `repl .` names the package's directory.
+#[test]
+#[cfg_attr(
+    not(any(
+        all(
+            any(target_os = "macos", target_os = "linux"),
+            any(target_arch = "aarch64", target_arch = "x86_64")
+        ),
+        windows
+    )),
+    ignore = "the REPL host runs on macOS, Linux and Windows (arm64, x86_64)"
+)]
+// spec: §9.1.2 §9.7.10
+fn repl_hints_at_the_package_it_runs_in() {
+    let env = setup_runtime();
+    let rokr = env.rokr.display().to_string();
+    let dir = scratch("repl-here").join("rokpk");
+    std::fs::create_dir_all(dir.join("src")).unwrap();
+    std::fs::write(
+        dir.join("src/lib.rok"),
+        "pub fn add(a: i32, b: i32) -> i32 { a + b }\n",
+    )
+    .unwrap();
+    let run = |args: &[&str], input: &str| {
+        let mut child = Command::new(ROKC)
+            .args(args)
+            .args(["--rokr", &rokr])
+            .current_dir(&dir)
+            .env("ROK_HOME", workspace())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(input.as_bytes())
+            .unwrap();
+        child.wait_with_output().unwrap()
+    };
+    let out = run(&["repl"], "add(1, 2)\nnope(1)\n");
+    let stderr = text(&out.stderr);
+    assert_eq!(text(&out.stdout), "", "{stderr}");
+    assert_eq!(
+        stderr
+            .matches("help: `add` is defined in this package; load this package: `rok repl .`")
+            .count(),
+        1,
+        "{stderr}"
+    );
+    // The library is archived by LLVM.
+    if setup().is_some() {
+        let out = run(&["repl", "."], "add(1, 2)\n");
+        let stderr = text(&out.stderr);
+        assert_eq!(text(&out.stdout), "3\n", "{stderr}");
+        assert!(stderr.contains("Compiling rokpk (.)"), "{stderr}");
+    }
+    let _ = std::fs::remove_dir_all(dir.parent().unwrap());
+}
+
 /// `rokc jupyter` driven by a hand-written ZMTP client (no Jupyter
 /// needed): heartbeat, `kernel_info`, cells that bind, show, print and
 /// panic, completion, and `shutdown`. Every message must be signed.
@@ -1257,7 +1554,13 @@ fn jupyter_kernel_speaks_the_wire_protocol() {
     let env = setup_runtime();
     let key = b"secret-key";
     let dir = scratch("jupyter");
-    std::fs::create_dir_all(&dir).unwrap();
+    // The kernel loads the package it starts in.
+    std::fs::create_dir_all(dir.join("src")).unwrap();
+    std::fs::write(
+        dir.join("src/main.rok"),
+        "fn add(a: i32, b: i32) -> i32 { a + b }\nlet base = 40i32;\n",
+    )
+    .unwrap();
     let file = dir.join("kernel.json");
     // The kernel says `ready` on stderr once every socket accepts. A
     // probed port can be taken again before the kernel binds it (it then
@@ -1287,6 +1590,7 @@ fn jupyter_kernel_speaks_the_wire_protocol() {
             .arg(&file)
             .args(["--rokr", &env.rokr.display().to_string()])
             .env("ROK_HOME", workspace())
+            .current_dir(&dir)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
@@ -1404,8 +1708,17 @@ fn jupyter_kernel_speaks_the_wire_protocol() {
     // The session goes on, as it was before the failed cell.
     let (_, _, published) = request(&mut shell, "execute_request", exec("x"));
     assert!(shows(&published, "40"), "{published:?}");
-
     completion_inspect_history(&mut shell, &mut request);
+    // The package's items and bindings, `await` and `it`, as in the REPL.
+    let (_, _, published) = request(&mut shell, "execute_request", exec("add(base, 2)"));
+    assert!(shows(&published, "42"), "{published:?}");
+    let code = "async fn af() -> i32 { return 3; }\nlet v = await af();\nv + it";
+    let (_, _, published) = request(&mut shell, "execute_request", exec(code));
+    assert!(shows(&published, "45"), "{published:?}");
+    let (_, _, published) = request(&mut shell, "execute_request", exec("await af()"));
+    assert!(shows(&published, "3"), "{published:?}");
+    let (_, _, published) = request(&mut shell, "execute_request", exec("v * it"));
+    assert!(shows(&published, "9"), "{published:?}");
 
     let (kind, _, _) = request(
         &mut control,
