@@ -3,6 +3,7 @@
 mod json;
 
 pub use json::Json;
+pub use rokc_core::suggest::{edit_distance, suggest, suggest_or_synonym};
 
 use std::fmt;
 use std::sync::Mutex;
@@ -276,6 +277,52 @@ pub struct Label {
     pub message: String,
 }
 
+/// A machine-applicable edit: replace `span` with `text`.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Fix {
+    pub span: Span,
+    pub text: String,
+    /// What the edit does, as a code action title.
+    pub title: String,
+}
+
+/// The fixes of a diagnostic: one word while empty, which is most of
+/// the time (keeps `RokDiagnostic` small as a `Result` error type).
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[allow(clippy::box_collection)]
+pub struct Fixes(Option<Box<Vec<Fix>>>);
+
+impl Fixes {
+    pub fn push(&mut self, fix: Fix) {
+        self.0.get_or_insert_default().push(fix);
+    }
+}
+
+impl std::ops::Deref for Fixes {
+    type Target = [Fix];
+    fn deref(&self) -> &[Fix] {
+        self.0.as_deref().map_or(&[], Vec::as_slice)
+    }
+}
+
+/// What a diagnostic is about, for callers that act on it without
+/// matching its text.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum Tag {
+    #[default]
+    None,
+    /// `{}` on a value without `Display` or `Debug`.
+    NoDisplay,
+    /// `{}` on a value without `Display` that has `Debug`.
+    NoDisplayHasDebug,
+    /// `{:?}` on a value without `Debug`.
+    NoDebug,
+    /// A closure parameter with no type to infer.
+    ClosureParamInfer,
+    /// A type parameter nothing infers.
+    TypeParamInfer,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RokDiagnostic {
     pub severity: Severity,
@@ -286,6 +333,8 @@ pub struct RokDiagnostic {
     pub primary: Option<Box<Label>>,
     pub secondary: Vec<Label>,
     pub notes: Vec<String>,
+    pub tag: Tag,
+    pub fixes: Fixes,
 }
 
 impl RokDiagnostic {
@@ -305,6 +354,8 @@ impl RokDiagnostic {
             }),
             secondary: Vec::new(),
             notes: Vec::new(),
+            tag: Tag::None,
+            fixes: Fixes::default(),
         }
     }
 
@@ -351,6 +402,27 @@ impl RokDiagnostic {
     #[must_use]
     pub fn with_note(mut self, note: impl Into<String>) -> Self {
         self.notes.push(note.into());
+        self
+    }
+
+    #[must_use]
+    pub fn with_fix(
+        mut self,
+        span: Span,
+        text: impl Into<String>,
+        title: impl Into<String>,
+    ) -> Self {
+        self.fixes.push(Fix {
+            span,
+            text: text.into(),
+            title: title.into(),
+        });
+        self
+    }
+
+    #[must_use]
+    pub const fn with_tag(mut self, tag: Tag) -> Self {
+        self.tag = tag;
         self
     }
 
@@ -418,53 +490,6 @@ impl SourceMap {
         out.push_str(&diag.message);
         out
     }
-}
-
-/// "Did you mean": the closest candidate within about a third of the
-/// name's length (short names match by case only), first on ties. Exact
-/// matches and internal names (`__x`, `#x`, `f/x`) give nothing.
-#[must_use]
-pub fn suggest<'a, I>(name: &str, candidates: I) -> Option<&'a str>
-where
-    I: IntoIterator<Item = &'a str>,
-{
-    let len = name.chars().count();
-    let limit = if len < 3 { 0 } else { (len + 2) / 3 };
-    let mut best: Option<(usize, &str)> = None;
-    for c in candidates {
-        if c == name || c.is_empty() || c.starts_with("__") || c.contains(['#', '/']) {
-            continue;
-        }
-        let d = edit_distance(name, c);
-        // A case-only difference is always worth naming.
-        let d = if c.eq_ignore_ascii_case(name) { 0 } else { d };
-        if d <= limit && best.is_none_or(|(b, _)| d < b) {
-            best = Some((d, c));
-        }
-    }
-    best.map(|(_, c)| c)
-}
-
-/// Levenshtein distance over chars, with adjacent transpositions
-/// counted as one edit.
-#[must_use]
-pub fn edit_distance(a: &str, b: &str) -> usize {
-    let a: Vec<char> = a.chars().collect();
-    let b: Vec<char> = b.chars().collect();
-    let mut prev2: Vec<usize> = vec![0; b.len() + 1];
-    let mut prev: Vec<usize> = (0..=b.len()).collect();
-    for i in 1..=a.len() {
-        let mut cur = vec![i; b.len() + 1];
-        for j in 1..=b.len() {
-            let cost = usize::from(a[i - 1] != b[j - 1]);
-            cur[j] = (prev[j] + 1).min(cur[j - 1] + 1).min(prev[j - 1] + cost);
-            if i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] {
-                cur[j] = cur[j].min(prev2[j - 2] + 1);
-            }
-        }
-        prev2 = std::mem::replace(&mut prev, cur);
-    }
-    prev[b.len()]
 }
 
 /// One underlined source line of a snippet.
@@ -542,7 +567,7 @@ impl ErrorKind {
 
 impl SourceMap {
     /// `diag` as one-line JSON (spec 909.4):
-    /// `{"type","code","kind","message","spans":[..],"notes":[..]}`.
+    /// `{"type","code","kind","message","spans":[..],"notes":[..],"fixes":[..]}`.
     #[must_use]
     pub fn json(&self, diag: &RokDiagnostic) -> String {
         let span_json = |l: &Label, primary: bool, file: Option<String>| {
@@ -567,6 +592,19 @@ impl SourceMap {
             ]));
         }
         spans.extend(diag.secondary.iter().map(|l| span_json(l, false, None)));
+        let fixes = diag.fixes.iter().map(|f| {
+            let file = self.path(f.span.file).map(str::to_owned);
+            let file = file.or_else(|| self.diag_path(diag));
+            Json::obj([
+                ("file_name", file.map_or(Json::Null, Json::Str)),
+                ("line_start", Json::num(f.span.line)),
+                ("col_start", Json::num(f.span.col)),
+                ("byte_start", Json::num(f.span.start)),
+                ("byte_end", Json::num(f.span.end)),
+                ("text", Json::str(&f.text)),
+                ("title", Json::str(&f.title)),
+            ])
+        });
         Json::obj([
             ("type", Json::str(diag.severity.to_string())),
             ("code", Json::str(diag.kind.code())),
@@ -577,6 +615,7 @@ impl SourceMap {
                 "notes",
                 Json::Arr(diag.notes.iter().map(Json::str).collect()),
             ),
+            ("fixes", Json::Arr(fixes.collect())),
         ])
         .to_string()
     }
@@ -850,8 +889,80 @@ mod tests {
             .with_note("n");
         assert_eq!(
             SourceMap::new().json(&d),
-            r#"{"type":"error","code":"E200","kind":"type","message":"bad \"x\"\n","spans":[{"file_name":"a.rok","is_primary":true}],"notes":["n"]}"#
+            r#"{"type":"error","code":"E200","kind":"type","message":"bad \"x\"\n","spans":[{"file_name":"a.rok","is_primary":true}],"notes":["n"],"fixes":[]}"#
         );
+    }
+
+    #[test]
+    fn json_lists_fixes() {
+        let mut map = SourceMap::new();
+        let file = map.add("a.rok".into(), "let x = 1\n".into());
+        let at = Span {
+            start: 9,
+            end: 9,
+            line: 1,
+            col: 10,
+            file,
+        };
+        let d = RokDiagnostic::error(ErrorKind::Parse, at, "expected `;`").with_fix(
+            at,
+            ";",
+            "insert `;`",
+        );
+        let json = map.json(&d);
+        assert!(
+            json.ends_with(
+                r#""fixes":[{"file_name":"a.rok","line_start":1,"col_start":10,"byte_start":9,"byte_end":9,"text":";","title":"insert `;`"}]}"#
+            ),
+            "{json}"
+        );
+    }
+
+    #[test]
+    fn tag_and_fixes_round_trip() {
+        use rokc_core::codec::{Codec, Dec, Enc};
+        let at = Span {
+            start: 3,
+            end: 5,
+            line: 2,
+            col: 4,
+            file: 0,
+        };
+        for tag in [
+            Tag::None,
+            Tag::NoDisplay,
+            Tag::NoDisplayHasDebug,
+            Tag::NoDebug,
+            Tag::ClosureParamInfer,
+            Tag::TypeParamInfer,
+        ] {
+            let plain = RokDiagnostic::error(ErrorKind::Type, at, "m").with_tag(tag);
+            let fixed = plain
+                .clone()
+                .with_fix(at, "x", "t")
+                .with_fix(Span::DUMMY, "", "");
+            for d in [plain, fixed] {
+                let mut e = Enc::new(true);
+                d.enc(&mut e);
+                let mut dec = Dec::new(&e.buf);
+                assert_eq!(RokDiagnostic::dec(&mut dec), Some(d));
+                assert!(dec.done());
+            }
+        }
+    }
+}
+
+impl rokc_core::codec::Codec for Fixes {
+    fn enc(&self, e: &mut rokc_core::codec::Enc) {
+        // As a `Vec<Fix>`.
+        e.u(self.len() as u64);
+        for f in self.iter() {
+            f.enc(e);
+        }
+    }
+    fn dec(d: &mut rokc_core::codec::Dec<'_>) -> Option<Self> {
+        let v = Vec::<Fix>::dec(d)?;
+        Some(Self((!v.is_empty()).then(|| Box::new(v))))
     }
 }
 
@@ -917,6 +1028,15 @@ rokc_core::codec_enum!(ErrorKind {
     Handoff,
 });
 rokc_core::codec_struct!(Label { span, message });
+rokc_core::codec_struct!(Fix { span, text, title });
+rokc_core::codec_enum!(Tag {
+    None,
+    NoDisplay,
+    NoDisplayHasDebug,
+    NoDebug,
+    ClosureParamInfer,
+    TypeParamInfer,
+});
 rokc_core::codec_struct!(RokDiagnostic {
     severity,
     kind,
@@ -925,4 +1045,6 @@ rokc_core::codec_struct!(RokDiagnostic {
     primary,
     secondary,
     notes,
+    tag,
+    fixes,
 });

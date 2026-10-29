@@ -525,6 +525,7 @@ pub(super) fn monomorphize_on(
                          binding or write `::<..>`",
                         fn_def.name
                     ));
+                    ctx.tag_last(rokc_diagnostic::Tag::TypeParamInfer);
                     return None;
                 }
             }

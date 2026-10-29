@@ -27,7 +27,7 @@ use super::bignum::Big;
 use super::*;
 use crate::fmt_spec::{self, FmtSpec};
 use rokc_ast::{FStringPart, SpecPiece};
-use rokc_diagnostic::Span;
+use rokc_diagnostic::{Span, Tag};
 
 /// Per-hole capacity guess, beyond the literal bytes.
 const HOLE_BYTES: usize = 16;
@@ -438,14 +438,26 @@ fn formattable(ctx: &LowerCtx<'_>, ty: &HirTy, debug: bool) -> bool {
         rokc_diagnostic::ErrorKind::Type,
         format!("`{shown}` cannot be formatted with `{hole}`{culprit}"),
     );
-    let help = if debug {
-        "add `#[derive(Debug)]` to the type, or implement `Debug` for it".to_owned()
+    let (tag, help) = if debug {
+        (
+            Tag::NoDebug,
+            "add `#[derive(Debug)]` to the type, or implement `Debug` for it".to_owned(),
+        )
     } else if ctx.has_trait(ty, ctx.lang("debug_trait")) {
-        format!("format it with `{DEBUG_HOLE}`, or implement `Display` for it")
+        (
+            Tag::NoDisplayHasDebug,
+            format!("format it with `{DEBUG_HOLE}`, or implement `Display` for it"),
+        )
     } else {
-        format!("implement `Display` for it, or derive `Debug` and format it with `{DEBUG_HOLE}`")
+        (
+            Tag::NoDisplay,
+            format!(
+                "implement `Display` for it, or derive `Debug` and format it with `{DEBUG_HOLE}`"
+            ),
+        )
     };
     ctx.help_last(Some(help));
+    ctx.tag_last(tag);
     false
 }
 

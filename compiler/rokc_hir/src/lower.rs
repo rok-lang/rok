@@ -3032,6 +3032,26 @@ impl<'a> LowerCtx<'a> {
         }
     }
 
+    /// Attach a fix (replace `span` with `text`) to the diagnostic just
+    /// emitted.
+    #[expect(dead_code, reason = "no producer yet")]
+    fn fix_last(&self, span: Span, text: impl Into<String>, title: impl Into<String>) {
+        if let Some(d) = self.env.sink.diagnostics.borrow_mut().last_mut() {
+            d.fixes.push(rokc_diagnostic::Fix {
+                span,
+                text: text.into(),
+                title: title.into(),
+            });
+        }
+    }
+
+    /// Tag the diagnostic just emitted.
+    fn tag_last(&self, tag: rokc_diagnostic::Tag) {
+        if let Some(d) = self.env.sink.diagnostics.borrow_mut().last_mut() {
+            d.tag = tag;
+        }
+    }
+
     /// "struct `S` has no field `x`" plus the closest field name.
     fn no_field(&self, sid: StructId, name: &str, span: rokc_diagnostic::Span) -> HirExpr {
         let def = self.struct_def(sid);
