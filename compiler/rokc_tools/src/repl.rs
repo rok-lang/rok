@@ -2887,7 +2887,17 @@ fn close_stmt(cell: &str) -> String {
         .rev()
         .nth(1)
         .is_some_and(|t| t.kind != T::Semi);
-    if open && (assigns || matches!(classify(last), Cell::Let)) {
+    // `use`, `const`, `static` and `type` end in `;` too, even after a `}`.
+    let mut rest = tokens.iter().map(|t| &t.kind).peekable();
+    if rest.next_if(|k| **k == T::Pub).is_some() && rest.next_if(|k| **k == T::LParen).is_some() {
+        rest.find(|k| **k == T::RParen);
+    }
+    let item = match rest.next() {
+        Some(T::Use) => true,
+        Some(T::Ident(w)) => matches!(w.as_str(), "const" | "static" | "type"),
+        _ => false,
+    };
+    if open && (assigns || item || matches!(classify(last), Cell::Let)) {
         // On a line of its own, outside the text diagnostics quote.
         format!("{cell}\n;")
     } else {
@@ -3191,6 +3201,14 @@ mod tests {
             ("using g = m.lock() { g.get() }", false),
             ("if let Some(x) = o { x } else { 0 }", false),
             ("(a, b) = (b, a)", true),
+            ("use rok::std::io::stdin", true),
+            ("use rok::std::fs::{read, write}", true),
+            ("pub(crate) use a::b", true),
+            ("const N: i32 = 3", true),
+            ("static S: str = \"s\"", true),
+            ("type Id = i64", true),
+            ("use a::b;", false),
+            ("pub fn f() {}", false),
         ] {
             let want = if closed {
                 format!("{cell}\n;")
