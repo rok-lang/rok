@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.1.4 (2026-10-29)
+
+- The REPL starts with the toolchain line and a hint (`-q` drops them); prompts are
+  `>>>` and `...`, and a prompt always starts on a fresh line.
+- A cell ends by tokens: char literals, comments and an item header without its body no
+  longer split or join cells; a cell's last `let`, assignment, `use`, `const`, `static` or
+  `type` needs no `;`.
+- Values show through `Display`, else `Debug`, else their type; `it` holds the last value;
+  a cell with a top-level `await` keeps its bindings.
+- Panics and throws in earlier cells point at `<repl cell N>`; a redefinition that breaks
+  an earlier item names it and the fix; a cell may hold several items.
+- REPL commands: `exit`, `:exit`, `:doc`, `:time`, `:vars`, `:load`, `:reload`, `:edit`,
+  `:save`, `:opt`; an unknown name the package defines hints at `rok repl .`.
+- Line editing: syntax colours, completion of core, imported and member names, bracketed
+  paste as one cell, whole-cell history with `C-r` and prefix search, wide characters.
+- Cells read the terminal; Jupyter streams output while a cell runs, asks for input with
+  `input_request`, and reports highlighting, indent hints, logos and help links.
+- The last statement before `}` may omit its `;`.
+- install.sh sets up PATH like rustup (`$ROK_HOME/env`, fish `conf.d`) unless
+  `--no-modify-path`, and installs shell completion; `rok completions <shell>` and
+  `rokc completions <shell>` print it, and `rok toolchain update` / `default` refresh it.
+- Concurrent runs of one script no longer race on the build cache; a written `ref`
+  parameter is no longer reported unused.
+
 ## 0.1.3 (2026-10-29)
 
 - `rok::core::encoding`: `hex_encode`, `hex_decode`, `base64_encode`, `base64_decode`;
