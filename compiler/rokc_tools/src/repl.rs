@@ -22,7 +22,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use rokc_diagnostic::{Label, RokDiagnostic, Span};
-use rokc_hir::{HirExpr, HirExprKind, HirModule, HirStaticDef, HirStmt, HirTy};
+use rokc_hir::{
+    HirBlock, HirExpr, HirExprKind, HirFunction, HirModule, HirStaticDef, HirStmt, HirTy,
+};
 use rokc_interface::{
     BuildOptions, CompileResult, EmitKind, ReplCell, ReplFn, Session, SourceMap, TempDir, link_host,
 };
@@ -37,19 +39,32 @@ const SHOWN: &str = "__rok_repl_out";
 /// empty where no host runs.
 const HOST_OBJ: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/repl_host.o"));
 
-const HELP: &str = "\
-  <expr>         evaluate and print its value (`Display`)
+const HELP: &str = "  <expr>         evaluate and print its value (`Display`); `it` holds the
+                 last value shown (a binding named `it` wins)
   <expr>?        evaluate and print its `Debug` form
   let x = ..     bind (a top-level `let` may rebind a name, 907.3; a
                  cell's last `let` or assignment needs no `;`)
   fn / struct / enum / impl / trait / use ..   define (a new `fn f` /
                  `struct S` replaces the old one)
-  :type <expr>   print the type of an expression
-  :add <name> --path <dir> | --git <url> [--rev|--tag|--branch <r>]
+  :type <expr>, :t <expr>   print the type of an expression
+  :doc <name>    print its signature and doc comment
+  :time <expr>   evaluate it; print the time of each phase and the total
+  :vars          list the bindings (`name: type`) and items
+  :load <file>   load a program into the session (as `rok repl <file>`)
+  :reload        load the last loaded program again
+  :edit          write cells in `$EDITOR`, then run them
+  :save <file>   write the session as a script
+  :opt [<level>] print or set the optimization level of later cells
+                 (0, 1, 2, 3, s, z)
+  :add <name>[@<req>] | <name> --path <dir> | <name> --git <url>
+                 [--rev|--tag|--branch <r>]
                  add a dependency: `rok install` into the environment, or
                  in a package `rok add` (`rok repl`)
   :reset         forget every cell
-  :quit          leave (also end of input)
+  :help, :h      print this help
+  :quit, :q, :exit, exit, quit
+                 leave (also end of input; a binding named `exit` or
+                 `quit` wins)
 A line ends the cell (`>>>`) unless a bracket, string or comment is still
 open, it ends in an operator, `,` or `=`, or it is an item header without
 its body: then `...` asks for the next line.
@@ -95,12 +110,12 @@ enum Cell {
     Expr,
 }
 
-/// `ROK_REPL_TIME=1`: each phase of a cell's build on stderr.
+/// `ROK_REPL_TIME=1` or `:time`: each phase of a cell's build on stderr.
 struct Lap(Option<std::time::Instant>);
 
 impl Lap {
-    fn start() -> Self {
-        Self(rokc_core::env_flag("ROK_REPL_TIME").then(std::time::Instant::now))
+    fn start(on: bool) -> Self {
+        Self((on || rokc_core::env_flag("ROK_REPL_TIME")).then(std::time::Instant::now))
     }
 
     fn note(&self, what: &str) {
@@ -129,8 +144,22 @@ struct Binding {
     sym: String,
     /// Its type, as source.
     ty: String,
+    /// Its type as `:vars` shows it.
+    shown_ty: String,
     /// It holds an `any` value (whose type a redefinition may change).
     holds_any: bool,
+    /// The session's `it`, not a user's binding.
+    is_it: bool,
+}
+
+/// A cell `:save` writes: its statements, then the expression whose
+/// value it showed (`it`: kept as `it`), and the bindings it made.
+#[derive(Default)]
+struct Saved {
+    stmts: String,
+    expr: Option<String>,
+    it: bool,
+    declares: Vec<(String, String)>,
 }
 
 /// The host and its channel. Field order matters: the channel closes
@@ -466,6 +495,15 @@ pub struct Repl {
     /// The host process running the current cell (0: none). `SIGINT`
     /// to it ends the cell; the session goes on as before it.
     pub running: Arc<AtomicU32>,
+    /// `:time`: the phases of the cell being built go to stderr.
+    timing: bool,
+    /// The last program loaded and whether it is a lone file (`:reload`).
+    loaded: Option<(PathBuf, bool)>,
+    /// The cells that ran, for `:save`.
+    history: Vec<Saved>,
+    /// The source directory of the package the session runs in without
+    /// loading it: names it defines get a hint.
+    pub package: Option<PathBuf>,
 }
 
 impl Drop for Repl {
@@ -501,6 +539,10 @@ impl Repl {
             input: String::new(),
             diverged: std::cell::Cell::new(false),
             running: Arc::default(),
+            timing: false,
+            loaded: None,
+            history: Vec::new(),
+            package: None,
         })
     }
 
@@ -577,26 +619,14 @@ impl Repl {
         cell.clone_into(&mut self.input);
         match cell {
             _ if blank(cell) => {}
-            ":q" | ":quit" | ":exit" => return false,
-            ":reset" => {
-                self.state = State::default();
-                self.bindings.clear();
-                self.statics.clear();
-                self.any_types.clear();
-                if let Some(p) = self.prelude.clone() {
-                    self.cell(&p);
-                }
+            // As in Python: the bare word ends the session.
+            _ if EXIT.contains(&cell) && !self.defines(&cell[..4]) => return false,
+            _ if cell.starts_with(':') => {
+                let (cmd, arg) = cell
+                    .split_once(char::is_whitespace)
+                    .map_or((cell, ""), |(c, a)| (c, a.trim()));
+                return self.command(cmd, arg);
             }
-            ":help" | ":h" => print!("{HELP}"),
-            _ if cell.starts_with(":type ") || cell.starts_with(":t ") => {
-                let expr = cell.split_once(' ').map_or("", |(_, e)| e).trim();
-                expr.clone_into(&mut self.input);
-                if let Some(ty) = self.type_of(expr, false) {
-                    println!("{ty}");
-                }
-            }
-            _ if cell.starts_with(":add ") => self.add_dep(&cell[5..]),
-            _ if cell.starts_with(':') => eprintln!("unknown command `{cell}` (:help lists them)"),
             _ => {
                 if let Ok(Some(shown)) = self.eval(cell) {
                     println!("{shown}");
@@ -604,6 +634,269 @@ impl Repl {
             }
         }
         true
+    }
+
+    /// A `:` command; `false` to stop.
+    fn command(&mut self, cmd: &str, arg: &str) -> bool {
+        let needs = |what: &str, example: &str| {
+            eprintln!("error: `{cmd}` takes {what}: `{cmd} {example}`");
+        };
+        match cmd {
+            ":q" | ":quit" | ":exit" => return false,
+            ":reset" => self.reset(),
+            ":help" | ":h" => print!("{HELP}"),
+            ":type" | ":t" if arg.is_empty() => needs("an expression", "1 + 2"),
+            ":type" | ":t" => {
+                arg.clone_into(&mut self.input);
+                if let Some(ty) = self.type_of(arg, false) {
+                    println!("{ty}");
+                }
+            }
+            ":add" if arg.is_empty() => needs("a dependency", "<name> --path <dir>"),
+            ":add" => self.add_dep(arg),
+            ":doc" => {
+                let start = arg
+                    .trim_end_matches(|c: char| c.is_alphanumeric() || c == '_')
+                    .len();
+                if start == arg.len() {
+                    needs("a name", "xs.len");
+                } else if let Some(text) = self
+                    .help(arg, start, arg.len())
+                    // A method is found in a call.
+                    .or_else(|| self.help(&format!("{arg}()"), start, arg.len()))
+                {
+                    println!("{text}");
+                } else {
+                    eprintln!("error: the session defines no `{arg}`; `:vars` lists what it does");
+                }
+            }
+            ":time" if arg.is_empty() => needs("an expression", "fib(30)"),
+            ":time" => {
+                let t = std::time::Instant::now();
+                self.timing = true;
+                let r = self.eval(arg);
+                self.timing = false;
+                if let Ok(Some(shown)) = r {
+                    println!("{shown}");
+                }
+                eprintln!("[repl] total: {:.1}ms", t.elapsed().as_secs_f64() * 1e3);
+            }
+            ":vars" => self.vars(),
+            ":load" if arg.is_empty() => needs("a file", "prog.rok"),
+            ":load" if std::path::Path::new(arg).is_dir() => eprintln!(
+                "error: `:load` takes a `.rok` file; for a package directory start `rok repl {arg}`"
+            ),
+            ":load" => {
+                self.load_program(std::path::Path::new(arg), true);
+            }
+            ":reload" => match self.loaded.clone() {
+                Some((path, anonymous)) => {
+                    self.load_program(&path, anonymous);
+                }
+                None => eprintln!("error: no program loaded yet; load one with `:load <file>`"),
+            },
+            ":edit" => return self.edit(),
+            ":save" if arg.is_empty() => needs("a file", "session.rok"),
+            ":save" => self.save(arg),
+            ":opt" => match arg {
+                "" => println!("-O{}", self.opts.opt_level),
+                "0" | "1" | "2" | "3" | "s" | "z" => {
+                    arg.clone_into(&mut self.opts.opt_level);
+                    // Code built at the old level is built again.
+                    self.known.clear();
+                }
+                _ => eprintln!(
+                    "error: `:opt` takes 0, 1, 2, 3, s or z (as `-O`), not `{arg}`: `:opt 2`"
+                ),
+            },
+            _ => eprintln!("unknown command `{cmd}` (:help lists them)"),
+        }
+        true
+    }
+
+    /// `:reset`: forget every cell, then run the prelude again.
+    fn reset(&mut self) {
+        self.state = State::default();
+        self.bindings.clear();
+        self.statics.clear();
+        self.any_types.clear();
+        self.history.clear();
+        if let Some(p) = self.prelude.clone() {
+            self.cell(&p);
+        }
+    }
+
+    /// Whether the session's own code names `name`: a binding (not `it`),
+    /// an item, or a `use` of it.
+    fn defines(&self, name: &str) -> bool {
+        self.bindings.iter().any(|b| b.name == name && !b.is_it)
+            || self.state.items.iter().any(|(k, t)| match k {
+                Some(k) => k.split(' ').nth(1) == Some(name),
+                None => t.starts_with("use ") && names(t, name),
+            })
+    }
+
+    /// Help for the name at `code[start..end]` (9.8.6): the language
+    /// server's hover as text, from the cell checked in the session, else
+    /// from the expression ending at the name alone.
+    pub fn help(&self, code: &str, start: usize, end: usize) -> Option<String> {
+        let at = |body: &str, off: usize| {
+            let (src, base) = self.source(body);
+            let (a, key) = self.analyze(&src);
+            crate::lsp::hover(&a, &key, &src, base + off)
+        };
+        let from = crate::lsp::receiver_start(code, end);
+        let md = at(code, start).or_else(|| at(&format!("{};", &code[from..end]), start - from))?;
+        let lines: Vec<&str> = md.lines().filter(|l| !l.starts_with("```")).collect();
+        Some(lines.join("\n"))
+    }
+
+    /// `:vars`: the bindings as `name: type`, then the named items'
+    /// headers.
+    fn vars(&self) {
+        for b in &self.bindings {
+            println!("{}: {}", b.name, b.shown_ty);
+        }
+        for (_, item) in self.state.items.iter().filter(|(k, _)| k.is_some()) {
+            println!("{}", header(item));
+        }
+    }
+
+    /// `:edit`: cells written in `$EDITOR` run as typed; `false` to stop.
+    /// The text of a run that failed opens again.
+    fn edit(&mut self) -> bool {
+        let file = self.tmp.path().join("edit.rok");
+        if !file.exists() {
+            if let Err(e) = std::fs::write(&file, "") {
+                eprintln!("error: cannot write {}: {e}", file.display());
+                return true;
+            }
+        }
+        let editor = ["VISUAL", "EDITOR"]
+            .iter()
+            .filter_map(std::env::var_os)
+            .find(|e| !e.is_empty())
+            .and_then(|e| e.into_string().ok())
+            .unwrap_or_else(|| if cfg!(windows) { "notepad" } else { "vi" }.to_owned());
+        let mut words = editor.split_whitespace();
+        let Some(exe) = words.next() else { return true };
+        match Command::new(exe).args(words).arg(&file).status() {
+            Ok(s) if s.success() => {}
+            Ok(s) => {
+                eprintln!("error: `{editor}` failed ({s}); nothing ran");
+                return true;
+            }
+            Err(e) => {
+                eprintln!("error: cannot run `{editor}`: {e}; set `EDITOR` to your editor");
+                return true;
+            }
+        }
+        let text = std::fs::read_to_string(&file).unwrap_or_default();
+        for c in split_cells(&text) {
+            let r = if c.starts_with(':') || EXIT.contains(&c.as_str()) {
+                if !self.cell(&c) {
+                    return false;
+                }
+                Ok(None)
+            } else {
+                self.eval(&c)
+            };
+            match r {
+                Ok(Some(shown)) => println!("{shown}"),
+                Ok(None) => {}
+                Err(()) => return true,
+            }
+        }
+        let _ = std::fs::write(&file, "");
+        true
+    }
+
+    /// `:save <file>`: the session's items, then the cells that ran, as a
+    /// script. An expression cell is a statement, or `let it = ..` where a
+    /// later cell reads `it`.
+    fn save(&self, path: &str) {
+        match std::fs::write(path, self.script()) {
+            Ok(()) => eprintln!("wrote {path}"),
+            Err(e) => eprintln!("error: cannot write {path}: {e}"),
+        }
+    }
+
+    /// The session as a script (`:save`). A file may not declare a name
+    /// twice in one scope (5.1.4): a cell that declares one again with
+    /// the same type assigns it; otherwise it opens a block that lasts
+    /// to the end.
+    fn script(&self) -> String {
+        let mut out = String::new();
+        for (_, item) in &self.state.items {
+            out.push_str(item);
+            out.push('\n');
+        }
+        let mut scope: HashMap<&str, &str> = HashMap::new();
+        let mut open = 0;
+        for (i, s) in self.history.iter().enumerate() {
+            let mut read = false;
+            for later in &self.history[i + 1..] {
+                let text = format!("{}{}", later.stmts, later.expr.as_deref().unwrap_or(""));
+                read = s.it && names(&text, "it");
+                if read || later.it {
+                    break;
+                }
+            }
+            // `it` is declared only where a later cell reads it.
+            let declares: Vec<(&str, &str)> = s
+                .declares
+                .iter()
+                .map(|(n, t)| (n.as_str(), t.as_str()))
+                .filter(|(n, _)| read || !(s.it && *n == "it"))
+                .collect();
+            let stmts = match s.stmts.strip_suffix("\n;") {
+                Some(t) => format!("{t};"),
+                None => s.stmts.clone(),
+            };
+            let mut text = stmts.clone();
+            let (mut assign_it, mut block) = (false, false);
+            for &(n, t) in &declares {
+                match scope.get(n) {
+                    None => {}
+                    Some(&old) if old == t && s.it && n == "it" => assign_it = true,
+                    Some(&old) if old == t => match assign_instead(&text, n) {
+                        Some(a) => text = a,
+                        None => block = true,
+                    },
+                    Some(_) => block = true,
+                }
+            }
+            if block {
+                out.push_str("{\n");
+                open += 1;
+                scope.clear();
+                (text, assign_it) = (stmts, false);
+            }
+            scope.extend(declares);
+            out.push_str(&text);
+            match &s.expr {
+                Some(e) if assign_it => {
+                    let _ = write!(out, "it = {e};");
+                }
+                Some(e) if read => {
+                    let _ = write!(out, "let it = {e};");
+                }
+                Some(e) => {
+                    let _ = write!(out, "{e};");
+                }
+                None => {}
+            }
+            out.push('\n');
+        }
+        out.push_str(&"}\n".repeat(open));
+        out
+    }
+
+    /// The bindings (name, type) the last cell built made.
+    fn declared(&self) -> Vec<(String, String)> {
+        let made = format!("__rok_repl_{}_", self.built);
+        let mine = self.bindings.iter().filter(|b| b.sym.starts_with(&made));
+        mine.map(|b| (b.name.clone(), b.ty.clone())).collect()
     }
 
     /// One cell: what it shows (the value, or its type), or `Err`
@@ -618,9 +911,17 @@ impl Repl {
         }
         // The cell's value is its last top-level statement's (907.7).
         let (stmts, last) = split_last(cell);
-        match classify(last) {
+        let saved = |stmts: &str, expr: Option<&str>, it: bool| Saved {
+            stmts: stmts.to_owned(),
+            expr: expr.map(str::to_owned),
+            it,
+            declares: Vec::new(),
+        };
+        let (r, ran) = match classify(last) {
             // A statement (a `let` too) shows nothing (907.1).
-            Cell::Item(_) | Cell::Let | Cell::Stmt => self.run_once(cell, None, false),
+            Cell::Item(_) | Cell::Let | Cell::Stmt => {
+                (self.run_once(cell, None, false), saved(cell, None, false))
+            }
             Cell::Expr => {
                 // A trailing `?` on a bare top-level expression asks for the
                 // `Debug` form: error propagation needs a `throws` context,
@@ -629,17 +930,32 @@ impl Repl {
                     Some(e) => (e.trim_end(), true),
                     None => (last, false),
                 };
+                let before = self.it().map(str::to_owned);
                 let r = self.run_once(
                     &format!("{stmts}let {VALUE} = ({expr});"),
                     Some(VALUE),
                     debug,
                 );
                 if r.is_err() && self.diverged.take() {
-                    return self.run_once(&format!("{stmts}{expr};"), None, false);
+                    let text = format!("{stmts}{expr};");
+                    (self.run_once(&text, None, false), saved(&text, None, false))
+                } else {
+                    let it = self.it().is_some() && self.it() != before.as_deref();
+                    (r, saved(stmts, Some(expr), it))
                 }
-                r
             }
+        };
+        if r.is_ok() {
+            let declares = self.declared();
+            self.history.push(Saved { declares, ..ran });
         }
+        r
+    }
+
+    /// The slot of the session's `it`.
+    fn it(&self) -> Option<&str> {
+        let b = self.bindings.iter().find(|b| b.is_it)?;
+        Some(&b.sym)
     }
 
     /// The type of `expr` in the session, without running it; `quiet`
@@ -782,6 +1098,10 @@ impl Repl {
             self.statics
                 .retain(|s| lib(s) || s.rsplit("::").next() != Some(name));
         }
+        // A user's `it` wins over the session's.
+        if key.as_deref().and_then(|k| k.split(' ').nth(1)) == Some("it") {
+            self.bindings.retain(|b| !b.is_it);
+        }
         self.state = next;
         true
     }
@@ -846,7 +1166,7 @@ impl Repl {
         may_drop: &[String],
     ) -> Result<Option<String>, Fail> {
         self.start_host();
-        let mut lap = Lap::start();
+        let mut lap = Lap::start(self.timing);
         // A bare expression prints its `Display`; a trailing `?` (`debug`)
         // prints its `Debug`. Either falls back to the type name alone when
         // the value does not implement that trait; the plain build reports
@@ -872,8 +1192,9 @@ impl Repl {
             }
         };
         lap.mark("front end");
+        let it = show.is_some() && !self.defines("it");
         let new = self
-            .keep(&mut r, may_drop)
+            .keep(&mut r, may_drop, it)
             .map_err(|(n, e)| Fail::Unkept(n, e))?;
         let edited = new.is_some();
         let new = new.unwrap_or_default();
@@ -951,44 +1272,35 @@ impl Repl {
 
     /// Adds slots for the cell's new top-level `let`s (last of each name)
     /// and, at the block's end, stores of every binding back to its slot.
-    /// An unusable binding is an error unless in `may_drop`. `None`: HIR
-    /// unchanged; else MIR must be lowered again.
+    /// An unusable binding is an error unless in `may_drop`. `it`: the
+    /// shown value becomes `it`, unless the cell binds `it` itself. `None`:
+    /// HIR unchanged; else MIR must be lowered again.
     fn keep(
         &self,
         r: &mut CompileResult,
         may_drop: &[String],
+        it: bool,
     ) -> Result<Option<Vec<Binding>>, (String, String)> {
         let Some(hir) = r.modules.first_mut().map(|m| &mut m.hir) else {
             return Ok(None);
         };
-        let Some(main) = hir.functions.iter().position(|f| f.name == "main") else {
+        // Where the cell's block starts in the session source.
+        let at = u32::try_from(self.session(&self.state, "", None).len()).unwrap_or(u32::MAX);
+        let Some((f, outer, block)) = top_fns(hir)
+            .into_iter()
+            .find_map(|f| cell_scope(&hir.functions[f], at).map(|(o, b)| (f, o, b)))
+        else {
             return Ok(None);
         };
         // The `let`s before the cell's block load the old bindings.
-        let mut outer: Vec<LocalId> = Vec::new();
-        let mut cell = None;
-        for (i, s) in hir.functions[main]
-            .body
+        let outer: Vec<LocalId> = outer
             .iter()
-            .flat_map(|b| &b.stmts)
-            .enumerate()
-        {
-            match s {
-                HirStmt::Let { local, .. } => outer.push(*local),
-                HirStmt::Expr(HirExpr {
-                    kind: HirExprKind::Block(b),
-                    ..
-                }) => {
-                    cell = Some((i, b));
-                    break;
-                }
-                _ => {}
-            }
-        }
-        let Some((at, block)) = cell else {
-            return Ok(None);
-        };
-        let locals = &hir.functions[main].locals;
+            .filter_map(|s| match s {
+                HirStmt::Let { local, .. } => Some(*local),
+                _ => None,
+            })
+            .collect();
+        let locals = &hir.functions[f].locals;
         let local = |id: LocalId| locals.iter().find(|l| l.id == id);
         let named = |id: LocalId| {
             local(id)?
@@ -1002,8 +1314,18 @@ impl Repl {
         });
         let mut new: Vec<(Binding, LocalId)> = Vec::new();
         for (i, id) in lets.enumerate() {
-            let (Some(name), Some(l)) = (named(id), local(id)) else {
-                continue;
+            let Some(l) = local(id) else { continue };
+            let shown = it && l.name.as_deref() == Some(VALUE);
+            let name = match named(id) {
+                Some(n) => n,
+                // A unit or unkeepable value leaves `it` as it was.
+                None if shown
+                    && !matches!(l.ty, HirTy::Unit | HirTy::Never)
+                    && !new.iter().any(|(b, _)| b.name == "it") =>
+                {
+                    "it"
+                }
+                None => continue,
             };
             // Full paths, so later cells name the type without a `use`.
             let ty = ty_path(hir, &l.ty);
@@ -1017,6 +1339,9 @@ impl Repl {
                     .map(|p| format!("`{p}` is private to its module"))
             };
             if let Some(why) = why {
+                if shown {
+                    continue;
+                }
                 let msg = format!(
                     "`{name}: {}` cannot be kept for later cells ({why})",
                     ty_name(hir, &l.ty)
@@ -1036,7 +1361,9 @@ impl Repl {
                     name,
                     sym,
                     ty,
+                    shown_ty: ty_name(hir, &l.ty),
                     holds_any,
+                    is_it: shown,
                 },
                 id,
             ));
@@ -1079,15 +1406,27 @@ impl Repl {
             })
             .collect();
         hir.statics.extend(slots);
-        let body = hir.functions[main].body.as_mut();
-        if let Some(HirStmt::Expr(e)) = body.and_then(|b| b.stmts.get_mut(at)) {
-            if let HirExprKind::Block(b) = &mut e.kind {
-                if let Some(t) = b.trailing.take() {
-                    b.stmts.push(HirStmt::Expr(t));
-                    e.ty = HirTy::Unit;
-                }
-                b.stmts.extend(stores);
+        let mut stores = Some(stores);
+        let mut store = |scope: &mut HirBlock| {
+            let Some(HirStmt::Expr(e)) = scope.stmts.iter_mut().find(|s| is_cell(s, at)) else {
+                return;
+            };
+            let (HirExprKind::Block(b), Some(stores)) = (&mut e.kind, stores.take()) else {
+                return;
+            };
+            if let Some(t) = b.trailing.take() {
+                b.stmts.push(HirStmt::Expr(t));
+                e.ty = HirTy::Unit;
             }
+            b.stmts.extend(stores);
+        };
+        if let Some(body) = hir.functions[f].body.as_mut() {
+            store(body);
+            rokc_hir::each_block_mut(body, &mut |e| {
+                if let HirExprKind::Block(b) = &mut e.kind {
+                    store(b);
+                }
+            });
         }
         Ok(Some(new.into_iter().map(|(b, _)| b).collect()))
     }
@@ -1259,10 +1598,28 @@ impl Repl {
         if !quiet {
             let path = path.display().to_string();
             for d in &r.errors {
-                r.report(&localize(d, session, &path, &regions));
+                r.report(&self.package_hint(localize(d, session, &path, &regions)));
             }
         }
         None
+    }
+
+    /// `d`, with a hint when the name it cannot find is one the package
+    /// the session runs in (not loaded) defines.
+    fn package_hint(&self, d: RokDiagnostic) -> RokDiagnostic {
+        let Some(dir) = &self.package else { return d };
+        let name = d
+            .message
+            .strip_prefix("cannot find ")
+            .filter(|m| m.ends_with("` in this scope"))
+            .and_then(|m| m.split('`').nth(1))
+            .map(str::to_owned);
+        match name {
+            Some(n) if defined_in(dir, &n) => d.with_help(format!(
+                "`{n}` is defined in this package; load this package: `rok repl .`"
+            )),
+            _ => d,
+        }
     }
 
     /// A compiler session for session sources, and the path they stand at.
@@ -1362,6 +1719,7 @@ impl Repl {
                 return false;
             }
         };
+        self.loaded = Some((path.to_owned(), anonymous));
         let shown = path.display().to_string();
         let (tokens, _) = rokc_lexer::Lexer::new(&text, shown.clone()).lex_all();
         let tops = rokc_parser::parse_program(&tokens, shown.clone()).0.tops;
@@ -1422,6 +1780,9 @@ impl Repl {
             cell: None,
         });
         let mut next = self.state.clone();
+        // Its items replace the session's of the same name (`:reload`).
+        next.items
+            .retain(|(k, _)| k.is_none() || !items.iter().any(|(n, ..)| n == k));
         next.items.extend(items.into_iter().map(|(k, t, _)| (k, t)));
         let all = match (cells.first(), cells.last()) {
             (Some(f), Some(l)) => &body[f.0..l.1],
@@ -1457,7 +1818,14 @@ impl Repl {
                 let text = &body[cells[i].0..cells[j].1];
                 self.set_cell(text, Some(cells[i].0));
                 match self.run_cell(text, None, false, &may_drop) {
-                    Ok(_) => break,
+                    Ok(_) => {
+                        self.history.push(Saved {
+                            stmts: text.trim().to_owned(),
+                            declares: self.declared(),
+                            ..Saved::default()
+                        });
+                        break;
+                    }
                     // Merged through the last cell that names it.
                     Err(Fail::Unkept(name, _)) => {
                         match (j + 1..cells.len())
@@ -1494,6 +1862,110 @@ impl Repl {
 
 /// The name a cell's text goes by in locations.
 const REPL_FILE: &str = "<repl>";
+
+/// Cells that end the session unless the session defines the name.
+const EXIT: [&str; 4] = ["exit", "quit", "exit()", "quit()"];
+
+/// The cells of a multi-line text: lines until the input is complete
+/// (`incomplete`), as the terminal REPL reads them.
+pub(crate) fn split_cells(code: &str) -> Vec<String> {
+    let mut cells = Vec::new();
+    let mut buf = String::new();
+    for line in code.lines() {
+        buf.push_str(line);
+        buf.push('\n');
+        if !incomplete(&buf) {
+            let cell = std::mem::take(&mut buf);
+            if !blank(&cell) {
+                cells.push(cell.trim().to_owned());
+            }
+        }
+    }
+    if !blank(&buf) {
+        cells.push(buf.trim().to_owned());
+    }
+    cells
+}
+
+/// An item's text before its body or `;`, on one line, without its
+/// attributes and comments: `fn f(x: i32) -> i32`, `const N: i32`.
+fn header(item: &str) -> String {
+    let rest = past_attrs(item);
+    let mut depth = 0i32;
+    let mut end = rest.len();
+    let bytes = rest.as_bytes();
+    for (i, &c) in bytes.iter().enumerate() {
+        match c {
+            b'(' | b'[' => depth += 1,
+            b')' | b']' => depth -= 1,
+            b'{' | b';' if depth == 0 => {
+                end = i;
+                break;
+            }
+            // `=` alone, not `==`, `=>`, `<=`, `>=` or `!=`.
+            b'=' if depth == 0
+                && !matches!(bytes.get(i + 1), Some(b'=' | b'>'))
+                && !matches!(
+                    i.checked_sub(1).map(|j| bytes[j]),
+                    Some(b'=' | b'<' | b'>' | b'!')
+                ) =>
+            {
+                end = i;
+                break;
+            }
+            _ => {}
+        }
+    }
+    rest[..end].split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// `stmts` with its top-level `let name =` (or `let mut name =`) turned
+/// into the assignment `name =`; `None` without one.
+fn assign_instead(stmts: &str, name: &str) -> Option<String> {
+    use rokc_lexer::TokenKind as T;
+    let (tokens, _) = rokc_lexer::Lexer::new(stmts, REPL_FILE).lex_all();
+    let kind = |i: usize| tokens.get(i).map(|t| &t.kind);
+    let mut depth = 0i32;
+    for (i, t) in tokens.iter().enumerate() {
+        match &t.kind {
+            T::LParen | T::LBracket | T::LBrace | T::HashLBracket | T::HashBangLBracket => {
+                depth += 1;
+            }
+            T::RParen | T::RBracket | T::RBrace => depth -= 1,
+            T::Let if depth == 0 => {
+                let j = i + 1 + usize::from(matches!(kind(i + 1), Some(T::Ident(m)) if m == "mut"));
+                if matches!(kind(j), Some(T::Ident(n)) if n == name) && kind(j + 1) == Some(&T::Eq)
+                {
+                    let (from, to) = (t.span.start as usize, tokens[j].span.start as usize);
+                    return Some(format!("{}{}", &stmts[..from], &stmts[to..]));
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Whether a `.rok` file under `dir` defines an item `name`.
+fn defined_in(dir: &std::path::Path, name: &str) -> bool {
+    use rokc_lexer::TokenKind as T;
+    let files = rokc_interface::source_files(dir);
+    files
+        .iter()
+        .filter(|f| f.extension().is_some_and(|x| x == "rok"))
+        .filter_map(|f| std::fs::read_to_string(f).ok())
+        .any(|text| {
+            let (tokens, _) = rokc_lexer::Lexer::new(&text, "").lex_all();
+            tokens.windows(2).any(|w| {
+                let item = match &w[0].kind {
+                    T::Fn | T::Struct | T::Enum | T::Trait => true,
+                    T::Ident(k) => matches!(k.as_str(), "const" | "static" | "type" | "union"),
+                    _ => false,
+                };
+                item && matches!(&w[1].kind, T::Ident(n) if n == name)
+            })
+        })
+}
 
 /// Whether `text` has the identifier `name`.
 fn names(text: &str, name: &str) -> bool {
@@ -1696,28 +2168,89 @@ fn holds_any(hir: &HirModule, ty: &HirTy, seen: &mut Vec<HirTy>) -> bool {
     }
 }
 
-/// The type of the last top-level binding `name` of `main`, as written.
+/// The functions that may hold the session's top level: `main`, then the
+/// coroutine bodies it starts (a top-level `await` makes `main` run its
+/// body on the executor, 4.16.5).
+fn top_fns(hir: &HirModule) -> Vec<usize> {
+    let Some(main) = hir.functions.iter().position(|f| f.name == "main") else {
+        return Vec::new();
+    };
+    let mut out = vec![main];
+    if let Some(body) = &hir.functions[main].body {
+        rokc_hir::each_block(body, &mut |e| {
+            if let HirExprKind::CoroNew { body_fn, .. } = &e.kind {
+                out.extend(hir.functions.iter().position(|f| f.id == *body_fn));
+            }
+        });
+    }
+    out
+}
+
+/// Whether `s` is the cell's block: the block expression at offset `at`
+/// of the session source.
+const fn is_cell(s: &HirStmt, at: u32) -> bool {
+    matches!(s, HirStmt::Expr(e) if e.span.start == at && matches!(e.kind, HirExprKind::Block(_)))
+}
+
+/// In `f`, the statements before the cell's block (`is_cell`) in the
+/// block holding it, and the cell's block.
+fn cell_scope(f: &HirFunction, at: u32) -> Option<(&[HirStmt], &HirBlock)> {
+    fn split(scope: &HirBlock, at: u32) -> Option<(&[HirStmt], &HirBlock)> {
+        let i = scope.stmts.iter().position(|s| is_cell(s, at))?;
+        match &scope.stmts[i] {
+            HirStmt::Expr(HirExpr {
+                kind: HirExprKind::Block(b),
+                ..
+            }) => Some((&scope.stmts[..i], b)),
+            _ => None,
+        }
+    }
+    let body = f.body.as_ref()?;
+    let mut found = split(body, at);
+    rokc_hir::each_block(body, &mut |e| {
+        if let (None, HirExprKind::Block(b)) = (&found, &e.kind) {
+            found = split(b, at);
+        }
+    });
+    found
+}
+
+/// The type of the last top-level binding `name` of the session (`main`
+/// or its coroutine body), as written.
 fn binding_ty(r: &CompileResult, name: &str) -> Option<String> {
     let hir: &HirModule = &r.modules.first()?.hir;
-    let main = hir.functions.iter().find(|f| f.name == "main")?;
-    let local = main
-        .locals
-        .iter()
-        .rev()
-        .find(|l| l.name.as_deref() == Some(name))?;
+    let local = top_fns(hir).into_iter().find_map(|f| {
+        hir.functions[f]
+            .locals
+            .iter()
+            .rev()
+            .find(|l| l.name.as_deref() == Some(name))
+    })?;
     Some(match &local.ty {
         HirTy::Unit => "()".to_owned(),
         t => ty_name(hir, t),
     })
 }
 
-fn classify(cell: &str) -> Cell {
-    // Leading attributes belong to the item after them.
-    let mut rest = cell;
-    while rest.starts_with("#[") {
-        let Some(end) = matching(rest, 1) else { break };
-        rest = rest[end + 1..].trim_start();
+/// `text` past its leading attributes and line comments, which belong to
+/// the item after them.
+fn past_attrs(text: &str) -> &str {
+    let mut rest = text.trim_start();
+    loop {
+        if rest.starts_with("#[") {
+            let Some(end) = matching(rest, 1) else { break };
+            rest = rest[end + 1..].trim_start();
+        } else if rest.starts_with("//") {
+            rest = rest.split_once('\n').map_or("", |(_, r)| r).trim_start();
+        } else {
+            return rest;
+        }
     }
+    rest
+}
+
+fn classify(cell: &str) -> Cell {
+    let rest = past_attrs(cell);
     let words: Vec<&str> = rest
         .split(|c: char| !(c.is_alphanumeric() || c == '_'))
         .filter(|w| !w.is_empty())
@@ -1783,11 +2316,20 @@ fn matching(s: &str, open: usize) -> Option<usize> {
 /// statement, or an item header still waiting for its body.
 pub(crate) fn incomplete(src: &str) -> bool {
     use rokc_lexer::TokenKind as T;
+    // A command is one line (`:load .`).
+    if src.trim_start().starts_with(':') {
+        return false;
+    }
     let (tokens, errors) = rokc_lexer::Lexer::new(src, REPL_FILE).lex_all();
     if errors
         .iter()
         .any(|e| e.message.starts_with("unterminated") && !e.message.contains("char"))
     {
+        return true;
+    }
+    // A doc comment waits for its item.
+    let last = src.lines().rev().map(str::trim).find(|l| !l.is_empty());
+    if last.is_some_and(|l| l.starts_with("///") && !l.starts_with("////")) {
         return true;
     }
     let tokens = tokens.split_last().map_or(&[][..], |(_, t)| t);
@@ -2004,28 +2546,46 @@ fn past_group(tokens: &[rokc_lexer::Token], open: usize) -> usize {
     tokens.len()
 }
 
-/// `rok repl` with the stdin it was started on; `program` (its root
-/// file, whether it is a lone file): `repl <path>`, loaded first.
+/// What a session loads before its first cell.
+#[derive(Default)]
+pub struct Start<'a> {
+    /// The first cell (`repl <lib>`: `use <lib>::*;`).
+    pub prelude: Option<&'a str>,
+    /// A program (its root file, whether it is a lone file): `repl <path>`.
+    pub program: Option<(&'a std::path::Path, bool)>,
+    /// The source directory of the package the session runs in, not
+    /// loaded (`Repl::package`).
+    pub package: Option<PathBuf>,
+}
+
+impl Repl {
+    /// Run `s`'s prelude, then load its program.
+    pub fn start(&mut self, s: Start<'_>) {
+        self.package = s.package;
+        if let Some(p) = s.prelude {
+            self.prelude = Some(p.to_owned());
+            self.cell(p);
+        }
+        if let Some((path, anonymous)) = s.program {
+            self.load_program(path, anonymous);
+        }
+    }
+}
+
+/// `rok repl` with the stdin it was started on, after `start`.
 pub fn main(
     bootstrap: Vec<PathBuf>,
     externs: Vec<(String, PathBuf)>,
     deps_dir: PathBuf,
     opts: BuildOptions,
     interactive: bool,
-    prelude: Option<&str>,
-    program: Option<(&std::path::Path, bool)>,
+    start: Start<'_>,
 ) -> i32 {
     match Repl::new(bootstrap, opts) {
         Ok(mut r) => {
             r.externs = externs;
             r.deps_dir = deps_dir;
-            if let Some(p) = prelude {
-                r.prelude = Some(p.to_owned());
-                r.cell(p);
-            }
-            if let Some((path, anonymous)) = program {
-                r.load_program(path, anonymous);
-            }
+            r.start(start);
             if interactive {
                 r.run_tty();
                 0
@@ -2159,5 +2719,182 @@ mod tests {
             "while true { break; }"
         );
         assert_eq!(split_last("let a = 1; a + 1").1, "a + 1");
+    }
+
+    fn repl() -> Repl {
+        Repl::new(Vec::new(), BuildOptions::default()).unwrap()
+    }
+
+    fn binding(name: &str, is_it: bool) -> Binding {
+        Binding {
+            name: name.to_owned(),
+            sym: format!("__rok_repl_1_{name}"),
+            ty: "i32".to_owned(),
+            shown_ty: "i32".to_owned(),
+            holds_any: false,
+            is_it,
+        }
+    }
+
+    fn saved(stmts: &str, expr: Option<&str>, it: bool, declares: &[(&str, &str)]) -> Saved {
+        Saved {
+            stmts: stmts.to_owned(),
+            expr: expr.map(str::to_owned),
+            it,
+            declares: declares
+                .iter()
+                .map(|(n, t)| ((*n).to_owned(), (*t).to_owned()))
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn doc_comments_and_commands_end_cells() {
+        // A doc comment waits for its item, which it belongs to.
+        assert!(incomplete("/// Doubles it.\n"));
+        assert!(!incomplete(
+            "/// Doubles it.\nfn twice(x: i32) -> i32 { x * 2 }\n"
+        ));
+        assert!(!incomplete("//// not a doc comment\n"));
+        assert!(
+            matches!(classify("/// Doubles it.\nfn twice(x: i32) -> i32 { x * 2 }"), Cell::Item(Some(k)) if k == "fn twice")
+        );
+        // A command is its line, even ending in `.` or an operator.
+        assert!(!incomplete(":load .\n"));
+        assert!(!incomplete(":type 1 +\n"));
+        assert_eq!(
+            split_cells("/// d\nfn f() {}\n:vars\nf()"),
+            ["/// d\nfn f() {}", ":vars", "f()"]
+        );
+    }
+
+    #[test]
+    fn vars_shows_item_headers() {
+        assert_eq!(
+            header("/// Doubles it.\n#[inline]\nfn twice(x: i32) -> i32 { x * 2 }"),
+            "fn twice(x: i32) -> i32"
+        );
+        assert_eq!(
+            header("fn f(a: [i32; 3]) -> bool { a[0] == 1 }"),
+            "fn f(a: [i32; 3]) -> bool"
+        );
+        assert_eq!(header("const N: i32 = 1;"), "const N: i32");
+        assert_eq!(header("struct P(i32);"), "struct P(i32)");
+        assert_eq!(
+            header("#[derive(Debug)]\nstruct Q {\n  x: i32;\n}"),
+            "struct Q"
+        );
+        assert_eq!(
+            header("fn g(x: i32)\n    -> i32 where i32: Copy { x }"),
+            "fn g(x: i32) -> i32 where i32: Copy"
+        );
+    }
+
+    #[test]
+    fn exit_and_it_yield_to_user_names() {
+        let mut r = repl();
+        assert!(!r.defines("exit") && !r.defines("it"));
+        // The session's `it` is not the user's.
+        r.bindings.push(binding("it", true));
+        assert!(!r.defines("it"));
+        r.bindings.push(binding("exit", false));
+        assert!(r.defines("exit") && !r.defines("quit"));
+        r.state
+            .items
+            .push((Some("fn quit".to_owned()), "fn quit() {}".to_owned()));
+        assert!(r.defines("quit"));
+        r.bindings.clear();
+        r.state
+            .items
+            .push((None, "use rok::std::env::exit;".to_owned()));
+        assert!(r.defines("exit"));
+        // Without one the bare word ends the session, as `:q` does.
+        let mut r = repl();
+        assert!(!r.cell("exit"));
+        assert!(!r.cell("quit()"));
+        assert!(!r.cell(":q"));
+        assert!(r.cell(":frob"));
+        assert!(r.cell(":opt 9"));
+        assert_eq!(r.opts.opt_level, BuildOptions::default().opt_level);
+        assert!(r.cell(":opt 2"));
+        assert_eq!(r.opts.opt_level, "2");
+        assert!(r.cell(":reload"));
+    }
+
+    #[test]
+    fn save_writes_a_script_that_declares_each_name_once() {
+        let mut r = repl();
+        r.state.items.push((
+            Some("fn twice".to_owned()),
+            "fn twice(x: i32) -> i32 { x * 2 }".to_owned(),
+        ));
+        r.history = vec![
+            saved("let a = 1\n;", None, false, &[("a", "i32")]),
+            // Read by the next cell: kept as `it`.
+            saved("", Some("twice(a)"), true, &[("it", "i32")]),
+            saved("", Some("it + 1"), true, &[("it", "i32")]),
+            // Not read again: a statement.
+            saved("", Some("it * 2"), true, &[("it", "i32")]),
+            // Declared again with its type: an assignment.
+            saved("let a = 5;", None, false, &[("a", "i32")]),
+            // With another type: a block of its own.
+            saved("let a = \"s\"; println(a);", None, false, &[("a", "str")]),
+            saved("", Some("a"), true, &[("it", "str")]),
+        ];
+        assert_eq!(
+            r.script(),
+            "\
+fn twice(x: i32) -> i32 { x * 2 }
+let a = 1;
+let it = twice(a);
+it = it + 1;
+it * 2;
+a = 5;
+{
+let a = \"s\"; println(a);
+a;
+}
+"
+        );
+        let path = r.tmp.path().join("s.rok");
+        r.save(&path.display().to_string());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), r.script());
+        assert_eq!(
+            assign_instead("f(); let b = 2; b", "b").as_deref(),
+            Some("f(); b = 2; b")
+        );
+        assert_eq!(assign_instead("{ let b = 2; }", "b"), None);
+        assert_eq!(assign_instead("let b: i32 = 2;", "b"), None);
+    }
+
+    #[test]
+    fn package_names_get_a_hint() {
+        let dir = rokc_core::tmp::test_dir("repl-hint");
+        std::fs::create_dir_all(dir.join("src/geo")).unwrap();
+        std::fs::write(
+            dir.join("src/lib.rok"),
+            "pub fn add(a: i32, b: i32) -> i32 { a + b }\n",
+        )
+        .unwrap();
+        std::fs::write(dir.join("src/geo.rok"), "pub struct Point { x: i32; }\n").unwrap();
+        let src = dir.join("src");
+        assert!(defined_in(&src, "add") && defined_in(&src, "Point"));
+        assert!(!defined_in(&src, "x"));
+        let missing = |what: &str| {
+            RokDiagnostic::error(
+                rokc_diagnostic::ErrorKind::Resolve,
+                Span::DUMMY,
+                format!("cannot find {what} in this scope"),
+            )
+        };
+        let mut r = repl();
+        assert!(r.package_hint(missing("function `add`")).notes.is_empty());
+        r.package = Some(src);
+        assert_eq!(
+            r.package_hint(missing("function `add`")).notes,
+            ["help: `add` is defined in this package; load this package: `rok repl .`"]
+        );
+        assert!(r.package_hint(missing("value `nope`")).notes.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

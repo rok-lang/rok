@@ -20,8 +20,8 @@ use rokc_core::hash::{hex, hmac_sha256};
 use rokc_interface::BuildOptions;
 
 use crate::analysis::Analysis;
-use crate::lsp::{complete, hover, receiver_start};
-use crate::repl::{Repl, blank, incomplete};
+use crate::lsp::complete;
+use crate::repl::{Repl, Start, incomplete, split_cells};
 use rokc_diagnostic::Json;
 
 const PROTOCOL: &str = "5.3";
@@ -344,27 +344,6 @@ fn redirect(fd: i32) -> io::Result<std::fs::File> {
     Ok(r)
 }
 
-/// The REPL cells of a Jupyter cell: lines until the input is complete
-/// (`repl::incomplete`), as the terminal REPL reads them.
-fn split_cells(code: &str) -> Vec<String> {
-    let mut cells = Vec::new();
-    let mut buf = String::new();
-    for line in code.lines() {
-        buf.push_str(line);
-        buf.push('\n');
-        if !incomplete(&buf) {
-            let cell = std::mem::take(&mut buf);
-            if !blank(&cell) {
-                cells.push(cell.trim().to_owned());
-            }
-        }
-    }
-    if !blank(&buf) {
-        cells.push(buf.trim().to_owned());
-    }
-    cells
-}
-
 /// `is_complete_reply` status: the REPL's continuation rule.
 fn completeness(code: &str) -> &'static str {
     if incomplete(code) {
@@ -397,6 +376,8 @@ struct Kernel {
     /// The session's check without a cell (path completion), until the
     /// next cell runs.
     checked: Option<(Analysis, String)>,
+    /// The output of loading the package, shown with the first cell's.
+    startup: (String, String),
 }
 
 impl Kernel {
@@ -417,12 +398,19 @@ impl Kernel {
                 break;
             }
         }
+        let (out, err) = self.output();
+        let (o, e) = std::mem::take(&mut self.startup);
+        (o + &out, e + &err, result)
+    }
+
+    /// What went to stdout and stderr since the last call.
+    fn output(&self) -> (String, String) {
         let mut stdout = io::stdout();
         let _ = stdout.write_all(END).and_then(|()| stdout.flush());
         let _ = io::stderr().write_all(END);
         let out = self.out.recv().unwrap_or_default();
         let err = self.err.recv().unwrap_or_default();
-        (out, err, result)
+        (out, err)
     }
 
     fn execute(&mut self, conn: &Conn, req: &Msg) {
@@ -492,21 +480,6 @@ impl Kernel {
             Json::Obj(reply)
         };
         self.wire.reply(conn, req, "execute_reply", &reply);
-    }
-
-    /// Help for the name at `code[start..end]` (9.8.6): the language
-    /// server's hover as text, from the cell checked in the session, else
-    /// from the expression ending at the name alone.
-    fn help(&self, code: &str, start: usize, end: usize) -> Option<String> {
-        let at = |body: &str, off: usize| {
-            let (src, base) = self.repl.source(body);
-            let (a, key) = self.repl.analyze(&src);
-            hover(&a, &key, &src, base + off)
-        };
-        let from = receiver_start(code, end);
-        let md = at(code, start).or_else(|| at(&format!("{};", &code[from..end]), start - from))?;
-        let lines: Vec<&str> = md.lines().filter(|l| !l.starts_with("```")).collect();
-        Some(lines.join("\n"))
     }
 
     /// Answer one shell / control request; `false` after `shutdown`.
@@ -595,7 +568,9 @@ impl Kernel {
                 let code = c.get("code").as_str().unwrap_or("");
                 let pos = c.get("cursor_pos").as_u32().unwrap_or(0) as usize;
                 let (start, end) = word_at(code, pos);
-                let help = (start < end).then(|| self.help(code, start, end)).flatten();
+                let help = (start < end)
+                    .then(|| self.repl.help(code, start, end))
+                    .flatten();
                 let data = help.as_ref().map_or_else(
                     || Json::obj([]),
                     |t| Json::obj([("text/plain", Json::str(t))]),
@@ -655,8 +630,9 @@ pub fn serve(
     externs: Vec<(String, PathBuf)>,
     deps_dir: PathBuf,
     opts: BuildOptions,
+    load: Start<'_>,
 ) -> i32 {
-    match start(file, bootstrap, externs, deps_dir, opts) {
+    match start(file, bootstrap, externs, deps_dir, opts, load) {
         Ok(()) => 0,
         Err(e) => {
             eprintln!("rokc jupyter: {e}");
@@ -671,6 +647,7 @@ fn start(
     externs: Vec<(String, PathBuf)>,
     deps_dir: PathBuf,
     opts: BuildOptions,
+    load: Start<'_>,
 ) -> Result<(), String> {
     let text = std::fs::read_to_string(file).map_err(|e| format!("{}: {e}", file.display()))?;
     let cf = Json::parse(&text).map_err(|e| format!("{}: {e}", file.display()))?;
@@ -782,7 +759,12 @@ fn start(
         out,
         err,
         checked: None,
+        startup: (String::new(), String::new()),
     };
+    // The package the kernel starts in, as `rok repl .` loads it. After
+    // the capture: the session host it starts inherits the streams.
+    k.repl.start(load);
+    k.startup = k.output();
     k.wire.status(&Json::obj([]), "starting");
     while let Ok((conn, m)) = rx.recv() {
         if !k.handle(&conn, &m) {
