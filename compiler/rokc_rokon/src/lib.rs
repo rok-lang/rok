@@ -501,7 +501,13 @@ impl Conv<'_> {
                     .map_err(|_| self.err(e, format!("invalid float `{t}`")))?;
                 // Infinity has no ROKON form (spec 3.9.1).
                 if !f.is_finite() {
-                    return Err(self.err(e, format!("float `{t}` is out of range")));
+                    return Err(self.err(
+                        e,
+                        format!(
+                            "float `{t}` is out of range (ROKON floats are f64, up to about \
+                             1.8e308)"
+                        ),
+                    ));
                 }
                 Kind::Float(f)
             }

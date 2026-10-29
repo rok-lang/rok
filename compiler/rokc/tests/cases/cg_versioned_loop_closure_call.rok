@@ -3,7 +3,7 @@
 // bounds checks: the read after `x.clear()` panics.
 // expect-exit: 101
 // expect-stderr: thread 'main' panicked at tests/cases/cg_versioned_loop_closure_call.rok:13:14:
-// expect-stderr: List index out of bounds
+// expect-stderr: index 0 out of bounds for length 0
 // expect-stdout:
 
 fn sum(x: List<i64>, n: usize, f: fn()) -> i64 {

@@ -241,7 +241,8 @@ pub(super) fn dynamic(ctx: &mut LowerCtx<'_>, recv: HirExpr, method: &str) -> Hi
 }
 
 /// `rok.method_table` / `rok.field_table` / `rok.any_cast`
-/// (`core/reflect.rok`), called as `name`.
+/// (`core/reflect.rok`) and `rok.shown` (`core/fmt.rok`), called as
+/// `name`.
 pub(super) fn intrinsic(
     ctx: &mut LowerCtx<'_>,
     op: super::collect::Intrinsic,
@@ -268,10 +269,32 @@ pub(super) fn intrinsic(
         discard_args(ctx, args);
         return ctx.error_expr(span, format!("`{name}` takes one value"));
     };
+    if op == super::collect::Intrinsic::Shown {
+        return shown(ctx, arg, &t, span);
+    }
     let any = HirTy::AnyTrait(Vec::new());
     let v = lower_expected(ctx, arg, any.clone());
     let v = coerce(ctx, &any, v, &|| format!("the value of `{name}`"));
     any_cast(ctx, v, &t, span)
+}
+
+/// `{x:?}` when `T: Debug`, else `"<T>"` (the value still evaluated).
+fn shown(ctx: &mut LowerCtx<'_>, arg: &Expr, t: &HirTy, span: rokc_diagnostic::Span) -> HirExpr {
+    let v = lower_expected(ctx, arg, t.clone());
+    let v = coerce(ctx, t, v, &|| "the value of `__shown`".to_owned());
+    if ctx.has_trait(t, ctx.lang("debug_trait")) {
+        return super::throws::format_value(ctx, v, true, span);
+    }
+    let text = str_const(format!("<{}>", type_name(ctx, t)), span);
+    HirExpr {
+        kind: HirExprKind::Block(Box::new(HirBlock {
+            stmts: vec![HirStmt::Expr(v)],
+            trailing: Some(text),
+            label: None,
+        })),
+        ty: HirTy::Prim(PrimTy::Str),
+        span,
+    }
 }
 
 /// `match v { x: T => x, x: I => x as T if it fits (integers), _ => none }`.

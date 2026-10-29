@@ -5,7 +5,7 @@
 // past it the checked loop does, and panics at the wrapped index.
 // expect-exit: 101
 // expect-stderr: thread 'main' panicked at tests/cases/cg_versioned_loop_signed_offset_wrap.rok:32:14:
-// expect-stderr: List index out of bounds
+// expect-stderr: index * out of bounds for length 32800
 // expect-stdout:
 // 118 32758 300
 // 117 300

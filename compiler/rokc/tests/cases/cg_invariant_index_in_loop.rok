@@ -6,7 +6,7 @@
 // expect-exit: 101
 // expect-stdout: 27 9
 // expect-stderr: thread 'main' panicked at tests/cases/cg_invariant_index_in_loop.rok:15:14:
-// expect-stderr: List index out of bounds
+// expect-stderr: index 2 out of bounds for length 2
 
 fn step(xs: List<i64>, ys: List<i64>, i: usize) -> i64 {
     let s: i64 = 0;

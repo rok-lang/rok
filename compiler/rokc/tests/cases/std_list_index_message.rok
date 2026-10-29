@@ -1,0 +1,11 @@
+// spec: std §2.9.2
+// `xs[i]` out of bounds names the index and the length.
+// expect-exit: 101
+// expect-stderr: thread 'main' panicked at tests/cases/std_list_index_message.rok:10:16:
+// expect-stderr: index 10 out of bounds for length 3
+// expect-stdout:
+
+fn main() {
+    let xs: List<i32> = [1, 2, 3];
+    println(f"{xs[10]}");
+}

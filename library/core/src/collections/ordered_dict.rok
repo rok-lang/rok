@@ -129,6 +129,7 @@ impl<K: Hash, V> FromIterator<(K, V)> for OrderedDict<K, V> {
 /// `d[k]`; panics when the key is absent.
 impl<K: Hash, V> Index<K> for OrderedDict<K, V> {
     type Output = V;
+    #[track_caller]
     const fn index(self, k: K) -> V {
         self.d[k]
     }

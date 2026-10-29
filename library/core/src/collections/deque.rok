@@ -276,7 +276,7 @@ impl<T> Index<usize> for Deque<T> {
     const fn index(self, i: usize) -> T {
         unsafe {
             if i >= self.len() {
-                return panic("Deque index out of bounds");
+                return index_oob("index", i, self.len());
             }
             self.data[0][self.slot(i)]
         }
@@ -290,7 +290,7 @@ impl<T> IndexSet<usize> for Deque<T> {
     fn index_set(self, i: usize, value: T) {
         unsafe {
             if i >= self.len() {
-                panic("Deque index out of bounds");
+                index_oob("index", i, self.len());
             }
             self.data[0][self.slot(i)] = value;
         }

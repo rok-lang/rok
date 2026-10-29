@@ -1,0 +1,18 @@
+// spec: std §2.9.3
+// A key without `Debug` is shown by its type name.
+// expect-exit: 101
+// expect-stderr: thread 'main' panicked at tests/cases/std_dict_missing_key_no_debug_panic.rok:16:13:
+// expect-stderr: key <Foo> not found; use `d.get(k)` to get `str | none`
+// expect-stdout:
+
+#[derive(PartialEq, Eq, Hash)]
+struct Foo {
+    n: i32;
+}
+
+fn main() {
+    let d: Dict<Foo, str> = Dict::new();
+    d[Foo { n: 1 }] = "one";
+    let s = d[Foo { n: 2 }];
+    println(s);
+}

@@ -2,7 +2,7 @@
 // Versioned loops: in bounds the unchecked copy, else the checked loop panics.
 // expect-exit: 101
 // expect-stderr: thread 'main' panicked at tests/cases/cg_versioned_loop_later_panic.rok:36:9:
-// expect-stderr: List index out of bounds
+// expect-stderr: index 3 out of bounds for length 3
 // expect-stdout:
 // 18 15 6 15 17
 // 3 [3, 5, 7]

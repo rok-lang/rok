@@ -6753,6 +6753,8 @@ pub(super) enum Intrinsic {
     AnyCast,
     MethodTable,
     FieldTable,
+    /// `rok.shown`: the argument as `{x:?}`, or `<T>` without `Debug`.
+    Shown,
     MlirOp,
     MlirAttr,
     /// `rok.transfer`: a hand-off copy of the value (stdlib 2.13.9).
@@ -6795,6 +6797,7 @@ impl Intrinsic {
             "any_cast" => Self::AnyCast,
             "method_table" => Self::MethodTable,
             "field_table" => Self::FieldTable,
+            "shown" => Self::Shown,
             "mlir.op" => Self::MlirOp,
             "mlir.attr" => Self::MlirAttr,
             "transfer" => Self::Transfer,

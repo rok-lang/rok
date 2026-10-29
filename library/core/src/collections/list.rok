@@ -213,7 +213,7 @@ impl<T> List<T> {
         unsafe {
             let n = self.len();
             if idx > n {
-                panic("List::insert: index out of bounds");
+                index_oob("List::insert index", idx, n);
             }
             self.reserve(1);
             let store = self.h[0].buf;
@@ -232,7 +232,7 @@ impl<T> List<T> {
         unsafe {
             let n = self.len();
             if idx >= n {
-                return panic("List::remove: index out of bounds");
+                return index_oob("List::remove index", idx, n);
             }
             let store = self.h[0].buf;
             let x = store[idx];
@@ -591,7 +591,7 @@ impl<T> Index<usize> for List<T> {
     const fn index(self, idx: usize) -> T {
         unsafe {
             if idx >= self.len() {
-                return panic("List index out of bounds");
+                return index_oob("index", idx, self.len());
             }
             self.h[0].buf[idx]
         }
@@ -605,7 +605,7 @@ impl<T> IndexSet<usize> for List<T> {
     const fn index_set(self, idx: usize, value: T) {
         unsafe {
             if idx >= self.len() {
-                panic("List index out of bounds");
+                index_oob("index", idx, self.len());
             }
             self.h[0].buf[idx] = value;
         }
