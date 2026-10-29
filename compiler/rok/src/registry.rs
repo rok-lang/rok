@@ -333,10 +333,37 @@ pub fn best<'a>(entries: &'a [Entry], req: &Req) -> Option<&'a Entry> {
         .max_by(|a, b| a.vers.cmp(&b.vers))
 }
 
+/// The stone (`native`: native package) names in the cached index `url`.
+pub fn names(cache: &Cache, url: &str, native: bool) -> Result<Vec<String>, String> {
+    Ok(cache
+        .files(url)?
+        .into_iter()
+        .filter(|f| f.contains('/') && f.starts_with("native/") == native)
+        .filter_map(|f| f.rsplit('/').next().map(str::to_owned))
+        .collect())
+}
+
+/// What to do about `name`, which the index `url` lacks: the closest name
+/// in it, and the search.
+pub fn missing(cache: &Cache, url: &str, name: &str, native: bool) -> String {
+    let all = names(cache, url, native).unwrap_or_default();
+    let search = if native {
+        format!("rok search --native {name}")
+    } else {
+        format!("rok search {name}")
+    };
+    let lower = name.to_ascii_lowercase().replace('_', "-");
+    match rokc_core::suggest::suggest(&lower, all.iter().map(String::as_str)) {
+        Some(near) => format!("\nhelp: did you mean `{near}`? (or search: `{search}`)"),
+        None => format!("\nhelp: search the index: `{search}`"),
+    }
+}
+
 /// "no stone .." / "no version of .." for a requirement nothing meets.
-pub fn no_match(entries: &[Entry], name: &str, req: &str, url: &str) -> String {
+pub fn no_match(cache: &Cache, entries: &[Entry], name: &str, req: &str, url: &str) -> String {
     if entries.is_empty() {
-        return format!("no stone named `{name}` in {url}");
+        let help = missing(cache, url, name, false);
+        return format!("no stone named `{name}` in {url}{help}");
     }
     let vs: Vec<String> = entries
         .iter()

@@ -4,6 +4,8 @@
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
+use crate::cli::CmdHelp;
+
 /// The shells a script can be generated for.
 pub const SHELLS: [&str; 4] = ["bash", "zsh", "fish", "powershell"];
 
@@ -313,6 +315,50 @@ impl Spec {
             }
             for c in cmds {
                 s.add_flags(&c, &shared);
+            }
+        }
+        s
+    }
+
+    /// Read a help table: each command's usage forms give its
+    /// subcommands and their flags, its option rows its own flags; the
+    /// `global` rows are taken anywhere.
+    #[must_use]
+    pub fn from_commands(prog: &str, cmds: &[&CmdHelp], global: &[(&str, &str)]) -> Self {
+        let mut s = Self {
+            prog: prog.to_owned(),
+            ..Self::default()
+        };
+        for h in cmds {
+            s.commands.push((h.name.to_owned(), h.summary.to_owned()));
+            for u in h.usage {
+                let (names, subs) = names(u);
+                if names.first() != Some(&h.name) {
+                    continue;
+                }
+                let flags = flags_in(u);
+                if subs.is_empty() {
+                    s.add_flags(h.name, &flags);
+                    continue;
+                }
+                let list = s.subs.entry(h.name.to_owned()).or_default();
+                for sub in &subs {
+                    push_new(list, (*sub).to_owned());
+                }
+                for sub in subs {
+                    s.add_flags(&format!("{} {sub}", h.name), &flags);
+                }
+            }
+            for (head, _) in h.flags {
+                s.add_flags(h.name, &flags_in(head));
+            }
+        }
+        for (head, _) in global {
+            for f in value_flags(head) {
+                push_new(&mut s.global_values, f);
+            }
+            for f in flags_in(head) {
+                push_new(&mut s.global, f);
             }
         }
         s
@@ -800,6 +846,37 @@ environment: X
         assert_eq!(value_flags("-A|-W|-D <lint|group>  x"), ["-A", "-W", "-D"]);
         assert_eq!(value_flags("--color=auto|always  x"), ["--color"]);
         assert!(value_flags("-q, --quiet     less").is_empty());
+    }
+
+    #[test]
+    fn reads_a_help_table() {
+        let add = CmdHelp {
+            name: "add",
+            summary: "add one",
+            usage: &[
+                "add <name> [--registry <url>]",
+                "add <name> --git <url> [--rev|--tag <r>]",
+            ],
+            flags: &[("--dev", "as a dev one")],
+            ..CmdHelp::EMPTY
+        };
+        let env = CmdHelp {
+            name: "env",
+            summary: "environments",
+            usage: &["env create|remove <name>", "env export <name> --to <dir>"],
+            ..CmdHelp::EMPTY
+        };
+        let global = [("--env <name>", "an environment"), ("-q, --quiet", "less")];
+        let s = Spec::from_commands("t", &[&add, &env], &global);
+        assert_eq!(s.commands[0], ("add".to_owned(), "add one".to_owned()));
+        assert_eq!(
+            s.flags["add"],
+            ["--registry", "--git", "--rev", "--tag", "--dev"]
+        );
+        assert_eq!(s.subs["env"], ["create", "remove", "export"]);
+        assert_eq!(s.flags["env export"], ["--to"]);
+        assert_eq!(s.global, ["--env", "-q", "--quiet"]);
+        assert_eq!(s.global_values, ["--env"]);
     }
 
     #[test]

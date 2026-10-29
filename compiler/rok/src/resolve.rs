@@ -762,7 +762,7 @@ impl<'a> Resolver<'a> {
                     "`{name}` {v} (in rok.lock) is not in the index {url} (run `rok update {name}`)"
                 ));
             }
-            (None, None) => return Err(registry::no_match(&all, name, req, url)),
+            (None, None) => return Err(registry::no_match(&self.index, &all, name, req, url)),
         };
         if let Some((l, _)) = &pinned {
             if l.commit != e.rev {
@@ -975,7 +975,7 @@ impl<'a> Resolver<'a> {
                      `rok update {name}`)"
                 ));
             }
-            (None, None) => return Err(native::no_match(&all, name, req, url)),
+            (None, None) => return Err(native::no_match(&self.index, &all, name, req, url)),
         };
         let sum = e.checksum();
         if let Some((l, _)) = &pinned {

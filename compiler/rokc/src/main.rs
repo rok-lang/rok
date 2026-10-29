@@ -16,7 +16,7 @@ use rokc_interface::{
 };
 use rokc_tools::lint::Level;
 
-use rokc_core::cli::ROKC_USAGE as USAGE;
+use rokc_core::cli::{self, ROKC_COMMANDS, ROKC_USAGE as USAGE};
 use rokc_core::term::{self, ColorChoice, Role, Stream};
 
 // One flag per CLI switch; an enum per group would only add plumbing.
@@ -92,32 +92,49 @@ impl Args {
 /// The version, and the commit and its date when built from git.
 const VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), env!("ROK_COMMIT_INFO"));
 
-/// `rokc <cmd> --help`: the command's entry in `USAGE` and its options.
+/// The command being run, once known, for usage errors.
+static CMD: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+/// `rokc <cmd> --help` (`rok <cmd> --help` under rok).
 fn command_help(cmd: &str) -> String {
-    let Some(entry) = rokc_core::command_help(USAGE, cmd) else {
-        usage_error(&format!("unknown command `{cmd}`"));
+    let Some(h) = cli::find(ROKC_COMMANDS, cmd) else {
+        usage_error(&format!("unknown command `{cmd}`{}", suggest_command(cmd)));
     };
-    let mut out = format!("usage: rokc [global options] {cmd} [options] [args]\n\n{entry}");
-    for s in rokc_core::cli::rokc_sections(cmd) {
-        let mut lines = USAGE
-            .lines()
-            .skip_while(|l| !l.starts_with(&format!("{s}:")));
-        out.push('\n');
-        if let Some(head) = lines.next() {
-            out.push_str(head);
-            out.push('\n');
-        }
-        for l in lines.take_while(|l| l.starts_with(' ') && !l.trim().is_empty()) {
-            out.push_str(l);
-            out.push('\n');
-        }
-    }
-    out.push_str("\nglobal options and the environment: `rokc help`\n");
-    out
+    cli::render_help(cli::invoked_as(), h, &[])
 }
 
+/// "; did you mean ..?" for an unknown command: `run <file>` for a
+/// script, else the closest command.
+fn suggest_command(cmd: &str) -> String {
+    if cli::looks_like_script(cmd) {
+        return format!("; did you mean `{} run {cmd}`?", cli::invoked_as());
+    }
+    cli::did_you_mean(cmd, ROKC_COMMANDS.iter().map(|h| h.name), cli::CMD_SYNONYMS)
+}
+
+/// "; did you mean ..?" for an unknown option of `cmd`.
+fn suggest_flag(cmd: &str, flag: &str) -> String {
+    let spec = cli::rokc_spec();
+    let sub = format!("{cmd} ");
+    let own = spec
+        .flags
+        .iter()
+        .filter(|(k, _)| cmd.is_empty() || *k == cmd || k.starts_with(&sub))
+        .flat_map(|(_, v)| v);
+    let cands: Vec<&str> = own.chain(&spec.global).map(String::as_str).collect();
+    cli::did_you_mean(flag, cands, &[])
+}
+
+/// A usage error (exit 2), named as the program the user ran, and where
+/// to read the usage.
 fn usage_error(msg: &str) -> ! {
-    eprintln!("rokc: {msg}\nrun `rokc help` for usage");
+    let tool = cli::invoked_as();
+    let msg = msg.replace("usage: rokc ", &format!("usage: {tool} "));
+    let more = match CMD.get().filter(|c| cli::find(ROKC_COMMANDS, c).is_some()) {
+        Some(c) => format!("{tool} help {c}"),
+        None => format!("{tool} help"),
+    };
+    eprintln!("{tool}: {msg}\nrun `{more}` for usage");
     process::exit(2);
 }
 
@@ -276,14 +293,17 @@ fn parse_args(raw: Vec<String>) -> Args {
             "--version" | "-V" if a.cmd.is_empty() => "version".clone_into(&mut a.cmd),
             // `-` alone is a positional (stdin, 901.9).
             s if s.starts_with('-') && s.len() > 1 => {
-                usage_error(&format!("unknown option `{s}`"));
+                usage_error(&format!("unknown option `{s}`{}", suggest_flag(&a.cmd, s)));
             }
-            _ if a.cmd.is_empty() => a.cmd = arg,
+            _ if a.cmd.is_empty() => {
+                let _ = CMD.set(arg.clone());
+                a.cmd = arg;
+            }
             _ => a.positional.push(arg),
         }
     }
     if a.cmd.is_empty() && a.print.is_none() {
-        usage_error("missing command");
+        usage_error("missing command (e.g. `build`)");
     }
     // Debug builds carry debug info; `-g` adds it to release (9.2.15).
     let output = matches!(a.cmd.as_str(), "build" | "run" | "test") && a.emit.is_empty();
@@ -473,8 +493,13 @@ fn real_main() {
         _ => usize::MAX,
     };
     if let Some(extra) = a.positional.get(most) {
+        let takes = if most == 1 {
+            "one path"
+        } else {
+            "a path and a filter"
+        };
         usage_error(&format!(
-            "unexpected argument `{extra}` (rokc {} --help)",
+            "unexpected argument `{extra}`: `{}` takes {takes}",
             a.cmd
         ));
     }
@@ -599,7 +624,10 @@ fn real_main() {
             Some(c) => print!("{}", command_help(c)),
             None => print!("{USAGE}"),
         },
-        other => usage_error(&format!("unknown command `{other}`")),
+        other => usage_error(&format!(
+            "unknown command `{other}`{}",
+            suggest_command(other)
+        )),
     }
 }
 

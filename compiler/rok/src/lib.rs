@@ -20,6 +20,7 @@
 
 mod env;
 mod git;
+mod help;
 mod lock;
 mod manifest;
 mod native;
@@ -35,6 +36,7 @@ use std::process::Command;
 
 use manifest::{Dep, GitRef, MANIFEST, Manifest, NativeSource, Source};
 use resolve::{Context, Options, Resolved};
+use rokc_core::cli::{self, looks_like_script};
 use rokc_core::completions::{Spec, Values};
 use rokc_core::term::{self, ColorChoice, Role, Stream};
 use rokc_core::tmp::TempEntry;
@@ -44,184 +46,6 @@ use rokc_rokon::{Kind, Value};
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// `VERSION`, and the commit and its date when built from git.
 pub const VERSION_LINE: &str = concat!(env!("CARGO_PKG_VERSION"), env!("ROK_COMMIT_INFO"));
-
-const USAGE: &str = "\
-usage: rok [options] <command> [args]
-       rok [options] <file> [args]  run a script, the arguments its own: `rok
-                                    run -q <file> -- args` (<file> has a
-                                    `/` or ends in .rok)
-       rok [options]                same as `rok repl`
-
-packages:
-  new [--lib] [--bin] <name>   create a package: src/main.rok (--bin, the
-                               default), src/lib.rok (--lib) or both, and
-                               rok.rokon
-  init [--lib] [--bin] [dir]   make a directory a package
-  init --script <file.rok>     make a script's directory a package: its
-                               blocks become rok.rokon, its files move
-                               under src/ (the script is src/main.rok)
-  add <name>[@<req>] [--registry <url>]
-                               add a stone (default: ^ the newest version)
-  add <name> --path <dir>      add a dependency (--dev: to dev_deps)
-  add <name> --git <url> [--rev <r> | --tag <t> | --branch <b>]
-                               (each also: --features <f,..>,
-                               --no-default-features, --optional: enabled
-                               by a new feature of its name)
-  add --native <name>[@<req>] [--registry <url>]
-                               add a native package (prebuilt C library)
-  add .. <file.rok>            the same into a script's //! ```rokon
-                               block (made at the top when missing; no
-                               --dev / --optional)
-  remove [--native] <name> [<file.rok>]
-                               remove a dependency (from a script's block)
-  update [name...]             re-resolve git dependencies and stones,
-                               rewrite rok.lock
-  search [--native] <query>    stones (native packages) whose name contains
-                               <query>
-  deps [--dev] [feature options]
-                               print the resolved dependencies (name=lib.rok),
-                               each after its own and followed by its
-                               features (`--extern-feature=<name>=<f>`);
-                               native packages as `# native <name> <vers>`
-                               and their rokc arguments, one per line
-  clean [path]                 remove target/
-
-  A package uses only the dependencies in its own rok.rokon, a script
-  only those of its //! ```rokon blocks; libraries installed with `rok
-  install` are for the REPL and Jupyter.
-
-installs:
-  install <name>[@<req>] [--registry <url>]
-                               a stone: an executable package (src/main.rok)
-                               is built --release into $ROK_HOME/bin; a
-                               library (src/lib.rok only, or with --lib)
-                               goes into the active environment, for `rok
-                               repl` / `rok jupyter` (a script adds it
-                               with `rok add <name> <file.rok>`)
-  install [<name>] --path <dir | file.rok>
-                               the same from a directory; a script file is
-                               built into $ROK_HOME/bin
-  install [<name>] --git <url> [--rev <r> | --tag <t> | --branch <b>]
-                               the same from git (each also: --features
-                               <f,..>, --no-default-features)
-
-  An executable already installed from the same stone version or git
-  commit is kept; --force rebuilds it. One from a path is always rebuilt.
-  install --native <name>[@<req>]
-                               a native package into the active environment
-  install --list               the active environment's libraries and the
-                               executables in $ROK_HOME/bin
-  uninstall [--native] <name>..
-                               remove each from the active environment, or
-                               else from $ROK_HOME/bin
-
-stones (the index is a git repository; sources are not uploaded):
-  login [<token>]              keep a registry token (from <api>/me, e.g.
-                               https://rokstones.io/me; read from stdin if
-                               not given) in $ROK_HOME/credentials.rokon,
-                               after checking its account may publish
-  logout                       remove it
-  publish [--index <dir>] [--commit]
-                               the index entry for this package (its git
-                               remote `origin`, an https:// URL, HEAD
-                               commit and tree); a dry
-                               run, checked against the index checkout <dir>
-                               if given. --commit: commit it to <dir>, or
-                               without --index, send it to the registry API
-                               (needs `rok login`)
-  publish --native <file> [--index <dir>] [--commit]
-                               the index entry of the native package
-                               `Native { .. }` in <file>, each build fetched
-                               and checked
-  yank [--native] --vers <v> [--undo] [--index <dir>] [name]
-                               mark a version yanked: committed to <dir>, or
-                               through the registry API (needs `rok login`);
-                               --native: a native package's (named)
-
-compiler commands (rokc, with the dependencies; see `rokc help`):
-  build | check | run | test | bench | lint | doc | emit [path] ...
-  repl [path]                  interactive session (`:add <dep>`: `rok add`
-                               in a package, else `rok install`); a program
-                               path runs in it first, a library is loaded
-                               and `use`d
-  lsp                          language server (also `rokls`)
-  jupyter --connection-file <f>  the kernel (Jupyter starts it)
-  fmt [path]                   format .rok and .rokon files
-
-  The path, if any, comes first after the command; it picks the project
-  (or script) whose dependencies and `lints` apply. A .rok file inside a
-  project (the nearest directory above it with src/main.rok, src/lib.rok or
-  rok.rokon) uses that project's.
-
-  feature options (rok.rokon's `features`; before any `--`):
-  --features <f,..>            the package's features, or `<dep>/<f>` of a
-                               dependency (repeatable)
-  --all-features               every feature of the package
-  --no-default-features        not its `default` feature
-
-jupyter:
-  jupyter install              install the `rok` Jupyter kernel (with --env:
-                               `rok-<env>`, running in that environment)
-
-environments:
-  env create|remove|use <name>      a named environment
-  env list                          (`*`: the active one)
-  env export <name> <dir>           write its rok.rokon / rok.lock to <dir>
-  env import <name> <dir|rok.rokon> create it from a project or export
-  env shell [name]                  a $SHELL with ROK_ENV=<name>
-
-toolchains ($ROK_HOME/toolchains/<version>-<triple>/):
-  toolchain list               installed toolchains
-  toolchain install <version> --from <dir | .tar[.gz] | .zip | url>
-                               install one (the first becomes the default)
-  toolchain default [<version>]
-                               the toolchain the $ROK_HOME/bin proxies run
-  toolchain remove <version>   remove one
-  toolchain clean              remove every toolchain but the default
-  toolchain update [<version>]
-                               install the newest release (or <version>),
-                               checked against its .sha256, make it the
-                               default and update the proxies; rolled back
-                               if they then do not run it. Releases: $ROK_DIST (default
-                               https://github.com/rok-lang/rok/releases)
-  +<version>                   (first) use that toolchain for this command;
-                               else $ROK_TOOLCHAIN, else rok.rokon's
-                               `toolchain`, else the default
-
-shell:
-  completions bash|zsh|fish|powershell
-                               print the shell's completion script for rok
-                               (install.sh / install.ps1 put it in place;
-                               toolchain default / update rewrite it)
-
-options (anywhere before `--`):
-  --env <name>    work in that environment (REPL, Jupyter, install)
-  --offline       never fetch (git dependencies must be cached)
-  --locked        fail instead of changing rok.lock
-  --cwd <dir>     change directory first
-  --color <when>  auto|always|never: color output (--no-color = never)
-  -q, --quiet     less output
-  -v, --verbose   more output
-  version, help
-
-A package builds with its own rok.rokon's dependencies only. A script
-builds with the //! ```rokon blocks (`Package { deps: {..} }`) at the
-top of it and of the files its `mod`s load, merged; `rok add <name>
-<file.rok>` writes one. Outside a package the REPL and Jupyter use an
-environment: --env, else $ROK_ENV, else the one `rok env use` chose, else
-`default`, with the libraries `rok install` put there.
-
-Shared lint levels: `lints_from: \"<dir>\"` in rok.rokon starts from the
-`lints` of <dir>/rok.rokon (and its own `lints_from`, recursively); this
-manifest's `lints` then override per lint.
-
-`rok <command> --help` (or `rok help <command>`) shows one command.
-
-environment: ROK_HOME (default: ~/.rok), ROK_ENV, ROK_TOOLCHAIN,
-  ROK_REGISTRY (the stone index; else `registry` in $ROK_HOME/config.rokon,
-  else https://github.com/rok-lang/rokstones.io-index),
-  ROK_REGISTRY_TOKEN (instead of `rok login`'s token)
-";
 
 #[derive(Default)]
 #[allow(clippy::struct_excessive_bools)] // independent switches
@@ -359,7 +183,7 @@ pub fn main_with(args: Vec<String>) -> i32 {
             }
             // `rok <file> [args..]` is `rok run -q <file> -- args..`; a path
             // has a `/` or ends in `.rok`, which no command does.
-            p if is_script(p)
+            p if looks_like_script(p)
                 && rest.iter().all(|r| r.starts_with('-'))
                 && rest
                     .last()
@@ -380,7 +204,7 @@ pub fn main_with(args: Vec<String>) -> i32 {
             return 0;
         }
         if rest.iter().any(|a| a == "-h" || a == "--help") {
-            print!("{USAGE}");
+            print!("{}", help::short_usage());
             return 0;
         }
         // Bare `rok` (options only) is `rok repl`, like `python` / `julia`.
@@ -395,16 +219,24 @@ pub fn main_with(args: Vec<String>) -> i32 {
         .into_iter()
         .any(|a| a == "-h" || a == "--help")
     {
-        return help(&g, cmd);
+        return help(cmd);
     }
-    run(&g, cmd, &rest[..i], post)
-}
-
-/// Whether command-line word `w` names a script, not a command.
-fn is_script(w: &str) -> bool {
-    Path::new(w).extension().is_some_and(|x| x == "rok")
-        || w.contains('/')
-        || cfg!(windows) && w.contains('\\')
+    // `-q` / `-v` were taken above; rokc takes them again, rok's own
+    // commands do not.
+    let to_rokc = DELEGATED.contains(&cmd.as_str())
+        && !(cmd == "jupyter" && post.first().is_some_and(|p| p == "install"));
+    let post: Vec<String> = if to_rokc {
+        post.to_vec()
+    } else {
+        let end = post.iter().position(|a| a == "--").unwrap_or(post.len());
+        let (opts, after) = post.split_at(end);
+        opts.iter()
+            .filter(|a| !matches!(a.as_str(), "-q" | "--quiet" | "-v" | "--verbose"))
+            .chain(after)
+            .cloned()
+            .collect()
+    };
+    run(&g, cmd, &rest[..i], &post)
 }
 
 /// The commands `rok` passes to `rokc`.
@@ -413,33 +245,22 @@ const DELEGATED: [&str; 15] = [
     "doc", "lint", "jupyter", "profdata",
 ];
 
-/// `rok <cmd> --help` / `rok help <cmd>`: rok's own entry, or rokc's
-/// help for a command it runs.
-fn help(g: &Global, cmd: &str) -> i32 {
-    if cmd == "toolchain" {
-        println!("{}", toolchain::USAGE);
-        return 0;
-    }
-    if DELEGATED.contains(&cmd) && cmd != "jupyter" {
-        return match toolchain::rokc_for(g.toolchain.as_deref(), None) {
-            Ok(rokc) => {
-                let mut c = Command::new(&rokc);
-                c.args(&g.color).args([cmd, "--help"]);
-                exec(c, &rokc)
-            }
-            Err(e) => {
-                eprintln!("rok: {} {e}", term::label(Stream::Stderr, Role::Error));
-                1
-            }
-        };
-    }
-    match rokc_core::command_help(USAGE, cmd) {
-        Some(entry) => {
-            print!("usage: rok [options] {cmd} ..\n\n{entry}");
+/// `rok <cmd> --help` / `rok help <cmd>`.
+fn help(cmd: &str) -> i32 {
+    match help::command(cmd) {
+        Some(text) => {
+            print!("{text}");
             0
         }
-        None => usage(&format!("unknown command `{cmd}`")),
+        None => usage(&unknown_command(cmd)),
     }
+}
+
+/// "unknown command" for `cmd`, with what to write instead.
+fn unknown_command(cmd: &str) -> String {
+    let names = help::all().map(|h| h.name).chain(["toolchain list"]);
+    let hint = cli::did_you_mean(cmd, names, cli::CMD_SYNONYMS);
+    format!("unknown command `{cmd}`{hint}")
 }
 
 /// Errors that are about the command line (exit code 2, spec 9.1.6).
@@ -461,9 +282,9 @@ fn run(g: &Global, cmd: &str, pre: &[String], post: &[String]) -> i32 {
             println!("rok {VERSION_LINE}");
             Ok(0)
         }
-        "help" if !post.is_empty() => return help(g, &post[0]),
+        "help" if !post.is_empty() => return help(&post[0]),
         "help" => {
-            print!("{USAGE}");
+            print!("{}", help::short_usage());
             Ok(0)
         }
         "new" | "init" => cmd_new(g, cmd, post),
@@ -485,11 +306,11 @@ fn run(g: &Global, cmd: &str, pre: &[String], post: &[String]) -> i32 {
         "jupyter" if post.first().is_some_and(|p| p == "install") => install_kernel(g, &post[1..]),
         "test" | "bench" => harness(g, cmd, pre, post),
         c if DELEGATED.contains(&c) => delegate(g, cmd, pre, post),
-        other => return usage(&format!("unknown command `{other}`")),
+        other => return usage(&unknown_command(other)),
     };
     r.unwrap_or_else(|e| {
         if is_usage(&e) {
-            return usage(&e);
+            return usage_of(cmd, &e);
         }
         // A rendered diagnostic (`error[E..]: ..`) as it is.
         if e.starts_with("error[") {
@@ -506,27 +327,52 @@ fn usage(msg: &str) -> i32 {
     2
 }
 
-/// What rok's command line takes, read from `USAGE`; the commands rok
+/// A usage error of command `cmd`: an unknown option gets the closest of
+/// its options, and the pointer is to the command's help.
+fn usage_of(cmd: &str, msg: &str) -> i32 {
+    let mut msg = msg.to_owned();
+    let unknown = msg
+        .strip_prefix("unknown option `")
+        .and_then(|r| r.strip_suffix('`'))
+        .map(str::to_owned);
+    if let Some(flag) = unknown {
+        let spec = completion_spec();
+        let sub = format!("{cmd} ");
+        let cands: Vec<&str> = spec
+            .flags
+            .iter()
+            .filter(|(k, _)| *k == cmd || k.starts_with(&sub))
+            .flat_map(|(_, v)| v)
+            .chain(&spec.global)
+            .map(String::as_str)
+            .collect();
+        msg.push_str(&cli::did_you_mean(&flag, cands, &[]));
+    }
+    if help::find(cmd).is_none() {
+        return usage(&msg);
+    }
+    eprintln!("rok: {msg}\nrun `rok help {cmd}` for usage");
+    2
+}
+
+/// What rok's command line takes, read from its help; the commands rok
 /// passes to rokc take rokc's flags too.
 fn completion_spec() -> Spec {
-    let mut s = Spec::parse(
-        "rok",
-        USAGE,
-        |n| n != "usage" && n != "environment" && !n.starts_with("options"),
-        |n| n.starts_with("options"),
-    );
-    let rokc = rokc_core::cli::rokc_spec();
+    let cmds: Vec<&cli::CmdHelp> = help::all().collect();
+    let mut s = Spec::from_commands("rok", &cmds, help::GLOBAL);
+    let rokc = cli::rokc_spec();
     for c in DELEGATED {
         let mut flags = rokc.flags.get(c).cloned().unwrap_or_default();
         flags.extend(rokc.global.iter().cloned());
         s.add_flags(c, &flags);
     }
-    for (n, about) in &mut s.commands {
-        if about.is_empty() {
-            if let Some((_, a)) = rokc.commands.iter().find(|(m, _)| m == n) {
-                a.clone_into(about);
-            }
-        }
+    let features: Vec<String> = help::FEATURES
+        .iter()
+        .filter_map(|(head, _)| head.split(' ').next())
+        .map(str::to_owned)
+        .collect();
+    for c in help::WITH_FEATURES {
+        s.add_flags(c, &features);
     }
     let run = |c: &str| Values::Run(c.to_owned());
     let toolchains = run("rok __complete toolchains");
@@ -1002,6 +848,8 @@ fn rokc_command(
     if let Ok(me) = std::env::current_exe() {
         c.env("ROK", me);
     }
+    // rokc's usage errors and help then speak of `rok`.
+    c.env("ROK_CLI", "rok");
     // The REPL's `:add` installs into this environment (or, with none,
     // adds to the package).
     match &t.env {
@@ -1635,7 +1483,7 @@ fn add_native(
         let index = registry::open(&home(), &url, g.offline, g.quiet)?;
         let all = native::entries(&index, &url, name)?;
         let e = native::best(&all, &semver::Req::parse("*")?)
-            .ok_or_else(|| native::no_match(&all, name, "*", &url))?;
+            .ok_or_else(|| native::no_match(&index, &all, name, "*", &url))?;
         format!("^{}", e.vers)
     } else {
         semver::Req::parse(req)?;
@@ -1802,7 +1650,7 @@ fn pin_newest(g: &Global, dep: &mut Dep) -> Result<(), String> {
             let all = registry::entries(&index, &url, &dep.name)?;
             let star = semver::Req::parse("*")?;
             let e = registry::best(&all, &star)
-                .ok_or_else(|| registry::no_match(&all, &dep.name, "*", &url))?;
+                .ok_or_else(|| registry::no_match(&index, &all, &dep.name, "*", &url))?;
             *req = format!("^{}", e.vers);
         }
     }
@@ -2346,11 +2194,8 @@ fn cmd_search(g: &Global, args: &[String]) -> Result<i32, String> {
     let index = registry::open(&home(), &url, g.offline, g.quiet)?;
     // `-` and `_` are one (9.10.3); file names are lowercase.
     let q = q.to_ascii_lowercase().replace('_', "-");
-    let mut names: Vec<String> = index
-        .files(&url)?
+    let mut names: Vec<String> = registry::names(&index, &url, native)?
         .into_iter()
-        .filter(|f| f.contains('/') && f.starts_with("native/") == native)
-        .filter_map(|f| f.rsplit('/').next().map(str::to_owned))
         .filter(|n| n.replace('_', "-").contains(&q))
         .collect();
     names.sort();
