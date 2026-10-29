@@ -399,6 +399,104 @@ fn set_default(home: &Path, pin: &str) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
+/// The completion scripts install.sh and install.ps1 write: file, shell
+/// and the tools whose scripts it holds.
+fn completion_files(home: &Path) -> Vec<(PathBuf, &'static str, &'static [&'static str])> {
+    let var = |k: &str| {
+        std::env::var_os(k)
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from)
+    };
+    let user = rokc_core::user_home();
+    let data = var("XDG_DATA_HOME").or_else(|| user.as_ref().map(|h| h.join(".local/share")));
+    let config = var("XDG_CONFIG_HOME").or_else(|| user.as_ref().map(|h| h.join(".config")));
+    let mut files = Vec::new();
+    for (t, tools) in [("rok", &["rok"]), ("rokc", &["rokc"])] {
+        if let Some(d) = &data {
+            files.push((
+                d.join("bash-completion/completions").join(t),
+                "bash",
+                &tools[..],
+            ));
+        }
+        files.push((home.join("zsh").join(format!("_{t}")), "zsh", &tools[..]));
+        if let Some(c) = &config {
+            let f = c.join("fish/completions").join(format!("{t}.fish"));
+            files.push((f, "fish", &tools[..]));
+        }
+    }
+    files.push((
+        home.join("completions/rok.ps1"),
+        "powershell",
+        &["rok", "rokc"],
+    ));
+    files
+}
+
+/// Rewrite the completion scripts that exist from `toolchain`'s tools;
+/// what was rewritten, or why not. Never creates one, and a toolchain
+/// without `completions` leaves them as they are.
+fn refresh_completions(home: &Path, toolchain: &Path) -> Vec<Result<String, String>> {
+    let script = |tool: &str, shell: &str| {
+        let exe = toolchain.join("bin").join(exe_name(tool));
+        let out = Command::new(exe)
+            .args(["completions", shell])
+            .env("ROK_HOME", home)
+            .env_remove("ROK_TOOLCHAIN")
+            .current_dir(home)
+            .output()
+            .ok()?;
+        let mut text = out.stdout;
+        if !out.status.success() || text.is_empty() {
+            return None;
+        }
+        if !text.ends_with(b"\n") {
+            text.push(b'\n');
+        }
+        Some(text)
+    };
+    let mut done = Vec::new();
+    for (file, shell, tools) in completion_files(home) {
+        if !file.is_file() {
+            continue;
+        }
+        let Some(parts) = tools
+            .iter()
+            .map(|t| script(t, shell))
+            .collect::<Option<Vec<_>>>()
+        else {
+            continue;
+        };
+        let mut tmp = file.clone().into_os_string();
+        tmp.push(".new");
+        let tmp = PathBuf::from(tmp);
+        let r = std::fs::write(&tmp, parts.concat()).and_then(|()| std::fs::rename(&tmp, &file));
+        done.push(match r {
+            Ok(()) => Ok(format!(
+                "{shell} completions for {} in {}",
+                tools.join(" and "),
+                shown(&file)
+            )),
+            Err(e) => {
+                let _ = std::fs::remove_file(&tmp);
+                Err(format!("cannot refresh {}: {e}", file.display()))
+            }
+        });
+    }
+    done
+}
+
+/// Report `refresh_completions`: failures always, the files under `-v`.
+fn report_completions(done: &[Result<String, String>], verbose: bool) {
+    for r in done {
+        match r {
+            Ok(m) if verbose => eprintln!("        note: refreshed {m}"),
+            Ok(_) => {}
+            Err(e) => eprintln!("rok: warning: {e}"),
+        }
+    }
+}
+
 /// Release server in GitHub releases' layout:
 /// `download/v<version>/rok-<version>-<triple>.<ext>` (+ `.sha256`) and
 /// `latest/download/rok-version`. `ROK_DIST` overrides it.
@@ -518,7 +616,7 @@ fn switch(home: &Path, full: &str, dir: &Path, fresh: bool) -> Result<(), String
 
 /// `rok toolchain update`: install `version` (default: newest), make it
 /// the default, update the proxies.
-fn update(home: &Path, version: Option<&str>, quiet: bool) -> Result<(), String> {
+fn update(home: &Path, version: Option<&str>, quiet: bool, verbose: bool) -> Result<(), String> {
     let dist = dist();
     let full = match version {
         Some(v) => release_version(v, "rok toolchain update")?,
@@ -543,6 +641,7 @@ fn update(home: &Path, version: Option<&str>, quiet: bool) -> Result<(), String>
         place(home, &tmp, &top, &full)?;
     }
     switch(home, &full, &dir, fresh)?;
+    let refreshed = refresh_completions(home, &dir);
     if quiet {
         return Ok(());
     }
@@ -563,6 +662,7 @@ fn update(home: &Path, version: Option<&str>, quiet: bool) -> Result<(), String>
     if let Some(old) = old.filter(|n| *n != name) {
         eprintln!("        note: {old} stays installed (`rok toolchain remove {old}`)");
     }
+    report_completions(&refreshed, verbose);
     Ok(())
 }
 
@@ -632,9 +732,14 @@ usage: rok toolchain list
        rok toolchain update [<version>]
        rok toolchain clean";
 
-pub fn cmd(args: &[String], quiet: bool) -> Result<i32, String> {
+pub fn cmd(args: &[String], quiet: bool, verbose: bool) -> Result<i32, String> {
     let h = home();
-    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    // `-q` and `-v` are rok's own options, taken already.
+    let args: Vec<&str> = args
+        .iter()
+        .map(String::as_str)
+        .filter(|a| !matches!(*a, "-q" | "--quiet" | "-v" | "--verbose"))
+        .collect();
     match args.as_slice() {
         ["list"] => {
             let def = default_pin(&h)?.and_then(|p| find(&h, &p));
@@ -673,8 +778,8 @@ pub fn cmd(args: &[String], quiet: bool) -> Result<i32, String> {
                 write_proxies(&h, &d.unwrap_or_else(|| root(&h).join(&name)))?;
             }
         }
-        ["update"] => update(&h, None, quiet)?,
-        ["update", v] if !v.starts_with('-') => update(&h, Some(v), quiet)?,
+        ["update"] => update(&h, None, quiet, verbose)?,
+        ["update", v] if !v.starts_with('-') => update(&h, Some(v), quiet, verbose)?,
         ["clean"] => clean(&h, quiet)?,
         ["default"] => match default_pin(&h)? {
             Some(p) => println!("{p}"),
@@ -682,9 +787,11 @@ pub fn cmd(args: &[String], quiet: bool) -> Result<i32, String> {
         },
         ["default", pin] => {
             let dir = set_default(&h, pin)?;
+            let refreshed = refresh_completions(&h, &dir);
             if !quiet {
                 let name = dir.file_name().unwrap_or_default().to_string_lossy();
                 status("Default", &format!("toolchain {pin} ({name})"));
+                report_completions(&refreshed, verbose);
             }
         }
         ["remove", name] if !name.contains(['/', '\\']) && !name.starts_with('.') => {

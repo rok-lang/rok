@@ -91,6 +91,9 @@ fn rok_cmd(home: &Path, cwd: &Path, args: &[&str]) -> Command {
         .env_remove("ROK_REGISTRY")
         .env_remove("ROK_REGISTRY_TOKEN")
         .args(args);
+    if cfg!(unix) {
+        user_env(&mut c, &home.join("user"));
+    }
     // Stones' https `origin` (see `origin`) fetches from the scratch tree.
     let root = rokc_core::tmp::test_root().display().to_string();
     c.env("GIT_CONFIG_COUNT", "1")
@@ -100,6 +103,14 @@ fn rok_cmd(home: &Path, cwd: &Path, args: &[&str]) -> Command {
         )
         .env("GIT_CONFIG_VALUE_0", ORIGIN);
     c
+}
+
+/// A user whose home is `user`, with no XDG directories set: the
+/// completion files `rok toolchain` refreshes stay in the test tree.
+fn user_env(c: &mut Command, user: &Path) {
+    c.env("HOME", user)
+        .env_remove("XDG_CONFIG_HOME")
+        .env_remove("XDG_DATA_HOME");
 }
 
 /// Where `origin` points stones; `rok_cmd` maps it to the test root.
@@ -1082,6 +1093,107 @@ fn pinned_toolchains() {
         &format!("Package {{ toolchain: \"{mine}\" }}\n"),
     );
     ok(&rok(&home, &app, &["-q", "check"]));
+}
+
+/// `rok toolchain default` rewrites the completion scripts the
+/// installers wrote from the new default, never makes one, and says
+/// which under `-v`; a toolchain without `completions` leaves them.
+// spec: §9.10.6
+#[cfg(unix)]
+#[test]
+fn toolchain_default_refreshes_completions() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = scratch("toolchain-completions");
+    let home = root.join("home");
+    let user = home.join("user");
+    fake_toolchain(&root.join("fake1"), "9.9.1");
+    fake_toolchain(&root.join("fake2"), "9.10.0");
+    fake_toolchain(&root.join("fake3"), "9.11.0");
+    // Too old for `completions`: both tools refuse it.
+    for t in ["rok", "rokc"] {
+        let exe = root.join("fake3/bin").join(t);
+        let old = fs::read(&exe).unwrap();
+        let real = root.join("fake3/bin").join(format!("{t}.real"));
+        fs::write(&real, old).unwrap();
+        write(
+            &exe,
+            &format!(
+                "#!/bin/sh\n[ \"$1\" = completions ] && exit 2\nexec \"{}\" \"$@\"\n",
+                real.display()
+            ),
+        );
+        fs::set_permissions(&real, fs::Permissions::from_mode(0o755)).unwrap();
+        fs::set_permissions(&exe, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let tc = |args: &[&str]| rok(&home, &root, &[&["toolchain"][..], args].concat());
+    for (v, dir) in [("9.9.1", "fake1"), ("9.10.0", "fake2"), ("9.11.0", "fake3")] {
+        ok(&tc(&["install", v, "--from", dir]));
+    }
+    let bash = user.join(".local/share/bash-completion/completions/rok");
+    let zsh = home.join("zsh/_rokc");
+    let ps1 = home.join("completions/rok.ps1");
+    for f in [&bash, &zsh, &ps1] {
+        write(f, "old\n");
+    }
+    let absent = [
+        user.join(".local/share/bash-completion/completions/rokc"),
+        home.join("zsh/_rok"),
+        user.join(".config/fish/completions/rok.fish"),
+        user.join(".config/fish/completions/rokc.fish"),
+    ];
+
+    let out = tc(&["default", "9.10"]);
+    ok(&out);
+    assert!(
+        !text(&out.stderr).contains("note:"),
+        "{}",
+        text(&out.stderr)
+    );
+    assert!(read(&bash).contains("complete -o bashdefault -o default -F _rok rok"));
+    assert_eq!(read(&zsh), "rokc 9.10.0: completions zsh\n");
+    let rok_ps1 = ok(&rok(&home, &root, &["completions", "powershell"]));
+    assert_eq!(
+        read(&ps1),
+        format!("{rok_ps1}rokc 9.10.0: completions powershell\n")
+    );
+    for f in &absent {
+        assert!(!f.exists(), "{}", f.display());
+    }
+
+    let out = tc(&["default", "9.9", "-v"]);
+    ok(&out);
+    let err = text(&out.stderr);
+    for want in [
+        "        note: refreshed bash completions for rok in ~/.local/share/bash-completion/completions/rok\n".to_owned(),
+        format!("        note: refreshed zsh completions for rokc in {}\n", zsh.display()),
+        format!(
+            "        note: refreshed powershell completions for rok and rokc in {}\n",
+            ps1.display()
+        ),
+    ] {
+        assert!(err.contains(&want), "lacks {want:?}:\n{err}");
+    }
+    assert_eq!(err.matches("note:").count(), 3, "{err}");
+    assert_eq!(read(&zsh), "rokc 9.9.1: completions zsh\n");
+
+    // `-q` wins over `-v`.
+    let out = rok(&home, &root, &["-q", "-v", "toolchain", "default", "9.10"]);
+    assert_eq!(text(&out.stderr), "");
+    assert_eq!(read(&zsh), "rokc 9.10.0: completions zsh\n");
+
+    let before: Vec<String> = [&bash, &zsh, &ps1].iter().map(|f| read(f)).collect();
+    let out = rok(&home, &root, &["-v", "toolchain", "default", "9.11"]);
+    ok(&out);
+    assert!(
+        !text(&out.stderr).contains("note:"),
+        "{}",
+        text(&out.stderr)
+    );
+    let after: Vec<String> = [&bash, &zsh, &ps1].iter().map(|f| read(f)).collect();
+    assert_eq!(before, after);
+    for f in &absent {
+        assert!(!f.exists(), "{}", f.display());
+    }
 }
 
 // spec: §9.10.7
@@ -2605,9 +2717,13 @@ fn update_toolchain() {
     let out = update(&[]);
     assert_eq!(text(&out.stderr), "rok 9.9.1 is up to date\n");
 
-    // Through the proxy, which updates itself.
+    // Through the proxy, which updates itself and, quietly, the
+    // completion scripts there are.
     release("9.10.0", None, false);
+    let zsh = home.join("zsh/_rokc");
+    write(&zsh, "old\n");
     let mut c = Command::new(home.join("bin/rok"));
+    user_env(&mut c, &home.join("user"));
     c.current_dir(&root)
         .env_remove("ROK_HOME")
         .env_remove("ROK_TOOLCHAIN")
@@ -2624,6 +2740,7 @@ fn update_toolchain() {
     );
     assert_eq!(list(), format!("9.9.1-{host}\n9.10.0-{host} (default)\n"));
     assert_eq!(proxy(&["x"]), "rokc 9.10.0: x\n");
+    assert_eq!(read(&zsh), "rokc 9.10.0: completions zsh\n");
 
     // A damaged download is refused before anything changes.
     release("9.11.0", Some(&"0".repeat(64)), false);
@@ -2652,13 +2769,21 @@ fn update_toolchain() {
         "rok toolchain update: `greet` is not a version",
     );
     fs::remove_dir_all(dist.join("download/v9.9.1")).unwrap();
-    let out = update(&["9.9.1"]);
+    let out = update(&["9.9.1", "-v"]);
     ok(&out);
+    let err = text(&out.stderr);
     assert!(
-        text(&out.stderr).starts_with("     Updated rok 9.10.0 -> 9.9.1\n"),
-        "{}",
-        text(&out.stderr)
+        err.starts_with("     Updated rok 9.10.0 -> 9.9.1\n"),
+        "{err}"
     );
+    assert!(
+        err.ends_with(&format!(
+            "        note: refreshed zsh completions for rokc in {}\n",
+            zsh.display()
+        )),
+        "{err}"
+    );
+    assert_eq!(read(&zsh), "rokc 9.9.1: completions zsh\n");
     assert_eq!(list(), format!("9.9.1-{host} (default)\n9.10.0-{host}\n"));
     assert_eq!(proxy(&["x"]), "rokc 9.9.1: x\n");
     assert_eq!(update(&["9.9.1", "x"]).status.code(), Some(2));

@@ -190,7 +190,8 @@ toolchains ($ROK_HOME/toolchains/<version>-<triple>/):
 shell:
   completions bash|zsh|fish|powershell
                                print the shell's completion script for rok
-                               (install.sh / install.ps1 put it in place)
+                               (install.sh / install.ps1 put it in place;
+                               toolchain default / update rewrite it)
 
 options (anywhere before `--`):
   --env <name>    work in that environment (REPL, Jupyter, install)
@@ -198,6 +199,7 @@ options (anywhere before `--`):
   --locked        fail instead of changing rok.lock
   --cwd <dir>     change directory first
   -q, --quiet     less output
+  -v, --verbose   more output
   version, help
 
 A package builds with its own rok.rokon's dependencies only. A script
@@ -220,11 +222,13 @@ environment: ROK_HOME (default: ~/.rok), ROK_ENV, ROK_TOOLCHAIN,
 ";
 
 #[derive(Default)]
+#[allow(clippy::struct_excessive_bools)] // independent switches
 struct Global {
     env: Option<String>,
     offline: bool,
     locked: bool,
     quiet: bool,
+    verbose: bool,
     /// `+<version>`.
     toolchain: Option<String>,
 }
@@ -324,6 +328,10 @@ pub fn main_with(args: Vec<String>) -> i32 {
             }
             "-q" | "--quiet" => {
                 g.quiet = true;
+                rest.push(a);
+            }
+            "-v" | "--verbose" => {
+                g.verbose = true;
                 rest.push(a);
             }
             // `rok +<version> ..` (spec 9.10.6), before the command.
@@ -452,7 +460,7 @@ fn run(g: &Global, cmd: &str, pre: &[String], post: &[String]) -> i32 {
         "login" => cmd_login(g, post),
         "logout" => cmd_logout(g, post),
         "env" => env::cmd(g, post),
-        "toolchain" => toolchain::cmd(post, g.quiet),
+        "toolchain" => toolchain::cmd(post, g.quiet, g.verbose),
         "completions" => cmd_completions(post),
         "__complete" => complete(post),
         "jupyter" if post.first().is_some_and(|p| p == "install") => install_kernel(g, &post[1..]),
