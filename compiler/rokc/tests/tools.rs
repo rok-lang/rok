@@ -85,12 +85,12 @@ a
         "\
 3
 sum 42
-P
+P { x: 40, y: 2 }
 i32
 rebound
 80
-List<i32>
-i32
+[1, 2, 3]
+7
 f64
 ",
         "stderr: {stderr}"
@@ -102,9 +102,9 @@ f64
     assert!(stderr.contains("cannot find value `x`"), "{stderr}");
 }
 
-/// The REPL prints an expression cell with `Display`, a trailing `?` with
-/// `Debug`, only the type when the value has neither; `println` uses
-/// `Display`; a `let` cell prints nothing.
+/// The REPL prints an expression cell with `Display`, else `Debug`, a
+/// trailing `?` with `Debug`, only the type when the value has neither;
+/// `println` uses `Display`; a `let` cell prints nothing.
 #[test]
 #[cfg_attr(
     not(any(
@@ -144,7 +144,7 @@ d?
     assert_eq!(out.status.code(), Some(0), "{stderr}");
     assert_eq!(
         text(&out.stdout),
-        "hello\nQ=3\nQ=3\nD { v: 4 }\nD\n42\n[1, 2, 3]\n\"hello\"\nD { v: 4 }\n",
+        "hello\nQ=3\nQ=3\nD { v: 4 }\nD { v: 4 }\n42\n[1, 2, 3]\n\"hello\"\nD { v: 4 }\n",
         "stderr: {stderr}"
     );
 }
@@ -408,7 +408,7 @@ p
     );
     let stdout = text(&out.stdout);
     let stderr = text(&out.stderr);
-    assert_eq!(stdout, "once\n2\n42\nP\n", "stderr: {stderr}");
+    assert_eq!(stdout, "once\n2\n42\nP { x: 21 }\n", "stderr: {stderr}");
     assert!(stderr.contains("boom"), "{stderr}");
     assert_eq!(std::fs::read_to_string(&log).ok().as_deref(), Some("x"));
     let _ = std::fs::remove_file(&log);
@@ -448,8 +448,8 @@ match q { x: Q => x.v, _ => 0 }
     let out = piped(ROKC, &["repl", "--rokr", &rokr], input);
     let stdout = text(&out.stdout);
     let stderr = text(&out.stderr);
-    // An `any` shows the type it holds (6.10.3).
-    assert_eq!(stdout, "3\ni32\nQ\n9\n", "stderr: {stderr}");
+    // An `any Debug` shows the `Debug` of what it holds (6.10.3).
+    assert_eq!(stdout, "3\n5\nQ { v: 9 }\n9\n", "stderr: {stderr}");
     assert!(
         stderr.contains("`h: Hid` cannot be kept for later cells (`geo::Hid` is private"),
         "{stderr}"
@@ -628,7 +628,7 @@ let never = 0;
     let stderr = text(&out.stderr);
     assert_eq!(out.status.code(), Some(0), "{stdout}\n{stderr}");
     // `n += 100` ran in the cell that failed: `n` is as before it.
-    assert_eq!(stdout, "ran 4\n1\nP\n6\nList<i32>\n", "stderr: {stderr}");
+    assert_eq!(stdout, "ran 4\n1\nP\n6\n[1, 2, 3]\n", "stderr: {stderr}");
     assert!(stderr.contains(&format!("{path}:12:11")), "{stderr}");
     assert!(
         stderr.contains("the rest of the program did not run"),
@@ -728,14 +728,17 @@ C.load()
     let stderr = text(&out.stderr);
     assert_eq!(
         text(&out.stdout),
-        "8\n9\n1\n1\n10\nList<i32>\n1\n1\n",
+        "8\n9\n1\n1\n10\n[1, 2, 3]\n1\n1\n",
         "stderr: {stderr}"
     );
-    assert_eq!(
-        stderr.matches("error: the cell failed").count(),
-        5,
-        "{stderr}"
-    );
+    let failed = |why: &str| {
+        stderr
+            .matches(&format!("error: {why}; the session is unchanged"))
+            .count()
+    };
+    assert_eq!(failed("the cell failed"), 1, "{stderr}");
+    assert_eq!(failed("the cell panicked"), 3, "{stderr}");
+    assert_eq!(failed("the cell called exit(3)"), 1, "{stderr}");
     assert!(stderr.contains("deep") && stderr.contains("v2"), "{stderr}");
 }
 
@@ -779,7 +782,7 @@ task::block_on(async { let ts = [task::spawn(async { 1 }), task::spawn(async { 2
         "stderr: {stderr}"
     );
     assert_eq!(
-        stderr.matches("error: the cell failed").count(),
+        stderr.matches("error: the cell panicked").count(),
         2,
         "{stderr}"
     );
@@ -834,11 +837,11 @@ once.call_once(|| { println(\"ran again\"); });
     let again = if cfg!(windows) { "" } else { "ran again\n" };
     assert_eq!(
         stdout,
-        format!("(i64, i64)\n3\n5\n6\n{again}"),
+        format!("(1, 1)\n3\n5\n6\n{again}"),
         "stderr: {stderr}"
     );
     assert_eq!(
-        stderr.matches("error: the cell failed").count(),
+        stderr.matches("error: the cell panicked").count(),
         2,
         "{stderr}"
     );
@@ -1533,6 +1536,224 @@ fn repl_hints_at_the_package_it_runs_in() {
     let _ = std::fs::remove_dir_all(dir.parent().unwrap());
 }
 
+/// A value shows with `Display`, else `Debug`, else its type name.
+#[test]
+#[cfg_attr(
+    not(any(
+        all(
+            any(target_os = "macos", target_os = "linux"),
+            any(target_arch = "aarch64", target_arch = "x86_64")
+        ),
+        windows
+    )),
+    ignore = "the REPL host runs on macOS, Linux and Windows (arm64, x86_64)"
+)]
+// spec: §9.7.0 §9.7.7 / std §2.12.4
+fn repl_shows_values_in_full() {
+    let env = setup_runtime();
+    let rokr = env.rokr.display().to_string();
+    let input = "\
+let xs = [1, 2, 3]
+xs
+(1, \"a\", [true])
+enum E { A, B(i32) }
+E::B(3)
+#[derive(Debug)]
+enum F { A, B(i32) }
+F::B(3)
+struct S { a: i32 }
+S { a: 1 }
+S { a: 1 }?
+#[derive(Debug)]
+struct D { a: i32 }
+D { a: 1 }
+struct T { a: i32 }
+impl Display for T { fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f\"T={self.a}\") } }
+T { a: 2 }
+T { a: 2 }?
+nope?
+nope(); S { a: 1 }
+";
+    let out = piped(ROKC, &["repl", "--rokr", &rokr], input);
+    let stderr = text(&out.stderr);
+    assert_eq!(
+        text(&out.stdout),
+        "[1, 2, 3]\n(1, \"a\", [true])\nE\nB(3)\nS\nS\nD { a: 1 }\nT=2\nT\n",
+        "stderr: {stderr}"
+    );
+    // A trailing `?` keeps the error's location; a value that cannot show
+    // adds no error to the cell's.
+    assert_eq!(
+        stderr,
+        "\
+error[E100]: cannot find value `nope` in this scope
+  --> <repl>:1:1
+   |
+ 1 | nope?
+   | ^^^^
+error[E100]: cannot find function `nope` in this scope
+  --> <repl>:1:1
+   |
+ 1 | nope(); S { a: 1 }
+   | ^^^^^^
+"
+    );
+}
+
+/// A cell's failure says what happened: a panic in an earlier cell's
+/// function names that cell, a throw and `exit` say so, and the generated
+/// `main` is never named.
+#[test]
+#[cfg_attr(
+    not(any(
+        all(
+            any(target_os = "macos", target_os = "linux"),
+            any(target_arch = "aarch64", target_arch = "x86_64")
+        ),
+        windows
+    )),
+    ignore = "the REPL host runs on macOS, Linux and Windows (arm64, x86_64)"
+)]
+// spec: §9.7.0 §9.7.5
+fn repl_reports_how_a_cell_failed() {
+    let env = setup_runtime();
+    let rokr = env.rokr.display().to_string();
+    let input = "\
+let kept = 1
+fn boom(n: i32) {
+    panic(f\"boom {n}\");
+}
+boom(5)
+fn t() throws { throw ValueError { msg: \"bad\" }; }
+kept += 1; try t()
+kept += 1; rok::std::env::exit(3);
+kept
+";
+    let out = piped(ROKC, &["repl", "--rokr", &rokr], input);
+    let stderr = text(&out.stderr);
+    assert_eq!(text(&out.stdout), "1\n", "stderr: {stderr}");
+    assert_eq!(
+        stderr,
+        "\
+thread 'main' panicked at <repl cell 2>:2:5:
+boom 5
+error: the cell panicked; the session is unchanged
+error: the cell threw `bad`; the session is unchanged
+  --> <repl cell 5>:1:16
+error: the cell called exit(3); the session is unchanged (`exit` or `:quit` ends the session)
+"
+    );
+}
+
+/// A redefinition that breaks an earlier item names it, its cell and its
+/// text, and says how to go on; redefining both in one cell works.
+#[test]
+#[cfg_attr(
+    not(any(
+        all(
+            any(target_os = "macos", target_os = "linux"),
+            any(target_arch = "aarch64", target_arch = "x86_64")
+        ),
+        windows
+    )),
+    ignore = "the REPL host runs on macOS, Linux and Windows (arm64, x86_64)"
+)]
+// spec: §9.7.0 §9.7.5
+fn repl_redefinition_names_broken_dependents() {
+    let env = setup_runtime();
+    let rokr = env.rokr.display().to_string();
+    let input = "\
+struct P { x: i32 }
+impl P { fn get(self) -> i32 { self.x } }
+impl P { fn two(self) -> i32 { 2 } }
+struct P { y: i32 }
+struct P { y: i32 } impl P { fn get(self) -> i32 { self.y } }
+P { y: 4 }.get() + P { y: 0 }.two()
+fn f() -> i32 { 1 }
+fn g() -> i32 { f() + 1 }
+fn f() -> str { \"x\" } fn g() -> str { f() }
+g()
+";
+    let out = piped(ROKC, &["repl", "--rokr", &rokr], input);
+    let stderr = text(&out.stderr);
+    assert_eq!(text(&out.stdout), "6\nx\n", "stderr: {stderr}");
+    assert_eq!(
+        stderr,
+        "\
+error[E200]: struct `P` has no field `x`
+  --> <repl cell 2>:1:32
+   |
+ 1 | impl P { fn get(self) -> i32 { self.x } }
+   |                                ^^^^^^
+   |
+   = help: available fields: `y`
+   = help: `impl P` from cell 2 no longer compiles with this definition: redefine it in this cell too, or `:reset` to start over
+"
+    );
+}
+
+/// Ctrl-C ends a running cell; the session goes on as before it.
+#[test]
+#[cfg_attr(
+    not(all(
+        any(target_os = "macos", target_os = "linux"),
+        any(target_arch = "aarch64", target_arch = "x86_64")
+    )),
+    ignore = "the REPL host runs on macOS and Linux, arm64 and x86_64"
+)]
+// spec: §9.7.5
+fn repl_ctrl_c_interrupts_the_cell() {
+    let env = setup_runtime();
+    let rokr = env.rokr.display().to_string();
+    let mut child = Command::new(ROKC)
+        .args(["repl", "--rokr", &rokr])
+        .env("ROK_HOME", workspace())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    let mut stderr = BufReader::new(child.stderr.take().unwrap());
+    stdin
+        .write_all(b"let n = 1\neprintln(\"spinning\"); n += 1; while true {}\n")
+        .unwrap();
+    let mut line = String::new();
+    stderr.read_line(&mut line).unwrap();
+    assert_eq!(line, "spinning\n");
+    // The session host is rokc's child; the cell runs in it.
+    let host = Command::new("pgrep")
+        .args(["-P", &child.id().to_string()])
+        .output()
+        .unwrap();
+    let host = text(&host.stdout);
+    let host = host.lines().next().unwrap_or_default();
+    assert!(
+        Command::new("kill")
+            .args(["-INT", host])
+            .status()
+            .unwrap()
+            .success()
+    );
+    stdin.write_all(b"n\n").unwrap();
+    drop(stdin);
+    let mut rest = String::new();
+    stderr.read_to_string(&mut rest).unwrap();
+    let mut stdout = String::new();
+    child
+        .stdout
+        .take()
+        .unwrap()
+        .read_to_string(&mut stdout)
+        .unwrap();
+    assert!(child.wait().unwrap().success());
+    assert_eq!(
+        rest,
+        "error: interrupted (Ctrl-C); the session is unchanged\n"
+    );
+    assert_eq!(stdout, "1\n");
+}
+
 /// `rokc jupyter` driven by a hand-written ZMTP client (no Jupyter
 /// needed): heartbeat, `kernel_info`, cells that bind, show, print and
 /// panic, completion, and `shutdown`. Every message must be signed.
@@ -1719,6 +1940,22 @@ fn jupyter_kernel_speaks_the_wire_protocol() {
     assert!(shows(&published, "3"), "{published:?}");
     let (_, _, published) = request(&mut shell, "execute_request", exec("v * it"));
     assert!(shows(&published, "9"), "{published:?}");
+
+    // Values and failures show as in the REPL.
+    let (_, _, published) = request(&mut shell, "execute_request", exec("[1, 2, 3]"));
+    assert!(shows(&published, "[1, 2, 3]"), "{published:?}");
+    let (_, reply, _) = request(
+        &mut shell,
+        "execute_request",
+        exec("rok::std::env::exit(3);"),
+    );
+    assert_eq!(
+        reply.get("evalue").as_str(),
+        Some(
+            "error: the cell called exit(3); the session is unchanged (`exit` or `:quit` ends the session)"
+        ),
+        "{reply}"
+    );
 
     let (kind, _, _) = request(
         &mut control,
