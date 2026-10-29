@@ -1609,12 +1609,19 @@ fn fmt_check_and_rewrite() {
     put(dir.join("a.rok"), messy).unwrap();
     put(dir.join("target/skip.rok"), messy).unwrap();
 
-    let out = rokc(None, &dir, &["fmt", "--check"]);
+    let out = rokc(None, &dir, &["fmt", "--check", "."]);
     assert_exit(&out, 1);
     assert!(text(&out.stdout).contains("a.rok"));
+    assert!(
+        text(&out.stderr).contains("1 file needs formatting; `rokc fmt` without `--check`"),
+        "{}",
+        text(&out.stderr)
+    );
     assert_eq!(fs::read_to_string(dir.join("a.rok")).unwrap(), messy);
 
-    assert_exit(&rokc(None, &dir, &["fmt"]), 0);
+    let out = rokc(None, &dir, &["fmt", "."]);
+    assert_exit(&out, 0);
+    assert_eq!(text(&out.stderr), "   Formatted 1 file\n");
     assert_eq!(fs::read_to_string(dir.join("a.rok")).unwrap(), clean);
     assert_eq!(
         fs::read_to_string(dir.join("target/skip.rok")).unwrap(),
@@ -1623,6 +1630,7 @@ fn fmt_check_and_rewrite() {
     assert_exit(&rokc(None, &dir, &["fmt", "--check", "a.rok"]), 0);
 
     // `.rokon` data files too: re-indented, and checked to be ROKON.
+    // With a rok.rokon, the directory is a package: `fmt` alone is it.
     put(dir.join("rok.rokon"), "Package {\n  deps: {}, // none\n}\n").unwrap();
     assert_exit(&rokc(None, &dir, &["fmt"]), 0);
     assert_eq!(
@@ -1630,7 +1638,7 @@ fn fmt_check_and_rewrite() {
         "Package {\n    deps: {}, // none\n}\n"
     );
     put(dir.join("bad.rokon"), "Package { name: x }\n").unwrap();
-    let out = rokc(None, &dir, &["fmt", "--check"]);
+    let out = rokc(None, &dir, &["fmt", "--check", "."]);
     assert_exit(&out, 1);
     assert!(
         text(&out.stderr).contains("error[E002]: bare identifier `x`")
@@ -1654,6 +1662,182 @@ fn fmt_writes_lf_and_keeps_literal_crlf() {
         fs::read_to_string(dir.join("w.rok")).unwrap(),
         "fn f() {\n    let s = \"a\r\nb\";\n}\n"
     );
+}
+
+/// `rokc <args>` in `cwd` with `HOME` (and `USERPROFILE`) at `home`;
+/// panics if it runs past a minute.
+fn rokc_within(cwd: &Path, home: &Path, args: &[&str]) -> Output {
+    let mut child = Command::new(ROKC)
+        .current_dir(cwd)
+        .env("ROK_HOME", workspace())
+        .env("HOME", home)
+        .env("USERPROFILE", home)
+        .env_remove("CLICOLOR_FORCE")
+        .env_remove("ROK_CLI")
+        .args(args)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let start = std::time::Instant::now();
+    while child.try_wait().unwrap().is_none() {
+        if start.elapsed() > std::time::Duration::from_secs(60) {
+            let _ = child.kill();
+            panic!(
+                "rokc {args:?} in {} still running after 60 s",
+                cwd.display()
+            );
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    child.wait_with_output().unwrap()
+}
+
+/// A home-like directory: no package, a big `node_modules/`, and
+/// `.rok` files deep down.
+fn home_like(dir: &Path) {
+    for i in 0..200 {
+        put(
+            dir.join(format!("node_modules/m{i}/x.rok")),
+            "fn f() {\n  1;\n}\n",
+        )
+        .unwrap();
+    }
+    put(dir.join("Library/Caches/a/b/c.rok"), "fn f() {}\n").unwrap();
+    put(dir.join(".cache/d.rok"), "fn f() {\n  1;\n}\n").unwrap();
+    put(dir.join("work/target/e.rok"), "fn f() {\n  1;\n}\n").unwrap();
+}
+
+/// Outside a package `fmt` needs a path: from a home directory or an
+/// empty one it says so at once, and writes nothing.
+// spec: §9.1.2
+#[test]
+fn fmt_outside_package_needs_path() {
+    let root = scratch("fmt-outside");
+    let home = root.join("home");
+    home_like(&home);
+    let empty = root.join("empty");
+    fs::create_dir_all(&empty).unwrap();
+    for (cwd, args) in [
+        (&home, &["fmt"][..]),
+        (&home, &["fmt", "--check"]),
+        (&empty, &["fmt"]),
+    ] {
+        let out = rokc_within(cwd, &home, args);
+        assert_exit(&out, 1);
+        assert_eq!(
+            text(&out.stderr),
+            "rokc: error: not inside a package; pass a file or directory: `rokc fmt <path>`\n"
+        );
+        assert_eq!(text(&out.stdout), "");
+    }
+    // Through rok, the message names `rok`.
+    let out = Command::new(ROKC)
+        .current_dir(&empty)
+        .env("ROK_CLI", "rok")
+        .arg("fmt")
+        .output()
+        .unwrap();
+    assert_exit(&out, 1);
+    assert_eq!(
+        text(&out.stderr),
+        "rok: error: not inside a package; pass a file or directory: `rok fmt <path>`\n"
+    );
+    assert_eq!(
+        fs::read_to_string(home.join("node_modules/m0/x.rok")).unwrap(),
+        "fn f() {\n  1;\n}\n"
+    );
+}
+
+/// A directory walk skips dot directories, `target/`, `node_modules/`
+/// and what the `.gitignore` there or at the package root ignores.
+// spec: §9.1.2
+#[test]
+fn fmt_skips_node_modules_and_ignored() {
+    let root = scratch("fmt-skips");
+    let home = root.join("home");
+    home_like(&home);
+    let messy = "fn f() {\n  1;\n}\n";
+    put(home.join("work/a.rok"), messy).unwrap();
+    put(home.join("work/gen/b.rok"), messy).unwrap();
+    put(home.join("work/c.gen.rok"), messy).unwrap();
+    put(home.join("work/.gitignore"), "# made\ngen/\n*.gen.rok\n").unwrap();
+    let out = rokc_within(&home, &home, &["fmt", "--check", "."]);
+    assert_exit(&out, 1);
+    let diff = text(&out.stdout);
+    assert!(diff.contains("a.rok"), "{diff}");
+    for skipped in ["node_modules", "Caches", ".cache", "target"] {
+        assert!(!diff.contains(skipped), "{skipped}: {diff}");
+    }
+    // `.gitignore` at the walk root.
+    let out = rokc_within(&home.join("work"), &home, &["fmt", "--check", "."]);
+    let diff = text(&out.stdout);
+    assert!(diff.contains("a.rok") && !diff.contains("b.rok") && !diff.contains("c.gen.rok"));
+    // At the package root, for a walk below it.
+    let pkg = root.join("pkg");
+    put(pkg.join("src/main.rok"), "fn main() {}\n").unwrap();
+    put(pkg.join("src/gen/x.rok"), messy).unwrap();
+    put(pkg.join("src/y.rok"), messy).unwrap();
+    put(pkg.join(".gitignore"), "/target\ngen/\n").unwrap();
+    let out = rokc_within(&pkg, &home, &["fmt", "--check", "src"]);
+    let diff = text(&out.stdout);
+    assert!(diff.contains("y.rok") && !diff.contains("x.rok"), "{diff}");
+}
+
+/// `fmt` says what it did: files formatted, already formatted, or none
+/// found; inside a package, without a path, it formats that package from
+/// any directory in it.
+// spec: §9.1.2
+#[test]
+fn fmt_reports_counts() {
+    let pkg = scratch("fmt-counts");
+    let messy = "fn f() {\n  1;\n}\n";
+    put(pkg.join("src/main.rok"), "fn main() {}\n").unwrap();
+    put(pkg.join("src/m/a.rok"), messy).unwrap();
+    put(pkg.join("tests/t.rok"), messy).unwrap();
+    put(pkg.join("benches/b.rok"), messy).unwrap();
+    put(pkg.join("examples/e.rok"), "fn main() {}\n").unwrap();
+    put(pkg.join("old.rok"), messy).unwrap();
+    let out = rokc_within(&pkg.join("src/m"), &pkg, &["fmt"]);
+    assert_exit(&out, 0);
+    assert_eq!(
+        text(&out.stderr),
+        "   Formatted 3 files, 2 already formatted\n"
+    );
+    assert_eq!(fs::read_to_string(pkg.join("old.rok")).unwrap(), messy);
+    let out = rokc_within(&pkg, &pkg, &["fmt"]);
+    assert_eq!(
+        text(&out.stderr),
+        "        note: 5 files already formatted\n"
+    );
+    let out = rokc_within(&pkg, &pkg, &["-q", "fmt"]);
+    assert_eq!(text(&out.stderr), "");
+    // `--check` keeps exit 1 and says how to fix it.
+    put(pkg.join("src/m/a.rok"), messy).unwrap();
+    let out = rokc_within(&pkg, &pkg, &["fmt", "--check"]);
+    assert_exit(&out, 1);
+    assert!(
+        text(&out.stderr)
+            .ends_with("note: 1 file needs formatting; `rokc fmt` without `--check` rewrites it\n"),
+        "{}",
+        text(&out.stderr)
+    );
+}
+
+// spec: §9.1.2
+#[test]
+fn fmt_empty_dir_says_so() {
+    let dir = scratch("fmt-empty");
+    fs::create_dir_all(dir.join("sub")).unwrap();
+    let out = rokc_within(&dir, &dir, &["fmt", "sub"]);
+    assert_exit(&out, 0);
+    assert_eq!(
+        text(&out.stderr),
+        "        note: no .rok or .rokon files under sub\n"
+    );
+    let out = rokc_within(&dir, &dir, &["fmt", "nope.rok"]);
+    assert_exit(&out, 1);
+    assert!(text(&out.stderr).contains("`nope.rok` does not exist"));
 }
 
 /// Symbol mangling in a host executable's symbol table.

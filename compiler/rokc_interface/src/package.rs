@@ -158,25 +158,162 @@ fn shown(p: &Path) -> PathBuf {
 /// directories are skipped.
 #[must_use]
 pub fn source_files(dir: &Path) -> Vec<PathBuf> {
-    fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
-        let Ok(rd) = std::fs::read_dir(dir) else {
-            return;
+    let mut out = Vec::new();
+    walk(dir, &mut |_, _| false, &mut out, &mut |_| {});
+    out.sort();
+    out
+}
+
+/// `source_files` for tools (`fmt`): also skips `node_modules/` and what
+/// the `.gitignore` at `dir` or at its package's root ignores (see
+/// `Ignore`). `progress` gets the number of entries seen so far.
+pub fn source_files_with(dir: &Path, progress: &mut dyn FnMut(usize)) -> Vec<PathBuf> {
+    let mut ignores = Vec::new();
+    if let Ok(abs) = std::path::absolute(dir) {
+        let pkg = package_root(&abs);
+        for base in std::iter::once(abs.as_path()).chain(pkg.as_deref().filter(|p| *p != abs)) {
+            if let (Ok(text), Ok(prefix)) = (
+                std::fs::read_to_string(base.join(".gitignore")),
+                abs.strip_prefix(base),
+            ) {
+                ignores.push(Ignore::parse(&text, prefix.to_path_buf()));
+            }
+        }
+    }
+    let mut skip = |rel: &Path, is_dir: bool| {
+        is_dir && rel.file_name().is_some_and(|n| n == "node_modules")
+            || ignores.iter().any(|i| i.matches(rel, is_dir))
+    };
+    let mut out = Vec::new();
+    walk(dir, &mut skip, &mut out, progress);
+    out.sort();
+    out
+}
+
+/// Walk `root`; `skip` sees each entry relative to `root`.
+fn walk(
+    root: &Path,
+    skip: &mut dyn FnMut(&Path, bool) -> bool,
+    out: &mut Vec<PathBuf>,
+    progress: &mut dyn FnMut(usize),
+) {
+    let mut seen = 0;
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let Ok(rd) = std::fs::read_dir(&dir) else {
+            continue;
         };
         for e in rd.flatten() {
+            seen += 1;
+            progress(seen);
             let p = e.path();
             let name = e.file_name();
             let name = name.to_string_lossy();
-            if p.is_dir() {
-                if name != "target" && !name.starts_with('.') {
-                    walk(&p, out);
+            let is_dir = p.is_dir();
+            let rel = p.strip_prefix(root).unwrap_or(&p);
+            if is_dir {
+                if name != "target" && !name.starts_with('.') && !skip(rel, true) {
+                    stack.push(p);
                 }
-            } else if p.extension().is_some_and(|x| x == "rok" || x == "rokon") {
+            } else if p.extension().is_some_and(|x| x == "rok" || x == "rokon") && !skip(rel, false)
+            {
                 out.push(p);
             }
         }
     }
-    let mut out = Vec::new();
-    walk(dir, &mut out);
-    out.sort();
-    out
+}
+
+/// The nearest directory at or above `dir` with `src/main.rok`,
+/// `src/lib.rok` or `rok.rokon`: the package `dir` is in, as rok finds
+/// it.
+#[must_use]
+pub fn package_root(dir: &Path) -> Option<PathBuf> {
+    let abs = std::path::absolute(dir).ok()?;
+    abs.ancestors()
+        .find(|d| root_file(d).is_some() || d.join("rok.rokon").is_file())
+        .map(Path::to_path_buf)
+}
+
+/// The `.gitignore` subset the tools honour: `name` (anywhere below),
+/// `name/` (directories only), `/name` (directly in the `.gitignore`'s
+/// directory) and `*suffix`. Other lines (`!`, `**`, other wildcards,
+/// `a/b`) are skipped.
+struct Ignore {
+    /// The walk root relative to the `.gitignore`'s directory.
+    prefix: PathBuf,
+    rules: Vec<Rule>,
+}
+
+struct Rule {
+    name: String,
+    anchored: bool,
+    dir_only: bool,
+    /// `*suffix`: `name` is the suffix.
+    suffix: bool,
+}
+
+impl Ignore {
+    fn parse(text: &str, prefix: PathBuf) -> Self {
+        let rules = text
+            .lines()
+            .filter_map(|l| {
+                let l = l.trim_end();
+                if l.is_empty() || l.starts_with(['#', '!']) || l.contains('\\') {
+                    return None;
+                }
+                let (l, dir_only) = l.strip_suffix('/').map_or((l, false), |l| (l, true));
+                let (l, anchored) = l.strip_prefix('/').map_or((l, false), |l| (l, true));
+                let (l, suffix) = l.strip_prefix('*').map_or((l, false), |l| (l, true));
+                let plain = !l.is_empty() && !l.contains(['/', '*', '?', '[']);
+                plain.then(|| Rule {
+                    name: l.to_owned(),
+                    anchored,
+                    dir_only,
+                    suffix,
+                })
+            })
+            .collect();
+        Self { prefix, rules }
+    }
+
+    fn matches(&self, rel: &Path, is_dir: bool) -> bool {
+        let full = self.prefix.join(rel);
+        let Some(last) = full.file_name().and_then(|n| n.to_str()) else {
+            return false;
+        };
+        let top = full.components().count() == 1;
+        self.rules.iter().any(|r| {
+            (is_dir || !r.dir_only)
+                && (!r.anchored || top)
+                && if r.suffix {
+                    last.ends_with(&r.name)
+                } else {
+                    last == r.name
+                }
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gitignore_subset() {
+        let i = Ignore::parse(
+            "# c\nbuild/\n/out\n*.gen.rok\nskip.rok\n!keep\na/b\n**/x\n",
+            PathBuf::from("src"),
+        );
+        assert_eq!(i.rules.len(), 4);
+        assert!(i.matches(Path::new("build"), true));
+        assert!(!i.matches(Path::new("build"), false));
+        // `/out` is beside the `.gitignore`, not under `src/`.
+        assert!(!i.matches(Path::new("out"), true));
+        assert!(i.matches(Path::new("m/x.gen.rok"), false));
+        assert!(i.matches(Path::new("skip.rok"), false));
+        assert!(!i.matches(Path::new("keep.rok"), false));
+        let top = Ignore::parse("/out\n", PathBuf::new());
+        assert!(top.matches(Path::new("out"), true));
+        assert!(!top.matches(Path::new("a/out"), true));
+    }
 }

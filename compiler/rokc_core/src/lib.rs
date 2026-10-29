@@ -46,7 +46,10 @@ pub fn env_knob<T>(
             .insert(name)
     {
         let v = v.to_string_lossy();
-        eprintln!("rokc: warning: ignoring {name}={v} (expected {expected})");
+        eprintln!(
+            "{}: warning: ignoring {name}={v} (expected {expected})",
+            cli::invoked_as()
+        );
     }
     r
 }

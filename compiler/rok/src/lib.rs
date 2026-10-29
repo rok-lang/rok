@@ -200,7 +200,7 @@ pub fn main_with(args: Vec<String>) -> i32 {
     // separate value go after it.
     let Some(i) = rest.iter().position(|a| !a.starts_with('-') || a == "--") else {
         if rest.iter().any(|a| a == "-V" || a == "--version") {
-            println!("rok {VERSION_LINE}");
+            print!("{}", version(&g));
             return 0;
         }
         if rest.iter().any(|a| a == "-h" || a == "--help") {
@@ -237,6 +237,15 @@ pub fn main_with(args: Vec<String>) -> i32 {
             .collect()
     };
     run(&g, cmd, &rest[..i], &post)
+}
+
+/// `rok --version`; with `-v`, which binary and toolchain that is.
+fn version(g: &Global) -> String {
+    let mut out = format!("rok {VERSION_LINE}\n");
+    if g.verbose {
+        out.push_str(&toolchain::describe(g.toolchain.as_deref()));
+    }
+    out
 }
 
 /// The commands `rok` passes to `rokc`.
@@ -279,7 +288,7 @@ fn is_usage(e: &str) -> bool {
 fn run(g: &Global, cmd: &str, pre: &[String], post: &[String]) -> i32 {
     let r = match cmd {
         "version" => {
-            println!("rok {VERSION_LINE}");
+            print!("{}", version(g));
             Ok(0)
         }
         "help" if !post.is_empty() => return help(&post[0]),
@@ -304,6 +313,7 @@ fn run(g: &Global, cmd: &str, pre: &[String], post: &[String]) -> i32 {
         "completions" => cmd_completions(post),
         "__complete" => complete(post),
         "jupyter" if post.first().is_some_and(|p| p == "install") => install_kernel(g, &post[1..]),
+        "jupyter" if post.is_empty() => return usage_of(cmd, cli::JUPYTER_BARE),
         "test" | "bench" => harness(g, cmd, pre, post),
         c if DELEGATED.contains(&c) => delegate(g, cmd, pre, post),
         other => return usage(&unknown_command(other)),
@@ -767,6 +777,18 @@ fn rokc_command(
             "`--env {env}` is for scripts and the REPL: a package builds with the dependencies \
              in its rok.rokon only (add one: `rok add <name>`)"
         ));
+    }
+    // A missing file is that, not a missing package; for test / bench a
+    // word may be a filter.
+    if let Some(p) = first.filter(|p| *p != "-" && path.is_none()) {
+        let file = Path::new(p).extension().is_some_and(|x| x == "rok");
+        if matches!(
+            cmd,
+            "build" | "check" | "run" | "doc" | "lint" | "emit" | "clean" | "repl" | "fmt"
+        ) || file && matches!(cmd, "test" | "bench")
+        {
+            return Err(format!("`{p}` does not exist"));
+        }
     }
     if matches!(
         cmd,
@@ -2110,8 +2132,20 @@ fn cmd_uninstall(g: &Global, args: &[String]) -> Result<i32, String> {
 }
 
 fn cmd_update(g: &Global, names: &[String]) -> Result<i32, String> {
+    let in_package = g.env.is_none() && package_dir(Path::new(".")).is_some();
     let t = target_for(g, None)?;
     let manifest = &t.ctx.manifest;
+    let has_deps =
+        !(manifest.deps.is_empty() && manifest.dev_deps.is_empty() && manifest.native.is_empty());
+    // Outside a package, the ambient environment only when it has
+    // libraries; else this is a mistake, not an empty update.
+    if !in_package && g.env.is_none() && !has_deps {
+        return Err(
+            "not inside a package (no src/main.rok, src/lib.rok or rok.rokon here or above): \
+             make one with `rok init`; for an environment's libraries: `rok update --env <name>`"
+                .to_owned(),
+        );
+    }
     for n in names {
         if !manifest
             .deps
@@ -2133,18 +2167,88 @@ fn cmd_update(g: &Global, names: &[String]) -> Result<i32, String> {
             }
         }
     }
+    let read = || {
+        t.ctx
+            .lock_path
+            .as_deref()
+            .and_then(|p| lock::Lock::read(p).ok().flatten())
+            .unwrap_or_default()
+    };
+    let before = read();
     let mut opts = options(g);
     opts.update = Some(names.to_vec());
     opts.dev = true;
-    let r = resolve::resolve(&home(), &t.ctx, &opts)?;
-    if !g.quiet {
-        if let Some(p) = &t.ctx.lock_path {
-            let count = r.packages.len() + r.natives.len();
-            let s = if count == 1 { "" } else { "s" };
-            term::status("Updated", &format!("{} ({count} package{s})", p.display()));
-        }
+    resolve::resolve(&home(), &t.ctx, &opts)?;
+    if g.quiet {
+        return Ok(0);
+    }
+    let changes = lock_changes(&before, &read());
+    for (verb, what) in &changes {
+        term::status(verb, what);
+    }
+    let what = match &t.env {
+        Some(e) => format!(" in environment `{e}`"),
+        None => String::new(),
+    };
+    if !has_deps {
+        let add = if t.env.is_some() {
+            "rok install <name>"
+        } else {
+            "rok add <name>"
+        };
+        term::note(&format!(
+            "no dependencies{what} to update; add one: `{add}`"
+        ));
+    } else if changes.is_empty() {
+        term::note(&format!("all dependencies{what} are up to date"));
+    } else if let Some(e) = &t.env {
+        term::status("Updated", &format!("environment `{e}`"));
     }
     Ok(0)
+}
+
+/// What `rok update` changed in the lock: (status verb, line) per
+/// package, as `json v0.1.0 -> v0.1.1`.
+fn lock_changes(old: &lock::Lock, new: &lock::Lock) -> Vec<(&'static str, String)> {
+    let short = |c: &str| c.chars().take(7).collect::<String>();
+    let label = |p: &lock::Locked| {
+        p.vers
+            .as_ref()
+            .map_or_else(|| short(&p.commit), |v| format!("v{v}"))
+    };
+    let mut out = Vec::new();
+    for p in &new.packages {
+        match old.find(&p.name) {
+            None => out.push(("Locked", format!("{} {}", p.name, label(p)))),
+            Some(o) if o.commit == p.commit && o.vers == p.vers => {}
+            Some(o) if label(o) == label(p) => out.push((
+                "Updated",
+                format!("{} {} -> {}", p.name, short(&o.commit), short(&p.commit)),
+            )),
+            Some(o) => out.push((
+                "Updated",
+                format!("{} {} -> {}", p.name, label(o), label(p)),
+            )),
+        }
+    }
+    for p in &new.natives {
+        match old.find_native(&p.name) {
+            None => out.push(("Locked", format!("{} v{}", p.name, p.vers))),
+            Some(o) if o.vers == p.vers => {}
+            Some(o) => out.push(("Updated", format!("{} v{} -> v{}", p.name, o.vers, p.vers))),
+        }
+    }
+    for p in &old.packages {
+        if new.find(&p.name).is_none() {
+            out.push(("Removed", format!("{} {}", p.name, label(p))));
+        }
+    }
+    for p in &old.natives {
+        if new.find_native(&p.name).is_none() {
+            out.push(("Removed", format!("{} v{}", p.name, p.vers)));
+        }
+    }
+    out
 }
 
 /// `rok deps [path] [--dev]`: `name=<lib.rok>` per dependency in build

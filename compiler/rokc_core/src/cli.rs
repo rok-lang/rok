@@ -740,6 +740,11 @@ pub fn rokc_spec() -> Spec {
     s
 }
 
+/// `rok jupyter` with no connection file: the user wants the kernel
+/// added, not run.
+pub const JUPYTER_BARE: &str =
+    "Jupyter starts the kernel itself; to add it, run `rok jupyter install`";
+
 #[cfg(test)]
 mod tests {
     use super::*;

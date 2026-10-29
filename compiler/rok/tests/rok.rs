@@ -95,6 +95,7 @@ fn rok_cmd(home: &Path, cwd: &Path, args: &[&str]) -> Command {
     if cfg!(unix) {
         user_env(&mut c, &home.join("user"));
     }
+    proxies_first(&mut c, home);
     // Stones' https `origin` (see `origin`) fetches from the scratch tree.
     let root = rokc_core::tmp::test_root().display().to_string();
     c.env("GIT_CONFIG_COUNT", "1")
@@ -104,6 +105,14 @@ fn rok_cmd(home: &Path, cwd: &Path, args: &[&str]) -> Command {
         )
         .env("GIT_CONFIG_VALUE_0", ORIGIN);
     c
+}
+
+/// `home`'s proxies first on PATH, as install.sh puts them: no warning
+/// about another `rok` there.
+fn proxies_first(c: &mut Command, home: &Path) {
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    let dirs = std::iter::once(home.join("bin")).chain(std::env::split_paths(&path));
+    c.env("PATH", std::env::join_paths(dirs).unwrap());
 }
 
 /// A user whose home is `user`, with no XDG directories set: the
@@ -249,8 +258,22 @@ fn add_lock_update_offline_remove() {
     // A new commit upstream: builds keep the locked one; `update` moves.
     let c2 = commit(&repo, &[("src/lib.rok", LIB_V2)]);
     assert!(deps(&home, &app, &["--locked"])[0].1.contains(&c1));
-    ok(&rok(&home, &app, &["update", "greet"]));
+    let out = rok(&home, &app, &["update", "greet"]);
+    ok(&out);
+    assert!(
+        text(&out.stderr).contains(&format!("Updated greet {} -> {}\n", &c1[..7], &c2[..7])),
+        "{}",
+        text(&out.stderr)
+    );
     assert!(read(&app.join("rok.lock")).contains(&c2));
+    // Nothing new upstream: it says so.
+    let out = rok(&home, &app, &["update"]);
+    ok(&out);
+    assert!(
+        text(&out.stderr).ends_with("note: all dependencies are up to date\n"),
+        "{}",
+        text(&out.stderr)
+    );
     assert!(deps(&home, &app, &[])[0].1.contains(&c2));
     fails(&rok(&home, &app, &["update", "nope"]), "not a dependency");
 
@@ -1190,6 +1213,243 @@ fn named_environments() {
     );
     // The choice went with it: back to `default`.
     assert_eq!(deps(&home, &elsewhere, &[])[0].0, "d");
+}
+
+/// `rok <args>` in `cwd`; panics if it runs past a minute.
+fn rok_within(home: &Path, cwd: &Path, args: &[&str]) -> Output {
+    let mut child = rok_cmd(home, cwd, args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let start = std::time::Instant::now();
+    while child.try_wait().unwrap().is_none() {
+        if start.elapsed() > std::time::Duration::from_secs(60) {
+            let _ = child.kill();
+            panic!("rok {args:?} in {} still running after 60 s", cwd.display());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    child.wait_with_output().unwrap()
+}
+
+/// Outside a package `rok update` is an error that says what to write,
+/// unless the ambient environment has libraries to update.
+// spec: §9.10.4 §9.10.5
+#[test]
+fn update_outside_package() {
+    let root = scratch("update-outside");
+    let home = root.join("home");
+    let user = home.join("user");
+    let empty = root.join("empty");
+    fs::create_dir_all(&user).unwrap();
+    fs::create_dir_all(&empty).unwrap();
+    for cwd in [&user, &empty] {
+        let out = rok_within(&home, cwd, &["update"]);
+        fails(
+            &out,
+            "not inside a package (no src/main.rok, src/lib.rok or rok.rokon here or above): \
+             make one with `rok init`; for an environment's libraries: `rok update --env <name>`",
+        );
+        assert_eq!(out.status.code(), Some(1));
+    }
+    // An environment with nothing in it.
+    let out = rok_within(&home, &empty, &["--env", "default", "update"]);
+    ok(&out);
+    assert_eq!(
+        text(&out.stderr),
+        "        note: no dependencies in environment `default` to update; add one: \
+         `rok install <name>`\n"
+    );
+    // The ambient environment with a library is updated.
+    let lib = root.join("lib1");
+    write(&lib.join("src/lib.rok"), "pub fn one() -> i32 { 1 }\n");
+    write(
+        &home.join("envs/default/rok.rokon"),
+        &format!(
+            "Package {{\n    deps: {{ \"lib1\": Dep::path({}) }},\n}}\n",
+            q(lib.display())
+        ),
+    );
+    let out = rok_within(&home, &empty, &["update"]);
+    ok(&out);
+    assert_eq!(
+        text(&out.stderr),
+        "        note: all dependencies in environment `default` are up to date\n"
+    );
+}
+
+/// `rok update` in a package says when there is nothing to do.
+// spec: §9.10.4
+#[test]
+fn update_nothing_to_do() {
+    let root = scratch("update-nothing");
+    let home = root.join("home");
+    ok(&rok(&home, &root, &["new", "app"]));
+    let out = rok_within(&home, &root.join("app/src"), &["update"]);
+    ok(&out);
+    assert_eq!(
+        text(&out.stderr),
+        "        note: no dependencies to update; add one: `rok add <name>`\n"
+    );
+    assert_eq!(
+        text(&rok(&home, &root.join("app"), &["-q", "update"]).stderr),
+        ""
+    );
+}
+
+// spec: §9.10.5
+#[test]
+fn env_list_empty() {
+    let root = scratch("env-list-empty");
+    let home = root.join("home");
+    let out = rok_within(&home, &root, &["env", "list"]);
+    assert_eq!(ok(&out), "");
+    assert_eq!(
+        text(&out.stderr),
+        "        note: no environments; make one with `rok env create <name>`\n"
+    );
+    ok(&rok(&home, &root, &["env", "create", "ml"]));
+    assert_eq!(ok(&rok(&home, &root, &["env", "list"])), "  ml\n");
+}
+
+/// A script that is not there is named, not taken for a missing
+/// package.
+// spec: §9.10.1
+#[test]
+fn run_missing_script_says_so() {
+    let root = scratch("missing-script");
+    let home = root.join("home");
+    for args in [
+        &["run", "nope.rok"][..],
+        &["nope.rok"],
+        &["build", "nope.rok"],
+        &["check", "dir/nope"],
+        &["test", "nope.rok"],
+        &["fmt", "nope.rok"],
+    ] {
+        let out = rok_within(&home, &root, args);
+        let want = format!("`{}` does not exist", args.last().unwrap());
+        fails(&out, &want);
+        assert!(
+            !text(&out.stderr).contains("not inside a package"),
+            "{args:?}"
+        );
+    }
+    // For `test`, a word may be a filter.
+    fails(
+        &rok_within(&home, &root, &["test", "add"]),
+        "not inside a package",
+    );
+}
+
+/// Bare `rok jupyter` points to `rok jupyter install`.
+// spec: §9.8.3
+#[test]
+fn bare_jupyter_points_to_install() {
+    let root = scratch("bare-jupyter");
+    let home = root.join("home");
+    let out = rok_within(&home, &root, &["jupyter"]);
+    assert_eq!(out.status.code(), Some(2));
+    let want = "rok: Jupyter starts the kernel itself; to add it, run `rok jupyter install`\n\
+                run `rok help jupyter` for usage\n";
+    assert_eq!(text(&out.stderr), want);
+    // With options but no connection file, rokc says the same.
+    let out = rok_within(&home, &root, &["jupyter", "-q"]);
+    assert_eq!(out.status.code(), Some(2));
+    assert_eq!(text(&out.stderr), want);
+}
+
+/// `rok --version -v` names the binary, the toolchain it resolves and
+/// why, its `rokc` and the host.
+// spec: §9.10.6
+#[test]
+fn version_verbose_names_binary() {
+    let root = scratch("version-verbose");
+    let home = root.join("home");
+    let out = ok(&rok(&home, &root, &["--version", "-v"]));
+    let lines: Vec<&str> = out.lines().collect();
+    assert!(lines[0].starts_with("rok "), "{out}");
+    let real = |p: &str| rokc_core::real_path(p).unwrap().display().to_string();
+    let rokc = Path::new(ROK).with_file_name(exe("rokc"));
+    assert_eq!(lines[1], format!("binary    {}", real(ROK)));
+    assert!(
+        lines[2].starts_with("toolchain none (this rok is "),
+        "{out}"
+    );
+    assert_eq!(lines[3], format!("rokc      {}", rokc.display()));
+    assert_eq!(lines[4], format!("host      {}", env!("ROK_HOST")));
+    assert_eq!(ok(&rok(&home, &root, &["version", "-v"])), out);
+    assert_eq!(lines.len(), 5, "{out}");
+}
+
+/// After `rok toolchain default`, a `rok` earlier on PATH than the
+/// proxies gets a warning naming it and its version.
+// spec: §9.10.6
+#[cfg(unix)]
+#[test]
+fn toolchain_warns_about_path_shadow() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = scratch("toolchain-shadow");
+    let home = root.join("home");
+    let host = env!("ROK_HOST");
+    fake_toolchain(&root.join("fake1"), "9.9.1");
+    fake_toolchain(&root.join("fake2"), "9.10.0");
+    for (v, dir) in [("9.9.1", "fake1"), ("9.10.0", "fake2")] {
+        ok(&rok(
+            &home,
+            &root,
+            &["toolchain", "install", v, "--from", dir],
+        ));
+    }
+    // The proxies first on PATH (as `rok_cmd` puts them): no warning.
+    let out = rok(&home, &root, &["toolchain", "default", "9.10"]);
+    ok(&out);
+    assert!(
+        !text(&out.stderr).contains("warning"),
+        "{}",
+        text(&out.stderr)
+    );
+    // An old `rok` before them.
+    let old = root.join("old/rok");
+    write(&old, "#!/bin/sh\necho 'rok 0.0.1 (old)'\n");
+    fs::set_permissions(&old, fs::Permissions::from_mode(0o755)).unwrap();
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    let dirs = [root.join("old"), home.join("bin")]
+        .into_iter()
+        .chain(std::env::split_paths(&path));
+    let mut c = rok_cmd(&home, &root, &["toolchain", "default", "9.9"]);
+    c.env("PATH", std::env::join_paths(dirs).unwrap());
+    let out = c.output().unwrap();
+    ok(&out);
+    let err = text(&out.stderr);
+    assert!(
+        err.contains(&format!(
+            "rok: warning: your shell runs {} (rok 0.0.1) before {}; put {} first on PATH or \
+             remove the other one\n",
+            old.display(),
+            home.join("bin/rok").display(),
+            home.join("bin").display()
+        )),
+        "{err}"
+    );
+    // `--version -v` through the proxy names the toolchain and why.
+    let mut c = Command::new(home.join("bin/rok"));
+    c.current_dir(&root)
+        .env_remove("ROK_HOME")
+        .env_remove("ROK_TOOLCHAIN")
+        .args(["--version", "-v"]);
+    let out = ok(&c.output().unwrap());
+    let tc = rokc_core::real_path(home.join(format!("toolchains/9.9.1-{host}"))).unwrap();
+    assert!(
+        out.contains(&format!("binary    {}\n", tc.join("bin/rok").display())),
+        "{out}"
+    );
+    assert!(
+        out.contains(&format!("toolchain 9.9.1-{host} (the default)\n")),
+        "{out}"
+    );
 }
 
 /// A fake toolchain `version` in `dir`: the real `rok`, and a `rokc`
@@ -2416,7 +2676,13 @@ fn stones_publish_add_update_yank() {
     ok(&rok(&home, &num, &["publish", "--index", &reg, "--commit"]));
     ok(&rok(&home, &app, &["--locked", "deps"]));
     assert!(locked_stones(&read(&app.join("rok.lock"))).contains(&"num@1.1.0".to_owned()));
-    ok(&rok(&home, &app, &["update", "num"]));
+    let out = rok(&home, &app, &["update", "num"]);
+    ok(&out);
+    assert!(
+        text(&out.stderr).contains("Updated num v1.1.0 -> v1.1.5\n"),
+        "{}",
+        text(&out.stderr)
+    );
     assert!(locked_stones(&read(&app.join("rok.lock"))).contains(&"num@1.1.5".to_owned()));
     ok(&rok(&home, &app, &["--offline", "deps"]));
 
@@ -3121,6 +3387,7 @@ fn update_toolchain() {
     write(&zsh, "old\n");
     let mut c = Command::new(home.join("bin/rok"));
     user_env(&mut c, &home.join("user"));
+    proxies_first(&mut c, &home);
     c.current_dir(&root)
         .env_remove("ROK_HOME")
         .env_remove("ROK_TOOLCHAIN")

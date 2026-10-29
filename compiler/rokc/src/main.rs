@@ -139,7 +139,11 @@ fn usage_error(msg: &str) -> ! {
 }
 
 fn fail(msg: &str) -> ! {
-    eprintln!("rokc: {} {msg}", term::label(Stream::Stderr, Role::Error));
+    eprintln!(
+        "{}: {} {msg}",
+        cli::invoked_as(),
+        term::label(Stream::Stderr, Role::Error)
+    );
     process::exit(1);
 }
 
@@ -433,7 +437,7 @@ fn main() {
     std::panic::set_hook(Box::new(move |info| {
         rokc_interface::end_if_output_closed(info);
         default_hook(info);
-        eprintln!("rokc: internal compiler error");
+        eprintln!("{}: internal compiler error", cli::invoked_as());
         process::exit(101);
     }));
     std::thread::Builder::new()
@@ -530,7 +534,11 @@ fn real_main() {
             let pkg = rokc_interface::discover(Path::new(".")).ok();
             // The server starts without the dependencies it cannot build.
             if let Err(e) = prebuild(&mut a, pkg.as_ref()) {
-                eprintln!("rokc: {} {e}", term::label(Stream::Stderr, Role::Warning));
+                eprintln!(
+                    "{}: {} {e}",
+                    cli::invoked_as(),
+                    term::label(Stream::Stderr, Role::Warning)
+                );
                 a.externs.clear();
             }
             let io = (
@@ -547,10 +555,14 @@ fn real_main() {
         }
         "repl" => cmd_repl(with_defaults(a)),
         "jupyter" => {
-            let mut a = with_defaults(a);
+            let mut a = a;
             let Some(file) = a.connection_file.take() else {
+                if rokc_core::cli::invoked_as() == "rok" {
+                    usage_error(rokc_core::cli::JUPYTER_BARE);
+                }
                 usage_error("usage: rokc jupyter --connection-file <file>");
             };
+            let mut a = with_defaults(a);
             // The kernel loads the package it starts in (`rok repl .`).
             let pkg = rokc_interface::discover(Path::new("."))
                 .ok()
@@ -640,7 +652,11 @@ fn with_defaults(mut a: Args) -> Args {
             Ok(roots) => a.bootstrap = roots,
             // The language server still starts.
             Err(e) if a.cmd == "lsp" => {
-                eprintln!("rokc: {} {e}", term::label(Stream::Stderr, Role::Warning));
+                eprintln!(
+                    "{}: {} {e}",
+                    cli::invoked_as(),
+                    term::label(Stream::Stderr, Role::Warning)
+                );
             }
             Err(e) => fail(&e),
         }
@@ -722,8 +738,9 @@ fn with_defaults(mut a: Args) -> Args {
         && rokc_interface::native_backend(&a.opts)
     {
         eprintln!(
-            "rokc: {} -C target-cpu / -C target-feature apply to the LLVM backend; the native \
+            "{}: {} -C target-cpu / -C target-feature apply to the LLVM backend; the native \
              backend (-O0) builds for the target's baseline CPU",
+            cli::invoked_as(),
             term::label(Stream::Stderr, Role::Warning)
         );
     }
@@ -1592,28 +1609,153 @@ fn cmd_doc(mut a: Args) {
     }
 }
 
-/// `rokc fmt [path]`: a file, a directory's sources, or a package's
-/// `src/`, `tests/` and manifest.
-fn cmd_fmt(a: &Args) {
-    let roots: Vec<PathBuf> = if a.positional.is_empty() {
-        vec![PathBuf::from(".")]
-    } else {
-        a.positional.iter().map(PathBuf::from).collect()
+/// A walk's progress on a terminal, once it has taken a second.
+struct Scanning {
+    on: bool,
+    start: Instant,
+    last: Option<Instant>,
+    width: usize,
+}
+
+impl Scanning {
+    fn new(quiet: bool) -> Self {
+        Self {
+            on: !quiet && std::io::stderr().is_terminal(),
+            start: Instant::now(),
+            last: None,
+            width: 0,
+        }
+    }
+
+    fn tick(&mut self, n: usize) {
+        let now = Instant::now();
+        if !self.on
+            || now - self.start < std::time::Duration::from_secs(1)
+            || self
+                .last
+                .is_some_and(|l| now - l < std::time::Duration::from_millis(100))
+        {
+            return;
+        }
+        self.last = Some(now);
+        let msg = format!("{n} files…");
+        // The verb takes 12 columns.
+        self.width = self.width.max(13 + msg.chars().count());
+        let d = term::depth(Stream::Stderr);
+        eprint!("\r{}", term::status_in(d, "Scanning", &msg));
+    }
+
+    fn clear(&mut self) {
+        if self.width > 0 {
+            eprint!("\r{}\r", " ".repeat(self.width));
+            self.width = 0;
+        }
+    }
+}
+
+/// `n file(s)`.
+fn files_n(n: usize) -> String {
+    format!("{n} file{}", if n == 1 { "" } else { "s" })
+}
+
+/// What `rokc fmt` formats: each path given, a package's (`true`) or
+/// not; without a path, the package the working directory is in.
+fn fmt_roots(a: &Args, tool: &str) -> Vec<(PathBuf, bool)> {
+    if !a.positional.is_empty() {
+        return a
+            .positional
+            .iter()
+            .map(|p| {
+                (
+                    PathBuf::from(p),
+                    rokc_interface::root_file(Path::new(p)).is_some(),
+                )
+            })
+            .collect();
+    }
+    let Some(pkg) = rokc_interface::package_root(Path::new(".")) else {
+        fail(&format!(
+            "not inside a package; pass a file or directory: `{tool} fmt <path>`"
+        ));
     };
+    // `..` steps up to it, so paths print short.
+    let cwd = std::path::absolute(".").unwrap_or_default();
+    let up = cwd.strip_prefix(&pkg).map_or(0, |r| r.components().count());
+    let dir = if up == 0 {
+        PathBuf::from(".")
+    } else {
+        std::iter::repeat_n("..", up).collect()
+    };
+    vec![(dir, true)]
+}
+
+/// The files under `roots`: a package's `src/`, `tests/`, `benches/`,
+/// `examples/` and manifest, a directory's sources, or the file.
+fn fmt_files(a: &Args, roots: &[(PathBuf, bool)]) -> Vec<PathBuf> {
+    let mut scan = Scanning::new(a.quiet);
     let mut files = Vec::new();
-    for r in &roots {
-        if rokc_interface::root_file(r).is_some() {
-            files.extend(rokc_interface::source_files(&r.join("src")));
-            files.extend(rokc_interface::source_files(&r.join("tests")));
-            files.extend(Some(r.join("rok.rokon")).filter(|m| m.is_file()));
-        } else if r.is_dir() {
-            files.extend(rokc_interface::source_files(r));
+    for (r, package) in roots {
+        if *package || r.is_dir() {
+            let mut found = Vec::new();
+            if *package {
+                for d in ["src", "tests", "benches", "examples"] {
+                    found.extend(rokc_interface::source_files_with(&r.join(d), &mut |n| {
+                        scan.tick(n);
+                    }));
+                }
+                found.extend(Some(r.join("rok.rokon")).filter(|m| m.is_file()));
+            } else {
+                found = rokc_interface::source_files_with(r, &mut |n| scan.tick(n));
+            }
+            scan.clear();
+            if found.is_empty() && !a.quiet {
+                term::note(&format!("no .rok or .rokon files under {}", r.display()));
+            }
+            files.extend(found);
         } else if r.is_file() {
             files.push(r.clone());
         } else {
+            scan.clear();
             fail(&format!("`{}` does not exist", r.display()));
         }
     }
+    scan.clear();
+    files
+}
+
+/// `rokc fmt`'s last line: what changed, or that nothing had to.
+fn fmt_summary(a: &Args, tool: &str, total: usize, changed: usize, errors: usize) {
+    let same = total - changed - errors;
+    if a.quiet || total == 0 {
+        return;
+    }
+    if changed > 0 && (a.check || a.diff) {
+        let flag = if a.check { "--check" } else { "--diff" };
+        let (need, them) = if changed == 1 {
+            ("needs", "it")
+        } else {
+            ("need", "them")
+        };
+        term::note(&format!(
+            "{} {need} formatting; `{tool} fmt` without `{flag}` rewrites {them}",
+            files_n(changed)
+        ));
+    } else if changed > 0 {
+        let rest = if same > 0 {
+            format!(", {same} already formatted")
+        } else {
+            String::new()
+        };
+        term::status("Formatted", &format!("{}{rest}", files_n(changed)));
+    } else if errors == 0 {
+        term::note(&format!("{} already formatted", files_n(same)));
+    }
+}
+
+/// `rokc fmt [path..]`: see `fmt_roots` and `fmt_files`.
+fn cmd_fmt(a: &Args) {
+    let tool = rokc_core::cli::invoked_as();
+    let files = fmt_files(a, &fmt_roots(a, tool));
     let (mut changed, mut errors) = (0, 0);
     for f in &files {
         let src = match std::fs::read_to_string(f) {
@@ -1628,7 +1770,7 @@ fn cmd_fmt(a: &Args) {
                 continue;
             }
             Err(e) => {
-                eprintln!("rokc: cannot format {}: {e}", f.display());
+                eprintln!("{}: cannot format {}: {e}", cli::invoked_as(), f.display());
                 errors += 1;
                 continue;
             }
@@ -1652,6 +1794,7 @@ fn cmd_fmt(a: &Args) {
             }
         }
     }
+    fmt_summary(a, tool, files.len(), changed, errors);
     if errors > 0 || (a.check && changed > 0) {
         process::exit(1);
     }
@@ -1709,7 +1852,8 @@ fn cmd_profdata(a: &Args) {
         .unwrap_or_else(|e| fail(&format!("profdata merge: {}", e.trim_end())));
     for w in warnings.lines() {
         eprintln!(
-            "rokc: {} profdata merge: {w}",
+            "{}: {} profdata merge: {w}",
+            cli::invoked_as(),
             term::label(Stream::Stderr, Role::Warning)
         );
     }
@@ -1773,7 +1917,7 @@ fn cmd_demangle(a: &Args) {
             println!();
         }
         let Some(d) = rokc_interface::demangle(sym) else {
-            eprintln!("rokc: `{sym}` is not a rok symbol");
+            eprintln!("{}: `{sym}` is not a rok symbol", cli::invoked_as());
             bad = true;
             continue;
         };
