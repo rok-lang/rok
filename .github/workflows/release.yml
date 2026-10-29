@@ -65,6 +65,9 @@ jobs:
 
   build:
     needs: plan
+    # plan ran even though ci-green was skipped; without this the skip
+    # carries over and a manual run builds nothing.
+    if: ${{ !cancelled() && needs.plan.result == 'success' }}
     strategy:
       fail-fast: false
       matrix:
@@ -105,6 +108,7 @@ jobs:
 
   publish:
     needs: build
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write      # create the GitHub release
