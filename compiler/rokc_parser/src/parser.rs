@@ -4602,13 +4602,13 @@ impl<'a> Parser<'a> {
                     let init = self.parse_expr()?;
                     if self.eat(&TokenKind::Else) {
                         let else_block = self.parse_block()?;
-                        self.expect(&TokenKind::Semi, "`;`")?;
+                        self.stmt_semi()?;
                         return Some((
                             self.let_else_pattern(pat, ty, init, else_block, start),
                             false,
                         ));
                     }
-                    self.expect(&TokenKind::Semi, "`;`")?;
+                    self.stmt_semi()?;
                     return Some((
                         Stmt {
                             kind: StmtKind::LetPattern { pat, ty, init },
@@ -4628,7 +4628,7 @@ impl<'a> Parser<'a> {
                     };
                     self.expect(&TokenKind::Eq, "`=`")?;
                     let init = self.parse_expr()?;
-                    self.expect(&TokenKind::Semi, "`;`")?;
+                    self.stmt_semi()?;
                     return Some((
                         Stmt {
                             kind: StmtKind::LetStruct {
@@ -4654,7 +4654,7 @@ impl<'a> Parser<'a> {
                     };
                     self.expect(&TokenKind::Eq, "`=`")?;
                     let init = self.parse_expr()?;
-                    self.expect(&TokenKind::Semi, "`;`")?;
+                    self.stmt_semi()?;
                     // `let (a) = ..` only groups; `let (a,) = ..` is a 1-tuple.
                     let kind = if names.len() == 1 && rest.is_none() && !trailing_comma {
                         StmtKind::Let {
@@ -4708,7 +4708,7 @@ impl<'a> Parser<'a> {
                     None
                 };
                 // `let x: i32;` (C, Java, TypeScript): no value yet.
-                if let (TokenKind::Semi, Some(t)) = (self.peek(), &ty) {
+                if let (TokenKind::Semi | TokenKind::RBrace, Some(t)) = (self.peek(), &ty) {
                     let t = self.text_in(t.span);
                     let at = self.peek_span();
                     self.error_help(
@@ -4724,7 +4724,7 @@ impl<'a> Parser<'a> {
                 self.expect(&TokenKind::Eq, "`=`")?;
                 let init = self.parse_expr()?;
                 if let Some(sub) = sub {
-                    self.expect(&TokenKind::Semi, "`;`")?;
+                    self.stmt_semi()?;
                     self.pending_stmts.push(sub);
                     return Some((
                         Stmt {
@@ -4739,7 +4739,7 @@ impl<'a> Parser<'a> {
                 if matches!(self.peek(), TokenKind::Else) {
                     self.bump();
                     let else_block = self.parse_block()?;
-                    self.expect(&TokenKind::Semi, "`;`")?;
+                    self.stmt_semi()?;
                     let init_span = init.span;
                     let bk_span = else_block.span;
                     let binder = "__letelse_v".to_string();
@@ -4808,7 +4808,7 @@ impl<'a> Parser<'a> {
                         false,
                     ));
                 }
-                self.expect(&TokenKind::Semi, "`;`")?;
+                self.stmt_semi()?;
                 Some((
                     Stmt {
                         kind: StmtKind::Let { name, ty, init },
@@ -4819,12 +4819,12 @@ impl<'a> Parser<'a> {
             }
             TokenKind::Return => {
                 self.bump();
-                let value = if matches!(self.peek(), TokenKind::Semi) {
+                let value = if matches!(self.peek(), TokenKind::Semi | TokenKind::RBrace) {
                     None
                 } else {
                     Some(self.parse_expr()?)
                 };
-                self.expect(&TokenKind::Semi, "`;`")?;
+                self.stmt_semi()?;
                 Some((
                     Stmt {
                         kind: StmtKind::Return(value),
@@ -4842,12 +4842,12 @@ impl<'a> Parser<'a> {
                 } else {
                     None
                 };
-                let value = if matches!(self.peek(), TokenKind::Semi) {
+                let value = if matches!(self.peek(), TokenKind::Semi | TokenKind::RBrace) {
                     None
                 } else {
                     Some(self.parse_expr()?)
                 };
-                self.expect(&TokenKind::Semi, "`;`")?;
+                self.stmt_semi()?;
                 Some((
                     Stmt {
                         kind: StmtKind::Break { label, value },
@@ -4864,7 +4864,7 @@ impl<'a> Parser<'a> {
                 } else {
                     None
                 };
-                self.expect(&TokenKind::Semi, "`;`")?;
+                self.stmt_semi()?;
                 Some((
                     Stmt {
                         kind: StmtKind::Continue { label },
@@ -4876,7 +4876,7 @@ impl<'a> Parser<'a> {
             TokenKind::Throw => {
                 self.bump();
                 let value = self.parse_expr()?;
-                self.expect(&TokenKind::Semi, "`;`")?;
+                self.stmt_semi()?;
                 Some((
                     Stmt {
                         kind: StmtKind::Throw(value),
@@ -4923,13 +4923,7 @@ impl<'a> Parser<'a> {
                 if matches!(self.peek(), TokenKind::Eq) {
                     self.bump();
                     let value = self.parse_expr()?;
-                    // `|| { count = count + 1 }` (spec 4.6.2): an assignment
-                    // before `}` may omit its `;`.
-                    if matches!(self.peek(), TokenKind::RBrace) {
-                        let _ = self.eat(&TokenKind::Semi);
-                    } else {
-                        self.expect(&TokenKind::Semi, "`;`")?;
-                    }
+                    self.stmt_semi()?;
                     return Some((
                         Stmt {
                             kind: StmtKind::Assign(expr, value),
@@ -4944,7 +4938,7 @@ impl<'a> Parser<'a> {
                 if let Some(op) = compound_assign_op(self.peek()) {
                     self.bump();
                     let value = self.parse_expr()?;
-                    self.expect(&TokenKind::Semi, "`;`")?;
+                    self.stmt_semi()?;
                     let mut stmts = Vec::new();
                     let target = self.hoist_place(expr, &mut stmts);
                     let assign = Stmt {
@@ -4995,6 +4989,15 @@ impl<'a> Parser<'a> {
                 }
             }
         }
+    }
+
+    /// The `;` ending a statement; optional before `}` (spec 1.3.4),
+    /// where leaving it out means the same as writing it.
+    fn stmt_semi(&mut self) -> Option<()> {
+        if !matches!(self.peek(), TokenKind::RBrace) {
+            self.expect(&TokenKind::Semi, "`;`")?;
+        }
+        Some(())
     }
 
     /// Expression including ranges (spec 3.7): `a..b`, `a..=b`, `..b`,

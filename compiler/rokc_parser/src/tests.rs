@@ -1310,3 +1310,32 @@ fn macro_json_int_shape_parses() {
         p.items
     );
 }
+
+#[test]
+fn last_stmt_semi_is_optional() {
+    // Same spans either way: `;` and a space are one byte each.
+    for body in [
+        "x = 1;",
+        "a[f()] += 1;",
+        "p.x <<= 2;",
+        "let y = 1;",
+        "let (a, b) = t;",
+        "let P { x, y } = p;",
+        "let v: i32 = o else { return; };",
+        "return;",
+        "return 1;",
+        "while c { break; }",
+        "loop { continue; }",
+        "throw e;",
+    ] {
+        let with = format!("fn f() {{ {body}}}");
+        let without = format!("fn f() {{ {}}}", body.replace(';', " "));
+        assert_eq!(
+            format!("{:?}", parse(&with).items),
+            format!("{:?}", parse(&without).items),
+            "{without}"
+        );
+    }
+    assert_rejected("fn f() { x = 1 y = 2; }", "expected `;`");
+    assert_rejected("fn f() { let a = 1 let b = 2; }", "expected `;`");
+}
