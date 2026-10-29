@@ -26,6 +26,14 @@ Windows, in PowerShell:
 powershell -ExecutionPolicy Bypass -c "irm https://rok-lang.org/install.ps1 | iex"
 ```
 
+The installer puts `~/.rok/bin` on `PATH` the way rustup does: `install.sh` writes
+`~/.rok/env` and sources it from `~/.profile`, `~/.bashrc`, `~/.bash_profile` and
+`~/.zshenv` (and fish's `conf.d/rok.fish`), and `install.ps1` sets the user `PATH`. It
+also installs shell completion for `rok` and `rokc` (`rok completions <shell>` prints
+the script). Open a new shell afterwards. To leave your shell files alone, pass
+`--no-modify-path` (`curl -fsSL https://rok-lang.org/install.sh | sh -s -- --no-modify-path`)
+or `-NoModifyPath`, or set `ROK_NO_MODIFY_PATH=1`.
+
 Nix:
 
 ```sh

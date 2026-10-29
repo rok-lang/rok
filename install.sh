@@ -8,7 +8,13 @@
 #   rok-<version>-<triple>/install.sh          (from an unpacked archive)
 #
 # Environment: ROK_HOME, ROK_VERSION (default below), ROK_DIST (where
-# releases are downloaded from), NO_COLOR.
+# releases are downloaded from), ROK_NO_MODIFY_PATH, NO_COLOR.
+#
+# Like rustup, it writes $ROK_HOME/env (and env.fish), which put
+# $ROK_HOME/bin first on PATH, sources it from the shell startup files
+# (~/.profile, ~/.bashrc, ~/.bash_profile, ~/.zshenv, fish's conf.d) and
+# installs the shell completions. --no-modify-path (or
+# ROK_NO_MODIFY_PATH=1) touches none of them and says what to add.
 #
 # Output goes to stderr in the style of `rok toolchain update`: status
 # words right-aligned, green and bold on a terminal unless NO_COLOR is
@@ -21,6 +27,10 @@ home="${ROK_HOME:-$HOME/.rok}"
 archive=""
 quiet=""
 verbose=""
+case ${ROK_NO_MODIFY_PATH-} in
+  "" | 0) modify_path=1 ;;
+  *) modify_path="" ;;
+esac
 
 if [ -t 2 ] && [ -z "${NO_COLOR-}" ]; then
   green=$(printf '\033[1;32m') red=$(printf '\033[1;31m') reset=$(printf '\033[0m')
@@ -39,7 +49,7 @@ die() {
   exit 1
 }
 usage() {
-  say "usage: install.sh [-q | --quiet] [-v | --verbose] [--archive <rok-*.tar.xz | rok-*.tar.gz>] [--version <version>]"
+  say "usage: install.sh [-q | --quiet] [-v | --verbose] [--no-modify-path] [--archive <rok-*.tar.xz | rok-*.tar.gz>] [--version <version>]"
   say "installs into \$ROK_HOME (now $home)"
 }
 
@@ -67,6 +77,10 @@ while [ $# -gt 0 ]; do
       ;;
     -v | --verbose)
       verbose=1
+      shift
+      ;;
+    --no-modify-path)
+      modify_path=""
       shift
       ;;
     -h | --help)
@@ -193,26 +207,151 @@ ROK_HOME=$home "$src/bin/rok" -q toolchain install "$full" --from "$src"
 ROK_HOME=$home "$src/bin/rok" -q toolchain default "$full"
 "$home/bin/rok" --version > /dev/null || die "the installed proxy $home/bin/rok does not run"
 
-# $home as ~/.. when under $HOME, for display only.
-shown=$home
-case ${HOME:+$home} in "${HOME-}"/*)
-  tilde='~'
-  shown=$tilde${home#"$HOME"}
-  ;;
-esac
+# $1 as ~/.. when under $HOME, for display only.
+shown_path() {
+  case ${HOME:+$1} in
+    "${HOME-}"/*) printf '~%s' "${1#"$HOME"}" ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+shown=$(shown_path "$home")
 status Installed "rok $full to $shown"
 note "toolchain in $home/toolchains, proxies in $home/bin"
 
-info ""
-case ":${PATH-}:" in
-  *":$home/bin:"*) ;;
-  *)
-    info "Add $shown/bin to PATH (then open a new shell):"
-    info "  bash / zsh:  echo 'export PATH=\"$home/bin:\$PATH\"' >> ~/.zshrc   (or ~/.bashrc)"
-    info "  fish:        fish_add_path $home/bin"
-    info ""
-    ;;
+# $1 as "$HOME/.." when under $HOME, for the shell files below.
+sh_path() {
+  # shellcheck disable=SC2016 # $HOME is for the shell that reads it
+  case ${HOME:+$1} in
+    "${HOME-}"/*) printf '$HOME%s' "${1#"$HOME"}" ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
+changed=""
+mark_changed() {
+  changed="${changed:+$changed, }$(shown_path "$1")"
+}
+
+# Append $line to startup file $1 unless it is there already.
+add_line() {
+  if [ -f "$1" ] && grep -qxF "$line" "$1"; then
+    return 0
+  fi
+  mkdir -p "$(dirname "$1")"
+  if [ -s "$1" ] && [ -n "$(tail -c 1 "$1")" ]; then
+    printf '\n' >> "$1"
+  fi
+  printf '%s\n' "$line" >> "$1"
+  mark_changed "$1"
+}
+
+# Write $2 to file $1 if it differs.
+put_file() {
+  if [ -f "$1" ] && [ "$(cat "$1")" = "$2" ]; then
+    return 0
+  fi
+  mkdir -p "$(dirname "$1")"
+  printf '%s\n' "$2" > "$1"
+  mark_changed "$1"
+}
+
+# $1's completion script for shell $2 into file $3; a toolchain too old
+# for `completions` leaves it alone.
+completion() {
+  mkdir -p "$(dirname "$3")"
+  if "$home/bin/$1" completions "$2" > "$3.new" 2> /dev/null; then
+    mv "$3.new" "$3"
+    note "$2 completions for $1 in $3"
+  else
+    rm -f "$3.new"
+  fi
+}
+
+setup_shells() {
+  env=$(sh_path "$home")
+  cat > "$home/env" << EOF
+#!/bin/sh
+# rok shell setup: $env/bin first on PATH, once; zsh also
+# finds the completions in $env/zsh. Written by install.sh.
+case ":\${PATH}:" in
+  *:"$env/bin":*) ;;
+  *) export PATH="$env/bin:\$PATH" ;;
 esac
+if [ -n "\${ZSH_VERSION-}" ]; then
+  eval 'fpath=("$env/zsh" \${fpath:#"$env/zsh"})'
+fi
+EOF
+  cat > "$home/env.fish" << EOF
+# rok shell setup for fish: $env/bin first on PATH, once.
+# Written by install.sh.
+if not contains -- "$env/bin" \$PATH
+    set -gx PATH "$env/bin" \$PATH
+end
+EOF
+  # Guarded: with $ROK_HOME gone the shell still starts.
+  line="[ -f \"$env/env\" ] && . \"$env/env\""
+  zdot=${ZDOTDIR:-$HOME}
+  for f in "$HOME/.profile" "$HOME/.bashrc" "$HOME/.bash_profile" "$zdot/.zshenv"; do
+    if [ -f "$f" ]; then
+      add_line "$f"
+    fi
+  done
+  # The login shell's own file, made if missing. A new ~/.bash_profile
+  # would hide ~/.profile, so bash gets ~/.profile instead.
+  case ${SHELL##*/} in
+    bash)
+      add_line "$HOME/.bashrc"
+      if [ ! -f "$HOME/.bash_profile" ] && [ ! -f "$HOME/.bash_login" ]; then
+        add_line "$HOME/.profile"
+      fi
+      ;;
+    zsh) add_line "$zdot/.zshenv" ;;
+    fish) ;;
+    *) add_line "$HOME/.profile" ;;
+  esac
+  fish_dir=${XDG_CONFIG_HOME:-$HOME/.config}/fish
+  fish=""
+  if [ "${SHELL##*/}" = fish ] || [ -d "$fish_dir" ]; then
+    fish=1
+    put_file "$fish_dir/conf.d/rok.fish" "test -f \"$env/env.fish\"; and source \"$env/env.fish\""
+  fi
+  bash_dir=${XDG_DATA_HOME:-$HOME/.local/share}/bash-completion/completions
+  for t in rok rokc; do
+    completion "$t" bash "$bash_dir/$t"
+    completion "$t" zsh "$home/zsh/_$t"
+    if [ -n "$fish" ]; then
+      completion "$t" fish "$fish_dir/completions/$t.fish"
+    fi
+  done
+}
+
+info ""
+if [ -n "$modify_path" ]; then
+  setup_shells
+  if [ -n "$changed" ]; then
+    status Modified "$changed (PATH)"
+    info ""
+  fi
+  case ":${PATH-}:" in
+    *":$home/bin:"*) ;;
+    *)
+      info "A new shell finds rok on PATH; to use it in this one, run:"
+      info "  . \"$env/env\"            (sh, bash, zsh)"
+      info "  source \"$env/env.fish\"  (fish)"
+      info ""
+      ;;
+  esac
+else
+  case ":${PATH-}:" in
+    *":$home/bin:"*) ;;
+    *)
+      info "Add $shown/bin to PATH (then open a new shell):"
+      info "  bash / zsh:  echo 'export PATH=\"$home/bin:\$PATH\"' >> ~/.zshrc   (or ~/.bashrc)"
+      info "  fish:        fish_add_path $home/bin"
+      info ""
+      ;;
+  esac
+fi
 # rokc links its own LLVM and linker, and on Linux its own C library
 # files (lib/rok/targets); on macOS the link needs the SDK of Xcode's
 # command line tools.
