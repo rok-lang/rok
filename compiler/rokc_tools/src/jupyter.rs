@@ -5,13 +5,14 @@
 //! as REP, HMAC-SHA256 signed.
 //!
 //! Not supported: CURVE / ipc, iopub topic filtering, rich display, the
-//! debugger, `input_request` (cells read `/dev/null`). `complete` /
-//! `inspect` are the language server's; `history` is this kernel's cells.
-//! Output is sent when a cell ends.
+//! debugger. `complete` / `inspect` are the language server's; `history`
+//! is this kernel's cells. What a cell writes while it runs is streamed;
+//! the rest is sent when the cell ends.
 
 use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -21,13 +22,26 @@ use rokc_interface::BuildOptions;
 
 use crate::analysis::Analysis;
 use crate::lsp::complete;
-use crate::repl::{Repl, Start, incomplete, split_cells};
+use crate::repl::{CellStdin, Repl, Start, incomplete, open_brackets, split_cells};
 use rokc_diagnostic::Json;
 
 const PROTOCOL: &str = "5.3";
 const DELIM: &[u8] = b"<IDS|MSG>";
-/// Written after a cell to stdout / stderr: the capture ends there.
-const END: &[u8] = b"\x00@@rok-kernel-end@@\x00";
+/// Marks the kernel writes to its stdout / stderr (`capture`): what
+/// follows `LIVE` is streamed, what follows `HOLD` kept, and `DONE`
+/// hands over what was kept. All of one length.
+const MARK: &[u8] = b"\x00@@rok-kernel-";
+const LIVE: &[u8] = b"\x00@@rok-kernel-live@@\x00";
+const HOLD: &[u8] = b"\x00@@rok-kernel-hold@@\x00";
+const DONE: &[u8] = b"\x00@@rok-kernel-done@@\x00";
+/// `help_links` of `kernel_info_reply`.
+const HELP: [(&str, &str); 2] = [
+    ("Rok documentation", "https://docs.rok-lang.org/latest/"),
+    (
+        "Rok REPL and notebook cells",
+        "https://docs.rok-lang.org/latest/spec/refs-lang/009-tools/907-jit-cells",
+    ),
+];
 
 /// The Jupyter signature of a message's four JSON frames (hex; empty
 /// when there is no key).
@@ -39,8 +53,9 @@ pub fn sign(key: &[u8], frames: &[&[u8]]) -> String {
 }
 
 /// Greeting and `READY` both ways, as a socket of `kind` (`ROUTER`,
-/// `PUB`, `REP`, or a client's `DEALER` / `SUB` / `REQ`).
-pub fn handshake(s: &mut TcpStream, kind: &str) -> io::Result<()> {
+/// `PUB`, `REP`, or a client's `DEALER` / `SUB` / `REQ`); the peer's
+/// `Identity` (empty: none).
+pub fn handshake(s: &mut TcpStream, kind: &str) -> io::Result<Vec<u8>> {
     let mut g = [0u8; 64];
     g[0] = 0xff;
     g[9] = 0x7f;
@@ -57,9 +72,31 @@ pub fn handshake(s: &mut TcpStream, kind: &str) -> io::Result<()> {
     ready.extend_from_slice(kind.as_bytes());
     s.write_all(&frame(&ready, false, true))?;
     match read_frame(s)? {
-        (flags, body) if flags & 4 != 0 && body.starts_with(b"\x05READY") => Ok(()),
+        (flags, body) if flags & 4 != 0 && body.starts_with(b"\x05READY") => {
+            Ok(identity(&body[6..]))
+        }
         _ => Err(bad("no READY")),
     }
+}
+
+/// The `Identity` property among a `READY` command's (empty: none).
+fn identity(mut props: &[u8]) -> Vec<u8> {
+    while let Some((&n, rest)) = props.split_first() {
+        let n = usize::from(n);
+        let (Some(name), Some(len)) = (rest.get(..n), rest.get(n..n + 4)) else {
+            break;
+        };
+        let len = u32::from_be_bytes(len.try_into().expect("4 bytes")) as usize;
+        let end = (n + 4).saturating_add(len);
+        let Some(value) = rest.get(n + 4..end) else {
+            break;
+        };
+        if name.eq_ignore_ascii_case(b"Identity") {
+            return value.to_vec();
+        }
+        props = &rest[end..];
+    }
+    Vec::new()
 }
 
 fn bad(msg: &str) -> io::Error {
@@ -239,6 +276,10 @@ struct Wire {
     key: Vec<u8>,
     session: String,
     subscribers: Mutex<Vec<TcpStream>>,
+    /// The stdin channel's peers: identity, writing end.
+    askers: Mutex<Vec<(Vec<u8>, TcpStream)>>,
+    /// The request whose cell's output is streamed (none: kept).
+    streaming: Mutex<Option<Json>>,
 }
 
 impl Wire {
@@ -269,6 +310,43 @@ impl Wire {
             &Json::obj([("execution_state", Json::str(state))]),
         );
     }
+
+    fn stream(&self, parent: &Json, name: &str, text: String) {
+        if !text.is_empty() {
+            self.publish(
+                parent,
+                "stream",
+                &Json::obj([("name", Json::str(name)), ("text", Json::Str(text))]),
+            );
+        }
+    }
+
+    /// `input_request` on the stdin channel to the client of the request
+    /// `parent` (the peer named for its session, else the newest);
+    /// `false` when there is none.
+    fn ask(&self, ids: &[Vec<u8>], parent: &Json) -> bool {
+        let session = parent.get("session").as_str().unwrap_or("").as_bytes();
+        let content = Json::obj([("prompt", Json::str("")), ("password", Json::Bool(false))]);
+        let frames = encode(
+            &self.key,
+            &self.session,
+            ids,
+            "input_request",
+            parent,
+            &content,
+        );
+        let mut peers = self.askers.lock().unwrap();
+        loop {
+            let at = peers.iter().rposition(|(id, _)| id == session);
+            let Some(at) = at.or_else(|| peers.len().checked_sub(1)) else {
+                return false;
+            };
+            if write_msg(&mut peers[at].1, &frames).is_ok() {
+                return true;
+            }
+            peers.remove(at);
+        }
+    }
 }
 
 /// Accept connections on `l` and run `f` on each, in its own thread.
@@ -282,26 +360,126 @@ fn serve_each(l: TcpListener, f: impl Fn(TcpStream) + Send + Sync + 'static) {
     });
 }
 
-/// Send what is written to `fd` from now on to the receiver, one string
-/// per `END` mark.
-fn capture(fd: i32) -> io::Result<mpsc::Receiver<String>> {
+/// Stream what is written to `fd` (stream `name`) from now on as the
+/// marks say; what is kept goes to the receiver, one string per `DONE`.
+fn capture(fd: i32, name: &'static str, wire: Arc<Wire>) -> io::Result<mpsc::Receiver<String>> {
     let mut r = redirect(fd)?;
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
+        let mut tap = Tap {
+            name,
+            wire,
+            live: false,
+            kept: Vec::new(),
+            part: Vec::new(),
+        };
         let (mut acc, mut buf) = (Vec::new(), [0u8; 8192]);
         while let Ok(n) = r.read(&mut buf) {
             if n == 0 {
                 return;
             }
             acc.extend_from_slice(&buf[..n]);
-            while let Some(at) = acc.windows(END.len()).position(|w| w == END) {
-                let text = String::from_utf8_lossy(&acc[..at]).into_owned();
-                acc.drain(..at + END.len());
-                let _ = tx.send(text);
+            loop {
+                let at = acc.windows(MARK.len()).position(|w| w == MARK);
+                let cut = at.unwrap_or_else(|| unmarked(&acc));
+                tap.text(&acc[..cut]);
+                acc.drain(..cut);
+                if at.is_none() || acc.len() < LIVE.len() {
+                    break;
+                }
+                let mark: Vec<u8> = acc.drain(..LIVE.len()).collect();
+                match mark.as_slice() {
+                    LIVE => tap.go_live(true),
+                    HOLD => tap.go_live(false),
+                    DONE => drop(tx.send(tap.done())),
+                    text => tap.text(text),
+                }
             }
         }
     });
     Ok(rx)
+}
+
+/// How much of `acc` (holding no whole `MARK`) cannot begin one.
+fn unmarked(acc: &[u8]) -> usize {
+    (acc.len().saturating_sub(MARK.len() - 1)..acc.len())
+        .find(|&i| MARK.starts_with(&acc[i..]))
+        .unwrap_or(acc.len())
+}
+
+/// One captured stream.
+struct Tap {
+    name: &'static str,
+    wire: Arc<Wire>,
+    live: bool,
+    /// Not streamed: before `LIVE`, after `HOLD`, or without a request.
+    kept: Vec<u8>,
+    /// The start of a character split across reads.
+    part: Vec<u8>,
+}
+
+impl Tap {
+    fn text(&mut self, bytes: &[u8]) {
+        let parent = if self.live {
+            self.wire.streaming.lock().unwrap().clone()
+        } else {
+            None
+        };
+        let Some(parent) = parent else {
+            self.kept.extend_from_slice(bytes);
+            return;
+        };
+        self.part.extend_from_slice(bytes);
+        let whole = match std::str::from_utf8(&self.part) {
+            Err(e) if e.error_len().is_none() => e.valid_up_to(),
+            _ => self.part.len(),
+        };
+        let text = String::from_utf8_lossy(&self.part[..whole]).into_owned();
+        self.part.drain(..whole);
+        self.wire.stream(&parent, self.name, text);
+    }
+
+    /// Going live sends what was kept first (an earlier cell's warnings).
+    fn go_live(&mut self, on: bool) {
+        self.kept.append(&mut self.part);
+        self.live = on;
+        if on {
+            let kept = std::mem::take(&mut self.kept);
+            self.text(&kept);
+        }
+    }
+
+    fn done(&mut self) -> String {
+        self.kept.append(&mut self.part);
+        String::from_utf8_lossy(&std::mem::take(&mut self.kept)).into_owned()
+    }
+}
+
+/// The kernel's stdout and stderr, captured.
+struct Taps {
+    out: mpsc::Receiver<String>,
+    err: mpsc::Receiver<String>,
+}
+
+impl Taps {
+    /// What went to stdout and stderr since the last call and was not
+    /// streamed; everything streamed before it is sent.
+    fn take(&self) -> (String, String) {
+        let mut stdout = io::stdout();
+        let _ = stdout.write_all(DONE).and_then(|()| stdout.flush());
+        let _ = io::stderr().write_all(DONE);
+        let out = self.out.recv().unwrap_or_default();
+        let err = self.err.recv().unwrap_or_default();
+        (out, err)
+    }
+}
+
+/// `Repl::live`: a cell's output is streamed from here on, or no longer.
+fn mark_live(on: bool) {
+    let mark = if on { LIVE } else { HOLD };
+    let mut stdout = io::stdout();
+    let _ = stdout.write_all(mark).and_then(|()| stdout.flush());
+    let _ = io::stderr().write_all(mark);
 }
 
 /// Point `fd` (1 or 2) at a new pipe, which child processes inherit;
@@ -344,13 +522,27 @@ fn redirect(fd: i32) -> io::Result<std::fs::File> {
     Ok(r)
 }
 
-/// `is_complete_reply` status: the REPL's continuation rule.
-fn completeness(code: &str) -> &'static str {
+/// `is_complete_reply` status and indent: the REPL's continuation rule,
+/// four spaces per open bracket.
+fn completeness(code: &str) -> (&'static str, String) {
     if incomplete(code) {
-        "incomplete"
+        ("incomplete", "    ".repeat(open_brackets(code)))
     } else {
-        "complete"
+        ("complete", String::new())
     }
+}
+
+/// `kernel_info_reply`'s `language_info`. Front ends highlight Rok as
+/// Rust until they have a Rok mode.
+fn language_info() -> Json {
+    Json::obj([
+        ("name", Json::str("rok")),
+        ("version", Json::str(env!("CARGO_PKG_VERSION"))),
+        ("mimetype", Json::str("text/x-rok")),
+        ("file_extension", Json::str(".rok")),
+        ("codemirror_mode", Json::str("rust")),
+        ("pygments_lexer", Json::str("rust")),
+    ])
 }
 
 fn ident(ch: char) -> bool {
@@ -371,8 +563,9 @@ struct Kernel {
     count: u32,
     /// `(execution count, code)` of the cells stored in the history.
     history: Vec<(u32, String)>,
-    out: mpsc::Receiver<String>,
-    err: mpsc::Receiver<String>,
+    taps: Rc<Taps>,
+    /// `input_reply` values; `None` when a cell is interrupted.
+    input: Rc<mpsc::Receiver<Option<String>>>,
     /// The session's check without a cell (path completion), until the
     /// next cell runs.
     checked: Option<(Analysis, String)>,
@@ -399,19 +592,28 @@ impl Kernel {
                 break;
             }
         }
-        let (out, err) = self.output();
+        let (out, err) = self.taps.take();
         let (o, e) = std::mem::take(&mut self.startup);
         (o + &out, e + &err, result)
     }
 
-    /// What went to stdout and stderr since the last call.
-    fn output(&self) -> (String, String) {
-        let mut stdout = io::stdout();
-        let _ = stdout.write_all(END).and_then(|()| stdout.flush());
-        let _ = io::stderr().write_all(END);
-        let out = self.out.recv().unwrap_or_default();
-        let err = self.err.recv().unwrap_or_default();
-        (out, err)
+    /// A cell's stdin for `req`: with `allow_stdin`, each read is an
+    /// `input_request`, else the end of input.
+    fn stdin(&self, req: &Msg) -> CellStdin {
+        if req.content.get("allow_stdin") != &Json::Bool(true) {
+            return CellStdin::Null;
+        }
+        let (wire, taps, input) = (self.wire.clone(), self.taps.clone(), self.input.clone());
+        let (ids, parent) = (req.ids.clone(), req.header.clone());
+        CellStdin::Ask(Box::new(move || {
+            // The prompt the cell printed goes out first.
+            taps.take();
+            while input.try_recv().is_ok() {}
+            if !wire.ask(&ids, &parent) {
+                return None;
+            }
+            input.recv().ok().flatten()
+        }))
     }
 
     fn execute(&mut self, conn: &Conn, req: &Msg) {
@@ -433,13 +635,16 @@ impl Kernel {
             "execute_input",
             Json::obj([("code", Json::str(code)), ("execution_count", n.clone())]),
         );
+        if !silent {
+            self.repl.stdin = self.stdin(req);
+            *wire.streaming.lock().unwrap() = Some(req.header.clone());
+        }
         let (out, err, result) = self.run(code);
+        *wire.streaming.lock().unwrap() = None;
+        self.repl.stdin = CellStdin::Null;
         let stream = |name: &str, text: String| {
-            if !text.is_empty() {
-                publish(
-                    "stream",
-                    Json::obj([("name", Json::str(name)), ("text", Json::Str(text))]),
-                );
+            if !silent {
+                wire.stream(&req.header, name, text);
             }
         };
         stream("stdout", out);
@@ -499,17 +704,21 @@ impl Kernel {
                         "implementation_version",
                         Json::str(env!("CARGO_PKG_VERSION")),
                     ),
-                    (
-                        "language_info",
-                        Json::obj([
-                            ("name", Json::str("rok")),
-                            ("version", Json::str(env!("CARGO_PKG_VERSION"))),
-                            ("mimetype", Json::str("text/x-rok")),
-                            ("file_extension", Json::str(".rok")),
-                        ]),
-                    ),
+                    ("language_info", language_info()),
                     ("banner", Json::str("rok (rokc jupyter)")),
-                    ("help_links", Json::Arr(Vec::new())),
+                    (
+                        "help_links",
+                        Json::Arr(
+                            HELP.iter()
+                                .map(|(text, url)| {
+                                    Json::obj([
+                                        ("text", Json::str(*text)),
+                                        ("url", Json::str(*url)),
+                                    ])
+                                })
+                                .collect(),
+                        ),
+                    ),
                 ]),
             ),
             "execute_request" => {
@@ -518,10 +727,10 @@ impl Kernel {
             }
             "is_complete_request" => {
                 let code = c.get("code").as_str().unwrap_or("");
-                let indent = ("indent", Json::str(""));
+                let (status, indent) = completeness(code);
                 (
                     "is_complete_reply",
-                    Json::obj([("status", Json::str(completeness(code))), indent]),
+                    Json::obj([("status", Json::str(status)), ("indent", Json::Str(indent))]),
                 )
             }
             "complete_request" => {
@@ -689,7 +898,10 @@ fn start(
         key,
         session: format!("rok-{}", std::process::id()),
         subscribers: Mutex::new(Vec::new()),
+        askers: Mutex::new(Vec::new()),
+        streaming: Mutex::new(None),
     });
+    let (input_tx, input) = mpsc::channel::<Option<String>>();
 
     serve_each(hb, |mut s| {
         if handshake(&mut s, "REP").is_ok() {
@@ -710,15 +922,28 @@ fn start(
             while read_msg(&mut s).is_ok() {}
         }
     });
-    // No `input_request`: stdin only accepts connections.
-    serve_each(stdin, |mut s| {
-        if handshake(&mut s, "ROUTER").is_ok() {
-            while read_msg(&mut s).is_ok() {}
+    let (w, input_to) = (wire.clone(), input_tx.clone());
+    serve_each(stdin, move |mut s| {
+        let Ok(id) = handshake(&mut s, "ROUTER") else {
+            return;
+        };
+        if let Ok(c) = s.try_clone() {
+            w.askers.lock().unwrap().push((id, c));
+        }
+        while let Ok(frames) = read_msg(&mut s) {
+            let Some(m) = parse_msg(&w.key, frames) else {
+                continue;
+            };
+            if m.kind() == "input_reply" {
+                let value = m.content.get("value").as_str().unwrap_or("").to_owned();
+                let _ = input_to.send(Some(value));
+            }
         }
     });
     let (tx, rx) = mpsc::channel::<(Conn, Msg)>();
     for (l, control) in [(shell, false), (control, true)] {
         let (tx, wire, running) = (tx.clone(), wire.clone(), running.clone());
+        let input_to = input_tx.clone();
         serve_each(l, move |mut s| {
             if handshake(&mut s, "ROUTER").is_err() {
                 return;
@@ -733,6 +958,8 @@ fn start(
                 // between cells).
                 if control && matches!(m.kind(), "interrupt_request" | "shutdown_request") {
                     interrupt(&running);
+                    // A cell waiting for input reads the end of it.
+                    let _ = input_to.send(None);
                 }
                 if control && m.kind() == "interrupt_request" {
                     wire.reply(
@@ -750,22 +977,23 @@ fn start(
 
     // Every channel accepts from here on; the last line on the real stderr.
     eprintln!("rokc jupyter: ready");
-    let out = capture(1).map_err(|e| format!("stdout: {e}"))?;
-    let err = capture(2).map_err(|e| format!("stderr: {e}"))?;
+    let out = capture(1, "stdout", wire.clone()).map_err(|e| format!("stdout: {e}"))?;
+    let err = capture(2, "stderr", wire.clone()).map_err(|e| format!("stderr: {e}"))?;
+    repl.live = Some(mark_live);
     let mut k = Kernel {
         wire,
         repl,
         count: 0,
         history: Vec::new(),
-        out,
-        err,
+        taps: Rc::new(Taps { out, err }),
+        input: Rc::new(input),
         checked: None,
         startup: (String::new(), String::new()),
     };
     // The package the kernel starts in, as `rok repl .` loads it. After
     // the capture: the session host it starts inherits the streams.
     k.repl.start(load);
-    k.startup = k.output();
+    k.startup = k.taps.take();
     k.wire.status(&Json::obj([]), "starting");
     while let Ok((conn, m)) = rx.recv() {
         if !k.handle(&conn, &m) {
@@ -845,11 +1073,60 @@ mod tests {
 
     #[test]
     fn is_complete_follows_the_repl() {
-        assert_eq!(completeness("'('"), "complete");
-        assert_eq!(completeness("1 + 1 /* c */"), "complete");
-        assert_eq!(completeness("let x = 1"), "complete");
-        assert_eq!(completeness("/* ("), "incomplete");
-        assert_eq!(completeness("fn g(x: i32)"), "incomplete");
-        assert_eq!(completeness("let x =\n"), "incomplete");
+        let status = |code| completeness(code).0;
+        assert_eq!(status("'('"), "complete");
+        assert_eq!(status("1 + 1 /* c */"), "complete");
+        assert_eq!(status("let x = 1"), "complete");
+        assert_eq!(status("/* ("), "incomplete");
+        assert_eq!(status("fn g(x: i32)"), "incomplete");
+        assert_eq!(status("let x =\n"), "incomplete");
+    }
+
+    #[test]
+    fn is_complete_indents_per_open_bracket() {
+        let indent = |code| completeness(code).1;
+        assert_eq!(indent("fn f() {"), "    ");
+        assert_eq!(
+            indent("fn f() {\n    let xs = [\n        (1,"),
+            " ".repeat(12)
+        );
+        assert_eq!(indent("let s = \"{(\" + f(\n"), "    ");
+        assert_eq!(indent("let x =\n"), "");
+        assert_eq!(indent("fn f() {}"), "");
+    }
+
+    #[test]
+    fn language_info_lets_front_ends_highlight() {
+        let info = language_info();
+        assert_eq!(info.get("name").as_str(), Some("rok"));
+        assert_eq!(info.get("file_extension").as_str(), Some(".rok"));
+        assert_eq!(info.get("codemirror_mode").as_str(), Some("rust"));
+        assert_eq!(info.get("pygments_lexer").as_str(), Some("rust"));
+        assert!(
+            HELP.iter()
+                .all(|(_, url)| url.starts_with("https://docs.rok-lang.org/latest/"))
+        );
+    }
+
+    #[test]
+    fn ready_names_the_peer() {
+        let mut props = b"\x0bSocket-Type\x00\x00\x00\x06DEALER".to_vec();
+        assert_eq!(identity(&props), b"");
+        props.extend(b"\x08Identity\x00\x00\x00\x03abc");
+        assert_eq!(identity(&props), b"abc");
+        assert_eq!(identity(b"\x08Identity\x00\x00\x00\x09ab"), b"");
+    }
+
+    #[test]
+    fn marks_split_across_reads_are_found() {
+        assert_eq!(unmarked(b"hello"), 5);
+        assert_eq!(unmarked(b"hello\x00@@rok"), 5);
+        assert_eq!(unmarked(b"hello\x00"), 5);
+        assert_eq!(unmarked(b"a\x00b"), 3);
+        assert!(
+            [LIVE, HOLD, DONE]
+                .iter()
+                .all(|m| m.len() == LIVE.len() && m.starts_with(MARK))
+        );
     }
 }

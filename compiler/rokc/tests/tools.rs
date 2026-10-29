@@ -1779,6 +1779,135 @@ fn repl_ctrl_c_interrupts_the_cell() {
     assert_eq!(stdout, "1\n");
 }
 
+/// Piped input is the REPL's own: a cell reads the end of input, and
+/// the lines after it are still cells.
+#[test]
+#[cfg_attr(
+    not(any(
+        all(
+            any(target_os = "macos", target_os = "linux"),
+            any(target_arch = "aarch64", target_arch = "x86_64")
+        ),
+        windows
+    )),
+    ignore = "the REPL host runs on macOS, Linux and Windows (arm64, x86_64)"
+)]
+// spec: §9.7.10
+fn repl_piped_cells_read_no_input() {
+    let env = setup_runtime();
+    let rokr = env.rokr.display().to_string();
+    let input = "use rok::std::io::Reader;\n\
+                 (try rok::std::io::stdin().read_line() catch _ { \"failed\" }).len()\n\
+                 40 + 2\n";
+    let out = piped(ROKC, &["repl", "--rokr", &rokr], input);
+    assert_eq!(text(&out.stdout), "0\n42\n", "{}", text(&out.stderr));
+}
+
+/// On a terminal a cell reads the terminal, and the line editor has it
+/// back after the cell.
+#[cfg(unix)]
+#[test]
+#[cfg_attr(
+    not(all(
+        any(target_os = "macos", target_os = "linux"),
+        any(target_arch = "aarch64", target_arch = "x86_64")
+    )),
+    ignore = "a pseudo-terminal: the REPL host on macOS and Linux, arm64 and x86_64"
+)]
+// spec: §9.7.10
+fn repl_cells_read_the_terminal() {
+    use std::os::unix::process::CommandExt;
+    use std::sync::{Arc, Mutex};
+    use std::time::{Duration, Instant};
+
+    let env = setup_runtime();
+    let rokr = env.rokr.display().to_string();
+    // SAFETY: plain libc calls on a pseudo-terminal this test owns.
+    let (mut master, slave) = unsafe {
+        let m = libc::posix_openpt(libc::O_RDWR | libc::O_NOCTTY);
+        assert!(m >= 0 && libc::grantpt(m) == 0 && libc::unlockpt(m) == 0);
+        let name = std::ffi::CStr::from_ptr(libc::ptsname(m)).to_owned();
+        let master = <std::fs::File as std::os::fd::FromRawFd>::from_raw_fd(m);
+        let slave = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(name.to_str().unwrap())
+            .unwrap();
+        (master, slave)
+    };
+    // Its own home: the line editor keeps its history there.
+    let home = scratch("repl-tty");
+    let mut cmd = Command::new(ROKC);
+    cmd.args(["repl", "--rokr", &rokr])
+        .env("ROK_HOME", &home)
+        .stdin(slave.try_clone().unwrap())
+        .stdout(slave.try_clone().unwrap())
+        .stderr(slave);
+    // SAFETY: async-signal-safe calls only: the terminal becomes the
+    // child's controlling one (`/dev/tty`).
+    unsafe {
+        cmd.pre_exec(|| {
+            if libc::setsid() < 0 || libc::ioctl(0, libc::TIOCSCTTY as _, 0) < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    let mut child = cmd.spawn().unwrap();
+    drop(cmd);
+    let seen = Arc::new(Mutex::new(String::new()));
+    let mut reader = master.try_clone().unwrap();
+    let s = seen.clone();
+    std::thread::spawn(move || {
+        let mut buf = [0u8; 4096];
+        while let Ok(n) = reader.read(&mut buf) {
+            if n == 0 {
+                break;
+            }
+            s.lock()
+                .unwrap()
+                .push_str(&String::from_utf8_lossy(&buf[..n]));
+        }
+    });
+    // Until `what` has been written `times` times.
+    let wait_for = |what: &str, times: usize| {
+        let deadline = Instant::now() + Duration::from_secs(120);
+        while seen.lock().unwrap().matches(what).count() < times {
+            assert!(
+                Instant::now() < deadline,
+                "no {what:?} in {:?}",
+                seen.lock().unwrap()
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    };
+    wait_for(">>> ", 1);
+    master.write_all(b"use rok::std::io::Reader;\r").unwrap();
+    wait_for(">>> ", 2);
+    master
+        .write_all(b"println(\"name?\"); let name = try rok::std::io::stdin().read_line() catch _ { \"failed\" };\r")
+        .unwrap();
+    wait_for("name?\r\n", 1);
+    master.write_all(b"rok\r").unwrap();
+    wait_for(">>> ", 3);
+    master.write_all(b"\"[\" + name + \"]\"\r").unwrap();
+    wait_for("[rok\r\n]", 1);
+    master.write_all(b":quit\r").unwrap();
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while child.try_wait().unwrap().is_none() {
+        assert!(Instant::now() < deadline, "{:?}", seen.lock().unwrap());
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    // The cell read `rok`, not the line editor.
+    let history = std::fs::read_to_string(home.join("repl_history")).unwrap();
+    assert!(
+        history.ends_with("\"[\" + name + \"]\"\n:quit\n"),
+        "{history}"
+    );
+    assert!(!history.lines().any(|l| l == "rok"), "{history}");
+    let _ = std::fs::remove_dir_all(&home);
+}
+
 /// `rokc jupyter` driven by a hand-written ZMTP client (no Jupyter
 /// needed): heartbeat, `kernel_info`, cells that bind, show, print and
 /// panic, completion, and `shutdown`. Every message must be signed.
@@ -1893,6 +2022,8 @@ fn jupyter_kernel_speaks_the_wire_protocol() {
     iopub
         .set_read_timeout(Some(Duration::from_secs(120)))
         .unwrap();
+    let mut stdin = connect(ports[2], "DEALER");
+    streams_and_asks(key, &mut shell, &mut iopub, &mut stdin);
 
     // Send a request: its reply (type, content) and the iopub messages
     // it caused, up to its `idle`.
@@ -1949,8 +2080,7 @@ fn jupyter_kernel_speaks_the_wire_protocol() {
 
     let (_, reply, published) = request(&mut shell, "execute_request", exec("panic(\"boom\");"));
     assert_eq!(reply.get("status").as_str(), Some("error"), "{reply}");
-    let error = published.iter().find(|(k, _)| k == "error").expect("error");
-    assert!(error.1.to_string().contains("boom"), "{}", error.1);
+    panic_streams_then_fails(&published);
     // The session goes on, as it was before the failed cell.
     let (_, _, published) = request(&mut shell, "execute_request", exec("x"));
     assert!(shows(&published, "40"), "{published:?}");
@@ -1993,6 +2123,117 @@ fn jupyter_kernel_speaks_the_wire_protocol() {
     stderr.read_to_string(&mut rest).unwrap();
     assert!(out.status.success(), "{rest}");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The panic message of a failed cell streams as it is written; `error`
+/// then says what became of the cell.
+fn panic_streams_then_fails(published: &[(String, rokc_interface::Json)]) {
+    let at = |kind: &str| published.iter().position(|(k, _)| k == kind);
+    let (said, error) = (at("stream").expect("stream"), at("error").expect("error"));
+    assert!(said < error, "{published:?}");
+    assert_eq!(published[said].1.get("name").as_str(), Some("stderr"));
+    assert!(
+        published[said].1.to_string().contains("boom"),
+        "{published:?}"
+    );
+    assert_eq!(
+        published[error].1.get("evalue").as_str(),
+        Some("error: the cell panicked; the session is unchanged")
+    );
+}
+
+/// Output streamed while a cell runs, and stdin through `input_request`,
+/// on the kernel of `jupyter_kernel_speaks_the_wire_protocol` (cells kept
+/// out of its history).
+fn streams_and_asks(
+    key: &[u8],
+    shell: &mut std::net::TcpStream,
+    iopub: &mut std::net::TcpStream,
+    stdin: &mut std::net::TcpStream,
+) {
+    use rokc_interface::Json;
+    use rokc_tools::jupyter::{encode, parse_msg, read_msg, write_msg};
+
+    let execute = |shell: &mut std::net::TcpStream, code: &str, allow_stdin: bool| {
+        let content = Json::obj([
+            ("code", Json::str(code)),
+            ("silent", Json::Bool(false)),
+            ("store_history", Json::Bool(false)),
+            ("allow_stdin", Json::Bool(allow_stdin)),
+        ]);
+        let frames = encode(
+            key,
+            "test",
+            &[],
+            "execute_request",
+            &Json::obj([]),
+            &content,
+        );
+        let header = parse_msg(key, frames.clone()).unwrap().header;
+        write_msg(shell, &frames).unwrap();
+        header
+    };
+    // The stdout streamed for `id` until it holds `text`.
+    let streamed = |iopub: &mut std::net::TcpStream, id: &Json, text: &str| {
+        let mut got = String::new();
+        while !got.contains(text) {
+            let m = parse_msg(key, read_msg(iopub).unwrap()).expect("signed iopub");
+            if m.parent.get("msg_id") == id
+                && m.kind() == "stream"
+                && m.content.get("name").as_str() == Some("stdout")
+            {
+                got += m.content.get("text").as_str().unwrap_or("");
+            }
+        }
+        got
+    };
+    let reply = |shell: &mut std::net::TcpStream, id: &Json| {
+        let m = parse_msg(key, read_msg(shell).unwrap()).expect("a signed reply");
+        assert_eq!(m.parent.get("msg_id"), id);
+        m.content
+    };
+
+    // `early` arrives while the cell still sleeps.
+    let code = "use rok::std::thread;\nprintln(\"early\");\n\
+                thread::sleep(Duration::ms(1500));\nprintln(\"late\");";
+    let id = execute(shell, code, true).get("msg_id").clone();
+    assert_eq!(streamed(iopub, &id, "early\n"), "early\n");
+    shell.set_nonblocking(true).unwrap();
+    let pending = shell.peek(&mut [0u8]);
+    shell.set_nonblocking(false).unwrap();
+    assert!(
+        pending
+            .as_ref()
+            .is_err_and(|e| e.kind() == std::io::ErrorKind::WouldBlock),
+        "the reply came before the output: {pending:?}"
+    );
+    assert_eq!(reply(shell, &id).get("status").as_str(), Some("ok"));
+    assert_eq!(streamed(iopub, &id, "late\n"), "late\n");
+
+    // A read asks the client, after the prompt the cell printed.
+    let code = "use rok::std::io::Reader;\nprint(\"name? \");\n\
+                let name = try rok::std::io::stdin().read_line() catch _ { \"failed\" };\n\
+                println(\"hello [\" + name + \"]\");";
+    let header = execute(shell, code, true);
+    let id = header.get("msg_id").clone();
+    let ask = parse_msg(key, read_msg(stdin).unwrap()).expect("a signed input_request");
+    assert_eq!(ask.kind(), "input_request");
+    assert_eq!(ask.parent.get("msg_id"), &id);
+    assert_eq!(ask.content.get("password"), &Json::Bool(false));
+    assert_eq!(streamed(iopub, &id, "name? "), "name? ");
+    let answer = Json::obj([("value", Json::str("rok"))]);
+    let frames = encode(key, "test", &[], "input_reply", &ask.header, &answer);
+    write_msg(stdin, &frames).unwrap();
+    assert_eq!(reply(shell, &id).get("status").as_str(), Some("ok"));
+    assert_eq!(streamed(iopub, &id, "hello [rok\n]\n"), "hello [rok\n]\n");
+
+    // Without `allow_stdin` a read is the end of input.
+    let code = "use rok::std::io::Reader;\n\
+                let line = try rok::std::io::stdin().read_line() catch _ { \"failed\" };\n\
+                println(line.len());";
+    let id = execute(shell, code, false).get("msg_id").clone();
+    assert_eq!(reply(shell, &id).get("status").as_str(), Some("ok"));
+    assert_eq!(streamed(iopub, &id, "0\n"), "0\n");
 }
 
 /// A REPL message: (reply kind, reply content, iopub messages).

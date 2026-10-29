@@ -510,8 +510,7 @@ pub unsafe extern "C" fn rok_os_read(fd: i32, buf: *mut u8, off: usize, len: usi
         return crate::net::recv(s, dst, len);
     }
     if fd == 0 {
-        // SAFETY: `dst` is writable for `len` bytes.
-        return native(|| unsafe { sys::read_stdin(dst, len) }).0;
+        return crate::stdio::read0(dst, len);
     }
     let mut n = 0;
     let want = len.min(1 << 30) as DWORD;

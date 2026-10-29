@@ -4,13 +4,15 @@
 // (`jit_cell`). Commands arrive on stdin (a socket; Windows: a named
 // pipe):
 //
-//   `cell <n>\n` + n bytes of object: link it and run its
-//     `rok_repl_cell` once; later cells link against it.
+//   `cell <n> <stdin>\n` + n bytes of object: link it and run its
+//     `rok_repl_cell` once; later cells link against it. `<stdin>` is
+//     what it reads (`cell_stdin`).
 //   `lib <n>\n` + an n-byte path: link every member of a static library,
 //     or load a shared one; reply `ok 0\n` or `err\n`.
 //
 // A cell replies `pid <p>\n`, then `ok <n>\n<shown value>` or `err <n>\n`
-// and why it failed (`why`).
+// and why it failed (`why`); in between, `in\n` for each stdin read of
+// an `ask` cell.
 // `SIGINT` (Windows: Ctrl-Break to the host's group) ends a running cell
 // and is ignored between cells.
 //
@@ -162,6 +164,8 @@ void rok_session_unhold(void);
 void rok_session_resume(void);
 void rok_session_restored(const uint64_t *, size_t);
 void rok_set_exit_hook(void (*)(int));
+void rok_set_stdin_hook(ssize_t (*)(unsigned char *, size_t));
+void rok_stdio_line_buffered(void);
 _Noreturn void rok_exit(int);
 
 // Set by Ctrl-C (SIGINT, Ctrl-Break) while `quiesce` waits.
@@ -1392,7 +1396,15 @@ static void ctl_write(const void *buf, size_t n) {
 #else
 static int ctl;
 
-static ssize_t ctl_read(void *buf, size_t n) { return read(ctl, buf, n); }
+static ssize_t ctl_read(void *buf, size_t n) {
+    ssize_t r;
+    while ((r = read(ctl, buf, n)) < 0 && errno == EINTR) {}
+    return r;
+}
+
+static void ctl_write(const void *buf, size_t n) {
+    if (write(ctl, buf, n) < 0) {}
+}
 #endif
 
 // A command line: `<word> <n>`.
@@ -1417,6 +1429,53 @@ static char *read_ir(size_t n) {
         got += (size_t)r;
     }
     return ir;
+}
+
+// A cell's stdin, the third word of `cell`: `-` (empty), `tty` (the
+// terminal) or `ask`: each read asks rokc with `in\n`, answered by
+// `in <n>\n` and n bytes (0: end of input).
+static unsigned char *asked;
+static size_t asked_len, asked_at;
+
+static ssize_t ask_stdin(unsigned char *dst, size_t len) {
+    if (asked_at == asked_len) {
+        char line[64];
+        size_t n = 0;
+        free(asked);
+        asked = NULL;
+        asked_at = asked_len = 0;
+        ctl_write("in\n", 3);
+        if (!read_command(line, sizeof line) || sscanf(line, "in %zu", &n) != 1 || !n) return 0;
+        asked = (unsigned char *)read_ir(n);
+        if (!asked) return 0;
+        asked_len = n;
+    }
+    size_t k = asked_len - asked_at < len ? asked_len - asked_at : len;
+    memcpy(dst, asked + asked_at, k);
+    asked_at += k;
+    return (ssize_t)k;
+}
+
+#if defined(_WIN32)
+static HANDLE nul_in, con_in;
+#else
+static int nul_in = -1, con_in = -1;
+#endif
+
+static void cell_stdin(const char *mode) {
+    int tty = !strcmp(mode, "tty");
+#if defined(_WIN32)
+    // GENERIC_READ | GENERIC_WRITE, shared, OPEN_EXISTING.
+    if (tty && !con_in) con_in = CreateFileA("CONIN$", 0xc0000000u, 3, NULL, 3, 0, NULL);
+    SetStdHandle((DWORD)-10, tty && con_in != (HANDLE)-1 ? con_in : nul_in);
+#else
+    if (tty && con_in < 0) con_in = open("/dev/tty", O_RDWR | O_CLOEXEC);
+    dup2(tty && con_in >= 0 ? con_in : nul_in, 0);
+#endif
+    free(asked);
+    asked = NULL;
+    asked_at = asked_len = 0;
+    rok_set_stdin_hook(strcmp(mode, "ask") ? NULL : ask_stdin);
 }
 
 #if defined(_WIN32)
@@ -2105,12 +2164,14 @@ int main(void) {
     const DWORD std_input = (DWORD)-10;
     ctl = GetStdHandle(std_input);
     // The cells' stdin: NUL (GENERIC_READ, shared, OPEN_EXISTING).
-    SetStdHandle(std_input, CreateFileA("NUL", 0x80000000u, 3, NULL, 3, 0, NULL));
+    nul_in = CreateFileA("NUL", 0x80000000u, 3, NULL, 3, 0, NULL);
+    SetStdHandle(std_input, nul_in);
     // No concurrent marking: its marker thread would live on across a
     // rollback with its own idea of the heap.
     _putenv_s("ROK_GC_CONCURRENT", "off");
     rok_watch_writes();
     rok_runtime_init();
+    rok_stdio_line_buffered();
     book = VirtualAlloc(NULL, BOOK_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
     if (!book) return 1;
     book->cap = (BOOK_SIZE - sizeof *book) / sizeof *book->regions;
@@ -2138,7 +2199,15 @@ int main(void) {
             ctl_write(bad ? "err\n" : "ok 0\n", bad ? 4 : 5);
             continue;
         }
-        if (sscanf(line, "cell %zu", &n) == 1) ir = read_ir(n);
+        if (sscanf(line, "in %zu", &n) == 1) {
+            free(read_ir(n));  // input for a cell that has ended
+            continue;
+        }
+        char mode[8] = "-";
+        if (sscanf(line, "cell %zu %7s", &n, mode) >= 1) {
+            cell_stdin(mode);
+            ir = read_ir(n);
+        }
         if (!ir) return 1;
         rok_stdio_flush();
         ctl_write(out, (size_t)snprintf(out, sizeof out, "pid %u\n", (unsigned)GetCurrentProcessId()));
@@ -2284,12 +2353,12 @@ int main(int argc, char **argv) {
     rokc_pid = getppid();
     if (argc > 0) set_session_dir(argv[0]);
     ctl = dup(0);
-    int nul = open("/dev/null", O_RDONLY);
-    dup2(nul, 0);  // the cells' stdin
-    close(nul);
+    nul_in = open("/dev/null", O_RDONLY | O_CLOEXEC);
+    dup2(nul_in, 0);  // the cells' stdin
     // No concurrent marking: its marker thread is not in a snapshot.
     setenv("ROK_GC_CONCURRENT", "off", 1);
     rok_runtime_init();
+    rok_stdio_line_buffered();
     rok_set_exit_hook(on_exit_hook);
     signal(SIGINT, SIG_IGN);
     for (;;) {
@@ -2306,7 +2375,15 @@ int main(int argc, char **argv) {
             dprintf(ctl, bad ? "err\n" : "ok 0\n");
             continue;
         }
-        if (sscanf(line, "cell %zu", &n) == 1) ir = read_ir(n);
+        if (sscanf(line, "in %zu", &n) == 1) {
+            free(read_ir(n));  // input for a cell that has ended
+            continue;
+        }
+        char mode[8] = "-";
+        if (sscanf(line, "cell %zu %7s", &n, mode) >= 1) {
+            cell_stdin(mode);
+            ir = read_ir(n);
+        }
         if (!ir) return 1;
         rok_stdio_flush();
         // A copy of the session from before the cell takes over if the

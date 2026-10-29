@@ -10,7 +10,7 @@
 
 use core::cell::UnsafeCell;
 use core::ptr;
-use core::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicI32, AtomicPtr, Ordering};
 
 use rokr_common::object_header::HEADER_SIZE;
 use rokr_common::{sys, write_all};
@@ -199,10 +199,40 @@ pub extern "C" fn rok_stdio_flush() -> i32 {
     drain(data, len, true)
 }
 
+/// Flush stdout at each newline, as on a terminal: the REPL session
+/// host's cells show their output as they write it.
+#[unsafe(no_mangle)]
+pub extern "C" fn rok_stdio_line_buffered() {
+    TTY.store(1, Ordering::Relaxed);
+}
+
+/// What reads stdin in place of fd 0 (null: none).
+static IN_HOOK: AtomicPtr<()> = AtomicPtr::new(ptr::null_mut());
+
+/// Read stdin through `hook` (null: fd 0 again). The REPL session host
+/// asks rokc for a cell's input this way. The hook fills `len` bytes at
+/// most and returns the count (0 at the end of input) or `-errno`;
+/// stdout is flushed before each call.
+#[unsafe(no_mangle)]
+pub extern "C" fn rok_set_stdin_hook(hook: Option<extern "C" fn(*mut u8, usize) -> isize>) {
+    IN_HOOK.store(
+        hook.map_or(ptr::null_mut(), |h| h as *mut ()),
+        Ordering::Release,
+    );
+}
+
 /// One read of stdin, parked.
-fn read0(dst: *mut u8, len: usize) -> isize {
-    // SAFETY: caller passes a writable region of `len` bytes.
-    native(|| unsafe { sys::read_stdin(dst, len) }).0
+pub fn read0(dst: *mut u8, len: usize) -> isize {
+    let h = IN_HOOK.load(Ordering::Acquire);
+    if h.is_null() {
+        // SAFETY: caller passes a writable region of `len` bytes.
+        return native(|| unsafe { sys::read_stdin(dst, len) }).0;
+    }
+    // SAFETY: only `rok_set_stdin_hook` stores, a function of this type.
+    let hook =
+        unsafe { core::mem::transmute::<*mut (), extern "C" fn(*mut u8, usize) -> isize>(h) };
+    rok_stdio_flush();
+    native(|| hook(dst, len)).0
 }
 
 /// Up to `len` bytes of stdin into the `GcBuf<u8>` `buf` at `off`,

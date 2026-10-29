@@ -543,6 +543,74 @@ pub struct Repl {
     /// The source directory of the package the session runs in without
     /// loading it: names it defines get a hint.
     pub package: Option<PathBuf>,
+    /// What a running cell reads as stdin.
+    pub stdin: CellStdin,
+    /// Called with `true` before a cell runs in the host and `false`
+    /// after it ends (the kernel streams the output written meanwhile).
+    pub live: Option<fn(bool)>,
+}
+
+/// A running cell's stdin (907.10).
+pub enum CellStdin {
+    /// Empty: a read is the end of input.
+    Null,
+    /// The terminal, while the cell runs.
+    Tty,
+    /// Each read asks for a line; `None` is the end of input.
+    Ask(Box<dyn FnMut() -> Option<String>>),
+}
+
+/// The terminal's mode before a cell that reads it; put back after.
+struct TermMode {
+    #[cfg(unix)]
+    saved: [u8; 256],
+    #[cfg(windows)]
+    saved: (*mut std::ffi::c_void, u32),
+}
+
+#[cfg(unix)]
+unsafe extern "C" {
+    fn tcgetattr(fd: i32, termios: *mut u8) -> i32;
+    fn tcsetattr(fd: i32, action: i32, termios: *const u8) -> i32;
+}
+
+#[cfg(windows)]
+unsafe extern "system" {
+    fn GetStdHandle(which: u32) -> *mut std::ffi::c_void;
+    fn GetConsoleMode(h: *mut std::ffi::c_void, mode: *mut u32) -> i32;
+    fn SetConsoleMode(h: *mut std::ffi::c_void, mode: u32) -> i32;
+}
+
+impl TermMode {
+    #[cfg(unix)]
+    fn save() -> Option<Self> {
+        let mut saved = [0u8; 256];
+        // SAFETY: the buffer is larger than any `struct termios`.
+        (unsafe { tcgetattr(0, saved.as_mut_ptr()) } == 0).then_some(Self { saved })
+    }
+
+    #[cfg(windows)]
+    fn save() -> Option<Self> {
+        // SAFETY: a std handle and an out parameter.
+        let h = unsafe { GetStdHandle(-10i32 as u32) };
+        let mut m = 0;
+        (unsafe { GetConsoleMode(h, &mut m) } != 0).then_some(Self { saved: (h, m) })
+    }
+}
+
+impl Drop for TermMode {
+    fn drop(&mut self) {
+        // SAFETY: what `save` read, back (`TCSANOW` keeps typed-ahead input).
+        #[cfg(unix)]
+        unsafe {
+            tcsetattr(0, 0, self.saved.as_ptr());
+        }
+        // SAFETY: the mode `save` read, back on its console handle.
+        #[cfg(windows)]
+        unsafe {
+            SetConsoleMode(self.saved.0, self.saved.1);
+        }
+    }
 }
 
 impl Drop for Repl {
@@ -584,6 +652,8 @@ impl Repl {
             loaded: None,
             history: Vec::new(),
             package: None,
+            stdin: CellStdin::Null,
+            live: None,
         })
     }
 
@@ -632,6 +702,7 @@ impl Repl {
         forward_ctrl_c(self.running.clone());
         #[cfg(unix)]
         survive_ctrl_c();
+        self.stdin = CellStdin::Tty;
         let mut ed = crate::line_edit::Editor::new();
         let mut buf = String::new();
         loop {
@@ -1585,8 +1656,19 @@ impl Repl {
         self.host()?;
         let host = self.host.as_mut()?;
         let _ = std::io::stdout().flush();
+        let stdin = match self.stdin {
+            CellStdin::Null => "-",
+            CellStdin::Tty => "tty",
+            CellStdin::Ask(_) => "ask",
+        };
+        let _term = matches!(self.stdin, CellStdin::Tty)
+            .then(TermMode::save)
+            .flatten();
+        if let Some(live) = self.live {
+            live(true);
+        }
         let reply = (|| {
-            writeln!(host.ctl, "cell {}", ir.len())?;
+            writeln!(host.ctl, "cell {} {stdin}", ir.len())?;
             host.ctl.write_all(ir)?;
             let mut rd = BufReader::new(&host.ctl);
             let mut line = String::new();
@@ -1596,8 +1678,20 @@ impl Repl {
                 .strip_prefix("pid ")
                 .and_then(|p| p.trim().parse().ok());
             self.running.store(pid.unwrap_or(0), Ordering::Relaxed);
-            line.clear();
-            rd.read_line(&mut line)?;
+            loop {
+                line.clear();
+                rd.read_line(&mut line)?;
+                if line != "in\n" {
+                    break;
+                }
+                let got = match &mut self.stdin {
+                    CellStdin::Ask(ask) => ask(),
+                    _ => None,
+                };
+                let got = got.map(|l| l + "\n").unwrap_or_default();
+                let mut ctl = *rd.get_ref();
+                write!(ctl, "in {}\n{got}", got.len())?;
+            }
             self.running.store(0, Ordering::Relaxed);
             // `ok <n>` and the shown value, or `err <n>` and why it failed.
             let (ok, n) = match line.trim_end().split_once(' ') {
@@ -1610,6 +1704,9 @@ impl Repl {
             let text = String::from_utf8_lossy(&text).into_owned();
             Ok::<_, std::io::Error>(if ok { Ok(text) } else { Err(text) })
         })();
+        if let Some(live) = self.live {
+            live(false);
+        }
         match reply {
             Ok(Ok(value)) => Some(value),
             Ok(Err(why)) => {
@@ -2685,6 +2782,17 @@ pub(crate) fn incomplete(src: &str) -> bool {
     tokens.last().is_some_and(|t| continues(&t.kind)) || item_header(&tokens[start..])
 }
 
+/// The brackets still open at the end of `src`.
+pub(crate) fn open_brackets(src: &str) -> usize {
+    use rokc_lexer::TokenKind as T;
+    let (tokens, _) = rokc_lexer::Lexer::new(src, REPL_FILE).lex_all();
+    tokens.iter().fold(0, |depth, t| match t.kind {
+        T::LParen | T::LBracket | T::LBrace | T::HashLBracket | T::HashBangLBracket => depth + 1,
+        T::RParen | T::RBracket | T::RBrace => depth.saturating_sub(1),
+        _ => depth,
+    })
+}
+
 /// `cell` with the `;` its last top-level `let` or assignment may lack
 /// (907.8).
 fn close_stmt(cell: &str) -> String {
@@ -2913,6 +3021,9 @@ pub fn main(
         Ok(mut r) => {
             r.externs = externs;
             r.deps_dir = deps_dir;
+            if interactive {
+                r.stdin = CellStdin::Tty;
+            }
             r.start(start);
             if interactive {
                 r.run_tty();
