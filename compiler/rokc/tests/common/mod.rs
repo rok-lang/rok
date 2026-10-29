@@ -11,7 +11,8 @@
 //!   - `// forbid-warning: text` - (repeatable) build stderr must not contain `text`
 //!   - `// expect-stderr: text` - (repeatable) the run's stderr, one
 //!     directive per line, leading and trailing blanks aside (`\` read
-//!     as `/`, library paths relative to the workspace); none: empty stderr
+//!     as `/`, library paths relative to the workspace, `*` any text, as in
+//!     `library/std/src/wit.rok:*:`); none: empty stderr
 //!   - `// expect-lint: L:C message` - (repeatable) `rokc lint` on the
 //!     case reports exactly these `E503` lints, in order: line, column
 //!     and headline

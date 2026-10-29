@@ -1,5 +1,5 @@
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at library/std/src/rokon/write.rok:136:21:
+// expect-stderr: thread 'main' panicked at library/std/src/rokon/write.rok:*:
 // expect-stderr: NaN/infinity has no ROKON form
 // expect-stdout:
 // ["xxxxxxxxxxxxxxxxxxxxx", "xxxxxxxxxxxxxxxxxxxxx", "xxxxxxxxxxxxxxxxxxxxx", "xxxxxxxxxxxxxxxxxxxxx"]

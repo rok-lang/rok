@@ -1,3 +1,4 @@
+// needs: threads
 // expect-exit: 0
 // spec: std 213-marker §2.13.9 / std 209-collections §2.9.5b
 // expect-stdout:
