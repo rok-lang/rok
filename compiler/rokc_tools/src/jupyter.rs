@@ -21,7 +21,7 @@ use rokc_interface::BuildOptions;
 
 use crate::analysis::Analysis;
 use crate::lsp::{complete, hover, receiver_start};
-use crate::repl::{Repl, incomplete};
+use crate::repl::{Repl, blank, incomplete};
 use rokc_diagnostic::Json;
 
 const PROTOCOL: &str = "5.3";
@@ -350,20 +350,28 @@ fn split_cells(code: &str) -> Vec<String> {
     let mut cells = Vec::new();
     let mut buf = String::new();
     for line in code.lines() {
-        let t = line.trim();
-        if buf.is_empty() && (t.is_empty() || t.starts_with("//")) {
-            continue;
-        }
         buf.push_str(line);
         buf.push('\n');
         if !incomplete(&buf) {
-            cells.push(std::mem::take(&mut buf).trim().to_owned());
+            let cell = std::mem::take(&mut buf);
+            if !blank(&cell) {
+                cells.push(cell.trim().to_owned());
+            }
         }
     }
-    if !buf.trim().is_empty() {
+    if !blank(&buf) {
         cells.push(buf.trim().to_owned());
     }
     cells
+}
+
+/// `is_complete_reply` status: the REPL's continuation rule.
+fn completeness(code: &str) -> &'static str {
+    if incomplete(code) {
+        "incomplete"
+    } else {
+        "complete"
+    }
 }
 
 fn ident(ch: char) -> bool {
@@ -536,15 +544,10 @@ impl Kernel {
             }
             "is_complete_request" => {
                 let code = c.get("code").as_str().unwrap_or("");
-                let status = if incomplete(code) {
-                    "incomplete"
-                } else {
-                    "complete"
-                };
                 let indent = ("indent", Json::str(""));
                 (
                     "is_complete_reply",
-                    Json::obj([("status", Json::str(status)), indent]),
+                    Json::obj([("status", Json::str(completeness(code))), indent]),
                 )
             }
             "complete_request" => {
@@ -840,5 +843,30 @@ mod tests {
             split_cells("// note\nlet x =\n  40i32;\n\nfn f() {\n}\nx + 2"),
             ["let x =\n  40i32;", "fn f() {\n}", "x + 2"]
         );
+        assert_eq!(
+            split_cells("'('\n'\"'\n/* ( */ 1\n1 + 1 /* c */\n/* a\n b */\nlet x = 1\nx"),
+            [
+                "'('",
+                "'\"'",
+                "/* ( */ 1",
+                "1 + 1 /* c */",
+                "let x = 1",
+                "x"
+            ]
+        );
+        assert_eq!(
+            split_cells("fn g(x: i32)\n-> i32 {\n  x\n}\ng(1) +\n  2"),
+            ["fn g(x: i32)\n-> i32 {\n  x\n}", "g(1) +\n  2"]
+        );
+    }
+
+    #[test]
+    fn is_complete_follows_the_repl() {
+        assert_eq!(completeness("'('"), "complete");
+        assert_eq!(completeness("1 + 1 /* c */"), "complete");
+        assert_eq!(completeness("let x = 1"), "complete");
+        assert_eq!(completeness("/* ("), "incomplete");
+        assert_eq!(completeness("fn g(x: i32)"), "incomplete");
+        assert_eq!(completeness("let x =\n"), "incomplete");
     }
 }

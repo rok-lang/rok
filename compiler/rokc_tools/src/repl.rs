@@ -40,7 +40,8 @@ const HOST_OBJ: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/repl_host.o"))
 const HELP: &str = "\
   <expr>         evaluate and print its value (`Display`)
   <expr>?        evaluate and print its `Debug` form
-  let x = ..;    bind (a top-level `let` may rebind a name, 907.3)
+  let x = ..     bind (a top-level `let` may rebind a name, 907.3; a
+                 cell's last `let` or assignment needs no `;`)
   fn / struct / enum / impl / trait / use ..   define (a new `fn f` /
                  `struct S` replaces the old one)
   :type <expr>   print the type of an expression
@@ -49,6 +50,9 @@ const HELP: &str = "\
                  in a package `rok add` (`rok repl`)
   :reset         forget every cell
   :quit          leave (also end of input)
+A line ends the cell (`>>>`) unless a bracket, string or comment is still
+open, it ends in an operator, `,` or `=`, or it is an item header without
+its body: then `...` asks for the next line.
 ";
 
 /// The items of the session, as source.
@@ -504,7 +508,7 @@ impl Repl {
     pub fn run(&mut self, input: impl BufRead, interactive: bool) -> bool {
         let prompt = |cont: bool| {
             if interactive {
-                print!("{}", if cont { "... " } else { "> " });
+                print!("{}", if cont { "... " } else { ">>> " });
                 let _ = std::io::stdout().flush();
             }
         };
@@ -548,7 +552,7 @@ impl Repl {
         let mut ed = crate::line_edit::Editor::new();
         let mut buf = String::new();
         loop {
-            let prompt = if buf.is_empty() { "> " } else { "... " };
+            let prompt = if buf.is_empty() { ">>> " } else { "... " };
             match ed.read_line(prompt) {
                 crate::line_edit::Input::Eof => return,
                 crate::line_edit::Input::Interrupt => buf.clear(),
@@ -572,7 +576,7 @@ impl Repl {
     pub fn cell(&mut self, cell: &str) -> bool {
         cell.clone_into(&mut self.input);
         match cell {
-            "" => {}
+            _ if blank(cell) => {}
             ":q" | ":quit" | ":exit" => return false,
             ":reset" => {
                 self.state = State::default();
@@ -606,7 +610,9 @@ impl Repl {
     /// after its errors went to stderr.
     #[allow(clippy::result_unit_err)]
     pub fn eval(&mut self, cell: &str) -> Result<Option<String>, ()> {
+        // Diagnostics quote the cell as typed (`regions`).
         cell.clone_into(&mut self.input);
+        let cell = &close_stmt(cell);
         if let Cell::Item(key) = classify(cell) {
             return self.item(cell, key).then_some(None).ok_or(());
         }
@@ -1717,7 +1723,12 @@ fn classify(cell: &str) -> Cell {
         .filter(|w| !w.is_empty())
         .take(4)
         .collect();
-    let first = words.first().copied().unwrap_or("");
+    // A block's first word is inside it: `{ let q = 2; q * 3 }` is a value.
+    let first = if rest.starts_with('{') {
+        ""
+    } else {
+        words.first().copied().unwrap_or("")
+    };
     let item_kw = [
         "fn", "struct", "enum", "union", "trait", "impl", "use", "mod", "type", "const", "static",
         "extern", "pub", "async", "unsafe",
@@ -1767,50 +1778,230 @@ fn matching(s: &str, open: usize) -> Option<usize> {
     None
 }
 
-/// The input needs more lines: open brackets / string, or a dangling
-/// operator or `let` (907.8 `...` continuation).
+/// The input needs more lines (907.8 `...` continuation): an open
+/// bracket, string or block comment, a last token that cannot end a
+/// statement, or an item header still waiting for its body.
 pub(crate) fn incomplete(src: &str) -> bool {
+    use rokc_lexer::TokenKind as T;
+    let (tokens, errors) = rokc_lexer::Lexer::new(src, REPL_FILE).lex_all();
+    if errors
+        .iter()
+        .any(|e| e.message.starts_with("unterminated") && !e.message.contains("char"))
+    {
+        return true;
+    }
+    let tokens = tokens.split_last().map_or(&[][..], |(_, t)| t);
     let mut depth = 0i32;
-    let mut chars = src.chars().peekable();
-    let mut in_str = false;
-    while let Some(c) = chars.next() {
-        if in_str {
-            match c {
-                '\\' => {
-                    chars.next();
-                }
-                '"' => in_str = false,
-                _ => {}
+    // The last top-level statement starts after a `;` or a closing `}`.
+    let mut start = 0;
+    for (i, t) in tokens.iter().enumerate() {
+        match t.kind {
+            T::LParen | T::LBracket | T::LBrace | T::HashLBracket | T::HashBangLBracket => {
+                depth += 1;
             }
-            continue;
-        }
-        match c {
-            '"' => in_str = true,
-            '/' if chars.peek() == Some(&'/') => {
-                // Line comment.
-                for c in chars.by_ref() {
-                    if c == '\n' {
-                        break;
-                    }
+            T::RParen | T::RBracket | T::RBrace => {
+                depth -= 1;
+                if depth == 0 && t.kind == T::RBrace {
+                    start = i + 1;
                 }
             }
-            '(' | '[' | '{' => depth += 1,
-            ')' | ']' | '}' => depth -= 1,
+            T::Semi if depth == 0 => start = i + 1,
             _ => {}
         }
     }
-    let t = src.trim_end();
-    let dangling = [
-        "=", "+", "-", "*", "/", ",", ".", "&&", "||", "->", "=>", "|",
-    ]
-    .iter()
-    .any(|op| t.ends_with(op));
-    in_str
-        || depth > 0
-        || (dangling && !t.is_empty())
-        || (split_last(t).1.starts_with("let ") && !t.ends_with(';') && !t.ends_with('}'))
-        // Attributes wait for their item.
-        || (t.starts_with("#[") && t.lines().all(|l| l.trim_start().starts_with("#[")))
+    if depth > 0 {
+        return true;
+    }
+    tokens.last().is_some_and(|t| continues(&t.kind)) || item_header(&tokens[start..])
+}
+
+/// `cell` with the `;` its last top-level `let` or assignment may lack
+/// (907.8).
+fn close_stmt(cell: &str) -> String {
+    use rokc_lexer::TokenKind as T;
+    let last = split_last(cell).1;
+    let (tokens, _) = rokc_lexer::Lexer::new(last, REPL_FILE).lex_all();
+    // A place starts an assignment; `using g = ..`, `if let p = ..` and
+    // `static S: T = ..` hold an `=` without being one.
+    let place = match tokens.first().map(|t| &t.kind) {
+        Some(T::Ident(w)) => !matches!(w.as_str(), "static" | "const" | "type" | "extern"),
+        Some(T::SelfLower | T::Star | T::LParen) => true,
+        _ => false,
+    };
+    let mut depth = 0i32;
+    let mut assigns = false;
+    let scan = if place { &tokens[..] } else { &[] };
+    for t in scan {
+        match t.kind {
+            T::LParen | T::LBracket | T::LBrace | T::HashLBracket | T::HashBangLBracket => {
+                depth += 1;
+            }
+            T::RParen | T::RBracket | T::RBrace => depth -= 1,
+            T::Eq
+            | T::PlusEq
+            | T::MinusEq
+            | T::StarEq
+            | T::SlashEq
+            | T::PercentEq
+            | T::PercentPercentEq
+            | T::AmpEq
+            | T::PipeEq
+            | T::CaretEq
+            | T::ShlEq
+            | T::ShrEq
+                if depth == 0 =>
+            {
+                assigns = true;
+            }
+            _ => {}
+        }
+    }
+    let open = tokens
+        .iter()
+        .rev()
+        .nth(1)
+        .is_some_and(|t| t.kind != T::Semi);
+    if open && (assigns || matches!(classify(last), Cell::Let)) {
+        // On a line of its own, outside the text diagnostics quote.
+        format!("{cell}\n;")
+    } else {
+        cell.to_owned()
+    }
+}
+
+/// `src` is only whitespace and comments.
+pub(crate) fn blank(src: &str) -> bool {
+    rokc_lexer::Lexer::new(src, REPL_FILE).lex_all().0.len() <= 1
+}
+
+/// `kind` needs a token after it: a binary operator, `.`, `,`, `=`,
+/// `->`, `|`, or a keyword that leads into more.
+fn continues(kind: &rokc_lexer::TokenKind) -> bool {
+    use rokc_lexer::TokenKind as T;
+    match kind {
+        T::Ident(w) => matches!(w.as_str(), "in" | "mut" | "where"),
+        // Not `>` / `>>`: they also close generics (`x as List<i32>`).
+        T::Plus
+        | T::Minus
+        | T::Star
+        | T::Slash
+        | T::Percent
+        | T::PercentPercent
+        | T::EqEq
+        | T::NotEq
+        | T::Lt
+        | T::LtEq
+        | T::GtEq
+        | T::AmpAmp
+        | T::PipePipe
+        | T::Bang
+        | T::Amp
+        | T::Pipe
+        | T::Caret
+        | T::Tilde
+        | T::Shl
+        | T::MathOp(_)
+        | T::ExtOp(_)
+        | T::DotPlus
+        | T::DotMinus
+        | T::DotStar
+        | T::DotSlash
+        | T::DotPercent
+        | T::DotPercentPercent
+        | T::DotEqEq
+        | T::DotNotEq
+        | T::DotLt
+        | T::DotGt
+        | T::DotLtEq
+        | T::DotGtEq
+        | T::DotAmp
+        | T::DotPipe
+        | T::DotAmpAmp
+        | T::DotPipePipe
+        | T::DotCaret
+        | T::DotShl
+        | T::DotShr
+        | T::Eq
+        | T::PlusEq
+        | T::MinusEq
+        | T::StarEq
+        | T::SlashEq
+        | T::PercentEq
+        | T::PercentPercentEq
+        | T::AmpEq
+        | T::PipeEq
+        | T::CaretEq
+        | T::ShlEq
+        | T::ShrEq
+        | T::DotDotEq
+        | T::Colon
+        | T::ColonColon
+        | T::Dot
+        | T::QuestionDot
+        | T::QuestionQuestion
+        | T::Arrow
+        | T::FatArrow
+        | T::Comma
+        | T::At
+        | T::Let
+        | T::If
+        | T::Else
+        | T::Match
+        | T::While
+        | T::Loop
+        | T::For
+        | T::As
+        | T::Is
+        | T::Ref
+        | T::Try
+        | T::Throw
+        | T::Using => true,
+        _ => false,
+    }
+}
+
+/// `stmt` (balanced, no `;` and no block) is only attributes or an
+/// item's header: `fn g(x: i32)` waits for `-> i32 {` on the next line.
+fn item_header(stmt: &[rokc_lexer::Token]) -> bool {
+    use rokc_lexer::TokenKind as T;
+    let kind = |i: usize| stmt.get(i).map(|t| &t.kind);
+    let mut i = 0;
+    loop {
+        match kind(i) {
+            None => return i > 0,
+            Some(T::HashLBracket | T::HashBangLBracket) => i = past_group(stmt, i),
+            Some(T::Pub) if kind(i + 1) == Some(&T::LParen) => i = past_group(stmt, i + 1),
+            Some(T::Pub | T::Async | T::Unsafe) => i += 1,
+            Some(T::Ident(w)) if w == "extern" => {
+                i += if matches!(kind(i + 1), Some(T::StrLit(_))) {
+                    2
+                } else {
+                    1
+                };
+            }
+            Some(T::Ident(w)) if w == "const" && kind(i + 1) == Some(&T::Fn) => i += 1,
+            Some(T::Fn | T::Struct | T::Enum | T::Trait | T::Impl) => return true,
+            Some(T::Ident(w)) => return w == "union" && matches!(kind(i + 1), Some(T::Ident(_))),
+            Some(_) => return false,
+        }
+    }
+}
+
+/// Index past the bracket closing the one at `open`.
+fn past_group(tokens: &[rokc_lexer::Token], open: usize) -> usize {
+    use rokc_lexer::TokenKind as T;
+    let mut depth = 0i32;
+    for (i, t) in tokens.iter().enumerate().skip(open) {
+        match t.kind {
+            T::LParen | T::LBracket | T::HashLBracket | T::HashBangLBracket => depth += 1,
+            T::RParen | T::RBracket => depth -= 1,
+            _ => {}
+        }
+        if depth == 0 {
+            return i + 1;
+        }
+    }
+    tokens.len()
 }
 
 /// `rok repl` with the stdin it was started on; `program` (its root
@@ -1873,8 +2064,94 @@ mod tests {
     }
 
     #[test]
+    fn cells_end_by_tokens() {
+        let complete = [
+            // Brackets in literals and comments do not count.
+            "'('",
+            "'\"'",
+            "/* ( */ 1",
+            "1 + 1 /* c */",
+            "f(x) // (",
+            "r\"(\"",
+            // A balanced line ends the cell; `;` is the compiler's to ask for.
+            "let x = 1",
+            "f(); let x = 1",
+            "x as List<i32>",
+            "0..",
+            "x?",
+            "return",
+            "fn g(x: i32)\n-> i32 { x }",
+            "struct P(i32);",
+            "const N: i32 = 1",
+            "union",
+            "(1, 2)",
+            "\"s\"",
+        ];
+        let open = [
+            "1 /* (",
+            "f\"{x}",
+            // A last token that needs more.
+            "1 +",
+            "xs.",
+            "f(a,",
+            "a ->",
+            "x ==",
+            "if a {} else",
+            "for x in",
+            "|x|",
+            "a &&",
+            // Item headers wait for their body.
+            "fn g(x: i32)",
+            "pub(crate) async fn g<T>(x: T) -> T",
+            "struct P",
+            "#[derive(Debug)]\nenum E",
+            "impl Display for P",
+            "trait T",
+            "fn f() {}\nfn g()",
+        ];
+        for t in complete {
+            assert!(!incomplete(&format!("{t}\n")), "{t}");
+        }
+        for t in open {
+            assert!(incomplete(&format!("{t}\n")), "{t}");
+        }
+        assert!(blank("// c\n/* d */\n"));
+        assert!(!blank("1 // c\n"));
+    }
+
+    #[test]
+    fn a_last_let_or_assignment_gets_its_semicolon() {
+        for (cell, closed) in [
+            ("let x = 1", true),
+            ("f(); let x = 1 // c", true),
+            ("let x = if c { 1 } else { 2 }", true),
+            ("k += 2", true),
+            ("v = 5", true),
+            ("xs[0] -= 1", true),
+            ("let x = 1;", false),
+            ("let x = 1; x", false),
+            ("f(1)", false),
+            ("f(a = 1)", false),
+            ("x == 1", false),
+            ("while true { let y = 1 }", false),
+            ("{ let q = 2; q * 3 }", false),
+            ("using g = m.lock() { g.get() }", false),
+            ("if let Some(x) = o { x } else { 0 }", false),
+            ("(a, b) = (b, a)", true),
+        ] {
+            let want = if closed {
+                format!("{cell}\n;")
+            } else {
+                cell.to_owned()
+            };
+            assert_eq!(close_stmt(cell), want);
+        }
+        assert!(matches!(classify("{ let q = 2; q * 3 }"), Cell::Expr));
+        assert!(matches!(classify("{ fn f() {} f() }"), Cell::Expr));
+    }
+
+    #[test]
     fn several_statements_end_at_the_last() {
-        assert!(incomplete("f(); let x = 1\n"));
         assert!(!incomplete("let a = 1; a + 1\n"));
         assert!(!incomplete("println(\"x\"); while true { break; }\n"));
         assert_eq!(
