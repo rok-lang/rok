@@ -291,6 +291,9 @@ EOF
   # Guarded: with $ROK_HOME gone the shell still starts.
   line="[ -f \"$env/env\" ] && . \"$env/env\""
   zdot=${ZDOTDIR:-$HOME}
+  # Unset in containers and some CI runners.
+  login=${SHELL-}
+  login=${login##*/}
   for f in "$HOME/.profile" "$HOME/.bashrc" "$HOME/.bash_profile" "$zdot/.zshenv"; do
     if [ -f "$f" ]; then
       add_line "$f"
@@ -298,7 +301,7 @@ EOF
   done
   # The login shell's own file, made if missing. A new ~/.bash_profile
   # would hide ~/.profile, so bash gets ~/.profile instead.
-  case ${SHELL##*/} in
+  case $login in
     bash)
       add_line "$HOME/.bashrc"
       if [ ! -f "$HOME/.bash_profile" ] && [ ! -f "$HOME/.bash_login" ]; then
@@ -311,7 +314,7 @@ EOF
   esac
   fish_dir=${XDG_CONFIG_HOME:-$HOME/.config}/fish
   fish=""
-  if [ "${SHELL##*/}" = fish ] || [ -d "$fish_dir" ]; then
+  if [ "$login" = fish ] || [ -d "$fish_dir" ]; then
     fish=1
     put_file "$fish_dir/conf.d/rok.fish" "test -f \"$env/env.fish\"; and source \"$env/env.fish\""
   fi

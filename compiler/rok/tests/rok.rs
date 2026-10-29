@@ -2574,6 +2574,23 @@ fn install_sh_no_modify_path() {
     }
 }
 
+/// Without `$SHELL` (containers, some CI) install.sh does not fail.
+/// Some `sh`s refill it from the user database, so only the run and
+/// `$ROK_HOME/env` are checked.
+// spec: §9.10.6
+#[cfg(unix)]
+#[test]
+fn install_sh_without_shell() {
+    let root = scratch("install-sh-no-shell");
+    fake_archive(&root, "9.9.7");
+    let user = root.join("user");
+    let mut c = install_sh(&root, &user, "");
+    c.env_remove("SHELL").args(["--archive", "rok.tar.gz"]);
+    let out = c.output().unwrap();
+    ok(&out);
+    assert!(user.join(".rok/env").exists(), "{}", text(&out.stderr));
+}
+
 /// `install.sh --archive` checks the archive against the `.sha256`
 /// beside it before unpacking.
 // spec: §9.10.6
