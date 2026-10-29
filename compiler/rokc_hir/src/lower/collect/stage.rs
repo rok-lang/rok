@@ -808,4 +808,5 @@ codec_enum!(Intrinsic {
     TransferFlat,
     TransferVisit,
     FieldTable,
+    Shown,
 });

@@ -2,7 +2,7 @@
 // Two-pointer loops with `hi - lo <= 64` run a copy that polls nowhere.
 // expect-exit: 101
 // expect-stderr: thread 'main' panicked at tests/cases/cg_strip_two_pointer.rok:68:27:
-// expect-stderr: List index out of bounds
+// expect-stderr: index 3 out of bounds for length 3
 // expect-stdout:
 // 0 0 1 32 33 500
 // 64 65

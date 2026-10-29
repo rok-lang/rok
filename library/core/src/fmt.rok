@@ -22,6 +22,12 @@ impl Debug for FmtError {
     const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("FmtError") }
 }
 
+/// `x` as `{x:?}` shows it, or `<T>` (its type name) when `T` has no
+/// `Debug`: for messages about a value of any type.
+#[doc(hidden)]
+#[intrinsic("rok.shown")]
+pub fn __shown<T>(x: T) -> str;
+
 /// The spec's `align`.
 pub enum Alignment {
     Left,

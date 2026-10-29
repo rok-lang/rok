@@ -2,7 +2,7 @@
 // Short counted-loop nests run a copy that polls nowhere; same iterations.
 // expect-exit: 101
 // expect-stderr: thread 'main' panicked at tests/cases/cg_short_nest.rok:60:18:
-// expect-stderr: List index out of bounds
+// expect-stderr: index 3 out of bounds for length 3
 // expect-stdout:
 // 0 0 2464 3564 5445000
 // 11 2717

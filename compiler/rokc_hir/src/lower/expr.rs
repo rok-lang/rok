@@ -9447,7 +9447,7 @@ fn lower_intrinsic(
     span: rokc_diagnostic::Span,
 ) -> HirExpr {
     match op {
-        Intrinsic::AnyCast | Intrinsic::MethodTable | Intrinsic::FieldTable => {
+        Intrinsic::AnyCast | Intrinsic::MethodTable | Intrinsic::FieldTable | Intrinsic::Shown => {
             super::reflect::intrinsic(ctx, op, name, targs, args, span)
         }
         Intrinsic::MlirOp => lower_mlir_op(ctx, targs, args, span),

@@ -3,7 +3,7 @@
 // list it is read or written beside can be the same list.
 // expect-exit: 101
 // expect-stderr: thread 'main' panicked at tests/cases/cg_versioned_loop_kept_element.rok:47:17:
-// expect-stderr: List index out of bounds
+// expect-stderr: index 3 out of bounds for length 3
 // expect-stdout:
 // [10, 1, 1, 1, 1] [0, 2, 3, 4, 5]
 // [16, 2, 3, 4, 5] [1, 2, 21, 4, 5]

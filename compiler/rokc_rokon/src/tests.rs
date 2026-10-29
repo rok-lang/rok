@@ -332,3 +332,31 @@ fn edits_keep_comments_and_layout() {
     // A syntax error is reported, not edited around.
     assert!(edit::set("Package { name: x }", &deps("a"), x).is_err());
 }
+
+#[test]
+fn quote_escapes_bidi() {
+    // The lexer rejects a raw bidi control in a string.
+    for (s, want) in [
+        ("a\u{202A}b", r#""a\u{202a}b""#),
+        ("a\u{202E}b", r#""a\u{202e}b""#),
+        ("a\u{2066}b", r#""a\u{2066}b""#),
+        ("a\u{2069}b", r#""a\u{2069}b""#),
+    ] {
+        let q = crate::quote(s);
+        assert_eq!(q, want);
+        assert!(matches!(kind(&q), Kind::Str(back) if back == s));
+    }
+}
+
+#[test]
+fn huge_float_is_an_error_naming_the_range() {
+    for src in ["1e999", "-1e999", "[1.5e400]"] {
+        let e = parse(src).expect_err(src);
+        assert!(
+            e.message
+                .contains("is out of range (ROKON floats are f64, up to about 1.8e308)"),
+            "{src:?}: {}",
+            e.message
+        );
+    }
+}

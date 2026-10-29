@@ -4,7 +4,7 @@
 // and `-1 as usize` is out of bounds on the first iteration.
 // expect-exit: 101
 // expect-stderr: thread 'main' panicked at tests/cases/cg_versioned_loop_negative_start.rok:13:14:
-// expect-stderr: List index out of bounds
+// expect-stderr: index * out of bounds for length 3
 // expect-stdout: 6
 
 fn sum(x: List<i64>, a: i64, n: i64) -> i64 {

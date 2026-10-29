@@ -1385,46 +1385,57 @@ pub(super) fn main_frame(ctx: &mut LowerCtx<'_>) {
 /// Spec 4.16.4: an uncaught error prints as its `Display`, else its
 /// `Debug`, else its type name.
 fn describe_err(ctx: &mut LowerCtx<'_>, err: HirExpr, span: rokc_diagnostic::Span) -> HirExpr {
-    let spec = if ctx.has_trait(&err.ty, ctx.lang("display_trait")) {
-        Some(Vec::new())
-    } else if ctx.has_trait(&err.ty, ctx.lang("debug_trait")) {
-        Some(vec![rokc_ast::SpecPiece::Text("?".to_owned())])
-    } else {
-        None
-    };
-    if let Some(spec) = spec {
-        // `{ let #eN = err; f"{#eN}" }` (`{#eN:?}`).
-        ctx.push_scope();
-        let name = format!("#e{}", ctx.locals.len());
-        let local = ctx.declare(Some(name.clone()), err.ty.clone());
-        let hole = rokc_ast::FStringPart::Hole {
-            expr: Expr {
-                kind: ExprKind::Path(AstPath {
-                    segments: vec![rokc_ast::PathSegment {
-                        name,
-                        generics: Vec::new(),
-                    }],
-                    span,
-                }),
-                span,
-            },
-            spec,
-        };
-        let text = super::fstring::lower_fstring(ctx, &[hole], span);
-        ctx.pop_scope();
-        return HirExpr {
-            ty: HirTy::Prim(PrimTy::Str),
-            kind: HirExprKind::Block(Box::new(HirBlock {
-                stmts: vec![HirStmt::Let { local, init: err }],
-                trailing: Some(text),
-                label: None,
-            })),
-            span,
-        };
+    if ctx.has_trait(&err.ty, ctx.lang("display_trait")) {
+        return format_value(ctx, err, false, span);
+    }
+    if ctx.has_trait(&err.ty, ctx.lang("debug_trait")) {
+        return format_value(ctx, err, true, span);
     }
     HirExpr {
         kind: HirExprKind::Const(ConstVal::Str(ctx.ty_name(&err.ty))),
         ty: HirTy::Prim(PrimTy::Str),
+        span,
+    }
+}
+
+/// `{ let #eN = v; f"{#eN}" }`, `{#eN:?}` when `debug`; the caller checks
+/// the trait.
+pub(super) fn format_value(
+    ctx: &mut LowerCtx<'_>,
+    v: HirExpr,
+    debug: bool,
+    span: rokc_diagnostic::Span,
+) -> HirExpr {
+    let spec = if debug {
+        vec![rokc_ast::SpecPiece::Text("?".to_owned())]
+    } else {
+        Vec::new()
+    };
+    ctx.push_scope();
+    let name = format!("#e{}", ctx.locals.len());
+    let local = ctx.declare(Some(name.clone()), v.ty.clone());
+    let hole = rokc_ast::FStringPart::Hole {
+        expr: Expr {
+            kind: ExprKind::Path(AstPath {
+                segments: vec![rokc_ast::PathSegment {
+                    name,
+                    generics: Vec::new(),
+                }],
+                span,
+            }),
+            span,
+        },
+        spec,
+    };
+    let text = super::fstring::lower_fstring(ctx, &[hole], span);
+    ctx.pop_scope();
+    HirExpr {
+        ty: HirTy::Prim(PrimTy::Str),
+        kind: HirExprKind::Block(Box::new(HirBlock {
+            stmts: vec![HirStmt::Let { local, init: v }],
+            trailing: Some(text),
+            label: None,
+        })),
         span,
     }
 }

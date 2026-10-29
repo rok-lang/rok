@@ -25,17 +25,6 @@ impl Rng {
     }
 }
 
-/// Open bugs (TODOS.md, Tests / CI): a failure containing one of these is
-/// counted, not failed. Delete an entry once its bug is fixed.
-const KNOWN: &[&str] = &[
-    // `quote` escapes `is_control` only; the lexer rejects a raw bidi
-    // control (U+202A..U+202E, U+2066..U+2069) in a string.
-    "bidirectional control character",
-    // `1e999` reads as an infinite float, which writes as `inf`: the
-    // reader should reject it (NaN / infinity have no ROKON form).
-    "float literal out of range reads as infinity",
-];
-
 fn budget() -> Duration {
     let secs = std::env::var("ROK_FUZZ_SECS")
         .ok()
@@ -213,15 +202,9 @@ fn rokon_round_trip_and_mutations() {
     let worker = thread::spawn(move || {
         let mut i = 0u64;
         let mut fails = Vec::new();
-        let mut known = 0;
         while Instant::now() < deadline {
             let _ = tx.send(i);
             if let Err(e) = one(i) {
-                if KNOWN.iter().any(|k| e.contains(k)) {
-                    known += 1;
-                    i += 1;
-                    continue;
-                }
                 fails.push(format!("input {i}: {e}"));
                 if fails.len() >= 5 {
                     break;
@@ -229,7 +212,7 @@ fn rokon_round_trip_and_mutations() {
             }
             i += 1;
         }
-        (i, known, fails)
+        (i, fails)
     });
     // Watchdog: an input that runs 10 s is a hang.
     let mut last = 0;
@@ -240,10 +223,7 @@ fn rokon_round_trip_and_mutations() {
             Err(mpsc::RecvTimeoutError::Timeout) => panic!("input {last} hangs (seed {})", seed()),
         }
     }
-    let (n, known, fails) = worker.join().unwrap();
-    println!(
-        "rokon fuzz: {n} inputs, {known} known failures, seed {}",
-        seed()
-    );
+    let (n, fails) = worker.join().unwrap();
+    println!("rokon fuzz: {n} inputs, seed {}", seed());
     assert!(fails.is_empty(), "{}", fails.join("\n\n"));
 }
