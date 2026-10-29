@@ -397,7 +397,7 @@ fn collect_attr(
             let Some(lv) = fixed_prec(&l, fixity) else {
                 diags.push(meta_err(
                     attr,
-                    format!("`like = \"{l}\"` must name a {name} operator of the spec 3.2 table"),
+                    format!("`like = \"{l}\"` must name a built-in {name} operator"),
                 ));
                 return None;
             };
@@ -407,7 +407,7 @@ fn collect_attr(
             diags.push(meta_err(
                 attr,
                 format!(
-                    "`{symbol}` is not a spec 3.2 table token for `#[{name}]`; a new \
+                    "`{symbol}` is not a built-in operator token; for `#[{name}]`, a new \
                      token needs `like = \"<existing token>\"`"
                 ),
             ));

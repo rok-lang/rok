@@ -506,6 +506,53 @@ pub(super) fn lower_let_tuple(
     }
 }
 
+/// The `: T` of a `let` at `stmt` whose type is at `ty`.
+fn ann_span(
+    ctx: &LowerCtx<'_>,
+    stmt: rokc_diagnostic::Span,
+    ty: rokc_diagnostic::Span,
+) -> Option<rokc_diagnostic::Span> {
+    if ty.is_dummy() || ty.file != stmt.file || ty.start < stmt.start {
+        return None;
+    }
+    let head = rokc_diagnostic::Span {
+        end: ty.end,
+        ..stmt
+    };
+    let colon = ctx
+        .src(head)?
+        .get(..(ty.start - stmt.start) as usize)?
+        .rfind(':')?;
+    ctx.sub_span(head, colon, (ty.end - stmt.start) as usize)
+}
+
+/// `let name[: pre_ty] = init` (`ann` the `: T`): the binding's type
+/// and its value.
+fn lower_let_init(
+    ctx: &mut LowerCtx<'_>,
+    name: &str,
+    pre_ty: Option<HirTy>,
+    ann: Option<rokc_diagnostic::Span>,
+    init: &Expr,
+) -> (HirTy, HirExpr) {
+    let since = ctx.env.sink.diagnostics.borrow().len();
+    let init = lower_expected(ctx, init, pre_ty.clone().unwrap_or(HirTy::Unknown));
+    // A bad annotation (`List` without arguments) is reported on its
+    // own: nothing is left to infer from it.
+    if matches!(pre_ty, Some(HirTy::Path(_))) {
+        retain_since(ctx, since, |d| {
+            d.tag != rokc_diagnostic::Tag::TypeParamInfer
+        });
+    }
+    let Some(t) = pre_ty else {
+        check_let_inferable(ctx, name, &init);
+        return (init.ty.clone(), init);
+    };
+    ctx.let_ann.set(ann);
+    let init = coerce(ctx, &t, init, &|| format!("`let {name}`"));
+    (t, init)
+}
+
 pub(super) fn lower_stmt(ctx: &mut LowerCtx<'_>, stmt: &Stmt) -> Option<HirStmt> {
     // Diagnostics raised while lowering default to this location.
     ctx.at_span(stmt.span, |ctx| lower_stmt_inner(ctx, stmt))
@@ -545,14 +592,8 @@ fn lower_stmt_inner(ctx: &mut LowerCtx<'_>, stmt: &Stmt) -> Option<HirStmt> {
                     guard_sink(ctx, i);
                 }
             }
-            let init = lower_expected(ctx, init, pre_ty.clone().unwrap_or(HirTy::Unknown));
-            let (declared_ty, init) = if let Some(t) = pre_ty {
-                let init = coerce(ctx, &t, init, &|| format!("`let {name}`"));
-                (t, init)
-            } else {
-                check_let_inferable(ctx, name, &init);
-                (init.ty.clone(), init)
-            };
+            let ann = ty.as_ref().and_then(|t| ann_span(ctx, stmt.span, t.span));
+            let (declared_ty, init) = lower_let_init(ctx, name, pre_ty, ann, init);
             let ty = declared_ty.clone();
             let fresh = ctx.sole_names.contains(name.as_str()) && fresh_future(ctx, ast_init);
             let s = ctx.declare_var(name, declared_ty, init, stmt.span);
@@ -2815,7 +2856,7 @@ pub(super) fn field_access(
                 rokc_diagnostic::ErrorKind::Type,
                 format!(
                     "reading field `{name}` of union `{}` needs an `unsafe` block \
-                     (spec 4.15.2: the bits may not be a valid `{name}`)",
+                     (the bits may not be a valid `{name}`; spec 4.15.2)",
                     ctx.ty_name(&HirTy::Struct(struct_id))
                 ),
             );
@@ -3720,8 +3761,9 @@ pub(super) fn lower_args_ref(
             v.span
         };
         let outer = ctx.at.replace(at);
+        let shown = ctx.display_path(callee);
         out.push(coerce(ctx, &pty, v, &|| {
-            format!("argument `{pname}` of `{callee}`")
+            format!("argument `{pname}` of `{shown}`")
         }));
         ctx.at.set(outer);
     }
@@ -4255,7 +4297,7 @@ fn sig_of_def(callee: &str, def: &FnDef) -> String {
 
 /// Report a wrong argument count, with the signature as help.
 fn arity_error(ctx: &LowerCtx<'_>, callee: &str, want: usize, got: usize, sig: Option<String>) {
-    let (msg, help) = super::arity_msg(callee, want, got, sig);
+    let (msg, help) = super::arity_msg(&ctx.display_path(callee), want, got, sig);
     ctx.emit_error(rokc_diagnostic::ErrorKind::Type, msg);
     ctx.help_last(help);
 }
@@ -7783,11 +7825,12 @@ fn call_generic_positional(
         .get(&mono_id)
         .map(|s| s.param_tys.clone())
         .unwrap_or_default();
+    let shown = ctx.display_path(callee);
     let lowered: Vec<HirExpr> = lowered
         .into_iter()
         .enumerate()
         .map(|(i, a)| match param_tys.get(i) {
-            Some(t) => coerce(ctx, t, a, &|| format!("argument {} of `{callee}`", i + 1)),
+            Some(t) => coerce(ctx, t, a, &|| format!("argument {} of `{shown}`", i + 1)),
             None => a,
         })
         .collect();

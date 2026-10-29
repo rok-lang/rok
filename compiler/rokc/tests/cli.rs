@@ -1059,7 +1059,7 @@ fn incremental_checks_generic_bodies() {
         ok.replace(": Add<T, Output = T> + Copy", ""),
     )
     .unwrap();
-    let want = "operator `+` on `T` needs a `Add` bound on `T` (spec 2.10.9)";
+    let want = "operator `+` on `T` needs a `Add` bound on `T`";
     let (pass, err) = check();
     assert!(!pass && err.contains(want), "{err}");
     // Another body edited: still reported.
@@ -2988,9 +2988,9 @@ fn library_tiers_depend_only_downward() {
     assert_exit(&out, 1);
     let err = text(&out.stderr);
     for want in [
-        "`rok::bare` must not depend on `rok::core` (stdlib spec 0.1.2)",
-        "`rok::bare` must not depend on `rok::std` (stdlib spec 0.1.2)",
-        "`rok::core` must not depend on `rok::std` (stdlib spec 0.1.2)",
+        "`rok::bare` must not depend on `rok::core`",
+        "`rok::bare` must not depend on `rok::std`",
+        "`rok::core` must not depend on `rok::std`",
     ] {
         assert!(err.contains(want), "{want}\n{err}");
     }

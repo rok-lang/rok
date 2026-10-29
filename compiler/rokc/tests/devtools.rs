@@ -245,11 +245,11 @@ fn lint_finds_each_kind_and_honors_levels() {
     .unwrap();
     let (_, err) = exit(&rokc(&dir, &["lint", "-A", "unused_variables"]), 1);
     assert!(
-        err.contains("warning[E503]: unused variable `a`\n  --> src/main.rok:4:10"),
+        err.contains("warning[E503]: unused variable `a`\n  --> src/main.rok:4:14"),
         "{err}"
     );
     assert!(
-        err.contains("error[E503]: unused variable `b`\n  --> src/main.rok:5:18"),
+        err.contains("error[E503]: unused variable `b`\n  --> src/main.rok:5:22"),
         "{err}"
     );
     assert!(

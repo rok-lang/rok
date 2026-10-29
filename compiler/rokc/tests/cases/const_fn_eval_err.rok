@@ -9,7 +9,7 @@
 // expect-error: const `DEEP` cannot be evaluated at compile time: evaluation exceeds the call depth limit
 // expect-error: const `SPIN` cannot be evaluated at compile time: evaluation exceeds the step limit
 // expect-error: const `DIV` cannot be evaluated at compile time: attempt to divide by zero
-// expect-error: array length must be a compile-time integer (spec 2.11.5): attempt to multiply with overflow
+// expect-error: array length must be a compile-time integer: attempt to multiply with overflow
 const fn sq(x: i32) -> i32 {
     x * x
 }

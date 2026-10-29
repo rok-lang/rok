@@ -1,7 +1,7 @@
 // spec: refs-lang §5.3 §5.3.4
-// expect-error: 10:1: a `static` is shared by every thread, so it can't be a `Cell<i64>`: two threads could change it at once (spec 5.3)
+// expect-error: 10:1: a `static` is shared by every thread, so it can't be a `Cell<i64>`: two threads could change it at once
 // expect-error: help: write `static C: Atomic<i64> = Atomic::new(0);` and use `C.load()` / `C.store(..)`
-// expect-error: 11:1: a `static` is shared by every thread, so it can't be a `Cell<str>`: two threads could change it at once (spec 5.3)
+// expect-error: 11:1: a `static` is shared by every thread, so it can't be a `Cell<str>`: two threads could change it at once
 // expect-error: help: write `static NAME: Mutex<str> = Mutex::new("a");` and use it inside `using g = NAME.lock() { .. }`
 
 // A `Cell` is for one thread; a `static` one is shared by all.

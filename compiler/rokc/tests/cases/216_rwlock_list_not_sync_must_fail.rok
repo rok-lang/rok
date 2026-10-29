@@ -1,5 +1,5 @@
 // spec: std-216.4 std-216.5
-// expect-error: 13:9: mismatched types: argument 1 of `rok::std::thread::spawn` expects `fn() -> i32 + Send`, found `closure() -> i32`
+// expect-error: 13:23: mismatched types: argument 1 of `thread::spawn` expects `fn() -> i32 + Send`, found `closure() -> i32`
 // expect-error: note: the closure captures `rw` (type `RwLock<List<i32>>`), which is not `Sync`: its readers could change the `List<i32>` inside at once; use `Mutex<List<i32>>` and `.lock()` in place of `.read()` / `.write()`
 
 // `RwLock<T>` is `Sync` only when `T` is `Send + Sync`: readers share

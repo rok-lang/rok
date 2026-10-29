@@ -1,4 +1,4 @@
-// expect-error: unknown template token `@fild` (spec 6.9)
+// expect-error: unknown template token `@fild`
 // Spec 6.9: a misspelt template token is reported at the template.
 trait Bad { fn bad(self) -> i32; }
 

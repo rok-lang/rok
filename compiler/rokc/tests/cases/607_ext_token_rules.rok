@@ -1,5 +1,5 @@
 // spec: refs-lang §1.10.4
-// expect-error: `->` can't be a new operator token: it is a fixed token of the language (spec 1.10.4)
+// expect-error: `->` can't be a new operator token: it is a fixed token of the language
 // expect-error: `a⊕` can't be a new operator token: every character must be a Unicode `Pattern_Syntax` code point
 
 // 1.10.4: a registered token is `Pattern_Syntax` only and no fixed token.

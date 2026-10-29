@@ -2,7 +2,7 @@
 // expect-error: cannot cast `Ptr<i32>` as `Ptr<u8>`
 // expect-error: cannot cast `Ptr<i32>` as `ConstPtr<i32>`
 // expect-error: cannot cast `ManyPtr<i32>` as `usize`
-// expect-error: type `Ptr<i32>` does not satisfy trait bound `rok::bare::mem::Pod`
+// expect-error: type `Ptr<i32>` does not satisfy trait bound `Pod`
 // expect-error: `Holder` cannot be `Pod`: `p` has type `Ptr<i32>`, which is not `Pod`
 // spec: std 102-cast §1.2.7, 103-mem §1.3.3
 // A pointer carries provenance: `as` never makes, retypes or erases one,

@@ -1,5 +1,5 @@
 // spec: lang 306-indexing-and-slicing §3.6.3
-// expect-error: one `[..]` cannot both index with `,` and slice with `:` (spec 3.6.3)
+// expect-error: one `[..]` cannot both index with `,` and slice with `:`
 
 fn main() {
     let xs = [1, 2, 3];

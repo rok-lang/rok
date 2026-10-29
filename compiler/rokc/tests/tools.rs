@@ -1417,20 +1417,23 @@ a + 1
         stderr,
         "\
 error[E200]: mismatched types: `let b` expects `str`, found `i32`
-  --> <repl>:1:12
+  --> <repl>:1:25
    |
  1 | let a = 1; let b: str = 2;
-   |            ^^^
+   |                         ^
+   |
+   = help: to make text from it, write `f\"{2}\"`
+   = help: or, to keep the `i32`, drop `: str`
 error[E200]: operator `+` cannot be applied to `i32` and `bool`
   --> <repl>:1:25
    |
  1 | let é = \"é\"; let w = 3; w + true
    |                         ^^^^^^^^
 error[E200]: mismatched types: the right operand of `+` expects `str`, found `i32`
-  --> <repl>:2:19
+  --> <repl>:2:25
    |
  2 |   2); println(p); f() + p
-   |                   ^^^^^^^
+   |                         ^
    |
    = help: `+` joins two `str`s; put the value in an f-string: `f\"{f()}{p}\"`
 error[E100]: cannot find value `a` in this scope

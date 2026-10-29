@@ -1,5 +1,5 @@
 // spec: refs-lang §2.9.1
-// expect-error: 8:1: an inherent `impl` attaches methods to a type, and `T` is a type parameter of this `impl` (spec 2.9.1)
+// expect-error: 8:1: an inherent `impl` attaches methods to a type, and `T` is a type parameter of this `impl`
 // expect-error: 9:1: cannot find type `Nope` in this scope
 
 // An inherent `impl` needs a type: a bare type parameter is none, and

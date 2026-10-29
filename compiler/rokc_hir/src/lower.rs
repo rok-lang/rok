@@ -2067,6 +2067,7 @@ fn coerce(
     value: HirExpr,
     what: &dyn Fn() -> String,
 ) -> HirExpr {
+    let ann = ctx.let_ann.take();
     if infer::unify_value(ctx, slot, &value) {
         return value;
     }
@@ -2135,8 +2136,16 @@ fn coerce(
             }
         }
         let hint = fn_mismatch_hint(slot, &v.ty);
-        ctx.emit_error(
+        // Underline the value, not the statement holding it.
+        let here = ctx.here();
+        let at = if !v.span.is_dummy() && v.span.file == here.file && here.start <= v.span.start {
+            v.span
+        } else {
+            here
+        };
+        ctx.emit_error_at(
             rokc_diagnostic::ErrorKind::Type,
+            at,
             format!(
                 "mismatched types: {} expects `{}`, found `{}`{hint}",
                 what(),
@@ -2144,6 +2153,7 @@ fn coerce(
                 ctx.ty_name(&v.ty)
             ),
         );
+        convert_help(ctx, slot, &v, ann, &what());
         // `let d: Dict<K, V> = {};` (Python, JS): `{}` is an empty block.
         let slot_name = ctx.ty_name(slot);
         let base = slot_name.split('<').next().unwrap_or_default();
@@ -2185,12 +2195,16 @@ fn arity_msg(
     (msg, help)
 }
 
-/// A standard library function by its own name (`println`).
-fn short_callee(callee: &str) -> &str {
-    if callee.starts_with("rok::") {
-        leaf_name(callee)
-    } else {
-        callee
+/// A standard library function by its own name (`println`), a method
+/// by its type's (`List::push`).
+fn short_callee(callee: &str) -> std::borrow::Cow<'_, str> {
+    if !callee.starts_with("rok::") {
+        return callee.into();
+    }
+    let leaf = leaf_name(callee);
+    match leaf.split_once("__") {
+        Some((ty, method)) => format!("{ty}::{method}").into(),
+        None => leaf.into(),
     }
 }
 
@@ -2255,6 +2269,79 @@ fn mismatch_help(ctx: &LowerCtx<'_>, slot: &HirTy, v: &HirExpr) {
         "convert the elements: `{xs}.iter().map(|x| x as {}).collect()`",
         ctx.ty_name(to)
     )));
+}
+
+/// Help for a primitive in another primitive's slot: `as` between
+/// numbers, `parse` from a `str`, and for a literal under `let x: T`
+/// (`ann` the `: T`), dropping the annotation.
+fn convert_help(ctx: &LowerCtx<'_>, slot: &HirTy, v: &HirExpr, ann: Option<Span>, what: &str) {
+    let (HirTy::Prim(to), HirTy::Prim(from)) = (slot, &v.ty) else {
+        return;
+    };
+    let num = |p: &PrimTy| p.is_int() || p.is_float();
+    let src = suggest::short_src(ctx, v.span);
+    // Needs no parentheses before `as` or `.parse()`.
+    let simple = |s: &str| {
+        s.chars()
+            .all(|c| c.is_alphanumeric() || matches!(c, '_' | '.' | '\''))
+            || s.len() > 1 && s.starts_with('"') && s.ends_with('"')
+            || s.ends_with(')') && !s.contains(' ')
+    };
+    let wrap = |s: &str| {
+        if simple(s) {
+            s.to_owned()
+        } else {
+            format!("({s})")
+        }
+    };
+    let to_name = to.name();
+    let mut helped = true;
+    match src {
+        Some(s) if num(to) && num(from) => {
+            let fix = format!("{} as {to_name}", wrap(s));
+            ctx.help_last(Some(format!("convert it with `as`: `{fix}`")));
+            ctx.fix_last(v.span, fix, format!("convert with `as {to_name}`"));
+        }
+        None if num(to) && num(from) => {
+            ctx.help_last(Some(format!("convert it with `as {to_name}`")));
+        }
+        Some(s) if num(to) && *from == PrimTy::Str => {
+            let fix = format!("try! {}.parse()", wrap(s));
+            ctx.help_last(Some(format!(
+                "to read a number from the text, write `{fix}`"
+            )));
+            ctx.fix_last(v.span, fix, "parse the text");
+        }
+        // `+` on text has its own f-string help.
+        Some(s)
+            if *to == PrimTy::Str
+                && *from != PrimTy::CChar
+                && !s.contains('"')
+                && !what.contains("operand of `+`") =>
+        {
+            let fix = format!("f\"{{{s}}}\"");
+            ctx.help_last(Some(format!("to make text from it, write `{fix}`")));
+            ctx.fix_last(v.span, fix, "format as text");
+        }
+        _ => helped = false,
+    }
+    let literal = src.is_some_and(|s| {
+        s.trim_start_matches('-')
+            .starts_with(|c: char| c.is_ascii_digit() || matches!(c, '"' | '\''))
+            || matches!(s, "true" | "false")
+    });
+    let (Some(ann), true) = (ann, literal) else {
+        return;
+    };
+    let Some(text) = ctx.src(ann) else {
+        return;
+    };
+    let or = if helped { "or, " } else { "" };
+    ctx.help_last(Some(format!(
+        "{or}to keep the `{}`, drop `{text}`",
+        from.name()
+    )));
+    ctx.fix_last(ann, "", format!("remove `{text}`"));
 }
 
 /// What to write instead of a `[ref name]` capture (`x` its variable's
@@ -2886,6 +2973,8 @@ struct LowerCtx<'a> {
     /// Temporaries named so far (`expr::tmp_path`): their names count
     /// per body, so a body lowers the same whatever was lowered before.
     temps: std::cell::Cell<u32>,
+    /// The `: T` of the `let` whose value the next `coerce` checks.
+    let_ann: std::cell::Cell<Option<Span>>,
 }
 
 /// Where a speculative lowering started (`probe_mark`); `rollback`
@@ -3028,6 +3117,7 @@ impl<'a> LowerCtx<'a> {
             splices: HashMap::new(),
             at: std::cell::Cell::new(at),
             temps: std::cell::Cell::new(0),
+            let_ann: std::cell::Cell::new(None),
         }
     }
 
@@ -3469,7 +3559,38 @@ impl<'a> LowerCtx<'a> {
 
     /// `Path<A, Name = B>` for diagnostics.
     fn trait_name(&self, r: &TraitRef) -> String {
-        r.render(&r.path, |t| self.ty_name(t))
+        r.render(&self.display_path(&r.path), |t| self.ty_name(t))
+    }
+
+    /// A library item as written: `List::sort` for
+    /// `rok::core::collections::list::List__sort`, the leaf when no other
+    /// function shares it, else the shortest suffix naming it alone
+    /// (`thread::spawn`). Other paths are kept.
+    fn display_path(&self, full: &str) -> String {
+        // A generic impl's method `__impl1f2e3d4c_show` (or `_2_show`).
+        if let Some(rest) = leaf_name(full).strip_prefix("__impl") {
+            let rest = rest.get(8..).unwrap_or_default();
+            let rest = rest.trim_start_matches(|c: char| c == '_' || c.is_ascii_digit());
+            if !rest.is_empty() {
+                return rest.to_owned();
+            }
+        }
+        if !full.starts_with("rok::") {
+            return full.to_owned();
+        }
+        let leaf = leaf_name(full);
+        if let Some((ty, method)) = leaf.split_once("__") {
+            return format!("{ty}::{method}");
+        }
+        let others = self.env.fn_leaf(leaf);
+        let segs: Vec<&str> = full.split("::").collect();
+        (1..segs.len())
+            .map(|n| segs[segs.len() - n..].join("::"))
+            .find(|s| {
+                let tail = format!("::{s}");
+                others.iter().all(|o| o == full || !o.ends_with(&tail))
+            })
+            .unwrap_or_else(|| full.to_owned())
     }
 
     /// The item bound to lang slot `slot` (spec 6.4), `""` if unbound.

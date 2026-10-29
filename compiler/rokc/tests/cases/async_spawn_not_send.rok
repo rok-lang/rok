@@ -1,4 +1,4 @@
-// expect-error: does not satisfy trait bound `rok::core::marker::Send` required by `rok::core::task::spawn`
+// expect-error: does not satisfy trait bound `Send` required by `task::spawn`
 
 async fn make() -> Cell<i32> { Cell::new(1) }
 let t = task::spawn(make());

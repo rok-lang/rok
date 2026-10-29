@@ -1,5 +1,5 @@
 // spec: std 213-marker §2.13.9
-// expect-error: does not satisfy trait bound `rok::core::marker::Send`
+// expect-error: does not satisfy trait bound `Send`
 
 // Send is structural: a tuple holding a type that opted out is not Send.
 struct Cellish { v: i32; }

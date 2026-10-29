@@ -519,12 +519,20 @@ pub(super) fn monomorphize_on(
                     subst.insert(name.clone(), v.clone());
                     subst_tys.push(v);
                 } else {
-                    ctx.emit_uninferred(format!(
-                        "cannot infer type parameter `{name}` of `{}` from the call \
-                         arguments, the expected type or a later use - annotate the \
-                         binding or write `::<..>`",
-                        fn_def.name
-                    ));
+                    let msg = if fn_def.name == "rok::core::collections::list::list_literal" {
+                        "cannot infer the element type of the list literal from its \
+                         elements, the expected type or a later use - annotate the \
+                         binding: `let xs: List<i32> = [];`"
+                            .to_owned()
+                    } else {
+                        format!(
+                            "cannot infer type parameter `{name}` of `{}` from the call \
+                             arguments, the expected type or a later use - annotate the \
+                             binding or write `::<..>`",
+                            ctx.display_path(&fn_def.name)
+                        )
+                    };
+                    ctx.emit_uninferred(msg);
                     ctx.tag_last(rokc_diagnostic::Tag::TypeParamInfer);
                     return None;
                 }
@@ -535,7 +543,7 @@ pub(super) fn monomorphize_on(
                         "cannot infer const parameter `{name}` of `{}` from the call \
                          arguments or the expected type - pass it explicitly (`::<..>`) \
                          (spec 2.11.6)",
-                        fn_def.name
+                        ctx.display_path(&fn_def.name)
                     ));
                     return None;
                 };
@@ -759,11 +767,11 @@ fn check_call_bounds(
                         ctx.ty_name(concrete),
                         ctx.trait_name(&want),
                         // `task::spawn` lowered to its plain twin is `spawn`.
-                        if fn_def.name == "rok::core::task::spawn_plain" {
+                        ctx.display_path(if fn_def.name == "rok::core::task::spawn_plain" {
                             "rok::core::task::spawn"
                         } else {
                             fn_def.name.as_str()
-                        }
+                        })
                     ),
                 );
                 if want.path == super::reflect::INSPECT {

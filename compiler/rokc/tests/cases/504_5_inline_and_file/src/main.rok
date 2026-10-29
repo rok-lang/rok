@@ -1,5 +1,5 @@
 // spec: §5.4.5
-// expect-error: 6:1: inline module `inner` conflicts with `inner.rok`: a module is either inline or a file (spec 5.4.5)
+// expect-error: 6:1: inline module `inner` conflicts with `inner.rok`: a module is either inline or a file
 
 // 5.4.5: an inline module may not have a file of the same name beside
 // it.

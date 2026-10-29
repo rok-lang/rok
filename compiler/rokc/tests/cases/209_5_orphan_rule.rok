@@ -1,6 +1,6 @@
 // spec: 002.09.5-orphan-rule
 // A trait impl needs the trait or the type to be this package's own.
-// expect-error: 13:1: `impl Display for List<i32>`: neither the trait nor the type is defined in this package (orphan rule, spec 2.9.5)
+// expect-error: 13:1: `impl Display for List<i32>`: neither the trait nor the type is defined in this package (orphan rule)
 // forbid-warning: `impl Mine
 
 trait Mine { fn m(self) -> i32; }

@@ -5,7 +5,7 @@
 // points at both and says what to write instead.
 // expect-error: 20:1: function `post_later` is defined more than once
 // expect-error: first defined here
-// expect-error: help: rename one of them, e.g. `post_later2`; there is no overloading, so to take fewer arguments keep one and give its last parameters defaults, as in `b: i32 = 0` (spec 4.2.3)
+// expect-error: help: rename one of them, e.g. `post_later2`; there is no overloading, so to take fewer arguments keep one and give its last parameters defaults, as in `b: i32 = 0`
 // expect-error: 25:1: function `add` is defined more than once
 // expect-error: 28:1: function `pick` is defined more than once
 // expect-error: 32:9: function `inner::f` is defined more than once

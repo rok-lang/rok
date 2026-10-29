@@ -1,5 +1,5 @@
 // spec: §2.13.9
-// expect-error: type `Node` does not satisfy trait bound `rok::core::marker::Sync` required by `need` because field `f` has type `fn() -> i32`
+// expect-error: type `Node` does not satisfy trait bound `Sync` required by `need` because field `f` has type `fn() -> i32`
 // forbid-error: because field `next` has type
 
 // The note names the part that is not `Sync`, not the type's way back

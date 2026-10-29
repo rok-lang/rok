@@ -1,5 +1,5 @@
 // spec: §5.9.2
-// expect-error: 5:1: an `extern` block names its ABI: `extern "C" { .. }` (spec 5.9.2)
+// expect-error: 5:1: an `extern` block names its ABI: `extern "C" { .. }`
 
 // 5.9.2: a plain `extern { .. }` without an ABI is a compile error.
 extern { fn abs(x: i32) -> i32; }

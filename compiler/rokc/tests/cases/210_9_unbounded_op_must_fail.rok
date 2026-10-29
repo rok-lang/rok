@@ -1,5 +1,5 @@
 // spec: §2.10.9
-// expect-error: operator `+` on `T` needs a `Add` bound on `T` (spec 2.10.9)
+// expect-error: operator `+` on `T` needs a `Add` bound on `T`
 
 // A generic body uses only what `T`'s bounds give, whatever a call
 // passes for `T`.

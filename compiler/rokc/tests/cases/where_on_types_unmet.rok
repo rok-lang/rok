@@ -1,4 +1,4 @@
-// expect-error: where_on_types_unmet.rok:8:13: type `Tok` does not satisfy trait bound `rok::core::fmt::Display` required by `W<Tok>`
+// expect-error: where_on_types_unmet.rok:8:13: type `Tok` does not satisfy trait bound `Display` required by `W<Tok>`
 // Spec 2.10.4: a struct's `where` bounds are checked at each
 // instantiation, like inline bounds.
 struct Tok { v: i32; }

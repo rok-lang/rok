@@ -2268,7 +2268,7 @@ fn collect<'a>(
                      here, `{other}` elsewhere{} (spec 5.9.4)",
                     f.name,
                     if f.name.starts_with("rok_") {
-                        "; `rok_*` symbols are the runtime's, with the signatures of spec 8.5"
+                        "; a `rok_*` symbol is the runtime's: declare it with the runtime's signature"
                     } else {
                         ""
                     }
@@ -6019,9 +6019,9 @@ fn check_impl_overlap(env: &Env<'_>, own: &dyn Fn(&str) -> bool) {
                         "conflicting implementations of trait `{}` for `{}`: the concrete \
                          impl overlaps `impl<..> {} for {}` (spec 2.9.3 - one impl per \
                          trait and type; no specialization)",
-                        gi.trait_key,
+                        ctx.display_path(&gi.trait_key),
                         ctx.ty_name(ty),
-                        gi.trait_key,
+                        ctx.display_path(&gi.trait_key),
                         impl_def_display(&gi.self_ty)
                     ),
                 );
@@ -6087,11 +6087,11 @@ fn check_impl_overlap(env: &Env<'_>, own: &dyn Fn(&str) -> bool) {
                     format!(
                         "conflicting implementations of trait `{}`: `impl<..> {} for {}` and \
                          `impl<..> {} for {}` overlap on `{t}` - bounds don't make impls \
-                         disjoint (spec 2.9.5 coherence; no specialization)",
-                        a.trait_key,
-                        a.trait_key,
+                         disjoint (no specialization; spec 2.9.5)",
+                        ctx.display_path(&a.trait_key),
+                        ctx.display_path(&a.trait_key),
                         impl_def_display(&a.self_ty),
-                        b.trait_key,
+                        ctx.display_path(&b.trait_key),
                         impl_def_display(&b.self_ty),
                     ),
                 );

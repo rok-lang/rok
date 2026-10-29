@@ -1,5 +1,5 @@
 // spec: refs-lang §5.3
-// expect-error: 9:1: a `static` is shared by every thread, so it can't be a `List<i32>`: two threads could change it at once (spec 5.3)
+// expect-error: 9:1: a `static` is shared by every thread, so it can't be a `List<i32>`: two threads could change it at once
 // expect-error: help: write `static XS: Mutex<List<i32>> = Mutex::new([]);` and use it inside `using g = XS.lock() { .. }`
 
 // A `static` is reachable from every thread, so its type must be

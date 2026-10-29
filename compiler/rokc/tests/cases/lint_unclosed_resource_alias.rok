@@ -1,9 +1,9 @@
 // expect-exit: 0
-// expect-lint: 80:25 `x` holds a `File` that is never closed - bind it with `using` or call `close()`; the GC does not close it (stdlib 2.13)
-// expect-lint: 88:10 `g` holds a `File` that is never closed - bind it with `using` or call `close()`; the GC does not close it (stdlib 2.13)
-// expect-lint: 94:25 `x` holds a `File` that is never closed - bind it with `using` or call `close()`; the GC does not close it (stdlib 2.13)
-// expect-lint: 101:25 `v` holds a `File` that is never closed - bind it with `using` or call `close()`; the GC does not close it (stdlib 2.13)
-// expect-lint: 106:10 `f` holds a `File` that is never closed - bind it with `using` or call `close()`; the GC does not close it (stdlib 2.13)
+// expect-lint: 80:25 `x` holds a `File` that is never closed - bind it with `using` or call `close()`; the GC does not close it
+// expect-lint: 88:10 `g` holds a `File` that is never closed - bind it with `using` or call `close()`; the GC does not close it
+// expect-lint: 94:25 `x` holds a `File` that is never closed - bind it with `using` or call `close()`; the GC does not close it
+// expect-lint: 101:25 `v` holds a `File` that is never closed - bind it with `using` or call `close()`; the GC does not close it
+// expect-lint: 106:10 `f` holds a `File` that is never closed - bind it with `using` or call `close()`; the GC does not close it
 // spec: §6.2.9
 // expect-stdout:
 // ok

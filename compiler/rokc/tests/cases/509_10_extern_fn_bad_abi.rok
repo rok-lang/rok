@@ -1,5 +1,5 @@
 // spec: §5.9.10 §5.9.2
-// expect-error: 6:19: `extern "fastcall" fn f`: unsupported ABI (`"C"` or `"system"`) (spec 5.9.10)
+// expect-error: 6:19: `extern "fastcall" fn f`: unsupported ABI (`"C"` or `"system"`)
 
 // 5.9.10: an `extern "ABI" fn` definition takes one of the ABIs of
 // 5.9.2 that a definition can have.

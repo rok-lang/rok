@@ -1,6 +1,6 @@
 // spec: §1.1.5
-// expect-error: 8:15: mismatched types: `let z` expects `str`, found `i32`
-// expect-error: 10:12: mismatched types: `let w` expects `bool`, found `i32`
+// expect-error: 8:28: mismatched types: `let z` expects `str`, found `i32`
+// expect-error: 10:26: mismatched types: `let w` expects `bool`, found `i32`
 
 // Diagnostic columns count code points from 1; a tab is one column.
 fn main() {

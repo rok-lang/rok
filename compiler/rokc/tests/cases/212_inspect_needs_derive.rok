@@ -5,7 +5,7 @@
 // expect-error: help: add `#[derive(Inspect)]` to `Shape` to use `variant_name`
 // expect-error: 20:13: no method `get_field` found for type `Box<i32>`
 // expect-error: help: add `#[derive(Inspect)]` to `Box` to use `get_field`
-// expect-error: 21:5: type `Point` does not satisfy trait bound `rok::core::reflect::Inspect`
+// expect-error: 21:5: type `Point` does not satisfy trait bound `Inspect`
 // expect-error: help: add `#[derive(Inspect)]` to `Point`
 
 // Stdlib 2.12.3: field and variant introspection is opt-in; using it on a

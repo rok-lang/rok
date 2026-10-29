@@ -1,5 +1,5 @@
 // spec: std §1.6.9
-// expect-error: type `Weak<i64>` does not satisfy trait bound `rok::core::marker::Sync`
+// expect-error: type `Weak<i64>` does not satisfy trait bound `Sync`
 
 // Stdlib 1.6.9: `impl<T> !Sync for Weak<T>` - a weak reference is not
 // shared across threads.

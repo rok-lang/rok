@@ -1,7 +1,7 @@
 // spec: refs-lang §4.6.9
-// expect-error: 14:13: mismatched types: argument 1 of `rok::std::thread::spawn` expects `fn() -> i32 + Send`, found `closure() -> i32` - the closure holds a `[ref ..]` capture, which the code that made it could change at the same time; share the value through a `Mutex` or an `Atomic` instead (spec 4.6.9)
-// expect-error: 16:13: mismatched types: argument 1 of `rok::std::thread::spawn` expects `fn() -> i32 + Send`, found `closure() -> i32` - the closure holds a `[ref ..]` capture, which the code that made it could change at the same time; share the value through a `Mutex` or an `Atomic` instead (spec 4.6.9)
-// expect-error: 22:13: `task::spawn` needs a `Send` future: it has a `[ref m]` capture, which the code that made it could change at the same time (spec 4.6.9), and the task may resume on another worker (spec 2.18.1); use `task::spawn_local`
+// expect-error: 14:27: mismatched types: argument 1 of `thread::spawn` expects `fn() -> i32 + Send`, found `closure() -> i32` - the closure holds a `[ref ..]` capture, which the code that made it could change at the same time; share the value through a `Mutex` or an `Atomic` instead
+// expect-error: 16:27: mismatched types: argument 1 of `thread::spawn` expects `fn() -> i32 + Send`, found `closure() -> i32` - the closure holds a `[ref ..]` capture, which the code that made it could change at the same time; share the value through a `Mutex` or an `Atomic` instead
+// expect-error: 22:13: `task::spawn` needs a `Send` future: it has a `[ref m]` capture, which the code that made it could change at the same time, and the task may resume on another worker; use `task::spawn_local`
 
 // A closure holding a `[ref]` cell stays on its thread however it gets
 // there: bound to a name first, inside another closure, or through an

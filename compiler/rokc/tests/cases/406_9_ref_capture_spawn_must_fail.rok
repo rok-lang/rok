@@ -1,9 +1,9 @@
 // spec: refs-lang §4.6.9
-// expect-error: 16:13: `[ref s]` can't be used in a closure that may run on another thread: both threads could change `s` at once (spec 4.6.9)
+// expect-error: 16:13: `[ref s]` can't be used in a closure that may run on another thread: both threads could change `s` at once
 // expect-error: help: write `let s = Mutex::new(s);` before the closure, capture `s` without `ref`, and use `using g = s.lock() { g.set(..); }`; or return the value from the closure instead
-// expect-error: 23:13: `[ref v]` can't be used in a closure that may run on another thread: both threads could change `v` at once (spec 4.6.9)
+// expect-error: 23:13: `[ref v]` can't be used in a closure that may run on another thread: both threads could change `v` at once
 // expect-error: help: write `let v = Mutex::new(v);` before the closure, capture `v` without `ref`, and use `using g = v.lock() { g.set(..); }`; or return the value from the closure instead
-// expect-error: 27:5: `[ref n]` can't be used in a closure that may run on another thread: both threads could change `n` at once (spec 4.6.9)
+// expect-error: 27:5: `[ref n]` can't be used in a closure that may run on another thread: both threads could change `n` at once
 // expect-error: help: write `let n = Atomic::new(n);` before the closure, capture `n` without `ref`, and use `n.load()` / `n.store(..)`; or return the value from the closure instead
 
 // A `[ref x]` cell is written by the closure and by the code that made

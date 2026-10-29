@@ -43,8 +43,8 @@ const HELP: &str = "  <expr>         evaluate and print its value (`Display`, el
                  else its type); `it` holds the last value shown (a
                  binding named `it` wins)
   <expr>?        evaluate and print its `Debug` form
-  let x = ..     bind (a top-level `let` may rebind a name, 907.3; a
-                 cell's last `let` or assignment needs no `;`)
+  let x = ..     bind (a top-level `let` may rebind a name; a cell's
+                 last `let` or assignment needs no `;`)
   fn / struct / enum / impl / trait / use ..   define (a new `fn f`,
                  `struct S` or `impl Tr for S` replaces the old one, an
                  `impl S` the one with its methods; one cell may define

@@ -1,7 +1,7 @@
 // spec: 005.02-const
-// expect-error: 12:33: `const fn h` calls `g`, which is not a `const fn` (spec 5.2.5)
-// expect-error: 13:30: `const fn io` calls `println`, which is not a `const fn` (spec 5.2.5)
-// expect-error: 14:24: `const fn st` reads the static `S` (spec 5.2.5)
+// expect-error: 12:33: `const fn h` calls `g`, which is not a `const fn`
+// expect-error: 13:30: `const fn io` calls `println`, which is not a `const fn`
+// expect-error: 14:24: `const fn st` reads the static `S`
 
 // Spec 5.2.5: a `const fn` calls only `const fn`s and does no I/O nor
 // reads a global, checked even when it is never evaluated. The standard

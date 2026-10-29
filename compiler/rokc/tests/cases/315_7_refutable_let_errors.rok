@@ -1,6 +1,6 @@
 // spec: §3.15.6 §3.15.7 §3.15.12
 // expect-error: this pattern can't destructure a value of type `Sh` here - it must be irrefutable
-// expect-error: 13:5: mismatched types: `let v` expects `i32`, found `i32 | none`
+// expect-error: 13:18: mismatched types: `let v` expects `i32`, found `i32 | none`
 // expect-error: the pattern `b` expects `str`, found `i32`
 // expect-error: 15:5: invalid assignment target
 

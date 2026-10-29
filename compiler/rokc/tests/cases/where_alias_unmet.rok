@@ -1,4 +1,4 @@
-// expect-error: where_alias_unmet.rok:10:14: type `Tok` does not satisfy trait bound `rok::core::fmt::Display` required by `Shown<Tok>`
+// expect-error: where_alias_unmet.rok:10:14: type `Tok` does not satisfy trait bound `Display` required by `Shown<Tok>`
 // Spec 2.10.4: a type alias's `where` holds at each use; the error
 // points at the use.
 struct Tok { v: i32; }

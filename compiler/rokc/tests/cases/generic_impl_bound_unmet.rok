@@ -1,4 +1,4 @@
-// expect-error: method `show` of the generic impl of `Show` does not apply to `Pair<Tok>`: its bound needs `Tok: rok::core::marker::Send`
+// expect-error: method `show` of the generic impl of `Show` does not apply to `Pair<Tok>`: its bound needs `Tok: Send`
 // A generic impl whose bound fails names the bound, not "no method".
 struct Tok { v: i32; }
 impl !Send for Tok {}
