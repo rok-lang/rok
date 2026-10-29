@@ -1071,6 +1071,56 @@ fn rokls_eof_before_initialize_says_so() {
     );
 }
 
+/// The `rok.add` command of a quick fix runs `$ROK add <name>` in the
+/// package directory; any other command, or a flag, is refused.
+// spec: §9.9.13
+#[cfg(unix)]
+#[test]
+fn lsp_rok_add_command_runs_rok() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = scratch("lsp-rok-add");
+    let app = dir.join("app");
+    std::fs::create_dir_all(app.join("src")).unwrap();
+    let main = app.join("src/main.rok");
+    std::fs::write(&main, "use json::parse;\n").unwrap();
+    let log = dir.join("log");
+    let stub = dir.join("rok");
+    std::fs::write(
+        &stub,
+        format!("#!/bin/sh\necho \"$PWD $*\" > '{}'\n", log.display()),
+    )
+    .unwrap();
+    std::fs::set_permissions(&stub, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let uri = rokc_tools::lsp::path_to_uri(&main.display().to_string(), cfg!(windows));
+    let run = |id: u32, command: &str, args: &str| {
+        format!(
+            r#"{{"jsonrpc":"2.0","id":{id},"method":"workspace/executeCommand","params":{{"command":"{command}","arguments":["{uri}"{args}]}}}}"#
+        )
+    };
+    let input = [
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}"#.to_owned(),
+        run(2, "rok.add", r#","json""#),
+        run(3, "rok.remove", r#","json""#),
+        run(4, "rok.add", r#","--path""#),
+        r#"{"jsonrpc":"2.0","id":5,"method":"shutdown"}"#.to_owned(),
+        r#"{"jsonrpc":"2.0","method":"exit"}"#.to_owned(),
+    ]
+    .map(|m| frame(&m))
+    .concat();
+    let stub = stub.display().to_string();
+    let out = piped_env(ROKC, &["lsp"], &input, &[("ROK", &stub)]);
+    assert_eq!(out.status.code(), Some(0), "{}", text(&out.stderr));
+    let stdout = text(&out.stdout);
+    assert!(stdout.contains(r#""id":2,"result":null"#), "{stdout}");
+    assert!(stdout.contains(r#""id":3,"error""#), "{stdout}");
+    assert!(stdout.contains(r#""id":4,"error""#), "{stdout}");
+    let ran = std::fs::read_to_string(&log).unwrap();
+    let real = |p: &std::path::Path| std::fs::canonicalize(p).unwrap();
+    let (cwd, args) = ran.trim_end().split_once(' ').unwrap();
+    assert_eq!(real(cwd.as_ref()), real(&app), "{ran}");
+    assert_eq!(args, "add json");
+}
+
 /// The server builds its dependencies first and answers from their ROKHIR:
 /// hover shows a dependency function's doc comment, definition goes to
 /// its source.

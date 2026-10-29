@@ -18,6 +18,9 @@ use rokc_diagnostic::Json;
 use crate::analysis::{Analysis, analyze, short_name, signature, ty_name};
 use crate::lint::Level;
 
+mod actions;
+mod signature;
+
 struct Doc {
     text: String,
     /// Needs a compile (changed since the last one).
@@ -27,6 +30,9 @@ struct Doc {
     /// The last compile that type-checked: hover / definition /
     /// completion keep working while the buffer has errors.
     good: Option<Analysis>,
+    /// The last published diagnostics and what they came from, for
+    /// code actions.
+    diags: Vec<(Json, RokDiagnostic)>,
 }
 
 struct Server<W> {
@@ -135,6 +141,17 @@ impl<W: Write> Server<W> {
         let _ = self.out.flush();
     }
 
+    fn error(&mut self, id: &Json, code: i32, message: String) {
+        self.send(&Json::obj([
+            ("jsonrpc", Json::str("2.0")),
+            ("id", id.clone()),
+            (
+                "error",
+                Json::obj([("code", Json::num(code)), ("message", Json::str(message))]),
+            ),
+        ]));
+    }
+
     fn reply(&mut self, id: &Json, result: Json) {
         self.send(&Json::obj([
             ("jsonrpc", Json::str("2.0")),
@@ -164,7 +181,28 @@ impl<W: Write> Server<W> {
                         ("hoverProvider", Json::Bool(true)),
                         ("definitionProvider", Json::Bool(true)),
                         ("referencesProvider", Json::Bool(true)),
-                        ("renameProvider", Json::Bool(true)),
+                        (
+                            "renameProvider",
+                            Json::obj([("prepareProvider", Json::Bool(true))]),
+                        ),
+                        (
+                            "codeActionProvider",
+                            Json::obj([(
+                                "codeActionKinds",
+                                Json::Arr(vec![Json::str("quickfix")]),
+                            )]),
+                        ),
+                        (
+                            "signatureHelpProvider",
+                            Json::obj([(
+                                "triggerCharacters",
+                                Json::Arr(vec![Json::str("("), Json::str(",")]),
+                            )]),
+                        ),
+                        (
+                            "executeCommandProvider",
+                            Json::obj([("commands", Json::Arr(vec![Json::str(actions::ROK_ADD)]))]),
+                        ),
                         ("documentSymbolProvider", Json::Bool(true)),
                         ("documentFormattingProvider", Json::Bool(true)),
                         (
@@ -228,6 +266,7 @@ impl<W: Write> Server<W> {
                         dirty: true,
                         inputs: vec![path.clone()],
                         good: None,
+                        diags: Vec::new(),
                     });
                     text.clone_into(&mut doc.text);
                     doc.dirty = true;
@@ -249,12 +288,46 @@ impl<W: Write> Server<W> {
                     .unwrap_or_default();
                 Json::obj([("data", Json::Arr(data.into_iter().map(Json::num).collect()))])
             }
+            "workspace/executeCommand" => {
+                let args: Vec<String> = match params.get("arguments") {
+                    Json::Arr(a) => a
+                        .iter()
+                        .filter_map(|x| x.as_str().map(str::to_owned))
+                        .collect(),
+                    _ => Vec::new(),
+                };
+                if params.get("command").as_str() != Some(actions::ROK_ADD) || args.is_empty() {
+                    self.error(id, -32602, "unknown command".to_owned());
+                    return None;
+                }
+                if let Err(why) = actions::rok_add(&args[0], &args[1..]) {
+                    self.error(id, -32603, why);
+                    return None;
+                }
+                // The manifest changed: every check may.
+                for doc in self.docs.values_mut() {
+                    doc.dirty = true;
+                }
+                Json::Null
+            }
+            "textDocument/codeAction" => {
+                if self.docs.get(&uri).is_some_and(|d| d.dirty) {
+                    self.refresh(&uri);
+                }
+                let found = self.docs.get(&uri).map(|d| {
+                    let (ctx, at) = (params.get("context"), params.get("range"));
+                    actions::code_actions(&uri, &d.text, &d.diags, ctx, at)
+                });
+                Json::Arr(found.unwrap_or_default())
+            }
             "textDocument/hover"
             | "textDocument/definition"
             | "textDocument/documentSymbol"
             | "textDocument/completion"
+            | "textDocument/signatureHelp"
             | "textDocument/references"
             | "textDocument/rename"
+            | "textDocument/prepareRename"
             | "textDocument/formatting" => {
                 if self.docs.get(&uri).is_some_and(|d| d.dirty) {
                     self.refresh(&uri);
@@ -263,21 +336,18 @@ impl<W: Write> Server<W> {
                 let line = pos.get("line").as_u32().unwrap_or(0);
                 let col = pos.get("character").as_u32().unwrap_or(0);
                 let new_name = params.get("newName").as_str();
-                if method == "textDocument/rename" {
-                    match self.rename(&uri, line, col, new_name.unwrap_or("")) {
-                        Ok(edit) => edit,
+                let renamed = match method {
+                    "textDocument/rename" => {
+                        Some(self.rename(&uri, line, col, new_name.unwrap_or("")))
+                    }
+                    "textDocument/prepareRename" => Some(self.prepare_rename(&uri, line, col)),
+                    _ => None,
+                };
+                if let Some(r) = renamed {
+                    match r {
+                        Ok(v) => v,
                         Err(why) => {
-                            self.send(&Json::obj([
-                                ("jsonrpc", Json::str("2.0")),
-                                ("id", id.clone()),
-                                (
-                                    "error",
-                                    Json::obj([
-                                        ("code", Json::num(-32602)),
-                                        ("message", Json::str(why)),
-                                    ]),
-                                ),
-                            ]));
+                            self.error(id, -32602, why);
                             return None;
                         }
                     }
@@ -287,20 +357,7 @@ impl<W: Write> Server<W> {
             }
             _ if matches!(id, Json::Null) => return None,
             _ => {
-                self.send(&Json::obj([
-                    ("jsonrpc", Json::str("2.0")),
-                    ("id", id.clone()),
-                    (
-                        "error",
-                        Json::obj([
-                            ("code", Json::num(-32601)),
-                            (
-                                "message",
-                                Json::str(format!("unsupported method `{method}`")),
-                            ),
-                        ]),
-                    ),
-                ]));
+                self.error(id, -32601, format!("unsupported method `{method}`"));
                 return None;
             }
         };
@@ -399,11 +456,14 @@ impl<W: Write> Server<W> {
                 Err(e) => {
                     let d =
                         RokDiagnostic::error(rokc_diagnostic::ErrorKind::Parse, e.span, &e.message);
-                    vec![diag_json(&d, uri, &doc.text)]
+                    vec![(diag_json(&d, uri, &doc.text), d)]
                 }
             };
-            self.docs.get_mut(uri).expect("checked above").dirty = false;
-            self.publish(uri, diags);
+            let doc = self.docs.get_mut(uri).expect("checked above");
+            doc.dirty = false;
+            let json = diags.iter().map(|(j, _)| j.clone()).collect();
+            doc.diags = diags;
+            self.publish(uri, json);
             return;
         }
         let a = self.compile(&path, &doc.text);
@@ -414,11 +474,14 @@ impl<W: Write> Server<W> {
             .filter(|d| a.diag_path(d).is_none_or(|p| p == key))
             .map(|d| {
                 let span = d.primary.as_ref().map(|l| l.span).unwrap_or_default();
-                diag_json(d, uri, a.file(span).map_or("", |(_, t)| t.as_str()))
+                let j = diag_json(d, uri, a.file(span).map_or("", |(_, t)| t.as_str()));
+                (j, d.clone())
             })
-            .collect();
+            .collect::<Vec<_>>();
         let doc = self.docs.get_mut(uri).expect("checked above");
         doc.dirty = false;
+        let json = diags.iter().map(|(j, _)| j.clone()).collect();
+        doc.diags = diags;
         if !a.source_map.files().is_empty() {
             doc.inputs = a
                 .source_map
@@ -430,7 +493,7 @@ impl<W: Write> Server<W> {
         if a.hir.is_some() {
             doc.good = Some(a);
         }
-        self.publish(uri, diags);
+        self.publish(uri, json);
     }
 
     fn publish(&mut self, uri: &str, diags: Vec<Json>) {
@@ -457,10 +520,7 @@ impl<W: Write> Server<W> {
         let text = doc.text.as_str();
         let key = uri_path(uri).display().to_string();
         let off = offset(text, line, col);
-        let refs = references(doc, &key, off).ok_or("nothing to rename here")?;
-        if !defined_here(doc, &key, off) {
-            return Err("it is declared in another file; rename it there".to_owned());
-        }
+        let refs = renamable(doc, &key, off)?.ok_or("nothing to rename here")?;
         let edits = refs
             .into_iter()
             .map(|(s, e)| {
@@ -474,6 +534,23 @@ impl<W: Write> Server<W> {
             "changes",
             Json::obj([(uri, Json::Arr(edits))]),
         )]))
+    }
+
+    /// `textDocument/prepareRename`: the name under the cursor when
+    /// `rename` would take it, else why not.
+    fn prepare_rename(&self, uri: &str, line: u32, col: u32) -> Result<Json, String> {
+        let doc = self.docs.get(uri).ok_or("unknown document")?;
+        let text = doc.text.as_str();
+        let key = uri_path(uri).display().to_string();
+        let off = offset(text, line, col);
+        if renamable(doc, &key, off)?.is_none() {
+            return Ok(Json::Null);
+        }
+        let (name, start) = ident_at(text, off).expect("renamable found it");
+        Ok(Json::obj([
+            ("range", range(text, start, start + name.len())),
+            ("placeholder", Json::str(name)),
+        ]))
     }
 
     fn query(&self, method: &str, uri: &str, line: u32, col: u32) -> Option<Json> {
@@ -552,6 +629,10 @@ impl<W: Write> Server<W> {
                         .map(|(s, e)| location_at(uri, text, s, e))
                         .collect(),
                 ))
+            }
+            "textDocument/signatureHelp" => {
+                let compile = |t: &str| self.compile(&path, t);
+                signature::signature_help(text, &key, off, compile, doc.good.as_ref())
             }
             "textDocument/completion" => {
                 let compile = |t: &str| self.compile(&path, t);
@@ -1084,6 +1165,44 @@ fn defined_here(doc: &Doc, key: &str, off: usize) -> bool {
         Some(a.file(span)?.0 == key)
     })
     .unwrap_or(false)
+}
+
+/// The references `rename` edits for the identifier at `off`: `None`
+/// with nothing there, an error naming where a name declared outside
+/// the buffer comes from.
+fn renamable(doc: &Doc, key: &str, off: usize) -> Result<Option<Vec<(usize, usize)>>, String> {
+    let text = doc.text.as_str();
+    let Some((name, start)) = ident_at(text, off) else {
+        return Ok(None);
+    };
+    if rokc_lexer::token::keyword_kind(name).is_some() {
+        return Err(format!("`{name}` is a keyword"));
+    }
+    let Some(refs) = references(doc, key, off) else {
+        return Ok(None);
+    };
+    if defined_here(doc, key, off) {
+        return Ok(Some(refs));
+    }
+    let a = doc.good.as_ref();
+    let span = a.and_then(|a| {
+        member_at(a, key, text, name, start)
+            .map(|m| m.def_span())
+            .or_else(|| indexed_member(a, key, text, name, start).map(|m| m.span))
+            .or_else(|| definition(a, key, name, off))
+    });
+    let source = span.and_then(|s| a?.sources.iter().find(|f| f.file_id == s.file));
+    let why = match (span, source) {
+        (None, _) => "nothing in this file declares it".to_owned(),
+        (Some(_), Some(f)) if f.package.is_empty() => {
+            "it is declared in another file; rename it there".to_owned()
+        }
+        (Some(_), Some(f)) if f.package != "rok" && !f.package.starts_with("rok::") => {
+            format!("it is defined in dependency `{}`", f.package)
+        }
+        _ => "it is defined in the standard library".to_owned(),
+    };
+    Err(format!("cannot rename `{name}`: {why}"))
 }
 
 /// LSP `Diagnostic` of `d`, whose span is in `text`.

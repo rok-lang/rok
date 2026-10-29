@@ -100,7 +100,7 @@ pub fn complete(
 
 /// `text` up to `off`, each open bracket closed (a block's after a `;`
 /// that ends the statement being typed).
-fn closed(text: &str, off: usize) -> String {
+pub fn closed(text: &str, off: usize) -> String {
     use rokc_lexer::TokenKind as K;
     let mut out = text[..off].to_owned();
     let (toks, _) = rokc_lexer::Lexer::new(&out, String::new()).lex_all();
@@ -127,7 +127,7 @@ fn closed(text: &str, off: usize) -> String {
 
 /// The last good compile; without one, the buffer without the line
 /// being typed (`blank`), else an empty one: what has the library.
-fn checked<'a>(
+pub fn checked<'a>(
     good: Option<&'a Analysis>,
     fresh: &'a mut Option<Analysis>,
     compile: &impl Fn(&str) -> Analysis,
@@ -155,8 +155,23 @@ fn members(
     good: Option<&Analysis>,
     push: &mut impl FnMut(&str, u32, String),
 ) {
-    // Type the receiver: recompile without `.partial` and take the
-    // outermost expression starting where the receiver does.
+    receiver(text, key, dot, off, compile, good, |a, ty| {
+        list_members(a, ty, push);
+    });
+}
+
+/// `f` of the type of the receiver of the `.` at `dot`: recompile
+/// without `.partial` (up to `off`) and take the outermost expression
+/// starting where the receiver does, else the last good compile's.
+pub fn receiver<R>(
+    text: &str,
+    key: &str,
+    dot: usize,
+    off: usize,
+    compile: &impl Fn(&str) -> Analysis,
+    good: Option<&Analysis>,
+    f: impl FnOnce(&Analysis, &HirTy) -> R,
+) -> Option<R> {
     let start = receiver_start(text, dot);
     // At a line end the receiver ends a statement: close it.
     let rest = &text[off..];
@@ -171,11 +186,16 @@ fn members(
             let a = good?;
             Some((a, a.find_expr(key, starts, true)?.ty.clone()))
         });
-    let Some((a, ty)) = found else { return };
+    let (a, ty) = found?;
+    Some(f(a, &ty))
+}
+
+/// The fields and methods of `ty`.
+fn list_members(a: &Analysis, ty: &HirTy, push: &mut impl FnMut(&str, u32, String)) {
     let hir = a.hir.as_ref().expect("find_expr needs HIR");
     let index = Members::of(a);
     let mut any = false;
-    for m in index.get(&ty_name(hir, &ty)) {
+    for m in index.get(&ty_name(hir, ty)) {
         any = true;
         match m.kind {
             Kind::Method => {
@@ -194,7 +214,7 @@ fn members(
     }
     // No source (a prebuilt dependency's type): its HIR.
     let hidden = a.hidden_spans();
-    if let HirTy::Struct(id) = &ty {
+    if let HirTy::Struct(id) = ty {
         if let Some(s) = hir.structs.iter().find(|s| s.id == *id) {
             for f in &s.fields {
                 push(&f.name, FIELD, ty_name(hir, &f.ty));
@@ -204,7 +224,7 @@ fn members(
     for f in &hir.functions {
         if f.params
             .first()
-            .is_some_and(|p| p.name == "self" && p.ty == ty)
+            .is_some_and(|p| p.name == "self" && p.ty == *ty)
             && !hidden.contains(&f.span)
         {
             push(short_name(&f.name), METHOD, signature(hir, f));
