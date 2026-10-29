@@ -4,12 +4,15 @@
 // (`jit_cell`). Commands arrive on stdin (a socket; Windows: a named
 // pipe):
 //
-//   `cell <n>\n` + n bytes of object: link it and run its
-//     `rok_repl_cell` once; later cells link against it.
+//   `cell <n> <stdin>\n` + n bytes of object: link it and run its
+//     `rok_repl_cell` once; later cells link against it. `<stdin>` is
+//     what it reads (`cell_stdin`).
 //   `lib <n>\n` + an n-byte path: link every member of a static library,
 //     or load a shared one; reply `ok 0\n` or `err\n`.
 //
-// A cell replies `pid <p>\n`, then `ok <n>\n<shown value>` or `err\n`.
+// A cell replies `pid <p>\n`, then `ok <n>\n<shown value>` or `err <n>\n`
+// and why it failed (`why`); in between, `in\n` for each stdin read of
+// an `ask` cell.
 // `SIGINT` (Windows: Ctrl-Break to the host's group) ends a running cell
 // and is ignored between cells.
 //
@@ -85,6 +88,7 @@ void *calloc(size_t, size_t);
 void free(void *);
 char *strdup(const char *);
 int strcmp(const char *, const char *);
+size_t strlen(const char *);
 int strncmp(const char *, const char *, size_t);
 int memcmp(const void *, const void *, size_t);
 void *memcpy(void *, const void *, size_t);
@@ -159,6 +163,10 @@ int rok_session_hold(int64_t);
 void rok_session_unhold(void);
 void rok_session_resume(void);
 void rok_session_restored(const uint64_t *, size_t);
+void rok_set_exit_hook(void (*)(int));
+void rok_set_stdin_hook(ssize_t (*)(unsigned char *, size_t));
+void rok_stdio_line_buffered(void);
+_Noreturn void rok_exit(int);
 
 // Set by Ctrl-C (SIGINT, Ctrl-Break) while `quiesce` waits.
 static volatile int quiesce_cancel;
@@ -193,6 +201,50 @@ struct {
 } __rok_repl_out;
 
 static unsigned cells;
+
+// Why the running cell is ending early, for rokc: `exit <code>`, `panic`,
+// `interrupted` or `throw\n<where>\n<error>`; empty: it failed otherwise.
+static char why[480];
+static size_t nwhy;
+
+static void add_why(const char *s, size_t n) {
+    if (n > sizeof why - nwhy) n = sizeof why - nwhy;
+    memcpy(why + nwhy, s, n);
+    nwhy += n;
+}
+
+static void set_why(const char *s) {
+    nwhy = 0;
+    add_why(s, strlen(s));
+}
+
+// A rok `str`.
+struct rok_str {
+    const char *ptr;
+    size_t len;
+};
+
+// Cells reach `exit` and an error escaping the cell through these, which
+// note why the cell ends (`resolve`).
+static _Noreturn void host_exit(int code) {
+    char s[32];
+    set_why("");
+    add_why(s, (size_t)snprintf(s, sizeof s, "exit %d", code));
+    rok_exit(code);
+}
+
+static _Noreturn void host_uncaught_at(struct rok_str what, struct rok_str at) {
+    set_why("throw\n");
+    add_why(at.ptr, at.len);
+    add_why("\n", 1);
+    add_why(what.ptr, what.len);
+    rok_exit(1);
+}
+
+static _Noreturn void host_uncaught(struct rok_str what) {
+    struct rok_str none = {"", 0};
+    host_uncaught_at(what, none);
+}
 
 // Symbols the session defines: name → its newest definition's name
 // (and a definition's address under its own name).
@@ -409,6 +461,10 @@ static void *host_symbol(const char *name) { return dlsym(RTLD_DEFAULT, name); }
 // An undefined symbol: the session's newest definition, else the
 // host's (a thread-local: what `host_tls` gives).
 static void *resolve(const char *name, int tls) {
+    const char *bare = name + SYM_PREFIX;
+    if (!strcmp(bare, "rok_exit")) return (void *)host_exit;
+    if (!strcmp(bare, "rok_uncaught_error")) return (void *)host_uncaught;
+    if (!strcmp(bare, "rok_uncaught_error_at")) return (void *)host_uncaught_at;
     const char *now = sym_now(name);
     void *a = now ? sym_addr(now) : NULL;
     if (a) return a;
@@ -1340,7 +1396,15 @@ static void ctl_write(const void *buf, size_t n) {
 #else
 static int ctl;
 
-static ssize_t ctl_read(void *buf, size_t n) { return read(ctl, buf, n); }
+static ssize_t ctl_read(void *buf, size_t n) {
+    ssize_t r;
+    while ((r = read(ctl, buf, n)) < 0 && errno == EINTR) {}
+    return r;
+}
+
+static void ctl_write(const void *buf, size_t n) {
+    if (write(ctl, buf, n) < 0) {}
+}
 #endif
 
 // A command line: `<word> <n>`.
@@ -1367,10 +1431,56 @@ static char *read_ir(size_t n) {
     return ir;
 }
 
+// A cell's stdin, the third word of `cell`: `-` (empty), `tty` (the
+// terminal) or `ask`: each read asks rokc with `in\n`, answered by
+// `in <n>\n` and n bytes (0: end of input).
+static unsigned char *asked;
+static size_t asked_len, asked_at;
+
+static ssize_t ask_stdin(unsigned char *dst, size_t len) {
+    if (asked_at == asked_len) {
+        char line[64];
+        size_t n = 0;
+        free(asked);
+        asked = NULL;
+        asked_at = asked_len = 0;
+        ctl_write("in\n", 3);
+        if (!read_command(line, sizeof line) || sscanf(line, "in %zu", &n) != 1 || !n) return 0;
+        asked = (unsigned char *)read_ir(n);
+        if (!asked) return 0;
+        asked_len = n;
+    }
+    size_t k = asked_len - asked_at < len ? asked_len - asked_at : len;
+    memcpy(dst, asked + asked_at, k);
+    asked_at += k;
+    return (ssize_t)k;
+}
+
+#if defined(_WIN32)
+static HANDLE nul_in, con_in;
+#else
+static int nul_in = -1, con_in = -1;
+#endif
+
+static void cell_stdin(const char *mode) {
+    int tty = !strcmp(mode, "tty");
+#if defined(_WIN32)
+    // GENERIC_READ | GENERIC_WRITE, shared, OPEN_EXISTING.
+    if (tty && !con_in) con_in = CreateFileA("CONIN$", 0xc0000000u, 3, NULL, 3, 0, NULL);
+    SetStdHandle((DWORD)-10, tty && con_in != (HANDLE)-1 ? con_in : nul_in);
+#else
+    if (tty && con_in < 0) con_in = open("/dev/tty", O_RDWR | O_CLOEXEC);
+    dup2(tty && con_in >= 0 ? con_in : nul_in, 0);
+#endif
+    free(asked);
+    asked = NULL;
+    asked_at = asked_len = 0;
+    rok_set_stdin_hook(strcmp(mode, "ask") ? NULL : ask_stdin);
+}
+
 #if defined(_WIN32)
 void rok_runtime_yield(void);
 void rok_leave_native(void);
-void rok_set_exit_hook(void (*)(int));
 // This thread's runtime TLS block (803) via the runtime's accessor: clang
 // guards C `extern __declspec(thread)` with `__dyn_tls_on_demand_init`,
 // which needs the MSVC CRT. `ROK_TLS_YIELD_FLAG` comes from build.rs.
@@ -1498,6 +1608,9 @@ static struct book {
     // The recovery point, and a CONTEXT to read suspended threads into.
     context recover, probe;
     volatile int running, ended, overflowed;
+    // `why` the cell failed, which a rollback would undo.
+    char why[sizeof why];
+    size_t nwhy;
     // The threads stopped now.
     HANDLE handle[THREADS];
     DWORD id[THREADS];
@@ -1966,6 +2079,8 @@ static void rollback(void) {
 static void fail_cell(void) {
     book->running = 0;
     book->ended = 1;
+    memcpy(book->why, why, nwhy);
+    book->nwhy = nwhy;
     rollback();
     RtlRestoreContext(&book->recover, NULL);
 }
@@ -1974,8 +2089,8 @@ static void fail_cell(void) {
 // stack overflow): on the cell's thread end only the cell, after the
 // stdout flush `exit` would do.
 static void on_exit_hook(int status) {
-    (void)status;
     if (!book->running || GetCurrentThreadId() != main_thread) return;
+    if (!nwhy && status == 101) set_why("panic");
     if (!book->overflowed) rok_stdio_flush();
     fail_cell();
 }
@@ -1999,16 +2114,23 @@ static long on_fault(void *pointers) {
     return 0;
 }
 
+// End the cell if it was interrupted and this is its thread.
+static void interrupted(void) {
+    if (!(*main_yield & INTERRUPT) || GetCurrentThreadId() != main_thread) return;
+    set_why("interrupted");
+    fail_cell();
+}
+
 // The safepoint slow path and the way back from a blocking call that
 // cells call: the runtime's, then the end of an interrupted cell.
 static void host_yield(void) {
     rok_runtime_yield();
-    if ((*main_yield & INTERRUPT) && GetCurrentThreadId() == main_thread) fail_cell();
+    interrupted();
 }
 
 static void host_leave_native(void) {
     rok_leave_native();
-    if ((*main_yield & INTERRUPT) && GetCurrentThreadId() == main_thread) fail_cell();
+    interrupted();
 }
 
 // Ctrl-Break / Ctrl-C on its own thread: the cell ends at its next poll or
@@ -2042,12 +2164,14 @@ int main(void) {
     const DWORD std_input = (DWORD)-10;
     ctl = GetStdHandle(std_input);
     // The cells' stdin: NUL (GENERIC_READ, shared, OPEN_EXISTING).
-    SetStdHandle(std_input, CreateFileA("NUL", 0x80000000u, 3, NULL, 3, 0, NULL));
+    nul_in = CreateFileA("NUL", 0x80000000u, 3, NULL, 3, 0, NULL);
+    SetStdHandle(std_input, nul_in);
     // No concurrent marking: its marker thread would live on across a
     // rollback with its own idea of the heap.
     _putenv_s("ROK_GC_CONCURRENT", "off");
     rok_watch_writes();
     rok_runtime_init();
+    rok_stdio_line_buffered();
     book = VirtualAlloc(NULL, BOOK_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
     if (!book) return 1;
     book->cap = (BOOK_SIZE - sizeof *book) / sizeof *book->regions;
@@ -2075,15 +2199,28 @@ int main(void) {
             ctl_write(bad ? "err\n" : "ok 0\n", bad ? 4 : 5);
             continue;
         }
-        if (sscanf(line, "cell %zu", &n) == 1) ir = read_ir(n);
+        if (sscanf(line, "in %zu", &n) == 1) {
+            free(read_ir(n));  // input for a cell that has ended
+            continue;
+        }
+        char mode[8] = "-";
+        if (sscanf(line, "cell %zu %7s", &n, mode) >= 1) {
+            cell_stdin(mode);
+            ir = read_ir(n);
+        }
         if (!ir) return 1;
         rok_stdio_flush();
         ctl_write(out, (size_t)snprintf(out, sizeof out, "pid %u\n", (unsigned)GetCurrentProcessId()));
         __atomic_fetch_and(main_yield, ~INTERRUPT, __ATOMIC_SEQ_CST);
         __rok_repl_out.len = 0;
+        set_why("");
+        book->nwhy = 0;
         int saved = checkpoint();
         if (!saved) fprintf(stderr, "error: no room to save the session before the cell\n");
-        if (saved < 0) fprintf(stderr, "error: interrupted before the cell ran\n");
+        if (saved < 0) {
+            memcpy(book->why, "interrupted", 11);
+            book->nwhy = 11;
+        }
         int ok = saved > 0 && run_cell(ir, n);
         free(ir);
         if (!ok) {
@@ -2095,7 +2232,8 @@ int main(void) {
                 rok_session_resume();
                 rok_session_restored(book->lost, book->nlost);
             }
-            ctl_write("err\n", 4);
+            ctl_write(out, (size_t)snprintf(out, sizeof out, "err %zu\n", book->nwhy));
+            ctl_write(book->why, book->nwhy);
             continue;
         }
         rok_stdio_flush();
@@ -2107,6 +2245,33 @@ int main(void) {
 static void on_sigint(int sig) {
     (void)sig;
     quiesce_cancel = 1;
+}
+
+// The running cell's end of the verdict pipe (`await_verdict`); -1: none.
+static int verdict_fd = -1;
+
+// A cell that ends early tells the copy waiting for it `!` and `why`, in
+// one write (at most PIPE_BUF bytes: read whole).
+static void tell_why(void) {
+    char msg[1 + sizeof why];
+    msg[0] = '!';
+    memcpy(msg + 1, why, nwhy);
+    if (verdict_fd >= 0 && write(verdict_fd, msg, 1 + nwhy) < 0) {}
+    verdict_fd = -1;
+}
+
+// The runtime is about to end the process (panic, uncaught error, `exit`).
+static void on_exit_hook(int status) {
+    if (verdict_fd < 0) return;
+    if (!nwhy && status == 101) set_why("panic");
+    tell_why();
+}
+
+static void on_cell_sigint(int sig) {
+    (void)sig;
+    set_why("interrupted");
+    tell_why();
+    _exit(130);
 }
 
 // rokc, and its session directory (the host's own). The host ends with
@@ -2161,9 +2326,11 @@ static int watch_rokc(void) {
     return gone ? -1 : -2;
 }
 
-// The copy from before a cell waits for its verdict on `fd`. Should rokc
-// die meanwhile, nothing would end the cell: end it and the session.
-static ssize_t await_verdict(int fd, char *c, pid_t host) {
+// The copy from before a cell waits for its verdict on `fd`, read into
+// `buf` (`cap` bytes): a 0 byte, else `tell_why`'s or nothing (it died).
+// Should rokc die meanwhile, nothing would end the cell: end it and the
+// session.
+static ssize_t await_verdict(int fd, char *buf, size_t cap, pid_t host) {
     int w = watch_rokc();
     while (w != -1) {
         struct pollfd p[2] = {{fd, POLLIN, 0}, {w, POLLIN, 0}};
@@ -2172,7 +2339,7 @@ static ssize_t await_verdict(int fd, char *c, pid_t host) {
         if (n > 0 && p[0].revents) {
             if (w >= 0) close(w);
             ssize_t r;
-            while ((r = read(fd, c, 1)) < 0 && errno == EINTR) {}
+            while ((r = read(fd, buf, cap)) < 0 && errno == EINTR) {}
             return r;
         }
         if (w >= 0 ? n > 0 : kill(rokc_pid, 0) != 0 && errno == ESRCH) break;
@@ -2186,15 +2353,16 @@ int main(int argc, char **argv) {
     rokc_pid = getppid();
     if (argc > 0) set_session_dir(argv[0]);
     ctl = dup(0);
-    int nul = open("/dev/null", O_RDONLY);
-    dup2(nul, 0);  // the cells' stdin
-    close(nul);
+    nul_in = open("/dev/null", O_RDONLY | O_CLOEXEC);
+    dup2(nul_in, 0);  // the cells' stdin
     // No concurrent marking: its marker thread is not in a snapshot.
     setenv("ROK_GC_CONCURRENT", "off", 1);
     rok_runtime_init();
+    rok_stdio_line_buffered();
+    rok_set_exit_hook(on_exit_hook);
     signal(SIGINT, SIG_IGN);
     for (;;) {
-        char line[8192], c;
+        char line[8192], got[1 + sizeof why];
         size_t n = 0;
         if (!read_command(line, sizeof line)) return 0;
         char *ir = NULL;
@@ -2207,7 +2375,15 @@ int main(int argc, char **argv) {
             dprintf(ctl, bad ? "err\n" : "ok 0\n");
             continue;
         }
-        if (sscanf(line, "cell %zu", &n) == 1) ir = read_ir(n);
+        if (sscanf(line, "in %zu", &n) == 1) {
+            free(read_ir(n));  // input for a cell that has ended
+            continue;
+        }
+        char mode[8] = "-";
+        if (sscanf(line, "cell %zu %7s", &n, mode) >= 1) {
+            cell_stdin(mode);
+            ir = read_ir(n);
+        }
         if (!ir) return 1;
         rok_stdio_flush();
         // A copy of the session from before the cell takes over if the
@@ -2225,8 +2401,7 @@ int main(int argc, char **argv) {
             free(ir);
             close(verdict[0]);
             close(verdict[1]);
-            fprintf(stderr, "error: interrupted before the cell ran\n");
-            dprintf(ctl, "err\n");
+            dprintf(ctl, "err 11\ninterrupted");
             continue;
         }
         pid_t host = getpid();
@@ -2234,21 +2409,27 @@ int main(int argc, char **argv) {
         rok_session_resume();
         if (snap == 0) {
             close(verdict[1]);
-            if (await_verdict(verdict[0], &c, host) == 1) _exit(0);
+            ssize_t r = await_verdict(verdict[0], got, sizeof got, host);
+            if (r > 0 && !got[0]) _exit(0);
             close(verdict[0]);
             free(ir);
             rok_session_restored(NULL, SIZE_MAX);
-            dprintf(ctl, "err\n");
+            size_t len = r > 1 ? (size_t)r - 1 : 0;
+            dprintf(ctl, "err %zu\n", len);
+            if (write(ctl, got + 1, len) < 0) return 1;
             continue;
         }
         close(verdict[0]);
-        signal(SIGINT, SIG_DFL);
+        nwhy = 0;
+        verdict_fd = verdict[1];
+        signal(SIGINT, on_cell_sigint);
         void (*cell)(void) = jit_cell(ir, n);
         free(ir);
         if (!cell) _exit(1);  // the copy, from before the cell, goes on
         __rok_repl_out.len = 0;
         cell();
         signal(SIGINT, SIG_IGN);
+        verdict_fd = -1;
         rok_stdio_flush();
         if (write(verdict[1], "", 1) != 1) {}
         close(verdict[1]);

@@ -529,14 +529,25 @@ fn real_main() {
             let Some(file) = a.connection_file.take() else {
                 usage_error("usage: rokc jupyter --connection-file <file>");
             };
-            let pkg = rokc_interface::discover(Path::new(".")).ok();
+            // The kernel loads the package it starts in (`rok repl .`).
+            let pkg = rokc_interface::discover(Path::new("."))
+                .ok()
+                .filter(|p| !p.anonymous);
+            let (prelude, program) = repl_load(&mut a, pkg.as_ref());
             let deps = prebuild(&mut a, pkg.as_ref()).unwrap_or_else(|e| fail(&e));
+            let start = rokc_tools::repl::Start {
+                prelude: prelude.as_deref(),
+                program: program.as_ref().map(|(p, anon)| (p.as_path(), *anon)),
+                package: None,
+                banner: Some(banner()),
+            };
             process::exit(rokc_tools::jupyter::serve(
                 &file,
                 a.bootstrap,
                 a.externs,
                 deps,
                 a.opts,
+                start,
             ));
         }
         "run" => cmd_run(with_defaults(a)),
@@ -1290,34 +1301,52 @@ fn cmd_repl(mut a: Args) {
     if a.positional.first().is_some_and(|p| p == "-") {
         usage_error("`rokc repl -`: standard input is the cell input; give a path or none");
     }
-    // `repl <path>`: a library becomes a session dependency with
-    // `use <name>::*;` as the first cell (901.2); a program is loaded,
-    // with its package's library (0.3.1) as a dependency.
     let pkg = a.positional.first().map(|p| discover_at(&a, p));
-    if let Some(lib) = pkg.as_ref().and_then(|p| p.library.clone()) {
-        a.externs
-            .push((lib_name(pkg.as_ref().expect("checked")), lib));
-    }
-    let prelude = pkg.as_ref().filter(|p| p.lib).map(|p| {
-        let name = lib_name(p);
-        a.externs.push((name.clone(), p.root.clone()));
-        format!("use {name}::*;")
-    });
+    let (prelude, program) = repl_load(&mut a, pkg.as_ref());
     let here = rokc_interface::discover(Path::new(".")).ok();
     let deps = prebuild(&mut a, pkg.as_ref().or(here.as_ref())).unwrap_or_else(|e| fail(&e));
-    let program = pkg
-        .as_ref()
-        .filter(|p| !p.lib)
-        .map(|p| (p.root.as_path(), p.anonymous));
+    // In a package it does not load, the session hints at its names.
+    let package = here
+        .filter(|_| pkg.is_none())
+        .and_then(|h| h.root.parent().map(Path::to_path_buf));
+    let interactive = std::io::stdin().is_terminal();
+    let start = rokc_tools::repl::Start {
+        prelude: prelude.as_deref(),
+        program: program.as_ref().map(|(p, anon)| (p.as_path(), *anon)),
+        package,
+        banner: (interactive && std::io::stdout().is_terminal() && !a.quiet).then(banner),
+    };
     process::exit(rokc_tools::repl::main(
         a.bootstrap,
         a.externs,
         deps,
         a.opts,
-        std::io::stdin().is_terminal(),
-        prelude.as_deref(),
-        program,
+        interactive,
+        start,
     ));
+}
+
+/// The REPL's and kernel's first line: the `--version` text and the host.
+fn banner() -> String {
+    format!("Rok {VERSION} on {}", env!("ROK_HOST"))
+}
+
+/// What a session on `pkg` loads: a library becomes a session dependency
+/// with `use <name>::*;` as the first cell (901.2); a program is loaded,
+/// with its package's library (0.3.1) as a dependency.
+fn repl_load(a: &mut Args, pkg: Option<&Package>) -> (Option<String>, Option<(PathBuf, bool)>) {
+    let Some(p) = pkg else {
+        return (None, None);
+    };
+    if let Some(lib) = p.library.clone() {
+        a.externs.push((lib_name(p), lib));
+    }
+    if p.lib {
+        let name = lib_name(p);
+        a.externs.push((name.clone(), p.root.clone()));
+        return (Some(format!("use {name}::*;")), None);
+    }
+    (None, Some((p.root.clone(), p.anonymous)))
 }
 
 fn cmd_run(mut a: Args) {

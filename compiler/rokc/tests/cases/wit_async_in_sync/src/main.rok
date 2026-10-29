@@ -2,7 +2,7 @@
 // only-target: wasm32-wasi
 // expect-exit: 101
 // expect-stdout: zero wait done
-// expect-stderr: thread 'main' panicked at library/std/src/wit.rok:163:9:
+// expect-stderr: thread 'main' panicked at library/std/src/wit.rok:*:
 // expect-stderr: wit: an async import, stream or future blocked outside an async export (a synchronous task cannot wait); call it from an `async` export
 
 // Stdlib 1.8: a synchronous task (`main` of a preview 2 command) cannot

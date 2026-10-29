@@ -25,10 +25,10 @@ commands:
                          (`-`: source on stdin)
   lint [path]            front end and lints; exit 1 if a `deny` lint fires
   repl [path]            interactive session, each cell compiled and run
-                         (:type <expr>, :reset, :quit); a program
-                         path runs in the session first, its bindings and
-                         items staying in scope; a library is loaded and
-                         `use`d
+                         (:type <expr>, :reset, :exit; -q: no banner); a
+                         program path runs in the session first, its
+                         bindings and items staying in scope; a library is
+                         loaded and `use`d
   lsp                    language server on stdio (`rok lsp` / `rokls` run it)
   jupyter --connection-file <file>
                          Jupyter kernel (Jupyter starts it; `rok jupyter

@@ -824,6 +824,10 @@ fn named_environments() {
     );
     // A kernel started from a GUI still finds the tools.
     assert!(spec.contains(r#""env":{"ROK_HOME":"#) && spec.contains(r#""PATH":"#));
+    for logo in ["logo-32x32.png", "logo-64x64.png"] {
+        let png = fs::read(jupyter.join("kernels/rok-work").join(logo)).unwrap();
+        assert!(png.starts_with(b"\x89PNG"), "{logo}");
+    }
     fails(
         &rok(&home, &root, &["env", "create", "work"]),
         "already exists",

@@ -278,7 +278,7 @@ fn check_run(
     };
     let got: Vec<&str> = got.lines().map(str::trim).collect();
     let want: Vec<&str> = directives(source, "expect-stderr:").collect();
-    if got != want {
+    if got.len() != want.len() || !got.iter().zip(&want).all(|(g, w)| glob(w, g)) {
         return Err(format!(
             "stderr mismatch\n  want: {want:?}\n  got:  {got:?}"
         ));
@@ -291,4 +291,25 @@ fn check_run(
         ));
     }
     Ok(())
+}
+
+/// `line` matches `pat`, where each `*` stands for any text (a library
+/// panic's `line:column`, which moves as the library changes).
+fn glob(pat: &str, line: &str) -> bool {
+    let mut parts = pat.split('*');
+    let first = parts.next().unwrap_or_default();
+    let Some(mut rest) = line.strip_prefix(first) else {
+        return false;
+    };
+    let mut parts: Vec<&str> = parts.collect();
+    let Some(last) = parts.pop() else {
+        return rest.is_empty();
+    };
+    for p in parts {
+        match rest.find(p) {
+            Some(i) => rest = &rest[i + p.len()..],
+            None => return false,
+        }
+    }
+    rest.ends_with(last)
 }

@@ -125,6 +125,12 @@ impl DepBuild<'_> {
             } else {
                 dir
             };
+            // `src/lib.rok` relative to the current directory.
+            let dir = if dir.as_os_str().is_empty() {
+                Path::new(".")
+            } else {
+                dir
+            };
             eprintln!("   Compiling {name} ({})", dir.display());
         }
         let mut s = Session::new();
