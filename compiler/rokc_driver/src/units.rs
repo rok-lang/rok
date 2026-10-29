@@ -125,8 +125,15 @@ fn open(dir: &Path, salt: &str) -> Result<(), RokDiagnostic> {
 /// renamed over it.
 fn write(path: &Path, bytes: &[u8]) -> Result<(), RokDiagnostic> {
     let tmp = path.with_extension(format!("tmp{}", std::process::id()));
-    std::fs::write(&tmp, bytes)
-        .and_then(|()| std::fs::rename(&tmp, path))
+    let put = || std::fs::write(&tmp, bytes).and_then(|()| std::fs::rename(&tmp, path));
+    // Another build may have emptied the directory meanwhile.
+    put()
+        .or_else(|e| match path.parent() {
+            Some(dir) if e.kind() == std::io::ErrorKind::NotFound => {
+                std::fs::create_dir_all(dir).and_then(|()| put())
+            }
+            _ => Err(e),
+        })
         .map_err(|e| err(format!("cannot write {}: {e}", path.display())))
 }
 
