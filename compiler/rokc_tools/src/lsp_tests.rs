@@ -1382,3 +1382,263 @@ fn parse_diag_has_width() {
         assert_ne!(r.get("start"), r.get("end"), "{d}");
     }
 }
+
+/// `textDocument/codeAction` over `line` with no diagnostics in its
+/// context: the ones published there.
+fn code_action(id: u32, uri: &str, line: u32) -> Json {
+    let pos = |c: u32| Json::obj([("line", Json::num(line)), ("character", Json::num(c))]);
+    request(
+        id,
+        "textDocument/codeAction",
+        Json::obj([
+            ("textDocument", doc(uri)),
+            ("range", Json::obj([("start", pos(0)), ("end", pos(200))])),
+            (
+                "context",
+                Json::obj([("diagnostics", Json::Arr(Vec::new()))]),
+            ),
+        ]),
+    )
+}
+
+fn actions(msgs: &[Json], id: u32) -> Vec<Json> {
+    match reply(msgs, id) {
+        Json::Arr(v) => v,
+        r => panic!("code actions {id}: {r}"),
+    }
+}
+
+fn titled<'a>(got: &'a [Json], title: &str) -> &'a Json {
+    got.iter()
+        .find(|a| a.get("title").as_str() == Some(title))
+        .unwrap_or_else(|| panic!("no `{title}` in {got:?}"))
+}
+
+/// The one edit of a quick fix: its start and new text.
+fn only_edit(action: &Json) -> ((u32, u32), String) {
+    let Json::Obj(changes) = action.get("edit").get("changes") else {
+        panic!("{action}")
+    };
+    let Json::Arr(edits) = &changes[0].1 else {
+        panic!("{action}")
+    };
+    assert_eq!(edits.len(), 1, "{action}");
+    let start = edits[0].get("range").get("start");
+    (
+        (
+            start.get("line").as_u32().unwrap(),
+            start.get("character").as_u32().unwrap(),
+        ),
+        edits[0].get("newText").as_str().unwrap().to_owned(),
+    )
+}
+
+fn published(msgs: &[Json]) -> Vec<Json> {
+    msgs.iter()
+        .filter(|m| m.get("method").as_str() == Some("textDocument/publishDiagnostics"))
+        .flat_map(|m| match m.get("params").get("diagnostics") {
+            Json::Arr(v) => v.clone(),
+            _ => Vec::new(),
+        })
+        .collect()
+}
+
+/// A missing `;` from its help line, asked by range and with the
+/// published diagnostic in the context.
+#[test]
+fn code_action_adds_semicolon() {
+    let src = "let a = 1\nlet b = a;\n";
+    let msgs = std_session("lsp-action-semi", src, |uri| vec![code_action(1, uri, 0)]);
+    let got = actions(&msgs, 1);
+    let semi = titled(&got, "add `;`");
+    assert_eq!(semi.get("kind").as_str(), Some("quickfix"));
+    assert_eq!(only_edit(semi), ((0, 9), ";".to_owned()));
+    let diag = published(&msgs).remove(0);
+    let msgs = std_session("lsp-action-semi-ctx", src, |uri| {
+        vec![request(
+            1,
+            "textDocument/codeAction",
+            Json::obj([
+                ("textDocument", doc(uri)),
+                ("range", diag.get("range").clone()),
+                (
+                    "context",
+                    Json::obj([("diagnostics", Json::Arr(vec![diag.clone()]))]),
+                ),
+            ]),
+        )]
+    });
+    let titles: Vec<_> = actions(&msgs, 1)
+        .iter()
+        .filter_map(|a| a.get("title").as_str().map(str::to_owned))
+        .collect();
+    assert_eq!(titles, ["add `;`"]);
+}
+
+/// A numeric mismatch: the diagnostic's own fix.
+#[test]
+fn code_action_as_cast() {
+    let src = "let x: i64 = 1;\nlet y: i32 = x;\nprintln(f\"{y}\");\n";
+    let msgs = std_session("lsp-action-cast", src, |uri| vec![code_action(1, uri, 1)]);
+    let got = actions(&msgs, 1);
+    let cast = titled(&got, "convert with `as i32`");
+    assert_eq!(only_edit(cast), ((1, 13), "x as i32".to_owned()));
+}
+
+/// An unknown name the library has: the `use` goes after the last one.
+#[test]
+fn code_action_adds_use() {
+    let src = "\
+use rok::std::env;
+let s = read_to_str(\"a\");
+println(f\"{env::args().len()}\");
+";
+    let msgs = std_session("lsp-action-use", src, |uri| vec![code_action(1, uri, 1)]);
+    let got = actions(&msgs, 1);
+    let add = titled(&got, "add `use rok::std::fs::read_to_str;`");
+    assert_eq!(
+        only_edit(add),
+        ((1, 0), "use rok::std::fs::read_to_str;\n".to_owned())
+    );
+}
+
+/// An import of a stone the script lacks: a `rok.add` command.
+#[test]
+fn code_action_rok_add_command() {
+    let msgs = std_session("lsp-action-rok-add", "use json::parse;\n", |uri| {
+        vec![code_action(1, uri, 0)]
+    });
+    let got = actions(&msgs, 1);
+    let cmd = titled(&got, "run `rok add json`").get("command");
+    assert_eq!(cmd.get("command").as_str(), Some("rok.add"));
+    let Json::Arr(args) = cmd.get("arguments") else {
+        panic!("{cmd}")
+    };
+    let ends = |i: usize| args[i].as_str().is_some_and(|u| u.ends_with("main.rok"));
+    assert!(ends(0), "{cmd}");
+    assert_eq!(args[1].as_str(), Some("json"));
+    // A script: `rok add` edits this file's `//! rokon` block.
+    assert!(ends(2), "{cmd}");
+}
+
+/// The signature label and active parameter of reply `id`.
+fn active(msgs: &[Json], id: u32) -> (String, u32) {
+    let r = reply(msgs, id);
+    let Json::Arr(sigs) = r.get("signatures") else {
+        panic!("signature help {id}: {r}")
+    };
+    (
+        sigs[0].get("label").as_str().unwrap().to_owned(),
+        r.get("activeParameter").as_u32().unwrap(),
+    )
+}
+
+#[test]
+fn signature_help_active_param() {
+    let src = "\
+/// Adds three.
+fn add3(a: i32, b: i32, c: i32) -> i32 { a + b + c }
+let s = add3(1, [2, 3].len() as i32,
+";
+    let msgs = std_session("lsp-sig-fn", src, |uri| {
+        vec![
+            request(1, "textDocument/signatureHelp", at(uri, 2, 13)),
+            request(2, "textDocument/signatureHelp", at(uri, 2, 21)),
+            request(3, "textDocument/signatureHelp", at(uri, 2, 37)),
+            request(4, "textDocument/signatureHelp", at(uri, 2, 4)),
+        ]
+    });
+    let (label, n) = active(&msgs, 1);
+    assert_eq!(label, "fn add3(a: i32, b: i32, c: i32) -> i32");
+    assert_eq!(n, 0);
+    // Inside `[2, 3]` the parameter is still `b`.
+    assert_eq!(active(&msgs, 2).1, 1);
+    assert_eq!(active(&msgs, 3).1, 2);
+    let r = reply(&msgs, 1);
+    let Json::Arr(sigs) = r.get("signatures") else {
+        panic!("{r}")
+    };
+    let Json::Arr(params) = sigs[0].get("parameters") else {
+        panic!("{r}")
+    };
+    assert_eq!(params.len(), 3);
+    assert_eq!(
+        params[1].get("label"),
+        &Json::Arr(vec![Json::num(16), Json::num(22)])
+    );
+    let doc = sigs[0].get("documentation").get("value").as_str();
+    assert!(doc.is_some_and(|d| d.contains("Adds three")), "{r}");
+    assert_eq!(reply(&msgs, 4), Json::Null);
+}
+
+/// A method by its receiver's type: `self` is not an argument.
+#[test]
+fn signature_help_method() {
+    let src = format!("{LIST}xs.insert(0, \n");
+    let msgs = std_session("lsp-sig-method", &src, |uri| {
+        vec![
+            request(1, "textDocument/signatureHelp", at(uri, 3, 10)),
+            request(2, "textDocument/signatureHelp", at(uri, 3, 13)),
+        ]
+    });
+    let (label, n) = active(&msgs, 1);
+    assert!(
+        label.contains("fn insert(self, idx: usize, x: T)"),
+        "{label}"
+    );
+    assert_eq!(n, 1);
+    assert_eq!(active(&msgs, 2).1, 2);
+}
+
+#[test]
+fn prepare_rename_local_ok_library_refused() {
+    let src = "let count = 1;\nprintln(f\"{count}\");\n";
+    let msgs = std_session("lsp-prepare-rename", src, |uri| {
+        vec![
+            request(1, "textDocument/prepareRename", at(uri, 0, 6)),
+            request(2, "textDocument/prepareRename", at(uri, 1, 2)),
+            request(3, "textDocument/prepareRename", at(uri, 0, 1)),
+        ]
+    });
+    let ok = reply(&msgs, 1);
+    assert_eq!(ok.get("placeholder").as_str(), Some("count"));
+    assert_eq!(ok.get("range").get("start").get("character"), &Json::num(4));
+    let error = |id| {
+        msgs.iter()
+            .find(|m| m.get("id") == &Json::num(id))
+            .unwrap()
+            .get("error")
+            .get("message")
+            .as_str()
+            .unwrap_or("")
+            .to_owned()
+    };
+    assert_eq!(
+        error(2),
+        "cannot rename `println`: it is defined in the standard library"
+    );
+    assert_eq!(error(3), "`let` is a keyword");
+}
+
+#[test]
+fn initialize_advertises_new_capabilities() {
+    let msgs = std_session("lsp-caps", "", |_| Vec::new());
+    let caps = reply(&msgs, 1000);
+    let caps = caps.get("capabilities");
+    assert_eq!(
+        caps.get("codeActionProvider").get("codeActionKinds"),
+        &Json::Arr(vec![Json::str("quickfix")])
+    );
+    assert_eq!(
+        caps.get("signatureHelpProvider").get("triggerCharacters"),
+        &Json::Arr(vec![Json::str("("), Json::str(",")])
+    );
+    assert_eq!(
+        caps.get("renameProvider").get("prepareProvider"),
+        &Json::Bool(true)
+    );
+    assert_eq!(
+        caps.get("executeCommandProvider").get("commands"),
+        &Json::Arr(vec![Json::str("rok.add")])
+    );
+}
