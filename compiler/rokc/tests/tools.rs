@@ -1087,15 +1087,40 @@ fn check_reads_stdin() {
 /// How rokc ended once its stdout (`out`) or stderr lost its reader
 /// before `input` reached its stdin, and what it wrote to the other one
 /// (for a failure's message).
+///
+/// Unix: the closed stream is a pipe made in the child with its read end
+/// closed there. A pipe made here could have its read end inherited by a
+/// process another test spawns meanwhile (macOS std sets `FD_CLOEXEC`
+/// after `pipe`), and rokc's writes would then succeed.
 fn closed_output(args: &[&str], out: bool, input: &str) -> Closed {
-    let mut child = Command::new(ROKC)
-        .args(args)
+    let mut cmd = Command::new(ROKC);
+    cmd.args(args)
         .env("ROK_HOME", workspace())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
+        .stderr(Stdio::piped());
+    #[cfg(unix)]
+    {
+        let fd = if out { 1 } else { 2 };
+        if out {
+            cmd.stdout(Stdio::null());
+        } else {
+            cmd.stderr(Stdio::null());
+        }
+        // SAFETY: pipe / close / dup2 are async-signal-safe.
+        unsafe {
+            std::os::unix::process::CommandExt::pre_exec(&mut cmd, move || {
+                let mut p = [0; 2];
+                if libc::pipe(p.as_mut_ptr()) != 0 || libc::dup2(p[1], fd) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                libc::close(p[0]);
+                libc::close(p[1]);
+                Ok(())
+            });
+        }
+    }
+    let mut child = cmd.spawn().unwrap();
     let kept = if out {
         drop(child.stdout.take());
         child.stderr.take().map(read_all)
