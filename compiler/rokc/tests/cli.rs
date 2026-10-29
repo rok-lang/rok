@@ -3932,6 +3932,38 @@ fn run_passes_arguments_codes_and_progress() {
     assert_exit(&out, 101);
 }
 
+/// `rokc completions <shell>`: rokc's commands and their flags, from the
+/// same text as `rokc help`.
+// spec: §9.1.4
+#[test]
+fn completions_follow_help() {
+    let dir = scratch("rokc-completions");
+    for shell in ["bash", "zsh", "fish", "powershell"] {
+        let out = rokc(None, &dir, &["completions", shell]);
+        assert_exit(&out, 0);
+        let script = text(&out.stdout);
+        for cmd in ["build", "profdata", "bindgen"] {
+            assert!(script.contains(cmd), "{shell} lacks {cmd}");
+        }
+        for flag in ["emit", "target-dir", "check-library"] {
+            // fish spells `--x` as `-l x`.
+            let want = if shell == "fish" {
+                format!("-l {flag}")
+            } else {
+                format!("--{flag}")
+            };
+            assert!(script.contains(&want), "{shell} lacks {want}");
+        }
+    }
+    let out = rokc(None, &dir, &["completions", "bash"]);
+    let file = dir.join("rokc.bash");
+    fs::write(&file, &out.stdout).unwrap();
+    let check = Command::new("bash").arg("-n").arg(&file).output().unwrap();
+    assert!(check.status.success(), "{}", text(&check.stderr));
+    assert_exit(&rokc(None, &dir, &["completions", "tcsh"]), 2);
+    assert_exit(&rokc(None, &dir, &["completions"]), 2);
+}
+
 /// The runtime ABI in emitted code: upstream dialects only, the TLS block
 /// passed as a hidden last argument and read only by the C `main`, fixed
 /// slot offsets (`p` is the pointer size), plain C runtime declarations,

@@ -8,6 +8,21 @@ use std::process::Command;
 use crate::manifest::{self, LOCK, MANIFEST, Source};
 use crate::{Global, ambient_env, env_dir, home};
 
+/// The environments' names, sorted.
+pub fn names() -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(home().join("envs"))
+        .map(|rd| {
+            rd.flatten()
+                .filter(|e| e.path().is_dir())
+                .filter_map(|e| e.file_name().into_string().ok())
+                .filter(|n| !n.starts_with('.'))
+                .collect()
+        })
+        .unwrap_or_default();
+    names.sort();
+    names
+}
+
 fn check(name: &str) -> Result<(), String> {
     let ok = !name.is_empty()
         && name != "CURRENT"
@@ -64,17 +79,7 @@ pub fn cmd(g: &Global, args: &[String]) -> Result<i32, String> {
         }
         ["list"] => {
             let active = ambient_env();
-            let mut names: Vec<String> = std::fs::read_dir(home().join("envs"))
-                .map(|rd| {
-                    rd.flatten()
-                        .filter(|e| e.path().is_dir())
-                        .filter_map(|e| e.file_name().into_string().ok())
-                        .filter(|n| !n.starts_with('.'))
-                        .collect()
-                })
-                .unwrap_or_default();
-            names.sort();
-            for n in names {
+            for n in names() {
                 println!("{} {n}", if n == active { "*" } else { " " });
             }
         }

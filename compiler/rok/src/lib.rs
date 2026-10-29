@@ -35,6 +35,7 @@ use std::process::Command;
 
 use manifest::{Dep, GitRef, MANIFEST, Manifest, NativeSource, Source};
 use resolve::{Context, Options, Resolved};
+use rokc_core::completions::{Spec, Values};
 use rokc_core::tmp::TempEntry;
 use rokc_diagnostic::Json;
 use rokc_rokon::{Kind, Value};
@@ -175,6 +176,7 @@ toolchains ($ROK_HOME/toolchains/<version>-<triple>/):
   toolchain default [<version>]
                                the toolchain the $ROK_HOME/bin proxies run
   toolchain remove <version>   remove one
+  toolchain clean              remove every toolchain but the default
   toolchain update [<version>]
                                install the newest release (or <version>),
                                checked against its .sha256, make it the
@@ -184,6 +186,11 @@ toolchains ($ROK_HOME/toolchains/<version>-<triple>/):
   +<version>                   (first) use that toolchain for this command;
                                else $ROK_TOOLCHAIN, else rok.rokon's
                                `toolchain`, else the default
+
+shell:
+  completions bash|zsh|fish|powershell
+                               print the shell's completion script for rok
+                               (install.sh / install.ps1 put it in place)
 
 options (anywhere before `--`):
   --env <name>    work in that environment (REPL, Jupyter, install)
@@ -446,6 +453,8 @@ fn run(g: &Global, cmd: &str, pre: &[String], post: &[String]) -> i32 {
         "logout" => cmd_logout(g, post),
         "env" => env::cmd(g, post),
         "toolchain" => toolchain::cmd(post, g.quiet),
+        "completions" => cmd_completions(post),
+        "__complete" => complete(post),
         "jupyter" if post.first().is_some_and(|p| p == "install") => install_kernel(g, &post[1..]),
         "test" | "bench" => harness(g, cmd, pre, post),
         c if DELEGATED.contains(&c) => delegate(g, cmd, pre, post),
@@ -468,6 +477,73 @@ fn run(g: &Global, cmd: &str, pre: &[String], post: &[String]) -> i32 {
 fn usage(msg: &str) -> i32 {
     eprintln!("rok: {msg}\nrun `rok help` for usage");
     2
+}
+
+/// What rok's command line takes, read from `USAGE`; the commands rok
+/// passes to rokc take rokc's flags too.
+fn completion_spec() -> Spec {
+    let mut s = Spec::parse(
+        "rok",
+        USAGE,
+        |n| n != "usage" && n != "environment" && !n.starts_with("options"),
+        |n| n.starts_with("options"),
+    );
+    let rokc = rokc_core::cli::rokc_spec();
+    for c in DELEGATED {
+        let mut flags = rokc.flags.get(c).cloned().unwrap_or_default();
+        flags.extend(rokc.global.iter().cloned());
+        s.add_flags(c, &flags);
+    }
+    for (n, about) in &mut s.commands {
+        if about.is_empty() {
+            if let Some((_, a)) = rokc.commands.iter().find(|(m, _)| m == n) {
+                a.clone_into(about);
+            }
+        }
+    }
+    let run = |c: &str| Values::Run(c.to_owned());
+    let toolchains = run("rok __complete toolchains");
+    let envs = run("rok __complete envs");
+    s.values = vec![("+".to_owned(), toolchains.clone())];
+    for k in ["toolchain default", "toolchain remove"] {
+        s.values.push((k.to_owned(), toolchains.clone()));
+    }
+    for k in ["env use", "env remove", "env shell", "env export", "--env"] {
+        s.values.push((k.to_owned(), envs.clone()));
+    }
+    s.values.extend([
+        ("--target".to_owned(), run("rokc --print target-list")),
+        ("help".to_owned(), Values::Commands),
+    ]);
+    s
+}
+
+/// `rok completions <shell>`.
+fn cmd_completions(args: &[String]) -> Result<i32, String> {
+    let [shell] = args else {
+        return Err("usage: rok completions bash|zsh|fish|powershell".to_owned());
+    };
+    let script = completion_spec().render(shell).ok_or_else(|| {
+        format!(
+            "usage: rok completions bash|zsh|fish|powershell (no completion script for `{shell}`)"
+        )
+    })?;
+    print!("{script}");
+    Ok(0)
+}
+
+/// `rok __complete toolchains | envs`: the names the completion scripts
+/// offer, one per line.
+fn complete(args: &[String]) -> Result<i32, String> {
+    let names = match args {
+        [w] if w == "toolchains" => toolchain::versions(&home()),
+        [w] if w == "envs" => env::names(),
+        _ => return Err("usage: rok __complete toolchains | envs".to_owned()),
+    };
+    for n in names {
+        println!("{n}");
+    }
+    Ok(0)
 }
 
 /// The package directory `start` belongs to: the nearest directory at

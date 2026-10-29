@@ -2122,6 +2122,341 @@ fn sh(dir: &Path, cmd: &str, args: &[&str]) {
     );
 }
 
+/// Whether `shell` runs here (zsh, fish and pwsh may be missing).
+fn have(shell: &str) -> bool {
+    Command::new(shell)
+        .arg("--version")
+        .output()
+        .is_ok_and(|o| o.status.success())
+}
+
+/// `rok completions <shell>`: a script with rok's commands, its own and
+/// those it passes to rokc, that the shell parses; toolchain and
+/// environment names come from `rok __complete`.
+// spec: §9.10.1
+#[test]
+fn completions_for_each_shell() {
+    let root = scratch("completions");
+    let home = root.join("home");
+    for shell in ["bash", "zsh", "fish", "powershell"] {
+        let script = ok(&rok(&home, &root, &["completions", shell]));
+        for want in [
+            "toolchain",
+            "completions",
+            "build",
+            "env",
+            "--offline",
+            "--release",
+            "rok __complete toolchains",
+        ] {
+            // fish spells `--x` as `-l x`.
+            let want = match want.strip_prefix("--") {
+                Some(f) if shell == "fish" => format!("-l {f}"),
+                _ => want.to_owned(),
+            };
+            assert!(script.contains(&want), "{shell} lacks {want}");
+        }
+        let ext = if shell == "powershell" { "ps1" } else { shell };
+        let file = root.join(format!("rok-{shell}.{ext}"));
+        write(&file, &script);
+        let check: &[&str] = match shell {
+            "bash" => &["bash", "-n"],
+            "zsh" => &["zsh", "-n"],
+            "fish" => &["fish", "--no-config", "-n"],
+            _ => &[],
+        };
+        if let Some((sh, args)) = check.split_first().filter(|(sh, _)| have(sh)) {
+            let out = Command::new(sh).args(args).arg(&file).output().unwrap();
+            assert!(out.status.success(), "{shell}: {}", text(&out.stderr));
+        }
+        if shell == "powershell" && have("pwsh") {
+            let parse = format!(
+                "$e = $null; [void][Management.Automation.Language.Parser]::ParseFile('{}', \
+                 [ref]$null, [ref]$e); if ($e) {{ $e; exit 1 }}",
+                file.display()
+            );
+            let out = Command::new("pwsh")
+                .args(["-NoProfile", "-c", &parse])
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "{}", text(&out.stdout));
+        }
+    }
+    let out = rok(&home, &root, &["completions", "tcsh"]);
+    assert_eq!(out.status.code(), Some(2));
+    fails(&out, "rok completions bash|zsh|fish|powershell");
+
+    let host = env!("ROK_HOST");
+    fs::create_dir_all(home.join(format!("toolchains/9.9.1-{host}"))).unwrap();
+    fs::create_dir_all(home.join("envs/dev")).unwrap();
+    assert_eq!(
+        ok(&rok(&home, &root, &["__complete", "toolchains"])),
+        "9.9.1\n"
+    );
+    assert_eq!(ok(&rok(&home, &root, &["__complete", "envs"])), "dev\n");
+
+    // What bash offers, with this rok first on PATH.
+    #[cfg(unix)]
+    {
+        let bin = Path::new(ROK).parent().unwrap();
+        let path = format!(
+            "{}:{}",
+            bin.display(),
+            std::env::var("PATH").unwrap_or_default()
+        );
+        let offer = |words: &[&str]| {
+            let out = Command::new("bash")
+                .arg("-c")
+                .arg(
+                    "source \"$1\"; shift; COMP_WORDS=(\"$@\"); \
+                     COMP_CWORD=$((${#COMP_WORDS[@]} - 1)); _rok; echo \"${COMPREPLY[*]}\"",
+                )
+                .arg("bash")
+                .arg(root.join("rok-bash.bash"))
+                .args(words)
+                .env("PATH", &path)
+                .env("ROK_HOME", &home)
+                .output()
+                .unwrap();
+            ok(&out).trim().to_owned()
+        };
+        assert_eq!(offer(&["rok", "toolc"]), "toolchain");
+        assert_eq!(offer(&["rok", "toolchain", "def"]), "default");
+        assert_eq!(offer(&["rok", "toolchain", "default", ""]), "9.9.1");
+        assert_eq!(offer(&["rok", "+"]), "+9.9.1");
+        assert_eq!(offer(&["rok", "--env", ""]), "dev");
+        assert_eq!(offer(&["rok", "--env", "dev", "env", "use", ""]), "dev");
+        assert_eq!(offer(&["rok", "build", "--rel"]), "--release");
+        assert_eq!(offer(&["rok", "add", "x", "--regi"]), "--registry");
+        assert_eq!(offer(&["rok", "help", "compl"]), "completions");
+    }
+}
+
+/// `sh install.sh` in `root` for a user whose home is `user` and login
+/// shell `shell`, with no XDG or zsh directories set.
+#[cfg(unix)]
+fn install_sh(root: &Path, user: &Path, shell: &str) -> Command {
+    fs::create_dir_all(user).unwrap();
+    let mut c = Command::new("sh");
+    c.arg(workspace().join("install.sh"))
+        .current_dir(root)
+        .env("HOME", user)
+        .env("SHELL", shell)
+        .env_remove("ROK_HOME")
+        .env_remove("ROK_NO_MODIFY_PATH")
+        .env_remove("XDG_CONFIG_HOME")
+        .env_remove("XDG_DATA_HOME")
+        .env_remove("ZDOTDIR");
+    c
+}
+
+/// `root/rok.tar.gz`: a fake toolchain `version`.
+#[cfg(unix)]
+fn fake_archive(root: &Path, version: &str) {
+    let top = format!("rok-{version}");
+    fake_toolchain(&root.join("stage").join(&top), version);
+    let tar = Command::new("tar")
+        .current_dir(root.join("stage"))
+        .args(["-czf", "../rok.tar.gz", &top])
+        .status()
+        .unwrap();
+    assert!(tar.success());
+}
+
+/// The line install.sh adds to a shell startup file.
+const PROFILE_LINE: &str = "[ -f \"$HOME/.rok/env\" ] && . \"$HOME/.rok/env\"";
+
+/// install.sh writes `$ROK_HOME/env`, sources it (guarded) from the
+/// startup files that exist and the login shell's, once, and installs
+/// the completions; a second run changes nothing.
+// spec: §9.10.6
+#[cfg(unix)]
+#[test]
+fn install_sh_sets_up_path() {
+    let root = scratch("install-sh-path");
+    let user = root.join("user");
+    fake_archive(&root, "9.9.3");
+    write(&user.join(".bashrc"), "alias ll='ls -l'");
+    let install = || {
+        install_sh(&root, &user, "/bin/zsh")
+            .args(["--archive", "rok.tar.gz"])
+            .output()
+            .unwrap()
+    };
+    let out = install();
+    ok(&out);
+    let err = text(&out.stderr);
+    assert!(
+        err.starts_with("   Installed rok 9.9.3 to ~/.rok\n"),
+        "{err}"
+    );
+    assert!(
+        err.contains("    Modified ~/.bashrc, ~/.zshenv (PATH)\n"),
+        "{err}"
+    );
+    assert!(err.contains("A new shell finds rok on PATH"), "{err}");
+    assert!(err.contains("  . \"$HOME/.rok/env\""), "{err}");
+    let bashrc = format!("alias ll='ls -l'\n{PROFILE_LINE}\n");
+    assert_eq!(read(&user.join(".bashrc")), bashrc);
+    assert_eq!(read(&user.join(".zshenv")), format!("{PROFILE_LINE}\n"));
+    assert!(!user.join(".profile").exists());
+    assert!(!user.join(".bash_profile").exists());
+    assert!(!user.join(".config/fish").exists());
+    let bash = read(&user.join(".local/share/bash-completion/completions/rok"));
+    assert!(bash.contains("complete -o bashdefault -o default -F _rok rok"));
+    assert!(read(&user.join(".rok/zsh/_rok")).starts_with("#compdef rok\n"));
+
+    // Sourced twice, env puts the proxies on PATH once.
+    let path = |shell: &str| {
+        let out = Command::new(shell)
+            .args([
+                "-c",
+                ". \"$HOME/.zshenv\"; . \"$HOME/.rok/env\"; echo \"$PATH\"",
+            ])
+            .env("HOME", &user)
+            .env("PATH", "/usr/bin:/bin")
+            .output()
+            .unwrap();
+        ok(&out).trim().to_owned()
+    };
+    let want = format!("{}:/usr/bin:/bin", user.join(".rok/bin").display());
+    assert_eq!(path("sh"), want);
+    if Command::new("zsh").arg("-fc").arg("true").status().is_ok() {
+        assert_eq!(path("zsh"), want);
+    }
+
+    // Again: nothing to change, no line twice.
+    let out = install();
+    ok(&out);
+    let err = text(&out.stderr);
+    assert!(!err.contains("Modified"), "{err}");
+    assert_eq!(read(&user.join(".bashrc")), bashrc);
+    assert_eq!(read(&user.join(".zshenv")), format!("{PROFILE_LINE}\n"));
+
+    // Without ~/.rok the startup files still run.
+    fs::remove_dir_all(user.join(".rok")).unwrap();
+    let out = Command::new("sh")
+        .args([
+            "-c",
+            ". \"$HOME/.zshenv\"; . \"$HOME/.bashrc\"; echo started",
+        ])
+        .env("HOME", &user)
+        .output()
+        .unwrap();
+    assert_eq!(ok(&out), "started\n");
+}
+
+/// A bash user with no startup files gets `~/.bashrc` and `~/.profile`
+/// (never a new `~/.bash_profile`, which would hide `~/.profile`).
+// spec: §9.10.6
+#[cfg(unix)]
+#[test]
+fn install_sh_bash_files() {
+    let root = scratch("install-sh-bash");
+    let user = root.join("user");
+    fake_archive(&root, "9.9.4");
+    let out = install_sh(&root, &user, "/usr/local/bin/bash")
+        .args(["--archive", "rok.tar.gz"])
+        .output()
+        .unwrap();
+    ok(&out);
+    let err = text(&out.stderr);
+    assert!(
+        err.contains("    Modified ~/.bashrc, ~/.profile (PATH)\n"),
+        "{err}"
+    );
+    assert_eq!(read(&user.join(".profile")), format!("{PROFILE_LINE}\n"));
+    assert!(!user.join(".bash_profile").exists());
+    assert!(!user.join(".zshenv").exists());
+}
+
+/// fish: `conf.d/rok.fish` (under `$XDG_CONFIG_HOME`) sources `env.fish`,
+/// and the fish completions go beside it.
+// spec: §9.10.6
+#[cfg(unix)]
+#[test]
+fn install_sh_fish_conf_d() {
+    let root = scratch("install-sh-fish");
+    let user = root.join("user");
+    let xdg = root.join("xdg");
+    fake_archive(&root, "9.9.5");
+    let install = || {
+        install_sh(&root, &user, "/opt/bin/fish")
+            .args(["--archive", "rok.tar.gz"])
+            .env("XDG_CONFIG_HOME", &xdg)
+            .output()
+            .unwrap()
+    };
+    let out = install();
+    ok(&out);
+    let err = text(&out.stderr);
+    let conf = xdg.join("fish/conf.d/rok.fish");
+    assert!(
+        err.contains(&format!("    Modified {} (PATH)\n", conf.display())),
+        "{err}"
+    );
+    assert_eq!(
+        read(&conf),
+        "test -f \"$HOME/.rok/env.fish\"; and source \"$HOME/.rok/env.fish\"\n"
+    );
+    let comp = read(&xdg.join("fish/completions/rok.fish"));
+    assert!(comp.contains("complete -c rok "), "{comp}");
+    // No sh startup file exists and fish is the login shell: none made.
+    assert!(!user.join(".profile").exists());
+    let out = install();
+    assert!(!text(&out.stderr).contains("Modified"));
+    if Command::new("fish").arg("--version").output().is_ok() {
+        let out = Command::new("fish")
+            .args(["--no-config", "-c"])
+            .arg(format!(
+                "set -gx PATH /usr/bin /bin; source {0}; source {0}; string join : $PATH",
+                conf.display()
+            ))
+            .env("HOME", &user)
+            .output()
+            .unwrap();
+        let want = format!("{}:/usr/bin:/bin\n", user.join(".rok/bin").display());
+        assert_eq!(ok(&out), want);
+        let out = Command::new("fish")
+            .args(["--no-config", "-n"])
+            .arg(xdg.join("fish/completions/rok.fish"))
+            .output()
+            .unwrap();
+        ok(&out);
+    }
+}
+
+/// `--no-modify-path` and `ROK_NO_MODIFY_PATH=1` write no shell files and
+/// print what to add to PATH instead.
+// spec: §9.10.6
+#[cfg(unix)]
+#[test]
+fn install_sh_no_modify_path() {
+    let root = scratch("install-sh-no-path");
+    fake_archive(&root, "9.9.6");
+    for (i, how) in ["flag", "env"].into_iter().enumerate() {
+        let user = root.join(format!("user{i}"));
+        write(&user.join(".profile"), "# mine\n");
+        let mut c = install_sh(&root, &user, "/bin/zsh");
+        c.args(["--archive", "rok.tar.gz"]);
+        if how == "flag" {
+            c.arg("--no-modify-path");
+        } else {
+            c.env("ROK_NO_MODIFY_PATH", "1");
+        }
+        let out = c.output().unwrap();
+        ok(&out);
+        let err = text(&out.stderr);
+        assert!(err.contains("Add ~/.rok/bin to PATH"), "{how}: {err}");
+        assert!(!err.contains("Modified"), "{how}: {err}");
+        assert_eq!(read(&user.join(".profile")), "# mine\n");
+        assert!(!user.join(".zshenv").exists());
+        assert!(!user.join(".rok/env").exists());
+        assert!(!user.join(".rok/zsh").exists());
+        assert!(!user.join(".local").exists());
+    }
+}
+
 /// `install.sh --archive` checks the archive against the `.sha256`
 /// beside it before unpacking.
 // spec: §9.10.6
@@ -2138,10 +2473,8 @@ fn install_sh_checks_sums() {
         .unwrap();
     assert!(tar.success());
     let install = || {
-        Command::new("sh")
-            .arg(workspace().join("install.sh"))
+        install_sh(&root, &root.join("user"), "/bin/sh")
             .args(["--archive", "rok.tar.gz"])
-            .current_dir(&root)
             .env("ROK_HOME", &home)
             .output()
             .unwrap()
@@ -2181,10 +2514,8 @@ fn install_sh_reads_tar_xz() {
         .status()
         .unwrap();
     assert!(tar.success(), "tar -cJf (tar needs xz)");
-    let out = Command::new("sh")
-        .arg(workspace().join("install.sh"))
+    let out = install_sh(&root, &root.join("user"), "/bin/sh")
         .args(["-q", "--archive", "rok.tar.xz"])
-        .current_dir(&root)
         .env("ROK_HOME", &home)
         .output()
         .unwrap();

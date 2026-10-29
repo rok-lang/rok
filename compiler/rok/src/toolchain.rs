@@ -48,6 +48,11 @@ fn installed(home: &Path) -> Vec<(String, String)> {
     v
 }
 
+/// The versions of the installed toolchains, oldest first.
+pub fn versions(home: &Path) -> Vec<String> {
+    installed(home).into_iter().map(|(_, v)| v).collect()
+}
+
 /// The newest installed toolchain matching `pin` (version prefix or dir
 /// name).
 fn find(home: &Path, pin: &str) -> Option<PathBuf> {

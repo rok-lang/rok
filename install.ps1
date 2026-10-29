@@ -8,9 +8,14 @@
 #   rok-<version>-<triple>\install.ps1          (from an unpacked archive)
 #
 # Environment: ROK_HOME, ROK_VERSION (default below), ROK_DIST (where
-# releases are downloaded from), NO_COLOR. Nothing else is needed: rokc
-# links with its own linker and import libraries (no MSVC or Windows SDK).
-# -NoModifyPath leaves the user's PATH alone and says what to add.
+# releases are downloaded from), ROK_NO_MODIFY_PATH, NO_COLOR. Nothing
+# else is needed: rokc links with its own linker and import libraries (no
+# MSVC or Windows SDK).
+#
+# It puts $ROK_HOME\bin first on the user's PATH and writes the PowerShell
+# completions to $ROK_HOME\completions\rok.ps1, loaded from the profile.
+# -NoModifyPath (or ROK_NO_MODIFY_PATH=1) leaves PATH and the profile
+# alone and says what to add.
 #
 # Output is that of install.sh and `rok toolchain update`: status words
 # right-aligned, green on a console unless NO_COLOR is set. -Quiet prints
@@ -23,6 +28,7 @@ $ErrorActionPreference = 'Stop'
 if (-not $Version) { $Version = if ($env:ROK_VERSION) { $env:ROK_VERSION } else { '0.1.3' } }
 $dist = if ($env:ROK_DIST) { $env:ROK_DIST } else { 'https://github.com/rok-lang/rok/releases' }
 $home_ = if ($env:ROK_HOME) { $env:ROK_HOME } else { Join-Path $env:USERPROFILE '.rok' }
+if ($env:ROK_NO_MODIFY_PATH -and $env:ROK_NO_MODIFY_PATH -ne '0') { $NoModifyPath = $true }
 $color = -not $env:NO_COLOR
 $quiet_ = [bool]$Quiet
 $verbose_ = [bool]$Verbose
@@ -138,26 +144,77 @@ try {
     return
 }
 
-# $home_ as ~\.. when under the profile, for display only.
-$shown = $home_
-if ($env:USERPROFILE -and $home_.StartsWith("$env:USERPROFILE\", [StringComparison]::OrdinalIgnoreCase)) {
-    $shown = '~' + $home_.Substring($env:USERPROFILE.Length)
+# $Path as ~\.. when under the user's profile directory, for display only.
+function Shown([string]$Path) {
+    if ($env:USERPROFILE -and $Path.StartsWith("$env:USERPROFILE\", [StringComparison]::OrdinalIgnoreCase)) {
+        return '~' + $Path.Substring($env:USERPROFILE.Length)
+    }
+    $Path
 }
+$shown = Shown $home_
 Status 'Installed' "rok $full to $shown"
 Note "toolchain in $home_\toolchains, proxies in $home_\bin"
+
+# Whether this PowerShell runs profile scripts (the execution policy
+# without this process's -ExecutionPolicy).
+function ProfilesRun {
+    $policy = 'Undefined'
+    foreach ($scope in 'MachinePolicy', 'UserPolicy', 'CurrentUser', 'LocalMachine') {
+        $p = Get-ExecutionPolicy -Scope $scope
+        if ($p -ne 'Undefined') { $policy = $p; break }
+    }
+    # Undefined: Restricted on Windows PowerShell, RemoteSigned on 7.
+    if ($policy -eq 'Undefined') { return $PSVersionTable.PSEdition -eq 'Core' }
+    $policy -notin 'Restricted', 'AllSigned'
+}
 
 Info ''
 $binDir = Join-Path $home_ 'bin'
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
 $parts = if ($userPath) { $userPath.Split(';') } else { @() }
-if ($parts -notcontains $binDir) {
-    if ($NoModifyPath) {
+if ($NoModifyPath) {
+    if ($parts -notcontains $binDir) {
         Info "Add $shown\bin to your PATH (then open a new terminal)."
-    } else {
-        [Environment]::SetEnvironmentVariable('Path', (@($binDir) + $parts | Where-Object { $_ }) -join ';', 'User')
-        Info "Added $shown\bin to your PATH (open a new terminal to use it)."
+        Info ''
     }
-    Info ''
+} else {
+    $changed = @()
+    if ($parts -notcontains $binDir) {
+        [Environment]::SetEnvironmentVariable('Path', (@($binDir) + $parts | Where-Object { $_ }) -join ';', 'User')
+        $changed += 'the user PATH'
+    }
+    # The completions of rok and rokc; a toolchain too old for
+    # `completions` leaves them out.
+    $completions = Join-Path $home_ 'completions\rok.ps1'
+    New-Item -ItemType Directory -Force (Split-Path $completions) | Out-Null
+    $script = foreach ($t in 'rok', 'rokc') {
+        $out = & "$binDir\$t.exe" completions powershell 2>$null
+        if (-not $LASTEXITCODE) { $out }
+    }
+    Set-Content -Path $completions -Value $script -Encoding UTF8
+    Note "PowerShell completions in $completions"
+    $quoted = $completions.Replace("'", "''")
+    $line = "if (Test-Path '$quoted') { . '$quoted' }"
+    $userProfile = $PROFILE.CurrentUserAllHosts
+    if (-not (ProfilesRun)) {
+        Info "PowerShell does not run profile scripts here (execution policy), so for"
+        Info "completions add this line to $(Shown $userProfile) once it does:"
+        Info "  $line"
+        Info ''
+    } elseif (-not ((Test-Path $userProfile) -and (Get-Content $userProfile) -contains $line)) {
+        New-Item -ItemType Directory -Force (Split-Path $userProfile) | Out-Null
+        Add-Content -Path $userProfile -Value $line -Encoding UTF8
+        $changed += Shown $userProfile
+    }
+    if ($changed) {
+        Status 'Modified' ($changed -join ', ')
+        Info ''
+    }
+    if ($env:Path.Split(';') -notcontains $binDir) {
+        Info 'A new terminal finds rok on PATH; to use it in this one, run:'
+        Info "  `$env:Path = `"$binDir;`$env:Path`""
+        Info ''
+    }
 }
 Info 'Next steps:'
 Info '  rok --version'
