@@ -23,7 +23,7 @@
 # -q prints errors only, -v adds notes (URLs, paths).
 set -eu
 
-version="${ROK_VERSION:-0.1.4}"
+version="${ROK_VERSION:-0.1.5}"
 dist="${ROK_DIST:-https://github.com/rok-lang/rok/releases}"
 home="${ROK_HOME:-$HOME/.rok}"
 archive=""

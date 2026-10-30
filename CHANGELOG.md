@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.1.5 (2026-10-31)
+
+- Colour: `rok`, `rokc` and the installers colour status verbs, errors, warnings, notes and
+  help; `--color`, `NO_COLOR`, `CLICOLOR_FORCE` and `TERM=dumb` decide, and piped output stays
+  plain. `rok` takes `--color` and passes it on.
+- `rok help <command>` and `rok <command> --help` show that command's usage, examples and
+  options; `rok --help` is a short list. `-q`, `-v` and `--color` work after the command, and
+  unknown commands, options and stones suggest the closest name.
+- Errors say what to write: the method you meant (`len` for `length`, `xs.iter().map` on a
+  `List`), how to get a value out of `T | none`, `==` for `=` in a condition, the signature in
+  an argument-count error, the `match` arms to add. A type mismatch underlines the value and
+  shows the conversion; an unused variable underlines its name. Messages use short type names
+  and leave spec citations to the JSON output, which also lists `fixes`.
+- Outside a package `rok fmt` needs a path; inside one it formats the package from any
+  directory and skips `target/`, hidden directories, `node_modules/` and `.gitignore`d paths.
+  `rok update`, `rok env list`, a missing script and a bare `rok jupyter` say what to run.
+- `rok toolchain update` and `default` warn when another `rok` comes first on PATH;
+  `rok --version -v` shows the binary, toolchain, `rokc` and host.
+- Build output: a failed build ends with `could not build <name> (N errors, M warnings)`, the
+  first std build is announced, `rok run hi.rok` shows `Running hi.rok`, and `rok build hi.rok`
+  writes `hi` next to the script. `rok new` prints the next command, `rok add` the version
+  added; `rok doc --open` opens the docs and `rok doc --std` works outside a package.
+- `rok bench` prints its human output when piped too (`--format=rokbench` for the protocol)
+  and warns about a bench that never calls `b.iter`.
+- Index and key panics name the value: `index 10 out of bounds for length 3`, and a missing
+  `Dict` key says to use `d.get(k)`.
+- The REPL draws no `%` marker after output without a newline; `:load` of a `:save` file
+  replays its cells; Jupyter numbers `<repl cell N>` by its execution count.
+- The language server completes locals, `use` paths and library members, reaches the
+  standard library for hover and definition, and adds quick fixes, signature help and
+  rename checks; `rokls` started by hand says it is for an editor.
+- An out-of-range ROKON float names the f64 range; corpus cases run with a time limit.
+
 ## 0.1.4 (2026-10-29)
 
 - The REPL starts with the toolchain line and a hint (`-q` drops them); prompts are
