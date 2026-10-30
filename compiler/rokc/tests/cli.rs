@@ -4189,7 +4189,7 @@ fn run_passes_arguments_codes_and_progress() {
     let out = rokc(None, &dir, &["run", "x.no"]);
     assert_exit(&out, 1);
     assert!(
-        text(&out.stderr).contains("is not a rok source file"),
+        text(&out.stderr).contains("is not a Rok source file"),
         "{}",
         text(&out.stderr)
     );
@@ -4393,6 +4393,29 @@ fn doc_open_accepted() {
         err.contains("warning: cannot open a browser") && err.contains("index.html in one"),
         "{err}"
     );
+}
+
+/// `doc --std` without a path, in a package: the standard library alone,
+/// and the status line says so instead of a temporary package's path.
+// spec: §9.1.2
+#[test]
+fn doc_std_alone_names_the_library() {
+    let dir = scratch("doc-std-alone");
+    let app = new_package(&dir, "app", true);
+    let out = Command::new(ROKC)
+        .current_dir(&app)
+        .env("ROK_HOME", workspace())
+        .args(["doc", "--std"])
+        .output()
+        .unwrap();
+    assert_exit(&out, 0);
+    let err = text(&out.stderr);
+    assert!(
+        err.contains(" the standard library\n") && !err.contains("rokc-"),
+        "{err}"
+    );
+    assert!(app.join("target/doc/rok-std").is_dir());
+    assert!(!app.join("target/doc/app").exists());
 }
 
 /// `rokc completions <shell>`: rokc's commands and their flags, from the

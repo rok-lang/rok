@@ -56,6 +56,8 @@ struct Args {
     check_library: bool,
     /// `doc --std`: document the standard library tiers too.
     std: bool,
+    /// `doc --std` without a path: the standard library alone.
+    std_only: bool,
     diff: bool,
     threads: Option<usize>,
     show_output: bool,
@@ -894,9 +896,17 @@ fn reused(a: &Args, result: &CompileResult) {
 }
 
 fn progress(a: &Args, verb: &str, pkg: &Package) {
-    if !a.quiet {
-        term::status(verb, &format!("{} ({})", pkg.name, pkg.dir.display()));
+    if a.quiet {
+        return;
     }
+    // `doc --std` alone documents a stand-in package in a temporary
+    // directory: name what is documented instead.
+    let what = if a.std_only {
+        "the standard library".to_owned()
+    } else {
+        format!("{} ({})", pkg.name, pkg.dir.display())
+    };
+    term::status(verb, &what);
 }
 
 /// Front end for `pkg`: reports warnings (also returned, rendered), exits
@@ -1709,6 +1719,7 @@ fn write_harness_manifest(
 fn cmd_doc(mut a: Args) {
     // `--std` alone: an empty package that only mounts the library.
     let std_only = a.std && a.positional.is_empty();
+    a.std_only = std_only;
     let tmp = std_only.then(|| fail_on(TempDir::new(a.opts.keep_temps), &SourceMap::new()));
     if let Some(t) = &tmp {
         let main = t.path().join("rok/src/main.rok");

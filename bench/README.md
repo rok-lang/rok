@@ -1,17 +1,17 @@
 # Benchmarks
 
-`bench/*.rok` are rok benchmarks; `bench/c/*.c` are C counterparts of
+`bench/*.rok` are Rok benchmarks; `bench/c/*.c` are C counterparts of
 some of them (same algorithm, same output). Not run by CI.
 
 | benchmark        | what it stresses                                         | C |
 |------------------|----------------------------------------------------------|---|
-| `nbody`          | f64 arithmetic over parallel `List<f64>`                 | ✓ |
-| `fannkuch`       | small integer lists, permutations, prefix reversals       | ✓ |
-| `spectral_norm`  | calls + f64 loops                                         | ✓ |
-| `binary_trees`   | short-lived trait objects, GC throughput                  | ✓ |
-| `json_tokenizer` | building a 6 MB `str` with `StrBuf`, byte-wise scanning   | ✓ |
-| `word_count`     | `split_whitespace` + `Dict<str, i64>` counting            | ✓ |
-| `throw_parse`    | recursive throwing calls (`try`), errors caught per expr  | ✓ |
+| `nbody`          | f64 arithmetic over parallel `List<f64>`                 | yes |
+| `fannkuch`       | small integer lists, permutations, prefix reversals       | yes |
+| `spectral_norm`  | calls + f64 loops                                         | yes |
+| `binary_trees`   | short-lived trait objects, GC throughput                  | yes |
+| `json_tokenizer` | building a 6 MB `str` with `StrBuf`, byte-wise scanning   | yes |
+| `word_count`     | `split_whitespace` + `Dict<str, i64>` counting            | yes |
+| `throw_parse`    | recursive throwing calls (`try`), errors caught per expr  | yes |
 | `throw_wide`     | throwing calls with a `str` result and a two-word error   |   |
 | `channel_contended` | 4 producer threads into one receiver, unbounded and bounded channels | |
 | `alloc_*`, `gc_*`, `store_heavy`, `wb_threads`, `timers`, `fstring_heavy` | allocation, collector, write barriers, timers, f-strings | |
@@ -42,13 +42,13 @@ and the results by benchmark (`c/<name>` for the C programs). The table
 printed at the end compares against the previous line of the history:
 the change in instructions (user time when no instruction count is
 available) above the threshold is flagged `REGRESSION`; `vs C` is the
-rok / C instruction ratio. A rok program whose output differs from its C
+Rok / C instruction ratio. A Rok program whose output differs from its C
 counterpart is flagged `OUTPUT MISMATCH`. Either makes the exit status 1.
 
 Compare only records from the same host: instruction counts depend on
 the CPU and the C compiler.
 
-`ROK_GC_STATS=1` makes a rok program print collections, pause totals
+`ROK_GC_STATS=1` makes a Rok program print collections, pause totals
 and collector CPU, then blocks / resident KiB / evacuations / bytes
 moved at exit:
 

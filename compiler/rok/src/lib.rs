@@ -767,6 +767,9 @@ fn rokc_command(
     let start = Path::new(path.unwrap_or("."));
     let stdin = first == Some("-");
     let package = package_dir(start);
+    // `doc --std` without a path documents the standard library alone and
+    // needs no package (spec 9.1).
+    let std_doc = cmd == "doc" && first.is_none() && post.iter().any(|a| a == "--std");
     // Without a path, a REPL / kernel / language server may use an
     // environment from inside a package.
     let on_package = package.is_some()
@@ -796,6 +799,7 @@ fn rokc_command(
     ) && package.is_none()
         && !start.is_file()
         && !stdin
+        && !std_doc
     {
         return Err(format!(
             "not inside a package: no src/main.rok or src/lib.rok in {} or above (make one with \
@@ -860,7 +864,8 @@ fn rokc_command(
             extra.push(level.flag().to_owned());
             extra.push(name.clone());
         }
-        if let Some(dir) = t.target_dir.as_ref().filter(|_| !on_package) {
+        // `doc --std` writes ./target/doc/, not into an environment.
+        if let Some(dir) = t.target_dir.as_ref().filter(|_| !on_package && !std_doc) {
             extra.push(format!("--target-dir={}", dir.display()));
         }
     }

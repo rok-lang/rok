@@ -24,7 +24,7 @@ is the last release of the newest major the emitted MLIR is tested with.
 ## Building it
 
 ```sh
-llvm/build.sh            # → ~/.cache/rok/llvm-22.1.8 (ROK_LLVM_CACHE)
+llvm/build.sh            # -> ~/.cache/rok/llvm-22.1.8 (ROK_LLVM_CACHE)
 llvm/build.sh <prefix>   # anywhere else
 ```
 
@@ -41,7 +41,7 @@ Hosts:
   libc++ when they name `std::__1`.
 - Windows (MSVC ABI; x86_64 verified, arm64 not yet run): `llvm\build.ps1
   [prefix]` from a Developer PowerShell for VS (the MSVC C++ build tools,
-  cmake, ninja, Python 3) →
+  cmake, ninja, Python 3) installs into
   `%LOCALAPPDATA%\rok\llvm-22.1.8`. The same libraries as `.lib` with
   the dynamic CRT (`/MD`, as rustc links), no DIA SDK. rokc_llvm compiles
   its shim with `cl` (or `CXX`, e.g. `clang-cl`) and archives it with
@@ -84,8 +84,8 @@ does not have. `build.ps1` reads `rok-msvc.profdata.tar.xz` (2 MB, made
 by `train-pgo.ps1` on a Windows x86_64 host) when built with clang-cl
 (`CXX=clang-cl`, 22 or newer); `cl` reads no clang profile and builds
 without PGO. On an 8-core host, rokc's `-O2` builds of `bench/` as
-objects take 6.97 s with the profile, 7.83 s with clang-cl alone (−11%)
-and 8.92 s with cl (−22%); the cases training left out, built and linked
+objects take 6.97 s with the profile, 7.83 s with clang-cl alone (-11%)
+and 8.92 s with cl (-22%); the cases training left out, built and linked
 in turn, 66.1 s, 68.7 s and 71.1 s.
 
 `llvm/train-pgo.sh [profile...]` trains on the host (macOS, Xcode's
@@ -103,7 +103,7 @@ every reader of the profile accepts:
 ```sh
 # Linux x86_64 (NixOS: in nix-shell), from the same commit:
 targets/build.sh x86_64-unknown-linux-gnu
-llvm/train-pgo.sh        # → ~/.cache/rok/rok-linux.profdata
+llvm/train-pgo.sh        # -> ~/.cache/rok/rok-linux.profdata
 # macOS arm64, with that file copied over:
 llvm/train-pgo.sh rok-linux.profdata
 ```
@@ -123,9 +123,9 @@ clang still reports 430 hash mismatches and Ubuntu's clang 189:
 functions only the other host's run reached, whose control flow differs
 on this one. On a 12-core Apple Silicon machine rokc's `-O2` builds of
 `bench/` as objects take 3.49 s with the profile and 3.75 s without PGO
-(−7%); the 298 cases training left out, as objects, 56.5 s and 59.6 s
-(−5%). On an 8-core x86_64 VM (Ubuntu 26.04, both prefixes built by
-clang 21), 6.43 s and 7.15 s (−10%), 103.0 s and 114.2 s (−10%).
+(-7%); the 298 cases training left out, as objects, 56.5 s and 59.6 s
+(-5%). On an 8-core x86_64 VM (Ubuntu 26.04, both prefixes built by
+clang 21), 6.43 s and 7.15 s (-10%), 103.0 s and 114.2 s (-10%).
 
 On Ubuntu, training needs clang, `llvm-profdata` (package `llvm-21`,
 whose binary is `llvm-profdata-21`: put it on PATH as `llvm-profdata`)
@@ -172,8 +172,8 @@ command needs it. It comes from the same source tarball, built apart from
 the prefix above so that prefix (and its CI cache key) stays as it is:
 
 ```sh
-llvm/build-libclang.sh            # → ~/.cache/rok/libclang-22.1.8 (ROK_LLVM_CACHE)
-llvm\build-libclang.ps1           # Windows (MSVC) → %LOCALAPPDATA%\rok\libclang-22.1.8
+llvm/build-libclang.sh            # -> ~/.cache/rok/libclang-22.1.8 (ROK_LLVM_CACHE)
+llvm\build-libclang.ps1           # Windows (MSVC) -> %LOCALAPPDATA%\rok\libclang-22.1.8
 ```
 
 It builds only the `libclang` shared library and `clang-resource-headers`:

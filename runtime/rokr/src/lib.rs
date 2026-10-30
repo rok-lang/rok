@@ -656,8 +656,7 @@ pub extern "C" fn rok_par_sequential(what: RokStr, at: RokStr) {
             b" at ",
             at.bytes(),
             b": two items reach one collection or future, so they run one at a time on this thread; \
-              give each item its own copy, or share read-only data through `Frozen` \
-              (stdlib 2.19.1)\n",
+              give each item its own copy, or share read-only data through `Frozen`\n",
         ],
     );
 }

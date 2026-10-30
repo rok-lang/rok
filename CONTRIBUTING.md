@@ -1,13 +1,15 @@
-# Contributing to rok
+# Contributing to Rok
 
-Thanks for your interest in improving rok. This repository holds the compiler
+Thanks for your interest in improving Rok. This repository holds the compiler
 (`rokc`), the toolchain front end (`rok`), the runtime, and the standard
 library.
 
 ## Building
 
-You need the Rust toolchain pinned in `rust-toolchain.toml` and an LLVM prefix
-(see the README for `llvm/`), then `cargo build`.
+You need the Rust toolchain pinned in `rust-toolchain.toml` and a C compiler.
+Run `cargo build`, then `targets/build.sh <host triple>` for the runtime, as
+the README's "Building from source" shows. Builds above `-O0` also need the
+pinned LLVM (`llvm/README.md`).
 
 ## Checks
 

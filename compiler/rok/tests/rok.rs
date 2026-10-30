@@ -797,6 +797,29 @@ fn status_lines_coloured_when_forced() {
     );
 }
 
+/// `doc --std` without a path documents the standard library alone, as
+/// rokc does: outside a package too, into ./target/doc/, and the status
+/// line names the library, not a temporary package.
+// spec: §9.1.2
+#[test]
+fn doc_std_without_a_package() {
+    let root = scratch("doc-std");
+    let home = root.join("home");
+    let dir = root.join("plain");
+    fs::create_dir_all(&dir).unwrap();
+    let out = rok(&home, &dir, &["doc", "--std"]);
+    ok(&out);
+    let err = text(&out.stderr);
+    assert!(
+        err.contains(" the standard library\n") && !err.contains("rokc-"),
+        "{err}"
+    );
+    assert!(dir.join("target/doc/rok-std").is_dir());
+    assert!(!dir.join("target/doc/plain").exists());
+    // A plain `doc` there still wants a package.
+    fails(&rok(&home, &dir, &["doc"]), "not inside a package");
+}
+
 // spec: §9.1.8 §9.10.1
 #[test]
 fn no_colour_when_piped_or_no_color() {

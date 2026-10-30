@@ -16,11 +16,11 @@ A push to `main` that the merge queue already passed runs `lint` only.
 A manual run (`workflow_dispatch`) takes `hosts` (all, or some of `linux-x64 linux-arm64 macos-arm64
 windows-x64 windows-arm64`), `jobs` (all, or some of `gate cross wasm bindgen dist`; `none`: prefixes only) and `filter`
 (`ROK_TEST_FILTER`: the integration cases to run; the differential suites always run). Hosts: `ubuntu-24.04` x86_64, `ubuntu-24.04-arm` aarch64, `macos-26`
-arm64, `windows-2022` x86_64, `windows-11-arm` aarch64 (cross only). x86_64-apple-darwin is a cross target only -- no native Intel-macOS host (GitHub's Intel runners are being retired).
+arm64, `windows-2022` x86_64, `windows-11-arm` aarch64 (cross only). x86_64-apple-darwin is a cross target only. There is no native Intel macOS host, as GitHub is retiring its Intel runners.
 
 ## Jobs
 
-- `llvm`, per host: the pinned LLVM prefix (`.github/actions/llvm-prefix`), downloaded from the public
+- `llvm-prefix`, per host: the pinned LLVM prefix (`.github/actions/llvm-prefix`), downloaded from the public
   `rok-lang-artifacts` S3 bucket (`llvm/<version>/<triple>/llvm.tar.gz`, SHA-256 verified) and no longer
   built here. A GitHub-hosted runner keeps it in the actions cache as a fast layer over the download (120-175
   MB per host; a cache entry made on a branch serves that branch only, so the first run on a new branch falls
@@ -49,7 +49,8 @@ arm64, `windows-2022` x86_64, `windows-11-arm` aarch64 (cross only). x86_64-appl
   sysroot link test.
 - `cross`, per target and level: the corpora for `ROK_TEST_TARGET` on a host that runs it:
   `i686-unknown-linux-gnu` (the i386 loader), `armv7-unknown-linux-gnueabihf` (qemu-user) and
-  `x86_64-unknown-linux-musl` (static) on linux-x64, `i686-pc-windows-msvc` (WOW64) on windows-x64,
+  `x86_64-unknown-linux-musl` (static) on linux-x64, `aarch64-unknown-linux-musl` (static) on
+  linux-arm64, `i686-pc-windows-msvc` (WOW64) on windows-x64,
   `aarch64-pc-windows-msvc` on windows-arm64, whose rokc is the x64 build under emulation with the x64
   prefix.
 - `wasm` (linux-x64), per wasm32 target: `targets/test-wasm.sh <target>`, with the image's node and clang.
@@ -65,6 +66,9 @@ arm64, `windows-2022` x86_64, `windows-11-arm` aarch64 (cross only). x86_64-appl
   / `mingw32-make`), then `install.ps1 -NoModifyPath` into a scratch `ROK_HOME` and, with only
   its `bin\` on PATH, `rok run` of a file and a `rok new --lib --bin` package's build / run / `--release`
   build / test.
+- `ci-gate`: the one required status check. It passes when `lint`, `plan`, `llvm-prefix`, `check`, `test` and
+  `corpus` passed or were skipped, and fails if any failed or was cancelled. A release tag needs it green
+  on `main` (docs/releasing.md).
 
 ## Self-hosted runners
 
