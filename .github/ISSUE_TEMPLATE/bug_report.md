@@ -1,7 +1,7 @@
 ---
 name: Bug report
 about: Something does not work as expected
-labels: bug
+labels: "type: bug"
 ---
 
 ## What happened
@@ -14,5 +14,5 @@ labels: bug
 
 ## Environment
 
-- Version (`rok version` / `rokc version`, or the package version):
+- Version (`rok version -v`, or the package version):
 - OS and architecture:

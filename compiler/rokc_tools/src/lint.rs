@@ -97,10 +97,7 @@ pub const LINTS: &[Lint] = &[
         "non_upper_case_globals",
         "`const` / `static` names are UPPER_SNAKE_CASE",
     ),
-    warn(
-        "confusable_idents",
-        "identifiers that look alike (spec 1.4.2)",
-    ),
+    warn("confusable_idents", "identifiers that look alike"),
     warn("deprecated", "use of a `#[deprecated]` function"),
     warn(
         "unclosed_resource",

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/rok.svg" alt="Rok" width="96" height="96">
+  <img src="https://raw.githubusercontent.com/rok-lang/web/main/assets/rok-transparent-512.png" alt="Rok" width="96">
 </p>
 
 # Rok

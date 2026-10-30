@@ -128,7 +128,7 @@ repository. Naming a script last adds it to the script's //! ```rokon
 block instead (made at the top when missing).",
         examples: &[
             ("rok add json", "the newest json stone"),
-            ("rok add json@^1.2", "a version requirement"),
+            ("rok add json@^0.1", "a version requirement"),
             ("rok add geom --path ../geom", "a package beside this one"),
             ("rok add json tool.rok", "into a script's block"),
         ],
@@ -178,9 +178,10 @@ rewrite rok.lock.",
         summary: "print the resolved dependencies",
         usage: &["deps [--dev] [feature options]"],
         about: "\
-Print the resolved dependencies as name=lib.rok, each after its own and
-followed by its features (--extern-feature=<name>=<f>). Native packages
-print as `# native <name> <version>` and their compiler arguments.",
+Print the resolved dependencies as name=lib.rok, each after its own
+dependencies and followed by its features (--extern-feature=<name>=<f>).
+Native packages print as `# native <name> <version>` and their compiler
+arguments.",
         examples: &[
             ("rok deps", ""),
             ("rok deps --dev", "with the dev dependencies"),
@@ -417,9 +418,11 @@ rewrite it.",
     CmdHelp {
         name: "version",
         summary: "print the version",
-        usage: &["version"],
-        about: "Print rok's version (also `rok --version`).",
-        examples: &[("rok version", "")],
+        usage: &["version [-v]"],
+        about: "\
+Print the version (also `rok --version`); with -v, also where rok and rokc
+are, the toolchain and the host.",
+        examples: &[("rok version -v", "")],
         ..CmdHelp::EMPTY
     },
 ];

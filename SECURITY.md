@@ -12,4 +12,4 @@ advisory unless you prefer otherwise.
 
 ## Supported versions
 
-rok is pre-1.0. Security fixes land on the latest 0.x release.
+Rok is pre-1.0. Security fixes land on the latest 0.x release.

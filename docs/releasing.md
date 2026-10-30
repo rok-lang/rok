@@ -9,7 +9,7 @@ publishes.
 
 ## Versioning and cadence
 
-rok shifts semantic versioning down one level while the major version is 0,
+Rok shifts semantic versioning down one level while the major version is 0,
 the way Cargo treats 0.x crates: the minor number is the breaking slot and
 the patch number carries features and fixes. A minor bump (`0.2.0`) is for
 breaking changes; a patch bump (`0.1.1`, `0.1.2`, ...) adds

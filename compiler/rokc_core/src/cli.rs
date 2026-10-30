@@ -22,7 +22,8 @@ commands:
                          executable's; `rok test` runs it (filter: regex with
                          ^ $ . * + ?, or a substring)
   bench [path] [filter]  build (-O2 unless -O given) the `#[bench]` harness;
-                         `rok bench` runs it and prints ns/iter (+/- deviation)
+                         `rok bench` runs it and prints the time per
+                         iteration (+/- deviation)
   check [path | -]       front end, lints and codegen, no native build
                          (`-`: source on stdin)
   lint [path]            front end and lints; exit 1 if a `deny` lint fires
@@ -41,7 +42,7 @@ commands:
                          target/doc/
   clean [path]           remove the package's target/
   bindgen <header> [-- <clang args>]
-                         rok declarations of a C header (stdout, or -o) for
+                         Rok declarations of a C header (stdout, or -o) for
                          the --target, through libclang (in the toolchain's
                          lib/); clang args such as -I <dir> or -D <name>
   demangle <symbol>...   decode `_Y` symbols
@@ -83,7 +84,7 @@ build options:
   -o, --out, --output <path>   output file
   --emit=<kind>[,<kind>...]    ast | hir | mir | mlir | llvmir | asm | obj | expanded
                                (ast: the package's whole AST after meta
-                               expansion and desugaring, as rok source;
+                               expansion and desugaring, as Rok source;
                                expanded: each meta expansion's output)
                                (written to target/<profile>/build/<name>.<ext>
                                unless -o)
@@ -116,7 +117,7 @@ build options:
                                debug_assertions below -O1) and exit
   --print target-list          print the built-in targets and exit
   --print target-spec          print the --target's spec as ROKON and exit
-  --print lldbinit             print the lldb command that loads rok's
+  --print lldbinit             print the lldb command that loads Rok's
                                formatters (sums, any) and exit
   --load-mlir-plugin <path|name>
                                MLIR dialect plugin (a name is searched
@@ -158,7 +159,7 @@ build options:
 
 check options:  --check-library (check every library body, reached or not)
 test options:   --threads=N, --show-output
-bench options:  --iters=N (calls per sample; default: calibrated to ~10ms),
+bench options:  --iters=N (calls per sample; default: calibrated to ~100ms),
                 --samples=N (timed samples, default 10),
                 --format=human|rokbench (rokbench: one `#rokbench` line
                 per benchmark for tools; default human, piped or not)
@@ -179,12 +180,34 @@ environment:
                     own lld)
   ROK_BACKEND       native | llvm: code generator, as -C backend
   ROKC_TARGET_DIR   target/ location (default: inside the package)
-  ROKC_VERBOSE      same as --verbose
-  ROKC_NUM_JOBS     default for --threads
+  ROKC_VERBOSE      1: same as --verbose
+  ROK_TIME_PASSES   1: the wall time of each compiler pass on stderr
+  ROKC_NUM_JOBS     default for --threads (default: the CPU count)
   ROKC_INCREMENTAL  where the front end keeps parses and lowered bodies
                     (default: target/<profile>/incremental/; 0: nowhere)
   ROKC_INCR_VERIFY  1: lower every body again and fail on a difference
+  ROK_MLIR_PLUGIN_PATH
+                    directories searched for an MLIR plugin given by name
+  ROK_LLVM_CACHE    where bindgen also looks for libclang
+  ROK_HOME          the toolchains, environments and caches (default:
+                    ~/.rok)
+  LIBRARY_PATH      native library search directories, after -L
+  BROWSER           the browser doc --open starts
+  ROK_REPL_TIME     1: the time of each phase of a REPL cell on stderr
+  NO_COLOR          non-empty: --color=auto uses no color
+  CLICOLOR_FORCE    non-empty and not 0: --color=auto uses color even when
+                    the stream is not a terminal, unless NO_COLOR is set
+  COLORTERM         truecolor or 24bit: 24-bit color
+  TERM              dumb: --color=auto uses no color; *256color*: the
+                    256-color palette
+  LLVM_PROFILE_FILE read by a -C profile-generate program: where its raw
+                    profile goes
   ROK_CLI           rok: messages name `rok`, not rokc (`rok` sets it)
+  ROK_ENV, ROK_ENV_LIBS
+                    the environment `rok` runs a script in, and its
+                    libraries (`rok` sets them)
+  ROK               the `rok` that REPL :add and the language server run
+                    (`rok` sets it)
 ";
 
 /// One command's help. `{tool}` in `usage`, `about` and `examples`
@@ -337,7 +360,8 @@ run them. A filter keeps the tests whose name matches: a regex with
         usage: &["bench [path] [filter] [options]"],
         about: "\
 Build the `#[bench]` functions (at -O2 unless an -O level is given) and run
-them; each prints ns/iter and its deviation. A filter works as for tests.",
+them; each prints its time per iteration and the deviation. A filter works
+as for tests.",
         rokc_note: "rokc only builds the harness; `rok bench` runs it.",
         examples: &[
             ("{tool} bench", "every benchmark"),
@@ -449,7 +473,8 @@ HTML docs of the package's library (else of its executable) and of its
 dependencies, in target/doc/.",
         examples: &[
             ("{tool} doc", "docs of the package here"),
-            ("{tool} doc --std", "with the standard library"),
+            ("{tool} doc . --std", "with the standard library"),
+            ("{tool} doc --std", "the standard library alone"),
             ("{tool} doc --open", "then open them in a browser"),
         ],
         sections: &["doc options"],
@@ -465,10 +490,10 @@ dependencies, in target/doc/.",
     },
     CmdHelp {
         name: "bindgen",
-        summary: "rok declarations of a C header",
+        summary: "Rok declarations of a C header",
         usage: &["bindgen <header> [options] [-- <clang args>]"],
         about: "\
-Write the rok declarations of a C header for the --target, read through
+Write the Rok declarations of a C header for the --target, read through
 libclang (in the toolchain's lib/). Clang arguments such as -I <dir> or
 -D <name> go after `--`.",
         examples: &[

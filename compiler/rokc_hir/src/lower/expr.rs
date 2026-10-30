@@ -2265,8 +2265,9 @@ fn infer_enum_instance(
             None if ctx.infer_vars => args.push(super::infer::fresh(ctx)),
             None => {
                 ctx.emit_uninferred(format!(
-                    "cannot infer the type arguments of `{full}` for `{}` - annotate the \
+                    "cannot infer the type arguments of `{}` for `{}` - annotate the \
                      binding with the concrete type",
+                    ctx.display_path(full),
                     segs.join("::")
                 ));
                 return None;
@@ -2554,8 +2555,9 @@ pub(super) fn lower_struct_init(
                             .and_then(|v| super::mono::typed_const(ctx, name, ty, v));
                         let Some(c) = c else {
                             ctx.emit_uninferred(format!(
-                                "cannot infer const parameter `{name}` of `{full}` - \
+                                "cannot infer const parameter `{name}` of `{}` - \
                                  annotate the binding (`let v: {}<..> = ..`)",
+                                ctx.display_path(&full),
                                 segs.join("::")
                             ));
                             return poison(span);
@@ -2573,8 +2575,9 @@ pub(super) fn lower_struct_init(
                             None if ctx.infer_vars => args.push(super::infer::fresh(ctx)),
                             None => {
                                 ctx.emit_uninferred(format!(
-                                    "cannot infer type parameter `{name}` of `{full}` - \
+                                    "cannot infer type parameter `{name}` of `{}` - \
                                      write `{}<...> {{ ... }}`",
+                                    ctx.display_path(&full),
                                     segs.join("::")
                                 ));
                                 ctx.tag_last(rokc_diagnostic::Tag::TypeParamInfer);

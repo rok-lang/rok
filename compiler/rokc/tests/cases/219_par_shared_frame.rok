@@ -4,7 +4,7 @@
 // Two `par` items holding one future's frame would run it on two workers:
 // the frame is one object the check sees, so they run one at a time.
 // expect-exit: 0
-// expect-stderr: warning: par::map at tests/cases/219_par_shared_frame.rok:26:14: two items reach one collection or future, so they run one at a time on this thread; give each item its own copy, or share read-only data through `Frozen` (stdlib 2.19.1)
+// expect-stderr: warning: par::map at tests/cases/219_par_shared_frame.rok:26:14: two items reach one collection or future, so they run one at a time on this thread; give each item its own copy, or share read-only data through `Frozen`
 // expect-stdout:
 // 200000 200000
 

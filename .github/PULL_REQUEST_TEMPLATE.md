@@ -1,4 +1,4 @@
-<!-- Thanks for contributing to rok. -->
+<!-- Thanks for contributing to Rok. -->
 
 ## Summary
 
