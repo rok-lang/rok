@@ -1188,6 +1188,28 @@ fn named_environments() {
     assert_eq!(ok(&out).split('=').next(), Some("d"));
     let list = ok(&rok(&home, &root, &["env", "list"]));
     assert_eq!(list, "  default\n* work (active)\n");
+    // The choice is in `.current`, and in `CURRENT` for older rok.
+    assert_eq!(read(&home.join("envs/.current")), "work\n");
+    assert_eq!(read(&home.join("envs/CURRENT")), "work\n");
+    // An older rok's `env use default` writes `CURRENT` only: newer wins.
+    let set_time = |f: &str, secs: u64| {
+        fs::File::options()
+            .write(true)
+            .open(home.join("envs").join(f))
+            .unwrap()
+            .set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(secs))
+            .unwrap();
+    };
+    write(&home.join("envs/CURRENT"), "default\n");
+    set_time(".current", 1_000_000);
+    set_time("CURRENT", 2_000_000);
+    assert_eq!(deps(&home, &elsewhere, &[])[0].0, "d");
+    set_time("CURRENT", 500_000);
+    assert_eq!(deps(&home, &elsewhere, &[])[0].0, "greet");
+    // An older rok's `env remove` drops `CURRENT`: no choice.
+    fs::remove_file(home.join("envs/CURRENT")).unwrap();
+    assert_eq!(deps(&home, &elsewhere, &[])[0].0, "d");
+    ok(&rok(&home, &root, &["env", "use", "work"]));
 
     // Export, import elsewhere.
     let export = root.join("export");
@@ -1238,6 +1260,82 @@ fn named_environments() {
     );
     // The choice went with it: back to `default`.
     assert_eq!(deps(&home, &elsewhere, &[])[0].0, "d");
+}
+
+/// Every source of an environment name is checked: never a path, never
+/// a device or the choice file, one environment per spelling whatever
+/// the case.
+// spec: §9.10.5
+#[test]
+fn environment_names_are_checked() {
+    let root = scratch("env-names");
+    let home = root.join("home");
+    let elsewhere = root.join("elsewhere");
+    fs::create_dir_all(&elsewhere).unwrap();
+    let jupyter = root.join("jupyter");
+    ok(&rok(&home, &root, &["env", "create", "work"]));
+    for (name, why) in [
+        (
+            "current",
+            "`current` is reserved for `rok env use`'s choice",
+        ),
+        ("CURRENT", "`CURRENT` is reserved"),
+        (".current", "starts with `.`"),
+        ("CON", "`CON` is a device name on Windows"),
+        ("nul.txt", "starts with a Windows device name (`nul`)"),
+        (
+            "Work",
+            "environment `work` already exists, and Windows and macOS see `Work` as the same name",
+        ),
+        ("a/b", "contains '/'"),
+    ] {
+        fails(&rok(&home, &root, &["env", "create", name]), why);
+    }
+    assert!(!home.join("envs/current").is_dir());
+    for (var, flag) in [("../../p1", false), ("../../p1", true), ("..", true)] {
+        let out = if flag {
+            rok(&home, &elsewhere, &["--env", var, "deps"])
+        } else {
+            rok_cmd(&home, &elsewhere, &["deps"])
+                .env("ROK_ENV", var)
+                .output()
+                .unwrap()
+        };
+        fails(&out, &format!("`{var}` is a path, not an environment name"));
+    }
+    write(&home.join("envs/CURRENT"), "../../p1\n");
+    write(&home.join("envs/.current"), "../../p1\n");
+    fails(
+        &rok(&home, &elsewhere, &["deps"]),
+        "`../../p1` is a path, not an environment name",
+    );
+    // One an older rok made still works, with a warning.
+    fs::create_dir_all(home.join("envs/a b")).unwrap();
+    let out = rok(&home, &elsewhere, &["--env", "a b", "deps"]);
+    ok(&out);
+    assert!(
+        text(&out.stderr).contains("warning: --env: `a b` is not a valid environment name"),
+        "{}",
+        text(&out.stderr)
+    );
+    if !cfg!(windows) {
+        fs::create_dir_all(home.join("envs/CON")).unwrap();
+        let out = rok(&home, &elsewhere, &["--env", "CON", "deps"]);
+        ok(&out);
+        assert!(
+            text(&out.stderr).contains("warning: --env: `CON` is a device name on Windows"),
+            "{}",
+            text(&out.stderr)
+        );
+    }
+    fails(
+        &rok_cmd(&home, &root, &["--env", "nosuch", "jupyter", "install"])
+            .env("JUPYTER_DATA_DIR", &jupyter)
+            .output()
+            .unwrap(),
+        "no environment `nosuch` (create it: rok env create nosuch)",
+    );
+    assert!(!jupyter.join("kernels/rok-nosuch").exists());
 }
 
 /// `rok <args>` in `cwd`; panics if it runs past a minute.
@@ -4730,6 +4828,22 @@ fn new_rejects_names_code_cannot_spell() {
         assert!(text(&out.stderr).contains(&format!("e.g. `{name}_util`")));
         assert!(!root.join(name).exists());
     }
+    // Names no file can carry on some OS.
+    for (name, why) in [
+        ("nul", "`nul` is a device name on Windows"),
+        ("com1", "`com1` is a device name on Windows"),
+        (
+            &"a".repeat(65),
+            "is 65 characters long; keep it to 64 or fewer",
+        ),
+    ] {
+        fails(&rok(&home, &root, &["new", name]), why);
+        assert!(!root.join(name).exists());
+    }
+    fails(
+        &rok(&home, &root, &["add", "aux", "--path", "x"]),
+        "`aux` is a device name on Windows",
+    );
     write(
         &root.join("named-pkg/rok.rokon"),
         "Package { name: \"pkg\", version: \"0.1.0\", deps: {} }\n",
@@ -4738,6 +4852,43 @@ fn new_rejects_names_code_cannot_spell() {
     fails(
         &rok(&home, &root.join("named-pkg"), &["build"]),
         "`pkg` already names a package's own root",
+    );
+}
+
+/// An existing manifest with a name some OS can't store or a version
+/// that is not semver still builds; each problem is a warning with its
+/// place. `rok init` in such a directory picks a name that works.
+// spec: §9.10.2 §9.10.3
+#[test]
+fn existing_manifest_bad_version_warns() {
+    let root = scratch("bad-version");
+    let home = root.join("home");
+    let app = root.join("con");
+    write(&app.join("src/main.rok"), "println(\"hi\");\n");
+    write(
+        &app.join("rok.rokon"),
+        "Package {\n    name: \"con\",\n    version: \"banana\",\n    deps: {},\n}\n",
+    );
+    let out = rok(&home, &app, &["check"]);
+    ok(&out);
+    let err = text(&out.stderr);
+    for want in [
+        "rok.rokon:2:11: `con` is a device name on Windows",
+        "rok.rokon:3:14: `banana` is not a version (major.minor.patch): it needs three numbers; \
+         `rok publish` needs one, e.g. `version: \"0.1.0\"`",
+    ] {
+        assert!(err.contains(want), "stderr lacks {want:?}:\n{err}");
+    }
+    assert_eq!(err.matches("`banana`").count(), 1, "{err}");
+
+    let dir = root.join("nul");
+    fs::create_dir_all(&dir).unwrap();
+    let out = rok(&home, &dir, &["init"]);
+    ok(&out);
+    assert!(
+        read(&dir.join("rok.rokon")).contains("name: \"pkg-nul\""),
+        "{}",
+        text(&out.stderr)
     );
 }
 

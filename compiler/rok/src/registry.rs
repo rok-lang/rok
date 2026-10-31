@@ -399,7 +399,7 @@ pub fn open(home: &Path, url: &str, offline: bool, quiet: bool) -> Result<Cache,
 pub fn entry_for(dir: &Path, m: &Manifest) -> Result<Entry, String> {
     m.check_publish()?;
     let name = m.name.clone().ok_or("rok.rokon has no `name`")?;
-    manifest::check_name(&name)?;
+    manifest::check_new_name(&name)?;
     let vers = Version::parse(m.version.as_deref().ok_or("rok.rokon has no `version`")?)?;
     // An executable-only stone is for `rok install`.
     if !dir.join("src/lib.rok").is_file() && !dir.join("src/main.rok").is_file() {

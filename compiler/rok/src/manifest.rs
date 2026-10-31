@@ -412,6 +412,9 @@ pub struct Manifest {
     /// `native`: prebuilt C libraries (a namespace of their own).
     pub native: Vec<NativeDep>,
     pub features: Features,
+    /// Problems that do not stop a build: a name no file can carry on
+    /// some OS, a `version` that is not semver (`load` prints them).
+    pub warnings: Vec<String>,
 }
 
 /// Where a native package comes from.
@@ -490,6 +493,14 @@ pub fn check_name(name: &str) -> Result<(), String> {
     ))
 }
 
+/// `check_name`, and a name every OS can store (`rokc_core::check_os_name`):
+/// what `rok new`, `init`, `add` and `publish` require. An existing
+/// manifest only warns (`parse`).
+pub fn check_new_name(name: &str) -> Result<(), String> {
+    check_name(name)?;
+    rokc_core::check_os_name("package", name)
+}
+
 /// The name code uses for package `name` (`use`, `--extern`): `-` as `_`.
 pub fn code_name(name: &str) -> String {
     name.replace('-', "_")
@@ -530,10 +541,15 @@ pub fn find(dir: &Path) -> Option<PathBuf> {
     found
 }
 
+/// `parse` the file at `path`; its warnings go to stderr, once each.
 pub fn load(path: &Path) -> Result<Manifest, String> {
     let text = std::fs::read_to_string(path)
         .map_err(|e| format!("cannot read {}: {e}", path.display()))?;
-    parse(&text, &path.display().to_string())
+    let m = parse(&text, &path.display().to_string())?;
+    for w in &m.warnings {
+        crate::warn_once(w);
+    }
+    Ok(m)
 }
 
 /// `toolchain` of the manifest text, read alone: fields this version does
@@ -659,9 +675,26 @@ pub fn parse(text: &str, file: &str) -> Result<Manifest, String> {
             lints.push((k.string()?, level));
         }
     }
+    let mut warnings = Vec::new();
+    let mut warn = |d: Decoder<'_>, msg: &str| {
+        let (line, col) = rokc_rokon::line_col(text, d.span().start as usize);
+        warnings.push(format!("{file}:{line}:{col}: {msg}"));
+    };
     // The package name is the dependency name others give it.
     if let Some(d) = pkg.opt("name") {
-        check_name(&d.string()?).map_err(|m| d.error(&m))?;
+        let name = d.string()?;
+        check_name(&name).map_err(|m| d.error(&m))?;
+        if let Err(m) = rokc_core::check_os_name("package", &name) {
+            warn(d, &m);
+        }
+    }
+    if let Some(d) = pkg.opt("version") {
+        if let Err(e) = crate::semver::Version::parse(&d.string()?) {
+            warn(
+                d,
+                &format!("{e}; `rok publish` needs one, e.g. `version: \"0.1.0\"`"),
+            );
+        }
     }
     let normal = deps("deps")?;
     let mut features = Features::new();
@@ -686,6 +719,20 @@ pub fn parse(text: &str, file: &str) -> Result<Manifest, String> {
             .and_then(|kv| kv.into_iter().nth(k))
             .map_or_else(|| m.clone(), |(key, _)| key.error(&m)),
     })?;
+    let dev = deps("dev_deps")?;
+    let native = pkg.opt("native").map_or(Ok(Vec::new()), natives)?;
+    for f in ["deps", "dev_deps", "native"] {
+        for (k, _) in pkg
+            .opt(f)
+            .map(|d| d.dict())
+            .transpose()?
+            .unwrap_or_default()
+        {
+            if let Err(m) = rokc_core::check_os_name("package", &k.string()?) {
+                warn(k, &m);
+            }
+        }
+    }
     Ok(Manifest {
         name: string("name")?,
         version: string("version")?,
@@ -700,11 +747,12 @@ pub fn parse(text: &str, file: &str) -> Result<Manifest, String> {
         keywords,
         publish: pkg.opt("publish").map(|d| d.bool()).transpose()?,
         deps: normal,
-        dev_deps: deps("dev_deps")?,
+        dev_deps: dev,
         lints,
         lints_from: string("lints_from")?,
-        native: pkg.opt("native").map_or(Ok(Vec::new()), natives)?,
+        native,
         features,
+        warnings,
     })
 }
 
