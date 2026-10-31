@@ -253,7 +253,7 @@ impl Cx<'_> {
             ),
             // Spec 6.2.14: a safe library function a later release makes
             // `unsafe`. A meta block of the name from before keeps it.
-            "future_unsafe" if !self.metas.knows_attribute("future_unsafe") => {
+            "deprecated_safe" if !self.metas.knows_attribute("deprecated_safe") => {
                 (&[P::Fn, P::Method, P::ExternFn, P::Static], message(a))
             }
             "doc" => (

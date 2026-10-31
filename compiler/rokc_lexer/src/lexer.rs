@@ -788,7 +788,7 @@ impl<'src> Lexer<'src> {
         )
         .with_file(self.file.clone())
         .with_help(help)
-        .with_lint("octal_like_literal")
+        .with_lint("zero_prefixed_literal")
         .with_fix(
             span,
             decimal.clone(),
@@ -1532,7 +1532,7 @@ mod tests {
             assert_eq!(d.len(), 1, "{src}: {d:?}");
             assert_eq!(
                 d[0].lint.as_deref().map(String::as_str),
-                Some("octal_like_literal")
+                Some("zero_prefixed_literal")
             );
             assert_eq!(d[0].notes, [help], "{src}");
         }

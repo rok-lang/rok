@@ -285,12 +285,12 @@ impl Path {
     }
 
     pub const fn strip_prefix(self, base: Path) throws (StripPrefixError) -> Path {
-        match self.strip_prefix_opt(base) { p: Path => p, none => throw StripPrefixError {} }
+        match self.strip_prefix_or_none(base) { p: Path => p, none => throw StripPrefixError {} }
     }
 
     /// The rest of `self` after `base` (component-wise), or `none` when
     /// `self` does not start with it (`str::strip_prefix` alike).
-    pub const fn strip_prefix_opt<P: AsPath>(self, base: P) -> Path | none {
+    pub const fn strip_prefix_or_none<P: AsPath>(self, base: P) -> Path | none {
         let b = base.as_path();
         if !self.starts_with(b) { return none; }
         let a = self.component_list();

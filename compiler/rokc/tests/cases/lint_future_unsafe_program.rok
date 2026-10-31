@@ -1,8 +1,0 @@
-// spec: §6.2.14
-// expect-error: `#[future_unsafe]` on `raw`: it marks a library function that a later release makes `unsafe`; in a program, write `unsafe fn` instead
-
-// A program's own function is made `unsafe fn` now, not marked.
-#[future_unsafe("the pointer must be live")]
-fn raw(x: i32) -> i32 { x }
-
-println(raw(1));

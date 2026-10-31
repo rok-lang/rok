@@ -4603,7 +4603,7 @@ impl<'a> LowerCtx<'a> {
             }
             out.push(w);
         }
-        if let (Some(note), 0) = (&mark.future_unsafe, self.unsafe_depth) {
+        if let (Some(note), 0) = (&mark.deprecated_safe, self.unsafe_depth) {
             let mut w = rokc_diagnostic::RokDiagnostic::warning(
                 rokc_diagnostic::ErrorKind::Lint,
                 at,

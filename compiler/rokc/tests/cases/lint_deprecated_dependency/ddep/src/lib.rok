@@ -23,7 +23,7 @@ impl<T> Cell<T> {
 pub fn old() -> i32 { 2 }
 pub fn uses_old() -> i32 { old() }
 
-#[future_unsafe("`x` must point at a live value")]
+#[deprecated_safe("`x` must point at a live value")]
 pub fn from_raw(x: i32) -> i32 { x }
 
 #[deprecated("use `LIMIT`")]

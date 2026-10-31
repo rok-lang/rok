@@ -25,9 +25,6 @@ pub(super) struct Hit {
     pub msg: String,
     pub notes: Vec<String>,
     pub secondary: Option<(Span, String)>,
-    /// The release that started reporting it, when newer than the lint:
-    /// `unclosed_resource` findings 0.1.5 did not make.
-    pub since: Option<&'static str>,
 }
 
 /// Methods that close what they are called on (`into_*` too). `next`,
@@ -35,7 +32,7 @@ pub(super) struct Hit {
 /// as a `for` (`for await`) does.
 const CLOSERS: &[&str] = &[
     "close",
-    "close_checked",
+    "try_close",
     "drop",
     "wait",
     "wait_with_output",
@@ -55,8 +52,6 @@ pub(super) struct Resources<'h> {
     tls: HashSet<StructId>,
     /// `BufWriter`, `LineWriter`.
     flushed: HashSet<StructId>,
-    /// What 0.1.5 judged: its resource types (name, HIR method prefix).
-    legacy: HashMap<StructId, (&'h str, String)>,
     structs: HashMap<StructId, &'h rokc_hir::HirStructDef>,
     /// `(callee, parameter)` → the callee only calls the value's own
     /// non-closing methods.
@@ -102,14 +97,10 @@ impl<'h> Resources<'h> {
             .collect();
         let base = |n: &'h str| n.split("__").next().unwrap_or(n);
         let mut types = HashMap::new();
-        let mut legacy = HashMap::new();
         let (mut senders, mut tls, mut flushed) = (HashSet::new(), HashSet::new(), HashSet::new());
         for s in &hir.structs {
             let own = format!("Struct{}", s.id.0);
             let n = s.name.as_str();
-            if STD.contains(&n) || drops.contains(own.as_str()) || drops.contains(n) {
-                legacy.insert(s.id, (n, own.clone()));
-            }
             if STD.contains(&n)
                 || drops.contains(own.as_str())
                 || drops.contains(n)
@@ -142,7 +133,6 @@ impl<'h> Resources<'h> {
             senders,
             tls,
             flushed,
-            legacy,
             structs: hir.structs.iter().map(|s| (s.id, s)).collect(),
             reads: RefCell::default(),
         }
@@ -154,88 +144,6 @@ impl<'h> Resources<'h> {
         CLOSERS.contains(&m)
             || m.starts_with("into_")
             || (m == "flush" && self.flushed.contains(&sid))
-    }
-
-    /// The locals of the values 0.1.5 reported in `f`: a named,
-    /// non-parameter `Drop` local whose every use is a call of its own
-    /// non-closing method. Other findings are new in 0.1.6 and stay out of
-    /// `warnings`.
-    fn legacy(&self, f: &HirFunction) -> HashSet<LocalId> {
-        const CLOSERS: &[&str] = &["close", "close_checked", "drop", "wait", "wait_with_output"];
-        let mut out = HashSet::new();
-        let resource = |t: &HirTy| match t {
-            HirTy::Struct(id) => self.legacy.get(id).map(|(n, own)| (*n, own.as_str())),
-            _ => None,
-        };
-        let Some(body) = f
-            .body
-            .as_ref()
-            .filter(|_| f.locals.iter().any(|l| resource(&l.ty).is_some()))
-        else {
-            return out;
-        };
-        // `using` calls `drop` through `Drop`: `<type>.drop__by_Drop`.
-        let method = |callee: FunctionId, ty: &str, own: &str| -> Option<&str> {
-            let n = self.fns.get(&callee)?.name.as_str();
-            let n = n.split("__by_").next().unwrap_or(n);
-            n.strip_prefix(own)
-                .filter(|m| m.starts_with("__") || m.starts_with('.'))
-                .and_then(|m| m.rsplit("__").next())
-                .or_else(|| n.strip_prefix(ty)?.strip_prefix('.'))
-        };
-        let (root, form) = aliases(body);
-        let root_of = |l: LocalId| *root.get(&l).unwrap_or(&l);
-        let mut groups: HashMap<_, HashMap<_, _>> = HashMap::new();
-        for l in &f.locals {
-            groups
-                .entry(root_of(l.id))
-                .or_default()
-                .insert(l.id, resource(&l.ty));
-        }
-        let params: HashSet<_> = f.params.iter().map(|p| p.local).collect();
-        for r in f.locals.iter().filter(|l| !params.contains(&l.id)) {
-            let Some(group) = groups
-                .get(&r.id)
-                .filter(|g| g.values().any(Option::is_some))
-            else {
-                continue;
-            };
-            let member = |e: &HirExpr| match e.kind {
-                HirExprKind::Local(x) => group.get(&x),
-                _ => None,
-            };
-            let (mut uses, mut kept, mut first) = (0, 0, None);
-            each_block(body, &mut |e| {
-                if member(e).is_some() && !form.contains(&std::ptr::from_ref(e)) {
-                    uses += 1;
-                    first = first.or(Some(e));
-                }
-                let HirExprKind::Call { callee, args } = &e.kind else {
-                    return;
-                };
-                if let Some(Some((ty, own))) = args.first().and_then(member) {
-                    if method(*callee, ty, own)
-                        .is_some_and(|m| !CLOSERS.contains(&m) && !m.starts_with("into_"))
-                    {
-                        kept += 1;
-                    }
-                }
-            });
-            let Some(HirExprKind::Local(x)) = first.filter(|_| uses == kept).map(|e| &e.kind)
-            else {
-                continue;
-            };
-            let named = f
-                .locals
-                .iter()
-                .find(|l| l.id == *x)
-                .and_then(|l| l.name.as_deref())
-                .is_some_and(|n| !n.starts_with(['#', '_']));
-            if named {
-                out.extend(group.keys().copied());
-            }
-        }
-        out
     }
 
     /// The method name of `callee` when its receiver is a `sid`.
@@ -516,10 +424,6 @@ struct Walk<'a, 'h> {
     /// The last span walked: where a bare `return` is.
     last: Span,
     temps: HashSet<(u32, u32)>,
-    /// The locals whose leaks 0.1.5 reported too.
-    legacy: HashSet<LocalId>,
-    /// Every local each group was held by.
-    holders: HashMap<usize, HashSet<LocalId>>,
     hits: &'a mut Vec<Hit>,
 }
 
@@ -571,8 +475,6 @@ pub(super) fn check<'h>(
         targets: Vec::new(),
         last: f.span,
         temps: HashSet::new(),
-        legacy: res.legacy(f),
-        holders: HashMap::new(),
         hits,
     };
     let mut st: State = Some(Vec::new());
@@ -606,7 +508,6 @@ impl<'h> Walk<'_, 'h> {
     /// Local `l` holds the value of group `g` from here on.
     fn hold(&mut self, l: LocalId, g: usize) {
         self.member.insert(l, g);
-        self.holders.entry(g).or_default().insert(l);
     }
 
     /// A local the lowering made (`_1`, `#e15`).
@@ -1294,7 +1195,7 @@ impl<'h> Walk<'_, 'h> {
 
     /// The leaks found, once the whole body is walked.
     fn report(&mut self) {
-        for (g, gr) in self.groups.iter().enumerate() {
+        for gr in &self.groups {
             let Some((at, why)) = gr.leak else { continue };
             if !self.files.contains(&gr.at.file) {
                 continue;
@@ -1347,19 +1248,12 @@ impl<'h> Walk<'_, 'h> {
             if !shown {
                 notes.insert(0, why.to_owned());
             }
-            // 0.1.5 reported this value too: it stays in `warnings`.
-            let old = lint == "unclosed_resource"
-                && self
-                    .holders
-                    .get(&g)
-                    .is_some_and(|ls| ls.iter().any(|l| self.legacy.contains(l)));
             self.hits.push(Hit {
                 lint,
                 span: open,
                 msg,
                 notes,
                 secondary: shown.then(|| (at, why.to_owned())),
-                since: (lint == "unclosed_resource" && !old).then_some("0.1.6"),
             });
         }
     }
@@ -1388,7 +1282,6 @@ impl<'h> Walk<'_, 'h> {
                 self.res.closer(sid).unwrap_or("close")
             )],
             secondary: None,
-            since: (!sender).then_some("0.1.6"),
         });
     }
 
@@ -1425,7 +1318,6 @@ impl<'h> Walk<'_, 'h> {
                         .to_owned(),
                 ],
                 secondary: None,
-                since: None,
             });
         }
     }
@@ -1749,80 +1641,6 @@ fn thread_local_across_await(
                 waited,
                 "the task may move to another thread here".to_owned(),
             )),
-            since: None,
         });
-    }
-}
-
-/// Each local bound to another's value (renamed, narrowed, destructured, a
-/// capture from `__env`) mapped to the first holder, and the reads that
-/// only form such aliases (the 0.1.5 judgement, `Resources::legacy`).
-fn aliases(body: &HirBlock) -> (HashMap<LocalId, LocalId>, HashSet<*const HirExpr>) {
-    type Form = Vec<*const HirExpr>;
-    fn base(e: &HirExpr, root: &HashMap<LocalId, LocalId>, form: &mut Form) -> Option<LocalId> {
-        match &e.kind {
-            HirExprKind::Local(x) => {
-                form.push(std::ptr::from_ref(e));
-                Some(*root.get(x).unwrap_or(x))
-            }
-            HirExprKind::TupleField { target, .. } | HirExprKind::FieldRead { target, .. } => {
-                base(target, root, form)
-            }
-            HirExprKind::Match { scrutinee, arms } => {
-                let r = base(scrutinee, root, form)?;
-                arms.iter()
-                    .all(|a| base(&a.body, root, form) == Some(r))
-                    .then_some(r)
-            }
-            _ => None,
-        }
-    }
-    fn lets(
-        blk: &HirBlock,
-        root: &HashMap<LocalId, LocalId>,
-        add: &mut Vec<(LocalId, LocalId)>,
-        form: &mut Form,
-    ) {
-        for s in &blk.stmts {
-            let HirStmt::Let { local, init } = s else {
-                continue;
-            };
-            let mut fv = Vec::new();
-            if let Some(r) = base(init, root, &mut fv) {
-                add.push((*local, r));
-                form.extend(fv);
-            }
-        }
-    }
-    let (mut root, mut form) = (HashMap::new(), HashSet::new());
-    loop {
-        let (mut add, mut fadd) = (Vec::new(), Vec::new());
-        lets(body, &root, &mut add, &mut fadd);
-        each_block(body, &mut |e| match &e.kind {
-            HirExprKind::Block(blk)
-            | HirExprKind::While { body: blk, .. }
-            | HirExprKind::Loop { body: blk, .. }
-            | HirExprKind::If {
-                then_block: blk, ..
-            } => lets(blk, &root, &mut add, &mut fadd),
-            HirExprKind::Match { scrutinee, arms } => {
-                let mut fv = Vec::new();
-                if let Some(r) = base(scrutinee, &root, &mut fv) {
-                    fadd.extend(fv);
-                    for a in arms {
-                        a.pat.each_binding(&mut |l| add.push((l, r)));
-                    }
-                }
-            }
-            _ => {}
-        });
-        form.extend(fadd);
-        let mut changed = false;
-        for (l, r) in add {
-            changed |= l != r && root.insert(l, r) != Some(r);
-        }
-        if !changed {
-            return (root, form);
-        }
     }
 }

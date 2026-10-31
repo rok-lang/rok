@@ -58,8 +58,8 @@ pub fn env_knob<T>(
 pub const RENAMED_VARS: &[(&str, &str)] = &[
     ("ROK_TARGET_DIR", "ROKC_TARGET_DIR"),
     ("ROK_INCREMENTAL", "ROKC_INCREMENTAL"),
-    ("ROK_INCR_VERIFY", "ROKC_INCR_VERIFY"),
-    ("ROK_NUM_JOBS", "ROKC_NUM_JOBS"),
+    ("ROK_INCREMENTAL_VERIFY", "ROKC_INCR_VERIFY"),
+    ("ROK_TEST_THREADS", "ROKC_NUM_JOBS"),
     ("ROK_VERBOSE", "ROKC_VERBOSE"),
 ];
 

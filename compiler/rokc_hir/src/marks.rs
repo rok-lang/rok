@@ -1,4 +1,4 @@
-//! `#[deprecated]` (spec 6.2.7) and `#[future_unsafe]` (6.2.14): what an
+//! `#[deprecated]` (spec 6.2.7) and `#[deprecated_safe]` (6.2.14): what an
 //! item's attributes say about using it.
 
 use rokc_ast::{AttrArg, AttrBody, Attribute, Literal};
@@ -9,8 +9,8 @@ use rokc_core::codec_struct;
 pub struct Mark {
     /// `#[deprecated]`.
     pub deprecated: Option<Deprecation>,
-    /// `#[future_unsafe("note")]`: its note (empty: none).
-    pub future_unsafe: Option<String>,
+    /// `#[deprecated_safe("note")]`: its note (empty: none).
+    pub deprecated_safe: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -23,19 +23,12 @@ pub struct Deprecation {
 
 codec_struct!(Mark {
     deprecated,
-    future_unsafe
+    deprecated_safe
 });
 codec_struct!(Deprecation { note, since });
 
-/// How a `deprecated` warning's note names the release: lint levels read
-/// it back ([`since_in`]).
+/// How a `deprecated` warning's note names the release.
 const SINCE: &str = "deprecated since ";
-
-/// The release a `deprecated` warning's notes name, if any.
-#[must_use]
-pub fn since_in(notes: &[String]) -> Option<&str> {
-    notes.iter().find_map(|n| n.strip_prefix(SINCE))
-}
 
 impl Deprecation {
     /// The notes of a warning about a use of `name`: since when, and what
@@ -120,8 +113,8 @@ pub fn mark_of(attrs: &[Attribute]) -> Option<Mark> {
     for a in attrs {
         match a.path.as_slice() {
             [n] if n == "deprecated" => m.deprecated = deprecation(a),
-            [n] if n == "future_unsafe" => {
-                m.future_unsafe = Some(match &a.body {
+            [n] if n == "deprecated_safe" => {
+                m.deprecated_safe = Some(match &a.body {
                     AttrBody::Value(l) => text(l).unwrap_or_default(),
                     AttrBody::Args(xs) => match xs.as_slice() {
                         [AttrArg::Lit(l)] => text(l).unwrap_or_default(),

@@ -8,10 +8,10 @@
 // expect-lint: 53:60 use of deprecated field `IoError.kind`
 // expect-lint: 53:71 use of deprecated field `IoError.code`
 // expect-lint: 53:80 use of deprecated field `IoError.message`
-// expect-lint: 55:75 use of deprecated field `RokonError.line`
-// expect-lint: 55:84 use of deprecated field `RokonError.col`
-// expect-lint: 55:92 use of deprecated field `RokonError.path`
-// expect-lint: 55:101 use of deprecated field `RokonError.msg`
+// expect-lint: 55:78 use of deprecated field `RokonError.line`
+// expect-lint: 55:87 use of deprecated field `RokonError.col`
+// expect-lint: 55:95 use of deprecated field `RokonError.path`
+// expect-lint: 55:104 use of deprecated field `RokonError.msg`
 // expect-lint: 61:76 use of deprecated field `JoinError.code`
 // expect-lint: 61:85 use of deprecated field `JoinError.code`
 // expect-lint: 61:95 use of deprecated constant `JOIN_TAKEN`
@@ -52,7 +52,7 @@ fn main() {
     let e = IoError::with_kind(IoErrorKind::NotFound, "gone");
     println(f"io: {e.kind():?} {e.code()} {e.message()} | {e.kind:?} {e.code} {e.message}");
     try rokon::from_str::<S>("{b: \"x\"}") catch x {
-        println(f"rokon: {x.line()}:{x.col()} {x.path()} {x.message()} | {x.line} {x.col} {x.path} {x.msg}");
+        println(f"rokon: {x.line()}:{x.column()} {x.path()} {x.message()} | {x.line} {x.col} {x.path} {x.msg}");
         S { b: 0 }
     };
     let h = thread::spawn(|| 1);

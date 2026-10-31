@@ -1,7 +1,7 @@
 // spec: 004.03.11-return-in-closures-and-nested-functions
 // expect-exit: 0
 // expect-lint: 22:21 this `return` leaves only the trailing closure, not the function around it
-// expect-warning: help: to leave the function, write a `for` loop instead of the call; to end only this call of the closure, add `#[allow(closure_return)]`
+// expect-warning: help: to leave the function, write a `for` loop instead of the call; to end only this call of the closure, add `#[allow(trailing_closure_return)]`
 // expect-stdout:
 // 1
 // 3

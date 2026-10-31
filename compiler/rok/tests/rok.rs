@@ -2794,8 +2794,9 @@ fn publish_stones(root: &Path, home: &Path, index: &Path) -> String {
         format!(
             "rok: warning: `rok publish --index <dir>` is now `--index-dir <dir>` (write \
              `--index-dir {reg}`); `--index` goes in 0.2.0\n\
-             rok: warning: `rok publish` will need `--commit` or `--dry-run` in 0.2.0; this was a \
-             dry run (write `rok publish --dry-run`)\n\
+             rok: warning: from 0.2.0 `rok publish` publishes; this was a dry run (write `rok \
+             publish --dry-run` to keep previewing, or `rok publish --commit`, which 0.2.0 no \
+             longer needs)\n\
              note: dry run; --commit commits it to {reg} as 3/n/num (not pushed)"
         )
     );
@@ -3204,9 +3205,17 @@ fn login_publish_yank_api() {
     // Yank with the environment's token, no file; a bad one is refused.
     ok(&run(&["logout"]));
     assert!(!cred.exists() && !read(&keyed).contains("rks_ok"));
-    ok(&done(
-        at(&["yank", "num@1.0.0"]).env("ROK_REGISTRY_TOKEN", "rks_ok"),
-    ));
+    let out = done(at(&["yank", "num@1.0.0"]).env("ROK_REGISTRY_TOKEN", "rks_ok"));
+    ok(&out);
+    // Not the default index: 0.2.0 no longer sends the variable's token.
+    assert!(
+        text(&out.stderr).contains(
+            "0.2.0 sends it only to https://github.com/rok-lang/rokstones.io-index: for this \
+             index run `rok login --registry "
+        ),
+        "{}",
+        text(&out.stderr)
+    );
     assert_eq!(
         last(),
         "POST /api/v1/yank [Bearer rks_ok] Yank { name: \"num\", vers: \"1.0.0\", undo: false, \

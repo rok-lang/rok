@@ -102,7 +102,7 @@ pub struct FormatSpec {
     pub sign: Sign | none;
     #[deprecated(since = "0.1.6", note = "read it with `spec.alternate()`; build a spec with `FormatSpec::try_parse`")]
     pub alt: bool;
-    #[deprecated(since = "0.1.6", note = "read it with `spec.pad_zero()`; build a spec with `FormatSpec::try_parse`")]
+    #[deprecated(since = "0.1.6", note = "read it with `spec.zero_pad()`; build a spec with `FormatSpec::try_parse`")]
     pub zero: bool;
     #[deprecated(since = "0.1.6", note = "read it with `spec.width()`; build a spec with `FormatSpec::try_parse`")]
     pub width: usize | none;
@@ -121,7 +121,7 @@ impl FormatSpec {
     /// `#`.
     pub const fn alternate(self) -> bool { self.alt }
     /// `0`.
-    pub const fn pad_zero(self) -> bool { self.zero }
+    pub const fn zero_pad(self) -> bool { self.zero }
     pub const fn width(self) -> usize | none { self.width }
     pub const fn precision(self) -> usize | none { self.precision }
     /// The type letter (`'\0'` for none or `s d g`).
@@ -275,7 +275,9 @@ impl Formatter {
     pub const fn sign(self) -> Sign | none { sign_of_byte(self.byte(40u64)) }
 
     pub const fn alternate(self) -> bool { ((self.flags >> 56u64) & 1u64) != 0u64 }
-    pub const fn pad_zero(self) -> bool { ((self.flags >> 57u64) & 1u64) != 0u64 }
+    pub const fn zero_pad(self) -> bool { ((self.flags >> 57u64) & 1u64) != 0u64 }
+    #[deprecated(since = "0.1.6", note = "use `zero_pad`")]
+    pub const fn pad_zero(self) -> bool { self.zero_pad() }
     pub const fn width(self) -> usize | none { count_of(self.counts) }
     pub const fn precision(self) -> usize | none { count_of(self.counts >> 32u64) }
 

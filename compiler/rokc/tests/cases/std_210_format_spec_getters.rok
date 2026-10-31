@@ -12,7 +12,7 @@
 fn main() {
     let s = FormatSpec::parse("*<#8.3x");
     let a = s.align() is Alignment;
-    println(f"{s.fill()} {s.width() ?? 0} {s.precision() ?? 0} {s.alternate()} {s.pad_zero()} {s.ty()}");
+    println(f"{s.fill()} {s.width() ?? 0} {s.precision() ?? 0} {s.alternate()} {s.zero_pad()} {s.ty()}");
     try {
         let _ = FormatSpec::try_parse(">>>");
     } catch e: ValueError {

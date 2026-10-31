@@ -2129,13 +2129,15 @@ fn collect<'a>(
             .and_then(|t| t.decls.get(leaf_name(&f.name)));
         let mark = mark_of(&f.attrs).or_else(|| declared.and_then(|t| mark_of(&t.attrs)));
         if let Some(mark) = mark {
-            if mark.future_unsafe.is_some() && package_of(&module).is_empty() && input.lib.is_none()
+            if mark.deprecated_safe.is_some()
+                && package_of(&module).is_empty()
+                && input.lib.is_none()
             {
                 err(
                     &mut pre_diags,
                     here,
                     format!(
-                        "`#[future_unsafe]` on `{}`: it marks a library function that a later \
+                        "`#[deprecated_safe]` on `{}`: it marks a library function that a later \
                          release makes `unsafe` (spec 6.2.14); in a program, write `unsafe fn` \
                          instead",
                         leaf_name(&f.name)
@@ -6843,7 +6845,7 @@ fn check_extern_ffi(env: &Env<'_>, programs: &[&Program]) {
                  `#[repr(C)]` struct of those; 0.2.0 makes this an error (spec 5.9.4)"
                     .to_owned(),
             )
-            .with_lint("extern_ffi_types"),
+            .with_lint("improper_ctypes"),
         );
     };
     let fn_types = |f: &FnDef, kind: &str| {

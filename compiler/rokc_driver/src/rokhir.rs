@@ -225,7 +225,7 @@ impl Rokhir {
         self.type_offset + self.type_count
     }
 
-    /// `rokc inspect --text` (904.14): header fields, then every file.
+    /// `rokc inspect --dump` (904.14): header fields, then every file.
     #[must_use]
     pub fn text(&self) -> String {
         let mut s = format!(

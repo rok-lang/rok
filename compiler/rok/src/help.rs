@@ -267,14 +267,15 @@ only checks it, against the index checkout <dir> if given. --commit
 commits it to <dir>, or without --index-dir sends it to the registry API
 of the configured index or of --registry <url> (log in first with `rok
 login`, or set $ROK_REGISTRY_TOKEN). Without either it is a dry run that
-warns: 0.2.0 asks for one. --index is the old name of --index-dir.",
+warns: from 0.2.0 a bare `rok publish` publishes and --dry-run previews,
+so --commit is no longer needed. --index is the old name of --index-dir.",
         examples: &[
             ("rok publish --dry-run", "check what would be published"),
             ("rok publish --commit", "publish it"),
         ],
         flags: &[
             ("--dry-run", "only check"),
-            ("--commit", "really publish"),
+            ("--commit", "really publish (the default from 0.2.0)"),
             ("--registry <url>", "another index than the configured one"),
             ("--index-dir <dir>", "a checkout of the index"),
             (

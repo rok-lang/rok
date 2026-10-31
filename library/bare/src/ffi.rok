@@ -80,7 +80,7 @@ pub struct CStr {
 impl CStr {
     /// The C string at `p` (copied in); `none` for a null pointer.
     /// Without a NUL terminator the behavior is undefined.
-    #[future_unsafe("`p` must be null or point at a live NUL-terminated string")]
+    #[deprecated_safe("`p` must be null or point at a live NUL-terminated string")]
     pub fn from_ptr(p: ConstPtr<c_char>) -> CStr | none {
         if p.addr() == 0 {
             return none;

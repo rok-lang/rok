@@ -13,7 +13,7 @@
 
 // A dependency's marks reach this package's uses: its methods, fields,
 // constants and generic methods, in a generic body too, even one no
-// call instantiates. A `#[future_unsafe]` call warns outside `unsafe`
+// call instantiates. A `#[deprecated_safe]` call warns outside `unsafe`
 // only. The dependency's own uses do not warn here.
 use ddep::Cell;
 use ddep::Conf;

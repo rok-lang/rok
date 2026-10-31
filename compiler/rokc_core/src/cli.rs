@@ -46,12 +46,12 @@ commands:
                          the --target, through libclang (in the toolchain's
                          lib/); clang args such as -I <dir> or -D <name>
   demangle <symbol>...   decode `_Y` symbols
-  inspect [--text] <file>
+  inspect [--dump] <file>
                          a prebuilt library's package, exports, generic
-                         items and archive members (--text: its whole
+                         items and archive members (--dump: its whole
                          ROKHIR); <file> is <name>.rokhir or the
                          lib<name>.a beside it
-  rokhir-text <file>     old name of `inspect --text`, until 0.2.0
+  rokhir-text <file>     old name of `inspect --dump`, until 0.2.0
   emit [path]            write an intermediate artifact (see --emit)
   profdata merge [-o <file>] <file | dir>...
                          merge the .profraw / .profdata files (a directory:
@@ -194,10 +194,11 @@ environment:
   ROK_TARGET_DIR    target/ location (default: inside the package)
   ROK_VERBOSE       1: same as --verbose
   ROK_TIME_PASSES   1: the wall time of each compiler pass on stderr
-  ROK_NUM_JOBS      default for --threads (default: the CPU count)
+  ROK_TEST_THREADS  default for --threads (default: the CPU count)
   ROK_INCREMENTAL   where the front end keeps parses and lowered bodies
                     (default: target/<profile>/incremental/; 0: nowhere)
-  ROK_INCR_VERIFY   1: lower every body again and fail on a difference
+  ROK_INCREMENTAL_VERIFY
+                    1: lower every body again and fail on a difference
   ROKC_TARGET_DIR, ROKC_VERBOSE, ROKC_NUM_JOBS, ROKC_INCREMENTAL,
   ROKC_INCR_VERIFY  the old names of the five above: read when the new
                     one is not set, with a warning, until 0.2.0
@@ -585,28 +586,28 @@ libclang (in the toolchain's lib/). Clang arguments such as -I <dir> or
     CmdHelp {
         name: "inspect",
         summary: "describe a prebuilt library",
-        usage: &["inspect [--text] <file>"],
+        usage: &["inspect [--dump] <file>"],
         about: "\
 Print a prebuilt library's package, exports, generic items and archive
-members; with --text, its whole ROKHIR as text. <file> is <name>.rokhir
+members; with --dump, its whole ROKHIR as text. <file> is <name>.rokhir
 or the lib<name>.a beside it.",
         examples: &[
             ("{tool} inspect target/debug/libgeom.a", ""),
             (
-                "{tool} inspect --text target/debug/libgeom.a",
+                "{tool} inspect --dump target/debug/libgeom.a",
                 "the whole ROKHIR",
             ),
         ],
-        flags: &[("--text", "the whole ROKHIR as text")],
+        flags: &[("--dump", "the whole ROKHIR as text")],
         ..CmdHelp::EMPTY
     },
     CmdHelp {
         name: "rokhir-text",
-        summary: "old name of `inspect --text`",
+        summary: "old name of `inspect --dump`",
         usage: &["rokhir-text <file>"],
         about: "\
-The old name of `inspect --text`, read until 0.2.0 with a warning.",
-        examples: &[("{tool} inspect --text target/debug/libgeom.a", "")],
+The old name of `inspect --dump`, read until 0.2.0 with a warning.",
+        examples: &[("{tool} inspect --dump target/debug/libgeom.a", "")],
         ..CmdHelp::EMPTY
     },
     CmdHelp {

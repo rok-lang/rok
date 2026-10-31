@@ -1,5 +1,8 @@
 // spec: std 210-fmt §2.10.2 §2.10.12
+// spec: §6.2.7
 // expect-exit: 0
+// expect-lint: 57:64 use of deprecated method `Formatter::pad_zero`
+// expect-warning: = note: use `zero_pad`
 // expect-stdout:
 // ab-c
 // [**hi**] [hel]
@@ -10,7 +13,8 @@
 // Stdlib 2.10.2: a `Formatter` on its own buffer (`new`, `with_spec`,
 // `finish`), `pad` applying fill / align / width / precision, the spec
 // accessors after `FormatSpec::parse`, `pad_integral`; writes to memory
-// never throw `FmtError` (2.10.12).
+// never throw `FmtError` (2.10.12). `pad_zero` is the old name of
+// `zero_pad` and warns.
 fn show_align(a: Alignment | none) -> str {
     match a {
         none => "-",
@@ -48,7 +52,7 @@ fn main() throws (FmtError) {
     println(f"[{g.finish()}] [{h.finish()}]");
 
     let k = Formatter::with_spec(FormatSpec::parse("*<+#08.3x"));
-    println(f"{k.fill()} {show_align(k.align())} {show_sign(k.sign())} {k.alternate() && k.pad_zero()} {k.width() ?? 0} {k.precision() ?? 0}");
+    println(f"{k.fill()} {show_align(k.align())} {show_sign(k.sign())} {k.alternate() && k.zero_pad()} {k.width() ?? 0} {k.precision() ?? 0}");
     let e = Formatter::new();
     println(f"{e.width():?} {e.precision():?} {e.alternate()} {e.pad_zero()} {show_align(e.align())} {show_sign(e.sign())}");
 

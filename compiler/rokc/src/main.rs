@@ -66,8 +66,8 @@ struct Args {
     show_output: bool,
     lint_levels: rokc_tools::lint::Levels,
     list: bool,
-    /// `inspect --text`: the whole ROKHIR as text.
-    text: bool,
+    /// `inspect --dump`: the whole ROKHIR as text.
+    dump: bool,
     /// `profdata show --all-functions`.
     all_functions: bool,
     /// `profdata show --topn N`.
@@ -290,7 +290,7 @@ fn parse_args(raw: Vec<String>, mut tail: Vec<OsString>) -> Args {
             "--diff" => a.diff = true,
             "--show-output" => a.show_output = true,
             "--list" => a.list = true,
-            "--text" => a.text = true,
+            "--dump" => a.dump = true,
             "--all-functions" => a.all_functions = true,
             "--topn" => {
                 let n = value(&name, inline, &mut it);
@@ -1683,13 +1683,13 @@ fn build_harness(a: &Args, pkg: &Package, mode: Mode) -> (PathBuf, Vec<String>) 
     (exe, result.tests)
 }
 
-/// The default test thread count: `--threads`, else `ROK_NUM_JOBS`, else
-/// the available parallelism. `rok`'s runner reads it from the manifest.
+/// The default test thread count: `--threads`, else `ROK_TEST_THREADS`,
+/// else the available parallelism. `rok`'s runner reads it from the manifest.
 fn test_threads(a: &Args) -> usize {
     a.threads
         .or_else(|| {
             rokc_core::env_knob(
-                rokc_core::env_name("ROK_NUM_JOBS"),
+                rokc_core::env_name("ROK_TEST_THREADS"),
                 "a positive number",
                 |v| v.parse().ok().filter(|&n| n > 0),
             )
@@ -1707,7 +1707,7 @@ fn write_harness_manifest(
     harnesses: &[(PathBuf, Vec<String>)],
 ) {
     // Resolve the thread count for a test run whether or not a manifest is
-    // emitted, so `ROK_NUM_JOBS` is validated (and a bad value warned)
+    // emitted, so `ROK_TEST_THREADS` is validated (and a bad value warned)
     // on every `rokc test`.
     let threads = (mode == Mode::Test).then(|| test_threads(a));
     let Some(path) = a.emit_harness.as_ref() else {
@@ -2168,20 +2168,20 @@ fn cmd_bindgen(a: &Args) {
     }
 }
 
-/// `inspect [--text] <file>`, and its old name `rokhir-text <file>`.
+/// `inspect [--dump] <file>`, and its old name `rokhir-text <file>`.
 fn cmd_inspect(a: &Args) {
     let [file] = a.positional.as_slice() else {
-        usage_error("usage: rokc inspect [--text] <file.rokhir | lib<name>.a>");
+        usage_error("usage: rokc inspect [--dump] <file.rokhir | lib<name>.a>");
     };
     if a.cmd == "rokhir-text" {
         let tool = cli::invoked_as();
         rokc_core::warn_once(&format!(
-            "`{tool} rokhir-text` is now `{tool} inspect --text` (write `{tool} inspect --text \
+            "`{tool} rokhir-text` is now `{tool} inspect --dump` (write `{tool} inspect --dump \
              {file}`); `rokhir-text` goes in 0.2.0"
         ));
     }
     let path = Path::new(file);
-    let out = if a.cmd == "inspect" && !a.text {
+    let out = if a.cmd == "inspect" && !a.dump {
         rokc_interface::rokhir::inspect(path)
     } else {
         let rokhir = rokc_interface::rokhir::companions(path).0;

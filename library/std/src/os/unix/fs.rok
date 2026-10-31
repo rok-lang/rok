@@ -3,28 +3,36 @@
 
 use rok::std::fs::{OpenOptions, Permissions};
 
-/// The Unix permission bits of a `Permissions`.
+/// The Unix permission bits of a `Permissions`. Until 0.2.0 the
+/// deprecated inherent `Permissions::from_mode` / `mode` win method
+/// lookup: reach these as `PermissionsExt::mode(p)` and
+/// `let p: Permissions = PermissionsExt::from_mode(m)`.
 pub trait PermissionsExt {
     /// Permissions with bits `mode` (`0o644`; bits past `0o7777` are
     /// dropped).
-    fn from_unix_mode(mode: u32) -> Self;
+    fn from_mode(mode: u32) -> Self;
     /// The permission bits.
-    fn unix_mode(self) -> u32;
+    fn mode(self) -> u32;
+    /// `self` with bits `mode` (as `from_mode`).
+    fn set_mode(self, mode: u32) -> Self;
 }
 
 impl PermissionsExt for Permissions {
-    const fn from_unix_mode(mode: u32) -> Permissions { Permissions { mode: mode & 0o7777u32 } }
-    const fn unix_mode(self) -> u32 { self.mode }
+    const fn from_mode(mode: u32) -> Permissions { Permissions { mode: mode & 0o7777u32 } }
+    const fn mode(self) -> u32 { self.mode }
+    const fn set_mode(self, mode: u32) -> Permissions { Permissions { mode: mode & 0o7777u32 } }
 }
 
-/// The Unix permission bits of a file `open_with` creates.
+/// The Unix permission bits of a file `open_with` creates. Until 0.2.0
+/// the deprecated inherent `OpenOptions::mode` wins method lookup: reach
+/// this one as `OpenOptionsExt::mode(opts, m)`.
 pub trait OpenOptionsExt {
     /// The bits a created file gets, before the umask (default `0o666`).
-    fn unix_mode(self, mode: u32) -> Self;
+    fn mode(self, mode: u32) -> Self;
 }
 
 impl OpenOptionsExt for OpenOptions {
-    const fn unix_mode(self, mode: u32) -> OpenOptions {
+    const fn mode(self, mode: u32) -> OpenOptions {
         self.mode = mode;
         self
     }

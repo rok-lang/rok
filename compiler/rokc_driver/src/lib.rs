@@ -771,7 +771,7 @@ fn compile_unit_in(
     let incr = incr::current();
     let ids = incr::Ids::of(files);
     // The library's collected stage, kept or read back, spares parsing the
-    // library's files (except under `ROK_INCR_VERIFY`).
+    // library's files (except under `ROK_INCREMENTAL_VERIFY`).
     let verify = incr::verify().is_some();
     let flags = format!(
         "{:?} {lib:?} {:?} {} {} {} {} {} {:?} {} {}",

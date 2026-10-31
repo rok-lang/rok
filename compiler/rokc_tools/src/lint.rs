@@ -38,15 +38,9 @@ pub struct Lint {
     pub name: &'static str,
     pub default: Level,
     pub desc: &'static str,
-    /// The release that added it: `warnings` covers it only up to
-    /// [`BASELINE`].
+    /// The release that added it (`lint --list` shows it).
     pub since: &'static str,
 }
-
-/// The newest release the `warnings` group covers. A lint or a
-/// deprecation added after it keeps its default level under `warnings`,
-/// so `"warnings": "deny"` builds on every later release of the series.
-pub const BASELINE: &str = "0.1.5";
 
 const fn warn(name: &'static str, desc: &'static str) -> Lint {
     Lint {
@@ -139,7 +133,7 @@ pub const LINTS: &[Lint] = &[
     Lint {
         name: "deprecated_safe",
         default: Level::Warn,
-        desc: "a call of a `#[future_unsafe]` function outside `unsafe`",
+        desc: "a call of a `#[deprecated_safe]` function outside `unsafe`",
         since: "0.1.6",
     },
     Lint {
@@ -149,7 +143,7 @@ pub const LINTS: &[Lint] = &[
         since: "0.1.6",
     },
     Lint {
-        name: "octal_like_literal",
+        name: "zero_prefixed_literal",
         default: Level::Warn,
         desc: "a decimal literal with a leading zero (`0755` is 755): write `0o755` or `755`",
         since: "0.1.6",
@@ -173,7 +167,7 @@ pub const LINTS: &[Lint] = &[
         since: "0.1.6",
     },
     Lint {
-        name: "closure_return",
+        name: "trailing_closure_return",
         default: Level::Warn,
         desc: "a bare `return` in a statement's trailing closure: it leaves the closure, not the function",
         since: "0.1.6",
@@ -183,7 +177,7 @@ pub const LINTS: &[Lint] = &[
         "a field write on a value-captured struct: it changes the closure's own copy",
     ),
     warn_since(
-        "const_mutation",
+        "const_item_mutation",
         "a `ref self` or mutating method called on a `const`: it changes a fresh copy",
     ),
     warn_since(
@@ -235,7 +229,7 @@ pub const LINTS: &[Lint] = &[
         "an extern static read or written outside `unsafe`",
     ),
     warn_since(
-        "extern_ffi_types",
+        "improper_ctypes",
         "a GC type (`List`, `Dict`, a closure, a sum, ..) in an extern declaration or an `extern \"C\" fn`",
     ),
     warn_since(
@@ -244,7 +238,7 @@ pub const LINTS: &[Lint] = &[
     ),
 ];
 
-/// A lint added in 0.1.6, outside `warnings`.
+/// A lint added in 0.1.6.
 const fn warn_since(name: &'static str, desc: &'static str) -> Lint {
     Lint {
         name,
@@ -255,7 +249,7 @@ const fn warn_since(name: &'static str, desc: &'static str) -> Lint {
 }
 
 /// Lint groups usable wherever a lint name is (`all`: every lint;
-/// `warnings`: every lint up to [`BASELINE`]).
+/// `warnings`: every warning-level lint, later ones included).
 const GROUPS: &[(&str, &[&str])] = &[
     (
         "unused",
@@ -292,7 +286,7 @@ fn expand_in(lints: &'static [Lint], name: &str) -> Option<Vec<&'static str>> {
             return Some(
                 lints
                     .iter()
-                    .filter(|l| !newer(l.since, BASELINE))
+                    .filter(|l| l.default == Level::Warn)
                     .map(|l| l.name)
                     .collect(),
             );
@@ -306,12 +300,6 @@ fn expand_in(lints: &'static [Lint], name: &str) -> Option<Vec<&'static str>> {
         .iter()
         .find(|(g, _)| *g == name)
         .map(|(_, ls)| ls.to_vec())
-}
-
-/// Release `v` comes after release `than` (`0.1.10` > `0.1.9`).
-fn newer(v: &str, than: &str) -> bool {
-    let parts = |s: &str| -> Vec<u64> { s.split('.').map(|p| p.parse().unwrap_or(0)).collect() };
-    parts(v) > parts(than)
 }
 
 /// "unknown lint `name`" with a did-you-mean and where the list is.
@@ -359,9 +347,7 @@ pub fn list() -> String {
             l.desc
         ));
     }
-    s.push_str(&format!(
-        "groups: all (every lint), warnings (every lint up to {BASELINE})"
-    ));
+    s.push_str("groups: all (every lint), warnings (every warning-level lint)");
     for (g, ls) in GROUPS {
         s.push_str(&format!(", {g} ({})", ls.join(", ")));
     }
@@ -376,21 +362,18 @@ struct Finding {
     msg: String,
     notes: Vec<String>,
     secondary: Option<(Span, String)>,
-    /// The release that deprecated what it reports, when that is newer
-    /// than the lint (see [`applies`]).
-    since: Option<String>,
     /// A compiler warning that carries the lint: it keeps its labels,
     /// notes and fixes.
     base: Option<Box<RokDiagnostic>>,
 }
 
 /// An attribute scope: `[start, end)` of file `file`, with the levels its
-/// `#[allow/warn/deny]` attributes set (`true`: through `warnings`).
+/// `#[allow/warn/deny]` attributes set.
 struct Region {
     file: u32,
     start: u32,
     end: u32,
-    levels: Vec<(Level, &'static str, Span, bool)>,
+    levels: Vec<(Level, &'static str, Span)>,
 }
 
 /// A macro or meta template renames its own locals with a hygiene suffix
@@ -407,15 +390,9 @@ fn demangle(name: &str) -> &str {
     name
 }
 
-/// Whether a level the `warnings` group set (`group`) applies to a
-/// finding from release `since`: not when that is past [`BASELINE`].
-fn applies(group: bool, since: Option<&str>) -> bool {
-    !group || !since.is_some_and(|s| newer(s, BASELINE))
-}
-
-/// A level set for a lint: the level, the note naming where (`None`: the
-/// default), and whether only `warnings` set it.
-type Set = (Level, Option<String>, bool);
+/// A level set for a lint: the level and the note naming where (`None`:
+/// the default).
+type Set = (Level, Option<String>);
 
 /// Lint a front-end result (`Session::set_keep_ast`).
 ///
@@ -427,7 +404,7 @@ pub fn run(result: &CompileResult, levels: &Levels) -> Vec<RokDiagnostic> {
     let mut out = Vec::new();
     let mut base: HashMap<&'static str, Vec<Set>> = LINTS
         .iter()
-        .map(|l| (l.name, vec![(l.default, None, false)]))
+        .map(|l| (l.name, vec![(l.default, None)]))
         .collect();
     for (i, (lvl, name)) in levels.flags.iter().enumerate() {
         let (from, at) = match &levels.manifest {
@@ -444,7 +421,7 @@ pub fn run(result: &CompileResult, levels: &Levels) -> Vec<RokDiagnostic> {
             Some(ls) => {
                 for l in ls {
                     if let Some(sets) = base.get_mut(l) {
-                        sets.push((*lvl, Some(from.clone()), name == "warnings"));
+                        sets.push((*lvl, Some(from.clone())));
                     }
                 }
             }
@@ -489,10 +466,6 @@ pub fn run(result: &CompileResult, levels: &Levels) -> Vec<RokDiagnostic> {
                 msg: w.message.clone(),
                 notes: Vec::new(),
                 secondary: None,
-                since: (l.name == "deprecated")
-                    .then(|| rokc_hir::marks::since_in(&w.notes))
-                    .flatten()
-                    .map(str::to_owned),
                 base: Some(Box::new(w.clone())),
             }),
             None => out.push(w.clone()),
@@ -507,18 +480,15 @@ pub fn run(result: &CompileResult, levels: &Levels) -> Vec<RokDiagnostic> {
         if generated {
             continue;
         }
-        let since = f.since.as_deref();
         let (mut level, mut from) = base[f.lint]
-            .iter()
-            .rev()
-            .find(|s| applies(s.2, since))
+            .last()
             .map(|s| (s.0, s.1.clone()))
-            .expect("the default level always applies");
+            .expect("the default level is always set");
         let mut at = None;
         for r in &regions {
             if r.file == f.span.file && r.start <= f.span.start && f.span.start < r.end {
-                for &(lvl, name, span, group) in &r.levels {
-                    if name == f.lint && applies(group, since) {
+                for &(lvl, name, span) in &r.levels {
+                    if name == f.lint {
                         level = lvl;
                         at = Some((span, lvl));
                         from = None;
@@ -597,12 +567,12 @@ fn name_span(texts: &[(String, String)], at: Span, name: &str) -> Option<Span> {
     })
 }
 
-/// `(level, lint, attribute span, by `warnings`)` for each lint an `allow`
-/// / `warn` / `deny` attribute names; unknown names are reported to `out`.
+/// `(level, lint, attribute span)` for each lint an `allow` / `warn` /
+/// `deny` attribute names; unknown names are reported to `out`.
 fn levels_of(
     attrs: &[Attribute],
     out: &mut Vec<RokDiagnostic>,
-) -> Vec<(Level, &'static str, Span, bool)> {
+) -> Vec<(Level, &'static str, Span)> {
     let mut levels = Vec::new();
     for a in attrs {
         let Some(lvl) = Level::parse(a.name()) else {
@@ -619,7 +589,7 @@ fn levels_of(
             };
             match expand(name) {
                 Some(ls) => {
-                    levels.extend(ls.into_iter().map(|l| (lvl, l, a.span, name == "warnings")));
+                    levels.extend(ls.into_iter().map(|l| (lvl, l, a.span)));
                 }
                 None => out.push(RokDiagnostic::warning(
                     ErrorKind::Lint,
@@ -1050,7 +1020,6 @@ impl<'a> Cx<'a> {
             msg,
             notes: Vec::new(),
             secondary: None,
-            since: None,
             base: None,
         });
     }
@@ -1086,7 +1055,6 @@ impl<'a> Cx<'a> {
                 msg: format!("{what} `{name}` should have {style} name"),
                 notes: vec![format!("rename it to `{fixed}`")],
                 secondary: None,
-                since: None,
                 base: None,
             });
         }
@@ -1257,7 +1225,6 @@ impl<'a> Cx<'a> {
                 msg: l.msg,
                 notes: vec![format!("help: {}", l.help)],
                 secondary: None,
-                since: None,
                 base: None,
             });
         }
@@ -1282,7 +1249,6 @@ impl<'a> Cx<'a> {
                     stmts[i].span,
                     "any code following this statement is unreachable".to_owned(),
                 )),
-                since: None,
                 base: None,
             });
         }
@@ -1443,7 +1409,6 @@ impl<'a> Cx<'a> {
                 msg: h.msg,
                 notes: h.notes,
                 secondary: h.secondary,
-                since: h.since.map(str::to_owned),
                 base: None,
             });
         }
@@ -1501,7 +1466,6 @@ impl<'a> Cx<'a> {
                         msg,
                         notes: fix.into_iter().collect(),
                         secondary: None,
-                        since: None,
                         base: None,
                     });
                 }
@@ -1561,7 +1525,6 @@ impl<'a> Cx<'a> {
                 "help: to put the value of `{name}` in the text, write `f\"{raw}\"`"
             )],
             secondary: None,
-            since: None,
             base: None,
         });
     }
@@ -1679,7 +1642,6 @@ impl<'a> Cx<'a> {
                 ),
                 notes: Vec::new(),
                 secondary: None,
-                since: None,
                 base: None,
             };
             f.notes.extend(Some(msg).filter(|m| !m.is_empty()));
@@ -1687,9 +1649,9 @@ impl<'a> Cx<'a> {
         }
     }
 
-    /// `closure_return`: a bare `return;` in the trailing closure of a
-    /// statement's call (`each(xs) |x| { .. }`) ends only that call of the
-    /// closure.
+    /// `trailing_closure_return`: a bare `return;` in the trailing closure
+    /// of a statement's call (`each(xs) |x| { .. }`) ends only that call of
+    /// the closure.
     fn closure_returns(&mut self, e: &Expr) {
         let (ExprKind::Call {
             trailing_closure: Some(c),
@@ -1712,17 +1674,16 @@ impl<'a> Cx<'a> {
         walk_expr(&mut v, body);
         for at in v.found {
             self.findings.push(Finding {
-                lint: "closure_return",
+                lint: "trailing_closure_return",
                 span: at,
                 msg: "this `return` leaves only the trailing closure, not the function around it"
                     .to_owned(),
                 notes: vec![
                     "help: to leave the function, write a `for` loop instead of the call; \
-                     to end only this call of the closure, add `#[allow(closure_return)]`"
+                     to end only this call of the closure, add `#[allow(trailing_closure_return)]`"
                         .to_owned(),
                 ],
                 secondary: None,
-                since: None,
                 base: None,
             });
         }
@@ -1750,7 +1711,6 @@ impl<'a> Cx<'a> {
             msg: format!("use of deprecated {what} `{name}`"),
             notes: d.notes(&name),
             secondary: None,
-            since: d.since,
             base: None,
         });
     }
@@ -1982,7 +1942,6 @@ impl AstVisitor for Cx<'_> {
                         "if this is intentional, prefix it with an underscore: `_{name}`"
                     )],
                     secondary: None,
-                    since: None,
                     base: None,
                 });
             }
@@ -2196,23 +2155,18 @@ mod tests {
     }
 
     #[test]
-    fn warnings_group_excludes_newer() {
+    fn warnings_group_takes_later_lints() {
         static FAKE: &[Lint] = &[
             warn("old", "a lint of the first release"),
+            warn_since("new", "a lint of a later release"),
             Lint {
-                name: "new",
-                default: Level::Warn,
-                desc: "a lint added after the baseline",
+                name: "quiet",
+                default: Level::Allow,
+                desc: "a lint off by default",
                 since: "0.1.6",
             },
         ];
-        assert_eq!(expand_in(FAKE, "warnings").unwrap(), ["old"]);
-        assert_eq!(expand_in(FAKE, "all").unwrap(), ["old", "new"]);
-        assert!(newer("0.1.10", "0.1.9") && newer("0.2.0", BASELINE));
-        assert!(!newer(BASELINE, BASELINE) && !newer("0.1.0", BASELINE));
-        // A deprecation newer than the baseline skips what `warnings` set.
-        assert!(!applies(true, Some("0.1.6")));
-        assert!(applies(true, Some("0.1.5")) && applies(true, None));
-        assert!(applies(false, Some("0.1.6")));
+        assert_eq!(expand_in(FAKE, "warnings").unwrap(), ["old", "new"]);
+        assert_eq!(expand_in(FAKE, "all").unwrap(), ["old", "new", "quiet"]);
     }
 }
