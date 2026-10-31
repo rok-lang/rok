@@ -124,6 +124,12 @@ pub const LINTS: &[Lint] = &[
         "missing_f_prefix",
         "a plain string holds `{name}` of a local in scope: it needs `f\"..\"`",
     ),
+    Lint {
+        name: "literal_spread_mismatch",
+        default: Level::Warn,
+        desc: "`f(..[a, b, c])` or `f(..{\"k\": v})` whose literal cannot fill the parameters: the call panics",
+        since: "0.1.6",
+    },
 ];
 
 /// Lint groups usable wherever a lint name is (`all`: every lint;

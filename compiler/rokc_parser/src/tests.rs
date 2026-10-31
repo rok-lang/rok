@@ -1339,3 +1339,24 @@ fn last_stmt_semi_is_optional() {
     assert_rejected("fn f() { x = 1 y = 2; }", "expected `;`");
     assert_rejected("fn f() { let a = 1 let b = 2; }", "expected `;`");
 }
+
+#[test]
+fn ext_ops_scope_ascii_led_to_their_package() {
+    let program = parse(
+        r#"trait T {
+            #[infix("<-", like = "+")] fn a(self, o: i32) -> i32;
+            #[infix("⊕", like = "+")] fn b(self, o: i32) -> i32;
+        }"#,
+    );
+    let (table, errs) = collect_prec_table(&program, &[]);
+    assert!(errs.is_empty(), "{errs:?}");
+    let mut dep = crate::PrecTable::new();
+    for mut e in table.entries().cloned() {
+        e.package = "dep".to_owned();
+        dep.insert(e);
+    }
+    let ext = dep.ext_ops();
+    assert_eq!(ext.in_package("dep").symbols(), ["⊕", "<-"]);
+    // `<-` starts like `<`: other packages keep `a < -1`; `⊕` is build-wide.
+    assert_eq!(ext.in_package("").symbols(), ["⊕"]);
+}

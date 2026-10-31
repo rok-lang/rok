@@ -607,6 +607,37 @@ fn compiler_warning_with_lint_can_be_allowed() {
     );
 }
 
+/// A lint added after the baseline: `-D warnings` leaves it a warning,
+/// `-D all` and its own name deny it.
+#[test]
+fn literal_spread_mismatch_is_outside_warnings() {
+    let dir = scratch("lint-spread");
+    let app = new_package(&dir, "app", false);
+    let src = "fn add(a: i32, b: i32) -> i32 { a + b }\n\
+               fn main() {\n    println(f\"{add(..[1, 2, 3])}\");\n}\n";
+    put(app.join("src/main.rok"), src).unwrap();
+    let warn = "warning[E503]: spread of 3 elements into 2 parameters; this call panics";
+    let out = rokc(None, &app, &["lint", "-D", "warnings"]);
+    assert_exit(&out, 0);
+    assert!(text(&out.stderr).contains(warn), "{}", text(&out.stderr));
+    for deny in ["all", "literal_spread_mismatch"] {
+        let out = rokc(None, &app, &["lint", "-D", deny]);
+        assert_exit(&out, 1);
+    }
+    let out = rokc(None, &app, &["lint", "-A", "literal_spread_mismatch"]);
+    assert!(
+        !text(&out.stderr).contains("spread"),
+        "{}",
+        text(&out.stderr)
+    );
+    let out = rokc(None, &app, &["lint", "--list"]);
+    assert!(
+        text(&out.stdout).contains("literal_spread_mismatch  warn  0.1.6"),
+        "{}",
+        text(&out.stdout)
+    );
+}
+
 /// 9.10.7: a cached script is linked again when the runtime changes.
 // spec: §9.10.7 §9.2.16
 #[test]

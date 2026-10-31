@@ -1,0 +1,33 @@
+// spec: 004.02-parameters
+// expect-exit: 0
+// expect-lint: 19:26 spread of 3 elements into 2 parameters; this call panics
+// expect-lint: 20:35 spread of key "c", which names no parameter left to fill; this call panics
+// expect-lint: 21:29 spread of 2 elements into 1 parameter; this call panics
+// expect-lint: 22:28 spread of 1 element into 2 parameters; this call panics
+// expect-warning: help: spread a list of exactly 2 elements, or pass the arguments without `..`
+// expect-warning: help: use a key that names a parameter: `"a"`, `"b"`
+// expect-stdout: 3 7 3 3 7
+
+// A literal spread into fixed parameters whose length or keys cannot
+// fit is sure to panic: a warning at compile time, the check at run time.
+fn add(a: i32, b: i32) -> i32 { a + b }
+fn first<T>(_a: T, b: T) -> T { b }
+
+fn main() -> i32 {
+    let xs = [4];
+    if xs.len() > 5 {
+        println(f"{add(..[1, 2, 3])}");
+        println(f"{add(..{"a": 1, "c": 2})}");
+        println(f"{add(1, ..[2, 3])}");
+        println(f"{first(..[1])} {quiet()}");
+    }
+    // These fit, or are known only at run time.
+    let d = {"b": 6};
+    println(f"{add(..[1, 2])} {add(..[3, ..xs])} {add(..{"b": 2, "a": 1})} {first(..[2, 3])} {add(1, ..d)}");
+    return 0;
+}
+
+#[allow(literal_spread_mismatch)]
+fn quiet() -> i32 {
+    add(..[1])
+}

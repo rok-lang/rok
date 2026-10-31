@@ -756,6 +756,9 @@ fn compile_unit_in(
     // Per package: the user's, then each library root's.
     let metas: Vec<MetaCtx> = (0..=roots.len())
         .map(|i| MetaCtx {
+            package: i
+                .checked_sub(1)
+                .map_or_else(String::new, |r| roots[r].0.join("::")),
             table: std::sync::Arc::clone(&meta_table),
             keywords: keywords.get(i).cloned().unwrap_or_default(),
             literals: std::sync::Arc::clone(if i == 0 { &user_lits } else { &lib_lits }),
@@ -1252,7 +1255,10 @@ fn build_prec_table(
         }
         for (sub_table, mut collect_diags) in tables {
             diags.append(&mut collect_diags);
-            diags.extend(sub_table.entries().cloned().filter_map(|e| table.merge(e)));
+            diags.extend(sub_table.entries().cloned().filter_map(|mut e| {
+                e.package.clone_from(&package);
+                table.merge(e)
+            }));
         }
     }
     table
@@ -1656,7 +1662,12 @@ fn relex_metas(metas: &mut PrePass, ext: &rokc_parser::ExtOps) {
         .map(|d| ((d.file, d.span), (d.package, d.cfg)))
         .collect();
     for (file, source, id) in &metas.meta_files {
-        let lexer = Lexer::new(source, file.clone()).with_ext_ops(symbols.clone());
+        let package = placed
+            .iter()
+            .find(|((f, _), _)| f == file)
+            .map_or("", |(_, (p, _))| p.as_str());
+        let symbols = ext.in_package(package).symbols();
+        let lexer = Lexer::new(source, file.clone()).with_ext_ops(symbols);
         let (mut tokens, _) = lexer.lex_all();
         for t in &mut tokens {
             t.span.file = *id;
@@ -1948,6 +1959,7 @@ fn cached_parse(
     ext: &ExtOps,
     metas: &MetaCtx,
 ) -> (rokc_ast::Program, Vec<RokDiagnostic>) {
+    let ext = &*ext.in_package(&metas.package);
     let file = path.display().to_string();
     let source = pre.source.as_bytes();
     let inc: Vec<u8> = includes
@@ -2032,6 +2044,7 @@ fn parse_file(
     ext: &ExtOps,
     metas: &MetaCtx,
 ) -> (rokc_ast::Program, Vec<RokDiagnostic>) {
+    let ext = &*ext.in_package(&metas.package);
     let lexer = Lexer::new(source, file.clone()).with_ext_ops(ext.symbols());
     let (mut tokens, mut diags) = lexer.lex_all();
     for t in &mut tokens {
@@ -2272,6 +2285,8 @@ fn cached<T: Clone>(
 /// What a package's parse needs from the pre-pass: every meta block,
 /// and the package's own keywords (6.6.5) with their handler paths.
 struct MetaCtx {
+    /// `""` for the package being built, else its library root's path.
+    package: String,
     table: std::sync::Arc<MetaTable>,
     keywords: KeywordTable,
     /// `#[literal]` patterns: the libraries', plus the package's own.
