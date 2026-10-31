@@ -1376,6 +1376,13 @@ struct Tables<'a> {
     decls: Vec<MethodOrFn<'a>>,
     /// `#[non_exhaustive]` structs and enums (spec 6.2.10), by name.
     non_exhaustive: std::collections::HashSet<String>,
+    /// Marked functions and methods (spec 6.2.7, 6.2.14): the name a
+    /// warning shows (`P::new`), the marks.
+    fn_marks: HashMap<FunctionId, (String, crate::marks::Mark)>,
+    /// Marked fields (`m::P.x`), consts and statics, by key.
+    marks: HashMap<String, crate::marks::Mark>,
+    /// The package whose uses of marked items warn: the one built.
+    mark_pkg: Option<String>,
     /// Per `(trait, method)`: the template a call on a type parameter
     /// bounded by the trait goes through (`bounds::templates`).
     bound_methods: HashMap<(String, String), GenericMethod>,
@@ -1578,6 +1585,18 @@ impl<'a> Env<'a> {
         self.non_exhaustive.contains(name)
     }
 
+    /// Function `id`'s marks, with the name a warning shows.
+    fn fn_mark(&self, id: FunctionId) -> Option<&(String, crate::marks::Mark)> {
+        incr::read(|| incr::Read::FnMark(id));
+        self.fn_marks.get(&id)
+    }
+
+    /// The marks of field, const or static `key`.
+    fn mark(&self, key: &str) -> Option<&crate::marks::Mark> {
+        incr::read(|| incr::Read::Mark(key.to_owned()));
+        self.marks.get(key)
+    }
+
     fn bound_method(&self, tr: &str, method: &str) -> Option<&GenericMethod> {
         incr::read(|| incr::Read::BoundMethod(tr.to_owned(), method.to_owned()));
         self.bound_methods.get(&(tr.to_owned(), method.to_owned()))
@@ -1685,6 +1704,9 @@ impl Tables<'_> {
             names: TypeNames::empty(),
             decls: Vec::new(),
             non_exhaustive: std::collections::HashSet::new(),
+            fn_marks: HashMap::new(),
+            marks: HashMap::new(),
+            mark_pkg: None,
             bound_methods: HashMap::new(),
             bound_traits: HashMap::new(),
         }
@@ -4492,8 +4514,23 @@ impl<'a> LowerCtx<'a> {
         (!self.is_visible(&def_module, vis)).then_some(def_module)
     }
 
-    /// Report access to a private field from outside its struct's module.
+    /// Report access to a private field from outside its struct's module,
+    /// and warn about a marked one.
     fn check_field_visible(&self, sid: StructId, field: &str) {
+        self.check_field_visible_at(sid, field, self.here());
+    }
+
+    /// `check_field_visible`, a marked field's warning at `at`.
+    fn check_field_visible_at(&self, sid: StructId, field: &str, at: Span) {
+        // The struct's own methods still set and read its marked fields.
+        if self.marks_apply() && self.self_ty != Some(HirTy::Struct(sid)) {
+            let name = self.struct_def(sid).name;
+            let base = name.split("__").next().unwrap_or(&name);
+            if let Some(m) = self.env.mark(&format!("{base}.{field}")) {
+                let shown = format!("{}.{field}", leaf_name(base));
+                self.use_marked("field", &shown, m, at);
+            }
+        }
         if let Some(def_module) = self.field_hidden(sid, field) {
             self.emit_error(
                 rokc_diagnostic::ErrorKind::Module,
@@ -4504,6 +4541,64 @@ impl<'a> LowerCtx<'a> {
                     module_display(&def_module)
                 ),
             );
+        }
+    }
+
+    /// Uses here warn about marked items: the code is the built
+    /// package's.
+    fn marks_apply(&self) -> bool {
+        self.env
+            .mark_pkg
+            .as_deref()
+            .is_some_and(|p| package_of(&self.current_module) == p)
+    }
+
+    /// A use at `at` of `name`, a `what` with marks `mark` (spec 6.2.7,
+    /// 6.2.14): a `deprecated` warning, and outside `unsafe` a
+    /// `deprecated_safe` one. Only the built package's own uses warn.
+    fn use_marked(&self, what: &str, name: &str, mark: &crate::marks::Mark, at: Span) {
+        if !self.marks_apply() || at.is_dummy() {
+            return;
+        }
+        let mut out = Vec::new();
+        if let Some(d) = &mark.deprecated {
+            let mut w = rokc_diagnostic::RokDiagnostic::warning(
+                rokc_diagnostic::ErrorKind::Lint,
+                at,
+                format!("use of deprecated {what} `{name}`"),
+            )
+            .with_lint("deprecated")
+            .with_tag(rokc_diagnostic::Tag::Deprecated);
+            for n in d.notes(name) {
+                w = w.with_note(n);
+            }
+            out.push(w);
+        }
+        if let (Some(note), 0) = (&mark.future_unsafe, self.unsafe_depth) {
+            let mut w = rokc_diagnostic::RokDiagnostic::warning(
+                rokc_diagnostic::ErrorKind::Lint,
+                at,
+                format!(
+                    "`{name}` will need `unsafe` in a later release: wrap the {} in \
+                     `unsafe {{ .. }}`",
+                    if what == "static" { "use" } else { "call" }
+                ),
+            )
+            .with_lint("deprecated_safe");
+            if !note.is_empty() {
+                w = w.with_note(note.clone());
+            }
+            out.push(w);
+        }
+        // Every instance of a generic body lowers the same use.
+        let mut sink = self.env.sink.diagnostics.borrow_mut();
+        for w in out {
+            if !sink
+                .iter()
+                .any(|d| d.primary == w.primary && d.message == w.message)
+            {
+                sink.push(w);
+            }
         }
     }
 

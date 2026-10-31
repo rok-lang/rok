@@ -126,6 +126,10 @@ pub(super) enum Read {
     TraitInfo(String),
     NegAuto(String, String),
     NonExhaustive(String),
+    /// A function's `#[deprecated]` / `#[future_unsafe]`.
+    FnMark(FunctionId),
+    /// A field's, const's or static's.
+    Mark(String),
     BoundMethod(String, String),
     BoundTrait(String),
     /// A declaration (its signature, body and impl).
@@ -308,6 +312,8 @@ codec_enum!(Read {
     TraitInfo(x0),
     NegAuto(x0, x1),
     NonExhaustive(x0),
+    FnMark(x0),
+    Mark(x0),
     BoundMethod(x0, x1),
     BoundTrait(x0),
     Decl(x0),
@@ -1637,6 +1643,12 @@ impl Incr<'_> {
             }
             Read::NonExhaustive(k) => {
                 f.add(&env.non_exhaustive.contains(k));
+            }
+            Read::FnMark(id) => {
+                f.add(&env.fn_marks.get(id).cloned());
+            }
+            Read::Mark(k) => {
+                f.add(&env.marks.get(k).cloned());
             }
             Read::BoundMethod(t, m) => {
                 f.opt(env.bound_methods.get(&(t.clone(), m.clone())), |f, g| {

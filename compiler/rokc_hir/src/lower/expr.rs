@@ -958,6 +958,7 @@ pub(super) fn lower_assign(
             if let Some(full) = ctx.resolve_in(&segs, true) {
                 let full = ctx.env.names.value_reexport(&full).cloned().unwrap_or(full);
                 ctx.check_item_visible(&full, "static");
+                item_marked(ctx, "static", &full, ctx.here());
                 if !ctx.env.is_mut_static(&full) {
                     ctx.emit_error(
                         rokc_diagnostic::ErrorKind::Type,
@@ -2653,7 +2654,12 @@ pub(super) fn lower_struct_init(
             ctx.no_field(struct_id, name, span);
             continue;
         };
-        ctx.check_field_visible(struct_id, name);
+        let at = if value.span.is_dummy() {
+            span
+        } else {
+            value.span
+        };
+        ctx.check_field_visible_at(struct_id, name, at);
         let target_ty = def.fields[idx].ty.clone();
         let lowered = match pre[i].take() {
             Some(v) => v,
@@ -4593,6 +4599,7 @@ pub(super) fn call_sig(
     if ctx.env.is(super::FnSet::Unsafe, sig.id) {
         check_unsafe_call(ctx, callee);
     }
+    fn_marked(ctx, sig.id, span);
     // By span: reading the declaration would tie the caller's
     // incremental unit to the callee's body.
     let decl = ctx.env.decls.get(sig.id.0 as usize);
@@ -7393,6 +7400,53 @@ pub(super) fn call_value(
     )
 }
 
+/// A use at `at` of const or static `key`: its marks' warnings.
+fn item_marked(ctx: &LowerCtx<'_>, what: &str, key: &str, at: rokc_diagnostic::Span) {
+    if !ctx.marks_apply() {
+        return;
+    }
+    // Checking a const's own value is no use of it.
+    let own = ctx.env.consts.get(key).is_some_and(|(_, v)| {
+        v.span.file == at.file && v.span.start <= at.start && at.end <= v.span.end
+    });
+    if let (Some(mark), false) = (ctx.env.mark(key), own) {
+        ctx.use_marked(what, leaf_name(key), mark, at);
+    }
+}
+
+/// A use at `at` of function `id`: its marks' warnings.
+fn fn_marked(ctx: &LowerCtx<'_>, id: FunctionId, at: rokc_diagnostic::Span) {
+    if !ctx.marks_apply() {
+        return;
+    }
+    if let Some((name, mark)) = ctx.env.fn_mark(id) {
+        let what = if name.contains("::") {
+            "method"
+        } else {
+            "function"
+        };
+        ctx.use_marked(what, name, mark, at);
+    }
+}
+
+/// A use at `at` of generic function or method template `def`
+/// (`m::Box__get` for `Box::get`).
+fn template_marked(ctx: &LowerCtx<'_>, def: &FnDef, at: rokc_diagnostic::Span) {
+    if !ctx.marks_apply() {
+        return;
+    }
+    let Some(mark) = crate::marks::mark_of(&def.attrs) else {
+        return;
+    };
+    let leaf = leaf_name(&def.name);
+    let leaf = leaf.split("__by_").next().unwrap_or(leaf);
+    let (what, name) = match leaf.split_once("__") {
+        Some((ty, m)) => ("method", format!("{ty}::{m}")),
+        None => ("function", leaf.to_owned()),
+    };
+    ctx.use_marked(what, &name, &mark, at);
+}
+
 /// Spec 4.15.3: an `unsafe fn` (or C function) is callable only in an
 /// `unsafe fn` body or `unsafe { }` block.
 fn check_unsafe_call(ctx: &LowerCtx<'_>, callee: &str) {
@@ -7694,6 +7748,7 @@ fn call_generic_positional(
     if def.is_unsafe {
         check_unsafe_call(ctx, callee);
     }
+    template_marked(ctx, def, span);
     // Spec 4.2.5: a variadic call's trailing arguments become one
     // `Slice<T>` once the others are in (`lower_variadic`).
     let (args, tail) = match def.params.last().filter(|p| p.variadic) {
@@ -11679,6 +11734,7 @@ pub(super) fn lower_path(
     if let Some(full) = assoc.or_else(|| ctx.resolve_in(&segs, false)) {
         let full = ctx.env.names.value_reexport(&full).cloned().unwrap_or(full);
         ctx.check_item_visible(&full, "const");
+        item_marked(ctx, "constant", &full, span);
         let (ty, value) = ctx.env.konst(&full).expect("a const").clone();
         // An impl const `m::T::N` resolves its type and value in `m`.
         let owner = module_of(&full);
@@ -11716,6 +11772,7 @@ pub(super) fn lower_path(
     if let Some(full) = ctx.resolve_in(&segs, true) {
         let full = ctx.env.names.value_reexport(&full).cloned().unwrap_or(full);
         ctx.check_item_visible(&full, "static");
+        item_marked(ctx, "static", &full, span);
         let ty = ctx.env.static_ty(&full).expect("a static").clone();
         return HirExpr {
             kind: HirExprKind::StaticRef(full),
@@ -11727,6 +11784,7 @@ pub(super) fn lower_path(
     if let Some(full) = ctx.resolve_fn_name(&segs) {
         ctx.check_item_visible(&full, "function");
         let sig = ctx.sig_of_key(&full);
+        fn_marked(ctx, sig.id, span);
         if sig.param_refs.iter().any(|r| *r) {
             return ctx.error_expr(
                 span,
@@ -11751,6 +11809,7 @@ pub(super) fn lower_path(
     if let Some(full) = ctx.resolve_generic_fn_name(&segs) {
         ctx.check_item_visible(&full, "function");
         let def = ctx.env.generic_fn(&full).expect("a generic function");
+        template_marked(ctx, def, span);
         // `id::<i32>`: every type argument given - that instance's value.
         let targs = path
             .segments

@@ -1,0 +1,27 @@
+// spec: §6.2.7
+// expect-exit: 0
+// expect-lint: 25:9 use of deprecated method `P::new`
+// expect-lint: 26:16 use of deprecated field `P.x`
+// expect-lint: 27:12 use of deprecated field `P.x`
+// expect-lint: 27:18 use of deprecated field `P.x`
+// expect-lint: 27:24 use of deprecated function `f`
+// expect-stdout: 0 1 1
+
+// `#[deprecated]` on a method and a field warns at each use: a call, a
+// field read, a struct literal that sets it. The struct's own methods
+// still set it without a warning.
+struct P {
+    #[deprecated("use y")]
+    pub x: i32;
+    pub y: i32;
+}
+impl P {
+    #[deprecated("use make")]
+    pub fn new() -> P { P { x: 0, y: 0 } }
+    pub fn make() -> P { P { x: 0, y: 0 } }
+}
+#[deprecated("use g")]
+fn f() -> i32 { 1 }
+let p = P::new();
+let q = P { x: 1, y: 2 };
+println(f"{p.x} {q.x} {f()}");

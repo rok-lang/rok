@@ -507,6 +507,35 @@ fn deny_warnings_ignores_new_lint() {
         ),
         "{err}"
     );
+    // A deprecation past the baseline and `deprecated_safe` (added in
+    // 0.1.6) stay warnings under `warnings`; `all` denies them.
+    put(
+        app.join("src/main.rok"),
+        "#[deprecated(since = \"0.1.6\")]\nfn new_old() {}\n\
+         #[deprecated(since = \"0.1.5\")]\nfn old() {}\n\
+         fn main() {\n    new_old();\n    old();\n}\n",
+    )
+    .unwrap();
+    let out = rokc(None, &app, &["lint", "-D", "warnings"]);
+    assert_exit(&out, 1);
+    let err = text(&out.stderr);
+    assert!(
+        err.contains("warning[E503]: use of deprecated function `new_old`")
+            && err.contains("error[E503]: use of deprecated function `old`"),
+        "{err}"
+    );
+    let out = rokc(None, &app, &["lint", "-D", "all"]);
+    let err = text(&out.stderr);
+    assert!(
+        err.contains("error[E503]: use of deprecated function `new_old`"),
+        "{err}"
+    );
+    let out = rokc(None, &app, &["lint", "--list"]);
+    let list = text(&out.stdout);
+    assert!(
+        list.contains("deprecated_safe          warn  0.1.6"),
+        "{list}"
+    );
 }
 
 /// 6.2.9: `rok` names the manifest's `lints` as where a level came from;
@@ -1246,6 +1275,60 @@ fn incremental_checks_generic_bodies() {
     let out = rokc(Some(&env), &app, &["run", "-q"]);
     assert_exit(&out, 0);
     assert_eq!(text(&out.stdout), "6 2\n");
+}
+
+/// A mark added to or removed from an item in another file reaches the
+/// uses in bodies kept from the last build.
+// spec: §6.2.7 §9.2.16
+#[test]
+fn incremental_deprecation_marks() {
+    let Some(_env) = setup() else { return };
+    let dir = scratch("incr-deprecated");
+    let app = dir.join("app");
+    let src = app.join("src");
+    fs::create_dir_all(&src).unwrap();
+    fs::write(
+        src.join("main.rok"),
+        "mod m;\n\nfn main() {\n    let s = m::S { x: 1 };\n    \
+         println(f\"{m::old()} {s.x} {m::C}\");\n}\n",
+    )
+    .unwrap();
+    let plain = "pub struct S { pub x: i32; }\npub const C: i32 = 2;\n\
+                 pub fn old() -> i32 {\n    1\n}\n";
+    let marked = "pub struct S { #[deprecated] pub x: i32; }\n\
+                  #[deprecated(\"use D\")]\npub const C: i32 = 2;\n\
+                  #[deprecated(since = \"0.1.6\", note = \"use new\")]\n\
+                  pub fn old() -> i32 {\n    1\n}\n";
+    fs::write(src.join("m.rok"), plain).unwrap();
+    let check = || {
+        let out = Command::new(ROKC)
+            .current_dir(&app)
+            .env("ROK_HOME", workspace())
+            .env("ROKC_INCR_VERIFY", "1")
+            .args(["check"])
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{}", text(&out.stderr));
+        text(&out.stderr)
+    };
+    let warned = [
+        "use of deprecated function `old`",
+        "use of deprecated field `S.x`",
+        "use of deprecated constant `C`",
+    ];
+    let err = check();
+    assert!(!err.contains("deprecated"), "{err}");
+    fs::write(src.join("m.rok"), marked).unwrap();
+    for _ in 0..2 {
+        let err = check();
+        for w in warned {
+            assert!(err.contains(w), "missing {w:?}:\n{err}");
+        }
+        assert!(err.contains("deprecated since 0.1.6"), "{err}");
+    }
+    fs::write(src.join("m.rok"), plain).unwrap();
+    let err = check();
+    assert!(!err.contains("deprecated"), "{err}");
 }
 
 /// A library builds by units, links with another holding the same

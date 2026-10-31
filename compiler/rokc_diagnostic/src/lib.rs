@@ -324,6 +324,8 @@ pub enum Tag {
     ClosureParamInfer,
     /// A type parameter nothing infers.
     TypeParamInfer,
+    /// A use of a `#[deprecated]` item (editors strike it through).
+    Deprecated,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -988,6 +990,7 @@ mod tests {
             Tag::NoDebug,
             Tag::ClosureParamInfer,
             Tag::TypeParamInfer,
+            Tag::Deprecated,
         ] {
             let plain = RokDiagnostic::error(ErrorKind::Type, at, "m").with_tag(tag);
             let fixed = plain
@@ -1089,6 +1092,7 @@ rokc_core::codec_enum!(Tag {
     NoDebug,
     ClosureParamInfer,
     TypeParamInfer,
+    Deprecated,
 });
 rokc_core::codec_struct!(RokDiagnostic {
     severity,

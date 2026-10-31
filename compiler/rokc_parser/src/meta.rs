@@ -104,6 +104,7 @@ pub const BUILTIN_ATTRS: &[&str] = &[
     "derive",
     "doc",
     "export_name",
+    "future_unsafe",
     "impl_attribute",
     "impl_derive",
     "impl_derive_attribute",
@@ -136,6 +137,7 @@ pub const BUILTIN_ATTRS: &[&str] = &[
 const LATE_RESERVED_ATTRS: &[&str] = &[
     "bench",
     "cfg_attr",
+    "future_unsafe",
     "niche",
     "no_implicit_rok",
     "no_safepoint",

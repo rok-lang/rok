@@ -3,6 +3,7 @@
 
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use crate::marks::mark_of;
 use rokc_ir_common::{Abi, FnRole, Linkage};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
@@ -467,6 +468,9 @@ fn collect<'a>(
         names: base_names,
         decls,
         non_exhaustive,
+        fn_marks,
+        marks,
+        mark_pkg: _,
         bound_methods: _,
         bound_traits: _,
     } = base_t;
@@ -1166,6 +1170,7 @@ fn collect<'a>(
     let mut intrinsics = intrinsics;
     let mut generic_intrinsics = generic_intrinsics;
     let mut unsafe_fns = unsafe_fns;
+    let mut fn_marks = fn_marks;
     let mut extern_fn_ids = extern_fn_ids;
     let mut c_variadic = c_variadic;
     // `extern "rok"` declarations: the runtime's own ABI.
@@ -1676,6 +1681,13 @@ fn collect<'a>(
                     _ => None,
                 }))
                 .collect(),
+            fn_marks: HashMap::new(),
+            marks: marks.into_iter().chain(item_marks(program)).collect(),
+            // The std's own uses never warn.
+            mark_pkg: match input.lib.as_deref() {
+                Some("rok") => None,
+                lib => Some(lib.unwrap_or_default().to_owned()),
+            },
             bound_methods,
             bound_traits,
         },
@@ -2098,6 +2110,29 @@ fn collect<'a>(
             MethodOrFn::Fn(f) => fn_module(&env, f),
             MethodOrFn::Method { module, .. } => module.clone(),
         };
+        // A trait method's marks reach every impl of it.
+        let declared = method_info
+            .get(&id)
+            .and_then(|m| m.trait_name.as_ref())
+            .and_then(|t| env.trait_info.get(t))
+            .and_then(|t| t.decls.get(leaf_name(&f.name)));
+        let mark = mark_of(&f.attrs).or_else(|| declared.and_then(|t| mark_of(&t.attrs)));
+        if let Some(mark) = mark {
+            if mark.future_unsafe.is_some() && package_of(&module).is_empty() && input.lib.is_none()
+            {
+                err(
+                    &mut pre_diags,
+                    here,
+                    format!(
+                        "`#[future_unsafe]` on `{}`: it marks a library function that a later \
+                         release makes `unsafe` (spec 6.2.14); in a program, write `unsafe fn` \
+                         instead",
+                        leaf_name(&f.name)
+                    ),
+                );
+            }
+            fn_marks.insert(id, (mark_name(&env, d), mark));
+        }
         // The prebuilt std interface keeps its bodies (const evaluation runs
         // them); its `.a` has the code of those named alike in every build
         // (not trait defaults). A prebuilt package's `.a` initializes its
@@ -2183,6 +2218,7 @@ fn collect<'a>(
     env.key_of = key_of;
     env.infer_ret = infer_ret;
     env.unsafe_fns = unsafe_fns;
+    env.fn_marks = fn_marks;
     env.c_defs = c_defs.iter().copied().collect();
     if input.stdcall_system {
         env.stdcall_fns.clone_from(&system_fns);
@@ -3103,6 +3139,65 @@ pub(super) fn impl_def_display(ty: &Ty) -> String {
 }
 
 /// struct names; generic instantiations look up their base name).
+/// The name a warning shows for marked function `d`: `f`, `P::new`.
+fn mark_name(env: &Env<'_>, d: &MethodOrFn<'_>) -> String {
+    let leaf = leaf_name(&d.def().name).to_owned();
+    let MethodOrFn::Method { self_ty, .. } = d else {
+        return leaf;
+    };
+    let ty = match self_ty {
+        HirTy::Struct(id) => env.defs.structs.borrow()[id.0 as usize].name.clone(),
+        HirTy::Enum(id) => env.defs.enums.borrow()[id.0 as usize].name.clone(),
+        t => ty_mangle(t),
+    };
+    let base = ty.split("__").next().unwrap_or(&ty);
+    format!("{}::{leaf}", leaf_name(base))
+}
+
+/// The marks of `program`'s fields (`m::P.x`, `m::P.0`), consts and
+/// statics (`extern` ones too).
+fn item_marks(program: &Program) -> Vec<(String, crate::marks::Mark)> {
+    let mut out = Vec::new();
+    let mut add = |key: String, attrs: &[rokc_ast::Attribute]| {
+        if let Some(m) = mark_of(attrs) {
+            out.push((key, m));
+        }
+    };
+    for item in &program.items {
+        match item {
+            Item::Struct(s) => match &s.kind {
+                AstStructKind::Named(fs) => {
+                    for f in fs {
+                        add(format!("{}.{}", s.name, f.name), &f.attrs);
+                    }
+                }
+                AstStructKind::Tuple(fs) => {
+                    for (i, f) in fs.iter().enumerate() {
+                        add(format!("{}.{i}", s.name), &f.attrs);
+                    }
+                }
+                AstStructKind::Unit => {}
+            },
+            Item::Union(u) => {
+                for f in &u.fields {
+                    add(format!("{}.{}", u.name, f.name), &f.attrs);
+                }
+            }
+            Item::Const(c) => add(c.name.clone(), &c.attrs),
+            Item::Static(st) => add(st.name.clone(), &st.attrs),
+            Item::Extern(b) => {
+                for ei in &b.items {
+                    if let rokc_ast::ExternItem::Static(st) = ei {
+                        add(st.name.clone(), &st.attrs);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
 pub(super) fn collect_field_visibility(
     program: &Program,
 ) -> HashMap<String, HashMap<String, Visibility>> {

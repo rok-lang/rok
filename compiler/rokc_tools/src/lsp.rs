@@ -1240,14 +1240,19 @@ fn diag_json(d: &RokDiagnostic, uri: &str, text: &str) -> Json {
     } else {
         (start, end)
     };
-    Json::obj([
+    let mut d_json = Json::obj([
         ("range", range(text, start, end)),
         ("severity", Json::num(if d.is_error() { 1 } else { 2 })),
         ("code", Json::str(d.kind.code())),
         ("source", Json::str("rokc")),
         ("message", Json::str(message)),
         ("relatedInformation", Json::Arr(related)),
-    ])
+    ]);
+    // `DiagnosticTag.Deprecated`: editors strike the use through.
+    if let (Json::Obj(fields), rokc_diagnostic::Tag::Deprecated) = (&mut d_json, d.tag) {
+        fields.push(("tags".to_owned(), Json::Arr(vec![Json::num(2)])));
+    }
+    d_json
 }
 
 /// The token a zero-width range at `at` points at: the next one on its

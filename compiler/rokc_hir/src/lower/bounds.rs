@@ -682,10 +682,10 @@ pub(super) fn check_all(
             Some(incr) => incr.checked(env, f, &owner.buf, run),
             None => run(),
         };
-        if !errors.is_empty() {
+        if errors.iter().any(rokc_diagnostic::RokDiagnostic::is_error) {
             env.sink.failed.borrow_mut().insert(f.span);
-            env.sink.diagnostics.borrow_mut().extend(errors);
         }
+        env.sink.diagnostics.borrow_mut().extend(errors);
     }
     check_decl_types(env, &wanted);
 }
@@ -955,7 +955,13 @@ fn check_one(
             }
         },
     );
-    errors.retain(rokc_diagnostic::RokDiagnostic::is_error);
+    // A use of a marked item warns even when nothing instantiates the body.
+    errors.retain(|d| {
+        d.is_error()
+            || d.lint
+                .as_deref()
+                .is_some_and(|l| l.starts_with("deprecated"))
+    });
     errors
 }
 

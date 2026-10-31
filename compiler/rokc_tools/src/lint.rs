@@ -2,7 +2,9 @@
 //! type-checked package (no codegen).
 //!
 //! Most lints walk the parsed AST; `redundant_cast` / `redundant_clone`
-//! read HIR types. Levels: each lint's default, then `-A/-W/-D name`
+//! read HIR types. Lowering reports uses of marked functions, fields,
+//! consts and statics (`deprecated`, `deprecated_safe`) as warnings that
+//! carry the lint; deprecated types are matched by path here. Levels: each lint's default, then `-A/-W/-D name`
 //! (later wins; `rok` prepends `rok.rokon` `lints`), then
 //! `#[allow/warn/deny]` on an enclosing item, `mod` or `#![..]`
 //! (innermost wins).
@@ -107,7 +109,10 @@ pub const LINTS: &[Lint] = &[
         "`const` / `static` names are UPPER_SNAKE_CASE",
     ),
     warn("confusable_idents", "identifiers that look alike"),
-    warn("deprecated", "use of a `#[deprecated]` function"),
+    warn(
+        "deprecated",
+        "use of a `#[deprecated]` function, method, field, type, constant or static",
+    ),
     warn(
         "unclosed_resource",
         "a local holding a `Drop` resource (file, socket, child) that is never closed",
@@ -128,6 +133,12 @@ pub const LINTS: &[Lint] = &[
         name: "literal_spread_mismatch",
         default: Level::Warn,
         desc: "`f(..[a, b, c])` or `f(..{\"k\": v})` whose literal cannot fill the parameters: the call panics",
+        since: "0.1.6",
+    },
+    Lint {
+        name: "deprecated_safe",
+        default: Level::Warn,
+        desc: "a call of a `#[future_unsafe]` function outside `unsafe`",
         since: "0.1.6",
     },
 ];
@@ -367,7 +378,10 @@ pub fn run(result: &CompileResult, levels: &Levels) -> Vec<RokDiagnostic> {
                 msg: w.message.clone(),
                 notes: Vec::new(),
                 secondary: None,
-                since: None,
+                since: (l.name == "deprecated")
+                    .then(|| rokc_hir::marks::since_in(&w.notes))
+                    .flatten()
+                    .map(str::to_owned),
                 base: Some(Box::new(w.clone())),
             }),
             None => out.push(w.clone()),
@@ -417,6 +431,11 @@ pub fn run(result: &CompileResult, levels: &Levels) -> Vec<RokDiagnostic> {
             },
             None => RokDiagnostic {
                 severity,
+                tag: if f.lint == "deprecated" {
+                    rokc_diagnostic::Tag::Deprecated
+                } else {
+                    rokc_diagnostic::Tag::None
+                },
                 ..RokDiagnostic::error(ErrorKind::Lint, f.span, f.msg)
             },
         };
@@ -845,7 +864,12 @@ struct Cx<'a> {
     stmt_exprs: HashMap<(u32, u32), String>,
     /// `(file, start)` of a `let` initializer: the binding's span and name.
     let_inits: HashMap<(u32, u32), (Span, String)>,
-    deprecated: HashMap<String, String>,
+    types: TypeMarks,
+    /// In an impl's head: its type is not a use.
+    impl_head: bool,
+    /// The last segment of the type whose impl is walked: a deprecated
+    /// type's own impl does not warn about it.
+    impl_of: Option<String>,
     traits: HashSet<String>,
 }
 
@@ -860,11 +884,11 @@ impl<'a> Cx<'a> {
     /// `all`: the parsed files; `library`: the items of the library
     /// files `all` leaves out.
     fn new(
-        all: &[SourceFile],
+        all_files: &[SourceFile],
         library: Option<&rokc_ast::Program>,
         texts: &'a [(String, String)],
     ) -> Self {
-        let all: Vec<&[Item]> = all
+        let all: Vec<&[Item]> = all_files
             .iter()
             .map(|f| f.items.as_slice())
             .chain(library.map(|p| p.items.as_slice()))
@@ -873,7 +897,18 @@ impl<'a> Cx<'a> {
         for items in &all {
             collect_traits(items, &mut traits);
         }
-        let [must_use, deprecated] = marked_fns(&all, ["must_use", "deprecated"]);
+        let [must_use] = marked_fns(&all, ["must_use"]);
+        let mut types = TypeMarks::default();
+        for f in all_files {
+            let mut at: Vec<&str> = std::iter::once(f.package.as_str())
+                .chain(f.module.iter().map(String::as_str))
+                .filter(|s| !s.is_empty())
+                .collect();
+            types.add(&f.items, &mut at);
+        }
+        if let Some(p) = library {
+            types.add(&p.items, &mut Vec::new());
+        }
         Self {
             texts,
             findings: Vec::new(),
@@ -890,7 +925,9 @@ impl<'a> Cx<'a> {
             must_use_types: marked_types(&all, "must_use"),
             stmt_exprs: HashMap::new(),
             let_inits: HashMap::new(),
-            deprecated,
+            types,
+            impl_head: false,
+            impl_of: None,
             traits,
         }
     }
@@ -1017,7 +1054,13 @@ impl<'a> Cx<'a> {
                 }
             }
             Item::Impl(im) => {
+                self.impl_head = true;
                 self.ty_names(&im.self_ty);
+                self.impl_head = false;
+                self.impl_of = match &im.self_ty.kind {
+                    TyKind::Path(p) => p.segments.last().map(|s| s.name.clone()),
+                    _ => None,
+                };
                 if let Some(p) = &im.trait_path {
                     self.file_names
                         .extend(p.segments.iter().map(|s| s.name.clone()));
@@ -1037,6 +1080,7 @@ impl<'a> Cx<'a> {
                         ImplItem::AssocType { ty, .. } => self.ty_names(ty),
                     }
                 }
+                self.impl_of = None;
             }
             Item::Const(c) => {
                 self.name_lint("constant", &c.name, c.span, 2);
@@ -1520,18 +1564,95 @@ impl<'a> Cx<'a> {
         }
     }
 
-    fn deprecated_use(&mut self, name: &str, span: Span) {
-        if let Some(msg) = self.deprecated.get(name).cloned() {
-            self.findings.push(Finding {
-                lint: "deprecated",
-                span,
-                msg: format!("use of deprecated function `{name}`"),
-                notes: Some(msg).filter(|m| !m.is_empty()).into_iter().collect(),
-                secondary: None,
-                since: None,
-                base: None,
-            });
+    /// `p` names a deprecated type, or one's item (`Old::new`).
+    fn type_use(&mut self, p: &rokc_ast::Path) {
+        if self.impl_head || p.span.is_dummy() || self.types.marked.is_empty() {
+            return;
         }
+        let segs: Vec<&str> = p.segments.iter().map(|s| s.name.as_str()).collect();
+        let hit = self
+            .types
+            .find(&segs)
+            .or_else(|| self.types.find(&segs[..segs.len().saturating_sub(1)]));
+        let Some((name, what, d)) = hit.map(|(k, w, d)| (leaf(k).to_owned(), *w, d.clone())) else {
+            return;
+        };
+        if self.impl_of.as_deref() == Some(name.as_str()) {
+            return;
+        }
+        self.findings.push(Finding {
+            lint: "deprecated",
+            span: p.span,
+            msg: format!("use of deprecated {what} `{name}`"),
+            notes: d.notes(&name),
+            secondary: None,
+            since: d.since,
+            base: None,
+        });
+    }
+}
+
+/// The deprecated types and traits of every file, for the paths that name
+/// them: by full path when written so, else by a last segment no other
+/// type shares (never invent one).
+#[derive(Default)]
+struct TypeMarks {
+    /// Full path, `type` or `trait`, the deprecation.
+    marked: Vec<(String, &'static str, rokc_hir::marks::Deprecation)>,
+    /// How many types and traits have each last segment.
+    leaves: HashMap<String, usize>,
+}
+
+impl TypeMarks {
+    /// `items`, in module `at` (a library's names are full already).
+    fn add<'i>(&mut self, items: &'i [Item], at: &mut Vec<&'i str>) {
+        for i in items {
+            let (name, attrs, what) = match i {
+                Item::Struct(s) => (&s.name, &s.attrs, "type"),
+                Item::Enum(e) => (&e.name, &e.attrs, "type"),
+                Item::Union(u) => (&u.name, &u.attrs, "type"),
+                Item::TypeAlias(t) => (&t.name, &t.attrs, "type"),
+                Item::Trait(t) => (&t.name, &t.attrs, "trait"),
+                Item::Mod(m) => {
+                    at.push(&m.name);
+                    self.add(m.items.as_deref().unwrap_or(&[]), at);
+                    at.pop();
+                    continue;
+                }
+                _ => continue,
+            };
+            *self.leaves.entry(leaf(name).to_owned()).or_default() += 1;
+            let d = attrs
+                .iter()
+                .filter(|a| a.name() == "deprecated")
+                .find_map(rokc_hir::marks::deprecation);
+            if let Some(d) = d {
+                let full = at
+                    .iter()
+                    .copied()
+                    .chain([name.as_str()])
+                    .collect::<Vec<_>>();
+                self.marked.push((full.join("::"), what, d));
+            }
+        }
+    }
+
+    /// The deprecated type `segs` names.
+    fn find(&self, segs: &[&str]) -> Option<&(String, &'static str, rokc_hir::marks::Deprecation)> {
+        let segs = match segs {
+            ["pkg" | "sup" | "self", rest @ ..] => rest,
+            s => s,
+        };
+        let last = *segs.last()?;
+        if last == "Self" {
+            return None;
+        }
+        let unique = self.leaves.get(last) == Some(&1);
+        let path = segs.join("::");
+        self.marked.iter().find(|(k, ..)| {
+            leaf(k) == last
+                && (unique || (segs.len() > 1 && (*k == path || k.ends_with(&format!("::{path}")))))
+        })
     }
 }
 
@@ -1934,6 +2055,10 @@ impl AstVisitor for Cx<'_> {
         }
     }
 
+    fn path(&mut self, p: &rokc_ast::Path) {
+        self.type_use(p);
+    }
+
     fn ty(&mut self, t: &Ty) {
         if let TyKind::Path(p) = &t.kind {
             self.file_names
@@ -1995,21 +2120,11 @@ impl AstVisitor for Cx<'_> {
                     }
                 }
             }
-            ExprKind::Call { callee, .. } => {
-                if let ExprKind::Path(p) = &callee.kind {
-                    if let Some(last) = p.segments.last() {
-                        let n = last.name.clone();
-                        self.deprecated_use(&n, e.span);
-                    }
-                }
-            }
             ExprKind::MethodCall { method, args, .. } => {
                 if method == "clone" && args.is_empty() {
                     self.clones.insert(key(e.span));
                 }
                 self.file_names.insert(method.clone());
-                let m = method.clone();
-                self.deprecated_use(&m, e.span);
                 for a in args {
                     if let CallArg::Named { name, .. } = a {
                         self.file_names.insert(name.clone());
