@@ -1,0 +1,32 @@
+// rokc-arg: --extern alog=tests/cases/608_11_meta_qualified/alog
+// expect-exit: 0
+// expect-warning: `log!` is package `alog`'s macro, found only through the build-wide meta scope, which Rok 0.2.0 removes
+// expect-warning: help: write `alog::log!` or add `use alog::log!;`
+// expect-warning: `#[traced]` is package `alog`'s attribute
+// expect-warning: help: write `#[alog::traced]`
+// forbid-warning: `#[derive(Named)]`
+// expect-stdout:
+// a: 1
+// a: 2
+// a
+
+// Spec 6.8.11: a bare meta name of another package still works in 0.1.6
+// but warns (`unqualified_meta`); `use alog::Named;` imports the derive
+// along with its trait, so that one is quiet.
+use alog::Named;
+
+#[derive(Named)]
+struct S {}
+
+#[traced]
+fn f() {}
+
+fn main() {
+    log!(1);
+    log!(2);
+    println(S {}.name());
+    f();
+}
+
+// spec: 006.08-meta-blocks
+// spec: §6.8.11

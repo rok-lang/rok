@@ -14,6 +14,7 @@ use rokc_lexer::token::{FUTURE_KEYWORDS, keyword_str};
 use rokc_lexer::{Token, TokenKind};
 
 use crate::prec::{Assoc, CAST_PREC, COALESCE_PREC, ExtOps, Fixity, PREFIX_PREC};
+use meta::{MetaDef, MetaKind, MetaUse};
 
 #[path = "fstring.rs"]
 mod fstring;
@@ -106,6 +107,16 @@ pub struct Parser<'a> {
     /// Start of the expression statement being parsed, for
     /// `trailing_closure_operator`.
     stmt_at: Option<u32>,
+    /// Mount path of the package being parsed (`""`: the one being
+    /// built); `pkg::name!` names its meta blocks (spec 6.8.11).
+    package: String,
+    /// Paths the file's `use`s import (a glob ends in `*`): an
+    /// unqualified meta name they cover is not `unqualified_meta`.
+    meta_imports: Vec<Vec<String>>,
+    /// Meta names `unqualified_meta` reported in this file, and the
+    /// warnings: kept apart from `diagnostics`, which a backtrack cuts.
+    meta_warned: std::collections::HashSet<String>,
+    meta_lints: Vec<RokDiagnostic>,
 }
 
 /// Nesting limit for expressions, types, patterns and blocks.
@@ -193,6 +204,7 @@ pub fn parse_program_ext(
     parse_program_meta(
         tokens,
         file,
+        "",
         ext,
         &std::sync::Arc::default(),
         &std::sync::Arc::default(),
@@ -205,6 +217,7 @@ pub fn parse_program_ext(
 pub fn parse_program_meta(
     tokens: &[Token],
     file: impl Into<String>,
+    package: &str,
     ext: &ExtOps,
     metas: &std::sync::Arc<meta::MetaTable>,
     literals: &std::sync::Arc<literal::LiteralTable>,
@@ -215,9 +228,11 @@ pub fn parse_program_meta(
     let metas = std::sync::Arc::clone(metas);
     let literals = std::sync::Arc::clone(literals);
     let cfg = cfg.cloned();
+    let package = package.to_owned();
     let run = move || {
         let mut p = Parser::new(tokens, file);
         p.ext = ext;
+        p.package = package;
         p.meta = metas;
         p.literals = literals;
         p.cfg = cfg;
@@ -294,6 +309,10 @@ impl<'a> Parser<'a> {
             name_pos: false,
             kw_warned: std::collections::HashSet::new(),
             stmt_at: None,
+            package: String::new(),
+            meta_imports: Vec::new(),
+            meta_warned: std::collections::HashSet::new(),
+            meta_lints: Vec::new(),
         }
     }
 
@@ -1048,6 +1067,9 @@ impl<'a> Parser<'a> {
         let mut stmts = Vec::new();
         let mut tops = Vec::new();
         let attrs = self.parse_inner_attrs();
+        if !self.meta.is_empty() && self.meta_stack.is_empty() {
+            self.scan_meta_imports();
+        }
         while !matches!(self.peek(), TokenKind::Eof) {
             let from = self.pos;
             if self.meta_block().is_some() || self.eat(&TokenKind::Semi) {
@@ -1085,6 +1107,7 @@ impl<'a> Parser<'a> {
         // marker; HIR reads it as `any Error` (spec 4.14).
         self.untyped_throws.clear();
         self.misplaced_docs();
+        self.diagnostics.append(&mut self.meta_lints);
         Program {
             attrs,
             items,
@@ -1099,13 +1122,10 @@ impl<'a> Parser<'a> {
     /// Positioned at `name!( .. )` for a registered macro (spec 6.8.12):
     /// at module level it is an item (it may expand to items).
     fn at_item_macro_call(&self) -> bool {
-        let at = |k: usize| self.tokens.get(self.pos + k).map(|t| &t.kind);
-        matches!(self.peek(), TokenKind::Ident(n) if self.meta.find_macro(n).is_some())
-            && at(1) == Some(&TokenKind::Bang)
-            && matches!(
-                at(2),
-                Some(TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace)
-            )
+        !self.meta.is_empty()
+            && self
+                .macro_head()
+                .is_some_and(|(q, n, _)| !q.is_empty() || self.meta.find_macro(&n).is_some())
     }
 
     fn at_item_start(&self) -> bool {
@@ -2640,6 +2660,11 @@ impl<'a> Parser<'a> {
         self.expect(&TokenKind::Use, "`use`")?;
         let tree = self.parse_use_tree()?;
         self.expect(&TokenKind::Semi, "`;`")?;
+        let Some(tree) = self.strip_meta_imports(tree, &[], vis != Visibility::Private, start)
+        else {
+            self.vanished = true;
+            return None;
+        };
         Some(rokc_ast::UseDef {
             vis,
             attrs,
@@ -2730,6 +2755,31 @@ impl<'a> Parser<'a> {
                     return None;
                 };
                 rokc_ast::UseTreeKind::Simple(Some(alias))
+            }
+            // `use dep::name!;` (spec 6.8.11): a macro, marked by its `!`
+            // until `strip_meta_imports` takes it out.
+            TokenKind::Bang => {
+                self.bump();
+                let mut prefix = prefix;
+                if let Some(last) = prefix.segments.last_mut() {
+                    last.name.push('!');
+                }
+                if self.peek() == &TokenKind::As {
+                    let s = self.peek_span();
+                    let path: Vec<&str> = prefix.segments.iter().map(|s| s.name.as_str()).collect();
+                    self.error(
+                        s,
+                        format!(
+                            "a macro import cannot be renamed: write `use {};`",
+                            path.join("::")
+                        ),
+                    );
+                    return None;
+                }
+                return Some(rokc_ast::UseTree {
+                    prefix,
+                    kind: rokc_ast::UseTreeKind::Simple(None),
+                });
             }
             _ => rokc_ast::UseTreeKind::Simple(None),
         };
@@ -3572,61 +3622,17 @@ impl<'a> Parser<'a> {
 
     /// `name!( .. )` where a type is expected (spec 6.8.12): expand and
     /// re-parse the result as a type.
+    // `Parser::parse_*` is not general over the expansion's lifetime.
+    #[allow(clippy::redundant_closure_for_method_calls)]
     fn macro_call_type(&mut self) -> Option<Ty> {
-        if self.meta.is_empty() {
-            return None;
-        }
-        let at = |k: usize| self.tokens.get(self.pos + k).map(|t| &t.kind);
-        let TokenKind::Ident(name) = self.peek().clone() else {
-            return None;
-        };
-        if self.pending.is_some()
-            || at(1) != Some(&TokenKind::Bang)
-            || !matches!(
-                at(2),
-                Some(TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace)
-            )
-        {
-            return None;
-        }
-        let def = self.meta.find_macro(&name)?.clone();
-        let start = self.peek_span();
-        let open = self.pos + 2;
-        let close = macros::close_of(self.tokens, open)?;
-        let call = self.tokens[open + 1..close].to_vec();
-        self.pos = close + 1;
+        let (def, name, start, call) = self.take_macro_call(false)?;
         let poison = || Ty {
             kind: TyKind::Tuple(Vec::new()),
             span: start,
         };
-        let key = format!("macro:{name}");
-        if self.meta_stack.iter().any(|k| *k == key) || self.meta_stack.len() >= 256 {
-            self.error(
-                start,
-                format!("`{name}!` expands too deeply or cyclically (spec 6.8.12)"),
-            );
-            return Some(poison());
-        }
-        let (out, diags) = macros::expand_macro(&def, &call, start);
-        self.diagnostics.extend(diags);
-        let Some(out) = out else {
-            return Some(poison());
-        };
-        self.expanded.push(format!(
-            "// expanded from {name}! (spec 6.8.12)\n{}",
-            meta::render(&out)
-        ));
-        let mut p = Parser::new(&out, self.file.clone());
-        p.ext = self.ext.clone();
-        p.meta = std::sync::Arc::clone(&self.meta);
-        p.literals = std::sync::Arc::clone(&self.literals);
-        p.cfg.clone_from(&self.cfg);
-        p.meta_stack.clone_from(&self.meta_stack);
-        p.meta_stack.push(key);
-        let t = p.parse_type();
-        self.diagnostics.extend(p.diagnostics);
-        self.expanded.append(&mut p.expanded);
-        Some(t.unwrap_or_else(poison))
+        let t =
+            def.and_then(|d| self.expand_call(&d, &name, start, &call, false, |p| p.parse_type()));
+        Some(t.flatten().unwrap_or_else(poison))
     }
 
     fn parse_type_atom_inner(&mut self) -> Option<Ty> {
@@ -4663,7 +4669,16 @@ impl<'a> Parser<'a> {
             TokenKind::Use => {
                 let vis = Visibility::Private;
                 let attrs = Vec::new();
-                let use_def = self.parse_use(vis, attrs)?;
+                let Some(use_def) = self.parse_use(vis, attrs) else {
+                    if std::mem::take(&mut self.vanished) {
+                        self.error(
+                            start,
+                            "a macro import goes at module level: move this `use dep::name!;` \
+                             to the top of the file",
+                        );
+                    }
+                    return None;
+                };
                 Some((
                     Stmt {
                         kind: StmtKind::Item(Item::Use(use_def)),
@@ -5546,198 +5561,173 @@ impl<'a> Parser<'a> {
     /// `name!( .. )` / `name![ .. ]` / `name!{ .. }` where `name` is a user
     /// macro (spec 6.8.12): capture the token tree, expand, and re-parse the
     /// result as an expression.
+    // `Parser::parse_*` is not general over the expansion's lifetime.
+    #[allow(clippy::redundant_closure_for_method_calls)]
     fn macro_call_expr(&mut self) -> Option<Expr> {
-        if self.meta.is_empty() {
-            return None;
-        }
-        let at = |k: usize| self.tokens.get(self.pos + k).map(|t| &t.kind);
-        let TokenKind::Ident(name) = self.peek().clone() else {
-            return None;
-        };
-        if self.pending.is_some()
-            || at(1) != Some(&TokenKind::Bang)
-            || !matches!(
-                at(2),
-                Some(TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace)
-            )
-        {
-            return None;
-        }
-        let def = self.meta.find_macro(&name)?.clone();
-        let start = self.peek_span();
-        let open = self.pos + 2;
-        let close = macros::close_of(self.tokens, open)?;
-        let call = self.tokens[open + 1..close].to_vec();
-        self.pos = close + 1;
+        let (def, name, start, call) = self.take_macro_call(false)?;
         let poison = || Expr {
             kind: ExprKind::Tuple(Vec::new()),
             span: start,
         };
-        let key = format!("macro:{name}");
+        let e =
+            def.and_then(|d| self.expand_call(&d, &name, start, &call, false, |p| p.parse_expr()));
+        Some(e.flatten().unwrap_or_else(poison))
+    }
+
+    /// The user macro call `self.pos` starts, `name!(..)` or
+    /// `dep::name!(..)` (spec 6.8.12): its qualifier, name and the index of
+    /// its opening bracket. Nothing is consumed.
+    fn macro_head(&self) -> Option<(Vec<String>, String, usize)> {
+        if self.pending.is_some() {
+            return None;
+        }
+        let mut k = self.pos;
+        let mut path = Vec::new();
+        loop {
+            let TokenKind::Ident(n) = &self.tokens.get(k)?.kind else {
+                return None;
+            };
+            path.push(n.clone());
+            match self.tokens.get(k + 1)?.kind {
+                TokenKind::ColonColon => k += 2,
+                TokenKind::Bang => break,
+                _ => return None,
+            }
+        }
+        let open = k + 2;
+        if !matches!(
+            self.tokens.get(open)?.kind,
+            TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace
+        ) {
+            return None;
+        }
+        let name = path.pop()?;
+        Some((path, name, open))
+    }
+
+    /// Take the macro call at `self.pos` (only one ending in `;`, with
+    /// the `;`, when `semi`): its block (`None`: a qualified name that
+    /// names none, reported), name, span and argument tokens. `None`, with
+    /// nothing consumed, when no macro call is there.
+    fn take_macro_call(
+        &mut self,
+        semi: bool,
+    ) -> Option<(Option<MetaDef>, String, Span, Vec<Token>)> {
+        if self.meta.is_empty() {
+            return None;
+        }
+        let (qual, name, open) = self.macro_head()?;
+        if qual.is_empty() && self.meta.find_macro(&name).is_none() {
+            return None;
+        }
+        let close = macros::close_of(self.tokens, open)?;
+        if semi && self.tokens.get(close + 1).map(|t| &t.kind) != Some(&TokenKind::Semi) {
+            return None;
+        }
+        let start = self.peek_span();
+        let at = self.tokens[open - 2].span;
+        let def = match self.find_meta(MetaKind::Macro, &qual, &name, at)? {
+            MetaUse::Def(d) => Some(d),
+            MetaUse::Bad => None,
+        };
+        let call = self.tokens[open + 1..close].to_vec();
+        self.pos = close + 1 + usize::from(semi);
+        Some((def, name, start, call))
+    }
+
+    /// Expand the call of macro `def` and parse the result with `parse`
+    /// (in braces when `braced`). `None`: it failed (reported).
+    fn expand_call<R>(
+        &mut self,
+        def: &MetaDef,
+        name: &str,
+        start: Span,
+        call: &[Token],
+        braced: bool,
+        parse: impl FnOnce(&mut Parser<'_>) -> R,
+    ) -> Option<R> {
+        let key = format!("macro:{name}:{}", def.package);
         if self.meta_stack.iter().any(|k| *k == key) || self.meta_stack.len() >= 256 {
             self.error(
                 start,
                 format!("`{name}!` expands too deeply or cyclically (spec 6.8.12)"),
             );
-            return Some(poison());
+            return None;
         }
-        let (out, diags) = macros::expand_macro(&def, &call, start);
+        let (out, diags) = macros::expand_macro(def, call, start);
         self.diagnostics.extend(diags);
-        let Some(out) = out else {
-            return Some(poison());
-        };
+        let out = out?;
         self.expanded.push(format!(
             "// expanded from {name}! (spec 6.8.12)\n{}",
             meta::render(&out)
         ));
-        let mut p = Parser::new(&out, self.file.clone());
+        let toks = if braced {
+            let mut toks = vec![Token::new(TokenKind::LBrace, start)];
+            toks.extend(out);
+            toks.push(Token::new(TokenKind::RBrace, start));
+            toks
+        } else {
+            out
+        };
+        let mut p = Parser::new(&toks, self.file.clone());
         p.ext = self.ext.clone();
         p.meta = std::sync::Arc::clone(&self.meta);
         p.literals = std::sync::Arc::clone(&self.literals);
         p.cfg.clone_from(&self.cfg);
+        p.package.clone_from(&def.package);
         p.meta_stack.clone_from(&self.meta_stack);
         p.meta_stack.push(key);
-        let e = p.parse_expr();
+        let r = parse(&mut p);
         self.diagnostics.extend(p.diagnostics);
         self.expanded.append(&mut p.expanded);
-        Some(e.unwrap_or_else(poison))
+        Some(r)
     }
 
     /// `name!( .. );` at item position (spec 6.8.12): expand and re-parse
     /// the result as items. Returns the generated items (possibly empty),
     /// or `None` if not positioned at a user-macro call.
     fn macro_call_items(&mut self) -> Option<Vec<Item>> {
-        if self.meta.is_empty() {
-            return None;
-        }
-        let at = |k: usize| self.tokens.get(self.pos + k).map(|t| &t.kind);
-        let TokenKind::Ident(name) = self.peek().clone() else {
-            return None;
-        };
-        if self.pending.is_some()
-            || at(1) != Some(&TokenKind::Bang)
-            || !matches!(
-                at(2),
-                Some(TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace)
-            )
-        {
-            return None;
-        }
-        let def = self.meta.find_macro(&name)?.clone();
-        let start = self.peek_span();
-        let open = self.pos + 2;
-        let close = macros::close_of(self.tokens, open)?;
-        let call = self.tokens[open + 1..close].to_vec();
-        self.pos = close + 1;
+        let (def, name, start, call) = self.take_macro_call(false)?;
         if self.peek() == &TokenKind::Semi {
             self.bump();
         }
-        let key = format!("macro:{name}");
-        if self.meta_stack.iter().any(|k| *k == key) || self.meta_stack.len() >= 256 {
-            self.error(
-                start,
-                format!("`{name}!` expands too deeply or cyclically (spec 6.8.12)"),
-            );
-            return Some(Vec::new());
-        }
-        let (out, diags) = macros::expand_macro(&def, &call, start);
-        self.diagnostics.extend(diags);
-        let Some(out) = out else {
-            return Some(Vec::new());
-        };
-        self.expanded.push(format!(
-            "// expanded from {name}! (spec 6.8.12)\n{}",
-            meta::render(&out)
-        ));
-        let mut p = Parser::new(&out, self.file.clone());
-        p.ext = self.ext.clone();
-        p.meta = std::sync::Arc::clone(&self.meta);
-        p.literals = std::sync::Arc::clone(&self.literals);
-        p.cfg.clone_from(&self.cfg);
-        p.meta_stack.clone_from(&self.meta_stack);
-        p.meta_stack.push(key);
-        let mut items = Vec::new();
-        while !p.at_eof() {
-            let before = p.pos;
-            if p.meta_block().is_some() {
-                continue;
-            }
-            match p.parse_item() {
-                Some(i) => {
-                    items.push(i);
-                    items.append(&mut p.pending_items);
+        let items = def.and_then(|d| {
+            self.expand_call(&d, &name, start, &call, false, |p| {
+                let mut items = Vec::new();
+                while !p.at_eof() {
+                    let before = p.pos;
+                    if p.meta_block().is_some() {
+                        continue;
+                    }
+                    match p.parse_item() {
+                        Some(i) => {
+                            items.push(i);
+                            items.append(&mut p.pending_items);
+                        }
+                        None if std::mem::take(&mut p.vanished) => {}
+                        None if p.pos == before => break,
+                        None => {}
+                    }
                 }
-                None if std::mem::take(&mut p.vanished) => {}
-                None if p.pos == before => break,
-                None => {}
-            }
-        }
-        self.diagnostics.extend(p.diagnostics);
-        self.expanded.append(&mut p.expanded);
-        Some(items)
+                items
+            })
+        });
+        Some(items.unwrap_or_default())
     }
 
     /// `name!( .. );` at statement position (spec 6.8.12): expand and
     /// splice the result into the block as statements (local items, `let`s,
     /// or an expression statement). Only a call terminated by `;` is taken
     /// here; a block-tail `name!(..)` stays an expression.
+    // `Parser::parse_*` is not general over the expansion's lifetime.
+    #[allow(clippy::redundant_closure_for_method_calls)]
     fn macro_call_stmts(&mut self) -> Option<Vec<Stmt>> {
-        if self.meta.is_empty() {
-            return None;
-        }
-        let at = |k: usize| self.tokens.get(self.pos + k).map(|t| &t.kind);
-        let TokenKind::Ident(name) = self.peek().clone() else {
-            return None;
-        };
-        if self.pending.is_some()
-            || at(1) != Some(&TokenKind::Bang)
-            || !matches!(
-                at(2),
-                Some(TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace)
-            )
-        {
-            return None;
-        }
-        let open = self.pos + 2;
-        let close = macros::close_of(self.tokens, open)?;
-        if self.tokens.get(close + 1).map(|t| &t.kind) != Some(&TokenKind::Semi) {
-            return None;
-        }
-        let def = self.meta.find_macro(&name)?.clone();
-        let start = self.peek_span();
-        let call = self.tokens[open + 1..close].to_vec();
-        self.pos = close + 2; // past `name!(..)` and `;`
-        let key = format!("macro:{name}");
-        if self.meta_stack.iter().any(|k| *k == key) || self.meta_stack.len() >= 256 {
-            self.error(
-                start,
-                format!("`{name}!` expands too deeply or cyclically (spec 6.8.12)"),
-            );
-            return Some(Vec::new());
-        }
-        let (out, diags) = macros::expand_macro(&def, &call, start);
-        self.diagnostics.extend(diags);
-        let Some(out) = out else {
-            return Some(Vec::new());
-        };
-        // Re-parse the expansion as a block's statements.
-        let mut toks = vec![Token::new(TokenKind::LBrace, start)];
-        toks.extend(out.iter().cloned());
-        toks.push(Token::new(TokenKind::RBrace, start));
-        self.expanded.push(format!(
-            "// expanded from {name}! (spec 6.8.12)\n{}",
-            meta::render(&out)
-        ));
-        let mut p = Parser::new(&toks, self.file.clone());
-        p.ext = self.ext.clone();
-        p.meta = std::sync::Arc::clone(&self.meta);
-        p.literals = std::sync::Arc::clone(&self.literals);
-        p.cfg.clone_from(&self.cfg);
-        p.meta_stack.clone_from(&self.meta_stack);
-        p.meta_stack.push(key);
-        let block = p.parse_block_stmts();
-        self.diagnostics.extend(p.diagnostics);
-        self.expanded.append(&mut p.expanded);
+        let (def, name, start, call) = self.take_macro_call(true)?;
+        let block = def
+            .and_then(|d| {
+                self.expand_call(&d, &name, start, &call, true, |p| p.parse_block_stmts())
+            })
+            .flatten();
         let Some(block) = block else {
             return Some(Vec::new());
         };
@@ -7391,61 +7381,17 @@ impl<'a> Parser<'a> {
 
     /// `name!( .. )` where a pattern is expected (spec 6.8.12): expand and
     /// re-parse the result as a pattern.
+    // `Parser::parse_*` is not general over the expansion's lifetime.
+    #[allow(clippy::redundant_closure_for_method_calls)]
     fn macro_call_pattern(&mut self) -> Option<Pattern> {
-        if self.meta.is_empty() {
-            return None;
-        }
-        let at = |k: usize| self.tokens.get(self.pos + k).map(|t| &t.kind);
-        let TokenKind::Ident(name) = self.peek().clone() else {
-            return None;
-        };
-        if self.pending.is_some()
-            || at(1) != Some(&TokenKind::Bang)
-            || !matches!(
-                at(2),
-                Some(TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace)
-            )
-        {
-            return None;
-        }
-        let def = self.meta.find_macro(&name)?.clone();
-        let span = self.peek_span();
-        let open = self.pos + 2;
-        let close = macros::close_of(self.tokens, open)?;
-        let call = self.tokens[open + 1..close].to_vec();
-        self.pos = close + 1;
+        let (def, name, span, call) = self.take_macro_call(false)?;
         let poison = || Pattern {
             kind: PatternKind::Wildcard,
             span,
         };
-        let key = format!("macro:{name}");
-        if self.meta_stack.iter().any(|k| *k == key) || self.meta_stack.len() >= 256 {
-            self.error(
-                span,
-                format!("`{name}!` expands too deeply or cyclically (spec 6.8.12)"),
-            );
-            return Some(poison());
-        }
-        let (out, diags) = macros::expand_macro(&def, &call, span);
-        self.diagnostics.extend(diags);
-        let Some(out) = out else {
-            return Some(poison());
-        };
-        self.expanded.push(format!(
-            "// expanded from {name}! (spec 6.8.12)\n{}",
-            meta::render(&out)
-        ));
-        let mut p = Parser::new(&out, self.file.clone());
-        p.ext = self.ext.clone();
-        p.meta = std::sync::Arc::clone(&self.meta);
-        p.literals = std::sync::Arc::clone(&self.literals);
-        p.cfg.clone_from(&self.cfg);
-        p.meta_stack.clone_from(&self.meta_stack);
-        p.meta_stack.push(key);
-        let pat = p.parse_pattern();
-        self.diagnostics.extend(p.diagnostics);
-        self.expanded.append(&mut p.expanded);
-        Some(pat.unwrap_or_else(poison))
+        let pat = def
+            .and_then(|d| self.expand_call(&d, &name, span, &call, false, |p| p.parse_pattern()));
+        Some(pat.flatten().unwrap_or_else(poison))
     }
 
     #[allow(clippy::cognitive_complexity)] // one arm per pattern form

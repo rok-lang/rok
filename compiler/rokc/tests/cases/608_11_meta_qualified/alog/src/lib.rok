@@ -1,0 +1,18 @@
+pub trait Named {
+    fn name(self) -> str;
+}
+
+#[impl_macro(log)] pub @macro {
+    ( @e: expr ) => { println(f"a: {@e}") }
+}
+
+#[impl_derive(Named)] pub @derive {
+    impl pkg::Named for @Self {
+        fn name(self) -> str { return "a"; }
+    }
+}
+
+#[impl_attribute(traced)] pub @attribute {
+    @item
+    pub fn traced_by() -> str { return "alog"; }
+}

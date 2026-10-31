@@ -1,0 +1,37 @@
+// rokc-arg: --extern alog=tests/cases/608_11_meta_qualified/alog
+// rokc-arg: --extern blog=tests/cases/608_11_meta_qualified/blog
+// expect-exit: 0
+// forbid-warning: unqualified_meta
+// forbid-warning: build-wide
+// expect-stdout:
+// a: 1
+// b: 2
+// b: hello
+// a: 3
+// a
+// alog
+
+// Spec 6.8.11: two packages may each define `log!`; a use names the
+// package (`dep::name!`, `#[derive(dep::Name)]`, `#[dep::attr]`), or
+// a `use dep::name!;` says which one the bare name is.
+use alog::log!;
+use alog::Named;
+
+#[derive(alog::Named)]
+struct S {}
+
+#[alog::traced]
+fn f() {}
+
+fn main() {
+    alog::log!(1);
+    blog::log!(2);
+    blog::hello();
+    log!(3);
+    println(S {}.name());
+    f();
+    println(traced_by());
+}
+
+// spec: 006.08-meta-blocks
+// spec: §6.8.11 §6.8.12

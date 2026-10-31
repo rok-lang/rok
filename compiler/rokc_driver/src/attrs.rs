@@ -7,7 +7,7 @@ use rokc_ast::{
     TraitItem,
 };
 use rokc_diagnostic::{ErrorKind, RokDiagnostic};
-use rokc_parser::MetaTable;
+use rokc_parser::{MetaKind, MetaTable};
 
 /// Where an attribute sits.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -276,6 +276,14 @@ impl Cx<'_> {
             }
             n if MAGIC.contains(&n) => return None,
             n if self.metas.knows_attribute(n) => return None,
+            // `#[dep::name]` of a meta attribute: the parser expanded it
+            // or said which package defines it.
+            n if n
+                .rsplit_once("::")
+                .is_some_and(|(_, l)| self.metas.find(MetaKind::Attribute, l).is_some()) =>
+            {
+                return None;
+            }
             n => {
                 return Some(format!(
                     "unknown attribute `#[{n}]`: not built in and no meta block defines it \
