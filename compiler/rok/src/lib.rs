@@ -15,7 +15,7 @@
 //! $ROK_HOME/config.rokon             `Config { registry: "<index url>", toolchain: "<default>" }`
 //! $ROK_HOME/cache/scripts/<hash>/    a script's lock and prebuilt dependencies
 //! $ROK_HOME/envs/<name>/             a named environment (rok.rokon, rok.lock, target/)
-//! $ROK_HOME/envs/CURRENT             `rok env use`'s choice
+//! $ROK_HOME/envs/.current            `rok env use`'s choice (also CURRENT, for older rok)
 //! ```
 
 mod env;
@@ -62,6 +62,20 @@ struct Global {
     /// The program's arguments after `--` (or a script's path) as given:
     /// the strings in `post` stand for them only lossily.
     tail: Vec<std::ffi::OsString>,
+}
+
+/// `rok: warning: <msg>` on stderr, unless already printed.
+fn warn_once(msg: &str) {
+    static SEEN: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+    let mut seen = SEEN
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if seen.iter().any(|s| s == msg) {
+        return;
+    }
+    seen.push(msg.to_owned());
+    drop(seen);
+    eprintln!("rok: {} {msg}", term::label(Stream::Stderr, Role::Warning));
 }
 
 /// The user's rok directory (`rokc_core::rok_home`).
@@ -494,15 +508,12 @@ fn env_dir(name: &str) -> PathBuf {
 
 /// The environment used outside a project: `$ROK_ENV`, `rok env use`'s
 /// choice, or `default`.
-fn ambient_env() -> String {
-    std::env::var("ROK_ENV")
-        .ok()
-        .filter(|e| !e.is_empty())
-        .or_else(|| {
-            let s = std::fs::read_to_string(home().join("envs/CURRENT")).ok()?;
-            Some(s.trim().to_owned()).filter(|s| !s.is_empty())
-        })
-        .unwrap_or_else(|| "default".to_owned())
+fn ambient_env() -> Result<String, String> {
+    if let Some(e) = std::env::var("ROK_ENV").ok().filter(|e| !e.is_empty()) {
+        env::name("ROK_ENV", &e)?;
+        return Ok(e);
+    }
+    Ok(env::chosen()?.unwrap_or_else(|| "default".to_owned()))
 }
 
 fn load_dir(dir: &Path) -> Result<Context, String> {
@@ -534,11 +545,16 @@ fn env_target(name: &str) -> Result<Target, String> {
 /// (which must exist, but for `default`), else `ambient_env`.
 fn selected_env(g: &Global) -> Result<String, String> {
     match &g.env {
-        Some(name) if !env_dir(name).is_dir() && name != "default" => Err(format!(
-            "no environment `{name}` (create it: rok env create {name})"
-        )),
-        Some(name) => Ok(name.clone()),
-        None => Ok(ambient_env()),
+        Some(name) => {
+            env::name("--env", name)?;
+            if !env_dir(name).is_dir() && name != "default" {
+                return Err(format!(
+                    "no environment `{name}` (create it: rok env create {name})"
+                ));
+            }
+            Ok(name.clone())
+        }
+        None => ambient_env(),
     }
 }
 
@@ -1134,6 +1150,13 @@ fn cmd_new(g: &Global, cmd: &str, args: &[String]) -> Result<i32, String> {
         (true, [d]) => PathBuf::from(d),
         _ => return Err(format!("usage: rok {cmd} [--lib] [--bin] <name>")),
     };
+    // Check the name as typed, before touching the file system: on
+    // Windows `nul` names the device, which exists and has no file name.
+    if !init {
+        if let Some(n) = dir.file_name().and_then(|n| n.to_str()) {
+            manifest::check_new_name(n)?;
+        }
+    }
     if init {
         for f in ["src/main.rok", "src/lib.rok"] {
             if dir.join(f).exists() {
@@ -1158,9 +1181,12 @@ fn cmd_new(g: &Global, cmd: &str, args: &[String]) -> Result<i32, String> {
                 }
             })
             .collect();
-        if !n.starts_with(|c: char| c.is_ascii_lowercase()) {
+        if !n.starts_with(|c: char| c.is_ascii_lowercase())
+            || rokc_core::check_os_name("package", &n).is_err()
+        {
             n.insert_str(0, "pkg-");
         }
+        n.truncate(rokc_core::MAX_NAME);
         if n != dir_name && !g.quiet {
             eprintln!(
                 "{} the package name is `{n}` (`{dir_name}` is not a package name)",
@@ -1169,7 +1195,7 @@ fn cmd_new(g: &Global, cmd: &str, args: &[String]) -> Result<i32, String> {
         }
         n
     } else {
-        manifest::check_name(dir_name)?;
+        manifest::check_new_name(dir_name)?;
         dir_name.to_owned()
     };
     let src = dir.join("src");
@@ -1258,12 +1284,12 @@ fn init_script(g: &Global, file: &Path) -> Result<i32, String> {
             file.display()
         ));
     }
-    let t = script_target(file, &ambient_env())?;
+    let t = script_target(file, &ambient_env()?)?;
     let root = rokc_core::real_path(file).map_err(|e| e.to_string())?;
     let dir = root.parent().unwrap_or_else(|| Path::new("/"));
     let stem = root.file_stem().and_then(|s| s.to_str()).unwrap_or("app");
     let name = stem.to_ascii_lowercase();
-    manifest::check_name(&name)?;
+    manifest::check_new_name(&name)?;
     let files = script_files(&root);
     let mut moves = Vec::new();
     for (f, src) in files {
@@ -1349,6 +1375,9 @@ fn init_script(g: &Global, file: &Path) -> Result<i32, String> {
 fn install_kernel(g: &Global, args: &[String]) -> Result<i32, String> {
     if let Some(a) = args.first() {
         return Err(format!("`rok jupyter install` takes no `{a}`"));
+    }
+    if g.env.is_some() {
+        selected_env(g)?;
     }
     // The proxy, when installed: the kernel follows the default toolchain.
     let proxy = home()
@@ -1492,7 +1521,7 @@ pub fn parse_dep_args(args: &[String]) -> Result<(Dep, bool), String> {
         None => (name, None),
     };
     if !name.is_empty() {
-        manifest::check_name(&name)?;
+        manifest::check_new_name(&name)?;
     }
     let source = match (path, git) {
         (None, None) if reference == GitRef::Default => {
@@ -1604,7 +1633,7 @@ fn add_native(
         return Err("usage: rok add --native <name>[@<req>] [--registry <url>]".into());
     };
     let (name, req) = spec.split_once('@').unwrap_or((spec, ""));
-    manifest::check_name(name)?;
+    manifest::check_new_name(name)?;
     let registry = val(&vals, "--registry").map(str::to_owned);
     let req = if req.is_empty() {
         let url = match &registry {
@@ -1734,7 +1763,7 @@ fn edit_script(
         std::fs::write(file, t).map_err(|e| format!("cannot write {}: {e}", file.display()))
     };
     write(&new)?;
-    let r = script_target(file, &ambient_env())
+    let r = script_target(file, &ambient_env()?)
         .and_then(|t| resolve::resolve(&home(), &t.ctx, &options(g)));
     if let Err(e) = r {
         write(&src).map_err(|e2| format!("{e}\n(and {e2})"))?;

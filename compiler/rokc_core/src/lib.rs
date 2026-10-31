@@ -279,6 +279,63 @@ pub fn reserved_package(name: &str) -> Option<String> {
     ))
 }
 
+/// Longest package, stone or environment name.
+pub const MAX_NAME: usize = 64;
+
+/// Why `name` can't name a `kind` ("package", "environment") stored as a
+/// file or directory on every supported OS.
+///
+/// A Windows device name (any
+/// case, any extension), a separator or other character Windows refuses,
+/// `.` / `..`, a leading `.` (hidden), a trailing `.` or space (dropped
+/// by Windows), or longer than `MAX_NAME`.
+pub fn check_os_name(kind: &str, name: &str) -> Result<(), String> {
+    const DEVICES: [&str; 4] = ["con", "prn", "aux", "nul"];
+    let stem = name.split('.').next().unwrap_or(name).trim_end();
+    let lower = stem.to_ascii_lowercase();
+    let device = DEVICES.contains(&lower.as_str())
+        || ["com", "lpt"].iter().any(|p| {
+            lower
+                .strip_prefix(p)
+                .is_some_and(|n| n.len() == 1 && matches!(n.as_bytes()[0], b'1'..=b'9'))
+        });
+    if name.is_empty() {
+        return Err(format!(
+            "the {kind} name is empty; write one, e.g. `my_{kind}`"
+        ));
+    }
+    let why = if device && stem == name {
+        "is a device name on Windows, so no file can be called that".to_owned()
+    } else if device {
+        format!("starts with a Windows device name (`{stem}`), so no file can be called that")
+    } else if let Some(c) = name.chars().find(|c| {
+        c.is_control() || matches!(c, '/' | '\\' | '<' | '>' | ':' | '"' | '|' | '?' | '*')
+    }) {
+        format!("contains {c:?}, which a file name can't hold on every system")
+    } else if name == "." || name == ".." {
+        "is a path, not a name".to_owned()
+    } else if name.starts_with('.') {
+        "starts with `.`, which hides it".to_owned()
+    } else if name.ends_with(['.', ' ']) {
+        "ends with `.` or a space, which Windows drops".to_owned()
+    } else if name.chars().count() > MAX_NAME {
+        let short: String = name.chars().take(16).collect();
+        return Err(format!(
+            "the {kind} name `{short}...` is {} characters long; keep it to {MAX_NAME} or fewer",
+            name.chars().count()
+        ));
+    } else {
+        return Ok(());
+    };
+    let fixed = name
+        .trim_matches(['.', ' '])
+        .replace(|c: char| !c.is_ascii_alphanumeric() && c != '.', "_");
+    let fixed = if fixed.is_empty() { kind } else { &fixed };
+    Err(format!(
+        "`{name}` {why}; name the {kind} something else, e.g. `my_{fixed}`"
+    ))
+}
+
 /// Length of the shebang line (spec 1.2.3), terminator excluded; 0 if
 /// none. `#!` followed (past whitespace and comments) by `[` is an inner
 /// attribute, not a shebang.
@@ -326,6 +383,45 @@ pub fn shebang_len(src: &str) -> usize {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn os_names() {
+        let c = |n: &str| super::check_os_name("package", n);
+        for ok in [
+            "app", "con-app", "console", "com0", "com10", "lpt", "a..b", "x.y",
+        ] {
+            assert_eq!(c(ok), Ok(()), "{ok}");
+        }
+        for (bad, why) in [
+            ("nul", "is a device name on Windows, so"),
+            ("CON", "is a device name on Windows"),
+            ("Aux.txt", "starts with a Windows device name (`Aux`)"),
+            ("com1", "device name"),
+            ("LPT9.x.y", "device name"),
+            ("a/b", "contains '/'"),
+            ("a\\b", "contains '\\\\'"),
+            ("c:x", "contains ':'"),
+            ("..", "is a path"),
+            (".hidden", "starts with `.`"),
+            ("x.", "ends with `.`"),
+            ("", "is empty; write one, e.g. `my_package`"),
+        ] {
+            let e = c(bad).unwrap_err();
+            assert!(e.contains(why), "{bad}: {e}");
+            assert!(e.contains("e.g. `my_"), "{bad}: {e}");
+        }
+        assert_eq!(
+            c("nul").unwrap_err(),
+            "`nul` is a device name on Windows, so no file can be called that; name the \
+             package something else, e.g. `my_nul`"
+        );
+        assert_eq!(c(&"a".repeat(64)), Ok(()));
+        let e = c(&"a".repeat(65)).unwrap_err();
+        assert!(
+            e.contains("is 65 characters long; keep it to 64 or fewer"),
+            "{e}"
+        );
+    }
+
     #[test]
     fn shebang_lines() {
         let s = super::shebang_len;

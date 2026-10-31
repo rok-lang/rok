@@ -25,22 +25,120 @@ pub fn names() -> Vec<String> {
     names
 }
 
+/// `rok env use`'s choice, in `envs/`; `CURRENT` too for older rok. No
+/// environment can be called either (`check`).
+const CHOICE: &str = ".current";
+const OLD_CHOICE: &str = "CURRENT";
+
+/// Why `name` can't be a new environment.
 fn check(name: &str) -> Result<(), String> {
-    let ok = !name.is_empty()
-        && name != "CURRENT"
-        && !name.starts_with('.')
-        && name
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'));
-    if ok {
-        Ok(())
-    } else {
-        Err(format!("`{name}` is not a valid environment name"))
+    rokc_core::check_os_name("environment", name)?;
+    if [CHOICE, OLD_CHOICE]
+        .iter()
+        .any(|r| r.trim_start_matches('.').eq_ignore_ascii_case(name))
+    {
+        return Err(format!(
+            "`{name}` is reserved for `rok env use`'s choice; name the environment something \
+             else, e.g. `my_{name}`"
+        ));
     }
+    let ok = |c: char| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.');
+    if name.chars().all(ok) {
+        return Ok(());
+    }
+    let fixed: String = name.chars().map(|c| if ok(c) { c } else { '_' }).collect();
+    Err(format!(
+        "`{name}` is not a valid environment name: ASCII letters, digits, `_`, `-` and `.`; try \
+         `{fixed}`"
+    ))
+}
+
+/// Check environment `name` taken from `source` (`--env`, `ROK_ENV`, the
+/// choice file; empty for an argument). A path is an error; a name
+/// `check` refuses only warns when that environment exists (an older rok
+/// made it).
+pub fn name(source: &str, name: &str) -> Result<(), String> {
+    let at = |e: String| {
+        if source.is_empty() {
+            e
+        } else {
+            format!("{source}: {e}")
+        }
+    };
+    if name.is_empty() || name == "." || name == ".." || name.contains(['/', '\\', ':', '\0']) {
+        return Err(at(format!(
+            "`{name}` is a path, not an environment name; use a name from `rok env list`, e.g. \
+             `default`"
+        )));
+    }
+    match check(name) {
+        Err(e) if env_dir(name).is_dir() => {
+            crate::warn_once(&at(e));
+            Ok(())
+        }
+        r => r.map_err(at),
+    }
+}
+
+/// `rok env use`'s choice, if any. `CURRENT` alone is an older rok's;
+/// when both files are there the newer wins, and `.current` without
+/// `CURRENT` means an older rok cleared the choice.
+pub fn chosen() -> Result<Option<String>, String> {
+    let envs = home().join("envs");
+    let (new, old) = (envs.join(CHOICE), envs.join(OLD_CHOICE));
+    let time = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
+    let file = match (time(&new), old.is_dir(), time(&old)) {
+        (None, _, _) => old,
+        (Some(_), true, _) => new,
+        (Some(_), false, None) => return Ok(None),
+        (Some(n), false, Some(o)) => {
+            if o > n {
+                old
+            } else {
+                new
+            }
+        }
+    };
+    let Ok(text) = std::fs::read_to_string(&file) else {
+        return Ok(None);
+    };
+    // The first line: a newer rok may add more.
+    let chosen = text.lines().next().unwrap_or("").trim();
+    if chosen.is_empty() {
+        return Ok(None);
+    }
+    name(&file.display().to_string(), chosen)?;
+    Ok(Some(chosen.to_owned()))
+}
+
+/// Make `name` `rok env use`'s choice.
+fn choose(name: &str) -> Result<(), String> {
+    let envs = home().join("envs");
+    std::fs::create_dir_all(&envs).map_err(|e| format!("{}: {e}", envs.display()))?;
+    let write = |f: &str| {
+        let file = envs.join(f);
+        std::fs::write(&file, format!("{name}\n")).map_err(|e| format!("{}: {e}", file.display()))
+    };
+    // `CURRENT` first, so `.current` is never the older; skipped when an
+    // environment's directory has that name (a case-insensitive `current`).
+    if !envs.join(OLD_CHOICE).is_dir() {
+        write(OLD_CHOICE)?;
+    }
+    write(CHOICE)
 }
 
 pub fn create(name: &str) -> Result<PathBuf, String> {
     check(name)?;
+    if let Some(other) = names().into_iter().find(|n| n.eq_ignore_ascii_case(name)) {
+        return Err(if other == name {
+            format!("environment `{name}` already exists")
+        } else {
+            format!(
+                "environment `{other}` already exists, and Windows and macOS see `{name}` as the \
+                 same name; pick another, or use `{other}`"
+            )
+        });
+    }
     let dir = env_dir(name);
     if dir.exists() {
         return Err(format!("environment `{name}` already exists"));
@@ -55,7 +153,7 @@ pub fn create(name: &str) -> Result<PathBuf, String> {
 }
 
 fn existing(name: &str) -> Result<PathBuf, String> {
-    check(name)?;
+    self::name("", name)?;
     let dir = env_dir(name);
     if dir.is_dir() {
         Ok(dir)
@@ -83,7 +181,7 @@ pub fn cmd(g: &Global, args: &[String]) -> Result<i32, String> {
             }
         }
         ["list"] => {
-            let active = ambient_env();
+            let active = ambient_env()?;
             let names = names();
             if names.is_empty() {
                 term::note("no environments; make one with `rok env create <name>`");
@@ -97,18 +195,17 @@ pub fn cmd(g: &Global, args: &[String]) -> Result<i32, String> {
         ["remove", name] => {
             let dir = existing(name)?;
             std::fs::remove_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-            if ambient_env() == *name {
-                let _ = std::fs::remove_file(home().join("envs/CURRENT"));
+            if chosen().ok().flatten().as_deref() == Some(*name) {
+                for f in [CHOICE, OLD_CHOICE] {
+                    let _ = std::fs::remove_file(home().join("envs").join(f));
+                }
             }
         }
         ["use", name] => {
             if *name != "default" {
                 existing(name)?;
             }
-            let file = home().join("envs/CURRENT");
-            std::fs::create_dir_all(home().join("envs")).map_err(|e| e.to_string())?;
-            std::fs::write(&file, format!("{name}\n"))
-                .map_err(|e| format!("{}: {e}", file.display()))?;
+            choose(name)?;
         }
         ["export", name, dir] => {
             let src = existing(name)?;
@@ -120,7 +217,7 @@ pub fn cmd(g: &Global, args: &[String]) -> Result<i32, String> {
             }
         }
         ["import", name, from] => import(g, name, Path::new(from))?,
-        ["shell"] => return shell(&ambient_env()),
+        ["shell"] => return shell(&ambient_env()?),
         ["shell", name] => {
             existing(name)?;
             return shell(name);
