@@ -1,5 +1,70 @@
 # Changelog
 
+## 0.1.6 (2026-11-01)
+
+This release gets code ready for 0.2.0: what 0.2.0 removes or changes now warns, and the
+replacement is already here. Code that built with 0.1.5 still builds; with `-D warnings` the
+new lints below can now stop a build.
+
+- Lints: `warnings` is every warning, as in rustc, so `-D warnings` also covers the lints
+  added in this release. Compiler warnings tied to a lint obey `-A`, `-W` and `-D`; a level
+  note says where it came from (`rok.rokon` or the command line); an unknown lint suggests
+  the closest name; `rok lint --list` shows the release that added each lint.
+- New warnings: `keyword_idents` (the six words 0.2.0 reserves; write `r#name`),
+  `zero_prefixed_literal`, `try_coalesce_precedence`, `trailing_closure_operator`,
+  `trailing_closure_return`, `fstring_g_precision`, `literal_spread_mismatch`,
+  `capture_field_write`, `const_item_mutation`, `pattern_binds_const`, `discarded_ref_write`,
+  `ambiguous_int_literal`, `trait_not_in_scope`, `finally_jump`, `float_to_bool`,
+  `implicit_core_fn`, `unclosed_sender`, `using_twice`, `guard_escape`,
+  `thread_local_across_await`, `extern_static_unsafe`, `improper_ctypes`, `deprecated_safe`
+  and `unqualified_meta`. `unclosed_resource` follows every exit path. Fixes are offered
+  where the edit is concrete.
+- Raw identifiers: `r#name` names an item after a keyword.
+- `#[deprecated(since, note)]` reaches methods, fields, types, consts, statics, generics,
+  dependencies and std; `#[deprecated_safe("..")]` marks a safe function that becomes
+  `unsafe` in 0.2.0. The language server tags deprecated items.
+- Meta: another package's macro, derive or attribute can be named in full (`dep::name!`,
+  `#[dep::attr]`, `#[derive(dep::Name)]`, `use dep::name!`); meta definitions are per
+  package, and an ambiguous bare name lists the qualified forms.
+- Std: every name that 0.2.0 replaces has its replacement, and the old name warns with it.
+  New are `env::args_os` / `vars_os` (bytes kept; `args` / `vars` are lossy), getters for
+  error and address fields, `process::exit`, a `Signal` API, `FileType`, `created` /
+  `status_changed`, `try_close`, `Reader::read_into`, `Writer::write_bytes`,
+  `strip_prefix_or_none`, `rok::std::os::unix::fs` with Rust's `PermissionsExt` /
+  `OpenOptionsExt`, `env::try_set_var`, `Duration::secs` / `mins`, `par::fold`,
+  `sort_by_key`, `parse_or_none`, `FormatSpec` getters and `zero_pad`, `TryFrom` for every
+  width, atomic `wait_timeout` and `try_recv_status`. `CStr::from_ptr`, `File::from_fd`,
+  `set_var` and `remove_var` are marked `deprecated_safe`.
+- Toolchains: a pin can be a prefix (`"0.1"`), a requirement (`"^0.1.5"`) or a directory
+  name, and a script's `//! rokon` block can pin one; `rok new` and `rok init` write
+  `toolchain: "<series>"`. A bare `rok toolchain update` installs the newest release, as
+  rustup does, and says so when that moves to a new series, keeping the old toolchain;
+  `rok toolchain update 0.1` stays in the series. `rok toolchain install <version>` downloads
+  without `--from`, and `install.sh` / `install.ps1` accept a series.
+- One toolchain per run: a pinned project hands the command to the pinned toolchain's own
+  `rok`; the proxies come from the newest installed toolchain; shared `ROK_HOME` files keep
+  fields an older or newer `rok` wrote.
+- CLI: `rok login` / `logout --registry`, `logout --all` (tokens per index in
+  `tokens.rokon`), `rok publish --dry-run` / `--registry` / `--index-dir`, `rok yank
+  name@version`, `rok install --bin`, `rokc --emit=source` / `expansions`, `rokc inspect
+  --dump`. A bare `rok publish` warns about what 0.2.0 changes. Tool variables are `ROK_*`
+  (`ROK_TEST_THREADS`, `ROK_INCREMENTAL_VERIFY`, ...) and runtime variables `ROKR_*`; the old
+  names still work and warn once. `wasm32-wasip2`, `wasm32-wasip1-threads` and
+  `riscv32imac-unknown-none-elf` are accepted as target names.
+- Machine output: JSON diagnostics add `line_end`, `col_end`, `help`, `lint` and a `schema`
+  number; `rok test` / `rok bench --format json` write case and summary records;
+  `rok deps --format json`; `rok --version -v --format json`.
+- Package and environment names that a supported OS rejects (Windows device names, reserved
+  characters, more than 64 characters) are errors in `rok new`, `add` and `publish`, and a
+  warning in an existing manifest. Environment names are checked everywhere.
+- Fixes: cleanup in `finally` and `using` finishes after a cancel; a `for` closes the
+  generator it made when it leaves early; `File`, socket and `Child` copies share one handle
+  safely; C threads can call into Rok; `Secret` moves between tasks; a `ref` argument of a
+  narrowed variable writes back; non-UTF-8 arguments no longer panic; the lone-file cache is
+  private to the user; extension operators led by an ASCII operator lex by longest match;
+  out-of-range literals and mixed-number errors name the wider type. `Dict` hashing is
+  seeded per process; iteration order is unchanged.
+
 ## 0.1.5 (2026-10-31)
 
 - Colour: `rok`, `rokc` and the installers colour status verbs, errors, warnings, notes and
