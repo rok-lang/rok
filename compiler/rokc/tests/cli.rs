@@ -31,6 +31,19 @@ fn rokc(env: Option<&Env>, cwd: &Path, args: &[&str]) -> Output {
 /// build error when the harness does not build).
 #[track_caller]
 fn harness(env: &Env, cwd: &Path, kind: &str, extra: &[&str]) -> (i32, String, String) {
+    let (code, out, _, err) = harness_json(env, cwd, kind, extra);
+    (code, out, err)
+}
+
+/// [`harness`], and the human text a `--format json` run keeps off its
+/// stdout (third).
+#[track_caller]
+fn harness_json(
+    env: &Env,
+    cwd: &Path,
+    kind: &str,
+    extra: &[&str],
+) -> (i32, String, String, String) {
     let man = cwd.join("harness.manifest");
     let mut args = vec![kind, "--emit-harness", man.to_str().unwrap()];
     args.extend_from_slice(extra);
@@ -40,15 +53,18 @@ fn harness(env: &Env, cwd: &Path, kind: &str, extra: &[&str]) -> (i32, String, S
         return (
             build.status.code().unwrap_or(1),
             text(&build.stdout),
+            String::new(),
             build_err,
         );
     }
     let manifest = fs::read_to_string(&man).unwrap();
-    // The format version comes first.
-    assert!(manifest.starts_with("version 1\n"), "{manifest}");
-    let mut out = Vec::new();
-    let code = rokc_harness::run_manifest(&manifest, &mut out);
-    (code, text(&out), build_err)
+    // The format version comes first: 2 only for `format json`.
+    let json = manifest.lines().any(|l| l == "format json");
+    let want = if json { "version 2\n" } else { "version 1\n" };
+    assert!(manifest.starts_with(want), "{manifest}");
+    let (mut out, mut human) = (Vec::new(), Vec::new());
+    let code = rokc_harness::run_manifest_to(&manifest, &mut out, &mut human);
+    (code, text(&out), text(&human), build_err)
 }
 
 /// `dir/name/src/main.rok` (or `src/lib.rok` with a test), as `rok new`
@@ -1765,6 +1781,163 @@ fn tests_in_private_modules_run() {
     assert!(err.contains("`util::checks::h` is private"), "{err}");
 }
 
+/// Each line of `out` as JSON.
+#[track_caller]
+fn records(out: &str) -> Vec<rokc_diagnostic::Json> {
+    out.lines()
+        .map(|l| rokc_diagnostic::Json::parse(l).unwrap_or_else(|e| panic!("{e}: {l}")))
+        .collect()
+}
+
+/// `test --format json`: a versioned record per test and a summary on
+/// stdout; the human text and the tests' output elsewhere.
+// spec: §9.9.12
+#[test]
+fn test_format_json() {
+    let Some(env) = setup() else { return };
+    let dir = scratch("test-json");
+    let lib = new_package(&dir, "jlib", true);
+    let mut src = fs::read_to_string(lib.join("src/lib.rok")).unwrap();
+    src.push_str("\n#[test]\nfn boom() {\n    println(\"noise\");\n    panic(\"boom\");\n}\n");
+    put(lib.join("src/lib.rok"), src).unwrap();
+    let (code, out, human, _) = harness_json(&env, &lib, "test", &["--format", "json"]);
+    assert_eq!(code, 1, "{out}\n{human}");
+    let recs = records(&out);
+    assert_eq!(recs.len(), 3, "{out}");
+    for r in &recs {
+        assert_eq!(r.get("schema").as_u32(), Some(1), "{out}");
+        assert_eq!(r.get("kind").as_str(), Some("test"), "{out}");
+    }
+    assert_eq!(recs[0].get("type").as_str(), Some("case"), "{out}");
+    assert_eq!(recs[0].get("name").as_str(), Some("adds"), "{out}");
+    assert_eq!(recs[0].get("result").as_str(), Some("ok"), "{out}");
+    assert_eq!(recs[1].get("name").as_str(), Some("boom"), "{out}");
+    assert_eq!(recs[1].get("result").as_str(), Some("failed"), "{out}");
+    assert!(
+        matches!(recs[1].get("ms"), rokc_diagnostic::Json::Num(_)),
+        "{out}"
+    );
+    assert_eq!(recs[2].get("type").as_str(), Some("summary"), "{out}");
+    assert_eq!(recs[2].get("result").as_str(), Some("failed"), "{out}");
+    assert_eq!(recs[2].get("passed").as_u32(), Some(1), "{out}");
+    assert_eq!(recs[2].get("failed").as_u32(), Some(1), "{out}");
+    assert!(!out.contains("noise"), "{out}");
+    assert!(human.contains("test boom ... FAILED"), "{human}");
+    assert!(human.contains("noise"), "{human}");
+
+    // Another format is named, with the ones there are.
+    let out = rokc(Some(&env), &lib, &["test", "--format", "xml"]);
+    assert_exit(&out, 2);
+    assert!(
+        text(&out.stderr).contains("`--format` takes human, json or rokbench, not `xml`"),
+        "{}",
+        text(&out.stderr)
+    );
+}
+
+/// `bench --format json`: the `#rokbench` line becomes a record; what the
+/// bench prints itself stays off stdout.
+// spec: §9.9.11 §9.9.12
+#[test]
+fn bench_format_json_separates_noise() {
+    let Some(env) = setup() else { return };
+    let dir = scratch("bench-json");
+    let app = new_package(&dir, "japp", false);
+    put(
+        app.join("src/main.rok"),
+        "use rok::core::bench::Bench;\nuse rok::core::hint::black_box;\nfn main() {}\n\
+         #[bench]\nfn sum(b: Bench) {\n    println(\"noise from bench\");\n    \
+         b.iter(|| black_box(1i64 + 2i64));\n}\n#[bench]\nfn idle(b: Bench) { let _ = b; }\n",
+    )
+    .unwrap();
+    let opts = ["--iters=3", "--samples=2"];
+    let (code, out, human, _) = harness_json(
+        &env,
+        &app,
+        "bench",
+        &[&opts[..], &["--format=json"]].concat(),
+    );
+    assert_eq!(code, 0, "{out}\n{human}");
+    let recs = records(&out);
+    assert_eq!(recs.len(), 3, "{out}");
+    let sum = recs.iter().find(|r| r.get("name").as_str() == Some("sum"));
+    let sum = sum.unwrap_or_else(|| panic!("{out}"));
+    assert_eq!(sum.get("kind").as_str(), Some("bench"), "{out}");
+    assert_eq!(sum.get("result").as_str(), Some("ok"), "{out}");
+    assert_eq!(sum.get("samples").as_u32(), Some(2), "{out}");
+    assert!(
+        matches!(sum.get("median_ns"), rokc_diagnostic::Json::Num(_)),
+        "{out}"
+    );
+    let idle = recs.iter().find(|r| r.get("name").as_str() == Some("idle"));
+    assert_eq!(
+        idle.unwrap().get("result").as_str(),
+        Some("ignored"),
+        "{out}"
+    );
+    let last = recs.last().unwrap();
+    assert_eq!(last.get("type").as_str(), Some("summary"), "{out}");
+    assert_eq!(last.get("run").as_u32(), Some(1), "{out}");
+    assert_eq!(last.get("ignored").as_u32(), Some(1), "{out}");
+    assert!(
+        !out.contains("noise") && !out.contains("#rokbench"),
+        "{out}"
+    );
+    assert!(human.contains("noise from bench\n"), "{human}");
+    assert!(human.contains("bench result: ok. 1 run;"), "{human}");
+}
+
+/// The `#rokbench` line is frozen as 0.1.5 prints it; new fields go only
+/// in the JSON records.
+// spec: §9.1.2 §9.9.11
+#[test]
+fn rokbench_line_unchanged() {
+    let Some(env) = setup() else { return };
+    let dir = scratch("rokbench-frozen");
+    let app = new_package(&dir, "vapp", false);
+    put(
+        app.join("src/main.rok"),
+        "use rok::core::bench::Bench;\nfn main() {}\n\
+         #[bench]\nfn one(b: Bench) { b.iter(|| 1i64); }\n",
+    )
+    .unwrap();
+    let man = app.join("harness.manifest");
+    let args = ["bench", "--iters=3", "--samples=2", "--format", "rokbench"];
+    let (code, _, err) = harness(&env, &app, args[0], &args[1..]);
+    assert_eq!(code, 0, "{err}");
+    let manifest = fs::read_to_string(&man).unwrap();
+    let exe = manifest
+        .lines()
+        .find_map(|l| l.strip_prefix("exe "))
+        .unwrap();
+    let o = Command::new(exe)
+        .args(["one", "3", "2", "0", "3"])
+        .output()
+        .unwrap();
+    let s = text(&o.stdout);
+    let line = s.lines().next().unwrap_or_default();
+    let keys: Vec<&str> = line
+        .split(' ')
+        .skip(1)
+        .filter_map(|kv| kv.split_once('=').map(|(k, _)| k))
+        .collect();
+    assert!(line.starts_with("#rokbench name=one "), "{s}");
+    assert_eq!(
+        keys,
+        [
+            "name",
+            "median_ns",
+            "mad_ns",
+            "samples",
+            "outliers",
+            "gc",
+            "bytes",
+            "items"
+        ],
+        "{s}"
+    );
+}
+
 // The day's eviction of the shared lone-file cache runs inside a build:
 // it must not take the directory that build just made, and its stamp
 // must move (Windows keeps an empty file's time when it is rewritten).
@@ -2163,9 +2336,47 @@ fn fixes_in_json() {
     // `length` at line 2, col 12, bytes 36..42.
     assert!(
         line.contains(
-            r#""fixes":[{"file_name":"bad.rok","line_start":2,"col_start":12,"byte_start":36,"byte_end":42,"text":"len","title":"use `len`"}]"#
+            r#""fixes":[{"file_name":"bad.rok","line_start":2,"col_start":12,"byte_start":36,"byte_end":42,"text":"len","title":"use `len`","line_end":2,"col_end":18}]"#
         ),
         "{stdout}"
+    );
+    assert!(line.ends_with(r#""lint":null,"schema":1}"#), "{line}");
+}
+
+/// JSON diagnostics name the lint a warning belongs to, where its span
+/// ends, and its help on its own.
+// spec: §9.9.4
+#[test]
+fn json_names_lint_and_end() {
+    let Some(env) = setup() else { return };
+    let dir = scratch("diag-lint");
+    put(dir.join("w.rok"), "fn main() {\n    let unused = 1;\n}\n").unwrap();
+    let out = rokc(
+        Some(&env),
+        &dir,
+        &["check", "--message-format=json", "w.rok"],
+    );
+    assert_exit(&out, 0);
+    let stdout = text(&out.stdout);
+    let line = stdout
+        .lines()
+        .find(|l| l.contains("unused_variables"))
+        .unwrap_or_else(|| panic!("{stdout}"));
+    let d = rokc_diagnostic::Json::parse(line).unwrap();
+    assert_eq!(d.get("schema").as_u32(), Some(1), "{line}");
+    assert_eq!(d.get("type").as_str(), Some("warning"), "{line}");
+    assert_eq!(d.get("lint").as_str(), Some("unused_variables"), "{line}");
+    let rokc_diagnostic::Json::Arr(spans) = d.get("spans") else {
+        panic!("{line}")
+    };
+    let primary = &spans[0];
+    assert_eq!(primary.get("line_start").as_u32(), Some(2), "{line}");
+    assert_eq!(primary.get("line_end").as_u32(), Some(2), "{line}");
+    let (s, e) = (primary.get("col_start"), primary.get("col_end"));
+    assert!(e.as_u32() > s.as_u32(), "{line}");
+    assert!(
+        matches!(d.get("help"), rokc_diagnostic::Json::Arr(_)),
+        "{line}"
     );
 }
 

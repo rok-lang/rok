@@ -390,8 +390,8 @@ fn version_line_of(exe: &Path) -> Option<String> {
 }
 
 /// `rok --version -v`: this binary, the toolchain it resolves and why,
-/// the `rokc` it runs, and the host.
-pub fn describe(plus: Option<&str>) -> String {
+/// the `rokc` it runs, and the host, as `key`, `value`.
+pub fn describe(plus: Option<&str>) -> [(&'static str, String); 4] {
     let home = home();
     let toolchain = match select(&home, plus, None) {
         Ok(s) => format!(
@@ -418,14 +418,12 @@ pub fn describe(plus: Option<&str>) -> String {
     let binary = rokc_core::current_exe()
         .or_else(|| std::env::current_exe().ok())
         .map_or_else(|| "unknown".to_owned(), |p| p.display().to_string());
-    let rows = [
+    [
         ("binary", binary),
         ("toolchain", toolchain),
         ("rokc", rokc),
         ("host", HOST.to_owned()),
     ]
-    .map(|(k, v)| (k.to_owned(), v));
-    term::list(&rows, None, "")
 }
 
 /// If this executable is a proxy (`$ROK_HOME/bin/<tool>` beside

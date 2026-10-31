@@ -63,6 +63,10 @@ pub struct Resolved {
     pub root: PathBuf,
     /// Its enabled features, sorted.
     pub features: Vec<String>,
+    /// `path+<dir>`, `git+<url>#<commit>` or `registry+<url>`.
+    pub source: String,
+    /// A stone's version, else its rok.rokon's `version`.
+    pub version: Option<String>,
 }
 
 /// A package of the whole graph.
@@ -71,6 +75,9 @@ struct Node {
     root: PathBuf,
     deps: Vec<Dep>,
     features: Features,
+    /// As in `Resolved`.
+    source: String,
+    version: Option<String>,
 }
 
 /// What a build uses: packages after their dependencies, native packages
@@ -210,6 +217,8 @@ pub fn resolve(home: &Path, ctx: &Context, opts: &Options) -> Result<Graph, Stri
                 name: n.name,
                 root: n.root,
                 features,
+                source: n.source,
+                version: n.version,
             })
         })
         .collect();
@@ -247,6 +256,8 @@ fn activate(
         root: PathBuf::new(),
         deps,
         features: features.clone(),
+        source: String::new(),
+        version: None,
     };
     let mut all: Vec<&Node> = nodes.iter().collect();
     all.push(&root);
@@ -573,15 +584,25 @@ impl<'a> Resolver<'a> {
                 ));
             }
             let me = format!("`{}`", dep.name);
+            let mut version = None;
             let (next, natives, features) = match stone_deps {
                 Some(d) => d,
                 None => match manifest::find(&dir) {
                     Some(m) => {
                         let m = manifest::load(&m)?;
+                        version = m.version;
                         (m.deps, m.native, m.features)
                     }
                     None => (Vec::new(), Vec::new(), Vec::new()),
                 },
+            };
+            let source = match &id {
+                Id::Path(p) => format!("path+{}", p.display()),
+                Id::Git { url, commit } => format!("git+{url}#{commit}"),
+                Id::Stone { registry, vers } => {
+                    version = Some(vers.to_string());
+                    format!("registry+{registry}")
+                }
             };
             let base = dir.display().to_string();
             let user = manifest::key(&dep.name);
@@ -601,6 +622,8 @@ impl<'a> Resolver<'a> {
                 root,
                 deps: next,
                 features,
+                source,
+                version,
             });
         }
         Ok(())
@@ -1080,6 +1103,8 @@ mod tests {
             .map(|(name, deps, features)| Node {
                 name: (*name).to_owned(),
                 root: PathBuf::new(),
+                source: String::new(),
+                version: None,
                 deps: deps
                     .iter()
                     .map(|d| Dep {

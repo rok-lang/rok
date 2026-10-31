@@ -283,11 +283,22 @@ pub fn main_with_os(args: Vec<std::ffi::OsString>) -> i32 {
         }
     }
     // The command is the first non-option word; rokc options with a
-    // separate value go after it.
-    let Some(i) = rest.iter().position(|a| !a.starts_with('-') || a == "--") else {
-        if rest.iter().any(|a| a == "-V" || a == "--version") {
-            print!("{}", version(&g));
-            return 0;
+    // separate value go after it. `--version --format json` has no
+    // command, so `json` there is the value.
+    let is_version = |a: &String| a == "-V" || a == "--version";
+    let Some(i) = (0..rest.len()).find(|&j| {
+        let a = &rest[j];
+        (!a.starts_with('-') || a == "--")
+            && !(j > 0 && rest[j - 1] == "--format" && rest[..j].iter().any(is_version))
+    }) else {
+        if rest.iter().any(is_version) {
+            return match json_format(&rest, "version") {
+                Ok(json) => {
+                    print!("{}", version(&g, json));
+                    0
+                }
+                Err(e) => usage(&e),
+            };
         }
         if rest.iter().any(|a| a == "-h" || a == "--help") {
             print!("{}", help::short_usage());
@@ -325,13 +336,53 @@ pub fn main_with_os(args: Vec<std::ffi::OsString>) -> i32 {
     run(&g, cmd, &rest[..i], &post)
 }
 
-/// `rok --version`; with `-v`, which binary and toolchain that is.
-fn version(g: &Global) -> String {
-    let mut out = format!("rok {VERSION_LINE}\n");
-    if g.verbose {
-        out.push_str(&toolchain::describe(g.toolchain.as_deref()));
+/// `rok --version`; with `-v`, which binary and toolchain that is, as
+/// `key: value` lines like `rokc --version -v`. `json`: one object.
+fn version(g: &Global, json: bool) -> String {
+    let rows = if g.verbose {
+        toolchain::describe(g.toolchain.as_deref()).to_vec()
+    } else {
+        Vec::new()
+    };
+    if json {
+        let mut fields = vec![
+            ("schema".to_owned(), Json::num(rokc_diagnostic::JSON_SCHEMA)),
+            ("version".to_owned(), Json::str(env!("CARGO_PKG_VERSION"))),
+            ("line".to_owned(), Json::str(VERSION_LINE)),
+        ];
+        fields.extend(rows.into_iter().map(|(k, v)| (k.to_owned(), Json::Str(v))));
+        return format!("{}\n", Json::Obj(fields));
     }
-    out
+    let rows: Vec<(String, String)> = rows
+        .into_iter()
+        .map(|(k, v)| (format!("{k}:"), v))
+        .collect();
+    format!("rok {VERSION_LINE}\n{}", term::list(&rows, None, ""))
+}
+
+/// `--format json` / `--format=json` in `args` (before `--`); an error
+/// for any other format.
+fn json_format(args: &[String], cmd: &str) -> Result<bool, String> {
+    let mut it = args.iter().take_while(|a| *a != "--");
+    let mut json = false;
+    while let Some(a) = it.next() {
+        let v = match a.strip_prefix("--format") {
+            Some("") => it.next().map(String::as_str),
+            Some(v) if v.starts_with('=') => Some(&v[1..]),
+            _ => continue,
+        };
+        json = match v {
+            Some("json") => true,
+            Some("human") => false,
+            Some(v) => {
+                return Err(format!(
+                    "`--format` takes human or json, not `{v}`: write `rok {cmd} --format json`"
+                ));
+            }
+            None => return Err("`--format` needs a value".to_owned()),
+        };
+    }
+    Ok(json)
 }
 
 /// The commands `rok` passes to `rokc`.
@@ -369,6 +420,7 @@ fn is_usage(e: &str) -> bool {
     .iter()
     .any(|p| e.starts_with(p))
         || e.starts_with('`') && e.contains("` needs a value")
+        || e.starts_with("`--format` takes ")
 }
 
 fn run(g: &Global, cmd: &str, pre: &[String], post: &[String]) -> i32 {
@@ -391,10 +443,10 @@ fn run(g: &Global, cmd: &str, pre: &[String], post: &[String]) -> i32 {
         }
     }
     let r = match cmd {
-        "version" => {
-            print!("{}", version(g));
-            Ok(0)
-        }
+        "version" => json_format(post, cmd).map(|json| {
+            print!("{}", version(g, json));
+            0
+        }),
         "help" if !post.is_empty() => return help(&post[0]),
         "help" => {
             print!("{}", help::short_usage());
@@ -2501,19 +2553,29 @@ fn lock_changes(old: &lock::Lock, new: &lock::Lock) -> Vec<(&'static str, String
     out
 }
 
-/// `rok deps [path] [--dev]`: `name=<lib.rok>` per dependency in build
-/// order, then per native package a `# native <name> <vers>` line and its
-/// rokc arguments (read by the REPL's `:add`).
+/// `rok deps [path] [--dev] [--format json]`: `name=<lib.rok>` per
+/// dependency in build order, then per native package a `# native <name>
+/// <vers>` line and its rokc arguments (read by the REPL's `:add`).
 fn cmd_deps(g: &Global, args: &[String]) -> Result<i32, String> {
     let mut opts = options(g);
     let args = feature_flags(args, &mut opts)?;
-    let path = args
-        .iter()
-        .find(|a| !a.starts_with('-'))
-        .map(String::as_str);
+    let json = json_format(&args, "deps")?;
+    let mut path = None;
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        if a == "--format" {
+            it.next();
+        } else if !a.starts_with('-') {
+            path = Some(a.as_str());
+            break;
+        }
+    }
     let t = target_for(g, path)?;
     opts.dev = args.iter().any(|a| a == "--dev");
     let graph = resolve::resolve(&home(), &t.ctx, &opts)?;
+    if json {
+        return deps_json(g, &graph);
+    }
     for p in &graph.packages {
         let mut lines = extern_args(p).into_iter();
         // The first line is `name=<lib.rok>`.
@@ -2533,6 +2595,61 @@ fn cmd_deps(g: &Global, args: &[String]) -> Result<i32, String> {
             println!("{a}");
         }
     }
+    Ok(0)
+}
+
+/// `rok deps --format json`: a `package` record per dependency in build
+/// order, a `native` record per native package, then a `summary`.
+fn deps_json(g: &Global, graph: &resolve::Graph) -> Result<i32, String> {
+    let record = |ty: &str, fields: Vec<(&str, Json)>| {
+        let mut all = vec![
+            ("schema".to_owned(), Json::num(rokc_diagnostic::JSON_SCHEMA)),
+            ("type".to_owned(), Json::str(ty)),
+        ];
+        all.extend(fields.into_iter().map(|(k, v)| (k.to_owned(), v)));
+        println!("{}", Json::Obj(all));
+    };
+    let strs = |v: &[String]| Json::Arr(v.iter().map(Json::str).collect());
+    for p in &graph.packages {
+        record(
+            "package",
+            vec![
+                ("name", Json::str(&p.name)),
+                (
+                    "version",
+                    p.version.as_deref().map_or(Json::Null, Json::str),
+                ),
+                ("source", Json::str(&p.source)),
+                ("path", Json::str(p.root.display().to_string())),
+                ("features", strs(&p.features)),
+            ],
+        );
+    }
+    for n in &graph.natives {
+        let args = native::rokc_args(
+            &home(),
+            &[n],
+            rokc_target::TargetSpec::host(),
+            g.offline,
+            g.quiet,
+        )?;
+        record(
+            "native",
+            vec![
+                ("name", Json::str(&n.entry.name)),
+                ("version", Json::str(n.entry.vers.to_string())),
+                ("args", strs(&args)),
+            ],
+        );
+    }
+    let count = |n: usize| Json::num(u32::try_from(n).unwrap_or(u32::MAX));
+    record(
+        "summary",
+        vec![
+            ("packages", count(graph.packages.len())),
+            ("natives", count(graph.natives.len())),
+        ],
+    );
     Ok(0)
 }
 

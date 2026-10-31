@@ -159,11 +159,14 @@ build options:
   --keep                       keep the temporary build directory
 
 check options:  --check-library (check every library body, reached or not)
-test options:   --threads=N, --show-output
+test options:   --threads=N, --show-output,
+                --format=human|json (json: one JSON line per test and a
+                summary on stdout, the human text on stderr)
 bench options:  --iters=N (calls per sample; default: calibrated to ~100ms),
                 --samples=N (timed samples, default 10),
-                --format=human|rokbench (rokbench: one `#rokbench` line
-                per benchmark for tools; default human, piped or not)
+                --format=human|json|rokbench (json: as for tests;
+                rokbench: one `#rokbench` line per benchmark; default
+                human, piped or not)
 harness:        --emit-harness <file> (write the built harness and its cases
                 to <file> for `rok` to run, instead of naming it)
 doc options:    --std (document the standard library too; without a path,

@@ -8,11 +8,14 @@
 use std::io::Write;
 use std::path::PathBuf;
 
+use rokc_diagnostic::Json;
+
 pub mod bench;
 pub mod test;
 
-/// The manifest format `rokc` writes and this runner reads.
-pub const VERSION: u32 = 1;
+/// The manifest format `rokc` writes and this runner reads. 2 adds
+/// `format json`; `rokc` writes 1 when it does not use it.
+pub const VERSION: u32 = 2;
 
 /// Check a harness manifest's `version` line: none (an older rokc's) and
 /// up to `VERSION` are read; a newer one is refused.
@@ -36,17 +39,25 @@ pub fn check_version(text: &str) -> Result<(), String> {
 /// The manifest is what `rokc test` / `rokc bench` write with
 /// `--emit-harness`: a `version N` line, then simple lines of
 /// `kind test|bench`, the resolved options
-/// (`threads`/`show_output` or `iters`/`samples`/`format`), an optional `filter`
-/// (raw to end of line), then an `exe <path>` per built executable each
-/// followed by its `case <name>` lines. A package with both roots lists
-/// the library first; a failing library run ends the command (spec 9.1).
+/// (`threads`/`show_output` or `iters`/`samples`, and `format`), an
+/// optional `filter` (raw to end of line), then an `exe <path>` per built
+/// executable each followed by its `case <name>` lines. A package with
+/// both roots lists the library first; a failing library run ends the
+/// command (spec 9.1). With `format json`, `out` gets the JSON records
+/// and the human text goes to stderr.
 pub fn run_manifest(text: &str, out: &mut dyn Write) -> i32 {
+    run_manifest_to(text, out, &mut std::io::stderr())
+}
+
+/// [`run_manifest`], with `format json`'s human text going to `human`.
+pub fn run_manifest_to(text: &str, out: &mut dyn Write, human: &mut dyn Write) -> i32 {
     let mut kind = "test";
     let mut threads = 1usize;
     let mut show_output = false;
     let mut iters: Option<u64> = None;
     let mut samples = 10u64;
     let mut rokbench = false;
+    let mut json = false;
     let mut filter: Option<String> = None;
     let mut harnesses: Vec<(PathBuf, Vec<String>)> = Vec::new();
     for line in text.lines() {
@@ -57,7 +68,7 @@ pub fn run_manifest(text: &str, out: &mut dyn Write) -> i32 {
             "show_output" => show_output = true,
             "iters" => iters = rest.parse().ok(),
             "samples" => samples = rest.parse().unwrap_or(10),
-            "format" => rokbench = rest == "rokbench",
+            "format" => (rokbench, json) = (rest == "rokbench", rest == "json"),
             "filter" => filter = Some(rest.to_owned()),
             "exe" => harnesses.push((PathBuf::from(rest), Vec::new())),
             "case" => {
@@ -68,6 +79,11 @@ pub fn run_manifest(text: &str, out: &mut dyn Write) -> i32 {
             _ => {}
         }
     }
+    let (text_out, mut records): (&mut dyn Write, Option<&mut dyn Write>) = if json {
+        (human, Some(out))
+    } else {
+        (out, None)
+    };
     let mut ok = true;
     for (exe, cases) in &harnesses {
         let passed = if kind == "bench" {
@@ -77,16 +93,19 @@ pub fn run_manifest(text: &str, out: &mut dyn Write) -> i32 {
                 samples,
                 rokbench,
             };
-            bench::run(exe, cases, &opts, out)
+            bench::run_to(exe, cases, &opts, text_out, records.as_deref_mut())
         } else {
             let opts = test::Options {
                 filter: filter.as_deref(),
                 threads,
                 show_output,
             };
-            test::run(exe, cases, &opts, out)
+            test::run_to(exe, cases, &opts, text_out, records.as_deref_mut())
         };
-        let _ = out.flush();
+        let _ = text_out.flush();
+        if let Some(r) = records.as_deref_mut() {
+            let _ = r.flush();
+        }
         if !passed {
             // A failing run (the library's, when it is first) ends it.
             ok = false;
@@ -94,6 +113,26 @@ pub fn run_manifest(text: &str, out: &mut dyn Write) -> i32 {
         }
     }
     i32::from(!ok)
+}
+
+/// Write one `format json` record: `{"schema":1,"type":ty,"kind":kind,..fields}`.
+fn record(to: &mut dyn Write, ty: &str, kind: &str, fields: Vec<(&str, Json)>) {
+    let mut all = vec![
+        ("schema".to_owned(), Json::num(rokc_diagnostic::JSON_SCHEMA)),
+        ("type".to_owned(), Json::str(ty)),
+        ("kind".to_owned(), Json::str(kind)),
+    ];
+    all.extend(fields.into_iter().map(|(k, v)| (k.to_owned(), v)));
+    let _ = writeln!(to, "{}", Json::Obj(all));
+}
+
+fn count(n: usize) -> Json {
+    Json::num(u32::try_from(n).unwrap_or(u32::MAX))
+}
+
+/// `d` in milliseconds, to the microsecond.
+fn ms(d: std::time::Duration) -> Json {
+    Json::num((d.as_secs_f64() * 1e6).round() / 1e3)
 }
 
 /// Test / bench filter (spec 9.1: "regex or plain substring"): unanchored,
@@ -147,14 +186,15 @@ mod tests {
     #[test]
     fn version_line_accepted() {
         assert!(check_version("version 1\nkind test\n").is_ok());
+        assert!(check_version("version 2\nkind test\nformat json\n").is_ok());
         // An older rokc writes none.
         assert!(check_version("kind test\nthreads 1\n").is_ok());
     }
 
     #[test]
     fn newer_version_refused() {
-        let e = check_version("version 2\nkind test\n").unwrap_err();
-        assert!(e.contains("newer rokc (format version 2)"), "{e}");
+        let e = check_version("version 3\nkind test\n").unwrap_err();
+        assert!(e.contains("newer rokc (format version 3)"), "{e}");
         assert!(e.contains("run the rok of the same toolchain"), "{e}");
         assert!(check_version("version x\n").is_err());
     }

@@ -176,17 +176,22 @@ rewrite rok.lock.",
     CmdHelp {
         name: "deps",
         summary: "print the resolved dependencies",
-        usage: &["deps [--dev] [feature options]"],
+        usage: &["deps [--dev] [--format json] [feature options]"],
         about: "\
 Print the resolved dependencies as name=lib.rok, each after its own
 dependencies and followed by its features (--extern-feature=<name>=<f>).
 Native packages print as `# native <name> <version>` and their compiler
-arguments.",
+arguments. --format json prints one JSON object per line instead: a
+package or native record each, then a summary.",
         examples: &[
             ("rok deps", ""),
             ("rok deps --dev", "with the dev dependencies"),
+            ("rok deps --format json", "for tools"),
         ],
-        flags: &[("--dev", "with dev_deps")],
+        flags: &[
+            ("--dev", "with dev_deps"),
+            ("--format <human|json>", "the output form (default human)"),
+        ],
         ..CmdHelp::EMPTY
     },
     CmdHelp {
@@ -425,11 +430,16 @@ rewrite it.",
     CmdHelp {
         name: "version",
         summary: "print the version",
-        usage: &["version [-v]"],
+        usage: &["version [-v] [--format json]"],
         about: "\
 Print the version (also `rok --version`); with -v, also where rok and rokc
-are, the toolchain and the host.",
-        examples: &[("rok version -v", "")],
+are, the toolchain and the host, as `key: value` lines. --format json prints
+one JSON object instead.",
+        examples: &[
+            ("rok version -v", ""),
+            ("rok version -v --format json", "for tools"),
+        ],
+        flags: &[("--format <human|json>", "the output form (default human)")],
         ..CmdHelp::EMPTY
     },
 ];
