@@ -518,7 +518,7 @@ pub fn run(result: &CompileResult, levels: &Levels) -> Vec<RokDiagnostic> {
                 } else {
                     rokc_diagnostic::Tag::None
                 },
-                ..RokDiagnostic::error(ErrorKind::Lint, f.span, f.msg)
+                ..RokDiagnostic::error(ErrorKind::Lint, f.span, f.msg).with_lint(f.lint)
             },
         };
         if let Some((span, msg)) = f.secondary {

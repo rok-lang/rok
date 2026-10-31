@@ -8,6 +8,7 @@ authors.workspace = true
 
 [dependencies]
 rokc_core = { workspace = true }
+rokc_diagnostic = { workspace = true }
 
 [lints]
 workspace = true

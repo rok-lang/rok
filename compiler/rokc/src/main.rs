@@ -78,6 +78,9 @@ struct Args {
     samples: Option<u64>,
     /// `bench --format=rokbench`: the machine lines, not the human ones.
     rokbench: bool,
+    /// `test` / `bench --format=json`: JSON records on stdout, the human
+    /// text on stderr.
+    format_json: bool,
     /// `doc --open`.
     open: bool,
     /// `--emit-harness <file>`: write the test / bench harness manifest
@@ -313,10 +316,13 @@ fn parse_args(raw: Vec<String>, mut tail: Vec<OsString>) -> Args {
                 }
             }
             "--format" => {
-                a.rokbench = match value(&name, inline, &mut it).as_str() {
-                    "rokbench" => true,
-                    "human" => false,
-                    v => usage_error(&format!("`--format` takes human or rokbench, not `{v}`")),
+                (a.rokbench, a.format_json) = match value(&name, inline, &mut it).as_str() {
+                    "rokbench" => (true, false),
+                    "json" => (false, true),
+                    "human" => (false, false),
+                    v => usage_error(&format!(
+                        "`--format` takes human, json or rokbench, not `{v}`"
+                    )),
                 };
             }
             "--open" => a.open = true,
@@ -1699,8 +1705,13 @@ fn write_harness_manifest(
         }
         return;
     };
-    // `rokc_harness::VERSION`; a newer runner reads older formats.
-    let mut m = String::from("version 1\n");
+    // `rokc_harness::VERSION`; a newer runner reads older formats. `format
+    // json` needs 2, so a runner that cannot write it refuses the run.
+    let mut m = String::from(if a.format_json {
+        "version 2\n"
+    } else {
+        "version 1\n"
+    });
     m.push_str(if mode == Mode::Bench {
         "kind bench\n"
     } else {
@@ -1714,7 +1725,11 @@ fn write_harness_manifest(
         if a.rokbench {
             m.push_str("format rokbench\n");
         }
-    } else {
+    }
+    if a.format_json {
+        m.push_str("format json\n");
+    }
+    if mode != Mode::Bench {
         m.push_str(&format!("threads {}\n", threads.unwrap_or(1)));
         if a.show_output {
             m.push_str("show_output\n");

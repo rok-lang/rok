@@ -114,6 +114,7 @@ name = "rokc_harness"
 version = "0.1.5"
 dependencies = [
  "rokc_core",
+ "rokc_diagnostic",
 ]
 
 [[package]]

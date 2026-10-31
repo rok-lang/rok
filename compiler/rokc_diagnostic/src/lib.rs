@@ -195,6 +195,33 @@ impl SourceMap {
         }
     }
 
+    /// Line and code-point column where `span` ends, counted from its
+    /// start as the lexer counts.
+    #[must_use]
+    pub fn end(&self, span: Span) -> Option<(u32, u32)> {
+        if span.line == 0 {
+            return None;
+        }
+        let (_, text) = self.file(span.file)?;
+        let s = usize::try_from(span.start).ok()?;
+        let e = usize::try_from(span.end).ok()?;
+        let bytes = text.get(s..e)?.as_bytes();
+        let (mut line, mut col) = (span.line, span.col.max(1));
+        let mut prev = s
+            .checked_sub(1)
+            .and_then(|p| text.as_bytes().get(p).copied());
+        for &b in bytes {
+            match b {
+                b'\n' if prev == Some(b'\r') => {}
+                b'\n' | b'\r' => (line, col) = (line + 1, 1),
+                b if b & 0xC0 == 0x80 => {}
+                _ => col += 1,
+            }
+            prev = Some(b);
+        }
+        Some((line, col))
+    }
+
     /// The file path of `diag`: explicit, else its primary span's file.
     fn diag_path(&self, diag: &RokDiagnostic) -> Option<String> {
         diag.file.clone().or_else(|| {
@@ -620,13 +647,23 @@ impl ErrorKind {
     }
 }
 
+/// The `schema` of JSON output: diagnostics and the test, bench and deps
+/// records. A schema only gains fields; removing or changing one bumps it.
+pub const JSON_SCHEMA: u32 = 1;
+
 impl SourceMap {
     /// `diag` as one-line JSON (spec 909.4):
-    /// `{"type","code","kind","message","spans":[..],"notes":[..],"fixes":[..],"spec":[..]}`.
+    /// `{"type","code","kind","message","spans":[..],"notes":[..],"fixes":[..],"spec":[..],
+    /// "help":[..],"lint","schema"}`.
     #[must_use]
     pub fn json(&self, diag: &RokDiagnostic) -> String {
+        let end = |span: Span| match self.end(span) {
+            Some((l, c)) => (Json::num(l), Json::num(c)),
+            None => (Json::Null, Json::Null),
+        };
         let span_json = |l: &Label, primary: bool, file: Option<String>| {
             let file = file.or_else(|| Some(self.path(l.span.file)?.to_owned()));
+            let (line_end, col_end) = end(l.span);
             Json::obj([
                 ("file_name", file.map_or(Json::Null, Json::Str)),
                 ("line_start", Json::num(l.span.line)),
@@ -635,6 +672,8 @@ impl SourceMap {
                 ("byte_end", Json::num(l.span.end)),
                 ("is_primary", Json::Bool(primary)),
                 ("label", Json::str(&l.message)),
+                ("line_end", line_end),
+                ("col_end", col_end),
             ])
         };
         let mut spans = Vec::new();
@@ -650,6 +689,7 @@ impl SourceMap {
         let fixes = diag.fixes.iter().map(|f| {
             let file = self.path(f.span.file).map(str::to_owned);
             let file = file.or_else(|| self.diag_path(diag));
+            let (line_end, col_end) = end(f.span);
             Json::obj([
                 ("file_name", file.map_or(Json::Null, Json::Str)),
                 ("line_start", Json::num(f.span.line)),
@@ -658,8 +698,16 @@ impl SourceMap {
                 ("byte_end", Json::num(f.span.end)),
                 ("text", Json::str(&f.text)),
                 ("title", Json::str(&f.title)),
+                ("line_end", line_end),
+                ("col_end", col_end),
             ])
         });
+        // Help stays a `help: ` note as well, for readers of `notes`.
+        let help = diag
+            .notes
+            .iter()
+            .filter_map(|n| n.strip_prefix("help: "))
+            .map(Json::str);
         Json::obj([
             ("type", Json::str(diag.severity.to_string())),
             ("code", Json::str(diag.kind.code())),
@@ -675,6 +723,9 @@ impl SourceMap {
                 "spec",
                 Json::Arr(diag.cites().iter().map(Json::str).collect()),
             ),
+            ("help", Json::Arr(help.collect())),
+            ("lint", diag.lint.as_deref().map_or(Json::Null, Json::str)),
+            ("schema", Json::num(JSON_SCHEMA)),
         ])
         .to_string()
     }
@@ -944,8 +995,54 @@ mod tests {
             .with_note("n");
         assert_eq!(
             SourceMap::new().json(&d),
-            r#"{"type":"error","code":"E200","kind":"type","message":"bad \"x\"\n","spans":[{"file_name":"a.rok","is_primary":true}],"notes":["n"],"fixes":[],"spec":[]}"#
+            r#"{"type":"error","code":"E200","kind":"type","message":"bad \"x\"\n","spans":[{"file_name":"a.rok","is_primary":true}],"notes":["n"],"fixes":[],"spec":[],"help":[],"lint":null,"schema":1}"#
         );
+    }
+
+    #[test]
+    fn json_has_schema_lint_end_help() {
+        let mut map = SourceMap::new();
+        let file = map.add("a.rok".into(), "let é = 1\r\nlet y = x\n".into());
+        // `é = 1\r\nlet` spans the CRLF; columns count code points.
+        let at = Span {
+            start: 4,
+            end: 15,
+            line: 1,
+            col: 5,
+            file,
+        };
+        let d = RokDiagnostic::warning(ErrorKind::Other, at, "m")
+            .with_lint("unused_variables")
+            .with_help("write `_` instead");
+        let json = Json::parse(&map.json(&d)).unwrap();
+        assert_eq!(json.get("schema").as_u32(), Some(1));
+        assert_eq!(json.get("lint").as_str(), Some("unused_variables"));
+        assert_eq!(
+            json.get("help"),
+            &Json::Arr(vec![Json::str("write `_` instead")])
+        );
+        // The note stays until a new schema.
+        assert_eq!(
+            json.get("notes"),
+            &Json::Arr(vec![Json::str("help: write `_` instead")])
+        );
+        let Json::Arr(spans) = json.get("spans") else {
+            panic!("{json}")
+        };
+        assert_eq!(spans[0].get("line_end").as_u32(), Some(2));
+        assert_eq!(spans[0].get("col_end").as_u32(), Some(4));
+        // A one-line span; no source: no end.
+        let one = Span { end: 6, ..at };
+        let json =
+            Json::parse(&map.json(&RokDiagnostic::error(ErrorKind::Type, one, "m"))).unwrap();
+        let Json::Arr(spans) = json.get("spans") else {
+            panic!("{json}")
+        };
+        assert_eq!(spans[0].get("line_end").as_u32(), Some(1));
+        assert_eq!(spans[0].get("col_end").as_u32(), Some(6));
+        assert_eq!(json.get("lint"), &Json::Null);
+        let json = SourceMap::new().json(&RokDiagnostic::error(ErrorKind::Type, at, "m"));
+        assert!(json.contains(r#""line_end":null,"col_end":null"#), "{json}");
     }
 
     #[test]
@@ -967,7 +1064,7 @@ mod tests {
         let json = map.json(&d);
         assert!(
             json.ends_with(
-                r#""fixes":[{"file_name":"a.rok","line_start":1,"col_start":10,"byte_start":9,"byte_end":9,"text":";","title":"insert `;`"}],"spec":[]}"#
+                r#""fixes":[{"file_name":"a.rok","line_start":1,"col_start":10,"byte_start":9,"byte_end":9,"text":";","title":"insert `;`","line_end":1,"col_end":10}],"spec":[],"help":[],"lint":null,"schema":1}"#
             ),
             "{json}"
         );

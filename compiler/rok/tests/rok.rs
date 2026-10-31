@@ -435,6 +435,76 @@ fn transitive_dependencies_and_conflicts() {
     assert_eq!(ok(&rok(&home, &app, &["deps", "--dev"])).lines().count(), 3);
 }
 
+/// `rok deps --format json`: a versioned record per package in build
+/// order, then a summary, also with no dependencies.
+// spec: §9.10.4
+#[test]
+fn deps_format_json() {
+    use rokc_diagnostic::Json;
+    let root = scratch("deps-json");
+    let home = root.join("home");
+    let app = root.join("app");
+    write(&app.join("src/main.rok"), "println(\"x\");\n");
+    write(&app.join("rok.rokon"), "Package { name: \"app\" }\n");
+    let out = ok(&rok(&home, &app, &["deps"]));
+    assert_eq!(out, "");
+    let out = ok(&rok(&home, &app, &["deps", "--format", "json"]));
+    assert_eq!(
+        out,
+        "{\"schema\":1,\"type\":\"summary\",\"packages\":0,\"natives\":0}\n"
+    );
+
+    write(
+        &root.join("a/src/lib.rok"),
+        "pub fn a() -> i32 { return 1; }\n",
+    );
+    write(
+        &root.join("a/rok.rokon"),
+        "Package { name: \"a\", version: \"0.2.0\", deps: { \"b\": Dep::path(\"../b\") } }\n",
+    );
+    write(
+        &root.join("b/src/lib.rok"),
+        "pub fn b() -> i32 { return 2; }\n",
+    );
+    write(
+        &app.join("rok.rokon"),
+        "Package { name: \"app\", deps: { \"a\": Dep::path(\"../a\") } }\n",
+    );
+    let out = ok(&rok(&home, &app, &["deps", "--format=json"]));
+    let recs: Vec<Json> = out.lines().map(|l| Json::parse(l).unwrap()).collect();
+    assert_eq!(recs.len(), 3, "{out}");
+    assert!(
+        recs.iter().all(|r| r.get("schema").as_u32() == Some(1)),
+        "{out}"
+    );
+    // `b` first: a package comes after its dependencies.
+    assert_eq!(recs[0].get("name").as_str(), Some("b"), "{out}");
+    assert_eq!(recs[0].get("version"), &Json::Null, "{out}");
+    assert_eq!(recs[1].get("name").as_str(), Some("a"), "{out}");
+    assert_eq!(recs[1].get("type").as_str(), Some("package"), "{out}");
+    assert_eq!(recs[1].get("version").as_str(), Some("0.2.0"), "{out}");
+    let a = rokc_core::real_path(root.join("a")).unwrap();
+    assert_eq!(
+        recs[1].get("source").as_str(),
+        Some(format!("path+{}", a.display()).as_str()),
+        "{out}"
+    );
+    let path = recs[1].get("path").as_str().unwrap();
+    assert!(path.ends_with("lib.rok"), "{out}");
+    assert_eq!(recs[2].get("type").as_str(), Some("summary"), "{out}");
+    assert_eq!(recs[2].get("packages").as_u32(), Some(2), "{out}");
+    // A path is still found after the format's value.
+    let out = ok(&rok(&home, &root, &["deps", "--format", "json", "app"]));
+    assert_eq!(out.lines().count(), 3, "{out}");
+    let out = rok(&home, &app, &["deps", "--format", "toml"]);
+    assert_eq!(out.status.code(), Some(2));
+    assert!(
+        text(&out.stderr).contains("`--format` takes human or json, not `toml`"),
+        "{}",
+        text(&out.stderr)
+    );
+}
+
 // spec: §0.3.4 §9.10.3
 #[test]
 fn manifest_errors_and_reserved_forms() {
@@ -1506,10 +1576,11 @@ fn bare_jupyter_points_to_install() {
 }
 
 /// `rok --version -v` names the binary, the toolchain it resolves and
-/// why, its `rokc` and the host.
+/// why, its `rokc` and the host, as `key: value` lines like `rokc
+/// --version -v`; `--format json` gives one object.
 // spec: §9.10.6
 #[test]
-fn version_verbose_names_binary() {
+fn version_verbose_key_value() {
     let root = scratch("version-verbose");
     let home = root.join("home");
     let out = ok(&rok(&home, &root, &["--version", "-v"]));
@@ -1517,15 +1588,44 @@ fn version_verbose_names_binary() {
     assert!(lines[0].starts_with("rok "), "{out}");
     let real = |p: &str| rokc_core::real_path(p).unwrap().display().to_string();
     let rokc = Path::new(ROK).with_file_name(exe("rokc"));
-    assert_eq!(lines[1], format!("binary    {}", real(ROK)));
+    assert_eq!(lines[1], format!("binary:    {}", real(ROK)));
     assert!(
-        lines[2].starts_with("toolchain none (this rok is "),
+        lines[2].starts_with("toolchain: none (this rok is "),
         "{out}"
     );
-    assert_eq!(lines[3], format!("rokc      {}", rokc.display()));
-    assert_eq!(lines[4], format!("host      {}", env!("ROK_HOST")));
+    assert_eq!(lines[3], format!("rokc:      {}", rokc.display()));
+    assert_eq!(lines[4], format!("host:      {}", env!("ROK_HOST")));
     assert_eq!(ok(&rok(&home, &root, &["version", "-v"])), out);
     assert_eq!(lines.len(), 5, "{out}");
+    // Read the way `rok toolchain` reads `rokc --version -v`.
+    let host = lines.iter().find_map(|l| l.strip_prefix("host: "));
+    assert_eq!(host.map(str::trim), Some(env!("ROK_HOST")));
+
+    let json = ok(&rok(&home, &root, &["version", "-v", "--format", "json"]));
+    let j = rokc_diagnostic::Json::parse(json.trim()).unwrap();
+    assert_eq!(j.get("schema").as_u32(), Some(1), "{json}");
+    assert_eq!(j.get("version").as_str(), Some(env!("CARGO_PKG_VERSION")));
+    assert_eq!(j.get("binary").as_str(), Some(real(ROK).as_str()));
+    assert_eq!(j.get("host").as_str(), Some(env!("ROK_HOST")));
+    assert_eq!(json.lines().count(), 1, "{json}");
+    for args in [
+        &["--version", "-v", "--format", "json"][..],
+        &["-V", "-v", "--format", "json"],
+    ] {
+        assert_eq!(ok(&rok(&home, &root, args)), json, "{args:?}");
+    }
+    let json = ok(&rok(&home, &root, &["--version", "--format=json"]));
+    let j = rokc_diagnostic::Json::parse(json.trim()).unwrap();
+    assert_eq!(j.get("host"), &rokc_diagnostic::Json::Null, "{json}");
+    let out = rok(&home, &root, &["version", "--format", "csv"]);
+    assert_eq!(out.status.code(), Some(2));
+    assert!(
+        text(&out.stderr).contains(
+            "`--format` takes human or json, not `csv`: write `rok version --format json`"
+        ),
+        "{}",
+        text(&out.stderr)
+    );
 }
 
 /// After `rok toolchain default`, a `rok` earlier on PATH than the
@@ -1587,11 +1687,11 @@ fn toolchain_warns_about_path_shadow() {
     let out = ok(&c.output().unwrap());
     let tc = rokc_core::real_path(home.join(format!("toolchains/9.9.1-{host}"))).unwrap();
     assert!(
-        out.contains(&format!("binary    {}\n", tc.join("bin/rok").display())),
+        out.contains(&format!("binary:    {}\n", tc.join("bin/rok").display())),
         "{out}"
     );
     assert!(
-        out.contains(&format!("toolchain 9.9.1-{host} (the default)\n")),
+        out.contains(&format!("toolchain: 9.9.1-{host} (the default)\n")),
         "{out}"
     );
 }
@@ -6081,7 +6181,7 @@ fn bench_output_is_human_when_piped() {
     let out = rok(&home, &dir, &["bench", "--format=csv"]);
     assert_eq!(out.status.code(), Some(2));
     assert!(
-        text(&out.stderr).contains("`--format` takes human or rokbench, not `csv`"),
+        text(&out.stderr).contains("`--format` takes human, json or rokbench, not `csv`"),
         "{}",
         text(&out.stderr)
     );
