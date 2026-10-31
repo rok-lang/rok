@@ -1,7 +1,7 @@
 // SHA-2 (FIPS 180-4): SHA-256, SHA-384 and SHA-512, chosen by
 // `HashAlgorithm`; `Digest` is a running hash.
 
-use sup::{view, Bytes};
+use sup::{view, ByteInput};
 
 const K256: [u32; 64] = [
     0x428a2f98u32, 0x71374491u32, 0xb5c0fbcfu32, 0xe9b5dba5u32, 0x3956c25bu32, 0x59f111f1u32, 0x923f82a4u32, 0xab1c5ed5u32,
@@ -165,7 +165,7 @@ impl Sha256State {
         }
     }
 
-    fn update(ref self, data: Bytes) {
+    fn update(ref self, data: ByteInput) {
         let s = view(data);
         // Locals, written back once: per-byte field access is slow.
         let h = self.h;
@@ -242,7 +242,7 @@ impl Sha512State {
         Sha512State { h: iv, buf: [0u8; 128], n: 0, total: 0u64, out_len }
     }
 
-    fn update(ref self, data: Bytes) {
+    fn update(ref self, data: ByteInput) {
         let s = view(data);
         // Locals, written back once: per-byte field access is slow.
         let h = self.h;
@@ -327,7 +327,7 @@ impl HashAlgorithm {
         }
     }
 
-    pub fn digest(self, data: Bytes) -> List<u8> {
+    pub fn digest(self, data: ByteInput) -> List<u8> {
         let d = Digest::new(self);
         d.update(data);
         d.finish()
@@ -353,7 +353,7 @@ impl Digest {
 
     pub const fn algorithm(self) -> HashAlgorithm { self.alg }
 
-    pub fn update(ref self, data: Bytes) {
+    pub fn update(ref self, data: ByteInput) {
         match self.alg {
             HashAlgorithm::Sha256 => self.s256.update(data),
             _ => self.s512.update(data),

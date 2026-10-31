@@ -1,7 +1,6 @@
 // rok::core::collections::heap - `BinaryHeap<T>`, a priority queue
 // over a `List` laid out as an implicit binary tree. `new()` pops the
-// greatest item first; `by(before)` takes the order: `before(a, b)`
-// puts `a` nearer the top.
+// greatest item first; `by_ordering(cmp)` pops the greatest by `cmp`.
 
 pub struct BinaryHeap<T> {
     items: List<T>;
@@ -19,7 +18,14 @@ impl<T: Ord> BinaryHeap<T> {
 }
 
 impl<T> BinaryHeap<T> {
+    /// A heap whose top is the greatest item by `cmp`, as `new()` is by
+    /// `Ord::cmp`: `by_ordering(|a, b| b.cmp(a))` pops the least first.
+    pub const fn by_ordering(cmp: fn(T, T) -> rok::core::cmp::Ordering) -> BinaryHeap<T> {
+        BinaryHeap { items: List::new(), before: |a: T, b: T| cmp(a, b).is_gt() }
+    }
+
     /// A heap whose top is the item `before` ranks first.
+    #[deprecated(since = "0.1.6", note = "use `BinaryHeap::by_ordering`, whose comparator returns `Ordering` as `List::sort_by` does: `by(|a, b| a < b)` is `by_ordering(|a, b| b.cmp(a))`")]
     pub const fn by(before: fn(T, T) -> bool) -> BinaryHeap<T> {
         BinaryHeap { items: List::new(), before }
     }

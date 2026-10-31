@@ -97,6 +97,11 @@ pub struct Atomic<T> {
     cell: GcBuf<T>;
 }
 
+// The cell holds an address, not what it points at: an `Atomic<Ptr<T>>`
+// is shared as any other.
+unsafe impl<T> Send for Atomic<rok::bare::ptr::Ptr<T>> {}
+unsafe impl<T> Sync for Atomic<rok::bare::ptr::Ptr<T>> {}
+
 // Each method maps its ordering argument onto the intrinsic's literal
 // ordering; with a constant argument the `match` folds away once the
 // method is inlined (`-O1` and up).
@@ -218,6 +223,11 @@ impl Atomic<i32> {
     /// no limit), or until `wake`; may return spuriously, so re-check.
     pub fn wait(self, expected: i32, timeout_ns: i64 = -1) {
         unsafe { rok_sync_wait(self.cell, 0, expected, timeout_ns) };
+    }
+
+    /// `wait` for at most `timeout` (a negative one: no limit).
+    pub fn wait_for(self, expected: i32, timeout: rok::core::task::time::Duration) {
+        self.wait(expected, timeout.as_ns());
     }
 
     /// Wake every thread in `wait` on this cell.

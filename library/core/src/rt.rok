@@ -75,6 +75,7 @@ extern "rok" {
     fn rok_fmt_pad(t: str, flags: u64, counts: u64, start: usize, mid: usize, numeric: u32) -> str;
     fn rok_fmt_pack(spec: str, text_only: u32, out: GcBuf<u64>);
     fn rok_fmt_spec_parse(spec: str, out: GcBuf<i64>);
+    fn rok_fmt_spec_error(spec: str) -> str;
 
     // `int` limb kernels.
 
@@ -254,6 +255,7 @@ extern "rok" {
     fn rok_str_rfind(s: str, pat: str) -> isize;
     fn rok_str_char_count(s: str) -> usize;
     fn rok_str_hash(s: str) -> u64;
+    fn rok_hash_seed() -> u64;
     fn rok_str_byte(s: str, i: usize) -> u8;
     fn rok_str_bytes_buf(s: str) -> GcBuf<u8>;
     fn rok_buf_copy(dst: GcBuf<u8>, doff: usize, src: GcBuf<u8>, soff: usize, len: usize);

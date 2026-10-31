@@ -434,26 +434,24 @@ fn if_else(
     }
 }
 
-/// `rok::core::task::<name>(#ctx)` (`None` when the core library lacks
-/// it).
+/// `rok::core::task::<name>(#ctx)`, through its lang slot (`None` when
+/// the core library lacks it).
 fn task_call(ctx: &mut LowerCtx<'_>, name: &str, span: rokc_diagnostic::Span) -> Option<HirExpr> {
-    let path = |names: &[&str]| Expr {
-        kind: ExprKind::Path(rokc_ast::Path {
-            segments: names
-                .iter()
-                .map(|n| rokc_ast::PathSegment {
-                    name: (*n).to_owned(),
-                    generics: Vec::new(),
-                })
-                .collect(),
-            span,
-        }),
+    let path = |p: rokc_ast::Path| Expr {
+        kind: ExprKind::Path(p),
+        span,
+    };
+    let local = rokc_ast::Path {
+        segments: vec![rokc_ast::PathSegment {
+            name: CTX.to_owned(),
+            generics: Vec::new(),
+        }],
         span,
     };
     let call = Expr {
         kind: ExprKind::Call {
-            callee: Box::new(path(&["rok", "core", "task", name])),
-            args: vec![CallArg::Positional(path(&[CTX]))],
+            callee: Box::new(path(super::expr::lang_fn("task", name, span))),
+            args: vec![CallArg::Positional(path(local))],
             trailing_closure: None,
         },
         span,

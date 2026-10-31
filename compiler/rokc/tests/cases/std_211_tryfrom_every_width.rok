@@ -1,0 +1,17 @@
+// spec: std 211-conversion §2.11.8
+// expect-exit: 0
+// forbid-warning: warning
+// expect-stdout:
+// 5 -7 true
+
+// `usize::try_from(u64)` and `isize::try_from(i64)` build on every
+// target, beside the 64-bit `From`; on 64 bits they never throw.
+fn main() {
+    let a: u64 = 5;
+    let b: i64 = -7;
+    let u: usize = try! usize::try_from(a);
+    let i: isize = try! isize::try_from(b);
+    let big: u64 = 1 << 40;
+    let fits = try? usize::try_from(big);
+    println(f"{u} {i} {!(fits is none) || usize::BITS == 32}");
+}

@@ -1,8 +1,51 @@
-// HMAC (RFC 2104) and HKDF (RFC 5869) over a SHA-2 function.
+// HMAC (RFC 2104) and HKDF (RFC 5869) over a SHA-2 function, and the
+// one-shot `_sha3` forms over a SHA-3 one.
 
-use sup::{view, Bytes, Secret};
+use sup::{view, ByteInput, Secret};
 use sup::constant_time_eq;
 use sup::sha2::{HashAlgorithm, Digest};
+use sup::sha3::{Sha3Algorithm, Keccak};
+
+/// HMAC over SHA-3, the key absorbed; `update` on `inner`.
+struct Sha3Mac {
+    alg: Sha3Algorithm;
+    inner: Keccak;
+    outer: Keccak;
+}
+
+impl Sha3Mac {
+    fn new(alg: Sha3Algorithm, key: ByteInput) -> Sha3Mac {
+        let k = view(key);
+        let bl = alg.block_len();
+        // The key, zero-padded to a block, in arrays: no list holds it.
+        let kb: [u8; 168] = [0u8; 168];
+        if k.len() > bl {
+            let d = alg.sponge();
+            d.absorb(k);
+            kb = d.squeeze_raw(alg.output_len());
+        } else {
+            for i in 0..k.len() { kb[i] = k[i]; }
+        }
+        let pad: [u8; 168] = [0u8; 168];
+        for i in 0..bl { pad[i] = kb[i] ^ 0x36u8; }
+        let inner = alg.sponge();
+        inner.absorb_raw(pad, bl);
+        for i in 0..bl { pad[i] = kb[i] ^ 0x5cu8; }
+        let outer = alg.sponge();
+        outer.absorb_raw(pad, bl);
+        Sha3Mac { alg, inner, outer }
+    }
+
+    /// The tag in the first `output_len` bytes of an array.
+    const fn finish_raw(self) -> [u8; 168] {
+        let n = self.alg.output_len();
+        let i = self.inner;
+        let h = i.squeeze_raw(n);
+        let o = self.outer;
+        o.absorb_raw(h, n);
+        o.squeeze_raw(n)
+    }
+}
 
 /// A running HMAC. A value: copying it forks the running MAC.
 pub struct Hmac {
@@ -11,7 +54,7 @@ pub struct Hmac {
 }
 
 impl Hmac {
-    pub fn new(alg: HashAlgorithm, key: Bytes) -> Hmac {
+    pub fn new(alg: HashAlgorithm, key: ByteInput) -> Hmac {
         let k = view(key);
         let bl = alg.block_len();
         // The key, zero-padded to a block, in arrays: no list holds it.
@@ -35,18 +78,33 @@ impl Hmac {
     }
 
     /// The tag of `data` under `key`.
-    pub fn mac(alg: HashAlgorithm, key: Bytes, data: Bytes) -> List<u8> {
+    pub fn mac(alg: HashAlgorithm, key: ByteInput, data: ByteInput) -> List<u8> {
         let h = Hmac::new(alg, key);
         h.update(data);
         h.finish()
     }
 
     /// Whether `tag` is the tag of `data`, compared in constant time.
-    pub fn verify(alg: HashAlgorithm, key: Bytes, data: Bytes, tag: Bytes) -> bool {
+    pub fn verify(alg: HashAlgorithm, key: ByteInput, data: ByteInput, tag: ByteInput) -> bool {
         constant_time_eq(Hmac::mac(alg, key, data), tag)
     }
 
-    pub fn update(ref self, data: Bytes) { self.inner.update(data); }
+    /// `mac` over a SHA-3 function: `Hmac::mac_sha3(Sha3_256, key, data)`.
+    pub fn mac_sha3(alg: Sha3Algorithm, key: ByteInput, data: ByteInput) -> List<u8> {
+        let m = Sha3Mac::new(alg, key);
+        m.inner.absorb(data);
+        let t = m.finish_raw();
+        let out: List<u8> = List::with_capacity(alg.output_len());
+        for i in 0..alg.output_len() { out.push(t[i]); }
+        out
+    }
+
+    /// `verify` over a SHA-3 function.
+    pub fn verify_sha3(alg: Sha3Algorithm, key: ByteInput, data: ByteInput, tag: ByteInput) -> bool {
+        constant_time_eq(Hmac::mac_sha3(alg, key, data), tag)
+    }
+
+    pub fn update(ref self, data: ByteInput) { self.inner.update(data); }
 
     pub const fn finish(self) -> List<u8> {
         self.outer_raw().finish()
@@ -70,7 +128,7 @@ pub struct Hkdf;
 
 impl Hkdf {
     /// `HMAC(salt, ikm)`; an empty salt is `output_len` zero bytes.
-    pub fn extract(alg: HashAlgorithm, salt: Bytes, ikm: Bytes) -> Secret {
+    pub fn extract(alg: HashAlgorithm, salt: ByteInput, ikm: ByteInput) -> Secret {
         let s = view(salt);
         // A zero key and an empty one give the same HMAC.
         let h = Hmac::new(alg, s);
@@ -83,7 +141,7 @@ impl Hkdf {
 
     /// `len` bytes of output keying material; `len` is at most
     /// `255 * output_len`.
-    pub fn expand(alg: HashAlgorithm, prk: Bytes, info: Bytes, len: usize) throws (ValueError) -> Secret {
+    pub fn expand(alg: HashAlgorithm, prk: ByteInput, info: ByteInput, len: usize) throws (ValueError) -> Secret {
         let ol = alg.output_len();
         if len > 255 * ol {
             throw ValueError { msg: "HKDF output too long" };
@@ -104,6 +162,52 @@ impl Hkdf {
             c[0] = i;
             h.inner.update_raw(c, 1);
             let d = h.outer_raw().finish_raw();
+            for j in 0..ol {
+                t[j] = d[j];
+                if at < len {
+                    out[at] = d[j];
+                    at += 1;
+                }
+            }
+            tn = ol;
+            i = i.wrapping_add(1u8);
+        }
+        out
+    }
+
+    /// `extract` over a SHA-3 function.
+    pub fn extract_sha3(alg: Sha3Algorithm, salt: ByteInput, ikm: ByteInput) -> Secret {
+        let m = Sha3Mac::new(alg, view(salt));
+        m.inner.absorb(ikm);
+        let prk = Secret::zeroed(alg.output_len());
+        let t = m.finish_raw();
+        for i in 0..alg.output_len() { prk[i] = t[i]; }
+        prk
+    }
+
+    /// `expand` over a SHA-3 function; `len` is at most
+    /// `255 * output_len`.
+    pub fn expand_sha3(alg: Sha3Algorithm, prk: ByteInput, info: ByteInput, len: usize) throws (ValueError) -> Secret {
+        let ol = alg.output_len();
+        if len > 255 * ol {
+            throw ValueError { msg: "HKDF output too long" };
+        }
+        let base = Sha3Mac::new(alg, prk);
+        let inf = view(info);
+        let out = Secret::zeroed(len);
+        // T(i - 1) || i, in an array.
+        let t: [u8; 168] = [0u8; 168];
+        let tn = 0usize;
+        let i = 1u8;
+        let at = 0usize;
+        while at < len {
+            let h = base;
+            h.inner.absorb_raw(t, tn);
+            h.inner.absorb(inf);
+            let c: [u8; 168] = [0u8; 168];
+            c[0] = i;
+            h.inner.absorb_raw(c, 1);
+            let d = h.finish_raw();
             for j in 0..ol {
                 t[j] = d[j];
                 if at < len {

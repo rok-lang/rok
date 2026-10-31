@@ -42,7 +42,14 @@ impl Duration {
     #[track_caller]
     pub const fn ms(n: i64) -> Duration { Duration { ns: ns_mul(n, 1000000) } }
     #[track_caller]
+    pub const fn secs(n: i64) -> Duration { Duration { ns: ns_mul(n, 1000000000) } }
+    #[track_caller]
+    pub const fn mins(n: i64) -> Duration { Duration { ns: ns_mul(n, 60000000000) } }
+    #[deprecated(since = "0.1.6", note = "use `Duration::secs`")]
+    #[track_caller]
     pub const fn sec(n: i64) -> Duration { Duration { ns: ns_mul(n, 1000000000) } }
+    /// Hides `Ord::min` on a `Duration`: `a.min(b)` does not compile.
+    #[deprecated(since = "0.1.6", note = "use `Duration::mins`")]
     #[track_caller]
     pub const fn min(n: i64) -> Duration { Duration { ns: ns_mul(n, 60000000000) } }
     #[track_caller]

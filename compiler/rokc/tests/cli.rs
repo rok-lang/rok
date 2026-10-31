@@ -346,7 +346,7 @@ fn library_build_drops_code_its_package_does_not_reach() {
     assert!(mir.contains("fn plib::unused_private()"), "{mir}");
     assert!(mir.contains("fn plib::f()"), "{mir}");
     assert!(!mir.contains("fn rok_f64_cbrt("), "{mir}");
-    assert!(mir.matches("\nfn ").count() < 44, "{mir}");
+    assert!(mir.matches("\nfn ").count() < 46, "{mir}");
 }
 
 /// 9.2.16: an unchanged package is not rebuilt; a changed source, a
@@ -1639,6 +1639,50 @@ fn spawn_of_a_sole_local_future_skips_the_hand_off() {
         "    let h = f(9, 1);\n    let k = h;\n    println(f\"{await task::spawn(k)}\");\n",
     );
     assert!(aliased.contains(copy) && !aliased.contains(plain));
+}
+
+/// Stdlib 2.5, 2.9.3: where a `Dict` puts a key depends on a per-process
+/// seed, but what it prints and writes (insertion order) does not; a
+/// dict built at compile time keeps its own seed.
+// spec: std §2.5.6 §2.9.3
+#[test]
+fn dict_seed_changes_placement_not_output() {
+    let Some(env) = setup() else { return };
+    let dir = scratch("dict_seed");
+    put(
+        dir.join("src/main.rok"),
+        "extern \"rok\" { fn rok_hash_seed() -> u64; }\n\
+         const C: Dict<str, i32> = {\"q\": 1, \"r\": 2};\n\
+         fn main() {\n\
+         \x20   let d: Dict<str, i32> = Dict::new();\n\
+         \x20   for i in 0..40 { d[f\"k{i}\"] = i; }\n\
+         \x20   d.remove(\"k3\");\n\
+         \x20   d[\"k3\"] = 3;\n\
+         \x20   println(f\"{d:?} {C[\"r\"]} {C.contains_key(\"q\")}\");\n\
+         \x20   println(rok::std::rokon::to_string(d));\n\
+         \x20   println(f\"{unsafe { rok_hash_seed() }}\");\n\
+         }\n",
+    )
+    .unwrap();
+    let out = rokc(Some(&env), &dir, &["build"]);
+    assert_exit(&out, 0);
+    let exe = dir.join("target/debug").join(exe_name("dict_seed"));
+    let run = || {
+        let o = Command::new(&exe).output().unwrap();
+        assert_exit(&o, 0);
+        let s = text(&o.stdout);
+        let (body, seed) = s.trim_end().rsplit_once('\n').unwrap();
+        (body.to_owned(), seed.to_owned())
+    };
+    let (a, seed_a) = run();
+    let (b, seed_b) = run();
+    assert_eq!(a, b);
+    assert!(
+        a.starts_with("{\"k0\": 0, \"k1\": 1, \"k2\": 2, \"k4\": 4,"),
+        "{a}"
+    );
+    assert!(a.contains("\"k39\": 39, \"k3\": 3} 2 true"), "{a}");
+    assert_ne!(seed_a, seed_b);
 }
 
 // spec: §9.1.2 §9.2.13 §9.2.15 §6.2.5 §9.9.12

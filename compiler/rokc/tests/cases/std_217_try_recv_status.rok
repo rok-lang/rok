@@ -1,0 +1,25 @@
+// spec: std 217-channel §2.17.2
+// expect-exit: 0
+// forbid-warning: warning
+// expect-stdout:
+// empty 7 closed
+
+// `try_recv_status` tells an empty channel from a closed one, which
+// `try_recv` reports alike as `none`.
+fn show(r: i32 | Empty | Closed) -> str {
+    match r {
+        v: i32 => f"{v}",
+        _: Empty => "empty",
+        _: Closed => "closed",
+    }
+}
+
+fn main() {
+    let (tx, rx) = channel::<i32>();
+    let a = show(rx.try_recv_status());
+    try! tx.send(7);
+    tx.close();
+    let b = show(rx.try_recv_status());
+    let c = show(rx.try_recv_status());
+    println(f"{a} {b} {c}");
+}

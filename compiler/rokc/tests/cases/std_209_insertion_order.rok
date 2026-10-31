@@ -1,0 +1,27 @@
+// spec: std 209-collections §2.9.3 §2.9.4 §2.9.5
+// expect-exit: 0
+// forbid-warning: warning
+// expect-stdout:
+// z a m
+// a m z
+// 3 1 2
+// z a m
+
+// `Dict` and `Set` iterate in insertion order: a present key re-inserted
+// keeps its place, a removed one re-inserted goes last. `OrderedDict`
+// iterates the same way.
+fn main() {
+    let d: Dict<str, i32> = {"z": 1, "a": 2, "m": 3};
+    println(d.keys().collect::<List<str>>().join(" "));
+    d.remove("z");
+    d["z"] = 9;
+    d["a"] = 5;
+    println(d.keys().collect::<List<str>>().join(" "));
+    let s: Set<i32> = Set::from([3, 1, 2, 1]);
+    println(s.iter().map(|x| f"{x}").collect::<List<str>>().join(" "));
+    let o: OrderedDict<str, i32> = OrderedDict::new();
+    o.insert("z", 1);
+    o.insert("a", 2);
+    o.insert("m", 3);
+    println(o.keys().collect::<List<str>>().join(" "));
+}

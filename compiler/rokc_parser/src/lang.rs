@@ -65,6 +65,23 @@ pub const KNOWN_SLOTS: &[&str] = &[
     "panic_fn",
     "oom_fn",
     "unreachable_fn",
+    // 0.4.4 fn slots of the hooks lowered code calls (`library/core/src/
+    // index.rok`, `fmt.rok`, `task.rok`)
+    "spread_len_fn",
+    "spread_names_fn",
+    "spread_misfit_fn",
+    "index_from_end_fn",
+    "slice_bound_fn",
+    "slice_range_fn",
+    "fstr_display_fn",
+    "fstr_debug_fn",
+    "fstr_num_fn",
+    "fstr_pack_fn",
+    "fstr_text_any_fn",
+    "cancel_point_fn",
+    "cancel_left_fn",
+    "cleanup_running_fn",
+    "cleanup_done_fn",
     // 0.4.5 method slots
     "drop_method",
 ];

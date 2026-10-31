@@ -1,7 +1,7 @@
 // RSA (RFC 8017): PKCS #1 v1.5 and PSS verification and signing (MGF1
 // with the message hash), moduli of 2048 to 4096 bits.
 
-use sup::{view, Bytes, constant_time_eq};
+use sup::{view, ByteInput, constant_time_eq};
 use sup::sha2::{HashAlgorithm, Digest};
 use sup::hmac::Hkdf;
 use sup::bignum::{Nat, Modulus};
@@ -96,7 +96,7 @@ impl RsaPublicKey {
     /// From big-endian `n` and `e`: `n` odd, 2048 to 4096 bits; `e` odd,
     /// `3 <= e < 2^33` (verification costs a square and a multiply per
     /// exponent bit; a peer's certificate must not choose that).
-    pub fn new(n: Bytes, e: Bytes) throws (ValueError) -> RsaPublicKey {
+    pub fn new(n: ByteInput, e: ByteInput) throws (ValueError) -> RsaPublicKey {
         let nb = strip(view(n));
         let eb = strip(view(e));
         if nb.len() == 0 || nb.len() > 512 {
@@ -118,7 +118,7 @@ impl RsaPublicKey {
 
     /// From a DER `RSAPublicKey ::= SEQUENCE { modulus INTEGER,
     /// publicExponent INTEGER }`.
-    pub fn from_pkcs1_der(der: Bytes) throws (ValueError) -> RsaPublicKey {
+    pub fn from_pkcs1_der(der: ByteInput) throws (ValueError) -> RsaPublicKey {
         let s = view(der);
         let bad = ValueError { msg: "malformed RSAPublicKey" };
         if s.len() < 2 || s[0] != 0x30u8 { throw bad; }
@@ -146,7 +146,7 @@ impl RsaPublicKey {
 
     /// `signature^e mod n` as `k` bytes; `none` if the signature is not
     /// `k` bytes or not below `n`.
-    fn open(self, signature: Bytes) -> List<u8> | none {
+    fn open(self, signature: ByteInput) -> List<u8> | none {
         let k = (self.bits + 7) / 8;
         let sig = view(signature);
         if sig.len() != k { return none; }
@@ -158,14 +158,14 @@ impl RsaPublicKey {
 
     /// RSASSA-PKCS1-v1_5 verification: the whole encoding is rebuilt
     /// and compared.
-    pub fn verify_pkcs1v15(self, hash: HashAlgorithm, msg: Bytes, signature: Bytes) -> bool {
+    pub fn verify_pkcs1v15(self, hash: HashAlgorithm, msg: ByteInput, signature: ByteInput) -> bool {
         let em: List<u8> = self.open(signature) else { return false; };
         constant_time_eq(em, pkcs1_encoding(hash, hash.digest(msg), em.len()))
     }
 
     /// RSASSA-PSS verification, MGF1 with `hash`; the salt is
     /// `salt_len` bytes (none: the hash length).
-    pub fn verify_pss(self, hash: HashAlgorithm, msg: Bytes, signature: Bytes, salt_len: usize | none = none) -> bool {
+    pub fn verify_pss(self, hash: HashAlgorithm, msg: ByteInput, signature: ByteInput, salt_len: usize | none = none) -> bool {
         let full: List<u8> = self.open(signature) else { return false; };
         let em_bits = self.bits - 1;
         let em_len = (em_bits + 7) / 8;
@@ -230,7 +230,7 @@ fn factor(b: Slice<u8>, nlimbs: usize) throws (ValueError) -> Modulus {
 impl RsaPrivateKey {
     /// From a DER `RSAPrivateKey` (RFC 8017 A.1.2, version 0: n, e, d,
     /// p, q, d mod (p - 1), d mod (q - 1), q^-1 mod p).
-    pub fn from_pkcs1_der(der: Bytes) throws (ValueError) -> RsaPrivateKey {
+    pub fn from_pkcs1_der(der: ByteInput) throws (ValueError) -> RsaPrivateKey {
         let s = view(der);
         let bad = ValueError { msg: "malformed RSAPrivateKey" };
         if s.len() < 2 || s[0] != 0x30u8 { throw bad; }
@@ -297,7 +297,7 @@ impl RsaPrivateKey {
     /// An RSASSA-PSS signature of `msg`: MGF1 with `hash`, `salt` as
     /// long as the hash. `salt` must be fresh random bytes; the
     /// blinding factor is derived from it, the message and the key.
-    pub fn sign_pss(self, hash: HashAlgorithm, msg: Bytes, salt: Bytes) throws (ValueError) -> List<u8> {
+    pub fn sign_pss(self, hash: HashAlgorithm, msg: ByteInput, salt: ByteInput) throws (ValueError) -> List<u8> {
         let hl = hash.output_len();
         let sb = view(salt);
         if sb.len() != hl { throw ValueError { msg: "PSS salt must be as long as the hash" }; }
@@ -329,7 +329,7 @@ impl RsaPrivateKey {
 
     /// An RSASSA-PKCS1-v1_5 signature of `msg` (deterministic: the
     /// blinding factor is derived from the message and the key).
-    pub fn sign_pkcs1v15(self, hash: HashAlgorithm, msg: Bytes) throws (ValueError) -> List<u8> {
+    pub fn sign_pkcs1v15(self, hash: HashAlgorithm, msg: ByteInput) throws (ValueError) -> List<u8> {
         let mh = hash.digest(msg);
         let k = (self.public.bits + 7) / 8;
         try self.sign_encoded(pkcs1_encoding(hash, mh, k), "", mh)
@@ -337,7 +337,7 @@ impl RsaPrivateKey {
 
     /// The signature of the `k`-byte encoding `em`, blinded with a
     /// factor derived from `salt`, the message hash `mh` and the key.
-    fn sign_encoded(self, em: List<u8>, salt: Bytes, mh: List<u8>) throws (ValueError) -> List<u8> {
+    fn sign_encoded(self, em: List<u8>, salt: ByteInput, mh: List<u8>) throws (ValueError) -> List<u8> {
         let k = em.len();
         let n = self.public.md.n;
         let m: List<u32> = Nat::from_be(em[0:k], n) else { throw ValueError { msg: "RSA encoding" }; };

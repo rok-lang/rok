@@ -130,7 +130,13 @@ impl Float {
     /// `s` as a decimal (`-1.5e400`, `.5`, `inf`, `nan`), correctly
     /// rounded; `none` when it isn't one. Decimal exponents past ±10^6
     /// are `none`: the exact conversion would need a million-digit power
-    /// of ten.
+    /// of ten. `FromStr` throws instead.
+    pub fn parse_or_none(s: str) -> Float | none {
+        Float::try_parse(s)
+    }
+
+    /// `parse_or_none`.
+    #[deprecated(since = "0.1.6", note = "use `Float::parse_or_none`; `try_` names forms that throw or do not block")]
     pub fn try_parse(s: str) -> Float | none {
         let bs = s.as_bytes();
         let n = s.len();

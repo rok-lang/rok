@@ -602,6 +602,12 @@ impl char {
     pub const fn to_uppercase(self) -> char {
         unsafe { char::from_u32_unchecked(rok_char_to_case(self as u32, 1)) }
     }
+    /// The full lowercase mapping, which may be several chars
+    /// (`'\u{130}'` → `"i\u{307}"`).
+    pub fn to_lowercase_str(self) -> str { f"{self}".to_lowercase() }
+    /// The full uppercase mapping, which may be several chars (`'ß'` →
+    /// `"SS"`).
+    pub fn to_uppercase_str(self) -> str { f"{self}".to_uppercase() }
 
     pub const fn is_ascii(self) -> bool { (self as u32) < 0x80u32 }
     pub const fn is_ascii_uppercase(self) -> bool { self >= 'A' && self <= 'Z' }

@@ -3,7 +3,7 @@
 // 16 bytes, appended to the ciphertext. The key material is in secret
 // storage; per-message state is in locals.
 
-use sup::{view, Bytes, constant_time_eq};
+use sup::{view, ByteInput, constant_time_eq};
 use sup::aes::{aes_expand, aes_encrypt2};
 use sup::chacha::{ChaChaState, Poly1305State};
 use sup::secret::SecretWords;
@@ -39,7 +39,7 @@ pub struct Aead {
 }
 
 impl Aead {
-    pub fn new(alg: AeadAlgorithm, key: Bytes) throws (ValueError) -> Aead {
+    pub fn new(alg: AeadAlgorithm, key: ByteInput) throws (ValueError) -> Aead {
         let k = view(key);
         if k.len() != alg.key_len() {
             throw ValueError { msg: f"{alg:?} key must be {alg.key_len()} bytes, not {k.len()}" };
@@ -65,7 +65,7 @@ impl Aead {
     pub fn wipe(self) { self.k.wipe(); }
 
     /// `plaintext` encrypted, then the tag.
-    pub fn seal(self, nonce: Bytes, aad: Bytes, plaintext: Bytes) throws (ValueError) -> List<u8> {
+    pub fn seal(self, nonce: ByteInput, aad: ByteInput, plaintext: ByteInput) throws (ValueError) -> List<u8> {
         let n = try nonce12(nonce);
         let a = view(aad);
         let p = view(plaintext);
@@ -85,7 +85,7 @@ impl Aead {
 
     /// The plaintext, or `none` when the tag does not match (nothing is
     /// decrypted then).
-    pub fn open(self, nonce: Bytes, aad: Bytes, ciphertext_and_tag: Bytes) throws (ValueError) -> List<u8> | none {
+    pub fn open(self, nonce: ByteInput, aad: ByteInput, ciphertext_and_tag: ByteInput) throws (ValueError) -> List<u8> | none {
         let n = try nonce12(nonce);
         let a = view(aad);
         let ct = view(ciphertext_and_tag);
@@ -173,7 +173,7 @@ impl Drop for Aead {
     fn drop(ref self) { self.wipe(); }
 }
 
-fn nonce12(nonce: Bytes) throws (ValueError) -> Slice<u8> {
+fn nonce12(nonce: ByteInput) throws (ValueError) -> Slice<u8> {
     let n = view(nonce);
     if n.len() != 12 {
         throw ValueError { msg: f"AEAD nonce must be 12 bytes, not {n.len()}" };

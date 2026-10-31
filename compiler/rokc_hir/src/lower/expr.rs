@@ -2537,15 +2537,24 @@ fn explicit_enum(ctx: &LowerCtx<'_>, p: &AstPath) -> Option<HirTy> {
 
 /// The variant a struct-literal path names, if any. A non-core struct
 /// beats a same-named core variant from the implicit `rok::core::**`
-/// (`struct Sha256` vs `HashAlgorithm::Sha256`).
+/// (`struct Sha256` vs `HashAlgorithm::Sha256`), and any struct beats a
+/// variant without named fields (`struct Sha3_256` vs
+/// `Sha3Algorithm::Sha3_256`): that literal could never build it.
 fn init_variant(ctx: &LowerCtx<'_>, segs: &[&str], hint: Option<&HirTy>) -> EnumRes {
+    let unnamed = |e: &str, v: &str| {
+        ctx.lookup_enum(e).is_some_and(|id| {
+            ctx.enum_def(id)
+                .variants
+                .iter()
+                .any(|x| x.name == v && x.named_fields.is_empty())
+        })
+    };
     let shadowed = segs.len() == 1
-        && ctx
-            .canon_type(segs)
-            .is_some_and(|t| !t.starts_with("rok::core::"))
-        && ctx
-            .enum_path(segs)
-            .is_some_and(|(e, _)| e.starts_with("rok::core::"));
+        && ctx.canon_type(segs).is_some_and(|t| {
+            ctx.enum_path(segs).is_some_and(|(e, v)| {
+                (!t.starts_with("rok::core::") && e.starts_with("rok::core::")) || unnamed(&e, &v)
+            })
+        });
     if shadowed {
         return EnumRes::NotEnum;
     }
@@ -7664,7 +7673,7 @@ fn item_marked(ctx: &LowerCtx<'_>, what: &str, key: &str, at: rokc_diagnostic::S
 
 /// A use at `at` of function `id`: its marks' warnings.
 fn fn_marked(ctx: &LowerCtx<'_>, id: FunctionId, at: rokc_diagnostic::Span) {
-    if !ctx.marks_apply() {
+    if ctx.hook_call.replace(false) || !ctx.marks_apply() {
         return;
     }
     if let Some((name, mark)) = ctx.env.fn_mark(id) {
@@ -7680,7 +7689,7 @@ fn fn_marked(ctx: &LowerCtx<'_>, id: FunctionId, at: rokc_diagnostic::Span) {
 /// A use at `at` of generic function or method template `def`
 /// (`m::Box__get` for `Box::get`).
 fn template_marked(ctx: &LowerCtx<'_>, def: &FnDef, at: rokc_diagnostic::Span) {
-    if !ctx.marks_apply() {
+    if ctx.hook_call.replace(false) || !ctx.marks_apply() {
         return;
     }
     let Some(mark) = crate::marks::mark_of(&def.attrs) else {
@@ -8521,6 +8530,25 @@ fn implicit_core_fn(
     );
 }
 
+/// A hook's call needs no visibility (`lang_fn`); any other does.
+fn hook_visible(ctx: &LowerCtx<'_>, hook: bool, full: &str) {
+    if !hook {
+        ctx.check_item_visible(full, "function");
+    }
+}
+
+/// `call` with `hook_call` set when it calls a hook.
+fn as_hook<'a, R>(
+    ctx: &mut LowerCtx<'a>,
+    hook: bool,
+    call: impl FnOnce(&mut LowerCtx<'a>) -> R,
+) -> R {
+    ctx.hook_call.set(hook);
+    let r = call(ctx);
+    ctx.hook_call.set(false);
+    r
+}
+
 /// A call of path `p`, not a local.
 fn lower_path_call(
     ctx: &mut LowerCtx<'_>,
@@ -8530,7 +8558,8 @@ fn lower_path_call(
 ) -> HirExpr {
     let self_segs = self_path_segs(ctx, p);
     let segs: Vec<&str> = self_segs.iter().map(String::as_str).collect();
-    let display = segs.join("::");
+    let hook = segs.first().is_some_and(|s| lang_slot(s).is_some());
+    let display = segs[usize::from(hook)..].join("::");
 
     let errors = ctx.env.sink.diagnostics.borrow().len();
     let concrete = ctx.resolve_fn_name(&segs);
@@ -8553,14 +8582,16 @@ fn lower_path_call(
 
     // Free function / extern / re-export, module-aware.
     if let Some(full) = concrete {
-        ctx.check_item_visible(&full, "function");
+        hook_visible(ctx, hook, &full);
         let sig = ctx.sig_of_key(&full);
-        return call_sig(ctx, &sig, &full, None, args, span);
+        return as_hook(ctx, hook, |ctx| {
+            call_sig(ctx, &sig, &full, None, args, span)
+        });
     }
 
     // Generic function - monomorphize on the argument types.
     if let Some(full) = generic {
-        ctx.check_item_visible(&full, "function");
+        hook_visible(ctx, hook, &full);
         let generic_def = ctx.env.generic_fn(&full).expect("a generic function");
         if let Some(&op) = ctx.env.generic_intrinsic(&generic_def.name) {
             if generic_def.is_unsafe {
@@ -8579,7 +8610,9 @@ fn lower_path_call(
         }
         // Named as written in its errors.
         let def = plain_spawn(ctx, &full, args).unwrap_or(generic_def);
-        return call_generic(ctx, def, None, None, args, &full, span);
+        return as_hook(ctx, hook, |ctx| {
+            call_generic(ctx, def, None, None, args, &full, span)
+        });
     }
 
     // `Box::get(b)` / `Box::new(v)` - generic-impl method by path.
@@ -12760,11 +12793,22 @@ fn lower_position(ctx: &mut LowerCtx<'_>, idx: &Expr) -> HirExpr {
     lower_expected(ctx, idx, HirTy::Prim(want))
 }
 
-/// `rok::core::index::<name>(args..)`.
-fn index_fn(name: &str, args: Vec<Expr>, span: rokc_diagnostic::Span) -> Expr {
-    let names = ["rok", "core", "index", name];
-    let path = rokc_ast::Path {
-        segments: names
+/// The first segment of a hook's path (`lang_fn`): `#lang:` and its slot.
+const LANG_FN: &str = "#lang:";
+
+/// The lang slot a path segment calls through (`lang_fn`), if any.
+pub(super) fn lang_slot(seg: &str) -> Option<&str> {
+    seg.strip_prefix(LANG_FN)
+}
+
+/// The path of hook `rok::core::<module>::<name>`, which lowered code
+/// calls: through lang slot `<name>_fn` (stdlib 0.4.4), by path when no
+/// item fills it. Not by name, so the hook need not be visible, and its
+/// `#[deprecated]` warns only about calls the user wrote.
+pub(super) fn lang_fn(module: &str, name: &str, span: rokc_diagnostic::Span) -> rokc_ast::Path {
+    let slot = format!("{LANG_FN}{name}_fn");
+    rokc_ast::Path {
+        segments: [slot.as_str(), "rok", "core", module, name]
             .iter()
             .map(|n| rokc_ast::PathSegment {
                 name: (*n).to_owned(),
@@ -12772,7 +12816,12 @@ fn index_fn(name: &str, args: Vec<Expr>, span: rokc_diagnostic::Span) -> Expr {
             })
             .collect(),
         span,
-    };
+    }
+}
+
+/// `rok::core::index::<name>(args..)`, through its lang slot.
+fn index_fn(name: &str, args: Vec<Expr>, span: rokc_diagnostic::Span) -> Expr {
+    let path = lang_fn("index", name, span);
     Expr {
         kind: ExprKind::Call {
             callee: Box::new(Expr {

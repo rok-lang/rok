@@ -1,0 +1,17 @@
+// spec: std 221-crypto §2.21.1 / refs-lang §6.2.7
+// expect-exit: 0
+// expect-lint: 13:9 use of deprecated type `Bytes`
+// expect-stdout:
+// 3 3 3
+
+// `crypto::ByteInput` is the new name of `crypto::Bytes`, which clashed
+// with `io::Bytes`; the old name still works.
+use rok::core::crypto;
+
+fn a(b: crypto::ByteInput) -> usize { crypto::Secret::new(b).len() }
+#[allow(unused)]
+fn b(b: crypto::Bytes) -> usize { crypto::Secret::new(b).len() }
+
+fn main() {
+    println(f"{a("abc")} {b([1u8, 2u8, 3u8])} {a(crypto::Secret::new("xyz"))}");
+}

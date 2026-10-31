@@ -80,4 +80,18 @@ impl BootTime {
     pub fn now() -> BootTime { BootTime { ns: unsafe { rok_time_boot_ns() } } }
     pub fn elapsed(self) -> Duration { BootTime::now().duration_since(self) }
     pub const fn duration_since(self, earlier: BootTime) -> Duration { Duration::ns(self.ns) - Duration::ns(earlier.ns) }
+    /// `none` when `earlier` is later, as `Instant`'s.
+    pub const fn checked_duration_since(self, earlier: BootTime) -> Duration | none {
+        if earlier.ns > self.ns {
+            return none;
+        }
+        self.duration_since(earlier)
+    }
+    /// Zero when `earlier` is later, as `Instant`'s.
+    pub const fn saturating_duration_since(self, earlier: BootTime) -> Duration {
+        if earlier.ns > self.ns {
+            return Duration::ZERO;
+        }
+        self.duration_since(earlier)
+    }
 }

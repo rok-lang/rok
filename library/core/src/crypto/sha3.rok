@@ -1,7 +1,7 @@
 // SHA-3 (FIPS 202): SHA3-256, SHA3-512 and the SHAKE128 / SHAKE256
 // extendable-output functions, all over Keccak-f[1600].
 
-use sup::{view, Bytes};
+use sup::{view, ByteInput};
 
 const RC: [u64; 24] = [
     0x0000000000000001u64, 0x0000000000008082u64, 0x800000000000808au64, 0x8000000080008000u64,
@@ -18,7 +18,7 @@ const ROT: [u32; 24] = [1u32, 3u32, 6u32, 10u32, 15u32, 21u32, 28u32, 36u32, 45u
 const PI: [usize; 24] = [10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4, 15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1];
 
 /// A Keccak sponge: `rate` bytes per block, domain byte `pad`.
-struct Keccak {
+pub(pkg) struct Keccak {
     st: [u64; 25];
     rate: usize;
     pos: usize;
@@ -27,16 +27,33 @@ struct Keccak {
 }
 
 impl Keccak {
-    const fn new(rate: usize, pad: u8) -> Keccak {
+    pub(pkg) const fn new(rate: usize, pad: u8) -> Keccak {
         Keccak { st: [0u64; 25], rate, pos: 0, pad, squeezing: false }
     }
 
-    fn absorb(ref self, data: Bytes) {
+    pub(pkg) fn absorb(ref self, data: ByteInput) {
         if self.squeezing { panic("Keccak: update after squeeze"); }
         let st = self.st;
         let p = self.pos;
         for b in view(data) {
             st[p / 8] = st[p / 8] ^ ((b as u64) << ((8 * (p % 8)) as u64));
+            p += 1;
+            if p == self.rate {
+                st = keccak_f(st);
+                p = 0;
+            }
+        }
+        self.st = st;
+        self.pos = p;
+    }
+
+    /// `absorb` of `b[0:len]`: secret input that is in no list.
+    pub(pkg) const fn absorb_raw(ref self, b: [u8; 168], len: usize) {
+        if self.squeezing { panic("Keccak: update after squeeze"); }
+        let st = self.st;
+        let p = self.pos;
+        for i in 0..len {
+            st[p / 8] = st[p / 8] ^ ((b[i] as u64) << ((8 * (p % 8)) as u64));
             p += 1;
             if p == self.rate {
                 st = keccak_f(st);
@@ -61,7 +78,7 @@ impl Keccak {
 
     /// The next `n <= 168` output bytes, in an array (secret output in
     /// no list).
-    const fn squeeze_raw(ref self, n: usize) -> [u8; 168] {
+    pub(pkg) const fn squeeze_raw(ref self, n: usize) -> [u8; 168] {
         let st = self.st;
         let p = self.pos;
         if !self.squeezing {
@@ -130,6 +147,42 @@ const fn keccak_f(a: [u64; 25]) -> [u64; 25] {
     a
 }
 
+/// A SHA-3 function chosen at run time, for HMAC and HKDF
+/// (`Hmac::mac_sha3(Sha3_256, key, data)`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Sha3Algorithm {
+    Sha3_256,
+    Sha3_512,
+}
+
+impl Sha3Algorithm {
+    pub const fn output_len(self) -> usize {
+        match self {
+            Sha3Algorithm::Sha3_256 => 32,
+            Sha3Algorithm::Sha3_512 => 64,
+        }
+    }
+
+    /// The sponge rate: HMAC's block length.
+    pub const fn block_len(self) -> usize {
+        match self {
+            Sha3Algorithm::Sha3_256 => 136,
+            Sha3Algorithm::Sha3_512 => 72,
+        }
+    }
+
+    pub fn digest(self, data: ByteInput) -> List<u8> {
+        let k = self.sponge();
+        k.absorb(data);
+        k.squeeze(self.output_len())
+    }
+
+    /// An empty sponge of this function.
+    pub(pkg) const fn sponge(self) -> Keccak {
+        Keccak::new(self.block_len(), 0x06u8)
+    }
+}
+
 /// SHA3-256: 32-byte digests.
 pub struct Sha3_256 {
     k: Keccak;
@@ -140,13 +193,13 @@ impl Sha3_256 {
 
     pub const fn new() -> Sha3_256 { Sha3_256 { k: Keccak::new(136, 0x06u8) } }
 
-    pub fn digest(data: Bytes) -> List<u8> {
+    pub fn digest(data: ByteInput) -> List<u8> {
         let h = Sha3_256::new();
         h.update(data);
         h.finish()
     }
 
-    pub fn update(ref self, data: Bytes) { self.k.absorb(data); }
+    pub fn update(ref self, data: ByteInput) { self.k.absorb(data); }
 
     pub const fn finish(self) -> List<u8> { self.k.squeeze(32) }
 }
@@ -161,13 +214,13 @@ impl Sha3_512 {
 
     pub const fn new() -> Sha3_512 { Sha3_512 { k: Keccak::new(72, 0x06u8) } }
 
-    pub fn digest(data: Bytes) -> List<u8> {
+    pub fn digest(data: ByteInput) -> List<u8> {
         let h = Sha3_512::new();
         h.update(data);
         h.finish()
     }
 
-    pub fn update(ref self, data: Bytes) { self.k.absorb(data); }
+    pub fn update(ref self, data: ByteInput) { self.k.absorb(data); }
 
     pub const fn finish(self) -> List<u8> { self.k.squeeze(64) }
 
@@ -184,7 +237,7 @@ pub struct Shake128 {
 impl Shake128 {
     pub const fn new() -> Shake128 { Shake128 { k: Keccak::new(168, 0x1fu8) } }
 
-    pub fn update(ref self, data: Bytes) { self.k.absorb(data); }
+    pub fn update(ref self, data: ByteInput) { self.k.absorb(data); }
 
     pub const fn squeeze(ref self, n: usize) -> List<u8> { self.k.squeeze(n) }
 }
@@ -197,7 +250,7 @@ pub struct Shake256 {
 impl Shake256 {
     pub const fn new() -> Shake256 { Shake256 { k: Keccak::new(136, 0x1fu8) } }
 
-    pub fn update(ref self, data: Bytes) { self.k.absorb(data); }
+    pub fn update(ref self, data: ByteInput) { self.k.absorb(data); }
 
     pub const fn squeeze(ref self, n: usize) -> List<u8> { self.k.squeeze(n) }
 

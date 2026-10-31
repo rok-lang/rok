@@ -115,12 +115,13 @@ pub fn map<I: IntoIterator<Item = T>, T: Send, U: Send>(iter: I, f: fn(T) -> U +
 
 /// Fold with an associative `f` (2.19.4): chunks fold in parallel, then
 /// `init` and the chunk results fold in order.
-pub fn reduce<T: Send + Sync>(iter: List<T>, init: T, f: fn(T, T) -> T + Send + Sync) -> T {
+pub fn fold<T: Send + Sync, I: IntoIterator<Item = T>>(iter: I, init: T, f: fn(T, T) -> T + Send + Sync) -> T {
     unsafe {
-        let n = iter.len();
+        let items: List<T> = collect_items(iter);
+        let n = items.len();
         let (chunks, size) = chunking(n);
         let partial: GcBuf<T> = buf_new(chunks);
-        let shared = Handoff::new((iter, partial));
+        let shared = Handoff::new((items, partial));
         run_chunks(chunks, |c| {
             let (iter, partial) = shared.get();
             let start = c * size;
@@ -138,15 +139,22 @@ pub fn reduce<T: Send + Sync>(iter: List<T>, init: T, f: fn(T, T) -> T + Send + 
     }
 }
 
+/// `fold`.
+#[deprecated(since = "0.1.6", note = "use `par::fold`, which is the same; `par::reduce` takes no `init` in 0.2.0, as `Iterator::reduce`")]
+pub fn reduce<T: Send + Sync, I: IntoIterator<Item = T>>(iter: I, init: T, f: fn(T, T) -> T + Send + Sync) -> T {
+    fold(iter, init, f)
+}
+
 /// The items `pred` accepts, in order.
 #[track_caller]
-pub fn filter<T: Send>(iter: List<T>, pred: fn(T) -> bool + Send + Sync) -> List<T> {
+pub fn filter<T: Send, I: IntoIterator<Item = T>>(iter: I, pred: fn(T) -> bool + Send + Sync) -> List<T> {
     unsafe {
-        let n = iter.len();
-        if !distinct(iter) {
+        let items: List<T> = collect_items(iter);
+        let n = items.len();
+        if !distinct(items) {
             rok_par_sequential("par::filter");
             let one: List<T> = [];
-            for x in iter {
+            for x in items {
                 if pred(x) {
                     one.push(x);
                 }
@@ -155,14 +163,14 @@ pub fn filter<T: Send>(iter: List<T>, pred: fn(T) -> bool + Send + Sync) -> List
         }
         let keep: GcBuf<bool> = buf_new(n);
         let (chunks, size) = chunking(n);
-        let shared = Handoff::new(iter);
+        let shared = Handoff::new(items);
         run_chunks(chunks, |c| {
             let iter = shared.get();
             for i in c * size..n.min((c + 1) * size) {
                 keep[i] = pred(iter[i]);
             }
         });
-        // The chunks are done: the list is the caller's again.
+        // The chunks are done: the list is this thread's again.
         let iter = shared.get();
         let out: List<T> = [];
         for i in 0..n {
@@ -206,9 +214,10 @@ pub fn scope(f: fn(Scope)) {
 
 fn run_scope(f: fn(Scope)) {
     let tasks: List<ScopeTask> = [];
-    let s = Scope { tasks: unsafe { Mutex::new_unshared(tasks) }, cancelled: Atomic::new(false) };
+    let s = Scope { tasks: unsafe { Mutex::new_unshared(tasks) }, cancelled: Atomic::new(false), closed: Atomic::new(false) };
     f(s);
     drain(s);
+    s.closed.store(true);
 }
 
 /// Wait for every task of `s` (they may spawn more: until none is left).
@@ -244,10 +253,16 @@ pub struct Scope {
     /// Set once a `try_scope` child or body threw: tasks that have not
     /// started yet never run.
     cancelled: Atomic<bool>;
+    /// Set once its `scope` has returned: a later `spawn` panics.
+    closed: Atomic<bool>;
 }
 
 impl Scope {
+    #[track_caller]
     pub fn spawn<T: Send>(self, f: fn() -> T + Send) -> ScopeHandle<T> {
+        if self.closed.load() {
+            panic("par::Scope::spawn after its `par::scope` returned: call `spawn` inside the closure passed to `par::scope`");
+        }
         unsafe {
             let result: GcBuf<T> = buf_new(1);
             let cancelled = self.cancelled;
@@ -299,12 +314,13 @@ pub fn try_scope<E: Send>(f: fn(TryScope<E>) throws (E)) throws (E) {
         task::in_pool(|| {
             let tasks: List<ScopeTask> = [];
             let s = TryScope {
-                scope: Scope { tasks: unsafe { Mutex::new_unshared(tasks) }, cancelled: Atomic::new(false) },
+                scope: Scope { tasks: unsafe { Mutex::new_unshared(tasks) }, cancelled: Atomic::new(false), closed: Atomic::new(false) },
                 err: Handoff::new(err),
                 failed: failed,
             };
             try f(s) catch e { s.fail(e); };
             drain(s.scope);
+            s.scope.closed.store(true);
             true
         });
         if failed.load() {

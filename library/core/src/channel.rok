@@ -1,7 +1,9 @@
 // rok::core::channel - message passing between threads (stdlib spec
-// 2.17). Multi-producer, single-consumer; `recv` / `send` block the OS
-// thread, `recv_async` / `for await` / `send_async` suspend the task
-// (`task::park`: receivers on the `meta` address, senders one past it).
+// 2.17). Multi-producer, multi-consumer (2.17.4): a `Receiver` copy
+// shares the queue, and each value goes to one receiver. `recv` / `send`
+// block the OS thread, `recv_async` / `for await` / `send_async` suspend
+// the task (`task::park`: receivers on the `meta` address, senders one
+// past it).
 //
 // The queue (2.17.6): a bounded channel's is a lock-free ring (Vyukov's
 // MPMC: per-slot stamps, CAS on head / tail), an unbounded one's a list
@@ -53,6 +55,25 @@ impl<T> Debug for TrySendError<T> {
 }
 
 impl<T> Error for TrySendError<T> {}
+
+/// `try_recv_status`: nothing is queued, and a sender is still open.
+pub struct Empty {}
+
+/// `try_recv_status`: nothing is queued, and every sender has closed.
+pub struct Closed {}
+
+// By hand: derives would build `Closed {}`, which also names the send
+// errors' variant.
+impl PartialEq for Empty { const fn eq(self, rhs: Empty) -> bool { true } }
+impl Eq for Empty {}
+impl Debug for Empty {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Empty") }
+}
+impl PartialEq for Closed { const fn eq(self, rhs: Closed) -> bool { true } }
+impl Eq for Closed {}
+impl Debug for Closed {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Closed") }
+}
 
 // `meta` slots.
 const SENDERS: usize = 0;
@@ -497,9 +518,22 @@ impl<T> Receiver<T> {
         }
     }
 
-    /// The next value if one is queued; `none` if empty or closed.
+    /// The next value if one is queued; `none` if empty or closed
+    /// (`try_recv_status` tells the two apart).
     pub fn try_recv(self) -> T | none {
         self.ch.take()
+    }
+
+    /// The next value if one is queued, else whether a sender may still
+    /// send one (`Empty`) or every sender has closed (`Closed`).
+    pub fn try_recv_status(self) -> T | Empty | Closed {
+        // `closed` first, as in `recv`.
+        let closed = self.ch.senders() == 0;
+        if let v: T = self.ch.take() {
+            return v;
+        }
+        // By path: `Closed` alone is also a variant of the send errors.
+        if closed { rok::core::channel::Closed {} } else { rok::core::channel::Empty {} }
     }
 
     /// Values until the channel closes (also `for v in rx`).

@@ -1,0 +1,18 @@
+// spec: std 218-task §2.18.6 / refs-lang §6.2.7
+// expect-exit: 0
+// expect-warning: use of deprecated method `Duration::sec`
+// expect-warning: use `Duration::secs`
+// expect-warning: use of deprecated method `Duration::min`
+// expect-warning: use `Duration::mins`
+// expect-stdout:
+// 2s 180s 2s 60s true
+
+// `secs` and `mins` are the constructors; `sec` and `min` are
+// deprecated (`min` hides `Ord::min`).
+fn main() {
+    let a = Duration::secs(2);
+    let b = Duration::mins(3);
+    let c = Duration::sec(2);
+    let d = Duration::min(1);
+    println(f"{a} {b} {c} {d} {a == c}");
+}
