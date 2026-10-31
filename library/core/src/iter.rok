@@ -997,17 +997,28 @@ impl<I: Iterator> Iterator for Windows<I> {
 /// The value of a `yield fn` call / `yield { .. }` block: an iterator
 /// over what the body yields. `resume` runs the body to its next `yield`
 /// (its env is the coroutine frame, a GC object the body's state lives
-/// in, so copies of a `GenIter` share one position).
+/// in, so copies of a `GenIter` share one position); `resume(true)`
+/// leaves the body at that `yield` through its `using` / `finally`
+/// cleanups instead.
 // One library type per coroutine kind, not a fresh anonymous type per
 // coroutine (spec 4.1.11); it only shows in type names and identity.
 pub struct GenIter<T> {
-    resume: fn() -> (T | none);
+    resume: fn(bool) -> (T | none);
 }
 
 impl<T> Iterator for GenIter<T> {
     type Item = T;
     const fn next(ref self) -> T | none {
-        (self.resume)()
+        (self.resume)(false)
+    }
+}
+
+impl<T> GenIter<T> {
+    /// End the generator where it waits: its cleanups run, then `next`
+    /// gives `none`. What `for` calls when it leaves the loop early.
+    #[doc(hidden)]
+    pub const fn close(ref self) {
+        (self.resume)(true);
     }
 }
 
@@ -1015,11 +1026,18 @@ impl<T> Iterator for GenIter<T> {
 /// surfaces at `next` (refs-lang 4.14.10), so a loop over it throws and
 /// must be covered: `try for x in g { .. }`.
 pub struct TryGenIter<T, E> {
-    resume: fn() throws (E) -> (T | none);
+    resume: fn(bool) throws (E) -> (T | none);
 }
 
 impl<T, E> TryGenIter<T, E> {
     pub const fn next(ref self) throws (E) -> T | none {
-        try (self.resume)()
+        try (self.resume)(false)
+    }
+
+    /// `GenIter::close`; an error its cleanups throw is dropped (the loop
+    /// is already leaving).
+    #[doc(hidden)]
+    pub const fn close(ref self) {
+        try (self.resume)(true) catch _ { none };
     }
 }

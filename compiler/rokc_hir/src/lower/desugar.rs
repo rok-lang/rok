@@ -893,9 +893,22 @@ pub(super) fn lower_for(
                     &mut out,
                 )),
                 HirTy::Unknown => None,
-                _ => Some(lower_for_iter(
-                    ctx, label, pat, iter_h, body, span, &mut out,
-                )),
+                _ => {
+                    // A generator the loop made (not one in a variable,
+                    // which may go on after the loop) is closed when the
+                    // loop leaves early.
+                    let owned = !matches!(
+                        iter.kind,
+                        ExprKind::Path(_)
+                            | ExprKind::QPath(_)
+                            | ExprKind::SelfLower
+                            | ExprKind::Field(..)
+                            | ExprKind::TupleField(..)
+                            | ExprKind::Index(..)
+                    );
+                    let w = lower_for_iter(ctx, label, pat, iter_h, body, span, &mut out, owned);
+                    Some(w)
+                }
             }
         }
     };
@@ -918,6 +931,10 @@ pub(super) fn lower_for(
 
 /// `for pat in xs` otherwise (stdlib 2.7.2): `let it = xs.into_iter();
 /// loop { match it.next() { v: T => { let pat = v; body } none => break } }`.
+/// A generator the loop owns (`owned`) is closed after the loop and on
+/// every exit leaving it (spec 4.11.10): a `finally { it.close() }` that
+/// `continue` and `break` of this loop skip.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn lower_for_iter(
     ctx: &mut LowerCtx<'_>,
     label: Option<&String>,
@@ -926,6 +943,7 @@ pub(super) fn lower_for_iter(
     body: &Block,
     span: rokc_diagnostic::Span,
     out: &mut Vec<HirStmt>,
+    owned: bool,
 ) -> HirExpr {
     let has_into_iter = !matches!(
         super::expr::pick_method(ctx, &iter_h.ty, "into_iter", None),
@@ -956,13 +974,75 @@ pub(super) fn lower_for_iter(
         return it_h;
     }
     let it_ty = it_h.ty.clone();
-    let it = ctx.declare(None, it_ty.clone());
+    let close = owned && is_generator(ctx, &it_ty);
+    let name = close.then(|| format!("#for_gen{}", ctx.locals.len()));
+    let it = ctx.declare(name.clone(), it_ty.clone());
     out.push(HirStmt::Let {
         local: it,
         init: it_h,
     });
     let next = method_call_on(ctx, hir_local(it, &it_ty, span), "next", &[], span);
-    for_next_loop(ctx, label, pat, next, body, span)
+    let Some(name) = name else {
+        return for_next_loop(ctx, label, pat, next, body, span);
+    };
+    let call = Expr {
+        kind: ExprKind::MethodCall {
+            receiver: Box::new(Expr {
+                kind: ExprKind::Path(rokc_ast::Path {
+                    segments: vec![rokc_ast::PathSegment {
+                        name,
+                        generics: Vec::new(),
+                    }],
+                    span,
+                }),
+                span,
+            }),
+            method: "close".to_owned(),
+            type_args: Vec::new(),
+            args: Vec::new(),
+            trailing_closure: None,
+        },
+        span,
+    };
+    let fin = Block {
+        stmts: vec![rokc_ast::Stmt {
+            kind: rokc_ast::StmtKind::Expr(call),
+            span,
+        }],
+        trailing: None,
+        span,
+        label: None,
+    };
+    // Outside this loop's breakable: its own `break` / `continue` do not
+    // run it.
+    ctx.err_frames.push(ErrFrame::Finally {
+        block: fin,
+        try_depth: ctx.try_depth,
+        breakables: ctx.breakables.len() - 1,
+    });
+    let lp = for_next_loop(ctx, label, pat, next, body, span);
+    ctx.err_frames.pop();
+    let closed = method_call_on(ctx, hir_local(it, &it_ty, span), "close", &[], span);
+    HirExpr {
+        kind: HirExprKind::Block(Box::new(HirBlock {
+            stmts: vec![HirStmt::Expr(lp), HirStmt::Expr(closed)],
+            trailing: None,
+            label: None,
+        })),
+        ty: HirTy::Unit,
+        span,
+    }
+}
+
+/// A `GenIter` / `TryGenIter`.
+fn is_generator(ctx: &LowerCtx<'_>, ty: &HirTy) -> bool {
+    let HirTy::Struct(sid) = ty else {
+        return false;
+    };
+    let def = ctx.struct_def(*sid);
+    ["rok::core::iter::GenIter", "rok::core::iter::TryGenIter"]
+        .iter()
+        .any(|base| def.name == mangle_inst(base, &def.generic_args))
 }
 
 /// `for await pat in s` (stdlib 2.8.2): `s.into_stream()` unless already
@@ -1222,7 +1302,9 @@ pub(super) fn lower_for_range(
     let elem_ty = start_h.ty.clone();
     if !matches!(elem_ty, HirTy::Prim(p) if p.is_int()) {
         let iter_h = lower_expected(ctx, range, HirTy::Unknown);
-        return Some(lower_for_iter(ctx, label, pat, iter_h, body, span, out));
+        return Some(lower_for_iter(
+            ctx, label, pat, iter_h, body, span, out, false,
+        ));
     }
     let prim = match &elem_ty {
         HirTy::Prim(p) if p.is_int() && end_h.as_ref().is_none_or(|e| e.ty == start_h.ty) => *p,

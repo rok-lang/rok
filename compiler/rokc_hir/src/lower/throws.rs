@@ -405,6 +405,7 @@ pub(super) fn raise(
             let ok = carrier_ok(ctx);
             // `ref` parameters go back on the error path too (spec 4.7).
             let c = super::mono::ref_pack(ctx, carrier(&ok, &decl, Err(v), span), span);
+            out.extend(super::coro::frame_end(ctx, span));
             out.push(HirStmt::Return(Some(c)));
             return out;
         }

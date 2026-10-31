@@ -48,6 +48,12 @@ pub const FN_BLOCK_LABEL: &str = "#coro_fn";
 const CLOSURE_BLOCK_LABEL: &str = "#coro_closure";
 const BODY_LABEL: &str = "#coro";
 const CTX: &str = "#ctx";
+/// A generator's resume argument: `true` from `GenIter::close`, which
+/// leaves the body through its cleanups at the `yield` it waits at.
+const CLOSE: &str = "#close";
+/// Set in an async frame once a cancellation point fired: its cleanups
+/// run, and no `await` in them checks for the cancel again.
+const UNWINDING: &str = "#unwinding";
 const CONTEXT: &str = "rok::core::future::Context";
 const POLL: &str = "rok::core::future::Poll";
 const PRIME_FRAME: &str = "rok::core::future::prime_frame";
@@ -364,7 +370,122 @@ pub(super) fn lower_yield(
         }
         _ => some,
     };
-    suspend(step(ctx, value), false, span)
+    let point = suspend(step(ctx, value), false, span);
+    let Some(closing) = local_bool(ctx, CLOSE, span) else {
+        return point;
+    };
+    // `if !#close { suspend } if #close { leave }`: a `yield` reached while
+    // closing ends the generator too.
+    let exit = super::throws::exit_through(ctx, None, None, coro_return, span);
+    let not_closing = if_else(
+        closing.clone(),
+        Vec::new(),
+        vec![HirStmt::Expr(point)],
+        span,
+    );
+    let leave = if_else(closing, vec![exit], Vec::new(), span);
+    HirExpr {
+        kind: HirExprKind::Block(Box::new(HirBlock {
+            stmts: vec![HirStmt::Expr(not_closing), HirStmt::Expr(leave)],
+            trailing: None,
+            label: None,
+        })),
+        ty: HirTy::Unit,
+        span,
+    }
+}
+
+/// The bool local `name` of the coroutine being lowered (`None` in the
+/// probe pass).
+fn local_bool(ctx: &LowerCtx<'_>, name: &str, span: rokc_diagnostic::Span) -> Option<HirExpr> {
+    if ctx.coro.as_ref().is_none_or(|c| c.probe) {
+        return None;
+    }
+    let l = ctx.lookup(name)?;
+    Some(hir_local(l, &HirTy::Prim(PrimTy::Bool), span))
+}
+
+/// `if cond { then } else { other }` as a unit statement.
+fn if_else(
+    cond: HirExpr,
+    then: Vec<HirStmt>,
+    other: Vec<HirStmt>,
+    span: rokc_diagnostic::Span,
+) -> HirExpr {
+    let block = |stmts: Vec<HirStmt>| HirBlock {
+        stmts,
+        trailing: None,
+        label: None,
+    };
+    HirExpr {
+        kind: HirExprKind::If {
+            cond: Box::new(cond),
+            then_block: Box::new(block(then)),
+            else_branch: (!other.is_empty()).then(|| {
+                Box::new(HirExpr {
+                    kind: HirExprKind::Block(Box::new(block(other))),
+                    ty: HirTy::Unit,
+                    span,
+                })
+            }),
+        },
+        ty: HirTy::Unit,
+        span,
+    }
+}
+
+/// `rok::core::task::<name>(#ctx)` (`None` when the core library lacks
+/// it).
+fn task_call(ctx: &mut LowerCtx<'_>, name: &str, span: rokc_diagnostic::Span) -> Option<HirExpr> {
+    let path = |names: &[&str]| Expr {
+        kind: ExprKind::Path(rokc_ast::Path {
+            segments: names
+                .iter()
+                .map(|n| rokc_ast::PathSegment {
+                    name: (*n).to_owned(),
+                    generics: Vec::new(),
+                })
+                .collect(),
+            span,
+        }),
+        span,
+    };
+    let call = Expr {
+        kind: ExprKind::Call {
+            callee: Box::new(path(&["rok", "core", "task", name])),
+            args: vec![CallArg::Positional(path(&[CTX]))],
+            trailing_closure: None,
+        },
+        span,
+    };
+    let e = super::expr::lower_expr(ctx, &call);
+    (e.ty != HirTy::Unknown).then_some(e)
+}
+
+/// `if #unwinding { task::<name>(#ctx) }`: tell the executor a frame left
+/// by the cancel is in its cleanups (`cleanup_running`) or done with them
+/// (`cleanup_done`).
+fn cleanup_note(
+    ctx: &mut LowerCtx<'_>,
+    name: &str,
+    span: rokc_diagnostic::Span,
+) -> Option<HirStmt> {
+    if !ctx.coro.as_ref().is_some_and(|c| c.kind.is_async()) {
+        return None;
+    }
+    let unwinding = local_bool(ctx, UNWINDING, span)?;
+    let call = task_call(ctx, name, span)?;
+    Some(HirStmt::Expr(if_else(
+        unwinding,
+        vec![HirStmt::Expr(call)],
+        Vec::new(),
+        span,
+    )))
+}
+
+/// Where an async frame ends, normally or by an escaping error.
+pub(super) fn frame_end(ctx: &mut LowerCtx<'_>, span: rokc_diagnostic::Span) -> Option<HirStmt> {
+    cleanup_note(ctx, "cleanup_done", span)
 }
 
 /// `await e` (spec 4.12.2): poll `e` (or `e.into_future()`) until ready,
@@ -489,7 +610,7 @@ pub(super) fn poll_loop(
             },
             guard: None,
             body: block(
-                cancel_check(ctx, "unwinding", span)
+                cancel_check(ctx, "cancel_left", span)
                     .into_iter()
                     .chain([HirStmt::Break {
                         label: None,
@@ -506,7 +627,7 @@ pub(super) fn poll_loop(
             },
             guard: None,
             body: block(
-                cancel_check(ctx, "cancel_requested", span)
+                cancel_check(ctx, "cancel_point", span)
                     .into_iter()
                     .chain(if coro.probe {
                         vec![HirStmt::Expr(pending_step)]
@@ -536,11 +657,13 @@ pub(super) fn poll_loop(
         ty: HirTy::Unit,
         span,
     };
+    // Run on every resume too, before the poll.
+    let note = cleanup_note(ctx, "cleanup_running", span);
     let lp = HirExpr {
         kind: HirExprKind::Loop {
             label: None,
             body: Box::new(HirBlock {
-                stmts: vec![HirStmt::Expr(m)],
+                stmts: note.into_iter().chain([HirStmt::Expr(m)]).collect(),
                 trailing: None,
                 label: None,
             }),
@@ -549,11 +672,13 @@ pub(super) fn poll_loop(
         ty: out.clone(),
         span,
     };
-    // Check on entry, after a ready poll (`unwinding`, not the bare flag: a
-    // hand-written future's value, e.g. a received message, is kept and the
-    // next check leaves) and before suspending (the awaited future is
+    // Check on entry, after a ready poll (`cancel_left`, not the bare flag:
+    // a hand-written future's value, e.g. a received message, is kept and
+    // the next check leaves) and before suspending (the awaited future is
     // polled first after a resume, so nested coroutines clean up first).
-    let Some(entry) = cancel_check(ctx, "cancel_requested", span) else {
+    // None fires in a frame already unwinding: its cleanups' awaits
+    // complete.
+    let Some(entry) = cancel_check(ctx, "cancel_point", span) else {
         return lp;
     };
     HirExpr {
@@ -567,39 +692,20 @@ pub(super) fn poll_loop(
     }
 }
 
-/// A cancellation point (stdlib 2.18.4): `if task::<check>(#ctx) { leave
-/// like a return }`, running the cleanups passed; the result is a zero
-/// value the executor drops. `None` in the probe pass.
+/// A cancellation point (stdlib 2.18.4): `if !#unwinding &&
+/// task::<check>(#ctx) { #unwinding = true; leave like a return }`,
+/// running the cleanups passed; the result is a zero value the executor
+/// drops. `None` in the probe pass.
 fn cancel_check(
     ctx: &mut LowerCtx<'_>,
     check: &str,
     span: rokc_diagnostic::Span,
 ) -> Option<HirStmt> {
-    if ctx.coro.as_ref().is_none_or(|c| c.probe) {
+    let unwinding = local_bool(ctx, UNWINDING, span)?;
+    let HirExprKind::Local(flag) = unwinding.kind else {
         return None;
-    }
-    let path = |names: &[&str]| Expr {
-        kind: ExprKind::Path(rokc_ast::Path {
-            segments: names
-                .iter()
-                .map(|n| rokc_ast::PathSegment {
-                    name: (*n).to_owned(),
-                    generics: Vec::new(),
-                })
-                .collect(),
-            span,
-        }),
-        span,
     };
-    let call = Expr {
-        kind: ExprKind::Call {
-            callee: Box::new(path(&["rok", "core", "task", check])),
-            args: vec![CallArg::Positional(path(&[CTX]))],
-            trailing_closure: None,
-        },
-        span,
-    };
-    let cond = super::expr::lower_expr(ctx, &call);
+    let cond = task_call(ctx, check, span)?;
     if cond.ty != HirTy::Prim(PrimTy::Bool) {
         return None;
     }
@@ -610,19 +716,21 @@ fn cancel_check(
         span,
     });
     let exit = super::throws::exit_through(ctx, None, value, coro_return, span);
-    Some(HirStmt::Expr(HirExpr {
-        kind: HirExprKind::If {
-            cond: Box::new(cond),
-            then_block: Box::new(HirBlock {
-                stmts: vec![exit],
-                trailing: None,
-                label: None,
-            }),
-            else_branch: None,
+    let set = HirStmt::Assign {
+        local: flag,
+        value: HirExpr {
+            kind: HirExprKind::Const(ConstVal::Bool(true)),
+            ty: HirTy::Prim(PrimTy::Bool),
+            span,
         },
-        ty: HirTy::Unit,
+    };
+    let fire = if_else(cond, vec![set, exit], Vec::new(), span);
+    Some(HirStmt::Expr(if_else(
+        unwinding,
+        Vec::new(),
+        vec![HirStmt::Expr(fire)],
         span,
-    }))
+    )))
 }
 
 /// `async || body` = `|| async { body }` (spec 4.11.5 / 4.12.5): the
@@ -749,6 +857,15 @@ fn lower_coro_block<'a>(
                 ty: cty,
                 by_ref: false,
             });
+        } else {
+            let bool_ty = HirTy::Prim(PrimTy::Bool);
+            let l = c.declare(Some(CLOSE.to_owned()), bool_ty.clone());
+            params.push(HirParam {
+                name: CLOSE.to_owned(),
+                local: l,
+                ty: bool_ty,
+                by_ref: false,
+            });
         }
         let (item, out) = if kind.yields() {
             (val.clone(), HirTy::Unit)
@@ -809,6 +926,18 @@ fn lower_coro_block<'a>(
     let body_id = rokc_ir_common::FunctionId(ctx.env.sink.next_id.get());
     ctx.env.sink.next_id.set(body_id.0 + 1);
     let (mut c, params, mut prelude) = make_ctx(ctx, &val_ty, &throws, false);
+    if kind.is_async() {
+        let bool_ty = HirTy::Prim(PrimTy::Bool);
+        let l = c.declare(Some(UNWINDING.to_owned()), bool_ty.clone());
+        prelude.push(HirStmt::Let {
+            local: l,
+            init: HirExpr {
+                kind: HirExprKind::Const(ConstVal::Bool(false)),
+                ty: bool_ty,
+                span,
+            },
+        });
+    }
     if kind == CoroKind::Async {
         let first = prime_captures(&mut c, &captures, span);
         let pending = pending_step(&c);
@@ -828,11 +957,16 @@ fn lower_coro_block<'a>(
     let coro = c.coro.clone().expect("coroutine ctx");
     let step_ty = coro.step_ty(&c, &out);
     let r = c.declare(None, out.clone());
+    // A generator closed before its first `next` runs none of its body.
+    let unstarted: Vec<HirStmt> = local_bool(&c, CLOSE, span)
+        .map(|closing| HirStmt::Expr(if_else(closing, vec![coro_return(None)], Vec::new(), span)))
+        .into_iter()
+        .collect();
     let labelled = HirExpr {
         ty: out.clone(),
         span,
         kind: HirExprKind::Block(Box::new(HirBlock {
-            stmts: Vec::new(),
+            stmts: unstarted,
             trailing: Some(body_h),
             label: Some(BODY_LABEL.to_owned()),
         })),
@@ -876,10 +1010,11 @@ fn lower_coro_block<'a>(
             init: run,
         }
     });
+    stmts.extend(frame_end(&mut c, span));
     stmts.push(HirStmt::Expr(suspend(final_value, true, span)));
     let resume_tys: Vec<HirTy> = params
         .iter()
-        .filter(|p| p.name == CTX)
+        .filter(|p| p.name == CTX || p.name == CLOSE)
         .map(|p| p.ty.clone())
         .collect();
     ctx.env.sink.extras.borrow_mut().push(HirFunction {

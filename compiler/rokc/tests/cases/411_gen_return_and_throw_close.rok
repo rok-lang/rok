@@ -1,0 +1,130 @@
+// spec: 004.11-generators §4.11.10
+// expect-exit: 0
+// expect-stdout:
+// first: 0
+// gen a closed
+// return -> 0
+// gen b closed
+// throw -> caught 1
+// gen c closed
+// try? -> -1
+// nested: 0 0
+// inner closed
+// outer closed
+// throwing gen: 0
+// throwing gen closed
+// try for -> 0
+// await: 0
+// gen d closed
+// async -> 0
+
+// 4.11.10: `return`, a thrown error, `try` propagation and a yield from
+// an enclosing generator all close a generator a `for` leaves early.
+struct Stop {}
+
+impl Display for Stop {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("stop") }
+}
+
+impl Debug for Stop {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Stop") }
+}
+
+impl Error for Stop {}
+
+yield fn gen(name: str) -> i64 {
+    try {
+        let i: i64 = 0;
+        loop {
+            yield i;
+            i += 1;
+        }
+    } finally {
+        println(f"gen {name} closed");
+    }
+}
+
+fn first() -> i64 {
+    for x in gen("a") {
+        println(f"first: {x}");
+        return x;
+    }
+    -1
+}
+
+fn thrower() throws (Stop) -> i64 {
+    for x in gen("b") {
+        if x == 1 { throw Stop {}; }
+    }
+    0
+}
+
+fn fails(x: i64) throws (Stop) -> i64 {
+    if x == 0 { throw Stop {}; }
+    x
+}
+
+fn propagates() throws (Stop) -> i64 {
+    for x in gen("c") {
+        let _ = try fails(x);
+    }
+    0
+}
+
+yield fn outer() -> i64 {
+    try {
+        for x in gen_inner() {
+            yield x;
+        }
+    } finally {
+        println("outer closed");
+    }
+}
+
+yield fn gen_inner() -> i64 {
+    try {
+        yield 0;
+        yield 1;
+    } finally {
+        println("inner closed");
+    }
+}
+
+yield fn may_fail() throws (Stop) -> i64 {
+    try {
+        yield 0;
+        throw Stop {};
+    } finally {
+        println("throwing gen closed");
+    }
+}
+
+fn try_loop() throws (Stop) -> i64 {
+    try for x in may_fail() {
+        println(f"throwing gen: {x}");
+        return x;
+    }
+    return -1;
+}
+
+async fn in_async() -> i64 {
+    for x in gen("d") {
+        await task::yield_now();
+        println(f"await: {x}");
+        return x;
+    }
+    return -1;
+}
+
+async fn main() {
+    println(f"return -> {first()}");
+    let r = try thrower() catch _: Stop { 1 };
+    println(f"throw -> caught {r}");
+    println(f"try? -> {(try? propagates()) ?? -1}");
+    for x in outer() {
+        println(f"nested: {x} {x}");
+        break;
+    }
+    println(f"try for -> {(try? try_loop()) ?? -1}");
+    println(f"async -> {await in_async()}");
+}

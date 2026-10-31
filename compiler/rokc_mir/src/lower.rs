@@ -118,17 +118,18 @@ pub fn lower(module: &HirModule, target: &Target) -> MirModule {
             .borrow_mut()
             .entry(hf.id)
             .or_insert_with(|| fnv.fresh_id());
-        // An `async` body takes the poll's `Context` on every resume.
-        let ctor_fn =
-            crate::coro::transform(&mut functions[i], usize::from(hf.is_async), ctor, |t| {
-                // A union away from its tag scans as ambiguous words.
-                let (size, word) = (target.size_align(t).0, target.pointer_width / 8);
-                if size % word == 0 {
-                    MirTy::Union(vec![(0, t.clone())], size / word, crate::UnionKind::Plain)
-                } else {
-                    t.clone()
-                }
-            });
+        // An `async` body takes the poll's `Context` on every resume, a
+        // generator whether it is being closed.
+        let n_resume = usize::from(hf.is_async || hf.is_generator);
+        let ctor_fn = crate::coro::transform(&mut functions[i], n_resume, ctor, |t| {
+            // A union away from its tag scans as ambiguous words.
+            let (size, word) = (target.size_align(t).0, target.pointer_width / 8);
+            if size % word == 0 {
+                MirTy::Union(vec![(0, t.clone())], size / word, crate::UnionKind::Plain)
+            } else {
+                t.clone()
+            }
+        });
         functions.push(ctor_fn);
     }
     finish_fn_values(&mut functions, &fnv);
