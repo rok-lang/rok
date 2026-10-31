@@ -1,0 +1,60 @@
+// spec: std 301-fs §3.1.1
+// spec: §6.2.7 §6.2.14
+// needs: posix-fs
+// expect-exit: 0
+// expect-lint: 45:57 use of deprecated method `Metadata::mtime`
+// expect-lint: 45:82 use of deprecated method `Metadata::mtime_nanos`
+// expect-lint: 46:76 use of deprecated method `Metadata::atime`
+// expect-lint: 47:74 use of deprecated method `Metadata::ctime`
+// expect-lint: 54:15 `File::from_fd` will need `unsafe` in a later release: wrap the call in `unsafe { .. }`
+// expect-warning: = note: use `modified()`
+// expect-warning: = note: use `accessed()`
+// expect-warning: = note: use `changed()` (last status change) or `created()`
+// expect-warning: = note: `fd` must be open, and nothing else may close it
+// expect-stdout:
+// File Dir true false
+// entry: File true
+// modified = mtime: true
+// accessed = atime: true
+// changed = ctime: true
+// created: true
+// from_fd: InvalidInput: none: file is closed
+
+// `file_type`, `changed` and `created` replace the raw Unix times;
+// `File::from_fd` warns outside `unsafe`.
+use rok::std::fs;
+use rok::std::fs::{File, FileType};
+use rok::std::io::{IoError, IoErrorKind};
+use rok::std::env;
+use rok::std::process;
+
+fn main() throws (IoError) {
+    let dir = env::temp_dir() / f"rok_fs_file_type_{process::id()}";
+    try fs::remove_dir_all(dir) catch _ {};
+    try fs::create_dir(dir);
+    let path = dir / "f.txt";
+    try fs::write(path, "abc");
+    let m = try fs::metadata(path);
+    let d = try fs::metadata(dir);
+    println(f"{m.file_type():?} {d.file_type():?} {m.file_type() == FileType::File} {m.file_type().is_dir()}");
+    for r in try fs::read_dir(dir) {
+        let e = try r.get();
+        println(f"entry: {e.file_type():?} {e.file_type() == e.metadata().file_type()}");
+    }
+    let t = try m.modified();
+    println(f"modified = mtime: {try! t.unix_nanos() == m.mtime() * 1000000000 + m.mtime_nanos()}");
+    println(f"accessed = atime: {try! (try m.accessed()).unix_seconds() == m.atime()}");
+    println(f"changed = ctime: {try! (try m.changed()).unix_seconds() == m.ctime()}");
+    // Some file systems keep no creation time.
+    let born = try m.created() catch e {
+        if e.kind() != IoErrorKind::Unsupported { throw e; }
+        t
+    };
+    println(f"created: {try! born.unix_seconds() > 0}");
+    let bad = File::from_fd(-1, "none");
+    let quiet = unsafe { File::from_fd(-1, "quiet") };
+    try bad.read_to_str() catch e { println(f"from_fd: {e.kind():?}: {e}"); "" };
+    try bad.close();
+    try quiet.close();
+    try fs::remove_dir_all(dir);
+}

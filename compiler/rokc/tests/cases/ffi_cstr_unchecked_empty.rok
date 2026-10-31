@@ -1,0 +1,25 @@
+// spec: std 107-ffi §1.7.2
+// spec: §6.2.14
+// expect-exit: 0
+// expect-lint: 21:13 `CStr::from_ptr` will need `unsafe` in a later release: wrap the call in `unsafe { .. }`
+// expect-warning: = note: `p` must be null or point at a live NUL-terminated string
+// expect-stdout:
+// empty: 0 1
+// hi: 2
+// copied: hi true
+
+// `from_bytes_with_nul_unchecked` of no bytes is the empty string, not
+// an underflow; `CStr::from_ptr` warns outside `unsafe`.
+use rok::bare::ffi::CStr;
+
+fn main() {
+    let e = CStr::from_bytes_with_nul_unchecked("".as_bytes());
+    println(f"empty: {e.len()} {e.as_bytes_with_nul().len()}");
+    let hi = CStr::from_bytes_with_nul_unchecked("hi\0".as_bytes());
+    println(f"hi: {hi.len()}");
+    let a = unsafe { CStr::from_ptr(hi.as_ptr()) };
+    let b = CStr::from_ptr(hi.as_ptr());
+    if let x: CStr = a {
+        println(f"copied: {try! x.to_str()} {b is CStr}");
+    }
+}

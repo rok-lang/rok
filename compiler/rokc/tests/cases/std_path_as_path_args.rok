@@ -1,0 +1,22 @@
+// spec: std 308-path §3.8.1
+// expect-exit: 0
+// expect-stdout:
+// true true
+// true true false
+// true false
+// b | none | b
+
+// `join`, `starts_with` and `ends_with` take a `str` as well as a
+// `Path`; `strip_prefix_opt` returns `none` where `strip_prefix` throws.
+use rok::std::path::Path;
+
+fn main() {
+    let p = Path::from("a/b");
+    println(f"{p.join("c") == p.join(Path::from("c"))} {p.join("c").ends_with("b/c")}");
+    println(f"{p.starts_with("a")} {p.starts_with(Path::from("a/b"))} {p.starts_with("b")}");
+    println(f"{p.ends_with("b")} {p.ends_with("a")}");
+    let rest = p.strip_prefix_opt("a") ?? Path::from("?");
+    let none_shown = match p.strip_prefix_opt("x") { q: Path => q.as_str(), none => "none" };
+    let thrown = try p.strip_prefix(Path::from("a")) catch _ { Path::from("?") };
+    println(f"{rest} | {none_shown} | {thrown}");
+}

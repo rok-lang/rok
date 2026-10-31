@@ -50,8 +50,11 @@ pub enum TlsErrorKind {
 /// A failed handshake or connection. `alert` is the TLS alert sent to
 /// the peer (or received, for `PeerAlert`).
 pub struct TlsError {
+    #[deprecated(since = "0.1.6", note = "use `TlsError::kind()`")]
     pub kind: TlsErrorKind;
+    #[deprecated(since = "0.1.6", note = "use `TlsError::message()`")]
     pub msg: str;
+    #[deprecated(since = "0.1.6", note = "use `TlsError::alert()`")]
     pub alert: u8;
 }
 
@@ -59,6 +62,12 @@ impl TlsError {
     pub(pkg) const fn certificate(msg: str) -> TlsError {
         TlsError { kind: TlsErrorKind::Certificate, msg, alert: 42u8 }
     }
+
+    pub const fn kind(self) -> TlsErrorKind { self.kind }
+    /// What went wrong, without the `tls: ` that `Display` adds.
+    pub const fn message(self) -> str { self.msg }
+    /// The TLS alert sent to the peer (or received, for `PeerAlert`).
+    pub const fn alert(self) -> u8 { self.alert }
 }
 
 impl Display for TlsError {
@@ -281,6 +290,7 @@ impl ClientConfig {
     /// client certificate, a new session cache, no early data. A trust
     /// store that cannot be read leaves `root_certs` empty, so every
     /// handshake fails; `try_new` reports that instead.
+    #[deprecated(since = "0.1.6", note = "use `ClientConfig::try_new()`, which throws when the OS trust store cannot be read")]
     pub fn new() -> ClientConfig {
         ClientConfig::with_roots(try system_roots() catch _ { [] })
     }

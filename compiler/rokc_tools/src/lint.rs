@@ -1807,7 +1807,7 @@ fn unclosed(
     files: &HashSet<u32>,
     hits: &mut Vec<(&'static str, Span, String)>,
 ) {
-    const CLOSERS: &[&str] = &["close", "drop", "wait", "wait_with_output"];
+    const CLOSERS: &[&str] = &["close", "close_checked", "drop", "wait", "wait_with_output"];
     let resource = |t: &HirTy| match t {
         HirTy::Struct(id) => res.types.get(id).map(|(n, own)| (*n, own.as_str())),
         _ => None,

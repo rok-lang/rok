@@ -11,7 +11,10 @@
 // turns it into `line:col` by re-reading the document and stopping at
 // that path, so the happy path keeps no positions.
 
+// The reader and writer are not API: the functions below wrap them.
+#[doc(hidden)]
 pub mod read;
+#[doc(hidden)]
 pub mod write;
 
 /// A ROKON value. `{ k: v }` with identifier keys is a `Struct` without
@@ -146,9 +149,13 @@ const fn entries_hash<K: Hash>(d: OrderedDict<K, Value>) -> u64 {
 /// when the value did not come from text (`T::from_rokon(v)` directly);
 /// `path` names the failing part (`.servers[2].port`, empty at the root).
 pub struct RokonError {
+    #[deprecated(since = "0.1.6", note = "use `RokonError::message()`")]
     pub msg: str;
+    #[deprecated(since = "0.1.6", note = "use `RokonError::line()`")]
     pub line: u32;
+    #[deprecated(since = "0.1.6", note = "use `RokonError::col()`")]
     pub col: u32;
+    #[deprecated(since = "0.1.6", note = "use `RokonError::path()`")]
     pub path: str;
     /// The error is about a field name / dict key, not its value
     /// (`from_str` points at the key).
@@ -168,6 +175,16 @@ impl RokonError {
     const fn at_key(self) -> RokonError {
         RokonError { msg: self.msg, line: self.line, col: self.col, path: self.path, on_key: true }
     }
+
+    /// What went wrong, without the position `Display` adds.
+    pub const fn message(self) -> str { self.msg }
+    /// 1-based line in the document; 0 when the value did not come from
+    /// text.
+    pub const fn line(self) -> u32 { self.line }
+    /// 1-based column (code points); 0 as for `line`.
+    pub const fn col(self) -> u32 { self.col }
+    /// The failing part (`.servers[2].port`); empty at the root.
+    pub const fn path(self) -> str { self.path }
 }
 
 impl Display for RokonError {
@@ -210,9 +227,55 @@ pub fn parse(s: str) throws (RokonError) -> Value {
     try read::parse(s)
 }
 
-/// `v` in canonical ROKON (spec 3.9.4). Panics on a NaN / infinite float.
+/// `v` in canonical ROKON (spec 3.9.4). Panics on a NaN / infinite float
+/// (`try_to_string` throws).
 pub fn to_string<T: ToRokon>(v: T) -> str {
     v.to_rokon().to_string()
+}
+
+/// `to_string`, but a NaN / infinite float (no ROKON form) is thrown,
+/// with its path.
+pub fn try_to_string<T: ToRokon>(v: T) throws (RokonError) -> str {
+    let x = v.to_rokon();
+    try finite(x);
+    x.to_string()
+}
+
+/// Throw at the first NaN / infinite float in `v`.
+fn finite(v: Value) throws (RokonError) {
+    match v {
+        Value::Float(x) => {
+            if !x.is_finite() { throw RokonError::new("NaN/infinity has no ROKON form"); }
+        },
+        Value::List(xs) => try finite_all(xs),
+        Value::Tuple(xs) => try finite_all(xs),
+        Value::Dict(d) => {
+            for (k, x) in d.entries() {
+                try finite(k) catch e { throw e.at_key(); };
+                try finite(x) catch e { throw e.within(f"[{k}]"); };
+            }
+        },
+        Value::Struct { name, fields } => try finite_fields(fields),
+        Value::Variant { path, args, named } => {
+            try finite_all(args);
+            try finite_fields(named);
+        },
+        _ => {},
+    }
+}
+
+fn finite_all(xs: List<Value>) throws (RokonError) {
+    let i = 0usize;
+    for x in xs {
+        try finite(x) catch e { throw e.within(f"[{i}]"); };
+        i += 1;
+    }
+}
+
+fn finite_fields(fs: OrderedDict<str, Value>) throws (RokonError) {
+    for (k, x) in fs.entries() {
+        try finite(x) catch e { throw e.within("." + k); };
+    }
 }
 
 /// Read a document as a `T`; errors carry the `line:col` of the part that
@@ -245,6 +308,7 @@ const fn last_seg(path: str) -> str {
 // derive support (used by `#[derive(Rokon)]`)
 
 /// The named fields read into a struct or a named variant.
+#[doc(hidden)]
 pub struct Fields {
     vals: OrderedDict<str, Value>;
     /// Each field's path segment (`.f`, or `[i]` when given by position).
@@ -321,6 +385,7 @@ impl Fields {
 }
 
 /// `v` as the values of tuple struct `name` (`Name(a, b)`), `n` of them.
+#[doc(hidden)]
 pub const fn struct_args(v: Value, name: str, n: usize) throws (RokonError) -> List<Value> {
     match v {
         Value::Variant { path, args, named } => {
@@ -335,6 +400,7 @@ pub const fn struct_args(v: Value, name: str, n: usize) throws (RokonError) -> L
 
 /// `v` as a variant of enum `name`: (variant name, positional values,
 /// named values).
+#[doc(hidden)]
 pub const fn variant_of(v: Value, name: str) throws (RokonError) -> (str, List<Value>, OrderedDict<str, Value>) {
     match v {
         Value::Variant { path, args, named } => {
@@ -352,6 +418,7 @@ pub const fn variant_of(v: Value, name: str) throws (RokonError) -> (str, List<V
 }
 
 /// A tuple variant's (or unit variant's, `n` = 0) values.
+#[doc(hidden)]
 pub const fn variant_args(args: List<Value>, named: OrderedDict<str, Value>, ctx: str, n: usize) throws (RokonError) -> List<Value> {
     for (k, _) in named.entries() {
         throw RokonError::new(f"{ctx} has no named fields (found `{k}`)").within("." + k).at_key();
@@ -367,6 +434,7 @@ const fn count_args(args: List<Value>, ctx: str, n: usize) throws (RokonError) -
     args
 }
 
+#[doc(hidden)]
 pub const fn unknown_variant(v: str, ctx: str) -> RokonError {
     RokonError::new(f"`{ctx}::{v}` is not a variant of {ctx}")
 }
@@ -375,7 +443,9 @@ pub const fn unknown_variant(v: str, ctx: str) -> RokonError {
 /// `Name { f: v }`, tuple → `Name(a, b)`, unit → `Name {}`) or an enum
 /// (`E::V`, `E::V(a)`, `E::V { f: v }`). A missing field takes its
 /// default (`f: T = expr`), else `none` for `T | none`, else is an error.
-#[impl_derive(Rokon)]
+/// A field the type does not have is an error; `#[rokon(deny_unknown_fields)]`
+/// on the type keeps that when 0.2.0 makes reads skip them.
+#[impl_derive_attribute(Rokon, rokon)]
 pub @derive {
     @where_all(rok::std::rokon::ToRokon)
     impl rok::std::rokon::ToRokon for @Self {

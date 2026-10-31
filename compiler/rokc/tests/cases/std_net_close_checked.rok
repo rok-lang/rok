@@ -1,0 +1,39 @@
+// spec: std 302-net §3.2.1 §3.2.4 §3.2.5
+// spec: §6.2.7
+// needs: net
+// expect-exit: 0
+// expect-lint: 34:19 use of deprecated function `resolve_one`
+// expect-lint: 37:17 use of deprecated method `ClientConfig::new`
+// expect-warning: = note: use `net::resolve` on `host:port` (an IPv6 host in `[..]`) and take its first address
+// expect-warning: = note: use `ClientConfig::try_new()`, which throws when the OS trust store cannot be read
+// expect-stdout:
+// closed: true
+// again: ok
+// read after close: InvalidInput
+// same: true
+
+// `close_checked` is `close` that throws what the OS reports; closing
+// twice is still a no-op. `resolve_one` and `ClientConfig::new` warn.
+use rok::std::io::IoError;
+use rok::std::net;
+use rok::std::net::tls::ClientConfig;
+
+fn main() throws (IoError) {
+    let l = try net::tcp_listen("127.0.0.1:0");
+    let addr = try l.local_addr();
+    let c = try net::tcp_connect(addr);
+    let (s, _) = try l.accept();
+    try c.close_checked();
+    println(f"closed: {c.fd() == -1}");
+    try c.close_checked();
+    println("again: ok");
+    let buf: List<u8> = [0u8];
+    try c.read(buf) catch e { println(f"read after close: {e.kind():?}"); 0 };
+    try s.close_checked();
+    try l.close_checked();
+    let one = try net::resolve_one("127.0.0.1", 80u16);
+    println(f"same: {one == (try net::resolve("127.0.0.1:80"))[0]}");
+    if false {
+        let _ = ClientConfig::new();
+    }
+}

@@ -9,17 +9,18 @@
 // Windows: `CreateProcessW` with arguments quoted for the MSVC CRT
 // (`.exe` added when there is no extension); the child inherits only its
 // standard handles; batch files refuse arguments holding `"`, `%` or a
-// line break. `kill` / `signal` use `TerminateProcess`; `signal` routes
-// console events: Ctrl-C (2), Ctrl-Break (21), close (1).
+// line break. `send_signal` sends only `Signal::Kill`, as
+// `TerminateProcess`; `on_signal` routes console events: Ctrl-C
+// (`Interrupt`) and close (`Hangup`).
 //
 // `output()` drains stdout and stderr together.
 //
-// `signal(sig, f)`: the C handler writes the signal number to a pipe and
-// a dispatcher thread (`rok-signal`) calls `f`, never in signal context.
-// A burst that fills the pipe drops signals.
+// `on_signal(sig, f)`: the C handler writes the signal number to a pipe
+// and a dispatcher thread (`rok-signal`) calls `f`, never in signal
+// context. A burst that fills the pipe drops signals.
 
 use rok::std::fs::File;
-use rok::std::io::{IoError, RawFd, Reader, Writer, check, byte_buf, read_more, take_handle, use_begin, use_end, use_close, word_at};
+use rok::std::io::{IoError, IoErrorKind, RawFd, Reader, Writer, check, byte_buf, read_more, take_handle, use_begin, use_end, use_close, word_at};
 use rok::std::path::Path;
 use rok::std::path::AsPath;
 use rok::std::env;
@@ -28,10 +29,118 @@ use rok::std::thread;
 /// Abnormal termination (`SIGABRT`); nothing is cleaned up.
 pub const fn abort() -> ! { unsafe { rok_os_abort() }; }
 
+/// Exit the process now with `code` (refs-lang 4.16.4); `finally` and
+/// `Drop` do not run.
+pub const fn exit(code: i32) -> ! {
+    unsafe { rok_exit(code) };
+}
+
 /// This process's id.
 pub fn id() -> u32 { unsafe { rok_os_getpid() } }
 
+/// A signal to send or handle. Windows: only `Kill` can be sent
+/// (`TerminateProcess`), and only `Interrupt` (Ctrl-C) and `Hangup`
+/// (console closed) handled.
+#[non_exhaustive]
+pub enum Signal {
+    /// `SIGHUP`.
+    Hangup,
+    /// `SIGINT`.
+    Interrupt,
+    /// `SIGQUIT`.
+    Quit,
+    /// `SIGKILL`: cannot be handled.
+    Kill,
+    /// `SIGPIPE`.
+    Pipe,
+    /// `SIGALRM`.
+    Alarm,
+    /// `SIGTERM`.
+    Terminate,
+    /// `SIGUSR1`.
+    User1,
+    /// `SIGUSR2`.
+    User2,
+    /// `SIGCHLD`.
+    Child,
+    /// `SIGCONT`.
+    Continue,
+    /// `SIGSTOP`: cannot be handled.
+    Stop,
+}
+
+const LINUX: bool = cfg!(target_os = "linux");
+
+impl Signal {
+    /// The OS number (Windows: the one `kill` / `signal` took).
+    pub const fn number(self) -> i32 {
+        match self {
+            Signal::Hangup => 1,
+            Signal::Interrupt => 2,
+            Signal::Quit => 3,
+            Signal::Kill => 9,
+            Signal::Pipe => 13,
+            Signal::Alarm => 14,
+            Signal::Terminate => 15,
+            Signal::User1 => if LINUX { 10 } else { 30 },
+            Signal::User2 => if LINUX { 12 } else { 31 },
+            Signal::Child => if LINUX { 17 } else { 20 },
+            Signal::Continue => if LINUX { 18 } else { 19 },
+            Signal::Stop => if LINUX { 19 } else { 17 },
+        }
+    }
+
+    /// Windows: what the OS can do with it (`Kill` to send; `Interrupt`,
+    /// `Hangup` to handle).
+    const fn on_windows(self, handle: bool) -> bool {
+        match self {
+            Signal::Kill => !handle,
+            Signal::Interrupt => handle,
+            Signal::Hangup => handle,
+            _ => false,
+        }
+    }
+}
+
+impl PartialEq for Signal {
+    const fn eq(self, rhs: Signal) -> bool { self.number() == rhs.number() }
+    const fn ne(self, rhs: Signal) -> bool { self.number() != rhs.number() }
+}
+
+impl Debug for Signal {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) {
+        try f.write_str(match self {
+            Signal::Hangup => "Hangup",
+            Signal::Interrupt => "Interrupt",
+            Signal::Quit => "Quit",
+            Signal::Kill => "Kill",
+            Signal::Pipe => "Pipe",
+            Signal::Alarm => "Alarm",
+            Signal::Terminate => "Terminate",
+            Signal::User1 => "User1",
+            Signal::User2 => "User2",
+            Signal::Child => "Child",
+            Signal::Continue => "Continue",
+            Signal::Stop => "Stop",
+        })
+    }
+}
+
+/// `sig` cannot be sent on Windows.
+fn unsent(sig: Signal) throws (IoError) {
+    if WINDOWS && !sig.on_windows(false) {
+        throw IoError::with_kind(IoErrorKind::Unsupported, f"kill: Windows can send only Signal::Kill, not Signal::{sig:?}");
+    }
+}
+
+/// Send `sig` to process `pid`.
+pub fn send_signal(pid: u32, sig: Signal) throws (IoError) {
+    try unsent(sig);
+    try check(unsafe { rok_os_kill(pid as i32, sig.number()) } as i64, "kill");
+}
+
 /// Send signal `sig` to process `pid`.
+#[deprecated(since = "0.1.6", note = "use `process::send_signal(pid, Signal::..)`")]
 pub fn kill(pid: u32, sig: i32) throws (IoError) {
     try check(unsafe { rok_os_kill(pid as i32, sig) } as i64, "kill");
 }
@@ -60,8 +169,22 @@ impl Error for SignalError {}
 static SIGNAL_HANDLERS: Mutex<Dict<i32, fn() + Send>> = unsafe { Mutex::new_unshared(Dict::new()) };
 
 /// Call `handler` (on the `rok-signal` thread) each time the process
+/// receives `sig`; a later `on_signal` for the same `sig` replaces it.
+pub fn on_signal(sig: Signal, handler: fn() + Send) throws (SignalError) {
+    let n = sig.number();
+    // ERROR_NOT_SUPPORTED.
+    if WINDOWS && !sig.on_windows(true) { throw SignalError { sig: n, code: 50 }; }
+    try install(n, handler);
+}
+
+/// Call `handler` (on the `rok-signal` thread) each time the process
 /// receives `sig`; a later `signal` for the same `sig` replaces it.
+#[deprecated(since = "0.1.6", note = "use `process::on_signal(Signal::.., handler)`")]
 pub fn signal(sig: i32, handler: fn() + Send) throws (SignalError) {
+    try install(sig, handler);
+}
+
+fn install(sig: i32, handler: fn() + Send) throws (SignalError) {
     unsafe {
         using g = SIGNAL_HANDLERS.lock() { g.get().insert(sig, handler); }
         let fd: GcBuf<i32> = buf_new(1);
@@ -360,10 +483,19 @@ impl Child {
     pub const fn id(self) -> u32 { self.pid as u32 }
 
     /// `SIGKILL`.
-    pub fn kill(self) throws (IoError) { try self.signal(9); }
+    pub fn kill(self) throws (IoError) { try self.raw_signal(9); }
+
+    /// Send `sig`; a no-op once the child has ended and is being reaped.
+    pub fn send_signal(self, sig: Signal) throws (IoError) {
+        try unsent(sig);
+        try self.raw_signal(sig.number());
+    }
 
     /// A no-op once the child has ended and is being reaped.
-    pub fn signal(self, sig: i32) throws (IoError) {
+    #[deprecated(since = "0.1.6", note = "use `Child::send_signal(Signal::..)`")]
+    pub fn signal(self, sig: i32) throws (IoError) { try self.raw_signal(sig); }
+
+    fn raw_signal(self, sig: i32) throws (IoError) {
         if !use_begin(self.state, 3) { return; }
         let r = unsafe {
             let fd = self.state[2];
@@ -442,7 +574,7 @@ impl Child {
 impl Drop for Child {
     fn drop(ref self) {
         if self.kill_on_drop && unsafe { word_at(self.state, 0) } == 0 {
-            try self.signal(9) catch _ {};
+            try self.raw_signal(9) catch _ {};
             try self.wait() catch _ { ExitStatus { raw: 0 } };
         }
     }
@@ -469,6 +601,16 @@ impl ExitStatus {
         let s = self.raw & 0x7f;
         if s == 0 || s == 0x7f { return none; }
         s
+    }
+}
+
+impl Debug for ExitStatus {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) {
+        if let c: i32 = self.code() {
+            try f.write_str(f"ExitStatus {{ code: {c} }}");
+        } else {
+            try f.write_str(f"ExitStatus {{ signal: {self.signal() ?? 0} }}");
+        }
     }
 }
 

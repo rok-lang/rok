@@ -80,6 +80,7 @@ pub struct CStr {
 impl CStr {
     /// The C string at `p` (copied in); `none` for a null pointer.
     /// Without a NUL terminator the behavior is undefined.
+    #[future_unsafe("`p` must be null or point at a live NUL-terminated string")]
     pub fn from_ptr(p: ConstPtr<c_char>) -> CStr | none {
         if p.addr() == 0 {
             return none;
@@ -107,8 +108,11 @@ impl CStr {
     }
 
     /// `bytes`, whose last byte must be the only NUL (not checked).
+    /// Empty `bytes` gives the empty string.
     pub const fn from_bytes_with_nul_unchecked(bytes: Slice<u8>) -> CStr {
-        CStr { s: with_nul(bytes[0:bytes.len() - 1]) }
+        let n = bytes.len();
+        if n == 0 { return CStr { s: with_nul(bytes) }; }
+        CStr { s: with_nul(bytes[0:n - 1]) }
     }
 
     pub fn as_ptr(self) -> ConstPtr<c_char> {

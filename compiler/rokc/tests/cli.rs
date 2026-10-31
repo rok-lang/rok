@@ -1855,6 +1855,71 @@ fn non_utf8_script_arg_passes_through() {
     assert_eq!(text(&out.stdout), "3\n");
 }
 
+// `env::args` / `env::vars` replace bytes that are not UTF-8 with U+FFFD;
+// `args_os` keeps them.
+// spec: std 306-env §3.6.1
+#[cfg(unix)]
+#[test]
+fn non_utf8_args_and_vars_are_lossy() {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+    let Some(env) = setup() else { return };
+    let dir = scratch("anon_lossy_args");
+    let case = workspace().join("compiler/rokc/tests/cases/std_args_lossy.rok");
+    fs::copy(case, dir.join("lossy.rok")).unwrap();
+    let out = Command::new(ROKC)
+        .current_dir(&dir)
+        .env("ROK_HOME", workspace())
+        .env("ROK_LOSSY", OsStr::from_bytes(b"v\xffw"))
+        .args(["run", "-q", "lossy.rok", "--rokr"])
+        .arg(&env.rokr)
+        .args(["--", "a"])
+        .arg(OsStr::from_bytes(b"b\xff\xfec"))
+        .arg(OsStr::from_bytes(b"\xe2\x82"))
+        .output()
+        .unwrap();
+    assert_exit(&out, 0);
+    assert_eq!(
+        text(&out.stdout),
+        "args: 4\n\
+         1: a [61] 1 bytes, lossy true\n\
+         2: b\u{fffd}\u{fffd}c [62 fffd fffd 63] 4 bytes, lossy true\n\
+         3: \u{fffd} [fffd] 2 bytes, lossy true\n\
+         var: v\u{fffd}w\n"
+    );
+}
+
+// Windows: a lone surrogate (WTF-8 in `args_os`) is one U+FFFD.
+// spec: std 306-env §3.6.1
+#[cfg(windows)]
+#[test]
+fn lone_surrogate_args_and_vars_are_lossy() {
+    use std::ffi::OsString;
+    use std::os::windows::ffi::OsStringExt;
+    let Some(env) = setup() else { return };
+    let dir = scratch("anon_lossy_args");
+    let case = workspace().join("compiler/rokc/tests/cases/std_args_lossy.rok");
+    fs::copy(case, dir.join("lossy.rok")).unwrap();
+    let out = Command::new(ROKC)
+        .current_dir(&dir)
+        .env("ROK_HOME", workspace())
+        .env("ROK_LOSSY", OsString::from_wide(&[0x76, 0xDC00, 0x77]))
+        .args(["run", "-q", "lossy.rok", "--rokr"])
+        .arg(&env.rokr)
+        .args(["--", "a"])
+        .arg(OsString::from_wide(&[0x62, 0xD800, 0x63]))
+        .output()
+        .unwrap();
+    assert_exit(&out, 0);
+    assert_eq!(
+        text(&out.stdout),
+        "args: 3\n\
+         1: a [61] 1 bytes, lossy true\n\
+         2: b\u{fffd}c [62 fffd 63] 5 bytes, lossy true\n\
+         var: v\u{fffd}w\n"
+    );
+}
+
 // Options, commands and paths are UTF-8; the error says where bytes may go.
 // spec: §9.1.1
 #[test]

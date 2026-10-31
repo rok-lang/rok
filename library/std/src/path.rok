@@ -229,10 +229,11 @@ impl Path {
         out
     }
 
-    /// `other` appended; an absolute `other` replaces `self`. Windows:
-    /// so does one with a prefix (`D:x`), and a rooted one without
-    /// (`\x`) keeps `self`'s prefix.
-    pub const fn join(self, other: Path) -> Path {
+    /// `other` (a `Path` or a `str`) appended; an absolute `other`
+    /// replaces `self`. Windows: so does one with a prefix (`D:x`), and a
+    /// rooted one without (`\x`) keeps `self`'s prefix.
+    pub const fn join<P: AsPath>(self, with: P) -> Path {
+        let other = with.as_path();
         if other.is_absolute() || self.s == "" { return other; }
         if other.s == "" { return self; }
         let (op, oroot) = prefix_of(other.s);
@@ -257,10 +258,10 @@ impl Path {
     }
 
     /// Component-wise prefix test.
-    pub const fn starts_with(self, base: Path) -> bool {
+    pub const fn starts_with<P: AsPath>(self, base: P) -> bool {
         unsafe {
             let a = self.component_list();
-            let b = base.component_list();
+            let b = base.as_path().component_list();
             if b.len() > a.len() { return false; }
             for i in 0..b.len() {
                 if a[i] != b[i] { return false; }
@@ -270,10 +271,10 @@ impl Path {
     }
 
     /// Component-wise suffix test.
-    pub const fn ends_with(self, suffix: Path) -> bool {
+    pub const fn ends_with<P: AsPath>(self, suffix: P) -> bool {
         unsafe {
             let a = self.component_list();
-            let b = suffix.component_list();
+            let b = suffix.as_path().component_list();
             if b.len() > a.len() { return false; }
             let off = a.len() - b.len();
             for i in 0..b.len() {
@@ -284,10 +285,17 @@ impl Path {
     }
 
     pub const fn strip_prefix(self, base: Path) throws (StripPrefixError) -> Path {
-        if !self.starts_with(base) { throw StripPrefixError {}; }
+        match self.strip_prefix_opt(base) { p: Path => p, none => throw StripPrefixError {} }
+    }
+
+    /// The rest of `self` after `base` (component-wise), or `none` when
+    /// `self` does not start with it (`str::strip_prefix` alike).
+    pub const fn strip_prefix_opt<P: AsPath>(self, base: P) -> Path | none {
+        let b = base.as_path();
+        if !self.starts_with(b) { return none; }
         let a = self.component_list();
         let out = Path::new();
-        for i in base.component_list().len()..a.len() {
+        for i in b.component_list().len()..a.len() {
             out = out.join(Path::from(a[i].as_str()));
         }
         out

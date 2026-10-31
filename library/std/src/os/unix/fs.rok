@@ -1,0 +1,31 @@
+// rok::std::os::unix::fs: Unix permission bits on the cross-platform fs
+// types (stdlib 301.1).
+
+use rok::std::fs::{OpenOptions, Permissions};
+
+/// The Unix permission bits of a `Permissions`.
+pub trait PermissionsExt {
+    /// Permissions with bits `mode` (`0o644`; bits past `0o7777` are
+    /// dropped).
+    fn from_unix_mode(mode: u32) -> Self;
+    /// The permission bits.
+    fn unix_mode(self) -> u32;
+}
+
+impl PermissionsExt for Permissions {
+    const fn from_unix_mode(mode: u32) -> Permissions { Permissions { mode: mode & 0o7777u32 } }
+    const fn unix_mode(self) -> u32 { self.mode }
+}
+
+/// The Unix permission bits of a file `open_with` creates.
+pub trait OpenOptionsExt {
+    /// The bits a created file gets, before the umask (default `0o666`).
+    fn unix_mode(self, mode: u32) -> Self;
+}
+
+impl OpenOptionsExt for OpenOptions {
+    const fn unix_mode(self, mode: u32) -> OpenOptions {
+        self.mode = mode;
+        self
+    }
+}

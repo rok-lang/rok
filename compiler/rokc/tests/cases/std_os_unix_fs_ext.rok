@@ -1,0 +1,39 @@
+// spec: std 301-fs §3.1.1
+// spec: §6.2.7
+// needs: posix-fs
+// only-os: macos linux
+// expect-exit: 0
+// expect-lint: 35:15 use of deprecated method `Permissions::from_mode`
+// expect-lint: 36:44 use of deprecated method `OpenOptions::mode`
+// expect-lint: 37:21 use of deprecated method `Permissions::mode`
+// expect-warning: = note: use `PermissionsExt::from_unix_mode` (rok::std::os::unix::fs); on Windows, `set_readonly`
+// expect-warning: = note: use `PermissionsExt::unix_mode` (rok::std::os::unix::fs); on Windows, `readonly`
+// expect-warning: = note: use `OpenOptionsExt::unix_mode` (rok::std::os::unix::fs)
+// expect-stdout:
+// 640 false 640
+// created: 600
+// old: 644 600
+
+// Unix permission bits move to `rok::std::os::unix::fs`; the methods on
+// the cross-platform types still work and warn.
+use rok::std::fs;
+use rok::std::fs::{OpenOptions, Permissions};
+use rok::std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use rok::std::io::IoError;
+use rok::std::env;
+use rok::std::process;
+
+fn main() throws (IoError) {
+    let p = Permissions::from_unix_mode(0o100640u32);
+    println(f"{p.unix_mode():o} {p.readonly()} {p.set_readonly(false).unix_mode() & 0o777u32:o}");
+    let dir = env::temp_dir() / f"rok_unix_fs_ext_{process::id()}";
+    try fs::remove_dir_all(dir) catch _ {};
+    try fs::create_dir(dir);
+    let opts = OpenOptions::new().write(true).create(true).unix_mode(0o600u32);
+    using f = try fs::open_with(dir / "a", opts) {}
+    println(f"created: {(try fs::metadata(dir / "a")).permissions().unix_mode():o}");
+    let old = Permissions::from_mode(0o644u32);
+    using g = try fs::open_with(dir / "b", OpenOptions::new().write(true).create(true).mode(0o600u32)) {}
+    println(f"old: {old.mode():o} {(try fs::metadata(dir / "b")).permissions().unix_mode():o}");
+    try fs::remove_dir_all(dir);
+}

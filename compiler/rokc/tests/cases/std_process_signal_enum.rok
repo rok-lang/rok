@@ -1,0 +1,56 @@
+// spec: std 307-process §3.7.2 §3.7.5
+// spec: §6.2.7
+// needs: process threads
+// only-os: macos linux
+// expect-exit: 0
+// expect-lint: 39:9 use of deprecated method `Child::signal`
+// expect-lint: 52:13 use of deprecated function `kill`
+// expect-lint: 53:13 use of deprecated function `signal`
+// expect-warning: = note: use `Child::send_signal(Signal::..)`
+// expect-warning: = note: use `process::send_signal(pid, Signal::..)`
+// expect-warning: = note: use `process::on_signal(Signal::.., handler)`
+// expect-stdout:
+// numbers: 2 9 15
+// terminated: ExitStatus { signal: 15 }
+// killed: ExitStatus { signal: 9 }
+// old kill: ExitStatus { signal: 9 }
+// exited: ExitStatus { code: 3 }
+// handled: true
+// Kill
+
+// `Signal` replaces the `i32` signal numbers; the `i32` forms still
+// work and warn. `ExitStatus` has `Debug`.
+use rok::std::io::IoError;
+use rok::std::process;
+use rok::std::process::{Command, Signal};
+use rok::std::thread;
+
+fn sleeper() throws (IoError) -> process::Child { try Command::new("sleep").arg("30").spawn() }
+
+fn main() throws (IoError) {
+    println(f"numbers: {Signal::Interrupt.number()} {Signal::Kill.number()} {Signal::Terminate.number()}");
+    let a = try sleeper();
+    try a.send_signal(Signal::Terminate);
+    println(f"terminated: {try a.wait():?}");
+    let b = try sleeper();
+    try process::send_signal(b.id(), Signal::Kill);
+    println(f"killed: {try b.wait():?}");
+    let c = try sleeper();
+    try c.signal(9);
+    println(f"old kill: {try c.wait():?}");
+    let d = try Command::new("sh").args(["-c", "exit 3"]).spawn();
+    println(f"exited: {try d.wait():?}");
+    let seen = Atomic::<bool>::new(false);
+    try process::on_signal(Signal::User1, || seen.store(true)) catch e { println(f"{e}"); };
+    try process::send_signal(process::id(), Signal::User1);
+    for _ in 0..500 {
+        if seen.load() { break; }
+        thread::sleep(Duration::ms(2));
+    }
+    println(f"handled: {seen.load()}");
+    if false {
+        try process::kill(process::id(), 0);
+        try process::signal(10, || {}) catch _ {};
+    }
+    println(f"{Signal::Kill:?}");
+}

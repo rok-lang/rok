@@ -890,7 +890,8 @@ const fn unix_time(ticks: i64) -> (i64, i64) {
 
 /// Metadata of `fd` (`>= 0`) or of `path` under `dir`, filling the
 /// `GcBuf<i64>` `out`: `[kind, size, mode, mtime_s, mtime_ns, atime_s,
-/// ctime_s, atime_ns]`, kind 1 file, 2 dir, 3 symlink (or junction).
+/// ctime_s, atime_ns, ctime_ns, 1, btime_s, btime_ns]`, kind 1 file,
+/// 2 dir, 3 symlink (or junction).
 /// `mode` is synthesized: `r` for all, `w` unless read-only, `x` on
 /// directories. 0 or `-error`.
 #[unsafe(no_mangle)]
@@ -958,9 +959,10 @@ pub extern "C" fn rok_os_stat(dir: i32, path: RokStr, follow: i32, fd: i32, out:
     }
     let (m, mn) = unix_time(bi.LastWriteTime);
     let (a, an) = unix_time(bi.LastAccessTime);
-    let (c, _) = unix_time(bi.ChangeTime);
-    let vals = [kind, si.EndOfFile, mode, m, mn, a, c, an];
-    // SAFETY: the library passes a live `GcBuf<i64>` of 8 elements.
+    let (c, cn) = unix_time(bi.ChangeTime);
+    let (b, bn) = unix_time(bi.CreationTime);
+    let vals = [kind, si.EndOfFile, mode, m, mn, a, c, an, cn, 1, b, bn];
+    // SAFETY: the library passes a live `GcBuf<i64>` of 12 elements.
     unsafe { ptr::copy_nonoverlapping(vals.as_ptr(), out.add(HEADER_SIZE).cast(), vals.len()) };
     0
 }
