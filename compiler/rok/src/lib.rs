@@ -712,6 +712,30 @@ fn split_features(v: &str) -> impl Iterator<Item = String> {
         .map(str::to_owned)
 }
 
+/// Push `lints` as `-A/-W/-D` flags; where they end.
+fn push_lints(extra: &mut Vec<String>, lints: &[(String, rokc_core::lint::Level)]) -> usize {
+    for (name, level) in lints {
+        extra.push(level.flag().to_owned());
+        extra.push(name.clone());
+    }
+    extra.len()
+}
+
+/// Say that the levels before `at` are `ctx`'s manifest `lints`, so rokc
+/// names rok.rokon as their source. Only for a rokc of this toolchain: a
+/// pinned older one has no such flag.
+fn mark_manifest_lints(extra: &mut Vec<String>, at: usize, ctx: &resolve::Context, rokc: &Path) {
+    let own = std::env::current_exe()
+        .ok()
+        .is_some_and(|e| e.parent() == rokc.parent());
+    if ctx.manifest.lints.is_empty() || !own {
+        return;
+    }
+    if let Some(path) = manifest::find(&ctx.base) {
+        extra.insert(at, format!("--lints-from-manifest={}", path.display()));
+    }
+}
+
 /// Run `rokc <pre> <cmd> [--extern..] [lint levels] [--target-dir] <post>`.
 fn delegate(g: &Global, cmd: &str, pre: &[String], post: &[String]) -> Result<i32, String> {
     let (c, rokc) = rokc_command(g, cmd, pre, post, None)?;
@@ -814,6 +838,7 @@ fn rokc_command(
         None => target_for(g, path)?,
     };
     let mut extra: Vec<String> = Vec::new();
+    let mut manifest_lints = None;
     // The manifest's `name` is the package's (spec 9.10.3).
     let named = package.as_deref().filter(|_| t.env.is_none() && !stdin);
     if let (Some(name), Some(_)) = (&t.ctx.manifest.name, named) {
@@ -860,16 +885,16 @@ fn rokc_command(
             }
         }
         // `lints` go first: the command line's own `-A/-W/-D` win.
-        for (name, level) in &t.ctx.manifest.lints {
-            extra.push(level.flag().to_owned());
-            extra.push(name.clone());
-        }
+        manifest_lints = Some(push_lints(&mut extra, &t.ctx.manifest.lints));
         // `doc --std` writes ./target/doc/, not into an environment.
         if let Some(dir) = t.target_dir.as_ref().filter(|_| !on_package && !std_doc) {
             extra.push(format!("--target-dir={}", dir.display()));
         }
     }
     let rokc = toolchain::rokc_for(g.toolchain.as_deref(), t.ctx.manifest.toolchain.as_deref())?;
+    if let Some(at) = manifest_lints {
+        mark_manifest_lints(&mut extra, at, &t.ctx, &rokc);
+    }
     let mut c = Command::new(&rokc);
     c.args(&g.color).args(pre).arg(cmd).args(&extra).args(post);
     if let Ok(me) = std::env::current_exe() {

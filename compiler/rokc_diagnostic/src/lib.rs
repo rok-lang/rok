@@ -338,6 +338,9 @@ pub struct RokDiagnostic {
     pub notes: Vec<String>,
     pub tag: Tag,
     pub fixes: Fixes,
+    /// The lint this warning belongs to: `rokc lint` levels it like the
+    /// lint's own findings (`-A name`, `#[allow(name)]`). Boxed as `primary`.
+    pub lint: Option<Box<String>>,
 }
 
 impl RokDiagnostic {
@@ -359,6 +362,7 @@ impl RokDiagnostic {
             notes: Vec::new(),
             tag: Tag::None,
             fixes: Fixes::default(),
+            lint: None,
         }
     }
 
@@ -399,6 +403,12 @@ impl RokDiagnostic {
             span,
             message: message.into(),
         });
+        self
+    }
+
+    #[must_use]
+    pub fn with_lint(mut self, name: impl Into<String>) -> Self {
+        self.lint = Some(Box::new(name.into()));
         self
     }
 
@@ -1090,4 +1100,5 @@ rokc_core::codec_struct!(RokDiagnostic {
     notes,
     tag,
     fixes,
+    lint,
 });

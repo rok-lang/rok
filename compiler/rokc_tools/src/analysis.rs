@@ -10,7 +10,7 @@ pub use rokc_hir::each_block;
 use rokc_hir::{HirExpr, HirFunction, HirModule, HirTy};
 use rokc_interface::{BuildOptions, CompileResult, Session, SourceFile};
 
-use crate::lint::{self, Level};
+use crate::lint::{self, Levels};
 
 /// Front end, lints at `levels`, then with `codegen` MLIR codegen.
 ///
@@ -21,7 +21,7 @@ pub fn check(
     session: &mut Session,
     source: Option<&str>,
     path: &Path,
-    levels: &[(Level, String)],
+    levels: &Levels,
     codegen: Option<&BuildOptions>,
 ) -> (CompileResult, Vec<RokDiagnostic>) {
     session.set_keep_ast(true);
@@ -151,13 +151,8 @@ pub struct Analysis {
 
 /// Check `source` as the root file `path` (no codegen), `isolate`d: an
 /// internal compiler error is the analysis's one diagnostic.
-pub fn analyze(
-    mut session: Session,
-    source: &str,
-    path: &Path,
-    levels: &[(Level, String)],
-) -> Analysis {
-    let (source, path, levels) = (source.to_owned(), path.to_owned(), levels.to_vec());
+pub fn analyze(mut session: Session, source: &str, path: &Path, levels: &Levels) -> Analysis {
+    let (source, path, levels) = (source.to_owned(), path.to_owned(), levels.clone());
     isolate(move || {
         let (r, diags) = check(&mut session, Some(&source), &path, &levels, None);
         Analysis {

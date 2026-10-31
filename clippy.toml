@@ -1,2 +1,4 @@
 # `ROKON` is a name (Rok Object Notation), not code.
 doc-valid-idents = ["ROKON", ".."]
+# `RokDiagnostic` (128 bytes) is the error type throughout.
+large-error-threshold = 136

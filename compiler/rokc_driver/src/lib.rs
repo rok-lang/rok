@@ -1629,7 +1629,8 @@ fn cross_file_confusables(idents: Vec<(String, rokc_diagnostic::Span)>) -> Vec<R
                                 id.0
                             ),
                         )
-                        .with_secondary(*at, "the other spelling"),
+                        .with_secondary(*at, "the other spelling")
+                        .with_lint("confusable_idents"),
                     );
                 }
             }

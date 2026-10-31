@@ -210,7 +210,7 @@ impl<'src> Lexer<'src> {
             }
         }
         for (span, msg) in warns {
-            self.warning(span, msg);
+            self.warning(span, msg, "confusable_idents");
         }
     }
 
@@ -579,6 +579,7 @@ impl<'src> Lexer<'src> {
                     self.warning(
                         span,
                         format!("identifier `{name}` mixes Cyrillic with Latin or Greek letters"),
+                        "confusable_idents",
                     );
                 }
             }
@@ -1203,9 +1204,11 @@ impl<'src> Lexer<'src> {
         )
     }
 
-    fn warning(&mut self, span: Span, msg: impl Into<String>) {
+    fn warning(&mut self, span: Span, msg: impl Into<String>, lint: &str) {
         self.diagnostics.push(
-            RokDiagnostic::warning(ErrorKind::Lexical, span, msg).with_file(self.file.clone()),
+            RokDiagnostic::warning(ErrorKind::Lexical, span, msg)
+                .with_file(self.file.clone())
+                .with_lint(lint),
         );
     }
 

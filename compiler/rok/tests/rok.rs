@@ -980,7 +980,9 @@ fn lint_and_doc_with_dependencies() {
     let out = rok(&home, &app, &["lint"]);
     fails(&out, "unused variable `x`");
     assert!(
-        !text(&out.stderr).contains("`unused`"),
+        !text(&out.stderr).contains("`unused`")
+            && text(&out.stderr)
+                .contains("`\"unused_variables\": \"deny\"` in `lints` of rok.rokon"),
         "{}",
         text(&out.stderr)
     );
