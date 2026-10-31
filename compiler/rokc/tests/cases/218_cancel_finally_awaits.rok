@@ -1,0 +1,40 @@
+// spec: std 200-core/218-task §2.18.4
+// expect-exit: 0
+// expect-stdout:
+// cancelled: finally start
+// cancelled: finally end
+// join -> -1
+// select loser: finally start
+// select -> 1 1
+// select loser: finally end
+// main done
+
+// 2.18.4: an `await` inside the cleanups a cancel runs completes; a
+// `select` loser finishes its cleanups after `select` returns.
+async fn worker(name: str) -> i64 {
+    try {
+        await task::sleep(Duration::ms(10000));
+    } finally {
+        println(f"{name}: finally start");
+        await task::sleep(Duration::ms(1));
+        println(f"{name}: finally end");
+    }
+    0
+}
+
+async fn fast() -> i64 {
+    await task::sleep(Duration::ms(5));
+    1
+}
+
+async fn main() {
+    let t = task::spawn(worker("cancelled"));
+    await task::sleep(Duration::ms(20));
+    t.cancel();
+    let r = try await t.join() catch _: CancellationError { -1 };
+    println(f"join -> {r}");
+    let (i, v) = await task::select([worker("select loser"), fast()]);
+    println(f"select -> {i} {v}");
+    await task::sleep(Duration::ms(50));
+    println("main done");
+}

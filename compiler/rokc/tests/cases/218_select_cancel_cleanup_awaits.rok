@@ -1,0 +1,81 @@
+// spec: std 200-core/218-task §2.18.4
+// expect-exit: 0
+// expect-stdout:
+// a: finally start
+// a: finally end
+// b: finally start
+// parent finally
+// join -> cancelled
+// children: 2 cleaned
+// losers: 2 cleaned
+// main done
+
+// 2.18.4: cancelling a task that waits on `select` runs the started
+// children's cleanups to the end, awaits included: the first one to
+// finish them ends the `select`, the rest finish theirs in the
+// background, like the losers of a `select` that won.
+static ENDED: Atomic<i64> = Atomic::new(0);
+static DONE: Atomic<i64> = Atomic::new(0);
+
+async fn until(a: Atomic<i64>, n: i64) {
+    let k = 0;
+    while a.load() < n && k < 1000 {
+        await task::sleep(Duration::ms(1));
+        k += 1;
+    }
+}
+
+async fn child(name: str, steps: i64) -> i64 {
+    try {
+        await task::sleep(Duration::ms(10000));
+    } finally {
+        println(f"{name}: finally start");
+        for _ in 0..steps {
+            await task::yield_now();
+        }
+        if name == "a" { println(f"{name}: finally end"); }
+        ENDED.fetch_add(1);
+    }
+    0
+}
+
+async fn parent() -> i64 {
+    try {
+        let (i, v) = await task::select([child("a", 1), child("b", 3)]);
+        println(f"select -> {i} {v}");
+    } finally {
+        await task::yield_now();
+        println("parent finally");
+    }
+    0
+}
+
+async fn loser() -> i64 {
+    try {
+        await task::sleep(Duration::ms(10000));
+    } finally {
+        await task::sleep(Duration::ms(1));
+        DONE.fetch_add(1);
+    }
+    0
+}
+
+async fn winner() -> i64 {
+    await task::yield_now();
+    1
+}
+
+async fn main() {
+    let t = task::spawn(parent());
+    await task::sleep(Duration::ms(20));
+    t.cancel();
+    let r = try await t.join() catch _: CancellationError { -1 };
+    println(if r == -1 { "join -> cancelled" } else { "join -> value" });
+    await until(ENDED, 2);
+    println(f"children: {ENDED.load()} cleaned");
+    let (i, _) = await task::select([loser(), winner(), loser()]);
+    await until(DONE, 2);
+    println(f"losers: {DONE.load()} cleaned");
+    if i != 1 { println("wrong winner"); }
+    println("main done");
+}

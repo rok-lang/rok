@@ -1,0 +1,73 @@
+// spec: std 200-core/218-task §2.18.4
+// expect-exit: 0
+// expect-stdout:
+// inner finally start
+// inner finally end
+// outer finally: helper 3
+// outer using: lock taken
+// guard dropped
+// join -> cancelled
+// lock free = true
+// next task runs: 7
+
+// 2.18.4: a cancel unwinds nested frames innermost first, and every
+// `await` in their cleanups completes: a helper awaited from a `finally`
+// runs all its steps, and a lock taken in one is granted.
+static M: Mutex<i64> = Mutex::new(0);
+
+struct Noisy {}
+
+impl Drop for Noisy {
+    fn drop(ref self) { println("guard dropped"); }
+}
+
+async fn helper() -> i64 {
+    let n: i64 = 0;
+    for _ in 0..3 {
+        await task::yield_now();
+        n += 1;
+    }
+    n
+}
+
+async fn inner() -> i64 {
+    try {
+        await task::sleep(Duration::ms(10000));
+    } finally {
+        println("inner finally start");
+        await task::sleep(Duration::ms(1));
+        println("inner finally end");
+    }
+    0
+}
+
+async fn outer() -> i64 {
+    using g = (Noisy {}) {
+        try {
+            await inner();
+        } finally {
+            let h = await helper();
+            println(f"outer finally: helper {h}");
+            using l = await M.lock_async() {
+                await task::yield_now();
+                println("outer using: lock taken");
+            }
+        }
+    }
+    0
+}
+
+async fn seven() -> i64 {
+    await task::yield_now();
+    7
+}
+
+async fn main() {
+    let t = task::spawn(outer());
+    await task::sleep(Duration::ms(20));
+    t.cancel();
+    let r = try await t.join() catch _: CancellationError { -1 };
+    println(if r == -1 { "join -> cancelled" } else { "join -> value" });
+    println(f"lock free = {M.try_lock() is MutexGuard<i64>}");
+    println(f"next task runs: {await task::spawn(seven())}");
+}

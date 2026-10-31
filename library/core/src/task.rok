@@ -70,12 +70,14 @@ const DONE: i32 = 4;
 
 /// A task as the executor sees it (what a `Waker` holds).
 pub struct TaskRef {
-    /// `[state, cancelled, timed, proxy, unwinding, local, handed]`
-    /// (`timed`: it has added a timer; `proxy`: a `select` stand-in, see
-    /// `up`; `unwinding`: a cancellation point saw the cancel; `local`: a
-    /// `spawn_local` task, counted in its home's `locals`; `handed`: its
-    /// `Task` went through a hand-off or a `par` item, so it may have
-    /// joiners on other threads).
+    /// `[state, cancelled, timed, proxy, unwinding, local, handed,
+    /// cleaning]` (`timed`: it has added a timer; `proxy`: a `select`
+    /// stand-in, see `up`; `unwinding`: a cancellation point saw the
+    /// cancel; `local`: a `spawn_local` task, counted in its home's
+    /// `locals`; `handed`: its `Task` went through a hand-off or a `par`
+    /// item, so it may have joiners on other threads; `cleaning`: in this
+    /// poll a frame left by the cancel runs its cleanups, which no
+    /// cancellation point cuts short).
     state: GcBuf<i32>;
     /// One poll of the task's future; `true` once it is done.
     poll: GcBuf<fn(Context) -> bool>;
@@ -796,8 +798,10 @@ fn run(t: TaskRef) {
         // and leaves the body through its cleanups. Only a poll that began
         // after the cancel saw the flag; one cancelled while it ran (`cancel`
         // then marks it NOTIFIED) is polled again below, else the task would
-        // finish without running its `finally` / `using` cleanups.
+        // finish without running its `finally` / `using` cleanups. A cleanup
+        // that awaits keeps it polled until the cleanup ends.
         let cancelled = is_cancelled(t);
+        t.state[7] = 0;
         let poll = t.poll[0];
         let ctx = Context::from_waker(Waker { task: t });
         // `help_until` runs tasks inside a task's poll: restore the outer
@@ -817,7 +821,7 @@ fn run(t: TaskRef) {
             if w.guest { release_lent(w); }
             if now.guest && !buf_same(now.locals, w.locals) { release_lent(now); }
         }
-        if ready || cancelled {
+        if ready || (cancelled && t.state[7] == 0) {
             if !ready {
                 // Ended without a result (no cancellation point reached).
                 atomic_xchg(t.state, 4, 1, SeqCst);
@@ -831,17 +835,74 @@ fn run(t: TaskRef) {
     }
 }
 
-/// Is the task polling with `ctx` cancelled? (The compiler's `await`
-/// checks this: 2.18.4 cancellation points.) A true answer means the
-/// caller leaves: the cancelled task (or `select` proxy) is marked
-/// `unwinding`.
+/// Is the task polling with `ctx` cancelled? (2.18.4 cancellation
+/// points.) A true answer means the caller leaves: the cancelled task (or
+/// `select` proxy) is marked `unwinding`. False while the task runs the
+/// cleanups of its cancel: an `await` there completes.
 pub fn cancel_requested(ctx: Context) -> bool {
     match cancel_source(ctx.waker.task) {
-        t: TaskRef => {
+        t: TaskRef => unsafe {
+            if t.state[7] != 0 {
+                return false;
+            }
             atomic_xchg(t.state, 4, 1, SeqCst);
             true
-        }
+        },
         none => false,
+    }
+}
+
+/// The compiler's cancellation point in an `await` (2.18.4): like
+/// `cancel_requested`, but none fires while a frame of the task runs the
+/// cleanups of its own cancel, so awaits inside `finally` / `using`
+/// complete. A true answer starts those cleanups.
+#[doc(hidden)]
+pub fn cancel_point(ctx: Context) -> bool {
+    match cancel_source(ctx.waker.task) {
+        t: TaskRef => unsafe {
+            if t.state[7] != 0 {
+                return false;
+            }
+            atomic_xchg(t.state, 4, 1, SeqCst);
+            t.state[7] = 1;
+            true
+        },
+        none => false,
+    }
+}
+
+/// `unwinding` for the `await` after a ready poll: false while a frame of
+/// the task runs its cleanups (a helper it awaits keeps its values). A
+/// true answer starts the caller's cleanups.
+#[doc(hidden)]
+pub fn cancel_left(ctx: Context) -> bool {
+    unsafe {
+        let t = cleanup_task(ctx);
+        if t.state[7] != 0 || !unwinding(ctx) {
+            return false;
+        }
+        t.state[7] = 1;
+        true
+    }
+}
+
+/// A frame left by the cancel is about to poll inside its cleanups.
+#[doc(hidden)]
+pub fn cleanup_running(ctx: Context) {
+    unsafe { cleanup_task(ctx).state[7] = 1; }
+}
+
+/// A frame left by the cancel finished its cleanups.
+#[doc(hidden)]
+pub fn cleanup_done(ctx: Context) {
+    unsafe { cleanup_task(ctx).state[7] = 0; }
+}
+
+/// The task whose `cleaning` flag covers `ctx`: the cancelled one.
+fn cleanup_task(ctx: Context) -> TaskRef {
+    match cancel_source(ctx.waker.task) {
+        t: TaskRef => t,
+        none => ctx.waker.task,
     }
 }
 
@@ -1022,7 +1083,7 @@ fn make_task(poll: fn(Context) -> bool, local: Worker | none) -> TaskRef {
     unsafe {
         let pool = executor();
         let home = pool.no_home;
-        let state: GcBuf<i32> = buf_new(7);
+        let state: GcBuf<i32> = buf_new(8);
         state[0] = SCHEDULED;
         if let w: Worker = local {
             home = buf_new(1);
@@ -1554,7 +1615,9 @@ impl<T> Future for Race<T> {
 /// output do (wrap differing outputs, `async { Msg::A(await a) }`).
 /// Once one completes, every other one that has started is polled once
 /// more as cancelled (its `await` leaves through `finally` / `using`, as
-/// for `Task::cancel`) and dropped. Panics on an empty list.
+/// for `Task::cancel`) and dropped; one whose cleanups await goes on as a
+/// task of its own until they end, and `select` does not wait for it.
+/// Panics on an empty list.
 pub const fn select<F: Future>(futs: List<F>) -> SelectFuture<F> {
     unsafe {
         if futs.len() == 0 {
@@ -1606,7 +1669,8 @@ impl<F: Future> Future for SelectFuture<F> {
 impl<F: Future> SelectFuture<F> {
     /// Finish the proxy (its wakes stop) as cancelled, poll the started
     /// losers once with it (their cancellation path), then drop all it
-    /// registered.
+    /// registered. A loser still in its cleanups runs them to the end as
+    /// a cancelled local task.
     fn cancel_others(self, winner: usize, p: TaskRef) {
         unsafe {
             atomic_xchg(p.state, 0, DONE, SeqCst);
@@ -1615,10 +1679,33 @@ impl<F: Future> SelectFuture<F> {
             for i in 0..self.futs.len() {
                 if i != winner && self.started[i] {
                     let f = self.futs[i];
-                    f.poll(ref c);
+                    p.state[7] = 0;
+                    if let Poll::Pending = f.poll(ref c) {
+                        if p.state[7] != 0 {
+                            spawn_cleanup(f);
+                        }
+                    }
                 }
             }
             finish_cancelled(p);
+        }
+    }
+}
+
+/// Run `fut`, a frame inside the cleanups of its cancel, to the end as a
+/// cancelled local task nobody joins.
+fn spawn_cleanup<F: Future>(fut: F) {
+    unsafe {
+        let w = current_worker();
+        let h = local_home(w);
+        let slot: GcBuf<F::Output> = buf_new(1);
+        let t = make_task(poll_fn(fut, slot), h);
+        t.state[1] = 1;
+        t.state[4] = 1;
+        if buf_same(h.locals, w.locals) {
+            schedule(t);
+        } else {
+            push(w.lent, t);
         }
     }
 }
@@ -1627,7 +1714,7 @@ impl<F: Future> SelectFuture<F> {
 /// go to `parent` until it is done.
 const fn proxy_task(parent: Waker) -> TaskRef {
     unsafe {
-        let state: GcBuf<i32> = buf_new(7);
+        let state: GcBuf<i32> = buf_new(8);
         state[3] = 1;
         state[5] = parent.task.state[5];
         let p: GcBuf<fn(Context) -> bool> = buf_new(1);
