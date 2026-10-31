@@ -1,10 +1,11 @@
 //! `rok`, the toolchain front (spec 901): manifests and locks, dependency
 //! resolution, stones and the git cache, environments, toolchains,
-//! scaffolding and the Jupyter kernelspec. It runs `rokc` (its sibling or
-//! a pinned toolchain's) with resolved deps as `--extern name=lib.rok`.
+//! scaffolding and the Jupyter kernelspec. It runs the `rokc` beside it
+//! with resolved deps as `--extern name=lib.rok`; a pin naming another
+//! toolchain hands the whole command to that toolchain's `rok`.
 //!
 //! ```text
-//! $ROK_HOME/bin/{rok,rokc,rokls}     proxies to the active toolchain (`toolchain`)
+//! $ROK_HOME/bin/{rok,rokc,rokls}     proxies to the active toolchain, copies of the newest's rok
 //! $ROK_HOME/bin/<name>               an executable `rok install` built
 //! $ROK_HOME/installs.rokon           those executables and their sources
 //! $ROK_HOME/toolchains/<version>-<triple>/
@@ -29,7 +30,7 @@ mod resolve;
 mod semver;
 mod toolchain;
 
-pub use toolchain::proxy;
+pub use toolchain::{proxy, take_guard};
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -62,6 +63,9 @@ struct Global {
     /// The program's arguments after `--` (or a script's path) as given:
     /// the strings in `post` stand for them only lossily.
     tail: Vec<std::ffi::OsString>,
+    /// The arguments and directory rok started with, for `handoff`.
+    argv: Vec<std::ffi::OsString>,
+    start: Option<PathBuf>,
 }
 
 /// `rok: warning: <msg>` on stderr, unless already printed.
@@ -108,11 +112,38 @@ fn config_text(path: &Path) -> Result<String, String> {
 }
 
 /// String field `field` of the config text `text`, read from `file`.
+/// Fields a newer rok wrote are skipped (spec 9.10.6).
 fn config_field(text: &str, file: &str, field: &str) -> Result<Option<String>, String> {
     let doc = rokc_rokon::Doc::parse(text, file)?;
     let c = doc.root().record("Config")?;
-    c.only(&CONFIG_FIELDS)?;
+    skipped(file, &c.known(&CONFIG_FIELDS));
     c.opt(field).map(|r| r.string()).transpose()
+}
+
+/// `-v`, for readers too deep to be passed it.
+static VERBOSE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Under `-v`, name the fields of shared file `file` this rok skipped;
+/// once per file.
+pub(crate) fn skipped(file: &str, fields: &[&str]) {
+    static SEEN: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+    if fields.is_empty() || !VERBOSE.load(std::sync::atomic::Ordering::Relaxed) {
+        return;
+    }
+    {
+        let mut seen = SEEN
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if seen.iter().any(|f| f == file) {
+            return;
+        }
+        seen.push(file.to_owned());
+    }
+    let names: Vec<String> = fields.iter().map(|f| format!("`{f}`")).collect();
+    term::note(&format!(
+        "{file}: skipped {}, written by a newer rok (kept in the file)",
+        names.join(", ")
+    ));
 }
 
 /// Set string field `field` of `$ROK_HOME/config.rokon`, keeping the rest.
@@ -149,7 +180,11 @@ pub fn main_with(args: Vec<String>) -> i32 {
 /// everything before them must be UTF-8.
 pub fn main_with_os(args: Vec<std::ffi::OsString>) -> i32 {
     rokc_core::tmp::sweep_once(&["rok-install-", "rok-prebuild-"]);
-    let mut g = Global::default();
+    let mut g = Global {
+        argv: args.clone(),
+        start: std::env::current_dir().ok(),
+        ..Global::default()
+    };
     let mut rest = Vec::new();
     let total = args.len();
     let mut it = args.into_iter();
@@ -337,6 +372,24 @@ fn is_usage(e: &str) -> bool {
 }
 
 fn run(g: &Global, cmd: &str, pre: &[String], post: &[String]) -> i32 {
+    VERBOSE.store(g.verbose && !g.quiet, std::sync::atomic::Ordering::Relaxed);
+    // A pin naming another toolchain: its own rok runs the command, so rok
+    // and rokc always come from one toolchain (spec 9.10.6). Commands that
+    // run rokc decide in `rokc_command`, by the package they work on.
+    if !matches!(
+        cmd,
+        "toolchain" | "help" | "version" | "completions" | "__complete"
+    ) && !DELEGATED.contains(&cmd)
+    {
+        match toolchain::handoff(g.toolchain.as_deref(), toolchain::project_pin(), false) {
+            Ok(Some(h)) => return toolchain::run_handoff(&h, &g.argv, g.start.as_deref()),
+            Ok(None) => {}
+            Err(e) => {
+                eprintln!("rok: {} {e}", term::label(Stream::Stderr, Role::Error));
+                return 1;
+            }
+        }
+    }
     let r = match cmd {
         "version" => {
             print!("{}", version(g));
@@ -775,13 +828,10 @@ fn push_lints(extra: &mut Vec<String>, lints: &[(String, rokc_core::lint::Level)
 }
 
 /// Say that the levels before `at` are `ctx`'s manifest `lints`, so rokc
-/// names rok.rokon as their source. Only for a rokc of this toolchain: a
-/// pinned older one has no such flag.
-fn mark_manifest_lints(extra: &mut Vec<String>, at: usize, ctx: &resolve::Context, rokc: &Path) {
-    let own = std::env::current_exe()
-        .ok()
-        .is_some_and(|e| e.parent() == rokc.parent());
-    if ctx.manifest.lints.is_empty() || !own {
+/// names rok.rokon as their source. The rokc is always this rok's own (a
+/// pinned toolchain gets the whole command via `handoff`).
+fn mark_manifest_lints(extra: &mut Vec<String>, at: usize, ctx: &resolve::Context) {
+    if ctx.manifest.lints.is_empty() {
         return;
     }
     if let Some(path) = manifest::find(&ctx.base) {
@@ -812,12 +862,29 @@ fn harness(g: &Global, cmd: &str, pre: &[String], post: &[String]) -> Result<i32
     }
     // No manifest means there was nothing to run (e.g. `--emit`).
     match std::fs::read_to_string(&manifest) {
-        Ok(text) => Ok(rokc_harness::run_manifest(
-            &text,
-            &mut std::io::stdout().lock(),
-        )),
+        Ok(text) => {
+            rokc_harness::check_version(&text)?;
+            Ok(rokc_harness::run_manifest(
+                &text,
+                &mut std::io::stdout().lock(),
+            ))
+        }
         Err(_) => Ok(0),
     }
+}
+
+/// When `package` (the one a command works on) or `+<version>` /
+/// `ROK_TOOLCHAIN` pins another toolchain than this one, run the command
+/// with that toolchain's rok and exit with its status.
+fn hand_off_for(g: &Global, package: Option<&Path>) -> Result<(), String> {
+    let pin = package.and_then(manifest::find).and_then(|p| {
+        let pin = manifest::toolchain_pin(&std::fs::read_to_string(&p).ok()?)?;
+        Some((pin, format!("pinned by {}", p.display())))
+    });
+    if let Some(h) = toolchain::handoff(g.toolchain.as_deref(), pin, true)? {
+        std::process::exit(toolchain::run_handoff(&h, &g.argv, g.start.as_deref()));
+    }
+    Ok(())
 }
 
 /// `delegate`'s rokc command, and the rokc it runs; with `in_env`, on
@@ -886,6 +953,13 @@ fn rokc_command(
                 .display()
         ));
     }
+    // Before reading its manifest (which may have newer fields) or lock.
+    hand_off_for(
+        g,
+        package
+            .as_deref()
+            .filter(|_| in_env.is_none() && g.env.is_none()),
+    )?;
     let t = match in_env {
         Some(e) => env_target(e)?,
         None => target_for(g, path)?,
@@ -944,9 +1018,9 @@ fn rokc_command(
             extra.push(format!("--target-dir={}", dir.display()));
         }
     }
-    let rokc = toolchain::rokc_for(g.toolchain.as_deref(), t.ctx.manifest.toolchain.as_deref())?;
+    let rokc = toolchain::rokc_for()?;
     if let Some(at) = manifest_lints {
-        mark_manifest_lints(&mut extra, at, &t.ctx, &rokc);
+        mark_manifest_lints(&mut extra, at, &t.ctx);
     }
     let mut c = Command::new(&rokc);
     c.args(&g.color).args(pre).arg(cmd).args(&extra);
@@ -1939,6 +2013,14 @@ fn installs() -> PathBuf {
     home().join("installs.rokon")
 }
 
+/// `installs.rokon`'s entries; under `-v`, what a newer rok wrote that
+/// this one skipped.
+fn read_installs(text: &str, file: &str) -> Result<Vec<Dep>, String> {
+    let (deps, newer) = manifest::parse_installs(text, file)?;
+    skipped(file, &newer.iter().map(String::as_str).collect::<Vec<_>>());
+    Ok(deps)
+}
+
 const INSTALLS_HEADER: &str = "// rok install: the executables in bin/ and where they came from\n";
 
 /// The toolchain's executables in `$ROK_HOME/bin`.
@@ -2104,8 +2186,7 @@ fn install_bin(
     let file = record.display().to_string();
     let old = std::fs::read_to_string(&record)
         .unwrap_or_else(|_| format!("{INSTALLS_HEADER}{}", manifest::EMPTY));
-    let prev = manifest::parse(&old, &file)?
-        .deps
+    let prev = read_installs(&old, &file)?
         .into_iter()
         .find(|d| d.name == *name);
     if exe.exists() && prev.is_none() {
@@ -2164,7 +2245,7 @@ fn install_bin(
         return Err(format!("`{name}` did not build; nothing was installed"));
     }
     std::fs::rename(tmp.path(), &exe).map_err(|e| format!("{}: {e}", exe.display()))?;
-    let text = manifest::add_dep(&old, &file, "deps", dep)?;
+    let text = manifest::set_install(&old, &file, dep)?;
     std::fs::write(&record, text).map_err(|e| format!("cannot write {file}: {e}"))?;
     if !g.quiet {
         let new = installed_as(&dep.source);
@@ -2230,7 +2311,7 @@ fn list_installs(g: &Global) -> Result<i32, String> {
     }
     println!("executables ({}):", home().join("bin").display());
     if let Ok(text) = std::fs::read_to_string(installs()) {
-        for d in manifest::parse(&text, &installs().display().to_string())?.deps {
+        for d in read_installs(&text, &installs().display().to_string())? {
             println!("  {} {}", d.name, d.source.to_rok());
         }
     }
@@ -2257,7 +2338,7 @@ fn cmd_uninstall(g: &Global, args: &[String]) -> Result<i32, String> {
         let record = installs();
         let file = record.display().to_string();
         let removed = match std::fs::read_to_string(&record) {
-            Ok(old) if !native => manifest::remove_dep(&old, &file, "deps", name)?,
+            Ok(old) if !native => manifest::remove_install(&old, &file, name)?,
             _ => None,
         };
         let Some(text) = removed else {

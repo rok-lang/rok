@@ -857,7 +857,7 @@ fn deps(d: Decoder<'_>, dev: bool) -> Result<Vec<Dep>, String> {
                 o.name
             )));
         }
-        let mut dep = dep(v, true)?;
+        let mut dep = dep(v, true, false)?;
         if dev && dep.optional {
             return Err(v.error("a dev dependency cannot be optional"));
         }
@@ -877,11 +877,12 @@ fn req(d: Decoder<'_>) -> Result<String, String> {
 /// A `Dep::path(..)` / `Dep::git(..)` / `Dep::version(..)` value, or a
 /// requirement string (`"^1.2"`, short for `Dep::version("^1.2")`).
 pub fn source(d: Decoder<'_>) -> Result<Source, String> {
-    dep(d, false).map(|d| d.source)
+    dep(d, false, false).map(|d| d.source)
 }
 
-/// `source`, plus feature arguments when `flags` (name left empty).
-fn dep(d: Decoder<'_>, flags: bool) -> Result<Dep, String> {
+/// `source`, plus feature arguments when `flags` (name left empty);
+/// `lenient` skips arguments it does not know (a file a newer rok wrote).
+fn dep(d: Decoder<'_>, flags: bool, lenient: bool) -> Result<Dep, String> {
     if let Ok(s) = d.string() {
         // `"geom": "../geom"`: a path where a requirement goes.
         if s.starts_with(['.', '/', '~']) || s.contains(['/', '\\']) {
@@ -906,6 +907,9 @@ fn dep(d: Decoder<'_>, flags: bool) -> Result<Dep, String> {
         _ => Err(d.error(&format!("`Dep::{}` takes one string, the {what}", v.name))),
     };
     let only = |own: &[&str]| {
+        if lenient {
+            return Ok(());
+        }
         let extra: &[&str] = if flags { &DEP_FLAGS } else { &[] };
         v.fields.only(&[own, extra].concat())
     };
@@ -917,7 +921,11 @@ fn dep(d: Decoder<'_>, flags: bool) -> Result<Dep, String> {
         "git" => {
             only(&["rev", "tag", "branch"])?;
             let mut refs = Vec::new();
-            for k in v.fields.names().filter(|k| !DEP_FLAGS.contains(k)) {
+            for k in v
+                .fields
+                .names()
+                .filter(|k| ["rev", "tag", "branch"].contains(k))
+            {
                 let s = v.fields.req(k)?.string()?;
                 refs.push(match k {
                     "rev" => GitRef::Rev(s),
@@ -1018,6 +1026,57 @@ pub fn remove_dep(
 ) -> Result<Option<String>, String> {
     parse(text, file)?;
     edit::remove(text, &[Step::Field(field), Step::Key(key)]).map_err(|e| e.render(text, file))
+}
+
+/// `$ROK_HOME/installs.rokon` (a `Package` with `deps`): its entries, and
+/// what it holds that this rok skipped. Every toolchain shares the file,
+/// so fields, arguments and entry kinds a newer rok wrote are skipped
+/// (spec 9.10.6).
+pub fn parse_installs(text: &str, file: &str) -> Result<(Vec<Dep>, Vec<String>), String> {
+    let doc = Doc::parse(text, file)?;
+    let pkg = doc.root().record("Package")?;
+    let mut skipped: Vec<String> = pkg
+        .known(&["deps"])
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+    let mut out = Vec::new();
+    for (k, v) in pkg
+        .opt("deps")
+        .map(|d| d.dict())
+        .transpose()?
+        .unwrap_or_default()
+    {
+        let name = k.string()?;
+        let kind = v.variant("Dep").ok().map(|v| v.name);
+        if kind.is_some_and(|k| !["path", "git", "version"].contains(&k)) {
+            skipped.push(format!("deps[\"{name}\"]"));
+            continue;
+        }
+        let mut dep = dep(v, true, true)?;
+        dep.name = name;
+        out.push(dep);
+    }
+    Ok((out, skipped))
+}
+
+/// `installs.rokon` text with `deps` entry `dep.name` set to `dep`, the
+/// rest (a newer rok's fields too) as it was.
+pub fn set_install(text: &str, file: &str, dep: &Dep) -> Result<String, String> {
+    parse_installs(text, file)?;
+    let out = edit::set(
+        text,
+        &[Step::Field("deps"), Step::Key(&dep.name)],
+        &dep.to_rok(),
+    )
+    .map_err(|e| e.render(text, file))?;
+    parse_installs(&out, file).map(|_| out)
+}
+
+/// `installs.rokon` text without entry `name`, or `None` when it has none.
+pub fn remove_install(text: &str, file: &str, name: &str) -> Result<Option<String>, String> {
+    parse_installs(text, file)?;
+    edit::remove(text, &[Step::Field("deps"), Step::Key(name)]).map_err(|e| e.render(text, file))
 }
 
 /// A script's `//! ```rokon` block.

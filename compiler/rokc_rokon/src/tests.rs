@@ -208,6 +208,16 @@ fn typed_decoding() {
     assert_eq!(d.fields.req("tag").unwrap().string().unwrap(), "t");
     let e = d.fields.only(&["rev"]).unwrap_err();
     assert!(e.contains("unknown argument `tag` (expected rev)"), "{e}");
+    // A shared file skips what a newer writer added.
+    assert_eq!(d.fields.known(&["rev"]), ["tag"]);
+    assert!(
+        r.known(&["name", "n", "ratio", "tags", "pair", "map", "proxy", "dep"])
+            .is_empty()
+    );
+    assert_eq!(
+        r.known(&["dep", "name"]),
+        ["n", "ratio", "tags", "pair", "map", "proxy"]
+    );
 
     // The target type decides: `{}` and `{ field: .. }` are structs,
     // `{}` and `{ "k": .. }` dicts.

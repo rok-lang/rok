@@ -290,6 +290,12 @@ impl<'a> Record<'a> {
             None => Ok(()),
         }
     }
+
+    /// The fields not in `known`, in order, for files several toolchains
+    /// share: a newer one may have written them, so they are skipped.
+    pub fn known(&self, known: &[&str]) -> Vec<&'a str> {
+        self.names().filter(|n| !known.contains(n)).collect()
+    }
 }
 
 /// An enum variant: its name (after `Type::`), positional arguments and
