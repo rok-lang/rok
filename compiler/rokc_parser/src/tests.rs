@@ -771,6 +771,7 @@ fn parse_meta(src: &str) -> (rokc_ast::Program, Vec<rokc_diagnostic::RokDiagnost
     crate::parse_program_meta(
         &tokens,
         "test",
+        "",
         &crate::ExtOps::default(),
         &std::sync::Arc::new(table),
         &std::sync::Arc::default(),
@@ -1432,4 +1433,119 @@ fn try_coalesce_and_closure_operator_warn() {
     ] {
         assert!(lints(quiet).is_empty(), "{quiet}");
     }
+}
+
+/// Parse `src` as package `package`, with the meta blocks of each
+/// `(package, source)` registered under that package.
+fn parse_in(
+    package: &str,
+    deps: &[(&str, &str)],
+    src: &str,
+) -> (rokc_ast::Program, Vec<rokc_diagnostic::RokDiagnostic>) {
+    let mut table = crate::MetaTable::default();
+    for (pkg, dep) in deps {
+        let (tokens, _) = Lexer::new(dep, *pkg).lex_all();
+        for mut d in crate::collect_meta_blocks(&tokens, pkg) {
+            d.set_package(pkg);
+            assert!(table.add(d).is_none());
+        }
+    }
+    let (tokens, _) = Lexer::new(src, "test").lex_all();
+    crate::parse_program_meta(
+        &tokens,
+        "test",
+        package,
+        &crate::ExtOps::default(),
+        &std::sync::Arc::new(table),
+        &std::sync::Arc::default(),
+        None,
+    )
+}
+
+const LOG_A: &str = "#[impl_macro(log)] pub @macro { (@e: expr) => { a(@e) } }\n\
+                     #[impl_derive(Tr)] pub @derive { impl Tr for @Self {} }\n\
+                     #[impl_attribute(traced)] pub @attribute { @item fn traced() {} }";
+const LOG_B: &str = "#[impl_macro(log)] pub @macro { (@e: expr) => { b(@e) } }";
+
+/// The body of `main`, as debug text.
+fn main_body(p: &rokc_ast::Program) -> String {
+    let f = p
+        .items
+        .iter()
+        .find_map(|i| match i {
+            Item::Fn(f) if f.name == "main" => Some(f),
+            _ => None,
+        })
+        .unwrap();
+    format!("{:?}", f.body)
+}
+
+#[test]
+fn qualified_macro_picks_its_package() {
+    let deps = [("a", LOG_A), ("b", LOG_B)];
+    for (call, want) in [("a::log!(1);", "\"a\""), ("b::log!(1);", "\"b\"")] {
+        let (p, diags) = parse_in("", &deps, &format!("fn main() {{ {call} }}"));
+        assert!(diags.is_empty(), "{diags:?}");
+        assert!(main_body(&p).contains(want), "{call}");
+    }
+    // A bare name two packages define: this package's, else the `use`d one.
+    let (p, diags) = parse_in("b", &deps, "fn main() { log!(1); }");
+    assert!(diags.is_empty(), "{diags:?}");
+    assert!(main_body(&p).contains("\"b\""));
+    let (p, diags) = parse_in("", &deps, "use a::log!;\nfn main() { log!(1); }");
+    assert!(diags.is_empty(), "{diags:?}");
+    assert!(main_body(&p).contains("\"a\""));
+    assert!(p.items.iter().all(|i| !matches!(i, Item::Use(_))));
+    let (_, diags) = parse_in("", &deps, "fn main() { log!(1); }");
+    assert!(diags[0].message.contains("ambiguous"), "{diags:?}");
+    let (_, diags) = parse_in("", &deps, "fn main() { b::nope!(1); }");
+    assert!(
+        diags[0]
+            .message
+            .contains("package `b` defines no macro `nope`"),
+        "{diags:?}"
+    );
+}
+
+#[test]
+fn unqualified_meta_warns_once_per_name() {
+    let deps = [("a", LOG_A)];
+    let src = "#[derive(Tr)] struct S {}\n#[traced] fn f() {}\n\
+               fn main() { log!(1); log!(2); }";
+    let (_, diags) = parse_in("", &deps, src);
+    let got: Vec<(Option<String>, String)> = diags
+        .iter()
+        .map(|d| (d.lint.as_deref().cloned(), d.notes.join(";")))
+        .collect();
+    let lint = Some("unqualified_meta".to_owned());
+    assert_eq!(
+        got,
+        [
+            (lint.clone(), "help: write `#[derive(a::Tr)]`".to_owned()),
+            (lint.clone(), "help: write `#[a::traced]`".to_owned()),
+            (
+                lint,
+                "help: write `a::log!` or add `use a::log!;`".to_owned()
+            ),
+        ]
+    );
+    // Qualified, imported, its own package's, or the standard library's:
+    // quiet.
+    for (pkg, src) in [
+        (
+            "",
+            "#[derive(a::Tr)] struct S {}\n#[a::traced] fn f() {}\nfn main() { a::log!(1); }",
+        ),
+        (
+            "",
+            "use a::{log!, Tr};\n#[derive(Tr)] struct S {}\nfn main() { log!(1); }",
+        ),
+        ("", "use a::*;\n#[traced] fn f() {}\nfn main() { log!(1); }"),
+        ("a", "fn main() { log!(1); }"),
+    ] {
+        let (_, diags) = parse_in(pkg, &deps, src);
+        assert!(diags.is_empty(), "{src}: {diags:?}");
+    }
+    let (_, diags) = parse_in("", &[("rok::core", LOG_A)], "fn main() { log!(1); }");
+    assert!(diags.is_empty(), "{diags:?}");
 }

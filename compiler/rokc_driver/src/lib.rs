@@ -2061,6 +2061,7 @@ fn parse_file(
     let (program, mut parse_diags) = parse_program_meta(
         &tokens,
         file,
+        &metas.package,
         ext,
         &metas.table,
         &metas.literals,
@@ -2308,6 +2309,7 @@ impl MetaCtx {
             levels.sort();
             incr::key(&[
                 levels.join(";").as_bytes(),
+                self.package.as_bytes(),
                 format!("{:?}", self.table).as_bytes(),
                 format!("{:?}", self.keywords).as_bytes(),
                 format!("{:?}", self.literals).as_bytes(),

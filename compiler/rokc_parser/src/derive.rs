@@ -48,6 +48,26 @@ pub fn derive_names(attrs: &[rokc_ast::Attribute]) -> Vec<(String, Span)> {
     out
 }
 
+/// Like `derive_names`, with the paths too (`#[derive(dep::Name)]`).
+#[must_use]
+pub fn derive_paths(attrs: &[rokc_ast::Attribute]) -> Vec<(Vec<String>, Span)> {
+    let mut out = Vec::new();
+    for a in attrs.iter().filter(|a| a.path == ["derive"]) {
+        if let AttrBody::Args(args) = &a.body {
+            for arg in args {
+                match arg {
+                    AttrArg::Word(w) => out.push((vec![w.clone()], a.span)),
+                    AttrArg::Nested { path, body } if matches!(**body, AttrBody::Empty) => {
+                        out.push((path.clone(), a.span));
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    out
+}
+
 /// The full path of a derivable trait.
 #[must_use]
 pub fn derivable(name: &str) -> Option<&'static str> {

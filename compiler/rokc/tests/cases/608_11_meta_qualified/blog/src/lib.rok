@@ -1,0 +1,8 @@
+#[impl_macro(log)] pub @macro {
+    ( @e: expr ) => { println(f"b: {@e}") }
+}
+
+// A bare name takes this package's block first.
+pub fn hello() {
+    log!("hello");
+}

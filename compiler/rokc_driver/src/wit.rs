@@ -132,6 +132,7 @@ pub fn expand(
         let (program, parse_diags) = parse_program_meta(
             &tokens,
             name,
+            &metas.package,
             ext,
             &metas.table,
             &metas.literals,

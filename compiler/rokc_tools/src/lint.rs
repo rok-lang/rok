@@ -238,6 +238,10 @@ pub const LINTS: &[Lint] = &[
         "extern_ffi_types",
         "a GC type (`List`, `Dict`, a closure, a sum, ..) in an extern declaration or an `extern \"C\" fn`",
     ),
+    warn_since(
+        "unqualified_meta",
+        "another package's macro, derive or attribute used by its bare name: write `dep::name!` or `use dep::name!;`",
+    ),
 ];
 
 /// A lint added in 0.1.6, outside `warnings`.

@@ -193,12 +193,28 @@ impl MetaTable {
         self.defs.iter().find(|d| d.kind == kind && d.name == name)
     }
 
-    /// Register `def`; a second block for the same name, or one taking a
-    /// built-in derive / attribute name, is an error (a warning for a name
-    /// in `LATE_RESERVED_ATTRS`; the block is still registered).
+    /// Every block registering `name` of `kind`, one per package.
+    pub fn find_all<'a>(
+        &'a self,
+        kind: MetaKind,
+        name: &'a str,
+    ) -> impl Iterator<Item = &'a MetaDef> + 'a {
+        self.defs
+            .iter()
+            .filter(move |d| d.kind == kind && d.name == name)
+    }
+
+    /// Register `def`; a second block for the same name in one package,
+    /// or one taking a built-in derive / attribute name, is an error (a
+    /// warning for a name in `LATE_RESERVED_ATTRS`; the block is still
+    /// registered). Two packages may each register a name: a use then
+    /// says which (6.8.11).
     pub fn add(&mut self, def: MetaDef) -> Option<RokDiagnostic> {
         let clash = |msg: String| RokDiagnostic::error(ErrorKind::Meta, def.span, msg);
-        if let Some(old) = self.find(def.kind, &def.name) {
+        if let Some(old) = self
+            .find_all(def.kind, &def.name)
+            .find(|d| d.package == def.package)
+        {
             if old.span == def.span && old.file == def.file {
                 return None;
             }
@@ -1282,7 +1298,362 @@ fn fn_parts(item: &[Token]) -> Option<(Vec<Token>, Vec<Token>, Vec<Token>)> {
     Some((params, ret, item[lb + 1..rb].to_vec()))
 }
 
+/// A meta name `find_meta` resolved.
+pub(crate) enum MetaUse {
+    Def(MetaDef),
+    /// No one meta block: a wrong qualifier or an ambiguous bare name
+    /// (reported).
+    Bad,
+}
+
+/// The standard library's meta names stay bare (`#[derive(Inspect)]`).
+fn is_std(package: &str) -> bool {
+    package == "rok" || package.starts_with("rok::")
+}
+
+/// How a use of meta name `name` of `kind` reads, qualified by `qual`.
+fn meta_use(kind: MetaKind, qual: &str, name: &str) -> String {
+    let path = if qual.is_empty() {
+        name.to_owned()
+    } else {
+        format!("{qual}::{name}")
+    };
+    match kind {
+        MetaKind::Derive => format!("`#[derive({path})]`"),
+        MetaKind::Attribute => format!("`#[{path}]`"),
+        MetaKind::Macro => format!("`{path}!`"),
+    }
+}
+
+const fn kind_word(kind: MetaKind) -> &'static str {
+    match kind {
+        MetaKind::Derive => "derive",
+        MetaKind::Attribute => "attribute",
+        MetaKind::Macro => "macro",
+    }
+}
+
+/// Every path `t` imports, a glob ending in `*` / `**`; a macro
+/// import's `!` is dropped.
+pub(crate) fn use_leaves(t: &rokc_ast::UseTree, outer: &[String], out: &mut Vec<Vec<String>>) {
+    let mut path = outer.to_vec();
+    path.extend(
+        t.prefix
+            .segments
+            .iter()
+            .map(|s| s.name.trim_end_matches('!').to_owned()),
+    );
+    match &t.kind {
+        rokc_ast::UseTreeKind::Simple(_) => out.push(path),
+        rokc_ast::UseTreeKind::Glob => {
+            path.push("*".to_owned());
+            out.push(path);
+        }
+        rokc_ast::UseTreeKind::GlobRecursive => {
+            path.push("**".to_owned());
+            out.push(path);
+        }
+        rokc_ast::UseTreeKind::Group(ts) => {
+            for c in ts {
+                use_leaves(c, &path, out);
+            }
+        }
+    }
+}
+
 impl Parser<'_> {
+    /// The package a meta qualifier names; `pkg` is this one.
+    fn meta_package(&self, qual: &[String]) -> String {
+        match qual {
+            [p] if p == "pkg" => self.package.clone(),
+            [p] if p.starts_with(PKG_ROOT) => p[PKG_ROOT.len()..].to_owned(),
+            _ => qual.join("::"),
+        }
+    }
+
+    /// How this package writes `package` as a qualifier; `None` when it
+    /// cannot (the package being built, seen from a dependency).
+    fn meta_qualifier(&self, package: &str) -> Option<String> {
+        if package == self.package {
+            Some("pkg".to_owned())
+        } else if package.is_empty() {
+            None
+        } else {
+            Some(package.to_owned())
+        }
+    }
+
+    /// The meta block of `kind` that `qual::name` (bare `name` when `qual`
+    /// is empty) at `at` uses. `None`: not a meta use, i.e. a bare name no
+    /// block registers, or a qualified derive or attribute no block of
+    /// that name registers (built in, or unknown).
+    pub(crate) fn find_meta(
+        &mut self,
+        kind: MetaKind,
+        qual: &[String],
+        name: &str,
+        at: Span,
+    ) -> Option<MetaUse> {
+        let meta = std::sync::Arc::clone(&self.meta);
+        let all: Vec<&MetaDef> = meta.find_all(kind, name).collect();
+        if qual.is_empty() {
+            return match all.as_slice() {
+                [] => None,
+                [d] => {
+                    self.unqualified_meta(d, at);
+                    Some(MetaUse::Def((*d).clone()))
+                }
+                _ => Some(self.ambiguous_meta(kind, name, &all, at)),
+            };
+        }
+        let package = self.meta_package(qual);
+        if let Some(d) = all.iter().find(|d| d.package == package) {
+            return Some(MetaUse::Def((*d).clone()));
+        }
+        let def = all
+            .iter()
+            .find(|d| d.package == self.package)
+            .or_else(|| all.first())
+            .copied();
+        if def.is_none() && kind == MetaKind::Attribute {
+            return None;
+        }
+        let help = match &def {
+            Some(d) => {
+                let q = self.meta_qualifier(&d.package).unwrap_or_default();
+                format!("write {}", meta_use(kind, &q, name))
+            }
+            None if kind == MetaKind::Macro => format!(
+                "no package defines `{name}!`; a package defines one with \
+                 `#[impl_macro({name})] pub @macro {{ .. }}` (spec 6.8.12)"
+            ),
+            None if crate::derive::derivable(name).is_some() => {
+                format!("write `#[derive({name})]`: it is built in")
+            }
+            None => "remove it, or name the package whose meta block defines it".to_owned(),
+        };
+        let at = self.name_span(at, name);
+        let shown = if package.is_empty() { "pkg" } else { &package };
+        let msg = format!(
+            "package `{shown}` defines no {} `{name}`, so {} names nothing",
+            kind_word(kind),
+            meta_use(kind, &qual.join("::"), name)
+        );
+        if kind == MetaKind::Derive {
+            // Ignored before 0.1.6, so only a warning.
+            self.diagnostics.push(
+                RokDiagnostic::warning(ErrorKind::Meta, at, format!("{msg} and does nothing"))
+                    .with_file(self.file.clone())
+                    .with_help(help),
+            );
+            return None;
+        }
+        self.diagnostics.push(
+            meta_err(at, msg)
+                .with_file(self.file.clone())
+                .with_help(help),
+        );
+        Some(MetaUse::Bad)
+    }
+
+    /// A bare `name` several packages register: this package's, else the
+    /// one a `use` imports; else an error saying which to write.
+    fn ambiguous_meta(
+        &mut self,
+        kind: MetaKind,
+        name: &str,
+        all: &[&MetaDef],
+        at: Span,
+    ) -> MetaUse {
+        let pick = all
+            .iter()
+            .find(|d| d.package == self.package)
+            .or_else(|| all.iter().find(|d| self.meta_imported(d)));
+        if let Some(d) = pick {
+            return MetaUse::Def((*d).clone());
+        }
+        let forms: Vec<String> = all
+            .iter()
+            .filter_map(|d| self.meta_qualifier(&d.package))
+            .map(|q| meta_use(kind, &q, name))
+            .collect();
+        let mut d = meta_err(
+            at,
+            format!(
+                "{} is defined by several packages, so the bare name is ambiguous (spec 6.8.11)",
+                meta_use(kind, "", name)
+            ),
+        )
+        .with_file(self.file.clone())
+        .with_help(format!("write one of {}", forms.join(", ")));
+        for def in all {
+            d = d.with_secondary(def.span, "defined here");
+        }
+        self.diagnostics.push(d);
+        MetaUse::Bad
+    }
+
+    /// `unqualified_meta`: `def`, another package's, used by its bare name
+    /// and found only through the build-wide scope that 0.2.0 drops.
+    fn unqualified_meta(&mut self, def: &MetaDef, at: Span) {
+        if !self.meta_stack.is_empty()
+            || at.is_dummy()
+            || def.package == self.package
+            || is_std(&def.package)
+            || self.meta_imported(def)
+        {
+            return;
+        }
+        let Some(q) = self.meta_qualifier(&def.package) else {
+            return;
+        };
+        if !self
+            .meta_warned
+            .insert(format!("{:?}:{}", def.kind, def.name))
+        {
+            return;
+        }
+        let at = self.name_span(at, &def.name);
+        let name = &def.name;
+        let mut help = format!("write {}", meta_use(def.kind, &q, name));
+        if def.kind == MetaKind::Macro {
+            help.push_str(&format!(" or add `use {q}::{name}!;`"));
+        }
+        let d = RokDiagnostic::warning(
+            ErrorKind::Meta,
+            at,
+            format!(
+                "{} is package `{q}`'s {}, found only through the build-wide meta scope, \
+                 which Rok 0.2.0 removes",
+                meta_use(def.kind, "", name),
+                kind_word(def.kind)
+            ),
+        )
+        .with_file(self.file.clone())
+        .with_help(help)
+        .with_fix(
+            at,
+            format!("{q}::{name}"),
+            format!("write {}", meta_use(def.kind, &q, name)),
+        )
+        .with_lint("unqualified_meta");
+        self.meta_lints.push(d);
+    }
+
+    /// Where `name` is written in the attribute at `at` (`#[name]`,
+    /// `#[derive(dep::name)]`); `at` itself for a macro call.
+    fn name_span(&self, at: Span, name: &str) -> Span {
+        let Some(k) = self
+            .tokens
+            .iter()
+            .position(|t| t.span == at && t.kind == TokenKind::HashLBracket)
+        else {
+            return at;
+        };
+        self.tokens[k..]
+            .iter()
+            .take_while(|t| t.kind != TokenKind::RBracket)
+            .find(|t| matches!(&t.kind, TokenKind::Ident(n) if n == name))
+            .map_or(at, |t| t.span)
+    }
+
+    /// Whether a `use` of the file imports `def`: its path (`use
+    /// json::log!;`, or `use mdep::Tag;` for a derive named like its
+    /// trait) or a glob of its package.
+    fn meta_imported(&self, def: &MetaDef) -> bool {
+        let pkg: Vec<&str> = def.package.split("::").collect();
+        self.meta_imports.iter().any(|p| {
+            p.len() > pkg.len()
+                && p.iter().zip(&pkg).all(|(a, b)| a == b)
+                && p.last().is_some_and(|l| {
+                    *l == def.name || (p.len() == pkg.len() + 1 && (l == "*" || l == "**"))
+                })
+        })
+    }
+
+    /// Note every path the file's `use`s import (`meta_imports`) before
+    /// the parse meets a meta name.
+    pub(crate) fn scan_meta_imports(&mut self) {
+        let mut out = Vec::new();
+        for (k, t) in self.tokens.iter().enumerate() {
+            if t.kind != TokenKind::Use {
+                continue;
+            }
+            let mut p = Parser::new(self.tokens, self.file.clone());
+            p.pos = k + 1;
+            if let Some(tree) = p.parse_use_tree() {
+                use_leaves(&tree, &[], &mut out);
+            }
+        }
+        self.meta_imports = out;
+    }
+
+    /// Drop the macro imports (`use dep::name!;`) from `t`, checking
+    /// each; `None` when nothing is left. They import no item, only say
+    /// where a bare `name!` comes from.
+    pub(crate) fn strip_meta_imports(
+        &mut self,
+        t: rokc_ast::UseTree,
+        outer: &[String],
+        public: bool,
+        at: Span,
+    ) -> Option<rokc_ast::UseTree> {
+        let mut path = outer.to_vec();
+        path.extend(t.prefix.segments.iter().map(|s| s.name.clone()));
+        match t.kind {
+            rokc_ast::UseTreeKind::Simple(_) if path.last().is_some_and(|n| n.ends_with('!')) => {
+                let last = path.pop().unwrap_or_default();
+                let name = last.trim_end_matches('!');
+                let shown = if path.is_empty() {
+                    "dep".to_owned()
+                } else {
+                    path.join("::")
+                };
+                if public {
+                    self.diagnostics.push(
+                        meta_err(
+                            at,
+                            format!("`pub use` cannot re-export the macro `{name}!`"),
+                        )
+                        .with_file(self.file.clone())
+                        .with_help(format!("write `use {shown}::{name}!;`")),
+                    );
+                } else if path.is_empty() {
+                    self.diagnostics.push(
+                        meta_err(
+                            at,
+                            format!("`use {name}!;` does not name the package of `{name}!`"),
+                        )
+                        .with_file(self.file.clone())
+                        .with_help(format!(
+                            "write `use dep::{name}!;`, where `dep` is the package that defines it"
+                        )),
+                    );
+                } else if !self.meta.is_empty() {
+                    if let Some(MetaUse::Def(d)) = self.find_meta(MetaKind::Macro, &path, name, at)
+                    {
+                        self.meta_visible(&d, at);
+                    }
+                }
+                None
+            }
+            rokc_ast::UseTreeKind::Group(ts) if !ts.is_empty() => {
+                let kept: Vec<_> = ts
+                    .into_iter()
+                    .filter_map(|c| self.strip_meta_imports(c, &path, public, at))
+                    .collect();
+                (!kept.is_empty()).then(|| rokc_ast::UseTree {
+                    prefix: t.prefix,
+                    kind: rokc_ast::UseTreeKind::Group(kept),
+                })
+            }
+            kind => Some(rokc_ast::UseTree {
+                prefix: t.prefix,
+                kind,
+            }),
+        }
+    }
+
     /// `#[cfg(..)] mod m {`: enter it; its closing `}` index and `cfg`s.
     /// `None` consumes nothing.
     fn cfg_mod_open(&mut self) -> Option<(usize, Vec<Attribute>)> {
@@ -1427,11 +1798,20 @@ impl Parser<'_> {
     /// Expand the first user attribute (`#[impl_attribute]`) on the item
     /// parsed from `self.tokens[from..self.pos]`; `None` if it has none.
     pub(crate) fn expand_user_attribute(&mut self, item: &Item, from: usize) -> Option<Vec<Item>> {
-        let attrs = item.attrs();
-        let (def, a) = attrs.iter().find_map(|a| {
-            let d = self.meta.find(MetaKind::Attribute, a.name())?;
-            Some((d.clone(), a.clone()))
-        })?;
+        let mut found = None;
+        for a in item.attrs() {
+            let Some((name, qual)) = a.path.split_last() else {
+                continue;
+            };
+            if a.path == ["wit", "export"] {
+                continue;
+            }
+            if let Some(MetaUse::Def(d)) = self.find_meta(MetaKind::Attribute, qual, name, a.span) {
+                found = Some((d, a.clone()));
+                break;
+            }
+        }
+        let (def, a) = found?;
         if !self.meta_visible(&def, a.span) {
             return Some(Vec::new());
         }
@@ -1458,11 +1838,22 @@ impl Parser<'_> {
         if !matches!(item, Item::Struct(_) | Item::Enum(_) | Item::Union(_)) {
             return (item, out);
         }
-        let users: Vec<(MetaDef, Span)> = crate::derive::derive_names(item.attrs())
-            .into_iter()
-            .filter_map(|(n, at)| Some((self.meta.find(MetaKind::Derive, &n)?.clone(), at)))
-            .collect();
-        if users.is_empty() {
+        // What expands, and what leaves `#[derive(..)]`: those and the
+        // ones reported.
+        let mut users: Vec<(MetaDef, Span)> = Vec::new();
+        let mut taken: Vec<Vec<String>> = Vec::new();
+        for (path, at) in crate::derive::derive_paths(item.attrs()) {
+            let Some((name, qual)) = path.split_last() else {
+                continue;
+            };
+            match self.find_meta(MetaKind::Derive, qual, name, at) {
+                Some(MetaUse::Def(d)) => users.push((d, at)),
+                Some(MetaUse::Bad) => {}
+                None => continue,
+            }
+            taken.push(path);
+        }
+        if taken.is_empty() {
             return (item, out);
         }
         for (def, at) in &users {
@@ -1475,9 +1866,16 @@ impl Parser<'_> {
             let attrs = item.attrs_mut();
             for a in attrs.iter_mut().filter(|a| a.path == ["derive"]) {
                 if let AttrBody::Args(args) = &mut a.body {
-                    args.retain(
-                        |x| !matches!(x, AttrArg::Word(w) if users.iter().any(|(d, _)| d.name == *w)),
-                    );
+                    args.retain(|x| {
+                        let path = match x {
+                            AttrArg::Word(w) => std::slice::from_ref(w),
+                            AttrArg::Nested { path, body } if matches!(**body, AttrBody::Empty) => {
+                                path.as_slice()
+                            }
+                            _ => return true,
+                        };
+                        !taken.iter().any(|p| p == path)
+                    });
                 }
             }
             attrs.retain(|a| {
@@ -1641,7 +2039,7 @@ impl Parser<'_> {
     /// Expand `def` over `target` and parse the result (expanding again
     /// what it produces - 6.8.8).
     fn run_meta(&mut self, def: &MetaDef, target: &Target, item: &Item) -> Vec<Item> {
-        let key = format!("{:?}:{}", def.kind, def.name);
+        let key = format!("{:?}:{}:{}", def.kind, def.name, def.package);
         if self.meta_stack.contains(&key) || self.meta_stack.len() >= 32 {
             let chain: Vec<&str> = self
                 .meta_stack
@@ -1695,6 +2093,7 @@ impl Parser<'_> {
         p.meta = Arc::clone(&self.meta);
         p.literals = Arc::clone(&self.literals);
         p.cfg.clone_from(&self.cfg);
+        p.package.clone_from(&def.package);
         p.meta_stack.clone_from(&self.meta_stack);
         p.meta_stack.push(key);
         let mut items = Vec::new();
