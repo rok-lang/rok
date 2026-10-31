@@ -1368,6 +1368,8 @@ struct Tables<'a> {
     static_leaves: std::cell::RefCell<(usize, Leaves)>,
     /// Statics that may be assigned (`extern` `static mut`, spec 5.9.3).
     mut_statics: std::collections::HashSet<String>,
+    /// Statics of `extern` blocks (spec 5.9.3), C globals.
+    extern_statics: std::collections::HashSet<String>,
     /// `#[literal]` handlers of the built-in literal shapes (spec 6.5).
     literal_shapes: Vec<ShapeHandler>,
     names: TypeNames,
@@ -1550,6 +1552,11 @@ impl<'a> Env<'a> {
         self.mut_statics.contains(key)
     }
 
+    fn is_extern_static(&self, key: &str) -> bool {
+        incr::read(|| incr::Read::ExternStatic(key.to_owned()));
+        self.extern_statics.contains(key)
+    }
+
     fn trait_of(&self, key: &str) -> Option<&TraitInfo> {
         incr::read(|| incr::Read::TraitInfo(key.to_owned()));
         self.trait_info.get(key)
@@ -1700,6 +1707,7 @@ impl Tables<'_> {
             statics: HashMap::new(),
             static_leaves: std::cell::RefCell::default(),
             mut_statics: std::collections::HashSet::new(),
+            extern_statics: std::collections::HashSet::new(),
             literal_shapes: Vec::new(),
             names: TypeNames::empty(),
             decls: Vec::new(),
@@ -2909,6 +2917,9 @@ struct LowerCtx<'a> {
     /// Set by a call through a lang slot (`expr::lang_fn`): lowering
     /// made it, so the hook's own marks do not warn. Taken by the call.
     hook_call: std::cell::Cell<bool>,
+    /// Lowering `addr_of`'s place: taking an extern static's address
+    /// reads nothing.
+    addr_place: bool,
     /// Enclosing breakable constructs, innermost last: `(label,
     /// is_loop)` - labelled blocks accept `break 'l` but not `continue`.
     breakables: Vec<(Option<String>, bool)>,
@@ -3114,6 +3125,7 @@ impl<'a> LowerCtx<'a> {
             value_captured: std::collections::HashSet::new(),
             unsafe_depth: 0,
             hook_call: std::cell::Cell::new(false),
+            addr_place: false,
             explicit_recv: None,
             dropped_ref_recv: Vec::new(),
             breakables: Vec::new(),

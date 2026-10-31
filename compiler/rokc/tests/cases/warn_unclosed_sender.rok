@@ -1,0 +1,67 @@
+// needs: threads
+// expect-exit: 0
+// expect-lint: 19:5 `tx` is never closed: its receivers wait for more values forever
+// expect-lint: 27:15 `tx2` is never closed: its receivers wait for more values forever
+// expect-lint: 34:5 `tx` is not always closed: its receivers wait for more values forever
+// expect-warning: help: call `tx.close()` once it has sent its last value
+// spec: §6.2.9
+// spec: std 217-channel §2.17.3
+// expect-stdout: 3
+
+// A `Sender` left open on some path keeps every receiver waiting: a
+// closure that only sends through it does not close it, and a clone is
+// a sender of its own.
+
+use rok::std::thread;
+
+// Each of these hangs in its `for`.
+pub fn thread_only_sends() {
+    let (tx, rx) = channel::<i64>();
+    let t = thread::spawn(|| { try! tx.send(1); });
+    for v in rx { println(f"{v}"); }
+    try! t.join();
+}
+
+pub fn clone_left_open() {
+    let (tx, rx) = channel::<i64>();
+    let tx2 = tx.clone();
+    try! tx2.send(2);
+    tx.close();
+    for v in rx { println(f"{v}"); }
+}
+
+pub fn closed_on_one_path(c: bool) {
+    let (tx, rx) = channel::<i64>();
+    try! tx.send(1);
+    if c {
+        tx.close();
+    }
+    for v in rx { println(f"{v}"); }
+}
+
+// Not flagged: closed by the thread, or after it.
+fn thread_closes() -> i64 {
+    let (tx, rx) = channel::<i64>();
+    let t = thread::spawn(|| {
+        try! tx.send(1);
+        tx.close();
+    });
+    let n = 0i64;
+    for v in rx { n += v; }
+    try! t.join();
+    n
+}
+
+fn closed_after_join() -> i64 {
+    let (tx, rx) = channel::<i64>();
+    let t = thread::spawn(|| { try! tx.send(2); });
+    try! t.join();
+    tx.close();
+    let n = 0i64;
+    for v in rx { n += v; }
+    n
+}
+
+fn main() {
+    println(f"{thread_closes() + closed_after_join()}");
+}

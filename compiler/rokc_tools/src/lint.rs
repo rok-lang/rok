@@ -27,11 +27,12 @@ use rokc_diagnostic::{ErrorKind, RokDiagnostic, Severity, Span};
 use rokc_hir::walk::{AstVisitor, walk_expr, walk_fn, walk_item, walk_stmt};
 use rokc_hir::{HirExprKind, HirTy};
 use rokc_interface::{CompileResult, SourceFile};
-use rokc_ir_common::LocalId;
 
-use crate::analysis::{each_block, short_name};
+use crate::analysis::each_block;
 
 pub use rokc_core::lint::Level;
+
+mod release;
 
 pub struct Lint {
     pub name: &'static str,
@@ -212,6 +213,30 @@ pub const LINTS: &[Lint] = &[
     warn_since(
         "implicit_core_fn",
         "a core free function called bare through the implicit `use rok::core::**`",
+    ),
+    warn_since(
+        "unclosed_sender",
+        "a channel `Sender` (or a clone) that is not closed on every path: receivers wait forever",
+    ),
+    warn_since(
+        "using_twice",
+        "a second `using` of the same `Drop` value, or a use after its `using` released it",
+    ),
+    warn_since(
+        "guard_escape",
+        "a `throw` inside `using` whose error holds what the lock protects",
+    ),
+    warn_since(
+        "thread_local_across_await",
+        "a `ThreadLocal::get()` value used after an `await`: the task may resume on another thread",
+    ),
+    warn_since(
+        "extern_static_unsafe",
+        "an extern static read or written outside `unsafe`",
+    ),
+    warn_since(
+        "extern_ffi_types",
+        "a GC type (`List`, `Dict`, a closure, a sum, ..) in an extern declaration or an `extern \"C\" fn`",
     ),
 ];
 
@@ -1402,9 +1427,21 @@ impl<'a> Cx<'a> {
                 }
             });
         }
-        let resources = Resources::new(hir);
+        let resources = release::Resources::new(hir);
+        let mut released = Vec::new();
         for f in &own {
-            unclosed(&resources, f, &files, &mut hits);
+            release::check(&resources, f, &files, &mut released);
+        }
+        for h in released {
+            self.findings.push(Finding {
+                lint: h.lint,
+                span: h.span,
+                msg: h.msg,
+                notes: h.notes,
+                secondary: h.secondary,
+                since: h.since.map(str::to_owned),
+                base: None,
+            });
         }
         let types: MustUse = hir
             .structs
@@ -1776,240 +1813,6 @@ impl TypeMarks {
             leaf(k) == last
                 && (unique || (segs.len() > 1 && (*k == path || k.ends_with(&format!("::{path}")))))
         })
-    }
-}
-
-/// What `unclosed` needs of the whole module, made once: function names
-/// by id and the resource types (name, HIR method prefix).
-struct Resources<'h> {
-    names: HashMap<rokc_ir_common::FunctionId, &'h str>,
-    types: HashMap<rokc_hir::StructId, (&'h str, String)>,
-}
-
-impl<'h> Resources<'h> {
-    fn new(hir: &'h rokc_hir::HirModule) -> Self {
-        // The std descriptor holders; any other type whose `drop` the
-        // program reaches counts too.
-        const STD: &[&str] = &[
-            "rok::std::fs::File",
-            "rok::std::fs::Dir",
-            "rok::std::fs::ReadDir",
-            "rok::std::net::TcpStream",
-            "rok::std::net::TcpListener",
-            "rok::std::net::UdpSocket",
-            "rok::std::process::Child",
-        ];
-        // Methods are named `Struct<id>__<method>`, a prebuilt library's
-        // `<type>.<method>`; a trait impl's add `__by_<Trait>`.
-        let drops: HashSet<&str> = hir
-            .functions
-            .iter()
-            .filter_map(|g| {
-                let n = g.name.as_str();
-                let n = n.split("__by_").next().unwrap_or(n);
-                n.strip_suffix(".drop").or_else(|| {
-                    n.strip_suffix("__drop")
-                        .map(|_| n.split("__").next().unwrap_or(n))
-                })
-            })
-            .collect();
-        let types = hir
-            .structs
-            .iter()
-            .filter_map(|s| {
-                let own = format!("Struct{}", s.id.0);
-                let n = s.name.as_str();
-                (STD.contains(&n) || drops.contains(own.as_str()) || drops.contains(n))
-                    .then_some((s.id, (n, own)))
-            })
-            .collect();
-        let names = hir
-            .functions
-            .iter()
-            .map(|g| (g.id, g.name.as_str()))
-            .collect();
-        Self { names, types }
-    }
-
-    /// The method of resource type `ty` (HIR prefix `own`) `callee` is.
-    fn method(&self, callee: rokc_ir_common::FunctionId, ty: &str, own: &str) -> Option<&'h str> {
-        // `using` calls `drop` through `Drop`: `<type>.drop__by_Drop`.
-        let n = self.names.get(&callee)?;
-        let n = n.split("__by_").next().unwrap_or(n);
-        n.strip_prefix(own)
-            .filter(|m| m.starts_with("__") || m.starts_with('.'))
-            .and_then(|m| m.rsplit("__").next())
-            .or_else(|| n.strip_prefix(ty)?.strip_prefix('.'))
-    }
-}
-
-/// `unclosed_resource`: a named `Drop` local whose every use is a call of
-/// its own non-closing methods; the GC never closes it (stdlib 2.13), so
-/// it leaks. Any other use counts as handled. Aliases are judged together;
-/// what a parameter holds isn't this function's to close.
-fn unclosed(
-    res: &Resources<'_>,
-    f: &rokc_hir::HirFunction,
-    files: &HashSet<u32>,
-    hits: &mut Vec<(&'static str, Span, String)>,
-) {
-    const CLOSERS: &[&str] = &["close", "close_checked", "drop", "wait", "wait_with_output"];
-    let resource = |t: &HirTy| match t {
-        HirTy::Struct(id) => res.types.get(id).map(|(n, own)| (*n, own.as_str())),
-        _ => None,
-    };
-    let Some(body) = f
-        .body
-        .as_ref()
-        .filter(|_| f.locals.iter().any(|l| resource(&l.ty).is_some()))
-    else {
-        return;
-    };
-    let (root, form) = aliases(body);
-    let root_of = |l: LocalId| *root.get(&l).unwrap_or(&l);
-    // Each value's holders: its first local and that one's aliases.
-    let mut groups: HashMap<_, HashMap<_, _>> = HashMap::new();
-    for l in &f.locals {
-        groups
-            .entry(root_of(l.id))
-            .or_default()
-            .insert(l.id, resource(&l.ty));
-    }
-    let params: HashSet<_> = f.params.iter().map(|p| p.local).collect();
-    for r in f.locals.iter().filter(|l| !params.contains(&l.id)) {
-        let Some(group) = groups
-            .get(&r.id)
-            .filter(|g| g.values().any(Option::is_some))
-        else {
-            continue;
-        };
-        let member = |e: &rokc_hir::HirExpr| match e.kind {
-            HirExprKind::Local(x) => group.get(&x),
-            _ => None,
-        };
-        let (mut uses, mut kept, mut first) = (0, 0, None);
-        each_block(body, &mut |e| {
-            if member(e).is_some() && !form.contains(&std::ptr::from_ref(e)) {
-                uses += 1;
-                first = first.or(Some((e.span, e)));
-            }
-            let HirExprKind::Call { callee, args } = &e.kind else {
-                return;
-            };
-            if let Some(Some((ty, own))) = args.first().and_then(member) {
-                let own = res.method(*callee, ty, own);
-                if own.is_some_and(|m| !CLOSERS.contains(&m) && !m.starts_with("into_")) {
-                    kept += 1;
-                }
-            }
-        });
-        // Every use is a method call, so the first one's receiver is
-        // the resource: the finding names it.
-        let Some((span, e)) = first.filter(|(s, _)| uses == kept && files.contains(&s.file)) else {
-            continue;
-        };
-        let Some(Some((ty, _))) = member(e) else {
-            continue;
-        };
-        let HirExprKind::Local(x) = e.kind else {
-            continue;
-        };
-        if let Some(name) = f
-            .locals
-            .iter()
-            .find(|l| l.id == x)
-            .and_then(|l| l.name.as_deref())
-            .filter(|n| !n.starts_with(['#', '_']))
-        {
-            hits.push((
-                "unclosed_resource",
-                span,
-                format!(
-                    "`{name}` holds a `{}` that is never closed - bind it with `using` or \
-                     call `close()`; the GC does not close it (stdlib 2.13)",
-                    short_name(ty)
-                ),
-            ));
-        }
-    }
-}
-
-/// Each local bound to another's value (renamed, narrowed, destructured, a
-/// capture from `__env`) mapped to the first holder, and the reads that
-/// only form such aliases.
-fn aliases(
-    body: &rokc_hir::HirBlock,
-) -> (HashMap<LocalId, LocalId>, HashSet<*const rokc_hir::HirExpr>) {
-    type Form = Vec<*const rokc_hir::HirExpr>;
-    fn base(
-        e: &rokc_hir::HirExpr,
-        root: &HashMap<LocalId, LocalId>,
-        form: &mut Form,
-    ) -> Option<LocalId> {
-        match &e.kind {
-            HirExprKind::Local(x) => {
-                form.push(std::ptr::from_ref(e));
-                Some(*root.get(x).unwrap_or(x))
-            }
-            HirExprKind::TupleField { target, .. } | HirExprKind::FieldRead { target, .. } => {
-                base(target, root, form)
-            }
-            HirExprKind::Match { scrutinee, arms } => {
-                let r = base(scrutinee, root, form)?;
-                arms.iter()
-                    .all(|a| base(&a.body, root, form) == Some(r))
-                    .then_some(r)
-            }
-            _ => None,
-        }
-    }
-    fn lets(
-        blk: &rokc_hir::HirBlock,
-        root: &HashMap<LocalId, LocalId>,
-        add: &mut Vec<(LocalId, LocalId)>,
-        form: &mut Form,
-    ) {
-        for s in &blk.stmts {
-            let rokc_hir::HirStmt::Let { local, init } = s else {
-                continue;
-            };
-            let mut fv = Vec::new();
-            if let Some(r) = base(init, root, &mut fv) {
-                add.push((*local, r));
-                form.extend(fv);
-            }
-        }
-    }
-    let (mut root, mut form) = (HashMap::new(), HashSet::new());
-    loop {
-        let (mut add, mut fadd) = (Vec::new(), Vec::new());
-        lets(body, &root, &mut add, &mut fadd);
-        each_block(body, &mut |e| match &e.kind {
-            HirExprKind::Block(blk)
-            | HirExprKind::While { body: blk, .. }
-            | HirExprKind::Loop { body: blk, .. }
-            | HirExprKind::If {
-                then_block: blk, ..
-            } => lets(blk, &root, &mut add, &mut fadd),
-            HirExprKind::Match { scrutinee, arms } => {
-                let mut fv = Vec::new();
-                if let Some(r) = base(scrutinee, &root, &mut fv) {
-                    fadd.extend(fv);
-                    for a in arms {
-                        a.pat.each_binding(&mut |l| add.push((l, r)));
-                    }
-                }
-            }
-            _ => {}
-        });
-        form.extend(fadd);
-        let mut changed = false;
-        for (l, r) in add {
-            changed |= l != r && root.insert(l, r) != Some(r);
-        }
-        if !changed {
-            return (root, form);
-        }
     }
 }
 
