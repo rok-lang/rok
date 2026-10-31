@@ -49,10 +49,10 @@ counterpart is flagged `OUTPUT MISMATCH`. Either makes the exit status 1.
 Compare only records from the same host: instruction counts depend on
 the CPU and the C compiler.
 
-`ROK_GC_STATS=1` makes a Rok program print collections, pause totals
+`ROKR_GC_STATS=1` makes a Rok program print collections, pause totals
 and collector CPU, then blocks / resident KiB / evacuations / bytes
 moved at exit:
 
 ```sh
-ROK_GC_STATS=1 target/bench/gc_old_heap
+ROKR_GC_STATS=1 target/bench/gc_old_heap
 ```

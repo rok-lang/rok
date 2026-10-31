@@ -2168,7 +2168,7 @@ int main(void) {
     SetStdHandle(std_input, nul_in);
     // No concurrent marking: its marker thread would live on across a
     // rollback with its own idea of the heap.
-    _putenv_s("ROK_GC_CONCURRENT", "off");
+    _putenv_s("ROKR_GC_CONCURRENT", "off");
     rok_watch_writes();
     rok_runtime_init();
     rok_stdio_line_buffered();
@@ -2356,7 +2356,7 @@ int main(int argc, char **argv) {
     nul_in = open("/dev/null", O_RDONLY | O_CLOEXEC);
     dup2(nul_in, 0);  // the cells' stdin
     // No concurrent marking: its marker thread is not in a snapshot.
-    setenv("ROK_GC_CONCURRENT", "off", 1);
+    setenv("ROKR_GC_CONCURRENT", "off", 1);
     rok_runtime_init();
     rok_stdio_line_buffered();
     rok_set_exit_hook(on_exit_hook);

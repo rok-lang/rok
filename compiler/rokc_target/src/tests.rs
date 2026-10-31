@@ -1,4 +1,4 @@
-use crate::{BUILTIN, CAbi, HOST, Libc, Linker, TargetSpec};
+use crate::{BUILTIN, CAbi, HOST, Libc, Linker, RENAMED, TargetSpec};
 
 fn t(name: &str) -> TargetSpec {
     TargetSpec::builtin(name).unwrap()
@@ -108,4 +108,14 @@ fn tier1_properties() {
     assert_eq!(t("wasm32-wasi").linker, Linker::WasmComponentLd);
     assert!(t("wasm32-wasi-threads").threads && !t("wasm32-wasi").threads);
     assert_eq!(t("s390x-unknown-linux-gnu").endian, "big");
+}
+
+/// A target's 0.2.0 name is an alias: the same spec, under the old name.
+#[test]
+fn new_names_are_aliases() {
+    for (old, new) in RENAMED {
+        assert!(BUILTIN.contains(old) && !BUILTIN.contains(new), "{old}");
+        assert_eq!(t(new), t(old), "{new}");
+        assert_eq!(TargetSpec::resolve(Some(new)).unwrap().name, *old);
+    }
 }

@@ -318,7 +318,7 @@ fn lib_and_main_package() {
     assert!(index.contains("add"), "{index}");
 }
 
-/// `--emit=ast` (9.9.10): the package after meta expansion, as rok
+/// `--emit=source` (9.9.10): the package after meta expansion, as rok
 /// source (derived impls, `if let` as `match`; no comments).
 // spec: §9.9.1
 #[test]
@@ -330,7 +330,7 @@ fn emit_ast_shows_derives_and_desugaring() {
          fn main() {\n    let v: i32 | none = 3;\n    if let n: i32 = v { println(f\"{n}\"); }\n}\n",
     )
     .unwrap();
-    let out = rokc(None, &dir, &["build", "--emit=ast", "-o", "x.rok"]);
+    let out = rokc(None, &dir, &["build", "--emit=source", "-o", "x.rok"]);
     assert_exit(&out, 0);
     let text = fs::read_to_string(dir.join("x.rok")).unwrap();
     assert!(
@@ -986,7 +986,7 @@ fn edited_module_recompiles_its_unit_alone() {
 }
 
 /// Unchanged parses and lowerings replay from the incremental directory;
-/// `ROKC_INCR_VERIFY` fails a replay that differs from a clean lowering.
+/// `ROK_INCR_VERIFY` fails a replay that differs from a clean lowering.
 // spec: §9.1.7
 #[test]
 fn front_end_reuses_parses_and_bodies() {
@@ -1007,7 +1007,7 @@ fn front_end_reuses_parses_and_bodies() {
         let mut cmd = Command::new(ROKC);
         cmd.current_dir(&app)
             .env("ROK_HOME", workspace())
-            .env("ROKC_INCR_VERIFY", "1")
+            .env("ROK_INCR_VERIFY", "1")
             .envs(vars.iter().copied())
             .args(args)
             .arg("--rokr")
@@ -1039,7 +1039,7 @@ fn front_end_reuses_parses_and_bodies() {
         ((n[0], n[1], n[2], n[3]), warnings, text(&run.stdout))
     };
     let clean = || {
-        let out = rokc_with(&[("ROKC_INCREMENTAL", "0")], &["check"]);
+        let out = rokc_with(&[("ROK_INCREMENTAL", "0")], &["check"]);
         let stderr = text(&out.stderr);
         let warnings: Vec<String> = stderr
             .lines()
@@ -1183,7 +1183,7 @@ fn library_stage_persists_across_builds() {
         let out = Command::new(ROKC)
             .current_dir(&dir)
             .env("ROK_HOME", workspace())
-            .env("ROKC_INCR_VERIFY", "1")
+            .env("ROK_INCR_VERIFY", "1")
             .envs(vars.iter().copied())
             .args(["run", "-v", "app", "--extern", "dep=dep"])
             .args(args)
@@ -1207,7 +1207,7 @@ fn library_stage_persists_across_builds() {
         let (kept, w, out) = run(&[], &[]);
         let clean = dir.join("clean");
         let target = ["--target-dir", clean.to_str().unwrap()];
-        let (_, clean_w, clean_out) = run(&[("ROKC_INCREMENTAL", "0")], &target);
+        let (_, clean_w, clean_out) = run(&[("ROK_INCREMENTAL", "0")], &target);
         assert_eq!((&w, &out), (&clean_w, &clean_out));
         assert!(
             w.iter().any(|l| l.contains("covers no throwing call")),
@@ -1303,7 +1303,7 @@ fn incremental_checks_generic_bodies() {
         let out = Command::new(ROKC)
             .current_dir(&app)
             .env("ROK_HOME", workspace())
-            .env("ROKC_INCR_VERIFY", "1")
+            .env("ROK_INCR_VERIFY", "1")
             .args(["check"])
             .arg("--rokr")
             .arg(&env.rokr)
@@ -1360,7 +1360,7 @@ fn incremental_deprecation_marks() {
         let out = Command::new(ROKC)
             .current_dir(&app)
             .env("ROK_HOME", workspace())
-            .env("ROKC_INCR_VERIFY", "1")
+            .env("ROK_INCR_VERIFY", "1")
             .args(["check"])
             .output()
             .unwrap();
@@ -1494,7 +1494,7 @@ fn library_units(env: &Env, target: Option<&str>, opt: &str) {
 }
 
 /// An anonymous file builds by units too, kept per file in the target
-/// directory without a package (`ROKC_TARGET_DIR`, else the system's
+/// directory without a package (`ROK_TARGET_DIR`, else the system's
 /// temporary one), not in a `target/` beside the script.
 // spec: §9.1.2 §9.1.7
 #[test]
@@ -1507,7 +1507,7 @@ fn anonymous_file_reuses_its_units() {
         let out = Command::new(ROKC)
             .current_dir(&dir)
             .env("ROK_HOME", workspace())
-            .env("ROKC_TARGET_DIR", &cache)
+            .env("ROK_TARGET_DIR", &cache)
             .args(["run", "-v", "hello.rok", "--rokr"])
             .arg(&env.rokr)
             .output()
@@ -2005,7 +2005,7 @@ fn rokc_in_tmp(env: &Env, dir: &Path, tmp: &Path, args: &[&str]) -> Output {
     Command::new(ROKC)
         .current_dir(dir)
         .env("ROK_HOME", workspace())
-        .env_remove("ROKC_TARGET_DIR")
+        .env_remove("ROK_TARGET_DIR")
         .env("TMPDIR", tmp)
         .env("TMP", tmp)
         .env("TEMP", tmp)
@@ -2055,7 +2055,7 @@ fn lone_cache_refuses_foreign_dir() {
     assert!(
         err.contains(&format!(
             "{} is not private to you (owner uid {uid}, mode 0755); remove it or set \
-             ROKC_TARGET_DIR",
+             ROK_TARGET_DIR",
             cache.display()
         )),
         "{err}"
@@ -2072,11 +2072,11 @@ fn lone_cache_refuses_foreign_dir() {
         "{}",
         text(&out.stderr)
     );
-    // `ROKC_TARGET_DIR` is the way out.
+    // `ROK_TARGET_DIR` is the way out.
     let out = Command::new(ROKC)
         .current_dir(&dir)
         .env("ROK_HOME", workspace())
-        .env("ROKC_TARGET_DIR", dir.join("t"))
+        .env("ROK_TARGET_DIR", dir.join("t"))
         .env("TMPDIR", &tmp)
         .args(["run", "-q", "hello.rok", "--rokr"])
         .arg(&env.rokr)
@@ -3425,7 +3425,14 @@ fn prebuilt_dependency_keeps_handoff_summaries() {
     assert_exit(&out, 0);
     let rokhir = dir.join("dep/target/debug/dep.rokhir");
     let ext = format!("dep={}", rokhir.display());
-    let dump = text(&rokc(None, &dir, &["rokhir-text", "dep/target/debug/dep.rokhir"]).stdout);
+    let dump = text(
+        &rokc(
+            None,
+            &dir,
+            &["inspect", "--text", "dep/target/debug/dep.rokhir"],
+        )
+        .stdout,
+    );
     assert!(dump.contains("--- summaries\ndep::lock\n"), "{dump}");
     // By exit: the `Mutex` (variant 0) took `xs`, `none` (1) nothing.
     assert!(dump.contains("dep::store_if\n"), "{dump}");
@@ -3647,9 +3654,25 @@ fn prebuilt_dependency_is_linked_and_instantiated() {
     assert_eq!(text(&out.stdout), "1 2\ncaught bad -3\n18\n");
 
     // The interface: concrete bodies cut, generic ones kept.
-    let out = rokc(None, &dir, &["rokhir-text", "geo/target/debug/geo.rokhir"]);
+    let out = rokc(
+        None,
+        &dir,
+        &["inspect", "--text", "geo/target/debug/geo.rokhir"],
+    );
     assert_exit(&out, 0);
     let dump = text(&out.stdout);
+    // The old name prints the same, and warns.
+    let old = rokc(None, &dir, &["rokhir-text", "geo/target/debug/geo.rokhir"]);
+    assert_exit(&old, 0);
+    assert_eq!(text(&old.stdout), dump);
+    assert!(
+        text(&old.stderr).contains(
+            "rokc: warning: `rokc rokhir-text` is now `rokc inspect --text` (write `rokc inspect \
+             --text geo/target/debug/geo.rokhir`); `rokhir-text` goes in 0.2.0"
+        ),
+        "{}",
+        text(&old.stderr)
+    );
     assert!(dump.contains("package: geo (hash: "), "{dump}");
     assert!(dump.contains("pub fn bump() -> i32 ;"), "{dump}");
     assert!(
@@ -3964,7 +3987,7 @@ fn library_tiers_depend_only_downward() {
 // spec: §9.9.1 §9.9.10
 #[test]
 fn emit_expanded_prints_meta_expansions() {
-    // `--emit=expanded` lists the nested expansion of `Tag`'s derive
+    // `--emit=expansions` lists the nested expansion of `Tag`'s derive
     // (used at 11:5) after the attribute's.
     let dir = scratch("expanded");
     let src = "trait Named { fn type_name() -> str; }\n\
@@ -3979,7 +4002,13 @@ fn emit_expanded_prints_meta_expansions() {
     let out = rokc(
         None,
         &dir,
-        &["build", "m.rok", "--emit=expanded", "-o", "m.expanded.rok"],
+        &[
+            "build",
+            "m.rok",
+            "--emit=expansions",
+            "-o",
+            "m.expanded.rok",
+        ],
     );
     assert_exit(&out, 0);
     let got = fs::read_to_string(dir.join("m.expanded.rok")).unwrap();
@@ -4293,7 +4322,13 @@ fn print_target_list_and_spec() {
     let out = rokc(None, &dir, &["--print", "target-list"]);
     assert_exit(&out, 0);
     let list = text(&out.stdout);
-    assert_eq!(list.lines().collect::<Vec<_>>(), rokc_target::BUILTIN);
+    let names: Vec<&str> = list.lines().filter(|l| !l.contains(' ')).collect();
+    let mut want: Vec<&str> = rokc_target::BUILTIN.to_vec();
+    for (old, new) in rokc_target::RENAMED {
+        let at = want.iter().position(|t| t == old).unwrap();
+        want[at] = new;
+    }
+    assert_eq!(names, want);
     for t in rokc_target::BUILTIN {
         let out = rokc(None, &dir, &["--print", "target-spec", "--target", t]);
         assert_exit(&out, 0);
@@ -4921,7 +4956,7 @@ fn run_passes_arguments_codes_and_progress() {
     }
     let exe = app.join("target/debug").join(exe_name("app"));
     let out = Command::new(&exe)
-        .env("ROK_GC_STATS", "1")
+        .env("ROKR_GC_STATS", "1")
         .output()
         .unwrap();
     let err = text(&out.stderr);
@@ -4935,7 +4970,7 @@ fn run_passes_arguments_codes_and_progress() {
     let out = Command::new(ROKC)
         .current_dir(&app)
         .env("ROK_HOME", workspace())
-        .env("ROKC_VERBOSE", "1")
+        .env("ROK_VERBOSE", "1")
         .env("ROK_TIME_PASSES", "1")
         .args(["build", "--rokr"])
         .arg(&env.rokr)
@@ -6461,10 +6496,10 @@ fn env_knob_bad_value_warns() {
         .current_dir(&lib)
         .env("ROK_HOME", workspace())
         .env("ROK_BACKEND", "gcc")
-        .env("ROKC_VERBOSE", "yes")
+        .env("ROK_VERBOSE", "yes")
         .env("ROK_TIME_PASSES", "on")
-        .env("ROKC_INCR_VERIFY", "true")
-        .env("ROKC_NUM_JOBS", "0")
+        .env("ROK_INCR_VERIFY", "true")
+        .env("ROK_NUM_JOBS", "0")
         .args(["test", "-q", "--rokr"])
         .arg(&env.rokr)
         .output()
@@ -6479,12 +6514,184 @@ fn env_knob_bad_value_warns() {
         warnings,
         [
             "rokc: warning: ignoring ROK_BACKEND=gcc (expected native|llvm)",
-            "rokc: warning: ignoring ROKC_VERBOSE=yes (expected 0|1)",
+            "rokc: warning: ignoring ROK_VERBOSE=yes (expected 0|1)",
             "rokc: warning: ignoring ROK_TIME_PASSES=on (expected 0|1)",
-            "rokc: warning: ignoring ROKC_INCR_VERIFY=true (expected 0|1)",
-            "rokc: warning: ignoring ROKC_NUM_JOBS=0 (expected a positive number)",
+            "rokc: warning: ignoring ROK_INCR_VERIFY=true (expected 0|1)",
+            "rokc: warning: ignoring ROK_NUM_JOBS=0 (expected a positive number)",
         ]
     );
+}
+
+/// The old `ROKC_*` names still work and warn once, naming the new one;
+/// the new name, when set too, wins without a warning. `test` (as `run`
+/// and `bench`) warns about the runtime's old names.
+// spec: §9.1.7 §9.9.8
+#[test]
+fn old_env_names_warn() {
+    let Some(env) = setup() else { return };
+    let dir = scratch("env-old");
+    let lib = new_package(&dir, "knobs", true);
+    let run = |vars: &[(&str, &Path)]| {
+        let mut c = Command::new(ROKC);
+        c.current_dir(&lib).env("ROK_HOME", workspace());
+        for (new, old) in rokc_core::RENAMED_VARS
+            .iter()
+            .chain(rokc_core::RUNTIME_VARS)
+        {
+            c.env_remove(new).env_remove(old);
+        }
+        c.envs(vars.iter().copied())
+            .args(["test", "-q", "--rokr"])
+            .arg(&env.rokr)
+            .output()
+            .unwrap()
+    };
+    let warnings = |out: &Output| {
+        let mut w: Vec<String> = text(&out.stderr)
+            .lines()
+            .filter(|l| l.starts_with("rokc: warning: "))
+            .map(str::to_owned)
+            .collect();
+        w.sort();
+        w
+    };
+    let (old, new) = (dir.join("old"), dir.join("new"));
+    let out = run(&[
+        ("ROKC_TARGET_DIR", &old),
+        ("ROKC_NUM_JOBS", Path::new("2")),
+        ("ROK_WORKERS", Path::new("2")),
+    ]);
+    assert_exit(&out, 0);
+    assert_eq!(
+        warnings(&out),
+        [
+            "rokc: warning: ROKC_NUM_JOBS is now ROK_NUM_JOBS: set ROK_NUM_JOBS instead \
+             (ROKC_NUM_JOBS goes in 0.2.0)",
+            "rokc: warning: ROKC_TARGET_DIR is now ROK_TARGET_DIR: set ROK_TARGET_DIR instead \
+             (ROKC_TARGET_DIR goes in 0.2.0)",
+            "rokc: warning: ROK_WORKERS is now ROKR_WORKERS: set ROKR_WORKERS instead (programs \
+             read ROK_WORKERS until 0.2.0)",
+        ]
+    );
+    assert!(old.join("debug").is_dir());
+    let out = run(&[
+        ("ROK_TARGET_DIR", &new),
+        ("ROKC_TARGET_DIR", &old),
+        ("ROKR_WORKERS", Path::new("2")),
+        ("ROK_WORKERS", Path::new("2")),
+    ]);
+    assert_exit(&out, 0);
+    assert!(warnings(&out).is_empty(), "{}", text(&out.stderr));
+    assert!(new.join("debug").is_dir());
+}
+
+/// `--out` still names the output, with a warning that says `-o`; `-o`
+/// and `--output` do not warn.
+// spec: §9.1.2
+#[test]
+fn out_flag_warns() {
+    let dir = scratch("out-flag");
+    put(dir.join("src/main.rok"), "fn main() {}\n").unwrap();
+    let out = rokc(None, &dir, &["emit", "--emit=hir", "--out", "a.hir"]);
+    assert_exit(&out, 0);
+    assert!(
+        text(&out.stderr).contains(
+            "rokc: warning: `--out` is now `-o` or `--output` (write `-o a.hir`); `--out` goes \
+             in 0.2.0"
+        ),
+        "{}",
+        text(&out.stderr)
+    );
+    assert!(dir.join("a.hir").is_file());
+    for f in ["-o", "--output"] {
+        let out = rokc(None, &dir, &["emit", "--emit=hir", f, "b.hir"]);
+        assert_exit(&out, 0);
+        assert!(
+            !text(&out.stderr).contains("warning"),
+            "{}",
+            text(&out.stderr)
+        );
+    }
+}
+
+/// `--emit=source` and `--emit=expansions` are the new names of `ast`
+/// and `expanded`, which still work and warn.
+// spec: §9.1.2 §9.9.10
+#[test]
+fn emit_new_names() {
+    let dir = scratch("emit-names");
+    put(
+        dir.join("src/main.rok"),
+        "#[derive(Clone)]\nstruct P { x: i32; }\nfn main() {}\n",
+    )
+    .unwrap();
+    for (new, old) in [("source", "ast"), ("expansions", "expanded")] {
+        let out = rokc(
+            None,
+            &dir,
+            &["emit", &format!("--emit={new}"), "-o", "n.rok"],
+        );
+        assert_exit(&out, 0);
+        assert!(
+            !text(&out.stderr).contains("warning"),
+            "{}",
+            text(&out.stderr)
+        );
+        let out = rokc(
+            None,
+            &dir,
+            &["emit", &format!("--emit={old}"), "-o", "o.rok"],
+        );
+        assert_exit(&out, 0);
+        assert!(
+            text(&out.stderr).contains(&format!(
+                "rokc: warning: `--emit={old}` is now `--emit={new}`; `{old}` goes in 0.2.0"
+            )),
+            "{}",
+            text(&out.stderr)
+        );
+        let read = |f: &str| fs::read_to_string(dir.join(f)).unwrap();
+        assert_eq!(read("n.rok"), read("o.rok"), "{new}");
+    }
+}
+
+/// The ecosystem's target names are aliases of the old ones, which warn.
+// spec: §0.6.2 §9.1.4
+#[test]
+fn new_target_aliases() {
+    let dir = scratch("target-alias");
+    for (old, new) in rokc_target::RENAMED {
+        let spec = |t: &str| rokc(None, &dir, &["--print", "target-spec", "--target", t]);
+        let (a, b) = (spec(new), spec(old));
+        assert_exit(&a, 0);
+        assert_exit(&b, 0);
+        assert_eq!(text(&a.stdout), text(&b.stdout), "{new}");
+        assert!(!text(&a.stderr).contains("warning"), "{}", text(&a.stderr));
+        assert_eq!(
+            text(&b.stderr),
+            format!(
+                "rokc: warning: target `{old}` is now `{new}` (write `--target {new}`); `{old}` \
+                 goes in 0.2.0\n"
+            )
+        );
+    }
+}
+
+/// `--print target-list` lists each new name, and the old one after it
+/// marked deprecated.
+// spec: §9.1.4
+#[test]
+fn target_list_marks_deprecated() {
+    let dir = scratch("target-list-old");
+    let out = rokc(None, &dir, &["--print", "target-list"]);
+    assert_exit(&out, 0);
+    let list = text(&out.stdout);
+    for (old, new) in rokc_target::RENAMED {
+        assert!(
+            list.contains(&format!("\n{new}\n{old} (deprecated: use {new})\n")),
+            "{list}"
+        );
+    }
 }
 
 /// A macOS program links against the default SDK (no SDKROOT) and against

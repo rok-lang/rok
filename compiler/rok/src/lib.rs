@@ -69,7 +69,7 @@ struct Global {
 }
 
 /// `rok: warning: <msg>` on stderr, unless already printed.
-fn warn_once(msg: &str) {
+pub(crate) fn warn_once(msg: &str) {
     static SEEN: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
     let mut seen = SEEN
         .lock()
@@ -1091,29 +1091,34 @@ fn rokc_command(
     let mut c = Command::new(&rokc);
     c.args(&g.color).args(pre).arg(cmd).args(&extra);
     post_args(&mut c, post, &g.tail);
-    if let Ok(me) = std::env::current_exe() {
-        c.env("ROK", me);
-    }
+    let me = std::env::current_exe().ok();
+    handoff(&mut c, "ROK", me.as_deref().map(Path::as_os_str));
     // rokc's usage errors and help then speak of `rok`.
-    c.env("ROK_CLI", "rok");
+    handoff(&mut c, "ROK_CLI", Some("rok".as_ref()));
     // The REPL's `:add` installs into this environment (or, with none,
     // adds to the package).
-    match &t.env {
-        Some(e) => c.env("ROK_ENV", e),
-        None => c.env_remove("ROK_ENV"),
-    };
+    handoff(&mut c, "ROK_ENV", t.env.as_deref().map(AsRef::as_ref));
     // Tell rokc what the environment has, so a script missing one of
     // those gets a hint.
-    match t.env.as_deref().filter(|_| t.ctx.script) {
-        Some(e) => {
-            let libs: Vec<String> = load_dir(&env_dir(e))
-                .map(|c| c.manifest.deps.into_iter().map(|d| d.name).collect())
-                .unwrap_or_default();
-            c.env("ROK_ENV_LIBS", libs.join(","))
-        }
-        None => c.env_remove("ROK_ENV_LIBS"),
-    };
+    let libs = t.env.as_deref().filter(|_| t.ctx.script).map(|e| {
+        let libs: Vec<String> = load_dir(&env_dir(e))
+            .map(|c| c.manifest.deps.into_iter().map(|d| d.name).collect())
+            .unwrap_or_default();
+        libs.join(",")
+    });
+    handoff(&mut c, "ROK_ENV_LIBS", libs.as_deref().map(AsRef::as_ref));
     Ok((c, rokc))
+}
+
+/// Hand `value` to rokc as `__<name>`, and as `<name>`, its spelling until
+/// 0.2.0 (`None`: unset both).
+fn handoff(c: &mut Command, name: &str, value: Option<&std::ffi::OsStr>) {
+    for n in [format!("__{name}"), name.to_owned()] {
+        match value {
+            Some(v) => c.env(n, v),
+            None => c.env_remove(n),
+        };
+    }
 }
 
 /// `post` for `c`, its program's arguments after `--` as given (`tail`).
@@ -2099,12 +2104,13 @@ const PROXIES: [&str; 3] = ["rok", "rokc", "rokls"];
 
 const INSTALL_USAGE: &str = "usage: rok install <name>[@<req>] [--registry <url>] | [<name>] --path \
                              <dir | file.rok> | [<name>] --git <url> [--rev|--tag|--branch <r>] \
-                             [--features <f,..>] [--no-default-features] [--lib] [--force] | \
+                             [--features <f,..>] [--no-default-features] [--lib | --bin] [--force] | \
                              --native <name>[@<req>] | --list";
 
 /// `rok install`: an executable (package with `src/main.rok`, or a script)
 /// built `--release` into `$ROK_HOME/bin`, or a library (`src/lib.rok`
-/// only, or `--lib`) into the active environment. An executable already
+/// only, or `--lib`) into the active environment; a package with both
+/// warns without `--lib` or `--bin`. An executable already
 /// installed from the same version or commit and features is kept unless
 /// `--force`; path installs always rebuild.
 fn cmd_install(g: &Global, args: &[String]) -> Result<i32, String> {
@@ -2119,10 +2125,17 @@ fn cmd_install(g: &Global, args: &[String]) -> Result<i32, String> {
         return add_native(g, args, Some(&env), None);
     }
     let lib = args.iter().any(|a| a == "--lib");
+    let bin = args.iter().any(|a| a == "--bin");
+    if lib && bin {
+        return Err(
+            "`--lib` and `--bin` go apart: `--lib` installs the library, `--bin` the executable"
+                .into(),
+        );
+    }
     let force = args.iter().any(|a| a == "--force");
     let args: Vec<String> = args
         .iter()
-        .filter(|a| *a != "--lib" && *a != "--force")
+        .filter(|a| *a != "--lib" && *a != "--bin" && *a != "--force")
         .cloned()
         .collect();
     if args.is_empty() {
@@ -2195,14 +2208,26 @@ fn cmd_install(g: &Global, args: &[String]) -> Result<i32, String> {
         let copy = !matches!(dep.source, Source::Path(_));
         let name = dep.name.clone();
         let code = install_bin(g, &dep, &dir, copy, again.as_deref())?;
-        if has_lib && !g.quiet {
-            eprintln!(
-                "{} `{name}` also has a library (src/lib.rok); `rok install --lib ..` puts that \
-                 into environment `{env}` (for `rok repl` / `rok jupyter`) instead",
-                term::label(Stream::Stderr, Role::Note)
-            );
+        if has_lib && !bin {
+            warn_once(&format!(
+                "`{name}` has an executable and a library (src/lib.rok); this installed the \
+                 executable. Write `rok install --bin ..` for it, or `rok install --lib ..` to \
+                 put the library into environment `{env}` (for `rok repl` / `rok jupyter`); \
+                 0.2.0 asks for one"
+            ));
         }
         return Ok(code);
+    }
+    if bin {
+        return Err(format!(
+            "`{}` has no executable (src/main.rok) for --bin{}",
+            dep.name,
+            if has_lib {
+                format!("; without --bin, its library goes into environment `{env}`")
+            } else {
+                String::new()
+            }
+        ));
     }
     if !has_lib {
         return Err(if lib {
@@ -2733,26 +2758,82 @@ fn val<'a>(vals: &'a [(String, String)], f: &str) -> Option<&'a str> {
         .map(|(_, v)| v.as_str())
 }
 
-/// The registry API of the configured index, and the token for it.
-fn api_token(g: &Global) -> Result<(String, String), String> {
+/// The index `--registry` names, else the configured one.
+fn index_url(registry: Option<&str>) -> Result<String, String> {
+    match registry {
+        Some(u) => Ok(u.to_owned()),
+        None => registry::default_url(&home()),
+    }
+}
+
+/// The registry API of the index `--registry` names (else the
+/// configured one), and the token for it.
+fn api_token(g: &Global, registry: Option<&str>) -> Result<(String, String), String> {
     let home = home();
-    let token = registry::token(&home)?;
-    let api = registry::api(&home, &registry::default_url(&home)?, g.quiet)?;
+    let url = index_url(registry)?;
+    let login = match registry {
+        Some(u) if !registry::same_index(u, &registry::default_url(&home)?) => {
+            format!("rok login --registry {u}")
+        }
+        _ => "rok login".to_owned(),
+    };
+    let token = registry::token(&home, &url, &login)?;
+    let api = registry::api(&home, &url, g.quiet)?;
     Ok((api, token))
 }
 
-/// `rok publish [--native <file>] [--index <dir>] [--commit]`: print the
-/// index line, check it against `--index`, and with `--commit` commit it
-/// there or publish through the API.
+/// `--index-dir <dir>`, or the old spelling `--index <dir>`, which warns.
+fn index_dir<'a>(vals: &'a [(String, String)], cmd: &str) -> Option<&'a str> {
+    let new = val(vals, "--index-dir");
+    let old = val(vals, "--index");
+    if let Some(d) = old {
+        warn_once(&format!(
+            "`rok {cmd} --index <dir>` is now `--index-dir <dir>` (write `--index-dir {d}`); \
+             `--index` goes in 0.2.0"
+        ));
+    }
+    new.or(old)
+}
+
+/// `rok publish [--native <file>] [--index-dir <dir> | --registry <url>]
+/// [--dry-run | --commit]`: print the index line, check it against
+/// `--index-dir`, and with `--commit` commit it there or publish through
+/// the API.
 fn cmd_publish(g: &Global, args: &[String]) -> Result<i32, String> {
-    let (vals, sw, pos) = flags(args, &["--index", "--native"], &["--commit"])?;
+    let (vals, sw, pos) = flags(
+        args,
+        &["--index", "--index-dir", "--registry", "--native"],
+        &["--commit", "--dry-run"],
+    )?;
     if let Some(p) = pos.first() {
         return Err(format!("unexpected argument `{p}`"));
     }
     let write = sw.iter().any(|s| s == "--commit");
-    let index = val(&vals, "--index").map(Path::new);
+    let dry = sw.iter().any(|s| s == "--dry-run");
+    if write && dry {
+        return Err(
+            "`--commit` and `--dry-run` go apart: `rok publish --dry-run` checks, `rok publish \
+             --commit` publishes"
+                .into(),
+        );
+    }
+    let index = index_dir(&vals, "publish").map(Path::new);
+    let reg = val(&vals, "--registry");
+    if index.is_some() && reg.is_some() {
+        return Err(
+            "`--index-dir` and `--registry` go apart: `--index-dir <dir>` commits to a checkout \
+             of the index, `--registry <url>` publishes through that index's API"
+                .into(),
+        );
+    }
+    if !write && !dry {
+        warn_once(
+            "`rok publish` will need `--commit` or `--dry-run` in 0.2.0; this was a dry run \
+             (write `rok publish --dry-run`)",
+        );
+    }
     let remote = match index {
-        None if write => Some(api_token(g)?),
+        None if write => Some(api_token(g, reg)?),
         _ => None,
     };
     let (line, mut name, mut vers, rel, what) = if let Some(file) = val(&vals, "--native") {
@@ -2774,7 +2855,7 @@ fn cmd_publish(g: &Global, args: &[String]) -> Result<i32, String> {
             (name, vers) = registry::publish_api(&api, &token, &line)?;
             api
         }
-        (None, None) => registry::default_url(&home())?,
+        (None, None) => index_url(reg)?,
     };
     println!("{line}");
     if !g.quiet {
@@ -2796,27 +2877,69 @@ fn cmd_publish(g: &Global, args: &[String]) -> Result<i32, String> {
     Ok(0)
 }
 
-/// `rok yank [--native] --vers <v> [--undo] [--index <dir>] [name]`
-/// (default: this package): into the `--index` checkout, else via the API.
+/// `rok yank [--native] <name>@<version> [--undo] [--index-dir <dir> |
+/// --registry <url>]`: into the `--index-dir` checkout, else via the API.
+/// The old form `--vers <v> [name]` (default: this package) warns.
 fn cmd_yank(g: &Global, args: &[String]) -> Result<i32, String> {
-    let (vals, sw, pos) = flags(args, &["--vers", "--index"], &["--undo", "--native"])?;
-    let usage = "usage: rok yank [--native] --vers <version> [--undo] [--index <dir>] [name]";
-    let Some(vers) = val(&vals, "--vers") else {
-        return Err(usage.into());
-    };
+    let (vals, sw, pos) = flags(
+        args,
+        &["--vers", "--index", "--index-dir", "--registry"],
+        &["--undo", "--native"],
+    )?;
+    let usage = "usage: rok yank [--native] <name>@<version> [--undo] [--index-dir <dir> | \
+                 --registry <url>]";
     let native = sw.iter().any(|s| s == "--native");
-    let name = match pos.as_slice() {
-        [n] => n.clone(),
-        [] if !native => this_package()?.1.name.ok_or("rok.rokon has no `name`")?,
+    let (name, vers) = match (pos.as_slice(), val(&vals, "--vers")) {
+        ([at], None) => match at.split_once('@') {
+            Some((n, v)) if !n.is_empty() && !v.is_empty() => (n.to_owned(), v.to_owned()),
+            _ => {
+                // A bare version is likely this package's.
+                let n = at.trim_end_matches('@');
+                let fix = if n.starts_with(|c: char| c.is_ascii_digit()) {
+                    format!("<name>@{n}")
+                } else {
+                    format!("{n}@1.2.0")
+                };
+                return Err(format!(
+                    "`{at}`: give the version as `<name>@<version>`, e.g. `rok yank {fix}`\n{usage}"
+                ));
+            }
+        },
+        ([at], Some(_)) if at.contains('@') => {
+            return Err(format!(
+                "`{at}` and `--vers` both give a version; write `rok yank {at}` alone"
+            ));
+        }
+        (pos, Some(v)) => {
+            let n = match pos {
+                [n] => n.clone(),
+                [] if !native => this_package()?.1.name.ok_or("rok.rokon has no `name`")?,
+                _ => return Err(usage.into()),
+            };
+            warn_once(&format!(
+                "`rok yank --vers <version> [name]` is now `rok yank <name>@<version>` (write \
+                 `rok yank {n}@{v}`); `--vers` goes in 0.2.0"
+            ));
+            (n, v.to_owned())
+        }
         _ => return Err(usage.into()),
     };
     let undo = sw.iter().any(|s| s == "--undo");
-    let to = if let Some(i) = val(&vals, "--index") {
-        registry::yank(Path::new(i), &name, vers, !undo, native)?;
+    let index = index_dir(&vals, "yank");
+    let reg = val(&vals, "--registry");
+    if index.is_some() && reg.is_some() {
+        return Err(
+            "`--index-dir` and `--registry` go apart: `--index-dir <dir>` commits to a checkout \
+             of the index, `--registry <url>` goes through that index's API"
+                .into(),
+        );
+    }
+    let to = if let Some(i) = index {
+        registry::yank(Path::new(i), &name, &vers, !undo, native)?;
         i.to_owned()
     } else {
-        let (api, token) = api_token(g)?;
-        registry::yank_api(&api, &token, &name, vers, undo, native)?;
+        let (api, token) = api_token(g, reg)?;
+        registry::yank_api(&api, &token, &name, &vers, undo, native)?;
         api
     };
     if !g.quiet {
@@ -2826,14 +2949,17 @@ fn cmd_yank(g: &Global, args: &[String]) -> Result<i32, String> {
     Ok(0)
 }
 
-/// `rok login [<token>]`: store a token whose account may publish.
+/// `rok login [--registry <url>] [<token>]`: store a token whose account
+/// may publish, for that index (default: the configured one).
 fn cmd_login(g: &Global, args: &[String]) -> Result<i32, String> {
-    let (_, _, pos) = flags(args, &[], &[])?;
+    let (vals, _, pos) = flags(args, &["--registry"], &[])?;
     if pos.len() > 1 {
-        return Err("usage: rok login [<token>]".into());
+        return Err("usage: rok login [--registry <url>] [<token>]".into());
     }
     let home = home();
-    let api = registry::api(&home, &registry::default_url(&home)?, g.quiet)?;
+    let default = registry::default_url(&home)?;
+    let url = val(&vals, "--registry").unwrap_or(&default);
+    let api = registry::api(&home, url, g.quiet)?;
     let token = match pos.first() {
         Some(t) => t.clone(),
         None => read_secret(&format!(
@@ -2848,7 +2974,10 @@ fn cmd_login(g: &Global, args: &[String]) -> Result<i32, String> {
                 .into(),
         );
     }
-    let file = registry::save_token(&home, &token)?;
+    // 0.1.5 and older send credentials.rokon's token to the configured
+    // index, so that one keeps it there too.
+    let legacy = registry::same_index(url, &default);
+    let file = registry::save_token(&home, url, &token, legacy)?;
     if !g.quiet {
         term::status(
             "Logged in",
@@ -2858,12 +2987,28 @@ fn cmd_login(g: &Global, args: &[String]) -> Result<i32, String> {
     Ok(0)
 }
 
-/// `rok logout`: remove `rok login`'s token.
+/// `rok logout [--registry <url> | --all]`: remove `rok login`'s token
+/// for that index (default: the configured one), or every one.
 fn cmd_logout(g: &Global, args: &[String]) -> Result<i32, String> {
-    if let Some(a) = args.first() {
+    let (vals, sw, pos) = flags(args, &["--registry"], &["--all"])?;
+    if let Some(a) = pos.first() {
         return Err(format!("unexpected argument `{a}`"));
     }
-    let had = registry::logout(&home())?;
+    let all = sw.iter().any(|s| s == "--all");
+    let reg = val(&vals, "--registry");
+    if all && reg.is_some() {
+        return Err(
+            "`--all` logs out of every index; give `--all` or `--registry <url>`, not both".into(),
+        );
+    }
+    let home = home();
+    let had = if all {
+        registry::logout(&home, None, true)?
+    } else {
+        let default = registry::default_url(&home)?;
+        let url = reg.unwrap_or(&default);
+        registry::logout(&home, Some(url), registry::same_index(url, &default))?
+    };
     if !g.quiet {
         if had {
             term::status("Logged out", "");

@@ -202,7 +202,7 @@ pub(super) fn rok_add(uri: &str, args: &[String]) -> Result<(), String> {
         .map(|p| p.dir)
         .or_else(|| path.parent().map(Path::to_path_buf))
         .ok_or("no directory for this document")?;
-    let rok = std::env::var_os("ROK").map_or_else(sibling_rok, Into::into);
+    let rok = rokc_core::handoff_var("ROK").map_or_else(sibling_rok, Into::into);
     let out = Command::new(&rok)
         .arg("add")
         .args(args)

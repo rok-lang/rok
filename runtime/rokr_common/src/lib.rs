@@ -39,7 +39,7 @@ pub fn oom() -> ! {
     fatal(b"fatal error: out of memory")
 }
 
-/// Called once by the first [`oom`] (`ROK_HEAP_DUMP=on_oom`).
+/// Called once by the first [`oom`] (`ROKR_HEAP_DUMP=on_oom`).
 static OOM_HOOK: core::sync::atomic::AtomicPtr<()> =
     core::sync::atomic::AtomicPtr::new(core::ptr::null_mut());
 
@@ -53,6 +53,17 @@ pub fn fatal(msg: &[u8]) -> ! {
     write_all(2, &[msg, b"\n"]);
     // SAFETY: plain libc call.
     unsafe { libc::exit(101) }
+}
+
+/// Knob `new` if set and not empty, else its old spelling `old` (read
+/// until 0.2.0, silently: a program's stderr is its own).
+pub fn env_name<'a>(new: &'a core::ffi::CStr, old: &'a core::ffi::CStr) -> &'a core::ffi::CStr {
+    // SAFETY: as in `env_knob`.
+    let set = unsafe {
+        let p = libc::getenv(new.as_ptr());
+        !p.is_null() && *p != 0
+    };
+    if set { new } else { old }
 }
 
 /// Env knob `name` as `parse` reads it; `None` if unset or empty. A

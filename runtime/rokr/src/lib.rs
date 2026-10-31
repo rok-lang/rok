@@ -908,4 +908,27 @@ mod tests {
             assert_eq!(unpack(f, c), s(t), "{t:?}");
         }
     }
+
+    /// `ROKR_WORKERS` wins over its old spelling `ROK_WORKERS`, which is
+    /// read alone.
+    #[test]
+    fn workers_new_name_first() {
+        if thread::rok_cpu_count() == 0 {
+            return;
+        }
+        // SAFETY: no other test reads or sets these.
+        unsafe {
+            std::env::remove_var("ROKR_WORKERS");
+            std::env::set_var("ROK_WORKERS", "3");
+        }
+        assert_eq!(thread::rok_sched_workers(), 3);
+        // SAFETY: as above.
+        unsafe { std::env::set_var("ROKR_WORKERS", "5") };
+        assert_eq!(thread::rok_sched_workers(), 5);
+        // SAFETY: as above.
+        unsafe {
+            std::env::remove_var("ROKR_WORKERS");
+            std::env::remove_var("ROK_WORKERS");
+        }
+    }
 }

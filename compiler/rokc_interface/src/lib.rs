@@ -29,7 +29,7 @@ pub use rokc_driver::{
     SourceFile, Subsystem, TargetSpec, TempDir, bootstrap_tiers, demangle, feature_of,
     find_mlir_plugin, link_host, profdata_merge, profdata_show, repl_host, rokhir, wasm_ld_main,
 };
-pub use rokc_target::BUILTIN as BUILTIN_TARGETS;
+pub use rokc_target::{BUILTIN as BUILTIN_TARGETS, RENAMED as RENAMED_TARGETS};
 
 #[derive(Default)]
 pub struct Session {
