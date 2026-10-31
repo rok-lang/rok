@@ -548,6 +548,7 @@ fn enc_plain(c: &Collected<'_>, e: &mut Enc) {
     t.trait_info.enc(e);
     t.statics.enc(e);
     t.mut_statics.enc(e);
+    t.extern_statics.enc(e);
     t.literal_shapes.enc(e);
     t.names.enc(e);
     t.non_exhaustive.enc(e);
@@ -573,6 +574,7 @@ fn enc_plain(c: &Collected<'_>, e: &mut Enc) {
 }
 
 /// `enc_plain`'s part, the borrows left empty.
+#[allow(clippy::cognitive_complexity)] // one line per field
 fn dec_plain(d: &mut Dec<'_>) -> Option<Collected<'static>> {
     let mut c = Collected::empty();
     let t = &mut c.t;
@@ -607,6 +609,7 @@ fn dec_plain(d: &mut Dec<'_>) -> Option<Collected<'static>> {
     t.trait_info = Codec::dec(d)?;
     t.statics = Codec::dec(d)?;
     t.mut_statics = Codec::dec(d)?;
+    t.extern_statics = Codec::dec(d)?;
     t.literal_shapes = Codec::dec(d)?;
     t.names = Codec::dec(d)?;
     t.non_exhaustive = Codec::dec(d)?;

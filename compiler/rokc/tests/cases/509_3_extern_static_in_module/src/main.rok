@@ -3,6 +3,8 @@
 // (POSIX environ / optind)
 // expect-exit: 0
 // expect-stdout: true 7
+// expect-warning: this writes extern static `optind` outside `unsafe`
+// expect-warning: this reads extern static `environ` outside `unsafe`
 
 // An extern `static` declared in a module has its type resolved there:
 // `sys` imports `CPtr` for `environ`'s type and uses it nowhere else.

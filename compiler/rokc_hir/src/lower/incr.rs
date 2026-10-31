@@ -123,6 +123,7 @@ pub(super) enum Read {
     Static(String),
     StaticLeaf(String),
     MutStatic(String),
+    ExternStatic(String),
     TraitInfo(String),
     NegAuto(String, String),
     NonExhaustive(String),
@@ -309,6 +310,7 @@ codec_enum!(Read {
     Static(x0),
     StaticLeaf(x0),
     MutStatic(x0),
+    ExternStatic(x0),
     TraitInfo(x0),
     NegAuto(x0, x1),
     NonExhaustive(x0),
@@ -1632,6 +1634,9 @@ impl Incr<'_> {
             }
             Read::MutStatic(k) => {
                 f.add(&env.mut_statics.contains(k));
+            }
+            Read::ExternStatic(k) => {
+                f.add(&env.extern_statics.contains(k));
             }
             Read::TraitInfo(k) => {
                 f.opt(env.trait_info.get(k), |f, t| {

@@ -512,6 +512,25 @@ fn tag_place(e: &HirExpr) -> Option<Place> {
     }
 }
 
+/// How a value leaves the body (`escapes_guard`).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Exit {
+    Return,
+    Yield,
+    Throw,
+}
+
+/// The error a returned carrier `(true, .., err)` throws.
+fn thrown(e: &HirExpr) -> Option<&HirExpr> {
+    let HirExprKind::Tuple { fields } = &e.kind else {
+        return None;
+    };
+    match (&e.ty, fields.first().map(|f| &f.kind)) {
+        (HirTy::Throws { .. }, Some(HirExprKind::Const(ConstVal::Bool(true)))) => fields.last(),
+        _ => None,
+    }
+}
+
 /// A carrier's tag: an error, a value of unknown tag, or `OK_TAG` plus
 /// the value's tag.
 const OK: u32 = 0;
@@ -3316,7 +3335,10 @@ impl<'h> Walk<'_, 'h> {
                     self.expr_to(e, &RET_TAG);
                     self.returning = false;
                     self.store(&(RET, Vec::new()), e, false);
-                    self.escapes_guard(e, false);
+                    self.escapes_guard(e, Exit::Return);
+                    if let Some(err) = thrown(e) {
+                        self.throw_escapes(err);
+                    }
                 }
                 self.note_renews();
                 self.exit_with(Some(&RET_TAG));
@@ -3459,7 +3481,7 @@ impl<'h> Walk<'_, 'h> {
                 if !*is_final {
                     let kept = self.cur.clone();
                     self.store(&(RET, Vec::new()), value, false);
-                    self.escapes_guard(value, true);
+                    self.escapes_guard(value, Exit::Yield);
                     self.cur = kept;
                 }
                 if *is_final {
@@ -4432,10 +4454,77 @@ impl<'h> Walk<'_, 'h> {
         );
     }
 
-    /// A `return` (`yields`: a `yield`) inside a `using` block hands out
+    /// A `throw` of `err`: its error leaves like a returned value, so it
+    /// is checked as one. What that store itself reports is dropped; an
+    /// error already at the `throw` stands alone.
+    fn throw_escapes(&mut self, err: &'h HirExpr) {
+        let at = err.span;
+        if self.diags.iter().any(|d| {
+            d.is_error()
+                && d.primary
+                    .as_ref()
+                    .is_some_and(|p| p.span.file == at.file && p.span.start == at.start)
+        }) {
+            return;
+        }
+        let (cur, n, reported) = (self.cur.clone(), self.diags.len(), self.reported.clone());
+        let returning = std::mem::replace(&mut self.returning, true);
+        self.store(&(RET, Vec::new()), err, false);
+        self.returning = returning;
+        self.diags.truncate(n);
+        self.reported.clone_from(&reported);
+        self.escapes_guard(err, Exit::Throw);
+        self.reported = reported;
+        self.cur = cur;
+    }
+
+    /// The guard whose `get()` value `e` holds as a part (a field of a
+    /// thrown struct, through the compiler's temporaries), and where.
+    fn holds_get(&self, e: &HirExpr, depth: u32) -> Option<(LocalId, Span)> {
+        if depth > 8 {
+            return None;
+        }
+        if let Some(g) = self.got_from(e) {
+            return Some((g, e.span));
+        }
+        match &e.kind {
+            HirExprKind::StructInit { fields: xs, .. }
+            | HirExprKind::Tuple { fields: xs }
+            | HirExprKind::EnumVariantInit { args: xs, .. }
+            | HirExprKind::ArrayInit { elements: xs, .. } => {
+                xs.iter().find_map(|x| self.holds_get(x, depth + 1))
+            }
+            HirExprKind::SumWrap { value: Some(x), .. } => self.holds_get(x, depth + 1),
+            HirExprKind::Block(b) => self.holds_get(b.trailing.as_ref()?, depth + 1),
+            HirExprKind::Local(x) if self.hidden(*x) => {
+                let mut init = None;
+                let body = self.f.body.as_ref()?;
+                let mut find = |b: &'h HirBlock| {
+                    for s in &b.stmts {
+                        if let HirStmt::Let { local, init: i } = s {
+                            if local == x {
+                                init = Some(i);
+                            }
+                        }
+                    }
+                };
+                find(body);
+                crate::each_block(body, &mut |e| {
+                    if let HirExprKind::Block(b) = &e.kind {
+                        find(b);
+                    }
+                });
+                self.holds_get(init?, depth + 1)
+            }
+            _ => None,
+        }
+    }
+
+    /// A `return`, `yield` or `throw` inside a `using` block hands out
     /// what the lock protects: the block's end releases the lock before the
-    /// caller is done with it.
-    fn escapes_guard(&mut self, e: &HirExpr, yields: bool) {
+    /// caller is done with it. A `throw` warns until 0.2.0.
+    fn escapes_guard(&mut self, e: &HirExpr, exit: Exit) {
+        let yields = exit == Exit::Yield;
         let at = e.span;
         let params: HashSet<LocalId> = self.f.params.iter().map(|p| p.local).collect();
         // A variable's use reports it; a compiler temporary's does not.
@@ -4468,6 +4557,9 @@ impl<'h> Walk<'_, 'h> {
                     hit = Some((*g, site));
                 }
             }
+        }
+        if exit == Exit::Throw {
+            hit = hit.or_else(|| self.holds_get(e, 0));
         }
         let Some((g, site)) = hit else { return };
         // One report: not again as the block's value.
@@ -4511,6 +4603,34 @@ impl<'h> Walk<'_, 'h> {
              its own)"
                 .to_owned()
         };
+        if exit == Exit::Throw {
+            let taken = self
+                .c
+                .src(site)
+                .filter(|t| t.len() <= 40 && !t.contains('\n'))
+                .map_or_else(
+                    || "a copy (`.clone()`)".to_owned(),
+                    |t| format!("a copy, `{t}.clone()`"),
+                );
+            self.diags.push(
+                RokDiagnostic::warning(
+                    ErrorKind::Handoff,
+                    at,
+                    format!(
+                        "this throws a value out of the `{ty}`, and `{gname}`'s `using` block \
+                         releases the lock before the catcher uses it"
+                    ),
+                )
+                .with_secondary(site, "taken out of the lock here")
+                .with_note(format!(
+                    "help: the lock stops protecting it; build the error from {taken}, or \
+                     handle it inside the `using` block; 0.2.0 makes this an error (stdlib \
+                     2.13.9)"
+                ))
+                .with_lint("guard_escape"),
+            );
+            return;
+        }
         self.diags.push(
             RokDiagnostic::error(
                 ErrorKind::Handoff,

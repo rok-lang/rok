@@ -464,6 +464,7 @@ fn collect<'a>(
         statics: static_tys,
         static_leaves: _,
         mut_statics,
+        extern_statics,
         literal_shapes,
         names: base_names,
         decls,
@@ -1616,6 +1617,15 @@ fn collect<'a>(
                 .map(|s| s.name.clone()),
         )
         .collect();
+    let extern_statics: std::collections::HashSet<String> = extern_statics
+        .into_iter()
+        .chain(
+            static_defs
+                .iter()
+                .filter(|s| s.is_extern)
+                .map(|s| s.name.clone()),
+        )
+        .collect();
     // The package's handlers ahead of the library's.
     let mut stage_shapes = literal_handlers(program, &mut pre_diags);
     stage_shapes.extend(literal_shapes);
@@ -1666,6 +1676,7 @@ fn collect<'a>(
             statics: static_tys,
             static_leaves: std::cell::RefCell::default(),
             mut_statics,
+            extern_statics,
             literal_shapes,
             names,
             decls,
@@ -2429,6 +2440,9 @@ fn finish<'a>(
         .iter()
         .flat_map(|p| check_derives(&env, p))
         .collect();
+    if !lib_pkg.as_deref().is_some_and(|p| within(p, "rok")) {
+        check_extern_ffi(&env, &programs[1..]);
+    }
     let main = env
         .fn_table
         .get("main")
@@ -6770,6 +6784,116 @@ fn check_extern_fn(f: &FnDef, abi: &str, diags: &mut Vec<rokc_diagnostic::RokDia
         .any(is_str)
     {
         bad("`str` is not an FFI type; pass a `Ptr<u8>` and a length".to_owned());
+    }
+}
+
+/// Spec 5.9.4: what of `ty` C cannot hold, a GC reference the collector
+/// may move or free (`List<i64>`, a closure), else `None`. `str` is a
+/// `char*` in an extern declaration; a bare `str` is checked elsewhere.
+fn gc_part(env: &Env<'_>, ty: &HirTy, depth: u32) -> Option<HirTy> {
+    if depth > 8 {
+        return None;
+    }
+    match ty {
+        HirTy::Prim(PrimTy::Str) => (depth > 0).then(|| ty.clone()),
+        HirTy::GcBuf(_)
+        | HirTy::Sum(_)
+        | HirTy::Any
+        | HirTy::AnyTrait(_)
+        | HirTy::Closure { .. } => Some(ty.clone()),
+        HirTy::Fn(..) if !ty.is_c_fn() => Some(ty.clone()),
+        HirTy::Tuple(ts) => ts.iter().find_map(|t| gc_part(env, t, depth + 1)),
+        HirTy::Array(t, _) => gc_part(env, t, depth + 1),
+        HirTy::Struct(id) => {
+            let def = env.defs.struct_at(*id);
+            def.fields
+                .iter()
+                .any(|f| gc_part(env, &f.ty, depth + 1).is_some())
+                .then(|| ty.clone())
+        }
+        _ => None,
+    }
+}
+
+/// `rok_*` (the runtime's ABI, which takes GC references) and `__rok_*`
+/// (the REPL's cells): the toolchain's own symbols.
+fn toolchain_symbol(name: &str) -> bool {
+    let n = leaf_name(name);
+    n.starts_with("rok_") || n.starts_with("__rok_")
+}
+
+/// Spec 5.9.4: GC types in the package's `extern "C"` blocks and
+/// `extern "C" fn` definitions. A warning until 0.2.0 makes it an error.
+fn check_extern_ffi(env: &Env<'_>, programs: &[&Program]) {
+    let no_subst = HashMap::new();
+    let warn = |what: String, ty: &HirTy, at: Span| {
+        let cx = LowerCtx::new(env, &no_subst, None, at);
+        let shown = cx.ty_name(ty);
+        env.sink.diagnostics.borrow_mut().push(
+            rokc_diagnostic::RokDiagnostic::warning(
+                rokc_diagnostic::ErrorKind::Type,
+                at,
+                format!(
+                    "{what} has type `{shown}`, which C cannot hold: the collector may move or \
+                     free it"
+                ),
+            )
+            .with_note(
+                "help: use a primitive, a `CPtr<T>` (`rok::bare::ptr`) and a length, or a \
+                 `#[repr(C)]` struct of those; 0.2.0 makes this an error (spec 5.9.4)"
+                    .to_owned(),
+            )
+            .with_lint("extern_ffi_types"),
+        );
+    };
+    let fn_types = |f: &FnDef, kind: &str| {
+        if toolchain_symbol(&f.name) {
+            return;
+        }
+        let Some(sig) = env.fn_table.get(&f.name) else {
+            return;
+        };
+        let name = leaf_name(&f.name);
+        for (p, ty) in f.params.iter().zip(&sig.param_tys) {
+            if let Some(bad) = gc_part(env, ty, 0) {
+                let at = p.ty.as_ref().map_or(p.span, |t| t.span);
+                warn(
+                    format!("parameter `{}` of {kind} `{name}`", p.name),
+                    &bad,
+                    at,
+                );
+            }
+        }
+        if let Some(bad) = gc_part(env, &sig.ret_ty, 0) {
+            let at = f.ret_ty.as_ref().map_or(f.span, |t| t.span);
+            warn(format!("the result of {kind} `{name}`"), &bad, at);
+        }
+    };
+    for p in programs {
+        for item in &p.items {
+            match item {
+                Item::Extern(blk) if blk.abi != "rok" => {
+                    for ei in &blk.items {
+                        match ei {
+                            rokc_ast::ExternItem::Fn(f) => fn_types(f, "extern function"),
+                            rokc_ast::ExternItem::Static(s) if !toolchain_symbol(&s.name) => {
+                                if let Some(bad) =
+                                    env.statics.get(&s.name).and_then(|t| gc_part(env, t, 0))
+                                {
+                                    let name = leaf_name(&s.name);
+                                    warn(format!("extern static `{name}`"), &bad, s.ty.span);
+                                }
+                            }
+                            rokc_ast::ExternItem::Static(_) => {}
+                        }
+                    }
+                }
+                Item::Fn(f) if rokc_ast::extern_fn_abi(&f.attrs).is_some() => {
+                    fn_types(f, "`extern \"C\" fn`");
+                }
+                _ => {}
+            }
+        }
     }
 }
 

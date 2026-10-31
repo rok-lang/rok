@@ -1097,6 +1097,7 @@ pub(super) fn lower_assign(
                         ),
                     );
                 }
+                extern_static_use(ctx, &full, true, span);
                 let ty = ctx.env.static_ty(&full).expect("a static").clone();
                 let v = lower_expected(ctx, value, ty.clone());
                 let value = coerce(ctx, &ty, v, &|| format!("assignment to `{name}`"));
@@ -7704,6 +7705,42 @@ fn template_marked(ctx: &LowerCtx<'_>, def: &FnDef, at: rokc_diagnostic::Span) {
     ctx.use_marked(what, &name, &mark, at);
 }
 
+/// Spec 5.9.3: an extern static is a C global Rok cannot check; reading
+/// or writing one outside `unsafe` warns until 0.2.0 makes it an error.
+/// Only the built package's uses warn.
+fn extern_static_use(ctx: &LowerCtx<'_>, full: &str, write: bool, at: rokc_diagnostic::Span) {
+    let name = leaf_name(full);
+    // `rok_*` and `__rok_*` (the REPL's cells) are the toolchain's own.
+    if ctx.unsafe_depth > 0
+        || at.is_dummy()
+        || name.starts_with("rok_")
+        || name.starts_with("__rok_")
+        || !ctx.marks_apply()
+        || !ctx.env.is_extern_static(full)
+    {
+        return;
+    }
+    // A write quotes its statement (`optind += 1`).
+    let stmt = ctx
+        .env
+        .sources
+        .file(at.file)
+        .and_then(|(_, t)| t.get(at.start as usize..))
+        .map(|r| r.split(['\n', ';']).next().unwrap_or(r).trim_end())
+        .filter(|t| t.len() <= 40 && t.contains('='));
+    let (what, fix) = match (write, stmt) {
+        (false, _) => ("reads", format!("`unsafe {{ {name} }}`")),
+        (true, Some(t)) => ("writes", format!("`unsafe {{ {t}; }}`")),
+        (true, None) => ("writes", format!("`unsafe {{ {name} = ..; }}`")),
+    };
+    ctx.emit_lint(
+        "extern_static_unsafe",
+        at,
+        format!("this {what} extern static `{name}` outside `unsafe`: Rok cannot check a C global"),
+        format!("write {fix}; 0.2.0 makes this an error (spec 5.9.3)"),
+    );
+}
+
 /// Spec 4.15.3: an `unsafe fn` (or C function) is callable only in an
 /// `unsafe fn` body or `unsafe { }` block.
 fn check_unsafe_call(ctx: &LowerCtx<'_>, callee: &str) {
@@ -10196,7 +10233,9 @@ fn lower_addr_of(
         discard_args(ctx, args);
         return ctx.error_expr(span, format!("`{name}` takes one place: `{name}(x)`"));
     };
+    let outer = std::mem::replace(&mut ctx.addr_place, true);
     let place = lower_expected(ctx, e, HirTy::Unknown);
+    ctx.addr_place = outer;
     // `xs[i]` on a collection is an `Index::index` call returning a copy;
     // only fixed-array elements are places.
     let target = match &e.kind {
@@ -12116,6 +12155,9 @@ pub(super) fn lower_path(
         let full = ctx.env.names.value_reexport(&full).cloned().unwrap_or(full);
         ctx.check_item_visible(&full, "static");
         item_marked(ctx, "static", &full, span);
+        if !ctx.addr_place {
+            extern_static_use(ctx, &full, false, span);
+        }
         let ty = ctx.env.static_ty(&full).expect("a static").clone();
         return HirExpr {
             kind: HirExprKind::StaticRef(full),

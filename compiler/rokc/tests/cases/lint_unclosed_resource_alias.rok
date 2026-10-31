@@ -1,9 +1,9 @@
 // expect-exit: 0
-// expect-lint: 80:25 `x` holds a `File` that is never closed - bind it with `using` or call `close()`; the GC does not close it
-// expect-lint: 88:10 `g` holds a `File` that is never closed - bind it with `using` or call `close()`; the GC does not close it
-// expect-lint: 94:25 `x` holds a `File` that is never closed - bind it with `using` or call `close()`; the GC does not close it
-// expect-lint: 101:25 `v` holds a `File` that is never closed - bind it with `using` or call `close()`; the GC does not close it
-// expect-lint: 106:10 `f` holds a `File` that is never closed - bind it with `using` or call `close()`; the GC does not close it
+// expect-lint: 79:11 `x` holds a `File` that is never closed
+// expect-lint: 86:13 `f` holds a `File` that is never closed
+// expect-lint: 92:13 `c` holds a `File` that is never closed
+// expect-lint: 100:13 `v` holds a `File` that is never closed
+// expect-lint: 105:13 `f` holds a `File` that is never closed
 // spec: §6.2.9
 // expect-stdout:
 // ok
@@ -11,7 +11,7 @@
 // `unclosed_resource` follows the value: a param is the caller's to
 // close, and so is every binding that only renames, narrows or
 // destructures it, in any kind of function. A binding of a value this
-// function owns is judged with that value.
+// function owns is judged with that value, reported where it is made.
 
 use rok::std::fs::File;
 

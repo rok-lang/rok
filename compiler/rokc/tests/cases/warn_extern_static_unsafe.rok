@@ -1,0 +1,41 @@
+// only-os: macos linux
+// (POSIX optind)
+// expect-exit: 0
+// expect-warning: this writes extern static `optind` outside `unsafe`: Rok cannot check a C global
+// expect-warning: help: write `unsafe { optind = 6; }`; 0.2.0 makes this an error
+// expect-warning: help: write `unsafe { optind += 1; }`
+// expect-warning: this reads extern static `optind` outside `unsafe`
+// expect-warning: parameter `xs` of extern function `takes_list` has type `List<i64>`, which C cannot hold
+// expect-warning: the result of extern function `gives_dict` has type `Dict<str, i64>`
+// expect-warning: parameter `x` of `extern "C" fn` `callback` has type `List<i64>`
+// expect-warning: `#[warn(extern_ffi_types)]` on by default
+// spec: §5.9.4
+// spec: §5.9.6
+// expect-stdout: 7 7 7 true
+
+// An extern static is a C global Rok cannot check: reading or writing it
+// outside `unsafe` warns (0.2.0: an error), as does a GC type crossing
+// into C. `unsafe` blocks, `unsafe fn` bodies and `addr_of` are quiet.
+
+use rok::bare::ptr::addr_of;
+
+extern "C" {
+    static mut optind: i32;
+    fn takes_list(xs: List<i64>) -> i32;
+    fn gives_dict() -> Dict<str, i64>;
+}
+
+extern "C" fn callback(x: List<i64>) -> i64 { x.len() as i64 }
+
+unsafe fn inside() -> i32 { optind }
+
+fn main() {
+    optind = 6;
+    optind += 1;
+    let p = addr_of(optind);
+    let a = unsafe { optind };
+    let b = unsafe { inside() };
+    let c = optind;
+    println(f"{a} {b} {c} {p.addr() != 0usize}");
+    unsafe { optind = 1; }
+}
