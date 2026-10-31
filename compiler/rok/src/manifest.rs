@@ -696,6 +696,15 @@ pub fn parse(text: &str, file: &str) -> Result<Manifest, String> {
             );
         }
     }
+    if let Some(d) = pkg.opt("toolchain") {
+        let pin = d.string()?;
+        if crate::toolchain::ToolchainReq::parse(&pin).is_err() {
+            warn(
+                d,
+                &format!("`toolchain: {pin:?}`: {}", crate::toolchain::PIN_FORMS),
+            );
+        }
+    }
     let normal = deps("deps")?;
     let mut features = Features::new();
     let mut at = Vec::new();

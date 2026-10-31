@@ -708,13 +708,25 @@ fn script_target(file: &Path, env: &str) -> Result<Target, String> {
         key += &format!("\0{}\0{}", f.display(), block.text);
         let label = format!("{name} (//! rokon block)");
         let m = manifest::parse(&block.text, &label)?;
+        for w in &m.warnings {
+            warn_once(w);
+        }
         if m.dev_deps.len() + m.lints.len() + m.features.len() > 0
             || m.lints_from.is_some()
-            || m.toolchain.is_some()
             || m.name.is_some()
             || m.version.is_some()
         {
-            return Err(format!("{label}: a script block holds only `deps`"));
+            return Err(format!(
+                "{label}: a script block holds only `deps`, `native` and `toolchain`"
+            ));
+        }
+        // The script run picks the toolchain (`toolchain::script_pin`).
+        if m.toolchain.is_some() && f != abs {
+            return Err(format!(
+                "{label}: `toolchain` goes in the block of {}, the script that is run; remove \
+                 it here",
+                shown(&abs)
+            ));
         }
         let dir = f.parent().unwrap_or_else(|| Path::new("/"));
         let local = |p: &str| {
@@ -873,14 +885,15 @@ fn harness(g: &Global, cmd: &str, pre: &[String], post: &[String]) -> Result<i32
     }
 }
 
-/// When `package` (the one a command works on) or `+<version>` /
-/// `ROK_TOOLCHAIN` pins another toolchain than this one, run the command
-/// with that toolchain's rok and exit with its status.
-fn hand_off_for(g: &Global, package: Option<&Path>) -> Result<(), String> {
+/// When `package` (the one a command works on), `script` or `+<version>`
+/// / `ROK_TOOLCHAIN` pins another toolchain than this one, run the
+/// command with that toolchain's rok and exit with its status.
+fn hand_off_for(g: &Global, package: Option<&Path>, script: Option<&Path>) -> Result<(), String> {
     let pin = package.and_then(manifest::find).and_then(|p| {
         let pin = manifest::toolchain_pin(&std::fs::read_to_string(&p).ok()?)?;
         Some((pin, format!("pinned by {}", p.display())))
     });
+    let pin = pin.or_else(|| script.and_then(toolchain::script_pin));
     if let Some(h) = toolchain::handoff(g.toolchain.as_deref(), pin, true)? {
         std::process::exit(toolchain::run_handoff(&h, &g.argv, g.start.as_deref()));
     }
@@ -959,6 +972,7 @@ fn rokc_command(
         package
             .as_deref()
             .filter(|_| in_env.is_none() && g.env.is_none()),
+        Some(start).filter(|s| package.is_none() && in_env.is_none() && s.is_file()),
     )?;
     let t = match in_env {
         Some(e) => env_target(e)?,
@@ -1298,6 +1312,11 @@ fn cmd_new(g: &Global, cmd: &str, args: &[String]) -> Result<i32, String> {
             vec![
                 ("name", Value::str(&name)),
                 ("version", Value::str("0.1.0")),
+                // Stays on this series when a newer one is the default.
+                (
+                    "toolchain",
+                    Value::str(toolchain::series(VERSION).unwrap_or_else(|| VERSION.to_owned())),
+                ),
                 ("deps", Value::new(Kind::Dict(Vec::new()))),
             ],
         );
@@ -1883,8 +1902,8 @@ fn pin_newest(g: &Global, dep: &mut Dep) -> Result<(), String> {
             let index = registry::open(&home(), &url, g.offline, g.quiet)?;
             let all = registry::entries(&index, &url, &dep.name)?;
             let star = semver::Req::parse("*")?;
-            let e = registry::best(&all, &star)
-                .ok_or_else(|| registry::no_match(&index, &all, &dep.name, "*", &url))?;
+            let (e, _) = registry::best_here(&all, &star);
+            let e = e.ok_or_else(|| registry::no_match(&index, &all, &dep.name, "*", &url))?;
             *req = format!("^{}", e.vers);
         }
     }

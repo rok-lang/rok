@@ -342,7 +342,7 @@ the active one with `*`; `shell` starts $SHELL with ROK_ENV=<name>.",
         summary: "install and pick toolchains",
         usage: &[
             "toolchain list",
-            "toolchain install <version> --from <dir | .tar[.gz] | .zip | url>",
+            "toolchain install <version> [--from <dir | .tar[.gz] | .zip | url>]",
             "toolchain default [<version>]",
             "toolchain remove <version>",
             "toolchain clean",
@@ -351,14 +351,21 @@ the active one with `*`; `shell` starts $SHELL with ROK_ENV=<name>.",
         about: "\
 Toolchains live in $ROK_HOME/toolchains/<version>-<triple>/ ($ROK_HOME:
 default ~/.rok); the $ROK_HOME/bin proxies run the default one. `update`
-installs the newest release (or <version>) from $ROK_DIST (default:
+installs the newest release, or <version>, from $ROK_DIST (default:
 https://github.com/rok-lang/rok/releases), checked against its .sha256,
 and makes it the default; it is rolled back if the proxies then do not
-run it. `clean` removes every toolchain but the default. A first argument
-+<version> runs one command with that toolchain, as does $ROK_TOOLCHAIN
-or rok.rokon's `toolchain`.",
+run it. <version> is a version (0.1.6), a series (0.1, the newest 0.1.x)
+or a requirement (^0.1.5). `install` without --from downloads one and
+keeps the default. `clean` removes every toolchain but the default. A
+first argument +<version> runs one command with that toolchain, as does
+$ROK_TOOLCHAIN, a script's or rok.rokon's `toolchain`.",
         examples: &[
             ("rok toolchain update", "the newest release"),
+            ("rok toolchain update 0.1", "the newest 0.1.x"),
+            (
+                "rok toolchain install 0.1.4",
+                "download 0.1.4 beside the default",
+            ),
             ("rok toolchain default 0.1.4", "switch"),
             ("rok +0.1.4 build", "one build with 0.1.4"),
         ],
