@@ -1161,7 +1161,7 @@ impl<'a> Parser<'a> {
             StmtKind::Return(_) => {
                 self.error(
                     span,
-                    "top-level `return` is not allowed (spec 4.16.4); use `env::exit(code)` \
+                    "top-level `return` is not allowed (spec 4.16.4); use `process::exit(code)` \
                      or an explicit `fn main() -> i32`",
                 );
                 None

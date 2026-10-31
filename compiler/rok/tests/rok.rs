@@ -2215,9 +2215,10 @@ fn script_dependencies() {
 }
 
 const ECHO: &str = "#!/usr/bin/env rok\nuse rok::std::env;\nuse rok::std::io;\n\
+                    use rok::std::process;\n\
                     let line = try! io::stdin().read_line();\n\
                     println(f\"{env::args()[1..]:?} {line.trim()}\");\n\
-                    eprintln(\"err\");\nenv::exit(3);\n";
+                    eprintln(\"err\");\nprocess::exit(3);\n";
 
 /// The cached executable `rok run -v` ran, and whether it compiled.
 fn ran(out: &Output) -> (String, bool) {

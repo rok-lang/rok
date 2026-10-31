@@ -81,31 +81,78 @@ impl Thread {
     }
 }
 
-/// The OS could not join the thread: `pthread_join`'s error number,
-/// [`JOIN_LOST`] or [`JOIN_TAKEN`].
+/// The thread could not be joined (`JoinError::kind`).
 #[derive(Debug)]
 pub struct JoinError {
+    #[deprecated(since = "0.1.6", note = "use `JoinError::kind()`")]
     pub code: i32;
+}
+
+/// Why a join failed.
+#[non_exhaustive]
+pub enum JoinErrorKind {
+    /// The OS refused: `pthread_join`'s error number (Windows: the
+    /// error code).
+    Os(i32),
+    /// A failed REPL cell's rollback ended the thread (the session went
+    /// back to before the cell; the thread is gone).
+    Lost,
+    /// The handle was already joined or detached, through it or a copy
+    /// of it: the OS thread handle is released once.
+    Taken,
+}
+
+impl PartialEq for JoinErrorKind {
+    const fn eq(self, rhs: JoinErrorKind) -> bool { code_of(self) == code_of(rhs) }
+    const fn ne(self, rhs: JoinErrorKind) -> bool { code_of(self) != code_of(rhs) }
+}
+
+impl Debug for JoinErrorKind {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) {
+        match self {
+            JoinErrorKind::Os(n) => try f.write_str(f"Os({n})"),
+            JoinErrorKind::Lost => try f.write_str("Lost"),
+            JoinErrorKind::Taken => try f.write_str("Taken"),
+        }
+    }
+}
+
+const fn code_of(k: JoinErrorKind) -> i32 {
+    match k {
+        JoinErrorKind::Os(n) => n,
+        JoinErrorKind::Lost => JOIN_LOST,
+        JoinErrorKind::Taken => JOIN_TAKEN,
+    }
 }
 
 /// `JoinError::code` of a thread a failed REPL cell's rollback ended
 /// (the session went back to before the cell; the thread is gone).
+#[deprecated(since = "0.1.6", note = "use `JoinErrorKind::Lost`")]
 pub const JOIN_LOST: i32 = -1;
 
 /// `JoinError::code` of a handle already joined or detached, through it
 /// or a copy of it: the OS thread handle is released once.
+#[deprecated(since = "0.1.6", note = "use `JoinErrorKind::Taken`")]
 pub const JOIN_TAKEN: i32 = -2;
 
-impl Display for JoinError {
-    const fn fmt(self, ref f: Formatter) throws (FmtError) {
-        if self.code == JOIN_LOST {
-            try f.write_str("thread join failed: the thread ended with a failed REPL cell")
-        } else if self.code == JOIN_TAKEN {
-            try f.write_str("thread join failed: the handle was already joined or detached")
-        } else {
-            try f.write_str(f"thread join failed (error {self.code})")
+impl JoinError {
+    pub const fn kind(self) -> JoinErrorKind {
+        if self.code == JOIN_LOST { return JoinErrorKind::Lost; }
+        if self.code == JOIN_TAKEN { return JoinErrorKind::Taken; }
+        JoinErrorKind::Os(self.code)
+    }
+
+    pub const fn message(self) -> str {
+        match self.kind() {
+            JoinErrorKind::Lost => "thread join failed: the thread ended with a failed REPL cell",
+            JoinErrorKind::Taken => "thread join failed: the handle was already joined or detached",
+            JoinErrorKind::Os(n) => f"thread join failed (error {n})",
         }
     }
+}
+
+impl Display for JoinError {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(self.message()) }
 }
 
 impl Error for JoinError {}
@@ -229,8 +276,13 @@ pub fn sleep(dur: Duration) {
     unsafe { rok_thread_sleep_ns(dur.as_ns()) };
 }
 
-/// Always `false`: a panic ends the process before anything can ask.
-pub const fn panicking() -> bool { false }
+extern "rok" {
+    fn rok_thread_panicking() -> i32;
+}
+
+/// Whether this thread panicked. A panic ends the process, so only code
+/// that runs while it ends (an embedder's exit hook) sees `true`.
+pub const fn panicking() -> bool { unsafe { rok_thread_panicking() } != 0 }
 
 /// Block until this thread is `unpark`ed (an earlier `unpark` makes it
 /// return at once). May also return spuriously: re-check the condition.

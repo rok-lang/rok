@@ -612,9 +612,21 @@ pub unsafe extern "C" fn rok_panic(msg: *const u8, msg_len: usize) -> ! {
     panic_at(msg.bytes(), None)
 }
 
+/// The thread that panicked, by the address of its own name slot (a
+/// per-thread address); 0: none.
+static PANICKING: core::sync::atomic::AtomicUsize = core::sync::atomic::AtomicUsize::new(0);
+
+/// `thread::panicking()`: 1 when the calling thread panicked and the
+/// process is ending (code the exit hook runs).
+#[unsafe(no_mangle)]
+pub extern "C" fn rok_thread_panicking() -> i32 {
+    i32::from(PANICKING.load(Ordering::Relaxed) == tls::thread_name() as usize)
+}
+
 /// A panic's report, `thread '<name>' panicked at <at>:\n<msg>\n` (no
 /// ` at <at>` without a location), then exit 101.
 pub(crate) fn panic_at(msg: &[u8], at: Option<&[u8]>) -> ! {
+    PANICKING.store(tls::thread_name() as usize, Ordering::Relaxed);
     let name = thread::name();
     let (sep, at) = at.map_or((&b""[..], &b""[..]), |a| (&b" at "[..], a));
     rokr_common::write_all(

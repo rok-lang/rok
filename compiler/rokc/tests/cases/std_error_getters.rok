@@ -1,0 +1,69 @@
+// spec: std 305-io §3.5.0
+// spec: std 302-net §3.2.4 §3.2.5
+// spec: std 304-thread §3.4.1
+// spec: std 309-rokon §3.9.3
+// spec: §6.2.7
+// needs: threads
+// expect-exit: 0
+// expect-lint: 53:60 use of deprecated field `IoError.kind`
+// expect-lint: 53:71 use of deprecated field `IoError.code`
+// expect-lint: 53:80 use of deprecated field `IoError.message`
+// expect-lint: 55:75 use of deprecated field `RokonError.line`
+// expect-lint: 55:84 use of deprecated field `RokonError.col`
+// expect-lint: 55:92 use of deprecated field `RokonError.path`
+// expect-lint: 55:101 use of deprecated field `RokonError.msg`
+// expect-lint: 61:76 use of deprecated field `JoinError.code`
+// expect-lint: 61:85 use of deprecated field `JoinError.code`
+// expect-lint: 61:95 use of deprecated constant `JOIN_TAKEN`
+// expect-lint: 65:54 use of deprecated field `Ipv4Addr.octets`
+// expect-lint: 66:58 use of deprecated field `Ipv6Addr.segments`
+// expect-lint: 67:30 use of deprecated field `TlsError.kind`
+// expect-lint: 67:62 use of deprecated field `TlsError.msg`
+// expect-lint: 67:76 use of deprecated field `TlsError.alert`
+// expect-lint: 68:62 use of deprecated field `TlsError.msg`
+// expect-warning: = note: use `IoError::kind()`; build one with `IoError::with_kind`
+// expect-warning: = note: use `IoError::message()`; build one with `IoError::new`
+// expect-warning: = note: use `RokonError::message()`
+// expect-warning: = note: use `JoinError::kind()`
+// expect-warning: = note: use `JoinErrorKind::Taken`
+// expect-warning: = note: use `Ipv4Addr::octets()`; build one with `Ipv4Addr::new`
+// expect-warning: = note: use `TlsError::message()`
+// expect-stdout:
+// io: NotFound 0 gone | NotFound 0 gone
+// rokon: 1:5 .b expected i32, found string | 1 5 .b expected i32, found string
+// join: Taken true | -2 true
+// v4: 10 1 | 10
+// v6: 1 | 1
+// tls: Certificate 42 bad | bad
+
+// Errors and addresses read through methods; the public fields still
+// work and warn.
+use rok::std::io::{IoError, IoErrorKind};
+use rok::std::net::{Ipv4Addr, Ipv6Addr};
+use rok::std::net::tls::{TlsError, TlsErrorKind};
+use rok::std::rokon;
+use rok::std::thread;
+use rok::std::thread::{JoinErrorKind, JOIN_TAKEN};
+
+#[derive(Rokon)]
+struct S { b: i32; }
+
+fn main() {
+    let e = IoError::with_kind(IoErrorKind::NotFound, "gone");
+    println(f"io: {e.kind():?} {e.code()} {e.message()} | {e.kind:?} {e.code} {e.message}");
+    try rokon::from_str::<S>("{b: \"x\"}") catch x {
+        println(f"rokon: {x.line()}:{x.col()} {x.path()} {x.message()} | {x.line} {x.col} {x.path} {x.msg}");
+        S { b: 0 }
+    };
+    let h = thread::spawn(|| 1);
+    try! h.join();
+    try h.join() catch x {
+        println(f"join: {x.kind():?} {x.kind() == JoinErrorKind::Taken} | {x.code} {x.code == JOIN_TAKEN}");
+        0
+    };
+    let a = Ipv4Addr::new(10u8, 0u8, 0u8, 1u8);
+    println(f"v4: {a.octets()[0]} {a.octets()[3]} | {a.octets[0]}");
+    println(f"v6: {Ipv6Addr::LOCALHOST.segments()[7]} | {Ipv6Addr::LOCALHOST.segments[7]}");
+    let t = TlsError { kind: TlsErrorKind::Certificate, msg: "bad", alert: 42u8 };
+    println(f"tls: {t.kind():?} {t.alert()} {t.message()} | {t.msg}");
+}

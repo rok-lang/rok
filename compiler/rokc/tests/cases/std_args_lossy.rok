@@ -1,0 +1,28 @@
+// spec: std 306-env §3.6.1
+// needs: process
+// expect-exit: 0
+// expect-stdout:
+// args: 1
+// var: none
+
+// `env::args` and `env::vars` give U+FFFD for bytes that are not UTF-8;
+// `args_os` / `vars_os` keep the bytes. `cli.rs`
+// (`non_utf8_args_and_vars_are_lossy`) runs it with such arguments and
+// `ROK_LOSSY` set.
+use rok::std::env;
+
+fn main() {
+    let a = env::args();
+    let raw = env::args_os();
+    println(f"args: {a.len()}");
+    for i in 1..a.len() {
+        let codes: List<str> = [];
+        for c in a[i].chars() { codes.push(f"{c as u32:x}"); }
+        println(f"{i}: {a[i]} [{codes.join(" ")}] {raw[i].len()} bytes, lossy {raw[i].to_str_lossy() == a[i]}");
+    }
+    let v = "none";
+    for (k, x) in env::vars() {
+        if k == "ROK_LOSSY" { v = x; }
+    }
+    println(f"var: {v}");
+}

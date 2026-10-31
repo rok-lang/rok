@@ -1,0 +1,19 @@
+// spec: std 305-io §3.5.1
+// expect-exit: 101
+// expect-stderr: thread 'main' panicked at *:
+// expect-stderr: read_into: range 4..9 is not within a buffer of 6 bytes
+// expect-stdout:
+
+// A range past the buffer is a bug in the caller: a panic, as slicing.
+use rok::std::io::{IoError, Reader, byte_buf};
+
+struct Empty {}
+
+impl Reader for Empty {
+    fn read(ref self, buf: List<u8>) throws (IoError) -> usize { 0 }
+}
+
+fn main() throws (IoError) {
+    let r = Empty {};
+    try r.read_into(byte_buf(6), 4..9);
+}

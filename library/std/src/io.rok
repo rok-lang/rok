@@ -131,8 +131,11 @@ impl Debug for IoErrorKind {
 /// its kind, the OS error code (`0` when the library raised it) and a
 /// readable message.
 pub struct IoError {
+    #[deprecated(since = "0.1.6", note = "use `IoError::kind()`; build one with `IoError::with_kind`")]
     pub kind: IoErrorKind;
+    #[deprecated(since = "0.1.6", note = "use `IoError::code()`; build one with `IoError::from_os`")]
     pub code: i32;
+    #[deprecated(since = "0.1.6", note = "use `IoError::message()`; build one with `IoError::new`")]
     pub message: str;
 }
 
@@ -362,6 +365,22 @@ pub trait Reader {
     /// (the default): none.
     const fn raw_fd(self) -> RawFd { -1 }
 
+    /// Read up to `r.end - r.start` bytes into `buf[r.start..r.end]`; the
+    /// count, `0` at the end of the stream. Panics if `r` is not within
+    /// `buf`.
+    #[track_caller]
+    fn read_into(ref self, buf: List<u8>, r: Range<usize>) throws (IoError) -> usize {
+        if r.start > r.end || r.end > buf.len() {
+            panic(f"read_into: range {r.start}..{r.end} is not within a buffer of {buf.len()} bytes");
+        }
+        let chunk = byte_buf(r.end - r.start);
+        let n = try self.read(chunk);
+        let (dst, to, _) = region(buf);
+        let (src, from, _) = region(chunk);
+        unsafe { rok_buf_copy(dst, to + r.start, src, from, n) };
+        n
+    }
+
     /// Fill all of `buf`, or `UnexpectedEof`.
     fn read_exact(ref self, buf: List<u8>) throws (IoError) {
         let at = try self.read(buf);
@@ -439,6 +458,12 @@ pub trait Writer {
 
     fn write_str(ref self, s: str) throws (IoError) {
         try self.write_all(list_of_str(s));
+    }
+
+    /// `write_all` of anything `AsBytes`: a `str`, a `List<u8>`, a
+    /// `Slice<u8>`.
+    fn write_bytes<B: AsBytes>(ref self, data: B) throws (IoError) {
+        try self.write_all(list_of(data));
     }
 
     /// Write formatted text: `try w.write_fmt(f"{x}\n")`.

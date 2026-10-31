@@ -119,7 +119,7 @@ fn check_main_signature(f: &FnDef, diags: &mut Vec<RokDiagnostic>) {
     if is_result {
         bad(
             "cannot return `Result`; declare `fn main() throws (E)` so an escaping error \
-             exits 1, and call `rok::std::env::exit(code)` for any other exit code",
+             exits 1, and call `rok::std::process::exit(code)` for any other exit code",
         );
     } else if !ret_ok {
         bad("must return `()` or `i32`");

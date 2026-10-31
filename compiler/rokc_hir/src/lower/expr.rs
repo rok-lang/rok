@@ -609,7 +609,7 @@ fn lower_stmt_inner(ctx: &mut LowerCtx<'_>, stmt: &Stmt) -> Option<HirStmt> {
             ctx.emit_error(
                 rokc_diagnostic::ErrorKind::Type,
                 "`return` is not allowed in top-level statements (spec 4.16.4); use \
-                 `env::exit(code)` or an explicit `fn main() -> i32`"
+                 `process::exit(code)` or an explicit `fn main() -> i32`"
                     .to_owned(),
             );
             None

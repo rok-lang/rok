@@ -740,18 +740,91 @@ pub extern "C" fn rok_os_clone(dir: i32, from: RokStr, to: RokStr) -> i32 {
     }
 }
 
+/// The kind `rok_os_stat` reports for file mode `m`.
+// `mode_t` is u16 on macOS, u32 elsewhere.
+#[allow(clippy::unnecessary_cast)]
+const fn kind_of(m: u32) -> i64 {
+    match m & libc::S_IFMT as u32 {
+        x if x == libc::S_IFREG as u32 => 1,
+        x if x == libc::S_IFDIR as u32 => 2,
+        x if x == libc::S_IFLNK as u32 => 3,
+        _ => 0,
+    }
+}
+
+/// `rok_os_stat` through `statx` (Linux 4.11+), the only call that
+/// reports creation time; `Err(errno)`.
+#[cfg(target_os = "linux")]
+fn statx(dir: i32, path: RokStr, flags: i32, fd: i32) -> Result<[i64; 12], i32> {
+    // SAFETY: zeroed `statx` is a valid out-buffer.
+    let mut sx: libc::statx = unsafe { core::mem::zeroed() };
+    let mask = libc::STATX_BASIC_STATS | libc::STATX_BTIME;
+    // SAFETY: C strings; `sx` is writable.
+    let (r, e) = native(|| unsafe {
+        if fd >= 0 {
+            let f = flags | libc::AT_EMPTY_PATH;
+            libc::syscall(libc::SYS_statx, fd, c"".as_ptr(), f, mask, &raw mut sx)
+        } else {
+            libc::syscall(
+                libc::SYS_statx,
+                at(dir),
+                cs(path).p(),
+                flags,
+                mask,
+                &raw mut sx,
+            )
+        }
+    });
+    if r < 0 {
+        return Err(e);
+    }
+    let ts = |t: libc::statx_timestamp| [t.tv_sec, i64::from(t.tv_nsec)];
+    let [mtime, mtime_ns] = ts(sx.stx_mtime);
+    let [atime, atime_ns] = ts(sx.stx_atime);
+    let [ctime, ctime_ns] = ts(sx.stx_ctime);
+    let [btime, btime_ns] = ts(sx.stx_btime);
+    let born = i64::from(sx.stx_mask & libc::STATX_BTIME != 0);
+    let mode = u32::from(sx.stx_mode);
+    Ok([
+        kind_of(mode),
+        sx.stx_size as i64,
+        i64::from(mode & 0o7777),
+        mtime,
+        mtime_ns,
+        atime,
+        ctime,
+        atime_ns,
+        ctime_ns,
+        born,
+        btime,
+        btime_ns,
+    ])
+}
+
 /// `fstatat` (`fd < 0`) or `fstat(fd)`, filling the `GcBuf<i64>` `out`:
-/// `[kind, size, mode, mtime_s, mtime_ns, atime_s, ctime_s, atime_ns]`, kind 1
-/// file, 2 dir, 3 symlink, 0 other. 0 or `-errno`.
+/// `[kind, size, mode, mtime_s, mtime_ns, atime_s, ctime_s, atime_ns,
+/// ctime_ns, has birth time, btime_s, btime_ns]`, kind 1 file, 2 dir,
+/// 3 symlink, 0 other. 0 or `-errno`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_os_stat(dir: i32, path: RokStr, follow: i32, fd: i32, out: *mut u8) -> i32 {
-    // SAFETY: zeroed `stat` is a valid out-buffer.
-    let mut st: libc::stat = unsafe { core::mem::zeroed() };
     let flags = if follow != 0 {
         0
     } else {
         libc::AT_SYMLINK_NOFOLLOW
     };
+    #[cfg(target_os = "linux")]
+    match statx(dir, path, flags, fd) {
+        Ok(vals) => {
+            // SAFETY: the library passes a live `GcBuf<i64>` of 12 elements.
+            unsafe { ptr::copy_nonoverlapping(vals.as_ptr(), out.add(HEADER_SIZE).cast(), 12) };
+            return 0;
+        }
+        // No statx (old kernel, or a sandbox that refuses it).
+        Err(libc::ENOSYS | libc::EPERM) => {}
+        Err(e) => return -e,
+    }
+    // SAFETY: zeroed `stat` is a valid out-buffer.
+    let mut st: libc::stat = unsafe { core::mem::zeroed() };
     // SAFETY: `path` is a C string; `st` is writable.
     let (r, e) = native(|| unsafe {
         if fd >= 0 {
@@ -763,12 +836,13 @@ pub extern "C" fn rok_os_stat(dir: i32, path: RokStr, follow: i32, fd: i32, out:
     if r < 0 {
         return -e;
     }
-    let kind = match st.st_mode & libc::S_IFMT {
-        libc::S_IFREG => 1,
-        libc::S_IFDIR => 2,
-        libc::S_IFLNK => 3,
-        _ => 0,
-    };
+    #[allow(clippy::unnecessary_cast)]
+    let kind = kind_of(st.st_mode as u32);
+    // macOS keeps the creation time in `stat`.
+    #[cfg(target_os = "macos")]
+    let born = [1, st.st_birthtime, st.st_birthtime_nsec];
+    #[cfg(not(target_os = "macos"))]
+    let born = [0, 0, 0];
     // The fields are i32 or i64 by target.
     #[cfg(unix)]
     #[allow(clippy::unnecessary_cast)]
@@ -781,6 +855,10 @@ pub extern "C" fn rok_os_stat(dir: i32, path: RokStr, follow: i32, fd: i32, out:
         st.st_atime as i64,
         st.st_ctime as i64,
         st.st_atime_nsec as i64,
+        st.st_ctime_nsec as i64,
+        born[0],
+        born[1],
+        born[2],
     ];
     #[cfg(target_os = "wasi")]
     let vals = [
@@ -792,8 +870,12 @@ pub extern "C" fn rok_os_stat(dir: i32, path: RokStr, follow: i32, fd: i32, out:
         st.st_atim.tv_sec,
         st.st_ctim.tv_sec,
         st.st_atim.tv_nsec as i64,
+        st.st_ctim.tv_nsec as i64,
+        born[0],
+        born[1],
+        born[2],
     ];
-    // SAFETY: the library passes a live `GcBuf<i64>` of 8 elements.
+    // SAFETY: the library passes a live `GcBuf<i64>` of 12 elements.
     unsafe { ptr::copy_nonoverlapping(vals.as_ptr(), out.add(HEADER_SIZE).cast(), vals.len()) };
     0
 }

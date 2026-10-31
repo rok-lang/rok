@@ -40,6 +40,7 @@ pub struct OpenOptions {
     pub create: bool;
     pub create_new: bool;
     /// Unix permission bits for a created file.
+    #[deprecated(since = "0.1.6", note = "use `OpenOptionsExt::unix_mode` (rok::std::os::unix::fs)")]
     pub mode: u32;
 }
 
@@ -59,6 +60,7 @@ impl OpenOptions {
     pub const fn truncate(self, on: bool) -> OpenOptions { self.truncate = on; self }
     pub const fn create(self, on: bool) -> OpenOptions { self.create = on; self }
     pub const fn create_new(self, on: bool) -> OpenOptions { self.create_new = on; self }
+    #[deprecated(since = "0.1.6", note = "use `OpenOptionsExt::unix_mode` (rok::std::os::unix::fs)")]
     pub const fn mode(self, mode: u32) -> OpenOptions { self.mode = mode; self }
 
     const fn bits(self) -> i32 {
@@ -73,19 +75,64 @@ impl OpenOptions {
     }
 }
 
-/// Unix permission bits.
+/// A file's permissions: Unix permission bits (Windows: the read-only
+/// attribute; `PermissionsExt` in `rok::std::os::unix::fs` reads and sets
+/// the bits).
 pub struct Permissions {
-    mode: u32;
+    pub(pkg) mode: u32;
 }
 
 impl Permissions {
+    #[deprecated(since = "0.1.6", note = "use `PermissionsExt::from_unix_mode` (rok::std::os::unix::fs); on Windows, `set_readonly`")]
     pub const fn from_mode(mode: u32) -> Permissions { Permissions { mode: mode & 0o7777u32 } }
+    #[deprecated(since = "0.1.6", note = "use `PermissionsExt::unix_mode` (rok::std::os::unix::fs); on Windows, `readonly`")]
     pub const fn mode(self) -> u32 { self.mode }
     /// No write bit for anyone.
     pub const fn readonly(self) -> bool { (self.mode & 0o222u32) == 0u32 }
     pub const fn set_readonly(self, on: bool) -> Permissions {
         if on { return Permissions { mode: self.mode & 0o7555u32 }; }
         Permissions { mode: self.mode | 0o200u32 }
+    }
+}
+
+/// What a directory entry is (301.1).
+#[non_exhaustive]
+pub enum FileType {
+    File,
+    Dir,
+    Symlink,
+    /// A device, pipe, socket, ...
+    Other,
+}
+
+impl FileType {
+    pub const fn is_file(self) -> bool { self == FileType::File }
+    pub const fn is_dir(self) -> bool { self == FileType::Dir }
+    pub const fn is_symlink(self) -> bool { self == FileType::Symlink }
+
+    const fn index(self) -> i32 {
+        match self {
+            FileType::File => 1,
+            FileType::Dir => 2,
+            FileType::Symlink => 3,
+            FileType::Other => 0,
+        }
+    }
+}
+
+impl PartialEq for FileType {
+    const fn eq(self, rhs: FileType) -> bool { self.index() == rhs.index() }
+    const fn ne(self, rhs: FileType) -> bool { self.index() != rhs.index() }
+}
+
+impl Debug for FileType {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) {
+        try f.write_str(match self {
+            FileType::File => "File",
+            FileType::Dir => "Dir",
+            FileType::Symlink => "Symlink",
+            FileType::Other => "Other",
+        })
     }
 }
 
@@ -99,24 +146,52 @@ pub struct Metadata {
     atime: i64;
     ctime: i64;
     atime_ns: i64;
+    ctime_ns: i64;
+    /// Creation time, when the OS and file system keep one.
+    btime: i64;
+    btime_ns: i64;
+    has_btime: bool;
 }
 
 impl Metadata {
     pub const fn len(self) -> u64 { self.len }
+    pub const fn file_type(self) -> FileType {
+        if self.kind == 1 { return FileType::File; }
+        if self.kind == 2 { return FileType::Dir; }
+        if self.kind == 3 { return FileType::Symlink; }
+        FileType::Other
+    }
     pub const fn is_file(self) -> bool { self.kind == 1 }
     pub const fn is_dir(self) -> bool { self.kind == 2 }
     pub const fn is_symlink(self) -> bool { self.kind == 3 }
     pub const fn permissions(self) -> Permissions { Permissions { mode: self.mode } }
     /// Last modification, Unix seconds (+ `mtime_nanos` within it).
+    #[deprecated(since = "0.1.6", note = "use `modified()`")]
     pub const fn mtime(self) -> i64 { self.mtime }
+    /// The nanoseconds within the `mtime` second.
+    #[deprecated(since = "0.1.6", note = "use `modified()`")]
     pub const fn mtime_nanos(self) -> i64 { self.mtime_ns }
+    #[deprecated(since = "0.1.6", note = "use `accessed()`")]
     pub const fn atime(self) -> i64 { self.atime }
+    /// The last status change (not creation), Unix seconds.
+    #[deprecated(since = "0.1.6", note = "use `changed()` (last status change) or `created()`")]
     pub const fn ctime(self) -> i64 { self.ctime }
     /// Last modification as a `SystemTime` (3.3.3). Never throws on
     /// Unix; `throws` keeps room for platforms without the field.
     pub const fn modified(self) throws (IoError) -> SystemTime { SystemTime::from_unix(self.mtime, self.mtime_ns as u32) }
     /// Last access as a `SystemTime`.
     pub const fn accessed(self) throws (IoError) -> SystemTime { SystemTime::from_unix(self.atime, self.atime_ns as u32) }
+    /// Last change of the contents or the metadata (permissions, links,
+    /// a rename) as a `SystemTime`.
+    pub const fn changed(self) throws (IoError) -> SystemTime { SystemTime::from_unix(self.ctime, self.ctime_ns as u32) }
+    /// Creation as a `SystemTime`; `Unsupported` where the OS or file
+    /// system keeps none (Linux before 4.11, some file systems).
+    pub const fn created(self) throws (IoError) -> SystemTime {
+        if !self.has_btime {
+            throw IoError::with_kind(IoErrorKind::Unsupported, "creation time is not available on this platform or file system");
+        }
+        SystemTime::from_unix(self.btime, self.btime_ns as u32)
+    }
 }
 
 /// `fd`'s size as a read size hint (0: unknown, as a pipe's).
@@ -127,7 +202,7 @@ fn size_hint(fd: i32, path: str) -> usize {
 /// `stat` through the runtime: `fd >= 0` → `fstat(fd)`.
 fn stat_at(dir: i32, path: str, follow: bool, fd: i32) throws (IoError) -> Metadata {
     unsafe {
-        let out: GcBuf<i64> = buf_new(8);
+        let out: GcBuf<i64> = buf_new(12);
         let f = if follow { 1 } else { 0 };
         try check(rok_os_stat(dir, path, f, fd, out) as i64, path);
         Metadata {
@@ -139,6 +214,10 @@ fn stat_at(dir: i32, path: str, follow: bool, fd: i32) throws (IoError) -> Metad
             atime: out[5],
             ctime: out[6],
             atime_ns: out[7],
+            ctime_ns: out[8],
+            has_btime: out[9] != 0,
+            btime: out[10],
+            btime_ns: out[11],
         }
     }
 }
@@ -169,6 +248,8 @@ impl File {
     }
 
     /// Take ownership of an open descriptor; `name` labels its errors.
+    /// Nothing else may close `fd` then.
+    #[future_unsafe("`fd` must be open, and nothing else may close it")]
     pub const fn from_fd(fd: i32, name: str) -> File { file_of(fd, name) }
 
     /// The OS file descriptor (`-1` once closed).
@@ -866,6 +947,7 @@ impl DirEntry {
     pub const fn file_name(self) -> str { self.name }
     /// Metadata of the entry itself (a symlink is not followed).
     pub const fn metadata(self) -> Metadata { self.meta }
+    pub const fn file_type(self) -> FileType { self.meta.file_type() }
     pub const fn is_dir(self) -> bool { self.meta.is_dir() }
     pub const fn is_file(self) -> bool { self.meta.is_file() }
     pub const fn is_symlink(self) -> bool { self.meta.is_symlink() }
