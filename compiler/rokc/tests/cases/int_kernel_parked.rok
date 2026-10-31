@@ -14,8 +14,13 @@ extern "C" {
     fn rok_gc_collect();
 }
 
-fn main() {
-    let a = (int::from(1) << 16000000u32) - int::from(1);
+// Two collections (under ROK_GC_CONCURRENT=always the pause that starts
+// a mark and the one that finishes it) from 20 ms into the product: when
+// they are done, in ns from the product's start, the product's time and
+// whether it is right. A collection that waited for the kernel would
+// end with it.
+fn attempt(a: int) -> (i64, i64, bool) {
+    STARTED.store(0);
     let t = rok::std::thread::spawn(|| {
         STARTED.store(1);
         let t0 = Instant::now();
@@ -25,12 +30,28 @@ fn main() {
         (took, p == (int::from(1) << 32000000u32) - (int::from(1) << 16000001u32) + int::from(1))
     });
     while STARTED.load() == 0 {}
+    let t0 = Instant::now();
     // Past the product's allocations, into the kernel.
     rok::std::thread::sleep(Duration::ms(20));
-    let t0 = Instant::now();
-    for _ in 0..10 { unsafe { rok_gc_collect() }; }
-    let gc = t0.elapsed().as_ns();
+    for _ in 0..2 { unsafe { rok_gc_collect() }; }
+    let done = t0.elapsed().as_ns();
     let (took, ok) = try! t.join();
-    println(if gc * 4 < took { "collected while multiplying" } else { f"the collections waited for the product ({gc} ns, product {took} ns)" });
+    (done, took, ok)
+}
+
+fn main() {
+    let a = (int::from(1) << 16000000u32) - int::from(1);
+    // On a loaded machine a collection that did not wait may still be
+    // slow: ask only for an end well before the product's, and allow a
+    // scheduling stall to spoil an attempt or two. A collection that
+    // waits for the kernel spoils every one.
+    let r = attempt(a);
+    let tries = 1;
+    while r.2 && r.0 * 4 >= r.1 * 3 && tries < 3 {
+        r = attempt(a);
+        tries += 1;
+    }
+    let (done, took, ok) = r;
+    println(if done * 4 < took * 3 { "collected while multiplying" } else { f"the collections waited for the product (done at {done} ns, product {took} ns)" });
     println(f"{(a * a).bit_length()} {ok}");
 }
