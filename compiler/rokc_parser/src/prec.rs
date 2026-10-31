@@ -89,6 +89,8 @@ pub struct OpEntry {
     pub swap: bool,
     /// Binding level: the table's, or `like`'s for an extension token.
     pub level: (u32, Assoc),
+    /// The package whose trait registers it (`""`: the one being built).
+    pub package: String,
 }
 
 /// Registered extension operator tokens: what the lexer must recognize
@@ -96,6 +98,10 @@ pub struct OpEntry {
 #[derive(Clone, Debug, Default)]
 pub struct ExtOps {
     pub levels: HashMap<(String, Fixity), (u32, Assoc)>,
+    /// Tokens that start like a fixed one (`<-`, `**`), by the package
+    /// registering them: they lex only in that package's files, so
+    /// `a<-1` elsewhere stays `a < -1`.
+    pub owners: std::collections::BTreeMap<String, String>,
 }
 
 impl ExtOps {
@@ -106,6 +112,30 @@ impl ExtOps {
         v.sort_by_key(|s| std::cmp::Reverse(s.len()));
         v.dedup();
         v
+    }
+
+    /// What files of `package` lex: without another package's tokens
+    /// that start like a fixed one.
+    #[must_use]
+    pub fn in_package(&self, package: &str) -> std::borrow::Cow<'_, Self> {
+        if self.owners.values().all(|p| p == package) {
+            return std::borrow::Cow::Borrowed(self);
+        }
+        let foreign = |s: &String| self.owners.get(s).is_some_and(|p| p != package);
+        std::borrow::Cow::Owned(Self {
+            levels: self
+                .levels
+                .iter()
+                .filter(|((s, _), _)| !foreign(s))
+                .map(|(k, v)| (k.clone(), *v))
+                .collect(),
+            owners: self
+                .owners
+                .iter()
+                .filter(|(_, p)| *p == package)
+                .map(|(s, p)| (s.clone(), p.clone()))
+                .collect(),
+        })
     }
 
     /// Level of `symbol` at `fixity`: the fixed table, else a registration.
@@ -146,14 +176,23 @@ impl PrecTable {
     /// fixed table, with the level they took from `like`.
     #[must_use]
     pub fn ext_ops(&self) -> ExtOps {
+        let ext = || {
+            self.by_key.values().filter(|e| {
+                fixed_prec(&e.symbol, e.fixity).is_none() && !is_assign_token(&e.symbol)
+            })
+        };
         ExtOps {
-            levels: self
-                .by_key
-                .values()
-                .filter(|e| {
-                    fixed_prec(&e.symbol, e.fixity).is_none() && !is_assign_token(&e.symbol)
-                })
+            levels: ext()
                 .map(|e| ((e.symbol.clone(), e.fixity), e.level))
+                .collect(),
+            owners: ext()
+                .filter(|e| {
+                    e.symbol
+                        .bytes()
+                        .next()
+                        .is_some_and(rokc_lexer::lexer::fixed_lead)
+                })
+                .map(|e| (e.symbol.clone(), e.package.clone()))
                 .collect(),
         }
     }
@@ -267,6 +306,7 @@ fn collect_items(
                     level: lv,
                     method_name: m.name.clone(),
                     trait_name: trait_name.clone(),
+                    package: String::new(),
                 };
                 if let Some(e) = table.merge(entry) {
                     diags.push(e.with_span(attr.span, ""));

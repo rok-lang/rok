@@ -3500,6 +3500,7 @@ pub(super) fn lower_args_ref(
     let mut written: Vec<Option<usize>> = vec![None; n];
     // `..d` with `d: Dict<str, V>`: its temp and written position.
     let mut dicts: Vec<(String, usize, HirTy)> = Vec::new();
+    let mut dict_lits: Vec<&Expr> = Vec::new();
     for (k, a) in args.iter().enumerate() {
         match a {
             CallArg::Positional(e) | CallArg::Ref(e) | CallArg::Spread(e) if next >= var_at => {
@@ -3621,6 +3622,7 @@ pub(super) fn lower_args_ref(
                             n.saturating_sub(later)
                         };
                         let fill = end.saturating_sub(next);
+                        warn_list_spread(ctx, e, fill);
                         let name = format!("#spread{}", ctx.locals.len());
                         let local = ctx.declare(Some(name.clone()), ty);
                         lets.push(HirStmt::Let { local, init: lh });
@@ -3653,6 +3655,7 @@ pub(super) fn lower_args_ref(
                         let v = dict_value_ty(ctx, &ty);
                         let local = ctx.declare(Some(name.clone()), ty);
                         lets.push(HirStmt::Let { local, init: lh });
+                        dict_lits.push(e);
                         dicts.push((name, k, v));
                     }
                     other => ctx.emit_error(
@@ -3668,7 +3671,7 @@ pub(super) fn lower_args_ref(
         }
     }
     let end = if sig.variadic { n - 1 } else { n };
-    let empty = (0..end)
+    let empty: Vec<_> = (0..end)
         .filter(|i| slots[*i].is_none())
         .map(|i| {
             let d = sig.param_defaults.get(i).cloned().flatten();
@@ -3676,6 +3679,7 @@ pub(super) fn lower_args_ref(
         })
         .collect();
     let names: Vec<(String, HirTy)> = dicts.iter().map(|d| (d.0.clone(), d.2.clone())).collect();
+    warn_dict_spreads(ctx, &dict_lits, &empty);
     let mut dict_slots = Vec::new();
     for (i, e) in dict_spread(ctx, &names, empty, &mut lets, span) {
         slots[i] = Some(ArgSrc::Dict(dict_slots.len()));
@@ -4007,6 +4011,80 @@ fn lower_byte_str(ctx: &mut LowerCtx<'_>, body: &str, span: rokc_diagnostic::Spa
             label: None,
         })),
         span,
+    }
+}
+
+/// `f(..[a, b, c])` into `fill` parameters: the run-time check is sure
+/// to panic when the literal's length differs.
+fn warn_list_spread(ctx: &LowerCtx<'_>, e: &Expr, fill: usize) {
+    let ExprKind::List(items) = &e.kind else {
+        return;
+    };
+    if items.iter().any(is_list_spread_item) || items.len() == fill {
+        return;
+    }
+    let s = |k: usize| if k == 1 { "" } else { "s" };
+    let n = items.len();
+    ctx.emit_lint(
+        "literal_spread_mismatch",
+        e.span,
+        format!(
+            "spread of {n} element{} into {fill} parameter{}; this call panics",
+            s(n),
+            s(fill)
+        ),
+        format!(
+            "spread a list of exactly {fill} element{}, or pass the arguments without `..`",
+            s(fill)
+        ),
+    );
+}
+
+/// `..xs` inside a `List` literal: its length is known only at run time.
+const fn is_list_spread_item(e: &Expr) -> bool {
+    matches!(
+        e.kind,
+        ExprKind::Range {
+            start: None,
+            end: Some(_),
+            inclusive: false,
+        }
+    )
+}
+
+/// `f(..{"a": 1, "c": 2})`: a literal key that names none of the
+/// parameters left to fill is sure to panic in `spread_names`.
+fn warn_dict_spreads(
+    ctx: &LowerCtx<'_>,
+    dicts: &[&Expr],
+    empty: &[(usize, String, Option<Expr>, HirTy)],
+) {
+    for e in dicts {
+        let ExprKind::Dict(entries) = &e.kind else {
+            continue;
+        };
+        for (key, _) in entries {
+            let Some(k) = super::resolve::str_lit_of(key) else {
+                continue;
+            };
+            if k.contains('\\') || empty.iter().any(|p| p.1 == k) {
+                continue;
+            }
+            let help = if empty.is_empty() {
+                "remove the key: every parameter already has an argument".to_owned()
+            } else {
+                let names: Vec<String> = empty.iter().map(|p| format!("`\"{}\"`", p.1)).collect();
+                format!("use a key that names a parameter: {}", names.join(", "))
+            };
+            ctx.emit_lint(
+                "literal_spread_mismatch",
+                key.span,
+                format!(
+                    "spread of key {k:?}, which names no parameter left to fill; this call panics"
+                ),
+                help,
+            );
+        }
     }
 }
 
@@ -7407,6 +7485,7 @@ fn generic_positional_args(
     let mut rest: Vec<CallArg> = Vec::new();
     let mut ok = true;
     let mut dicts: Vec<(String, HirTy)> = Vec::new();
+    let mut dict_lits: Vec<&Expr> = Vec::new();
     for (k, a) in args.iter().enumerate() {
         match a {
             CallArg::Positional(e)
@@ -7469,7 +7548,9 @@ fn generic_positional_args(
                         } else {
                             n.saturating_sub(later)
                         };
-                        end.saturating_sub(next)
+                        let fill = end.saturating_sub(next);
+                        warn_list_spread(ctx, e, fill);
+                        fill
                     }
                     HirTy::Unknown => return None,
                     t if is_str_dict(ctx, t) => {
@@ -7477,6 +7558,7 @@ fn generic_positional_args(
                         let vty = dict_value_ty(ctx, &h.ty);
                         let local = ctx.declare(Some(name.clone()), h.ty.clone());
                         lets.push(HirStmt::Let { local, init: h });
+                        dict_lits.push(e);
                         dicts.push((name, vty));
                         continue;
                     }
@@ -7541,7 +7623,7 @@ fn generic_positional_args(
         arity_error(ctx, callee, n, n + extra, Some(sig_of_def(callee, def)));
         return None;
     }
-    let empty = params
+    let empty: Vec<_> = params
         .iter()
         .enumerate()
         .filter(|(i, p)| slots[*i].is_none() && !p.variadic)
@@ -7558,6 +7640,7 @@ fn generic_positional_args(
             )
         })
         .collect();
+    warn_dict_spreads(ctx, &dict_lits, &empty);
     let span = args
         .first()
         .map_or(rokc_diagnostic::Span::DUMMY, |a| match a {
@@ -10351,12 +10434,83 @@ fn operand_help(
         }
     }
     if numeric(lhs.1) && numeric(rhs.1) && lhs.1 != rhs.1 {
+        let name = |t: &HirTy| ctx.ty_name(t);
+        let (to_l, to_r) = match widen(ctx, lhs.1, rhs.1) {
+            Widen::Left => (Some(name(rhs.1)), None),
+            Widen::Right => (None, Some(name(lhs.1))),
+            Widen::Both(t) => (Some(t.name().to_owned()), Some(t.name().to_owned())),
+        };
+        let cast = |s: &str, to: Option<String>| match to {
+            Some(t) => format!("({s} as {t})"),
+            None => s.to_owned(),
+        };
+        let both = to_l.is_some() && to_r.is_some();
         return Some(format!(
-            "rok never converts numbers implicitly; convert one side: `{l} {op} ({r} as {})`",
-            ctx.ty_name(lhs.1)
+            "rok never converts numbers implicitly; convert {}: `{} {op} {}`",
+            if both { "both sides" } else { "one side" },
+            cast(&l, to_l),
+            cast(&r, to_r)
         ));
     }
     None
+}
+
+/// Which side of mixed numbers to convert so no value is lost.
+enum Widen {
+    /// Convert the left operand to the right one's type.
+    Left,
+    Right,
+    Both(PrimTy),
+}
+
+/// An integer goes to a float, `int` / `float` take any primitive, and
+/// the narrower of two of a kind goes to the wider. A signed type takes
+/// an unsigned one; of one width below 64 bits both go one width up.
+fn widen(ctx: &LowerCtx<'_>, a: &HirTy, b: &HirTy) -> Widen {
+    use super::bignum::Big;
+    // (class, bits, signed): a higher class holds every lower one.
+    let rank = |t: &HirTy| match t {
+        HirTy::Prim(p) if p.is_float() => (2, if *p == PrimTy::F32 { 32 } else { 64 }, true),
+        HirTy::Prim(p) => {
+            let bits = match p {
+                PrimTy::I8 | PrimTy::U8 => 8,
+                PrimTy::I16 | PrimTy::U16 => 16,
+                PrimTy::I32 | PrimTy::U32 => 32,
+                _ => 64,
+            };
+            (0, bits, p.is_signed_int())
+        }
+        _ => match super::bignum::big_of(ctx, t) {
+            Some(Big::Float) => (3, 0, true),
+            _ => (1, 0, true),
+        },
+    };
+    let (ra, rb) = (rank(a), rank(b));
+    if ra.0 != rb.0 {
+        return if ra.0 < rb.0 {
+            Widen::Left
+        } else {
+            Widen::Right
+        };
+    }
+    if ra.0 != 0 || ra.2 == rb.2 {
+        return if ra.1 < rb.1 {
+            Widen::Left
+        } else {
+            Widen::Right
+        };
+    }
+    if ra.1 == rb.1 && ra.1 < 64 {
+        let up = match ra.1 {
+            8 => PrimTy::I16,
+            16 => PrimTy::I32,
+            _ => PrimTy::I64,
+        };
+        return Widen::Both(up);
+    }
+    // Into the signed side: a length (`usize`) with an `i32` reads as
+    // `(xs.len() as i32)`.
+    if ra.2 { Widen::Right } else { Widen::Left }
 }
 
 fn lower_infix_typed(

@@ -236,6 +236,14 @@ impl<'src> Lexer<'src> {
             );
             return None;
         }
+        // A registered token longer than the fixed one here wins
+        // (`<-` over `<`); the fixed arm is undone.
+        let ext = if fixed_lead(b) && !self.ext_ops.is_empty() {
+            self.peek_ext_op()
+        } else {
+            None
+        };
+        let errors = self.diagnostics.len();
         let kind = match b {
             b'#' if next == Some(b'[') => {
                 self.advance(2);
@@ -300,6 +308,15 @@ impl<'src> Lexer<'src> {
             },
         };
 
+        let kind = match ext {
+            Some(op) if op.len() > self.pos - start => {
+                (self.pos, self.line, self.col) = (start, line, col);
+                self.diagnostics.truncate(errors);
+                self.advance(op.len());
+                TokenKind::ExtOp(op)
+            }
+            _ => kind,
+        };
         let span = Self::make_span(start, self.pos, line, col);
         Some(Token::new(kind, span))
     }
@@ -544,11 +561,13 @@ impl<'src> Lexer<'src> {
         }
     }
 
+    /// The longest registered token at `pos` (spec 1.10.2).
     fn peek_ext_op(&self) -> Option<String> {
         let rest = &self.src[self.pos..];
         self.ext_ops
             .iter()
-            .find(|op| rest.starts_with(op.as_str()))
+            .filter(|op| !op.is_empty() && rest.starts_with(op.as_str()))
+            .max_by_key(|op| op.len())
             .cloned()
     }
 
@@ -770,10 +789,28 @@ impl<'src> Lexer<'src> {
             (1u128 << bits) - 1
         };
         if value > max {
+            let neg = signed && self.prev_minus;
+            let bound = if neg {
+                format!("min -{max}")
+            } else {
+                format!("max {max}")
+            };
+            let sign = if neg { "-" } else { "" };
             self.error_from(
                 start,
-                format!("literal `{body}` out of range for `{suffix}` (max {max})"),
+                format!("literal `{sign}{body}` out of range for `{suffix}` ({bound})"),
             );
+            let wider = match bits {
+                8 => Some(16),
+                16 => Some(32),
+                32 => Some(64),
+                _ => None,
+            };
+            if let (Some(w), Some(d)) = (wider, self.diagnostics.last_mut()) {
+                let p = if signed { 'i' } else { 'u' };
+                d.notes
+                    .push(format!("help: use a wider type: `{sign}{body}{p}{w}`"));
+            }
         }
     }
 
@@ -1250,6 +1287,31 @@ fn block_doc_text(body: &str) -> String {
     text.join("\n").trim_end().to_owned()
 }
 
+/// A byte that starts a fixed operator token. A registered token that
+/// starts with one is scoped to its package (`ExtOps::in_package`).
+#[must_use]
+pub const fn fixed_lead(b: u8) -> bool {
+    matches!(
+        b,
+        b'~' | b'@'
+            | b'+'
+            | b'-'
+            | b'*'
+            | b'/'
+            | b'%'
+            | b'^'
+            | b'='
+            | b'!'
+            | b'<'
+            | b'>'
+            | b'&'
+            | b'|'
+            | b'.'
+            | b':'
+            | b'?'
+    )
+}
+
 /// Spec 1.10.3 Unicode math operators. `÷ ≡ ≠ ≤ ≥` are synonyms of
 /// `/ == != <= >=` and lex as those tokens.
 const fn math_op(c: char) -> Option<TokenKind> {
@@ -1553,5 +1615,30 @@ mod tests {
         let toks = ok(r#"f"""{{a}} "{f"{x:>{w}$$}"}" """"#);
         let back: String = toks.iter().map(T::text).collect();
         assert_eq!(ok(&back), toks);
+    }
+
+    #[test]
+    fn ext_ops_longest_match() {
+        let ops = |src: &str, ops: &[&str]| -> Vec<T> {
+            let ops = ops.iter().map(|s| (*s).to_owned()).collect();
+            let (toks, d) = Lexer::new(src, "t").with_ext_ops(ops).lex_all();
+            assert!(d.is_empty(), "{src:?}: {d:?}");
+            toks.into_iter().map(|t| t.kind).collect()
+        };
+        let x = || T::Ident("x".into());
+        let op = |s: &str| T::ExtOp(s.into());
+        assert_eq!(ops("x<-x", &["<-"]), [x(), op("<-"), x(), T::Eof]);
+        assert_eq!(ops("x**x", &["**"]), [x(), op("**"), x(), T::Eof]);
+        // The fixed token is as long or longer: it stays.
+        assert_eq!(ops("x<=x", &["<"]), [x(), T::LtEq, x(), T::Eof]);
+        assert_eq!(ops("x<<=x", &["<<"]), [x(), T::ShlEq, x(), T::Eof]);
+        // Longest registered token, whatever the order.
+        assert_eq!(ops("x$$$x", &["$", "$$$"]), [x(), op("$$$"), x(), T::Eof]);
+        assert_eq!(
+            ops("x<-->x", &["<-", "<-->"]),
+            [x(), op("<-->"), x(), T::Eof]
+        );
+        // No registration: `x < -x`.
+        assert_eq!(ok("x<-x"), [x(), T::Lt, T::Minus, x(), T::Eof]);
     }
 }

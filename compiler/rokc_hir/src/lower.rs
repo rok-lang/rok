@@ -3201,11 +3201,24 @@ impl<'a> LowerCtx<'a> {
     /// every instance raised it: a `rethrows` instance with a non-throwing
     /// argument would otherwise flag every `try`.
     fn emit_warning(&self, msg: String) {
-        let d = rokc_diagnostic::RokDiagnostic::warning(
+        self.push_warning(rokc_diagnostic::RokDiagnostic::warning(
             rokc_diagnostic::ErrorKind::Type,
             self.here(),
             msg,
+        ));
+    }
+
+    /// A warning at `at` that belongs to `lint`, so `-A lint` and
+    /// `#[allow(lint)]` silence it.
+    fn emit_lint(&self, lint: &str, at: Span, msg: String, help: String) {
+        self.push_warning(
+            rokc_diagnostic::RokDiagnostic::warning(rokc_diagnostic::ErrorKind::Type, at, msg)
+                .with_note(format!("help: {help}"))
+                .with_lint(lint),
         );
+    }
+
+    fn push_warning(&self, d: rokc_diagnostic::RokDiagnostic) {
         if self.ty_subst.is_empty() {
             self.env.sink.diagnostics.borrow_mut().push(d);
             return;

@@ -1,0 +1,22 @@
+// spec: std §2.1
+// Mixed numbers: the help converts the narrower side to the wider type,
+// so no value is lost.
+// expect-error: 17:13: operator `+` cannot be applied to `i32` and `i64`
+// expect-error: help: rok never converts numbers implicitly; convert one side: `(a as i64) + b`
+// expect-error: 18:13: operator `*` cannot be applied to `i32` and `f64`
+// expect-error: help: rok never converts numbers implicitly; convert one side: `(a as f64) * f`
+// expect-error: 19:13: operator `+` cannot be applied to `i32` and `u32`
+// expect-error: help: rok never converts numbers implicitly; convert both sides: `(a as i64) + (u as i64)`
+// expect-error: 20:13: operator `-` cannot be applied to `i64` and `u8`
+// expect-error: help: rok never converts numbers implicitly; convert one side: `b - (h as i64)`
+// expect-error: 21:13: operator `+` cannot be applied to `f64` and `f32`
+// expect-error: help: rok never converts numbers implicitly; convert one side: `f + (m as f64)`
+fn main() {
+    let (a, b, f): (i32, i64, f64) = (1, 5000000000, 1.5);
+    let (u, h, m): (u32, u8, f32) = (3, 1, 1.0);
+    let c = a + b;
+    let d = a * f;
+    let e = a + u;
+    let g = b - h;
+    let k = f + m;
+}

@@ -1,0 +1,13 @@
+pub struct Sink { pub v: i32; }
+
+pub trait Feed {
+    #[infix("<-", like = "+")]
+    fn feed(self, o: i32) -> i32;
+}
+
+impl Feed for Sink {
+    fn feed(self, o: i32) -> i32 { self.v + o }
+}
+
+// In this package's own files `<-` is the token.
+pub fn fed(s: Sink) -> i32 { s <- 10 }
