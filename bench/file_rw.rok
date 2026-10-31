@@ -1,0 +1,34 @@
+// File IO with small calls: 300k 16-byte writes, then 16-byte reads
+// and seeks back over the file. Bound by syscalls and the per-call cost
+// of the File handle.
+use rok::std::{env, fs, io, process};
+use rok::std::fs::{File, OpenOptions};
+use rok::std::io::SeekFrom;
+use rok::std::path::Path;
+
+fn main() -> i32 {
+    let path = env::temp_dir().join(Path::from(f"rok_bench_file_rw_{process::id()}"));
+    let opts = OpenOptions::new().read(true).write(true).create(true).truncate(true);
+    let f = try! File::open_with(path, opts);
+    let line = "0123456789abcde\n";
+    for _ in 0..300000 {
+        try! f.write_all(line);
+    }
+    try! f.seek(SeekFrom::Start(0u64));
+    let buf = io::byte_buf(16);
+    let total = 0usize;
+    let sum = 0u64;
+    loop {
+        let n = try! f.read(buf);
+        if n == 0 { break; }
+        total += n;
+        sum += buf[0] as u64;
+    }
+    for i in 0..300000 {
+        try! f.seek(SeekFrom::Start((i % 1000) as u64 * 16u64));
+    }
+    try! f.close();
+    try! fs::remove_file(path);
+    println(f"{total} {sum}");
+    0
+}

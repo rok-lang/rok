@@ -13,7 +13,7 @@
 // (`none`: unnamed). `sendfile` / `splice` are Linux only; no IPv6
 // multicast or `MSG_ZEROCOPY` (302.7). TLS 1.3 is `tls` (302.5).
 
-use rok::std::io::{IoError, IoErrorKind, RawFd, Reader, Writer, AsBytes, check, would_block, region, take_handle};
+use rok::std::io::{IoError, IoErrorKind, RawFd, Reader, Writer, AsBytes, check, would_block, region, take_handle, use_begin, use_end, use_close};
 use rok::std::time::Duration;
 use rok::std::fs::File;
 use rok::std::path::{AsPath, Path};
@@ -397,8 +397,9 @@ fn addrs_of(addr: str | SocketAddr) throws (IoError) -> List<SocketAddr> {
     }
 }
 
-/// An fd shared by copies of a handle, plus `[nonblocking, read
-/// timeout ns, write timeout ns]` (timeouts -1: none).
+/// `[fd, calls in flight]` (`io::use_begin`) shared by copies of a
+/// handle, plus `[nonblocking, read timeout ns, write timeout ns]`
+/// (timeouts -1: none).
 struct Sock {
     fd: GcBuf<i32>;
     opts: GcBuf<i64>;
@@ -406,7 +407,7 @@ struct Sock {
 
 const fn sock_of(fd: i32) -> Sock {
     unsafe {
-        let cell: GcBuf<i32> = buf_new(1);
+        let cell: GcBuf<i32> = buf_new(2);
         cell[0] = fd;
         let opts: GcBuf<i64> = buf_new(3);
         opts[1] = -1i64;
@@ -434,21 +435,41 @@ impl Sock {
     const fn copy_fd(self) -> i32 {
         unsafe {
             if cfg!(target_os = "windows") || self.opts[0] != 0i64 || self.opts[1] >= 0i64 || self.opts[2] >= 0i64 { return -1; }
+            self.fd()
+        }
+    }
+
+    /// The fd (`-1` once closed).
+    const fn fd(self) -> i32 {
+        unsafe {
+            if (self.fd[1] & 1) != 0 { return -1; }
             self.fd[0]
         }
     }
 
+    /// The fd to wait on for readiness (no call on it), or of a sock not
+    /// shared yet.
     const fn live(self) throws (IoError) -> i32 {
-        unsafe {
-            let fd = self.fd[0];
-            if fd < 0 { throw IoError::with_kind(IoErrorKind::InvalidInput, "socket is closed"); }
-            fd
-        }
+        let fd = self.fd();
+        if fd < 0 { throw IoError::with_kind(IoErrorKind::InvalidInput, "socket is closed"); }
+        fd
     }
 
-    /// Close the fd; a task waiting on its readiness wakes and finds it
-    /// closed (the kernel sends no event for a closed fd).
-    fn close(self) {
+    /// The fd for one call, which `done` ends. A `close` meanwhile
+    /// leaves the fd open until then.
+    fn enter(self) throws (IoError) -> i32 {
+        let fd = unsafe { self.fd[0] };
+        if fd < 0 || !use_begin(self.fd, 1) {
+            throw IoError::with_kind(IoErrorKind::InvalidInput, "socket is closed");
+        }
+        fd
+    }
+
+    fn done(self) {
+        if use_end(self.fd, 1) { self.release(); }
+    }
+
+    fn release(self) {
         unsafe {
             let fd = take_handle(self.fd, 0, -1);
             if fd >= 0 {
@@ -458,12 +479,26 @@ impl Sock {
         }
     }
 
+    /// Close the fd; a task waiting on its readiness wakes and finds it
+    /// closed (the kernel sends no event for a closed fd). With calls in
+    /// flight through other copies, the last of them releases the fd.
+    fn close(self) {
+        let fd = unsafe { self.fd[0] };
+        if use_close(self.fd, 1) == 0 {
+            self.release();
+        } else if fd >= 0 {
+            task::wake_io(fd);
+        }
+    }
+
     /// `shutdown(2)`; waiting tasks wake to see the end of stream or the
     /// write error.
     fn shutdown(self, how: Shutdown) throws (IoError) {
         let h = match how { Shutdown::Read => 0, Shutdown::Write => 1, Shutdown::Both => 2 };
-        let fd = try self.live();
-        try check(unsafe { rok_net_shutdown(fd, h) } as i64, "shutdown");
+        let fd = try self.enter();
+        let r = unsafe { rok_net_shutdown(fd, h) };
+        self.done();
+        try check(r as i64, "shutdown");
         task::wake_io(fd);
     }
 
@@ -474,7 +509,9 @@ impl Sock {
             if self.opts[0] != 0i64 {
                 throw IoError::with_kind(IoErrorKind::WouldBlock, what + ": operation would block");
             }
-            let r = rok_net_wait(try self.live(), write, self.opts[1 + write as usize]);
+            let fd = try self.enter();
+            let r = rok_net_wait(fd, write, self.opts[1 + write as usize]);
+            self.done();
             if r == 0 { throw timed_out(what); }
             try check(r as i64, what);
         }
@@ -500,18 +537,27 @@ impl Sock {
     fn addr(self, peer: i32) throws (IoError) -> SocketAddr {
         unsafe {
             let out: GcBuf<i64> = buf_new(ADDR_WORDS);
-            try check(rok_net_addr(try self.live(), out, peer) as i64, "getsockname");
+            let fd = try self.enter();
+            let r = rok_net_addr(fd, out, peer);
+            self.done();
+            try check(r as i64, "getsockname");
             addr_at(out, 0)
         }
     }
 
     fn setopt(self, opt: i32, val: i64) throws (IoError) {
-        try check(unsafe { rok_net_setopt(try self.live(), opt, val) } as i64, "setsockopt");
+        let fd = try self.enter();
+        let r = unsafe { rok_net_setopt(fd, opt, val) };
+        self.done();
+        try check(r as i64, "setsockopt");
     }
 
     fn try_clone(self) throws (IoError) -> Sock {
         unsafe {
-            let fd = try check(rok_os_dup(try self.live()) as i64, "dup");
+            let old = try self.enter();
+            let r = rok_os_dup(old);
+            self.done();
+            let fd = try check(r as i64, "dup");
             let s = sock_of(fd as i32);
             for i in 0..3usize { s.opts[i] = self.opts[i]; }
             s
@@ -520,14 +566,18 @@ impl Sock {
 
     /// One read into `buf[at..at + n]`: the count, or `none` on `WouldBlock`.
     fn read_once(self, buf: GcBuf<u8>, at: usize, n: usize) throws (IoError) -> usize | none {
-        let r = unsafe { rok_net_recv(try self.live(), buf, at, n) } as i64;
+        let fd = try self.enter();
+        let r = unsafe { rok_net_recv(fd, buf, at, n) } as i64;
+        self.done();
         if would_block(r) { return none; }
         (try check(r, "read")) as usize
     }
 
     /// One write of `buf[at..at + n]`: the count, or `none` on `WouldBlock`.
     fn write_once(self, buf: GcBuf<u8>, at: usize, n: usize) throws (IoError) -> usize | none {
-        let r = unsafe { rok_net_send(try self.live(), buf, at, n) } as i64;
+        let fd = try self.enter();
+        let r = unsafe { rok_net_send(fd, buf, at, n) } as i64;
+        self.done();
         if would_block(r) { return none; }
         (try check(r, "write")) as usize
     }
@@ -703,11 +753,7 @@ impl TcpStream {
     }
 
     /// The OS socket descriptor (`-1` once closed).
-    pub const fn fd(self) -> i32 {
-        unsafe {
-            self.sock.fd[0]
-        }
-    }
+    pub const fn fd(self) -> i32 { self.sock.fd() }
 
     /// Read up to `buf.len()` bytes into `buf[0..n]`; 0 at end of stream.
     pub fn read(self, buf: List<u8>) throws (IoError) -> usize { try self.sock.read(buf) }
@@ -839,7 +885,9 @@ impl TcpListener {
     fn accept_once(self) throws (IoError) -> (TcpStream, SocketAddr) | none {
         unsafe {
             let out: GcBuf<i64> = buf_new(ADDR_WORDS);
-            let fd = rok_net_accept(try self.sock.live(), out) as i64;
+            let l = try self.sock.enter();
+            let fd = rok_net_accept(l, out) as i64;
+            self.sock.done();
             if would_block(fd) { return none; }
             try check(fd, "accept");
             (TcpStream { sock: sock_of(fd as i32) }, addr_at(out, 0))
@@ -878,11 +926,7 @@ impl TcpListener {
     /// forever (each item is the stream or the error `accept` threw).
     pub const fn incoming(self) -> Incoming { Incoming { listener: self } }
 
-    pub const fn fd(self) -> i32 {
-        unsafe {
-            self.sock.fd[0]
-        }
-    }
+    pub const fn fd(self) -> i32 { self.sock.fd() }
 
     pub fn close(self) { self.sock.close(); }
 }
@@ -925,7 +969,9 @@ impl UdpSocket {
     /// One datagram from `buf[at..at + n]` to `addr`: the count, or
     /// `none` on `WouldBlock`.
     fn send_to_once(self, buf: GcBuf<u8>, at: usize, n: usize, addr: SocketAddr) throws (IoError) -> usize | none {
-        let r = unsafe { rok_net_send_to(try self.sock.live(), buf, at, n, words_of(addr)) } as i64;
+        let fd = try self.sock.enter();
+        let r = unsafe { rok_net_send_to(fd, buf, at, n, words_of(addr)) } as i64;
+        self.sock.done();
         if would_block(r) { return none; }
         (try check(r, f"send_to {addr}")) as usize
     }
@@ -936,7 +982,9 @@ impl UdpSocket {
         unsafe {
             let out: GcBuf<i64> = buf_new(ADDR_WORDS);
             let (b, at, n) = region(buf);
-            let r = rok_net_recv_from(try self.sock.live(), b, at, n, out) as i64;
+            let fd = try self.sock.enter();
+            let r = rok_net_recv_from(fd, b, at, n, out) as i64;
+            self.sock.done();
             if would_block(r) { return none; }
             ((try check(r, "recv_from")) as usize, addr_at(out, 0))
         }
@@ -977,7 +1025,9 @@ impl UdpSocket {
 
     /// Fix the peer: `send` / `recv` then talk to it only.
     pub fn connect(self, addr: SocketAddr) throws (IoError) {
-        let r = unsafe { rok_net_connect(try self.sock.live(), words_of(addr)) };
+        let fd = try self.sock.enter();
+        let r = unsafe { rok_net_connect(fd, words_of(addr)) };
+        self.sock.done();
         try check(r as i64, f"connect {addr}");
     }
 
@@ -1003,11 +1053,17 @@ impl UdpSocket {
     }
 
     pub fn join_multicast_v4(self, addr: Ipv4Addr, iface: Ipv4Addr) throws (IoError) {
-        try check(unsafe { rok_net_multicast_v4(try self.sock.live(), addr.to_bits(), iface.to_bits(), 1) } as i64, "join_multicast_v4");
+        let fd = try self.sock.enter();
+        let r = unsafe { rok_net_multicast_v4(fd, addr.to_bits(), iface.to_bits(), 1) };
+        self.sock.done();
+        try check(r as i64, "join_multicast_v4");
     }
 
     pub fn leave_multicast_v4(self, addr: Ipv4Addr, iface: Ipv4Addr) throws (IoError) {
-        try check(unsafe { rok_net_multicast_v4(try self.sock.live(), addr.to_bits(), iface.to_bits(), 0) } as i64, "leave_multicast_v4");
+        let fd = try self.sock.enter();
+        let r = unsafe { rok_net_multicast_v4(fd, addr.to_bits(), iface.to_bits(), 0) };
+        self.sock.done();
+        try check(r as i64, "leave_multicast_v4");
     }
 
     pub fn set_multicast_loop_v4(self, on: bool) throws (IoError) {
@@ -1036,11 +1092,7 @@ impl UdpSocket {
         UdpSocket { sock: try self.sock.try_clone() }
     }
 
-    pub const fn fd(self) -> i32 {
-        unsafe {
-            self.sock.fd[0]
-        }
-    }
+    pub const fn fd(self) -> i32 { self.sock.fd() }
 
     pub fn close(self) { self.sock.close(); }
 }
@@ -1097,7 +1149,10 @@ fn unix_path(s: Sock, peer: i32) throws (IoError) -> Path | none {
     buf.reserve(256);
     unsafe { buf.set_len(256) };
     let (b, at, n) = region(buf);
-    let k = try check(unsafe { rok_net_unix_path(try s.live(), peer, b, at, n) } as i64, "getsockname");
+    let fd = try s.enter();
+    let r = unsafe { rok_net_unix_path(fd, peer, b, at, n) };
+    s.done();
+    let k = try check(r as i64, "getsockname");
     if k == 0 { return none; }
     unsafe { buf.set_len(k as usize) };
     Path::from(try str::from_utf8(buf) catch _ { return none; })
@@ -1113,7 +1168,9 @@ impl UnixListener {
     fn accept_once(self) throws (IoError) -> UnixStream | none {
         // The peer is read with `peer_addr` (`out` holds no Unix address).
         let out: GcBuf<i64> = unsafe { buf_new(ADDR_WORDS) };
-        let fd = unsafe { rok_net_accept(try self.sock.live(), out) } as i64;
+        let l = try self.sock.enter();
+        let fd = unsafe { rok_net_accept(l, out) } as i64;
+        self.sock.done();
         if would_block(fd) { return none; }
         try check(fd, "accept");
         UnixStream { sock: sock_of(fd as i32) }
@@ -1143,7 +1200,7 @@ impl UnixListener {
 
     pub fn try_clone(self) throws (IoError) -> UnixListener { UnixListener { sock: try self.sock.try_clone() } }
 
-    pub const fn fd(self) -> i32 { unsafe { self.sock.fd[0] } }
+    pub const fn fd(self) -> i32 { self.sock.fd() }
 
     pub fn close(self) { self.sock.close(); }
 }
@@ -1187,7 +1244,9 @@ impl UnixStream {
     pub fn send_with_fd<B: AsBytes>(self, buf: B, fd: RawFd) throws (IoError) -> usize {
         let (b, at, n) = unsafe { buf.byte_slice().raw_parts() };
         loop {
-            let r = unsafe { rok_net_send_fd(try self.sock.live(), b, at, n, fd) } as i64;
+            let s = try self.sock.enter();
+            let r = unsafe { rok_net_send_fd(s, b, at, n, fd) } as i64;
+            self.sock.done();
             if !would_block(r) { return (try check(r, "sendmsg")) as usize; }
             try self.sock.block(1, "sendmsg");
         }
@@ -1200,7 +1259,9 @@ impl UnixStream {
         unsafe {
             let got: GcBuf<i32> = buf_new(1);
             loop {
-                let r = rok_net_recv_fd(try self.sock.live(), b, at, n, got) as i64;
+                let fd = try self.sock.enter();
+                let r = rok_net_recv_fd(fd, b, at, n, got) as i64;
+                self.sock.done();
                 if !would_block(r) {
                     let k = (try check(r, "recvmsg")) as usize;
                     if got[0] < 0 { return (k, none); }
@@ -1227,7 +1288,7 @@ impl UnixStream {
 
     pub fn try_clone(self) throws (IoError) -> UnixStream { UnixStream { sock: try self.sock.try_clone() } }
 
-    pub const fn fd(self) -> i32 { unsafe { self.sock.fd[0] } }
+    pub const fn fd(self) -> i32 { self.sock.fd() }
 
     pub fn close(self) { self.sock.close(); }
 }
@@ -1293,7 +1354,7 @@ impl UnixDatagram {
         unsafe { self.sock.opts[0] = if nb { 1i64 } else { 0i64 }; }
     }
 
-    pub const fn fd(self) -> i32 { unsafe { self.sock.fd[0] } }
+    pub const fn fd(self) -> i32 { self.sock.fd() }
 
     pub fn close(self) { self.sock.close(); }
 }
@@ -1312,7 +1373,9 @@ impl TcpStream {
     pub fn sendfile(self, ref file: File, offset: u64, count: u64) throws (IoError) -> u64 {
         let done = 0u64;
         while done < count {
-            let r = unsafe { rok_net_sendfile(try self.sock.live(), file.fd(), (offset + done) as i64, (count - done) as usize) } as i64;
+            let fd = try self.sock.enter();
+            let r = unsafe { rok_net_sendfile(fd, file.fd(), (offset + done) as i64, (count - done) as usize) } as i64;
+            self.sock.done();
             if would_block(r) {
                 try self.sock.block(1, "sendfile");
                 continue;
@@ -1329,7 +1392,9 @@ impl TcpStream {
     pub fn splice(self, ref src: File, count: u64) throws (IoError) -> u64 {
         let done = 0u64;
         while done < count {
-            let r = unsafe { rok_net_splice(try self.sock.live(), src.fd(), (count - done) as usize) } as i64;
+            let fd = try self.sock.enter();
+            let r = unsafe { rok_net_splice(fd, src.fd(), (count - done) as usize) } as i64;
+            self.sock.done();
             let k = try check(r, "splice");
             if k == 0 { break; }
             done += k as u64;
@@ -1342,7 +1407,9 @@ impl TcpStream {
     pub fn write_zerocopy(self, buf: List<u8>) throws (IoError) -> usize {
         let (b, at, n) = region(buf);
         loop {
-            let r = unsafe { rok_net_send_zerocopy(try self.sock.live(), b, at, n) } as i64;
+            let fd = try self.sock.enter();
+            let r = unsafe { rok_net_send_zerocopy(fd, b, at, n) } as i64;
+            self.sock.done();
             if would_block(r) {
                 try self.sock.block(1, "write_zerocopy");
                 continue;

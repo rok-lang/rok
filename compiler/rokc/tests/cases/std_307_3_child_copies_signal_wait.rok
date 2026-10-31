@@ -1,0 +1,36 @@
+// spec: std 307-process §3.7.3
+// needs: process threads
+// only-os: macos linux
+// expect-exit: 0
+// expect-stdout: 50 rounds: same status, no signal error
+
+// Copies of a Child: one thread signals while two others wait. The
+// waits get the same status, and a signal after the child has ended
+// and is being reaped is a no-op, not an error.
+
+use rok::std::process::{Command, ExitStatus};
+use rok::std::thread;
+
+fn main() throws (thread::JoinError) {
+    let bad = 0;
+    for _ in 0..50 {
+        let c = try! Command::new("sleep").arg("0.01").spawn();
+        let signaller = thread::spawn(|| {
+            let errors = 0;
+            for _ in 0..200 {
+                try c.signal(0) catch _ { errors += 1; };
+            }
+            errors
+        });
+        let waiter = thread::spawn(|| { try! c.wait() });
+        let st: ExitStatus = try! c.wait();
+        let other = try waiter.join();
+        bad += try signaller.join();
+        if st.code() != other.code() || !st.success() { bad += 1; }
+    }
+    if bad == 0 {
+        println("50 rounds: same status, no signal error");
+    } else {
+        println(f"{bad} bad");
+    }
+}

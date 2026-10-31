@@ -1,0 +1,44 @@
+// spec: std 301-fs §3.1.1
+// needs: threads fs
+// expect-exit: 0
+// expect-stdout: 1000 rounds, 0 foreign reads
+
+// A copy of a File closed while another thread reads through it: the
+// read sees the file or "file is closed", never a file opened after the
+// close that got the same fd number.
+
+use rok::std::{env, fs, io, process, thread};
+use rok::std::fs::File;
+use rok::std::io::SeekFrom;
+use rok::std::path::Path;
+
+fn main() throws (io::IoError | thread::JoinError) {
+    let dir = env::temp_dir();
+    let a = dir.join(Path::from(f"rok_close_while_reading_a_{process::id()}"));
+    let b = dir.join(Path::from(f"rok_close_while_reading_b_{process::id()}"));
+    try fs::write(a, "AAAAAAAAAAAAAAAA");
+    try fs::write(b, "BBBBBBBBBBBBBBBB");
+    let foreign = 0;
+    for _ in 0..1000 {
+        let f = try File::open(a);
+        let reader = thread::spawn(|| {
+            let buf = io::byte_buf(1);
+            let seen = 0;
+            loop {
+                try f.seek(SeekFrom::Start(0u64)) catch _ { break; };
+                let n = try f.read(buf) catch _ { break; };
+                if n == 1 && buf[0] != 65u8 { seen += 1; }
+            }
+            seen
+        });
+        thread::yield_now();
+        try f.close();
+        // Likely the number `f` had, once it is released.
+        let g = try File::open(b);
+        foreign += try reader.join();
+        try g.close();
+    }
+    try fs::remove_file(a);
+    try fs::remove_file(b);
+    println(f"1000 rounds, {foreign} foreign reads");
+}

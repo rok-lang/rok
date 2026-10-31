@@ -82,7 +82,124 @@ pub fn thread_exit() {
     #[cfg(rok_solo)]
     let _ = p;
     // SAFETY: as above.
-    unsafe { tls::thread_name().write([0, 0]) };
+    unsafe {
+        tls::thread_name().write([0, 0]);
+        tls::attached().write(0);
+    }
+}
+
+/// A call into rok on a thread rok did not start: attach it as a
+/// mutator, and leave the registry when the thread ends. It keeps its
+/// own stack setup (no guard range, no alternate signal stack).
+#[cfg(not(target_family = "wasm"))]
+pub fn adopt() {
+    tls::thread_init();
+    world::attach_current();
+    // SAFETY: this thread's own slot.
+    unsafe { tls::attached().write(tls::ATTACHED_CALLBACK) };
+    on_thread_end();
+}
+
+#[cfg(target_family = "wasm")]
+pub fn adopt() {
+    rokr_common::fatal(
+        b"rok: callback on a thread rok does not know; call rok_thread_init() first",
+    );
+}
+
+/// At the end of an adopted thread, while its TLS is still there.
+#[cfg(not(target_family = "wasm"))]
+fn adopted_end() {
+    // SAFETY: this thread's own slot.
+    if unsafe { tls::attached().read() } != tls::ATTACHED_CALLBACK {
+        return; // `rok_thread_shutdown` came first
+    }
+    // Between callbacks the thread is in C, `PARKED`.
+    if tls::mutator_state().load(Ordering::Relaxed) == tls::MUTATOR_PARKED {
+        world::leave_native();
+    }
+    thread_exit();
+}
+
+/// Run `adopted_end` when this thread ends: `_tlv_atexit` on Apple (a
+/// pthread key destructor may run after the TLV block is freed).
+#[cfg(target_vendor = "apple")]
+fn on_thread_end() {
+    unsafe extern "C" {
+        #[link_name = "_tlv_atexit"]
+        fn tlv_atexit(f: unsafe extern "C" fn(*mut libc::c_void), arg: *mut libc::c_void);
+    }
+    unsafe extern "C" fn end(_: *mut libc::c_void) {
+        adopted_end();
+    }
+    // SAFETY: registers a plain function for this thread's exit.
+    unsafe { tlv_atexit(end, ptr::null_mut()) };
+}
+
+/// A pthread key whose destructor runs `adopted_end` (static TLS lives
+/// until after key destructors).
+#[cfg(all(unix, not(target_vendor = "apple")))]
+fn on_thread_end() {
+    use core::sync::atomic::AtomicUsize;
+    static KEY: AtomicUsize = AtomicUsize::new(usize::MAX);
+    unsafe extern "C" fn end(_: *mut libc::c_void) {
+        adopted_end();
+    }
+    let mut key = KEY.load(Ordering::Acquire);
+    if key == usize::MAX {
+        let mut k: libc::pthread_key_t = 0;
+        // SAFETY: `k` is writable; `end` is a plain function.
+        if unsafe { libc::pthread_key_create(&raw mut k, Some(end)) } != 0 {
+            rokr_common::fatal(b"rok: no pthread key left to attach a foreign thread");
+        }
+        key =
+            match KEY.compare_exchange(usize::MAX, k as usize, Ordering::AcqRel, Ordering::Acquire)
+            {
+                Ok(_) => k as usize,
+                Err(won) => {
+                    // SAFETY: ours, never set.
+                    unsafe { libc::pthread_key_delete(k) };
+                    won
+                }
+            };
+    }
+    // SAFETY: a live key; any non-null value runs the destructor.
+    unsafe { libc::pthread_setspecific(key as libc::pthread_key_t, ptr::dangling()) };
+}
+
+/// An FLS slot whose callback runs `adopted_end` (FLS callbacks run
+/// before the thread's static TLS is freed).
+#[cfg(windows)]
+fn on_thread_end() {
+    use core::sync::atomic::AtomicU32;
+    use rokr_common::win;
+    static SLOT: AtomicU32 = AtomicU32::new(win::FLS_OUT_OF_INDEXES);
+    unsafe extern "system" fn end(_: *mut core::ffi::c_void) {
+        adopted_end();
+    }
+    let mut slot = SLOT.load(Ordering::Acquire);
+    if slot == win::FLS_OUT_OF_INDEXES {
+        // SAFETY: `end` is a plain function.
+        let s = unsafe { win::FlsAlloc(Some(end)) };
+        if s == win::FLS_OUT_OF_INDEXES {
+            rokr_common::fatal(b"rok: no FLS slot left to attach a foreign thread");
+        }
+        slot = match SLOT.compare_exchange(
+            win::FLS_OUT_OF_INDEXES,
+            s,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => s,
+            Err(won) => {
+                // SAFETY: ours, never set.
+                unsafe { win::FlsFree(s) };
+                won
+            }
+        };
+    }
+    // SAFETY: a live slot; any non-null value runs the callback.
+    unsafe { win::FlsSetValue(slot, ptr::dangling_mut()) };
 }
 
 static MAIN_NAME: [u8; 4] = *b"main";

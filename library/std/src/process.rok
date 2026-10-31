@@ -19,7 +19,7 @@
 // A burst that fills the pipe drops signals.
 
 use rok::std::fs::File;
-use rok::std::io::{IoError, RawFd, Reader, Writer, check, byte_buf, read_more, take_handle};
+use rok::std::io::{IoError, RawFd, Reader, Writer, check, byte_buf, read_more, take_handle, use_begin, use_end, use_close, word_at};
 use rok::std::path::Path;
 use rok::std::path::AsPath;
 use rok::std::env;
@@ -310,7 +310,7 @@ impl Command {
                 )
             };
             try check(pid as i64, self.program.as_str());
-            let state: GcBuf<i32> = buf_new(3);
+            let state: GcBuf<i32> = buf_new(4);
             state[2] = rok_os_pidfd_open(pid);
             Child {
                 pid: pid,
@@ -347,8 +347,11 @@ pub struct Child {
     pub stdin: ChildStdin | none;
     pub stdout: ChildStdout | none;
     pub stderr: ChildStderr | none;
-    /// `[reaped, raw status, pidfd or -errno]`, shared by copies of the
-    /// handle.
+    /// `[reaped, raw status, pidfd or -errno, calls in flight]`, shared
+    /// by copies of the handle. `reaped`: 0 not yet, 1 reaped, `-errno`
+    /// if reaping failed. Signals and waits hold a call (`io::use_begin`)
+    /// on the pid, and reaping waits them out, so none of them reaches a
+    /// pid or pidfd that was reused.
     state: GcBuf<i32>;
     kill_on_drop: bool;
 }
@@ -359,13 +362,15 @@ impl Child {
     /// `SIGKILL`.
     pub fn kill(self) throws (IoError) { try self.signal(9); }
 
+    /// A no-op once the child has ended and is being reaped.
     pub fn signal(self, sig: i32) throws (IoError) {
-        unsafe {
-            if self.state[0] != 0 { return; }
+        if !use_begin(self.state, 3) { return; }
+        let r = unsafe {
             let fd = self.state[2];
-            let r = if fd >= 0 { rok_os_pidfd_signal(fd, sig) } else { rok_os_kill(self.pid, sig) };
-            try check(r as i64, "kill");
-        }
+            if fd >= 0 { rok_os_pidfd_signal(fd, sig) } else { rok_os_kill(self.pid, sig) }
+        };
+        use_end(self.state, 3);
+        try check(r as i64, "kill");
     }
 
     /// The pidfd tracking the child (Linux 5.3+), valid until it is
@@ -377,53 +382,68 @@ impl Child {
         fd
     }
 
+    /// Reap the child once it has ended (`block`: wait for that):
+    /// `false` if `!block` and it is still running. Of copies reaping at
+    /// once, the first to see it ended reaps it, after the calls in
+    /// flight; the rest wait for that.
+    fn reap(self, block: bool) throws (IoError) -> bool {
+        unsafe {
+            if word_at(self.state, 0) == 0 && use_begin(self.state, 3) {
+                let out: GcBuf<i32> = buf_new(1);
+                let r = rok_os_waitpid(self.pid, if block { 2 } else { 3 }, out);
+                use_end(self.state, 3);
+                if r == 0 { return false; }
+                try check(r as i64, "waitpid");
+                // The first to close reaps.
+                if (use_close(self.state, 3) & 1) == 0 {
+                    while word_at(self.state, 3) != 1 { rok_thread_yield_now(); }
+                    let k = rok_os_waitpid(self.pid, 1, out);
+                    if k < 0 {
+                        take_handle(self.state, 0, k);
+                    } else {
+                        self.reaped(out[0]);
+                    }
+                }
+            }
+            while word_at(self.state, 0) == 0 { rok_thread_yield_now(); }
+            let st = word_at(self.state, 0);
+            if st < 0 { try check(st as i64, "waitpid"); }
+            true
+        }
+    }
+
     /// Record a reaped status; the pidfd goes with the process.
     unsafe fn reaped(self, raw: i32) {
-        self.state[0] = 1;
         self.state[1] = raw;
         let fd = take_handle(self.state, 2, -9);
         if fd >= 0 {
             rok_os_close(fd);
         }
+        take_handle(self.state, 0, 1);
     }
 
     /// Wait for the child to end. Closes our end of its stdin first, so
     /// a child reading to EOF can finish.
     pub fn wait(self) throws (IoError) -> ExitStatus {
-        unsafe {
-            let si = self.stdin;
-            if si is ChildStdin { try si.close(); }
-            if self.state[0] == 0 {
-                let out: GcBuf<i32> = buf_new(1);
-                try check(rok_os_waitpid(self.pid, 0, out) as i64, "waitpid");
-                self.reaped(out[0]);
-            }
-            ExitStatus { raw: self.state[1] }
-        }
+        let si = self.stdin;
+        if si is ChildStdin { try si.close(); }
+        try self.reap(true);
+        ExitStatus { raw: unsafe { self.state[1] } }
     }
 
     /// The status if it has ended, without blocking.
     pub fn try_wait(self) throws (IoError) -> ExitStatus | none {
-        unsafe {
-            if self.state[0] == 0 {
-                let out: GcBuf<i32> = buf_new(1);
-                let r = try check(rok_os_waitpid(self.pid, 1, out) as i64, "waitpid");
-                if r == 0 { return none; }
-                self.reaped(out[0]);
-            }
-            ExitStatus { raw: self.state[1] }
-        }
+        if !(try self.reap(false)) { return none; }
+        ExitStatus { raw: unsafe { self.state[1] } }
     }
 }
 
 /// `using child = ..`: kill (with `kill_on_drop`) and reap.
 impl Drop for Child {
     fn drop(ref self) {
-        unsafe {
-            if self.kill_on_drop && self.state[0] == 0 {
-                rok_os_kill(self.pid, 9);
-                try self.wait() catch _ { ExitStatus { raw: 0 } };
-            }
+        if self.kill_on_drop && unsafe { word_at(self.state, 0) } == 0 {
+            try self.signal(9) catch _ {};
+            try self.wait() catch _ { ExitStatus { raw: 0 } };
         }
     }
 }

@@ -14,6 +14,7 @@ some of them (same algorithm, same output). Not run by CI.
 | `throw_parse`    | recursive throwing calls (`try`), errors caught per expr  | yes |
 | `throw_wide`     | throwing calls with a `str` result and a two-word error   |   |
 | `channel_contended` | 4 producer threads into one receiver, unbounded and bounded channels | |
+| `file_rw`        | 16-byte `File` writes, reads and seeks (syscall-bound)    |   |
 | `alloc_*`, `gc_*`, `store_heavy`, `wb_threads`, `timers`, `fstring_heavy` | allocation, collector, write barriers, timers, f-strings | |
 
 ## Running
