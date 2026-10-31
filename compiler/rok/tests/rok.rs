@@ -1853,6 +1853,43 @@ fn scripts_run_directly() {
     }
 }
 
+// A script's arguments may be any bytes; rok's own must be UTF-8.
+// spec: §9.1.1 §9.10.1
+#[cfg(unix)]
+#[test]
+fn scripts_take_non_utf8_args() {
+    use std::os::unix::ffi::OsStrExt;
+    if !llvm() {
+        return;
+    }
+    let root = scratch("direct-bytes");
+    let home = root.join("home");
+    write(
+        &root.join("n.rok"),
+        "println(f\"{rok::std::env::args().len()}\");\n",
+    );
+    let bad = std::ffi::OsStr::from_bytes(b"b\xffc");
+    for args in [&["./n.rok", "a"][..], &["run", "n.rok", "--", "a"]] {
+        let out = rok_cmd(&home, &root, args)
+            .arg(bad)
+            .stdin(Stdio::null())
+            .output()
+            .unwrap();
+        assert_eq!(ok(&out), "3\n", "{args:?}");
+    }
+    let out = rok_cmd(&home, &root, &["--cwd"])
+        .arg(bad)
+        .args(["run", "n.rok"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2));
+    fails(
+        &out,
+        "rok: argument 2 (`b\u{fffd}c`) is not valid UTF-8; only a program's arguments, after \
+         `--`, may be other bytes",
+    );
+}
+
 // spec: §9.10.7
 #[test]
 fn script_executables_are_cached_by_content() {
@@ -4982,7 +5019,7 @@ fn rok_leaves_no_temporaries() {
         .unwrap()
         .flatten()
         .map(|e| e.file_name().to_string_lossy().into_owned())
-        .filter(|n| n != "rokc-target")
+        .filter(|n| !n.starts_with("rokc-target"))
         .collect();
     assert!(left.is_empty(), "left behind: {left:?}");
 }

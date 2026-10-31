@@ -2666,7 +2666,7 @@ fn leftovers(tmp: &std::path::Path) -> Vec<String> {
         .unwrap()
         .flatten()
         .map(|e| e.file_name().to_string_lossy().into_owned())
-        .filter(|n| n != "rokc-target")
+        .filter(|n| !n.starts_with("rokc-target"))
         .collect();
     v.sort();
     v

@@ -3309,7 +3309,7 @@ pub(super) fn lower_narrowed_block(ctx: &mut LowerCtx<'_>, cond: &Expr, block: &
 
 /// Write-through for an assignment to a narrowed binding: also store
 /// the new value, converted back, into the original slot.
-fn write_through(
+pub(super) fn write_through(
     ctx: &mut LowerCtx<'_>,
     stmt: Option<HirStmt>,
     span: rokc_diagnostic::Span,
@@ -5050,6 +5050,8 @@ const TRANSFER_TYPES: &[&str] = &[
     "rok::core::collections::deque::Deque",
     "rok::core::collections::slice::Slice",
     "rok::core::str::StrBuf",
+    "rok::core::crypto::secret::Secret",
+    "rok::core::crypto::secret::SecretWords",
     "rok::bare::gc::GcPtr",
     "rok::core::future::AsyncFuture",
     "rok::core::future::TryAsyncFuture",

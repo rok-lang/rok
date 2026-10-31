@@ -5,6 +5,7 @@
 //! 2 usage error, 101 internal error. `run` exits with the program's own
 //! code.
 
+use std::ffi::OsString;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 use std::process::{self, Command};
@@ -47,7 +48,9 @@ struct Args {
     /// `-C target-feature`, each `+f` / `-f`.
     target_features: Vec<String>,
     opts: BuildOptions,
-    run_args: Vec<String>,
+    /// After `--`: the program's arguments as given (any bytes), or
+    /// bindgen's clang arguments.
+    run_args: Vec<OsString>,
     verbose: u8,
     quiet: bool,
     json: bool,
@@ -160,7 +163,8 @@ fn fail(msg: &str) -> ! {
     process::exit(1);
 }
 
-fn parse_args(raw: Vec<String>) -> Args {
+/// `raw` up to `--`, then the program's arguments `tail` (`cli::os_args`).
+fn parse_args(raw: Vec<String>, mut tail: Vec<OsString>) -> Args {
     let mut it = raw.into_iter();
     let mut a = Args::default();
     // Value of `--name=value` or the next argument for `--name value`.
@@ -176,7 +180,8 @@ fn parse_args(raw: Vec<String>) -> Args {
         };
         match name.as_str() {
             "--" => {
-                a.run_args = it.by_ref().collect();
+                a.run_args = it.by_ref().map(OsString::from).collect();
+                a.run_args.append(&mut tail);
             }
             // Global options (901.5), accepted before or after the command.
             "-v" | "--verbose" => a.verbose += 1,
@@ -484,7 +489,8 @@ fn main() {
 
 fn real_main() {
     started();
-    let a = parse_args(std::env::args().skip(1).collect());
+    let (raw, tail) = cli::os_args().unwrap_or_else(|e| usage_error(&e));
+    let a = parse_args(raw, tail);
     term::set_choice(a.color);
     rokc_interface::set_report_depth(a.json, term::depth(Stream::Stderr));
     match a.print.as_deref() {
@@ -1091,7 +1097,7 @@ fn fail_on<T>(r: Result<T, rokc_interface::RokDiagnostic>, sources: &SourceMap) 
 }
 
 /// `<target>/[<triple>/]<profile>/`: `release` at `-O2`+ or `-Os`, else
-/// `debug`. Without a package, `<target>` is `$TMPDIR/rokc-target/`.
+/// `debug`. Without a package, `<target>` is `lone_target_dir`.
 fn out_dir(a: &Args, pkg: Option<&Package>) -> PathBuf {
     let mut dir = a
         .target_dir
@@ -1105,10 +1111,13 @@ fn out_dir(a: &Args, pkg: Option<&Package>) -> PathBuf {
     dir.join(if a.opts.release() { "release" } else { "debug" })
 }
 
-/// `$TMPDIR/rokc-target`, the target directory of lone files: a cache.
-/// Once a day, files nobody wrote for a week go (`evict`).
+/// `$TMPDIR/rokc-target-<uid>` (Windows: `%TEMP%\rokc-target`), the
+/// target directory of lone files: a cache, private to the user, as it
+/// runs what it finds. Once a day, files nobody wrote for a week go
+/// (`evict`).
 fn lone_target_dir() -> PathBuf {
-    let dir = std::env::temp_dir().join("rokc-target");
+    let dir = rokc_core::tmp::user_cache_dir("rokc-target")
+        .unwrap_or_else(|e| fail(&format!("{e}; remove it or set ROKC_TARGET_DIR")));
     let stamp = dir.join(".evicted");
     let day = std::time::Duration::from_secs(86_400);
     let due = std::fs::metadata(&stamp)
@@ -2088,20 +2097,33 @@ fn cmd_bindgen(a: &Args) {
         .then(rokc_llvm::apple_sdk)
         .transpose()
         .unwrap_or_else(|e| fail(&e));
+    let clang_args: Vec<String> = a
+        .run_args
+        .iter()
+        .enumerate()
+        .map(|(i, x)| match x.to_str() {
+            Some(x) => x.to_owned(),
+            None => usage_error(&format!(
+                "clang argument {} (`{}`) is not valid UTF-8; libclang takes UTF-8 only",
+                i + 1,
+                x.to_string_lossy()
+            )),
+        })
+        .collect();
     let opts = rokc_tools::bindgen::Options {
         header: Path::new(header),
         target: &spec.name,
         triple: &spec.llvm_triple(),
         stdcall: spec.stdcall_system(),
         sdk,
-        clang_args: &a.run_args,
+        clang_args: &clang_args,
         // Host headers serve the host, every Apple target (the SDK has
         // them all) and every MSVC target on an MSVC host; others come
         // from clang arguments.
         system_headers: spec.is_host()
             || spec.vendor == "apple"
             || spec.env == "msvc" && TargetSpec::host().env == "msvc"
-            || a.run_args.iter().any(|x| x.starts_with("--sysroot")),
+            || clang_args.iter().any(|x| x.starts_with("--sysroot")),
     };
     let out = rokc_tools::bindgen::generate(&libclang, &opts).unwrap_or_else(|e| fail(&e));
     match &a.output {

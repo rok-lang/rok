@@ -1574,7 +1574,7 @@ fn lone_file_survives_the_cache_eviction() {
     let Some(env) = setup() else { return };
     let dir = scratch("anon_evict");
     let tmp = dir.join("tmp");
-    let stamp = tmp.join("rokc-target/.evicted");
+    let stamp = lone_cache(&tmp).join(".evicted");
     put(&stamp, "").unwrap();
     let old = std::time::SystemTime::now() - std::time::Duration::from_secs(3 * 86_400);
     fs::File::options()
@@ -1605,6 +1605,167 @@ fn lone_file_survives_the_cache_eviction() {
         .elapsed()
         .unwrap();
     assert!(age.as_secs() < 3600, "stamp not renewed: {age:?}");
+}
+
+/// The lone-file cache under temp directory `tmp`, made as rokc makes it.
+fn lone_cache(tmp: &Path) -> PathBuf {
+    fs::create_dir_all(tmp).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+        let uid = fs::metadata(tmp).unwrap().uid();
+        let d = tmp.join(format!("rokc-target-{uid}"));
+        fs::DirBuilder::new().mode(0o700).create(&d).unwrap();
+        d
+    }
+    #[cfg(not(unix))]
+    {
+        let d = tmp.join("rokc-target");
+        fs::create_dir_all(&d).unwrap();
+        d
+    }
+}
+
+/// `rokc <args>` in `dir` with `tmp` as the temp directory.
+fn rokc_in_tmp(env: &Env, dir: &Path, tmp: &Path, args: &[&str]) -> Output {
+    Command::new(ROKC)
+        .current_dir(dir)
+        .env("ROK_HOME", workspace())
+        .env_remove("ROKC_TARGET_DIR")
+        .env("TMPDIR", tmp)
+        .env("TMP", tmp)
+        .env("TEMP", tmp)
+        .args(args)
+        .arg("--rokr")
+        .arg(&env.rokr)
+        .output()
+        .unwrap()
+}
+
+// The lone-file cache runs what it finds: it is the user's alone.
+// spec: §9.2.16
+#[cfg(unix)]
+#[test]
+fn lone_cache_is_private() {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    let Some(env) = setup() else { return };
+    let dir = scratch("anon_private");
+    let tmp = dir.join("tmp");
+    fs::create_dir_all(&tmp).unwrap();
+    put(dir.join("hello.rok"), "println(\"hi\");\n").unwrap();
+    let out = rokc_in_tmp(&env, &dir, &tmp, &["run", "-q", "hello.rok"]);
+    assert_exit(&out, 0);
+    assert_eq!(text(&out.stdout), "hi\n");
+    let uid = fs::metadata(&dir).unwrap().uid();
+    let m = fs::symlink_metadata(tmp.join(format!("rokc-target-{uid}"))).unwrap();
+    assert!(m.is_dir());
+    assert_eq!(m.uid(), uid);
+    assert_eq!(m.permissions().mode() & 0o777, 0o700);
+}
+
+// spec: §9.2.16
+#[cfg(unix)]
+#[test]
+fn lone_cache_refuses_foreign_dir() {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    let Some(env) = setup() else { return };
+    let dir = scratch("anon_foreign");
+    let tmp = dir.join("tmp");
+    put(dir.join("hello.rok"), "println(\"hi\");\n").unwrap();
+    let cache = lone_cache(&tmp);
+    fs::set_permissions(&cache, fs::Permissions::from_mode(0o755)).unwrap();
+    let out = rokc_in_tmp(&env, &dir, &tmp, &["run", "-q", "hello.rok"]);
+    assert_exit(&out, 1);
+    let uid = fs::metadata(&dir).unwrap().uid();
+    let err = text(&out.stderr);
+    assert!(
+        err.contains(&format!(
+            "{} is not private to you (owner uid {uid}, mode 0755); remove it or set \
+             ROKC_TARGET_DIR",
+            cache.display()
+        )),
+        "{err}"
+    );
+    assert_eq!(text(&out.stdout), "");
+    // A link to a directory of the user's is refused too.
+    fs::remove_dir(&cache).unwrap();
+    let real = lone_cache(&dir.join("elsewhere"));
+    std::os::unix::fs::symlink(&real, &cache).unwrap();
+    let out = rokc_in_tmp(&env, &dir, &tmp, &["run", "-q", "hello.rok"]);
+    assert_exit(&out, 1);
+    assert!(
+        text(&out.stderr).contains("(a symbolic link)"),
+        "{}",
+        text(&out.stderr)
+    );
+    // `ROKC_TARGET_DIR` is the way out.
+    let out = Command::new(ROKC)
+        .current_dir(&dir)
+        .env("ROK_HOME", workspace())
+        .env("ROKC_TARGET_DIR", dir.join("t"))
+        .env("TMPDIR", &tmp)
+        .args(["run", "-q", "hello.rok", "--rokr"])
+        .arg(&env.rokr)
+        .output()
+        .unwrap();
+    assert_exit(&out, 0);
+}
+
+// A program's arguments after `--` reach it as given, any bytes.
+// spec: §9.1.1
+#[cfg(unix)]
+#[test]
+fn non_utf8_script_arg_passes_through() {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+    let Some(env) = setup() else { return };
+    let dir = scratch("anon_os_args");
+    put(
+        dir.join("args.rok"),
+        "fn main() {\n    let a = rok::std::env::args();\n    println(f\"{a.len()}\");\n}\n",
+    )
+    .unwrap();
+    let out = Command::new(ROKC)
+        .current_dir(&dir)
+        .env("ROK_HOME", workspace())
+        .args(["run", "-q", "args.rok", "--rokr"])
+        .arg(&env.rokr)
+        .args(["--", "a"])
+        .arg(OsStr::from_bytes(b"b\xffc"))
+        .output()
+        .unwrap();
+    assert_exit(&out, 0);
+    assert_eq!(text(&out.stdout), "3\n");
+}
+
+// Options, commands and paths are UTF-8; the error says where bytes may go.
+// spec: §9.1.1
+#[test]
+fn non_utf8_option_is_usage_error() {
+    let dir = scratch("anon_os_opt");
+    #[cfg(unix)]
+    let bad = {
+        use std::os::unix::ffi::OsStringExt;
+        std::ffi::OsString::from_vec(b"b\xffc".to_vec())
+    };
+    #[cfg(windows)]
+    let bad = {
+        use std::os::windows::ffi::OsStringExt;
+        std::ffi::OsString::from_wide(&[0x62, 0xD800, 0x63])
+    };
+    let out = Command::new(ROKC)
+        .current_dir(&dir)
+        .env("ROK_HOME", workspace())
+        .args(["run", "-q"])
+        .arg(&bad)
+        .output()
+        .unwrap();
+    assert_exit(&out, 2);
+    let err = text(&out.stderr);
+    assert!(
+        err.contains("argument 3 (`b\u{fffd}c`) is not valid UTF-8; only a program's arguments, after `--`, may be other bytes"),
+        "{err}"
+    );
 }
 
 // spec: §9.1.1 §9.1.2 §9.2.2 §9.2.15

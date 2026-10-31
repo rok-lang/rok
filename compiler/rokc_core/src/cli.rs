@@ -150,8 +150,9 @@ build options:
                                library's is in its symbols
   --target-dir <dir>           instead of the package's target/ (without a
                                package: the system temp directory's
-                               rokc-target/, a cache trimmed to what was
-                               built in the last week)
+                               rokc-target-<uid>/, private to the user, a
+                               cache trimmed to what was built in the last
+                               week)
   -g                           debug info in a release build too (a debug
                                build always has it; macOS: a .dSYM next to
                                the executable)
@@ -253,6 +254,42 @@ pub fn invoked_as() -> &'static str {
     } else {
         "rokc"
     }
+}
+
+/// This process's arguments without the program name, split at the first
+/// `--`: those up to it (with it) as strings, the program's after it as
+/// given. A non-UTF-8 argument before `--` is an error message.
+pub fn os_args() -> Result<(Vec<String>, Vec<std::ffi::OsString>), String> {
+    split_os_args(std::env::args_os().skip(1))
+}
+
+/// [`os_args`] of `args`.
+pub fn split_os_args(
+    args: impl IntoIterator<Item = std::ffi::OsString>,
+) -> Result<(Vec<String>, Vec<std::ffi::OsString>), String> {
+    let mut it = args.into_iter();
+    let mut head = Vec::new();
+    for a in it.by_ref() {
+        let a = utf8_arg(head.len() + 1, a)?;
+        let end = a == "--";
+        head.push(a);
+        if end {
+            break;
+        }
+    }
+    Ok((head, it.collect()))
+}
+
+/// Argument `n` (from 1) as a string: options, commands and paths must
+/// be UTF-8; a program's arguments, after `--`, need not.
+pub fn utf8_arg(n: usize, a: std::ffi::OsString) -> Result<String, String> {
+    a.into_string().map_err(|a| {
+        format!(
+            "argument {n} (`{}`) is not valid UTF-8; only a program's arguments, after `--`, \
+             may be other bytes",
+            a.to_string_lossy()
+        )
+    })
 }
 
 /// Whether command-line word `w` names a script, not a command: it has a
