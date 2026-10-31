@@ -985,6 +985,7 @@ pub(super) fn lower_pattern_inner(
                     sub: Box::new(lower_pattern(ctx, p, scrut_ty)),
                 },
             };
+            binds_const(ctx, name, scrut_ty, pat.span);
             let local = ctx.declare_bound(name, scrut_ty.clone(), pat.span);
             at(ctx, local)
         }
@@ -1616,6 +1617,53 @@ pub(super) fn int_fits(v: i128, p: PrimTy) -> bool {
     } else {
         (0..(1i128 << bits)).contains(&v)
     }
+}
+
+/// Warn when binding pattern `name` looks meant as a value: it names a
+/// const or static, or is capitalised and close to a variant of the
+/// scrutinee's enum. Either way it binds every value.
+fn binds_const(ctx: &LowerCtx<'_>, name: &str, scrut_ty: &HirTy, at: rokc_diagnostic::Span) {
+    if !name.starts_with(|c: char| c.is_uppercase()) {
+        return;
+    }
+    let segs = [name];
+    let what = if ctx.resolve_in(&segs, false).is_some() {
+        "const"
+    } else if ctx.resolve_in(&segs, true).is_some() {
+        "static"
+    } else {
+        let HirTy::Enum(id) = scrut_ty else {
+            return;
+        };
+        let def = ctx.enum_def(*id);
+        let Some(v) = def
+            .variants
+            .iter()
+            .map(|v| (rokc_core::suggest::edit_distance(&v.name, name), v))
+            .filter(|(d, v)| *d <= 2 && *d < v.name.chars().count())
+            .min_by_key(|(d, _)| *d)
+            .map(|(_, v)| v)
+        else {
+            return;
+        };
+        let base = enum_base_name(&def.name);
+        let rest = if v.arity == 0 { "" } else { "(..)" };
+        ctx.emit_lint(
+            "pattern_binds_const",
+            at,
+            format!("`{name}` here is a new variable that matches every value"),
+            format!("did you mean the variant `{base}::{}{rest}`?", v.name),
+        );
+        return;
+    };
+    ctx.emit_lint(
+        "pattern_binds_const",
+        at,
+        format!(
+            "`{name}` here is a new variable that matches every value, not the {what} `{name}`"
+        ),
+        format!("to compare with the {what}, write `x if x == {name}`"),
+    );
 }
 
 /// The variant of enum `scrut_ty` named `name`: its enum, index, and the

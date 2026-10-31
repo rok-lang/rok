@@ -903,6 +903,135 @@ pub(super) fn snippet(e: &Expr) -> String {
     }
 }
 
+/// Core collection methods that change the collection in place.
+const MUTATORS: &[&str] = &[
+    "push",
+    "pop",
+    "set",
+    "insert",
+    "remove",
+    "clear",
+    "truncate",
+    "drain",
+    "retain",
+    "fill",
+    "swap",
+    "dedup",
+    "sort",
+    "sort_by",
+    "reverse",
+    "reserve",
+    "shrink_to_fit",
+    "push_back",
+    "push_front",
+    "pop_back",
+    "pop_front",
+    "entry",
+];
+
+/// Core collections: a `const` of one is built afresh at each use.
+const HEAP_CONSTS: &[&str] = &[
+    "List",
+    "Dict",
+    "Set",
+    "Deque",
+    "Heap",
+    "OrderedDict",
+    "OrderedSet",
+];
+
+/// Warn on a method call whose change to `receiver` is lost: a `ref self`
+/// write back to an element, entry or static that has no place to go
+/// (`dropped`), or any change to a `const`.
+fn receiver_write(
+    ctx: &LowerCtx<'_>,
+    receiver: &Expr,
+    method: &str,
+    dropped: bool,
+    span: rokc_diagnostic::Span,
+) {
+    let mut root = receiver;
+    while let ExprKind::Field(inner, _) | ExprKind::TupleField(inner, _) = &root.kind {
+        root = inner;
+    }
+    let text = ctx
+        .src(receiver.span)
+        .map_or_else(|| snippet(receiver), str::to_owned);
+    match &root.kind {
+        ExprKind::Path(p) if p.segments.len() == 1 => {
+            let name = p.segments[0].name.as_str();
+            if ctx.lookup(name).is_some() {
+                return;
+            }
+            if let Some(full) = ctx.resolve_in(&[name], false) {
+                let heap = std::ptr::eq(root, receiver)
+                    && MUTATORS.contains(&method)
+                    && ctx.env.konst(&full).is_some_and(|(ty, _)| {
+                        matches!(&ty.kind, rokc_ast::TyKind::Path(tp)
+                            if tp.segments.last().is_some_and(|s| HEAP_CONSTS.contains(&s.name.as_str())))
+                    });
+                if dropped || heap {
+                    let low = name.to_lowercase();
+                    ctx.emit_lint(
+                        "const_mutation",
+                        span,
+                        format!(
+                            "`{name}` is a const: each use builds a new value, so `{method}` \
+                             changes a copy that is dropped"
+                        ),
+                        format!(
+                            "copy it into a variable and change that: `let {low} = {name}; \
+                             {low}.{method}(..);`"
+                        ),
+                    );
+                }
+            } else if dropped && ctx.resolve_in(&[name], true).is_some() {
+                ctx.emit_lint(
+                    "discarded_ref_write",
+                    span,
+                    format!(
+                        "the write to `{text}` is discarded: `{method}` takes `ref self`, and a \
+                         static is never written"
+                    ),
+                    format!(
+                        "copy it into a variable and call `{method}` there: `let v = {text}; \
+                         v.{method}(..);`"
+                    ),
+                );
+            }
+        }
+        ExprKind::Index(..) if dropped => ctx.emit_lint(
+            "discarded_ref_write",
+            span,
+            format!(
+                "the write to `{text}` is discarded: `{method}` takes `ref self` and changes a \
+                 copy of the element"
+            ),
+            format!(
+                "copy it out, call `{method}`, and store it back: `let v = {text}; \
+                 v.{method}(..); {text} = v;`"
+            ),
+        ),
+        _ => {}
+    }
+}
+
+/// `snippet(e)`, parenthesised unless it is a single term.
+pub(super) fn operand_text(e: &Expr) -> String {
+    let s = snippet(e);
+    match e.kind {
+        ExprKind::Path(_)
+        | ExprKind::Literal(_)
+        | ExprKind::Field(..)
+        | ExprKind::TupleField(..)
+        | ExprKind::Index(..)
+        | ExprKind::Call { .. }
+        | ExprKind::MethodCall { .. }
+        | ExprKind::SelfLower => s,
+        _ => format!("({s})"),
+    }
+}
+
 /// A loop body that ends an outer narrowing is lowered again with it
 /// ended from the entry, since the head joins the back edge (spec 2.2.6).
 fn lower_loop(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
@@ -1154,6 +1283,20 @@ pub(super) fn lower_assign(
                         .to_owned(),
                 );
                 return None;
+            }
+            if let (HirExprKind::Local(l), ExprKind::Path(p)) = (&root_h.kind, &cur.kind) {
+                if ctx.value_captured.contains(l) {
+                    let name = p.segments.last().map_or("", |s| s.name.as_str());
+                    ctx.emit_lint(
+                        "capture_field_write",
+                        target.span,
+                        format!(
+                            "`{name}` is value-captured: this write changes the closure's copy, \
+                             not the outer `{name}`"
+                        ),
+                        format!("add `[ref {name}]` to the closure's capture list"),
+                    );
+                }
             }
             let root_place = root_h.clone();
             let mut steps: Vec<Step> = Vec::new();
@@ -1657,6 +1800,17 @@ fn lower_cast(
             ),
         );
     }
+    if to_ty == HirTy::Prim(PrimTy::Bool) && matches!(&from_ty, HirTy::Prim(p) if p.is_float()) {
+        ctx.emit_lint(
+            "float_to_bool",
+            span,
+            format!(
+                "`{} as bool` truncates first: `0.5 as bool` is false, `1.5 as bool` is true",
+                operand_text(operand)
+            ),
+            format!("compare instead: `{} != 0.0`", operand_text(operand)),
+        );
+    }
     HirExpr {
         kind: HirExprKind::Cast {
             operand: Box::new(operand_h),
@@ -1790,7 +1944,11 @@ fn lower_expr_inner(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
                     span,
                 };
             }
+            let mark = ctx.dropped_ref_recv.len();
             let call = method_call_on(ctx, recv_h, method, &all_args, span);
+            let dropped = ctx.dropped_ref_recv[mark..].contains(&span);
+            ctx.dropped_ref_recv.truncate(mark);
+            receiver_write(ctx, receiver, method, dropped, span);
             unpack_call(ctx, call)
         }
         ExprKind::If {
@@ -3749,6 +3907,9 @@ pub(super) fn lower_args_ref(
                     check_path_receiver(ctx, explicit_recv, by_ref, &h, &pname, callee);
                 }
                 if is_receiver && by_ref {
+                    if !super::mono::writable_place(ctx, &h) {
+                        ctx.dropped_ref_recv.push(span);
+                    }
                     places[i] = Some(h.clone());
                 }
                 h
@@ -6225,7 +6386,10 @@ pub(super) fn method_call_on(
         return any_method_call(ctx, recv_h, &bounds, method, None, args, span);
     }
     let pick = match pick_method(ctx, &recv_h.ty, method, None) {
-        Ok(p) => p,
+        Ok(p) => {
+            trait_scope_lint(ctx, &recv_h.ty, method, p, span);
+            p
+        }
         Err(msg) => {
             let recv = Some(recv_h.clone());
             if let Some(call) =
@@ -7258,6 +7422,13 @@ pub(super) fn pick_method<'e>(
         if own.len() == 1 {
             return Ok(Some(own[0].1));
         }
+        // A trait defined or `use`d here beats the others.
+        let mut near = cands
+            .iter()
+            .filter(|(t, _)| t.is_some_and(|t| trait_in_scope(ctx, t, false)));
+        if let (Some((_, p)), None) = (near.next(), near.next()) {
+            return Ok(Some(*p));
+        }
         let mut traits: Vec<String> = cands
             .iter()
             .map(|(t, _)| format!("`{}`", t.unwrap_or_default()))
@@ -7293,6 +7464,83 @@ fn core_only_trait(ctx: &LowerCtx<'_>, key: &str) -> bool {
         .flatten()
         .chain(ctx.env.uses_of(&ctx.current_module).into_iter().flatten())
         .any(named)
+}
+
+/// Is trait `key` in scope here: defined in this module, `use`d (also
+/// through a `pub use`), a bound of a type parameter, or (`implicit`) a
+/// `rok::` trait, which spec 3.5 makes visible everywhere?
+fn trait_in_scope(ctx: &LowerCtx<'_>, key: &str, implicit: bool) -> bool {
+    if module_of(key) == ctx.current_module
+        || (implicit && key.starts_with("rok::"))
+        || ctx.ty_bounds.values().flatten().any(|b| b == key)
+    {
+        return true;
+    }
+    let names = &ctx.env.names;
+    // Follow `pub use` aliases to the trait they name.
+    let is_key = |k: &str| {
+        let mut k = k.to_owned();
+        for _ in 0..8 {
+            if k == key {
+                return true;
+            }
+            match names.reexport(&k) {
+                Some(n) => k.clone_from(n),
+                None => return false,
+            }
+        }
+        false
+    };
+    let leaf = leaf_name(key);
+    let named = |e: &crate::uses::UseEntry| match e {
+        crate::uses::UseEntry::Single { full, .. } => is_key(full),
+        crate::uses::UseEntry::Glob { prefix } => {
+            module_of(key) == *prefix || is_key(&format!("{prefix}::{leaf}"))
+        }
+        crate::uses::UseEntry::GlobDeep { prefix } => key.starts_with(&format!("{prefix}::")),
+    };
+    ctx.local_uses
+        .iter()
+        .flatten()
+        .chain(ctx.env.uses_of(&ctx.current_module).into_iter().flatten())
+        .any(named)
+}
+
+/// Warn when the method `pick` comes from a trait not in scope here.
+fn trait_scope_lint(
+    ctx: &LowerCtx<'_>,
+    ty: &HirTy,
+    method: &str,
+    pick: Option<MethodPick<'_>>,
+    at: rokc_diagnostic::Span,
+) {
+    if matches!(ty, HirTy::Param(_)) || ctx.current_module.starts_with("rok::") {
+        return;
+    }
+    let key = match pick {
+        Some(MethodPick::Concrete(id)) => {
+            ctx.env.method_info(id).and_then(|i| i.trait_name.clone())
+        }
+        Some(MethodPick::Generic(gm)) => gm.info.trait_name.clone(),
+        None => None,
+    };
+    let Some(key) = key.filter(|k| !k.is_empty() && !trait_in_scope(ctx, k, true)) else {
+        return;
+    };
+    // From a submodule, the package's own items need `pkg::`.
+    let own = super::resolve::package_of(&key).is_empty();
+    let rooted = format!("pkg::{key}");
+    let path = if own && !ctx.current_module.is_empty() {
+        &rooted
+    } else {
+        &key
+    };
+    ctx.emit_lint(
+        "trait_not_in_scope",
+        at,
+        format!("method `{method}` comes from trait `{key}`, which is not in scope"),
+        format!("add `use {path};`"),
+    );
 }
 
 /// `method` from the generic impl covering `ty` (`impl<T> Tr for Box<T>`,
@@ -7786,6 +8034,9 @@ fn call_generic_positional(
             places.first_mut(),
             def.params.first().is_some_and(|p| p.by_ref),
         ) {
+            if !super::mono::writable_place(ctx, &r) {
+                ctx.dropped_ref_recv.push(span);
+            }
             *p = Some(r.clone());
         }
         lowered.push(r);
@@ -8217,6 +8468,59 @@ fn plain_spawn<'a>(ctx: &LowerCtx<'a>, full: &str, args: &[CallArg]) -> Option<&
         .flatten()
 }
 
+/// Core free functions that stay bare names: printing, panics and
+/// `channel` (stdlib 2.17 writes `channel::<T>()`).
+const PRELUDE_FNS: &[&str] = &[
+    "rok::core::channel::channel",
+    "rok::core::channel::channel_bounded",
+    "rok::core::print::print",
+    "rok::core::print::println",
+    "rok::core::print::eprint",
+    "rok::core::print::eprintln",
+    "rok::core::panic::panic",
+    "rok::core::panic::assert",
+    "rok::core::panic::assert_eq",
+    "rok::core::panic::assert_ne",
+    "rok::core::panic::unreachable",
+    "rok::core::panic::oom",
+];
+
+/// Warn on a bare call of a core submodule's free function (`sleep`)
+/// that only the implicit `use rok::core::**` brings in.
+fn implicit_core_fn(
+    ctx: &LowerCtx<'_>,
+    segs: &[&str],
+    full: Option<&str>,
+    at: rokc_diagnostic::Span,
+) {
+    let (Some(full), [name]) = (full, segs) else {
+        return;
+    };
+    let Some((module, _)) = full
+        .strip_prefix("rok::core::")
+        .and_then(|rest| rest.rsplit_once("::"))
+    else {
+        return;
+    };
+    if PRELUDE_FNS.contains(&full)
+        || ctx.current_module.starts_with("rok::")
+        || ctx.src(at).and_then(|t| t.split("::<").next()) != Some(*name)
+    {
+        return;
+    }
+    let explicit =
+        super::resolve::without_implicit(&ctx.current_module, || ctx.resolve_any_fn(segs));
+    if explicit.is_some() {
+        return;
+    }
+    ctx.emit_lint(
+        "implicit_core_fn",
+        at,
+        format!("`{name}` is `rok::core::{module}::{name}`, reached only through the implicit `use rok::core::**`"),
+        format!("write `{module}::{name}(..)`, or `use rok::core::{module}::{name};`"),
+    );
+}
+
 /// A call of path `p`, not a local.
 fn lower_path_call(
     ctx: &mut LowerCtx<'_>,
@@ -8240,6 +8544,12 @@ fn lower_path_call(
         discard_args(ctx, args);
         return poison(span);
     }
+    implicit_core_fn(
+        ctx,
+        &segs,
+        concrete.as_deref().or(generic.as_deref()),
+        p.span,
+    );
 
     // Free function / extern / re-export, module-aware.
     if let Some(full) = concrete {
@@ -11969,6 +12279,42 @@ pub(super) fn expected_prim(ctx: &LowerCtx<'_>, want: fn(PrimTy) -> bool) -> Opt
     }
 }
 
+/// An unsuffixed integer that fell to the float member `fty` because
+/// the expected sum has several integer members.
+fn ambiguous_int(ctx: &LowerCtx<'_>, text: &str, fty: PrimTy, span: rokc_diagnostic::Span) {
+    let Some(HirTy::Sum(vs)) = ctx.current_expected() else {
+        return;
+    };
+    let ints: Vec<&str> = vs
+        .iter()
+        .filter_map(|v| match v {
+            HirTy::Prim(p) if p.is_int() && !matches!(p, PrimTy::CChar | PrimTy::Char) => {
+                Some(p.name())
+            }
+            _ => None,
+        })
+        .collect();
+    if ints.len() < 2 {
+        return;
+    }
+    let sum = ctx.ty_name(&HirTy::Sum(vs.clone()));
+    let picks: Vec<String> = ints.iter().map(|t| format!("`{text}{t}`")).collect();
+    ctx.emit_lint(
+        "ambiguous_int_literal",
+        span,
+        format!(
+            "integer literal `{text}` into `{sum}` becomes the `{}`: the sum has more than one \
+             integer member",
+            fty.name()
+        ),
+        format!(
+            "write {}, or `{text}.0` for the `{}`",
+            picks.join(" or "),
+            fty.name()
+        ),
+    );
+}
+
 /// A literal (`negate`: under a unary minus). Unsuffixed numbers take the
 /// expected type (else `i32` / `f64`); integers are range-checked.
 pub(super) fn lower_literal(
@@ -12041,6 +12387,7 @@ pub(super) fn lower_literal(
                         ),
                     );
                 }
+                ambiguous_int(ctx, text, fty, span);
                 return konst(ConstVal::Float { bits, ty: fty }, HirTy::Prim(fty));
             }
             let ty = if has_int_suffix(text) {

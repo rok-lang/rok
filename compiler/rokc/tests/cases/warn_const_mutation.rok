@@ -1,0 +1,26 @@
+// spec: 005.02-const
+// expect-exit: 0
+// expect-lint: 18:5 `XS` is a const: each use builds a new value, so `push` changes a copy that is dropped
+// expect-lint: 19:5 `K` is a const: each use builds a new value, so `set` changes a copy that is dropped
+// expect-warning: help: copy it into a variable and change that: `let xs = XS; xs.push(..);`
+// expect-stdout: 3 0 4 4
+
+// A heap const is built again at each use, and a const struct is a
+// fresh value: a mutating method on one changes a copy that is dropped.
+struct Cell { v: i32; }
+impl Cell { fn set(ref self, n: i32) { self.v = n; } }
+
+const XS: List<i32> = [1, 2, 3];
+const K: Cell = Cell { v: 0 };
+
+fn main() {
+    // Silent no-ops today.
+    XS.push(4);
+    K.set(4);
+    // Reading is fine; a copy in a variable can change.
+    let xs = XS;
+    xs.push(4);
+    let k = K;
+    k.set(4);
+    println(f"{XS.len()} {K.v} {xs.len()} {k.v}");
+}

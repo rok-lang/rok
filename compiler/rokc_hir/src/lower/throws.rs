@@ -1563,6 +1563,78 @@ pub(super) fn finish_throwing_body(ctx: &LowerCtx<'_>, block: &mut HirBlock) {
     }
 }
 
+/// Warn on `return`, `break` and `continue` that leave `fin`: they drop
+/// an error in flight. Jumps inside a closure, or to a loop or labelled
+/// block within `fin`, stay.
+fn finally_jumps(ctx: &LowerCtx<'_>, fin: &Block) {
+    #[derive(Default)]
+    struct Jumps {
+        bodies: u32,
+        loops: Vec<(rokc_diagnostic::Span, Option<String>)>,
+        blocks: Vec<(rokc_diagnostic::Span, String)>,
+        jumps: Vec<(rokc_diagnostic::Span, &'static str, Option<String>)>,
+    }
+    impl crate::walk::AstVisitor for Jumps {
+        fn expr(&mut self, e: &Expr) {
+            match &e.kind {
+                ExprKind::Loop { label, .. }
+                | ExprKind::While { label, .. }
+                | ExprKind::For { label, .. } => self.loops.push((e.span, label.clone())),
+                ExprKind::Block(b) | ExprKind::Unsafe(b) => {
+                    if let Some(l) = &b.label {
+                        self.blocks.push((b.span, l.clone()));
+                    }
+                }
+                _ => {}
+            }
+        }
+        fn stmt(&mut self, s: &rokc_ast::Stmt) {
+            if self.bodies > 0 {
+                return;
+            }
+            let (what, label) = match &s.kind {
+                StmtKind::Return(_) => ("return", None),
+                StmtKind::Break { label, .. } => ("break", label.clone()),
+                StmtKind::Continue { label } => ("continue", label.clone()),
+                _ => return,
+            };
+            self.jumps.push((s.span, what, label));
+        }
+        fn enter_body(&mut self) {
+            self.bodies += 1;
+        }
+        fn leave_body(&mut self) {
+            self.bodies -= 1;
+        }
+    }
+    let mut w = Jumps::default();
+    crate::walk::walk_block(&mut w, fin);
+    let within = |outer: rokc_diagnostic::Span, at: rokc_diagnostic::Span| {
+        outer.start <= at.start && at.end <= outer.end
+    };
+    for (at, what, label) in w.jumps {
+        let stays = what != "return"
+            && match &label {
+                None => w.loops.iter().any(|(s, _)| within(*s, at)),
+                Some(l) => {
+                    w.loops
+                        .iter()
+                        .any(|(s, ll)| ll.as_deref() == Some(l.as_str()) && within(*s, at))
+                        || w.blocks.iter().any(|(s, bl)| bl == l && within(*s, at))
+                }
+            };
+        if stays {
+            continue;
+        }
+        ctx.emit_lint(
+            "finally_jump",
+            at,
+            format!("`{what}` leaves a `finally` block and drops the error in flight"),
+            format!("move the `{what}` after the `try` expression; `finally` only cleans up"),
+        );
+    }
+}
+
 /// Postfix `body catch pat { .. } ... finally { .. }`.
 pub(super) fn lower_catch(
     ctx: &mut LowerCtx<'_>,
@@ -1573,6 +1645,7 @@ pub(super) fn lower_catch(
 ) -> HirExpr {
     let expected = ctx.current_expected().cloned().unwrap_or(HirTy::Unknown);
     if let Some(fin) = finally {
+        finally_jumps(ctx, fin);
         ctx.err_frames.push(ErrFrame::Finally {
             block: fin.clone(),
             try_depth: ctx.try_depth,

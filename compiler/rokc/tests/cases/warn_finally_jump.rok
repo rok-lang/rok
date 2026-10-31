@@ -1,0 +1,40 @@
+// spec: 003.14.5-finally
+// expect-exit: 0
+// expect-lint: 14:49 `return` leaves a `finally` block and drops the error in flight
+// expect-lint: 18:45 `continue` leaves a `finally` block and drops the error in flight
+// expect-warning: help: move the `return` after the `try` expression; `finally` only cleans up
+// expect-stdout: 7 3 -1
+
+// `return`, `break` or `continue` that leaves a `finally` block drops
+// the error in flight: a warning. Jumps that stay inside the block, or
+// inside a closure in it, are fine.
+fn boom() throws -> i32 {
+    throw ValueError { msg: "boom" };
+}
+fn f() throws -> i32 { try { boom() } finally { return 7; } }
+fn g() throws -> i32 {
+    let n = 0;
+    for _ in 0..3 {
+        try { boom() } finally { n = n + 1; continue; };
+    }
+    n
+}
+fn h() throws -> i32 {
+    let n = 0;
+    try {
+        boom()
+    } finally {
+        for i in 0..4 {
+            if i == 1 { continue; }
+            n = n + 1;
+        }
+        let k = || { return 2; };
+        n = n + k() - 2;
+    }
+}
+fn main() {
+    let a = try f() catch _ { -1 };
+    let b = try g() catch _ { -1 };
+    let c = try h() catch _ { -1 };
+    println(f"{a} {b} {c}");
+}

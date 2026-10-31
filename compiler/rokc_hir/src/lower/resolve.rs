@@ -283,6 +283,14 @@ pub fn set_no_implicit(modules: Vec<String>) {
     NO_IMPLICIT.with(|n| *n.borrow_mut() = modules);
 }
 
+/// `f` with the implicit `use rok::core::**;` off in `module`.
+pub(super) fn without_implicit<R>(module: &str, f: impl FnOnce() -> R) -> R {
+    NO_IMPLICIT.with(|n| n.borrow_mut().push(module.to_owned()));
+    let r = f();
+    NO_IMPLICIT.with(|n| n.borrow_mut().pop());
+    r
+}
+
 pub fn is_dependency(name: &str) -> bool {
     PACKAGES.with(|p| p.borrow().iter().any(|n| n == name))
 }

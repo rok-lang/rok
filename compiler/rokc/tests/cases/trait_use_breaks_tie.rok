@@ -1,0 +1,26 @@
+// spec: 003.05-member-access-and-method-call
+// expect-exit: 0
+// expect-stdout: a.hi b.hi true
+
+// Two traits give `i32` a method `hi`: the one `use`d in the module wins
+// (it was an ambiguity error before).
+mod a {
+    pub trait Greet { fn hi(self) -> str; }
+    impl Greet for i32 { fn hi(self) -> str { "a.hi" } }
+}
+
+mod b {
+    pub trait Wave { fn hi(self) -> str; }
+    impl Wave for i32 { fn hi(self) -> str { "b.hi" } }
+}
+
+mod c {
+    use pkg::b::Wave;
+    pub fn run() -> str { 2.hi() }
+}
+
+use a::Greet;
+
+fn main() {
+    println(f"{1.hi()} {c::run()} {b::Wave::hi(3) == "b.hi" && a::Greet::hi(3) == "a.hi"}");
+}
