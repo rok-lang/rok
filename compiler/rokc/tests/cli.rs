@@ -667,6 +667,46 @@ fn literal_spread_mismatch_is_outside_warnings() {
     );
 }
 
+/// The semantic warnings added after the baseline: `-D warnings` leaves
+/// them warnings, `-D all` denies them, `#[allow]` and `-A` silence them.
+#[test]
+fn semantic_warnings_are_outside_warnings() {
+    let dir = scratch("lint-semantic");
+    let app = new_package(&dir, "app", false);
+    let src = "const LIMIT: i32 = 5;\n\
+               fn main() {\n    let b = 0.5 as bool;\n    match 3 { LIMIT => println(f\"{b} {quiet()}\") };\n}\n\
+               #[allow(float_to_bool)]\n\
+               fn quiet() -> bool { 1.5 as bool }\n";
+    put(app.join("src/main.rok"), src).unwrap();
+    let cast = "warning[E503]: `0.5 as bool` truncates first";
+    let pat = "warning[E503]: `LIMIT` here is a new variable that matches every value";
+    let out = rokc(None, &app, &["lint", "-D", "warnings"]);
+    assert_exit(&out, 0);
+    let err = text(&out.stderr);
+    assert!(err.contains(cast) && err.contains(pat), "{err}");
+    assert!(!err.contains("`1.5 as bool` truncates"), "{err}");
+    let out = rokc(None, &app, &["lint", "-D", "all"]);
+    assert_exit(&out, 1);
+    let out = rokc(None, &app, &["lint", "-A", "pattern_binds_const"]);
+    let err = text(&out.stderr);
+    assert!(err.contains(cast) && !err.contains(pat), "{err}");
+    let out = rokc(None, &app, &["lint", "--list"]);
+    let list = text(&out.stdout);
+    for name in [
+        "capture_field_write",
+        "const_mutation",
+        "pattern_binds_const",
+        "discarded_ref_write",
+        "ambiguous_int_literal",
+        "trait_not_in_scope",
+        "finally_jump",
+        "float_to_bool",
+        "implicit_core_fn",
+    ] {
+        assert!(list.contains(&format!("{name:<24} warn  0.1.6")), "{list}");
+    }
+}
+
 /// 9.10.7: a cached script is linked again when the runtime changes.
 // spec: §9.10.7 §9.2.16
 #[test]

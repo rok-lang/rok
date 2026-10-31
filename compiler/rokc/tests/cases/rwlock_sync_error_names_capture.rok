@@ -1,0 +1,14 @@
+// spec: std 216-sync §2.16.4
+// expect-error: argument 1 of `spawn_blocking` expects `fn() -> usize + Send`, found `closure() -> usize`
+// expect-error: the closure captures `lock` (type `RwLock<List<i32>>`), which is not `Sync`: its readers could change the `List<i32>` inside at once; use `Mutex<List<i32>>` and `.lock()` in place of `.read()` / `.write()`
+
+// `RwLock<T>` is `Sync` only when `T` is: a collection inside cannot
+// reach another thread, and the error names the capture, the trait and
+// what to use instead.
+fn main() {
+    let lock = RwLock::new([1, 2, 3]);
+    let n = task::spawn_blocking(|| {
+        using g = lock.read() { g.get().len() }
+    });
+    let _ = n;
+}

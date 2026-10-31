@@ -1,0 +1,20 @@
+// spec: std 002-import §0.2.3
+// expect-exit: 0
+// expect-lint: 15:13 `cpu_count` is `rok::core::task::cpu_count`, reached only through the implicit `use rok::core::**`
+// expect-lint: 16:13 `hex_encode` is `rok::core::encoding::hex_encode`, reached only through the implicit `use rok::core::**`
+// expect-warning: help: write `task::cpu_count(..)`, or `use rok::core::task::cpu_count;`
+// expect-stdout: true 6869 true 6869 ok
+
+// A core free function called bare through the implicit
+// `use rok::core::**` warns; the module path, a `use` and the printing
+// and panic functions do not.
+use rok::core::encoding::hex_encode as hex;
+
+fn main() {
+    assert(1 + 1 == 2);
+    let a = cpu_count() > 0;
+    let b = hex_encode("hi");
+    let c = task::cpu_count() > 0;
+    let d = hex("hi");
+    println(f"{a} {b} {c} {d} ok");
+}

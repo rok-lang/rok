@@ -1946,6 +1946,18 @@ pub(super) fn place_root(e: &HirExpr) -> Option<LocalId> {
     }
 }
 
+/// Whether [`assign_place`] can write `place` back.
+pub(super) fn writable_place(ctx: &LowerCtx<'_>, place: &HirExpr) -> bool {
+    match &place.kind {
+        HirExprKind::Local(_) => true,
+        HirExprKind::BufGet { buf, .. } => {
+            matches!(buf.kind, HirExprKind::Local(l) if ctx.is_boxed(l))
+        }
+        HirExprKind::FieldRead { target, .. } => writable_place(ctx, target),
+        _ => false,
+    }
+}
+
 /// `place = value` for a local, a field chain on a local, or a cell. A
 /// narrowed local writes through to the slot it narrows, as `=` does.
 pub(super) fn assign_place(

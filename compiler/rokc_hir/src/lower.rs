@@ -2900,6 +2900,9 @@ struct LowerCtx<'a> {
     /// Set by a path call whose first argument fills `self`: whether it was
     /// `ref`. Taken by that call's argument lowering.
     explicit_recv: Option<bool>,
+    /// Spans of calls whose `ref self` receiver is no place to write
+    /// back to (an element, a static, a const): the write is dropped.
+    dropped_ref_recv: Vec<Span>,
     /// Enclosing `unsafe fn` body / `unsafe { }` blocks (spec 4.15):
     /// unsafe calls are allowed when > 0.
     unsafe_depth: u32,
@@ -3108,6 +3111,7 @@ impl<'a> LowerCtx<'a> {
             value_captured: std::collections::HashSet::new(),
             unsafe_depth: 0,
             explicit_recv: None,
+            dropped_ref_recv: Vec::new(),
             breakables: Vec::new(),
             break_tys: HashMap::new(),
             expected_ty_stack: Vec::new(),

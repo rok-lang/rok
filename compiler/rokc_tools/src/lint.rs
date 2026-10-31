@@ -177,7 +177,53 @@ pub const LINTS: &[Lint] = &[
         desc: "a bare `return` in a statement's trailing closure: it leaves the closure, not the function",
         since: "0.1.6",
     },
+    warn_since(
+        "capture_field_write",
+        "a field write on a value-captured struct: it changes the closure's own copy",
+    ),
+    warn_since(
+        "const_mutation",
+        "a `ref self` or mutating method called on a `const`: it changes a fresh copy",
+    ),
+    warn_since(
+        "pattern_binds_const",
+        "a pattern name that is a const, a static or a misspelled variant: it binds every value",
+    ),
+    warn_since(
+        "discarded_ref_write",
+        "a `ref self` method on an element, a `Dict` entry or a static: the write is dropped",
+    ),
+    warn_since(
+        "ambiguous_int_literal",
+        "an unsuffixed integer literal into a sum with several integer members and a float",
+    ),
+    warn_since(
+        "trait_not_in_scope",
+        "a method from a trait outside `rok::` that is neither defined nor `use`d in the module",
+    ),
+    warn_since(
+        "finally_jump",
+        "`return`, `break` or `continue` that leaves a `finally` block and drops the error",
+    ),
+    warn_since(
+        "float_to_bool",
+        "a float `as bool`: it truncates first, so `0.5 as bool` is false",
+    ),
+    warn_since(
+        "implicit_core_fn",
+        "a core free function called bare through the implicit `use rok::core::**`",
+    ),
 ];
+
+/// A lint added in 0.1.6, outside `warnings`.
+const fn warn_since(name: &'static str, desc: &'static str) -> Lint {
+    Lint {
+        name,
+        default: Level::Warn,
+        desc,
+        since: "0.1.6",
+    }
+}
 
 /// Lint groups usable wherever a lint name is (`all`: every lint;
 /// `warnings`: every lint up to [`BASELINE`]).
