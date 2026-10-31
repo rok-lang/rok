@@ -412,7 +412,7 @@ impl Spec {
         let _ = write!(o, "  esac\n}}\n_{p}_values() {{\n  case $1 in\n");
         for (k, v) in &self.values {
             let what = match v {
-                Values::Run(cmd) => format!("{cmd} 2>/dev/null"),
+                Values::Run(cmd) => format!("{cmd} 2>/dev/null | grep -v ' '"),
                 Values::Commands => format!("echo '{}'", self.command_names()),
             };
             let _ = writeln!(o, "    '{k}') {what} ;;");
@@ -578,7 +578,7 @@ fi
 
     fn fish_values(&self, v: &Values) -> String {
         match v {
-            Values::Run(cmd) => format!("({cmd} 2>/dev/null)"),
+            Values::Run(cmd) => format!("({cmd} 2>/dev/null | string match -v \"* *\")"),
             Values::Commands => self.command_names(),
         }
     }
@@ -628,7 +628,7 @@ complete -c {p} -n __{p}_at -f
         );
         if let Some((_, v)) = self.values.iter().find(|(k, _)| k == "+") {
             let run = match v {
-                Values::Run(cmd) => format!("{cmd} 2>/dev/null"),
+                Values::Run(cmd) => format!("{cmd} 2>/dev/null | string match -v \"* *\""),
                 Values::Commands => format!("string split ' ' '{}'", self.command_names()),
             };
             let _ = write!(
@@ -689,7 +689,7 @@ complete -c {p} -n __{p}_at -f -a '(__{p}_plus)'
         let mut values = String::new();
         for (k, v) in &self.values {
             let what = match v {
-                Values::Run(cmd) => format!("{cmd} 2>$null"),
+                Values::Run(cmd) => format!("{cmd} 2>$null | Where-Object {{ $_ -notmatch ' ' }}"),
                 Values::Commands => "$commands".to_owned(),
             };
             let _ = write!(values, "\n            '{k}' {{ {what} }}");

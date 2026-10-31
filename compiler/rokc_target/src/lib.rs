@@ -15,7 +15,7 @@ use std::sync::OnceLock;
 
 use rokc_rokon::{Decoder, Kind, Value};
 
-pub use builtin::BUILTIN;
+pub use builtin::{BUILTIN, RENAMED};
 
 /// The target this rokc runs on, the default `--target`.
 pub const HOST: &str = env!("ROK_TARGET_HOST");

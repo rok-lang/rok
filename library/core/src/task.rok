@@ -2,7 +2,7 @@
 // refs-lang 7.6) and `block_on` (2.20.6); time is `task::time`.
 //
 // One executor per process, started on first use: N workers on threads
-// that live as long as the process (N = online CPUs or `ROK_WORKERS`),
+// that live as long as the process (N = online CPUs or `ROKR_WORKERS`),
 // the blocking lane and the I/O driver. `block_on` and `par::*` attach
 // the calling thread as a guest until their future and its
 // `spawn_local` tasks are done. Without threads (wasm32-wasi, the
@@ -38,8 +38,8 @@
 //
 // Timers: one binary heap behind a `Mutex` (707 §7.7.5).
 //
-// `ROK_THREAD_PER_CORE=1` (706 §7.6.8) keeps every task on one worker's
-// local queue, so nothing is stolen. `ROK_DYNAMIC_WORKERS=1` (707
+// `ROKR_THREAD_PER_CORE=1` (706 §7.6.8) keeps every task on one worker's
+// local queue, so nothing is stolen. `ROKR_DYNAMIC_WORKERS=1` (707
 // §7.7.8) wakes only active workers and activates one more when all are
 // busy.
 //

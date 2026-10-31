@@ -18,7 +18,7 @@ pub struct Program {
     /// Top-level statements in source order (spec 4.16.1). Only the entry
     /// file `main.rok` may have them; they become the implicit `main`.
     pub stmts: Vec<Stmt>,
-    /// Source text of each meta expansion (spec 6.9.9, `--emit=expanded`).
+    /// Source text of each meta expansion (spec 6.9.9, `--emit=expansions`).
     pub expanded: Vec<String>,
     /// Start of each top-level item / statement (first token, attributes
     /// included): (byte offset, is an item). The REPL splits programs by

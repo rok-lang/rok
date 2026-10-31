@@ -216,7 +216,9 @@ package or native record each, then a summary.",
         about: "\
 An executable package (src/main.rok) is built --release into
 $ROK_HOME/bin; a library (src/lib.rok only, or with --lib) goes into the
-active environment, for `rok repl` and `rok jupyter`. A script file is
+active environment, for `rok repl` and `rok jupyter`; a package with
+both installs its executable and warns unless --bin or --lib says which.
+A script file is
 built into $ROK_HOME/bin. An executable already installed from the same
 stone version or git commit is kept unless --force; one from a path is
 always rebuilt.",
@@ -234,6 +236,7 @@ always rebuilt.",
             ("--features <f,..>", "features to enable"),
             ("--no-default-features", "not its `default` feature"),
             ("--lib", "install the library, not the executable"),
+            ("--bin", "install the executable, not the library"),
             ("--force", "rebuild even if installed"),
             ("--native", "a native package into the environment"),
             ("--list", "the environment's libraries and the executables"),
@@ -254,23 +257,26 @@ Remove each from the active environment, or else from $ROK_HOME/bin.",
         name: "publish",
         summary: "publish this package to the index",
         usage: &[
-            "publish [--index <dir>] [--commit]",
-            "publish --native <file> [--index <dir>] [--commit]",
+            "publish [--dry-run | --commit] [--registry <url> | --index-dir <dir>]",
+            "publish --native <file> [--dry-run | --commit] [--registry <url> | --index-dir <dir>]",
         ],
         about: "\
 Make the index entry for this package: its git remote `origin` (an
-https:// URL), HEAD commit and tree; sources are not uploaded. Without
---commit it is a dry run, checked against the index checkout <dir> if
-given. With --commit it is committed to <dir>, or without --index sent to
-the registry API (log in first with `rok login`, or set
-$ROK_REGISTRY_TOKEN).",
+https:// URL), HEAD commit and tree; sources are not uploaded. --dry-run
+only checks it, against the index checkout <dir> if given. --commit
+commits it to <dir>, or without --index-dir sends it to the registry API
+of the configured index or of --registry <url> (log in first with `rok
+login`, or set $ROK_REGISTRY_TOKEN). Without either it is a dry run that
+warns: 0.2.0 asks for one. --index is the old name of --index-dir.",
         examples: &[
-            ("rok publish", "check what would be published"),
+            ("rok publish --dry-run", "check what would be published"),
             ("rok publish --commit", "publish it"),
         ],
         flags: &[
-            ("--index <dir>", "a checkout of the index"),
+            ("--dry-run", "only check"),
             ("--commit", "really publish"),
+            ("--registry <url>", "another index than the configured one"),
+            ("--index-dir <dir>", "a checkout of the index"),
             (
                 "--native <file>",
                 "the native package `Native { .. }` in <file>",
@@ -281,40 +287,62 @@ $ROK_REGISTRY_TOKEN).",
     CmdHelp {
         name: "yank",
         summary: "mark a version yanked",
-        usage: &["yank [--native] --vers <version> [--undo] [--index <dir>] [name]"],
+        usage: &[
+            "yank [--native] <name>@<version> [--undo] [--registry <url> | --index-dir <dir>]",
+        ],
         about: "\
 Mark a version yanked, so new resolutions skip it: committed to the index
-checkout <dir>, or through the registry API (log in with `rok login`).
-Without a name, this package's.",
+checkout <dir>, or through the registry API of the configured index or of
+--registry <url> (log in with `rok login`). The old form `--vers
+<version> [name]` (default: this package) warns.",
         examples: &[
-            ("rok yank --vers 1.2.0", "this package's 1.2.0"),
-            ("rok yank --vers 1.2.0 --undo", "take it back"),
+            ("rok yank num@1.2.0", "yank num 1.2.0"),
+            ("rok yank num@1.2.0 --undo", "take it back"),
         ],
         flags: &[
-            ("--vers <version>", "the version"),
             ("--undo", "un-yank it"),
-            ("--index <dir>", "a checkout of the index"),
-            ("--native", "a native package (give its name)"),
+            ("--registry <url>", "another index than the configured one"),
+            ("--index-dir <dir>", "a checkout of the index"),
+            ("--native", "a native package"),
         ],
         ..CmdHelp::EMPTY
     },
     CmdHelp {
         name: "login",
         summary: "keep a registry token",
-        usage: &["login [<token>]"],
+        usage: &["login [--registry <url>] [<token>]"],
         about: "\
-Keep a registry token in $ROK_HOME/credentials.rokon, after checking its
-account may publish. Get one from <api>/me (e.g. https://rokstones.io/me);
-without <token> it is read from standard input.",
-        examples: &[("rok login", "paste the token")],
+Keep a registry token for one index (default: the configured one) in
+$ROK_HOME/tokens.rokon, after checking its account may publish; it is
+sent only to that index. Get one from <api>/me (e.g.
+https://rokstones.io/me); without <token> it is read from standard input.
+The configured index's token also goes into credentials.rokon, where rok
+0.1.5 and older read it.",
+        examples: &[
+            ("rok login", "paste the token"),
+            (
+                "rok login --registry https://example.com/index",
+                "a token for another index",
+            ),
+        ],
+        flags: &[("--registry <url>", "another index than the configured one")],
         ..CmdHelp::EMPTY
     },
     CmdHelp {
         name: "logout",
         summary: "remove the registry token",
-        usage: &["logout"],
-        about: "Remove the token `rok login` kept.",
-        examples: &[("rok logout", "")],
+        usage: &["logout [--registry <url> | --all]"],
+        about: "\
+Remove the token `rok login` kept for the index (default: the configured
+one), or with --all every token.",
+        examples: &[
+            ("rok logout", ""),
+            ("rok logout --all", "every index's token"),
+        ],
+        flags: &[
+            ("--registry <url>", "another index than the configured one"),
+            ("--all", "every index"),
+        ],
         ..CmdHelp::EMPTY
     },
     CmdHelp {

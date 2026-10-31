@@ -47,10 +47,11 @@ impl Package {
         })
     }
 
-    /// `target/` (spec 902.15); `ROKC_TARGET_DIR` overrides (901.7).
+    /// `target/` (spec 902.15); `ROK_TARGET_DIR` overrides (901.7).
     #[must_use]
     pub fn target_dir(&self) -> PathBuf {
-        std::env::var_os("ROKC_TARGET_DIR").map_or_else(|| self.dir.join("target"), PathBuf::from)
+        std::env::var_os(rokc_core::env_name("ROK_TARGET_DIR"))
+            .map_or_else(|| self.dir.join("target"), PathBuf::from)
     }
 }
 

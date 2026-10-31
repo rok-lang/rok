@@ -26,6 +26,16 @@ pub const BUILTIN: &[&str] = &[
     "s390x-unknown-linux-gnu",
 ];
 
+/// Built-in names that mean something else elsewhere: `(old, new)`.
+///
+/// The new name is 0.2.0's. Until then it is an alias of the old one,
+/// which stays the target's name (its directories, `cfg`).
+pub const RENAMED: &[(&str, &str)] = &[
+    ("wasm32-wasi", "wasm32-wasip2"),
+    ("wasm32-wasi-threads", "wasm32-wasip1-threads"),
+    ("riscv32imac-unknown-none", "riscv32imac-unknown-none-elf"),
+];
+
 /// rok's thread stack: 8 MiB, as Linux's default rlimit and macOS give
 /// the main thread (nested `await` runs on it, 7.8.10).
 const STACK: u64 = 8 << 20;
@@ -222,8 +232,12 @@ fn wasm32(name: &str, rust_target: &str) -> TargetSpec {
     }
 }
 
-/// The built-in target `name`.
+/// The built-in target `name` (or a new name in `RENAMED`).
 pub fn spec(name: &str) -> Option<TargetSpec> {
+    let name = RENAMED
+        .iter()
+        .find(|(_, new)| *new == name)
+        .map_or(name, |(old, _)| old);
     Some(match name {
         "x86_64-unknown-linux-gnu" => x86_64(linux_gnu(
             name,

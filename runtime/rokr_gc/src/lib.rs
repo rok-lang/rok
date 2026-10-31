@@ -49,11 +49,11 @@
 //! ([`weak_new`]). A word outside every object is ignored; an ambiguous
 //! one only retains and pins the object it hits.
 //!
-//! Debug knobs (read once): `ROK_GC_STRESS=N` (a collection every `N`
-//! runtime allocations, every 8th full), `ROK_GC_EVAC=always`,
-//! `ROK_GC_CONCURRENT=always|off`, `ROK_GC_STATS=1`, `ROK_GC_LOG=1`
-//! ([`Pause`]), `ROK_HEAP_DUMP=on_oom` ([`heap_dump`]). Other values warn
-//! ([`rokr_common::env_knob`]).
+//! Debug knobs (read once): `ROKR_GC_STRESS=N` (a collection every `N`
+//! runtime allocations, every 8th full), `ROKR_GC_EVAC=always`,
+//! `ROKR_GC_CONCURRENT=always|off`, `ROKR_GC_STATS=1`, `ROKR_GC_LOG=1`
+//! ([`Pause`]), `ROKR_HEAP_DUMP=on_oom` ([`heap_dump`]); until 0.2.0
+//! also spelled `ROK_..`. Other values warn ([`rokr_common::env_knob`]).
 
 #![cfg_attr(not(test), no_std)]
 
@@ -68,7 +68,7 @@ use rokr_common::object_header::{
     FLAG_SATB, FLAG_SCANNED, FLAG_STICKY, FLAG_UNLOGGED, FLAG_WIPE, HEADER_ALIGN, HEADER_SIZE,
     ObjectHeader,
 };
-use rokr_common::{env_choice, env_flag, env_num, fatal, sys};
+use rokr_common::{env_choice, env_flag, env_name, env_num, fatal, sys};
 
 mod concurrent;
 pub mod world;
@@ -193,7 +193,7 @@ struct Heap {
     /// `old_bytes` reaches this.
     full_at: usize,
     minors: u64,
-    /// Total / longest pause (`ROK_GC_STATS`).
+    /// Total / longest pause (`ROKR_GC_STATS`).
     gc_ns: u64,
     max_ns: u64,
     /// Collector-thread CPU time in pauses (robust on a loaded machine).
@@ -206,11 +206,11 @@ struct Heap {
     /// Their collector-thread CPU time: total, longest.
     full_cpu_ns: u64,
     full_cpu_max_ns: u64,
-    /// `ROK_GC_*` read (first slow-path allocation or collection).
+    /// `ROKR_GC_*` read (first slow-path allocation or collection).
     configured: bool,
-    /// `ROK_GC_LOG`: a line per collection to stderr.
+    /// `ROKR_GC_LOG`: a line per collection to stderr.
     log: bool,
-    /// `ROK_GC_STRESS`: collect every `stress` runtime allocations (0 =
+    /// `ROKR_GC_STRESS`: collect every `stress` runtime allocations (0 =
     /// off); `allocs` counts them.
     stress: u64,
     allocs: u64,
@@ -232,10 +232,10 @@ struct Heap {
     /// LOS objects, linked through their prefixes (newest first).
     los: *mut u8,
     los_count: usize,
-    /// `ROK_GC_EVAC=always`: every full collection evacuates every block
+    /// `ROKR_GC_EVAC=always`: every full collection evacuates every block
     /// it may (tests); otherwise only when fragmented.
     evac_always: bool,
-    /// `ROK_GC_CONCURRENT`: whether full collections mark concurrently.
+    /// `ROKR_GC_CONCURRENT`: whether full collections mark concurrently.
     concurrent: Concurrent,
     /// A concurrent mark runs: refills hand out `BLACK` lines.
     marking: bool,
@@ -247,7 +247,7 @@ struct Heap {
     /// A concurrent mark found the heap fragmented: the next full
     /// collection stops the world and evacuates.
     stw_next: bool,
-    /// `ROK_GC_STATS`: concurrent marks, and those the allocation budget
+    /// `ROKR_GC_STATS`: concurrent marks, and those the allocation budget
     /// finished before the marker did.
     cycles: u64,
     forced: u64,
@@ -260,14 +260,14 @@ struct Heap {
     /// 0: holes of used blocks, 1: free blocks, 2: fresh blocks.
     copy_phase: u8,
     /// Fresh blocks the copy allocator may still commit (unbounded for
-    /// `ROK_GC_EVAC=always`).
+    /// `ROKR_GC_EVAC=always`).
     fresh_blocks: usize,
-    /// `ROK_GC_STATS`: evacuating collections, bytes moved.
+    /// `ROKR_GC_STATS`: evacuating collections, bytes moved.
     evacuations: u64,
     moved_bytes: u64,
 }
 
-/// `ROK_GC_CONCURRENT`: `auto` marks concurrently once the old heap
+/// `ROKR_GC_CONCURRENT`: `auto` marks concurrently once the old heap
 /// reaches [`CONCURRENT_MIN`]; `always` / `off` are for tests.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Concurrent {
@@ -276,7 +276,7 @@ enum Concurrent {
     Off,
 }
 
-/// Old bytes from which `ROK_GC_CONCURRENT=auto` marks concurrently.
+/// Old bytes from which `ROKR_GC_CONCURRENT=auto` marks concurrently.
 const CONCURRENT_MIN: usize = 32 << 20;
 
 struct Global<T>(UnsafeCell<T>);
@@ -371,11 +371,11 @@ struct Mark {
     weak: *mut usize,
     weak_len: usize,
     weak_cap: usize,
-    /// Objects marked by this collection (`ROK_GC_LOG`).
+    /// Objects marked by this collection (`ROKR_GC_LOG`).
     marked: usize,
 }
 
-/// Marker thread CPU time (`ROK_GC_STATS`).
+/// Marker thread CPU time (`ROKR_GC_STATS`).
 static MARKER_CPU_NS: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
 
 static MARK: Global<Mark> = Global(UnsafeCell::new(Mark {
@@ -525,7 +525,7 @@ pub fn alloc(size: usize, align: usize, type_id: u32) -> *mut u8 {
 }
 
 /// With the lock held, before handing out `want` more bytes: collect
-/// if the heap outgrew its budget or `ROK_GC_STRESS` says so.
+/// if the heap outgrew its budget or `ROKR_GC_STRESS` says so.
 fn before_alloc(want: usize) {
     let h = heap();
     configure(h);
@@ -544,15 +544,19 @@ fn before_alloc(want: usize) {
     }
 }
 
-/// Read the `ROK_GC_*` knobs once (before the first collection).
+/// Read the `ROKR_GC_*` knobs (old spelling `ROKR_GC_*`) once, before the
+/// first collection.
 fn configure(h: &mut Heap) {
     if h.configured {
         return;
     }
     h.configured = true;
-    h.stress = env_num(c"ROK_GC_STRESS", false).unwrap_or(0);
-    h.evac_always = env_choice(c"ROK_GC_EVAC", "always").is_some();
-    h.concurrent = match env_choice(c"ROK_GC_CONCURRENT", "auto|always|off") {
+    h.stress = env_num(env_name(c"ROKR_GC_STRESS", c"ROK_GC_STRESS"), false).unwrap_or(0);
+    h.evac_always = env_choice(env_name(c"ROKR_GC_EVAC", c"ROK_GC_EVAC"), "always").is_some();
+    h.concurrent = match env_choice(
+        env_name(c"ROKR_GC_CONCURRENT", c"ROK_GC_CONCURRENT"),
+        "auto|always|off",
+    ) {
         Some("always") => Concurrent::Always,
         Some("off") => Concurrent::Off,
         _ => Concurrent::Auto,
@@ -561,11 +565,11 @@ fn configure(h: &mut Heap) {
     if cfg!(rok_solo) {
         h.concurrent = Concurrent::Off;
     }
-    if env_flag(c"ROK_GC_STATS") {
+    if env_flag(env_name(c"ROKR_GC_STATS", c"ROK_GC_STATS")) {
         sys::atexit(print_stats);
     }
-    h.log = env_flag(c"ROK_GC_LOG");
-    if env_choice(c"ROK_HEAP_DUMP", "on_oom").is_some() {
+    h.log = env_flag(env_name(c"ROKR_GC_LOG", c"ROK_GC_LOG"));
+    if env_choice(env_name(c"ROKR_HEAP_DUMP", c"ROK_HEAP_DUMP"), "on_oom").is_some() {
         rokr_common::set_oom_hook(heap_dump);
     }
 }
@@ -639,7 +643,7 @@ static DUMP: Global<Dump> = Global(UnsafeCell::new(Dump {
     large: [(0, 0); DUMP_LINES],
 }));
 
-/// `ROK_HEAP_DUMP=on_oom`: the object count and bytes of each type (most
+/// `ROKR_HEAP_DUMP=on_oom`: the object count and bytes of each type (most
 /// bytes first; type ids, 801 §8.1.2) and the largest LOS objects, to
 /// stderr. Runs on the failing thread without taking the world lock (it
 /// may hold it): other threads' newest objects may be missed.
@@ -1834,7 +1838,7 @@ pub fn collect_young() {
 /// With the world lock held: stop every other mutator, collect, resume.
 /// While a concurrent mark runs, finish it instead (no minor collection
 /// runs meanwhile). A full collection that `may_concur` marks
-/// concurrently if `ROK_GC_CONCURRENT` says so: this pause is then a
+/// concurrently if `ROKR_GC_CONCURRENT` says so: this pause is then a
 /// minor collection that starts the mark.
 fn collect_locked(full: bool, may_concur: bool) {
     if heap().marking {
@@ -1893,7 +1897,7 @@ impl Pause {
     }
 
     /// `full`: the pause belongs to a full collection; `kind` names the
-    /// collection in the `ROK_GC_LOG` line.
+    /// collection in the `ROKR_GC_LOG` line.
     fn end(self, full: bool, kind: &str) {
         let marked = mark().marked;
         concurrent::unlock_mark();
@@ -2148,7 +2152,7 @@ fn sweep_los(full: bool, concurrent: bool) -> usize {
 /// (703 §7.3.1 opportunistic defragmentation) from the exact line
 /// states the sweep left: when free lines are at least a quarter of the
 /// used blocks' lines, every block at most half occupied - if together
-/// they hold an eighth of the used lines free. `ROK_GC_EVAC=always`:
+/// they hold an eighth of the used lines free. `ROKR_GC_EVAC=always`:
 /// every used block. Whether there is any.
 // Occupancy counts lines, not live bytes (no Immix hole histogram).
 #[allow(clippy::naive_bytecount)] // 256 bytes per block
@@ -2825,7 +2829,7 @@ mod tests {
         unsafe { o.add(off).cast::<usize>().write_unaligned(v) };
     }
 
-    /// `ROK_GC_EVAC=always`: a full collection moves what it may and
+    /// `ROKR_GC_EVAC=always`: a full collection moves what it may and
     /// fixes every precise reference (header, interior `str`, boxed
     /// `any` payload, array-table buffer element); roots, ambiguous
     /// words, `NOMOVE` objects and inline `any` payloads behave.

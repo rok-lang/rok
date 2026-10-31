@@ -116,11 +116,12 @@ pub struct CompilerConfig {
     pub incremental: Option<PathBuf>,
 }
 
-/// The environment `rok` runs a script from (`ROK_ENV`) and its installed
-/// libraries (`ROK_ENV_LIBS`), which the script doesn't see.
+/// The environment `rok` runs a script from (`__ROK_ENV`) and its
+/// installed libraries (`__ROK_ENV_LIBS`), which the script doesn't see.
 fn script_env() -> Option<(String, Vec<String>)> {
-    let env = std::env::var("ROK_ENV").ok().filter(|e| !e.is_empty())?;
-    let libs = std::env::var("ROK_ENV_LIBS").unwrap_or_default();
+    let var = |n| rokc_core::handoff_var(n).and_then(|v| v.into_string().ok());
+    let env = var("ROK_ENV").filter(|e| !e.is_empty())?;
+    let libs = var("ROK_ENV_LIBS").unwrap_or_default();
     let libs = libs.split(',').filter(|l| !l.is_empty()).map(str::to_owned);
     Some((env, libs.collect()))
 }
@@ -343,7 +344,7 @@ pub struct SourceFile {
     pub items: Vec<rokc_ast::Item>,
     /// Top-level statements (the entry file's implicit `main`).
     pub stmts: Vec<rokc_ast::Stmt>,
-    /// Its meta expansions as source text (`--emit=expanded`).
+    /// Its meta expansions as source text (`--emit=expansions`).
     pub expanded: Vec<String>,
 }
 
@@ -770,7 +771,7 @@ fn compile_unit_in(
     let incr = incr::current();
     let ids = incr::Ids::of(files);
     // The library's collected stage, kept or read back, spares parsing the
-    // library's files (except under `ROKC_INCR_VERIFY`).
+    // library's files (except under `ROK_INCR_VERIFY`).
     let verify = incr::verify().is_some();
     let flags = format!(
         "{:?} {lib:?} {:?} {} {} {} {} {} {:?} {} {}",

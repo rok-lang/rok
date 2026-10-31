@@ -668,9 +668,25 @@ pub fn yank(
     commit(index, &file, &out, &format!("{verb} {what}{name} {vers}"))
 }
 
-/// `rok login`'s file: `Credentials { token: ".." }`.
+/// The token file 0.1.5 and older read: `Credentials { token: ".." }`,
+/// sent to whichever index is configured.
 fn credentials(home: &Path) -> PathBuf {
     home.join("credentials.rokon")
+}
+
+/// A token per index: `Tokens { tokens: { "<index url>": "<token>" } }`.
+fn tokens_file(home: &Path) -> PathBuf {
+    home.join("tokens.rokon")
+}
+
+/// The key of index `url` in `tokens.rokon`.
+fn index_key(url: &str) -> &str {
+    url.trim_end_matches('/')
+}
+
+/// Whether index URLs `a` and `b` are one index.
+pub fn same_index(a: &str, b: &str) -> bool {
+    index_key(a) == index_key(b)
 }
 
 /// A token goes into an HTTP header: printable ASCII, no spaces.
@@ -681,22 +697,71 @@ pub fn check_token(token: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// `$ROK_REGISTRY_TOKEN`, else `rok login`'s.
-pub fn token(home: &Path) -> Result<String, String> {
-    pick_token(std::env::var("ROK_REGISTRY_TOKEN").ok(), home)
+/// The token for `index`: `$ROK_REGISTRY_TOKEN`, else `rok login`'s for
+/// that index, else the one in credentials.rokon. `login` is the command
+/// that logs in to it.
+pub fn token(home: &Path, index: &str, login: &str) -> Result<String, String> {
+    pick_token(std::env::var("ROK_REGISTRY_TOKEN").ok(), home, index, login)
 }
 
-fn pick_token(env: Option<String>, home: &Path) -> Result<String, String> {
+fn pick_token(
+    env: Option<String>,
+    home: &Path,
+    index: &str,
+    login: &str,
+) -> Result<String, String> {
     if let Some(t) = env.filter(|t| !t.is_empty()) {
         check_token(&t).map_err(|e| format!("ROK_REGISTRY_TOKEN: {e}"))?;
         return Ok(t);
     }
+    if let Some(t) = keyed_token(home, index)? {
+        return Ok(t);
+    }
+    let Some(t) = legacy_token(home)? else {
+        return Err(format!("publishing needs a token: run `{login}` first"));
+    };
+    if !same_index(index, DEFAULT) {
+        crate::warn_once(&format!(
+            "the token in {} is not tied to an index; run `rok login --registry {index}` (0.2.0 \
+             sends that token only to {DEFAULT})",
+            credentials(home).display()
+        ));
+    }
+    Ok(t)
+}
+
+/// `tokens.rokon`'s token for `index`, if any.
+fn keyed_token(home: &Path, index: &str) -> Result<Option<String>, String> {
+    let path = tokens_file(home);
+    let text = match std::fs::read_to_string(&path) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("{}: {e}", path.display())),
+    };
+    // Parse errors would quote the line holding a token.
+    let bad = |_| format!("{} is malformed; run `rok login` again", path.display());
+    let doc = Doc::parse(&text, "tokens").map_err(bad)?;
+    let r = doc.root().record("Tokens").map_err(bad)?;
+    crate::skipped(&path.display().to_string(), &r.known(&["tokens"]));
+    let Some(d) = r.get("tokens") else {
+        return Ok(None);
+    };
+    for (k, v) in d.dict().map_err(bad)? {
+        if index_key(&k.string().map_err(bad)?) == index_key(index) {
+            let t = v.string().map_err(bad)?;
+            check_token(&t).map_err(bad)?;
+            return Ok(Some(t));
+        }
+    }
+    Ok(None)
+}
+
+/// credentials.rokon's token, if any.
+fn legacy_token(home: &Path) -> Result<Option<String>, String> {
     let path = credentials(home);
     let text = match std::fs::read_to_string(&path) {
         Ok(t) => t,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return Err("publishing needs a token: run `rok login` first".into());
-        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(format!("{}: {e}", path.display())),
     };
     // Parse errors would quote the line holding the token.
@@ -706,18 +771,40 @@ fn pick_token(env: Option<String>, home: &Path) -> Result<String, String> {
     crate::skipped(&path.display().to_string(), &r.known(&["token"]));
     // `rok logout` leaves a newer rok's fields without the token.
     let Some(t) = r.get("token") else {
-        return Err("publishing needs a token: run `rok login` first".into());
+        return Ok(None);
     };
     let t = t.string().map_err(bad)?;
     check_token(&t).map_err(bad)?;
-    Ok(t)
+    Ok(Some(t))
 }
 
-/// Store `token` in `$ROK_HOME/credentials.rokon` (0600 on Unix).
-pub fn save_token(home: &Path, token: &str) -> Result<PathBuf, String> {
-    use std::io::Write;
-    let path = credentials(home);
+/// Store `token` for `index` in `$ROK_HOME/tokens.rokon`, and with
+/// `legacy` in credentials.rokon too, where 0.1.5 and older read it
+/// (both 0600 on Unix). Returns tokens.rokon's path.
+pub fn save_token(home: &Path, index: &str, token: &str, legacy: bool) -> Result<PathBuf, String> {
     std::fs::create_dir_all(home).map_err(|e| format!("{}: {e}", home.display()))?;
+    let path = tokens_file(home);
+    let step = [
+        rokc_rokon::edit::Step::Field("tokens"),
+        rokc_rokon::edit::Step::Key(index_key(index)),
+    ];
+    let set = |old: &str| rokc_rokon::edit::set(old, &step, &rokc_rokon::quote(token)).ok();
+    // Fields and other indexes stay; a file that does not read is replaced.
+    let text = std::fs::read_to_string(&path)
+        .ok()
+        .filter(|old| record_is(old, "Tokens"))
+        .and_then(|old| set(&old))
+        .or_else(|| set("Tokens {}\n"))
+        .ok_or_else(|| format!("cannot write {}", path.display()))?;
+    write_private(&path, &text)?;
+    if legacy {
+        save_legacy(home, token)?;
+    }
+    Ok(path)
+}
+
+fn save_legacy(home: &Path, token: &str) -> Result<(), String> {
+    let path = credentials(home);
     let fresh = || {
         rokc_rokon::to_string(&Value::record(
             Some("Credentials"),
@@ -726,33 +813,60 @@ pub fn save_token(home: &Path, token: &str) -> Result<PathBuf, String> {
     };
     // Fields a newer rok wrote stay; a file that does not read is replaced.
     let text = match std::fs::read_to_string(&path) {
-        Ok(old) if credentials_record(&old) => {
+        Ok(old) if record_is(&old, "Credentials") => {
             let step = [rokc_rokon::edit::Step::Field("token")];
             rokc_rokon::edit::set(&old, &step, &rokc_rokon::quote(token))
                 .unwrap_or_else(|_| fresh())
         }
         _ => fresh(),
     };
-    // Created anew, so the mode applies.
-    let _ = std::fs::remove_file(&path);
+    write_private(&path, &text)
+}
+
+/// Write `text` to `path` anew, so a 0600 mode applies on Unix.
+fn write_private(path: &Path, text: &str) -> Result<(), String> {
+    use std::io::Write;
+    let _ = std::fs::remove_file(path);
     let mut o = std::fs::OpenOptions::new();
     o.write(true).create_new(true);
     #[cfg(unix)]
     std::os::unix::fs::OpenOptionsExt::mode(&mut o, 0o600);
-    o.open(&path)
+    o.open(path)
         .and_then(|mut f| f.write_all(text.as_bytes()))
-        .map_err(|e| format!("cannot write {}: {e}", path.display()))?;
-    Ok(path)
+        .map_err(|e| format!("cannot write {}: {e}", path.display()))
 }
 
-/// Whether `text` is a `Credentials { .. }`.
-fn credentials_record(text: &str) -> bool {
-    Doc::parse(text, "credentials").is_ok_and(|d| d.root().record("Credentials").is_ok())
+/// Whether `text` is a `<name> { .. }`.
+fn record_is(text: &str, name: &str) -> bool {
+    Doc::parse(text, "rokon").is_ok_and(|d| d.root().record(name).is_ok())
 }
 
-/// Remove `rok login`'s token; whether there was one. Fields a newer rok
-/// wrote stay in the file.
-pub fn logout(home: &Path) -> Result<bool, String> {
+/// Remove `rok login`'s token for `index` (`None`: for every index), and
+/// with `legacy` the one in credentials.rokon; whether there was one.
+pub fn logout(home: &Path, index: Option<&str>, legacy: bool) -> Result<bool, String> {
+    let path = tokens_file(home);
+    let mut had = false;
+    if let Ok(old) = std::fs::read_to_string(&path) {
+        let key = index.map(index_key);
+        let mut step = vec![rokc_rokon::edit::Step::Field("tokens")];
+        step.extend(key.map(rokc_rokon::edit::Step::Key));
+        // Errors would quote the line holding a token.
+        let left = rokc_rokon::edit::remove(&old, &step)
+            .map_err(|_| format!("{} is malformed; delete it", path.display()))?;
+        if let Some(text) = left {
+            write_private(&path, &text)?;
+            had = true;
+        }
+    }
+    if legacy {
+        had |= logout_legacy(home)?;
+    }
+    Ok(had)
+}
+
+/// Remove credentials.rokon's token; whether there was one. Fields a
+/// newer rok wrote stay in the file.
+fn logout_legacy(home: &Path) -> Result<bool, String> {
     let path = credentials(home);
     if let Ok(old) = std::fs::read_to_string(&path) {
         let others = Doc::parse(&old, "credentials").is_ok_and(|d| {
@@ -785,7 +899,7 @@ pub fn logout(home: &Path) -> Result<bool, String> {
 pub fn api(home: &Path, url: &str, quiet: bool) -> Result<String, String> {
     let cache = open(home, url, false, quiet)?;
     let text = cache.show(url, "config.rokon")?.ok_or_else(|| {
-        format!("the index {url} has no config.rokon naming its API; use --index <checkout>")
+        format!("the index {url} has no config.rokon naming its API; use --index-dir <checkout>")
     })?;
     let file = format!("{url}: config.rokon");
     let doc = Doc::parse(&text, &file)?;
@@ -978,65 +1092,109 @@ mod tests {
             );
         }
         let home = rokc_core::tmp::test_dir("token");
-        let e = pick_token(None, &home).unwrap_err();
+        let pick = |env: Option<&str>| pick_token(env.map(Into::into), &home, DEFAULT, "rok login");
+        let e = pick(None).unwrap_err();
         assert!(e.contains("run `rok login` first"), "{e}");
-        let file = save_token(&home, "ghp_file").unwrap();
-        assert_eq!(pick_token(None, &home).unwrap(), "ghp_file");
+        let file = save_token(&home, DEFAULT, "ghp_file", true).unwrap();
+        assert_eq!(pick(None).unwrap(), "ghp_file");
         // The environment wins over the file.
-        assert_eq!(
-            pick_token(Some("ghp_env".into()), &home).unwrap(),
-            "ghp_env"
-        );
-        assert_eq!(pick_token(Some(String::new()), &home).unwrap(), "ghp_file");
-        assert!(pick_token(Some("a b".into()), &home).is_err());
+        assert_eq!(pick(Some("ghp_env")).unwrap(), "ghp_env");
+        assert_eq!(pick(Some("")).unwrap(), "ghp_file");
+        assert!(pick(Some("a b")).is_err());
         #[cfg(unix)]
-        {
+        for f in [&file, &credentials(&home)] {
             use std::os::unix::fs::PermissionsExt;
-            let mode = std::fs::metadata(&file).unwrap().permissions().mode();
+            let mode = std::fs::metadata(f).unwrap().permissions().mode();
             assert_eq!(mode & 0o777, 0o600);
         }
-        std::fs::write(&file, "Credentials { token: 1 }").unwrap();
-        let e = pick_token(None, &home).unwrap_err();
+        std::fs::write(&file, "Tokens { tokens: 1 }").unwrap();
+        let e = pick(None).unwrap_err();
         assert!(e.contains("malformed"), "{e}");
-        std::fs::write(&file, "Credentials { token: \"ghp_secret\" x }").unwrap();
-        let e = pick_token(None, &home).unwrap_err();
+        std::fs::write(&file, "Tokens { tokens: { \"a\": \"ghp_secret\" x } }").unwrap();
+        let e = pick(None).unwrap_err();
         assert!(e.contains("malformed") && !e.contains("ghp_secret"), "{e}");
-        assert!(logout(&home).unwrap());
-        assert!(!logout(&home).unwrap());
+        std::fs::remove_file(&file).unwrap();
+        let cred = credentials(&home);
+        std::fs::write(&cred, "Credentials { token: 1 }").unwrap();
+        let e = pick(None).unwrap_err();
+        assert!(e.contains("malformed"), "{e}");
+        std::fs::write(&cred, "Credentials { token: \"ghp_secret\" x }").unwrap();
+        let e = pick(None).unwrap_err();
+        assert!(e.contains("malformed") && !e.contains("ghp_secret"), "{e}");
+        assert!(logout(&home, Some(DEFAULT), true).unwrap());
+        assert!(!logout(&home, Some(DEFAULT), true).unwrap());
         let _ = std::fs::remove_dir_all(&home);
     }
 
-    /// A newer rok's fields in credentials.rokon: read past, kept by
-    /// `rok login` and `rok logout`.
+    /// Each index gets its own token; the legacy one is the fallback.
+    #[test]
+    fn token_per_index() {
+        let home = rokc_core::tmp::test_dir("token-index");
+        let (a, b) = ("https://a.example/index", "https://b.example/index/");
+        let pick = |i: &str| pick_token(None, &home, i, "rok login --registry x");
+        save_token(&home, a, "ghp_a", false).unwrap();
+        save_token(&home, b, "ghp_b", false).unwrap();
+        assert!(!credentials(&home).exists());
+        assert_eq!(pick(a).unwrap(), "ghp_a");
+        // Keys ignore a trailing `/`.
+        assert_eq!(pick("https://b.example/index").unwrap(), "ghp_b");
+        let e = pick(DEFAULT).unwrap_err();
+        assert!(e.contains("run `rok login --registry x` first"), "{e}");
+        save_token(&home, a, "ghp_a2", true).unwrap();
+        assert_eq!(pick(a).unwrap(), "ghp_a2");
+        assert_eq!(pick(DEFAULT).unwrap(), "ghp_a2");
+        assert!(logout(&home, Some(b), false).unwrap());
+        assert!(!logout(&home, Some(b), false).unwrap());
+        // `b` falls back to the legacy token now.
+        assert_eq!(pick(b).unwrap(), "ghp_a2");
+        assert!(logout(&home, None, true).unwrap());
+        assert!(pick(a).is_err() && !credentials(&home).exists());
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// A newer rok's fields in credentials.rokon and tokens.rokon: read
+    /// past, kept by `rok login` and `rok logout`.
     #[test]
     fn credentials_skip_unknown() {
         let home = rokc_core::tmp::test_dir("token-newer");
+        let pick = || pick_token(None, &home, DEFAULT, "rok login");
         let file = credentials(&home);
         std::fs::write(
             &file,
             "Credentials { token: \"ghp_old\", tokens: { \"x\": \"y\" } }\n",
         )
         .unwrap();
-        assert_eq!(pick_token(None, &home).unwrap(), "ghp_old");
-        save_token(&home, "ghp_new").unwrap();
+        assert_eq!(pick().unwrap(), "ghp_old");
+        let keyed = save_token(&home, DEFAULT, "ghp_new", true).unwrap();
         let text = std::fs::read_to_string(&file).unwrap();
         assert!(text.contains("tokens: { \"x\": \"y\" }"), "{text}");
-        assert_eq!(pick_token(None, &home).unwrap(), "ghp_new");
+        assert_eq!(pick().unwrap(), "ghp_new");
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             let mode = std::fs::metadata(&file).unwrap().permissions().mode();
             assert_eq!(mode & 0o777, 0o600);
         }
-        assert!(logout(&home).unwrap());
+        std::fs::write(
+            &keyed,
+            format!("Tokens {{ tokens: {{ \"{DEFAULT}\": \"ghp_k\" }}, more: 1 }}\n"),
+        )
+        .unwrap();
+        assert_eq!(pick().unwrap(), "ghp_k");
+        save_token(&home, "https://x", "ghp_x", false).unwrap();
+        let text = std::fs::read_to_string(&keyed).unwrap();
+        assert!(text.contains("more: 1") && text.contains("ghp_k"), "{text}");
+        assert!(logout(&home, Some(DEFAULT), true).unwrap());
         let text = std::fs::read_to_string(&file).unwrap();
         assert!(
             text.contains("tokens") && !text.contains("ghp_new"),
             "{text}"
         );
-        let e = pick_token(None, &home).unwrap_err();
+        let text = std::fs::read_to_string(&keyed).unwrap();
+        assert!(text.contains("ghp_x") && !text.contains("ghp_k"), "{text}");
+        let e = pick().unwrap_err();
         assert!(e.contains("run `rok login` first"), "{e}");
-        assert!(!logout(&home).unwrap());
+        assert!(!logout(&home, Some(DEFAULT), true).unwrap());
         let _ = std::fs::remove_dir_all(&home);
     }
 

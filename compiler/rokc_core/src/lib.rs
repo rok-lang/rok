@@ -54,6 +54,85 @@ pub fn env_knob<T>(
     r
 }
 
+/// Tool variables and their old spellings, read until 0.2.0.
+pub const RENAMED_VARS: &[(&str, &str)] = &[
+    ("ROK_TARGET_DIR", "ROKC_TARGET_DIR"),
+    ("ROK_INCREMENTAL", "ROKC_INCREMENTAL"),
+    ("ROK_INCR_VERIFY", "ROKC_INCR_VERIFY"),
+    ("ROK_NUM_JOBS", "ROKC_NUM_JOBS"),
+    ("ROK_VERBOSE", "ROKC_VERBOSE"),
+];
+
+/// Runtime variables and their old spellings. The runtime reads both
+/// silently; `run`, `test` and `bench` warn about the old ones instead.
+pub const RUNTIME_VARS: &[(&str, &str)] = &[
+    ("ROKR_WORKERS", "ROK_WORKERS"),
+    ("ROKR_THREAD_PER_CORE", "ROK_THREAD_PER_CORE"),
+    ("ROKR_DYNAMIC_WORKERS", "ROK_DYNAMIC_WORKERS"),
+    ("ROKR_GC_STRESS", "ROK_GC_STRESS"),
+    ("ROKR_GC_EVAC", "ROK_GC_EVAC"),
+    ("ROKR_GC_CONCURRENT", "ROK_GC_CONCURRENT"),
+    ("ROKR_GC_STATS", "ROK_GC_STATS"),
+    ("ROKR_GC_LOG", "ROK_GC_LOG"),
+    ("ROKR_HEAP_DUMP", "ROK_HEAP_DUMP"),
+];
+
+fn set_var(name: &str) -> bool {
+    std::env::var_os(name).is_some_and(|v| !v.is_empty())
+}
+
+/// The variable to read for `new` (in [`RENAMED_VARS`]): `new` if set,
+/// else its old spelling if that is set, which warns once.
+#[must_use]
+pub fn env_name(new: &'static str) -> &'static str {
+    let Some(&(_, old)) = RENAMED_VARS.iter().find(|(n, _)| *n == new) else {
+        return new;
+    };
+    if set_var(new) || !set_var(old) {
+        return new;
+    }
+    renamed_warning(old, new, &format!("{old} goes in 0.2.0"));
+    old
+}
+
+/// Warn once about the old runtime variables that are set alone.
+pub fn warn_runtime_vars() {
+    for &(new, old) in RUNTIME_VARS {
+        if set_var(old) && !set_var(new) {
+            renamed_warning(old, new, &format!("programs read {old} until 0.2.0"));
+        }
+    }
+}
+
+fn renamed_warning(old: &str, new: &str, until: &str) {
+    warn_once(&format!("{old} is now {new}: set {new} instead ({until})"));
+}
+
+/// `rokc: warning: <msg>` (`rok: ..` under rok) on stderr, once per
+/// process.
+pub fn warn_once(msg: &str) {
+    static WARNED: std::sync::Mutex<std::collections::BTreeSet<String>> =
+        std::sync::Mutex::new(std::collections::BTreeSet::new());
+    if WARNED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .insert(msg.to_owned())
+    {
+        eprintln!(
+            "{}: {} {msg}",
+            cli::invoked_as(),
+            term::label(term::Stream::Stderr, term::Role::Warning)
+        );
+    }
+}
+
+/// Hand-off variable `name` from `rok`: `__<name>`, else its old spelling
+/// `<name>`.
+#[must_use]
+pub fn handoff_var(name: &str) -> Option<std::ffi::OsString> {
+    std::env::var_os(format!("__{name}")).or_else(|| std::env::var_os(name))
+}
+
 /// Knob `name` set to one of `choices` (`a|b|c`): that choice.
 pub fn env_choice(name: &'static str, choices: &'static str) -> Option<&'static str> {
     env_knob(name, choices, |v| choices.split('|').find(|&c| c == v))

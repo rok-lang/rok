@@ -2769,7 +2769,7 @@ fn publish_stones(root: &Path, home: &Path, index: &Path) -> String {
          \"{c1}\"), cksum: \"{tree1}\", yanked: false }}\n",
         q(origin(&num))
     );
-    let out = rok(home, &num, &["publish"]);
+    let out = rok(home, &num, &["publish", "--dry-run"]);
     assert_eq!(ok(&out), line);
     let note = |o: &Output| text(&o.stderr).trim().to_owned();
     assert_eq!(
@@ -2779,11 +2779,37 @@ fn publish_stones(root: &Path, home: &Path, index: &Path) -> String {
              which adds it as 3/n/num"
         )
     );
-    let out = rok(home, &num, &["publish", "--index", &reg]);
+    let out = rok(home, &num, &["publish", "--index-dir", &reg, "--dry-run"]);
     assert_eq!(ok(&out), line);
     assert_eq!(
         note(&out),
         format!("note: dry run; --commit commits it to {reg} as 3/n/num (not pushed)")
+    );
+    // Without --dry-run or --commit, and with the old `--index`: the
+    // same dry run, with warnings.
+    let out = rok(home, &num, &["publish", "--index", &reg]);
+    assert_eq!(ok(&out), line);
+    assert_eq!(
+        note(&out),
+        format!(
+            "rok: warning: `rok publish --index <dir>` is now `--index-dir <dir>` (write \
+             `--index-dir {reg}`); `--index` goes in 0.2.0\n\
+             rok: warning: `rok publish` will need `--commit` or `--dry-run` in 0.2.0; this was a \
+             dry run (write `rok publish --dry-run`)\n\
+             note: dry run; --commit commits it to {reg} as 3/n/num (not pushed)"
+        )
+    );
+    fails(
+        &rok(home, &num, &["publish", "--dry-run", "--commit"]),
+        "`--commit` and `--dry-run` go apart",
+    );
+    fails(
+        &rok(
+            home,
+            &num,
+            &["publish", "--index-dir", &reg, "--registry", &reg],
+        ),
+        "`--index-dir` and `--registry` go apart",
     );
     assert!(!index.join("3/n/num").exists());
     // Without --index, --commit goes through the registry API: a token first.
@@ -2791,7 +2817,11 @@ fn publish_stones(root: &Path, home: &Path, index: &Path) -> String {
         &rok(home, &num, &["publish", "--commit"]),
         "run `rok login` first",
     );
-    ok(&rok(home, &num, &["publish", "--index", &reg, "--commit"]));
+    ok(&rok(
+        home,
+        &num,
+        &["publish", "--index-dir", &reg, "--commit"],
+    ));
     assert_eq!(read(&index.join("3/n/num")), line);
     assert!(
         index_log().starts_with("Publish num 1.0.0\n"),
@@ -2799,7 +2829,7 @@ fn publish_stones(root: &Path, home: &Path, index: &Path) -> String {
         index_log()
     );
     fails(
-        &rok(home, &num, &["publish", "--index", &reg, "--commit"]),
+        &rok(home, &num, &["publish", "--index-dir", &reg, "--commit"]),
         "num 1.0.0 is already in the index",
     );
     write(&num.join("src/lib.rok"), "dirty");
@@ -2808,7 +2838,11 @@ fn publish_stones(root: &Path, home: &Path, index: &Path) -> String {
     // More versions, and `geom` 0.3.0 needing `num` ^1.0.
     for v in ["1.1.0", "2.0.0"] {
         stone(&num, "num", v, "", &[("src/lib.rok", one)]);
-        ok(&rok(home, &num, &["publish", "--index", &reg, "--commit"]));
+        ok(&rok(
+            home,
+            &num,
+            &["publish", "--index-dir", &reg, "--commit"],
+        ));
     }
     let geom = root.join("geom");
     let two = "use num::one;\npub fn two() -> i32 { return one() + one(); }\n";
@@ -2821,7 +2855,11 @@ fn publish_stones(root: &Path, home: &Path, index: &Path) -> String {
         "description: \"Shapes\", license: \"MIT\", repository: \"https://example.com/geom\", ",
         &[("src/lib.rok", two)],
     );
-    ok(&rok(home, &geom, &["publish", "--index", &reg, "--commit"]));
+    ok(&rok(
+        home,
+        &geom,
+        &["publish", "--index-dir", &reg, "--commit"],
+    ));
     let entry = read(&index.join("ge/om/geom"));
     assert!(
         entry.contains("deps: [{ name: \"num\", req: \"^1.0\", kind: \"normal\" }]"),
@@ -3103,7 +3141,7 @@ fn login_publish_yank_api() {
     ok(&out);
     assert!(text(&out.stderr).contains("not logged in"));
     fails(&run(&["publish", "--commit"]), "run `rok login` first");
-    fails(&run(&["yank", "--vers", "1.0.0"]), "run `rok login` first");
+    fails(&run(&["yank", "num@1.0.0"]), "run `rok login` first");
     // A dry run needs no token and sends nothing.
     ok(&run(&["publish"]));
     assert!(log.lock().unwrap().is_empty());
@@ -3133,14 +3171,19 @@ fn login_publish_yank_api() {
     ok(&out);
     assert!(text(&out.stderr).contains("Logged in as alice"));
     assert!(!text(&out.stderr).contains("rks_ok") && !text(&out.stdout).contains("rks_ok"));
+    // The configured index's token goes into tokens.rokon, and into
+    // credentials.rokon too, where rok 0.1.5 and older read it.
     assert_eq!(read(&cred), "Credentials { token: \"rks_ok\" }\n");
+    let keyed = home.join("tokens.rokon");
+    assert!(
+        read(&keyed).starts_with("Tokens {") && read(&keyed).contains(": \"rks_ok\""),
+        "{}",
+        read(&keyed)
+    );
     #[cfg(unix)]
-    {
+    for f in [&cred, &keyed] {
         use std::os::unix::fs::PermissionsExt;
-        assert_eq!(
-            fs::metadata(&cred).unwrap().permissions().mode() & 0o777,
-            0o600
-        );
+        assert_eq!(fs::metadata(f).unwrap().permissions().mode() & 0o777, 0o600);
     }
 
     // Publish: the entry line is the body; a second time, the API's
@@ -3160,9 +3203,9 @@ fn login_publish_yank_api() {
 
     // Yank with the environment's token, no file; a bad one is refused.
     ok(&run(&["logout"]));
-    assert!(!cred.exists());
+    assert!(!cred.exists() && !read(&keyed).contains("rks_ok"));
     ok(&done(
-        at(&["yank", "--vers", "1.0.0"]).env("ROK_REGISTRY_TOKEN", "rks_ok"),
+        at(&["yank", "num@1.0.0"]).env("ROK_REGISTRY_TOKEN", "rks_ok"),
     ));
     assert_eq!(
         last(),
@@ -3170,8 +3213,7 @@ fn login_publish_yank_api() {
          native: false }"
     );
     ok(&done(
-        at(&["yank", "--native", "--undo", "--vers", "2.0.0", "z"])
-            .env("ROK_REGISTRY_TOKEN", "rks_ok"),
+        at(&["yank", "--native", "--undo", "z@2.0.0"]).env("ROK_REGISTRY_TOKEN", "rks_ok"),
     ));
     assert_eq!(
         last(),
@@ -3179,7 +3221,7 @@ fn login_publish_yank_api() {
          native: true }"
     );
     fails(
-        &done(at(&["yank", "--vers", "1.0.0"]).env("ROK_REGISTRY_TOKEN", "rks_nope")),
+        &done(at(&["yank", "num@1.0.0"]).env("ROK_REGISTRY_TOKEN", "rks_nope")),
         "refused the token",
     );
 
@@ -3191,6 +3233,133 @@ fn login_publish_yank_api() {
     fails(
         &run(&["login", "rks_ok"]),
         "api `http://example.com` must be an https:// URL",
+    );
+}
+
+/// A token from `rok login --registry <url>` goes only to that index;
+/// `logout --registry` and `--all` remove it.
+// spec: §9.10.4a
+#[test]
+fn token_goes_only_to_its_index() {
+    let root = scratch("api-index");
+    let home = root.join("home");
+    let log = Arc::new(Mutex::new(Vec::new()));
+    let api = format!("http://127.0.0.1:{}", fake_api(log.clone()));
+    let last = || log.lock().unwrap().last().cloned().unwrap_or_default();
+    let (a, b) = (root.join("a"), root.join("b"));
+    for i in [&a, &b] {
+        commit(
+            i,
+            &[("config.rokon", &format!("Config {{ api: \"{api}\" }}\n"))],
+        );
+    }
+    let (ra, rb) = (a.display().to_string(), b.display().to_string());
+    stone(
+        &root.join("num"),
+        "num",
+        "1.0.0",
+        "",
+        &[("src/lib.rok", ONE)],
+    );
+    let run = |args: &[&str]| {
+        rok_cmd(&home, &root.join("num"), args)
+            .env("ROK_REGISTRY", &ra)
+            .output()
+            .unwrap()
+    };
+    ok(&run(&["login", "--registry", &rb, "rks_ok"]));
+    // Not the configured index: nothing for rok 0.1.5 to send elsewhere.
+    assert!(!home.join("credentials.rokon").exists());
+    fails(&run(&["yank", "num@1.0.0"]), "run `rok login` first");
+    ok(&run(&["yank", "num@1.0.0", "--registry", &rb]));
+    assert_eq!(
+        last(),
+        "POST /api/v1/yank [Bearer rks_ok] Yank { name: \"num\", vers: \"1.0.0\", undo: false, \
+         native: false }"
+    );
+    fails(&run(&["publish", "--commit"]), "run `rok login` first");
+    ok(&run(&["publish", "--commit", "--registry", &rb]));
+    ok(&run(&["logout", "--registry", &rb]));
+    fails(
+        &run(&["yank", "num@1.0.0", "--registry", &rb]),
+        &format!("run `rok login --registry {rb}` first"),
+    );
+    ok(&run(&["login", "--registry", &rb, "rks_ok"]));
+    ok(&run(&["login", "rks_ok"]));
+    assert!(home.join("credentials.rokon").exists());
+    fails(
+        &run(&["logout", "--all", "--registry", &rb]),
+        "give `--all` or",
+    );
+    ok(&run(&["logout", "--all"]));
+    assert!(!home.join("credentials.rokon").exists());
+    for r in [&ra, &rb] {
+        fails(&run(&["yank", "num@1.0.0", "--registry", r]), "first");
+    }
+}
+
+/// The token in credentials.rokon (rok 0.1.5's, not tied to an index)
+/// still goes to an index other than rokstones.io, with a warning; a
+/// login for that index replaces it there.
+// spec: §9.10.4a
+#[test]
+fn legacy_token_warns_on_other_index() {
+    let root = scratch("api-legacy");
+    let home = root.join("home");
+    let log = Arc::new(Mutex::new(Vec::new()));
+    let api = format!("http://127.0.0.1:{}", fake_api(log.clone()));
+    let index = root.join("index");
+    commit(
+        &index,
+        &[("config.rokon", &format!("Config {{ api: \"{api}\" }}\n"))],
+    );
+    let reg = index.display().to_string();
+    stone(
+        &root.join("num"),
+        "num",
+        "1.0.0",
+        "",
+        &[("src/lib.rok", ONE)],
+    );
+    let run = |args: &[&str]| {
+        rok_cmd(&home, &root.join("num"), args)
+            .env("ROK_REGISTRY", &reg)
+            .output()
+            .unwrap()
+    };
+    write(
+        &home.join("credentials.rokon"),
+        "Credentials { token: \"rks_ok\" }\n",
+    );
+    let out = run(&["yank", "num@1.0.0"]);
+    ok(&out);
+    assert_eq!(
+        log.lock()
+            .unwrap()
+            .last()
+            .unwrap()
+            .split(']')
+            .next()
+            .unwrap(),
+        "POST /api/v1/yank [Bearer rks_ok"
+    );
+    assert!(
+        text(&out.stderr).contains(&format!(
+            "rok: warning: the token in {} is not tied to an index; run `rok login --registry \
+             {reg}` (0.2.0 sends that token only to \
+             https://github.com/rok-lang/rokstones.io-index)\n",
+            home.join("credentials.rokon").display()
+        )),
+        "{}",
+        text(&out.stderr)
+    );
+    ok(&run(&["login", "--registry", &reg, "rks_ok"]));
+    let out = run(&["yank", "num@1.0.0"]);
+    ok(&out);
+    assert!(
+        !text(&out.stderr).contains("warning"),
+        "{}",
+        text(&out.stderr)
     );
 }
 
@@ -3357,7 +3526,11 @@ fn stones_publish_add_update_yank() {
 
     // A new version: builds keep the locked one until `update`.
     stone(&num, "num", "1.1.5", "", &[("src/lib.rok", ONE)]);
-    ok(&rok(&home, &num, &["publish", "--index", &reg, "--commit"]));
+    ok(&rok(
+        &home,
+        &num,
+        &["publish", "--index-dir", &reg, "--commit"],
+    ));
     ok(&rok(&home, &app, &["--locked", "deps"]));
     assert!(locked_stones(&read(&app.join("rok.lock"))).contains(&"num@1.1.0".to_owned()));
     let out = rok(&home, &app, &["update", "num"]);
@@ -3371,11 +3544,21 @@ fn stones_publish_add_update_yank() {
     ok(&rok(&home, &app, &["--offline", "deps"]));
 
     // Yanked: kept while locked, skipped by `update`; `--undo` restores.
-    ok(&rok(
+    // The old form `--vers <v>` (this package) still works, and warns.
+    let out = rok(
         &home,
         &num,
-        &["yank", "--vers", "1.1.5", "--index", &reg],
-    ));
+        &["yank", "--vers", "1.1.5", "--index-dir", &reg],
+    );
+    ok(&out);
+    assert!(
+        text(&out.stderr).contains(
+            "rok: warning: `rok yank --vers <version> [name]` is now `rok yank <name>@<version>` \
+             (write `rok yank num@1.1.5`); `--vers` goes in 0.2.0\n"
+        ),
+        "{}",
+        text(&out.stderr)
+    );
     assert!(read(&index.join("3/n/num")).contains("vers: \"1.1.5\""));
     assert!(index_log().starts_with("Yank num 1.1.5\n"));
     ok(&rok(&home, &app, &["deps"]));
@@ -3387,12 +3570,20 @@ fn stones_publish_add_update_yank() {
     ok(&rok(
         &home,
         &num,
-        &["yank", "--undo", "--vers", "1.1.5", "--index", &reg, "num"],
+        &["yank", "--undo", "num@1.1.5", "--index-dir", &reg],
     ));
     ok(&rok(&home, &app, &["add", "num@=1.1.5"]));
     fails(
-        &rok(&home, &num, &["yank", "--vers", "9.9.9", "--index", &reg]),
+        &rok(&home, &num, &["yank", "num@9.9.9", "--index-dir", &reg]),
         "not in the index",
+    );
+    fails(
+        &rok(&home, &num, &["yank", "num", "--index-dir", &reg]),
+        "`num`: give the version as `<name>@<version>`, e.g. `rok yank num@1.2.0`",
+    );
+    fails(
+        &rok(&home, &num, &["yank", "num@1.1.5", "--vers", "1.1.5"]),
+        "`num@1.1.5` and `--vers` both give a version; write `rok yank num@1.1.5` alone",
     );
 
     // An entry whose cksum is not its commit's tree is refused.
@@ -3423,7 +3614,11 @@ fn stones_publish_add_update_yank() {
     // Either spelling of `-` / `_` finds a stone.
     let big = root.join("big-int");
     stone(&big, "big-int", "0.1.0", "", &[("src/lib.rok", ONE)]);
-    ok(&rok(&home, &big, &["publish", "--index", &reg, "--commit"]));
+    ok(&rok(
+        &home,
+        &big,
+        &["publish", "--index-dir", &reg, "--commit"],
+    ));
     for q in ["big_int", "G-I", "big-int"] {
         assert_eq!(ok(&rok(&home, &root, &["search", q])), "big-int 0.1.0\n");
     }
@@ -4643,7 +4838,7 @@ fn native_packages() {
     );
     assert!(!index.join("native/2/yy").exists());
     for f in ["yy.rokon", "zz.rokon"] {
-        let args = ["publish", "--native", f, "--index", &reg, "--commit"];
+        let args = ["publish", "--native", f, "--index-dir", &reg, "--commit"];
         ok(&rok(&home, &root, &args));
     }
     assert_eq!(read(&index.join("native/2/yy")), line);
@@ -4652,7 +4847,7 @@ fn native_packages() {
         &rok(
             &home,
             &root,
-            &["publish", "--native", "yy.rokon", "--index", &reg],
+            &["publish", "--native", "yy.rokon", "--index-dir", &reg],
         ),
         "native package yy 1.0.0 is already in the index",
     );
@@ -4830,14 +5025,16 @@ fn native_in_tools(home: &Path, root: &Path, app: &Path, ext: &str) {
 #[cfg(unix)]
 fn native_yank(home: &Path, root: &Path, index: &Path, line: &str) {
     let reg = index.display().to_string();
-    let yank = ["yank", "--native", "--vers", "1.0.0", "--index", &reg, "yy"];
+    let yank = ["yank", "--native", "yy@1.0.0", "--index-dir", &reg];
     ok(&rok(home, root, &yank));
     assert!(read(&index.join("native/2/yy")).contains("yanked: true"));
     assert!(git(index, &["log", "--format=%s"]).starts_with("Yank native yy 1.0.0\n"));
     assert_eq!(ok(&rok(home, root, &["search", "--native", "y"])), "");
     ok(&rok(home, root, &[&yank[..], &["--undo"]].concat()));
     assert_eq!(read(&index.join("native/2/yy")), line);
-    fails(&rok(home, root, &yank[..6]), "usage: rok yank");
+    // A native package has no default name.
+    let old = ["yank", "--native", "--vers", "1.0.0", "--index-dir", &reg];
+    fails(&rok(home, root, &old), "usage: rok yank");
 }
 
 /// `rok deps` as `name[features]` per package, in build order.
@@ -5073,7 +5270,11 @@ fn stone_features_round_trip() {
         "features: { \"big\": [] }, ",
         &[("src/lib.rok", ONE)],
     );
-    ok(&rok(&home, &num, &["publish", "--index", &reg, "--commit"]));
+    ok(&rok(
+        &home,
+        &num,
+        &["publish", "--index-dir", &reg, "--commit"],
+    ));
     let codec = root.join("codec");
     stone_meta(
         &codec,
@@ -5087,7 +5288,7 @@ fn stone_features_round_trip() {
     let line = ok(&rok(
         &home,
         &codec,
-        &["publish", "--index", &reg, "--commit"],
+        &["publish", "--index-dir", &reg, "--commit"],
     ));
     assert!(
         line.contains(
@@ -5652,7 +5853,11 @@ fn install_stones() {
     );
     let num = root.join("num");
     stone(&num, "num", "1.0.0", "", &[("src/lib.rok", ONE)]);
-    ok(&rok(&home, &num, &["publish", "--index", &reg, "--commit"]));
+    ok(&rok(
+        &home,
+        &num,
+        &["publish", "--index-dir", &reg, "--commit"],
+    ));
 
     ok(&rok(&home, &root, &["install", "num"]));
     let env = home.join("envs/default");
@@ -5849,14 +6054,16 @@ fn lib_and_main_packages() {
     );
     assert_eq!(script_out(&home, &user, &["run"]), "3\n");
 
-    // `rok install`: the executable, with a note on the library; `--lib`
-    // installs the library instead.
+    // `rok install`: the executable, with a warning naming --bin and
+    // --lib; `--bin` installs it silently, `--lib` the library instead.
     let out = rok(&home, &root, &["install", "--path", "both"]);
     ok(&out);
     assert!(
         text(&out.stderr).contains(
-            "note: `both` also has a library (src/lib.rok); `rok install --lib ..` puts that \
-             into environment `default` (for `rok repl` / `rok jupyter`) instead"
+            "rok: warning: `both` has an executable and a library (src/lib.rok); this installed \
+             the executable. Write `rok install --bin ..` for it, or `rok install --lib ..` to \
+             put the library into environment `default` (for `rok repl` / `rok jupyter`); 0.2.0 \
+             asks for one\n"
         ),
         "{}",
         text(&out.stderr)
@@ -5865,6 +6072,28 @@ fn lib_and_main_packages() {
         .output()
         .unwrap();
     assert_eq!(ok(&installed), "2 + 2 = 4\n");
+    let out = rok(&home, &root, &["install", "--bin", "--path", "both"]);
+    ok(&out);
+    assert!(
+        !text(&out.stderr).contains("warning"),
+        "{}",
+        text(&out.stderr)
+    );
+    fails(
+        &rok(
+            &home,
+            &root,
+            &["install", "--bin", "--lib", "--path", "both"],
+        ),
+        "`--lib` and `--bin` go apart",
+    );
+    write(&root.join("lone/rok.rokon"), "Package { name: \"lone\" }\n");
+    write(&root.join("lone/src/lib.rok"), "pub fn f() {}\n");
+    fails(
+        &rok(&home, &root, &["install", "--bin", "--path", "lone"]),
+        "`lone` has no executable (src/main.rok) for --bin; without --bin, its library goes \
+         into environment `default`",
+    );
     ok(&rok(&home, &root, &["install", "--lib", "--path", "both"]));
     assert!(read(&home.join("envs/default/rok.rokon")).contains("\"both\": Dep::path("));
     // For the REPL (`rok deps` outside a package).
@@ -5920,9 +6149,13 @@ fn lib_and_main_packages() {
         &[("src/main.rok", "println(\"tool\");\n")],
     );
     for dir in [&calc, &tool] {
-        let line = ok(&rok(&home, dir, &["publish", "--index", &reg]));
+        let line = ok(&rok(&home, dir, &["publish", "--index-dir", &reg]));
         assert!(line.starts_with("Stone { name: "), "{line}");
-        ok(&rok(&home, dir, &["publish", "--index", &reg, "--commit"]));
+        ok(&rok(
+            &home,
+            dir,
+            &["publish", "--index-dir", &reg, "--commit"],
+        ));
     }
     let empty = root.join("empty");
     stone(&empty, "empty", "0.1.0", "", &[("README", "")]);
@@ -5959,7 +6192,7 @@ fn lib_and_main_packages() {
     ok(&rok(
         &home,
         &tool,
-        &["publish", "--index", &reg, "--commit"],
+        &["publish", "--index-dir", &reg, "--commit"],
     ));
     says(
         &["install", "tool"],

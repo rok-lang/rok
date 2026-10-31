@@ -1,4 +1,4 @@
-//! The AST as rok source (`--emit=ast`, spec 9.9.10).
+//! The AST as rok source (`--emit=source`, spec 9.9.10).
 //!
 //! Printed after meta expansion and desugaring, without comments or
 //! layout, non-atomic operands parenthesized. Parser markers print as the

@@ -17,8 +17,9 @@ use crate::CompiledModule;
 /// Intermediate artifact selectable with `--emit=<kind>` (spec 901).
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EmitKind {
-    /// The package's whole AST after meta expansion and desugaring, as
-    /// source (needs `keep_ast`); `expanded` shows meta expansions alone.
+    /// `source` (old name `ast`): the package's whole AST after meta
+    /// expansion and desugaring, as source (needs `keep_ast`);
+    /// `expansions` shows meta expansions alone.
     Ast,
     Hir,
     Mir,
@@ -26,7 +27,8 @@ pub enum EmitKind {
     LlvmIr,
     Asm,
     Obj,
-    /// Meta expansions as source text (spec 6.9.9); needs the parsed
+    /// `expansions` (old name `expanded`): meta expansions as source
+    /// text (spec 6.9.9); needs the parsed
     /// sources (`Session::set_keep_ast`), so `CompileResult::emit` makes it.
     Expanded,
 }
@@ -35,16 +37,26 @@ impl EmitKind {
     #[must_use]
     pub fn parse(s: &str) -> Option<Self> {
         Some(match s {
-            "ast" => Self::Ast,
+            "source" | "ast" => Self::Ast,
             "hir" => Self::Hir,
             "mir" => Self::Mir,
             "mlir" => Self::Mlir,
             "llvmir" | "llvm-ir" | "ll" => Self::LlvmIr,
             "asm" => Self::Asm,
             "obj" => Self::Obj,
-            "expanded" => Self::Expanded,
+            "expansions" | "expanded" => Self::Expanded,
             _ => return None,
         })
+    }
+
+    /// The new name of old kind name `s`, read until 0.2.0.
+    #[must_use]
+    pub fn renamed(s: &str) -> Option<&'static str> {
+        match s {
+            "ast" => Some("source"),
+            "expanded" => Some("expansions"),
+            _ => None,
+        }
     }
 
     /// File extension used under `target/`.

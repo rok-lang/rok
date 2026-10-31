@@ -66,6 +66,8 @@ struct Args {
     show_output: bool,
     lint_levels: rokc_tools::lint::Levels,
     list: bool,
+    /// `inspect --text`: the whole ROKHIR as text.
+    text: bool,
     /// `profdata show --all-functions`.
     all_functions: bool,
     /// `profdata show --topn N`.
@@ -210,7 +212,14 @@ fn parse_args(raw: Vec<String>, mut tail: Vec<OsString>) -> Args {
                     v => usage_error(&format!("unknown message format `{v}`")),
                 };
             }
-            "-o" | "--out" | "--output" => a.output = Some(value(&name, inline, &mut it).into()),
+            "-o" | "--output" => a.output = Some(value(&name, inline, &mut it).into()),
+            "--out" => {
+                let v = value(&name, inline, &mut it);
+                rokc_core::warn_once(&format!(
+                    "`--out` is now `-o` or `--output` (write `-o {v}`); `--out` goes in 0.2.0"
+                ));
+                a.output = Some(v.into());
+            }
             "--bootstrap" => a.bootstrap.push(value(&name, inline, &mut it).into()),
             "--cfg" => a.cfg.push(value(&name, inline, &mut it)),
             "--print" => a.print = Some(value(&name, inline, &mut it)),
@@ -253,6 +262,11 @@ fn parse_args(raw: Vec<String>, mut tail: Vec<OsString>) -> Args {
             "--mlir-pass" => a.opts.mlir_passes.push(value(&name, inline, &mut it)),
             "--emit" => {
                 for k in value(&name, inline, &mut it).split(',') {
+                    if let Some(new) = EmitKind::renamed(k) {
+                        rokc_core::warn_once(&format!(
+                            "`--emit={k}` is now `--emit={new}`; `{k}` goes in 0.2.0"
+                        ));
+                    }
                     a.emit.push(
                         EmitKind::parse(k)
                             .unwrap_or_else(|| usage_error(&format!("unknown emit kind `{k}`"))),
@@ -276,6 +290,7 @@ fn parse_args(raw: Vec<String>, mut tail: Vec<OsString>) -> Args {
             "--diff" => a.diff = true,
             "--show-output" => a.show_output = true,
             "--list" => a.list = true,
+            "--text" => a.text = true,
             "--all-functions" => a.all_functions = true,
             "--topn" => {
                 let n = value(&name, inline, &mut it);
@@ -358,6 +373,16 @@ fn parse_args(raw: Vec<String>, mut tail: Vec<OsString>) -> Args {
     if output && !a.opts.release() {
         a.opts.debug = true;
     }
+    let old = a.target.as_deref().and_then(|t| {
+        rokc_interface::RENAMED_TARGETS
+            .iter()
+            .find(|(old, _)| *old == t)
+    });
+    if let Some((t, new)) = old {
+        rokc_core::warn_once(&format!(
+            "target `{t}` is now `{new}` (write `--target {new}`); `{t}` goes in 0.2.0"
+        ));
+    }
     let mut spec = TargetSpec::resolve(a.target.as_deref()).unwrap_or_else(|e| fail(&e));
     spec.set_cpu(
         a.target_cpu.as_deref(),
@@ -372,7 +397,7 @@ fn parse_args(raw: Vec<String>, mut tail: Vec<OsString>) -> Args {
         };
         a.opts.profile = Profile::CsGenerate(p.clone(), g);
     }
-    if rokc_core::env_flag("ROKC_VERBOSE") {
+    if rokc_core::env_flag(rokc_core::env_name("ROK_VERBOSE")) {
         a.verbose = a.verbose.max(1);
     }
     a
@@ -503,7 +528,13 @@ fn real_main() {
         None | Some("cfg") => {}
         Some("target-list") => {
             for t in rokc_interface::BUILTIN_TARGETS {
-                println!("{t}");
+                match rokc_interface::RENAMED_TARGETS
+                    .iter()
+                    .find(|(old, _)| old == t)
+                {
+                    Some((_, new)) => println!("{new}\n{t} (deprecated: use {new})"),
+                    None => println!("{t}"),
+                }
             }
             return;
         }
@@ -552,6 +583,9 @@ fn real_main() {
             "unexpected argument `{extra}`: `{}` takes {takes}",
             a.cmd
         ));
+    }
+    if matches!(a.cmd.as_str(), "run" | "test" | "bench") {
+        rokc_core::warn_runtime_vars();
     }
     match a.cmd.as_str() {
         "build" => cmd_build(with_defaults(a)),
@@ -648,25 +682,7 @@ fn real_main() {
         "bindgen" => cmd_bindgen(&a),
         "demangle" => cmd_demangle(&a),
         "profdata" => cmd_profdata(&a),
-        "rokhir-text" | "inspect" => {
-            let [file] = a.positional.as_slice() else {
-                usage_error(&format!(
-                    "usage: rokc {} <file.rokhir | lib<name>.a>",
-                    a.cmd
-                ));
-            };
-            let path = Path::new(file);
-            let out = if a.cmd == "inspect" {
-                rokc_interface::rokhir::inspect(path)
-            } else {
-                let rokhir = rokc_interface::rokhir::companions(path).0;
-                std::fs::read(&rokhir)
-                    .map_err(|e| format!("{}: {e}", rokhir.display()))
-                    .and_then(|b| rokc_interface::rokhir::Rokhir::decode(&b))
-                    .map(|r| r.text())
-            };
-            print!("{}", out.unwrap_or_else(|e| fail(&e)));
-        }
+        "rokhir-text" | "inspect" => cmd_inspect(&a),
         "version" => {
             println!("rokc {}", VERSION);
             if a.verbose > 0 {
@@ -1016,10 +1032,10 @@ fn counts(errors: usize, warnings: usize) -> String {
 }
 
 /// Incremental directory (spec 9.2.16): `<out>/incremental/<name>-<hash>`,
-/// or under `$ROKC_INCREMENTAL`. A lone file gets one only there;
-/// `ROKC_INCREMENTAL=0` turns it off.
+/// or under `$ROK_INCREMENTAL`. A lone file gets one only there;
+/// `ROK_INCREMENTAL=0` turns it off.
 fn incremental_dir(a: &Args, pkg: &Package) -> Option<PathBuf> {
-    let env = std::env::var_os("ROKC_INCREMENTAL").filter(|v| !v.is_empty());
+    let env = std::env::var_os(rokc_core::env_name("ROK_INCREMENTAL")).filter(|v| !v.is_empty());
     let root = match env {
         Some(v) if v == "0" => return None,
         Some(v) => PathBuf::from(v),
@@ -1109,7 +1125,7 @@ fn out_dir(a: &Args, pkg: Option<&Package>) -> PathBuf {
         .target_dir
         .clone()
         .or_else(|| pkg.map(Package::target_dir))
-        .or_else(|| std::env::var_os("ROKC_TARGET_DIR").map(PathBuf::from))
+        .or_else(|| std::env::var_os(rokc_core::env_name("ROK_TARGET_DIR")).map(PathBuf::from))
         .unwrap_or_else(lone_target_dir);
     if a.target.is_some() {
         dir.push(&a.spec().name);
@@ -1123,7 +1139,7 @@ fn out_dir(a: &Args, pkg: Option<&Package>) -> PathBuf {
 /// (`evict`).
 fn lone_target_dir() -> PathBuf {
     let dir = rokc_core::tmp::user_cache_dir("rokc-target")
-        .unwrap_or_else(|e| fail(&format!("{e}; remove it or set ROKC_TARGET_DIR")));
+        .unwrap_or_else(|e| fail(&format!("{e}; remove it or set ROK_TARGET_DIR")));
     let stamp = dir.join(".evicted");
     let day = std::time::Duration::from_secs(86_400);
     let due = std::fs::metadata(&stamp)
@@ -1399,7 +1415,7 @@ fn place(a: &Args, pkg: &Package, from: &Path, to: &Path) {
     let root = a
         .target_dir
         .clone()
-        .or_else(|| std::env::var_os("ROKC_TARGET_DIR").map(PathBuf::from))
+        .or_else(|| std::env::var_os(rokc_core::env_name("ROK_TARGET_DIR")).map(PathBuf::from))
         .unwrap_or_else(lone_target_dir);
     let abs = std::path::absolute(to).unwrap_or_else(|_| to.to_path_buf());
     let h = rokc_core::hash::fnv(abs.to_string_lossy().as_bytes());
@@ -1667,14 +1683,16 @@ fn build_harness(a: &Args, pkg: &Package, mode: Mode) -> (PathBuf, Vec<String>) 
     (exe, result.tests)
 }
 
-/// The default test thread count: `--threads`, else `ROKC_NUM_JOBS`, else
+/// The default test thread count: `--threads`, else `ROK_NUM_JOBS`, else
 /// the available parallelism. `rok`'s runner reads it from the manifest.
 fn test_threads(a: &Args) -> usize {
     a.threads
         .or_else(|| {
-            rokc_core::env_knob("ROKC_NUM_JOBS", "a positive number", |v| {
-                v.parse().ok().filter(|&n| n > 0)
-            })
+            rokc_core::env_knob(
+                rokc_core::env_name("ROK_NUM_JOBS"),
+                "a positive number",
+                |v| v.parse().ok().filter(|&n| n > 0),
+            )
         })
         .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, usize::from))
 }
@@ -1689,7 +1707,7 @@ fn write_harness_manifest(
     harnesses: &[(PathBuf, Vec<String>)],
 ) {
     // Resolve the thread count for a test run whether or not a manifest is
-    // emitted, so `ROKC_NUM_JOBS` is validated (and a bad value warned)
+    // emitted, so `ROK_NUM_JOBS` is validated (and a bad value warned)
     // on every `rokc test`.
     let threads = (mode == Mode::Test).then(|| test_threads(a));
     let Some(path) = a.emit_harness.as_ref() else {
@@ -2148,6 +2166,31 @@ fn cmd_bindgen(a: &Args) {
         }
         None => print!("{out}"),
     }
+}
+
+/// `inspect [--text] <file>`, and its old name `rokhir-text <file>`.
+fn cmd_inspect(a: &Args) {
+    let [file] = a.positional.as_slice() else {
+        usage_error("usage: rokc inspect [--text] <file.rokhir | lib<name>.a>");
+    };
+    if a.cmd == "rokhir-text" {
+        let tool = cli::invoked_as();
+        rokc_core::warn_once(&format!(
+            "`{tool} rokhir-text` is now `{tool} inspect --text` (write `{tool} inspect --text \
+             {file}`); `rokhir-text` goes in 0.2.0"
+        ));
+    }
+    let path = Path::new(file);
+    let out = if a.cmd == "inspect" && !a.text {
+        rokc_interface::rokhir::inspect(path)
+    } else {
+        let rokhir = rokc_interface::rokhir::companions(path).0;
+        std::fs::read(&rokhir)
+            .map_err(|e| format!("{}: {e}", rokhir.display()))
+            .and_then(|b| rokc_interface::rokhir::Rokhir::decode(&b))
+            .map(|r| r.text())
+    };
+    print!("{}", out.unwrap_or_else(|e| fail(&e)));
 }
 
 fn cmd_demangle(a: &Args) {

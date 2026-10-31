@@ -1178,12 +1178,12 @@ impl Repl {
     /// `:add <args>`: `rok install --env` in an environment's session, else
     /// `rok add`; then prebuild `rok deps`.
     fn add_dep(&mut self, args: &str) {
-        let Some(rok) = std::env::var_os("ROK") else {
+        let Some(rok) = rokc_core::handoff_var("ROK") else {
             eprintln!("`:add` needs a session started by `rok repl`");
             return;
         };
-        let env: Vec<String> = std::env::var("ROK_ENV")
-            .ok()
+        let env: Vec<String> = rokc_core::handoff_var("ROK_ENV")
+            .and_then(|e| e.into_string().ok())
             .filter(|e| !e.is_empty())
             .map(|e| vec!["--env".to_owned(), e])
             .unwrap_or_default();
