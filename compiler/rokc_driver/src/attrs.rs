@@ -245,7 +245,17 @@ impl Cx<'_> {
             "no_implicit_rok" => (&[P::File], empty(a)),
             // What a WIT export (stdlib 1.8) runs.
             "wit::export" => (&[P::Fn, P::Struct], empty(a)),
-            "deprecated" => (anywhere, message(a)),
+            "deprecated" => (
+                anywhere,
+                rokc_hir::marks::deprecation(a).is_none().then_some(
+                    "no argument, a message string, or `(since = \"0.1.6\", note = \"..\")`",
+                ),
+            ),
+            // Spec 6.2.14: a safe library function a later release makes
+            // `unsafe`. A meta block of the name from before keeps it.
+            "future_unsafe" if !self.metas.knows_attribute("future_unsafe") => {
+                (&[P::Fn, P::Method, P::ExternFn, P::Static], message(a))
+            }
             "doc" => (
                 anywhere,
                 (!matches!(

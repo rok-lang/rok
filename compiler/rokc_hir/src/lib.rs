@@ -7,6 +7,7 @@ mod fmt_spec;
 #[path = "../../../runtime/rokr/src/fmt_text.rs"]
 mod fmt_text;
 mod lower;
+pub mod marks;
 mod print;
 #[path = "../../../runtime/rokr/src/str_ops.rs"]
 mod str_ops;

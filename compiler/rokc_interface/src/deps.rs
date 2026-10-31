@@ -147,7 +147,17 @@ impl DepBuild<'_> {
         s.set_target(self.target);
         s.set_std_prebuilt(self.std.map(Path::to_path_buf));
         let r = s.compile_file(root);
-        let warnings: String = r.warnings.iter().map(|w| r.render(w)).collect();
+        // Its uses of its own deprecated items are for its author.
+        let warnings: String = r
+            .warnings
+            .iter()
+            .filter(|w| {
+                !w.lint
+                    .as_deref()
+                    .is_some_and(|l| l.starts_with("deprecated"))
+            })
+            .map(|w| r.render(w))
+            .collect();
         print_rendered(&warnings);
         let failed = || format!("could not build dependency `{name}`");
         if r.has_errors() {

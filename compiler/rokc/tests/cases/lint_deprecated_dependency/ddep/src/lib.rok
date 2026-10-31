@@ -1,0 +1,30 @@
+pub struct Conf {
+    #[deprecated(since = "0.1.6", note = "use `Conf::level`")]
+    pub lvl: i32;
+}
+
+impl Conf {
+    #[deprecated("use `Conf::try_new`")]
+    pub fn new() -> Conf { Conf { lvl: 1 } }
+    pub fn try_new() throws -> Conf { Conf { lvl: 1 } }
+    pub fn level(self) -> i32 { self.lvl }
+}
+
+pub struct Cell<T> { pub v: T; }
+
+impl<T> Cell<T> {
+    #[deprecated("use `Cell::take`")]
+    pub fn get(self) -> T { self.v }
+    pub fn take(self) -> T { self.v }
+}
+
+// Its own uses of what it deprecates are for its author.
+#[deprecated]
+pub fn old() -> i32 { 2 }
+pub fn uses_old() -> i32 { old() }
+
+#[future_unsafe("`x` must point at a live value")]
+pub fn from_raw(x: i32) -> i32 { x }
+
+#[deprecated("use `LIMIT`")]
+pub const MAX: i32 = 9;

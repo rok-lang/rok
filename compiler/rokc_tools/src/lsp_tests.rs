@@ -1383,6 +1383,37 @@ fn parse_diag_has_width() {
     }
 }
 
+/// A use of a deprecated item carries `DiagnosticTag.Deprecated` (2);
+/// other warnings carry no tags.
+#[test]
+fn deprecated_tag_sent() {
+    let src =
+        "#[deprecated(\"use g\")]\nfn f() -> i32 { 1 }\nfn main() { let a = 1; println(f()); }\n";
+    let msgs = std_session("lsp-deprecated-tag", src, |uri| {
+        vec![request(1, "textDocument/hover", at(uri, 1, 4))]
+    });
+    let diags: Vec<Json> = msgs
+        .iter()
+        .filter(|m| m.get("method").as_str() == Some("textDocument/publishDiagnostics"))
+        .flat_map(|m| match m.get("params").get("diagnostics") {
+            Json::Arr(v) => v.clone(),
+            _ => Vec::new(),
+        })
+        .collect();
+    let tags = |want: &str| {
+        let d = diags
+            .iter()
+            .find(|d| d.get("message").as_str().is_some_and(|m| m.contains(want)))
+            .unwrap_or_else(|| panic!("no {want:?} in {diags:?}"));
+        d.get("tags").clone()
+    };
+    assert_eq!(
+        tags("use of deprecated function `f`"),
+        Json::Arr(vec![Json::num(2)])
+    );
+    assert_eq!(tags("unused variable `a`"), Json::Null);
+}
+
 /// `textDocument/codeAction` over `line` with no diagnostics in its
 /// context: the ones published there.
 fn code_action(id: u32, uri: &str, line: u32) -> Json {
