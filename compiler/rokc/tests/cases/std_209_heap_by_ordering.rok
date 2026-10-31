@@ -1,0 +1,25 @@
+// spec: std 209-collections §2.9.9 §2.9.2 / refs-lang §6.2.7
+// expect-exit: 0
+// expect-warning: use of deprecated method `BinaryHeap::by`
+// expect-warning: use `BinaryHeap::by_ordering`
+// expect-stdout:
+// max 9 min 1 old 1
+// ["a", "bb", "dd", "ccc"]
+
+// `BinaryHeap::by_ordering` takes a comparator that returns `Ordering`,
+// as `List::sort_by` does, and pops the greatest by it; the bool form
+// `by` is deprecated. `List::sort_by_key` sorts by a key, stably.
+fn main() {
+    let a: BinaryHeap<i32> = BinaryHeap::by_ordering(|x: i32, y: i32| x.cmp(y));
+    let b: BinaryHeap<i32> = BinaryHeap::by_ordering(|x: i32, y: i32| y.cmp(x));
+    let c: BinaryHeap<i32> = BinaryHeap::by(|x: i32, y: i32| x < y);
+    for v in [5, 1, 9, 3] {
+        a.push(v);
+        b.push(v);
+        c.push(v);
+    }
+    println(f"max {a.pop() ?? 0} min {b.pop() ?? 0} old {c.pop() ?? 0}");
+    let xs = ["ccc", "a", "bb", "dd"];
+    xs.sort_by_key(|s: str| s.len());
+    println(f"{xs:?}");
+}

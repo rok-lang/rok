@@ -2906,6 +2906,9 @@ struct LowerCtx<'a> {
     /// Enclosing `unsafe fn` body / `unsafe { }` blocks (spec 4.15):
     /// unsafe calls are allowed when > 0.
     unsafe_depth: u32,
+    /// Set by a call through a lang slot (`expr::lang_fn`): lowering
+    /// made it, so the hook's own marks do not warn. Taken by the call.
+    hook_call: std::cell::Cell<bool>,
     /// Enclosing breakable constructs, innermost last: `(label,
     /// is_loop)` - labelled blocks accept `break 'l` but not `continue`.
     breakables: Vec<(Option<String>, bool)>,
@@ -3110,6 +3113,7 @@ impl<'a> LowerCtx<'a> {
             pending_resums: Vec::new(),
             value_captured: std::collections::HashSet::new(),
             unsafe_depth: 0,
+            hook_call: std::cell::Cell::new(false),
             explicit_recv: None,
             dropped_ref_recv: Vec::new(),
             breakables: Vec::new(),
@@ -4374,6 +4378,15 @@ impl<'a> LowerCtx<'a> {
     /// the nearest declaration wins (spec 5.7: own items, `use`s, core).
     fn resolve_any_fn(&self, segments: &[&str]) -> Option<String> {
         let env = self.env;
+        // A hook lowering calls (`expr::lang_fn`): its slot's item, else
+        // the path it had before it had a slot.
+        if let Some(slot) = segments.first().and_then(|s| expr::lang_slot(s)) {
+            let item = self.lang(slot);
+            if !item.is_empty() {
+                return Some(item.to_owned());
+            }
+            return self.resolve_any_fn(&segments[1..]);
+        }
         if let [name] = segments {
             // An empty key: a `use` of the name hides outer nested fns.
             let nested = self.nested_fns.iter().rev().find_map(|m| m.get(*name));

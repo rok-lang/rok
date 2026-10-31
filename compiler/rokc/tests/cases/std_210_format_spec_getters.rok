@@ -1,0 +1,23 @@
+// spec: std 210-fmt §2.10.2 / refs-lang §6.2.7
+// expect-exit: 0
+// expect-warning: use of deprecated field `FormatSpec.width`
+// expect-warning: read it with `spec.width()`
+// expect-stdout:
+// * 8 3 true false x
+// invalid format spec `>>>`: unknown format type (expected one of `d b o x X f e E g s ?`)
+// 8
+
+// `FormatSpec` has getters and a throwing `try_parse`; reading or
+// setting a field is deprecated (the fields are private in 0.2.0).
+fn main() {
+    let s = FormatSpec::parse("*<#8.3x");
+    let a = s.align() is Alignment;
+    println(f"{s.fill()} {s.width() ?? 0} {s.precision() ?? 0} {s.alternate()} {s.pad_zero()} {s.ty()}");
+    try {
+        let _ = FormatSpec::try_parse(">>>");
+    } catch e: ValueError {
+        println(f"{e}");
+    }
+    println(f"{s.width ?? 0}");
+    let _ = a;
+}

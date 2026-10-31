@@ -71,6 +71,18 @@ pub unsafe extern "C" fn rok_fmt_spec_parse(spec: RokStr, out: *mut u8) {
     }
 }
 
+/// What is wrong with `spec`, as `rok_fmt_spec_parse` panics with it;
+/// empty when it parses.
+#[unsafe(no_mangle)]
+pub extern "C" fn rok_fmt_spec_error(spec: RokStr) -> RokStr {
+    let t = text(&spec);
+    let mut w = W::of(rok_fmt_new(0));
+    if let Err(why) = fmt_text::spec_words(t) {
+        fmt_text::bad_spec(&mut w, t, why);
+    }
+    rok_fmt_finish(w.done())
+}
+
 /// The text of `v` (an `f32` widened when `is_f32 != 0`): Display for
 /// `ty` 0, else `e`, `E` or `f`, `prec < 0` for none (`fmt_text::float`).
 #[unsafe(no_mangle)]

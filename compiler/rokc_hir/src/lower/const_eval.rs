@@ -918,6 +918,7 @@ fn plain_size(ty: &HirTy) -> Option<u32> {
 /// constant equals the run-time result (5.2.5). Not libm's inexact ones
 /// (the target's may round differently) nor the `int` kernels.
 const EVALUABLE: &[&str] = &[
+    "rok_hash_seed",
     "rok_str_len",
     "rok_str_char_count",
     "rok_str_byte",
@@ -1145,6 +1146,8 @@ fn run_extern(name: &str, args: &[Value]) -> Result<Value, Ext> {
             let b = str_of(s)?.as_bytes().get(usize_of(i)?).copied();
             Value::Int(i128::from(b.unwrap_or(0)), PrimTy::U8)
         }
+        // A dict built at compile time keeps seed 0 (`Dict` stores it).
+        ("rok_hash_seed", []) => Value::Int(0, PrimTy::U64),
         // FNV-1a, as `rokr`'s.
         ("rok_str_hash", [s]) => Value::Int(
             i128::from(str_of(s)?.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| {

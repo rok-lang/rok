@@ -441,6 +441,11 @@ impl<T: Ord> List<T> {
 }
 
 impl<T> List<T> {
+    /// Ascending by `key(x)`, stable; `key` runs twice per comparison.
+    pub const fn sort_by_key<K: Ord>(self, key: fn(T) -> K) {
+        self.sort_by(|a: T, b: T| key(a).cmp(key(b)));
+    }
+
     /// Stable bottom-up merge sort by `cmp`: O(n log n), n extra slots.
     pub const fn sort_by(self, cmp: fn(T, T) -> rok::core::cmp::Ordering) {
         unsafe {

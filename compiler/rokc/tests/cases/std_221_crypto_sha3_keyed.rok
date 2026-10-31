@@ -1,0 +1,38 @@
+// spec: std 221-crypto §2.21.1
+// expect-exit: 0
+// forbid-warning: deprecated
+// expect-stdout:
+// 8c6e0683409427f8931711b10ca92a506eb1fafa48fadd66d76126f47ac2c333
+// 0733f1f947887d6ad5deaca79b8e69ee625674ffa7cf7cc18c4ca7fbafe7efc44aa1f5ed233ce9af6b9252be19368e7247a938f694164e34f7311ca2830ad5a3
+// 9cc87dcdf5fd78a31bf7a03256e56386606a744a0ee48db1cbca1b483b060e10
+// 0a35ce133619c6dda6c47247ba3a65352b8fa7313a3ccddfc707ea425085517cbcaa618df8674ec88341
+// true false true
+// 3 abc
+
+// HMAC and HKDF over SHA-3 (values from Python's hmac and hashlib), a
+// key longer than the block, `Secret` as `AsBytes`, and `ByteInput`.
+use rok::core::crypto::{Hmac, Hkdf, Sha3Algorithm, ByteInput, Secret};
+
+fn len_of(b: ByteInput) -> usize {
+    match b {
+        s: str => s.len(),
+        _ => 0,
+    }
+}
+
+fn first<B: AsBytes>(b: B) -> Slice<u8> { b.byte_slice() }
+
+fn main() {
+    let m = "The quick brown fox jumps over the lazy dog";
+    println(hex_encode(Hmac::mac_sha3(Sha3_256, "key", m)));
+    println(hex_encode(Hmac::mac_sha3(Sha3Algorithm::Sha3_512, "k".repeat(200), m)));
+    let prk = Hkdf::extract_sha3(Sha3_256, "salt", "ikm");
+    println(hex_encode(prk.as_bytes()));
+    let okm = try! Hkdf::expand_sha3(Sha3_256, prk, "info", 42);
+    println(hex_encode(okm.as_bytes()));
+    okm.wipe();
+    let tag = Hmac::mac_sha3(Sha3_256, "key", m);
+    println(f"{Hmac::verify_sha3(Sha3_256, "key", m, tag)} {Hmac::verify_sha3(Sha3_512, "key", m, tag)} {Sha3_256.digest("") == Sha3_256::digest("")}");
+    let s = Secret::new("abc");
+    println(f"{len_of("abc")} {try! str::from_utf8(first(s))}");
+}

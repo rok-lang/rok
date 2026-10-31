@@ -32,6 +32,7 @@ impl f64 {
     pub const LOG2_E: f64 = 1.44269504088896340735992468100189214;
     pub const LOG10_E: f64 = 0.434294481903251827651128918916605082;
 
+    #[deprecated(since = "0.1.6", note = "use `f64::NAN`")]
     pub const fn nan() -> f64 { f64::NAN }
     pub const fn infinity() -> f64 { f64::INFINITY }
     pub const fn neg_infinity() -> f64 { f64::NEG_INFINITY }
@@ -113,6 +114,7 @@ impl f64 {
     pub const fn min(self, other: f64) -> f64 { unsafe { rok_f64_min(self, other) } }
     /// The larger; a NaN operand loses to a number.
     pub const fn max(self, other: f64) -> f64 { unsafe { rok_f64_max(self, other) } }
+    #[deprecated(since = "0.1.6", note = "use `pow`, which is the same")]
     pub fn powf(self, exp: f64) -> f64 { self.pow(exp) }
     pub fn powi(self, n: i32) -> f64 { self.pow(n as f64) }
     /// `self * a + b` with one rounding.
@@ -195,6 +197,7 @@ impl f32 {
     pub const LOG2_E: f32 = 1.44269504088896340735992468100189214;
     pub const LOG10_E: f32 = 0.434294481903251827651128918916605082;
 
+    #[deprecated(since = "0.1.6", note = "use `f32::NAN`")]
     pub const fn nan() -> f32 { f32::NAN }
     pub const fn infinity() -> f32 { f32::INFINITY }
     pub const fn neg_infinity() -> f32 { f32::NEG_INFINITY }
@@ -276,6 +279,7 @@ impl f32 {
     pub const fn min(self, other: f32) -> f32 { unsafe { rok_f32_min(self, other) } }
     /// The larger; a NaN operand loses to a number.
     pub const fn max(self, other: f32) -> f32 { unsafe { rok_f32_max(self, other) } }
+    #[deprecated(since = "0.1.6", note = "use `pow`, which is the same")]
     pub fn powf(self, exp: f32) -> f32 { self.pow(exp) }
     pub fn powi(self, n: i32) -> f32 { self.pow(n as f32) }
     /// `self * a + b` with one rounding.

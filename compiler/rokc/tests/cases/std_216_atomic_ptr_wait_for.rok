@@ -1,0 +1,19 @@
+// spec: std 216-sync §2.16.2
+// needs: threads
+// expect-exit: 0
+// forbid-warning: warning
+// expect-stdout:
+// true 0
+
+// `Atomic<Ptr<T>>` is `Send` (the cell holds an address), so a thread
+// may take it; `Atomic::wait_for` takes a `Duration`.
+use rok::bare::ptr::Ptr;
+
+fn main() {
+    let p: Ptr<i32> = Ptr::dangling();
+    let a = Atomic::new(p);
+    let t = rok::std::thread::spawn(|| a.load().addr() == 4);
+    let w = Atomic::new(0i32);
+    w.wait_for(1, Duration::ms(1));
+    println(f"{try! t.join()} {w.load()}");
+}

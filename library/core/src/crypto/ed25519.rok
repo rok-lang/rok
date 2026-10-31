@@ -1,6 +1,6 @@
 // Ed25519 (RFC 8032 5.1): pure EdDSA over edwards25519 with SHA-512.
 
-use sup::{view, Bytes};
+use sup::{view, ByteInput};
 use sup::sha2::{HashAlgorithm, Digest};
 use sup::curve25519::{EdPoint, ge_base, ge_add, ge_negate, ge_encode, ge_decode, ge_mul_ct, sc25519_reduce, sc25519_muladd, sc25519_is_canonical};
 
@@ -10,7 +10,7 @@ pub struct Ed25519;
 
 /// SHA-512 of a seed: the secret scalar (clamped) from the first half;
 /// the nonce prefix is the second.
-fn expand(seed: Bytes) throws (ValueError) -> ([u8; 32], [u8; 64]) {
+fn expand(seed: ByteInput) throws (ValueError) -> ([u8; 32], [u8; 64]) {
     let s = view(seed);
     if s.len() != 32 { throw ValueError { msg: "Ed25519 seed must be 32 bytes" }; }
     let d = Digest::new(HashAlgorithm::Sha512);
@@ -33,13 +33,13 @@ fn hash_scalar(a: Slice<u8>, b: Slice<u8>, c: Slice<u8>) -> [u8; 32] {
 }
 
 impl Ed25519 {
-    pub fn public_key(seed: Bytes) throws (ValueError) -> List<u8> {
+    pub fn public_key(seed: ByteInput) throws (ValueError) -> List<u8> {
         let (a, _) = try expand(seed);
         ge_encode(ge_mul_ct(a, ge_base()))
     }
 
     /// The signature `R || S` of `msg` (deterministic).
-    pub fn sign(seed: Bytes, msg: Bytes) throws (ValueError) -> List<u8> {
+    pub fn sign(seed: ByteInput, msg: ByteInput) throws (ValueError) -> List<u8> {
         let (a, hs) = try expand(seed);
         let m = view(msg);
         let pk = ge_encode(ge_mul_ct(a, ge_base()));
@@ -59,7 +59,7 @@ impl Ed25519 {
     /// Whether `sig` is a valid signature of `msg` under `public_key`:
     /// canonical `A`, `S < L`, and the encoding of `[S]B - [k]A` equal
     /// to `R` byte for byte (cofactorless, RFC 8032 5.1.7).
-    pub fn verify(public_key: Bytes, msg: Bytes, sig: Bytes) -> bool {
+    pub fn verify(public_key: ByteInput, msg: ByteInput, sig: ByteInput) -> bool {
         let pk = view(public_key);
         let sg = view(sig);
         if pk.len() != 32 || sg.len() != 64 { return false; }

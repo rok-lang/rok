@@ -8,7 +8,7 @@
 // key select are masks. Only the rejection sampling of the public
 // matrix branches.
 
-use sup::{view, Bytes, Secret, ct_mask};
+use sup::{view, ByteInput, Secret, ct_mask};
 use sup::secret::SecretWords;
 use sup::sha3::{Sha3_256, Sha3_512, Shake128, Shake256};
 
@@ -279,7 +279,7 @@ impl MlKem768 {
     pub const SHARED_KEY_LEN: usize = 32;
 
     /// KeyGen from 32-byte seeds `d` and `z`: `(ek, dk)`.
-    pub fn keygen(d: Bytes, z: Bytes) throws (ValueError) -> (List<u8>, Secret) {
+    pub fn keygen(d: ByteInput, z: ByteInput) throws (ValueError) -> (List<u8>, Secret) {
         let dv = view(d);
         let zv = view(z);
         try need(dv, 32, "d");
@@ -321,7 +321,7 @@ impl MlKem768 {
 
     /// Encaps with the 32-byte message `m`: `(shared key, ciphertext)`.
     /// `ek` must pass the length and modulus checks (FIPS 203 7.2).
-    pub fn encapsulate(ek: Bytes, m: Bytes) throws (ValueError) -> (Secret, List<u8>) {
+    pub fn encapsulate(ek: ByteInput, m: ByteInput) throws (ValueError) -> (Secret, List<u8>) {
         let e = view(ek);
         let mv = view(m);
         try need(e, 1184, "encapsulation key");
@@ -342,7 +342,7 @@ impl MlKem768 {
 
     /// Decaps: the shared key, or (implicit rejection) a key derived
     /// from `z` and `c` when `c` does not re-encrypt to itself.
-    pub fn decapsulate(dk: Bytes, c: Bytes) throws (ValueError) -> Secret {
+    pub fn decapsulate(dk: ByteInput, c: ByteInput) throws (ValueError) -> Secret {
         let d = view(dk);
         let cv = view(c);
         try need(d, 2400, "decapsulation key");

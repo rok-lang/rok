@@ -215,24 +215,13 @@ fn write_hole(ctx: &mut LowerCtx<'_>, stmts: &mut Vec<HirStmt>, t: &Expr, h: Hol
             let Spec::Dynamic(text) = h.spec else {
                 unreachable!("dynamic")
             };
-            let c = call(
-                &["rok", "core", "fmt", "fstr_text_any"],
-                vec![t.clone(), h.value, text],
-                at,
-            );
+            let c = hook("fstr_text_any", vec![t.clone(), h.value, text], at);
             write(ctx, stmts, t, &c);
             return;
         }
         Spec::Dynamic(text) => {
             let text_only = mk(ExprKind::Literal(AstLit::Bool(!h.kind.number())), at);
-            let packed = lower_expr(
-                ctx,
-                &call(
-                    &["rok", "core", "fmt", "fstr_pack"],
-                    vec![text.clone(), text_only],
-                    at,
-                ),
-            );
+            let packed = lower_expr(ctx, &hook("fstr_pack", vec![text.clone(), text_only], at));
             let p = bind_hir(ctx, stmts, "#sp", packed, at);
             let field = |i| mk(ExprKind::TupleField(Box::new(p.clone()), i), at);
             (field(0), field(1))
@@ -302,7 +291,7 @@ fn plain_write(t: &Expr, value: Expr, kind: Kind, debug: bool, flags: Expr, coun
         )
     };
     let flag = |b: bool| int_lit(usize::from(b), at);
-    let fmt = |f: &str, args: Vec<Expr>| call(&["rok", "core", "fmt", f], args, at);
+    let fmt = |f: &str, args: Vec<Expr>| hook(f, args, at);
     match (kind, debug) {
         (Kind::Int { signed, bits, i64 }, _) => rt(
             "rok_fmt_int",
@@ -547,6 +536,18 @@ fn call(names: &[&str], args: Vec<Expr>, at: Span) -> Expr {
     mk(
         ExprKind::Call {
             callee: Box::new(mk(ExprKind::Path(path(names, at)), at)),
+            args: args.into_iter().map(CallArg::Positional).collect(),
+            trailing_closure: None,
+        },
+        at,
+    )
+}
+
+/// `rok::core::fmt::<f>(args..)`, through its lang slot.
+fn hook(f: &str, args: Vec<Expr>, at: Span) -> Expr {
+    mk(
+        ExprKind::Call {
+            callee: Box::new(mk(ExprKind::Path(super::expr::lang_fn("fmt", f, at)), at)),
             args: args.into_iter().map(CallArg::Positional).collect(),
             trailing_closure: None,
         },

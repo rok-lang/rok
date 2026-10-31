@@ -20,7 +20,7 @@ pub mod mlkem;
 
 pub use secret::Secret;
 pub use sha2::{HashAlgorithm, Digest};
-pub use sha3::{Sha3_256, Sha3_512, Shake128, Shake256};
+pub use sha3::{Sha3Algorithm, Sha3_256, Sha3_512, Shake128, Shake256};
 pub use hmac::{Hmac, Hkdf};
 pub use aead::{AeadAlgorithm, Aead};
 pub use x25519::X25519;
@@ -51,10 +51,14 @@ pub(pkg) fn ct_mask_i64(bit: i64) -> i64 {
 }
 
 /// Byte input: a list, a view, a string's UTF-8 bytes or a secret.
-pub type Bytes = List<u8> | Slice<u8> | str | Secret;
+pub type ByteInput = List<u8> | Slice<u8> | str | Secret;
+
+/// The old name of `ByteInput`; `rok::std::io::Bytes` is another type.
+#[deprecated(since = "0.1.6", note = "use `crypto::ByteInput`")]
+pub type Bytes = ByteInput;
 
 /// `b` as a view.
-pub(pkg) fn view(b: Bytes) -> Slice<u8> {
+pub(pkg) fn view(b: ByteInput) -> Slice<u8> {
     match b {
         l: List<u8> => l[0:l.len()],
         s: Slice<u8> => s,
@@ -65,7 +69,7 @@ pub(pkg) fn view(b: Bytes) -> Slice<u8> {
 
 /// Whether `a` and `b` are equal, in time that depends only on their
 /// lengths.
-pub fn constant_time_eq(a: Bytes, b: Bytes) -> bool {
+pub fn constant_time_eq(a: ByteInput, b: ByteInput) -> bool {
     let x = view(a);
     let y = view(b);
     if x.len() != y.len() { return false; }

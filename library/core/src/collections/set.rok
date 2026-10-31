@@ -1,5 +1,5 @@
 // rok::core::collections::set - `Set<T>`, a hash set (stdlib spec
-// 2.9.4) over `Dict<T, bool>`. Iteration order is unspecified.
+// 2.9.4) over `Dict<T, bool>`, so it iterates in insertion order.
 
 pub struct Set<T> {
     d: Dict<T, bool>;

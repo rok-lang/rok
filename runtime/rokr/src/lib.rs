@@ -442,6 +442,35 @@ pub unsafe extern "C" fn rok_task_key(obj: *mut u8) -> usize {
     obj as usize
 }
 
+/// The process's seed for `Dict`'s hash mix (stdlib 2.5: hash values
+/// change between runs): OS randomness read once, else the clock and an
+/// address. Never 0, the seed of a dict built at compile time.
+#[unsafe(no_mangle)]
+pub extern "C" fn rok_hash_seed() -> u64 {
+    use core::sync::atomic::AtomicU64;
+    use rokr_common::object_header::HEADER_SIZE;
+    static SEED: AtomicU64 = AtomicU64::new(0);
+    let s = SEED.load(Ordering::Relaxed);
+    if s != 0 {
+        return s;
+    }
+    // `rok_os_random` writes past an object header.
+    let mut b = [0u8; HEADER_SIZE + 8];
+    let mut s = match os::rok_os_random(b.as_mut_ptr(), 0, 8) {
+        0 => b[HEADER_SIZE..]
+            .iter()
+            .rev()
+            .fold(0u64, |a, &x| (a << 8) | u64::from(x)),
+        _ => (rokr_common::sys::monotonic_ns() as u64 ^ ptr::addr_of!(SEED) as u64)
+            .wrapping_mul(0x9E37_79B9_7F4A_7C15),
+    };
+    s |= 1;
+    match SEED.compare_exchange(0, s, Ordering::Relaxed, Ordering::Relaxed) {
+        Ok(_) => s,
+        Err(first) => first,
+    }
+}
+
 /// Monotonic clock in nanoseconds, stopped during suspend (`Instant`,
 /// 707 timers; 3.3.7: `CLOCK_UPTIME_RAW` on macOS, whose
 /// `CLOCK_MONOTONIC` counts sleep; `QueryPerformanceCounter` on Windows).

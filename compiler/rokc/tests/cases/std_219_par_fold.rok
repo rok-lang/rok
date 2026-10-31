@@ -1,0 +1,18 @@
+// spec: std 219-par §2.19.4 / refs-lang §6.2.7
+// needs: threads
+// expect-exit: 0
+// expect-warning: use of deprecated function `reduce`
+// expect-warning: use `par::fold`, which is the same
+// expect-stdout:
+// 16 16 [0, 2, 4, 6] 10 [2]
+
+// `par::fold` is today's `par::reduce` (an `init` folded in once);
+// `filter`, `fold` and `reduce` take any `IntoIterator`, as `map` does.
+fn main() {
+    let a = par::fold([1, 2, 3], 10, |x: i32, y: i32| x + y);
+    let b = par::reduce([1, 2, 3], 10, |x: i32, y: i32| x + y);
+    let evens = par::filter(0..8, |x: i32| x % 2 == 0);
+    let r = par::fold(0..5, 0, |x: i32, y: i32| x + y);
+    let s = par::filter([1, 2, 3].iter(), |x: i32| x == 2);
+    println(f"{a} {b} {evens:?} {r} {s:?}");
+}

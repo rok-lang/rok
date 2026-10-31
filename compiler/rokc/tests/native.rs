@@ -1973,6 +1973,9 @@ void rok_enter_native(void) {}
 void rok_leave_native(void) {}
 int rok_native_reenter(void) { return 0; }
 void rok_native_resume(int x) { (void)x; }
+void rok_nosp_enter(void) {}
+void rok_nosp_leave(void) {}
+unsigned long rok_hash_seed(void) { return 1; }
 void rok_gc_add_root(const void *w) { (void)w; }
 void *rok_gc_alloc_slow(usize size, usize align, unsigned t) {
     char *p = calloc(1, size + align + 16); *(unsigned *)p = t; return p;

@@ -1,0 +1,25 @@
+// spec: std 309-rokon
+// expect-exit: 0
+// forbid-warning: warning
+// expect-stdout:
+// Config { name: "a", limits: {"x": 1, "y": 2}, tags: ["t"] }
+// true
+
+// A `#[derive(Rokon)]` struct round-trips in user code and builds with
+// no warning: nothing the derive expands to is deprecated.
+use rok::std::rokon;
+
+#[derive(Rokon, Debug, PartialEq)]
+struct Config {
+    name: str;
+    limits: Dict<str, i32>;
+    tags: List<str>;
+}
+
+fn main() {
+    let c = Config { name: "a", limits: {"x": 1, "y": 2}, tags: ["t"] };
+    let text = rokon::to_string(c);
+    let back: Config = try! rokon::from_str(text);
+    println(f"{back:?}");
+    println(f"{back == c}");
+}

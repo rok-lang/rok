@@ -1,6 +1,6 @@
 // X25519 (RFC 7748): Diffie-Hellman on Curve25519's u coordinate.
 
-use sup::{view, Bytes, Secret};
+use sup::{view, ByteInput, Secret};
 use sup::curve25519::{Fe25519, f25519_zero, f25519_one, f25519_small, f25519_add, f25519_sub, f25519_mul, f25519_sq, f25519_invert, f25519_cswap, f25519_to_bytes, f25519_from_bytes};
 
 /// X25519 key agreement. Keys are 32 bytes.
@@ -47,7 +47,7 @@ fn ladder(k: Slice<u8>, u: Slice<u8>) -> [u8; 32] {
     f25519_to_bytes(f25519_mul(x2, f25519_invert(z2)))
 }
 
-fn key32(b: Bytes, what: str) throws (ValueError) -> Slice<u8> {
+fn key32(b: ByteInput, what: str) throws (ValueError) -> Slice<u8> {
     let s = view(b);
     if s.len() != 32 { throw ValueError { msg: f"X25519 {what} must be 32 bytes" }; }
     s
@@ -55,7 +55,7 @@ fn key32(b: Bytes, what: str) throws (ValueError) -> Slice<u8> {
 
 impl X25519 {
     /// The public key of a 32-byte secret (clamped as RFC 7748 says).
-    pub fn public_key(secret: Bytes) throws (ValueError) -> List<u8> {
+    pub fn public_key(secret: ByteInput) throws (ValueError) -> List<u8> {
         let base: [u8; 32] = [0u8; 32];
         base[0] = 9u8;
         let p = ladder(try key32(secret, "secret"), base[0:32]);
@@ -66,7 +66,7 @@ impl X25519 {
 
     /// The shared secret with `peer_public`; `none` when it is all
     /// zero (a small-order peer key, RFC 7748 6.1).
-    pub fn shared_secret(secret: Bytes, peer_public: Bytes) throws (ValueError) -> Secret | none {
+    pub fn shared_secret(secret: ByteInput, peer_public: ByteInput) throws (ValueError) -> Secret | none {
         let k = ladder(try key32(secret, "secret"), try key32(peer_public, "public key"));
         let out = Secret::zeroed(32);
         let d = 0u8;

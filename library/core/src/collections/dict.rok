@@ -5,8 +5,8 @@
 // scans the hashes. `remove` leaves a hole; holes are squeezed out when
 // the entries are full. One object holds the counts and the current
 // arrays, swapped on growth. Iteration follows the entries, so it is in
-// insertion order (which `OrderedDict` relies on; for `Dict` the spec
-// leaves it unspecified).
+// insertion order, as the spec guarantees: a present key re-inserted
+// keeps its place, a removed one re-inserted goes last.
 
 use rok::core::marker::{Memo, Transfer, buf_is_null, copy_buf};
 
@@ -25,6 +25,8 @@ pub struct DictHead<K, V> {
     keys: GcBuf<K>;
     vals: GcBuf<V>;
     meta: GcBuf<u64>;
+    /// `mix`'s seed: the process's, 0 in a dict built at compile time.
+    seed: u64;
 }
 
 /// Entries a table holds without an index.
@@ -33,11 +35,12 @@ const SMALL: usize = 16;
 /// `find`'s answer for an absent key.
 const ABSENT: usize = usize::MAX;
 
-/// `k.hash()` mixed, so a weak hash (an integer's own value) still
-/// spreads over the low bits; never 0, which marks a hole.
+/// `k.hash()` mixed with the dict's seed, so a weak hash (an integer's
+/// own value) still spreads over the low bits and where a key lands
+/// changes between runs; never 0, which marks a hole.
 #[inline]
-const fn mix(h: u64) -> u64 {
-    let x = h.wrapping_mul(0x9E37_79B9_7F4A_7C15u64);
+const fn mix(h: u64, seed: u64) -> u64 {
+    let x = (h ^ seed).wrapping_mul(0x9E37_79B9_7F4A_7C15u64);
     let y = x ^ (x >> 32u64);
     if y == 0u64 { 1u64 } else { y }
 }
@@ -59,7 +62,7 @@ const fn index_slots(cap: usize) -> usize {
 
 /// An empty table of `cap` entries.
 #[track_caller]
-const fn new_table<K, V>(cap: usize) -> DictHead<K, V> {
+const fn new_table<K, V>(cap: usize, seed: u64) -> DictHead<K, V> {
     unsafe {
         let n = cap_add(cap, 1);
         let slots = index_slots(cap);
@@ -71,6 +74,7 @@ const fn new_table<K, V>(cap: usize) -> DictHead<K, V> {
             keys: buf_new(buf_len(n, size_of::<K>())),
             vals: buf_new(buf_len(n, size_of::<V>())),
             meta: buf_new(buf_len(cap_add(cap, slots), 8)),
+            seed,
         }
     }
 }
@@ -103,7 +107,7 @@ impl<K: Hash, V> Dict<K, V> {
     pub const fn with_capacity(cap: usize) -> Dict<K, V> {
         unsafe {
             let h: GcBuf<DictHead<K, V>> = buf_new(1);
-            h[0] = new_table(cap);
+            h[0] = new_table(cap, rok_hash_seed());
             Dict { h }
         }
     }
@@ -116,6 +120,12 @@ impl<K: Hash, V> Dict<K, V> {
 
     pub const fn is_empty(self) -> bool {
         self.len() == 0
+    }
+
+    /// `k`'s hash, mixed.
+    #[inline]
+    const fn hash_of(self, k: K) -> u64 {
+        unsafe { mix(k.hash(), self.h[0].seed) }
     }
 
     /// The entry holding `k` (mixed hash `h`), or `ABSENT`.
@@ -178,7 +188,7 @@ impl<K: Hash, V> Dict<K, V> {
             if old.len * 2 >= cap {
                 cap = cap_add(cap, cap / 2).max(4);
             }
-            self.h[0] = new_table(cap);
+            self.h[0] = new_table(cap, old.seed);
             for i in 0..old.n {
                 let h = old.meta[i];
                 if h != 0u64 {
@@ -191,7 +201,7 @@ impl<K: Hash, V> Dict<K, V> {
     /// Insert or replace; the old value, or `none`.
     pub const fn insert(self, k: K, v: V) -> V | none {
         unsafe {
-            let h = mix(k.hash());
+            let h = self.hash_of(k);
             let at = self.find(k, h);
             if at != ABSENT {
                 let s = self.h[0];
@@ -209,7 +219,7 @@ impl<K: Hash, V> Dict<K, V> {
 
     pub const fn get(self, k: K) -> V | none {
         unsafe {
-            let at = self.find(k, mix(k.hash()));
+            let at = self.find(k, self.hash_of(k));
             if at == ABSENT {
                 return none;
             }
@@ -219,12 +229,12 @@ impl<K: Hash, V> Dict<K, V> {
     }
 
     pub const fn contains_key(self, k: K) -> bool {
-        self.find(k, mix(k.hash())) != ABSENT
+        self.find(k, self.hash_of(k)) != ABSENT
     }
 
     pub const fn remove(self, k: K) -> V | none {
         unsafe {
-            let at = self.find(k, mix(k.hash()));
+            let at = self.find(k, self.hash_of(k));
             if at == ABSENT {
                 return none;
             }
@@ -270,7 +280,7 @@ impl<K: Hash, V> Dict<K, V> {
     /// Drop every entry (a fresh small table).
     pub const fn clear(self) {
         unsafe {
-            self.h[0] = new_table(4);
+            self.h[0] = new_table(4, self.h[0].seed);
         }
     }
 
@@ -467,7 +477,7 @@ impl<K: Hash, V> Index<K> for Dict<K, V> {
     #[track_caller]
     const fn index(self, k: K) -> V {
         unsafe {
-            let at = self.find(k, mix(k.hash()));
+            let at = self.find(k, self.hash_of(k));
             if at == ABSENT {
                 return key_missing::<K, V>(k);
             }
@@ -569,6 +579,7 @@ impl<K, V> Transfer for Dict<K, V> {
                 keys: copy_buf(s.keys, 0, s.n, 1, n, m),
                 vals: copy_buf(s.vals, 0, s.n, 1, n, m),
                 meta: copy_buf(s.meta, 0, index, 1, index, m),
+                seed: s.seed,
             };
             Dict { h }
         }

@@ -1,0 +1,33 @@
+// spec: std 218-task §2.18.3 / refs-lang §6.2.7
+// expect-exit: 0
+// expect-warning: use of deprecated function `wake_task`
+// expect-warning: call `wake()` on the task's `Waker`
+// expect-warning: use of deprecated function `cancel_requested`
+// expect-warning: use of deprecated function `unwinding`
+// expect-warning: use of deprecated function `host_enter`
+// expect-warning: use of deprecated function `host_run`
+// expect-warning: internal to WebAssembly component exports
+// expect-lint: 24:12 use of deprecated type `Pool`
+// expect-lint: 24:27 use of deprecated type `Worker`
+// expect-lint: 24:44 use of deprecated type `TaskRef`
+// expect-lint: 26:13 use of deprecated function `wake_task`
+// expect-lint: 27:13 use of deprecated function `cancel_requested`
+// expect-lint: 28:13 use of deprecated function `unwinding`
+// expect-lint: 29:13 use of deprecated function `host_enter`
+// expect-lint: 30:13 use of deprecated function `host_run`
+// expect-stdout:
+// ok
+
+// The executor's internals are public only for the compiler and the
+// runtime: naming one warns, and 0.2.0 makes them private.
+#[allow(unused)]
+fn uses(p: task::Pool, w: task::Worker, t: task::TaskRef) {}
+fn main() {
+    let a = task::wake_task;
+    let b = task::cancel_requested;
+    let c = task::unwinding;
+    let d = task::host_enter;
+    let e = task::host_run;
+    let _ = (a, b, c, d, e);
+    println("ok");
+}
