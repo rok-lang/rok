@@ -16,6 +16,8 @@ pub trait AstVisitor {
     /// trait.
     fn path(&mut self, _p: &rokc_ast::Path) {}
     fn stmt(&mut self, _s: &Stmt) {}
+    /// A block, before its statements.
+    fn block(&mut self, _b: &Block) {}
     fn ty(&mut self, _t: &Ty) {}
     fn bind(&mut self, _name: &str) {}
     /// `bind`, with the declaring construct's span (a `let` statement, a
@@ -150,6 +152,7 @@ pub fn walk_fn(v: &mut impl AstVisitor, f: &FnDef) {
 }
 
 pub fn walk_block(v: &mut impl AstVisitor, b: &Block) {
+    v.block(b);
     v.push_scope();
     for s in &b.stmts {
         walk_stmt(v, s);

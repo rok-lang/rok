@@ -1360,3 +1360,76 @@ fn ext_ops_scope_ascii_led_to_their_package() {
     // `<-` starts like `<`: other packages keep `a < -1`; `⊕` is build-wide.
     assert_eq!(ext.in_package("").symbols(), ["⊕"]);
 }
+
+/// The `(lint, message)` of each parse warning in `src`.
+fn parse_warnings(src: &str) -> Vec<(String, String)> {
+    let (tokens, _) = Lexer::new(src, "test").lex_all();
+    let (_, diags) = parse_program(&tokens, "test");
+    diags
+        .into_iter()
+        .map(|d| (d.lint.map(|l| *l).unwrap_or_default(), d.message))
+        .collect()
+}
+
+#[test]
+fn keyword_idents_only_where_names_become_keywords() {
+    let src = "struct S { move: i32; }\n\
+               fn gen(dyn: i32) -> i32 { dyn }\n\
+               fn main() {\n    let s = S { move: 1 };\n    let r#do = s.move + f(defer: 2);\n}\n\
+               #[impl_macro(x)] @macro { }\n";
+    let got: Vec<String> = parse_warnings(src)
+        .into_iter()
+        .filter(|(l, _)| l == "keyword_idents")
+        .map(|(_, m)| m)
+        .collect();
+    assert_eq!(
+        got,
+        [
+            "`gen` is a keyword from Rok 0.2.0 on",
+            "`dyn` is a keyword from Rok 0.2.0 on",
+            "`dyn` is a keyword from Rok 0.2.0 on",
+        ]
+    );
+}
+
+#[test]
+fn raw_contextual_keyword_is_a_name() {
+    // `r#type = 1;` assigns a local; `type T = i32;` is an alias.
+    let p = parse("fn f() {\n    let r#type = 0;\n    r#type = 1;\n    type T = i32;\n}\n");
+    let Item::Fn(f) = &p.items[0] else { panic!() };
+    let body = f.body.as_ref().unwrap();
+    assert!(matches!(body.stmts[1].kind, StmtKind::Assign(..)));
+}
+
+#[test]
+fn try_coalesce_and_closure_operator_warn() {
+    let lints =
+        |src: &str| -> Vec<String> { parse_warnings(src).into_iter().map(|(l, _)| l).collect() };
+    let warn = ["try_coalesce_precedence"];
+    assert_eq!(lints("fn f() { let a = try? g() ?? 1; }"), warn);
+    for quiet in [
+        "fn f() { let a = (try? g()) ?? 1; }",
+        "fn f() { let a = try? (g() ?? 1); }",
+        "fn f() { let a = try? g(); }",
+        "fn f() { let a = try g() ?? 1; }",
+    ] {
+        assert!(lints(quiet).is_empty(), "{quiet}");
+    }
+    let warn = ["trailing_closure_operator"];
+    assert_eq!(
+        lints("fn f() {\n    run {\n        a();\n    }\n    - x;\n}\n"),
+        warn
+    );
+    assert_eq!(
+        lints("fn f() {\n    xs.each |x| { a(x); }\n    * y;\n}\n"),
+        warn
+    );
+    for quiet in [
+        "fn f() {\n    run {\n        a();\n    };\n    - x;\n}\n",
+        "fn f() {\n    run { a(); } - x;\n}\n",
+        "fn f() {\n    let v = run { a(); }\n        - x;\n}\n",
+        "fn f() {\n    if c { a(); }\n    - x;\n}\n",
+    ] {
+        assert!(lints(quiet).is_empty(), "{quiet}");
+    }
+}

@@ -256,6 +256,10 @@ pub const KEYWORDS: &[&str] = &[
     "impl", "pub", "mod", "use", "as", "is", "ref", "true", "false", "none", "self", "Self",
 ];
 
+/// Words that become reserved keywords in 0.2.0: a name spelled so needs
+/// `r#` there (`keyword_idents`).
+pub const FUTURE_KEYWORDS: &[&str] = &["macro", "defer", "dyn", "move", "gen", "do"];
+
 /// Why `name` (code name: `-` spelled `_`) can't be a package name: code
 /// could not name it, or it would mount into `rok::` beside the standard
 /// library.

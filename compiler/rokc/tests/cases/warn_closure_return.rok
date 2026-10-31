@@ -1,0 +1,32 @@
+// spec: 004.03.11-return-in-closures-and-nested-functions
+// expect-exit: 0
+// expect-lint: 22:21 this `return` leaves only the trailing closure, not the function around it
+// expect-warning: help: to leave the function, write a `for` loop instead of the call; to end only this call of the closure, add `#[allow(closure_return)]`
+// expect-stdout:
+// 1
+// 3
+// 1
+// 3
+// 2
+
+// A bare `return` in a statement's trailing closure ends that call of the
+// closure, not the function (spec 4.3.11). A `return` with a value, one
+// in a closure inside, and one in a closure passed in parentheses are
+// quiet.
+fn each(xs: List<i32>, f: fn(i32) -> ()) { for x in xs { f(x); } }
+fn first(xs: List<i32>, f: fn(i32) -> bool) -> i32 { for x in xs { if f(x) { return x; } } -1 }
+
+fn main() {
+    let xs: List<i32> = [1, 2, 3];
+    each(xs) |x| {
+        if x == 2 { return; }
+        println(f"{x}");
+    }
+    each(xs, |x| { if x == 2 { return; } println(f"{x}"); });
+    let n = first(xs) |x| { if x > 1 { return true; } false };
+    each([0]) |_| {
+        let skip = |x: i32| { if x == 0 { return; } };
+        skip(0);
+    }
+    println(f"{n}");
+}

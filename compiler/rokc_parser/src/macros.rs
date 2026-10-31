@@ -624,7 +624,11 @@ fn emit_concat(
                     let toks = rep.and_then(|r| r.get(n)).or_else(|| binds.get(n)).cloned();
                     if let Some(Binding::One(ts)) = toks {
                         for s in &ts {
-                            name.push_str(&s.kind.text());
+                            match &s.kind {
+                                // `r#match` pastes as `match`.
+                                TokenKind::Ident(n) => name.push_str(n),
+                                k => name.push_str(&k.text()),
+                            }
                         }
                     }
                     k += 2;

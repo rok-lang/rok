@@ -498,6 +498,18 @@ fn static_hole(ctx: &LowerCtx<'_>, value: Expr, ty: &HirTy, text: &str) -> Optio
         );
         return None;
     }
+    if spec.ty == b'g' && spec.precision.is_some() && (int || float) {
+        let plain = text.strip_suffix('g').unwrap_or(text);
+        ctx.emit_lint(
+            "fstring_g_precision",
+            ctx.here(),
+            format!(
+                "`{{:{text}}}` prints like `{{:{plain}}}` today; from Rok 0.2.0 `g` is the \
+                 general format (`1.23e+03`)"
+            ),
+            format!("write `{{:{plain}}}` to keep this output"),
+        );
+    }
     let number = kind_of(ctx, ty).number();
     let debug = spec.ty == b'?';
     // Nothing to apply: the plain rendering (a non-number's sign / `0` /

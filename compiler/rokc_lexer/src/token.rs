@@ -9,6 +9,9 @@ pub struct Token {
     /// The `///` / `//!` lines in the trivia before this token; the
     /// parser turns them into `#[doc]` / `#![doc]` attributes.
     pub docs: Vec<DocLine>,
+    /// Written `r#name` (spec 1.4.4): never a keyword, contextual or
+    /// reserved.
+    pub raw: bool,
 }
 
 impl Token {
@@ -18,9 +21,12 @@ impl Token {
             kind,
             span,
             docs: Vec::new(),
+            raw: false,
         }
     }
 }
+
+pub use rokc_core::FUTURE_KEYWORDS;
 
 /// One doc comment line: its text after the marker and one space.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -224,6 +230,7 @@ impl TokenKind {
             return k.to_owned();
         }
         let p = match self {
+            Self::Ident(s) if RESERVED.contains(&s.as_str()) => return format!("r#{s}"),
             Self::IntLit(s) | Self::FloatLit(s) | Self::Ident(s) | Self::ExtOp(s) => {
                 return s.clone();
             }
@@ -411,7 +418,12 @@ pub fn keyword_kind(ident: &str) -> Option<TokenKind> {
         _ => return None,
     })
 }
-rokc_core::codec_struct!(Token { kind, span, docs });
+rokc_core::codec_struct!(Token {
+    kind,
+    span,
+    docs,
+    raw
+});
 rokc_core::codec_struct!(DocLine { inner, text, span });
 rokc_core::codec_enum!(TokenKind {
     IntLit(x0),

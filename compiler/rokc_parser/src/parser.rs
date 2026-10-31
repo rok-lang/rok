@@ -10,7 +10,7 @@ use rokc_ast::{
 };
 use rokc_core::Visibility;
 use rokc_diagnostic::{ErrorKind, RokDiagnostic, Span};
-use rokc_lexer::token::keyword_str;
+use rokc_lexer::token::{FUTURE_KEYWORDS, keyword_str};
 use rokc_lexer::{Token, TokenKind};
 
 use crate::prec::{Assoc, CAST_PREC, COALESCE_PREC, ExtOps, Fixity, PREFIX_PREC};
@@ -97,6 +97,15 @@ pub struct Parser<'a> {
     docs_dropped: std::collections::HashMap<u32, (&'static str, bool)>,
     /// Token ranges no parse looks into (meta block bodies).
     unparsed: Vec<std::ops::Range<usize>>,
+    /// The next `bump` takes a name where any keyword is one (`p.move`,
+    /// a field): no `keyword_idents` there.
+    name_pos: bool,
+    /// Starts of the identifiers `keyword_idents` reported (a token is
+    /// parsed again after backtracking).
+    kw_warned: std::collections::HashSet<(u32, u32)>,
+    /// Start of the expression statement being parsed, for
+    /// `trailing_closure_operator`.
+    stmt_at: Option<u32>,
 }
 
 /// Nesting limit for expressions, types, patterns and blocks.
@@ -282,6 +291,9 @@ impl<'a> Parser<'a> {
             docs_used: std::collections::HashSet::new(),
             docs_dropped: std::collections::HashMap::new(),
             unparsed: Vec::new(),
+            name_pos: false,
+            kw_warned: std::collections::HashSet::new(),
+            stmt_at: None,
         }
     }
 
@@ -794,8 +806,45 @@ impl<'a> Parser<'a> {
         let Some(t) = self.tokens.get(self.pos).cloned() else {
             return Token::new(TokenKind::Eof, Span::DUMMY);
         };
+        if let TokenKind::Ident(n) = &t.kind {
+            let name_pos = std::mem::take(&mut self.name_pos);
+            // `@macro { .. }` is meta syntax, not a name.
+            if !t.raw
+                && !name_pos
+                && FUTURE_KEYWORDS.contains(&n.as_str())
+                && self.prev_kind() != Some(&TokenKind::At)
+            {
+                self.future_keyword(n, t.span);
+            }
+        }
         self.pos += 1;
         t
+    }
+
+    /// `bump` a name where any keyword is one (after `.`, a field).
+    fn bump_name(&mut self) -> Token {
+        self.name_pos = true;
+        let t = self.bump();
+        self.name_pos = false;
+        t
+    }
+
+    /// `keyword_idents`: `name` is a keyword from 0.2.0 on.
+    fn future_keyword(&mut self, name: &str, span: Span) {
+        if span.is_dummy() || !self.kw_warned.insert((span.file, span.start)) {
+            return;
+        }
+        self.diagnostics.push(
+            RokDiagnostic::warning(
+                ErrorKind::Parse,
+                span,
+                format!("`{name}` is a keyword from Rok 0.2.0 on"),
+            )
+            .with_file(self.file.clone())
+            .with_help(format!("write `r#{name}` to keep this name, or rename it"))
+            .with_fix(span, format!("r#{name}"), format!("write `r#{name}`"))
+            .with_lint("keyword_idents"),
+        );
     }
 
     fn eat(&mut self, kind: &TokenKind) -> bool {
@@ -1083,6 +1132,9 @@ impl<'a> Parser<'a> {
         let TokenKind::Ident(k) = self.peek() else {
             return false;
         };
+        if self.peek_raw() {
+            return false;
+        }
         match k.as_str() {
             "extern" => matches!(next, Some(TokenKind::StrLit(_) | TokenKind::LBrace)),
             "const" => matches!(
@@ -1097,8 +1149,7 @@ impl<'a> Parser<'a> {
     /// Spec 1.5.4: `union` is an item keyword only as `union Name` at item
     /// start (`Set::union`, `a.union(b)` are identifiers).
     fn at_union_item(&self) -> bool {
-        matches!(self.peek(), TokenKind::Ident(n) if n == "union")
-            && matches!(self.peek_next(), Some(TokenKind::Ident(_)))
+        self.at_kw("union") && matches!(self.peek_next(), Some(TokenKind::Ident(_)))
     }
 
     /// Top-level statement of the entry file (spec 4.16.1). Block-like
@@ -1619,7 +1670,12 @@ impl<'a> Parser<'a> {
     /// The current token is the contextual keyword `w` (an identifier
     /// token; spec 1.5).
     fn at_kw(&self, w: &str) -> bool {
-        matches!(self.peek(), TokenKind::Ident(n) if n == w)
+        matches!(self.peek(), TokenKind::Ident(n) if n == w) && !self.peek_raw()
+    }
+
+    /// The current token is an identifier written `r#name`.
+    fn peek_raw(&self) -> bool {
+        self.pending.is_none() && self.tokens.get(self.pos).is_some_and(|t| t.raw)
     }
 
     fn eat_kw(&mut self, w: &str) -> bool {
@@ -2064,7 +2120,7 @@ impl<'a> Parser<'a> {
                 );
                 return None;
             };
-            self.bump();
+            self.bump_name();
             self.expect(&TokenKind::Colon, "`:`")?;
             let ty = self.parse_type()?;
             let default = if allow_default && self.eat(&TokenKind::Eq) {
@@ -2978,7 +3034,7 @@ impl<'a> Parser<'a> {
                 break;
             }
             let field_name = if let Some(n) = self.peek_name() {
-                self.bump();
+                self.bump_name();
                 n
             } else {
                 let s = self.peek_span();
@@ -3581,8 +3637,9 @@ impl<'a> Parser<'a> {
         let kind = match self.peek().clone() {
             // `any` | `any Tr` | `any (A + B)`. The bound binds
             // tighter than `|`: `any Error | none` is `(any Error) | none`.
-            TokenKind::Ident(k)
-                if k == "any" && !matches!(self.peek_next(), Some(TokenKind::ColonColon)) =>
+            TokenKind::Ident(_)
+                if self.at_kw("any")
+                    && !matches!(self.peek_next(), Some(TokenKind::ColonColon)) =>
             {
                 self.bump();
                 match self.peek() {
@@ -4965,7 +5022,10 @@ impl<'a> Parser<'a> {
                 ))
             }
             _ => {
-                let expr = self.parse_expr()?;
+                let outer = self.stmt_at.replace(start.start);
+                let expr = self.parse_expr();
+                self.stmt_at = outer;
+                let expr = expr?;
                 if matches!(self.peek(), TokenKind::Eq) {
                     self.bump();
                     let value = self.parse_expr()?;
@@ -5219,6 +5279,7 @@ impl<'a> Parser<'a> {
                 if COALESCE_PREC < min_bp {
                     break;
                 }
+                self.closure_operator(&lhs, &sym);
                 self.bump();
                 let rhs = self.parse_expr_bp(COALESCE_PREC)?;
                 let span = self.to_prev(lhs.span);
@@ -5250,6 +5311,7 @@ impl<'a> Parser<'a> {
                     ),
                 );
             }
+            self.closure_operator(&lhs, &sym);
             self.bump();
             let rhs = self.parse_expr_bp(right_bp)?;
             let span = self.to_prev(lhs.span);
@@ -5267,6 +5329,88 @@ impl<'a> Parser<'a> {
             return self.ternary(lhs);
         }
         Some(lhs)
+    }
+
+    /// `try_coalesce_precedence`: `try? f() ?? d` (operand from token
+    /// `from`) is `try? (f() ?? d)`, so an error gives `none`, not `d`.
+    fn try_coalesce(&mut self, at: Span, from: usize, operand: &Expr) {
+        if !matches!(operand.kind, ExprKind::NullishCoalesce(..)) || self.pending.is_some() {
+            return;
+        }
+        let toks = &self.tokens[from..self.pos];
+        let mut depth = 0i32;
+        let mut split = None;
+        let mut closed = None;
+        for (i, t) in toks.iter().enumerate() {
+            match t.kind {
+                TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace => depth += 1,
+                TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace => {
+                    depth -= 1;
+                    if depth == 0 && closed.is_none() {
+                        closed = Some(i);
+                    }
+                }
+                TokenKind::QuestionQuestion if depth == 0 && split.is_none() => split = Some(i),
+                _ => {}
+            }
+        }
+        // `try? (f() ?? d)`: already grouped.
+        if toks.first().is_some_and(|t| t.kind == TokenKind::LParen)
+            && closed == Some(toks.len() - 1)
+        {
+            return;
+        }
+        let Some(split) = split else { return };
+        let (mut l, mut r) = (tokens_text(&toks[..split]), tokens_text(&toks[split + 1..]));
+        // Long operands read better as placeholders.
+        if l.len() + r.len() > 60 {
+            (l, r) = ("x".to_owned(), "d".to_owned());
+        }
+        self.diagnostics.push(
+            RokDiagnostic::warning(
+                ErrorKind::Parse,
+                at,
+                format!(
+                    "`try? {l} ?? {r}` is `try? ({l} ?? {r})`: an error gives `none`, not `{r}`"
+                ),
+            )
+            .with_file(self.file.clone())
+            .with_help(format!(
+                "write `(try? {l}) ?? {r}` to get `{r}` on an error, or `try? ({l} ?? {r})` \
+                 to keep this meaning"
+            ))
+            .with_lint("try_coalesce_precedence"),
+        );
+    }
+
+    /// `trailing_closure_operator`: `op` starts the line after the `}` of
+    /// a trailing-closure call that starts a statement, so it continues
+    /// the call (`run { .. }` then `-x;`). Rok 0.2.0 ends the call there.
+    fn closure_operator(&mut self, lhs: &Expr, op: &str) {
+        if self.stmt_at != Some(lhs.span.start) || is_block_like(lhs) || !ends_stmt(lhs) {
+            return;
+        }
+        let Some(prev) = self.prev_span() else { return };
+        let at = self.peek_span();
+        if at.line <= prev.line {
+            return;
+        }
+        self.diagnostics.push(
+            RokDiagnostic::warning(
+                ErrorKind::Parse,
+                at,
+                format!(
+                    "`{op}` at the start of this line continues the trailing-closure call above"
+                ),
+            )
+            .with_file(self.file.clone())
+            .with_help(format!(
+                "write `;` after the closure's `}}` to end the call there, as Rok 0.2.0 \
+                 does; to keep one expression, move `{op}` to the end of the line above"
+            ))
+            .with_fix(self.after_prev(), ";", "end the call with `;`")
+            .with_lint("trailing_closure_operator"),
+        );
     }
 
     /// The current token as a `fixity` operator; tokens that are also
@@ -5930,7 +6074,8 @@ impl<'a> Parser<'a> {
             TokenKind::Try => {
                 // `try e` / `try? e` / `try! e` covers everything to its right
                 // up to `catch` / `finally` (`parse_catch_tail`).
-                let try_end = self.peek_span().end;
+                let try_span = self.peek_span();
+                let try_end = try_span.end;
                 self.bump();
                 // `try!` is one word: `try !x` tries the negation.
                 let glued = self.peek_span().start == try_end;
@@ -5941,7 +6086,11 @@ impl<'a> Parser<'a> {
                 } else {
                     TryKind::Plain
                 };
+                let from = self.pos;
                 let operand = self.parse_expr_bp(0)?;
+                if kind == TryKind::Optional {
+                    self.try_coalesce(try_span, from, &operand);
+                }
                 ExprKind::Try {
                     kind,
                     operand: Box::new(operand),
@@ -6368,7 +6517,7 @@ impl<'a> Parser<'a> {
                     let name = match self.peek().clone() {
                         _ if self.peek_name().is_some() => {
                             let n = self.peek_name().unwrap_or_default();
-                            self.bump();
+                            self.bump_name();
                             n
                         }
                         TokenKind::IntLit(s) | TokenKind::FloatLit(s) => {
@@ -6514,7 +6663,7 @@ impl<'a> Parser<'a> {
                     let name = match self.peek().clone() {
                         _ if self.peek_name().is_some() => {
                             let n = self.peek_name().unwrap_or_default();
-                            self.bump();
+                            self.bump_name();
                             n
                         }
                         TokenKind::IntLit(s) => {
@@ -7037,7 +7186,7 @@ impl<'a> Parser<'a> {
             let attrs = self.cfg_only_attrs("a struct literal field");
             let marks = (self.pending_stmts.len(), self.lifted.len());
             let name = if let Some(n) = self.peek_name() {
-                self.bump();
+                self.bump_name();
                 n
             } else {
                 let s = self.peek_span();
@@ -7187,7 +7336,7 @@ impl<'a> Parser<'a> {
                 break;
             }
             let name = if let Some(n) = self.peek_name() {
-                self.bump();
+                self.bump_name();
                 n
             } else {
                 let s = self.peek_span();
@@ -7497,7 +7646,7 @@ impl<'a> Parser<'a> {
                     || (matches!(name.as_str(), "attributes" | "regions")
                         && matches!(self.peek_next(), Some(TokenKind::Eq)))
                 {
-                    self.bump(); // ident
+                    self.bump_name(); // ident
                     self.bump(); // `:`
                     let value = self.parse_expr()?;
                     args.push(CallArg::Named { name, value });
@@ -7581,6 +7730,20 @@ const fn ends_stmt(e: &Expr) -> bool {
         return is_block_like(e);
     };
     matches!(&c.kind, ExprKind::Closure { body, .. } if matches!(body.kind, ExprKind::Block(_)))
+}
+
+/// Tokens as source, one space where the source had any.
+fn tokens_text(toks: &[Token]) -> String {
+    let mut out = String::new();
+    let mut end = None;
+    for t in toks {
+        if end.is_some_and(|e| e != t.span.start) {
+            out.push(' ');
+        }
+        out.push_str(&t.kind.text());
+        end = Some(t.span.end);
+    }
+    out
 }
 
 const fn is_block_like(e: &Expr) -> bool {
