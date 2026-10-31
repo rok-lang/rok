@@ -910,7 +910,9 @@ mod tests {
     }
 
     /// `ROKR_WORKERS` wins over its old spelling `ROK_WORKERS`, which is
-    /// read alone.
+    /// read alone. Not on Windows: `set_var` there does not reach the C
+    /// runtime's copy that `getenv` reads.
+    #[cfg(not(windows))]
     #[test]
     fn workers_new_name_first() {
         if thread::rok_cpu_count() == 0 {
