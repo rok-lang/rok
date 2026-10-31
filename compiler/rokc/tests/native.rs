@@ -1732,6 +1732,83 @@ fn main() -> i32 {
     assert_eq!(run.status.code(), Some(42));
 }
 
+/// An `extern "C" fn` called on threads rok did not start: the first
+/// call attaches the thread, enough allocation to collect runs, and the
+/// threads leave the registry when they end (the second round collects
+/// with them gone).
+// spec: §8.3.8
+#[test]
+fn foreign_thread_callback_allocates() {
+    let Some(env) = setup() else { return };
+    let dir = scratch("foreign_thread");
+    fs::write(
+        dir.join("side.c"),
+        r"
+#include <pthread.h>
+typedef long (*cb_t)(long);
+static cb_t g_cb;
+static void *run(void *a) {
+    long n = (long)a;
+    long t = g_cb(n);
+    return (void *)(t + g_cb(n));
+}
+long run_threads(cb_t f, long n) {
+    pthread_t th[4];
+    long total = 0;
+    g_cb = f;
+    for (int i = 0; i < 4; i++) pthread_create(&th[i], 0, run, (void *)n);
+    for (int i = 0; i < 4; i++) {
+        void *r;
+        pthread_join(th[i], &r);
+        total += (long)r;
+    }
+    return total;
+}
+",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("main.rok"),
+        r#"
+extern "C" {
+    fn run_threads(f: fn(i64) -> i64, n: i64) -> i64;
+}
+
+extern "C" fn fill(n: i64) -> i64 {
+    let xs: List<i64> = List::new();
+    for i in 0..n { xs.push(i); }
+    xs.len() as i64
+}
+
+fn main() -> i32 {
+    let a = unsafe { run_threads(fill, 2000000) };
+    let b = unsafe { run_threads(fill, 2000000) };
+    let c = fill(3000000);
+    if a == 16000000 && b == 16000000 && c == 3000000 { 0 } else { 1 }
+}
+"#,
+    )
+    .unwrap();
+    let obj = dir.join("main.o");
+    ok(&build(
+        &env,
+        &dir.join("main.rok"),
+        &["--emit=obj", "-o", obj.to_str().unwrap()],
+    ));
+    let exe = dir.join("out");
+    ok(&Command::new("clang")
+        .arg(&obj)
+        .arg(dir.join("side.c"))
+        .arg(&env.rokr)
+        .args(["-pthread", "-lm", "-o"])
+        .arg(&exe)
+        .output()
+        .unwrap());
+    for _ in 0..5 {
+        ok(&Command::new(&exe).output().unwrap());
+    }
+}
+
 /// `kind = "static"` takes `lib<name>.a` from the `-L` directories even
 /// beside a shared library of the same name (ld64 would take the
 /// `.dylib`); a missing archive is an error naming it.

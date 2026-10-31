@@ -1368,10 +1368,14 @@ pub extern "C" fn rok_os_spawn(
 }
 
 /// `waitpid`: the pid (status in `out[0]`), 0 if `nohang` and still
-/// running, or `-errno`.
+/// running, or `-errno`. `nohang` bit 0: do not block; bit 1: only wait
+/// for the end, leave the child to reap (`out` untouched).
 #[cfg(unix)]
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_os_waitpid(pid: i32, nohang: i32, out: *mut u8) -> i32 {
+    if nohang & 2 != 0 {
+        return wait_ended(pid, nohang & 1 != 0);
+    }
     let mut st = 0;
     let flags = if nohang != 0 { libc::WNOHANG } else { 0 };
     let (r, e) = native(|| {
@@ -1389,6 +1393,29 @@ pub extern "C" fn rok_os_waitpid(pid: i32, nohang: i32, out: *mut u8) -> i32 {
     // SAFETY: a live one-element `GcBuf<i32>`.
     unsafe { *cell(out, 0) = st };
     r
+}
+
+/// `waitid(WNOWAIT)`: the pid once it has ended, still a zombie, 0 if
+/// `nohang` and running, or `-errno`.
+#[cfg(unix)]
+fn wait_ended(pid: i32, nohang: bool) -> i32 {
+    let flags = libc::WEXITED | libc::WNOWAIT | if nohang { libc::WNOHANG } else { 0 };
+    let (r, e) = native(|| {
+        loop {
+            // SAFETY: a zeroed `siginfo_t` is valid; `waitid` fills it.
+            let mut info: libc::siginfo_t = unsafe { core::mem::zeroed() };
+            // SAFETY: plain libc call into `info`.
+            let r = unsafe { libc::waitid(libc::P_PID, pid as libc::id_t, &raw mut info, flags) };
+            if r >= 0 {
+                // SAFETY: filled by `waitid`, or still zeroed (WNOHANG).
+                break unsafe { info.si_pid() };
+            }
+            if errno() != libc::EINTR {
+                break r;
+            }
+        }
+    });
+    if r < 0 { -e } else { r }
 }
 
 #[cfg(target_os = "wasi")]

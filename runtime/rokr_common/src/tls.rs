@@ -280,6 +280,17 @@ pub fn no_safepoint() -> *mut u8 {
     at(tls_abi::NO_SAFEPOINT)
 }
 
+/// `attached()`: started by rok, or `rok_thread_init`.
+pub const ATTACHED_INIT: u8 = 1;
+/// `attached()`: a thread rok did not start, attached by a callback.
+pub const ATTACHED_CALLBACK: u8 = 2;
+
+/// How this thread joined the runtime: 0 (not, or left), or one of
+/// `ATTACHED_*`. A new thread's block is zeroed.
+pub fn attached() -> *mut u8 {
+    at(tls_abi::ATTACHED)
+}
+
 /// `rok_thread_init` slot values (803 §8.3.6). The TLAB starts empty
 /// (the first allocation refills it); the write barrier logs into its
 /// own remembered-set chunk, allocated by the first logged store.
@@ -305,6 +316,7 @@ pub fn thread_init() {
         }
         worker_id().write(new_worker_id());
         no_safepoint().write(0);
+        attached().write(ATTACHED_INIT);
     }
 }
 

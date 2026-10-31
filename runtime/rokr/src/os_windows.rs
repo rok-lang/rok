@@ -1653,13 +1653,15 @@ unsafe fn create(
 }
 
 /// Wait for child `pid`: the pid (its exit code in `out[0]`), 0 if
-/// `nohang` and still running, or `-error`.
+/// `nohang` and still running, or `-error`. `nohang` bit 0: do not
+/// block; bit 1: only wait for the end, keep the handle (`out`
+/// untouched).
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_os_waitpid(pid: i32, nohang: i32, out: *mut u8) -> i32 {
     let Some(hd) = child(pid as u32) else {
         return -win::ERROR_INVALID_PARAMETER;
     };
-    let ms = if nohang != 0 { 0 } else { win::INFINITE };
+    let ms = if nohang & 1 != 0 { 0 } else { win::INFINITE };
     // SAFETY: a live process handle (only this call closes it).
     let (w, e) = native(|| unsafe { win::WaitForSingleObject(hd, ms) });
     if w == win::WAIT_TIMEOUT {
@@ -1667,6 +1669,9 @@ pub extern "C" fn rok_os_waitpid(pid: i32, nohang: i32, out: *mut u8) -> i32 {
     }
     if w != win::WAIT_OBJECT_0 {
         return -e;
+    }
+    if nohang & 2 != 0 {
+        return pid;
     }
     let mut code = 0;
     // SAFETY: as above.

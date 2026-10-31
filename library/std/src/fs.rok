@@ -14,7 +14,7 @@
 // `read_async` still fills its buffer). `Dir::read_dir_async` streams
 // entries in batches; the free `read_dir_async` lists them all at once.
 
-use rok::std::io::{IoError, IoErrorKind, Reader, Writer, Seek, AsBytes, check, region, read_all, take_handle, write_region, text_of, byte_buf, list_of};
+use rok::std::io::{IoError, IoErrorKind, Reader, Writer, Seek, AsBytes, check, region, read_all, take_handle, write_region, text_of, byte_buf, list_of, use_begin, use_end, use_close};
 pub use rok::std::io::SeekFrom;
 use rok::std::path::{Path, AsPath, Component};
 use rok::std::env;
@@ -146,13 +146,14 @@ fn stat_at(dir: i32, path: str, follow: bool, fd: i32) throws (IoError) -> Metad
 /// An open file. `fd` is shared by copies of the handle, so `close()`
 /// through any copy closes it for all.
 pub struct File {
+    /// `[fd, calls in flight]` (`io::use_begin`).
     fd: GcBuf<i32>;
     path: str;
 }
 
 const fn file_of(fd: i32, path: str) -> File {
     unsafe {
-        let cell: GcBuf<i32> = buf_new(1);
+        let cell: GcBuf<i32> = buf_new(2);
         cell[0] = fd;
         File { fd: cell, path: path }
     }
@@ -173,20 +174,43 @@ impl File {
     /// The OS file descriptor (`-1` once closed).
     pub const fn fd(self) -> i32 {
         unsafe {
+            if (self.fd[1] & 1) != 0 { return -1; }
             self.fd[0]
         }
     }
 
-    const fn live(self) throws (IoError) -> i32 {
+    /// The fd for one call, which `done` ends. A `close` meanwhile
+    /// leaves the fd open until then.
+    fn live(self) throws (IoError) -> i32 {
+        let fd = unsafe { self.fd[0] };
+        if fd < 0 || !use_begin(self.fd, 1) {
+            throw IoError::with_kind(IoErrorKind::InvalidInput, f"{self.path}: file is closed");
+        }
+        fd
+    }
+
+    fn done(self) {
+        if use_end(self.fd, 1) { self.release(); }
+    }
+
+    /// `done`, then `r` checked.
+    fn done_with(self, r: i64) throws (IoError) -> i64 {
+        self.done();
+        try check(r, self.path)
+    }
+
+    fn release(self) {
         unsafe {
-            let fd = self.fd[0];
-            if fd < 0 { throw IoError::with_kind(IoErrorKind::InvalidInput, f"{self.path}: file is closed"); }
-            fd
+            let fd = take_handle(self.fd, 0, -1);
+            if fd >= 0 { rok_os_close(fd); }
         }
     }
 
-    /// Close now; later calls fail with `InvalidInput`. Closing twice is a no-op.
+    /// Close now; later calls fail with `InvalidInput`. Closing twice is a
+    /// no-op. With calls in flight through other copies, the last of them
+    /// releases the fd.
     pub fn close(self) throws (IoError) {
+        if use_close(self.fd, 1) != 0 { return; }
         unsafe {
             let fd = take_handle(self.fd, 0, -1);
             if fd < 0 { return; }
@@ -196,12 +220,16 @@ impl File {
 
     pub fn read(self, buf: List<u8>) throws (IoError) -> usize {
         let (dst, at, n) = region(buf);
-        (try check(unsafe { rok_os_read(try self.live(), dst, at, n) } as i64, self.path)) as usize
+        let fd = try self.live();
+        (try self.done_with(unsafe { rok_os_read(fd, dst, at, n) } as i64)) as usize
     }
 
     pub fn read_to_end(self) throws (IoError) -> List<u8> {
         let fd = try self.live();
-        try read_all(|b: GcBuf<u8>, at: usize, n: usize| unsafe { rok_os_read(fd, b, at, n) }, self.path, size_hint(fd, self.path))
+        let out = try read_all(|b: GcBuf<u8>, at: usize, n: usize| unsafe { rok_os_read(fd, b, at, n) }, self.path, size_hint(fd, self.path))
+            catch e { self.done(); throw e; };
+        self.done();
+        out
     }
 
     /// The rest of the file as text (`InvalidData` if not UTF-8).
@@ -212,13 +240,16 @@ impl File {
     /// Write some of `data` (a `str` or bytes); the count written.
     pub fn write<B: AsBytes>(self, data: B) throws (IoError) -> usize {
         let (src, at, n) = region(data);
-        (try check(unsafe { rok_os_write(try self.live(), src, at, n) } as i64, self.path)) as usize
+        let fd = try self.live();
+        (try self.done_with(unsafe { rok_os_write(fd, src, at, n) } as i64)) as usize
     }
 
     pub fn write_all<B: AsBytes>(self, data: B) throws (IoError) {
-        let fd = try self.live();
         let (src, at, n) = region(data);
-        try write_region(src, at, n, |b: GcBuf<u8>, o: usize, k: usize| unsafe { rok_os_write(fd, b, o, k) }, self.path);
+        let fd = try self.live();
+        try write_region(src, at, n, |b: GcBuf<u8>, o: usize, k: usize| unsafe { rok_os_write(fd, b, o, k) }, self.path)
+            catch e { self.done(); throw e; };
+        self.done();
     }
 
     pub fn write_str(self, s: str) throws (IoError) {
@@ -229,19 +260,25 @@ impl File {
     pub const fn flush(self) throws (IoError) {}
 
     pub fn sync_all(self) throws (IoError) {
-        try check(unsafe { rok_os_fsync(try self.live(), 0) } as i64, self.path);
+        let fd = try self.live();
+        try self.done_with(unsafe { rok_os_fsync(fd, 0) } as i64);
     }
 
     pub fn sync_data(self) throws (IoError) {
-        try check(unsafe { rok_os_fsync(try self.live(), 1) } as i64, self.path);
+        let fd = try self.live();
+        try self.done_with(unsafe { rok_os_fsync(fd, 1) } as i64);
     }
 
     pub fn set_len(self, size: u64) throws (IoError) {
-        try check(unsafe { rok_os_ftruncate(try self.live(), size) } as i64, self.path);
+        let fd = try self.live();
+        try self.done_with(unsafe { rok_os_ftruncate(fd, size) } as i64);
     }
 
     pub fn metadata(self) throws (IoError) -> Metadata {
-        try stat_at(-1, self.path, true, try self.live())
+        let fd = try self.live();
+        let m = try stat_at(-1, self.path, true, fd) catch e { self.done(); throw e; };
+        self.done();
+        m
     }
 
     pub fn permissions(self) throws (IoError) -> Permissions {
@@ -249,7 +286,8 @@ impl File {
     }
 
     pub fn set_permissions(self, perm: Permissions) throws (IoError) {
-        try check(unsafe { rok_os_fchmod(try self.live(), perm.mode) } as i64, self.path);
+        let fd = try self.live();
+        try self.done_with(unsafe { rok_os_fchmod(fd, perm.mode) } as i64);
     }
 
     pub fn seek(self, pos: SeekFrom) throws (IoError) -> u64 {
@@ -259,37 +297,43 @@ impl File {
             SeekFrom::Current(n) => unsafe { rok_os_lseek(fd, n, 1) },
             SeekFrom::End(n) => unsafe { rok_os_lseek(fd, n, 2) },
         };
-        (try check(r, self.path)) as u64
+        (try self.done_with(r)) as u64
     }
 
     /// A second handle on the same open file (`dup`).
     pub fn try_clone(self) throws (IoError) -> File {
-        let fd = try check(unsafe { rok_os_dup(try self.live()) } as i64, self.path);
-        file_of(fd as i32, self.path)
+        let fd = try self.live();
+        let new = try self.done_with(unsafe { rok_os_dup(fd) } as i64);
+        file_of(new as i32, self.path)
     }
 
     pub fn lock_exclusive(self) throws (IoError) {
-        try check(unsafe { rok_os_flock(try self.live(), 2) } as i64, self.path);
+        let fd = try self.live();
+        try self.done_with(unsafe { rok_os_flock(fd, 2) } as i64);
     }
 
     pub fn lock_shared(self) throws (IoError) {
-        try check(unsafe { rok_os_flock(try self.live(), 1) } as i64, self.path);
+        let fd = try self.live();
+        try self.done_with(unsafe { rok_os_flock(fd, 1) } as i64);
     }
 
     /// `false` if another holder has it.
     pub fn try_lock_exclusive(self) throws (IoError) -> bool {
-        (try check(unsafe { rok_os_flock(try self.live(), 6) } as i64, self.path)) == 1
+        let fd = try self.live();
+        (try self.done_with(unsafe { rok_os_flock(fd, 6) } as i64)) == 1
     }
 
     pub fn unlock(self) throws (IoError) {
-        try check(unsafe { rok_os_flock(try self.live(), 8) } as i64, self.path);
+        let fd = try self.live();
+        try self.done_with(unsafe { rok_os_flock(fd, 8) } as i64);
     }
 
     /// Map `len` bytes at `offset` (a multiple of the page size) read-only
     /// and shared. Unsafe: another writer of the file changes the bytes
     /// under the mapping, and truncating it makes reads fault.
     pub unsafe fn mmap(self, len: usize, offset: u64) throws (IoError) -> Mmap {
-        let addr = try check(unsafe { rok_os_mmap(try self.live(), len, offset) }, self.path);
+        let fd = try self.live();
+        let addr = try self.done_with(unsafe { rok_os_mmap(fd, len, offset) });
         unsafe {
             let cell: GcBuf<usize> = buf_new(1);
             cell[0] = addr as usize;
@@ -570,12 +614,7 @@ impl Seek for File {
 /// `using f = try fs::open(..) { .. }` closes `f` on the way out.
 impl Drop for File {
     fn drop(ref self) {
-        unsafe {
-            let fd = take_handle(self.fd, 0, -1);
-            if fd >= 0 {
-                rok_os_close(fd);
-            }
-        }
+        if use_close(self.fd, 1) == 0 { self.release(); }
     }
 }
 

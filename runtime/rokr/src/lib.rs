@@ -328,8 +328,16 @@ pub extern "C" fn rok_leave_native() {
 /// The C entry of a rok `extern "C" fn`: a call from C code that this
 /// thread entered from rok (`PARKED`) runs rok code again until
 /// [`rok_native_resume`]. Returns whether it was parked.
+///
+/// A thread rok does not know is attached first and counts as parked:
+/// back in C it is `PARKED`, so a collection does not wait for it.
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_native_reenter() -> u32 {
+    // SAFETY: this thread's own slot.
+    if unsafe { tls::attached().read() } == 0 {
+        thread::adopt();
+        return 1;
+    }
     let parked = rokr_common::tls::mutator_state().load(core::sync::atomic::Ordering::Relaxed)
         == rokr_common::tls::MUTATOR_PARKED;
     if parked {

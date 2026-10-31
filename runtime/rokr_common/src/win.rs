@@ -19,6 +19,7 @@ pub type SOCKET = usize;
 
 pub const INVALID_HANDLE_VALUE: HANDLE = -1;
 pub const INFINITE: DWORD = u32::MAX;
+pub const FLS_OUT_OF_INDEXES: DWORD = u32::MAX;
 pub const INVALID_SOCKET: SOCKET = !0;
 
 // Error codes (winerror.h).
@@ -402,6 +403,9 @@ unsafe extern "system" {
     pub fn GetCurrentProcess() -> HANDLE;
     pub fn GetCurrentProcessId() -> DWORD;
     pub fn GetCurrentThreadId() -> DWORD;
+    pub fn FlsAlloc(callback: Option<unsafe extern "system" fn(*mut c_void)>) -> DWORD;
+    pub fn FlsFree(index: DWORD) -> BOOL;
+    pub fn FlsSetValue(index: DWORD, value: *mut c_void) -> BOOL;
 
     pub fn VirtualAlloc(addr: *mut c_void, size: usize, kind: DWORD, protect: DWORD)
     -> *mut c_void;

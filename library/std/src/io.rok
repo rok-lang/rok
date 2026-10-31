@@ -205,6 +205,50 @@ pub(pkg) fn take_handle<T>(cell: GcBuf<T>, i: usize, empty: T) -> T {
     unsafe { atomic_xchg(cell, i, empty, SeqCst) }
 }
 
+#[intrinsic("rok.atomic.cas")]
+fn atomic_cas<T>(buf: GcBuf<T>, i: usize, current: T, new: T, success: AtomicOrdering, failure: AtomicOrdering) -> T;
+#[intrinsic("rok.atomic.sub")]
+fn atomic_sub<T>(buf: GcBuf<T>, i: usize, v: T, o: AtomicOrdering) -> T;
+#[intrinsic("rok.atomic.or")]
+fn atomic_or<T>(buf: GcBuf<T>, i: usize, v: T, o: AtomicOrdering) -> T;
+#[intrinsic("rok.atomic.load")]
+fn atomic_load<T>(buf: GcBuf<T>, i: usize, o: AtomicOrdering) -> T;
+
+// Calls in flight on a handle that copies share. `cell[u]` counts them
+// by 2, and bit 0 is set once the handle is closed. A close while calls
+// are in flight leaves the release to the last of them, so no call runs
+// on a handle that was closed (and its number maybe reused) under it.
+
+/// Start a call: `false` (and nothing to end) if the handle is closed.
+pub(pkg) fn use_begin(cell: GcBuf<i32>, u: usize) -> bool {
+    // A compare-and-swap, not an add: once closed the count only goes
+    // down, so the last call to end is one that ran.
+    let n = unsafe { cell[u] };
+    loop {
+        if (n & 1) != 0 { return false; }
+        let seen = unsafe { atomic_cas(cell, u, n, n + 2, SeqCst, SeqCst) };
+        if seen == n { return true; }
+        n = seen;
+    }
+}
+
+/// End a call: `true` if it was the last after a close, and the caller
+/// releases the handle now.
+pub(pkg) fn use_end(cell: GcBuf<i32>, u: usize) -> bool {
+    unsafe { atomic_sub(cell, u, 2, SeqCst) } == 3
+}
+
+/// Close: the word before. 0: the caller releases the handle now; bit 0
+/// set: it was closed already; else a call in flight releases it.
+pub(pkg) fn use_close(cell: GcBuf<i32>, u: usize) -> i32 {
+    unsafe { atomic_or(cell, u, 1, SeqCst) }
+}
+
+/// `cell[i]`, read atomically (a word another thread may change).
+pub(pkg) fn word_at(cell: GcBuf<i32>, i: usize) -> i32 {
+    unsafe { atomic_load(cell, i, SeqCst) }
+}
+
 /// The region `(buf, off, len)` holding `b`'s bytes.
 pub(pkg) const fn region<B: AsBytes>(b: B) -> (GcBuf<u8>, usize, usize) {
     unsafe { b.byte_slice().raw_parts() }
