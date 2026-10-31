@@ -70,6 +70,44 @@ A manual `workflow_dispatch` run skips `ci-green`, then runs `plan`,
 no attestation, no release, nothing uploaded. Use it to check the pipeline
 on a commit before tagging it.
 
+## Series and update pointers
+
+A series is the releases one breaking slot covers: `0.MINOR` while the
+major version is 0 (`0.1` is 0.1.0, 0.1.1, ...), then `MAJOR`. Clients find
+the newest release in two ways:
+
+- `latest/download/rok-version`: one line naming the newest release, of
+  any series. A bare `rok toolchain update` installs what it names and
+  makes it the default, as rustup does, also when that moves to a new
+  series. The previous toolchain stays installed, and when the series
+  changed `rok` says so once, with how to stay on the old one: pin it
+  (`toolchain: "0.1"` in `rok.rokon`, or in a script's `//! rokon`
+  block) or run `rok +0.1 ..`. `rok new` writes that pin from 0.1.6 on.
+- `download/channels/rok-version-<series>`, one channel file per series,
+  each one line naming the newest release of that series. They are assets
+  of a `channels` GitHub release (a prerelease, never the latest one, so
+  it does not move `latest/`).
+
+rok 0.1.6 and later read the channel files for a series:
+
+- `rok toolchain update <series>` and `rok toolchain install <series>`
+  (or a requirement such as `^0.1.5`) read the series' channel file;
+  a full version (`0.1.6`) is fetched directly and needs no pointer.
+- `install.sh --version 0.1` and `install.ps1 -Version 0.1` read the same
+  channel file.
+
+When a channel file is missing (HTTP 404), these clients fall back to
+`rok-version` and use it only if it names a release of the series they
+want; otherwise they stop and ask for a full version. So 0.1.6 works
+before any channel file is published, for the series `rok-version` is in.
+
+To publish the channel files, every release would write
+`rok-version-<its series>` to the `channels` release, replacing the old
+one (`gh release upload channels rok-version-<series> --clobber`); the
+`channels` release is created once by hand, as a prerelease. Nothing does
+this yet: `release.sh` and `release.yml` upload only `rok-version` with
+each release, and clients rely on the fallback above.
+
 ## Before the tag
 
 - The prefixes for this `<version>` must already be on S3: the native

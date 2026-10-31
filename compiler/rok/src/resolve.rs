@@ -744,16 +744,21 @@ impl<'a> Resolver<'a> {
         if updating || !self.index.has(url) {
             self.fetch_index(url, name)?;
         }
-        let pick = |all: &[registry::Entry]| match &pinned {
-            Some((_, v)) => all.iter().find(|e| e.vers == *v).cloned(),
-            None => registry::best(all, &parsed).cloned(),
+        // A locked version stays; a new pick skips stones whose
+        // `toolchain` this rok is not.
+        let pick = |all: &[registry::Entry]| {
+            if let Some((_, v)) = &pinned {
+                return (all.iter().find(|e| e.vers == *v).cloned(), None);
+            }
+            let (e, note) = registry::best_here(all, &parsed);
+            (e.cloned(), note)
         };
         let mut all = registry::entries(&self.index, url, name)?;
-        let mut chosen = pick(&all);
+        let (mut chosen, mut skipped) = pick(&all);
         if chosen.is_none() && !self.fetched.iter().any(|u| u == url) && !self.opts.offline {
             self.fetch_index(url, name)?;
             all = registry::entries(&self.index, url, name)?;
-            chosen = pick(&all);
+            (chosen, skipped) = pick(&all);
         }
         let e = match (chosen, &pinned) {
             (Some(e), _) => e,
@@ -762,8 +767,17 @@ impl<'a> Resolver<'a> {
                     "`{name}` {v} (in rok.lock) is not in the index {url} (run `rok update {name}`)"
                 ));
             }
-            (None, None) => return Err(registry::no_match(&self.index, &all, name, req, url)),
+            (None, None) => {
+                let mut e = registry::no_match(&self.index, &all, name, req, url);
+                if let Some(s) = skipped {
+                    e = format!("{e}\nhelp: {s}");
+                }
+                return Err(e);
+            }
         };
+        if let Some(s) = skipped.filter(|_| !self.opts.quiet) {
+            rokc_core::term::note(&format!("{s}; using {}", e.vers));
+        }
         if let Some((l, _)) = &pinned {
             if l.commit != e.rev {
                 return Err(format!(

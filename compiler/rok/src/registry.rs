@@ -101,6 +101,8 @@ pub struct Entry {
     pub yanked: bool,
     /// The manifest's `description` / `license` / `repository`.
     pub meta: Vec<(&'static str, String)>,
+    /// The toolchains that build it (a pin, `ToolchainReq`); `None`: any.
+    pub toolchain: Option<String>,
 }
 
 /// Manifest metadata an entry carries, in line order.
@@ -214,6 +216,7 @@ fn entry(d: Decoder<'_>) -> Result<Entry, String> {
             .iter()
             .filter_map(|k| Some(r.opt(k)?.string().map(|v| (*k, v))))
             .collect::<Result<_, _>>()?,
+        toolchain: r.opt("toolchain").map(|t| t.string()).transpose()?,
     })
 }
 
@@ -289,6 +292,7 @@ impl Entry {
                 ("yanked", Value::new(Kind::Bool(self.yanked))),
             ])
             .chain(self.meta.iter().map(|(k, v)| (*k, Value::str(v))))
+            .chain(self.toolchain.iter().map(|t| ("toolchain", Value::str(t))))
             .collect(),
         ))
     }
@@ -331,6 +335,34 @@ pub fn best<'a>(entries: &'a [Entry], req: &Req) -> Option<&'a Entry> {
         .iter()
         .filter(|e| !e.yanked && req.matches(&e.vers))
         .max_by(|a, b| a.vers.cmp(&b.vers))
+}
+
+/// `e` builds with this toolchain: it names none, or a pin `VERSION`
+/// meets. A pin that does not parse names a newer rok's form: no.
+pub fn builds_here(e: &Entry) -> bool {
+    e.toolchain.as_deref().is_none_or(|t| {
+        crate::toolchain::ToolchainReq::parse(t).is_ok_and(|r| r.matches(crate::VERSION))
+    })
+}
+
+/// `best` among the entries this toolchain builds, and a note when that
+/// hides a newer match.
+pub fn best_here<'a>(entries: &'a [Entry], req: &Req) -> (Option<&'a Entry>, Option<String>) {
+    let pick = entries
+        .iter()
+        .filter(|e| !e.yanked && req.matches(&e.vers) && builds_here(e))
+        .max_by(|a, b| a.vers.cmp(&b.vers));
+    let note = best(entries, req).filter(|n| pick != Some(*n)).map(|n| {
+        format!(
+            "stone `{}` {} needs toolchain {} (this is rok {}); to use it, pin that toolchain \
+             (`toolchain` in rok.rokon) or run `rok +<version> ..`",
+            n.name,
+            n.vers,
+            n.toolchain.as_deref().unwrap_or_default(),
+            crate::VERSION,
+        )
+    });
+    (pick, note)
 }
 
 /// The stone (`native`: native package) names in the cached index `url`.
@@ -491,6 +523,8 @@ pub fn entry_for(dir: &Path, m: &Manifest) -> Result<Entry, String> {
         .into_iter()
         .filter_map(|(k, v)| Some((k, v.clone()?)))
         .collect(),
+        // Not written yet: rok 0.1.1 and older reject unknown fields.
+        toolchain: None,
     })
 }
 
@@ -1031,6 +1065,7 @@ mod tests {
             cksum: "t".repeat(40),
             yanked: false,
             meta: vec![("license", "MIT".into())],
+            toolchain: None,
         };
         let line = e.to_line();
         assert_eq!(
@@ -1048,6 +1083,30 @@ mod tests {
         assert_eq!(back[0], e);
         assert_eq!(back[1].vers.to_string(), "0.4.0");
         assert_eq!(best(&back, &Req::parse("^0.3").unwrap()), Some(&back[0]));
+        // `toolchain` round-trips; an entry for another series is skipped.
+        let mut other = back[1].clone();
+        other.toolchain = Some("99.0".into());
+        let tl = other.to_line();
+        assert!(
+            tl.ends_with("license: \"MIT\", toolchain: \"99.0\" }"),
+            "{tl}"
+        );
+        assert_eq!(parse_file(&tl, "f").unwrap()[0], other);
+        let both = [back[0].clone(), other];
+        let (pick, note) = best_here(&both, &Req::parse("*").unwrap());
+        assert_eq!(pick, Some(&both[0]));
+        let note = note.unwrap();
+        assert!(note.contains("`geom` 0.4.0 needs toolchain 99.0"), "{note}");
+        let mine = Some(crate::toolchain::series(crate::VERSION).unwrap());
+        assert!(builds_here(&Entry {
+            toolchain: mine,
+            ..back[0].clone()
+        }));
+        // A pin from a newer rok's form builds nowhere here.
+        assert!(!builds_here(&Entry {
+            toolchain: Some("banana".into()),
+            ..back[0].clone()
+        }));
         // Features round-trip; only what differs from the defaults is written.
         let mut f = e;
         f.deps[0].optional = true;

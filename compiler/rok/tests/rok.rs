@@ -148,6 +148,16 @@ fn ok(out: &Output) -> String {
     text(&out.stdout)
 }
 
+/// This rok's series (`0.1`), the pin `rok new` writes.
+fn series() -> String {
+    let v: Vec<&str> = env!("CARGO_PKG_VERSION").split('.').collect();
+    if v[0] == "0" {
+        format!("0.{}", v[1])
+    } else {
+        v[0].to_owned()
+    }
+}
+
 #[track_caller]
 fn fails(out: &Output, want: &str) {
     let err = text(&out.stderr);
@@ -560,7 +570,10 @@ fn new_and_init_write_a_manifest() {
     assert_eq!(files, [".git", ".gitignore", "rok.rokon", "src"]);
     assert_eq!(
         read(&root.join("mylib/rok.rokon")),
-        "Package { name: \"mylib\", version: \"0.1.0\", deps: {} }\n"
+        format!(
+            "Package {{ name: \"mylib\", version: \"0.1.0\", toolchain: \"{}\", deps: {{}} }}\n",
+            series()
+        )
     );
     // Its own git repository, ignoring target/.
     assert_eq!(read(&root.join("mylib/.gitignore")), "target/\n");
@@ -904,7 +917,11 @@ fn rok_add_writes_canonical_rokon() {
     // Fits in 100 columns: one line.
     assert_eq!(
         read(&app.join("rok.rokon")),
-        "Package { name: \"app\", version: \"0.1.0\", deps: { \"u\": Dep::path(\"../u\") } }\n"
+        format!(
+            "Package {{ name: \"app\", version: \"0.1.0\", toolchain: \"{}\", deps: {{ \"u\": \
+             Dep::path(\"../u\") }} }}\n",
+            series()
+        )
     );
     ok(&rok(
         &home,
@@ -913,8 +930,12 @@ fn rok_add_writes_canonical_rokon() {
     ));
     assert_eq!(
         read(&app.join("rok.rokon")),
-        "Package {\n    name: \"app\",\n    version: \"0.1.0\",\n    deps: { \"u\": \
-         Dep::path(\"../u\"), \"a_rather_long_dependency_name\": Dep::path(\"../u\") },\n}\n"
+        format!(
+            "Package {{\n    name: \"app\",\n    version: \"0.1.0\",\n    toolchain: \"{}\",\n    \
+             deps: {{ \"u\": Dep::path(\"../u\"), \"a_rather_long_dependency_name\": \
+             Dep::path(\"../u\") }},\n}}\n",
+            series()
+        )
     );
     // A file with comments keeps its layout.
     let mine = "// mine\nPackage { name: \"app\", deps: { \"u\": Dep::path(\"../u\") } }\n";
@@ -1610,7 +1631,22 @@ fn pinned_toolchains() {
     fake_toolchain(&root.join("fake1"), "9.9.1");
     fake_toolchain(&root.join("fake2/rok-9.10.0"), "9.10.0");
     let tc = |args: &[&str]| rok(&home, &root, &[&["toolchain"][..], args].concat());
-    assert_eq!(tc(&["install", "9.9.1"]).status.code(), Some(2));
+    // Without --from, a release is downloaded from ROK_DIST.
+    let empty = format!("http://127.0.0.1:{}", serve_dir(root.join("empty")));
+    let mut c = rok_cmd(&home, &root, &["toolchain", "install", "9.9.1"]);
+    fails(
+        &c.env("ROK_DIST", &empty).output().unwrap(),
+        "/download/v9.9.1/rok-9.9.1-",
+    );
+    let mut c = rok_cmd(&home, &root, &["toolchain", "install", "9.9"]);
+    fails(
+        &c.env("ROK_DIST", &empty).output().unwrap(),
+        "no release is published at",
+    );
+    assert_eq!(
+        tc(&["install", "9.9.1", "--frm", "x"]).status.code(),
+        Some(2)
+    );
     fails(&tc(&["install", "9.9.1", "--from", "app"]), "no bin/rokc");
     // The version is the toolchain's own (`bin/rokc --version`).
     fails(
@@ -2794,6 +2830,10 @@ fn package_metadata_and_publish() {
         line.ends_with("yanked: false, license: \"MIT\" }\n"),
         "{line}"
     );
+    // A pinned manifest publishes no `toolchain` either.
+    let pin = format!("^{}.0", series());
+    let line = ok(&publish(&format!("toolchain: \"{pin}\", ")));
+    assert!(!line.contains("toolchain"), "{line}");
     fails(&publish("readme: \"doc/R.md\", "), "`readme: \"doc/R.md\"`");
     fails(
         &publish("readme: \"../meta/README.md\", "),
@@ -3050,6 +3090,85 @@ fn login_publish_yank_api() {
     fails(
         &run(&["login", "rks_ok"]),
         "api `http://example.com` must be an https:// URL",
+    );
+}
+
+/// An index entry whose `toolchain` this rok does not meet is skipped,
+/// with a note when that hides the newest match; a lone match is an
+/// error that says which toolchain it needs.
+// spec: §9.10.4a
+#[test]
+fn resolver_skips_other_series() {
+    let root = scratch("stones-series");
+    let home = root.join("home");
+    let index = root.join("index");
+    commit(
+        &index,
+        &[("config.rokon", "Config { api: \"https://rokstones.io\" }\n")],
+    );
+    for kv in [
+        ["user.name", "t"],
+        ["user.email", "t@t"],
+        ["commit.gpgsign", "false"],
+    ] {
+        git(&index, &["config", kv[0], kv[1]]);
+    }
+    let reg = index.display().to_string();
+    write(
+        &home.join("config.rokon"),
+        &format!("Config {{ registry: {} }}\n", q(&reg)),
+    );
+    publish_stones(&root, &home, &index);
+    // num 2.0.0 needs another series, 1.1.0 this one (as a newer rok
+    // writes them).
+    let file = read(&index.join("3/n/num"));
+    let pin =
+        |l: &str, t: &str| format!("{}, toolchain: \"{t}\" }}", l.strip_suffix(" }").unwrap());
+    let other: String = file
+        .lines()
+        .map(|l| {
+            if l.contains("vers: \"2.0.0\"") {
+                pin(l, "99.0")
+            } else if l.contains("vers: \"1.1.0\"") {
+                pin(l, &series())
+            } else {
+                l.to_owned()
+            }
+        })
+        .map(|l| l + "\n")
+        .collect();
+    assert_ne!(other, file);
+    commit(&index, &[("3/n/num", &other)]);
+
+    let app = root.join("app");
+    write(&app.join("src/main.rok"), "println(\"x\");\n");
+    write(&app.join("rok.rokon"), APP0);
+    ok(&rok(&home, &app, &["add", "num"]));
+    assert!(read(&app.join("rok.rokon")).contains("\"num\": Dep::version(\"^1.1.0\"),"));
+    write(
+        &app.join("rok.rokon"),
+        "Package { name: \"app\", deps: { \"num\": \">=1.0\" } }\n",
+    );
+    let _ = fs::remove_file(app.join("rok.lock"));
+    let out = rok(&home, &app, &["deps"]);
+    ok(&out);
+    assert_eq!(locked_stones(&read(&app.join("rok.lock"))), ["num@1.1.0"]);
+    let err = text(&out.stderr);
+    assert!(
+        err.contains(&format!(
+            "note: stone `num` 2.0.0 needs toolchain 99.0 (this is rok {}); to use it, pin that \
+             toolchain (`toolchain` in rok.rokon) or run `rok +<version> ..`; using 1.1.0",
+            env!("CARGO_PKG_VERSION")
+        )),
+        "{err}"
+    );
+    write(
+        &app.join("rok.rokon"),
+        "Package { name: \"app\", deps: { \"num\": \"^2\" } }\n",
+    );
+    fails(
+        &rok(&home, &app, &["deps"]),
+        "help: stone `num` 2.0.0 needs toolchain 99.0",
     );
 }
 
@@ -3949,6 +4068,346 @@ fn update_toolchain() {
             &format!("unknown command `{gone}`"),
         );
     }
+}
+
+/// A release server in `root/dist` with fake releases `versions` for
+/// this host; its URL.
+#[cfg(unix)]
+fn fake_dist(root: &Path, versions: &[&str]) -> String {
+    let host = env!("ROK_HOST");
+    let dist = root.join("dist");
+    for v in versions {
+        let stage = root.join("stage").join(v);
+        fake_toolchain(&stage.join(format!("rok-{v}")), v);
+        let name = format!("rok-{v}-{host}.tar.gz");
+        let to = dist.join(format!("download/v{v}"));
+        fs::create_dir_all(&to).unwrap();
+        let tar = Command::new("tar")
+            .current_dir(&stage)
+            .arg("-czf")
+            .arg(to.join(&name))
+            .arg(format!("rok-{v}"))
+            .status()
+            .unwrap();
+        assert!(tar.success());
+        let sum = sha256_of(&to.join(&name));
+        write(
+            &to.join(format!("{name}.sha256")),
+            &format!("{sum}  {name}\n"),
+        );
+    }
+    format!("http://127.0.0.1:{}", serve_dir(dist))
+}
+
+/// A bare update installs the newest release, also from another series,
+/// and says how to stay on the old one. `update <series>` is the newest
+/// of that series: its channel file, or before it exists `rok-version`
+/// when that names a release of the series.
+// spec: §9.10.6
+#[cfg(unix)]
+#[test]
+fn update_series_and_exact() {
+    let root = scratch("update-series");
+    let home = root.join("home");
+    let host = env!("ROK_HOST");
+    let url = fake_dist(&root, &["0.90.1", "0.90.2", "0.91.0"]);
+    let dist = root.join("dist");
+    let tc = |args: &[&str]| {
+        let mut c = rok_cmd(&home, &root, &[&["toolchain"][..], args].concat());
+        c.env("ROK_DIST", &url);
+        c.output().unwrap()
+    };
+    let default = || {
+        let list = ok(&rok(&home, &root, &["toolchain", "list"]));
+        list.lines()
+            .find_map(|l| l.strip_prefix("* ")?.strip_suffix(" (default)"))
+            .map(str::to_owned)
+    };
+    let latest = dist.join("latest/download/rok-version");
+    let channel = |s: &str| dist.join(format!("download/channels/rok-version-{s}"));
+
+    // No channel file yet: `rok-version`, when in the series.
+    write(&latest, "0.90.1\n");
+    ok(&tc(&["update", "0.90"]));
+    assert_eq!(default(), Some(format!("0.90.1-{host}")));
+    write(&latest, "0.91.0\n");
+    fails(
+        &tc(&["update", "0.90"]),
+        &format!(
+            "cannot tell the newest 0.90 release: {url}/download/channels/rok-version-0.90 does \
+             not exist and {url}/latest/download/rok-version names 0.91.0; name a 0.90 version \
+             (`rok toolchain update <version>`) or move to 0.91.0 (`rok toolchain update 0.91`)"
+        ),
+    );
+    assert_eq!(default(), Some(format!("0.90.1-{host}")));
+    // The channel file.
+    write(&channel("0.90"), "0.90.2\n");
+    let err = text(&tc(&["update", "0.90"]).stderr);
+    assert!(err.contains("Updated rok 0.90.1 -> 0.90.2\n"), "{err}");
+    assert!(
+        err.ends_with(&format!(
+            "note: 0.90.1-{host} stays installed (`rok toolchain remove 0.90.1-{host}`)\n"
+        )),
+        "{err}"
+    );
+    assert_eq!(default(), Some(format!("0.90.2-{host}")));
+
+    // A bare update crosses into the newest series, keeping the old one.
+    let out = tc(&["update"]);
+    ok(&out);
+    let err = text(&out.stderr);
+    assert!(err.contains("Updated rok 0.90.2 -> 0.91.0\n"), "{err}");
+    assert!(
+        err.ends_with(
+            "note: rok 0.90.2 stays installed; a project that must stay on 0.90 pins it \
+             (`toolchain: \"0.90\"` in rok.rokon or a script's `//! rokon` block, as `rok new` \
+             writes) or runs `rok +0.90 ..`\n"
+        ),
+        "{err}"
+    );
+    assert_eq!(default(), Some(format!("0.91.0-{host}")));
+    assert!(home.join(format!("toolchains/0.90.2-{host}")).is_dir());
+    assert_eq!(text(&tc(&["update"]).stderr), "rok 0.91.0 is up to date\n");
+    // A project pinned to the old series keeps it.
+    let app = root.join("app");
+    write(&app.join("rok.rokon"), "Package { toolchain: \"0.90\" }\n");
+    let mut c = Command::new(home.join("bin/rokc"));
+    c.current_dir(&app)
+        .env_remove("ROK_HOME")
+        .env_remove("ROK_TOOLCHAIN")
+        .arg("x");
+    assert_eq!(ok(&c.output().unwrap()), "rokc 0.90.2: x\n");
+
+    // An exact version, a requirement.
+    ok(&tc(&["update", "0.90.1"]));
+    assert_eq!(default(), Some(format!("0.90.1-{host}")));
+    ok(&tc(&["update", "^0.90.2"]));
+    assert_eq!(default(), Some(format!("0.90.2-{host}")));
+    fails(
+        &tc(&["update", "^0.90.3"]),
+        "the newest rok 0.90 release is 0.90.2, which `^0.90.3` does not accept; name a version \
+         it does (`rok toolchain update <version>`)",
+    );
+    fails(
+        &tc(&["update", "0"]),
+        "rok toolchain update: `0` is not a version; write a series (`0.1`), a version \
+         (`0.1.6`) or a requirement (`^0.1.5`)",
+    );
+    write(&channel("0.90"), "0.91.0\n");
+    fails(
+        &tc(&["update", "0.90"]),
+        "rok-version-0.90 names 0.91.0, which is not a 0.90 release",
+    );
+}
+
+/// `rok toolchain install <version>` without `--from` downloads a
+/// release, as `update` finds it, and keeps the default.
+// spec: §9.10.6
+#[cfg(unix)]
+#[test]
+fn install_by_version_without_from() {
+    let root = scratch("install-version");
+    let home = root.join("home");
+    let host = env!("ROK_HOST");
+    let url = fake_dist(&root, &["0.90.1", "0.90.2"]);
+    write(
+        &root.join("dist/download/channels/rok-version-0.90"),
+        "0.90.2\n",
+    );
+    let tc = |args: &[&str]| {
+        let mut c = rok_cmd(&home, &root, &[&["toolchain"][..], args].concat());
+        c.env("ROK_DIST", &url);
+        c.output().unwrap()
+    };
+    let out = tc(&["install", "0.90.1"]);
+    ok(&out);
+    assert!(
+        text(&out.stderr).contains(&format!("Installed toolchain 0.90.1-{host}\n")),
+        "{}",
+        text(&out.stderr)
+    );
+    // The first one became the default; a series adds its newest.
+    ok(&tc(&["install", "0.90"]));
+    assert_eq!(
+        ok(&tc(&["list"])),
+        format!("* 0.90.1-{host} (default)\n  0.90.2-{host}\n")
+    );
+    assert_eq!(
+        text(&tc(&["install", "^0.90.1"]).stderr),
+        format!("toolchain 0.90.2-{host} is already installed\n")
+    );
+    // The proxies are the newest's; the default still runs.
+    let mut c = Command::new(home.join("bin/rokc"));
+    c.current_dir(&root)
+        .env_remove("ROK_HOME")
+        .env_remove("ROK_TOOLCHAIN")
+        .arg("x");
+    assert_eq!(ok(&c.output().unwrap()), "rokc 0.90.1: x\n");
+    fails(&tc(&["install", "0.92"]), "no release is published at");
+}
+
+/// A pin is a version prefix, a requirement (`^`, `~`, `=`) or a
+/// directory name; the newest installed match wins. A pin that is none
+/// of them warns, and says what to write.
+// spec: §9.10.6 §9.10.3
+#[cfg(unix)]
+#[test]
+fn pin_requirement_caret() {
+    let root = scratch("pin-req");
+    let home = root.join("home");
+    let host = env!("ROK_HOST");
+    let app = root.join("app");
+    write(&app.join("src/main.rok"), "println(\"x\");\n");
+    fake_toolchain(&root.join("a"), "9.9.1");
+    fake_toolchain(&root.join("b"), "9.9.4");
+    fake_toolchain(&root.join("c"), "9.10.0");
+    for (v, from) in [("9.9.1", "a"), ("9.9.4", "b"), ("9.10.0", "c")] {
+        ok(&rok(
+            &home,
+            &root,
+            &["toolchain", "install", v, "--from", from],
+        ));
+    }
+    let rokc = |pin: &str| {
+        write(
+            &app.join("rok.rokon"),
+            &format!("Package {{ toolchain: \"{pin}\" }}\n"),
+        );
+        let mut c = Command::new(home.join("bin/rokc"));
+        c.current_dir(&app)
+            .env_remove("ROK_HOME")
+            .env_remove("ROK_TOOLCHAIN")
+            .arg("x");
+        c.output().unwrap()
+    };
+    for (pin, runs) in [
+        ("9.9", "9.9.4"),
+        ("^9.9.1", "9.10.0"),
+        ("~9.9.1", "9.9.4"),
+        ("=9.9.1", "9.9.1"),
+        (&format!("9.9.1-{host}"), "9.9.1"),
+    ] {
+        assert_eq!(ok(&rokc(pin)), format!("rokc {runs}: x\n"), "{pin}");
+    }
+    fails(&rokc("^9.11"), "toolchain ^9.11 (pinned by ");
+    fails(
+        &rokc("^9.11"),
+        "install it with `rok toolchain install ^9.11`",
+    );
+}
+
+// spec: §9.10.3
+#[test]
+fn bad_pin_warns() {
+    let root = scratch("bad-pin");
+    let home = root.join("home");
+    write(&root.join("src/main.rok"), "println(\"x\");\n");
+    write(
+        &root.join("rok.rokon"),
+        "Package { name: \"app\", toolchain: \"banana\", deps: {} }\n",
+    );
+    // rok's own commands go on, with a warning.
+    let out = rok(&home, &root, &["deps"]);
+    ok(&out);
+    let err = text(&out.stderr);
+    assert!(
+        err.contains(
+            "rok.rokon:1:35: `toolchain: \"banana\"`: write a version (`0.1`), a requirement \
+             (`^0.1.5`) or a toolchain directory name"
+        ),
+        "{err}"
+    );
+    // A build needs the toolchain it names.
+    fails(
+        &rok(&home, &root, &["check"]),
+        "toolchain banana (pinned by ",
+    );
+    fails(
+        &rok(&home, &root, &["check"]),
+        "`banana` is not a toolchain pin; write a version (`0.1`)",
+    );
+}
+
+/// A script's `//! ```rokon` block may pin a toolchain: the proxy and a
+/// rok run directly both run the pinned toolchain's rok. Only the script
+/// that is run pins; a module's block may not.
+// spec: §9.10.6 §9.10.7
+#[cfg(unix)]
+#[test]
+fn script_block_pins_toolchain() {
+    let root = scratch("script-pin");
+    let home = root.join("home");
+    let host = env!("ROK_HOST");
+    // 9.10.0 (a copy of this rok, so the proxies too) is the default.
+    fake_toolchain(&root.join("new"), "9.10.0");
+    fake_toolchain_rok(&root.join("old"), "9.9.1");
+    for (v, from) in [("9.10.0", "new"), ("9.9.1", "old")] {
+        ok(&rok(
+            &home,
+            &root,
+            &["toolchain", "install", v, "--from", from],
+        ));
+    }
+    let dir = root.join("s");
+    let block = "//! ```rokon\n//! { toolchain: \"9.9\" }\n//! ```\n";
+    write(&dir.join("s.rok"), &format!("{block}println(\"x\");\n"));
+    let real = rokc_core::real_path(&dir).unwrap();
+    let tc = rokc_core::real_path(home.join(format!("toolchains/9.9.1-{host}"))).unwrap();
+    let mut c = Command::new(home.join("bin/rok"));
+    c.current_dir(&dir)
+        .env_remove("ROK_HOME")
+        .env_remove("ROK_TOOLCHAIN");
+    for args in [&["run", "s.rok"][..], &["s.rok"], &["-q", "check", "s.rok"]] {
+        let out = ok(&Command::new(home.join("bin/rok"))
+            .current_dir(&dir)
+            .env_remove("ROK_HOME")
+            .env_remove("ROK_TOOLCHAIN")
+            .args(args)
+            .output()
+            .unwrap());
+        assert!(
+            out.starts_with(&format!(
+                "rok 9.9.1: {} in {}",
+                args.join(" "),
+                real.display()
+            )),
+            "{args:?}: {out}"
+        );
+    }
+    // Run directly, this rok hands the script to the pinned one.
+    assert_eq!(
+        ok(&rok(&home, &dir, &["s.rok"])),
+        format!(
+            "rok 9.9.1: s.rok in {} home={} guard={}\n",
+            real.display(),
+            home.display(),
+            tc.display()
+        )
+    );
+    // `+<version>` still wins.
+    let out = ok(&c.args(["+9.10", "-q", "check", "s.rok"]).output().unwrap());
+    assert!(out.starts_with("rokc 9.10.0: "), "{out}");
+    // A module's block may not pin.
+    let mine = series();
+    write(&dir.join("t.rok"), "mod m;\nprintln(\"x\");\n");
+    write(
+        &dir.join("m.rok"),
+        &format!("//! ```rokon\n//! {{ toolchain: \"{mine}\" }}\n//! ```\npub fn f() {{}}\n"),
+    );
+    fails(
+        &rok(&home, &dir, &["check", "t.rok"]),
+        "m.rok (//! rokon block): `toolchain` goes in the block of t.rok, the script that is run; \
+         remove it here",
+    );
+    // Other fields are still refused.
+    write(
+        &dir.join("u.rok"),
+        "//! ```rokon\n//! { name: \"u\" }\n//! ```\n",
+    );
+    fails(
+        &rok(&home, &dir, &["check", "u.rok"]),
+        "a script block holds only `deps`, `native` and `toolchain`",
+    );
 }
 
 /// `GET /<name>` of the files in `dir` on `http://127.0.0.1:<port>`

@@ -6,6 +6,7 @@
 #   curl -fsSL https://rok-lang.org/install.sh | sh
 #   sh install.sh --archive rok-<version>-<triple>.tar.xz   (or .tar.gz)
 #   rok-<version>-<triple>/install.sh          (from an unpacked archive)
+#   sh install.sh --version 0.1                (the newest 0.1.x)
 #
 # Environment: ROK_HOME, ROK_VERSION (default below), ROK_DIST (where
 # releases are downloaded from), ROK_NO_MODIFY_PATH, NO_COLOR,
@@ -74,7 +75,7 @@ die() {
   exit 1
 }
 usage() {
-  say "usage: install.sh [-q | --quiet] [-v | --verbose] [--no-modify-path] [--archive <rok-*.tar.xz | rok-*.tar.gz>] [--version <version>]"
+  say "usage: install.sh [-q | --quiet] [-v | --verbose] [--no-modify-path] [--archive <rok-*.tar.xz | rok-*.tar.gz>] [--version <version | series>]"
   say "installs into \$ROK_HOME (now $home)"
 }
 
@@ -167,6 +168,34 @@ download() {
   esac
 }
 
+# The series of version $1: 0.MINOR, or MAJOR from 1.0 on.
+series_of() {
+  case $1 in
+    0.*) printf '%s\n' "$1" | cut -d. -f1,2 ;;
+    *) printf '%s\n' "${1%%.*}" ;;
+  esac
+}
+
+# The newest release of series $1: its channel file, or before that
+# exists rok-version when it names a release of the series.
+latest_in() {
+  channel="$dist/download/channels/rok-version-$1"
+  legacy="$dist/latest/download/rok-version"
+  if download "$channel" "$tmp/rok-version"; then
+    v=$(tr -d ' \r\n' < "$tmp/rok-version")
+  elif download "$legacy" "$tmp/rok-version"; then
+    v=$(tr -d ' \r\n' < "$tmp/rok-version")
+    [ "$(series_of "$v")" = "$1" ] ||
+      die "cannot tell the newest rok $1 release: $channel does not exist and $legacy names $v; give a full version (--version <version>)"
+  else
+    die "no rok release is published at $channel or $legacy; give a full version (--version <version>)"
+  fi
+  case $v in
+    [0-9]*.*.*) printf '%s\n' "$v" ;;
+    *) die "$channel does not name a version" ;;
+  esac
+}
+
 # The archive for $triple is missing: no such host, or no such version.
 no_archive() {
   case " $supported " in
@@ -191,6 +220,12 @@ if [ -z "$archive" ] && [ -n "$here" ] && [ -x "$here/bin/rok" ] && [ -x "$here/
 else
   if [ -z "$archive" ]; then
     triple=$(host_triple)
+    # A series (--version 0.1) is its newest release.
+    case $version in
+      *.*.*) ;;
+      [0-9]*) version=$(latest_in "$version") || exit 1 ;;
+      *) die "--version takes a version (0.1.6) or a series (0.1), not $version" ;;
+    esac
     base="$dist/download/v$version/rok-$version-$triple"
     status Downloading "rok $version ($triple)"
     # The .tar.xz is about half the .tar.gz; tar needs xz for it on Linux
