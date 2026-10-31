@@ -1627,6 +1627,7 @@ fn lone_cache(tmp: &Path) -> PathBuf {
 }
 
 /// `rokc <args>` in `dir` with `tmp` as the temp directory.
+#[cfg(unix)]
 fn rokc_in_tmp(env: &Env, dir: &Path, tmp: &Path, args: &[&str]) -> Output {
     Command::new(ROKC)
         .current_dir(dir)
