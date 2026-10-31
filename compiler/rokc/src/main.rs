@@ -61,7 +61,7 @@ struct Args {
     diff: bool,
     threads: Option<usize>,
     show_output: bool,
-    lint_levels: Vec<(Level, String)>,
+    lint_levels: rokc_tools::lint::Levels,
     list: bool,
     /// `profdata show --all-functions`.
     all_functions: bool,
@@ -280,7 +280,19 @@ fn parse_args(raw: Vec<String>) -> Args {
             }
             "-A" | "-W" | "-D" | "--allow" | "--warn" | "--deny" => {
                 let lvl = Level::from_flag(&name).expect("a lint level flag");
-                a.lint_levels.push((lvl, value(&name, inline, &mut it)));
+                a.lint_levels
+                    .flags
+                    .push((lvl, value(&name, inline, &mut it)));
+            }
+            // From `rok`: the levels so far are this manifest's `lints`.
+            "--lints-from-manifest" => {
+                let p = PathBuf::from(value(&name, inline, &mut it));
+                let shown = std::env::current_dir()
+                    .ok()
+                    .and_then(|d| p.strip_prefix(d).ok().map(Path::to_path_buf))
+                    .unwrap_or_else(|| p.clone());
+                a.lint_levels.manifest =
+                    Some((shown.display().to_string(), a.lint_levels.flags.len()));
             }
             "--iters" | "--samples" => {
                 let n = value(&name, inline, &mut it);

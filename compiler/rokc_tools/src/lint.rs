@@ -21,7 +21,7 @@ use rokc_ast::{
     TryKind, Ty, TyKind, UseTree, UseTreeKind,
 };
 use rokc_core::Visibility;
-use rokc_diagnostic::{ErrorKind, RokDiagnostic, Span};
+use rokc_diagnostic::{ErrorKind, RokDiagnostic, Severity, Span};
 use rokc_hir::walk::{AstVisitor, walk_fn, walk_item, walk_stmt};
 use rokc_hir::{HirExprKind, HirTy};
 use rokc_interface::{CompileResult, SourceFile};
@@ -35,13 +35,22 @@ pub struct Lint {
     pub name: &'static str,
     pub default: Level,
     pub desc: &'static str,
+    /// The release that added it: `warnings` covers it only up to
+    /// [`BASELINE`].
+    pub since: &'static str,
 }
+
+/// The newest release the `warnings` group covers. A lint or a
+/// deprecation added after it keeps its default level under `warnings`,
+/// so `"warnings": "deny"` builds on every later release of the series.
+pub const BASELINE: &str = "0.1.5";
 
 const fn warn(name: &'static str, desc: &'static str) -> Lint {
     Lint {
         name,
         default: Level::Warn,
         desc,
+        since: "0.1.0",
     }
 }
 
@@ -117,7 +126,8 @@ pub const LINTS: &[Lint] = &[
     ),
 ];
 
-/// Lint groups usable wherever a lint name is (`all`: every lint).
+/// Lint groups usable wherever a lint name is (`all`: every lint;
+/// `warnings`: every lint up to [`BASELINE`]).
 const GROUPS: &[(&str, &[&str])] = &[
     (
         "unused",
@@ -140,13 +150,28 @@ const GROUPS: &[(&str, &[&str])] = &[
     ),
 ];
 
-/// The lints `name` stands for (a lint, a group, `all`), or `None`.
+/// The lints `name` stands for (a lint, a group, `all`, `warnings`), or
+/// `None`.
 #[must_use]
 pub fn expand(name: &str) -> Option<Vec<&'static str>> {
-    if name == "all" {
-        return Some(LINTS.iter().map(|l| l.name).collect());
+    expand_in(LINTS, name)
+}
+
+fn expand_in(lints: &'static [Lint], name: &str) -> Option<Vec<&'static str>> {
+    match name {
+        "all" => return Some(lints.iter().map(|l| l.name).collect()),
+        "warnings" => {
+            return Some(
+                lints
+                    .iter()
+                    .filter(|l| !newer(l.since, BASELINE))
+                    .map(|l| l.name)
+                    .collect(),
+            );
+        }
+        _ => {}
     }
-    if let Some(l) = LINTS.iter().find(|l| l.name == name) {
+    if let Some(l) = lints.iter().find(|l| l.name == name) {
         return Some(vec![l.name]);
     }
     GROUPS
@@ -155,19 +180,60 @@ pub fn expand(name: &str) -> Option<Vec<&'static str>> {
         .map(|(_, ls)| ls.to_vec())
 }
 
+/// Release `v` comes after release `than` (`0.1.10` > `0.1.9`).
+fn newer(v: &str, than: &str) -> bool {
+    let parts = |s: &str| -> Vec<u64> { s.split('.').map(|p| p.parse().unwrap_or(0)).collect() };
+    parts(v) > parts(than)
+}
+
+/// "unknown lint `name`" with a did-you-mean and where the list is.
+fn unknown(name: &str, at: &str) -> String {
+    let names = LINTS
+        .iter()
+        .map(|l| l.name)
+        .chain(GROUPS.iter().map(|(g, _)| *g))
+        .chain(["all", "warnings"]);
+    format!(
+        "unknown lint `{name}`{at}{} (`{} lint --list` shows every lint and group)",
+        rokc_core::cli::did_you_mean(name, names, &[]),
+        rokc_core::cli::invoked_as()
+    )
+}
+
+/// Levels set outside the source: `-A/-W/-D` in order. The first
+/// `manifest.1` of them are `rok.rokon` `lints`, from the manifest at
+/// `manifest.0`.
+#[derive(Clone, Debug, Default)]
+pub struct Levels {
+    pub flags: Vec<(Level, String)>,
+    pub manifest: Option<(String, usize)>,
+}
+
+impl From<Vec<(Level, String)>> for Levels {
+    fn from(flags: Vec<(Level, String)>) -> Self {
+        Self {
+            flags,
+            manifest: None,
+        }
+    }
+}
+
 /// `rokc lint --list` text.
 #[must_use]
 pub fn list() -> String {
-    let mut s = String::from("lints (default level):\n");
+    let mut s = String::from("lints (default level, release that added it):\n");
     for l in LINTS {
         s.push_str(&format!(
-            "  {:<24} {:<5} {}\n",
+            "  {:<24} {:<5} {:<6} {}\n",
             l.name,
             l.default.name(),
+            l.since,
             l.desc
         ));
     }
-    s.push_str("groups: all");
+    s.push_str(&format!(
+        "groups: all (every lint), warnings (every lint up to {BASELINE})"
+    ));
     for (g, ls) in GROUPS {
         s.push_str(&format!(", {g} ({})", ls.join(", ")));
     }
@@ -182,23 +248,23 @@ struct Finding {
     msg: String,
     notes: Vec<String>,
     secondary: Option<(Span, String)>,
+    /// The release that deprecated what it reports, when that is newer
+    /// than the lint (see [`applies`]).
+    since: Option<String>,
+    /// A compiler warning that carries the lint: it keeps its labels,
+    /// notes and fixes.
+    base: Option<Box<RokDiagnostic>>,
 }
 
 /// An attribute scope: `[start, end)` of file `file`, with the levels its
-/// `#[allow/warn/deny]` attributes set.
+/// `#[allow/warn/deny]` attributes set (`true`: through `warnings`).
 struct Region {
     file: u32,
     start: u32,
     end: u32,
-    levels: Vec<(Level, &'static str, Span)>,
+    levels: Vec<(Level, &'static str, Span, bool)>,
 }
 
-/// Lint a front-end result (`Session::set_keep_ast`).
-///
-/// `cli` is the command line's `-A/-W/-D` in order. Returns compile
-/// warnings (confusables become `confusable_idents`), then findings as
-/// warnings or (deny) errors.
-#[must_use]
 /// A macro or meta template renames its own locals with a hygiene suffix
 /// (`x__mac` / `x__meta`); the user never wrote it, so strip it before a name
 /// reaches a diagnostic.
@@ -213,21 +279,51 @@ fn demangle(name: &str) -> &str {
     name
 }
 
-pub fn run(result: &CompileResult, cli: &[(Level, String)]) -> Vec<RokDiagnostic> {
+/// Whether a level the `warnings` group set (`group`) applies to a
+/// finding from release `since`: not when that is past [`BASELINE`].
+fn applies(group: bool, since: Option<&str>) -> bool {
+    !group || !since.is_some_and(|s| newer(s, BASELINE))
+}
+
+/// A level set for a lint: the level, the note naming where (`None`: the
+/// default), and whether only `warnings` set it.
+type Set = (Level, Option<String>, bool);
+
+/// Lint a front-end result (`Session::set_keep_ast`).
+///
+/// `levels` are the manifest's and the command line's `-A/-W/-D`.
+/// Returns compile warnings (those that carry a lint are leveled as that
+/// lint), then findings as warnings or (deny) errors.
+#[must_use]
+pub fn run(result: &CompileResult, levels: &Levels) -> Vec<RokDiagnostic> {
     let mut out = Vec::new();
-    let mut base: HashMap<&'static str, (Level, Option<String>)> =
-        LINTS.iter().map(|l| (l.name, (l.default, None))).collect();
-    for (lvl, name) in cli {
+    let mut base: HashMap<&'static str, Vec<Set>> = LINTS
+        .iter()
+        .map(|l| (l.name, vec![(l.default, None, false)]))
+        .collect();
+    for (i, (lvl, name)) in levels.flags.iter().enumerate() {
+        let (from, at) = match &levels.manifest {
+            Some((path, n)) if i < *n => (
+                format!("`\"{name}\": \"{}\"` in `lints` of {path}", lvl.name()),
+                format!(" in `lints` of {path}"),
+            ),
+            _ => (
+                format!("`{} {name}` on the command line", lvl.flag()),
+                " on the command line".to_owned(),
+            ),
+        };
         match expand(name) {
             Some(ls) => {
                 for l in ls {
-                    base.insert(l, (*lvl, Some(format!("{} {name}", lvl.flag()))));
+                    if let Some(sets) = base.get_mut(l) {
+                        sets.push((*lvl, Some(from.clone()), name == "warnings"));
+                    }
                 }
             }
             None => out.push(RokDiagnostic::warning(
                 ErrorKind::Lint,
                 Span::DUMMY,
-                format!("unknown lint `{name}` on the command line"),
+                unknown(name, &at),
             )),
         }
     }
@@ -254,22 +350,21 @@ pub fn run(result: &CompileResult, cli: &[(Level, String)]) -> Vec<RokDiagnostic
         rokc_diagnostic::time("lints hir", || cx.hir(&m.hir, &user));
     }
     for w in &result.warnings {
-        let confusable = w.kind == ErrorKind::Lexical
-            && (w.message.contains("confusable") || w.message.contains("mixes Cyrillic"));
-        let doc = w.kind == ErrorKind::Parse && w.message.starts_with("unused doc comment");
-        match (confusable || doc, &w.primary) {
-            (true, Some(p)) => cx.findings.push(Finding {
-                lint: if doc {
-                    "unused_doc_comments"
-                } else {
-                    "confusable_idents"
-                },
-                span: p.span,
+        let lint = w
+            .lint
+            .as_deref()
+            .and_then(|n| LINTS.iter().find(|l| l.name == n));
+        match lint {
+            Some(l) => cx.findings.push(Finding {
+                lint: l.name,
+                span: w.primary.as_ref().map_or(Span::DUMMY, |p| p.span),
                 msg: w.message.clone(),
                 notes: Vec::new(),
                 secondary: None,
+                since: None,
+                base: Some(Box::new(w.clone())),
             }),
-            _ => out.push(w.clone()),
+            None => out.push(w.clone()),
         }
     }
 
@@ -281,12 +376,18 @@ pub fn run(result: &CompileResult, cli: &[(Level, String)]) -> Vec<RokDiagnostic
         if generated {
             continue;
         }
-        let (mut level, mut from) = base[f.lint].clone();
+        let since = f.since.as_deref();
+        let (mut level, mut from) = base[f.lint]
+            .iter()
+            .rev()
+            .find(|s| applies(s.2, since))
+            .map(|s| (s.0, s.1.clone()))
+            .expect("the default level always applies");
         let mut at = None;
         for r in &regions {
             if r.file == f.span.file && r.start <= f.span.start && f.span.start < r.end {
-                for &(lvl, name, span) in &r.levels {
-                    if name == f.lint {
+                for &(lvl, name, span, group) in &r.levels {
+                    if name == f.lint && applies(group, since) {
                         level = lvl;
                         at = Some((span, lvl));
                         from = None;
@@ -297,10 +398,21 @@ pub fn run(result: &CompileResult, cli: &[(Level, String)]) -> Vec<RokDiagnostic
         if level == Level::Allow {
             continue;
         }
-        let mut d = if level == Level::Deny {
-            RokDiagnostic::error(ErrorKind::Lint, f.span, f.msg)
+        let severity = if level == Level::Deny {
+            Severity::Error
         } else {
-            RokDiagnostic::warning(ErrorKind::Lint, f.span, f.msg)
+            Severity::Warning
+        };
+        let mut d = match f.base {
+            Some(b) => RokDiagnostic {
+                severity,
+                kind: ErrorKind::Lint,
+                ..*b
+            },
+            None => RokDiagnostic {
+                severity,
+                ..RokDiagnostic::error(ErrorKind::Lint, f.span, f.msg)
+            },
         };
         if let Some((span, msg)) = f.secondary {
             d = d.with_secondary(span, msg);
@@ -312,7 +424,7 @@ pub fn run(result: &CompileResult, cli: &[(Level, String)]) -> Vec<RokDiagnostic
             (Some((span, lvl)), _) => {
                 d.with_secondary(span, format!("`#[{}({})]` set here", lvl.name(), f.lint))
             }
-            (None, Some(flag)) => d.with_note(format!("`{flag}` on the command line")),
+            (None, Some(from)) => d.with_note(from),
             (None, None) => d.with_note(format!("`#[{}({})]` on by default", level.name(), f.lint)),
         };
         out.push(d);
@@ -349,12 +461,12 @@ fn name_span(texts: &[(String, String)], at: Span, name: &str) -> Option<Span> {
     })
 }
 
-/// `(level, lint, attribute span)` for each lint an `allow` / `warn` /
-/// `deny` attribute names; unknown names are reported to `out`.
+/// `(level, lint, attribute span, by `warnings`)` for each lint an `allow`
+/// / `warn` / `deny` attribute names; unknown names are reported to `out`.
 fn levels_of(
     attrs: &[Attribute],
     out: &mut Vec<RokDiagnostic>,
-) -> Vec<(Level, &'static str, Span)> {
+) -> Vec<(Level, &'static str, Span, bool)> {
     let mut levels = Vec::new();
     for a in attrs {
         let Some(lvl) = Level::parse(a.name()) else {
@@ -370,11 +482,13 @@ fn levels_of(
                 _ => "",
             };
             match expand(name) {
-                Some(ls) => levels.extend(ls.into_iter().map(|l| (lvl, l, a.span))),
+                Some(ls) => {
+                    levels.extend(ls.into_iter().map(|l| (lvl, l, a.span, name == "warnings")));
+                }
                 None => out.push(RokDiagnostic::warning(
                     ErrorKind::Lint,
                     a.span,
-                    format!("unknown lint `{name}`"),
+                    unknown(name, ""),
                 )),
             }
         }
@@ -782,6 +896,8 @@ impl<'a> Cx<'a> {
             msg,
             notes: Vec::new(),
             secondary: None,
+            since: None,
+            base: None,
         });
     }
 
@@ -816,6 +932,8 @@ impl<'a> Cx<'a> {
                 msg: format!("{what} `{name}` should have {style} name"),
                 notes: vec![format!("rename it to `{fixed}`")],
                 secondary: None,
+                since: None,
+                base: None,
             });
         }
     }
@@ -978,6 +1096,8 @@ impl<'a> Cx<'a> {
                 msg: l.msg,
                 notes: vec![format!("help: {}", l.help)],
                 secondary: None,
+                since: None,
+                base: None,
             });
         }
     }
@@ -1001,6 +1121,8 @@ impl<'a> Cx<'a> {
                     stmts[i].span,
                     "any code following this statement is unreachable".to_owned(),
                 )),
+                since: None,
+                base: None,
             });
         }
     }
@@ -1206,6 +1328,8 @@ impl<'a> Cx<'a> {
                         msg,
                         notes: fix.into_iter().collect(),
                         secondary: None,
+                        since: None,
+                        base: None,
                     });
                 }
                 rokc_hir::HirStmt::Let { init, .. } => {
@@ -1264,6 +1388,8 @@ impl<'a> Cx<'a> {
                 "help: to put the value of `{name}` in the text, write `f\"{raw}\"`"
             )],
             secondary: None,
+            since: None,
+            base: None,
         });
     }
 
@@ -1380,6 +1506,8 @@ impl<'a> Cx<'a> {
                 ),
                 notes: Vec::new(),
                 secondary: None,
+                since: None,
+                base: None,
             };
             f.notes.extend(Some(msg).filter(|m| !m.is_empty()));
             self.findings.push(f);
@@ -1394,6 +1522,8 @@ impl<'a> Cx<'a> {
                 msg: format!("use of deprecated function `{name}`"),
                 notes: Some(msg).filter(|m| !m.is_empty()).into_iter().collect(),
                 secondary: None,
+                since: None,
+                base: None,
             });
         }
     }
@@ -1761,6 +1891,8 @@ impl AstVisitor for Cx<'_> {
                         "if this is intentional, prefix it with an underscore: `_{name}`"
                     )],
                     secondary: None,
+                    since: None,
+                    base: None,
                 });
             }
         }
@@ -1976,5 +2108,26 @@ mod tests {
         assert_eq!(expand("all").unwrap().len(), LINTS.len());
         assert!(expand("nope").is_none());
         assert_eq!(Level::parse("deny"), Some(Level::Deny));
+    }
+
+    #[test]
+    fn warnings_group_excludes_newer() {
+        static FAKE: &[Lint] = &[
+            warn("old", "a lint of the first release"),
+            Lint {
+                name: "new",
+                default: Level::Warn,
+                desc: "a lint added after the baseline",
+                since: "0.1.6",
+            },
+        ];
+        assert_eq!(expand_in(FAKE, "warnings").unwrap(), ["old"]);
+        assert_eq!(expand_in(FAKE, "all").unwrap(), ["old", "new"]);
+        assert!(newer("0.1.10", "0.1.9") && newer("0.2.0", BASELINE));
+        assert!(!newer(BASELINE, BASELINE) && !newer("0.1.0", BASELINE));
+        // A deprecation newer than the baseline skips what `warnings` set.
+        assert!(!applies(true, Some("0.1.6")));
+        assert!(applies(true, Some("0.1.5")) && applies(true, None));
+        assert!(applies(false, Some("0.1.6")));
     }
 }

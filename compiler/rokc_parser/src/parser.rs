@@ -1313,6 +1313,7 @@ impl<'a> Parser<'a> {
                     RokDiagnostic::error(ErrorKind::Parse, span, msg)
                 } else {
                     RokDiagnostic::warning(ErrorKind::Parse, span, msg)
+                        .with_lint("unused_doc_comments")
                 });
             }
         }

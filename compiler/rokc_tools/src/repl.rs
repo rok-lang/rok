@@ -1920,7 +1920,7 @@ impl Repl {
     /// nothing: the analysis and the path its spans name.
     pub fn analyze(&self, src: &str) -> (Analysis, String) {
         let (s, path) = self.compiler();
-        let a = crate::analysis::analyze(s, src, &path, &[]);
+        let a = crate::analysis::analyze(s, src, &path, &crate::lint::Levels::default());
         (a, path.display().to_string())
     }
 

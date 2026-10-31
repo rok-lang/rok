@@ -16,7 +16,7 @@ use rokc_interface::Session;
 use rokc_diagnostic::Json;
 
 use crate::analysis::{Analysis, analyze, short_name, signature, ty_name};
-use crate::lint::Level;
+use crate::lint::Levels;
 
 mod actions;
 mod signature;
@@ -39,7 +39,7 @@ struct Server<W> {
     out: W,
     bootstrap: Vec<PathBuf>,
     externs: Vec<(String, PathBuf)>,
-    levels: Vec<(Level, String)>,
+    levels: Levels,
     docs: HashMap<String, Doc>,
     /// `initialize` came.
     initialized: bool,
@@ -53,7 +53,7 @@ pub fn serve(
     out: impl Write,
     bootstrap: Vec<PathBuf>,
     externs: Vec<(String, PathBuf)>,
-    levels: Vec<(Level, String)>,
+    levels: impl Into<Levels>,
 ) -> i32 {
     if std::io::stdin().is_terminal() {
         eprintln!(
@@ -74,7 +74,7 @@ pub fn serve(
         out,
         bootstrap,
         externs,
-        levels,
+        levels: levels.into(),
         docs: HashMap::new(),
         initialized: false,
         shutdown: false,

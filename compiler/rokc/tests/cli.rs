@@ -464,6 +464,147 @@ fn builds_print_lints() {
     );
 }
 
+/// 6.2.9: `warnings` holds the lints up to the baseline, as a flag and as
+/// an attribute; `all` still holds every lint.
+// spec: §6.2.9
+#[test]
+fn deny_warnings_ignores_new_lint() {
+    let dir = scratch("lint-warnings");
+    let app = new_package(&dir, "app", false);
+    let src = "fn main() {\n    let x = 1;\n}\n";
+    put(app.join("src/main.rok"), src).unwrap();
+    let out = rokc(None, &app, &["lint", "-D", "warnings"]);
+    assert_exit(&out, 1);
+    let err = text(&out.stderr);
+    assert!(
+        err.contains("error[E503]: unused variable `x`")
+            && err.contains("`-D warnings` on the command line"),
+        "{err}"
+    );
+    let out = rokc(None, &app, &["lint", "-D", "warnings", "-A", "unused"]);
+    assert_exit(&out, 0);
+    put(
+        app.join("src/main.rok"),
+        format!("#![deny(warnings)]\n{src}"),
+    )
+    .unwrap();
+    assert_exit(&rokc(None, &app, &["lint"]), 1);
+    let out = rokc(None, &app, &["lint", "--list"]);
+    let list = text(&out.stdout);
+    assert!(
+        list.contains("warnings (every lint up to 0.1.5)")
+            && list.contains("unused_variables         warn  0.1.0"),
+        "{list}"
+    );
+    let out = rokc(None, &app, &["lint", "-W", "unused_varibles"]);
+    let err = text(&out.stderr);
+    assert!(
+        err.contains(
+            "unknown lint `unused_varibles` on the command line; did you mean \
+             `unused_variables`? (`rokc lint --list` shows every lint and group)"
+        ),
+        "{err}"
+    );
+}
+
+/// 6.2.9: `rok` names the manifest's `lints` as where a level came from;
+/// the command line's own flags after them still say so.
+// spec: §6.2.9 §9.10.3
+#[test]
+fn manifest_lint_note_names_rok_rokon() {
+    let dir = scratch("lint-manifest");
+    let app = new_package(&dir, "app", false);
+    put(
+        app.join("src/main.rok"),
+        "fn BadName() {}\nfn main() {\n    let x = 1;\n    BadName();\n}\n",
+    )
+    .unwrap();
+    let manifest = app.join("rok.rokon");
+    put(&manifest, "Package { name: \"app\" }\n").unwrap();
+    let from = format!("--lints-from-manifest={}", manifest.display());
+    let args = [
+        "lint",
+        "-D",
+        "unused_variables",
+        "-W",
+        "nope",
+        &from,
+        "-D",
+        "non_snake_case",
+    ];
+    let out = rokc(None, &app, &args);
+    assert_exit(&out, 1);
+    let err = text(&out.stderr);
+    for want in [
+        "`\"unused_variables\": \"deny\"` in `lints` of rok.rokon",
+        "unknown lint `nope` in `lints` of rok.rokon",
+        "`-D non_snake_case` on the command line",
+    ] {
+        assert!(err.contains(want), "missing {want:?}:\n{err}");
+    }
+}
+
+/// 6.2.9: a compiler warning that belongs to a lint takes the lint's
+/// level: `-A`, `#[allow]` and `-D` reach it.
+// spec: §6.2.9 §1.4.2
+#[test]
+fn compiler_warning_with_lint_can_be_allowed() {
+    let dir = scratch("lint-compiler-warning");
+    let app = new_package(&dir, "app", false);
+    let src = "fn main() {\n    /// not an item\n    let x = 1;\n    println(f\"{x}\");\n}\n";
+    put(app.join("src/main.rok"), src).unwrap();
+    let warn = "warning[E503]: unused doc comment";
+    let out = rokc(None, &app, &["lint"]);
+    assert_exit(&out, 0);
+    let err = text(&out.stderr);
+    assert!(
+        err.contains(warn) && err.contains("`#[warn(unused_doc_comments)]` on by default"),
+        "{err}"
+    );
+    let out = rokc(None, &app, &["lint", "-A", "unused_doc_comments"]);
+    assert!(
+        !text(&out.stderr).contains("doc comment"),
+        "{}",
+        text(&out.stderr)
+    );
+    let out = rokc(None, &app, &["lint", "-D", "unused"]);
+    assert_exit(&out, 1);
+    assert!(
+        text(&out.stderr).contains("error[E503]: unused doc comment"),
+        "{}",
+        text(&out.stderr)
+    );
+    put(
+        app.join("src/main.rok"),
+        format!("#![allow(unused_doc_comments)]\n{src}"),
+    )
+    .unwrap();
+    let out = rokc(None, &app, &["lint"]);
+    assert!(
+        !text(&out.stderr).contains("doc comment"),
+        "{}",
+        text(&out.stderr)
+    );
+    // A confusable pair, from the lexer.
+    put(
+        app.join("src/main.rok"),
+        "fn main() {\n    let σ² = 1;\n    let σ2 = 2;\n    println(f\"{σ²} {σ2}\");\n}\n",
+    )
+    .unwrap();
+    let out = rokc(None, &app, &["lint"]);
+    assert!(
+        text(&out.stderr).contains("(confusable spelling)"),
+        "{}",
+        text(&out.stderr)
+    );
+    let out = rokc(None, &app, &["lint", "-A", "confusable_idents"]);
+    assert!(
+        !text(&out.stderr).contains("confusable"),
+        "{}",
+        text(&out.stderr)
+    );
+}
+
 /// 9.10.7: a cached script is linked again when the runtime changes.
 // spec: §9.10.7 §9.2.16
 #[test]
