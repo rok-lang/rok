@@ -2,7 +2,15 @@
 //! (with the project's dependencies).
 
 fn main() {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let args: Result<Vec<String>, String> = std::env::args_os()
+        .skip(1)
+        .enumerate()
+        .map(|(i, a)| rokc_core::cli::utf8_arg(i + 1, a))
+        .collect();
+    let args = args.unwrap_or_else(|e| {
+        eprintln!("rokls: {e}\nrun `rokls --help` for usage");
+        std::process::exit(2);
+    });
     match args.first().map(String::as_str) {
         Some("-V" | "--version") => println!("rokls {}", rok::VERSION_LINE),
         Some("-h" | "--help") => print!(

@@ -1946,10 +1946,19 @@ pub(super) fn place_root(e: &HirExpr) -> Option<LocalId> {
     }
 }
 
-/// `place = value` for a local, a field chain on a local, or a cell.
-pub(super) fn assign_place(ctx: &LowerCtx<'_>, place: &HirExpr, value: HirExpr) -> Option<HirStmt> {
+/// `place = value` for a local, a field chain on a local, or a cell. A
+/// narrowed local writes through to the slot it narrows, as `=` does.
+pub(super) fn assign_place(
+    ctx: &mut LowerCtx<'_>,
+    place: &HirExpr,
+    value: HirExpr,
+) -> Option<HirStmt> {
     match &place.kind {
-        HirExprKind::Local(l) => Some(HirStmt::Assign { local: *l, value }),
+        HirExprKind::Local(l) => {
+            let span = value.span;
+            let st = HirStmt::Assign { local: *l, value };
+            super::expr::write_through(ctx, Some(st), span)
+        }
         HirExprKind::BufGet { buf, .. } if matches!(buf.kind, HirExprKind::Local(l) if ctx.is_boxed(l)) => {
             Some(HirStmt::Expr(buf_store((**buf).clone(), value)))
         }

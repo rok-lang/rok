@@ -59,6 +59,9 @@ struct Global {
     toolchain: Option<String>,
     /// `--color=<when>`, passed on to rokc.
     color: Option<String>,
+    /// The program's arguments after `--` (or a script's path) as given:
+    /// the strings in `post` stand for them only lossily.
+    tail: Vec<std::ffi::OsString>,
 }
 
 /// The user's rok directory (`rokc_core::rok_home`).
@@ -124,29 +127,61 @@ fn canonical_edit(old: &str, new: &str) -> String {
 
 /// Run `rok` with `args` (without the program name); the exit code.
 pub fn main_with(args: Vec<String>) -> i32 {
+    main_with_os(args.into_iter().map(Into::into).collect())
+}
+
+/// [`main_with`] of the arguments as the system gives them: a program's
+/// arguments (after `--`, or after a script's path) may be any bytes,
+/// everything before them must be UTF-8.
+pub fn main_with_os(args: Vec<std::ffi::OsString>) -> i32 {
     rokc_core::tmp::sweep_once(&["rok-install-", "rok-prebuild-"]);
     let mut g = Global::default();
     let mut rest = Vec::new();
+    let total = args.len();
     let mut it = args.into_iter();
+    // The next argument as a string; the error names its position.
+    let next = |it: &mut std::vec::IntoIter<std::ffi::OsString>| {
+        let a = it.next()?;
+        Some(cli::utf8_arg(total - it.len(), a).map_err(|e| usage(&e)))
+    };
+    // The rest as given, and as strings for `post`.
+    let take_tail = |g: &mut Global, it: &mut std::vec::IntoIter<std::ffi::OsString>| {
+        g.tail = it.collect();
+        g.tail
+            .iter()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect::<Vec<String>>()
+    };
     // rok's own options, anywhere before `--`; the rest goes to rokc.
-    while let Some(a) = it.next() {
+    while let Some(a) = next(&mut it) {
+        let a = match a {
+            Ok(a) => a,
+            Err(code) => return code,
+        };
         let (name, inline) = match a.split_once('=') {
             Some((n, v)) if n.starts_with("--") => (n.to_owned(), Some(v.to_owned())),
             _ => (a.clone(), None),
         };
-        let value = |it: &mut std::vec::IntoIter<String>| inline.clone().or_else(|| it.next());
+        let value = |it: &mut std::vec::IntoIter<std::ffi::OsString>| match &inline {
+            Some(v) => Ok(Some(v.clone())),
+            None => next(it).transpose(),
+        };
         match name.as_str() {
             "--" => {
                 rest.push(a);
-                rest.extend(it.by_ref());
+                rest.extend(take_tail(&mut g, &mut it));
             }
             "--env" => match value(&mut it) {
-                Some(v) => g.env = Some(v),
-                None => return usage("`--env` needs a name"),
+                Ok(Some(v)) => g.env = Some(v),
+                Ok(None) => return usage("`--env` needs a name"),
+                Err(code) => return code,
             },
             "--no-color" | "--color" => {
                 let when = if name == "--color" {
-                    value(&mut it)
+                    match value(&mut it) {
+                        Ok(v) => v,
+                        Err(code) => return code,
+                    }
                 } else {
                     Some("never".to_owned())
                 };
@@ -162,8 +197,10 @@ pub fn main_with(args: Vec<String>) -> i32 {
             "--offline" => g.offline = true,
             "--locked" => g.locked = true,
             "--cwd" => {
-                let Some(dir) = value(&mut it) else {
-                    return usage("`--cwd` needs a directory");
+                let dir = match value(&mut it) {
+                    Ok(Some(dir)) => dir,
+                    Ok(None) => return usage("`--cwd` needs a directory"),
+                    Err(code) => return code,
                 };
                 if let Err(e) = std::env::set_current_dir(&dir) {
                     return usage(&format!("--cwd {dir}: {e}"));
@@ -190,7 +227,7 @@ pub fn main_with(args: Vec<String>) -> i32 {
                     .is_none_or(|l| !VALUE_OPTIONS.contains(&l.as_str())) =>
             {
                 let mut post = vec![a, "-q".to_owned(), "--".to_owned()];
-                post.extend(it.by_ref());
+                post.extend(take_tail(&mut g, &mut it));
                 return run(&g, "run", &rest, &post);
             }
             _ => rest.push(a),
@@ -896,7 +933,8 @@ fn rokc_command(
         mark_manifest_lints(&mut extra, at, &t.ctx, &rokc);
     }
     let mut c = Command::new(&rokc);
-    c.args(&g.color).args(pre).arg(cmd).args(&extra).args(post);
+    c.args(&g.color).args(pre).arg(cmd).args(&extra);
+    post_args(&mut c, post, &g.tail);
     if let Ok(me) = std::env::current_exe() {
         c.env("ROK", me);
     }
@@ -920,6 +958,14 @@ fn rokc_command(
         None => c.env_remove("ROK_ENV_LIBS"),
     };
     Ok((c, rokc))
+}
+
+/// `post` for `c`, its program's arguments after `--` as given (`tail`).
+fn post_args(c: &mut Command, post: &[String], tail: &[std::ffi::OsString]) {
+    match post.iter().position(|a| a == "--") {
+        Some(i) if post.len() - i - 1 == tail.len() => c.args(&post[..=i]).args(tail),
+        _ => c.args(post),
+    };
 }
 
 /// rokc's options that take a separate value (`--target x86_64-..`).

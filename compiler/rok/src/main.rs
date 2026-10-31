@@ -13,5 +13,5 @@ fn main() {
     if let Some(code) = rok::proxy(&args) {
         std::process::exit(code);
     }
-    std::process::exit(rok::main_with(std::env::args().skip(1).collect()));
+    std::process::exit(rok::main_with_os(args));
 }

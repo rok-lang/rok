@@ -195,6 +195,52 @@ pub fn sweep(dir: &Path, prefixes: &[&str], min_age: Duration) {
     }
 }
 
+/// `<temp>/<name>-<euid>`, made mode 0700, for a cache whose files are
+/// trusted.
+///
+/// One already there must be a directory (not a link) of this user that
+/// nobody else may use, else the error names its owner and mode.
+/// Elsewhere `<temp>/<name>`: the Windows temp directory is the user's.
+pub fn user_cache_dir(name: &str) -> Result<PathBuf, String> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
+        unsafe extern "C" {
+            fn geteuid() -> u32;
+        }
+        // SAFETY: no arguments, cannot fail.
+        let uid = unsafe { geteuid() };
+        let dir = std::env::temp_dir().join(format!("{name}-{uid}"));
+        let made = std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(&dir);
+        let m = std::fs::symlink_metadata(&dir).map_err(|e| match made {
+            Err(made) => format!("cannot create {}: {made}", dir.display()),
+            Ok(()) => format!("{}: {e}", dir.display()),
+        })?;
+        let mode = m.permissions().mode() & 0o7777;
+        if m.file_type().is_symlink() {
+            return Err(format!(
+                "{} is not private to you (a symbolic link)",
+                dir.display()
+            ));
+        }
+        if !m.is_dir() || m.uid() != uid || mode & 0o077 != 0 {
+            return Err(format!(
+                "{} is not private to you (owner uid {}, mode {mode:04o})",
+                dir.display(),
+                m.uid()
+            ));
+        }
+        Ok(dir)
+    }
+    #[cfg(not(unix))]
+    {
+        Ok(std::env::temp_dir().join(name))
+    }
+}
+
 /// Remove files under `dir` not changed for `age`, then directories that
 /// emptied and are that old themselves: a build that just made one (other
 /// processes share the cache) keeps it.

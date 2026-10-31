@@ -1,0 +1,31 @@
+// spec: 002.02.6-narrowing
+// expect-exit: 0
+// expect-stdout:
+// assign: 11
+// in: 12
+// ref: 12
+// field: 5
+// twice: 14
+
+// A narrowed variable passed as `ref` writes back to the slot it narrows,
+// as `=` does; a field of one and a narrowing of a narrowing too.
+struct P { x: i32; }
+
+fn inc(ref n: i32) { n = n + 1; }
+fn bump(ref x: i32) { x = x + 4; }
+
+fn main() {
+    let v: i32 | str = 1;
+    if v is i32 { v = v + 10; }
+    println(f"assign: {v:?}");
+    if v is i32 { inc(ref v); println(f"in: {v}"); }
+    println(f"ref: {v:?}");
+    let p: P | none = P { x: 1 };
+    if p is P { bump(ref p.x); }
+    match p { q: P => println(f"field: {q.x}"), none => println("none") }
+    let w: i32 | str | none = 12;
+    if w is (i32 | str) {
+        if w is i32 { inc(ref w); inc(ref w); }
+    }
+    match w { n: i32 => println(f"twice: {n}"), _ => println("?") }
+}
