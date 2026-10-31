@@ -482,12 +482,11 @@ fn builds_print_lints() {
     );
 }
 
-/// 6.2.9: an `unclosed_resource` finding 0.1.6 added (a value closed on
-/// one path only) stays out of `warnings`; one 0.1.5 made (never closed,
-/// only its own methods called) stays in.
+/// 6.2.9: `-D warnings` denies every `unclosed_resource` finding, the
+/// ones 0.1.6 added (a value closed on one path only) too.
 // spec: §6.2.9
 #[test]
-fn deny_warnings_keeps_new_unclosed_findings_out() {
+fn deny_warnings_takes_new_unclosed_findings() {
     let dir = scratch("lint-unclosed-since");
     let app = new_package(&dir, "app", false);
     let new = "use rok::std::fs::File;\n\n\
@@ -498,20 +497,22 @@ fn deny_warnings_keeps_new_unclosed_findings_out() {
                s\n}\n\n\
                fn main() {}\n";
     put(app.join("src/main.rok"), new).unwrap();
-    let out = rokc(None, &app, &["lint", "-D", "warnings"]);
+    let out = rokc(None, &app, &["lint"]);
     assert_exit(&out, 0);
     let err = text(&out.stderr);
     assert!(
         err.contains("warning[E503]: `f` holds a `File` that is not closed on every path"),
         "{err}"
     );
-    let out = rokc(None, &app, &["lint", "-D", "unclosed_resource"]);
-    assert_exit(&out, 1);
-    let err = text(&out.stderr);
-    assert!(
-        err.contains("error[E503]: `f` holds a `File` that is not closed on every path"),
-        "{err}"
-    );
+    for deny in ["warnings", "unclosed_resource"] {
+        let out = rokc(None, &app, &["lint", "-D", deny]);
+        assert_exit(&out, 1);
+        let err = text(&out.stderr);
+        assert!(
+            err.contains("error[E503]: `f` holds a `File` that is not closed on every path"),
+            "{err}"
+        );
+    }
     let old = "use rok::std::fs::File;\n\n\
                pub fn never(p: str) -> str {\n    \
                let f = try! File::open(p);\n    \
@@ -527,11 +528,11 @@ fn deny_warnings_keeps_new_unclosed_findings_out() {
     );
 }
 
-/// 6.2.9: `warnings` holds the lints up to the baseline, as a flag and as
-/// an attribute; `all` still holds every lint.
+/// 6.2.9: `warnings` holds every warning-level lint, later ones too, as
+/// a flag and as an attribute; `lint --list` shows each lint's release.
 // spec: §6.2.9
 #[test]
-fn deny_warnings_ignores_new_lint() {
+fn deny_warnings_takes_new_lints() {
     let dir = scratch("lint-warnings");
     let app = new_package(&dir, "app", false);
     let src = "fn main() {\n    let x = 1;\n}\n";
@@ -555,7 +556,7 @@ fn deny_warnings_ignores_new_lint() {
     let out = rokc(None, &app, &["lint", "--list"]);
     let list = text(&out.stdout);
     assert!(
-        list.contains("warnings (every lint up to 0.1.5)")
+        list.contains("warnings (every warning-level lint)")
             && list.contains("unused_variables         warn  0.1.0"),
         "{list}"
     );
@@ -568,8 +569,7 @@ fn deny_warnings_ignores_new_lint() {
         ),
         "{err}"
     );
-    // A deprecation past the baseline and `deprecated_safe` (added in
-    // 0.1.6) stay warnings under `warnings`; `all` denies them.
+    // A deprecation of any release is denied under `warnings`.
     put(
         app.join("src/main.rok"),
         "#[deprecated(since = \"0.1.6\")]\nfn new_old() {}\n\
@@ -577,20 +577,16 @@ fn deny_warnings_ignores_new_lint() {
          fn main() {\n    new_old();\n    old();\n}\n",
     )
     .unwrap();
-    let out = rokc(None, &app, &["lint", "-D", "warnings"]);
-    assert_exit(&out, 1);
-    let err = text(&out.stderr);
-    assert!(
-        err.contains("warning[E503]: use of deprecated function `new_old`")
-            && err.contains("error[E503]: use of deprecated function `old`"),
-        "{err}"
-    );
-    let out = rokc(None, &app, &["lint", "-D", "all"]);
-    let err = text(&out.stderr);
-    assert!(
-        err.contains("error[E503]: use of deprecated function `new_old`"),
-        "{err}"
-    );
+    for deny in ["warnings", "all"] {
+        let out = rokc(None, &app, &["lint", "-D", deny]);
+        assert_exit(&out, 1);
+        let err = text(&out.stderr);
+        assert!(
+            err.contains("error[E503]: use of deprecated function `new_old`")
+                && err.contains("error[E503]: use of deprecated function `old`"),
+            "{err}"
+        );
+    }
     let out = rokc(None, &app, &["lint", "--list"]);
     let list = text(&out.stdout);
     assert!(
@@ -697,20 +693,20 @@ fn compiler_warning_with_lint_can_be_allowed() {
     );
 }
 
-/// A lint added after the baseline: `-D warnings` leaves it a warning,
-/// `-D all` and its own name deny it.
+/// A lint added in 0.1.6: `-D warnings`, `-D all` and its own name deny
+/// it.
 #[test]
-fn literal_spread_mismatch_is_outside_warnings() {
+fn literal_spread_mismatch_is_in_warnings() {
     let dir = scratch("lint-spread");
     let app = new_package(&dir, "app", false);
     let src = "fn add(a: i32, b: i32) -> i32 { a + b }\n\
                fn main() {\n    println(f\"{add(..[1, 2, 3])}\");\n}\n";
     put(app.join("src/main.rok"), src).unwrap();
     let warn = "warning[E503]: spread of 3 elements into 2 parameters; this call panics";
-    let out = rokc(None, &app, &["lint", "-D", "warnings"]);
+    let out = rokc(None, &app, &["lint"]);
     assert_exit(&out, 0);
     assert!(text(&out.stderr).contains(warn), "{}", text(&out.stderr));
-    for deny in ["all", "literal_spread_mismatch"] {
+    for deny in ["warnings", "all", "literal_spread_mismatch"] {
         let out = rokc(None, &app, &["lint", "-D", deny]);
         assert_exit(&out, 1);
     }
@@ -728,10 +724,10 @@ fn literal_spread_mismatch_is_outside_warnings() {
     );
 }
 
-/// The semantic warnings added after the baseline: `-D warnings` leaves
-/// them warnings, `-D all` denies them, `#[allow]` and `-A` silence them.
+/// The semantic warnings added in 0.1.6: `-D warnings` and `-D all` deny
+/// them, `#[allow]` and `-A` silence them.
 #[test]
-fn semantic_warnings_are_outside_warnings() {
+fn semantic_warnings_are_in_warnings() {
     let dir = scratch("lint-semantic");
     let app = new_package(&dir, "app", false);
     let src = "const LIMIT: i32 = 5;\n\
@@ -741,13 +737,14 @@ fn semantic_warnings_are_outside_warnings() {
     put(app.join("src/main.rok"), src).unwrap();
     let cast = "warning[E503]: `0.5 as bool` truncates first";
     let pat = "warning[E503]: `LIMIT` here is a new variable that matches every value";
-    let out = rokc(None, &app, &["lint", "-D", "warnings"]);
+    let out = rokc(None, &app, &["lint"]);
     assert_exit(&out, 0);
     let err = text(&out.stderr);
     assert!(err.contains(cast) && err.contains(pat), "{err}");
     assert!(!err.contains("`1.5 as bool` truncates"), "{err}");
-    let out = rokc(None, &app, &["lint", "-D", "all"]);
-    assert_exit(&out, 1);
+    for deny in ["warnings", "all"] {
+        assert_exit(&rokc(None, &app, &["lint", "-D", deny]), 1);
+    }
     let out = rokc(None, &app, &["lint", "-A", "pattern_binds_const"]);
     let err = text(&out.stderr);
     assert!(err.contains(cast) && !err.contains(pat), "{err}");
@@ -755,7 +752,7 @@ fn semantic_warnings_are_outside_warnings() {
     let list = text(&out.stdout);
     for name in [
         "capture_field_write",
-        "const_mutation",
+        "const_item_mutation",
         "pattern_binds_const",
         "discarded_ref_write",
         "ambiguous_int_literal",
@@ -1031,7 +1028,7 @@ fn edited_module_recompiles_its_unit_alone() {
 }
 
 /// Unchanged parses and lowerings replay from the incremental directory;
-/// `ROK_INCR_VERIFY` fails a replay that differs from a clean lowering.
+/// `ROK_INCREMENTAL_VERIFY` fails a replay that differs from a clean lowering.
 // spec: §9.1.7
 #[test]
 fn front_end_reuses_parses_and_bodies() {
@@ -1052,7 +1049,7 @@ fn front_end_reuses_parses_and_bodies() {
         let mut cmd = Command::new(ROKC);
         cmd.current_dir(&app)
             .env("ROK_HOME", workspace())
-            .env("ROK_INCR_VERIFY", "1")
+            .env("ROK_INCREMENTAL_VERIFY", "1")
             .envs(vars.iter().copied())
             .args(args)
             .arg("--rokr")
@@ -1228,7 +1225,7 @@ fn library_stage_persists_across_builds() {
         let out = Command::new(ROKC)
             .current_dir(&dir)
             .env("ROK_HOME", workspace())
-            .env("ROK_INCR_VERIFY", "1")
+            .env("ROK_INCREMENTAL_VERIFY", "1")
             .envs(vars.iter().copied())
             .args(["run", "-v", "app", "--extern", "dep=dep"])
             .args(args)
@@ -1348,7 +1345,7 @@ fn incremental_checks_generic_bodies() {
         let out = Command::new(ROKC)
             .current_dir(&app)
             .env("ROK_HOME", workspace())
-            .env("ROK_INCR_VERIFY", "1")
+            .env("ROK_INCREMENTAL_VERIFY", "1")
             .args(["check"])
             .arg("--rokr")
             .arg(&env.rokr)
@@ -1405,7 +1402,7 @@ fn incremental_deprecation_marks() {
         let out = Command::new(ROKC)
             .current_dir(&app)
             .env("ROK_HOME", workspace())
-            .env("ROK_INCR_VERIFY", "1")
+            .env("ROK_INCREMENTAL_VERIFY", "1")
             .args(["check"])
             .output()
             .unwrap();
@@ -3474,7 +3471,7 @@ fn prebuilt_dependency_keeps_handoff_summaries() {
         &rokc(
             None,
             &dir,
-            &["inspect", "--text", "dep/target/debug/dep.rokhir"],
+            &["inspect", "--dump", "dep/target/debug/dep.rokhir"],
         )
         .stdout,
     );
@@ -3702,7 +3699,7 @@ fn prebuilt_dependency_is_linked_and_instantiated() {
     let out = rokc(
         None,
         &dir,
-        &["inspect", "--text", "geo/target/debug/geo.rokhir"],
+        &["inspect", "--dump", "geo/target/debug/geo.rokhir"],
     );
     assert_exit(&out, 0);
     let dump = text(&out.stdout);
@@ -3712,8 +3709,8 @@ fn prebuilt_dependency_is_linked_and_instantiated() {
     assert_eq!(text(&old.stdout), dump);
     assert!(
         text(&old.stderr).contains(
-            "rokc: warning: `rokc rokhir-text` is now `rokc inspect --text` (write `rokc inspect \
-             --text geo/target/debug/geo.rokhir`); `rokhir-text` goes in 0.2.0"
+            "rokc: warning: `rokc rokhir-text` is now `rokc inspect --dump` (write `rokc inspect \
+             --dump geo/target/debug/geo.rokhir`); `rokhir-text` goes in 0.2.0"
         ),
         "{}",
         text(&old.stderr)
@@ -6543,8 +6540,8 @@ fn env_knob_bad_value_warns() {
         .env("ROK_BACKEND", "gcc")
         .env("ROK_VERBOSE", "yes")
         .env("ROK_TIME_PASSES", "on")
-        .env("ROK_INCR_VERIFY", "true")
-        .env("ROK_NUM_JOBS", "0")
+        .env("ROK_INCREMENTAL_VERIFY", "true")
+        .env("ROK_TEST_THREADS", "0")
         .args(["test", "-q", "--rokr"])
         .arg(&env.rokr)
         .output()
@@ -6561,8 +6558,8 @@ fn env_knob_bad_value_warns() {
             "rokc: warning: ignoring ROK_BACKEND=gcc (expected native|llvm)",
             "rokc: warning: ignoring ROK_VERBOSE=yes (expected 0|1)",
             "rokc: warning: ignoring ROK_TIME_PASSES=on (expected 0|1)",
-            "rokc: warning: ignoring ROK_INCR_VERIFY=true (expected 0|1)",
-            "rokc: warning: ignoring ROK_NUM_JOBS=0 (expected a positive number)",
+            "rokc: warning: ignoring ROK_INCREMENTAL_VERIFY=true (expected 0|1)",
+            "rokc: warning: ignoring ROK_TEST_THREADS=0 (expected a positive number)",
         ]
     );
 }
@@ -6610,7 +6607,7 @@ fn old_env_names_warn() {
     assert_eq!(
         warnings(&out),
         [
-            "rokc: warning: ROKC_NUM_JOBS is now ROK_NUM_JOBS: set ROK_NUM_JOBS instead \
+            "rokc: warning: ROKC_NUM_JOBS is now ROK_TEST_THREADS: set ROK_TEST_THREADS instead \
              (ROKC_NUM_JOBS goes in 0.2.0)",
             "rokc: warning: ROKC_TARGET_DIR is now ROK_TARGET_DIR: set ROK_TARGET_DIR instead \
              (ROKC_TARGET_DIR goes in 0.2.0)",

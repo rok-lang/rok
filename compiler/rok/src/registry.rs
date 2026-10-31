@@ -697,9 +697,9 @@ pub fn check_token(token: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// The token for `index`: `$ROK_REGISTRY_TOKEN`, else `rok login`'s for
-/// that index, else the one in credentials.rokon. `login` is the command
-/// that logs in to it.
+/// The token for `index`: `$ROK_REGISTRY_TOKEN` (which warns for an index
+/// other than [`DEFAULT`]), else `rok login`'s for that index, else the
+/// one in credentials.rokon. `login` is the command that logs in to it.
 pub fn token(home: &Path, index: &str, login: &str) -> Result<String, String> {
     pick_token(std::env::var("ROK_REGISTRY_TOKEN").ok(), home, index, login)
 }
@@ -712,6 +712,12 @@ fn pick_token(
 ) -> Result<String, String> {
     if let Some(t) = env.filter(|t| !t.is_empty()) {
         check_token(&t).map_err(|e| format!("ROK_REGISTRY_TOKEN: {e}"))?;
+        if !same_index(index, DEFAULT) {
+            crate::warn_once(&format!(
+                "ROK_REGISTRY_TOKEN is sent to {index}; 0.2.0 sends it only to {DEFAULT}: for \
+                 this index run `rok login --registry {index}` (its token goes in tokens.rokon)"
+            ));
+        }
         return Ok(t);
     }
     if let Some(t) = keyed_token(home, index)? {

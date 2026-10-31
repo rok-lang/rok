@@ -226,7 +226,7 @@ impl Atomic<i32> {
     }
 
     /// `wait` for at most `timeout` (a negative one: no limit).
-    pub fn wait_for(self, expected: i32, timeout: rok::core::task::time::Duration) {
+    pub fn wait_timeout(self, expected: i32, timeout: rok::core::task::time::Duration) {
         self.wait(expected, timeout.as_ns());
     }
 

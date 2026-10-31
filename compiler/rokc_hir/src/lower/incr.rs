@@ -127,7 +127,7 @@ pub(super) enum Read {
     TraitInfo(String),
     NegAuto(String, String),
     NonExhaustive(String),
-    /// A function's `#[deprecated]` / `#[future_unsafe]`.
+    /// A function's `#[deprecated]` / `#[deprecated_safe]`.
     FnMark(FunctionId),
     /// A field's, const's or static's.
     Mark(String),

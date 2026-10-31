@@ -1,9 +1,9 @@
 // spec: §6.2.7 §6.2.14
-// expect-error: `#[future_unsafe]` cannot be attached to a struct; it goes on a function, a method, an extern function or a static
+// expect-error: `#[deprecated_safe]` cannot be attached to a struct; it goes on a function, a method, an extern function or a static
 // expect-error: malformed `#[deprecated]`: expected no argument, a message string, or `(since = "0.1.6", note = "..")`
 
-// `#[future_unsafe]` goes on functions and statics; `since` is a release.
-#[future_unsafe]
+// `#[deprecated_safe]` goes on functions and statics; `since` is a release.
+#[deprecated_safe]
 struct S { v: i32; }
 
 #[deprecated(since = "soon", note = "use g")]

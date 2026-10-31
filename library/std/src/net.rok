@@ -502,7 +502,7 @@ impl Sock {
 
     /// `close`, throwing the OS's error. Released by a call in flight,
     /// or closed already: nothing to report.
-    fn close_checked(self) throws (IoError) {
+    fn try_close(self) throws (IoError) {
         let fd = unsafe { self.fd[0] };
         if use_close(self.fd, 1) != 0 {
             if fd >= 0 { task::wake_io(fd); }
@@ -857,7 +857,7 @@ impl TcpStream {
     pub fn close(self) { self.sock.close(); }
 
     /// `close`, but an error the OS reports is thrown.
-    pub fn close_checked(self) throws (IoError) { try self.sock.close_checked(); }
+    pub fn try_close(self) throws (IoError) { try self.sock.try_close(); }
 }
 
 impl Reader for TcpStream {
@@ -958,7 +958,7 @@ impl TcpListener {
     pub fn close(self) { self.sock.close(); }
 
     /// `close`, but an error the OS reports is thrown.
-    pub fn close_checked(self) throws (IoError) { try self.sock.close_checked(); }
+    pub fn try_close(self) throws (IoError) { try self.sock.try_close(); }
 }
 
 impl Drop for TcpListener {
@@ -1127,7 +1127,7 @@ impl UdpSocket {
     pub fn close(self) { self.sock.close(); }
 
     /// `close`, but an error the OS reports is thrown.
-    pub fn close_checked(self) throws (IoError) { try self.sock.close_checked(); }
+    pub fn try_close(self) throws (IoError) { try self.sock.try_close(); }
 }
 
 impl Drop for UdpSocket {
@@ -1238,7 +1238,7 @@ impl UnixListener {
     pub fn close(self) { self.sock.close(); }
 
     /// `close`, but an error the OS reports is thrown.
-    pub fn close_checked(self) throws (IoError) { try self.sock.close_checked(); }
+    pub fn try_close(self) throws (IoError) { try self.sock.try_close(); }
 }
 
 #[cfg(target_family = "unix")]
@@ -1329,7 +1329,7 @@ impl UnixStream {
     pub fn close(self) { self.sock.close(); }
 
     /// `close`, but an error the OS reports is thrown.
-    pub fn close_checked(self) throws (IoError) { try self.sock.close_checked(); }
+    pub fn try_close(self) throws (IoError) { try self.sock.try_close(); }
 }
 
 #[cfg(target_family = "unix")]
@@ -1398,7 +1398,7 @@ impl UnixDatagram {
     pub fn close(self) { self.sock.close(); }
 
     /// `close`, but an error the OS reports is thrown.
-    pub fn close_checked(self) throws (IoError) { try self.sock.close_checked(); }
+    pub fn try_close(self) throws (IoError) { try self.sock.try_close(); }
 }
 
 #[cfg(target_family = "unix")]

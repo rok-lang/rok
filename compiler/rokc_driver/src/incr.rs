@@ -444,10 +444,10 @@ pub fn bodies(i: std::sync::Arc<Incr>, files: &rokc_diagnostic::SourceMap) -> ro
     rokc_hir::Bodies(std::sync::Arc::new(BodyStore(i, Ids::of(files))))
 }
 
-/// `ROK_INCR_VERIFY=1`: lower with and without the stores and compare;
+/// `ROK_INCREMENTAL_VERIFY=1`: lower with and without the stores and compare;
 /// a difference fails the build.
 pub fn verify() -> Option<fn(&rokc_hir::HirModule, &mut rokc_hir::HirModule)> {
-    rokc_core::env_flag(rokc_core::env_name("ROK_INCR_VERIFY")).then_some(check)
+    rokc_core::env_flag(rokc_core::env_name("ROK_INCREMENTAL_VERIFY")).then_some(check)
 }
 
 fn check(clean: &rokc_hir::HirModule, incr: &mut rokc_hir::HirModule) {
@@ -487,7 +487,7 @@ fn check(clean: &rokc_hir::HirModule, incr: &mut rokc_hir::HirModule) {
             rokc_diagnostic::ErrorKind::Internal,
             rokc_diagnostic::Span::DUMMY,
             format!(
-                "ROK_INCR_VERIFY: the incremental lowering differs from a clean one at `{what}`"
+                "ROK_INCREMENTAL_VERIFY: the incremental lowering differs from a clean one at `{what}`"
             ),
         ));
     }

@@ -973,7 +973,7 @@ fn receiver_write(
                 if dropped || heap {
                     let low = name.to_lowercase();
                     ctx.emit_lint(
-                        "const_mutation",
+                        "const_item_mutation",
                         span,
                         format!(
                             "`{name}` is a const: each use builds a new value, so `{method}` \

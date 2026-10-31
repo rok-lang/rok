@@ -8,7 +8,7 @@
 // expect-warning: parameter `xs` of extern function `takes_list` has type `List<i64>`, which C cannot hold
 // expect-warning: the result of extern function `gives_dict` has type `Dict<str, i64>`
 // expect-warning: parameter `x` of `extern "C" fn` `callback` has type `List<i64>`
-// expect-warning: `#[warn(extern_ffi_types)]` on by default
+// expect-warning: `#[warn(improper_ctypes)]` on by default
 // spec: §5.9.4
 // spec: §5.9.6
 // expect-stdout: 7 7 7 true

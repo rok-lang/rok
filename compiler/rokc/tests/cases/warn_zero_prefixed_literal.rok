@@ -16,5 +16,5 @@ fn main() {
     println(f"{mode} {z} {n} {0o755} {0} {0.5} {01.5} {quiet()}");
 }
 
-#[allow(octal_like_literal)]
+#[allow(zero_prefixed_literal)]
 fn quiet() -> i32 { 007 }

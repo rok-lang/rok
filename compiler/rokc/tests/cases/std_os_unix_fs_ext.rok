@@ -3,19 +3,20 @@
 // needs: posix-fs
 // only-os: macos linux
 // expect-exit: 0
-// expect-lint: 35:15 use of deprecated method `Permissions::from_mode`
-// expect-lint: 36:44 use of deprecated method `OpenOptions::mode`
-// expect-lint: 37:21 use of deprecated method `Permissions::mode`
-// expect-warning: = note: use `PermissionsExt::from_unix_mode` (rok::std::os::unix::fs); on Windows, `set_readonly`
-// expect-warning: = note: use `PermissionsExt::unix_mode` (rok::std::os::unix::fs); on Windows, `readonly`
-// expect-warning: = note: use `OpenOptionsExt::unix_mode` (rok::std::os::unix::fs)
+// expect-lint: 38:15 use of deprecated method `Permissions::from_mode`
+// expect-lint: 39:44 use of deprecated method `OpenOptions::mode`
+// expect-lint: 40:21 use of deprecated method `Permissions::mode`
+// expect-warning: = note: use `PermissionsExt::from_mode` (rok::std::os::unix::fs): write `let p: Permissions = PermissionsExt::from_mode(m)`; from 0.2.0 `Permissions::from_mode(m)` reaches it; on Windows, `set_readonly`
+// expect-warning: = note: use `PermissionsExt::mode` (rok::std::os::unix::fs): write `PermissionsExt::mode(p)`; from 0.2.0 `p.mode()` reaches it; on Windows, `readonly`
+// expect-warning: = note: use `OpenOptionsExt::mode` (rok::std::os::unix::fs): write `OpenOptionsExt::mode(opts, m)`; from 0.2.0 `opts.mode(m)` reaches it
 // expect-stdout:
-// 640 false 640
+// 640 false 640 600
 // created: 600
 // old: 644 600
 
-// Unix permission bits move to `rok::std::os::unix::fs`; the methods on
-// the cross-platform types still work and warn.
+// Unix permission bits move to `rok::std::os::unix::fs`. Until 0.2.0 the
+// deprecated inherent methods win method lookup, so the trait is
+// reached through its name; the plain calls still work and warn.
 use rok::std::fs;
 use rok::std::fs::{OpenOptions, Permissions};
 use rok::std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
@@ -24,16 +25,18 @@ use rok::std::env;
 use rok::std::process;
 
 fn main() throws (IoError) {
-    let p = Permissions::from_unix_mode(0o100640u32);
-    println(f"{p.unix_mode():o} {p.readonly()} {p.set_readonly(false).unix_mode() & 0o777u32:o}");
+    let p: Permissions = PermissionsExt::from_mode(0o100640u32);
+    let q = p.set_mode(0o600u32);
+    println(f"{PermissionsExt::mode(p):o} {p.readonly()} {PermissionsExt::mode(p.set_readonly(false)) & 0o777u32:o} {PermissionsExt::mode(q):o}");
     let dir = env::temp_dir() / f"rok_unix_fs_ext_{process::id()}";
     try fs::remove_dir_all(dir) catch _ {};
     try fs::create_dir(dir);
-    let opts = OpenOptions::new().write(true).create(true).unix_mode(0o600u32);
+    let opts = OpenOptionsExt::mode(OpenOptions::new().write(true).create(true), 0o600u32);
     using f = try fs::open_with(dir / "a", opts) {}
-    println(f"created: {(try fs::metadata(dir / "a")).permissions().unix_mode():o}");
+    println(f"created: {PermissionsExt::mode((try fs::metadata(dir / "a")).permissions()):o}");
+    // The plain forms: the deprecated inherent methods.
     let old = Permissions::from_mode(0o644u32);
     using g = try fs::open_with(dir / "b", OpenOptions::new().write(true).create(true).mode(0o600u32)) {}
-    println(f"old: {old.mode():o} {(try fs::metadata(dir / "b")).permissions().unix_mode():o}");
+    println(f"old: {old.mode():o} {PermissionsExt::mode((try fs::metadata(dir / "b")).permissions()):o}");
     try fs::remove_dir_all(dir);
 }

@@ -2828,8 +2828,9 @@ fn cmd_publish(g: &Global, args: &[String]) -> Result<i32, String> {
     }
     if !write && !dry {
         warn_once(
-            "`rok publish` will need `--commit` or `--dry-run` in 0.2.0; this was a dry run \
-             (write `rok publish --dry-run`)",
+            "from 0.2.0 `rok publish` publishes; this was a dry run (write `rok publish \
+             --dry-run` to keep previewing, or `rok publish --commit`, which 0.2.0 no longer \
+             needs)",
         );
     }
     let remote = match index {

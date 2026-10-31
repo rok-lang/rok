@@ -153,7 +153,7 @@ pub struct RokonError {
     pub msg: str;
     #[deprecated(since = "0.1.6", note = "use `RokonError::line()`")]
     pub line: u32;
-    #[deprecated(since = "0.1.6", note = "use `RokonError::col()`")]
+    #[deprecated(since = "0.1.6", note = "use `RokonError::column()`")]
     pub col: u32;
     #[deprecated(since = "0.1.6", note = "use `RokonError::path()`")]
     pub path: str;
@@ -182,7 +182,7 @@ impl RokonError {
     /// text.
     pub const fn line(self) -> u32 { self.line }
     /// 1-based column (code points); 0 as for `line`.
-    pub const fn col(self) -> u32 { self.col }
+    pub const fn column(self) -> u32 { self.col }
     /// The failing part (`.servers[2].port`); empty at the root.
     pub const fn path(self) -> str { self.path }
 }

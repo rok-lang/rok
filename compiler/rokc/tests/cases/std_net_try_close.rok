@@ -12,7 +12,7 @@
 // read after close: InvalidInput
 // same: true
 
-// `close_checked` is `close` that throws what the OS reports; closing
+// `try_close` is `close` that throws what the OS reports; closing
 // twice is still a no-op. `resolve_one` and `ClientConfig::new` warn.
 use rok::std::io::IoError;
 use rok::std::net;
@@ -23,14 +23,14 @@ fn main() throws (IoError) {
     let addr = try l.local_addr();
     let c = try net::tcp_connect(addr);
     let (s, _) = try l.accept();
-    try c.close_checked();
+    try c.try_close();
     println(f"closed: {c.fd() == -1}");
-    try c.close_checked();
+    try c.try_close();
     println("again: ok");
     let buf: List<u8> = [0u8];
     try c.read(buf) catch e { println(f"read after close: {e.kind():?}"); 0 };
-    try s.close_checked();
-    try l.close_checked();
+    try s.try_close();
+    try l.try_close();
     let one = try net::resolve_one("127.0.0.1", 80u16);
     println(f"same: {one == (try net::resolve("127.0.0.1:80"))[0]}");
     if false {

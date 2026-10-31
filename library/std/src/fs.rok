@@ -40,7 +40,7 @@ pub struct OpenOptions {
     pub create: bool;
     pub create_new: bool;
     /// Unix permission bits for a created file.
-    #[deprecated(since = "0.1.6", note = "use `OpenOptionsExt::unix_mode` (rok::std::os::unix::fs)")]
+    #[deprecated(since = "0.1.6", note = "use `OpenOptionsExt::mode` (rok::std::os::unix::fs)")]
     pub mode: u32;
 }
 
@@ -60,7 +60,7 @@ impl OpenOptions {
     pub const fn truncate(self, on: bool) -> OpenOptions { self.truncate = on; self }
     pub const fn create(self, on: bool) -> OpenOptions { self.create = on; self }
     pub const fn create_new(self, on: bool) -> OpenOptions { self.create_new = on; self }
-    #[deprecated(since = "0.1.6", note = "use `OpenOptionsExt::unix_mode` (rok::std::os::unix::fs)")]
+    #[deprecated(since = "0.1.6", note = "use `OpenOptionsExt::mode` (rok::std::os::unix::fs): write `OpenOptionsExt::mode(opts, m)`; from 0.2.0 `opts.mode(m)` reaches it")]
     pub const fn mode(self, mode: u32) -> OpenOptions { self.mode = mode; self }
 
     const fn bits(self) -> i32 {
@@ -83,9 +83,9 @@ pub struct Permissions {
 }
 
 impl Permissions {
-    #[deprecated(since = "0.1.6", note = "use `PermissionsExt::from_unix_mode` (rok::std::os::unix::fs); on Windows, `set_readonly`")]
+    #[deprecated(since = "0.1.6", note = "use `PermissionsExt::from_mode` (rok::std::os::unix::fs): write `let p: Permissions = PermissionsExt::from_mode(m)`; from 0.2.0 `Permissions::from_mode(m)` reaches it; on Windows, `set_readonly`")]
     pub const fn from_mode(mode: u32) -> Permissions { Permissions { mode: mode & 0o7777u32 } }
-    #[deprecated(since = "0.1.6", note = "use `PermissionsExt::unix_mode` (rok::std::os::unix::fs); on Windows, `readonly`")]
+    #[deprecated(since = "0.1.6", note = "use `PermissionsExt::mode` (rok::std::os::unix::fs): write `PermissionsExt::mode(p)`; from 0.2.0 `p.mode()` reaches it; on Windows, `readonly`")]
     pub const fn mode(self) -> u32 { self.mode }
     /// No write bit for anyone.
     pub const fn readonly(self) -> bool { (self.mode & 0o222u32) == 0u32 }
@@ -174,7 +174,7 @@ impl Metadata {
     #[deprecated(since = "0.1.6", note = "use `accessed()`")]
     pub const fn atime(self) -> i64 { self.atime }
     /// The last status change (not creation), Unix seconds.
-    #[deprecated(since = "0.1.6", note = "use `changed()` (last status change) or `created()`")]
+    #[deprecated(since = "0.1.6", note = "use `status_changed()` (last status change) or `created()`")]
     pub const fn ctime(self) -> i64 { self.ctime }
     /// Last modification as a `SystemTime` (3.3.3). Never throws on
     /// Unix; `throws` keeps room for platforms without the field.
@@ -183,7 +183,7 @@ impl Metadata {
     pub const fn accessed(self) throws (IoError) -> SystemTime { SystemTime::from_unix(self.atime, self.atime_ns as u32) }
     /// Last change of the contents or the metadata (permissions, links,
     /// a rename) as a `SystemTime`.
-    pub const fn changed(self) throws (IoError) -> SystemTime { SystemTime::from_unix(self.ctime, self.ctime_ns as u32) }
+    pub const fn status_changed(self) throws (IoError) -> SystemTime { SystemTime::from_unix(self.ctime, self.ctime_ns as u32) }
     /// Creation as a `SystemTime`; `Unsupported` where the OS or file
     /// system keeps none (Linux before 4.11, some file systems).
     pub const fn created(self) throws (IoError) -> SystemTime {
@@ -249,7 +249,7 @@ impl File {
 
     /// Take ownership of an open descriptor; `name` labels its errors.
     /// Nothing else may close `fd` then.
-    #[future_unsafe("`fd` must be open, and nothing else may close it")]
+    #[deprecated_safe("`fd` must be open, and nothing else may close it")]
     pub const fn from_fd(fd: i32, name: str) -> File { file_of(fd, name) }
 
     /// The OS file descriptor (`-1` once closed).
