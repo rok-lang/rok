@@ -280,6 +280,7 @@ impl<'src> Lexer<'src> {
             b'?' => self.lex_question(),
             b'\'' => self.lex_quote_or_label(),
             b'"' => self.lex_str_lit(),
+            b'r' if next == Some(b'#') && self.at_raw_ident() => return Some(self.lex_raw_ident()),
             b'r' if next == Some(b'"') || next == Some(b'#') => self.lex_raw_str_lit(),
             b'f' if next == Some(b'"') => {
                 let triple = self.src[start + 1..].starts_with("\"\"\"");
@@ -579,6 +580,42 @@ impl<'src> Lexer<'src> {
         it.next().is_some_and(ri) && it.next().is_some_and(ri)
     }
 
+    /// `r#` then an identifier start (`r#"` is a raw string).
+    fn at_raw_ident(&self) -> bool {
+        self.src[self.pos + 2..]
+            .chars()
+            .next()
+            .is_some_and(is_ident_start)
+    }
+
+    /// `r#name` (spec 1.4.4): the identifier `name`, even when `name` is a
+    /// keyword.
+    fn lex_raw_ident(&mut self) -> Token {
+        let start = self.pos;
+        let (line, col) = (self.line, self.col);
+        self.advance(2);
+        let from = self.pos;
+        self.eat_ident_continue();
+        let name = normalize_ident(&self.src[from..self.pos]);
+        let span = Self::make_span(start, self.pos, line, col);
+        if matches!(name.as_str(), "self" | "Self" | "_") {
+            self.error(
+                span,
+                format!(
+                    "`r#{name}` is not allowed: `{name}` can't be a raw identifier; write \
+                     `{name}` or pick another name"
+                ),
+            );
+        }
+        if self.seen.insert(name.clone()) {
+            self.any_non_ascii |= !name.is_ascii();
+            self.idents.push((name.clone(), span));
+        }
+        let mut tok = Token::new(TokenKind::Ident(name), span);
+        tok.raw = true;
+        tok
+    }
+
     fn lex_ident(&mut self) -> TokenKind {
         let start = self.pos;
         let (line, col) = (self.line, self.col);
@@ -707,11 +744,64 @@ impl<'src> Lexer<'src> {
             // handler (spec 1.6.2, 6.5); the parser resolves it.
         }
         self.check_range(start, &self.src[start..body_end], radix, is_float, suffix);
+        let int_suffix = suffix.is_empty() || INT_SUFFIXES.contains(&suffix);
+        if radix == 10 && !is_float && int_suffix {
+            self.check_leading_zero(start, body_end);
+        }
         if is_float {
             TokenKind::FloatLit(text)
         } else {
             TokenKind::IntLit(text)
         }
+    }
+
+    /// `0755` is decimal 755: say so, and offer `0o755` and `755`.
+    fn check_leading_zero(&mut self, start: usize, body_end: usize) {
+        let digits: String = self.src[start..body_end]
+            .chars()
+            .filter(|&c| c != '_')
+            .collect();
+        if digits.len() < 2 || !digits.starts_with('0') {
+            return;
+        }
+        let text = &self.src[start..self.pos];
+        let suffix = &self.src[body_end..self.pos];
+        let value = match digits.trim_start_matches('0') {
+            "" => "0",
+            v => v,
+        };
+        let decimal = format!("{value}{suffix}");
+        let (line, col) = self.line_col(start);
+        let span = Self::make_span(start, self.pos, line, col);
+        let octal = value != "0" && digits.bytes().all(|b| (b'0'..=b'7').contains(&b));
+        let help = if octal {
+            format!("write `0o{decimal}` for an octal number, or `{decimal}` for decimal")
+        } else {
+            format!("write `{decimal}`")
+        };
+        let mut d = RokDiagnostic::warning(
+            ErrorKind::Lexical,
+            span,
+            format!(
+                "`{text}` is the decimal number {value}: a leading zero does not make it octal"
+            ),
+        )
+        .with_file(self.file.clone())
+        .with_help(help)
+        .with_lint("octal_like_literal")
+        .with_fix(
+            span,
+            decimal.clone(),
+            format!("write `{decimal}` (the same value)"),
+        );
+        if octal {
+            d = d.with_fix(
+                span,
+                format!("0o{decimal}"),
+                format!("write `0o{decimal}` (octal)"),
+            );
+        }
+        self.diagnostics.push(d);
     }
 
     /// Consume `digit ("_"? digit)*` in `radix`; report empty runs and
@@ -1400,6 +1490,58 @@ mod tests {
     }
 
     #[test]
+    fn raw_identifiers() {
+        let (toks, d) = Lexer::new("r#match r#move r#\"s\"# r##\"t\"## x", "t").lex_all();
+        assert!(d.is_empty(), "{d:?}");
+        let kinds: Vec<&T> = toks.iter().map(|t| &t.kind).collect();
+        assert_eq!(
+            kinds,
+            [
+                &T::Ident("match".into()),
+                &T::Ident("move".into()),
+                &T::RawStrLit("s".into()),
+                &T::RawStrLit("t".into()),
+                &T::Ident("x".into()),
+                &T::Eof
+            ]
+        );
+        assert!(toks[0].raw && toks[1].raw && !toks[4].raw);
+        assert_eq!(toks[0].span.end - toks[0].span.start, 7);
+        assert_eq!(T::Ident("match".into()).text(), "r#match");
+        for bad in ["r#self", "r#Self", "r#_"] {
+            err(bad);
+        }
+    }
+
+    #[test]
+    fn leading_zero_warns() {
+        for (src, help) in [
+            (
+                "0755",
+                "help: write `0o755` for an octal number, or `755` for decimal",
+            ),
+            (
+                "0_1u8",
+                "help: write `0o1u8` for an octal number, or `1u8` for decimal",
+            ),
+            ("089", "help: write `89`"),
+            ("00", "help: write `0`"),
+        ] {
+            let (toks, d) = Lexer::new(src, "t").lex_all();
+            assert!(matches!(toks[0].kind, T::IntLit(_)), "{src}");
+            assert_eq!(d.len(), 1, "{src}: {d:?}");
+            assert_eq!(
+                d[0].lint.as_deref().map(String::as_str),
+                Some("octal_like_literal")
+            );
+            assert_eq!(d[0].notes, [help], "{src}");
+        }
+        for quiet in ["0", "0.5", "00.5", "0e3", "0o17", "10", "0f64"] {
+            ok(quiet);
+        }
+    }
+
+    #[test]
     fn numeric_literals() {
         for good in [
             "1_000",
@@ -1413,7 +1555,6 @@ mod tests {
             "1f32",
             "-128i8",
             "255u8",
-            "0123",
             "2i", // a `#[literal]` suffix: the parser resolves it
         ] {
             ok(good);

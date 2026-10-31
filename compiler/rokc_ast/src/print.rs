@@ -118,12 +118,16 @@ impl Printer {
     }
 
     /// A local's name; a parser temp (`#using12`) becomes `__rok_using12`
-    /// so the output parses back.
+    /// and a keyword `r#match`, so the output parses back.
     fn name(&mut self, n: &str) {
         match n.strip_prefix('#') {
             Some(rest) => {
                 self.s("__rok_");
                 self.s(rest);
+            }
+            None if raw(n) => {
+                self.s("r#");
+                self.s(n);
             }
             None => self.s(n),
         }
@@ -557,6 +561,9 @@ impl Printer {
             self.s("yield ");
         }
         self.s("fn ");
+        if raw(&f.name) {
+            self.s("r#");
+        }
         self.s(&f.name);
         self.generics(&f.generics);
         self.s("(");
@@ -1697,6 +1704,13 @@ impl Printer {
             }),
         }
     }
+}
+
+/// A name spelled like a keyword, now or from 0.2.0, prints as `r#name`.
+fn raw(n: &str) -> bool {
+    n != "self"
+        && n != "Self"
+        && (rokc_core::KEYWORDS.contains(&n) || rokc_core::FUTURE_KEYWORDS.contains(&n))
 }
 
 /// The single-segment name of a path type.

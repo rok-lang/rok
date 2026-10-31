@@ -259,6 +259,14 @@ mod tests {
     }
 
     #[test]
+    fn keeps_raw_identifiers() {
+        let src = "fn r#match(r#type: i32) -> i32 {\n  let r#move = r#type;\n    r#move\n}\n";
+        let want = "fn r#match(r#type: i32) -> i32 {\n    let r#move = r#type;\n    r#move\n}\n";
+        assert_eq!(format_source(src).unwrap(), want);
+        assert_eq!(format_source(want).unwrap(), want);
+    }
+
+    #[test]
     fn keeps_optional_last_semi() {
         let src = "fn f() {\n  while i < 2 { i += 1 }\n    { let x = 1; }\n  let y = 2\n}\n";
         assert_eq!(

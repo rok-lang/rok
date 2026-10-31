@@ -1,0 +1,33 @@
+// spec: 001.03.4-block-like-expression-statements
+// expect-exit: 0
+// expect-lint: 23:5 `-` at the start of this line continues the trailing-closure call above
+// expect-warning: help: write `;` after the closure's `}` to end the call there, as Rok 0.2.0 does; to keep one expression, move `-` to the end of the line above
+// expect-stdout:
+// run
+// run
+// -4
+// run
+// run
+// 6
+
+// After a statement's trailing-closure call, an operator on the next
+// line continues the call (spec 1.3.4); 0.2.0 ends the call at `}`.
+// Only that form warns: not a `let`, not after `;`, not mid-line.
+fn run(f: fn() -> ()) -> i32 { f(); 1 }
+
+fn main() {
+    let y = 5;
+    run {
+        println("run");
+    }
+    - y;
+    let w = run { println("run"); }
+        - y;
+    println(f"{w}");
+    run {
+        println("run");
+    };
+    let z = run { println("run"); } +
+        y;
+    println(f"{z}");
+}

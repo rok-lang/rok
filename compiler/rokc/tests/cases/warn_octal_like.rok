@@ -1,0 +1,20 @@
+// spec: 001.06.1-basic-form
+// expect-exit: 0
+// expect-lint: 13:16 `0755` is the decimal number 755: a leading zero does not make it octal
+// expect-lint: 14:13 `00` is the decimal number 0: a leading zero does not make it octal
+// expect-lint: 15:13 `089u16` is the decimal number 89: a leading zero does not make it octal
+// expect-warning: help: write `0o755` for an octal number, or `755` for decimal
+// expect-warning: help: write `0`
+// expect-warning: help: write `89u16`
+// expect-stdout: 755 0 89 493 0 0.5 1.5 7
+
+// A leading zero does not make a decimal literal octal (spec 1.6.1).
+fn main() {
+    let mode = 0755;
+    let z = 00;
+    let n = 089u16;
+    println(f"{mode} {z} {n} {0o755} {0} {0.5} {01.5} {quiet()}");
+}
+
+#[allow(octal_like_literal)]
+fn quiet() -> i32 { 007 }

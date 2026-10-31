@@ -1,0 +1,22 @@
+// spec: 001.04.4-collision-with-keywords
+// expect-exit: 0
+// expect-stdout:
+// 1 7 9 2
+// 3 4
+
+// `r#name` is the identifier `name`, keyword or not: `r#type` names a
+// field and a function, `r#match` a function, `r#fn` a local. It names
+// the same item as `name` where that is a name already (`t.type`).
+struct Tok { r#type: i32; kind: i32; }
+
+fn r#type() -> i32 { 7 }
+fn r#match(x: i32) -> i32 { x + 1 }
+
+fn main() {
+    let t = Tok { r#type: 1, kind: 2 };
+    let r#fn = r#match(t.r#type + r#type());
+    println(f"{t.type} {r#type()} {r#fn} {t.r#kind}");
+    let r#move = 3;
+    let r#in = r#move + 1;
+    println(f"{r#move} {r#in}");
+}
