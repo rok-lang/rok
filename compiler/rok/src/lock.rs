@@ -64,14 +64,23 @@ impl Lock {
         let bad = |e: String| format!("{e}\n(delete {file} and run `rok update` to make it again)");
         let doc = Doc::parse(text, file).map_err(bad)?;
         let root = doc.root().record("Lock").map_err(bad)?;
-        root.only(&["version", "packages", "natives"])
-            .map_err(bad)?;
+        // Before the fields: a newer rok's lock may have others.
         let version = root.req("version").and_then(|v| Ok((v, v.int::<u32>()?)));
         match version {
             Ok((_, 1)) => {}
+            // Deleting it would throw away what a newer rok resolved.
+            Ok((_, n)) if n > 1 => {
+                return Err(format!(
+                    "{file} was written by a newer rok (lock version {n}); run that rok's \
+                     toolchain here: set `toolchain` in rok.rokon to its version, or run `rok \
+                     +<version> ..`"
+                ));
+            }
             Ok((v, _)) => return Err(bad(v.error("unsupported lockfile version"))),
             Err(e) => return Err(bad(e)),
         }
+        root.only(&["version", "packages", "natives"])
+            .map_err(bad)?;
         let mut packages = Vec::new();
         let list = root
             .opt("packages")
@@ -309,7 +318,7 @@ mod tests {
 
         for (src, want) in [
             (
-                "Lock { version: 2, packages: [] }",
+                "Lock { version: 0, packages: [] }",
                 "unsupported lockfile version\n  --> rok.lock:1:17",
             ),
             ("version = 1", "--> rok.lock:1:9\n"),
@@ -338,6 +347,19 @@ mod tests {
             assert!(e.contains(want), "{src}: {e}");
             assert!(e.contains("run `rok update`"), "{e}");
         }
+    }
+
+    #[test]
+    fn newer_lock_version_says_which_toolchain() {
+        // Fields of a newer format do not matter: the version comes first.
+        let e =
+            Lock::parse("Lock { version: 2, packages: [], groups: {} }", "rok.lock").unwrap_err();
+        assert_eq!(
+            e,
+            "rok.lock was written by a newer rok (lock version 2); run that rok's toolchain \
+             here: set `toolchain` in rok.rokon to its version, or run `rok +<version> ..`"
+        );
+        assert!(!e.contains("delete"), "{e}");
     }
 
     fn lock_sorted(l: &Lock) -> Lock {

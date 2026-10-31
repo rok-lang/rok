@@ -2,6 +2,7 @@
 //! it is the toolchain proxy.
 
 fn main() {
+    rok::take_guard();
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         rokc_diagnostic::end_if_output_closed(info);

@@ -1729,6 +1729,310 @@ fn pinned_toolchains() {
         &format!("Package {{ toolchain: \"{mine}\" }}\n"),
     );
     ok(&rok(&home, &app, &["-q", "check"]));
+
+    // A toolchain's rok runs its own rokc, never another's: pinned to
+    // 9.9, 9.10's rok is the same build as 9.9's (both copies of this
+    // rok), so it keeps the command and runs its own rokc.
+    write(&app.join("rok.rokon"), "Package { toolchain: \"9.9\" }\n");
+    ok(&tc(&["install", "9.9.1", "--from", "fake1"]));
+    let own = home.join(format!("toolchains/9.10.0-{host}/bin/rok"));
+    let out = Command::new(&own)
+        .current_dir(&app)
+        .env("ROK_HOME", &home)
+        .env_remove("ROK_TOOLCHAIN")
+        .args(["-q", "check"])
+        .output()
+        .unwrap();
+    assert_eq!(ok(&out), "rokc 9.10.0: -q check\n");
+}
+
+/// A fake toolchain `version` whose `rok` is a script that says how it
+/// was run: its arguments, directory and handoff guard.
+#[cfg(unix)]
+fn fake_toolchain_rok(dir: &Path, version: &str) {
+    use std::os::unix::fs::PermissionsExt;
+    fake_toolchain(dir, version);
+    let rok = dir.join("bin/rok");
+    fs::remove_file(&rok).unwrap();
+    write(
+        &rok,
+        &format!(
+            "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'rok {version} (fake)'; exit 0; \
+             fi\necho \"rok {version}: $* in $(pwd) home=$ROK_HOME guard=$__ROK_REEXEC\"\n"
+        ),
+    );
+    fs::set_permissions(&rok, fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+/// A rok run directly (a dev build, nix, a toolchain's `bin/rok`) in a
+/// project pinned to another toolchain runs that toolchain's own `rok`
+/// with the same arguments, from the same directory.
+// spec: §9.10.6
+#[cfg(unix)]
+#[test]
+fn direct_rok_execs_pinned_toolchain() {
+    let root = scratch("toolchain-handoff");
+    let home = root.join("home");
+    let app = root.join("app");
+    let host = env!("ROK_HOST");
+    write(&app.join("src/main.rok"), "println(\"x\");\n");
+    write(&app.join("rok.rokon"), "Package { toolchain: \"9.9\" }\n");
+    fake_toolchain_rok(&root.join("fake1"), "9.9.1");
+    ok(&rok(
+        &home,
+        &root,
+        &["toolchain", "install", "9.9.1", "--from", "fake1"],
+    ));
+    let tc = rokc_core::real_path(home.join(format!("toolchains/9.9.1-{host}"))).unwrap();
+    let app_real = rokc_core::real_path(&app).unwrap();
+    let root_real = rokc_core::real_path(&root).unwrap();
+    let ran = |args: &str, cwd: &Path| {
+        format!(
+            "rok 9.9.1: {args} in {} home={} guard={}\n",
+            cwd.display(),
+            home.display(),
+            tc.display()
+        )
+    };
+    // A command that runs rokc, and one of rok's own.
+    assert_eq!(
+        ok(&rok(&home, &app, &["-q", "build", "--release"])),
+        ran("-q build --release", &app_real)
+    );
+    assert_eq!(ok(&rok(&home, &app, &["deps"])), ran("deps", &app_real));
+    // `--cwd` is applied again by the toolchain's rok, from where it began.
+    assert_eq!(
+        ok(&rok(&home, &root, &["--cwd", "app", "deps"])),
+        ran("--cwd app deps", &root_real)
+    );
+    // A package named by path, `+<version>` and ROK_TOOLCHAIN (a version
+    // or a directory name).
+    assert_eq!(
+        ok(&rok(&home, &root, &["-q", "check", "app"])),
+        ran("-q check app", &root_real)
+    );
+    assert_eq!(
+        ok(&rok(&home, &root, &["+9.9", "-q", "fmt"])),
+        ran("+9.9 -q fmt", &root_real)
+    );
+    let mut c = rok_cmd(&home, &root, &["-q", "fmt"]);
+    c.env("ROK_TOOLCHAIN", format!("9.9.1-{host}"));
+    assert_eq!(ok(&c.output().unwrap()), ran("-q fmt", &root_real));
+    // `--version` and `toolchain` stay with this rok.
+    let out = ok(&rok(&home, &app, &["--version"]));
+    assert!(
+        out.starts_with(&format!("rok {}", env!("CARGO_PKG_VERSION"))),
+        "{out}"
+    );
+    assert_eq!(
+        ok(&rok(&home, &app, &["toolchain", "default"])),
+        format!("9.9.1-{host}\n")
+    );
+}
+
+/// The handoff compares toolchain directories, never the pin's text: a
+/// pin naming a directory runs that toolchain's rok once, and a rok that
+/// hands the command back is an error, not a loop.
+// spec: §9.10.6
+#[cfg(unix)]
+#[test]
+fn reexec_guard_no_loop() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = scratch("toolchain-guard");
+    let home = root.join("home");
+    let host = env!("ROK_HOST");
+    fake_toolchain(&root.join("fake1"), "9.8.0");
+    fake_toolchain(&root.join("fake2"), "9.9.1");
+    for (v, dir) in [("9.8.0", "fake1"), ("9.9.1", "fake2")] {
+        ok(&rok(
+            &home,
+            &root,
+            &["toolchain", "install", v, "--from", dir],
+        ));
+    }
+    // The toolchain's own rok, pinned by its directory name: no handoff.
+    let own = home.join(format!("toolchains/9.8.0-{host}/bin/rok"));
+    let out = Command::new(&own)
+        .current_dir(&root)
+        .env("ROK_HOME", &home)
+        .env("ROK_TOOLCHAIN", format!("9.8.0-{host}"))
+        .args(["-q", "fmt"])
+        .output()
+        .unwrap();
+    assert_eq!(ok(&out), "rokc 9.8.0: -q fmt\n");
+    // A broken toolchain whose `bin/rok` is another rok: it would hand
+    // the command on again.
+    let rok9 = home.join(format!("toolchains/9.9.1-{host}/bin/rok"));
+    write(
+        &rok9,
+        &format!(
+            "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'rok 9.9.1 (fake)'; exit 0; \
+             fi\nexec \"{ROK}\" \"$@\"\n"
+        ),
+    );
+    fs::set_permissions(&rok9, fs::Permissions::from_mode(0o755)).unwrap();
+    let mut c = rok_cmd(&home, &root, &["-q", "fmt"]);
+    c.env("ROK_TOOLCHAIN", format!("9.9.1-{host}"));
+    let out = c.output().unwrap();
+    fails(
+        &out,
+        &format!(
+            "ran for toolchain 9.9.1-{host} (ROK_TOOLCHAIN) already and handed the command back"
+        ),
+    );
+    assert_eq!(text(&out.stderr).matches("error").count(), 1);
+}
+
+/// Copies a toolchain's `rok` as `bin/rok` would be, then makes it a
+/// script that runs this rok, so the copies differ by content.
+#[cfg(unix)]
+fn proxied_toolchains(name: &str) -> (PathBuf, PathBuf) {
+    use std::os::unix::fs::PermissionsExt;
+    let root = scratch(name);
+    let home = root.join("home");
+    fake_toolchain(&root.join("fake1"), "9.9.1");
+    fake_toolchain(&root.join("fake2"), "9.10.0");
+    // 9.9.1's rok differs from 9.10.0's (this rok) by content.
+    let old = root.join("fake1/bin/rok");
+    fs::remove_file(&old).unwrap();
+    write(&old, &format!("#!/bin/sh\nexec \"{ROK}\" \"$@\"\n"));
+    fs::set_permissions(&old, fs::Permissions::from_mode(0o755)).unwrap();
+    for (v, dir) in [("9.9.1", "fake1"), ("9.10.0", "fake2")] {
+        ok(&rok(
+            &home,
+            &root,
+            &["toolchain", "install", v, "--from", dir],
+        ));
+    }
+    (root, home)
+}
+
+#[cfg(unix)]
+fn proxies_are(home: &Path, version: &str) {
+    let want =
+        fs::read(home.join(format!("toolchains/{version}-{}/bin/rok", env!("ROK_HOST")))).unwrap();
+    for t in ["rok", "rokc", "rokls"] {
+        assert!(
+            fs::read(home.join("bin").join(t)).unwrap() == want,
+            "bin/{t} is not {version}'s rok"
+        );
+    }
+}
+
+/// The proxies are the newest toolchain's rok: making an older one the
+/// default keeps them.
+// spec: §9.10.6
+#[cfg(unix)]
+#[test]
+fn default_to_older_keeps_newest_proxies() {
+    let (root, home) = proxied_toolchains("toolchain-proxies-default");
+    // Installing the newer one replaced the first one's proxies.
+    proxies_are(&home, "9.10.0");
+    ok(&rok(&home, &root, &["toolchain", "default", "9.10"]));
+    ok(&rok(&home, &root, &["toolchain", "default", "9.9"]));
+    proxies_are(&home, "9.10.0");
+    // They run the default's tools.
+    let out = Command::new(home.join("bin/rokc"))
+        .current_dir(&root)
+        .env_remove("ROK_HOME")
+        .env_remove("ROK_TOOLCHAIN")
+        .arg("x")
+        .output()
+        .unwrap();
+    assert_eq!(ok(&out), "rokc 9.9.1: x\n");
+    // A missing proxy comes back.
+    fs::remove_file(home.join("bin/rokls")).unwrap();
+    ok(&rok(&home, &root, &["toolchain", "default", "9.9"]));
+    proxies_are(&home, "9.10.0");
+}
+
+/// Removing the newest toolchain makes the proxies the next newest's.
+// spec: §9.10.6
+#[cfg(unix)]
+#[test]
+fn remove_newest_rewrites_proxies() {
+    let (root, home) = proxied_toolchains("toolchain-proxies-remove");
+    proxies_are(&home, "9.10.0");
+    ok(&rok(&home, &root, &["toolchain", "remove", "9.10.0"]));
+    proxies_are(&home, "9.9.1");
+}
+
+/// Files every toolchain in `ROK_HOME` shares skip what a newer rok
+/// wrote, keep it when written, and name it under `-v`.
+// spec: §9.10.6
+#[test]
+fn config_with_unknown_field_still_works() {
+    let root = scratch("config-newer");
+    let home = root.join("home");
+    write(
+        &home.join("config.rokon"),
+        "Config { toolchain: \"x\", future: 1 }\n",
+    );
+    assert_eq!(ok(&rok(&home, &root, &["toolchain", "default"])), "x\n");
+    let out = rok(&home, &root, &["-v", "toolchain", "default"]);
+    assert!(
+        text(&out.stderr).contains("config.rokon: skipped `future`, written by a newer rok"),
+        "{}",
+        text(&out.stderr)
+    );
+    assert!(!text(&rok(&home, &root, &["toolchain", "default"]).stderr).contains("skipped"));
+}
+
+// spec: §9.10.6
+#[test]
+fn installs_and_credentials_skip_unknown() {
+    let root = scratch("installs-newer");
+    let home = root.join("home");
+    let installs = home.join("installs.rokon");
+    write(
+        &installs,
+        "Package {\n    deps: {\n        \"a\": Dep::path(\"/srv/a\", target: \"t\"),\n        \
+         \"b\": Dep::workspace(\"w\"),\n    },\n    bins: {},\n}\n",
+    );
+    let out = ok(&rok(&home, &root, &["install", "--list"]));
+    assert!(out.contains("executables") && out.contains("  a "), "{out}");
+    assert!(!out.contains("  b "), "{out}");
+    ok(&rok(&home, &root, &["uninstall", "a"]));
+    let after = read(&installs);
+    assert!(!after.contains("\"a\""), "{after}");
+    assert!(
+        after.contains("Dep::workspace(\"w\")") && after.contains("bins: {}"),
+        "{after}"
+    );
+    // `rok logout` keeps a newer rok's credentials.
+    let creds = home.join("credentials.rokon");
+    write(&creds, "Credentials { token: \"t0k\", tokens: {} }\n");
+    ok(&rok(&home, &root, &["logout"]));
+    let after = read(&creds);
+    assert!(
+        after.contains("tokens: {}") && !after.contains("t0k"),
+        "{after}"
+    );
+}
+
+/// A lock from a newer rok names the toolchain to use, and is never to be
+/// deleted.
+// spec: §9.10.3
+#[test]
+fn newer_lock_version_says_which_toolchain() {
+    let root = scratch("lock-newer");
+    let home = root.join("home");
+    let app = root.join("app");
+    write(&app.join("src/main.rok"), "println(\"x\");\n");
+    write(&app.join("rok.rokon"), "Package { name: \"app\" }\n");
+    write(
+        &app.join("rok.lock"),
+        "Lock { version: 2, packages: [], v2: {} }\n",
+    );
+    let out = rok(&home, &app, &["check"]);
+    fails(&out, "was written by a newer rok (lock version 2)");
+    fails(&out, "or run `rok +<version> ..`");
+    assert!(
+        !text(&out.stderr).contains("delete"),
+        "{}",
+        text(&out.stderr)
+    );
+    assert!(app.join("rok.lock").is_file());
 }
 
 /// `rok toolchain default` rewrites the completion scripts the

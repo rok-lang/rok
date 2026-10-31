@@ -1699,7 +1699,8 @@ fn write_harness_manifest(
         }
         return;
     };
-    let mut m = String::new();
+    // `rokc_harness::VERSION`; a newer runner reads older formats.
+    let mut m = String::from("version 1\n");
     m.push_str(if mode == Mode::Bench {
         "kind bench\n"
     } else {

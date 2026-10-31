@@ -2,7 +2,9 @@
 //! `$ROK_HOME/toolchains/<version>-<triple>/`. `$ROK_HOME/bin/{rok,rokc,
 //! rokls}` are proxies that run the active toolchain's tool of the same
 //! name, picked by `+<version>`, else `ROK_TOOLCHAIN`, else the nearest
-//! `rok.rokon`'s `toolchain`, else `rok toolchain default`.
+//! `rok.rokon`'s `toolchain`, else `rok toolchain default`. The proxies
+//! are copies of the newest installed toolchain's `rok`, and each
+//! toolchain's `rok` drives only its own `rokc` (`handoff`).
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -86,35 +88,70 @@ fn default_pin(home: &Path) -> Result<Option<String>, String> {
     crate::config(home, "toolchain")
 }
 
-/// `+<version>`, else `ROK_TOOLCHAIN`, else the manifest's, else default.
-fn active(home: &Path, plus: Option<&str>) -> Result<PathBuf, String> {
-    chosen(home, plus).map(|(dir, _)| dir)
+/// An installed toolchain picked for a run, and why it is the one.
+pub struct Selection {
+    pub dir: PathBuf,
+    pub why: String,
 }
 
-/// `active`'s toolchain and why it is the one.
-fn chosen(home: &Path, plus: Option<&str>) -> Result<(PathBuf, String), String> {
+/// `+<version>`, else `ROK_TOOLCHAIN`, else `pin` (a manifest's): the pin
+/// and why, or `None` when nothing names one.
+fn explicit(plus: Option<&str>, pin: Option<(String, String)>) -> Option<(String, String)> {
     let env = std::env::var("ROK_TOOLCHAIN")
         .ok()
         .filter(|t| !t.is_empty());
-    let (pin, why) = if let Some(p) = plus {
-        (p.to_owned(), "`+` on the command line".to_owned())
+    if let Some(p) = plus {
+        Some((p.to_owned(), "`+` on the command line".to_owned()))
     } else if let Some(p) = env {
-        (p, "ROK_TOOLCHAIN".to_owned())
-    } else if let Some((path, p)) = manifest_pin() {
-        (p, format!("pinned by {}", path.display()))
-    } else if let Some(p) = default_pin(home)? {
-        (p, "the default".to_owned())
+        Some((p, "ROK_TOOLCHAIN".to_owned()))
     } else {
-        return Err(
-            "no default toolchain; install one (`rok toolchain install`) or choose one with \
-             `rok toolchain default <version>`"
-                .to_owned(),
-        );
-    };
-    match find(home, &pin) {
-        Some(dir) => Ok((dir, why)),
-        None => Err(not_installed(&pin, &why)),
+        pin
     }
+}
+
+/// The nearest manifest's pin, as `explicit` takes it.
+pub fn project_pin() -> Option<(String, String)> {
+    manifest_pin().map(|(path, p)| (p, format!("pinned by {}", path.display())))
+}
+
+/// `+<version>`, else `ROK_TOOLCHAIN`, else the manifest's, else default.
+pub fn select(home: &Path, plus: Option<&str>) -> Result<Selection, String> {
+    let (pin, why) = match explicit(plus, project_pin()) {
+        Some(p) => p,
+        None => match default_pin(home)? {
+            Some(p) => (p, "the default".to_owned()),
+            None => {
+                return Err(
+                    "no default toolchain; install one (`rok toolchain install`) or choose one \
+                     with `rok toolchain default <version>`"
+                        .to_owned(),
+                );
+            }
+        },
+    };
+    let dir = find(home, &pin).ok_or_else(|| not_installed(&pin, &why))?;
+    Ok(Selection { dir, why })
+}
+
+/// The newest installed toolchain for this host with a `bin/rok`; a
+/// prerelease only when no release is installed.
+pub fn newest_installed(home: &Path) -> Option<PathBuf> {
+    let all: Vec<(String, String)> = installed(home)
+        .into_iter()
+        .filter(|(name, _)| {
+            root(home)
+                .join(name)
+                .join("bin")
+                .join(exe_name("rok"))
+                .is_file()
+        })
+        .collect();
+    let release = |v: &str| crate::semver::Version::parse(v).is_ok_and(|v| v.pre.is_empty());
+    all.iter()
+        .rev()
+        .find(|(_, v)| release(v))
+        .or_else(|| all.last())
+        .map(|(name, _)| root(home).join(name))
 }
 
 /// The first `tool` on `PATH`, as the shell finds it (on Windows, with
@@ -174,6 +211,12 @@ fn path_warning(home: &Path, quiet: bool) {
 
 /// `<exe> --version`'s version, given a few seconds.
 fn version_of(exe: &Path) -> Option<String> {
+    let line = version_line_of(exe)?;
+    line.split_whitespace().next().map(str::to_owned)
+}
+
+/// `<exe> --version`'s line after `rok `, as `VERSION_LINE` is.
+fn version_line_of(exe: &Path) -> Option<String> {
     let mut child = Command::new(exe)
         .arg("--version")
         .stdin(std::process::Stdio::null())
@@ -198,26 +241,36 @@ fn version_of(exe: &Path) -> Option<String> {
     let mut out = String::new();
     std::io::Read::read_to_string(&mut child.stdout.take()?, &mut out).ok()?;
     // `rok 0.1.4 (..)`.
-    let mut words = out.lines().next()?.split_whitespace();
-    (words.next() == Some("rok")).then(|| words.next().map(str::to_owned))?
+    let rest = out.lines().next()?.strip_prefix("rok ")?.trim();
+    (!rest.is_empty()).then(|| rest.to_owned())
 }
 
 /// `rok --version -v`: this binary, the toolchain it resolves and why,
 /// the `rokc` it runs, and the host.
 pub fn describe(plus: Option<&str>) -> String {
     let home = home();
-    let toolchain = match chosen(&home, plus) {
-        Ok((dir, why)) => format!(
-            "{} ({why})",
-            dir.file_name().unwrap_or_default().to_string_lossy()
+    let toolchain = match select(&home, plus) {
+        Ok(s) => format!(
+            "{} ({})",
+            s.dir.file_name().unwrap_or_default().to_string_lossy(),
+            s.why
         ),
         Err(_) => format!(
             "none (this rok is {VERSION}, not from {})",
             shown(&root(&home))
         ),
     };
-    let pin = manifest_pin().map(|(_, p)| p);
-    let rokc = rokc_for(plus, pin.as_deref()).map_or_else(|e| e, |p| p.display().to_string());
+    // A command here hands off to that toolchain's rok, then its rokc.
+    let rokc = match handoff(plus, project_pin(), false) {
+        Ok(Some(h)) => h
+            .dir
+            .join("bin")
+            .join(exe_name("rokc"))
+            .display()
+            .to_string(),
+        Ok(None) => rokc_for().map_or_else(|e| e, |p| p.display().to_string()),
+        Err(e) => e,
+    };
     let binary = rokc_core::current_exe()
         .or_else(|| std::env::current_exe().ok())
         .map_or_else(|| "unknown".to_owned(), |p| p.display().to_string());
@@ -252,8 +305,8 @@ pub fn proxy(args: &[OsString]) -> Option<i32> {
     if tool == "rok" && plus.is_none() && command.is_some_and(|c| c == "toolchain") {
         return None;
     }
-    let dir = match active(h, plus) {
-        Ok(d) => d,
+    let dir = match select(h, plus) {
+        Ok(s) => s.dir,
         Err(e) => {
             eprintln!("{tool}: {} {e}", term::label(Stream::Stderr, Role::Error));
             return Some(1);
@@ -269,20 +322,105 @@ pub fn proxy(args: &[OsString]) -> Option<i32> {
     Some(crate::exec(c, &target))
 }
 
-/// This `rok`'s own `rokc`, unless the active pin names another installed
-/// version.
-pub fn rokc_for(plus: Option<&str>, pin: Option<&str>) -> Result<PathBuf, String> {
-    let env = std::env::var("ROK_TOOLCHAIN")
-        .ok()
-        .filter(|t| !t.is_empty());
-    let chosen = plus
-        .map(|p| (p.to_owned(), "`+` on the command line"))
-        .or_else(|| env.map(|p| (p, "ROK_TOOLCHAIN")))
-        .or_else(|| pin.map(|p| (p.to_owned(), "rok.rokon")));
-    if let Some((p, why)) = chosen.filter(|(p, _)| !matches(p, VERSION)) {
-        let dir = find(&home(), &p).ok_or_else(|| not_installed(&p, why))?;
-        return Ok(dir.join("bin").join(exe_name("rokc")));
+/// Set on a `rok` that `handoff` runs: the toolchain directories handed
+/// off to so far, as a path list.
+const GUARD: &str = "__ROK_REEXEC";
+
+static GUARD_DIRS: std::sync::OnceLock<Vec<PathBuf>> = std::sync::OnceLock::new();
+
+/// Take the guard a parent `rok` set out of the environment, so programs
+/// this run starts do not inherit it. Call first in `main`, while no
+/// other thread runs.
+pub fn take_guard() {
+    if let Some(g) = std::env::var_os(GUARD) {
+        // SAFETY: single-threaded here (see above).
+        unsafe { std::env::remove_var(GUARD) };
+        let _ = GUARD_DIRS.set(std::env::split_paths(&g).collect());
     }
+}
+
+fn guard_dirs() -> &'static [PathBuf] {
+    GUARD_DIRS.get().map_or(&[], Vec::as_slice)
+}
+
+/// A toolchain whose own `rok` runs this command instead.
+pub struct Handoff {
+    pub dir: PathBuf,
+    pub rok: PathBuf,
+}
+
+/// One toolchain per run (spec 9.10.6): when `+<version>`,
+/// `ROK_TOOLCHAIN` or `pin` names an installed toolchain other than this
+/// rok's, that toolchain. Compared by directory, then by `rok --version`,
+/// never by the pin's text: a pin naming a directory matches no version.
+/// A pin naming nothing installed is an error when `strict`, else this
+/// rok goes on.
+pub fn handoff(
+    plus: Option<&str>,
+    pin: Option<(String, String)>,
+    strict: bool,
+) -> Result<Option<Handoff>, String> {
+    let Some((pin, why)) = explicit(plus, pin) else {
+        return Ok(None);
+    };
+    if matches(&pin, VERSION) {
+        return Ok(None);
+    }
+    let Some(dir) = find(&home(), &pin) else {
+        return if strict {
+            Err(not_installed(&pin, &why))
+        } else {
+            Ok(None)
+        };
+    };
+    let dir = rokc_core::real_path(&dir).unwrap_or(dir);
+    let me = rokc_core::current_exe();
+    let own = me.as_deref().and_then(|e| e.parent()?.parent());
+    if own == Some(dir.as_path()) {
+        return Ok(None);
+    }
+    let rok = dir.join("bin").join(exe_name("rok"));
+    if !rok.is_file() {
+        return Err(format!(
+            "toolchain {} ({why}) has no bin/{}; install it again with `rok toolchain install \
+             {pin} --from <dir | .tar.gz | .zip | url>`",
+            dir.file_name().unwrap_or_default().to_string_lossy(),
+            exe_name("rok")
+        ));
+    }
+    // The same build placed elsewhere (a dev build, nix) is this one.
+    if version_line_of(&rok).as_deref() == Some(crate::VERSION_LINE) {
+        return Ok(None);
+    }
+    if guard_dirs().contains(&dir) {
+        return Err(format!(
+            "{} ran for toolchain {pin} ({why}) already and handed the command back to {}; run \
+             {} directly, or install that toolchain again (`rok toolchain install {pin} --from \
+             ..`)",
+            rok.display(),
+            me.unwrap_or_default().display(),
+            rok.display()
+        ));
+    }
+    Ok(Some(Handoff { dir, rok }))
+}
+
+/// Run `h`'s `rok` with `args` from `cwd`; its exit code.
+pub fn run_handoff(h: &Handoff, args: &[std::ffi::OsString], cwd: Option<&Path>) -> i32 {
+    let dirs = guard_dirs().iter().chain([&h.dir]);
+    let mut c = Command::new(&h.rok);
+    c.args(args).env("ROK_HOME", home());
+    if let Ok(g) = std::env::join_paths(dirs) {
+        c.env(GUARD, g);
+    }
+    if let Some(d) = cwd {
+        c.current_dir(d);
+    }
+    crate::exec(c, &h.rok)
+}
+
+/// This `rok`'s own `rokc`, beside it.
+pub fn rokc_for() -> Result<PathBuf, String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let rokc = exe.with_file_name(exe_name("rokc"));
     if !rokc.is_file() {
@@ -482,11 +620,16 @@ fn install(home: &Path, version: &str, from: &str) -> Result<String, String> {
     place(home, &tmp, &top, &full)
 }
 
-/// `$ROK_HOME/bin/{rok,rokc,rokls}`: copies of `toolchain`'s `rok`.
-fn write_proxies(home: &Path, toolchain: &Path) -> Result<(), String> {
+/// `$ROK_HOME/bin/{rok,rokc,rokls}`: copies of the newest installed
+/// toolchain's `rok`, so the default going back never brings back an
+/// older proxy.
+fn write_proxies(home: &Path) -> Result<(), String> {
+    let Some(newest) = newest_installed(home) else {
+        return Ok(());
+    };
     let bin = home.join("bin");
     std::fs::create_dir_all(&bin).map_err(|e| format!("{}: {e}", bin.display()))?;
-    let src = toolchain.join("bin").join(exe_name("rok"));
+    let src = newest.join("bin").join(exe_name("rok"));
     for t in TOOLS {
         let dst = bin.join(exe_name(t));
         // Copy beside, then rename: a running proxy keeps its file.
@@ -516,10 +659,28 @@ fn set_aside(bin: &Path, exe: &Path) {
     }
 }
 
+/// `write_proxies` when a proxy is missing or is not the newest
+/// toolchain's `rok`.
+fn refresh_proxies(home: &Path) -> Result<(), String> {
+    let Some(newest) = newest_installed(home) else {
+        return Ok(());
+    };
+    let Ok(want) = std::fs::read(newest.join("bin").join(exe_name("rok"))) else {
+        return write_proxies(home);
+    };
+    let bin = home.join("bin");
+    let current = TOOLS.iter().all(|t| {
+        let p = bin.join(exe_name(t));
+        std::fs::metadata(&p).is_ok_and(|m| m.len() == want.len() as u64)
+            && std::fs::read(&p).is_ok_and(|b| b == want)
+    });
+    if current { Ok(()) } else { write_proxies(home) }
+}
+
 fn set_default(home: &Path, pin: &str) -> Result<PathBuf, String> {
     let dir = find(home, pin).ok_or_else(|| not_installed(pin, "the default"))?;
     crate::set_config(home, "toolchain", pin)?;
-    write_proxies(home, &dir)?;
+    refresh_proxies(home)?;
     Ok(dir)
 }
 
@@ -827,6 +988,7 @@ fn clean(home: &Path, quiet: bool) -> Result<(), String> {
             term::status("Removed", &format!("toolchain {name}"));
         }
     }
+    refresh_proxies(home)?;
     if !quiet {
         let kept = def.file_name().unwrap_or_default().to_string_lossy();
         if removed == 0 {
@@ -880,9 +1042,8 @@ pub fn cmd(args: &[String], quiet: bool, verbose: bool) -> Result<i32, String> {
                 if !quiet {
                     term::status("Default", &format!("toolchain {name}"));
                 }
-            } else if !h.join("bin").join(exe_name("rok")).is_file() {
-                let d = def.as_deref().and_then(|p| find(&h, p));
-                write_proxies(&h, &d.unwrap_or_else(|| root(&h).join(&name)))?;
+            } else {
+                refresh_proxies(&h)?;
             }
         }
         ["update"] => {
@@ -914,6 +1075,8 @@ pub fn cmd(args: &[String], quiet: bool, verbose: bool) -> Result<i32, String> {
                 .find(|d| d.is_dir())
                 .ok_or_else(|| format!("toolchain {name} is not installed"))?;
             std::fs::remove_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+            // It may have been the newest, whose rok the proxies are.
+            refresh_proxies(&h)?;
         }
         _ => return Err(USAGE.into()),
     }

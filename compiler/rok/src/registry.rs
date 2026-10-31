@@ -669,8 +669,12 @@ fn pick_token(env: Option<String>, home: &Path) -> Result<String, String> {
     let bad = |_| format!("{} is malformed; run `rok login` again", path.display());
     let doc = Doc::parse(&text, "credentials").map_err(bad)?;
     let r = doc.root().record("Credentials").map_err(bad)?;
-    r.only(&["token"]).map_err(bad)?;
-    let t = r.req("token").and_then(|t| t.string()).map_err(bad)?;
+    crate::skipped(&path.display().to_string(), &r.known(&["token"]));
+    // `rok logout` leaves a newer rok's fields without the token.
+    let Some(t) = r.get("token") else {
+        return Err("publishing needs a token: run `rok login` first".into());
+    };
+    let t = t.string().map_err(bad)?;
     check_token(&t).map_err(bad)?;
     Ok(t)
 }
@@ -680,10 +684,21 @@ pub fn save_token(home: &Path, token: &str) -> Result<PathBuf, String> {
     use std::io::Write;
     let path = credentials(home);
     std::fs::create_dir_all(home).map_err(|e| format!("{}: {e}", home.display()))?;
-    let text = rokc_rokon::to_string(&Value::record(
-        Some("Credentials"),
-        vec![("token", Value::str(token))],
-    )) + "\n";
+    let fresh = || {
+        rokc_rokon::to_string(&Value::record(
+            Some("Credentials"),
+            vec![("token", Value::str(token))],
+        )) + "\n"
+    };
+    // Fields a newer rok wrote stay; a file that does not read is replaced.
+    let text = match std::fs::read_to_string(&path) {
+        Ok(old) if credentials_record(&old) => {
+            let step = [rokc_rokon::edit::Step::Field("token")];
+            rokc_rokon::edit::set(&old, &step, &rokc_rokon::quote(token))
+                .unwrap_or_else(|_| fresh())
+        }
+        _ => fresh(),
+    };
     // Created anew, so the mode applies.
     let _ = std::fs::remove_file(&path);
     let mut o = std::fs::OpenOptions::new();
@@ -696,9 +711,34 @@ pub fn save_token(home: &Path, token: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-/// Remove `rok login`'s token; whether there was one.
+/// Whether `text` is a `Credentials { .. }`.
+fn credentials_record(text: &str) -> bool {
+    Doc::parse(text, "credentials").is_ok_and(|d| d.root().record("Credentials").is_ok())
+}
+
+/// Remove `rok login`'s token; whether there was one. Fields a newer rok
+/// wrote stay in the file.
 pub fn logout(home: &Path) -> Result<bool, String> {
     let path = credentials(home);
+    if let Ok(old) = std::fs::read_to_string(&path) {
+        let others = Doc::parse(&old, "credentials").is_ok_and(|d| {
+            d.root()
+                .record("Credentials")
+                .is_ok_and(|r| !r.known(&["token"]).is_empty())
+        });
+        if others {
+            let step = [rokc_rokon::edit::Step::Field("token")];
+            // Errors would quote the line holding the token.
+            let had = rokc_rokon::edit::remove(&old, &step)
+                .map_err(|_| format!("{} is malformed; delete it", path.display()))?;
+            let Some(text) = had else {
+                return Ok(false);
+            };
+            std::fs::write(&path, text)
+                .map_err(|e| format!("cannot write {}: {e}", path.display()))?;
+            return Ok(true);
+        }
+    }
     match std::fs::remove_file(&path) {
         Ok(()) => Ok(true),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
@@ -921,10 +961,47 @@ mod tests {
             let mode = std::fs::metadata(&file).unwrap().permissions().mode();
             assert_eq!(mode & 0o777, 0o600);
         }
-        std::fs::write(&file, "Credentials { token: \"ghp_secret\", x: 1 }").unwrap();
+        std::fs::write(&file, "Credentials { token: 1 }").unwrap();
+        let e = pick_token(None, &home).unwrap_err();
+        assert!(e.contains("malformed"), "{e}");
+        std::fs::write(&file, "Credentials { token: \"ghp_secret\" x }").unwrap();
         let e = pick_token(None, &home).unwrap_err();
         assert!(e.contains("malformed") && !e.contains("ghp_secret"), "{e}");
         assert!(logout(&home).unwrap());
+        assert!(!logout(&home).unwrap());
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    /// A newer rok's fields in credentials.rokon: read past, kept by
+    /// `rok login` and `rok logout`.
+    #[test]
+    fn credentials_skip_unknown() {
+        let home = rokc_core::tmp::test_dir("token-newer");
+        let file = credentials(&home);
+        std::fs::write(
+            &file,
+            "Credentials { token: \"ghp_old\", tokens: { \"x\": \"y\" } }\n",
+        )
+        .unwrap();
+        assert_eq!(pick_token(None, &home).unwrap(), "ghp_old");
+        save_token(&home, "ghp_new").unwrap();
+        let text = std::fs::read_to_string(&file).unwrap();
+        assert!(text.contains("tokens: { \"x\": \"y\" }"), "{text}");
+        assert_eq!(pick_token(None, &home).unwrap(), "ghp_new");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&file).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o600);
+        }
+        assert!(logout(&home).unwrap());
+        let text = std::fs::read_to_string(&file).unwrap();
+        assert!(
+            text.contains("tokens") && !text.contains("ghp_new"),
+            "{text}"
+        );
+        let e = pick_token(None, &home).unwrap_err();
+        assert!(e.contains("run `rok login` first"), "{e}");
         assert!(!logout(&home).unwrap());
         let _ = std::fs::remove_dir_all(&home);
     }

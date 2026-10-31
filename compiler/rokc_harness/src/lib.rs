@@ -11,10 +11,31 @@ use std::path::PathBuf;
 pub mod bench;
 pub mod test;
 
+/// The manifest format `rokc` writes and this runner reads.
+pub const VERSION: u32 = 1;
+
+/// Check a harness manifest's `version` line: none (an older rokc's) and
+/// up to `VERSION` are read; a newer one is refused.
+pub fn check_version(text: &str) -> Result<(), String> {
+    let first = text.lines().next().unwrap_or("");
+    let Some(v) = first.strip_prefix("version ") else {
+        return Ok(());
+    };
+    match v.trim().parse::<u32>() {
+        Ok(n) if n <= VERSION => Ok(()),
+        _ => Err(format!(
+            "the test harness is from a newer rokc (format version {}); run the rok of the \
+             same toolchain, e.g. `rok +<version> test`",
+            v.trim()
+        )),
+    }
+}
+
 /// Run the cases in a harness manifest; the exit code (0: all passed).
 ///
 /// The manifest is what `rokc test` / `rokc bench` write with
-/// `--emit-harness`: simple lines of `kind test|bench`, the resolved options
+/// `--emit-harness`: a `version N` line, then simple lines of
+/// `kind test|bench`, the resolved options
 /// (`threads`/`show_output` or `iters`/`samples`/`format`), an optional `filter`
 /// (raw to end of line), then an `exe <path>` per built executable each
 /// followed by its `case <name>` lines. A package with both roots lists
@@ -121,7 +142,22 @@ fn star(hit: impl Fn(&[char]) -> bool, re: &[char], mut t: &[char]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::re_match;
+    use super::{check_version, re_match};
+
+    #[test]
+    fn version_line_accepted() {
+        assert!(check_version("version 1\nkind test\n").is_ok());
+        // An older rokc writes none.
+        assert!(check_version("kind test\nthreads 1\n").is_ok());
+    }
+
+    #[test]
+    fn newer_version_refused() {
+        let e = check_version("version 2\nkind test\n").unwrap_err();
+        assert!(e.contains("newer rokc (format version 2)"), "{e}");
+        assert!(e.contains("run the rok of the same toolchain"), "{e}");
+        assert!(check_version("version x\n").is_err());
+    }
 
     #[test]
     fn filter_regex() {

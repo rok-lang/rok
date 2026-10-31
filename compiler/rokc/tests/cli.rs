@@ -44,6 +44,8 @@ fn harness(env: &Env, cwd: &Path, kind: &str, extra: &[&str]) -> (i32, String, S
         );
     }
     let manifest = fs::read_to_string(&man).unwrap();
+    // The format version comes first.
+    assert!(manifest.starts_with("version 1\n"), "{manifest}");
     let mut out = Vec::new();
     let code = rokc_harness::run_manifest(&manifest, &mut out);
     (code, text(&out), build_err)
