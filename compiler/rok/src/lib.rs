@@ -1150,6 +1150,13 @@ fn cmd_new(g: &Global, cmd: &str, args: &[String]) -> Result<i32, String> {
         (true, [d]) => PathBuf::from(d),
         _ => return Err(format!("usage: rok {cmd} [--lib] [--bin] <name>")),
     };
+    // Check the name as typed, before touching the file system: on
+    // Windows `nul` names the device, which exists and has no file name.
+    if !init {
+        if let Some(n) = dir.file_name().and_then(|n| n.to_str()) {
+            manifest::check_new_name(n)?;
+        }
+    }
     if init {
         for f in ["src/main.rok", "src/lib.rok"] {
             if dir.join(f).exists() {

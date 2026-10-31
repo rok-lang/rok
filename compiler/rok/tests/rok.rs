@@ -4838,7 +4838,8 @@ fn new_rejects_names_code_cannot_spell() {
         ),
     ] {
         fails(&rok(&home, &root, &["new", name]), why);
-        assert!(!root.join(name).exists());
+        // On Windows `nul` and `com1` exist as devices.
+        assert!(cfg!(windows) || !root.join(name).exists());
     }
     fails(
         &rok(&home, &root, &["add", "aux", "--path", "x"]),
@@ -4863,7 +4864,7 @@ fn new_rejects_names_code_cannot_spell() {
 fn existing_manifest_bad_version_warns() {
     let root = scratch("bad-version");
     let home = root.join("home");
-    let app = root.join("con");
+    let app = root.join("app");
     write(&app.join("src/main.rok"), "println(\"hi\");\n");
     write(
         &app.join("rok.rokon"),
@@ -4881,15 +4882,18 @@ fn existing_manifest_bad_version_warns() {
     }
     assert_eq!(err.matches("`banana`").count(), 1, "{err}");
 
-    let dir = root.join("nul");
-    fs::create_dir_all(&dir).unwrap();
-    let out = rok(&home, &dir, &["init"]);
-    ok(&out);
-    assert!(
-        read(&dir.join("rok.rokon")).contains("name: \"pkg-nul\""),
-        "{}",
-        text(&out.stderr)
-    );
+    // No directory can be called `nul` on Windows.
+    if !cfg!(windows) {
+        let dir = root.join("nul");
+        fs::create_dir_all(&dir).unwrap();
+        let out = rok(&home, &dir, &["init"]);
+        ok(&out);
+        assert!(
+            read(&dir.join("rok.rokon")).contains("name: \"pkg-nul\""),
+            "{}",
+            text(&out.stderr)
+        );
+    }
 }
 
 /// Every `rok new` template builds, runs and tests as written.
