@@ -30,7 +30,7 @@
 use rok::bare::gc;
 
 async fn run() -> i64 {
-    println(f"workers {task::workers() > 0}");
+    println(f"workers {task::worker_count() > 0}");
     let tasks: List<Task<i64>> = List::new();
     for i in 1..101 {
         tasks.push(task::spawn(async { i as i64 }));

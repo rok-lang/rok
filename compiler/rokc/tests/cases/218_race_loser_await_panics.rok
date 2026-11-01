@@ -1,0 +1,18 @@
+// spec: std 200-core/218-task §2.18.1
+// expect-exit: 101
+// expect-stderr: thread 'main' panicked at *
+// expect-stderr: awaited a task cancelled by `task::race`; use `try await t.join()`
+// expect-stdout:
+// race fast
+
+// Plain `await` on a task `race` cancelled panics, naming `race`.
+async fn after(ms: i64, name: str) -> str {
+    await task::sleep(Duration::ms(ms));
+    name
+}
+
+async fn main() {
+    let slow = task::spawn(after(5000, "slow"));
+    println(f"race {await task::race([slow, task::spawn(after(1, "fast"))])}");
+    println(await slow);
+}

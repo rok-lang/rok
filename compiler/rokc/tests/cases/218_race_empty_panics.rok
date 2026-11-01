@@ -1,0 +1,12 @@
+// spec: std 200-core/218-task §2.18.1
+// expect-exit: 101
+// expect-stderr: thread 'main' panicked at *
+// expect-stderr: task::race of no tasks
+// expect-stdout:
+
+// `race` of no tasks has no result to wait for: it panics, as `select`
+// does.
+async fn main() {
+    let none_left: List<Task<i32>> = [];
+    println(f"{await task::race(none_left)}");
+}

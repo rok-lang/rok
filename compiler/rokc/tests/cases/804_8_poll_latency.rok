@@ -9,6 +9,7 @@
 // A thread scanning lists in loops with no safepoint but their polls
 // (its lists rooted only on the yield path) stops for every collection
 // another thread runs, promptly.
+use rok::core::sync::{LoadOrdering, StoreOrdering};
 use rok::std::thread;
 use rok::std::time::Instant;
 
@@ -26,10 +27,10 @@ fn main() -> i32 {
             for j in 0..64i64 { r.push(i + j); }
             xs.push(r);
         }
-        started.store(1, Relaxed);
+        started.store(1, StoreOrdering::Relaxed);
         let t: i64 = 0;
         let rounds: i64 = 0;
-        while stop.load(Relaxed) == 0 {
+        while stop.load(LoadOrdering::Relaxed) == 0 {
             let i: usize = 0;
             while i < xs.len() {
                 let r = xs[i];
@@ -41,7 +42,7 @@ fn main() -> i32 {
         }
         t == rounds * 258048
     });
-    while started.load(Relaxed) == 0 { thread::yield_now(); }
+    while started.load(LoadOrdering::Relaxed) == 0 { thread::yield_now(); }
     let worst: u64 = 0;
     for _ in 0..20 {
         let junk: List<str> = [];
@@ -53,7 +54,7 @@ fn main() -> i32 {
     }
     println("collections 20");
     println(f"bounded: {worst < 2000u64}");
-    stop.store(1, Relaxed);
+    stop.store(1, StoreOrdering::Relaxed);
     println(if try! h.join() { "scan ok" } else { "scan wrong" });
     return 0;
 }

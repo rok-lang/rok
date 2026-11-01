@@ -12,6 +12,7 @@
 // std::thread (304): `thread::local` gives each thread its own value
 // (made by `init` on first use); `park` / `unpark` / `park_timeout`;
 // `JoinHandle::detach`.
+use rok::core::sync::{LoadOrdering, StoreOrdering};
 use rok::std::thread;
 use rok::std::time::Duration;
 
@@ -33,11 +34,11 @@ fn main() -> i32 {
 
     let flag = Atomic::new(false);
     let sleeper = thread::spawn(|| {
-        while !flag.load(Acquire) { thread::park(); }
+        while !flag.load(LoadOrdering::Acquire) { thread::park(); }
         7
     });
     thread::sleep(Duration::ms(5));
-    flag.store(true, Release);
+    flag.store(true, StoreOrdering::Release);
     sleeper.thread().unpark();
     println(f"{try! sleeper.join()}");
     thread::park_timeout(Duration::ms(1));

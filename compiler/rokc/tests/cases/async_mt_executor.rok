@@ -53,7 +53,7 @@ let results = await task::join(tasks);
 let sum: i64 = 0;
 for r in results { sum = sum + r; }
 println(f"sum {sum}");
-println(f"workers {task::workers() >= 1}");
+println(f"workers {task::worker_count() >= 1}");
 let seen = await ids;
 println(f"samples {seen.len()}");
 

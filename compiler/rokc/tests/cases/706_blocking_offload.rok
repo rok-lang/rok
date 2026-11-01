@@ -14,7 +14,7 @@ use rok::std::thread;
 use rok::std::time::Duration;
 
 async fn run() -> i32 {
-    let n = task::workers();
+    let n = task::worker_count();
     let (tx, rx) = channel::<i32>();
     let (dtx, drx) = channel::<i32>();
     for i in 0..n * 5 {

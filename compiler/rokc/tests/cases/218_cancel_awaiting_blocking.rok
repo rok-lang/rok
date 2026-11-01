@@ -2,12 +2,12 @@
 // needs: threads
 // expect-exit: 0
 // expect-stdout:
-// join: cancelled
+// join: finished 7
 // write landed: true
 
-// A task cancelled while it waits on `spawn_blocking` has no result, even
-// when the job finishes before the task polls again: the job's work
-// lands, its result is discarded.
+// `spawn_blocking` gives a `Task`, awaited as any other: a task cancelled
+// while it waits on one that finishes before the task polls again takes
+// the result, and with no cancellation point left it finishes with it.
 use rok::std::thread;
 
 let release = Atomic::new(0);

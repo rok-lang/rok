@@ -18,14 +18,16 @@
 // explicit orderings, CAS success / failure, `bool`, `u64` bit ops),
 // `Mutex` / `RwLock` guards under `using`, `Once`, `Cell`. Bare
 // `Ordering` stays `cmp::Ordering`.
+use rok::core::sync::{LoadOrdering, UpdateOrdering};
+
 fn main() -> i32 {
     let a = Atomic::new(5);
     a.fetch_add(3);
-    a.fetch_sub(1, Relaxed);
+    a.fetch_sub(1, UpdateOrdering::Relaxed);
     println(f"{a.load()}");
-    let r = a.compare_exchange(7, 10, SeqCst, SeqCst);
+    let r = a.compare_exchange(7, 10, UpdateOrdering::SeqCst, LoadOrdering::SeqCst);
     match r { Result::Ok(v) => println(f"{v}"), Result::Err(v) => println(f"{0 - v}"), };
-    let r2 = a.compare_exchange(7, 11, SeqCst, SeqCst);
+    let r2 = a.compare_exchange(7, 11, UpdateOrdering::SeqCst, LoadOrdering::SeqCst);
     match r2 { Result::Ok(v) => println(f"{v}"), Result::Err(v) => println(f"{0 - v}"), };
     let f = Atomic::new(false);
     if !f.swap(true) { println("was false"); }

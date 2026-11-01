@@ -13,7 +13,7 @@
 use rok::std::thread;
 
 async fn run() -> i32 {
-    println(f"workers {task::workers()}");
+    println(f"workers {task::worker_count()}");
     let tasks: List<Task<i64>> = List::new();
     for i in 1..101 {
         tasks.push(task::spawn(async {

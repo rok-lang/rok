@@ -8,6 +8,7 @@
 // spec 7.4.3 / 8.4.8: a loop back edge polls the yield flag, so a thread
 // spinning in a loop without calls still reaches a safepoint and a
 // stop-the-world collection on another thread completes.
+use rok::core::sync::{LoadOrdering, StoreOrdering};
 use rok::std::thread;
 
 extern "C" {
@@ -19,18 +20,18 @@ fn main() -> i32 {
     let stop = Atomic::new(0);
     let started = Atomic::new(0);
     let h = thread::spawn(|| {
-        started.store(1, Relaxed);
+        started.store(1, StoreOrdering::Relaxed);
         let n = 0u64;
-        while stop.load(Relaxed) == 0 {
+        while stop.load(LoadOrdering::Relaxed) == 0 {
             n = n + 1u64;
         }
         n > 0u64
     });
-    while started.load(Relaxed) == 0 { thread::yield_now(); }
+    while started.load(LoadOrdering::Relaxed) == 0 { thread::yield_now(); }
     let before = unsafe { rok_gc_stats_collections() };
     unsafe { rok_gc_collect(); }
     println(f"collected while spinning: {unsafe { rok_gc_stats_collections() } > before}");
-    stop.store(1, Relaxed);
+    stop.store(1, StoreOrdering::Relaxed);
     println(f"spin result: {try! h.join()}");
     return 0;
 }

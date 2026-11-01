@@ -1,0 +1,18 @@
+// spec: std 200-core/218-task §2.18.1
+// needs: threads
+// expect-exit: 0
+// expect-stdout:
+// 42 true
+// 7 7
+
+// `spawn_blocking` hands back a `Task`, the same handle as `spawn`: it
+// has `join`, `is_finished`, and copies of it may each await it.
+async fn main() {
+    let t: Task<i32> = task::spawn_blocking(|| 42);
+    let v = try await t.join() catch _: CancellationError { -1 };
+    println(f"{v} {t.is_finished()}");
+
+    let u = task::spawn_blocking(|| 7);
+    let copy = u;
+    println(f"{await u} {await copy}");
+}
