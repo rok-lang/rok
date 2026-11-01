@@ -2965,6 +2965,7 @@ mod tests {
         "Iterator",
         "IntoIterator",
         "FromIterator",
+        "TryIterator",
         "Future",
         "IntoFuture",
         "From",
