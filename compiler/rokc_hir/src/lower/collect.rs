@@ -2175,7 +2175,9 @@ fn collect<'a>(
         // `#[internal]` outside the toolchain is reported where it is
         // written (`check_internal_marks`), not at every use.
         let mark = mark.and_then(|mut m| {
-            m.internal &= is_toolchain_module(&module);
+            if !is_toolchain_module(&module) {
+                m.internal = None;
+            }
             (m != crate::marks::Mark::default()).then_some(m)
         });
         if let Some(mark) = mark {

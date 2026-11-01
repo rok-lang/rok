@@ -4806,7 +4806,15 @@ impl<'a> LowerCtx<'a> {
                     module_display(package_of(&def_module))
                 ),
             );
-            self.help_last(resolve::own_library_privacy(&def_module));
+            let pkg = module_display(package_of(&def_module));
+            let help = resolve::own_library_privacy(&def_module).unwrap_or_else(|| {
+                if is_toolchain_module(&def_module) {
+                    format!("it is a helper of `{pkg}`, not part of its API: use a `pub` item instead")
+                } else {
+                    format!("use a `pub` item of `{pkg}`, or make `{}` `pub` there", leaf_name(full))
+                }
+            });
+            self.help_last(Some(help));
             return false;
         }
         self.emit_error(
@@ -4919,7 +4927,17 @@ impl<'a> LowerCtx<'a> {
         }
         // Code a toolchain template or the compiler wrote is checked
         // where it is defined (spec 6.9.9).
-        if mark.internal && !is_toolchain_module(&self.access_module()) {
+        if let Some(note) = mark
+            .internal
+            .as_ref()
+            .filter(|_| !is_toolchain_module(&self.access_module()))
+        {
+            let help = if note.is_empty() {
+                "help: it is compiler-only: no public item replaces it, so remove the use"
+                    .to_owned()
+            } else {
+                format!("help: {note}")
+            };
             let e = rokc_diagnostic::RokDiagnostic::error(
                 Code::PRIVATE_ITEM,
                 at,
@@ -4928,10 +4946,7 @@ impl<'a> LowerCtx<'a> {
                      `rok::core` and `rok::std` may use it (spec 6.2.16)"
                 ),
             )
-            .with_note(
-                "it is not part of the standard library's API; use the public items the \
-                 docs list instead",
-            );
+            .with_note(help);
             let seen = self
                 .env
                 .sink

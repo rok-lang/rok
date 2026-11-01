@@ -12,8 +12,9 @@ pub struct Mark {
     pub deprecated: Option<Deprecation>,
     /// `#[deprecated_safe("note")]`: its note (empty: none).
     pub deprecated_safe: Option<String>,
-    /// `#[internal]`: only the toolchain's packages may use it.
-    pub internal: bool,
+    /// `#[internal("what to write instead")]`: only the toolchain's
+    /// packages may use it; its note (empty: none).
+    pub internal: Option<String>,
     /// `#[discardable]`: a call statement may drop the result.
     pub discardable: bool,
 }
@@ -113,6 +114,18 @@ fn is_release(s: &str) -> bool {
             .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
 }
 
+/// `#[x("note")]` / `#[x = "note"]`: the note (empty: none).
+fn note(a: &Attribute) -> String {
+    match &a.body {
+        AttrBody::Value(l) => text(l).unwrap_or_default(),
+        AttrBody::Args(xs) => match xs.as_slice() {
+            [AttrArg::Lit(l)] => text(l).unwrap_or_default(),
+            _ => String::new(),
+        },
+        AttrBody::Empty => String::new(),
+    }
+}
+
 /// The marks among `attrs`, if any.
 #[must_use]
 pub fn mark_of(attrs: &[Attribute]) -> Option<Mark> {
@@ -120,18 +133,9 @@ pub fn mark_of(attrs: &[Attribute]) -> Option<Mark> {
     for a in attrs {
         match a.path.as_slice() {
             [n] if n == "deprecated" => m.deprecated = deprecation(a),
-            [n] if n == "internal" => m.internal = true,
+            [n] if n == "internal" => m.internal = Some(note(a)),
             [n] if n == "discardable" => m.discardable = true,
-            [n] if n == "deprecated_safe" => {
-                m.deprecated_safe = Some(match &a.body {
-                    AttrBody::Value(l) => text(l).unwrap_or_default(),
-                    AttrBody::Args(xs) => match xs.as_slice() {
-                        [AttrArg::Lit(l)] => text(l).unwrap_or_default(),
-                        _ => String::new(),
-                    },
-                    AttrBody::Empty => String::new(),
-                });
-            }
+            [n] if n == "deprecated_safe" => m.deprecated_safe = Some(note(a)),
             _ => {}
         }
     }

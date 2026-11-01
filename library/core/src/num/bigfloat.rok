@@ -209,7 +209,7 @@ impl Float {
 
     /// An unsuffixed float literal (`_` allowed) too large or small for
     /// `f64` in a `float` slot.
-    #[internal]
+    #[internal("to make a `Float` from text, write `try s.parse::<Float>()`")]
     pub fn from_literal(s: str) -> Float {
         match Float::parse_decimal(s.replace("_", "")) {
             v: Float => v,

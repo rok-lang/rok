@@ -239,7 +239,7 @@ impl Cx<'_> {
             "test" | "bench" => (&[P::Fn], empty(a)),
             "non_exhaustive" => (&[P::Struct, P::Enum], empty(a)),
             "sealed" => (&[P::Trait], empty(a)),
-            "internal" => (&[P::Fn, P::Method, P::Const, P::Static, P::Field], empty(a)),
+            "internal" => (&[P::Fn, P::Method, P::Const, P::Static, P::Field], message(a)),
             "link" => (&[P::Extern], None),
             "link_name" => (
                 &[P::ExternFn],
