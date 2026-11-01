@@ -12,7 +12,7 @@
 // data only and indexes its tables by scalar digits.
 
 use sup::{Secret, ct_mask};
-use sup::sha2::HashAlgorithm;
+use sup::HashAlgorithm;
 use sup::hmac::Hmac;
 use sup::bignum::Nat;
 use sup::ecfield::{Fe, fe_zero, mul_p256, add_p256, sub_p256, mul_p384, add_p384, sub_p384};

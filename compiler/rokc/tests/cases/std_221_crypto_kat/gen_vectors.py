@@ -51,7 +51,7 @@ rsa_pkcs1_2048_sig_gen_test rsa_pkcs1_3072_sig_gen_test rsa_pkcs1_4096_sig_gen_t
 rsa_pss_2048_sha256_mgf1_0_test rsa_pss_2048_sha256_mgf1_32_test rsa_pss_2048_sha384_mgf1_48_test
 rsa_pss_3072_sha256_mgf1_32_test rsa_pss_4096_sha256_mgf1_32_test rsa_pss_4096_sha384_mgf1_48_test
 rsa_pss_4096_sha512_mgf1_32_test rsa_pss_4096_sha512_mgf1_64_test rsa_pss_misc_test
-mlkem_768_test mlkem_768_encaps_test mlkem_768_keygen_seed_test'''.split()
+mlkem_768_test mlkem_768_encaps_test mlkem_768_keygen_seed_test mlkem_768_semi_expanded_decaps_test'''.split()
 
 dl = sys.argv[1]
 full_out = sys.argv[sys.argv.index('--full') + 1] if '--full' in sys.argv else None
@@ -439,10 +439,13 @@ def sha(x):
 
 for g in wp('mlkem_768_keygen_seed_test')['testGroups']:
     for t in g['tests']:
-        add('wp-mlkem768-keygen', key_of(t), 'mlkem-keygen', t['seed'][:64], t['seed'][64:], sha(t['ek']))
+        add('wp-mlkem768-keygen', key_of(t), 'mlkem-keygen', t['seed'][:64], t['seed'][64:], sha(t['ek']), sha(t['dk']))
 for g in wp('mlkem_768_encaps_test')['testGroups']:
     for t in g['tests']:
         add('wp-mlkem768-encaps', key_of(t), 'mlkem-encaps', t['ek'], t['m'], h(t.get('K', '')), sha(t['c']) if t.get('c') else '-', res(t))
+for g in wp('mlkem_768_semi_expanded_decaps_test')['testGroups']:
+    for t in g['tests']:
+        add('wp-mlkem768-decaps', key_of(t), 'mlkem-decaps', h(t['dk']), h(t['c']), h(t.get('K', '')), res(t))
 for g in wp('mlkem_768_test')['testGroups']:
     for t in g['tests']:
         add('wp-mlkem768', key_of(t), 'mlkem-seed', t['seed'][:64], t['seed'][64:], sha(t['ek']) if t.get('ek') else '-', h(t['c']), h(t.get('K', '')), res(t))

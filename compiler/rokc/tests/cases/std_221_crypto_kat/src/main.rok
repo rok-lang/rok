@@ -71,8 +71,9 @@
 // wp-rsa-pss-misc: 5 cases, 0 failed
 // wp-mlkem768-keygen: 3 cases, 0 failed
 // wp-mlkem768-encaps: 3 cases, 0 failed
+// wp-mlkem768-decaps: 2 cases, 0 failed
 // wp-mlkem768: 3 cases, 0 failed
-// total: 593 cases, 0 failed
+// total: 595 cases, 0 failed
 
 // Official vectors (NIST CAVP, Wycheproof), one case per vectors.txt line,
 // made by ../gen_vectors.py: `<suite> <op> <field>...`, hex fields, `-` for
@@ -310,15 +311,21 @@ fn run(op: str, f: List<str>, pubs: Dict<str, rsa::PublicKey>, privs: Dict<str, 
         return hex(sig) == f[5] && back;
     }
     if op == "mlkem-keygen" {
-        // d z sha256(ek)
+        // d z sha256(ek) sha256(dk)
         let dk = try DecapsulationKey768::from_seed(unhex(f[0]), unhex(f[1])) catch _ { return false; };
-        return sha256(dk.encapsulation_key().to_bytes()) == f[2];
+        return sha256(dk.encapsulation_key().to_bytes()) == f[2] && sha256(dk.to_expanded_bytes().as_bytes().to_list()) == f[3];
     }
     if op == "mlkem-encaps" {
         // ek m key sha256(c) valid
         let ek = try EncapsulationKey768::from_bytes(unhex(f[0])) catch _ { return f[4] == "0"; };
         let (k, c) = try ek.encapsulate(unhex(f[1])) catch _ { return f[4] == "0"; };
         return f[4] == "1" && hex(k.as_bytes().to_list()) == f[2] && sha256(c) == f[3];
+    }
+    if op == "mlkem-decaps" {
+        // dk c key valid
+        let dk = try DecapsulationKey768::from_expanded_bytes(unhex(f[0])) catch _ { return f[3] == "0"; };
+        let k = try dk.decapsulate(unhex(f[1])) catch _ { return f[3] == "0"; };
+        return f[3] == "1" && hex(k.as_bytes().to_list()) == f[2];
     }
     if op == "mlkem-seed" {
         // d z sha256(ek) c key valid: keygen, then decapsulate c

@@ -31,7 +31,7 @@ use rok::std::net::{tcp_listen, tcp_connect, TcpStream, Shutdown};
 use rok::std::net::tls::{Client, Server, ClientConfig, ServerConfig, Certificate, PrivateKey, CipherSuite};
 use rok::std::thread;
 use rok::std::time::{Duration, Instant};
-use rok::core::crypto::sha2::HashAlgorithm;
+use rok::core::crypto::HashAlgorithm;
 use rok::core::crypto::hmac::Hmac;
 use rok::core::crypto::hkdf;
 use rok::core::crypto::aead::{Aead, AeadAlgorithm};

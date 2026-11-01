@@ -1,7 +1,7 @@
-// SHA-2 (FIPS 180-4): SHA-256, SHA-384 and SHA-512. `HashAlgorithm`
-// chooses a SHA-2 or a SHA-3 function (`sha3`); `Digest` is a running
-// hash of either.
+// SHA-2 (FIPS 180-4): SHA-256, SHA-384 and SHA-512. `Digest` is a
+// running hash of any `HashAlgorithm`, SHA-2 or SHA-3 (`sha3`).
 
+use sup::HashAlgorithm;
 use sup::sha3::Keccak;
 
 const K256: [u32; 64] = [
@@ -301,50 +301,6 @@ impl Sha512State {
             out[i] = (self.h[i / 8] >> (56 - 8 * (i % 8)) as u64) as u8;
         }
         out
-    }
-}
-
-/// A hash function chosen at run time (HMAC, HKDF, signatures, TLS).
-#[non_exhaustive]
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub enum HashAlgorithm {
-    Sha256,
-    Sha384,
-    Sha512,
-    Sha3_256,
-    Sha3_512,
-}
-
-impl HashAlgorithm {
-    pub const fn output_len(self) -> usize {
-        match self {
-            HashAlgorithm::Sha256 => 32,
-            HashAlgorithm::Sha384 => 48,
-            HashAlgorithm::Sha512 => 64,
-            HashAlgorithm::Sha3_256 => 32,
-            HashAlgorithm::Sha3_512 => 64,
-        }
-    }
-
-    /// The block length; for SHA-3 the sponge rate (HMAC's block).
-    pub const fn block_len(self) -> usize {
-        match self {
-            HashAlgorithm::Sha256 => 64,
-            HashAlgorithm::Sha384 => 128,
-            HashAlgorithm::Sha512 => 128,
-            HashAlgorithm::Sha3_256 => 136,
-            HashAlgorithm::Sha3_512 => 72,
-        }
-    }
-
-    pub fn digest<B: AsBytes>(self, data: B) -> List<u8> {
-        let d = Digest::new(self);
-        d.update(data);
-        d.finish()
-    }
-
-    const fn is_sha3(self) -> bool {
-        self == HashAlgorithm::Sha3_256 || self == HashAlgorithm::Sha3_512
     }
 }
 

@@ -271,8 +271,8 @@ const fn need(b: Slice<u8>, n: usize, what: str) throws (ValueError) {
 /// The shared key length.
 pub const SHARED_KEY_LEN: usize = 32;
 
-/// An ML-KEM-768 decapsulation key (the 2400-byte encoding) in secret
-/// storage. Copies share the storage; `wipe` and `using` release clear
+/// An ML-KEM-768 decapsulation key (the 2400-byte expanded encoding)
+/// in secret storage. Copies share the storage; `wipe` and `using` release clear
 /// it.
 pub struct DecapsulationKey768 {
     dk: Secret;
@@ -328,6 +328,22 @@ impl DecapsulationKey768 {
         for w in [s, e, t] { w.wipe(); }
         DecapsulationKey768 { dk }
     }
+
+    /// From the 2400-byte expanded encoding `dk_pke || ek || H(ek) || z`
+    /// (FIPS 203 7.3): the low-level form, for keys stored expanded.
+    /// The stored `H(ek)` must match the encapsulation key.
+    pub fn from_expanded_bytes<B: AsBytes>(bytes: B) throws (ValueError) -> DecapsulationKey768 {
+        let d = bytes.byte_slice();
+        try need(d, 2400, "decapsulation key");
+        let hd = Sha3_256::digest(d[384 * K:768 * K + 32]);
+        let bad = 0u8;
+        for i in 0usize..32 { bad = bad | (hd[i] ^ d[768 * K + 32 + i]); }
+        if bad != 0u8 { throw ValueError { msg: "ML-KEM-768: decapsulation key hash mismatch" }; }
+        DecapsulationKey768 { dk: Secret::new(d) }
+    }
+
+    /// A copy of the 2400-byte expanded encoding.
+    pub fn to_expanded_bytes(self) -> Secret { Secret::new(self.dk) }
 
     pub fn encapsulation_key(self) -> EncapsulationKey768 {
         EncapsulationKey768 { ek: self.dk[384 * K:768 * K + 32].to_list() }

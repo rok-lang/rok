@@ -16,7 +16,7 @@
 
 // RSA PKCS #1 v1.5 signing (must equal OpenSSL's) and PSS verification.
 
-use rok::core::crypto::sha2::HashAlgorithm;
+use rok::core::crypto::HashAlgorithm;
 use rok::core::crypto::rsa::{PrivateKey, PublicKey};
 
 fn nib(c: u8) -> u8 {

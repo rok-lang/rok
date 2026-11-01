@@ -63,7 +63,8 @@ fn main() {
     let bad: rsa::PublicKey | none = try rsa::PublicKey::from_pkcs1_der("x") catch _ { none };
     let bad2: rsa::PrivateKey | none = try rsa::PrivateKey::from_pkcs1_der("x") catch _ { none };
     println(f"rsa {bad is none && bad2 is none}");
-    let h: HashAlgorithm = crypto::sha2::HashAlgorithm::Sha384;
+    let h: HashAlgorithm = crypto::HashAlgorithm::Sha384;
+    let dg: crypto::sha2::Digest = Digest::new(h);
     let g: crypto::aead::Aead = a;
-    println(f"same type {h.output_len() == 48usize && g.algorithm().key_len() == 32usize}");
+    println(f"same type {dg.algorithm().output_len() == 48usize && g.algorithm().key_len() == 32usize}");
 }

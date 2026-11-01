@@ -11,7 +11,7 @@
 // of the RFC's r and s), public keys, sign / verify round trips and
 // invalid private keys.
 
-use rok::core::crypto::sha2::HashAlgorithm;
+use rok::core::crypto::HashAlgorithm;
 use rok::core::crypto::ecdsa::{EcCurve, SigningKey};
 
 fn nib(c: u8) -> u8 {

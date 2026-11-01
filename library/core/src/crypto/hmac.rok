@@ -1,7 +1,8 @@
 // HMAC (RFC 2104) over any `HashAlgorithm`, SHA-2 or SHA-3.
 
 use sup::constant_time_eq;
-use sup::sha2::{HashAlgorithm, Digest};
+use sup::HashAlgorithm;
+use sup::sha2::Digest;
 
 /// A running HMAC. A value: copying it forks the running MAC.
 pub struct Hmac {

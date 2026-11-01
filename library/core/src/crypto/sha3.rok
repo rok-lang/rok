@@ -1,6 +1,8 @@
 // SHA-3 (FIPS 202): SHA3-256, SHA3-512 and the SHAKE128 / SHAKE256
-// extendable-output functions, all over Keccak-f[1600]. The keyed
-// forms take `HashAlgorithm::Sha3_256` / `Sha3_512`.
+// extendable-output functions, all over Keccak-f[1600]. The types here
+// are the low-level form: one fixed function each, no algorithm chosen
+// at run time. `HashAlgorithm::Sha3_256` / `Sha3_512` with `Digest`,
+// `Hmac` and `hkdf` is the form chosen at run time.
 
 const RC: [u64; 24] = [
     0x0000000000000001u64, 0x0000000000008082u64, 0x800000000000808au64, 0x8000000080008000u64,
@@ -146,7 +148,8 @@ const fn keccak_f(a: [u64; 25]) -> [u64; 25] {
     a
 }
 
-/// SHA3-256: 32-byte digests.
+/// SHA3-256, fixed at compile time: 32-byte digests. The same function
+/// as `Digest::new(HashAlgorithm::Sha3_256)`.
 pub struct Sha3_256 {
     k: Keccak;
 }
@@ -167,7 +170,8 @@ impl Sha3_256 {
     pub const fn finish(self) -> List<u8> { self.k.squeeze(32) }
 }
 
-/// SHA3-512: 64-byte digests.
+/// SHA3-512, fixed at compile time: 64-byte digests. The same function
+/// as `Digest::new(HashAlgorithm::Sha3_512)`.
 pub struct Sha3_512 {
     k: Keccak;
 }

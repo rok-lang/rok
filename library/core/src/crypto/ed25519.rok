@@ -1,7 +1,8 @@
 // Ed25519 (RFC 8032 5.1): pure EdDSA over edwards25519 with SHA-512.
 
 use sup::Secret;
-use sup::sha2::{HashAlgorithm, Digest};
+use sup::HashAlgorithm;
+use sup::sha2::Digest;
 use sup::curve25519::{EdPoint, ge_base, ge_add, ge_negate, ge_encode, ge_decode, ge_mul_ct, sc25519_reduce, sc25519_muladd, sc25519_is_canonical};
 
 /// A signing key: the 32-byte seed and its expansion, in secret

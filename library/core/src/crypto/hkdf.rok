@@ -2,7 +2,7 @@
 // key, `expand` it into output keying material.
 
 use sup::Secret;
-use sup::sha2::HashAlgorithm;
+use sup::HashAlgorithm;
 use sup::hmac::Hmac;
 
 /// `HMAC(salt, ikm)`; an empty salt is `output_len` zero bytes.

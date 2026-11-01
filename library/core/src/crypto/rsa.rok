@@ -2,7 +2,8 @@
 // with the message hash), moduli of 2048 to 4096 bits.
 
 use sup::{Secret, constant_time_eq};
-use sup::sha2::{HashAlgorithm, Digest};
+use sup::HashAlgorithm;
+use sup::sha2::Digest;
 use sup::hkdf;
 use sup::bignum::{Nat, Modulus};
 
@@ -201,17 +202,19 @@ impl PublicKey {
 }
 
 /// An RSA private key with its CRT parameters (RFC 8017 3.2, two
-/// primes).
+/// primes), big-endian in secret storage.
 pub struct PrivateKey {
     public: PublicKey;
-    fp: Modulus;
-    fq: Modulus;
+    p: Secret;
+    q: Secret;
     // The CRT exponents, padded to the primes' width.
     dp: Secret;
     dq: Secret;
-    /// `q^-1 mod p`, Montgomery form mod p.
-    qinv: List<u32>;
+    // `q^-1 mod p`.
+    qinv: Secret;
 }
+
+impl !Sync for PrivateKey {}
 
 /// `b` with leading zeros to `len` bytes (`b.len() <= len`).
 const fn pad_be(b: Slice<u8>, len: usize) -> List<u8> {
@@ -258,14 +261,20 @@ impl PrivateKey {
         if !Nat::lt(qi, fp.m) || fields[6].len() > 4 * fp.n || fields[7].len() > 4 * fq.n { throw bad; }
         PrivateKey {
             public,
-            qinv: fp.to_mont(qi),
+            p: Secret::new(fields[4]),
+            q: Secret::new(fields[5]),
             // Padded to the primes' width: `pow` takes the same number of
             // steps whatever the exponents' leading zeros.
             dp: Secret::new(pad_be(fields[6], 4 * fp.n)),
             dq: Secret::new(pad_be(fields[7], 4 * fq.n)),
-            fp,
-            fq,
+            qinv: Secret::new(fields[8]),
         }
+    }
+
+    /// Overwrite the private values with zeros now (every copy shares
+    /// them); signing is meaningless afterwards.
+    pub fn wipe(self) {
+        for x in [self.p, self.q, self.dp, self.dq, self.qinv] { x.wipe(); }
     }
 
     pub const fn public_key(self) -> PublicKey { self.public }
@@ -277,8 +286,12 @@ impl PrivateKey {
     /// `s^e = m`: a fault in either half would reveal a factor.
     fn private_op(self, m: List<u32>, r: List<u32>) throws (ValueError) -> List<u32> {
         let md = self.public.md;
-        let fp = self.fp;
-        let fq = self.fq;
+        // The primes as moduli, rebuilt per operation: at rest they are
+        // only in secret storage.
+        let fp = try factor(self.p[0:self.p.len()], md.n);
+        let fq = try factor(self.q[0:self.q.len()], md.n);
+        let qi: List<u32> = Nat::from_be(self.qinv[0:self.qinv.len()], fp.n) else { throw ValueError { msg: "bad RSA private key" }; };
+        let qinv = fp.to_mont(qi);
         let e = self.public.e[0:self.public.e.len()];
         let blinded = md.from_mont(md.mul(md.to_mont(m), md.pow(md.to_mont(r), e)));
         // Per prime: (m r^e)^dp = m^dp r, times r^-1.
@@ -289,7 +302,7 @@ impl PrivateKey {
         // Garner: s = sq + q ((sp - sq) q^-1 mod p); q h < n, so the
         // product and the sum mod n are exact.
         let sq_plain = fq.from_mont(sq);
-        let h = fp.from_mont(fp.mul(fp.sub(sp, fp.to_mont(fp.reduce(sq_plain))), self.qinv));
+        let h = fp.from_mont(fp.mul(fp.sub(sp, fp.to_mont(fp.reduce(sq_plain))), qinv));
         let qh = md.from_mont(md.mul(md.to_mont(Nat::resize(fq.m, md.n)), md.to_mont(Nat::resize(h, md.n))));
         let s = md.add(qh, Nat::resize(sq_plain, md.n));
         let back = md.from_mont(md.pow(md.to_mont(s), e));
@@ -360,4 +373,14 @@ impl PrivateKey {
         rb.wipe();
         Nat::to_be(try self.private_op(m, r), k)
     }
+}
+
+/// `using` release wipes.
+impl Drop for PrivateKey {
+    fn drop(ref self) { self.wipe(); }
+}
+
+/// The public key only.
+impl Debug for PrivateKey {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"PrivateKey({self.public.bits} bits)") }
 }

@@ -5,7 +5,7 @@
 
 // A program's own struct named like a core enum variant is the struct,
 // with or without an expected type that has the variant
-// (`rok::core::crypto::sha2::HashAlgorithm::Sha256`).
+// (`rok::core::crypto::HashAlgorithm::Sha256`).
 struct Sha256 { x: i32; }
 struct P256 { y: i32; }
 
@@ -13,7 +13,7 @@ fn main() {
     let s = Sha256 { x: 1 };
     let p = P256 { y: 2 };
     println(f"{s.x} {p.y}");
-    println(f"{rok::core::crypto::sha2::HashAlgorithm::Sha384:?}");
+    println(f"{rok::core::crypto::HashAlgorithm::Sha384:?}");
 }
 
 // spec: 002.03-struct
