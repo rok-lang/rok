@@ -388,14 +388,14 @@ default ~/.rok); the $ROK_HOME/bin proxies run the default one. `update`
 installs the newest release, or <version>, from $ROK_DIST (default:
 https://github.com/rok-lang/rok/releases), checked against its .sha256,
 and makes it the default; it is rolled back if the proxies then do not
-run it. <version> is a version (0.1.6), a series (0.1, the newest 0.1.x)
-or a requirement (^0.1.5). `install` without --from downloads one and
-keeps the default. `clean` removes every toolchain but the default. A
-first argument +<version> runs one command with that toolchain, as does
-$ROK_TOOLCHAIN, a script's or rok.rokon's `toolchain`.",
+run it. For `update` and `install`, <version> is a full version (0.1.6).
+`install` without --from downloads one and keeps the default. `clean`
+removes every toolchain but the default. A first argument +<version> runs
+one command with that toolchain, as does $ROK_TOOLCHAIN, a script's or
+rok.rokon's `toolchain`.",
         examples: &[
             ("rok toolchain update", "the newest release"),
-            ("rok toolchain update 0.1", "the newest 0.1.x"),
+            ("rok toolchain update 0.1.6", "exactly 0.1.6"),
             (
                 "rok toolchain install 0.1.4",
                 "download 0.1.4 beside the default",

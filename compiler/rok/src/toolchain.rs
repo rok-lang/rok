@@ -41,7 +41,7 @@ pub const PIN_FORMS: &str =
 #[derive(Clone, Debug)]
 pub enum ToolchainReq {
     Prefix(String),
-    Req(crate::semver::Req, String),
+    Req(crate::semver::Req),
 }
 
 impl ToolchainReq {
@@ -49,7 +49,7 @@ impl ToolchainReq {
         let bad = || format!("`{s}` is not a toolchain pin; {PIN_FORMS}");
         if s.starts_with(['^', '~', '=', '<', '>']) {
             return crate::semver::Req::parse(s)
-                .map(|r| Self::Req(r, s.to_owned()))
+                .map(Self::Req)
                 .map_err(|_| bad());
         }
         // `0.1`, `0.1.5`, `0.1.0-rc.1`, `0.1.5-<triple>`.
@@ -72,25 +72,12 @@ impl ToolchainReq {
     pub fn matches(&self, version: &str) -> bool {
         match self {
             Self::Prefix(p) => matches(p, version),
-            Self::Req(r, _) => crate::semver::Version::parse(version).is_ok_and(|v| r.matches(&v)),
-        }
-    }
-
-    /// The series a release is looked for in: the pin's, or that of the
-    /// requirement's first version.
-    fn series(&self) -> Option<String> {
-        match self {
-            Self::Prefix(p) => series(p),
-            Self::Req(_, text) => {
-                let first = text.split(',').next()?;
-                series(first.trim_start_matches(['^', '~', '=', '<', '>', ' ']))
-            }
+            Self::Req(r) => crate::semver::Version::parse(version).is_ok_and(|v| r.matches(&v)),
         }
     }
 }
 
-/// `v`'s series, the releases a bare `update` stays within: `0.MINOR`
-/// while the major version is 0, else `MAJOR`.
+/// `v`'s series: `0.MINOR` while the major version is 0, else `MAJOR`.
 pub fn series(v: &str) -> Option<String> {
     let core = v.split(['-', '+']).next()?;
     let mut parts = core.split('.').map(|p| {
@@ -164,9 +151,17 @@ fn not_installed(pin: &str, why: &str) -> String {
         ToolchainReq::Prefix(p) => p.strip_suffix(&format!("-{HOST}")).unwrap_or(p),
         ToolchainReq::Req(..) => pin,
     };
+    // A download takes a full version only.
+    if crate::semver::Version::parse(arg).is_ok() {
+        return format!(
+            "toolchain {pin} ({why}) is not installed; install it with `rok toolchain install \
+             {arg}` (or add `--from <dir | .tar.gz | .zip | url>`)"
+        );
+    }
     format!(
-        "toolchain {pin} ({why}) is not installed; install it with `rok toolchain install {arg}` \
-         (or add `--from <dir | .tar.gz | .zip | url>`)"
+        "toolchain {pin} ({why}) is not installed; install a release it accepts by its full \
+         version, `rok toolchain install <version>` (or `rok toolchain install {arg} --from <dir \
+         | .tar.gz | .zip | url>`)"
     )
 }
 
@@ -976,11 +971,6 @@ fn fetch(url: &str) -> Result<Option<String>, String> {
     }
 }
 
-/// The file naming the newest release of series `s`.
-fn channel(dist: &str, s: &str) -> String {
-    format!("{dist}/download/channels/rok-version-{s}")
-}
-
 /// The newest release, from `<dist>/latest/download/rok-version`.
 fn latest(dist: &str) -> Result<String, String> {
     let url = format!("{dist}/latest/download/rok-version");
@@ -992,60 +982,20 @@ fn latest(dist: &str) -> Result<String, String> {
     release_version(text.trim(), &url)
 }
 
-/// The newest release of series `s`: `channel`, or, before that file
-/// exists, `latest/download/rok-version` when it names a release of `s`.
-fn latest_in(dist: &str, s: &str) -> Result<String, String> {
-    let url = channel(dist, s);
-    if let Some(text) = fetch(&url)? {
-        let v = release_version(text.trim(), &url)?;
-        if series(&v).as_deref() != Some(s) {
-            return Err(format!("{url} names {v}, which is not a {s} release"));
-        }
-        return Ok(v);
-    }
-    let legacy = format!("{dist}/latest/download/rok-version");
-    let Some(text) = fetch(&legacy)? else {
-        return Err(format!(
-            "no release is published at {url} or {legacy}; name a version instead, e.g. `rok \
-             toolchain update {s}.0`"
-        ));
-    };
-    let v = release_version(text.trim(), &legacy)?;
-    match series(&v) {
-        Some(got) if got == s => Ok(v),
-        got => Err(format!(
-            "cannot tell the newest {s} release: {url} does not exist and {legacy} names {v}; \
-             name a {s} version (`rok toolchain update <version>`) or move to {v} (`rok \
-             toolchain update {}`)",
-            got.unwrap_or_else(|| v.clone())
-        )),
-    }
-}
-
-/// The release `want` names: a version as it is; a series (`0.1`), a
-/// prefix or a requirement as the newest release of its series that it
-/// accepts.
-fn resolve(dist: &str, want: &str, from: &str) -> Result<String, String> {
+/// The release `want` names: a full version only; there is no series
+/// or requirement lookup.
+fn exact(want: &str, from: &str) -> Result<String, String> {
     if crate::semver::Version::parse(want).is_ok() {
         return release_version(want, from);
     }
-    let bad = || {
-        format!(
-            "{from}: `{want}` is not a version; write a series (`0.1`), a version (`0.1.6`) or a \
-             requirement (`^0.1.5`)"
-        )
-    };
-    let req = ToolchainReq::parse(want).map_err(|_| bad())?;
-    let s = req.series().ok_or_else(bad)?;
-    let newest = latest_in(dist, &s)?;
-    if req.matches(&newest) {
-        Ok(newest)
+    let newest = if from == "rok toolchain update" {
+        ", or nothing for the newest release"
     } else {
-        Err(format!(
-            "the newest rok {s} release is {newest}, which `{want}` does not accept; name a \
-             version it does (`{from} <version>`)"
-        ))
-    }
+        ""
+    };
+    Err(format!(
+        "{from}: `{want}` is not a full version; write one like `0.1.6`{newest}"
+    ))
 }
 
 /// Download release `full` for this host into `toolchains/`.
@@ -1146,7 +1096,7 @@ fn update(home: &Path, version: Option<&str>, quiet: bool, verbose: bool) -> Res
     let dist = dist();
     let current = default_pin(home)?.and_then(|p| find(home, &p));
     let full = match version {
-        Some(v) => resolve(&dist, v, "rok toolchain update")?,
+        Some(v) => exact(v, "rok toolchain update")?,
         None => latest(&dist)?,
     };
     let name = format!("{full}-{HOST}");
@@ -1282,7 +1232,7 @@ pub fn cmd(args: &[String], quiet: bool, verbose: bool) -> Result<i32, String> {
                 // A release, downloaded; the default stays.
                 None => {
                     let dist = dist();
-                    let full = resolve(&dist, version, "rok toolchain install")?;
+                    let full = exact(version, "rok toolchain install")?;
                     let name = format!("{full}-{HOST}");
                     if root(&h).join(&name).is_dir() {
                         if !quiet {
@@ -1386,9 +1336,6 @@ mod tests {
         for none in ["0", "x.1", "0.x", "", "0.1.y"] {
             assert_eq!(series(none), None, "{none}");
         }
-        let req = |s: &str| super::ToolchainReq::parse(s).unwrap().series();
-        assert_eq!(req("^0.1.5").as_deref(), Some("0.1"));
-        assert_eq!(req(">= 0.2, < 0.4").as_deref(), Some("0.2"));
     }
 
     #[test]
