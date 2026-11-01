@@ -195,6 +195,14 @@ if [ "$(uname -s)" = Linux ] && [ -z "$static" ]; then
     exit 1
   }
 fi
+# The installer contract (spec 9.10.6): 0.1.x `rok toolchain update` reads
+# the version from `rokc <version>` and the host from `host: <triple>`.
+v=$("$stage/bin/rokc$exe" --version --verbose)
+printf '%s\n' "$v" | head -n 1 | grep -Eq "^rokc $version( |\$)" &&
+  printf '%s\n' "$v" | grep -qx "host: $triple" || {
+  printf 'dist-native.sh: rokc --version --verbose breaks the installer contract (spec 9.10.6):\n%s\n' "$v" >&2
+  exit 1
+}
 cp install.sh install.ps1 README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE \
   compiler/rokc_driver/windows/COPYING.mingw-w64 "$stage/"
 
@@ -261,6 +269,12 @@ for n in "$name" $devname; do
   done
   rm -rf "${out:?}/$n"
 done
+# Listing a .zip takes unzip; release.sh checks every archive again.
+if [ "$ext" != zip ]; then
+  scripts/check-archive.sh "$version" "$out/$name.tar.gz" "$out/$name.tar.xz"
+elif command -v unzip > /dev/null 2>&1; then
+  scripts/check-archive.sh "$version" "$out/$name.zip"
+fi
 # The release's version: `rok toolchain update` reads the newest release's
 # from releases/latest/download/rok-version.
 printf '%s\n' "$version" > "$out/rok-version"

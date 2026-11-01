@@ -6,9 +6,13 @@
 #
 # Gather every host's archives, their .sha256 sidecars and rok-version into
 # one <dir> (default dist). Without --publish it only checks the full set is
-# present and verifies, so a release never ships a missing archive. --publish
-# creates the tag and uploads the assets with gh; run it only when the release
-# is meant to go out. It does not deploy the sites or publish stones.
+# present and verifies, and that every toolchain archive keeps the installer
+# contract (scripts/check-archive.sh), so a release never ships a missing
+# archive or one 0.1.x clients cannot install. --publish creates the tag and
+# uploads the assets with gh; run it only when the release is meant to go
+# out. A -rc.N version is published as a prerelease, so it never becomes
+# latest/ and a bare `rok toolchain update` never installs it. It does not
+# deploy the sites or publish stones.
 set -eu
 
 dir=dist
@@ -88,6 +92,15 @@ cat "$dir/.release-check"
 problems=$(grep -c '^\(missing\|no sha256\|bad sha\)' "$dir/.release-check" || true)
 rm -f "$dir/.release-check"
 
+# The toolchain archives keep the contract every 0.1.x client relies on.
+if [ "${problems:-0}" -eq 0 ]; then
+  set --
+  for a in "$dir/rok-$version"-*.tar.gz "$dir/rok-$version"-*.tar.xz "$dir/rok-$version"-*.zip; do
+    [ ! -f "$a" ] || set -- "$@" "$a"
+  done
+  [ $# -eq 0 ] || "$(dirname "$0")/check-archive.sh" "$version" "$@" || problems=1
+fi
+
 echo
 if [ "${problems:-0}" -ne 0 ]; then
   echo "release.sh: $problems problem(s); $tag is not ready" >&2
@@ -106,8 +119,12 @@ command -v gh > /dev/null || {
 }
 notes="--generate-notes"
 [ -f "$dir/notes.md" ] && notes="--notes-file $dir/notes.md"
+# A release candidate is a prerelease: GitHub's latest/ skips it, so the
+# rok-version there keeps naming the last final release.
+pre=""
+case $version in *-rc.*) pre=--prerelease ;; esac
 # rok-* already matches rok-version; naming it again uploads it twice (422).
 # shellcheck disable=SC2086
 gh release create "$tag" "$dir"/rok-* \
-  --target "$(git rev-parse HEAD)" --title "rok $version" $notes
-echo "release.sh: created $tag"
+  --target "$(git rev-parse HEAD)" --title "rok $version" $notes $pre
+echo "release.sh: created $tag${pre:+ (a prerelease)}"
