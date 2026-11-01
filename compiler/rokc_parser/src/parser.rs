@@ -4643,13 +4643,28 @@ impl<'a> Parser<'a> {
                         stmts.push(stmt);
                     }
                 } else {
-                    if let StmtKind::Trailing(e) = &stmt.kind {
-                        if !ends_stmt(e) {
+                    let stmt = match stmt.kind {
+                        StmtKind::Trailing(e) if !ends_stmt(&e) => {
                             let d =
                                 self.expected(&TokenKind::Semi, "`;` after expression statement");
                             self.diagnostics.push(d);
+                            Stmt {
+                                kind: StmtKind::Trailing(e),
+                                span: stmt.span,
+                            }
                         }
-                    }
+                        // A trailing-closure call ending at its `}` is an
+                        // expression statement, as if `;` were written
+                        // (spec 1.3.4): its value is dropped, not checked.
+                        StmtKind::Trailing(e) if !is_block_like(&e) => Stmt {
+                            kind: StmtKind::Expr(e),
+                            span: stmt.span,
+                        },
+                        kind => Stmt {
+                            kind,
+                            span: stmt.span,
+                        },
+                    };
                     stmts.push(stmt);
                 }
                 // Follow-ups queued by the statement (nested tuple
