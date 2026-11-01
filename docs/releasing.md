@@ -24,6 +24,15 @@ needed after `main` has moved on. A version may first go out as a release
 candidate (`v<version>-rc.N`) to exercise the pipeline before the final
 tag.
 
+A release candidate is always a GitHub prerelease: `release.sh --publish`
+passes `--prerelease` for a `-rc.N` version. GitHub's `latest/` skips
+prereleases, so `latest/download/rok-version` keeps naming the last final
+release, and a bare `rok toolchain update` (or `install.sh` / `install.ps1`
+without a version) never installs an rc. An rc is installed only by name:
+`install.sh --version 0.2.0-rc.1`, `install.ps1 -Version 0.2.0-rc.1` or
+`rok toolchain update 0.2.0-rc.1`. `scripts/test-release.sh` checks this
+against a stubbed `gh` (CI `lint`).
+
 ## Targets
 
 `release-targets.json` is the single list of release targets: `release.yml`
@@ -59,7 +68,8 @@ Pushing a `v<version>` tag runs `release.yml`:
      `rok-version` file.
 4. `publish`, once every build passed: gathers every archive, runs
    `release.sh --dir dist` to verify that every target's archives and
-   checksums are present and match, records the build provenance
+   checksums are present and match and that every toolchain archive keeps
+   the installer contract (below), records the build provenance
    attestation, and runs `release.sh --dir dist --publish` to create the
    `v<version>` GitHub release and upload every asset with the `gh` CLI.
    `install.sh` / `install.ps1` download `v<version>` by default;
@@ -83,10 +93,9 @@ the newest release in two ways:
   changed `rok` says so once, with how to stay on the old one: pin it
   (`toolchain: "0.1"` in `rok.rokon`, or in a script's `//! rokon`
   block) or run `rok +0.1 ..`. `rok new` writes that pin from 0.1.6 on.
-- `download/channels/rok-version-<series>`, one channel file per series,
-  each one line naming the newest release of that series. They are assets
-  of a `channels` GitHub release (a prerelease, never the latest one, so
-  it does not move `latest/`).
+- `download/channels/rok-version-<series>`, a channel file per series
+  naming the newest release of that series. Clients look for it, but none
+  is published (below).
 
 rok 0.1.6 and later read the channel files for a series:
 
@@ -101,12 +110,32 @@ When a channel file is missing (HTTP 404), these clients fall back to
 want; otherwise they stop and ask for a full version. So 0.1.6 works
 before any channel file is published, for the series `rok-version` is in.
 
-To publish the channel files, every release would write
-`rok-version-<its series>` to the `channels` release, replacing the old
-one (`gh release upload channels rok-version-<series> --clobber`); the
-`channels` release is created once by hand, as a prerelease. Nothing does
-this yet: `release.sh` and `release.yml` upload only `rok-version` with
-each release, and clients rely on the fallback above.
+No channel files are published: `release.sh` and `release.yml` upload
+only `rok-version` with each release, and clients rely on the fallback
+above. A series other than the newest one is installed by full version.
+
+## Installer contract
+
+Every 0.1.x `rok toolchain update` and install script must be able to
+install a new release, so the archive keeps what they rely on (spec
+9.10.6):
+
+- the name `rok-<version>-<triple>.tar.gz` / `.tar.xz` (Windows `.zip`),
+  holding one top directory `rok-<version>-<triple>/`;
+- in it `bin/rok`, `bin/rokc` (`.exe` on Windows), `lib/librokr.a`
+  (Windows `lib/rokr.lib`) and `lib/rok/core/src/lib.rok`;
+- `rokc --version --verbose` printing `rokc <version>` first and a
+  `host: <triple>` line.
+
+`dist-native.sh` checks the `rokc --version --verbose` output of what it
+builds; `scripts/check-archive.sh`, run by `dist-native.sh` and by
+`release.sh` on every toolchain archive, checks the name and layout. The
+`rok-mlir-dev` bundle is not part of the contract. The nightly `dist`
+job (linux-x64 and windows-x64, docs/ci.md) installs the last 0.1.x
+release and updates it to the archive it built, with `rok toolchain
+update`, the old install script and the new one (`scripts/test-update.sh`,
+`scripts/test-update.ps1`); then the new toolchain builds a project the
+old one made and locked. Run it (`jobs: dist`) before tagging.
 
 ## Before the tag
 
