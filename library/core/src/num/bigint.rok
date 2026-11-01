@@ -751,8 +751,6 @@ const fn mag_bit(m: IntMag, n: u64) -> bool {
 }
 
 impl Int {
-    /// Zero.
-    pub const fn new() -> Int { Int::from_i64(0) }
     pub const fn from_i64(n: i64) -> Int { Int { small: n, neg: false, big: none } }
     pub const fn from_i32(n: i32) -> Int { Int::from_i64(n as i64) }
     pub const fn from_u64(n: u64) -> Int { Int::from_parts(false, IntMag::from_u64(n)) }

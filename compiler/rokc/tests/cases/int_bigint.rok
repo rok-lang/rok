@@ -116,7 +116,7 @@ fn main() {
     let total: int = [x, y, k].iter().sum();
     println(f"{dict[k]} {dict[x + 0]} {dict.len()} {mx} {total} {x > y} {y < k} {x == x + 0} {x != y}");
     let z: int = 0;
-    println(f"{z} {-z} {z.is_zero()} {int::new()} {int::default()}");
+    println(f"{z} {-z} {z.is_zero()} {int::zero()} {int::default()}");
 }
 
 // spec: std 201-numbers

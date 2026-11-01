@@ -167,7 +167,7 @@ impl Pinned<str> {
 
     /// The bytes as `c_char`s; NUL termination is not promised (use
     /// `ffi::CString`).
-    pub fn as_c_str(self) -> ConstPtr<c_char> {
+    pub fn as_c_ptr(self) -> ConstPtr<c_char> {
         ConstPtr::<c_char>::dangling().with_addr(self.obj.as_ptr().addr())
     }
 }
