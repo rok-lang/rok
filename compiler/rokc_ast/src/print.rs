@@ -104,6 +104,14 @@ pub fn print_ty(t: &Ty) -> String {
     p.out
 }
 
+/// One attribute argument (`unix`, `target_os = "linux"`, `all(..)`).
+#[must_use]
+pub fn print_attr_arg(a: &AttrArg) -> String {
+    let mut p = Printer::default();
+    p.attr_arg(a);
+    p.out
+}
+
 #[derive(Default)]
 struct Printer {
     out: String,
@@ -239,6 +247,9 @@ impl Printer {
     /// module's inner ones go in its body.
     fn attrs(&mut self, attrs: &[Attribute]) {
         for a in attrs.iter().filter(|a| !a.inner) {
+            if a.path.first().is_some_and(|p| p == crate::CFG_OFF_ATTR) {
+                continue;
+            }
             if a.path.len() == 1
                 && [
                     crate::EXTERN_FN_ATTR,

@@ -237,6 +237,14 @@ pub fn lower_full(
     super::const_eval::set_pointer_width(input.pointer_width);
     super::const_eval::set_stdcall_system(input.stdcall_system);
     crate::clear_type_names();
+    let mut dropped = crate::cfg_dropped(
+        input
+            .item_modules
+            .iter()
+            .map(String::as_str)
+            .zip(&program.items),
+    );
+    dropped.extend(input.cfg_dropped.iter().cloned());
     let (mut lib, mut user) = (Program::default(), Program::default());
     let (mut lib_modules, mut user_modules) = (Vec::new(), Vec::new());
     for (item, module) in program.items.into_iter().zip(&input.item_modules) {
@@ -341,7 +349,9 @@ pub fn lower_full(
             t.elapsed().as_secs_f64() * 1e3
         );
     }
-    finish(c, [lib, user], raw_uses, &at)
+    let mut module = finish(c, [lib, user], raw_uses, &at);
+    crate::cfg_off::note_dropped(&mut module.diagnostics, &dropped);
+    module
 }
 
 mod stage;
