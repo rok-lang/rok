@@ -23,16 +23,16 @@ pub enum Assoc {
     None,
 }
 
-/// Binding power of the prefix unary operators and `await` (spec 3.2.3
-/// level 12, right-assoc).
-pub const PREFIX_PREC: u32 = 12;
-/// Binding power of `as` / `is` (spec 3.2.3 level 11, left-assoc).
-pub const CAST_PREC: u32 = 11;
+/// Binding power of the prefix unary operators and `await` (spec 3.2.3,
+/// right-assoc).
+pub const PREFIX_PREC: u32 = 13;
+/// Binding power of `as` / `is` (spec 3.2.3, left-assoc).
+pub const CAST_PREC: u32 = 12;
 /// Binding power of `??` (level 1, right-assoc).
 pub const COALESCE_PREC: u32 = 1;
 
-/// A built-in operator's precedence (spec 3.2.3); dotted broadcast tokens
-/// share their scalar's row. `None` outside the table.
+/// A built-in operator's precedence (spec 3.2.3), Rust's order; dotted
+/// broadcast tokens share their scalar's row. `None` outside the table.
 #[must_use]
 pub fn fixed_prec(symbol: &str, fixity: Fixity) -> Option<(u32, Assoc)> {
     let base = match symbol {
@@ -44,15 +44,16 @@ pub fn fixed_prec(symbol: &str, fixity: Fixity) -> Option<(u32, Assoc)> {
         Fixity::Prefix => {
             matches!(symbol, "-" | "!" | "~" | "√").then_some((PREFIX_PREC, Assoc::Right))
         }
-        // Level 13: the postfix row (`?`, member access). `?` itself is
-        // language syntax; it is here only as a `like` target (spec 6.7.1).
-        Fixity::Postfix => (symbol == "?").then_some((13, Assoc::Left)),
+        // The postfix row (`?`, member access). `?` itself is language
+        // syntax; it is here only as a `like` target (spec 6.7.1).
+        Fixity::Postfix => (symbol == "?").then_some((14, Assoc::Left)),
         Fixity::Infix => Some(match base {
-            "<<" | ">>" => (10, Assoc::Left),
-            "∘" => (9, Assoc::Left),
-            "*" | "/" | "%" | "%%" | "×" | "⋅" | "÷" | "∩" => (8, Assoc::Left),
-            "+" | "-" | "∪" => (7, Assoc::Left),
-            "&" | "^" => (6, Assoc::Left),
+            "∘" => (11, Assoc::Left),
+            "*" | "/" | "%" | "%%" | "×" | "⋅" | "÷" | "∩" => (10, Assoc::Left),
+            "+" | "-" | "∪" => (9, Assoc::Left),
+            "<<" | ">>" => (8, Assoc::Left),
+            "&" => (7, Assoc::Left),
+            "^" => (6, Assoc::Left),
             "|" => (5, Assoc::Left),
             "==" | "!=" | "<" | ">" | "<=" | ">=" | "≡" | "≠" | "≤" | "≥" | "∈" | "∉" | "⊂"
             | "⊆" => (4, Assoc::None),

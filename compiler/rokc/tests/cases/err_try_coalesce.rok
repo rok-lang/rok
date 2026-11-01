@@ -1,0 +1,23 @@
+// spec: 003.14.3-try-opt
+// expect-error: `try? find(-1) ?? 9` needs parentheses
+// expect-error: help: write `(try? find(-1)) ?? 9` to get `9` on an error, or `try? (find(-1) ?? 9)` to get `none` on an error
+
+// `try? f() ?? d` without parentheses is an error (spec 3.14.3): either
+// grouping must be written out.
+#[derive(Debug)]
+struct E {}
+impl Display for E { fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("E") } }
+impl Error for E {}
+
+fn find(n: i32) throws (E) -> i32? {
+    if n < 0 { throw E {}; }
+    if n == 0 { return none; }
+    n
+}
+
+fn main() {
+    let a = try? find(-1) ?? 9;
+    let b = (try? find(-1)) ?? 9;
+    let c = try? (find(-1) ?? 9);
+    println(f"{a:?} {b} {c:?}");
+}

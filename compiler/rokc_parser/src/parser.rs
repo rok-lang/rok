@@ -10,7 +10,7 @@ use rokc_ast::{
 };
 use rokc_core::Visibility;
 use rokc_diagnostic::{ErrorKind, RokDiagnostic, Span};
-use rokc_lexer::token::{FUTURE_KEYWORDS, keyword_str};
+use rokc_lexer::token::{UNUSED_KEYWORDS, keyword_str};
 use rokc_lexer::{Token, TokenKind};
 
 use crate::prec::{Assoc, CAST_PREC, COALESCE_PREC, ExtOps, Fixity, PREFIX_PREC};
@@ -99,13 +99,16 @@ pub struct Parser<'a> {
     /// Token ranges no parse looks into (meta block bodies).
     unparsed: Vec<std::ops::Range<usize>>,
     /// The next `bump` takes a name where any keyword is one (`p.move`,
-    /// a field): no `keyword_idents` there.
+    /// a field): an unused keyword is fine there.
     name_pos: bool,
-    /// Starts of the identifiers `keyword_idents` reported (a token is
-    /// parsed again after backtracking).
-    kw_warned: std::collections::HashSet<(u32, u32)>,
-    /// Start of the expression statement being parsed, for
-    /// `trailing_closure_operator`.
+    /// Per closure or fn body being parsed, innermost last: the label
+    /// `return@name` may name there, and the bare `return;`s in it.
+    ret_frames: Vec<RetFrame>,
+    /// The bare `return;`s of each trailing closure, by its span start:
+    /// one in a statement's trailing closure is an error.
+    closure_returns: std::collections::HashMap<(u32, u32), Vec<Span>>,
+    /// Start of the expression statement being parsed: an operator may
+    /// not start the line after its trailing-closure call.
     stmt_at: Option<u32>,
     /// Mount path of the package being parsed (`""`: the one being
     /// built); `pkg::name!` names its meta blocks (spec 6.8.11).
@@ -117,6 +120,15 @@ pub struct Parser<'a> {
     /// warnings: kept apart from `diagnostics`, which a backtrack cuts.
     meta_warned: std::collections::HashSet<String>,
     meta_lints: Vec<RokDiagnostic>,
+}
+
+/// A closure or fn body being parsed.
+#[derive(Default)]
+struct RetFrame {
+    /// A trailing closure's callee name: what `return@name` names.
+    label: Option<String>,
+    /// The `return` tokens of the bare `return;`s directly in it.
+    bare: Vec<Span>,
 }
 
 /// Nesting limit for expressions, types, patterns and blocks.
@@ -307,8 +319,9 @@ impl<'a> Parser<'a> {
             docs_dropped: std::collections::HashMap::new(),
             unparsed: Vec::new(),
             name_pos: false,
-            kw_warned: std::collections::HashSet::new(),
             stmt_at: None,
+            ret_frames: Vec::new(),
+            closure_returns: std::collections::HashMap::new(),
             package: String::new(),
             meta_imports: Vec::new(),
             meta_warned: std::collections::HashSet::new(),
@@ -830,10 +843,10 @@ impl<'a> Parser<'a> {
             // `@macro { .. }` is meta syntax, not a name.
             if !t.raw
                 && !name_pos
-                && FUTURE_KEYWORDS.contains(&n.as_str())
+                && UNUSED_KEYWORDS.contains(&n.as_str())
                 && self.prev_kind() != Some(&TokenKind::At)
             {
-                self.future_keyword(n, t.span);
+                self.unused_keyword(n, t.span);
             }
         }
         self.pos += 1;
@@ -848,21 +861,24 @@ impl<'a> Parser<'a> {
         t
     }
 
-    /// `keyword_idents`: `name` is a keyword from 0.2.0 on.
-    fn future_keyword(&mut self, name: &str, span: Span) {
-        if span.is_dummy() || !self.kw_warned.insert((span.file, span.start)) {
+    /// `name` is a reserved keyword with no syntax yet: not a name.
+    /// Backtracking drops what a failed parse reported, and the token is
+    /// bumped again: report once per kept parse.
+    fn unused_keyword(&mut self, name: &str, span: Span) {
+        let msg = format!("`{name}` is a reserved keyword, not a name");
+        if span.is_dummy()
+            || self
+                .diagnostics
+                .iter()
+                .any(|d| d.message == msg && d.primary.as_ref().is_some_and(|l| l.span == span))
+        {
             return;
         }
         self.diagnostics.push(
-            RokDiagnostic::warning(
-                ErrorKind::Parse,
-                span,
-                format!("`{name}` is a keyword from Rok 0.2.0 on"),
-            )
-            .with_file(self.file.clone())
-            .with_help(format!("write `r#{name}` to keep this name, or rename it"))
-            .with_fix(span, format!("r#{name}"), format!("write `r#{name}`"))
-            .with_lint("keyword_idents"),
+            RokDiagnostic::error(ErrorKind::Parse, span, msg)
+                .with_file(self.file.clone())
+                .with_help(format!("write `r#{name}` to keep this name, or rename it"))
+                .with_fix(span, format!("r#{name}"), format!("write `r#{name}`")),
         );
     }
 
@@ -1103,6 +1119,7 @@ impl<'a> Parser<'a> {
                 self.recover(from, Recover::Stmt);
             }
         }
+        self.statement_closure_returns(&stmts, None);
         // Untyped `throws` in fn types that no `rethrows` claimed keep the
         // marker; HIR reads it as `any Error` (spec 4.14).
         self.untyped_throws.clear();
@@ -3305,7 +3322,7 @@ impl<'a> Parser<'a> {
             self.fn_names.push(owned);
             // `//!` at the start of the body documents the function.
             self.doc_attrs_at(self.pos + 1, true, &mut attrs);
-            let b = self.parse_block();
+            let (b, _) = self.ret_frame(None, Self::parse_block);
             self.fn_names.pop();
             Some(b?)
         } else {
@@ -3826,7 +3843,7 @@ impl<'a> Parser<'a> {
                         p.expect(&TokenKind::RBrace, "`}`")?;
                         e
                     } else {
-                        p.parse_expr_bp(12)
+                        p.parse_expr_bp(PREFIX_PREC)
                     };
                     let Some(e) = e else {
                         ok = false;
@@ -4060,8 +4077,13 @@ impl<'a> Parser<'a> {
         };
         let kind = match self.peek() {
             TokenKind::Return => {
-                self.bump();
-                StmtKind::Return(value(self)?)
+                let at = self.bump().span;
+                let labeled = self.return_label(at);
+                let v = value(self)?;
+                if v.is_none() && !labeled {
+                    self.bare_return(at);
+                }
+                StmtKind::Return(v)
             }
             TokenKind::Break => {
                 self.bump();
@@ -4239,6 +4261,7 @@ impl<'a> Parser<'a> {
     fn parse_block_inner(&mut self) -> Option<Block> {
         let lifted = self.lifted.len();
         let mut block = self.parse_block_stmts()?;
+        self.statement_closure_returns(&block.stmts, block.trailing.as_deref());
         self.rename_local_items(&mut block, lifted);
         // Spec 4.10.5 / 3.9.1: a nested fn and a `use` hold in their whole
         // block - in the bodies of the fns lifted from inside it too.
@@ -4936,8 +4959,12 @@ impl<'a> Parser<'a> {
                 ))
             }
             TokenKind::Return => {
-                self.bump();
+                let at = self.bump().span;
+                let labeled = self.return_label(at);
                 let value = if matches!(self.peek(), TokenKind::Semi | TokenKind::RBrace) {
+                    if !labeled {
+                        self.bare_return(at);
+                    }
                     None
                 } else {
                     Some(self.parse_expr()?)
@@ -5346,8 +5373,8 @@ impl<'a> Parser<'a> {
         Some(lhs)
     }
 
-    /// `try_coalesce_precedence`: `try? f() ?? d` (operand from token
-    /// `from`) is `try? (f() ?? d)`, so an error gives `none`, not `d`.
+    /// `try? f() ?? d` (operand from token `from`) is an error: it would
+    /// be `try? (f() ?? d)`, where an error gives `none`, not `d`.
     fn try_coalesce(&mut self, at: Span, from: usize, operand: &Expr) {
         if !matches!(operand.kind, ExprKind::NullishCoalesce(..)) || self.pending.is_some() {
             return;
@@ -5376,31 +5403,164 @@ impl<'a> Parser<'a> {
             return;
         }
         let Some(split) = split else { return };
-        let (mut l, mut r) = (tokens_text(&toks[..split]), tokens_text(&toks[split + 1..]));
+        let Some(last) = toks.last() else { return };
+        let (l, r) = (tokens_text(&toks[..split]), tokens_text(&toks[split + 1..]));
+        let whole = Span {
+            end: last.span.end,
+            ..at
+        };
         // Long operands read better as placeholders.
-        if l.len() + r.len() > 60 {
-            (l, r) = ("x".to_owned(), "d".to_owned());
-        }
+        let (sl, sr) = if l.len() + r.len() > 60 {
+            ("x", "d")
+        } else {
+            (l.as_str(), r.as_str())
+        };
         self.diagnostics.push(
-            RokDiagnostic::warning(
+            RokDiagnostic::error(
                 ErrorKind::Parse,
                 at,
-                format!(
-                    "`try? {l} ?? {r}` is `try? ({l} ?? {r})`: an error gives `none`, not `{r}`"
-                ),
+                format!("`try? {sl} ?? {sr}` needs parentheses"),
             )
             .with_file(self.file.clone())
             .with_help(format!(
-                "write `(try? {l}) ?? {r}` to get `{r}` on an error, or `try? ({l} ?? {r})` \
-                 to keep this meaning"
+                "write `(try? {sl}) ?? {sr}` to get `{sr}` on an error, or \
+                 `try? ({sl} ?? {sr})` to get `none` on an error"
             ))
-            .with_lint("try_coalesce_precedence"),
+            .with_fix(
+                whole,
+                format!("(try? {l}) ?? {r}"),
+                format!("write `(try? {sl}) ?? {sr}`"),
+            )
+            .with_fix(
+                whole,
+                format!("try? ({l} ?? {r})"),
+                format!("write `try? ({sl} ?? {sr})`"),
+            ),
         );
     }
 
-    /// `trailing_closure_operator`: `op` starts the line after the `}` of
-    /// a trailing-closure call that starts a statement, so it continues
-    /// the call (`run { .. }` then `-x;`). Rok 0.2.0 ends the call there.
+    /// `f` parsing a closure or fn body whose `return@name` may name
+    /// `label`; with the bare `return;`s directly in it.
+    fn ret_frame<T>(
+        &mut self,
+        label: Option<String>,
+        f: impl FnOnce(&mut Self) -> Option<T>,
+    ) -> (Option<T>, Vec<Span>) {
+        self.ret_frames.push(RetFrame {
+            label,
+            bare: Vec::new(),
+        });
+        let r = f(self);
+        let frame = self.ret_frames.pop().unwrap_or_default();
+        (r, frame.bare)
+    }
+
+    /// The bare `return;`s of the closure starting at `span`.
+    fn note_closure_returns(&mut self, span: Span, bare: Vec<Span>) {
+        let key = (span.file, span.start);
+        if bare.is_empty() {
+            self.closure_returns.remove(&key);
+        } else {
+            self.closure_returns.insert(key, bare);
+        }
+    }
+
+    /// A bare `return;` (its `return` at `at`).
+    fn bare_return(&mut self, at: Span) {
+        if let Some(f) = self.ret_frames.last_mut() {
+            f.bare.push(at);
+        }
+    }
+
+    /// `return@name` (`@name` glued to the `return` at `at`): leaves the
+    /// innermost closure, which must be the trailing closure of a call
+    /// to `name`. Whether there is one.
+    fn return_label(&mut self, at: Span) -> bool {
+        let glued = self.peek_span().start == at.end;
+        if !glued || self.peek() != &TokenKind::At {
+            return false;
+        }
+        let Some(TokenKind::Ident(name)) = self.tokens.get(self.pos + 1).map(|t| t.kind.clone())
+        else {
+            return false;
+        };
+        self.bump(); // `@`
+        let span = self.bump_name().span;
+        let inner = self.ret_frames.last().and_then(|f| f.label.as_deref());
+        if inner == Some(name.as_str()) {
+            return true;
+        }
+        let help = match inner {
+            Some(l) => format!(
+                "the innermost closure here is the trailing closure of `{l}`: write `return@{l}`"
+            ),
+            None => "`return@name` leaves the trailing closure of a call to `name`; \
+                     here, write `return`"
+                .to_owned(),
+        };
+        self.diagnostics.push(
+            RokDiagnostic::error(
+                ErrorKind::Parse,
+                span,
+                format!("`return@{name}`: no enclosing trailing closure of a call to `{name}`"),
+            )
+            .with_file(self.file.clone())
+            .with_help(help),
+        );
+        true
+    }
+
+    /// A bare `return;` in a statement's trailing closure is an error: it
+    /// would leave only the closure, not the function.
+    fn statement_closure_returns(&mut self, stmts: &[Stmt], tail: Option<&Expr>) {
+        let exprs = stmts.iter().filter_map(|s| match &s.kind {
+            StmtKind::Expr(e) | StmtKind::Trailing(e) => Some(e),
+            _ => None,
+        });
+        let mut found = Vec::new();
+        for e in exprs.chain(tail) {
+            let (ExprKind::Call {
+                trailing_closure: Some(c),
+                ..
+            }
+            | ExprKind::MethodCall {
+                trailing_closure: Some(c),
+                ..
+            }) = &e.kind
+            else {
+                continue;
+            };
+            if let Some(bare) = self.closure_returns.get(&(c.span.file, c.span.start)) {
+                found.extend(bare.iter().map(|&at| (at, callee_name(e))));
+            }
+        }
+        for (at, name) in found {
+            let mut d = RokDiagnostic::error(
+                ErrorKind::Parse,
+                at,
+                "a bare `return` in a statement's trailing closure: it would leave only \
+                 the closure, not the function",
+            )
+            .with_file(self.file.clone());
+            d = match name {
+                Some(n) => d
+                    .with_help(format!(
+                        "write `return@{n}` to end this call of the closure; to leave the \
+                         function, write a `for` loop instead of the call"
+                    ))
+                    .with_fix(at, format!("return@{n}"), format!("write `return@{n}`")),
+                None => d.with_help(
+                    "to leave the function, write a `for` loop instead of the call; to end \
+                     this call of the closure, pass it in the parentheses",
+                ),
+            };
+            self.diagnostics.push(d);
+        }
+    }
+
+    /// `op` starting the line after the `}` of a trailing-closure call
+    /// that starts a statement (`run { .. }` then `-x;`) is an error: it
+    /// reads as a new statement but would continue the call.
     fn closure_operator(&mut self, lhs: &Expr, op: &str) {
         if self.stmt_at != Some(lhs.span.start) || is_block_like(lhs) || !ends_stmt(lhs) {
             return;
@@ -5411,20 +5571,17 @@ impl<'a> Parser<'a> {
             return;
         }
         self.diagnostics.push(
-            RokDiagnostic::warning(
+            RokDiagnostic::error(
                 ErrorKind::Parse,
                 at,
-                format!(
-                    "`{op}` at the start of this line continues the trailing-closure call above"
-                ),
+                format!("`{op}` can't start the line after a trailing-closure call"),
             )
             .with_file(self.file.clone())
             .with_help(format!(
-                "write `;` after the closure's `}}` to end the call there, as Rok 0.2.0 \
-                 does; to keep one expression, move `{op}` to the end of the line above"
+                "write `;` after the closure's `}}` to end the call there; to keep one \
+                 expression, move `{op}` to the end of the line above"
             ))
-            .with_fix(self.after_prev(), ";", "end the call with `;`")
-            .with_lint("trailing_closure_operator"),
+            .with_fix(self.after_prev(), ";", "end the call with `;`"),
         );
     }
 
@@ -6268,7 +6425,10 @@ impl<'a> Parser<'a> {
                     } else {
                         // `path { body }` → call with 0-arg trailing closure.
                         let body_span = self.peek_span();
-                        let block = self.parse_block()?;
+                        let label = path.segments.last().map(|s| s.name.clone());
+                        let (block, bare) = self.ret_frame(label, Self::parse_block);
+                        let block = block?;
+                        self.note_closure_returns(body_span, bare);
                         let body = Expr {
                             span: body_span,
                             kind: ExprKind::Block(block),
@@ -6294,7 +6454,9 @@ impl<'a> Parser<'a> {
                             trailing_closure: Some(Box::new(closure)),
                         }
                     }
-                } else if let Some(closure) = self.paren_less_trailing_closure() {
+                } else if let Some(closure) =
+                    self.paren_less_trailing_closure(path.segments.last().map(|s| s.name.clone()))
+                {
                     // `f |x| { .. }` → `f(|x| { .. })` (spec 4.8.1).
                     ExprKind::Call {
                         callee: Box::new(Expr {
@@ -6381,7 +6543,7 @@ impl<'a> Parser<'a> {
                 let is_generator = self.eat(&TokenKind::Yield);
                 match self.peek() {
                     TokenKind::LBrace => {
-                        let b = self.parse_block()?;
+                        let b = self.ret_frame(None, Self::parse_block).0?;
                         if is_generator {
                             ExprKind::AsyncYieldBlock(b)
                         } else {
@@ -6408,7 +6570,7 @@ impl<'a> Parser<'a> {
             // generator closure, anything else the `yield` statement.
             TokenKind::Yield if matches!(self.peek_next(), Some(TokenKind::LBrace)) => {
                 self.bump();
-                ExprKind::YieldBlock(self.parse_block()?)
+                ExprKind::YieldBlock(self.ret_frame(None, Self::parse_block).0?)
             }
             TokenKind::Yield
                 if matches!(
@@ -6478,7 +6640,7 @@ impl<'a> Parser<'a> {
                     self.expect(&TokenKind::RParen, "`)`")?;
                     // Trailing closure (spec 4.8): a `{` or `|..|` right
                     // after `)` is the last argument.
-                    let trailing_closure = self.try_parse_trailing_closure()?;
+                    let trailing_closure = self.try_parse_trailing_closure(path_name(&expr))?;
                     expr = Expr {
                         span: expr.span,
                         kind: ExprKind::Call {
@@ -6559,7 +6721,8 @@ impl<'a> Parser<'a> {
                         self.expect(&TokenKind::RParen, "`)`")?;
                         // Trailing closure on a method call (spec 4.8), as
                         // for calls.
-                        let trailing_closure = self.try_parse_trailing_closure()?;
+                        let trailing_closure =
+                            self.try_parse_trailing_closure(Some(name.clone()))?;
                         expr = Expr {
                             span: expr.span,
                             kind: ExprKind::MethodCall {
@@ -6570,7 +6733,9 @@ impl<'a> Parser<'a> {
                                 trailing_closure,
                             },
                         };
-                    } else if let Some(closure) = self.paren_less_trailing_closure() {
+                    } else if let Some(closure) =
+                        self.paren_less_trailing_closure(Some(name.clone()))
+                    {
                         // `xs.map |x| { .. }` (spec 4.8.1).
                         expr = Expr {
                             span: expr.span,
@@ -6888,11 +7053,13 @@ impl<'a> Parser<'a> {
     /// call's `)`. `||` there is logical-or (0-arg is `{ .. }`), and `{`
     /// is off in a control-flow head (`struct_expr_allowed`).
     #[allow(clippy::option_option)] // outer None = parse error (for `?`), inner None = no closure
-    fn try_parse_trailing_closure(&mut self) -> Option<Option<Box<Expr>>> {
+    fn try_parse_trailing_closure(&mut self, label: Option<String>) -> Option<Option<Box<Expr>>> {
         match self.peek() {
             TokenKind::LBrace if self.struct_expr_allowed => {
                 let span = self.peek_span();
-                let block = self.parse_block()?;
+                let (block, bare) = self.ret_frame(label, Self::parse_block);
+                let block = block?;
+                self.note_closure_returns(span, bare);
                 let body = Expr {
                     span,
                     kind: ExprKind::Block(block),
@@ -6912,7 +7079,7 @@ impl<'a> Parser<'a> {
             }
             TokenKind::Pipe => {
                 let span = self.peek_span();
-                let kind = self.parse_closure_expr()?;
+                let kind = self.closure_expr(label, span)?;
                 Some(Some(Box::new(Expr { span, kind })))
             }
             _ => Some(None),
@@ -6993,8 +7160,17 @@ impl<'a> Parser<'a> {
 
     /// `|args| body`, `|args| -> R body` or `|| body`.
     fn parse_closure_expr(&mut self) -> Option<ExprKind> {
+        let span = self.peek_span();
+        self.closure_expr(None, span)
+    }
+
+    /// `parse_closure_expr` for a trailing closure of a call to `label`
+    /// (`span`: the closure's).
+    fn closure_expr(&mut self, label: Option<String>, span: Span) -> Option<ExprKind> {
         let (params, ret_ty) = self.parse_closure_head()?;
-        let body = self.parse_expr()?;
+        let (body, bare) = self.ret_frame(label, Self::parse_expr);
+        let body = body?;
+        self.note_closure_returns(span, bare);
         Some(ExprKind::Closure {
             captures: Vec::new(),
             params,
@@ -7008,7 +7184,7 @@ impl<'a> Parser<'a> {
     /// Spec 4.8.1 without the `( )`: `xs.map |x| { .. }`. A `|` after a
     /// callee is a closure only when `|params| (-> R)? {` follows; `||`
     /// stays logical-or. Off in a control-flow head.
-    fn paren_less_trailing_closure(&mut self) -> Option<Box<Expr>> {
+    fn paren_less_trailing_closure(&mut self, label: Option<String>) -> Option<Box<Expr>> {
         if !self.struct_expr_allowed || !matches!(self.peek(), TokenKind::Pipe) {
             return None;
         }
@@ -7022,7 +7198,9 @@ impl<'a> Parser<'a> {
         let span = self.peek_span();
         let (params, ret_ty) = self.parse_closure_head()?;
         let body_span = self.peek_span();
-        let block = self.parse_block()?;
+        let (block, bare) = self.ret_frame(label, Self::parse_block);
+        let block = block?;
+        self.note_closure_returns(span, bare);
         Some(Box::new(Expr {
             span,
             kind: ExprKind::Closure {
@@ -7676,6 +7854,24 @@ const fn ends_stmt(e: &Expr) -> bool {
         return is_block_like(e);
     };
     matches!(&c.kind, ExprKind::Closure { body, .. } if matches!(body.kind, ExprKind::Block(_)))
+}
+
+/// The name `return@name` gives the trailing closure of call `e`: the
+/// method's, or a path callee's last segment.
+fn callee_name(e: &Expr) -> Option<String> {
+    match &e.kind {
+        ExprKind::Call { callee, .. } => path_name(callee),
+        ExprKind::MethodCall { method, .. } => Some(method.clone()),
+        _ => None,
+    }
+}
+
+/// A path expression's last segment.
+fn path_name(e: &Expr) -> Option<String> {
+    match &e.kind {
+        ExprKind::Path(p) => p.segments.last().map(|s| s.name.clone()),
+        _ => None,
+    }
 }
 
 /// Tokens as source, one space where the source had any.

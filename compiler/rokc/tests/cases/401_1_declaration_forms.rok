@@ -46,7 +46,7 @@ pub(pkg) fn helper(x: i32) -> i32 { x * 3 }
 fn _internal(s: str) -> str { s }
 
 unsafe fn raw(x: i32) -> i32 { x }
-unsafe yield fn gen() -> i32 { yield 1; yield 2; }
+unsafe yield fn make() -> i32 { yield 1; yield 2; }
 unsafe async fn later() -> i32 { 3 }
 
 fn tag(s: str, v: i32) -> i32 {
@@ -65,7 +65,7 @@ println(f"{f()}");
 println(f"{early(-5)} {early(5)}");
 println(f"{area(2)} {helper(3)} {_internal("x")}");
 let g = 0;
-for v in unsafe { gen() } { g += v; }
+for v in unsafe { make() } { g += v; }
 let fut: AsyncFuture<i32> = unsafe { later() };
 println(f"unsafe {unsafe { raw(g) }} 3");
 let s = three(tag("a", 1), tag("b", 2), tag("c", 3));

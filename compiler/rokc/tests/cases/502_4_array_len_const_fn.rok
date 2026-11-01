@@ -27,7 +27,7 @@ struct G<const K: usize> {
     v: [i32; f(K) - 1];
 }
 
-fn gen<const K: usize>(xs: [i32; f(K)]) -> usize {
+fn make<const K: usize>(xs: [i32; f(K)]) -> usize {
     xs.len()
 }
 
@@ -37,7 +37,7 @@ fn main() {
     println(f"{s.a.len()} {s.b.len()} {take([1, 2, 3])} {T[0]} {l.len()}");
     let g = G::<2> { v: [0; 4] };
     println(f"{g.v.len()}");
-    println(f"{gen::<2>([0; 5])} {gen::<4>([0; 9])}");
+    println(f"{make::<2>([0; 5])} {make::<4>([0; 9])}");
 }
 
 // spec: 005.02-const §5.2.4

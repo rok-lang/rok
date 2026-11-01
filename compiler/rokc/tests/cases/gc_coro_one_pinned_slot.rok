@@ -12,7 +12,7 @@ use rok::bare::ptr::ConstPtr;
 fn churn() { for i in 0..3000i64 { let xs: List<str> = [f"{i}-xxxxxxxxxxxxxxxxxxxxxxxx"]; } }
 fn mk() -> List<u8> { let l: List<u8> = [104u8, 101u8]; l }
 
-yield fn gen() -> u32 {
+yield fn make() -> u32 {
     let s = mk();
     let p = ConstPtr::<u8>::dangling();
     yield p.addr() as u32;
@@ -22,6 +22,6 @@ yield fn gen() -> u32 {
 
 fn main() {
     let o = "";
-    for x in gen() { o = f"{o} {x}"; }
+    for x in make() { o = f"{o} {x}"; }
     println(o);
 }

@@ -34,7 +34,7 @@ async yield fn read_lines(file: str) -> str {
 
 fn plain() -> i32 { 1 }
 async fn fut() -> i32 { 7 }
-yield fn gen() -> i32 { yield 1; yield 2; }
+yield fn make() -> i32 { yield 1; yield 2; }
 async yield fn st() -> i32 { yield 3; }
 
 async fn show(label: str, s: AsyncStream<i32>) {
@@ -55,7 +55,7 @@ async fn main() {
 
     let r: i32 = plain();
     let f: AsyncFuture<i32> = fut();
-    let g: GenIter<i32> = gen();
+    let g: GenIter<i32> = make();
     let s: AsyncStream<i32> = st();
     let gs = g.collect::<List<i32>>();
     let ss = await s.collect();

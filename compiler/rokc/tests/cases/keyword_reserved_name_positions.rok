@@ -1,0 +1,21 @@
+// spec: 001.05.6-reserved-for-future-use
+// expect-exit: 0
+// expect-stdout: 4 1 2 3 9 3
+
+// The reserved keywords with no syntax yet are names after `.`, in a
+// field and as an argument label, and anywhere as `r#name`.
+struct Step { move: i32; dyn: i32; }
+
+impl Step {
+    fn r#do(self) -> i32 { self.move + self.dyn }
+}
+
+fn r#gen(n: i32) -> i32 { n * 2 }
+
+fn main() {
+    let s = r#gen(2);
+    let t = Step { move: 1, dyn: 2 };
+    let r#defer = 3;
+    let r#macro = 9;
+    println(f"{s} {t.move} {t.dyn} {r#defer} {r#macro} {t.do()}");
+}

@@ -5,19 +5,19 @@
 struct DivZero { at: usize; }
 
 // Tokens: 0..9 numbers; -1 `+`, -2 `*`, -3 `/`, -4 `(`, -5 `)`.
-fn gen(x: List<u64>, t: List<i64>, d: i64) {
+fn make(x: List<u64>, t: List<i64>, d: i64) {
     x[0] = x[0].wrapping_mul(6364136223846793005u64).wrapping_add(1442695040888963407u64);
     let r = (x[0] >> 33) as i64;
     if d == 0 || r % 4 == 0 {
         t.push(r % 10);
     } else if r % 4 == 1 {
         t.push(-4);
-        gen(x, t, d - 1);
+        make(x, t, d - 1);
         t.push(-5);
     } else {
-        gen(x, t, d - 1);
+        make(x, t, d - 1);
         t.push(-1 - (r / 4) % 3);
-        gen(x, t, d - 1);
+        make(x, t, d - 1);
     }
 }
 
@@ -69,7 +69,7 @@ fn main() -> i32 {
     let toks: usize = 0;
     for _ in 0..200000 {
         t.clear();
-        gen(x, t, 12);
+        make(x, t, 12);
         toks += t.len();
         p[0] = 0;
         let v = try expr(t, p) catch e: DivZero {

@@ -1206,17 +1206,7 @@ pub(super) fn lower_try(
         catch_all_frame(ctx);
     }
     ctx.try_depth += 1;
-    let since = ctx.env.sink.diagnostics.borrow().len();
     let body = lower_expected(ctx, operand, inner_expected);
-    // `try? f() ?? 0`: `try?` reaches to the end, over the `??` too.
-    if let (TryKind::Optional, ExprKind::NullishCoalesce(l, r)) = (kind, &operand.kind) {
-        if let (Some(l), Some(r)) = (ctx.src(l.span), ctx.src(r.span)) {
-            ctx.help_since(
-                since,
-                format!("`try?` covers everything after it; write `(try? {l}) ?? {r}`"),
-            );
-        }
-    }
     ctx.try_depth -= 1;
     if kind == TryKind::Force {
         if let Some(p) = optional(ctx, &body) {

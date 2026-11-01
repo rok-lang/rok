@@ -3,7 +3,7 @@
 // a digit, through two forwarding levels. Generated text from an LCG.
 struct BadWord { at: usize; len: usize; }
 
-fn gen(n: i64) -> str {
+fn make(n: i64) -> str {
     let b = StrBuf::new();
     let x: u64 = 42;
     for _ in 0..n {
@@ -49,7 +49,7 @@ fn record(s: str, p: List<usize>) throws (BadWord) -> str {
 }
 
 fn main() -> i32 {
-    let s = gen(3000000);
+    let s = make(3000000);
     let p: List<usize> = [0];
     let n: usize = 0;
     let bytes: usize = 0;

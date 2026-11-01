@@ -7,7 +7,7 @@
 // suspension point: each resume reloads the frame into new slots.
 use rok::bare::ptr::{addr_of, many_addr_of};
 
-yield fn gen() -> i32 {
+yield fn make() -> i32 {
     let x = 1;
     let p = addr_of(x);
     yield 0;
@@ -42,7 +42,7 @@ async fn main() {
         unsafe { s.read() }
     };
     println(f"{await b}");
-    for v in gen() { println(f"{v}"); }
+    for v in make() { println(f"{v}"); }
     for v in looped() { println(f"{v}"); }
     println(f"{await task_body()}");
 }

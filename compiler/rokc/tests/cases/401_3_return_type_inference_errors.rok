@@ -3,7 +3,7 @@
 // none on another, cannot be inferred.
 // expect-error: cannot infer the return type of `fact`: its body calls it again
 // expect-error: cannot infer the return type of `half`: one path returns a value and another none
-// expect-error: cannot infer the return type of `gen`: its body calls it again
+// expect-error: cannot infer the return type of `make`: its body calls it again
 
 fn fact(n: i32) { if n == 0 { 1 } else { n * fact(n - 1) } }
 
@@ -11,10 +11,10 @@ fn half(b: bool) {
     if b { return 1; }
 }
 
-fn gen<T>(x: T) { gen(x) }
+fn make<T>(x: T) { make(x) }
 
 fn main() {
     let a = fact(3);
     let b = half(true);
-    let c = gen(1);
+    let c = make(1);
 }
