@@ -167,6 +167,13 @@ pub(super) fn no_method_help(
         }
         return format!("`{shown}` is not an iterator: write `{r}.iter().{method}(..)`");
     }
+    let r = recv_src.unwrap_or("x");
+    if let Some((plain, help)) = twin_help(ctx, ty, method, &format!("{r}.")) {
+        if let Some(at) = method_span(ctx, recv.span, span, method) {
+            ctx.fix_last(at, plain, format!("use `{plain}`"));
+        }
+        return help;
+    }
     let pick = rokc_diagnostic::suggest_or_synonym(
         method,
         names.iter().map(String::as_str),
@@ -195,6 +202,79 @@ pub(super) fn no_method_help(
         "add `fn {method}(self, ..)` in an `impl {shown} {{ .. }}` block, or import a trait \
          that provides it"
     )
+}
+
+/// Help for `try_x` / `x_or_none`, which `ty` lacks while it has `x`:
+/// a function has one failure channel and `try?` turns a throw into
+/// `none` (stdlib 0.5.9), so the plain name is the one to call. `owner`
+/// is what goes before the name (`s.`, `Path::`). `None` when `x` is
+/// missing, or for `try_x` when `x` does not throw (another meaning).
+pub(super) fn twin_help<'n>(
+    ctx: &LowerCtx<'_>,
+    ty: &HirTy,
+    name: &'n str,
+    owner: &str,
+) -> Option<(&'n str, String)> {
+    let (plain, try_form) = match name.strip_prefix("try_") {
+        Some(p) => (p, true),
+        None => (name.strip_suffix("_or_none")?, false),
+    };
+    if plain.is_empty() {
+        return None;
+    }
+    let throws = |t: &rokc_ast::ThrowsKind| !matches!(t, rokc_ast::ThrowsKind::None);
+    let throws = match super::expr::pick_method(ctx, ty, plain, None).ok()?? {
+        super::expr::MethodPick::Concrete(id) => match ctx.env.decl(id)? {
+            MethodOrFn::Fn(d) => throws(&d.throws),
+            MethodOrFn::Method { fn_def, .. } => throws(&fn_def.throws),
+        },
+        super::expr::MethodPick::Generic(gm) => throws(&gm.def.throws),
+    };
+    let call = format!("{owner}{plain}(..)");
+    let help = match (try_form, throws) {
+        (true, true) => format!(
+            "`{plain}` throws its error itself; there is no `try_` form: write `try {call}`"
+        ),
+        (true, false) => return None,
+        (false, true) => format!("`try?` gives `none` for `{plain}`'s error: write `try? {call}`"),
+        (false, false) => format!("`{plain}` gives `none` itself: write `{call}`"),
+    };
+    Some((plain, help))
+}
+
+/// Help for `Type::name(..)` (`display`), which type `full` lacks. Call
+/// right after the error.
+pub(super) fn no_assoc_help(ctx: &LowerCtx<'_>, full: &str, name: &str, display: &str, span: Span) {
+    if !path_twin_help(ctx, full, name, display, span) {
+        ctx.help_last(super::reflect::inspect_help_key(ctx, full, name));
+    }
+}
+
+/// `twin_help` for `Type::name(..)`: the help and a fix naming the plain
+/// function; false when there is none.
+fn path_twin_help(ctx: &LowerCtx<'_>, full: &str, name: &str, display: &str, span: Span) -> bool {
+    let Some(ty) = ctx
+        .lookup_struct(full)
+        .map(HirTy::Struct)
+        .or_else(|| ctx.lookup_enum(full).map(HirTy::Enum))
+    else {
+        return false;
+    };
+    let owner = display
+        .rsplit_once("::")
+        .map_or(String::new(), |(o, _)| format!("{o}::"));
+    let Some((plain, help)) = twin_help(ctx, &ty, name, &owner) else {
+        return false;
+    };
+    let at = ctx
+        .src(span)
+        .and_then(|t| t.find(name))
+        .and_then(|i| ctx.sub_span(span, i, i + name.len()));
+    if let Some(at) = at {
+        ctx.fix_last(at, plain, format!("use `{plain}`"));
+    }
+    ctx.help_last(Some(help));
+    true
 }
 
 /// `name` is another language's word for `target` (`length` for `len`).

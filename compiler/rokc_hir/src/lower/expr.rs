@@ -8975,7 +8975,7 @@ fn lower_path_call(
                             span,
                             format!("no associated function `{method}` on `{full}`"),
                         );
-                        ctx.help_last(super::reflect::inspect_help_key(ctx, &full, &method));
+                        super::suggest::no_assoc_help(ctx, &full, &method, &display, span);
                         return e;
                     }
                     _ => {
