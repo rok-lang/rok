@@ -109,6 +109,16 @@ impl FromBytesUntilNulError {
     pub const fn message(self) -> str { "data provided does not contain a nul" }
 }
 
+impl PartialEq for FromBytesUntilNulError {
+    const fn eq(self, _rhs: FromBytesUntilNulError) -> bool { true }
+}
+
+impl Eq for FromBytesUntilNulError {}
+
+impl Clone for FromBytesUntilNulError {
+    const fn clone(self) -> FromBytesUntilNulError { FromBytesUntilNulError {} }
+}
+
 impl Display for FromBytesUntilNulError {
     const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(self.message()) }
 }

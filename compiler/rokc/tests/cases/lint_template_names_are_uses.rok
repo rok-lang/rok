@@ -1,0 +1,25 @@
+// spec: §6.9.9 §9.1.5
+// expect-exit: 0
+// expect-lint: 23:13 function `really_dead` is never used
+// expect-stdout:
+
+// A function a meta template names is used, even where the template
+// never expands; the dead one's caret covers its name, after `fn`.
+trait Ten {
+    fn ten(self) -> i32;
+}
+
+fn helper() -> i32 { 10 }
+
+fn second() -> i32 { 2 }
+
+#[impl_derive(Ten)]
+@derive {
+    impl Ten for @Self {
+        fn ten(self) -> i32 { helper() + second() }
+    }
+}
+
+pub(pkg) fn really_dead() -> i32 { 1 }
+
+fn main() {}

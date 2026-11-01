@@ -2175,7 +2175,9 @@ fn collect<'a>(
         // `#[internal]` outside the toolchain is reported where it is
         // written (`check_internal_marks`), not at every use.
         let mark = mark.and_then(|mut m| {
-            m.internal &= is_toolchain_module(&module);
+            if !is_toolchain_module(&module) {
+                m.internal = None;
+            }
             (m != crate::marks::Mark::default()).then_some(m)
         });
         if let Some(mark) = mark {
@@ -6084,10 +6086,109 @@ fn check_impl_rules(
                 ),
             );
         }
+        check_impl_returns(&ctx, info, &key, i, &target);
         if let Some(td) = traits.get(key.as_str()) {
             ctx.self_ty = Some(target);
             check_assoc_bounds(&ctx, td, i);
         }
+    }
+}
+
+/// Spec 2.9.4: a concrete impl's method returns the type the trait
+/// declares, with `Self`, the trait's parameters and associated types
+/// replaced by the impl's. Generic methods and unresolved types are left
+/// to the call sites.
+fn check_impl_returns(
+    ctx: &LowerCtx<'_>,
+    info: &TraitInfo,
+    key: &str,
+    i: &rokc_ast::ImplDef,
+    target: &HirTy,
+) {
+    let Some(tp) = &i.trait_path else {
+        return;
+    };
+    // Resolving again must not repeat what the impl's own lowering reports.
+    let quiet = |f: &dyn Fn() -> HirTy| {
+        let n = ctx.env.sink.diagnostics.borrow().len();
+        let t = f();
+        ctx.env.sink.diagnostics.borrow_mut().truncate(n);
+        t
+    };
+    let args: Vec<HirTy> = tp
+        .segments
+        .last()
+        .map(|s| {
+            s.generics
+                .iter()
+                .map(|g| quiet(&|| ctx.resolve_ast_ty(g)))
+                .collect()
+        })
+        .unwrap_or_default();
+    if args.len() != info.params.len() {
+        return;
+    }
+    let assoc = impl_assoc_types(i);
+    let mut subst: HashMap<String, HirTy> = info.params.iter().cloned().zip(args).collect();
+    for (name, ty) in &assoc {
+        subst.insert(name.clone(), quiet(&|| ctx.resolve_ast_ty(ty)));
+    }
+    let unit = |t: &Option<Ty>| {
+        t.as_ref()
+            .is_none_or(|t| matches!(&t.kind, AstTyKind::Tuple(v) if v.is_empty()))
+    };
+    for it in &i.items {
+        let AstImplItem::Method(m) = it else {
+            continue;
+        };
+        let leaf = leaf_name(&m.name);
+        let Some(tm) = info.decls.get(leaf) else {
+            continue;
+        };
+        if !m.generics.params.is_empty() || !tm.generics.params.is_empty() {
+            continue;
+        }
+        let (Some(mine), Some(theirs)) = (&m.ret_ty, &tm.ret_ty) else {
+            continue;
+        };
+        if unit(&m.ret_ty) || unit(&tm.ret_ty) {
+            continue;
+        }
+        let mut def = m.clone();
+        subst_assoc_sig(&mut def, &assoc);
+        let got = quiet(&|| {
+            let mut rc = LowerCtx::new(ctx.env, &subst, Some(target.clone()), m.span);
+            rc.current_module.clone_from(&ctx.current_module);
+            rc.resolve_ast_ty(def.ret_ty.as_ref().unwrap_or(mine))
+        });
+        let want = quiet(&|| {
+            let mut rc = LowerCtx::new(ctx.env, &subst, Some(target.clone()), m.span);
+            rc.current_module.clone_from(&info.module);
+            let mut t = theirs.clone();
+            expr::strip_self_assoc(&mut t);
+            rc.resolve_ast_ty(&t)
+        });
+        if got == want || mono::has_unknown(&got) || mono::has_unknown(&want) {
+            continue;
+        }
+        ctx.env.sink.diagnostics.borrow_mut().push(
+            rokc_diagnostic::RokDiagnostic::error(
+                Code::IMPL_MISMATCH,
+                m.span,
+                format!(
+                    "`{leaf}` does not match its declaration in trait `{}`: it returns `{}` \
+                     where the trait's returns `{}`",
+                    leaf_name(key),
+                    ctx.ty_name(&got),
+                    ctx.ty_name(&want)
+                ),
+            )
+            .with_help(format!(
+                "write `-> {}`, the trait's `{}`",
+                ctx.ty_name(&want),
+                rokc_ast::print::print_fn_sig(tm)
+            )),
+        );
     }
 }
 

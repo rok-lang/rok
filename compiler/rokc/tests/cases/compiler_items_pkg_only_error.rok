@@ -5,12 +5,17 @@
 // expect-error: function `rok::core::collections::broadcast::check_len` is `pub(pkg)`
 // expect-error: function `rok::core::bench::measured` is `pub(pkg)`
 // expect-error: function `rok::std::rokon::variant_of` is `pub(pkg)`
+// expect-error: = help: it is a helper of `rok::std`, not part of its API: use a `pub` item instead
 // expect-error: method `Int::from_literal` is internal to the Rok toolchain
+// expect-error: = help: to make an `Int` from text, write `try s.parse::<Int>()`
+// expect-error: method `Float::from_literal` is internal to the Rok toolchain
+// expect-error: = help: to make a `Float` from text, write `try s.parse::<Float>()`
 // forbid-error: deprecated
 
 // What the compiler writes into a package (a literal's handler, a
 // derive's helpers) is checked where it is defined, so those items are
-// `pub(pkg)`: the literals and derives work, a direct call does not.
+// `pub(pkg)`: the literals and derives work, a direct call does not. Each
+// error says what to write instead.
 #[derive(Default, Rokon)]
 struct P { x: i32; ys: List<i32>; }
 
@@ -27,4 +32,5 @@ fn main() {
     let _ = rok::core::bench::measured();
     let _ = try? rok::std::rokon::variant_of(rok::std::rokon::Value::None, "P");
     let _ = int::from_literal("1");
+    let _ = float::from_literal("1.5");
 }

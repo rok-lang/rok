@@ -767,7 +767,7 @@ impl Int {
     /// An integer literal's digits (`_`, `0x` / `0o` / `0b` allowed):
     /// what an unsuffixed literal too big for `i64` in an `int` slot
     /// lowers to.
-    #[internal]
+    #[internal("to make an `Int` from text, write `try s.parse::<Int>()`")]
     pub fn from_literal(s: str) -> Int {
         let t = if s.contains("_") { s.replace("_", "") } else { s };
         let radix = 10u32;

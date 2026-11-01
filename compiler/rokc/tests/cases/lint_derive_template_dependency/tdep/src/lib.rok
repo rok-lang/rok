@@ -1,0 +1,15 @@
+/// Ten of a value.
+pub trait Ten {
+    /// Ten.
+    fn ten(self) -> i32;
+}
+
+// Used only by the template below: not dead.
+pub(pkg) fn helper() -> i32 { 10 }
+
+#[impl_derive(Ten)]
+pub @derive {
+    impl pkg::Ten for @Self {
+        fn ten(self) -> i32 { pkg::helper() }
+    }
+}

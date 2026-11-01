@@ -199,7 +199,7 @@ impl IoError {
 
     /// A failed name lookup with runtime code `code`: a resolver (EAI)
     /// code is no OS error code.
-    #[internal]
+    #[internal("write `IoError::from_os_code(code, context)`")]
     pub fn resolver(code: i32, context: str) -> IoError {
         if !is_eai(code) { return IoError::from_os_code(code, context); }
         IoError { kind: IoErrorKind::of_os(code), os_code: none, message: os_message(code, context) }
