@@ -162,6 +162,7 @@ fn release_block(n: u32, span: Span) -> Block {
             type_args: Vec::new(),
             args: Vec::new(),
             trailing_closure: None,
+            origin: None,
         },
     };
     let release = Expr {
