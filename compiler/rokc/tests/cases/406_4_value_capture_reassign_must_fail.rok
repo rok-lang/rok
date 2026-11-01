@@ -1,5 +1,5 @@
 // spec: 004.06.4-value-capture-reassign-must-fail
-// expect-error: error[E200]
+// expect-error: error[E0057]
 
 // spec 4.6.4: reassigning a value-captured variable in the closure body is a
 // compile error; capture it with `[ref count]`.

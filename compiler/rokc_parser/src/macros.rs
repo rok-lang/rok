@@ -8,7 +8,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use rokc_diagnostic::{ErrorKind, RokDiagnostic, Span};
+use rokc_diagnostic::{Code, RokDiagnostic, Span};
 use rokc_lexer::{Origin, Token, TokenKind};
 
 use crate::MetaDef;
@@ -17,8 +17,8 @@ const fn tok(kind: TokenKind, span: Span) -> Token {
     Token::new(kind, span)
 }
 
-fn err(span: Span, msg: impl Into<String>) -> RokDiagnostic {
-    RokDiagnostic::error(ErrorKind::Meta, span, msg.into())
+fn err(code: Code, span: Span, msg: impl Into<String>) -> RokDiagnostic {
+    RokDiagnostic::error(code, span, msg.into())
 }
 
 /// The matching close of a bracket opened at `open` (`()`, `[]`, `{}`).
@@ -117,16 +117,23 @@ fn parse_rules(body: &[Token], span: Span) -> Result<Vec<Rule>, RokDiagnostic> {
     while i < body.len() {
         if body[i].kind != TokenKind::LParen {
             return Err(err(
+                Code::INVALID_MACRO,
                 body[i].span,
                 "a macro rule starts with `( matcher )` (spec 6.8.12)",
             ));
         }
-        let mp = close_of(body, i)
-            .ok_or_else(|| err(body[i].span, "unbalanced `(` in macro matcher"))?;
+        let mp = close_of(body, i).ok_or_else(|| {
+            err(
+                Code::INVALID_MACRO,
+                body[i].span,
+                "unbalanced `(` in macro matcher",
+            )
+        })?;
         let matcher = parse_matcher(&body[i + 1..mp])?;
         i = mp + 1;
         if body.get(i).map(|t| &t.kind) != Some(&TokenKind::FatArrow) {
             return Err(err(
+                Code::INVALID_MACRO,
                 body.get(i).map_or(span, |t| t.span),
                 "a macro rule needs `=>` after its matcher",
             ));
@@ -134,12 +141,18 @@ fn parse_rules(body: &[Token], span: Span) -> Result<Vec<Rule>, RokDiagnostic> {
         i += 1;
         if body.get(i).map(|t| &t.kind) != Some(&TokenKind::LBrace) {
             return Err(err(
+                Code::INVALID_MACRO,
                 body.get(i).map_or(span, |t| t.span),
                 "a macro rule needs a `{ template }` body",
             ));
         }
-        let tp = close_of(body, i)
-            .ok_or_else(|| err(body[i].span, "unbalanced `{` in macro template"))?;
+        let tp = close_of(body, i).ok_or_else(|| {
+            err(
+                Code::INVALID_MACRO,
+                body[i].span,
+                "unbalanced `{` in macro template",
+            )
+        })?;
         rules.push(Rule {
             matcher,
             template: body[i + 1..tp].to_vec(),
@@ -148,6 +161,7 @@ fn parse_rules(body: &[Token], span: Span) -> Result<Vec<Rule>, RokDiagnostic> {
     }
     if rules.is_empty() {
         return Err(err(
+            Code::INVALID_MACRO,
             span,
             "a macro needs at least one `( matcher ) => { template }` rule",
         ));
@@ -164,6 +178,7 @@ fn parse_matcher(toks: &[Token]) -> Result<Vec<MatchItem>, RokDiagnostic> {
         if toks[i].kind == TokenKind::At {
             let Some(TokenKind::Ident(head)) = toks.get(i + 1).map(|t| &t.kind) else {
                 return Err(err(
+                    Code::INVALID_MACRO,
                     toks[i].span,
                     "`@` in a matcher must be `@name: frag` or `@rep`",
                 ));
@@ -172,33 +187,57 @@ fn parse_matcher(toks: &[Token]) -> Result<Vec<MatchItem>, RokDiagnostic> {
                 // @rep [ opts ] { sub }
                 let lb = i + 2;
                 if toks.get(lb).map(|t| &t.kind) != Some(&TokenKind::LBracket) {
-                    return Err(err(toks[i].span, "`@rep` needs `[ sep = \",\" ]`"));
+                    return Err(err(
+                        Code::INVALID_MACRO,
+                        toks[i].span,
+                        "`@rep` needs `[ sep = \",\" ]`",
+                    ));
                 }
-                let rb = close_of(toks, lb)
-                    .ok_or_else(|| err(toks[lb].span, "unbalanced `[` in `@rep`"))?;
+                let rb = close_of(toks, lb).ok_or_else(|| {
+                    err(
+                        Code::INVALID_MACRO,
+                        toks[lb].span,
+                        "unbalanced `[` in `@rep`",
+                    )
+                })?;
                 let sep = rep_sep(&toks[lb + 1..rb]);
                 let br = rb + 1;
                 if toks.get(br).map(|t| &t.kind) != Some(&TokenKind::LBrace) {
-                    return Err(err(toks[i].span, "`@rep[..]` needs a `{ sub-pattern }`"));
+                    return Err(err(
+                        Code::INVALID_MACRO,
+                        toks[i].span,
+                        "`@rep[..]` needs a `{ sub-pattern }`",
+                    ));
                 }
-                let be = close_of(toks, br)
-                    .ok_or_else(|| err(toks[br].span, "unbalanced `{` in `@rep`"))?;
+                let be = close_of(toks, br).ok_or_else(|| {
+                    err(
+                        Code::INVALID_MACRO,
+                        toks[br].span,
+                        "unbalanced `{` in `@rep`",
+                    )
+                })?;
                 let sub = parse_matcher(&toks[br + 1..be])?;
                 items.push(MatchItem::Rep { sep, sub });
                 i = be + 1;
             } else {
                 // @name : frag
                 if toks.get(i + 2).map(|t| &t.kind) != Some(&TokenKind::Colon) {
-                    return Err(err(toks[i].span, "a metavariable is `@name: frag`"));
+                    return Err(err(
+                        Code::INVALID_MACRO,
+                        toks[i].span,
+                        "a metavariable is `@name: frag`",
+                    ));
                 }
                 let Some(TokenKind::Ident(fname)) = toks.get(i + 3).map(|t| &t.kind) else {
                     return Err(err(
+                        Code::INVALID_MACRO,
                         toks[i].span,
                         "`@name:` needs a fragment (expr, ty, ident, ..)",
                     ));
                 };
                 let frag = Frag::parse(fname).ok_or_else(|| {
                     err(
+                        Code::INVALID_MACRO,
                         toks[i + 3].span,
                         format!("unknown fragment `{fname}` (spec 6.9.8)"),
                     )
@@ -405,6 +444,7 @@ pub(super) fn expand_macro(
     (
         None,
         vec![err(
+            Code::NO_MACRO_RULE,
             at,
             format!(
                 "no rule of macro `{}!` matches this call (spec 6.8.12)",
@@ -561,6 +601,7 @@ fn emit(
                 // (`@Self`, `@field`, `@apply_if`, ..) belong to the
                 // type-driven forms, not a macro.
                 errs.push(err(
+                    Code::INVALID_TEMPLATE,
                     at,
                     format!(
                         "`@{head}` is not valid in a macro template; use a metavariable, \
@@ -601,6 +642,7 @@ fn emit_use_site(
         .and_then(|rp| Some((rp, super::meta::use_site_path(&template[lp + 1..rp])?)));
     let Some((rp, toks)) = path else {
         errs.push(err(
+            Code::INVALID_TEMPLATE,
             site.at,
             "`@use_site(..)` takes a path, e.g. `@use_site(validate)` (spec 6.9.9)",
         ));

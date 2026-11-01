@@ -1,4 +1,4 @@
-// expect-error: error[E202]: `tx` was moved at line 15, and is used here
+// expect-error: error[E0134]: `tx` was moved at line 15, and is used here
 // expect-error: affine_struct_field_moves.rok:16:10: `tx` was moved at line 15, and is used here
 // expect-error: affine_struct_field_moves.rok:19:10: `tx2` was moved at line 18, and is used here
 // expect-error: affine_struct_field_moves.rok:23:10: `tx3` was moved at line 22, and is used here

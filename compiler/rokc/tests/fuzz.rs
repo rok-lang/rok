@@ -1002,7 +1002,7 @@ fn generator_and_mutator_are_deterministic() {
         Some("panic compiler/rokc_hir/src/x.rs: index # out of #")
     );
     assert_eq!(signature(&run(Some(1), "error: [parse] x")), None);
-    let quoted = "error[E002]: x\n 1 | // thread 'main' panicked at a.rok:1:1:\n   |    ^\n";
+    let quoted = "error[E0010]: x\n 1 | // thread 'main' panicked at a.rok:1:1:\n   |    ^\n";
     assert_eq!(signature(&run(Some(1), quoted)), None);
     assert_eq!(signature(&run(None, "")).as_deref(), Some("signal"));
 }

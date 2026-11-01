@@ -284,7 +284,7 @@ mod tests {
         );
         let e = format_file(Path::new("c.rokon"), "Cfg { a: x }").unwrap_err();
         assert!(
-            e.starts_with("error[E002]: bare identifier") && e.contains("--> c.rokon:1:10\n"),
+            e.starts_with("error[E0010]: bare identifier") && e.contains("--> c.rokon:1:10\n"),
             "{e}"
         );
     }

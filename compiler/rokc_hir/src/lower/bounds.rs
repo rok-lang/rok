@@ -19,6 +19,7 @@
 
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use rokc_diagnostic::Code;
 
 /// One type parameter (or projection) being checked.
 #[derive(Clone)]
@@ -235,7 +236,7 @@ fn item_bound(
             let t = ctx.ty_name(&HirTy::Param(p));
             let show = |r: &TraitRef| r.render(leaf_name(&r.path), |t| ctx.ty_name(t));
             ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::AMBIGUOUS_ITEM,
                 format!(
                     "`{t}::{name}` is ambiguous: the bounds `{}` and `{}` of `{t}` both give it \
                      - name the bound (`<{t} as {}>::{name}`) (spec 2.13.4)",
@@ -1171,6 +1172,7 @@ pub(super) fn no_method(ctx: &LowerCtx<'_>, p: u32, method: &str, span: Span) ->
         format!("its bounds ({}) do not declare it", bounds.join(", "))
     };
     let e = ctx.error_expr(
+        Code::NO_METHOD,
         span,
         format!("no method `{method}` on type parameter `{t}`: {have} (spec 2.10.9)"),
     );

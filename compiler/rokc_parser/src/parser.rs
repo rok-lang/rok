@@ -9,7 +9,7 @@ use rokc_ast::{
     TraitDef, TraitItem, TryKind, Ty, TyKind, UnionDef,
 };
 use rokc_core::Visibility;
-use rokc_diagnostic::{ErrorKind, RokDiagnostic, Span};
+use rokc_diagnostic::{Code, RokDiagnostic, Span};
 use rokc_lexer::token::{UNUSED_KEYWORDS, keyword_str};
 use rokc_lexer::{Token, TokenKind};
 
@@ -266,7 +266,11 @@ pub fn parse_expr_file(
         let e = p.parse_expr();
         if e.is_some() && !matches!(p.peek(), TokenKind::Eof) {
             let span = p.peek_span();
-            p.error(span, "expected the end of the file after the expression");
+            p.error(
+                Code::SYNTAX,
+                span,
+                "expected the end of the file after the expression",
+            );
         }
         (e, p.diagnostics)
     })
@@ -499,7 +503,11 @@ impl<'a> Parser<'a> {
             if !self.depth_reported {
                 self.depth_reported = true;
                 let span = self.peek_span();
-                self.error(span, format!("nesting too deep (limit {MAX_DEPTH})"));
+                self.error(
+                    Code::NESTING_LIMIT,
+                    span,
+                    format!("nesting too deep (limit {MAX_DEPTH})"),
+                );
             }
             return None;
         }
@@ -520,6 +528,7 @@ impl<'a> Parser<'a> {
             self.depth_reported = true;
             let span = self.peek_span();
             self.error(
+                Code::NESTING_LIMIT,
                 span,
                 format!("expression chain too long (limit {MAX_CHAIN})"),
             );
@@ -600,6 +609,7 @@ impl<'a> Parser<'a> {
         let lit = self.with_struct_expr(true, Self::parse_primary)?;
         let text = self.text_in(lit.span);
         self.error_help(
+            Code::STRUCT_LITERAL_IN_HEAD,
             lit.span,
             "a struct literal can't start a block's head: its `{` would open the body \
              (spec 3.10.3)",
@@ -624,9 +634,15 @@ impl<'a> Parser<'a> {
         out
     }
 
-    fn error_help(&mut self, span: Span, msg: impl Into<String>, help: impl Into<String>) {
+    fn error_help(
+        &mut self,
+        code: Code,
+        span: Span,
+        msg: impl Into<String>,
+        help: impl Into<String>,
+    ) {
         self.diagnostics.push(
-            RokDiagnostic::error(ErrorKind::Parse, span, msg)
+            RokDiagnostic::error(code, span, msg)
                 .with_file(self.file.clone())
                 .with_help(help),
         );
@@ -684,6 +700,7 @@ impl<'a> Parser<'a> {
         let b = self.parse_expr()?;
         let (a, b) = (self.text_in(a.span), self.text_in(b.span));
         self.error_help(
+            Code::FOREIGN_SYNTAX,
             q,
             "rok has no `? :` operator",
             format!("`if` is an expression: `if {c} {{ {a} }} else {{ {b} }}`"),
@@ -719,6 +736,7 @@ impl<'a> Parser<'a> {
         };
         let x = self.text_in(lhs.span);
         self.error_help(
+            Code::FOREIGN_SYNTAX,
             at,
             format!("rok has no `{op}{op}` operator"),
             format!("write `{x} {op}= 1`"),
@@ -788,7 +806,7 @@ impl<'a> Parser<'a> {
                     other.describe()
                 );
                 let span = self.peek_span();
-                self.error(span, msg);
+                self.error(Code::SYNTAX, span, msg);
                 return false;
             }
         };
@@ -876,7 +894,7 @@ impl<'a> Parser<'a> {
             return;
         }
         self.diagnostics.push(
-            RokDiagnostic::error(ErrorKind::Parse, span, msg)
+            RokDiagnostic::error(Code::RESERVED_NAME, span, msg)
                 .with_file(self.file.clone())
                 .with_help(format!("write `r#{name}` to keep this name, or rename it"))
                 .with_fix(span, format!("r#{name}"), format!("write `r#{name}`")),
@@ -908,7 +926,7 @@ impl<'a> Parser<'a> {
         let found = self.peek();
         let here = self.peek_span();
         let d = RokDiagnostic::error(
-            ErrorKind::Parse,
+            Code::SYNTAX,
             Span::DUMMY,
             format!("expected {what}, found {}", found.describe()),
         )
@@ -1074,9 +1092,9 @@ impl<'a> Parser<'a> {
             .map(|(_, s)| *s)
     }
 
-    fn error(&mut self, span: Span, msg: impl Into<String>) {
+    fn error(&mut self, code: Code, span: Span, msg: impl Into<String>) {
         self.diagnostics
-            .push(RokDiagnostic::error(ErrorKind::Parse, span, msg).with_file(self.file.clone()));
+            .push(RokDiagnostic::error(code, span, msg).with_file(self.file.clone()));
     }
 
     pub fn parse_program(&mut self) -> Program {
@@ -1197,6 +1215,7 @@ impl<'a> Parser<'a> {
         match stmt.kind {
             StmtKind::Return(_) => {
                 self.error(
+                    Code::TOP_LEVEL_RETURN,
                     span,
                     "top-level `return` is not allowed (spec 4.16.4); use `process::exit(code)` \
                      or an explicit `fn main() -> i32`",
@@ -1245,7 +1264,7 @@ impl<'a> Parser<'a> {
         }
         for a in attrs.iter().filter(|a| a.path == ["cfg"]) {
             if let Some(m) = crate::cfg::attr_problem(a) {
-                let d = RokDiagnostic::error(ErrorKind::Meta, a.span, m);
+                let d = RokDiagnostic::error(Code::INVALID_CFG, a.span, m);
                 self.diagnostics.push(d.with_file(self.file.clone()));
             }
         }
@@ -1299,14 +1318,17 @@ impl<'a> Parser<'a> {
         for a in &attrs {
             let why = match a.name() {
                 "doc" => None,
-                "cfg" => crate::cfg::attr_problem(a),
-                _ => Some(format!(
-                    "`#[{}]` cannot be attached to {what}; only `#[cfg]` can (spec 6.1.3)",
-                    a.path.join("::")
+                "cfg" => crate::cfg::attr_problem(a).map(|m| (Code::INVALID_CFG, m)),
+                _ => Some((
+                    Code::MISPLACED_ATTRIBUTE,
+                    format!(
+                        "`#[{}]` cannot be attached to {what}; only `#[cfg]` can (spec 6.1.3)",
+                        a.path.join("::")
+                    ),
                 )),
             };
-            if let Some(m) = why {
-                let d = RokDiagnostic::error(ErrorKind::Meta, a.span, m);
+            if let Some((code, m)) = why {
+                let d = RokDiagnostic::error(code, a.span, m);
                 self.diagnostics.push(d.with_file(self.file.clone()));
             }
         }
@@ -1398,9 +1420,9 @@ impl<'a> Parser<'a> {
                     ..d.span
                 };
                 out.push(if error {
-                    RokDiagnostic::error(ErrorKind::Parse, span, msg)
+                    RokDiagnostic::error(Code::MISPLACED_DOC_COMMENT, span, msg)
                 } else {
-                    RokDiagnostic::warning(ErrorKind::Parse, span, msg)
+                    RokDiagnostic::warning(Code::MISPLACED_DOC_COMMENT, span, msg)
                         .with_lint("unused_doc_comments")
                 });
             }
@@ -1494,6 +1516,7 @@ impl<'a> Parser<'a> {
                 other => {
                     let s = self.peek_span();
                     self.error(
+                        Code::INVALID_ATTRIBUTE,
                         s,
                         format!("expected attribute name, found {}", other.describe()),
                     );
@@ -1600,6 +1623,7 @@ impl<'a> Parser<'a> {
         }
         let s = self.peek_span();
         self.error(
+            Code::INVALID_ATTRIBUTE,
             s,
             format!(
                 "unexpected {} in attribute arguments",
@@ -1613,6 +1637,7 @@ impl<'a> Parser<'a> {
         self.try_parse_attr_literal().or_else(|| {
             let s = self.peek_span();
             self.error(
+                Code::INVALID_ATTRIBUTE,
                 s,
                 format!("expected literal, found {}", self.peek().describe()),
             );
@@ -1677,6 +1702,7 @@ impl<'a> Parser<'a> {
                 system = abi == "system";
                 if abi != "C" && !system {
                     self.error(
+                        Code::INVALID_ABI,
                         start,
                         format!("unsupported ABI `\"{abi}\"` (only \"C\" or \"system\")"),
                     );
@@ -1729,6 +1755,7 @@ impl<'a> Parser<'a> {
         }
         let s = self.peek_span();
         self.error(
+            Code::SYNTAX,
             s,
             format!("expected `{w}`, found {}", self.peek().describe()),
         );
@@ -1786,6 +1813,7 @@ impl<'a> Parser<'a> {
                 "type"
             };
             self.error(
+                Code::RESERVED_NAME,
                 span,
                 format!("`{n}` cannot name a {what}: it is reserved as a path root / type keyword"),
             );
@@ -1882,7 +1910,7 @@ impl<'a> Parser<'a> {
             TokenKind::Use => self.parse_use(vis, attrs).map(Item::Use),
             _ => {
                 let span = self.peek_span();
-                self.error(span, "expected an item");
+                self.error(Code::SYNTAX, span, "expected an item");
                 None
             }
         }
@@ -1902,6 +1930,7 @@ impl<'a> Parser<'a> {
         } else {
             let s = self.peek_span();
             self.error(
+                Code::SYNTAX,
                 s,
                 format!("expected type alias name, found {}", self.peek().describe()),
             );
@@ -1950,6 +1979,7 @@ impl<'a> Parser<'a> {
             ..at
         });
         self.error_help(
+            Code::MODIFIER_ORDER,
             at,
             "`throws` goes before the return type",
             format!("write `{head} {clause} -> {ty}`"),
@@ -1971,6 +2001,7 @@ impl<'a> Parser<'a> {
         } else {
             let s = self.peek_span();
             self.error(
+                Code::SYNTAX,
                 s,
                 format!("expected const name, found {}", self.peek().describe()),
             );
@@ -2005,6 +2036,7 @@ impl<'a> Parser<'a> {
         if is_mut {
             let mut_span = self.peek_span();
             self.error(
+                Code::MISPLACED_ITEM,
                 mut_span,
                 "`static mut` is only allowed inside `extern \"C\" { ... }` (FFI). \
                  General code should use `Atomic`/`Mutex`/`Cell` (spec 5.3)",
@@ -2016,6 +2048,7 @@ impl<'a> Parser<'a> {
         } else {
             let s = self.peek_span();
             self.error(
+                Code::SYNTAX,
                 s,
                 format!("expected static name, found {}", self.peek().describe()),
             );
@@ -2049,6 +2082,7 @@ impl<'a> Parser<'a> {
         } else {
             let s = self.peek_span();
             self.error(
+                Code::SYNTAX,
                 s,
                 format!("expected struct name, found {}", self.peek().describe()),
             );
@@ -2118,6 +2152,7 @@ impl<'a> Parser<'a> {
         } else {
             let s = self.peek_span();
             self.error(
+                Code::SYNTAX,
                 s,
                 format!("expected union name, found {}", self.peek().describe()),
             );
@@ -2152,6 +2187,7 @@ impl<'a> Parser<'a> {
             let span = self.peek_span();
             let Some(name) = self.peek_name() else {
                 self.error(
+                    Code::SYNTAX,
                     span,
                     format!("expected field name, found {}", self.peek().describe()),
                 );
@@ -2186,6 +2222,7 @@ impl<'a> Parser<'a> {
                         format!("{}: {};", f.name, self.text_in(f.ty.span))
                     });
                     self.error_help(
+                        Code::SYNTAX,
                         at,
                         "expected `;` after a struct field, found `,`",
                         format!("struct fields end with `;`: `{field}`"),
@@ -2228,7 +2265,7 @@ impl<'a> Parser<'a> {
         let first_ty = self.parse_type()?;
         if negative && !matches!(self.peek(), TokenKind::For) {
             let s = self.peek_span();
-            self.error(s, "`impl !Trait` needs `for Type`");
+            self.error(Code::SYNTAX, s, "`impl !Trait` needs `for Type`");
         }
         let (trait_path, self_ty) = if self.eat(&TokenKind::For) {
             // `impl TRAIT for SELF` - the first parsed type was the trait.
@@ -2300,7 +2337,7 @@ impl<'a> Parser<'a> {
                         n
                     } else {
                         let s = self.peek_span();
-                        self.error(s, "associated-type name expected");
+                        self.error(Code::SYNTAX, s, "associated-type name expected");
                         String::new()
                     };
                     self.expect(&TokenKind::Eq, "`=`")?;
@@ -2334,14 +2371,20 @@ impl<'a> Parser<'a> {
                 }
                 _ => {
                     let s = self.peek_span();
-                    let msg = if self.at_kw("static") && self.at_ctx_item() {
-                        "a `static` is declared only at module level, not in an `impl`; \
-                         an associated `const` goes there (spec 5.3.8)"
-                            .to_owned()
+                    let (code, msg) = if self.at_kw("static") && self.at_ctx_item() {
+                        (
+                            Code::MISPLACED_ITEM,
+                            "a `static` is declared only at module level, not in an `impl`; \
+                             an associated `const` goes there (spec 5.3.8)"
+                                .to_owned(),
+                        )
                     } else {
-                        format!("expected impl item, found {}", self.peek().describe())
+                        (
+                            Code::SYNTAX,
+                            format!("expected impl item, found {}", self.peek().describe()),
+                        )
                     };
-                    self.error(s, msg);
+                    self.error(code, s, msg);
                     let from = self.pos;
                     self.recover(from, Recover::NestedItem);
                 }
@@ -2371,6 +2414,7 @@ impl<'a> Parser<'a> {
             match i {
                 Item::Fn(f) => out.push(f),
                 _ => self.error(
+                    Code::INVALID_META_BLOCK,
                     span,
                     "an attribute on a method must expand to methods only (spec 6.9.5)",
                 ),
@@ -2389,6 +2433,7 @@ impl<'a> Parser<'a> {
         } else {
             let s = self.peek_span();
             self.error(
+                Code::SYNTAX,
                 s,
                 format!("expected enum name, found {}", self.peek().describe()),
             );
@@ -2409,6 +2454,7 @@ impl<'a> Parser<'a> {
             if matches!(self.peek(), TokenKind::Pub) {
                 let s = self.peek_span();
                 self.error(
+                    Code::MISPLACED_VISIBILITY,
                     s,
                     "enum variants take the enum's visibility; remove the visibility \
                      keyword (spec 5.6.9)",
@@ -2422,6 +2468,7 @@ impl<'a> Parser<'a> {
             } else {
                 let s = self.peek_span();
                 self.error(
+                    Code::SYNTAX,
                     s,
                     format!("expected variant name, found {}", self.peek().describe()),
                 );
@@ -2489,6 +2536,7 @@ impl<'a> Parser<'a> {
             s
         } else {
             self.error(
+                Code::INVALID_ABI,
                 start,
                 "an `extern` block names its ABI: `extern \"C\" { .. }` (spec 5.9.2)",
             );
@@ -2539,13 +2587,18 @@ impl<'a> Parser<'a> {
                             span,
                         }));
                     } else {
-                        self.error(span, "expected `static name: Type;` in `extern` block");
+                        self.error(
+                            Code::SYNTAX,
+                            span,
+                            "expected `static name: Type;` in `extern` block",
+                        );
                         self.recover(from, Recover::NestedItem);
                     }
                 }
                 _ => {
                     let s = self.peek_span();
                     self.error(
+                        Code::SYNTAX,
                         s,
                         format!("expected extern item, found {}", self.peek().describe()),
                     );
@@ -2594,6 +2647,7 @@ impl<'a> Parser<'a> {
             let TokenKind::StrLit(p) = self.peek().clone() else {
                 let s = self.peek_span();
                 self.error(
+                    Code::SYNTAX,
                     s,
                     format!(
                         "expected a `.wit` path string, found {}",
@@ -2627,6 +2681,7 @@ impl<'a> Parser<'a> {
         } else {
             let s = self.peek_span();
             self.error(
+                Code::SYNTAX,
                 s,
                 format!("expected module name, found {}", self.peek().describe()),
             );
@@ -2645,6 +2700,7 @@ impl<'a> Parser<'a> {
                 if !self.at_item_start() {
                     let span = self.peek_span();
                     self.error(
+                        Code::MISPLACED_ITEM,
                         span,
                         format!(
                             "expected an item in `mod {name}`: module bodies are \
@@ -2705,7 +2761,7 @@ impl<'a> Parser<'a> {
                 n
             } else {
                 let s = self.peek_span();
-                self.error(s, "expected an import path");
+                self.error(Code::SYNTAX, s, "expected an import path");
                 return None;
             };
             segments.push(PathSegment {
@@ -2767,6 +2823,7 @@ impl<'a> Parser<'a> {
                 } else {
                     let s = self.peek_span();
                     self.error(
+                        Code::SYNTAX,
                         s,
                         format!(
                             "expected alias name after `as`, found {}",
@@ -2789,6 +2846,7 @@ impl<'a> Parser<'a> {
                     let s = self.peek_span();
                     let path: Vec<&str> = prefix.segments.iter().map(|s| s.name.as_str()).collect();
                     self.error(
+                        Code::SYNTAX,
                         s,
                         format!(
                             "a macro import cannot be renamed: write `use {};`",
@@ -2816,6 +2874,7 @@ impl<'a> Parser<'a> {
         } else {
             let s = self.peek_span();
             self.error(
+                Code::SYNTAX,
                 s,
                 format!("expected trait name, found {}", self.peek().describe()),
             );
@@ -2881,6 +2940,7 @@ impl<'a> Parser<'a> {
                 let TokenKind::Ident(name) = self.peek().clone() else {
                     let s = self.peek_span();
                     self.error(
+                        Code::SYNTAX,
                         s,
                         format!(
                             "expected associated const name, found {}",
@@ -2908,6 +2968,7 @@ impl<'a> Parser<'a> {
                 } else {
                     let s = self.peek_span();
                     self.error(
+                        Code::SYNTAX,
                         s,
                         format!(
                             "expected associated type name, found {}",
@@ -2933,6 +2994,7 @@ impl<'a> Parser<'a> {
                         bounds.extend(pred.bounds);
                     } else {
                         self.error(
+                            Code::INVALID_GENERIC_PARAMS,
                             pred.ty.span,
                             format!(
                                 "a `where` clause on associated type `{name}` can only \
@@ -2957,6 +3019,7 @@ impl<'a> Parser<'a> {
             _ => {
                 let s = self.peek_span();
                 self.error(
+                    Code::SYNTAX,
                     s,
                     format!("expected trait item, found {}", self.peek().describe()),
                 );
@@ -2983,6 +3046,7 @@ impl<'a> Parser<'a> {
                 if rest.is_some() {
                     let s = self.peek_span();
                     self.error(
+                        Code::REST_PATTERN,
                         s,
                         "tuple destructure: only one `..` rest pattern allowed (spec 3.15.3)",
                     );
@@ -3045,6 +3109,7 @@ impl<'a> Parser<'a> {
                 } else {
                     let s = self.peek_span();
                     self.error(
+                        Code::SYNTAX,
                         s,
                         format!("expected binding name, found {}", self.peek().describe()),
                     );
@@ -3111,7 +3176,7 @@ impl<'a> Parser<'a> {
                 n
             } else {
                 let s = self.peek_span();
-                self.error(s, "expected field name");
+                self.error(Code::SYNTAX, s, "expected field name");
                 return None;
             };
             let bind_name = if self.eat(&TokenKind::Colon) {
@@ -3121,6 +3186,7 @@ impl<'a> Parser<'a> {
                 } else {
                     let s = self.peek_span();
                     self.error(
+                        Code::SYNTAX,
                         s,
                         format!("expected rebind name, found {}", self.peek().describe()),
                     );
@@ -3163,13 +3229,13 @@ impl<'a> Parser<'a> {
                 "sub" => Visibility::Sub,
                 _ => {
                     let s = self.peek_span();
-                    self.error(s, "expected `pkg` or `sub`");
+                    self.error(Code::SYNTAX, s, "expected `pkg` or `sub`");
                     Visibility::Pub
                 }
             }
         } else {
             let s = self.peek_span();
-            self.error(s, "expected `pkg` or `sub`");
+            self.error(Code::SYNTAX, s, "expected `pkg` or `sub`");
             Visibility::Pub
         };
         self.bump();
@@ -3183,6 +3249,7 @@ impl<'a> Parser<'a> {
         let TokenKind::Ident(name) = self.peek().clone() else {
             let s = self.peek_span();
             self.error(
+                Code::SYNTAX,
                 s,
                 format!("expected function name, found {}", self.peek().describe()),
             );
@@ -3217,6 +3284,7 @@ impl<'a> Parser<'a> {
             {
                 if matches!(path.segments.as_slice(), [s] if s.name == "type") {
                     self.error(
+                        Code::INVALID_SIGNATURE,
                         *span,
                         "a `const fn` cannot take a type as an argument (spec 5.2.5): use a \
                          generic parameter, or a meta block for type introspection",
@@ -3257,7 +3325,12 @@ impl<'a> Parser<'a> {
                      async yield` (spec 4.1.11)"
                 )
             };
-            self.error_help(w[1].1, msg, format!("write `{} fn`", fixed.join(" ")));
+            self.error_help(
+                Code::MODIFIER_ORDER,
+                w[1].1,
+                msg,
+                format!("write `{} fn`", fixed.join(" ")),
+            );
         }
         let is_unsafe = seen.iter().any(|m| m.0 == 0);
         let is_async = seen.iter().any(|m| m.0 == 1);
@@ -3300,6 +3373,7 @@ impl<'a> Parser<'a> {
             let errs = desugar_rethrows(&mut params, &mut generics);
             if errs.is_empty() {
                 self.error(
+                    Code::INVALID_SIGNATURE,
                     span,
                     "`rethrows` needs a parameter of throwing function type \
                      (`f: fn(T) throws -> U`) (spec 4.14)",
@@ -3372,7 +3446,11 @@ impl<'a> Parser<'a> {
         });
         self.eat(&TokenKind::Comma);
         if !matches!(self.peek(), TokenKind::RParen) {
-            self.error(span, "`...` must be the last parameter (spec 8.6.10)");
+            self.error(
+                Code::INVALID_SIGNATURE,
+                span,
+                "`...` must be the last parameter (spec 8.6.10)",
+            );
         }
         true
     }
@@ -3387,6 +3465,7 @@ impl<'a> Parser<'a> {
             }
             if i != last {
                 self.error(
+                    Code::INVALID_SIGNATURE,
                     p.span,
                     "only the last parameter can be variadic `...T` (spec 4.2.5)",
                 );
@@ -3410,7 +3489,7 @@ impl<'a> Parser<'a> {
             if matches!(self.peek_next(), Some(TokenKind::Ident(_))) && self.eat_kw("const") {
                 let TokenKind::Ident(name) = self.peek().clone() else {
                     let s = self.peek_span();
-                    self.error(s, "const-generic name expected");
+                    self.error(Code::SYNTAX, s, "const-generic name expected");
                     break;
                 };
                 self.bump();
@@ -3426,6 +3505,7 @@ impl<'a> Parser<'a> {
                 let TokenKind::Ident(name) = self.peek().clone() else {
                     let s = self.peek_span();
                     self.error(
+                        Code::SYNTAX,
                         s,
                         format!(
                             "expected generic param name, found {}",
@@ -3465,7 +3545,7 @@ impl<'a> Parser<'a> {
                         "generic parameter `{name}` has no default but follows one that does; \
                          defaults must be trailing (spec 2.10.5)"
                     );
-                    self.error(start, msg);
+                    self.error(Code::INVALID_GENERIC_PARAMS, start, msg);
                 }
                 _ => {}
             }
@@ -3571,6 +3651,7 @@ impl<'a> Parser<'a> {
         } else {
             let s = self.peek_span();
             self.error(
+                Code::SYNTAX,
                 s,
                 format!("expected parameter name, found {}", self.peek().describe()),
             );
@@ -3811,7 +3892,11 @@ impl<'a> Parser<'a> {
                 TyKind::Array(Box::new(elem), len)
             }
             other => {
-                self.error(start, format!("expected type, found {}", other.describe()));
+                self.error(
+                    Code::SYNTAX,
+                    start,
+                    format!("expected type, found {}", other.describe()),
+                );
                 return None;
             }
         };
@@ -3959,6 +4044,7 @@ impl<'a> Parser<'a> {
         let TokenKind::Ident(name) = self.peek().clone() else {
             let s = self.peek_span();
             self.error(
+                Code::SYNTAX,
                 s,
                 format!(
                     "expected associated item name after `<.. as ..>::`, found {}",
@@ -3988,6 +4074,7 @@ impl<'a> Parser<'a> {
             let TokenKind::Ident(name) = self.peek().clone() else {
                 let s = self.peek_span();
                 self.error(
+                    Code::SYNTAX,
                     s,
                     format!("expected path segment, found {}", self.peek().describe()),
                 );
@@ -4330,6 +4417,7 @@ impl<'a> Parser<'a> {
         let start = self.peek_span();
         if self.parse_visibility() != Visibility::Private {
             self.error(
+                Code::MISPLACED_VISIBILITY,
                 start,
                 "`pub` is meaningless on a nested function: it is visible only in its block \
                  (spec 4.10.7)",
@@ -4424,6 +4512,7 @@ impl<'a> Parser<'a> {
                 Item::Impl(x) => (x.vis, None),
                 Item::Mod(_) | Item::Use(_) | Item::Extern(_) => {
                     self.error(
+                        Code::INVALID_META_BLOCK,
                         span,
                         "a meta expansion in a function body gives only `struct`, `enum`, \
                          `union`, `trait`, `impl`, `type`, `static`, `fn` and `const` items \
@@ -4434,6 +4523,7 @@ impl<'a> Parser<'a> {
             };
             if vis != Visibility::Private {
                 self.error(
+                    Code::MISPLACED_VISIBILITY,
                     start,
                     "`pub` is meaningless on an item in a function body: it is visible only \
                      in its block (spec 3.9.1)",
@@ -4488,7 +4578,7 @@ impl<'a> Parser<'a> {
                     .find_map(|(in_ns, m)| m.get(&source).filter(|_| *in_ns));
                 self.diagnostics.push(
                     rokc_diagnostic::duplicate(
-                        ErrorKind::Parse,
+                        Code::DUPLICATE_DEFINITION,
                         format!("`{source}` is defined twice in this block"),
                         &source,
                         s.span,
@@ -4512,7 +4602,11 @@ impl<'a> Parser<'a> {
             rokc_ast::rename::use_names(&u.tree, &mut used);
             for n in used {
                 if r.types.contains_key(n) || r.values.contains_key(n) {
-                    self.error(s.span, format!("`{n}` is defined twice in this block"));
+                    self.error(
+                        Code::DUPLICATE_DEFINITION,
+                        s.span,
+                        format!("`{n}` is defined twice in this block"),
+                    );
                 }
             }
         }
@@ -4705,6 +4799,7 @@ impl<'a> Parser<'a> {
         };
         if let Some(what) = module_only {
             self.error(
+                Code::MISPLACED_ITEM,
                 start,
                 format!("{what} is declared only at module level, not in a function body"),
             );
@@ -4717,6 +4812,7 @@ impl<'a> Parser<'a> {
                 let Some(use_def) = self.parse_use(vis, attrs) else {
                     if std::mem::take(&mut self.vanished) {
                         self.error(
+                            Code::MISPLACED_ITEM,
                             start,
                             "a macro import goes at module level: move this `use dep::name!;` \
                              to the top of the file",
@@ -4840,6 +4936,7 @@ impl<'a> Parser<'a> {
                 } else {
                     let s = self.peek_span();
                     self.error(
+                        Code::SYNTAX,
                         s,
                         format!("expected binding name, found {}", self.peek().describe()),
                     );
@@ -4850,6 +4947,7 @@ impl<'a> Parser<'a> {
                 if let (true, TokenKind::Ident(n)) = (name == "mut", self.peek().clone()) {
                     let at = self.prev_span().unwrap_or(start);
                     self.error_help(
+                        Code::FOREIGN_SYNTAX,
                         at,
                         "rok has no `let mut`: variables are mutable by default",
                         format!("drop `mut`: `let {n} = ..;`"),
@@ -4875,6 +4973,7 @@ impl<'a> Parser<'a> {
                     let t = self.text_in(t.span);
                     let at = self.peek_span();
                     self.error_help(
+                        Code::LET_WITHOUT_VALUE,
                         at,
                         format!("`let {name}` needs a value"),
                         format!(
@@ -5194,7 +5293,11 @@ impl<'a> Parser<'a> {
         };
         if matches!(self.peek(), TokenKind::DotDot | TokenKind::DotDotEq) {
             let s = self.peek_span();
-            self.error(s, "range operators cannot be chained (spec 3.7.3)");
+            self.error(
+                Code::NEEDS_PARENTHESES,
+                s,
+                "range operators cannot be chained (spec 3.7.3)",
+            );
             // Skip the rest of the chain, so it is not a second error.
             while matches!(self.peek(), TokenKind::DotDot | TokenKind::DotDotEq) {
                 self.bump();
@@ -5368,6 +5471,7 @@ impl<'a> Parser<'a> {
             if last_none_prec == Some(prec) {
                 let span = self.peek_span();
                 self.error(
+                    Code::NEEDS_PARENTHESES,
                     span,
                     format!(
                         "non-associative operator `{sym}` cannot be chained \
@@ -5438,7 +5542,7 @@ impl<'a> Parser<'a> {
         };
         self.diagnostics.push(
             RokDiagnostic::error(
-                ErrorKind::Parse,
+                Code::NEEDS_PARENTHESES,
                 at,
                 format!("`try? {sl} ?? {sr}` needs parentheses"),
             )
@@ -5521,7 +5625,7 @@ impl<'a> Parser<'a> {
         };
         self.diagnostics.push(
             RokDiagnostic::error(
-                ErrorKind::Parse,
+                Code::TRAILING_CLOSURE_RETURN,
                 span,
                 format!("`return@{name}`: no enclosing trailing closure of a call to `{name}`"),
             )
@@ -5557,7 +5661,7 @@ impl<'a> Parser<'a> {
         }
         for (at, name) in found {
             let mut d = RokDiagnostic::error(
-                ErrorKind::Parse,
+                Code::TRAILING_CLOSURE_RETURN,
                 at,
                 "a bare `return` in a statement's trailing closure: it would leave only \
                  the closure, not the function",
@@ -5660,12 +5764,16 @@ impl<'a> Parser<'a> {
         let value = match &body {
             AttrBody::Args(args) if args.len() == 1 => {
                 if let Some(why) = crate::cfg::check_pred(&args[0]) {
-                    self.error(start, why);
+                    self.error(Code::INVALID_CFG, start, why);
                 }
                 self.cfg.as_ref().is_some_and(|env| env.eval(&args[0]))
             }
             _ => {
-                self.error(start, "`cfg!` takes exactly one predicate".to_owned());
+                self.error(
+                    Code::INVALID_CFG,
+                    start,
+                    "`cfg!` takes exactly one predicate".to_owned(),
+                );
                 false
             }
         };
@@ -5707,7 +5815,7 @@ impl<'a> Parser<'a> {
             Err("takes one string literal path".to_owned())
         };
         let lit = read.unwrap_or_else(|msg| {
-            self.error(start, format!("`{name}!` {msg}"));
+            self.error(Code::INCLUDE_FAILED, start, format!("`{name}!` {msg}"));
             Literal::Str(String::new())
         });
         Some(Expr {
@@ -5807,6 +5915,7 @@ impl<'a> Parser<'a> {
         let key = format!("macro:{name}:{}", def.package);
         if self.meta_stack.iter().any(|k| *k == key) || self.meta_stack.len() >= 256 {
             self.error(
+                Code::EXPANSION_LIMIT,
                 start,
                 format!("`{name}!` expands too deeply or cyclically (spec 6.8.12)"),
             );
@@ -5955,7 +6064,7 @@ impl<'a> Parser<'a> {
                 // Spec 4.15.2 `unsafe { ... }`.
                 self.bump();
                 if !matches!(self.peek(), TokenKind::LBrace) {
-                    self.error(start, "expected `{` after `unsafe`");
+                    self.error(Code::SYNTAX, start, "expected `{` after `unsafe`");
                     return None;
                 }
                 ExprKind::Unsafe(self.parse_block()?)
@@ -6167,7 +6276,11 @@ impl<'a> Parser<'a> {
                     }
                     _ => {
                         let s = self.peek_span();
-                        self.error(s, "expected `loop`, `while`, `for`, or `{` after label");
+                        self.error(
+                            Code::SYNTAX,
+                            s,
+                            "expected `loop`, `while`, `for`, or `{` after label",
+                        );
                         return None;
                     }
                 }
@@ -6565,7 +6678,11 @@ impl<'a> Parser<'a> {
                         self.coro_closure(true, is_generator)?
                     }
                     _ => {
-                        self.error(start, "expected `{`, `|` or `fn` after `async`");
+                        self.error(
+                            Code::SYNTAX,
+                            start,
+                            "expected `{`, `|` or `fn` after `async`",
+                        );
                         return None;
                     }
                 }
@@ -6615,6 +6732,7 @@ impl<'a> Parser<'a> {
             }
             other => {
                 self.error(
+                    Code::SYNTAX,
                     start,
                     format!("expected expression, found {}", other.describe()),
                 );
@@ -6704,6 +6822,7 @@ impl<'a> Parser<'a> {
                         _ => {
                             let s = self.peek_span();
                             self.error(
+                                Code::SYNTAX,
                                 s,
                                 format!(
                                     "expected field or method name after `.`, found {}",
@@ -6726,7 +6845,7 @@ impl<'a> Parser<'a> {
                         }
                         if !matches!(self.peek(), TokenKind::LParen) {
                             let s = self.peek_span();
-                            self.error(s, "expected `(` after a method's `::<..>`");
+                            self.error(Code::SYNTAX, s, "expected `(` after a method's `::<..>`");
                             return None;
                         }
                     }
@@ -6786,7 +6905,7 @@ impl<'a> Parser<'a> {
                     }
                     if indices.is_empty() {
                         let s = self.peek_span();
-                        self.error(s, "expected index expression");
+                        self.error(Code::SYNTAX, s, "expected index expression");
                     }
                     self.expect(&TokenKind::RBracket, "`]`")?;
                     // Spec 3.6.1: `m[i, j]` is `m[(i, j)]` (`Index<(I, J)>`).
@@ -6855,6 +6974,7 @@ impl<'a> Parser<'a> {
                         _ => {
                             let s = self.peek_span();
                             self.error(
+                                Code::SYNTAX,
                                 s,
                                 format!(
                                     "expected field or method name after `?.`, found {}",
@@ -6901,7 +7021,11 @@ impl<'a> Parser<'a> {
         match text.parse::<u32>() {
             Ok(i) if plain => Some(i),
             _ => {
-                self.error(span, format!("invalid tuple field index `{text}`"));
+                self.error(
+                    Code::SYNTAX,
+                    span,
+                    format!("invalid tuple field index `{text}`"),
+                );
                 None
             }
         }
@@ -7038,6 +7162,7 @@ impl<'a> Parser<'a> {
     fn mixed_index_error(&mut self) {
         let s = self.peek_span();
         self.error(
+            Code::NEEDS_PARENTHESES,
             s,
             "one `[..]` cannot both index with `,` and slice with `:` (spec 3.6.3); \
              slice and index in separate brackets (`m[a:b][c]`)",
@@ -7112,6 +7237,7 @@ impl<'a> Parser<'a> {
                 let Some(name) = self.capture_name() else {
                     let s = self.peek_span();
                     self.error(
+                        Code::SYNTAX,
                         s,
                         format!(
                             "expected capture name after `ref`, found {}",
@@ -7125,7 +7251,7 @@ impl<'a> Parser<'a> {
                 captures.push(rokc_ast::CaptureSpec::Value(n));
             } else {
                 let s = self.peek_span();
-                self.error(s, "capture-list item expected");
+                self.error(Code::SYNTAX, s, "capture-list item expected");
                 return None;
             }
             if !self.eat(&TokenKind::Comma) {
@@ -7135,7 +7261,7 @@ impl<'a> Parser<'a> {
         self.expect(&TokenKind::RBracket, "`]`")?;
         if !matches!(self.peek(), TokenKind::Pipe | TokenKind::PipePipe) {
             let s = self.peek_span();
-            self.error(s, "`|` or `||` expected after capture list");
+            self.error(Code::SYNTAX, s, "`|` or `||` expected after capture list");
             return None;
         }
         let mut closure_kind = self.parse_closure_expr()?;
@@ -7375,7 +7501,7 @@ impl<'a> Parser<'a> {
                 n
             } else {
                 let s = self.peek_span();
-                self.error(s, "expected field name");
+                self.error(Code::SYNTAX, s, "expected field name");
                 return None;
             };
             // Shorthand `Foo { x }` (using a local named `x`) is allowed
@@ -7410,6 +7536,7 @@ impl<'a> Parser<'a> {
                             format!("{n}: {}, ", self.text_in(v.span))
                         });
                     self.error_help(
+                        Code::SYNTAX,
                         at,
                         format!("expected `,` or `}}`, found field `{next}`"),
                         format!("separate the fields with `,`: `{last}{next}: ..`"),
@@ -7526,7 +7653,7 @@ impl<'a> Parser<'a> {
                 n
             } else {
                 let s = self.peek_span();
-                self.error(s, "expected field name");
+                self.error(Code::SYNTAX, s, "expected field name");
                 return None;
             };
             // `Foo { x: pat }` or shorthand `Foo { x }` (binds `x`).
@@ -7603,6 +7730,7 @@ impl<'a> Parser<'a> {
         if let Some(TokenKind::IntLit(t) | TokenKind::FloatLit(t)) = num {
             if let Some(sfx) = literal::user_suffix(t) {
                 self.error(
+                    Code::PATTERN_TYPE,
                     span,
                     format!(
                         "a `{sfx}` suffix literal is a `#[literal]` handler call and can't be a \
@@ -7627,6 +7755,7 @@ impl<'a> Parser<'a> {
                 _ => {
                     let s = self.peek_span();
                     self.error(
+                        Code::SYNTAX,
                         s,
                         format!(
                             "expected literal after `-`, found {}",
@@ -7764,6 +7893,7 @@ impl<'a> Parser<'a> {
             }
             other => {
                 self.error(
+                    Code::SYNTAX,
                     span,
                     format!("expected pattern, found {}", other.describe()),
                 );

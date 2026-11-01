@@ -3569,8 +3569,12 @@ a;
         };
         // The message does not matter, only the tag.
         let err = |tag: Tag, start: u32| {
-            RokDiagnostic::error(rokc_diagnostic::ErrorKind::Type, at(start), "reworded")
-                .with_tag(tag)
+            RokDiagnostic::error(
+                rokc_diagnostic::Code::MISMATCHED_TYPES,
+                at(start),
+                "reworded",
+            )
+            .with_tag(tag)
         };
         let one = |tag: Tag, fmt: Fmt| unformattable(&[err(tag, show + 4)], &src, 7, fmt);
         assert_eq!(one(Tag::NoDisplayHasDebug, Fmt::Display), Some(Fmt::Debug));
@@ -3601,7 +3605,7 @@ a;
         assert!(!defined_in(&src, "x"));
         let missing = |what: &str| {
             RokDiagnostic::error(
-                rokc_diagnostic::ErrorKind::Resolve,
+                rokc_diagnostic::Code::UNRESOLVED_NAME,
                 Span::DUMMY,
                 format!("cannot find {what} in this scope"),
             )

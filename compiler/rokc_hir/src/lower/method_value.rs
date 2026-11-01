@@ -7,6 +7,7 @@
 use super::expr::{MethodPick, bind_explicit, pick_method, self_path_segs};
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use rokc_diagnostic::Code;
 
 /// What the value needs to know of the method before it is expanded.
 struct Shape {
@@ -54,6 +55,7 @@ pub(super) fn method_path_value(
     };
     if shape.has_ref {
         return Some(ctx.error_expr(
+            Code::REF_ARGUMENT,
             span,
             format!(
                 "`{display}` has a `ref` parameter (or `ref self`) and cannot be used as a `fn` \
@@ -80,6 +82,7 @@ pub(super) fn method_path_value(
         ),
         (None, None) => {
             return Some(ctx.error_expr(
+                Code::TYPE_ANNOTATIONS_NEEDED,
                 span,
                 format!(
                     "type annotations needed: the `fn` type of `{display}` as a value - annotate \
@@ -227,7 +230,7 @@ fn picked(
 ) -> Option<Result<Shape, HirExpr>> {
     let pick = match pick_method(ctx, t, method, key) {
         Ok(p) => p?,
-        Err(msg) => return Some(Err(ctx.error_expr(span, msg))),
+        Err(msg) => return Some(Err(ctx.error_expr(Code::AMBIGUOUS_ITEM, span, msg))),
     };
     let gm = match pick {
         MethodPick::Concrete(fid) => {

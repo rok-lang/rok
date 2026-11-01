@@ -482,7 +482,7 @@ impl<T> MutexGuard<T> {
     /// A scoped view of the protected value (the handle itself for GC
     /// types). Like the guard it is neither `Send` nor `Sync` and stays
     /// inside the `using` block: returning, throwing or sending it, or
-    /// passing it to a callee that keeps it, is an error (E202).
+    /// passing it to a callee that keeps it, is an error (E0106).
     pub const fn get(self) -> T {
         unsafe {
             self.mutex.value[0]

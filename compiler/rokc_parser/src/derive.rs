@@ -11,7 +11,7 @@ use rokc_ast::{
     AttrArg, AttrBody, EnumDef, EnumVariantKind, GenericParam, Generics, Item, StructDef,
     StructKind, Ty, TyKind,
 };
-use rokc_diagnostic::{RokDiagnostic, Span};
+use rokc_diagnostic::{Code, RokDiagnostic, Span};
 
 use crate::parser::Parser;
 
@@ -97,7 +97,7 @@ pub(crate) fn derive_items(item: &Item, file: &str) -> (Vec<Item>, Vec<RokDiagno
         };
         if let Some(missing) = needs.iter().find(|n| !has(n)) {
             diags.push(RokDiagnostic::error(
-                rokc_diagnostic::ErrorKind::Meta,
+                Code::CANNOT_DERIVE,
                 at,
                 format!(
                     "`#[derive({tr})]` on `{name}` needs `{missing}` too - derive both \
@@ -122,7 +122,7 @@ pub(crate) fn derive_items(item: &Item, file: &str) -> (Vec<Item>, Vec<RokDiagno
                 )
             };
             diags.push(RokDiagnostic::error(
-                rokc_diagnostic::ErrorKind::Meta,
+                Code::CANNOT_DERIVE,
                 at,
                 format!("cannot derive `{tr}` for `{name}`: {why} (spec 6.2.1)"),
             ));
@@ -135,7 +135,7 @@ pub(crate) fn derive_items(item: &Item, file: &str) -> (Vec<Item>, Vec<RokDiagno
         };
         let Some(body) = body else {
             diags.push(RokDiagnostic::error(
-                rokc_diagnostic::ErrorKind::Meta,
+                Code::CANNOT_DERIVE,
                 at,
                 format!(
                     "cannot derive `Default` for enum `{name}`: its first variant must \

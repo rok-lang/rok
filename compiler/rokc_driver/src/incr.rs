@@ -4,6 +4,7 @@
 //! paths and are renumbered on read; an entry that doesn't read back is a
 //! miss, computed afresh.
 
+use rokc_diagnostic::Code;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -484,7 +485,7 @@ fn check(clean: &rokc_hir::HirModule, incr: &mut rokc_hir::HirModule) {
     };
     if let Some(what) = differ {
         incr.diagnostics.push(rokc_diagnostic::RokDiagnostic::error(
-            rokc_diagnostic::ErrorKind::Internal,
+            Code::INTERNAL,
             rokc_diagnostic::Span::DUMMY,
             format!(
                 "ROK_INCREMENTAL_VERIFY: the incremental lowering differs from a clean one at `{what}`"

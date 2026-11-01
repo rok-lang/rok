@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 
 use rokc_ast::{Expr, ExprKind, ImplItem, Item, TraitItem};
-use rokc_diagnostic::{RokDiagnostic, Span};
+use rokc_diagnostic::{Code, RokDiagnostic, Span};
 use rokc_hir::walk::{AstVisitor, walk_item, walk_stmt};
 use rokc_hir::{HirExprKind, HirTy};
 use rokc_interface::Session;
@@ -454,8 +454,7 @@ impl<W: Write> Server<W> {
             let diags = match rokc_rokon::parse(&doc.text) {
                 Ok(_) => Vec::new(),
                 Err(e) => {
-                    let d =
-                        RokDiagnostic::error(rokc_diagnostic::ErrorKind::Parse, e.span, &e.message);
+                    let d = RokDiagnostic::error(Code::SYNTAX, e.span, &e.message);
                     vec![(diag_json(&d, uri, &doc.text), d)]
                 }
             };
@@ -1243,7 +1242,7 @@ fn diag_json(d: &RokDiagnostic, uri: &str, text: &str) -> Json {
     let mut d_json = Json::obj([
         ("range", range(text, start, end)),
         ("severity", Json::num(if d.is_error() { 1 } else { 2 })),
-        ("code", Json::str(d.kind.code())),
+        ("code", Json::str(d.code.to_string())),
         ("source", Json::str("rokc")),
         ("message", Json::str(message)),
         ("relatedInformation", Json::Arr(related)),

@@ -5,7 +5,7 @@
 // expect-error: 44:5: `v` views `xs`, which `xs += ..` resized at line 43
 
 // Stdlib 2.9.7a: resizing a list while a view of it is still used is a
-// compile error (E202), through copies of the list, views of the view,
+// compile error (E0138), through copies of the list, views of the view,
 // a loop over the view and the next pass of a loop. A view made again,
 // or a resize on a path that leaves, is fine.
 fn fine(xs: List<i32>) {

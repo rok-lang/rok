@@ -31,7 +31,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 use rokc_ast::{Block, Expr, ExprKind, Stmt, StmtKind};
-use rokc_diagnostic::{ErrorKind, RokDiagnostic, Span};
+use rokc_diagnostic::{Code, RokDiagnostic, Span};
 use rokc_ir_common::{ConstVal, FunctionId, LocalId, PrimTy};
 
 use super::throws::{ErrFrame, path_expr};
@@ -807,14 +807,20 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             .map(|x| &x.ty)
     }
 
-    fn error(&mut self, at: Span, msg: String, extra: impl FnOnce(RokDiagnostic) -> RokDiagnostic) {
+    fn error(
+        &mut self,
+        code: Code,
+        at: Span,
+        msg: String,
+        extra: impl FnOnce(RokDiagnostic) -> RokDiagnostic,
+    ) {
         if !self.report || self.quiet || at.is_dummy() {
             return;
         }
         if !self.seen.insert((at.file, at.start, msg.clone())) {
             return;
         }
-        let d = extra(RokDiagnostic::error(ErrorKind::Handoff, at, msg));
+        let d = extra(RokDiagnostic::error(code, at, msg));
         self.errors.push(d);
     }
 
@@ -1040,7 +1046,9 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             } else {
                 "moved here"
             };
-            self.error(at, msg, |d| d.with_secondary(site, here).with_note(help));
+            self.error(Code::USE_AFTER_MOVE, at, msg, |d| {
+                d.with_secondary(site, here).with_note(help)
+            });
             return;
         }
     }
@@ -1201,7 +1209,7 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                  `let x = ..;` and add `try x.close();`, or use `using x = .. {{ .. }}` (stdlib 2.13.4)"
             )
         };
-        self.error(bound, msg, |d| {
+        self.error(Code::UNCLOSED_RESOURCE, bound, msg, |d| {
             d.with_secondary(at, "it is still open when it leaves here")
                 .with_note(help)
         });
@@ -1287,6 +1295,7 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                         let who = self.roots[r].name.clone();
                         let ty = self.c.ty_name(&self.roots[r].ty);
                         self.error(
+                            Code::UNCLOSED_RESOURCE,
                             value.span,
                             format!("`{who}` still holds an open `{ty}` when this replaces it"),
                             |d| {
@@ -1320,6 +1329,7 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                     if let Some((Kind::Close, _)) = self.c.shape(&e.ty) {
                         let ty = self.c.ty_name(&e.ty);
                         self.error(
+                            Code::UNCLOSED_RESOURCE,
                             e.span,
                             format!("the `{ty}` made here is never closed"),
                             |d| {

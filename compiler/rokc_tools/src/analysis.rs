@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use std::path::Path;
 
 use rokc_ast::{ImplItem, Item, TraitItem, doc_hidden};
-use rokc_diagnostic::{RokDiagnostic, Span};
+use rokc_diagnostic::{Code, RokDiagnostic, Span};
 pub use rokc_hir::each_block;
 use rokc_hir::{HirExpr, HirFunction, HirModule, HirTy};
 use rokc_interface::{BuildOptions, CompileResult, Session, SourceFile};
@@ -178,7 +178,7 @@ pub fn analyze(mut session: Session, source: &str, path: &Path, levels: &Levels)
 /// The diagnostic of an `isolate`d compile's panic.
 pub fn ice(message: &str) -> RokDiagnostic {
     RokDiagnostic::error(
-        rokc_diagnostic::ErrorKind::Internal,
+        Code::INTERNAL,
         Span::default(),
         format!("internal compiler error: {message}"),
     )

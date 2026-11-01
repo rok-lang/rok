@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use rokc_core::tmp::{TempEntry, private_dir};
-use rokc_diagnostic::{ErrorKind, RokDiagnostic, SourceMap};
+use rokc_diagnostic::{Code, RokDiagnostic, SourceMap};
 use rokc_mir::TargetSpec;
 use rokc_target::{Linker, ObjectFormat};
 
@@ -184,8 +184,12 @@ pub struct TempDir {
 
 impl TempDir {
     pub fn new(keep: bool) -> Result<Self, RokDiagnostic> {
-        let mut e = TempEntry::dir("rokc-")
-            .map_err(|e| err(format!("cannot create a temporary directory: {e}")))?;
+        let mut e = TempEntry::dir("rokc-").map_err(|e| {
+            err(
+                Code::IO,
+                format!("cannot create a temporary directory: {e}"),
+            )
+        })?;
         if keep {
             e.keep();
         }
@@ -208,7 +212,8 @@ impl TempDir {
         if let Some(p) = path.parent() {
             let _ = std::fs::create_dir_all(p);
         }
-        private_dir(&path).map_err(|e| err(format!("cannot create {}: {e}", path.display())))?;
+        private_dir(&path)
+            .map_err(|e| err(Code::IO, format!("cannot create {}: {e}", path.display())))?;
         Ok(Self {
             path,
             keep,
@@ -236,8 +241,8 @@ impl Drop for TempDir {
     }
 }
 
-fn err(msg: String) -> RokDiagnostic {
-    RokDiagnostic::error(ErrorKind::Linkage, rokc_diagnostic::Span::DUMMY, msg)
+fn err(code: Code, msg: String) -> RokDiagnostic {
+    RokDiagnostic::error(code, rokc_diagnostic::Span::DUMMY, msg)
 }
 
 /// Codegen a module to MLIR text for its target.
@@ -302,14 +307,15 @@ pub fn emit(
     }
     match kind {
         EmitKind::Ast => Err(RokDiagnostic::error(
-            rokc_diagnostic::ErrorKind::Internal,
+            Code::INTERNAL,
             rokc_diagnostic::Span::DUMMY,
             "--emit=source needs the parsed files (keep_ast)",
         )),
         EmitKind::Hir => Ok(rokc_hir::print_hir(&module.hir).into_bytes()),
         EmitKind::Mir => Ok(rokc_mir::print_mir(&module.mir).into_bytes()),
         EmitKind::Expanded => Err(err(
-            "`--emit=expansions` needs the parsed sources".to_owned()
+            Code::INTERNAL,
+            "`--emit=expansions` needs the parsed sources".to_owned(),
         )),
         EmitKind::Mlir => Ok(mlir_text(module, sources, opts)?.text.into_bytes()),
         EmitKind::LlvmIr => Ok(lower_to_llvm(module, sources, opts)?.0.into_bytes()),
@@ -350,7 +356,8 @@ pub fn link_executable(
     let mut paths = Vec::new();
     for (i, o) in objects.iter().enumerate() {
         let p = tmp.path().join(format!("module{i}.o"));
-        std::fs::write(&p, o).map_err(|e| err(format!("cannot write {}: {e}", p.display())))?;
+        std::fs::write(&p, o)
+            .map_err(|e| err(Code::IO, format!("cannot write {}: {e}", p.display())))?;
         paths.push(p);
     }
     link_object(module, &paths, opts, out, tmp.path())?;
@@ -388,21 +395,26 @@ pub fn build_archive(
     let mut paths = Vec::new();
     for (i, o) in objects.iter().enumerate() {
         let p = tmp.path().join(format!("part{i}.o"));
-        std::fs::write(&p, o).map_err(|e| err(format!("cannot write {}: {e}", p.display())))?;
+        std::fs::write(&p, o)
+            .map_err(|e| err(Code::IO, format!("cannot write {}: {e}", p.display())))?;
         paths.push(p);
     }
     // A fresh archive, not members appended to an old one.
     let _ = std::fs::remove_file(archive_out);
     let t = &module.mir.target.spec;
     let members: Vec<&Path> = paths.iter().map(PathBuf::as_path).collect();
-    rokc_llvm::write_archive(t, archive_out, &members)
-        .map_err(|e| err(format!("cannot write {}: {e}", archive_out.display())))?;
+    rokc_llvm::write_archive(t, archive_out, &members).map_err(|e| {
+        err(
+            Code::IO,
+            format!("cannot write {}: {e}", archive_out.display()),
+        )
+    })?;
     if let Some(r) = &module.interface {
         let mut r = r.clone();
         r.type_count = gc_types;
         let path = archive_out.with_file_name(format!("{}.rokhir", r.name));
         std::fs::write(&path, r.encode())
-            .map_err(|e| err(format!("cannot write {}: {e}", path.display())))?;
+            .map_err(|e| err(Code::IO, format!("cannot write {}: {e}", path.display())))?;
     }
     Ok(counts)
 }
@@ -425,8 +437,8 @@ pub fn lower_to_llvm(
     opts: &BuildOptions,
 ) -> Result<(String, rokc_codegen_mlir::MlirOutput), RokDiagnostic> {
     let (mut ir, mlir) = llvm(module, sources, opts, rokc_llvm::Emit::LlvmIr, 1)?;
-    let ir =
-        String::from_utf8(ir.remove(0)).map_err(|_| err("LLVM printed non-UTF-8 IR".to_owned()))?;
+    let ir = String::from_utf8(ir.remove(0))
+        .map_err(|_| err(Code::BACKEND_FAILED, "LLVM printed non-UTF-8 IR".to_owned()))?;
     Ok((ir, mlir))
 }
 
@@ -446,8 +458,12 @@ fn llvm(
 ) -> Result<(Vec<Vec<u8>>, rokc_codegen_mlir::MlirOutput), RokDiagnostic> {
     let mut mlir = mlir_text(module, sources, opts)?;
     let t = &module.mir.target.spec;
-    let opt = rokc_llvm::OptLevel::parse(&opts.opt_level)
-        .ok_or_else(|| err(format!("unknown optimization level `{}`", opts.opt_level)))?;
+    let opt = rokc_llvm::OptLevel::parse(&opts.opt_level).ok_or_else(|| {
+        err(
+            Code::INVALID_OPTION,
+            format!("unknown optimization level `{}`", opts.opt_level),
+        )
+    })?;
     let pipeline = rokc_llvm::mlir_pipeline(opts.opt_level != "0");
     let c = rokc_llvm::Compile {
         target: t,
@@ -478,10 +494,10 @@ fn llvm(
     let text = std::mem::take(&mut mlir.text);
     let (out, warnings) =
         rokc_diagnostic::time("llvm", || rokc_llvm::compile_mlir_split(&text, &c, parts))
-            .map_err(|e| err(format!("LLVM back end failed:\n{e}")))?;
+            .map_err(|e| err(Code::BACKEND_FAILED, format!("LLVM back end failed:\n{e}")))?;
     for w in warnings.lines() {
         SourceMap::new().report(&RokDiagnostic::warning(
-            ErrorKind::Linkage,
+            Code::BACKEND_FAILED,
             rokc_diagnostic::Span::DUMMY,
             w,
         ));
@@ -580,12 +596,12 @@ pub fn link_object(
         inputs.extend(search);
         inputs.extend(
             crate::windows::link_args(t, &libs, opts.subsystem, opts.debug, objs_dir)
-                .map_err(|e| err(format!("the link failed:\n{e}")))?,
+                .map_err(|e| err(Code::LINK_FAILED, format!("the link failed:\n{e}")))?,
         );
         rokc_diagnostic::time("link", || {
             rokc_llvm::link_executable(t, &inputs, out, true, None)
         })
-        .map_err(|e| err(format!("the link failed:\n{e}")))?;
+        .map_err(|e| err(Code::LINK_FAILED, format!("the link failed:\n{e}")))?;
     } else {
         let tmp = TempDir::new(opts.keep_temps)?;
         let mut inputs: Vec<OsString> = objs.iter().map(|o| o.clone().into_os_string()).collect();
@@ -616,7 +632,7 @@ pub fn link_object(
         rokc_diagnostic::time("link", || {
             rokc_llvm::link_executable(t, &inputs, out, true, opts.libc.as_deref())
         })
-        .map_err(|e| err(format!("the link failed:\n{e}")))?;
+        .map_err(|e| err(Code::LINK_FAILED, format!("the link failed:\n{e}")))?;
     }
     let dir = out.parent().unwrap_or_else(|| Path::new("."));
     for f in &opts.runtime_files {
@@ -624,18 +640,17 @@ pub fn link_object(
         // A new file: one a running program maps stays intact.
         let _ = std::fs::remove_file(&to);
         std::fs::copy(f, &to).map_err(|e| {
-            err(format!(
-                "cannot copy {} to {}: {e}",
-                f.display(),
-                to.display()
-            ))
+            err(
+                Code::IO,
+                format!("cannot copy {} to {}: {e}", f.display(), to.display()),
+            )
         })?;
     }
     // Mach-O keeps DWARF in the objects: gather it into a `.dSYM` while
     // they still exist.
     if opts.debug && apple {
         rokc_diagnostic::time("dsymutil", || rokc_llvm::dsymutil(&[out.as_os_str()]))
-            .map_err(|e| err(format!("{}: {e}", out.display())))?;
+            .map_err(|e| err(Code::IO, format!("{}: {e}", out.display())))?;
     }
     Ok(())
 }
@@ -670,7 +685,8 @@ fn cc_profile_args(t: &TargetSpec, opts: &BuildOptions) -> &'static [&'static st
 /// a directory under `tmp`, its sources under `deps/`, and the core
 /// exports backing the world's functions.
 fn wit_link_args(w: &rokc_mir::WitLink, tmp: &Path) -> Result<Vec<OsString>, RokDiagnostic> {
-    let io = |p: &Path, e: std::io::Error| err(format!("cannot write {}: {e}", p.display()));
+    let io =
+        |p: &Path, e: std::io::Error| err(Code::IO, format!("cannot write {}: {e}", p.display()));
     let dir = tmp.join("wit");
     let deps = dir.join("deps");
     std::fs::create_dir_all(&deps).map_err(|e| io(&deps, e))?;
@@ -805,9 +821,10 @@ fn wasm_tls_object(t: &TargetSpec, dir: &Path) -> Result<PathBuf, RokDiagnostic>
             profile: rokc_llvm::Profile::None,
         },
     )
-    .map_err(|e| err(format!("the TLS object: {e}")))?;
+    .map_err(|e| err(Code::IO, format!("the TLS object: {e}")))?;
     let path = dir.join("rok_tls.o");
-    std::fs::write(&path, obj).map_err(|e| err(format!("cannot write {}: {e}", path.display())))?;
+    std::fs::write(&path, obj)
+        .map_err(|e| err(Code::IO, format!("cannot write {}: {e}", path.display())))?;
     Ok(path)
 }
 
@@ -827,7 +844,7 @@ fn static_archive(name: &str, opts: &BuildOptions) -> Result<PathBuf, RokDiagnos
         .map(|d| d.join(&file))
         .find(|p| p.is_file())
         .ok_or_else(|| {
-            err(format!(
+            err(Code::LINK_FAILED, format!(
                 "`#[link(name = \"{name}\", kind = \"static\")]`: no {file} in the -L directories \
              or LIBRARY_PATH"
             ))
@@ -886,7 +903,12 @@ pub fn link_host(host_object: &Path, opts: &BuildOptions, out: &Path) -> Result<
     }
     rokc_llvm::link_executable(t, &inputs, out, false, opts.libc.as_deref())
         .map(drop)
-        .map_err(|e| err(format!("cannot link the REPL host:\n{e}")))
+        .map_err(|e| {
+            err(
+                Code::LINK_FAILED,
+                format!("cannot link the REPL host:\n{e}"),
+            )
+        })
 }
 
 /// Windows host: every runtime member, every symbol exported (found with
@@ -905,7 +927,12 @@ fn link_windows_host(
         "-lldmingw".into(),
         "/export-all-symbols".into(),
     ];
-    let fail = |e: String| err(format!("cannot link the REPL host:\n{e}"));
+    let fail = |e: String| {
+        err(
+            Code::LINK_FAILED,
+            format!("cannot link the REPL host:\n{e}"),
+        )
+    };
     inputs.extend(
         crate::windows::link_args(t, &[], crate::Subsystem::Console, false, tmp.path())
             .map_err(fail)?,
@@ -979,12 +1006,12 @@ fn user_cache() -> Option<PathBuf> {
 
 fn run(cmd: &mut Command, what: &str) -> Result<(), RokDiagnostic> {
     let out = rokc_diagnostic::time(what, || cmd.output())
-        .map_err(|e| err(format!("cannot run {what}: {e}")))?;
+        .map_err(|e| err(Code::TOOL_FAILED, format!("cannot run {what}: {e}")))?;
     if !out.status.success() {
-        return Err(err(format!(
-            "{what} failed:\n{}",
-            String::from_utf8_lossy(&out.stderr)
-        )));
+        return Err(err(
+            Code::TOOL_FAILED,
+            format!("{what} failed:\n{}", String::from_utf8_lossy(&out.stderr)),
+        ));
     }
     Ok(())
 }

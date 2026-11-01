@@ -13,7 +13,7 @@
 use std::path::{Path, PathBuf};
 
 use rokc_codegen_mlir::units::{self, Plan, PlanOptions};
-use rokc_diagnostic::{ErrorKind, RokDiagnostic, SourceMap};
+use rokc_diagnostic::{Code, RokDiagnostic, SourceMap};
 
 use crate::{BuildOptions, CompiledModule};
 
@@ -112,7 +112,7 @@ fn open(dir: &Path, salt: &str) -> Result<(), RokDiagnostic> {
     }
     let _ = std::fs::remove_dir_all(dir);
     std::fs::create_dir_all(dir)
-        .map_err(|e| err(format!("cannot create {}: {e}", dir.display())))?;
+        .map_err(|e| err(Code::IO, format!("cannot create {}: {e}", dir.display())))?;
     write(&stamp, salt.as_bytes())
 }
 
@@ -129,7 +129,7 @@ fn write(path: &Path, bytes: &[u8]) -> Result<(), RokDiagnostic> {
             }
             _ => Err(e),
         })
-        .map_err(|e| err(format!("cannot write {}: {e}", path.display())))
+        .map_err(|e| err(Code::IO, format!("cannot write {}: {e}", path.display())))
 }
 
 /// Deletes the unit entries of `dir` other than `keep`, and scratch
@@ -182,9 +182,16 @@ fn in_parallel<T: Send>(
     job: impl Fn(usize) -> Result<T, RokDiagnostic> + Sync,
 ) -> Result<Vec<T>, RokDiagnostic> {
     crate::on_cores(n, 256 << 20, job)
-        .map_err(|e| err(format!("cannot start a codegen thread: {e}")))?
+        .map_err(|e| {
+            err(
+                Code::INTERNAL,
+                format!("cannot start a codegen thread: {e}"),
+            )
+        })?
         .into_iter()
-        .map(|r| r.unwrap_or_else(|| Err(err("a codegen thread failed".to_owned()))))
+        .map(|r| {
+            r.unwrap_or_else(|| Err(err(Code::INTERNAL, "a codegen thread failed".to_owned())))
+        })
         .collect()
 }
 
@@ -282,12 +289,16 @@ fn by_llvm_o0(
         in_parallel(plan.units.len(), |u| match (&fresh[u], &texts[u]) {
             (Some(o), _) => Ok((o.clone(), false)),
             (None, Some(text)) => {
-                let o = rokc_llvm::compile_mlir(text, &c)
-                    .map_err(|e| err(format!("LLVM back end failed:\n{e}")))?;
+                let o = rokc_llvm::compile_mlir(text, &c).map_err(|e| {
+                    err(Code::BACKEND_FAILED, format!("LLVM back end failed:\n{e}"))
+                })?;
                 write(&paths[u], &o)?;
                 Ok((o, true))
             }
-            (None, None) => Err(err("internal: a unit without code".to_owned())),
+            (None, None) => Err(err(
+                Code::INTERNAL,
+                "internal: a unit without code".to_owned(),
+            )),
         })
     })?;
     Ok(finish_counts(plan, objects, None, paths))
@@ -332,8 +343,12 @@ fn by_thin_link(
             (name.as_str(), input)
         })
         .collect();
-    let opt = rokc_llvm::OptLevel::parse(&opts.opt_level)
-        .ok_or_else(|| err(format!("unknown optimization level `{}`", opts.opt_level)))?;
+    let opt = rokc_llvm::OptLevel::parse(&opts.opt_level).ok_or_else(|| {
+        err(
+            Code::INVALID_OPTION,
+            format!("unknown optimization level `{}`", opts.opt_level),
+        )
+    })?;
     let pipeline = rokc_llvm::mlir_pipeline(true);
     let c = llvm_options(t, &pipeline, opt);
     let alloc = rokc_codegen_mlir::alloc_module(&module.mir.target);
@@ -341,10 +356,10 @@ fn by_thin_link(
     let out = rokc_diagnostic::time("llvm", || {
         rokc_llvm::compile_units(&inputs, &alloc, &c, &cache, module.mir.link.lib.is_some())
     })
-    .map_err(|e| err(format!("LLVM back end failed:\n{e}")))?;
+    .map_err(|e| err(Code::BACKEND_FAILED, format!("LLVM back end failed:\n{e}")))?;
     for w in out.warnings.lines() {
         sources.report(&RokDiagnostic::warning(
-            ErrorKind::Linkage,
+            Code::BACKEND_FAILED,
             rokc_diagnostic::Span::DUMMY,
             w,
         ));
@@ -379,6 +394,6 @@ const fn llvm_options<'a>(
     }
 }
 
-fn err(msg: String) -> RokDiagnostic {
-    RokDiagnostic::error(ErrorKind::Linkage, rokc_diagnostic::Span::DUMMY, msg)
+fn err(code: Code, msg: String) -> RokDiagnostic {
+    RokDiagnostic::error(code, rokc_diagnostic::Span::DUMMY, msg)
 }

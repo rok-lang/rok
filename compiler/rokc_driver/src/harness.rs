@@ -5,7 +5,7 @@
 //! calls instead.
 
 use rokc_ast::{Item, ThrowsKind};
-use rokc_diagnostic::{ErrorKind, RokDiagnostic};
+use rokc_diagnostic::{Code, RokDiagnostic};
 use rokc_lexer::Lexer;
 use rokc_parser::{ExtOps, parse_program_ext};
 
@@ -47,7 +47,7 @@ pub fn install(
                 "no parameters or generics"
             };
             diags.push(RokDiagnostic::error(
-                ErrorKind::Type,
+                Code::INVALID_SIGNATURE,
                 f.span,
                 format!("`#[{attr}] fn {}` must take {want}", f.name),
             ));

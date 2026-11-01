@@ -2,6 +2,7 @@
 
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use rokc_diagnostic::Code;
 
 /// Lift a closure into an anonymous function and return its value.
 /// Captures copy at creation; `[ref x]` shares `x`'s cell (spec 4.6.2). A
@@ -35,13 +36,13 @@ pub(super) fn lower_closure_expr(
         match ctx.lookup(n).map(cell_of) {
             Some(l) if ctx.is_boxed(l) => {}
             Some(_) => ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::INVALID_CAPTURE,
                 format!(
                     "`[ref {n}]` needs `{n}` to be a `let` variable or a parameter (spec 4.6.2)"
                 ),
             ),
             None => ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::INVALID_CAPTURE,
                 format!("`[ref {n}]` names no variable in scope (spec 4.6.2)"),
             ),
         }
@@ -64,7 +65,7 @@ pub(super) fn lower_closure_expr(
         .collect();
     for p in params.iter().filter(|p| p.by_ref) {
         ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::INVALID_SIGNATURE,
             format!(
                 "closure parameter `{}` cannot be `ref` - a `fn` type has no `ref` \
                  parameters (spec 4.7.6)",
@@ -345,7 +346,7 @@ pub(super) fn closure_ctx<'a>(
                 _ if ctx.infer_vars => super::infer::fresh(ctx),
                 _ => {
                     ctx.emit_error(
-                        rokc_diagnostic::ErrorKind::Type,
+                        Code::TYPE_ANNOTATIONS_NEEDED,
                         format!(
                             "cannot infer the type of closure parameter `{}` - annotate \
                              it (`|{}: i32| ...`)",
@@ -476,6 +477,7 @@ pub(super) fn desugar_question_dot(
     let Some((none_idx, some)) = optional_parts(&recv.ty) else {
         // Spec 3.8: `?.` on a non-optional receiver is an error.
         return ctx.error_expr(
+            Code::OPTIONAL_OPERATOR,
             span,
             format!(
                 "`?.` needs an optional (`T | none`) receiver, found `{}` - it is not \
@@ -486,6 +488,7 @@ pub(super) fn desugar_question_dot(
     };
     if some.len() != 1 {
         return ctx.error_expr(
+            Code::OPTIONAL_OPERATOR,
             span,
             format!(
                 "`?.` needs a `T | none` receiver with a single payload type, found `{}`",
@@ -573,11 +576,13 @@ pub(super) fn apply_access_tail(
                     span,
                 },
                 None => ctx.error_expr(
+                    Code::NO_FIELD,
                     span,
                     format!("tuple index {idx} out of range for a {}-tuple", parts.len()),
                 ),
             },
             other => ctx.error_expr(
+                Code::NO_FIELD,
                 span,
                 format!("no field `{idx}` on type `{}`", ctx.ty_name(&other)),
             ),
@@ -610,6 +615,7 @@ pub(super) fn desugar_try_q(
     }
     let Some((none_idx, some)) = optional_parts(&inner.ty) else {
         return ctx.error_expr(
+            Code::OPTIONAL_OPERATOR,
             span,
             format!(
                 "`?` only works on `T | none`, found `{}` - to propagate errors use `throws` \
@@ -621,6 +627,7 @@ pub(super) fn desugar_try_q(
     let ret_ty = ctx.fn_ret_ty.clone();
     if optional_parts(&ret_ty).is_none() {
         return ctx.error_expr(
+            Code::OPTIONAL_OPERATOR,
             span,
             format!(
                 "`?` propagates `none`, but the enclosing function returns `{}` - its \
@@ -667,6 +674,7 @@ pub(super) fn desugar_nullish_coalesce(
             return poison(span);
         }
         return ctx.error_expr(
+            Code::OPTIONAL_OPERATOR,
             span,
             format!(
                 "`??` needs an optional left operand (`T | none`), found `{}`",
@@ -827,7 +835,7 @@ pub(super) fn bind_irrefutable(
         }
         (_, ty) => {
             ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::PATTERN_TYPE,
                 format!(
                     "this pattern can't destructure a value of type `{}` here - it must be \
                      irrefutable: a name, `_`, `name @ pat`, or a tuple / struct of those",
@@ -880,6 +888,7 @@ pub(super) fn lower_for(
             &mut out,
         ),
         ExprKind::Range { .. } => Some(ctx.error_expr(
+            Code::NOT_ITERABLE,
             span,
             "`for` over an unbounded range needs both bounds (`a..b`)".to_owned(),
         )),
@@ -960,6 +969,7 @@ pub(super) fn lower_for_iter(
     let is_try = !has_into_iter && !try_iter.is_empty() && ctx.has_trait(&iter_h.ty, try_iter);
     if !has_into_iter && !is_try {
         return ctx.error_expr(
+            Code::NOT_ITERABLE,
             span,
             format!(
                 "cannot iterate over a value of type `{}` - `for` needs an integer range, \
@@ -972,7 +982,7 @@ pub(super) fn lower_for_iter(
     if is_try && ctx.try_depth == 0 && iter_h.ty != HirTy::Unknown {
         let t = ctx.ty_name(&iter_h.ty);
         let mut d = rokc_diagnostic::RokDiagnostic::error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::UNHANDLED_ERROR,
             span,
             format!("`next` of `{t}` can throw, so this loop must be `try for` (spec 3.13.3)"),
         )
@@ -1134,6 +1144,7 @@ fn for_next_loop(
         HirTy::Unknown => return next,
         other => {
             return ctx.error_expr(
+                Code::NOT_ITERABLE,
                 span,
                 format!(
                     "`next` of an iterator must return `T | none`, found `{}`",
@@ -1146,7 +1157,11 @@ fn for_next_loop(
         parts.iter().position(HirTy::is_none),
         parts.iter().position(|p| !p.is_none()),
     ) else {
-        return ctx.error_expr(span, "`next` must return `T | none`".to_owned());
+        return ctx.error_expr(
+            Code::NOT_ITERABLE,
+            span,
+            "`next` must return `T | none`".to_owned(),
+        );
     };
     if parts.len() > 2 {
         return for_next_loop_sum(ctx, label, pat, next, &parts, none_i, body, span);
@@ -1352,6 +1367,7 @@ pub(super) fn lower_for_range(
         HirTy::Prim(p) if p.is_int() && end_h.as_ref().is_none_or(|e| e.ty == start_h.ty) => *p,
         _ => {
             return Some(ctx.error_expr(
+                Code::MISMATCHED_TYPES,
                 span,
                 format!(
                     "range bounds must be integers of the same type, found `{}` and `{}`",

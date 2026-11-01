@@ -25,7 +25,7 @@ use std::sync::Arc;
 
 use rokc_ast::{AttrArg, AttrBody, Attribute, EnumVariantKind, GenericParam, Item, StructKind};
 use rokc_core::Visibility;
-use rokc_diagnostic::{ErrorKind, RokDiagnostic, Span};
+use rokc_diagnostic::{Code, RokDiagnostic, Span};
 use rokc_lexer::{Token, TokenKind};
 
 use super::Parser;
@@ -229,7 +229,7 @@ impl MetaTable {
     /// or one taking a built-in derive / attribute name, is an error. Two
     /// packages may each register a name: a use then says which (6.8.11).
     pub fn add(&mut self, def: MetaDef) -> Option<RokDiagnostic> {
-        let clash = |msg: String| RokDiagnostic::error(ErrorKind::Meta, def.span, msg);
+        let clash = |code: Code, msg: String| RokDiagnostic::error(code, def.span, msg);
         if let Some(old) = self
             .find_all(def.kind, &def.name)
             .find(|d| d.package == def.package)
@@ -243,24 +243,31 @@ impl MetaTable {
                 MetaKind::Macro => format!("macro `{}!`", def.name),
             };
             return Some(
-                clash(format!(
-                    "{what} is defined by two meta blocks (spec 6.8.11)"
-                ))
+                clash(
+                    Code::DUPLICATE_DEFINITION,
+                    format!("{what} is defined by two meta blocks (spec 6.8.11)"),
+                )
                 .with_secondary(old.span, "first defined here"),
             );
         }
         if def.kind == MetaKind::Derive && crate::derive::derivable(&def.name).is_some() {
-            return Some(clash(format!(
-                "`{}` is a built-in derive; a meta block cannot redefine it (spec 6.2.1)",
-                def.name
-            )));
+            return Some(clash(
+                Code::INVALID_META_BLOCK,
+                format!(
+                    "`{}` is a built-in derive; a meta block cannot redefine it (spec 6.2.1)",
+                    def.name
+                ),
+            ));
         }
         if def.kind == MetaKind::Attribute && BUILTIN_ATTRS.contains(&def.name.as_str()) {
             return Some(
-                clash(format!(
-                    "`#[{}]` is a built-in attribute; a meta block cannot redefine it (spec 6.2)",
-                    def.name
-                ))
+                clash(
+                    Code::INVALID_META_BLOCK,
+                    format!(
+                        "`#[{}]` is a built-in attribute; a meta block cannot redefine it (spec 6.2)",
+                        def.name
+                    ),
+                )
                 .with_help(format!(
                     "rename it, e.g. `#[impl_attribute(my_{})]`",
                     def.name
@@ -268,10 +275,13 @@ impl MetaTable {
             );
         }
         if def.kind == MetaKind::Macro && BUILTIN_BANGS.contains(&def.name.as_str()) {
-            return Some(clash(format!(
-                "`{}!` is a built-in form; a macro cannot take its name (spec 6.8.12)",
-                def.name
-            )));
+            return Some(clash(
+                Code::INVALID_META_BLOCK,
+                format!(
+                    "`{}!` is a built-in form; a macro cannot take its name (spec 6.8.12)",
+                    def.name
+                ),
+            ));
         }
         self.defs.push(def);
         None
@@ -384,8 +394,8 @@ fn keyed_attr(a: &Attribute) -> Option<(String, Vec<String>)> {
     })
 }
 
-fn meta_err(span: Span, msg: impl Into<String>) -> RokDiagnostic {
-    RokDiagnostic::error(ErrorKind::Meta, span, msg)
+fn meta_err(code: Code, span: Span, msg: impl Into<String>) -> RokDiagnostic {
+    RokDiagnostic::error(code, span, msg)
 }
 
 /// Index of the token closing the group opened at `open`.
@@ -577,7 +587,7 @@ impl Expander<'_> {
             MetaKind::Macro => format!("in this `{}!` macro", self.def.name),
         };
         self.diags
-            .push(meta_err(span, msg).with_secondary(self.t.at, what));
+            .push(meta_err(Code::INVALID_TEMPLATE, span, msg).with_secondary(self.t.at, what));
     }
 
     fn field(&self, ctx: Ctx) -> Option<&FieldInfo> {
@@ -1593,14 +1603,14 @@ impl Parser<'_> {
         if kind == MetaKind::Derive {
             // Ignored before 0.1.6, so only a warning.
             self.diagnostics.push(
-                RokDiagnostic::warning(ErrorKind::Meta, at, format!("{msg} and does nothing"))
+                RokDiagnostic::warning(Code::META_NAME, at, format!("{msg} and does nothing"))
                     .with_file(self.file.clone())
                     .with_help(help),
             );
             return None;
         }
         self.diagnostics.push(
-            meta_err(at, msg)
+            meta_err(Code::META_NAME, at, msg)
                 .with_file(self.file.clone())
                 .with_help(help),
         );
@@ -1622,6 +1632,7 @@ impl Parser<'_> {
             .map(|q| meta_use(kind, &q, name))
             .collect();
         let mut d = meta_err(
+            Code::META_NAME,
             at,
             format!(
                 "{} is defined by several packages, so the bare name is ambiguous (spec 6.8.11)",
@@ -1669,6 +1680,7 @@ impl Parser<'_> {
             _ => format!("a {} of another package", kind_word(kind)),
         };
         let mut d = meta_err(
+            Code::META_NAME,
             at,
             format!(
                 "{} is {owner}, which a bare name does not reach: it names this package's \
@@ -1769,6 +1781,7 @@ impl Parser<'_> {
                 if public {
                     self.diagnostics.push(
                         meta_err(
+                            Code::INVALID_REEXPORT,
                             at,
                             format!("`pub use` cannot re-export the macro `{name}!`"),
                         )
@@ -1778,6 +1791,7 @@ impl Parser<'_> {
                 } else if path.is_empty() {
                     self.diagnostics.push(
                         meta_err(
+                            Code::META_NAME,
                             at,
                             format!("`use {name}!;` does not name the package of `{name}!`"),
                         )
@@ -1875,6 +1889,7 @@ impl Parser<'_> {
             .flatten()
         else {
             self.diagnostics.push(meta_err(
+                Code::INVALID_META_BLOCK,
                 ma.span,
                 format!(
                     "`#[{}(..)]` needs a `{}@{want} {{ .. }}` body (spec 6.8)",
@@ -1892,6 +1907,7 @@ impl Parser<'_> {
         self.unparsed.push(body_start..self.pos);
         if starter != want {
             self.diagnostics.push(meta_err(
+                Code::INVALID_META_BLOCK,
                 ma.span,
                 format!(
                     "`#[{}(..)]` takes an `@{want} {{ .. }}` body, not `@{starter}` (spec 6.8.7)",
@@ -1915,6 +1931,7 @@ impl Parser<'_> {
         };
         if words.len() != arity {
             self.diagnostics.push(meta_err(
+                Code::INVALID_META_BLOCK,
                 ma.span,
                 format!(
                     "`#[{}]` takes {arity} name argument(s) (spec 6.8.1)",
@@ -1951,6 +1968,7 @@ impl Parser<'_> {
         }
         self.diagnostics.push(
             meta_err(
+                Code::PRIVATE_ITEM,
                 at,
                 format!(
                     "meta block `{}` is private to `{}` (mark it `pub @..`; spec 6.8.6)",
@@ -2106,6 +2124,7 @@ impl Parser<'_> {
             };
             for why in bad {
                 self.diagnostics.push(meta_err(
+                    Code::INVALID_ATTRIBUTE,
                     a.span,
                     format!("`#[{attr}(..)]`: {why}; write one of {valid}"),
                 ));
@@ -2277,6 +2296,7 @@ impl Parser<'_> {
                 .collect();
             self.diagnostics.push(
                 meta_err(
+                    Code::EXPANSION_LIMIT,
                     target.at,
                     format!(
                         "cyclic meta expansion: {} → {} (spec 6.8.8)",
@@ -2349,6 +2369,7 @@ impl Parser<'_> {
         if p.pos < tokens.len() && p.diagnostics.is_empty() {
             let s = tokens[p.pos].span;
             p.diagnostics.push(meta_err(
+                Code::INVALID_META_BLOCK,
                 s,
                 "expected an item in the meta block's expansion",
             ));

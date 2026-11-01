@@ -28,7 +28,7 @@ use super::bignum::Big;
 use super::*;
 use crate::fmt_spec::{self, FmtSpec};
 use rokc_ast::{FStringPart, SpecPiece};
-use rokc_diagnostic::{Span, Tag};
+use rokc_diagnostic::{Code, Span, Tag};
 
 /// Per-hole capacity guess, beyond the literal bytes.
 const HOLE_BYTES: usize = 16;
@@ -450,7 +450,7 @@ fn formattable(ctx: &LowerCtx<'_>, ty: &HirTy, debug: bool) -> bool {
     .unwrap_or_else(|| format!(": it does not implement `{name}`"));
     let hole = if debug { DEBUG_HOLE } else { PLAIN_HOLE };
     ctx.emit_error(
-        rokc_diagnostic::ErrorKind::Type,
+        Code::INVALID_FORMAT,
         format!("`{shown}` cannot be formatted with `{hole}`{culprit}"),
     );
     let (tag, help) = if debug {
@@ -486,7 +486,7 @@ fn static_hole(ctx: &LowerCtx<'_>, value: Expr, ty: &HirTy, text: &str) -> Optio
         Ok(s) => s,
         Err(why) => {
             ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::INVALID_FORMAT,
                 format!("invalid format spec `{text}`: {why} (refs-lang 1.7.3)"),
             );
             return None;
@@ -504,7 +504,7 @@ fn static_hole(ctx: &LowerCtx<'_>, value: Expr, ty: &HirTy, text: &str) -> Optio
     };
     if let Some(needs) = needs {
         ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::INVALID_FORMAT,
             format!(
                 "format type `{}` needs {needs}, found `{}`",
                 char::from(spec.ty),

@@ -11,6 +11,7 @@
 
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use rokc_diagnostic::Code;
 
 use super::desugar::{optional_parts, sum_none};
 
@@ -251,7 +252,7 @@ pub(super) fn unpack_call(ctx: &mut LowerCtx<'_>, call: HirExpr) -> HirExpr {
     }];
     if ctx.try_depth == 0 {
         let mut d = rokc_diagnostic::RokDiagnostic::error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::UNHANDLED_ERROR,
             ctx.here(),
             format!(
                 "this call can throw `{}` and must be marked with `try` (`try f()`; \
@@ -435,7 +436,7 @@ pub(super) fn raise(
         if any_error(&decl) {
             let name = ctx.ty_name(&ety);
             ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::NOT_AN_ERROR,
                 format!("`{name}` can't be thrown: it does not implement `Error` (spec 4.14)"),
             );
             // A `str`'s help quotes it (`lower_throw`).
@@ -447,7 +448,7 @@ pub(super) fn raise(
             }
         } else {
             ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::UNHANDLED_ERROR,
                 format!(
                     "error `{}` is not covered by the enclosing function's `throws ({})` - \
                      catch it or add it to the `throws` list (spec 4.14)",
@@ -458,7 +459,7 @@ pub(super) fn raise(
         }
     } else {
         ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::UNHANDLED_ERROR,
             format!(
                 "error `{}` is not handled: catch it, or declare `throws ({0})` on the \
                  enclosing function (spec 4.14)",
@@ -1137,6 +1138,7 @@ pub(super) fn hook_call(
 ) -> HirExpr {
     let Some(sig) = ctx.env.sig(hook) else {
         return ctx.error_expr(
+            Code::INTERNAL,
             span,
             format!("internal: runtime hook `{hook}` is not declared"),
         );
@@ -1179,7 +1181,10 @@ pub(super) fn lower_try(
             .skip(mark)
             .any(|d| d.severity == rokc_diagnostic::Severity::Error);
         if ctx.throwing_calls == calls && !failed && e.ty != HirTy::Unknown {
-            ctx.emit_warning("this `try` covers no throwing call (spec 3.14.2)".to_owned());
+            ctx.emit_warning(
+                Code::UNNEEDED_TRY,
+                "this `try` covers no throwing call (spec 3.14.2)".to_owned(),
+            );
         }
     };
     // `try! xs.pop()`: no throwing call, an optional value.
@@ -1199,7 +1204,7 @@ pub(super) fn lower_try(
         let fix = format!("{op} ?? {d}");
         ctx.emit_diag(
             rokc_diagnostic::RokDiagnostic::error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::OPTIONAL_OPERATOR,
                 span,
                 format!("`{word}` is for calls that throw; `{op}` gives `{t}`, which may be none"),
             )
@@ -1285,7 +1290,7 @@ fn dropped_resources(ctx: &LowerCtx<'_>, frame: &CatchFrame, span: rokc_diagnost
         let t = ctx.ty_name(ety);
         ctx.emit_diag(
             rokc_diagnostic::RokDiagnostic::error(
-                rokc_diagnostic::ErrorKind::Handoff,
+                Code::UNCLOSED_RESOURCE,
                 span,
                 format!(
                     "`try?` drops the `{t}` it catches, which can hold a value that must be \
@@ -1325,6 +1330,7 @@ pub(super) fn uncaught_in_main(
     let Some(sig) = ctx.env.sig("rok_uncaught_error_at").cloned() else {
         return HirBlock {
             stmts: vec![HirStmt::Expr(ctx.error_expr(
+                Code::INTERNAL,
                 span,
                 "internal: runtime hook `rok_uncaught_error_at` is not declared".to_owned(),
             ))],
@@ -1675,6 +1681,7 @@ fn finally_jumps(ctx: &LowerCtx<'_>, fin: &Block) {
             continue;
         }
         ctx.emit_error_help(
+            Code::OUTSIDE_CONTEXT,
             at,
             format!("`{what}` cannot leave a `finally` block: it would drop the error in flight"),
             format!("move the `{what}` after the `try` expression; `finally` only cleans up"),
@@ -1776,19 +1783,25 @@ fn lower_catch_arms(
         expected.clone()
     };
     if frame.errs.is_empty() {
-        ctx.emit_warning("no error reaches this `catch`: its body can't throw".to_owned());
+        ctx.emit_warning(
+            Code::UNNEEDED_TRY,
+            "no error reaches this `catch`: its body can't throw".to_owned(),
+        );
     }
     for (arm, filter) in arms.iter().zip(&filters) {
         if frame.errs.iter().any(|(t, _)| may_take(filter.as_ref(), t)) {
             continue;
         }
         if !frame.errs.is_empty() {
-            ctx.emit_warning(format!(
-                "this `catch` arm never runs: no `{}` error reaches it",
-                filter
-                    .as_ref()
-                    .map_or_else(|| "_".to_owned(), |f| ctx.ty_name(f))
-            ));
+            ctx.emit_warning(
+                Code::UNNEEDED_TRY,
+                format!(
+                    "this `catch` arm never runs: no `{}` error reaches it",
+                    filter
+                        .as_ref()
+                        .map_or_else(|| "_".to_owned(), |f| ctx.ty_name(f))
+                ),
+            );
         }
         check_dead_arm(ctx, arm, filter.as_ref(), check_hint.clone(), span);
     }

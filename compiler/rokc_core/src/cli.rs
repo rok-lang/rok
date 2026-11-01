@@ -77,6 +77,8 @@ global options:
   --color=auto|always|never    color output (--no-color = never)
   --cwd=<path>                 change directory first
   --message-format=human|json  diagnostics as JSON lines on stdout
+  --explain <code>             what an error code (E0001) means and what
+                               to write instead, then exit
   -A|-W|-D <lint|group>        allow / warn / deny a lint (repeatable, later
                                wins; `#[allow(..)]` etc. in the source
                                override)

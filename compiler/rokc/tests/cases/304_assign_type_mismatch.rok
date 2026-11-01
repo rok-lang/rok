@@ -1,5 +1,5 @@
 // spec: 003.04-assign-type-mismatch
-// expect-error: error[E200]
+// expect-error: error[E0040]
 
 // Assigning another type to a typed slot is an error.
 fn main() -> i32 {

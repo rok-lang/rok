@@ -13,7 +13,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
-use rokc_diagnostic::{ErrorKind, RokDiagnostic, Span};
+use rokc_diagnostic::{Code, RokDiagnostic, Span};
 use rokc_ir_common::{FunctionId, LocalId};
 
 use super::Env;
@@ -202,7 +202,7 @@ impl Walk<'_> {
                 "the view".to_owned(),
             ),
         };
-        let d = RokDiagnostic::error(ErrorKind::Handoff, at, msg)
+        let d = RokDiagnostic::error(Code::VIEW_AFTER_RESIZE, at, msg)
             .with_secondary(r.at, format!("`{list}` is resized here"))
             .with_note(format!(
                 "help: a resize may move the list's elements, so a view made before it cannot \

@@ -14,7 +14,7 @@
 //!     as `/`, library paths relative to the workspace, `*` any text, as in
 //!     `library/std/src/wit.rok:*:`); none: empty stderr
 //!   - `// expect-lint: L:C message` - (repeatable) `rokc lint` on the
-//!     case reports exactly these `E503` lints, in order: line, column
+//!     case reports exactly these `E0132` lints, in order: line, column
 //!     and headline
 //!   - `// gc-stress: N`        - run twice more, with
 //!     `ROKR_GC_STRESS=N ROKR_GC_EVAC=always` and with
@@ -60,7 +60,7 @@
 //!   - `ROK_TEST_OPT=-O2` (or `--release`, `-O3`, ...) - build every case
 //!     at that optimization level instead of the default `-O0`.
 //!   - `ROK_TEST_FILTER=text` - only the integration cases whose name
-//!     contains `text`.
+//!     contains `text`; `a,b` runs those containing any of them.
 //!   - `ROK_TEST_SHARD=i/n` - only every n-th integration case of the
 //!     sorted list from the i-th (1-based), and every n-th differential
 //!     suite: CI splits a corpus over n jobs.

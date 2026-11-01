@@ -17,7 +17,7 @@ mod wit;
 
 use std::path::{Path, PathBuf};
 
-use rokc_diagnostic::{RokDiagnostic, SourceMap};
+use rokc_diagnostic::{Code, RokDiagnostic, SourceMap};
 use rokc_hir::HirModule;
 use rokc_lexer::Lexer;
 use rokc_mir::MirModule;
@@ -216,7 +216,7 @@ fn load_prebuilt(
             Ok(r) if r.name == *name => r,
             Ok(r) => {
                 diags.push(RokDiagnostic::error(
-                    rokc_diagnostic::ErrorKind::Module,
+                    Code::DEPENDENCY,
                     rokc_diagnostic::Span::DUMMY,
                     format!(
                         "`--extern {name}={}`: it was built as `{}`, and the name is in its \
@@ -229,7 +229,7 @@ fn load_prebuilt(
             }
             Err(e) => {
                 diags.push(RokDiagnostic::error(
-                    rokc_diagnostic::ErrorKind::Module,
+                    Code::DEPENDENCY,
                     rokc_diagnostic::Span::DUMMY,
                     e,
                 ));
@@ -241,7 +241,7 @@ fn load_prebuilt(
             .find(|p| r.type_offset < p.rokhir.type_end() && p.rokhir.type_offset < r.type_end())
         {
             diags.push(RokDiagnostic::error(
-                rokc_diagnostic::ErrorKind::Module,
+                Code::DEPENDENCY,
                 rokc_diagnostic::Span::DUMMY,
                 format!(
                     "prebuilt `{}` and `{}` use the same GC type ids - build each dependency \
@@ -443,7 +443,7 @@ fn check_dependency_names(
         let under = format!("{dep}::");
         if modules.iter().any(|m| m == dep || m.starts_with(&under)) {
             diags.push(RokDiagnostic::error(
-                rokc_diagnostic::ErrorKind::Module,
+                Code::IMPORT_CONFLICT,
                 rokc_diagnostic::Span::DUMMY,
                 format!(
                     "module `{dep}` has the name of the dependency `{dep}` - dependency names \
@@ -495,7 +495,7 @@ pub fn compile_file(
 ) -> Result<CompiledProject, Vec<RokDiagnostic>> {
     let source = std::fs::read_to_string(path).map_err(|e| {
         vec![RokDiagnostic::error(
-            rokc_diagnostic::ErrorKind::Module,
+            Code::IO,
             rokc_diagnostic::Span::DUMMY,
             format!("cannot read {}: {e}", path.display()),
         )]
@@ -604,7 +604,7 @@ fn compile_std(
     let mut p = r?;
     let no_dir = || {
         vec![RokDiagnostic::error(
-            rokc_diagnostic::ErrorKind::Module,
+            Code::DEPENDENCY,
             rokc_diagnostic::Span::DUMMY,
             "the bootstrap tiers must be the folders of one directory".to_owned(),
         )]
@@ -1642,13 +1642,8 @@ fn mod_file(
     dir: Option<&Path>,
 ) -> Result<(PathBuf, Option<PathBuf>), RokDiagnostic> {
     let name = &m.name;
-    let err = |msg: String| {
-        RokDiagnostic::error(
-            rokc_diagnostic::ErrorKind::Module,
-            rokc_diagnostic::Span::DUMMY,
-            msg,
-        )
-    };
+    let err =
+        |msg: String| RokDiagnostic::error(Code::MODULE_FILE, rokc_diagnostic::Span::DUMMY, msg);
     let custom = m.attrs.iter().find(|a| a.path == ["path"]).map(|a| {
         match &a.body {
             rokc_ast::AttrBody::Args(args) => match args.as_slice() {
@@ -1755,7 +1750,7 @@ fn cross_file_confusables(idents: Vec<(String, rokc_diagnostic::Span)>) -> Vec<R
                 if *name != id.0 && at.file != id.1.file {
                     out.push(
                         RokDiagnostic::warning(
-                            rokc_diagnostic::ErrorKind::Lexical,
+                            Code::LINT,
                             id.1,
                             format!(
                                 "identifier `{}` looks like `{name}` (confusable spelling)",
@@ -2475,7 +2470,7 @@ fn keyword_tables(
         if let Some(old) = seen.iter().find(|o| o.name == d.name) {
             diags.push(
                 RokDiagnostic::error(
-                    rokc_diagnostic::ErrorKind::Meta,
+                    Code::DUPLICATE_REGISTRATION,
                     d.span,
                     format!("keyword `{}` is registered twice (spec 6.6.4)", d.name),
                 )
@@ -2495,7 +2490,7 @@ fn keyword_tables(
             }
         } else {
             diags.push(RokDiagnostic::error(
-                rokc_diagnostic::ErrorKind::Meta,
+                Code::INVALID_KEYWORD_DECL,
                 d.span,
                 format!(
                     "`#[keyword(\"{}\")]` must be on a function - its handler (spec 6.6.2); \
@@ -2581,7 +2576,7 @@ fn literal_tables(
     for d in defs {
         if d.handler.is_empty() {
             diags.push(RokDiagnostic::error(
-                rokc_diagnostic::ErrorKind::Meta,
+                Code::INVALID_LITERAL_HANDLER,
                 d.span,
                 "`#[literal(..)]` must be on a function - its handler (spec 6.5.2)",
             ));
@@ -2686,7 +2681,7 @@ fn collect_module_tree(
                 Ok(s) => s,
                 Err(e) => {
                     diags.push(RokDiagnostic::error(
-                        rokc_diagnostic::ErrorKind::Module,
+                        Code::MODULE_FILE,
                         rokc_diagnostic::Span::DUMMY,
                         format!("cannot read module file {}: {e}", body_path.display()),
                     ));
@@ -2756,9 +2751,7 @@ fn flatten_module_items(
                 uses.push((module_key.clone(), u.vis, u.tree));
             }
             rokc_ast::Item::Mod(m) => {
-                let err = |msg: String| {
-                    RokDiagnostic::error(rokc_diagnostic::ErrorKind::Module, m.span, msg)
-                };
+                let err = |msg: String| RokDiagnostic::error(Code::MODULE_FILE, m.span, msg);
                 if mods.contains(&m.name) {
                     diags.push(err(format!(
                         "module `{}` is declared twice in the same module (spec 5.4.12)",

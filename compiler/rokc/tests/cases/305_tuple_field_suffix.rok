@@ -1,5 +1,5 @@
 // spec: 003.05-tuple-field-index
-// expect-error: error[E002]
+// expect-error: error[E0010]
 // expect-error: invalid tuple field index `1u8`
 
 // A tuple index is plain decimal digits, so `t.1u8` is rejected.

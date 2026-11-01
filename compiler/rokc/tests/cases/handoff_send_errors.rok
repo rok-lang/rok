@@ -1,4 +1,4 @@
-// expect-error: error[E202]: `xs` was sent through a channel at line 27
+// expect-error: error[E0105]: `xs` was sent through a channel at line 27
 // expect-error: handoff_send_errors.rok:28:5: `xs` was sent through a channel at line 27
 // expect-error: help: the receiver owns it now; hand over `xs.clone()` to keep a separate copy, or give `xs` a new value before using it again
 // expect-error: handoff_send_errors.rok:34:5: `ys` was sent through a channel at line 33

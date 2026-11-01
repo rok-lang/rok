@@ -283,6 +283,25 @@ pub fn main_with_os(args: Vec<std::ffi::OsString>) -> i32 {
             _ => rest.push(a),
         }
     }
+    // `--explain <code>` takes no command.
+    let explain = rest
+        .iter()
+        .take_while(|a| *a != "--")
+        .enumerate()
+        .find_map(|(j, a)| match a.strip_prefix("--explain") {
+            Some("") => Some(rest.get(j + 1).cloned().unwrap_or_default()),
+            Some(v) => v.strip_prefix('=').map(str::to_owned),
+            None => None,
+        });
+    if let Some(code) = explain {
+        return match rokc_diagnostic::explain(&code) {
+            Ok(text) => {
+                print!("{text}");
+                0
+            }
+            Err(e) => usage(&e),
+        };
+    }
     // The command is the first non-option word; rokc options with a
     // separate value go after it. `--version --format json` has no
     // command, so `json` there is the value.
@@ -347,7 +366,10 @@ fn version(g: &Global, json: bool) -> String {
     };
     if json {
         let mut fields = vec![
-            ("schema".to_owned(), Json::num(rokc_diagnostic::JSON_SCHEMA)),
+            (
+                "schema".to_owned(),
+                Json::num(rokc_diagnostic::RECORD_SCHEMA),
+            ),
             ("version".to_owned(), Json::str(env!("CARGO_PKG_VERSION"))),
             ("line".to_owned(), Json::str(VERSION_LINE)),
         ];
@@ -1135,7 +1157,7 @@ fn post_args(c: &mut Command, post: &[String], tail: &[std::ffi::OsString]) {
 }
 
 /// rokc's options that take a separate value (`--target x86_64-..`).
-const VALUE_OPTIONS: [&str; 32] = [
+const VALUE_OPTIONS: [&str; 33] = [
     "--color",
     "--cwd",
     "--message-format",
@@ -1144,6 +1166,7 @@ const VALUE_OPTIONS: [&str; 32] = [
     "--bootstrap",
     "--cfg",
     "--print",
+    "--explain",
     "--extern",
     "--extern-feature",
     "--name",
@@ -2640,7 +2663,10 @@ fn cmd_deps(g: &Global, args: &[String]) -> Result<i32, String> {
 fn deps_json(g: &Global, graph: &resolve::Graph) -> Result<i32, String> {
     let record = |ty: &str, fields: Vec<(&str, Json)>| {
         let mut all = vec![
-            ("schema".to_owned(), Json::num(rokc_diagnostic::JSON_SCHEMA)),
+            (
+                "schema".to_owned(),
+                Json::num(rokc_diagnostic::RECORD_SCHEMA),
+            ),
             ("type".to_owned(), Json::str(ty)),
         ];
         all.extend(fields.into_iter().map(|(k, v)| (k.to_owned(), v)));

@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use rokc_ast::Item;
-use rokc_diagnostic::{ErrorKind, RokDiagnostic, SourceMap, Span};
+use rokc_diagnostic::{Code, RokDiagnostic, SourceMap, Span};
 use rokc_lexer::Lexer;
 use rokc_mir::WitLink;
 use rokc_parser::{ExtOps, apply_keywords, parse_program_meta};
@@ -54,7 +54,7 @@ pub fn expand(
         let span = g[0].1;
         let requests: Vec<rokc_wit::Request> = g.into_iter().map(|(r, _)| r).collect();
         let fail = |diags: &mut Vec<RokDiagnostic>, msg: String| {
-            diags.push(RokDiagnostic::error(ErrorKind::Module, span, msg));
+            diags.push(RokDiagnostic::error(Code::INVALID_WIT, span, msg));
         };
         // A prebuilt dependency's WIT is in its ROKHIR (the overlay).
         let loaded = match crate::OVERLAY.with(|o| rokc_wit::load(&requests, &o.borrow())) {

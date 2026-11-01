@@ -1,5 +1,5 @@
 // spec: 003.02.5-cmp-chain-banned
-// expect-error: error[E002]
+// expect-error: error[E0019]
 // expect-error: cannot be chained
 
 // spec 302.5: chained comparisons (`a < b < c`) are a compile error.

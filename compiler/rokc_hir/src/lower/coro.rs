@@ -30,6 +30,7 @@
 //! when the body diverges.
 
 use rokc_ast::{Block, CallArg, Expr, ExprKind};
+use rokc_diagnostic::Code;
 use rokc_ir_common::{ConstVal, PrimTy};
 
 use super::desugar::{closure_ctx, may_throw};
@@ -328,6 +329,7 @@ pub(super) fn lower_yield(
 ) -> HirExpr {
     let Some(coro) = ctx.coro.clone().filter(|c| c.kind.yields()) else {
         return ctx.error_expr(
+            Code::OUTSIDE_CONTEXT,
             span,
             "`yield` outside a generator: use it in a `yield fn` / `yield { .. }` / \
              `async yield` body (spec 4.11)"
@@ -609,6 +611,7 @@ pub(super) fn poll_loop(
 ) -> HirExpr {
     if !ctx.coro.as_ref().is_some_and(|c| c.kind.is_async()) {
         return ctx.error_expr(
+            Code::OUTSIDE_CONTEXT,
             span,
             "`await` outside an async body: use it in an `async fn` / `async { .. }` / \
              `async ||` body (spec 4.12.10)"
@@ -632,6 +635,7 @@ pub(super) fn poll_loop(
             return polled;
         }
         return ctx.error_expr(
+            Code::COROUTINE,
             span,
             format!(
                 "`{method}` must return `Poll<T>`, found `{}`",
@@ -645,7 +649,11 @@ pub(super) fn poll_loop(
         def.variants.iter().position(|v| v.name == "Pending"),
         def.generic_args.first().cloned(),
     ) else {
-        return ctx.error_expr(span, "`await` needs a `Poll<T>`".to_owned());
+        return ctx.error_expr(
+            Code::COROUTINE,
+            span,
+            "`await` needs a `Poll<T>`".to_owned(),
+        );
     };
     let v = ctx.declare(None, out.clone());
     let coro = ctx.coro.clone().expect("in a coroutine");
@@ -1141,6 +1149,7 @@ fn lower_coro_block<'a>(
     args.extend(throws.clone());
     let Some(sid) = ctx.instantiate_struct(kind.wrapper(throws.is_some()), args, ctx.here()) else {
         return ctx.error_expr(
+            Code::INTERNAL,
             span,
             format!(
                 "`{}` is missing from the core library",

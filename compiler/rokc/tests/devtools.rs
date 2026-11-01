@@ -165,9 +165,9 @@ fn lint_finds_each_kind_and_honors_levels() {
         "`while true` is `loop`",
         "unreachable statement",
         "`#[warn(unused_variables)]` on by default",
-        "error[E503]: `k` is assigned to itself",
+        "error[E0132]: `k` is assigned to itself",
         "`#[deny(self_assignment)]` on by default",
-        "error[E503]: comparison with NaN is always false",
+        "error[E0132]: comparison with NaN is always false",
         "`#[deny(nan_comparison)]` on by default",
     ] {
         assert!(err.contains(want), "missing {want:?}:\n{err}");
@@ -179,7 +179,7 @@ fn lint_finds_each_kind_and_honors_levels() {
     // `-D` makes it an error (exit 1); `-A` on a group silences it.
     let (_, err) = exit(&rokc(&dir, &["lint", "-D", "unused_variables"]), 1);
     assert!(
-        err.contains("error[E503]") && err.contains("`-D unused_variables` on the command line")
+        err.contains("error[E0132]") && err.contains("`-D unused_variables` on the command line")
     );
     let (_, err) = exit(&rokc(&dir, &["lint", "-A", "all", "-W", "deprecated"]), 0);
     assert!(
@@ -203,11 +203,11 @@ fn lint_finds_each_kind_and_honors_levels() {
     .unwrap();
     let (_, err) = exit(&rokc(&dir, &["lint", "-A", "unused_variables"]), 1);
     assert!(
-        err.contains("warning[E503]: unused variable `a`\n  --> src/main.rok:4:14"),
+        err.contains("warning[E0132]: unused variable `a`\n  --> src/main.rok:4:14"),
         "{err}"
     );
     assert!(
-        err.contains("error[E503]: unused variable `b`\n  --> src/main.rok:5:22"),
+        err.contains("error[E0132]: unused variable `b`\n  --> src/main.rok:5:22"),
         "{err}"
     );
     assert!(
@@ -220,7 +220,7 @@ fn lint_finds_each_kind_and_honors_levels() {
     let (out, _) = exit(&rokc(&dir, &["-q", "--message-format=json", "lint"]), 1);
     let line = out.lines().find(|l| l.contains("`b`")).expect(&out);
     assert!(
-        line.starts_with("{\"type\":\"error\",\"code\":\"E503\",\"kind\":\"lint\""),
+        line.starts_with("{\"type\":\"error\",\"code\":\"E0132\",\"kind\":\"lint\""),
         "{line}"
     );
 
@@ -239,7 +239,7 @@ fn lint_finds_each_kind_and_honors_levels() {
     )
     .unwrap();
     let (_, err) = exit(&rokc(&dir, &["lint"]), 0);
-    assert!(!err.contains("[E503]"), "{err}");
+    assert!(!err.contains("[E0132]"), "{err}");
 }
 
 // spec: §9.1.2

@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 
 use rokc_ast::{AttrArg, AttrBody, Attribute, FnDef, Item, Literal, Program};
-use rokc_diagnostic::{ErrorKind, RokDiagnostic};
+use rokc_diagnostic::{Code, RokDiagnostic};
 
 /// Every slot name the compiler accepts (spec 6.4.8). Source of truth:
 /// stdlib spec `000-meta/004-lang-slot-table.md`; change that table first.
@@ -279,7 +279,7 @@ fn collect_attr(
     }
     let AttrBody::Args(args) = &attr.body else {
         diags.push(RokDiagnostic::error(
-            ErrorKind::Meta,
+            Code::INVALID_LANG_ITEM,
             attr.span,
             "`#[lang(...)]` requires a single string-literal slot name (spec 6.4.2)".to_owned(),
         ));
@@ -294,7 +294,7 @@ fn collect_attr(
     }
     let Some(slot) = slot else {
         diags.push(RokDiagnostic::error(
-            ErrorKind::Meta,
+            Code::INVALID_LANG_ITEM,
             attr.span,
             "`#[lang(...)]` requires a single string-literal slot name (spec 6.4.2)".to_owned(),
         ));
@@ -303,7 +303,7 @@ fn collect_attr(
     // Spec 6.4.8: unknown slot name → error.
     if !KNOWN_SLOTS.contains(&slot.as_str()) {
         diags.push(RokDiagnostic::error(
-            ErrorKind::Meta,
+            Code::INVALID_LANG_ITEM,
             attr.span,
             format!("unknown lang slot `{slot}` on `{item_name}` (spec 6.4.8)"),
         ));
@@ -311,7 +311,7 @@ fn collect_attr(
     }
     if let Some(why) = form_mismatch(&slot, on.0, on.1) {
         diags.push(RokDiagnostic::error(
-            ErrorKind::Meta,
+            Code::INVALID_LANG_ITEM,
             attr.span,
             format!(
                 "`{item_name}` does not match the form of lang slot `{slot}`: it {why} (spec 6.4.7)"
@@ -322,7 +322,7 @@ fn collect_attr(
     // Spec 6.4.6: same slot on two items → error.
     if let Some(prev) = table.by_slot.get(&slot) {
         diags.push(RokDiagnostic::error(
-            ErrorKind::Meta,
+            Code::DUPLICATE_REGISTRATION,
             item_span,
             format!(
                 "lang slot `{slot}` is already bound to `{}` - cannot also bind to \

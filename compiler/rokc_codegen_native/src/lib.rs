@@ -22,7 +22,7 @@ mod obj;
 mod wrap;
 mod x64;
 
-use rokc_diagnostic::{ErrorKind, RokDiagnostic};
+use rokc_diagnostic::{Code, RokDiagnostic};
 use rokc_mir::MirModule;
 
 /// How to generate code for a module (its target is `MirModule::target`).
@@ -66,7 +66,7 @@ pub fn compile(
 ) -> Result<Output, RokDiagnostic> {
     if let Some(why) = unsupported(module) {
         return Err(RokDiagnostic::error(
-            ErrorKind::Unsupported,
+            Code::UNSUPPORTED,
             rokc_diagnostic::Span::DUMMY,
             why,
         ));
@@ -92,7 +92,7 @@ pub fn compile_unit(
     let o = finish(module, opts, sources, Some(&unit))?;
     if o.gc_tables.len() != plan.gc_tables.len() {
         return Err(RokDiagnostic::error(
-            ErrorKind::Internal,
+            Code::INTERNAL,
             rokc_diagnostic::Span::DUMMY,
             format!(
                 "unit `{}` made a GC type its plan lacks",

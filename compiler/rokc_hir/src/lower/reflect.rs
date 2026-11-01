@@ -6,6 +6,7 @@
 
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use rokc_diagnostic::Code;
 
 use super::expr::{any_dispatcher, discard_args, enum_base_name, hir_local};
 
@@ -91,6 +92,7 @@ pub(super) fn no_assoc_fn(
     span: rokc_diagnostic::Span,
 ) -> HirExpr {
     let e = ctx.error_expr(
+        Code::NO_METHOD,
         span,
         format!("no associated function `{method}` on `{}`", ctx.ty_name(ty)),
     );
@@ -253,7 +255,11 @@ pub(super) fn intrinsic(
 ) -> HirExpr {
     let Some(t) = targs.first().filter(|_| targs.len() == 1) else {
         discard_args(ctx, args);
-        return ctx.error_expr(span, format!("`{name}` is called as `{name}::<T>(..)`"));
+        return ctx.error_expr(
+            Code::BUILTIN_CALL,
+            span,
+            format!("`{name}` is called as `{name}::<T>(..)`"),
+        );
     };
     let t = ctx.resolve_ast_ty(t);
     let table = match op {
@@ -267,7 +273,11 @@ pub(super) fn intrinsic(
     }
     let [CallArg::Positional(arg)] = args else {
         discard_args(ctx, args);
-        return ctx.error_expr(span, format!("`{name}` takes one value"));
+        return ctx.error_expr(
+            Code::BUILTIN_CALL,
+            span,
+            format!("`{name}` takes one value"),
+        );
     };
     if op == super::collect::Intrinsic::Shown {
         return shown(ctx, arg, &t, span);

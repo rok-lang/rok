@@ -6,7 +6,7 @@ use rokc_ast::{
     AttrArg, AttrBody, Attribute, EnumVariantKind, ExternItem, ImplItem, Item, Literal, StructKind,
     TraitItem,
 };
-use rokc_diagnostic::{ErrorKind, RokDiagnostic};
+use rokc_diagnostic::{Code, RokDiagnostic};
 use rokc_parser::{MetaKind, MetaTable};
 
 /// Where an attribute sits.
@@ -196,8 +196,13 @@ impl Cx<'_> {
     fn attrs(&mut self, attrs: &[Attribute], pos: Pos) {
         for a in attrs {
             if let Some(msg) = self.problem(a, pos) {
-                self.diags
-                    .push(RokDiagnostic::error(ErrorKind::Meta, a.span, msg));
+                // The rest are malformed or unknown.
+                let code = if msg.contains("` cannot be attached to ") {
+                    Code::MISPLACED_ATTRIBUTE
+                } else {
+                    Code::INVALID_ATTRIBUTE
+                };
+                self.diags.push(RokDiagnostic::error(code, a.span, msg));
             }
         }
     }

@@ -666,7 +666,7 @@ fn manifest_errors_and_reserved_forms() {
         "Package {\n    name: env(\"X\"),\n}\n",
     );
     let out = rok(&home, &app, &["deps"]);
-    fails(&out, "error[E002]: calls are not allowed in ROKON");
+    fails(&out, "error[E0010]: calls are not allowed in ROKON");
     fails(&out, "rok.rokon:2:11\n");
     write(&app.join("rok.rokon"), "Package { deps: {\n");
     fails(&rok(&home, &app, &["deps"]), "rok.rokon:2:1\n");
@@ -699,12 +699,15 @@ fn manifest_errors_say_what_to_write() {
     let out = rok(&home, &app, &["deps"]);
     fails(
         &out,
-        "error[E002]: expected the end of the file: a ROKON file holds one value",
+        "error[E0010]: expected the end of the file: a ROKON file holds one value",
     );
     fails(&out, example);
     write(&app.join("rok.rokon"), "{\"name\": \"app\"}\n");
     let out = rok(&home, &app, &["deps"]);
-    fails(&out, "error[E200]: expected `Package { .. }`, found a dict");
+    fails(
+        &out,
+        "error[E0097]: expected `Package { .. }`, found a dict",
+    );
     fails(&out, example);
     // A path where a version requirement goes.
     write(
@@ -714,7 +717,7 @@ fn manifest_errors_say_what_to_write() {
     let out = rok(&home, &app, &["deps"]);
     fails(
         &out,
-        "error[E200]: `../geom` is a path, not a version requirement",
+        "error[E0097]: `../geom` is a path, not a version requirement",
     );
     fails(
         &out,
@@ -728,7 +731,7 @@ fn manifest_errors_say_what_to_write() {
     let out = rok(&home, &app, &["deps"]);
     fails(
         &out,
-        "error[E002]: expected `,` or `}`, found field `version`",
+        "error[E0010]: expected `,` or `}`, found field `version`",
     );
     fails(
         &out,
@@ -1089,7 +1092,7 @@ fn rok_passes_color_to_rokc() {
     ] {
         let err = stderr_with(&home, &app, &[], args);
         assert!(
-            err.contains("\x1b[1;91merror[E100]\x1b[0m"),
+            err.contains("\x1b[1;91merror[E0027]\x1b[0m"),
             "{args:?}: {err:?}"
         );
     }
@@ -1100,7 +1103,7 @@ fn rok_passes_color_to_rokc() {
         &["check", "--no-color"],
     );
     assert!(
-        err.contains("error[E100]") && !err.contains('\x1b'),
+        err.contains("error[E0027]") && !err.contains('\x1b'),
         "{err:?}"
     );
 }
@@ -1209,7 +1212,7 @@ fn lint_and_doc_with_dependencies() {
     );
     let out = rok(&home, &app, &["lint", "-W", "unused_variables"]);
     ok(&out);
-    assert!(text(&out.stderr).contains("warning[E503]"));
+    assert!(text(&out.stderr).contains("warning[E0132]"));
     fails(
         &rok(&home, &app, &["lint", "-D", "all"]),
         "unused variable `x`",

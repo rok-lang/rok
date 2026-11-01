@@ -1481,7 +1481,7 @@ a + 1
     assert_eq!(
         stderr,
         "\
-error[E200]: mismatched types: `let b` expects `str`, found `i32`
+error[E0040]: mismatched types: `let b` expects `str`, found `i32`
   --> <repl>:1:25
    |
  1 | let a = 1; let b: str = 2;
@@ -1489,19 +1489,19 @@ error[E200]: mismatched types: `let b` expects `str`, found `i32`
    |
    = help: to make text from it, write `f\"{2}\"`
    = help: or, to keep the `i32`, drop `: str`
-error[E200]: operator `+` cannot be applied to `i32` and `bool`
+error[E0054]: operator `+` cannot be applied to `i32` and `bool`
   --> <repl>:1:25
    |
  1 | let é = \"é\"; let w = 3; w + true
    |                         ^^^^^^^^
-error[E200]: mismatched types: the right operand of `+` expects `str`, found `i32`
+error[E0040]: mismatched types: the right operand of `+` expects `str`, found `i32`
   --> <repl>:2:25
    |
  2 |   2); println(p); f() + p
    |                         ^
    |
    = help: `+` joins two `str`s; put the value in an f-string: `f\"{f()}{p}\"`
-error[E100]: cannot find value `a` in this scope
+error[E0027]: cannot find value `a` in this scope
   --> <repl>:1:1
    |
  1 | a + 1
@@ -1891,12 +1891,12 @@ nope(); S { a: 1 }
     assert_eq!(
         stderr,
         "\
-error[E100]: cannot find value `nope` in this scope
+error[E0027]: cannot find value `nope` in this scope
   --> <repl>:1:1
    |
  1 | nope?
    | ^^^^
-error[E100]: cannot find function `nope` in this scope
+error[E0027]: cannot find function `nope` in this scope
   --> <repl>:1:1
    |
  1 | nope(); S { a: 1 }
@@ -1985,7 +1985,7 @@ g()
     assert_eq!(
         stderr,
         "\
-error[E200]: struct `P` has no field `x`
+error[E0043]: struct `P` has no field `x`
   --> <repl cell 2>:1:32
    |
  1 | impl P { fn get(self) -> i32 { self.x } }

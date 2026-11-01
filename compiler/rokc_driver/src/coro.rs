@@ -17,7 +17,7 @@ use rokc_ast::{
     Block, Expr, ExprKind, FnDef, ImplItem, Item, Path, PathSegment, Stmt, StmtKind, ThrowsKind,
     TryKind, Ty, TyKind,
 };
-use rokc_diagnostic::{ErrorKind, RokDiagnostic, Span};
+use rokc_diagnostic::{Code, RokDiagnostic, Span};
 
 /// The flattened items; a root `main` is the entry (spec 4.16.5).
 pub fn rewrite_items(items: &mut [(String, Item)], diags: &mut Vec<RokDiagnostic>) {
@@ -80,7 +80,7 @@ fn rewrite_fn(f: &mut FnDef, root: bool, diags: &mut Vec<RokDiagnostic>) {
     let deferred = |p: &rokc_ast::Param| p.name == "self" && f.is_async && !f.is_generator;
     if f.params.iter().any(|p| p.by_ref && !deferred(p)) {
         let mut d = RokDiagnostic::error(
-            ErrorKind::Type,
+            Code::INVALID_SIGNATURE,
             span,
             format!(
                 "`{}`: a coroutine (`async` / `yield`) fn cannot take `ref` parameters - \
@@ -112,7 +112,7 @@ fn rewrite_fn(f: &mut FnDef, root: bool, diags: &mut Vec<RokDiagnostic>) {
         Some(t) => t,
         None if f.is_generator => {
             diags.push(RokDiagnostic::error(
-                ErrorKind::Type,
+                Code::INVALID_SIGNATURE,
                 f.span,
                 format!(
                     "`yield fn {}` needs its item type: `yield fn {}(..) -> T` (spec 4.11.12)",
