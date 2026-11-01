@@ -34,8 +34,7 @@ for i in 0..150 {
 let seen = Set::<str>::new();
 let count = 0;
 let sum: u64 = 0;
-for await e in try! await many.read_dir_async() {
-    let x = try! e.get();
+try! for await x in try! await many.read_dir_async() {
     count += 1;
     seen.insert(x.file_name());
     sum += x.metadata().len();
@@ -51,8 +50,8 @@ try! await a.write_all_async("abc");
 try! a_own.close();
 try! await sub.copy_async("a.txt", "b.txt");
 let names: List<str> = List::new();
-for await e in try! await sub.read_dir_async() {
-    names.push(try! e.get().file_name());
+try! for await e in try! await sub.read_dir_async() {
+    names.push(e.file_name());
 }
 let first = if names[0] < names[1] { names[0] } else { names[1] };
 let second = if names[0] < names[1] { names[1] } else { names[0] };
@@ -67,7 +66,7 @@ try (try await sub.open_async("../many/1.txt")).close() catch e: IoError {
 // Stop early inside `using`: the stream closes.
 let taken = 0;
 using s = try! await many.read_dir_async() {
-    for await e in s {
+    try! for await e in s {
         taken += 1;
         if taken == 3 { break; }
     }

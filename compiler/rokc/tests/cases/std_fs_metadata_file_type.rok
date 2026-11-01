@@ -2,11 +2,11 @@
 // spec: §6.2.7 §6.2.14
 // needs: posix-fs
 // expect-exit: 0
-// expect-lint: 45:57 use of deprecated method `Metadata::mtime`
-// expect-lint: 45:82 use of deprecated method `Metadata::mtime_nanos`
-// expect-lint: 46:76 use of deprecated method `Metadata::atime`
-// expect-lint: 47:88 use of deprecated method `Metadata::ctime`
-// expect-lint: 54:15 `File::from_fd` will need `unsafe` in a later release: wrap the call in `unsafe { .. }`
+// expect-lint: 44:57 use of deprecated method `Metadata::mtime`
+// expect-lint: 44:82 use of deprecated method `Metadata::mtime_nanos`
+// expect-lint: 45:76 use of deprecated method `Metadata::atime`
+// expect-lint: 46:88 use of deprecated method `Metadata::ctime`
+// expect-lint: 53:15 `File::from_fd` will need `unsafe` in a later release: wrap the call in `unsafe { .. }`
 // expect-warning: = note: use `modified()`
 // expect-warning: = note: use `accessed()`
 // expect-warning: = note: use `status_changed()` (last status change) or `created()`
@@ -37,8 +37,7 @@ fn main() throws (IoError) {
     let m = try fs::metadata(path);
     let d = try fs::metadata(dir);
     println(f"{m.file_type():?} {d.file_type():?} {m.file_type() == FileType::File} {m.file_type().is_dir()}");
-    for r in try fs::read_dir(dir) {
-        let e = try r.get();
+    try for e in fs::read_dir(dir) {
         println(f"entry: {e.file_type():?} {e.file_type() == e.metadata().file_type()}");
     }
     let t = try m.modified();

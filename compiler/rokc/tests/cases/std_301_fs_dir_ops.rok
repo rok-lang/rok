@@ -14,7 +14,7 @@
 // truncates, `try_clone` dups the fd (shared offset), `remove_file`,
 // `remove_dir` (fails on a non-empty dir), `exists`.
 use rok::std::fs;
-use rok::std::fs::{Dir, File, OpenOptions};
+use rok::std::fs::{Dir, File};
 use rok::core::io::IoError;
 use rok::std::env;
 use rok::std::process;
@@ -28,7 +28,7 @@ fn main() throws (IoError) {
     try f.close();
     println(f"created: {fs::exists(base / "x.txt")}");
 
-    let g = try File::open_with(base / "x.txt", OpenOptions::new().read(true).write(true));
+    let g = try File::open(base / "x.txt", ReadWrite);
     try g.set_len(3u64);
     try g.close();
     println(f"set_len: {(try fs::metadata(base / "x.txt")).len()} [{try fs::read_to_str(base / "x.txt")}]");

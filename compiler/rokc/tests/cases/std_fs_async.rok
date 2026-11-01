@@ -19,7 +19,7 @@
 // (`task::spawn_blocking`) while the task suspends; errors throw as in
 // the sync API; a cancelled task's call still finishes in the background.
 use rok::std::fs;
-use rok::std::fs::{File, OpenOptions};
+use rok::std::fs::File;
 use rok::core::io::IoError;
 use rok::std::env;
 use rok::std::thread;
@@ -36,7 +36,7 @@ try! await fs::write_async(f, "hello async");
 println(f"read: {try! await fs::read_to_str_async(f)}");
 println(f"bytes: {(try! await fs::read_async(f)).len()}");
 
-let h = try! await fs::open_with_async(f, OpenOptions::new().append(true));
+let h = try! await File::open_async(f, Append);
 try! await h.write_all_async(" more");
 try! h.close();
 println(f"append: {try! await fs::read_to_str_async(f)}");
@@ -55,7 +55,7 @@ try! await w.write_all_async("y");
 try! await w.sync_all_async();
 try! w.close();
 let names: List<str> = List::new();
-for e in try! await fs::read_dir_async(base / "d") { names.push(e.file_name()); }
+try! for await e in try! await fs::read_dir_async(base / "d") { names.push(e.file_name()); }
 let a = names[0];
 let b = names[1];
 if a > b { names[0] = b; names[1] = a; }

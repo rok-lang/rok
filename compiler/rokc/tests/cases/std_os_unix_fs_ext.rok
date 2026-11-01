@@ -1,42 +1,78 @@
-// spec: std 301-fs §3.1.1
-// spec: §6.2.7
+// spec: std 301-fs §3.1.1 §3.1.1a §3.1.6
 // needs: posix-fs
 // only-os: macos linux
 // expect-exit: 0
-// expect-lint: 38:15 use of deprecated method `Permissions::from_mode`
-// expect-lint: 39:44 use of deprecated method `OpenOptions::mode`
-// expect-lint: 40:21 use of deprecated method `Permissions::mode`
-// expect-warning: = note: use `PermissionsExt::from_mode` (rok::std::os::unix::fs): write `let p: Permissions = PermissionsExt::from_mode(m)`; from 0.2.0 `Permissions::from_mode(m)` reaches it; on Windows, `set_readonly`
-// expect-warning: = note: use `PermissionsExt::mode` (rok::std::os::unix::fs): write `PermissionsExt::mode(p)`; from 0.2.0 `p.mode()` reaches it; on Windows, `readonly`
-// expect-warning: = note: use `OpenOptionsExt::mode` (rok::std::os::unix::fs): write `OpenOptionsExt::mode(opts, m)`; from 0.2.0 `opts.mode(m)` reaches it
 // expect-stdout:
 // 640 false 640 600
 // created: 600
-// old: 644 600
+// set: 444 true 644
+// raw: 600 seen
+// truncated: 0
+// nofollow: FilesystemLoop
+// custom: InvalidInput
+// custom says: os.custom_flags sets O_TRUNC, which File::open_or_create decides: use File::create instead, or DirExt::open_at for raw flags
 
-// Unix permission bits move to `rok::std::os::unix::fs`. Until 0.2.0 the
-// deprecated inherent methods win method lookup, so the trait is
-// reached through its name; the plain calls still work and warn.
+// Unix permission bits and raw open(2) live in `rok::std::os::unix::fs`:
+// `PermissionsExt` on `Permissions`, the create mode as
+// `CreateFlags.permissions`, `DirExt::open_at` with the `O_*` flags, and
+// `OsCreateFlags.custom_flags` refusing the bits the function decides.
 use rok::std::fs;
-use rok::std::fs::{OpenOptions, Permissions};
-use rok::std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use rok::std::fs::{CreateFlags, Dir, File, OpenFlags, Permissions};
+use rok::std::os::unix::fs::{DirExt, OsCreateFlags, PermissionsExt, O_CREAT, O_TRUNC, O_WRONLY};
 use rok::core::io::IoError;
 use rok::std::env;
 use rok::std::process;
 
+fn mode_of(p: str) throws (IoError) -> u32 {
+    (try fs::metadata(p)).permissions().mode() & 0o777u32
+}
+
 fn main() throws (IoError) {
-    let p: Permissions = PermissionsExt::from_mode(0o100640u32);
-    let q = p.set_mode(0o600u32);
-    println(f"{PermissionsExt::mode(p):o} {p.readonly()} {PermissionsExt::mode(p.set_readonly(false)) & 0o777u32:o} {PermissionsExt::mode(q):o}");
+    let p = Permissions::from_mode(0o100640u32);
+    let q = p;
+    q.set_mode(0o600u32);
+    let w = p;
+    w.set_readonly(false);
+    println(f"{p.mode():o} {p.readonly()} {w.mode() & 0o777u32:o} {q.mode():o}");
+
     let dir = env::temp_dir() / f"rok_unix_fs_ext_{process::id()}";
     try fs::remove_dir_all(dir) catch _ {};
     try fs::create_dir(dir);
-    let opts = OpenOptionsExt::mode(OpenOptions::new().write(true).create(true), 0o600u32);
-    using f = try fs::open_with(dir / "a", opts) {}
-    println(f"created: {PermissionsExt::mode((try fs::metadata(dir / "a")).permissions()):o}");
-    // The plain forms: the deprecated inherent methods.
-    let old = Permissions::from_mode(0o644u32);
-    using g = try fs::open_with(dir / "b", OpenOptions::new().write(true).create(true).mode(0o600u32)) {}
-    println(f"old: {old.mode():o} {PermissionsExt::mode((try fs::metadata(dir / "b")).permissions()):o}");
+    let a = dir / "a";
+    using f = try File::open_or_create(a, CreateFlags { permissions: Permissions::from_mode(0o600u32) }) {}
+    println(f"created: {try mode_of(a.as_str()):o}");
+
+    // set_readonly(true) clears every write bit; false adds the owner's only.
+    let r = Permissions::from_mode(0o644u32);
+    r.set_readonly(true);
+    try fs::set_permissions(a, r);
+    let ro = try mode_of(a.as_str());
+    r.set_readonly(false);
+    try Dir::root().set_permissions(a, r);
+    println(f"set: {ro:o} {!(try fs::metadata(a)).permissions().readonly() && ro == 0o444u32} {try mode_of(a.as_str()):o}");
+
+    using g = try Dir::root().open_at(dir / "b", O_WRONLY | O_CREAT, 0o600u32) {
+        try g.write_all("seen");
+    }
+    println(f"raw: {try mode_of((dir / "b").as_str()):o} {try fs::read_to_str(dir / "b")}");
+    // Truncate an existing file without creating one: the raw layer only.
+    using t = try Dir::root().open_at(dir / "b", O_WRONLY | O_TRUNC) {}
+    println(f"truncated: {(try fs::metadata(dir / "b")).len()}");
+
+    try fs::symlink("b", dir / "link");
+    let nofollow = try File::open(dir / "link", ReadOnly, OpenFlags { follow_symlinks: false }) catch e {
+        println(f"nofollow: {e.kind():?}");
+        try File::open(dir / "b")
+    };
+    try nofollow.close();
+
+    let bad = CreateFlags { os: OsCreateFlags { custom_flags: O_TRUNC } };
+    let opened = try File::open_or_create(a, bad) catch e {
+        println(f"custom: {e.kind():?}");
+        println(f"custom says: {e.message().replace(a.as_str() + ": ", "")}");
+        try fs::remove_dir_all(dir);
+        return;
+    };
+    try opened.close();
     try fs::remove_dir_all(dir);
 }
