@@ -1,0 +1,19 @@
+// rok::std::os::unix::process: Unix-only parts of `process` (stdlib
+// 307.5). The traits are in the prelude on Unix targets.
+
+use rok::std::process::Signal;
+
+/// Unix-only `Command` settings.
+pub trait CommandExt {
+    /// Put the child in process group `pgid` (0: a new group it leads).
+    fn process_group(self, pgid: i32) -> Self;
+}
+
+/// How a Unix child ended beyond its exit code.
+pub trait ExitStatusExt {
+    /// The signal that ended it, if one did.
+    fn signal(self) -> Signal | none;
+}
+
+/// The parent process's id (`getppid`).
+pub fn parent_id() -> u32 { unsafe { rok_os_getppid() } }

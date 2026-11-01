@@ -11,7 +11,12 @@
 // standard handles; batch files refuse arguments holding `"`, `%` or a
 // line break. `send_signal` sends only `Signal::Kill`, as
 // `TerminateProcess`; `on_signal` routes console events: Ctrl-C
-// (`Interrupt`) and close (`Hangup`).
+// (`Interrupt`) and close (`Hangup`); Ctrl-Break goes through
+// `os::windows::process::on_ctrl_break`.
+//
+// The OS-only parts are trait impls under `#[cfg]` here
+// (`os::unix::process`, `os::linux::process`), so a call on another
+// target names the cfg it needs.
 //
 // `output()` drains stdout and stderr together.
 //
@@ -19,7 +24,15 @@
 // and a dispatcher thread (`rok-signal`) calls `f`, never in signal
 // context. A burst that fills the pipe drops signals.
 
-use rok::std::fs::File;
+use rok::std::fs::{File, file_of};
+#[cfg(target_family = "unix")]
+use rok::std::os::unix::io::{AsRawFd, RawFd};
+#[cfg(target_family = "unix")]
+use rok::std::os::unix::process::{CommandExt, ExitStatusExt};
+#[cfg(target_os = "linux")]
+use rok::std::os::linux::process::ChildExt;
+#[cfg(target_os = "windows")]
+use rok::std::os::windows::io::{AsRawHandle, RawHandle, raw_handle};
 use rok::core::io::{Close, IoError, IoErrorKind, Read, Write};
 use rok::std::sys::{check, byte_buf, read_more, take_handle, use_begin, use_end, use_close, word_at};
 use rok::std::path::Path;
@@ -42,7 +55,8 @@ pub fn id() -> u32 { unsafe { rok_os_getpid() } }
 
 /// A signal to send or handle. Windows: only `Kill` can be sent
 /// (`TerminateProcess`), and only `Interrupt` (Ctrl-C) and `Hangup`
-/// (console closed) handled.
+/// (console closed) handled; Ctrl-Break is
+/// `os::windows::process::on_ctrl_break`.
 #[derive(Clone, Copy)]
 #[non_exhaustive]
 pub enum Signal {
@@ -52,8 +66,20 @@ pub enum Signal {
     Interrupt,
     /// `SIGQUIT`.
     Quit,
+    /// `SIGILL`.
+    IllegalInstruction,
+    /// `SIGTRAP`.
+    Trap,
+    /// `SIGABRT`.
+    Abort,
+    /// `SIGBUS`.
+    Bus,
+    /// `SIGFPE`.
+    FloatingPoint,
     /// `SIGKILL`: cannot be handled.
     Kill,
+    /// `SIGSEGV`.
+    Segmentation,
     /// `SIGPIPE`.
     Pipe,
     /// `SIGALRM`.
@@ -70,18 +96,57 @@ pub enum Signal {
     Continue,
     /// `SIGSTOP`: cannot be handled.
     Stop,
+    /// `SIGTSTP`.
+    TerminalStop,
+    /// `SIGTTIN`.
+    TerminalInput,
+    /// `SIGTTOU`.
+    TerminalOutput,
+    /// `SIGURG`.
+    Urgent,
+    /// `SIGXCPU`.
+    CpuLimit,
+    /// `SIGXFSZ`.
+    FileSizeLimit,
+    /// `SIGVTALRM`.
+    VirtualAlarm,
+    /// `SIGPROF`.
+    Profile,
+    /// `SIGWINCH`.
+    WindowChange,
+    /// `SIGIO`.
+    Io,
+    /// `SIGSYS`.
+    BadSyscall,
 }
 
 const LINUX: bool = cfg!(target_os = "linux");
 
+/// Every `Signal`, for the number-to-signal lookup.
+const SIGNALS: [Signal; 29] = [
+    Signal::Hangup, Signal::Interrupt, Signal::Quit, Signal::IllegalInstruction, Signal::Trap,
+    Signal::Abort, Signal::Bus, Signal::FloatingPoint, Signal::Kill, Signal::Segmentation,
+    Signal::Pipe, Signal::Alarm, Signal::Terminate, Signal::User1, Signal::User2, Signal::Child,
+    Signal::Continue, Signal::Stop, Signal::TerminalStop, Signal::TerminalInput,
+    Signal::TerminalOutput, Signal::Urgent, Signal::CpuLimit, Signal::FileSizeLimit,
+    Signal::VirtualAlarm, Signal::Profile, Signal::WindowChange, Signal::Io, Signal::BadSyscall,
+];
+
 impl Signal {
-    /// The OS number (Windows: the one `kill` / `signal` took).
+    /// The OS number (Linux's, else the BSD / macOS one; Windows: the
+    /// CRT's for the ones it routes).
     pub const fn number(self) -> i32 {
         match self {
             Signal::Hangup => 1,
             Signal::Interrupt => 2,
             Signal::Quit => 3,
+            Signal::IllegalInstruction => 4,
+            Signal::Trap => 5,
+            Signal::Abort => 6,
+            Signal::Bus => if LINUX { 7 } else { 10 },
+            Signal::FloatingPoint => 8,
             Signal::Kill => 9,
+            Signal::Segmentation => 11,
             Signal::Pipe => 13,
             Signal::Alarm => 14,
             Signal::Terminate => 15,
@@ -90,7 +155,26 @@ impl Signal {
             Signal::Child => if LINUX { 17 } else { 20 },
             Signal::Continue => if LINUX { 18 } else { 19 },
             Signal::Stop => if LINUX { 19 } else { 17 },
+            Signal::TerminalStop => if LINUX { 20 } else { 18 },
+            Signal::TerminalInput => 21,
+            Signal::TerminalOutput => 22,
+            Signal::Urgent => if LINUX { 23 } else { 16 },
+            Signal::CpuLimit => 24,
+            Signal::FileSizeLimit => 25,
+            Signal::VirtualAlarm => 26,
+            Signal::Profile => 27,
+            Signal::WindowChange => 28,
+            Signal::Io => if LINUX { 29 } else { 23 },
+            Signal::BadSyscall => if LINUX { 31 } else { 12 },
         }
+    }
+
+    /// The signal numbered `n`, if it is one of these.
+    pub(pkg) const fn from_number(n: i32) -> Signal | none {
+        for s in SIGNALS {
+            if s.number() == n { return s; }
+        }
+        none
     }
 
     /// Windows: what the OS can do with it (`Kill` to send; `Interrupt`,
@@ -118,7 +202,13 @@ impl Debug for Signal {
             Signal::Hangup => "Hangup",
             Signal::Interrupt => "Interrupt",
             Signal::Quit => "Quit",
+            Signal::IllegalInstruction => "IllegalInstruction",
+            Signal::Trap => "Trap",
+            Signal::Abort => "Abort",
+            Signal::Bus => "Bus",
+            Signal::FloatingPoint => "FloatingPoint",
             Signal::Kill => "Kill",
+            Signal::Segmentation => "Segmentation",
             Signal::Pipe => "Pipe",
             Signal::Alarm => "Alarm",
             Signal::Terminate => "Terminate",
@@ -127,6 +217,17 @@ impl Debug for Signal {
             Signal::Child => "Child",
             Signal::Continue => "Continue",
             Signal::Stop => "Stop",
+            Signal::TerminalStop => "TerminalStop",
+            Signal::TerminalInput => "TerminalInput",
+            Signal::TerminalOutput => "TerminalOutput",
+            Signal::Urgent => "Urgent",
+            Signal::CpuLimit => "CpuLimit",
+            Signal::FileSizeLimit => "FileSizeLimit",
+            Signal::VirtualAlarm => "VirtualAlarm",
+            Signal::Profile => "Profile",
+            Signal::WindowChange => "WindowChange",
+            Signal::Io => "Io",
+            Signal::BadSyscall => "BadSyscall",
         })
     }
 }
@@ -150,9 +251,14 @@ pub fn kill(pid: u32, sig: i32) throws (IoError) {
     try check(unsafe { rok_os_kill(pid as i32, sig) } as i64, "kill");
 }
 
-/// Send `sig` to this process.
-pub fn raise(sig: i32) throws (IoError) {
-    try check(unsafe { rok_os_raise(sig) } as i64, "raise");
+/// Send `sig` to this process. Windows: only `Interrupt` and `Hangup`,
+/// which reach an `on_signal` handler (`Interrupt` without one ends the
+/// process).
+pub fn raise(sig: Signal) throws (IoError) {
+    if WINDOWS && !sig.on_windows(true) {
+        throw IoError::new(IoErrorKind::Unsupported, f"raise: Windows can raise only Signal::Interrupt and Signal::Hangup, not Signal::{sig:?}");
+    }
+    try check(unsafe { rok_os_raise(sig.number()) } as i64, "raise");
 }
 
 /// `signal` could not route the signal (`SIGKILL` / `SIGSTOP`, a bad
@@ -198,26 +304,26 @@ static SIGNAL_HANDLERS: Mutex<Dict<i32, fn() + Send>> = unsafe { Mutex::new_unsh
 pub fn on_signal(sig: Signal, handler: fn() + Send) throws (SignalError) {
     // ERROR_NOT_SUPPORTED.
     if WINDOWS && !sig.on_windows(true) { throw SignalError { signal: sig, os_code: 50 }; }
-    try install(sig, handler);
+    try install_handler(sig.number(), handler) catch e { throw SignalError { signal: sig, os_code: e.os_code() }; };
 }
 
-fn install(signal: Signal, handler: fn() + Send) throws (SignalError) {
-    let sig = signal.number();
+/// Route OS signal number `sig` to `handler` (`os::windows` routes
+/// Ctrl-Break through here too).
+pub(pkg) fn install_handler(sig: i32, handler: fn() + Send) throws (IoError) {
     unsafe {
         using g = SIGNAL_HANDLERS.lock() { g.get().insert(sig, handler); }
         let fd: GcBuf<i32> = buf_new(1);
         let r = rok_os_signal_install(sig, fd);
         if r < 0 {
             using g = SIGNAL_HANDLERS.lock() { g.get().remove(sig); }
-            throw SignalError { signal, os_code: -r };
+            throw IoError::from_os_code(-r, "signal");
         }
         if fd[0] >= 0 {
-            let pipe = File::from_fd(fd[0], "signal pipe");
+            let pipe = file_of(fd[0], "signal pipe");
             let h = try thread::Builder::new().name("rok-signal").spawn(|| {
                 dispatch_signals(pipe);
                 try pipe.close() catch _ {};
-            })
-                catch e { throw SignalError { signal, os_code: e.os_code() }; };
+            });
             h.detach();
         }
     }
@@ -259,7 +365,6 @@ pub struct ChildStdin {
 }
 
 impl ChildStdin {
-    pub const fn fd(self) -> i32 { self.file.fd() }
     /// Close the pipe: the child reads end of input.
     pub fn close(self) throws (IoError) { try self.file.close(); }
 }
@@ -275,13 +380,22 @@ impl Close for ChildStdin {
     fn close(self) throws (IoError) { try self.file.close(); }
 }
 
+#[cfg(target_family = "unix")]
+impl AsRawFd for ChildStdin {
+    const fn as_raw_fd(self) -> RawFd { self.file.fd() }
+}
+
+#[cfg(target_os = "windows")]
+impl AsRawHandle for ChildStdin {
+    fn as_raw_handle(self) -> RawHandle { raw_handle(self.file.fd()) }
+}
+
 /// A child's stdout: the read end of its pipe.
 pub struct ChildStdout {
     file: File;
 }
 
 impl ChildStdout {
-    pub const fn fd(self) -> i32 { self.file.fd() }
     pub fn close(self) throws (IoError) { try self.file.close(); }
 }
 
@@ -295,13 +409,22 @@ impl Close for ChildStdout {
     fn close(self) throws (IoError) { try self.file.close(); }
 }
 
+#[cfg(target_family = "unix")]
+impl AsRawFd for ChildStdout {
+    const fn as_raw_fd(self) -> RawFd { self.file.fd() }
+}
+
+#[cfg(target_os = "windows")]
+impl AsRawHandle for ChildStdout {
+    fn as_raw_handle(self) -> RawHandle { raw_handle(self.file.fd()) }
+}
+
 /// A child's stderr: the read end of its pipe.
 pub struct ChildStderr {
     file: File;
 }
 
 impl ChildStderr {
-    pub const fn fd(self) -> i32 { self.file.fd() }
     pub fn close(self) throws (IoError) { try self.file.close(); }
 }
 
@@ -315,9 +438,21 @@ impl Close for ChildStderr {
     fn close(self) throws (IoError) { try self.file.close(); }
 }
 
-/// A process to run (307.1). Builder methods return the updated command.
-/// The streams start as `Inherit`; `output` pipes an inherited stdout /
-/// stderr and reads stdin from null.
+#[cfg(target_family = "unix")]
+impl AsRawFd for ChildStderr {
+    const fn as_raw_fd(self) -> RawFd { self.file.fd() }
+}
+
+#[cfg(target_os = "windows")]
+impl AsRawHandle for ChildStderr {
+    fn as_raw_handle(self) -> RawHandle { raw_handle(self.file.fd()) }
+}
+
+/// A process to run (307.1). Builder methods return the updated command
+/// and leave the one they were called on as it was, so copies are
+/// independent. The streams start as `Inherit`; `output` pipes an
+/// inherited stdout / stderr and reads stdin from null.
+#[must_use("command does nothing until it runs: call `.spawn()`, `.output()` or `.status()`, or keep the command the builder returns")]
 pub struct Command {
     program: Path;
     args: List<str>;
@@ -347,22 +482,29 @@ impl Command {
         }
     }
 
+    // The lists are shared by copies of a command, so a builder that
+    // changes one changes a fresh copy.
+
     pub const fn arg(self, arg: str) -> Command {
+        self.args = self.args.clone();
         self.args.push(arg);
         self
     }
 
     pub const fn args<I: IntoIterator<Item = str>>(self, args: I) -> Command {
+        self.args = self.args.clone();
         for a in args { self.args.push(a); }
         self
     }
 
     pub const fn env(self, key: str, value: str) -> Command {
+        self.envs = self.envs.clone();
         self.envs.insert(key, value);
         self
     }
 
     pub fn envs<I: IntoIterator<Item = (str, str)>>(self, envs: I) -> Command {
+        self.envs = self.envs.clone();
         for (k, v) in envs {
             self.envs.insert(k, v);
         }
@@ -384,9 +526,6 @@ impl Command {
     pub const fn stdin(self, cfg: Stdio) -> Command { self.stdin = cfg; self }
     pub const fn stdout(self, cfg: Stdio) -> Command { self.stdout = cfg; self }
     pub const fn stderr(self, cfg: Stdio) -> Command { self.stderr = cfg; self }
-
-    /// Put the child in process group `pgid` (0: a new group it leads).
-    pub const fn process_group(self, pgid: i32) -> Command { self.process_group = pgid; self }
 
     /// Kill the child when its `Child` is dropped by `using`.
     pub const fn kill_on_drop(self, on: bool) -> Command { self.kill_on_drop = on; self }
@@ -410,8 +549,8 @@ impl Command {
         let se = unsafe { rok::core::marker::share(child.stderr) };
         let out: List<u8> = List::new();
         let errs: List<u8> = List::new();
-        let fd_out = if so is ChildStdout { so.fd() } else { -1 };
-        let fd_err = if se is ChildStderr { se.fd() } else { -1 };
+        let fd_out = if so is ChildStdout { so.file.fd() } else { -1 };
+        let fd_err = if se is ChildStderr { se.file.fd() } else { -1 };
         try drain(fd_out, out, fd_err, errs, self.program.as_str()) catch e {
             if so is ChildStdout { try so.close() catch _ {}; }
             if se is ChildStderr { try se.close() catch _ {}; }
@@ -474,9 +613,9 @@ impl Command {
             state[2] = rok_os_pidfd_open(pid);
             Child {
                 pid: pid,
-                stdin: if fds[0] < 0 { none } else { ChildStdin { file: File::from_fd(fds[0], "child stdin") } },
-                stdout: if fds[1] < 0 { none } else { ChildStdout { file: File::from_fd(fds[1], "child stdout") } },
-                stderr: if fds[2] < 0 { none } else { ChildStderr { file: File::from_fd(fds[2], "child stderr") } },
+                stdin: if fds[0] < 0 { none } else { ChildStdin { file: file_of(fds[0], "child stdin") } },
+                stdout: if fds[1] < 0 { none } else { ChildStdout { file: file_of(fds[1], "child stdout") } },
+                stderr: if fds[2] < 0 { none } else { ChildStderr { file: file_of(fds[2], "child stderr") } },
                 state: state,
                 kill_on_drop: self.kill_on_drop,
             }
@@ -540,15 +679,6 @@ impl Child {
         };
         _ = use_end(self.state, 3);
         try check(r as i64, "kill");
-    }
-
-    /// The pidfd tracking the child (Linux 5.3+), valid until it is
-    /// reaped (`wait` / `try_wait` close it).
-    #[cfg(target_os = "linux")]
-    pub fn pidfd(self) throws (IoError) -> i32 {
-        let fd = unsafe { self.state[2] };
-        try check(fd as i64, "pidfd");
-        fd
     }
 
     /// Reap the child once it has ended (`block`: wait for that):
@@ -632,8 +762,9 @@ impl ExitStatus {
         (self.raw >> 8) & 0xff
     }
 
-    /// The signal that ended it, if any (never on Windows).
-    pub const fn signal(self) -> i32 | none {
+    /// The number of the signal that ended it, if any (never on
+    /// Windows).
+    const fn signal_number(self) -> i32 | none {
         if WINDOWS { return none; }
         let s = self.raw & 0x7f;
         if s == 0 || s == 0x7f { return none; }
@@ -646,7 +777,7 @@ impl Debug for ExitStatus {
         if let c: i32 = self.code() {
             try f.write_str(f"ExitStatus {{ code: {c} }}");
         } else {
-            try f.write_str(f"ExitStatus {{ signal: {self.signal() ?? 0} }}");
+            try f.write_str(f"ExitStatus {{ signal: {self.signal_number() ?? 0} }}");
         }
     }
 }
@@ -656,8 +787,27 @@ impl Display for ExitStatus {
         if let c: i32 = self.code() {
             try f.write_str(f"exit status: {c}");
         } else {
-            try f.write_str(f"signal: {self.signal() ?? 0}");
+            try f.write_str(f"signal: {self.signal_number() ?? 0}");
         }
+    }
+}
+
+#[cfg(target_family = "unix")]
+impl CommandExt for Command {
+    const fn process_group(self, pgid: i32) -> Command { self.process_group = pgid; self }
+}
+
+#[cfg(target_family = "unix")]
+impl ExitStatusExt for ExitStatus {
+    const fn signal(self) -> Signal | none { Signal::from_number(self.signal_number()?) }
+}
+
+#[cfg(target_os = "linux")]
+impl ChildExt for Child {
+    fn pidfd(self) throws (IoError) -> RawFd {
+        let fd = unsafe { self.state[2] };
+        try check(fd as i64, "pidfd");
+        fd
     }
 }
 

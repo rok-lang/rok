@@ -1,0 +1,70 @@
+// rok::std::os::windows::io: raw handles and sockets (stdlib 305.9).
+// `File`, the child pipes and the standard streams implement
+// `AsRawHandle`; the TCP and UDP sockets `AsRawSocket`. The values are
+// the full pointer-sized HANDLE and the SOCKET as Win32 gives them.
+
+use rok::core::io::{Stdin, Stdout, Stderr};
+
+/// A Win32 `HANDLE`.
+pub type RawHandle = isize;
+
+/// A Winsock `SOCKET`.
+pub type RawSocket = u64;
+
+/// The HANDLE behind a handle, still owned by it
+/// (`INVALID_HANDLE_VALUE`, -1, once the handle is closed).
+pub trait AsRawHandle {
+    fn as_raw_handle(self) -> RawHandle;
+}
+
+/// A handle that owns HANDLE `h` from now on: closing the handle closes
+/// `h`.
+pub trait FromRawHandle {
+    /// Safety: `h` must be an open kernel handle, and nothing else may
+    /// close it.
+    unsafe fn from_raw_handle(h: RawHandle) -> Self;
+}
+
+/// The SOCKET behind a socket, still owned by it (`INVALID_SOCKET`
+/// once it is closed).
+pub trait AsRawSocket {
+    fn as_raw_socket(self) -> RawSocket;
+}
+
+/// A socket that owns SOCKET `s` from now on: closing it closes `s`.
+pub trait FromRawSocket {
+    /// Safety: `s` must be an open socket of the right kind, and
+    /// nothing else may close it.
+    unsafe fn from_raw_socket(s: RawSocket) -> Self;
+}
+
+impl AsRawHandle for Stdin {
+    fn as_raw_handle(self) -> RawHandle { unsafe { rok_os_raw_handle(0) } }
+}
+
+impl AsRawHandle for Stdout {
+    fn as_raw_handle(self) -> RawHandle { unsafe { rok_os_raw_handle(1) } }
+}
+
+impl AsRawHandle for Stderr {
+    fn as_raw_handle(self) -> RawHandle { unsafe { rok_os_raw_handle(2) } }
+}
+
+/// The runtime fd behind HANDLE `h` (-1: a value it cannot hold).
+pub(pkg) unsafe fn handle_fd(h: RawHandle) -> i32 { rok_os_handle_fd(h) }
+
+/// The runtime fd behind SOCKET `s` (-1: a value it cannot hold).
+pub(pkg) unsafe fn socket_fd(s: RawSocket) -> i32 { rok_os_socket_fd(s) }
+
+/// The HANDLE behind runtime fd `fd`.
+pub(pkg) fn raw_handle(fd: i32) -> RawHandle { unsafe { rok_os_raw_handle(fd) } }
+
+/// The SOCKET behind runtime fd `fd`.
+pub(pkg) fn raw_socket(fd: i32) -> RawSocket { unsafe { rok_os_raw_socket(fd) } }
+
+extern "C" {
+    fn rok_os_raw_handle(fd: i32) -> isize;
+    fn rok_os_raw_socket(fd: i32) -> u64;
+    fn rok_os_handle_fd(h: isize) -> i32;
+    fn rok_os_socket_fd(s: u64) -> i32;
+}

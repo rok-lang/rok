@@ -1,3 +1,6 @@
-// rok::std::os::windows: Windows-only parts of the cross-platform modules.
+// rok::std::os::windows: Windows-only parts of the cross-platform
+// modules.
 
 pub mod fs;
+pub mod io;
+pub mod process;

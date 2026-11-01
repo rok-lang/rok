@@ -32,8 +32,12 @@ use rok::core::stream::TryStream;
 use rok::core::task::Task;
 #[cfg(target_family = "unix")]
 use rok::std::os::unix::fs::{OsOpenFlags, OsCreateFlags, check_custom};
+#[cfg(target_family = "unix")]
+use rok::std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
 #[cfg(target_os = "windows")]
 use rok::std::os::windows::fs::{OsOpenFlags, OsCreateFlags};
+#[cfg(target_os = "windows")]
+use rok::std::os::windows::io::{AsRawHandle, FromRawHandle, RawHandle, raw_handle, handle_fd};
 
 // `OpenHow.access` / `.disposition` (the runtime's `rok_os_open`).
 const ACCESS_READ: u32 = 0u32;
@@ -328,7 +332,7 @@ pub struct File {
     path: str;
 }
 
-const fn file_of(fd: i32, path: str) -> File {
+pub(pkg) const fn file_of(fd: i32, path: str) -> File {
     unsafe {
         let cell: GcBuf<i32> = buf_new(2);
         cell[0] = fd;
@@ -360,13 +364,9 @@ impl File {
         try Dir::root().append(path, flags)
     }
 
-    /// Take ownership of an open descriptor; `name` labels its errors.
-    /// Nothing else may close `fd` then.
-    #[deprecated_safe("`fd` must be open, and nothing else may close it")]
-    pub const fn from_fd(fd: i32, name: str) -> File { file_of(fd, name) }
-
-    /// The OS file descriptor (`-1` once closed).
-    pub const fn fd(self) -> i32 {
+    /// The runtime fd (`-1` once closed); `AsRawFd` / `AsRawHandle`
+    /// give the OS value.
+    pub(pkg) const fn fd(self) -> i32 {
         unsafe {
             if (self.fd[1] & 1) != 0 { return -1; }
             self.fd[0]
@@ -757,6 +757,29 @@ impl Drop for ReadDirStream {
             close_dir(self.rd.d);
         }
     }
+}
+
+#[cfg(target_family = "unix")]
+impl AsRawFd for File {
+    const fn as_raw_fd(self) -> RawFd { self.fd() }
+}
+
+/// Its errors name it `fd N`.
+#[cfg(target_family = "unix")]
+impl FromRawFd for File {
+    unsafe fn from_raw_fd(fd: RawFd) -> File { file_of(fd, f"fd {fd}") }
+}
+
+#[cfg(target_os = "windows")]
+impl AsRawHandle for File {
+    fn as_raw_handle(self) -> RawHandle { raw_handle(self.fd()) }
+}
+
+/// Its errors name it `handle N`; a value that is no kernel handle
+/// gives a closed `File`.
+#[cfg(target_os = "windows")]
+impl FromRawHandle for File {
+    unsafe fn from_raw_handle(h: RawHandle) -> File { file_of(handle_fd(h), f"handle {h}") }
 }
 
 impl Read for File {
