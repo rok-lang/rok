@@ -6455,6 +6455,8 @@ fn sum_structural_call(
                             span,
                         })],
                         trailing_closure: None,
+                        // `Hasher` is in scope where the trait lives.
+                        origin: Some("rok::core::hash".to_owned()),
                     },
                     span,
                 };
@@ -6469,6 +6471,7 @@ fn sum_structural_call(
                                 type_args: Vec::new(),
                                 args: args.to_vec(),
                                 trailing_closure: None,
+                                origin: None,
                             },
                             span,
                         },

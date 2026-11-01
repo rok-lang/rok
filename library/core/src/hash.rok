@@ -3,7 +3,7 @@
 // and `Set` default to with its SipHash-1-3 `DefaultHasher`, and the
 // caller-keyed `SipHasher13` / `SipHasher24`, whose output is stable.
 
-use rok::core::collections::slice::AsBytes;
+use rok::core::convert::AsBytes;
 
 /// A running hash: `Hash` impls feed it bytes and integers, `finish`
 /// reads the result. Equal values must make the same sequence of
