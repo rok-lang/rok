@@ -4,7 +4,8 @@
 # updates, each on a fresh ROK_HOME holding the 0.1.x release:
 #
 #   - its `rok toolchain update`, then the staged rok builds and runs a
-#     project the 0.1.x rok made and locked (a git dependency);
+#     project the 0.1.x rok made and locked (a git dependency), and
+#     leaves its rok.lock in lock format 2;
 #   - its install.ps1 -Version <staged> from the staged set;
 #   - the staged archive's own install.ps1 -Version <staged>.
 #
@@ -132,6 +133,9 @@ try {
         $out = (& "$h\bin\rok.exe" -q run) -join "`n"
         if ($LASTEXITCODE -or $out -ne '1') { throw "the project prints '$out', not 1" }
         if (-not (Test-Path rok.lock)) { throw "rok $v removed rok.lock" }
+        $lock = Get-Content -Raw rok.lock
+        if ($lock -notmatch '(?m)^Lock \{\s*version: 2,') { throw "rok $v did not write rok.lock in lock format 2:`n$lock" }
+        if ($lock -match 'vers:') { throw "rok $v left a 0.1 field (vers) in rok.lock:`n$lock" }
     } finally { Pop-Location }
 
     Step "rok ${from}: its install.ps1 -Version $v"
