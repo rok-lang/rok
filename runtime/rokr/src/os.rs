@@ -126,6 +126,13 @@ fn until_nul(buf: &[u8]) -> &[u8] {
 /// First resolver code: `getaddrinfo` failure `e` is `EAI_BASE + |e|`.
 pub const EAI_BASE: i32 = 100_000;
 
+/// `getaddrinfo`'s "name does not resolve"; the libc crate lacks it for
+/// WASI, where wasi-libc numbers it as musl does.
+#[cfg(unix)]
+const EAI_NONAME: i32 = libc::EAI_NONAME;
+#[cfg(not(unix))]
+const EAI_NONAME: i32 = -2;
+
 /// `IoErrorKind` discriminants (library/std/src/io.rok declares the same).
 mod kind {
     pub const OTHER: i32 = 0;
@@ -152,7 +159,7 @@ pub const extern "C" fn rok_os_errno_kind(code: i32) -> i32 {
     match code {
         libc::ENOENT => kind::NOT_FOUND,
         // A name that does not resolve; other resolver failures are Other.
-        c if c == EAI_BASE + libc::EAI_NONAME.abs() => kind::NOT_FOUND,
+        c if c == EAI_BASE + EAI_NONAME.abs() => kind::NOT_FOUND,
         libc::EACCES | libc::EPERM => kind::PERMISSION_DENIED,
         libc::EEXIST => kind::ALREADY_EXISTS,
         libc::ENOTDIR => kind::NOT_A_DIRECTORY,
@@ -1925,7 +1932,7 @@ mod tests {
         assert_eq!(rok_os_errno_kind(libc::EEXIST), kind::ALREADY_EXISTS);
         assert_eq!(rok_os_errno_kind(libc::ENOTSUP), kind::UNSUPPORTED);
         assert_eq!(
-            rok_os_errno_kind(EAI_BASE + libc::EAI_NONAME.abs()),
+            rok_os_errno_kind(EAI_BASE + EAI_NONAME.abs()),
             kind::NOT_FOUND
         );
         assert_eq!(
