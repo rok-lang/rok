@@ -9,7 +9,8 @@
 
 use rok::bare::ptr::{ConstPtr, Ptr};
 
-/// Size of `T` in bytes.
+/// Size of `T` in bytes. A value's size at run time is
+/// `x.size_of_val()` (`Reflect`).
 #[intrinsic("rok.size_of")]
 pub fn size_of<T>() -> usize;
 
@@ -117,15 +118,6 @@ pub unsafe fn transmute_unchecked<A, B>(a: A) -> B {
     rok_free(at);
     b
 }
-
-/// Size of `T` in bytes. A value's size at run time is
-/// `x.size_of_val()` (`Reflect`).
-#[intrinsic("rok.size_of")]
-pub fn size_of<T>() -> usize;
-
-/// Alignment of `T` in bytes.
-#[intrinsic("rok.align_of")]
-pub fn align_of<T>() -> usize;
 
 pub unsafe fn read<T>(src: ConstPtr<T>) -> T { src.read() }
 pub unsafe fn write<T>(dst: Ptr<T>, value: T) { dst.write(value); }
