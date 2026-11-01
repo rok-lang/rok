@@ -12,13 +12,20 @@
 // is `Eq` / `Ord` / `Hash`.
 static CALLS: Atomic<i32> = Atomic::new(0);
 
+/// `x`'s hash under the process key.
+fn hash_of<T: Hash>(x: T) -> u64 {
+    let h = RandomState::new().build_hasher();
+    x.hash(ref h);
+    h.finish()
+}
+
 fn side(b: bool) -> bool {
     CALLS.fetch_add(1);
     b
 }
 
 fn same<T: Eq + Ord + Hash>(a: T, b: T) -> bool {
-    a == b && a.cmp(b) == Ordering::Equal && a.hash() == b.hash()
+    a == b && a.cmp(b) == Ordering::Equal && hash_of(a) == hash_of(b)
 }
 
 fn main() {

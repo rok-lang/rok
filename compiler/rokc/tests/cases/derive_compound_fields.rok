@@ -33,13 +33,20 @@ struct Cfg { n: i32; s: str; on: bool; }
 #[derive(Default, Debug)]
 enum Mode { Off, On(i32) }
 
+/// `x`'s hash under the process key.
+fn hash_of<T: Hash>(x: T) -> u64 {
+    let h = RandomState::new().build_hasher();
+    x.hash(ref h);
+    h.finish()
+}
+
 fn main() -> i32 {
     let r = Rec { pos: (1, 2), grid: [3, 4, 5], tag: 7, name: none };
     println(f"{r:?}");
     let r2 = r.clone();
     let r3 = Rec { pos: (1, 2), grid: [3, 4, 5], tag: none, name: none };
     println(f"{r == r2} {r == r3}");
-    println(f"{r.hash() == r2.hash()}");
+    println(f"{hash_of(r) == hash_of(r2)}");
 
     let s = Store { xs: [1], seen: {1,}, names: {"a": 1} };
     let t = s.clone();

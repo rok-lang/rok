@@ -61,6 +61,13 @@
 use rok::std::rokon;
 use rok::std::rokon::Value;
 
+/// `x`'s hash under the process key.
+fn hash_of<T: Hash>(x: T) -> u64 {
+    let h = RandomState::new().build_hasher();
+    x.hash(ref h);
+    h.finish()
+}
+
 fn show(s: str) {
     let v = try rokon::parse(s) catch e { println(f"error: {e}"); return; };
     println(f"{v.kind_name()}: {v}");
@@ -123,14 +130,14 @@ fn main() {
     let p = try! rokon::parse("P { x: 1, y: { \"a\": 1, \"b\": 2 } }");
     let q = try! rokon::parse("P { y: { \"b\": 2, \"a\": 1 }, x: 1 }");
     let r = try! rokon::parse("Q { y: { \"b\": 2, \"a\": 1 }, x: 1 }");
-    println(f"unordered: {p == q} {p.hash() == q.hash()} {p == r}");
+    println(f"unordered: {p == q} {hash_of(p) == hash_of(q)} {p == r}");
     let nan = Value::Float(Float::from_f64(f64::NAN));
     let z = Value::Float(Float::from_f64(0.0));
     let nz = Value::Float(Float::from_f64(-0.0));
-    println(f"floats: {nan == nan} {nan.hash() == nan.hash()} {z == nz} {Value::Int(Int::from(1)) == Value::Float(Float::from_f64(1.0))}");
+    println(f"floats: {nan == nan} {hash_of(nan) == hash_of(nan)} {z == nz} {Value::Int(Int::from(1)) == Value::Float(Float::from_f64(1.0))}");
     let e = Value::Struct { name: none, fields: Dict::new() };
     let ed = Value::Dict(Dict::new());
-    println(f"empty: {e == ed} {e.hash() == ed.hash()}");
+    println(f"empty: {e == ed} {hash_of(e) == hash_of(ed)}");
     let d: Dict<Value, Value> = Dict::new();
     d.insert(Value::Str("k"), Value::Int(1));
     d.insert(Value::Tuple([Value::Int(1), Value::Bool(true)]), Value::None);

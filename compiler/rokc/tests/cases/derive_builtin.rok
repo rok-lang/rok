@@ -35,6 +35,13 @@ struct Bag { items: List<i32>; }
 #[derive(Debug)]
 struct Name { s: str; }
 
+/// `x`'s hash under the process key.
+fn hash_of<T: Hash>(x: T) -> u64 {
+    let h = RandomState::new().build_hasher();
+    x.hash(ref h);
+    h.finish()
+}
+
 fn name_of(o: Ordering) -> str {
     return match o {
         Ordering::Less => "Less",
@@ -51,14 +58,14 @@ fn main() -> i32 {
     let r = Point { x: 1, y: 3 };
     println(f"{p < r} {p <= q} {r < p}");
     println(f"{name_of(p.cmp(r))} {name_of(r.cmp(p))} {name_of(p.cmp(q))}");
-    println(f"{p.hash() == q.hash()}");
+    println(f"{hash_of(p) == hash_of(q)}");
 
     let shapes = [Shape::Circle { r: 2 }, Shape::Rect(3, 4), Shape::Empty];
     println(f"{shapes[0]:?} {shapes[1]:?} {shapes[2]:?}");
     println(f"{shapes[1] == Shape::Rect(3, 4)} {shapes[1] == Shape::Rect(3, 5)}");
     println(f"{shapes[0] < shapes[1]} {Shape::Rect(3, 4) < Shape::Rect(3, 5)}");
     println(name_of(Shape::Empty.cmp(Shape::Rect(9, 9))));
-    println(f"{shapes[1].clone().hash() == shapes[1].hash()}");
+    println(f"{hash_of(shapes[1].clone()) == hash_of(shapes[1])}");
 
     let w = W { v: 9 };
     println(f"{w.clone():?}");

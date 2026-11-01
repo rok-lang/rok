@@ -130,10 +130,6 @@ pub trait One {
 
             impl Eq for @t {}
 
-            impl Hash for @t {
-                const fn hash(self) -> u64 { self as u64 }
-            }
-
             impl Ord for @t {
                 const fn cmp(self, other: @t) -> Ordering {
                     if self < other { return Ordering::Less; }
@@ -243,10 +239,6 @@ signed_int_ops!(i8, i16, i32, i64, isize);
 
             impl Eq for @t {}
 
-            impl Hash for @t {
-                const fn hash(self) -> u64 { self as u64 }
-            }
-
             impl Ord for @t {
                 const fn cmp(self, other: @t) -> Ordering {
                     if self < other { return Ordering::Less; }
@@ -258,6 +250,47 @@ signed_int_ops!(i8, i16, i32, i64, isize);
     }
 }
 unsigned_int_ops!(u8, u16, u32, u64, usize);
+
+// `Hash`: each integer writes itself at its own width (2.5.6).
+impl Hash for i8 {
+    const fn hash<H: Hasher>(self, ref h: H) { h.write_i8(self) }
+}
+
+impl Hash for i16 {
+    const fn hash<H: Hasher>(self, ref h: H) { h.write_i16(self) }
+}
+
+impl Hash for i32 {
+    const fn hash<H: Hasher>(self, ref h: H) { h.write_i32(self) }
+}
+
+impl Hash for i64 {
+    const fn hash<H: Hasher>(self, ref h: H) { h.write_i64(self) }
+}
+
+impl Hash for isize {
+    const fn hash<H: Hasher>(self, ref h: H) { h.write_isize(self) }
+}
+
+impl Hash for u8 {
+    const fn hash<H: Hasher>(self, ref h: H) { h.write_u8(self) }
+}
+
+impl Hash for u16 {
+    const fn hash<H: Hasher>(self, ref h: H) { h.write_u16(self) }
+}
+
+impl Hash for u32 {
+    const fn hash<H: Hasher>(self, ref h: H) { h.write_u32(self) }
+}
+
+impl Hash for u64 {
+    const fn hash<H: Hasher>(self, ref h: H) { h.write_u64(self) }
+}
+
+impl Hash for usize {
+    const fn hash<H: Hasher>(self, ref h: H) { h.write_usize(self) }
+}
 
 // f32
 
@@ -490,7 +523,7 @@ impl Ord for bool {
 }
 
 impl Hash for bool {
-    const fn hash(self) -> u64 { if self { 1u64 } else { 0u64 } }
+    const fn hash<H: Hasher>(self, ref h: H) { h.write_u8(if self { 1u8 } else { 0u8 }) }
 }
 
 // char
@@ -505,7 +538,7 @@ impl PartialEq for char {
 impl Eq for char {}
 
 impl Hash for char {
-    const fn hash(self) -> u64 { self as u64 }
+    const fn hash<H: Hasher>(self, ref h: H) { h.write_u32(self as u32) }
 }
 
 // c_char (stdlib 2.5): compared and hashed as its byte.
@@ -529,7 +562,7 @@ impl Ord for c_char {
 }
 
 impl Hash for c_char {
-    const fn hash(self) -> u64 { self as u64 }
+    const fn hash<H: Hasher>(self, ref h: H) { h.write_u8(self as u8) }
 }
 
 // `&&` / `||` (stdlib 2.3.9): on two `bool`s the compiler short-circuits

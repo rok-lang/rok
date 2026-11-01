@@ -58,6 +58,13 @@ const HEAP_C: i32 = heap_c();
 const DEQUE_C: i32 = deque_c();
 const OSET_C: bool = oset_c();
 
+/// `x`'s hash under the process key.
+fn hash_of<T: Hash>(x: T) -> u64 {
+    let h = RandomState::new().build_hasher();
+    x.hash(ref h);
+    h.finish()
+}
+
 fn main() {
     println(f"const heap {HEAP_C} deque {DEQUE_C} oset {OSET_C}");
     let h: BinaryHeap<i32> = BinaryHeap::new();
@@ -152,10 +159,10 @@ fn main() {
     byset.insert({2, 1}, 2);
     let x1 = {4, 5};
     let x2 = {5, 4};
-    println(f"oset key {byset[{1, 2}]} hash-eq {x1.hash() == x2.hash()}");
+    println(f"oset key {byset[{1, 2}]} hash-eq {hash_of(x1) == hash_of(x2)}");
     let bydict: Set<Dict<str, i32>> = Set::new();
     bydict.insert({"a": 1, "b": 2});
     let y1 = {"a": 1, "b": 2};
     let y2 = {"b": 2, "a": 1};
-    println(f"odict key {if bydict.contains(y2) { 7 } else { 0 }} hash-eq {y1.hash() == y2.hash()}");
+    println(f"odict key {if bydict.contains(y2) { 7 } else { 0 }} hash-eq {hash_of(y1) == hash_of(y2)}");
 }

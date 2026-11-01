@@ -104,7 +104,7 @@ impl Ord for SystemTime {
     const fn cmp(self, rhs: SystemTime) -> Ordering { self.ns.cmp(rhs.ns) }
 }
 impl Hash for SystemTime {
-    const fn hash(self) -> u64 { self.ns.hash() }
+    const fn hash<H: Hasher>(self, ref h: H) { self.ns.hash(ref h); }
 }
 impl Debug for SystemTime {
     const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"SystemTime {{ ns: {self.ns} }}") }

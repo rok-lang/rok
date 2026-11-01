@@ -1,0 +1,181 @@
+// spec: std §2.5.6 §2.5.9 §2.5.11 §2.9.3 §2.9.4
+// expect-exit: 0
+// expect-stdout:
+// sip13 abac0158050fc4dc 9d199062b7bbb3a8
+// sip24 726fdb47dd0e0e31 a129ca6149be45e5 958a324ceb064572
+// ints true
+// prefix-free true true
+// derive true true true true
+// sum true true
+// custom 3 2 true {"b": 2, "a": 1, "c": 3}
+// custom set true {3, 1}
+// order {"k0": 0, "k2": 2, "k3": 3} {9, 1, 5}
+// const 20 true true
+// manual true 1
+
+// Keyed hashing (stdlib 2.5.6, 2.5.10): SipHasher13 / SipHasher24 give
+// the reference SipHash; equal values make the same writes; derive and
+// sums hash the tag then the fields; a `Dict` / `Set` takes any
+// `BuildHasher`; a `RandomState` built at compile time stands for the
+// process key at run time.
+
+use rok::core::hash::{BuildHasher, BuildHasherDefault, RandomState, SipHasher13, SipHasher24};
+
+fn hash_of<T: Hash>(x: T) -> u64 {
+    let h = RandomState::new().build_hasher();
+    x.hash(ref h);
+    h.finish()
+}
+
+/// `00 01 02 .. n-1`.
+fn seq(n: usize) -> List<u8> {
+    let out: List<u8> = [];
+    for i in 0..n {
+        out.push(i as u8);
+    }
+    out
+}
+
+const K0: u64 = 0x0706050403020100u64;
+const K1: u64 = 0x0f0e0d0c0b0a0908u64;
+
+/// FNV-1a: a fixed hasher of the caller's.
+struct Fnv {
+    s: u64;
+}
+
+impl Default for Fnv {
+    fn default() -> Fnv { Fnv { s: 0xcbf29ce484222325u64 } }
+}
+
+impl Hasher for Fnv {
+    fn write<B: AsBytes>(ref self, bytes: B) {
+        for b in bytes.byte_slice() {
+            self.s = (self.s ^ (b as u64)).wrapping_mul(0x100000001b3u64);
+        }
+    }
+    fn finish(self) -> u64 { self.s }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct Point {
+    x: i32;
+    y: i32;
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum Shape {
+    Dot,
+    Circle(i32),
+    Rect { w: i32; h: i32; },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum Only {
+    One(str),
+}
+
+/// Equal when the names are equal, whatever the case: the hash must
+/// agree.
+struct Name {
+    s: str;
+}
+
+impl PartialEq for Name {
+    fn eq(self, rhs: Name) -> bool { self.s.to_lowercase() == rhs.s.to_lowercase() }
+    fn ne(self, rhs: Name) -> bool { !self.eq(rhs) }
+}
+
+impl Eq for Name {}
+
+impl Hash for Name {
+    fn hash<H: Hasher>(self, ref h: H) {
+        h.write_str(self.s.to_lowercase());
+    }
+}
+
+/// A dict built and read during compile-time evaluation.
+const fn table_sum() -> i32 {
+    let d: Dict<str, i32> = Dict::new();
+    for i in 0..20 {
+        d[f"k{i}"] = 1;
+    }
+    let n = 0;
+    for (_, v) in d {
+        n += v;
+    }
+    n
+}
+
+const SUM: i32 = table_sum();
+const R: RandomState = RandomState::new();
+
+fn main() {
+    let a = SipHasher13::with_keys(K0, K1);
+    let b = SipHasher13::with_keys(K0, K1);
+    b.write(seq(63));
+    println(f"sip13 {a.finish():016x} {b.finish():016x}");
+    let c = SipHasher24::with_keys(K0, K1);
+    let d = SipHasher24::with_keys(K0, K1);
+    d.write(seq(15));
+    // Split writes give what one write of the same bytes gives.
+    let e = SipHasher24::with_keys(K0, K1);
+    e.write(seq(3));
+    e.write_u32(0x06050403u32);
+    e.write(seq(63)[7:]);
+    println(f"sip24 {c.finish():016x} {d.finish():016x} {e.finish():016x}");
+
+    // The width is in the hash: `1u8` and `1u64` differ.
+    println(f"ints {hash_of(1u8) != hash_of(1u64) && hash_of(5usize) == hash_of(5usize)}");
+
+    let t1 = ("ab", "c");
+    let t2 = ("a", "bc");
+    let l1: List<List<i32>> = [[1, 2], [3]];
+    let l2: List<List<i32>> = [[1], [2, 3]];
+    println(f"prefix-free {hash_of(t1) != hash_of(t2)} {hash_of(l1) != hash_of(l2)}");
+
+    let p = Point { x: 1, y: 2 };
+    println(f"derive {hash_of(p) == hash_of(p.clone())} {hash_of(p) != hash_of(Point { x: 2, y: 1 })} {hash_of(Shape::Circle(3)) != hash_of(Shape::Rect { w: 3, h: 0 })} {hash_of(Only::One("a")) == hash_of(Only::One("a"))}");
+
+    let s1: i32 | str | none = 7;
+    let s2: i32 | str | none = 7;
+    let s3: i32 | str | none = none;
+    println(f"sum {hash_of(s1) == hash_of(s2)} {hash_of(s1) != hash_of(s3)}");
+
+    let fixed: Dict<str, i32, BuildHasherDefault<Fnv>> = Dict::with_hasher(BuildHasherDefault::new());
+    fixed["b"] = 2;
+    fixed["a"] = 1;
+    fixed["c"] = 3;
+    let same: Dict<str, i32> = {"c": 3, "a": 1, "b": 2};
+    let other: Dict<str, i32, BuildHasherDefault<Fnv>> = Dict::default();
+    other["x"] = 1;
+    other["y"] = 2;
+    println(f"custom {fixed.len()} {fixed["b"]} {hash_of(fixed) == hash_of(same)} {fixed:?}");
+    let fs: Set<i32, BuildHasherDefault<Fnv>> = Set::with_capacity_and_hasher(8, BuildHasherDefault::new());
+    fs.insert(3);
+    fs.insert(1);
+    fs.insert(3);
+    let ss: Set<i32> = {1, 3};
+    println(f"custom set {hash_of(fs) == hash_of(ss)} {fs:?}");
+
+    let ord: Dict<str, i32> = Dict::new();
+    for i in 0..4 {
+        ord[f"k{i}"] = i;
+    }
+    ord.remove("k1");
+    let s: Set<i32> = {9, 1, 5};
+    println(f"order {ord:?} {s:?}");
+
+    // `R` was built at compile time: it hashes as the process key does.
+    let r = R.build_hasher();
+    r.write_u64(42u64);
+    let n = RandomState::new().build_hasher();
+    n.write_u64(42u64);
+    let byr: Dict<i32, i32, RandomState> = Dict::with_hasher(R);
+    byr[1] = 10;
+    println(f"const {SUM} {r.finish() == n.finish()} {byr[1] == 10}");
+
+    let names: Dict<Name, i32> = Dict::new();
+    names[Name { s: "Ann" }] = 1;
+    println(f"manual {hash_of(Name { s: "ANN" }) == hash_of(Name { s: "ann" })} {names[Name { s: "aNN" }]}");
+}

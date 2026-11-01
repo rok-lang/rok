@@ -712,14 +712,13 @@ impl<T: Ord> Ord for List<T> {
     }
 }
 
-/// Order-dependent mix of the element hashes.
+/// The length, then the items in order.
 impl<T: Hash> Hash for List<T> {
-    const fn hash(self) -> u64 {
-        let h = 0xcbf29ce484222325u64 ^ (self.len() as u64);
+    const fn hash<H: Hasher>(self, ref h: H) {
+        h.write_length_prefix(self.len());
         for x in self {
-            h = ((h << 5u64) | (h >> 59u64)) ^ x.hash();
+            x.hash(ref h);
         }
-        h
     }
 }
 

@@ -917,12 +917,12 @@ fn plain_size(ty: &HirTy) -> Option<u32> {
 /// constant equals the run-time result (5.2.5). Not libm's inexact ones
 /// (the target's may round differently) nor the `int` kernels.
 const EVALUABLE: &[&str] = &[
-    "rok_hash_seed",
+    "rok_hash_keys",
     "rok_str_len",
     "rok_str_char_count",
     "rok_str_byte",
     "rok_str_cmp",
-    "rok_str_hash",
+    "rok_str_bytes_buf",
     "rok_str_eq",
     "rok_str_eq_at",
     "rok_str_find",
@@ -1145,15 +1145,20 @@ fn run_extern(name: &str, args: &[Value]) -> Result<Value, Ext> {
             let b = str_of(s)?.as_bytes().get(usize_of(i)?).copied();
             Value::Int(i128::from(b.unwrap_or(0)), PrimTy::U8)
         }
-        // A dict built at compile time keeps seed 0 (`Dict` stores it).
-        ("rok_hash_seed", []) => Value::Int(0, PrimTy::U64),
-        // FNV-1a, as `rokr`'s.
-        ("rok_str_hash", [s]) => Value::Int(
-            i128::from(str_of(s)?.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| {
-                (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
-            })),
-            PrimTy::U64,
-        ),
+        // The reserved all-zero key: a `RandomState` built at compile
+        // time takes the process's keys at run time.
+        ("rok_hash_keys", [out]) => {
+            put_bits(out, 0, 0)?;
+            put_bits(out, 1, 0)?;
+            Value::Unit
+        }
+        // A copy of the bytes: the view is read-only.
+        ("rok_str_bytes_buf", [s]) => Value::Buf(Rc::new(RefCell::new(
+            str_of(s)?
+                .bytes()
+                .map(|b| Value::Int(i128::from(b), PrimTy::U8))
+                .collect(),
+        ))),
         ("rok_str_eq", [a, b]) => i32_value(i32::from(str_of(a)? == str_of(b)?)),
         ("rok_str_cmp", [a, b]) => {
             i32_value(str_of(a)?.as_bytes().cmp(str_of(b)?.as_bytes()) as i32)

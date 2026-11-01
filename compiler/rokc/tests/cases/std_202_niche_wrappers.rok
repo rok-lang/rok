@@ -20,6 +20,13 @@
 
 use rok::bare::mem::size_of;
 
+/// `x`'s hash under the process key.
+fn hash_of<T: Hash>(x: T) -> u64 {
+    let h = RandomState::new().build_hasher();
+    x.hash(ref h);
+    h.finish()
+}
+
 fn main() {
     println(f"{size_of::<num::niche::NonZero<i32> | none>()} {size_of::<num::niche::NonZero<u8> | none>()} {size_of::<num::niche::NonZero<i16> | none>()} {size_of::<num::niche::NonZero<u32> | none>()} {size_of::<num::niche::NonZero<i64> | none>()} {size_of::<num::niche::NonZero<usize> | none>()} {size_of::<num::niche::NonNan<f64> | none>()} {size_of::<num::niche::Finite<f64> | none>()} {size_of::<num::niche::NonNan<f32> | none>()} {size_of::<f32 | none>()} {size_of::<num::niche::Positive<i32> | none>()} {size_of::<num::niche::Positive<u32> | none>()} {size_of::<i32 | none>()}");
     let n: num::niche::NonZero<i32> = num::niche::NonZero::new(42) ?? panic("zero");
@@ -27,7 +34,7 @@ fn main() {
     let m: num::niche::NonZero<i32> | none = num::niche::NonZero::new(7);
     println(f"{n.get()} {z is none} {m is none} {n} {n:?}");
     let b: num::niche::NonZero<i32> = num::niche::NonZero::new(6) ?? panic("zero");
-    println(f"{n * b} {n + b} {n - b} {n / b} {84 / b} {n == b} {n > b} {n.cmp(b):?} {n.hash() == 42.hash()}");
+    println(f"{n * b} {n + b} {n - b} {n / b} {84 / b} {n == b} {n > b} {n.cmp(b):?} {hash_of(n) == hash_of(42)}");
     let e = try num::niche::NonZero::<i32>::try_from(0) catch err: num::niche::ZeroError { println(f"caught {err}"); n };
     let t: num::niche::NonZero<i32> = try 5.try_into() catch _ { n };
     let v: i32 = t.into();
@@ -37,7 +44,7 @@ fn main() {
     let one = num::niche::NonNan::new(1.5) ?? panic("nan");
     let mz = num::niche::NonNan::new(-0.0) ?? panic("nan");
     let pz = num::niche::NonNan::new(0.0) ?? panic("nan");
-    println(f"{nn is none} {one} {one + one} {mz == pz} {mz.hash() == pz.hash()} {one.cmp(pz):?} {one:?}");
+    println(f"{nn is none} {one} {one + one} {mz == pz} {hash_of(mz) == hash_of(pz)} {one.cmp(pz):?} {one:?}");
     let inf: num::niche::Finite<f64> | none = num::niche::Finite::new(1.0 / 0.0);
     let big = num::niche::Finite::new(1.0e308) ?? panic("inf");
     let two = num::niche::Finite::new(2.0) ?? big;

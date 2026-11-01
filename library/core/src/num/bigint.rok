@@ -1427,20 +1427,33 @@ impl Ord for Int {
     }
 }
 
-/// Equal to `i64`'s hash for values in `i64` range.
+/// The sign, then the magnitude's 32-bit limbs after their count: the
+/// same writes for the small and big forms of one value.
 impl Hash for Int {
-    const fn hash(self) -> u64 {
+    const fn hash<H: Hasher>(self, ref h: H) {
         unsafe {
             if let m: IntMag = self.big {
-                let h = if self.neg { 0x9E37_79B9_7F4A_7C15u64 } else { 0u64 };
-                let i = 0usize;
-                while i < m.n {
-                    h = (h ^ (m.d[i] as u64)).wrapping_mul(0x0000_0100_0000_01B3u64);
-                    i += 1;
+                let n = m.n;
+                while n > 0 && m.d[n - 1] == 0u32 {
+                    n -= 1;
                 }
-                return h;
+                h.write_u8(if self.neg && n > 0 { 1u8 } else { 0u8 });
+                h.write_length_prefix(n);
+                for i in 0..n {
+                    h.write_u32(m.d[i]);
+                }
+                return;
             }
-            self.small as u64
+            let mag = if self.small < 0 { 0u64.wrapping_sub(self.small as u64) } else { self.small as u64 };
+            let n = if mag == 0u64 { 0usize } else if mag >> 32u64 == 0u64 { 1usize } else { 2usize };
+            h.write_u8(if self.small < 0 { 1u8 } else { 0u8 });
+            h.write_length_prefix(n);
+            if n > 0 {
+                h.write_u32(mag as u32);
+            }
+            if n > 1 {
+                h.write_u32((mag >> 32u64) as u32);
+            }
         }
     }
 }

@@ -1503,7 +1503,7 @@ impl PartialEq for TaskId {
 impl Eq for TaskId {}
 
 impl Hash for TaskId {
-    const fn hash(self) -> u64 { self.id.hash() }
+    const fn hash<H: Hasher>(self, ref h: H) { self.id.hash(ref h) }
 }
 
 impl Display for TaskId {

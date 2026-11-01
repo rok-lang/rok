@@ -4,7 +4,7 @@
 // `Error`.
 // expect-error: 16:5: function `add` returns `i32`, but the `;` after its last expression drops the value
 // expect-error: help: remove the `;` to return it: `a + b`
-// expect-error: 18:25: mismatched types: `let d` expects `Dict<str, i32>`, found `()`
+// expect-error: 18:25: mismatched types: `let d` expects `Dict<str, i32, RandomState>`, found `()`
 // expect-error: help: `{}` is an empty block, not an empty `Dict`; write `Dict::new()`
 // expect-error: 20:16: `str` can't be thrown: it does not implement `Error`
 // expect-error: help: throw a `ValueError`: `throw ValueError::new("negative");`

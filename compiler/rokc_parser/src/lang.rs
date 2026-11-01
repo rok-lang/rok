@@ -121,7 +121,7 @@ const TRAIT_FORMS: &[(&str, &str, usize)] = &[
     ("eq_trait", "eq", 2),
     ("cmp_trait", "lt", 2),
     ("ord_trait", "cmp", 2),
-    ("hash_trait", "hash", 1),
+    ("hash_trait", "hash", 2),
     ("clone_trait", "clone", 1),
     ("drop_method", "drop", 1),
     ("close_trait", "close", 1),

@@ -1,5 +1,6 @@
-// rok::core::collections::dict - `Dict<K, V>`, a hash map (stdlib spec
-// 2.9.3), compact: entries are appended to dense key / value / hash
+// rok::core::collections::dict - `Dict<K, V, S>`, a hash map (stdlib
+// spec 2.9.3) hashing with `S` (the process-keyed `RandomState` by
+// default), compact: entries are appended to dense key / value / hash
 // arrays, and a power-of-two index of linear-probed slots maps a hash to
 // its entry. A table of at most `SMALL` entries has no index: lookup
 // scans the hashes. `remove` leaves a hole; holes are squeezed out when
@@ -8,6 +9,7 @@
 // insertion order, as the spec guarantees: a present key re-inserted
 // keeps its place, a removed one re-inserted goes last.
 
+use rok::core::hash::{BuildHasher, RandomState};
 use rok::core::marker::{Memo, Transfer, buf_is_null, copy_buf};
 
 /// The dict's object. `keys` / `vals` have one more slot that stays
@@ -17,7 +19,7 @@ use rok::core::marker::{Memo, Transfer, buf_is_null, copy_buf};
 /// slot of a removed entry stays, pointing at the hole: a tombstone,
 /// passed over because no lookup hash is 0. Index slots in use never
 /// exceed `cap`, at most 2/3 of `slots`, so probing always ends.
-pub struct DictHead<K, V> {
+pub struct DictHead<K, V, S> {
     len: usize;
     n: usize;
     cap: usize;
@@ -25,8 +27,10 @@ pub struct DictHead<K, V> {
     keys: GcBuf<K>;
     vals: GcBuf<V>;
     meta: GcBuf<u64>;
-    /// `mix`'s seed: the process's, 0 in a dict built at compile time.
-    seed: u64;
+    state: S;
+    /// The hashes were made at compile time, with the reserved key: the
+    /// first operation at run time rehashes.
+    stale: bool;
 }
 
 /// Entries a table holds without an index.
@@ -35,14 +39,18 @@ const SMALL: usize = 16;
 /// `find`'s answer for an absent key.
 const ABSENT: usize = usize::MAX;
 
-/// `k.hash()` mixed with the dict's seed, so a weak hash (an integer's
-/// own value) still spreads over the low bits and where a key lands
-/// changes between runs; never 0, which marks a hole.
+/// Compile-time evaluation: the process key reads as all zero there.
+const fn compile_time() -> bool {
+    RandomState::new().is_reserved()
+}
+
+/// `k`'s hash with a hasher of `state`'s; never 0, which marks a hole.
 #[inline]
-const fn mix(h: u64, seed: u64) -> u64 {
-    let x = (h ^ seed).wrapping_mul(0x9E37_79B9_7F4A_7C15u64);
-    let y = x ^ (x >> 32u64);
-    if y == 0u64 { 1u64 } else { y }
+const fn hash_with<K: Hash, S: BuildHasher>(state: S, k: K) -> u64 {
+    let h = state.build_hasher();
+    k.hash(ref h);
+    let x = h.finish();
+    if x == 0u64 { 1u64 } else { x }
 }
 
 /// Index slots for `cap` entries: none up to `SMALL`, else a power of
@@ -62,7 +70,7 @@ const fn index_slots(cap: usize) -> usize {
 
 /// An empty table of `cap` entries.
 #[track_caller]
-const fn new_table<K, V>(cap: usize, seed: u64) -> DictHead<K, V> {
+const fn new_table<K, V, S>(cap: usize, state: S, stale: bool) -> DictHead<K, V, S> {
     unsafe {
         let n = cap_add(cap, 1);
         let slots = index_slots(cap);
@@ -74,22 +82,24 @@ const fn new_table<K, V>(cap: usize, seed: u64) -> DictHead<K, V> {
             keys: buf_new(buf_len(n, size_of::<K>())),
             vals: buf_new(buf_len(n, size_of::<V>())),
             meta: buf_new(buf_len(cap_add(cap, slots), 8)),
-            seed,
+            state,
+            stale,
         }
     }
 }
 
-pub struct Dict<K, V> {
-    h: GcBuf<DictHead<K, V>>;
+/// `S` builds the hashers (`RandomState`: the process key).
+pub struct Dict<K, V, S = RandomState> {
+    h: GcBuf<DictHead<K, V, S>>;
 }
 
 // Shares its buffer like `List` (stdlib 2.13.9).
-impl<K, V> !Sync for Dict<K, V> {}
+impl<K, V, S> !Sync for Dict<K, V, S> {}
 
 /// `pairs.collect::<Dict<K, V>>()`; a later pair's value wins.
-impl<K: Hash, V> FromIterator<(K, V)> for Dict<K, V> {
-    const fn from_iter<I: IntoIterator<Item = (K, V)>>(it: I) -> Dict<K, V> {
-        let out: Dict<K, V> = Dict::new();
+impl<K: Hash, V, S: BuildHasher + Default> FromIterator<(K, V)> for Dict<K, V, S> {
+    const fn from_iter<I: IntoIterator<Item = (K, V)>>(it: I) -> Dict<K, V, S> {
+        let out: Dict<K, V, S> = Dict::with_hasher(S::default());
         for (k, v) in it {
             out.insert(k, v);
         }
@@ -105,10 +115,36 @@ impl<K: Hash, V> Dict<K, V> {
     /// Room for `cap` entries before the first growth.
     #[track_caller]
     pub const fn with_capacity(cap: usize) -> Dict<K, V> {
+        let state = RandomState::new();
+        Dict::make(cap, state, state.is_reserved())
+    }
+}
+
+impl<K: Hash, V, S: BuildHasher> Dict<K, V, S> {
+    /// An empty dict hashing with `state`'s hashers.
+    pub const fn with_hasher(state: S) -> Dict<K, V, S> {
+        Dict::with_capacity_and_hasher(4, state)
+    }
+
+    /// Room for `cap` entries, hashing with `state`'s hashers.
+    #[track_caller]
+    pub const fn with_capacity_and_hasher(cap: usize, state: S) -> Dict<K, V, S> {
+        Dict::make(cap, state, compile_time())
+    }
+
+    #[track_caller]
+    const fn make(cap: usize, state: S, stale: bool) -> Dict<K, V, S> {
         unsafe {
-            let h: GcBuf<DictHead<K, V>> = buf_new(1);
-            h[0] = new_table(cap, rok_hash_seed());
+            let h: GcBuf<DictHead<K, V, S>> = buf_new(1);
+            h[0] = new_table(cap, state, stale);
             Dict { h }
+        }
+    }
+
+    /// What builds the dict's hashers.
+    pub const fn hasher(self) -> S {
+        unsafe {
+            self.h[0].state
         }
     }
 
@@ -122,13 +158,35 @@ impl<K: Hash, V> Dict<K, V> {
         self.len() == 0
     }
 
-    /// `k`'s hash, mixed.
+    /// `k`'s hash.
     #[inline]
     const fn hash_of(self, k: K) -> u64 {
-        unsafe { mix(k.hash(), self.h[0].seed) }
+        unsafe {
+            if self.h[0].stale {
+                self.rehash();
+            }
+            hash_with(self.h[0].state, k)
+        }
     }
 
-    /// The entry holding `k` (mixed hash `h`), or `ABSENT`.
+    /// Hash every entry again, with the run time's key: a table built
+    /// at compile time, on its first use. O(n), once.
+    const fn rehash(self) {
+        if compile_time() {
+            return;
+        }
+        unsafe {
+            let old = self.h[0];
+            self.h[0] = new_table(old.cap, old.state, false);
+            for i in 0..old.n {
+                if old.meta[i] != 0u64 {
+                    self.append(old.keys[i], old.vals[i], hash_with(old.state, old.keys[i]));
+                }
+            }
+        }
+    }
+
+    /// The entry holding `k` (hash `h`), or `ABSENT`.
     const fn find(self, k: K, h: u64) -> usize {
         unsafe {
             let s = self.h[0];
@@ -156,7 +214,7 @@ impl<K: Hash, V> Dict<K, V> {
         }
     }
 
-    /// Append `k` (absent, mixed hash `h`) and `v`; the entries have
+    /// Append `k` (absent, hash `h`) and `v`; the entries have
     /// room.
     const fn append(self, k: K, v: V, h: u64) {
         unsafe {
@@ -188,7 +246,7 @@ impl<K: Hash, V> Dict<K, V> {
             if old.len * 2 >= cap {
                 cap = cap_add(cap, cap / 2).max(4);
             }
-            self.h[0] = new_table(cap, old.seed);
+            self.h[0] = new_table(cap, old.state, old.stale);
             for i in 0..old.n {
                 let h = old.meta[i];
                 if h != 0u64 {
@@ -282,7 +340,7 @@ impl<K: Hash, V> Dict<K, V> {
     /// Drop every entry (a fresh small table).
     pub const fn clear(self) {
         unsafe {
-            self.h[0] = new_table(4, self.h[0].seed);
+            self.h[0] = new_table(4, self.h[0].state, self.h[0].stale);
         }
     }
 
@@ -299,34 +357,34 @@ impl<K: Hash, V> Dict<K, V> {
     }
 
     /// The keys, lazily (2.9.3; insertion order).
-    pub const fn keys(self) -> Keys<K, V> {
+    pub const fn keys(self) -> Keys<K, V, S> {
         Keys { d: self, at: 0 }
     }
 
     /// The values, lazily.
-    pub const fn values(self) -> Values<K, V> {
+    pub const fn values(self) -> Values<K, V, S> {
         Values { d: self, at: 0 }
     }
 
     /// `(key, value)` pairs, lazily (insertion order).
-    pub const fn iter(self) -> DictIter<K, V> {
+    pub const fn iter(self) -> DictIter<K, V, S> {
         DictIter { d: self, at: 0 }
     }
 
     /// `k`'s place in the dict, present or not (2.9.3).
-    pub const fn entry(self, k: K) -> Entry<K, V> {
+    pub const fn entry(self, k: K) -> Entry<K, V, S> {
         Entry { d: self, key: k }
     }
 }
 
 /// `d.entry(k)`: read or fill one key's slot. Each call looks the key
 /// up again.
-pub struct Entry<K, V> {
-    d: Dict<K, V>;
+pub struct Entry<K, V, S = RandomState> {
+    d: Dict<K, V, S>;
     key: K;
 }
 
-impl<K: Hash, V> Entry<K, V> {
+impl<K: Hash, V, S: BuildHasher> Entry<K, V, S> {
     pub fn key(self) -> K {
         self.key
     }
@@ -348,7 +406,7 @@ impl<K: Hash, V> Entry<K, V> {
     }
 
     /// A present value replaced by `f(value)`; an absent key is left alone.
-    pub const fn and_modify(self, f: fn(V) -> V) -> Entry<K, V> {
+    pub const fn and_modify(self, f: fn(V) -> V) -> Entry<K, V, S> {
         if self.d.contains_key(self.key) {
             self.d.insert(self.key, f(self.d[self.key]));
         }
@@ -356,7 +414,7 @@ impl<K: Hash, V> Entry<K, V> {
     }
 }
 
-impl<K: Hash, V: Default> Entry<K, V> {
+impl<K: Hash, V: Default, S: BuildHasher> Entry<K, V, S> {
     /// The value, after inserting `V::default()` if the key is absent.
     pub const fn or_default(self) -> V {
         if !self.d.contains_key(self.key) {
@@ -369,12 +427,12 @@ impl<K: Hash, V: Default> Entry<K, V> {
 // The iterators walk the live table; a dict changed while iterated
 // gives unspecified (but memory-safe) results.
 
-pub struct Keys<K, V> {
-    d: Dict<K, V>;
+pub struct Keys<K, V, S = RandomState> {
+    d: Dict<K, V, S>;
     at: usize;
 }
 
-impl<K: Hash, V> Iterator for Keys<K, V> {
+impl<K: Hash, V, S: BuildHasher> Iterator for Keys<K, V, S> {
     type Item = K;
     const fn next(ref self) -> K | none {
         unsafe {
@@ -389,12 +447,12 @@ impl<K: Hash, V> Iterator for Keys<K, V> {
     }
 }
 
-pub struct Values<K, V> {
-    d: Dict<K, V>;
+pub struct Values<K, V, S = RandomState> {
+    d: Dict<K, V, S>;
     at: usize;
 }
 
-impl<K: Hash, V> Iterator for Values<K, V> {
+impl<K: Hash, V, S: BuildHasher> Iterator for Values<K, V, S> {
     type Item = V;
     const fn next(ref self) -> V | none {
         unsafe {
@@ -409,12 +467,12 @@ impl<K: Hash, V> Iterator for Values<K, V> {
     }
 }
 
-pub struct DictIter<K, V> {
-    d: Dict<K, V>;
+pub struct DictIter<K, V, S = RandomState> {
+    d: Dict<K, V, S>;
     at: usize;
 }
 
-impl<K: Hash, V> Iterator for DictIter<K, V> {
+impl<K: Hash, V, S: BuildHasher> Iterator for DictIter<K, V, S> {
     type Item = (K, V);
     const fn next(ref self) -> (K, V) | none {
         unsafe {
@@ -429,14 +487,14 @@ impl<K: Hash, V> Iterator for DictIter<K, V> {
     }
 }
 
-impl<K: Hash, V> Default for Dict<K, V> {
-    fn default() -> Dict<K, V> { Dict::new() }
+impl<K: Hash, V, S: BuildHasher + Default> Default for Dict<K, V, S> {
+    fn default() -> Dict<K, V, S> { Dict::with_hasher(S::default()) }
 }
 
 /// A new dict with every key and value cloned (stdlib 2.13.2).
-impl<K: Hash + Clone, V: Clone> Clone for Dict<K, V> {
-    const fn clone(self) -> Dict<K, V> {
-        let r: Dict<K, V> = Dict::new();
+impl<K: Hash + Clone, V: Clone, S: BuildHasher> Clone for Dict<K, V, S> {
+    const fn clone(self) -> Dict<K, V, S> {
+        let r: Dict<K, V, S> = Dict::with_hasher(self.hasher());
         for (k, v) in self {
             r.insert(k.clone(), v.clone());
         }
@@ -445,9 +503,9 @@ impl<K: Hash + Clone, V: Clone> Clone for Dict<K, V> {
 }
 
 /// The pairs of a list; a later pair's value wins.
-impl<K: Hash, V> From<List<(K, V)>> for Dict<K, V> {
-    const fn from(pairs: List<(K, V)>) -> Dict<K, V> {
-        let d: Dict<K, V> = Dict::with_capacity(pairs.len());
+impl<K: Hash, V, S: BuildHasher + Default> From<List<(K, V)>> for Dict<K, V, S> {
+    const fn from(pairs: List<(K, V)>) -> Dict<K, V, S> {
+        let d: Dict<K, V, S> = Dict::with_capacity_and_hasher(pairs.len(), S::default());
         for (k, v) in pairs {
             d.insert(k, v);
         }
@@ -456,8 +514,8 @@ impl<K: Hash, V> From<List<(K, V)>> for Dict<K, V> {
 }
 
 /// `d += e`: merge `e` in place; its values win (stdlib 2.4.6).
-impl<K: Hash, V> AddAssign<Dict<K, V>> for Dict<K, V> {
-    const fn add_assign(ref self, rhs: Dict<K, V>) {
+impl<K: Hash, V, S: BuildHasher> AddAssign<Dict<K, V, S>> for Dict<K, V, S> {
+    const fn add_assign(ref self, rhs: Dict<K, V, S>) {
         for (k, v) in rhs {
             self.insert(k, v);
         }
@@ -465,16 +523,16 @@ impl<K: Hash, V> AddAssign<Dict<K, V>> for Dict<K, V> {
 }
 
 /// `for (k, v) in d` (2.9.9).
-impl<K: Hash, V> IntoIterator for Dict<K, V> {
-    type IntoIter = DictIter<K, V>;
+impl<K: Hash, V, S: BuildHasher> IntoIterator for Dict<K, V, S> {
+    type IntoIter = DictIter<K, V, S>;
     type Item = (K, V);
-    const fn into_iter(self) -> DictIter<K, V> {
+    const fn into_iter(self) -> DictIter<K, V, S> {
         self.iter()
     }
 }
 
 /// `d[k]`; panics when the key is absent.
-impl<K: Hash, V> Index<K> for Dict<K, V> {
+impl<K: Hash, V, S: BuildHasher> Index<K> for Dict<K, V, S> {
     type Output = V;
     #[track_caller]
     const fn index(self, k: K) -> V {
@@ -497,7 +555,7 @@ const fn key_missing<K, V>(k: K) -> ! {
 }
 
 /// `d[k] = v` inserts or replaces.
-impl<K: Hash, V> IndexSet<K> for Dict<K, V> {
+impl<K: Hash, V, S: BuildHasher> IndexSet<K> for Dict<K, V, S> {
     type Value = V;
     const fn index_set(self, k: K, v: V) {
         self.insert(k, v);
@@ -505,8 +563,8 @@ impl<K: Hash, V> IndexSet<K> for Dict<K, V> {
 }
 
 /// Same keys, equal values (insertion order does not matter).
-impl<K: Hash, V: PartialEq> PartialEq for Dict<K, V> {
-    const fn eq(self, rhs: Dict<K, V>) -> bool {
+impl<K: Hash, V: PartialEq, S: BuildHasher> PartialEq for Dict<K, V, S> {
+    const fn eq(self, rhs: Dict<K, V, S>) -> bool {
         if self.len() != rhs.len() { return false; }
         for (k, v) in self {
             if !rhs.contains_key(k) { return false; }
@@ -514,25 +572,31 @@ impl<K: Hash, V: PartialEq> PartialEq for Dict<K, V> {
         }
         true
     }
-    fn ne(self, rhs: Dict<K, V>) -> bool { !self.eq(rhs) }
+    fn ne(self, rhs: Dict<K, V, S>) -> bool { !self.eq(rhs) }
 }
 
-impl<K: Hash, V: Eq> Eq for Dict<K, V> {}
+impl<K: Hash, V: Eq, S: BuildHasher> Eq for Dict<K, V, S> {}
 
-/// Order-independent: entries combine by xor.
-impl<K: Hash, V: Hash> Hash for Dict<K, V> {
-    const fn hash(self) -> u64 {
-        let h = self.len() as u64;
+/// Order-independent, as `==`: each entry hashed alone with the
+/// process key (the same for every `S`), the results summed; then the
+/// length and the sum.
+impl<K: Hash, V: Hash, S: BuildHasher> Hash for Dict<K, V, S> {
+    const fn hash<H: Hasher>(self, ref h: H) {
+        let st = RandomState::new();
+        let sum = 0u64;
         for (k, v) in self {
-            let vh = v.hash();
-            h ^= k.hash() ^ ((vh << 17u64) | (vh >> 47u64));
+            let e = st.build_hasher();
+            k.hash(ref e);
+            v.hash(ref e);
+            sum = sum.wrapping_add(e.finish());
         }
-        h
+        h.write_length_prefix(self.len());
+        h.write_u64(sum);
     }
 }
 
 /// `{k: v, ..}` with each key's and value's `Debug`, in iteration order.
-impl<K: Hash + Debug, V: Debug> Debug for Dict<K, V> {
+impl<K: Hash + Debug, V: Debug, S: BuildHasher> Debug for Dict<K, V, S> {
     const fn fmt(self, ref f: Formatter) throws (FmtError) {
         try f.write_str("{");
         let first = true;
@@ -556,17 +620,17 @@ pub const fn dict_literal<K: Hash, V>(pairs: ...(K, V)) -> Dict<K, V> {
 
 /// A hand-off's copy (stdlib 2.13.9): the same table; keys and values go
 /// through `transfer` from the memo's queue (holes stay zero).
-impl<K, V> Transfer for Dict<K, V> {
-    const fn transfer_copy(self, m: Memo) -> Dict<K, V> {
+impl<K, V, S> Transfer for Dict<K, V, S> {
+    const fn transfer_copy(self, m: Memo) -> Dict<K, V, S> {
         if buf_is_null(self.h) {
             return self;
         }
-        if let got: GcBuf<DictHead<K, V>> = m.find(self.h) {
+        if let got: GcBuf<DictHead<K, V, S>> = m.find(self.h) {
             return Dict { h: got };
         }
         unsafe {
             let s = self.h[0];
-            let h: GcBuf<DictHead<K, V>> = buf_new(1);
+            let h: GcBuf<DictHead<K, V, S>> = buf_new(1);
             m.note(self.h, h);
             let n = cap_add(s.cap, 1);
             let index = cap_add(s.cap, s.slots);
@@ -578,20 +642,21 @@ impl<K, V> Transfer for Dict<K, V> {
                 keys: copy_buf(s.keys, 0, s.n, 1, n, m),
                 vals: copy_buf(s.vals, 0, s.n, 1, n, m),
                 meta: copy_buf(s.meta, 0, index, 1, index, m),
-                seed: s.seed,
+                state: s.state,
+                stale: s.stale,
             };
             Dict { h }
         }
     }
 
-    const fn transfer_keep(self, m: Memo) -> Dict<K, V> {
+    const fn transfer_keep(self, m: Memo) -> Dict<K, V, S> {
         if !buf_is_null(self.h) {
             m.keep(self.h);
         }
         self
     }
 
-    const fn transfer_visit(self, m: Memo) -> Dict<K, V> {
+    const fn transfer_visit(self, m: Memo) -> Dict<K, V, S> {
         if !buf_is_null(self.h) && m.visit(self.h) {
             unsafe {
                 let s = self.h[0];

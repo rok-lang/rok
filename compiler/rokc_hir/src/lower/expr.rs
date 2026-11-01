@@ -6304,8 +6304,7 @@ fn sum_structural_call(
     };
     let result_ty = match method {
         "clone" => sum_ty.clone(),
-        "fmt" => HirTy::Unit,
-        "hash" => HirTy::Prim(PrimTy::U64),
+        "fmt" | "hash" => HirTy::Unit,
         "cmp" => ordering(ctx, "Equal").ty,
         _ => HirTy::Prim(PrimTy::Bool),
     };
@@ -6342,7 +6341,11 @@ fn sum_structural_call(
         stmts.push(HirStmt::Let { local: r, init: v });
         Some(r)
     } else {
-        if method != "fmt" {
+        if method == "hash" && !matches!(args, [CallArg::Ref(_) | CallArg::Positional(_)]) {
+            discard_args(ctx, args);
+            return ctx.error_expr(span, "`hash` takes the hasher: `x.hash(ref h)`".to_owned());
+        }
+        if !matches!(method, "fmt" | "hash") {
             discard_args(ctx, args);
         }
         None
@@ -6438,20 +6441,47 @@ fn sum_structural_call(
                 lower_expr(ctx, &c)
             }
             ("hash", _) => {
-                let tag = hir_int(i128::try_from(i).unwrap_or(0), PrimTy::U64, span);
-                if none {
-                    tag
-                } else {
-                    let h = lower_expr(ctx, &call("hash", None));
-                    HirExpr {
-                        kind: HirExprKind::PrimBinOp {
-                            op: PrimOp::BitXor,
-                            lhs: Box::new(h),
-                            rhs: Box::new(tag),
+                // `h.write_usize(i)`, then the member's `hash(ref h)`.
+                let [CallArg::Ref(h) | CallArg::Positional(h)] = args else {
+                    unreachable!("checked above")
+                };
+                let tag = Expr {
+                    kind: ExprKind::MethodCall {
+                        receiver: Box::new(h.clone()),
+                        method: "write_usize".to_owned(),
+                        type_args: Vec::new(),
+                        args: vec![CallArg::Positional(Expr {
+                            kind: ExprKind::Literal(AstLit::Int(format!("{i}usize"))),
+                            span,
+                        })],
+                        trailing_closure: None,
+                    },
+                    span,
+                };
+                let tag = lower_expr(ctx, &tag);
+                let member = (!none).then(|| {
+                    lower_expr(
+                        ctx,
+                        &Expr {
+                            kind: ExprKind::MethodCall {
+                                receiver: Box::new(path("#a")),
+                                method: "hash".to_owned(),
+                                type_args: Vec::new(),
+                                args: args.to_vec(),
+                                trailing_closure: None,
+                            },
+                            span,
                         },
-                        ty: HirTy::Prim(PrimTy::U64),
-                        span,
-                    }
+                    )
+                });
+                HirExpr {
+                    kind: HirExprKind::Block(Box::new(HirBlock {
+                        stmts: vec![HirStmt::Expr(tag)],
+                        trailing: member,
+                        label: None,
+                    })),
+                    ty: HirTy::Unit,
+                    span,
                 }
             }
             (_, Some(r)) => {

@@ -25,10 +25,8 @@ impl<A: PartialEq> PartialEq for (A,) {
 }
 impl<A: Eq> Eq for (A,) {}
 impl<A: Hash> Hash for (A,) {
-    fn hash(self) -> u64 {
-        let h = 1u64;
-        h = ((h << 5) | (h >> 59)) ^ self.0.hash();
-        h
+    fn hash<Hx: Hasher>(self, ref h: Hx) {
+        self.0.hash(ref h);
     }
 }
 
@@ -54,11 +52,9 @@ impl<A: PartialEq, B: PartialEq> PartialEq for (A, B) {
 }
 impl<A: Eq, B: Eq> Eq for (A, B) {}
 impl<A: Hash, B: Hash> Hash for (A, B) {
-    const fn hash(self) -> u64 {
-        let h = 2u64;
-        h = ((h << 5) | (h >> 59)) ^ self.0.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.1.hash();
-        h
+    const fn hash<Hx: Hasher>(self, ref h: Hx) {
+        self.0.hash(ref h);
+        self.1.hash(ref h);
     }
 }
 
@@ -85,12 +81,10 @@ impl<A: PartialEq, B: PartialEq, C: PartialEq> PartialEq for (A, B, C) {
 }
 impl<A: Eq, B: Eq, C: Eq> Eq for (A, B, C) {}
 impl<A: Hash, B: Hash, C: Hash> Hash for (A, B, C) {
-    fn hash(self) -> u64 {
-        let h = 3u64;
-        h = ((h << 5) | (h >> 59)) ^ self.0.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.1.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.2.hash();
-        h
+    fn hash<Hx: Hasher>(self, ref h: Hx) {
+        self.0.hash(ref h);
+        self.1.hash(ref h);
+        self.2.hash(ref h);
     }
 }
 
@@ -118,13 +112,11 @@ impl<A: PartialEq, B: PartialEq, C: PartialEq, D: PartialEq> PartialEq for (A, B
 }
 impl<A: Eq, B: Eq, C: Eq, D: Eq> Eq for (A, B, C, D) {}
 impl<A: Hash, B: Hash, C: Hash, D: Hash> Hash for (A, B, C, D) {
-    fn hash(self) -> u64 {
-        let h = 4u64;
-        h = ((h << 5) | (h >> 59)) ^ self.0.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.1.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.2.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.3.hash();
-        h
+    fn hash<Hx: Hasher>(self, ref h: Hx) {
+        self.0.hash(ref h);
+        self.1.hash(ref h);
+        self.2.hash(ref h);
+        self.3.hash(ref h);
     }
 }
 
@@ -153,14 +145,12 @@ impl<A: PartialEq, B: PartialEq, C: PartialEq, D: PartialEq, E: PartialEq> Parti
 }
 impl<A: Eq, B: Eq, C: Eq, D: Eq, E: Eq> Eq for (A, B, C, D, E) {}
 impl<A: Hash, B: Hash, C: Hash, D: Hash, E: Hash> Hash for (A, B, C, D, E) {
-    fn hash(self) -> u64 {
-        let h = 5u64;
-        h = ((h << 5) | (h >> 59)) ^ self.0.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.1.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.2.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.3.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.4.hash();
-        h
+    fn hash<Hx: Hasher>(self, ref h: Hx) {
+        self.0.hash(ref h);
+        self.1.hash(ref h);
+        self.2.hash(ref h);
+        self.3.hash(ref h);
+        self.4.hash(ref h);
     }
 }
 
@@ -190,15 +180,13 @@ impl<A: PartialEq, B: PartialEq, C: PartialEq, D: PartialEq, E: PartialEq, F: Pa
 }
 impl<A: Eq, B: Eq, C: Eq, D: Eq, E: Eq, F: Eq> Eq for (A, B, C, D, E, F) {}
 impl<A: Hash, B: Hash, C: Hash, D: Hash, E: Hash, F: Hash> Hash for (A, B, C, D, E, F) {
-    fn hash(self) -> u64 {
-        let h = 6u64;
-        h = ((h << 5) | (h >> 59)) ^ self.0.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.1.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.2.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.3.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.4.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.5.hash();
-        h
+    fn hash<Hx: Hasher>(self, ref h: Hx) {
+        self.0.hash(ref h);
+        self.1.hash(ref h);
+        self.2.hash(ref h);
+        self.3.hash(ref h);
+        self.4.hash(ref h);
+        self.5.hash(ref h);
     }
 }
 
@@ -229,16 +217,14 @@ impl<A: PartialEq, B: PartialEq, C: PartialEq, D: PartialEq, E: PartialEq, F: Pa
 }
 impl<A: Eq, B: Eq, C: Eq, D: Eq, E: Eq, F: Eq, G: Eq> Eq for (A, B, C, D, E, F, G) {}
 impl<A: Hash, B: Hash, C: Hash, D: Hash, E: Hash, F: Hash, G: Hash> Hash for (A, B, C, D, E, F, G) {
-    fn hash(self) -> u64 {
-        let h = 7u64;
-        h = ((h << 5) | (h >> 59)) ^ self.0.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.1.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.2.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.3.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.4.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.5.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.6.hash();
-        h
+    fn hash<Hx: Hasher>(self, ref h: Hx) {
+        self.0.hash(ref h);
+        self.1.hash(ref h);
+        self.2.hash(ref h);
+        self.3.hash(ref h);
+        self.4.hash(ref h);
+        self.5.hash(ref h);
+        self.6.hash(ref h);
     }
 }
 
@@ -270,17 +256,15 @@ impl<A: PartialEq, B: PartialEq, C: PartialEq, D: PartialEq, E: PartialEq, F: Pa
 }
 impl<A: Eq, B: Eq, C: Eq, D: Eq, E: Eq, F: Eq, G: Eq, H: Eq> Eq for (A, B, C, D, E, F, G, H) {}
 impl<A: Hash, B: Hash, C: Hash, D: Hash, E: Hash, F: Hash, G: Hash, H: Hash> Hash for (A, B, C, D, E, F, G, H) {
-    fn hash(self) -> u64 {
-        let h = 8u64;
-        h = ((h << 5) | (h >> 59)) ^ self.0.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.1.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.2.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.3.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.4.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.5.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.6.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.7.hash();
-        h
+    fn hash<Hx: Hasher>(self, ref h: Hx) {
+        self.0.hash(ref h);
+        self.1.hash(ref h);
+        self.2.hash(ref h);
+        self.3.hash(ref h);
+        self.4.hash(ref h);
+        self.5.hash(ref h);
+        self.6.hash(ref h);
+        self.7.hash(ref h);
     }
 }
 
@@ -313,18 +297,16 @@ impl<A: PartialEq, B: PartialEq, C: PartialEq, D: PartialEq, E: PartialEq, F: Pa
 }
 impl<A: Eq, B: Eq, C: Eq, D: Eq, E: Eq, F: Eq, G: Eq, H: Eq, I: Eq> Eq for (A, B, C, D, E, F, G, H, I) {}
 impl<A: Hash, B: Hash, C: Hash, D: Hash, E: Hash, F: Hash, G: Hash, H: Hash, I: Hash> Hash for (A, B, C, D, E, F, G, H, I) {
-    fn hash(self) -> u64 {
-        let h = 9u64;
-        h = ((h << 5) | (h >> 59)) ^ self.0.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.1.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.2.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.3.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.4.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.5.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.6.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.7.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.8.hash();
-        h
+    fn hash<Hx: Hasher>(self, ref h: Hx) {
+        self.0.hash(ref h);
+        self.1.hash(ref h);
+        self.2.hash(ref h);
+        self.3.hash(ref h);
+        self.4.hash(ref h);
+        self.5.hash(ref h);
+        self.6.hash(ref h);
+        self.7.hash(ref h);
+        self.8.hash(ref h);
     }
 }
 
@@ -358,19 +340,17 @@ impl<A: PartialEq, B: PartialEq, C: PartialEq, D: PartialEq, E: PartialEq, F: Pa
 }
 impl<A: Eq, B: Eq, C: Eq, D: Eq, E: Eq, F: Eq, G: Eq, H: Eq, I: Eq, J: Eq> Eq for (A, B, C, D, E, F, G, H, I, J) {}
 impl<A: Hash, B: Hash, C: Hash, D: Hash, E: Hash, F: Hash, G: Hash, H: Hash, I: Hash, J: Hash> Hash for (A, B, C, D, E, F, G, H, I, J) {
-    fn hash(self) -> u64 {
-        let h = 10u64;
-        h = ((h << 5) | (h >> 59)) ^ self.0.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.1.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.2.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.3.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.4.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.5.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.6.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.7.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.8.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.9.hash();
-        h
+    fn hash<Hx: Hasher>(self, ref h: Hx) {
+        self.0.hash(ref h);
+        self.1.hash(ref h);
+        self.2.hash(ref h);
+        self.3.hash(ref h);
+        self.4.hash(ref h);
+        self.5.hash(ref h);
+        self.6.hash(ref h);
+        self.7.hash(ref h);
+        self.8.hash(ref h);
+        self.9.hash(ref h);
     }
 }
 
@@ -405,20 +385,18 @@ impl<A: PartialEq, B: PartialEq, C: PartialEq, D: PartialEq, E: PartialEq, F: Pa
 }
 impl<A: Eq, B: Eq, C: Eq, D: Eq, E: Eq, F: Eq, G: Eq, H: Eq, I: Eq, J: Eq, K: Eq> Eq for (A, B, C, D, E, F, G, H, I, J, K) {}
 impl<A: Hash, B: Hash, C: Hash, D: Hash, E: Hash, F: Hash, G: Hash, H: Hash, I: Hash, J: Hash, K: Hash> Hash for (A, B, C, D, E, F, G, H, I, J, K) {
-    fn hash(self) -> u64 {
-        let h = 11u64;
-        h = ((h << 5) | (h >> 59)) ^ self.0.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.1.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.2.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.3.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.4.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.5.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.6.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.7.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.8.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.9.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.10.hash();
-        h
+    fn hash<Hx: Hasher>(self, ref h: Hx) {
+        self.0.hash(ref h);
+        self.1.hash(ref h);
+        self.2.hash(ref h);
+        self.3.hash(ref h);
+        self.4.hash(ref h);
+        self.5.hash(ref h);
+        self.6.hash(ref h);
+        self.7.hash(ref h);
+        self.8.hash(ref h);
+        self.9.hash(ref h);
+        self.10.hash(ref h);
     }
 }
 
@@ -454,21 +432,19 @@ impl<A: PartialEq, B: PartialEq, C: PartialEq, D: PartialEq, E: PartialEq, F: Pa
 }
 impl<A: Eq, B: Eq, C: Eq, D: Eq, E: Eq, F: Eq, G: Eq, H: Eq, I: Eq, J: Eq, K: Eq, L: Eq> Eq for (A, B, C, D, E, F, G, H, I, J, K, L) {}
 impl<A: Hash, B: Hash, C: Hash, D: Hash, E: Hash, F: Hash, G: Hash, H: Hash, I: Hash, J: Hash, K: Hash, L: Hash> Hash for (A, B, C, D, E, F, G, H, I, J, K, L) {
-    fn hash(self) -> u64 {
-        let h = 12u64;
-        h = ((h << 5) | (h >> 59)) ^ self.0.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.1.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.2.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.3.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.4.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.5.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.6.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.7.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.8.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.9.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.10.hash();
-        h = ((h << 5) | (h >> 59)) ^ self.11.hash();
-        h
+    fn hash<Hx: Hasher>(self, ref h: Hx) {
+        self.0.hash(ref h);
+        self.1.hash(ref h);
+        self.2.hash(ref h);
+        self.3.hash(ref h);
+        self.4.hash(ref h);
+        self.5.hash(ref h);
+        self.6.hash(ref h);
+        self.7.hash(ref h);
+        self.8.hash(ref h);
+        self.9.hash(ref h);
+        self.10.hash(ref h);
+        self.11.hash(ref h);
     }
 }
 

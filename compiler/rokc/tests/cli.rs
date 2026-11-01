@@ -1704,9 +1704,9 @@ fn spawn_of_a_sole_local_future_skips_the_hand_off() {
     assert!(aliased.contains(copy) && !aliased.contains(plain));
 }
 
-/// Stdlib 2.5, 2.9.3: where a `Dict` puts a key depends on a per-process
-/// seed, but what it prints and writes (insertion order) does not; a
-/// dict built at compile time keeps its own seed.
+/// Stdlib 2.5, 2.9.3: the hash key is drawn per process, so hashes
+/// differ between runs, but what a `Dict` prints and writes (insertion
+/// order) does not.
 // spec: std §2.5.6 §2.9.3
 #[test]
 fn dict_seed_changes_placement_not_output() {
@@ -1714,8 +1714,7 @@ fn dict_seed_changes_placement_not_output() {
     let dir = scratch("dict_seed");
     put(
         dir.join("src/main.rok"),
-        "extern \"rok\" { fn rok_hash_seed() -> u64; }\n\
-         const C: Dict<str, i32> = {\"q\": 1, \"r\": 2};\n\
+        "const C: Dict<str, i32> = {\"q\": 1, \"r\": 2};\n\
          fn main() {\n\
          \x20   let d: Dict<str, i32> = Dict::new();\n\
          \x20   for i in 0..40 { d[f\"k{i}\"] = i; }\n\
@@ -1723,7 +1722,9 @@ fn dict_seed_changes_placement_not_output() {
          \x20   d[\"k3\"] = 3;\n\
          \x20   println(f\"{d:?} {C[\"r\"]} {C.contains_key(\"q\")}\");\n\
          \x20   println(try! rok::std::rokon::to_str(d));\n\
-         \x20   println(f\"{unsafe { rok_hash_seed() }}\");\n\
+         \x20   let h = rok::core::hash::RandomState::new().build_hasher();\n\
+         \x20   h.write_u64(1u64);\n\
+         \x20   println(f\"{h.finish()}\");\n\
          }\n",
     )
     .unwrap();
