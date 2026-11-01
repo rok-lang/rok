@@ -8,20 +8,25 @@
 // bounds, method calls and `fn` values.
 
 /// Lengths of two broadcast operands agree (each collection is checked
-/// against the first).
+/// against the first). A fused expression may hold several operators,
+/// so it names none.
 #[track_caller]
 #[lang("broadcast_len_fn")]
-pub(pkg) const fn check_len(len: usize, want: usize) {
+pub(pkg) const fn check_len(len: usize, want: usize) { check_len_in("broadcast", len, want); }
+
+/// `check_len`, the panic naming `what`.
+#[track_caller]
+const fn check_len_in(what: str, len: usize, want: usize) {
     if len != want {
-        panic(f"broadcast over lengths {want} and {len}");
+        panic(f"{what}: lengths {want} and {len} differ; make both sides the same length");
     }
 }
 
-/// `[f(a[i], b[i])]`; panics when the lengths differ.
+/// `[f(a[i], b[i])]`; panics, naming `what`, when the lengths differ.
 #[track_caller]
-const fn zip_with<A, B, C>(a: List<A>, b: List<B>, f: fn(A, B) -> C) -> List<C> {
+const fn zip_with<A, B, C>(what: str, a: List<A>, b: List<B>, f: fn(A, B) -> C) -> List<C> {
     let n = a.len();
-    check_len(b.len(), n);
+    check_len_in(what, b.len(), n);
     let out: List<C> = List::with_capacity(n);
     for i in 0..n {
         out.push(f(a[i], b[i]));
@@ -50,7 +55,7 @@ const fn map_left<A, B, C>(a: A, b: List<B>, f: fn(A, B) -> C) -> List<C> {
 impl<T: Add<Output = T>> DotAdd<List<T>> for List<T> {
     type Output = List<T>;
     #[track_caller]
-    fn dot_add(self, rhs: List<T>) -> List<T> { zip_with(self, rhs, |a: T, b: T| -> T { a + b }) }
+    fn dot_add(self, rhs: List<T>) -> List<T> { zip_with("List::dot_add", self, rhs, |a: T, b: T| -> T { a + b }) }
 }
 
 impl<T: Add<Output = T>> DotAdd<T> for List<T> {
@@ -66,7 +71,7 @@ impl<T: Add<Output = T>> DotAdd<List<T>> for T {
 impl<T: Sub<Output = T>> DotSub<List<T>> for List<T> {
     type Output = List<T>;
     #[track_caller]
-    fn dot_sub(self, rhs: List<T>) -> List<T> { zip_with(self, rhs, |a: T, b: T| -> T { a - b }) }
+    fn dot_sub(self, rhs: List<T>) -> List<T> { zip_with("List::dot_sub", self, rhs, |a: T, b: T| -> T { a - b }) }
 }
 
 impl<T: Sub<Output = T>> DotSub<T> for List<T> {
@@ -82,7 +87,7 @@ impl<T: Sub<Output = T>> DotSub<List<T>> for T {
 impl<T: Mul<Output = T>> DotMul<List<T>> for List<T> {
     type Output = List<T>;
     #[track_caller]
-    fn dot_mul(self, rhs: List<T>) -> List<T> { zip_with(self, rhs, |a: T, b: T| -> T { a * b }) }
+    fn dot_mul(self, rhs: List<T>) -> List<T> { zip_with("List::dot_mul", self, rhs, |a: T, b: T| -> T { a * b }) }
 }
 
 impl<T: Mul<Output = T>> DotMul<T> for List<T> {
@@ -98,7 +103,7 @@ impl<T: Mul<Output = T>> DotMul<List<T>> for T {
 impl<T: Div<Output = T>> DotDiv<List<T>> for List<T> {
     type Output = List<T>;
     #[track_caller]
-    fn dot_div(self, rhs: List<T>) -> List<T> { zip_with(self, rhs, |a: T, b: T| -> T { a / b }) }
+    fn dot_div(self, rhs: List<T>) -> List<T> { zip_with("List::dot_div", self, rhs, |a: T, b: T| -> T { a / b }) }
 }
 
 impl<T: Div<Output = T>> DotDiv<T> for List<T> {
@@ -114,7 +119,7 @@ impl<T: Div<Output = T>> DotDiv<List<T>> for T {
 impl<T: Rem<Output = T>> DotRem<List<T>> for List<T> {
     type Output = List<T>;
     #[track_caller]
-    fn dot_rem(self, rhs: List<T>) -> List<T> { zip_with(self, rhs, |a: T, b: T| -> T { a % b }) }
+    fn dot_rem(self, rhs: List<T>) -> List<T> { zip_with("List::dot_rem", self, rhs, |a: T, b: T| -> T { a % b }) }
 }
 
 impl<T: Rem<Output = T>> DotRem<T> for List<T> {
@@ -130,7 +135,7 @@ impl<T: Rem<Output = T>> DotRem<List<T>> for T {
 impl<T: Modulo<Output = T>> DotModulo<List<T>> for List<T> {
     type Output = List<T>;
     #[track_caller]
-    fn dot_modulo(self, rhs: List<T>) -> List<T> { zip_with(self, rhs, |a: T, b: T| -> T { a %% b }) }
+    fn dot_modulo(self, rhs: List<T>) -> List<T> { zip_with("List::dot_modulo", self, rhs, |a: T, b: T| -> T { a %% b }) }
 }
 
 impl<T: Modulo<Output = T>> DotModulo<T> for List<T> {
@@ -146,7 +151,7 @@ impl<T: Modulo<Output = T>> DotModulo<List<T>> for T {
 impl<T: BitAnd<Output = T>> DotBitAnd<List<T>> for List<T> {
     type Output = List<T>;
     #[track_caller]
-    fn dot_bitand(self, rhs: List<T>) -> List<T> { zip_with(self, rhs, |a: T, b: T| -> T { a & b }) }
+    fn dot_bitand(self, rhs: List<T>) -> List<T> { zip_with("List::dot_bitand", self, rhs, |a: T, b: T| -> T { a & b }) }
 }
 
 impl<T: BitAnd<Output = T>> DotBitAnd<T> for List<T> {
@@ -162,7 +167,7 @@ impl<T: BitAnd<Output = T>> DotBitAnd<List<T>> for T {
 impl<T: BitOr<Output = T>> DotBitOr<List<T>> for List<T> {
     type Output = List<T>;
     #[track_caller]
-    fn dot_bitor(self, rhs: List<T>) -> List<T> { zip_with(self, rhs, |a: T, b: T| -> T { a | b }) }
+    fn dot_bitor(self, rhs: List<T>) -> List<T> { zip_with("List::dot_bitor", self, rhs, |a: T, b: T| -> T { a | b }) }
 }
 
 impl<T: BitOr<Output = T>> DotBitOr<T> for List<T> {
@@ -178,7 +183,7 @@ impl<T: BitOr<Output = T>> DotBitOr<List<T>> for T {
 impl<T: BitXor<Output = T>> DotBitXor<List<T>> for List<T> {
     type Output = List<T>;
     #[track_caller]
-    fn dot_bitxor(self, rhs: List<T>) -> List<T> { zip_with(self, rhs, |a: T, b: T| -> T { a ^ b }) }
+    fn dot_bitxor(self, rhs: List<T>) -> List<T> { zip_with("List::dot_bitxor", self, rhs, |a: T, b: T| -> T { a ^ b }) }
 }
 
 impl<T: BitXor<Output = T>> DotBitXor<T> for List<T> {
@@ -194,7 +199,7 @@ impl<T: BitXor<Output = T>> DotBitXor<List<T>> for T {
 impl<T: Shl<Output = T>> DotShl<List<T>> for List<T> {
     type Output = List<T>;
     #[track_caller]
-    fn dot_shl(self, rhs: List<T>) -> List<T> { zip_with(self, rhs, |a: T, b: T| -> T { a << b }) }
+    fn dot_shl(self, rhs: List<T>) -> List<T> { zip_with("List::dot_shl", self, rhs, |a: T, b: T| -> T { a << b }) }
 }
 
 impl<T: Shl<Output = T>> DotShl<T> for List<T> {
@@ -210,7 +215,7 @@ impl<T: Shl<Output = T>> DotShl<List<T>> for T {
 impl<T: Shr<Output = T>> DotShr<List<T>> for List<T> {
     type Output = List<T>;
     #[track_caller]
-    fn dot_shr(self, rhs: List<T>) -> List<T> { zip_with(self, rhs, |a: T, b: T| -> T { a >> b }) }
+    fn dot_shr(self, rhs: List<T>) -> List<T> { zip_with("List::dot_shr", self, rhs, |a: T, b: T| -> T { a >> b }) }
 }
 
 impl<T: Shr<Output = T>> DotShr<T> for List<T> {
@@ -226,7 +231,7 @@ impl<T: Shr<Output = T>> DotShr<List<T>> for T {
 impl<T: PartialEq> DotEq<List<T>> for List<T> {
     type Output = List<bool>;
     #[track_caller]
-    fn dot_eq(self, rhs: List<T>) -> List<bool> { zip_with(self, rhs, |a: T, b: T| -> bool { a == b }) }
+    fn dot_eq(self, rhs: List<T>) -> List<bool> { zip_with("List::dot_eq", self, rhs, |a: T, b: T| -> bool { a == b }) }
 }
 
 impl<T: PartialEq> DotEq<T> for List<T> {
@@ -242,7 +247,7 @@ impl<T: PartialEq> DotEq<List<T>> for T {
 impl<T: PartialEq> DotNe<List<T>> for List<T> {
     type Output = List<bool>;
     #[track_caller]
-    fn dot_ne(self, rhs: List<T>) -> List<bool> { zip_with(self, rhs, |a: T, b: T| -> bool { a != b }) }
+    fn dot_ne(self, rhs: List<T>) -> List<bool> { zip_with("List::dot_ne", self, rhs, |a: T, b: T| -> bool { a != b }) }
 }
 
 impl<T: PartialEq> DotNe<T> for List<T> {
@@ -258,7 +263,7 @@ impl<T: PartialEq> DotNe<List<T>> for T {
 impl<T: PartialOrd> DotLt<List<T>> for List<T> {
     type Output = List<bool>;
     #[track_caller]
-    fn dot_lt(self, rhs: List<T>) -> List<bool> { zip_with(self, rhs, |a: T, b: T| -> bool { a < b }) }
+    fn dot_lt(self, rhs: List<T>) -> List<bool> { zip_with("List::dot_lt", self, rhs, |a: T, b: T| -> bool { a < b }) }
 }
 
 impl<T: PartialOrd> DotLt<T> for List<T> {
@@ -274,7 +279,7 @@ impl<T: PartialOrd> DotLt<List<T>> for T {
 impl<T: PartialOrd> DotGt<List<T>> for List<T> {
     type Output = List<bool>;
     #[track_caller]
-    fn dot_gt(self, rhs: List<T>) -> List<bool> { zip_with(self, rhs, |a: T, b: T| -> bool { a > b }) }
+    fn dot_gt(self, rhs: List<T>) -> List<bool> { zip_with("List::dot_gt", self, rhs, |a: T, b: T| -> bool { a > b }) }
 }
 
 impl<T: PartialOrd> DotGt<T> for List<T> {
@@ -290,7 +295,7 @@ impl<T: PartialOrd> DotGt<List<T>> for T {
 impl<T: PartialOrd> DotLe<List<T>> for List<T> {
     type Output = List<bool>;
     #[track_caller]
-    fn dot_le(self, rhs: List<T>) -> List<bool> { zip_with(self, rhs, |a: T, b: T| -> bool { a <= b }) }
+    fn dot_le(self, rhs: List<T>) -> List<bool> { zip_with("List::dot_le", self, rhs, |a: T, b: T| -> bool { a <= b }) }
 }
 
 impl<T: PartialOrd> DotLe<T> for List<T> {
@@ -306,7 +311,7 @@ impl<T: PartialOrd> DotLe<List<T>> for T {
 impl<T: PartialOrd> DotGe<List<T>> for List<T> {
     type Output = List<bool>;
     #[track_caller]
-    fn dot_ge(self, rhs: List<T>) -> List<bool> { zip_with(self, rhs, |a: T, b: T| -> bool { a >= b }) }
+    fn dot_ge(self, rhs: List<T>) -> List<bool> { zip_with("List::dot_ge", self, rhs, |a: T, b: T| -> bool { a >= b }) }
 }
 
 impl<T: PartialOrd> DotGe<T> for List<T> {
@@ -324,7 +329,7 @@ impl DotLogicalAnd for List<bool> {
     type Output = List<bool>;
     #[track_caller]
     const fn dot_logical_and(self, rhs: List<bool>) -> List<bool> {
-        zip_with(self, rhs, |a: bool, b: bool| -> bool { a && b })
+        zip_with("List::dot_logical_and", self, rhs, |a: bool, b: bool| -> bool { a && b })
     }
 }
 
@@ -333,7 +338,7 @@ impl DotLogicalOr for List<bool> {
     type Output = List<bool>;
     #[track_caller]
     const fn dot_logical_or(self, rhs: List<bool>) -> List<bool> {
-        zip_with(self, rhs, |a: bool, b: bool| -> bool { a || b })
+        zip_with("List::dot_logical_or", self, rhs, |a: bool, b: bool| -> bool { a || b })
     }
 }
 
@@ -342,7 +347,7 @@ impl DotLogicalOr for List<bool> {
 impl<T: Add<Output = T>> DotAdd<Slice<T>> for Slice<T> {
     type Output = List<T>;
     #[track_caller]
-    fn dot_add(self, rhs: Slice<T>) -> List<T> { zip_with(self.to_list(), rhs.to_list(), |a: T, b: T| -> T { a + b }) }
+    fn dot_add(self, rhs: Slice<T>) -> List<T> { zip_with("Slice::dot_add", self.to_list(), rhs.to_list(), |a: T, b: T| -> T { a + b }) }
 }
 
 impl<T: Add<Output = T>> DotAdd<T> for Slice<T> {
@@ -358,7 +363,7 @@ impl<T: Add<Output = T>> DotAdd<Slice<T>> for T {
 impl<T: Sub<Output = T>> DotSub<Slice<T>> for Slice<T> {
     type Output = List<T>;
     #[track_caller]
-    fn dot_sub(self, rhs: Slice<T>) -> List<T> { zip_with(self.to_list(), rhs.to_list(), |a: T, b: T| -> T { a - b }) }
+    fn dot_sub(self, rhs: Slice<T>) -> List<T> { zip_with("Slice::dot_sub", self.to_list(), rhs.to_list(), |a: T, b: T| -> T { a - b }) }
 }
 
 impl<T: Sub<Output = T>> DotSub<T> for Slice<T> {
@@ -374,7 +379,7 @@ impl<T: Sub<Output = T>> DotSub<Slice<T>> for T {
 impl<T: Mul<Output = T>> DotMul<Slice<T>> for Slice<T> {
     type Output = List<T>;
     #[track_caller]
-    fn dot_mul(self, rhs: Slice<T>) -> List<T> { zip_with(self.to_list(), rhs.to_list(), |a: T, b: T| -> T { a * b }) }
+    fn dot_mul(self, rhs: Slice<T>) -> List<T> { zip_with("Slice::dot_mul", self.to_list(), rhs.to_list(), |a: T, b: T| -> T { a * b }) }
 }
 
 impl<T: Mul<Output = T>> DotMul<T> for Slice<T> {
@@ -390,7 +395,7 @@ impl<T: Mul<Output = T>> DotMul<Slice<T>> for T {
 impl<T: Div<Output = T>> DotDiv<Slice<T>> for Slice<T> {
     type Output = List<T>;
     #[track_caller]
-    fn dot_div(self, rhs: Slice<T>) -> List<T> { zip_with(self.to_list(), rhs.to_list(), |a: T, b: T| -> T { a / b }) }
+    fn dot_div(self, rhs: Slice<T>) -> List<T> { zip_with("Slice::dot_div", self.to_list(), rhs.to_list(), |a: T, b: T| -> T { a / b }) }
 }
 
 impl<T: Div<Output = T>> DotDiv<T> for Slice<T> {
@@ -406,7 +411,7 @@ impl<T: Div<Output = T>> DotDiv<Slice<T>> for T {
 impl<T: Rem<Output = T>> DotRem<Slice<T>> for Slice<T> {
     type Output = List<T>;
     #[track_caller]
-    fn dot_rem(self, rhs: Slice<T>) -> List<T> { zip_with(self.to_list(), rhs.to_list(), |a: T, b: T| -> T { a % b }) }
+    fn dot_rem(self, rhs: Slice<T>) -> List<T> { zip_with("Slice::dot_rem", self.to_list(), rhs.to_list(), |a: T, b: T| -> T { a % b }) }
 }
 
 impl<T: Rem<Output = T>> DotRem<T> for Slice<T> {
@@ -422,7 +427,7 @@ impl<T: Rem<Output = T>> DotRem<Slice<T>> for T {
 impl<T: Modulo<Output = T>> DotModulo<Slice<T>> for Slice<T> {
     type Output = List<T>;
     #[track_caller]
-    fn dot_modulo(self, rhs: Slice<T>) -> List<T> { zip_with(self.to_list(), rhs.to_list(), |a: T, b: T| -> T { a %% b }) }
+    fn dot_modulo(self, rhs: Slice<T>) -> List<T> { zip_with("Slice::dot_modulo", self.to_list(), rhs.to_list(), |a: T, b: T| -> T { a %% b }) }
 }
 
 impl<T: Modulo<Output = T>> DotModulo<T> for Slice<T> {
@@ -438,7 +443,7 @@ impl<T: Modulo<Output = T>> DotModulo<Slice<T>> for T {
 impl<T: BitAnd<Output = T>> DotBitAnd<Slice<T>> for Slice<T> {
     type Output = List<T>;
     #[track_caller]
-    fn dot_bitand(self, rhs: Slice<T>) -> List<T> { zip_with(self.to_list(), rhs.to_list(), |a: T, b: T| -> T { a & b }) }
+    fn dot_bitand(self, rhs: Slice<T>) -> List<T> { zip_with("Slice::dot_bitand", self.to_list(), rhs.to_list(), |a: T, b: T| -> T { a & b }) }
 }
 
 impl<T: BitAnd<Output = T>> DotBitAnd<T> for Slice<T> {
@@ -454,7 +459,7 @@ impl<T: BitAnd<Output = T>> DotBitAnd<Slice<T>> for T {
 impl<T: BitOr<Output = T>> DotBitOr<Slice<T>> for Slice<T> {
     type Output = List<T>;
     #[track_caller]
-    fn dot_bitor(self, rhs: Slice<T>) -> List<T> { zip_with(self.to_list(), rhs.to_list(), |a: T, b: T| -> T { a | b }) }
+    fn dot_bitor(self, rhs: Slice<T>) -> List<T> { zip_with("Slice::dot_bitor", self.to_list(), rhs.to_list(), |a: T, b: T| -> T { a | b }) }
 }
 
 impl<T: BitOr<Output = T>> DotBitOr<T> for Slice<T> {
@@ -470,7 +475,7 @@ impl<T: BitOr<Output = T>> DotBitOr<Slice<T>> for T {
 impl<T: BitXor<Output = T>> DotBitXor<Slice<T>> for Slice<T> {
     type Output = List<T>;
     #[track_caller]
-    fn dot_bitxor(self, rhs: Slice<T>) -> List<T> { zip_with(self.to_list(), rhs.to_list(), |a: T, b: T| -> T { a ^ b }) }
+    fn dot_bitxor(self, rhs: Slice<T>) -> List<T> { zip_with("Slice::dot_bitxor", self.to_list(), rhs.to_list(), |a: T, b: T| -> T { a ^ b }) }
 }
 
 impl<T: BitXor<Output = T>> DotBitXor<T> for Slice<T> {
@@ -486,7 +491,7 @@ impl<T: BitXor<Output = T>> DotBitXor<Slice<T>> for T {
 impl<T: Shl<Output = T>> DotShl<Slice<T>> for Slice<T> {
     type Output = List<T>;
     #[track_caller]
-    fn dot_shl(self, rhs: Slice<T>) -> List<T> { zip_with(self.to_list(), rhs.to_list(), |a: T, b: T| -> T { a << b }) }
+    fn dot_shl(self, rhs: Slice<T>) -> List<T> { zip_with("Slice::dot_shl", self.to_list(), rhs.to_list(), |a: T, b: T| -> T { a << b }) }
 }
 
 impl<T: Shl<Output = T>> DotShl<T> for Slice<T> {
@@ -502,7 +507,7 @@ impl<T: Shl<Output = T>> DotShl<Slice<T>> for T {
 impl<T: Shr<Output = T>> DotShr<Slice<T>> for Slice<T> {
     type Output = List<T>;
     #[track_caller]
-    fn dot_shr(self, rhs: Slice<T>) -> List<T> { zip_with(self.to_list(), rhs.to_list(), |a: T, b: T| -> T { a >> b }) }
+    fn dot_shr(self, rhs: Slice<T>) -> List<T> { zip_with("Slice::dot_shr", self.to_list(), rhs.to_list(), |a: T, b: T| -> T { a >> b }) }
 }
 
 impl<T: Shr<Output = T>> DotShr<T> for Slice<T> {
@@ -518,7 +523,7 @@ impl<T: Shr<Output = T>> DotShr<Slice<T>> for T {
 impl<T: PartialEq> DotEq<Slice<T>> for Slice<T> {
     type Output = List<bool>;
     #[track_caller]
-    fn dot_eq(self, rhs: Slice<T>) -> List<bool> { zip_with(self.to_list(), rhs.to_list(), |a: T, b: T| -> bool { a == b }) }
+    fn dot_eq(self, rhs: Slice<T>) -> List<bool> { zip_with("Slice::dot_eq", self.to_list(), rhs.to_list(), |a: T, b: T| -> bool { a == b }) }
 }
 
 impl<T: PartialEq> DotEq<T> for Slice<T> {
@@ -534,7 +539,7 @@ impl<T: PartialEq> DotEq<Slice<T>> for T {
 impl<T: PartialEq> DotNe<Slice<T>> for Slice<T> {
     type Output = List<bool>;
     #[track_caller]
-    fn dot_ne(self, rhs: Slice<T>) -> List<bool> { zip_with(self.to_list(), rhs.to_list(), |a: T, b: T| -> bool { a != b }) }
+    fn dot_ne(self, rhs: Slice<T>) -> List<bool> { zip_with("Slice::dot_ne", self.to_list(), rhs.to_list(), |a: T, b: T| -> bool { a != b }) }
 }
 
 impl<T: PartialEq> DotNe<T> for Slice<T> {
@@ -550,7 +555,7 @@ impl<T: PartialEq> DotNe<Slice<T>> for T {
 impl<T: PartialOrd> DotLt<Slice<T>> for Slice<T> {
     type Output = List<bool>;
     #[track_caller]
-    fn dot_lt(self, rhs: Slice<T>) -> List<bool> { zip_with(self.to_list(), rhs.to_list(), |a: T, b: T| -> bool { a < b }) }
+    fn dot_lt(self, rhs: Slice<T>) -> List<bool> { zip_with("Slice::dot_lt", self.to_list(), rhs.to_list(), |a: T, b: T| -> bool { a < b }) }
 }
 
 impl<T: PartialOrd> DotLt<T> for Slice<T> {
@@ -566,7 +571,7 @@ impl<T: PartialOrd> DotLt<Slice<T>> for T {
 impl<T: PartialOrd> DotGt<Slice<T>> for Slice<T> {
     type Output = List<bool>;
     #[track_caller]
-    fn dot_gt(self, rhs: Slice<T>) -> List<bool> { zip_with(self.to_list(), rhs.to_list(), |a: T, b: T| -> bool { a > b }) }
+    fn dot_gt(self, rhs: Slice<T>) -> List<bool> { zip_with("Slice::dot_gt", self.to_list(), rhs.to_list(), |a: T, b: T| -> bool { a > b }) }
 }
 
 impl<T: PartialOrd> DotGt<T> for Slice<T> {
@@ -582,7 +587,7 @@ impl<T: PartialOrd> DotGt<Slice<T>> for T {
 impl<T: PartialOrd> DotLe<Slice<T>> for Slice<T> {
     type Output = List<bool>;
     #[track_caller]
-    fn dot_le(self, rhs: Slice<T>) -> List<bool> { zip_with(self.to_list(), rhs.to_list(), |a: T, b: T| -> bool { a <= b }) }
+    fn dot_le(self, rhs: Slice<T>) -> List<bool> { zip_with("Slice::dot_le", self.to_list(), rhs.to_list(), |a: T, b: T| -> bool { a <= b }) }
 }
 
 impl<T: PartialOrd> DotLe<T> for Slice<T> {
@@ -598,7 +603,7 @@ impl<T: PartialOrd> DotLe<Slice<T>> for T {
 impl<T: PartialOrd> DotGe<Slice<T>> for Slice<T> {
     type Output = List<bool>;
     #[track_caller]
-    fn dot_ge(self, rhs: Slice<T>) -> List<bool> { zip_with(self.to_list(), rhs.to_list(), |a: T, b: T| -> bool { a >= b }) }
+    fn dot_ge(self, rhs: Slice<T>) -> List<bool> { zip_with("Slice::dot_ge", self.to_list(), rhs.to_list(), |a: T, b: T| -> bool { a >= b }) }
 }
 
 impl<T: PartialOrd> DotGe<T> for Slice<T> {
@@ -616,7 +621,7 @@ impl DotLogicalAnd for Slice<bool> {
     type Output = List<bool>;
     #[track_caller]
     const fn dot_logical_and(self, rhs: Slice<bool>) -> List<bool> {
-        zip_with(self.to_list(), rhs.to_list(), |a: bool, b: bool| -> bool { a && b })
+        zip_with("Slice::dot_logical_and", self.to_list(), rhs.to_list(), |a: bool, b: bool| -> bool { a && b })
     }
 }
 
@@ -625,7 +630,7 @@ impl DotLogicalOr for Slice<bool> {
     type Output = List<bool>;
     #[track_caller]
     const fn dot_logical_or(self, rhs: Slice<bool>) -> List<bool> {
-        zip_with(self.to_list(), rhs.to_list(), |a: bool, b: bool| -> bool { a || b })
+        zip_with("Slice::dot_logical_or", self.to_list(), rhs.to_list(), |a: bool, b: bool| -> bool { a || b })
     }
 }
 
@@ -845,7 +850,7 @@ impl<T> List<T> {
     #[track_caller]
     pub const fn dot_add_assign(self, rhs: List<T>) where T: Add<Output = T> {
         let n = self.len();
-        check_len(rhs.len(), n);
+        check_len_in("List::dot_add_assign", rhs.len(), n);
         for i in 0..n {
             self[i] = self[i] + rhs[i];
         }
@@ -855,7 +860,7 @@ impl<T> List<T> {
     #[track_caller]
     pub fn dot_sub_assign(self, rhs: List<T>) where T: Sub<Output = T> {
         let n = self.len();
-        check_len(rhs.len(), n);
+        check_len_in("List::dot_sub_assign", rhs.len(), n);
         for i in 0..n {
             self[i] = self[i] - rhs[i];
         }
@@ -865,7 +870,7 @@ impl<T> List<T> {
     #[track_caller]
     pub const fn dot_mul_assign(self, rhs: List<T>) where T: Mul<Output = T> {
         let n = self.len();
-        check_len(rhs.len(), n);
+        check_len_in("List::dot_mul_assign", rhs.len(), n);
         for i in 0..n {
             self[i] = self[i] * rhs[i];
         }
@@ -875,7 +880,7 @@ impl<T> List<T> {
     #[track_caller]
     pub fn dot_div_assign(self, rhs: List<T>) where T: Div<Output = T> {
         let n = self.len();
-        check_len(rhs.len(), n);
+        check_len_in("List::dot_div_assign", rhs.len(), n);
         for i in 0..n {
             self[i] = self[i] / rhs[i];
         }
@@ -885,7 +890,7 @@ impl<T> List<T> {
     #[track_caller]
     pub fn dot_rem_assign(self, rhs: List<T>) where T: Rem<Output = T> {
         let n = self.len();
-        check_len(rhs.len(), n);
+        check_len_in("List::dot_rem_assign", rhs.len(), n);
         for i in 0..n {
             self[i] = self[i] % rhs[i];
         }
@@ -895,7 +900,7 @@ impl<T> List<T> {
     #[track_caller]
     pub const fn dot_modulo_assign(self, rhs: List<T>) where T: Modulo<Output = T> {
         let n = self.len();
-        check_len(rhs.len(), n);
+        check_len_in("List::dot_modulo_assign", rhs.len(), n);
         for i in 0..n {
             self[i] = self[i] %% rhs[i];
         }
@@ -905,7 +910,7 @@ impl<T> List<T> {
     #[track_caller]
     pub fn dot_bitand_assign(self, rhs: List<T>) where T: BitAnd<Output = T> {
         let n = self.len();
-        check_len(rhs.len(), n);
+        check_len_in("List::dot_bitand_assign", rhs.len(), n);
         for i in 0..n {
             self[i] = self[i] & rhs[i];
         }
@@ -915,7 +920,7 @@ impl<T> List<T> {
     #[track_caller]
     pub fn dot_bitor_assign(self, rhs: List<T>) where T: BitOr<Output = T> {
         let n = self.len();
-        check_len(rhs.len(), n);
+        check_len_in("List::dot_bitor_assign", rhs.len(), n);
         for i in 0..n {
             self[i] = self[i] | rhs[i];
         }
@@ -925,7 +930,7 @@ impl<T> List<T> {
     #[track_caller]
     pub fn dot_bitxor_assign(self, rhs: List<T>) where T: BitXor<Output = T> {
         let n = self.len();
-        check_len(rhs.len(), n);
+        check_len_in("List::dot_bitxor_assign", rhs.len(), n);
         for i in 0..n {
             self[i] = self[i] ^ rhs[i];
         }
@@ -935,7 +940,7 @@ impl<T> List<T> {
     #[track_caller]
     pub const fn dot_shl_assign(self, rhs: List<T>) where T: Shl<Output = T> {
         let n = self.len();
-        check_len(rhs.len(), n);
+        check_len_in("List::dot_shl_assign", rhs.len(), n);
         for i in 0..n {
             self[i] = self[i] << rhs[i];
         }
@@ -945,7 +950,7 @@ impl<T> List<T> {
     #[track_caller]
     pub const fn dot_shr_assign(self, rhs: List<T>) where T: Shr<Output = T> {
         let n = self.len();
-        check_len(rhs.len(), n);
+        check_len_in("List::dot_shr_assign", rhs.len(), n);
         for i in 0..n {
             self[i] = self[i] >> rhs[i];
         }

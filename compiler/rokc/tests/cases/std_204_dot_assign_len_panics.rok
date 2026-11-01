@@ -1,0 +1,13 @@
+// spec: std 204-ops-assign §2.4.10
+// A method call of different lengths panics naming the method.
+// expect-exit: 101
+// expect-stderr: thread 'main' panicked at tests/cases/std_204_dot_assign_len_panics.rok:11:5:
+// expect-stderr: List::dot_add_assign: lengths 3 and 2 differ; make both sides the same length
+// expect-stdout:
+
+fn main() -> i32 {
+    let p: List<i32> = [1, 2, 3];
+    let q: List<i32> = [1, 2];
+    p.dot_add_assign(q);
+    p[0]
+}

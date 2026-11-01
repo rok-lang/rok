@@ -305,7 +305,7 @@ impl Scope {
     #[track_caller]
     pub fn spawn<T: Send>(self, f: fn() -> T + Send) -> ScopeHandle<T> {
         if self.closed.load() {
-            panic("par::Scope::spawn after its `par::scope` returned: call `spawn` inside the closure passed to `par::scope`");
+            panic("Scope::spawn: the scope has ended; call `spawn` inside the closure passed to `par::scope`");
         }
         unsafe {
             let result: GcBuf<T> = buf_new(1);

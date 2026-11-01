@@ -890,7 +890,7 @@ impl<R> BufReader<R> {
     #[track_caller]
     const fn take_buffered(self, n: usize) {
         if n > self.buffer_len() {
-            panic(f"consume: {n} bytes past the {self.buffer_len()} buffered");
+            panic(f"BufReader::consume: {n} bytes past the {self.buffer_len()} buffered; consume at most what fill_buf returned");
         }
         self.at[0] += n;
     }
@@ -1170,7 +1170,7 @@ impl<T: AsBytes> BufRead for Cursor<T> {
 
     #[track_caller]
     fn consume(ref self, n: usize) {
-        if n > self.rest().len() { panic(f"consume: {n} bytes past the {self.rest().len()} left"); }
+        if n > self.rest().len() { panic(f"Cursor::consume: {n} bytes past the {self.rest().len()} buffered; consume at most what fill_buf returned"); }
         self.pos[0] += n as u64;
     }
 }
@@ -1404,7 +1404,7 @@ impl BufRead for Stdin {
 
     #[track_caller]
     fn consume(ref self, n: usize) {
-        if n > self.held() { panic(f"consume: {n} bytes past the {self.held()} buffered"); }
+        if n > self.held() { panic(f"Stdin::consume: {n} bytes past the {self.held()} buffered; consume at most what fill_buf returned"); }
         self.at[0] += n;
     }
 }

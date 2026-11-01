@@ -120,8 +120,9 @@ impl<T: NicheInt> Debug for NonZero<T> {
 /// Never 0: a wrapped (unchecked) product that lands on 0 panics.
 impl<T: NicheInt> Mul for NonZero<T> {
     type Output = NonZero<T>;
+    #[track_caller]
     const fn mul(self, rhs: NonZero<T>) -> NonZero<T> {
-        NonZero::new(self.0 * rhs.0) ?? panic("NonZero multiplication overflowed to zero")
+        NonZero::new(self.0 * rhs.0) ?? panic("NonZero::mul: the product wrapped to zero; use `checked_mul` on the values")
     }
 }
 

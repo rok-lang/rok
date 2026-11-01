@@ -1531,7 +1531,7 @@ impl Debug for TaskId {
 /// The running task's id; panics outside a task (`current_id`).
 #[track_caller]
 pub fn id() -> TaskId {
-    current_id() ?? panic("task::id() outside a task; use `task::current_id()`, which is `none` there")
+    current_id() ?? panic("task::id: called outside a task; use `task::current_id()`, which is `none` there")
 }
 
 /// The running task's id, or `none` outside a task (sync code, a

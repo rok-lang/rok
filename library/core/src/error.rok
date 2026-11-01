@@ -9,6 +9,7 @@
 
 /// A value or an error, kept as a value (2.14.2): `Ok(T)` or `Err(E)`.
 #[must_use("`Result` may hold an error that is never looked at: match on it, or write `_ = {};` to drop it")]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Result<T, E> {
     Ok(T),
     Err(E),
@@ -60,10 +61,13 @@ impl<T, E> Result<T, E> {
         }
     }
 
-    /// The value; panics on `Err`.
+    /// The value; panics on `Err`, showing the error.
     #[track_caller]
     pub const fn unwrap(self) -> T {
-        try! self.get()
+        match self {
+            Result::Ok(v) => v,
+            Result::Err(e) => panic(f"Result::unwrap: called on `Err({rok::core::fmt::shown::<E>(e)})`; use `try r.get()` to throw it instead"),
+        }
     }
 
     /// The value, or `default` on `Err`.
