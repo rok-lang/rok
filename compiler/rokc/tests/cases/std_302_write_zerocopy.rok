@@ -16,9 +16,9 @@ fn main() throws (IoError) {
     let addr = try l.local_addr();
     let h = thread::spawn(|| {
         let (s, _) = try! l.accept();
-        l.close();
+        try! l.close();
         let all = try! s.read_to_end();
-        s.close();
+        try! s.close();
         all
     });
     let c = try TcpStream::connect(addr);
@@ -28,7 +28,7 @@ fn main() throws (IoError) {
     while sent < buf.len() {
         sent += try c.write_zerocopy(list_tail(buf, sent));
     }
-    c.close();
+    try c.close();
     let got = try! h.join();
     let sum = 0u64;
     for b in got { sum += b as u64; }
