@@ -139,7 +139,7 @@ pub struct Map<S, U> {
     f: fn(S::Item) -> U;
 }
 
-impl<S, U> Debug for Map<S, U> {
+impl<S: Stream, U> Debug for Map<S, U> {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Map") }
 }
 
@@ -163,7 +163,7 @@ pub struct Filter<S> {
     pred: fn(S::Item) -> bool;
 }
 
-impl<S> Debug for Filter<S> {
+impl<S: Stream> Debug for Filter<S> {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Filter") }
 }
 
@@ -252,7 +252,7 @@ pub struct Throttle<S> {
     inner: AsyncStream<S::Item>;
 }
 
-impl<S> Debug for Throttle<S> {
+impl<S: Stream> Debug for Throttle<S> {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Throttle") }
 }
 
@@ -267,7 +267,10 @@ pub struct Buffered<S> {
     inner: AsyncStream< <S::Item as Future>::Output>;
 }
 
-impl<S> Debug for Buffered<S> {
+impl<S: Stream> Debug for Buffered<S>
+where
+    S::Item: Future,
+{
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Buffered") }
 }
 
@@ -285,7 +288,10 @@ pub struct BufferUnordered<S> {
     inner: AsyncStream< <S::Item as Future>::Output>;
 }
 
-impl<S> Debug for BufferUnordered<S> {
+impl<S: Stream> Debug for BufferUnordered<S>
+where
+    S::Item: Future,
+{
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("BufferUnordered") }
 }
 
@@ -422,7 +428,7 @@ pub struct Zip<S1, S2> {
     right: S2::Item | none;
 }
 
-impl<S1, S2> Debug for Zip<S1, S2> {
+impl<S1: Stream, S2: Stream> Debug for Zip<S1, S2> {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Zip") }
 }
 

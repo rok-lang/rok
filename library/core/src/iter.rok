@@ -411,7 +411,7 @@ pub struct Map<I, U> {
     f: fn(I::Item) -> U;
 }
 
-impl<I, U> Debug for Map<I, U> {
+impl<I: Iterator, U> Debug for Map<I, U> {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Map") }
 }
 
@@ -442,7 +442,7 @@ pub struct Filter<I> {
     pred: fn(I::Item) -> bool;
 }
 
-impl<I> Debug for Filter<I> {
+impl<I: Iterator> Debug for Filter<I> {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Filter") }
 }
 
@@ -669,7 +669,10 @@ pub struct Flatten<I> {
     cur: <I::Item as IntoIterator>::IntoIter | none;
 }
 
-impl<I> Debug for Flatten<I> {
+impl<I: Iterator> Debug for Flatten<I>
+where
+    I::Item: IntoIterator,
+{
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Flatten") }
 }
 
@@ -702,7 +705,7 @@ pub struct FlatMap<I, U> {
     cur: <U as IntoIterator>::IntoIter | none;
 }
 
-impl<I, U> Debug for FlatMap<I, U> {
+impl<I: Iterator, U: IntoIterator> Debug for FlatMap<I, U> {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("FlatMap") }
 }
 
@@ -730,7 +733,7 @@ pub struct Peekable<I> {
     has: bool;
 }
 
-impl<I> Debug for Peekable<I> {
+impl<I: Iterator> Debug for Peekable<I> {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Peekable") }
 }
 
@@ -842,7 +845,7 @@ pub struct TakeWhile<I> {
     done: bool;
 }
 
-impl<I> Debug for TakeWhile<I> {
+impl<I: Iterator> Debug for TakeWhile<I> {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TakeWhile") }
 }
 
@@ -868,7 +871,7 @@ pub struct SkipWhile<I> {
     done: bool;
 }
 
-impl<I> Debug for SkipWhile<I> {
+impl<I: Iterator> Debug for SkipWhile<I> {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("SkipWhile") }
 }
 
@@ -894,7 +897,7 @@ pub struct Scan<I, S> {
     f: fn(S, I::Item) -> S;
 }
 
-impl<I, S> Debug for Scan<I, S> {
+impl<I: Iterator, S> Debug for Scan<I, S> {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Scan") }
 }
 
@@ -922,7 +925,7 @@ pub struct InspectIter<I> {
     f: fn(I::Item);
 }
 
-impl<I> Debug for InspectIter<I> {
+impl<I: Iterator> Debug for InspectIter<I> {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("InspectIter") }
 }
 
@@ -1029,7 +1032,7 @@ pub struct Windows<I> {
     started: bool;
 }
 
-impl<I> Debug for Windows<I> {
+impl<I: Iterator> Debug for Windows<I> {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Windows") }
 }
 

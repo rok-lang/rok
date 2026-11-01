@@ -62,9 +62,9 @@ impl<T: PartialEq> PartialEq for Range<T> {
 impl<T: Eq> Eq for Range<T> {}
 
 impl<T: Hash> Hash for Range<T> {
-    const fn hash(self) -> u64 {
-        let h = self.start.hash();
-        ((h << 5) | (h >> 59)) ^ self.end.hash()
+    const fn hash<H: Hasher>(self, ref h: H) {
+        self.start.hash(ref h);
+        self.end.hash(ref h);
     }
 }
 

@@ -157,7 +157,7 @@ impl PartialEq for CStr {
 impl Eq for CStr {}
 
 impl Hash for CStr {
-    const fn hash(self) -> u64 { self.s.hash() }
+    const fn hash<H: Hasher>(self, ref h: H) { self.s.hash(ref h); }
 }
 
 impl Debug for CStr {
@@ -241,7 +241,7 @@ impl PartialEq for CString {
 impl Eq for CString {}
 
 impl Hash for CString {
-    const fn hash(self) -> u64 { self.c.hash() }
+    const fn hash<H: Hasher>(self, ref h: H) { self.c.hash(ref h); }
 }
 
 impl Debug for CString {

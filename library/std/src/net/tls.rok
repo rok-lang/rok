@@ -124,7 +124,7 @@ impl PartialEq for Certificate {
 impl Eq for Certificate {}
 
 impl Hash for Certificate {
-    fn hash(self) -> u64 { self.der.hash() }
+    fn hash<H: Hasher>(self, ref h: H) { self.der.hash(ref h); }
 }
 
 impl Certificate {

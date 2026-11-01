@@ -63,7 +63,10 @@ impl PartialEq for Layout {
 impl Eq for Layout {}
 
 impl Hash for Layout {
-    const fn hash(self) -> u64 { ((self.size.hash() << 5) | (self.size.hash() >> 59)) ^ self.align.hash() }
+    const fn hash<H: Hasher>(self, ref h: H) {
+        self.size.hash(ref h);
+        self.align.hash(ref h);
+    }
 }
 
 impl Debug for Layout {
