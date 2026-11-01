@@ -587,12 +587,12 @@ fn debug_writes(name: &str, named: bool, fields: &[(Option<&str>, String)], ind:
     for (i, (label, value)) in fields.iter().enumerate() {
         let label = label.map_or_else(String::new, |l| format!("{l}: "));
         out.push_str(&format!(
-            "{ind}try f.debug_entry(\"{label}\", {value}, {}, {named});\n",
+            "{ind}try rok::core::fmt::Formatter::debug_entry(ref f, \"{label}\", {value}, {}, {named});\n",
             i == 0
         ));
     }
     out.push_str(&format!(
-        "{ind}try f.debug_close(\"{close}\", false, {named});\n"
+        "{ind}try rok::core::fmt::Formatter::debug_close(ref f, \"{close}\", false, {named});\n"
     ));
     out
 }

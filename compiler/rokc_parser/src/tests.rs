@@ -1689,11 +1689,8 @@ fn expansion_meta_names_resolve_at_definition() {
 fn library_one_path_per_item() {
     use rokc_ast::UseTreeKind;
     use rokc_core::Visibility;
-    // Not user paths yet; removed when their items move.
-    const KNOWN: [(&str, &str); 2] = [
-        ("rok::core::collections::raw", "rok::bare::mem"),
-        ("rok::std::io", "rok::core::collections::slice::AsBytes"),
-    ];
+    // Not user paths: `collections::raw` is `pub(pkg)`.
+    const KNOWN: [(&str, &str); 1] = [("rok::core::collections::raw", "rok::bare::mem")];
     fn walk(module: &str, items: &[Item], bad: &mut Vec<String>) {
         let children: Vec<&str> = items
             .iter()

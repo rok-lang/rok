@@ -26,11 +26,14 @@ pub fn collect() { unsafe { rok_gc_collect() } }
 /// stays in place while the `Pinned` holding it is in scope, 2.15.2).
 #[sealed]
 pub trait Pinnable {
-    #[doc(hidden)]
+    /// The GC object holding the value's data; `none` when nothing can
+    /// move.
+    #[internal("write `pin(x)` to keep a value in place")]
     fn gc_object(self) -> GcBuf<u8> | none;
 }
 
 impl<T> Pinnable for List<T> {
+    #[internal("write `pin(x)` to keep a value in place")]
     fn gc_object(self) -> GcBuf<u8> | none {
         if self.is_empty() {
             return none;
@@ -42,10 +45,12 @@ impl<T> Pinnable for List<T> {
 }
 
 impl Pinnable for str {
+    #[internal("write `pin(x)` to keep a value in place")]
     const fn gc_object(self) -> GcBuf<u8> | none { none }
 }
 
 impl<T> Pinnable for GcPtr<T> {
+    #[internal("write `pin(x)` to keep a value in place")]
     fn gc_object(self) -> GcBuf<u8> | none {
         let erased: GcBuf<u8> = unsafe { transmute_unchecked(self.obj) };
         erased

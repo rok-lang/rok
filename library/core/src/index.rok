@@ -151,7 +151,6 @@ pub(pkg) const fn slice_range(start: isize | none, stop: isize | none, step: isi
 
 /// `xs[a:b]` (or `xs` alone, `r` = `none`) where a `SliceMut<T>` is
 /// expected: a writable view of the list (stdlib 2.9.7).
-#[doc(hidden)]
 #[track_caller]
 #[lang("slice_mut_fn")]
 pub(pkg) const fn slice_mut<T>(xs: List<T>, r: Range<usize> | none) -> SliceMut<T> {

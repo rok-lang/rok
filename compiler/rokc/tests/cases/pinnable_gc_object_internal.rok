@@ -1,0 +1,19 @@
+// expect-error: 10:36: method `Pinnable::gc_object` is internal to the Rok toolchain
+// expect-error: 14:14: method `gc_object` is internal to the Rok toolchain
+// expect-error: 15:14: method `str::gc_object` is internal to the Rok toolchain
+// expect-error: help: write `pin(x)` to keep a value in place
+
+// `Pinnable` is sealed and its `gc_object` is the toolchain's own: a
+// program pins with `pin`.
+use rok::bare::gc::Pinnable;
+
+fn g<T: Pinnable>(x: T) { let _o = x.gc_object(); }
+
+fn main() {
+    let xs: List<i32> = [1];
+    let _o = xs.gc_object();
+    let _p = "a".gc_object();
+    g(xs);
+}
+
+// spec: std 106-gc-pin §1.6.2

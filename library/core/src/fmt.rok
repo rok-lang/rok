@@ -311,8 +311,7 @@ impl Formatter {
     /// on one line, `spaced` with a space inside the brackets
     /// (`Name { x: 1 }`); `{:#?}` one entry a line, indented, each ending
     /// in `,`.
-    #[doc(hidden)]
-    pub const fn debug_entry<T: Debug>(ref self, label: str, v: T, first: bool, spaced: bool) throws (FmtError) {
+    pub(pkg) const fn debug_entry<T: Debug>(ref self, label: str, v: T, first: bool, spaced: bool) throws (FmtError) {
         if !self.alternate() {
             if !first { try self.write_str(", "); } else if spaced { try self.write_str(" "); }
             try self.write_str(label);
@@ -328,8 +327,7 @@ impl Formatter {
     }
 
     /// `debug_entry` of a map's `k: v`.
-    #[doc(hidden)]
-    pub const fn debug_pair<K: Debug, V: Debug>(ref self, k: K, v: V, first: bool) throws (FmtError) {
+    pub(pkg) const fn debug_pair<K: Debug, V: Debug>(ref self, k: K, v: V, first: bool) throws (FmtError) {
         let g = Formatter { t: unsafe { rok_fmt_new(16) }, flags: PLAIN_FLAGS + (self.flags & ALT_FLAG), counts: PLAIN_COUNTS, sink: none };
         try Debug::fmt(k, ref g);
         try self.debug_entry(g.finish() + ": ", v, first, false)
@@ -337,8 +335,7 @@ impl Formatter {
 
     /// The closing bracket of a Debug group; `empty` when it had no
     /// entry.
-    #[doc(hidden)]
-    pub const fn debug_close(ref self, close: str, empty: bool, spaced: bool) throws (FmtError) {
+    pub(pkg) const fn debug_close(ref self, close: str, empty: bool, spaced: bool) throws (FmtError) {
         if spaced && !empty && !self.alternate() { try self.write_str(" "); }
         try self.write_str(close)
     }
