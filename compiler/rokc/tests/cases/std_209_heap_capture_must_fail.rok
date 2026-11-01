@@ -1,0 +1,11 @@
+// spec: std 209-collections §2.9.5b
+// expect-error: argument 1 of `BinaryHeap::by_ordering` expects `fn(i32, i32) -> Ordering + Send`
+// expect-error: note: the closure captures `rank` (type `List<i32>`), which is not `Sync`
+// expect-error: help: drop the capture
+
+// A heap's comparator is `Send`, so it cannot capture a collection.
+fn main() {
+    let rank: List<i32> = [2, 0, 1];
+    let h: BinaryHeap<i32> = BinaryHeap::by_ordering(|a: i32, b: i32| rank[a as usize].cmp(rank[b as usize]));
+    h.push(1);
+}

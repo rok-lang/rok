@@ -1,5 +1,5 @@
-// rok::core::collections - List / Dict / Set / OrderedDict / OrderedSet /
-// Slice (stdlib spec 2.9), Deque and BinaryHeap.
+// rok::core::collections - List / Dict / Set / Slice (stdlib spec 2.9),
+// Deque and BinaryHeap.
 //
 // Each collection is a small handle struct over GC buffers (`raw`):
 // copying the handle shares the collection, so the mutating methods
@@ -11,17 +11,13 @@ pub mod deque;
 pub mod heap;
 pub mod dict;
 pub mod set;
-pub mod ordered_dict;
-pub mod ordered_set;
 pub mod slice;
 pub mod broadcast;
 
 // `use rok::core::collections::List` (stdlib 2.9).
 pub use list::{List, ListIter, ListIntoIter};
 pub use deque::{Deque, DequeIter};
-pub use heap::BinaryHeap;
-pub use dict::{Dict, Entry, KeysIter, ValuesIter, EntriesIter};
-pub use set::Set;
-pub use ordered_dict::OrderedDict;
-pub use ordered_set::OrderedSet;
+pub use heap::{BinaryHeap, HeapIter};
+pub use dict::{Dict, Entry, KeysIter, ValuesIter, DictIter};
+pub use set::{Set, SetIter};
 pub use slice::{Slice, SliceIter, SliceMut, SliceMutIter};

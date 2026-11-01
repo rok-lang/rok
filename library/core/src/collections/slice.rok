@@ -188,6 +188,36 @@ impl<T> IntoIterator for Slice<T> {
     }
 }
 
+impl<T> Slice<T> {
+    /// The first index whose element fails `pred`, which must hold for a
+    /// prefix and fail for the rest; O(log n).
+    pub const fn partition_point(self, pred: fn(T) -> bool) -> usize {
+        let lo: usize = 0;
+        let hi = self.len;
+        while lo < hi {
+            let mid = lo + (hi - lo) / 2;
+            if pred(self[mid]) {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+        lo
+    }
+}
+
+impl<T: Ord> Slice<T> {
+    /// The index of the first element equal to `x` in an ascending
+    /// view, or `none`; O(log n).
+    pub const fn binary_search(self, x: T) -> usize | none {
+        let i = self.partition_point(|e: T| e.cmp(x).is_lt());
+        if i < self.len && self[i].cmp(x).is_eq() {
+            return i;
+        }
+        none
+    }
+}
+
 impl<T: PartialEq> Slice<T> {
     /// `true` when an element equals `x`.
     pub const fn contains(self, x: T) -> bool {

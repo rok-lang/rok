@@ -221,17 +221,6 @@ impl<T> List<T> {
         }
     }
 
-    /// Overwrite element `idx`; throws out of bounds (`xs[idx] = x`
-    /// panics instead).
-    pub const fn set(self, idx: usize, x: T) throws (IndexError) {
-        unsafe {
-            if idx >= self.len() {
-                throw IndexError { index: idx as i64, len: self.len() };
-            }
-            self.h[0].buf[idx] = x;
-        }
-    }
-
     pub const fn first(self) -> T | none {
         self.get(0)
     }
@@ -249,7 +238,7 @@ impl<T> List<T> {
         unsafe {
             let n = self.len();
             if idx > n {
-                index_oob("List::insert index", idx, n);
+                index_oob("List::insert: index", idx, n);
             }
             self.reserve(1);
             let store = self.h[0].buf;
@@ -269,7 +258,7 @@ impl<T> List<T> {
         unsafe {
             let n = self.len();
             if idx >= n {
-                return index_oob("List::remove index", idx, n);
+                return index_oob("List::remove: index", idx, n);
             }
             let store = self.h[0].buf;
             let x = store[idx];
@@ -315,7 +304,7 @@ impl<T> List<T> {
         unsafe {
             let n = self.len();
             if r.start > r.end || r.end > n {
-                panic("List::drain: range out of bounds");
+                panic(f"List::drain: range {r.start}..{r.end} out of bounds for length {n}");
             }
             let k = r.end - r.start;
             let out: List<T> = List::with_capacity(k);
@@ -383,10 +372,10 @@ impl<T> List<T> {
         unsafe {
             let n = self.len();
             if i >= n {
-                index_oob("List::swap index", i, n);
+                index_oob("List::swap: index", i, n);
             }
             if j >= n {
-                index_oob("List::swap index", j, n);
+                index_oob("List::swap: index", j, n);
             }
             let store = self.h[0].buf;
             let x = store[i];
@@ -458,27 +447,21 @@ impl<T: Ord> List<T> {
         self.sort_by(|a: T, b: T| a.cmp(b));
     }
 
-    /// The index of an element equal to `x` in an ascending list, or
-    /// `none`; O(log n). Which of several equal ones is unspecified.
+    /// The index of the first element equal to `x` in an ascending
+    /// list, or `none`; O(log n).
     pub const fn binary_search(self, x: T) -> usize | none {
-        let lo: usize = 0;
-        let hi = self.len();
-        while lo < hi {
-            let mid = lo + (hi - lo) / 2;
-            let c = self[mid].cmp(x);
-            if c.is_lt() {
-                lo = mid + 1;
-            } else if c.is_gt() {
-                hi = mid;
-            } else {
-                return mid;
-            }
-        }
-        none
+        self[:].binary_search(x)
     }
 }
 
 impl<T> List<T> {
+    /// The first index whose element fails `pred`, which must hold for a
+    /// prefix and fail for the rest; O(log n). The insertion point of `x`
+    /// in an ascending list is `xs.partition_point(|e| e < x)`.
+    pub const fn partition_point(self, pred: fn(T) -> bool) -> usize {
+        self[:].partition_point(pred)
+    }
+
     /// Ascending by `key(x)`, stable; `key` runs twice per comparison.
     pub const fn sort_by_key<K: Ord>(self, key: fn(T) -> K) {
         self.sort_by(|a: T, b: T| key(a).cmp(key(b)));

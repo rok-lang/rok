@@ -78,7 +78,7 @@ fn main() {
     for _ in 0..8 { q.pop_front(); }
     println(f"deque pop {freed(before)}");
 
-    let od: collections::OrderedDict<i64, List<i64>> = collections::OrderedDict::new();
+    let od: Dict<i64, List<i64>> = Dict::new();
     for k in 0..8i64 { od.insert(k, big(k)); }
     before = live();
     for k in 0..8i64 { od.remove(k); }

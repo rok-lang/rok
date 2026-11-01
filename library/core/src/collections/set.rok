@@ -122,9 +122,21 @@ impl<T: Hash> Set<T> {
         self.d.keys().collect()
     }
 
-    /// The members, lazily.
-    pub const fn iter(self) -> KeysIter<T, bool> {
-        self.d.keys()
+    /// The members, lazily (insertion order).
+    pub const fn iter(self) -> SetIter<T> {
+        SetIter { it: self.d.keys() }
+    }
+}
+
+/// The members of a set, in insertion order.
+pub struct SetIter<T> {
+    it: KeysIter<T, bool>;
+}
+
+impl<T: Hash> Iterator for SetIter<T> {
+    type Item = T;
+    const fn next(ref self) -> T | none {
+        self.it.next()
     }
 }
 
@@ -145,10 +157,10 @@ impl<T: Hash + Clone> Clone for Set<T> {
 
 /// `for x in s` (2.9.9).
 impl<T: Hash> IntoIterator for Set<T> {
-    type IntoIter = KeysIter<T, bool>;
+    type IntoIter = SetIter<T>;
     type Item = T;
-    const fn into_iter(self) -> KeysIter<T, bool> {
-        self.d.keys()
+    const fn into_iter(self) -> SetIter<T> {
+        self.iter()
     }
 }
 

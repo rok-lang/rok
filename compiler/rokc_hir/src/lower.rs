@@ -2313,6 +2313,11 @@ fn coerce(
             ctx.env.sink.diagnostics.borrow_mut().last_mut(),
         ) {
             d.notes.push(note);
+            d.notes.push(
+                "help: drop the capture: compute the value inside the closure, or capture a \
+                 copy that is `Send + Sync` (an array, not a collection)"
+                    .to_owned(),
+            );
         }
     }
     v
@@ -4106,13 +4111,6 @@ impl<'a> LowerCtx<'a> {
             HirTy::Struct(id) => {
                 let def = self.struct_def(*id);
                 let base = def.name.split("__").next().unwrap_or(&def.name);
-                if base == "rok::core::collections::heap::BinaryHeap"
-                    && key == self.lang("send_trait")
-                {
-                    return " (its comparator is a `fn` without `+ Send`: send the items as a \
-                            `List` and `collect()` a `BinaryHeap` on the other side)"
-                        .to_owned();
-                }
                 if base.starts_with("rok::core::collections::") {
                     return format!(
                         " (collections are not `{tr}`; share one through a `Mutex`, or use an \

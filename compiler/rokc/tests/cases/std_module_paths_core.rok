@@ -4,7 +4,6 @@
 // 0..3 true 6
 // i64 7 8 255
 // Point ["x", "y"]
-// index 10 out of bounds (len 3) | IndexError { index: 10, len: 3 }
 // bad | ValueError("bad")
 // ab c 1 none true
 // 5 [2, 4] 3 2s
@@ -43,7 +42,6 @@ async fn main() {
     let fields: List<str> = Point::field_names();
     let methods: List<MethodInfo> = [];
     println(f"{Point::type_name()} {fields:?}");
-    println(report(error::IndexError { index: 10, len: 3 }));
     println(report(ValueError::new("bad")));
     let buf = StrBuf::new();
     buf.push_str("ab");

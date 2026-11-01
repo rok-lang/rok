@@ -131,7 +131,7 @@ impl Path {
     /// The empty path.
     pub const fn empty() -> Path { Path { s: "" } }
 
-    pub const fn from_components<I: Iterator<Item = str>>(components: I) -> Path {
+    pub const fn from_components<I: IntoIterator<Item = str>>(components: I) -> Path {
         let p = Path::empty();
         for c in components { p = p.join(Path::new(c)); }
         p

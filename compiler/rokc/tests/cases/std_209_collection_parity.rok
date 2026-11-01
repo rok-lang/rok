@@ -22,8 +22,8 @@
 
 // Sibling parity: `BinaryHeap` as a container (for, collect, clone,
 // default, debug, in-place retain), `clear` on keyed collections, `+=`
-// on sets / deques / ordered dicts, `Dict::from` / `Set::from`, deque
-// equality and collect, ordered collections as keys, and the sibling
+// on sets / deques / dicts, `Dict::from` / `Set::from`, deque
+// equality and collect, sets and dicts as keys, and the sibling
 // methods made `const fn` used in a `const`.
 const fn heap_c() -> i32 {
     let h: BinaryHeap<i32> = BinaryHeap::new();
@@ -45,11 +45,11 @@ const fn deque_c() -> i32 {
 }
 
 const fn oset_c() -> bool {
-    let a = collections::OrderedSet::from([1, 2, 3]);
-    let b = collections::OrderedSet::from([3, 4]);
+    let a = {1, 2, 3};
+    let b = {3, 4};
     let s = a.symmetric_difference(b);
     let c = a.clone();
-    let ok = s.len() == 3 && a.is_superset(collections::OrderedSet::from([1])) && !a.is_disjoint(b) && c.eq(a);
+    let ok = s.len() == 3 && a.is_superset({1,}) && !a.is_disjoint(b) && c.eq(a);
     c.clear();
     ok && c.is_empty() && !a.is_empty()
 }
@@ -107,7 +107,7 @@ fn main() {
     dd.clear();
     let ss: Set<i32> = {1, 2};
     ss.clear();
-    let os = collections::OrderedSet::from([1, 2]);
+    let os = {1, 2};
     os.clear();
     os.insert(5);
     os.remove(5);
@@ -124,12 +124,12 @@ fn main() {
     let df: Dict<str, i32> = Dict::from([("x", 1), ("y", 2), ("y", 20)]);
     println(f"dict from {df.len()} {df["y"]}");
 
-    let o = collections::OrderedSet::from([3, 1]);
+    let o = {3, 1};
     o += 2;
     o += 3;
     println(f"oset += {o.to_list():?}");
-    let od = collections::OrderedDict::from([("a", 1), ("b", 2)]);
-    od += collections::OrderedDict::from([("c", 3), ("b", 20)]);
+    let od = {"a": 1, "b": 2};
+    od += {"c": 3, "b": 20};
     println(f"odict += {od:?}");
 
     let q: Deque<i32> = Deque::new();
@@ -147,15 +147,15 @@ fn main() {
     qc.push_back(4);
     println(f"deque clone {qc:?} {q1:?}");
 
-    let byset: Dict<collections::OrderedSet<i32>, i32> = Dict::new();
-    byset.insert(collections::OrderedSet::from([1, 2]), 1);
-    byset.insert(collections::OrderedSet::from([2, 1]), 2);
-    let x1 = collections::OrderedSet::from([4, 5]);
-    let x2 = collections::OrderedSet::from([5, 4]);
-    println(f"oset key {byset[collections::OrderedSet::from([1, 2])]} hash-eq {x1.hash() == x2.hash()}");
-    let bydict: Set<collections::OrderedDict<str, i32>> = Set::new();
-    bydict.insert(collections::OrderedDict::from([("a", 1), ("b", 2)]));
-    let y1 = collections::OrderedDict::from([("a", 1), ("b", 2)]);
-    let y2 = collections::OrderedDict::from([("b", 2), ("a", 1)]);
+    let byset: Dict<Set<i32>, i32> = Dict::new();
+    byset.insert({1, 2}, 1);
+    byset.insert({2, 1}, 2);
+    let x1 = {4, 5};
+    let x2 = {5, 4};
+    println(f"oset key {byset[{1, 2}]} hash-eq {x1.hash() == x2.hash()}");
+    let bydict: Set<Dict<str, i32>> = Set::new();
+    bydict.insert({"a": 1, "b": 2});
+    let y1 = {"a": 1, "b": 2};
+    let y2 = {"b": 2, "a": 1};
     println(f"odict key {if bydict.contains(y2) { 7 } else { 0 }} hash-eq {y1.hash() == y2.hash()}");
 }

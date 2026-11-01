@@ -15,7 +15,7 @@ fn main() -> i32 {
     println(f"{d.values().sum()}");
     println(f"{d.keys().sum()}");
     let big = 0;
-    for (k, v) in d.entries().filter(|e| e.1 > 15) {
+    for (k, v) in d.iter().filter(|e| e.1 > 15) {
         big = big + k;
     }
     println(f"{big - 2}");

@@ -190,7 +190,6 @@ const TAKES: &[&str] = &[
     "rok::core::collections::deque::Deque__pop_front",
     "rok::core::collections::deque::Deque__pop_back",
     "rok::core::collections::dict::Dict__remove",
-    "rok::core::collections::ordered_dict::OrderedDict__remove",
     "rok::core::collections::heap::BinaryHeap__pop",
 ];
 
@@ -221,7 +220,6 @@ const CLEARS: &[&str] = &[
     "rok::core::collections::list::List__clear",
     "rok::core::collections::deque::Deque__clear",
     "rok::core::collections::dict::Dict__clear",
-    "rok::core::collections::ordered_dict::OrderedDict__clear",
 ];
 
 /// Functions that store every element of argument 1 into argument 0's
@@ -3913,7 +3911,7 @@ impl<'h> Walk<'_, 'h> {
         };
         match base.as_deref() {
             Some("Deque") => format!("`{x}.pop_front()`, `{x}.pop_back()`"),
-            Some("Dict" | "OrderedDict") => format!("`{x}.remove(key)`"),
+            Some("Dict") => format!("`{x}.remove(key)`"),
             Some("BinaryHeap") => format!("`{x}.pop()`"),
             _ => format!("`{x}.remove(i)`, `{x}.pop()`"),
         }

@@ -243,26 +243,6 @@ impl Debug for TypeError {
 
 impl Error for TypeError {}
 
-/// An index out of range in a throwing API (stdlib spec 2.14.4;
-/// `List::set`). `xs[i]` out of range panics instead.
-#[derive(Clone, PartialEq, Eq)]
-pub struct IndexError {
-    pub index: i64;
-    pub len: usize;
-}
-
-impl Display for IndexError {
-    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"index {self.index} out of bounds (len {self.len})") }
-}
-
-impl Debug for IndexError {
-    const fn fmt(self, ref f: Formatter) throws (FmtError) {
-        try f.write_str(f"IndexError {{ index: {self.index}, len: {self.len} }}")
-    }
-}
-
-impl Error for IndexError {}
-
 // Fatal errors (stdlib spec 2.14.4): never thrown; the runtime reports
 // these conditions and exits with 101.
 

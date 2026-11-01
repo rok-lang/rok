@@ -7,7 +7,7 @@
 // oset {3, 1, 2} {3, 1}
 // pair 1 true
 
-// The collections that wrap another (`Set`, `OrderedDict`, `OrderedSet`)
+// A collection that wraps another (`Set` over a `Dict`) and a `Dict`
 // hand off as copies too: their inner dict is copied field by field,
 // what the sender kept is left alone.
 struct Two {
@@ -25,21 +25,21 @@ fn main() {
             println(f"set {r.len()} {r.contains(3)} {s.len()}");
         }
 
-        let (td, rd) = channel::<collections::OrderedDict<str, List<i32>>>();
+        let (td, rd) = channel::<Dict<str, List<i32>>>();
         let dl: List<i32> = [1];
-        let d: collections::OrderedDict<str, List<i32>> = collections::OrderedDict::new();
+        let d: Dict<str, List<i32>> = Dict::new();
         d["a"] = dl;
         try! td.send(d);
-        if let r: collections::OrderedDict<str, List<i32>> = rd.recv() {
+        if let r: Dict<str, List<i32>> = rd.recv() {
             r["a"].push(2);
             r["b"] = [];
             println(f"odict {r:?} {d.len()} {dl:?}");
         }
 
-        let (to, ro) = channel::<collections::OrderedSet<i32>>();
-        let o = collections::OrderedSet::from([3, 1]);
+        let (to, ro) = channel::<Set<i32>>();
+        let o: Set<i32> = {3, 1};
         try! to.send(o);
-        if let r: collections::OrderedSet<i32> = ro.recv() {
+        if let r: Set<i32> = ro.recv() {
             r.insert(2);
             println(f"oset {r:?} {o:?}");
         }

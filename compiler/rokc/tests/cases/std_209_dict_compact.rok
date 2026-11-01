@@ -10,7 +10,7 @@
 // true 1 {"x": 1}
 
 // A dict's entries are dense and in insertion order (the spec leaves the
-// order unspecified; OrderedDict relies on it): small tables scan, big
+// order unspecified): small tables scan, big
 // ones (over 16 entries) have an index; removal leaves holes that churn
 // squeezes out; a removed key inserted again goes last.
 fn keys(d: Dict<i64, i64>) -> List<i64> {
@@ -55,7 +55,7 @@ fn main() {
 
     let st: Set<i64> = {7, 8};
     st.remove(8);
-    let o: collections::OrderedDict<str, i64> = collections::OrderedDict::new();
+    let o: Dict<str, i64> = Dict::new();
     o.insert("x", 1);
     o.insert("y", 2);
     o.clear();

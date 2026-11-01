@@ -8,8 +8,7 @@
 // z a m
 
 // `Dict` and `Set` iterate in insertion order: a present key re-inserted
-// keeps its place, a removed one re-inserted goes last. `OrderedDict`
-// iterates the same way.
+// keeps its place, a removed one re-inserted goes last.
 fn main() {
     let d: Dict<str, i32> = {"z": 1, "a": 2, "m": 3};
     println(d.keys().collect::<List<str>>().join(" "));
@@ -19,7 +18,7 @@ fn main() {
     println(d.keys().collect::<List<str>>().join(" "));
     let s: Set<i32> = Set::from([3, 1, 2, 1]);
     println(s.iter().map(|x| f"{x}").collect::<List<str>>().join(" "));
-    let o: collections::OrderedDict<str, i32> = collections::OrderedDict::new();
+    let o: Dict<str, i32> = Dict::new();
     o.insert("z", 1);
     o.insert("a", 2);
     o.insert("m", 3);

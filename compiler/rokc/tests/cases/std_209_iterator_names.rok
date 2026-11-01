@@ -2,9 +2,11 @@
 // expect-exit: 0
 // expect-stdout:
 // 6 3 [1] 2 a 98
+// a 1 2
 
 // Stdlib 2.9.2 / 2.9.3 / 2.15.1: the iterator types are named
-// `ListIntoIter`, `KeysIter` / `ValuesIter` / `EntriesIter`, `BytesIter`.
+// `ListIntoIter`, `KeysIter` / `ValuesIter` / `DictIter`, `SetIter`,
+// `HeapIter`, `BytesIter`.
 fn main() {
     let xs: List<i32> = [1, 2, 3];
     let it: collections::ListIntoIter<i32> = xs.into_iter();
@@ -12,10 +14,16 @@ fn main() {
     d["a"] = 2;
     let ks: collections::KeysIter<str, i32> = d.keys();
     let vs: collections::ValuesIter<str, i32> = d.values();
-    let es: collections::EntriesIter<str, i32> = d.entries();
+    let es: collections::DictIter<str, i32> = d.iter();
     let bs: str::BytesIter = "ab".bytes();
     bs.next();
     let one: List<i32> = [1];
     let (k, v) = es.next() ?? ("", 0);
     println(f"{it.sum()} {xs.len()} {one:?} {vs.sum()} {ks.next() ?? ""} {bs.next() ?? 0}");
+    let s: Set<i32> = {1,};
+    let si: collections::SetIter<i32> = s.iter();
+    let h: BinaryHeap<i32> = BinaryHeap::new();
+    h.push(2);
+    let hi: collections::HeapIter<i32> = h.into_iter();
+    println(f"{k} {si.next() ?? 0} {hi.next() ?? 0}");
 }

@@ -174,7 +174,7 @@ fn sorted_set(s: Set<i64>) -> List<i64> {
     ks.sort();
     ks
 }
-fn odkeys(d: collections::OrderedDict<i64, i64>) -> List<i64> {
+fn odkeys(d: Dict<i64, i64>) -> List<i64> {
     let ks: List<i64> = List::new();
     for k in d.keys() { ks.push(k); }
     ks
@@ -840,7 +840,7 @@ fn dict_suite(rng: &mut Rng) -> Suite {
         ..Suite::default()
     };
     s.body.push_str(
-        "    let d: Dict<i64, i64> = Dict::new();\n    let od: collections::OrderedDict<i64, i64> = collections::OrderedDict::new();\n    let st: Set<i64> = Set::new();\n",
+        "    let d: Dict<i64, i64> = Dict::new();\n    let od: Dict<i64, i64> = Dict::new();\n    let st: Set<i64> = Set::new();\n",
     );
     s.py.push_str("d = {}\nod = {}\nst = set()\n");
     for _ in 0..cases() * 2 {

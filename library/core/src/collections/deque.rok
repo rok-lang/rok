@@ -149,16 +149,6 @@ impl<T> Deque<T> {
         }
     }
 
-    /// Overwrite element `i` from the front; throws out of bounds.
-    pub const fn set(self, i: usize, x: T) throws (IndexError) {
-        unsafe {
-            if i >= self.meta[1] {
-                throw IndexError { index: i as i64, len: self.meta[1] };
-            }
-            self.data[0][self.slot(i)] = x;
-        }
-    }
-
     /// The front item.
     pub const fn front(self) -> T | none {
         self.get(0)
