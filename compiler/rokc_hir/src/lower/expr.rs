@@ -5496,7 +5496,7 @@ const DROP_GLUE_DEPTH: u32 = 64;
 
 /// Does releasing a `ty` run any `Drop::drop` - its own, or one of a
 /// field / tuple element / payload's (stdlib spec 2.13.4)?
-fn needs_drop(ctx: &LowerCtx<'_>, ty: &HirTy, depth: u32) -> bool {
+pub(super) fn needs_drop(ctx: &LowerCtx<'_>, ty: &HirTy, depth: u32) -> bool {
     if depth > DROP_GLUE_DEPTH {
         return false;
     }

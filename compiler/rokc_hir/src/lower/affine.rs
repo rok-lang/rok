@@ -209,7 +209,12 @@ const fn flag_value(on: bool, span: Span) -> HirExpr {
 /// every exit of the current scope while its flag is set: the flag's
 /// `let`, when `ty` is released that way.
 pub(super) fn owe(ctx: &mut LowerCtx<'_>, local: LocalId, ty: &HirTy) -> Option<HirStmt> {
-    if affine(ctx, ty).is_none() || ctx.lang("drop_method").is_empty() {
+    // A type that only closes (`io::Close` without `Drop`) has nothing
+    // to release: the check makes the program close it.
+    if affine(ctx, ty).is_none()
+        || ctx.lang("drop_method").is_empty()
+        || !super::expr::needs_drop(ctx, ty, 0)
+    {
         return None;
     }
     let n = local.0;
@@ -452,6 +457,9 @@ const SHARE: &str = "rok::core::marker::share";
 /// moves out, the place keeps a new value.
 const SWAPS: &[&str] = &["rok::core::marker::replace", "rok::core::marker::take"];
 
+/// What a not yet started frame runs on a hand-off's poll.
+const PRIME_FRAME: &str = "rok::core::future::prime_frame";
+
 /// Key prefix of a summary in the stored list (beside the hand-off ones).
 const KEY: &str = "#affine\u{1f}";
 
@@ -629,6 +637,8 @@ struct Walk<'c, 'a, 'e> {
     quiet: bool,
     /// Walking a panic's message: the process ends, nothing is closed.
     dying: bool,
+    /// Locals holding a frame's captures through `prime_frame`.
+    primed: HashSet<LocalId>,
     /// Binding an assignment's value.
     assigning: bool,
     roots: Vec<Root>,
@@ -700,6 +710,7 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             report,
             quiet: false,
             dying: false,
+            primed: HashSet::new(),
             assigning: false,
             roots: Vec::new(),
             root_of: HashMap::new(),
@@ -731,6 +742,51 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             .or_else(|| self.f.locals.iter().find(|x| x.id == l))
             .and_then(|x| x.name.as_deref())
             .filter(|n| !n.starts_with('#') && !n.starts_with("__"))
+    }
+
+    /// `prime_frame(captures, ..)`: a frame's captures, copied on a
+    /// hand-off and assigned back; the frame keeps owning them.
+    fn let_stmt(&mut self, local: LocalId, init: &'a HirExpr, st: State) -> State {
+        if self.flag_locals.contains(&local) {
+            self.flag_init(local, init);
+            return st;
+        }
+        if let Some(args) = self.prime_args(init) {
+            self.primed.insert(local);
+            return self.prime(args, st);
+        }
+        self.bind_value(local, init, st)
+    }
+
+    /// The captures handed to `prime_frame` are only read.
+    fn prime(&mut self, args: &'a [HirExpr], mut st: State) -> State {
+        for a in args {
+            let parts = match &a.kind {
+                HirExprKind::Tuple { fields } => fields.iter().collect(),
+                _ => vec![a],
+            };
+            for x in parts {
+                st = self.expr(x, st, Mode::Use).0;
+            }
+        }
+        st
+    }
+
+    /// A capture back from `prime_frame`: still the same value.
+    fn primed_back(&self, value: &HirExpr) -> bool {
+        matches!(&value.kind, HirExprKind::TupleField { target, .. }
+            if matches!(target.kind, HirExprKind::Local(l) if self.primed.contains(&l)))
+    }
+
+    fn prime_args(&self, e: &'a HirExpr) -> Option<&'a [HirExpr]> {
+        let HirExprKind::Call { callee, args } = &e.kind else {
+            return None;
+        };
+        self.c
+            .fns
+            .get(callee)
+            .is_some_and(|f| f.name.split("__mono__").next() == Some(PRIME_FRAME))
+            .then_some(args.as_slice())
     }
 
     fn local_name_raw(&self, l: LocalId) -> Option<&'a str> {
@@ -1198,16 +1254,13 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
     fn stmt(&mut self, s: &'a HirStmt, st: State) -> State {
         st.as_ref()?;
         match s {
-            HirStmt::Let { local, init } => {
-                if self.flag_locals.contains(local) {
-                    self.flag_init(*local, init);
-                    return st;
-                }
-                self.bind_value(*local, init, st)
-            }
+            HirStmt::Let { local, init } => self.let_stmt(*local, init, st),
             HirStmt::Assign { local, value } => {
                 if self.flag_locals.contains(local) {
                     self.flag_init(*local, value);
+                    return st;
+                }
+                if self.primed_back(value) {
                     return st;
                 }
                 if self.write_back(*local, value) {
@@ -2298,7 +2351,8 @@ pub(super) fn check(
             .filter(|f| {
                 f.body.is_some()
                     && (f.params.iter().any(|p| c.shape(&p.ty).is_some())
-                        || f.locals.iter().any(|l| c.shape(&l.ty).is_some()))
+                        || f.locals.iter().any(|l| c.shape(&l.ty).is_some())
+                        || c.shape(&f.ret_ty).is_some())
             })
             .collect();
         // Summaries to a fixpoint: every parameter borrowed.

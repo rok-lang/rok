@@ -1,0 +1,61 @@
+// spec: std 213-marker §2.13.4
+// needs: net threads
+// expect-exit: 0
+// expect-stdout:
+// read 0 0
+// idle 2
+
+// An argument of an async fn awaited at once comes back to the caller
+// unless the body keeps it: here a struct holding a stream and a list
+// (which a frame's hand-off copy passes through) is read twice, then
+// closed by its owner. An element seen while iterating a container is
+// the container's, not the loop's.
+use rok::std::net::{TcpListener, TcpStream, SocketAddr};
+use rok::core::io::IoError;
+
+struct Io {
+    s: TcpStream;
+    seen: List<usize>;
+    idle: bool;
+}
+
+async fn fill(io: Io) throws (IoError) -> usize {
+    try io.s.set_nodelay(true);
+    io.seen.push(0);
+    0
+}
+
+impl Io {
+    async fn more(self) throws (IoError) -> usize {
+        try await fill(self)
+    }
+}
+
+async fn twice(io: Io) throws (IoError) -> str {
+    let a = try await fill(io);
+    let b = try await io.more();
+    try io.s.close();
+    f"{a} {b}"
+}
+
+fn idle(all: List<Io>) -> usize {
+    let n: usize = 0;
+    for io in all {
+        if io.idle { n += 1; }
+    }
+    n
+}
+
+let any: SocketAddr = try! "127.0.0.1:0".parse::<SocketAddr>();
+let l = try! TcpListener::bind(any);
+let addr = try! l.local_addr();
+let io = Io { s: try! TcpStream::connect(addr), seen: [], idle: true };
+println(f"read {try! await twice(io)}");
+let all: List<Io> = [];
+all.push(Io { s: try! TcpStream::connect(addr), seen: [], idle: true });
+all.push(Io { s: try! TcpStream::connect(addr), seen: [], idle: true });
+println(f"idle {idle(all)}");
+for io in all {
+    try! io.s.close();
+}
+try! l.close();

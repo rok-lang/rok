@@ -43,6 +43,9 @@ pub(super) struct CatchFrame {
     errs: Vec<(HirTy, LocalId)>,
     /// Some raise reached this frame.
     hit: bool,
+    /// Every error type raised into this frame (`try?` checks what it
+    /// drops).
+    raised: Vec<HirTy>,
     /// Throwing `main`'s frame: a `str` local each raise sets to its
     /// position, for the uncaught-error report.
     site: Option<LocalId>,
@@ -403,6 +406,9 @@ pub(super) fn raise(
         }
         if let ErrFrame::Catch(c) = &mut ctx.err_frames[i] {
             c.hit = true;
+            if !c.raised.contains(&ety) {
+                c.raised.push(ety);
+            }
         }
         out.push(HirStmt::Break {
             label: Some(label),
@@ -1060,6 +1066,7 @@ pub(super) fn catch_all_frame(ctx: &mut LowerCtx<'_>) {
         arms: None,
         errs: Vec::new(),
         hit: false,
+        raised: Vec::new(),
         site: None,
     }));
 }
@@ -1244,6 +1251,7 @@ pub(super) fn lower_try(
         let ty = body.ty.clone();
         return shell(ctx, &frame, body, ty, (report, None), span);
     }
+    dropped_resources(ctx, &frame, span);
     // `try?` in statement position just drops the error; elsewhere a
     // `()` operand gives `() | none` (spec 3.14.3).
     if expected == HirTy::Unit {
@@ -1265,6 +1273,31 @@ pub(super) fn lower_try(
     }
     let none = sum_none(&result_ty, span);
     shell(ctx, &frame, body, result_ty, (Vec::new(), Some(none)), span)
+}
+
+/// `try?` drops the error it catches: one that can hold a value whose
+/// close can fail would leave it open (stdlib 2.13.4).
+fn dropped_resources(ctx: &LowerCtx<'_>, frame: &CatchFrame, span: rokc_diagnostic::Span) {
+    for ety in &frame.raised {
+        if super::affine::affine(ctx, ety) != Some(super::affine::Kind::Close) {
+            continue;
+        }
+        let t = ctx.ty_name(ety);
+        ctx.emit_diag(
+            rokc_diagnostic::RokDiagnostic::error(
+                rokc_diagnostic::ErrorKind::Handoff,
+                span,
+                format!(
+                    "`try?` drops the `{t}` it catches, which can hold a value that must be \
+                     closed (stdlib 2.13.4)"
+                ),
+            )
+            .with_help(format!(
+                "catch it instead: `try .. catch e {{ .. }}`, take the value out of the `{t}` \
+                 and close it (`try x.close();`)"
+            )),
+        );
+    }
 }
 
 /// Wrap a throwing `main`'s body (spec 4.16.3): an error escaping it
@@ -1429,6 +1462,7 @@ pub(super) fn main_frame(ctx: &mut LowerCtx<'_>) {
         arms: Some((vec![None], which)),
         errs: Vec::new(),
         hit: false,
+        raised: Vec::new(),
         site: Some(site),
     }));
 }
@@ -1729,6 +1763,7 @@ fn lower_catch_arms(
         arms: Some((filters.clone(), which)),
         errs: Vec::new(),
         hit: false,
+        raised: Vec::new(),
         site: None,
     }));
     let body_h = lower_expected(ctx, body, expected.clone());
