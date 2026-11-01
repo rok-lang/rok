@@ -739,10 +739,7 @@ fn semantic_warnings_are_in_warnings() {
     assert!(!err.contains(elem), "{err}");
     let out = rokc(None, &app, &["lint", "--list"]);
     let list = text(&out.stdout);
-    for name in [
-        "discarded_ref_write",
-        "trait_not_in_scope",
-    ] {
+    for name in ["discarded_ref_write", "trait_not_in_scope"] {
         assert!(list.contains(&format!("{name:<24} warn  0.1.6")), "{list}");
     }
     // Lints that became errors are gone from the list.
