@@ -3394,21 +3394,6 @@ impl<'a> LowerCtx<'a> {
         self.push_warning(lint_diag(lint, at, msg, help));
     }
 
-    /// `emit_lint` with the edit `help` asks for, for editors to apply
-    /// (an empty `fix.span` inserts). Errors take theirs by `fix_last`.
-    fn emit_lint_fix(
-        &self,
-        lint: &str,
-        at: Span,
-        msg: String,
-        help: String,
-        fix: rokc_diagnostic::Fix,
-    ) {
-        let mut d = lint_diag(lint, at, msg, help);
-        d.fixes.push(fix);
-        self.push_warning(d);
-    }
-
     fn push_warning(&self, d: rokc_diagnostic::RokDiagnostic) {
         if self.ty_subst.is_empty() {
             self.env.sink.diagnostics.borrow_mut().push(d);
