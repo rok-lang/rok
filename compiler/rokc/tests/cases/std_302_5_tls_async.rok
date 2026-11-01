@@ -47,7 +47,7 @@ FaEpq/6UIdEL3wPK3Oj3v+97CWRf3SsIe8X0/ZpoW+ppyMMO58QOQHyV
 
 async fn connect(s: TcpStream, name: str, cfg: ClientConfig) -> str {
     let c = try await Client::with_config_async(s, name, cfg) catch e { return f"{e.kind():?} {e.message()}"; };
-    c.close();
+    try! c.close();
     "unexpected success"
 }
 
@@ -69,14 +69,14 @@ let server = task::spawn_local(async {
     println(f"server got {got.len()} bytes, intact {got == data()}");
     try! await srv.write_all_async(got);
     try! await srv.close_notify_async();
-    srv.close();
+    try! srv.close();
     // The second client rejects the certificate.
     let (s2, _) = try! await l.accept_async();
-    l.close();
+    try! l.close();
     let _ = try await Server::new_async(s2, cfg) catch e { return f"{e.kind():?} {e.message()}"; };
     "unexpected success"
 });
-let ccfg = try! ClientConfig::try_new();
+let ccfg = try! ClientConfig::new();
 ccfg.root_certs = try! Certificate::from_pem(CA);
 ccfg.alpn_protocols = ["h2".as_bytes().to_list()];
 let s = try! await net::tcp_connect_async(f"{addr}");
@@ -88,7 +88,7 @@ try! await c.write_all_async(data()[100000:300000]);
 try! await c.close_notify_async();
 let back = try! await c.read_to_end_async();
 println(f"client got {back.len()} bytes back, intact {back == data()}");
-c.close();
+try! c.close();
 
 let s2 = try! await net::tcp_connect_async(f"{addr}");
 println(f"wrong name: {await connect(s2, "example.com", ccfg)}");

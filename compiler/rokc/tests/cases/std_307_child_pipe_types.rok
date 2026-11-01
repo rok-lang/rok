@@ -14,7 +14,7 @@ use rok::std::io::{Reader, Writer};
 use rok::std::path::Path;
 
 fn main() throws (IoError) {
-    let c = try Command::new(Path::from("tr")).args(["a-z", "A-Z"])
+    let c = try Command::new(Path::new("tr")).args(["a-z", "A-Z"])
         .stdin(Stdio::Piped).stdout(Stdio::Piped).spawn();
     let si: ChildStdin = c.stdin ?? panic("no stdin");
     try si.write_str("hello\n");

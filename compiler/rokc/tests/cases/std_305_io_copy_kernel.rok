@@ -41,8 +41,8 @@ fn sender(n: usize, k: usize) throws (IoError) -> (SocketAddr, thread::JoinHandl
     let h = thread::spawn(|| {
         let (c, _) = try! l.accept();
         try! c.write_all(pattern(n, k));
-        c.close();
-        l.close();
+        try! c.close();
+        try! l.close();
         0
     });
     (addr, h)
@@ -73,8 +73,8 @@ fn main() throws (IoError) {
     let got = thread::spawn(|| {
         let (c, _) = try! l.accept();
         let all = try! c.read_to_end();
-        c.close();
-        l.close();
+        try! c.close();
+        try! l.close();
         all
     });
     let s = try TcpStream::connect(addr);
@@ -84,7 +84,7 @@ fn main() throws (IoError) {
         try s.shutdown(Shutdown::Write);
         println(f"file to socket: {n} {(try! got.join()) == want}");
     }
-    s.close();
+    try! s.close();
 
     // socket -> file, plain and with a read timeout.
     let sent = pattern(70000, 13);
@@ -98,7 +98,7 @@ fn main() throws (IoError) {
             println(f"{label}: {n} {(try fs::read(dst)) == sent}");
         }
         try! h.join();
-        c.close();
+        try! c.close();
     }
 
     // A buffered reader has no descriptor of its own.
@@ -114,7 +114,7 @@ fn main() throws (IoError) {
     // file -> child stdin pipe -> child stdout pipe -> file.
     let small = pattern(1000, 3);
     try fs::write(src, small);
-    let child = try Command::new(Path::from("cat")).stdin(Stdio::Piped).stdout(Stdio::Piped).spawn();
+    let child = try Command::new(Path::new("cat")).stdin(Stdio::Piped).stdout(Stdio::Piped).spawn();
     let si: ChildStdin = child.stdin ?? panic("no stdin");
     let so: ChildStdout = child.stdout ?? panic("no stdout");
     using r = try fs::open(src) {

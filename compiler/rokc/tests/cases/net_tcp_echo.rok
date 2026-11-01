@@ -42,7 +42,7 @@ let server = thread::spawn(|| {
         while i < n { part.push(buf[i]); i = i + 1; }
         try! conn.write_all(part);
     }
-    conn.close();
+    try! conn.close();
     peer.port() as i32
 });
 let c = try! TcpStream::connect(addr);
@@ -52,8 +52,8 @@ let back = try! c.read_to_end();
 println(f"blocking echo: {text(back, back.len())}");
 let peer_port = try! server.join();
 println(f"peer is local: {(try! c.local_addr()).port() as i32 == peer_port}");
-c.close();
-listener.close();
+try! c.close();
+try! listener.close();
 
 // Async: the server task accepts, a task per connection echoes.
 let l2 = try! TcpListener::bind(any);
@@ -72,7 +72,7 @@ let srv = task::spawn(async {
                 while i < n { part.push(buf[i]); i = i + 1; }
                 try! await conn.write_all_async(part);
             }
-            conn.close();
+            try! conn.close();
             0
         });
         served = served + 1;
@@ -89,7 +89,7 @@ while k < 3 {
         try! await s.write_str_async(msg);
         let buf = byte_buf(64);
         let n = try! await s.read_async(buf);
-        s.close();
+        try! s.close();
         text(buf, n) == msg
     }));
     k = k + 1;
@@ -114,7 +114,7 @@ let big = task::spawn(async {
 });
 println(f"async read_to_end: {await big} bytes");
 await srv;
-l2.close();
+try! l2.close();
 
 // `incoming()` over a blocking listener.
 let l3 = try! net::tcp_listen("127.0.0.1:0");
@@ -122,18 +122,18 @@ let a3 = try! l3.local_addr();
 let t3 = thread::spawn(|| {
     let c = try! net::tcp_connect(f"{a3}");
     try! c.write_str("ping");
-    c.close();
+    try! c.close();
     0
 });
 for r in l3.incoming() {
     let s = try! r.get();
     let all = try! s.read_to_end();
     println(f"incoming: {text(all, all.len())}");
-    s.close();
+    try! s.close();
     break;
 }
 try! t3.join();
-l3.close();
+try! l3.close();
 
 let found = (try! net::resolve("localhost:80"))[0];
 println(f"resolve localhost: {found.port() == 80u16}");

@@ -23,9 +23,9 @@ use rok::std::env;
 use rok::std::fs;
 
 fn main() {
-    let raw = Path::from("C:\\é😀").to_raw();
+    let raw = Path::new("C:\\é😀").to_raw();
     let back = RawPath::from_wide(list_of(raw.as_wide()));
-    if (try back.try_to_path() catch _ { Path::new() }).as_str() == "C:\\é😀" { println("raw ok"); }
+    if (try back.try_to_path() catch _ { Path::empty() }).as_str() == "C:\\é😀" { println("raw ok"); }
 
     let bad: List<u16> = List::new();
     bad.push(97u16);

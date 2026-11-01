@@ -109,7 +109,7 @@ fn main() throws (IoError) {
     let gone = if env::var_os("ROK_BYTES_IO") is none { "none" } else { "set" };
     println(f"env: {present} {gone}");
 
-    let real = try Path::from(".").canonicalize();
+    let real = try Path::new(".").canonicalize();
     let exe = try env::current_exe();
     println(f"canonical: {real.is_absolute()} exe: {exe.is_absolute()}");
 

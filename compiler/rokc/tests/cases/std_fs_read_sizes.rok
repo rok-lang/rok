@@ -44,7 +44,7 @@ fn main() throws (IoError) {
     let rest = try f.read_to_end();
     try f.close();
     println(f"rest {rest.len()} same {rest == bytes(70000)[1000:70000].to_list()}");
-    let a = try task::block_on_try(async { try await fs::read_async(base / "f4096") });
+    let a = try task::try_block_on(async { try await fs::read_async(base / "f4096") });
     println(f"async {a.len()} same {a == bytes(4096)}");
     try fs::remove_dir_all(base);
 }

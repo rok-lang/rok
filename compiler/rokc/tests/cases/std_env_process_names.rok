@@ -3,28 +3,21 @@
 // spec: §6.2.7 §6.2.14
 // needs: process
 // expect-exit: 3
-// expect-lint: 27:26 use of deprecated function `pid`
-// expect-lint: 28:5 `set_var` will need `unsafe` in a later release: wrap the call in `unsafe { .. }`
-// expect-lint: 32:5 `remove_var` will need `unsafe` in a later release: wrap the call in `unsafe { .. }`
-// expect-lint: 39:9 use of deprecated function `exit`
-// expect-warning: = note: use `process::id`
+// expect-lint: 21:5 `set_var` will need `unsafe` in a later release: wrap the call in `unsafe { .. }`
+// expect-lint: 25:5 `remove_var` will need `unsafe` in a later release: wrap the call in `unsafe { .. }`
 // expect-warning: = note: another thread may read the environment at the same time
-// expect-warning: = note: use `process::exit`
 // expect-stdout:
-// same pid: true
 // set: 1 2
 // unset: true
 // bad name: InvalidInput: invalid environment variable name "A=B"
 // bad value: InvalidInput
 
-// `process::exit` and `process::id` replace `env::exit` and `env::pid`;
 // `set_var` / `remove_var` warn outside `unsafe`; `try_set_var` throws.
 use rok::std::env;
 use rok::std::io::IoError;
 use rok::std::process;
 
 fn main() throws (IoError) {
-    println(f"same pid: {env::pid() == process::id()}");
     env::set_var("ROK_S2_A", "1");
     unsafe { env::set_var("ROK_S2_B", "x"); }
     unsafe { try env::try_set_var("ROK_S2_B", "2"); }
@@ -34,9 +27,5 @@ fn main() throws (IoError) {
     println(f"unset: {env::var_os("ROK_S2_A") is none}");
     try unsafe { env::try_set_var("A=B", "1") } catch e { println(f"bad name: {e.kind():?}: {e}"); };
     try unsafe { env::try_set_var("ROK_S2_C", "a\0b") } catch e { println(f"bad value: {e.kind():?}"); };
-    if env::args().len() > 5 {
-        // Never runs: the deprecated form still warns.
-        env::exit(4);
-    }
     process::exit(3);
 }

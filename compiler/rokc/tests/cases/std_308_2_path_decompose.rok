@@ -18,24 +18,24 @@
 use rok::std::path::Path;
 
 fn main() {
-    let p = Path::from("/etc") / "nginx" / "nginx.conf";
+    let p = Path::new("/etc") / "nginx" / "nginx.conf";
     println(p.as_str());
-    let parent = p.parent() ?? Path::new();
+    let parent = p.parent() ?? Path::empty();
     println(f"parent {parent.as_str()} name {p.file_name() ?? "-"} stem {p.file_stem() ?? "-"} ext {p.extension() ?? "-"}");
     println(f"with_ext {p.with_extension("bak").as_str()}");
-    println(f"starts {p.starts_with(Path::from("/etc"))} ends {p.ends_with(Path::from("nginx.conf"))}");
-    let s = try! p.strip_prefix(Path::from("/etc"));
+    println(f"starts {p.starts_with(Path::new("/etc"))} ends {p.ends_with(Path::new("nginx.conf"))}");
+    let s = p.strip_prefix(Path::new("/etc")) ?? Path::empty();
     println(f"strip {s.as_str()}");
-    println(f"normalize {Path::from("/a/b/../c").normalize().as_str()}");
-    let q = Path::from("x");
+    println(f"normalize {Path::new("/a/b/../c").normalize().as_str()}");
+    let q = Path::new("x");
     q /= "y";
-    q /= Path::from("z");
+    q /= Path::new("z");
     println(f"div-assign {q.as_str()}");
     let line = "ancestors";
-    for a in Path::from("/a/b").ancestors() {
+    for a in Path::new("/a/b").ancestors() {
         line = line + f" {a.as_str()}";
     }
     println(line);
-    let r = Path::from("/").parent();
+    let r = Path::new("/").parent();
     println(f"root parent {if r == none { "none" } else { "some" }}");
 }

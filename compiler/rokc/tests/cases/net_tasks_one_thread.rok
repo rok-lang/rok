@@ -28,7 +28,7 @@ let server = task::spawn(async {
     let buf = byte_buf(64);
     let n = try! await s.read_async(buf);
     try! await s.write_all_async(buf[0:n]);
-    s.close();
+    try! s.close();
     n
 });
 let c = try! await net::tcp_connect_async(f"{addr}");
@@ -36,7 +36,7 @@ try! await c.write_all_async("hello tasks");
 let back = byte_buf(64);
 let n = try! await c.read_async(back);
 println(f"tcp echo: {text(back, n)} (server read {await server})");
-c.close();
+try! c.close();
 
 let a = try! UdpSocket::bind(any);
 let b = try! UdpSocket::bind(any);

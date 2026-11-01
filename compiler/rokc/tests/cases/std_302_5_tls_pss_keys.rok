@@ -194,7 +194,7 @@ fn serve(l: TcpListener) {
         let (s, _) = try l.accept() catch _ { return; };
         let srv = try Server::new(s, cfg) catch _ { continue; };
         try srv.write_all("hello") catch _ {};
-        srv.close();
+        try! srv.close();
     }
 }
 
@@ -202,7 +202,7 @@ fn main() {
     let l = try! tcp_listen("127.0.0.1:0");
     let port = (try! l.local_addr()).port();
     let t = thread::spawn(|| serve(l));
-    let cfg = try! ClientConfig::try_new();
+    let cfg = try! ClientConfig::new();
     cfg.root_certs = try! Certificate::from_pem(CA);
     for what in ["pss, sha-256 only", "pss, any hash"] {
         let s = try! tcp_connect(f"127.0.0.1:{port}");
@@ -211,7 +211,7 @@ fn main() {
             continue;
         };
         println(f"{what}: {try str::from_utf8(try! c.read_to_end()) catch _ { "?" }}");
-        c.close();
+        try! c.close();
     }
     try! t.join();
     for (what, cert, key) in [("rsa", RSA, RSA_KEY), ("ec leaf, rsa key", EC, RSA_KEY), ("pss leaf, another pss key", PSS, PSS_ANY_KEY), ("ec leaf, other ec key", EC, "-----BEGIN PRIVATE KEY-----

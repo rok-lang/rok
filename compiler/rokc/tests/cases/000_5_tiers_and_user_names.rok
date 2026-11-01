@@ -19,6 +19,6 @@ fn main() {
     let d: rok::core::collections::dict::Dict<str, i32> = Dict::new();
     d["k"] = 3;
     let n = rok::bare::ptr::size_of::<i64>();
-    let p = rok::std::path::Path::new();
+    let p = rok::std::path::Path::empty();
     println(f"{xs:?} {d["k"]} {n} {p.is_relative()}");
 }

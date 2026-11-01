@@ -51,6 +51,6 @@ fn main() {
     println(f"{out} {caught}");
     match try? g.next() { none => println("done after error"), _ => println("bad") }
     println(f"{task::block_on(safe([1, 2, 3]))} {task::block_on(safe([1, -7, 3]))}");
-    let r = try task::block_on_try(sum_parsed([5, 6])) catch e: BadInput { 0 };
+    let r = try task::try_block_on(sum_parsed([5, 6])) catch e: BadInput { 0 };
     println(f"{r}");
 }

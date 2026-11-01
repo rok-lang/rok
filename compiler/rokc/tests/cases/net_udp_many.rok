@@ -73,8 +73,8 @@ try! a.set_read_timeout(Duration::ms(20));
 let to = false;
 try a.recv(buf) catch e: IoError { to = e.kind() == IoErrorKind::TimedOut; };
 println(f"timed out: {to}");
-a.close();
-b.close();
+try! a.close();
+try! b.close();
 
 // Many concurrent TCP connections on the pool.
 let l = try! TcpListener::bind(any);
@@ -101,7 +101,7 @@ let server = task::spawn(async {
                 rounds = rounds + 1;
             }
             open.fetch_sub(1);
-            c.close();
+            try! c.close();
             rounds
         }));
     }
@@ -126,7 +126,7 @@ while k < clients {
             await task::sleep(Duration::ms(2));
             r = r + 1;
         }
-        s.close();
+        try! s.close();
         ok
     }));
     k = k + 1;
@@ -137,5 +137,5 @@ let rounds = await server;
 let peak_n = 0;
 using g = peak.lock() { peak_n = g.get(); }
 println(f"connections: {good} clients x {rounds / good} rounds ok, peak open >= 40: {peak_n >= 40}");
-l.close();
+try! l.close();
 // spec: std 302-net §3.2.2 §3.2.6

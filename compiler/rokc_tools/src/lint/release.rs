@@ -32,7 +32,6 @@ pub(super) struct Hit {
 /// as a `for` (`for await`) does.
 const CLOSERS: &[&str] = &[
     "close",
-    "try_close",
     "drop",
     "wait",
     "wait_with_output",

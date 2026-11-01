@@ -757,7 +757,7 @@ impl Dir {
     /// For messages: the path as the user would spell it.
     const fn shown(self, p: str) -> str {
         if self.path == "" { return p; }
-        Path::from(self.path).join(Path::from(p)).as_str()
+        Path::new(self.path).join(Path::new(p)).as_str()
     }
 
     pub fn open<P: AsPath>(self, path: P) throws (IoError) -> File {
@@ -820,7 +820,7 @@ impl Dir {
 
     /// `path` and any missing parents; fine if it already is a directory.
     pub fn create_dir_all<P: AsPath>(self, path: P) throws (IoError) {
-        let p = Path::from(try self.rel(path));
+        let p = Path::new(try self.rel(path));
         let chain: List<Path> = List::new();
         for a in p.ancestors() { chain.push(a); }
         let i = chain.len();
@@ -863,7 +863,7 @@ impl Dir {
         for e in entries {
             // Under `self`, not `e.path` (the shown path, absolute when
             // `self` was opened by one).
-            let sub = Path::from(p).join(Path::from(e.name)).as_str();
+            let sub = Path::new(p).join(Path::new(e.name)).as_str();
             if e.meta.is_dir() {
                 try self.remove_dir_all(sub);
             } else {
@@ -983,11 +983,11 @@ impl Iterator for ReadDir {
                 return none;
             }
             let name = try text_of(list_of(self.name[0:n as usize])) catch e { return Result::Err(e); };
-            let path = Path::from(self.base).join(Path::from(name));
+            let path = Path::new(self.base).join(Path::new(name));
             let meta = try stat_at(self.dir.fd(), path.as_str(), false, -1) catch e {
                 return Result::Err(IoError::from_os(e.code(), self.dir.shown(path.as_str())));
             };
-            let shown = Path::from(self.dir.shown(path.as_str()));
+            let shown = Path::new(self.dir.shown(path.as_str()));
             Result::Ok(DirEntry { path: shown, name: name, meta: meta })
         }
     }
@@ -1085,14 +1085,14 @@ pub fn write_atomic<P: AsPath, D: AsBytes>(path: P, data: D) throws (IoError) {
     let target = path.as_path();
     let name = target.file_name() ?? "";
     if name == "" { throw IoError::with_kind(IoErrorKind::InvalidInput, f"{target}: no file name"); }
-    let parent = target.parent() ?? Path::new();
+    let parent = target.parent() ?? Path::empty();
     // A fresh temp name: pid + the first free counter.
     let pid = unsafe { rok_os_getpid() };
     let n = 0;
-    let tmp = Path::new();
+    let tmp = Path::empty();
     let f = file_of(-1, "");
     loop {
-        tmp = parent.join(Path::from(f".{name}.tmp.{pid}.{n}"));
+        tmp = parent.join(Path::new(f".{name}.tmp.{pid}.{n}"));
         let opened = try open_with(tmp, OpenOptions::new().write(true).create_new(true)) catch e {
             if e.kind() == IoErrorKind::AlreadyExists { n += 1; continue; }
             throw e;
@@ -1105,7 +1105,7 @@ pub fn write_atomic<P: AsPath, D: AsBytes>(path: P, data: D) throws (IoError) {
         try remove_file(tmp) catch _ {};
         throw e;
     };
-    let dir_path = if parent.as_str() == "" { Path::from(".") } else { parent };
+    let dir_path = if parent.as_str() == "" { Path::new(".") } else { parent };
     let d = try open_with(dir_path, OpenOptions::new().read(true));
     try d.sync_all() catch _ {}; // some filesystems refuse fsync on a directory
     try d.close();

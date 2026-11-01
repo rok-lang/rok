@@ -94,21 +94,21 @@ pub trait Debug {
 /// `s d g` read as absent. Read it with the getters; the fields stop
 /// being `pub` in 0.2.0.
 pub struct FormatSpec {
-    #[deprecated(since = "0.1.6", note = "read it with `spec.fill()`; build a spec with `FormatSpec::try_parse`")]
+    #[deprecated(since = "0.1.6", note = "read it with `spec.fill()`; build a spec with `FormatSpec::parse`")]
     pub fill: char;
-    #[deprecated(since = "0.1.6", note = "read it with `spec.align()`; build a spec with `FormatSpec::try_parse`")]
+    #[deprecated(since = "0.1.6", note = "read it with `spec.align()`; build a spec with `FormatSpec::parse`")]
     pub align: Alignment | none;
-    #[deprecated(since = "0.1.6", note = "read it with `spec.sign()`; build a spec with `FormatSpec::try_parse`")]
+    #[deprecated(since = "0.1.6", note = "read it with `spec.sign()`; build a spec with `FormatSpec::parse`")]
     pub sign: Sign | none;
-    #[deprecated(since = "0.1.6", note = "read it with `spec.alternate()`; build a spec with `FormatSpec::try_parse`")]
+    #[deprecated(since = "0.1.6", note = "read it with `spec.alternate()`; build a spec with `FormatSpec::parse`")]
     pub alt: bool;
-    #[deprecated(since = "0.1.6", note = "read it with `spec.zero_pad()`; build a spec with `FormatSpec::try_parse`")]
+    #[deprecated(since = "0.1.6", note = "read it with `spec.zero_pad()`; build a spec with `FormatSpec::parse`")]
     pub zero: bool;
-    #[deprecated(since = "0.1.6", note = "read it with `spec.width()`; build a spec with `FormatSpec::try_parse`")]
+    #[deprecated(since = "0.1.6", note = "read it with `spec.width()`; build a spec with `FormatSpec::parse`")]
     pub width: usize | none;
-    #[deprecated(since = "0.1.6", note = "read it with `spec.precision()`; build a spec with `FormatSpec::try_parse`")]
+    #[deprecated(since = "0.1.6", note = "read it with `spec.precision()`; build a spec with `FormatSpec::parse`")]
     pub precision: usize | none;
-    #[deprecated(since = "0.1.6", note = "read it with `spec.ty()`; build a spec with `FormatSpec::try_parse`")]
+    #[deprecated(since = "0.1.6", note = "read it with `spec.ty()`; build a spec with `FormatSpec::parse`")]
     pub ty: char;
 }
 
@@ -127,15 +127,6 @@ impl FormatSpec {
     /// The type letter (`'\0'` for none or `s d g`).
     pub const fn ty(self) -> char { self.ty }
 
-    /// `parse` that throws on a malformed spec instead of panicking.
-    pub fn try_parse(text: str) throws (ValueError) -> FormatSpec {
-        let why = unsafe { rok_fmt_spec_error(text) };
-        if !why.is_empty() {
-            throw ValueError { msg: why };
-        }
-        FormatSpec::parse(text)
-    }
-
     /// The empty spec.
     pub const fn new() -> FormatSpec {
         FormatSpec {
@@ -145,8 +136,12 @@ impl FormatSpec {
     }
 
     /// `text` parsed by the runtime with the parser the compiler checks
-    /// static specs with; panics on a malformed spec (`try_parse` throws).
-    pub const fn parse(text: str) -> FormatSpec {
+    /// static specs with; throws on a malformed spec.
+    pub const fn parse(text: str) throws (ValueError) -> FormatSpec {
+        let why = unsafe { rok_fmt_spec_error(text) };
+        if !why.is_empty() {
+            throw ValueError { msg: why };
+        }
         unsafe {
             let w: GcBuf<i64> = buf_new(8);
             rok_fmt_spec_parse(text, w);
@@ -329,7 +324,7 @@ pub fn fstr_num<T: Display>(t: str, v: T, flags: u64, counts: u64) -> str {
 /// `text_only` and it has a number's type letter.
 #[doc(hidden)]
 #[lang("fstr_pack_fn")]
-#[deprecated(since = "0.1.6", note = "a compiler hook, not callable in 0.2.0: read a spec with `FormatSpec::try_parse`")]
+#[deprecated(since = "0.1.6", note = "a compiler hook, not callable in 0.2.0: read a spec with `FormatSpec::parse`")]
 pub const fn fstr_pack(spec: str, text_only: bool) -> (u64, u64) {
     unsafe {
         let out: GcBuf<u64> = buf_new(2);

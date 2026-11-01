@@ -771,21 +771,26 @@ impl Int {
             if c == 98u8 { radix = 2u32; }
             if radix != 10u32 { t = t[2:]; }
         }
-        match Int::parse_radix(t, radix) {
+        match try? Int::parse_radix(t, radix) {
             v: Int => v,
             none => panic(f"malformed integer literal `{s}`"),
         }
     }
 
-    /// `s` in base `radix` (2..=36): an optional sign, then digits of
-    /// either case; `none` otherwise. The grammar is the runtime's, the
-    /// same the primitives' `FromStr` reads.
-    pub fn parse_radix(s: str, radix: u32) -> Int | none {
+    /// `s` in base `radix`: an optional sign, then digits of either
+    /// case. The grammar is the runtime's, the same the primitives'
+    /// `FromStr` reads. Panics when `radix` is outside 2..=36.
+    #[track_caller]
+    pub fn parse_radix(s: str, radix: u32) throws (ParseError) -> Int {
+        if radix < 2u32 || radix > 36u32 {
+            panic(f"Int::parse_radix: radix {radix} out of 2..=36");
+        }
         unsafe {
             let out: GcBuf<i64> = buf_new(1);
             let st = rok_str_parse_int(s, radix, 1, 64u32, out);
             if st == 0 { return Int::from_i64(out[0]); }
-            if st != 3 { return none; }
+            if st == 1 { throw ParseError { input: s, pos: 0, reason: "empty string" }; }
+            if st != 3 { throw ParseError { input: s, pos: 0, reason: "invalid digit" }; }
             // Past `i64`: the checked digits, by halves over the powers
             // pw[j] = chunk^(2^j).
             let bs = s.as_bytes();
@@ -1456,10 +1461,7 @@ impl Debug for Int {
 impl FromStr for Int {
     type Err = ParseError;
     fn from_str(s: str) throws (ParseError) -> Int {
-        match Int::parse_radix(s, 10u32) {
-            v: Int => v,
-            none => throw ParseError { input: s, pos: 0, reason: "invalid digit" },
-        }
+        try Int::parse_radix(s, 10u32)
     }
 }
 

@@ -136,13 +136,13 @@ fn serve(l: TcpListener, n: i32, required: bool) -> List<str> {
         for _ in 0..64 { buf.push(0u8); }
         let _ = try srv.read(buf) catch _ { 0usize };
         try srv.write_all("hello") catch _ {};
-        srv.close();
+        try! srv.close();
     }
     log
 }
 
 fn with_cert(cert: str, key: str) -> ClientConfig {
-    let cfg = try! ClientConfig::try_new();
+    let cfg = try! ClientConfig::new();
     cfg.root_certs = try! Certificate::from_pem(CA);
     cfg.session_cache = none;
     if cert != "" {
@@ -161,11 +161,11 @@ fn run(what: str, port: u16, cfg: ClientConfig) {
     try c.write_all("hi") catch _ {};
     let r = try c.read_to_end() catch e {
         println(f"{what}: read: {e}");
-        c.close();
+        try! c.close();
         return;
     };
     println(f"{what}: {try str::from_utf8(r) catch _ { "?" }}, resumed {c.resumed()}");
-    c.close();
+    try! c.close();
 }
 
 fn main() {

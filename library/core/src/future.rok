@@ -242,7 +242,7 @@ impl<T> Transfer for AsyncFuture<T> {
 
 /// A throwing `async` body (`async fn f() throws (E) -> T`): the error
 /// comes out of `poll`, so `try await f()` (refs-lang 4.14.10). Not a
-/// `Future` (whose `poll` cannot throw); `await` and `task::block_on_try`
+/// `Future` (whose `poll` cannot throw); `await` and `task::try_block_on`
 /// take it.
 pub struct TryAsyncFuture<T, E> {
     resume: fn(Context) throws (E) -> Poll<T>;

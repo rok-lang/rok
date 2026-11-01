@@ -32,19 +32,19 @@ fn show(p: Path) -> str {
 }
 
 fn main() {
-    let p = Path::from("C:\\a/b");
-    let r = Path::from("\\x");
+    let p = Path::new("C:\\a/b");
+    let r = Path::new("\\x");
     println(f"{p.is_absolute()} {r.is_absolute()} {r.has_root()}");
     println(show(p));
-    println((Path::from("C:\\a") / "b").as_str());
-    println((p.parent() ?? Path::new()).as_str());
-    println(Path::from("C:\\a").join(Path::from("\\x")).as_str());
-    println(Path::from("C:\\a").join(Path::from("D:\\y")).as_str());
-    println((Path::from("C:") / "x").as_str());
-    let u = Path::from("\\\\srv\\share\\f");
+    println((Path::new("C:\\a") / "b").as_str());
+    println((p.parent() ?? Path::empty()).as_str());
+    println(Path::new("C:\\a").join(Path::new("\\x")).as_str());
+    println(Path::new("C:\\a").join(Path::new("D:\\y")).as_str());
+    println((Path::new("C:") / "x").as_str());
+    let u = Path::new("\\\\srv\\share\\f");
     println(show(u));
-    println((u.parent() ?? Path::new()).as_str());
-    let root = Path::from("C:\\");
+    println((u.parent() ?? Path::empty()).as_str());
+    let root = Path::new("C:\\");
     println(f"{root.parent() is none}");
-    println(Path::from("a/./b/../b/c").normalize().as_str());
+    println(Path::new("a/./b/../b/c").normalize().as_str());
 }

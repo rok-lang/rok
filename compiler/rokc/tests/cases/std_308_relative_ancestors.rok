@@ -11,10 +11,10 @@ use rok::std::path::Path;
 
 fn main() {
     let line = "";
-    for a in Path::from("sub/inner").ancestors() {
+    for a in Path::new("sub/inner").ancestors() {
         line = line + f"[{a.as_str()}] ";
     }
     println(line.trim());
-    let e = Path::new();
+    let e = Path::empty();
     println(f"{if e.parent() == none { "none" } else { "some" }} {e.components().count()}");
 }

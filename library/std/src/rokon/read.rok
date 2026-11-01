@@ -286,7 +286,7 @@ fn escape(cs: List<char>, i: usize, b: StrBuf, in_str: bool) throws (RokonError)
 /// `h` as hex digits (no sign), if it is.
 fn hex_value(h: str) -> u32 | none {
     if h.starts_with("-") || h.starts_with("+") { return none; }
-    let n = Int::parse_radix(h, 16u32)?;
+    let n = (try? Int::parse_radix(h, 16u32))?;
     let v = n.to_i64()?;
     if v > 0xFFFFFF { return none; }
     v as u32

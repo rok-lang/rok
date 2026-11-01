@@ -160,7 +160,7 @@ fn through_value(tx: Sender<List<i32>>) -> i64 {
 fn after_send(tx: Sender<List<i32>>) -> i64 {
     let a = after_early_send(tx) + after_catch(tx) + after_try_q(tx) + after_value(tx);
     let b = after_true(tx) + after_send_none(tx);
-    a + b + try! task::block_on_try(after_await(tx)) + try! task::block_on_try(before_await(tx))
+    a + b + try! task::try_block_on(after_await(tx)) + try! task::try_block_on(before_await(tx))
 }
 
 struct Oops { n: i64; }

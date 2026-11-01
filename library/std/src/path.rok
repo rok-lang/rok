@@ -103,17 +103,6 @@ impl Debug for Component {
     }
 }
 
-/// `p.strip_prefix(base)` where `base` is not a prefix of `p`.
-pub struct StripPrefixError {}
-
-impl Display for StripPrefixError {
-    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("prefix not found") }
-}
-impl Debug for StripPrefixError {
-    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("StripPrefixError") }
-}
-impl Error for StripPrefixError {}
-
 /// What the fs functions take: a `Path` or a `str` spelling one.
 pub trait AsPath {
     fn as_path(self) -> Path;
@@ -135,12 +124,14 @@ const fn trim_slashes(s: str) -> str {
 }
 
 impl Path {
-    pub const fn new() -> Path { Path { s: "" } }
-    pub const fn from(s: str) -> Path { Path { s: s } }
+    /// The path `s` spells.
+    pub const fn new(s: str) -> Path { Path { s: s } }
+    /// The empty path.
+    pub const fn empty() -> Path { Path { s: "" } }
 
     pub const fn from_components<I: Iterator<Item = str>>(components: I) -> Path {
-        let p = Path::new();
-        for c in components { p = p.join(Path::from(c)); }
+        let p = Path::empty();
+        for c in components { p = p.join(Path::new(c)); }
         p
     }
 
@@ -156,16 +147,16 @@ impl Path {
     pub const fn has_root(self) -> bool { prefix_of(self.s).1 }
 
     /// The path without its last component; `none` for `/` and `""`.
-    /// `Path::from("a").parent()` is `""` (as in Rust).
+    /// `Path::new("a").parent()` is `""` (as in Rust).
     pub const fn parent(self) -> Path | none {
         let comps = self.component_list();
         let n = comps.len();
         if n == 0 { return none; }
         let last = comps[n - 1];
         if last is Component::RootDir || last is Component::Prefix { return none; }
-        let out = Path::new();
+        let out = Path::empty();
         for i in 0..n - 1 {
-            out = out.join(Path::from(comps[i].as_str()));
+            out = out.join(Path::new(comps[i].as_str()));
         }
         out
     }
@@ -247,8 +238,8 @@ impl Path {
     }
 
     pub const fn with_file_name(self, name: str) -> Path {
-        let parent = self.parent() ?? Path::new();
-        parent.join(Path::from(name))
+        let parent = self.parent() ?? Path::empty();
+        parent.join(Path::new(name))
     }
 
     pub const fn with_extension(self, ext: str) -> Path {
@@ -284,19 +275,15 @@ impl Path {
         }
     }
 
-    pub const fn strip_prefix(self, base: Path) throws (StripPrefixError) -> Path {
-        match self.strip_prefix_or_none(base) { p: Path => p, none => throw StripPrefixError {} }
-    }
-
     /// The rest of `self` after `base` (component-wise), or `none` when
     /// `self` does not start with it (`str::strip_prefix` alike).
-    pub const fn strip_prefix_or_none<P: AsPath>(self, base: P) -> Path | none {
+    pub const fn strip_prefix<P: AsPath>(self, base: P) -> Path | none {
         let b = base.as_path();
         if !self.starts_with(b) { return none; }
         let a = self.component_list();
-        let out = Path::new();
+        let out = Path::empty();
         for i in b.component_list().len()..a.len() {
-            out = out.join(Path::from(a[i].as_str()));
+            out = out.join(Path::new(a[i].as_str()));
         }
         out
     }
@@ -318,9 +305,9 @@ impl Path {
                 _ => kept.push(c),
             }
         }
-        let out = Path::new();
-        for c in kept { out = out.join(Path::from(c.as_str())); }
-        if out.s == "" { return Path::from("."); }
+        let out = Path::empty();
+        for c in kept { out = out.join(Path::new(c.as_str())); }
+        if out.s == "" { return Path::new("."); }
         out
     }
 
@@ -353,7 +340,7 @@ impl Path {
 
 impl Div<str> for Path {
     type Output = Path;
-    const fn div(self, rhs: str) -> Path { self.join(Path::from(rhs)) }
+    const fn div(self, rhs: str) -> Path { self.join(Path::new(rhs)) }
 }
 
 impl Div<Path> for Path {
@@ -469,6 +456,10 @@ impl Debug for RawPath {
 
 /// `Path::try_from(raw)`: `raw` as a path; throws if it is not UTF-8
 /// (3.8.4).
+impl From<str> for Path {
+    const fn from(s: str) -> Path { Path { s: s } }
+}
+
 impl TryFrom<RawPath> for Path {
     type Error = NonUtf8Error;
     const fn try_from(raw: RawPath) throws (NonUtf8Error) -> Path { try raw.try_to_path() }

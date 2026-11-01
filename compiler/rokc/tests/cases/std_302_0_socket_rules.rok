@@ -30,7 +30,7 @@ fn main() throws (IoError) {
     println(f"copy shares: {(try alias.local_addr()) == (try c.local_addr())}");
 
     let dup = try s.try_clone();
-    s.close();
+    try! s.close();
     try dup.write_str("x");
     println("clone after close: ok");
     let buf = byte_buf(4);
@@ -43,6 +43,6 @@ fn main() throws (IoError) {
     let rest = try c.read_to_end();
     let n = try c.read(buf);
     println(f"using closed it: {rest.len()} {n}");
-    c.close();
-    l.close();
+    try! c.close();
+    try! l.close();
 }

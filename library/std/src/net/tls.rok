@@ -287,21 +287,11 @@ pub struct ClientConfig {
 
 impl ClientConfig {
     /// The OS trust store, all suites, no ALPN, post-quantum on, no
-    /// client certificate, a new session cache, no early data. A trust
-    /// store that cannot be read leaves `root_certs` empty, so every
-    /// handshake fails; `try_new` reports that instead.
-    #[deprecated(since = "0.1.6", note = "use `ClientConfig::try_new()`, which throws when the OS trust store cannot be read")]
-    pub fn new() -> ClientConfig { ClientConfig::system_or_empty() }
-
-    /// `new`, but throws the `system_roots` error (no trust store found
-    /// or readable) instead of leaving `root_certs` empty.
-    pub fn try_new() throws (TlsError) -> ClientConfig {
+    /// client certificate, a new session cache, no early data. Throws
+    /// the `system_roots` error when no trust store is found or
+    /// readable.
+    pub fn new() throws (TlsError) -> ClientConfig {
         ClientConfig::with_roots(try system_roots())
-    }
-
-    /// The OS trust store, or no roots when it cannot be read.
-    fn system_or_empty() -> ClientConfig {
-        ClientConfig::with_roots(try system_roots() catch _ { [] })
     }
 
     fn with_roots(roots: List<Certificate>) -> ClientConfig {
@@ -698,13 +688,18 @@ impl Shared {
         }
     }
 
-    fn close(self) {
+    /// close_notify (if the connection is healthy; its failure is not
+    /// reported), then close the socket, throwing the OS's error. The
+    /// keys are wiped either way.
+    fn close(self) throws (IoError) {
         unsafe {
             let c = self.c[0];
             if c.failed is none && c.done { try c.close_notify() catch _ {}; }
-            c.sock.close();
+            let err: IoError | none = none;
+            try c.sock.close() catch e { err = e; };
             c.wipe();
             self.c[0] = c;
+            if let e: IoError = err { throw e; }
         }
     }
 
@@ -816,7 +811,7 @@ fn linger_close(s: TcpStream) {
         let n = try s.read(buf) catch _ { break; };
         if n == 0 { break; }
     }
-    s.close();
+    try s.close() catch _ {};
 }
 
 async fn drain_async(s: TcpStream) -> i32 {
@@ -831,7 +826,7 @@ async fn drain_async(s: TcpStream) -> i32 {
 async fn linger_close_async(s: TcpStream) {
     try s.shutdown(Shutdown::Write) catch _ {};
     let _ = try await task::timeout(LINGER, task::spawn(drain_async(s))) catch _ { 0 };
-    s.close();
+    try s.close() catch _ {};
 }
 
 fn check_client_key(cfg: ClientConfig) throws (TlsError) {
@@ -856,17 +851,21 @@ pub struct Client {
 impl !Sync for Client {}
 
 impl Client {
-    /// Handshake as `server_name` trusting the OS store (none when it
-    /// cannot be read).
+    /// Handshake as `server_name` trusting the OS store; throws when the
+    /// store cannot be read (`ClientConfig::new`).
     pub fn new(stream: TcpStream, server_name: str) throws (TlsError) -> Client {
-        try Client::with_config(stream, server_name, ClientConfig::system_or_empty())
+        let cfg = try ClientConfig::new() catch e {
+            try stream.close() catch _ {};
+            throw e;
+        };
+        try Client::with_config(stream, server_name, cfg)
     }
 
     /// Handshake as `server_name` (a DNS name, or an IP address checked
     /// against the certificate's IP addresses; no SNI is sent for one).
     pub fn with_config(stream: TcpStream, server_name: str, cfg: ClientConfig) throws (TlsError) -> Client {
         try check_client_key(cfg) catch e {
-            stream.close();
+            try stream.close() catch _ {};
             throw e;
         };
         let c = new_conn(stream, true);
@@ -885,13 +884,17 @@ impl Client {
 
     /// `new` without blocking the worker.
     pub async fn new_async(stream: TcpStream, server_name: str) throws (TlsError) -> Client {
-        try await Client::with_config_async(stream, server_name, ClientConfig::system_or_empty())
+        let cfg = try ClientConfig::new() catch e {
+            try stream.close() catch _ {};
+            throw e;
+        };
+        try await Client::with_config_async(stream, server_name, cfg)
     }
 
     /// `with_config` without blocking the worker.
     pub async fn with_config_async(stream: TcpStream, server_name: str, cfg: ClientConfig) throws (TlsError) -> Client {
         try check_client_key(cfg) catch e {
-            stream.close();
+            try stream.close() catch _ {};
             throw e;
         };
         let c = new_conn(stream, true);
@@ -953,8 +956,9 @@ impl Client {
     pub async fn close_notify_async(self) throws (IoError) { try await self.s.op_async(OP_CLOSE_NOTIFY, [], nothing()); }
     pub async fn key_update_async(self) throws (IoError) { try await self.s.op_async(OP_KEY_UPDATE, [], nothing()); }
 
-    /// close_notify (if the connection is healthy), then close the socket.
-    pub fn close(self) { self.s.close(); }
+    /// close_notify (if the connection is healthy), then close the
+    /// socket, throwing the OS's error.
+    pub fn close(self) throws (IoError) { try self.s.close(); }
 
     pub const fn negotiated_alpn(self) -> List<u8> | none { self.s.conn().alpn }
 
@@ -986,7 +990,7 @@ impl Writer for Client {
 }
 
 impl Drop for Client {
-    fn drop(ref self) { self.s.close(); }
+    fn drop(ref self) { try self.s.close() catch _ {}; }
 }
 
 /// A TLS server connection. Copies share the connection.
@@ -1000,7 +1004,7 @@ impl Server {
     /// Handshake with the client on `stream`.
     pub fn new(stream: TcpStream, cfg: ServerConfig) throws (TlsError) -> Server {
         if cfg.cert_chain.len() == 0 {
-            stream.close();
+            try stream.close() catch _ {};
             throw TlsError::certificate("ServerConfig without a certificate");
         }
         let c = new_conn(stream, false);
@@ -1016,7 +1020,7 @@ impl Server {
     /// `new` without blocking the worker.
     pub async fn new_async(stream: TcpStream, cfg: ServerConfig) throws (TlsError) -> Server {
         if cfg.cert_chain.len() == 0 {
-            stream.close();
+            try stream.close() catch _ {};
             throw TlsError::certificate("ServerConfig without a certificate");
         }
         let c = new_conn(stream, false);
@@ -1061,7 +1065,7 @@ impl Server {
     pub async fn flush_async(self) throws (IoError) {}
     pub async fn close_notify_async(self) throws (IoError) { try await self.s.op_async(OP_CLOSE_NOTIFY, [], nothing()); }
     pub async fn key_update_async(self) throws (IoError) { try await self.s.op_async(OP_KEY_UPDATE, [], nothing()); }
-    pub fn close(self) { self.s.close(); }
+    pub fn close(self) throws (IoError) { try self.s.close(); }
     pub const fn negotiated_alpn(self) -> List<u8> | none { self.s.conn().alpn }
 
     /// The client's validated certificate chain, leaf first (empty: it
@@ -1095,5 +1099,5 @@ impl Writer for Server {
 }
 
 impl Drop for Server {
-    fn drop(ref self) { self.s.close(); }
+    fn drop(ref self) { try self.s.close() catch _ {}; }
 }

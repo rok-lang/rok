@@ -73,7 +73,7 @@ fn main() throws (IoError) {
 
     for e in fs::walk(base) {
         let e = try e.get();
-        let rel = try e.path().strip_prefix(base) catch _ { Path::new() };
+        let rel = e.path().strip_prefix(base) ?? Path::empty();
         println(f"walk [{rel}] dir={e.is_dir()}");
     }
 

@@ -137,7 +137,7 @@ fn attempt(label: str, chain: str, name: str) {
         let certs = try Certificate::from_pem(chain) catch _ { return; };
         let srv = try Server::new(s, try! ServerConfig::new(certs, key)) catch _ { return; };
         try srv.write_all("x") catch _ {};
-        srv.close();
+        try! srv.close();
     });
     let cfg = ClientConfig { root_certs: certs([CA]), cipher_suites: CipherSuite::all(), alpn_protocols: [], enable_pq: false, client_cert_chain: [], client_key: none, session_cache: none, early_data: [] };
     let s = try tcp_connect(f"127.0.0.1:{port}") catch _ { return; };
@@ -147,7 +147,7 @@ fn attempt(label: str, chain: str, name: str) {
         return;
     };
     println(f"{label}: ok {c.peer_certificates()[0].dns_names()[0]}");
-    c.close();
+    try! c.close();
     try t.join() catch _ {};
 }
 
