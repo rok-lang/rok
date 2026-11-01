@@ -195,6 +195,17 @@ pub const REMOVED_LINTS: &[&str] = &[
     "unqualified_meta",
 ];
 
+/// A lint added in 0.1.6 (tests build a later-release table with it).
+#[cfg(test)]
+const fn warn_since(name: &'static str, desc: &'static str) -> Lint {
+    Lint {
+        name,
+        default: Level::Warn,
+        desc,
+        since: "0.1.6",
+    }
+}
+
 /// Lint groups usable wherever a lint name is (`all`: every lint;
 /// `warnings`: every warning-level lint, later ones included).
 const GROUPS: &[(&str, &[&str])] = &[
