@@ -99,7 +99,7 @@ impl<T: NicheInt> Ord for NonZero<T> {
 }
 
 impl<T: NicheInt> Hash for NonZero<T> {
-    const fn hash(self) -> u64 { self.0.hash() }
+    const fn hash<H: Hasher>(self, ref h: H) { self.0.hash(ref h) }
 }
 
 impl<T: NicheInt> Display for NonZero<T> {
@@ -203,7 +203,7 @@ impl<T: NicheInt> Ord for Positive<T> {
 }
 
 impl<T: NicheInt> Hash for Positive<T> {
-    fn hash(self) -> u64 { self.0.hash() }
+    fn hash<H: Hasher>(self, ref h: H) { self.0.hash(ref h) }
 }
 
 impl<T: NicheInt> Display for Positive<T> {
@@ -265,7 +265,7 @@ impl<F: NicheFloat> Ord for NonNan<F> {
 }
 
 impl<F: NicheFloat> Hash for NonNan<F> {
-    const fn hash(self) -> u64 { self.0.key().hash() }
+    const fn hash<H: Hasher>(self, ref h: H) { h.write_u64(self.0.key()) }
 }
 
 impl<F: NicheFloat> Display for NonNan<F> {
@@ -364,7 +364,7 @@ impl<F: NicheFloat> Ord for Finite<F> {
 }
 
 impl<F: NicheFloat> Hash for Finite<F> {
-    fn hash(self) -> u64 { self.0.key().hash() }
+    fn hash<H: Hasher>(self, ref h: H) { h.write_u64(self.0.key()) }
 }
 
 impl<F: NicheFloat> Display for Finite<F> {

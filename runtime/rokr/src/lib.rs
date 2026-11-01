@@ -443,32 +443,57 @@ pub unsafe extern "C" fn rok_task_key(obj: *mut u8) -> usize {
     obj as usize
 }
 
-/// The process's seed for `Dict`'s hash mix (stdlib 2.5: hash values
-/// change between runs): OS randomness read once, else the clock and an
-/// address. Never 0, the seed of a dict built at compile time.
+/// The process's 128-bit hash key into `out[0..2]`, a `GcBuf<u64>`.
+///
+/// `RandomState`'s key (stdlib 2.5: hash values change between runs):
+/// OS randomness read once, else the clock and an address. Neither word
+/// is 0, so a key is never all zero, the reserved key of a state built
+/// at compile time.
+///
+/// # Safety
+/// `out` is a live `GcBuf<u64>` of at least two elements.
 #[unsafe(no_mangle)]
-pub extern "C" fn rok_hash_seed() -> u64 {
+pub unsafe extern "C" fn rok_hash_keys(out: *mut u8) {
     use core::sync::atomic::AtomicU64;
     use rokr_common::object_header::HEADER_SIZE;
-    static SEED: AtomicU64 = AtomicU64::new(0);
-    let s = SEED.load(Ordering::Relaxed);
-    if s != 0 {
-        return s;
+    static K0: AtomicU64 = AtomicU64::new(0);
+    static K1: AtomicU64 = AtomicU64::new(0);
+    let mut k0 = K0.load(Ordering::SeqCst);
+    if k0 == 0 {
+        // `rok_os_random` writes past an object header.
+        let mut b = [0u8; HEADER_SIZE + 16];
+        let (a, c) = if os::rok_os_random(b.as_mut_ptr(), 0, 16) == 0 {
+            let word = |at: usize| {
+                b[HEADER_SIZE + at..HEADER_SIZE + at + 8]
+                    .iter()
+                    .rev()
+                    .fold(0u64, |a, &x| (a << 8) | u64::from(x))
+            };
+            (word(0), word(8))
+        } else {
+            let t = rokr_common::sys::monotonic_ns() as u64;
+            let p = ptr::addr_of!(K0) as u64;
+            (
+                (t ^ p).wrapping_mul(0x9E37_79B9_7F4A_7C15),
+                (t.rotate_left(32) ^ p).wrapping_mul(0xC2B2_AE3D_27D4_EB4F),
+            )
+        };
+        // Both words are made nonzero (0 is "not set yet"). K1 is set
+        // before any K0 is published, so a reader that sees K0 sees K1;
+        // racing callers agree on the first of each.
+        let (a, c) = (a | 1, c | 1);
+        let _ = K1.compare_exchange(0, c, Ordering::SeqCst, Ordering::SeqCst);
+        k0 = match K0.compare_exchange(0, a, Ordering::SeqCst, Ordering::SeqCst) {
+            Ok(_) => a,
+            Err(first) => first,
+        };
     }
-    // `rok_os_random` writes past an object header.
-    let mut b = [0u8; HEADER_SIZE + 8];
-    let mut s = match os::rok_os_random(b.as_mut_ptr(), 0, 8) {
-        0 => b[HEADER_SIZE..]
-            .iter()
-            .rev()
-            .fold(0u64, |a, &x| (a << 8) | u64::from(x)),
-        _ => (rokr_common::sys::monotonic_ns() as u64 ^ ptr::addr_of!(SEED) as u64)
-            .wrapping_mul(0x9E37_79B9_7F4A_7C15),
-    };
-    s |= 1;
-    match SEED.compare_exchange(0, s, Ordering::Relaxed, Ordering::Relaxed) {
-        Ok(_) => s,
-        Err(first) => first,
+    let k1 = K1.load(Ordering::SeqCst);
+    // SAFETY: caller contract; elements start after the header.
+    unsafe {
+        let p = out.add(HEADER_SIZE);
+        ptr::copy_nonoverlapping(k0.to_ne_bytes().as_ptr(), p, 8);
+        ptr::copy_nonoverlapping(k1.to_ne_bytes().as_ptr(), p.add(8), 8);
     }
 }
 

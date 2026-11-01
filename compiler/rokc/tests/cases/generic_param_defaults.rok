@@ -1,10 +1,10 @@
 // spec: §2.10.5
 // expect-exit: 0
 // expect-stdout:
-// W<i32>
-// E<i64>
-// S<u8, u8>
-// Dflt<str, List<str>>
+// W
+// E
+// S<u8>
+// Dflt<str>
 // List<i64>
 // 4
 // 1099511627776

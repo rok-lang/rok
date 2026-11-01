@@ -112,20 +112,29 @@ impl PartialEq for Value {
 impl Eq for Value {}
 
 impl Hash for Value {
-    const fn hash(self) -> u64 {
+    const fn hash<H: Hasher>(self, ref h: H) {
         match norm(self) {
-            Value::None => 0u64,
-            Value::Bool(b) => mix(1u64, b.hash()),
-            Value::Int(n) => mix(2u64, n.hash()),
+            Value::None => h.write_u8(0u8),
+            Value::Bool(b) => { h.write_u8(1u8); b.hash(ref h); },
+            Value::Int(n) => { h.write_u8(2u8); n.hash(ref h); },
             // Equal floats share an `f64`; every NaN hashes alike.
-            Value::Float(x) => mix(3u64, if x.is_nan() { 0u64 } else { x.to_f64().to_bits() }),
-            Value::Char(c) => mix(4u64, c.hash()),
-            Value::Str(s) => mix(5u64, s.hash()),
-            Value::List(xs) => mix(6u64, xs.hash()),
-            Value::Tuple(xs) => mix(7u64, xs.hash()),
-            Value::Dict(d) => mix(8u64, entries_hash(d)),
-            Value::Struct { name, fields } => mix(mix(9u64, (name ?? "").hash()), entries_hash(fields)),
-            Value::Variant { path, args, named } => mix(mix(mix(10u64, path.hash()), args.hash()), entries_hash(named)),
+            Value::Float(x) => { h.write_u8(3u8); h.write_u64(if x.is_nan() { 0u64 } else { x.to_f64().to_bits() }); },
+            Value::Char(c) => { h.write_u8(4u8); c.hash(ref h); },
+            Value::Str(s) => { h.write_u8(5u8); s.hash(ref h); },
+            Value::List(xs) => { h.write_u8(6u8); xs.hash(ref h); },
+            Value::Tuple(xs) => { h.write_u8(7u8); xs.hash(ref h); },
+            Value::Dict(d) => { h.write_u8(8u8); d.hash(ref h); },
+            Value::Struct { name, fields } => {
+                h.write_u8(9u8);
+                (name ?? "").hash(ref h);
+                fields.hash(ref h);
+            },
+            Value::Variant { path, args, named } => {
+                h.write_u8(10u8);
+                path.hash(ref h);
+                args.hash(ref h);
+                named.hash(ref h);
+            },
         }
     }
 }
@@ -136,18 +145,6 @@ const fn norm(v: Value) -> Value {
         if name is none && fields.is_empty() { return Value::Dict(Dict::new()); }
     }
     v
-}
-
-const fn mix(h: u64, x: u64) -> u64 { ((h << 5u64) | (h >> 59u64)) ^ x }
-
-/// Order-independent, matching `Dict` equality.
-const fn entries_hash<K: Hash>(d: Dict<K, Value>) -> u64 {
-    let h = d.len() as u64;
-    for (k, v) in d.iter() {
-        let vh = v.hash();
-        h ^= k.hash() ^ ((vh << 17u64) | (vh >> 47u64));
-    }
-    h
 }
 
 /// A read or decode error. `line` / `col` (1-based, code points) are 0

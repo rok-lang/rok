@@ -3752,6 +3752,32 @@ impl<'a> LowerCtx<'a> {
         ))
     }
 
+    /// How many of `args` (an instance of template `base`) a name shows:
+    /// trailing arguments equal to their parameter's default are left
+    /// out (`Dict<str, i32>`, not `Dict<str, i32, RandomState>`).
+    fn shown_args(&self, base: &str, args: &[HirTy]) -> usize {
+        let Some(g) = self.env.defs.generics_of(base) else {
+            return args.len();
+        };
+        let mut n = args.len().min(g.params.len());
+        while n > 0 {
+            let rokc_ast::GenericParam::Type {
+                default: Some(d), ..
+            } = &g.params[n - 1]
+            else {
+                break;
+            };
+            let subst = mono::generic_subst(g, &args[..n - 1]);
+            let mut rcx = LowerCtx::new(self.env, &subst, None, self.here());
+            rcx.current_module = module_of(base);
+            if rcx.resolve_ast_ty(d) != args[n - 1] {
+                break;
+            }
+            n -= 1;
+        }
+        n
+    }
+
     /// User-facing type name (no internal `Struct0` / mangled names).
     fn ty_name(&self, ty: &HirTy) -> String {
         if let Some(n) = ty
@@ -3787,6 +3813,7 @@ impl<'a> LowerCtx<'a> {
                 if name == self.lang("float_type") {
                     return "float".to_owned();
                 }
+                let full_base = name.split("__").next().unwrap_or(&name).to_owned();
                 // A library type by its name (`List<i32>`, not
                 // `rok::core::collections::list::List<i32>`).
                 let name = if name.starts_with("rok::") {
@@ -3799,7 +3826,14 @@ impl<'a> LowerCtx<'a> {
                     name
                 } else {
                     let base = name.split("__").next().unwrap_or(&name).to_owned();
-                    let args: Vec<String> = generic_args.iter().map(|a| self.ty_name(a)).collect();
+                    let shown = self.shown_args(&full_base, &generic_args);
+                    if shown == 0 {
+                        return base;
+                    }
+                    let args: Vec<String> = generic_args[..shown]
+                        .iter()
+                        .map(|a| self.ty_name(a))
+                        .collect();
                     format!("{base}<{}>", args.join(", "))
                 }
             }

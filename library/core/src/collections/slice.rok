@@ -342,7 +342,7 @@ impl<T, const N: usize> Sliceable<Range<usize>> for [T; N] {
 }
 
 impl AsBytes for str {
-    fn byte_slice(self) -> Slice<u8> { self.as_bytes() }
+    const fn byte_slice(self) -> Slice<u8> { self.as_bytes() }
 }
 
 impl AsBytes for List<u8> {

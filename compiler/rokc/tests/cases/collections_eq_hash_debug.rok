@@ -9,11 +9,20 @@
 // lists compare in order, dicts and sets ignore insertion order (and
 // so does their hash); collections work as `Set` / `Dict` keys.
 
+use rok::core::hash::{BuildHasher, Hasher, RandomState};
+
+/// `x`'s hash under the process key.
+fn hash_of<T: Hash>(x: T) -> u64 {
+    let h = RandomState::new().build_hasher();
+    x.hash(ref h);
+    h.finish()
+}
+
 fn main() {
     let a = [1, 2, 3];
     let b = [1, 2, 3];
     let c = [3, 2, 1];
-    println(f"{a:?} {a == b} {a == c} {a.hash() == b.hash()}");
+    println(f"{a:?} {a == b} {a == c} {hash_of(a) == hash_of(b)}");
 
     let d1: Dict<str, i32> = Dict::new();
     d1.insert("a", 1);
@@ -26,7 +35,7 @@ fn main() {
     d3.insert("b", 3);
     let one: Dict<str, i32> = Dict::new();
     one.insert("a", 1);
-    println(f"{one:?} {d1 == d2} {d1 == d3} {d1.hash() == d2.hash()}");
+    println(f"{one:?} {d1 == d2} {d1 == d3} {hash_of(d1) == hash_of(d2)}");
 
     let s1: Set<str> = Set::new();
     s1.insert("x");
@@ -36,7 +45,7 @@ fn main() {
     s2.insert("x");
     let s3: Set<str> = Set::new();
     s3.insert("x");
-    println(f"{s3:?} {s1 == s2} {s1 == s3} {s1.hash() == s2.hash()}");
+    println(f"{s3:?} {s1 == s2} {s1 == s3} {hash_of(s1) == hash_of(s2)}");
 
     let seen: Set<List<i32>> = Set::new();
     seen.insert([1]);

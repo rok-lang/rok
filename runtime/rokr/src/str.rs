@@ -96,15 +96,6 @@ pub extern "C" fn rok_str_eq(a: RokStr, b: RokStr) -> i32 {
     i32::from(a.bytes() == b.bytes())
 }
 
-/// FNV-1a over the bytes: `str`'s `Hash` (stdlib 2.5.6; equal strings
-/// hash alike).
-#[unsafe(no_mangle)]
-pub extern "C" fn rok_str_hash(s: RokStr) -> u64 {
-    s.bytes().iter().fold(0xcbf2_9ce4_8422_2325, |h, b| {
-        (h ^ u64::from(*b)).wrapping_mul(0x0100_0000_01b3)
-    })
-}
-
 /// `s[start:end]` (byte offsets): shares `s`'s bytes, O(1). Panics
 /// outside `0..=len`, on a reversed range, or off a UTF-8 char boundary
 /// (stdlib 2.15.3), reporting `at` (the caller's `path:line:col`).
@@ -447,10 +438,6 @@ pub mod tests {
     // Non-allocating entries: safe to run alongside other tests.
     #[test]
     fn non_allocating_ops() {
-        // FNV-1a: the empty string hashes to the offset basis.
-        assert_eq!(rok_str_hash(s(b"")), 0xcbf2_9ce4_8422_2325);
-        assert_eq!(rok_str_hash(s(b"ab")), rok_str_hash(s(b"ab")));
-        assert_ne!(rok_str_hash(s(b"ab")), rok_str_hash(s(b"ba")));
         assert_eq!(rok_str_char_count(s("a한😀".as_bytes())), 3);
         assert_eq!(rok_str_find(s(b"abc"), s(b"")), 0);
         assert_eq!(rok_str_find(s(b"abc"), s(b"x")), -1);

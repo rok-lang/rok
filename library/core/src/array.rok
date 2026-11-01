@@ -71,13 +71,12 @@ impl<T: Ord, const N: usize> Ord for [T; N] {
     }
 }
 
+/// The items in order; `N` is in the type, so no length.
 impl<T: Hash, const N: usize> Hash for [T; N] {
-    const fn hash(self) -> u64 {
-        let h = N as u64;
+    const fn hash<H: Hasher>(self, ref h: H) {
         for i in 0..N {
-            h = ((h << 5) | (h >> 59)) ^ self[i].hash();
+            self[i].hash(ref h);
         }
-        h
     }
 }
 

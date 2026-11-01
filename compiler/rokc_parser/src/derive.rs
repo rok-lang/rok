@@ -268,9 +268,10 @@ pub(crate) fn ty_text(t: &Ty) -> String {
     }
 }
 
-/// `h = rotl(h, 5) ^ x.hash();` - a field folded into a hash.
-fn hash_step(x: &str) -> String {
-    format!("        h = ((h << 5) | (h >> 59)) ^ {x}.hash();\n")
+/// `fn hash` writing `body` to the hasher `h` (`__H`: no clash with the
+/// type's own parameters).
+fn hash_fn(body: &str) -> String {
+    format!("    fn hash<__H: rok::core::hash::Hasher>(self, ref h: __H) {{\n{body}    }}\n")
 }
 
 /// Lexicographic comparison over field pairs, ending in `last`.
@@ -379,15 +380,13 @@ fn struct_body(tr: &str, s: &StructDef) -> String {
             "    fn cmp(self, rhs: Self) -> {ORDERING} {{\n{}    }}\n",
             ord_cmp(&pairs)
         ),
-        "Hash" => {
-            let steps: String = fields
+        // The fields in declaration order.
+        "Hash" => hash_fn(
+            &fields
                 .iter()
-                .map(|f| hash_step(&format!("self.{f}")))
-                .collect();
-            format!(
-                "    fn hash(self) -> u64 {{\n        let h = 0u64;\n{steps}        return h;\n    }}\n"
-            )
-        }
+                .map(|f| format!("        self.{f}.hash(ref h);\n"))
+                .collect::<String>(),
+        ),
         // `Copy` / `Eq`: markers.
         _ => String::new(),
     }
@@ -542,14 +541,30 @@ fn enum_body(tr: &str, e: &EnumDef) -> Option<String> {
             tag("rhs", "tb"),
             pair_arms(&ord_cmp, &format!("return {ORDERING}::Equal;"))
         ),
-        "Hash" => format!(
-            "    fn hash(self) -> u64 {{\n{}        let h = ta as u64;\n        match self {{\n{}        }}\n        return h;\n    }}\n",
-            tag("self", "ta"),
-            arms(&|_, _, names| {
-                let steps: String = names.iter().map(|n| hash_step(n)).collect();
-                format!("{{\n{steps}            }}")
-            })
-        ),
+        // The variant's index (none for a single variant), then its
+        // fields.
+        "Hash" => {
+            let one = e.variants.len() == 1;
+            let arms: String = e
+                .variants
+                .iter()
+                .enumerate()
+                .map(|(i, v)| {
+                    let (pat, names) = variant_pat(e, v, "a");
+                    let tag = if one {
+                        String::new()
+                    } else {
+                        format!("                h.write_usize({i});\n")
+                    };
+                    let steps: String = names
+                        .iter()
+                        .map(|n| format!("                {n}.hash(ref h);\n"))
+                        .collect();
+                    format!("            {pat} => {{\n{tag}{steps}            }},\n")
+                })
+                .collect();
+            hash_fn(&format!("        match self {{\n{arms}        }}\n"))
+        }
         _ => String::new(),
     })
 }

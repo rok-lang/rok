@@ -1,0 +1,335 @@
+// rok::core::hash - what a `Hash` impl writes to (stdlib 2.5.11):
+// `Hasher`, `BuildHasher`, the process-keyed `RandomState` that `Dict`
+// and `Set` default to with its SipHash-1-3 `DefaultHasher`, and the
+// caller-keyed `SipHasher13` / `SipHasher24`, whose output is stable.
+
+use rok::core::convert::AsBytes;
+
+/// A running hash: `Hash` impls feed it bytes and integers, `finish`
+/// reads the result. Equal values must make the same sequence of
+/// writes; a variable-length run of values starts with
+/// `write_length_prefix`, so that `("ab", "c")` and `("a", "bc")` differ.
+pub trait Hasher {
+    /// Raw bytes; adds no length or terminator.
+    fn write<B: AsBytes>(ref self, bytes: B);
+
+    /// The hash of everything written so far; the state is not reset.
+    fn finish(self) -> u64;
+
+    // Fixed-width integers: their little-endian bytes.
+
+    const fn write_u8(ref self, x: u8) { self.write([x]) }
+    const fn write_u16(ref self, x: u16) { self.write(x.to_le_bytes()) }
+    const fn write_u32(ref self, x: u32) { self.write(x.to_le_bytes()) }
+    const fn write_u64(ref self, x: u64) { self.write(x.to_le_bytes()) }
+    /// 8 bytes on every target, so a hash does not depend on the width.
+    const fn write_usize(ref self, x: usize) { self.write_u64(x as u64) }
+    const fn write_i8(ref self, x: i8) { self.write_u8(x as u8) }
+    const fn write_i16(ref self, x: i16) { self.write_u16(x as u16) }
+    const fn write_i32(ref self, x: i32) { self.write_u32(x as u32) }
+    const fn write_i64(ref self, x: i64) { self.write_u64(x as u64) }
+    const fn write_isize(ref self, x: isize) { self.write_u64(x as i64 as u64) }
+
+    /// Before a variable-length run of `Hash` values (a list's items).
+    const fn write_length_prefix(ref self, len: usize) { self.write_usize(len) }
+
+    /// A whole `str`, prefix-free on its own: never precede it with
+    /// `write_length_prefix`.
+    const fn write_str(ref self, s: str) {
+        self.write_length_prefix(s.len());
+        self.write(s);
+    }
+}
+
+/// Makes the `Hasher`s of a `Dict` / `Set`: every one it builds hashes
+/// equal values alike.
+pub trait BuildHasher {
+    type Hasher: Hasher;
+    fn build_hasher(self) -> Self::Hasher;
+}
+
+/// The process's hash key, what `Dict` and `Set` use by default: drawn
+/// at random once per process, so where a key lands changes between
+/// runs (but not what a dict prints: that follows insertion order).
+/// Every `RandomState::new()` in a process holds the same key.
+pub struct RandomState {
+    k0: u64;
+    k1: u64;
+}
+
+/// The process key; all zero during compile-time evaluation.
+const fn process_keys() -> (u64, u64) {
+    unsafe {
+        let b: GcBuf<u64> = buf_new(2);
+        rok_hash_keys(b);
+        (b[0], b[1])
+    }
+}
+
+impl RandomState {
+    pub const fn new() -> RandomState {
+        let (k0, k1) = process_keys();
+        RandomState { k0, k1 }
+    }
+
+    /// Built at compile time: the all-zero key, which the run time never
+    /// draws. It stands for the process key, and a table hashed with it
+    /// at compile time is rehashed on first use.
+    pub(pkg) const fn is_reserved(self) -> bool {
+        self.k0 == 0u64 && self.k1 == 0u64
+    }
+}
+
+impl BuildHasher for RandomState {
+    type Hasher = DefaultHasher;
+    const fn build_hasher(self) -> DefaultHasher {
+        let k = if self.is_reserved() { process_keys() } else { (self.k0, self.k1) };
+        DefaultHasher { s: Sip::new(k.0, k.1, false) }
+    }
+}
+
+impl Default for RandomState {
+    const fn default() -> RandomState { RandomState::new() }
+}
+
+impl Clone for RandomState {
+    const fn clone(self) -> RandomState { self }
+}
+
+impl Copy for RandomState {}
+
+impl PartialEq for RandomState {
+    const fn eq(self, rhs: RandomState) -> bool { self.k0 == rhs.k0 && self.k1 == rhs.k1 }
+    const fn ne(self, rhs: RandomState) -> bool { !self.eq(rhs) }
+}
+
+impl Eq for RandomState {}
+
+/// Shows no key.
+impl Debug for RandomState {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("RandomState { .. }") }
+}
+
+/// `RandomState`'s hasher. The algorithm (SipHash-1-3 today) and so its
+/// output are unspecified and may change in any release: never persist
+/// it. `SipHasher13` is the stable form.
+pub struct DefaultHasher {
+    s: Sip;
+}
+
+impl Hasher for DefaultHasher {
+    const fn write<B: AsBytes>(ref self, bytes: B) { self.s.bytes(bytes.byte_slice()) }
+    const fn finish(self) -> u64 { self.s.finish() }
+    const fn write_u8(ref self, x: u8) { self.s.short(x as u64, 1) }
+    const fn write_u16(ref self, x: u16) { self.s.short(x as u64, 2) }
+    const fn write_u32(ref self, x: u32) { self.s.short(x as u64, 4) }
+    const fn write_u64(ref self, x: u64) { self.s.short(x, 8) }
+    const fn write_usize(ref self, x: usize) { self.s.short(x as u64, 8) }
+    const fn write_i8(ref self, x: i8) { self.s.short(x as u8 as u64, 1) }
+    const fn write_i16(ref self, x: i16) { self.s.short(x as u16 as u64, 2) }
+    const fn write_i32(ref self, x: i32) { self.s.short(x as u32 as u64, 4) }
+    const fn write_i64(ref self, x: i64) { self.s.short(x as u64, 8) }
+    const fn write_isize(ref self, x: isize) { self.s.short(x as i64 as u64, 8) }
+    const fn write_length_prefix(ref self, len: usize) { self.s.short(len as u64, 8) }
+    /// The bytes, then 0xFF: UTF-8 never holds that byte, so no prefix
+    /// is needed.
+    const fn write_str(ref self, s: str) {
+        self.s.bytes(s.as_bytes());
+        self.s.short(0xFFu64, 1);
+    }
+}
+
+impl Clone for DefaultHasher {
+    const fn clone(self) -> DefaultHasher { self }
+}
+
+/// SipHash-1-3 under a caller's key. Its output for the bytes written
+/// is the reference SipHash and stable across releases; `write_<int>`
+/// writes the integer's little-endian bytes (`write_usize` 8). The
+/// writes a `Hash` impl makes are not stable, so a persisted hash feeds
+/// bytes and integers directly, never `x.hash(ref h)`.
+pub struct SipHasher13 {
+    s: Sip;
+}
+
+impl SipHasher13 {
+    pub const fn with_keys(k0: u64, k1: u64) -> SipHasher13 {
+        SipHasher13 { s: Sip::new(k0, k1, false) }
+    }
+}
+
+impl Hasher for SipHasher13 {
+    const fn write<B: AsBytes>(ref self, bytes: B) { self.s.bytes(bytes.byte_slice()) }
+    const fn finish(self) -> u64 { self.s.finish() }
+    const fn write_u8(ref self, x: u8) { self.s.short(x as u64, 1) }
+    const fn write_u16(ref self, x: u16) { self.s.short(x as u64, 2) }
+    const fn write_u32(ref self, x: u32) { self.s.short(x as u64, 4) }
+    const fn write_u64(ref self, x: u64) { self.s.short(x, 8) }
+}
+
+impl Clone for SipHasher13 {
+    const fn clone(self) -> SipHasher13 { self }
+}
+
+/// SipHash-2-4 under a caller's key: as `SipHasher13`, with the
+/// original paper's rounds.
+pub struct SipHasher24 {
+    s: Sip;
+}
+
+impl SipHasher24 {
+    pub const fn with_keys(k0: u64, k1: u64) -> SipHasher24 {
+        SipHasher24 { s: Sip::new(k0, k1, true) }
+    }
+}
+
+impl Hasher for SipHasher24 {
+    const fn write<B: AsBytes>(ref self, bytes: B) { self.s.bytes(bytes.byte_slice()) }
+    const fn finish(self) -> u64 { self.s.finish() }
+    const fn write_u8(ref self, x: u8) { self.s.short(x as u64, 1) }
+    const fn write_u16(ref self, x: u16) { self.s.short(x as u64, 2) }
+    const fn write_u32(ref self, x: u32) { self.s.short(x as u64, 4) }
+    const fn write_u64(ref self, x: u64) { self.s.short(x, 8) }
+}
+
+impl Clone for SipHasher24 {
+    const fn clone(self) -> SipHasher24 { self }
+}
+
+/// Builds `H::default()`: for a `Dict` / `Set` with a fixed hasher of
+/// the caller's (`Dict<K, V, BuildHasherDefault<MyHasher>>`). Use one
+/// only when keys cannot come from an attacker.
+pub struct BuildHasherDefault<H> {}
+
+impl<H: Hasher + Default> BuildHasherDefault<H> {
+    pub const fn new() -> BuildHasherDefault<H> { BuildHasherDefault {} }
+}
+
+impl<H: Hasher + Default> BuildHasher for BuildHasherDefault<H> {
+    type Hasher = H;
+    const fn build_hasher(self) -> H { H::default() }
+}
+
+impl<H: Hasher + Default> Default for BuildHasherDefault<H> {
+    const fn default() -> BuildHasherDefault<H> { BuildHasherDefault {} }
+}
+
+impl<H> Clone for BuildHasherDefault<H> {
+    const fn clone(self) -> BuildHasherDefault<H> { self }
+}
+
+impl<H> Copy for BuildHasherDefault<H> {}
+
+/// SipHash state: `c` compression rounds per word (1, or 2 when `wide`)
+/// and `c + 2` finishing rounds. `tail` holds the `ntail` bytes not yet
+/// a whole word; `length` counts every byte (its low byte is mixed in).
+struct Sip {
+    v0: u64;
+    v1: u64;
+    v2: u64;
+    v3: u64;
+    tail: u64;
+    ntail: usize;
+    length: usize;
+    wide: bool;
+}
+
+impl Sip {
+    const fn new(k0: u64, k1: u64, wide: bool) -> Sip {
+        Sip {
+            v0: k0 ^ 0x736f_6d65_7073_6575u64,
+            v1: k1 ^ 0x646f_7261_6e64_6f6du64,
+            v2: k0 ^ 0x6c79_6765_6e65_7261u64,
+            v3: k1 ^ 0x7465_6462_7974_6573u64,
+            tail: 0u64,
+            ntail: 0,
+            length: 0,
+            wide,
+        }
+    }
+
+    #[inline]
+    const fn round(ref self) {
+        self.v0 = self.v0.wrapping_add(self.v1);
+        self.v1 = self.v1.rotate_left(13u32) ^ self.v0;
+        self.v0 = self.v0.rotate_left(32u32);
+        self.v2 = self.v2.wrapping_add(self.v3);
+        self.v3 = self.v3.rotate_left(16u32) ^ self.v2;
+        self.v0 = self.v0.wrapping_add(self.v3);
+        self.v3 = self.v3.rotate_left(21u32) ^ self.v0;
+        self.v2 = self.v2.wrapping_add(self.v1);
+        self.v1 = self.v1.rotate_left(17u32) ^ self.v2;
+        self.v2 = self.v2.rotate_left(32u32);
+    }
+
+    #[inline]
+    const fn compress(ref self, m: u64) {
+        self.v3 ^= m;
+        self.round();
+        if self.wide {
+            self.round();
+        }
+        self.v0 ^= m;
+    }
+
+    /// The low `size` (1..=8) bytes of `x`, the rest zero, as written
+    /// bytes.
+    #[inline]
+    const fn short(ref self, x: u64, size: usize) {
+        self.length += size;
+        let room = 8 - self.ntail;
+        self.tail |= x << ((8 * self.ntail) as u64);
+        if size < room {
+            self.ntail += size;
+            return;
+        }
+        let m = self.tail;
+        self.compress(m);
+        self.ntail = size - room;
+        self.tail = if room < 8 { x >> ((8 * room) as u64) } else { 0u64 };
+    }
+
+    const fn bytes(ref self, b: Slice<u8>) {
+        let n = b.len();
+        let i = 0usize;
+        unsafe {
+            let flat = b.stride == 1;
+            while i < n && self.ntail != 0 {
+                let x = if flat { b.buf[b.start + i] } else { b[i] };
+                self.short(x as u64, 1);
+                i += 1;
+            }
+            while i + 8 <= n {
+                let m = 0u64;
+                let j = 8usize;
+                while j > 0 {
+                    j -= 1;
+                    let x = if flat { b.buf[b.start + i + j] } else { b[i + j] };
+                    m = (m << 8u64) | (x as u64);
+                }
+                self.length += 8;
+                self.compress(m);
+                i += 8;
+            }
+            while i < n {
+                let x = if flat { b.buf[b.start + i] } else { b[i] };
+                self.short(x as u64, 1);
+                i += 1;
+            }
+        }
+    }
+
+    const fn finish(self) -> u64 {
+        let s = self;
+        let b = (((s.length as u64) & 0xFFu64) << 56u64) | s.tail;
+        s.compress(b);
+        s.v2 ^= 0xFFu64;
+        s.round();
+        s.round();
+        s.round();
+        if s.wide {
+            s.round();
+        }
+        s.v0 ^ s.v1 ^ s.v2 ^ s.v3
+    }
+}

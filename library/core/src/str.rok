@@ -50,7 +50,7 @@ impl str {
 
     /// The UTF-8 bytes as a read-only view of the string itself (no
     /// copy, O(1)).
-    pub fn as_bytes(self) -> Slice<u8> {
+    pub const fn as_bytes(self) -> Slice<u8> {
         Slice { buf: unsafe { rok_str_bytes_buf(self) }, start: 0, len: self.len(), stride: 1, whole: false }
     }
 
@@ -221,9 +221,8 @@ impl Ord for str {
     }
 }
 
-/// Byte-wise FNV-1a, so `str` keys work in `Dict` / `Set`.
 impl Hash for str {
-    const fn hash(self) -> u64 { unsafe { rok_str_hash(self) } }
+    const fn hash<H: Hasher>(self, ref h: H) { h.write_str(self) }
 }
 
 // Iterators (stdlib 2.15.3).

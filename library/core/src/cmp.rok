@@ -69,9 +69,9 @@ pub trait Ord: PartialOrd + Eq {
     }
 }
 
-/// `a == b` ⇒ `a.hash() == b.hash()` (2.5.6) - what `Dict` / `Set`
-/// rely on.
+/// Feeds a value to a `Hasher` (2.5.6): equal values make the same
+/// writes, so `a == b` hashes alike - what `Dict` / `Set` rely on.
 #[lang("hash_trait")]
 pub trait Hash: Eq {
-    fn hash(self) -> u64;
+    fn hash<H: Hasher>(self, ref h: H);
 }
