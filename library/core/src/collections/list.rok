@@ -51,6 +51,15 @@ impl<T> List<T> {
         }
     }
 
+    /// `n` copies of `x` (a read buffer: `List::filled(n, 0u8)`).
+    #[track_caller]
+    pub const fn filled(n: usize, x: T) -> List<T> {
+        let out: List<T> = List::with_capacity(n);
+        unsafe { out.set_len(n) };
+        out.fill(x);
+        out
+    }
+
     pub const fn len(self) -> usize {
         unsafe {
             self.h[0].len

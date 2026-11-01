@@ -23,7 +23,8 @@ use rok::bare::mem::{GcBuf, buf_new};
 use rok::std::net::{TcpStream, Shutdown};
 use rok::core::task;
 use rok::core::convert::AsBytes;
-use rok::std::io::{IoError, IoErrorKind, Reader, Writer, byte_buf};
+use rok::core::io::{IoError, IoErrorKind, Read, Write, AsyncRead, AsyncWrite};
+use rok::std::sys::{byte_buf, mut_region};
 use rok::std::fs;
 use rok::std::env;
 use rok::std::time::{Instant, Duration};
@@ -616,7 +617,7 @@ impl Shared {
         }
     }
 
-    fn read(self, buf: List<u8>) throws (IoError) -> usize {
+    fn read(self, buf: SliceMut<u8>) throws (IoError) -> usize {
         try self.check();
         unsafe {
             let c = self.c[0];
@@ -698,7 +699,7 @@ impl Shared {
     /// Run `op` (`Conn::step`) without blocking: the connection's
     /// records are written and more input read asynchronously until the
     /// operation completes. A failure sends its alert first.
-    async fn pump(self, op: u8, buf: List<u8>, data: Slice<u8>) throws (TlsError) -> usize {
+    async fn pump(self, op: u8, buf: SliceMut<u8>, data: Slice<u8>) throws (TlsError) -> usize {
         loop {
             let c = unsafe { self.c[0] };
             let failure: TlsError | none = none;
@@ -765,12 +766,12 @@ impl Shared {
         }
     }
 
-    async fn op_async(self, op: u8, buf: List<u8>, data: Slice<u8>) throws (IoError) -> usize {
+    async fn op_async(self, op: u8, buf: SliceMut<u8>, data: Slice<u8>) throws (IoError) -> usize {
         try self.check();
         try await self.pump(op, buf, data) catch e { throw io_err(e); }
     }
 
-    async fn read_async(self, buf: List<u8>) throws (IoError) -> usize { try await self.op_async(OP_READ, buf, nothing()) }
+    async fn read_async(self, buf: SliceMut<u8>) throws (IoError) -> usize { try await self.op_async(OP_READ, buf, nothing()) }
 
     async fn read_to_end_async(self) throws (IoError) -> List<u8> {
         let out: List<u8> = [];
@@ -781,6 +782,12 @@ impl Shared {
             for i in 0..n { out.push(buf[i]); }
         }
     }
+}
+
+/// The read buffer of an operation that reads nothing.
+const fn no_buf() -> SliceMut<u8> {
+    let e: List<u8> = [];
+    e
 }
 
 /// A configured client key must belong to the client certificate.
@@ -896,7 +903,7 @@ impl Client {
         };
         let s = Shared::new(c);
         let failed: TlsError | none = none;
-        try await s.pump(OP_HANDSHAKE, [], nothing()) catch e {
+        try await s.pump(OP_HANDSHAKE, no_buf(), nothing()) catch e {
             failed = e;
             0
         };
@@ -907,44 +914,14 @@ impl Client {
         Client { s }
     }
 
-    /// Read up to `buf.len()` bytes of application data into `buf`; 0
-    /// once the server sent close_notify.
-    pub fn read(self, buf: List<u8>) throws (IoError) -> usize { try self.s.read(buf) }
-
-    /// Everything until the server's close_notify.
-    pub fn read_to_end(self) throws (IoError) -> List<u8> { try self.s.read_to_end() }
-
-    /// Write all of `buf` (TLS records are written whole).
-    pub fn write<B: AsBytes>(self, buf: B) throws (IoError) -> usize {
-        let b = buf.byte_slice();
-        try self.s.write(b);
-        b.len()
-    }
-
-    pub fn write_all<B: AsBytes>(self, buf: B) throws (IoError) { try self.s.write(buf.byte_slice()); }
-
-    /// Nothing to flush: records go straight to the socket.
-    pub const fn flush(self) throws (IoError) {}
-
     /// Tell the server no more data follows (the read side stays open).
     pub fn close_notify(self) throws (IoError) { try self.s.close_notify(); }
 
     /// Switch to the next write key and ask the peer to do the same.
     pub fn key_update(self) throws (IoError) { try self.s.key_update(); }
 
-    pub async fn read_async(self, buf: List<u8>) throws (IoError) -> usize { try await self.s.read_async(buf) }
-    pub async fn read_to_end_async(self) throws (IoError) -> List<u8> { try await self.s.read_to_end_async() }
-
-    pub async fn write_async<B: AsBytes>(self, buf: B) throws (IoError) -> usize {
-        let b = buf.byte_slice();
-        try await self.s.op_async(OP_WRITE, [], b);
-        b.len()
-    }
-
-    pub async fn write_all_async<B: AsBytes>(self, buf: B) throws (IoError) { try await self.s.op_async(OP_WRITE, [], buf.byte_slice()); }
-    pub async fn flush_async(self) throws (IoError) {}
-    pub async fn close_notify_async(self) throws (IoError) { _ = try await self.s.op_async(OP_CLOSE_NOTIFY, [], nothing()); }
-    pub async fn key_update_async(self) throws (IoError) { _ = try await self.s.op_async(OP_KEY_UPDATE, [], nothing()); }
+    pub async fn close_notify_async(self) throws (IoError) { _ = try await self.s.op_async(OP_CLOSE_NOTIFY, no_buf(), nothing()); }
+    pub async fn key_update_async(self) throws (IoError) { _ = try await self.s.op_async(OP_KEY_UPDATE, no_buf(), nothing()); }
 
     /// close_notify (if the connection is healthy), then close the
     /// socket, throwing the OS's error.
@@ -964,19 +941,40 @@ impl Client {
     pub const fn early_data_accepted(self) -> bool { self.s.conn().early_accepted }
 }
 
-impl Reader for Client {
-    fn read(ref self, buf: List<u8>) throws (IoError) -> usize { try self.s.read(buf) }
+impl Read for Client {
+    /// Up to `buf.len()` bytes of application data; 0 once the peer sent
+    /// close_notify.
+    fn read(ref self, buf: SliceMut<u8>) throws (IoError) -> usize { try self.s.read(buf) }
     fn read_to_end(ref self) throws (IoError) -> List<u8> { try self.s.read_to_end() }
 }
 
-impl Writer for Client {
-    fn write(ref self, buf: List<u8>) throws (IoError) -> usize {
-        try self.s.write(buf[0:buf.len()]);
-        buf.len()
+impl Write for Client {
+    /// Writes all of `buf`: TLS records are written whole.
+    fn write<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize {
+        let b = buf.byte_slice();
+        try self.s.write(b);
+        b.len()
     }
-    fn write_all(ref self, buf: List<u8>) throws (IoError) { try self.s.write(buf[0:buf.len()]); }
-    fn write_str(ref self, s: str) throws (IoError) { try self.s.write(s.as_bytes()); }
+    /// Nothing to flush: records go straight to the socket.
     const fn flush(ref self) throws (IoError) {}
+    fn write_all<B: AsBytes>(ref self, buf: B) throws (IoError) { try self.s.write(buf.byte_slice()); }
+}
+
+impl AsyncRead for Client {
+    async fn read_async(self, buf: SliceMut<u8>) throws (IoError) -> usize { try await self.s.read_async(buf) }
+    async fn read_to_end_async(self) throws (IoError) -> List<u8> { try await self.s.read_to_end_async() }
+}
+
+impl AsyncWrite for Client {
+    async fn write_async<B: AsBytes>(self, buf: B) throws (IoError) -> usize {
+        let b = buf.byte_slice();
+        try await self.s.op_async(OP_WRITE, no_buf(), b);
+        b.len()
+    }
+    async fn flush_async(self) throws (IoError) {}
+    async fn write_all_async<B: AsBytes>(self, buf: B) throws (IoError) {
+        try await self.s.op_async(OP_WRITE, no_buf(), buf.byte_slice());
+    }
 }
 
 impl Drop for Client {
@@ -1017,7 +1015,7 @@ impl Server {
         c.server_start(cfg);
         let s = Shared::new(c);
         let failed: TlsError | none = none;
-        try await s.pump(OP_HANDSHAKE, [], nothing()) catch e {
+        try await s.pump(OP_HANDSHAKE, no_buf(), nothing()) catch e {
             failed = e;
             0
         };
@@ -1028,33 +1026,11 @@ impl Server {
         Server { s }
     }
 
-    pub fn read(self, buf: List<u8>) throws (IoError) -> usize { try self.s.read(buf) }
-    pub fn read_to_end(self) throws (IoError) -> List<u8> { try self.s.read_to_end() }
-
-    pub fn write<B: AsBytes>(self, buf: B) throws (IoError) -> usize {
-        let b = buf.byte_slice();
-        try self.s.write(b);
-        b.len()
-    }
-
-    pub fn write_all<B: AsBytes>(self, buf: B) throws (IoError) { try self.s.write(buf.byte_slice()); }
-    pub const fn flush(self) throws (IoError) {}
     pub fn close_notify(self) throws (IoError) { try self.s.close_notify(); }
     pub fn key_update(self) throws (IoError) { try self.s.key_update(); }
 
-    pub async fn read_async(self, buf: List<u8>) throws (IoError) -> usize { try await self.s.read_async(buf) }
-    pub async fn read_to_end_async(self) throws (IoError) -> List<u8> { try await self.s.read_to_end_async() }
-
-    pub async fn write_async<B: AsBytes>(self, buf: B) throws (IoError) -> usize {
-        let b = buf.byte_slice();
-        try await self.s.op_async(OP_WRITE, [], b);
-        b.len()
-    }
-
-    pub async fn write_all_async<B: AsBytes>(self, buf: B) throws (IoError) { try await self.s.op_async(OP_WRITE, [], buf.byte_slice()); }
-    pub async fn flush_async(self) throws (IoError) {}
-    pub async fn close_notify_async(self) throws (IoError) { _ = try await self.s.op_async(OP_CLOSE_NOTIFY, [], nothing()); }
-    pub async fn key_update_async(self) throws (IoError) { _ = try await self.s.op_async(OP_KEY_UPDATE, [], nothing()); }
+    pub async fn close_notify_async(self) throws (IoError) { _ = try await self.s.op_async(OP_CLOSE_NOTIFY, no_buf(), nothing()); }
+    pub async fn key_update_async(self) throws (IoError) { _ = try await self.s.op_async(OP_KEY_UPDATE, no_buf(), nothing()); }
     pub fn close(self) throws (IoError) { try self.s.close(); }
     pub const fn negotiated_alpn(self) -> List<u8> | none { self.s.conn().alpn }
 
@@ -1073,19 +1049,40 @@ impl Server {
     pub const fn server_name(self) -> str | none { self.s.conn().sni }
 }
 
-impl Reader for Server {
-    fn read(ref self, buf: List<u8>) throws (IoError) -> usize { try self.s.read(buf) }
+impl Read for Server {
+    /// Up to `buf.len()` bytes of application data; 0 once the peer sent
+    /// close_notify.
+    fn read(ref self, buf: SliceMut<u8>) throws (IoError) -> usize { try self.s.read(buf) }
     fn read_to_end(ref self) throws (IoError) -> List<u8> { try self.s.read_to_end() }
 }
 
-impl Writer for Server {
-    fn write(ref self, buf: List<u8>) throws (IoError) -> usize {
-        try self.s.write(buf[0:buf.len()]);
-        buf.len()
+impl Write for Server {
+    /// Writes all of `buf`: TLS records are written whole.
+    fn write<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize {
+        let b = buf.byte_slice();
+        try self.s.write(b);
+        b.len()
     }
-    fn write_all(ref self, buf: List<u8>) throws (IoError) { try self.s.write(buf[0:buf.len()]); }
-    fn write_str(ref self, s: str) throws (IoError) { try self.s.write(s.as_bytes()); }
+    /// Nothing to flush: records go straight to the socket.
     const fn flush(ref self) throws (IoError) {}
+    fn write_all<B: AsBytes>(ref self, buf: B) throws (IoError) { try self.s.write(buf.byte_slice()); }
+}
+
+impl AsyncRead for Server {
+    async fn read_async(self, buf: SliceMut<u8>) throws (IoError) -> usize { try await self.s.read_async(buf) }
+    async fn read_to_end_async(self) throws (IoError) -> List<u8> { try await self.s.read_to_end_async() }
+}
+
+impl AsyncWrite for Server {
+    async fn write_async<B: AsBytes>(self, buf: B) throws (IoError) -> usize {
+        let b = buf.byte_slice();
+        try await self.s.op_async(OP_WRITE, no_buf(), b);
+        b.len()
+    }
+    async fn flush_async(self) throws (IoError) {}
+    async fn write_all_async<B: AsBytes>(self, buf: B) throws (IoError) {
+        try await self.s.op_async(OP_WRITE, no_buf(), buf.byte_slice());
+    }
 }
 
 impl Drop for Server {

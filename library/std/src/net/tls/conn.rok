@@ -19,7 +19,8 @@ use sup::x509;
 use sup::ocsp;
 use sup::x509::{CertInfo, PubKey, SigAlg};
 use rok::std::net::TcpStream;
-use rok::std::io::{IoError, IoErrorKind, byte_buf};
+use rok::core::io::{IoError, IoErrorKind};
+use rok::std::sys::byte_buf;
 use rok::std::crypto::random;
 use rok::std::time::{SystemTime, Instant};
 use rok::core::crypto::HashAlgorithm;
@@ -650,7 +651,7 @@ impl Conn {
 
     /// Up to `buf.len()` bytes of application data into `buf`; 0 after
     /// close_notify.
-    pub(pkg) fn read_app(ref self, buf: List<u8>) throws (TlsError) -> usize {
+    pub(pkg) fn read_app(ref self, buf: SliceMut<u8>) throws (TlsError) -> usize {
         while self.plain_at >= self.plain.len() {
             if self.eof { return 0; }
             let (typ, data) = try self.record();
@@ -759,7 +760,7 @@ impl Conn {
     /// `op` for a caller that does not block (`nb`): `need` set and an
     /// error thrown means more input is wanted, and the call is repeated
     /// once it arrived; records to send are left in `out`.
-    pub(pkg) fn step(ref self, op: u8, buf: List<u8>, data: Slice<u8>) throws (TlsError) -> usize {
+    pub(pkg) fn step(ref self, op: u8, buf: SliceMut<u8>, data: Slice<u8>) throws (TlsError) -> usize {
         if op == OP_HANDSHAKE {
             try self.handshake();
             return 0;

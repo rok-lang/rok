@@ -10,7 +10,8 @@
 
 use rok::std::fs;
 use rok::std::fs::Metadata;
-use rok::std::io::{IoError, fetch, text_of, list_of_str};
+use rok::core::io::IoError;
+use rok::std::sys::{fetch, text_of, list_of_str};
 use rok::bare::mem::GcBuf;
 
 pub struct Path {

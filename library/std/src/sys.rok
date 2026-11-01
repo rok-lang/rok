@@ -1,0 +1,194 @@
+// rok::std::sys - OS helpers the std modules share (not public): runtime
+// result checks, handle cells that copies share, and byte regions.
+//
+// Bytes cross to the runtime as `GcBuf<u8>` regions `(buf, off, len)`:
+// reads fill the caller's list in place, every other move is one bulk
+// copy, and bytes become a `str` only through the UTF-8 check.
+
+use rok::core::io::{IoError, IoErrorKind};
+use rok::bare::mem::GcBuf;
+
+/// `r`, or its OS error thrown when `r < 0` (the runtime's `-errno`).
+#[discardable]
+pub(pkg) fn check(r: i64, context: str) throws (IoError) -> i64 {
+    if r < 0 { throw IoError::from_os_code((0 - r) as i32, context); }
+    r
+}
+
+/// Whether runtime result `r` failed with `WouldBlock`.
+pub(pkg) fn would_block(r: i64) -> bool {
+    r < 0 && IoErrorKind::of_os((0 - r) as i32) == IoErrorKind::WouldBlock
+}
+
+/// A zeroed list of `n` bytes (a read buffer).
+pub(pkg) const fn byte_buf(n: usize) -> List<u8> {
+    let out: List<u8> = List::with_capacity(n);
+    unsafe { out.set_len(n) };
+    out
+}
+
+#[intrinsic("rok.atomic.xchg")]
+#[discardable]
+fn atomic_xchg<T>(buf: GcBuf<T>, i: usize, v: T, o: rok::core::sync::UpdateOrdering) -> T;
+
+/// The OS handle in `cell[i]`, leaving `empty` there. Copies of a handle
+/// share its cell, so of any that release it, even at once from several
+/// threads, exactly one gets the handle; the rest get `empty`.
+#[discardable]
+pub(pkg) fn take_handle<T>(cell: GcBuf<T>, i: usize, empty: T) -> T {
+    unsafe { atomic_xchg(cell, i, empty, SeqCst) }
+}
+
+#[intrinsic("rok.atomic.cas")]
+#[discardable]
+fn atomic_cas<T>(buf: GcBuf<T>, i: usize, current: T, new: T, success: rok::core::sync::UpdateOrdering, failure: rok::core::sync::LoadOrdering) -> T;
+#[intrinsic("rok.atomic.sub")]
+#[discardable]
+fn atomic_sub<T>(buf: GcBuf<T>, i: usize, v: T, o: rok::core::sync::UpdateOrdering) -> T;
+#[intrinsic("rok.atomic.or")]
+#[discardable]
+fn atomic_or<T>(buf: GcBuf<T>, i: usize, v: T, o: rok::core::sync::UpdateOrdering) -> T;
+#[intrinsic("rok.atomic.load")]
+fn atomic_load<T>(buf: GcBuf<T>, i: usize, o: rok::core::sync::LoadOrdering) -> T;
+
+// Calls in flight on a handle that copies share. `cell[u]` counts them
+// by 2, and bit 0 is set once the handle is closed. A close while calls
+// are in flight leaves the release to the last of them, so no call runs
+// on a handle that was closed (and its number maybe reused) under it.
+
+/// Start a call: `false` (and nothing to end) if the handle is closed.
+pub(pkg) fn use_begin(cell: GcBuf<i32>, u: usize) -> bool {
+    // A compare-and-swap, not an add: once closed the count only goes
+    // down, so the last call to end is one that ran.
+    let n = unsafe { cell[u] };
+    loop {
+        if (n & 1) != 0 { return false; }
+        let seen = unsafe { atomic_cas(cell, u, n, n + 2, SeqCst, SeqCst) };
+        if seen == n { return true; }
+        n = seen;
+    }
+}
+
+/// End a call: `true` if it was the last after a close, and the caller
+/// releases the handle now.
+pub(pkg) fn use_end(cell: GcBuf<i32>, u: usize) -> bool {
+    unsafe { atomic_sub(cell, u, 2, SeqCst) } == 3
+}
+
+/// Close: the word before. 0: the caller releases the handle now; bit 0
+/// set: it was closed already; else a call in flight releases it.
+pub(pkg) fn use_close(cell: GcBuf<i32>, u: usize) -> i32 {
+    unsafe { atomic_or(cell, u, 1, SeqCst) }
+}
+
+/// `cell[i]`, read atomically (a word another thread may change).
+pub(pkg) fn word_at(cell: GcBuf<i32>, i: usize) -> i32 {
+    unsafe { atomic_load(cell, i, SeqCst) }
+}
+
+/// The region `(buf, off, len)` holding `b`'s bytes.
+pub(pkg) const fn region<B: AsBytes>(b: B) -> (GcBuf<u8>, usize, usize) {
+    unsafe { b.byte_slice().raw_parts() }
+}
+
+/// A new list of `b`'s bytes.
+pub(pkg) const fn list_of<B: AsBytes>(b: B) -> List<u8> {
+    let (src, at, n) = region(b);
+    let out = byte_buf(n);
+    let (dst, to, _) = region(out);
+    unsafe { rok_buf_copy(dst, to, src, at, n) };
+    out
+}
+
+/// A new list of `s`'s UTF-8 bytes.
+pub(pkg) const fn list_of_str(s: str) -> List<u8> {
+    let out = byte_buf(s.len());
+    let (dst, to, _) = region(out);
+    unsafe { rok_buf_put_str(dst, to, s) };
+    out
+}
+
+/// A runtime call on the region `(buf, off, len)`: a count or `-errno`.
+pub(pkg) type RegionIo = fn(GcBuf<u8>, usize, usize) -> isize;
+
+/// Grow `out` by `n` bytes to fill in place: their region's buffer and
+/// offset.
+const fn spare(out: List<u8>, n: usize) -> (GcBuf<u8>, usize) {
+    out.reserve(n);
+    let m = out.len();
+    unsafe { out.set_len(m + n) };
+    let (buf, at, _) = region(out);
+    (buf, at + m)
+}
+
+/// Append `src[at..at + n]` to `out`.
+pub(pkg) const fn append(out: List<u8>, src: GcBuf<u8>, at: usize, n: usize) {
+    let (dst, to) = spare(out, n);
+    unsafe { rok_buf_copy(dst, to, src, at, n) };
+}
+
+/// Grow `out` by what one runtime read `read(buf, off, len)` (a count or
+/// `-errno`) puts in up to `want` new bytes; the count.
+pub(pkg) fn read_more(out: List<u8>, want: usize, read: RegionIo, context: str) throws (IoError) -> usize {
+    let m = out.len();
+    let (buf, at) = spare(out, want);
+    let r = read(buf, at, want);
+    unsafe { out.set_len(m) };
+    let n = (try check(r as i64, context)) as usize;
+    unsafe { out.set_len(m + n) };
+    n
+}
+
+/// Everything `read` (as in `read_more`) yields until it reports 0, read
+/// into the spare room before growing. `hint`: the bytes expected (0:
+/// unknown); with one byte more of room, the read that sees the end
+/// needs no growth.
+pub(pkg) fn read_all(read: RegionIo, context: str, hint: usize) throws (IoError) -> List<u8> {
+    let out: List<u8> = List::with_capacity(if hint > 0 { hint + 1 } else { 0 });
+    loop {
+        let room = out.capacity() - out.len();
+        if (try read_more(out, if room > 0 { room } else { 16384 }, read, context)) == 0 {
+            return out;
+        }
+    }
+}
+
+/// The bytes a runtime call `get(buf, off, len)` copies into a region:
+/// it returns their full length (or `-errno`), so a short region is
+/// retried with room for all of them.
+pub(pkg) fn fetch(get: RegionIo, context: str) throws (IoError) -> List<u8> {
+    let cap = 256usize;
+    loop {
+        let out = byte_buf(cap);
+        let (buf, at, _) = region(out);
+        let n = (try check(get(buf, at, cap) as i64, context)) as usize;
+        if n <= cap {
+            unsafe { out.set_len(n) };
+            return out;
+        }
+        cap = n;
+    }
+}
+
+/// Write all of `buf[at..at + n]` with `write(buf, off, len)` (a count
+/// or `-errno` per call).
+pub(pkg) fn write_region(buf: GcBuf<u8>, at: usize, n: usize, write: RegionIo, context: str) throws (IoError) {
+    let done = 0usize;
+    while done < n {
+        let k = try check(write(buf, at + done, n - done) as i64, context);
+        if k == 0 { throw IoError::new(IoErrorKind::Other, "failed to write whole buffer"); }
+        done += k as usize;
+    }
+}
+
+/// Bytes as text, or `InvalidData`.
+pub(pkg) const fn text_of(bytes: List<u8>) throws (IoError) -> str {
+    try str::from_utf8(bytes) catch _ {
+        throw IoError::new(IoErrorKind::InvalidData, "stream did not contain valid UTF-8");
+    }
+}
+
+/// The region `(buf, off, len)` a read fills.
+pub(pkg) const fn mut_region(buf: SliceMut<u8>) -> (GcBuf<u8>, usize, usize) {
+    unsafe { buf.raw_parts() }
+}
