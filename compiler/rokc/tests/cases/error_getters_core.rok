@@ -58,8 +58,8 @@ fn main() {
     println(f"layout: {l}");
     println(f"fmt: {as_error(FmtError)} | {FmtError == FmtError}");
     println(f"unit: {CancellationError.message()} {TimeoutError.message()} | {CancellationError == CancellationError} {same(TimeoutError)}");
-    let z: ZeroError | none = try { NonZero::<i32>::try_from(0); none } catch e { e };
-    if let z: ZeroError = z {
+    let z: num::niche::ZeroError | none = try { num::niche::NonZero::<i32>::try_from(0); none } catch e { e };
+    if let z: num::niche::ZeroError = z {
         println(f"zero: {z.message()} | {same(z)}");
     }
     println(f"fatal: {StackOverflowError.message()} {OutOfMemoryError.message()} {InternalError.message()}");
