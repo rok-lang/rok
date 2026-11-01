@@ -30,7 +30,7 @@
 
 // `int` past the subquadratic cut-offs; Python-computed results.
 
-fn gen(seed: u64, limbs: usize) -> int {
+fn make(seed: u64, limbs: usize) -> int {
     let x: int = 0;
     let s = seed;
     for _ in 0..limbs {
@@ -50,7 +50,7 @@ fn hstr(t: str) -> u64 {
 
 fn divisor(kind: usize, n: usize) -> int {
     let one: int = 1;
-    if kind == 0 { return (gen((n * 7) as u64, n)) | (one << ((32 * n - 1) as u32)); }
+    if kind == 0 { return (make((n * 7) as u64, n)) | (one << ((32 * n - 1) as u32)); }
     if kind == 1 { return (one << ((32 * n) as u32)) - one; }
     if kind == 2 { return one << ((32 * n - 1) as u32); }
     (one << ((32 * n - 1) as u32)) + one
@@ -62,9 +62,9 @@ fn main() {
     for (n, qn) in [(3000usize, 3000usize), (3001usize, 7000usize), (6000usize, 3100usize), (4096usize, 4097usize)] {
         for kind in 0usize..4usize {
             let b = divisor(kind, n);
-            let a = gen((n + qn + kind) as u64, qn) * b + (b - one);
+            let a = make((n + qn + kind) as u64, qn) * b + (b - one);
             let (q, r) = a.div_rem(b);
-            let c = gen((n * 3 + kind) as u64, n + qn);
+            let c = make((n * 3 + kind) as u64, n + qn);
             let (q2, r2) = c.div_rem(b);
             let ok = q * b + r == a && r == b - one && q2 * b + r2 == c && !r2.is_negative() && r2 < b;
             println(f"d {n} {qn} {kind} {ok} {q %% md} {q2 %% md} {r2 %% md}");
@@ -72,7 +72,7 @@ fn main() {
     }
     let ten: int = 10;
     for n in [4000usize, 30000usize] {
-        let xs = [gen(n as u64, n), ten.pow((n * 9) as u32) - one, ten.pow((n * 9) as u32)];
+        let xs = [make(n as u64, n), ten.pow((n * 9) as u32) - one, ten.pow((n * 9) as u32)];
         for xi in 0..3 {
             let t = f"{xs[xi]}";
             let back = try! t.parse::<int>();
@@ -82,9 +82,9 @@ fn main() {
         }
     }
     for (n, m, gl) in [(2400usize, 2400usize, 1usize), (2600usize, 2500usize, 1300usize), (9000usize, 6000usize, 500usize)] {
-        let g = gen((n * 5 + gl) as u64, gl);
-        let a = gen((n * 11) as u64, n - gl) * g;
-        let b = gen((m * 13 + 1) as u64, m - gl) * g;
+        let g = make((n * 5 + gl) as u64, gl);
+        let a = make((n * 11) as u64, n - gl) * g;
+        let b = make((m * 13 + 1) as u64, m - gl) * g;
         let d = a.gcd(b);
         println(f"g {n} {m} {gl} {d %% md} {d.bit_length()}");
     }

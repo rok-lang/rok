@@ -15,7 +15,7 @@ use rok::core::ops::Modulo;
 
 const C: i32 = -7 %% 3;
 
-fn gen<T: Modulo<Output = T>>(a: T, b: T) -> T { a %% b }
+fn make<T: Modulo<Output = T>>(a: T, b: T) -> T { a %% b }
 
 fn main() -> i32 {
     let a = -7 %% 3;
@@ -31,7 +31,7 @@ fn main() -> i32 {
     let y = 7.5;
     y %%= -2.0;
     println(f"{a} {b} {c} {d} {e} {f} {g} {h} {x} {y} {C}");
-    println(f"{gen(-7, 3)} {gen(-7.0, 3.0)} {(-7).modulo(3)} {Modulo::modulo(7, -3)}");
+    println(f"{make(-7, 3)} {make(-7.0, 3.0)} {(-7).modulo(3)} {Modulo::modulo(7, -3)}");
     let any_v: any = -9;
     match any_v %% 4 {
         i: i32 => println(f"{i}"),

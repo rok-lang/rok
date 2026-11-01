@@ -755,7 +755,7 @@ impl<'src> Lexer<'src> {
         }
     }
 
-    /// `0755` is decimal 755: say so, and offer `0o755` and `755`.
+    /// `0755` is an error: offer `0o755` and `755`.
     fn check_leading_zero(&mut self, start: usize, body_end: usize) {
         let digits: String = self.src[start..body_end]
             .chars()
@@ -779,16 +779,13 @@ impl<'src> Lexer<'src> {
         } else {
             format!("write `{decimal}`")
         };
-        let mut d = RokDiagnostic::warning(
+        let mut d = RokDiagnostic::error(
             ErrorKind::Lexical,
             span,
-            format!(
-                "`{text}` is the decimal number {value}: a leading zero does not make it octal"
-            ),
+            format!("`{text}`: a decimal literal can't start with `0`"),
         )
         .with_file(self.file.clone())
         .with_help(help)
-        .with_lint("zero_prefixed_literal")
         .with_fix(
             span,
             decimal.clone(),
@@ -1514,7 +1511,7 @@ mod tests {
     }
 
     #[test]
-    fn leading_zero_warns() {
+    fn leading_zero_is_an_error() {
         for (src, help) in [
             (
                 "0755",
@@ -1530,9 +1527,9 @@ mod tests {
             let (toks, d) = Lexer::new(src, "t").lex_all();
             assert!(matches!(toks[0].kind, T::IntLit(_)), "{src}");
             assert_eq!(d.len(), 1, "{src}: {d:?}");
-            assert_eq!(
-                d[0].lint.as_deref().map(String::as_str),
-                Some("zero_prefixed_literal")
+            assert!(
+                d[0].lint.is_none() && d[0].severity == rokc_diagnostic::Severity::Error,
+                "{src}"
             );
             assert_eq!(d[0].notes, [help], "{src}");
         }

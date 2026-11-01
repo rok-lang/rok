@@ -110,6 +110,11 @@ struct Printer {
     indent: usize,
     /// Lifted nested fns by lifted name.
     lifted: std::collections::HashMap<String, FnDef>,
+    /// Inside the trailing closure of a call to this: `return` prints
+    /// as `return@name`.
+    ret_label: Option<String>,
+    /// The label the next closure printed takes (a trailing closure's).
+    closure_label: Option<String>,
 }
 
 impl Printer {
@@ -596,7 +601,9 @@ impl Printer {
         match &f.body {
             Some(b) => {
                 self.s(" ");
+                let outer = self.ret_label.take();
                 self.block(b);
+                self.ret_label = outer;
             }
             None => self.s(";"),
         }
@@ -984,6 +991,9 @@ impl Printer {
             }
             StmtKind::Return(v) => {
                 self.s("return");
+                if let Some(l) = &self.ret_label {
+                    let _ = write!(self.out, "@{l}");
+                }
                 if let Some(v) = v {
                     self.s(" ");
                     self.expr(v);
@@ -1045,6 +1055,8 @@ impl Printer {
             out: String::new(),
             indent: self.indent,
             lifted: self.lifted.clone(),
+            ret_label: self.ret_label.clone(),
+            closure_label: None,
         };
         p.expr(e);
         if group(&p.out) {
@@ -1077,9 +1089,11 @@ impl Printer {
         self.s(")");
     }
 
-    fn trailing(&mut self, closure: Option<&Expr>) {
+    /// A trailing closure of a call to `label`.
+    fn trailing(&mut self, closure: Option<&Expr>, label: Option<&str>) {
         let Some(c) = closure else { return };
         self.s(" ");
+        let label = label.map(str::to_owned);
         // `f() { .. }`: after a call `||` would be logical or.
         if let ExprKind::Closure {
             captures,
@@ -1093,11 +1107,15 @@ impl Printer {
             if let (true, true, ExprKind::Block(b)) =
                 (captures.is_empty(), params.is_empty(), &body.kind)
             {
+                let outer = std::mem::replace(&mut self.ret_label, label);
                 self.block(b);
+                self.ret_label = outer;
                 return;
             }
         }
+        self.closure_label = label;
         self.expr(c);
+        self.closure_label = None;
     }
 
     #[allow(clippy::too_many_lines, clippy::cognitive_complexity)] // one arm per expression form
@@ -1342,7 +1360,7 @@ impl Printer {
                     self.s(">");
                 }
                 self.args(args);
-                self.trailing(trailing_closure.as_deref());
+                self.trailing(trailing_closure.as_deref(), Some(method));
             }
             ExprKind::Call {
                 callee,
@@ -1351,7 +1369,11 @@ impl Printer {
             } => {
                 self.receiver(callee);
                 self.args(args);
-                self.trailing(trailing_closure.as_deref());
+                let label = match &callee.kind {
+                    ExprKind::Path(p) => p.segments.last().map(|s| s.name.as_str()),
+                    _ => None,
+                };
+                self.trailing(trailing_closure.as_deref(), label);
             }
             ExprKind::Broadcast { callee, args } => {
                 self.receiver(callee);
@@ -1454,6 +1476,7 @@ impl Printer {
                 is_async,
                 is_generator,
             } => {
+                let label = self.closure_label.take();
                 if *is_async {
                     self.s("async ");
                 }
@@ -1479,7 +1502,9 @@ impl Printer {
                     self.ty(r);
                     self.s(" ");
                 }
+                let outer = std::mem::replace(&mut self.ret_label, label);
                 self.expr(body);
+                self.ret_label = outer;
             }
             ExprKind::Await(x) => {
                 self.s("await ");
@@ -1706,11 +1731,9 @@ impl Printer {
     }
 }
 
-/// A name spelled like a keyword, now or from 0.2.0, prints as `r#name`.
+/// A name spelled like a keyword prints as `r#name`.
 fn raw(n: &str) -> bool {
-    n != "self"
-        && n != "Self"
-        && (rokc_core::KEYWORDS.contains(&n) || rokc_core::FUTURE_KEYWORDS.contains(&n))
+    n != "self" && n != "Self" && rokc_core::KEYWORDS.contains(&n)
 }
 
 /// The single-segment name of a path type.

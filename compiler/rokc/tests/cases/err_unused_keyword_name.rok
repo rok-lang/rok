@@ -1,0 +1,13 @@
+// spec: 001.05.6-reserved-for-future-use
+// expect-error: `move` is a reserved keyword, not a name
+// expect-error: `gen` is a reserved keyword, not a name
+// expect-error: help: write `r#move` to keep this name, or rename it
+
+// `macro`, `defer`, `dyn`, `move`, `gen` and `do` are reserved keywords
+// with no syntax yet: a name spelled so needs `r#`.
+fn gen(n: i32) -> i32 { n * 2 }
+
+fn main() {
+    let move = 1;
+    println(f"{move}");
+}

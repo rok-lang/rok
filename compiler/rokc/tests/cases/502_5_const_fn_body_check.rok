@@ -13,9 +13,9 @@ const fn h(x: i32) -> i32 { x + g() }
 const fn io(x: i32) -> i32 { println("x"); x }
 const fn st() -> i32 { S }
 const fn ok(x: i32) -> i32 { let s = "ab" + "c"; x.abs() + s.len() as i32 }
-const fn gen<T>(x: T) -> T { x }
+const fn make<T>(x: T) -> T { x }
 const fn rec(n: i64) -> i64 { if n == 0 { 0 } else { rec(n - 1) + 1 } }
 fn main() -> i32 {
-    println(f"{ok(-1)} {gen(1)} {rec(3)}");
+    println(f"{ok(-1)} {make(1)} {rec(3)}");
     return 0;
 }

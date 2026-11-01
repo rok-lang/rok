@@ -1362,33 +1362,29 @@ fn ext_ops_scope_ascii_led_to_their_package() {
     assert_eq!(ext.in_package("").symbols(), ["⊕"]);
 }
 
-/// The `(lint, message)` of each parse warning in `src`.
-fn parse_warnings(src: &str) -> Vec<(String, String)> {
+/// The messages of the parse errors in `src`.
+fn parse_errors(src: &str) -> Vec<String> {
     let (tokens, _) = Lexer::new(src, "test").lex_all();
     let (_, diags) = parse_program(&tokens, "test");
     diags
         .into_iter()
-        .map(|d| (d.lint.map(|l| *l).unwrap_or_default(), d.message))
+        .filter(rokc_diagnostic::RokDiagnostic::is_error)
+        .map(|d| d.message)
         .collect()
 }
 
 #[test]
-fn keyword_idents_only_where_names_become_keywords() {
+fn unused_keywords_only_where_names_are_expected() {
     let src = "struct S { move: i32; }\n\
                fn gen(dyn: i32) -> i32 { dyn }\n\
                fn main() {\n    let s = S { move: 1 };\n    let r#do = s.move + f(defer: 2);\n}\n\
                #[impl_macro(x)] @macro { }\n";
-    let got: Vec<String> = parse_warnings(src)
-        .into_iter()
-        .filter(|(l, _)| l == "keyword_idents")
-        .map(|(_, m)| m)
-        .collect();
     assert_eq!(
-        got,
+        parse_errors(src),
         [
-            "`gen` is a keyword from Rok 0.2.0 on",
-            "`dyn` is a keyword from Rok 0.2.0 on",
-            "`dyn` is a keyword from Rok 0.2.0 on",
+            "`gen` is a reserved keyword, not a name",
+            "`dyn` is a reserved keyword, not a name",
+            "`dyn` is a reserved keyword, not a name",
         ]
     );
 }
@@ -1403,35 +1399,124 @@ fn raw_contextual_keyword_is_a_name() {
 }
 
 #[test]
-fn try_coalesce_and_closure_operator_warn() {
-    let lints =
-        |src: &str| -> Vec<String> { parse_warnings(src).into_iter().map(|(l, _)| l).collect() };
-    let warn = ["try_coalesce_precedence"];
-    assert_eq!(lints("fn f() { let a = try? g() ?? 1; }"), warn);
-    for quiet in [
+fn try_coalesce_needs_parentheses() {
+    assert_eq!(
+        parse_errors("fn f() { let a = try? g() ?? 1; }"),
+        ["`try? g() ?? 1` needs parentheses"]
+    );
+    for ok in [
         "fn f() { let a = (try? g()) ?? 1; }",
         "fn f() { let a = try? (g() ?? 1); }",
         "fn f() { let a = try? g(); }",
         "fn f() { let a = try g() ?? 1; }",
     ] {
-        assert!(lints(quiet).is_empty(), "{quiet}");
+        assert!(parse_errors(ok).is_empty(), "{ok}");
     }
-    let warn = ["trailing_closure_operator"];
-    assert_eq!(
-        lints("fn f() {\n    run {\n        a();\n    }\n    - x;\n}\n"),
-        warn
-    );
-    assert_eq!(
-        lints("fn f() {\n    xs.each |x| { a(x); }\n    * y;\n}\n"),
-        warn
-    );
-    for quiet in [
-        "fn f() {\n    run {\n        a();\n    };\n    - x;\n}\n",
+}
+
+#[test]
+fn statement_trailing_closure_call_ends_at_brace() {
+    // The statement count of the body: two statements, or one.
+    let stmts = |src: &str| {
+        let p = parse(src);
+        let Item::Fn(f) = &p.items[0] else { panic!() };
+        let b = f.body.as_ref().unwrap();
+        b.stmts.len() + usize::from(b.trailing.is_some())
+    };
+    for two in [
+        "fn f() {\n    run {\n        a();\n    }\n    - x;\n}\n",
+        "fn f() {\n    xs.each |x| { a(x); }\n    - y;\n}\n",
         "fn f() {\n    run { a(); } - x;\n}\n",
-        "fn f() {\n    let v = run { a(); }\n        - x;\n}\n",
+        "fn f() {\n    run { a(); };\n    - x;\n}\n",
         "fn f() {\n    if c { a(); }\n    - x;\n}\n",
     ] {
-        assert!(lints(quiet).is_empty(), "{quiet}");
+        assert!(parse_errors(two).is_empty(), "{two}");
+        assert_eq!(stmts(two), 2, "{two}");
+    }
+    for one in [
+        "fn f() {\n    let v = run { a(); }\n        - x;\n}\n",
+        "fn f() {\n    run(a) + x;\n}\n",
+        "fn f() {\n    run { a(); }.len();\n}\n",
+    ] {
+        assert!(parse_errors(one).is_empty(), "{one}");
+        assert_eq!(stmts(one), 1, "{one}");
+    }
+}
+
+#[test]
+fn trailing_closure_returns() {
+    let bare = "a bare `return` in a statement's trailing closure: it would leave only the \
+                closure, not the function";
+    for src in [
+        "fn f() { each(xs) |x| { if x { return; } } }",
+        "fn f() { xs.each() |x| { return; } }",
+        "fn f() { run { match x { _ => return, } } }",
+        "each(xs) |x| { return; }",
+    ] {
+        assert_eq!(parse_errors(src), [bare], "{src}");
+    }
+    for ok in [
+        "fn f() { each(xs) |x| { if x { return@each; } } }",
+        "fn f() { xs.each() |x| { return@each; } }",
+        "fn f() { m::run { match x { _ => return@run, } } }",
+        "fn f() { let n = first(xs) |x| { return@first true; }; }",
+        "fn f() { let n = first(xs) |x| { return true; }; }",
+        "fn f() { let n = first(xs) |x| { return; }; }",
+        "fn f() { each(xs, |x| { return; }); }",
+        "fn f() { each(xs) |x| { let g = || { return; }; } }",
+        "fn f() { each(xs) |x| { let g = async { return; }; } }",
+        "fn f() { each(xs) |x| { fn g() { return; } } }",
+    ] {
+        assert!(parse_errors(ok).is_empty(), "{ok}: {:?}", parse_errors(ok));
+    }
+    assert_eq!(
+        parse_errors("fn f() { each(xs) |x| { let g = || { return@each; }; } }"),
+        ["`return@each`: no enclosing trailing closure of a call to `each`"]
+    );
+    assert_eq!(
+        parse_errors("fn f() { return@f; }"),
+        ["`return@f`: no enclosing trailing closure of a call to `f`"]
+    );
+    // The fix-it names the call.
+    let (tokens, _) = Lexer::new("fn f() { xs.each |x| { return; } }", "t").lex_all();
+    let (_, d) = parse_program(&tokens, "t");
+    assert_eq!(d[0].fixes[0].text, "return@each");
+}
+
+#[test]
+fn labeled_return_prints_back() {
+    for src in [
+        "fn f() { each(xs) |x| { return@each; } }",
+        "fn f() { xs.each() { return@each 1; } }",
+        "fn f() { m::run { let g = || { return; }; return@run; } }",
+    ] {
+        let p = parse(src);
+        let out = rokc_ast::print::print_file(&p.attrs, &p.items, &p.stmts);
+        assert!(parse_errors(&out).is_empty(), "{src}\n{out}");
+        assert!(out.contains("return@"), "{out}");
+        assert!(
+            !out.contains("return;") || src.contains("|| { return; }"),
+            "{out}"
+        );
+    }
+}
+
+#[test]
+fn rust_precedence() {
+    // Each source, fully grouped as the parser reads it.
+    for (src, grouped) in [
+        ("1 + 2 << 3", "(1 + 2) << 3"),
+        ("1 << 2 * 3", "1 << (2 * 3)"),
+        ("a ^ b & c", "a ^ (b & c)"),
+        ("a | b ^ c", "a | (b ^ c)"),
+        ("a & b == c", "(a & b) == c"),
+        ("a == b && c || d", "((a == b) && c) || d"),
+    ] {
+        let p = parse(&format!("fn f() {{ let v = {src}; }}"));
+        let q = parse(&format!("fn f() {{ let v = {grouped}; }}"));
+        let print =
+            |p: &rokc_ast::Program| rokc_ast::print::print_file(&p.attrs, &p.items, &p.stmts);
+        assert_eq!(print(&p), print(&q), "{src}");
     }
 }
 

@@ -15,7 +15,7 @@ use rok::bare::ptr::addr_of;
 
 static TOTAL: i32 = 7;
 
-yield fn gen(flag: bool) -> i32 {
+yield fn make(flag: bool) -> i32 {
     let x = 10;
     let p = addr_of(x);
     yield unsafe { p.read() };
@@ -46,7 +46,7 @@ async fn body() -> str {
 }
 
 async fn main() {
-    for v in gen(true) {
+    for v in make(true) {
         if v != 0 { println(f"{v}"); }
     }
     println(await body());

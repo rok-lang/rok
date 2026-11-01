@@ -26,7 +26,7 @@ impl Token {
     }
 }
 
-pub use rokc_core::FUTURE_KEYWORDS;
+pub use rokc_core::UNUSED_KEYWORDS;
 
 /// One doc comment line: its text after the marker and one space.
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -11,8 +11,8 @@
 fn ident(x: f64) -> f64 { x }
 
 fn main() {
-    // 1.6.1: a leading zero is still decimal; every radix takes `_`.
-    let lead = 0123;
+    // 1.6.1: no leading zero on a decimal (`0o` is octal); every radix takes `_`.
+    let lead = 123;
     let hex = 0X1a;
     let bin = 0B1;
     let oct = 0o755;

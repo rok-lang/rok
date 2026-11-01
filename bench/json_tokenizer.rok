@@ -1,7 +1,7 @@
 // JSON-ish tokenizer: builds ~6 MB of JSON-like text from an LCG, then
 // scans it byte by byte into strings / numbers / literals / punctuation.
 // Output matches bench/c/json_tokenizer.c.
-fn gen(n: i64) -> str {
+fn make(n: i64) -> str {
     let b = StrBuf::new();
     let x: u64 = 42;
     for _ in 0..n {
@@ -35,7 +35,7 @@ fn is_digit(c: u8) -> bool { c >= 48u8 && c <= 57u8 }
 fn is_alpha(c: u8) -> bool { c >= 97u8 && c <= 122u8 }
 
 fn main() -> i32 {
-    let s = gen(1000000);
+    let s = make(1000000);
     let n = s.len();
     let strings: i64 = 0;
     let numbers: i64 = 0;

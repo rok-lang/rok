@@ -24,7 +24,7 @@ use rokc_ast::{
 };
 use rokc_core::Visibility;
 use rokc_diagnostic::{ErrorKind, RokDiagnostic, Severity, Span};
-use rokc_hir::walk::{AstVisitor, walk_expr, walk_fn, walk_item, walk_stmt};
+use rokc_hir::walk::{AstVisitor, walk_fn, walk_item, walk_stmt};
 use rokc_hir::{HirExprKind, HirTy};
 use rokc_interface::{CompileResult, SourceFile};
 
@@ -137,39 +137,9 @@ pub const LINTS: &[Lint] = &[
         since: "0.1.6",
     },
     Lint {
-        name: "keyword_idents",
-        default: Level::Warn,
-        desc: "a name spelled `macro`, `defer`, `dyn`, `move`, `gen` or `do`, keywords from 0.2.0: write `r#name`",
-        since: "0.1.6",
-    },
-    Lint {
-        name: "zero_prefixed_literal",
-        default: Level::Warn,
-        desc: "a decimal literal with a leading zero (`0755` is 755): write `0o755` or `755`",
-        since: "0.1.6",
-    },
-    Lint {
-        name: "try_coalesce_precedence",
-        default: Level::Warn,
-        desc: "`try? f() ?? d`, which is `try? (f() ?? d)`: write the parentheses",
-        since: "0.1.6",
-    },
-    Lint {
-        name: "trailing_closure_operator",
-        default: Level::Warn,
-        desc: "an operator starting the line after a statement's trailing-closure call, which it continues",
-        since: "0.1.6",
-    },
-    Lint {
         name: "fstring_g_precision",
         default: Level::Warn,
         desc: "`{x:.3g}`, which prints like `{x:.3}` until `g` becomes the general format in 0.2.0",
-        since: "0.1.6",
-    },
-    Lint {
-        name: "trailing_closure_return",
-        default: Level::Warn,
-        desc: "a bare `return` in a statement's trailing closure: it leaves the closure, not the function",
         since: "0.1.6",
     },
     warn_since(
@@ -253,7 +223,13 @@ pub const LINTS: &[Lint] = &[
 /// Names of lints that are gone (most became errors). Naming one in
 /// `#[allow/warn/deny]`, `-A/-W/-D` or `rok.rokon` `lints` is accepted
 /// and does nothing, so old level settings keep building.
-pub const REMOVED_LINTS: &[&str] = &[];
+pub const REMOVED_LINTS: &[&str] = &[
+    "keyword_idents",
+    "zero_prefixed_literal",
+    "try_coalesce_precedence",
+    "trailing_closure_operator",
+    "trailing_closure_return",
+];
 
 /// A lint added in 0.1.6.
 const fn warn_since(name: &'static str, desc: &'static str) -> Lint {
@@ -1670,46 +1646,6 @@ impl<'a> Cx<'a> {
         }
     }
 
-    /// `trailing_closure_return`: a bare `return;` in the trailing closure
-    /// of a statement's call (`each(xs) |x| { .. }`) ends only that call of
-    /// the closure.
-    fn closure_returns(&mut self, e: &Expr) {
-        let (ExprKind::Call {
-            trailing_closure: Some(c),
-            ..
-        }
-        | ExprKind::MethodCall {
-            trailing_closure: Some(c),
-            ..
-        }) = &e.kind
-        else {
-            return;
-        };
-        let ExprKind::Closure { body, .. } = &c.kind else {
-            return;
-        };
-        if !matches!(body.kind, ExprKind::Block(_)) {
-            return;
-        }
-        let mut v = Returns::default();
-        walk_expr(&mut v, body);
-        for at in v.found {
-            self.findings.push(Finding {
-                lint: "trailing_closure_return",
-                span: at,
-                msg: "this `return` leaves only the trailing closure, not the function around it"
-                    .to_owned(),
-                notes: vec![
-                    "help: to leave the function, write a `for` loop instead of the call; \
-                     to end only this call of the closure, add `#[allow(trailing_closure_return)]`"
-                        .to_owned(),
-                ],
-                secondary: None,
-                base: None,
-            });
-        }
-    }
-
     /// `p` names a deprecated type, or one's item (`Old::new`).
     fn type_use(&mut self, p: &rokc_ast::Path) {
         if self.impl_head || p.span.is_dummy() || self.types.marked.is_empty() {
@@ -1904,41 +1840,7 @@ fn pat_names(p: &Pattern, out: &mut HashSet<String>) {
     }
 }
 
-/// The bare `return;` statements of a body, outside nested closures and
-/// coroutine blocks.
-#[derive(Default)]
-struct Returns {
-    depth: u32,
-    found: Vec<Span>,
-}
-
-impl AstVisitor for Returns {
-    fn stmt(&mut self, s: &Stmt) {
-        if self.depth == 0 && matches!(s.kind, StmtKind::Return(None)) {
-            self.found.push(s.span);
-        }
-    }
-
-    fn enter_body(&mut self) {
-        self.depth += 1;
-    }
-
-    fn leave_body(&mut self) {
-        self.depth -= 1;
-    }
-}
-
 impl AstVisitor for Cx<'_> {
-    fn block(&mut self, b: &Block) {
-        let stmts = b.stmts.iter().filter_map(|s| match &s.kind {
-            StmtKind::Expr(e) | StmtKind::Trailing(e) => Some(e),
-            _ => None,
-        });
-        for e in stmts.chain(b.trailing.as_deref()) {
-            self.closure_returns(e);
-        }
-    }
-
     fn push_scope(&mut self) {
         self.scopes.push(Scope {
             bindings: Vec::new(),

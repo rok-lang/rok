@@ -15,7 +15,7 @@ fn area(r: f64) -> f64 {
     FACTOR * r * r
 }
 
-fn gen<const N: usize>() -> usize {
+fn make<const N: usize>() -> usize {
     const K: usize = 2;
     let a = [0i32; K];
     N * K + a.len()
@@ -25,7 +25,7 @@ fn main() -> i32 {
     const A: i64 = sq(4);
     const B: i64 = A + 1;
     let f = || B * 2;
-    println(f"{area(2.0)} {A} {B} {f()} {gen::<3>()}");
+    println(f"{area(2.0)} {A} {B} {f()} {make::<3>()}");
     {
         const A: i64 = 7;
         println(f"{A}");

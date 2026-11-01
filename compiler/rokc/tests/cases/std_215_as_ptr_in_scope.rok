@@ -44,7 +44,7 @@ fn check(name: str, want: str, got: str) {
     if want != got { println(f"FAIL {name}: {got}"); } else { println(f"ok {name}"); }
 }
 
-yield fn gen(tag: str) -> str {
+yield fn make(tag: str) -> str {
     let s = mk(tag, 7);
     let n = s.len();
     let p = s.as_ptr();
@@ -124,7 +124,7 @@ fn main() {
     }
     {
         let out = "";
-        for x in gen("F") { out = x; }
+        for x in make("F") { out = x; }
         check("F", mk("F", 7), out);
     }
     {

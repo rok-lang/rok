@@ -1,16 +1,14 @@
 // spec: §3.9.5 §3.14.1
 // Small slips, each with the fix: a `;` that drops the return value,
-// `{}` for an empty dict, `try?` reaching over `??`, throwing a `str`
-// or a type that is not an `Error`.
-// expect-error: 18:5: function `add` returns `i32`, but the `;` after its last expression drops the value
+// `{}` for an empty dict, throwing a `str` or a type that is not an
+// `Error`.
+// expect-error: 16:5: function `add` returns `i32`, but the `;` after its last expression drops the value
 // expect-error: help: remove the `;` to return it: `a + b`
-// expect-error: 20:25: mismatched types: `let d` expects `Dict<str, i32>`, found `()`
+// expect-error: 18:25: mismatched types: `let d` expects `Dict<str, i32>`, found `()`
 // expect-error: help: `{}` is an empty block, not an empty `Dict`; write `Dict::new()`
-// expect-error: 21:14: `??` needs an optional left operand (`T | none`), found `i32`
-// expect-error: help: `try?` covers everything after it; write `(try? "x".parse::<i32>()) ?? 0`
-// expect-error: 23:16: `str` can't be thrown: it does not implement `Error`
+// expect-error: 20:16: `str` can't be thrown: it does not implement `Error`
 // expect-error: help: throw a `ValueError`: `throw ValueError { msg: "negative" };`
-// expect-error: 27:24: `Oops` can't be thrown: it does not implement `Error`
+// expect-error: 24:24: `Oops` can't be thrown: it does not implement `Error`
 // expect-error: help: add `impl Error for Oops {}` (it needs `Display` and `Debug`), or throw a `ValueError`: `throw ValueError { msg: .. };`
 // forbid-error: is not covered by the enclosing function
 // forbid-error: can finish without returning
@@ -18,7 +16,6 @@ fn add(a: i32, b: i32) -> i32 {
     a + b;
 }
 let d: Dict<str, i32> = {};
-let n = try? "x".parse::<i32>() ?? 0;
 fn f(n: i32) throws -> i32 {
     if n < 0 { throw "negative"; }
     n

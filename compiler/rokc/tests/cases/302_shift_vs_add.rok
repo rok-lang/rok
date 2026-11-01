@@ -1,8 +1,8 @@
 // spec: 003.02.3-precedence-shift-vs-add
 // expect-exit: 0
-// expect-stdout: 17
+// expect-stdout: 24
 
-// `+` binds tighter than `<<`: `1 + 2 << 3` is `1 + (2 << 3)`.
+// `+` binds tighter than `<<`, as in Rust: `1 + 2 << 3` is `(1 + 2) << 3`.
 fn main() -> i32 {
     let r = 1 + 2 << 3;
     println(f"{r}");
