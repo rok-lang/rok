@@ -2575,6 +2575,7 @@ fn finish<'a>(
         *env.auto_memo.borrow_mut() = None;
     });
     super::frame_ptr::check(&env, &functions);
+    super::views::check(&env, &functions);
     let summaries = rokc_diagnostic::time("hir handoff check", || {
         *env.auto_memo.borrow_mut() = Some(HashMap::new());
         let s = super::handoff::check(&env, &functions, &input.summaries, lib_pkg.is_some());

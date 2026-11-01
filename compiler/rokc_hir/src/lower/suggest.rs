@@ -159,6 +159,9 @@ pub(super) fn no_method_help(
     let recv_src = ctx
         .src(recv.span)
         .filter(|_| recv.span.file == span.file && recv.span.end <= span.end);
+    if let Some(h) = read_only_view_help(ctx, ty, method, recv_src) {
+        return h;
+    }
     // `xs.map(..)` on a List: an iterator method.
     if ITER_METHODS.contains(&method) && has("iter") {
         let r = recv_src.unwrap_or("xs");
@@ -275,6 +278,48 @@ fn path_twin_help(ctx: &LowerCtx<'_>, full: &str, name: &str, display: &str, spa
     }
     ctx.help_last(Some(help));
     true
+}
+
+/// Methods a `SliceMut` has and the read-only `Slice` lacks.
+const VIEW_WRITES: &[&str] = &[
+    "index_set",
+    "fill",
+    "swap",
+    "reverse",
+    "sort",
+    "sort_by",
+    "sort_by_key",
+    "copy_from_slice",
+];
+
+/// `xs[a:b].sort()` / `s[i] = x` on a `Slice`: name the writable view.
+fn read_only_view_help(
+    ctx: &LowerCtx<'_>,
+    ty: &HirTy,
+    method: &str,
+    recv_src: Option<&str>,
+) -> Option<String> {
+    let HirTy::Struct(id) = ty else {
+        return None;
+    };
+    let def = ctx.struct_def(*id);
+    if expr::enum_base_name(&def.name) != "rok::core::collections::slice::Slice"
+        || !VIEW_WRITES.contains(&method)
+    {
+        return None;
+    }
+    let elem = def
+        .generic_args
+        .first()
+        .map_or_else(|| "T".to_owned(), |t| ctx.ty_name(t));
+    let src = recv_src
+        .filter(|s| s.contains('[') && s.ends_with(']'))
+        .unwrap_or("xs[a:b]");
+    Some(format!(
+        "`{}` is a read-only view; a view that writes the list is a `SliceMut<{elem}>`: \
+         `let s: SliceMut<{elem}> = {src};` (stdlib 2.9.7a)",
+        ctx.ty_name(ty)
+    ))
 }
 
 /// `name` is another language's word for `target` (`length` for `len`).

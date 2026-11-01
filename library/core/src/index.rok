@@ -160,6 +160,16 @@ pub const fn slice_range(start: isize | none, stop: isize | none, step: isize, l
     (lo as usize)..(hi as usize)
 }
 
+/// `xs[a:b]` (or `xs` alone, `r` = `none`) where a `SliceMut<T>` is
+/// expected: a writable view of the list (stdlib 2.9.7).
+#[doc(hidden)]
+#[track_caller]
+#[lang("slice_mut_fn")]
+pub(pkg) const fn slice_mut<T>(xs: List<T>, r: Range<usize> | none) -> SliceMut<T> {
+    let r = r ?? (0..xs.len());
+    rok::core::collections::slice::view_mut_of(xs, r)
+}
+
 /// `i` (`n + i` when negative) clamped to `lo..=hi`.
 const fn py_bound(i: isize, n: isize, lo: isize, hi: isize) -> isize {
     let x = if i < 0 { i + n } else { i };

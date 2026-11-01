@@ -1,0 +1,34 @@
+// expect-exit: 0
+// expect-stdout:
+// 2 [0, 7, 7, 0]
+// 4 [1, 1, 1, 1]
+// [5, 5, 7, 0]
+
+// Stdlib 2.9.7a: a `SliceMut` may be an `async fn`'s argument and live
+// across an `await`; a resize while it waits is caught by the run-time
+// check, not rejected.
+async fn fill_later(s: SliceMut<u8>, b: u8) -> usize {
+    await task::yield_now();
+    s.fill(b);
+    s.len()
+}
+
+async fn twice(buf: List<u8>) -> usize {
+    let s: SliceMut<u8> = buf[0:2];
+    await task::yield_now();
+    s.fill(5);
+    s.len()
+}
+
+fn main() {
+    let buf: List<u8> = [0, 0, 0, 0];
+    let n = task::block_on(fill_later(buf[1:3], 7));
+    println(f"{n} {buf:?}");
+    let other: List<u8> = [0, 0, 0, 0];
+    let m = task::block_on(fill_later(other, 1));
+    println(f"{m} {other:?}");
+    task::block_on(twice(buf));
+    println(f"{buf:?}");
+}
+
+// spec: std 209-collections §2.9.7a / std 218-task

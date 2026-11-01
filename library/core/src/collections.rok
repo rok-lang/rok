@@ -24,4 +24,4 @@ pub use dict::{Dict, Entry, KeysIter, ValuesIter, EntriesIter};
 pub use set::Set;
 pub use ordered_dict::OrderedDict;
 pub use ordered_set::OrderedSet;
-pub use slice::{Slice, SliceIter};
+pub use slice::{Slice, SliceIter, SliceMut, SliceMutIter};
