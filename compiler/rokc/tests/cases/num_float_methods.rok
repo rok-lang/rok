@@ -25,8 +25,8 @@ fn main() {
     println(f"{(-0.0).abs()} {7.5.signum()} {(-7.5).signum()} {(-0.0).signum()} {0.0.signum()} {f64::NAN.signum().is_nan()}");
 
     let nan = f64::NAN;
-    let inf = f64::infinity();
-    println(f"{nan.is_nan()} {nan.is_finite()} {inf.is_infinite()} {inf.is_finite()} {f64::neg_infinity().is_sign_negative()} {nan == nan}");
+    let inf = f64::INFINITY;
+    println(f"{nan.is_nan()} {nan.is_finite()} {inf.is_infinite()} {inf.is_finite()} {f64::NEG_INFINITY.is_sign_negative()} {nan == nan}");
     println(f"{1.0.is_finite()} {f64::MIN_POSITIVE.is_normal()} {(f64::MIN_POSITIVE / 2.0).is_normal()} {(-0.0).is_sign_negative()} {0.0.is_sign_negative()}");
 
     println(f"{1.0.to_bits()} {1.0f32.to_bits()} {f64::from_bits(4611686018427387904)} {f32::from_bits(3221225472)}");

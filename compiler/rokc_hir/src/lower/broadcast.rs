@@ -344,11 +344,12 @@ pub(super) fn lower(ctx: &mut LowerCtx<'_>, e: &Expr) -> HirExpr {
     let_of(&mut stmts, &n, method(path(&many[0]), "len", Vec::new()));
     for other in &many[1..] {
         let check = ast(ExprKind::Call {
-            callee: Box::new(super::bignum::path_expr(
-                "rok::core::collections::broadcast",
+            callee: Box::new(ast(ExprKind::Path(super::expr::lang_fn_in(
+                "broadcast_len_fn",
+                "collections::broadcast",
                 "check_len",
                 span,
-            )),
+            )))),
             args: vec![
                 CallArg::Positional(method(path(other), "len", Vec::new())),
                 CallArg::Positional(path(&n)),

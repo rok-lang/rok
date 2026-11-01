@@ -13261,12 +13261,24 @@ pub(super) fn lang_slot(seg: &str) -> Option<&str> {
 /// item fills it. Not by name, so the hook need not be visible, and its
 /// `#[deprecated]` warns only about calls the user wrote.
 pub(super) fn lang_fn(module: &str, name: &str, span: rokc_diagnostic::Span) -> rokc_ast::Path {
-    let slot = format!("{LANG_FN}{name}_fn");
+    lang_fn_in(&format!("{name}_fn"), module, name, span)
+}
+
+/// `lang_fn` through slot `slot`; `module` may be nested (`a::b`).
+pub(super) fn lang_fn_in(
+    slot: &str,
+    module: &str,
+    name: &str,
+    span: rokc_diagnostic::Span,
+) -> rokc_ast::Path {
+    let slot = format!("{LANG_FN}{slot}");
     rokc_ast::Path {
-        segments: [slot.as_str(), "rok", "core", module, name]
-            .iter()
+        segments: [slot.as_str(), "rok", "core"]
+            .into_iter()
+            .chain(module.split("::"))
+            .chain([name])
             .map(|n| rokc_ast::PathSegment {
-                name: (*n).to_owned(),
+                name: n.to_owned(),
                 generics: Vec::new(),
             })
             .collect(),

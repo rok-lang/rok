@@ -786,8 +786,8 @@ let p = P { x: m::shown() + m::hook() };
 println(f\"{p.get() + p.raw()}\");
 ";
 
-/// Completion leaves out `#[doc(hidden)]` items: the buffer's own and
-/// the library's compiler hooks.
+/// Completion leaves out `#[doc(hidden)]` items, and the library's
+/// `pub(pkg)` compiler hooks.
 #[test]
 fn completion_skips_doc_hidden() {
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -851,8 +851,9 @@ fn completion_skips_doc_hidden() {
     let has = |id: u32, name: &str| labels(id).iter().any(|l| l == name);
     assert!(has(2, "shown") && !has(2, "hook"), "{:?}", labels(2));
     assert!(has(3, "get") && !has(3, "raw"), "{:?}", labels(3));
-    assert!(has(4, "index_oob"), "{:?}", labels(4));
+    assert!(has(4, "Index"), "{:?}", labels(4));
     for hook in [
+        "index_oob",
         "spread_misfit",
         "spread_len",
         "index_from_end",

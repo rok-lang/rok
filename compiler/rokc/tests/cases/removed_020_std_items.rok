@@ -1,0 +1,48 @@
+// expect-error: no associated function `sec` on `rok::core::task::time::Duration`
+// expect-error: no associated function `by` on `rok::core::collections::heap::BinaryHeap
+// expect-error: no associated function `nan` on `f64`
+// expect-error: no associated function `infinity` on `f64`
+// expect-error: no associated function `neg_infinity` on `f32`
+// expect-error: no associated function `epsilon` on `f64`
+// expect-error: no method `powf` found for type `f64`
+// expect-error: no method `mtime`
+// expect-error: no method `ctime`
+// expect-error: `process::kill`
+// expect-error: `process::signal`
+// expect-error: no method `signal` found for type `Child`
+// expect-error: no associated function `from_bytes_with_nul_unchecked`
+// expect-error: `env::try_set_var`
+// expect-error: field `width` of `FormatSpec` is private to module `rok::core::fmt` (read it with `.width()`)
+// expect-error: no method `pad_zero`
+// expect-error: call to unsafe function `set_var` outside an `unsafe` block
+// expect-error: call to unsafe function `from_ptr` outside an `unsafe` block
+
+// Items 0.2.0 removed give a plain error; `set_var`, `remove_var`,
+// and `CStr::from_ptr` are `unsafe fn`s.
+use rok::bare::ffi::CStr;
+use rok::bare::ptr::ConstPtr;
+use rok::std::env;
+use rok::std::fs;
+use rok::std::process;
+
+fn main() throws (rok::std::io::IoError) {
+    let a = Duration::sec(1);
+    let b: BinaryHeap<i32> = BinaryHeap::by(|x: i32, y: i32| x < y);
+    let c = f64::nan() + f64::infinity() + f64::epsilon();
+    let d = f32::neg_infinity();
+    let e = 2.0.powf(2.0);
+    let m = try fs::metadata(".");
+    let t = m.mtime() + m.ctime();
+    try process::kill(1, 9);
+    try process::signal(10, || {});
+    let child = try process::Command::new("true").spawn();
+    try child.signal(9);
+    let s = CStr::from_bytes_with_nul_unchecked("a\0".as_bytes());
+    unsafe { try env::try_set_var("A", "1"); }
+    let spec = try! fmt::FormatSpec::parse("4");
+    let w = spec.width;
+    let z = Formatter::new().pad_zero();
+    try env::set_var("A", "1");
+    let q = CStr::from_ptr(ConstPtr::<c_char>::dangling());
+    let _ = (a, b, c, d, e, t, s, w, z, q);
+}

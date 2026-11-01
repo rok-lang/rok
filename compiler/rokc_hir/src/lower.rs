@@ -4806,11 +4806,20 @@ impl<'a> LowerCtx<'a> {
             }
         }
         if let Some(def_module) = self.field_hidden(sid, field) {
+            // A getter of the same name is what to write instead.
+            let getter = self
+                .env
+                .methods_on(&HirTy::Struct(sid), field)
+                .is_some_and(|m| !m.is_empty());
+            let fix = if getter {
+                format!("read it with `.{field}()`")
+            } else {
+                "spec 5.6 - add `pub` to the field to expose it".to_owned()
+            };
             self.emit_error(
                 rokc_diagnostic::ErrorKind::Module,
                 format!(
-                    "field `{field}` of `{}` is private to module `{}` (spec 5.6 - add \
-                     `pub` to the field to expose it)",
+                    "field `{field}` of `{}` is private to module `{}` ({fix})",
                     self.ty_name(&HirTy::Struct(sid)),
                     module_display(&def_module)
                 ),

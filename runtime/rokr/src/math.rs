@@ -102,6 +102,23 @@ libm! {
     rok_f32_mul_add = fmaf(x, y, z): f32;
 }
 
+// `llvm.powi`, which `core` cannot reach: compiler-builtins' functions
+// that it lowers to (repeated multiplication, no libm call).
+unsafe extern "C" {
+    fn __powidf2(a: f64, b: i32) -> f64;
+    fn __powisf2(a: f32, b: i32) -> f32;
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn rok_f64_powi(x: f64, n: i32) -> f64 {
+    // SAFETY: pure on its arguments.
+    unsafe { __powidf2(x, n) }
+}
+#[unsafe(no_mangle)]
+pub extern "C" fn rok_f32_powi(x: f32, n: i32) -> f32 {
+    // SAFETY: pure on its arguments.
+    unsafe { __powisf2(x, n) }
+}
+
 // Through `hypot`: exact in `f64`, so rounding it gives `hypotf`'s
 // result (the UCRT has only `_hypotf`).
 #[unsafe(no_mangle)]

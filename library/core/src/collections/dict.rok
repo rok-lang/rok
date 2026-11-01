@@ -493,7 +493,7 @@ impl<K: Hash, V> Index<K> for Dict<K, V> {
 /// of line, as `index_oob`.
 #[track_caller]
 const fn key_missing<K, V>(k: K) -> ! {
-    panic(f"key {__shown::<K>(k)} not found; use `d.get(k)` to get `{V::type_name()} | none`")
+    panic(f"key {rok::core::fmt::shown::<K>(k)} not found; use `d.get(k)` to get `{V::type_name()} | none`")
 }
 
 /// `d[k] = v` inserts or replaces.

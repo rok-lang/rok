@@ -101,10 +101,10 @@ fn main() throws (IoError) {
     try out.flush();
     try io::stderr().write_all([104u8, 105u8, 10u8]);
 
-    unsafe { env::set_var("ROK_BYTES_IO", "v"); }
+    unsafe { try! env::set_var("ROK_BYTES_IO", "v"); }
     let v = env::var_os("ROK_BYTES_IO");
     let present = if let x: env::RawStr = v { (try! x.to_str()) == "v" } else { false };
-    unsafe { env::remove_var("ROK_BYTES_IO"); }
+    unsafe { try! env::remove_var("ROK_BYTES_IO"); }
     let gone = if env::var_os("ROK_BYTES_IO") is none { "none" } else { "set" };
     println(f"env: {present} {gone}");
 

@@ -293,6 +293,7 @@ extern "rok" {
     fn rok_f64_acosh(x: f64) -> f64;
     fn rok_f64_atanh(x: f64) -> f64;
     fn rok_f64_pow(x: f64, y: f64) -> f64;
+    fn rok_f64_powi(x: f64, n: i32) -> f64;
     fn rok_f64_atan2(x: f64, y: f64) -> f64;
     fn rok_f64_hypot(x: f64, y: f64) -> f64;
     fn rok_f64_copysign(x: f64, y: f64) -> f64;
@@ -325,6 +326,7 @@ extern "rok" {
     fn rok_f32_acosh(x: f32) -> f32;
     fn rok_f32_atanh(x: f32) -> f32;
     fn rok_f32_pow(x: f32, y: f32) -> f32;
+    fn rok_f32_powi(x: f32, n: i32) -> f32;
     fn rok_f32_atan2(x: f32, y: f32) -> f32;
     fn rok_f32_hypot(x: f32, y: f32) -> f32;
     fn rok_f32_copysign(x: f32, y: f32) -> f32;

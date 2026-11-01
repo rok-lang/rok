@@ -1,0 +1,30 @@
+// spec: std 107-ffi §1.7.2
+// expect-exit: 0
+// expect-stdout:
+// buf: hi 2
+// empty: 0
+// no nul: data provided does not contain a nul
+// InteriorNul { position: 1 } at 1
+// NotNulTerminated: data provided is not nul terminated
+
+// `from_bytes_until_nul` takes the bytes before the first NUL (a fixed C
+// buffer with trailing garbage); `FromBytesWithNulError` says which way
+// the bytes are not one C string.
+use rok::bare::ffi::{CStr, FromBytesUntilNulError, FromBytesWithNulError};
+
+fn main() {
+    let buf = try! CStr::from_bytes_until_nul("hi\0xyz\0".as_bytes());
+    println(f"buf: {try! buf.to_str()} {buf.len()}");
+    let e = try! CStr::from_bytes_until_nul("\0".as_bytes());
+    println(f"empty: {e.len()}");
+    try CStr::from_bytes_until_nul("abc".as_bytes()) catch e: FromBytesUntilNulError {
+        println(f"no nul: {e}");
+    };
+    try CStr::from_bytes_with_nul("h\0i\0".as_bytes()) catch e: FromBytesWithNulError {
+        match e {
+            FromBytesWithNulError::InteriorNul { position } => println(f"{e:?} at {position}"),
+            FromBytesWithNulError::NotNulTerminated => println("unreachable"),
+        }
+    };
+    try CStr::from_bytes_with_nul("hi".as_bytes()) catch e: FromBytesWithNulError { println(f"{e:?}: {e}"); };
+}

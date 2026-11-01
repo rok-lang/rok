@@ -15,7 +15,7 @@ use rok::std::path::Path;
 use rok::std::process;
 
 fn main() {
-    unsafe { env::set_var("ROK_ENV_EXAMPLE_LEVEL", "debug"); }
+    unsafe { try! env::set_var("ROK_ENV_EXAMPLE_LEVEL", "debug"); }
     let log_level = (try? env::var("ROK_ENV_EXAMPLE_UNSET")) ?? "info";
     let set_level = (try? env::var("ROK_ENV_EXAMPLE_LEVEL")) ?? "info";
     println(f"log level: {log_level} {set_level}");

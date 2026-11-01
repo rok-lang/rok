@@ -27,7 +27,7 @@ gDBrha3fDQ==
 ";
 
 fn check(label: str, path: Path) {
-    unsafe { env::set_var("SSL_CERT_FILE", path.as_str()); }
+    unsafe { try! env::set_var("SSL_CERT_FILE", path.as_str()); }
     let c = try ClientConfig::new() catch e {
         println(f"{label}: {e.kind():?}");
         return;

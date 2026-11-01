@@ -2,19 +2,12 @@
 // spec: §6.2.7 §6.2.14
 // needs: posix-fs
 // expect-exit: 0
-// expect-lint: 40:57 use of deprecated method `Metadata::mtime`
-// expect-lint: 40:82 use of deprecated method `Metadata::mtime_nanos`
-// expect-lint: 41:76 use of deprecated method `Metadata::atime`
-// expect-lint: 42:88 use of deprecated method `Metadata::ctime`
-// expect-warning: = note: use `modified()`
-// expect-warning: = note: use `accessed()`
-// expect-warning: = note: use `status_changed()` (last status change) or `created()`
 // expect-stdout:
 // File Dir true false
 // entry: File true
-// modified = mtime: true
-// accessed = atime: true
-// status_changed = ctime: true
+// modified: true
+// accessed: true
+// status_changed: true
 // created: true
 
 // `file_type`, `changed` and `created` replace the raw Unix times.
@@ -37,9 +30,9 @@ fn main() throws (IoError) {
         println(f"entry: {e.file_type():?} {e.file_type() == e.metadata().file_type()}");
     }
     let t = try m.modified();
-    println(f"modified = mtime: {try! t.unix_nanos() == m.mtime() * 1000000000 + m.mtime_nanos()}");
-    println(f"accessed = atime: {try! (try m.accessed()).unix_seconds() == m.atime()}");
-    println(f"status_changed = ctime: {try! (try m.status_changed()).unix_seconds() == m.ctime()}");
+    println(f"modified: {try! t.unix_seconds() > 0}");
+    println(f"accessed: {try! (try m.accessed()).unix_seconds() > 0}");
+    println(f"status_changed: {try! (try m.status_changed()).unix_seconds() > 0}");
     // Some file systems keep no creation time.
     let born = try m.created() catch e {
         if e.kind() != IoErrorKind::Unsupported { throw e; }

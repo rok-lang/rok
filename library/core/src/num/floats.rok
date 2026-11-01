@@ -32,13 +32,6 @@ impl f64 {
     pub const LOG2_E: f64 = 1.44269504088896340735992468100189214;
     pub const LOG10_E: f64 = 0.434294481903251827651128918916605082;
 
-    #[deprecated(since = "0.1.6", note = "use `f64::NAN`")]
-    pub const fn nan() -> f64 { f64::NAN }
-    pub const fn infinity() -> f64 { f64::INFINITY }
-    pub const fn neg_infinity() -> f64 { f64::NEG_INFINITY }
-    /// The gap between `1.0` and the next f64 (`EPSILON`).
-    pub const fn epsilon() -> f64 { f64::EPSILON }
-
     /// The IEEE 754 bit pattern.
     pub const fn to_bits(self) -> u64 { unsafe { F64Bits { f: self }.u } }
     pub const fn from_bits(bits: u64) -> f64 { unsafe { F64Bits { u: bits }.f } }
@@ -114,9 +107,9 @@ impl f64 {
     pub const fn min(self, other: f64) -> f64 { unsafe { rok_f64_min(self, other) } }
     /// The larger; a NaN operand loses to a number.
     pub const fn max(self, other: f64) -> f64 { unsafe { rok_f64_max(self, other) } }
-    #[deprecated(since = "0.1.6", note = "use `pow`, which is the same")]
-    pub fn powf(self, exp: f64) -> f64 { self.pow(exp) }
-    pub fn powi(self, n: i32) -> f64 { self.pow(n as f64) }
+    /// `self` to an integer power, by repeated multiplication: may round
+    /// differently from `pow(n as f64)`.
+    pub fn powi(self, n: i32) -> f64 { unsafe { rok_f64_powi(self, n) } }
     /// `self * a + b` with one rounding.
     pub const fn mul_add(self, a: f64, b: f64) -> f64 { unsafe { rok_f64_mul_add(self, a, b) } }
     /// `self` limited to `lo..=hi`; NaN stays NaN. Panics if `lo > hi`.
@@ -199,13 +192,6 @@ impl f32 {
     pub const LOG2_E: f32 = 1.44269504088896340735992468100189214;
     pub const LOG10_E: f32 = 0.434294481903251827651128918916605082;
 
-    #[deprecated(since = "0.1.6", note = "use `f32::NAN`")]
-    pub const fn nan() -> f32 { f32::NAN }
-    pub const fn infinity() -> f32 { f32::INFINITY }
-    pub const fn neg_infinity() -> f32 { f32::NEG_INFINITY }
-    /// The gap between `1.0` and the next f32 (`EPSILON`).
-    pub const fn epsilon() -> f32 { f32::EPSILON }
-
     /// The IEEE 754 bit pattern.
     pub const fn to_bits(self) -> u32 { unsafe { F32Bits { f: self }.u } }
     pub const fn from_bits(bits: u32) -> f32 { unsafe { F32Bits { u: bits }.f } }
@@ -281,9 +267,9 @@ impl f32 {
     pub const fn min(self, other: f32) -> f32 { unsafe { rok_f32_min(self, other) } }
     /// The larger; a NaN operand loses to a number.
     pub const fn max(self, other: f32) -> f32 { unsafe { rok_f32_max(self, other) } }
-    #[deprecated(since = "0.1.6", note = "use `pow`, which is the same")]
-    pub fn powf(self, exp: f32) -> f32 { self.pow(exp) }
-    pub fn powi(self, n: i32) -> f32 { self.pow(n as f32) }
+    /// `self` to an integer power, by repeated multiplication: may round
+    /// differently from `pow(n as f32)`.
+    pub fn powi(self, n: i32) -> f32 { unsafe { rok_f32_powi(self, n) } }
     /// `self * a + b` with one rounding.
     pub const fn mul_add(self, a: f32, b: f32) -> f32 { unsafe { rok_f32_mul_add(self, a, b) } }
     /// `self` limited to `lo..=hi`; NaN stays NaN. Panics if `lo > hi`.

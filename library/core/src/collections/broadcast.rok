@@ -10,7 +10,8 @@
 /// Lengths of two broadcast operands agree (each collection is checked
 /// against the first).
 #[track_caller]
-pub const fn check_len(len: usize, want: usize) {
+#[lang("broadcast_len_fn")]
+pub(pkg) const fn check_len(len: usize, want: usize) {
     if len != want {
         panic(f"broadcast over lengths {want} and {len}");
     }
