@@ -24,13 +24,13 @@
 // lock: true
 // exists after remove: false
 
-// Spec 301: files (`File`, `OpenOptions`, seek, `using` closes), the
+// Spec 301: files (`File`'s open functions, seek, `using` closes), the
 // convenience functions over `Dir::root()` (write / write_atomic /
 // copy / rename / walk / remove_dir_all), and a confined `Dir`.
 
 use rok::core::marker::share;
 use rok::std::fs;
-use rok::std::fs::{Dir, File, OpenOptions, Permissions};
+use rok::std::fs::{Dir, File, Permissions};
 use rok::core::io::SeekFrom;
 use rok::std::os::unix::fs::PermissionsExt;
 use rok::core::io::{IoError, IoErrorKind};
@@ -50,7 +50,7 @@ fn main() throws (IoError) {
     let m = try fs::metadata(f);
     println(f"len={m.len()} file={m.is_file()} dir={m.is_dir()}");
 
-    using h = try File::open_with(f, OpenOptions::new().append(true)) {
+    using h = try File::open(f, Append) {
         try h.write_all(" more");
     }
     println(try fs::read_to_str(f));
@@ -65,24 +65,23 @@ fn main() throws (IoError) {
     println(try closed.read_to_str() catch e { f"{e.kind():?}" });
 
     let c = base / "a" / "b" / "c.txt";
-    let perm: Permissions = PermissionsExt::from_mode(0o640u32);
+    let perm = Permissions::from_mode(0o640u32);
     using pf = try File::open(f) { try pf.set_permissions(perm); }
     let copied = try fs::copy(f, c);
-    println(f"copied {copied}, mode kept: {PermissionsExt::mode((try fs::metadata(c)).permissions()) == 0o640u32}");
+    println(f"copied {copied}, mode kept: {(try fs::metadata(c)).permissions().mode() == 0o640u32}");
     try fs::rename(c, base / "a" / "b" / "d.txt");
     try fs::write(base / "z.bin", [1u8, 2u8, 255u8]);
     let bytes = try fs::read(base / "z.bin");
     println(f"bin {bytes.len()} {bytes[2]}");
 
-    for e in fs::walk(base) {
-        let e = try e.get();
+    try for e in fs::walk(base) {
         let rel = e.path().strip_prefix(base) ?? Path::empty();
         println(f"walk [{rel}] dir={e.is_dir()}");
     }
 
     // read_dir order is the OS's: report it sorted.
     let names: List<str> = List::new();
-    for e in try fs::read_dir(base / "a") { names.push((try e.get()).file_name()); }
+    try for e in fs::read_dir(base / "a") { names.push(e.file_name()); }
     if names.len() == 2 && names[0] != "b" { names = [names[1], names[0]]; }
     println(f"read_dir: {names[0]} {names[1]}");
 
@@ -91,7 +90,7 @@ fn main() throws (IoError) {
     let opened = 0;
     while opened < 20000 {
         using rd = try fs::read_dir(base / "a") {
-            for e in rd { break; }
+            try for e in rd { break; }
         }
         opened += 1;
     }

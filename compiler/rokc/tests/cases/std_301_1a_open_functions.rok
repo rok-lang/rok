@@ -1,0 +1,91 @@
+// spec: std 301-fs §3.1.1a
+// needs: posix-fs
+// needs: threads
+// expect-exit: 0
+// expect-stdout:
+// create: 3 [new]
+// create read: [rw]
+// create_new: AlreadyExists
+// open_or_create: [Xew]
+// append: [ab] [abc]
+// open: NotFound
+// open WriteOnly: [Zew]
+// open ReadAppend: [Zew] [Zew!]
+// directory: IsADirectory is a directory: open it with Dir::open_dir
+// access: ReadAppend true
+// readonly: true false
+// async: [ab!] [ab!?]
+
+// One function per way of opening (stdlib 301.1.1a): `open` takes an
+// `Access`, the create family takes `CreateFlags`; each row of the
+// access x disposition table once.
+use rok::std::fs;
+use rok::std::fs::{Access, CreateFlags, Dir, File, Permissions};
+use rok::core::io::{IoError, SeekFrom};
+use rok::std::env;
+use rok::std::process;
+
+/// What opening throws, as `Kind message` (`p` cut from the message).
+fn refused(f: fn() throws (IoError) -> File, p: str) -> str {
+    let file = try f() catch e { return f"{e.kind():?} {e.message().replace(p + ": ", "")}".trim(); };
+    try! file.close();
+    "opened"
+}
+
+async fn twins(d: Dir, base: str) throws (IoError) -> str {
+    using f = try await File::append_async(base + "/s") { try f.write_all("ab!"); }
+    let one = try fs::read_to_str(base + "/s");
+    using f = try await d.open_async("s", Access::Append) { try f.write_all("?"); }
+    f"[{one}] [{try fs::read_to_str(base + "/s")}]"
+}
+
+fn main() throws (IoError) {
+    let base = env::temp_dir() / f"rok_open_fns_{process::id()}";
+    try fs::remove_dir_all(base) catch _ {};
+    try fs::create_dir(base);
+    let d = try Dir::root().open_dir(base);
+
+    try fs::write(base / "a", "old contents");
+    using f = try d.create("a") { try f.write_all("new"); }
+    println(f"create: {(try fs::metadata(base / "a")).len()} [{try fs::read_to_str(base / "a")}]");
+    using f = try File::create(base / "b", CreateFlags { read: true }) {
+        try f.write_all("rw");
+        try f.seek(SeekFrom::Start(0u64));
+        println(f"create read: [{try f.read_to_str()}]");
+    }
+
+    println(f"create_new: {refused(|| try File::create_new(base / "a"), "-").split(" ").next() ?? ""}");
+    using f = try d.open_or_create("a") { try f.write_all("X"); }
+    println(f"open_or_create: [{try fs::read_to_str(base / "a")}]");
+
+    using f = try File::append(base / "c") { try f.write_all("ab"); }
+    let first = try fs::read_to_str(base / "c");
+    using f = try d.append("c") { try f.write_all("c"); }
+    println(f"append: [{first}] [{try fs::read_to_str(base / "c")}]");
+
+    println(f"open: {refused(|| try File::open(base / "nope", Access::WriteOnly), "-").split(" ").next() ?? ""}");
+    using f = try File::open(base / "a", Access::WriteOnly) { try f.write_all("Z"); }
+    println(f"open WriteOnly: [{try fs::read_to_str(base / "a")}]");
+    using f = try d.open("a", Access::ReadAppend) {
+        let before = try f.read_to_str();
+        try f.write_all("!");
+        println(f"open ReadAppend: [{before}] [{try fs::read_to_str(base / "a")}]");
+    }
+
+    println(f"directory: {refused(|| try File::open(base), base.as_str())}");
+    println(f"access: {Access::ReadAppend:?} {Access::ReadOnly == Access::ReadOnly}");
+
+    let ro = Permissions::default();
+    ro.set_readonly(true);
+    using f = try File::create_new(base / "r", CreateFlags { permissions: ro }) {}
+    let was = (try fs::metadata(base / "r")).permissions().readonly();
+    let rw = ro;
+    rw.set_readonly(false);
+    try fs::set_permissions(base / "r", rw);
+    println(f"readonly: {was} {(try fs::metadata(base / "r")).permissions().readonly()}");
+
+    println(f"async: {try task::try_block_on(twins(d, base.as_str()))}");
+
+    try d.close();
+    try fs::remove_dir_all(base);
+}

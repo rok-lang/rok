@@ -23,7 +23,7 @@ let f = try! File::open(p);
 try f.try_clone() catch e: IoError { println(f"try_clone: {e.kind():?}"); };
 try f.lock_exclusive() catch e: IoError { println(f"lock_exclusive: {e.kind():?}"); };
 try f.lock_shared() catch e: IoError { println(f"lock_shared: {e.kind():?}"); };
-try unsafe { f.mmap(3usize, 0u64) } catch e: IoError { println(f"mmap: {e.kind():?}"); };
+try unsafe { f.mmap(0u64, 3usize) } catch e: IoError { println(f"mmap: {e.kind():?}"); };
 try! f.close();
 try! fs::remove_file(p);
 // spec: std 301-fs §3.1.6

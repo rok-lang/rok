@@ -1,0 +1,107 @@
+// rok::std::os::windows::fs: the Windows side of the cross-platform fs
+// types (stdlib 301.6): the open functions' `os` records and
+// `CreateFile2` itself with its constants.
+
+use rok::core::io::IoError;
+use rok::std::fs::{Dir, File};
+use rok::std::path::AsPath;
+
+pub const FILE_SHARE_READ: u32 = 0x1u32;
+pub const FILE_SHARE_WRITE: u32 = 0x2u32;
+pub const FILE_SHARE_DELETE: u32 = 0x4u32;
+
+pub const GENERIC_READ: u32 = 0x80000000u32;
+pub const GENERIC_WRITE: u32 = 0x40000000u32;
+pub const FILE_READ_DATA: u32 = 0x1u32;
+pub const FILE_WRITE_DATA: u32 = 0x2u32;
+pub const FILE_APPEND_DATA: u32 = 0x4u32;
+pub const FILE_READ_ATTRIBUTES: u32 = 0x80u32;
+pub const FILE_WRITE_ATTRIBUTES: u32 = 0x100u32;
+pub const DELETE: u32 = 0x10000u32;
+pub const SYNCHRONIZE: u32 = 0x100000u32;
+
+pub const CREATE_NEW: u32 = 1u32;
+pub const CREATE_ALWAYS: u32 = 2u32;
+pub const OPEN_EXISTING: u32 = 3u32;
+pub const OPEN_ALWAYS: u32 = 4u32;
+pub const TRUNCATE_EXISTING: u32 = 5u32;
+
+pub const FILE_ATTRIBUTE_READONLY: u32 = 0x1u32;
+pub const FILE_ATTRIBUTE_HIDDEN: u32 = 0x2u32;
+pub const FILE_ATTRIBUTE_SYSTEM: u32 = 0x4u32;
+pub const FILE_ATTRIBUTE_ARCHIVE: u32 = 0x20u32;
+pub const FILE_ATTRIBUTE_NORMAL: u32 = 0x80u32;
+pub const FILE_ATTRIBUTE_TEMPORARY: u32 = 0x100u32;
+pub const FILE_ATTRIBUTE_OFFLINE: u32 = 0x1000u32;
+pub const FILE_ATTRIBUTE_NOT_CONTENT_INDEXED: u32 = 0x2000u32;
+pub const FILE_ATTRIBUTE_ENCRYPTED: u32 = 0x4000u32;
+
+pub const FILE_FLAG_WRITE_THROUGH: u32 = 0x80000000u32;
+pub const FILE_FLAG_NO_BUFFERING: u32 = 0x20000000u32;
+pub const FILE_FLAG_RANDOM_ACCESS: u32 = 0x10000000u32;
+pub const FILE_FLAG_SEQUENTIAL_SCAN: u32 = 0x8000000u32;
+pub const FILE_FLAG_DELETE_ON_CLOSE: u32 = 0x4000000u32;
+pub const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x2000000u32;
+pub const FILE_FLAG_POSIX_SEMANTICS: u32 = 0x1000000u32;
+pub const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x200000u32;
+pub const FILE_FLAG_OPEN_NO_RECALL: u32 = 0x100000u32;
+
+pub const SECURITY_ANONYMOUS: u32 = 0x0u32;
+pub const SECURITY_IDENTIFICATION: u32 = 0x10000u32;
+pub const SECURITY_IMPERSONATION: u32 = 0x20000u32;
+pub const SECURITY_DELEGATION: u32 = 0x30000u32;
+pub const SECURITY_CONTEXT_TRACKING: u32 = 0x40000u32;
+pub const SECURITY_EFFECTIVE_ONLY: u32 = 0x80000u32;
+
+/// Windows knobs of `Dir::open` / `File::open` (`OpenFlags.os`).
+#[non_exhaustive]
+pub struct OsOpenFlags {
+    /// What other opens of the file may do meanwhile.
+    pub share_mode: u32 = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+    /// `FILE_FLAG_*` bits ORed in: `FILE_FLAG_WRITE_THROUGH`,
+    /// `FILE_FLAG_SEQUENTIAL_SCAN`, `FILE_FLAG_NO_BUFFERING`, ...
+    pub custom_flags: u32 = 0u32;
+    /// `SECURITY_*` bits for opening a named pipe's client end
+    /// (`SECURITY_SQOS_PRESENT` is added when non-zero).
+    pub security_qos_flags: u32 = 0u32;
+}
+
+/// Windows knobs of the functions that may create the file
+/// (`CreateFlags.os`).
+#[non_exhaustive]
+pub struct OsCreateFlags {
+    pub share_mode: u32 = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+    pub custom_flags: u32 = 0u32;
+    pub security_qos_flags: u32 = 0u32;
+    /// `FILE_ATTRIBUTE_*` bits of a created file (`FILE_ATTRIBUTE_HIDDEN`,
+    /// ...); `create` also adds them to a file it empties.
+    pub attributes: u32 = 0u32;
+}
+
+/// The parameters of `CreateFile2`, as the OS has them.
+#[non_exhaustive]
+pub struct CreateFileParams {
+    /// `GENERIC_READ`, `FILE_APPEND_DATA`, ...; 0 opens for metadata only.
+    pub access: u32;
+    /// `CREATE_NEW` .. `TRUNCATE_EXISTING`.
+    pub disposition: u32;
+    pub share_mode: u32 = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+    pub attributes: u32 = 0u32;
+    pub flags: u32 = 0u32;
+    pub security_qos_flags: u32 = 0u32;
+}
+
+/// `CreateFile2` as the OS has it, for what the typed functions leave
+/// out (truncating an existing file only, metadata-only handles, ...).
+pub trait DirExt {
+    /// `CreateFile2` of `path` under this directory with `params` as
+    /// given; nothing else is checked. The handle is never inherited.
+    fn create_file<P: AsPath>(self, path: P, params: CreateFileParams) throws (IoError) -> File;
+}
+
+impl DirExt for Dir {
+    fn create_file<P: AsPath>(self, path: P, params: CreateFileParams) throws (IoError) -> File {
+        try self.open_raw(path, params.access, params.disposition, params.share_mode,
+            params.attributes, params.flags, params.security_qos_flags)
+    }
+}

@@ -32,6 +32,7 @@ mod lane;
 mod math;
 #[cfg_attr(windows, path = "net_windows.rs")]
 mod net;
+mod open_how;
 #[cfg_attr(windows, path = "os_windows.rs")]
 mod os;
 #[cfg(not(target_family = "wasm"))]

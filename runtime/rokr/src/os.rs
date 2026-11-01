@@ -20,6 +20,7 @@ use core::ptr;
 pub use rokr_common::errno;
 use rokr_common::object_header::HEADER_SIZE;
 
+use crate::open_how::How;
 use crate::str::{RokStr, build};
 
 type CStrPtr = *const libc::c_char;
@@ -142,6 +143,7 @@ mod kind {
     pub const STORAGE_FULL: i32 = 12;
     pub const CROSSES_DEVICES: i32 = 13;
     pub const UNSUPPORTED: i32 = 14;
+    pub const FILESYSTEM_LOOP: i32 = 18;
 }
 
 /// The `IoErrorKind` discriminant of error code `code`.
@@ -164,6 +166,7 @@ pub const extern "C" fn rok_os_errno_kind(code: i32) -> i32 {
         libc::ENOSPC => kind::STORAGE_FULL,
         libc::EXDEV => kind::CROSSES_DEVICES,
         libc::ENOSYS | libc::ENOTSUP => kind::UNSUPPORTED,
+        libc::ELOOP => kind::FILESYSTEM_LOOP,
         _ => kind::OTHER,
     }
 }
@@ -195,32 +198,70 @@ const fn at(dir: i32) -> i32 {
     if dir < 0 { libc::AT_FDCWD } else { dir }
 }
 
-/// `openat`. `flags` bits: 1 read, 2 write, 4 append, 8 truncate,
-/// 16 create, 32 `create_new`, 64 directory. Always `O_CLOEXEC`.
+/// `openat` for one of the library's open functions: `how` fixes the
+/// access and the disposition, the runtime maps them 1:1. Always
+/// `O_CLOEXEC`. A read-only open of a directory as a file is `EISDIR`.
+///
+/// # Safety
+/// `how` must be a live `GcBuf<u32>` of `HOW_LEN` elements.
 #[unsafe(no_mangle)]
-pub extern "C" fn rok_os_open(dir: i32, path: RokStr, flags: i32, mode: u32) -> i32 {
-    let mut o = match (flags & 1 != 0, flags & 6 != 0) {
-        (true, true) => libc::O_RDWR,
-        (false, true) => libc::O_WRONLY,
+pub unsafe extern "C" fn rok_os_open(dir: i32, path: RokStr, how: *const u8) -> i32 {
+    // SAFETY: caller contract.
+    let how = unsafe { How::read(how) };
+    let mut o = match how.access {
+        1 => libc::O_WRONLY,
+        2 => libc::O_RDWR,
+        3 => libc::O_WRONLY | libc::O_APPEND,
+        4 => libc::O_RDWR | libc::O_APPEND,
         _ => libc::O_RDONLY,
     };
-    for (bit, f) in [
-        (4, libc::O_APPEND),
-        (8, libc::O_TRUNC),
-        (16, libc::O_CREAT),
-        (32, libc::O_CREAT | libc::O_EXCL),
-        (64, libc::O_DIRECTORY),
-    ] {
-        if flags & bit != 0 {
-            o |= f;
-        }
+    o |= match how.disposition {
+        1 => libc::O_CREAT | libc::O_TRUNC,
+        2 => libc::O_CREAT | libc::O_EXCL,
+        3 => libc::O_CREAT,
+        _ => 0,
+    };
+    if how.nofollow {
+        o |= libc::O_NOFOLLOW;
     }
+    if how.directory {
+        o |= libc::O_DIRECTORY;
+    }
+    o |= how.custom as libc::c_int;
     // SAFETY: `path` is a C string; the mode is read only with O_CREAT.
     let (r, _) = native(|| unsafe {
         libc::openat(
             at(dir),
             cs(path).p(),
             o | libc::O_CLOEXEC,
+            how.mode as libc::c_uint,
+        )
+    });
+    if r >= 0 && !how.directory && how.access == 0 && is_dir_fd(r) {
+        // SAFETY: ours.
+        unsafe { libc::close(r) };
+        return -libc::EISDIR;
+    }
+    ret(r as isize) as i32
+}
+
+fn is_dir_fd(fd: i32) -> bool {
+    // SAFETY: zeroed stat is a valid out-buffer.
+    let mut st: libc::stat = unsafe { core::mem::zeroed() };
+    // SAFETY: valid out-buffer.
+    unsafe { libc::fstat(fd, &raw mut st) == 0 && st.st_mode & libc::S_IFMT == libc::S_IFDIR }
+}
+
+/// `openat(dir, path, oflag | O_CLOEXEC, mode)`, nothing else checked
+/// (`DirExt::open_at`).
+#[unsafe(no_mangle)]
+pub extern "C" fn rok_os_openat_raw(dir: i32, path: RokStr, oflag: i32, mode: u32) -> i32 {
+    // SAFETY: `path` is a C string.
+    let (r, _) = native(|| unsafe {
+        libc::openat(
+            at(dir),
+            cs(path).p(),
+            oflag | libc::O_CLOEXEC,
             mode as libc::c_uint,
         )
     });
@@ -360,6 +401,29 @@ pub extern "C" fn rok_os_fchmod(fd: i32, mode: u32) -> i32 {
 #[unsafe(no_mangle)]
 pub const extern "C" fn rok_os_fchmod(_fd: i32, _mode: u32) -> i32 {
     0
+}
+
+/// `fchmodat`: the permission bits of `path` under `dir` (a final
+/// symlink is followed).
+#[cfg(unix)]
+#[unsafe(no_mangle)]
+pub extern "C" fn rok_os_chmod(dir: i32, path: RokStr, mode: u32) -> i32 {
+    // SAFETY: `path` is a C string.
+    let (r, e) =
+        native(|| unsafe { libc::fchmodat(at(dir), cs(path).p(), mode as libc::mode_t, 0) });
+    if r < 0 { -e } else { 0 }
+}
+
+/// WASI: no permission bits; `path` must exist.
+#[cfg(target_os = "wasi")]
+#[unsafe(no_mangle)]
+pub extern "C" fn rok_os_chmod(dir: i32, path: RokStr, _mode: u32) -> i32 {
+    // SAFETY: zeroed stat is a valid out-buffer; `path` is a C string.
+    let (r, e) = native(|| unsafe {
+        let mut st: libc::stat = core::mem::zeroed();
+        libc::fstatat(at(dir), cs(path).p(), &raw mut st, 0)
+    });
+    if r < 0 { -e } else { 0 }
 }
 
 /// A read-only shared mapping of `len` bytes of `fd` at `offset`: its

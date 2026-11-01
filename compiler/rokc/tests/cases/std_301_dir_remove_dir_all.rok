@@ -25,8 +25,8 @@ for i in 0..3 {
 }
 try! fs::write(f"{base}/many/deep/x.txt", "x");
 let n = 0;
-for e in try! fs::read_dir(f"{base}/many") {
-    if (try! e.get()).file_name().ends_with(".txt") { n += 1; }
+try! for e in fs::read_dir(f"{base}/many") {
+    if e.file_name().ends_with(".txt") { n += 1; }
 }
 println(f"before: {d.exists("many/deep/x.txt")} {n}");
 try! d.remove_dir_all("many");

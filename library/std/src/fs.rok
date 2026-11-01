@@ -8,74 +8,163 @@
 // `copy_file_range`), else copies bytes. Windows: a `Dir` is a directory
 // handle and permissions are the read-only attribute.
 //
+// Opening: one function per way of opening (`open`, `create`,
+// `create_new`, `open_or_create`, `append`), so no invalid combination
+// can be written; each passes its fixed choice to the runtime as an
+// `OpenHow`. The raw open(2) / `CreateFile2` live in `os::unix::fs` /
+// `os::windows::fs` (`DirExt`).
+//
 // `*_async`: kqueue / epoll cannot wait on regular files, so each call
 // runs its sync twin on the blocking lane (`task::spawn_blocking`). A
 // cancelled task leaves the call to finish in the background (a
-// `read_async` still fills its buffer). `Dir::read_dir_async` streams
-// entries in batches; the free `read_dir_async` lists them all at once.
+// `read_async` still fills its buffer). `read_dir_async` streams entries
+// in batches.
 
 use rok::core::convert::AsBytes;
 use rok::core::io::{Close, IoError, IoErrorKind, Read, Write, Seek, SeekFrom, AsyncRead, AsyncWrite, AsyncSeek};
 use rok::std::sys::{check, region, mut_region, read_all, take_handle, write_region, text_of, byte_buf, list_of, use_begin, use_end, use_close};
-use rok::bare::mem::{GcBuf, buf_new};
+use rok::bare::mem::{GcBuf, buf_new, transmute_unchecked};
 use rok::std::path::{Path, AsPath, Component};
 use rok::std::env;
 use rok::std::time::SystemTime;
 use rok::core::future::{Context, Poll};
-use rok::core::stream::Stream;
+use rok::core::stream::TryStream;
 use rok::core::task::Task;
+#[cfg(target_family = "unix")]
+use rok::std::os::unix::fs::{OsOpenFlags, OsCreateFlags, check_custom};
+#[cfg(target_os = "windows")]
+use rok::std::os::windows::fs::{OsOpenFlags, OsCreateFlags};
 
-const O_READ: i32 = 1;
-const O_WRITE: i32 = 2;
-const O_APPEND: i32 = 4;
-const O_TRUNCATE: i32 = 8;
-const O_CREATE: i32 = 16;
-const O_CREATE_NEW: i32 = 32;
-const O_DIRECTORY: i32 = 64;
+// `OpenHow.access` / `.disposition` (the runtime's `rok_os_open`).
+const ACCESS_READ: u32 = 0u32;
+const ACCESS_WRITE: u32 = 1u32;
+const ACCESS_READ_WRITE: u32 = 2u32;
+const ACCESS_APPEND: u32 = 3u32;
+const ACCESS_READ_APPEND: u32 = 4u32;
+const DISP_OPEN: u32 = 0u32;
+const DISP_CREATE: u32 = 1u32;
+const DISP_CREATE_NEW: u32 = 2u32;
+const DISP_OPEN_OR_CREATE: u32 = 3u32;
+const HOW_LEN: usize = 9;
+const SHARE_ALL: u32 = 7u32;
 
-/// How `open_with` opens a file (301.1).
-pub struct OpenOptions {
-    pub read: bool;
-    pub write: bool;
-    pub append: bool;
-    pub truncate: bool;
-    pub create: bool;
-    pub create_new: bool;
-    /// Unix permission bits for a created file.
-    #[deprecated(since = "0.1.6", note = "use `OpenOptionsExt::mode` (rok::std::os::unix::fs)")]
-    pub mode: u32;
+/// What `open` opens an existing file for (301.1.1a).
+#[non_exhaustive]
+pub enum Access {
+    ReadOnly,
+    WriteOnly,
+    ReadWrite,
+    /// Write, every write at the end.
+    Append,
+    /// Read, and every write at the end.
+    ReadAppend,
 }
 
-impl OpenOptions {
-    /// Nothing set (`mode` 0o666): pick at least `read` or `write`.
-    pub const fn new() -> OpenOptions {
-        OpenOptions {
-            read: false, write: false, append: false, truncate: false,
-            create: false, create_new: false, mode: 0o666u32,
+impl Access {
+    const fn index(self) -> u32 {
+        match self {
+            Access::ReadOnly => ACCESS_READ,
+            Access::WriteOnly => ACCESS_WRITE,
+            Access::ReadWrite => ACCESS_READ_WRITE,
+            Access::Append => ACCESS_APPEND,
+            Access::ReadAppend => ACCESS_READ_APPEND,
         }
     }
-    pub const fn default() -> OpenOptions { OpenOptions::new() }
+}
 
-    pub const fn read(self, on: bool) -> OpenOptions { self.read = on; self }
-    pub const fn write(self, on: bool) -> OpenOptions { self.write = on; self }
-    pub const fn append(self, on: bool) -> OpenOptions { self.append = on; self }
-    pub const fn truncate(self, on: bool) -> OpenOptions { self.truncate = on; self }
-    pub const fn create(self, on: bool) -> OpenOptions { self.create = on; self }
-    pub const fn create_new(self, on: bool) -> OpenOptions { self.create_new = on; self }
-    #[deprecated(since = "0.1.6", note = "use `OpenOptionsExt::mode` (rok::std::os::unix::fs): write `OpenOptionsExt::mode(opts, m)`; from 0.2.0 `opts.mode(m)` reaches it")]
-    pub const fn mode(self, mode: u32) -> OpenOptions { self.mode = mode; self }
+impl PartialEq for Access {
+    const fn eq(self, rhs: Access) -> bool { self.index() == rhs.index() }
+    const fn ne(self, rhs: Access) -> bool { self.index() != rhs.index() }
+}
 
-    const fn bits(self) -> i32 {
-        let b = 0;
-        if self.read { b |= O_READ; }
-        if self.write { b |= O_WRITE; }
-        if self.append { b |= O_APPEND; }
-        if self.truncate { b |= O_TRUNCATE; }
-        if self.create { b |= O_CREATE; }
-        if self.create_new { b |= O_CREATE_NEW; }
-        b
+impl Debug for Access {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) {
+        try f.write_str(match self {
+            Access::ReadOnly => "ReadOnly",
+            Access::WriteOnly => "WriteOnly",
+            Access::ReadWrite => "ReadWrite",
+            Access::Append => "Append",
+            Access::ReadAppend => "ReadAppend",
+        })
     }
 }
+
+/// Knobs of `open` (301.1.1a).
+#[non_exhaustive]
+pub struct OpenFlags {
+    /// `false`: a final symbolic link is `FilesystemLoop`, not followed.
+    pub follow_symlinks: bool = true;
+    /// The target's own knobs (`os::unix::fs::OsOpenFlags`,
+    /// `os::windows::fs::OsOpenFlags`; empty elsewhere).
+    pub os: OsOpenFlags = OsOpenFlags {};
+}
+
+/// Knobs of the functions that may create the file (301.1.1a).
+#[non_exhaustive]
+pub struct CreateFlags {
+    /// Open for reading too.
+    pub read: bool = false;
+    /// A created file's permissions, before the umask; an existing file
+    /// keeps its own. Windows: only the read-only attribute.
+    pub permissions: Permissions = Permissions::default();
+    /// `false`: a final symbolic link is `FilesystemLoop`, not followed.
+    pub follow_symlinks: bool = true;
+    /// The target's own knobs (`os::unix::fs::OsCreateFlags`,
+    /// `os::windows::fs::OsCreateFlags`; empty elsewhere).
+    pub os: OsCreateFlags = OsCreateFlags {};
+}
+
+/// No target knobs here.
+#[cfg(not(any(target_family = "unix", target_os = "windows")))]
+#[non_exhaustive]
+pub struct OsOpenFlags {}
+
+/// No target knobs here.
+#[cfg(not(any(target_family = "unix", target_os = "windows")))]
+#[non_exhaustive]
+pub struct OsCreateFlags {}
+
+/// The `os` record's part of an `OpenHow`.
+struct Knobs {
+    custom: u32;
+    share: u32;
+    attrs: u32;
+    sqos: u32;
+}
+
+#[cfg(target_family = "unix")]
+const fn open_knobs(o: OsOpenFlags) -> Knobs {
+    Knobs { custom: o.custom_flags as u32, share: SHARE_ALL, attrs: 0u32, sqos: 0u32 }
+}
+#[cfg(target_family = "unix")]
+const fn create_knobs(o: OsCreateFlags) -> Knobs {
+    Knobs { custom: o.custom_flags as u32, share: SHARE_ALL, attrs: 0u32, sqos: 0u32 }
+}
+#[cfg(target_os = "windows")]
+const fn open_knobs(o: OsOpenFlags) -> Knobs {
+    Knobs { custom: o.custom_flags, share: o.share_mode, attrs: 0u32, sqos: o.security_qos_flags }
+}
+#[cfg(target_os = "windows")]
+const fn create_knobs(o: OsCreateFlags) -> Knobs {
+    Knobs { custom: o.custom_flags, share: o.share_mode, attrs: o.attributes, sqos: o.security_qos_flags }
+}
+#[cfg(not(any(target_family = "unix", target_os = "windows")))]
+const fn open_knobs(_o: OsOpenFlags) -> Knobs {
+    Knobs { custom: 0u32, share: SHARE_ALL, attrs: 0u32, sqos: 0u32 }
+}
+#[cfg(not(any(target_family = "unix", target_os = "windows")))]
+const fn create_knobs(_o: OsCreateFlags) -> Knobs {
+    Knobs { custom: 0u32, share: SHARE_ALL, attrs: 0u32, sqos: 0u32 }
+}
+
+/// `InvalidInput` when `os.custom_flags` sets a bit the open function
+/// `name` decides (Unix; Windows flags only add).
+#[cfg(target_family = "unix")]
+fn check_knobs(custom: u32, path: str, name: str) throws (IoError) {
+    try check_custom(custom as i32, path, f"File::{name}");
+}
+#[cfg(not(target_family = "unix"))]
+const fn check_knobs(_custom: u32, _path: str, _name: str) throws (IoError) {}
 
 /// A file's permissions: Unix permission bits (Windows: the read-only
 /// attribute; `PermissionsExt` in `rok::std::os::unix::fs` reads and sets
@@ -85,16 +174,23 @@ pub struct Permissions {
 }
 
 impl Permissions {
-    #[deprecated(since = "0.1.6", note = "use `PermissionsExt::from_mode` (rok::std::os::unix::fs): write `let p: Permissions = PermissionsExt::from_mode(m)`; from 0.2.0 `Permissions::from_mode(m)` reaches it; on Windows, `set_readonly`")]
-    pub const fn from_mode(mode: u32) -> Permissions { Permissions { mode: mode & 0o7777u32 } }
-    #[deprecated(since = "0.1.6", note = "use `PermissionsExt::mode` (rok::std::os::unix::fs): write `PermissionsExt::mode(p)`; from 0.2.0 `p.mode()` reaches it; on Windows, `readonly`")]
-    pub const fn mode(self) -> u32 { self.mode }
     /// No write bit for anyone.
     pub const fn readonly(self) -> bool { (self.mode & 0o222u32) == 0u32 }
-    pub const fn set_readonly(self, on: bool) -> Permissions {
-        if on { return Permissions { mode: self.mode & 0o7555u32 }; }
-        Permissions { mode: self.mode | 0o200u32 }
+    /// `true` clears every write bit; `false` adds the owner's write bit
+    /// only (group and others stay as they are).
+    pub const fn set_readonly(ref self, readonly: bool) {
+        if readonly {
+            self.mode = self.mode & 0o7555u32;
+        } else {
+            self.mode = self.mode | 0o200u32;
+        }
     }
+}
+
+/// `0o666` before the umask (Windows: not read-only): what a created
+/// file gets.
+impl Default for Permissions {
+    const fn default() -> Permissions { Permissions { mode: 0o666u32 } }
 }
 
 /// What a directory entry is (301.1).
@@ -240,13 +336,28 @@ const fn file_of(fd: i32, path: str) -> File {
     }
 }
 
+// Each opens as `Dir::root()`'s function of the same name (301.1.1a).
 impl File {
-    /// Open for reading.
-    pub fn open<P: AsPath>(path: P) throws (IoError) -> File { try Dir::root().open(path) }
-    /// Create or truncate for writing.
-    pub fn create<P: AsPath>(path: P) throws (IoError) -> File { try Dir::root().create(path) }
-    pub fn open_with<P: AsPath>(path: P, opts: OpenOptions) throws (IoError) -> File {
-        try Dir::root().open_with(path, opts)
+    /// An existing file, opened for `access`; missing: `NotFound`.
+    pub fn open<P: AsPath>(path: P, access: Access = Access::ReadOnly, flags: OpenFlags = OpenFlags {}) throws (IoError) -> File {
+        try Dir::root().open(path, access, flags)
+    }
+    /// Created, or emptied when it exists; open for writing (and
+    /// reading with `flags.read`).
+    pub fn create<P: AsPath>(path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
+        try Dir::root().create(path, flags)
+    }
+    /// Created; `AlreadyExists` when anything is at `path`.
+    pub fn create_new<P: AsPath>(path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
+        try Dir::root().create_new(path, flags)
+    }
+    /// Created when missing; the contents are kept.
+    pub fn open_or_create<P: AsPath>(path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
+        try Dir::root().open_or_create(path, flags)
+    }
+    /// Created when missing; every write goes to the end.
+    pub fn append<P: AsPath>(path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
+        try Dir::root().append(path, flags)
     }
 
     /// Take ownership of an open descriptor; `name` labels its errors.
@@ -364,7 +475,7 @@ impl File {
     /// Map `len` bytes at `offset` (a multiple of the page size) read-only
     /// and shared. Unsafe: another writer of the file changes the bytes
     /// under the mapping, and truncating it makes reads fault.
-    pub unsafe fn mmap(self, len: usize, offset: u64) throws (IoError) -> Mmap {
+    pub unsafe fn mmap(self, offset: u64, len: usize) throws (IoError) -> Mmap {
         let fd = try self.live();
         let addr = try self.done_with(unsafe { rok_os_mmap(fd, len, offset) });
         unsafe {
@@ -396,17 +507,29 @@ impl Mmap {
         b[0]
     }
 
-    /// The bytes `start..end` (clamped to the mapping) as a new list.
-    pub fn slice(self, start: usize, end: usize) -> List<u8> {
-        let end = end.min(self.len());
-        let start = start.min(end);
-        let out = byte_buf(end - start);
-        self.copy_into(start, out);
-        out
+    /// The mapped bytes, not copied (`m.as_bytes()[a:b]` for a part).
+    /// The view reads the mapping itself: use it only while the mapping
+    /// is live (empty once unmapped).
+    pub fn as_bytes(self) -> Slice<u8> {
+        if !self.live() {
+            let empty: List<u8> = List::new();
+            return empty[0:0];
+        }
+        unsafe {
+            // A buffer reference sits a header before element 0 (as
+            // `rok::bare::ptr::ManyPtr::slice`); the GC skips memory it
+            // did not allocate.
+            let buf: GcBuf<u8> = transmute_unchecked(self.addr[0] - 16);
+            Slice::from_raw_parts(buf, 0, self.len)
+        }
     }
 
     /// Every byte as a new list.
-    pub fn to_list(self) -> List<u8> { self.slice(0, self.len) }
+    pub fn to_list(self) -> List<u8> {
+        let out = byte_buf(self.len());
+        self.copy_into(0, out);
+        out
+    }
 
     pub fn unmap(self) {
         unsafe {
@@ -438,8 +561,21 @@ async fn off<T: Send>(f: fn() throws (IoError) -> T + Send) throws (IoError) -> 
 }
 
 impl File {
-    pub async fn open_async<P: AsPath>(path: P) throws (IoError) -> File { try await open_async(path) }
-    pub async fn create_async<P: AsPath>(path: P) throws (IoError) -> File { try await create_async(path) }
+    pub async fn open_async<P: AsPath>(path: P, access: Access = Access::ReadOnly, flags: OpenFlags = OpenFlags {}) throws (IoError) -> File {
+        try await Dir::root().open_async(path, access, flags)
+    }
+    pub async fn create_async<P: AsPath>(path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
+        try await Dir::root().create_async(path, flags)
+    }
+    pub async fn create_new_async<P: AsPath>(path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
+        try await Dir::root().create_new_async(path, flags)
+    }
+    pub async fn open_or_create_async<P: AsPath>(path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
+        try await Dir::root().open_or_create_async(path, flags)
+    }
+    pub async fn append_async<P: AsPath>(path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
+        try await Dir::root().append_async(path, flags)
+    }
 
     pub async fn sync_all_async(self) throws (IoError) { try await off(|| try self.sync_all()); }
     pub async fn sync_data_async(self) throws (IoError) { try await off(|| try self.sync_data()); }
@@ -450,32 +586,44 @@ impl File {
 }
 
 impl Dir {
-    pub async fn cwd_async() throws (IoError) -> Dir { try await off(|| try Dir::cwd()) }
+    pub async fn current_async() throws (IoError) -> Dir { try await off(|| try Dir::current()) }
     pub async fn home_async() throws (IoError) -> Dir { try await off(|| try Dir::home()) }
     pub async fn temp_async() throws (IoError) -> Dir { try await off(|| try Dir::temp()) }
 
-    pub async fn open_async<P: AsPath>(self, path: P) throws (IoError) -> File {
+    pub async fn open_async<P: AsPath>(self, path: P, access: Access = Access::ReadOnly, flags: OpenFlags = OpenFlags {}) throws (IoError) -> File {
         let p = path.as_path();
-        try await off(|| try self.open(p))
+        try await off(|| try self.open(p, access, flags))
     }
-    pub async fn create_async<P: AsPath>(self, path: P) throws (IoError) -> File {
+    pub async fn create_async<P: AsPath>(self, path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
         let p = path.as_path();
-        try await off(|| try self.create(p))
+        try await off(|| try self.create(p, flags))
     }
-    pub async fn open_with_async<P: AsPath>(self, path: P, opts: OpenOptions) throws (IoError) -> File {
+    pub async fn create_new_async<P: AsPath>(self, path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
         let p = path.as_path();
-        try await off(|| try self.open_with(p, opts))
+        try await off(|| try self.create_new(p, flags))
+    }
+    pub async fn open_or_create_async<P: AsPath>(self, path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
+        let p = path.as_path();
+        try await off(|| try self.open_or_create(p, flags))
+    }
+    pub async fn append_async<P: AsPath>(self, path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
+        let p = path.as_path();
+        try await off(|| try self.append(p, flags))
     }
     pub async fn open_dir_async<P: AsPath>(self, path: P) throws (IoError) -> Dir {
         let p = path.as_path();
         try await off(|| try self.open_dir(p))
     }
-    /// This directory's entries as a `Stream` (`for await e in try await
-    /// d.read_dir_async() { let x = try e.get(); .. }`), read in batches
-    /// on a blocking thread.
+    /// This directory's entries as a `TryStream` (`try for await e in
+    /// try await d.read_dir_async() { .. }`), read in batches on a
+    /// blocking thread.
     pub async fn read_dir_async(self) throws (IoError) -> ReadDirStream {
         let rd = try await off(|| try self.read_dir());
-        ReadDirStream { rd: rd, lock: Mutex::new(0), batch: List::new(), pos: 0, pending: none }
+        stream_of(rd)
+    }
+    pub async fn set_permissions_async<P: AsPath>(self, path: P, perm: Permissions) throws (IoError) {
+        let p = path.as_path();
+        try await off(|| try self.set_permissions(p, perm));
     }
     pub async fn metadata_async<P: AsPath>(self, path: P) throws (IoError) -> Metadata {
         let p = path.as_path();
@@ -535,7 +683,7 @@ impl Dir {
 /// Entries per blocking-thread trip of a `ReadDirStream`.
 const DIR_BATCH: usize = 64;
 
-/// `Dir::read_dir_async`: a `ReadDir` as a `Stream`. Each refill reads up
+/// `read_dir_async`: a `ReadDir` as a `TryStream`. Each refill reads up
 /// to `DIR_BATCH` entries on a blocking thread while the task suspends.
 /// Closed at its end or on leaving `using`; a cancelled task's refill
 /// finishes in the background first.
@@ -548,14 +696,19 @@ pub struct ReadDirStream {
     pending: Task<List<Result<DirEntry, IoError>>> | none;
 }
 
-impl Stream for ReadDirStream {
-    type Item = Result<DirEntry, IoError>;
-    fn poll_next(ref self, ref ctx: Context) -> Poll<Result<DirEntry, IoError> | none> {
+const fn stream_of(rd: ReadDir) -> ReadDirStream {
+    ReadDirStream { rd: rd, lock: Mutex::new(0), batch: List::new(), pos: 0, pending: none }
+}
+
+impl TryStream for ReadDirStream {
+    type Item = DirEntry;
+    type Error = IoError;
+    fn poll_next(ref self, ref ctx: Context) throws (IoError) -> Poll<DirEntry | none> {
         unsafe {
             loop {
                 if self.pos < self.batch.len() {
                     self.pos += 1;
-                    return Poll::Ready(self.batch[self.pos - 1]);
+                    return Poll::Ready(try self.batch[self.pos - 1].get());
                 }
                 let job = match self.pending {
                     b: Task<List<Result<DirEntry, IoError>>> => b,
@@ -570,8 +723,10 @@ impl Stream for ReadDirStream {
                             let out: List<Result<DirEntry, IoError>> = List::new();
                             using g = lock.lock() {
                                 while out.len() < DIR_BATCH {
-                                    match rd.next() {
-                                        e: Result<DirEntry, IoError> => out.push(e),
+                                    // The batch ends at an error.
+                                    let e = try rd.next() catch x { out.push(Result::Err(x)); break; };
+                                    match e {
+                                        d: DirEntry => out.push(Result::Ok(d)),
                                         none => break,
                                     }
                                 }
@@ -723,7 +878,8 @@ const fn dir_of(fd: i32, path: str) -> Dir {
 impl Dir {
     pub const fn root() -> Dir { dir_of(-1, "") }
 
-    pub fn cwd() throws (IoError) -> Dir { try Dir::root().open_dir(".") }
+    /// The working directory.
+    pub fn current() throws (IoError) -> Dir { try Dir::root().open_dir(".") }
 
     pub fn home() throws (IoError) -> Dir {
         if let home: Path = env::home_dir() { return try Dir::root().open_dir(home); }
@@ -764,27 +920,132 @@ impl Dir {
         Path::new(self.path).join(Path::new(p)).as_str()
     }
 
-    pub fn open<P: AsPath>(self, path: P) throws (IoError) -> File {
-        try self.open_with(path, OpenOptions::new().read(true))
+    /// An existing file, opened for `access`; missing: `NotFound`
+    /// (301.1.1a).
+    pub fn open<P: AsPath>(self, path: P, access: Access = Access::ReadOnly, flags: OpenFlags = OpenFlags {}) throws (IoError) -> File {
+        try self.open_file(path, access.index(), DISP_OPEN, flags.follow_symlinks, 0u32, open_knobs(flags.os), "open")
     }
 
-    /// Open for writing, created or truncated.
-    pub fn create<P: AsPath>(self, path: P) throws (IoError) -> File {
-        try self.open_with(path, OpenOptions::new().write(true).create(true).truncate(true))
+    /// Created, or emptied when it exists; open for writing (and reading
+    /// with `flags.read`).
+    pub fn create<P: AsPath>(self, path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
+        try self.create_how(path, flags, DISP_CREATE, false, "create")
     }
 
-    pub fn open_with<P: AsPath>(self, path: P, opts: OpenOptions) throws (IoError) -> File {
+    /// Created; `AlreadyExists` when anything is at `path` (a dangling
+    /// symbolic link too).
+    pub fn create_new<P: AsPath>(self, path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
+        try self.create_how(path, flags, DISP_CREATE_NEW, false, "create_new")
+    }
+
+    /// Created when missing; the contents are kept, the position is 0.
+    pub fn open_or_create<P: AsPath>(self, path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
+        try self.create_how(path, flags, DISP_OPEN_OR_CREATE, false, "open_or_create")
+    }
+
+    /// Created when missing; every write goes to the end.
+    pub fn append<P: AsPath>(self, path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
+        try self.create_how(path, flags, DISP_OPEN_OR_CREATE, true, "append")
+    }
+
+    fn create_how<P: AsPath>(self, path: P, flags: CreateFlags, disp: u32, append: bool, name: str) throws (IoError) -> File {
+        let access = if append {
+            if flags.read { ACCESS_READ_APPEND } else { ACCESS_APPEND }
+        } else {
+            if flags.read { ACCESS_READ_WRITE } else { ACCESS_WRITE }
+        };
+        try self.open_file(path, access, disp, flags.follow_symlinks, flags.permissions.mode, create_knobs(flags.os), name)
+    }
+
+    /// The one open path: the function's fixed choice as an `OpenHow`.
+    fn open_file<P: AsPath>(self, path: P, access: u32, disp: u32, follow: bool, mode: u32, k: Knobs, name: str) throws (IoError) -> File {
         let p = try self.rel(path);
-        let fd = try check(unsafe { rok_os_open(self.fd(), p, opts.bits(), opts.mode) } as i64, self.shown(p));
-        file_of(fd as i32, self.shown(p))
+        let shown = self.shown(p);
+        try check_knobs(k.custom, shown, name);
+        let how = unsafe {
+            let h: GcBuf<u32> = buf_new(HOW_LEN);
+            h[0] = access;
+            h[1] = disp;
+            h[2] = if follow { 0u32 } else { 1u32 };
+            h[3] = 0u32;
+            h[4] = mode;
+            h[5] = k.custom;
+            h[6] = k.share;
+            h[7] = k.attrs;
+            h[8] = k.sqos;
+            h
+        };
+        let fd = try check(unsafe { rok_os_open(self.fd(), p, how) } as i64, shown) catch e {
+            if !follow && e.kind() == IoErrorKind::FilesystemLoop {
+                throw IoError::new(IoErrorKind::FilesystemLoop,
+                    f"{shown}: is a symbolic link and follow_symlinks is false: open its target, or leave follow_symlinks: true");
+            }
+            if e.kind() == IoErrorKind::IsADirectory {
+                throw IoError::new(IoErrorKind::IsADirectory, f"{shown}: is a directory: open it with Dir::open_dir");
+            }
+            throw e;
+        };
+        file_of(fd as i32, shown)
     }
 
     pub fn open_dir<P: AsPath>(self, path: P) throws (IoError) -> Dir {
         let p = try self.rel(path);
-        let fd = try check(unsafe { rok_os_open(self.fd(), p, O_READ | O_DIRECTORY, 0u32) } as i64, self.shown(p));
+        let how = unsafe {
+            let h: GcBuf<u32> = buf_new(HOW_LEN);
+            for i in 0..HOW_LEN { h[i] = 0u32; }
+            h[0] = ACCESS_READ;
+            h[1] = DISP_OPEN;
+            h[3] = 1u32;
+            h[6] = SHARE_ALL;
+            h
+        };
+        let fd = try check(unsafe { rok_os_open(self.fd(), p, how) } as i64, self.shown(p));
         dir_of(fd as i32, self.shown(p))
     }
 
+    /// `DirExt::open_at`: openat(2) with `oflag` as given.
+    #[cfg(target_family = "unix")]
+    pub(pkg) fn open_raw<P: AsPath>(self, path: P, oflag: i32, mode: u32) throws (IoError) -> File {
+        let p = try self.rel(path);
+        let fd = try check(unsafe { rok_os_openat_raw(self.fd(), p, oflag, mode) } as i64, self.shown(p));
+        file_of(fd as i32, self.shown(p))
+    }
+
+    /// `DirExt::create_file`: `CreateFile2` with the parameters as given.
+    #[cfg(target_os = "windows")]
+    pub(pkg) fn open_raw<P: AsPath>(self, path: P, access: u32, disposition: u32, share: u32, attrs: u32, flags: u32, sqos: u32) throws (IoError) -> File {
+        let p = try self.rel(path);
+        let params = unsafe {
+            let v: GcBuf<u32> = buf_new(6);
+            v[0] = access;
+            v[1] = disposition;
+            v[2] = share;
+            v[3] = attrs;
+            v[4] = flags;
+            v[5] = sqos;
+            v
+        };
+        let fd = try check(unsafe { rok_os_create_file2(self.fd(), p, params) } as i64, self.shown(p));
+        file_of(fd as i32, self.shown(p))
+    }
+
+    /// Set the permissions of `path` (a final symbolic link is followed).
+    /// Windows: only the read-only attribute.
+    pub fn set_permissions<P: AsPath>(self, path: P, perm: Permissions) throws (IoError) {
+        let p = try self.rel(path);
+        try check(unsafe { rok_os_chmod(self.fd(), p, perm.mode) } as i64, self.shown(p));
+    }
+
+    /// `fsync` the directory itself, so a rename in it is durable (Windows:
+    /// nothing to do).
+    #[cfg(not(target_os = "windows"))]
+    pub(pkg) fn sync(self) throws (IoError) {
+        if self.fd() < 0 { return; }
+        try check(unsafe { rok_os_fsync(self.fd(), 0) } as i64, self.path);
+    }
+
+    #[cfg(target_os = "windows")]
+    pub(pkg) fn sync(self) throws (IoError) {}
     /// The entries of this directory.
     pub fn read_dir(self) throws (IoError) -> ReadDir {
         try self.list(".")
@@ -861,8 +1122,8 @@ impl Dir {
         // directory may skip some (WASI's `fd_readdir` cookies are
         // positions).
         let entries: List<DirEntry> = List::new();
-        for entry in try self.list(p) {
-            entries.push(try entry.get());
+        try for e in self.list(p) {
+            entries.push(e);
         }
         for e in entries {
             // Under `self`, not `e.path` (the shown path, absolute when
@@ -895,9 +1156,7 @@ impl Dir {
             try src.close() catch _ {};
             return meta.len();
         }
-        let opts = OpenOptions::new().write(true).create(true).truncate(true);
-        opts.mode = meta.mode;
-        let dst = try self.open_with(to, opts)
+        let dst = try self.create(to, CreateFlags { permissions: meta.permissions() })
             catch e { try src.close() catch _ {}; throw e; };
         let n = unsafe { rok_os_copy_fd(src.fd(), dst.fd()) };
         let perm = unsafe { rok_os_fchmod(dst.fd(), meta.mode) };
@@ -961,7 +1220,8 @@ impl DirEntry {
 }
 
 /// The entries of one directory, in the order the OS returns them
-/// (`.` / `..` skipped). Each item is an entry or the error reading it.
+/// (`.` / `..` skipped): a `TryIterator` (`try for e in
+/// fs::read_dir(p) { .. }`).
 pub struct ReadDir {
     /// The `DIR*` (0 once closed), shared by copies of the handle.
     d: GcBuf<isize>;
@@ -990,9 +1250,12 @@ impl DirView {
 /// Room for any entry name (macOS `d_name` holds 1024 bytes).
 const NAME_MAX: usize = 1024;
 
-impl Iterator for ReadDir {
-    type Item = Result<DirEntry, IoError>;
-    fn next(ref self) -> Result<DirEntry, IoError> | none {
+impl TryIterator for ReadDir {
+    type Item = DirEntry;
+    type Error = IoError;
+    /// The next entry. A throw closes the stream: `next` gives `none`
+    /// after it.
+    fn next(ref self) throws (IoError) -> DirEntry | none {
         unsafe {
             let d = self.d[0];
             if d == 0 { return none; }
@@ -1000,16 +1263,20 @@ impl Iterator for ReadDir {
             let n = rok_os_readdir(d, buf, at, cap);
             if n <= 0 {
                 close_dir(self.d);
-                if n < 0 { return Result::Err(IoError::from_os_code((0 - n) as i32, self.dir.shown(self.base))); }
+                if n < 0 { throw IoError::from_os_code((0 - n) as i32, self.dir.shown(self.base)); }
                 return none;
             }
-            let name = try text_of(list_of(self.name[0:n as usize])) catch e { return Result::Err(e); };
+            let name = try text_of(list_of(self.name[0:n as usize])) catch e {
+                close_dir(self.d);
+                throw e;
+            };
             let path = Path::new(self.base).join(Path::new(name));
             let meta = try stat_at(self.dir.fd(), path.as_str(), false, -1) catch e {
-                return Result::Err(e.retold(self.dir.shown(path.as_str())));
+                close_dir(self.d);
+                throw e.retold(self.dir.shown(path.as_str()));
             };
             let shown = Path::new(self.dir.shown(path.as_str()));
-            Result::Ok(DirEntry { path: shown, name: name, meta: meta })
+            DirEntry { path: shown, name: name, meta: meta }
         }
     }
 }
@@ -1036,27 +1303,30 @@ fn close_dir(cell: GcBuf<isize>) {
 /// entries sorted by name (Go `filepath.WalkDir`). Symlinks are listed,
 /// not followed. Each directory is read whole when reached, so a `Walk`
 /// never holds a stream open (stopping early leaks nothing). An
-/// unreadable directory yields its error and the walk goes on.
+/// unreadable directory throws its error from `next`; calling `next`
+/// again goes on with the rest.
 pub struct Walk {
     stack: List<DirEntry>;
     errors: List<IoError>;
 }
 
-impl Iterator for Walk {
-    type Item = Result<DirEntry, IoError>;
-    fn next(ref self) -> Result<DirEntry, IoError> | none {
-        if let err: IoError = self.errors.pop() { return Result::Err(err); }
+impl TryIterator for Walk {
+    type Item = DirEntry;
+    type Error = IoError;
+    fn next(ref self) throws (IoError) -> DirEntry | none {
+        if let err: IoError = self.errors.pop() { throw err; }
         let e = self.stack.pop()?;
         if e.meta.is_dir() {
             let kids: List<DirEntry> = List::new();
             let rd = try Dir::root().list(e.path.as_str()) catch x {
                 self.errors.push(x);
-                return Result::Ok(e);
+                return e;
             };
-            for k in rd {
+            loop {
+                let k = try rd.next() catch x { self.errors.push(x); continue; };
                 match k {
-                    Result::Ok(x) => kids.push(x),
-                    Result::Err(x) => self.errors.push(x),
+                    x: DirEntry => kids.push(x),
+                    none => break,
                 }
             }
             kids.sort_by(|a: DirEntry, b: DirEntry| a.name.cmp(b.name));
@@ -1066,17 +1336,17 @@ impl Iterator for Walk {
                 self.stack.push(kids[i]);
             }
         }
-        Result::Ok(e)
+        e
     }
 }
 
 // convenience functions (301.4) over Dir::root()
 
+/// `File::open(path)`: an existing file, for reading. The other ways
+/// of opening are on `File` and `Dir`.
 pub fn open<P: AsPath>(path: P) throws (IoError) -> File { try Dir::root().open(path) }
+/// `File::create(path)`: created or emptied, for writing.
 pub fn create<P: AsPath>(path: P) throws (IoError) -> File { try Dir::root().create(path) }
-pub fn open_with<P: AsPath>(path: P, opts: OpenOptions) throws (IoError) -> File {
-    try Dir::root().open_with(path, opts)
-}
 
 pub fn read<P: AsPath>(path: P) throws (IoError) -> List<u8> {
     let f = try open(path);
@@ -1113,7 +1383,7 @@ pub fn write_atomic<P: AsPath, D: AsBytes>(path: P, data: D) throws (IoError) {
     let tmp = Path::empty();
     let f = loop {
         tmp = parent.join(Path::new(f".{name}.tmp.{pid}.{n}"));
-        let opened = try open_with(tmp, OpenOptions::new().write(true).create_new(true)) catch e {
+        let opened = try File::create_new(tmp) catch e {
             if e.kind() == IoErrorKind::AlreadyExists { n += 1; continue; }
             throw e;
         };
@@ -1124,8 +1394,8 @@ pub fn write_atomic<P: AsPath, D: AsBytes>(path: P, data: D) throws (IoError) {
         throw e;
     };
     let dir_path = if parent.as_str() == "" { Path::new(".") } else { parent };
-    let d = try open_with(dir_path, OpenOptions::new().read(true));
-    try d.sync_all() catch _ {}; // some filesystems refuse fsync on a directory
+    let d = try Dir::root().open_dir(dir_path);
+    try d.sync() catch _ {}; // some filesystems refuse fsync on a directory
     try d.close();
 }
 
@@ -1155,6 +1425,11 @@ pub fn hardlink<P: AsPath, Q: AsPath>(target: P, link: Q) throws (IoError) { try
 pub fn read_dir<P: AsPath>(path: P) throws (IoError) -> ReadDir {
     try Dir::root().list(try Dir::root().rel(path))
 }
+/// Set the permissions of `path` (a final symbolic link is followed).
+/// Windows: only the read-only attribute.
+pub fn set_permissions<P: AsPath>(path: P, perm: Permissions) throws (IoError) {
+    try Dir::root().set_permissions(path, perm);
+}
 
 /// Everything under `root`, `root` included (see `Walk`).
 pub fn walk<P: AsPath>(root: P) -> Walk {
@@ -1174,10 +1449,6 @@ pub async fn open_async<P: AsPath>(path: P) throws (IoError) -> File {
 pub async fn create_async<P: AsPath>(path: P) throws (IoError) -> File {
     let p = path.as_path();
     try await off(|| try create(p))
-}
-pub async fn open_with_async<P: AsPath>(path: P, opts: OpenOptions) throws (IoError) -> File {
-    let p = path.as_path();
-    try await off(|| try open_with(p, opts))
 }
 pub async fn read_async<P: AsPath>(path: P) throws (IoError) -> List<u8> {
     let p = path.as_path();
@@ -1249,15 +1520,14 @@ pub async fn hardlink_async<P: AsPath, Q: AsPath>(target: P, link: Q) throws (Io
     let b = link.as_path();
     try await off(|| try hardlink(a, b));
 }
-/// The whole listing (the first entry error is thrown), unlike the
-/// lazy `read_dir`.
-pub async fn read_dir_async<P: AsPath>(path: P) throws (IoError) -> List<DirEntry> {
+/// The entries of `path` as a `TryStream`, read in batches on a
+/// blocking thread (`Dir::read_dir_async`).
+pub async fn read_dir_async<P: AsPath>(path: P) throws (IoError) -> ReadDirStream {
     let p = path.as_path();
-    try await off(|| {
-        let out: List<DirEntry> = List::new();
-        using rd = try read_dir(p) {
-            for e in rd { out.push(try e.get()); }
-        }
-        out
-    })
+    let rd = try await off(|| try read_dir(p));
+    stream_of(rd)
+}
+pub async fn set_permissions_async<P: AsPath>(path: P, perm: Permissions) throws (IoError) {
+    let p = path.as_path();
+    try await off(|| try set_permissions(p, perm));
 }

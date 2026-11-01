@@ -24,6 +24,7 @@ use rokr_common::object_header::HEADER_SIZE;
 use rokr_common::sys::{self, MBuf, Wide, fill_wide, narrow, push_wide, wide};
 use rokr_common::win::{self, DWORD, HANDLE};
 
+use crate::open_how::How;
 use crate::str::{RokStr, build};
 use crate::winargs::{Args, parse_command_line, push_arg};
 
@@ -218,6 +219,7 @@ mod kind {
     pub const STORAGE_FULL: i32 = 12;
     pub const CROSSES_DEVICES: i32 = 13;
     pub const UNSUPPORTED: i32 = 14;
+    pub const FILESYSTEM_LOOP: i32 = 18;
 }
 
 /// The `IoErrorKind` discriminant of Win32 / Winsock error `code`.
@@ -247,6 +249,7 @@ pub const extern "C" fn rok_os_errno_kind(code: i32) -> i32 {
         ERROR_HANDLE_DISK_FULL | ERROR_DISK_FULL => kind::STORAGE_FULL,
         ERROR_NOT_SAME_DEVICE => kind::CROSSES_DEVICES,
         ERROR_NOT_SUPPORTED | ERROR_CALL_NOT_IMPLEMENTED | WSAEOPNOTSUPP => kind::UNSUPPORTED,
+        ERROR_STOPPED_ON_SYMLINK | ERROR_CANT_RESOLVE_FILENAME => kind::FILESYSTEM_LOOP,
         _ => kind::OTHER,
     }
 }
@@ -414,32 +417,43 @@ fn open_meta(path: &mut Wide, follow: bool) -> Result<Owned, i32> {
 /// `FILE_GENERIC_WRITE` without `FILE_WRITE_DATA`: appends only.
 const APPEND_ACCESS: DWORD = 0x0012_0114;
 
-/// `CreateFileW`. `flags` bits: 1 read, 2 write, 4 append, 8 truncate,
-/// 16 create, 32 `create_new`, 64 directory. A created file is read-only
-/// when `mode` has no write bit. Never inherited by children.
+/// `CreateFileW` for one of the library's open functions: `how` fixes
+/// the access and the disposition. Create-or-truncate is `OPEN_ALWAYS`
+/// and then a truncate when the file existed, so hidden and system files
+/// keep their attributes (`CREATE_ALWAYS` resets them, or fails on them).
+/// A created file is read-only when `mode` has no write bit. Never
+/// inherited by children.
+///
+/// # Safety
+/// `how` must be a live `GcBuf<u32>` of the library's `OpenHow` slots.
 #[unsafe(no_mangle)]
-pub extern "C" fn rok_os_open(dir: i32, path: RokStr, flags: i32, mode: u32) -> i32 {
-    let mut access = if flags & 1 != 0 { win::GENERIC_READ } else { 0 };
-    if flags & 4 != 0 {
-        access |= APPEND_ACCESS;
-    } else if flags & 2 != 0 {
-        access |= win::GENERIC_WRITE;
-    }
-    let disposition = match (flags & 32 != 0, flags & 16 != 0, flags & 8 != 0) {
-        (true, _, _) => win::CREATE_NEW,
-        (_, true, true) => win::CREATE_ALWAYS,
-        (_, true, false) => win::OPEN_ALWAYS,
-        (_, false, true) => win::TRUNCATE_EXISTING,
+pub unsafe extern "C" fn rok_os_open(dir: i32, path: RokStr, how: *const u8) -> i32 {
+    // SAFETY: caller contract.
+    let how = unsafe { How::read(how) };
+    let access = match how.access {
+        1 => win::GENERIC_WRITE,
+        2 => win::GENERIC_READ | win::GENERIC_WRITE,
+        3 => APPEND_ACCESS,
+        4 => win::GENERIC_READ | APPEND_ACCESS,
+        _ => win::GENERIC_READ,
+    };
+    let disposition = match how.disposition {
+        1 | 3 => win::OPEN_ALWAYS,
+        2 => win::CREATE_NEW,
         _ => win::OPEN_EXISTING,
     };
-    let dir_flag = flags & 64 != 0;
-    let mut attrs = if mode & 0o222 == 0 && flags & 48 != 0 {
-        win::FILE_ATTRIBUTE_READONLY
-    } else {
-        win::FILE_ATTRIBUTE_NORMAL
-    };
-    if dir_flag {
-        attrs |= win::FILE_FLAG_BACKUP_SEMANTICS;
+    let mut flags = how.attrs | how.custom;
+    if how.disposition != 0 && how.mode & 0o222 == 0 {
+        flags |= win::FILE_ATTRIBUTE_READONLY;
+    }
+    if how.sqos != 0 {
+        flags |= win::SECURITY_SQOS_PRESENT | how.sqos;
+    }
+    if how.directory {
+        flags |= win::FILE_FLAG_BACKUP_SEMANTICS;
+    }
+    if how.nofollow {
+        flags |= win::FILE_FLAG_OPEN_REPARSE_POINT;
     }
     let mut p = match path_w(dir, path) {
         Ok(p) => p,
@@ -450,22 +464,129 @@ pub extern "C" fn rok_os_open(dir: i32, path: RokStr, flags: i32, mode: u32) -> 
         win::CreateFileW(
             p.ptr(),
             access,
-            win::FILE_SHARE_READ | win::FILE_SHARE_WRITE | win::FILE_SHARE_DELETE,
+            how.share,
             ptr::null_mut(),
             disposition,
-            attrs,
+            flags,
             0,
         )
     });
     if hd == win::INVALID_HANDLE_VALUE {
+        // Without FILE_FLAG_BACKUP_SEMANTICS a directory is ACCESS_DENIED.
+        if e == win::ERROR_ACCESS_DENIED && !how.directory {
+            // SAFETY: a NUL-terminated path.
+            let a = unsafe { win::GetFileAttributesW(p.ptr()) };
+            if a != win::INVALID_FILE_ATTRIBUTES && a & win::FILE_ATTRIBUTE_DIRECTORY != 0 {
+                return -win::ERROR_DIRECTORY_NOT_SUPPORTED;
+            }
+        }
         return -e;
     }
-    if dir_flag && !is_dir(hd) {
-        // SAFETY: ours.
-        unsafe { win::CloseHandle(hd) };
+    let hd = Owned(hd);
+    if how.directory && !is_dir(hd.0) {
         return -win::ERROR_DIRECTORY;
     }
-    hd as i32
+    if how.nofollow && is_symlink(hd.0) {
+        return -win::ERROR_STOPPED_ON_SYMLINK;
+    }
+    if how.disposition == 1 && e == win::ERROR_ALREADY_EXISTS {
+        if let Err(e) = truncate_existing(hd.0, how.attrs) {
+            return e;
+        }
+    }
+    let raw = hd.0;
+    core::mem::forget(hd);
+    raw as i32
+}
+
+/// Empty a file `OPEN_ALWAYS` found, and merge `attrs` into its
+/// attributes as `CREATE_ALWAYS` would.
+fn truncate_existing(hd: HANDLE, attrs: DWORD) -> Result<(), i32> {
+    let end = 0i64;
+    // SAFETY: an 8-byte `FILE_END_OF_FILE_INFO`.
+    let ok = unsafe {
+        win::SetFileInformationByHandle(hd, win::FileEndOfFileInfo, (&raw const end).cast(), 8)
+    };
+    if ok == 0 {
+        return Err(fail());
+    }
+    if attrs == 0 {
+        return Ok(());
+    }
+    // SAFETY: zeroed info is a valid out-buffer.
+    let mut bi: win::FILE_BASIC_INFO = unsafe { zeroed() };
+    let n = size_of::<win::FILE_BASIC_INFO>() as DWORD;
+    // SAFETY: valid buffers of their size.
+    unsafe {
+        if win::GetFileInformationByHandleEx(hd, win::FileBasicInfo, (&raw mut bi).cast(), n) == 0 {
+            return Err(fail());
+        }
+        bi.FileAttributes |= attrs;
+        // Zero times mean "unchanged".
+        bi.CreationTime = 0;
+        bi.LastAccessTime = 0;
+        bi.LastWriteTime = 0;
+        bi.ChangeTime = 0;
+        if win::SetFileInformationByHandle(hd, win::FileBasicInfo, (&raw const bi).cast(), n) == 0 {
+            return Err(fail());
+        }
+    }
+    Ok(())
+}
+
+/// Whether the open handle `hd` is a symbolic link (opened with
+/// `FILE_FLAG_OPEN_REPARSE_POINT`).
+fn is_symlink(hd: HANDLE) -> bool {
+    // SAFETY: zeroed info is a valid out-buffer.
+    let mut ti: win::FILE_ATTRIBUTE_TAG_INFO = unsafe { zeroed() };
+    // SAFETY: valid out-buffer of its size.
+    let ok = unsafe {
+        win::GetFileInformationByHandleEx(
+            hd,
+            win::FileAttributeTagInfo,
+            (&raw mut ti).cast(),
+            size_of::<win::FILE_ATTRIBUTE_TAG_INFO>() as DWORD,
+        )
+    };
+    ok != 0
+        && ti.FileAttributes & win::FILE_ATTRIBUTE_REPARSE_POINT != 0
+        && ti.ReparseTag == win::IO_REPARSE_TAG_SYMLINK
+}
+
+/// `CreateFile2` with the caller's parameters as given
+/// (`DirExt::create_file`): `p` is `[access, disposition, share,
+/// attributes, flags, sqos]`. Never inherited by children.
+///
+/// # Safety
+/// `p` must be a live `GcBuf<u32>` of 6 elements.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rok_os_create_file2(dir: i32, path: RokStr, p: *const u8) -> i32 {
+    let mut v = [0u32; 6];
+    // SAFETY: caller contract.
+    unsafe { ptr::copy_nonoverlapping(p.add(HEADER_SIZE).cast(), v.as_mut_ptr(), 6) };
+    let mut w = match path_w(dir, path) {
+        Ok(w) => w,
+        Err(e) => return e,
+    };
+    let ext = win::CREATEFILE2_EXTENDED_PARAMETERS {
+        dwSize: size_of::<win::CREATEFILE2_EXTENDED_PARAMETERS>() as DWORD,
+        dwFileAttributes: v[3],
+        dwFileFlags: v[4],
+        dwSecurityQosFlags: if v[5] != 0 {
+            win::SECURITY_SQOS_PRESENT | v[5]
+        } else {
+            0
+        },
+        lpSecurityAttributes: ptr::null_mut(),
+        hTemplateFile: 0,
+    };
+    // SAFETY: a NUL-terminated path and a filled-in parameter block.
+    let (hd, e) = native(|| unsafe { win::CreateFile2(w.ptr(), v[0], v[2], v[1], &raw const ext) });
+    if hd == win::INVALID_HANDLE_VALUE {
+        -e
+    } else {
+        hd as i32
+    }
 }
 
 /// Whether the open handle `hd` is a directory.
@@ -714,6 +835,33 @@ pub extern "C" fn rok_os_fchmod(fd: i32, mode: u32) -> i32 {
         }
     }
     0
+}
+
+/// `rok_os_fchmod` by path: the read-only attribute of `path` under
+/// `dir` (a final symlink is followed).
+#[unsafe(no_mangle)]
+pub extern "C" fn rok_os_chmod(dir: i32, path: RokStr, mode: u32) -> i32 {
+    let mut p = match path_w(dir, path) {
+        Ok(p) => p,
+        Err(e) => return e,
+    };
+    // SAFETY: a NUL-terminated path.
+    let hd = unsafe {
+        win::CreateFileW(
+            p.ptr(),
+            win::FILE_READ_ATTRIBUTES | win::FILE_WRITE_ATTRIBUTES,
+            win::FILE_SHARE_READ | win::FILE_SHARE_WRITE | win::FILE_SHARE_DELETE,
+            ptr::null_mut(),
+            win::OPEN_EXISTING,
+            win::FILE_FLAG_BACKUP_SEMANTICS,
+            0,
+        )
+    };
+    if hd == win::INVALID_HANDLE_VALUE {
+        return fail();
+    }
+    let hd = Owned(hd);
+    rok_os_fchmod(hd.0 as i32, mode)
 }
 
 /// The allocation granularity (64 KiB): map view offsets are multiples.
