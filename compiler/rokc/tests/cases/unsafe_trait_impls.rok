@@ -1,0 +1,39 @@
+// expect-exit: 0
+// expect-stdout:
+// zero 0 0
+// pod 8
+
+// An `unsafe trait` is implemented by `unsafe impl`: the impl promises
+// what the compiler cannot check. `Pod` is one.
+use rok::bare::mem::Pod;
+
+/// Every all-zero bit pattern is a value.
+unsafe trait Zeroable {
+    fn zeroed() -> Self;
+}
+
+unsafe impl Zeroable for i32 {
+    fn zeroed() -> i32 { 0 }
+}
+
+unsafe impl Zeroable for u64 {
+    fn zeroed() -> u64 { 0u64 }
+}
+
+#[repr(C)]
+struct Pair { a: u32; b: u32; }
+
+unsafe impl Pod for Pair {}
+
+fn zero<T: Zeroable>() -> T { T::zeroed() }
+
+fn size<T: Pod>(v: T) -> usize { rok::bare::mem::size_of::<T>() }
+
+fn main() {
+    let a: i32 = zero();
+    let b: u64 = zero();
+    println(f"zero {a} {b}");
+    println(f"pod {size(Pair { a: 1u32, b: 2u32 })}");
+}
+
+// spec: refs-lang §4.15.4

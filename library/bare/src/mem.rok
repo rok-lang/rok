@@ -70,33 +70,34 @@ pub fn buf_same<T>(a: GcBuf<T>, b: GcBuf<T>) -> bool {
 
 /// Plain old data: every bit pattern of the type is a valid value, its
 /// layout is fixed and it has no `Drop` (spec 1.3.3). User structs opt
-/// in with `#[derive(Pod)]` (`#[repr(C)]` / `#[repr(transparent)]`).
+/// in with `#[derive(Pod)]` (`#[repr(C)]` / `#[repr(transparent)]`); a
+/// hand-written impl is `unsafe impl Pod`.
 /// `bool` and `char` are not `Pod`: most of their bit patterns are not
 /// values (read a `u8` / `u32` and convert).
-pub trait Pod {}
+pub unsafe trait Pod {}
 
-impl Pod for i8 {}
-impl Pod for i16 {}
-impl Pod for i32 {}
-impl Pod for i64 {}
-impl Pod for isize {}
-impl Pod for u8 {}
-impl Pod for u16 {}
-impl Pod for u32 {}
-impl Pod for u64 {}
-impl Pod for usize {}
-impl Pod for f32 {}
-impl Pod for f64 {}
-impl Pod for c_char {}
-impl<T: Pod, const N: usize> Pod for [T; N] {}
-impl<A: Pod> Pod for (A,) {}
-impl<A: Pod, B: Pod> Pod for (A, B) {}
-impl<A: Pod, B: Pod, C: Pod> Pod for (A, B, C) {}
-impl<A: Pod, B: Pod, C: Pod, D: Pod> Pod for (A, B, C, D) {}
+unsafe impl Pod for i8 {}
+unsafe impl Pod for i16 {}
+unsafe impl Pod for i32 {}
+unsafe impl Pod for i64 {}
+unsafe impl Pod for isize {}
+unsafe impl Pod for u8 {}
+unsafe impl Pod for u16 {}
+unsafe impl Pod for u32 {}
+unsafe impl Pod for u64 {}
+unsafe impl Pod for usize {}
+unsafe impl Pod for f32 {}
+unsafe impl Pod for f64 {}
+unsafe impl Pod for c_char {}
+unsafe impl<T: Pod, const N: usize> Pod for [T; N] {}
+unsafe impl<A: Pod> Pod for (A,) {}
+unsafe impl<A: Pod, B: Pod> Pod for (A, B) {}
+unsafe impl<A: Pod, B: Pod, C: Pod> Pod for (A, B, C) {}
+unsafe impl<A: Pod, B: Pod, C: Pod, D: Pod> Pod for (A, B, C, D) {}
 
 #[impl_derive(Pod)]
 pub @derive {
-    impl rok::bare::mem::Pod for @Self {}
+    unsafe impl rok::bare::mem::Pod for @Self {}
 }
 
 /// The bits of `a` as a `B`; both are `Pod` and the same size (a size

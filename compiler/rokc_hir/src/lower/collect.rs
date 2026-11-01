@@ -649,6 +649,9 @@ fn collect<'a>(
             Item::TypeAlias(a) => (&a.name, a.vis),
             Item::Trait(t) => {
                 names.traits.insert(t.name.clone());
+                if t.is_unsafe {
+                    names.unsafe_traits.insert(t.name.clone());
+                }
                 let mut methods: HashMap<&str, Span> = HashMap::new();
                 for ti in &t.items {
                     let rokc_ast::TraitItem::Method(m) = ti else {
@@ -7024,8 +7027,9 @@ fn occurs(v: &str, t: &CanonTy) -> bool {
 }
 
 /// Auto trait impls: opt in with `unsafe impl`, out with `impl !Tr for S`
-/// (recorded in `neg`); both only for auto traits. Whether to register the
-/// impl normally (false for opt-outs and errors).
+/// (recorded in `neg`); both only for auto traits. An `unsafe trait`
+/// takes `unsafe impl` only. Whether to register the impl normally (false
+/// for opt-outs and errors).
 fn check_auto_impl(
     impl_def: &rokc_ast::ImplDef,
     names: &TypeNames,
@@ -7060,13 +7064,37 @@ fn check_auto_impl(
         );
         return false;
     }
+    if names.unsafe_traits.contains(&key) {
+        if impl_def.negative {
+            err(
+                diags,
+                format!(
+                    "`impl !{tr}`: `impl !Trait` is only for the auto traits `Send` / `Sync`; \
+                     remove it (a type without `unsafe impl {tr}` does not have it)"
+                ),
+            );
+            return false;
+        }
+        if !impl_def.is_unsafe {
+            err(
+                diags,
+                format!(
+                    "`{tr}` is an `unsafe trait`: the impl promises what the compiler cannot \
+                     check; write `unsafe impl {tr} for {target}`"
+                ),
+            );
+            return false;
+        }
+        return true;
+    }
     if !names.auto_traits.contains(&key) {
         if impl_def.is_unsafe || impl_def.negative {
             err(
                 diags,
                 format!(
-                    "`{tr}` is not an auto trait - `unsafe impl` and `impl !Trait` are only \
-                     for `Send` / `Sync`"
+                    "`{tr}` is not an auto trait or an `unsafe trait` - `unsafe impl` is only \
+                     for `Send`, `Sync` and `unsafe trait`s, `impl !Trait` only for `Send` / \
+                     `Sync`; write `impl {tr} for {target}`"
                 ),
             );
             return false;

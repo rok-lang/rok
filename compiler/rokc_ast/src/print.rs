@@ -359,6 +359,9 @@ impl Printer {
             Item::Trait(t) => {
                 self.attrs(&t.attrs);
                 self.vis(t.vis);
+                if t.is_unsafe {
+                    self.s("unsafe ");
+                }
                 self.s("trait ");
                 self.s(&t.name);
                 self.generics(&t.generics);

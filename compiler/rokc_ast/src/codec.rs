@@ -392,6 +392,7 @@ codec_struct!(UnionDef {
 codec_struct!(TraitDef {
     vis,
     attrs,
+    is_unsafe,
     name,
     generics,
     supertraits,
