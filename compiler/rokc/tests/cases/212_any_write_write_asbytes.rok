@@ -8,7 +8,7 @@
 
 // `write<B: AsBytes>` stays callable on `any Write`, the `async` twin
 // too (with its `ref self` written back on the concrete type).
-use rok::core::collections::slice::AsBytes;
+use rok::core::convert::AsBytes;
 
 trait Write {
     fn write<B: AsBytes>(self, buf: B) -> usize;
