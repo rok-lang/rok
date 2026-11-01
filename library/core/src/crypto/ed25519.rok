@@ -1,6 +1,5 @@
 // Ed25519 (RFC 8032 5.1): pure EdDSA over edwards25519 with SHA-512.
 
-use sup::{view, ByteInput};
 use sup::sha2::{HashAlgorithm, Digest};
 use sup::curve25519::{EdPoint, ge_base, ge_add, ge_negate, ge_encode, ge_decode, ge_mul_ct, sc25519_reduce, sc25519_muladd, sc25519_is_canonical};
 
@@ -10,8 +9,8 @@ pub struct Ed25519;
 
 /// SHA-512 of a seed: the secret scalar (clamped) from the first half;
 /// the nonce prefix is the second.
-fn expand(seed: ByteInput) throws (ValueError) -> ([u8; 32], [u8; 64]) {
-    let s = view(seed);
+fn expand<B: AsBytes>(seed: B) throws (ValueError) -> ([u8; 32], [u8; 64]) {
+    let s = seed.byte_slice();
     if s.len() != 32 { throw ValueError::new("Ed25519 seed must be 32 bytes"); }
     let d = Digest::new(HashAlgorithm::Sha512);
     d.update(s);
@@ -33,15 +32,15 @@ fn hash_scalar(a: Slice<u8>, b: Slice<u8>, c: Slice<u8>) -> [u8; 32] {
 }
 
 impl Ed25519 {
-    pub fn public_key(seed: ByteInput) throws (ValueError) -> List<u8> {
+    pub fn public_key<B: AsBytes>(seed: B) throws (ValueError) -> List<u8> {
         let (a, _) = try expand(seed);
         ge_encode(ge_mul_ct(a, ge_base()))
     }
 
     /// The signature `R || S` of `msg` (deterministic).
-    pub fn sign(seed: ByteInput, msg: ByteInput) throws (ValueError) -> List<u8> {
+    pub fn sign<S: AsBytes, M: AsBytes>(seed: S, msg: M) throws (ValueError) -> List<u8> {
         let (a, hs) = try expand(seed);
-        let m = view(msg);
+        let m = msg.byte_slice();
         let pk = ge_encode(ge_mul_ct(a, ge_base()));
         let prefix: [u8; 128] = [0u8; 128];
         for i in 0usize..32 { prefix[i] = hs[32 + i]; }
@@ -59,9 +58,9 @@ impl Ed25519 {
     /// Whether `sig` is a valid signature of `msg` under `public_key`:
     /// canonical `A`, `S < L`, and the encoding of `[S]B - [k]A` equal
     /// to `R` byte for byte (cofactorless, RFC 8032 5.1.7).
-    pub fn verify(public_key: ByteInput, msg: ByteInput, sig: ByteInput) -> bool {
-        let pk = view(public_key);
-        let sg = view(sig);
+    pub fn verify<P: AsBytes, M: AsBytes, S: AsBytes>(public_key: P, msg: M, sig: S) -> bool {
+        let pk = public_key.byte_slice();
+        let sg = sig.byte_slice();
         if pk.len() != 32 || sg.len() != 64 { return false; }
         let s = sg[32:64];
         if !sc25519_is_canonical(s) { return false; }
@@ -69,7 +68,7 @@ impl Ed25519 {
             p: EdPoint => p,
             none => { return false; },
         };
-        let k = hash_scalar(sg[0:32], pk, view(msg));
+        let k = hash_scalar(sg[0:32], pk, msg.byte_slice());
         let sb: [u8; 32] = [0u8; 32];
         for i in 0usize..32 { sb[i] = s[i]; }
         let r = ge_add(ge_mul_ct(sb, ge_base()), ge_mul_ct(k, ge_negate(a)));

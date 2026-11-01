@@ -1,0 +1,89 @@
+// rok::core::encoding::hex - base16 (RFC 4648 section 8): two digits per
+// byte. Decoding takes either case.
+
+use sup::{DecodeError, DecodeErrorKind, shown_byte, zeroed, ascii};
+
+const DIGITS_LOWER: str = "0123456789abcdef";
+const DIGITS_UPPER: str = "0123456789ABCDEF";
+
+/// The case of the digits `a` to `f` that `encode` writes.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum Case {
+    Lower,
+    Upper,
+}
+
+/// `data` in hex, two digits per byte.
+pub fn encode<B: AsBytes>(data: B, case: Case = Case::Lower) -> str {
+    let b = data.byte_slice();
+    let out = zeroed(2 * b.len());
+    let n = encode_into(b, out, case);
+    ascii(out, n)
+}
+
+/// `data` in hex, written to the front of `out`; returns how many bytes
+/// it wrote (`2 * data.len()`). Panics if `out` is shorter.
+#[track_caller]
+pub fn encode_into<B: AsBytes>(data: B, out: SliceMut<u8>, case: Case = Case::Lower) -> usize {
+    let b = data.byte_slice();
+    let need = 2 * b.len();
+    if out.len() < need {
+        panic(f"hex::encode_into: `out` holds {out.len()} bytes but the text needs {need}, two per byte");
+    }
+    let digits = match case {
+        Case::Lower => DIGITS_LOWER,
+        Case::Upper => DIGITS_UPPER,
+    };
+    let j = 0usize;
+    for x in b {
+        out[j] = digits.byte((x >> 4) as usize);
+        out[j + 1] = digits.byte((x & 0x0fu8) as usize);
+        j += 2;
+    }
+    j
+}
+
+/// The bytes `text` spells in hex, two digits each (either case).
+pub fn decode<B: AsBytes>(text: B) throws (DecodeError) -> List<u8> {
+    let t = text.byte_slice();
+    let out = zeroed(t.len() / 2);
+    let n = try decode_into(t, out);
+    out.truncate(n);
+    out
+}
+
+/// The bytes `text` spells in hex, written to the front of `out`;
+/// returns how many it wrote (`text.len() / 2`). Panics if `out` is
+/// shorter.
+#[track_caller]
+pub fn decode_into<B: AsBytes>(text: B, out: SliceMut<u8>) throws (DecodeError) -> usize {
+    let t = text.byte_slice();
+    let n = t.len();
+    if n % 2 != 0 {
+        throw DecodeError::new(DecodeErrorKind::InvalidLength, n - 1, f"hex: odd length {n}; every byte takes two digits, so write \"0f\" rather than \"f\"");
+    }
+    if out.len() < n / 2 {
+        panic(f"hex::decode_into: `out` holds {out.len()} bytes but the text spells {n / 2}");
+    }
+    let i = 0usize;
+    while i < n {
+        let hi = digit(t[i]);
+        if hi < 0 { throw bad_digit(t[i], i); }
+        let lo = digit(t[i + 1]);
+        if lo < 0 { throw bad_digit(t[i + 1], i + 1); }
+        out[i / 2] = ((hi << 4) | lo) as u8;
+        i += 2;
+    }
+    n / 2
+}
+
+const fn digit(c: u8) -> i32 {
+    if c >= 0x30u8 && c <= 0x39u8 { return (c - 0x30u8) as i32; }
+    if c >= 0x61u8 && c <= 0x66u8 { return (c - 0x61u8) as i32 + 10; }
+    if c >= 0x41u8 && c <= 0x46u8 { return (c - 0x41u8) as i32 + 10; }
+    -1
+}
+
+const fn bad_digit(c: u8, at: usize) -> DecodeError {
+    DecodeError::new(DecodeErrorKind::InvalidByte, at, f"hex: {shown_byte(c)} at byte {at} is not a hex digit; use 0-9, a-f or A-F")
+}

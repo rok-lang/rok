@@ -18,7 +18,8 @@ use rok::std::fs;
 use rok::std::env;
 use rok::std::path::Path;
 use rok::std::thread;
-use rok::std::io::{AsBytes, IoError, byte_buf};
+use rok::core::convert::AsBytes;
+use rok::std::io::{IoError, byte_buf};
 
 /// Any `AsBytes` value writes, not only the library's own.
 struct Msg { s: str; }

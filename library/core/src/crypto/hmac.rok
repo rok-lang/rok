@@ -1,7 +1,7 @@
 // HMAC (RFC 2104) and HKDF (RFC 5869) over a SHA-2 function, and the
 // one-shot `_sha3` forms over a SHA-3 one.
 
-use sup::{view, ByteInput, Secret};
+use sup::Secret;
 use sup::constant_time_eq;
 use sup::sha2::{HashAlgorithm, Digest};
 use sup::sha3::{Sha3Algorithm, Keccak};
@@ -14,8 +14,8 @@ struct Sha3Mac {
 }
 
 impl Sha3Mac {
-    fn new(alg: Sha3Algorithm, key: ByteInput) -> Sha3Mac {
-        let k = view(key);
+    fn new<B: AsBytes>(alg: Sha3Algorithm, key: B) -> Sha3Mac {
+        let k = key.byte_slice();
         let bl = alg.block_len();
         // The key, zero-padded to a block, in arrays: no list holds it.
         let kb: [u8; 168] = [0u8; 168];
@@ -54,8 +54,8 @@ pub struct Hmac {
 }
 
 impl Hmac {
-    pub fn new(alg: HashAlgorithm, key: ByteInput) -> Hmac {
-        let k = view(key);
+    pub fn new<B: AsBytes>(alg: HashAlgorithm, key: B) -> Hmac {
+        let k = key.byte_slice();
         let bl = alg.block_len();
         // The key, zero-padded to a block, in arrays: no list holds it.
         let kb: [u8; 128] = [0u8; 128];
@@ -78,19 +78,19 @@ impl Hmac {
     }
 
     /// The tag of `data` under `key`.
-    pub fn mac(alg: HashAlgorithm, key: ByteInput, data: ByteInput) -> List<u8> {
+    pub fn mac<K: AsBytes, D: AsBytes>(alg: HashAlgorithm, key: K, data: D) -> List<u8> {
         let h = Hmac::new(alg, key);
         h.update(data);
         h.finish()
     }
 
     /// Whether `tag` is the tag of `data`, compared in constant time.
-    pub fn verify(alg: HashAlgorithm, key: ByteInput, data: ByteInput, tag: ByteInput) -> bool {
+    pub fn verify<K: AsBytes, D: AsBytes, T: AsBytes>(alg: HashAlgorithm, key: K, data: D, tag: T) -> bool {
         constant_time_eq(Hmac::mac(alg, key, data), tag)
     }
 
     /// `mac` over a SHA-3 function: `Hmac::mac_sha3(Sha3_256, key, data)`.
-    pub fn mac_sha3(alg: Sha3Algorithm, key: ByteInput, data: ByteInput) -> List<u8> {
+    pub fn mac_sha3<K: AsBytes, D: AsBytes>(alg: Sha3Algorithm, key: K, data: D) -> List<u8> {
         let m = Sha3Mac::new(alg, key);
         m.inner.absorb(data);
         let t = m.finish_raw();
@@ -100,11 +100,11 @@ impl Hmac {
     }
 
     /// `verify` over a SHA-3 function.
-    pub fn verify_sha3(alg: Sha3Algorithm, key: ByteInput, data: ByteInput, tag: ByteInput) -> bool {
+    pub fn verify_sha3<K: AsBytes, D: AsBytes, T: AsBytes>(alg: Sha3Algorithm, key: K, data: D, tag: T) -> bool {
         constant_time_eq(Hmac::mac_sha3(alg, key, data), tag)
     }
 
-    pub fn update(ref self, data: ByteInput) { self.inner.update(data); }
+    pub fn update<B: AsBytes>(ref self, data: B) { self.inner.update(data); }
 
     pub const fn finish(self) -> List<u8> {
         self.outer_raw().finish()
@@ -128,8 +128,8 @@ pub struct Hkdf;
 
 impl Hkdf {
     /// `HMAC(salt, ikm)`; an empty salt is `output_len` zero bytes.
-    pub fn extract(alg: HashAlgorithm, salt: ByteInput, ikm: ByteInput) -> Secret {
-        let s = view(salt);
+    pub fn extract<S: AsBytes, I: AsBytes>(alg: HashAlgorithm, salt: S, ikm: I) -> Secret {
+        let s = salt.byte_slice();
         // A zero key and an empty one give the same HMAC.
         let h = Hmac::new(alg, s);
         h.update(ikm);
@@ -141,13 +141,13 @@ impl Hkdf {
 
     /// `len` bytes of output keying material; `len` is at most
     /// `255 * output_len`.
-    pub fn expand(alg: HashAlgorithm, prk: ByteInput, info: ByteInput, len: usize) throws (ValueError) -> Secret {
+    pub fn expand<P: AsBytes, I: AsBytes>(alg: HashAlgorithm, prk: P, info: I, len: usize) throws (ValueError) -> Secret {
         let ol = alg.output_len();
         if len > 255 * ol {
             throw ValueError::new("HKDF output too long");
         }
         let base = Hmac::new(alg, prk);
-        let inf = view(info);
+        let inf = info.byte_slice();
         let out = Secret::zeroed(len);
         // T(i - 1) || i, in an array.
         let t: [u8; 128] = [0u8; 128];
@@ -176,8 +176,8 @@ impl Hkdf {
     }
 
     /// `extract` over a SHA-3 function.
-    pub fn extract_sha3(alg: Sha3Algorithm, salt: ByteInput, ikm: ByteInput) -> Secret {
-        let m = Sha3Mac::new(alg, view(salt));
+    pub fn extract_sha3<S: AsBytes, I: AsBytes>(alg: Sha3Algorithm, salt: S, ikm: I) -> Secret {
+        let m = Sha3Mac::new(alg, salt.byte_slice());
         m.inner.absorb(ikm);
         let prk = Secret::zeroed(alg.output_len());
         let t = m.finish_raw();
@@ -187,13 +187,13 @@ impl Hkdf {
 
     /// `expand` over a SHA-3 function; `len` is at most
     /// `255 * output_len`.
-    pub fn expand_sha3(alg: Sha3Algorithm, prk: ByteInput, info: ByteInput, len: usize) throws (ValueError) -> Secret {
+    pub fn expand_sha3<P: AsBytes, I: AsBytes>(alg: Sha3Algorithm, prk: P, info: I, len: usize) throws (ValueError) -> Secret {
         let ol = alg.output_len();
         if len > 255 * ol {
             throw ValueError::new("HKDF output too long");
         }
         let base = Sha3Mac::new(alg, prk);
-        let inf = view(info);
+        let inf = info.byte_slice();
         let out = Secret::zeroed(len);
         // T(i - 1) || i, in an array.
         let t: [u8; 168] = [0u8; 168];

@@ -1,8 +1,6 @@
 // SHA-3 (FIPS 202): SHA3-256, SHA3-512 and the SHAKE128 / SHAKE256
 // extendable-output functions, all over Keccak-f[1600].
 
-use sup::{view, ByteInput};
-
 const RC: [u64; 24] = [
     0x0000000000000001u64, 0x0000000000008082u64, 0x800000000000808au64, 0x8000000080008000u64,
     0x000000000000808bu64, 0x0000000080000001u64, 0x8000000080008081u64, 0x8000000000008009u64,
@@ -31,11 +29,11 @@ impl Keccak {
         Keccak { st: [0u64; 25], rate, pos: 0, pad, squeezing: false }
     }
 
-    pub(pkg) fn absorb(ref self, data: ByteInput) {
+    pub(pkg) fn absorb<B: AsBytes>(ref self, data: B) {
         if self.squeezing { panic("Keccak: update after squeeze"); }
         let st = self.st;
         let p = self.pos;
-        for b in view(data) {
+        for b in data.byte_slice() {
             st[p / 8] = st[p / 8] ^ ((b as u64) << ((8 * (p % 8)) as u64));
             p += 1;
             if p == self.rate {
@@ -171,7 +169,7 @@ impl Sha3Algorithm {
         }
     }
 
-    pub fn digest(self, data: ByteInput) -> List<u8> {
+    pub fn digest<B: AsBytes>(self, data: B) -> List<u8> {
         let k = self.sponge();
         k.absorb(data);
         k.squeeze(self.output_len())
@@ -193,13 +191,13 @@ impl Sha3_256 {
 
     pub const fn new() -> Sha3_256 { Sha3_256 { k: Keccak::new(136, 0x06u8) } }
 
-    pub fn digest(data: ByteInput) -> List<u8> {
+    pub fn digest<B: AsBytes>(data: B) -> List<u8> {
         let h = Sha3_256::new();
         h.update(data);
         h.finish()
     }
 
-    pub fn update(ref self, data: ByteInput) { self.k.absorb(data); }
+    pub fn update<B: AsBytes>(ref self, data: B) { self.k.absorb(data); }
 
     pub const fn finish(self) -> List<u8> { self.k.squeeze(32) }
 }
@@ -214,13 +212,13 @@ impl Sha3_512 {
 
     pub const fn new() -> Sha3_512 { Sha3_512 { k: Keccak::new(72, 0x06u8) } }
 
-    pub fn digest(data: ByteInput) -> List<u8> {
+    pub fn digest<B: AsBytes>(data: B) -> List<u8> {
         let h = Sha3_512::new();
         h.update(data);
         h.finish()
     }
 
-    pub fn update(ref self, data: ByteInput) { self.k.absorb(data); }
+    pub fn update<B: AsBytes>(ref self, data: B) { self.k.absorb(data); }
 
     pub const fn finish(self) -> List<u8> { self.k.squeeze(64) }
 
@@ -238,7 +236,7 @@ impl Shake128 {
     pub const fn new() -> Shake128 { Shake128 { k: Keccak::new(168, 0x1fu8) } }
 
     #[track_caller]
-    pub fn update(ref self, data: ByteInput) {
+    pub fn update<B: AsBytes>(ref self, data: B) {
         if self.k.squeezing { panic("Shake128::update: called after squeeze; start a new Shake128 for new input"); }
         self.k.absorb(data);
     }
@@ -255,7 +253,7 @@ impl Shake256 {
     pub const fn new() -> Shake256 { Shake256 { k: Keccak::new(136, 0x1fu8) } }
 
     #[track_caller]
-    pub fn update(ref self, data: ByteInput) {
+    pub fn update<B: AsBytes>(ref self, data: B) {
         if self.k.squeezing { panic("Shake256::update: called after squeeze; start a new Shake256 for new input"); }
         self.k.absorb(data);
     }

@@ -1,50 +1,63 @@
 // spec: std 222-encoding §2.22.3
 // expect-exit: 0
 // expect-stdout:
-// hex: odd length 3; every byte takes two digits, so write "0f" rather than "f"
-// hex: 'g' at byte 1 is not a hex digit; use 0-9, a-f or A-F
-// hex: byte 0x20 at byte 2 is not a hex digit; use 0-9, a-f or A-F
-// hex: byte 0xed at byte 0 is not a hex digit; use 0-9, a-f or A-F
-// base64: '-' at byte 2 is url-safe base64; decode with url_safe: true
-// base64: '+' at byte 0 is standard base64; decode with url_safe: false
-// base64: '*' at byte 1 is not base64; use A-Z, a-z, 0-9, + and /
-// base64: '.' at byte 3 is not base64; use A-Z, a-z, 0-9, - and _
-// base64: byte 0x0a at byte 4 is not base64; use A-Z, a-z, 0-9, + and /
-// base64: '=' at byte 1: '=' pads only the end of the text
-// base64: '=' at byte 0: '=' pads only the end of the text
-// base64: padded text must be a multiple of 4 characters long, not 3; fix the '=' count or drop the padding
-// base64: padded text must be a multiple of 4 characters long, not 7; fix the '=' count or drop the padding
-// base64: text is cut short at byte 4; a last group needs 2 to 4 characters
-// base64: text is cut short at byte 0; a last group needs 2 to 4 characters
+// InvalidLength 2: hex: odd length 3; every byte takes two digits, so write "0f" rather than "f"
+// InvalidByte 1: hex: 'g' at byte 1 is not a hex digit; use 0-9, a-f or A-F
+// InvalidByte 2: hex: byte 0x20 at byte 2 is not a hex digit; use 0-9, a-f or A-F
+// InvalidByte 0: hex: byte 0xed at byte 0 is not a hex digit; use 0-9, a-f or A-F
+// InvalidByte 2: base64: '-' at byte 2 is url-safe base64; decode with base64::URL_SAFE
+// InvalidByte 0: base64: '+' at byte 0 is standard base64; decode with base64::STANDARD
+// InvalidByte 1: base64: '*' at byte 1 is not base64; use A-Z, a-z, 0-9, + and /
+// InvalidByte 3: base64: '.' at byte 3 is not base64; use A-Z, a-z, 0-9, - and _
+// InvalidByte 4: base64: byte 0x0a at byte 4 is not base64; use A-Z, a-z, 0-9, + and /
+// InvalidPadding 1: base64: '=' at byte 1: '=' pads only the end of the text
+// InvalidPadding 0: base64: '=' at byte 0: '=' pads only the end of the text
+// InvalidPadding 2: base64: padded text must be a multiple of 4 characters long, not 3; fix the '=' count or drop the padding
+// InvalidPadding 6: base64: padded text must be a multiple of 4 characters long, not 7; fix the '=' count or drop the padding
+// InvalidLength 4: base64: text is cut short at byte 4; a last group needs 2 to 4 characters
+// InvalidLength 0: base64: text is cut short at byte 0; a last group needs 2 to 4 characters
+// InvalidPadding 2: base64: '=' at byte 2, but this codec takes no padding; drop the '=' or decode with base64::STANDARD
+// InvalidPadding 2: base64: text of 2 characters has no '=' padding, which this codec requires; pad it to a multiple of 4 or decode with base64::STANDARD
+// decoded [102]
 // ok [] [] [102]
 
-// Every decode error names the offending byte offset and says what to
-// write instead.
-fn hex(s: str) {
-    try { hex_decode(s); println("decoded"); } catch e { println(e.message()); }
+// Every decode error has a kind, names the offending byte offset and
+// says what to write instead.
+use rok::core::encoding::{base64, hex, DecodeError};
+use rok::core::encoding::base64::{Codec, Alphabet, Padding};
+
+fn show(e: DecodeError) { println(f"{e.kind():?} {e.position()}: {e}"); }
+
+fn hx(s: str) {
+    try { hex::decode(s); println("decoded"); } catch e { show(e); }
 }
 
-fn b64(s: str, url_safe: bool) {
-    try { base64_decode(s, url_safe: url_safe); println("decoded"); } catch e { println(e.message()); }
+fn b64(s: str, codec: Codec) {
+    try { let d = base64::decode(s, codec); println(f"decoded {d:?}"); } catch e { show(e); }
 }
 
 fn main() {
-    hex("abc");
-    hex("0g");
-    hex("00 1");
-    hex("한국");
-    b64("ab-_", false);
-    b64("+/+/", true);
-    b64("a*bc", false);
-    b64("abc.", true);
-    b64("Zm9v\nYmFy", false);
-    b64("a===", false);
-    b64("====", false);
-    b64("QQ=", false);
-    b64("Zm9vYg=", false);
-    b64("Zm9vY", false);
-    b64("Q", false);
+    let std = base64::STANDARD;
+    let url = base64::URL_SAFE;
+    hx("abc");
+    hx("0g");
+    hx("00 1");
+    hx("한국");
+    b64("ab-_", std);
+    b64("+/+/", url);
+    b64("a*bc", std);
+    b64("abc.", url);
+    b64("Zm9v\nYmFy", std);
+    b64("a===", std);
+    b64("====", std);
+    b64("QQ=", std);
+    b64("Zm9vYg=", std);
+    b64("Zm9vY", std);
+    b64("Q", std);
+    b64("Zg==", base64::STANDARD_NO_PAD);
+    b64("Zg", Codec::new(Alphabet::Standard, Padding::Present));
+    b64("Zg==", Codec::new(Alphabet::Standard, Padding::Present));
     let e: List<u8> = [];
-    let ok = try! base64_decode(e);
-    println(f"ok {ok:?} {try! hex_decode(e):?} {try! base64_decode("Zg", url_safe: true):?}");
+    let ok = try! base64::decode(e);
+    println(f"ok {ok:?} {try! hex::decode(e):?} {try! base64::decode("Zg", url):?}");
 }

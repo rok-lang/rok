@@ -11,7 +11,7 @@
 // exponent, carries and reductions are masks. Verification sees public
 // data only and indexes its tables by scalar digits.
 
-use sup::{view, ByteInput, ct_mask};
+use sup::ct_mask;
 use sup::sha2::HashAlgorithm;
 use sup::hmac::Hmac;
 use sup::bignum::Nat;
@@ -457,7 +457,7 @@ impl Curve {
 
     /// The hash's leftmost bits as wide as the order, reduced mod `q`
     /// (bits2int then mod q; the orders have whole bytes).
-    fn hash_int(self, hash: HashAlgorithm, msg: ByteInput) -> Fe {
+    fn hash_int<B: AsBytes>(self, hash: HashAlgorithm, msg: B) -> Fe {
         let h = hash.digest(msg);
         let hb = if h.len() > self.size { h[0:self.size] } else { h[0:h.len()] };
         let e = fe_from_be(hb, self.fp.n) ?? fe_zero();
@@ -465,8 +465,8 @@ impl Curve {
     }
 
     /// The secret scalar `d` from big-endian bytes: `1 <= d < q`.
-    fn scalar(self, b: ByteInput) throws (ValueError) -> Fe {
-        let s = view(b);
+    fn scalar<B: AsBytes>(self, b: B) throws (ValueError) -> Fe {
+        let s = b.byte_slice();
         let bad = ValueError::new("bad ECDSA private key");
         if s.len() > self.size { throw bad; }
         let d: Fe = fe_from_be(s, self.fp.n) else { throw bad; };
@@ -527,7 +527,7 @@ pub struct Ecdsa;
 impl Ecdsa {
     /// The SEC1 uncompressed public key of `private_key` (a big-endian
     /// scalar of at most the curve's size).
-    pub fn public_key(curve: EcCurve, private_key: ByteInput) throws (ValueError) -> List<u8> {
+    pub fn public_key<B: AsBytes>(curve: EcCurve, private_key: B) throws (ValueError) -> List<u8> {
         let c = curve_of(curve);
         let d = try c.scalar(private_key);
         let (x, y) = c.affine(c.mul_base(d)) ?? (fe_zero(), fe_zero());
@@ -539,7 +539,7 @@ impl Ecdsa {
 
     /// A DER signature of `msg`, hashed with `hash`, by `private_key`;
     /// the nonce is derived per RFC 6979 (HMAC-DRBG with `hash`).
-    pub fn sign(curve: EcCurve, hash: HashAlgorithm, private_key: ByteInput, msg: ByteInput) throws (ValueError) -> List<u8> {
+    pub fn sign<P: AsBytes, M: AsBytes>(curve: EcCurve, hash: HashAlgorithm, private_key: P, msg: M) throws (ValueError) -> List<u8> {
         let c = curve_of(curve);
         let q = c.fq;
         let n = c.fp.n;
@@ -606,11 +606,11 @@ impl Ecdsa {
 
     /// Whether `signature` (DER) is a signature of `msg`, hashed with
     /// `hash`, under `public_key` (SEC1 uncompressed point).
-    pub fn verify(curve: EcCurve, hash: HashAlgorithm, public_key: ByteInput, msg: ByteInput, signature: ByteInput) -> bool {
+    pub fn verify<P: AsBytes, M: AsBytes, S: AsBytes>(curve: EcCurve, hash: HashAlgorithm, public_key: P, msg: M, signature: S) -> bool {
         let c = curve_of(curve);
         let size = c.size;
         let n = c.fp.n;
-        let pk = view(public_key);
+        let pk = public_key.byte_slice();
         if pk.len() != 1 + 2 * size || pk[0] != 0x04u8 { return false; }
         let qx: Fe = fe_from_be(pk[1:1 + size], n) else { return false; };
         let qy: Fe = fe_from_be(pk[1 + size:1 + 2 * size], n) else { return false; };
@@ -619,7 +619,7 @@ impl Ecdsa {
         let qym = c.fp.to_mont(qy);
         if !c.on_curve(qxm, qym) { return false; }
 
-        let t3: (Slice<u8>, Slice<u8>) = parse_sig(view(signature), size) else { return false; };
+        let t3: (Slice<u8>, Slice<u8>) = parse_sig(signature.byte_slice(), size) else { return false; };
         let (rb, sb) = t3;
         let r: Fe = fe_from_be(rb, n) else { return false; };
         let s: Fe = fe_from_be(sb, n) else { return false; };

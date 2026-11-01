@@ -11,11 +11,8 @@ impl str {
     pub const fn new() -> str { "" }
 
     /// `bytes` as a `str`; throws if they are not UTF-8 (2.15.6).
-    pub const fn from_utf8(bytes: List<u8> | Slice<u8>) throws (Utf8Error) -> str {
-        let view = match bytes {
-            l: List<u8> => l[0:l.len()],
-            v: Slice<u8> => v,
-        };
+    pub const fn from_utf8<B: AsBytes>(bytes: B) throws (Utf8Error) -> str {
+        let view = bytes.byte_slice();
         let (buf, at, n) = unsafe { view.raw_parts() };
         let bad = unsafe { rok_buf_utf8_error(buf, at, n) };
         if bad >= 0 { throw Utf8Error { valid_up_to: bad as usize }; }
@@ -25,11 +22,8 @@ impl str {
     /// `bytes` as a `str` with each ill-formed run replaced by U+FFFD,
     /// one per maximal subpart (Unicode 3.9 "U+FFFD Substitution of
     /// Maximal Subparts", as WHATWG UTF-8 decode does).
-    pub const fn from_utf8_lossy(bytes: List<u8> | Slice<u8>) -> str {
-        let view = match bytes {
-            l: List<u8> => l[0:l.len()],
-            v: Slice<u8> => v,
-        };
+    pub const fn from_utf8_lossy<B: AsBytes>(bytes: B) -> str {
+        let view = bytes.byte_slice();
         let (buf, at, n) = unsafe { view.raw_parts() };
         let first = unsafe { rok_buf_utf8_error(buf, at, n) };
         if first < 0 {
@@ -846,7 +840,8 @@ impl Display for StrBuf {
     const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(self.to_str()) }
 }
 
-/// Bytes that are not UTF-8 (`str::from_utf8`).
+/// Bytes that are not UTF-8 (`str::from_utf8`, `RawStr::to_str`,
+/// `RawPath::to_path`; Windows paths: not UTF-16).
 #[derive(Clone, PartialEq, Eq)]
 pub struct Utf8Error {
     valid_up_to: usize;

@@ -24,18 +24,18 @@ use rok::std::fs;
 
 fn main() {
     let raw = Path::new("C:\\é😀").to_raw();
-    let back = RawPath::from_wide(list_of(raw.as_wide()));
-    if (try back.try_to_path() catch _ { Path::empty() }).as_str() == "C:\\é😀" { println("raw ok"); }
+    let back = RawPath::from_wide(raw.as_wide());
+    if (try back.to_path() catch _ { Path::empty() }).as_str() == "C:\\é😀" { println("raw ok"); }
 
     let bad: List<u16> = List::new();
     bad.push(97u16);
     bad.push(0xD800u16);
     bad.push(98u16);
-    let r = RawPath::from_wide(bad);
-    try r.try_to_path() catch e { println(f"lone surrogate at {e.valid_up_to()}"); };
+    let r = RawPath::from_wide(bad[:]);
+    try r.to_path() catch e { println(f"lone surrogate at {e.valid_up_to()}"); };
     println(r.to_path_lossy().as_str().replace("\u{FFFD}", "?"));
-    let rs = env::RawStr::from_wide(bad);
-    println(f"rawstr {rs.len()} {rs.as_wide() == bad}");
+    let rs = env::RawStr::from_wide(bad[:]);
+    println(f"rawstr {rs.len()} {rs.as_wide() == bad[:]}");
     let a0 = env::args_os()[0];
     if env::RawStr::from_wide(a0.as_wide()) == a0 { println("args ok"); }
 
@@ -57,10 +57,4 @@ fn main() {
     let s = try fs::read_to_str(f) catch _ { "" };
     try fs::remove_dir_all(dir) catch _ {};
     if s == "hi" { println("fs ok"); }
-}
-
-fn list_of(s: Slice<u16>) -> List<u16> {
-    let out: List<u16> = List::new();
-    for u in s { out.push(u); }
-    out
 }

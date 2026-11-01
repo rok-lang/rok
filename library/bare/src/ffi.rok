@@ -127,10 +127,11 @@ impl CStr {
     }
 
     /// `bytes` when the last one is the only NUL.
-    pub const fn from_bytes_with_nul(bytes: Slice<u8>) throws (FromBytesWithNulError) -> CStr {
-        let n = bytes.len();
-        match nul_in(bytes) {
-            i: usize if i + 1 == n => CStr { s: with_nul(bytes[0:i]) },
+    pub const fn from_bytes_with_nul<B: AsBytes>(bytes: B) throws (FromBytesWithNulError) -> CStr {
+        let b = bytes.byte_slice();
+        let n = b.len();
+        match nul_in(b) {
+            i: usize if i + 1 == n => CStr { s: with_nul(b[0:i]) },
             i: usize => throw FromBytesWithNulError { message: f"interior nul byte at {i}" },
             none => throw FromBytesWithNulError { message: "data provided is not nul terminated" },
         }
@@ -138,10 +139,11 @@ impl CStr {
 
     /// `bytes`, whose last byte must be the only NUL (not checked).
     /// Empty `bytes` gives the empty string.
-    pub const fn from_bytes_with_nul_unchecked(bytes: Slice<u8>) -> CStr {
-        let n = bytes.len();
-        if n == 0 { return CStr { s: with_nul(bytes) }; }
-        CStr { s: with_nul(bytes[0:n - 1]) }
+    pub const fn from_bytes_with_nul_unchecked<B: AsBytes>(bytes: B) -> CStr {
+        let b = bytes.byte_slice();
+        let n = b.len();
+        if n == 0 { return CStr { s: with_nul(b) }; }
+        CStr { s: with_nul(b[0:n - 1]) }
     }
 
     pub fn as_ptr(self) -> ConstPtr<c_char> {
@@ -165,15 +167,15 @@ pub struct CString {
 }
 
 impl CString {
-    /// `bytes` and a NUL; throws if `bytes` has a NUL of its own.
-    pub const fn new(bytes: Slice<u8>) throws (NulError) -> CString {
-        if let i: usize = nul_in(bytes) {
+    /// `bytes` and a NUL; throws if `bytes` has a NUL of its own. A
+    /// `str` gives its UTF-8.
+    pub const fn new<B: AsBytes>(bytes: B) throws (NulError) -> CString {
+        let b = bytes.byte_slice();
+        if let i: usize = nul_in(b) {
             throw NulError { position: i };
         }
-        CString { c: CStr { s: with_nul(bytes) } }
+        CString { c: CStr { s: with_nul(b) } }
     }
-
-    pub fn from_str(s: str) throws (NulError) -> CString { try CString::new(s.as_bytes()) }
 
     pub const fn as_c_str(self) -> CStr { self.c }
     pub fn as_ptr(self) -> ConstPtr<c_char> { self.c.as_ptr() }

@@ -1,0 +1,210 @@
+// rok::core::encoding::base64 - base64 (RFC 4648 sections 4 and 5). A
+// `Codec` picks the alphabet and the padding policy; `STANDARD` is the
+// default argument everywhere. Whitespace is not skipped.
+
+use sup::{DecodeError, DecodeErrorKind, shown_byte, zeroed, ascii};
+
+const ABC_STANDARD: str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+const ABC_URL_SAFE: str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+/// The 64 characters a codec writes.
+#[non_exhaustive]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum Alphabet {
+    /// `A-Z a-z 0-9 + /` (RFC 4648 section 4).
+    Standard,
+    /// `A-Z a-z 0-9 - _`, for URLs and file names (RFC 4648 section 5).
+    UrlSafe,
+}
+
+/// The `=` padding policy: what `encode` writes and what `decode` takes.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum Padding {
+    /// Encode pads; decode requires padding.
+    Present,
+    /// Encode does not pad; decode rejects padding.
+    Absent,
+    /// Encode pads; decode takes padded and unpadded text.
+    PresentOptional,
+    /// Encode does not pad; decode takes padded and unpadded text.
+    AbsentOptional,
+}
+
+/// An alphabet and a padding policy.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct Codec {
+    alphabet: Alphabet;
+    padding: Padding;
+}
+
+impl Codec {
+    pub const fn new(alphabet: Alphabet, padding: Padding) -> Codec { Codec { alphabet, padding } }
+
+    pub const fn alphabet(self) -> Alphabet { self.alphabet }
+
+    pub const fn padding(self) -> Padding { self.padding }
+
+    const fn pads(self) -> bool {
+        match self.padding {
+            Padding::Present => true,
+            Padding::PresentOptional => true,
+            _ => false,
+        }
+    }
+
+    const fn url_safe(self) -> bool {
+        match self.alphabet {
+            Alphabet::UrlSafe => true,
+            _ => false,
+        }
+    }
+}
+
+/// The standard alphabet; encode pads, decode takes either.
+pub const STANDARD: Codec = Codec { alphabet: Alphabet::Standard, padding: Padding::PresentOptional };
+/// The standard alphabet without padding.
+pub const STANDARD_NO_PAD: Codec = Codec { alphabet: Alphabet::Standard, padding: Padding::Absent };
+/// The URL-safe alphabet; encode pads, decode takes either.
+pub const URL_SAFE: Codec = Codec { alphabet: Alphabet::UrlSafe, padding: Padding::PresentOptional };
+/// The URL-safe alphabet without padding.
+pub const URL_SAFE_NO_PAD: Codec = Codec { alphabet: Alphabet::UrlSafe, padding: Padding::Absent };
+
+/// The length of the text `encode` makes of `n` bytes.
+pub const fn encoded_len(n: usize, codec: Codec = STANDARD) -> usize {
+    if codec.pads() { return (n + 2) / 3 * 4; }
+    n / 3 * 4 + (n % 3 * 4 + 2) / 3
+}
+
+/// The most bytes `decode` makes of `n` characters: enough room for
+/// `decode_into`.
+pub const fn decoded_len_max(n: usize) -> usize {
+    n / 4 * 3 + n % 4 * 3 / 4
+}
+
+/// `data` in base64.
+pub fn encode<B: AsBytes>(data: B, codec: Codec = STANDARD) -> str {
+    let b = data.byte_slice();
+    let out = zeroed(encoded_len(b.len(), codec));
+    let n = encode_into(b, out, codec);
+    ascii(out, n)
+}
+
+/// `data` in base64, written to the front of `out`; returns how many
+/// bytes it wrote. Panics if `out` is shorter than `encoded_len`.
+#[track_caller]
+pub fn encode_into<B: AsBytes>(data: B, out: SliceMut<u8>, codec: Codec = STANDARD) -> usize {
+    let b = data.byte_slice();
+    let n = b.len();
+    let need = encoded_len(n, codec);
+    if out.len() < need {
+        panic(f"base64::encode_into: `out` holds {out.len()} bytes but the text needs {need}; size it with base64::encoded_len");
+    }
+    let abc = if codec.url_safe() { ABC_URL_SAFE } else { ABC_STANDARD };
+    let i = 0usize;
+    let j = 0usize;
+    while i + 3 <= n {
+        let w = ((b[i] as u32) << 16) | ((b[i + 1] as u32) << 8) | (b[i + 2] as u32);
+        for k in 0..4 {
+            out[j] = abc.byte(((w >> (18 - 6 * k) as u32) & 63u32) as usize);
+            j += 1;
+        }
+        i += 3;
+    }
+    let rest = n - i;
+    if rest > 0 {
+        let w = (b[i] as u32) << 16;
+        if rest == 2 { w = w | ((b[i + 1] as u32) << 8); }
+        for k in 0..rest + 1 {
+            out[j] = abc.byte(((w >> (18 - 6 * k) as u32) & 63u32) as usize);
+            j += 1;
+        }
+        if codec.pads() {
+            for _ in rest..3 {
+                out[j] = 0x3du8;
+                j += 1;
+            }
+        }
+    }
+    j
+}
+
+/// The bytes `text` spells in base64.
+pub fn decode<B: AsBytes>(text: B, codec: Codec = STANDARD) throws (DecodeError) -> List<u8> {
+    let t = text.byte_slice();
+    let out = zeroed(decoded_len_max(t.len()));
+    let n = try decode_into(t, out, codec);
+    out.truncate(n);
+    out
+}
+
+/// The bytes `text` spells in base64, written to the front of `out`;
+/// returns how many it wrote. Panics if `out` is shorter than
+/// `decoded_len_max(text.len())` less what the padding saves.
+#[track_caller]
+pub fn decode_into<B: AsBytes>(text: B, out: SliceMut<u8>, codec: Codec = STANDARD) throws (DecodeError) -> usize {
+    let t = text.byte_slice();
+    let n = t.len();
+    let end = n;
+    // At most two `=`: a third is reported where it stands.
+    while end > 0 && n - end < 2 && t[end - 1] == 0x3du8 { end -= 1; }
+    let need = decoded_len_max(end);
+    if out.len() < need {
+        panic(f"base64::decode_into: `out` holds {out.len()} bytes but the text may need {need}; size it with base64::decoded_len_max");
+    }
+    let url_safe = codec.url_safe();
+    let acc = 0u32;
+    let bits = 0u32;
+    let j = 0usize;
+    for i in 0..end {
+        let v = sextet(t[i], url_safe);
+        if v < 0 { throw bad_byte(t[i], i, url_safe); }
+        acc = (acc << 6) | (v as u32);
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out[j] = (acc >> bits) as u8;
+            j += 1;
+            acc = acc & ((1u32 << bits) - 1u32);
+        }
+    }
+    if end < n {
+        if codec.padding == Padding::Absent {
+            throw DecodeError::new(DecodeErrorKind::InvalidPadding, end, f"base64: '=' at byte {end}, but this codec takes no padding; drop the '=' or decode with base64::STANDARD");
+        }
+        if n % 4 != 0 {
+            throw DecodeError::new(DecodeErrorKind::InvalidPadding, end, f"base64: padded text must be a multiple of 4 characters long, not {n}; fix the '=' count or drop the padding");
+        }
+    }
+    if end % 4 == 1 {
+        throw DecodeError::new(DecodeErrorKind::InvalidLength, end - 1, f"base64: text is cut short at byte {end - 1}; a last group needs 2 to 4 characters");
+    }
+    if end == n && n % 4 != 0 && codec.padding == Padding::Present {
+        throw DecodeError::new(DecodeErrorKind::InvalidPadding, n, f"base64: text of {n} characters has no '=' padding, which this codec requires; pad it to a multiple of 4 or decode with base64::STANDARD");
+    }
+    j
+}
+
+const fn sextet(c: u8, url_safe: bool) -> i32 {
+    if c >= 0x41u8 && c <= 0x5au8 { return (c - 0x41u8) as i32; }
+    if c >= 0x61u8 && c <= 0x7au8 { return (c - 0x61u8) as i32 + 26; }
+    if c >= 0x30u8 && c <= 0x39u8 { return (c - 0x30u8) as i32 + 52; }
+    if c == (if url_safe { 0x2du8 } else { 0x2bu8 }) { return 62; }
+    if c == (if url_safe { 0x5fu8 } else { 0x2fu8 }) { return 63; }
+    -1
+}
+
+const fn bad_byte(c: u8, at: usize, url_safe: bool) -> DecodeError {
+    let head = f"base64: {shown_byte(c)} at byte {at}";
+    if c == 0x3du8 {
+        return DecodeError::new(DecodeErrorKind::InvalidPadding, at, f"{head}: '=' pads only the end of the text");
+    }
+    let kind = DecodeErrorKind::InvalidByte;
+    if !url_safe && (c == 0x2du8 || c == 0x5fu8) {
+        return DecodeError::new(kind, at, f"{head} is url-safe base64; decode with base64::URL_SAFE");
+    }
+    if url_safe && (c == 0x2bu8 || c == 0x2fu8) {
+        return DecodeError::new(kind, at, f"{head} is standard base64; decode with base64::STANDARD");
+    }
+    let extra = if url_safe { "- and _" } else { "+ and /" };
+    DecodeError::new(kind, at, f"{head} is not base64; use A-Z, a-z, 0-9, {extra}")
+}

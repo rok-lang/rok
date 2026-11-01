@@ -32,7 +32,7 @@ fn main() -> i32 {
     show(b"\xC3\xA9\xE2\x82");
     let l: List<u8> = [71, 69, 84];
     println(str::from_utf8_lossy(l));
-    let out = rok::std::io::AsBytes::byte_slice(b"abc");
+    let out = rok::core::convert::AsBytes::byte_slice(b"abc");
     println(f"{out.len()}");
     0
 }

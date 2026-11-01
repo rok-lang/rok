@@ -2,61 +2,85 @@
 // expect-exit: 0
 // expect-stdout:
 // hex [] [66] [666f] [666f6f] [666f6f62] [666f6f6261] [666f6f626172]
-// hex bytes 00ff10 00ff10 e29c93
+// hex bytes 00ff10 00ff10 e29c93 00FF10
 // unhex [] [f] [fo] [foo] [foob] [fooba] [foobar]
 // unhex upper foobar mixed [222, 173, 190, 239]
 // b64 [] [Zg==] [Zm8=] [Zm9v] [Zm9vYg==] [Zm9vYmE=] [Zm9vYmFy]
 // nopad [] [Zg] [Zm8] [Zm9v] [Zm9vYg] [Zm9vYmE] [Zm9vYmFy]
 // unb64 [] [f] [fo] [foo] [foob] [fooba] [foobar]
 // unb64 nopad [] [f] [fo] [foo] [foob] [fooba] [foobar]
-// url +/+/ -_-_ -_-_ [251, 255, 191] [251, 255, 191]
+// url +/+/ -_-_ [251, 255, 191] [251, 255, 191]
 // url pad +/8= -_8= -_8
 // round 256 true true true true
 // utf8 7JWI64WV 안녕
+// len 0 4 4 4 8 | 0 2 3 4 6 | 0 0 1 2 3 3
+// into 8 [90, 109, 57, 118, 89, 103, 61, 61, 0, 0] 4 [102, 111, 111, 98, 0, 0] 4 [54, 54, 54, 70, 0]
+// codec true Standard Absent PresentOptional
 
 // RFC 4648 section 10 vectors for base16 and base64, padded and not,
-// the url-safe alphabet (section 5), and all 256 byte values round trip.
+// the url-safe alphabet (section 5), all 256 byte values round trip,
+// and the `_into` forms with their lengths.
+use rok::core::encoding::{base64, hex};
+
 fn utf8(b: List<u8>) -> str { try! str::from_utf8(b) }
 
 fn main() {
     let words = ["", "f", "fo", "foo", "foob", "fooba", "foobar"];
     let out = "hex";
-    for w in words { out += f" [{hex_encode(w)}]"; }
+    for w in words { out += f" [{hex::encode(w)}]"; }
     println(out);
     let raw: List<u8> = [0u8, 255u8, 16u8];
-    println(f"hex bytes {hex_encode(raw)} {hex_encode(raw[0:3])} {hex_encode("✓")}");
+    println(f"hex bytes {hex::encode(raw)} {hex::encode(raw[0:3])} {hex::encode("✓")} {hex::encode(raw, hex::Case::Upper)}");
     out = "unhex";
-    for w in words { out += f" [{utf8(try! hex_decode(hex_encode(w)))}]"; }
+    for w in words { out += f" [{utf8(try! hex::decode(hex::encode(w)))}]"; }
     println(out);
-    println(f"unhex upper {utf8(try! hex_decode("666F6F626172"))} mixed {try! hex_decode("dEaDbEeF"):?}");
+    println(f"unhex upper {utf8(try! hex::decode("666F6F626172"))} mixed {try! hex::decode("dEaDbEeF"):?}");
 
     out = "b64";
-    for w in words { out += f" [{base64_encode(w)}]"; }
+    for w in words { out += f" [{base64::encode(w)}]"; }
     println(out);
     out = "nopad";
-    for w in words { out += f" [{base64_encode(w, pad: false)}]"; }
+    for w in words { out += f" [{base64::encode(w, base64::STANDARD_NO_PAD)}]"; }
     println(out);
     out = "unb64";
-    for w in words { out += f" [{utf8(try! base64_decode(base64_encode(w)))}]"; }
+    for w in words { out += f" [{utf8(try! base64::decode(base64::encode(w)))}]"; }
     println(out);
     out = "unb64 nopad";
-    for w in words { out += f" [{utf8(try! base64_decode(base64_encode(w, pad: false)))}]"; }
+    for w in words { out += f" [{utf8(try! base64::decode(base64::encode(w, base64::STANDARD_NO_PAD)))}]"; }
     println(out);
 
     let u: List<u8> = [251u8, 255u8, 191u8];
-    let std = base64_encode(u);
-    let url = base64_encode(u, url_safe: true);
-    let url2 = base64_encode(u, true, false);
-    println(f"url {std} {url} {url2} {try! base64_decode(std):?} {try! base64_decode(url, url_safe: true):?}");
+    let std = base64::encode(u);
+    let url = base64::encode(u, codec: base64::URL_SAFE);
+    println(f"url {std} {url} {try! base64::decode(std):?} {try! base64::decode(url, base64::URL_SAFE):?}");
     let v: List<u8> = [251u8, 255u8];
-    println(f"url pad {base64_encode(v)} {base64_encode(v, url_safe: true)} {base64_encode(v, url_safe: true, pad: false)}");
+    println(f"url pad {base64::encode(v)} {base64::encode(v, base64::URL_SAFE)} {base64::encode(v, base64::URL_SAFE_NO_PAD)}");
 
     let all: List<u8> = [];
     for i in 0..256 { all.push(i as u8); }
-    let h = try! hex_decode(hex_encode(all)) == all;
-    let b = try! base64_decode(base64_encode(all)) == all;
-    let bu = try! base64_decode(base64_encode(all, url_safe: true, pad: false), url_safe: true) == all;
-    let sl = try! base64_decode(base64_encode(all[1:255])) == all[1:255].to_list();
+    let h = try! hex::decode(hex::encode(all)) == all;
+    let b = try! base64::decode(base64::encode(all)) == all;
+    let bu = try! base64::decode(base64::encode(all, base64::URL_SAFE_NO_PAD), base64::URL_SAFE) == all;
+    let sl = try! base64::decode(base64::encode(all[1:255])) == all[1:255].to_list();
     println(f"round {all.len()} {h} {b} {bu} {sl}");
-    println(f"utf8 {base64_encode("안녕")} {utf8(try! base64_decode("7JWI64WV".as_bytes()))}");
+    println(f"utf8 {base64::encode("안녕")} {utf8(try! base64::decode("7JWI64WV".as_bytes()))}");
+
+    let lens = "len";
+    for n in [0usize, 1, 2, 3, 4] { lens += f" {base64::encoded_len(n)}"; }
+    lens += " |";
+    for n in [0usize, 1, 2, 3, 4] { lens += f" {base64::encoded_len(n, base64::URL_SAFE_NO_PAD)}"; }
+    lens += " |";
+    for n in [0usize, 1, 2, 3, 4, 5] { lens += f" {base64::decoded_len_max(n)}"; }
+    println(lens);
+
+    let e: List<u8> = [0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8];
+    let ne = base64::encode_into("foob", e);
+    let d: List<u8> = [0u8, 0u8, 0u8, 0u8, 0u8, 0u8];
+    let nd = try! base64::decode_into("Zm9vYg", d[0:6]);
+    let x: List<u8> = [0u8, 0u8, 0u8, 0u8, 0u8];
+    let nx = hex::encode_into([0x66u8, 0x6fu8], x, hex::Case::Upper);
+    println(f"into {ne} {e:?} {nd} {d:?} {nx} {x:?}");
+
+    let strict = base64::Codec::new(base64::Alphabet::Standard, base64::Padding::Present);
+    println(f"codec {base64::STANDARD == base64::Codec::new(base64::Alphabet::Standard, base64::Padding::PresentOptional)} {strict.alphabet():?} {base64::STANDARD_NO_PAD.padding():?} {base64::URL_SAFE.padding():?}");
 }
