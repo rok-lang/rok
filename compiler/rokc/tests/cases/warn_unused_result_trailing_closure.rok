@@ -1,0 +1,41 @@
+// expect-exit: 0
+// expect-lint: 25:5 the `i32` result of `one` is never used
+// expect-lint: 29:5 the `i32` result of `count` is never used
+// expect-stdout:
+// a
+// b
+// c
+// d
+// e
+
+// A trailing-closure call that ends a statement at its `}` drops its
+// value like any expression statement (spec 1.3.4): a non-unit value
+// warns, `_ = ..` and `#[discardable]` silence it.
+fn one(f: fn() -> ()) -> i32 { f(); 1 }
+
+#[discardable]
+fn two(f: fn() -> ()) -> i32 { f(); 2 }
+
+struct Box { n: i32 }
+impl Box {
+    fn count(self, f: fn() -> ()) -> i32 { f(); self.n }
+}
+
+fn main() {
+    one {
+        println("a");
+    }
+    let b = Box { n: 3 };
+    b.count() {
+        println("b");
+    }
+    _ = one {
+        println("c");
+    };
+    two {
+        println("d");
+    }
+    println("e");
+}
+
+// spec: 001.03.4-block-like-expression-statements
