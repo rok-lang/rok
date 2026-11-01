@@ -68,6 +68,14 @@ impl<S> WrappingInto for S {
     const fn wrapping_into<T: WrappingFrom<S>>(self) -> T { T::wrapping_from(self) }
 }
 
+/// Bytes as a view: a `str` (its UTF-8), a `List<u8>`, a `Slice<u8>`,
+/// a `[u8; N]` or a `crypto::Secret`. Every byte parameter in the
+/// library takes `<B: AsBytes>`.
+pub trait AsBytes {
+    /// The bytes as a view (no copy).
+    fn byte_slice(self) -> Slice<u8>;
+}
+
 const fn overflow(ty: str) -> OverflowError { OverflowError::new("try_from", ty) }
 
 // From (lossless)

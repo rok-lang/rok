@@ -112,7 +112,7 @@ fn main() {
         churn(); check("J", mk("J", 6), read(v.p, v.n));
     }
     {
-        let c = try! CString::from_str(mk("K", 9)); let p = c.as_ptr();
+        let c = try! CString::new(mk("K", 9)); let p = c.as_ptr();
         churn();
         match unsafe { CStr::from_ptr(p) } { x: CStr => check("K", mk("K", 9), try! x.to_str()), none => println("FAIL K null") }
     }

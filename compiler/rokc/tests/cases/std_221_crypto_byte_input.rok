@@ -1,17 +1,28 @@
-// spec: std 221-crypto §2.21.1 / refs-lang §6.2.7
+// spec: std 221-crypto §2.21.1
 // expect-exit: 0
-// expect-lint: 13:9 use of deprecated type `Bytes`
 // expect-stdout:
-// 3 3 3
+// 3 3 3 3 3
+// true true
 
-// `crypto::ByteInput` is the new name of `crypto::Bytes`, which clashed
-// with `io::Bytes`; the old name still works.
+// Every crypto byte parameter is `<B: AsBytes>`: a `str`, a list, an
+// array, a view, a `Secret`, or a type of the program's own.
 use rok::core::crypto;
+use rok::core::convert::AsBytes;
 
-fn a(b: crypto::ByteInput) -> usize { crypto::Secret::new(b).len() }
-#[allow(unused)]
-fn b(b: crypto::Bytes) -> usize { crypto::Secret::new(b).len() }
+struct Word { s: str; }
+impl AsBytes for Word {
+    fn byte_slice(self) -> Slice<u8> { self.s.as_bytes() }
+}
 
 fn main() {
-    println(f"{a("abc")} {b([1u8, 2u8, 3u8])} {a(crypto::Secret::new("xyz"))}");
+    let l: List<u8> = [1u8, 2u8, 3u8];
+    let a = crypto::Secret::new("abc").len();
+    let b = crypto::Secret::new(l).len();
+    let c = crypto::Secret::new([1u8, 2u8, 3u8]).len();
+    let d = crypto::Secret::new(l[0:3]).len();
+    let e = crypto::Secret::new(Word { s: "xyz" }).len();
+    println(f"{a} {b} {c} {d} {e}");
+    let k = crypto::Secret::new("key");
+    let t = crypto::Hmac::mac(crypto::HashAlgorithm::Sha256, k, Word { s: "msg" });
+    println(f"{crypto::Hmac::verify(crypto::HashAlgorithm::Sha256, "key", "msg", t)} {crypto::constant_time_eq(t, t[0:t.len()])}");
 }

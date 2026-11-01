@@ -13,7 +13,8 @@
 // (`none`: unnamed). `sendfile` / `splice` are Linux only; no IPv6
 // multicast or `MSG_ZEROCOPY` (302.7). TLS 1.3 is `tls` (302.5).
 
-use rok::std::io::{IoError, IoErrorKind, RawFd, Reader, Writer, AsBytes, check, would_block, region, take_handle, use_begin, use_end, use_close};
+use rok::core::convert::AsBytes;
+use rok::std::io::{IoError, IoErrorKind, RawFd, Reader, Writer, check, would_block, region, take_handle, use_begin, use_end, use_close};
 use rok::std::time::Duration;
 use rok::std::fs::File;
 use rok::std::path::{AsPath, Path};

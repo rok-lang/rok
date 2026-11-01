@@ -14,7 +14,8 @@
 // `read_async` still fills its buffer). `Dir::read_dir_async` streams
 // entries in batches; the free `read_dir_async` lists them all at once.
 
-use rok::std::io::{Close, IoError, IoErrorKind, Reader, Writer, Seek, AsBytes, check, region, read_all, take_handle, write_region, text_of, byte_buf, list_of, use_begin, use_end, use_close};
+use rok::core::convert::AsBytes;
+use rok::std::io::{Close, IoError, IoErrorKind, Reader, Writer, Seek, check, region, read_all, take_handle, write_region, text_of, byte_buf, list_of, use_begin, use_end, use_close};
 pub use rok::std::io::SeekFrom;
 use rok::std::path::{Path, AsPath, Component};
 use rok::std::env;

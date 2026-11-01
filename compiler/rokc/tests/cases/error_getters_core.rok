@@ -43,7 +43,7 @@ fn main() {
     if let u: Utf8Error = u {
         println(f"utf8: {u.valid_up_to()} | {u.message()} | {same(u)}");
     }
-    let n = try { CString::from_str("a\0b"); "made" } catch n {
+    let n = try { CString::new("a\0b"); "made" } catch n {
         f"{n.position()} | {n.message()} | {same(n)}"
     };
     println(f"nul: {n}");

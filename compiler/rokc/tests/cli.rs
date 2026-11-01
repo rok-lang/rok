@@ -5794,7 +5794,7 @@ fn main() {
     let p = unsafe { tiny_add(tiny_point { x: 1, y: 2 }, tiny_point { x: 10, y: 20 }) };
     println(f"add {p.x} {p.y}");
     println(f"apply {unsafe { tiny_apply(twice, CPtr::null(), 21) }}");
-    let s = try! CString::from_str("hello");
+    let s = try! CString::new("hello");
     let path = CPtr::from_const(s.as_ptr());
     println(f"len {unsafe { tiny_len(path) }} sum {unsafe { tiny_sum(3, 1, 2, 3) }}");
     let h = unsafe { tiny_open(path, CPtr::null()) };

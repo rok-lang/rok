@@ -1,5 +1,5 @@
 // rok::std::io (stdlib spec 305): `IoError`, the `Reader` / `Writer` /
-// `Seek` traits, `AsBytes` and the standard streams.
+// `Seek` traits and the standard streams.
 //
 // Byte buffers are `List<u8>` (305): `read(buf)` fills `buf[0..n]` of a
 // pre-sized list. Bytes cross to the runtime as `GcBuf<u8>` regions
@@ -222,9 +222,6 @@ pub(pkg) fn would_block(r: i64) -> bool {
 
 /// An OS file descriptor (Windows: a handle value).
 pub type RawFd = i32;
-
-/// Bytes a write takes (301.0); defined in core (`Slice<u8>::find`).
-pub use rok::core::collections::slice::AsBytes;
 
 /// A zeroed list of `n` bytes (a read buffer).
 pub const fn byte_buf(n: usize) -> List<u8> {

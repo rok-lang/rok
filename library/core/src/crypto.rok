@@ -50,28 +50,11 @@ pub(pkg) fn ct_mask_i64(bit: i64) -> i64 {
     -bit ^ (CT_ZERO.load(AtomicOrdering::Relaxed) as i64)
 }
 
-/// Byte input: a list, a view, a string's UTF-8 bytes or a secret.
-pub type ByteInput = List<u8> | Slice<u8> | str | Secret;
-
-/// The old name of `ByteInput`; `rok::std::io::Bytes` is another type.
-#[deprecated(since = "0.1.6", note = "use `crypto::ByteInput`")]
-pub type Bytes = ByteInput;
-
-/// `b` as a view.
-pub(pkg) fn view(b: ByteInput) -> Slice<u8> {
-    match b {
-        l: List<u8> => l[0:l.len()],
-        s: Slice<u8> => s,
-        t: str => t.as_bytes(),
-        k: Secret => k.as_bytes(),
-    }
-}
-
 /// Whether `a` and `b` are equal, in time that depends only on their
 /// lengths.
-pub fn constant_time_eq(a: ByteInput, b: ByteInput) -> bool {
-    let x = view(a);
-    let y = view(b);
+pub fn constant_time_eq<A: AsBytes, B: AsBytes>(a: A, b: B) -> bool {
+    let x = a.byte_slice();
+    let y = b.byte_slice();
     if x.len() != y.len() { return false; }
     let d = 0u8;
     for i in 0..x.len() {

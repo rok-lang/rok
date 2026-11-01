@@ -21,7 +21,7 @@ extern "C" {
 }
 
 fn main() {
-    let cs = try! CString::from_str("hello");
+    let cs = try! CString::new("hello");
     println(f"strlen {unsafe { strlen(cs.as_ptr()) }} len {cs.as_c_str().len()}");
     match unsafe { CStr::from_ptr(cs.as_ptr()) } {
         c: CStr => println(f"from_ptr {try! c.to_str()} {c.as_bytes_with_nul().len()}"),
@@ -30,7 +30,7 @@ fn main() {
     println(f"null {unsafe { CStr::from_ptr(ConstPtr::<c_char>::dangling().with_addr(0)) } is none}");
 
     let ok = try! CStr::from_bytes_with_nul("hi\0".as_bytes());
-    let xy = try! CString::from_str("xy");
+    let xy = try! CString::new("xy");
     let n = xy.into_bytes().len();
     let m = xy.into_bytes_with_nul().len();
     println(f"with_nul {try! ok.to_str()} {ok.len()} {try! xy.as_c_str().to_str()} {n} {m}");
@@ -40,5 +40,5 @@ fn main() {
     try CStr::from_bytes_with_nul("h\0i\0".as_bytes()) catch e: FromBytesWithNulError {
         println(f"interior: {e.message()}");
     };
-    try CString::from_str("a\0b") catch e: NulError { println(f"nul at {e.position()}"); };
+    try CString::new("a\0b") catch e: NulError { println(f"nul at {e.position()}"); };
 }
