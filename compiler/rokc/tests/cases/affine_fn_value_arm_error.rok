@@ -1,0 +1,39 @@
+// expect-error: error[E0134]: `f` was moved at line 19, and is used here
+// expect-error: affine_fn_value_arm_error.rok:20:9: `f` was moved at line 19, and is used here
+// expect-error: affine_fn_value_arm_error.rok:27:9: `f` was moved at line 26, and is used here
+// expect-error: error[E0135]: `f` holds a `File` that this arm never closes
+// expect-error: affine_fn_value_arm_error.rok:32:33: `f` holds a `File` that this arm never closes
+// expect-error: help: closing a `File` can fail, so it is not closed for you: add `try f.close();` at the end of this arm
+// spec: std 213-marker §2.13.4
+
+// A function value takes what it is passed: the caller can no longer
+// use it, sync or async. An arm that sees a `File` still owes its close
+// when another arm sees only a `Sender`.
+
+use rok::std::fs::File;
+use rok::core::io::IoError;
+use rok::core::future::AsyncFuture;
+
+fn used_after(p: str, g: fn(File) -> i32) throws (IoError) -> i32 {
+    let f = try File::open(p);
+    let n = g(f);
+    try f.close();
+    n
+}
+
+async fn used_after_await(p: str, g: fn(File) -> AsyncFuture<i32>) throws (IoError) -> i32 {
+    let f = try File::open(p);
+    let n = await g(f);
+    try f.close();
+    n
+}
+
+fn arm_open(p: str, tx: Sender<i32>, file: bool) {
+    let c: File | Sender<i32> = if file { try! File::open(p) } else { tx };
+    match c {
+        t: Sender<i32> => { let _ = try? t.send(1); },
+        f: File => { let _ = try? f.read_to_str(); },
+    }
+}
+
+fn main() {}
