@@ -18,14 +18,26 @@ pub struct UnixStream {
     sock: Sock;
 }
 
+impl Debug for UnixStream {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("UnixStream") }
+}
+
 /// A listening Unix stream socket bound to a path.
 pub struct UnixListener {
     sock: Sock;
 }
 
+impl Debug for UnixListener {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("UnixListener") }
+}
+
 /// A Unix datagram socket.
 pub struct UnixDatagram {
     sock: Sock;
+}
+
+impl Debug for UnixDatagram {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("UnixDatagram") }
 }
 
 /// A Unix socket of `kind` (1 stream / 2 datagram) at `path` (`op` 0

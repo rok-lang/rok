@@ -57,7 +57,7 @@ pub fn id() -> u32 { unsafe { rok_os_getpid() } }
 /// (`TerminateProcess`), and only `Interrupt` (Ctrl-C) and `Hangup`
 /// (console closed) handled; Ctrl-Break is
 /// `os::windows::process::on_ctrl_break`.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum Signal {
     /// `SIGHUP`.
@@ -188,13 +188,6 @@ impl Signal {
         }
     }
 }
-
-impl PartialEq for Signal {
-    const fn eq(self, rhs: Signal) -> bool { self.number() == rhs.number() }
-    const fn ne(self, rhs: Signal) -> bool { self.number() != rhs.number() }
-}
-
-impl Eq for Signal {}
 
 impl Debug for Signal {
     const fn fmt(self, ref f: Formatter) throws (FmtError) {
@@ -337,6 +330,8 @@ fn dispatch_signals(pipe: File) {
 }
 
 /// Where a child's standard stream goes.
+#[non_exhaustive]
+#[derive(Debug)]
 pub enum Stdio {
     Inherit,
     Null,
@@ -356,6 +351,10 @@ const fn stdio_mode(s: Stdio) -> i32 {
 /// A child's stdin: the write end of its pipe (307.2).
 pub struct ChildStdin {
     file: File;
+}
+
+impl Debug for ChildStdin {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("ChildStdin") }
 }
 
 impl ChildStdin {
@@ -389,6 +388,10 @@ pub struct ChildStdout {
     file: File;
 }
 
+impl Debug for ChildStdout {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("ChildStdout") }
+}
+
 impl ChildStdout {
     pub fn close(self) throws (IoError) { try self.file.close(); }
 }
@@ -416,6 +419,10 @@ impl AsRawHandle for ChildStdout {
 /// A child's stderr: the read end of its pipe.
 pub struct ChildStderr {
     file: File;
+}
+
+impl Debug for ChildStderr {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("ChildStderr") }
 }
 
 impl ChildStderr {
@@ -458,6 +465,10 @@ pub struct Command {
     cwd: Path | none;
     kill_on_drop: bool;
     process_group: i32 | none;
+}
+
+impl Debug for Command {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"Command {{ program: {self.program:?}, args: {self.args:?} }}") }
 }
 
 impl Command {
@@ -649,6 +660,10 @@ pub struct Child {
     kill_on_drop: bool;
 }
 
+impl Debug for Child {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"Child {{ pid: {self.pid} }}") }
+}
+
 impl Child {
     pub const fn id(self) -> u32 { self.pid as u32 }
 
@@ -738,6 +753,7 @@ impl Drop for Child {
 }
 
 /// How a child ended (a raw `wait` status; Windows: the exit code).
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ExitStatus {
     raw: i32;
 }
@@ -802,6 +818,7 @@ impl ChildExt for Child {
 }
 
 /// What `output()` collected.
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Output {
     pub status: ExitStatus;
     pub stdout: List<u8>;

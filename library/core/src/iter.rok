@@ -411,6 +411,10 @@ pub struct Map<I, U> {
     f: fn(I::Item) -> U;
 }
 
+impl<I, U> Debug for Map<I, U> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Map") }
+}
+
 impl<I: Iterator, U> Iterator for Map<I, U> {
     type Item = U;
     const fn next(ref self) -> U | none {
@@ -436,6 +440,10 @@ impl<I: ExactSizeIterator, U> ExactSizeIterator for Map<I, U> {
 pub struct Filter<I> {
     it: I;
     pred: fn(I::Item) -> bool;
+}
+
+impl<I> Debug for Filter<I> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Filter") }
 }
 
 impl<I: Iterator> Iterator for Filter<I> {
@@ -464,6 +472,10 @@ impl<I: DoubleEndedIterator> DoubleEndedIterator for Filter<I> {
 pub struct Enumerate<I> {
     it: I;
     i: usize;
+}
+
+impl<I> Debug for Enumerate<I> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Enumerate") }
 }
 
 impl<I: Iterator> Iterator for Enumerate<I> {
@@ -496,6 +508,10 @@ impl<I: DoubleEndedIterator + ExactSizeIterator> DoubleEndedIterator for Enumera
 pub struct Zip<I, J> {
     a: I;
     b: J;
+}
+
+impl<I, J> Debug for Zip<I, J> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Zip") }
 }
 
 impl<I: Iterator, J: Iterator> Iterator for Zip<I, J> {
@@ -536,6 +552,10 @@ pub struct Chain<I, J> {
     first: bool;
 }
 
+impl<I, J> Debug for Chain<I, J> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Chain") }
+}
+
 impl<I: Iterator, J: Iterator<Item = I::Item>> Iterator for Chain<I, J> {
     type Item = I::Item;
     const fn next(ref self) -> I::Item | none {
@@ -559,6 +579,10 @@ pub struct StepBy<I> {
     it: I;
     step: usize;
     first: bool;
+}
+
+impl<I> Debug for StepBy<I> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("StepBy") }
 }
 
 impl<I: Iterator> Iterator for StepBy<I> {
@@ -613,6 +637,10 @@ pub struct Rev<I> {
     it: I;
 }
 
+impl<I> Debug for Rev<I> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Rev") }
+}
+
 impl<I: DoubleEndedIterator> Iterator for Rev<I> {
     type Item = I::Item;
     const fn next(ref self) -> I::Item | none {
@@ -639,6 +667,10 @@ impl<I: DoubleEndedIterator + ExactSizeIterator> ExactSizeIterator for Rev<I> {
 pub struct Flatten<I> {
     it: I;
     cur: <I::Item as IntoIterator>::IntoIter | none;
+}
+
+impl<I> Debug for Flatten<I> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Flatten") }
 }
 
 impl<I: Iterator> Iterator for Flatten<I>
@@ -670,6 +702,10 @@ pub struct FlatMap<I, U> {
     cur: <U as IntoIterator>::IntoIter | none;
 }
 
+impl<I, U> Debug for FlatMap<I, U> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("FlatMap") }
+}
+
 impl<I: Iterator, U: IntoIterator> Iterator for FlatMap<I, U> {
     type Item = U::Item;
     const fn next(ref self) -> U::Item | none {
@@ -692,6 +728,10 @@ pub struct Peekable<I> {
     it: I;
     peeked: I::Item | none;
     has: bool;
+}
+
+impl<I> Debug for Peekable<I> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Peekable") }
 }
 
 impl<I: Iterator> Peekable<I> {
@@ -719,6 +759,10 @@ impl<I: Iterator> Iterator for Peekable<I> {
 pub struct Take<I> {
     it: I;
     left: usize;
+}
+
+impl<I> Debug for Take<I> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Take") }
 }
 
 impl<I: Iterator> Iterator for Take<I> {
@@ -761,6 +805,10 @@ pub struct Skip<I> {
     n: usize;
 }
 
+impl<I> Debug for Skip<I> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Skip") }
+}
+
 impl<I: Iterator> Iterator for Skip<I> {
     type Item = I::Item;
     const fn next(ref self) -> I::Item | none {
@@ -794,6 +842,10 @@ pub struct TakeWhile<I> {
     done: bool;
 }
 
+impl<I> Debug for TakeWhile<I> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TakeWhile") }
+}
+
 impl<I: Iterator> Iterator for TakeWhile<I> {
     type Item = I::Item;
     const fn next(ref self) -> I::Item | none {
@@ -814,6 +866,10 @@ pub struct SkipWhile<I> {
     pred: fn(I::Item) -> bool;
     /// An item passed `pred`'s test: the rest go through unchecked.
     done: bool;
+}
+
+impl<I> Debug for SkipWhile<I> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("SkipWhile") }
 }
 
 impl<I: Iterator> Iterator for SkipWhile<I> {
@@ -838,6 +894,10 @@ pub struct Scan<I, S> {
     f: fn(S, I::Item) -> S;
 }
 
+impl<I, S> Debug for Scan<I, S> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Scan") }
+}
+
 impl<I: Iterator, S> Iterator for Scan<I, S> {
     type Item = S;
     const fn next(ref self) -> S | none {
@@ -860,6 +920,10 @@ impl<I: ExactSizeIterator, S> ExactSizeIterator for Scan<I, S> {
 pub struct InspectIter<I> {
     it: I;
     f: fn(I::Item);
+}
+
+impl<I> Debug for InspectIter<I> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("InspectIter") }
 }
 
 // No `count` override: counting a stepped inner iterator runs `f`.
@@ -892,6 +956,10 @@ pub struct Cycle<I> {
     it: I;
 }
 
+impl<I> Debug for Cycle<I> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Cycle") }
+}
+
 impl<I: Iterator> Iterator for Cycle<I> {
     type Item = I::Item;
     const fn next(ref self) -> I::Item | none {
@@ -917,6 +985,10 @@ impl<I: Iterator> Iterator for Cycle<I> {
 pub struct Chunks<I> {
     it: I;
     size: usize;
+}
+
+impl<I> Debug for Chunks<I> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Chunks") }
 }
 
 impl<I: Iterator> Iterator for Chunks<I> {
@@ -955,6 +1027,10 @@ pub struct Windows<I> {
     /// yielded window never changes.
     win: List<I::Item>;
     started: bool;
+}
+
+impl<I> Debug for Windows<I> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Windows") }
 }
 
 impl<I: Iterator> Iterator for Windows<I> {
@@ -1008,6 +1084,10 @@ pub struct GenIter<T> {
     resume: fn(bool) -> (T | none);
 }
 
+impl<T> Debug for GenIter<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("GenIter") }
+}
+
 impl<T> Iterator for GenIter<T> {
     type Item = T;
     const fn next(ref self) -> T | none {
@@ -1029,6 +1109,10 @@ impl<T> GenIter<T> {
 /// 4.14.10), stepped with `try for x in g { .. }`.
 pub struct TryGenIter<T, E> {
     resume: fn(bool) throws (E) -> (T | none);
+}
+
+impl<T, E> Debug for TryGenIter<T, E> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TryGenIter") }
 }
 
 impl<T, E> TryIterator for TryGenIter<T, E> {

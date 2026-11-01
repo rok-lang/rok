@@ -384,6 +384,10 @@ pub struct Entry<K, V, S = RandomState> {
     key: K;
 }
 
+impl<K, V, S> Debug for Entry<K, V, S> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Entry") }
+}
+
 impl<K: Hash, V, S: BuildHasher> Entry<K, V, S> {
     pub fn key(self) -> K {
         self.key
@@ -432,6 +436,10 @@ pub struct Keys<K, V, S = RandomState> {
     at: usize;
 }
 
+impl<K, V, S> Debug for Keys<K, V, S> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Keys") }
+}
+
 impl<K: Hash, V, S: BuildHasher> Iterator for Keys<K, V, S> {
     type Item = K;
     const fn next(ref self) -> K | none {
@@ -452,6 +460,10 @@ pub struct Values<K, V, S = RandomState> {
     at: usize;
 }
 
+impl<K, V, S> Debug for Values<K, V, S> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Values") }
+}
+
 impl<K: Hash, V, S: BuildHasher> Iterator for Values<K, V, S> {
     type Item = V;
     const fn next(ref self) -> V | none {
@@ -470,6 +482,10 @@ impl<K: Hash, V, S: BuildHasher> Iterator for Values<K, V, S> {
 pub struct DictIter<K, V, S = RandomState> {
     d: Dict<K, V, S>;
     at: usize;
+}
+
+impl<K, V, S> Debug for DictIter<K, V, S> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("DictIter") }
 }
 
 impl<K: Hash, V, S: BuildHasher> Iterator for DictIter<K, V, S> {

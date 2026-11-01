@@ -20,6 +20,7 @@ pub struct Range<T> {
     pub end: T;
 }
 
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct RangeInclusive<T> {
     pub start: T;
     pub end: T;
@@ -27,20 +28,24 @@ pub struct RangeInclusive<T> {
     exhausted: bool = false;
 }
 
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct RangeFrom<T> {
     pub start: T;
 }
 
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct RangeTo<T> {
     pub end: T;
 }
 
 /// `..=b`: up to and including `end` (the spec's range grammar has no
 /// `..=b` form; this mirrors `RangeTo`).
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct RangeToInclusive<T> {
     pub end: T;
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RangeFull;
 
 // Clone / Copy / PartialEq / Eq from the bounds (stdlib 2.13, 2.5.7).
@@ -55,6 +60,56 @@ impl<T: PartialEq> PartialEq for Range<T> {
 }
 
 impl<T: Eq> Eq for Range<T> {}
+
+impl<T: Hash> Hash for Range<T> {
+    const fn hash(self) -> u64 {
+        let h = self.start.hash();
+        ((h << 5) | (h >> 59)) ^ self.end.hash()
+    }
+}
+
+// Debug as the range is written: `0..3`, `0..=3`, `0..`, `..3`, `..=3`, `..`.
+impl<T: Debug> Debug for Range<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) {
+        try Debug::fmt(self.start, ref f);
+        try f.write_str("..");
+        try Debug::fmt(self.end, ref f);
+    }
+}
+
+impl<T: Debug> Debug for RangeInclusive<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) {
+        try Debug::fmt(self.start, ref f);
+        try f.write_str("..=");
+        try Debug::fmt(self.end, ref f);
+        if self.exhausted { try f.write_str(" (exhausted)"); }
+    }
+}
+
+impl<T: Debug> Debug for RangeFrom<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) {
+        try Debug::fmt(self.start, ref f);
+        try f.write_str("..");
+    }
+}
+
+impl<T: Debug> Debug for RangeTo<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) {
+        try f.write_str("..");
+        try Debug::fmt(self.end, ref f);
+    }
+}
+
+impl<T: Debug> Debug for RangeToInclusive<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) {
+        try f.write_str("..=");
+        try Debug::fmt(self.end, ref f);
+    }
+}
+
+impl Debug for RangeFull {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("..") }
+}
 
 impl<T: Step> Iterator for Range<T> {
     type Item = T;

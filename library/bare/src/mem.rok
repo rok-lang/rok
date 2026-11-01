@@ -30,6 +30,10 @@ extern "rok" {
 
 pub struct GcBuf<T> {}
 
+impl<T> Debug for GcBuf<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("GcBuf") }
+}
+
 /// The method forms of `buf_new` / `buf_get` / `buf_set` (2.9.12).
 impl<T> GcBuf<T> {
     pub const unsafe fn new(len: usize) -> GcBuf<T> { unsafe { buf_new(len) } }
@@ -65,6 +69,8 @@ pub fn buf_same<T>(a: GcBuf<T>, b: GcBuf<T>) -> bool {
 /// Plain old data: every bit pattern of the type is a valid value, its
 /// layout is fixed and it has no `Drop` (spec 1.3.3). User structs opt
 /// in with `#[derive(Pod)]` (`#[repr(C)]` / `#[repr(transparent)]`).
+/// `bool` and `char` are not `Pod`: most of their bit patterns are not
+/// values (read a `u8` / `u32` and convert).
 pub trait Pod {}
 
 impl Pod for i8 {}
@@ -79,8 +85,6 @@ impl Pod for u64 {}
 impl Pod for usize {}
 impl Pod for f32 {}
 impl Pod for f64 {}
-impl Pod for bool {}
-impl Pod for char {}
 impl Pod for c_char {}
 impl<T: Pod, const N: usize> Pod for [T; N] {}
 impl<A: Pod> Pod for (A,) {}
@@ -179,6 +183,10 @@ pub unsafe fn drop_in_place<T>(p: Ptr<T>);
 #[repr(transparent)]
 pub struct MaybeUninit<T> {
     value: T;
+}
+
+impl<T> Debug for MaybeUninit<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("MaybeUninit") }
 }
 
 impl<T> MaybeUninit<T> {

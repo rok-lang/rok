@@ -8,7 +8,8 @@ use sup::aes::{aes_expand, aes_encrypt2};
 use sup::chacha::{ChaChaState, Poly1305State};
 use sup::secret::SecretWords;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[non_exhaustive]
 pub enum AeadAlgorithm {
     Aes128Gcm,
     Aes256Gcm,
@@ -36,6 +37,10 @@ pub struct Aead {
     // words.
     k: SecretWords;
     rounds: usize;
+}
+
+impl Debug for Aead {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"Aead {{ algorithm: {self.alg:?}, .. }}") }
 }
 
 impl Aead {

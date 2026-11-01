@@ -121,6 +121,10 @@ pub struct AsyncStream<T> {
     resume: fn(Context) -> Poll<T | none>;
 }
 
+impl<T> Debug for AsyncStream<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("AsyncStream") }
+}
+
 impl<T> Stream for AsyncStream<T> {
     type Item = T;
     const fn poll_next(ref self, ref ctx: Context) -> Poll<T | none> {
@@ -133,6 +137,10 @@ impl<T> Stream for AsyncStream<T> {
 pub struct Map<S, U> {
     s: S;
     f: fn(S::Item) -> U;
+}
+
+impl<S, U> Debug for Map<S, U> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Map") }
 }
 
 impl<S: Stream, U> Stream for Map<S, U> {
@@ -153,6 +161,10 @@ impl<S: Stream, U> Stream for Map<S, U> {
 pub struct Filter<S> {
     s: S;
     pred: fn(S::Item) -> bool;
+}
+
+impl<S> Debug for Filter<S> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Filter") }
 }
 
 impl<S: Stream> Stream for Filter<S> {
@@ -182,6 +194,10 @@ pub struct Take<S> {
     left: usize;
 }
 
+impl<S> Debug for Take<S> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Take") }
+}
+
 impl<S: Stream> Stream for Take<S> {
     type Item = S::Item;
     const fn poll_next(ref self, ref ctx: Context) -> Poll<S::Item | none> {
@@ -203,6 +219,10 @@ impl<S: Stream> Stream for Take<S> {
 pub struct Skip<S> {
     s: S;
     n: usize;
+}
+
+impl<S> Debug for Skip<S> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Skip") }
 }
 
 impl<S: Stream> Stream for Skip<S> {
@@ -232,6 +252,10 @@ pub struct Throttle<S> {
     inner: AsyncStream<S::Item>;
 }
 
+impl<S> Debug for Throttle<S> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Throttle") }
+}
+
 impl<S: Stream> Stream for Throttle<S> {
     type Item = S::Item;
     const fn poll_next(ref self, ref ctx: Context) -> Poll<S::Item | none> {
@@ -241,6 +265,10 @@ impl<S: Stream> Stream for Throttle<S> {
 
 pub struct Buffered<S> {
     inner: AsyncStream< <S::Item as Future>::Output>;
+}
+
+impl<S> Debug for Buffered<S> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Buffered") }
 }
 
 impl<S: Stream> Stream for Buffered<S>
@@ -255,6 +283,10 @@ where
 
 pub struct BufferUnordered<S> {
     inner: AsyncStream< <S::Item as Future>::Output>;
+}
+
+impl<S> Debug for BufferUnordered<S> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("BufferUnordered") }
 }
 
 impl<S: Stream> Stream for BufferUnordered<S>
@@ -327,6 +359,10 @@ pub struct Merge<S1, S2> {
     either: bool;
 }
 
+impl<S1, S2> Debug for Merge<S1, S2> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Merge") }
+}
+
 impl<S1: Stream, S2: Stream> Stream for Merge<S1, S2> {
     type Item = S1::Item | S2::Item;
     const fn poll_next(ref self, ref ctx: Context) -> Poll<S1::Item | S2::Item | none> {
@@ -363,6 +399,10 @@ pub struct Select<S1, S2> {
     m: Merge<S1, S2>;
 }
 
+impl<S1, S2> Debug for Select<S1, S2> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Select") }
+}
+
 impl<S1: Stream, S2: Stream> Stream for Select<S1, S2> {
     type Item = S1::Item | S2::Item;
     const fn poll_next(ref self, ref ctx: Context) -> Poll<S1::Item | S2::Item | none> {
@@ -380,6 +420,10 @@ pub struct Zip<S1, S2> {
     b: S2;
     left: S1::Item | none;
     right: S2::Item | none;
+}
+
+impl<S1, S2> Debug for Zip<S1, S2> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Zip") }
 }
 
 impl<S1: Stream, S2: Stream> Stream for Zip<S1, S2> {
@@ -417,6 +461,10 @@ impl<S1: Stream, S2: Stream> Stream for Zip<S1, S2> {
 /// with `try for await x in s { .. }`.
 pub struct TryAsyncStream<T, E> {
     resume: fn(Context) throws (E) -> Poll<T | none>;
+}
+
+impl<T, E> Debug for TryAsyncStream<T, E> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TryAsyncStream") }
 }
 
 // fallible streams (2.8.11)

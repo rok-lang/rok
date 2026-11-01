@@ -57,6 +57,8 @@ pub trait Inspect: Reflect {
 /// One field of an `Inspect` type. `type_name` is the instantiated type
 /// (`f64` for `v: T` in `Box<f64>`); `name` is `"0"`, `"1"`, .. for a
 /// tuple struct; `is_pub` is true only for a plain `pub` field.
+#[non_exhaustive]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct FieldInfo {
     pub name: str;
     pub type_name: str;
@@ -66,6 +68,8 @@ pub struct FieldInfo {
 /// One inherent method of an `Inspect` type. 6.10 names `name` / `arity` /
 /// `is_static`, 2.12 `name` / `arg_types` / `return_type`: both are here.
 /// `arity` and `arg_types` leave out `self`.
+#[non_exhaustive]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct MethodInfo {
     pub name: str;
     pub arity: usize;

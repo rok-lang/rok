@@ -10,6 +10,10 @@ pub struct Hmac {
     outer: Digest;
 }
 
+impl Debug for Hmac {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Hmac { .. }") }
+}
+
 impl Hmac {
     pub fn new<B: AsBytes>(alg: HashAlgorithm, key: B) -> Hmac {
         let k = key.byte_slice();

@@ -14,6 +14,7 @@ use rok::core::io::IoError;
 use rok::std::sys::{fetch, text_of, list_of_str};
 use rok::bare::mem::GcBuf;
 
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Path {
     s: str;
 }
@@ -68,6 +69,7 @@ const fn prefix_of(s: str) -> (usize, bool) {
 }
 
 /// One piece of a path (`Path::components`).
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Component {
     RootDir,
     Prefix(str),
@@ -86,11 +88,6 @@ impl Component {
             Component::Normal(n) => n,
         }
     }
-}
-
-impl PartialEq for Component {
-    const fn eq(self, rhs: Component) -> bool { self.as_str() == rhs.as_str() }
-    const fn ne(self, rhs: Component) -> bool { self.as_str() != rhs.as_str() }
 }
 
 impl Debug for Component {
@@ -352,6 +349,7 @@ impl Div<Path> for Path {
 
 /// OS path bytes that need not be UTF-8 (3.8.5): Unix bytes.
 #[cfg(not(target_os = "windows"))]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct RawPath {
     raw: List<u8>;
 }
@@ -376,6 +374,7 @@ impl RawPath {
 /// An OS path that need not be valid UTF-16 (3.8.5): Windows WTF-16
 /// units (lone surrogates allowed).
 #[cfg(target_os = "windows")]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct RawPath {
     raw: List<u16>;
 }
@@ -455,11 +454,6 @@ impl RawPath {
     pub fn to_path_lossy(self) -> Path { Path { s: decode_wide(self.raw).0 } }
 }
 
-impl PartialEq for RawPath {
-    const fn eq(self, rhs: RawPath) -> bool { self.raw == rhs.raw }
-    const fn ne(self, rhs: RawPath) -> bool { self.raw != rhs.raw }
-}
-
 impl Debug for RawPath {
     const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"RawPath({self.to_path_lossy().as_str():?})") }
 }
@@ -475,11 +469,6 @@ impl TryFrom<RawPath> for Path {
     const fn try_from(raw: RawPath) throws (Utf8Error) -> Path { try raw.to_path() }
 }
 
-impl PartialEq for Path {
-    const fn eq(self, rhs: Path) -> bool { self.s == rhs.s }
-    const fn ne(self, rhs: Path) -> bool { self.s != rhs.s }
-}
-
 impl Display for Path {
     const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(self.s) }
 }
@@ -493,6 +482,10 @@ pub struct Components {
     pos: usize;
 }
 
+impl Debug for Components {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Components") }
+}
+
 impl Iterator for Components {
     type Item = Component;
     const fn next(ref self) -> Component | none {
@@ -504,6 +497,10 @@ impl Iterator for Components {
 
 pub struct Ancestors {
     next: Path | none;
+}
+
+impl Debug for Ancestors {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Ancestors") }
 }
 
 impl Iterator for Ancestors {

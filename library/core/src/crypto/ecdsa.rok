@@ -18,6 +18,7 @@ use sup::bignum::Nat;
 use sup::ecfield::{Fe, fe_zero, mul_p256, add_p256, sub_p256, mul_p384, add_p384, sub_p384};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[non_exhaustive]
 pub enum EcCurve {
     P256,
     P384,

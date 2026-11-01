@@ -6,6 +6,7 @@
 pub trait Eq: PartialEq {}
 
 /// The result of a three-way comparison (2.5.4).
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Ordering {
     Less,
     Equal,
@@ -24,20 +25,6 @@ impl Ordering {
         }
     }
 }
-
-impl PartialEq for Ordering {
-    const fn eq(self, rhs: Ordering) -> bool {
-        match (self, rhs) {
-            (Ordering::Less, Ordering::Less) => true,
-            (Ordering::Equal, Ordering::Equal) => true,
-            (Ordering::Greater, Ordering::Greater) => true,
-            _ => false,
-        }
-    }
-    const fn ne(self, rhs: Ordering) -> bool { !self.eq(rhs) }
-}
-
-impl Eq for Ordering {}
 
 impl Debug for Ordering {
     const fn fmt(self, ref f: Formatter) throws (FmtError) {

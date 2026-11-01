@@ -293,6 +293,10 @@ pub struct Scope {
     closed: Atomic<bool>;
 }
 
+impl Debug for Scope {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Scope") }
+}
+
 impl Scope {
     #[track_caller]
     pub fn spawn<T: Send>(self, f: fn() -> T + Send) -> ScopeHandle<T> {
@@ -325,6 +329,10 @@ impl Scope {
 pub struct ScopeHandle<T> {
     task: ScopeTask;
     result: GcBuf<T>;
+}
+
+impl<T> Debug for ScopeHandle<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("ScopeHandle") }
 }
 
 impl<T> ScopeHandle<T> {
@@ -371,6 +379,10 @@ pub struct TryScope<E> {
     /// The first error (`failed` set once it is written).
     err: Handoff<GcBuf<E>>;
     failed: Atomic<bool>;
+}
+
+impl<E> Debug for TryScope<E> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TryScope") }
 }
 
 impl<E: Send> TryScope<E> {
@@ -424,6 +436,10 @@ pub struct TryScopeHandle<T, E> {
     own: GcBuf<E>;
     status: Atomic<i32>;
     scope: TryScope<E>;
+}
+
+impl<T, E> Debug for TryScopeHandle<T, E> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TryScopeHandle") }
 }
 
 impl<T, E: Send> TryScopeHandle<T, E> {

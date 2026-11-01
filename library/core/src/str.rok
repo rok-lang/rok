@@ -235,6 +235,10 @@ pub struct Chars {
     pos: usize;
 }
 
+impl Debug for Chars {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Chars") }
+}
+
 impl Iterator for Chars {
     type Item = char;
     const fn next(ref self) -> char | none {
@@ -267,6 +271,10 @@ pub struct Split {
     done: bool;
 }
 
+impl Debug for Split {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Split") }
+}
+
 impl Iterator for Split {
     type Item = str;
     const fn next(ref self) -> str | none {
@@ -287,6 +295,10 @@ pub struct SplitN {
     rest: str;
     sep: str;
     left: usize;
+}
+
+impl Debug for SplitN {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("SplitN") }
 }
 
 impl Iterator for SplitN {
@@ -310,6 +322,10 @@ pub struct RSplit {
     rest: str;
     sep: str;
     done: bool;
+}
+
+impl Debug for RSplit {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("RSplit") }
 }
 
 impl Iterator for RSplit {
@@ -336,6 +352,10 @@ pub struct RSplitN {
     rest: str;
     sep: str;
     left: usize;
+}
+
+impl Debug for RSplitN {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("RSplitN") }
 }
 
 impl Iterator for RSplitN {
@@ -365,6 +385,10 @@ pub struct MatchIndices {
     pos: usize;
 }
 
+impl Debug for MatchIndices {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("MatchIndices") }
+}
+
 impl Iterator for MatchIndices {
     type Item = (usize, str);
     const fn next(ref self) -> (usize, str) | none {
@@ -380,6 +404,10 @@ impl Iterator for MatchIndices {
 
 pub struct Lines {
     rest: str;
+}
+
+impl Debug for Lines {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Lines") }
 }
 
 impl Iterator for Lines {
@@ -402,6 +430,10 @@ impl Iterator for Lines {
 
 pub struct CharIndices {
     chars: Chars;
+}
+
+impl Debug for CharIndices {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("CharIndices") }
 }
 
 impl Iterator for CharIndices {
@@ -470,6 +502,10 @@ const fn space_at_wide(s: str, pos: usize, b: u8) -> usize {
 pub struct SplitWhitespace {
     s: str;
     pos: usize;
+}
+
+impl Debug for SplitWhitespace {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("SplitWhitespace") }
 }
 
 impl Iterator for SplitWhitespace {
@@ -677,6 +713,10 @@ pub struct StrBuf {
     h: GcBuf<StrBufHead>;
 }
 
+impl Debug for StrBuf {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try Debug::fmt(self.to_str(), ref f) }
+}
+
 struct StrBufHead {
     len: usize;
     cap: usize;
@@ -837,6 +877,11 @@ impl FromIterator<str> for str {
 
 impl Display for StrBuf {
     const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(self.to_str()) }
+}
+
+/// Empty.
+impl Default for StrBuf {
+    const fn default() -> StrBuf { StrBuf::new() }
 }
 
 /// Bytes that are not UTF-8 (`str::from_utf8`, `RawStr::to_str`,

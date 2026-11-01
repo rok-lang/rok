@@ -38,7 +38,7 @@ const CHUNK: usize = 8192;
 // errors (2.23.0)
 
 /// What went wrong, from the OS error (`os_code`) or the library itself.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum IoErrorKind {
     Other,
@@ -114,13 +114,6 @@ impl IoErrorKind {
     }
 }
 
-impl PartialEq for IoErrorKind {
-    const fn eq(self, rhs: IoErrorKind) -> bool { self.index() == rhs.index() }
-    const fn ne(self, rhs: IoErrorKind) -> bool { self.index() != rhs.index() }
-}
-
-impl Eq for IoErrorKind {}
-
 impl Debug for IoErrorKind {
     const fn fmt(self, ref f: Formatter) throws (FmtError) {
         try f.write_str(match self {
@@ -143,6 +136,33 @@ impl Debug for IoErrorKind {
             IoErrorKind::InvalidData => "InvalidData",
             IoErrorKind::WriteZero => "WriteZero",
             IoErrorKind::FilesystemLoop => "FilesystemLoop",
+        })
+    }
+}
+
+/// The kind in words, lowercase (`not found`, `permission denied`).
+impl Display for IoErrorKind {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) {
+        try f.pad(match self {
+            IoErrorKind::Other => "other error",
+            IoErrorKind::NotFound => "not found",
+            IoErrorKind::PermissionDenied => "permission denied",
+            IoErrorKind::AlreadyExists => "already exists",
+            IoErrorKind::NotADirectory => "not a directory",
+            IoErrorKind::IsADirectory => "is a directory",
+            IoErrorKind::DirectoryNotEmpty => "directory not empty",
+            IoErrorKind::InvalidInput => "invalid input",
+            IoErrorKind::BrokenPipe => "broken pipe",
+            IoErrorKind::Interrupted => "interrupted",
+            IoErrorKind::WouldBlock => "operation would block",
+            IoErrorKind::TimedOut => "timed out",
+            IoErrorKind::StorageFull => "no storage space",
+            IoErrorKind::CrossesDevices => "cross-device link",
+            IoErrorKind::Unsupported => "unsupported",
+            IoErrorKind::UnexpectedEof => "unexpected end of file",
+            IoErrorKind::InvalidData => "invalid data",
+            IoErrorKind::WriteZero => "write zero",
+            IoErrorKind::FilesystemLoop => "filesystem loop",
         })
     }
 }
@@ -509,6 +529,7 @@ pub trait Write {
 // Seek (2.23.4)
 
 /// A position for `Seek::seek`.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum SeekFrom {
     Start(u64),
     End(i64),
@@ -710,6 +731,10 @@ pub struct Lines<R> {
     r: R;
 }
 
+impl<R> Debug for Lines<R> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Lines") }
+}
+
 impl<R: BufRead> TryIterator for Lines<R> {
     type Item = str;
     type Error = IoError;
@@ -742,6 +767,10 @@ impl<R: BufRead> TryIterator for Split<R> {
 pub struct Bytes<R> {
     r: R;
     one: List<u8>;
+}
+
+impl<R> Debug for Bytes<R> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Bytes") }
 }
 
 impl<R: Read> TryIterator for Bytes<R> {
@@ -809,6 +838,10 @@ pub struct BufReader<R> {
     /// Bytes read but not yet handed out: `chunk[at[0]..at[1]]`.
     chunk: List<u8>;
     at: List<usize>;
+}
+
+impl<R> Debug for BufReader<R> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("BufReader") }
 }
 
 impl<R> BufReader<R> {
@@ -918,6 +951,10 @@ pub struct BufWriter<W> {
     by_line: bool;
 }
 
+impl<W> Debug for BufWriter<W> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("BufWriter") }
+}
+
 impl<W> BufWriter<W> {
     pub const fn new(inner: W) -> BufWriter<W> { BufWriter::with_capacity(CHUNK, inner) }
 
@@ -1010,6 +1047,10 @@ impl<W: Write> Drop for BufWriter<W> {
 /// write holds one.
 pub struct LineWriter<W> {
     buf: BufWriter<W>;
+}
+
+impl<W> Debug for LineWriter<W> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("LineWriter") }
 }
 
 impl<W> LineWriter<W> {
@@ -1254,12 +1295,24 @@ pub struct Stdin {
     at: List<usize>;
 }
 
+impl Debug for Stdin {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Stdin") }
+}
+
 /// Standard output, through the runtime's buffer shared with `print`:
 /// flushed at a newline on a terminal, when full, and at exit.
 pub struct Stdout {}
 
+impl Debug for Stdout {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Stdout") }
+}
+
 /// Standard error, unbuffered, shared with `eprint`.
 pub struct Stderr {}
+
+impl Debug for Stderr {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Stderr") }
+}
 
 pub const fn stdin() -> Stdin { Stdin { line: List::new(), at: [0usize] } }
 pub const fn stdout() -> Stdout { Stdout {} }

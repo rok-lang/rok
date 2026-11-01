@@ -145,6 +145,10 @@ pub struct SliceIter<T> {
     back: usize = 0;
 }
 
+impl<T> Debug for SliceIter<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("SliceIter") }
+}
+
 impl<T> Iterator for SliceIter<T> {
     type Item = T;
     const fn next(ref self) -> T | none {
@@ -238,6 +242,10 @@ pub struct Windows<T> {
     i: usize;
 }
 
+impl<T> Debug for Windows<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Windows") }
+}
+
 impl<T> Iterator for Windows<T> {
     type Item = Slice<T>;
     const fn next(ref self) -> Slice<T> | none {
@@ -267,6 +275,10 @@ pub struct Chunks<T> {
     size: usize;
     /// Start of the next chunk.
     i: usize;
+}
+
+impl<T> Debug for Chunks<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Chunks") }
 }
 
 impl<T> Iterator for Chunks<T> {

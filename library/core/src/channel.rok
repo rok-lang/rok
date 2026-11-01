@@ -408,6 +408,10 @@ pub struct Sender<T> {
     open: GcBuf<bool>;
 }
 
+impl<T> Debug for Sender<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Sender") }
+}
+
 impl<T> Sender<T> {
     fn is_open(self) -> bool {
         atomic_load(self.open, 0, SeqCst)
@@ -504,6 +508,10 @@ pub struct Receiver<T> {
     ch: Chan<T>;
 }
 
+impl<T> Debug for Receiver<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Receiver") }
+}
+
 impl<T> Receiver<T> {
     /// `await rx.recv_async()` inside async code: like `recv`, but
     /// suspends the task instead of blocking the thread.
@@ -566,6 +574,10 @@ pub struct ReceiverIter<T> {
     rx: Receiver<T>;
 }
 
+impl<T> Debug for ReceiverIter<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("ReceiverIter") }
+}
+
 impl<T> Iterator for ReceiverIter<T> {
     type Item = T;
     fn next(ref self) -> T | none {
@@ -576,6 +588,10 @@ impl<T> Iterator for ReceiverIter<T> {
 /// `Receiver::recv_async`.
 pub struct RecvFuture<T> {
     rx: Receiver<T>;
+}
+
+impl<T> Debug for RecvFuture<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("RecvFuture") }
 }
 
 impl<T> rok::core::future::Future for RecvFuture<T> {
@@ -625,6 +641,10 @@ pub struct SendFuture<T> {
     ticket: usize;
     /// Counted in the channel's suspended senders.
     counted: bool;
+}
+
+impl<T> Debug for SendFuture<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("SendFuture") }
 }
 
 impl<T> SendFuture<T> {

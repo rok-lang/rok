@@ -6,6 +6,7 @@
 // left-out value in one reads as `none` once it is in a sum.
 
 /// The integer types `NonZero` / `Positive` wrap.
+#[sealed]
 pub trait NicheInt: Zero + Copy + Ord + Hash + Display + Debug + Add<Output = Self> + Sub<Output = Self> + Mul<Output = Self> + Div<Output = Self> {}
 
 impl NicheInt for i8 {}
@@ -20,6 +21,7 @@ impl NicheInt for u64 {}
 impl NicheInt for usize {}
 
 /// The float types `NonNan` / `Finite` wrap.
+#[sealed]
 pub trait NicheFloat: Copy + PartialOrd + Display + Debug + Add<Output = Self> + Sub<Output = Self> + Mul<Output = Self> + Div<Output = Self> {
     fn niche_nan(self) -> bool;
     fn niche_finite(self) -> bool;

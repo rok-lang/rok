@@ -19,6 +19,7 @@ use rok::bare::mem::{GcBuf, buf_new, buf_same, size_of, transmute_unchecked};
 use rok::bare::ptr::Ptr;
 
 /// Identifies a thread for its lifetime (its runtime worker id).
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ThreadId {
     id: u64;
 }
@@ -27,9 +28,8 @@ impl ThreadId {
     pub const fn as_u64(self) -> u64 { self.id }
 }
 
-impl PartialEq for ThreadId {
-    const fn eq(self, rhs: ThreadId) -> bool { self.id == rhs.id }
-    const fn ne(self, rhs: ThreadId) -> bool { self.id != rhs.id }
+impl Debug for ThreadId {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"ThreadId({self.id})") }
 }
 
 /// What the library keeps per thread.
@@ -74,6 +74,10 @@ pub struct Thread {
     rec: Rec;
 }
 
+impl Debug for Thread {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"Thread {{ id: {self.id():?}, name: {self.name():?} }}") }
+}
+
 impl Thread {
     pub const fn id(self) -> ThreadId { ThreadId { id: self.rec.id } }
     pub const fn name(self) -> str | none { self.rec.name }
@@ -93,6 +97,7 @@ pub struct JoinError {
 
 /// Why a join failed.
 #[non_exhaustive]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum JoinErrorKind {
     /// The OS refused: `pthread_join`'s error number (Windows: the
     /// error code).
@@ -103,11 +108,6 @@ pub enum JoinErrorKind {
     /// The handle was already joined or detached, through it or a copy
     /// of it: the OS thread handle is released once.
     Taken,
-}
-
-impl PartialEq for JoinErrorKind {
-    const fn eq(self, rhs: JoinErrorKind) -> bool { code_of(self) == code_of(rhs) }
-    const fn ne(self, rhs: JoinErrorKind) -> bool { code_of(self) != code_of(rhs) }
 }
 
 impl Debug for JoinErrorKind {
@@ -164,6 +164,10 @@ pub struct JoinHandle<T> {
     taken: Atomic<bool>;
 }
 
+impl<T> Debug for JoinHandle<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("JoinHandle") }
+}
+
 impl<T> JoinHandle<T> {
     /// Wait for the thread and take its result.
     pub fn join(self) throws (JoinError) -> T {
@@ -205,6 +209,7 @@ impl<T: Send> IntoFuture for JoinHandle<T> {
 }
 
 /// Spawn configuration.
+#[derive(Debug)]
 pub struct Builder {
     name: str | none;
     stack_size: usize | none;
@@ -309,6 +314,10 @@ pub fn park_timeout(dur: Duration) {
 pub struct ThreadLocal<T> {
     init: fn() -> T + Sync;
     key: u64;
+}
+
+impl<T> Debug for ThreadLocal<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("ThreadLocal") }
 }
 
 static NEXT_LOCAL: Atomic<u64> = Atomic::new(1);
