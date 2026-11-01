@@ -29,9 +29,7 @@
 
 // rok::core::crypto: X25519 (RFC 7748 5.2, 6.1, iterated), Ed25519 (RFC 8032 7.1)
 // and Wycheproof subsets.
-use rok::core::crypto::x25519::X25519;
-use rok::core::crypto::Secret;
-use rok::core::crypto::ed25519::Ed25519;
+use rok::core::crypto::{x25519, ed25519, Secret};
 
 fn hex(b: List<u8>) -> str {
     let s = "";
@@ -59,11 +57,25 @@ fn check(name: str, got: str, want: str) {
     if got == want { println(f"ok {name}"); } else { println(f"FAIL {name}: {got} != {want}"); }
 }
 
+fn dh(k: List<u8>, u: List<u8>) -> Secret | none {
+    (try! x25519::PrivateKey::from_bytes(k)).diffie_hellman(try! x25519::PublicKey::from_bytes(u))
+}
+
 fn x(k: str, u: str) -> str {
-    match try X25519::shared_secret(unhex(k), unhex(u)) catch _ { none } {
+    match dh(unhex(k), unhex(u)) {
         s: Secret => hex(s.as_bytes().to_list()),
         none => "none",
     }
+}
+
+fn public_of(k: str) -> str {
+    hex((try! x25519::PrivateKey::from_bytes(unhex(k))).public_key().to_bytes()[0:32].to_list())
+}
+
+/// False for a key that does not decode, as for a bad signature.
+fn ed_verify(pk: List<u8>, msg: List<u8>, sig: List<u8>) -> bool {
+    let k = try ed25519::VerifyingKey::from_bytes(pk) catch _ { return false; };
+    k.verify(msg, sig)
 }
 
 fn parts(s: str) -> List<str> {
@@ -82,21 +94,22 @@ fn main() {
     let k = unhex("0900000000000000000000000000000000000000000000000000000000000000");
     let u = k;
     for i in 1..1001 {
-        let r = ((try X25519::shared_secret(k, u) catch _ { none }) ?? Secret::zeroed(0)).as_bytes().to_list();
+        let r = (dh(k, u) ?? Secret::zeroed(0)).as_bytes().to_list();
         u = k;
         k = r;
         if i == 1 { check("x25519 iter 1", hex(k), "422c8e7a6227d7bca1350b3e2bb7279f7897b87bb6854b783c60e80311ae3079"); }
     }
     check("x25519 iter 1000", hex(k), "684cf59ba83309552800ef566f2f4d3c1c3887c49360e3875f2eb94d99532c51");
     // RFC 7748 6.1.
-    let ap = try X25519::public_key(unhex("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")) catch _ { [] };
-    check("x25519 6.1 alice", hex(ap), "8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a");
-    let bp = try X25519::public_key(unhex("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb")) catch _ { [] };
-    check("x25519 6.1 bob", hex(bp), "de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f");
-    check("x25519 6.1 shared", x("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a", hex(bp)),
+    let ap = public_of("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a");
+    check("x25519 6.1 alice", ap, "8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a");
+    let bp = public_of("5dab087e624a8a4b79e17f8b83800ee66f3bb1292618b6fd1c2f8b27ff88e0eb");
+    check("x25519 6.1 bob", bp, "de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f");
+    check("x25519 6.1 shared", x("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a", bp),
         "4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742");
-    let bad = try X25519::public_key(unhex("00")) catch e { [] };
-    check("x25519 short key", f"{bad.len()}", "0");
+    let short: x25519::PrivateKey | none = try x25519::PrivateKey::from_bytes(unhex("00")) catch _ { none };
+    let bad = short is none;
+    check("x25519 short key", f"{bad}", "true");
 
     // RFC 8032 7.1.
     let rfc: List<str> = [
@@ -109,12 +122,13 @@ fn main() {
         let p = parts(line);
         let seed = unhex(p[0]);
         let msg = unhex(p[2]);
-        check(f"ed25519 rfc {i} pk", hex(try Ed25519::public_key(seed) catch _ { [] }), p[1]);
-        let sig = try Ed25519::sign(seed, msg) catch _ { [] };
+        let sk = try! ed25519::SigningKey::from_seed(seed);
+        check(f"ed25519 rfc {i} pk", hex(sk.verifying_key().to_bytes()[0:32].to_list()), p[1]);
+        let sig = sk.sign(msg);
         check(f"ed25519 rfc {i} sig", hex(sig), p[3]);
-        check(f"ed25519 rfc {i} verify", f"{Ed25519::verify(unhex(p[1]), msg, sig)}", "true");
+        check(f"ed25519 rfc {i} verify", f"{ed_verify(unhex(p[1]), msg, sig)}", "true");
         sig[5] ^= 1u8;
-        check(f"ed25519 rfc {i} reject", f"{Ed25519::verify(unhex(p[1]), msg, sig)}", "false");
+        check(f"ed25519 rfc {i} reject", f"{ed_verify(unhex(p[1]), msg, sig)}", "false");
     }
 
     let fails = 0;
@@ -127,7 +141,7 @@ fn main() {
     fails = 0;
     for line in WP_ED25519 {
         let p = parts(line);
-        let ok = Ed25519::verify(unhex(p[0]), unhex(p[1]), unhex(p[2]));
+        let ok = ed_verify(unhex(p[0]), unhex(p[1]), unhex(p[2]));
         if ok != (p[3] == "1") { fails += 1; println(f"FAIL wycheproof ed25519 {line}"); }
     }
     println(f"wycheproof ed25519 {WP_ED25519.len()} cases, {fails} failed");

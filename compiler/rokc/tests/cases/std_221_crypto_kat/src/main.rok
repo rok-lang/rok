@@ -78,7 +78,9 @@
 // Official vectors (NIST CAVP, Wycheproof), one case per vectors.txt line,
 // made by ../gen_vectors.py: `<suite> <op> <field>...`, hex fields, `-` for
 // empty, `@name` for an earlier `def name <hex>` line.
-use rok::core::crypto::{constant_time_eq, HashAlgorithm, Digest, Sha3_256, Sha3_512, Shake128, Shake256, Hmac, Hkdf, Aead, AeadAlgorithm, X25519, Ed25519, Ecdsa, EcCurve, RsaPublicKey, RsaPrivateKey, MlKem768, Secret};
+use rok::core::crypto::{constant_time_eq, HashAlgorithm, Digest, Sha3_256, Sha3_512, Shake128, Shake256, Hmac, Aead, AeadAlgorithm, EcCurve, Secret};
+use rok::core::crypto::{hkdf, x25519, ed25519, ecdsa, rsa};
+use rok::core::crypto::mlkem::{DecapsulationKey768, EncapsulationKey768};
 
 fn nib(c: u8) -> u8 {
     if c >= 0x30u8 && c <= 0x39u8 { return c - 0x30u8; }
@@ -178,22 +180,22 @@ fn aead_case(alg: str, key: List<u8>, iv: List<u8>, aad: List<u8>, msg: List<u8>
     o == none
 }
 
-fn rsa_key(cache: Dict<str, RsaPublicKey>, n: str, e: str) -> RsaPublicKey | none {
+fn rsa_key(cache: Dict<str, rsa::PublicKey>, n: str, e: str) -> rsa::PublicKey | none {
     let k = n + e;
-    if let c: RsaPublicKey = cache.get(k) { return c; }
-    let key: RsaPublicKey = try RsaPublicKey::new(unhex(n), unhex(e)) catch _ { return none; };
+    if let c: rsa::PublicKey = cache.get(k) { return c; }
+    let key: rsa::PublicKey = try rsa::PublicKey::new(unhex(n), unhex(e)) catch _ { return none; };
     cache.insert(k, key);
     key
 }
 
-fn rsa_priv(cache: Dict<str, RsaPrivateKey>, der: str) -> RsaPrivateKey | none {
-    if let c: RsaPrivateKey = cache.get(der) { return c; }
-    let key: RsaPrivateKey = try RsaPrivateKey::from_pkcs1_der(unhex(der)) catch _ { return none; };
+fn rsa_priv(cache: Dict<str, rsa::PrivateKey>, der: str) -> rsa::PrivateKey | none {
+    if let c: rsa::PrivateKey = cache.get(der) { return c; }
+    let key: rsa::PrivateKey = try rsa::PrivateKey::from_pkcs1_der(unhex(der)) catch _ { return none; };
     cache.insert(der, key);
     key
 }
 
-fn run(op: str, f: List<str>, pubs: Dict<str, RsaPublicKey>, privs: Dict<str, RsaPrivateKey>) -> bool {
+fn run(op: str, f: List<str>, pubs: Dict<str, rsa::PublicKey>, privs: Dict<str, rsa::PrivateKey>) -> bool {
     if op == "hash" {
         // alg msg md
         return hex(digest(f[0], unhex(f[1]))) == f[2];
@@ -231,8 +233,8 @@ fn run(op: str, f: List<str>, pubs: Dict<str, RsaPublicKey>, privs: Dict<str, Rs
         // alg ikm salt info size okm valid
         let h = hash_of(f[0]);
         let size = try f[4].parse::<usize>() catch _ { 0 };
-        let prk = Hkdf::extract(h, unhex(f[2]), unhex(f[1]));
-        let okm = try Hkdf::expand(h, prk, unhex(f[3]), size) catch _ { return f[6] == "0"; };
+        let prk = hkdf::extract(h, unhex(f[2]), unhex(f[1]));
+        let okm = try hkdf::expand(h, prk, unhex(f[3]), size) catch _ { return f[6] == "0"; };
         return want(f[6], hex(okm.as_bytes().to_list()) == f[5]);
     }
     if op == "aead" {
@@ -241,7 +243,9 @@ fn run(op: str, f: List<str>, pubs: Dict<str, RsaPublicKey>, privs: Dict<str, Rs
     }
     if op == "x25519" {
         // private public shared valid; an all-zero shared secret is `none`
-        let r = try X25519::shared_secret(unhex(f[0]), unhex(f[1])) catch _ { return f[3] == "0"; };
+        let sk = try x25519::PrivateKey::from_bytes(unhex(f[0])) catch _ { return f[3] == "0"; };
+        let pk = try x25519::PublicKey::from_bytes(unhex(f[1])) catch _ { return f[3] == "0"; };
+        let r = sk.diffie_hellman(pk);
         let zero = true;
         for x in unhex(f[2]) { if x != 0u8 { zero = false; } }
         return match r {
@@ -251,36 +255,41 @@ fn run(op: str, f: List<str>, pubs: Dict<str, RsaPublicKey>, privs: Dict<str, Rs
     }
     if op == "x25519-pub" {
         // private public
-        return hex(try X25519::public_key(unhex(f[0])) catch _ { return false; }) == f[1];
+        let sk = try x25519::PrivateKey::from_bytes(unhex(f[0])) catch _ { return false; };
+        return hex(sk.public_key().to_bytes()[0:32].to_list()) == f[1];
     }
     if op == "ed25519" {
         // public msg sig valid
-        return want(f[3], Ed25519::verify(unhex(f[0]), unhex(f[1]), unhex(f[2])));
+        let pk = try ed25519::VerifyingKey::from_bytes(unhex(f[0])) catch _ { return f[3] == "0"; };
+        return want(f[3], pk.verify(unhex(f[1]), unhex(f[2])));
     }
     if op == "ed25519-sign" {
         // seed public msg sig
-        let pk = try Ed25519::public_key(unhex(f[0])) catch _ { return false; };
-        let sig = try Ed25519::sign(unhex(f[0]), unhex(f[2])) catch _ { return false; };
-        return hex(pk) == f[1] && hex(sig) == f[3] && Ed25519::verify(pk, unhex(f[2]), sig);
+        let sk = try ed25519::SigningKey::from_seed(unhex(f[0])) catch _ { return false; };
+        let pk = sk.verifying_key();
+        let sig = sk.sign(unhex(f[2]));
+        return hex(pk.to_bytes()[0:32].to_list()) == f[1] && hex(sig) == f[3] && pk.verify(unhex(f[2]), sig);
     }
     if op == "ecdsa" {
         // curve hash public msg sig valid
-        return want(f[5], Ecdsa::verify(curve_of(f[0]), hash_of(f[1]), unhex(f[2]), unhex(f[3]), unhex(f[4])));
+        let pk = try ecdsa::VerifyingKey::from_sec1(curve_of(f[0]), unhex(f[2])) catch _ { return f[5] == "0"; };
+        return want(f[5], pk.verify(hash_of(f[1]), unhex(f[3]), unhex(f[4])));
     }
     if op == "ecdsa-pub" {
         // curve private public
-        return hex(try Ecdsa::public_key(curve_of(f[0]), unhex(f[1])) catch _ { return false; }) == f[2];
+        let sk = try ecdsa::SigningKey::from_bytes(curve_of(f[0]), unhex(f[1])) catch _ { return false; };
+        return hex(sk.verifying_key().to_sec1()) == f[2];
     }
     if op == "ecdsa-sign" {
         // curve hash private msg sig (RFC 6979 nonces)
         let c = curve_of(f[0]);
-        let sig = try Ecdsa::sign(c, hash_of(f[1]), unhex(f[2]), unhex(f[3])) catch _ { return false; };
-        let pk = try Ecdsa::public_key(c, unhex(f[2])) catch _ { return false; };
-        return hex(sig) == f[4] && Ecdsa::verify(c, hash_of(f[1]), pk, unhex(f[3]), sig);
+        let sk = try ecdsa::SigningKey::from_bytes(c, unhex(f[2])) catch _ { return false; };
+        let sig = sk.sign(hash_of(f[1]), unhex(f[3]));
+        return hex(sig) == f[4] && sk.verifying_key().verify(hash_of(f[1]), unhex(f[3]), sig);
     }
     if op == "rsa" {
         // pkcs1|pss hash n e msg sig salt_len valid
-        let key: RsaPublicKey = rsa_key(pubs, f[2], f[3]) else { return f[7] != "1"; };
+        let key: rsa::PublicKey = rsa_key(pubs, f[2], f[3]) else { return f[7] != "1"; };
         let ok = if f[0] == "pkcs1" {
             key.verify_pkcs1v15(hash_of(f[1]), unhex(f[4]), unhex(f[5]))
         } else {
@@ -290,7 +299,7 @@ fn run(op: str, f: List<str>, pubs: Dict<str, RsaPublicKey>, privs: Dict<str, Rs
     }
     if op == "rsa-sign" {
         // pkcs1|pss hash der msg salt sig: deterministic given the salt
-        let key: RsaPrivateKey = rsa_priv(privs, f[2]) else { return false; };
+        let key: rsa::PrivateKey = rsa_priv(privs, f[2]) else { return false; };
         let h = hash_of(f[1]);
         let sig = if f[0] == "pkcs1" {
             try key.sign_pkcs1v15(h, unhex(f[3])) catch _ { return false; }
@@ -303,24 +312,26 @@ fn run(op: str, f: List<str>, pubs: Dict<str, RsaPublicKey>, privs: Dict<str, Rs
     }
     if op == "mlkem-keygen" {
         // d z sha256(ek) sha256(dk)
-        let (ek, dk) = try MlKem768::keygen(unhex(f[0]), unhex(f[1])) catch _ { return false; };
-        return sha256(ek) == f[2] && sha256(dk.as_bytes().to_list()) == f[3];
+        let dk = try DecapsulationKey768::from_seed(unhex(f[0]), unhex(f[1])) catch _ { return false; };
+        return sha256(dk.encapsulation_key().to_bytes()) == f[2] && sha256(dk.to_expanded_bytes().as_bytes().to_list()) == f[3];
     }
     if op == "mlkem-encaps" {
         // ek m key sha256(c) valid
-        let (k, c) = try MlKem768::encapsulate(unhex(f[0]), unhex(f[1])) catch _ { return f[4] == "0"; };
+        let ek = try EncapsulationKey768::from_bytes(unhex(f[0])) catch _ { return f[4] == "0"; };
+        let (k, c) = try ek.encapsulate(unhex(f[1])) catch _ { return f[4] == "0"; };
         return f[4] == "1" && hex(k.as_bytes().to_list()) == f[2] && sha256(c) == f[3];
     }
     if op == "mlkem-decaps" {
         // dk c key valid
-        let k = try MlKem768::decapsulate(unhex(f[0]), unhex(f[1])) catch _ { return f[3] == "0"; };
+        let dk = try DecapsulationKey768::from_expanded_bytes(unhex(f[0])) catch _ { return f[3] == "0"; };
+        let k = try dk.decapsulate(unhex(f[1])) catch _ { return f[3] == "0"; };
         return f[3] == "1" && hex(k.as_bytes().to_list()) == f[2];
     }
     if op == "mlkem-seed" {
         // d z sha256(ek) c key valid: keygen, then decapsulate c
-        let (_, dk) = try MlKem768::keygen(unhex(f[0]), unhex(f[1])) catch _ { return f[5] != "1"; };
-        let ek_ok = f[2] == "-" || sha256(dk[1152:2336].to_list()) == f[2];
-        let k = try MlKem768::decapsulate(dk, unhex(f[3])) catch _ { return ek_ok && f[5] == "0"; };
+        let dk = try DecapsulationKey768::from_seed(unhex(f[0]), unhex(f[1])) catch _ { return f[5] != "1"; };
+        let ek_ok = f[2] == "-" || sha256(dk.encapsulation_key().to_bytes()) == f[2];
+        let k = try dk.decapsulate(unhex(f[3])) catch _ { return ek_ok && f[5] == "0"; };
         return ek_ok && want(f[5], hex(k.as_bytes().to_list()) == f[4]);
     }
     false
@@ -329,8 +340,8 @@ fn run(op: str, f: List<str>, pubs: Dict<str, RsaPublicKey>, privs: Dict<str, Rs
 fn main() {
     let text = include_str!("vectors.txt");
     let defs: Dict<str, str> = Dict::new();
-    let pubs: Dict<str, RsaPublicKey> = Dict::new();
-    let privs: Dict<str, RsaPrivateKey> = Dict::new();
+    let pubs: Dict<str, rsa::PublicKey> = Dict::new();
+    let privs: Dict<str, rsa::PrivateKey> = Dict::new();
     let suites: List<str> = [];
     let counts: Dict<str, (i64, i64)> = Dict::new();
     for line in text.lines() {

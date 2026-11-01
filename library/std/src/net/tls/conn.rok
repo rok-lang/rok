@@ -22,13 +22,14 @@ use rok::std::net::TcpStream;
 use rok::std::io::{IoError, IoErrorKind, byte_buf};
 use rok::std::crypto::random;
 use rok::std::time::{SystemTime, Instant};
-use rok::core::crypto::sha2::{HashAlgorithm, Digest};
-use rok::core::crypto::hmac::{Hmac, Hkdf};
+use rok::core::crypto::HashAlgorithm;
+use rok::core::crypto::sha2::Digest;
+use rok::core::crypto::hmac::Hmac;
+use rok::core::crypto::hkdf;
 use rok::core::crypto::aead::{Aead, AeadAlgorithm};
-use rok::core::crypto::x25519::X25519;
-use rok::core::crypto::mlkem::MlKem768;
-use rok::core::crypto::ed25519::Ed25519;
-use rok::core::crypto::ecdsa::{Ecdsa, EcCurve};
+use rok::core::crypto::{x25519, mlkem};
+use rok::core::crypto::mlkem::EncapsulationKey768;
+use rok::core::crypto::ecdsa::EcCurve;
 use rok::core::crypto::{constant_time_eq, Secret};
 
 // Content types.
@@ -295,7 +296,7 @@ fn expand_label(h: HashAlgorithm, secret: Secret, label: str, ctx: List<u8>, len
     put(info, full.as_bytes());
     vec8(info, ctx);
     // `len` is at most a hash length: within HKDF's limit.
-    try Hkdf::expand(h, secret, info, len) catch _ { Secret::zeroed(0) }
+    try hkdf::expand(h, secret, info, len) catch _ { Secret::zeroed(0) }
 }
 
 fn derive_secret(h: HashAlgorithm, secret: Secret, label: str, transcript: Digest) -> Secret {
@@ -830,7 +831,7 @@ impl Conn {
             let h = suite_hash(t.suite);
             let tr = Digest::new(h);
             tr.update(x.ch);
-            self.wr = dir_of(t.suite, derive_secret(h, Hkdf::extract(h, "", t.psk), "c e traffic", tr));
+            self.wr = dir_of(t.suite, derive_secret(h, hkdf::extract(h, "", t.psk), "c e traffic", tr));
             self.x = x;
             try self.write_app(x.early_data[0:x.early_data.len()]);
             self.x.early_dir = self.wr;
@@ -900,8 +901,8 @@ impl Conn {
                 self.peer = tk.peer;
             }
             let shared = try shares.finish(hello.group, hello.share);
-            let early = Hkdf::extract(h, "", psk);
-            x.hs_secret = Hkdf::extract(h, derive_secret(h, early, "derived", Digest::new(h)), shared);
+            let early = hkdf::extract(h, "", psk);
+            x.hs_secret = hkdf::extract(h, derive_secret(h, early, "derived", Digest::new(h)), shared);
             x.c_hs = derive_secret(h, x.hs_secret, "c hs traffic", tr);
             x.s_hs = derive_secret(h, x.hs_secret, "s hs traffic", tr);
             early.wipe();
@@ -989,7 +990,7 @@ impl Conn {
                 throw proto("bad server Finished", ALERT_DECRYPT_ERROR);
             }
             tr.update(all);
-            let master = Hkdf::extract(h, derive_secret(h, x.hs_secret, "derived", Digest::new(h)), zeros(h.output_len()));
+            let master = hkdf::extract(h, derive_secret(h, x.hs_secret, "derived", Digest::new(h)), zeros(h.output_len()));
             let c_ap = derive_secret(h, master, "c ap traffic", tr);
             let s_ap = derive_secret(h, master, "s ap traffic", tr);
             // Client flight.
@@ -1181,7 +1182,7 @@ impl Conn {
                         if s.sni == self.sni && suite_hash(s.suite) == h {
                             let bt = tr;
                             bt.update(all[0:all.len() - hello.binders_len]);
-                            let bk = derive_secret(h, Hkdf::extract(h, "", s.psk), "res binder", Digest::new(h));
+                            let bk = derive_secret(h, hkdf::extract(h, "", s.psk), "res binder", Digest::new(h));
                             let want = Hmac::mac(h, expand_label(h, bk, "finished", [], hl), bt.finish());
                             if !constant_time_eq(want, hello.binders[i]) { throw proto("bad PSK binder", ALERT_DECRYPT_ERROR); }
                             if st.redeem(s.id) {
@@ -1208,7 +1209,7 @@ impl Conn {
                 && s.suite == suite && s.alpn == alpn && skew <= AGE_TOLERANCE_MS && skew >= -AGE_TOLERANCE_MS;
         }
         if hello.early && !accept_early { self.skip_early = early_skip(x.max_early); }
-        let early = Hkdf::extract(h, "", psk);
+        let early = hkdf::extract(h, "", psk);
         if accept_early { x.c_early = derive_secret(h, early, "c e traffic", tr); }
 
         let (reply, shared) = try server_share(x.group, hello.share_for(x.group) ?? body[0:0]);
@@ -1217,7 +1218,7 @@ impl Conn {
         try self.send(HANDSHAKE, sh);
         if !x.retried { try self.send_record(CHANGE_CIPHER_SPEC, [1u8][0:1]); }
 
-        let hs_secret = Hkdf::extract(h, derive_secret(h, early, "derived", Digest::new(h)), shared);
+        let hs_secret = hkdf::extract(h, derive_secret(h, early, "derived", Digest::new(h)), shared);
         let c_hs = derive_secret(h, hs_secret, "c hs traffic", tr);
         let s_hs = derive_secret(h, hs_secret, "s hs traffic", tr);
         self.wr = dir_of(suite, s_hs);
@@ -1280,7 +1281,7 @@ impl Conn {
         put_list(flight, fin);
         try self.send(HANDSHAKE, flight);
 
-        x.master = Hkdf::extract(h, derive_secret(h, hs_secret, "derived", Digest::new(h)), zeros(hl));
+        x.master = hkdf::extract(h, derive_secret(h, hs_secret, "derived", Digest::new(h)), zeros(hl));
         x.c_ap = derive_secret(h, x.master, "c ap traffic", tr);
         let s_ap = derive_secret(h, x.master, "s ap traffic", tr);
         self.wr.wipe();
@@ -1479,8 +1480,8 @@ const fn pick_suite(suites: List<CipherSuite>, offered: List<u16>) throws (TlsEr
 
 /// The client's key-exchange secrets for the groups it offers shares of.
 struct Shares {
-    x25519: Secret | none;
-    mlkem_dk: Secret | none;
+    x: x25519::PrivateKey;
+    mlkem_dk: mlkem::DecapsulationKey768 | none;
     mlkem_ek: List<u8>;
     groups: List<u16>;
 }
@@ -1489,29 +1490,29 @@ impl Shares {
     /// Shares for `groups` (the hybrid's X25519 half reuses the X25519
     /// secret).
     fn new(groups: List<u16>) -> Shares {
-        let s = Shares { x25519: none, mlkem_dk: none, mlkem_ek: [], groups: [] };
+        let xs = random::secret(32);
+        let x = try x25519::PrivateKey::from_bytes(xs) catch _ { panic("X25519 key length") };
+        xs.wipe();
+        let s = Shares { x, mlkem_dk: none, mlkem_ek: [], groups: [] };
         for g in groups {
             if g == HYBRID_GROUP {
                 let seed = random::secret(64);
-                let (ek, dk) = try MlKem768::keygen(seed[0:32], seed[32:64]) catch _ { panic("ML-KEM seed length") };
+                let dk = try mlkem::DecapsulationKey768::from_seed(seed[0:32], seed[32:64]) catch _ { panic("ML-KEM seed length") };
                 seed.wipe();
                 s.mlkem_dk = dk;
-                s.mlkem_ek = ek;
+                s.mlkem_ek = dk.encapsulation_key().to_bytes();
                 s.groups.push(HYBRID_GROUP);
             }
         }
-        s.x25519 = random::secret(32);
         if groups.contains(X25519_GROUP) { s.groups.push(X25519_GROUP); }
         s
     }
 
     const fn has(self, g: u16) -> bool { self.groups.contains(g) }
 
-    fn x_secret(self) -> Secret { self.x25519 ?? Secret::zeroed(0) }
-
     fn wipe(self) {
-        if let k: Secret = self.x25519 { k.wipe(); }
-        if let k: Secret = self.mlkem_dk { k.wipe(); }
+        self.x.wipe();
+        if let k: mlkem::DecapsulationKey768 = self.mlkem_dk { k.wipe(); }
     }
 
     /// The key_share extension body.
@@ -1520,7 +1521,7 @@ impl Shares {
         for g in self.groups {
             let k: List<u8> = [];
             if g == HYBRID_GROUP { put_list(k, self.mlkem_ek); }
-            put_list(k, try X25519::public_key(self.x_secret()) catch _ { [] });
+            put(k, self.x.public_key().to_bytes()[0:32]);
             put_u16(all, g as usize);
             vec16(all, k);
         }
@@ -1534,10 +1535,12 @@ impl Shares {
         if !self.has(group) { throw proto("server chose a key share not offered", ALERT_ILLEGAL_PARAMETER); }
         let bad = proto("bad key share", ALERT_ILLEGAL_PARAMETER);
         if group == HYBRID_GROUP {
-            if share.len() != MlKem768::CIPHERTEXT_LEN + 32 { throw bad; }
-            let ss = try MlKem768::decapsulate(self.mlkem_dk ?? Secret::zeroed(0), share[0:MlKem768::CIPHERTEXT_LEN]) catch _ { throw bad; };
-            let x = try X25519::shared_secret(self.x_secret(), share[MlKem768::CIPHERTEXT_LEN:share.len()]) catch _ { throw bad; };
-            match x {
+            let ct = EncapsulationKey768::CIPHERTEXT_LEN;
+            if share.len() != ct + 32 { throw bad; }
+            let dk: mlkem::DecapsulationKey768 = self.mlkem_dk else { throw bad; };
+            let ss = try dk.decapsulate(share[0:ct]) catch _ { throw bad; };
+            let peer = try x25519::PublicKey::from_bytes(share[ct:share.len()]) catch _ { throw bad; };
+            match self.x.diffie_hellman(peer) {
                 v: Secret => {
                     let j = joined(ss, v);
                     ss.wipe();
@@ -1547,8 +1550,8 @@ impl Shares {
                 none => throw bad,
             }
         }
-        if share.len() != 32 { throw bad; }
-        match try X25519::shared_secret(self.x_secret(), share) catch _ { throw bad; } {
+        let peer = try x25519::PublicKey::from_bytes(share) catch _ { throw bad; };
+        match self.x.diffie_hellman(peer) {
             v: Secret => v,
             none => throw bad,
         }
@@ -1629,7 +1632,7 @@ fn bind(ch: List<u8>, t: Ticket, tr: Digest) {
     let hl = h.output_len();
     let cut = ch.len() - (3 + hl);
     tr.update(ch[0:cut]);
-    let bk = derive_secret(h, Hkdf::extract(h, "", t.psk), "res binder", Digest::new(h));
+    let bk = derive_secret(h, hkdf::extract(h, "", t.psk), "res binder", Digest::new(h));
     let b = Hmac::mac(h, expand_label(h, bk, "finished", [], hl), tr.finish());
     for i in 0..hl { ch[cut + 3 + i] = b[i]; }
 }
@@ -1795,7 +1798,7 @@ fn check_cert_verify(body: List<u8>, key: PubKey, signed: List<u8>) throws (TlsE
 fn pick_scheme(key: PrivateKey, cert_key: PubKey, offered: List<u16>) throws (TlsError) -> u16 {
     let want: List<u16> = match key.key {
         KeyKind::Ed25519(_) => [ED25519_SCHEME],
-        KeyKind::Ec(c, _) => [if c == EcCurve::P256 { ECDSA_P256_SHA256 } else { ECDSA_P384_SHA384 }],
+        KeyKind::Ec(k) => [if k.curve() == EcCurve::P256 { ECDSA_P256_SHA256 } else { ECDSA_P384_SHA384 }],
         KeyKind::Rsa(_) => match cert_key {
             PubKey::RsaPss(_, only, min_salt) => {
                 let l: List<u16> = [];
@@ -1818,11 +1821,8 @@ fn pick_scheme(key: PrivateKey, cert_key: PubKey, offered: List<u16>) throws (Tl
 /// (from `pick_scheme`). Every key was checked when it was loaded.
 fn cert_verify(key: PrivateKey, scheme: u16, msg: List<u8>) -> List<u8> {
     let sig: List<u8> = match key.key {
-        KeyKind::Ed25519(seed) => try Ed25519::sign(seed, msg) catch _ { panic("Ed25519 key") },
-        KeyKind::Ec(c, d) => {
-            let h = if c == EcCurve::P256 { HashAlgorithm::Sha256 } else { HashAlgorithm::Sha384 };
-            try Ecdsa::sign(c, h, d, msg) catch _ { panic("EC key") }
-        },
+        KeyKind::Ed25519(k) => k.sign(msg),
+        KeyKind::Ec(k) => k.sign(if k.curve() == EcCurve::P256 { HashAlgorithm::Sha256 } else { HashAlgorithm::Sha384 }, msg),
         KeyKind::Rsa(k) => {
             let h = pss_hash(scheme);
             try k.sign_pss(h, msg, random::bytes(h.output_len())) catch _ { panic("RSA key") }
@@ -1981,29 +1981,32 @@ const fn choose_group(c: ClientHelloInfo) -> u16 {
 /// The server's share for `group` given the client's: `(reply, shared)`.
 fn server_share(group: u16, client: Slice<u8>) throws (TlsError) -> (List<u8>, Secret) {
     let bad = proto("bad client key share", ALERT_ILLEGAL_PARAMETER);
-    using secret = random::secret(32) {
-        let public_key = try X25519::public_key(secret) catch _ { throw bad; };
+    let xs = random::secret(32);
+    using secret = try x25519::PrivateKey::from_bytes(xs) catch _ { panic("X25519 key length") } {
+        xs.wipe();
+        let public_key = secret.public_key().to_bytes();
         if group == HYBRID_GROUP {
-            let ek_len = MlKem768::ENCAPSULATION_KEY_LEN;
+            let ek_len = EncapsulationKey768::LEN;
             if client.len() != ek_len + 32 { throw bad; }
+            let ek = try EncapsulationKey768::from_bytes(client[0:ek_len]) catch _ { throw bad; };
             let m = random::secret(32);
-            let (ss, ct) = try MlKem768::encapsulate(client[0:ek_len], m) catch _ { throw bad; };
+            let (ss, ct) = try ek.encapsulate(m) catch _ { throw bad; };
             m.wipe();
-            let x = try X25519::shared_secret(secret, client[ek_len:client.len()]) catch _ { throw bad; };
-            match x {
+            let peer = try x25519::PublicKey::from_bytes(client[ek_len:client.len()]) catch _ { throw bad; };
+            match secret.diffie_hellman(peer) {
                 v: Secret => {
                     let j = joined(ss, v);
                     ss.wipe();
                     v.wipe();
-                    put_list(ct, public_key);
+                    put(ct, public_key[0:32]);
                     return (ct, j);
                 },
                 none => throw bad,
             }
         }
-        if client.len() != 32 { throw bad; }
-        match try X25519::shared_secret(secret, client) catch _ { throw bad; } {
-            v: Secret => (public_key, v),
+        let peer = try x25519::PublicKey::from_bytes(client) catch _ { throw bad; };
+        match secret.diffie_hellman(peer) {
+            v: Secret => (public_key[0:32].to_list(), v),
             none => throw bad,
         }
     }

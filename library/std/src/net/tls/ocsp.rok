@@ -8,7 +8,7 @@ use sup::der::{Der, SEQUENCE, INTEGER, BIT_STRING, OCTET_STRING, NULL, OID, GENE
 use sup::der;
 use sup::x509;
 use sup::x509::CertInfo;
-use rok::core::crypto::sha2::HashAlgorithm;
+use rok::core::crypto::HashAlgorithm;
 use rok::core::crypto::constant_time_eq;
 
 const OID_BASIC: str = "1.3.6.1.5.5.7.48.1.1";

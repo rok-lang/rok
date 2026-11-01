@@ -1,13 +1,14 @@
 // RSA (RFC 8017): PKCS #1 v1.5 and PSS verification and signing (MGF1
 // with the message hash), moduli of 2048 to 4096 bits.
 
-use sup::constant_time_eq;
-use sup::sha2::{HashAlgorithm, Digest};
-use sup::hmac::Hkdf;
+use sup::{Secret, constant_time_eq};
+use sup::HashAlgorithm;
+use sup::sha2::Digest;
+use sup::hkdf;
 use sup::bignum::{Nat, Modulus};
 
 /// An RSA public key `(n, e)`.
-pub struct RsaPublicKey {
+pub struct PublicKey {
     md: Modulus;
     e: List<u8>;
     bits: usize;
@@ -56,6 +57,8 @@ const fn digest_info(hash: HashAlgorithm) -> List<u8> {
         HashAlgorithm::Sha256 => 1u8,
         HashAlgorithm::Sha384 => 2u8,
         HashAlgorithm::Sha512 => 3u8,
+        HashAlgorithm::Sha3_256 => 8u8,
+        HashAlgorithm::Sha3_512 => 10u8,
     };
     let hl = hash.output_len() as u8;
     [0x30u8, 0x0du8 + 4u8 + hl, 0x30u8, 0x0du8, 0x06u8, 0x09u8, 0x60u8, 0x86u8, 0x48u8, 0x01u8,
@@ -92,11 +95,11 @@ fn mgf1(hash: HashAlgorithm, seed: Slice<u8>, len: usize) -> List<u8> {
     out
 }
 
-impl RsaPublicKey {
+impl PublicKey {
     /// From big-endian `n` and `e`: `n` odd, 2048 to 4096 bits; `e` odd,
     /// `3 <= e < 2^33` (verification costs a square and a multiply per
     /// exponent bit; a peer's certificate must not choose that).
-    pub fn new<N: AsBytes, E: AsBytes>(n: N, e: E) throws (ValueError) -> RsaPublicKey {
+    pub fn new<N: AsBytes, E: AsBytes>(n: N, e: E) throws (ValueError) -> PublicKey {
         let nb = strip(n.byte_slice());
         let eb = strip(e.byte_slice());
         if nb.len() == 0 || nb.len() > 512 {
@@ -113,12 +116,12 @@ impl RsaPublicKey {
         if eb.len() == 0 || eb.len() > 5 || (eb.len() == 5 && eb[0] > 1u8) || eb[eb.len() - 1] & 1u8 == 0u8 || (eb.len() == 1 && eb[0] < 3u8) {
             throw ValueError::new("RSA exponent must be odd, at least 3 and below 2^33");
         }
-        RsaPublicKey { md: Modulus::new(m), e: eb.to_list(), bits }
+        PublicKey { md: Modulus::new(m), e: eb.to_list(), bits }
     }
 
     /// From a DER `RSAPublicKey ::= SEQUENCE { modulus INTEGER,
     /// publicExponent INTEGER }`.
-    pub fn from_pkcs1_der<B: AsBytes>(der: B) throws (ValueError) -> RsaPublicKey {
+    pub fn from_pkcs1_der<B: AsBytes>(der: B) throws (ValueError) -> PublicKey {
         let s = der.byte_slice();
         let bad = ValueError::new("malformed RSAPublicKey");
         if s.len() < 2 || s[0] != 0x30u8 { throw bad; }
@@ -130,7 +133,7 @@ impl RsaPublicKey {
         let t4: (Slice<u8>, usize) = der_uint(s, next) else { throw bad; };
         let (e, end) = t4;
         if end != s.len() { throw bad; }
-        try RsaPublicKey::new(n, e)
+        try PublicKey::new(n, e)
     }
 
     pub const fn bits(self) -> usize { self.bits }
@@ -199,16 +202,19 @@ impl RsaPublicKey {
 }
 
 /// An RSA private key with its CRT parameters (RFC 8017 3.2, two
-/// primes).
-pub struct RsaPrivateKey {
-    public: RsaPublicKey;
-    fp: Modulus;
-    fq: Modulus;
-    dp: List<u8>;
-    dq: List<u8>;
-    /// `q^-1 mod p`, Montgomery form mod p.
-    qinv: List<u32>;
+/// primes), big-endian in secret storage.
+pub struct PrivateKey {
+    public: PublicKey;
+    p: Secret;
+    q: Secret;
+    // The CRT exponents, padded to the primes' width.
+    dp: Secret;
+    dq: Secret;
+    // `q^-1 mod p`.
+    qinv: Secret;
 }
+
+impl !Sync for PrivateKey {}
 
 /// `b` with leading zeros to `len` bytes (`b.len() <= len`).
 const fn pad_be(b: Slice<u8>, len: usize) -> List<u8> {
@@ -227,10 +233,10 @@ fn factor(b: Slice<u8>, nlimbs: usize) throws (ValueError) -> Modulus {
     Modulus::new(m)
 }
 
-impl RsaPrivateKey {
+impl PrivateKey {
     /// From a DER `RSAPrivateKey` (RFC 8017 A.1.2, version 0: n, e, d,
     /// p, q, d mod (p - 1), d mod (q - 1), q^-1 mod p).
-    pub fn from_pkcs1_der<B: AsBytes>(der: B) throws (ValueError) -> RsaPrivateKey {
+    pub fn from_pkcs1_der<B: AsBytes>(der: B) throws (ValueError) -> PrivateKey {
         let s = der.byte_slice();
         let bad = ValueError::new("malformed RSAPrivateKey");
         if s.len() < 2 || s[0] != 0x30u8 { throw bad; }
@@ -247,25 +253,31 @@ impl RsaPrivateKey {
         }
         // Version 0 strips to an empty magnitude.
         if fields.len() != 9 || fields[0].len() != 0 { throw bad; }
-        let public = try RsaPublicKey::new(fields[1], fields[2]);
+        let public = try PublicKey::new(fields[1], fields[2]);
         let n = public.md.n;
         let fp = try factor(fields[4], n);
         let fq = try factor(fields[5], n);
         let qi: List<u32> = Nat::from_be(fields[8], fp.n) else { throw bad; };
         if !Nat::lt(qi, fp.m) || fields[6].len() > 4 * fp.n || fields[7].len() > 4 * fq.n { throw bad; }
-        RsaPrivateKey {
+        PrivateKey {
             public,
-            qinv: fp.to_mont(qi),
+            p: Secret::new(fields[4]),
+            q: Secret::new(fields[5]),
             // Padded to the primes' width: `pow` takes the same number of
             // steps whatever the exponents' leading zeros.
-            dp: pad_be(fields[6], 4 * fp.n),
-            dq: pad_be(fields[7], 4 * fq.n),
-            fp,
-            fq,
+            dp: Secret::new(pad_be(fields[6], 4 * fp.n)),
+            dq: Secret::new(pad_be(fields[7], 4 * fq.n)),
+            qinv: Secret::new(fields[8]),
         }
     }
 
-    pub const fn public_key(self) -> RsaPublicKey { self.public }
+    /// Overwrite the private values with zeros now (every copy shares
+    /// them); signing is meaningless afterwards.
+    pub fn wipe(self) {
+        for x in [self.p, self.q, self.dp, self.dq, self.qinv] { x.wipe(); }
+    }
+
+    pub const fn public_key(self) -> PublicKey { self.public }
 
     pub const fn bits(self) -> usize { self.public.bits }
 
@@ -274,8 +286,12 @@ impl RsaPrivateKey {
     /// `s^e = m`: a fault in either half would reveal a factor.
     fn private_op(self, m: List<u32>, r: List<u32>) throws (ValueError) -> List<u32> {
         let md = self.public.md;
-        let fp = self.fp;
-        let fq = self.fq;
+        // The primes as moduli, rebuilt per operation: at rest they are
+        // only in secret storage.
+        let fp = try factor(self.p[0:self.p.len()], md.n);
+        let fq = try factor(self.q[0:self.q.len()], md.n);
+        let qi: List<u32> = Nat::from_be(self.qinv[0:self.qinv.len()], fp.n) else { throw ValueError::new("bad RSA private key"); };
+        let qinv = fp.to_mont(qi);
         let e = self.public.e[0:self.public.e.len()];
         let blinded = md.from_mont(md.mul(md.to_mont(m), md.pow(md.to_mont(r), e)));
         // Per prime: (m r^e)^dp = m^dp r, times r^-1.
@@ -286,7 +302,7 @@ impl RsaPrivateKey {
         // Garner: s = sq + q ((sp - sq) q^-1 mod p); q h < n, so the
         // product and the sum mod n are exact.
         let sq_plain = fq.from_mont(sq);
-        let h = fp.from_mont(fp.mul(fp.sub(sp, fp.to_mont(fp.reduce(sq_plain))), self.qinv));
+        let h = fp.from_mont(fp.mul(fp.sub(sp, fp.to_mont(fp.reduce(sq_plain))), qinv));
         let qh = md.from_mont(md.mul(md.to_mont(Nat::resize(fq.m, md.n)), md.to_mont(Nat::resize(h, md.n))));
         let s = md.add(qh, Nat::resize(sq_plain, md.n));
         let back = md.from_mont(md.pow(md.to_mont(s), e));
@@ -342,14 +358,29 @@ impl RsaPrivateKey {
         let n = self.public.md.n;
         let m: List<u32> = Nat::from_be(em[0:k], n) else { throw ValueError::new("RSA encoding"); };
         // The blinding factor, below 2^(8 (k - 1)) <= 2^(bits - 1) < n.
-        let ikm = self.dp.clone();
-        for x in self.dq { ikm.push(x); }
+        let dl = self.dp.len();
+        let ikm = Secret::zeroed(dl + self.dq.len());
+        for i in 0..dl { ikm[i] = self.dp[i]; }
+        for i in 0..self.dq.len() { ikm[dl + i] = self.dq[i]; }
         let info = "rok rsa blinding".as_bytes().to_list();
         for x in mh { info.push(x); }
-        let rb = try Hkdf::expand(HashAlgorithm::Sha512, Hkdf::extract(HashAlgorithm::Sha512, salt, ikm), info, k);
+        let prk = hkdf::extract(HashAlgorithm::Sha512, salt, ikm);
+        ikm.wipe();
+        let rb = try hkdf::expand(HashAlgorithm::Sha512, prk, info, k);
+        prk.wipe();
         rb[0] = 0u8;
         let r: List<u32> = Nat::from_be(rb[0:k], n) else { throw ValueError::new("RSA blinding"); };
         rb.wipe();
         Nat::to_be(try self.private_op(m, r), k)
     }
+}
+
+/// `using` release wipes.
+impl Drop for PrivateKey {
+    fn drop(ref self) { self.wipe(); }
+}
+
+/// The public key only.
+impl Debug for PrivateKey {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"PrivateKey({self.public.bits} bits)") }
 }

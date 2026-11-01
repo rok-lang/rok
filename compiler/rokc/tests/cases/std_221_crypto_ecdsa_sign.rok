@@ -11,8 +11,8 @@
 // of the RFC's r and s), public keys, sign / verify round trips and
 // invalid private keys.
 
-use rok::core::crypto::sha2::HashAlgorithm;
-use rok::core::crypto::ecdsa::{Ecdsa, EcCurve};
+use rok::core::crypto::HashAlgorithm;
+use rok::core::crypto::ecdsa::{EcCurve, SigningKey};
 
 fn nib(c: u8) -> u8 {
     if c >= 0x30u8 && c <= 0x39u8 { return c - 0x30u8; }
@@ -71,19 +71,20 @@ fn hash(s: str) -> HashAlgorithm {
 fn main() {
     let bad = 0;
     let n = 0;
-    let key: List<u8> = [];
+    let key: SigningKey | none = none;
     for v in vectors() {
         let f: List<str> = [];
         for x in v.split(" ") { f.push(x); }
         let c = curve(f[0]);
         if f[1] == "-" {
-            key = unhex(f[2]);
-            let pk = try Ecdsa::public_key(c, key) catch _ { [] };
-            if hex(pk) != f[3] { bad += 1; println(f"FAIL public key {f[0]}"); }
+            let k = try SigningKey::from_bytes(c, unhex(f[2])) catch _ { panic("key") };
+            if hex(k.verifying_key().to_sec1()) != f[3] { bad += 1; println(f"FAIL public key {f[0]}"); }
+            key = k;
             n += 1;
             continue;
         }
-        let sig = try Ecdsa::sign(c, hash(f[1]), key, f[2]) catch _ { [] };
+        let k: SigningKey = key else { panic("no key") };
+        let sig = k.sign(hash(f[1]), f[2]);
         if hex(sig) != f[3] { bad += 1; println(f"FAIL {v}: {hex(sig)}"); }
         n += 1;
     }
@@ -96,11 +97,12 @@ fn main() {
         for i in 1..5 {
             let d: List<u8> = [];
             for j in 0..size { d.push(((i * 37 + j * 11) % 251) as u8); }
-            let pk = try Ecdsa::public_key(c, d) catch _ { [] };
-            for h in [HashAlgorithm::Sha256, HashAlgorithm::Sha384, HashAlgorithm::Sha512] {
-                let sig = try Ecdsa::sign(c, h, d, f"message {i}") catch _ { [] };
-                if !Ecdsa::verify(c, h, pk, f"message {i}", sig) { ok = false; }
-                if Ecdsa::verify(c, h, pk, f"message {i + 1}", sig) { ok = false; }
+            let k = try SigningKey::from_bytes(c, d) catch _ { panic("key") };
+            let pk = k.verifying_key();
+            for h in [HashAlgorithm::Sha256, HashAlgorithm::Sha384, HashAlgorithm::Sha512, HashAlgorithm::Sha3_256, HashAlgorithm::Sha3_512] {
+                let sig = k.sign(h, f"message {i}");
+                if !pk.verify(h, f"message {i}", sig) { ok = false; }
+                if pk.verify(h, f"message {i + 1}", sig) { ok = false; }
             }
         }
         println(f"{if ok { "ok" } else { "FAIL" }} roundtrip {if c == EcCurve::P256 { "p256" } else { "p384" }}");
@@ -112,17 +114,20 @@ fn main() {
     let order = unhex("ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551");
     let long: List<u8> = [1u8];
     for _ in 0..32 { long.push(1u8); }
-    let z = (try Ecdsa::sign(EcCurve::P256, HashAlgorithm::Sha256, zero, "m") catch _ { [] }).len() == 0;
-    let o = (try Ecdsa::sign(EcCurve::P256, HashAlgorithm::Sha256, order, "m") catch _ { [] }).len() == 0;
-    let l = (try Ecdsa::public_key(EcCurve::P256, long) catch _ { [] }).len() == 0;
+    let zk: SigningKey | none = try SigningKey::from_bytes(EcCurve::P256, zero) catch _ { none };
+    let z = zk is none;
+    let ordk: SigningKey | none = try SigningKey::from_bytes(EcCurve::P256, order) catch _ { none };
+    let o = ordk is none;
+    let lk: SigningKey | none = try SigningKey::from_bytes(EcCurve::P256, long) catch _ { none };
+    let l = lk is none;
     println(f"rejected: zero {z}, order {o}, long {l}");
 
     // A signature under one key does not verify under another.
     let k1 = unhex("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6721");
     let k2 = unhex("c9afa9d845ba75166b5c215767b1d6934e50c3db36e89b127b8a622b120f6722");
-    let sig = try Ecdsa::sign(EcCurve::P256, HashAlgorithm::Sha256, k1, "m") catch _ { [] };
-    let pk2 = try Ecdsa::public_key(EcCurve::P256, k2) catch _ { [] };
-    println(f"rejected: forged {Ecdsa::verify(EcCurve::P256, HashAlgorithm::Sha256, pk2, "m", sig)}");
+    let sig = (try SigningKey::from_bytes(EcCurve::P256, k1) catch _ { panic("k1") }).sign(HashAlgorithm::Sha256, "m");
+    let pk2 = (try SigningKey::from_bytes(EcCurve::P256, k2) catch _ { panic("k2") }).verifying_key();
+    println(f"rejected: forged {pk2.verify(HashAlgorithm::Sha256, "m", sig)}");
 }
 
 // spec: std 221-crypto §2.21.4

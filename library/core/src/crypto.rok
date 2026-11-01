@@ -5,6 +5,7 @@
 pub mod secret;
 pub mod sha2;
 pub mod hmac;
+pub mod hkdf;
 pub mod sha3;
 pub(pkg) mod aes;
 pub(pkg) mod chacha;
@@ -19,15 +20,11 @@ pub mod rsa;
 pub mod mlkem;
 
 pub use secret::Secret;
-pub use sha2::{HashAlgorithm, Digest};
-pub use sha3::{Sha3Algorithm, Sha3_256, Sha3_512, Shake128, Shake256};
-pub use hmac::{Hmac, Hkdf};
+pub use sha2::Digest;
+pub use sha3::{Sha3_256, Sha3_512, Shake128, Shake256};
+pub use hmac::Hmac;
 pub use aead::{AeadAlgorithm, Aead};
-pub use x25519::X25519;
-pub use mlkem::MlKem768;
-pub use ed25519::Ed25519;
-pub use ecdsa::{EcCurve, Ecdsa};
-pub use rsa::{RsaPublicKey, RsaPrivateKey};
+pub use ecdsa::EcCurve;
 
 use rok::core::sync::{Atomic, LoadOrdering};
 
@@ -61,4 +58,49 @@ pub fn constant_time_eq<A: AsBytes, B: AsBytes>(a: A, b: B) -> bool {
         d = d | (x[i] ^ y[i]);
     }
     d == 0u8
+}
+
+/// A hash function chosen at run time (HMAC, HKDF, signatures, TLS).
+#[non_exhaustive]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum HashAlgorithm {
+    Sha256,
+    Sha384,
+    Sha512,
+    Sha3_256,
+    Sha3_512,
+}
+
+impl HashAlgorithm {
+    pub const fn output_len(self) -> usize {
+        match self {
+            HashAlgorithm::Sha256 => 32,
+            HashAlgorithm::Sha384 => 48,
+            HashAlgorithm::Sha512 => 64,
+            HashAlgorithm::Sha3_256 => 32,
+            HashAlgorithm::Sha3_512 => 64,
+        }
+    }
+
+    /// The block length; for SHA-3 the sponge rate (HMAC's block).
+    pub const fn block_len(self) -> usize {
+        match self {
+            HashAlgorithm::Sha256 => 64,
+            HashAlgorithm::Sha384 => 128,
+            HashAlgorithm::Sha512 => 128,
+            HashAlgorithm::Sha3_256 => 136,
+            HashAlgorithm::Sha3_512 => 72,
+        }
+    }
+
+    /// The digest of `data`: `Digest::new`, `update`, `finish`.
+    pub fn digest<B: AsBytes>(self, data: B) -> List<u8> {
+        let d = Digest::new(self);
+        d.update(data);
+        d.finish()
+    }
+
+    pub(pkg) const fn is_sha3(self) -> bool {
+        self == HashAlgorithm::Sha3_256 || self == HashAlgorithm::Sha3_512
+    }
 }

@@ -13,10 +13,9 @@
 use sup::TlsError;
 use sup::der::{Der, SEQUENCE, SET, INTEGER, BIT_STRING, OCTET_STRING, NULL, OID, BOOLEAN, UTC_TIME, GENERALIZED_TIME};
 use sup::der;
-use rok::core::crypto::sha2::HashAlgorithm;
-use rok::core::crypto::rsa::RsaPublicKey;
-use rok::core::crypto::ecdsa::{Ecdsa, EcCurve};
-use rok::core::crypto::ed25519::Ed25519;
+use rok::core::crypto::HashAlgorithm;
+use rok::core::crypto::{ecdsa, ed25519, rsa};
+use rok::core::crypto::ecdsa::EcCurve;
 
 /// A subject public key.
 pub(pkg) enum PubKey {
@@ -41,8 +40,18 @@ pub(pkg) enum SigAlg {
     Other(str),
 }
 
-fn rsa_key(der: List<u8>) -> RsaPublicKey | none {
-    try RsaPublicKey::from_pkcs1_der(der) catch _ { none }
+fn rsa_key(der: List<u8>) -> rsa::PublicKey | none {
+    try rsa::PublicKey::from_pkcs1_der(der) catch _ { none }
+}
+
+fn ec_verify(curve: EcCurve, point: List<u8>, h: HashAlgorithm, msg: Slice<u8>, sig: Slice<u8>) -> bool {
+    let k = try ecdsa::VerifyingKey::from_sec1(curve, point) catch _ { return false; };
+    k.verify(h, msg, sig)
+}
+
+fn ed_verify(pk: List<u8>, msg: Slice<u8>, sig: Slice<u8>) -> bool {
+    let k = try ed25519::VerifyingKey::from_bytes(pk) catch _ { return false; };
+    k.verify(msg, sig)
 }
 
 /// Whether `sig` over `msg` verifies under `key` with `alg`.
@@ -50,31 +59,31 @@ pub(pkg) fn verify_sig(key: PubKey, alg: SigAlg, msg: Slice<u8>, sig: Slice<u8>)
     match alg {
         SigAlg::RsaPkcs1(h) => match key {
             PubKey::Rsa(der) => match rsa_key(der) {
-                k: RsaPublicKey => k.verify_pkcs1v15(h, msg, sig),
+                k: rsa::PublicKey => k.verify_pkcs1v15(h, msg, sig),
                 none => false,
             },
             _ => false,
         },
         SigAlg::RsaPss(h, salt) => match key {
             PubKey::Rsa(der) => match rsa_key(der) {
-                k: RsaPublicKey => k.verify_pss(h, msg, sig, salt),
+                k: rsa::PublicKey => k.verify_pss(h, msg, sig, salt),
                 none => false,
             },
             PubKey::RsaPss(der, only, min_salt) => {
                 if (only is HashAlgorithm && only != h) || salt < min_salt { return false; }
                 match rsa_key(der) {
-                    k: RsaPublicKey => k.verify_pss(h, msg, sig, salt),
+                    k: rsa::PublicKey => k.verify_pss(h, msg, sig, salt),
                     none => false,
                 }
             },
             _ => false,
         },
         SigAlg::Ecdsa(h) => match key {
-            PubKey::Ec(curve, point) => Ecdsa::verify(curve, h, point, msg, sig),
+            PubKey::Ec(curve, point) => ec_verify(curve, point, h, msg, sig),
             _ => false,
         },
         SigAlg::EdDsa => match key {
-            PubKey::EdDsa(pk) => Ed25519::verify(pk, msg, sig),
+            PubKey::EdDsa(pk) => ed_verify(pk, msg, sig),
             _ => false,
         },
         SigAlg::Other(_) => false,

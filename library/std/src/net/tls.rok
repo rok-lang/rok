@@ -30,9 +30,8 @@ use rok::std::time::{Instant, Duration};
 use rok::std::net::tls::x509::{CertInfo, PubKey};
 use rok::std::net::tls::conn::{Conn, new_conn, io_tls, OP_HANDSHAKE, OP_READ, OP_WRITE, OP_CLOSE_NOTIFY, OP_KEY_UPDATE};
 use rok::std::net::tls::der::{Der, SEQUENCE, INTEGER, OCTET_STRING, OID};
-use rok::core::crypto::ecdsa::{Ecdsa, EcCurve};
-use rok::core::crypto::ed25519::Ed25519;
-use rok::core::crypto::rsa::{RsaPrivateKey, RsaPublicKey};
+use rok::core::crypto::{ecdsa, ed25519, rsa};
+use rok::core::crypto::ecdsa::EcCurve;
 use rok::core::crypto::Secret;
 
 /// What failed.
@@ -137,11 +136,9 @@ pub struct PrivateKey {
 }
 
 pub(pkg) enum KeyKind {
-    /// The 32-byte seed.
-    Ed25519(Secret),
-    /// The big-endian scalar.
-    Ec(EcCurve, Secret),
-    Rsa(RsaPrivateKey),
+    Ed25519(ed25519::SigningKey),
+    Ec(ecdsa::SigningKey),
+    Rsa(rsa::PrivateKey),
 }
 
 const fn curve_of_oid(oid: str) throws (TlsError) -> EcCurve {
@@ -165,13 +162,12 @@ fn ec_key(b: Slice<u8>, curve: EcCurve | none) throws (TlsError) -> PrivateKey {
     }
     if c is none { throw TlsError::certificate("ECPrivateKey without a curve"); }
     let cv = c ?? EcCurve::P256;
-    // Check the scalar now rather than at the first handshake.
-    try Ecdsa::public_key(cv, d) catch _ { throw TlsError::certificate("bad EC private key"); };
-    PrivateKey { key: KeyKind::Ec(cv, Secret::new(d)) }
+    let sk = try ecdsa::SigningKey::from_bytes(cv, d) catch _ { throw TlsError::certificate("bad EC private key"); };
+    PrivateKey { key: KeyKind::Ec(sk) }
 }
 
 fn rsa_key(b: Slice<u8>) throws (TlsError) -> PrivateKey {
-    let k = try RsaPrivateKey::from_pkcs1_der(b) catch e { throw TlsError::certificate(f"bad RSA private key: {e.message()}"); };
+    let k = try rsa::PrivateKey::from_pkcs1_der(b) catch e { throw TlsError::certificate(f"bad RSA private key: {e.message()}"); };
     PrivateKey { key: KeyKind::Rsa(k) }
 }
 
@@ -191,8 +187,8 @@ impl PrivateKey {
         if oid == "1.3.101.112" {
             try alg.finish();
             let seed = try Der::new(inner).expect(OCTET_STRING);
-            if seed.len() != 32 { throw TlsError::certificate("bad Ed25519 private key"); }
-            return PrivateKey { key: KeyKind::Ed25519(Secret::new(seed)) };
+            let k = try ed25519::SigningKey::from_seed(seed) catch _ { throw TlsError::certificate("bad Ed25519 private key"); };
+            return PrivateKey { key: KeyKind::Ed25519(k) };
         }
         if oid == "1.2.840.10045.2.1" {
             let curve = try curve_of_oid(try der::oid_text(try alg.expect(OID)));
@@ -224,12 +220,12 @@ impl PrivateKey {
     /// Whether this is the private key of `cert`'s public key.
     pub(pkg) fn matches(self, cert: Certificate) -> bool {
         match self.key {
-            KeyKind::Ed25519(seed) => match cert.info.key {
-                PubKey::EdDsa(pk) => (try Ed25519::public_key(seed) catch _ { [] }) == pk,
+            KeyKind::Ed25519(k) => match cert.info.key {
+                PubKey::EdDsa(pk) => k.verifying_key().to_bytes()[0:32] == pk[0:pk.len()],
                 _ => false,
             },
-            KeyKind::Ec(c, d) => match cert.info.key {
-                PubKey::Ec(cc, pt) => cc == c && (try Ecdsa::public_key(c, d) catch _ { [] }) == pt,
+            KeyKind::Ec(k) => match cert.info.key {
+                PubKey::Ec(c, pt) => c == k.curve() && k.verifying_key().to_sec1() == pt,
                 _ => false,
             },
             KeyKind::Rsa(k) => {
@@ -238,7 +234,7 @@ impl PrivateKey {
                     PubKey::RsaPss(b, _, _) => b,
                     _ => return false,
                 };
-                let p: RsaPublicKey = try RsaPublicKey::from_pkcs1_der(der) catch _ { return false; };
+                let p: rsa::PublicKey = try rsa::PublicKey::from_pkcs1_der(der) catch _ { return false; };
                 let mine = k.public_key();
                 p.modulus() == mine.modulus() && p.exponent() == mine.exponent()
             },

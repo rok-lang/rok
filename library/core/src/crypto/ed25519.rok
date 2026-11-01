@@ -1,25 +1,26 @@
 // Ed25519 (RFC 8032 5.1): pure EdDSA over edwards25519 with SHA-512.
 
-use sup::sha2::{HashAlgorithm, Digest};
+use sup::Secret;
+use sup::HashAlgorithm;
+use sup::sha2::Digest;
 use sup::curve25519::{EdPoint, ge_base, ge_add, ge_negate, ge_encode, ge_decode, ge_mul_ct, sc25519_reduce, sc25519_muladd, sc25519_is_canonical};
 
-/// Ed25519 signatures: 32-byte seeds and public keys, 64-byte
-/// signatures.
-pub struct Ed25519;
+/// A signing key: the 32-byte seed and its expansion, in secret
+/// storage. Copies share the storage; `wipe` and `using` release
+/// clear it.
+pub struct SigningKey {
+    seed: Secret;
+    // The clamped scalar, then the nonce prefix (SHA-512 of the seed).
+    expanded: Secret;
+    public: VerifyingKey;
+}
 
-/// SHA-512 of a seed: the secret scalar (clamped) from the first half;
-/// the nonce prefix is the second.
-fn expand<B: AsBytes>(seed: B) throws (ValueError) -> ([u8; 32], [u8; 64]) {
-    let s = seed.byte_slice();
-    if s.len() != 32 { throw ValueError::new("Ed25519 seed must be 32 bytes"); }
-    let d = Digest::new(HashAlgorithm::Sha512);
-    d.update(s);
-    let h = d.finish_raw();
-    let a: [u8; 32] = [0u8; 32];
-    for i in 0usize..32 { a[i] = h[i]; }
-    a[0] &= 248u8;
-    a[31] = (a[31] & 127u8) | 64u8;
-    (a, h)
+impl !Sync for SigningKey {}
+
+/// A public key: a 32-byte encoded point.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct VerifyingKey {
+    b: [u8; 32];
 }
 
 /// `SHA-512(parts) mod L`.
@@ -31,37 +32,94 @@ fn hash_scalar(a: Slice<u8>, b: Slice<u8>, c: Slice<u8>) -> [u8; 32] {
     sc25519_reduce(h.finish_raw())
 }
 
-impl Ed25519 {
-    pub fn public_key<B: AsBytes>(seed: B) throws (ValueError) -> List<u8> {
-        let (a, _) = try expand(seed);
-        ge_encode(ge_mul_ct(a, ge_base()))
+const fn array32(s: Slice<u8>) -> [u8; 32] {
+    let a: [u8; 32] = [0u8; 32];
+    for i in 0usize..32 { a[i] = s[i]; }
+    a
+}
+
+impl SigningKey {
+    /// The key of a 32-byte seed.
+    pub fn from_seed<B: AsBytes>(seed: B) throws (ValueError) -> SigningKey {
+        let s = seed.byte_slice();
+        if s.len() != 32 { throw ValueError::new("Ed25519 seed must be 32 bytes"); }
+        let d = Digest::new(HashAlgorithm::Sha512);
+        d.update(s);
+        let h = d.finish_raw();
+        let a: [u8; 32] = [0u8; 32];
+        for i in 0usize..32 { a[i] = h[i]; }
+        a[0] &= 248u8;
+        a[31] = (a[31] & 127u8) | 64u8;
+        let expanded = Secret::zeroed(64);
+        for i in 0usize..32 {
+            expanded[i] = a[i];
+            expanded[32 + i] = h[32 + i];
+        }
+        let pk = ge_encode(ge_mul_ct(a, ge_base()));
+        SigningKey { seed: Secret::new(s), expanded, public: VerifyingKey { b: array32(pk[0:32]) } }
     }
 
-    /// The signature `R || S` of `msg` (deterministic).
-    pub fn sign<S: AsBytes, M: AsBytes>(seed: S, msg: M) throws (ValueError) -> List<u8> {
-        let (a, hs) = try expand(seed);
+    /// A copy of the seed.
+    pub fn seed(self) -> Secret { Secret::new(self.seed) }
+
+    pub const fn verifying_key(self) -> VerifyingKey { self.public }
+
+    /// The 64-byte signature `R || S` of `msg` (deterministic).
+    pub fn sign<B: AsBytes>(self, msg: B) -> List<u8> {
+        let a = array32(self.expanded[0:32]);
         let m = msg.byte_slice();
-        let pk = ge_encode(ge_mul_ct(a, ge_base()));
-        let prefix: [u8; 128] = [0u8; 128];
-        for i in 0usize..32 { prefix[i] = hs[32 + i]; }
+        let prefix: [u8; 168] = [0u8; 168];
+        for i in 0usize..32 { prefix[i] = self.expanded[32 + i]; }
         let rh = Digest::new(HashAlgorithm::Sha512);
         rh.update_raw(prefix, 32);
         rh.update(m);
         let r = sc25519_reduce(rh.finish_raw());
         let rb = ge_encode(ge_mul_ct(r, ge_base()));
-        let k = hash_scalar(rb[0:32], pk[0:32], m);
+        let k = hash_scalar(rb[0:32], self.public.b[0:32], m);
         let s = sc25519_muladd(k, a, r);
         for i in 0usize..32 { rb.push(s[i]); }
         rb
     }
 
-    /// Whether `sig` is a valid signature of `msg` under `public_key`:
-    /// canonical `A`, `S < L`, and the encoding of `[S]B - [k]A` equal
-    /// to `R` byte for byte (cofactorless, RFC 8032 5.1.7).
-    pub fn verify<P: AsBytes, M: AsBytes, S: AsBytes>(public_key: P, msg: M, sig: S) -> bool {
-        let pk = public_key.byte_slice();
+    /// Overwrite the key material with zeros now (every copy shares
+    /// it); `sign` is meaningless afterwards.
+    pub fn wipe(self) {
+        self.seed.wipe();
+        self.expanded.wipe();
+    }
+}
+
+/// `using` release wipes.
+impl Drop for SigningKey {
+    fn drop(ref self) { self.wipe(); }
+}
+
+/// The public key only.
+impl Debug for SigningKey {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) {
+        try f.write_str(f"SigningKey({self.public:?})")
+    }
+}
+
+impl VerifyingKey {
+    /// A 32-byte encoded point; a non-canonical encoding or one that
+    /// is not on the curve is an error.
+    pub fn from_bytes<B: AsBytes>(bytes: B) throws (ValueError) -> VerifyingKey {
+        let s = bytes.byte_slice();
+        if s.len() != 32 { throw ValueError::new("Ed25519 public key must be 32 bytes"); }
+        if ge_decode(s) is none { throw ValueError::new("Ed25519 public key is not a curve point"); }
+        VerifyingKey { b: array32(s) }
+    }
+
+    pub const fn to_bytes(self) -> [u8; 32] { self.b }
+
+    /// Whether `sig` is a valid signature of `msg`: `S < L` and the
+    /// encoding of `[S]B - [k]A` equal to `R` byte for byte
+    /// (cofactorless, RFC 8032 5.1.7).
+    pub fn verify<M: AsBytes, S: AsBytes>(self, msg: M, sig: S) -> bool {
+        let pk = self.b[0:32];
         let sg = sig.byte_slice();
-        if pk.len() != 32 || sg.len() != 64 { return false; }
+        if sg.len() != 64 { return false; }
         let s = sg[32:64];
         if !sc25519_is_canonical(s) { return false; }
         let a = match ge_decode(pk) {
@@ -69,9 +127,7 @@ impl Ed25519 {
             none => { return false; },
         };
         let k = hash_scalar(sg[0:32], pk, msg.byte_slice());
-        let sb: [u8; 32] = [0u8; 32];
-        for i in 0usize..32 { sb[i] = s[i]; }
-        let r = ge_add(ge_mul_ct(sb, ge_base()), ge_mul_ct(k, ge_negate(a)));
+        let r = ge_add(ge_mul_ct(array32(s), ge_base()), ge_mul_ct(k, ge_negate(a)));
         let want = ge_encode(r);
         for i in 0usize..32 {
             if want[i] != sg[i] { return false; }

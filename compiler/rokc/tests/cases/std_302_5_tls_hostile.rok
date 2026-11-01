@@ -27,15 +27,16 @@
 // mutated DER / PEM: 900, hostile DER rejected: 12 of 12
 
 // TLS against hostile peers and inputs: an alert, never a panic or a hang.
+use rok::core::convert::AsBytes;
 use rok::std::net::{tcp_listen, tcp_connect, TcpStream, Shutdown};
 use rok::std::net::tls::{Client, Server, ClientConfig, ServerConfig, Certificate, PrivateKey, CipherSuite};
 use rok::std::thread;
 use rok::std::time::{Duration, Instant};
-use rok::core::crypto::sha2::HashAlgorithm;
-use rok::core::crypto::hmac::{Hmac, Hkdf};
+use rok::core::crypto::HashAlgorithm;
+use rok::core::crypto::hmac::Hmac;
+use rok::core::crypto::hkdf;
 use rok::core::crypto::aead::{Aead, AeadAlgorithm};
-use rok::core::crypto::x25519::X25519;
-use rok::core::crypto::ed25519::Ed25519;
+use rok::core::crypto::{x25519, ed25519};
 use rok::core::crypto::Secret;
 
 const CA: str = "-----BEGIN CERTIFICATE-----
@@ -257,7 +258,7 @@ const H: HashAlgorithm = HashAlgorithm::Sha256;
 
 fn label(secret: List<u8>, l: str, ctx: List<u8>, n: usize) -> List<u8> {
     let info = cat(cat(u16b(n), v8(("tls13 " + l).as_bytes().to_list())), v8(ctx));
-    (try! Hkdf::expand(H, secret, info, n)).as_bytes().to_list()
+    (try! hkdf::expand(H, secret, info, n)).as_bytes().to_list()
 }
 
 fn derive(secret: List<u8>, l: str, transcript: List<u8>) -> List<u8> { label(secret, l, H.digest(transcript), 32) }
@@ -316,9 +317,17 @@ fn pem_der(pem: str) -> List<u8> { (try! Certificate::from_pem(pem))[0].der() }
 
 fn cert_msg(der: List<u8>, entry_exts: List<u8>) -> List<u8> { msg(11u8, cat(v8([]), v24(cat(v24(der), v16(entry_exts))))) }
 
+fn x_public(k: List<u8>) -> List<u8> {
+    (try! x25519::PrivateKey::from_bytes(k)).public_key().to_bytes()[0:32].to_list()
+}
+
+fn x_shared<P: AsBytes>(k: List<u8>, peer: P) -> Secret | none {
+    (try! x25519::PrivateKey::from_bytes(k)).diffie_hellman(try! x25519::PublicKey::from_bytes(peer))
+}
+
 fn verify_msg(tr: List<u8>, ctx: str) -> List<u8> {
     let tbs = cat(cat(spaces(64), ctx.as_bytes().to_list()), cat([0u8], H.digest(tr)));
-    msg(15u8, cat([8u8, 7u8], v16(try! Ed25519::sign(unhex(SEED), tbs))))
+    msg(15u8, cat([8u8, 7u8], v16((try! ed25519::SigningKey::from_seed(unhex(SEED))).sign(tbs))))
 }
 
 // A server written here, against tls::Client.
@@ -381,13 +390,13 @@ fn evil_serve(s: TcpStream, ref r: Rng, e: Evil) {
         for b in HRR_RANDOM { random.push(b); }
     }
     // A HelloRetryRequest's key_share names only the group.
-    let ks = if e.hrr { [0u8, 0x1du8] } else { cat([0u8, 0x1du8], v16(try! X25519::public_key(eph))) };
+    let ks = if e.hrr { [0u8, 0x1du8] } else { cat([0u8, 0x1du8], v16(x_public(eph))) };
     let sh_exts = cat(cat(ext(43, [3u8, 4u8]), ext(51, ks)), e.sh_ext);
     let sh = msg(2u8, cat(cat(cat(cat([3u8, 3u8], random), v8(sid)), [0x13u8, 0x01u8, 0u8]), v16(sh_exts)));
     let tr = cat(ch[5:ch.len()].to_list(), sh);
-    let shared = match try! X25519::shared_secret(eph, share) { b: Secret => b.as_bytes().to_list(), none => return };
-    let early = Hkdf::extract(H, [0u8], zeros(32)).as_bytes().to_list();
-    let hs = Hkdf::extract(H, derive(early, "derived", []), shared).as_bytes().to_list();
+    let shared = match x_shared(eph, share) { b: Secret => b.as_bytes().to_list(), none => return };
+    let early = hkdf::extract(H, [0u8], zeros(32)).as_bytes().to_list();
+    let hs = hkdf::extract(H, derive(early, "derived", []), shared).as_bytes().to_list();
     let s_hs = derive(hs, "s hs traffic", tr);
     let k = keys(s_hs);
 
@@ -434,7 +443,7 @@ fn evil_serve(s: TcpStream, ref r: Rng, e: Evil) {
         let _ = drain(s);
         return;
     }
-    let master = Hkdf::extract(H, derive(hs, "derived", []), zeros(32)).as_bytes().to_list();
+    let master = hkdf::extract(H, derive(hs, "derived", []), zeros(32)).as_bytes().to_list();
     let ka = keys(derive(master, "s ap traffic", tr));
     let _ = read_some(s);
     let post = e.post;
@@ -553,7 +562,7 @@ fn fuzz_evil_server(n: usize) {
 fn evil_client(s: TcpStream, ref r: Rng, what: usize) {
     let eph = rand_bytes(ref r, 32);
     let random = rand_bytes(ref r, 32);
-    let exts = cat(cat(ext(43, [2u8, 3u8, 4u8]), ext(10, [0u8, 2u8, 0u8, 0x1du8])), cat(ext(13, [0u8, 4u8, 8u8, 7u8, 4u8, 3u8]), ext(51, v16(cat([0u8, 0x1du8], v16(try! X25519::public_key(eph)))))));
+    let exts = cat(cat(ext(43, [2u8, 3u8, 4u8]), ext(10, [0u8, 2u8, 0u8, 0x1du8])), cat(ext(13, [0u8, 4u8, 8u8, 7u8, 4u8, 3u8]), ext(51, v16(cat([0u8, 0x1du8], v16(x_public(eph)))))));
     let ch = msg(1u8, cat(cat(cat([3u8, 3u8], random), v8(random)), cat(cat(v16([0x13u8, 1u8]), [1u8, 0u8]), v16(exts))));
     try s.write_all(cat(cat([22u8, 3u8, 1u8], u16b(ch.len())), ch)) catch _ { return; };
     let tr = ch;
@@ -580,9 +589,9 @@ fn evil_client(s: TcpStream, ref r: Rng, what: usize) {
             // ServerHello: its key share is the last 32 bytes.
             tr = cat(tr, body);
             sh_end = tr.len();
-            let shared = match try! X25519::shared_secret(eph, body[body.len() - 32:body.len()]) { b: Secret => b.as_bytes().to_list(), none => return };
-            let early = Hkdf::extract(H, [0u8], zeros(32)).as_bytes().to_list();
-            hs = Hkdf::extract(H, derive(early, "derived", []), shared).as_bytes().to_list();
+            let shared = match x_shared(eph, body[body.len() - 32:body.len()]) { b: Secret => b.as_bytes().to_list(), none => return };
+            let early = hkdf::extract(H, [0u8], zeros(32)).as_bytes().to_list();
+            hs = hkdf::extract(H, derive(early, "derived", []), shared).as_bytes().to_list();
             k = keys(derive(hs, "s hs traffic", tr));
             continue;
         }
@@ -599,7 +608,7 @@ fn evil_client(s: TcpStream, ref r: Rng, what: usize) {
         }
     }
     let c_hs = derive(hs, "c hs traffic", tr[0:sh_end].to_list());
-    let master = Hkdf::extract(H, derive(hs, "derived", []), zeros(32)).as_bytes().to_list();
+    let master = hkdf::extract(H, derive(hs, "derived", []), zeros(32)).as_bytes().to_list();
     let c_ap = derive(master, "c ap traffic", tr);
     let kc = keys(c_hs);
 

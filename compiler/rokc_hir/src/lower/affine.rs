@@ -54,12 +54,17 @@ const GUARDS: &[&str] = &[
     "rok::core::sync::RwLockWriteGuard",
 ];
 
-/// Secrets: their `drop` only wipes early, and the collector wipes them
-/// anyway, so copies are fine.
+/// Secrets and the keys held in them: their `drop` only wipes early, and
+/// the collector wipes them anyway, so copies are fine.
 const WIPED: &[&str] = &[
     "rok::core::crypto::Secret",
     "rok::core::crypto::SecretWords",
     "rok::core::crypto::Aead",
+    "rok::core::crypto::x25519::PrivateKey",
+    "rok::core::crypto::ed25519::SigningKey",
+    "rok::core::crypto::ecdsa::SigningKey",
+    "rok::core::crypto::rsa::PrivateKey",
+    "rok::core::crypto::mlkem::DecapsulationKey768",
 ];
 
 /// Configurations that name a handle without owning it (a child's

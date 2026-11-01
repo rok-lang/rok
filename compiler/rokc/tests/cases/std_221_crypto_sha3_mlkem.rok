@@ -33,7 +33,7 @@
 // rok::core::crypto: SHA-3 / SHAKE (FIPS 202) and ML-KEM-768 (FIPS 203, ACVP
 // keyGen / encapDecap vectors, implicit rejection, input checks).
 use rok::core::crypto::sha3::{Sha3_256, Sha3_512, Shake128, Shake256};
-use rok::core::crypto::mlkem::MlKem768;
+use rok::core::crypto::mlkem::{DecapsulationKey768, EncapsulationKey768};
 use rok::core::crypto::{Secret, constant_time_eq};
 
 fn hex(b: List<u8>) -> str {
@@ -113,44 +113,45 @@ fn main() {
 
     for (i, t) in kg.iter().enumerate() {
         let (d, z, hek, hdk) = t;
-        let (ek, dk) = try MlKem768::keygen(unhex(d), unhex(z)) catch _ { ([], none_secret()) };
-        check(f"keygen {i} ek", Sha3_256::digest(ek), hek);
-        check(f"keygen {i} dk", Sha3_256::digest(dk), hdk);
+        let dk = try! DecapsulationKey768::from_seed(unhex(d), unhex(z));
+        check(f"keygen {i} ek", Sha3_256::digest(dk.encapsulation_key().to_bytes()), hek);
+        check(f"keygen {i} dk", Sha3_256::digest(dk.to_expanded_bytes()), hdk);
     }
     for (i, t) in enc.iter().enumerate() {
         let (dkh, m, k, hc) = t;
-        let dk = unhex(dkh);
-        let ek = dk[1152:2336];
-        let (key, c) = try MlKem768::encapsulate(ek, unhex(m)) catch _ { (none_secret(), []) };
+        let dk = try! DecapsulationKey768::from_expanded_bytes(unhex(dkh));
+        let (key, c) = try dk.encapsulation_key().encapsulate(unhex(m)) catch _ { (none_secret(), []) };
         check(f"encaps {i} K", key.as_bytes().to_list(), k);
         check(f"encaps {i} c", Sha3_256::digest(c), hc);
-        check(f"decaps {i} K", (try MlKem768::decapsulate(dk, c) catch _ { none_secret() }).as_bytes().to_list(), k);
+        check(f"decaps {i} K", (try dk.decapsulate(c) catch _ { none_secret() }).as_bytes().to_list(), k);
     }
     for (i, t) in dec.iter().enumerate() {
         let (dk, c, k) = t;
-        check(f"decaps reject {i}", (try MlKem768::decapsulate(unhex(dk), unhex(c)) catch _ { none_secret() }).as_bytes().to_list(), k);
+        let key = try! DecapsulationKey768::from_expanded_bytes(unhex(dk));
+        check(f"decaps reject {i}", (try key.decapsulate(unhex(c)) catch _ { none_secret() }).as_bytes().to_list(), k);
     }
 
     // Round trip, a flipped ciphertext bit, and the input checks.
     let seed: List<u8> = [];
     for i in 0..32 { seed.push(i as u8); }
-    let (ek, dk) = try MlKem768::keygen(seed, seed) catch _ { ([], none_secret()) };
-    let (k1, c) = try MlKem768::encapsulate(ek, seed) catch _ { (none_secret(), []) };
-    let k2 = try MlKem768::decapsulate(dk, c) catch _ { none_secret() };
+    let dk = try! DecapsulationKey768::from_seed(seed, seed);
+    let ek = dk.encapsulation_key();
+    let (k1, c) = try ek.encapsulate(seed) catch _ { (none_secret(), []) };
+    let k2 = try dk.decapsulate(c) catch _ { none_secret() };
     flag("round trip", k1.len() == 32 && constant_time_eq(k1, k2));
     c[5] = c[5] ^ 1u8;
-    let k3 = try MlKem768::decapsulate(dk, c) catch _ { none_secret() };
+    let k3 = try dk.decapsulate(c) catch _ { none_secret() };
     flag("flipped bit rejected", k3.len() == 32 && !constant_time_eq(k3, k1));
-    let bad = ek[0:1184].to_list();
+    let bad = ek.to_bytes();
     bad[0] = 0xffu8;
     bad[1] = bad[1] | 0x0fu8;
-    let r1 = try MlKem768::encapsulate(bad, seed) catch _ { (Secret::new([9u8]), []) };
-    flag("ek modulus check", r1.0.len() == 1);
-    let bdk = dk[0:2400].to_list();
+    let r1: EncapsulationKey768 | none = try EncapsulationKey768::from_bytes(bad) catch _ { none };
+    flag("ek modulus check", r1 is none);
+    let bdk = dk.to_expanded_bytes().as_bytes().to_list();
     bdk[2336] = bdk[2336] ^ 1u8;
-    let r2 = try MlKem768::decapsulate(bdk, c) catch _ { Secret::new([9u8]) };
-    flag("dk hash check", r2.len() == 1);
-    let r3 = try MlKem768::decapsulate(dk, c[0:1087]) catch _ { Secret::new([9u8]) };
+    let r2: DecapsulationKey768 | none = try DecapsulationKey768::from_expanded_bytes(bdk) catch _ { none };
+    flag("dk hash check", r2 is none);
+    let r3 = try dk.decapsulate(c[0:1087]) catch _ { Secret::new([9u8]) };
     flag("ciphertext length check", r3.len() == 1);
 }
 

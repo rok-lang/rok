@@ -16,8 +16,8 @@
 
 // RSA PKCS #1 v1.5 signing (must equal OpenSSL's) and PSS verification.
 
-use rok::core::crypto::sha2::HashAlgorithm;
-use rok::core::crypto::rsa::{RsaPrivateKey, RsaPublicKey};
+use rok::core::crypto::HashAlgorithm;
+use rok::core::crypto::rsa::{PrivateKey, PublicKey};
 
 fn nib(c: u8) -> u8 {
     if c >= 0x30u8 && c <= 0x39u8 { return c - 0x30u8; }
@@ -76,13 +76,13 @@ fn main() {
     for v in pkcs1() {
         let f: List<str> = [];
         for x in v.split(" ") { f.push(x); }
-        let key = try! RsaPrivateKey::from_pkcs1_der(unhex(if f[0] == "rsa2048" { K2048 } else { K2049 }));
+        let key = try! PrivateKey::from_pkcs1_der(unhex(if f[0] == "rsa2048" { K2048 } else { K2049 }));
         let h = hash(f[1]);
         let sig = try key.sign_pkcs1v15(h, msg) catch e { println(f"FAIL {e.message()}"); [] };
         let pk = key.public_key();
         println(f"{f[0]} {f[1]}: matches {sig == unhex(f[2])}, verifies {pk.verify_pkcs1v15(h, msg, sig)}, other message {pk.verify_pkcs1v15(h, "other", sig)}, as pss {pk.verify_pss(h, msg, sig)}");
     }
-    let pk = (try! RsaPrivateKey::from_pkcs1_der(unhex(K2048))).public_key();
+    let pk = (try! PrivateKey::from_pkcs1_der(unhex(K2048))).public_key();
     let h = HashAlgorithm::Sha256;
     for v in pss() {
         let f: List<str> = [];
@@ -91,9 +91,9 @@ fn main() {
         let sig = unhex(f[1]);
         println(f"pss salt {s}: with {s} {pk.verify_pss(h, msg, sig, s)}, with hash length {pk.verify_pss(h, msg, sig, 32)}");
     }
-    let key = try! RsaPrivateKey::from_pkcs1_der(unhex(K2048));
+    let key = try! PrivateKey::from_pkcs1_der(unhex(K2048));
     let own = try! key.sign_pss(h, msg, unhex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"));
     println(f"pss default salt: hash length {pk.verify_pss(h, msg, own)}");
-    let again = try! RsaPublicKey::new(pk.modulus(), pk.exponent());
+    let again = try! PublicKey::new(pk.modulus(), pk.exponent());
     println(f"modulus round trip {again.modulus() == pk.modulus() && again.verify_pss(h, msg, own)}, exponent {hex(pk.exponent())}");
 }

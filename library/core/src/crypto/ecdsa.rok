@@ -11,13 +11,13 @@
 // exponent, carries and reductions are masks. Verification sees public
 // data only and indexes its tables by scalar digits.
 
-use sup::ct_mask;
-use sup::sha2::HashAlgorithm;
+use sup::{Secret, ct_mask};
+use sup::HashAlgorithm;
 use sup::hmac::Hmac;
 use sup::bignum::Nat;
 use sup::ecfield::{Fe, fe_zero, mul_p256, add_p256, sub_p256, mul_p384, add_p384, sub_p384};
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum EcCurve {
     P256,
     P384,
@@ -522,29 +522,70 @@ const fn der_int(out: List<u8>, v: List<u8>) {
     for j in i..v.len() { out.push(v[j]); }
 }
 
-pub struct Ecdsa;
+/// A signing key: the secret scalar (big-endian, the curve's size) in
+/// secret storage, and its public point. Copies share the storage;
+/// `wipe` and `using` release clear it.
+pub struct SigningKey {
+    d: Secret;
+    public: VerifyingKey;
+}
 
-impl Ecdsa {
-    /// The SEC1 uncompressed public key of `private_key` (a big-endian
-    /// scalar of at most the curve's size).
-    pub fn public_key<B: AsBytes>(curve: EcCurve, private_key: B) throws (ValueError) -> List<u8> {
+impl !Sync for SigningKey {}
+
+/// A public key: a point on `curve`, SEC1 uncompressed.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct VerifyingKey {
+    curve: EcCurve;
+    // `0x04 || x || y`, then zeros (P-256 uses 65 bytes).
+    p: [u8; 97];
+}
+
+/// The affine point of a SEC1 uncompressed encoding, in Montgomery
+/// form; `none` unless it is on the curve.
+fn sec1_point(c: Curve, pk: Slice<u8>) -> (Fe, Fe) | none {
+    let size = c.size;
+    let n = c.fp.n;
+    if pk.len() != 1 + 2 * size || pk[0] != 0x04u8 { return none; }
+    let qx: Fe = fe_from_be(pk[1:1 + size], n) else { return none; };
+    let qy: Fe = fe_from_be(pk[1 + size:1 + 2 * size], n) else { return none; };
+    if !fe_lt(qx, c.fp.m, n) || !fe_lt(qy, c.fp.m, n) { return none; }
+    let qxm = c.fp.to_mont(qx);
+    let qym = c.fp.to_mont(qy);
+    if !c.on_curve(qxm, qym) { return none; }
+    (qxm, qym)
+}
+
+impl SigningKey {
+    /// The key of a big-endian scalar of at most the curve's size,
+    /// `1 <= d < q`.
+    pub fn from_bytes<B: AsBytes>(curve: EcCurve, bytes: B) throws (ValueError) -> SigningKey {
         let c = curve_of(curve);
-        let d = try c.scalar(private_key);
+        let d = try c.scalar(bytes);
         let (x, y) = c.affine(c.mul_base(d)) ?? (fe_zero(), fe_zero());
-        let out: List<u8> = [0x04u8];
-        for v in fe_to_be(x, c.size) { out.push(v); }
-        for v in fe_to_be(y, c.size) { out.push(v); }
-        out
+        let p: [u8; 97] = [0u8; 97];
+        p[0] = 0x04u8;
+        let at = 1usize;
+        for v in fe_to_be(x, c.size) { p[at] = v; at += 1; }
+        for v in fe_to_be(y, c.size) { p[at] = v; at += 1; }
+        SigningKey { d: Secret::new(fe_to_be(d, c.size)), public: VerifyingKey { curve, p } }
     }
 
-    /// A DER signature of `msg`, hashed with `hash`, by `private_key`;
-    /// the nonce is derived per RFC 6979 (HMAC-DRBG with `hash`).
-    pub fn sign<P: AsBytes, M: AsBytes>(curve: EcCurve, hash: HashAlgorithm, private_key: P, msg: M) throws (ValueError) -> List<u8> {
-        let c = curve_of(curve);
+    pub const fn curve(self) -> EcCurve { self.public.curve }
+
+    pub const fn verifying_key(self) -> VerifyingKey { self.public }
+
+    /// Overwrite the scalar with zeros now (every copy shares it);
+    /// `sign` is meaningless afterwards.
+    pub fn wipe(self) { self.d.wipe(); }
+
+    /// A DER signature of `msg`, hashed with `hash`; the nonce is
+    /// derived per RFC 6979 (HMAC-DRBG with `hash`).
+    pub fn sign<M: AsBytes>(self, hash: HashAlgorithm, msg: M) -> List<u8> {
+        let c = curve_of(self.public.curve);
         let q = c.fq;
         let n = c.fp.n;
         let size = c.size;
-        let d = try c.scalar(private_key);
+        let d = fe_from_be(self.d[0:size], n) ?? fe_zero();
         let e = c.hash_int(hash, msg);
         // RFC 6979 3.2: K and V from int2octets(d) || bits2octets(h1).
         let seed = fe_to_be(d, size);
@@ -603,21 +644,50 @@ impl Ecdsa {
             vv = Hmac::mac(hash, kk, vv);
         }
     }
+}
+
+/// The scalar not shown.
+impl Debug for SigningKey {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) {
+        try f.write_str(f"SigningKey({self.public.curve:?})")
+    }
+}
+
+/// `using` release wipes.
+impl Drop for SigningKey {
+    fn drop(ref self) { self.wipe(); }
+}
+
+impl VerifyingKey {
+    /// From a SEC1 uncompressed point (`0x04 || x || y`) on `curve`.
+    pub fn from_sec1<B: AsBytes>(curve: EcCurve, bytes: B) throws (ValueError) -> VerifyingKey {
+        let s = bytes.byte_slice();
+        if sec1_point(curve_of(curve), s) is none {
+            throw ValueError::new(f"not an uncompressed {curve:?} point");
+        }
+        let p: [u8; 97] = [0u8; 97];
+        for i in 0..s.len() { p[i] = s[i]; }
+        VerifyingKey { curve, p }
+    }
+
+    pub const fn curve(self) -> EcCurve { self.curve }
+
+    /// The SEC1 uncompressed point.
+    pub const fn to_sec1(self) -> List<u8> {
+        let len = 1 + 2 * curve_of(self.curve).size;
+        let out: List<u8> = List::with_capacity(len);
+        for i in 0..len { out.push(self.p[i]); }
+        out
+    }
 
     /// Whether `signature` (DER) is a signature of `msg`, hashed with
-    /// `hash`, under `public_key` (SEC1 uncompressed point).
-    pub fn verify<P: AsBytes, M: AsBytes, S: AsBytes>(curve: EcCurve, hash: HashAlgorithm, public_key: P, msg: M, signature: S) -> bool {
-        let c = curve_of(curve);
+    /// `hash`.
+    pub fn verify<M: AsBytes, S: AsBytes>(self, hash: HashAlgorithm, msg: M, signature: S) -> bool {
+        let c = curve_of(self.curve);
         let size = c.size;
         let n = c.fp.n;
-        let pk = public_key.byte_slice();
-        if pk.len() != 1 + 2 * size || pk[0] != 0x04u8 { return false; }
-        let qx: Fe = fe_from_be(pk[1:1 + size], n) else { return false; };
-        let qy: Fe = fe_from_be(pk[1 + size:1 + 2 * size], n) else { return false; };
-        if !fe_lt(qx, c.fp.m, n) || !fe_lt(qy, c.fp.m, n) { return false; }
-        let qxm = c.fp.to_mont(qx);
-        let qym = c.fp.to_mont(qy);
-        if !c.on_curve(qxm, qym) { return false; }
+        let qm: (Fe, Fe) = sec1_point(c, self.p[0:1 + 2 * size]) else { return false; };
+        let (qxm, qym) = qm;
 
         let t3: (Slice<u8>, Slice<u8>) = parse_sig(signature.byte_slice(), size) else { return false; };
         let (rb, sb) = t3;
