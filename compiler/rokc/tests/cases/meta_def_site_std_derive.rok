@@ -19,7 +19,7 @@ struct P {
 }
 
 fn main() {
-    let back: P = try! rokon::from_str(rokon::to_string(P { a: 1 }));
+    let back: P = try! rokon::from_str(try! rokon::to_str(P { a: 1 }));
     println(f"{back:?}");
     println(OrderedDict { n: 2 }.n);
 }
