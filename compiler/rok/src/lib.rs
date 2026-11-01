@@ -13,10 +13,12 @@
 //! $ROK_HOME/cache/git/               shared git cache (see `git`)
 //! $ROK_HOME/cache/registry/          stone index clones (see `registry`)
 //! $ROK_HOME/cache/native/            native packages, by SHA-256 (see `native`)
-//! $ROK_HOME/config.rokon             `Config { registry: "<index url>", toolchain: "<default>" }`
+//! $ROK_HOME/config.rokon             `Config { toolchain: "<default>" }`
+//! $ROK_HOME/tokens.rokon             publish tokens, per index
+//! $ROK_HOME/sources.rokon            index mirrors (see `registry`)
 //! $ROK_HOME/cache/scripts/<hash>/    a script's lock and prebuilt dependencies
 //! $ROK_HOME/envs/<name>/             a named environment (rok.rokon, rok.lock, target/)
-//! $ROK_HOME/envs/.current            `rok env use`'s choice (also CURRENT, for older rok)
+//! $ROK_HOME/envs/.current            `rok env use`'s choice
 //! ```
 
 mod env;

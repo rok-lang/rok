@@ -1452,28 +1452,9 @@ fn named_environments() {
     assert_eq!(ok(&out).split('=').next(), Some("d"));
     let list = ok(&rok(&home, &root, &["env", "list"]));
     assert_eq!(list, "  default\n* work (active)\n");
-    // The choice is in `.current`, and in `CURRENT` for older rok.
+    // The choice is in `.current`, and nothing else.
     assert_eq!(read(&home.join("envs/.current")), "work\n");
-    assert_eq!(read(&home.join("envs/CURRENT")), "work\n");
-    // An older rok's `env use default` writes `CURRENT` only: newer wins.
-    let set_time = |f: &str, secs: u64| {
-        fs::File::options()
-            .write(true)
-            .open(home.join("envs").join(f))
-            .unwrap()
-            .set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(secs))
-            .unwrap();
-    };
-    write(&home.join("envs/CURRENT"), "default\n");
-    set_time(".current", 1_000_000);
-    set_time("CURRENT", 2_000_000);
-    assert_eq!(deps(&home, &elsewhere, &[])[0].0, "d");
-    set_time("CURRENT", 500_000);
-    assert_eq!(deps(&home, &elsewhere, &[])[0].0, "greet");
-    // An older rok's `env remove` drops `CURRENT`: no choice.
-    fs::remove_file(home.join("envs/CURRENT")).unwrap();
-    assert_eq!(deps(&home, &elsewhere, &[])[0].0, "d");
-    ok(&rok(&home, &root, &["env", "use", "work"]));
+    assert!(!home.join("envs/CURRENT").exists());
 
     // Export, import elsewhere.
     let export = root.join("export");
@@ -1539,11 +1520,6 @@ fn environment_names_are_checked() {
     let jupyter = root.join("jupyter");
     ok(&rok(&home, &root, &["env", "create", "work"]));
     for (name, why) in [
-        (
-            "current",
-            "`current` is reserved for `rok env use`'s choice",
-        ),
-        ("CURRENT", "`CURRENT` is reserved"),
         (".current", "starts with `.`"),
         ("CON", "`CON` is a device name on Windows"),
         ("nul.txt", "starts with a Windows device name (`nul`)"),
@@ -1555,7 +1531,6 @@ fn environment_names_are_checked() {
     ] {
         fails(&rok(&home, &root, &["env", "create", name]), why);
     }
-    assert!(!home.join("envs/current").is_dir());
     for (var, flag) in [("../../p1", false), ("../../p1", true), ("..", true)] {
         let out = if flag {
             rok(&home, &elsewhere, &["--env", var, "deps"])
@@ -1567,13 +1542,12 @@ fn environment_names_are_checked() {
         };
         fails(&out, &format!("`{var}` is a path, not an environment name"));
     }
-    write(&home.join("envs/CURRENT"), "../../p1\n");
     write(&home.join("envs/.current"), "../../p1\n");
     fails(
         &rok(&home, &elsewhere, &["deps"]),
         "`../../p1` is a path, not an environment name",
     );
-    // One an older rok made still works, with a warning.
+    // One made by hand still works, with a warning.
     fs::create_dir_all(home.join("envs/a b")).unwrap();
     let out = rok(&home, &elsewhere, &["--env", "a b", "deps"]);
     ok(&out);

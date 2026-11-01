@@ -25,23 +25,13 @@ pub fn names() -> Vec<String> {
     names
 }
 
-/// `rok env use`'s choice, in `envs/`; `CURRENT` too for older rok. No
-/// environment can be called either (`check`).
+/// `rok env use`'s choice, in `envs/`. Environment names never start
+/// with `.`, so none can clash with it.
 const CHOICE: &str = ".current";
-const OLD_CHOICE: &str = "CURRENT";
 
 /// Why `name` can't be a new environment.
 fn check(name: &str) -> Result<(), String> {
     rokc_core::check_os_name("environment", name)?;
-    if [CHOICE, OLD_CHOICE]
-        .iter()
-        .any(|r| r.trim_start_matches('.').eq_ignore_ascii_case(name))
-    {
-        return Err(format!(
-            "`{name}` is reserved for `rok env use`'s choice; name the environment something \
-             else, e.g. `my_{name}`"
-        ));
-    }
     let ok = |c: char| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.');
     if name.chars().all(ok) {
         return Ok(());
@@ -55,8 +45,8 @@ fn check(name: &str) -> Result<(), String> {
 
 /// Check environment `name` taken from `source` (`--env`, `ROK_ENV`, the
 /// choice file; empty for an argument). A path is an error; a name
-/// `check` refuses only warns when that environment exists (an older rok
-/// made it).
+/// `check` refuses only warns when that environment exists (its
+/// directory was made by hand).
 pub fn name(source: &str, name: &str) -> Result<(), String> {
     let at = |e: String| {
         if source.is_empty() {
@@ -80,25 +70,9 @@ pub fn name(source: &str, name: &str) -> Result<(), String> {
     }
 }
 
-/// `rok env use`'s choice, if any. `CURRENT` alone is an older rok's;
-/// when both files are there the newer wins, and `.current` without
-/// `CURRENT` means an older rok cleared the choice.
+/// `rok env use`'s choice, if any.
 pub fn chosen() -> Result<Option<String>, String> {
-    let envs = home().join("envs");
-    let (new, old) = (envs.join(CHOICE), envs.join(OLD_CHOICE));
-    let time = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
-    let file = match (time(&new), old.is_dir(), time(&old)) {
-        (None, _, _) => old,
-        (Some(_), true, _) => new,
-        (Some(_), false, None) => return Ok(None),
-        (Some(n), false, Some(o)) => {
-            if o > n {
-                old
-            } else {
-                new
-            }
-        }
-    };
+    let file = home().join("envs").join(CHOICE);
     let Ok(text) = std::fs::read_to_string(&file) else {
         return Ok(None);
     };
@@ -115,16 +89,8 @@ pub fn chosen() -> Result<Option<String>, String> {
 fn choose(name: &str) -> Result<(), String> {
     let envs = home().join("envs");
     std::fs::create_dir_all(&envs).map_err(|e| format!("{}: {e}", envs.display()))?;
-    let write = |f: &str| {
-        let file = envs.join(f);
-        std::fs::write(&file, format!("{name}\n")).map_err(|e| format!("{}: {e}", file.display()))
-    };
-    // `CURRENT` first, so `.current` is never the older; skipped when an
-    // environment's directory has that name (a case-insensitive `current`).
-    if !envs.join(OLD_CHOICE).is_dir() {
-        write(OLD_CHOICE)?;
-    }
-    write(CHOICE)
+    let file = envs.join(CHOICE);
+    std::fs::write(&file, format!("{name}\n")).map_err(|e| format!("{}: {e}", file.display()))
 }
 
 pub fn create(name: &str) -> Result<PathBuf, String> {
@@ -196,9 +162,7 @@ pub fn cmd(g: &Global, args: &[String]) -> Result<i32, String> {
             let dir = existing(name)?;
             std::fs::remove_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
             if chosen().ok().flatten().as_deref() == Some(*name) {
-                for f in [CHOICE, OLD_CHOICE] {
-                    let _ = std::fs::remove_file(home().join("envs").join(f));
-                }
+                let _ = std::fs::remove_file(home().join("envs").join(CHOICE));
             }
         }
         ["use", name] => {
