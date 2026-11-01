@@ -717,7 +717,7 @@ pub(super) fn monomorphize_on(
 
 /// Each `T: Bound` and `where` predicate of a call of `fn_def` under
 /// `subst` needs an impl.
-fn check_call_bounds(
+pub(super) fn check_call_bounds(
     ctx: &LowerCtx<'_>,
     fn_def: &FnDef,
     subst: &HashMap<String, HirTy>,
