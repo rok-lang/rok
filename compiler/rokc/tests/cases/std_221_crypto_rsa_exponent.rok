@@ -35,7 +35,7 @@ fn unhex(s: str) -> List<u8> {
 fn main() {
     let n = unhex("bd0f1f41d8c061d4c8642524171bdaf983f9a6a85386ff6ab900ec4c3989a7bee43aa2bf1d44603cdca181dfec13107e65d27b2f7d76a6fae506d57fb7c71466c6d58dfcd5227f53df5e56a111c870e1f6a35cd44f2a2b4d3472deca8c225e3f741a6984786b0a9e858d71d7801ebe4b4225860db836d1a3af0f8b3d3acdc69b7db5199503b20e53961f6b9299d6f422fc32feaa6a7fa2389ace9f2e06fdc3ec752fcb246ea90a2a8b49abbfcd96b54af8d920fc3f61becf37be03809857b3990a7771d11d244d8bbeacbc63521ce7f3fb424df08effed48989fb3c11f1168a5bf172e35785ea1879bc05645aa1616f001330a680c5f002e799571f389566ddf");
     for e in ["03", "010001", "1ffffffff", "0100000001", "01ffffffff", "0200000001", "0000000200000001", "010000000000000001", "01", "010000"] {
-        let r = try RsaPublicKey::new(n, unhex(e)) catch err { println(f"{e} {err.msg}"); continue; };
+        let r = try RsaPublicKey::new(n, unhex(e)) catch err { println(f"{e} {err.message()}"); continue; };
         println(f"{e} {if r.bits() == 2048 { "ok" } else { "bits" }}");
     }
 }

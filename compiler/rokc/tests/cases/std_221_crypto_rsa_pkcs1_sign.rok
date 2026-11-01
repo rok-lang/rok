@@ -78,7 +78,7 @@ fn main() {
         for x in v.split(" ") { f.push(x); }
         let key = try! RsaPrivateKey::from_pkcs1_der(unhex(if f[0] == "rsa2048" { K2048 } else { K2049 }));
         let h = hash(f[1]);
-        let sig = try key.sign_pkcs1v15(h, msg) catch e { println(f"FAIL {e.msg}"); [] };
+        let sig = try key.sign_pkcs1v15(h, msg) catch e { println(f"FAIL {e.message()}"); [] };
         let pk = key.public_key();
         println(f"{f[0]} {f[1]}: matches {sig == unhex(f[2])}, verifies {pk.verify_pkcs1v15(h, msg, sig)}, other message {pk.verify_pkcs1v15(h, "other", sig)}, as pss {pk.verify_pss(h, msg, sig)}");
     }

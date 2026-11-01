@@ -12,15 +12,22 @@
 use rok::core::collections::raw::{GcBuf, buf_new};
 
 /// A failed write (2.10.12). Writing to memory never fails.
+#[derive(Clone, PartialEq, Eq)]
 pub struct FmtError;
 
+impl FmtError {
+    pub const fn message(self) -> str { "an error occurred when formatting" }
+}
+
 impl Display for FmtError {
-    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("an error occurred when formatting") }
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(self.message()) }
 }
 
 impl Debug for FmtError {
     const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("FmtError") }
 }
+
+impl Error for FmtError {}
 
 /// `x` as `{x:?}` shows it, or `<T>` (its type name) when `T` has no
 /// `Debug`: for messages about a value of any type.
@@ -140,7 +147,7 @@ impl FormatSpec {
     pub const fn parse(text: str) throws (ValueError) -> FormatSpec {
         let why = unsafe { rok_fmt_spec_error(text) };
         if !why.is_empty() {
-            throw ValueError { msg: why };
+            throw ValueError::new(why);
         }
         unsafe {
             let w: GcBuf<i64> = buf_new(8);

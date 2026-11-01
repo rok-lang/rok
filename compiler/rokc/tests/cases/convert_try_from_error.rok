@@ -5,7 +5,7 @@
 // default: negative
 // even 4
 // overflow: try_from: value out of range for `u8`
-// path: path is not UTF-8 (valid up to byte 1)
+// path: invalid UTF-8 at byte 1
 // path ok a/b
 // generic 200 / OverflowError
 // generic even: odd
@@ -15,18 +15,18 @@
 
 // Stdlib spec 2.11.4: `TryFrom<U>` throws its associated `Error`, which
 // defaults to `ConversionError`; the numeric impls say `OverflowError`,
-// `Path` says `NonUtf8Error`. `try_into` throws the target's `Error`,
+// `Path` says `Utf8Error`. `try_into` throws the target's `Error`,
 // and a generic fn can name it as `T::Error`.
 
-use rok::std::path::{Path, RawPath, NonUtf8Error};
+use rok::std::path::{Path, RawPath};
 
 struct Even { v: i64; }
 
 // No `type Error`: the default `ConversionError`.
 impl TryFrom<i64> for Even {
     fn try_from(value: i64) throws (Self::Error) -> Even {
-        if value < 0 { throw ConversionError { msg: "negative" }; }
-        if value % 2 != 0 { throw ConversionError { msg: "odd" }; }
+        if value < 0 { throw ConversionError::new("negative"); }
+        if value % 2 != 0 { throw ConversionError::new("odd"); }
         Even { v: value }
     }
 }
@@ -36,7 +36,7 @@ impl TryFrom<i64> for Even {
 impl TryFrom<str> for Even {
     type Error = ValueError;
     fn try_from(value: str) throws (ValueError) -> Even {
-        if value.len() % 2 != 0 { throw ValueError { msg: f"odd length {value.len()}" }; }
+        if value.len() % 2 != 0 { throw ValueError::new(f"odd length {value.len()}"); }
         Even { v: value.len() as i64 }
     }
 }
@@ -62,11 +62,11 @@ fn main() {
     };
 
     let bad = RawPath::from_bytes([0x61, 0xff]);
-    let p = try Path::try_from(bad) catch e: NonUtf8Error {
+    let p = try Path::try_from(bad) catch e: Utf8Error {
         println(f"path: {e}");
         Path::empty()
     };
-    let ok: Path = try RawPath::from_bytes([0x61, 0x2f, 0x62]).try_into() catch _: NonUtf8Error {
+    let ok: Path = try RawPath::from_bytes([0x61, 0x2f, 0x62]).try_into() catch _: Utf8Error {
         Path::empty()
     };
     println(f"path ok {ok.as_str()}");

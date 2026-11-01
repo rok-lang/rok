@@ -20,7 +20,7 @@ impl Writer for Closing {
     }
     fn write_str(ref self, s: str) throws (IoError) {
         if self.taken == self.room {
-            throw IoError::with_kind(IoErrorKind::BrokenPipe, "pipe closed");
+            throw IoError::new(IoErrorKind::BrokenPipe, "pipe closed");
         }
         self.taken += 1;
     }

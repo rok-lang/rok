@@ -1928,7 +1928,7 @@ fn boom(n: i32) {
     panic(f\"boom {n}\");
 }
 boom(5)
-fn t() throws { throw ValueError { msg: \"bad\" }; }
+fn t() throws { throw ValueError::new(\"bad\"); }
 kept += 1; try t()
 kept += 1; rok::std::process::exit(3);
 kept

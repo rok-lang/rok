@@ -541,7 +541,7 @@ impl FromStr for Float {
     fn from_str(s: str) throws (ParseError) -> Float {
         match Float::parse_decimal(s) {
             v: Float => v,
-            none => throw ParseError { input: s, pos: 0, reason: "invalid float literal" },
+            none => throw ParseError::new(s, 0, "invalid float literal"),
         }
     }
 }
@@ -562,7 +562,7 @@ impl TryFrom<Float> for i32 {
     const fn try_from(value: Float) throws (OverflowError) -> i32 {
         match value.to_int() {
             v: Int => try i32::try_from(v),
-            none => throw OverflowError { op: "try_from", ty: "i32" },
+            none => throw OverflowError::new("try_from", "i32"),
         }
     }
 }
@@ -571,7 +571,7 @@ impl TryFrom<Float> for i64 {
     const fn try_from(value: Float) throws (OverflowError) -> i64 {
         match value.to_int() {
             v: Int => try i64::try_from(v),
-            none => throw OverflowError { op: "try_from", ty: "i64" },
+            none => throw OverflowError::new("try_from", "i64"),
         }
     }
 }

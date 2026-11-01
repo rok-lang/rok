@@ -144,7 +144,7 @@ impl Hkdf {
     pub fn expand(alg: HashAlgorithm, prk: ByteInput, info: ByteInput, len: usize) throws (ValueError) -> Secret {
         let ol = alg.output_len();
         if len > 255 * ol {
-            throw ValueError { msg: "HKDF output too long" };
+            throw ValueError::new("HKDF output too long");
         }
         let base = Hmac::new(alg, prk);
         let inf = view(info);
@@ -190,7 +190,7 @@ impl Hkdf {
     pub fn expand_sha3(alg: Sha3Algorithm, prk: ByteInput, info: ByteInput, len: usize) throws (ValueError) -> Secret {
         let ol = alg.output_len();
         if len > 255 * ol {
-            throw ValueError { msg: "HKDF output too long" };
+            throw ValueError::new("HKDF output too long");
         }
         let base = Sha3Mac::new(alg, prk);
         let inf = view(info);

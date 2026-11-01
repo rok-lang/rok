@@ -21,11 +21,11 @@
 // Every decode error names the offending byte offset and says what to
 // write instead.
 fn hex(s: str) {
-    try { hex_decode(s); println("decoded"); } catch e { println(e.msg); }
+    try { hex_decode(s); println("decoded"); } catch e { println(e.message()); }
 }
 
 fn b64(s: str, url_safe: bool) {
-    try { base64_decode(s, url_safe: url_safe); println("decoded"); } catch e { println(e.msg); }
+    try { base64_decode(s, url_safe: url_safe); println("decoded"); } catch e { println(e.message()); }
 }
 
 fn main() {

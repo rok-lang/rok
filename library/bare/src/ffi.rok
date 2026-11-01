@@ -15,14 +15,29 @@ extern "rok" {
 }
 
 /// An interior NUL byte, at `position` (`CString::new`).
+// By hand: bare cannot use the derives, which expand to core paths.
 pub struct NulError {
-    pub position: usize;
+    position: usize;
+}
+
+impl NulError {
+    /// The byte offset of the NUL.
+    pub const fn position(self) -> usize { self.position }
+    pub const fn message(self) -> str { f"nul byte found at position {self.position}" }
+}
+
+impl PartialEq for NulError {
+    const fn eq(self, rhs: NulError) -> bool { self.position == rhs.position }
+}
+
+impl Eq for NulError {}
+
+impl Clone for NulError {
+    fn clone(self) -> NulError { NulError { position: self.position } }
 }
 
 impl Display for NulError {
-    const fn fmt(self, ref f: Formatter) throws (FmtError) {
-        try f.write_str(f"nul byte found at position {self.position}")
-    }
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(self.message()) }
 }
 
 impl Debug for NulError {
@@ -33,16 +48,30 @@ impl Error for NulError {}
 
 /// Bytes that are not one C string: no final NUL, or one before it.
 pub struct FromBytesWithNulError {
-    pub reason: str;
+    message: str;
+}
+
+impl FromBytesWithNulError {
+    pub const fn message(self) -> str { self.message }
+}
+
+impl PartialEq for FromBytesWithNulError {
+    const fn eq(self, rhs: FromBytesWithNulError) -> bool { self.message == rhs.message }
+}
+
+impl Eq for FromBytesWithNulError {}
+
+impl Clone for FromBytesWithNulError {
+    fn clone(self) -> FromBytesWithNulError { FromBytesWithNulError { message: self.message } }
 }
 
 impl Display for FromBytesWithNulError {
-    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(self.reason) }
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(self.message) }
 }
 
 impl Debug for FromBytesWithNulError {
     const fn fmt(self, ref f: Formatter) throws (FmtError) {
-        try f.write_str(f"FromBytesWithNulError({self.reason})")
+        try f.write_str(f"FromBytesWithNulError({self.message})")
     }
 }
 
@@ -102,8 +131,8 @@ impl CStr {
         let n = bytes.len();
         match nul_in(bytes) {
             i: usize if i + 1 == n => CStr { s: with_nul(bytes[0:i]) },
-            i: usize => throw FromBytesWithNulError { reason: f"interior nul byte at {i}" },
-            none => throw FromBytesWithNulError { reason: "data provided is not nul terminated" },
+            i: usize => throw FromBytesWithNulError { message: f"interior nul byte at {i}" },
+            none => throw FromBytesWithNulError { message: "data provided is not nul terminated" },
         }
     }
 

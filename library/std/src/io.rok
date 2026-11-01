@@ -31,7 +31,9 @@ const KIND_UNSUPPORTED: i32 = 14;
 const KIND_UNEXPECTED_EOF: i32 = 15;
 const KIND_INVALID_DATA: i32 = 16;
 
-/// What went wrong, from the OS error (`code`) or the library itself.
+/// What went wrong, from the OS error (`os_code`) or the library itself.
+#[derive(Clone, Copy)]
+#[non_exhaustive]
 pub enum IoErrorKind {
     Other,
     NotFound,
@@ -103,6 +105,8 @@ impl PartialEq for IoErrorKind {
     const fn ne(self, rhs: IoErrorKind) -> bool { self.index() != rhs.index() }
 }
 
+impl Eq for IoErrorKind {}
+
 impl Debug for IoErrorKind {
     const fn fmt(self, ref f: Formatter) throws (FmtError) {
         try f.write_str(match self {
@@ -127,39 +131,65 @@ impl Debug for IoErrorKind {
     }
 }
 
-/// An I/O failure (std 3.5.0):
-/// its kind, the OS error code (`0` when the library raised it) and a
-/// readable message.
+/// An I/O failure (std 3.5.0): its kind, the OS error code (`none`
+/// when the library raised it or a name did not resolve) and a readable
+/// message.
+#[derive(Clone, PartialEq, Eq)]
 pub struct IoError {
-    #[deprecated(since = "0.1.6", note = "use `IoError::kind()`; build one with `IoError::with_kind`")]
-    pub kind: IoErrorKind;
-    #[deprecated(since = "0.1.6", note = "use `IoError::code()`; build one with `IoError::from_os`")]
-    pub code: i32;
-    #[deprecated(since = "0.1.6", note = "use `IoError::message()`; build one with `IoError::new`")]
-    pub message: str;
+    kind: IoErrorKind;
+    os_code: i32 | none;
+    message: str;
 }
 
 impl IoError {
-    /// A library-raised error of kind `Other`.
-    pub const fn new(message: str) -> IoError {
-        IoError { kind: IoErrorKind::Other, code: 0, message: message }
+    /// A library-raised error: no OS code.
+    pub const fn new(kind: IoErrorKind, message: str) -> IoError {
+        IoError { kind, os_code: none, message }
     }
 
-    pub const fn with_kind(kind: IoErrorKind, message: str) -> IoError {
-        IoError { kind: kind, code: 0, message: message }
+    /// The error for OS error `code` (errno; Windows: a Win32 or
+    /// Winsock code), its kind and message as the OS gives them;
+    /// `context` (a path, a call) prefixes the message unless empty.
+    pub fn from_os_code(code: i32, context: str = "") -> IoError {
+        IoError { kind: IoErrorKind::of_os(code), os_code: code, message: os_message(code, context) }
     }
 
-    /// The error for OS error code `code`; `context` (a path, a call)
-    /// prefixes the message unless empty.
-    pub fn from_os(code: i32, context: str) -> IoError {
-        let msg = unsafe { rok_os_strerror(code) };
-        if context.len() > 0 { msg = f"{context}: {msg}"; }
-        IoError { kind: IoErrorKind::of_os(code), code: code, message: msg }
+    /// A failed name lookup with runtime code `code`: a resolver (EAI)
+    /// code is no OS error code.
+    pub(pkg) fn resolver(code: i32, context: str) -> IoError {
+        if !is_eai(code) { return IoError::from_os_code(code, context); }
+        IoError { kind: IoErrorKind::of_os(code), os_code: none, message: os_message(code, context) }
+    }
+
+    /// `self` with its message told again for `context`.
+    pub(pkg) fn retold(self, context: str) -> IoError {
+        match self.os_code {
+            c: i32 => IoError::from_os_code(c, context),
+            none => self,
+        }
     }
 
     pub const fn kind(self) -> IoErrorKind { self.kind }
-    pub const fn code(self) -> i32 { self.code }
+    /// The platform's code (errno; Windows: `GetLastError` / WSA), or
+    /// `none` when the library raised the error or a name did not
+    /// resolve.
+    pub const fn os_code(self) -> i32 | none { self.os_code }
     pub const fn message(self) -> str { self.message }
+}
+
+/// Whether runtime code `code` is a resolver failure (`getaddrinfo`'s
+/// EAI codes, numbered from the runtime's `EAI_BASE`).
+#[cfg(not(target_os = "windows"))]
+fn is_eai(code: i32) -> bool { code >= 100000 }
+
+/// Windows resolver failures are Winsock codes.
+#[cfg(target_os = "windows")]
+fn is_eai(code: i32) -> bool { false }
+
+/// The OS text of error `code`, after `context: ` unless that is empty.
+fn os_message(code: i32, context: str) -> str {
+    let msg = unsafe { rok_os_strerror(code) };
+    if context.len() > 0 { f"{context}: {msg}" } else { msg }
 }
 
 impl Display for IoError {
@@ -168,7 +198,11 @@ impl Display for IoError {
 
 impl Debug for IoError {
     const fn fmt(self, ref f: Formatter) throws (FmtError) {
-        try f.write_str(f"IoError({self.kind:?}, {self.code}, {self.message})")
+        let code = match self.os_code {
+            c: i32 => f"{c}",
+            none => "none",
+        };
+        try f.write_str(f"IoError({self.kind:?}, {code}, {self.message})")
     }
 }
 
@@ -176,7 +210,7 @@ impl Error for IoError {}
 
 /// `r`, or its OS error thrown when `r < 0` (the runtime's `-errno`).
 pub(pkg) fn check(r: i64, context: str) throws (IoError) -> i64 {
-    if r < 0 { throw IoError::from_os((0 - r) as i32, context); }
+    if r < 0 { throw IoError::from_os_code((0 - r) as i32, context); }
     r
 }
 
@@ -342,7 +376,7 @@ pub(pkg) fn write_region(buf: GcBuf<u8>, at: usize, n: usize, write: RegionIo, c
     let done = 0usize;
     while done < n {
         let k = try check(write(buf, at + done, n - done) as i64, context);
-        if k == 0 { throw IoError::new("failed to write whole buffer"); }
+        if k == 0 { throw IoError::new(IoErrorKind::Other, "failed to write whole buffer"); }
         done += k as usize;
     }
 }
@@ -350,7 +384,7 @@ pub(pkg) fn write_region(buf: GcBuf<u8>, at: usize, n: usize, write: RegionIo, c
 /// Bytes as text, or `InvalidData`.
 pub(pkg) const fn text_of(bytes: List<u8>) throws (IoError) -> str {
     try str::from_utf8(bytes) catch _ {
-        throw IoError::with_kind(IoErrorKind::InvalidData, "stream did not contain valid UTF-8");
+        throw IoError::new(IoErrorKind::InvalidData, "stream did not contain valid UTF-8");
     }
 }
 
@@ -387,10 +421,10 @@ pub trait Reader {
         if at == buf.len() { return; }
         let (dst, to, _) = region(buf);
         while at < buf.len() {
-            if at == 0 { throw IoError::with_kind(IoErrorKind::UnexpectedEof, "failed to fill whole buffer"); }
+            if at == 0 { throw IoError::new(IoErrorKind::UnexpectedEof, "failed to fill whole buffer"); }
             let chunk = byte_buf(buf.len() - at);
             let n = try self.read(chunk);
-            if n == 0 { throw IoError::with_kind(IoErrorKind::UnexpectedEof, "failed to fill whole buffer"); }
+            if n == 0 { throw IoError::new(IoErrorKind::UnexpectedEof, "failed to fill whole buffer"); }
             let (src, from, _) = region(chunk);
             unsafe { rok_buf_copy(dst, to + at, src, from, n) };
             at += n;
@@ -451,7 +485,7 @@ pub trait Writer {
         let rest = buf;
         while rest.len() > 0 {
             let n = try self.write(rest);
-            if n == 0 { throw IoError::new("failed to write whole buffer"); }
+            if n == 0 { throw IoError::new(IoErrorKind::Other, "failed to write whole buffer"); }
             if n < rest.len() { rest = list_of(rest[n:rest.len()]); } else { return; }
         }
     }
@@ -490,7 +524,7 @@ pub trait Writer {
         try Display::fmt(x, ref out) catch _ { ok = false; };
         if ok { try out.flush() catch _ { ok = false; }; }
         if let err: IoError = failed { throw err; }
-        if !ok { throw IoError::new("a `Display` implementation failed (FmtError)"); }
+        if !ok { throw IoError::new(IoErrorKind::Other, "a `Display` implementation failed (FmtError)"); }
     }
 }
 

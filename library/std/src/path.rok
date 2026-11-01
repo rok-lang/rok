@@ -364,9 +364,8 @@ impl RawPath {
     pub const fn as_bytes(self) -> Slice<u8> { self.raw[0:self.raw.len()] }
 
     /// The path, if the bytes are UTF-8.
-    pub const fn try_to_path(self) throws (NonUtf8Error) -> Path {
-        let s = try str::from_utf8(self.raw) catch e { throw NonUtf8Error { valid_up_to: e.valid_up_to }; };
-        Path { s: s }
+    pub const fn try_to_path(self) throws (Utf8Error) -> Path {
+        Path { s: try str::from_utf8(self.raw) }
     }
 
     /// The path with each maximal ill-formed subsequence replaced by
@@ -394,6 +393,17 @@ fn raw_of(s: str) -> RawPath {
         }
     }
     RawPath { raw: out }
+}
+
+/// The `Utf8Error` with `valid_up_to() == n`. Core makes them; decoding
+/// `n` ASCII bytes and a stray continuation byte gets one.
+#[cfg(target_os = "windows")]
+fn utf8_error_at(n: usize) -> Utf8Error {
+    let b: List<u8> = List::with_capacity(n + 1);
+    for _ in 0..n { b.push(0x61u8); }
+    b.push(0x80u8);
+    try str::from_utf8(b) catch e { return e; };
+    unreachable()
 }
 
 /// `w` as text (a lone surrogate as U+FFFD) and the index of its first
@@ -435,9 +445,9 @@ impl RawPath {
 
     /// The path, if the units are valid UTF-16; `valid_up_to` counts
     /// UTF-16 units here.
-    pub fn try_to_path(self) throws (NonUtf8Error) -> Path {
+    pub fn try_to_path(self) throws (Utf8Error) -> Path {
         let (s, bad) = decode_wide(self.raw);
-        if bad < self.raw.len() { throw NonUtf8Error { valid_up_to: bad }; }
+        if bad < self.raw.len() { throw utf8_error_at(bad); }
         Path { s: s }
     }
 
@@ -461,23 +471,9 @@ impl From<str> for Path {
 }
 
 impl TryFrom<RawPath> for Path {
-    type Error = NonUtf8Error;
-    const fn try_from(raw: RawPath) throws (NonUtf8Error) -> Path { try raw.try_to_path() }
+    type Error = Utf8Error;
+    const fn try_from(raw: RawPath) throws (Utf8Error) -> Path { try raw.try_to_path() }
 }
-
-/// `RawPath` contents that are not UTF-8 (Windows: not UTF-16).
-pub struct NonUtf8Error {
-    /// Length of the valid prefix (bytes; Windows: UTF-16 units).
-    pub valid_up_to: usize;
-}
-
-impl Display for NonUtf8Error {
-    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"path is not UTF-8 (valid up to byte {self.valid_up_to})") }
-}
-impl Debug for NonUtf8Error {
-    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"NonUtf8Error {{ valid_up_to: {self.valid_up_to} }}") }
-}
-impl Error for NonUtf8Error {}
 
 impl PartialEq for Path {
     const fn eq(self, rhs: Path) -> bool { self.s == rhs.s }

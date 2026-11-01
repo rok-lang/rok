@@ -26,7 +26,7 @@ impl Shape for i32 {
 }
 
 fn parse(s: str) throws -> i32 {
-    if s == "x" { throw ValueError { msg: "bad" }; }
+    if s == "x" { throw ValueError::new("bad"); }
     return 5;
 }
 struct P {}

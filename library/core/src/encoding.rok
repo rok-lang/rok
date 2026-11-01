@@ -22,7 +22,7 @@ pub fn hex_decode(text: List<u8> | Slice<u8> | str) throws (ValueError) -> List<
     let t = bytes_of(text);
     let n = t.len();
     if n % 2 != 0 {
-        throw ValueError { msg: f"hex: odd length {n}; every byte takes two digits, so write \"0f\" rather than \"f\"" };
+        throw ValueError::new(f"hex: odd length {n}; every byte takes two digits, so write \"0f\" rather than \"f\"");
     }
     let out: List<u8> = List::with_capacity(n / 2);
     let i = 0usize;
@@ -86,10 +86,10 @@ pub fn base64_decode(text: List<u8> | Slice<u8> | str, url_safe: bool = false) t
         }
     }
     if end < n && n % 4 != 0 {
-        throw ValueError { msg: f"base64: padded text must be a multiple of 4 characters long, not {n}; fix the '=' count or drop the padding" };
+        throw ValueError::new(f"base64: padded text must be a multiple of 4 characters long, not {n}; fix the '=' count or drop the padding");
     }
     if end % 4 == 1 {
-        throw ValueError { msg: f"base64: text is cut short at byte {end - 1}; a last group needs 2 to 4 characters" };
+        throw ValueError::new(f"base64: text is cut short at byte {end - 1}; a last group needs 2 to 4 characters");
     }
     out
 }
@@ -125,18 +125,18 @@ const fn shown(c: u8) -> str {
 }
 
 const fn bad_hex(c: u8, at: usize) -> ValueError {
-    ValueError { msg: f"hex: {shown(c)} at byte {at} is not a hex digit; use 0-9, a-f or A-F" }
+    ValueError::new(f"hex: {shown(c)} at byte {at} is not a hex digit; use 0-9, a-f or A-F")
 }
 
 const fn bad_base64(c: u8, at: usize, url_safe: bool) -> ValueError {
     let head = f"base64: {shown(c)} at byte {at}";
-    if c == 0x3du8 { return ValueError { msg: f"{head}: '=' pads only the end of the text" }; }
+    if c == 0x3du8 { return ValueError::new(f"{head}: '=' pads only the end of the text"); }
     if !url_safe && (c == 0x2du8 || c == 0x5fu8) {
-        return ValueError { msg: f"{head} is url-safe base64; decode with url_safe: true" };
+        return ValueError::new(f"{head} is url-safe base64; decode with url_safe: true");
     }
     if url_safe && (c == 0x2bu8 || c == 0x2fu8) {
-        return ValueError { msg: f"{head} is standard base64; decode with url_safe: false" };
+        return ValueError::new(f"{head} is standard base64; decode with url_safe: false");
     }
     let extra = if url_safe { "- and _" } else { "+ and /" };
-    ValueError { msg: f"{head} is not base64; use A-Z, a-z, 0-9, {extra}" }
+    ValueError::new(f"{head} is not base64; use A-Z, a-z, 0-9, {extra}")
 }

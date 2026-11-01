@@ -42,7 +42,7 @@ impl Aead {
     pub fn new(alg: AeadAlgorithm, key: ByteInput) throws (ValueError) -> Aead {
         let k = view(key);
         if k.len() != alg.key_len() {
-            throw ValueError { msg: f"{alg:?} key must be {alg.key_len()} bytes, not {k.len()}" };
+            throw ValueError::new(f"{alg:?} key must be {alg.key_len()} bytes, not {k.len()}");
         }
         if alg == AeadAlgorithm::ChaCha20Poly1305 {
             let w = SecretWords::new(8);
@@ -108,7 +108,7 @@ impl Aead {
     fn check_len(self, len: usize) throws (ValueError) {
         let max = if self.alg == AeadAlgorithm::ChaCha20Poly1305 { 274877906880u64 } else { 68719476704u64 };
         if (len as u64) > max {
-            throw ValueError { msg: f"{self.alg:?} message longer than {max} bytes" };
+            throw ValueError::new(f"{self.alg:?} message longer than {max} bytes");
         }
     }
 
@@ -176,7 +176,7 @@ impl Drop for Aead {
 fn nonce12(nonce: ByteInput) throws (ValueError) -> Slice<u8> {
     let n = view(nonce);
     if n.len() != 12 {
-        throw ValueError { msg: f"AEAD nonce must be 12 bytes, not {n.len()}" };
+        throw ValueError::new(f"AEAD nonce must be 12 bytes, not {n.len()}");
     }
     n
 }

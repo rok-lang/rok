@@ -5260,7 +5260,7 @@ fn emitted_code_follows_the_runtime_abi() {
                fn mk(n: i64) -> P { P { a: n, b: \"s\" } }\n\
                fn len_of(xs: List<i64>) -> usize { xs.len() }\n\
                fn fails(n: i64) throws -> i64 {\n\
-               \x20   if n > 5 { throw ValueError { msg: \"big\" }; }\n\
+               \x20   if n > 5 { throw ValueError::new(\"big\"); }\n\
                \x20   n\n\
                }\n\
                fn down(n: i64, acc: i64) -> i64 { if n == 0 { acc } else { down(n - 1, acc + 1) } }\n\

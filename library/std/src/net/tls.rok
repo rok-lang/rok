@@ -36,6 +36,7 @@ use rok::core::crypto::Secret;
 
 /// What failed.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[non_exhaustive]
 pub enum TlsErrorKind {
     /// The underlying stream failed or closed.
     Io,
@@ -49,13 +50,11 @@ pub enum TlsErrorKind {
 
 /// A failed handshake or connection. `alert` is the TLS alert sent to
 /// the peer (or received, for `PeerAlert`).
+#[derive(Clone, PartialEq, Eq)]
 pub struct TlsError {
-    #[deprecated(since = "0.1.6", note = "use `TlsError::kind()`")]
-    pub kind: TlsErrorKind;
-    #[deprecated(since = "0.1.6", note = "use `TlsError::message()`")]
-    pub msg: str;
-    #[deprecated(since = "0.1.6", note = "use `TlsError::alert()`")]
-    pub alert: u8;
+    pub(sub) kind: TlsErrorKind;
+    pub(sub) msg: str;
+    pub(sub) alert: u8;
 }
 
 impl TlsError {
@@ -174,7 +173,7 @@ fn ec_key(b: Slice<u8>, curve: EcCurve | none) throws (TlsError) -> PrivateKey {
 }
 
 fn rsa_key(b: Slice<u8>) throws (TlsError) -> PrivateKey {
-    let k = try RsaPrivateKey::from_pkcs1_der(b) catch e { throw TlsError::certificate(f"bad RSA private key: {e.msg}"); };
+    let k = try RsaPrivateKey::from_pkcs1_der(b) catch e { throw TlsError::certificate(f"bad RSA private key: {e.message()}"); };
     PrivateKey { key: KeyKind::Rsa(k) }
 }
 
@@ -577,14 +576,14 @@ const fn ip_bytes(s: str) -> List<u8> | none {
     let h = if s.starts_with("[") && s.ends_with("]") { s[1:s.len() - 1] } else { s };
     let v4: rok::std::net::Ipv4Addr | none = try h.parse::<rok::std::net::Ipv4Addr>() catch _ { none };
     match v4 {
-        a: rok::std::net::Ipv4Addr => return [a.octets[0], a.octets[1], a.octets[2], a.octets[3]],
+        a: rok::std::net::Ipv4Addr => return [a.octets()[0], a.octets()[1], a.octets()[2], a.octets()[3]],
         none => {},
     }
     let v6: rok::std::net::Ipv6Addr | none = try h.parse::<rok::std::net::Ipv6Addr>() catch _ { none };
     match v6 {
         a: rok::std::net::Ipv6Addr => {
             let out: List<u8> = [];
-            for x in a.segments {
+            for x in a.segments() {
                 out.push((x >> 8) as u8);
                 out.push(x as u8);
             }
@@ -596,7 +595,7 @@ const fn ip_bytes(s: str) -> List<u8> | none {
 
 fn io_err(e: TlsError) -> IoError {
     let kind = if e.kind == TlsErrorKind::Io { IoErrorKind::UnexpectedEof } else { IoErrorKind::InvalidData };
-    IoError::with_kind(kind, f"tls: {e.msg}")
+    IoError::new(kind, f"tls: {e.msg}")
 }
 
 /// One side of a connection; `Client` and `Server` are views of it.
@@ -620,7 +619,7 @@ impl Shared {
     const fn check(self) throws (IoError) {
         unsafe {
             match self.c[0].failed {
-                m: str => throw IoError::with_kind(IoErrorKind::InvalidData, f"tls: connection failed: {m}"),
+                m: str => throw IoError::new(IoErrorKind::InvalidData, f"tls: connection failed: {m}"),
                 none => {},
             }
         }

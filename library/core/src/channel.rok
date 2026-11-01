@@ -25,9 +25,22 @@ pub enum TrySendError<T> {
     Closed(T),
 }
 
+impl<T> SendError<T> {
+    pub const fn message(self) -> str { "sending on a closed channel" }
+}
+
+impl<T> TrySendError<T> {
+    pub const fn message(self) -> str {
+        match self {
+            TrySendError::Full(_) => "sending on a full channel",
+            TrySendError::Closed(_) => "sending on a closed channel",
+        }
+    }
+}
+
 // Errors (2.14.3) whatever `T` is: the value they carry is not shown.
 impl<T> Display for SendError<T> {
-    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("sending on a closed channel") }
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(self.message()) }
 }
 
 impl<T> Debug for SendError<T> {
@@ -37,12 +50,7 @@ impl<T> Debug for SendError<T> {
 impl<T> Error for SendError<T> {}
 
 impl<T> Display for TrySendError<T> {
-    const fn fmt(self, ref f: Formatter) throws (FmtError) {
-        match self {
-            TrySendError::Full(_) => try f.write_str("sending on a full channel"),
-            TrySendError::Closed(_) => try f.write_str("sending on a closed channel"),
-        }
-    }
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(self.message()) }
 }
 
 impl<T> Debug for TrySendError<T> {
@@ -57,13 +65,13 @@ impl<T> Debug for TrySendError<T> {
 impl<T> Error for TrySendError<T> {}
 
 /// `try_recv_status`: nothing is queued, and a sender is still open.
-pub struct Empty {}
+pub struct Empty;
 
 /// `try_recv_status`: nothing is queued, and every sender has closed.
-pub struct Closed {}
+pub struct Closed;
 
-// By hand: derives would build `Closed {}`, which also names the send
-// errors' variant.
+// By hand: a derive's `Closed` would also name the send errors'
+// variant.
 impl PartialEq for Empty { const fn eq(self, rhs: Empty) -> bool { true } }
 impl Eq for Empty {}
 impl Debug for Empty {
@@ -533,7 +541,7 @@ impl<T> Receiver<T> {
             return v;
         }
         // By path: `Closed` alone is also a variant of the send errors.
-        if closed { rok::core::channel::Closed {} } else { rok::core::channel::Empty {} }
+        if closed { rok::core::channel::Closed } else { rok::core::channel::Empty }
     }
 
     /// Values until the channel closes (also `for v in rx`).

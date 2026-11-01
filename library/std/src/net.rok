@@ -23,13 +23,11 @@ pub mod tls;
 // addresses (302.4)
 
 pub struct Ipv4Addr {
-    #[deprecated(since = "0.1.6", note = "use `Ipv4Addr::octets()`; build one with `Ipv4Addr::new`")]
-    pub octets: [u8; 4];
+    octets: [u8; 4];
 }
 
 pub struct Ipv6Addr {
-    #[deprecated(since = "0.1.6", note = "use `Ipv6Addr::segments()`; build one with `Ipv6Addr::new`")]
-    pub segments: [u16; 8];
+    segments: [u16; 8];
 }
 
 impl Ipv4Addr {
@@ -217,7 +215,7 @@ impl Debug for SocketAddr {
 }
 
 const fn bad_addr(s: str) -> ParseError {
-    ParseError { input: s, pos: 0, reason: "invalid IP address syntax" }
+    ParseError::new(s, 0, "invalid IP address syntax")
 }
 
 /// Digits of `s` in `radix` (at most `max_len` of them) as a number.
@@ -305,7 +303,7 @@ impl FromStr for SocketAddr {
     type Err = ParseError;
     const fn from_str(s: str) throws (ParseError) -> SocketAddr {
         if let a: SocketAddr = parse_socket_addr(s) { return a; }
-        throw ParseError { input: s, pos: 0, reason: "invalid socket address syntax" };
+        throw ParseError::new(s, 0, "invalid socket address syntax");
     }
 }
 
@@ -364,8 +362,9 @@ const MAX_ADDRS: usize = 32;
 fn resolve_raw(host: str, port: u16) throws (IoError) -> List<SocketAddr> {
     unsafe {
         let out: GcBuf<i64> = buf_new(ADDR_WORDS * MAX_ADDRS);
-        let n = try check(rok_net_resolve(host, port, out, MAX_ADDRS) as i64, host);
-        if n == 0 { throw IoError::with_kind(IoErrorKind::NotFound, host + ": no addresses"); }
+        let n = rok_net_resolve(host, port, out, MAX_ADDRS);
+        if n < 0 { throw IoError::resolver(0 - n, host); }
+        if n == 0 { throw IoError::new(IoErrorKind::NotFound, host + ": no addresses"); }
         let addrs: List<SocketAddr> = List::new();
         for i in 0..n as usize { addrs.push(addr_at(out, i * ADDR_WORDS)); }
         addrs
@@ -425,7 +424,7 @@ fn new_sock(family: i32, kind: i32) throws (IoError) -> Sock {
 }
 
 const fn timed_out(what: str) -> IoError {
-    IoError::with_kind(IoErrorKind::TimedOut, what + ": timed out")
+    IoError::new(IoErrorKind::TimedOut, what + ": timed out")
 }
 
 /// The chunk `read_to_end` grows its list by.
@@ -454,7 +453,7 @@ impl Sock {
     /// shared yet.
     const fn live(self) throws (IoError) -> i32 {
         let fd = self.fd();
-        if fd < 0 { throw IoError::with_kind(IoErrorKind::InvalidInput, "socket is closed"); }
+        if fd < 0 { throw IoError::new(IoErrorKind::InvalidInput, "socket is closed"); }
         fd
     }
 
@@ -463,7 +462,7 @@ impl Sock {
     fn enter(self) throws (IoError) -> i32 {
         let fd = unsafe { self.fd[0] };
         if fd < 0 || !use_begin(self.fd, 1) {
-            throw IoError::with_kind(IoErrorKind::InvalidInput, "socket is closed");
+            throw IoError::new(IoErrorKind::InvalidInput, "socket is closed");
         }
         fd
     }
@@ -526,7 +525,7 @@ impl Sock {
     fn block(self, write: i32, what: str) throws (IoError) {
         unsafe {
             if self.opts[0] != 0i64 {
-                throw IoError::with_kind(IoErrorKind::WouldBlock, what + ": operation would block");
+                throw IoError::new(IoErrorKind::WouldBlock, what + ": operation would block");
             }
             let fd = try self.enter();
             let r = rok_net_wait(fd, write, self.opts[1 + write as usize]);
@@ -673,7 +672,7 @@ impl Sock {
         while done < n {
             match try self.write_once(b, at + done, n - done) {
                 k: usize => {
-                    if k == 0 { throw IoError::new("failed to write whole buffer"); }
+                    if k == 0 { throw IoError::new(IoErrorKind::Other, "failed to write whole buffer"); }
                     done += k;
                 }
                 none => try self.block(1, "write"),
@@ -687,7 +686,7 @@ impl Sock {
         while done < n {
             match try self.write_once(b, at + done, n - done) {
                 k: usize => {
-                    if k == 0 { throw IoError::new("failed to write whole buffer"); }
+                    if k == 0 { throw IoError::new(IoErrorKind::Other, "failed to write whole buffer"); }
                     done += k;
                 }
                 none => await task::writable(try self.live()),
@@ -721,7 +720,7 @@ fn connect_start(addr: SocketAddr) throws (IoError) -> (Sock, bool) {
     let r = unsafe { rok_net_connect(try s.live(), words_of(addr)) };
     if r < 0 {
         s.discard();
-        throw IoError::from_os(-r, f"connect {addr}");
+        throw IoError::from_os_code(-r, f"connect {addr}");
     }
     (s, r == 1)
 }
@@ -730,7 +729,7 @@ fn connect_finish(s: Sock, addr: SocketAddr) throws (IoError) -> TcpStream {
     let e = unsafe { rok_net_sock_error(try s.live()) };
     if e < 0 {
         s.discard();
-        throw IoError::from_os(-e, f"connect {addr}");
+        throw IoError::from_os_code(-e, f"connect {addr}");
     }
     TcpStream { sock: s }
 }
@@ -742,7 +741,7 @@ fn connect_wait(addr: SocketAddr, limit: i64) throws (IoError) -> TcpStream {
         if r <= 0 {
             s.discard();
             if r == 0 { throw timed_out(f"connect {addr}"); }
-            throw IoError::from_os(-r, f"connect {addr}");
+            throw IoError::from_os_code(-r, f"connect {addr}");
         }
     }
     try connect_finish(s, addr)
@@ -880,7 +879,7 @@ impl TcpListener {
         if r >= 0 { r = unsafe { rok_net_listen(try s.live(), 128) }; }
         if r < 0 {
             s.discard();
-            throw IoError::from_os(-r, f"bind {addr}");
+            throw IoError::from_os_code(-r, f"bind {addr}");
         }
         TcpListener { sock: s }
     }
@@ -981,7 +980,7 @@ impl UdpSocket {
         let r = unsafe { rok_net_bind(try s.live(), words_of(addr)) };
         if r < 0 {
             s.discard();
-            throw IoError::from_os(-r, f"bind {addr}");
+            throw IoError::from_os_code(-r, f"bind {addr}");
         }
         UdpSocket { sock: s }
     }
@@ -1445,7 +1444,7 @@ impl TcpStream {
 /// resolved).
 pub fn tcp_connect(addr: str | SocketAddr) throws (IoError) -> TcpStream {
     let addrs = try addrs_of(addr);
-    let last = IoError::new("no address to connect to");
+    let last = IoError::new(IoErrorKind::Other, "no address to connect to");
     for a in addrs {
         let s = try TcpStream::connect(a) catch e {
             last = e;
@@ -1459,7 +1458,7 @@ pub fn tcp_connect(addr: str | SocketAddr) throws (IoError) -> TcpStream {
 /// `tcp_connect` that suspends the task while connecting.
 pub async fn tcp_connect_async(addr: str | SocketAddr) throws (IoError) -> TcpStream {
     let addrs = try addrs_of(addr);
-    let last = IoError::new("no address to connect to");
+    let last = IoError::new(IoErrorKind::Other, "no address to connect to");
     for a in addrs {
         let s = try await TcpStream::connect_async(a) catch e {
             last = e;

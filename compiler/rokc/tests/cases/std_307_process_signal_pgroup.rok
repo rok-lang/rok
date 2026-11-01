@@ -4,7 +4,7 @@
 // grouped: true
 // plain: false
 // handled: 2
-// sigkill: SignalError { sig: 9, code: 22 }
+// sigkill: SignalError { signal: Kill, os_code: 22 }
 
 // spec 3.7.1: `Command::process_group(0)` makes the child lead a new
 // process group. 3.7.5: `on_signal(sig, handler)` runs `handler` when the

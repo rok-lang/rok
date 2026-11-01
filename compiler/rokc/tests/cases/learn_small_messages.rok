@@ -7,9 +7,9 @@
 // expect-error: 18:25: mismatched types: `let d` expects `Dict<str, i32>`, found `()`
 // expect-error: help: `{}` is an empty block, not an empty `Dict`; write `Dict::new()`
 // expect-error: 20:16: `str` can't be thrown: it does not implement `Error`
-// expect-error: help: throw a `ValueError`: `throw ValueError { msg: "negative" };`
+// expect-error: help: throw a `ValueError`: `throw ValueError::new("negative");`
 // expect-error: 24:24: `Oops` can't be thrown: it does not implement `Error`
-// expect-error: help: add `impl Error for Oops {}` (it needs `Display` and `Debug`), or throw a `ValueError`: `throw ValueError { msg: .. };`
+// expect-error: help: add `impl Error for Oops {}` (it needs `Display` and `Debug`), or throw a `ValueError`: `throw ValueError::new(..);`
 // forbid-error: is not covered by the enclosing function
 // forbid-error: can finish without returning
 fn add(a: i32, b: i32) -> i32 {

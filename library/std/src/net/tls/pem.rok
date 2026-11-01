@@ -18,7 +18,7 @@ pub(pkg) fn blocks(text: str, label: str) throws (TlsError) -> List<List<u8>> {
         if stop is none { throw TlsError::certificate(f"PEM: unterminated {label}"); }
         let s = stop ?? 0;
         let body: str = tail[0:s].split_whitespace().collect();
-        out.push(try base64_decode(body) catch e { throw TlsError::certificate(f"PEM {label}: {e.msg}"); });
+        out.push(try base64_decode(body) catch e { throw TlsError::certificate(f"PEM {label}: {e.message()}"); });
         rest = tail[s + end.len():tail.len()];
     }
     out

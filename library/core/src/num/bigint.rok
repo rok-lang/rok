@@ -789,8 +789,8 @@ impl Int {
             let out: GcBuf<i64> = buf_new(1);
             let st = rok_str_parse_int(s, radix, 1, 64u32, out);
             if st == 0 { return Int::from_i64(out[0]); }
-            if st == 1 { throw ParseError { input: s, pos: 0, reason: "empty string" }; }
-            if st != 3 { throw ParseError { input: s, pos: 0, reason: "invalid digit" }; }
+            if st == 1 { throw ParseError::new(s, 0, "empty string"); }
+            if st != 3 { throw ParseError::new(s, 0, "invalid digit"); }
             // Past `i64`: the checked digits, by halves over the powers
             // pw[j] = chunk^(2^j).
             let bs = s.as_bytes();
@@ -1467,7 +1467,7 @@ impl FromStr for Int {
 
 // conversions (stdlib 2.11.8, 2.1.7)
 
-const fn overflow(ty: str) -> OverflowError { OverflowError { op: "try_from", ty: ty } }
+const fn overflow(ty: str) -> OverflowError { OverflowError::new("try_from", ty) }
 
 /// The low 64 bits of the two's complement form (`wrapping_into`).
 const fn low_bits(v: Int) -> u64 {

@@ -40,10 +40,15 @@ impl NicheFloat for f64 {
 }
 
 /// What `NonZero::try_from(0)` throws (2.2.8).
+#[derive(Clone, PartialEq, Eq)]
 pub struct ZeroError;
 
+impl ZeroError {
+    pub const fn message(self) -> str { "zero is not a valid `NonZero` value" }
+}
+
 impl Display for ZeroError {
-    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("zero is not a valid `NonZero` value") }
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(self.message()) }
 }
 
 impl Debug for ZeroError {
@@ -295,7 +300,7 @@ impl<F: NicheFloat> Div for NonNan<F> {
 impl<F: NicheFloat> TryFrom<F> for NonNan<F> {
     fn try_from(value: F) throws (ConversionError) -> NonNan<F> {
         let v: NonNan<F> = NonNan::new(value) else {
-            throw ConversionError { msg: "NaN is not a valid `NonNan` value" };
+            throw ConversionError::new("NaN is not a valid `NonNan` value");
         };
         v
     }
@@ -389,14 +394,14 @@ impl<F: NicheFloat> Mul for Finite<F> {
 const fn finite<F: NicheFloat>(r: F, op: str) -> Result<Finite<F>, OverflowError> {
     match Finite::new(r) {
         f: Finite<F> => Result::Ok(f),
-        none => Result::Err(OverflowError { op, ty: "Finite" }),
+        none => Result::Err(OverflowError::new(op, "Finite")),
     }
 }
 
 impl<F: NicheFloat> TryFrom<F> for Finite<F> {
     fn try_from(value: F) throws (ConversionError) -> Finite<F> {
         let v: Finite<F> = Finite::new(value) else {
-            throw ConversionError { msg: "NaN / ±∞ is not a valid `Finite` value" };
+            throw ConversionError::new("NaN / ±∞ is not a valid `Finite` value");
         };
         v
     }

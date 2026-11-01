@@ -9,7 +9,7 @@
 // Spec 2.11.9: `impl TryFrom<str> for i32` with `type Error =
 // OverflowError`, so `try "42".try_into()` parses; every fixed-width
 // integer has it, by its `FromStr`. Empty text, a bad digit and an
-// out-of-range value all throw `OverflowError { op: "try_from", ty }`.
+// out-of-range value all throw `OverflowError::new("try_from", ty)`.
 const SEVEN: i32 = try! i32::try_from("7");
 
 fn main() throws (OverflowError) {
@@ -24,9 +24,9 @@ fn main() throws (OverflowError) {
     let d: u32 | none = try? "-1".try_into();
     let e: isize | none = try? isize::try_from("1.5");
     println(f"{a:?} {c:?} {d:?} {e:?}");
-    let x = try f"{u8::try_from("300")}" catch e: OverflowError { f"{e.op} {e.ty}" };
-    let y = try f"{i32::try_from("x")}" catch e: OverflowError { f"{e.op} {e.ty}" };
-    let z = try f"{usize::try_from("")}" catch e: OverflowError { f"{e.op} {e.ty}" };
+    let x = try f"{u8::try_from("300")}" catch e: OverflowError { f"{e.operation()} {e.type_name()}" };
+    let y = try f"{i32::try_from("x")}" catch e: OverflowError { f"{e.operation()} {e.type_name()}" };
+    let z = try f"{usize::try_from("")}" catch e: OverflowError { f"{e.operation()} {e.type_name()}" };
     println(f"{x} / {y} / {z}");
     println(f"{SEVEN}");
 }

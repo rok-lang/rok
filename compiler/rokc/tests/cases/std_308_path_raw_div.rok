@@ -14,7 +14,7 @@
 // spec 3.8.3: `Div<str>` and `Div<Path>` on `Path` (and `/=`); 3.8.4 /
 // 3.8.5: `RawPath` (`from_bytes`, `as_bytes`, `try_to_path`,
 // `to_path_lossy`), `Path::to_raw`, `Path::try_from(raw)` throwing
-// `NonUtf8Error`.
+// `Utf8Error`.
 use rok::std::path::{Path, RawPath};
 
 fn main() {
@@ -27,7 +27,7 @@ fn main() {
     let gp = try Path::try_from(good) catch _ { Path::new("?") };
     println(f"ok {gp.as_str()} {gp.to_raw() == good}");
     let bad = RawPath::from_bytes([97u8, 0xFFu8, 98u8]);
-    let msg = try bad.try_to_path().as_str() catch e { f"{e.valid_up_to}" };
+    let msg = try bad.try_to_path().as_str() catch e { f"{e.valid_up_to()}" };
     println(f"bad {msg} {bad.to_path_lossy().as_str()}");
     // A truncated sequence is one replacement (a maximal subpart, as
     // `str::from_utf8_lossy`); a stray continuation byte is its own.

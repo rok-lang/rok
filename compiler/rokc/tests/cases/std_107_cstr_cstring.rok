@@ -35,10 +35,10 @@ fn main() {
     let m = xy.into_bytes_with_nul().len();
     println(f"with_nul {try! ok.to_str()} {ok.len()} {try! xy.as_c_str().to_str()} {n} {m}");
     try CStr::from_bytes_with_nul("hi".as_bytes()) catch e: FromBytesWithNulError {
-        println(f"not nul terminated: {e.reason}");
+        println(f"not nul terminated: {e.message()}");
     };
     try CStr::from_bytes_with_nul("h\0i\0".as_bytes()) catch e: FromBytesWithNulError {
-        println(f"interior: {e.reason}");
+        println(f"interior: {e.message()}");
     };
-    try CString::from_str("a\0b") catch e: NulError { println(f"nul at {e.position}"); };
+    try CString::from_str("a\0b") catch e: NulError { println(f"nul at {e.position()}"); };
 }

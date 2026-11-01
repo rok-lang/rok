@@ -9,21 +9,21 @@
 
 // Built-in error types, the `assert` family, and `Result` conversions.
 fn pick(n: i32) throws (ConversionError | ValueError | OverflowError) -> i32 {
-    if n == 0 { throw ConversionError { msg: "str" }; }
-    if n == 1 { throw ValueError { msg: "bad input" }; }
-    if n == 2 { throw OverflowError { op: "mul", ty: "u8" }; }
+    if n == 0 { throw ConversionError::new("str"); }
+    if n == 1 { throw ValueError::new("bad input"); }
+    if n == 2 { throw OverflowError::new("mul", "u8"); }
     n
 }
 
 fn describe(n: i32) -> str {
     try { f"ok {pick(n)}" }
-    catch e: ConversionError { f"conversion: {e.msg}" }
-    catch e: ValueError { f"value: {e.msg}" }
-    catch e: OverflowError { f"overflow: {e.op} {e.ty}" }
+    catch e: ConversionError { f"conversion: {e.message()}" }
+    catch e: ValueError { f"value: {e.message()}" }
+    catch e: OverflowError { f"overflow: {e.operation()} {e.type_name()}" }
 }
 
 fn parse_digit(s: str) throws (ParseError) -> i32 {
-    if s.len() != 1 { throw ParseError { input: s, pos: 0, reason: "not a digit" }; }
+    if s.len() != 1 { throw ParseError::new(s, 0, "not a digit"); }
     7
 }
 
@@ -37,14 +37,14 @@ fn first_ok(rs: List<Result<i32, ParseError>>) throws (ParseError) -> i32 {
 }
 
 fn main() {
-    let o = OverflowError { op: "add", ty: "i32" };
+    let o = OverflowError::new("add", "i32");
     println(f"{describe(0)} {describe(1)} {describe(2)} {o}");
     let p = try parse_digit("x1") catch e { print(f"parse: {e} "); 0 };
-    let c = ConversionError { msg: "odd" };
-    let z = try NonZero::<i32>::try_from(0) catch e: ZeroError { print(f"{c.msg} "); NonZero::new(1) ?? panic("zero") };
+    let c = ConversionError::new("odd");
+    let z = try NonZero::<i32>::try_from(0) catch e: ZeroError { print(f"{c.message()} "); NonZero::new(1) ?? panic("zero") };
     println(f"zero: {z.get() == 1 && p == 0}");
     let t = try parse_digit("7") catch e { 0 };
-    println(f"typed {t} / {o.ty}");
+    println(f"typed {t} / {o.type_name()}");
     let r: Result<i32, ParseError> = Result::catching(|| try parse_digit("5"));
     let bad: Result<i32, ParseError> = Result::catching(|| try parse_digit("55"));
     let a: i32 | none = try? parse_digit("x9");

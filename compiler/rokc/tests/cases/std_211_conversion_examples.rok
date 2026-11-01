@@ -22,8 +22,8 @@ struct Port { n: i32; }
 impl TryFrom<str> for Port {
     type Error = ValueError;
     fn try_from(s: str) throws (ValueError) -> Port {
-        let n: i32 = try s.parse() catch _ { throw ValueError { msg: "not a port" }; };
-        if n < 0 || n > 65535 { throw ValueError { msg: "out of range" }; }
+        let n: i32 = try s.parse() catch _ { throw ValueError::new("not a port"); };
+        if n < 0 || n > 65535 { throw ValueError::new("out of range"); }
         Port { n: n }
     }
 }
