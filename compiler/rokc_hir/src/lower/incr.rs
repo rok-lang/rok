@@ -127,6 +127,7 @@ pub(super) enum Read {
     TraitInfo(String),
     NegAuto(String, String),
     NonExhaustive(String),
+    Sealed(String),
     /// A function's `#[deprecated]` / `#[deprecated_safe]`.
     FnMark(FunctionId),
     /// A field's, const's or static's.
@@ -314,6 +315,7 @@ codec_enum!(Read {
     TraitInfo(x0),
     NegAuto(x0, x1),
     NonExhaustive(x0),
+    Sealed(x0),
     FnMark(x0),
     Mark(x0),
     BoundMethod(x0, x1),
@@ -1648,6 +1650,9 @@ impl Incr<'_> {
             }
             Read::NonExhaustive(k) => {
                 f.add(&env.non_exhaustive.contains(k));
+            }
+            Read::Sealed(k) => {
+                f.add(&env.sealed.contains(k));
             }
             Read::FnMark(id) => {
                 f.add(&env.fn_marks.get(id).cloned());

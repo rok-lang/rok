@@ -78,6 +78,7 @@ pub enum AtomicOrdering {
 }
 
 /// The element types `Atomic<T>` supports.
+#[sealed]
 pub trait AtomicPrimitive {}
 // Every integer and bool is an atomic primitive (spec 6.8.12).
 #[impl_macro(atomic_prims)] @macro {

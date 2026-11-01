@@ -1,0 +1,18 @@
+// spec: §5.6.8 §2.3.3
+// rokc-arg: --extern ldep=tests/cases/literal_omit_private_nodefault_error/ldep
+// expect-error: struct `ldep::Keyed` has private field `key` with no default, so a literal here cannot leave it out: build the value with a function of its module instead (a constructor such as `new`)
+// expect-error: src/main.rok:16:15
+
+// A literal of another package's struct may leave out a field it cannot
+// see only when the field has a default.
+use ldep::Keyed;
+use ldep::Opts;
+
+fn main() {
+    let o = Opts { name: "a" };
+    let k = Keyed::new(3);
+    println(f"{o.depth} {o.seed()} {o.name} {k.label} {k.key()}");
+    // No default for `key`.
+    let bad = Keyed { label: "y" };
+    println(bad.label);
+}

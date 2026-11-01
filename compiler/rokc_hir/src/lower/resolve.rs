@@ -340,6 +340,12 @@ pub(super) fn own_library_import<'a>(
 
 /// The package of `module`: `rok::<tier>` (each tier its own, spec 5.7), a
 /// dependency's name, or `""` for the one being compiled.
+/// Whether `module` is in one of the toolchain's packages (`rok::bare`,
+/// `rok::core`, `rok::std`).
+pub(super) fn is_toolchain_module(module: &str) -> bool {
+    package_of(module).starts_with("rok::")
+}
+
 pub(super) fn package_of(module: &str) -> &str {
     let first = module.split("::").next().unwrap_or_default();
     if first == "rok" {

@@ -1,0 +1,26 @@
+// spec: §6.2.15
+// rokc-arg: --extern sdep=tests/cases/sealed_impl_foreign_error/sdep
+// expect-error: `impl Shape for Square`: trait `Shape` is sealed, so only `sdep` implements it
+// expect-error: = note: a sealed trait still works in bounds and calls: use the types that already implement it
+// expect-error: `impl AtomicPrimitive for Big`: trait `AtomicPrimitive` is sealed, so only `rok::core` implements it
+
+// A sealed trait has impls in its own package only; bounds on it and
+// calls of its methods work everywhere.
+use sdep::Shape;
+use sdep::Tri;
+
+struct Square {}
+
+impl Shape for Square {
+    fn sides(self) -> i32 { 4 }
+}
+
+struct Big { a: i64; b: i64; }
+
+impl sync::AtomicPrimitive for Big {}
+
+fn count<T: Shape>(x: T) -> i32 { x.sides() }
+
+fn main() {
+    println(f"{count(Tri {})} {sdep::sides_of(Tri {})}");
+}

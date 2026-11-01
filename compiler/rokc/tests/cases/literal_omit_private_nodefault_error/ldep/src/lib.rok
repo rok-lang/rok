@@ -1,0 +1,21 @@
+/// An options record: pub fields with defaults, one private.
+pub struct Opts {
+    pub depth: i32 = 4;
+    pub name: str;
+    seed: i64 = 7;
+}
+
+/// A record with a private field that has no default.
+pub struct Keyed {
+    pub label: str = "k";
+    key: i64;
+}
+
+impl Keyed {
+    pub fn new(key: i64) -> Keyed { Keyed { key } }
+    pub fn key(self) -> i64 { self.key }
+}
+
+impl Opts {
+    pub fn seed(self) -> i64 { self.seed }
+}

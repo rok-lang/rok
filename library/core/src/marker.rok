@@ -377,6 +377,7 @@ pub(pkg) fn transfer_flat<T>() -> bool;
 /// What a hand-off gives the new owner: `x` with a copy of every
 /// collection it reaches (`x` itself, with no call, when there are none).
 #[intrinsic("rok.hand_over")]
+#[internal]
 pub fn hand_over<T>(x: T) -> T;
 
 /// `hand_over` of `x` into a slot that holds `kept`: what `kept` reaches

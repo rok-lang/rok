@@ -12,11 +12,15 @@ pub(super) fn lower_block(ctx: &mut LowerCtx<'_>, block: &Block) -> HirBlock {
             StmtKind::LetStruct {
                 path,
                 fields,
-                rest: _,
+                rest,
                 ty,
                 init,
             } => ctx.at_span(s.span, |ctx| {
-                lower_let_struct(ctx, path, fields, ty.as_ref(), init, s.span, &mut stmts);
+                let ty = lower_let_struct(ctx, path, fields, ty.as_ref(), init, s.span, &mut stmts);
+                if let (false, Some(ty)) = (*rest, ty) {
+                    let listed: Vec<&str> = fields.iter().map(|(f, _)| f.as_str()).collect();
+                    super::pattern::missing_rest(ctx, s.span, path, &listed, &ty);
+                }
             }),
             StmtKind::LetPattern { pat, ty, init } => ctx.at_span(s.span, |ctx| {
                 guard_sink(ctx, init);
@@ -319,7 +323,7 @@ fn local_item_generics<'a>(item: &'a Item, out: &mut Vec<&'a str>) {
 }
 
 /// `let S { f1, f2: alias, .. } [: T] = init;` → temp local + one field
-/// read per binding.
+/// read per binding; the struct type when it matched.
 pub(super) fn lower_let_struct(
     ctx: &mut LowerCtx<'_>,
     path: &AstPath,
@@ -328,7 +332,7 @@ pub(super) fn lower_let_struct(
     init: &Expr,
     span: rokc_diagnostic::Span,
     stmts: &mut Vec<HirStmt>,
-) {
+) -> Option<HirTy> {
     let pre_ty = ty.map(|t| ctx.resolve_ast_ty(t));
     let init_h = lower_expected(ctx, init, pre_ty.clone().unwrap_or(HirTy::Unknown));
     let init_h = match &pre_ty {
@@ -352,7 +356,7 @@ pub(super) fn lower_let_struct(
             for (_, bind) in fields {
                 ctx.declare(Some(bind.clone()), HirTy::Unknown);
             }
-            return;
+            return None;
         }
         (HirTy::Struct(sid), Some(n)) if *sid == n => *sid,
         (HirTy::Struct(sid), None) if path.segments.is_empty() => *sid,
@@ -368,7 +372,7 @@ pub(super) fn lower_let_struct(
             for (_, bind) in fields {
                 ctx.declare(Some(bind.clone()), HirTy::Unknown);
             }
-            return;
+            return None;
         }
     };
     let def = ctx.struct_def(sid);
@@ -396,6 +400,7 @@ pub(super) fn lower_let_struct(
         };
         stmts.push(ctx.declare_var(bind_name, field_ty, read, span));
     }
+    Some(init_ty)
 }
 
 /// `let (a, b, ..rest) [: T] = init;` → fresh tuple local plus per-name
@@ -2847,6 +2852,20 @@ pub(super) fn lower_struct_init(
             (Some(v), _) => out.push(v),
             (None, Some(default_expr)) => {
                 out.push(field_default(ctx, &def.name, &f.name, &f.ty, default_expr));
+            }
+            // Spec 5.6.8: a field this code cannot see is omitted only
+            // when it has a default.
+            (None, None) if ctx.field_hidden(struct_id, &f.name).is_some() => {
+                ctx.emit_error(
+                    rokc_diagnostic::ErrorKind::Type,
+                    format!(
+                        "struct `{ty_display}` has private field `{}` with no default, so a \
+                         literal here cannot leave it out: build the value with a function \
+                         of its module instead (a constructor such as `new`)",
+                        f.name
+                    ),
+                );
+                out.push(poison(span));
             }
             (None, None) => {
                 ctx.emit_error(
@@ -7660,7 +7679,7 @@ pub(super) fn call_value(
 
 /// A use at `at` of const or static `key`: its marks' warnings.
 fn item_marked(ctx: &LowerCtx<'_>, what: &str, key: &str, at: rokc_diagnostic::Span) {
-    if !ctx.marks_apply() {
+    if !ctx.marks_checked() {
         return;
     }
     // Checking a const's own value is no use of it.
@@ -7674,7 +7693,7 @@ fn item_marked(ctx: &LowerCtx<'_>, what: &str, key: &str, at: rokc_diagnostic::S
 
 /// A use at `at` of function `id`: its marks' warnings.
 fn fn_marked(ctx: &LowerCtx<'_>, id: FunctionId, at: rokc_diagnostic::Span) {
-    if ctx.hook_call.replace(false) || !ctx.marks_apply() {
+    if ctx.hook_call.replace(false) || !ctx.marks_checked() {
         return;
     }
     if let Some((name, mark)) = ctx.env.fn_mark(id) {
@@ -7690,7 +7709,7 @@ fn fn_marked(ctx: &LowerCtx<'_>, id: FunctionId, at: rokc_diagnostic::Span) {
 /// A use at `at` of generic function or method template `def`
 /// (`m::Box__get` for `Box::get`).
 fn template_marked(ctx: &LowerCtx<'_>, def: &FnDef, at: rokc_diagnostic::Span) {
-    if ctx.hook_call.replace(false) || !ctx.marks_apply() {
+    if ctx.hook_call.replace(false) || !ctx.marks_checked() {
         return;
     }
     let Some(mark) = crate::marks::mark_of(&def.attrs) else {
@@ -8644,6 +8663,7 @@ fn lower_path_call(
             if generic_def.is_unsafe {
                 check_unsafe_call(ctx, &full);
             }
+            template_marked(ctx, generic_def, span);
             let targs = p.segments.last().map_or(&[][..], |s| s.generics.as_slice());
             let name = leaf_name(&generic_def.name).to_owned();
             if op == Intrinsic::AddrOf {

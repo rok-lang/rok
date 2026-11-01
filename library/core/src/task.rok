@@ -1214,7 +1214,7 @@ static HOSTED: GcBuf<bool> = unsafe { buf_new(1) };
 
 /// This thread works as the host loop's guest worker (`host_leave`
 /// ends it): tasks spawned with `spawn_local` belong to that worker.
-#[deprecated(since = "0.1.6", note = "internal to WebAssembly component exports, which call it, not public in 0.2.0: export an `async fn`")]
+#[internal]
 pub fn host_enter() {
     unsafe {
         let pool = executor();
@@ -1235,7 +1235,7 @@ pub fn host_enter() {
 }
 
 /// Ends `host_enter`; anywhere else (in `block_on`, a task) it panics.
-#[deprecated(since = "0.1.6", note = "internal to WebAssembly component exports, which call it, not public in 0.2.0: export an `async fn`")]
+#[internal]
 #[track_caller]
 pub fn host_leave() {
     unsafe {
@@ -1251,7 +1251,7 @@ pub fn host_leave() {
 /// task and due timer, until none is left; then the wait for sockets and
 /// timers, at most `slice()` ns (< 0: until nothing is left to wait for;
 /// 0: none), and what it woke. Whether a socket or timer still waits.
-#[deprecated(since = "0.1.6", note = "internal to WebAssembly component exports, which call it, not public in 0.2.0: export an `async fn`")]
+#[internal]
 pub fn host_run(slice: fn() -> i64) -> bool {
     let w = current_worker();
     let pool = w.pool;
@@ -2018,6 +2018,7 @@ const fn io_key(fd: i32, write: i32) -> usize {
 
 /// Wake every task waiting on `fd`'s readiness: after a `shutdown` or
 /// a close, which may raise no poller event (stdlib 2.18.1).
+#[internal]
 pub fn wake_io(fd: i32) {
     unpark(io_key(fd, 0));
     unpark(io_key(fd, 1));

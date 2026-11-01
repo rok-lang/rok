@@ -1,0 +1,16 @@
+/// Fields added in later releases get defaults.
+#[non_exhaustive]
+pub struct Config {
+    pub port: i32;
+    pub verbose: bool = false;
+}
+
+impl Config {
+    pub fn local() -> Config { Config { port: 80 } }
+}
+
+// Its own package matches it without `..`.
+pub fn port_of(c: Config) -> i32 {
+    let Config { port, verbose } = c;
+    if verbose { 0 } else { port }
+}

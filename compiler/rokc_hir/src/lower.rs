@@ -63,8 +63,8 @@ use mono::{
 };
 use pattern::{int_fits, lower_match, lower_pattern};
 use resolve::{
-    COPY_TRAIT, DEFAULT_TRAIT, EQ_TRAIT, GC_BUF, impl_module, item_module, leaf_name, mangle_inst,
-    method_target_for, module_display, module_of, package_of, resolve_name,
+    COPY_TRAIT, DEFAULT_TRAIT, EQ_TRAIT, GC_BUF, impl_module, is_toolchain_module, item_module,
+    leaf_name, mangle_inst, method_target_for, module_display, module_of, package_of, resolve_name,
     resolve_ty_with_structs, substitute_params, ty_mangle,
 };
 use throws::{
@@ -1385,6 +1385,8 @@ struct Tables<'a> {
     decls: Vec<MethodOrFn<'a>>,
     /// `#[non_exhaustive]` structs and enums (spec 6.2.10), by name.
     non_exhaustive: std::collections::HashSet<String>,
+    /// `#[sealed]` traits (spec 6.2.15), by name.
+    sealed: std::collections::HashSet<String>,
     /// Marked functions and methods (spec 6.2.7, 6.2.14): the name a
     /// warning shows (`P::new`), the marks.
     fn_marks: HashMap<FunctionId, (String, crate::marks::Mark)>,
@@ -1599,6 +1601,11 @@ impl<'a> Env<'a> {
         self.non_exhaustive.contains(name)
     }
 
+    fn is_sealed(&self, name: &str) -> bool {
+        incr::read(|| incr::Read::Sealed(name.to_owned()));
+        self.sealed.contains(name)
+    }
+
     /// Function `id`'s marks, with the name a warning shows.
     fn fn_mark(&self, id: FunctionId) -> Option<&(String, crate::marks::Mark)> {
         incr::read(|| incr::Read::FnMark(id));
@@ -1719,6 +1726,7 @@ impl Tables<'_> {
             names: TypeNames::empty(),
             decls: Vec::new(),
             non_exhaustive: std::collections::HashSet::new(),
+            sealed: std::collections::HashSet::new(),
             fn_marks: HashMap::new(),
             marks: HashMap::new(),
             mark_pkg: None,
@@ -4573,7 +4581,7 @@ impl<'a> LowerCtx<'a> {
     /// `check_field_visible`, a marked field's warning at `at`.
     fn check_field_visible_at(&self, sid: StructId, field: &str, at: Span) {
         // The struct's own methods still set and read its marked fields.
-        if self.marks_apply() && self.self_ty != Some(HirTy::Struct(sid)) {
+        if self.marks_checked() && self.self_ty != Some(HirTy::Struct(sid)) {
             let name = self.struct_def(sid).name;
             let base = name.split("__").next().unwrap_or(&name);
             if let Some(m) = self.env.mark(&format!("{base}.{field}")) {
@@ -4603,11 +4611,47 @@ impl<'a> LowerCtx<'a> {
             .is_some_and(|p| package_of(&self.current_module) == p)
     }
 
+    /// Uses here are checked against marks at all: the built package's,
+    /// or any code outside the toolchain's packages (`#[internal]` holds
+    /// in a dependency built from source too).
+    fn marks_checked(&self) -> bool {
+        self.marks_apply() || !is_toolchain_module(&self.current_module)
+    }
+
     /// A use at `at` of `name`, a `what` with marks `mark` (spec 6.2.7,
-    /// 6.2.14): a `deprecated` warning, and outside `unsafe` a
-    /// `deprecated_safe` one. Only the built package's own uses warn.
+    /// 6.2.14, 6.2.16): an error for an `internal` one, else a `deprecated`
+    /// warning, and outside `unsafe` a `deprecated_safe` one. Only the
+    /// built package's own uses are checked.
     fn use_marked(&self, what: &str, name: &str, mark: &crate::marks::Mark, at: Span) {
-        if !self.marks_apply() || at.is_dummy() {
+        if at.is_dummy() {
+            return;
+        }
+        if mark.internal && !is_toolchain_module(&self.current_module) {
+            let e = rokc_diagnostic::RokDiagnostic::error(
+                rokc_diagnostic::ErrorKind::Module,
+                at,
+                format!(
+                    "{what} `{name}` is internal to the Rok toolchain: only `rok::bare`, \
+                     `rok::core` and `rok::std` may use it (spec 6.2.16)"
+                ),
+            )
+            .with_note(
+                "it is not part of the standard library's API; use the public items the \
+                 docs list instead",
+            );
+            let seen = self
+                .env
+                .sink
+                .diagnostics
+                .borrow()
+                .iter()
+                .any(|d| d.primary == e.primary && d.message == e.message);
+            if !seen {
+                self.emit_diag(e);
+            }
+            return;
+        }
+        if !self.marks_apply() {
             return;
         }
         let mut out = Vec::new();

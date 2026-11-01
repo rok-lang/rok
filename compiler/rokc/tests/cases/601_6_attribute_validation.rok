@@ -12,6 +12,9 @@
 // expect-error: unknown cfg combinator `either`
 // expect-error: `#[cfg_attr]` takes a predicate and at least one attribute
 // expect-error: `#[path]` cannot be attached to a function
+// expect-error: `#[sealed]` cannot be attached to a function
+// expect-error: `#[internal]` cannot be attached to a trait
+// expect-error: malformed `#[sealed]`: expected no arguments
 
 #[mystery]
 fn f() -> i32 { return 1; }
@@ -47,6 +50,15 @@ fn ca() {}
 
 #[path("x.rok")]
 fn p() {}
+
+#[sealed]
+fn sl() {}
+
+#[internal]
+trait It {}
+
+#[sealed(1)]
+trait Sl {}
 
 // Well-formed ones are accepted.
 #[inline(always)]
