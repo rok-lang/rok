@@ -8,6 +8,7 @@
 use super::expr::{block_of, lower_infix, splice, spread_item_at};
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use rokc_diagnostic::Code;
 
 const LIST: &str = "rok::core::collections::list::List";
 const SLICE: &str = "rok::core::collections::slice::Slice";
@@ -217,6 +218,7 @@ pub(super) fn lower(ctx: &mut LowerCtx<'_>, e: &Expr) -> HirExpr {
         return match &tree.kind {
             ExprKind::OpInfix { op, lhs, rhs } => lower_infix(ctx, op, lhs, rhs, span),
             _ => ctx.error_expr(
+                Code::BROADCAST,
                 span,
                 "a broadcast `f.(..)` needs a `List`, `Slice` or array argument (spec 3.3.3)"
                     .to_owned(),
@@ -233,6 +235,7 @@ pub(super) fn lower(ctx: &mut LowerCtx<'_>, e: &Expr) -> HirExpr {
     let all_fixed = fixed.len() == elems.len();
     if let Some(n) = fixed.iter().find(|n| **n != fixed[0]) {
         return ctx.error_expr(
+            Code::BROADCAST,
             span,
             format!(
                 "broadcast over arrays of lengths {} and {n} (stdlib 2.6.4)",

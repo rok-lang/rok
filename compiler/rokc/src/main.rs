@@ -38,6 +38,8 @@ struct Args {
     cfg: Vec<String>,
     /// `--print <what>` (`cfg`, `target-list`, `target-spec`), then exit.
     print: Option<String>,
+    /// `--explain <code>`: print the code's explanation, then exit.
+    explain: Option<String>,
     /// `--target`: a built-in target or a `<name>.rokon` file; `None` is
     /// the host.
     target: Option<String>,
@@ -220,6 +222,7 @@ fn parse_args(raw: Vec<String>, mut tail: Vec<OsString>) -> Args {
             "--bootstrap" => a.bootstrap.push(value(&name, inline, &mut it).into()),
             "--cfg" => a.cfg.push(value(&name, inline, &mut it)),
             "--print" => a.print = Some(value(&name, inline, &mut it)),
+            "--explain" => a.explain = Some(value(&name, inline, &mut it)),
             "--extern" => a.externs.push(parse_extern(&value(&name, inline, &mut it))),
             "--extern-feature" => {
                 let v = value(&name, inline, &mut it);
@@ -351,7 +354,7 @@ fn parse_args(raw: Vec<String>, mut tail: Vec<OsString>) -> Args {
             _ => a.positional.push(arg),
         }
     }
-    if a.cmd.is_empty() && a.print.is_none() {
+    if a.cmd.is_empty() && a.print.is_none() && a.explain.is_none() {
         usage_error("missing command (e.g. `build`)");
     }
     set_overflow_checks(&mut a);
@@ -511,6 +514,13 @@ fn real_main() {
     let a = parse_args(raw, tail);
     term::set_choice(a.color);
     rokc_interface::set_report_depth(a.json, term::depth(Stream::Stderr));
+    if let Some(code) = &a.explain {
+        match rokc_interface::explain(code) {
+            Ok(text) => print!("{text}"),
+            Err(e) => usage_error(&e),
+        }
+        return;
+    }
     match a.print.as_deref() {
         None | Some("cfg") => {}
         Some("target-list") => {

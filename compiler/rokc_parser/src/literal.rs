@@ -20,7 +20,7 @@
 use std::sync::Arc;
 
 use rokc_ast::{Expr, ExprKind, LitArg, LitCand, Literal, Path, PathSegment};
-use rokc_diagnostic::{ErrorKind, RokDiagnostic, Span};
+use rokc_diagnostic::{Code, RokDiagnostic, Span};
 use rokc_lexer::lexer::{FLOAT_SUFFIXES, INT_SUFFIXES};
 use rokc_lexer::{Lexer, Token, TokenKind};
 
@@ -488,7 +488,7 @@ impl Parser<'_> {
         let start = self.pos;
         let Some(close) = balanced_close(self.tokens, start) else {
             let s = self.peek_span();
-            self.error(s, "unclosed `#[literal(`");
+            self.error(Code::INVALID_LITERAL_HANDLER, s, "unclosed `#[literal(`");
             return rokc_ast::AttrBody::Empty;
         };
         self.pos = close + 1;
@@ -509,7 +509,7 @@ impl Parser<'_> {
             Err((span, m)) => {
                 self.diagnostics.push(
                     RokDiagnostic::error(
-                        ErrorKind::Meta,
+                        Code::INVALID_LITERAL_HANDLER,
                         span,
                         format!("invalid `#[literal]`: {m}"),
                     )
@@ -597,6 +597,7 @@ impl Parser<'_> {
         self.bump();
         if cands.is_empty() {
             self.error(
+                Code::INVALID_LITERAL_HANDLER,
                 span,
                 format!(
                     "unknown numeric literal suffix `{suffix}` - no `#[literal(number \

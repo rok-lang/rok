@@ -44,7 +44,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::rc::Rc;
 
-use rokc_diagnostic::{ErrorKind, RokDiagnostic, Span};
+use rokc_diagnostic::{Code, RokDiagnostic, Span};
 use rokc_ir_common::{ConstVal, FunctionId, LocalId, PrimOp, PrimTy};
 
 use super::send_check::{Child, each_child};
@@ -2058,7 +2058,7 @@ fn walk(c: &Checker<'_>, f: &HirFunction) -> WalkOut {
         if f.is_async || body.trailing.as_ref().is_some_and(coro) {
             w.diags.push(
                 RokDiagnostic::error(
-                    ErrorKind::Handoff,
+                    Code::THREAD_LOCAL_ESCAPE,
                     f.span,
                     "an `async` closure can't be given to `with`: its future would keep this \
                      thread's `ThreadLocal` value past the call, and may resume on another \
@@ -2321,7 +2321,7 @@ impl<'h> Walk<'_, 'h> {
             let line = self.line(site, at);
             let d = if p.1.is_empty() && self.is_guard(p.0) {
                 RokDiagnostic::error(
-                    ErrorKind::Handoff,
+                    Code::USE_AFTER_UNLOCK,
                     at,
                     format!(
                         "`{x}` is the guard `{gname}`, and `{gname}`'s `using` block released \
@@ -2335,7 +2335,7 @@ impl<'h> Walk<'_, 'h> {
                 ))
             } else {
                 RokDiagnostic::error(
-                    ErrorKind::Handoff,
+                    Code::USE_AFTER_UNLOCK,
                     at,
                     format!(
                         "`{x}` holds a copy of the guard `{gname}`, whose `using` block released \
@@ -2533,7 +2533,7 @@ impl<'h> Walk<'_, 'h> {
         at: Span,
     ) -> RokDiagnostic {
         let chk = self.c;
-        let err = |msg: String| RokDiagnostic::error(ErrorKind::Handoff, at, msg);
+        let err = |code: Code, msg: String| RokDiagnostic::error(code, at, msg);
         let keep = format!("pass `{who}.clone()` to keep a separate copy");
         match gone {
             Gone::To(site, what) => {
@@ -2559,7 +2559,7 @@ impl<'h> Walk<'_, 'h> {
                 };
                 // The hand-off itself again, on the loop's next pass.
                 if self.calls.last().is_some_and(|k| k.span == site) {
-                    return err(format!(
+                    return err(Code::USE_AFTER_HANDOFF, format!(
                         "`{who}` was already {moved} by this call, on an earlier pass of the loop"
                     ))
                     .with_note(format!(
@@ -2576,7 +2576,7 @@ impl<'h> Walk<'_, 'h> {
                     None => (format!("`{who}` was {moved}"), who.to_owned()),
                 };
                 let keep = format!("hand over `{given}.clone()` to keep a separate copy");
-                let diag = err(format!("{head} at {line}"))
+                let diag = err(Code::USE_AFTER_HANDOFF, format!("{head} at {line}"))
                     .with_secondary(site, format!("`{given}` {here}"));
                 match what {
                     What::Mutex | What::RwLock => {
@@ -2674,7 +2674,7 @@ impl<'h> Walk<'_, 'h> {
                 } else {
                     format!("`{who}` shares what {call} {verb}")
                 };
-                err(format!(
+                err(Code::USE_AFTER_HANDOFF, format!(
                     "{head} at {} (inside `{}`, {inner})",
                     self.line(site, at),
                     why.func
@@ -2705,21 +2705,27 @@ impl<'h> Walk<'_, 'h> {
                     .filter(|t| t.len() <= 24 && !t.contains('\n'))
                     .map(str::to_owned);
                 if tie_kind == Tie::Given {
-                    err(format!("`{who}` was given to the `{ty}` at {line}"))
-                        .with_secondary(site, format!("`{who}` given to the lock here"))
-                        .with_note(format!(
-                            "help: `{who}` belongs to the `{ty}` now; use it through the lock \
+                    err(
+                        Code::USE_AFTER_HANDOFF,
+                        format!("`{who}` was given to the `{ty}` at {line}"),
+                    )
+                    .with_secondary(site, format!("`{who}` given to the lock here"))
+                    .with_note(format!(
+                        "help: `{who}` belongs to the `{ty}` now; use it through the lock \
                              (`{gname}.get()` inside a `using` block), or {keep} (stdlib 2.13.9)"
-                        ))
+                    ))
                 } else if self.returning {
                     let copy = tie.map_or_else(
                         || "a `.clone()` of it".to_owned(),
                         |t| format!("`{t}.clone()`"),
                     );
-                    err(format!(
-                        "this returns a value out of the `{ty}` after `{gname}`'s `using` \
+                    err(
+                        Code::USE_AFTER_UNLOCK,
+                        format!(
+                            "this returns a value out of the `{ty}` after `{gname}`'s `using` \
                          block released the lock"
-                    ))
+                        ),
+                    )
                     .with_secondary(site, "taken out of the lock here")
                     .with_note(format!(
                         "help: the lock no longer protects it; return {copy}, or do the work \
@@ -2729,10 +2735,13 @@ impl<'h> Walk<'_, 'h> {
                     let from = tie
                         .as_ref()
                         .map_or_else(String::new, |t| format!(" (`{t}`)"));
-                    err(format!(
-                        "`{who}` shares the value the `{ty}` protects{from} at {line}, and \
+                    err(
+                        Code::USE_AFTER_UNLOCK,
+                        format!(
+                            "`{who}` shares the value the `{ty}` protects{from} at {line}, and \
                          `{gname}`'s `using` block released the lock"
-                    ))
+                        ),
+                    )
                     .with_secondary(site, "the lock's value, taken out here")
                     .with_note(format!(
                         "help: the lock no longer protects `{who}`; use it inside the `using` \
@@ -2742,7 +2751,7 @@ impl<'h> Walk<'_, 'h> {
                     ))
                 } else {
                     let copy = format!("keep a deep copy there with `{gname}.get_clone()`");
-                    err(format!(
+                    err(Code::USE_AFTER_UNLOCK, format!(
                         "`{who}` came out of the `{ty}` at {line}, and `{gname}`'s `using` block \
                          released the lock"
                     ))
@@ -4082,7 +4091,7 @@ impl<'h> Walk<'_, 'h> {
             )
         };
         self.diags.push(
-            RokDiagnostic::error(ErrorKind::Handoff, call.span, head).with_note(
+            RokDiagnostic::error(Code::SHARED_HANDOFF, call.span, head).with_note(
                 "help: pass separate values (`.clone()` one of them) (stdlib 2.13.9)".to_owned(),
             ),
         );
@@ -4560,7 +4569,7 @@ impl<'h> Walk<'_, 'h> {
         if g == VIEW {
             self.diags.push(
                 RokDiagnostic::error(
-                    ErrorKind::Handoff,
+                    Code::THREAD_LOCAL_ESCAPE,
                     arg.span,
                     format!(
                         "{text} can't be {to}: it is this thread's `ThreadLocal` value, lent to \
@@ -4583,7 +4592,7 @@ impl<'h> Walk<'_, 'h> {
         };
         self.diags.push(
             RokDiagnostic::error(
-                ErrorKind::Handoff,
+                Code::SHARED_HANDOFF,
                 arg.span,
                 format!("{text} can't be {to}: the `{ty}` behind `{gname}` still holds it"),
             )
@@ -4698,7 +4707,7 @@ impl<'h> Walk<'_, 'h> {
             .unwrap_or_else(|| "the function called".to_owned());
             let d = if g == VIEW {
                 RokDiagnostic::error(
-                    ErrorKind::Handoff,
+                    Code::THREAD_LOCAL_ESCAPE,
                     arg.span,
                     format!(
                         "{shown} is this thread's `ThreadLocal` value, lent to `with`'s closure, \
@@ -4723,7 +4732,7 @@ impl<'h> Walk<'_, 'h> {
                     .filter(|t| t.len() <= 40 && !t.contains('\n'))
                     .map_or_else(|| format!("{gname}.get_clone()"), deep_copy);
                 let d = RokDiagnostic::error(
-                    ErrorKind::Handoff,
+                    Code::USE_AFTER_UNLOCK,
                     arg.span,
                     format!(
                         "{shown} is a view of what the `{ty}` behind `{gname}` protects, and {who} \
@@ -4749,7 +4758,7 @@ impl<'h> Walk<'_, 'h> {
     fn view_kept(&mut self, name: &str, at: Span) {
         self.diags.push(
             RokDiagnostic::error(
-                ErrorKind::Handoff,
+                Code::THREAD_LOCAL_ESCAPE,
                 at,
                 format!(
                     "this closure keeps `{name}`, this thread's `ThreadLocal` value, past \
@@ -4791,7 +4800,7 @@ impl<'h> Walk<'_, 'h> {
             );
         self.diags.push(
             RokDiagnostic::error(
-                ErrorKind::Handoff,
+                Code::USE_AFTER_UNLOCK,
                 at,
                 format!(
                     "the value of `{gname}`'s `using` block is what the `{ty}` protects, and the \
@@ -4929,7 +4938,7 @@ impl<'h> Walk<'_, 'h> {
                 Exit::Throw => "throws",
             };
             let d = RokDiagnostic::error(
-                ErrorKind::Handoff,
+                Code::THREAD_LOCAL_ESCAPE,
                 at,
                 format!(
                     "this {how} this thread's `ThreadLocal` value out of `with`'s closure: the \
@@ -4986,7 +4995,7 @@ impl<'h> Walk<'_, 'h> {
                 );
             self.diags.push(
                 RokDiagnostic::error(
-                    ErrorKind::Handoff,
+                    Code::USE_AFTER_UNLOCK,
                     at,
                     format!(
                         "this throws a value out of the `{ty}`, and `{gname}`'s `using` block \
@@ -5003,7 +5012,7 @@ impl<'h> Walk<'_, 'h> {
         }
         self.diags.push(
             RokDiagnostic::error(
-                ErrorKind::Handoff,
+                Code::USE_AFTER_UNLOCK,
                 at,
                 if yields {
                     format!(
@@ -5066,7 +5075,7 @@ impl<'h> Walk<'_, 'h> {
         .map_or_else(String::new, |t| format!(" `{t}`"));
         self.diags.push(
             RokDiagnostic::error(
-                ErrorKind::Handoff,
+                Code::SHARED_HANDOFF,
                 arg.span,
                 format!(
                     "{text} can't be {to}: other code reaches it through{from} (a thread-local \

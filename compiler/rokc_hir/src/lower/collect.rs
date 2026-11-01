@@ -4,6 +4,7 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 use crate::marks::mark_of;
+use rokc_diagnostic::Code;
 use rokc_ir_common::{Abi, FnRole, Linkage};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
@@ -570,12 +571,8 @@ fn collect<'a>(
     }
     add_lazy_static_inits(owned);
     implicit_generics(owned);
-    let err = |pre: &mut Vec<rokc_diagnostic::RokDiagnostic>, at: Span, msg: String| {
-        pre.push(rokc_diagnostic::RokDiagnostic::error(
-            rokc_diagnostic::ErrorKind::Type,
-            at,
-            msg,
-        ));
+    let err = |code: Code, pre: &mut Vec<rokc_diagnostic::RokDiagnostic>, at: Span, msg: String| {
+        pre.push(rokc_diagnostic::RokDiagnostic::error(code, at, msg));
     };
     let program: &Program = &*owned;
     // Spec 6.2: `#[derive]` expanded into impls by the parser; a union has
@@ -584,6 +581,7 @@ fn collect<'a>(
         if let Item::Union(u) = item {
             if let Some((_, at)) = rokc_parser::derive::derive_names(&u.attrs).first() {
                 err(
+                    Code::CANNOT_DERIVE,
                     &mut pre_diags,
                     *at,
                     format!("cannot derive traits for union `{}` (spec 6.2.1)", u.name),
@@ -621,6 +619,7 @@ fn collect<'a>(
         for (i, (n, at)) in names.iter().enumerate() {
             if names[..i].iter().any(|(m, _)| m == n) {
                 err(
+                    Code::DUPLICATE_DEFINITION,
                     &mut pre_diags,
                     *at,
                     format!(
@@ -657,7 +656,7 @@ fn collect<'a>(
                     };
                     if let Some(first) = methods.insert(&m.name, m.span) {
                         pre_diags.push(rokc_diagnostic::duplicate(
-                            rokc_diagnostic::ErrorKind::Type,
+                            Code::DUPLICATE_DEFINITION,
                             format!(
                                 "method `{}` is defined more than once in trait `{}`",
                                 m.name, t.name
@@ -678,7 +677,7 @@ fn collect<'a>(
             type_spans.insert(name, item.span());
         } else {
             pre_diags.push(rokc_diagnostic::duplicate(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::DUPLICATE_DEFINITION,
                 format!("type `{name}` is defined more than once"),
                 name,
                 item.span(),
@@ -988,7 +987,7 @@ fn collect<'a>(
             {
                 duplicated.insert(first);
                 pre_diags.push(rokc_diagnostic::duplicate(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::DUPLICATE_DEFINITION,
                     value_dup("const", &key, &value_spans),
                     &key,
                     here,
@@ -1003,7 +1002,7 @@ fn collect<'a>(
                 consts.insert(key, (ty, value));
             } else {
                 pre_diags.push(rokc_diagnostic::duplicate(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::DUPLICATE_DEFINITION,
                     format!("const `{key}` is defined more than once"),
                     &key,
                     here,
@@ -1032,7 +1031,7 @@ fn collect<'a>(
                     .or_else(|| value_spans.get(&s.name).map(|(at, _)| *at));
                 duplicated.extend(first);
                 pre_diags.push(rokc_diagnostic::duplicate(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::DUPLICATE_DEFINITION,
                     value_dup("static", &s.name, &value_spans),
                     &s.name,
                     here,
@@ -1067,7 +1066,7 @@ fn collect<'a>(
                 };
                 if static_tys.contains_key(&s.name) {
                     pre_diags.push(rokc_diagnostic::duplicate(
-                        rokc_diagnostic::ErrorKind::Type,
+                        Code::DUPLICATE_DEFINITION,
                         format!("static `{}` is defined more than once", s.name),
                         &s.name,
                         s.span,
@@ -1170,6 +1169,7 @@ fn collect<'a>(
         for a in cyclic {
             names.broken_aliases.borrow_mut().insert(a.name.clone());
             err(
+                Code::CYCLIC_DEFINITION,
                 &mut pre_diags,
                 a.span,
                 format!("type alias `{}` is cyclic", a.name),
@@ -1234,7 +1234,7 @@ fn collect<'a>(
                         .or_else(|| value_spans.get(name).map(|(at, _)| *at));
                     duplicated.extend(first);
                     pre_diags.push(rokc_diagnostic::duplicate(
-                        rokc_diagnostic::ErrorKind::Type,
+                        Code::DUPLICATE_DEFINITION,
                         value_dup("function", name, &value_spans),
                         name,
                         here,
@@ -1270,6 +1270,7 @@ fn collect<'a>(
                 let quiet = blk.attrs.iter().any(|a| a.path == ["no_safepoint"]);
                 if quiet && !rok_abi {
                     err(
+                        Code::MISPLACED_ATTRIBUTE,
                         &mut pre_diags,
                         here,
                         "`#[no_safepoint]` is for `extern \"rok\"` blocks".to_owned(),
@@ -1279,6 +1280,7 @@ fn collect<'a>(
                 // driver rejects it there).
                 if !rok_abi && blk.abi != "C" && blk.abi != "system" {
                     err(
+                        Code::INVALID_ABI,
                         &mut pre_diags,
                         here,
                         format!(
@@ -1306,6 +1308,7 @@ fn collect<'a>(
                             || fn_def.ret_ty.as_ref().is_some_and(is_str))
                     {
                         err(
+                            Code::FFI,
                             &mut pre_diags,
                             fn_def.span,
                             format!(
@@ -1542,6 +1545,7 @@ fn collect<'a>(
             );
             if is_param {
                 err(
+                    Code::INVALID_IMPL,
                     &mut pre_diags,
                     here,
                     format!(
@@ -1554,7 +1558,7 @@ fn collect<'a>(
                 // A path that names no type (other targets are templates above).
                 let name = target.split('<').next().unwrap_or(&target);
                 let d = rokc_diagnostic::RokDiagnostic::error(
-                    rokc_diagnostic::ErrorKind::Resolve,
+                    Code::UNRESOLVED_TYPE,
                     here,
                     format!("cannot find type `{name}` in this scope"),
                 );
@@ -1787,7 +1791,7 @@ fn collect<'a>(
         let mut dup = |leaf: &str, at: Span, first: Option<Span>| {
             duplicated.extend(first);
             rokc_diagnostic::duplicate(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::DUPLICATE_DEFINITION,
                 format!("method `{leaf}` is defined more than once for `{target_display}`"),
                 leaf,
                 at,
@@ -1867,6 +1871,7 @@ fn collect<'a>(
                 });
                 match tm {
                     None => err(
+                        Code::NOT_A_TRAIT_MEMBER,
                         &mut pre_diags,
                         here,
                         format!("method `{leaf}` is not a member of trait `{}`", td.name),
@@ -1875,6 +1880,7 @@ fn collect<'a>(
                     // slot. The operator traits (stdlib 2.3) never throw.
                     Some(tm) if is_throwing(&m.throws) && !is_throwing(&tm.throws) => {
                         err(
+                            Code::IMPL_MISMATCH,
                             &mut pre_diags,
                             here,
                             format!(
@@ -1975,6 +1981,7 @@ fn collect<'a>(
                 }
                 if tm.body.is_none() {
                     err(
+                        Code::MISSING_TRAIT_ITEM,
                         &mut pre_diags,
                         here,
                         format!(
@@ -1993,6 +2000,7 @@ fn collect<'a>(
                     &trait_args_key,
                 ) else {
                     err(
+                        Code::DUPLICATE_DEFINITION,
                         &mut pre_diags,
                         here,
                         format!(
@@ -2143,6 +2151,7 @@ fn collect<'a>(
                 .any(|a| a.path == [rokc_ast::C_VARIADIC_ATTR])
         {
             err(
+                Code::INVALID_SIGNATURE,
                 &mut pre_diags,
                 here,
                 format!(
@@ -2175,6 +2184,7 @@ fn collect<'a>(
                 && input.lib.is_none()
             {
                 err(
+                    Code::MISPLACED_ATTRIBUTE,
                     &mut pre_diags,
                     here,
                     format!(
@@ -2210,12 +2220,14 @@ fn collect<'a>(
         if let Some(sym) = export_name(f) {
             if f.body.is_none() && !prebuilt_fn {
                 err(
+                    Code::MISPLACED_ATTRIBUTE,
                     &mut pre_diags,
                     here,
                     format!("`#[export_name]` on `{}` needs a function body", f.name),
                 );
             } else if exports.iter().any(|(_, s)| *s == sym) {
                 err(
+                    Code::DUPLICATE_REGISTRATION,
                     &mut pre_diags,
                     here,
                     format!("symbol `{sym}` is exported twice (`#[export_name]`)"),
@@ -2235,6 +2247,7 @@ fn collect<'a>(
         }
         if export_name(f).is_some() {
             err(
+                Code::MISPLACED_ATTRIBUTE,
                 &mut pre_diags,
                 f.span,
                 format!(
@@ -2351,7 +2364,7 @@ fn collect<'a>(
         env.duplicated.borrow_mut().insert(first_def.span);
         pre_diags.push(
             rokc_diagnostic::RokDiagnostic::error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::FFI,
                 at,
                 format!(
                     "extern function `{}` is declared twice with different signatures: `{here}` \
@@ -2781,7 +2794,7 @@ fn finish<'a>(
     // A derive that failed its field check leaves its generated impl's
     // errors (located at the attribute) as a cascade: drop them.
     module.diagnostics.retain(|d| {
-        d.kind == rokc_diagnostic::ErrorKind::Meta
+        d.kind() == rokc_diagnostic::ErrorKind::Meta
             || !d
                 .primary
                 .as_ref()
@@ -2892,7 +2905,7 @@ fn check_tiers(
             };
             if r.name == "rok" && forbidden {
                 self.out.push(rokc_diagnostic::RokDiagnostic::error(
-                    rokc_diagnostic::ErrorKind::Module,
+                    Code::DEPENDENCY,
                     p.span,
                     format!(
                         "`{}` must not depend on `rok::{}` (stdlib spec 0.1.2)",
@@ -3429,7 +3442,7 @@ pub(super) fn check_unresolved_types(
             let leaf = leaf_name(&t);
             let (msg, help) = super::mono::bare_generic(leaf, &g);
             diags.push(
-                rokc_diagnostic::RokDiagnostic::error(rokc_diagnostic::ErrorKind::Resolve, at, msg)
+                rokc_diagnostic::RokDiagnostic::error(Code::GENERIC_ARGUMENTS, at, msg)
                     .with_help(help),
             );
             reported.push(t);
@@ -3457,7 +3470,7 @@ pub(super) fn check_unresolved_types(
                 (format!("module `{def}`"), format!("pkg::{k}"))
             };
             rokc_diagnostic::RokDiagnostic::error(
-                rokc_diagnostic::ErrorKind::Resolve,
+                Code::UNRESOLVED_TYPE,
                 span,
                 format!(
                     "cannot find type `{t}` in module `{at}`: it is defined in {where_}, \
@@ -3467,7 +3480,7 @@ pub(super) fn check_unresolved_types(
             .with_help(format!("add `use {path};` inside `mod {}`", leaf_name(&at)))
         } else {
             let d = rokc_diagnostic::RokDiagnostic::error(
-                rokc_diagnostic::ErrorKind::Resolve,
+                Code::UNRESOLVED_TYPE,
                 span,
                 format!("cannot find type `{t}` in this scope"),
             );
@@ -3494,16 +3507,16 @@ pub(super) fn check_unresolved_types(
         diags.push(d);
         reported.push(t);
     }
-    // A type error naming an unknown type follows from it: report the
-    // name first and alone. A block item's capture error says why the
-    // name is unknown; it stays.
+    // A type or pattern error naming an unknown type follows from it:
+    // report the name first and alone.
     module.diagnostics.retain(|d| {
-        d.kind != rokc_diagnostic::ErrorKind::Type
-            || d.message.contains(" and can't use `")
-            || !reported
-                .iter()
-                .filter(|t| t.starts_with(char::is_alphabetic))
-                .any(|t| names_type(&d.message, t))
+        !matches!(
+            d.kind(),
+            rokc_diagnostic::ErrorKind::Type | rokc_diagnostic::ErrorKind::Pattern
+        ) || !reported
+            .iter()
+            .filter(|t| t.starts_with(char::is_alphabetic))
+            .any(|t| names_type(&d.message, t))
     });
     module.diagnostics.splice(0..0, diags);
     if module
@@ -3522,7 +3535,7 @@ pub(super) fn check_unresolved_types(
         module
             .diagnostics
             .push(rokc_diagnostic::RokDiagnostic::error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::INTERNAL,
                 f.span,
                 format!(
                     "internal compiler error: an expression in `{}` has no resolved type \
@@ -3614,7 +3627,7 @@ fn check_static_cycles(module: &mut HirModule) {
                     .collect();
                 diags.push(
                     rokc_diagnostic::RokDiagnostic::error(
-                        rokc_diagnostic::ErrorKind::Type,
+                        Code::CYCLIC_DEFINITION,
                         module.statics[to].span,
                         format!(
                             "static `{}` is initialized from itself: `{}`",
@@ -3757,6 +3770,7 @@ fn check_value_types(module: &mut HirModule) {
             if x == d {
                 let (name, span, kind) = defs.name_span(d);
                 errs.push((
+                    Code::CYCLIC_DEFINITION,
                     span,
                     format!(
                         "recursive type `{name}` has infinite size ({kind} can't contain \
@@ -3781,6 +3795,7 @@ fn check_value_types(module: &mut HirModule) {
             if leaves > MAX_VALUE_LEAVES || bytes > MAX_VALUE_BYTES {
                 let (name, span, _) = defs.name_span(d);
                 errs.push((
+                    Code::TYPE_SIZE,
                     span,
                     format!(
                         "value type `{name}` is too large ({leaves} scalar slots, ~{bytes} \
@@ -3791,14 +3806,10 @@ fn check_value_types(module: &mut HirModule) {
             }
         }
     }
-    for (span, msg) in errs {
+    for (code, span, msg) in errs {
         module
             .diagnostics
-            .push(rokc_diagnostic::RokDiagnostic::error(
-                rokc_diagnostic::ErrorKind::Type,
-                span,
-                msg,
-            ));
+            .push(rokc_diagnostic::RokDiagnostic::error(code, span, msg));
     }
 }
 
@@ -3851,7 +3862,7 @@ fn check_packed(module: &mut HirModule) {
         module
             .diagnostics
             .push(rokc_diagnostic::RokDiagnostic::error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::INVALID_REPR,
                 span,
                 format!(
                     "`#[repr(packed)]` struct `{}` holds a GC reference (`str`, a collection, \
@@ -4247,7 +4258,7 @@ fn check_repr_attrs(program: &rokc_ast::Program, diags: &mut Vec<rokc_diagnostic
         };
         if let Some(msg) = msg {
             diags.push(rokc_diagnostic::RokDiagnostic::error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::INVALID_REPR,
                 attr.span,
                 msg,
             ));
@@ -4272,7 +4283,7 @@ fn assign_discriminants(env: &Env<'_>, decls: &[(EnumId, &AstEnumDef)]) {
         let mut ctx = LowerCtx::new(env, &no_subst, None, decl.span);
         ctx.current_module = module_of(&decl.name);
         let err = |msg: String| {
-            ctx.emit_error(rokc_diagnostic::ErrorKind::Type, msg);
+            ctx.emit_error(Code::INVALID_ENUM_VALUE, msg);
         };
         if values != decl.variants.len() {
             err(format!(
@@ -4360,7 +4371,7 @@ fn check_niche_attrs(program: &rokc_ast::Program, diags: &mut Vec<rokc_diagnosti
         };
         if let Some(msg) = msg {
             diags.push(rokc_diagnostic::RokDiagnostic::error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::INVALID_REPR,
                 attr.span,
                 msg,
             ));
@@ -4482,7 +4493,7 @@ pub(super) fn union_storage_strategy(
 ) -> UnionStorage {
     if aliases.is_empty() {
         pre_diags.push(rokc_diagnostic::RokDiagnostic::error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::INVALID_UNION,
             span,
             format!("union `{name}` declares no fields"),
         ));
@@ -4615,7 +4626,7 @@ fn sig_mismatch(
     let name = leaf_name(&m.name);
     diags.push(
         rokc_diagnostic::RokDiagnostic::error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::IMPL_MISMATCH,
             m.span,
             format!(
                 "`{name}` does not match its declaration in trait `{}`: {}",
@@ -4647,9 +4658,9 @@ fn generic_trait_impl(
     diags: &mut Vec<rokc_diagnostic::RokDiagnostic>,
     duplicated: &mut std::collections::HashSet<Span>,
 ) -> Impl {
-    let err = |pre: &mut Vec<rokc_diagnostic::RokDiagnostic>, msg: String| {
+    let err = |code: Code, pre: &mut Vec<rokc_diagnostic::RokDiagnostic>, msg: String| {
         pre.push(rokc_diagnostic::RokDiagnostic::error(
-            rokc_diagnostic::ErrorKind::Type,
+            code,
             impl_def.span,
             msg,
         ));
@@ -4704,6 +4715,7 @@ fn generic_trait_impl(
             });
             match tm {
                 None => err(
+                    Code::NOT_A_TRAIT_MEMBER,
                     diags,
                     format!("method `{leaf}` is not a member of trait `{}`", td.name),
                 ),
@@ -4717,7 +4729,7 @@ fn generic_trait_impl(
         if let Some(first) = methods.get(&leaf) {
             duplicated.insert(first.def.span);
             diags.push(rokc_diagnostic::duplicate(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::DUPLICATE_DEFINITION,
                 format!("method `{leaf}` is defined more than once for `{target_display}`"),
                 &leaf,
                 m.span,
@@ -4739,6 +4751,7 @@ fn generic_trait_impl(
             }
             if tm.body.is_none() {
                 err(
+                    Code::MISSING_TRAIT_ITEM,
                     diags,
                     format!(
                         "impl of trait `{}` for `{target_display}` is missing method `{}`",
@@ -4863,7 +4876,7 @@ fn impl_heads(
                         t => ty_mangle(t),
                     });
                     diags.push(rokc_diagnostic::RokDiagnostic::error(
-                        rokc_diagnostic::ErrorKind::Type,
+                        Code::CONFLICTING_IMPLS,
                         p.def.span,
                         format!(
                             "`{shown}` is implemented more than once for `{}`",
@@ -4992,7 +5005,7 @@ fn impl_consts(
             match default {
                 Some(v) => out.push((name.clone(), ty.clone(), v.clone())),
                 None => pre_diags.push(rokc_diagnostic::RokDiagnostic::error(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::MISSING_TRAIT_ITEM,
                     i.span,
                     format!(
                         "impl of `{}` for `{}` is missing associated const `{name}` \
@@ -5287,7 +5300,7 @@ fn check_derives(env: &Env<'_>, program: &Program) -> Vec<rokc_diagnostic::Span>
                 if !ctx.has_trait(ty, key) {
                     failed.push(at);
                     ctx.emit_error(
-                        rokc_diagnostic::ErrorKind::Meta,
+                        Code::CANNOT_DERIVE,
                         format!(
                             "cannot derive `{tr}` for `{}`: `{field}` has type `{}`, which does \
                              not implement `{tr}` (spec 6.2.1)",
@@ -5303,7 +5316,7 @@ fn check_derives(env: &Env<'_>, program: &Program) -> Vec<rokc_diagnostic::Span>
                     .is_some_and(|t| ctx.has_trait(t, ctx.lang("drop_method")))
             {
                 ctx.emit_error(
-                    rokc_diagnostic::ErrorKind::Meta,
+                    Code::CANNOT_DERIVE,
                     format!(
                         "cannot derive `Copy` for `{}`: it implements `Drop` (stdlib 2.13.3)",
                         leaf_name(name)
@@ -5330,7 +5343,7 @@ fn check_pod(
     };
     let fail = |why: String| {
         ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Meta,
+            Code::CANNOT_DERIVE,
             format!(
                 "`{}` cannot be `Pod`: {why} (stdlib 1.3.3)",
                 leaf_name(name)
@@ -5411,7 +5424,7 @@ fn check_templates(env: &Env<'_>, templates: &[crate::TemplateRefs]) {
                 });
             let d = match found {
                 None => rokc_diagnostic::RokDiagnostic::error(
-                    rokc_diagnostic::ErrorKind::Resolve,
+                    Code::UNRESOLVED_NAME,
                     *at,
                     format!(
                         "this meta template names `{}`, which does not exist (spec 6.9.9)",
@@ -5420,7 +5433,7 @@ fn check_templates(env: &Env<'_>, templates: &[crate::TemplateRefs]) {
                 ),
                 Some((k, vis)) if !visible_from(&t.module, &module_of(&k), vis) => {
                     rokc_diagnostic::RokDiagnostic::error(
-                        rokc_diagnostic::ErrorKind::Module,
+                        Code::PRIVATE_ITEM,
                         *at,
                         format!(
                             "this meta template names `{}`, which its module `{}` cannot see \
@@ -5466,7 +5479,7 @@ fn check_bound_names(
         // A bootstrap trait keys by its leaf (see `trait_key`).
         let Some(found) = names.traits.get(&key) else {
             let d = rokc_diagnostic::RokDiagnostic::error(
-                rokc_diagnostic::ErrorKind::Resolve,
+                Code::UNRESOLVED_TYPE,
                 b.span,
                 format!("cannot find trait `{}` (named {role})", segs.join("::")),
             );
@@ -5502,12 +5515,8 @@ fn check_bound_names(
         if written > max {
             let (msg, help) = mono::misfit(leaf_name(found), g, written);
             pre_diags.push(
-                rokc_diagnostic::RokDiagnostic::error(
-                    rokc_diagnostic::ErrorKind::Type,
-                    b.span,
-                    msg,
-                )
-                .with_help(help),
+                rokc_diagnostic::RokDiagnostic::error(Code::GENERIC_ARGUMENTS, b.span, msg)
+                    .with_help(help),
             );
         }
     };
@@ -5799,7 +5808,7 @@ fn unmet_bounds(
             }
             let name = rcx.ty_name(&ty);
             let mut d = rokc_diagnostic::RokDiagnostic::error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::UNSATISFIED_BOUND,
                 span,
                 format!(
                     "type `{name}` does not satisfy trait bound `{}` required by `{shown}` \
@@ -5895,7 +5904,7 @@ fn check_statics_sync(env: &Env<'_>, programs: &[&Program]) {
             )
         };
         ctx.emit_error_at(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::THREAD_SAFETY,
             s.span,
             format!(
                 "a `static` is shared by every thread, so it can't be a `{}`: two threads could \
@@ -5956,7 +5965,7 @@ fn check_internal_marks(env: &Env<'_>, checked: &[&Program], own: &dyn Fn(&str) 
     let mut sink = env.sink.diagnostics.borrow_mut();
     for (name, span) in found {
         sink.push(rokc_diagnostic::RokDiagnostic::error(
-            rokc_diagnostic::ErrorKind::Meta,
+            Code::MISPLACED_ATTRIBUTE,
             span,
             format!(
                 "`#[internal]` on `{name}`: it marks items the Rok toolchain's own packages \
@@ -6008,7 +6017,7 @@ fn check_impl_rules(
                 .diagnostics
                 .borrow_mut()
                 .push(rokc_diagnostic::RokDiagnostic::error(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::ORPHAN_IMPL,
                     i.span,
                     format!(
                         "`impl {} for {}`: neither the trait nor the type is defined in this \
@@ -6022,7 +6031,7 @@ fn check_impl_rules(
         if env.is_sealed(&key) && owner != pkg {
             env.sink.diagnostics.borrow_mut().push(
                 rokc_diagnostic::RokDiagnostic::error(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::INVALID_IMPL,
                     i.span,
                     format!(
                         "`impl {} for {}`: trait `{}` is sealed, so only `{}` implements it \
@@ -6066,7 +6075,7 @@ fn check_impl_rules(
                 continue;
             }
             ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::MISSING_SUPERTRAIT,
                 format!(
                     "`{}` implements `{}` but not its supertrait `{}` (spec 2.8.4)",
                     ctx.ty_name(&target),
@@ -6114,7 +6123,7 @@ fn assoc_bound_goals<'i>(
 
 fn assoc_bound_error(ctx: &LowerCtx<'_>, td: &str, name: &str, ty: &str, bound: &str, every: &str) {
     ctx.emit_error(
-        rokc_diagnostic::ErrorKind::Type,
+        Code::UNSATISFIED_BOUND,
         format!(
             "associated type `{name}` = `{ty}` does not implement `{}`{every}, a bound of \
              `{}::{name}` (spec 2.8.3)",
@@ -6199,7 +6208,7 @@ fn check_generic_supers(
             continue;
         }
         ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::MISSING_SUPERTRAIT,
             format!(
                 "`{}` implements `{}` but not its supertrait `{}` for every `{params}` the \
                  impl allows (spec 2.8.4)",
@@ -6370,7 +6379,7 @@ fn check_impl_overlap(env: &Env<'_>, own: &dyn Fn(&str) -> bool) {
                 .is_some_and(|s| trait_args_overlap(&ctx, gi, &s, ty))
             {
                 ctx.emit_error_at(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::CONFLICTING_IMPLS,
                     gi.self_ty.span,
                     format!(
                         "conflicting implementations of trait `{}` for `{}`: the concrete \
@@ -6428,7 +6437,7 @@ fn check_impl_overlap(env: &Env<'_>, own: &dyn Fn(&str) -> bool) {
                 a.trait_key.is_empty().then(|| shared(b)).flatten(),
             ) {
                 ctx.emit_error_at(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::CONFLICTING_IMPLS,
                     b.self_ty.span,
                     format!(
                         "duplicate method `{m}`: `impl<..> {}` and `impl<..> {}` both define it \
@@ -6439,7 +6448,7 @@ fn check_impl_overlap(env: &Env<'_>, own: &dyn Fn(&str) -> bool) {
                 );
             } else if let Some(t) = witness {
                 ctx.emit_error_at(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::CONFLICTING_IMPLS,
                     b.self_ty.span,
                     format!(
                         "conflicting implementations of trait `{}`: `impl<..> {} for {}` and \
@@ -6925,7 +6934,7 @@ fn check_auto_impl(
 ) -> bool {
     let err = |d: &mut Vec<rokc_diagnostic::RokDiagnostic>, msg: String| {
         d.push(rokc_diagnostic::RokDiagnostic::error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::INVALID_IMPL,
             impl_def.span,
             msg,
         ));
@@ -7005,7 +7014,7 @@ fn check_auto_impl(
 fn check_extern_fn(f: &FnDef, abi: &str, diags: &mut Vec<rokc_diagnostic::RokDiagnostic>) {
     let mut bad = |msg: String| {
         diags.push(rokc_diagnostic::RokDiagnostic::error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::FFI,
             f.span,
             format!(
                 "`extern {abi:?} fn {}`: {msg} (spec 5.9.10)",
@@ -7098,7 +7107,7 @@ fn check_extern_ffi(env: &Env<'_>, programs: &[&Program]) {
         let shown = cx.ty_name(ty);
         env.sink.diagnostics.borrow_mut().push(
             rokc_diagnostic::RokDiagnostic::error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::FFI,
                 at,
                 format!(
                     "{what} has type `{shown}`, which C cannot hold: the collector may move or \
@@ -7352,7 +7361,7 @@ pub(super) fn intrinsic_of(
     let attr = m.attrs.iter().find(|a| a.name() == "intrinsic")?;
     let mut err = |msg: String| {
         diags.push(rokc_diagnostic::RokDiagnostic::error(
-            rokc_diagnostic::ErrorKind::Meta,
+            Code::INVALID_INTRINSIC,
             m.span,
             msg,
         ));
@@ -8033,7 +8042,7 @@ fn check_assoc_shadowing(
             for at in &uses {
                 diags.push(
                     rokc_diagnostic::RokDiagnostic::error(
-                        rokc_diagnostic::ErrorKind::Type,
+                        Code::AMBIGUOUS_ITEM,
                         *at,
                         format!(
                             "`{a}` is ambiguous here: the associated type `{a}` shadows the \
@@ -8047,7 +8056,7 @@ fn check_assoc_shadowing(
             }
             if uses.is_empty() {
                 diags.push(rokc_diagnostic::RokDiagnostic::warning(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::AMBIGUOUS_ITEM,
                     it.span(),
                     format!(
                         "associated type `{a}` shadows the outer type `{a}` inside the {owner}; \
@@ -8300,7 +8309,7 @@ fn literal_handlers(
                 .collect();
             diags.push(
                 rokc_diagnostic::RokDiagnostic::error(
-                    rokc_diagnostic::ErrorKind::Meta,
+                    Code::INVALID_LITERAL_HANDLER,
                     attr.span,
                     format!(
                         "`#[literal({text})]` handler `{}` must take {} parameter(s): {} \
@@ -8326,7 +8335,7 @@ fn literal_handlers(
         if let Some((first, first_span)) = seen.get(&key) {
             diags.push(
                 rokc_diagnostic::RokDiagnostic::error(
-                    rokc_diagnostic::ErrorKind::Meta,
+                    Code::DUPLICATE_REGISTRATION,
                     attr.span,
                     format!(
                         "`#[literal({text})]` is already registered by `{first}` with the same \

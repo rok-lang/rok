@@ -1,5 +1,5 @@
 // spec: 002.10-generics
-// expect-error: error[E002]
+// expect-error: error[E0010]
 // expect-error: expected `>` to close generic arguments
 
 // A missing `>` must be a parse error, not silently accepted.

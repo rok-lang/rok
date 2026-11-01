@@ -2,7 +2,7 @@
 //! columns count code points (spec 1.1.3, 1.1.5).
 
 use rokc_ast::escape::{EscapeMode, unescape};
-use rokc_diagnostic::{ErrorKind, RokDiagnostic, Span};
+use rokc_diagnostic::{Code, RokDiagnostic, Span};
 
 use crate::token::{DocLine, Token, TokenKind, keyword_kind};
 use crate::unicode::{
@@ -173,6 +173,7 @@ impl<'src> Lexer<'src> {
             let (line, col) = self.line_col(at);
             let span = Self::make_span(at, at + c.len_utf8(), line, col);
             self.error(
+                Code::BIDI_CHARACTER,
                 span,
                 format!(
                     "bidirectional control character U+{:04X} in source; write it as an \
@@ -357,6 +358,7 @@ impl<'src> Lexer<'src> {
             format!("unexpected character(s) `{}`", text.escape_debug())
         };
         self.error(
+            Code::UNKNOWN_CHARACTER,
             Span::new(span.start, self.pos as u32, span.line, span.col),
             msg,
         );
@@ -492,6 +494,7 @@ impl<'src> Lexer<'src> {
         // its leading `0`. Where no expression precedes, say so.
         if !self.prev_ends_expr && self.bytes.get(self.pos + 1).is_some_and(u8::is_ascii_digit) {
             self.error_from(
+                Code::MALFORMED_NUMBER,
                 self.pos,
                 "a float literal needs a leading digit (`0.5`); `.5` is a tuple index",
             );
@@ -600,6 +603,7 @@ impl<'src> Lexer<'src> {
         let span = Self::make_span(start, self.pos, line, col);
         if matches!(name.as_str(), "self" | "Self" | "_") {
             self.error(
+                Code::RAW_IDENTIFIER,
                 span,
                 format!(
                     "`r#{name}` is not allowed: `{name}` can't be a raw identifier; write \
@@ -684,6 +688,7 @@ impl<'src> Lexer<'src> {
             let stray = self.bytes.get(self.pos).copied().filter(u8::is_ascii_digit);
             if let Some(d) = stray.filter(|_| radix != 16) {
                 self.error_from(
+                    Code::MALFORMED_NUMBER,
                     start,
                     format!("invalid digit `{}` in base-{radix} literal", d as char),
                 );
@@ -716,7 +721,7 @@ impl<'src> Lexer<'src> {
             if self.bytes.get(self.pos).is_some_and(u8::is_ascii_digit) {
                 self.eat_digit_seq(10, start);
             } else {
-                self.error_from(start, "exponent has no digits");
+                self.error_from(Code::MALFORMED_NUMBER, start, "exponent has no digits");
             }
         }
 
@@ -730,12 +735,14 @@ impl<'src> Lexer<'src> {
                     is_float = true;
                 } else {
                     self.error_from(
+                        Code::MALFORMED_NUMBER,
                         start,
                         format!("float suffix `{suffix}` on a base-{radix} literal"),
                     );
                 }
             } else if INT_SUFFIXES.contains(&suffix) && is_float {
                 self.error_from(
+                    Code::MALFORMED_NUMBER,
                     start,
                     format!("integer suffix `{suffix}` on a float literal"),
                 );
@@ -780,7 +787,7 @@ impl<'src> Lexer<'src> {
             format!("write `{decimal}`")
         };
         let mut d = RokDiagnostic::error(
-            ErrorKind::Lexical,
+            Code::MALFORMED_NUMBER,
             span,
             format!("`{text}`: a decimal literal can't start with `0`"),
         )
@@ -824,7 +831,7 @@ impl<'src> Lexer<'src> {
         } else {
             return;
         };
-        self.error_from(lit_start, msg);
+        self.error_from(Code::MALFORMED_NUMBER, lit_start, msg);
     }
 
     /// A suffix fixes the type, so the value must fit. Unsuffixed literals
@@ -841,6 +848,7 @@ impl<'src> Lexer<'src> {
             };
             if inf {
                 self.error_from(
+                    Code::LITERAL_OUT_OF_RANGE,
                     start,
                     format!(
                         "float literal out of range for `{}`",
@@ -853,7 +861,11 @@ impl<'src> Lexer<'src> {
         let digits = if radix == 10 { &clean[..] } else { &clean[2..] };
         let Ok(value) = u128::from_str_radix(digits, radix) else {
             if !digits.is_empty() && digits.chars().all(|c| c.is_digit(radix)) {
-                self.error_from(start, "integer literal is too large");
+                self.error_from(
+                    Code::LITERAL_OUT_OF_RANGE,
+                    start,
+                    "integer literal is too large",
+                );
             }
             return;
         };
@@ -884,6 +896,7 @@ impl<'src> Lexer<'src> {
             };
             let sign = if neg { "-" } else { "" };
             self.error_from(
+                Code::LITERAL_OUT_OF_RANGE,
                 start,
                 format!("literal `{sign}{body}` out of range for `{suffix}` ({bound})"),
             );
@@ -925,7 +938,7 @@ impl<'src> Lexer<'src> {
         self.advance(usize::from(c_char) + 1); // optional `c`, then `'`
         let start = self.pos;
         let Some(end) = self.scan_quoted(b'\'') else {
-            self.error_from(lit_start, "unterminated char literal");
+            self.error_from(Code::UNTERMINATED, lit_start, "unterminated char literal");
             return TokenKind::CharLit(String::new());
         };
         let body = self.src[start..end].to_owned();
@@ -935,7 +948,7 @@ impl<'src> Lexer<'src> {
             EscapeMode::Char
         };
         match unescape(&body, mode) {
-            Err((_, msg)) => self.error_from(lit_start, msg),
+            Err((_, msg)) => self.error_from(Code::INVALID_ESCAPE, lit_start, msg),
             Ok(v) => {
                 let mut chars = v.chars();
                 match (chars.next(), chars.next()) {
@@ -943,6 +956,7 @@ impl<'src> Lexer<'src> {
                         if c_char && (c as u32 > 0xFF || (!c.is_ascii() && !body.starts_with('\\')))
                         {
                             self.error_from(
+                                Code::CHAR_LITERAL_LENGTH,
                                 lit_start,
                                 format!(
                                     "`c'{body}'` must be one byte; write non-ASCII bytes as `\\xHH`"
@@ -951,6 +965,7 @@ impl<'src> Lexer<'src> {
                         }
                     }
                     _ => self.error_from(
+                        Code::CHAR_LITERAL_LENGTH,
                         lit_start,
                         "char literal must contain exactly one code point",
                     ),
@@ -995,12 +1010,12 @@ impl<'src> Lexer<'src> {
         self.advance(1);
         let start = self.pos;
         let Some(end) = self.scan_quoted(b'"') else {
-            self.error_from(lit_start, "unterminated string literal");
+            self.error_from(Code::UNTERMINATED, lit_start, "unterminated string literal");
             return TokenKind::StrLit(String::new());
         };
         let body = self.src[start..end].to_owned();
         if let Err((_, msg)) = unescape(&body, EscapeMode::Str) {
-            self.error_from(lit_start, msg);
+            self.error_from(Code::INVALID_ESCAPE, lit_start, msg);
         }
         TokenKind::StrLit(body)
     }
@@ -1012,18 +1027,27 @@ impl<'src> Lexer<'src> {
         self.advance(2);
         let start = self.pos;
         let Some(end) = self.scan_quoted(b'"') else {
-            self.error_from(lit_start, "unterminated byte string literal");
+            self.error_from(
+                Code::UNTERMINATED,
+                lit_start,
+                "unterminated byte string literal",
+            );
             return TokenKind::ByteStrLit(String::new());
         };
         let body = self.src[start..end].to_owned();
         match unescape(&body, EscapeMode::CChar) {
-            Err((_, msg)) => self.error_from(lit_start, msg),
+            Err((_, msg)) => self.error_from(Code::INVALID_ESCAPE, lit_start, msg),
             Ok(_) if !body.is_ascii() => self.error_from(
+                Code::INVALID_ESCAPE,
                 lit_start,
                 "a byte string holds ASCII only; write other bytes as `\\xHH`",
             ),
             Ok(v) if v.chars().any(|c| c as u32 > 0xFF) => {
-                self.error_from(lit_start, "a byte string escape must be at most `\\xFF`");
+                self.error_from(
+                    Code::INVALID_ESCAPE,
+                    lit_start,
+                    "a byte string escape must be at most `\\xFF`",
+                );
             }
             Ok(_) => {}
         }
@@ -1082,7 +1106,11 @@ impl<'src> Lexer<'src> {
                 b'}' if !spec => {
                     let at = self.pos;
                     self.advance(1);
-                    self.error_from(at, "single `}` in f-string (write `}}`)");
+                    self.error_from(
+                        Code::FSTRING_SYNTAX,
+                        at,
+                        "single `}` in f-string (write `}}`)",
+                    );
                 }
                 b'$' if spec && next == Some(b'$') => {
                     text.push('$');
@@ -1112,7 +1140,11 @@ impl<'src> Lexer<'src> {
         } else {
             match self.bytes[self.pos] {
                 b'"' if spec => {
-                    self.error_from(start, "unclosed `{` in f-string (missing `}`)");
+                    self.error_from(
+                        Code::FSTRING_SYNTAX,
+                        start,
+                        "unclosed `{` in f-string (missing `}`)",
+                    );
                     self.fstr.pop();
                     TokenKind::HoleEnd
                 }
@@ -1159,7 +1191,11 @@ impl<'src> Lexer<'src> {
             self.hole_reported = outer;
             let (line, col) = self.line_col(at);
             let end = at + self.src[at..].chars().next().map_or(0, char::len_utf8);
-            self.error(Self::make_span(at, end, line, col), msg);
+            self.error(
+                Code::FSTRING_SYNTAX,
+                Self::make_span(at, end, line, col),
+                msg,
+            );
         }
     }
 
@@ -1167,7 +1203,7 @@ impl<'src> Lexer<'src> {
     /// holes and literals so the parser sees balanced tokens.
     fn close_fstrings(&mut self, tokens: &mut Vec<Token>) {
         if let Some(&Frame::Text { start, .. }) = self.fstr.first() {
-            self.error_from(start, "unterminated f-string literal");
+            self.error_from(Code::UNTERMINATED, start, "unterminated f-string literal");
         }
         while let Some(f) = self.fstr.pop() {
             let kind = match f {
@@ -1188,7 +1224,11 @@ impl<'src> Lexer<'src> {
             self.advance(1);
         }
         if self.bytes.get(self.pos) != Some(&b'"') {
-            self.error_from(lit_start, "expected `\"` after raw-string prefix");
+            self.error_from(
+                Code::UNTERMINATED,
+                lit_start,
+                "expected `\"` after raw-string prefix",
+            );
             return TokenKind::RawStrLit(String::new());
         }
         self.advance(1);
@@ -1196,7 +1236,7 @@ impl<'src> Lexer<'src> {
         let closing = format!("\"{}", "#".repeat(hash_count));
         let Some(len) = self.src[start..].find(&closing) else {
             self.advance(self.bytes.len() - self.pos);
-            self.error_from(lit_start, "unterminated raw string");
+            self.error_from(Code::UNTERMINATED, lit_start, "unterminated raw string");
             return TokenKind::RawStrLit(String::new());
         };
         self.advance(len + closing.len());
@@ -1250,7 +1290,7 @@ impl<'src> Lexer<'src> {
         while depth > 0 {
             match (self.bytes.get(self.pos), self.bytes.get(self.pos + 1)) {
                 (None, _) => {
-                    self.error_from(start, "unterminated block comment");
+                    self.error_from(Code::UNTERMINATED, start, "unterminated block comment");
                     return;
                 }
                 (Some(b'/'), Some(b'*')) => {
@@ -1310,10 +1350,10 @@ impl<'src> Lexer<'src> {
     }
 
     /// Error spanning `start..pos`, positioned at `start`'s line/column.
-    fn error_from(&mut self, start: usize, msg: impl Into<String>) {
+    fn error_from(&mut self, code: Code, start: usize, msg: impl Into<String>) {
         let (line, col) = self.line_col(start);
         let span = Self::make_span(start, self.pos, line, col);
-        self.error(span, msg);
+        self.error(code, span, msg);
     }
 
     fn line_col(&self, at: usize) -> (u32, u32) {
@@ -1330,15 +1370,15 @@ impl<'src> Lexer<'src> {
 
     fn warning(&mut self, span: Span, msg: impl Into<String>, lint: &str) {
         self.diagnostics.push(
-            RokDiagnostic::warning(ErrorKind::Lexical, span, msg)
+            RokDiagnostic::warning(Code::LINT, span, msg)
                 .with_file(self.file.clone())
                 .with_lint(lint),
         );
     }
 
-    fn error(&mut self, span: Span, msg: impl Into<String>) {
+    fn error(&mut self, code: Code, span: Span, msg: impl Into<String>) {
         self.diagnostics
-            .push(RokDiagnostic::error(ErrorKind::Lexical, span, msg).with_file(self.file.clone()));
+            .push(RokDiagnostic::error(code, span, msg).with_file(self.file.clone()));
     }
 }
 

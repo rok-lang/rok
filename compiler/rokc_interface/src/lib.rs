@@ -19,8 +19,8 @@ pub use std_cache::{StdKey, prebuilt_std};
 use rokc_driver::{CompiledModule, CompilerConfig, compile_file, compile_source};
 
 pub use rokc_diagnostic::{
-    ErrorKind, Json, RokDiagnostic, SourceMap, capture_warnings, end_if_output_closed,
-    print_rendered, set_report_depth, set_report_style,
+    Code, ErrorKind, Json, RokDiagnostic, SourceMap, capture_warnings, end_if_output_closed,
+    explain, print_rendered, set_report_depth, set_report_style,
 };
 pub use rokc_driver::native::chosen as native_backend;
 pub use rokc_driver::units::UnitCounts;
@@ -242,7 +242,7 @@ impl CompileResult {
     fn module(&self) -> Result<&CompiledModule, RokDiagnostic> {
         self.modules.first().ok_or_else(|| {
             RokDiagnostic::error(
-                ErrorKind::Internal,
+                Code::INTERNAL,
                 rokc_diagnostic::Span::DUMMY,
                 "no module produced",
             )

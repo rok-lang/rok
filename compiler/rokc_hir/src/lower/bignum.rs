@@ -16,7 +16,7 @@
 #[allow(clippy::wildcard_imports)]
 use super::*;
 use rokc_ast::{CallArg, PathSegment};
-use rokc_diagnostic::Span;
+use rokc_diagnostic::{Code, Span};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum Big {
@@ -210,6 +210,7 @@ pub(super) fn cast(
     }
     let rokc_ast::TyKind::Path(p) = &to.kind else {
         return ctx.error_expr(
+            Code::INVALID_CAST,
             span,
             format!(
                 "cannot cast `{}` as `{}`",
@@ -229,7 +230,7 @@ pub(super) fn cast(
             "use `x.to_f64() as f32` (rounds)"
         };
         ctx.emit_error_at(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::INVALID_CAST,
             span,
             format!(
                 "cannot cast `{from}` as `{to}`: `as` keeps the low bits, and a float has none"

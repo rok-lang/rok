@@ -5,11 +5,11 @@
 use std::path::Path;
 
 use rokc_ast::{Block, FnDef, Generics, Item, Stmt, ThrowsKind, TyKind};
-use rokc_diagnostic::{ErrorKind, RokDiagnostic, Span};
+use rokc_diagnostic::{Code, RokDiagnostic, Span};
 
 pub fn stmts_outside_entry(file: &Path) -> RokDiagnostic {
     RokDiagnostic::error(
-        ErrorKind::Module,
+        Code::ENTRY_POINT,
         Span::DUMMY,
         format!(
             "{}: top-level statements are only allowed in the entry file `main.rok`; \
@@ -34,7 +34,7 @@ pub fn resolve_entry(
         (Some(f), false) => {
             diags.push(
                 RokDiagnostic::error(
-                    ErrorKind::Module,
+                    Code::ENTRY_POINT,
                     Span::DUMMY,
                     "`main.rok` has both top-level statements and `fn main`; use exactly one \
                  entry point (spec 4.16.1)",
@@ -91,7 +91,7 @@ fn implicit_main(stmts: Vec<Stmt>) -> FnDef {
 fn check_main_signature(f: &FnDef, diags: &mut Vec<RokDiagnostic>) {
     let mut bad = |msg: &str| {
         diags.push(RokDiagnostic::error(
-            ErrorKind::Type,
+            Code::ENTRY_POINT,
             f.span,
             format!("`fn main`: {msg} (spec 4.16.3)"),
         ));

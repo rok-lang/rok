@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 
 use rokc_ast::{UseTree, UseTreeKind};
 use rokc_core::Visibility;
-use rokc_diagnostic::{ErrorKind, RokDiagnostic, Span};
+use rokc_diagnostic::{Code, RokDiagnostic, Span};
 
 /// One resolved `use` entry. Paths are fully qualified (no `pkg::` /
 /// `sup::` left), so lookup is plain concatenation.
@@ -114,7 +114,7 @@ pub fn check_use_clashes(
             };
             diags.push(
                 RokDiagnostic::error(
-                    ErrorKind::Module,
+                    Code::IMPORT_CONFLICT,
                     span,
                     format!(
                         "name `{local}` imported twice with different targets: `{prev}` and \
@@ -332,7 +332,7 @@ pub fn glob_reexports(
                     Some(other) => {
                         if reported.insert(alias.clone()) {
                             diags.push(RokDiagnostic::error(
-                                ErrorKind::Module,
+                                Code::IMPORT_CONFLICT,
                                 *span,
                                 format!(
                                     "glob re-export of `{target}` as `{alias}` conflicts with \
@@ -534,7 +534,7 @@ pub fn check_use_targets(
                     }
                     if chain.len() > 1 && chain.last() == Some(&me.as_str()) {
                         diags.push(RokDiagnostic::error(
-                            ErrorKind::Module,
+                            Code::INVALID_REEXPORT,
                             span,
                             format!("circular re-export: {} (spec 5.8.10)", {
                                 let ring: Vec<String> =
@@ -547,7 +547,7 @@ pub fn check_use_targets(
                 }
                 if let Some(m) = crate::lower::hidden_module(&mod_vis, module_path, full) {
                     diags.push(RokDiagnostic::error(
-                        ErrorKind::Module,
+                        Code::PRIVATE_ITEM,
                         span,
                         crate::lower::hidden_module_msg(full, &m, module_path),
                     ));
@@ -559,7 +559,7 @@ pub fn check_use_targets(
                     let rank = crate::lower::visibility_rank;
                     if *use_vis != Visibility::Private && rank(*use_vis) > rank(vis) {
                         diags.push(RokDiagnostic::error(
-                            ErrorKind::Module,
+                            Code::INVALID_REEXPORT,
                             span,
                             format!(
                                 "`{full}` is {} but re-exported as {} - a re-export can't \
@@ -611,7 +611,7 @@ pub fn check_use_targets(
                 continue;
             }
             let mut d = RokDiagnostic::error(
-                ErrorKind::Module,
+                Code::UNRESOLVED_IMPORT,
                 span,
                 format!("unresolved import: `{path}` does not exist"),
             );
@@ -728,7 +728,7 @@ fn shadowed_import(
     };
     Some((
         RokDiagnostic::error(
-            ErrorKind::Module,
+            Code::IMPORT_CONFLICT,
             span,
             format!("`{local}` is both imported from `{full}` and defined in this module"),
         )

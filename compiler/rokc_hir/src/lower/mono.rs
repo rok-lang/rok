@@ -3,6 +3,7 @@
 
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use rokc_diagnostic::Code;
 
 /// Match an AST parameter type against an argument's `HirTy` to bind
 /// generic parameters (`[T; N]` against `[i32; 4]` binds `T → i32`).
@@ -481,7 +482,7 @@ pub(super) fn monomorphize_on(
 
     if let Some(HirTy::Param(p)) = self_hint {
         if let Err(msg) = super::bounds::pick_bound(ctx, fn_def, *p, &mut subst) {
-            ctx.emit_error(rokc_diagnostic::ErrorKind::Type, msg);
+            ctx.emit_error(Code::UNSATISFIED_BOUND, msg);
             return None;
         }
     }
@@ -504,7 +505,7 @@ pub(super) fn monomorphize_on(
     }
 
     if let Some(msg) = assoc_shape_error(ctx, fn_def, self_hint, &subst) {
-        ctx.emit_error(rokc_diagnostic::ErrorKind::Type, msg);
+        ctx.emit_error(Code::UNSATISFIED_BOUND, msg);
         return None;
     }
 
@@ -565,7 +566,7 @@ pub(super) fn monomorphize_on(
         || ctx.env.sink.mono_depth.get() >= MONO_DEPTH_LIMIT
     {
         ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::INSTANTIATION_LIMIT,
             format!(
                 "instantiating generic function `{}` recursed past the limit \
                  (depth {MONO_DEPTH_LIMIT}) - the instantiation never reaches a \
@@ -764,7 +765,7 @@ pub(super) fn check_call_bounds(
                     String::new()
                 };
                 ctx.emit_error(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::UNSATISFIED_BOUND,
                     format!(
                         "type `{}` does not satisfy trait bound `{}` required by `{}`{why}",
                         ctx.ty_name(concrete),
@@ -1130,7 +1131,7 @@ fn infer_ret_of(
     tys.retain(|t| *t != HirTy::Unit);
     let fail = |why: &str| {
         probe.emit_error_at(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::TYPE_ANNOTATIONS_NEEDED,
             fn_def.span,
             format!(
                 "cannot infer the return type of `{}`: {why} - write `-> T` (spec 4.1.3)",
@@ -1239,7 +1240,7 @@ fn lower_fn_with(
         // The location is a hidden parameter: no fixed signature.
         if fixed_abi || name == "main" {
             ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::MISPLACED_ATTRIBUTE,
                 format!(
                     "`#[track_caller]` on `{}`: not on `main` or a fixed-ABI \
                      (`extern \"C\"`, `#[export_name]`) function",
@@ -1283,7 +1284,7 @@ fn lower_fn_with(
             // A by-value `self` is not a slot to write.
             if p.name == "self" && !p.by_ref {
                 ctx.emit_error_at(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::INVALID_CAPTURE,
                     ap.span,
                     "`[ref self]` needs a `ref self` method (spec 4.7.4)".to_owned(),
                 );
@@ -1555,7 +1556,7 @@ pub(super) fn typed_const(
         HirTy::Prim(p) if p.is_int() || matches!(p, PrimTy::Bool | PrimTy::CChar) => p,
         other => {
             ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::INVALID_GENERIC_PARAMS,
                 format!(
                     "const parameter `{name}` has type `{}`; only integers, `bool`, `char` \
                      and `c_char` may be const parameters (spec 2.11.3)",
@@ -1569,7 +1570,7 @@ pub(super) fn typed_const(
     if is_char != (p == PrimTy::Char) {
         let found = if is_char { "a `char`" } else { "an integer" };
         ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::INVALID_CONST_ARGUMENT,
             format!(
                 "const argument for `{name}: {}` must be a `{}`, found {found}",
                 p.name(),
@@ -1585,7 +1586,7 @@ pub(super) fn typed_const(
     };
     if !fits {
         ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::INVALID_CONST_ARGUMENT,
             format!(
                 "const argument `{v}` out of range for `{name}: {}`",
                 p.name()
@@ -1834,7 +1835,7 @@ fn check_fn_body(ctx: &mut LowerCtx<'_>, mut block: HirBlock, fn_name: &str) -> 
         // `fn f() -> i32 { if c { return 1; } }`: a unit-valued tail
         // means some path falls off the end.
         Some(t) if t.ty == HirTy::Unit && !matches!(ret, HirTy::Unknown | HirTy::Unit) => {
-            ctx.emit_error(rokc_diagnostic::ErrorKind::Type, falls_off());
+            ctx.emit_error(Code::MISMATCHED_TYPES, falls_off());
             block.trailing = Some(t);
         }
         Some(t) => {
@@ -1850,7 +1851,7 @@ fn check_fn_body(ctx: &mut LowerCtx<'_>, mut block: HirBlock, fn_name: &str) -> 
                 };
                 if let Some((at, text)) = last {
                     ctx.emit_error_at(
-                        rokc_diagnostic::ErrorKind::Type,
+                        Code::MISMATCHED_TYPES,
                         at,
                         format!(
                             "function `{}` returns `{}`, but the `;` after its last expression \
@@ -1861,7 +1862,7 @@ fn check_fn_body(ctx: &mut LowerCtx<'_>, mut block: HirBlock, fn_name: &str) -> 
                     );
                     ctx.help_last(Some(format!("remove the `;` to return it: `{text}`")));
                 } else {
-                    ctx.emit_error(rokc_diagnostic::ErrorKind::Type, falls_off());
+                    ctx.emit_error(Code::MISMATCHED_TYPES, falls_off());
                 }
             }
         }
@@ -2034,7 +2035,7 @@ pub(super) fn ref_unpack(
             let name = ctx.locals[l.0 as usize].name.clone().unwrap_or_default();
             let text = ctx.src(span).filter(|t| t.len() <= 60 && !t.contains('\n'));
             ctx.emit_error_at(
-                rokc_diagnostic::ErrorKind::Handoff,
+                Code::COROUTINE,
                 span,
                 format!(
                     "this `async` call takes `{name}` as `ref self`: its future holds `{name}` \

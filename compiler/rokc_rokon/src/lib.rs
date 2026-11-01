@@ -36,6 +36,7 @@ pub use write::{quote, to_line, to_string};
 
 use rokc_ast::escape::{EscapeMode, unescape};
 use rokc_ast::{CallArg, Expr, ExprKind, Literal};
+use rokc_diagnostic::Code;
 use rokc_lexer::{Lexer, Token, TokenKind};
 
 #[derive(Clone, Debug)]
@@ -168,7 +169,7 @@ impl Error {
 
     /// The syntax error as `rokc` prints diagnostics (spec 9.1.8).
     pub fn render(&self, text: &str, file: &str) -> String {
-        let r = render(text, file, self.span, "E002", &self.message);
+        let r = render(text, file, self.span, Code::SYNTAX, &self.message);
         match &self.help {
             Some(h) => with_help(&r, h),
             None => r,
@@ -188,7 +189,7 @@ pub fn line_col(src: &str, offset: usize) -> (usize, usize) {
 /// An error at `span` of `src` in the diagnostic layout of spec 9.1.8:
 /// `error[code]: message`, `--> file:line:col`, then the line with
 /// `^^^` under the span (its first line).
-pub fn render(src: &str, file: &str, span: Span, code: &str, message: &str) -> String {
+pub fn render(src: &str, file: &str, span: Span, code: Code, message: &str) -> String {
     let (start, end) = (span.start as usize, span.end as usize);
     let (line, col) = line_col(src, start);
     let text = src.lines().nth(line - 1).unwrap_or("");

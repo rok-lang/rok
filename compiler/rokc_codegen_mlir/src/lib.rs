@@ -15,7 +15,7 @@ pub mod units;
 pub use mangle::{Demangled, demangle, pkg_hash};
 pub use repl::ReplFn;
 
-use rokc_diagnostic::{ErrorKind, RokDiagnostic};
+use rokc_diagnostic::{Code, RokDiagnostic};
 use rokc_mir::MirModule;
 
 #[derive(Clone, Debug, Default)]
@@ -74,7 +74,7 @@ pub struct CodegenOptions {
 #[must_use]
 pub fn codegen_error(errors: &[(rokc_diagnostic::Span, String)]) -> Option<RokDiagnostic> {
     let ((at, first), rest) = errors.split_first()?;
-    let mut d = RokDiagnostic::error(ErrorKind::Unsupported, *at, first.clone());
+    let mut d = RokDiagnostic::error(Code::UNSUPPORTED, *at, first.clone());
     for (_, more) in rest {
         d = d.with_note(more.clone());
     }

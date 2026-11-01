@@ -3,6 +3,7 @@
 
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use rokc_diagnostic::Code;
 
 /// The module path of `module::path::name` (`""` at the package root).
 pub(super) fn module_of(name: &str) -> String {
@@ -585,7 +586,7 @@ pub(super) fn instance(
         });
         if let Some((msg, help)) = misfit {
             let at = if span.is_dummy() { sc.at } else { span };
-            sc.names.error_help(at, msg, help);
+            sc.names.error_help(Code::GENERIC_ARGUMENTS, at, msg, help);
             misfit_pad = true;
         }
     }
@@ -654,6 +655,7 @@ pub(super) fn resolve_ty_with_structs(
             if sc.names.is_trait(&full) {
                 let written = segs.join("::");
                 sc.names.error_help(
+                    Code::TRAIT_AS_TYPE,
                     sc.at,
                     format!("trait `{full}` cannot be used as a type directly"),
                     format!(
@@ -718,7 +720,7 @@ pub(super) fn resolve_ty_with_structs(
             let Ok(n) = u32::try_from(n) else {
                 // Located at the type: field types resolve outside any item pass.
                 let at = if ty.span.is_dummy() { sc.at } else { ty.span };
-                sc.names.error(
+                sc.names.error(Code::CONST_EVAL,
                     at,
                     format!("array length must be a compile-time integer (spec 2.11.5): length {n} is out of range"),
                 );
@@ -748,6 +750,7 @@ pub(super) fn resolve_ty_with_structs(
                     let written = segs.join("::");
                     if sc.names.canon(&segs, sc.module, &[], sc.at).is_some() {
                         sc.names.error(
+                            Code::NOT_A_TRAIT,
                             sc.at,
                             format!(
                                 "`{written}` in `any {written}` is not a trait - `any` bounds \
@@ -756,7 +759,7 @@ pub(super) fn resolve_ty_with_structs(
                         );
                     } else {
                         let d = rokc_diagnostic::RokDiagnostic::error(
-                            rokc_diagnostic::ErrorKind::Resolve,
+                            Code::UNRESOLVED_TYPE,
                             b.span,
                             format!("cannot find trait `{written}` in this scope"),
                         );

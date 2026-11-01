@@ -2,6 +2,7 @@
 
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use rokc_diagnostic::Code;
 
 pub(super) fn lower_block(ctx: &mut LowerCtx<'_>, block: &Block) -> HirBlock {
     ctx.push_scope();
@@ -131,7 +132,7 @@ fn declare_nested_fns(ctx: &mut LowerCtx<'_>, block: &Block) {
             }
             if let Some(&(first, first_fn)) = own.get(f.name.as_str()).filter(|_| !inherited) {
                 ctx.emit_diag(rokc_diagnostic::duplicate(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::DUPLICATE_DEFINITION,
                     format!(
                         "nested function `{}` is defined twice in this block",
                         f.name
@@ -170,7 +171,7 @@ fn declare_nested_fns(ctx: &mut LowerCtx<'_>, block: &Block) {
         for n in names {
             if own.contains_key(n) {
                 ctx.emit_error_at(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::REDECLARED_LOCAL,
                     s.span,
                     format!(
                         "`{n}` names both a variable and a nested function in this block \
@@ -243,7 +244,7 @@ fn check_local_item(ctx: &LowerCtx<'_>, item: &Item) {
             _ => "pass it as a parameter instead",
         };
         ctx.emit_error_at(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::OUTER_LOCAL,
             *span,
             format!(
                 "{what} is declared inside `{outer}` and can't use `{name}`, a local of \
@@ -277,7 +278,7 @@ fn check_local_item(ctx: &LowerCtx<'_>, item: &Item) {
             _ => format!("declare its own instead: `{keyword} {leaf}<{name}>`"),
         };
         ctx.emit_error_at(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::OUTER_LOCAL,
             *span,
             format!(
                 "{what} is declared inside `{outer}` and can't use `{name}`, a generic \
@@ -366,7 +367,7 @@ pub(super) fn lower_let_struct(
         (HirTy::Struct(sid), None) if path.segments.is_empty() => *sid,
         _ => {
             ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::PATTERN_TYPE,
                 format!(
                     "struct pattern `{}` does not match the value's type `{}`",
                     segs.join("::"),
@@ -430,7 +431,7 @@ pub(super) fn lower_let_tuple(
         HirTy::Unknown => vec![HirTy::Unknown; names.len()],
         other => {
             ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::PATTERN_TYPE,
                 format!(
                     "tuple destructure of a non-tuple value of type `{}`",
                     ctx.ty_name(other)
@@ -445,7 +446,7 @@ pub(super) fn lower_let_tuple(
     let have = elem_tys.len();
     if rest.is_none() && have != needed {
         ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::PATTERN_ARITY,
             format!(
                 "tuple destructure length mismatch: pattern has {needed} element{}, value \
                  has {have} (spec 3.15.2)",
@@ -454,7 +455,7 @@ pub(super) fn lower_let_tuple(
         );
     } else if rest.is_some() && have < needed {
         ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::PATTERN_ARITY,
             format!(
                 "tuple destructure too short: pattern needs at least {needed} non-rest \
                  element{}, value has {have} (spec 3.15.3)",
@@ -574,7 +575,7 @@ fn lower_stmt_inner(ctx: &mut LowerCtx<'_>, stmt: &Stmt) -> Option<HirStmt> {
             // shadowing); an inner scope makes a fresh binding.
             if name != "_" && ctx.lookup_in_current_scope(name).is_some() {
                 ctx.emit_error(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::REDECLARED_LOCAL,
                     format!(
                         "`{name}` is already declared in this scope, and rok does not \
                          let a second `let` hide it"
@@ -616,7 +617,7 @@ fn lower_stmt_inner(ctx: &mut LowerCtx<'_>, stmt: &Stmt) -> Option<HirStmt> {
         }
         StmtKind::Return(_) if ctx.implicit_main => {
             ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::TOP_LEVEL_RETURN,
                 "`return` is not allowed in top-level statements (spec 4.16.4); use \
                  `process::exit(code)` or an explicit `fn main() -> i32`"
                     .to_owned(),
@@ -649,7 +650,7 @@ fn lower_stmt_inner(ctx: &mut LowerCtx<'_>, stmt: &Stmt) -> Option<HirStmt> {
                 }
                 if !matches!(ret, HirTy::Unit | HirTy::Unknown) {
                     ctx.emit_error(
-                        rokc_diagnostic::ErrorKind::Type,
+                        Code::MISMATCHED_TYPES,
                         format!(
                             "`return;` without a value in a function returning `{}`",
                             ctx.ty_name(&ret)
@@ -667,7 +668,7 @@ fn lower_stmt_inner(ctx: &mut LowerCtx<'_>, stmt: &Stmt) -> Option<HirStmt> {
             let h = lower_expected(ctx, expr, HirTy::Unit);
             if let Some(g) = lock_guard(ctx, &h.ty) {
                 ctx.emit_error_at(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::GUARD_NOT_RELEASED,
                     stmt.span,
                     format!(
                         "this `{g}` is discarded without being released: only `using` \
@@ -684,7 +685,7 @@ fn lower_stmt_inner(ctx: &mut LowerCtx<'_>, stmt: &Stmt) -> Option<HirStmt> {
             let h = lower_expected(ctx, expr, HirTy::Unit);
             if let Some(t) = arm_value_ty(&h) {
                 ctx.emit_error_at(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::BLOCK_VALUE_DISCARDED,
                     stmt.span,
                     format!(
                         "this block-like statement leaves a value of type `{}` without `;`: a \
@@ -750,7 +751,7 @@ fn lower_stmt_inner(ctx: &mut LowerCtx<'_>, stmt: &Stmt) -> Option<HirStmt> {
                     Some((t, _)) if t != HirTy::Unit => {
                         let t = ctx.ty_name(&t);
                         ctx.emit_error(
-                            rokc_diagnostic::ErrorKind::Type,
+                            Code::BRANCH_TYPES,
                             format!(
                                 "`break` without a value, but this loop's `break` values are \
                                  `{t}` (spec 3.13.1)"
@@ -827,7 +828,7 @@ fn check_let_inferable(ctx: &LowerCtx<'_>, name: &str, init: &HirExpr) {
         return;
     };
     ctx.emit_error(
-        rokc_diagnostic::ErrorKind::Type,
+        Code::TYPE_ANNOTATIONS_NEEDED,
         format!("cannot infer the type of `{name}`: {why}"),
     );
 }
@@ -1054,6 +1055,7 @@ fn receiver_write(
                 if dropped || heap {
                     let low = name.to_lowercase();
                     ctx.emit_error_help(
+                        Code::INVALID_ASSIGNMENT,
                         span,
                         format!(
                             "cannot call `{method}` on `{name}`: it is a const, and each use \
@@ -1067,6 +1069,7 @@ fn receiver_write(
                 }
             } else if dropped && ctx.resolve_in(&[name], true).is_some() {
                 ctx.emit_error_help(
+                    Code::INVALID_ASSIGNMENT,
                     span,
                     format!(
                         "cannot call `{method}` on `{text}`: it takes `ref self`, and a static \
@@ -1327,7 +1330,7 @@ pub(super) fn lower_assign(
                 guard_sink(ctx, value);
                 if ctx.value_captured.contains(&local) {
                     ctx.emit_error(
-                        rokc_diagnostic::ErrorKind::Type,
+                        Code::INVALID_ASSIGNMENT,
                         format!(
                             "`{name}` is value-captured; to mutate the outer variable, add \
                              `[ref {name}]` to the closure's capture list (spec 4.6.4)"
@@ -1344,7 +1347,7 @@ pub(super) fn lower_assign(
                 item_marked(ctx, "static", &full, ctx.here());
                 if !ctx.env.is_mut_static(&full) {
                     ctx.emit_error(
-                        rokc_diagnostic::ErrorKind::Type,
+                        Code::INVALID_ASSIGNMENT,
                         format!(
                             "cannot assign to static `{name}`: statics are immutable \
                              (spec 5.3); only an `extern` `static mut` can be written"
@@ -1359,7 +1362,7 @@ pub(super) fn lower_assign(
             }
             if ctx.resolve_in(&segs, false).is_some() {
                 ctx.emit_error(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::INVALID_ASSIGNMENT,
                     format!("cannot assign to const `{name}` (spec 5.2)"),
                 );
                 return None;
@@ -1367,7 +1370,7 @@ pub(super) fn lower_assign(
             // Only `let` declares. Declare it anyway so later uses don't
             // report again.
             ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::INVALID_ASSIGNMENT,
                 format!("`{name}` is not declared; a variable is created only by `let`"),
             );
             ctx.help_last(Some(format!("write `let {name} = {};`", snippet(value))));
@@ -1456,7 +1459,7 @@ pub(super) fn lower_assign(
             }
             let Some((array_local, elem_ty)) = elem else {
                 ctx.emit_error(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::INVALID_ASSIGNMENT,
                     format!(
                         "indexed assignment needs a local array variable as target \
                          (found `{}`)",
@@ -1532,7 +1535,7 @@ pub(super) fn lower_assign(
             }
             if super::mono::place_root(&root_h).is_none() {
                 ctx.emit_error(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::INVALID_ASSIGNMENT,
                     "field assignment needs a local variable at the root of the target \
                      (`v.f = x`)"
                         .to_owned(),
@@ -1543,6 +1546,7 @@ pub(super) fn lower_assign(
                 if ctx.value_captured.contains(l) {
                     let name = p.segments.last().map_or("", |s| s.name.as_str());
                     ctx.emit_error_help(
+                        Code::INVALID_ASSIGNMENT,
                         target.span,
                         format!(
                             "cannot assign to a field of `{name}`: it is value-captured, so the \
@@ -1573,7 +1577,7 @@ pub(super) fn lower_assign(
                 }
                 let HirTy::Struct(sid) = step_ty.clone() else {
                     ctx.emit_error(
-                        rokc_diagnostic::ErrorKind::Type,
+                        Code::NO_FIELD,
                         format!("no field `{name}` on type `{}`", ctx.ty_name(&step_ty)),
                     );
                     return None;
@@ -1591,7 +1595,7 @@ pub(super) fn lower_assign(
                     };
                     if ci + 1 != chain.len() {
                         ctx.emit_error(
-                            rokc_diagnostic::ErrorKind::Type,
+                            Code::INVALID_ASSIGNMENT,
                             format!(
                                 "cannot assign through union field `{name}`: read it (in \
                                  `unsafe`), change the copy, and write the field back"
@@ -1730,7 +1734,7 @@ pub(super) fn lower_assign(
         }
         _ => {
             ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::INVALID_ASSIGNMENT,
                 format!("invalid assignment target (spec 3.4) at line {}", span.line),
             );
             None
@@ -1856,10 +1860,7 @@ pub(super) fn check_jump_target(
             || "a loop".to_owned(),
             |l| format!("a loop labelled `'{l}`"),
         );
-        ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
-            format!("`{kw}` outside of {what}"),
-        );
+        ctx.emit_error(Code::OUTSIDE_CONTEXT, format!("`{kw}` outside of {what}"));
     }
 }
 
@@ -1867,7 +1868,7 @@ pub(super) fn check_jump_target(
 pub(super) fn check_index_ty(ctx: &LowerCtx<'_>, idx: &HirExpr) {
     if !matches!(&idx.ty, HirTy::Prim(p) if p.is_int()) && idx.ty != HirTy::Unknown {
         ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::INVALID_INDEX,
             format!(
                 "array index must be an integer, found `{}`",
                 ctx.ty_name(&idx.ty)
@@ -1944,7 +1945,7 @@ fn guard_flow(ctx: &mut LowerCtx<'_>, expr: &Expr, e: &HirExpr) {
         | ExprKind::Try { .. }
         | ExprKind::Loop { .. } => {}
         _ if !sink => ctx.emit_error_at(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::GUARD_NOT_RELEASED,
             expr.span,
             format!(
                 "this `{g}` is never released: a guard received without `using` must be \
@@ -2044,9 +2045,14 @@ fn lower_cast(
     {
         let to_name = ctx.ty_name(&to_ty);
         if let Some(h) = super::wide_int_help(&to_name) {
-            return ctx.error_expr(span, format!("cannot cast to `{to_name}`: {h}"));
+            return ctx.error_expr(
+                Code::INVALID_CAST,
+                span,
+                format!("cannot cast to `{to_name}`: {h}"),
+            );
         }
         return ctx.error_expr(
+            Code::INVALID_CAST,
             span,
             format!(
                 "cannot cast `{}` as `{}` (only numeric / bool / char casts){}",
@@ -2065,6 +2071,7 @@ fn lower_cast(
         )
     {
         return ctx.error_expr(
+            Code::INVALID_CAST,
             span,
             format!(
                 "only `u8` can be cast as `char`, not `{}`; use `char::from_u32(n)` \
@@ -2112,6 +2119,7 @@ fn bool_cast(
         None => format!("{text} != {zero}"),
     };
     ctx.emit_error_help(
+        Code::INVALID_CAST,
         span,
         format!("cannot cast `{}` as `bool`", from.name()),
         format!("compare instead: `{text} != {zero}`"),
@@ -2160,9 +2168,17 @@ fn lower_expr_inner(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
         ExprKind::QPath(q) => lower_qpath_value(ctx, expr, q, span),
         ExprKind::SelfLower => match ctx.lookup("self") {
             Some(local) => ctx.read_local(local, span),
-            None => ctx.error_expr(span, "`self` is only available inside methods".to_owned()),
+            None => ctx.error_expr(
+                Code::OUTSIDE_CONTEXT,
+                span,
+                "`self` is only available inside methods".to_owned(),
+            ),
         },
-        ExprKind::SelfUpper => ctx.error_expr(span, "`Self` is a type, not a value".to_owned()),
+        ExprKind::SelfUpper => ctx.error_expr(
+            Code::WRONG_ITEM_FORM,
+            span,
+            "`Self` is a type, not a value".to_owned(),
+        ),
         ExprKind::Unsafe(b) => {
             ctx.unsafe_depth += 1;
             let block = Expr {
@@ -2316,6 +2332,7 @@ fn lower_expr_inner(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
                         },
                     },
                     None => ctx.error_expr(
+                        Code::NO_FIELD,
                         span,
                         format!("tuple index {index} out of range for a {}-tuple", ts.len()),
                     ),
@@ -2339,6 +2356,7 @@ fn lower_expr_inner(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
                             }
                         }
                         _ => ctx.error_expr(
+                            Code::NO_FIELD,
                             span,
                             format!("struct `{}` has no field `{index}`", def.name),
                         ),
@@ -2346,6 +2364,7 @@ fn lower_expr_inner(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
                 }
                 HirTy::Unknown => target_h,
                 other => ctx.error_expr(
+                    Code::NO_FIELD,
                     span,
                     format!("no field `{index}` on type `{}`", ctx.ty_name(&other)),
                 ),
@@ -2387,6 +2406,7 @@ fn lower_expr_inner(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
                 HirTy::Unknown => return arr_h,
                 other => {
                     let e = ctx.error_expr(
+                        Code::INVALID_INDEX,
                         span,
                         format!("cannot index into a value of type `{}`", ctx.ty_name(other)),
                     );
@@ -2575,6 +2595,7 @@ pub(super) fn lower_break_value(ctx: &mut LowerCtx<'_>, depth: usize, e: &Expr) 
         {
             let t = ctx.ty_name(&v.ty);
             let h = ctx.error_expr(
+                Code::BRANCH_TYPES,
                 v.span,
                 format!(
                     "`break` with a `{t}` value, but an earlier `break` of this loop has no \
@@ -2588,6 +2609,7 @@ pub(super) fn lower_break_value(ctx: &mut LowerCtx<'_>, depth: usize, e: &Expr) 
             h
         }
         Some((t, true)) if v.ty != HirTy::Unknown && !coercible(ctx, &t, &v.ty) => ctx.error_expr(
+            Code::BRANCH_TYPES,
             v.span,
             format!(
                 "`break` values have different types `{}` and `{}` - rok does not infer \
@@ -2663,7 +2685,7 @@ pub(super) fn resolve_enum_variant(
         EnumRes::NotEnum
     } else {
         ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::UNRESOLVED_VARIANT,
             format!("enum `{full}` has no variant `{vname}`"),
         );
         EnumRes::Error
@@ -2716,7 +2738,7 @@ fn infer_enum_instance(
         .collect();
     let Some(variant) = def.variants.iter().find(|v| v.name == vname) else {
         ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::UNRESOLVED_VARIANT,
             format!("enum `{full}` has no variant `{vname}`"),
         );
         return None;
@@ -2794,7 +2816,7 @@ fn check_duplicate_fields(ctx: &LowerCtx<'_>, segs: &[&str], fields: &[(String, 
     for (n, _) in fields {
         if !seen.insert(n.as_str()) {
             ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::DUPLICATE_FIELD,
                 format!(
                     "field `{n}` specified more than once in `{}` literal",
                     segs.join("::")
@@ -2907,6 +2929,7 @@ pub(super) fn lower_struct_init(
         EnumRes::Error => return poison(span),
         EnumRes::Found(..) if spread.is_some() => {
             return ctx.error_expr(
+                Code::WRONG_ITEM_FORM,
                 span,
                 format!(
                     "`..base` needs a struct; `{}` is an enum variant (spec 2.3.4)",
@@ -2918,6 +2941,7 @@ pub(super) fn lower_struct_init(
             let variant = ctx.enum_def(enum_id).variants[idx].clone();
             if variant.named_fields.is_empty() {
                 return ctx.error_expr(
+                    Code::WRONG_ITEM_FORM,
                     span,
                     format!("`{}` is not a struct-like enum variant", segs.join("::")),
                 );
@@ -2933,7 +2957,7 @@ pub(super) fn lower_struct_init(
                     }
                     None => {
                         ctx.emit_error(
-                            rokc_diagnostic::ErrorKind::Type,
+                            Code::NO_FIELD,
                             format!(
                                 "enum variant `{}` has no field `{n}` (spec 2.4)",
                                 segs.join("::")
@@ -2948,7 +2972,7 @@ pub(super) fn lower_struct_init(
                     args.push(a);
                 } else {
                     ctx.emit_error(
-                        rokc_diagnostic::ErrorKind::Type,
+                        Code::MISSING_FIELD,
                         format!(
                             "enum variant `{}` is missing field `{}` (spec 2.4)",
                             segs.join("::"),
@@ -2981,6 +3005,7 @@ pub(super) fn lower_struct_init(
         }
         let help = ctx.type_help(&segs);
         return ctx.unknown_name(
+            Code::UNRESOLVED_TYPE,
             span,
             format!("cannot find struct `{}` in this scope", segs.join("::")),
             help,
@@ -3004,6 +3029,7 @@ pub(super) fn lower_struct_init(
             _ if ctx.env.sink.diagnostics.borrow().len() > errors => return poison(span),
             _ => {
                 return ctx.error_expr(
+                    Code::GENERIC_ARGUMENTS,
                     span,
                     format!(
                         "cannot instantiate `{}` with these type arguments",
@@ -3088,7 +3114,11 @@ pub(super) fn lower_struct_init(
             }
         }
     } else {
-        return ctx.error_expr(span, format!("`{full}` is not a struct"));
+        return ctx.error_expr(
+            Code::WRONG_ITEM_FORM,
+            span,
+            format!("`{full}` is not a struct"),
+        );
     };
     let def = ctx.struct_def(struct_id);
     let ty_display = ctx.ty_name(&HirTy::Struct(struct_id));
@@ -3096,10 +3126,15 @@ pub(super) fn lower_struct_init(
     // synthetic `__data` slot.
     if let Some(union_kind) = def.union_kind.clone() {
         if spread.is_some() {
-            return ctx.error_expr(span, format!("`..base` cannot build union `{ty_display}`"));
+            return ctx.error_expr(
+                Code::INVALID_UNION,
+                span,
+                format!("`..base` cannot build union `{ty_display}`"),
+            );
         }
         if fields.len() != 1 {
             return ctx.error_expr(
+                Code::INVALID_UNION,
                 span,
                 format!(
                     "union `{ty_display}` initializer must list exactly one field, found {}",
@@ -3178,7 +3213,7 @@ pub(super) fn lower_struct_init(
             // when it has a default.
             (None, None) if ctx.field_hidden(struct_id, &f.name).is_some() => {
                 ctx.emit_error(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::PRIVATE_ITEM,
                     format!(
                         "struct `{ty_display}` has private field `{}` with no default, so a \
                          literal here cannot leave it out: build the value with a function \
@@ -3190,7 +3225,7 @@ pub(super) fn lower_struct_init(
             }
             (None, None) => {
                 ctx.emit_error(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::MISSING_FIELD,
                     format!(
                         "struct `{ty_display}` is missing field `{}` and no default is \
                          declared",
@@ -3318,6 +3353,7 @@ pub(super) fn lower_field(
     if !has_field && matches!(pick_method(ctx, &target_h.ty, name, None), Ok(Some(_))) {
         let recv = rokc_ast::print::print_expr(target);
         let r = ctx.error_expr(
+            Code::WRONG_ITEM_FORM,
             span,
             format!(
                 "`{recv}.{name}` names a method without calling it; `.method` is not a \
@@ -3334,6 +3370,7 @@ pub(super) fn lower_field(
     if !has_field && name == "await" {
         let recv = rokc_ast::print::print_expr(target);
         let r = ctx.error_expr(
+            Code::FOREIGN_SYNTAX,
             span,
             "`await` goes before the expression, not after it".to_owned(),
         );
@@ -3357,6 +3394,7 @@ pub(super) fn field_access(
         HirTy::Path(_) => return poison(span),
         other => {
             return ctx.error_expr(
+                Code::NO_FIELD,
                 span,
                 format!("no field `{name}` on type `{}`", ctx.ty_name(other)),
             );
@@ -3370,7 +3408,7 @@ pub(super) fn field_access(
         // (a bad `bool`, a forged GC reference).
         if ctx.unsafe_depth == 0 {
             ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::UNSAFE_REQUIRED,
                 format!(
                     "reading field `{name}` of union `{}` needs an `unsafe` block \
                      (the bits may not be a valid `{name}`; spec 4.15.2)",
@@ -3616,7 +3654,7 @@ pub(super) fn lower_if(
         // Branches of different types are an error, not an inferred
         // sum - the slot's annotation must name the sum.
         ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::BRANCH_TYPES,
             format!(
                 "`if` branches have different types `{}` and `{}` - rok does not infer a \
                  sum type; annotate the slot (`let v: {} | {} = if ...`)",
@@ -3676,7 +3714,7 @@ fn fit_if_branch(
         }
         None if !coercible(ctx, t, &HirTy::Unit) => {
             ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::MISMATCHED_TYPES,
                 format!(
                     "mismatched types: {} expects `{}`, found `()`",
                     what(),
@@ -4057,13 +4095,13 @@ pub(super) fn lower_args_ref(
                     Some(i) => {
                         let p = sig.param_names.get(i).map_or(name.as_str(), String::as_str);
                         ctx.emit_error(
-                            rokc_diagnostic::ErrorKind::Type,
+                            Code::NAMED_ARGUMENT,
                             format!("argument `{p}` provided more than once (spec 4.2.4)"),
                         );
                         ctx.help_last(Some(twice_help(p)));
                     }
                     None => ctx.emit_error(
-                        rokc_diagnostic::ErrorKind::Type,
+                        Code::NAMED_ARGUMENT,
                         format!("`{callee}` has no parameter named `{name}` (spec 4.2.4)"),
                     ),
                 }
@@ -4174,7 +4212,7 @@ pub(super) fn lower_args_ref(
                         dicts.push((name, k, v));
                     }
                     other => ctx.emit_error(
-                        rokc_diagnostic::ErrorKind::Type,
+                        Code::SPREAD_ARGUMENT,
                         format!(
                             "spread `f(..x)` needs a tuple, a `List`, a `Slice`, an array or a \
                              `Dict<str, V>`, found `{}` (spec 4.2.6)",
@@ -4219,14 +4257,14 @@ pub(super) fn lower_args_ref(
         let is_receiver = i == 0 && has_receiver;
         match &slot {
             Some(ArgSrc::Ref(_)) if !by_ref => ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::REF_ARGUMENT,
                 format!(
                     "argument `{pname}` of `{callee}` is passed with `ref`, but the parameter \
                      is not `ref` (spec 4.7.3)"
                 ),
             ),
             Some(ArgSrc::Ast(_)) if by_ref && !is_receiver => ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::REF_ARGUMENT,
                 format!(
                     "parameter `{pname}` of `{callee}` is `ref` - pass `ref x` at the call \
                      site (spec 4.7.3)"
@@ -4244,7 +4282,7 @@ pub(super) fn lower_args_ref(
                     places[i] = Some(h.clone());
                 } else if h.ty != HirTy::Unknown {
                     ctx.emit_error(
-                        rokc_diagnostic::ErrorKind::Type,
+                        Code::REF_ARGUMENT,
                         format!(
                             "`ref` argument `{pname}` of `{callee}` must name a variable or \
                              a field of one (spec 4.7)"
@@ -4270,7 +4308,7 @@ pub(super) fn lower_args_ref(
                     lower_expected(ctx, &d, pty.clone())
                 } else {
                     ctx.emit_error(
-                        rokc_diagnostic::ErrorKind::Type,
+                        Code::WRONG_ARGUMENT_COUNT,
                         format!("missing argument `{pname}` in call to `{callee}`"),
                     );
                     let sig = sig_of(ctx, callee, sig);
@@ -4523,7 +4561,11 @@ fn lower_byte_str(ctx: &mut LowerCtx<'_>, body: &str, span: rokc_diagnostic::Spa
         .map(|c| c as u8)
         .collect();
     let Ok(n) = u32::try_from(bytes.len()) else {
-        return ctx.error_expr(span, "byte string is too long".to_owned());
+        return ctx.error_expr(
+            Code::LITERAL_OUT_OF_RANGE,
+            span,
+            "byte string is too long".to_owned(),
+        );
     };
     let arr = HirExpr {
         ty: HirTy::Array(Box::new(HirTy::Prim(PrimTy::U8)), n),
@@ -4777,7 +4819,7 @@ pub(super) fn lower_variadic(
                     }
                     HirTy::Unknown => {}
                     other => ctx.emit_error(
-                        rokc_diagnostic::ErrorKind::Type,
+                        Code::SPREAD_ARGUMENT,
                         format!(
                             "spread into a variadic `...T` needs a tuple, a `List`, a `Slice` or \
                              an array, found `{}` (spec 4.2.6)",
@@ -4935,7 +4977,7 @@ fn sig_of_def(callee: &str, def: &FnDef) -> String {
 /// Report a wrong argument count, with the signature as help.
 fn arity_error(ctx: &LowerCtx<'_>, callee: &str, want: usize, got: usize, sig: Option<String>) {
     let (msg, help) = super::arity_msg(&ctx.display_path(callee), want, got, sig);
-    ctx.emit_error(rokc_diagnostic::ErrorKind::Type, msg);
+    ctx.emit_error(Code::WRONG_ARGUMENT_COUNT, msg);
     ctx.help_last(help);
 }
 
@@ -4977,7 +5019,7 @@ fn c_vararg_promote(ctx: &LowerCtx<'_>, callee: &str, a: HirExpr) -> HirExpr {
         other => {
             let name = ctx.ty_name(other);
             ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::FFI,
                 format!(
                     "`{callee}`: a `{name}` cannot be passed as a C variadic `...` argument \
                      (only numbers, `bool`, `char`, `str` and C function pointers; spec 8.6.10)"
@@ -5012,14 +5054,14 @@ fn check_path_receiver(
 ) {
     match explicit {
         Some(false) if by_ref => ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::REF_ARGUMENT,
             format!(
                 "parameter `{pname}` of `{callee}` is `ref` - pass `ref x` at the call site \
                  (spec 4.7.3)"
             ),
         ),
         Some(true) if !by_ref => ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::REF_ARGUMENT,
             format!(
                 "argument `{pname}` of `{callee}` is passed with `ref`, but the parameter is \
                  not `ref` (spec 4.7.3)"
@@ -5027,7 +5069,7 @@ fn check_path_receiver(
         ),
         Some(true) if super::mono::place_root(arg).is_none() && arg.ty != HirTy::Unknown => ctx
             .emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::REF_ARGUMENT,
                 format!(
                     "`ref` argument `{pname}` of `{callee}` must name a variable or a field of \
                      one (spec 4.7)"
@@ -5103,7 +5145,7 @@ fn check_ref_exclusive(
                 )
             };
             ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::REF_ARGUMENT,
                 format!("{what} in one call to `{callee}` (spec 4.7.2)"),
             );
             return;
@@ -5126,7 +5168,7 @@ fn check_ref_exclusive(
                 .any(|(x, q)| *x == n && ctx.lookup(x) == Some(*root) && overlaps(path, q));
         if read {
             ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::REF_ARGUMENT,
                 format!(
                     "`{}` is passed as `ref` to `{callee}` and also read by another argument \
                      of the same call (spec 4.7.2)",
@@ -5195,7 +5237,7 @@ pub(super) fn call_sig(
                 && !matches!(a.kind, HirExprKind::FnRef(_))
             {
                 ctx.emit_error(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::FFI,
                     format!(
                         "`{callee}` is a C function: a `fn` argument must name a function \
                          (a C callback has no room for a closure's captures, spec 5.9)"
@@ -5350,7 +5392,7 @@ fn check_const_overflow(
         ),
         None => format!("constant expression overflows `{}`", p.name()),
     };
-    ctx.emit_error_at(rokc_diagnostic::ErrorKind::Type, span, msg);
+    ctx.emit_error_at(Code::CONST_EVAL, span, msg);
 }
 
 /// `{ lets; e }` - temporaries a spread argument introduced, so the
@@ -5471,7 +5513,7 @@ fn drop_method<'m>(
         rokc_ast::USING_DROP_METHOD => {
             if *recv_ty != HirTy::Unknown && !needs_drop(ctx, recv_ty, 0) {
                 ctx.emit_diag(rokc_diagnostic::RokDiagnostic::error(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::USING_NOT_DROP,
                     span,
                     format!(
                         "`using` needs a resource whose type implements `Drop`; `{}` does not \
@@ -5802,7 +5844,11 @@ fn lower_transfer(
 ) -> HirExpr {
     let Some(t) = targs.first().filter(|_| targs.len() == 1) else {
         discard_args(ctx, args);
-        return ctx.error_expr(span, format!("`{name}` is called as `{name}::<T>(..)`"));
+        return ctx.error_expr(
+            Code::BUILTIN_CALL,
+            span,
+            format!("`{name}` is called as `{name}::<T>(..)`"),
+        );
     };
     let t = ctx.resolve_ast_ty(t);
     if op == Intrinsic::HandOver {
@@ -5829,6 +5875,7 @@ fn lower_transfer(
             _ => {
                 discard_args(ctx, args);
                 return ctx.error_expr(
+                    Code::BUILTIN_CALL,
                     span,
                     format!("`{name}` takes one value (or the kept one first)"),
                 );
@@ -5860,7 +5907,11 @@ fn lower_transfer(
     }
     let [CallArg::Positional(x), CallArg::Positional(memo)] = args else {
         discard_args(ctx, args);
-        return ctx.error_expr(span, format!("`{name}` takes a value and a memo"));
+        return ctx.error_expr(
+            Code::BUILTIN_CALL,
+            span,
+            format!("`{name}` takes a value and a memo"),
+        );
     };
     let x = lower_expected(ctx, x, t.clone());
     let x = coerce(ctx, &t, x, &|| format!("the value of `{name}`"));
@@ -6201,6 +6252,7 @@ fn direct_drop_error(ctx: &LowerCtx<'_>, span: rokc_diagnostic::Span) -> Option<
     }
     Some(
         ctx.error_expr(
+            Code::EXPLICIT_DROP,
             span,
             "`Drop::drop` cannot be called directly; it runs when a `using` block exits \
          (spec 2.13.4) - expose a method such as `close()` to release early"
@@ -6280,7 +6332,7 @@ pub(super) fn sum_order_error(
         ctx.ty_name(ty)
     );
     ctx.emit_diag(
-        rokc_diagnostic::RokDiagnostic::error(rokc_diagnostic::ErrorKind::Type, span, msg)
+        rokc_diagnostic::RokDiagnostic::error(Code::INVALID_OPERATOR, span, msg)
             .with_help(sum_order_help().to_owned()),
     );
     poison(span)
@@ -6369,7 +6421,11 @@ fn sum_structural_call(
         } else {
             let [CallArg::Positional(e)] = args else {
                 discard_args(ctx, args);
-                return ctx.error_expr(span, format!("`{method}` takes one argument"));
+                return ctx.error_expr(
+                    Code::WRONG_ARGUMENT_COUNT,
+                    span,
+                    format!("`{method}` takes one argument"),
+                );
             };
             lower_expected(ctx, e, sum_ty.clone())
         };
@@ -6380,7 +6436,11 @@ fn sum_structural_call(
     } else {
         if method == "hash" && !matches!(args, [CallArg::Ref(_) | CallArg::Positional(_)]) {
             discard_args(ctx, args);
-            return ctx.error_expr(span, "`hash` takes the hasher: `x.hash(ref h)`".to_owned());
+            return ctx.error_expr(
+                Code::REF_ARGUMENT,
+                span,
+                "`hash` takes the hasher: `x.hash(ref h)`".to_owned(),
+            );
         }
         if !matches!(method, "fmt" | "hash") {
             discard_args(ctx, args);
@@ -6609,7 +6669,7 @@ fn sum_min_max(
     if args.len() != want || args.iter().any(|a| !matches!(a, CallArg::Positional(_))) {
         discard_args(ctx, args);
         let (msg, _) = super::arity_msg(method, want, args.len(), None);
-        return ctx.error_expr(span, msg);
+        return ctx.error_expr(Code::WRONG_ARGUMENT_COUNT, span, msg);
     }
     let mut stmts = Vec::new();
     let mut local = |ctx: &mut LowerCtx<'_>, init: HirExpr| {
@@ -6702,6 +6762,7 @@ fn sum_no_method(
         }
     };
     let e = ctx.error_expr(
+        Code::NO_METHOD,
         span,
         format!(
             "{what} is {} `{ty}`, and only {} `{case}` has the method `{method}`",
@@ -6753,7 +6814,7 @@ fn try_q_errors(ctx: &LowerCtx<'_>, text: &str, at: rokc_diagnostic::Span, since
     });
     if hit {
         let d = rokc_diagnostic::RokDiagnostic::error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::OPTIONAL_OPERATOR,
             at,
             "`?` only works on `T | none`; it does not pass errors on (spec 3.14 / 4.14)",
         )
@@ -6908,7 +6969,7 @@ pub(super) fn method_call_on(
                 Some(p)
             } else {
                 lower_args_only(ctx);
-                return ctx.error_expr(span, msg);
+                return ctx.error_expr(Code::AMBIGUOUS_ITEM, span, msg);
             }
         }
     };
@@ -6926,6 +6987,7 @@ pub(super) fn method_call_on(
             if gm.def.params.first().map(|p| p.name.as_str()) != Some("self") {
                 lower_args_only(ctx);
                 return ctx.error_expr(
+                    Code::WRONG_ITEM_FORM,
                     span,
                     format!(
                         "`{method}` is an associated function, not a method - call it as \
@@ -6949,7 +7011,7 @@ pub(super) fn method_call_on(
                 Ok(bound) => ctx.explicit_generics = bound,
                 Err(msg) => {
                     lower_args_only(ctx);
-                    return ctx.error_expr(span, msg);
+                    return ctx.error_expr(Code::GENERIC_ARGUMENTS, span, msg);
                 }
             }
             return call_generic(
@@ -6978,6 +7040,7 @@ pub(super) fn method_call_on(
             });
         if let Some((gi, (bty, bound))) = unmet {
             return ctx.error_expr(
+                Code::UNSATISFIED_BOUND,
                 span,
                 format!(
                     "method `{method}` of the generic impl of `{}` does not apply to `{}`: \
@@ -7010,7 +7073,11 @@ pub(super) fn method_call_on(
         retain_since(ctx, since, |d| {
             d.tag != rokc_diagnostic::Tag::ClosureParamInfer
         });
-        let e = ctx.error_expr(span, format!("no method `{method}` found for type `{ty}`"));
+        let e = ctx.error_expr(
+            Code::NO_METHOD,
+            span,
+            format!("no method `{method}` found for type `{ty}`"),
+        );
         let format = (method == "format" && recv_h.ty == HirTy::Prim(PrimTy::Str))
             .then(|| format_help(ctx, args, span));
         let help = format
@@ -7022,12 +7089,17 @@ pub(super) fn method_call_on(
     check_method_visible(ctx, fn_id, method);
     if !type_args.is_empty() {
         lower_args_only(ctx);
-        return ctx.error_expr(span, super::mono::arity_msg(method, 0, 0, type_args.len()));
+        return ctx.error_expr(
+            Code::GENERIC_ARGUMENTS,
+            span,
+            super::mono::arity_msg(method, 0, 0, type_args.len()),
+        );
     }
     let sig = ctx.sig_by_id(fn_id);
     if sig.param_names.first().map(String::as_str) != Some("self") {
         lower_args_only(ctx);
         return ctx.error_expr(
+            Code::WRONG_ITEM_FORM,
             span,
             format!(
                 "`{method}` is an associated function, not a method - call it as \
@@ -7242,6 +7314,7 @@ fn any_method_call(
         }
         discard_args(ctx, args);
         return ctx.error_expr(
+            Code::NO_METHOD,
             span,
             format!(
                 "no method `{method}` on `{}` - only methods of its trait bound(s) and their \
@@ -7296,6 +7369,7 @@ fn any_method_call(
     if let Some(why) = why {
         discard_args(ctx, args);
         return ctx.error_expr(
+            Code::NO_METHOD,
             span,
             format!(
                 "cannot call `{method}` on `{}`: {why}; narrow the value with `is` or a type \
@@ -7308,7 +7382,11 @@ fn any_method_call(
     let own: Vec<String> = decl.map(own_type_params).unwrap_or_default();
     if own.is_empty() && !type_args.is_empty() {
         discard_args(ctx, args);
-        return ctx.error_expr(span, super::mono::arity_msg(method, 0, 0, type_args.len()));
+        return ctx.error_expr(
+            Code::GENERIC_ARGUMENTS,
+            span,
+            super::mono::arity_msg(method, 0, 0, type_args.len()),
+        );
     }
     let mut method_subst = HashMap::new();
     if let (Some(def), false) = (decl, own.is_empty()) {
@@ -7317,7 +7395,7 @@ fn any_method_call(
             Err(msg) => {
                 discard_args(ctx, args);
                 return match msg {
-                    Some(msg) => ctx.error_expr(span, msg),
+                    Some(msg) => ctx.error_expr(Code::GENERIC_ARGUMENTS, span, msg),
                     None => poison(span),
                 };
             }
@@ -7346,6 +7424,7 @@ fn any_method_call(
     else {
         discard_args(ctx, args);
         return ctx.error_expr(
+            Code::NO_METHOD,
             span,
             format!(
                 "cannot call `{method}` on `{}`: its signature can't be fixed from the bound \
@@ -8239,7 +8318,7 @@ fn trait_out_of_scope(ctx: &LowerCtx<'_>, ty: &HirTy, method: &str, at: Span) ->
         return false;
     };
     ctx.emit_error_at(
-        rokc_diagnostic::ErrorKind::Resolve,
+        Code::TRAIT_NOT_IN_SCOPE,
         at,
         format!("method `{method}` comes from trait `{key}`, which is not in scope (spec 3.5.2)"),
     );
@@ -8286,7 +8365,7 @@ pub(super) fn check_method_info_visible(ctx: &LowerCtx<'_>, info: &MethodInfo, m
     }
     if !ctx.is_visible(&info.module, info.vis) {
         ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Module,
+            Code::PRIVATE_ITEM,
             format!(
                 "method `{method}` is private to module `{}` and cannot be called from `{}` \
                  (spec 5.6 - add `pub` to expose it)",
@@ -8318,6 +8397,7 @@ pub(super) fn call_value(
         }
         other => {
             return ctx.error_expr(
+                Code::NOT_CALLABLE,
                 span,
                 format!("a value of type `{}` is not callable", ctx.ty_name(&other)),
             );
@@ -8325,6 +8405,7 @@ pub(super) fn call_value(
     };
     if args.iter().any(|a| !matches!(a, CallArg::Positional(_))) {
         return ctx.error_expr(
+            Code::SPREAD_ARGUMENT,
             span,
             "named / spread arguments need a statically known callee (spec 4.2.4)".to_owned(),
         );
@@ -8439,7 +8520,7 @@ fn extern_static_use(ctx: &LowerCtx<'_>, full: &str, write: bool, at: rokc_diagn
         (true, None) => ("writes", format!("`unsafe {{ {name} = ..; }}`")),
     };
     ctx.emit_error_at(
-        rokc_diagnostic::ErrorKind::Type,
+        Code::UNSAFE_REQUIRED,
         at,
         format!("this {what} extern static `{name}` outside `unsafe`: Rok cannot check a C global"),
     );
@@ -8458,7 +8539,7 @@ fn extern_static_use(ctx: &LowerCtx<'_>, full: &str, write: bool, at: rokc_diagn
 fn check_unsafe_call(ctx: &LowerCtx<'_>, callee: &str) {
     if ctx.unsafe_depth == 0 {
         ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::UNSAFE_REQUIRED,
             format!(
                 "call to unsafe function `{}` outside an `unsafe` block or `unsafe fn` \
                  (spec 4.15; C functions are implicitly unsafe)",
@@ -8569,7 +8650,7 @@ fn generic_positional_args(
                 Some(_) => {
                     ok = false;
                     ctx.emit_error(
-                        rokc_diagnostic::ErrorKind::Type,
+                        Code::NAMED_ARGUMENT,
                         format!("argument `{name}` provided more than once (spec 4.2.4)"),
                     );
                     ctx.help_last(Some(twice_help(name)));
@@ -8577,7 +8658,7 @@ fn generic_positional_args(
                 None => {
                     ok = false;
                     ctx.emit_error(
-                        rokc_diagnostic::ErrorKind::Type,
+                        Code::NAMED_ARGUMENT,
                         format!("`{callee}` has no parameter named `{name}` (spec 4.2.4)"),
                     );
                 }
@@ -8624,7 +8705,7 @@ fn generic_positional_args(
                     }
                     other => {
                         ctx.emit_error(
-                            rokc_diagnostic::ErrorKind::Type,
+                            Code::SPREAD_ARGUMENT,
                             format!(
                                 "spread `f(..x)` needs a tuple, a `List`, a `Slice`, an array \
                                  or a `Dict<str, V>`, found `{}` (spec 4.2.6)",
@@ -8724,7 +8805,7 @@ fn generic_positional_args(
             }
             (None, None) => {
                 ctx.emit_error(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::WRONG_ARGUMENT_COUNT,
                     format!("missing argument `{}` in call to `{callee}`", p.name),
                 );
                 let sig = sig_of_def(callee, def);
@@ -8811,7 +8892,7 @@ fn call_generic_positional(
         let by_ref = def.params.get(i).is_some_and(|p| p.by_ref);
         if is_ref != by_ref {
             ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::REF_ARGUMENT,
                 if is_ref {
                     format!(
                         "argument {} of `{callee}` is passed with `ref`, but the parameter is \
@@ -8841,6 +8922,7 @@ fn call_generic_positional(
                     Ok(None) => {}
                     Err(fits) => {
                         return ctx.error_expr(
+                            Code::AMBIGUOUS_LITERAL,
                             span,
                             format!(
                                 "`{callee}` on `{}`: the literal fits several of its bounds \
@@ -8894,7 +8976,7 @@ fn call_generic_positional(
             }
         } else if is_ref && h.ty != HirTy::Unknown {
             ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::REF_ARGUMENT,
                 format!(
                     "`ref` argument {} of `{callee}` must name a variable or a field of one \
                      (spec 4.7)",
@@ -9138,7 +9220,7 @@ fn bind_explicit_generics(
 ) -> bool {
     if explicit.len() > def.generics.params.len() {
         ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::GENERIC_ARGUMENTS,
             super::mono::arity_msg(
                 leaf_name(full),
                 def.generics.params.len(),
@@ -9181,7 +9263,7 @@ pub(super) fn lower_call(
         Ok(a) => lower_path_call(ctx, a.as_ref().unwrap_or(p), args, span),
         Err(msg) => {
             discard_args(ctx, args);
-            ctx.error_expr(span, msg)
+            ctx.error_expr(Code::GENERIC_ARGUMENTS, span, msg)
         }
     }
 }
@@ -9384,7 +9466,7 @@ fn lower_path_call(
                 Ok(bound) => ctx.explicit_generics = bound,
                 Err(msg) => {
                     discard_args(ctx, args);
-                    return ctx.error_expr(span, msg);
+                    return ctx.error_expr(Code::GENERIC_ARGUMENTS, span, msg);
                 }
             }
             return call_generic_on(
@@ -9446,6 +9528,7 @@ fn lower_path_call(
                 .all(|(i, f)| f.name == i.to_string());
         if !is_tuple_form {
             return ctx.error_expr(
+                Code::WRONG_ITEM_FORM,
                 span,
                 format!("`{display}` is not a tuple struct - use `{display} {{ field: ... }}`"),
             );
@@ -9516,6 +9599,7 @@ fn lower_path_call(
             let slots = variant_arg_tys(&variant);
             if !variant.named_fields.is_empty() {
                 return ctx.error_expr(
+                    Code::WRONG_ITEM_FORM,
                     span,
                     format!("`{display}` has named fields - use `{display} {{ ... }}`"),
                 );
@@ -9588,7 +9672,7 @@ fn lower_path_call(
                     Ok(h) => h,
                     Err(msg) => {
                         discard_args(ctx, args);
-                        return ctx.error_expr(span, msg);
+                        return ctx.error_expr(Code::AMBIGUOUS_ITEM, span, msg);
                     }
                 };
                 match hits.as_slice() {
@@ -9651,6 +9735,7 @@ fn lower_path_call(
                             return poison(span);
                         }
                         let e = ctx.error_expr(
+                            Code::NO_METHOD,
                             span,
                             format!("no associated function `{method}` on `{full}`"),
                         );
@@ -9659,6 +9744,7 @@ fn lower_path_call(
                     }
                     _ => {
                         return ctx.error_expr(
+                            Code::GENERIC_ARGUMENTS,
                             span,
                             format!(
                                 "`{display}` is ambiguous: several instantiations of `{full}` \
@@ -9691,6 +9777,7 @@ fn call_item_value(
     discard_args(ctx, args);
     if let Some(help) = (segs.len() > 1).then(|| ctx.import_help(segs)).flatten() {
         return ctx.unknown_name(
+            Code::UNRESOLVED_NAME,
             span,
             format!(
                 "cannot find function `{display}`: module `{}` is not imported here",
@@ -9704,10 +9791,11 @@ fn call_item_value(
         .filter(|_| segs.len() == 1)
         .and_then(|n| ctx.variant_not_in_scope(n))
     {
-        return ctx.unknown_name(span, msg, Some(help));
+        return ctx.unknown_name(Code::UNRESOLVED_VARIANT, span, msg, Some(help));
     }
     let help = habit_call_help(ctx, segs, args).or_else(|| ctx.value_help(segs));
     ctx.unknown_name(
+        Code::UNRESOLVED_NAME,
         span,
         format!("cannot find function `{display}` in this scope"),
         help,
@@ -9869,7 +9957,11 @@ fn qpath_call(
     );
     let Some(key) = key else {
         discard_args(ctx, args);
-        return ctx.error_expr(span, format!("`{display}`: not a trait after `as`"));
+        return ctx.error_expr(
+            Code::NOT_A_TRAIT,
+            span,
+            format!("`{display}`: not a trait after `as`"),
+        );
     };
     if method == "drop" && key == ctx.lang("drop_method") {
         if let Some(e) = direct_drop_error(ctx, span) {
@@ -9909,6 +10001,7 @@ fn qpath_call(
     ctx.explicit_recv = None;
     call.unwrap_or_else(|| {
         ctx.error_expr(
+            Code::NO_METHOD,
             span,
             format!(
                 "`{}` has no `{key}` impl providing `{method}`",
@@ -9985,6 +10078,7 @@ fn path_call_via_impls(
         let Some(t) = self_ty else {
             discard_args(ctx, rest);
             return Some(ctx.error_expr(
+                Code::TYPE_ANNOTATIONS_NEEDED,
                 span,
                 format!(
                     "cannot tell which type's `{key}` impl `{display}` calls - annotate the \
@@ -10031,6 +10125,7 @@ fn path_call_via_impls(
         ctx.explicit_recv = None;
         return Some(call.unwrap_or_else(|| {
             ctx.error_expr(
+                Code::NO_METHOD,
                 span,
                 format!(
                     "`{}` has no `{key}` impl providing `{method}`",
@@ -10143,7 +10238,7 @@ fn call_impl_method(
         Err(msg) => {
             let Some(gm) = pick_generic_by_bounds(ctx, t, method, args) else {
                 discard_args(ctx, args);
-                return Some(ctx.error_expr(span, msg));
+                return Some(ctx.error_expr(Code::AMBIGUOUS_ITEM, span, msg));
             };
             gm
         }
@@ -10302,6 +10397,7 @@ fn call_overload(
             Err(fits) => {
                 discard_args(ctx, args);
                 return Some(ctx.error_expr(
+                    Code::AMBIGUOUS_LITERAL,
                     span,
                     format!(
                         "`{display}`: the literal fits several `{}` impls of `{}` ({fits}); \
@@ -10322,6 +10418,7 @@ fn call_overload(
             return Some(poison(span));
         }
         return Some(ctx.error_expr(
+            Code::UNSATISFIED_BOUND,
             span,
             format!(
                 "`{display}`: no `{}<{}>` impl for `{}`",
@@ -10486,6 +10583,7 @@ fn lower_array_repeat(
     };
     let Some(n) = ctx.eval_const(len).and_then(|n| u32::try_from(n).ok()) else {
         return ctx.error_expr(
+            Code::CONST_EVAL,
             span,
             "the length of `[v; N]` must be a non-negative compile-time integer (spec 2.11)"
                 .to_owned(),
@@ -10552,7 +10650,11 @@ fn lower_intrinsic(
         Intrinsic::SizeOf | Intrinsic::AlignOf => {
             let (Some(t), true) = (targs.first(), args.is_empty() && targs.len() == 1) else {
                 discard_args(ctx, args);
-                return ctx.error_expr(span, format!("`{name}` is called as `{name}::<T>()`"));
+                return ctx.error_expr(
+                    Code::BUILTIN_CALL,
+                    span,
+                    format!("`{name}` is called as `{name}::<T>()`"),
+                );
             };
             HirExpr {
                 kind: HirExprKind::SizeOf {
@@ -10622,7 +10724,11 @@ fn lower_ptr_intrinsic(
     let want = if write { 2 } else { 1 };
     if pos.len() != want || args.len() != want {
         discard_args(ctx, args);
-        return ctx.error_expr(span, format!("`{op}` takes {want} argument(s)"));
+        return ctx.error_expr(
+            Code::BUILTIN_CALL,
+            span,
+            format!("`{op}` takes {want} argument(s)"),
+        );
     }
     let p = lower_expected(ctx, pos[0], HirTy::Unknown);
     let HirTy::Struct(sid) = p.ty else {
@@ -10631,6 +10737,7 @@ fn lower_ptr_intrinsic(
             return p;
         }
         return ctx.error_expr(
+            Code::BUILTIN_CALL,
             span,
             format!("`{op}` needs a `Ptr<T>`, found `{}`", ctx.ty_name(&p.ty)),
         );
@@ -10640,7 +10747,7 @@ fn lower_ptr_intrinsic(
         def.generic_args.first().cloned(),
         def.fields.first().map(|f| f.ty.clone()),
     ) else {
-        return ctx.error_expr(span, format!("`{op}` needs a `Ptr<T>`"));
+        return ctx.error_expr(Code::BUILTIN_CALL, span, format!("`{op}` needs a `Ptr<T>`"));
     };
     let addr = Box::new(HirExpr {
         kind: HirExprKind::FieldRead {
@@ -10699,7 +10806,11 @@ fn lower_addr_of(
 ) -> HirExpr {
     let [CallArg::Positional(e)] = args else {
         discard_args(ctx, args);
-        return ctx.error_expr(span, format!("`{name}` takes one place: `{name}(x)`"));
+        return ctx.error_expr(
+            Code::BUILTIN_CALL,
+            span,
+            format!("`{name}` takes one place: `{name}(x)`"),
+        );
     };
     let outer = std::mem::replace(&mut ctx.addr_place, true);
     let place = lower_expected(ctx, e, HirTy::Unknown);
@@ -10716,6 +10827,7 @@ fn lower_addr_of(
         let target = rokc_ast::print::print_expr(target);
         let elem = ctx.ty_name(&place.ty);
         let r = ctx.error_expr(
+            Code::BUILTIN_CALL,
             span,
             format!(
                 "`{name}` needs a place, but `{target}[..]` is an `Index` call that returns a \
@@ -10748,6 +10860,7 @@ pub(super) fn addr_expr(
     let mut lets = Vec::new();
     let Some(place) = addr_place(ctx, place, &mut lets) else {
         return ctx.error_expr(
+            Code::BUILTIN_CALL,
             span,
             format!(
                 "`{name}` needs a place: a local variable or `static`, or a field or array \
@@ -10763,6 +10876,7 @@ pub(super) fn addr_expr(
         .and_then(|p| ctx.instantiate_struct(&format!("rok::bare::ptr::{p}"), vec![pointee], span))
     else {
         return ctx.error_expr(
+            Code::BUILTIN_CALL,
             span,
             "`rok.addr_of` returns a `rok::bare::ptr` pointer".to_owned(),
         );
@@ -10865,7 +10979,11 @@ fn lower_atomic_intrinsic(
     let want = 2 + values + orders;
     if pos.len() != want || args.len() != want {
         discard_args(ctx, args);
-        return ctx.error_expr(span, format!("`atomic_{op}` takes {want} argument(s)"));
+        return ctx.error_expr(
+            Code::BUILTIN_CALL,
+            span,
+            format!("`atomic_{op}` takes {want} argument(s)"),
+        );
     }
     // The orderings must be literal ordering variants: LLVM fixes them
     // per instruction.
@@ -10884,6 +11002,7 @@ fn lower_atomic_intrinsic(
             _ => {
                 discard_args(ctx, args);
                 return ctx.error_expr(
+                    Code::BUILTIN_CALL,
                     span,
                     format!(
                         "`atomic_{op}`: the memory ordering must be a constant ordering \
@@ -10907,6 +11026,7 @@ fn lower_atomic_intrinsic(
                 _ => "a failed compare-exchange",
             };
             return ctx.error_expr(
+                Code::BUILTIN_CALL,
                 span,
                 format!(
                     "`atomic_{op}`: `{}` is not a valid ordering for {what}",
@@ -10922,6 +11042,7 @@ fn lower_atomic_intrinsic(
             if !matches!(op, "load" | "store" | "xchg" | "cas") {
                 discard_args(ctx, &args[1..]);
                 return ctx.error_expr(
+                    Code::BUILTIN_CALL,
                     span,
                     format!("`atomic_{op}` needs an integer, found `{}`", ctx.ty_name(e)),
                 );
@@ -10945,12 +11066,13 @@ fn lower_atomic_intrinsic(
                 ctx.ty_name(other)
             );
             discard_args(ctx, &args[1..]);
-            return ctx.error_expr(span, msg);
+            return ctx.error_expr(Code::BUILTIN_CALL, span, msg);
         }
     };
     if elem == HirTy::Prim(PrimTy::Bool) && matches!(op, "add" | "sub") {
         discard_args(ctx, &args[1..]);
         return ctx.error_expr(
+            Code::BUILTIN_CALL,
             span,
             format!("`atomic_{op}` needs an integer, found `bool`"),
         );
@@ -11002,6 +11124,7 @@ fn lower_buf_intrinsic(
     if pos.len() != want || args.len() != want {
         discard_args(ctx, args);
         return ctx.error_expr(
+            Code::BUILTIN_CALL,
             span,
             format!("`{name}` takes {want} positional argument(s)"),
         );
@@ -11014,6 +11137,7 @@ fn lower_buf_intrinsic(
         let Some(HirTy::GcBuf(elem)) = ctx.current_expected().cloned() else {
             discard_args(ctx, args);
             return ctx.error_expr(
+                Code::TYPE_ANNOTATIONS_NEEDED,
                 span,
                 format!("`{name}` needs its `GcBuf<T>` type from the context - annotate the slot"),
             );
@@ -11035,6 +11159,7 @@ fn lower_buf_intrinsic(
             return buf;
         }
         return ctx.error_expr(
+            Code::BUILTIN_CALL,
             span,
             format!(
                 "`{name}` needs a `GcBuf<T>`, found `{}`",
@@ -11046,6 +11171,7 @@ fn lower_buf_intrinsic(
     if op == Intrinsic::BufCast {
         let Some(to @ HirTy::GcBuf(_)) = ctx.current_expected().cloned() else {
             return ctx.error_expr(
+                Code::TYPE_ANNOTATIONS_NEEDED,
                 span,
                 format!("`{name}` needs its `GcBuf<U>` type from the context - annotate the slot"),
             );
@@ -11194,7 +11320,7 @@ fn buf_access(
     // arbitrary memory.
     if ctx.unsafe_depth == 0 {
         ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::UNSAFE_REQUIRED,
             "indexing a `GcBuf` is unchecked and needs an `unsafe` block or `unsafe fn` \
              (spec 4.15)"
                 .to_owned(),
@@ -11530,6 +11656,7 @@ fn lower_infix_typed(
         }
     }
     ctx.error_expr(
+        Code::INVALID_OPERATOR,
         span,
         format!(
             "operator `{op}` cannot be applied to `{}` and `{}`",
@@ -11593,6 +11720,7 @@ fn dyn_op(
             .map(|t| format!("`{}`", ctx.ty_name(t)))
             .collect();
         return ctx.error_expr(
+            Code::INVALID_OPERATOR,
             span,
             format!(
                 "operator `{op}` cannot be applied to {} - on an `any` value it dispatches \
@@ -11813,6 +11941,7 @@ pub(super) fn lower_prefix(
         }
     }
     ctx.error_expr(
+        Code::INVALID_OPERATOR,
         span,
         format!(
             "operator `{op}` cannot be applied to `{}`",
@@ -11849,6 +11978,7 @@ pub(super) fn dispatch_user_op_lit(
     let ty_name = ctx.ty_name(&lhs.ty);
     let Some(entry) = ctx.env.prec.lookup(sym, fixity) else {
         return ctx.error_expr(
+            Code::INVALID_OPERATOR,
             span,
             format!("operator `{sym}` cannot be applied to `{ty_name}`"),
         );
@@ -11864,6 +11994,7 @@ pub(super) fn dispatch_user_op_lit(
         && names.hidden(cur, op_trait).is_none();
     if !visible {
         return ctx.error_expr(
+            Code::INVALID_OPERATOR,
             span,
             format!(
                 "operator `{sym}` needs trait `{op_trait}`, which is not visible here (spec \
@@ -11918,6 +12049,7 @@ pub(super) fn dispatch_user_op_lit(
             Ok(None) => {}
             Err(fits) => {
                 return ctx.error_expr(
+                    Code::AMBIGUOUS_LITERAL,
                     span,
                     format!(
                         "operator `{sym}` on `{ty_name}`: the literal fits several \
@@ -11954,6 +12086,7 @@ pub(super) fn dispatch_user_op_lit(
             }
         }
         return ctx.error_expr(
+            Code::INVALID_OPERATOR,
             span,
             format!(
                 "operator `{sym}` cannot be applied to `{ty_name}`: it needs \
@@ -11966,6 +12099,7 @@ pub(super) fn dispatch_user_op_lit(
     let expected_arity = if rhs.is_some() { 2 } else { 1 };
     if sig.param_tys.len() != expected_arity {
         return ctx.error_expr(
+            Code::INVALID_OPERATOR,
             span,
             format!(
                 "`{method}` for `{ty_name}` must take {expected_arity} parameter(s) to implement \
@@ -12009,6 +12143,7 @@ fn param_op(
     let gm = super::bounds::bound_methods(ctx, p, method, Some(op_trait));
     let (false, [gm]) = (bounds.is_empty(), gm.as_slice()) else {
         return ctx.error_expr(
+            Code::INVALID_OPERATOR,
             span,
             format!(
                 "operator `{sym}` on `{t}` needs a `{}` bound on `{t}` (spec 2.10.9)",
@@ -12034,6 +12169,7 @@ fn param_op(
                 Some(Ok(Some(i))) => params[i].clone(),
                 Some(Err(fits)) => {
                     return ctx.error_expr(
+                        Code::AMBIGUOUS_LITERAL,
                         span,
                         format!(
                             "operator `{sym}` on `{t}`: the literal fits several `{}` bounds \
@@ -12048,6 +12184,7 @@ fn param_op(
                         .map(|b| format!("`{}`", b.render(leaf_name(op_trait), |t| ctx.ty_name(t))))
                         .collect();
                     return ctx.error_expr(
+                        Code::INVALID_OPERATOR,
                         span,
                         format!(
                             "operator `{sym}` on `{t}` needs a bound `{}<{}>`, but `{t}` has {} \
@@ -12363,6 +12500,7 @@ fn lower_assoc_const(
             })
             .collect();
         return Some(ctx.error_expr(
+            Code::AMBIGUOUS_ITEM,
             ctx.here(),
             format!(
                 "associated const `{name}` of `{}` is ambiguous: {} define it - name the \
@@ -12440,6 +12578,7 @@ fn lower_qpath_value(
 ) -> HirExpr {
     if let Some(m) = &q.member {
         return ctx.error_expr(
+            Code::WRONG_ITEM_FORM,
             span,
             format!(
                 "`<.. as ..>::{}::{m}` without a call: write a closure `|..| <..>::{}::{m}(..)`",
@@ -12450,6 +12589,7 @@ fn lower_qpath_value(
     let t = ctx.resolve_ast_ty(&q.self_ty);
     let Some(key) = qpath_trait(ctx, q) else {
         return ctx.error_expr(
+            Code::NOT_A_TRAIT,
             span,
             format!(
                 "`<{} as ..>::{}`: not a trait after `as`",
@@ -12472,6 +12612,7 @@ fn lower_qpath_value(
         return v;
     }
     ctx.error_expr(
+        Code::NO_METHOD,
         span,
         format!(
             "`<{} as {}>` has no associated const or method `{}`",
@@ -12544,7 +12685,7 @@ pub(super) fn lower_path(
 ) -> HirExpr {
     let aliased = match alias_path(ctx, path) {
         Ok(a) => a,
-        Err(msg) => return ctx.error_expr(span, msg),
+        Err(msg) => return ctx.error_expr(Code::GENERIC_ARGUMENTS, span, msg),
     };
     let path = aliased.as_ref().unwrap_or(path);
     let self_segs = self_path_segs(ctx, path);
@@ -12652,6 +12793,7 @@ pub(super) fn lower_path(
         fn_marked(ctx, sig.id, span);
         if sig.param_refs.iter().any(|r| *r) {
             return ctx.error_expr(
+                Code::REF_ARGUMENT,
                 span,
                 format!(
                     "`{full}` has `ref` parameters and cannot be used as a `fn` value (a `fn` \
@@ -12692,11 +12834,12 @@ pub(super) fn lower_path(
                 Some(b) => b,
                 None => match bind_explicit(ctx, def, None, targs, &full) {
                     Ok(b) => b,
-                    Err(msg) => return ctx.error_expr(span, msg),
+                    Err(msg) => return ctx.error_expr(Code::GENERIC_ARGUMENTS, span, msg),
                 },
             };
             if bound.len() < def.generics.params.len() {
                 return ctx.error_expr(
+                    Code::GENERIC_ARGUMENTS,
                     span,
                     format!(
                         "`{}` as a value needs all {} generic argument(s)",
@@ -12729,6 +12872,7 @@ pub(super) fn lower_path(
             return v;
         }
         return ctx.error_expr(
+            Code::TYPE_ANNOTATIONS_NEEDED,
             span,
             format!(
                 "generic function `{}` as a value: its type arguments are not determined \
@@ -12751,6 +12895,7 @@ pub(super) fn lower_path(
             let variant = &ctx.enum_def(enum_id).variants[idx];
             if variant.payload_ty.is_some() {
                 return ctx.error_expr(
+                    Code::WRONG_ITEM_FORM,
                     span,
                     format!(
                         "enum variant `{}` takes arguments: `{}(...)`",
@@ -12798,6 +12943,7 @@ pub(super) fn lower_path(
         .filter(|_| !ctx.implicit_main);
     if let (Some(konst), [name]) = (top_let, segs.as_slice()) {
         return ctx.unknown_name(
+            Code::UNRESOLVED_NAME,
             span,
             format!(
                 "cannot find value `{name}`: it is a top-level `let`, a variable of the \
@@ -12814,10 +12960,11 @@ pub(super) fn lower_path(
         .filter(|_| segs.len() == 1)
         .and_then(|n| ctx.variant_not_in_scope(n))
     {
-        return ctx.unknown_name(span, msg, Some(help));
+        return ctx.unknown_name(Code::UNRESOLVED_VARIANT, span, msg, Some(help));
     }
     let help = ctx.value_help(&segs);
     ctx.unknown_name(
+        Code::UNRESOLVED_NAME,
         span,
         format!("cannot find value `{}` in this scope", segs.join("::")),
         help,
@@ -12862,6 +13009,7 @@ fn ambiguous_int(ctx: &LowerCtx<'_>, text: &str, fty: PrimTy, span: rokc_diagnos
     let sum = ctx.ty_name(&HirTy::Sum(vs.clone()));
     let picks: Vec<String> = ints.iter().map(|t| format!("`{text}{t}`")).collect();
     ctx.emit_error_help(
+        Code::AMBIGUOUS_LITERAL,
         span,
         format!(
             "ambiguous literal: integer literal `{text}` into `{sum}`, which has more than one \
@@ -12908,6 +13056,7 @@ pub(super) fn lower_literal(
                     String::new()
                 };
                 return ctx.error_expr(
+                    Code::LITERAL_OUT_OF_RANGE,
                     span,
                     format!(
                         "integer literal `{text}`: rok has no `{wide}`; write {narrow}`{digits}` \
@@ -12917,6 +13066,7 @@ pub(super) fn lower_literal(
             }
             let Some((value, suffix_ty)) = parse_int_literal(text) else {
                 return ctx.error_expr(
+                    Code::LITERAL_OUT_OF_RANGE,
                     span,
                     format!("integer literal `{text}` is too large (an `int` holds any size)"),
                 );
@@ -12940,6 +13090,7 @@ pub(super) fn lower_literal(
                 };
                 if !exact {
                     return ctx.error_expr(
+                        Code::LITERAL_OUT_OF_RANGE,
                         span,
                         format!(
                             "integer literal `{text}` is not exactly representable as `{}`",
@@ -12957,6 +13108,7 @@ pub(super) fn lower_literal(
             };
             if negate && !ty.is_signed_int() {
                 return ctx.error_expr(
+                    Code::LITERAL_OUT_OF_RANGE,
                     span,
                     format!(
                         "cannot negate unsigned literal `{text}` of type `{}`",
@@ -12971,6 +13123,7 @@ pub(super) fn lower_literal(
                     text.clone()
                 };
                 return ctx.error_expr(
+                    Code::LITERAL_OUT_OF_RANGE,
                     span,
                     format!("integer literal `{shown}` out of range for `{}`", ty.name()),
                 );
@@ -12987,10 +13140,15 @@ pub(super) fn lower_literal(
             let digits = text.trim_end_matches("f32").trim_end_matches("f64");
             let cleaned: String = digits.chars().filter(|c| *c != '_').collect();
             let Ok(v) = cleaned.parse::<f64>() else {
-                return ctx.error_expr(span, format!("malformed float literal `{text}`"));
+                return ctx.error_expr(
+                    Code::MALFORMED_NUMBER,
+                    span,
+                    format!("malformed float literal `{text}`"),
+                );
             };
             if v.is_infinite() || (ty == PrimTy::F32 && (v as f32).is_infinite()) {
                 return ctx.error_expr(
+                    Code::LITERAL_OUT_OF_RANGE,
                     span,
                     format!("float literal out of range for `{}`", ty.name()),
                 );
@@ -13017,14 +13175,26 @@ pub(super) fn lower_literal(
                 konst(ConstVal::Char(c), HirTy::Prim(PrimTy::CChar))
             }
             Some(c) => konst(ConstVal::Char(c), HirTy::Prim(PrimTy::Char)),
-            None => ctx.error_expr(span, format!("unsupported character literal `'{s}'`")),
+            None => ctx.error_expr(
+                Code::CHAR_LITERAL_LENGTH,
+                span,
+                format!("unsupported character literal `'{s}'`"),
+            ),
         },
         AstLit::CChar(s) => match parse_char_literal(s) {
             Some(c) => konst(ConstVal::Char(c), HirTy::Prim(PrimTy::CChar)),
-            None => ctx.error_expr(span, format!("unsupported character literal `c'{s}'`")),
+            None => ctx.error_expr(
+                Code::CHAR_LITERAL_LENGTH,
+                span,
+                format!("unsupported character literal `c'{s}'`"),
+            ),
         },
         // Reached only under a unary minus (`lower_byte_str` otherwise).
-        AstLit::ByteStr(_) => ctx.error_expr(span, "cannot negate a byte string".to_owned()),
+        AstLit::ByteStr(_) => ctx.error_expr(
+            Code::INVALID_OPERATOR,
+            span,
+            "cannot negate a byte string".to_owned(),
+        ),
     }
 }
 
@@ -13136,6 +13306,7 @@ fn lower_shape(
         .collect();
     if cands.is_empty() {
         return ctx.error_expr(
+            Code::INVALID_LITERAL_HANDLER,
             span,
             format!("no `#[literal]` handler is registered for {what} literals (spec 6.5)"),
         );
@@ -13207,7 +13378,7 @@ fn lower_magic(
             .map(|c| format!("`{}`", handler_name(c)))
             .collect();
         let mut d = rokc_diagnostic::RokDiagnostic::error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::AMBIGUOUS_LITERAL,
             span,
             format!(
                 "ambiguous literal: handlers {} all match (spec 6.5.5) - give the slot a type \
@@ -13551,6 +13722,7 @@ fn lower_slice(
     let view = want_mut && is_list(ctx, &t_h.ty);
     if view && step.is_some() {
         return ctx.error_expr(
+            Code::INVALID_INDEX,
             span,
             "a `SliceMut` views a contiguous run of a list: drop the step, or copy the \
              elements with `xs[a:b:k].to_list()`"

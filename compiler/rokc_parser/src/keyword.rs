@@ -11,7 +11,7 @@
 //! every package (`keyword_tables`).
 
 use rokc_ast::{AttrArg, AttrBody, Attribute, FnDef, ImplItem, Item, Literal, TraitItem};
-use rokc_diagnostic::{ErrorKind, RokDiagnostic, Span};
+use rokc_diagnostic::{Code, RokDiagnostic, Span};
 use rokc_lexer::token::{RESERVED, keyword_kind};
 use rokc_lexer::{Token, TokenKind};
 
@@ -178,7 +178,13 @@ pub(crate) fn handler_at(tokens: &[Token], attr: usize, after: usize) -> String 
 /// a name that is not an identifier.
 #[must_use]
 pub fn check_keyword(def: &KeywordDef) -> Option<RokDiagnostic> {
-    let err = |m: String| Some(RokDiagnostic::error(ErrorKind::Meta, def.span, m));
+    let err = |m: String| {
+        Some(RokDiagnostic::error(
+            Code::INVALID_KEYWORD_DECL,
+            def.span,
+            m,
+        ))
+    };
     let n = def.name.as_str();
     if RESERVED.contains(&n) || keyword_kind(n).is_some() || CONTEXTUAL.contains(&n) {
         return err(format!(
@@ -243,7 +249,8 @@ pub fn apply_keywords(tokens: &mut Vec<Token>, kws: &KeywordTable, diags: &mut V
         if names {
             diags.push(
                 RokDiagnostic::error(
-                    ErrorKind::Parse, t.span,
+                    Code::RESERVED_NAME,
+                    t.span,
                     format!(
                         "`{n}` is a keyword registered with `#[keyword(\"{n}\")]` and can't be used as a name (spec 6.6.3)"
                     ),

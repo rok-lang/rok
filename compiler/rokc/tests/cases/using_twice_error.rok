@@ -1,4 +1,4 @@
-// expect-error: error[E202]: `a` was moved at line 13, and is used here
+// expect-error: error[E0134]: `a` was moved at line 13, and is used here
 // expect-error: using_twice_error.rok:14:15: `a` was moved at line 13, and is used here
 // expect-error: using_twice_error.rok:20:5: `a` was moved at line 19, and is used here
 // spec: §3.17.6

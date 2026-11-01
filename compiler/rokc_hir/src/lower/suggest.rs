@@ -3,6 +3,7 @@
 
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use rokc_diagnostic::Code;
 
 /// `(rok method, names other languages use for it)`.
 pub(super) const METHOD_SYNONYMS: &[(&str, &[&str])] = &[
@@ -416,6 +417,7 @@ pub(super) fn optional_method(
     let v = short_src(ctx, recv.span).filter(|_| recv.span.file == span.file);
     let what = v.map_or("this value".to_owned(), |v| format!("`{v}`"));
     let e = ctx.error_expr(
+        Code::NO_METHOD,
         span,
         format!(
             "{what} is `{}` and may be none; rok has no `{method}`",

@@ -13,6 +13,7 @@
 
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use rokc_diagnostic::Code;
 
 /// An inference variable: what it is bound to, and where.
 #[derive(Clone)]
@@ -343,7 +344,7 @@ pub(super) fn lower_let(
         Some(t) => {
             if let Some((at, used, fixed, Some(have))) = conflict {
                 let d = rokc_diagnostic::RokDiagnostic::error(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::MISMATCHED_TYPES,
                     at,
                     format!(
                         "conflicting uses of `{name}` (`{}`): `{}` here, but `{}` fixed at {}:{}",

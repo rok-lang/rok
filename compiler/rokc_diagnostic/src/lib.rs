@@ -1,8 +1,10 @@
 //! Diagnostics shared across compiler stages.
 
 mod cite;
+mod codes;
 mod json;
 
+pub use codes::{Code, Entry, explain};
 pub use json::Json;
 pub use rokc_core::suggest::{edit_distance, suggest, suggest_or_synonym};
 
@@ -254,7 +256,7 @@ impl fmt::Display for Severity {
     }
 }
 
-/// Coarse error category.
+/// The area an error code belongs to: the JSON `kind`.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ErrorKind {
     Lexical,
@@ -273,7 +275,7 @@ pub enum ErrorKind {
     Unsupported,
     Internal,
     Other,
-    /// A `rokc lint` finding (its lint name is in a note).
+    /// A lint finding (its lint name is in `lint`).
     Lint,
 }
 
@@ -358,7 +360,7 @@ pub enum Tag {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RokDiagnostic {
     pub severity: Severity,
-    pub kind: ErrorKind,
+    pub code: Code,
     pub message: String,
     pub file: Option<String>,
     /// Boxed to keep `RokDiagnostic` small as a `Result` error type.
@@ -375,10 +377,10 @@ pub struct RokDiagnostic {
 impl RokDiagnostic {
     /// An error at `here` (`Span::DUMMY`: no location).
     #[must_use]
-    pub fn error(kind: ErrorKind, here: Span, message: impl Into<String>) -> Self {
+    pub fn error(code: Code, here: Span, message: impl Into<String>) -> Self {
         Self {
             severity: Severity::Error,
-            kind,
+            code,
             message: message.into(),
             file: None,
             primary: (!here.is_dummy()).then(|| {
@@ -396,18 +398,18 @@ impl RokDiagnostic {
     }
 
     #[must_use]
-    pub fn fatal(kind: ErrorKind, here: Span, message: impl Into<String>) -> Self {
+    pub fn fatal(code: Code, here: Span, message: impl Into<String>) -> Self {
         Self {
             severity: Severity::Fatal,
-            ..Self::error(kind, here, message)
+            ..Self::error(code, here, message)
         }
     }
 
     #[must_use]
-    pub fn warning(kind: ErrorKind, here: Span, message: impl Into<String>) -> Self {
+    pub fn warning(code: Code, here: Span, message: impl Into<String>) -> Self {
         Self {
             severity: Severity::Warning,
-            ..Self::error(kind, here, message)
+            ..Self::error(code, here, message)
         }
     }
 
@@ -435,8 +437,11 @@ impl RokDiagnostic {
         self
     }
 
+    /// A finding of lint `name`: it takes the lint code, wherever it
+    /// was raised.
     #[must_use]
     pub fn with_lint(mut self, name: impl Into<String>) -> Self {
+        self.code = Code::LINT;
         self.lint = Some(Box::new(name.into()));
         self
     }
@@ -466,6 +471,12 @@ impl RokDiagnostic {
     pub const fn with_tag(mut self, tag: Tag) -> Self {
         self.tag = tag;
         self
+    }
+
+    /// The area of its code.
+    #[must_use]
+    pub fn kind(&self) -> ErrorKind {
+        self.code.kind()
     }
 
     #[must_use]
@@ -515,7 +526,7 @@ impl RokDiagnostic {
 /// is the error. `callable`: suggest default parameters (spec 4.2.3).
 #[must_use]
 pub fn duplicate(
-    kind: ErrorKind,
+    code: Code,
     message: impl Into<String>,
     leaf: &str,
     a: Span,
@@ -527,7 +538,7 @@ pub fn duplicate(
         b => (a, b),
     };
     let leaf = leaf.rsplit("::").next().unwrap_or(leaf);
-    let mut d = RokDiagnostic::error(kind, here, message);
+    let mut d = RokDiagnostic::error(code, here, message);
     if !here.is_dummy() {
         d = d.with_span(here, "defined again here");
     }
@@ -546,11 +557,11 @@ pub fn duplicate(
 }
 
 impl SourceMap {
-    /// `diag` on one line: `error[E200]: path:line:col: message`.
+    /// `diag` on one line: `error[E0040]: path:line:col: message`.
     #[must_use]
     pub fn line(&self, diag: &RokDiagnostic) -> String {
         let diag = &diag.without_cites();
-        let mut out = format!("{}[{}]: ", diag.severity, diag.kind.code());
+        let mut out = format!("{}[{}]: ", diag.severity, diag.code);
         if let Some(file) = self.diag_path(diag) {
             match diag.primary.as_ref().map(|l| l.span) {
                 Some(s) if s.line != 0 => {
@@ -621,35 +632,12 @@ pub fn set_report_depth(json: bool, depth: Depth) {
     STYLE.store(style, Ordering::Relaxed);
 }
 
-impl ErrorKind {
-    /// Spec 909.4 code ranges: E0xx lexical / syntax, E1xx names /
-    /// visibility, E2xx types, E3xx meta, E4xx build / link, E5xx other.
-    #[must_use]
-    pub const fn code(self) -> &'static str {
-        match self {
-            Self::Lexical => "E001",
-            Self::Parse => "E002",
-            Self::Resolve => "E100",
-            Self::Visibility => "E101",
-            Self::Module => "E102",
-            Self::Type => "E200",
-            Self::Pattern => "E201",
-            Self::Handoff => "E202",
-            Self::Meta => "E300",
-            Self::Lowering => "E400",
-            Self::Codegen => "E401",
-            Self::Linkage => "E402",
-            Self::Unsupported => "E500",
-            Self::Internal => "E501",
-            Self::Other => "E502",
-            Self::Lint => "E503",
-        }
-    }
-}
+/// The `schema` of a JSON diagnostic. A schema only gains fields;
+/// removing or changing one bumps it.
+pub const JSON_SCHEMA: u32 = 2;
 
-/// The `schema` of JSON output: diagnostics and the test, bench and deps
-/// records. A schema only gains fields; removing or changing one bumps it.
-pub const JSON_SCHEMA: u32 = 1;
+/// The `schema` of the other JSON records: test, bench, deps, version.
+pub const RECORD_SCHEMA: u32 = 1;
 
 impl SourceMap {
     /// `diag` as one-line JSON (spec 909.4):
@@ -702,28 +690,25 @@ impl SourceMap {
                 ("col_end", col_end),
             ])
         });
-        // Help stays a `help: ` note as well, for readers of `notes`.
-        let help = diag
-            .notes
-            .iter()
-            .filter_map(|n| n.strip_prefix("help: "))
-            .map(Json::str);
+        let (help, notes): (Vec<&String>, Vec<&String>) =
+            diag.notes.iter().partition(|n| n.starts_with("help: "));
+        let help = help.iter().filter_map(|n| n.strip_prefix("help: "));
         Json::obj([
             ("type", Json::str(diag.severity.to_string())),
-            ("code", Json::str(diag.kind.code())),
-            ("kind", Json::str(diag.kind.to_string())),
+            ("code", Json::str(diag.code.to_string())),
+            ("kind", Json::str(diag.kind().to_string())),
             ("message", Json::str(&diag.message)),
             ("spans", Json::Arr(spans)),
             (
                 "notes",
-                Json::Arr(diag.notes.iter().map(Json::str).collect()),
+                Json::Arr(notes.into_iter().map(Json::str).collect()),
             ),
             ("fixes", Json::Arr(fixes.collect())),
             (
                 "spec",
                 Json::Arr(diag.cites().iter().map(Json::str).collect()),
             ),
-            ("help", Json::Arr(help.collect())),
+            ("help", Json::Arr(help.map(Json::str).collect())),
             ("lint", diag.lint.as_deref().map_or(Json::Null, Json::str)),
             ("schema", Json::num(JSON_SCHEMA)),
         ])
@@ -835,7 +820,7 @@ impl SourceMap {
     /// `diag` as `report` prints it, newline-terminated (spec 9.1.8):
     ///
     /// ```text
-    /// error[E100]: cannot find value `count` in this scope
+    /// error[E0026]: cannot find value `count` in this scope
     ///   --> src/main.rok:5:10
     ///    |
     ///  5 |     let x = count + 1;
@@ -859,7 +844,7 @@ impl SourceMap {
         };
         let mut out = format!(
             "{}{}\n",
-            paint(color, &format!("{}[{}]", diag.severity, diag.kind.code())),
+            paint(color, &format!("{}[{}]", diag.severity, diag.code)),
             paint(Role::Emph, &format!(": {}", diag.message))
         );
         let path = self.diag_path(diag);
@@ -990,12 +975,12 @@ mod tests {
 
     #[test]
     fn json_line_escapes_and_codes() {
-        let d = RokDiagnostic::error(ErrorKind::Type, Span::DUMMY, "bad \"x\"\n")
+        let d = RokDiagnostic::error(Code::MISMATCHED_TYPES, Span::DUMMY, "bad \"x\"\n")
             .with_file("a.rok")
             .with_note("n");
         assert_eq!(
             SourceMap::new().json(&d),
-            r#"{"type":"error","code":"E200","kind":"type","message":"bad \"x\"\n","spans":[{"file_name":"a.rok","is_primary":true}],"notes":["n"],"fixes":[],"spec":[],"help":[],"lint":null,"schema":1}"#
+            r#"{"type":"error","code":"E0040","kind":"type","message":"bad \"x\"\n","spans":[{"file_name":"a.rok","is_primary":true}],"notes":["n"],"fixes":[],"spec":[],"help":[],"lint":null,"schema":2}"#
         );
     }
 
@@ -1011,21 +996,22 @@ mod tests {
             col: 5,
             file,
         };
-        let d = RokDiagnostic::warning(ErrorKind::Other, at, "m")
+        let d = RokDiagnostic::warning(Code::IO, at, "m")
             .with_lint("unused_variables")
-            .with_help("write `_` instead");
+            .with_help("write `_` instead")
+            .with_note("n");
         let json = Json::parse(&map.json(&d)).unwrap();
-        assert_eq!(json.get("schema").as_u32(), Some(1));
+        assert_eq!(json.get("schema").as_u32(), Some(2));
+        // A lint finding has the lint code, whatever raised it.
+        assert_eq!(json.get("code").as_str(), Some("E0132"));
+        assert_eq!(json.get("kind").as_str(), Some("lint"));
         assert_eq!(json.get("lint").as_str(), Some("unused_variables"));
         assert_eq!(
             json.get("help"),
             &Json::Arr(vec![Json::str("write `_` instead")])
         );
-        // The note stays until a new schema.
-        assert_eq!(
-            json.get("notes"),
-            &Json::Arr(vec![Json::str("help: write `_` instead")])
-        );
+        // Help is listed only under `help`.
+        assert_eq!(json.get("notes"), &Json::Arr(vec![Json::str("n")]));
         let Json::Arr(spans) = json.get("spans") else {
             panic!("{json}")
         };
@@ -1033,15 +1019,15 @@ mod tests {
         assert_eq!(spans[0].get("col_end").as_u32(), Some(4));
         // A one-line span; no source: no end.
         let one = Span { end: 6, ..at };
-        let json =
-            Json::parse(&map.json(&RokDiagnostic::error(ErrorKind::Type, one, "m"))).unwrap();
+        let json = Json::parse(&map.json(&RokDiagnostic::error(Code::MISMATCHED_TYPES, one, "m")))
+            .unwrap();
         let Json::Arr(spans) = json.get("spans") else {
             panic!("{json}")
         };
         assert_eq!(spans[0].get("line_end").as_u32(), Some(1));
         assert_eq!(spans[0].get("col_end").as_u32(), Some(6));
         assert_eq!(json.get("lint"), &Json::Null);
-        let json = SourceMap::new().json(&RokDiagnostic::error(ErrorKind::Type, at, "m"));
+        let json = SourceMap::new().json(&RokDiagnostic::error(Code::MISMATCHED_TYPES, at, "m"));
         assert!(json.contains(r#""line_end":null,"col_end":null"#), "{json}");
     }
 
@@ -1056,15 +1042,12 @@ mod tests {
             col: 10,
             file,
         };
-        let d = RokDiagnostic::error(ErrorKind::Parse, at, "expected `;`").with_fix(
-            at,
-            ";",
-            "insert `;`",
-        );
+        let d =
+            RokDiagnostic::error(Code::SYNTAX, at, "expected `;`").with_fix(at, ";", "insert `;`");
         let json = map.json(&d);
         assert!(
             json.ends_with(
-                r#""fixes":[{"file_name":"a.rok","line_start":1,"col_start":10,"byte_start":9,"byte_end":9,"text":";","title":"insert `;`","line_end":1,"col_end":10}],"spec":[],"help":[],"lint":null,"schema":1}"#
+                r#""fixes":[{"file_name":"a.rok","line_start":1,"col_start":10,"byte_start":9,"byte_end":9,"text":";","title":"insert `;`","line_end":1,"col_end":10}],"spec":[],"help":[],"lint":null,"schema":2}"#
             ),
             "{json}"
         );
@@ -1089,7 +1072,7 @@ mod tests {
             Tag::TypeParamInfer,
             Tag::Deprecated,
         ] {
-            let plain = RokDiagnostic::error(ErrorKind::Type, at, "m").with_tag(tag);
+            let plain = RokDiagnostic::error(Code::MISMATCHED_TYPES, at, "m").with_tag(tag);
             let fixed = plain
                 .clone()
                 .with_fix(at, "x", "t")
@@ -1162,24 +1145,6 @@ rokc_core::codec_enum!(Severity {
     Warning,
     Note
 });
-rokc_core::codec_enum!(ErrorKind {
-    Lexical,
-    Parse,
-    Resolve,
-    Type,
-    Visibility,
-    Module,
-    Pattern,
-    Meta,
-    Lowering,
-    Codegen,
-    Linkage,
-    Unsupported,
-    Internal,
-    Other,
-    Lint,
-    Handoff,
-});
 rokc_core::codec_struct!(Label { span, message });
 rokc_core::codec_struct!(Fix { span, text, title });
 rokc_core::codec_enum!(Tag {
@@ -1193,7 +1158,7 @@ rokc_core::codec_enum!(Tag {
 });
 rokc_core::codec_struct!(RokDiagnostic {
     severity,
-    kind,
+    code,
     message,
     file,
     primary,

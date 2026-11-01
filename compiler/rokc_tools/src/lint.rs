@@ -23,7 +23,7 @@ use rokc_ast::{
     TryKind, Ty, TyKind, UseTree, UseTreeKind,
 };
 use rokc_core::Visibility;
-use rokc_diagnostic::{ErrorKind, RokDiagnostic, Severity, Span};
+use rokc_diagnostic::{Code, RokDiagnostic, Severity, Span};
 use rokc_hir::walk::{AstVisitor, walk_fn, walk_item, walk_stmt};
 use rokc_hir::{HirExprKind, HirTy};
 use rokc_interface::{CompileResult, SourceFile};
@@ -392,7 +392,7 @@ pub fn run(result: &CompileResult, levels: &Levels) -> Vec<RokDiagnostic> {
                 }
             }
             None => out.push(RokDiagnostic::warning(
-                ErrorKind::Lint,
+                Code::LINT,
                 Span::DUMMY,
                 unknown(name, &at),
             )),
@@ -491,7 +491,7 @@ pub fn run(result: &CompileResult, levels: &Levels) -> Vec<RokDiagnostic> {
         let mut d = match f.base {
             Some(b) => RokDiagnostic {
                 severity,
-                kind: ErrorKind::Lint,
+                code: Code::LINT,
                 ..*b
             },
             None => RokDiagnostic {
@@ -501,7 +501,7 @@ pub fn run(result: &CompileResult, levels: &Levels) -> Vec<RokDiagnostic> {
                 } else {
                     rokc_diagnostic::Tag::None
                 },
-                ..RokDiagnostic::error(ErrorKind::Lint, f.span, f.msg).with_lint(f.lint)
+                ..RokDiagnostic::error(Code::LINT, f.span, f.msg).with_lint(f.lint)
             },
         };
         if let Some((span, msg)) = f.secondary {
@@ -591,7 +591,7 @@ fn levels_of(
                     levels.extend(ls.into_iter().map(|l| (lvl, l, a.span)));
                 }
                 None => out.push(RokDiagnostic::warning(
-                    ErrorKind::Lint,
+                    Code::LINT,
                     a.span,
                     unknown(name, ""),
                 )),

@@ -1,4 +1,4 @@
-// expect-error: error[E202]: `tx` was moved at line 14, and is used here
+// expect-error: error[E0134]: `tx` was moved at line 14, and is used here
 // expect-error: affine_move_then_use_error.rok:15:10: `tx` was moved at line 14, and is used here
 // expect-error: help: a `Sender<i32>` has one owner, and `tx` gave it away; use the new owner, or keep a copy with `.clone()` before it moves
 // expect-error: affine_move_then_use_error.rok:26:5: `a` may have been moved at line 23, and is used here

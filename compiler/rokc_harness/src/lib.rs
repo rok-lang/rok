@@ -118,7 +118,10 @@ pub fn run_manifest_to(text: &str, out: &mut dyn Write, human: &mut dyn Write) -
 /// Write one `format json` record: `{"schema":1,"type":ty,"kind":kind,..fields}`.
 fn record(to: &mut dyn Write, ty: &str, kind: &str, fields: Vec<(&str, Json)>) {
     let mut all = vec![
-        ("schema".to_owned(), Json::num(rokc_diagnostic::JSON_SCHEMA)),
+        (
+            "schema".to_owned(),
+            Json::num(rokc_diagnostic::RECORD_SCHEMA),
+        ),
         ("type".to_owned(), Json::str(ty)),
         ("kind".to_owned(), Json::str(kind)),
     ];

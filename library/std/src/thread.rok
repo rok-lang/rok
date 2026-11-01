@@ -354,7 +354,7 @@ impl<T> ThreadLocal<T> {
     }
 
     /// `f` of this thread's value. The value is a scoped view: it may not
-    /// leave `f` (returned, stored, sent), so `f` is not `async` (E202).
+    /// leave `f` (returned, stored, sent), so `f` is not `async` (E0137).
     pub fn with<R>(self, f: fn(T) -> R) -> R {
         f(self.cell()[0])
     }

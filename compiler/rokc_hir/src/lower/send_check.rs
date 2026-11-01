@@ -23,6 +23,7 @@
 // by `push` look like one. Exact would be per-coroutine future types
 // (4.1.11) checked by the `Send` bound itself.
 
+use rokc_diagnostic::Code;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 use rokc_ir_common::{FunctionId, LocalId};
@@ -173,7 +174,7 @@ pub(super) fn check(env: &Env<'_>, functions: &[HirFunction]) {
             continue;
         }
         ctx.emit_error_at(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::THREAD_SAFETY,
             span,
             if guard {
                 format!("`task::spawn` cannot take a guard: {why} (stdlib 2.16.3)")

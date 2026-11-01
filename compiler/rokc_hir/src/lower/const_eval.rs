@@ -16,7 +16,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use rokc_diagnostic::Span;
+use rokc_diagnostic::{Code, Span};
 
 use crate::fmt_spec::unpack;
 use crate::{fmt_text, str_ops, unicode};
@@ -1380,7 +1380,7 @@ pub(super) fn check_const_fns(env: &Env<'_>, fns: &[&HirFunction]) {
         if let Some((at, why)) = impure(&mut bodies, body, &mut memo) {
             let why = why.trim_end_matches(" (spec 5.2.5)");
             let d = rokc_diagnostic::RokDiagnostic::error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::CONST_EVAL,
                 at,
                 format!("`const fn {}` {why} (spec 5.2.5)", leaf_name(&f.name)),
             );
@@ -1849,7 +1849,7 @@ pub(super) fn eval_in(ctx: &LowerCtx<'_>, e: &HirExpr) -> R<Value> {
 
 fn report(ctx: &LowerCtx<'_>, at: Span, what: &str, op: Span, why: &str) {
     let mut d = rokc_diagnostic::RokDiagnostic::error(
-        rokc_diagnostic::ErrorKind::Type,
+        Code::CONST_EVAL,
         at,
         format!("{what} cannot be evaluated at compile time: {why}"),
     );
@@ -1870,7 +1870,7 @@ pub(super) fn guard(
     let stack = &ctx.env.sink.const_stack;
     if stack.borrow().iter().any(|n| n == name) {
         let d = rokc_diagnostic::RokDiagnostic::error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::CYCLIC_DEFINITION,
             span,
             format!("const `{}` is defined in terms of itself", leaf_name(name)),
         );

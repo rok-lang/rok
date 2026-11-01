@@ -1,5 +1,5 @@
 // spec: 003.12.6-unreachable-arm
-// expect-error: error[E200]
+// expect-error: error[E0099]
 
 // spec 3.12.6: an arm after a catch-all is unreachable, a compile error.
 fn main() -> i32 {

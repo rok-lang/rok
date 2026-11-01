@@ -9,7 +9,7 @@ use rokc_ast::{
     StructDef as AstStructDef, StructKind as AstStructKind, Ty, TyKind as AstTyKind,
 };
 use rokc_core::Visibility;
-use rokc_diagnostic::Span;
+use rokc_diagnostic::{Code, Span};
 use rokc_ir_common::{ConstVal, FunctionId, LocalId, PrimOp, PrimTy};
 use rokc_parser::{Fixity, PrecTable};
 
@@ -162,7 +162,7 @@ fn join_help(import: Option<String>, typo: Option<String>) -> Option<String> {
 
 /// A warning at `at` that belongs to `lint`, with a `help:` note.
 fn lint_diag(lint: &str, at: Span, msg: String, help: String) -> rokc_diagnostic::RokDiagnostic {
-    rokc_diagnostic::RokDiagnostic::warning(rokc_diagnostic::ErrorKind::Type, at, msg)
+    rokc_diagnostic::RokDiagnostic::warning(Code::LINT, at, msg)
         .with_help(help)
         .with_lint(lint)
 }
@@ -234,7 +234,12 @@ impl TypeNames {
             .count();
         if args.len() < min || args.len() > params.len() {
             let (msg, help) = mono::misfit(leaf_name(&full), &alias.generics, args.len());
-            self.error_help(if ty.span.is_dummy() { at } else { ty.span }, msg, help);
+            self.error_help(
+                Code::GENERIC_ARGUMENTS,
+                if ty.span.is_dummy() { at } else { ty.span },
+                msg,
+                help,
+            );
         }
         // A missing argument (reported above) reads as `any`.
         let any = Ty {
@@ -479,6 +484,7 @@ impl TypeNames {
             Err(hits) if hits.iter().all(|h| item(h) == item(&hits[0])) => item(&hits[0]),
             Err(hits) => {
                 self.error(
+                    Code::AMBIGUOUS_NAME,
                     at,
                     format!(
                         "type name `{}` is ambiguous in module `{}` - multiple glob imports \
@@ -494,7 +500,11 @@ impl TypeNames {
         // Spec 5.6.13: every module on the path as written (a re-export
         // key, before following it) must be visible too.
         if let Some(m) = self.hidden(module, &full) {
-            self.error(at, resolve::hidden_module_msg(&full, &m, module));
+            self.error(
+                Code::PRIVATE_ITEM,
+                at,
+                resolve::hidden_module_msg(&full, &m, module),
+            );
         }
         if let Some(t) = self.reexport(&full) {
             full.clone_from(t);
@@ -509,8 +519,8 @@ impl TypeNames {
                     module_display(module)
                 );
                 match resolve::own_library_privacy(&def_module) {
-                    Some(help) => self.error_help(at, msg, help),
-                    None => self.error(at, msg),
+                    Some(help) => self.error_help(Code::PRIVATE_ITEM, at, msg, help),
+                    None => self.error(Code::PRIVATE_ITEM, at, msg),
                 }
             }
         }
@@ -550,6 +560,7 @@ impl TypeNames {
             Ok(r) => full_key(&r?),
             Err(hits) => {
                 self.error(
+                    Code::AMBIGUOUS_NAME,
                     at,
                     format!(
                         "variant name `{}` is ambiguous in module `{}` - multiple glob imports \
@@ -577,6 +588,7 @@ impl TypeNames {
                     Some(key)
                 } else {
                     self.error(
+                        Code::NOT_A_TRAIT,
                         at,
                         format!(
                             "`{}` in a `fn` type bound is not an auto trait - only `Send` / \
@@ -669,21 +681,16 @@ impl TypeNames {
             .unwrap_or_else(|| segments.last().copied().unwrap_or_default().to_owned())
     }
 
-    fn error(&self, at: Span, msg: String) {
+    fn error(&self, code: Code, at: Span, msg: String) {
         self.diags
             .borrow_mut()
-            .push(rokc_diagnostic::RokDiagnostic::error(
-                rokc_diagnostic::ErrorKind::Type,
-                at,
-                msg,
-            ));
+            .push(rokc_diagnostic::RokDiagnostic::error(code, at, msg));
     }
 
-    fn error_help(&self, at: Span, msg: String, help: String) {
-        self.diags.borrow_mut().push(
-            rokc_diagnostic::RokDiagnostic::error(rokc_diagnostic::ErrorKind::Type, at, msg)
-                .with_help(help),
-        );
+    fn error_help(&self, code: Code, at: Span, msg: String, help: String) {
+        self.diags
+            .borrow_mut()
+            .push(rokc_diagnostic::RokDiagnostic::error(code, at, msg).with_help(help));
     }
 }
 
@@ -2268,7 +2275,7 @@ fn coerce(
         if let (HirTy::Fn(_, _, want), Some((name, x))) = (slot, ctx.ref_capture(&v)) {
             if !want.auto.is_empty() {
                 ctx.emit_error(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::THREAD_SAFETY,
                     format!(
                         "`[ref {name}]` can't be used in a closure that may run on another \
                          thread: both threads could change `{name}` at once (spec 4.6.9)"
@@ -2289,7 +2296,7 @@ fn coerce(
             here
         };
         ctx.emit_error_at(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::MISMATCHED_TYPES,
             at,
             format!(
                 "mismatched types: {} expects `{}`, found `{}`{hint}",
@@ -2590,7 +2597,7 @@ fn c_fn_value(ctx: &LowerCtx<'_>, slot: &HirTy, mut value: HirExpr) -> HirExpr {
     };
     if !(ctx.env.is(FnSet::ExternC, *id) || ctx.env.is(FnSet::CDef, *id)) {
         ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::FFI,
             "only an `extern \"C\"` function (an `extern` block declaration or an \
              `extern \"C\" fn` definition) is an `extern \"C\" fn(..)` value (spec 5.9.4)"
                 .to_owned(),
@@ -2604,7 +2611,7 @@ fn c_fn_value(ctx: &LowerCtx<'_>, slot: &HirTy, mut value: HirExpr) -> HirExpr {
             ("a C", "`extern \"system\" fn(..)`")
         };
         ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::FFI,
             format!(
                 "{is} function is no {slot} value: `\"system\"` is `stdcall` on this \
                  target (spec 5.9.4)"
@@ -2699,6 +2706,7 @@ fn box_into_any(ctx: &LowerCtx<'_>, slot: &HirTy, value: HirExpr) -> HirExpr {
         // Spec 2.2.10: no implicit `any` → `any Tr` (it would hide a
         // runtime check); `any Tr` → `any` is the arm above.
         HirTy::AnyTrait(_) => ctx.error_expr(
+            Code::MISMATCHED_TYPES,
             value.span,
             format!(
                 "cannot store an `{}` value in an `{}` slot without narrowing - test it with \
@@ -2716,6 +2724,7 @@ fn box_into_any(ctx: &LowerCtx<'_>, slot: &HirTy, value: HirExpr) -> HirExpr {
                 .collect();
             if !names.is_empty() {
                 return ctx.error_expr(
+                    Code::UNSATISFIED_BOUND,
                     value.span,
                     format!(
                         "`{}` does not implement {}, so it cannot be stored in an `{}` slot",
@@ -3247,7 +3256,7 @@ impl<'a> LowerCtx<'a> {
             .uninferred
             .set(self.env.sink.uninferred.get() + 1);
         self.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::TYPE_ANNOTATIONS_NEEDED,
             format!("type annotations needed: {msg}"),
         );
     }
@@ -3413,13 +3422,13 @@ impl<'a> LowerCtx<'a> {
     }
 
     /// Push a lowering-time diagnostic onto the shared sink.
-    fn emit_error(&self, kind: rokc_diagnostic::ErrorKind, msg: String) {
-        self.emit_error_at(kind, self.here(), msg);
+    fn emit_error(&self, code: Code, msg: String) {
+        self.emit_error_at(code, self.here(), msg);
     }
 
     /// An error at `at`.
-    fn emit_error_at(&self, kind: rokc_diagnostic::ErrorKind, at: Span, msg: String) {
-        self.emit_diag(rokc_diagnostic::RokDiagnostic::error(kind, at, msg));
+    fn emit_error_at(&self, code: Code, at: Span, msg: String) {
+        self.emit_diag(rokc_diagnostic::RokDiagnostic::error(code, at, msg));
     }
 
     /// An error built by the caller.
@@ -3437,17 +3446,17 @@ impl<'a> LowerCtx<'a> {
     }
 
     /// An error at `at` with a `help:` note.
-    fn emit_error_help(&self, at: Span, msg: String, help: String) {
-        self.emit_error_at(rokc_diagnostic::ErrorKind::Type, at, msg);
+    fn emit_error_help(&self, code: Code, at: Span, msg: String, help: String) {
+        self.emit_error_at(code, at, msg);
         self.help_last(Some(help));
     }
 
     /// A warning. In a generic instance it is held and reported only if
     /// every instance raised it: a `rethrows` instance with a non-throwing
     /// argument would otherwise flag every `try`.
-    fn emit_warning(&self, msg: String) {
+    fn emit_warning(&self, code: Code, msg: String) {
         self.push_warning(rokc_diagnostic::RokDiagnostic::warning(
-            rokc_diagnostic::ErrorKind::Type,
+            code,
             self.here(),
             msg,
         ));
@@ -3476,19 +3485,20 @@ impl<'a> LowerCtx<'a> {
 
     /// Report a type error and return an `Unknown` placeholder; checks skip
     /// `Unknown`, so one cause gives one diagnostic.
-    fn error_expr(&self, span: rokc_diagnostic::Span, msg: String) -> HirExpr {
-        self.emit_error(rokc_diagnostic::ErrorKind::Type, msg);
+    fn error_expr(&self, code: Code, span: rokc_diagnostic::Span, msg: String) -> HirExpr {
+        self.emit_error(code, msg);
         poison(span)
     }
 
     /// An unknown name (spec 9.9.4 `resolve`), with an optional hint.
     fn unknown_name(
         &self,
+        code: Code,
         span: rokc_diagnostic::Span,
         msg: String,
         help: Option<String>,
     ) -> HirExpr {
-        self.emit_error(rokc_diagnostic::ErrorKind::Resolve, msg);
+        self.emit_error(code, msg);
         // A name a meta template wrote is looked up where the template is.
         let help = match self.access.borrow().as_deref() {
             Some(m) => Some(format!(
@@ -3556,6 +3566,7 @@ impl<'a> LowerCtx<'a> {
             "struct"
         };
         let e = self.error_expr(
+            Code::NO_FIELD,
             span,
             format!(
                 "{kind} `{}` has no field `{name}`",
@@ -4546,8 +4557,7 @@ impl<'a> LowerCtx<'a> {
     fn emit_arity(&self, span: Span, (msg, help): (String, String)) {
         let at = if span.is_dummy() { self.here() } else { span };
         self.emit_diag(
-            rokc_diagnostic::RokDiagnostic::error(rokc_diagnostic::ErrorKind::Type, at, msg)
-                .with_help(help),
+            rokc_diagnostic::RokDiagnostic::error(Code::GENERIC_ARGUMENTS, at, msg).with_help(help),
         );
     }
 
@@ -4753,7 +4763,7 @@ impl<'a> LowerCtx<'a> {
 
     fn report_ambiguous(&self, name: &str, hits: &[String]) {
         self.emit_error(
-            rokc_diagnostic::ErrorKind::Module,
+            Code::AMBIGUOUS_NAME,
             format!(
                 "name `{name}` is ambiguous in module `{}` - multiple glob imports \
                  resolve it: {}",
@@ -4779,7 +4789,7 @@ impl<'a> LowerCtx<'a> {
         let from = self.access_module();
         if let Some(m) = self.env.names.hidden(&from, full) {
             self.emit_error(
-                rokc_diagnostic::ErrorKind::Module,
+                Code::PRIVATE_ITEM,
                 resolve::hidden_module_msg(full, &m, &from),
             );
             return false;
@@ -4789,7 +4799,7 @@ impl<'a> LowerCtx<'a> {
         }
         if vis == Visibility::Pkg {
             self.emit_error(
-                rokc_diagnostic::ErrorKind::Module,
+                Code::PRIVATE_ITEM,
                 format!(
                     "{what} `{full}` is `pub(pkg)`: visible only inside its package \
                      `{}` (spec 5.6.4)",
@@ -4800,7 +4810,7 @@ impl<'a> LowerCtx<'a> {
             return false;
         }
         self.emit_error(
-            rokc_diagnostic::ErrorKind::Module,
+            Code::PRIVATE_ITEM,
             format!(
                 "{what} `{full}` is private to module `{}` and cannot be used from `{}` \
                  (spec 5.6 - add `pub` to expose it)",
@@ -4855,7 +4865,7 @@ impl<'a> LowerCtx<'a> {
                 "spec 5.6 - add `pub` to the field to expose it".to_owned()
             };
             self.emit_error(
-                rokc_diagnostic::ErrorKind::Module,
+                Code::PRIVATE_ITEM,
                 format!(
                     "field `{field}` of `{}` is private to module `{}` ({fix})",
                     self.ty_name(&HirTy::Struct(sid)),
@@ -4911,7 +4921,7 @@ impl<'a> LowerCtx<'a> {
         // where it is defined (spec 6.9.9).
         if mark.internal && !is_toolchain_module(&self.access_module()) {
             let e = rokc_diagnostic::RokDiagnostic::error(
-                rokc_diagnostic::ErrorKind::Module,
+                Code::PRIVATE_ITEM,
                 at,
                 format!(
                     "{what} `{name}` is internal to the Rok toolchain: only `rok::bare`, \
@@ -4940,7 +4950,7 @@ impl<'a> LowerCtx<'a> {
         let mut out = Vec::new();
         if let Some(d) = &mark.deprecated {
             let mut w = rokc_diagnostic::RokDiagnostic::warning(
-                rokc_diagnostic::ErrorKind::Lint,
+                Code::LINT,
                 at,
                 format!("use of deprecated {what} `{name}`"),
             )
@@ -4953,7 +4963,7 @@ impl<'a> LowerCtx<'a> {
         }
         if let (Some(note), 0) = (&mark.deprecated_safe, self.unsafe_depth) {
             let mut w = rokc_diagnostic::RokDiagnostic::warning(
-                rokc_diagnostic::ErrorKind::Lint,
+                Code::LINT,
                 at,
                 format!(
                     "`{name}` will need `unsafe` in a later release: wrap the {} in \
@@ -5085,7 +5095,7 @@ impl<'a> LowerCtx<'a> {
             }
             Err(why) => {
                 self.emit_error(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::CONST_EVAL,
                     format!(
                         "array length must be a compile-time integer (spec 2.11.5): \
                              {why}"
@@ -5255,7 +5265,7 @@ impl<'a> LowerCtx<'a> {
                 Ok((v, p)) => HirTy::Const(v, p),
                 Err(why) => {
                     self.emit_error(
-                        rokc_diagnostic::ErrorKind::Type,
+                        Code::INVALID_CONST_ARGUMENT,
                         format!(
                             "a const generic argument must be a compile-time integer, \
                                  `bool` or `char` (spec 2.11.4): {why}"
@@ -5286,7 +5296,7 @@ impl<'a> LowerCtx<'a> {
             .trait_key(&segs, &self.current_module, self.here());
         if !self.env.names.is_trait(&key) {
             self.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::NOT_A_TRAIT,
                 format!(
                     "`{}` in `<.. as {}>` is not a trait",
                     segs.join("::"),
@@ -5397,7 +5407,7 @@ impl<'a> LowerCtx<'a> {
                 _ => String::new(),
             };
             self.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::NO_METHOD,
                 format!(
                     "`{}` has no associated type `{name}`{via} (no trait impl of it defines one)",
                     self.ty_name(base)
@@ -5476,7 +5486,7 @@ impl<'a> LowerCtx<'a> {
                 .map(|t| format!("`{}`", self.ty_name(t)))
                 .collect();
             self.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::AMBIGUOUS_ITEM,
                 format!(
                     "associated type `{}::{name}` is ambiguous: impls define it as {} - name \
                      the trait (`<T as Tr>::{name}`, spec 2.13.4)",
@@ -5604,7 +5614,7 @@ impl<'a> LowerCtx<'a> {
                 self.locals[local.0 as usize].ty = ty;
             } else if existing != ty {
                 self.emit_error(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::OR_PATTERN_BINDINGS,
                     format!(
                         "or-pattern binding `{name}` has inconsistent types across \
                          alternatives (`{}` and `{}`, spec 3.11.4); to bind either as \
@@ -5725,7 +5735,7 @@ impl<'a> LowerCtx<'a> {
         self.guard_lets = kept;
         for (_, _, at, binder, guard) in open {
             self.emit_error_at(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::GUARD_NOT_RELEASED,
                 at,
                 format!(
                     "`{binder}` holds a `{guard}` that is never released: only `using` \

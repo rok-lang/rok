@@ -11,6 +11,7 @@
 //! ```
 
 use crate::{Field, Kind, Span, Value};
+use rokc_diagnostic::Code;
 
 /// A parsed file, for decoding.
 pub struct Doc<'t> {
@@ -35,7 +36,7 @@ impl<'t> Doc<'t> {
     }
 
     pub fn error(&self, span: Span, msg: &str) -> String {
-        crate::render(self.text, self.file, span, "E200", msg)
+        crate::render(self.text, self.file, span, Code::ROKON_VALUE, msg)
     }
 }
 
@@ -64,7 +65,7 @@ impl<'a> Decoder<'a> {
     }
 
     pub fn error_at(&self, span: Span, msg: &str) -> String {
-        crate::render(self.text, self.file, span, "E200", msg)
+        crate::render(self.text, self.file, span, Code::ROKON_VALUE, msg)
     }
 
     const fn child(&self, v: &'a Value, what: Option<&'a str>) -> Self {

@@ -3,7 +3,7 @@
 //! HIR reads the spec and formats by the hole's type (stdlib 2.10).
 
 use rokc_ast::{Expr, ExprKind, FStringPart, SpecPiece};
-use rokc_diagnostic::{ErrorKind, RokDiagnostic};
+use rokc_diagnostic::{Code, RokDiagnostic};
 use rokc_lexer::TokenKind;
 
 use super::Parser;
@@ -41,7 +41,7 @@ impl Parser<'_> {
         let span = self.peek_span();
         self.bump();
         if self.eat(&TokenKind::HoleEnd) {
-            self.error(span, "empty `{}` in f-string");
+            self.error(Code::FSTRING_SYNTAX, span, "empty `{}` in f-string");
             return None;
         }
         let expr = self.with_struct_expr(true, Self::parse_expr);
@@ -57,7 +57,11 @@ impl Parser<'_> {
                         let at = self.peek_span();
                         match self.parse_hole() {
                             Some((e, s)) if s.is_empty() => spec.push(SpecPiece::Expr(e)),
-                            Some(_) => self.error(at, "a format spec can't have its own spec"),
+                            Some(_) => self.error(
+                                Code::FSTRING_SYNTAX,
+                                at,
+                                "a format spec can't have its own spec",
+                            ),
                             None => {}
                         }
                     }
@@ -71,7 +75,7 @@ impl Parser<'_> {
         if expr.is_some() {
             let at = self.peek_span();
             let d = RokDiagnostic::error(
-                ErrorKind::Parse,
+                Code::FSTRING_SYNTAX,
                 at,
                 "unexpected tokens in f-string hole (expected `}`)",
             )

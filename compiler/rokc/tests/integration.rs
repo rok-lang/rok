@@ -188,7 +188,7 @@ fn run_case(
     Ok(())
 }
 
-/// `// expect-lint:`: the `E503` diagnostics of `rokc lint`, as
+/// `// expect-lint:`: the `E0132` diagnostics of `rokc lint`, as
 /// `line:col headline`, are exactly the directives, and so are those
 /// the build printed (`build_err`).
 fn check_lints(
@@ -216,14 +216,14 @@ fn check_lints(
     Ok(())
 }
 
-/// The `E503` diagnostics of `err` as `line:col headline`.
+/// The `E0132` diagnostics of `err` as `line:col headline`.
 fn lint_lines(err: &str) -> Vec<String> {
     let mut got = Vec::new();
     let mut lines = err.lines();
     while let Some(l) = lines.next() {
         let Some(msg) = l
-            .strip_prefix("warning[E503]: ")
-            .or_else(|| l.strip_prefix("error[E503]: "))
+            .strip_prefix("warning[E0132]: ")
+            .or_else(|| l.strip_prefix("error[E0132]: "))
         else {
             continue;
         };

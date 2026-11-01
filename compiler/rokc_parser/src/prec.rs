@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use rokc_ast::{AttrArg, AttrBody, Attribute, Item, Literal, Program, TraitItem};
-use rokc_diagnostic::{ErrorKind, RokDiagnostic};
+use rokc_diagnostic::{Code, RokDiagnostic};
 use rokc_lexer::TokenKind;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -204,7 +204,7 @@ impl PrecTable {
         if let Some(e) = self.lookup(&entry.symbol, entry.fixity) {
             if e.trait_name != entry.trait_name || e.method_name != entry.method_name {
                 return Some(RokDiagnostic::error(
-                    ErrorKind::Meta,
+                    Code::DUPLICATE_REGISTRATION,
                     rokc_diagnostic::Span::DUMMY,
                     format!(
                         "operator `{}` is bound twice (`{}::{}` and `{}::{}`)",
@@ -349,7 +349,7 @@ const fn is_pattern_syntax(c: char) -> bool {
 }
 
 fn meta_err(attr: &Attribute, msg: String) -> RokDiagnostic {
-    RokDiagnostic::error(ErrorKind::Meta, attr.span, msg)
+    RokDiagnostic::error(Code::INVALID_OPERATOR_DECL, attr.span, msg)
 }
 
 fn collect_attr(

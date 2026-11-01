@@ -14,7 +14,7 @@
 //!     as `/`, library paths relative to the workspace, `*` any text, as in
 //!     `library/std/src/wit.rok:*:`); none: empty stderr
 //!   - `// expect-lint: L:C message` - (repeatable) `rokc lint` on the
-//!     case reports exactly these `E503` lints, in order: line, column
+//!     case reports exactly these `E0132` lints, in order: line, column
 //!     and headline
 //!   - `// gc-stress: N`        - run twice more, with
 //!     `ROKR_GC_STRESS=N ROKR_GC_EVAC=always` and with

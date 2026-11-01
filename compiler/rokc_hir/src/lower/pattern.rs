@@ -2,6 +2,7 @@
 
 #[allow(clippy::wildcard_imports)]
 use super::*;
+use rokc_diagnostic::Code;
 
 pub(super) fn lower_match(
     ctx: &mut LowerCtx<'_>,
@@ -84,7 +85,7 @@ pub(super) fn lower_match(
         if !hir_expr_diverges(&a.body) && (result_ty != HirTy::Unit || is_let_else) {
             if is_let_else && i == 1 {
                 ctx.emit_error(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::LET_ELSE_NOT_DIVERGING,
                     "the `else` block of `let ... else` must diverge (end in `return`, \
                      `break`, `continue` or `throw`) (spec 3.15)"
                         .to_owned(),
@@ -95,7 +96,7 @@ pub(super) fn lower_match(
             {
                 // No sum type is inferred from differing arms.
                 ctx.emit_error(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::BRANCH_TYPES,
                     format!(
                         "`match` arms have different types `{}` and `{}` (arm {}) - rok does \
                          not infer a sum type; annotate the slot (`let v: {} | {} = match ...`)",
@@ -578,7 +579,7 @@ pub(super) fn check_match_arms(
             || (foreign.is_some() && hir_pattern_irrefutable(&a.pat));
         if !exempt && !instance && !useful(ctx, &rows, std::slice::from_ref(&p), &tys) {
             ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::UNREACHABLE_ARM,
                 format!(
                     "unreachable match arm {}: earlier arms already match every value it \
                      matches (spec 3.12.6)",
@@ -595,7 +596,7 @@ pub(super) fn check_match_arms(
         .any(|a| a.guard.is_none() && hir_pattern_irrefutable(&a.pat));
     if let Some(name) = foreign.filter(|_| !catch_all) {
         ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::NON_EXHAUSTIVE,
             format!(
                 "match on `{name}` needs a `_` arm: it is `#[non_exhaustive]` in another \
                  package (spec 6.2.10)"
@@ -691,7 +692,7 @@ pub(super) fn check_match_exhaustiveness(
         ));
     }
     ctx.emit_error(
-        rokc_diagnostic::ErrorKind::Type,
+        Code::NON_EXHAUSTIVE,
         format!(
             "non-exhaustive match on `{}`: {} not covered (spec 3.12.5)",
             ctx.ty_name(scrut_ty),
@@ -840,7 +841,7 @@ pub(super) fn missing_rest(
         format!("{} {{ {}, .. }}", segs.join("::"), listed.join(", "))
     };
     ctx.emit_error_at(
-        rokc_diagnostic::ErrorKind::Type,
+        Code::PATTERN_ARITY,
         at,
         format!(
             "pattern on `{name}` needs `..`: it is `#[non_exhaustive]` in another package, \
@@ -957,7 +958,7 @@ fn lower_pattern_here(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy
     let mismatch = |ctx: &LowerCtx<'_>, what: String| {
         if *scrut_ty != HirTy::Unknown {
             ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::PATTERN_TYPE,
                 format!(
                     "{what} can't match a value of type `{}`",
                     ctx.ty_name(scrut_ty)
@@ -1019,7 +1020,7 @@ fn lower_pattern_here(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy
             let args = ctx.enum_def(enum_id).variants[idx].arity;
             if args != 0 {
                 ctx.emit_error_at(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::PATTERN_ARITY,
                     pat.span,
                     format!("variant `{base}::{name}` has a payload: match it as `{name}(..)`"),
                 );
@@ -1128,7 +1129,7 @@ fn lower_pattern_here(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy
             if let Some(name) = unknown.iter().find(|n| !n.starts_with(['_', '#'])) {
                 let segs: Vec<&str> = name.split("::").collect();
                 ctx.emit_error_at(
-                    rokc_diagnostic::ErrorKind::Resolve,
+                    Code::UNRESOLVED_TYPE,
                     ty.span,
                     format!("cannot find type `{name}` in this scope"),
                 );
@@ -1292,7 +1293,7 @@ fn lower_pattern_here(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy
                         detail.push_str(&format!(" extra {extra}"));
                     }
                     ctx.emit_error(
-                        rokc_diagnostic::ErrorKind::Type,
+                        Code::OR_PATTERN_BINDINGS,
                         format!(
                             "or-pattern alternatives bind different name sets \
                              (alternative {i}:{detail}, spec 3.11.4)"
@@ -1358,14 +1359,14 @@ fn lower_pattern_here(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy
                 }
             } else if rest_at.len() > 1 {
                 ctx.emit_error(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::REST_PATTERN,
                     format!("pattern `{}` has more than one `..`", segs.join("::")),
                 );
                 return HirPattern::Wildcard;
             }
             if args.len() != slots.len() {
                 ctx.emit_error(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::PATTERN_ARITY,
                     format!(
                         "pattern `{}` has {} field{}, but the variant has {}",
                         segs.join("::"),
@@ -1438,7 +1439,7 @@ fn lower_pattern_here(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy
                         let Some(i) = variant.named_fields.iter().position(|n| *n == fp.name)
                         else {
                             ctx.emit_error(
-                                rokc_diagnostic::ErrorKind::Type,
+                                Code::NO_FIELD,
                                 format!(
                                     "enum variant `{}` has no field `{}`",
                                     segs.join("::"),
@@ -1470,6 +1471,7 @@ fn lower_pattern_here(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy
             let Some(struct_id) = struct_id else {
                 let help = ctx.type_help(&segs);
                 ctx.unknown_name(
+                    Code::UNRESOLVED_TYPE,
                     pat.span,
                     format!("cannot find struct `{}` in this scope", segs.join("::")),
                     help,
@@ -1509,7 +1511,7 @@ fn lower_pattern_here(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy
         }
         AstPatternKind::Rest(_) => {
             ctx.emit_error(
-                rokc_diagnostic::ErrorKind::Type,
+                Code::REST_PATTERN,
                 "a rest pattern `..` is only allowed in tuple destructuring `let`".to_owned(),
             );
             HirPattern::Wildcard
@@ -1527,7 +1529,7 @@ fn tuple_struct_pattern(
     let full = ctx.canon_type(segs);
     let HirTy::Struct(sid) = scrut_ty else {
         ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::UNRESOLVED_VARIANT,
             format!("cannot find enum variant `{}`", segs.join("::")),
         );
         ctx.help_last(ctx.value_help(segs));
@@ -1555,7 +1557,7 @@ fn tuple_struct_pattern(
         .all(|(i, f)| f.name == i.to_string());
     if full.as_deref() != Some(enum_base_name(&def.name)) || !tuple_form {
         ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::PATTERN_TYPE,
             format!(
                 "pattern `{}(..)` can't match a value of type `{}`",
                 segs.join("::"),
@@ -1566,7 +1568,7 @@ fn tuple_struct_pattern(
     }
     if args.len() != def.fields.len() {
         ctx.emit_error(
-            rokc_diagnostic::ErrorKind::Type,
+            Code::PATTERN_ARITY,
             format!(
                 "pattern `{}` has {} field(s), but the struct has {}",
                 segs.join("::"),
@@ -1642,7 +1644,7 @@ pub(super) fn literal_to_const(
             }
             if !int_fits(value, ty) {
                 ctx.emit_error(
-                    rokc_diagnostic::ErrorKind::Type,
+                    Code::LITERAL_OUT_OF_RANGE,
                     format!("literal `{text}` out of range for `{}`", ty.name()),
                 );
             }
@@ -1725,6 +1727,7 @@ fn binds_const(ctx: &LowerCtx<'_>, name: &str, scrut_ty: &HirTy, at: rokc_diagno
         let base = enum_base_name(&def.name);
         let rest = if v.arity == 0 { "" } else { "(..)" };
         ctx.emit_error_help(
+            Code::BINDING_SHADOWS_VARIANT,
             at,
             format!("`{name}` here would be a new variable that matches every value"),
             format!("did you mean the variant `{base}::{}{rest}`?", v.name),
@@ -1737,6 +1740,7 @@ fn binds_const(ctx: &LowerCtx<'_>, name: &str, scrut_ty: &HirTy, at: rokc_diagno
         return;
     };
     ctx.emit_error_help(
+        Code::BINDING_SHADOWS_VARIANT,
         at,
         format!(
             "`{name}` here would be a new variable that matches every value, not the {what} \

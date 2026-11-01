@@ -422,7 +422,7 @@ fn builds_print_lints() {
     let app = new_package(&dir, "app", false);
     let src = "fn main() {\n    let x = 1;\n    println(\"hi\");\n}\n";
     put(app.join("src/main.rok"), src).unwrap();
-    let warn = "warning[E503]: unused variable `x`";
+    let warn = "warning[E0132]: unused variable `x`";
     let out = rokc(Some(&env), &app, &["run"]);
     assert_exit(&out, 0);
     assert_eq!(text(&out.stdout), "hi\n");
@@ -434,7 +434,7 @@ fn builds_print_lints() {
     assert_exit(&out, 1);
     let err = text(&out.stderr);
     assert!(
-        err.contains("error[E503]: unused variable `x`")
+        err.contains("error[E0132]: unused variable `x`")
             && err.contains("`-D unused` on the command line"),
         "{err}"
     );
@@ -442,7 +442,7 @@ fn builds_print_lints() {
     assert_exit(&out, 0);
     let err = text(&out.stderr);
     assert!(
-        err.contains("Compiling app") && !err.contains("E503"),
+        err.contains("Compiling app") && !err.contains("E0132"),
         "{err}"
     );
     put(
@@ -451,7 +451,11 @@ fn builds_print_lints() {
     )
     .unwrap();
     let out = rokc(Some(&env), &app, &["build"]);
-    assert!(!text(&out.stderr).contains("E503"), "{}", text(&out.stderr));
+    assert!(
+        !text(&out.stderr).contains("E0132"),
+        "{}",
+        text(&out.stderr)
+    );
     put(
         app.join("src/main.rok"),
         format!("#![deny(unused_variables)]\n{src}"),
@@ -466,7 +470,7 @@ fn builds_print_lints() {
     .unwrap();
     let (code, _, err) = harness(&env, &app, "test", &[]);
     assert_eq!(code, 0, "{err}");
-    assert!(err.contains("warning[E503]: unused variable `y`"), "{err}");
+    assert!(err.contains("warning[E0132]: unused variable `y`"), "{err}");
     // A lone file's cached executable.
     put(dir.join("s.rok"), src).unwrap();
     let run = || rokc(Some(&env), &dir, &["--target-dir", "t", "run", "s.rok"]);
@@ -495,7 +499,7 @@ fn deny_warnings_takes_new_lints() {
     assert_exit(&out, 1);
     let err = text(&out.stderr);
     assert!(
-        err.contains("error[E503]: unused variable `x`")
+        err.contains("error[E0132]: unused variable `x`")
             && err.contains("`-D warnings` on the command line"),
         "{err}"
     );
@@ -536,8 +540,8 @@ fn deny_warnings_takes_new_lints() {
         assert_exit(&out, 1);
         let err = text(&out.stderr);
         assert!(
-            err.contains("error[E503]: use of deprecated function `new_old`")
-                && err.contains("error[E503]: use of deprecated function `old`"),
+            err.contains("error[E0132]: use of deprecated function `new_old`")
+                && err.contains("error[E0132]: use of deprecated function `old`"),
             "{err}"
         );
     }
@@ -630,7 +634,7 @@ fn compiler_warning_with_lint_can_be_allowed() {
     let app = new_package(&dir, "app", false);
     let src = "fn main() {\n    /// not an item\n    let x = 1;\n    println(f\"{x}\");\n}\n";
     put(app.join("src/main.rok"), src).unwrap();
-    let warn = "warning[E503]: unused doc comment";
+    let warn = "warning[E0132]: unused doc comment";
     let out = rokc(None, &app, &["lint"]);
     assert_exit(&out, 0);
     let err = text(&out.stderr);
@@ -647,7 +651,7 @@ fn compiler_warning_with_lint_can_be_allowed() {
     let out = rokc(None, &app, &["lint", "-D", "unused"]);
     assert_exit(&out, 1);
     assert!(
-        text(&out.stderr).contains("error[E503]: unused doc comment"),
+        text(&out.stderr).contains("error[E0132]: unused doc comment"),
         "{}",
         text(&out.stderr)
     );
@@ -691,7 +695,7 @@ fn literal_spread_mismatch_is_in_warnings() {
     let src = "fn add(a: i32, b: i32) -> i32 { a + b }\n\
                fn main() {\n    println(f\"{add(..[1, 2, 3])}\");\n}\n";
     put(app.join("src/main.rok"), src).unwrap();
-    let warn = "warning[E503]: spread of 3 elements into 2 parameters; this call panics";
+    let warn = "warning[E0132]: spread of 3 elements into 2 parameters; this call panics";
     let out = rokc(None, &app, &["lint"]);
     assert_exit(&out, 0);
     assert!(text(&out.stderr).contains(warn), "{}", text(&out.stderr));
@@ -1190,8 +1194,8 @@ fn check_takes_the_library_stage() {
         assert_eq!(
             lints,
             [
-                "warning[E503]: unused import `dep::plain`",
-                "warning[E503]: unused result of `token`, which is `#[must_use]`",
+                "warning[E0132]: unused import `dep::plain`",
+                "warning[E0132]: unused result of `token`, which is `#[must_use]`",
             ],
             "{err}"
         );
@@ -2333,20 +2337,20 @@ fn json_and_colored_diagnostics() {
     };
     let always = ["--color=always"];
     let err = stderr(&[], &always);
-    assert!(err.contains("\x1b[1;91merror[E100]\x1b[0m"), "{err:?}");
+    assert!(err.contains("\x1b[1;91merror[E0027]\x1b[0m"), "{err:?}");
     assert!(err.contains("\x1b[1;96m-->\x1b[0m"), "{err:?}");
     let err = stderr(&[("TERM", "xterm-256color")], &always);
     assert!(
-        err.contains("\x1b[1;38;5;203merror[E100]\x1b[0m"),
+        err.contains("\x1b[1;38;5;203merror[E0027]\x1b[0m"),
         "{err:?}"
     );
     let err = stderr(&[("COLORTERM", "truecolor")], &always);
     assert!(
-        err.contains("\x1b[1;38;2;255;95;95merror[E100]\x1b[0m"),
+        err.contains("\x1b[1;38;2;255;95;95merror[E0027]\x1b[0m"),
         "{err:?}"
     );
     let err = stderr(&[("CLICOLOR_FORCE", "1")], &[]);
-    assert!(err.contains("\x1b[1;91merror[E100]\x1b[0m"), "{err:?}");
+    assert!(err.contains("\x1b[1;91merror[E0027]\x1b[0m"), "{err:?}");
     for (vars, args) in [
         (&[][..], &[][..]),
         (&[("NO_COLOR", "1"), ("CLICOLOR_FORCE", "1")][..], &[][..]),
@@ -2355,7 +2359,7 @@ fn json_and_colored_diagnostics() {
         (&[("CLICOLOR_FORCE", "1")][..], &["--no-color"][..]),
     ] {
         let err = stderr(vars, args);
-        assert!(err.contains("error[E100]"), "{err:?}");
+        assert!(err.contains("error[E0027]"), "{err:?}");
         assert!(!err.contains('\x1b'), "{vars:?} {args:?}: {err:?}");
     }
 }
@@ -2388,7 +2392,7 @@ fn fixes_in_json() {
         ),
         "{stdout}"
     );
-    assert!(line.ends_with(r#""lint":null,"schema":1}"#), "{line}");
+    assert!(line.ends_with(r#""lint":null,"schema":2}"#), "{line}");
 }
 
 /// JSON diagnostics name the lint a warning belongs to, where its span
@@ -2411,7 +2415,7 @@ fn json_names_lint_and_end() {
         .find(|l| l.contains("unused_variables"))
         .unwrap_or_else(|| panic!("{stdout}"));
     let d = rokc_diagnostic::Json::parse(line).unwrap();
-    assert_eq!(d.get("schema").as_u32(), Some(1), "{line}");
+    assert_eq!(d.get("schema").as_u32(), Some(2), "{line}");
     assert_eq!(d.get("type").as_str(), Some("warning"), "{line}");
     assert_eq!(d.get("lint").as_str(), Some("unused_variables"), "{line}");
     let rokc_diagnostic::Json::Arr(spans) = d.get("spans") else {
@@ -2425,6 +2429,25 @@ fn json_names_lint_and_end() {
     assert!(
         matches!(d.get("help"), rokc_diagnostic::Json::Arr(_)),
         "{line}"
+    );
+}
+
+/// `--explain` prints a code's page; an unknown code is a usage error
+/// that says which codes exist.
+// spec: §9.9.4
+#[test]
+fn explain_prints_the_code() {
+    let dir = scratch("explain");
+    let out = rokc(None, &dir, &["--explain", "E0040"]);
+    assert_exit(&out, 0);
+    let page = text(&out.stdout);
+    assert!(page.starts_with("E0040: mismatched types\n\n"), "{page}");
+    let out = rokc(None, &dir, &["--explain", "E200"]);
+    assert_exit(&out, 2);
+    assert!(
+        text(&out.stderr).contains("codes run from E0001"),
+        "{}",
+        text(&out.stderr)
     );
 }
 
@@ -2470,7 +2493,7 @@ fn fmt_check_and_rewrite() {
     let out = rokc(None, &dir, &["fmt", "--check", "."]);
     assert_exit(&out, 1);
     assert!(
-        text(&out.stderr).contains("error[E002]: bare identifier `x`")
+        text(&out.stderr).contains("error[E0010]: bare identifier `x`")
             && text(&out.stderr).contains("bad.rokon:1:17\n"),
         "{}",
         text(&out.stderr)
@@ -3501,7 +3524,7 @@ fn prebuilt_dependency_keeps_handoff_summaries() {
     let err = text(&out.stderr);
     assert!(
         err.contains(
-            "error[E202]: `xs` was moved into a `Mutex` by `dep::store(xs)` at line 2 (inside \
+            "error[E0105]: `xs` was moved into a `Mutex` by `dep::store(xs)` at line 2 (inside \
              `lock`, lib.rok:3)"
         ),
         "{err}"
@@ -3517,7 +3540,7 @@ fn prebuilt_dependency_keeps_handoff_summaries() {
     assert_exit(&out, 1);
     let err = text(&out.stderr);
     assert!(
-        err.contains("error[E202]: `xs` was moved into a `Mutex` by `dep::store_if(xs, true)`"),
+        err.contains("error[E0105]: `xs` was moved into a `Mutex` by `dep::store_if(xs, true)`"),
         "{err}"
     );
 
@@ -3527,7 +3550,7 @@ fn prebuilt_dependency_keeps_handoff_summaries() {
     let err = text(&out.stderr);
     assert!(
         err.contains(
-            "error[E202]: `xs` shares what `b.share()` moved into a `Mutex` at line 3 (inside \
+            "error[E0105]: `xs` shares what `b.share()` moved into a `Mutex` at line 3 (inside \
              `Bag::share`, lib.rok:9)"
         ),
         "{err}"

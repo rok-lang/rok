@@ -7,7 +7,7 @@
 
 use std::collections::HashSet;
 
-use rokc_diagnostic::{ErrorKind, Span};
+use rokc_diagnostic::{Code, Span};
 use rokc_ir_common::LocalId;
 
 use super::send_check::{Child, each_child, root};
@@ -48,7 +48,7 @@ pub(super) fn check(env: &Env<'_>, functions: &[HirFunction]) {
                 .and_then(|x| x.name.clone())
                 .unwrap_or_else(|| "a pointer".to_owned());
             ctx.emit_error_at(
-                ErrorKind::Type,
+                Code::COROUTINE,
                 at,
                 format!(
                     "`{name}` points to a local of this coroutine and is used after a \
