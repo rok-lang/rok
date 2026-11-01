@@ -47,5 +47,6 @@ fn main() throws (rok::std::io::IoError) {
     try env::set_var("A", "1");
     let q = CStr::from_ptr(ConstPtr::<c_char>::dangling());
     let f = File::from_fd(0, "stdin");
-    let _ = (a, b, c, d, e, t, s, w, z, q, f);
+    try f.close();
+    let _ = (a, b, c, d, e, t, s, w, z, q);
 }
