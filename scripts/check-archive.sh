@@ -10,7 +10,6 @@
 #
 # Prints one line per archive and exits 1 if any breaks the contract.
 # `rokc --version --verbose` is checked where it runs: dist-native.sh.
-# The rok-mlir-dev bundle is not a toolchain and is not checked.
 set -eu
 
 [ $# -gt 1 ] || {
@@ -33,7 +32,6 @@ bad=0
 for a in "$@"; do
   file=${a##*/}
   case $file in
-    rok-mlir-dev-*) continue ;;
     rok-*.tar.gz) top=${file%.tar.gz} ;;
     rok-*.tar.xz) top=${file%.tar.xz} ;;
     rok-*.zip) top=${file%.zip} ;;
