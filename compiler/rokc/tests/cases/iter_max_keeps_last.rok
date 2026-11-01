@@ -1,0 +1,30 @@
+// spec: std 207-iter
+// expect-exit: 0
+// expect-stdout:
+// max b min a
+// key b
+
+// `max` keeps the last of equal maxima, `min` the first (as Rust and
+// `max_by_key`).
+#[derive(PartialEq, Eq)]
+struct Tag { rank: i32; name: str; }
+
+impl PartialOrd for Tag {
+    fn lt(self, rhs: Tag) -> bool { self.rank < rhs.rank }
+    fn gt(self, rhs: Tag) -> bool { self.rank > rhs.rank }
+    fn le(self, rhs: Tag) -> bool { self.rank <= rhs.rank }
+    fn ge(self, rhs: Tag) -> bool { self.rank >= rhs.rank }
+}
+
+impl Ord for Tag {
+    fn cmp(self, rhs: Tag) -> Ordering { self.rank.cmp(rhs.rank) }
+}
+
+fn main() {
+    let xs = [Tag { rank: 1, name: "a" }, Tag { rank: 1, name: "b" }];
+    let hi = xs.iter().max() ?? Tag { rank: 0, name: "?" };
+    let lo = xs.iter().min() ?? Tag { rank: 0, name: "?" };
+    println(f"max {hi.name} min {lo.name}");
+    let k = xs.iter().max_by_key(|t| t.rank) ?? Tag { rank: 0, name: "?" };
+    println(f"key {k.name}");
+}

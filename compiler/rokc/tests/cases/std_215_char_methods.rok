@@ -16,9 +16,9 @@ fn main() {
     let e: char = '😀';
     let k: char = '한';
     println(f"{c.len_utf8()} {e.len_utf8()} {k.len_utf8()}");
-    println(f"{try '1'.to_digit(10) catch _ { 99u32 }}");
+    println(f"{'1'.to_digit(10) ?? 99u32}");
     let n: u32 = c as u32;
-    println(f"{n} {char::from_u32(0x41u32) ?? '?'} {char::from_digit(5u32, 10u32)}");
+    println(f"{n} {char::from_u32(0x41u32) ?? '?'} {char::from_digit(5u32, 10u32) ?? '?'}");
     let s = if char::from_u32(0xD800u32) is none { "surrogate rejected" } else { "accepted" };
     println(s);
 }

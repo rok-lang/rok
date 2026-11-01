@@ -223,8 +223,8 @@ const fn number(s: str, radix: u64, max_len: usize) -> u64 | none {
     if s.len() == 0 || s.len() > max_len { return none; }
     let n = 0u64;
     for c in s.chars() {
-        let d = (try c.to_digit(radix as u32) catch _ { return none; }) as u64;
-        n = n * radix + d;
+        let d: u32 = c.to_digit(radix as u32) else { return none; };
+        n = n * radix + d as u64;
     }
     n
 }

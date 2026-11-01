@@ -51,10 +51,21 @@ pub fn props(c: u32) -> u32 {
     bits
 }
 
-/// Simple (one-char) case mapping; `c` itself when it has none.
-pub fn to_case(c: u32, upper: bool) -> u32 {
-    let table = if upper { t::TO_UPPER } else { t::TO_LOWER };
-    lookup(table, c).unwrap_or(c)
+/// Case mapping `mode`: 0 lowercase, 1 uppercase, 2 titlecase.
+pub const LOWER: i32 = 0;
+pub const UPPER: i32 = 1;
+pub const TITLE: i32 = 2;
+
+/// Simple (one-char) case mapping (`mode` as `LOWER` / `UPPER` /
+/// `TITLE`); `c` itself when it has none.
+pub fn to_case(c: u32, mode: i32) -> u32 {
+    match mode {
+        LOWER => lookup(t::TO_LOWER, c).unwrap_or(c),
+        UPPER => lookup(t::TO_UPPER, c).unwrap_or(c),
+        // Titlecase is the uppercase unless the table says otherwise.
+        TITLE => lookup(t::TO_TITLE, c).unwrap_or_else(|| to_case(c, UPPER)),
+        _ => c,
+    }
 }
 
 fn is_white_space(c: char) -> bool {
@@ -72,33 +83,37 @@ fn final_sigma(s: &str, i: usize) -> bool {
 }
 
 /// The full case mapping of `c` (at byte `i` of `s`), char by char.
-fn map_full(s: &str, i: usize, c: char, upper: bool, f: &mut impl FnMut(char)) {
+fn map_full(s: &str, i: usize, c: char, mode: i32, f: &mut impl FnMut(char)) {
     if c.is_ascii() {
-        f(if upper {
-            c.to_ascii_uppercase()
-        } else {
+        f(if mode == LOWER {
             c.to_ascii_lowercase()
+        } else {
+            c.to_ascii_uppercase()
         });
         return;
     }
-    let full = if upper { t::FULL_UPPER } else { t::FULL_LOWER };
+    let full = match mode {
+        LOWER => t::FULL_LOWER,
+        UPPER => t::FULL_UPPER,
+        _ => t::FULL_TITLE,
+    };
     if let Some(m) = lookup(full, c as u32) {
         for &x in m.iter().filter(|&&x| x != 0) {
             f(char::from_u32(x).unwrap_or(c));
         }
-    } else if !upper && c == 'Σ' && final_sigma(s, i) {
+    } else if mode == LOWER && c == 'Σ' && final_sigma(s, i) {
         f('ς');
     } else {
-        f(char::from_u32(to_case(c as u32, upper)).unwrap_or(c));
+        f(char::from_u32(to_case(c as u32, mode)).unwrap_or(c));
     }
 }
 
-/// `text` uppercased (`upper`) or lowercased, char by char into `f`:
-/// full Unicode mappings (`ß` → `SS`) plus `Final_Sigma`; no
-/// locale-specific rules.
-pub fn case(text: &str, upper: bool, mut f: impl FnMut(char)) {
+/// `text` mapped char by char into `f` (`mode` as `to_case`): full
+/// Unicode mappings (`ß` → `SS`, `Ss` in titlecase) plus `Final_Sigma`;
+/// no locale-specific rules and no word boundaries.
+pub fn case(text: &str, mode: i32, mut f: impl FnMut(char)) {
     for (i, c) in text.char_indices() {
-        map_full(text, i, c, upper, &mut f);
+        map_full(text, i, c, mode, &mut f);
     }
 }
 
@@ -133,8 +148,20 @@ mod tests {
         assert_eq!(props('한' as u32), 1);
         assert_eq!(props('٣' as u32), 16);
         assert_eq!(props(0x3000), 8);
-        assert_eq!(to_case('É' as u32, false), 'é' as u32);
-        assert_eq!(to_case('ß' as u32, true), 'ß' as u32);
+        assert_eq!(to_case('É' as u32, LOWER), 'é' as u32);
+        assert_eq!(to_case('ß' as u32, UPPER), 'ß' as u32);
+        assert_eq!(to_case('ǆ' as u32, UPPER), 'Ǆ' as u32);
+        assert_eq!(to_case('ǆ' as u32, TITLE), 'ǅ' as u32);
+        assert_eq!(to_case('a' as u32, TITLE), 'A' as u32);
+        let full = |c: &str, mode| {
+            let mut out = String::new();
+            case(c, mode, |m| out.push(m));
+            out
+        };
+        assert_eq!(full("ß", TITLE), "Ss");
+        assert_eq!(full("ﬁ", TITLE), "Fi");
+        assert_eq!(full("ǆ", TITLE), "ǅ");
+        assert_eq!(full("ß", UPPER), "SS");
         assert!(final_sigma("ΟΔΟΣ", 6));
         assert!(!final_sigma("Σ", 0));
     }

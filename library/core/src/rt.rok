@@ -54,7 +54,7 @@ extern "rok" {
     fn rok_str_concat(a: str, b: str) -> str;
     #[track_caller]
     fn rok_str_slice(s: str, start: usize, end: usize) -> str;
-    fn rok_str_case(s: str, upper: i32) -> str;
+    fn rok_str_case(s: str, mode: i32) -> str;
     fn rok_str_replace(s: str, from: str, to: str) -> str;
     fn rok_str_from_char(c: u32) -> str;
     fn rok_str_from_buf(buf: GcBuf<u8>, off: usize, len: usize) -> str;
@@ -261,7 +261,7 @@ extern "rok" {
     fn rok_buf_copy(dst: GcBuf<u8>, doff: usize, src: GcBuf<u8>, soff: usize, len: usize);
     fn rok_gc_secret_wipe(obj: GcBuf<u32>);
     fn rok_char_props(c: u32) -> u32;
-    fn rok_char_to_case(c: u32, upper: i32) -> u32;
+    fn rok_char_to_case(c: u32, mode: i32) -> u32;
     fn rok_fmt_len(t: str) -> usize;
     fn rok_f64_floor(x: f64) -> f64;
     fn rok_f64_ceil(x: f64) -> f64;
