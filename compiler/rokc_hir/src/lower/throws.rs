@@ -1232,7 +1232,9 @@ pub(super) fn lower_try(
         }
         return shell(ctx, &frame, body, HirTy::Unit, (Vec::new(), None), span);
     }
-    let result_ty = if optional_parts(&body.ty).is_some() || body.ty == HirTy::Unknown {
+    // `T?` with the operand as `T` (spec 2.6.4): an optional operand
+    // nests, so a thrown error and a returned `none` stay apart.
+    let result_ty = if body.ty == HirTy::Unknown {
         body.ty.clone()
     } else {
         HirTy::sum([body.ty.clone(), HirTy::None])

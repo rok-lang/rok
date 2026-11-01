@@ -2279,6 +2279,19 @@ fn sig_text<'n>(callee: &str, params: impl IntoIterator<Item = (&'n str, String)
 fn mismatch_help(ctx: &LowerCtx<'_>, slot: &HirTy, v: &HirExpr) {
     let src = suggest::short_src(ctx, v.span);
     if suggest::some_part(&v.ty).as_ref() == Some(slot) {
+        // `try?` over an optional nests (spec 3.14.3).
+        if let Some(s) = src.filter(|s| {
+            s.starts_with("try?") && matches!(slot, HirTy::Sum(ts) if ts.iter().any(HirTy::is_none))
+        }) {
+            let fix = format!("({s}) ?? none");
+            ctx.fix_last(v.span, fix.clone(), format!("use `{fix}`"));
+            ctx.help_last(Some(format!(
+                "`try?` keeps a thrown error apart from a returned `none`: write `{fix}` to \
+                 merge them, or annotate `{}`",
+                ctx.ty_name(&v.ty)
+            )));
+            return;
+        }
         let name = src.unwrap_or("v");
         let help = match (src, suggest::default_lit(slot)) {
             (Some(s), Some(d)) => {

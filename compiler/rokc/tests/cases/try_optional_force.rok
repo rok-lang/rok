@@ -27,9 +27,9 @@ fn main() -> i32 {
         v: i32 => println(f"{v}"),
         none => println("none"),
     };
-    // An optional result type does not nest; `try` covers all to its
-    // right, hence the parentheses.
-    println(f"{(try? maybe(3)) ?? -1}");
+    // `try?` on an optional nests, `??` peels the outer layer; `try`
+    // covers all to its right, hence the parentheses.
+    println(f"{((try? maybe(3)) ?? -1) ?? -2}");
     println(f"{try! half(18)}");
     try? half(1);
     println("dropped");
