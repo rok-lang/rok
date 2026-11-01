@@ -458,7 +458,7 @@ pub @derive {
                 @apply_if(!@Self.is_tuple) {
                     let fs: rok::core::collections::OrderedDict<str, rok::std::rokon::Value> = rok::core::collections::OrderedDict::new();
                     @for_fields {
-                        fs.insert(@field.name.as_str(), rok::std::rokon::encode::<@field.type>(self.@field));
+                        _ = fs.insert(@field.name.as_str(), rok::std::rokon::encode::<@field.type>(self.@field));
                     }
                     return rok::std::rokon::Value::Struct { name: @Self.as_str(), fields: fs };
                 }
