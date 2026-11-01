@@ -4,6 +4,7 @@
 // distinct true
 // spread true
 // fill true
+// part true
 
 // rok::std::random: the OS random source fills lists of any
 // length (getentropy's 256-byte limit is chunked).
@@ -27,6 +28,14 @@ fn main() {
         if x != 0u8 { nonzero = true; }
     }
     println(f"fill {nonzero}");
+    // A view fills only its own bytes.
+    let part: List<u8> = [0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8];
+    random::fill(part[2:18]);
+    let inner = false;
+    for x in part[2:18] {
+        if x != 0u8 { inner = true; }
+    }
+    println(f"part {inner && part[0] == 0u8 && part[1] == 0u8 && part[18] == 0u8 && part[19] == 0u8}");
 }
 
 // spec: std 310-random §3.10.1
