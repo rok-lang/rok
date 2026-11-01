@@ -47,7 +47,6 @@ impl Debug for NulError {
 impl Error for NulError {}
 
 /// Bytes that are not one C string (`CStr::from_bytes_with_nul`).
-#[derive(Clone, PartialEq, Eq)]
 pub enum FromBytesWithNulError {
     /// A NUL before the last byte, at `position`.
     InteriorNul { position: usize; },
@@ -60,6 +59,27 @@ impl FromBytesWithNulError {
         match self {
             FromBytesWithNulError::InteriorNul { position } => f"interior nul byte at {position}",
             FromBytesWithNulError::NotNulTerminated => "data provided is not nul terminated",
+        }
+    }
+}
+
+impl PartialEq for FromBytesWithNulError {
+    const fn eq(self, rhs: FromBytesWithNulError) -> bool {
+        match (self, rhs) {
+            (FromBytesWithNulError::InteriorNul { position: a }, FromBytesWithNulError::InteriorNul { position: b }) => a == b,
+            (FromBytesWithNulError::NotNulTerminated, FromBytesWithNulError::NotNulTerminated) => true,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for FromBytesWithNulError {}
+
+impl Clone for FromBytesWithNulError {
+    fn clone(self) -> FromBytesWithNulError {
+        match self {
+            FromBytesWithNulError::InteriorNul { position } => FromBytesWithNulError::InteriorNul { position },
+            FromBytesWithNulError::NotNulTerminated => FromBytesWithNulError::NotNulTerminated,
         }
     }
 }
