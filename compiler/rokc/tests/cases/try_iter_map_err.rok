@@ -1,0 +1,49 @@
+// spec: std §2.7.13
+// expect-exit: 0
+// expect-stdout:
+// [10, 30]
+// [2]
+// 3 15 6
+// wrapped bad 7
+// [0, 1] none
+// 6
+
+// `TryIterator` adapters: closures may throw the iterator's error,
+// `map_err` changes it, `collect` stops at the first error.
+struct Bad { at: i32; }
+impl Display for Bad { fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"bad {self.at}") } }
+impl Debug for Bad { fn fmt(self, ref f: Formatter) throws (FmtError) { try Display::fmt(self, ref f) } }
+impl Error for Bad {}
+
+yield fn checked(xs: List<i32>) throws (Bad) -> i32 {
+    for x in xs {
+        if x < 0 { throw Bad { at: -x }; }
+        yield x;
+    }
+}
+
+fn not_two(x: i32) throws (Bad) -> bool {
+    if x == 4 { throw Bad { at: x }; }
+    x != 2
+}
+
+fn main() throws (Bad | str) {
+    let v: List<i32> = try checked([1, 2, 3]).filter(not_two).map(|x| x * 10).collect();
+    println(f"{v:?}");
+    let r: List<i32> = try checked([1, -2, 3]).collect() catch e: Bad { [e.at] };
+    println(f"{r:?}");
+    let n = try checked([4, 5, 6]).count();
+    let s = try checked([4, 5, 6]).sum();
+    let m = try checked([4, 5, 6]).max() ?? 0;
+    println(f"{n} {s} {m}");
+    let w = try checked([1, -7]).map_err(|e| -> str { f"wrapped {e}" }).count() catch e: str { println(e); 0 };
+    let p = checked([5, 6, 7]).enumerate().peekable();
+    let firsts: List<usize> = try p.take(2).map(|p| p.0).collect();
+    println(f"{firsts:?} {try checked([]).last():?}");
+    let c = Atomic::new(0);
+    let step: fn() throws (Bad) -> (i32 | none) = || -> i32 | none {
+        let k = c.fetch_add(1) + 1;
+        if k > 3 { none } else { k }
+    };
+    println(f"{try iter::try_from_fn(step).fold(w as i32, |a, x| a + x)}");
+}

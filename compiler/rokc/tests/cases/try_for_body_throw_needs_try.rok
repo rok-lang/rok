@@ -1,0 +1,15 @@
+// spec: §3.13.3 §4.14.10
+// expect-error: 12:17: this call can throw `str` and must be marked with `try`
+// expect-error: 15:1: `next` of `TryGenIter<str, str>` can throw, so this loop must be `try for`
+
+// The loop's `try` does not cover the body; a plain `for` over a
+// `TryIterator` asks for `try for`.
+yield fn lines() throws (str) -> str { yield "a"; }
+fn parse(s: str) throws (str) -> i32 { if s == "" { throw "empty"; } 1 }
+
+fn f() throws (str) {
+    try for l in lines() {
+        let _ = parse(l);
+    }
+}
+for l in lines() { println(l); }

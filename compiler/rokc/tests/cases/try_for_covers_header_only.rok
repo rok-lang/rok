@@ -1,0 +1,55 @@
+// spec: §3.13.3 §4.14.10 std §2.7.13
+// expect-exit: 0
+// expect-stdout:
+// 1 2 caught bad 3
+// body caught bad 7
+// try? none
+// 3
+
+// The `try` of `try for` covers the iterable and each `next`; a throwing
+// call in the body carries its own `try`, routed like any other.
+struct Bad { at: i32; }
+impl Display for Bad { fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"bad {self.at}") } }
+impl Debug for Bad { fn fmt(self, ref f: Formatter) throws (FmtError) { try Display::fmt(self, ref f) } }
+impl Error for Bad {}
+
+yield fn checked(xs: List<i32>) throws (Bad) -> i32 {
+    for x in xs {
+        if x < 0 { throw Bad { at: -x }; }
+        yield x;
+    }
+}
+
+fn check(x: i32) throws (Bad) -> i32 {
+    if x == 7 { throw Bad { at: x }; }
+    x
+}
+
+fn open(xs: List<i32>) throws (Bad) -> iter::TryGenIter<i32, Bad> {
+    if xs.len() == 0 { throw Bad { at: 0 }; }
+    checked(xs)
+}
+
+fn main() {
+    try for x in try open([1, 2, -3]) {
+        print(f"{x} ");
+    } catch e: Bad {
+        print(f"caught {e}");
+    }
+    println("");
+    try for x in checked([5, 7]) {
+        let _ = try check(x);
+    } catch e: Bad {
+        println(f"body caught {e}");
+    }
+    let r = try? for x in checked([-1]) {
+        println(f"{x}");
+    };
+    println(f"try? {if r is none { "none" } else { "()" }}");
+    // `try!` panics on an error from a step; none here
+    let n = 0;
+    try! for x in checked([1, 1, 1]) {
+        n += x;
+    }
+    println(f"{n}");
+}

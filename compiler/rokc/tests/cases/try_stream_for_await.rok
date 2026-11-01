@@ -1,0 +1,41 @@
+// spec: std §2.8.11 §3.13.3
+// expect-exit: 0
+// expect-stdout:
+// 4 5 caught bad 9
+// [40, 50]
+// err bad 2
+// 9 wrapped bad 9
+
+// `TryStream`: `try for await` covers each step, adapters carry the
+// error, `results` / `map_err` convert it.
+struct Bad { at: i32; }
+impl Display for Bad { fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"bad {self.at}") } }
+impl Debug for Bad { fn fmt(self, ref f: Formatter) throws (FmtError) { try Display::fmt(self, ref f) } }
+impl Error for Bad {}
+
+async yield fn checked(xs: List<i32>) throws (Bad) -> i32 {
+    for x in xs {
+        await task::yield_now();
+        if x < 0 { throw Bad { at: -x }; }
+        yield x;
+    }
+}
+
+async fn main() {
+    try for await x in checked([4, 5, -9]) {
+        print(f"{x} ");
+    } catch e: Bad {
+        println(f"caught {e}");
+    }
+    let v: List<i32> = try await checked([4, 5]).map(|x| x * 10).collect() catch _: Bad { [] };
+    println(f"{v:?}");
+    for await r in checked([-2]).results() {
+        match r {
+            Result::Ok(x) => println(f"ok {x}"),
+            Result::Err(e) => println(f"err {e}"),
+        }
+    }
+    let s = try await checked([2, 3, 4]).filter(|x| x != 3).take(5).fold(3, |a, x| a + x) catch _: Bad { 0 };
+    try await checked([-9]).map_err(|e| -> str { f"wrapped {e}" }).for_each(|_| {}) catch e: str { print(f"{s} {e}"); };
+    println("");
+}
