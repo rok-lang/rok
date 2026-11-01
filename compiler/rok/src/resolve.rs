@@ -9,7 +9,9 @@
 //! `rok.lock` pins the whole graph, optional deps included. Features then
 //! pick what a build has: from the root's (`--features`, `default`) along
 //! every enabled edge, one set per package. `dev_deps` count only for
-//! tests.
+//! tests; a dependency with `target` only for a build for that target.
+//! A renamed dependency (`package`) is one package under one name in a
+//! build.
 // Greedy, no backtracking: a root requirement both sides accept
 // (`rok add x@=1.2.0`) settles a conflict.
 
@@ -42,6 +44,9 @@ pub struct Options {
     pub no_default_features: bool,
     /// A test / bench build: with the root's `dev_deps`.
     pub dev: bool,
+    /// The build's target, for dependencies with `target` (`None`: the
+    /// host).
+    pub target: Option<rokc_target::TargetSpec>,
 }
 
 /// What a command works on: a project (a directory with `rok.rokon`), a
@@ -59,6 +64,8 @@ pub struct Context {
 #[derive(Clone)]
 pub struct Resolved {
     pub name: String,
+    /// What code calls it: `name`, or the dependency's name when renamed.
+    pub code: String,
     /// The package's `src/lib.rok`.
     pub root: PathBuf,
     /// Its enabled features, sorted.
@@ -72,6 +79,10 @@ pub struct Resolved {
 /// A package of the whole graph.
 struct Node {
     name: String,
+    /// What its dependents call it.
+    code: String,
+    /// The native library it links (`links`).
+    links: Option<String>,
     root: PathBuf,
     deps: Vec<Dep>,
     features: Features,
@@ -134,15 +145,18 @@ struct Resolver<'a> {
     /// What each name resolved to, who required it, and how (a stone's
     /// requirement).
     seen: HashMap<String, (Id, String, String)>,
+    /// What code calls each package (by key), and who named it first.
+    names: HashMap<String, (String, String)>,
     out: Vec<Node>,
     natives: Vec<NativeReq>,
 }
 
 pub fn resolve(home: &Path, ctx: &Context, opts: &Options) -> Result<Graph, String> {
-    let old = match &ctx.lock_path {
+    let mut old = match &ctx.lock_path {
         Some(p) => Lock::read(p)?.unwrap_or_default(),
         None => Lock::default(),
     };
+    old.unmirror(&registry::sources(home)?);
     if opts.locked && ctx.lock_path.as_ref().is_some_and(|p| !p.is_file()) {
         let any_git = ctx
             .manifest
@@ -178,13 +192,23 @@ pub fn resolve(home: &Path, ctx: &Context, opts: &Options) -> Result<Graph, Stri
         "the root package"
     };
     r.walk(&all, &ctx.base, by)?;
+    check_links(&r.out)?;
     let natives = r.natives()?;
     if let Some(path) = &ctx.lock_path {
         let text = r.new.to_text();
         let old_text = std::fs::read_to_string(path).ok();
         let empty = r.new == Lock::default();
         if old_text.as_deref() != Some(text.as_str()) && !(empty && old_text.is_none()) {
-            if opts.locked {
+            // A version 1 lock is written as version 2 even under --locked
+            // when its pins stay.
+            let format_only = r.old.from_v1 && r.new.same_pins(&r.old);
+            if format_only && !opts.quiet {
+                rokc_core::term::note(&format!(
+                    "{} is written in lock format 2 (the pins are unchanged)",
+                    path.display()
+                ));
+            }
+            if opts.locked && !format_only {
                 return Err(format!(
                     "{} is out of date and --locked forbids changing it (run `rok update`)",
                     path.display()
@@ -197,7 +221,7 @@ pub fn resolve(home: &Path, ctx: &Context, opts: &Options) -> Result<Graph, Stri
     let nodes = order(
         r.out,
         |p| &p.name,
-        |p| p.deps.iter().map(|d| d.name.clone()).collect(),
+        |p| p.deps.iter().map(|d| d.package_name().to_owned()).collect(),
     );
     let mut root_deps = ctx.manifest.deps.clone();
     if opts.dev {
@@ -215,6 +239,7 @@ pub fn resolve(home: &Path, ctx: &Context, opts: &Options) -> Result<Graph, Stri
                 .clone();
             Some(Resolved {
                 name: n.name,
+                code: n.code,
                 root: n.root,
                 features,
                 source: n.source,
@@ -253,6 +278,8 @@ fn activate(
 ) -> Result<Vec<String>, String> {
     let root = Node {
         name: String::new(),
+        code: String::new(),
+        links: None,
         root: PathBuf::new(),
         deps,
         features: features.clone(),
@@ -268,6 +295,10 @@ fn activate(
             .map(|(i, n)| (manifest::key(&n.name), i))
             .collect(),
         nodes: all,
+        target: opts
+            .target
+            .clone()
+            .unwrap_or_else(|| rokc_target::TargetSpec::host().clone()),
         on: HashMap::new(),
         edges: HashSet::new(),
         weak: Vec::new(),
@@ -298,6 +329,8 @@ fn activate(
 /// Feature resolution over `nodes` (the root last).
 struct Activation<'a> {
     nodes: Vec<&'a Node>,
+    /// The build's target: a dependency with another `target` stays off.
+    target: rokc_target::TargetSpec,
     index: HashMap<String, usize>,
     /// The packages reached, and their features.
     on: HashMap<usize, BTreeSet<String>>,
@@ -334,8 +367,9 @@ impl Activation<'_> {
         Ok(())
     }
 
-    /// Enable `n`'s dependency `dep` with the features `n` asks; its key.
-    fn edge(&mut self, n: usize, dep: &str) -> Result<usize, String> {
+    /// Enable `n`'s dependency `dep` with the features `n` asks; the
+    /// package, `None` when the build's target does not use it.
+    fn edge(&mut self, n: usize, dep: &str) -> Result<Option<usize>, String> {
         let Some(d) = self.nodes[n]
             .deps
             .iter()
@@ -344,12 +378,15 @@ impl Activation<'_> {
         else {
             return Err(format!("{} has no dependency `{dep}`", self.who(n)));
         };
+        if !crate::platform::matches(d.target.as_deref(), &self.target) {
+            return Ok(None);
+        }
         let key = manifest::key(dep);
-        let Some(&t) = self.index.get(&key) else {
+        let Some(&t) = self.index.get(&manifest::key(d.package_name())) else {
             return Err(format!("dependency `{dep}` was not resolved"));
         };
         if !self.edges.insert((n, key.clone())) {
-            return Ok(t);
+            return Ok(Some(t));
         }
         self.enable(t)?;
         let by = self.who(n);
@@ -368,7 +405,7 @@ impl Activation<'_> {
         for f in waiting {
             self.feature(t, &f, &by)?;
         }
-        Ok(t)
+        Ok(Some(t))
     }
 
     /// Feature `f` of package `n` (in the build), required by `by`.
@@ -399,21 +436,21 @@ impl Activation<'_> {
                 dep,
                 feature,
                 weak: false,
-            } => {
-                let t = self.edge(n, dep)?;
-                self.feature(t, feature, by)
-            }
+            } => match self.edge(n, dep)? {
+                Some(t) => self.feature(t, feature, by),
+                None => Ok(()),
+            },
             Enables::DepFeature { dep, feature, .. } => {
                 let key = manifest::key(dep);
-                if !self.nodes[n]
+                let Some(d) = self.nodes[n]
                     .deps
                     .iter()
-                    .any(|d| manifest::same(&d.name, dep))
-                {
+                    .find(|d| manifest::same(&d.name, dep))
+                else {
                     return Err(format!("{} has no dependency `{dep}`", self.who(n)));
-                }
+                };
                 if self.edges.contains(&(n, key.clone())) {
-                    let t = self.index[&key];
+                    let t = self.index[&manifest::key(d.package_name())];
                     return self.feature(t, feature, by);
                 }
                 self.weak.push((n, key, feature.to_owned()));
@@ -438,7 +475,7 @@ fn check_stone_features(dir: &Path, name: &str, e: &registry::Entry) -> Result<(
     if set(&own) != set(&e.features) {
         return Err(format!(
             "stone `{name}` {}: the index's features differ from its rok.rokon's at commit {}",
-            e.vers, e.rev
+            e.version, e.rev
         ));
     }
     Ok(())
@@ -510,13 +547,14 @@ impl<'a> Resolver<'a> {
             home: home.to_path_buf(),
             root: rokc_core::real_path(base).unwrap_or_else(|_| base.to_path_buf()),
             cache: Cache::new(home),
-            index: Cache::index(home),
+            index: Cache::index(home, registry::sources(home)?),
             registry: registry::default_url(home)?,
             opts,
             old,
             new: Lock::default(),
             fetched: Vec::new(),
             seen: HashMap::new(),
+            names: HashMap::new(),
             out: Vec::new(),
             natives: Vec::new(),
         })
@@ -532,6 +570,14 @@ impl<'a> Resolver<'a> {
         while i < queue.len() {
             let (dep, base, by) = queue[i].clone();
             i += 1;
+            // From here on the dependency is named by its package.
+            let code = dep.name.clone();
+            let dep = Dep {
+                name: dep.package_name().to_owned(),
+                package: None,
+                ..dep
+            };
+            self.one_name(&dep.name, &code, &by)?;
             if let (
                 Some((Id::Stone { registry, vers }, prev_by, prev_req)),
                 Source::Registry { req, .. },
@@ -585,15 +631,15 @@ impl<'a> Resolver<'a> {
             }
             let me = format!("`{}`", dep.name);
             let mut version = None;
-            let (next, natives, features) = match stone_deps {
+            let (next, natives, features, links) = match stone_deps {
                 Some(d) => d,
                 None => match manifest::find(&dir) {
                     Some(m) => {
                         let m = manifest::load(&m)?;
                         version = m.version;
-                        (m.deps, m.native, m.features)
+                        (m.deps, m.native, m.features, m.links)
                     }
-                    None => (Vec::new(), Vec::new(), Vec::new()),
+                    None => (Vec::new(), Vec::new(), Vec::new(), None),
                 },
             };
             let source = match &id {
@@ -619,6 +665,8 @@ impl<'a> Resolver<'a> {
             self.seen.insert(manifest::key(&dep.name), (id, by, req));
             self.out.push(Node {
                 name: dep.name,
+                code,
+                links,
                 root,
                 deps: next,
                 features,
@@ -627,6 +675,23 @@ impl<'a> Resolver<'a> {
             });
         }
         Ok(())
+    }
+
+    /// Package `name` is `code` in code for `by`: one name per build.
+    fn one_name(&mut self, name: &str, code: &str, by: &str) -> Result<(), String> {
+        match self.names.get(&manifest::key(name)) {
+            Some((c, prev)) if !manifest::same(c, code) => Err(format!(
+                "package `{name}` is called `{c}` by {prev} and `{code}` by {by}; one build \
+                 calls a package by one name: rename it the same way (`package: \"{name}\"`) in \
+                 both, or in neither"
+            )),
+            Some(_) => Ok(()),
+            None => {
+                self.names
+                    .insert(manifest::key(name), (code.to_owned(), by.to_owned()));
+                Ok(())
+            }
+        }
     }
 
     fn registry_of(&self, source: &Source) -> String {
@@ -679,7 +744,9 @@ impl<'a> Resolver<'a> {
         let pinned = self
             .old
             .find(&dep.name)
-            .filter(|l| !updating && l.vers.is_none() && l.url == *url && l.reference == *reference)
+            .filter(|l| {
+                !updating && l.version.is_none() && l.url == *url && l.reference == *reference
+            })
             .cloned();
         let commit = if let Some(l) = &pinned {
             if !self.cache.has_commit(url, &l.commit) {
@@ -726,7 +793,7 @@ impl<'a> Resolver<'a> {
         {
             self.new.packages.push(Locked {
                 name: dep.name.clone(),
-                vers: None,
+                version: None,
                 url: url.clone(),
                 reference: reference.clone(),
                 commit: commit.clone(),
@@ -743,7 +810,7 @@ impl<'a> Resolver<'a> {
         ))
     }
 
-    /// The version `req` picks, checked out and verified against `cksum`.
+    /// The version `req` picks, checked out and verified against `tree`.
     fn locate_stone(
         &mut self,
         name: &str,
@@ -756,7 +823,7 @@ impl<'a> Resolver<'a> {
             .old
             .find(name)
             .filter(|l| !updating && l.url == url)
-            .and_then(|l| Some((l.clone(), Version::parse(l.vers.as_deref()?).ok()?)))
+            .and_then(|l| Some((l.clone(), Version::parse(l.version.as_deref()?).ok()?)))
             .filter(|(_, v)| parsed.matches(v));
         if pinned.is_none() && self.opts.locked && !updating {
             return Err(format!(
@@ -771,7 +838,7 @@ impl<'a> Resolver<'a> {
         // `toolchain` this rok is not.
         let pick = |all: &[registry::Entry]| {
             if let Some((_, v)) = &pinned {
-                return (all.iter().find(|e| e.vers == *v).cloned(), None);
+                return (all.iter().find(|e| e.version == *v).cloned(), None);
             }
             let (e, note) = registry::best_here(all, &parsed);
             (e.cloned(), note)
@@ -799,14 +866,14 @@ impl<'a> Resolver<'a> {
             }
         };
         if let Some(s) = skipped.filter(|_| !self.opts.quiet) {
-            rokc_core::term::note(&format!("{s}; using {}", e.vers));
+            rokc_core::term::note(&format!("{s}; using {}", e.version));
         }
         if let Some((l, _)) = &pinned {
             if l.commit != e.rev {
                 return Err(format!(
                     "the index {url} now says {name} {} is commit {}, but rok.lock says {} \
                      (run `rok update {name}` to accept it)",
-                    e.vers, e.rev, l.commit
+                    e.version, e.rev, l.commit
                 ));
             }
         }
@@ -815,15 +882,15 @@ impl<'a> Resolver<'a> {
             if !self.cache.has_commit(&e.url, &e.rev) {
                 return Err(format!(
                     "stone `{name}` {}: commit {} is not in {}",
-                    e.vers, e.rev, e.url
+                    e.version, e.rev, e.url
                 ));
             }
         }
         let (dir, tree) = self.cache.checkout(&e.url, &e.rev)?;
-        if tree != e.cksum {
+        if tree != e.tree {
             return Err(format!(
-                "stone `{name}` {}: commit {} has tree {tree}, but the index's cksum is {}",
-                e.vers, e.rev, e.cksum
+                "stone `{name}` {}: commit {} has tree {tree}, but the index says {}",
+                e.version, e.rev, e.tree
             ));
         }
         check_stone_features(&dir, name, &e)?;
@@ -835,7 +902,7 @@ impl<'a> Resolver<'a> {
         {
             self.new.packages.push(Locked {
                 name: name.to_owned(),
-                vers: Some(e.vers.to_string()),
+                version: Some(e.version.to_string()),
                 url: url.to_owned(),
                 reference: crate::manifest::GitRef::Default,
                 commit: e.rev.clone(),
@@ -866,9 +933,9 @@ impl<'a> Resolver<'a> {
             dir,
             Id::Stone {
                 registry: url.to_owned(),
-                vers: e.vers,
+                vers: e.version,
             },
-            Some((deps, natives, e.features)),
+            Some((deps, natives, e.features, e.links)),
         ))
     }
 
@@ -905,7 +972,7 @@ impl<'a> Resolver<'a> {
                         "conflicting requirements for native package `{}`:\n  {prev_how} \
                          (required by {prev_by}) chose {}\n  {how} (required by {by})\none build \
                          has one version of a native package",
-                        dep.name, e.vers
+                        dep.name, e.version
                     ));
                 }
                 if !out[*j].users.contains(&user) {
@@ -919,7 +986,7 @@ impl<'a> Resolver<'a> {
                     let e = self.locate_native(&dep.name, req, &url)?;
                     let id = NativeId::Index {
                         url: url.clone(),
-                        vers: e.vers.clone(),
+                        vers: e.version.clone(),
                     };
                     (e, id, None, url)
                 }
@@ -982,7 +1049,7 @@ impl<'a> Resolver<'a> {
             .old
             .find_native(name)
             .filter(|l| !updating && l.url == url)
-            .and_then(|l| Some((l.clone(), Version::parse(&l.vers).ok()?)))
+            .and_then(|l| Some((l.clone(), Version::parse(&l.version).ok()?)))
             .filter(|(_, v)| parsed.matches(v));
         if pinned.is_none() && self.opts.locked && !updating {
             return Err(format!(
@@ -994,7 +1061,7 @@ impl<'a> Resolver<'a> {
             self.fetch_index(url, name)?;
         }
         let pick = |all: &[native::Entry]| match &pinned {
-            Some((_, v)) => all.iter().find(|e| e.vers == *v).cloned(),
+            Some((_, v)) => all.iter().find(|e| e.version == *v).cloned(),
             None => native::best(all, &parsed).cloned(),
         };
         let mut all = native::entries(&self.index, url, name)?;
@@ -1016,18 +1083,20 @@ impl<'a> Resolver<'a> {
         };
         let sum = e.checksum();
         if let Some((l, _)) = &pinned {
-            if l.sha256 != sum {
+            // A version 1 lock hashed the index's old line format: the
+            // version stays, the hash is taken anew.
+            if l.sha256 != sum && !self.old.from_v1 {
                 return Err(format!(
                     "the index {url} changed native package `{name}` {} (entry sha256 {sum}, \
                      rok.lock says {}; run `rok update {name}` to accept it)",
-                    e.vers, l.sha256
+                    e.version, l.sha256
                 ));
             }
         }
         if self.new.find_native(name).is_none() {
             self.new.natives.push(LockedNative {
                 name: name.to_owned(),
-                vers: e.vers.to_string(),
+                version: e.version.to_string(),
                 url: url.to_owned(),
                 sha256: sum,
             });
@@ -1074,8 +1143,26 @@ impl<'a> Resolver<'a> {
     }
 }
 
-/// A stone's dependencies, native packages and features.
-type StoneDeps = (Vec<Dep>, Vec<NativeDep>, Features);
+/// A stone's dependencies, native packages, features and `links`.
+type StoneDeps = (Vec<Dep>, Vec<NativeDep>, Features, Option<String>);
+
+/// At most one package of the graph links each native library.
+fn check_links(nodes: &[Node]) -> Result<(), String> {
+    let mut seen: HashMap<&str, &str> = HashMap::new();
+    for n in nodes {
+        let Some(l) = n.links.as_deref() else {
+            continue;
+        };
+        if let Some(prev) = seen.insert(l, &n.name) {
+            return Err(format!(
+                "packages `{prev}` and `{}` both link the native library `{l}` (`links: \"{l}\"`); \
+                 one build has one package per native library: depend on only one of them",
+                n.name
+            ));
+        }
+    }
+    Ok(())
+}
 
 #[cfg(test)]
 mod tests {
@@ -1102,6 +1189,8 @@ mod tests {
             .iter()
             .map(|(name, deps, features)| Node {
                 name: (*name).to_owned(),
+                code: (*name).to_owned(),
+                links: None,
                 root: PathBuf::new(),
                 source: String::new(),
                 version: None,

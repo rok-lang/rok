@@ -25,6 +25,7 @@ mod help;
 mod lock;
 mod manifest;
 mod native;
+mod platform;
 mod registry;
 mod resolve;
 mod semver;
@@ -1043,6 +1044,7 @@ fn rokc_command(
         }
     }
     if resolves {
+        opts.target = rokc_target::TargetSpec::resolve(target_arg(post)).ok();
         let graph = match resolve::resolve(&home(), &t.ctx, &opts) {
             Ok(r) => r,
             // The language server still starts (without dependencies).
@@ -1179,7 +1181,7 @@ fn positional(args: &[String]) -> Option<&str> {
 
 /// `--extern=<name>=<lib.rok>` and its `--extern-feature=<name>=<f>`s.
 fn extern_args(p: &Resolved) -> Vec<String> {
-    let name = manifest::code_name(&p.name);
+    let name = manifest::code_name(&p.code);
     let mut out = vec![format!("--extern={name}={}", p.root.display())];
     out.extend(
         p.features
@@ -1788,7 +1790,7 @@ fn add_native(
         let all = native::entries(&index, &url, name)?;
         let e = native::best(&all, &semver::Req::parse("*")?)
             .ok_or_else(|| native::no_match(&index, &all, name, "*", &url))?;
-        format!("^{}", e.vers)
+        format!("^{}", e.version)
     } else {
         semver::Req::parse(req)?;
         req.to_owned()
@@ -1955,7 +1957,7 @@ fn pin_newest(g: &Global, dep: &mut Dep) -> Result<(), String> {
             let star = semver::Req::parse("*")?;
             let (e, _) = registry::best_here(&all, &star);
             let e = e.ok_or_else(|| registry::no_match(&index, &all, &dep.name, "*", &url))?;
-            *req = format!("^{}", e.vers);
+            *req = format!("^{}", e.version);
         }
     }
     Ok(())
@@ -2538,7 +2540,7 @@ fn cmd_update(g: &Global, names: &[String]) -> Result<i32, String> {
 fn lock_changes(old: &lock::Lock, new: &lock::Lock) -> Vec<(&'static str, String)> {
     let short = |c: &str| c.chars().take(7).collect::<String>();
     let label = |p: &lock::Locked| {
-        p.vers
+        p.version
             .as_ref()
             .map_or_else(|| short(&p.commit), |v| format!("v{v}"))
     };
@@ -2546,7 +2548,7 @@ fn lock_changes(old: &lock::Lock, new: &lock::Lock) -> Vec<(&'static str, String
     for p in &new.packages {
         match old.find(&p.name) {
             None => out.push(("Locked", format!("{} {}", p.name, label(p)))),
-            Some(o) if o.commit == p.commit && o.vers == p.vers => {}
+            Some(o) if o.commit == p.commit && o.version == p.version => {}
             Some(o) if label(o) == label(p) => out.push((
                 "Updated",
                 format!("{} {} -> {}", p.name, short(&o.commit), short(&p.commit)),
@@ -2559,9 +2561,12 @@ fn lock_changes(old: &lock::Lock, new: &lock::Lock) -> Vec<(&'static str, String
     }
     for p in &new.natives {
         match old.find_native(&p.name) {
-            None => out.push(("Locked", format!("{} v{}", p.name, p.vers))),
-            Some(o) if o.vers == p.vers => {}
-            Some(o) => out.push(("Updated", format!("{} v{} -> v{}", p.name, o.vers, p.vers))),
+            None => out.push(("Locked", format!("{} v{}", p.name, p.version))),
+            Some(o) if o.version == p.version => {}
+            Some(o) => out.push((
+                "Updated",
+                format!("{} v{} -> v{}", p.name, o.version, p.version),
+            )),
         }
     }
     for p in &old.packages {
@@ -2571,7 +2576,7 @@ fn lock_changes(old: &lock::Lock, new: &lock::Lock) -> Vec<(&'static str, String
     }
     for p in &old.natives {
         if new.find_native(&p.name).is_none() {
-            out.push(("Removed", format!("{} v{}", p.name, p.vers)));
+            out.push(("Removed", format!("{} v{}", p.name, p.version)));
         }
     }
     out
@@ -2608,7 +2613,7 @@ fn cmd_deps(g: &Global, args: &[String]) -> Result<i32, String> {
         lines.for_each(|l| println!("{l}"));
     }
     for n in &graph.natives {
-        println!("# native {} {}", n.entry.name, n.entry.vers);
+        println!("# native {} {}", n.entry.name, n.entry.version);
         for a in native::rokc_args(
             &home(),
             &[n],
@@ -2661,7 +2666,7 @@ fn deps_json(g: &Global, graph: &resolve::Graph) -> Result<i32, String> {
             "native",
             vec![
                 ("name", Json::str(&n.entry.name)),
-                ("version", Json::str(n.entry.vers.to_string())),
+                ("version", Json::str(n.entry.version.to_string())),
                 ("args", strs(&args)),
             ],
         );
@@ -2695,18 +2700,28 @@ fn cmd_search(g: &Global, args: &[String]) -> Result<i32, String> {
         .collect();
     names.sort();
     let star = semver::Req::parse("*")?;
+    // Descriptions live in the registry API, not the index.
+    let api = if g.offline {
+        None
+    } else {
+        registry::api(&home(), &url, true).ok()
+    };
     for n in names {
         let newest = if native {
             native::best(&native::entries(&index, &url, &n)?, &star)
-                .map(|e| (e.name.clone(), e.vers.clone(), e.meta.clone()))
+                .map(|e| (e.name.clone(), e.version.clone()))
         } else {
             registry::best(&registry::entries(&index, &url, &n)?, &star)
-                .map(|e| (e.name.clone(), e.vers.clone(), e.meta.clone()))
+                .map(|e| (e.name.clone(), e.version.clone()))
         };
-        if let Some((name, vers, meta)) = newest {
-            match meta.iter().find(|(k, _)| *k == "description") {
-                Some((_, d)) => println!("{name} {vers} - {d}"),
-                None => println!("{name} {vers}"),
+        if let Some((name, version)) = newest {
+            let v = version.to_string();
+            match api
+                .as_deref()
+                .and_then(|a| registry::description(a, &name, &v, native))
+            {
+                Some(d) => println!("{name} {v} - {d}"),
+                None => println!("{name} {v}"),
             }
         }
     }
@@ -2757,7 +2772,7 @@ fn val<'a>(vals: &'a [(String, String)], f: &str) -> Option<&'a str> {
         .map(|(_, v)| v.as_str())
 }
 
-/// The index `--registry` names, else the configured one.
+/// The index `--registry` names, else rokstones.io's.
 fn index_url(registry: Option<&str>) -> Result<String, String> {
     match registry {
         Some(u) => Ok(u.to_owned()),
@@ -2765,13 +2780,13 @@ fn index_url(registry: Option<&str>) -> Result<String, String> {
     }
 }
 
-/// The registry API of the index `--registry` names (else the
-/// configured one), and the token for it.
+/// The registry API of the index `--registry` names (else
+/// rokstones.io's), and the token for it.
 fn api_token(g: &Global, registry: Option<&str>) -> Result<(String, String), String> {
     let home = home();
     let url = index_url(registry)?;
     let login = match registry {
-        Some(u) if !registry::same_index(u, &registry::default_url(&home)?) => {
+        Some(u) if !registry::same_index(u, registry::DEFAULT) => {
             format!("rok login --registry {u}")
         }
         _ => "rok login".to_owned(),
@@ -2824,23 +2839,37 @@ fn cmd_publish(g: &Global, args: &[String]) -> Result<i32, String> {
         None if write => Some(api_token(g, reg)?),
         _ => None,
     };
-    let (line, mut name, mut vers, rel, what) = if let Some(file) = val(&vals, "--native") {
+    let (line, meta, mut name, mut vers, rel, what) = if let Some(file) = val(&vals, "--native") {
         let e = native::publish(&home(), Path::new(file), index, write)?.0;
         let rel = native::path(&e.name);
-        (e.to_line(), e.name, e.vers.to_string(), rel, "native ")
+        let meta = registry::native_meta(&e);
+        (
+            e.to_line(),
+            meta,
+            e.name,
+            e.version.to_string(),
+            rel,
+            "native ",
+        )
     } else {
         let (dir, m) = this_package()?;
         let e = registry::entry_for(&dir, &m)?;
+        // Checked on a dry run too.
+        let meta = registry::meta(&dir, &m)?;
         if let Some(i) = index {
             registry::publish(i, &e, write)?;
         }
         let rel = registry::path(&e.name);
-        (e.to_line(), e.name, e.vers.to_string(), rel, "")
+        (e.to_line(), meta, e.name, e.version.to_string(), rel, "")
     };
     let to = match (index, remote) {
         (Some(i), _) => i.display().to_string(),
         (None, Some((api, token))) => {
-            (name, vers) = registry::publish_api(&api, &token, &line)?;
+            let p = registry::publish_api(&api, &token, &line, meta)?;
+            (name, vers) = (p.name, p.version);
+            for w in &p.warnings {
+                warn_once(&format!("{api}: {w}"));
+            }
             api
         }
         (None, None) => index_url(reg)?,
@@ -2865,16 +2894,26 @@ fn cmd_publish(g: &Global, args: &[String]) -> Result<i32, String> {
     Ok(0)
 }
 
-/// `rok yank [--native] <name>@<version> [--undo] [--index-dir <dir> |
-/// --registry <url>]`: into the `--index-dir` checkout, else via the API.
+/// The most bytes of a yank's `--message`.
+const MAX_YANK_MESSAGE: usize = 512;
+
+/// `rok yank [--native] <name>@<version> [--undo] [--message <why>]
+/// [--index-dir <dir> | --registry <url>]`: into the `--index-dir`
+/// checkout, else via the API.
 fn cmd_yank(g: &Global, args: &[String]) -> Result<i32, String> {
     let (vals, sw, pos) = flags(
         args,
-        &["--vers", "--index", "--index-dir", "--registry"],
+        &[
+            "--vers",
+            "--index",
+            "--index-dir",
+            "--registry",
+            "--message",
+        ],
         &["--undo", "--native"],
     )?;
-    let usage = "usage: rok yank [--native] <name>@<version> [--undo] [--index-dir <dir> | \
-                 --registry <url>]";
+    let usage = "usage: rok yank [--native] <name>@<version> [--undo] [--message <why>] \
+                 [--index-dir <dir> | --registry <url>]";
     let native = sw.iter().any(|s| s == "--native");
     if let Some(v) = val(&vals, "--vers") {
         let n = match pos.as_slice() {
@@ -2904,6 +2943,21 @@ fn cmd_yank(g: &Global, args: &[String]) -> Result<i32, String> {
         _ => return Err(usage.into()),
     };
     let undo = sw.iter().any(|s| s == "--undo");
+    let message = val(&vals, "--message").filter(|m| !m.is_empty());
+    if let Some(m) = message {
+        if undo {
+            return Err(
+                "`--message` says why a version is yanked; `--undo` takes none: drop one of them"
+                    .into(),
+            );
+        }
+        if m.len() > MAX_YANK_MESSAGE {
+            return Err(format!(
+                "`--message` is {} bytes; keep it to {MAX_YANK_MESSAGE}",
+                m.len()
+            ));
+        }
+    }
     let index = index_dir(&vals, "yank")?;
     let reg = val(&vals, "--registry");
     if index.is_some() && reg.is_some() {
@@ -2914,11 +2968,18 @@ fn cmd_yank(g: &Global, args: &[String]) -> Result<i32, String> {
         );
     }
     let to = if let Some(i) = index {
+        if message.is_some() {
+            return Err(
+                "`--message` goes to the registry API, which keeps it; an `--index-dir` \
+                 checkout has no place for it: drop `--message`"
+                    .into(),
+            );
+        }
         registry::yank(Path::new(i), &name, &vers, !undo, native)?;
         i.to_owned()
     } else {
         let (api, token) = api_token(g, reg)?;
-        registry::yank_api(&api, &token, &name, &vers, undo, native)?;
+        registry::yank_api(&api, &token, &name, &vers, undo, native, message)?;
         api
     };
     if !g.quiet {
@@ -2929,7 +2990,7 @@ fn cmd_yank(g: &Global, args: &[String]) -> Result<i32, String> {
 }
 
 /// `rok login [--registry <url>] [<token>]`: store a token whose account
-/// may publish, for that index (default: the configured one).
+/// may publish, for that index (default: rokstones.io's).
 fn cmd_login(g: &Global, args: &[String]) -> Result<i32, String> {
     let (vals, _, pos) = flags(args, &["--registry"], &[])?;
     if pos.len() > 1 {
@@ -2953,10 +3014,7 @@ fn cmd_login(g: &Global, args: &[String]) -> Result<i32, String> {
                 .into(),
         );
     }
-    // 0.1.5 and older send credentials.rokon's token to the configured
-    // index, so that one keeps it there too.
-    let legacy = registry::same_index(url, &default);
-    let file = registry::save_token(&home, url, &token, legacy)?;
+    let file = registry::save_token(&home, url, &token)?;
     if !g.quiet {
         term::status(
             "Logged in",
@@ -2967,7 +3025,7 @@ fn cmd_login(g: &Global, args: &[String]) -> Result<i32, String> {
 }
 
 /// `rok logout [--registry <url> | --all]`: remove `rok login`'s token
-/// for that index (default: the configured one), or every one.
+/// for that index (default: rokstones.io's), or every one.
 fn cmd_logout(g: &Global, args: &[String]) -> Result<i32, String> {
     let (vals, sw, pos) = flags(args, &["--registry"], &["--all"])?;
     if let Some(a) = pos.first() {
@@ -2982,11 +3040,10 @@ fn cmd_logout(g: &Global, args: &[String]) -> Result<i32, String> {
     }
     let home = home();
     let had = if all {
-        registry::logout(&home, None, true)?
+        registry::logout(&home, None)?
     } else {
         let default = registry::default_url(&home)?;
-        let url = reg.unwrap_or(&default);
-        registry::logout(&home, Some(url), registry::same_index(url, &default))?
+        registry::logout(&home, Some(reg.unwrap_or(&default)))?
     };
     if !g.quiet {
         if had {

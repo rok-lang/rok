@@ -5,7 +5,8 @@
 # fresh ROK_HOME holding the 0.1.x release:
 #
 #   - its `rok toolchain update`, then the staged rok builds and runs a
-#     project the 0.1.x rok made and locked (a git dependency);
+#     project the 0.1.x rok made and locked (a git dependency), and
+#     leaves its rok.lock in lock format 2;
 #   - its install.sh --archive with the staged archive;
 #   - the staged archive's own install.sh.
 #
@@ -129,7 +130,10 @@ mv "$app/rok.rokon.new" "$app/rok.rokon"
 out=$(cd "$app" && ROK_HOME=$h "$h/bin/rok" -q run)
 [ "$out" = 1 ] || fail "the project prints '$out', not 1"
 [ -f "$app/rok.lock" ] || fail "rok $v removed rok.lock"
-echo "rok.lock after rok $v: version $(sed -n "s/^ *version: *\([0-9]*\).*/\1/p" "$app/rok.lock" | head -n 1)"
+lockv=$(sed -n "s/^ *version: *\([0-9]*\).*/\1/p" "$app/rok.lock" | head -n 1)
+echo "rok.lock after rok $v: version $lockv"
+[ "$lockv" = 2 ] || fail "rok $v left rok.lock at version $lockv, not 2"
+! grep -q 'vers:' "$app/rok.lock" || fail "rok $v left a 0.1 field (vers) in rok.lock"
 
 step "rok $from: its install.sh --archive $name.tar.xz"
 h=$tmp/install-old

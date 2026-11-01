@@ -21,6 +21,9 @@ use crate::manifest::GitRef;
 
 pub struct Cache {
     root: PathBuf,
+    /// `(url, mirror)`: fetch `url` from `mirror` (`registry::sources`);
+    /// the clone stays keyed by `url`.
+    replace: Vec<(String, String)>,
 }
 
 /// `git -C dir args..` in a working tree (a package's, an index checkout's).
@@ -77,14 +80,25 @@ impl Cache {
     pub fn new(home: &Path) -> Self {
         Self {
             root: home.join("cache/git"),
+            replace: Vec::new(),
         }
     }
 
-    /// The cache of stone indexes (read in place, never checked out).
-    pub fn index(home: &Path) -> Self {
+    /// The cache of stone indexes (read in place, never checked out),
+    /// fetched from the mirrors in `replace`.
+    pub fn index(home: &Path, replace: Vec<(String, String)>) -> Self {
         Self {
             root: home.join("cache/registry"),
+            replace,
         }
+    }
+
+    /// Where `url` is fetched from.
+    fn remote<'a>(&'a self, url: &'a str) -> &'a str {
+        self.replace
+            .iter()
+            .find(|(u, _)| u.trim_end_matches('/') == url.trim_end_matches('/'))
+            .map_or(url, |(_, m)| m.as_str())
     }
 
     pub fn has(&self, url: &str) -> bool {
@@ -134,13 +148,14 @@ impl Cache {
             std::fs::create_dir_all(&db).map_err(|e| format!("{}: {e}", db.display()))?;
             git(&db, &["init", "--quiet", "--bare"], None)?;
         }
+        let from = self.remote(url);
         git(
             &db,
             &[
                 "fetch",
                 "--quiet",
                 "--force",
-                url,
+                from,
                 "+refs/heads/*:refs/heads/*",
                 "+refs/tags/*:refs/tags/*",
                 "+HEAD:refs/rok/HEAD",
@@ -163,7 +178,11 @@ impl Cache {
             } else {
                 ""
             };
-            format!("cannot fetch {url}: {why}{hint}")
+            if from == url {
+                format!("cannot fetch {url}: {why}{hint}")
+            } else {
+                format!("cannot fetch {url} from its mirror {from} (sources.rokon): {why}{hint}")
+            }
         })
     }
 

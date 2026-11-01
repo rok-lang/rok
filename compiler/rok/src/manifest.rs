@@ -15,12 +15,21 @@
 //!     documentation: "https://example.com/app/docs",
 //!     readme: "README.md",              // the default when README.md exists
 //!     keywords: ["json", "parser"],     // at most 5
+//!     categories: ["encoding"],         // at most 5
+//!     license_file: "LICENSE",          // a license file instead of an SPDX `license`
+//!     include: ["src/**", "README.md"], // what the stone holds (default: every file)
+//!     exclude: ["bench/**"],            // files left out of it
+//!     links: "z",                       // the native library it links, one package per name
+//!     default_run: "app",               // the executable `rok run` runs
+//!     metadata: { docs: { all_features: true } },  // free-form, for other tools
 //!     publish: true,                    // false: `rok publish` refuses
 //!     deps: {
 //!         "json": Dep::git("https://example.com/json.git", tag: "v1.2"),
 //!         "util": Dep::path("../util"),
 //!         "geom": Dep::version("^0.3"),   // a stone; also `"geom": "^0.3"`
 //!         "tls": Dep::version("^2", optional: true, default_features: false),
+//!         "j": Dep::version("^1", package: "json5"),   // `json5`, named `j` in code
+//!         "nix": Dep::version("^0.4", target: "cfg(target_family = \"unix\")"),
 //!     },
 //!     features: { "default": ["json"], "json": [], "tls": ["dep:tls", "geom/fast"] },
 //!     dev_deps: {},
@@ -45,21 +54,28 @@ pub const LOCK: &str = "rok.lock";
 /// A manifest with nothing in it, for `rok add` to fill.
 pub const EMPTY: &str = "Package {\n    deps: {},\n}\n";
 
-/// `keywords` holds at most this many.
+/// `keywords` and `categories` hold at most this many.
 pub const MAX_KEYWORDS: usize = 5;
 
-const FIELDS: [&str; 18] = [
+const FIELDS: [&str; 25] = [
     "name",
     "version",
     "toolchain",
     "description",
     "license",
+    "license_file",
     "repository",
     "authors",
     "homepage",
     "documentation",
     "readme",
     "keywords",
+    "categories",
+    "include",
+    "exclude",
+    "links",
+    "default_run",
+    "metadata",
     "publish",
     "deps",
     "dev_deps",
@@ -70,7 +86,13 @@ const FIELDS: [&str; 18] = [
 ];
 
 /// A dependency's feature arguments (`Dep::..(.., optional: true)`).
-const DEP_FLAGS: [&str; 3] = ["optional", "features", "default_features"];
+const DEP_FLAGS: [&str; 5] = [
+    "optional",
+    "features",
+    "default_features",
+    "package",
+    "target",
+];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GitRef {
@@ -149,6 +171,12 @@ pub struct Dep {
     pub features: Vec<String>,
     /// `default_features: false` turns it off.
     pub default_features: bool,
+    /// `package: "real"`: the package's own name; `name` is what code
+    /// calls it.
+    pub package: Option<String>,
+    /// `target: "cfg(..)"` or a target name: only builds for a target it
+    /// matches use it (`crate::platform`).
+    pub target: Option<String>,
 }
 
 impl Dep {
@@ -159,7 +187,14 @@ impl Dep {
             optional: false,
             features: Vec::new(),
             default_features: true,
+            package: None,
+            target: None,
         }
+    }
+
+    /// The package's own name: `package`, else the dependency's name.
+    pub fn package_name(&self) -> &str {
+        self.package.as_deref().unwrap_or(&self.name)
     }
 
     /// The `Dep::..` value; feature arguments only where not the default.
@@ -177,6 +212,12 @@ impl Dep {
                     "default_features",
                     Value::new(Kind::Bool(false)),
                 ));
+            }
+            if let Some(p) = &self.package {
+                named.push(Field::new("package", Value::str(p)));
+            }
+            if let Some(t) = &self.target {
+                named.push(Field::new("target", Value::str(t)));
             }
         }
         v
@@ -380,25 +421,38 @@ pub struct Manifest {
     pub name: Option<String>,
     pub version: Option<String>,
     pub toolchain: Option<String>,
-    /// Package metadata, carried into a stone's index entry.
+    // The descriptive fields: `rok publish` sends them to the registry
+    // API beside the index line (`registry::meta`).
     pub description: Option<String>,
     /// An SPDX license expression.
     pub license: Option<String>,
+    /// A license file inside the package, for a license SPDX does not name.
+    pub license_file: Option<String>,
     pub repository: Option<String>,
-    // authors, homepage, documentation, keywords: checked, not yet in the
-    // index entry (older rok rejects unknown entry fields).
     /// `"Name <email>"` each.
-    #[allow(dead_code)]
     pub authors: Vec<String>,
-    #[allow(dead_code)]
     pub homepage: Option<String>,
-    #[allow(dead_code)]
     pub documentation: Option<String>,
     /// As written: relative to the manifest's directory (`readme_path`).
     pub readme: Option<String>,
     /// At most `MAX_KEYWORDS`, none empty.
-    #[allow(dead_code)]
     pub keywords: Vec<String>,
+    /// At most `MAX_KEYWORDS`, none empty.
+    pub categories: Vec<String>,
+    /// Globs of the files a published stone holds (empty: all) and of
+    /// those it leaves out (`registry::packaged`).
+    pub include: Vec<String>,
+    pub exclude: Vec<String>,
+    /// The native library the package links; one package per name in a
+    /// build.
+    pub links: Option<String>,
+    /// The executable `rok run` runs.
+    pub default_run: Option<String>,
+    /// Free-form data for other tools.
+    pub metadata: Option<Value>,
+    /// Fields this rok does not know, as written (sent on with the
+    /// metadata, so a newer registry gets them).
+    pub extra: Vec<(String, Value)>,
     /// `publish: false`: `rok publish` refuses the package (`None`: true).
     pub publish: Option<bool>,
     pub deps: Vec<Dep>,
@@ -627,7 +681,21 @@ pub fn parse(text: &str, file: &str) -> Result<Manifest, String> {
         }
     })?;
     let pkg = doc.root().record("Package").map_err(example)?;
-    pkg.only(&FIELDS)?;
+    let mut warnings = Vec::new();
+    let mut warn = |d: Decoder<'_>, msg: &str| {
+        let (line, col) = rokc_rokon::line_col(text, d.span().start as usize);
+        warnings.push(format!("{file}:{line}:{col}: {msg}"));
+    };
+    // Unknown fields warn: a newer rok's, or a typo.
+    let mut extra = Vec::new();
+    for k in pkg.known(&FIELDS) {
+        let Some(d) = pkg.get(k) else { continue };
+        let near = rokc_core::suggest::suggest(k, FIELDS.iter().copied())
+            .map(|n| format!("; did you mean `{n}`?"))
+            .unwrap_or_default();
+        warn(d, &format!("unknown field `{k}` is ignored{near}"));
+        extra.push((k.to_owned(), d.value().clone()));
+    }
     let string = |f: &str| pkg.opt(f).map(|d| d.string()).transpose();
     let deps = |f: &str| {
         pkg.opt(f)
@@ -653,16 +721,30 @@ pub fn parse(text: &str, file: &str) -> Result<Manifest, String> {
         Ok(out)
     };
     let keywords = list("keywords")?;
-    if let Some(d) = pkg
-        .opt("keywords")
-        .filter(|_| keywords.len() > MAX_KEYWORDS)
-    {
-        return Err(d.error(&format!(
-            "`keywords` has {} entries; keep at most {MAX_KEYWORDS}, e.g. `keywords: [\"json\", \
-             \"parser\"]`",
-            keywords.len()
-        )));
+    let categories = list("categories")?;
+    for (f, l, eg) in [
+        ("keywords", &keywords, "[\"json\", \"parser\"]"),
+        ("categories", &categories, "[\"encoding\"]"),
+    ] {
+        if let Some(d) = pkg.opt(f).filter(|_| l.len() > MAX_KEYWORDS) {
+            return Err(d.error(&format!(
+                "`{f}` has {} entries; keep at most {MAX_KEYWORDS}, e.g. `{f}: {eg}`",
+                l.len()
+            )));
+        }
     }
+    let metadata = match pkg.opt("metadata") {
+        Some(d)
+            if matches!(
+                d.value().kind,
+                Kind::Dict(_) | Kind::Struct { name: None, .. }
+            ) =>
+        {
+            Some(d.value().clone())
+        }
+        Some(d) => return Err(d.expected("a table (`metadata: { key: .. }`)")),
+        None => None,
+    };
     let mut lints = Vec::new();
     if let Some(d) = pkg.opt("lints") {
         for (k, v) in d.dict()? {
@@ -675,11 +757,6 @@ pub fn parse(text: &str, file: &str) -> Result<Manifest, String> {
             lints.push((k.string()?, level));
         }
     }
-    let mut warnings = Vec::new();
-    let mut warn = |d: Decoder<'_>, msg: &str| {
-        let (line, col) = rokc_rokon::line_col(text, d.span().start as usize);
-        warnings.push(format!("{file}:{line}:{col}: {msg}"));
-    };
     // The package name is the dependency name others give it.
     if let Some(d) = pkg.opt("name") {
         let name = d.string()?;
@@ -748,12 +825,20 @@ pub fn parse(text: &str, file: &str) -> Result<Manifest, String> {
         toolchain: string("toolchain")?,
         description: string("description")?,
         license: string("license")?,
+        license_file: string("license_file")?,
         repository: string("repository")?,
         authors: list("authors")?,
         homepage: string("homepage")?,
         documentation: string("documentation")?,
         readme: string("readme")?,
         keywords,
+        categories,
+        include: list("include")?,
+        exclude: list("exclude")?,
+        links: string("links")?,
+        default_run: string("default_run")?,
+        metadata,
+        extra,
         publish: pkg.opt("publish").map(|d| d.bool()).transpose()?,
         deps: normal,
         dev_deps: dev,
@@ -986,6 +1071,16 @@ fn dep(d: Decoder<'_>, flags: bool, lenient: bool) -> Result<Dep, String> {
     }
     if let Some(o) = v.fields.opt("default_features") {
         out.default_features = o.bool()?;
+    }
+    if let Some(p) = v.fields.opt("package") {
+        let name = p.string()?;
+        check_name(&name).map_err(|m| p.error(&m))?;
+        out.package = Some(name);
+    }
+    if let Some(t) = v.fields.opt("target") {
+        let s = t.string()?;
+        crate::platform::check(&s).map_err(|m| t.error(&m))?;
+        out.target = Some(s);
     }
     Ok(out)
 }
@@ -1250,9 +1345,75 @@ mod tests {
     }
 
     #[test]
+    fn manifest_new_fields() {
+        let m = parse(
+            "Package { name: \"app\", license_file: \"LICENSE\", categories: [\"encoding\"], \
+             include: [\"src/**\"], exclude: [\"bench\"], links: \"z\", default_run: \"app\", \
+             metadata: { docs: { all: true } }, deps: { \"j\": Dep::version(\"^1\", package: \
+             \"json5\", target: \"cfg(target_os = \\\"linux\\\")\") } }",
+            "f",
+        )
+        .unwrap();
+        assert_eq!(m.license_file.as_deref(), Some("LICENSE"));
+        assert_eq!(m.categories, ["encoding"]);
+        assert_eq!(
+            (m.include.as_slice(), m.exclude.as_slice()),
+            (&["src/**".to_owned()][..], &["bench".to_owned()][..])
+        );
+        assert_eq!(
+            (m.links.as_deref(), m.default_run.as_deref()),
+            (Some("z"), Some("app"))
+        );
+        assert!(m.metadata.is_some() && m.warnings.is_empty());
+        let d = &m.deps[0];
+        assert_eq!((d.name.as_str(), d.package_name()), ("j", "json5"));
+        assert_eq!(d.target.as_deref(), Some("cfg(target_os = \"linux\")"));
+        assert!(
+            d.to_rok().contains("package: \"json5\", target: "),
+            "{}",
+            d.to_rok()
+        );
+        for (src, want) in [
+            ("Package { metadata: 1 }", "must be a table"),
+            (
+                "Package { categories: [\"a\", \"b\", \"c\", \"d\", \"e\", \"f\"] }",
+                "keep at most 5",
+            ),
+            (
+                "Package { deps: { \"a\": Dep::version(\"1\", target: \"cfg(unix)\") } }",
+                "not a target key",
+            ),
+            (
+                "Package { deps: { \"a\": Dep::version(\"1\", package: \"A B\") } }",
+                "not a valid",
+            ),
+        ] {
+            let e = parse(src, "f").unwrap_err();
+            assert!(e.contains(want), "{src}: {e}");
+        }
+    }
+
+    #[test]
+    fn manifest_unknown_key_warns() {
+        let m = parse(
+            "Package {\n    name: \"a\",\n    edtion: \"x\",\n}",
+            "rok.rokon",
+        )
+        .unwrap();
+        assert_eq!(m.warnings.len(), 1);
+        let w = &m.warnings[0];
+        assert!(
+            w.starts_with("rok.rokon:3:13: unknown field `edtion` is ignored"),
+            "{w}"
+        );
+        assert_eq!(m.extra.len(), 1);
+        assert_eq!(m.extra[0].0, "edtion");
+    }
+
+    #[test]
     fn toolchain_pin_skips_unknown_fields() {
         let text = "Package { toolchain: \"0.3\", from_a_newer_rok: [1], deps: {} }";
-        assert!(parse(text, "f").is_err());
+        assert_eq!(parse(text, "f").unwrap().warnings.len(), 1);
         assert_eq!(toolchain_pin(text).as_deref(), Some("0.3"));
         assert_eq!(toolchain_pin("Package { deps: {} }"), None);
         assert_eq!(toolchain_pin("not rokon {"), None);
@@ -1333,7 +1494,6 @@ mod tests {
                 "Package { native: { \"z\": Dep::native(\"1\", url: \"u\") } }",
                 "unknown argument `url`",
             ),
-            ("Package { registry: {} }", "unknown field `registry`"),
             (
                 "Package { deps: { \"My Dep\": Dep::path(\"x\") } }",
                 "try `my-dep`",
@@ -1369,7 +1529,6 @@ mod tests {
                 "given twice",
             ),
             ("Package { deps: [] }", "`deps` must be a dict"),
-            ("Package { edition: \"x\" }", "unknown field `edition`"),
             ("Package { name: \"a\", name: \"b\" }", "given twice"),
             ("Package { name: 1 + 2 }", "operator `+` is not allowed"),
             ("Package { name: x }", "bare identifier `x`"),
@@ -1433,16 +1592,6 @@ mod tests {
             assert!(e.contains(want), "{src:?}: {e}");
             assert!(e.contains("--> rok.rokon:1:"), "{e}");
         }
-        // The position is the offending token's.
-        let e = parse(
-            "Package {\n    name: \"a\",\n    edtion: \"x\",\n}",
-            "rok.rokon",
-        )
-        .unwrap_err();
-        assert!(
-            e.contains("unknown field `edtion`") && e.contains("--> rok.rokon:3:5\n"),
-            "{e}"
-        );
         let e = parse(APP.replace("tag", "tga").as_str(), "rok.rokon").unwrap_err();
         assert!(
             e.contains("unknown argument `tga`") && e.contains("--> rok.rokon:7:28\n"),
