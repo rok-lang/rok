@@ -10,8 +10,9 @@
 //! pick what a build has: from the root's (`--features`, `default`) along
 //! every enabled edge, one set per package. `dev_deps` count only for
 //! tests; a dependency with `target` only for a build for that target.
-//! A renamed dependency (`package`) is one package under one name in a
-//! build.
+//! A renamed dependency (`package`) is the same package under another
+//! name: dependents may call one package differently, and each name is
+//! one package in a build.
 // Greedy, no backtracking: a root requirement both sides accept
 // (`rok add x@=1.2.0`) settles a conflict.
 
@@ -66,6 +67,8 @@ pub struct Resolved {
     pub name: String,
     /// What code calls it: `name`, or the dependency's name when renamed.
     pub code: String,
+    /// What other dependents call it (`package` renames).
+    pub aliases: Vec<String>,
     /// The package's `src/lib.rok`.
     pub root: PathBuf,
     /// Its enabled features, sorted.
@@ -145,8 +148,12 @@ struct Resolver<'a> {
     /// What each name resolved to, who required it, and how (a stone's
     /// requirement).
     seen: HashMap<String, (Id, String, String)>,
-    /// What code calls each package (by key), and who named it first.
+    /// The package each code name (by key) is, and who named it first.
     names: HashMap<String, (String, String)>,
+    /// What code calls each package (by key), first name first.
+    codes: HashMap<String, Vec<String>>,
+    /// What each dependent calls a package: (dependent, package key).
+    named_by: HashMap<(String, String), String>,
     out: Vec<Node>,
     natives: Vec<NativeReq>,
 }
@@ -237,7 +244,13 @@ pub fn resolve(home: &Path, ctx: &Context, opts: &Options) -> Result<Graph, Stri
                 .find(|(k, _)| *k == manifest::key(&n.name))?
                 .1
                 .clone();
+            let aliases = r
+                .codes
+                .get(&manifest::key(&n.name))
+                .map(|c| c[1..].to_vec())
+                .unwrap_or_default();
             Some(Resolved {
+                aliases,
                 name: n.name,
                 code: n.code,
                 root: n.root,
@@ -555,6 +568,8 @@ impl<'a> Resolver<'a> {
             fetched: Vec::new(),
             seen: HashMap::new(),
             names: HashMap::new(),
+            codes: HashMap::new(),
+            named_by: HashMap::new(),
             out: Vec::new(),
             natives: Vec::new(),
         })
@@ -577,7 +592,7 @@ impl<'a> Resolver<'a> {
                 package: None,
                 ..dep
             };
-            self.one_name(&dep.name, &code, &by)?;
+            self.name(&dep.name, &code, &by)?;
             if let (
                 Some((Id::Stone { registry, vers }, prev_by, prev_req)),
                 Source::Registry { req, .. },
@@ -677,21 +692,43 @@ impl<'a> Resolver<'a> {
         Ok(())
     }
 
-    /// Package `name` is `code` in code for `by`: one name per build.
-    fn one_name(&mut self, name: &str, code: &str, by: &str) -> Result<(), String> {
-        match self.names.get(&manifest::key(name)) {
-            Some((c, prev)) if !manifest::same(c, code) => Err(format!(
-                "package `{name}` is called `{c}` by {prev} and `{code}` by {by}; one build \
-                 calls a package by one name: rename it the same way (`package: \"{name}\"`) in \
-                 both, or in neither"
-            )),
-            Some(_) => Ok(()),
+    /// Package `name` is `code` in code for `by`. Dependents may call a
+    /// package differently, but a name is one package in a build, and a
+    /// dependent calls a package by one name.
+    fn name(&mut self, name: &str, code: &str, by: &str) -> Result<(), String> {
+        let key = manifest::key(name);
+        match self.names.get(&manifest::key(code)) {
+            Some((p, prev)) if *p != key => {
+                return Err(format!(
+                    "`{code}` is package `{p}` for {prev} and package `{name}` for {by}; one \
+                     name is one package in a build: rename one of them (`\"<new name>\": \
+                     Dep::..(.., package: \"{name}\")`)"
+                ));
+            }
+            Some(_) => {}
             None => {
                 self.names
-                    .insert(manifest::key(name), (code.to_owned(), by.to_owned()));
-                Ok(())
+                    .insert(manifest::key(code), (key.clone(), by.to_owned()));
             }
         }
+        let mine = (by.to_owned(), key.clone());
+        match self.named_by.get(&mine) {
+            Some(c) if !manifest::same(c, code) => {
+                return Err(format!(
+                    "{by} depends on package `{name}` twice, as `{c}` and `{code}`; depend on \
+                     it once"
+                ));
+            }
+            Some(_) => {}
+            None => {
+                self.named_by.insert(mine, code.to_owned());
+            }
+        }
+        let codes = self.codes.entry(key).or_default();
+        if !codes.iter().any(|c| manifest::same(c, code)) {
+            codes.push(code.to_owned());
+        }
+        Ok(())
     }
 
     fn registry_of(&self, source: &Source) -> String {

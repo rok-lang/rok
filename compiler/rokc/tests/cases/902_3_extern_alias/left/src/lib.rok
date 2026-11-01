@@ -1,0 +1,14 @@
+// This package calls `util` by the name `helper`.
+use helper::Named;
+
+#[derive(helper::Named)]
+pub struct Tag {}
+
+pub fn moved(p: helper::Point) -> helper::Point {
+    return helper::Point { x: p.x + helper::shapes::sides() };
+}
+
+pub fn greet() {
+    helper::shout!("left");
+    println(Tag {}.name());
+}

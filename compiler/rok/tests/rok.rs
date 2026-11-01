@@ -217,7 +217,7 @@ const LIB_V2: &str = "pub fn greet() -> i32 { return 2; }\n";
 /// A manifest with comments, which `add` / `remove` keep.
 const APP0: &str = "// my app\nPackage {\n    name: \"app\", // keep\n    deps: {\n        // deps go here\n    },\n}\n";
 
-/// `package` renames a dependency for code, one name per build; a
+/// `package` renames a dependency for code, one name per dependent; a
 /// dependency with another `target` stays out of the build; two
 /// packages may not link one native library.
 // spec: §9.10.2
@@ -263,11 +263,65 @@ fn renamed_target_and_links_dependencies() {
         &deps_of(
             "\"g\": Dep::path(\"../greet\", package: \"greet\"), \"greet\": Dep::path(\"../greet\")",
         ),
-        "package `greet` is called `g` by the root package and `greet` by the root package",
+        "the root package depends on package `greet` twice, as `g` and `greet`; depend on it \
+         once",
     );
     fails(
         &deps_of("\"other\": Dep::path(\"../other\"), \"third\": Dep::path(\"../third\")"),
         "packages `other` and `third` both link the native library `z`",
+    );
+}
+
+/// Dependents may call one package by different names: each name is
+/// one package, built once, so its types are the same under both. A
+/// name may not stand for two packages.
+// spec: §9.10.2 §9.2.3
+#[test]
+fn per_dependent_renames() {
+    let root = scratch("rename-per-dependent");
+    let home = root.join("home");
+    let greet = root.join("greet");
+    write(
+        &greet.join("src/lib.rok"),
+        "pub struct Hi { pub n: i32 }\npub fn hi() -> Hi { return Hi { n: 1 }; }\n",
+    );
+    write(&greet.join("rok.rokon"), "Package { name: \"greet\" }\n");
+    let mid = root.join("mid");
+    write(
+        &mid.join("src/lib.rok"),
+        "pub fn twice(h: hello::Hi) -> hello::Hi { return hello::Hi { n: h.n * 2 }; }\n",
+    );
+    write(
+        &mid.join("rok.rokon"),
+        "Package { name: \"mid\", deps: { \"hello\": Dep::path(\"../greet\", package: \
+         \"greet\") } }\n",
+    );
+    let other = root.join("other");
+    write(&other.join("src/lib.rok"), LIB_V1);
+    write(&other.join("rok.rokon"), "Package { name: \"other\" }\n");
+    let app = root.join("app");
+    write(
+        &app.join("src/main.rok"),
+        "let h: g::Hi = mid::twice(g::hi());\nprintln(h.n);\n",
+    );
+    write(
+        &app.join("rok.rokon"),
+        "Package { name: \"app\", deps: { \"g\": Dep::path(\"../greet\", package: \
+         \"greet\"), \"mid\": Dep::path(\"../mid\") } }\n",
+    );
+    let names: Vec<String> = deps(&home, &app, &[]).into_iter().map(|d| d.0).collect();
+    assert_eq!(names, ["g", "hello", "mid"]);
+    let out = ok(&rok(&home, &app, &["run"]));
+    assert_eq!(out.trim(), "2");
+    // `hello` is `greet` for `mid`, so it can't also be `other`.
+    write(
+        &app.join("rok.rokon"),
+        "Package { name: \"app\", deps: { \"hello\": Dep::path(\"../other\", package: \
+         \"other\"), \"mid\": Dep::path(\"../mid\") } }\n",
+    );
+    fails(
+        &rok(&home, &app, &["deps"]),
+        "`hello` is package `other` for the root package and package `greet` for `mid`",
     );
 }
 
