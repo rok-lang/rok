@@ -488,6 +488,9 @@ pub(super) fn frame_end(ctx: &mut LowerCtx<'_>, span: rokc_diagnostic::Span) -> 
     cleanup_note(ctx, "cleanup_done", span)
 }
 
+/// Name prefix of the local an `await` polls its future in.
+pub(super) const AWAITED: &str = "#await";
+
 /// `await e` (spec 4.12.2): poll `e` (or `e.into_future()`) until ready,
 /// suspending with `Pending`. A throwing `poll` needs a `try` like any
 /// throwing call.
@@ -527,7 +530,7 @@ pub(super) fn lower_await(
         return fut;
     }
     let fty = fut.ty.clone();
-    let f = ctx.declare(None, fty.clone());
+    let f = ctx.declare(Some(format!("{AWAITED}{}", ctx.locals.len())), fty.clone());
     let lp = poll_loop(ctx, f, &fty, "poll", span);
     HirExpr {
         ty: lp.ty.clone(),
@@ -552,7 +555,7 @@ fn await_writing_back(
     span: rokc_diagnostic::Span,
 ) -> HirExpr {
     let fty = fut.ty.clone();
-    let f = ctx.declare(None, fty.clone());
+    let f = ctx.declare(Some(format!("{AWAITED}{}", ctx.locals.len())), fty.clone());
     ctx.err_frames.push(super::throws::ErrFrame::Finally {
         block: Block {
             stmts: Vec::new(),

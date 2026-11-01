@@ -1,0 +1,11 @@
+// expect-warning: this `try` covers no throwing call
+// expect-error: mismatched types: `let b` expects `str`, found `i32`
+// expect-error: could not build build_summary_counts_warnings (1 error, 1 warning)
+
+// A failed build's summary counts the warnings it printed.
+fn one() -> i32 { 1 }
+
+fn main() {
+    let a = try one();
+    let b: str = a;
+}

@@ -122,10 +122,19 @@ impl<T> Chan<T> {
         atomic_load(self.meta, RENDEZVOUS, SeqCst) == 1
     }
 
-    /// Queue `v`; its position (rendezvous), or `FULL`.
-    fn push(self, v: T) -> usize {
+    /// Reserve the next slot: its position (rendezvous), or `FULL`. The
+    /// value goes in with `fill`, so a full queue never takes it.
+    fn claim(self) -> usize {
         match self.queue {
-            q: Ring<T> => q.push(v),
+            q: Ring<T> => q.claim(),
+            q: Segments<T> => 0,
+        }
+    }
+
+    /// Queue `v` in the slot `claim` gave.
+    fn fill(self, pos: usize, v: T) {
+        match self.queue {
+            q: Ring<T> => q.fill(pos, v),
             q: Segments<T> => q.push(v),
         }
     }
@@ -241,22 +250,27 @@ impl<T> Ring<T> {
         atomic_load(self.tail, 0, SeqCst) - h
     }
 
-    fn push(self, v: T) -> usize {
-        unsafe {
-            loop {
-                let pos = atomic_load(self.tail, 0, Relaxed);
-                let i = pos % self.cap;
-                let s = atomic_load(self.stamps, i, SeqCst);
-                if s == 2 * pos {
-                    if atomic_cas(self.tail, 0, pos, pos + 1, SeqCst, Relaxed) == pos {
-                        self.slots[i] = v;
-                        atomic_xchg(self.stamps, i, 2 * pos + 1, SeqCst);
-                        return pos;
-                    }
-                } else if s < 2 * pos {
-                    return FULL;
+    /// Reserve the tail slot: its position, or `FULL`. A reader waits on
+    /// the slot's stamp until `fill` publishes it.
+    fn claim(self) -> usize {
+        loop {
+            let pos = atomic_load(self.tail, 0, Relaxed);
+            let s = atomic_load(self.stamps, pos % self.cap, SeqCst);
+            if s == 2 * pos {
+                if atomic_cas(self.tail, 0, pos, pos + 1, SeqCst, Relaxed) == pos {
+                    return pos;
                 }
+            } else if s < 2 * pos {
+                return FULL;
             }
+        }
+    }
+
+    fn fill(self, pos: usize, v: T) {
+        unsafe {
+            let i = pos % self.cap;
+            self.slots[i] = v;
+            atomic_xchg(self.stamps, i, 2 * pos + 1, SeqCst);
         }
     }
 
@@ -328,7 +342,7 @@ impl<T> Segments<T> {
         }
     }
 
-    fn push(self, v: T) -> usize {
+    fn push(self, v: T) {
         unsafe {
             using g = self.lock.lock() {
                 if self.at[1] == SEGMENT {
@@ -342,7 +356,6 @@ impl<T> Segments<T> {
                 self.at[2] += 1;
             }
         }
-        0
     }
 
     #[discardable]
@@ -431,15 +444,16 @@ impl<T> Sender<T> {
         }
         let value = hand_over::<T>(value);
         let ch = self.ch;
-        let pos = ch.push(value);
+        let pos = ch.claim();
         while pos == FULL {
             let s = enter(ch.tx);
-            pos = ch.push(value);
+            pos = ch.claim();
             if pos == FULL {
                 sleep(ch.tx, s);
             }
             leave(ch.tx);
         }
+        ch.fill(pos, value);
         ch.wake_receiver();
         if ch.rendezvous() {
             while !ch.taken(pos) {
@@ -466,9 +480,11 @@ impl<T> Sender<T> {
                 throw TrySendError::Full(value);
             }
         }
-        if ch.push(hand_over::<T>(value)) == FULL {
+        let pos = ch.claim();
+        if pos == FULL {
             throw TrySendError::Full(value);
         }
+        ch.fill(pos, hand_over::<T>(value));
         ch.wake_receiver();
     }
 
@@ -690,10 +706,11 @@ impl<T> SendFuture<T> {
                 self.value = hand_over::<T>(self.value);
                 self.handed = true;
             }
-            let pos = ch.push(self.value);
+            let pos = ch.claim();
             if pos == FULL {
                 return rok::core::future::Poll::Pending;
             }
+            ch.fill(pos, self.value);
             self.pushed = true;
             self.ticket = pos;
             ch.wake_receiver();

@@ -5394,10 +5394,14 @@ fn check_templates(env: &Env<'_>, templates: &[crate::TemplateRefs]) {
                 }
                 s.join("::")
             };
-            // The item, or a type whose associated item it names.
+            // The item, or a type (or trait) whose associated item it
+            // names: in the root package `pkg::E::new` is `E::new`.
             let found = (1..=full.len())
                 .rev()
-                .find_map(|n| item(&full[..n].join("::")).filter(|_| n == full.len() || n > 1))
+                .find_map(|n| {
+                    item(&full[..n].join("::"))
+                        .filter(|(k, _)| n == full.len() || names.has_type(k) || names.is_trait(k))
+                })
                 .or_else(|| {
                     let m = full.join("::");
                     names

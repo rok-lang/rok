@@ -1102,7 +1102,14 @@ fn lower_method_call(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
     let recv_h = literal_conv_receiver(ctx, receiver, method)
         .unwrap_or_else(|| lower_receiver(ctx, receiver));
     ctx.method_type_args.clone_from(type_args);
-    let method = match drop_method(ctx, &recv_h.ty, method, span) {
+    // A release the compiler added has no span: its binding's.
+    let at = match recv_h.kind {
+        HirExprKind::Local(l) if span.is_dummy() => {
+            ctx.owed_at.get(&l).copied().unwrap_or_else(|| ctx.here())
+        }
+        _ => span,
+    };
+    let method = match drop_method(ctx, &recv_h.ty, method, at) {
         Ok(m) => m,
         Err(e) => return e,
     };
@@ -5463,7 +5470,8 @@ fn drop_method<'m>(
     match method {
         rokc_ast::USING_DROP_METHOD => {
             if *recv_ty != HirTy::Unknown && !needs_drop(ctx, recv_ty, 0) {
-                return Err(ctx.error_expr(
+                ctx.emit_diag(rokc_diagnostic::RokDiagnostic::error(
+                    rokc_diagnostic::ErrorKind::Type,
                     span,
                     format!(
                         "`using` needs a resource whose type implements `Drop`; `{}` does not \
@@ -5471,6 +5479,7 @@ fn drop_method<'m>(
                         ctx.ty_name(recv_ty)
                     ),
                 ));
+                return Err(poison(span));
             }
             Ok(method)
         }

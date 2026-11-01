@@ -1,0 +1,27 @@
+// spec: 3.10.5
+// expect-exit: 0
+// expect-stdout:
+// 3
+// 3
+// 4
+
+// `if let` takes an irrefutable pattern too (3.11): it always matches,
+// and its `else` never runs.
+enum One { A(i32) }
+
+struct P { x: i32; }
+
+fn main() {
+    let o = One::A(3);
+    if let One::A(x) = o {
+        println(f"{x}");
+    }
+    if let One::A(y) = o {
+        println(f"{y}");
+    } else {
+        println("no");
+    }
+    if let P { x } = (P { x: 4 }) {
+        println(f"{x}");
+    }
+}

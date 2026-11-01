@@ -213,6 +213,7 @@ pub(super) fn owe(ctx: &mut LowerCtx<'_>, local: LocalId, ty: &HirTy) -> Option<
         return None;
     }
     let n = local.0;
+    ctx.owed_at.insert(local, ctx.here());
     let flag = ctx.declare(Some(format!("{OWN}{n}")), HirTy::Prim(PrimTy::Bool));
     if let Some(scope) = ctx.scopes.last_mut() {
         scope.insert(format!("{REL}{n}"), local);
@@ -305,7 +306,8 @@ pub(super) fn settle(
     }
     for b in blocks {
         ctx.push_expected(HirTy::Unit);
-        let h = super::expr::lower_block(ctx, &b);
+        // The release has no span of its own: what it reports is here.
+        let h = ctx.at_span(span, |ctx| super::expr::lower_block(ctx, &b));
         ctx.pop_expected();
         stmts.push(HirStmt::Expr(HirExpr {
             kind: HirExprKind::Block(Box::new(h)),
@@ -593,7 +595,10 @@ impl Checker<'_, '_> {
 
 /// One followed value: a local and its parts.
 struct Root {
+    /// The variable, or the source of a hidden temporary.
     name: String,
+    /// `name` is a variable the program wrote.
+    named: bool,
     ty: HirTy,
     kind: Kind,
     /// This body must release it.
@@ -615,12 +620,15 @@ struct Target {
     val: Option<Val>,
 }
 
+#[allow(clippy::struct_excessive_bools)] // independent walk modes
 struct Walk<'c, 'a, 'e> {
     c: &'c Checker<'a, 'e>,
     f: &'a HirFunction,
     report: bool,
     /// On a path that is not checked (a cancelled task's way out).
     quiet: bool,
+    /// Walking a panic's message: the process ends, nothing is closed.
+    dying: bool,
     /// Binding an assignment's value.
     assigning: bool,
     roots: Vec<Root>,
@@ -691,6 +699,7 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             f,
             report,
             quiet: false,
+            dying: false,
             assigning: false,
             roots: Vec::new(),
             root_of: HashMap::new(),
@@ -722,6 +731,15 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             .or_else(|| self.f.locals.iter().find(|x| x.id == l))
             .and_then(|x| x.name.as_deref())
             .filter(|n| !n.starts_with('#') && !n.starts_with("__"))
+    }
+
+    fn local_name_raw(&self, l: LocalId) -> Option<&'a str> {
+        self.f
+            .locals
+            .get(l.0 as usize)
+            .filter(|x| x.id == l)
+            .or_else(|| self.f.locals.iter().find(|x| x.id == l))
+            .and_then(|x| x.name.as_deref())
     }
 
     fn local_ty(&self, l: LocalId) -> Option<&'a HirTy> {
@@ -775,11 +793,23 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             self.roots[r].param = param;
             r
         } else {
-            let name = self.local_name(l).unwrap_or("this value").to_owned();
+            let (name, named) = match self.local_name(l) {
+                Some(n) => (n.to_owned(), true),
+                None => (
+                    self.c
+                        .ctx
+                        .src(at)
+                        .filter(|t| !t.is_empty() && t.len() <= 40 && !t.contains('\n'))
+                        .unwrap_or("")
+                        .to_owned(),
+                    false,
+                ),
+            };
             let base = self.slots;
             self.slots += leaves.len();
             self.roots.push(Root {
                 name,
+                named,
                 ty: ty.clone(),
                 kind,
                 owned,
@@ -858,9 +888,33 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             .collect()
     }
 
+    /// How a diagnostic names the place `(r, path)`: `` `x.f` ``, or for
+    /// a hidden temporary the expression it holds the value of.
     fn shown(&self, r: usize, path: &[u32]) -> String {
         let root = &self.roots[r];
-        let mut s = root.name.clone();
+        let place = self.place_text(r, path);
+        if root.named {
+            return format!("`{place}`");
+        }
+        let of = if root.name.is_empty() {
+            "this value".to_owned()
+        } else {
+            format!("the value of `{}`", root.name)
+        };
+        match place.split_once('.') {
+            Some((_, f)) if f.bytes().all(|b| b.is_ascii_digit()) => format!("element {f} of {of}"),
+            Some((_, f)) => format!("field `{f}` of {of}"),
+            None => of,
+        }
+    }
+
+    fn place_text(&self, r: usize, path: &[u32]) -> String {
+        let root = &self.roots[r];
+        let mut s = if root.named {
+            root.name.clone()
+        } else {
+            String::new()
+        };
         let mut ty = root.ty.clone();
         for &i in path {
             match &ty {
@@ -899,9 +953,9 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             let did = if released { "closed" } else { "moved" };
             let line = self.line(site, at);
             let head = if maybe {
-                format!("`{who}` may have been {did} at {line}")
+                format!("{who} may have been {did} at {line}")
             } else {
-                format!("`{who}` was {did} at {line}")
+                format!("{who} was {did} at {line}")
             };
             let msg = if releasing {
                 format!("{head}; releasing it again here would release it twice")
@@ -915,9 +969,14 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                      a new one"
                 )
             } else {
+                let copy = self
+                    .copy_method(&self.roots[r].ty)
+                    .map_or_else(String::new, |m| {
+                        format!(", or keep a copy with `.{m}` before it moves")
+                    });
                 format!(
-                    "help: a `{ty}` has one owner, and `{who}` gave it away; use the new owner, \
-                     or keep a copy with `.clone()` before it moves (stdlib 2.13.4)"
+                    "help: a `{ty}` has one owner, and {who} gave it away; use the new \
+                     owner{copy} (stdlib 2.13.4)"
                 )
             };
             let here = if released {
@@ -927,6 +986,25 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             };
             self.error(at, msg, |d| d.with_secondary(site, here).with_note(help));
             return;
+        }
+    }
+
+    /// How a copy of a `ty` is made, if it can be: `clone()`, or
+    /// `try_clone()` (a `File`, a socket).
+    fn copy_method(&self, ty: &HirTy) -> Option<&'static str> {
+        let ctx = self.c.ctx;
+        let clone = ctx.lang("clone_trait");
+        if !clone.is_empty() && ctx.has_trait(ty, clone) {
+            Some("clone()")
+        } else if self
+            .c
+            .env
+            .methods_on(ty, "try_clone")
+            .is_some_and(|m| !m.is_empty())
+        {
+            Some("try_clone()")
+        } else {
+            None
         }
     }
 
@@ -1021,7 +1099,7 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
 
     fn leaves_open(&mut self, r: usize, st: &State, at: Span) {
         let root = &self.roots[r];
-        if !root.owned || root.kind != Kind::Close {
+        if self.dying || !root.owned || root.kind != Kind::Close {
             return;
         }
         let open: Vec<usize> = (0..root.leaves.len())
@@ -1050,15 +1128,23 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
         };
         let bound = root.at;
         let msg = if somewhere {
-            format!("`{who}` holds a `{ty}` that is not closed on every path")
+            format!("{who} holds a `{ty}` that is not closed on every path")
         } else {
-            format!("`{who}` holds a `{ty}` that is never closed")
+            format!("{who} holds a `{ty}` that is never closed")
         };
-        let help = format!(
-            "help: closing a `{ty}` can fail, so it is not closed for you: add `try {who}.close();` \
-             before it leaves its scope, or bind it with `using {} = .. {{ .. }}` (stdlib 2.13.4)",
-            root.name
-        );
+        let help = if root.named {
+            format!(
+                "help: closing a `{ty}` can fail, so it is not closed for you: add `try {}.close();` \
+                 before it leaves its scope, or bind it with `using {} = .. {{ .. }}` (stdlib 2.13.4)",
+                self.place_text(r, &path),
+                root.name
+            )
+        } else {
+            format!(
+                "help: closing a `{ty}` can fail, so it is not closed for you: bind it with \
+                 `let x = ..;` and add `try x.close();`, or use `using x = .. {{ .. }}` (stdlib 2.13.4)"
+            )
+        };
         self.error(bound, msg, |d| {
             d.with_secondary(at, "it is still open when it leaves here")
                 .with_note(help)
@@ -1259,7 +1345,10 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                 None
             }
             HirStmt::Panic(e) => {
+                let saved = self.dying;
+                self.dying = true;
                 self.expr(e, st, Mode::Use);
+                self.dying = saved;
                 None
             }
         }
@@ -1403,7 +1492,12 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
         if !affine {
             return st;
         }
-        let val = if view { Val::Alias } else { val };
+        // An awaited future: polling it to the end hands on what it holds
+        // (its output, or the error it raises).
+        let awaited = self
+            .local_name_raw(local)
+            .is_some_and(|n| n.starts_with(super::coro::AWAITED));
+        let val = if view || awaited { Val::Alias } else { val };
         if val == Val::Owned {
             self.bind(local, &ty, true, None, value.span, &mut st);
         } else {
@@ -1909,8 +2003,23 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
         let (st, sv) = self.expr(scrutinee, st, mode_s);
         let mut out: State = None;
         let mut val: Option<Val> = None;
-        let members = match &scrutinee.ty {
-            HirTy::Sum(ts) => Some(ts.clone()),
+        // Per member of a sum, or variant of an enum: whether it holds a
+        // resource.
+        let members: Option<Vec<bool>> = match &scrutinee.ty {
+            HirTy::Sum(ts) => Some(ts.iter().map(|t| self.c.shape(t).is_some()).collect()),
+            HirTy::Enum(eid) => Some(
+                self.c
+                    .ctx
+                    .enum_def(*eid)
+                    .variants
+                    .iter()
+                    .map(|v| {
+                        super::expr::variant_arg_tys(v)
+                            .iter()
+                            .any(|t| self.c.shape(t).is_some())
+                    })
+                    .collect(),
+            ),
             _ => None,
         };
         let mut taken: HashSet<u32> = HashSet::new();
@@ -1921,7 +2030,8 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             if let (Some(ms), Some((r, p))) = (&members, &at) {
                 let here: Vec<u32> = match &a.pat {
                     HirPattern::SumVariant { variant_index, .. }
-                    | HirPattern::SumMember { variant_index, .. } => vec![*variant_index],
+                    | HirPattern::SumMember { variant_index, .. }
+                    | HirPattern::EnumVariant { variant_index, .. } => vec![*variant_index],
                     HirPattern::Wildcard | HirPattern::Binding { .. } => (0..ms.len())
                         .filter_map(|i| u32::try_from(i).ok())
                         .filter(|i| !taken.contains(i))
@@ -1931,15 +2041,24 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                         .collect(),
                 };
                 if a.guard.is_none() {
-                    if let HirPattern::SumVariant { variant_index, .. }
-                    | HirPattern::SumMember { variant_index, .. } = &a.pat
-                    {
-                        taken.insert(*variant_index);
+                    match &a.pat {
+                        HirPattern::SumVariant { variant_index, .. }
+                        | HirPattern::SumMember { variant_index, .. } => {
+                            taken.insert(*variant_index);
+                        }
+                        HirPattern::EnumVariant {
+                            variant_index,
+                            args,
+                            ..
+                        } if args.iter().all(HirPattern::is_irrefutable) => {
+                            taken.insert(*variant_index);
+                        }
+                        _ => {}
                     }
                 }
                 let empty = here
                     .iter()
-                    .all(|&i| ms.get(i as usize).is_none_or(|t| self.c.shape(t).is_none()));
+                    .all(|&i| !ms.get(i as usize).copied().unwrap_or(false));
                 if empty {
                     for x in self.slots_at(*r, p) {
                         if get(&s, x) & LIVE != 0 {

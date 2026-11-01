@@ -894,6 +894,8 @@ impl Snapshot {
         sink.tentative_ret.borrow_mut().truncate(self.tentative_ret);
         sink.next_id.set(self.next_id);
         env.defs.truncate(self.structs, self.enums);
+        // The ids of the dropped instances are handed out again.
+        env.affine_memo.borrow_mut().clear();
         sink.params.borrow_mut().truncate(self.params);
         sink.infer_vars.borrow_mut().truncate(self.infer_vars);
         sink.const_names.borrow_mut().clear();

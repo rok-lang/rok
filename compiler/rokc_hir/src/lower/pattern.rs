@@ -51,8 +51,9 @@ pub(super) fn lower_match(
     // Spec 3.12.5 / 3.12.6: exhaustiveness and unreachable arms.
     if !is_let_else && !bad_pattern {
         // `if let` / `while let` desugar to `match { pat => .., _ => .. }`
-        // with `_` at the `if` span; an irrefutable `pat` makes that arm
-        // unreachable by construction, so don't warn (matched by span).
+        // with `_` at the `if` keyword; an irrefutable `pat` makes that
+        // arm unreachable by construction, so don't warn (matched by where
+        // it starts: no written arm starts at its `match`).
         // A `catch` dispatch reports its own unreachable arms.
         let catch_dispatch = matches!(&scrutinee.kind,
             ExprKind::Path(p) if p.segments.len() == 1 && p.segments[0].name.starts_with('#'));
@@ -60,7 +61,9 @@ pub(super) fn lower_match(
             .iter()
             .map(|a| {
                 catch_dispatch
-                    || (matches!(a.pat.kind, AstPatternKind::Wildcard) && a.pat.span == span)
+                    || (matches!(a.pat.kind, AstPatternKind::Wildcard)
+                        && a.pat.span.file == span.file
+                        && a.pat.span.start == span.start)
             })
             .collect();
         check_match_arms(ctx, &scrut_ty, &arm_h, &synthetic);
