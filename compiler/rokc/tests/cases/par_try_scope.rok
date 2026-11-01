@@ -20,7 +20,7 @@ fn check(n: i32) throws (Bad) -> i32 {
 
 fn main() {
     let sum = Atomic::new(0);
-    try! par::try_scope(|s: TryScope<Bad>| {
+    try! par::try_scope(|s: par::TryScope<Bad>| {
         for i in 0..5 {
             s.spawn(|| { sum.fetch_add(i); 0 });
         }
@@ -30,7 +30,7 @@ fn main() {
     // Child 3 throws; the 1000 tasks spawned after it see the cancelled
     // scope (each waits for it first) and never run their body.
     let ran = Atomic::new(0);
-    try par::try_scope(|s: TryScope<Bad>| {
+    try par::try_scope(|s: par::TryScope<Bad>| {
         let h = s.spawn(|| try check(3));
         // Wait until the error has cancelled the scope.
         try h.join() catch e { println(f"join of the failed child: bad {e.n}"); 0 };
@@ -46,7 +46,7 @@ fn main() {
     // sees `is_cancelled` and ends - the scope waits for it either way.
     let saw = Atomic::new(false);
     let started = Atomic::new(false);
-    try par::try_scope(|s: TryScope<Bad>| {
+    try par::try_scope(|s: par::TryScope<Bad>| {
         s.spawn(|| {
             started.store(true);
             while !s.is_cancelled() { }
@@ -61,7 +61,7 @@ fn main() {
 
     let r = task::block_on(async {
         let t = task::spawn(async {
-            try par::try_scope(|s: TryScope<Bad>| {
+            try par::try_scope(|s: par::TryScope<Bad>| {
                 for i in 5..10 {
                     s.spawn(|| try check(i));
                 }

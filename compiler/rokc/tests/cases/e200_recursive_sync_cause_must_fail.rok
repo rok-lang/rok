@@ -4,7 +4,7 @@
 
 // The note names the part that is not `Sync`, not the type's way back
 // to itself through `next`.
-use rok::core::collections::raw::GcBuf;
+use rok::bare::mem::GcBuf;
 
 struct Node {
     next: GcBuf<Node | none>;

@@ -1,9 +1,8 @@
 // spec: 005.05-variant-needs-import
 // expect-error: Blue
 
-// spec 5.5: a user enum's variants are not bare names until imported
-// (`use Color::*` / `use Color::{Blue}`); only the implicit
-// `rok::core::**` brings core variants (`Ok` / `Err`) in.
+// spec 5.5 / 2.4.8: a variant is a bare name when imported (`use
+// Color::*`) or when the expected type is its enum; here there is none.
 enum Color { Red, Blue(i32) }
 
 fn main() -> i32 {

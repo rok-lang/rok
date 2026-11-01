@@ -12,10 +12,10 @@ where
 }
 
 struct Job {
-    fut: AsyncFuture<i32>;
+    fut: future::AsyncFuture<i32>;
 }
 
-fn helper(n: i32) -> AsyncFuture<i32> {
+fn helper(n: i32) -> future::AsyncFuture<i32> {
     let m = Mutex::new(n);
     async {
         await task::yield_now();
@@ -40,7 +40,7 @@ let b = task::spawn(job.fut);
 
 let c = task::spawn(helper(3));
 
-let futs: List<AsyncFuture<i32>> = List::new();
+let futs: List<future::AsyncFuture<i32>> = List::new();
 for i in 0..4 {
     futs.push(helper(i * 5));
 }

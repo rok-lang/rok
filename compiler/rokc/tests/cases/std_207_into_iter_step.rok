@@ -62,7 +62,7 @@ fn index(d: Weekday) -> usize {
     }
 }
 
-impl Step for Weekday {
+impl range::Step for Weekday {
     fn forward_checked(self, n: usize) -> Weekday | none { day(index(self) + n) }
     fn backward_checked(self, n: usize) -> Weekday | none {
         if n > index(self) { none } else { day(index(self) - n) }
@@ -105,10 +105,10 @@ fn main() {
     println(f"{1i8.forward_checked(1) ?? 0} {127i8.forward_checked(1):?} {255u8.backward_checked(1) ?? 0} {0u8.backward_checked(1):?} {i32::steps_between(2, 5) ?? 0} {i32::steps_between(5, 2):?}");
     let cs: List<char> = ('\u{D7FE}'..='\u{E000}').collect();
     println(f"chars {cs.len() - 1} {cs[1] as u32} {cs[2] as u32}");
-    let od: OrderedDict<str, i32> = OrderedDict::new();
+    let od: collections::OrderedDict<str, i32> = collections::OrderedDict::new();
     od["b"] = 1;
     od["a"] = 2;
-    let os: OrderedSet<str> = OrderedSet::new();
+    let os: collections::OrderedSet<str> = collections::OrderedSet::new();
     os.insert("z");
     os.insert("y");
     print("ordered");

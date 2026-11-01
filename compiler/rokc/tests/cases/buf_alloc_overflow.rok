@@ -5,6 +5,8 @@
 
 // A buffer whose `len * size + header` overflows `usize` is a fatal
 // "allocation too large", not a small allocation written past its end.
+use rok::bare::mem::{GcBuf, buf_new};
+
 fn main() {
     let n: usize = usize::MAX / 8 + 1; // `n * 8` wraps to 0
     println("before");

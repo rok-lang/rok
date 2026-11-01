@@ -38,12 +38,12 @@ impl<T: Num> Twice for T { fn once(self) -> i32 { return self.num(); } }
 
 // Operators dispatch through a generic impl of the operator trait.
 struct V2<T> { x: T; y: T; }
-impl<T: Add<T, Output = T>> Add for V2<T> {
+impl<T: ops::Add<T, Output = T>> ops::Add for V2<T> {
     fn add(self, rhs: V2<T>) -> V2<T> { return V2 { x: self.x + rhs.x, y: self.y + rhs.y }; }
 }
 
 // Primitives implement the operator / compare traits (core::num).
-fn sum3<T: Add<T, Output = T>>(a: T, b: T, c: T) -> T { return a + b + c; }
+fn sum3<T: ops::Add<T, Output = T>>(a: T, b: T, c: T) -> T { return a + b + c; }
 fn less<T: PartialOrd>(a: T, b: T) -> bool { return a < b; }
 
 fn show_it<T: Show>(x: T) -> i32 { return x.show(); }

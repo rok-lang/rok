@@ -8,13 +8,13 @@
 // expect-stdout:
 // polled
 
-struct Once { f: AsyncFuture<usize>; }
+struct Once { f: future::AsyncFuture<usize>; }
 
 impl Future for Once {
     type Output = ();
-    fn poll(ref self, ref ctx: Context) -> Poll<()> {
+    fn poll(ref self, ref ctx: future::Context) -> future::Poll<()> {
         let _ = self.f.poll(ref ctx);
-        Poll::Ready(())
+        future::Poll::Ready(())
     }
 }
 

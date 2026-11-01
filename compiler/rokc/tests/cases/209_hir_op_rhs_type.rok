@@ -3,6 +3,6 @@
 // expect-error: the right operand of `+` expects `V`, found `i32`
 
 struct V { x: i32; }
-impl Add for V { fn add(self, o: V) -> V { return V { x: self.x + o.x }; } }
+impl ops::Add for V { fn add(self, o: V) -> V { return V { x: self.x + o.x }; } }
 
 fn main() -> i32 { let a = V { x: 1 }; let c = a + 5; return c.x; }

@@ -10,21 +10,21 @@
 // `rok_timer_register` wakes at a deadline, `rok_coro_park` /
 // `rok_coro_unpark` park on a frame address, `rok_io_register` wakes on
 // fd readiness. A waker crosses as a one-element `GcBuf<Waker>`.
-use rok::core::collections::raw::{GcBuf, buf_new};
+use rok::bare::mem::{GcBuf, buf_new};
 use rok::std::net::{TcpListener, TcpStream, SocketAddr};
 use rok::std::io::byte_buf;
 
 extern "C" {
     fn rok_time_now_ns() -> i64;
-    fn rok_timer_register(deadline: u64, waker: GcBuf<Waker>);
-    fn rok_coro_park(frame: GcBuf<i32>, waker: GcBuf<Waker>);
+    fn rok_timer_register(deadline: u64, waker: GcBuf<future::Waker>);
+    fn rok_coro_park(frame: GcBuf<i32>, waker: GcBuf<future::Waker>);
     fn rok_coro_unpark(frame: GcBuf<i32>);
-    fn rok_io_register(fd: i32, interest: u32, waker: GcBuf<Waker>);
+    fn rok_io_register(fd: i32, interest: u32, waker: GcBuf<future::Waker>);
 }
 
-fn boxed(w: Waker) -> GcBuf<Waker> {
+fn boxed(w: future::Waker) -> GcBuf<future::Waker> {
     unsafe {
-        let b: GcBuf<Waker> = buf_new(1);
+        let b: GcBuf<future::Waker> = buf_new(1);
         b[0] = w;
         b
     }
@@ -34,10 +34,10 @@ fn boxed(w: Waker) -> GcBuf<Waker> {
 struct Deadline { at: i64; }
 impl Future for Deadline {
     type Output = bool;
-    fn poll(ref self, ref ctx: Context) -> Poll<bool> {
-        if unsafe { rok_time_now_ns() } >= self.at { return Poll::Ready(true); }
+    fn poll(ref self, ref ctx: future::Context) -> future::Poll<bool> {
+        if unsafe { rok_time_now_ns() } >= self.at { return future::Poll::Ready(true); }
         unsafe { rok_timer_register(self.at as u64, boxed(ctx.waker())) };
-        Poll::Pending
+        future::Poll::Pending
     }
 }
 
@@ -45,11 +45,11 @@ impl Future for Deadline {
 struct Slot { frame: GcBuf<i32>; }
 impl Future for Slot {
     type Output = i32;
-    fn poll(ref self, ref ctx: Context) -> Poll<i32> {
+    fn poll(ref self, ref ctx: future::Context) -> future::Poll<i32> {
         unsafe { rok_coro_park(self.frame, boxed(ctx.waker())) };
         let v = unsafe { self.frame[0] };
-        if v != 0 { return Poll::Ready(v); }
-        Poll::Pending
+        if v != 0 { return future::Poll::Ready(v); }
+        future::Poll::Pending
     }
 }
 
@@ -57,11 +57,11 @@ impl Future for Slot {
 struct Readable { fd: i32; armed: bool; }
 impl Future for Readable {
     type Output = ();
-    fn poll(ref self, ref ctx: Context) -> Poll<()> {
-        if self.armed { return Poll::Ready(()); }
+    fn poll(ref self, ref ctx: future::Context) -> future::Poll<()> {
+        if self.armed { return future::Poll::Ready(()); }
         self.armed = true;
         unsafe { rok_io_register(self.fd, 1, boxed(ctx.waker())) };
-        Poll::Pending
+        future::Poll::Pending
     }
 }
 

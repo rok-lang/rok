@@ -16,7 +16,7 @@
 // `&&` / `||` short-circuiting (2.3.9).
 struct Matrix2x2 { a: f64; b: f64; c: f64; d: f64; }
 
-impl Mul<Matrix2x2> for Matrix2x2 {
+impl ops::Mul<Matrix2x2> for Matrix2x2 {
     type Output = Matrix2x2;
 
     fn mul(self, rhs: Matrix2x2) -> Matrix2x2 {
@@ -32,7 +32,7 @@ impl Mul<Matrix2x2> for Matrix2x2 {
 #[derive(Debug)]
 struct Vec3 { x: f64; y: f64; z: f64; }
 
-impl Add for Vec3 {
+impl ops::Add for Vec3 {
     type Output = Vec3;
 
     fn add(self, rhs: Vec3) -> Vec3 {
@@ -40,7 +40,7 @@ impl Add for Vec3 {
     }
 }
 
-impl Mul<f64> for Vec3 {
+impl ops::Mul<f64> for Vec3 {
     type Output = Vec3;
 
     fn mul(self, k: f64) -> Vec3 {

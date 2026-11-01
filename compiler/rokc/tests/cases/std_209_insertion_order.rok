@@ -19,7 +19,7 @@ fn main() {
     println(d.keys().collect::<List<str>>().join(" "));
     let s: Set<i32> = Set::from([3, 1, 2, 1]);
     println(s.iter().map(|x| f"{x}").collect::<List<str>>().join(" "));
-    let o: OrderedDict<str, i32> = OrderedDict::new();
+    let o: collections::OrderedDict<str, i32> = collections::OrderedDict::new();
     o.insert("z", 1);
     o.insert("a", 2);
     o.insert("m", 3);

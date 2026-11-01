@@ -22,16 +22,16 @@ let (server_own, _) = try! listener.accept();
 let server = unsafe { share(server_own) };
 
 let read = task::spawn(async { try await server.read_async(byte_buf(16)) catch _ { 0 } });
-let r = try await task::timeout(Duration::ms(20), read) catch _: TimeoutError { 999 };
+let r = try await task::timeout(Duration::ms(20), read) catch _: task::TimeoutError { 999 };
 println(f"read: {if r == 999 { "timed out" } else { "data" }}");
 read.cancel();
-let gone = try await read.join() catch _: CancellationError { 999 };
+let gone = try await read.join() catch _: task::CancellationError { 999 };
 println(f"cancelled: {gone == 999}");
 println(f"registrations left: {task::registrations()}");
 
 let read2 = task::spawn(async { try await server.read_async(byte_buf(16)) catch _ { 0 } });
 try! client.write_str("hi");
-let n = try await task::timeout(Duration::secs(10), read2) catch _: TimeoutError { 999 };
+let n = try await task::timeout(Duration::secs(10), read2) catch _: task::TimeoutError { 999 };
 println(f"read in time: {n}");
 
 let (which, _) = await task::select([

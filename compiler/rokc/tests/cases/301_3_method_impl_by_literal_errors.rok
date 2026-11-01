@@ -5,17 +5,17 @@
 // No impl for the default type and several the literal fits: a suffix
 // is needed. A literal no impl takes is an error.
 struct W { v: i64; }
-impl Add<i64> for W {
+impl ops::Add<i64> for W {
     type Output = i64;
     fn add(self, rhs: i64) -> i64 { rhs }
 }
-impl Add<i32> for W {
+impl ops::Add<i32> for W {
     type Output = i64;
     fn add(self, rhs: i32) -> i64 { 0 }
 }
 struct U { v: i64; }
-impl Add<i64> for U { type Output = i64; fn add(self, rhs: i64) -> i64 { rhs } }
-impl Add<u64> for U { type Output = i64; fn add(self, rhs: u64) -> i64 { 0 } }
+impl ops::Add<i64> for U { type Output = i64; fn add(self, rhs: i64) -> i64 { rhs } }
+impl ops::Add<u64> for U { type Output = i64; fn add(self, rhs: u64) -> i64 { 0 } }
 
 fn main() {
     let w = W { v: 0 };

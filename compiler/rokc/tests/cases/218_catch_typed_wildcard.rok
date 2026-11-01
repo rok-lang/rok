@@ -12,6 +12,6 @@ async fn main() {
         0
     });
     t.cancel();
-    let r = try await t.join() catch _: CancellationError { -1 };
+    let r = try await t.join() catch _: task::CancellationError { -1 };
     println(f"fallback {r}");
 }

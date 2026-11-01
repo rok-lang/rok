@@ -8,6 +8,8 @@
 // 7 hi 3
 // 1
 
+use rok::bare::mem::{GcBuf, buf_new};
+
 struct P { s: str; xs: List<i32>; }
 
 fn show<T: Display>(v: T | none) -> str {

@@ -12,12 +12,12 @@
 // the caller binds it with `using`.
 static M: Mutex<i32> = Mutex::new(0);
 
-fn peek(g: MutexGuard<i32>) -> i32 { g.get() }
-fn bump(g: MutexGuard<i32>) -> MutexGuard<i32> { g.set(g.get() + 1); g }
-fn acquire() -> MutexGuard<i32> { M.lock() }
+fn peek(g: sync::MutexGuard<i32>) -> i32 { g.get() }
+fn bump(g: sync::MutexGuard<i32>) -> sync::MutexGuard<i32> { g.set(g.get() + 1); g }
+fn acquire() -> sync::MutexGuard<i32> { M.lock() }
 fn peek_free() -> bool { true }
-fn acquire_let() -> MutexGuard<i32> { let g = M.lock(); g }
-fn acquire_ret(early: bool) -> MutexGuard<i32> {
+fn acquire_let() -> sync::MutexGuard<i32> { let g = M.lock(); g }
+fn acquire_ret(early: bool) -> sync::MutexGuard<i32> {
     if early {
         return M.lock();
     }

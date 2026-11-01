@@ -10,11 +10,11 @@
 // `FormatSpec` has getters and a throwing `parse`; reading or
 // setting a field is deprecated (the fields are private in 0.2.0).
 fn main() {
-    let s = try! FormatSpec::parse("*<#8.3x");
-    let a = s.align() is Alignment;
+    let s = try! fmt::FormatSpec::parse("*<#8.3x");
+    let a = s.align() is fmt::Alignment;
     println(f"{s.fill()} {s.width() ?? 0} {s.precision() ?? 0} {s.alternate()} {s.zero_pad()} {s.ty()}");
     try {
-        let _ = FormatSpec::parse(">>>");
+        let _ = fmt::FormatSpec::parse(">>>");
     } catch e: ValueError {
         println(f"{e}");
     }

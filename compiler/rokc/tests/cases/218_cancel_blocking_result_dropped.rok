@@ -37,6 +37,6 @@ release.store(1);
 while done.load() == 0 {
     thread::sleep(Duration::ms(1));
 }
-let r = try await t.join() catch _: CancellationError { -1 };
+let r = try await t.join() catch _: task::CancellationError { -1 };
 println(f"join: {if r == -1 { "cancelled" } else { f"finished {r}" }}");
 println(f"write landed: {landed.load() == 1}");

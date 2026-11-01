@@ -18,5 +18,5 @@ fn main() {
     let a = Point::fields();
     let b = Shape::Dot.variant_name();
     let c = Box { v: 1 }.get_field("v");
-    fields_of::<Point>();
+    reflect::fields_of::<Point>();
 }

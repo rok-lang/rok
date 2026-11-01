@@ -14,7 +14,7 @@
 // is `a = a %% b`; a user type implements `Modulo`.
 struct Clock { h: i32; }
 
-impl Modulo<i32> for Clock {
+impl ops::Modulo<i32> for Clock {
     type Output = Clock;
     fn modulo(self, rhs: i32) -> Clock { Clock { h: self.h %% rhs } }
 }

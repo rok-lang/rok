@@ -1,0 +1,11 @@
+// spec: std 002-import §0.2.7
+// expect-error: 8:9: cannot find type `GcBuf` in this scope
+// expect-error: help: add `use rok::bare::mem::GcBuf;`
+// expect-error: module `rok::core::collections::raw` is private
+
+// `collections::raw` is internal to core: `GcBuf` and `buf_*` are not
+// prelude names, and the module path is closed.
+fn f(b: GcBuf<i32>) {}
+fn main() {
+    let c = rok::core::collections::raw::buf_erase::<i32>;
+}

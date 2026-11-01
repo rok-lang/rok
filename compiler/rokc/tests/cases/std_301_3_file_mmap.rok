@@ -16,7 +16,7 @@ use rok::std::fs::File;
 use rok::std::env;
 use rok::std::io::IoError;
 
-fn run() throws (IoError | Utf8Error) {
+fn run() throws (IoError | str::Utf8Error) {
     let path = f"{env::temp_dir()}/rok_mmap_case_{rok::std::process::id()}.txt";
     try fs::write(path, "hello world");
     let f = try File::open(path);

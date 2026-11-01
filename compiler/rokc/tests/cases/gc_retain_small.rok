@@ -22,10 +22,10 @@ fn main() -> i32 {
         rows.push(row);
         i += 1;
     }
-    let objs: List<OrderedDict<str, str>> = [];
+    let objs: List<collections::OrderedDict<str, str>> = [];
     i = 0;
     while i < 5000 {
-        let o: OrderedDict<str, str> = OrderedDict::new();
+        let o: collections::OrderedDict<str, str> = collections::OrderedDict::new();
         let j = 0;
         while j < 9 {
             o.insert(f"k{j}", f"v{i}");

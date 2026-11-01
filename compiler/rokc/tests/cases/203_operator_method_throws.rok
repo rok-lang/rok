@@ -5,7 +5,7 @@
 enum Overflow { Big }
 struct M { v: i32; }
 
-impl Add<M> for M {
+impl ops::Add<M> for M {
     type Output = M;
     fn add(self, rhs: M) throws (Overflow) -> M {
         if self.v + rhs.v > 100 { throw Overflow::Big; }

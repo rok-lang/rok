@@ -4,7 +4,7 @@
 // expect-exit: 0
 // expect-stdout: 6 1000
 
-use rok::core::collections::raw::GcBuf;
+use rok::bare::mem::GcBuf;
 
 struct V { meta: GcBuf<usize>; a: GcBuf<i64>; }
 

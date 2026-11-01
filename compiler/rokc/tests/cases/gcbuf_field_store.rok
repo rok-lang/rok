@@ -11,6 +11,8 @@
 // nothing writes memory between the element's load and the store; the
 // other fields keep their values, a reference field still takes the
 // write barrier (the collector moves objects every few allocations).
+use rok::bare::mem::{GcBuf, buf_new};
+
 struct Node {
     n: usize;
     m: usize;

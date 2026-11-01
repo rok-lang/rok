@@ -55,7 +55,7 @@ fn main() {
 
     let st: Set<i64> = {7, 8};
     st.remove(8);
-    let o: OrderedDict<str, i64> = OrderedDict::new();
+    let o: collections::OrderedDict<str, i64> = collections::OrderedDict::new();
     o.insert("x", 1);
     o.insert("y", 2);
     o.clear();

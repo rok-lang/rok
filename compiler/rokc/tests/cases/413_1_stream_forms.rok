@@ -37,7 +37,7 @@ async fn fut() -> i32 { 7 }
 yield fn make() -> i32 { yield 1; yield 2; }
 async yield fn st() -> i32 { yield 3; }
 
-async fn show(label: str, s: AsyncStream<i32>) {
+async fn show(label: str, s: stream::AsyncStream<i32>) {
     let out = label;
     for await v in s { out = out + f" {v}"; }
     println(out);
@@ -54,9 +54,9 @@ async fn main() {
     println(out);
 
     let r: i32 = plain();
-    let f: AsyncFuture<i32> = fut();
-    let g: GenIter<i32> = make();
-    let s: AsyncStream<i32> = st();
+    let f: future::AsyncFuture<i32> = fut();
+    let g: iter::GenIter<i32> = make();
+    let s: stream::AsyncStream<i32> = st();
     let gs = g.collect::<List<i32>>();
     let ss = await s.collect();
     println(f"{r} {await f} {gs:?} {ss[0]}");

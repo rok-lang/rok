@@ -9,16 +9,16 @@
 // Stdlib 2.10.2: `FormatSpec` reads `align() -> Alignment | none` and
 // `sign() -> Sign | none`; `Formatter::with_spec` writes by it.
 fn main() {
-    let s = try! FormatSpec::parse("*^+8");
-    let a = match s.align() { x: Alignment => match x { Alignment::Center => true, _ => false }, none => false };
-    let g = match s.sign() { x: Sign => match x { Sign::Plus => true, _ => false }, none => false };
+    let s = try! fmt::FormatSpec::parse("*^+8");
+    let a = match s.align() { x: fmt::Alignment => match x { fmt::Alignment::Center => true, _ => false }, none => false };
+    let g = match s.sign() { x: fmt::Sign => match x { fmt::Sign::Plus => true, _ => false }, none => false };
     println(f"{a} {g} {s.width() ?? 0} {s.fill() == '*'}");
     let f = Formatter::with_spec(s);
     try! Display::fmt(42, ref f);
     println(f"[{f.finish()}]");
-    let e = FormatSpec::new();
+    let e = fmt::FormatSpec::new();
     println(f"{e.align() is none} {e.sign() is none}");
-    let g2 = Formatter::with_spec(try! FormatSpec::parse("<4"));
+    let g2 = Formatter::with_spec(try! fmt::FormatSpec::parse("<4"));
     try! Display::fmt(42, ref g2);
     println(f"[{g2.finish()}]");
 }

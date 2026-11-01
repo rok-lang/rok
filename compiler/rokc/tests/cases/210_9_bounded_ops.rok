@@ -4,7 +4,7 @@
 
 // Operators on a type parameter come from its bounds or their
 // supertraits (`PartialOrd: PartialEq`).
-fn double<T: Add<T, Output = T>>(x: T) -> T { x + x }
+fn double<T: ops::Add<T, Output = T>>(x: T) -> T { x + x }
 fn same<T>(a: T, b: T) -> bool where T: PartialOrd { a == b }
-fn neg<T: Neg<Output = T>>(x: T) -> T { -x }
+fn neg<T: ops::Neg<Output = T>>(x: T) -> T { -x }
 println(f"{double(2)} {same(1, 1)} {neg(3)}");

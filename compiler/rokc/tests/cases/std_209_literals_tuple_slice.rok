@@ -12,12 +12,12 @@
 // Collection literals, tuples, `Slice` views, `Index` / `IndexSet`.
 struct Grid { w: usize; cells: List<i32>; }
 
-impl Index<(usize, usize)> for Grid {
+impl index::Index<(usize, usize)> for Grid {
     type Output = i32;
     fn index(self, idx: (usize, usize)) -> i32 { self.cells[idx.0 * self.w + idx.1] }
 }
 
-impl IndexSet<(usize, usize)> for Grid {
+impl index::IndexSet<(usize, usize)> for Grid {
     type Value = i32;
     fn index_set(self, idx: (usize, usize), value: i32) { self.cells[idx.0 * self.w + idx.1] = value; }
 }

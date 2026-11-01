@@ -8,7 +8,7 @@
 
 // `List`, `Slice` and `[T; N]` implement the dot traits: generic code
 // bounded by them and the method form work too.
-fn sum2<C: DotAdd<C>>(a: C, b: C) -> C::Output {
+fn sum2<C: ops::DotAdd<C>>(a: C, b: C) -> C::Output {
     a .+ b
 }
 

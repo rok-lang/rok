@@ -15,25 +15,25 @@
 // accessors after `FormatSpec::parse`, `pad_integral`; writes to memory
 // never throw `FmtError` (2.10.12). `pad_zero` is the old name of
 // `zero_pad` and warns.
-fn show_align(a: Alignment | none) -> str {
+fn show_align(a: fmt::Alignment | none) -> str {
     match a {
         none => "-",
-        v: Alignment => match v {
-            Alignment::Left => "<",
-            Alignment::Right => ">",
-            Alignment::Center => "^",
-            Alignment::Equal => "=",
+        v: fmt::Alignment => match v {
+            fmt::Alignment::Left => "<",
+            fmt::Alignment::Right => ">",
+            fmt::Alignment::Center => "^",
+            fmt::Alignment::Equal => "=",
         },
     }
 }
 
-fn show_sign(s: Sign | none) -> str {
+fn show_sign(s: fmt::Sign | none) -> str {
     match s {
         none => "-",
-        v: Sign => match v {
-            Sign::Plus => "+",
-            Sign::Minus => "-",
-            Sign::Space => " ",
+        v: fmt::Sign => match v {
+            fmt::Sign::Plus => "+",
+            fmt::Sign::Minus => "-",
+            fmt::Sign::Space => " ",
         },
     }
 }
@@ -45,18 +45,18 @@ fn main() throws (FmtError) {
     try f.write_char('c');
     println(f.finish());
 
-    let g = Formatter::with_spec(try! FormatSpec::parse("*^6"));
+    let g = Formatter::with_spec(try! fmt::FormatSpec::parse("*^6"));
     try g.pad("hi");
-    let h = Formatter::with_spec(try! FormatSpec::parse(".3"));
+    let h = Formatter::with_spec(try! fmt::FormatSpec::parse(".3"));
     try h.pad("hello");
     println(f"[{g.finish()}] [{h.finish()}]");
 
-    let k = Formatter::with_spec(try! FormatSpec::parse("*<+#08.3x"));
+    let k = Formatter::with_spec(try! fmt::FormatSpec::parse("*<+#08.3x"));
     println(f"{k.fill()} {show_align(k.align())} {show_sign(k.sign())} {k.alternate() && k.zero_pad()} {k.width() ?? 0} {k.precision() ?? 0}");
     let e = Formatter::new();
     println(f"{e.width():?} {e.precision():?} {e.alternate()} {e.pad_zero()} {show_align(e.align())} {show_sign(e.sign())}");
 
-    let w = Formatter::with_spec(try! FormatSpec::parse("#7"));
+    let w = Formatter::with_spec(try! fmt::FormatSpec::parse("#7"));
     try w.pad_integral(false, "0x", "2a");
     println(f"[{w.finish()}]");
 }

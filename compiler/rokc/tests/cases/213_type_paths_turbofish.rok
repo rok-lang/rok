@@ -18,7 +18,7 @@ mod geom {
     }
 }
 
-fn out<T: Add<T>>(a: T, b: T) -> T::Output { a + b }
+fn out<T: ops::Add<T>>(a: T, b: T) -> T::Output { a + b }
 
 fn pick(n: i32) -> pkg::geom::Point | str {
     if n > 0 { return geom::Point { x: n, y: n }; }

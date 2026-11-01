@@ -106,12 +106,12 @@ fn main() {
     st.extend([8, 2, 4]);
     println(f"set retain {sr} {had} {odd} extend {st.len()} {st.contains(8)}");
 
-    let od = OrderedDict::from([("a", 1), ("b", 2), ("c", 3)]);
+    let od = collections::OrderedDict::from([("a", 1), ("b", 2), ("c", 3)]);
     od.retain(|k, _v| k != "b");
     od.extend([("d", 4), ("b", 20), ("a", 1)]);
     println(f"odict {od:?}");
 
-    let os = OrderedSet::from([3, 1, 5]);
+    let os = collections::OrderedSet::from([3, 1, 5]);
     os.retain(|x| x != 1);
     os.extend([4, 3, 2, 5]);
     println(f"oset {os:?}");
@@ -122,9 +122,9 @@ fn main() {
     let es: Set<i32> = Set::new();
     es.retain(|_x| true);
     es.extend(none_);
-    let eod: OrderedDict<str, i32> = OrderedDict::new();
+    let eod: collections::OrderedDict<str, i32> = collections::OrderedDict::new();
     eod.retain(|_k, _v| true);
-    let eos: OrderedSet<i32> = OrderedSet::new();
+    let eos: collections::OrderedSet<i32> = collections::OrderedSet::new();
     eos.extend(none_);
     println(f"empty {ed.len()} {es.len()} {eod.len()} {eos.len()}");
 

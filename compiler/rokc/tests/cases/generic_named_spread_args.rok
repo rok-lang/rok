@@ -24,7 +24,7 @@ impl<T: Display> Pair<T> {
     fn print(self, gap: str = " ") { println(f"{self.a}{gap}{self.b}"); }
 }
 fn mid<T: Display>(a: T, b: i32 = 2, c: T) { println(f"{a} {b} {c}"); }
-fn sum3<T: Add<Output = T>>(a: T, b: T, c: T) -> T { return a + b + c; }
+fn sum3<T: ops::Add<Output = T>>(a: T, b: T, c: T) -> T { return a + b + c; }
 
 fn make() -> (i32, i32) {
     println("evaluated once");

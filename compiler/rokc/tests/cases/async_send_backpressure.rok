@@ -56,7 +56,7 @@ let ok = false;
 deadline = Instant::now() + Duration::secs(60);
 while !ok && Instant::now() < deadline {
     ok = true;
-    try rtx.try_send(42) catch e: TrySendError<i32> { ok = false; };
+    try rtx.try_send(42) catch e: channel::TrySendError<i32> { ok = false; };
     if !ok { await task::yield_now(); }
 }
 match await waiter {
@@ -78,8 +78,8 @@ zrx.recv();
 println(f"rendezvous send_async waited: {await sender}");
 
 ztx.close();
-try await ztx.send_async(9) catch e: SendError<i32> {
-    match e { SendError::Closed(v) => println(f"closed: Closed({v})"), }
+try await ztx.send_async(9) catch e: channel::SendError<i32> {
+    match e { channel::SendError::Closed(v) => println(f"closed: Closed({v})"), }
 };
 
 // spec: 004.12-async

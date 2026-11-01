@@ -66,7 +66,7 @@ println(f"{early(-5)} {early(5)}");
 println(f"{area(2)} {helper(3)} {_internal("x")}");
 let g = 0;
 for v in unsafe { make() } { g += v; }
-let fut: AsyncFuture<i32> = unsafe { later() };
+let fut: future::AsyncFuture<i32> = unsafe { later() };
 println(f"unsafe {unsafe { raw(g) }} 3");
 let s = three(tag("a", 1), tag("b", 2), tag("c", 3));
 println(f"{s}");

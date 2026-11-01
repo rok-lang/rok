@@ -12,6 +12,7 @@
 // Each ScanTable slot kind, and conservatively scanned (type id 2) buffers.
 use rok::bare::mem::transmute_unchecked;
 use rok::bare::ptr::ConstPtr;
+use rok::bare::mem::{GcBuf, buf_new};
 
 extern "C" {
     fn rok_gc_collect();

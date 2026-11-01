@@ -105,7 +105,7 @@ while true {
     await task::sleep(Duration::ms(1));
 }
 cw.cancel();
-let gone = try await cw.join() catch _: CancellationError { 0 };
+let gone = try await cw.join() catch _: task::CancellationError { 0 };
 release.store(1);
 while !fs::exists(big) || (try! fs::metadata(big)).len() != 10u64 {
     await task::sleep(Duration::ms(1));

@@ -17,29 +17,29 @@ fn main() {
     using g = m.lock() {
         match m.try_lock() {
             none => println("try_lock while held: none"),
-            g2: MutexGuard<i32> => { using x = g2 { println("try_lock while held: GOT"); } }
+            g2: sync::MutexGuard<i32> => { using x = g2 { println("try_lock while held: GOT"); } }
         };
     }
     match m.try_lock() {
         none => println("try_lock after release: none"),
-        g2: MutexGuard<i32> => { using x = g2 { println(f"try_lock after release: {x.get()}"); } }
+        g2: sync::MutexGuard<i32> => { using x = g2 { println(f"try_lock after release: {x.get()}"); } }
     };
 
     let l = RwLock::new(1);
     using r = l.read() {
         match l.try_write() {
             none => println("try_write under read: none"),
-            w: RwLockWriteGuard<i32> => { using x = w { println("try_write under read: GOT"); } }
+            w: sync::RwLockWriteGuard<i32> => { using x = w { println("try_write under read: GOT"); } }
         };
         match l.try_read() {
             none => println("try_read under read: none"),
-            r2: RwLockReadGuard<i32> => { using x = r2 { println("try_read under read: ok"); } }
+            r2: sync::RwLockReadGuard<i32> => { using x = r2 { println("try_read under read: ok"); } }
         };
     }
     using w = l.write() {
         match l.try_read() {
             none => println("try_read under write: none"),
-            r3: RwLockReadGuard<i32> => { using x = r3 { println("try_read under write: GOT"); } }
+            r3: sync::RwLockReadGuard<i32> => { using x = r3 { println("try_read under write: GOT"); } }
         };
         w.set(2);
     }

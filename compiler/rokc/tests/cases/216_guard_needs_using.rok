@@ -15,16 +15,16 @@ static L: RwLock<i32> = RwLock::new(0);
 
 fn main() -> i32 {
     using g = M.lock() { g.set(1); }
-    match M.try_lock() { v: MutexGuard<i32> => using g = v { g.set(2); }, none => {} }
-    if let v: MutexGuard<i32> = M.try_lock() { using g = v { g.set(3); } }
+    match M.try_lock() { v: sync::MutexGuard<i32> => using g = v { g.set(2); }, none => {} }
+    if let v: sync::MutexGuard<i32> = M.try_lock() { using g = v { g.set(3); } }
     let g = M.lock();
-    let w: RwLockWriteGuard<i32> = L.write();
+    let w: sync::RwLockWriteGuard<i32> = L.write();
     if true {
         let r = L.read();
     }
     M.lock();
-    if let t: MutexGuard<i32> = M.try_lock() { t.set(4); }
-    match M.try_lock() { u: MutexGuard<i32> => u.set(5), none => {} }
+    if let t: sync::MutexGuard<i32> = M.try_lock() { t.set(4); }
+    match M.try_lock() { u: sync::MutexGuard<i32> => u.set(5), none => {} }
     using (a, b) = (L.read(), L.read()) { println(f"{a.get() + b.get()}"); }
     return 0;
 }

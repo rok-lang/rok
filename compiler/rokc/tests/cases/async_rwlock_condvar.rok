@@ -68,7 +68,7 @@ using o = order.lock() { println(f"waited for writer: {o.get() == "wr"}"); }
 
 // Condvar: 64 tasks wait for a flag; one notify_all wakes them all.
 let m = Mutex::new(0);
-let cv = Condvar::new();
+let cv = sync::Condvar::new();
 let woken = Atomic::new(0);
 let waiters: List<Task<i32>> = List::new();
 for i in 0..64 {
@@ -93,7 +93,7 @@ println(f"condvar: {woken.load()} woken, sum {sum}");
 // Cancelled while parked: read_async / write_async under a writer, and
 // wait_async (which must take the mutex back for its `using`).
 let m2 = Mutex::new(0);
-let cv2 = Condvar::new();
+let cv2 = sync::Condvar::new();
 let blocked: List<Task<i32>> = List::new();
 let base = task::registrations();
 using w = await rw.write_async() {
@@ -113,11 +113,11 @@ using w = await rw.write_async() {
     for t in blocked { t.cancel(); }
     let n = 0;
     for t in blocked {
-        try await t.join() catch _: CancellationError { n += 1; 0 };
+        try await t.join() catch _: task::CancellationError { n += 1; 0 };
     }
     println(f"cancelled waits: {n}");
 }
-let free = rw.try_write() is RwLockWriteGuard<i32> && m2.try_lock() is MutexGuard<i32>;
+let free = rw.try_write() is sync::RwLockWriteGuard<i32> && m2.try_lock() is sync::MutexGuard<i32>;
 println(f"all free: {free}");
 println(f"registrations left: {task::registrations()}");
 

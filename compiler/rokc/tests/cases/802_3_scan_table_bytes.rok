@@ -7,6 +7,7 @@
 // A hand-written ScanTable makes the collector trace and move its referent.
 use rok::bare::mem::transmute_unchecked;
 use rok::bare::ptr::{addr_of, ConstPtr};
+use rok::bare::mem::{GcBuf, buf_new};
 
 extern "C" {
     fn rok_gc_collect();

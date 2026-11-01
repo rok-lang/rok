@@ -10,7 +10,7 @@
 // Compound assignment on primitives and through a user `AddAssign`.
 struct Bag { n: i32; items: List<i32>; }
 
-impl AddAssign<i32> for Bag {
+impl ops::AddAssign<i32> for Bag {
     fn add_assign(ref self, rhs: i32) {
         self.n += 1;
         self.items.push(rhs);
@@ -23,11 +23,11 @@ fn bump(ref b: Bag) {
 
 struct Acc { total: i32; }
 
-impl ShlAssign<i32> for Acc {
+impl ops::ShlAssign<i32> for Acc {
     fn shl_assign(ref self, rhs: i32) { self.total <<= rhs; }
 }
 
-impl MulAssign for Acc {
+impl ops::MulAssign for Acc {
     fn mul_assign(ref self, rhs: Acc) { self.total *= rhs.total; }
 }
 

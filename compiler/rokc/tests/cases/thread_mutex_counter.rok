@@ -13,9 +13,9 @@ use rok::std::thread;
 fn main() -> i32 {
     let counter = Mutex::new(0i64);
     let ready = Mutex::new(false);
-    let gate = Condvar::new();
+    let gate = sync::Condvar::new();
     let arrived = Atomic::new(0);
-    let once = Once::new();
+    let once = sync::Once::new();
     let inits = Atomic::new(0);
     let table = RwLock::new(0i64);
     let hs: List<thread::JoinHandle<()>> = [];

@@ -11,7 +11,7 @@ union Bits { i: i32; f: f32; }
 
 struct S { v: i32; }
 
-impl Union for S {
+impl ops::Union for S {
     type Output = S;
     fn union(self, rhs: S) -> S { return S { v: self.v | rhs.v }; }
 }

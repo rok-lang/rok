@@ -11,16 +11,16 @@
 // 3.3.1 note: `.&&` does not short-circuit; both operands run.
 struct Vec2 { a: i32; b: i32; }
 
-impl DotAdd for Vec2 {
+impl ops::DotAdd for Vec2 {
     type Output = Vec2;
     fn dot_add(self, rhs: Vec2) -> Vec2 { Vec2 { a: self.a + rhs.a, b: self.b + rhs.b } }
 }
-impl DotMul for Vec2 {
+impl ops::DotMul for Vec2 {
     type Output = Vec2;
     fn dot_mul(self, rhs: Vec2) -> Vec2 { Vec2 { a: self.a * rhs.a, b: self.b * rhs.b } }
 }
 // `*` on the same type: a dot product, not element-wise.
-impl Mul for Vec2 {
+impl ops::Mul for Vec2 {
     type Output = i32;
     fn mul(self, rhs: Vec2) -> i32 { self.a * rhs.a + self.b * rhs.b }
 }

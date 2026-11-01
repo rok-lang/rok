@@ -32,7 +32,7 @@ impl Describe for Point {
     fn describe(self) -> str { f"point({self.x}, {self.y})" }
 }
 
-impl Add for Point {
+impl ops::Add for Point {
     type Output = Point;
     fn add(self, rhs: Point) -> Point { Point { x: self.x + rhs.x, y: self.y + rhs.y } }
 }

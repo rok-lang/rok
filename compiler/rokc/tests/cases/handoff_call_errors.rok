@@ -33,7 +33,7 @@ impl Bag {
 fn id(x: List<i32>) -> List<i32> { x }
 fn mk(xs: List<i32>) -> Bag { Bag { items: xs, n: 0 } }
 fn items(b: Bag) -> List<i32> { b.items }
-fn peek(g: MutexGuard<List<i32>>) -> List<i32> { g.get() }
+fn peek(g: sync::MutexGuard<List<i32>>) -> List<i32> { g.get() }
 fn post(tx: Sender<List<i32>>, xs: List<i32>) { try! tx.send(xs); }
 fn store(xs: List<i32>) -> Mutex<List<i32>> {
     let m = Mutex::new(xs);

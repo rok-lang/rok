@@ -70,7 +70,7 @@ let forever = task::spawn(async {
 });
 await task::sleep(Duration::ms(3));
 forever.cancel();
-let r = try await forever.join() catch e: CancellationError { -1 };
+let r = try await forever.join() catch e: task::CancellationError { -1 };
 println(f"cancelled {r} {forever.is_cancelled()}");
 
 // `par` runs on the same pool from inside a task.

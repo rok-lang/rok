@@ -10,7 +10,7 @@
 // next `await` like a `return`, running `finally` but never entering a
 // `catch` inside the task (cancellation is not a catchable error). The
 // awaiting side gets `CancellationError` from `try await t.join()`.
-async fn forever() throws (CancellationError) -> i32 {
+async fn forever() throws (task::CancellationError) -> i32 {
     while true { await task::sleep(Duration::ms(1)); }
     0
 }
@@ -23,7 +23,7 @@ async fn main() {
     await task::sleep(Duration::ms(5));
     t.cancel();
     let c = t.is_cancelled();
-    let v = try await t.join() catch e: CancellationError { println(f"join {e:?}"); -1 };
+    let v = try await t.join() catch e: task::CancellationError { println(f"join {e:?}"); -1 };
     println(f"cancelled {c}");
     println(f"finished {t.is_finished()}");
 }

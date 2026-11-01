@@ -14,9 +14,9 @@
 // handed to a function or a field is still unreleased.
 static M: Mutex<i32> = Mutex::new(0);
 
-struct Holder { g: MutexGuard<i32>; }
+struct Holder { g: sync::MutexGuard<i32>; }
 
-fn peek(g: MutexGuard<i32>) -> i32 { g.get() }
+fn peek(g: sync::MutexGuard<i32>) -> i32 { g.get() }
 
 fn main() {
     peek(M.lock());

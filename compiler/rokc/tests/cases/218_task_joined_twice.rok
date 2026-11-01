@@ -14,7 +14,7 @@ async fn three() -> List<i32> { [1, 2, 3] }
 struct Held { t: Task<List<i32>>; }
 
 async fn main() {
-    let fz = Frozen::new(Held { t: task::spawn(three()) });
+    let fz = sync::Frozen::new(Held { t: task::spawn(three()) });
     let a = thread::spawn(|| {
         let l = task::block_on(fz.get().t);
         for i in 0..20000 { l.push(i); }

@@ -11,7 +11,7 @@ use rok::std::time::Duration;
 
 fn main() -> i32 {
     let m = Mutex::new(0);
-    let cv = Condvar::new();
+    let cv = sync::Condvar::new();
     let ready = Atomic::new(0);
     let returned = Atomic::new(0);
     let hs: List<thread::JoinHandle<()>> = [];

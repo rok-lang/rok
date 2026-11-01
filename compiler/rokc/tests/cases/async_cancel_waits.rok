@@ -18,7 +18,7 @@ for round in 0..200 {
     await task::sleep(Duration::us(200));
     try! tx.send(round);
     t.cancel();
-    let got = try await t.join() catch _: CancellationError { -2 };
+    let got = try await t.join() catch _: task::CancellationError { -2 };
     if got == round {
         seen += 1;
     } else if rx.try_recv() == round {
@@ -30,7 +30,7 @@ for round in 0..200 {
 println(f"recv: {seen} values, {if lost == 0 { "none" } else { "some" }} lost");
 
 let m = Mutex::new(0);
-let cv = Condvar::new();
+let cv = sync::Condvar::new();
 let waiter = task::spawn(async {
     using g = await m.lock_async() {
         g = await cv.wait_async(g);
@@ -42,11 +42,11 @@ let deadline = Instant::now() + Duration::secs(60);
 while task::registrations() < 1 && Instant::now() < deadline { await task::yield_now(); }
 using held = await m.lock_async() {
     waiter.cancel();
-    let r = try await waiter.join() catch _: CancellationError { 0 };
+    let r = try await waiter.join() catch _: task::CancellationError { 0 };
     println(f"condvar: left while the mutex was held: {r == 0}");
     println(f"held lock untouched: {m.try_lock() is none}");
 }
-println(f"free afterwards: {m.try_lock() is MutexGuard<i32>}");
+println(f"free afterwards: {m.try_lock() is sync::MutexGuard<i32>}");
 
 // Cancelled the moment it parks: the cancel can land while `wait_async`
 // returns `Pending`, and the `await` then leaves without polling it
@@ -54,7 +54,7 @@ println(f"free afterwards: {m.try_lock() is MutexGuard<i32>}");
 let unlocked = 0;
 for round in 0..200 {
     let m2 = Mutex::new(0);
-    let cv2 = Condvar::new();
+    let cv2 = sync::Condvar::new();
     let w2 = task::spawn(async {
         using g = await m2.lock_async() {
             g = await cv2.wait_async(g);
@@ -64,8 +64,8 @@ for round in 0..200 {
     while task::registrations() < 1 && Instant::now() < deadline { await task::yield_now(); }
     using held2 = await m2.lock_async() {
         w2.cancel();
-        try await w2.join() catch _: CancellationError { 0 };
-        if m2.try_lock() is MutexGuard<i32> { unlocked += 1; }
+        try await w2.join() catch _: task::CancellationError { 0 };
+        if m2.try_lock() is sync::MutexGuard<i32> { unlocked += 1; }
     }
 }
 println(f"cancelled as it parks, held lock untouched: {unlocked == 0}");

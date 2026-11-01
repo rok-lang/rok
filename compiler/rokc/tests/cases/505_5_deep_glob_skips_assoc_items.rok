@@ -1,6 +1,6 @@
 // spec: §5.5.5 §5.5.7 §5.7.1
 // A deep glob reaches module items and enum variants, not a type's
-// associated items: the implicit `use rok::core::**;` does not make
+// associated items: the implicit prelude import does not make
 // `Duration::MAX` a bare `MAX`, and the help never offers to `use` one.
 // expect-error: 15:16: cannot find value `MAX` in this scope
 // expect-error: help: add `use geo::MAX;`

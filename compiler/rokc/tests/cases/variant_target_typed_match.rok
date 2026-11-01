@@ -1,14 +1,11 @@
-// spec: §3.11.1
-// expect-error: diag_bare_variant_pattern.rok:17:9: `Red` here is a new variable that matches every value, not the variant `Color::Red`
-// expect-error: help: did you mean `Color::Red`?
-// expect-error: diag_bare_variant_pattern.rok:18:9: `Green` here is a new variable that matches every value, not the variant `Color::Green`
-// expect-error: diag_bare_variant_pattern.rok:19:9: `Custom` here is a new variable that matches every value, not the variant `Color::Custom`
-// expect-error: help: did you mean `Color::Custom(..)`?
+// spec: §3.11.1 §2.4.8
+// expect-error: variant_target_typed_match.rok:20:37: variant `Color::Custom` has a payload: match it as `Custom(..)`
+// forbid-error: new variable
 // forbid-error: unreachable match arm
 
-// spec 3.11: a bare name in a pattern binds, unless it is an imported
-// variant. One named like a variant of the scrutinee's enum, not
-// imported, is an error: it would match every value.
+// spec 2.4.8 / 3.11: a bare name in a pattern that is a variant of the
+// scrutinee's enum is that variant, imported or not. A payload variant
+// still needs its payload pattern.
 
 enum Color { Red, Green, Custom(i32) }
 
@@ -16,8 +13,10 @@ fn name(c: Color) -> str {
     match c {
         Red => "red",
         Green => "green",
-        Custom => "custom",
+        Custom(_) => "custom",
     }
 }
+
+fn bad(c: Color) -> str { match c { Custom => "custom", _ => "other" } }
 
 println(name(Color::Green));

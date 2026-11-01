@@ -41,7 +41,7 @@ fn main() {
     println(f"{describe(0)} {describe(1)} {describe(2)} {o}");
     let p = try parse_digit("x1") catch e { print(f"parse: {e} "); 0 };
     let c = ConversionError::new("odd");
-    let z = try NonZero::<i32>::try_from(0) catch e: ZeroError { print(f"{c.message()} "); NonZero::new(1) ?? panic("zero") };
+    let z = try num::niche::NonZero::<i32>::try_from(0) catch e: num::niche::ZeroError { print(f"{c.message()} "); num::niche::NonZero::new(1) ?? panic("zero") };
     println(f"zero: {z.get() == 1 && p == 0}");
     let t = try parse_digit("7") catch e { 0 };
     println(f"typed {t} / {o.type_name()}");

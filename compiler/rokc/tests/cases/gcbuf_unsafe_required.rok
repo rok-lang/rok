@@ -7,7 +7,7 @@
 // The raw `GcBuf` primitives index without a bounds check (and a fresh
 // buffer's zero bytes need not be a valid `T`), so safe code cannot
 // reach them: `buf_get(b, 100000000)` would read arbitrary memory.
-use rok::core::collections::raw::{GcBuf, buf_new, buf_get, buf_set};
+use rok::bare::mem::{GcBuf, buf_new, buf_get, buf_set};
 
 fn main() {
     let b: GcBuf<i64> = buf_new(4);

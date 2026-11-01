@@ -3,7 +3,7 @@
 // 15 55 1
 // 4.5
 
-fn sum_down<T: PartialOrd + Add<T, Output = T> + Sub<T, Output = T>>(n: T, one: T) -> T {
+fn sum_down<T: PartialOrd + ops::Add<T, Output = T> + ops::Sub<T, Output = T>>(n: T, one: T) -> T {
     if n <= one {
         return n;
     }

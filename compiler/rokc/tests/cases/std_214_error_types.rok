@@ -16,15 +16,15 @@ fn show<E: Error>(e: E) -> str { f"{e}" }
 fn main() {
     let xs: List<i32> = [1, 2, 3];
     try xs.set(1, 9) catch e { println(f"unexpected {e}"); };
-    let msg = try { xs.set(10, 0); "no error" } catch e: IndexError { f"{e}" };
+    let msg = try { xs.set(10, 0); "no error" } catch e: error::IndexError { f"{e}" };
     println(f"{xs:?} {msg}");
-    let d = try { xs.set(10, 0); IndexError { index: 0, len: 0 } } catch e: IndexError { e };
+    let d = try { xs.set(10, 0); error::IndexError { index: 0, len: 0 } } catch e: error::IndexError { e };
     println(f"{d:?}");
     let q: Deque<i32> = Deque::new();
     q.push_back(1);
     q.push_back(2);
     try q.set(0, 7) catch e { println(f"unexpected {e}"); };
-    let m = try { q.set(2, 0); "no error" } catch e: IndexError { f"{e}" };
+    let m = try { q.set(2, 0); "no error" } catch e: error::IndexError { f"{e}" };
     println(f"{q:?} {m}");
     let t = TypeError::new("i32", "str");
     println(f"{show(t)} {t:?}");

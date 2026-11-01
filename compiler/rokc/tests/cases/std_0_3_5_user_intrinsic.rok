@@ -5,7 +5,7 @@
 // stdlib spec 0.3.5: `#[intrinsic]` is a compiler ↔ stdlib boundary;
 // user code can't attach it, to a method or a generic function.
 struct Meters { m: i32; }
-impl Add for Meters {
+impl ops::Add for Meters {
     #[intrinsic("rok.add.i32")]
     fn add(self, rhs: Meters) -> Meters { return Meters { m: self.m + rhs.m }; }
 }

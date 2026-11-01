@@ -3,7 +3,7 @@
 
 // 6.10.1: `Reflect` is automatic; there is nothing to write by hand.
 struct P { a: i32; }
-impl Reflect for P {
+impl reflect::Reflect for P {
     fn type_name() -> str { "P" }
     fn size() -> usize { 4 }
     fn align() -> usize { 4 }
