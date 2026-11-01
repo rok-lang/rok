@@ -153,25 +153,27 @@ const SEND_FLAGS: libc::c_int = 0;
 
 #[cfg(any(unix, target_env = "p2"))]
 /// A new non-blocking socket: `family` 4 / 6, `kind` 1 stream / 2
-/// datagram. The fd or `-errno`.
+/// datagram / 3 raw, `proto` an IP protocol number (0: the default for
+/// `kind`). The fd or `-errno`.
 #[unsafe(no_mangle)]
-pub extern "C" fn rok_net_socket(family: i32, kind: i32) -> i32 {
+pub extern "C" fn rok_net_socket(family: i32, kind: i32, proto: i32) -> i32 {
     let af = if family == 6 {
         libc::AF_INET6
     } else {
         libc::AF_INET
     };
-    let ty = if kind == 2 {
-        libc::SOCK_DGRAM
-    } else {
-        libc::SOCK_STREAM
+    let ty = match kind {
+        2 => libc::SOCK_DGRAM,
+        #[cfg(unix)]
+        3 => libc::SOCK_RAW,
+        _ => libc::SOCK_STREAM,
     };
     // wasi-libc's preview 2 sockets take no `fcntl`: non-blocking from
     // the start.
     #[cfg(target_env = "p2")]
     let ty = ty | libc::SOCK_NONBLOCK;
     // SAFETY: plain libc call.
-    let fd = unsafe { libc::socket(af, ty, 0) };
+    let fd = unsafe { libc::socket(af, ty, proto) };
     if fd < 0 {
         return -errno();
     }
@@ -188,33 +190,12 @@ pub extern "C" fn rok_net_socket(family: i32, kind: i32) -> i32 {
 }
 
 #[cfg(any(unix, target_env = "p2"))]
-/// `bind` (stream sockets get `SO_REUSEADDR` first).
+/// `bind`, nothing else (a listener sets `SO_REUSEADDR` first itself).
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_net_bind(fd: i32, addr: *mut u8) -> i32 {
     let (ss, len) = read_addr(addr);
-    // SAFETY: valid sockaddr / option pointers.
-    unsafe {
-        let mut ty: libc::c_int = 0;
-        let mut n = size_of::<libc::c_int>() as libc::socklen_t;
-        libc::getsockopt(
-            fd,
-            libc::SOL_SOCKET,
-            libc::SO_TYPE,
-            (&raw mut ty).cast(),
-            &raw mut n,
-        );
-        if ty == libc::SOCK_STREAM {
-            let on: libc::c_int = 1;
-            libc::setsockopt(
-                fd,
-                libc::SOL_SOCKET,
-                libc::SO_REUSEADDR,
-                (&raw const on).cast(),
-                size_of::<libc::c_int>() as libc::socklen_t,
-            );
-        }
-        ret(libc::bind(fd, (&raw const ss).cast(), len) as isize) as i32
-    }
+    // SAFETY: a valid sockaddr.
+    ret(unsafe { libc::bind(fd, (&raw const ss).cast(), len) } as isize) as i32
 }
 
 #[cfg(any(unix, target_env = "p2"))]
@@ -338,7 +319,7 @@ mod p1 {
     }
 
     unsupported! {
-        rok_net_socket(i32, i32) -> i32;
+        rok_net_socket(i32, i32, i32) -> i32;
         rok_net_bind(i32, *mut u8) -> i32;
         rok_net_listen(i32, i32) -> i32;
         rok_net_connect(i32, *mut u8) -> i32;
@@ -347,6 +328,7 @@ mod p1 {
         rok_net_send_to(i32, *mut u8, usize, usize, *mut u8) -> isize;
         rok_net_recv_from(i32, *mut u8, usize, usize, *mut u8) -> isize;
         rok_net_setopt(i32, i32, i64) -> i32;
+        rok_net_getopt(i32, i32, *mut u8) -> i32;
         rok_net_multicast_v4(i32, u32, u32, i32) -> i32;
         rok_net_resolve(RokStr, u16, *mut u8, usize) -> i32;
     }
@@ -566,9 +548,45 @@ fn setopt(fd: i32, level: libc::c_int, name: libc::c_int, v: libc::c_int) -> i32
 }
 
 #[cfg(any(unix, target_env = "p2"))]
+fn getopt(fd: i32, level: libc::c_int, name: libc::c_int) -> Result<libc::c_int, i32> {
+    let mut v: libc::c_int = 0;
+    let mut n = size_of::<libc::c_int>() as libc::socklen_t;
+    // SAFETY: valid out-pointers.
+    let r = unsafe { libc::getsockopt(fd, level, name, (&raw mut v).cast(), &raw mut n) };
+    if r < 0 { Err(-errno()) } else { Ok(v) }
+}
+
+/// `SO_LINGER` in seconds (plain `SO_LINGER` counts ticks on Apple).
+#[cfg(target_vendor = "apple")]
+const LINGER: libc::c_int = libc::SO_LINGER_SEC;
+#[cfg(all(unix, not(target_vendor = "apple")))]
+const LINGER: libc::c_int = libc::SO_LINGER;
+
+#[cfg(unix)]
+fn set_linger(fd: i32, secs: libc::c_int) -> i32 {
+    let l = libc::linger {
+        l_onoff: libc::c_int::from(secs >= 0),
+        l_linger: secs.max(0),
+    };
+    // SAFETY: a valid option.
+    let r = unsafe {
+        libc::setsockopt(
+            fd,
+            libc::SOL_SOCKET,
+            LINGER,
+            (&raw const l).cast(),
+            size_of::<libc::linger>() as libc::socklen_t,
+        )
+    };
+    ret(r as isize) as i32
+}
+
+#[cfg(any(unix, target_env = "p2"))]
 /// Socket options by library code: 1 `TCP_NODELAY`, 2 keepalive (`val`
 /// idle seconds, < 0 off), 3 `SO_BROADCAST`, 4 `IP_MULTICAST_LOOP`, 5
-/// `IP_MULTICAST_TTL`, 6 `UDP_SEGMENT` (Linux only).
+/// `IP_MULTICAST_TTL`, 6 `UDP_SEGMENT` (Linux only), 7 `SO_REUSEADDR`, 8
+/// `SO_REUSEPORT`, 9 `SO_RCVBUF`, 10 `SO_SNDBUF`, 11 `IP_TTL`, 12
+/// `IPV6_V6ONLY`, 13 `SO_LINGER` (`val` seconds, < 0 off).
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_net_setopt(fd: i32, opt: i32, val: i64) -> i32 {
     let v = val as libc::c_int;
@@ -605,7 +623,75 @@ pub extern "C" fn rok_net_setopt(fd: i32, opt: i32, val: i64) -> i32 {
         5 => setopt(fd, libc::IPPROTO_IP, libc::IP_MULTICAST_TTL, v),
         #[cfg(target_os = "linux")]
         6 => setopt(fd, libc::SOL_UDP, libc::UDP_SEGMENT, v),
+        7 => setopt(fd, libc::SOL_SOCKET, libc::SO_REUSEADDR, v),
+        #[cfg(unix)]
+        8 => setopt(fd, libc::SOL_SOCKET, libc::SO_REUSEPORT, v),
+        #[cfg(unix)]
+        9 => setopt(fd, libc::SOL_SOCKET, libc::SO_RCVBUF, v),
+        #[cfg(unix)]
+        10 => setopt(fd, libc::SOL_SOCKET, libc::SO_SNDBUF, v),
+        #[cfg(unix)]
+        11 => setopt(fd, libc::IPPROTO_IP, libc::IP_TTL, v),
+        #[cfg(unix)]
+        12 => setopt(fd, libc::IPPROTO_IPV6, libc::IPV6_V6ONLY, v),
+        #[cfg(unix)]
+        13 => set_linger(fd, v),
         _ => -libc::ENOTSUP,
+    }
+}
+
+#[cfg(any(unix, target_env = "p2"))]
+/// The value of option `opt` (as in [`rok_net_setopt`]) into word 0 of
+/// the `GcBuf<i64>` `out`: 0 / 1 for a flag, a size, a TTL, or the linger
+/// seconds (-1: off). 0 or `-errno`.
+#[unsafe(no_mangle)]
+pub extern "C" fn rok_net_getopt(fd: i32, opt: i32, out: *mut u8) -> i32 {
+    let v = match opt {
+        1 => getopt(fd, libc::IPPROTO_TCP, libc::TCP_NODELAY),
+        3 => getopt(fd, libc::SOL_SOCKET, libc::SO_BROADCAST),
+        7 => getopt(fd, libc::SOL_SOCKET, libc::SO_REUSEADDR),
+        #[cfg(unix)]
+        8 => getopt(fd, libc::SOL_SOCKET, libc::SO_REUSEPORT),
+        #[cfg(unix)]
+        9 => getopt(fd, libc::SOL_SOCKET, libc::SO_RCVBUF),
+        #[cfg(unix)]
+        10 => getopt(fd, libc::SOL_SOCKET, libc::SO_SNDBUF),
+        #[cfg(unix)]
+        11 => getopt(fd, libc::IPPROTO_IP, libc::IP_TTL),
+        #[cfg(unix)]
+        12 => getopt(fd, libc::IPPROTO_IPV6, libc::IPV6_V6ONLY),
+        #[cfg(unix)]
+        13 => {
+            // SAFETY: zeroed is a valid linger.
+            let mut l: libc::linger = unsafe { zeroed() };
+            let mut n = size_of::<libc::linger>() as libc::socklen_t;
+            // SAFETY: valid out-pointers.
+            let r = unsafe {
+                libc::getsockopt(
+                    fd,
+                    libc::SOL_SOCKET,
+                    LINGER,
+                    (&raw mut l).cast(),
+                    &raw mut n,
+                )
+            };
+            if r < 0 {
+                Err(-errno())
+            } else if l.l_onoff == 0 {
+                Ok(-1)
+            } else {
+                Ok(l.l_linger)
+            }
+        }
+        _ => Err(-libc::ENOTSUP),
+    };
+    match v {
+        Ok(v) => {
+            // SAFETY: the library passes a live `GcBuf<i64>` of one word.
+            unsafe { *word(out, 0) = i64::from(v) };
+            0
+        }
+        Err(e) => e,
     }
 }
 

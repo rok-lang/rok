@@ -31,12 +31,20 @@ const AF_INET: i32 = 2;
 const AF_INET6: i32 = 23;
 const SOCK_STREAM: i32 = 1;
 const SOCK_DGRAM: i32 = 2;
+const SOCK_RAW: i32 = 3;
 const SOL_SOCKET: i32 = 0xFFFF;
+const SO_REUSEADDR: i32 = 0x4;
 const SO_KEEPALIVE: i32 = 0x8;
 const SO_BROADCAST: i32 = 0x20;
+const SO_LINGER: i32 = 0x80;
+const SO_SNDBUF: i32 = 0x1001;
+const SO_RCVBUF: i32 = 0x1002;
 const SO_ERROR: i32 = 0x1007;
 const IPPROTO_IP: i32 = 0;
 const IPPROTO_TCP: i32 = 6;
+const IPPROTO_IPV6: i32 = 41;
+const IP_TTL: i32 = 4;
+const IPV6_V6ONLY: i32 = 27;
 const TCP_NODELAY: i32 = 1;
 const TCP_KEEPIDLE: i32 = 3;
 const IP_MULTICAST_TTL: i32 = 10;
@@ -96,6 +104,12 @@ struct WsaPollFd {
 /// `WSAPROTOCOL_INFOW`, passed through opaquely.
 #[repr(C)]
 struct ProtocolInfo([u32; 157]);
+
+#[repr(C)]
+struct Linger {
+    onoff: u16,
+    secs: u16,
+}
 
 #[repr(C)]
 struct IpMreq {
@@ -284,18 +298,23 @@ fn adopt(s: SOCKET) -> i32 {
 }
 
 /// A new non-blocking socket: `family` 4 / 6, `kind` 1 stream / 2
-/// datagram. The fd or `-error`.
+/// datagram / 3 raw, `proto` an IP protocol number (0: the default for
+/// `kind`). The fd or `-error`.
 #[unsafe(no_mangle)]
-pub extern "C" fn rok_net_socket(family: i32, kind: i32) -> i32 {
+pub extern "C" fn rok_net_socket(family: i32, kind: i32, proto: i32) -> i32 {
     startup();
     let af = if family == 6 { AF_INET6 } else { AF_INET };
-    let ty = if kind == 2 { SOCK_DGRAM } else { SOCK_STREAM };
+    let ty = match kind {
+        2 => SOCK_DGRAM,
+        3 => SOCK_RAW,
+        _ => SOCK_STREAM,
+    };
     // SAFETY: plain call.
     adopt(unsafe {
         WSASocketW(
             af,
             ty,
-            0,
+            proto,
             ptr::null_mut(),
             0,
             WSA_FLAG_OVERLAPPED | WSA_FLAG_NO_HANDLE_INHERIT,
@@ -314,7 +333,8 @@ fn ok(r: i32) -> i32 {
 }
 
 /// `bind`. Windows lets a listener rebind over `TIME_WAIT` without
-/// `SO_REUSEADDR` (which there would let another socket steal the port).
+/// `SO_REUSEADDR` (which there would let another socket steal the port),
+/// so a listener does not set it here.
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_net_bind(fd: i32, addr: *mut u8) -> i32 {
     let (ss, len) = read_addr(addr);
@@ -520,9 +540,19 @@ fn setopt(fd: i32, level: i32, name: i32, v: i32) -> i32 {
     ok(unsafe { setsockopt(sock(fd), level, name, (&raw const v).cast(), 4) })
 }
 
+fn getopt(fd: i32, level: i32, name: i32) -> Result<i32, i32> {
+    let mut v = 0i32;
+    let mut n = 4;
+    // SAFETY: valid out-pointers.
+    let r = unsafe { getsockopt(sock(fd), level, name, (&raw mut v).cast(), &mut n) };
+    if r != 0 { Err(wsa_fail()) } else { Ok(v) }
+}
+
 /// Socket options by library code: 1 `TCP_NODELAY`, 2 keepalive (`val`
 /// idle seconds, < 0 off), 3 `SO_BROADCAST`, 4 `IP_MULTICAST_LOOP`, 5
-/// `IP_MULTICAST_TTL`; 6 `UDP_SEGMENT` is Linux only.
+/// `IP_MULTICAST_TTL`, 7 `SO_REUSEADDR`, 9 `SO_RCVBUF`, 10 `SO_SNDBUF`, 11
+/// `IP_TTL`, 12 `IPV6_V6ONLY`, 13 `SO_LINGER` (`val` seconds, < 0 off); 6
+/// `UDP_SEGMENT` is Linux only, 8 `SO_REUSEPORT` Unix only.
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_net_setopt(fd: i32, opt: i32, val: i64) -> i32 {
     let v = val as i32;
@@ -538,7 +568,67 @@ pub extern "C" fn rok_net_setopt(fd: i32, opt: i32, val: i64) -> i32 {
         3 => setopt(fd, SOL_SOCKET, SO_BROADCAST, v),
         4 => setopt(fd, IPPROTO_IP, IP_MULTICAST_LOOP, v),
         5 => setopt(fd, IPPROTO_IP, IP_MULTICAST_TTL, v),
+        7 => setopt(fd, SOL_SOCKET, SO_REUSEADDR, v),
+        9 => setopt(fd, SOL_SOCKET, SO_RCVBUF, v),
+        10 => setopt(fd, SOL_SOCKET, SO_SNDBUF, v),
+        11 => setopt(fd, IPPROTO_IP, IP_TTL, v),
+        12 => setopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, v),
+        13 => {
+            let l = Linger {
+                onoff: u16::from(v >= 0),
+                secs: v.clamp(0, i32::from(u16::MAX)) as u16,
+            };
+            // SAFETY: a valid option.
+            ok(unsafe {
+                setsockopt(
+                    sock(fd),
+                    SOL_SOCKET,
+                    SO_LINGER,
+                    (&raw const l).cast(),
+                    size_of::<Linger>() as i32,
+                )
+            })
+        }
         _ => -win::WSAEOPNOTSUPP,
+    }
+}
+
+/// The value of option `opt` (as in [`rok_net_setopt`]) into word 0 of
+/// the `GcBuf<i64>` `out`: 0 / 1 for a flag, a size, a TTL, or the linger
+/// seconds (-1: off). 0 or `-error`.
+#[unsafe(no_mangle)]
+pub extern "C" fn rok_net_getopt(fd: i32, opt: i32, out: *mut u8) -> i32 {
+    let v = match opt {
+        1 => getopt(fd, IPPROTO_TCP, TCP_NODELAY),
+        3 => getopt(fd, SOL_SOCKET, SO_BROADCAST),
+        7 => getopt(fd, SOL_SOCKET, SO_REUSEADDR),
+        9 => getopt(fd, SOL_SOCKET, SO_RCVBUF),
+        10 => getopt(fd, SOL_SOCKET, SO_SNDBUF),
+        11 => getopt(fd, IPPROTO_IP, IP_TTL),
+        12 => getopt(fd, IPPROTO_IPV6, IPV6_V6ONLY),
+        13 => {
+            let mut l = Linger { onoff: 0, secs: 0 };
+            let mut n = size_of::<Linger>() as i32;
+            // SAFETY: valid out-pointers.
+            let r =
+                unsafe { getsockopt(sock(fd), SOL_SOCKET, SO_LINGER, (&raw mut l).cast(), &mut n) };
+            if r != 0 {
+                Err(wsa_fail())
+            } else if l.onoff == 0 {
+                Ok(-1)
+            } else {
+                Ok(i32::from(l.secs))
+            }
+        }
+        _ => Err(-win::WSAEOPNOTSUPP),
+    };
+    match v {
+        Ok(v) => {
+            // SAFETY: the library passes a live `GcBuf<i64>` of one word.
+            unsafe { *word(out, 0) = i64::from(v) };
+            0
+        }
+        Err(e) => e,
     }
 }
 

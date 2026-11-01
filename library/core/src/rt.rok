@@ -167,7 +167,7 @@ extern "rok" {
     // Clocks.
 
     // Sockets.
-    fn rok_net_socket(family: i32, kind: i32) -> i32;
+    fn rok_net_socket(family: i32, kind: i32, proto: i32) -> i32;
     fn rok_net_bind(fd: i32, addr: GcBuf<i64>) -> i32;
     fn rok_net_listen(fd: i32, backlog: i32) -> i32;
     fn rok_net_connect(fd: i32, addr: GcBuf<i64>) -> i32;
@@ -181,6 +181,7 @@ extern "rok" {
     fn rok_net_recv_from(fd: i32, buf: GcBuf<u8>, off: usize, len: usize, out: GcBuf<i64>) -> isize;
     fn rok_net_shutdown(fd: i32, how: i32) -> i32;
     fn rok_net_setopt(fd: i32, opt: i32, val: i64) -> i32;
+    fn rok_net_getopt(fd: i32, opt: i32, out: GcBuf<i64>) -> i32;
     fn rok_net_multicast_v4(fd: i32, group: u32, iface: u32, join: i32) -> i32;
     fn rok_net_resolve(host: str, port: u16, out: GcBuf<i64>, max: usize) -> i32;
     fn rok_net_unix(kind: i32, path: str, op: i32) -> i32;
