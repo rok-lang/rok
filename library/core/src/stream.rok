@@ -680,4 +680,3 @@ impl<S: TryStream> Stream for Shunt<S> {
         }
     }
 }
-

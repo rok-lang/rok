@@ -2916,6 +2916,7 @@ mod tests {
         "stream",
         "sync",
         "task",
+        "time",
         "tuple",
         "List",
         "Dict",

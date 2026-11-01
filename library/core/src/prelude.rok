@@ -7,7 +7,7 @@
 pub use rok::core::{
     array, bench, channel, cmp, collections, convert, crypto, encoding, error, fmt, future,
     hint, index, io, iter, marker, num, ops, panic, par, print, range, reflect, str, stream, sync,
-    task, tuple,
+    task, time, tuple,
 };
 
 // Types.
