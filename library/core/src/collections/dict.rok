@@ -299,13 +299,13 @@ impl<K: Hash, V> Dict<K, V> {
     }
 
     /// The keys, lazily (2.9.3; insertion order).
-    pub const fn keys(self) -> KeysIter<K, V> {
-        KeysIter { d: self, at: 0 }
+    pub const fn keys(self) -> Keys<K, V> {
+        Keys { d: self, at: 0 }
     }
 
     /// The values, lazily.
-    pub const fn values(self) -> ValuesIter<K, V> {
-        ValuesIter { d: self, at: 0 }
+    pub const fn values(self) -> Values<K, V> {
+        Values { d: self, at: 0 }
     }
 
     /// `(key, value)` pairs, lazily (insertion order).
@@ -369,12 +369,12 @@ impl<K: Hash, V: Default> Entry<K, V> {
 // The iterators walk the live table; a dict changed while iterated
 // gives unspecified (but memory-safe) results.
 
-pub struct KeysIter<K, V> {
+pub struct Keys<K, V> {
     d: Dict<K, V>;
     at: usize;
 }
 
-impl<K: Hash, V> Iterator for KeysIter<K, V> {
+impl<K: Hash, V> Iterator for Keys<K, V> {
     type Item = K;
     const fn next(ref self) -> K | none {
         unsafe {
@@ -389,12 +389,12 @@ impl<K: Hash, V> Iterator for KeysIter<K, V> {
     }
 }
 
-pub struct ValuesIter<K, V> {
+pub struct Values<K, V> {
     d: Dict<K, V>;
     at: usize;
 }
 
-impl<K: Hash, V> Iterator for ValuesIter<K, V> {
+impl<K: Hash, V> Iterator for Values<K, V> {
     type Item = V;
     const fn next(ref self) -> V | none {
         unsafe {

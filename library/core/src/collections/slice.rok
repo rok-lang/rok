@@ -94,21 +94,21 @@ impl<T> Slice<T> {
     /// Views of `size` consecutive elements, sliding by one (`size` > 0);
     /// nothing when the view is shorter than `size`.
     #[track_caller]
-    pub const fn windows(self, size: usize) -> SliceWindows<T> {
+    pub const fn windows(self, size: usize) -> Windows<T> {
         if size == 0 {
             panic("Slice::windows: size must be positive, e.g. `windows(2)`");
         }
-        SliceWindows { s: self, size: size, i: 0 }
+        Windows { s: self, size: size, i: 0 }
     }
 
     /// Views of `size` elements in order, the last one shorter
     /// (`size` > 0).
     #[track_caller]
-    pub const fn chunks(self, size: usize) -> SliceChunks<T> {
+    pub const fn chunks(self, size: usize) -> Chunks<T> {
         if size == 0 {
             panic("Slice::chunks: size must be positive, e.g. `chunks(2)`");
         }
-        SliceChunks { s: self, size: size, i: 0 }
+        Chunks { s: self, size: size, i: 0 }
     }
 
     /// `(buffer, start, len)` of the viewed elements as one contiguous
@@ -231,14 +231,14 @@ impl<T: PartialEq> Slice<T> {
 }
 
 /// `s.windows(size)`: each window is a view of `s`, no copy.
-pub struct SliceWindows<T> {
+pub struct Windows<T> {
     s: Slice<T>;
     size: usize;
     /// Start of the next window.
     i: usize;
 }
 
-impl<T> Iterator for SliceWindows<T> {
+impl<T> Iterator for Windows<T> {
     type Item = Slice<T>;
     const fn next(ref self) -> Slice<T> | none {
         if self.s.len - self.i < self.size {
@@ -255,21 +255,21 @@ impl<T> Iterator for SliceWindows<T> {
     const fn count(self) -> usize { self.len() }
 }
 
-impl<T> ExactSizeIterator for SliceWindows<T> {
+impl<T> ExactSizeIterator for Windows<T> {
     const fn len(self) -> usize {
         if self.s.len - self.i < self.size { 0 } else { self.s.len - self.size - self.i + 1 }
     }
 }
 
 /// `s.chunks(size)`: each chunk is a view of `s`, no copy.
-pub struct SliceChunks<T> {
+pub struct Chunks<T> {
     s: Slice<T>;
     size: usize;
     /// Start of the next chunk.
     i: usize;
 }
 
-impl<T> Iterator for SliceChunks<T> {
+impl<T> Iterator for Chunks<T> {
     type Item = Slice<T>;
     const fn next(ref self) -> Slice<T> | none {
         if self.i >= self.s.len {
@@ -287,7 +287,7 @@ impl<T> Iterator for SliceChunks<T> {
     const fn count(self) -> usize { self.len() }
 }
 
-impl<T> ExactSizeIterator for SliceChunks<T> {
+impl<T> ExactSizeIterator for Chunks<T> {
     const fn len(self) -> usize {
         let n = self.s.len - self.i;
         n / self.size + if n % self.size == 0 { 0 } else { 1 }

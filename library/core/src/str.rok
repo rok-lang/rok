@@ -145,36 +145,36 @@ impl str {
     pub const fn replace(self, from: str, to: str) -> str { unsafe { rok_str_replace(self, from, to) } }
 
     /// Unicode scalar values, in order.
-    pub const fn chars(self) -> CharsIter { CharsIter { s: self, pos: 0 } }
+    pub const fn chars(self) -> Chars { Chars { s: self, pos: 0 } }
     /// UTF-8 bytes, in order.
-    pub fn bytes(self) -> BytesIter { self.as_bytes().iter() }
+    pub fn bytes(self) -> Bytes { self.as_bytes().iter() }
     /// The pieces between occurrences of `sep` (all of them, empty ones
     /// included).
-    pub const fn split(self, sep: str) -> SplitIter { SplitIter { rest: self, sep: sep, done: false } }
+    pub const fn split(self, sep: str) -> Split { Split { rest: self, sep: sep, done: false } }
     /// At most `n` pieces split on `sep` from the start; the last one is
     /// the unsplit rest (`n == 0` yields nothing).
-    pub const fn splitn(self, n: usize, sep: str) -> SplitNIter { SplitNIter { rest: self, sep: sep, left: n } }
+    pub const fn splitn(self, n: usize, sep: str) -> SplitN { SplitN { rest: self, sep: sep, left: n } }
     /// The pieces `split` yields, last first.
-    pub const fn rsplit(self, sep: str) -> RSplitIter { RSplitIter { rest: self, sep: sep, done: false } }
+    pub const fn rsplit(self, sep: str) -> RSplit { RSplit { rest: self, sep: sep, done: false } }
     /// At most `n` pieces split on `sep` from the end, last first; the
     /// final one is the unsplit start.
-    pub const fn rsplitn(self, n: usize, sep: str) -> RSplitNIter { RSplitNIter { rest: self, sep: sep, left: n } }
+    pub const fn rsplitn(self, n: usize, sep: str) -> RSplitN { RSplitN { rest: self, sep: sep, left: n } }
     /// `(byte offset, match)` for each non-overlapping `pat`, left to
     /// right; an empty `pat` matches nothing.
-    pub const fn match_indices(self, pat: str) -> MatchIndicesIter {
-        MatchIndicesIter { s: self, pat: pat, pos: 0 }
+    pub const fn match_indices(self, pat: str) -> MatchIndices {
+        MatchIndices { s: self, pat: pat, pos: 0 }
     }
     /// Lines without their `\n` / `\r\n`; a final line ending adds no
     /// empty line.
-    pub const fn lines(self) -> LinesIter { LinesIter { rest: self } }
+    pub const fn lines(self) -> Lines { Lines { rest: self } }
     /// `(byte offset, char)` pairs.
-    pub const fn char_indices(self) -> CharIndicesIter {
-        CharIndicesIter { chars: CharsIter { s: self, pos: 0 } }
+    pub const fn char_indices(self) -> CharIndices {
+        CharIndices { chars: Chars { s: self, pos: 0 } }
     }
     /// The non-empty pieces between runs of Unicode `White_Space` (the
     /// set `trim` strips).
-    pub const fn split_whitespace(self) -> SplitWhitespaceIter {
-        SplitWhitespaceIter { s: self, pos: 0 }
+    pub const fn split_whitespace(self) -> SplitWhitespace {
+        SplitWhitespace { s: self, pos: 0 }
     }
 
     /// `T`'s value spelled by this string (stdlib 2.15.7).
@@ -229,14 +229,14 @@ impl Hash for str {
 // Iterators (stdlib 2.15.3).
 
 /// What `s.bytes()` returns (2.15.1): the bytes of the `as_bytes` view.
-pub type BytesIter = SliceIter<u8>;
+pub type Bytes = SliceIter<u8>;
 
-pub struct CharsIter {
+pub struct Chars {
     s: str;
     pos: usize;
 }
 
-impl Iterator for CharsIter {
+impl Iterator for Chars {
     type Item = char;
     const fn next(ref self) -> char | none {
         if self.pos >= self.s.len() { return none; }
@@ -262,13 +262,13 @@ impl Iterator for CharsIter {
     }
 }
 
-pub struct SplitIter {
+pub struct Split {
     rest: str;
     sep: str;
     done: bool;
 }
 
-impl Iterator for SplitIter {
+impl Iterator for Split {
     type Item = str;
     const fn next(ref self) -> str | none {
         if self.done { return none; }
@@ -284,13 +284,13 @@ impl Iterator for SplitIter {
     }
 }
 
-pub struct SplitNIter {
+pub struct SplitN {
     rest: str;
     sep: str;
     left: usize;
 }
 
-impl Iterator for SplitNIter {
+impl Iterator for SplitN {
     type Item = str;
     const fn next(ref self) -> str | none {
         if self.left == 0 { return none; }
@@ -307,13 +307,13 @@ impl Iterator for SplitNIter {
     }
 }
 
-pub struct RSplitIter {
+pub struct RSplit {
     rest: str;
     sep: str;
     done: bool;
 }
 
-impl Iterator for RSplitIter {
+impl Iterator for RSplit {
     type Item = str;
     const fn next(ref self) -> str | none {
         if self.done { return none; }
@@ -333,13 +333,13 @@ impl Iterator for RSplitIter {
     }
 }
 
-pub struct RSplitNIter {
+pub struct RSplitN {
     rest: str;
     sep: str;
     left: usize;
 }
 
-impl Iterator for RSplitNIter {
+impl Iterator for RSplitN {
     type Item = str;
     const fn next(ref self) -> str | none {
         if self.left == 0 { return none; }
@@ -360,13 +360,13 @@ impl Iterator for RSplitNIter {
     }
 }
 
-pub struct MatchIndicesIter {
+pub struct MatchIndices {
     s: str;
     pat: str;
     pos: usize;
 }
 
-impl Iterator for MatchIndicesIter {
+impl Iterator for MatchIndices {
     type Item = (usize, str);
     const fn next(ref self) -> (usize, str) | none {
         let m = self.pat.len();
@@ -379,11 +379,11 @@ impl Iterator for MatchIndicesIter {
     }
 }
 
-pub struct LinesIter {
+pub struct Lines {
     rest: str;
 }
 
-impl Iterator for LinesIter {
+impl Iterator for Lines {
     type Item = str;
     const fn next(ref self) -> str | none {
         if self.rest.len() == 0 { return none; }
@@ -401,11 +401,11 @@ impl Iterator for LinesIter {
     }
 }
 
-pub struct CharIndicesIter {
-    chars: CharsIter;
+pub struct CharIndices {
+    chars: Chars;
 }
 
-impl Iterator for CharIndicesIter {
+impl Iterator for CharIndices {
     type Item = (usize, char);
     const fn next(ref self) -> (usize, char) | none {
         let at = self.chars.pos;
@@ -463,17 +463,17 @@ const fn space_at(s: str, pos: usize) -> usize {
 #[inline(never)]
 const fn space_at_wide(s: str, pos: usize, b: u8) -> usize {
     if b < 0xC0u8 { return 0usize; }
-    let it = CharsIter { s: s, pos: pos };
+    let it = Chars { s: s, pos: pos };
     let c: char = it.next() else { return 0usize; };
     if c.is_whitespace() { it.pos - pos } else { 0usize }
 }
 
-pub struct SplitWhitespaceIter {
+pub struct SplitWhitespace {
     s: str;
     pos: usize;
 }
 
-impl Iterator for SplitWhitespaceIter {
+impl Iterator for SplitWhitespace {
     type Item = str;
     const fn next(ref self) -> str | none {
         let s = self.s;

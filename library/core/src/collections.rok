@@ -18,6 +18,6 @@ pub mod broadcast;
 pub use list::{List, ListIter, ListIntoIter};
 pub use deque::{Deque, DequeIter};
 pub use heap::{BinaryHeap, HeapIter};
-pub use dict::{Dict, Entry, KeysIter, ValuesIter, DictIter};
+pub use dict::{Dict, Entry, Keys, Values, DictIter};
 pub use set::{Set, SetIter};
 pub use slice::{Slice, SliceIter, SliceMut, SliceMutIter};
