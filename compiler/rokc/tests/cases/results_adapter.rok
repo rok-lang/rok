@@ -1,0 +1,42 @@
+// spec: std §2.7.13
+// expect-exit: 0
+// expect-stdout:
+// ok 1
+// err bad 5
+// ok 1 err 9 ok 3
+// [7, 8]
+
+// `results()` turns each error into a `Result::Err` item; a generator
+// ends after a throw, `iter::from_results` goes on.
+struct Bad { at: i32; }
+impl Display for Bad { fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"bad {self.at}") } }
+impl Debug for Bad { fn fmt(self, ref f: Formatter) throws (FmtError) { try Display::fmt(self, ref f) } }
+impl Error for Bad {}
+
+yield fn checked(xs: List<i32>) throws (Bad) -> i32 {
+    for x in xs {
+        if x < 0 { throw Bad { at: -x }; }
+        yield x;
+    }
+}
+
+fn main() throws (Bad) {
+    for r in checked([1, -5, 3]).results() {
+        match r {
+            Result::Ok(x) => println(f"ok {x}"),
+            Result::Err(e) => println(f"err {e}"),
+        }
+    }
+    let rs: List<Result<i32, Bad>> = [Result::Ok(1), Result::Err(Bad { at: 9 }), Result::Ok(3)];
+    let out = "";
+    for r in iter::from_results(rs).results() {
+        let s = match r {
+            Result::Ok(x) => f"ok {x}",
+            Result::Err(e) => f"err {e.at}",
+        };
+        out = if out == "" { s } else { f"{out} {s}" };
+    }
+    println(out);
+    let inf: List<i32> = try iter::infallible::<Bad, List<i32>>([7, 8]).collect();
+    println(f"{inf:?}");
+}

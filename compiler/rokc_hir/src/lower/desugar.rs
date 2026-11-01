@@ -852,6 +852,10 @@ pub(super) fn lower_for(
     span: rokc_diagnostic::Span,
 ) -> HirExpr {
     let mut out: Vec<HirStmt> = Vec::new();
+    // `try for`: the `try` covers the iterable and each step, not the body.
+    if let Some(d) = ctx.try_for.take() {
+        ctx.try_for_body = Some((body.span, d));
+    }
     ctx.push_scope();
     ctx.breakables.push((label.cloned(), true));
     let while_expr = match &iter.kind {
@@ -950,21 +954,42 @@ pub(super) fn lower_for_iter(
         super::expr::pick_method(ctx, &iter_h.ty, "into_iter", None),
         Ok(None)
     );
-    // A throwing iterator (`TryGenIter`) is stepped directly; its `next`
-    // must sit under a `try` covering the loop (`try for x in g { .. }`).
-    let has_next = matches!(
-        super::expr::pick_method(ctx, &iter_h.ty, "next", None),
-        Ok(Some(_))
-    );
-    if !has_into_iter && !has_next {
+    // A `TryIterator` is stepped directly; its `next` must sit under the
+    // loop's `try` (`try for x in it { .. }`).
+    let try_iter = ctx.lang("try_iterator_trait");
+    let is_try = !has_into_iter && !try_iter.is_empty() && ctx.has_trait(&iter_h.ty, try_iter);
+    if !has_into_iter && !is_try {
         return ctx.error_expr(
             span,
             format!(
                 "cannot iterate over a value of type `{}` - `for` needs an integer range, \
-                 an array, or an `IntoIterator` / `Iterator` impl (stdlib 2.7.2)",
+                 an array, an `IntoIterator` / `Iterator` impl, or a `TryIterator` \
+                 (`try for`) (stdlib 2.7.2)",
                 ctx.ty_name(&iter_h.ty)
             ),
         );
+    }
+    if is_try && ctx.try_depth == 0 && iter_h.ty != HirTy::Unknown {
+        let t = ctx.ty_name(&iter_h.ty);
+        let mut d = rokc_diagnostic::RokDiagnostic::error(
+            rokc_diagnostic::ErrorKind::Type,
+            span,
+            format!("`next` of `{t}` can throw, so this loop must be `try for` (spec 3.13.3)"),
+        )
+        .with_help(
+            "write `try for x in ..` (`try!` / `try?` to panic / stop on an error), \
+             or loop over `<iterator>.results()` to handle each error as a `Result`"
+                .to_owned(),
+        );
+        if label.is_none() {
+            let at = rokc_diagnostic::Span {
+                end: span.start,
+                ..span
+            };
+            d = d.with_fix(at, "try ", "write `try for`");
+        }
+        ctx.emit_diag(d);
+        return poison(span);
     }
     let it_h = if has_into_iter {
         method_call_on(ctx, iter_h, "into_iter", &[], span)

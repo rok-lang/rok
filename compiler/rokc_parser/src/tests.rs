@@ -759,6 +759,15 @@ fn block_like_statement_needs_no_semicolon() {
         body.trailing.as_deref().map(|e| &e.kind),
         Some(ExprKind::Cast(..))
     ));
+    // `try for` ends like its loop: the tuple after it is the tail.
+    let p = parse("fn t() -> (i32, i32) { try for x in g { } (a, b) }");
+    let Item::Fn(f) = &p.items[0] else { panic!() };
+    let body = f.body.as_ref().unwrap();
+    assert_eq!(body.stmts.len(), 1);
+    assert!(matches!(
+        body.trailing.as_deref().map(|e| &e.kind),
+        Some(ExprKind::Tuple(..))
+    ));
 }
 
 /// Parse with the meta blocks of `src` registered (the driver's pre-pass).

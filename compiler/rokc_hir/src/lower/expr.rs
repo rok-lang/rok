@@ -2519,7 +2519,25 @@ pub(super) fn lower_cond(ctx: &mut LowerCtx<'_>, cond: &Expr) -> HirExpr {
 /// Loop bodies yield no value (expected `()`).
 pub(super) fn lower_loop_body(ctx: &mut LowerCtx<'_>, body: &Block) -> HirBlock {
     ctx.push_expected(HirTy::Unit);
-    let b = lower_block(ctx, body);
+    // The body of `try for` is outside the `try`: its throwing calls
+    // carry their own (spec 3.13.3).
+    let outside = ctx
+        .try_for_body
+        .take_if(|(at, _)| *at == body.span)
+        .map(|(_, d)| d);
+    let b = if let Some(d) = outside {
+        let depth = std::mem::replace(&mut ctx.try_depth, d);
+        let calls = ctx.throwing_calls;
+        ctx.in_try_for_body += 1;
+        let b = lower_block(ctx, body);
+        ctx.in_try_for_body -= 1;
+        ctx.try_depth = depth;
+        // Calls the body marks do not count for the loop's `try`.
+        ctx.throwing_calls = calls;
+        b
+    } else {
+        lower_block(ctx, body)
+    };
     ctx.pop_expected();
     b
 }

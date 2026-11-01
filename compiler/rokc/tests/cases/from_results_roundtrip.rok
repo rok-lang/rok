@@ -1,0 +1,18 @@
+// spec: std §2.7.13
+// expect-exit: 0
+// expect-stdout:
+// 1 2 caught 3
+// 4
+
+// `from_results(xs).results()` gives the same items back.
+fn main() {
+    let rs: List<Result<i32, str>> = [Result::Ok(1), Result::Ok(2), Result::Err("3"), Result::Ok(4)];
+    try for x in iter::from_results(rs) {
+        print(f"{x} ");
+    } catch e: str {
+        println(f"caught {e}");
+    }
+    let back: List<Result<i32, str>> = iter::from_results(rs).results().collect();
+    let same = back.len() == rs.len() && back[2].is_err() && (back[3].ok() ?? 0) == 4;
+    println(f"{if same { 4 } else { 0 }}");
+}

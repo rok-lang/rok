@@ -1,5 +1,5 @@
 // spec: §4.14.10
-// expect-error: 9:1: this call can throw `str` and must be marked with `try`
+// expect-error: 9:1: `next` of `TryGenIter<str, str>` can throw, so this loop must be `try for`
 
 // Spec 4.14.10: a `for` over a throwing generator throws at each `next`,
 // so it needs `try for`.

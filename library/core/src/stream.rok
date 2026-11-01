@@ -412,15 +412,272 @@ impl<S1: Stream, S2: Stream> Stream for Zip<S1, S2> {
     }
 }
 
-/// A throwing stream: errors come out of `poll_next`, so consume it with
-/// `try` around `for await` steps (`try await`-style).
+/// A throwing stream (`async yield fn f() throws (E) -> T`): a
+/// `TryStream` whose `poll_next` throws what the body throws, stepped
+/// with `try for await x in s { .. }`.
 pub struct TryAsyncStream<T, E> {
     resume: fn(Context) throws (E) -> Poll<T | none>;
 }
 
-impl<T, E> TryAsyncStream<T, E> {
-    pub const fn poll_next(ref self, ref ctx: Context) throws (E) -> Poll<T | none> {
+// fallible streams (2.8.11)
+
+/// A stream whose `poll_next` can fail: an item, `none` at the end, or a
+/// thrown `Error` (the async `TryIterator`). `try for await x in s { .. }`
+/// steps it; the `try` covers the stream and each step, not the body.
+pub trait TryStream {
+    type Item;
+    type Error;
+    fn poll_next(ref self, ref ctx: Context) throws (Error) -> Poll<Item | none>;
+
+    /// `f` of each item.
+    const fn map<U>(self, f: fn(Item) throws (Error) -> U) -> TryMap<Self, U> {
+        TryMap { s: self, f: f }
+    }
+
+    /// The items `pred` accepts.
+    const fn filter(self, pred: fn(Item) throws (Error) -> bool) -> TryFilter<Self> {
+        TryFilter { s: self, pred: pred }
+    }
+
+    /// The same items, each error passed through `f`.
+    const fn map_err<E2>(self, f: fn(Error) -> E2) -> MapErr<Self, E2> {
+        MapErr { s: self, f: f }
+    }
+
+    /// At most the first `n` items.
+    const fn take(self, n: usize) -> TryTake<Self> {
+        TryTake { s: self, left: n }
+    }
+
+    /// All but the first `n` items.
+    const fn skip(self, n: usize) -> TrySkip<Self> {
+        TrySkip { s: self, n: n }
+    }
+
+    /// A plain stream of `Result`s: each error becomes a `Result::Err`
+    /// item and polling goes on.
+    const fn results(self) -> Results<Self> {
+        Results { s: self }
+    }
+
+    /// All items gathered into a `FromStream` collection; the first error
+    /// stops it and is thrown.
+    async fn collect<C: FromStream<Item> = List<Item>>(self) throws (Error) -> C {
+        let err: List<Error> = List::new();
+        let c: C = await C::from_stream(Shunt { s: self, err: err });
+        if err.len() > 0 {
+            throw err[0];
+        }
+        c
+    }
+
+    /// `f` of each item, in order.
+    async fn for_each(self, f: fn(Item) throws (Error)) throws (Error) {
+        try for await x in self {
+            try f(x);
+        }
+    }
+
+    async fn fold<B>(self, init: B, f: fn(B, Item) throws (Error) -> B) throws (Error) -> B {
+        let acc = init;
+        try for await x in self {
+            acc = try f(acc, x);
+        }
+        acc
+    }
+}
+
+/// A plain stream of `Result`s as a `TryStream`: an `Err` item is
+/// thrown, then polling goes on.
+pub const fn from_results<S: Stream<Item = Result<T, E>>, T, E>(s: S) -> FromResults<S, T, E> {
+    FromResults { s: s }
+}
+
+impl<T, E> TryStream for TryAsyncStream<T, E> {
+    type Item = T;
+    type Error = E;
+    const fn poll_next(ref self, ref ctx: Context) throws (E) -> Poll<T | none> {
         try (self.resume)(ctx)
+    }
+}
+
+pub struct TryMap<S, U> {
+    s: S;
+    f: fn(S::Item) throws (S::Error) -> U;
+}
+
+impl<S: TryStream, U> TryStream for TryMap<S, U> {
+    type Item = U;
+    type Error = S::Error;
+    const fn poll_next(ref self, ref ctx: Context) throws (S::Error) -> Poll<U | none> {
+        match try self.s.poll_next(ref ctx) {
+            Poll::Ready(v) => {
+                if let x: S::Item = v {
+                    return Poll::Ready(try (self.f)(x));
+                }
+                Poll::Ready(none)
+            }
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+pub struct TryFilter<S> {
+    s: S;
+    pred: fn(S::Item) throws (S::Error) -> bool;
+}
+
+impl<S: TryStream> TryStream for TryFilter<S> {
+    type Item = S::Item;
+    type Error = S::Error;
+    const fn poll_next(ref self, ref ctx: Context) throws (S::Error) -> Poll<S::Item | none> {
+        loop {
+            match try self.s.poll_next(ref ctx) {
+                Poll::Ready(v) => {
+                    if let x: S::Item = v {
+                        if try (self.pred)(x) {
+                            return Poll::Ready(x);
+                        }
+                    } else {
+                        return Poll::Ready(none);
+                    }
+                }
+                Poll::Pending => {
+                    return Poll::Pending;
+                }
+            }
+        }
+    }
+}
+
+pub struct MapErr<S, E2> {
+    s: S;
+    f: fn(S::Error) -> E2;
+}
+
+impl<S: TryStream, E2> TryStream for MapErr<S, E2> {
+    type Item = S::Item;
+    type Error = E2;
+    const fn poll_next(ref self, ref ctx: Context) throws (E2) -> Poll<S::Item | none> {
+        try self.s.poll_next(ref ctx) catch e {
+            throw (self.f)(e);
+        }
+    }
+}
+
+pub struct TryTake<S> {
+    s: S;
+    left: usize;
+}
+
+impl<S: TryStream> TryStream for TryTake<S> {
+    type Item = S::Item;
+    type Error = S::Error;
+    const fn poll_next(ref self, ref ctx: Context) throws (S::Error) -> Poll<S::Item | none> {
+        if self.left == 0 {
+            return Poll::Ready(none);
+        }
+        let r = try self.s.poll_next(ref ctx);
+        if let Poll::Ready(v) = r {
+            if v is none {
+                self.left = 0;
+            } else {
+                self.left -= 1;
+            }
+        }
+        r
+    }
+}
+
+pub struct TrySkip<S> {
+    s: S;
+    n: usize;
+}
+
+impl<S: TryStream> TryStream for TrySkip<S> {
+    type Item = S::Item;
+    type Error = S::Error;
+    const fn poll_next(ref self, ref ctx: Context) throws (S::Error) -> Poll<S::Item | none> {
+        loop {
+            let r = try self.s.poll_next(ref ctx);
+            if self.n == 0 {
+                return r;
+            }
+            match r {
+                Poll::Ready(v) => {
+                    if v is none {
+                        return Poll::Ready(none);
+                    }
+                    self.n -= 1;
+                }
+                Poll::Pending => {
+                    return Poll::Pending;
+                }
+            }
+        }
+    }
+}
+
+/// `results`'s adapter.
+pub struct Results<S> {
+    s: S;
+}
+
+impl<S: TryStream> Stream for Results<S> {
+    type Item = Result<S::Item, S::Error>;
+    const fn poll_next(ref self, ref ctx: Context) -> Poll<Result<S::Item, S::Error> | none> {
+        let r = try self.s.poll_next(ref ctx) catch e {
+            return Poll::Ready(Result::Err(e));
+        };
+        match r {
+            Poll::Ready(v) => {
+                if let x: S::Item = v {
+                    return Poll::Ready(Result::Ok(x));
+                }
+                Poll::Ready(none)
+            }
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+pub struct FromResults<S, T, E> {
+    s: S;
+}
+
+impl<S: Stream<Item = Result<T, E>>, T, E> TryStream for FromResults<S, T, E> {
+    type Item = T;
+    type Error = E;
+    const fn poll_next(ref self, ref ctx: Context) throws (E) -> Poll<T | none> {
+        match self.s.poll_next(ref ctx) {
+            Poll::Ready(v) => {
+                if let r: Result<T, E> = v {
+                    return Poll::Ready(try r.get());
+                }
+                Poll::Ready(none)
+            }
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+/// `collect`'s plain view of a `TryStream`: ends at the first error,
+/// which it keeps in `err` (shared with the caller).
+struct Shunt<S> {
+    s: S;
+    err: List<S::Error>;
+}
+
+impl<S: TryStream> Stream for Shunt<S> {
+    type Item = S::Item;
+    const fn poll_next(ref self, ref ctx: Context) -> Poll<S::Item | none> {
+        if self.err.len() > 0 {
+            return Poll::Ready(none);
+        }
+        try self.s.poll_next(ref ctx) catch e {
+            self.err.push(e);
+            Poll::Ready(none)
+        }
     }
 }
 

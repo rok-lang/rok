@@ -247,14 +247,29 @@ pub(super) fn unpack_call(ctx: &mut LowerCtx<'_>, call: HirExpr) -> HirExpr {
         init: call,
     }];
     if ctx.try_depth == 0 {
-        ctx.emit_error(
+        let mut d = rokc_diagnostic::RokDiagnostic::error(
             rokc_diagnostic::ErrorKind::Type,
+            ctx.here(),
             format!(
                 "this call can throw `{}` and must be marked with `try` (`try f()`; \
                  `try? f()` / `try! f()` to drop / panic on the error) (spec 4.14)",
                 ctx.ty_name(&err)
             ),
         );
+        if ctx.in_try_for_body > 0 {
+            d = d.with_help(
+                "the `try` of `try for` covers the iteration, not the loop body".to_owned(),
+            );
+        }
+        // A call written in the source (not one lowering made up).
+        if ctx.src(span).is_some_and(|s| s.ends_with(')')) {
+            let at = rokc_diagnostic::Span {
+                end: span.start,
+                ..span
+            };
+            d = d.with_fix(at, "try ", "mark the call with `try`");
+        }
+        ctx.emit_diag(d);
     } else {
         let raised = raise(ctx, field(err_index(&ok), &err), span);
         stmts.push(HirStmt::Expr(HirExpr {
@@ -1144,6 +1159,7 @@ pub(super) fn lower_try(
     let expected = ctx.current_expected().cloned().unwrap_or(HirTy::Unknown);
     let calls = ctx.throwing_calls;
     let mark = ctx.env.sink.diagnostics.borrow().len();
+    ctx.try_for = matches!(operand.kind, ExprKind::For { .. }).then_some(ctx.try_depth);
     // An operand that failed to lower (an error, or a poisoned value) may
     // hide its throwing call.
     let warn_if_idle = |ctx: &LowerCtx<'_>, e: &HirExpr| {

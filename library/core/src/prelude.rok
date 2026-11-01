@@ -34,7 +34,7 @@ pub use rok::core::ops::{PartialEq, PartialOrd};
 pub use rok::core::cmp::{Eq, Ord, Hash};
 pub use rok::core::fmt::{Debug, Display};
 pub use rok::core::error::Error;
-pub use rok::core::iter::{Iterator, IntoIterator, FromIterator};
+pub use rok::core::iter::{Iterator, IntoIterator, FromIterator, TryIterator};
 pub use rok::core::future::{Future, IntoFuture};
 pub use rok::core::convert::{From, Into, TryFrom, TryInto};
 pub use rok::core::str::FromStr;

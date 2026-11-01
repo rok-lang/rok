@@ -6239,6 +6239,11 @@ impl<'a> Parser<'a> {
                     TryKind::Plain
                 };
                 let from = self.pos;
+                // `try for x in g { .. } (a, b)`: the loop ends there, the
+                // `(` starts the next expression.
+                if matches!(self.peek(), TokenKind::For) {
+                    self.stmt_head = true;
+                }
                 let operand = self.parse_expr_bp(0)?;
                 if kind == TryKind::Optional {
                     self.try_coalesce(try_span, from, &operand);
@@ -6637,7 +6642,10 @@ impl<'a> Parser<'a> {
             }
             self.chain_link()?;
             match self.peek() {
-                TokenKind::LParen | TokenKind::LBracket if stmt_head && is_block_like(&expr) => {
+                TokenKind::LParen | TokenKind::LBracket
+                    if (stmt_head || matches!(expr.kind, ExprKind::Try { .. }))
+                        && is_block_like(&expr) =>
+                {
                     break;
                 }
                 TokenKind::LParen => {

@@ -3094,6 +3094,13 @@ struct LowerCtx<'a> {
     fn_throws: Option<HirTy>,
     /// Enclosing prefix `try`s; a throwing call must sit under one.
     try_depth: u32,
+    /// `try for`: the `try_depth` outside the `try`, set for the `for`
+    /// it marks, which takes it (the `try` covers the iteration only).
+    try_for: Option<u32>,
+    /// That `for`'s body block and the `try_depth` it is lowered at.
+    try_for_body: Option<(Span, u32)>,
+    /// Inside the body of a `try for` (a throwing call there gets a hint).
+    in_try_for_body: u32,
     /// Enclosing `catch` / `try?` / `try!` / `finally` frames, innermost
     /// last (see `throws`).
     err_frames: Vec<ErrFrame>,
@@ -3291,6 +3298,9 @@ impl<'a> LowerCtx<'a> {
             method_type_args: Vec::new(),
             fn_throws: None,
             try_depth: 0,
+            try_for: None,
+            try_for_body: None,
+            in_try_for_body: 0,
             err_frames: Vec::new(),
             owe_params: Vec::new(),
             throws_probe: None,

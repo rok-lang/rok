@@ -31,6 +31,7 @@ pub const KNOWN_SLOTS: &[&str] = &[
     // 0.4.3 trait slots
     "iterator_trait",
     "into_iterator_trait",
+    "try_iterator_trait",
     "index_trait",
     "index_set_trait",
     "slice_trait",
@@ -94,6 +95,7 @@ pub const KNOWN_SLOTS: &[&str] = &[
 const TRAIT_FORMS: &[(&str, &str, usize)] = &[
     ("iterator_trait", "next", 1),
     ("into_iterator_trait", "into_iter", 1),
+    ("try_iterator_trait", "next", 1),
     ("index_trait", "index", 2),
     ("index_set_trait", "index_set", 3),
     ("slice_trait", "slice", 2),

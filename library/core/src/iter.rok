@@ -1024,22 +1024,760 @@ impl<T> GenIter<T> {
     }
 }
 
-/// A throwing generator (`yield fn f() throws (E) -> T`): the error
-/// surfaces at `next` (refs-lang 4.14.10), so a loop over it throws and
-/// must be covered: `try for x in g { .. }`.
+/// A throwing generator (`yield fn f() throws (E) -> T`): a
+/// `TryIterator` whose `next` throws what the body throws (refs-lang
+/// 4.14.10), stepped with `try for x in g { .. }`.
 pub struct TryGenIter<T, E> {
     resume: fn(bool) throws (E) -> (T | none);
 }
 
-impl<T, E> TryGenIter<T, E> {
-    pub const fn next(ref self) throws (E) -> T | none {
+impl<T, E> TryIterator for TryGenIter<T, E> {
+    type Item = T;
+    type Error = E;
+    const fn next(ref self) throws (E) -> T | none {
         try (self.resume)(false)
     }
+}
 
+impl<T, E> TryGenIter<T, E> {
     /// `GenIter::close`; an error its cleanups throw is dropped (the loop
     /// is already leaving).
     #[doc(hidden)]
     pub const fn close(ref self) {
         try (self.resume)(true) catch _ { none };
+    }
+}
+
+// fallible iteration (stdlib 2.7.13)
+
+/// An iterator whose `next` can fail: an item, `none` at the end, or a
+/// thrown `Error`. What a `next` after a throw does is the type's
+/// documented choice: it may go on (`fs::Walk`) or end (`fs::ReadDir`).
+///
+/// `try for x in it { .. }` steps it: the `try` covers the iterable and
+/// each `next`, not the body. The adapters' functions may throw `Error`
+/// (a non-throwing function fits too); `map_err` changes it.
+#[lang("try_iterator_trait")]
+pub trait TryIterator {
+    type Item;
+    type Error;
+    fn next(ref self) throws (Error) -> Item | none;
+
+    /// Apply `f` to each item.
+    const fn map<U>(self, f: fn(Item) throws (Error) -> U) -> TryMap<Self, U> {
+        TryMap { it: self, f: f }
+    }
+
+    /// Keep the items `pred` accepts.
+    const fn filter(self, pred: fn(Item) throws (Error) -> bool) -> TryFilter<Self> {
+        TryFilter { it: self, pred: pred }
+    }
+
+    /// The same items, each error passed through `f`: the only way to
+    /// change `Error` (`.map_err(|e| -> any Error { e })` erases it).
+    const fn map_err<E2>(self, f: fn(Error) -> E2) -> MapErr<Self, E2> {
+        MapErr { it: self, f: f }
+    }
+
+    /// `(index, item)` pairs.
+    const fn enumerate(self) -> TryEnumerate<Self> {
+        TryEnumerate { it: self, i: 0 }
+    }
+
+    /// Pairs of this iterator's items and a plain iterator's, until
+    /// either ends.
+    const fn zip<J: IntoIterator>(self, other: J) -> TryZip<Self, J::IntoIter> {
+        TryZip { a: self, b: other.into_iter() }
+    }
+
+    /// This iterator's items, then `other`'s.
+    const fn chain<J: TryIterator<Item = Item, Error = Error>>(self, other: J) -> TryChain<Self, J> {
+        TryChain { a: self, b: other, first: true }
+    }
+
+    /// At most the first `n` items.
+    const fn take(self, n: usize) -> TryTake<Self> {
+        TryTake { it: self, left: n }
+    }
+
+    /// All but the first `n` items.
+    const fn skip(self, n: usize) -> TrySkip<Self> {
+        TrySkip { it: self, n: n }
+    }
+
+    /// Every `step`th item, starting with the first (`step` > 0).
+    #[track_caller]
+    const fn step_by(self, step: usize) -> TryStepBy<Self> {
+        if step == 0 {
+            panic("TryIterator::step_by: step must be positive");
+        }
+        TryStepBy { it: self, step: step, first: true }
+    }
+
+    /// The items before the first one `pred` rejects.
+    const fn take_while(self, pred: fn(Item) throws (Error) -> bool) -> TryTakeWhile<Self> {
+        TryTakeWhile { it: self, pred: pred, done: false }
+    }
+
+    /// The items from the first one `pred` rejects on.
+    const fn skip_while(self, pred: fn(Item) throws (Error) -> bool) -> TrySkipWhile<Self> {
+        TrySkipWhile { it: self, pred: pred, done: false }
+    }
+
+    /// The items of each `f(item)` (a plain `IntoIterator`).
+    const fn flat_map<U: IntoIterator>(self, f: fn(Item) throws (Error) -> U) -> TryFlatMap<Self, U> {
+        TryFlatMap { it: self, f: f, cur: none }
+    }
+
+    /// The running state: `f(init, x0)`, then `f` of that and `x1`, ...
+    const fn scan<S>(self, init: S, f: fn(S, Item) throws (Error) -> S) -> TryScan<Self, S> {
+        TryScan { it: self, state: init, f: f }
+    }
+
+    /// The same items, each passed to `f` first.
+    const fn inspect(self, f: fn(Item) throws (Error)) -> TryInspect<Self> {
+        TryInspect { it: self, f: f }
+    }
+
+    /// An iterator that can look at its next item without taking it.
+    const fn peekable(self) -> TryPeekable<Self> {
+        TryPeekable { it: self, peeked: none, has: false }
+    }
+
+    /// Lists of `size` items in order, the last one shorter (`size` > 0).
+    #[track_caller]
+    const fn chunks(self, size: usize) -> TryChunks<Self> {
+        if size == 0 {
+            panic("TryIterator::chunks: size must be positive, e.g. `chunks(2)`");
+        }
+        TryChunks { it: self, size: size }
+    }
+
+    /// A plain iterator of `Result`s: each error becomes a
+    /// `Result::Err` item and stepping goes on, so a source that ends
+    /// after an error gives that `Err` last.
+    const fn results(self) -> Results<Self> {
+        Results { it: self }
+    }
+
+    /// Gather the items into a `FromIterator` collection; the first
+    /// error stops it and is thrown.
+    const fn collect<C: FromIterator<Item>>(self) throws (Error) -> C {
+        let err: List<Error> = List::new();
+        let c: C = C::from_iter(Shunt { it: self, err: err });
+        if err.len() > 0 {
+            throw err[0];
+        }
+        c
+    }
+
+    const fn count(self) throws (Error) -> usize {
+        let n: usize = 0;
+        try for _ in self {
+            n += 1;
+        }
+        n
+    }
+
+    const fn last(self) throws (Error) -> Item | none {
+        let last: Item | none = none;
+        try for x in self {
+            last = x;
+        }
+        last
+    }
+
+    /// The `n`th remaining item (0-based), consuming the ones before it.
+    const fn nth(ref self, n: usize) throws (Error) -> Item | none {
+        for _ in 0..n {
+            if (try self.next()) is none {
+                return none;
+            }
+        }
+        try self.next()
+    }
+
+    const fn fold<B>(self, init: B, f: fn(B, Item) throws (Error) -> B) throws (Error) -> B {
+        let acc = init;
+        try for x in self {
+            acc = try f(acc, x);
+        }
+        acc
+    }
+
+    const fn for_each(self, f: fn(Item) throws (Error)) throws (Error) {
+        try for x in self {
+            try f(x);
+        }
+    }
+
+    /// The items combined left to right with `f`; `none` for none.
+    const fn reduce(self, f: fn(Item, Item) throws (Error) -> Item) throws (Error) -> Item | none {
+        let acc: Item | none = none;
+        try for x in self {
+            acc = if let a: Item = acc { try f(a, x) } else { x };
+        }
+        acc
+    }
+
+    const fn any(self, pred: fn(Item) throws (Error) -> bool) throws (Error) -> bool {
+        try for x in self {
+            if try pred(x) {
+                return true;
+            }
+        }
+        false
+    }
+
+    const fn all(self, pred: fn(Item) throws (Error) -> bool) throws (Error) -> bool {
+        try for x in self {
+            if !(try pred(x)) {
+                return false;
+            }
+        }
+        true
+    }
+
+    const fn find(self, pred: fn(Item) throws (Error) -> bool) throws (Error) -> Item | none {
+        try for x in self {
+            if try pred(x) {
+                return x;
+            }
+        }
+        none
+    }
+
+    const fn position(self, pred: fn(Item) throws (Error) -> bool) throws (Error) -> usize | none {
+        let i: usize = 0;
+        try for x in self {
+            if try pred(x) {
+                return i;
+            }
+            i += 1;
+        }
+        none
+    }
+
+    /// The items `pred` accepts, then the rest, each in order.
+    const fn partition(self, pred: fn(Item) throws (Error) -> bool) throws (Error) -> (List<Item>, List<Item>) {
+        let yes: List<Item> = List::new();
+        let no: List<Item> = List::new();
+        try for x in self {
+            if try pred(x) {
+                yes.push(x);
+            } else {
+                no.push(x);
+            }
+        }
+        (yes, no)
+    }
+
+    /// The items added up; `0` for none.
+    const fn sum(self) throws (Error) -> Item where Item: Add<Output = Item> + Zero {
+        let acc = Item::zero();
+        try for x in self {
+            acc += x;
+        }
+        acc
+    }
+
+    /// The items multiplied; `1` for none.
+    const fn product(self) throws (Error) -> Item where Item: Mul<Output = Item> + One {
+        let acc = Item::one();
+        try for x in self {
+            acc *= x;
+        }
+        acc
+    }
+
+    const fn min(self) throws (Error) -> Item | none where Item: Ord {
+        let best: Item | none = none;
+        try for x in self {
+            if let b: Item = best {
+                if x.cmp(b).is_lt() {
+                    best = x;
+                }
+            } else {
+                best = x;
+            }
+        }
+        best
+    }
+
+    const fn max(self) throws (Error) -> Item | none where Item: Ord {
+        let best: Item | none = none;
+        try for x in self {
+            if let b: Item = best {
+                if x.cmp(b).is_gt() {
+                    best = x;
+                }
+            } else {
+                best = x;
+            }
+        }
+        best
+    }
+
+    /// The item with the smallest `key` (the first of equals).
+    const fn min_by_key<K: Ord>(self, key: fn(Item) throws (Error) -> K) throws (Error) -> Item | none {
+        let best: Item | none = none;
+        let best_key: K | none = none;
+        try for x in self {
+            let k = try key(x);
+            if let b: K = best_key {
+                if k.cmp(b).is_lt() {
+                    best = x;
+                    best_key = k;
+                }
+            } else {
+                best = x;
+                best_key = k;
+            }
+        }
+        best
+    }
+
+    /// The item with the largest `key` (the last of equals).
+    const fn max_by_key<K: Ord>(self, key: fn(Item) throws (Error) -> K) throws (Error) -> Item | none {
+        let best: Item | none = none;
+        let best_key: K | none = none;
+        try for x in self {
+            let k = try key(x);
+            if let b: K = best_key {
+                if !k.cmp(b).is_lt() {
+                    best = x;
+                    best_key = k;
+                }
+            } else {
+                best = x;
+                best_key = k;
+            }
+        }
+        best
+    }
+}
+
+/// A plain iterator of `Result`s as a `TryIterator`: an `Err` item is
+/// thrown, then stepping goes on.
+pub const fn from_results<T, E, I: IntoIterator<Item = Result<T, E>>>(it: I) -> FromResults<I::IntoIter, T, E> {
+    FromResults { it: it.into_iter() }
+}
+
+/// A plain iterator as a `TryIterator` that never throws, for an API
+/// that takes one: `iter::infallible::<IoError>(names)`.
+pub const fn infallible<E, I: IntoIterator>(it: I) -> Infallible<I::IntoIter, E> {
+    Infallible { it: it.into_iter(), err: none }
+}
+
+/// A `TryIterator` whose `next` calls `f`.
+pub const fn try_from_fn<T, E>(f: fn() throws (E) -> (T | none)) -> TryFromFn<T, E> {
+    TryFromFn { f: f }
+}
+
+pub struct TryMap<I, U> {
+    it: I;
+    f: fn(I::Item) throws (I::Error) -> U;
+}
+
+impl<I: TryIterator, U> TryIterator for TryMap<I, U> {
+    type Item = U;
+    type Error = I::Error;
+    const fn next(ref self) throws (I::Error) -> U | none {
+        if let x: I::Item = try self.it.next() {
+            return try (self.f)(x);
+        }
+        none
+    }
+}
+
+pub struct TryFilter<I> {
+    it: I;
+    pred: fn(I::Item) throws (I::Error) -> bool;
+}
+
+impl<I: TryIterator> TryIterator for TryFilter<I> {
+    type Item = I::Item;
+    type Error = I::Error;
+    const fn next(ref self) throws (I::Error) -> I::Item | none {
+        while let x: I::Item = try self.it.next() {
+            if try (self.pred)(x) {
+                return x;
+            }
+        }
+        none
+    }
+}
+
+pub struct MapErr<I, E2> {
+    it: I;
+    f: fn(I::Error) -> E2;
+}
+
+impl<I: TryIterator, E2> TryIterator for MapErr<I, E2> {
+    type Item = I::Item;
+    type Error = E2;
+    const fn next(ref self) throws (E2) -> I::Item | none {
+        try self.it.next() catch e {
+            throw (self.f)(e);
+        }
+    }
+}
+
+pub struct TryEnumerate<I> {
+    it: I;
+    i: usize;
+}
+
+impl<I: TryIterator> TryIterator for TryEnumerate<I> {
+    type Item = (usize, I::Item);
+    type Error = I::Error;
+    const fn next(ref self) throws (I::Error) -> (usize, I::Item) | none {
+        if let x: I::Item = try self.it.next() {
+            let at = self.i;
+            self.i = at + 1;
+            return (at, x);
+        }
+        none
+    }
+}
+
+pub struct TryZip<I, J> {
+    a: I;
+    b: J;
+}
+
+impl<I: TryIterator, J: Iterator> TryIterator for TryZip<I, J> {
+    type Item = (I::Item, J::Item);
+    type Error = I::Error;
+    const fn next(ref self) throws (I::Error) -> (I::Item, J::Item) | none {
+        if let x: I::Item = try self.a.next() {
+            if let y: J::Item = self.b.next() {
+                return (x, y);
+            }
+        }
+        none
+    }
+}
+
+pub struct TryChain<I, J> {
+    a: I;
+    b: J;
+    first: bool;
+}
+
+impl<I: TryIterator, J: TryIterator<Item = I::Item, Error = I::Error>> TryIterator for TryChain<I, J> {
+    type Item = I::Item;
+    type Error = I::Error;
+    const fn next(ref self) throws (I::Error) -> I::Item | none {
+        if self.first {
+            if let x: I::Item = try self.a.next() {
+                return x;
+            }
+            self.first = false;
+        }
+        try self.b.next()
+    }
+}
+
+pub struct TryTake<I> {
+    it: I;
+    left: usize;
+}
+
+impl<I: TryIterator> TryIterator for TryTake<I> {
+    type Item = I::Item;
+    type Error = I::Error;
+    const fn next(ref self) throws (I::Error) -> I::Item | none {
+        if self.left == 0 {
+            return none;
+        }
+        self.left -= 1;
+        try self.it.next()
+    }
+}
+
+pub struct TrySkip<I> {
+    it: I;
+    n: usize;
+}
+
+impl<I: TryIterator> TryIterator for TrySkip<I> {
+    type Item = I::Item;
+    type Error = I::Error;
+    const fn next(ref self) throws (I::Error) -> I::Item | none {
+        while self.n > 0 {
+            self.n -= 1;
+            if (try self.it.next()) is none {
+                return none;
+            }
+        }
+        try self.it.next()
+    }
+}
+
+pub struct TryStepBy<I> {
+    it: I;
+    step: usize;
+    first: bool;
+}
+
+impl<I: TryIterator> TryIterator for TryStepBy<I> {
+    type Item = I::Item;
+    type Error = I::Error;
+    const fn next(ref self) throws (I::Error) -> I::Item | none {
+        if self.first {
+            self.first = false;
+            return try self.it.next();
+        }
+        try self.it.nth(self.step - 1)
+    }
+}
+
+pub struct TryTakeWhile<I> {
+    it: I;
+    pred: fn(I::Item) throws (I::Error) -> bool;
+    /// `pred` rejected an item: no more are taken.
+    done: bool;
+}
+
+impl<I: TryIterator> TryIterator for TryTakeWhile<I> {
+    type Item = I::Item;
+    type Error = I::Error;
+    const fn next(ref self) throws (I::Error) -> I::Item | none {
+        if self.done {
+            return none;
+        }
+        if let x: I::Item = try self.it.next() {
+            if try (self.pred)(x) {
+                return x;
+            }
+            self.done = true;
+        }
+        none
+    }
+}
+
+pub struct TrySkipWhile<I> {
+    it: I;
+    pred: fn(I::Item) throws (I::Error) -> bool;
+    /// An item passed `pred`'s test: the rest go through unchecked.
+    done: bool;
+}
+
+impl<I: TryIterator> TryIterator for TrySkipWhile<I> {
+    type Item = I::Item;
+    type Error = I::Error;
+    const fn next(ref self) throws (I::Error) -> I::Item | none {
+        if self.done {
+            return try self.it.next();
+        }
+        while let x: I::Item = try self.it.next() {
+            if !(try (self.pred)(x)) {
+                self.done = true;
+                return x;
+            }
+        }
+        none
+    }
+}
+
+/// `flat_map`: `cur` is the inner iterator being drained.
+pub struct TryFlatMap<I, U> {
+    it: I;
+    f: fn(I::Item) throws (I::Error) -> U;
+    cur: <U as IntoIterator>::IntoIter | none;
+}
+
+impl<I: TryIterator, U: IntoIterator> TryIterator for TryFlatMap<I, U> {
+    type Item = U::Item;
+    type Error = I::Error;
+    const fn next(ref self) throws (I::Error) -> U::Item | none {
+        while true {
+            if let inner: U::IntoIter = self.cur {
+                if let x: U::Item = inner.next() {
+                    self.cur = inner;
+                    return x;
+                }
+                self.cur = none;
+            } else if let x: I::Item = try self.it.next() {
+                self.cur = (try (self.f)(x)).into_iter();
+            } else {
+                return none;
+            }
+        }
+        none
+    }
+}
+
+pub struct TryScan<I, S> {
+    it: I;
+    state: S;
+    f: fn(S, I::Item) throws (I::Error) -> S;
+}
+
+impl<I: TryIterator, S> TryIterator for TryScan<I, S> {
+    type Item = S;
+    type Error = I::Error;
+    const fn next(ref self) throws (I::Error) -> S | none {
+        if let x: I::Item = try self.it.next() {
+            let s = try (self.f)(self.state, x);
+            self.state = s;
+            return s;
+        }
+        none
+    }
+}
+
+pub struct TryInspect<I> {
+    it: I;
+    f: fn(I::Item) throws (I::Error);
+}
+
+impl<I: TryIterator> TryIterator for TryInspect<I> {
+    type Item = I::Item;
+    type Error = I::Error;
+    const fn next(ref self) throws (I::Error) -> I::Item | none {
+        if let x: I::Item = try self.it.next() {
+            try (self.f)(x);
+            return x;
+        }
+        none
+    }
+}
+
+pub struct TryPeekable<I> {
+    it: I;
+    peeked: I::Item | none;
+    has: bool;
+}
+
+impl<I: TryIterator> TryPeekable<I> {
+    /// The next item, left in place for the following `next`; a throw
+    /// leaves nothing peeked.
+    pub const fn peek(ref self) throws (I::Error) -> I::Item | none {
+        if !self.has {
+            self.peeked = try self.it.next();
+            self.has = true;
+        }
+        self.peeked
+    }
+}
+
+impl<I: TryIterator> TryIterator for TryPeekable<I> {
+    type Item = I::Item;
+    type Error = I::Error;
+    const fn next(ref self) throws (I::Error) -> I::Item | none {
+        if self.has {
+            self.has = false;
+            return self.peeked;
+        }
+        try self.it.next()
+    }
+}
+
+/// A throw drops the chunk being built.
+pub struct TryChunks<I> {
+    it: I;
+    size: usize;
+}
+
+impl<I: TryIterator> TryIterator for TryChunks<I> {
+    type Item = List<I::Item>;
+    type Error = I::Error;
+    const fn next(ref self) throws (I::Error) -> List<I::Item> | none {
+        let out: List<I::Item> = List::with_capacity(self.size);
+        while out.len() < self.size {
+            if let x: I::Item = try self.it.next() {
+                out.push(x);
+            } else {
+                break;
+            }
+        }
+        if out.len() == 0 {
+            return none;
+        }
+        out
+    }
+}
+
+/// `results`'s adapter.
+pub struct Results<I> {
+    it: I;
+}
+
+impl<I: TryIterator> Iterator for Results<I> {
+    type Item = Result<I::Item, I::Error>;
+    const fn next(ref self) -> Result<I::Item, I::Error> | none {
+        let r = try self.it.next() catch e {
+            return Result::Err(e);
+        };
+        if let x: I::Item = r {
+            return Result::Ok(x);
+        }
+        none
+    }
+}
+
+pub struct FromResults<I, T, E> {
+    it: I;
+}
+
+impl<I: Iterator<Item = Result<T, E>>, T, E> TryIterator for FromResults<I, T, E> {
+    type Item = T;
+    type Error = E;
+    const fn next(ref self) throws (E) -> T | none {
+        if let r: Result<T, E> = self.it.next() {
+            return try r.get();
+        }
+        none
+    }
+}
+
+pub struct Infallible<I, E> {
+    it: I;
+    /// Never set: it only carries `E`.
+    err: E | none;
+}
+
+impl<I: Iterator, E> TryIterator for Infallible<I, E> {
+    type Item = I::Item;
+    type Error = E;
+    const fn next(ref self) throws (E) -> I::Item | none {
+        if let e: E = self.err {
+            throw e;
+        }
+        self.it.next()
+    }
+}
+
+pub struct TryFromFn<T, E> {
+    f: fn() throws (E) -> (T | none);
+}
+
+impl<T, E> TryIterator for TryFromFn<T, E> {
+    type Item = T;
+    type Error = E;
+    const fn next(ref self) throws (E) -> T | none {
+        try (self.f)()
+    }
+}
+
+/// `collect`'s plain view of a `TryIterator`: ends at the first error,
+/// which it keeps in `err` (shared with the caller).
+struct Shunt<I> {
+    it: I;
+    err: List<I::Error>;
+}
+
+impl<I: TryIterator> Iterator for Shunt<I> {
+    type Item = I::Item;
+    const fn next(ref self) -> I::Item | none {
+        if self.err.len() > 0 {
+            return none;
+        }
+        try self.it.next() catch e {
+            self.err.push(e);
+            none
+        }
     }
 }
