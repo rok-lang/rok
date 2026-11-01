@@ -7,7 +7,7 @@
 // directly, any other hole through `Display::fmt` / `Debug::fmt`
 // (`fstr_*` below), and `rok_fmt_finish` hands the text over as the
 // `str` without a copy. A formatter made by `to_sink` instead hands its
-// text out in chunks as it grows (io's `Writer::write_display`).
+// text out in chunks as it grows (`io::Write::write_display`).
 
 use rok::core::collections::raw::{GcBuf, buf_new};
 
