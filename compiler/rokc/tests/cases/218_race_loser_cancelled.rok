@@ -32,7 +32,7 @@ async fn main() {
     println(f"finished loser {won + (await b) - 2}");
 
     let late = task::spawn(after(5000, "late"));
-    let w = try await task::timeout(Duration::ms(5), late) catch e: TimeoutError { f"{e:?}" };
+    let w = try await task::timeout(Duration::ms(5), late) catch e: task::TimeoutError { f"{e:?}" };
     println(f"timeout {w}");
     println(f"timed out cancelled {late.is_cancelled()}");
     let j = try await late.join() catch _: task::CancellationError { "cancelled" };
