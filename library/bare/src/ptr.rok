@@ -18,13 +18,7 @@ unsafe fn raw_read_volatile<P, T>(p: P) -> T;
 #[intrinsic("rok.ptr.write_volatile")]
 unsafe fn raw_write_volatile<P, T>(p: P, value: T);
 
-/// Size of `T` in bytes (also `rok::bare::mem::size_of`).
-#[intrinsic("rok.size_of")]
-pub fn size_of<T>() -> usize;
-
-/// Alignment of `T` in bytes.
-#[intrinsic("rok.align_of")]
-pub fn align_of<T>() -> usize;
+use rok::bare::mem::{align_of, size_of};
 
 /// A non-null, mutable pointer to one `T` (C `T*`).
 #[repr(transparent)]

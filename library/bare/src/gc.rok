@@ -6,7 +6,8 @@
 // without keeping it alive (a `WEAK_REF` word, refs-lang 8.2.8).
 
 use rok::bare::mem::transmute_unchecked;
-use rok::bare::ptr::{ConstPtr, ManyPtr, Ptr, size_of};
+use rok::bare::mem::size_of;
+use rok::bare::ptr::{ConstPtr, ManyPtr, Ptr};
 use rok::bare::mem::{GcBuf, buf_get, buf_new, buf_same, buf_set};
 
 extern "rok" {

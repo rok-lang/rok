@@ -1681,3 +1681,91 @@ fn expansion_meta_names_resolve_at_definition() {
     );
     assert!(diags[0].message.contains("does not reach"), "{diags:?}");
 }
+
+/// One path per library item: a `pub use` may only flatten a child
+/// module into its parent (`collections::List` for
+/// `collections::list::List`) or sit in the prelude.
+#[test]
+fn library_one_path_per_item() {
+    use rokc_ast::UseTreeKind;
+    use rokc_core::Visibility;
+    // Not user paths yet; removed when their items move.
+    const KNOWN: [(&str, &str); 2] = [
+        ("rok::core::collections::raw", "rok::bare::mem"),
+        ("rok::std::io", "rok::core::collections::slice::AsBytes"),
+    ];
+    fn walk(module: &str, items: &[Item], bad: &mut Vec<String>) {
+        let children: Vec<&str> = items
+            .iter()
+            .filter_map(|i| match i {
+                Item::Mod(m) => Some(m.name.as_str()),
+                _ => None,
+            })
+            .collect();
+        for item in items {
+            match item {
+                Item::Mod(m) => {
+                    if let Some(inner) = &m.items {
+                        walk(&format!("{module}::{}", m.name), inner, bad);
+                    }
+                }
+                Item::Use(u) if u.vis == Visibility::Pub => {
+                    let segs: Vec<&str> = u
+                        .tree
+                        .prefix
+                        .segments
+                        .iter()
+                        .map(|s| s.name.as_str())
+                        .collect();
+                    let path = segs.join("::");
+                    let rel = path.strip_prefix(&format!("{module}::")).unwrap_or(&path);
+                    let first = rel.split("::").next().unwrap_or("");
+                    let named = rel.contains("::") || matches!(u.tree.kind, UseTreeKind::Group(_));
+                    let child = named && children.contains(&first);
+                    let known = KNOWN
+                        .iter()
+                        .any(|(m, p)| *m == module && path.starts_with(p));
+                    if !(child || known || module.ends_with("::prelude")) {
+                        bad.push(format!("{module}: pub use {path}"));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    fn files(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+        for e in std::fs::read_dir(dir).unwrap().flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                files(&p, out);
+            } else if p.extension().is_some_and(|x| x == "rok") {
+                out.push(p);
+            }
+        }
+    }
+    let lib = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../library");
+    let mut bad = Vec::new();
+    let mut seen = 0;
+    for tier in ["bare", "core", "std"] {
+        let src = lib.join(tier).join("src");
+        let mut all = Vec::new();
+        files(&src, &mut all);
+        for f in all {
+            let rel = f.strip_prefix(&src).unwrap().with_extension("");
+            let mut module = format!("rok::{tier}");
+            if rel != std::path::Path::new("lib") {
+                for c in rel.components() {
+                    module.push_str("::");
+                    module.push_str(&c.as_os_str().to_string_lossy());
+                }
+            }
+            let text = std::fs::read_to_string(&f).unwrap();
+            let (tokens, _) = Lexer::new(&text, "t").lex_all();
+            let (program, _) = parse_program(&tokens, "t");
+            walk(&module, &program.items, &mut bad);
+            seen += 1;
+        }
+    }
+    assert!(seen > 50, "{seen}");
+    assert!(bad.is_empty(), "{}", bad.join("\n"));
+}

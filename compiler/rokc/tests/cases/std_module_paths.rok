@@ -1,24 +1,16 @@
-// spec: std §2.9.10 §2.16.6 §2.17.6 §2.20.9 §2.8.9 §2.6.2
+// spec: std §0.1.6 §2.9.10 §2.16.6 §2.17.6 §2.20.9 §2.8.9 §2.6.2
 // expect-exit: 0
 // expect-stdout:
 // 3 1 true 5 2 ready
 
-// The module paths the stdlib spec names resolve to the same items:
-// collections (2.9), sync (2.16.6), channel (2.17.6), future (2.20.9),
-// stream (2.8.9), ops::broadcast (2.6). Glob imports seeing an item and
-// its re-export are not ambiguous.
+// Each item has one path, its defining module; a parent module may
+// flatten its children (`collections::List`).
 use rok::core::collections::{List, Dict};
-use rok::core::sync::atomic::Atomic;
-use rok::core::sync::mutex::Mutex;
-use rok::core::sync::rwlock::RwLock;
-use rok::core::sync::cell::Cell;
-use rok::core::channel::sender::Sender;
-use rok::core::channel::receiver::Receiver;
-use rok::core::future::poll::Poll;
-use rok::core::future::into_future::IntoFuture;
-use rok::core::stream::stream::Stream;
-use rok::core::stream::combinator::merge;
-use rok::core::ops::broadcast::DotAdd;
+use rok::core::sync::{Atomic, Mutex, RwLock, Cell};
+use rok::core::channel::{Sender, Receiver};
+use rok::core::future::{Poll, IntoFuture};
+use rok::core::stream::{Stream, merge};
+use rok::core::ops::DotAdd;
 
 fn send_one(tx: Sender<i32>) { try! tx.send(5); }
 

@@ -438,11 +438,3 @@ impl<A, B, C> Compose<fn(A) -> B> for fn(B) -> C {
     type Output = fn(A) -> C;
     const fn compose(self, rhs: fn(A) -> B) -> fn(A) -> C { |x| self(rhs(x)) }
 }
-
-// The module path of stdlib 2.6: the broadcast (dot operator) traits.
-pub mod broadcast {
-    pub use rok::core::ops::{
-        DotAdd, DotSub, DotMul, DotDiv, DotRem, DotModulo, DotEq, DotNe, DotLt, DotGt, DotLe,
-        DotGe, DotLogicalAnd, DotLogicalOr, DotBitAnd, DotBitOr, DotBitXor, DotShl, DotShr, Dot,
-    };
-}

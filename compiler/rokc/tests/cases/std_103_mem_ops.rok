@@ -12,9 +12,10 @@
 // stdlib 1.3: `MaybeUninit` written then taken out, the free raw memory
 // functions (`copy` allows overlap), and the size / align helpers.
 use rok::bare::mem::{
-    MaybeUninit, align_of, align_of_val, copy, min_align_of, read, read_volatile, replace,
-    size_of, size_of_val, write, write_volatile,
+    MaybeUninit, align_of, align_of_val, copy, min_align_of, read, replace, size_of,
+    size_of_val, write,
 };
+use rok::bare::volatile;
 use rok::bare::ptr::{Ptr, addr_of};
 
 struct Big { a: i64; b: i64; c: i64; }
@@ -44,8 +45,8 @@ fn main() {
     let old = unsafe { replace(p, 40) };
     println(f"replace: {old} -> {xs[0]}");
 
-    unsafe { write_volatile(px, 77); }
-    println(f"volatile: {unsafe { read_volatile(px.as_const()) }}");
+    unsafe { volatile::write(px, 77); }
+    println(f"volatile: {unsafe { volatile::read(px.as_const()) }}");
 
     let w: i64 = 3;
     let f: f32 = 1.0;
