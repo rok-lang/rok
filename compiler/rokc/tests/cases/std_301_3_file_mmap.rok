@@ -10,6 +10,7 @@
 // `unsafe fn File::mmap` maps a file read-only; `unmap` (or `using`)
 // releases it.
 
+use rok::core::marker::share;
 use rok::std::fs;
 use rok::std::fs::File;
 use rok::std::env;
@@ -19,7 +20,8 @@ fn run() throws (IoError | Utf8Error) {
     let path = f"{env::temp_dir()}/rok_mmap_case_{rok::std::process::id()}.txt";
     try fs::write(path, "hello world");
     let f = try File::open(path);
-    let m = try unsafe { f.mmap(11, 0) };
+    let m_own = try unsafe { f.mmap(11, 0) };
+    let m = unsafe { share(m_own) };
     println(f"{m.len()} {m.get(0) ?? 0} {m.get(11) is none}");
     println(try str::from_utf8(m.to_list()));
     println(try str::from_utf8(m.slice(6, 100)));

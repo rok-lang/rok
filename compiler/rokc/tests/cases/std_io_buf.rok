@@ -16,6 +16,7 @@
 // flush on `using` exit), `BufReader` (`read_line` / `lines` / `bytes`
 // across chunk edges that split a UTF-8 char), `line_writer`.
 
+use rok::core::marker::share;
 use rok::std::io;
 use rok::std::io::{IoError, Reader, Writer, BufReader, BufWriter, LineWriter};
 use rok::std::fs;
@@ -25,7 +26,7 @@ use rok::std::process;
 fn main() throws (IoError) {
     let p = env::temp_dir() / f"rok_std_io_buf_{process::id()}.txt";
     using f = try fs::create(p) {
-        let w = BufWriter::with_capacity(16, f);
+        let w = unsafe { share(BufWriter::with_capacity(16, share(f))) };
         let i = 0;
         while i < 5 {
             try w.write_fmt(f"line {i} é\n");
@@ -36,13 +37,13 @@ fn main() throws (IoError) {
     }
     using g = try fs::open(p) {
         // 7-byte chunks: every `é` straddles a chunk edge at some point.
-        let r = BufReader::with_capacity(7, g);
+        let r = unsafe { share(BufReader::with_capacity(7, share(g))) };
         println("first: [" + (try r.read_line()).trim_end() + "]");
         for l in r.lines() { println("> " + (try l.get())); }
     }
     using h = try fs::open(p) {
         let n = 0;
-        for b in BufReader::new(h).bytes() {
+        for b in unsafe { share(BufReader::new(share(h))) }.bytes() {
             try b.get();
             n += 1;
         }
@@ -51,7 +52,7 @@ fn main() throws (IoError) {
 
     let q = env::temp_dir() / f"rok_std_io_buf2_{process::id()}.txt";
     let out = try fs::create(q);
-    using w = BufWriter::new(out) {
+    using w = BufWriter::new(unsafe { share(out) }) {
         try w.write_str("kept by drop");
     }
     try out.close();

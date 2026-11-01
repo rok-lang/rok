@@ -466,7 +466,7 @@ impl<T> Sender<T> {
     /// full, and on a rendezvous channel until the value is received.
     #[track_caller]
     pub const fn send_async(self, value: T) -> SendFuture<T> {
-        SendFuture { tx: self, value: value, handed: false, pushed: false, ticket: 0, counted: false }
+        SendFuture { ch: self.ch, open: self.open, value: value, handed: false, pushed: false, ticket: 0, counted: false }
     }
 
     /// Close this sender; later `send`s on it throw `Closed`.
@@ -476,6 +476,12 @@ impl<T> Sender<T> {
         }
         self.ch.wake_receiver();
     }
+}
+
+/// The compiler releases a `Sender` where its last owner leaves scope
+/// (and when a task ends): the channel closes once every sender is gone.
+impl<T> Drop for Sender<T> {
+    fn drop(ref self) { self.close(); }
 }
 
 impl<T> Clone for Sender<T> {
@@ -611,7 +617,10 @@ impl<T> rok::core::stream::Stream for Receiver<T> {
 
 /// `Sender::send_async`.
 pub struct SendFuture<T> {
-    tx: Sender<T>;
+    /// The sender's channel and open flag: the future borrows the sender,
+    /// which stays with its owner.
+    ch: Chan<T>;
+    open: GcBuf<bool>;
     value: T;
     /// `value` is the hand-off's copy (made at the first push).
     handed: bool;
@@ -624,13 +633,13 @@ pub struct SendFuture<T> {
 impl<T> SendFuture<T> {
     fn uncount(ref self) {
         if self.counted {
-            atomic_sub(self.tx.ch.tx, SUSPENDED, 1, SeqCst);
+            atomic_sub(self.ch.tx, SUSPENDED, 1, SeqCst);
             self.counted = false;
         }
     }
 
     pub fn poll(ref self, ref ctx: rok::core::future::Context) throws (SendError<T>) -> rok::core::future::Poll<()> {
-        let ch = self.tx.ch;
+        let ch = self.ch;
         // A cancelled task does not send.
         if rok::core::task::cancel_requested(ctx) && !self.pushed {
             self.uncount();
@@ -644,7 +653,7 @@ impl<T> SendFuture<T> {
             self.counted = true;
         }
         if !self.pushed {
-            if !self.tx.is_open() {
+            if !atomic_load(self.open, 0, SeqCst) {
                 self.uncount();
                 throw SendError::Closed(self.value);
             }

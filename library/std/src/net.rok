@@ -1199,14 +1199,20 @@ impl UnixListener {
     /// unnamed, the usual case), blocking until one arrives.
     pub fn accept(self) throws (IoError) -> (UnixStream, Path | none) {
         loop {
-            if let c: UnixStream = try self.accept_once() { return (c, try c.peer_addr()); }
+            if let c: UnixStream = try self.accept_once() {
+                let peer = try c.peer_addr();
+                return (c, peer);
+            }
             try self.sock.block(0, "accept");
         }
     }
 
     pub async fn accept_async(self) throws (IoError) -> (UnixStream, Path | none) {
         loop {
-            if let c: UnixStream = try self.accept_once() { return (c, try c.peer_addr()); }
+            if let c: UnixStream = try self.accept_once() {
+                let peer = try c.peer_addr();
+                return (c, peer);
+            }
             await task::readable(try self.sock.live());
         }
     }

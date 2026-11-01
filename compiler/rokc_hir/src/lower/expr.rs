@@ -7,7 +7,9 @@ pub(super) fn lower_block(ctx: &mut LowerCtx<'_>, block: &Block) -> HirBlock {
     ctx.push_scope();
     declare_nested_fns(ctx, block);
     let mut stmts = Vec::with_capacity(block.stmts.len());
+    let owed = ctx.err_frames.len();
     for (i, s) in block.stmts.iter().enumerate() {
+        let from = stmts.len();
         match &s.kind {
             StmtKind::LetStruct {
                 path,
@@ -72,15 +74,17 @@ pub(super) fn lower_block(ctx: &mut LowerCtx<'_>, block: &Block) -> HirBlock {
                 }
             }
         }
+        super::affine::owe_lets(ctx, &mut stmts, from);
     }
     // The tail inherits the block's expected type; in a labelled block it
     // is a `break` to it (spec 3.9.6) and must agree with the others.
     let label_target = (ctx.breakables.len().checked_sub(1))
         .filter(|&i| block.label.is_some() && ctx.breakables[i].0 == block.label);
-    let trailing = block.trailing.as_ref().map(|e| match label_target {
+    let mut trailing = block.trailing.as_ref().map(|e| match label_target {
         Some(idx) => lower_break_value(ctx, idx, e),
         None => lower_expr(ctx, e),
     });
+    super::affine::settle(ctx, owed, &mut stmts, &mut trailing, block.span);
     ctx.pop_scope();
     HirBlock {
         stmts,
@@ -1084,7 +1088,8 @@ pub(super) fn lower_assign(
                         ),
                     );
                 }
-                return Some(assign_local(ctx, name, local, value));
+                let a = assign_local(ctx, name, local, value);
+                return Some(super::affine::reassign(ctx, a, span));
             }
             let segs = [name.as_str()];
             if let Some(full) = ctx.resolve_in(&segs, true) {

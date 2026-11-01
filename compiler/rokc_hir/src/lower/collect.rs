@@ -470,6 +470,7 @@ fn collect<'a>(
         unsafe_fns,
         neg_auto,
         auto_memo: _,
+        affine_memo: _,
         trait_info: base_trait_info,
         statics: static_tys,
         static_leaves: _,
@@ -1683,6 +1684,7 @@ fn collect<'a>(
             unsafe_fns: std::collections::HashSet::new(),
             neg_auto,
             auto_memo: std::cell::RefCell::default(),
+            affine_memo: std::cell::RefCell::default(),
             trait_info,
             statics: static_tys,
             static_leaves: std::cell::RefCell::default(),
@@ -2581,6 +2583,17 @@ fn finish<'a>(
         let s = super::handoff::check(&env, &functions, &input.summaries, lib_pkg.is_some());
         *env.auto_memo.borrow_mut() = None;
         s
+    });
+    let mut summaries = summaries;
+    rokc_diagnostic::time("hir affine check", || {
+        *env.auto_memo.borrow_mut() = Some(HashMap::new());
+        summaries.extend(super::affine::check(
+            &env,
+            &mut functions,
+            &input.summaries,
+            lib_pkg.is_some(),
+        ));
+        *env.auto_memo.borrow_mut() = None;
     });
     let (any_seeds, any_exports) = super::expr::any_link(&env, lib_pkg.as_deref());
     let any_types = super::expr::any_types(&env);

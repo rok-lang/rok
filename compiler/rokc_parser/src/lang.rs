@@ -85,6 +85,8 @@ pub const KNOWN_SLOTS: &[&str] = &[
     "cleanup_done_fn",
     // 0.4.5 method slots
     "drop_method",
+    // 0.4.3 trait slot of a close that can fail (`library/std/src/io.rok`)
+    "close_trait",
 ];
 
 /// Spec 6.4.7: the method a trait slot's trait declares, as `(slot,
@@ -119,6 +121,7 @@ const TRAIT_FORMS: &[(&str, &str, usize)] = &[
     ("hash_trait", "hash", 1),
     ("clone_trait", "clone", 1),
     ("drop_method", "drop", 1),
+    ("close_trait", "close", 1),
 ];
 
 /// What is wrong with `item` in `slot` (spec 6.4.7; stdlib 0.4.8: the

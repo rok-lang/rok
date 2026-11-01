@@ -211,7 +211,10 @@ fn install(signal: Signal, handler: fn() + Send) throws (SignalError) {
         }
         if fd[0] >= 0 {
             let pipe = File::from_fd(fd[0], "signal pipe");
-            let h = try thread::Builder::new().name("rok-signal").spawn(|| dispatch_signals(pipe))
+            let h = try thread::Builder::new().name("rok-signal").spawn(|| {
+                dispatch_signals(pipe);
+                try pipe.close() catch _ {};
+            })
                 catch e { throw SignalError { signal, os_code: e.os_code() }; };
             h.detach();
         }
@@ -385,8 +388,9 @@ impl Command {
         if c.stderr is Stdio::Inherit { c.stderr = Stdio::Piped; }
         let child = try c.start();
         // Both pipes drain together (poll), so neither can fill and stall.
-        let so = child.stdout;
-        let se = child.stderr;
+        // They stay the child's: these handles only close them.
+        let so = unsafe { rok::core::marker::share(child.stdout) };
+        let se = unsafe { rok::core::marker::share(child.stderr) };
         let out: List<u8> = List::new();
         let errs: List<u8> = List::new();
         let fd_out = if so is ChildStdout { so.fd() } else { -1 };
@@ -573,7 +577,7 @@ impl Child {
     /// Wait for the child to end. Closes our end of its stdin first, so
     /// a child reading to EOF can finish.
     pub fn wait(self) throws (IoError) -> ExitStatus {
-        let si = self.stdin;
+        let si = unsafe { rok::core::marker::share(self.stdin) };
         if si is ChildStdin { try si.close(); }
         try self.reap(true);
         ExitStatus { raw: unsafe { self.state[1] } }

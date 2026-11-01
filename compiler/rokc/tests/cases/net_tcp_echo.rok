@@ -13,6 +13,7 @@
 // std::net (302): a TCP echo server and its clients in one program,
 // with the blocking API (an OS thread serves) and the async one (tasks
 // on the pool suspend in accept / read / write).
+use rok::core::marker::share;
 use rok::std::net::{TcpListener, TcpStream, SocketAddr, Ipv4Addr, Ipv6Addr, Shutdown};
 use rok::std::net;
 use rok::std::io::{IoError, Reader, Writer, byte_buf};
@@ -29,7 +30,8 @@ let ip6: Ipv6Addr = try! "2001:db8:0:0:0:0:0:1".parse::<Ipv6Addr>();
 println(f"addr {any} {v6} {ip} {ip6}");
 
 // Blocking: a thread echoes one connection.
-let listener = try! TcpListener::bind(any);
+let listener_own = try! TcpListener::bind(any);
+let listener = unsafe { share(listener_own) };
 let addr = try! listener.local_addr();
 let server = thread::spawn(|| {
     let (conn, peer) = try! listener.accept();
@@ -56,7 +58,8 @@ try! c.close();
 try! listener.close();
 
 // Async: the server task accepts, a task per connection echoes.
-let l2 = try! TcpListener::bind(any);
+let l2_own = try! TcpListener::bind(any);
+let l2 = unsafe { share(l2_own) };
 let a2 = try! l2.local_addr();
 let srv = task::spawn(async {
     let served = 0;
@@ -100,7 +103,8 @@ println(f"async echo: {oks} clients ok");
 
 // A large payload: write and read concurrently (the socket buffers fill).
 let big = task::spawn(async {
-    let s = try! await net::tcp_connect_async(a2);
+    let s_own = try! await net::tcp_connect_async(a2);
+    let s = unsafe { share(s_own) };
     // The writer task owns its buffer: a list cannot be shared with it.
     let w = task::spawn(async {
         let data = byte_buf(100000);
@@ -117,7 +121,8 @@ await srv;
 try! l2.close();
 
 // `incoming()` over a blocking listener.
-let l3 = try! net::tcp_listen("127.0.0.1:0");
+let l3_own = try! net::tcp_listen("127.0.0.1:0");
+let l3 = unsafe { share(l3_own) };
 let a3 = try! l3.local_addr();
 let t3 = thread::spawn(|| {
     let c = try! net::tcp_connect(f"{a3}");

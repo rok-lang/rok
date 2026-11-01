@@ -473,6 +473,14 @@ pub trait Reader {
     }
 }
 
+/// A resource whose close can fail: a file, a pipe, a buffered writer.
+/// Its owner closes it, `try x.close()` or `using`; leaving its scope
+/// open is an error, since a close error would be lost (stdlib 2.13.4).
+#[lang("close_trait")]
+pub trait Close {
+    fn close(self) throws (IoError);
+}
+
 pub trait Writer {
     /// Write some prefix of `buf`; returns its length.
     fn write(ref self, buf: List<u8>) throws (IoError) -> usize;
@@ -674,6 +682,18 @@ impl<W: Writer> BufWriter<W> {
     pub fn buffer_len(self) -> usize { self.pending.len() }
 }
 
+impl<W: Writer + Close> BufWriter<W> {
+    /// Flush, then close the inner writer.
+    pub fn close(self) throws (IoError) {
+        let inner = try self.into_inner();
+        try inner.close();
+    }
+}
+
+impl<W: Writer + Close> Close for BufWriter<W> {
+    fn close(self) throws (IoError) { try self.close(); }
+}
+
 /// Write out what `w` holds (not flushing `inner`). The batch is handed
 /// over whole, so `inner` may keep the list.
 fn buf_flush<W: Writer>(ref w: BufWriter<W>) throws (IoError) {
@@ -736,6 +756,15 @@ impl<W: Writer> LineWriter<W> {
 
     /// Flushes, then hands back the inner writer.
     pub fn into_inner(self) throws (IoError) -> W { try self.buf.into_inner() }
+}
+
+impl<W: Writer + Close> LineWriter<W> {
+    /// Flush, then close the inner writer.
+    pub fn close(self) throws (IoError) { try self.buf.close(); }
+}
+
+impl<W: Writer + Close> Close for LineWriter<W> {
+    fn close(self) throws (IoError) { try self.close(); }
 }
 
 impl<W: Writer> Writer for LineWriter<W> {

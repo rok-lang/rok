@@ -14,7 +14,7 @@
 // `read_async` still fills its buffer). `Dir::read_dir_async` streams
 // entries in batches; the free `read_dir_async` lists them all at once.
 
-use rok::std::io::{IoError, IoErrorKind, Reader, Writer, Seek, AsBytes, check, region, read_all, take_handle, write_region, text_of, byte_buf, list_of, use_begin, use_end, use_close};
+use rok::std::io::{Close, IoError, IoErrorKind, Reader, Writer, Seek, AsBytes, check, region, read_all, take_handle, write_region, text_of, byte_buf, list_of, use_begin, use_end, use_close};
 pub use rok::std::io::SeekFrom;
 use rok::std::path::{Path, AsPath, Component};
 use rok::std::env;
@@ -635,7 +635,8 @@ impl Stream for ReadDirStream {
                         let shared = Handoff::new(self.rd);
                         let lock = self.lock;
                         task::spawn_blocking(|| {
-                            let rd = shared.get();
+                            // The stream still owns `rd`: this is a second handle.
+                            let rd = rok::core::marker::share(shared.get());
                             let out: List<Result<DirEntry, IoError>> = List::new();
                             using g = lock.lock() {
                                 while out.len() < DIR_BATCH {
@@ -690,6 +691,10 @@ impl Writer for File {
 
 impl Seek for File {
     fn seek(ref self, pos: SeekFrom) throws (IoError) -> u64 { try self.seek(pos) }
+}
+
+impl Close for File {
+    fn close(self) throws (IoError) { try self.close(); }
 }
 
 /// `using f = try fs::open(..) { .. }` closes `f` on the way out.
@@ -792,7 +797,7 @@ impl Dir {
             let base = if p == "." { "" } else { p };
             let cell: GcBuf<isize> = buf_new(1);
             cell[0] = d as isize;
-            ReadDir { d: cell, dir: self, base: base, name: byte_buf(NAME_MAX) }
+            ReadDir { d: cell, dir: DirView { fd: self.fd, path: self.path }, base: base, name: byte_buf(NAME_MAX) }
         }
     }
 
@@ -960,10 +965,26 @@ impl DirEntry {
 pub struct ReadDir {
     /// The `DIR*` (0 once closed), shared by copies of the handle.
     d: GcBuf<isize>;
-    dir: Dir;
+    dir: DirView;
     base: str;
     /// Room for the next entry name.
     name: List<u8>;
+}
+
+/// The listed `Dir`'s descriptor and path: a view, not an owner (the
+/// `Dir` stays with its owner).
+struct DirView {
+    fd: GcBuf<i32>;
+    path: str;
+}
+
+impl DirView {
+    const fn fd(self) -> i32 { unsafe { self.fd[0] } }
+
+    const fn shown(self, p: str) -> str {
+        if self.path == "" { return p; }
+        Path::new(self.path).join(Path::new(p)).as_str()
+    }
 }
 
 /// Room for any entry name (macOS `d_name` holds 1024 bytes).
@@ -1090,18 +1111,15 @@ pub fn write_atomic<P: AsPath, D: AsBytes>(path: P, data: D) throws (IoError) {
     let pid = unsafe { rok_os_getpid() };
     let n = 0;
     let tmp = Path::empty();
-    let f = file_of(-1, "");
-    loop {
+    let f = loop {
         tmp = parent.join(Path::new(f".{name}.tmp.{pid}.{n}"));
         let opened = try open_with(tmp, OpenOptions::new().write(true).create_new(true)) catch e {
             if e.kind() == IoErrorKind::AlreadyExists { n += 1; continue; }
             throw e;
         };
-        f = opened;
-        break;
-    }
+        break opened;
+    };
     try stage(f, data.byte_slice(), tmp, target) catch e {
-        try f.close() catch _ {};
         try remove_file(tmp) catch _ {};
         throw e;
     };
@@ -1111,9 +1129,10 @@ pub fn write_atomic<P: AsPath, D: AsBytes>(path: P, data: D) throws (IoError) {
     try d.close();
 }
 
+/// Closes `f` on every path.
 fn stage(f: File, data: Slice<u8>, tmp: Path, target: Path) throws (IoError) {
-    try f.write_all(data);
-    try f.sync_all();
+    try f.write_all(data) catch e { try f.close() catch _ {}; throw e; };
+    try f.sync_all() catch e { try f.close() catch _ {}; throw e; };
     try f.close();
     try rename(tmp, target);
 }

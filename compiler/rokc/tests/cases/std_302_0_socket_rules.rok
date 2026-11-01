@@ -9,6 +9,7 @@
 // using closed it: 2 0
 
 // Socket rules: write / read forms, copies, `try_clone`, close.
+use rok::core::marker::share;
 use rok::std::net;
 use rok::std::net::{Shutdown, TcpStream};
 use rok::std::io::{IoError, IoErrorKind, byte_buf};
@@ -23,18 +24,19 @@ fn main() throws (IoError) {
     try c.write_str("str");
     try c.write_all(bytes);
     try c.write_all("+slice!"[0:6]);
-    let alias = c;
+    let alias = unsafe { share(c) };
     try alias.shutdown(Shutdown::Write);
     let all = try s.read_to_end();
     println(f"got: {try! str::from_utf8(all[0:all.len()])}");
     println(f"copy shares: {(try alias.local_addr()) == (try c.local_addr())}");
 
     let dup = try s.try_clone();
+    let s_closed = unsafe { share(s) };
     try! s.close();
     try dup.write_str("x");
     println("clone after close: ok");
     let buf = byte_buf(4);
-    let k = try s.read(buf) catch e: IoError { if e.kind() == IoErrorKind::InvalidInput { 99 } else { 98 } };
+    let k = try s_closed.read(buf) catch e: IoError { if e.kind() == IoErrorKind::InvalidInput { 99 } else { 98 } };
     println(f"closed: {if k == 99 { "InvalidInput" } else { "other" }}");
 
     using d = dup {

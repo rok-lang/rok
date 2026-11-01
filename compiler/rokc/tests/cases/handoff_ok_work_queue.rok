@@ -5,13 +5,15 @@
 
 // spec: std 213-marker §2.13.9
 // Work queue: jobs popped off a list and sent to workers; results back.
+use rok::core::marker::share;
 use rok::std::thread;
 struct Job { id: i32; data: List<i32>; }
 fn main() {
     let jobs: List<Job> = [];
     for i in 0..8 { jobs.push(Job { id: i, data: [i, i * 2] }); }
     let (tx, rx) = channel::<Job>();
-    let (rt, rr) = channel::<i32>();
+    let (rt_own, rr) = channel::<i32>();
+    let rt = unsafe { share(rt_own) };
     let workers: List<thread::JoinHandle<i32>> = [];
     for _ in 0..2 {
         workers.push(thread::spawn(|| {

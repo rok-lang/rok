@@ -8,6 +8,7 @@
 // registrations left: 0
 
 // `shutdown` / `close` from another task wake a pending socket operation.
+use rok::core::marker::share;
 use rok::std::net::{TcpListener, TcpStream, SocketAddr, Shutdown};
 use rok::std::io::{IoError, byte_buf};
 
@@ -65,7 +66,8 @@ await t3;
 println("shutdown(Both) + close: finished");
 try! c3.close();
 
-let idle = try! TcpListener::bind(any);
+let idle_own = try! TcpListener::bind(any);
+let idle = unsafe { share(idle_own) };
 let acc = task::spawn(async {
     let r: str = try {
         await idle.accept_async();

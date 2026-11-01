@@ -11,6 +11,7 @@
 // pipes: 1000 true true
 
 // `io::copy` takes each kernel path, or the loop, from the reader's offset.
+use rok::core::marker::share;
 use rok::std::io;
 use rok::std::io::{IoError, Reader, Writer, BufReader, byte_buf};
 use rok::std::fs;
@@ -104,7 +105,7 @@ fn main() throws (IoError) {
     // A buffered reader has no descriptor of its own.
     using f = try fs::open(src) {
         try f.read_exact(byte_buf(10));
-        let br = BufReader::new(f);
+        let br = unsafe { share(BufReader::new(share(f))) };
         using w = try fs::create(dst) {
             let n = try io::copy(ref br, ref w);
             println(f"buffered: {n} {(try fs::read(dst)) == want}");
@@ -115,8 +116,8 @@ fn main() throws (IoError) {
     let small = pattern(1000, 3);
     try fs::write(src, small);
     let child = try Command::new(Path::new("cat")).stdin(Stdio::Piped).stdout(Stdio::Piped).spawn();
-    let si: ChildStdin = child.stdin ?? panic("no stdin");
-    let so: ChildStdout = child.stdout ?? panic("no stdout");
+    let si: ChildStdin = unsafe { share(child.stdin) } ?? panic("no stdin");
+    let so: ChildStdout = unsafe { share(child.stdout) } ?? panic("no stdout");
     using r = try fs::open(src) {
         let n = try io::copy(ref r, ref si);
         try si.close();

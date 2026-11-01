@@ -20,6 +20,7 @@ use crate::{
     HirTy, HirUnionKind, NicheArg, NicheVal, StructId, TraitRef, UnionStorage,
 };
 
+mod affine;
 mod bignum;
 mod bounds;
 mod broadcast;
@@ -1369,6 +1370,8 @@ struct Tables<'a> {
     /// `auto_trait` answers by type and trait, while the program no
     /// longer changes (`send_check`); `None` otherwise.
     auto_memo: std::cell::RefCell<Option<HashMap<String, HashMap<HirTy, bool>>>>,
+    /// `affine::affine` answers by type.
+    affine_memo: std::cell::RefCell<HashMap<HirTy, Option<affine::Kind>>>,
     /// Trait key → declared methods + supertraits (`any Tr` calls).
     trait_info: HashMap<String, TraitInfo>,
     /// Module-level `static` items by name → declared type.
@@ -1718,6 +1721,7 @@ impl Tables<'_> {
             unsafe_fns: std::collections::HashSet::new(),
             neg_auto: std::collections::HashSet::new(),
             auto_memo: std::cell::RefCell::default(),
+            affine_memo: std::cell::RefCell::default(),
             trait_info: HashMap::new(),
             statics: HashMap::new(),
             static_leaves: std::cell::RefCell::default(),
@@ -2999,6 +3003,8 @@ struct LowerCtx<'a> {
     /// Enclosing `catch` / `try?` / `try!` / `finally` frames, innermost
     /// last (see `throws`).
     err_frames: Vec<ErrFrame>,
+    /// By-value parameters whose release the body owes (`affine`).
+    owe_params: Vec<(LocalId, HirTy)>,
     /// Probe pass over a closure body: collects the error types that
     /// escape it instead of reporting them.
     throws_probe: Option<Vec<HirTy>>,
@@ -3190,6 +3196,7 @@ impl<'a> LowerCtx<'a> {
             fn_throws: None,
             try_depth: 0,
             err_frames: Vec::new(),
+            owe_params: Vec::new(),
             throws_probe: None,
             uncaught_in_main: false,
             throwing_calls: 0,

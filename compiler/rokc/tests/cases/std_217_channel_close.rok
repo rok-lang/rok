@@ -9,12 +9,14 @@
 // mpsc total 30
 
 // Closing a channel: buffered values drain, then `recv` returns none.
+use rok::core::marker::share;
 fn show(v: i32 | none) -> str {
     match v { x: i32 => f"{x}", none => "none" }
 }
 
 fn main() {
-    let (tx, rx) = channel::<i32>();
+    let (tx_own, rx) = channel::<i32>();
+    let tx = unsafe { share(tx_own) };
     println(f"try_recv empty: {show(rx.try_recv())}");
     try! tx.send(1);
     try! tx.send(2);

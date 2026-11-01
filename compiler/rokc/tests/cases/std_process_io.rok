@@ -23,6 +23,7 @@
 // stdout / stderr writers), then drives `sh` / `tr` / `env` through
 // `output` / `spawn` / `status` with env, cwd, signals.
 
+use rok::core::marker::share;
 use rok::std::process;
 use rok::std::process::{Command, Stdio};
 use rok::std::io;
@@ -53,11 +54,11 @@ fn main() throws (IoError) {
 
     let me = try Command::new(args[0]).args(["child", "x", "y"])
         .stdin(Stdio::Piped).stdout(Stdio::Piped).stderr(Stdio::Piped).spawn();
-    let si = me.stdin ?? panic("stdin not piped");
+    let si = unsafe { share(me.stdin) } ?? panic("stdin not piped");
     try si.write_str("one\ntwo\r\nthree");
     try si.close();
-    print(try (me.stdout ?? panic("stdout not piped")).read_to_str());
-    println("child stderr: [" + (try (me.stderr ?? panic("stderr not piped")).read_to_str()) + "]");
+    print(try (unsafe { share(me.stdout) } ?? panic("stdout not piped")).read_to_str());
+    println("child stderr: [" + (try (unsafe { share(me.stderr) } ?? panic("stderr not piped")).read_to_str()) + "]");
     let st = try me.wait();
     println(f"child exit: {st.code() ?? -1} {st.success()}");
 
@@ -71,10 +72,10 @@ fn main() throws (IoError) {
 
     let tr = try Command::new("tr").arg("a-z").arg("A-Z")
         .stdin(Stdio::Piped).stdout(Stdio::Piped).spawn();
-    let tin = tr.stdin ?? panic("no stdin");
+    let tin = unsafe { share(tr.stdin) } ?? panic("no stdin");
     try tin.write_str("piped text\n");
     try tin.close();
-    print(try (tr.stdout ?? panic("no stdout")).read_to_str());
+    print(try (unsafe { share(tr.stdout) } ?? panic("no stdout")).read_to_str());
     println(f"{try tr.wait()}");
 
     let pwd = try Command::new("pwd").current_dir("/").output();

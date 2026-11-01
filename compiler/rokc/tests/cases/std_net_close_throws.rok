@@ -9,15 +9,18 @@
 
 // A socket's `close` throws what the OS reports; closing twice is a
 // no-op.
+use rok::core::marker::share;
 use rok::std::io::IoError;
 use rok::std::net;
 
 fn main() throws (IoError) {
     let l = try net::tcp_listen("127.0.0.1:0");
     let addr = try l.local_addr();
-    let c = try net::tcp_connect(addr);
+    let c_own = try net::tcp_connect(addr);
+    // A second handle checks what a closed socket does.
+    let c = unsafe { share(c_own) };
     let (s, _) = try l.accept();
-    try c.close();
+    try c_own.close();
     println(f"closed: {c.fd() == -1}");
     try c.close();
     println("again: ok");
