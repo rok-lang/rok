@@ -1553,8 +1553,8 @@ pub(super) fn finish_throwing_body(ctx: &LowerCtx<'_>, block: &mut HirBlock) {
     }
 }
 
-/// Warn on `return`, `break` and `continue` that leave `fin`: they drop
-/// an error in flight. Jumps inside a closure, or to a loop or labelled
+/// Reject `return`, `break` and `continue` that leave `fin`: they would
+/// drop an error in flight. Jumps inside a closure, or to a loop or labelled
 /// block within `fin`, stay.
 fn finally_jumps(ctx: &LowerCtx<'_>, fin: &Block) {
     #[derive(Default)]
@@ -1616,10 +1616,9 @@ fn finally_jumps(ctx: &LowerCtx<'_>, fin: &Block) {
         if stays {
             continue;
         }
-        ctx.emit_lint(
-            "finally_jump",
+        ctx.emit_error_help(
             at,
-            format!("`{what}` leaves a `finally` block and drops the error in flight"),
+            format!("`{what}` cannot leave a `finally` block: it would drop the error in flight"),
             format!("move the `{what}` after the `try` expression; `finally` only cleans up"),
         );
     }

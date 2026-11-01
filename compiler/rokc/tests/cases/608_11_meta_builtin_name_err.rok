@@ -1,0 +1,28 @@
+// spec: 006.02-built-in-attributes
+// expect-error: `#[bench]` is a built-in attribute; a meta block cannot redefine it
+// expect-error: `#[path]` is a built-in attribute; a meta block cannot redefine it
+// expect-error: help: rename it, e.g. `#[impl_attribute(my_bench)]`
+
+// Spec 6.2: built-in attribute names are reserved, those listed late
+// (`bench`, `path`, ..) too: a meta block taking one is an error.
+#[impl_attribute(bench)]
+pub @attribute {
+    @accept(fn)
+    fn @item.name(@item.params) -> @item.return_type {
+        println("bench @item.name");
+        @item.body
+    }
+}
+
+#[impl_attribute(path)]
+pub @attribute {
+    @accept(fn)
+    @item
+}
+
+fn f() -> i32 { return 1; }
+
+fn main() -> i32 {
+    println(f() + 2);
+    return 0;
+}

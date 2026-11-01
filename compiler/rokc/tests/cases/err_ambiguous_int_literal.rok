@@ -1,0 +1,19 @@
+// spec: 001.06-numeric-literals
+// expect-error: 15:15: ambiguous literal: integer literal `1` into `f32 | u16 | u8`, which has more than one integer member
+// expect-error: 16:29: ambiguous literal: integer literal `5` into `f32 | u16 | u8`, which has more than one integer member
+// expect-error: help: write `1u16` or `1u8`, or `1.0` for the `f32`
+
+// An unsuffixed integer into a sum with several integer members and a
+// float member names no member: an error asks for a suffix.
+fn f(x: u16 | u8 | f32) -> str {
+    match x { _: u16 => "u16", _: u8 => "u8", _: f32 => "f32" }
+}
+
+fn g(x: i64 | f64) -> str { match x { _: i64 => "i64", _: f64 => "f64" } }
+
+fn main() {
+    let a = f(1);
+    let v: u16 | u8 | f32 = 5;
+    // A suffix, or a single integer member: fine.
+    println(f"{a} {f(v)} {f(1u16)} {f(1u8)} {f(1.0)} {g(1)}");
+}

@@ -1,0 +1,31 @@
+// spec: 002.08.3-associated-types
+// expect-error: 26:25: `Out` is ambiguous here: the associated type `Out` shadows the outer type `Out` inside the impl for `N`
+// expect-error: 14:27: `Item` is ambiguous here: the associated type `Item` shadows the outer type `Item` inside the trait `Bag`
+// expect-error: help: write `Self::Out` for the associated type or `pkg::Out` for the outer one
+
+// Spec 2.8.3: inside a trait or impl whose associated type hides an
+// outer type, the bare name is ambiguous: an error asking for
+// `Self::X` or the outer path. Declaring it alone only warns.
+struct Out { n: i32; }
+struct Item { n: i32; }
+
+trait Bag {
+    type Item;
+    fn first(ref self) -> Item;
+}
+
+trait Src {
+    type Out;
+    fn get(ref self) -> Self::Out;
+}
+
+struct N { n: i32; }
+
+impl Src for N {
+    type Out = i32;
+    fn get(ref self) -> Out { self.n }
+}
+
+fn main() {
+    println(N { n: 4 }.get());
+}

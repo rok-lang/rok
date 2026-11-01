@@ -1,0 +1,23 @@
+// spec: 005.02-const
+// expect-error: 17:5: cannot call `push` on `XS`: it is a const, and each use builds a new value, so the change would be dropped
+// expect-error: 18:5: cannot call `set` on `K`: it is a const, and each use builds a new value, so the change would be dropped
+// expect-error: help: copy it into a variable and change that: `let xs = XS; xs.push(..);`
+
+// A heap const is built again at each use, and a const struct is a
+// fresh value: a mutating method on one is an error.
+struct Cell { v: i32; }
+impl Cell { fn set(ref self, n: i32) { self.v = n; } }
+
+const XS: List<i32> = [1, 2, 3];
+const K: Cell = Cell { v: 0 };
+
+fn main() {
+    // Reading is fine; a copy in a variable can change.
+    let xs = XS;
+    XS.push(4);
+    K.set(4);
+    xs.push(4);
+    let k = K;
+    k.set(4);
+    println(f"{XS.len()} {K.v} {xs.len()} {k.v}");
+}

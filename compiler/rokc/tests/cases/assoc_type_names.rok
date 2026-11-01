@@ -1,19 +1,14 @@
 // spec: refs-lang §2.8.3
 // expect-exit: 0
-// expect-warning: associated type `Item` shadows the outer type `Item` inside the impl for `Bag`
-// expect-warning: associated type `Out` shadows the outer type `Out` inside the trait `Src`
 // expect-stdout:
 // trait: 3 1 | 5 2
 // impl: 3 none
 // generic: 9 1 6
-// shadow: 7 outer
+// bag: 7
 
 // Spec 2.8.3: inside a trait or impl, bare `X` and `Self::X` both name
-// the associated type `X` (signatures and bodies), shadowing an outer
-// type `X` (with a warning).
-struct Out { tag: str; }
-struct Item { name: str; }
-
+// the associated type `X` (signatures and bodies). With an outer type
+// `X` the bare name is an error (err_assoc_type_shadow_use).
 trait Src {
     type Out;
     fn get(ref self) -> Self::Out;
@@ -65,7 +60,6 @@ impl<T: Copy> Src for Wrap<T> {
     }
 }
 
-// `Item` here is the associated type `i32`, not `struct Item`.
 struct Bag { n: i32; }
 impl Iterator for Bag {
     type Item = i32;
@@ -92,6 +86,5 @@ fn main() {
     let w = Wrap { v: 9 };
     println(f"generic: {w.get()} {w.pair().len() - 1} {n.apply(|x| x * 2)}");
     let b = Bag { n: 7 };
-    let outer = Item { name: "outer" };
-    println(f"shadow: {show(b.next() ?? 0)} {outer.name}");
+    println(f"bag: {show(b.next() ?? 0)}");
 }

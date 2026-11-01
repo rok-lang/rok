@@ -736,7 +736,7 @@ fn collect<'a>(
     for (alias, c) in aliased {
         names.consts.entry(alias).or_insert(c);
     }
-    warn_assoc_shadowing(program, &names, &mut pre_diags);
+    check_assoc_shadowing(program, &names, &mut pre_diags);
     let defaults = assoc_defaults(program, &names, &base_trait_defs);
     for (i, added) in defaults {
         if let Item::Impl(imp) = &mut owned.items[i] {
@@ -7761,9 +7761,46 @@ fn impl_param_types(
     }
 }
 
-/// Spec 2.8.3: warn when an associated type hides an outer type of the
-/// same name inside its trait / impl.
-fn warn_assoc_shadowing(
+/// Where a trait or impl writes a path starting with `name`, outside its
+/// header.
+fn bare_uses(it: &Item, name: &str) -> Vec<rokc_diagnostic::Span> {
+    struct Uses<'n> {
+        name: &'n str,
+        out: Vec<rokc_diagnostic::Span>,
+    }
+    impl crate::walk::AstVisitor for Uses<'_> {
+        fn path(&mut self, p: &rokc_ast::Path) {
+            if p.segments.first().is_some_and(|s| s.name == self.name) {
+                self.out.push(p.span);
+            }
+        }
+    }
+    let mut v = Uses {
+        name,
+        out: Vec::new(),
+    };
+    match it {
+        Item::Impl(i) => {
+            for ii in &i.items {
+                match ii {
+                    AstImplItem::Method(m) => crate::walk::walk_fn(&mut v, m),
+                    AstImplItem::AssocType { ty, .. } => crate::walk::walk_ty(&mut v, ty),
+                    AstImplItem::Const(c) => {
+                        crate::walk::walk_ty(&mut v, &c.ty);
+                        crate::walk::walk_expr(&mut v, &c.value);
+                    }
+                }
+            }
+        }
+        _ => crate::walk::walk_item(&mut v, it),
+    }
+    v.out
+}
+
+/// Spec 2.8.3: an associated type that hides an outer type of the same
+/// name inside its trait / impl. A bare use of the name there is an
+/// error; the declaration alone warns.
+fn check_assoc_shadowing(
     program: &Program,
     names: &TypeNames,
     diags: &mut Vec<rokc_diagnostic::RokDiagnostic>,
@@ -7798,7 +7835,35 @@ fn warn_assoc_shadowing(
             let outer = names
                 .canon(&[a.as_str()], &module, &[], it.span())
                 .filter(|full| !names.traits.contains(full));
-            if prim || outer.is_some() {
+            if !prim && outer.is_none() {
+                continue;
+            }
+            let uses = bare_uses(it, &a);
+            let outer_help = match &outer {
+                // Own items from the root; library and dependency items
+                // by their path.
+                Some(full) if package_of(&module_of(full)).is_empty() => {
+                    format!(" or `pkg::{full}` for the outer one")
+                }
+                Some(full) => format!(" or `{full}` for the outer one"),
+                None => String::new(),
+            };
+            for at in &uses {
+                diags.push(
+                    rokc_diagnostic::RokDiagnostic::error(
+                        rokc_diagnostic::ErrorKind::Type,
+                        *at,
+                        format!(
+                            "`{a}` is ambiguous here: the associated type `{a}` shadows the \
+                             outer type `{a}` inside the {owner} (spec 2.8.3)"
+                        ),
+                    )
+                    .with_help(format!(
+                        "write `Self::{a}` for the associated type{outer_help}"
+                    )),
+                );
+            }
+            if uses.is_empty() {
                 diags.push(rokc_diagnostic::RokDiagnostic::warning(
                     rokc_diagnostic::ErrorKind::Type,
                     it.span(),

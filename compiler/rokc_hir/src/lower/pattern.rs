@@ -1662,19 +1662,19 @@ pub(super) fn int_fits(v: i128, p: PrimTy) -> bool {
     }
 }
 
-/// Warn when binding pattern `name` looks meant as a value: it names a
-/// const or static, or is capitalised and close to a variant of the
-/// scrutinee's enum. Either way it binds every value.
+/// Reject binding pattern `name` when it looks meant as a value: it
+/// names a const or static (any case), or is capitalised and close to a
+/// variant of the scrutinee's enum. Either way it would bind every value.
 fn binds_const(ctx: &LowerCtx<'_>, name: &str, scrut_ty: &HirTy, at: rokc_diagnostic::Span) {
-    if !name.starts_with(|c: char| c.is_uppercase()) {
-        return;
-    }
     let segs = [name];
     let what = if ctx.resolve_in(&segs, false).is_some() {
         "const"
     } else if ctx.resolve_in(&segs, true).is_some() {
         "static"
     } else {
+        if !name.starts_with(|c: char| c.is_uppercase()) {
+            return;
+        }
         let HirTy::Enum(id) = scrut_ty else {
             return;
         };
@@ -1691,27 +1691,23 @@ fn binds_const(ctx: &LowerCtx<'_>, name: &str, scrut_ty: &HirTy, at: rokc_diagno
         };
         let base = enum_base_name(&def.name);
         let rest = if v.arity == 0 { "" } else { "(..)" };
-        let msg = format!("`{name}` here is a new variable that matches every value");
-        let help = format!("did you mean the variant `{base}::{}{rest}`?", v.name);
+        ctx.emit_error_help(
+            at,
+            format!("`{name}` here would be a new variable that matches every value"),
+            format!("did you mean the variant `{base}::{}{rest}`?", v.name),
+        );
         // Only a unit variant is a drop-in replacement for the name.
         if v.arity == 0 && ctx.src(at) == Some(name) {
             let text = format!("{base}::{}", v.name);
-            let fix = rokc_diagnostic::Fix {
-                span: at,
-                title: format!("write `{text}`"),
-                text,
-            };
-            ctx.emit_lint_fix("pattern_binds_const", at, msg, help, fix);
-        } else {
-            ctx.emit_lint("pattern_binds_const", at, msg, help);
+            ctx.fix_last(at, text.clone(), format!("write `{text}`"));
         }
         return;
     };
-    ctx.emit_lint(
-        "pattern_binds_const",
+    ctx.emit_error_help(
         at,
         format!(
-            "`{name}` here is a new variable that matches every value, not the {what} `{name}`"
+            "`{name}` here would be a new variable that matches every value, not the {what} \
+             `{name}`"
         ),
         format!("to compare with the {what}, write `x if x == {name}`"),
     );

@@ -11,8 +11,10 @@ static C: Cell<i64> = Cell::new(0);
 static NAME: Cell<str> = Cell::new("a");
 
 fn main() {
-    let t = thread::spawn(|| { C.set(1); NAME.set("b"); 0 });
-    C.set(2);
+    // Reads only: a `ref self` call such as `C.set(1)` on a static is
+    // its own error (5.3).
+    let t = thread::spawn(|| { C.get() });
+    println(C.get());
     try! t.join();
     println(f"{C.get()} {NAME.get()}");
 }

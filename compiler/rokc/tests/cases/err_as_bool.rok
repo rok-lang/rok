@@ -1,0 +1,20 @@
+// spec: 002.14-cast-and-conversion
+// expect-error: 13:13: cannot cast `f64` as `bool`
+// expect-error: 14:13: cannot cast `f64` as `bool`
+// expect-error: 16:13: cannot cast `i32` as `bool`
+// expect-error: 17:13: cannot cast `u8` as `bool`
+// expect-error: help: compare instead: `x != 0.0`
+// expect-error: help: compare instead: `(x - 1.0) != 0.0`
+// expect-error: help: compare instead: `n != 0`
+
+// Only `bool` casts as `bool`: a number compares with zero instead.
+fn main() {
+    let x = 0.5;
+    let a = x as bool;
+    let b = (x - 1.0) as bool;
+    let n = -1;
+    let c = n as bool;
+    let d = 2u8 as bool;
+    // What the error asks for, and `bool` casts out still work.
+    println(f"{a} {b} {c} {d} {x != 0.0} {n != 0} {true as i32}");
+}

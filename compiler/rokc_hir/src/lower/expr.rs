@@ -945,9 +945,9 @@ const HEAP_CONSTS: &[&str] = &[
     "OrderedSet",
 ];
 
-/// Warn on a method call whose change to `receiver` is lost: a `ref self`
-/// write back to an element, entry or static that has no place to go
-/// (`dropped`), or any change to a `const`.
+/// A method call whose change to `receiver` is lost: any change to a
+/// `const` or a `ref self` write to a static is an error; a `ref self`
+/// write to an element or entry (`dropped`) warns.
 fn receiver_write(
     ctx: &LowerCtx<'_>,
     receiver: &Expr,
@@ -977,12 +977,11 @@ fn receiver_write(
                     });
                 if dropped || heap {
                     let low = name.to_lowercase();
-                    ctx.emit_lint(
-                        "const_item_mutation",
+                    ctx.emit_error_help(
                         span,
                         format!(
-                            "`{name}` is a const: each use builds a new value, so `{method}` \
-                             changes a copy that is dropped"
+                            "cannot call `{method}` on `{name}`: it is a const, and each use \
+                             builds a new value, so the change would be dropped"
                         ),
                         format!(
                             "copy it into a variable and change that: `let {low} = {name}; \
@@ -991,12 +990,11 @@ fn receiver_write(
                     );
                 }
             } else if dropped && ctx.resolve_in(&[name], true).is_some() {
-                ctx.emit_lint(
-                    "discarded_ref_write",
+                ctx.emit_error_help(
                     span,
                     format!(
-                        "the write to `{text}` is discarded: `{method}` takes `ref self`, and a \
-                         static is never written"
+                        "cannot call `{method}` on `{text}`: it takes `ref self`, and a static \
+                         is never written"
                     ),
                     format!(
                         "copy it into a variable and call `{method}` there: `let v = {text}; \
@@ -1293,12 +1291,11 @@ pub(super) fn lower_assign(
             if let (HirExprKind::Local(l), ExprKind::Path(p)) = (&root_h.kind, &cur.kind) {
                 if ctx.value_captured.contains(l) {
                     let name = p.segments.last().map_or("", |s| s.name.as_str());
-                    ctx.emit_lint(
-                        "capture_field_write",
+                    ctx.emit_error_help(
                         target.span,
                         format!(
-                            "`{name}` is value-captured: this write changes the closure's copy, \
-                             not the outer `{name}`"
+                            "cannot assign to a field of `{name}`: it is value-captured, so the \
+                             write would change the closure's copy, not the outer `{name}`"
                         ),
                         format!("add `[ref {name}]` to the closure's capture list"),
                     );
@@ -1806,16 +1803,11 @@ fn lower_cast(
             ),
         );
     }
-    if to_ty == HirTy::Prim(PrimTy::Bool) && matches!(&from_ty, HirTy::Prim(p) if p.is_float()) {
-        ctx.emit_lint(
-            "float_to_bool",
-            span,
-            format!(
-                "`{} as bool` truncates first: `0.5 as bool` is false, `1.5 as bool` is true",
-                operand_text(operand)
-            ),
-            format!("compare instead: `{} != 0.0`", operand_text(operand)),
-        );
+    // Only `bool` casts as `bool`: a number compares with zero instead.
+    if let (HirTy::Prim(PrimTy::Bool), HirTy::Prim(p)) = (&to_ty, &from_ty) {
+        if *p != PrimTy::Bool {
+            return bool_cast(ctx, operand, *p, span);
+        }
     }
     HirExpr {
         kind: HirExprKind::Cast {
@@ -1826,6 +1818,53 @@ fn lower_cast(
         ty: to_ty,
         span,
     }
+}
+
+/// `x as bool` from a number or `char`: an error with the comparison to
+/// write in its place.
+fn bool_cast(
+    ctx: &LowerCtx<'_>,
+    operand: &Expr,
+    from: PrimTy,
+    span: rokc_diagnostic::Span,
+) -> HirExpr {
+    let zero = if from.is_float() {
+        "0.0"
+    } else if from == PrimTy::Char {
+        "'\\0'"
+    } else {
+        "0"
+    };
+    let text = operand_text(operand);
+    let fix = match ctx.src(operand.span) {
+        Some(src) if text == snippet(operand) || wrapped(src) => format!("{src} != {zero}"),
+        Some(src) => format!("({src}) != {zero}"),
+        None => format!("{text} != {zero}"),
+    };
+    ctx.emit_error_help(
+        span,
+        format!("cannot cast `{}` as `bool`", from.name()),
+        format!("compare instead: `{text} != {zero}`"),
+    );
+    ctx.fix_last(span, fix.clone(), format!("write `{fix}`"));
+    poison(span)
+}
+
+/// `src` is one parenthesised whole: `(a + b)`, not `(a) + (b)`.
+fn wrapped(src: &str) -> bool {
+    let Some(inner) = src.strip_prefix('(').and_then(|s| s.strip_suffix(')')) else {
+        return false;
+    };
+    let mut depth = 0i32;
+    for c in inner.chars() {
+        match c {
+            '(' => depth += 1,
+            ')' if depth == 0 => return false,
+            ')' => depth -= 1,
+            _ => {}
+        }
+    }
+    depth == 0
 }
 
 /// `x as T?` casts to the type `T?` (spec 2.6.5); say so when the cast
@@ -12153,8 +12192,8 @@ pub(super) fn expected_prim(ctx: &LowerCtx<'_>, want: fn(PrimTy) -> bool) -> Opt
     }
 }
 
-/// An unsuffixed integer that fell to the float member `fty` because
-/// the expected sum has several integer members.
+/// An unsuffixed integer into a sum with several integer members and the
+/// float member `fty`: an error, the literal names no member.
 fn ambiguous_int(ctx: &LowerCtx<'_>, text: &str, fty: PrimTy, span: rokc_diagnostic::Span) {
     let Some(HirTy::Sum(vs)) = ctx.current_expected() else {
         return;
@@ -12173,13 +12212,11 @@ fn ambiguous_int(ctx: &LowerCtx<'_>, text: &str, fty: PrimTy, span: rokc_diagnos
     }
     let sum = ctx.ty_name(&HirTy::Sum(vs.clone()));
     let picks: Vec<String> = ints.iter().map(|t| format!("`{text}{t}`")).collect();
-    ctx.emit_lint(
-        "ambiguous_int_literal",
+    ctx.emit_error_help(
         span,
         format!(
-            "integer literal `{text}` into `{sum}` becomes the `{}`: the sum has more than one \
-             integer member",
-            fty.name()
+            "ambiguous literal: integer literal `{text}` into `{sum}`, which has more than one \
+             integer member"
         ),
         format!(
             "write {}, or `{text}.0` for the `{}`",

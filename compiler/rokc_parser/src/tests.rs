@@ -964,22 +964,23 @@ fn meta_macro_rejects_builtin_bang_name() {
 }
 
 #[test]
-fn meta_attribute_late_reserved_name_warns() {
-    // A name reserved in 0.1.2 warns but still registers; an older one is
-    // refused.
+fn meta_attribute_builtin_name_refused() {
+    // Every built-in attribute name is refused, those reserved late too.
     let src = "#[impl_attribute(bench)] pub @attribute { @item }\n\
                #[impl_attribute(test)] pub @attribute { @item }\n";
     let (tokens, _) = Lexer::new(src, "test").lex_all();
     let defs = crate::collect_meta_blocks(&tokens, "test");
     assert_eq!(defs.len(), 2, "{defs:?}");
     let mut table = crate::MetaTable::default();
-    let d = table.add(defs[0].clone()).expect("a warning");
-    assert_eq!(d.severity, rokc_diagnostic::Severity::Warning, "{d:?}");
-    assert!(d.message.contains("my_bench"), "{d:?}");
-    assert!(table.knows_attribute("bench"));
-    let d = table.add(defs[1].clone()).expect("an error");
-    assert_eq!(d.severity, rokc_diagnostic::Severity::Error, "{d:?}");
-    assert!(!table.knows_attribute("test"));
+    for (def, name) in defs.iter().zip(["bench", "test"]) {
+        let d = table.add(def.clone()).expect("an error");
+        assert_eq!(d.severity, rokc_diagnostic::Severity::Error, "{d:?}");
+        assert!(
+            d.notes.iter().any(|n| n.contains(&format!("my_{name}"))),
+            "{d:?}"
+        );
+        assert!(!table.knows_attribute(name));
+    }
 }
 
 #[test]

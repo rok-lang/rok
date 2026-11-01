@@ -1,14 +1,13 @@
 // spec: 004.07-ref-keyword
 // expect-exit: 0
-// expect-lint: 19:5 the write to `cs[0]` is discarded: `set` takes `ref self` and changes a copy of the element
-// expect-lint: 20:5 the write to `d["a"]` is discarded: `set` takes `ref self` and changes a copy of the element
-// expect-lint: 21:5 the write to `S` is discarded: `set` takes `ref self`, and a static is never written
+// expect-lint: 18:5 the write to `cs[0]` is discarded: `set` takes `ref self` and changes a copy of the element
+// expect-lint: 19:5 the write to `d["a"]` is discarded: `set` takes `ref self` and changes a copy of the element
 // expect-warning: help: copy it out, call `set`, and store it back: `let v = cs[0]; v.set(..); cs[0] = v;`
-// expect-warning: help: copy it into a variable and call `set` there: `let v = S; v.set(..);`
 // expect-stdout: 0 5 6 7
 
-// A `ref self` method on an element, a Dict entry or a static has no
-// place to write back to: a warning says the write is discarded.
+// A `ref self` method on an element or a Dict entry has no place to
+// write back to: a warning says the write is discarded. (A static is
+// an error: err_static_ref_write.)
 struct Cell { v: i32; }
 impl Cell { fn set(ref self, n: i32) { self.v = n; } }
 static S: Cell = Cell { v: 0 };
@@ -18,7 +17,6 @@ fn main() {
     let d = {"a": Cell { v: 0 }};
     cs[0].set(1);
     d["a"].set(2);
-    S.set(3);
     // A variable, and the element copied out and stored back.
     let c = Cell { v: 0 };
     c.set(5);

@@ -1,0 +1,16 @@
+// spec: 003.11.1-identifier-pattern
+// expect-exit: 0
+// expect-stdout: 7 red
+// expect-lint: 13:23 variable `Foo` should have a snake case name
+
+// A capitalised binding that is neither a const, a static nor a variant
+// is a plain binding: it gets the naming lint. A `use`d variant written
+// bare is not a binding.
+enum Color { Red, Green }
+use Color::*;
+
+fn main() {
+    let n = match 7 { Foo => Foo };
+    let c = match Color::Red { Red => "red", Green => "green" };
+    println(f"{n} {c}");
+}
