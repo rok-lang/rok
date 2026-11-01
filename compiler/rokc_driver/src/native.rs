@@ -30,7 +30,7 @@ pub(crate) fn chosen_for(module: &CompiledModule, opts: &BuildOptions) -> bool {
 /// The native backend's options of a program build.
 pub(crate) fn options(opts: &BuildOptions) -> rokc_codegen_native::Options {
     rokc_codegen_native::Options {
-        overflow_checks: opts.overflow_checks.unwrap_or(opts.opt_level == "0"),
+        overflow_checks: opts.overflow_checks,
         debug: opts.debug,
         repl: opts.repl.clone(),
         fresh_fns: None,
@@ -63,7 +63,7 @@ pub fn cell_object(
     let o = rokc_codegen_native::compile(
         &module.mir,
         &rokc_codegen_native::Options {
-            overflow_checks: opts.overflow_checks.unwrap_or(opts.opt_level == "0"),
+            overflow_checks: opts.overflow_checks,
             debug: opts.debug,
             repl: opts.repl.clone(),
             fresh_fns: Some(fresh),

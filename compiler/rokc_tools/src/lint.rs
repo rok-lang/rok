@@ -78,16 +78,23 @@ pub const LINTS: &[Lint] = &[
         "shadowed_loop_var",
         "a `let` in a `for` body re-binds the loop variable",
     ),
-    warn(
-        "nan_comparison",
-        "comparing with NaN is always false (`!=`: true)",
-    ),
+    Lint {
+        name: "nan_comparison",
+        default: Level::Deny,
+        desc: "comparing with NaN is always false (`!=`: true)",
+        since: "0.1.0",
+    },
     warn("none_comparison", "`x == none` instead of `x is none`"),
     warn(
         "bool_comparison",
         "comparing a `bool` with `true` / `false`",
     ),
-    warn("self_assignment", "`x = x;`"),
+    Lint {
+        name: "self_assignment",
+        default: Level::Deny,
+        desc: "`x = x;`",
+        since: "0.1.0",
+    },
     warn("while_true", "`while true` instead of `loop`"),
     warn("redundant_cast", "`x as T` where `x` already has type `T`"),
     warn("redundant_clone", "`.clone()` of a primitive value"),
@@ -159,14 +166,6 @@ pub const LINTS: &[Lint] = &[
         "a `ThreadLocal::get()` value used after an `await`: the task may resume on another thread",
     ),
     warn_since(
-        "extern_static_unsafe",
-        "an extern static read or written outside `unsafe`",
-    ),
-    warn_since(
-        "improper_ctypes",
-        "a GC type (`List`, `Dict`, a closure, a sum, ..) in an extern declaration or an `extern \"C\" fn`",
-    ),
-    warn_since(
         "unqualified_meta",
         "another package's macro, derive or attribute used by its bare name: write `dep::name!` or `use dep::name!;`",
     ),
@@ -215,6 +214,8 @@ pub const REMOVED_LINTS: &[&str] = &[
     "unclosed_resource",
     "unclosed_sender",
     "using_twice",
+    "extern_static_unsafe",
+    "improper_ctypes",
 ];
 
 /// A lint added in 0.1.6.

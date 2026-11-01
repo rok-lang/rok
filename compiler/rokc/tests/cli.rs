@@ -4087,7 +4087,7 @@ fn emit_expanded_prints_meta_expansions() {
 
 // spec: §9.1.2
 #[test]
-fn overflow_checks_option_overrides_the_opt_level() {
+fn overflow_checks_on_in_every_profile() {
     let Some(env) = setup() else { return };
     let dir = scratch("ovf");
     put(
@@ -4096,8 +4096,19 @@ fn overflow_checks_option_overrides_the_opt_level() {
     )
     .unwrap();
     let run = |args: &[&str]| rokc(Some(&env), &dir, &[&["run", "ovf.rok"], args].concat());
+    assert_exit(&run(&[]), 101);
+    assert_exit(&run(&["--release"]), 101);
     assert_exit(&run(&["-O2", "-C", "overflow-checks"]), 101);
     assert_exit(&run(&["-O0", "-C", "overflow-checks=no"]), 0);
+    assert_exit(&run(&["--release", "-C", "overflow-checks=no"]), 0);
+    // `rok` passes the manifest's profiles; `-C` beats them.
+    let off = ["--no-overflow-checks-in=release"];
+    assert_exit(&run(&off), 101);
+    assert_exit(&run(&[&off[..], &["--release"]].concat()), 0);
+    assert_exit(
+        &run(&[&off[..], &["--release", "-C", "overflow-checks"]].concat()),
+        101,
+    );
     assert_exit(&run(&["-C", "bogus"]), 2);
 }
 

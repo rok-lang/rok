@@ -1,0 +1,28 @@
+// only-os: macos linux
+// (POSIX optind)
+// expect-exit: 0
+// spec: §5.9.3
+// expect-stdout: 7 7 true
+
+// Reading or writing an extern static inside `unsafe` (a block or an
+// `unsafe fn` body) builds, and so does taking its address.
+
+use rok::bare::ptr::addr_of;
+
+extern "C" {
+    static mut optind: i32;
+}
+
+unsafe fn inside() -> i32 { optind }
+
+fn main() {
+    unsafe {
+        optind = 6;
+        optind += 1;
+    }
+    let p = addr_of(optind);
+    let a = unsafe { optind };
+    let b = unsafe { inside() };
+    println(f"{a} {b} {p.addr() != 0usize}");
+    unsafe { optind = 1; }
+}

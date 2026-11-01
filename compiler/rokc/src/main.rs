@@ -91,6 +91,10 @@ struct Args {
     emit_harness: Option<PathBuf>,
     /// An `-O` level or `--release` was given.
     opt_set: bool,
+    /// `-C overflow-checks[=yes|no]`, which beats the manifest's profiles.
+    overflow_checks: Option<bool>,
+    /// From `rok`: the manifest's profiles that turn overflow checks off.
+    no_overflow_checks: Vec<String>,
     /// The prebuilt standard library this build links (`prebuild`).
     std_prebuilt: Option<PathBuf>,
 }
@@ -285,6 +289,10 @@ fn parse_args(raw: Vec<String>, mut tail: Vec<OsString>) -> Args {
                     .flags
                     .push((lvl, value(&name, inline, &mut it)));
             }
+            // From `rok`: `profile: { "<p>": { overflow_checks: false } }`.
+            "--no-overflow-checks-in" => {
+                a.no_overflow_checks.push(value(&name, inline, &mut it));
+            }
             // From `rok`: the levels so far are this manifest's `lints`.
             "--lints-from-manifest" => {
                 let p = PathBuf::from(value(&name, inline, &mut it));
@@ -346,6 +354,7 @@ fn parse_args(raw: Vec<String>, mut tail: Vec<OsString>) -> Args {
     if a.cmd.is_empty() && a.print.is_none() {
         usage_error("missing command (e.g. `build`)");
     }
+    set_overflow_checks(&mut a);
     // Debug builds carry debug info; `-g` adds it to release (9.2.15).
     let output = matches!(a.cmd.as_str(), "build" | "run" | "test") && a.emit.is_empty();
     if output && !a.opts.release() {
@@ -371,14 +380,23 @@ fn parse_args(raw: Vec<String>, mut tail: Vec<OsString>) -> Args {
     a
 }
 
+/// Overflow checks are on in every profile; `-C overflow-checks=no` or
+/// the manifest's profile turns them off (spec 9.1.2).
+fn set_overflow_checks(a: &mut Args) {
+    let profile = if a.opts.release() { "release" } else { "debug" };
+    a.opts.overflow_checks = a
+        .overflow_checks
+        .unwrap_or_else(|| !a.no_overflow_checks.iter().any(|p| p == profile));
+}
+
 /// `-C <v>`.
 fn codegen_option(a: &mut Args, v: &str) {
     match v {
         "overflow-checks" | "overflow-checks=yes" | "overflow-checks=on" => {
-            a.opts.overflow_checks = Some(true);
+            a.overflow_checks = Some(true);
         }
         "overflow-checks=no" | "overflow-checks=off" => {
-            a.opts.overflow_checks = Some(false);
+            a.overflow_checks = Some(false);
         }
         "backend=native" | "backend=llvm" => a.opts.backend = Some(v[8..].to_owned()),
         _ if v.starts_with("target-cpu=") && v.len() > 11 => {
@@ -1609,6 +1627,7 @@ fn path_and_filter(a: &Args) -> (&str, Option<&str>) {
 fn cmd_harness(mut a: Args, mode: Mode) {
     if mode == Mode::Bench && !a.opt_set {
         "2".clone_into(&mut a.opts.opt_level);
+        set_overflow_checks(&mut a);
     }
     let (path, filter) = path_and_filter(&a);
     let filter = filter.map(str::to_owned);
