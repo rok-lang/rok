@@ -1,0 +1,7 @@
+// spec: 001.07.3-format-string
+// expect-error: format type `g` needs a number, found `str`
+
+// `g` is a number's general format: text has none.
+fn main() {
+    println(f"{"abc":g}");
+}

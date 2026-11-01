@@ -84,12 +84,20 @@ pub extern "C" fn rok_fmt_spec_error(spec: RokStr) -> RokStr {
 }
 
 /// The text of `v` (an `f32` widened when `is_f32 != 0`): Display for
-/// `ty` 0, else `e`, `E` or `f`, `prec < 0` for none (`fmt_text::float`).
+/// `ty` 0, else `e`, `E`, `f`, `g` or `?`, `prec < 0` for none
+/// (`fmt_text::float`).
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_fmt_float(v: f64, is_f32: u32, ty: u32, prec: i64) -> RokStr {
     let mut w = W::of(rok_fmt_new(32));
     let ty = u8::try_from(ty).unwrap_or(0);
-    fmt_text::float(&mut w, v, is_f32 != 0, ty, usize::try_from(prec).ok());
+    fmt_text::float(
+        &mut w,
+        v,
+        is_f32 != 0,
+        ty,
+        usize::try_from(prec).ok(),
+        false,
+    );
     rok_fmt_finish(w.done())
 }
 
@@ -276,11 +284,12 @@ pub extern "C" fn rok_fmt_integral(
     w.done()
 }
 
-/// A float (`is_f32`: an `f32` widened); inf / NaN pad like text.
+/// A float (`mode`: 1 an `f32` widened, 2 Debug); inf / NaN pad like
+/// text.
 #[unsafe(no_mangle)]
-pub extern "C" fn rok_fmt_f64(h: RokStr, flags: u64, counts: u64, v: f64, is_f32: u32) -> RokStr {
+pub extern "C" fn rok_fmt_f64(h: RokStr, flags: u64, counts: u64, v: f64, mode: u32) -> RokStr {
     let mut w = W::of(h);
-    if let Err(m) = fmt_text::float_number(&mut w, &unpack(flags, counts), v, is_f32 != 0) {
+    if let Err(m) = fmt_text::float_number(&mut w, &unpack(flags, counts), v, mode) {
         // SAFETY: valid message.
         unsafe { crate::rok_panic(m.as_ptr(), m.len()) }
     }
@@ -379,6 +388,39 @@ pub mod tests {
         let sp = parse("*^+#012.3x").unwrap();
         let (fl, co) = pack(&sp);
         assert_eq!(unpack(fl, co), sp);
+    }
+
+    // Allocates: called from the GC test (single mutator).
+    pub fn general_and_debug() {
+        let f = |v: f64, ty: u8, prec: i64| text(&rok_fmt_float(v, 0, ty.into(), prec)).to_owned();
+        assert_eq!(f(1234.5678, b'g', 3), "1.23e+03");
+        assert_eq!(f(1e20, b'g', -1), "1e+20");
+        assert_eq!(f(1234.5678, b'g', -1), "1234.57");
+        assert_eq!(f(0.0001, b'g', -1), "0.0001");
+        assert_eq!(f(0.000_012_34, b'g', -1), "1.234e-05");
+        assert_eq!(f(100.0, b'g', 0), "1e+02");
+        assert_eq!(f(0.0, b'g', -1), "0");
+        assert_eq!(f(999_999.5, b'g', -1), "1e+06");
+        assert_eq!(f(f64::NAN, b'g', -1), "NaN");
+        assert_eq!(f(1.0, b'?', -1), "1.0");
+        assert_eq!(f(2.5, b'?', -1), "2.5");
+        assert_eq!(f(f64::INFINITY, b'?', -1), "inf");
+        assert_eq!(f(1.0, b'?', 2), "1.00");
+        let fmt = |spec: &str, write: &dyn Fn(RokStr, u64, u64) -> RokStr| {
+            let (fl, co) = pack(&parse(spec).unwrap());
+            let t = rok_fmt_str(rok_fmt_new(1), s("<"));
+            text(&rok_fmt_finish(write(t, fl, co))).to_owned()
+        };
+        let float =
+            |v: f64, mode: u32| move |t: RokStr, fl: u64, co: u64| rok_fmt_f64(t, fl, co, v, mode);
+        let int = |v: i64| move |t: RokStr, fl: u64, co: u64| rok_fmt_int(t, fl, co, v, 1, 32);
+        assert_eq!(fmt("#.3g", &float(1.0, 0)), "<1.00");
+        assert_eq!(fmt("+10.3g", &float(-1234.5678, 0)), "< -1.23e+03");
+        assert_eq!(fmt("g", &int(1_234_567)), "<1.23457e+06");
+        assert_eq!(fmt("g", &int(-42)), "<-42");
+        assert_eq!(fmt(">6?", &float(1.0, 0)), "<   1.0");
+        assert_eq!(fmt("", &float(3.0, 2)), "<3.0");
+        assert_eq!(fmt("", &float(-0.5, 2)), "<-0.5");
     }
 
     // Allocates: called from the GC test (single mutator).

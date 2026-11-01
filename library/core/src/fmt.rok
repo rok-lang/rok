@@ -98,7 +98,7 @@ pub trait Debug {
 
 /// An f-string spec, `[[fill]align][sign][#][0][width][.precision][type]`
 /// (refs-lang 1.7.3). An absent `ty` is `'\0'`; the Display letters
-/// `s d g` read as absent. Read it with the getters; the fields stop
+/// `s d` read as absent. Read it with the getters; the fields stop
 /// being `pub` in 0.2.0.
 pub struct FormatSpec {
     #[deprecated(since = "0.1.6", note = "read it with `spec.fill()`; build a spec with `FormatSpec::parse`")]
@@ -131,7 +131,7 @@ impl FormatSpec {
     pub const fn zero_pad(self) -> bool { self.zero }
     pub const fn width(self) -> usize | none { self.width }
     pub const fn precision(self) -> usize | none { self.precision }
-    /// The type letter (`'\0'` for none or `s d g`).
+    /// The type letter (`'\0'` for none or `s d`).
     pub const fn ty(self) -> char { self.ty }
 
     /// The empty spec.
@@ -185,6 +185,8 @@ const SINK_CHUNK: usize = 4096;
 /// The packed words of no spec.
 const PLAIN_FLAGS: u64 = 32;
 const PLAIN_COUNTS: u64 = 0xFFFFFFFFFFFFFFFF;
+/// `#` in the packed flags.
+const ALT_FLAG: u64 = 0x100000000000000;
 
 /// A packed count: all ones when absent.
 const fn count_bits(v: usize | none) -> u64 {
@@ -229,7 +231,7 @@ impl Formatter {
     /// Empty, writing values per `spec`.
     pub const fn with_spec(spec: FormatSpec) -> Formatter {
         let f = Formatter::new();
-        let ty = if spec.ty == 's' || spec.ty == 'd' || spec.ty == 'g' { '\0' } else { spec.ty };
+        let ty = if spec.ty == 's' || spec.ty == 'd' { '\0' } else { spec.ty };
         let alt = if spec.alt { 1u64 } else { 0u64 };
         let zero = if spec.zero { 1u64 } else { 0u64 };
         f.flags = (spec.fill as u64) + ((align_byte(spec.align) as u64) << 32u64)
@@ -283,8 +285,46 @@ impl Formatter {
     pub const fn width(self) -> usize | none { count_of(self.counts) }
     pub const fn precision(self) -> usize | none { count_of(self.counts >> 32u64) }
 
-    /// The spec's type letter (`'\0'` for none or `s d g`).
+    /// The spec's type letter (`'\0'` for none or `s d`).
     pub(pkg) const fn ty(self) -> char { self.byte(48u64) }
+
+    /// One entry of a Debug group (`Name { .. }`, `Name(..)`, `[..]`,
+    /// `{..}`): `label` (`"x: "` or `""`) and `v`. The group writes its
+    /// opening bracket, an entry each, then `debug_close`. `{:?}` puts it
+    /// on one line, `spaced` with a space inside the brackets
+    /// (`Name { x: 1 }`); `{:#?}` one entry a line, indented, each ending
+    /// in `,`.
+    #[doc(hidden)]
+    pub const fn debug_entry<T: Debug>(ref self, label: str, v: T, first: bool, spaced: bool) throws (FmtError) {
+        if !self.alternate() {
+            if !first { try self.write_str(", "); } else if spaced { try self.write_str(" "); }
+            try self.write_str(label);
+            try Debug::fmt(v, ref self);
+            return;
+        }
+        let g = Formatter { t: unsafe { rok_fmt_new(16) }, flags: PLAIN_FLAGS + ALT_FLAG, counts: PLAIN_COUNTS, sink: none };
+        try Debug::fmt(v, ref g);
+        let text = label + g.finish();
+        try self.write_str(if first { "\n    " } else { "    " });
+        try self.write_str(text.replace("\n", "\n    "));
+        try self.write_str(",\n")
+    }
+
+    /// `debug_entry` of a map's `k: v`.
+    #[doc(hidden)]
+    pub const fn debug_pair<K: Debug, V: Debug>(ref self, k: K, v: V, first: bool) throws (FmtError) {
+        let g = Formatter { t: unsafe { rok_fmt_new(16) }, flags: PLAIN_FLAGS + (self.flags & ALT_FLAG), counts: PLAIN_COUNTS, sink: none };
+        try Debug::fmt(k, ref g);
+        try self.debug_entry(g.finish() + ": ", v, first, false)
+    }
+
+    /// The closing bracket of a Debug group; `empty` when it had no
+    /// entry.
+    #[doc(hidden)]
+    pub const fn debug_close(ref self, close: str, empty: bool, spaced: bool) throws (FmtError) {
+        if spaced && !empty && !self.alternate() { try self.write_str(" "); }
+        try self.write_str(close)
+    }
 
     const fn byte(self, at: u64) -> char { (((self.flags >> at) & 0xFFu64) as u8) as char }
 }
@@ -297,22 +337,22 @@ const fn count_of(v: u64) -> usize | none {
 // f-string lowering targets (HIR calls them by full path, on the text
 // `t`; each returns it, maybe moved). Formatting to memory never fails.
 
-/// `{v}`.
+/// `{v}` (`flags`: no spec but maybe `#`).
 #[doc(hidden)]
 #[lang("fstr_display_fn")]
 #[deprecated(since = "0.1.6", note = "a compiler hook, not callable in 0.2.0: write the value in an f-string hole, `{v}`")]
-pub const fn fstr_display<T: Display>(t: str, v: T) -> str {
-    let f = Formatter { t: t, flags: PLAIN_FLAGS, counts: PLAIN_COUNTS, sink: none };
+pub const fn fstr_display<T: Display>(t: str, v: T, flags: u64) -> str {
+    let f = Formatter { t: t, flags: flags, counts: PLAIN_COUNTS, sink: none };
     try! Display::fmt(v, ref f);
     f.t
 }
 
-/// `{v:?}`.
+/// `{v:?}` (`flags`: no spec but maybe `#`).
 #[doc(hidden)]
 #[lang("fstr_debug_fn")]
 #[deprecated(since = "0.1.6", note = "a compiler hook, not callable in 0.2.0: write the value in an f-string hole, `{v:?}`")]
-pub const fn fstr_debug<T: Debug>(t: str, v: T) -> str {
-    let f = Formatter { t: t, flags: PLAIN_FLAGS, counts: PLAIN_COUNTS, sink: none };
+pub const fn fstr_debug<T: Debug>(t: str, v: T, flags: u64) -> str {
+    let f = Formatter { t: t, flags: flags, counts: PLAIN_COUNTS, sink: none };
     try! Debug::fmt(v, ref f);
     f.t
 }
@@ -349,7 +389,8 @@ pub const fn fstr_text_any<T: Display + Debug>(t: str, v: T, spec: str) -> str {
     let (flags, counts) = fstr_pack(spec, true);
     let start = unsafe { rok_fmt_len(t) };
     let debug = ((flags >> 48u64) & 0xFFu64) == 63u64;
-    let out = if debug { fstr_debug(t, v) } else { fstr_display(t, v) };
+    let alt = PLAIN_FLAGS | (flags & ALT_FLAG);
+    let out = if debug { fstr_debug(t, v, alt) } else { fstr_display(t, v, alt) };
     unsafe { rok_fmt_pad(out, flags, counts, start, start, 0u32) }
 }
 
@@ -375,7 +416,7 @@ impl Display for bool {
 impl Display for char { const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_char(self) } }
 impl Display for str { const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.pad(self) } }
 
-// Debug is Display for the primitives (char escapes, so it is separate).
+// Debug is Display for the primitives but floats and chars.
 #[impl_macro(debug_via_display)] @macro {
     (@rep[sep = ","] { @t: ty }) => {
         @for @t {
@@ -385,7 +426,11 @@ impl Display for str { const fn fmt(self, ref f: Formatter) throws (FmtError) { 
         }
     }
 }
-debug_via_display!(i8, i16, i32, i64, isize, u8, u16, u32, u64, usize, f32, f64, bool);
+debug_via_display!(i8, i16, i32, i64, isize, u8, u16, u32, u64, usize, bool);
+
+/// Display with `.0` on a whole number (`1.0`, `[1.0, 2.5]`).
+impl Debug for f32 { const fn fmt(self, ref f: Formatter) throws (FmtError) { f.t = unsafe { rok_fmt_f64(f.t, f.flags, f.counts, self as f64, 3u32) }; } }
+impl Debug for f64 { const fn fmt(self, ref f: Formatter) throws (FmtError) { f.t = unsafe { rok_fmt_f64(f.t, f.flags, f.counts, self, 2u32) }; } }
 
 /// A rok literal: quotes, `\\`, `\n` `\r` `\t` `\0` escaped, other
 /// control and bidi chars as `\u{..}` (2.10.4).

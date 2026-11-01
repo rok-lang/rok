@@ -14,8 +14,9 @@ impl<A: Default> Default for (A,) {
 impl<A: Debug> Debug for (A,) {
     const fn fmt(self, ref f: Formatter) throws (FmtError) {
         try f.write_str("(");
-        try Debug::fmt(self.0, ref f);
-        try f.write_str(",)")
+        try f.debug_entry("", self.0, true, false);
+        if !f.alternate() { try f.write_str(","); }
+        try f.debug_close(")", false, false)
     }
 }
 impl<A: PartialEq> PartialEq for (A,) {
@@ -42,10 +43,9 @@ impl<A: Default, B: Default> Default for (A, B) {
 impl<A: Debug, B: Debug> Debug for (A, B) {
     const fn fmt(self, ref f: Formatter) throws (FmtError) {
         try f.write_str("(");
-        try Debug::fmt(self.0, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.1, ref f);
-        try f.write_str(")")
+        try f.debug_entry("", self.0, true, false);
+        try f.debug_entry("", self.1, false, false);
+        try f.debug_close(")", false, false)
     }
 }
 impl<A: PartialEq, B: PartialEq> PartialEq for (A, B) {
@@ -73,12 +73,10 @@ impl<A: Default, B: Default, C: Default> Default for (A, B, C) {
 impl<A: Debug, B: Debug, C: Debug> Debug for (A, B, C) {
     fn fmt(self, ref f: Formatter) throws (FmtError) {
         try f.write_str("(");
-        try Debug::fmt(self.0, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.1, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.2, ref f);
-        try f.write_str(")")
+        try f.debug_entry("", self.0, true, false);
+        try f.debug_entry("", self.1, false, false);
+        try f.debug_entry("", self.2, false, false);
+        try f.debug_close(")", false, false)
     }
 }
 impl<A: PartialEq, B: PartialEq, C: PartialEq> PartialEq for (A, B, C) {
@@ -107,14 +105,11 @@ impl<A: Default, B: Default, C: Default, D: Default> Default for (A, B, C, D) {
 impl<A: Debug, B: Debug, C: Debug, D: Debug> Debug for (A, B, C, D) {
     fn fmt(self, ref f: Formatter) throws (FmtError) {
         try f.write_str("(");
-        try Debug::fmt(self.0, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.1, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.2, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.3, ref f);
-        try f.write_str(")")
+        try f.debug_entry("", self.0, true, false);
+        try f.debug_entry("", self.1, false, false);
+        try f.debug_entry("", self.2, false, false);
+        try f.debug_entry("", self.3, false, false);
+        try f.debug_close(")", false, false)
     }
 }
 impl<A: PartialEq, B: PartialEq, C: PartialEq, D: PartialEq> PartialEq for (A, B, C, D) {
@@ -144,16 +139,12 @@ impl<A: Default, B: Default, C: Default, D: Default, E: Default> Default for (A,
 impl<A: Debug, B: Debug, C: Debug, D: Debug, E: Debug> Debug for (A, B, C, D, E) {
     fn fmt(self, ref f: Formatter) throws (FmtError) {
         try f.write_str("(");
-        try Debug::fmt(self.0, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.1, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.2, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.3, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.4, ref f);
-        try f.write_str(")")
+        try f.debug_entry("", self.0, true, false);
+        try f.debug_entry("", self.1, false, false);
+        try f.debug_entry("", self.2, false, false);
+        try f.debug_entry("", self.3, false, false);
+        try f.debug_entry("", self.4, false, false);
+        try f.debug_close(")", false, false)
     }
 }
 impl<A: PartialEq, B: PartialEq, C: PartialEq, D: PartialEq, E: PartialEq> PartialEq for (A, B, C, D, E) {
@@ -184,18 +175,13 @@ impl<A: Default, B: Default, C: Default, D: Default, E: Default, F: Default> Def
 impl<A: Debug, B: Debug, C: Debug, D: Debug, E: Debug, F: Debug> Debug for (A, B, C, D, E, F) {
     fn fmt(self, ref f: Formatter) throws (FmtError) {
         try f.write_str("(");
-        try Debug::fmt(self.0, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.1, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.2, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.3, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.4, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.5, ref f);
-        try f.write_str(")")
+        try f.debug_entry("", self.0, true, false);
+        try f.debug_entry("", self.1, false, false);
+        try f.debug_entry("", self.2, false, false);
+        try f.debug_entry("", self.3, false, false);
+        try f.debug_entry("", self.4, false, false);
+        try f.debug_entry("", self.5, false, false);
+        try f.debug_close(")", false, false)
     }
 }
 impl<A: PartialEq, B: PartialEq, C: PartialEq, D: PartialEq, E: PartialEq, F: PartialEq> PartialEq for (A, B, C, D, E, F) {
@@ -227,20 +213,14 @@ impl<A: Default, B: Default, C: Default, D: Default, E: Default, F: Default, G: 
 impl<A: Debug, B: Debug, C: Debug, D: Debug, E: Debug, F: Debug, G: Debug> Debug for (A, B, C, D, E, F, G) {
     fn fmt(self, ref f: Formatter) throws (FmtError) {
         try f.write_str("(");
-        try Debug::fmt(self.0, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.1, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.2, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.3, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.4, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.5, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.6, ref f);
-        try f.write_str(")")
+        try f.debug_entry("", self.0, true, false);
+        try f.debug_entry("", self.1, false, false);
+        try f.debug_entry("", self.2, false, false);
+        try f.debug_entry("", self.3, false, false);
+        try f.debug_entry("", self.4, false, false);
+        try f.debug_entry("", self.5, false, false);
+        try f.debug_entry("", self.6, false, false);
+        try f.debug_close(")", false, false)
     }
 }
 impl<A: PartialEq, B: PartialEq, C: PartialEq, D: PartialEq, E: PartialEq, F: PartialEq, G: PartialEq> PartialEq for (A, B, C, D, E, F, G) {
@@ -273,22 +253,15 @@ impl<A: Default, B: Default, C: Default, D: Default, E: Default, F: Default, G: 
 impl<A: Debug, B: Debug, C: Debug, D: Debug, E: Debug, F: Debug, G: Debug, H: Debug> Debug for (A, B, C, D, E, F, G, H) {
     fn fmt(self, ref f: Formatter) throws (FmtError) {
         try f.write_str("(");
-        try Debug::fmt(self.0, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.1, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.2, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.3, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.4, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.5, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.6, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.7, ref f);
-        try f.write_str(")")
+        try f.debug_entry("", self.0, true, false);
+        try f.debug_entry("", self.1, false, false);
+        try f.debug_entry("", self.2, false, false);
+        try f.debug_entry("", self.3, false, false);
+        try f.debug_entry("", self.4, false, false);
+        try f.debug_entry("", self.5, false, false);
+        try f.debug_entry("", self.6, false, false);
+        try f.debug_entry("", self.7, false, false);
+        try f.debug_close(")", false, false)
     }
 }
 impl<A: PartialEq, B: PartialEq, C: PartialEq, D: PartialEq, E: PartialEq, F: PartialEq, G: PartialEq, H: PartialEq> PartialEq for (A, B, C, D, E, F, G, H) {
@@ -322,24 +295,16 @@ impl<A: Default, B: Default, C: Default, D: Default, E: Default, F: Default, G: 
 impl<A: Debug, B: Debug, C: Debug, D: Debug, E: Debug, F: Debug, G: Debug, H: Debug, I: Debug> Debug for (A, B, C, D, E, F, G, H, I) {
     fn fmt(self, ref f: Formatter) throws (FmtError) {
         try f.write_str("(");
-        try Debug::fmt(self.0, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.1, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.2, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.3, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.4, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.5, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.6, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.7, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.8, ref f);
-        try f.write_str(")")
+        try f.debug_entry("", self.0, true, false);
+        try f.debug_entry("", self.1, false, false);
+        try f.debug_entry("", self.2, false, false);
+        try f.debug_entry("", self.3, false, false);
+        try f.debug_entry("", self.4, false, false);
+        try f.debug_entry("", self.5, false, false);
+        try f.debug_entry("", self.6, false, false);
+        try f.debug_entry("", self.7, false, false);
+        try f.debug_entry("", self.8, false, false);
+        try f.debug_close(")", false, false)
     }
 }
 impl<A: PartialEq, B: PartialEq, C: PartialEq, D: PartialEq, E: PartialEq, F: PartialEq, G: PartialEq, H: PartialEq, I: PartialEq> PartialEq for (A, B, C, D, E, F, G, H, I) {
@@ -374,26 +339,17 @@ impl<A: Default, B: Default, C: Default, D: Default, E: Default, F: Default, G: 
 impl<A: Debug, B: Debug, C: Debug, D: Debug, E: Debug, F: Debug, G: Debug, H: Debug, I: Debug, J: Debug> Debug for (A, B, C, D, E, F, G, H, I, J) {
     fn fmt(self, ref f: Formatter) throws (FmtError) {
         try f.write_str("(");
-        try Debug::fmt(self.0, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.1, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.2, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.3, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.4, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.5, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.6, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.7, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.8, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.9, ref f);
-        try f.write_str(")")
+        try f.debug_entry("", self.0, true, false);
+        try f.debug_entry("", self.1, false, false);
+        try f.debug_entry("", self.2, false, false);
+        try f.debug_entry("", self.3, false, false);
+        try f.debug_entry("", self.4, false, false);
+        try f.debug_entry("", self.5, false, false);
+        try f.debug_entry("", self.6, false, false);
+        try f.debug_entry("", self.7, false, false);
+        try f.debug_entry("", self.8, false, false);
+        try f.debug_entry("", self.9, false, false);
+        try f.debug_close(")", false, false)
     }
 }
 impl<A: PartialEq, B: PartialEq, C: PartialEq, D: PartialEq, E: PartialEq, F: PartialEq, G: PartialEq, H: PartialEq, I: PartialEq, J: PartialEq> PartialEq for (A, B, C, D, E, F, G, H, I, J) {
@@ -429,28 +385,18 @@ impl<A: Default, B: Default, C: Default, D: Default, E: Default, F: Default, G: 
 impl<A: Debug, B: Debug, C: Debug, D: Debug, E: Debug, F: Debug, G: Debug, H: Debug, I: Debug, J: Debug, K: Debug> Debug for (A, B, C, D, E, F, G, H, I, J, K) {
     fn fmt(self, ref f: Formatter) throws (FmtError) {
         try f.write_str("(");
-        try Debug::fmt(self.0, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.1, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.2, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.3, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.4, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.5, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.6, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.7, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.8, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.9, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.10, ref f);
-        try f.write_str(")")
+        try f.debug_entry("", self.0, true, false);
+        try f.debug_entry("", self.1, false, false);
+        try f.debug_entry("", self.2, false, false);
+        try f.debug_entry("", self.3, false, false);
+        try f.debug_entry("", self.4, false, false);
+        try f.debug_entry("", self.5, false, false);
+        try f.debug_entry("", self.6, false, false);
+        try f.debug_entry("", self.7, false, false);
+        try f.debug_entry("", self.8, false, false);
+        try f.debug_entry("", self.9, false, false);
+        try f.debug_entry("", self.10, false, false);
+        try f.debug_close(")", false, false)
     }
 }
 impl<A: PartialEq, B: PartialEq, C: PartialEq, D: PartialEq, E: PartialEq, F: PartialEq, G: PartialEq, H: PartialEq, I: PartialEq, J: PartialEq, K: PartialEq> PartialEq for (A, B, C, D, E, F, G, H, I, J, K) {
@@ -487,30 +433,19 @@ impl<A: Default, B: Default, C: Default, D: Default, E: Default, F: Default, G: 
 impl<A: Debug, B: Debug, C: Debug, D: Debug, E: Debug, F: Debug, G: Debug, H: Debug, I: Debug, J: Debug, K: Debug, L: Debug> Debug for (A, B, C, D, E, F, G, H, I, J, K, L) {
     fn fmt(self, ref f: Formatter) throws (FmtError) {
         try f.write_str("(");
-        try Debug::fmt(self.0, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.1, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.2, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.3, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.4, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.5, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.6, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.7, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.8, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.9, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.10, ref f);
-        try f.write_str(", ");
-        try Debug::fmt(self.11, ref f);
-        try f.write_str(")")
+        try f.debug_entry("", self.0, true, false);
+        try f.debug_entry("", self.1, false, false);
+        try f.debug_entry("", self.2, false, false);
+        try f.debug_entry("", self.3, false, false);
+        try f.debug_entry("", self.4, false, false);
+        try f.debug_entry("", self.5, false, false);
+        try f.debug_entry("", self.6, false, false);
+        try f.debug_entry("", self.7, false, false);
+        try f.debug_entry("", self.8, false, false);
+        try f.debug_entry("", self.9, false, false);
+        try f.debug_entry("", self.10, false, false);
+        try f.debug_entry("", self.11, false, false);
+        try f.debug_close(")", false, false)
     }
 }
 impl<A: PartialEq, B: PartialEq, C: PartialEq, D: PartialEq, E: PartialEq, F: PartialEq, G: PartialEq, H: PartialEq, I: PartialEq, J: PartialEq, K: PartialEq, L: PartialEq> PartialEq for (A, B, C, D, E, F, G, H, I, J, K, L) {

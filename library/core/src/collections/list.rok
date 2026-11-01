@@ -737,11 +737,10 @@ impl<T: Debug> Debug for List<T> {
         try f.write_str("[");
         let first = true;
         for x in self {
-            if !first { try f.write_str(", "); }
-            try Debug::fmt(x, ref f);
+            try f.debug_entry("", x, first, false);
             first = false;
         }
-        try f.write_str("]")
+        try f.debug_close("]", first, false)
     }
 }
 

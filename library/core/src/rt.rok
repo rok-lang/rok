@@ -71,7 +71,7 @@ extern "rok" {
     fn rok_fmt_int(t: str, flags: u64, counts: u64, v: i64, signed: u32, bits: u32) -> str;
     fn rok_fmt_digits(t: str, flags: u64, counts: u64, neg: u32, digits: str) -> str;
     fn rok_fmt_integral(t: str, flags: u64, counts: u64, nonneg: u32, prefix: str, buf: str) -> str;
-    fn rok_fmt_f64(t: str, flags: u64, counts: u64, v: f64, is_f32: u32) -> str;
+    fn rok_fmt_f64(t: str, flags: u64, counts: u64, v: f64, mode: u32) -> str;
     fn rok_fmt_pad(t: str, flags: u64, counts: u64, start: usize, mid: usize, numeric: u32) -> str;
     fn rok_fmt_pack(spec: str, text_only: u32, out: GcBuf<u64>);
     fn rok_fmt_spec_parse(spec: str, out: GcBuf<i64>);

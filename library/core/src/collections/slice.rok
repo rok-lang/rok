@@ -375,10 +375,9 @@ impl<T: Debug> Debug for Slice<T> {
     const fn fmt(self, ref f: Formatter) throws (FmtError) {
         try f.write_str("[");
         for i in 0..self.len {
-            if i > 0 { try f.write_str(", "); }
-            try Debug::fmt(self[i], ref f);
+            try f.debug_entry("", self[i], i == 0, false);
         }
-        try f.write_str("]")
+        try f.debug_close("]", self.len == 0, false)
     }
 }
 

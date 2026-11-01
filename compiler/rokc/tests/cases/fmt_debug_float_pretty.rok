@@ -1,0 +1,53 @@
+// spec: std 210-fmt §2.10.4 §2.10.6
+// expect-exit: 0
+// expect-stdout:
+// 1.0 [1.0, 2.5] 2.5 -0.5 inf 1.00 |   1.0|
+// P { x: 1.0, y: -0.5 } T(1, "x") (1.0,) A B { v: [] }
+// P {
+//     x: 1.0,
+//     y: -0.5,
+// }
+// {
+//     "a": T(
+//         1,
+//         "x",
+//     ),
+// }
+// B {
+//     v: [
+//         1,
+//         2,
+//     ],
+// }
+// (
+//     1,
+//     2.0,
+// ) [] A
+// [1.0]
+
+// Debug of a float shows it is one (`1.0`); `{:#?}` writes a group one
+// entry a line, indented.
+#[derive(Debug)]
+struct P { x: f64; y: f64; }
+#[derive(Debug)]
+struct T(i32, str);
+#[derive(Debug)]
+enum E { A, B { v: List<i32> } }
+
+fn main() {
+    let inf = 1.0 / 0.0;
+    println(f"{1.0:?} {[1.0, 2.5]:?} {2.5f32:?} {-0.5:?} {inf:?} {1.0:.2?} |{1.0:>6?}|");
+    let p = P { x: 1.0, y: -0.5 };
+    let t = T(1, "x");
+    let nil: List<i32> = [];
+    println(f"{p:?} {t:?} {(1.0,):?} {E::A:?} {E::B { v: nil }:?}");
+    println(f"{p:#?}");
+    let d = {"a": t};
+    println(f"{d:#?}");
+    println(f"{E::B { v: [1, 2] }:#?}");
+    let empty: List<f64> = [];
+    let spec = "#?";
+    println(f"{(1, 2.0):{spec}} {empty:#?} {E::A:#?}");
+    let big: float = 1.0;
+    println(f"{[big]:?}");
+}

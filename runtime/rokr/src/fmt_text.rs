@@ -43,15 +43,11 @@ pub fn bad_spec(w: &mut impl Write, spec: &str, why: &str) {
 
 /// `rok_fmt_spec_parse`'s words: fill, align, sign, `#`, `0`, width,
 /// precision (-1 when absent), type (0 when absent or the Display
-/// letters `s d g`).
+/// letters `s d`).
 pub fn spec_words(spec: &str) -> Result<[i64; 8], &'static str> {
     let s = parse(spec)?;
     let opt = |v: Option<usize>| v.map_or(-1, |v| v as i64);
-    let ty = if matches!(s.ty, b's' | b'd' | b'g') {
-        0
-    } else {
-        s.ty
-    };
+    let ty = if matches!(s.ty, b's' | b'd') { 0 } else { s.ty };
     Ok([
         i64::from(u32::from(s.fill)),
         s.align.into(),
@@ -67,20 +63,32 @@ pub fn spec_words(spec: &str) -> Result<[i64; 8], &'static str> {
 /// `rok_fmt_pack`'s words; `text_only` refuses a number's type letter.
 pub fn pack_spec(spec: &str, text_only: bool) -> Result<(u64, u64), &'static str> {
     let parsed = parse(spec)?;
-    if text_only && !matches!(parsed.ty, 0 | b's' | b'd' | b'g' | b'?') {
+    if text_only && !matches!(parsed.ty, 0 | b's' | b'd' | b'?') {
         return Err("the type letter needs a number");
     }
     Ok(pack(&parsed))
 }
 
 /// The text of `v` (an `f32` widened when `is_f32`): Display for `ty`
-/// 0, else `e`, `E` or `f`. Without a precision the digits are the
-/// shortest that read back as the same value of its own width; `f` then
-/// takes 6 places. Every float rendering comes here.
+/// 0, else `e`, `E`, `f`, `g` or `?` (Debug: Display, and `.0` on a
+/// whole number without a precision). Without a precision the digits are
+/// the shortest that read back as the same value of its own width; `f`
+/// then takes 6 places. `alt` keeps `g`'s trailing zeros. Every float
+/// rendering comes here.
 #[allow(clippy::cast_possible_truncation)] // `f32` values widened by the caller
-pub fn float(out: &mut impl Text, v: f64, is_f32: bool, ty: u8, prec: Option<usize>) {
+pub fn float(out: &mut impl Text, v: f64, is_f32: bool, ty: u8, prec: Option<usize>, alt: bool) {
     let start = out.len();
     let x = v as f32;
+    if ty == b'g' && v.is_finite() {
+        let p = prec.unwrap_or(6).clamp(1, MAX_SIG);
+        let _ = if is_f32 {
+            write!(out, "{x:.*e}", p - 1)
+        } else {
+            write!(out, "{v:.*e}", p - 1)
+        };
+        general(out, start, p, alt);
+        return;
+    }
     let exp = ty == b'e' || ty == b'E';
     let _ = match (exp, ty == b'f', prec, is_f32) {
         (true, _, Some(d), true) => write!(out, "{x:.d$e}"),
@@ -92,12 +100,75 @@ pub fn float(out: &mut impl Text, v: f64, is_f32: bool, ty: u8, prec: Option<usi
         (_, _, None, true) => write!(out, "{x}"),
         (_, _, None, false) => write!(out, "{v}"),
     };
+    if ty == b'?' && prec.is_none() && v.is_finite() && !out.tail_mut(start).contains(&b'.') {
+        out.put(b".0");
+    }
     if ty == b'E' {
         // `inf` / `NaN` hold no `e`.
         out.tail_mut(start)
             .iter_mut()
             .filter(|c| **c == b'e')
             .for_each(|c| *c = b'E');
+    }
+}
+
+/// The most significant digits `g` shows.
+const MAX_SIG: usize = 800;
+
+/// `g`, the general format of C and Python, from the `d.ddde<x>` text
+/// written since `start` (`p` significant digits, already rounded):
+/// fixed when `-4 <= x < p`, else `d.ddde+XX` (two exponent digits at
+/// least). Trailing zeros, and a `.` left bare, go unless `alt`.
+fn general(out: &mut impl Text, start: usize, p: usize, alt: bool) {
+    let mut sig = [0u8; MAX_SIG];
+    let mut n = 0;
+    let mut exp: i32 = 0;
+    let mut neg = false;
+    let mut in_exp = false;
+    for &c in &*out.tail_mut(start) {
+        match c {
+            b'e' | b'E' => in_exp = true,
+            b'-' if in_exp => neg = true,
+            b'0'..=b'9' if in_exp => exp = exp * 10 + i32::from(c - b'0'),
+            b'0'..=b'9' if n < MAX_SIG => {
+                sig[n] = c;
+                n += 1;
+            }
+            _ => {}
+        }
+    }
+    if neg {
+        exp = -exp;
+    }
+    out.truncate(start);
+    let fixed = (-4..i32::try_from(p).unwrap_or(i32::MAX)).contains(&exp);
+    // The digits before the `.`, and the `0`s after it before `frac`.
+    let (k, lead) = match (fixed, usize::try_from(exp)) {
+        (true, Ok(e)) => ((e + 1).min(n), 0),
+        (true, Err(_)) => (0, exp.unsigned_abs() as usize - 1),
+        (false, _) => (1.min(n), 0),
+    };
+    if k == 0 {
+        out.put(b"0");
+    } else {
+        out.put(&sig[..k]);
+    }
+    let frac = &sig[k..n];
+    let keep = if alt {
+        frac.len()
+    } else {
+        frac.iter().rposition(|&c| c != b'0').map_or(0, |i| i + 1)
+    };
+    if keep > 0 || alt {
+        out.put(b".");
+        for _ in 0..lead {
+            out.put(b"0");
+        }
+        out.put(&frac[..keep]);
+    }
+    if !fixed {
+        let sign = if exp < 0 { '-' } else { '+' };
+        let _ = write!(out, "e{sign}{:02}", exp.unsigned_abs());
     }
 }
 
@@ -283,6 +354,15 @@ pub fn digits(w: &mut impl Text, spec: &FmtSpec, neg: bool, d: &[u8]) {
                 plain,
             );
         }
+        b'g' => {
+            let p = spec.precision.unwrap_or(6).clamp(1, MAX_SIG);
+            let body = |w: &mut _| {
+                let at = Text::len(w);
+                exp_digits(w, d, Some(p - 1), false);
+                general(w, at, p, spec.alt);
+            };
+            number(w, spec, neg, b"", body, plain);
+        }
         b'f' => {
             let zeros = spec.precision.unwrap_or(6);
             number(w, spec, neg, b"", |w| w.put(d), Body { zeros, ..plain });
@@ -323,13 +403,17 @@ pub fn integral(w: &mut impl Text, spec: &FmtSpec, nonneg: bool, prefix: &[u8], 
     number(w, spec, !nonneg, prefix, |w| w.put(buf), Body::default());
 }
 
-/// `rok_fmt_f64`: a float (`is_f32`: an `f32` widened); inf / NaN pad
-/// like text. A binary / octal / hex spec is the panic message.
+/// `rok_fmt_f64`'s `mode` bits: the value is an `f32` widened; Debug.
+pub const FLOAT_F32: u32 = 1;
+pub const FLOAT_DEBUG: u32 = 2;
+
+/// `rok_fmt_f64`: a float (`mode`: `FLOAT_*` bits); inf / NaN pad like
+/// text. A binary / octal / hex spec is the panic message.
 pub fn float_number(
     w: &mut impl Text,
     spec: &FmtSpec,
     v: f64,
-    is_f32: bool,
+    mode: u32,
 ) -> Result<(), &'static str> {
     if radix(spec.ty) != 10 {
         return Err("invalid format spec: a float has no binary / octal / hex form");
@@ -339,7 +423,13 @@ pub fn float_number(
         text: !v.is_finite(),
         ..Body::default()
     };
-    let body = |w: &mut _| float(w, v.abs(), is_f32, spec.ty, spec.precision);
+    let ty = if mode & FLOAT_DEBUG != 0 {
+        b'?'
+    } else {
+        spec.ty
+    };
+    let is_f32 = mode & FLOAT_F32 != 0;
+    let body = |w: &mut _| float(w, v.abs(), is_f32, ty, spec.precision, spec.alt);
     number(w, spec, neg, b"", body, how);
     Ok(())
 }
