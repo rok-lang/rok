@@ -1428,8 +1428,8 @@ fn close_dir(cell: GcBuf<isize>) {
     }
 }
 
-/// Recursive walk, depth first, the root first and each directory's
-/// entries sorted by name (Go `filepath.WalkDir`). Symlinks are listed,
+/// Recursive walk, depth first in pre-order (a directory before its
+/// entries), the root first and each directory's entries sorted by name (Go `filepath.WalkDir`). Symlinks are listed,
 /// not followed. Each directory is read whole when reached, so a `Walk`
 /// never holds a stream open (stopping early leaks nothing). An
 /// unreadable directory throws its error from `next`; calling `next`

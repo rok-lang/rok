@@ -78,7 +78,8 @@ impl<T: Hash, S: BuildHasher> Set<T, S> {
         }
     }
 
-    /// The members of either set.
+    /// The members of either set: those of `self` in its order, then
+    /// those only in `other` in its order.
     pub const fn union(self, other: Set<T, S>) -> Set<T, S> {
         let out: Set<T, S> = Set::with_hasher(self.hasher());
         for x in self.d.keys() {
@@ -90,7 +91,7 @@ impl<T: Hash, S: BuildHasher> Set<T, S> {
         out
     }
 
-    /// The members of both sets.
+    /// The members of both sets, in `self`'s order.
     pub const fn intersection(self, other: Set<T, S>) -> Set<T, S> {
         let out: Set<T, S> = Set::with_hasher(self.hasher());
         for x in self.d.keys() {
@@ -101,7 +102,7 @@ impl<T: Hash, S: BuildHasher> Set<T, S> {
         out
     }
 
-    /// The members of `self` not in `other`.
+    /// The members of `self` not in `other`, in `self`'s order.
     pub const fn difference(self, other: Set<T, S>) -> Set<T, S> {
         let out: Set<T, S> = Set::with_hasher(self.hasher());
         for x in self.d.keys() {
@@ -112,7 +113,8 @@ impl<T: Hash, S: BuildHasher> Set<T, S> {
         out
     }
 
-    /// The members of exactly one set.
+    /// The members of exactly one set: those only in `self` in its
+    /// order, then those only in `other` in its order.
     pub const fn symmetric_difference(self, other: Set<T, S>) -> Set<T, S> {
         self.difference(other).union(other.difference(self))
     }

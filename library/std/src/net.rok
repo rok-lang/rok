@@ -520,7 +520,9 @@ fn resolve_raw(host: str, port: u16) throws (IoError) -> List<SocketAddr> {
 }
 
 /// Addresses of `host`: `"name:port"`, `"[v6]:port"`, a socket address,
-/// or a bare name / IP (port 0).
+/// or a bare name / IP (port 0). The addresses come in the system
+/// resolver's order (its preferred address first), at most 32; a name
+/// with none throws `NotFound`.
 pub fn resolve(host: str) throws (IoError) -> List<SocketAddr> {
     if let a: SocketAddr = parse_socket_addr(host) { return [a]; }
     let name = host;
