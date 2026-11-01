@@ -19,7 +19,7 @@ fn main() -> i32 {
         for i in 0..(round * 37 + 1) {
             ok = ok && rx.try_recv() == f"v{round}-{i}";
         }
-        ok = ok && rx.try_recv() is Empty;
+        ok = ok && rx.try_recv() is channel::Empty;
     }
     for i in 0..1000 { try! tx.send(f"{i}"); }
     for i in 0..1000 { ok = ok && rx.recv() == f"{i}"; }

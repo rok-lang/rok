@@ -13,8 +13,8 @@ use rok::core::marker::share;
 fn show(v: i32 | none) -> str {
     match v { x: i32 => f"{x}", none => "none" }
 }
-fn show_try(v: i32 | Empty | Closed) -> str {
-    match v { x: i32 => f"{x}", _: Empty => "empty", _: Closed => "closed" }
+fn show_try(v: i32 | channel::Empty | channel::Closed) -> str {
+    match v { x: i32 => f"{x}", _: channel::Empty => "empty", _: channel::Closed => "closed" }
 }
 
 fn main() {

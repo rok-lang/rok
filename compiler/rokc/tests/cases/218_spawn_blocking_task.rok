@@ -9,7 +9,7 @@
 // has `join`, `is_finished`, and copies of it may each await it.
 async fn main() {
     let t: Task<i32> = task::spawn_blocking(|| 42);
-    let v = try await t.join() catch _: CancellationError { -1 };
+    let v = try await t.join() catch _: task::CancellationError { -1 };
     println(f"{v} {t.is_finished()}");
 
     let u = task::spawn_blocking(|| 7);

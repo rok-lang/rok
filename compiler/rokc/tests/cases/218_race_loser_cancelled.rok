@@ -22,7 +22,7 @@ async fn main() {
     let first = await task::race([slow, task::spawn(after(1, "fast"))]);
     println(f"race {first}");
     println(f"loser cancelled {slow.is_cancelled()}");
-    let l = try await slow.join() catch _: CancellationError { "cancelled" };
+    let l = try await slow.join() catch _: task::CancellationError { "cancelled" };
     println(f"loser join: {l}");
 
     let a = task::spawn(async { 1 });
@@ -35,6 +35,6 @@ async fn main() {
     let w = try await task::timeout(Duration::ms(5), late) catch e: TimeoutError { f"{e:?}" };
     println(f"timeout {w}");
     println(f"timed out cancelled {late.is_cancelled()}");
-    let j = try await late.join() catch _: CancellationError { "cancelled" };
+    let j = try await late.join() catch _: task::CancellationError { "cancelled" };
     println(f"timed out join: {j}");
 }

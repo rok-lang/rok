@@ -11,7 +11,7 @@ async fn main() {
     let ran = Cell::new(false);
     let t = task::spawn_local(async { ran.set(true); 1 });
     t.cancel();
-    let j = try await t.join() catch _: CancellationError { -1 };
+    let j = try await t.join() catch _: task::CancellationError { -1 };
     println(f"ran {ran.get()}");
     println(f"join: {if j == -1 { "cancelled" } else { "value" }}");
 }
