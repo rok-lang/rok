@@ -136,8 +136,8 @@ impl Debug for ParseError {
 
 impl Error for ParseError {}
 
-/// An invalid argument value (stdlib spec 2.14.4;
-/// `char::to_digit`, ...).
+/// An invalid argument value (stdlib spec 2.14.4; `encoding::hex_decode`,
+/// ...).
 #[derive(Clone, PartialEq, Eq)]
 pub struct ValueError {
     message: str;

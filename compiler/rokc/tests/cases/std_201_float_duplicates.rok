@@ -9,12 +9,12 @@
 // SS ß i̇ X
 
 // `powf` duplicates `pow` and `nan()` duplicates `NAN`; both still work.
-// `char::to_uppercase_str` / `to_lowercase_str` map a char fully, to
-// several chars where Unicode says so.
+// `char::to_uppercase` / `to_lowercase` map a char fully, to several
+// chars where Unicode says so.
 fn main() {
     let a = 2.0.pow(3.0);
     let b = 2.0.powf(3.0);
     let n = f32::nan();
     println(f"{a} {b} {n.is_nan()} {f64::NAN.is_nan()} {Int::from_i64(1).to_f64() / 2.0}");
-    println(f"{'ß'.to_uppercase_str()} {'ß'.to_lowercase_str()} {'\u{130}'.to_lowercase_str()} {'x'.to_uppercase_str()}");
+    println(f"{'ß'.to_uppercase()} {'ß'.to_lowercase()} {'\u{130}'.to_lowercase()} {'x'.to_uppercase()}");
 }

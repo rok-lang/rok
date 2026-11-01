@@ -1,11 +1,11 @@
 // spec: std §2.1.2
 // expect-exit: 101
 // expect-stderr: thread 'main' panicked at tests/cases/int_bigint_unsigned_bytes_negative.rok:10:5:
-// expect-stderr: Int::to_be_bytes: a negative int with signed: false; use signed: true for two's complement or take .abs() first
+// expect-stderr: Int::to_be_bytes_unsigned: negative value; use to_be_bytes for two's complement or call .abs() first
 // expect-stdout: [5]
 
 fn main() {
     let x: int = -5;
-    println(f"{x.abs().to_be_bytes(signed: false):?}");
-    x.to_be_bytes(signed: false);
+    println(f"{x.abs().to_be_bytes_unsigned():?}");
+    x.to_be_bytes_unsigned();
 }

@@ -948,43 +948,68 @@ impl Int {
         self.bit_length() - 1u64
     }
 
-    /// Bytes, least significant first. `signed`: the shortest two's
-    /// complement (the top bit is the sign, `-1` is `[255]`); otherwise
-    /// the magnitude, which panics on a negative number. Zero is `[0]`.
-    #[track_caller]
-    pub fn to_le_bytes(self, signed: bool = true) -> List<u8> { self.bytes(signed, false, "to_le_bytes") }
+    /// The shortest two's complement, least significant first: the top
+    /// bit is the sign (`-1` is `[255]`, `128` is `[128, 0]`); zero is
+    /// `[0]`. Fixed-width integers' `to_le_bytes` agree in their width.
+    pub fn to_le_bytes(self) -> List<u8> { self.bytes(true, false, "to_le_bytes") }
 
     /// As `to_le_bytes`, most significant first.
-    #[track_caller]
-    pub fn to_be_bytes(self, signed: bool = true) -> List<u8> { self.bytes(signed, true, "to_be_bytes") }
+    pub fn to_be_bytes(self) -> List<u8> { self.bytes(true, true, "to_be_bytes") }
 
-    /// The `int` of `bytes`, least significant first: two's complement
-    /// when `signed` (a set top bit is negative), else a magnitude. No
-    /// bytes is zero.
-    pub fn from_le_bytes(bytes: List<u8> | Slice<u8>, signed: bool = true) -> Int {
-        Int::from_bytes(bytes, signed, false)
-    }
+    /// The magnitude, least significant first, with no sign bit (`255`
+    /// is `[255]`); zero is `[0]`. Panics on a negative number.
+    #[track_caller]
+    pub fn to_le_bytes_unsigned(self) -> List<u8> { self.bytes(false, false, "to_le_bytes_unsigned") }
+
+    /// As `to_le_bytes_unsigned`, most significant first.
+    #[track_caller]
+    pub fn to_be_bytes_unsigned(self) -> List<u8> { self.bytes(false, true, "to_be_bytes_unsigned") }
+
+    /// The length of `to_le_bytes()`.
+    pub fn byte_len(self) -> usize { self.byte_count(true, "byte_len") }
+
+    /// The length of `to_le_bytes_unsigned()`; panics on a negative
+    /// number.
+    #[track_caller]
+    pub fn byte_len_unsigned(self) -> usize { self.byte_count(false, "byte_len_unsigned") }
+
+    /// The `int` of `bytes` in two's complement, least significant
+    /// first (a set top bit is negative). No bytes is zero.
+    pub fn from_le_bytes(bytes: List<u8> | Slice<u8>) -> Int { Int::from_bytes(bytes, true, false) }
 
     /// As `from_le_bytes`, most significant first.
-    pub fn from_be_bytes(bytes: List<u8> | Slice<u8>, signed: bool = true) -> Int {
-        Int::from_bytes(bytes, signed, true)
-    }
+    pub fn from_be_bytes(bytes: List<u8> | Slice<u8>) -> Int { Int::from_bytes(bytes, true, true) }
+
+    /// The `int` of the magnitude `bytes`, least significant first;
+    /// never negative. No bytes is zero.
+    pub fn from_le_bytes_unsigned(bytes: List<u8> | Slice<u8>) -> Int { Int::from_bytes(bytes, false, false) }
+
+    /// As `from_le_bytes_unsigned`, most significant first.
+    pub fn from_be_bytes_unsigned(bytes: List<u8> | Slice<u8>) -> Int { Int::from_bytes(bytes, false, true) }
 
     #[track_caller]
-    fn bytes(self, signed: bool, be: bool, name: str) -> List<u8> {
+    fn byte_count(self, signed: bool, name: str) -> usize {
         unsafe {
             let (neg, m) = self.parts();
             if neg && !signed {
-                panic(f"Int::{name}: a negative int with signed: false; use signed: true for two's complement or take .abs() first");
+                let plain = name.replace("_unsigned", "");
+                panic(f"Int::{name}: negative value; use {plain} for two's complement or call .abs() first");
             }
             // Sign bit included: -m needs the bits of m - 1, plus one.
-            let nb = if !signed {
+            if !signed {
                 if m.n == 0 { 1usize } else { ((m.bits() + 7u64) / 8u64) as usize }
             } else if neg {
                 (m.minus(IntMag::from_u64(1u64)).bits() / 8u64) as usize + 1
             } else {
                 (m.bits() / 8u64) as usize + 1
-            };
+            }
+        }
+    }
+
+    #[track_caller]
+    fn bytes(self, signed: bool, be: bool, name: str) -> List<u8> {
+        unsafe {
+            let nb = self.byte_count(signed, name);
             let limbs = self.twos(nb / 4 + 1);
             let out: List<u8> = List::with_capacity(nb);
             let i = 0usize;
@@ -1489,8 +1514,25 @@ impl From<u32> for Int { const fn from(value: u32) -> Int { Int::from_i64(value 
 impl From<u64> for Int { const fn from(value: u64) -> Int { Int::from_u64(value) } }
 impl From<usize> for Int { const fn from(value: usize) -> Int { Int::from_u64(value as u64) } }
 
-/// Lossy (rounds to nearest), as spec 2.11.8 allows for `int → f64`.
-impl From<Int> for f64 { fn from(value: Int) -> f64 { value.to_f64() } }
+/// Rounds to nearest (ties to even); throws past `±f64::MAX`.
+/// `to_f64` is the infallible form.
+impl TryFrom<Int> for f64 {
+    type Error = OverflowError;
+    fn try_from(value: Int) throws (OverflowError) -> f64 {
+        let r = value.to_f64();
+        if r.is_infinite() { throw overflow("f64"); }
+        r
+    }
+}
+
+/// Rounds to nearest; `±f64::MAX` past the range.
+impl SaturatingFrom<Int> for f64 {
+    fn saturating_from(value: Int) -> f64 {
+        let r = value.to_f64();
+        if r.is_infinite() { return if r < 0.0 { -f64::MAX } else { f64::MAX }; }
+        r
+    }
+}
 
 impl TryFrom<Int> for i8 {
     type Error = OverflowError;
@@ -1628,5 +1670,3 @@ impl WrappingFrom<Int> for u16 { const fn wrapping_from(value: Int) -> u16 { low
 impl WrappingFrom<Int> for u32 { const fn wrapping_from(value: Int) -> u32 { low_bits(value) as u32 } }
 impl WrappingFrom<Int> for u64 { const fn wrapping_from(value: Int) -> u64 { low_bits(value) } }
 impl WrappingFrom<Int> for usize { const fn wrapping_from(value: Int) -> usize { low_bits(value) as usize } }
-/// `n as f64`: rounds to nearest.
-impl WrappingFrom<Int> for f64 { fn wrapping_from(value: Int) -> f64 { value.to_f64() } }

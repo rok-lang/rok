@@ -533,20 +533,22 @@ impl char {
         unsafe { b.c }
     }
 
-    /// Digit `d` in base `radix` (2..=36; lowercase letters past `9`).
-    /// Panics if `d` is not a digit of that base.
+    /// Digit `d` in base `radix` (lowercase letters past `9`); `none`
+    /// if `d` is not a digit of that base. Panics unless `radix` is in
+    /// 2..=36.
     #[track_caller]
-    pub const fn from_digit(d: u32, radix: u32) -> char {
-        if radix < 2u32 || radix > 36u32 { panic("char::from_digit: radix must be in 2..=36"); }
-        if d >= radix { panic("char::from_digit: not a digit of the radix"); }
+    pub const fn from_digit(d: u32, radix: u32) -> char | none {
+        if radix < 2u32 || radix > 36u32 { panic(f"char::from_digit: radix {radix} is not in 2..=36"); }
+        if d >= radix { return none; }
         if d < 10u32 { return (0x30u8 + d as u8) as char; }
         (0x61u8 + d as u8 - 10u8) as char
     }
 
-    /// The value of this digit in base `radix` (2..=36, either letter
-    /// case); throws if it is not one.
-    pub const fn to_digit(self, radix: u32) throws (ValueError) -> u32 {
-        if radix < 2u32 || radix > 36u32 { throw ValueError::new("radix must be in 2..=36"); }
+    /// The value of this digit in base `radix` (either letter case);
+    /// `none` if it is not one. Panics unless `radix` is in 2..=36.
+    #[track_caller]
+    pub const fn to_digit(self, radix: u32) -> u32 | none {
+        if radix < 2u32 || radix > 36u32 { panic(f"char::to_digit: radix {radix} is not in 2..=36"); }
         let c = self as u32;
         let d = 99u32;
         if c >= 0x30u32 && c <= 0x39u32 {
@@ -556,13 +558,13 @@ impl char {
         } else if c >= 0x41u32 && c <= 0x5Au32 {
             d = c - 0x41u32 + 10u32;
         }
-        if d >= radix { throw ValueError::new(f"{self:?} is not a base-{radix} digit"); }
+        if d >= radix { return none; }
         d
     }
 
-    pub const fn is_digit(self, radix: u32) -> bool {
-        try { _ = self.to_digit(radix); true } catch _ { false }
-    }
+    /// Panics unless `radix` is in 2..=36.
+    #[track_caller]
+    pub const fn is_digit(self, radix: u32) -> bool { !(self.to_digit(radix) is none) }
 
     /// Bytes in UTF-8.
     pub const fn len_utf8(self) -> usize {
@@ -593,22 +595,31 @@ impl char {
         c < 0x20u32 || (c >= 0x7Fu32 && c < 0xA0u32)
     }
 
-    /// The simple (one-char) lowercase mapping; `self` if none. Strings
-    /// map fully with `str::to_lowercase`.
-    pub const fn to_lowercase(self) -> char {
-        unsafe { char::from_u32_unchecked(rok_char_to_case(self as u32, 0)) }
-    }
-    /// The simple (one-char) uppercase mapping (`'ß'` stays `'ß'`; `"ß"`
-    /// becomes `"SS"` through `str::to_uppercase`).
-    pub const fn to_uppercase(self) -> char {
-        unsafe { char::from_u32_unchecked(rok_char_to_case(self as u32, 1)) }
-    }
     /// The full lowercase mapping, which may be several chars
-    /// (`'\u{130}'` → `"i\u{307}"`).
-    pub fn to_lowercase_str(self) -> str { f"{self}".to_lowercase() }
+    /// (`'\u{130}'` → `"i\u{307}"`); locale-independent.
+    pub const fn to_lowercase(self) -> str { unsafe { rok_str_case(rok_str_from_char(self as u32), 0) } }
     /// The full uppercase mapping, which may be several chars (`'ß'` →
     /// `"SS"`).
-    pub fn to_uppercase_str(self) -> str { f"{self}".to_uppercase() }
+    pub const fn to_uppercase(self) -> str { unsafe { rok_str_case(rok_str_from_char(self as u32), 1) } }
+    /// The full titlecase mapping, which may be several chars (`'ß'` →
+    /// `"Ss"`, `'ǆ'` → `"ǅ"`). Capitalize a word with
+    /// `c.to_titlecase() + rest.to_lowercase()`.
+    pub const fn to_titlecase(self) -> str { unsafe { rok_str_case(rok_str_from_char(self as u32), 2) } }
+    /// The simple (one-char) lowercase mapping (UCD `slc`); `self` if
+    /// none.
+    pub const fn to_simple_lowercase(self) -> char {
+        unsafe { char::from_u32_unchecked(rok_char_to_case(self as u32, 0)) }
+    }
+    /// The simple (one-char) uppercase mapping (UCD `suc`; `'ß'` stays
+    /// `'ß'`); `self` if none.
+    pub const fn to_simple_uppercase(self) -> char {
+        unsafe { char::from_u32_unchecked(rok_char_to_case(self as u32, 1)) }
+    }
+    /// The simple (one-char) titlecase mapping (UCD `stc`; `'ǆ'` →
+    /// `'ǅ'`); `self` if none.
+    pub const fn to_simple_titlecase(self) -> char {
+        unsafe { char::from_u32_unchecked(rok_char_to_case(self as u32, 2)) }
+    }
 
     pub const fn is_ascii(self) -> bool { (self as u32) < 0x80u32 }
     pub const fn is_ascii_uppercase(self) -> bool { self >= 'A' && self <= 'Z' }

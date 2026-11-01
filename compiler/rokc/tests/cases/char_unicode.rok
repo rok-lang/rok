@@ -3,26 +3,25 @@
 // alpha true true true false
 // numeric true true false
 // space true true false
-// case é Σ ß a Z
-// err '9' is not a base-8 digit
-// digits 15 10 z 7 bad
+// case é Σ SS ß a Z
+// digits 15 10 z 7 true true
 // ascii true false true true false
 // order true 한
-// STRASSE οδος σ Ǆ
+// STRASSE οδος σ Ǆ ǅ ǅ Ss Fi
 // [trim] [x y] [tail ]
 fn main() {
     println(f"alpha {'é'.is_alphabetic()} {'한'.is_alphabetic()} {'Ж'.is_uppercase()} {'1'.is_alphabetic()}");
     println(f"numeric {'٣'.is_numeric()} {'Ⅻ'.is_numeric()} {'x'.is_numeric()}");
     println(f"space {'\u{3000}'.is_whitespace()} {'\n'.is_whitespace()} {'_'.is_whitespace()}");
-    println(f"case {'É'.to_lowercase()} {'σ'.to_uppercase()} {'ß'.to_uppercase()} {'A'.to_ascii_lowercase()} {'z'.to_ascii_uppercase()}");
-    let f = try 'F'.to_digit(16) catch _ { 99u32 };
-    let t = try 'a'.to_digit(11) catch _ { 99u32 };
-    let bad = try '9'.to_digit(8) catch e { println(f"err {e}"); 0u32 };
-    println(f"digits {f} {t} {char::from_digit(35u32, 36u32)} {char::from_digit(7u32, 10u32)} {if bad == 0u32 { "bad" } else { "ok" }}");
+    println(f"case {'É'.to_lowercase()} {'σ'.to_uppercase()} {'ß'.to_uppercase()} {'ß'.to_simple_uppercase()} {'A'.to_ascii_lowercase()} {'z'.to_ascii_uppercase()}");
+    let f = 'F'.to_digit(16) ?? 99u32;
+    let t = 'a'.to_digit(11) ?? 99u32;
+    let bad = '9'.to_digit(8);
+    println(f"digits {f} {t} {char::from_digit(35u32, 36u32) ?? '?'} {char::from_digit(7u32, 10u32) ?? '?'} {char::from_digit(10u32, 10u32) is none} {bad is none}");
     println(f"ascii {'~'.is_ascii_punctuation()} {'é'.is_ascii()} {'F'.is_ascii_hexdigit()} {'Q'.eq_ignore_ascii_case('q')} {'\t'.is_ascii_graphic()}");
     let m = '가'.max('한');
     println(f"order {'a' < 'b'} {m}");
-    println(f"{"straße".to_uppercase()} {"ΟΔΟΣ Σ".to_lowercase()} {'ǆ'.to_uppercase()}");
+    println(f"{"straße".to_uppercase()} {"ΟΔΟΣ Σ".to_lowercase()} {'ǆ'.to_uppercase()} {'ǆ'.to_titlecase()} {'ǆ'.to_simple_titlecase()} {'ß'.to_titlecase()} {'ﬁ'.to_titlecase()}");
     println(f"[{"\u{3000} trim\u{2003}".trim()}] [{"x y\u{85}".trim_end()}] [{"\u{a0}tail ".trim_start()}]");
 }
 

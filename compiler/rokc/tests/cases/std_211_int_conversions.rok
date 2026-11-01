@@ -4,11 +4,13 @@
 // -42 -42 2147483647 -1294967296 -1294967296 3000000000 -42
 // try_from: value out of range for `i32`
 // 0 -7 -7.9
+// f64 true true true
 
 // Spec 2.1.7 / 2.11.8: fixed → int is lossless (`into`, `int::from_i32`);
 // int → i32 is `try_into` (throws `OverflowError`), `saturating_into`
-// (clamps) or `wrapping_into` / `as` (modular); int → f64 is `into`
-// (rounds). float → i32 / i64 `try_into` truncates.
+// (clamps) or `wrapping_into` / `as` (modular); int → f64 is `to_f64`
+// (rounds), `try_into` (throws past `f64::MAX`) or `saturating_into`.
+// float → i32 / i64 `try_into` truncates.
 fn main() {
     let small: i32 = -42;
     let n: int = small.into();
@@ -16,11 +18,16 @@ fn main() {
     let a: i32 = try! n.try_into();
     let b: i32 = big.saturating_into();
     let c: i32 = big.wrapping_into();
-    let d: f64 = big.into();
+    let d: f64 = big.to_f64();
     println(f"{n} {a} {b} {c} {big as i32} {d} {int::from_i32(small)}");
     let r = try big.try_into::<i32>() catch e { println(f"{e}"); 0 };
     let f: float = -7.9;
     let g: i32 = try! f.try_into();
-    let h: f64 = f.into();
+    let h: f64 = try! f.try_into();
     println(f"{r} {g} {h}");
+    let huge: int = int::from(1) << 1100u32;
+    let s: f64 = huge.saturating_into();
+    let t: f64 | none = try? huge.try_into::<f64>();
+    let byte: f64 = 200u8.into();
+    println(f"f64 {s == f64::MAX} {t is none} {byte == 200.0}");
 }

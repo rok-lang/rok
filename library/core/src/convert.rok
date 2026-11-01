@@ -142,14 +142,8 @@ impl From<i32> for f64 {
     const fn from(value: i32) -> f64 { value as f64 }
 }
 
-#[cfg(target_pointer_width = "64")]
-impl From<i64> for isize {
-    #[intrinsic("rok.cast.i64.isize")]
-    const fn from(value: i64) -> isize { value as isize }
-}
-
-// On every target, beside the 64-bit `From`: code that converts this way
-// builds everywhere (on 64 bits it never throws).
+// No `From`: `isize` is narrower than `i64` on 32-bit targets, and the
+// same code builds on every target (on 64 bits it never throws).
 impl TryFrom<i64> for isize {
     type Error = OverflowError;
     fn try_from(value: i64) throws (OverflowError) -> isize {
@@ -198,6 +192,16 @@ impl From<u8> for i64 {
     const fn from(value: u8) -> i64 { value as i64 }
 }
 
+impl From<u8> for f32 {
+    #[intrinsic("rok.cast.u8.f32")]
+    const fn from(value: u8) -> f32 { value as f32 }
+}
+
+impl From<u8> for f64 {
+    #[intrinsic("rok.cast.u8.f64")]
+    const fn from(value: u8) -> f64 { value as f64 }
+}
+
 impl From<u16> for u32 {
     #[intrinsic("rok.cast.u16.u32")]
     const fn from(value: u16) -> u32 { value as u32 }
@@ -223,6 +227,16 @@ impl From<u16> for i64 {
     const fn from(value: u16) -> i64 { value as i64 }
 }
 
+impl From<u16> for f32 {
+    #[intrinsic("rok.cast.u16.f32")]
+    const fn from(value: u16) -> f32 { value as f32 }
+}
+
+impl From<u16> for f64 {
+    #[intrinsic("rok.cast.u16.f64")]
+    const fn from(value: u16) -> f64 { value as f64 }
+}
+
 impl From<u32> for u64 {
     #[intrinsic("rok.cast.u32.u64")]
     const fn from(value: u32) -> u64 { value as u64 }
@@ -238,13 +252,12 @@ impl From<u32> for i64 {
     const fn from(value: u32) -> i64 { value as i64 }
 }
 
-#[cfg(target_pointer_width = "64")]
-impl From<u64> for usize {
-    #[intrinsic("rok.cast.u64.usize")]
-    const fn from(value: u64) -> usize { value as usize }
+impl From<u32> for f64 {
+    #[intrinsic("rok.cast.u32.f64")]
+    const fn from(value: u32) -> f64 { value as f64 }
 }
 
-// On every target, as `TryFrom<i64> for isize`.
+// As `TryFrom<i64> for isize`.
 impl TryFrom<u64> for usize {
     type Error = OverflowError;
     fn try_from(value: u64) throws (OverflowError) -> usize {

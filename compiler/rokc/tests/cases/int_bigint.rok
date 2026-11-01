@@ -96,7 +96,7 @@ fn main() {
     let t: i64 = x.saturating_into();
     let u: i32 = try! y.try_into();
     let v: u8 = y.wrapping_into();
-    println(f"{into + 1} {int::from(i) * 2} {i as int} {t} {u} {v} {x as i64} {x as u16} {y as f64} {x.to_f64()} {x.to_i64() is none} {y.to_i32() ?? 0}");
+    println(f"{into + 1} {int::from(i) * 2} {i as int} {t} {u} {v} {x as i64} {x as u16} {y.to_f64()} {x.to_f64()} {x.to_i64() is none} {y.to_i32() ?? 0}");
     let fits: i32 | none = try? x.try_into::<i32>();
     println(f"{fits is none}");
 

@@ -787,6 +787,17 @@ pub(super) fn check_call_bounds(
                         super::expr::sum_order_help()
                     )));
                 }
+                // `int` / `float` into a float rounds, so it is no `From`.
+                let to = ctx.ty_name(concrete);
+                let from = ctx.trait_name(&want);
+                if matches!(to.as_str(), "f32" | "f64")
+                    && matches!(from.as_str(), "From<int>" | "From<float>")
+                {
+                    ctx.help_last(Some(format!(
+                        "`From` is lossless; use `x.to_f64()` (rounds), or `try {to}::try_from(x)` \
+                         to throw past the range"
+                    )));
+                }
             }
         }
     }

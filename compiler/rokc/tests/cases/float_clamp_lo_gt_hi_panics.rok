@@ -1,0 +1,13 @@
+// spec: std 201-numbers
+// expect-exit: 101
+// expect-stderr: thread 'main' panicked at tests/cases/float_clamp_lo_gt_hi_panics.rok:11:13:
+// expect-stderr: f64::clamp: lo > hi (2 > 1)
+// expect-stdout: 1.5 1
+
+// `clamp` with `lo > hi` is a bug at the call site: it panics there.
+fn main() {
+    let x: f64 = 5.0;
+    println(f"{1.5.clamp(1.0, 2.0)} {x.clamp(0.0, 1.0)}");
+    let y = x.clamp(2.0, 1.0);
+    println(f"{y}");
+}

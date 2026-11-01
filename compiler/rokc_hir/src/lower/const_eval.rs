@@ -1198,9 +1198,9 @@ fn run_extern(name: &str, args: &[Value]) -> Result<Value, Ext> {
         ("rok_str_from_buf", [buf, off, len]) => {
             text_value(bytes_of(buf, usize_of(off)?, usize_of(len)?)?)?
         }
-        ("rok_str_case", [s, upper]) => {
+        ("rok_str_case", [s, mode]) => {
             let mut out = String::new();
-            unicode::case(str_of(s)?, int_of(upper)? != 0, |c| out.push(c));
+            unicode::case(str_of(s)?, i32::try_from(int_of(mode)?)?, |c| out.push(c));
             Value::Str(out.into())
         }
         ("rok_str_trim", [s, which]) => {
@@ -1260,8 +1260,8 @@ fn run_extern(name: &str, args: &[Value]) -> Result<Value, Ext> {
             i128::from(unicode::props(u32::try_from(int_of(c)?)?)),
             PrimTy::U32,
         ),
-        ("rok_char_to_case", [c, upper]) => {
-            let c = unicode::to_case(u32::try_from(int_of(c)?)?, int_of(upper)? != 0);
+        ("rok_char_to_case", [c, mode]) => {
+            let c = unicode::to_case(u32::try_from(int_of(c)?)?, i32::try_from(int_of(mode)?)?);
             Value::Int(i128::from(c), PrimTy::U32)
         }
         // A formatter's text is its `str` so far.

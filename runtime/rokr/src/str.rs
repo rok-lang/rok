@@ -389,34 +389,34 @@ pub extern "C" fn rok_char_props(c: u32) -> u32 {
     unicode::props(c)
 }
 
-/// Simple (one-char) case mapping; `c` itself when it has none.
+/// Simple (one-char) case mapping, `mode` 0 lower, 1 upper, 2 title;
+/// `c` itself when it has none.
 #[unsafe(no_mangle)]
-pub extern "C" fn rok_char_to_case(c: u32, upper: i32) -> u32 {
-    unicode::to_case(c, upper != 0)
+pub extern "C" fn rok_char_to_case(c: u32, mode: i32) -> u32 {
+    unicode::to_case(c, mode)
 }
 
-/// `upper` != 0 → uppercase, else lowercase (`unicode::case`); ASCII
-/// only when `s` is not UTF-8.
+/// Full case mapping of each char (`unicode::case`), `mode` as
+/// `rok_char_to_case`; ASCII only when `s` is not UTF-8.
 #[unsafe(no_mangle)]
-pub extern "C" fn rok_str_case(s: RokStr, upper: i32) -> RokStr {
-    let upper = upper != 0;
+pub extern "C" fn rok_str_case(s: RokStr, mode: i32) -> RokStr {
     let Ok(text) = core::str::from_utf8(s.bytes()) else {
         let out = build(&[s.bytes()]);
         // SAFETY: `out` is a fresh GC string of `len` bytes.
         let b = unsafe { core::slice::from_raw_parts_mut(out.ptr.cast_mut(), out.len) };
-        if upper {
-            b.make_ascii_uppercase();
-        } else {
+        if mode == unicode::LOWER {
             b.make_ascii_lowercase();
+        } else {
+            b.make_ascii_uppercase();
         }
         return out;
     };
     // Two passes: measure, then encode.
     let mut len = 0;
-    unicode::case(text, upper, |m| len += m.len_utf8());
+    unicode::case(text, mode, |m| len += m.len_utf8());
     let p = alloc_str(len);
     let mut at = 0;
-    unicode::case(text, upper, |m| {
+    unicode::case(text, mode, |m| {
         let mut buf = [0u8; 4];
         let e = m.encode_utf8(&mut buf);
         // SAFETY: the first pass measured exactly `len` bytes.

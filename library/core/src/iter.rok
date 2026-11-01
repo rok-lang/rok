@@ -256,6 +256,7 @@ pub trait Iterator {
         none
     }
 
+    /// The smallest item (the first of equals).
     const fn min(self) -> Item | none where Item: Ord {
         let best: Item | none = none;
         for x in self {
@@ -273,12 +274,13 @@ pub trait Iterator {
         best
     }
 
+    /// The largest item (the last of equals).
     const fn max(self) -> Item | none where Item: Ord {
         let best: Item | none = none;
         for x in self {
             match best {
                 b: Item => {
-                    if x.cmp(b).is_gt() {
+                    if !x.cmp(b).is_lt() {
                         best = x;
                     }
                 }

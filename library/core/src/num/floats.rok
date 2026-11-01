@@ -119,8 +119,10 @@ impl f64 {
     pub fn powi(self, n: i32) -> f64 { self.pow(n as f64) }
     /// `self * a + b` with one rounding.
     pub const fn mul_add(self, a: f64, b: f64) -> f64 { unsafe { rok_f64_mul_add(self, a, b) } }
-    /// `self` limited to `lo..=hi`; NaN stays NaN.
+    /// `self` limited to `lo..=hi`; NaN stays NaN. Panics if `lo > hi`.
+    #[track_caller]
     pub const fn clamp(self, lo: f64, hi: f64) -> f64 {
+        if lo > hi { panic(f"f64::clamp: lo > hi ({lo} > {hi})"); }
         if self < lo { return lo; }
         if self > hi { return hi; }
         self
@@ -284,8 +286,10 @@ impl f32 {
     pub fn powi(self, n: i32) -> f32 { self.pow(n as f32) }
     /// `self * a + b` with one rounding.
     pub const fn mul_add(self, a: f32, b: f32) -> f32 { unsafe { rok_f32_mul_add(self, a, b) } }
-    /// `self` limited to `lo..=hi`; NaN stays NaN.
+    /// `self` limited to `lo..=hi`; NaN stays NaN. Panics if `lo > hi`.
+    #[track_caller]
     pub const fn clamp(self, lo: f32, hi: f32) -> f32 {
+        if lo > hi { panic(f"f32::clamp: lo > hi ({lo} > {hi})"); }
         if self < lo { return lo; }
         if self > hi { return hi; }
         self
