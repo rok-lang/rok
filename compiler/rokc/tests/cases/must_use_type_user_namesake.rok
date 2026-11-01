@@ -1,0 +1,15 @@
+// expect-exit: 0
+// spec: §6.2.11
+// expect-lint: 13:5 unused variable `h`
+// expect-lint: 14:1 the `JoinHandle` result of `mk` is never used
+// expect-stdout:
+// 1
+
+// A user type that shares its name with a `#[must_use]` library type
+// (`thread::JoinHandle`) is not taken for it.
+struct JoinHandle { x: i32; }
+fn mk() -> JoinHandle { JoinHandle { x: 1 } }
+
+let h = mk();
+mk();
+println(f"{mk().x}");

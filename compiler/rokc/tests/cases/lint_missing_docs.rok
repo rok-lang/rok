@@ -1,20 +1,23 @@
 // expect-exit: 0
 // spec: §6.2.9
-// expect-lint: 17:5 `pub fn bare` has no doc comment
-// expect-lint: 19:5 `pub struct Point` has no doc comment
-// expect-lint: 27:9 `pub fn norm` has no doc comment
-// expect-lint: 30:5 `pub trait Shape` has no doc comment
-// expect-lint: 33:5 `pub fn area` has no doc comment
+// expect-lint: 19:5 `pub fn bare` has no doc comment
+// expect-lint: 20:11 `pub fn constant` has no doc comment
+// expect-lint: 22:5 `pub struct Point` has no doc comment
+// expect-lint: 30:9 `pub fn norm` has no doc comment
+// expect-lint: 33:5 `pub trait Shape` has no doc comment
+// expect-lint: 36:5 `pub fn area` has no doc comment
 // expect-stdout:
 // 5
 
 // `missing_docs` is allowed by default; a package turns it on. Private
-// items, trait impls and `#[doc(hidden)]` ones need no docs.
+// items, trait impls and `#[doc(hidden)]` ones need no docs; a
+// `const fn` does.
 #![warn(missing_docs)]
 
 /// Documented.
 pub fn documented() {}
 pub fn bare() {}
+pub const fn constant() -> i32 { 1 }
 
 pub struct Point {
     x: i32;
