@@ -1292,27 +1292,35 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
         }
     }
 
-    /// `local = <call>.k`: a `ref` argument written back.
+    /// `local = <call>.k`: a `ref` argument written back. An `async`
+    /// method's `ref self` comes back in a cell its future fills:
+    /// `local = <call>.k[0]` (or `<call>[0]` when it returns nothing).
     fn write_back(&self, local: LocalId, value: &HirExpr) -> bool {
+        if let HirExprKind::BufGet { buf, .. } = &value.kind {
+            let target = match &buf.kind {
+                HirExprKind::TupleField { target, .. } => &**target,
+                _ => &**buf,
+            };
+            return self.call_of(target).is_some_and(|(callee, args)| {
+                self.c.fns.get(&callee).is_some_and(|f| {
+                    f.params
+                        .iter()
+                        .position(|p| p.by_ref)
+                        .and_then(|i| args.get(i))
+                        .is_some_and(|a| base_local(a) == Some(local))
+                })
+            });
+        }
         let HirExprKind::TupleField { target, index, .. } = &value.kind else {
             return false;
         };
         if *index == 0 {
             return false;
         }
-        let call = match &target.kind {
-            HirExprKind::Call { .. } => Some(&**target),
-            HirExprKind::Local(t) => self.inits.get(t).copied(),
-            _ => None,
-        };
-        let Some(HirExpr {
-            kind: HirExprKind::Call { callee, args },
-            ..
-        }) = call
-        else {
+        let Some((callee, args)) = self.call_of(target) else {
             return false;
         };
-        let Some(f) = self.c.fns.get(callee) else {
+        let Some(f) = self.c.fns.get(&callee) else {
             return false;
         };
         let refs: Vec<usize> = f
@@ -1325,6 +1333,25 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
         refs.get(*index as usize - 1)
             .and_then(|&i| args.get(i))
             .is_some_and(|a| base_local(a) == Some(local))
+    }
+
+    /// The call `e` is, or the one its temporary was bound to.
+    fn call_of<'x>(&self, e: &'x HirExpr) -> Option<(FunctionId, &'x [HirExpr])>
+    where
+        'a: 'x,
+    {
+        let call = match &e.kind {
+            HirExprKind::Call { .. } => Some(e),
+            HirExprKind::Local(t) => self.inits.get(t).copied(),
+            _ => None,
+        };
+        match call {
+            Some(HirExpr {
+                kind: HirExprKind::Call { callee, args },
+                ..
+            }) => Some((*callee, args.as_slice())),
+            _ => None,
+        }
     }
 
     /// `local` takes `value` (a `let` or an assignment).

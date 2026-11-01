@@ -5896,6 +5896,13 @@ fn transfer_glue(
     if let HirTy::Array(e, n) = &ty {
         return transfer_array(ctx, value, local, e, *n, &part, span);
     }
+    if !matches!(
+        ty,
+        HirTy::Struct(_) | HirTy::Tuple(_) | HirTy::Enum(_) | HirTy::Sum(_)
+    ) {
+        return value;
+    }
+    let mut stmts = vec![HirStmt::Let { local, init: value }];
     let copy = match &ty {
         HirTy::Struct(sid) => {
             let fields: Vec<HirTy> = ctx
@@ -5904,21 +5911,42 @@ fn transfer_glue(
                 .iter()
                 .map(|f| f.ty.clone())
                 .collect();
+            let read = |i: usize, fty: &HirTy| HirExpr {
+                kind: HirExprKind::FieldRead {
+                    target: Box::new(v.clone()),
+                    struct_id: *sid,
+                    field_index: at(i),
+                    field_ty: fty.clone(),
+                },
+                ty: fty.clone(),
+                span,
+            };
+            // Taking an affine part moves a value with its own `Drop` as
+            // a whole: read the plain parts into temporaries first.
+            let affine_part: Vec<bool> = fields
+                .iter()
+                .map(|f| super::affine::affine(ctx, f).is_some())
+                .collect();
+            let mut parts: Vec<Option<HirExpr>> = vec![None; fields.len()];
+            if affine_part.iter().any(|&a| a) {
+                for later in [false, true] {
+                    for (i, fty) in fields.iter().enumerate() {
+                        if affine_part[i] != later {
+                            continue;
+                        }
+                        let e = part(ctx, read(i, fty));
+                        let t = ctx.declare(None, fty.clone());
+                        stmts.push(HirStmt::Let { local: t, init: e });
+                        parts[i] = Some(hir_local(t, fty, span));
+                    }
+                }
+            }
             let fields = fields
                 .iter()
                 .enumerate()
-                .map(|(i, fty)| {
-                    let read = HirExpr {
-                        kind: HirExprKind::FieldRead {
-                            target: Box::new(v.clone()),
-                            struct_id: *sid,
-                            field_index: at(i),
-                            field_ty: fty.clone(),
-                        },
-                        ty: fty.clone(),
-                        span,
-                    };
-                    part(ctx, read)
+                .map(|(i, fty)| match parts[i].take() {
+                    Some(e) => e,
+                    None => part(ctx, read(i, fty)),
                 })
                 .collect();
             HirExprKind::StructInit {
@@ -6031,11 +6059,11 @@ fn transfer_glue(
                 arms,
             }
         }
-        _ => return value,
+        _ => unreachable!("checked above"),
     };
     HirExpr {
         kind: HirExprKind::Block(Box::new(HirBlock {
-            stmts: vec![HirStmt::Let { local, init: value }],
+            stmts,
             trailing: Some(HirExpr {
                 kind: copy,
                 ty: ty.clone(),
