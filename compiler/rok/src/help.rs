@@ -135,8 +135,8 @@ block instead (made at the top when missing).",
         flags: &[
             (
                 "--registry <url>",
-                "another stone index (default: $ROK_REGISTRY,\nelse `registry` in \
-                 $ROK_HOME/config.rokon,\nelse rokstones.io's)",
+                "another stone index (default: rokstones.io's;\na mirror of it goes in \
+                 $ROK_HOME/sources.rokon)",
             ),
             ("--path <dir>", "a local package"),
             ("--git <url>", "a git repository"),
@@ -262,18 +262,20 @@ Remove each from the active environment, or else from $ROK_HOME/bin.",
         ],
         about: "\
 Make the index entry for this package: its git remote `origin` (an
-https:// URL), HEAD commit and tree; sources are not uploaded. It is
-committed to the index checkout <dir>, or without --index-dir sent to
-the registry API of the configured index or of --registry <url> (log in
-first with `rok login`, or set $ROK_REGISTRY_TOKEN). --dry-run only
-checks it, against <dir> if given.",
+https:// URL), HEAD commit and tree, dependencies, features, `toolchain`
+(the pin, else this rok's series) and `links`; sources are not uploaded.
+It is committed to the index checkout <dir>, or without --index-dir sent
+to the registry API of rokstones.io or of --registry <url>, with the
+manifest's descriptive fields, the README and the packed size (log in
+first with `rok login`, or set $ROK_REGISTRY_TOKEN for rokstones.io).
+--dry-run only checks it, against <dir> if given.",
         examples: &[
             ("rok publish --dry-run", "check what would be published"),
             ("rok publish", "publish it"),
         ],
         flags: &[
             ("--dry-run", "only check"),
-            ("--registry <url>", "another index than the configured one"),
+            ("--registry <url>", "another index than rokstones.io's"),
             ("--index-dir <dir>", "a checkout of the index"),
             (
                 "--native <file>",
@@ -286,19 +288,22 @@ checks it, against <dir> if given.",
         name: "yank",
         summary: "mark a version yanked",
         usage: &[
-            "yank [--native] <name>@<version> [--undo] [--registry <url> | --index-dir <dir>]",
+            "yank [--native] <name>@<version> [--undo] [--message <why>] [--registry <url> | \
+             --index-dir <dir>]",
         ],
         about: "\
 Mark a version yanked, so new resolutions skip it: committed to the index
-checkout <dir>, or through the registry API of the configured index or of
---registry <url> (log in with `rok login`).",
+checkout <dir>, or through the registry API of rokstones.io or of
+--registry <url> (log in with `rok login`), which keeps --message.",
         examples: &[
             ("rok yank num@1.2.0", "yank num 1.2.0"),
+            ("rok yank num@1.2.0 --message \"wrong sums\"", "and say why"),
             ("rok yank num@1.2.0 --undo", "take it back"),
         ],
         flags: &[
             ("--undo", "un-yank it"),
-            ("--registry <url>", "another index than the configured one"),
+            ("--message <why>", "why it is yanked (at most 512 bytes)"),
+            ("--registry <url>", "another index than rokstones.io's"),
             ("--index-dir <dir>", "a checkout of the index"),
             ("--native", "a native package"),
         ],
@@ -309,12 +314,10 @@ checkout <dir>, or through the registry API of the configured index or of
         summary: "keep a registry token",
         usage: &["login [--registry <url>] [<token>]"],
         about: "\
-Keep a registry token for one index (default: the configured one) in
+Keep a registry token for one index (default: rokstones.io's) in
 $ROK_HOME/tokens.rokon, after checking its account may publish; it is
 sent only to that index. Get one from <api>/me (e.g.
-https://rokstones.io/me); without <token> it is read from standard input.
-The configured index's token also goes into credentials.rokon, where rok
-0.1.5 and older read it.",
+https://rokstones.io/me); without <token> it is read from standard input.",
         examples: &[
             ("rok login", "paste the token"),
             (
@@ -322,7 +325,7 @@ The configured index's token also goes into credentials.rokon, where rok
                 "a token for another index",
             ),
         ],
-        flags: &[("--registry <url>", "another index than the configured one")],
+        flags: &[("--registry <url>", "another index than rokstones.io's")],
         ..CmdHelp::EMPTY
     },
     CmdHelp {
@@ -330,14 +333,14 @@ The configured index's token also goes into credentials.rokon, where rok
         summary: "remove the registry token",
         usage: &["logout [--registry <url> | --all]"],
         about: "\
-Remove the token `rok login` kept for the index (default: the configured
-one), or with --all every token.",
+Remove the token `rok login` kept for the index (default: rokstones.io's),
+or with --all every token.",
         examples: &[
             ("rok logout", ""),
             ("rok logout --all", "every index's token"),
         ],
         flags: &[
-            ("--registry <url>", "another index than the configured one"),
+            ("--registry <url>", "another index than rokstones.io's"),
             ("--all", "every index"),
         ],
         ..CmdHelp::EMPTY

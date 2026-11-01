@@ -3,8 +3,11 @@
 //! it checks hashes, unpacks, and tells rokc where the libraries are.
 //!
 //! ```rokon
-//! Native { name: "zlib", vers: "1.3.1", deps: { "other": Dep::native("^1") }, targets: { "aarch64-apple-darwin": Artifact { url: "https://example.com/zlib-1.3.1-aarch64-apple-darwin.tar.gz", sha256: "<hex>", links: { "z": "static" }, runtime: [] } }, yanked: false, license: "Zlib" }
+//! Native { name: "zlib", version: "1.3.1", deps: { "other": Dep::native("^1") }, targets: { "aarch64-apple-darwin": Artifact { url: "https://example.com/zlib-1.3.1-aarch64-apple-darwin.tar.gz", sha256: "<hex>", links: { "z": "static" }, runtime: [] } }, yanked: false }
 //! ```
+//!
+//! A file `rok publish --native` reads may add `description`, `license`
+//! and `repository`; they go to the registry API, not the index line.
 //!
 //! An index has one line per version in `native/<shard>`; a
 //! `Dep::native(url, sha256)` names a file with one value (artifact urls
@@ -42,11 +45,12 @@ pub struct Artifact {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
     pub name: String,
-    pub vers: Version,
+    pub version: Version,
     pub deps: Vec<NativeDep>,
     /// Target triple -> its build.
     pub targets: Vec<(String, Artifact)>,
     pub yanked: bool,
+    /// A file's descriptive fields (never in an index line).
     pub meta: Vec<(&'static str, String)>,
 }
 
@@ -131,7 +135,7 @@ fn entry(d: Decoder<'_>, strict: bool) -> Result<Entry, String> {
     if strict {
         r.only(&[
             "name",
-            "vers",
+            "version",
             "deps",
             "targets",
             "yanked",
@@ -142,14 +146,15 @@ fn entry(d: Decoder<'_>, strict: bool) -> Result<Entry, String> {
     }
     let name = r.req("name")?.string()?;
     manifest::check_name(&name).map_err(|e| r.field_error("name", &e))?;
-    let vers = Version::parse(&r.req("vers")?.string()?).map_err(|e| r.field_error("vers", &e))?;
+    let version =
+        Version::parse(&r.req("version")?.string()?).map_err(|e| r.field_error("version", &e))?;
     let mut targets = Vec::new();
     for (k, v) in r.req("targets")?.dict()? {
         targets.push((k.string()?, artifact(v, strict)?));
     }
     Ok(Entry {
         name,
-        vers,
+        version,
         deps: r.opt("deps").map_or(Ok(Vec::new()), manifest::natives)?,
         targets,
         yanked: r
@@ -220,13 +225,12 @@ impl Entry {
             Some("Native"),
             [
                 ("name", Value::str(&self.name)),
-                ("vers", Value::str(self.vers.to_string())),
+                ("version", Value::str(self.version.to_string())),
                 ("deps", Value::new(Kind::Dict(deps))),
                 ("targets", Value::new(Kind::Dict(targets))),
                 ("yanked", Value::new(Kind::Bool(self.yanked))),
             ]
             .into_iter()
-            .chain(self.meta.iter().map(|(k, v)| (*k, Value::str(v))))
             .collect(),
         ))
     }
@@ -255,8 +259,8 @@ pub fn entries(cache: &crate::git::Cache, url: &str, name: &str) -> Result<Vec<E
 pub fn best<'a>(entries: &'a [Entry], req: &Req) -> Option<&'a Entry> {
     entries
         .iter()
-        .filter(|e| !e.yanked && req.matches(&e.vers))
-        .max_by(|a, b| a.vers.cmp(&b.vers))
+        .filter(|e| !e.yanked && req.matches(&e.version))
+        .max_by(|a, b| a.version.cmp(&b.version))
 }
 
 pub fn no_match(
@@ -272,7 +276,7 @@ pub fn no_match(
     }
     let vs: Vec<String> = entries
         .iter()
-        .map(|e| format!("{}{}", e.vers, if e.yanked { " (yanked)" } else { "" }))
+        .map(|e| format!("{}{}", e.version, if e.yanked { " (yanked)" } else { "" }))
         .collect();
     format!(
         "no version of native package `{name}` matches `{req}` (in {url}: {})",
@@ -413,7 +417,7 @@ pub fn unpack(
         return Err(format!(
             "native package `{}` {} has no build for {triple} (it has: {})",
             e.name,
-            e.vers,
+            e.version,
             if have.is_empty() {
                 "none".to_owned()
             } else {
@@ -425,7 +429,7 @@ pub fn unpack(
     if dir.is_dir() {
         return Ok((dir, a.clone()));
     }
-    let what = format!("native package `{}` {} ({triple})", e.name, e.vers);
+    let what = format!("native package `{}` {} ({triple})", e.name, e.version);
     let loc = locate(n.base.as_deref(), &a.url).map_err(|m| format!("{what}: {m}"))?;
     if offline && remote(&loc) {
         return Err(format!(
@@ -433,7 +437,10 @@ pub fn unpack(
         ));
     }
     if !quiet && remote(&loc) {
-        rokc_core::term::status("Downloading", &format!("{} {} ({triple})", e.name, e.vers));
+        rokc_core::term::status(
+            "Downloading",
+            &format!("{} {} ({triple})", e.name, e.version),
+        );
     }
     let tmp = scratch(home, &a.sha256)?;
     let _ = std::fs::remove_dir_all(&tmp);
@@ -684,7 +691,7 @@ pub fn rokc_args(
                     return Err(format!(
                         "native package `{}` {} links `{l}` as a shared library, but {} \
                          executables are static (it needs \"static\" links)",
-                        n.entry.name, n.entry.vers, t.name
+                        n.entry.name, n.entry.version, t.name
                     ));
                 }
             }
@@ -770,10 +777,10 @@ pub fn publish(
         &e.name,
         have.iter().map(|o| o.name.clone()),
     )?;
-    if have.iter().any(|o| o.vers == e.vers) {
+    if have.iter().any(|o| o.version == e.version) {
         return Err(format!(
             "native package {} {} is already in the index",
-            e.name, e.vers
+            e.name, e.version
         ));
     }
     if write {
@@ -787,7 +794,7 @@ pub fn publish(
             index,
             &path,
             &out,
-            &format!("Publish native {} {}", e.name, e.vers),
+            &format!("Publish native {} {}", e.name, e.version),
         )?;
     }
     Ok((e, Some(path)))
@@ -802,7 +809,7 @@ mod tests {
     #[test]
     fn unknown_fields() {
         let line = format!(
-            "Native {{ name: \"zz\", vers: \"1.0.0\", targets: {{ \"aarch64-apple-darwin\": \
+            "Native {{ name: \"zz\", version: \"1.0.0\", targets: {{ \"aarch64-apple-darwin\": \
              Artifact {{ url: \"https://x/zz.tar.gz\", sha256: \"{}\" }} }}, yanked: false }}",
             "ab".repeat(32)
         );
@@ -821,10 +828,9 @@ mod tests {
     fn lines_paths_and_names() {
         let h = "ab".repeat(32);
         let line = format!(
-            "Native {{ name: \"zz\", vers: \"1.0.0\", deps: {{ \"yy\": Dep::native(\"^1.0\") }}, \
+            "Native {{ name: \"zz\", version: \"1.0.0\", deps: {{ \"yy\": Dep::native(\"^1.0\") }}, \
              targets: {{ \"aarch64-apple-darwin\": Artifact {{ url: \"https://x/zz.tar.gz\", \
-             sha256: \"{h}\", links: {{ \"zz\": \"static\" }}, runtime: [] }} }}, yanked: false, \
-             license: \"MIT\" }}"
+             sha256: \"{h}\", links: {{ \"zz\": \"static\" }}, runtime: [] }} }}, yanked: false }}"
         );
         let e = &parse_file(&format!("\n{line}\n"), "f").unwrap()[0];
         assert_eq!(e.to_line(), line);
@@ -918,7 +924,7 @@ mod tests {
     fn musl_refuses_shared_links_before_fetching() {
         let t = "x86_64-unknown-linux-musl";
         let line = format!(
-            "Native {{ name: \"zz\", vers: \"1.0.0\", targets: {{ \"{t}\": Artifact {{ url: \
+            "Native {{ name: \"zz\", version: \"1.0.0\", targets: {{ \"{t}\": Artifact {{ url: \
              \"https://nowhere.invalid/zz.tgz\", sha256: \"{}\", links: {{ \"zz\": \"dylib\" }} \
              }} }} }}",
             "ab".repeat(32)
