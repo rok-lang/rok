@@ -10,7 +10,7 @@
 
 // Value types work as keys, order and print.
 use rok::std::path::Path;
-use rok::std::net::{Ipv4Addr, Shutdown, SocketAddr};
+use rok::std::net::{IpAddr, Ipv4Addr, Shutdown, SocketAddr};
 use rok::core::io::{IoErrorKind, SeekFrom};
 use rok::std::fs::Permissions;
 use rok::std::os::unix::fs::PermissionsExt;
@@ -38,7 +38,7 @@ fn main() {
 
     let p: Permissions = Permissions::from_mode(0o644u32);
     p.set_readonly(true);
-    println(f"{p:?} {SocketAddr::v4(Ipv4Addr::LOCALHOST, 80u16):?}");
+    println(f"{p:?} {SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 80u16):?}");
 
     println(f"{[1, 2].iter().map(|x| x + 1):?}");
 }
