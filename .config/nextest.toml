@@ -2,3 +2,9 @@
 # costs one job, not the 6 h job limit.
 [profile.default]
 slow-timeout = { period = "60s", terminate-after = 8 }
+
+# The corpus shards run hundreds of cases in one test; a slow Windows
+# runner needs more than 8 minutes for one.
+[[profile.default.overrides]]
+filter = "binary(integration)"
+slow-timeout = { period = "60s", terminate-after = 15 }
