@@ -4,30 +4,28 @@ use rok::std::rokon::Value;
 
 const WIDTH: usize = 100;
 
+// Neither writer checks floats: a NaN / infinite one comes out as `nan`
+// / `inf` / `-inf` (`Debug`, `Display`, error messages); `to_str` and
+// `to_str_flat` throw before writing one.
+
 /// `v` on one line.
-pub fn flat(v: Value) -> str { text(v, true) }
-
-/// `flat`, with NaN / infinity as `nan` / `inf` / `-inf` instead of a
-/// panic (`Debug`, error messages).
-pub fn loose(v: Value) -> str { text(v, false) }
-
-fn text(v: Value, strict: bool) -> str {
+pub fn flat(v: Value) -> str {
     match v {
         Value::None => "none",
         Value::Bool(b) => if b { "true" } else { "false" },
         Value::Int(n) => f"{n}",
-        Value::Float(x) => float_text(x, strict),
+        Value::Float(x) => float_text(x),
         Value::Char(c) => f"{c:?}",
         Value::Str(s) => f"{s:?}",
-        Value::List(xs) => "[" + flat_items(xs, strict) + "]",
+        Value::List(xs) => "[" + flat_items(xs) + "]",
         Value::Tuple(xs) => {
-            if xs.len() == 1 { return "(" + text(xs[0], strict) + ",)"; }
-            "(" + flat_items(xs, strict) + ")"
+            if xs.len() == 1 { return "(" + flat(xs[0]) + ",)"; }
+            "(" + flat_items(xs) + ")"
         },
         Value::Dict(d) => {
             if d.is_empty() { return "{}"; }
             let parts: List<str> = List::new();
-            for (k, x) in d.entries() { parts.push(text(k, strict) + ": " + text(x, strict)); }
+            for (k, x) in d.entries() { parts.push(flat(k) + ": " + flat(x)); }
             "{ " + parts.join(", ") + " }"
         },
         Value::Struct { name, fields } => {
@@ -35,31 +33,31 @@ fn text(v: Value, strict: bool) -> str {
                 n: str => n + " ",
                 none => "",
             };
-            head + flat_fields(fields, strict)
+            head + flat_fields(fields)
         },
         Value::Variant { path, args, named } => {
             if args.is_empty() {
                 if named.is_empty() { return path; }
-                return path + " " + flat_fields(named, strict);
+                return path + " " + flat_fields(named);
             }
             let parts: List<str> = List::new();
-            for x in args { parts.push(text(x, strict)); }
-            for (k, x) in named.entries() { parts.push(k + ": " + text(x, strict)); }
+            for x in args { parts.push(flat(x)); }
+            for (k, x) in named.entries() { parts.push(k + ": " + flat(x)); }
             path + "(" + parts.join(", ") + ")"
         },
     }
 }
 
-fn flat_items(xs: List<Value>, strict: bool) -> str {
+fn flat_items(xs: List<Value>) -> str {
     let parts: List<str> = List::new();
-    for x in xs { parts.push(text(x, strict)); }
+    for x in xs { parts.push(flat(x)); }
     parts.join(", ")
 }
 
-fn flat_fields(fs: OrderedDict<str, Value>, strict: bool) -> str {
+fn flat_fields(fs: Dict<str, Value>) -> str {
     if fs.is_empty() { return "{}"; }
     let parts: List<str> = List::new();
-    for (k, x) in fs.entries() { parts.push(k + ": " + text(x, strict)); }
+    for (k, x) in fs.entries() { parts.push(k + ": " + flat(x)); }
     "{ " + parts.join(", ") + " }"
 }
 
@@ -114,7 +112,7 @@ pub fn pretty(v: Value, indent: usize, col: usize, tail: usize) -> str {
     b.to_str()
 }
 
-fn pretty_fields(fs: OrderedDict<str, Value>, indent: usize) -> str {
+fn pretty_fields(fs: Dict<str, Value>, indent: usize) -> str {
     let inner = indent + 4;
     let b = StrBuf::new();
     b.push_str("{\n");
@@ -127,13 +125,9 @@ fn pretty_fields(fs: OrderedDict<str, Value>, indent: usize) -> str {
 
 /// A float that reads back as the same float: the shortest round-trip
 /// digits (Display / `{:e}`), always with a `.`, as a plain decimal for
-/// magnitudes 1e-5 up to 1e17, else `1.5e300`. NaN / infinity have no
-/// ROKON form (spec 3.9.1 has no literal for them): a panic, like an
-/// out-of-range index; check `is_finite` first when the data may hold
-/// them.
-fn float_text(x: float, strict: bool) -> str {
+/// magnitudes 1e-5 up to 1e17, else `1.5e300`.
+fn float_text(x: float) -> str {
     if !x.is_finite() {
-        if strict { panic("NaN/infinity has no ROKON form"); }
         if x.is_nan() { return "nan"; }
         return if x.is_sign_negative() { "-inf" } else { "inf" };
     }

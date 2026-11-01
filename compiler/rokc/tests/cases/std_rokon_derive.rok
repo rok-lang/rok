@@ -11,7 +11,7 @@
 //     retries: 3,
 //     ratio: 0.1,
 //     big: 123456789012345678901234567890,
-//     huge: 1.0e400,
+//     huge: 1.0e300,
 //     letter: 'λ',
 //     on: true,
 //     tags: ["a", "b"],
@@ -117,7 +117,7 @@ Config {
     name: \"geom\",
     ratio: 0.1,
     big: 123456789012345678901234567890,
-    huge: 1e400,
+    huge: 1e300,
     letter: 'λ',
     on: true,
     tags: [\"a\", \"b\"],
@@ -146,23 +146,23 @@ Config {
     println(f"pair={c.pair:?} corner={c.corner.0} {c.corner.1} grid={c.grid[2]} mark={c.mark:?}");
     println(f"wrapped={c.wrapped.inner[0]:?} tree sum={sum(c.tree)}");
 
-    let out = rokon::to_string(c);
+    let out = try rokon::to_str(c);
     println(out);
     let back: Config = try rokon::from_str(out);
-    println(f"round trip: {rokon::to_string(back) == out}");
+    println(f"round trip: {try rokon::to_str(back) == out}");
 
     // Value round trip and the generic entry points.
     let v = try rokon::parse(out);
-    println(f"value round trip: {try rokon::parse(v.to_string()) == v}");
+    println(f"value round trip: {try rokon::parse(try v.to_str()) == v}");
     let m: Mode = try rokon::from_str("Mode::Fast");
     let o: i32 | none = try rokon::from_str("none");
     let p: i32 | none = try rokon::from_str("5");
     let f: f64 = try rokon::from_str("2");
     let t: (bool, char) = try rokon::from_str("(true, 'x')");
     println(f"{m:?} {o:?} {p:?} {f} {t.0} {t.1}");
-    println(rokon::to_string(Wrap { inner: Mode::Fast, tag: "m" }));
-    println(rokon::to_string([0.1f32, 1.5f32]));
-    println(rokon::to_string(Shape::Rect { w: 1, h: none }));
+    println(try rokon::to_str(Wrap { inner: Mode::Fast, tag: "m" }));
+    println(try rokon::to_str([0.1f32, 1.5f32]));
+    println(try rokon::to_str(Shape::Rect { w: 1, h: none }));
     let pd = Point { x: 0.25, y: 1e-9 };
     let pb = try Point::from_rokon(pd.to_rokon());
     println(f"{pb == pd}");

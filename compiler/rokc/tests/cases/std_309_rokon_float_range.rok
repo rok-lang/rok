@@ -1,0 +1,30 @@
+// spec: std §3.9.4
+// expect-exit: 0
+// expect-stdout:
+// 1.7976931348623157e308 true
+// 3.3333333333333334e-301 true
+// 0.1 true
+// 1.0e20 true
+// at [0]: float 1.2345678901234568e600 is out of range (ROKON floats are f64, up to about 1.8e308)
+// 1:1: float `1e999` is out of range (ROKON floats are f64, up to about 1.8e308)
+// 1:2: float `1e999` is out of range (ROKON floats are f64, up to about 1.8e308)
+
+// Std 3.9.4: ROKON floats are `f64`. Each one is written in the shortest
+// form that reads back to the same value; a `float` past the `f64` range
+// has no ROKON form, and the reader rejects such a literal as the
+// toolchain's reader does.
+use rok::std::rokon;
+
+fn main() {
+    let tiny: float = 1.0e-300;
+    for v in [1.7976931348623157e308 as float, tiny / 3.0, 0.1 as float, 1.0e20 as float] {
+        let s = try! rokon::to_str(v);
+        let back: float = try rokon::from_str(s) catch e { println(f"err {e}"); 0.0 };
+        println(f"{s} {back == v}");
+    }
+    let big: float = 1.0e300;
+    let x = big * big * 1.2345678901234567;
+    try rokon::to_str([x]) catch e { println(f"{e}"); "" };
+    try rokon::from_str::<f64>("1e999") catch e { println(f"{e}"); 0.0 };
+    try rokon::parse("-1e999") catch e { println(f"{e}"); rokon::Value::None };
+}

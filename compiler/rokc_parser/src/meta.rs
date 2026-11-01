@@ -47,6 +47,10 @@ pub struct MetaDef {
     pub name: String,
     /// `#[impl_derive_attribute(Tr, attr)]`'s field attribute.
     pub field_attr: Option<String>,
+    /// The keys `#[impl_derive_attribute(Tr, attr(k, ..))]` declares:
+    /// every `#[attr(..)]` on the type and its fields must list only
+    /// these. `None`: `#[attr(..)]` is not checked.
+    pub attr_keys: Option<Vec<String>>,
     pub public: bool,
     /// The defining file (a private block is usable there only).
     pub file: String,
@@ -356,6 +360,30 @@ fn attr_words(a: &Attribute) -> Vec<String> {
     }
 }
 
+/// `attr(k, ..)` as the field attribute of `#[impl_derive_attribute]`:
+/// the attribute name and the keys it takes.
+fn keyed_attr(a: &Attribute) -> Option<(String, Vec<String>)> {
+    let AttrBody::Args(args) = &a.body else {
+        return None;
+    };
+    args.iter().find_map(|x| match x {
+        AttrArg::Nested { path, body } if path.len() == 1 => {
+            let keys = match &**body {
+                AttrBody::Args(ks) => ks
+                    .iter()
+                    .filter_map(|k| match k {
+                        AttrArg::Word(w) => Some(w.clone()),
+                        _ => None,
+                    })
+                    .collect(),
+                _ => Vec::new(),
+            };
+            Some((path[0].clone(), keys))
+        }
+        _ => None,
+    })
+}
+
 fn meta_err(span: Span, msg: impl Into<String>) -> RokDiagnostic {
     RokDiagnostic::error(ErrorKind::Meta, span, msg)
 }
@@ -501,6 +529,8 @@ struct Target {
     item: Vec<Token>,
     /// `#[name(args)]`'s arguments (`@attribute`).
     attr_args: Vec<Token>,
+    /// The words of the type's own `#[attr(..)]` (`@Self.has_derive_key`).
+    self_keys: Vec<String>,
     /// The `#[derive(..)]` / `#[name]` use.
     at: Span,
 }
@@ -879,7 +909,7 @@ impl Expander<'_> {
                 "has_default",
                 "default",
             ],
-            "Self" => &["name", "is_unit", "is_tuple", "is_named"],
+            "Self" => &["name", "is_unit", "is_tuple", "is_named", "has_derive_key"],
             "variant" => &["name", "pattern", "is_unit", "is_tuple", "is_named"],
             "item" => &["name", "params", "return_type", "body"],
             _ => &[],
@@ -898,6 +928,7 @@ impl Expander<'_> {
         let takes_args = matches!(
             full.as_str(),
             "field.has_attr"
+                | "Self.has_derive_key"
                 | "has_derive_attr"
                 | "derive_attr"
                 | "apply_if"
@@ -967,12 +998,14 @@ impl Expander<'_> {
             );
             return j;
         }
-        if matches!(head.as_str(), "has_derive_attr" | "derive_attr")
-            && self.def.field_attr.is_none()
+        if matches!(
+            full.as_str(),
+            "has_derive_attr" | "derive_attr" | "Self.has_derive_key"
+        ) && self.def.field_attr.is_none()
         {
             self.err(
                 k,
-                format!("`@{head}` needs `#[impl_derive_attribute(Trait, attr)]` (spec 6.9.6)"),
+                format!("`@{full}` needs `#[impl_derive_attribute(Trait, attr)]` (spec 6.9.6)"),
             );
             return j;
         }
@@ -1113,6 +1146,29 @@ impl Expander<'_> {
                     ("field", Some(bn)) => vec![tok(TokenKind::Ident(bn), span)],
                     _ => vec![ident(&f.name, f.span)],
                 }
+            }
+            "Self.has_derive_key" => {
+                let key = self.word(args);
+                let known = self
+                    .def
+                    .attr_keys
+                    .as_ref()
+                    .is_some_and(|ks| ks.contains(&key));
+                if !known {
+                    let attr = self.def.field_attr.clone().unwrap_or_default();
+                    self.err(
+                        k,
+                        format!(
+                            "`{key}` is not a declared key of `#[{attr}(..)]` (declare it: \
+                             `#[impl_derive_attribute(Trait, {attr}({key}))]`)"
+                        ),
+                    );
+                }
+                let v = self.t.self_keys.contains(&key);
+                vec![tok(
+                    if v { TokenKind::True } else { TokenKind::False },
+                    span,
+                )]
             }
             "field.is_pub" | "field.has_attr" | "field.has_default" | "has_derive_attr"
             | "variant.is_unit" | "variant.is_tuple" | "variant.is_named" | "Self.is_unit"
@@ -1844,7 +1900,14 @@ impl Parser<'_> {
             ));
             return Some(None);
         }
-        let words = attr_words(&ma);
+        let mut words = attr_words(&ma);
+        let mut attr_keys = None;
+        if ma.name() == "impl_derive_attribute" {
+            if let Some((attr, keys)) = keyed_attr(&ma) {
+                words.push(attr);
+                attr_keys = Some(keys);
+            }
+        }
         let arity = if ma.name() == "impl_derive_attribute" {
             2
         } else {
@@ -1868,6 +1931,7 @@ impl Parser<'_> {
             },
             name: words[0].clone(),
             field_attr: words.get(1).cloned(),
+            attr_keys,
             public: vis != Visibility::Private,
             file: self.file.clone(),
             package: String::new(),
@@ -1961,7 +2025,18 @@ impl Parser<'_> {
         }
         for (def, at) in &users {
             if self.meta_visible(def, *at) {
-                let target = self.target(&item, from, *at);
+                let mut target = self.target(&item, from, *at);
+                if let Some(attr) = &def.field_attr {
+                    if let Some(keys) = &def.attr_keys {
+                        self.check_attr_keys(&item, attr, keys);
+                    }
+                    target.self_keys = item
+                        .attrs()
+                        .iter()
+                        .filter(|a| a.name() == attr)
+                        .flat_map(attr_words)
+                        .collect();
+                }
                 out.extend(self.run_meta(def, &target, &item));
             }
         }
@@ -1986,6 +2061,56 @@ impl Parser<'_> {
             });
         }
         (item, out)
+    }
+
+    /// Report every `#[attr(..)]` on `item`, its variants and fields that
+    /// lists something other than one of `keys`.
+    fn check_attr_keys(&mut self, item: &Item, attr: &str, keys: &[String]) {
+        fn named(fs: &[rokc_ast::NamedField]) -> impl Iterator<Item = &Attribute> {
+            fs.iter().flat_map(|f| f.attrs.iter())
+        }
+        let mut attrs: Vec<&Attribute> = item.attrs().iter().collect();
+        match item {
+            Item::Struct(s) => match &s.kind {
+                StructKind::Named(fs) => attrs.extend(named(fs)),
+                StructKind::Tuple(fs) => attrs.extend(fs.iter().flat_map(|f| f.attrs.iter())),
+                StructKind::Unit => {}
+            },
+            Item::Union(u) => attrs.extend(named(&u.fields)),
+            Item::Enum(e) => {
+                for v in &e.variants {
+                    attrs.extend(v.attrs.iter());
+                    if let EnumVariantKind::Named(fs) = &v.kind {
+                        attrs.extend(named(fs));
+                    }
+                }
+            }
+            _ => {}
+        }
+        let valid = keys
+            .iter()
+            .map(|k| format!("`{k}`"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        for a in attrs.into_iter().filter(|a| a.name() == attr) {
+            let bad: Vec<String> = match &a.body {
+                AttrBody::Args(args) if !args.is_empty() => args
+                    .iter()
+                    .filter_map(|x| match x {
+                        AttrArg::Word(w) if keys.contains(w) => None,
+                        AttrArg::Word(w) => Some(format!("unknown key `{w}`")),
+                        _ => Some("only key names are allowed".to_owned()),
+                    })
+                    .collect(),
+                _ => vec!["it needs a key".to_owned()],
+            };
+            for why in bad {
+                self.diagnostics.push(meta_err(
+                    a.span,
+                    format!("`#[{attr}(..)]`: {why}; write one of {valid}"),
+                ));
+            }
+        }
     }
 
     /// The item parsed from `self.tokens[from..self.pos]` as a target.
@@ -2135,6 +2260,7 @@ impl Parser<'_> {
             variants,
             item: toks.to_vec(),
             attr_args: Vec::new(),
+            self_keys: Vec::new(),
             at,
         }
     }
@@ -2429,6 +2555,7 @@ rokc_core::codec_struct!(MetaDef {
     kind,
     name,
     field_attr,
+    attr_keys,
     public,
     file,
     package,

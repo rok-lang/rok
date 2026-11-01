@@ -28,6 +28,8 @@
 // parse: 1:12: a positional value cannot follow named ones
 // parse: 3:3: expected a value, found `$`
 // parse: 1:1: unexpected end of input, expected a value
+// parse: 1:2: float `1e999` is out of range (ROKON floats are f64, up to about 1.8e308)
+// parse: 1:2: float `1e999` is out of range (ROKON floats are f64, up to about 1.8e308)
 // decode: 1:64: unknown field `extra` in Config [.extra]
 // decode: 1:1: missing field `mode` in Config []
 // decode: 1:1: expected Config, found `Other { .. }` []
@@ -56,6 +58,7 @@ use rok::std::rokon::{Value, RokonError, FromRokon};
 enum Mode { Fast, Slow }
 
 #[derive(Rokon)]
+#[rokon(deny_unknown_fields)]
 enum Shape {
     Circle(f64),
     Rect { w: i32; h: i32; },
@@ -65,6 +68,7 @@ enum Shape {
 struct Server { host: str; port: u16; }
 
 #[derive(Rokon)]
+#[rokon(deny_unknown_fields)]
 struct Config {
     name: str;
     mode: Mode;
@@ -115,6 +119,8 @@ fn main() {
     read("E::V(a: 1, 2)");
     read("[\n  1,\n  $\n]");
     read("");
+    read("[1e999]");
+    read("-1e999");
 
     decode("Config { name: \"x\", mode: Mode::Fast, servers: [], limits: {}, extra: 1 }");
     decode("Config { name: \"x\", servers: [], limits: {} }");

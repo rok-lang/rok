@@ -1162,7 +1162,7 @@ fn rokon_suite(rng: &mut Rng) -> Suite {
         let text = rokc_rokon::to_string(&v);
         let _ = writeln!(
             s.body,
-            "    {{\n        let v = try rokon::parse({}) catch e {{ rokon::Value::Str(f\"ERROR {{e}}\") }};\n        println(v.to_string());\n        println(\"----\");\n    }}",
+            "    {{\n        let v = try rokon::parse({}) catch e {{ rokon::Value::Str(f\"ERROR {{e}}\") }};\n        println(try! v.to_str());\n        println(\"----\");\n    }}",
             rq(&text)
         );
         s.want.push(text.clone());

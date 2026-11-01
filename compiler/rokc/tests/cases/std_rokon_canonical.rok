@@ -1,6 +1,4 @@
-// expect-exit: 101
-// expect-stderr: thread 'main' panicked at library/std/src/rokon/write.rok:*:
-// expect-stderr: NaN/infinity has no ROKON form
+// expect-exit: 0
 // expect-stdout:
 // ["xxxxxxxxxxxxxxxxxxxxx", "xxxxxxxxxxxxxxxxxxxxx", "xxxxxxxxxxxxxxxxxxxxx", "xxxxxxxxxxxxxxxxxxxxx"]
 // [
@@ -49,6 +47,8 @@
 // "quote \" back \\ nl \n tab \t nul \0 bell \u{7} c1 \u{85} rlo \u{202e} é"
 // '\''
 // debug: [nan]
+// display: [nan]
+// to_str: at [0]: NaN/infinity has no ROKON form
 
 // The canonical ROKON form reads back as the same value.
 
@@ -62,7 +62,7 @@ fn items(n: i32, w: i32) -> Value {
 }
 
 fn check(v: Value) {
-    let s = v.to_string();
+    let s = try! v.to_str();
     println(s);
     let back = try rokon::parse(s) catch e { println(f"reparse failed: {e}"); return; };
     if back != v { println("ROUND TRIP MISMATCH"); }
@@ -74,16 +74,16 @@ fn main() {
     // One column more breaks the list.
     check(items(4, 22));
     // Inside a struct the field line counts its indent, name and comma.
-    let fs: collections::OrderedDict<str, Value> = collections::OrderedDict::new();
+    let fs: Dict<str, Value> = Dict::new();
     fs.insert("fits", items(3, 23));
     fs.insert("breaks", items(3, 26));
     fs.insert("t", Value::Tuple([items(2, 30), Value::Int(1), items(2, 30)]));
-    let named: collections::OrderedDict<str, Value> = collections::OrderedDict::new();
+    let named: Dict<str, Value> = Dict::new();
     named.insert("label", Value::Str("y".repeat(60)));
     fs.insert("v", Value::Variant { path: "Shape::Tagged", args: [Value::Str("z".repeat(40))], named: named });
-    let d: collections::OrderedDict<Value, Value> = collections::OrderedDict::new();
+    let d: Dict<Value, Value> = Dict::new();
     d.insert(Value::Str("k".repeat(30)), items(3, 25));
-    d.insert(Value::Int(2), Value::Struct { name: none, fields: collections::OrderedDict::new() });
+    d.insert(Value::Int(2), Value::Struct { name: none, fields: Dict::new() });
     fs.insert("d", Value::Dict(d));
     check(Value::Struct { name: "Config", fields: fs });
 
@@ -97,7 +97,8 @@ fn main() {
 
     let bad = Value::List([Value::Float(Float::from_f64(f64::NAN))]);
     println(f"debug: {bad:?}");
-    println(bad.to_string());
+    println(f"display: {bad}");
+    try bad.to_str() catch e { println(f"to_str: {e}"); "" };
 }
 
 // spec: std 309-rokon
