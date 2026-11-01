@@ -4,7 +4,7 @@
 // expect-exit: 0
 // expect-stdout:
 // Unsupported: kill: Windows can send only Signal::Kill, not Signal::Terminate
-// cannot handle signal 30 (errno 50)
+// cannot handle signal User1 (os error 50)
 // interrupt: ok
 
 // Windows sends only `Kill` and handles only `Interrupt` and `Hangup`;
