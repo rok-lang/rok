@@ -29,11 +29,9 @@ pub trait Sliceable<R> {
 
 /// Spec 4.2.6: a `List` / `Slice` spread `f(..xs)` into fixed
 /// parameters needs exactly as many elements as it fills.
-#[doc(hidden)]
 #[track_caller]
 #[lang("spread_len_fn")]
-#[deprecated(since = "0.1.6", note = "a compiler hook, not callable in 0.2.0: check the length yourself (`if xs.len() != n { panic(..) }`)")]
-pub const fn spread_len(len: usize, want: usize) {
+pub(pkg) const fn spread_len(len: usize, want: usize) {
     if len != want {
         panic(f"spread of {len} elements into {want} parameters");
     }
@@ -41,11 +39,9 @@ pub const fn spread_len(len: usize, want: usize) {
 
 /// Spec 4.2.6: a `Dict` spread `f(..d)` is named arguments, so every
 /// key must name a parameter the spread may fill.
-#[doc(hidden)]
 #[track_caller]
 #[lang("spread_names_fn")]
-#[deprecated(since = "0.1.6", note = "a compiler hook, not callable in 0.2.0: check the keys yourself with `d.contains_key(k)`")]
-pub const fn spread_names<V>(d: rok::core::collections::dict::Dict<str, V>, names: List<str>) {
+pub(pkg) const fn spread_names<V>(d: rok::core::collections::dict::Dict<str, V>, names: List<str>) {
     for k in d.keys() {
         if !names.contains(k) {
             panic(f"spread of key {k:?}, which names no parameter left to fill");
@@ -55,11 +51,9 @@ pub const fn spread_names<V>(d: rok::core::collections::dict::Dict<str, V>, name
 
 /// Spec 4.2.6: a defaulted parameter the dict's value type does not fit
 /// takes its default; a key naming it is an error.
-#[doc(hidden)]
 #[track_caller]
 #[lang("spread_misfit_fn")]
-#[deprecated(since = "0.1.6", note = "a compiler hook, not callable in 0.2.0: check the keys yourself with `d.contains_key(k)`")]
-pub const fn spread_misfit<V>(d: rok::core::collections::dict::Dict<str, V>, key: str, why: str) {
+pub(pkg) const fn spread_misfit<V>(d: rok::core::collections::dict::Dict<str, V>, key: str, why: str) {
     if d.contains_key(key) {
         panic(f"spread of key {key:?}, {why}");
     }
@@ -72,11 +66,9 @@ pub const fn spread_misfit<V>(d: rok::core::collections::dict::Dict<str, V>, key
 /// through here; an unsigned one never is. A non-negative `i` is
 /// checked by the indexed type as before; a negative one past the
 /// start panics here.
-#[doc(hidden)]
 #[track_caller]
 #[lang("index_from_end_fn")]
-#[deprecated(since = "0.1.6", note = "a compiler hook, not callable in 0.2.0: write `xs[i]`, which counts a negative `i` from the end")]
-pub const fn index_from_end(i: isize, len: usize) -> usize {
+pub(pkg) const fn index_from_end(i: isize, len: usize) -> usize {
     if i >= 0 {
         return i as usize;
     }
@@ -99,8 +91,7 @@ const fn index_neg_oob(i: isize, len: usize) -> ! {
 /// panic path is never inlined), so the checked accessors calling it
 /// stay small enough to inline.
 #[track_caller]
-#[deprecated(since = "0.1.6", note = "internal to the library, not callable in 0.2.0: call `panic` with your own message")]
-pub const fn index_oob(what: str, i: usize, len: usize) -> ! {
+pub(pkg) const fn index_oob(what: str, i: usize, len: usize) -> ! {
     panic(f"{what} {i} out of bounds for length {len}")
 }
 
@@ -108,7 +99,7 @@ pub const fn index_oob(what: str, i: usize, len: usize) -> ! {
 /// end to `n`, the start to the end (`a >= b` is empty). Every
 /// `Sliceable<Range<usize>>` impl goes through here, so `xs[5:100]` and
 /// `xs.slice(9..2)` never panic.
-pub const fn clamp_range(r: Range<usize>, n: usize) -> Range<usize> {
+pub(pkg) const fn clamp_range(r: Range<usize>, n: usize) -> Range<usize> {
     let end = if r.end > n { n } else { r.end };
     let start = if r.start > end { end } else { r.start };
     start..end
@@ -117,10 +108,8 @@ pub const fn clamp_range(r: Range<usize>, n: usize) -> Range<usize> {
 /// A signed slice bound (`xs[-3:]`, no step): `len + i` when negative,
 /// clamped at 0 (`xs[-10:]` is the whole list). The top is clamped by
 /// `clamp_range`.
-#[doc(hidden)]
 #[lang("slice_bound_fn")]
-#[deprecated(since = "0.1.6", note = "a compiler hook, not callable in 0.2.0: write `xs[i:]`, which counts a negative `i` from the end")]
-pub const fn slice_bound(i: isize, len: usize) -> usize {
+pub(pkg) const fn slice_bound(i: isize, len: usize) -> usize {
     if i >= 0 {
         return i as usize;
     }
@@ -137,11 +126,9 @@ pub const fn slice_bound(i: isize, len: usize) -> usize {
 /// this way). A missing bound is `none`: `0` / `len` when `step > 0`,
 /// the last element / before the first when `step < 0`. A step of 0
 /// panics.
-#[doc(hidden)]
 #[track_caller]
 #[lang("slice_range_fn")]
-#[deprecated(since = "0.1.6", note = "a compiler hook, not callable in 0.2.0: write `xs[a:b:k]`")]
-pub const fn slice_range(start: isize | none, stop: isize | none, step: isize, len: usize) -> Range<usize> {
+pub(pkg) const fn slice_range(start: isize | none, stop: isize | none, step: isize, len: usize) -> Range<usize> {
     if step == 0 {
         panic("slice step must not be zero");
     }

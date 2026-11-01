@@ -1,0 +1,12 @@
+// spec: std 004-lang-slot-table §0.4.4 / refs-lang §6.2.7
+// expect-exit: 0
+// expect-stdout:
+// 3 [3, 4, 5] 5 [4]
+
+// Lowering reaches the hooks through their lang slots, though they are
+// `pub(pkg)` in core: negative positions, slice bounds, f-strings.
+fn main() {
+    let xs = [1, 2, 3, 4, 5];
+    let i = -3;
+    println(f"{xs[i]} {xs[i:]:?} {xs[-1]} {xs[-2:-1]:?}");
+}

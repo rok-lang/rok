@@ -75,8 +75,7 @@ const BY_RACE: i32 = 1;
 const BY_TIMEOUT: i32 = 2;
 
 /// A task as the executor sees it (what a `Waker` holds).
-#[deprecated(since = "0.1.6", note = "internal to the executor, not public in 0.2.0: use the task's `Waker` (`ctx.waker`) and `task::id()`")]
-pub struct TaskRef {
+pub(pkg) struct TaskRef {
     /// `[state, cancelled, timed, proxy, unwinding, local, handed,
     /// cleaning, cause, started]` (`timed`: it has added a timer; `proxy`:
     /// a `select` stand-in, see `up`; `unwinding`: a cancellation point
@@ -125,8 +124,7 @@ fn no_result(t: TaskRef) -> bool {
 }
 
 /// Schedule `t` to be polled (`Waker::wake`); safe from any thread.
-#[deprecated(since = "0.1.6", note = "internal to the executor, not public in 0.2.0: call `wake()` on the task's `Waker`")]
-pub fn wake_task(t: TaskRef) {
+pub(pkg) fn wake_task(t: TaskRef) {
     unsafe {
         if t.state[3] != 0 {
             if atomic_load(t.state, 0, SeqCst) != DONE {
@@ -254,8 +252,7 @@ const ASLEEP: i32 = 1;
 const WOKEN: i32 = 2;
 
 /// The process's work-stealing executor.
-#[deprecated(since = "0.1.6", note = "internal to the executor, not public in 0.2.0: use `task::worker_count()` and `task::cpu_count()`")]
-pub struct Pool {
+pub(pkg) struct Pool {
     workers: List<Worker>;
     injector: Queue;
     /// Earliest deadline on top.
@@ -287,8 +284,7 @@ unsafe impl Send for Pool {}
 unsafe impl Sync for Pool {}
 
 /// A thread running tasks: a pool thread, or a guest (`block_on`).
-#[deprecated(since = "0.1.6", note = "internal to the executor, not public in 0.2.0: use `task::worker_count()` and `task::cpu_count()`")]
-pub struct Worker {
+pub(pkg) struct Worker {
     pool: Pool;
     /// Its position in `pool.workers`; 0 for a guest.
     index: usize;
@@ -858,8 +854,7 @@ fn run(t: TaskRef) {
 /// points.) A true answer means the caller leaves: the cancelled task (or
 /// `select` proxy) is marked `unwinding`. False while the task runs the
 /// cleanups of its cancel: an `await` there completes.
-#[deprecated(since = "0.1.6", note = "internal to the executor, not public in 0.2.0: an `await` is the cancellation point; `Task::is_cancelled` tells a cancelled task")]
-pub fn cancel_requested(ctx: Context) -> bool {
+pub(pkg) fn cancel_requested(ctx: Context) -> bool {
     match cancel_source(ctx.waker.task) {
         t: TaskRef => unsafe {
             if t.state[7] != 0 {
@@ -876,10 +871,8 @@ pub fn cancel_requested(ctx: Context) -> bool {
 /// `cancel_requested`, but none fires while a frame of the task runs the
 /// cleanups of its own cancel, so awaits inside `finally` / `using`
 /// complete. A true answer starts those cleanups.
-#[doc(hidden)]
 #[lang("cancel_point_fn")]
-#[deprecated(since = "0.1.6", note = "a compiler hook, not callable in 0.2.0: an `await` is the cancellation point")]
-pub fn cancel_point(ctx: Context) -> bool {
+pub(pkg) fn cancel_point(ctx: Context) -> bool {
     match cancel_source(ctx.waker.task) {
         t: TaskRef => unsafe {
             if t.state[7] != 0 {
@@ -896,10 +889,8 @@ pub fn cancel_point(ctx: Context) -> bool {
 /// `unwinding` for the `await` after a ready poll: false while a frame of
 /// the task runs its cleanups (a helper it awaits keeps its values). A
 /// true answer starts the caller's cleanups.
-#[doc(hidden)]
 #[lang("cancel_left_fn")]
-#[deprecated(since = "0.1.6", note = "a compiler hook, not callable in 0.2.0: an `await` is the cancellation point")]
-pub fn cancel_left(ctx: Context) -> bool {
+pub(pkg) fn cancel_left(ctx: Context) -> bool {
     unsafe {
         let t = cleanup_task(ctx);
         if t.state[7] != 0 || !unwinding(ctx) {
@@ -911,18 +902,14 @@ pub fn cancel_left(ctx: Context) -> bool {
 }
 
 /// A frame left by the cancel is about to poll inside its cleanups.
-#[doc(hidden)]
 #[lang("cleanup_running_fn")]
-#[deprecated(since = "0.1.6", note = "a compiler hook, not callable in 0.2.0: `finally` and `using` run cleanups")]
-pub fn cleanup_running(ctx: Context) {
+pub(pkg) fn cleanup_running(ctx: Context) {
     unsafe { cleanup_task(ctx).state[7] = 1; }
 }
 
 /// A frame left by the cancel finished its cleanups.
-#[doc(hidden)]
 #[lang("cleanup_done_fn")]
-#[deprecated(since = "0.1.6", note = "a compiler hook, not callable in 0.2.0: `finally` and `using` run cleanups")]
-pub fn cleanup_done(ctx: Context) {
+pub(pkg) fn cleanup_done(ctx: Context) {
     unsafe { cleanup_task(ctx).state[7] = 0; }
 }
 
@@ -939,9 +926,7 @@ fn cleanup_task(ctx: Context) -> TaskRef {
 /// after a ready poll checks this, not the bare flag, so a value a
 /// hand-written future handed over (a message, a guard) is kept when the
 /// cancel lands meanwhile - the next cancellation point leaves.
-#[doc(hidden)]
-#[deprecated(since = "0.1.6", note = "internal to the executor, not public in 0.2.0: an `await` is the cancellation point; `Task::is_cancelled` tells a cancelled task")]
-pub fn unwinding(ctx: Context) -> bool {
+pub(pkg) fn unwinding(ctx: Context) -> bool {
     unsafe {
         let t = ctx.waker.task;
         if atomic_load(t.state, 4, SeqCst) != 0 {
@@ -1964,7 +1949,7 @@ static PARKING: Parking = Parking {
 
 /// Wake `waker` at the next `unpark(key)`. The entry goes at that
 /// `unpark` or when the waker's task finishes (a cancelled task's wait).
-pub fn park(key: usize, waker: Waker) {
+pub(pkg) fn park(key: usize, waker: Waker) {
     let p = PARKING;
     p.used.store(true);
     using g = p.lock.lock() {
@@ -2050,7 +2035,7 @@ pub fn registrations() -> usize {
 }
 
 /// Wake every task parked on `key` (cheap when no task ever parked).
-pub fn unpark(key: usize) {
+pub(pkg) fn unpark(key: usize) {
     let p = PARKING;
     if !p.used.load() {
         return;

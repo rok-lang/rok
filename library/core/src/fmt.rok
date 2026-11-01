@@ -31,9 +31,8 @@ impl Error for FmtError {}
 
 /// `x` as `{x:?}` shows it, or `<T>` (its type name) when `T` has no
 /// `Debug`: for messages about a value of any type.
-#[doc(hidden)]
 #[intrinsic("rok.shown")]
-pub fn __shown<T>(x: T) -> str;
+pub(pkg) fn shown<T>(x: T) -> str;
 
 /// The spec's `align`.
 pub enum Alignment {
@@ -328,30 +327,24 @@ const fn count_of(v: u64) -> usize | none {
 // `t`; each returns it, maybe moved). Formatting to memory never fails.
 
 /// `{v}` (`flags`: no spec but maybe `#`).
-#[doc(hidden)]
 #[lang("fstr_display_fn")]
-#[deprecated(since = "0.1.6", note = "a compiler hook, not callable in 0.2.0: write the value in an f-string hole, `{v}`")]
-pub const fn fstr_display<T: Display>(t: str, v: T, flags: u64) -> str {
+pub(pkg) const fn fstr_display<T: Display>(t: str, v: T, flags: u64) -> str {
     let f = Formatter { t: t, flags: flags, counts: PLAIN_COUNTS, sink: none };
     try! Display::fmt(v, ref f);
     f.t
 }
 
 /// `{v:?}` (`flags`: no spec but maybe `#`).
-#[doc(hidden)]
 #[lang("fstr_debug_fn")]
-#[deprecated(since = "0.1.6", note = "a compiler hook, not callable in 0.2.0: write the value in an f-string hole, `{v:?}`")]
-pub const fn fstr_debug<T: Debug>(t: str, v: T, flags: u64) -> str {
+pub(pkg) const fn fstr_debug<T: Debug>(t: str, v: T, flags: u64) -> str {
     let f = Formatter { t: t, flags: flags, counts: PLAIN_COUNTS, sink: none };
     try! Debug::fmt(v, ref f);
     f.t
 }
 
 /// A number under a spec (`flags`, `counts`).
-#[doc(hidden)]
 #[lang("fstr_num_fn")]
-#[deprecated(since = "0.1.6", note = "a compiler hook, not callable in 0.2.0: write the value in an f-string hole, `{v:spec}`")]
-pub fn fstr_num<T: Display>(t: str, v: T, flags: u64, counts: u64) -> str {
+pub(pkg) fn fstr_num<T: Display>(t: str, v: T, flags: u64, counts: u64) -> str {
     let f = Formatter { t: t, flags: flags, counts: counts, sink: none };
     try! Display::fmt(v, ref f);
     f.t
@@ -359,10 +352,8 @@ pub fn fstr_num<T: Display>(t: str, v: T, flags: u64, counts: u64) -> str {
 
 /// A dynamic spec's packed words; panics when malformed, or when
 /// `text_only` and it has a number's type letter.
-#[doc(hidden)]
 #[lang("fstr_pack_fn")]
-#[deprecated(since = "0.1.6", note = "a compiler hook, not callable in 0.2.0: read a spec with `FormatSpec::parse`")]
-pub const fn fstr_pack(spec: str, text_only: bool) -> (u64, u64) {
+pub(pkg) const fn fstr_pack(spec: str, text_only: bool) -> (u64, u64) {
     unsafe {
         let out: GcBuf<u64> = buf_new(2);
         rok_fmt_pack(spec, if text_only { 1u32 } else { 0u32 }, out);
@@ -372,10 +363,8 @@ pub const fn fstr_pack(spec: str, text_only: bool) -> (u64, u64) {
 
 /// A dynamic spec on a value with both: `?` picks the Debug; then cut
 /// and padded as text.
-#[doc(hidden)]
 #[lang("fstr_text_any_fn")]
-#[deprecated(since = "0.1.6", note = "a compiler hook, not callable in 0.2.0: write the value in an f-string hole, `{v:{spec}}`")]
-pub const fn fstr_text_any<T: Display + Debug>(t: str, v: T, spec: str) -> str {
+pub(pkg) const fn fstr_text_any<T: Display + Debug>(t: str, v: T, spec: str) -> str {
     let (flags, counts) = fstr_pack(spec, true);
     let start = unsafe { rok_fmt_len(t) };
     let debug = ((flags >> 48u64) & 0xFFu64) == 63u64;

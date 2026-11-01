@@ -67,7 +67,7 @@ pub const KNOWN_SLOTS: &[&str] = &[
     "oom_fn",
     "unreachable_fn",
     // 0.4.4 fn slots of the hooks lowered code calls (`library/core/src/
-    // index.rok`, `fmt.rok`, `task.rok`)
+    // index.rok`, `fmt.rok`, `task.rok`, `collections/broadcast.rok`)
     "spread_len_fn",
     "spread_names_fn",
     "spread_misfit_fn",
@@ -84,6 +84,7 @@ pub const KNOWN_SLOTS: &[&str] = &[
     "cancel_left_fn",
     "cleanup_running_fn",
     "cleanup_done_fn",
+    "broadcast_len_fn",
     // 0.4.5 method slots
     "drop_method",
     // 0.4.3 trait slot of a close that can fail (`library/std/src/io.rok`)
