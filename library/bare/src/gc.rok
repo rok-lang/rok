@@ -145,6 +145,7 @@ pub fn pin<T: Pinnable>(obj: T) -> Pinned<T> {
 }
 
 impl<T> Pinned<T> {
+    /// The pinned object.
     pub fn obj(self) -> T { self.obj }
 }
 
@@ -162,6 +163,7 @@ impl<T> Pinned<List<T>> {
         }
     }
 
+    /// `as_data_ptr` as a pointer to the run of elements.
     pub fn as_data_many_ptr(self) -> ManyPtr<T> { self.as_data_ptr().as_many() }
 }
 

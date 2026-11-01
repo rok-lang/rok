@@ -6,6 +6,7 @@
 
 use rok::core::marker::{Memo, Transfer, buf_is_null, copy_shared};
 
+/// A growable array (2.9.2); copies share one buffer.
 pub struct List<T> {
     h: GcBuf<ListHead<T>>;
 }
@@ -38,10 +39,12 @@ impl List<str> {
 impl<T> !Sync for List<T> {}
 
 impl<T> List<T> {
+    /// An empty list with room for 4 elements.
     pub const fn new() -> List<T> {
         List::with_capacity(4)
     }
 
+    /// An empty list with room for `cap` elements.
     #[track_caller]
     pub const fn with_capacity(cap: usize) -> List<T> {
         unsafe {
@@ -60,16 +63,19 @@ impl<T> List<T> {
         out
     }
 
+    /// The number of elements.
     pub const fn len(self) -> usize {
         unsafe {
             self.h[0].len
         }
     }
 
+    /// `true` when the list has no element.
     pub const fn is_empty(self) -> bool {
         self.len() == 0
     }
 
+    /// Elements the list holds before it grows.
     pub const fn capacity(self) -> usize {
         unsafe {
             self.h[0].cap
@@ -165,6 +171,7 @@ impl<T> List<T> {
         }
     }
 
+    /// Append `x` at the end, growing the buffer as needed.
     pub const fn push(self, x: T) {
         unsafe {
             let n = self.len();
@@ -190,6 +197,7 @@ impl<T> List<T> {
         }
     }
 
+    /// Remove and return the last element; `none` when empty.
     #[discardable]
     pub const fn pop(self) -> T | none {
         unsafe {
@@ -221,10 +229,12 @@ impl<T> List<T> {
         }
     }
 
+    /// The first element; `none` when empty.
     pub const fn first(self) -> T | none {
         self.get(0)
     }
 
+    /// The last element; `none` when empty.
     pub const fn last(self) -> T | none {
         let n = self.len();
         if n == 0 {
@@ -233,6 +243,8 @@ impl<T> List<T> {
         self.get(n - 1)
     }
 
+    /// Insert `x` at `idx`, shifting the later elements right; panics when
+    /// `idx > len()`.
     #[track_caller]
     pub const fn insert(self, idx: usize, x: T) {
         unsafe {
@@ -252,6 +264,8 @@ impl<T> List<T> {
         }
     }
 
+    /// Remove and return the element at `idx`, shifting the later ones left;
+    /// panics when `idx >= len()`.
     #[track_caller]
     #[discardable]
     pub const fn remove(self, idx: usize) -> T {
@@ -271,6 +285,7 @@ impl<T> List<T> {
         }
     }
 
+    /// Remove every element; the capacity stays.
     pub const fn clear(self) {
         unsafe {
             let store = self.h[0].buf;
@@ -335,6 +350,7 @@ impl<T> List<T> {
         self.resize_to(n);
     }
 
+    /// The elements front to back.
     pub const fn iter(self) -> ListIter<T> {
         ListIter { list: self, front: 0, back: 0 }
     }
@@ -558,6 +574,7 @@ pub(pkg) const unsafe fn sort_region<T>(
 
 /// `xs.iter()` / `for x in xs`: walks a list front to back. Its state
 /// is its own (`next(ref self)`, 2.7.1): a copy walks on its own.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct ListIter<T> {
     list: List<T>;
     /// The next index from the front.

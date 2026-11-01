@@ -301,7 +301,7 @@ impl From<Vec<(Level, String)>> for Levels {
 }
 
 /// The library's lint levels: its manifest, were it a package.
-const LIBRARY_LEVELS: &[(Level, &str)] = &[(Level::Warn, "missing_docs")];
+const LIBRARY_LEVELS: &[(Level, &str)] = &[(Level::Deny, "missing_docs")];
 
 /// `rokc lint --list` text.
 #[must_use]
@@ -753,12 +753,22 @@ fn has_attr(attrs: &[Attribute], names: &[&str]) -> bool {
 /// `mod m;` (or the empty stub a library stage keeps) is left out: its
 /// file's `//!` documents it.
 fn missing_docs(items: &[Item], out: &mut Vec<Finding>) {
-    // `#[doc(hidden)]` counts as documented; a parser marker is no item
-    // the user wrote.
+    // `#[doc(hidden)]` counts as documented; an item the parser lifted
+    // is no item the user wrote. `const fn`, `async fn` and the like
+    // carry markers too, and need docs.
+    let written = [
+        rokc_ast::CONST_FN_ATTR,
+        rokc_ast::CORO_FN_ATTR,
+        rokc_ast::EXTERN_FN_ATTR,
+        rokc_ast::C_VARIADIC_ATTR,
+    ];
     let documented = |attrs: &[Attribute]| {
-        attrs
-            .iter()
-            .any(|a| a.name() == "doc" || a.path.first().is_some_and(|p| p.starts_with('#')))
+        attrs.iter().any(|a| {
+            a.name() == "doc"
+                || a.path
+                    .first()
+                    .is_some_and(|p| p.starts_with('#') && !written.contains(&p.as_str()))
+        })
     };
     let hit = |what: &str, name: &str, span: Span| Finding {
         lint: "missing_docs",
@@ -893,30 +903,69 @@ fn marked_fns<const N: usize>(items: &[&[Item]], attrs: [&str; N]) -> [HashMap<S
     marked
 }
 
-/// The structs and enums of `items` with an `attr` attribute, by short
-/// name: its message.
-fn marked_types(items: &[&[Item]], attr: &str) -> HashMap<String, String> {
-    fn walk(items: &[Item], attr: &str, out: &mut HashMap<String, String>) {
+/// The structs and enums with an `attr` attribute, by full path: its
+/// message. `files` are walked in their package and module, `library`
+/// items have full names already.
+fn marked_types(
+    files: &[SourceFile],
+    library: Option<&rokc_ast::Program>,
+    attr: &str,
+) -> HashMap<String, String> {
+    fn walk<'i>(
+        items: &'i [Item],
+        at: &mut Vec<&'i str>,
+        attr: &str,
+        out: &mut HashMap<String, String>,
+    ) {
         for i in items {
             let (name, attrs) = match i {
                 Item::Struct(s) => (&s.name, &s.attrs),
                 Item::Enum(e) => (&e.name, &e.attrs),
                 Item::Mod(m) => {
-                    walk(m.items.as_deref().unwrap_or(&[]), attr, out);
+                    at.push(&m.name);
+                    walk(m.items.as_deref().unwrap_or(&[]), at, attr, out);
+                    at.pop();
                     continue;
                 }
                 _ => continue,
             };
             if let Some(m) = attr_msg(attrs, attr) {
-                out.insert(leaf(name).to_owned(), m);
+                let full: Vec<&str> = at.iter().copied().chain([name.as_str()]).collect();
+                out.insert(full.join("::"), m);
             }
         }
     }
     let mut out = HashMap::new();
-    for i in items {
-        walk(i, attr, &mut out);
+    for f in files {
+        let mut at: Vec<&str> = std::iter::once(f.package.as_str())
+            .chain(f.module.iter().map(String::as_str))
+            .filter(|s| !s.is_empty())
+            .collect();
+        walk(&f.items, &mut at, attr, &mut out);
+    }
+    if let Some(p) = library {
+        walk(&p.items, &mut Vec::new(), attr, &mut out);
     }
     out
+}
+
+/// The message of the `#[must_use]` type HIR names `name`: a library
+/// type by its full path only, so a user type of the same leaf name is
+/// not taken for it.
+fn must_use_msg<'m>(marks: &'m HashMap<String, String>, name: &str) -> Option<&'m String> {
+    let lib = |p: &str| p.starts_with("rok::");
+    marks.get(name).or_else(|| {
+        marks
+            .iter()
+            .find(|(k, _)| {
+                if lib(k) {
+                    lib(name) && k.ends_with(&format!("::{}", name.trim_start_matches("rok::")))
+                } else {
+                    !lib(name) && leaf(k) == leaf(name)
+                }
+            })
+            .map(|(_, m)| m)
+    })
 }
 
 /// `e` as source for a fix: a long call shows its arguments as `..`.
@@ -1085,7 +1134,7 @@ impl<'a> Cx<'a> {
             casts: HashSet::new(),
             clones: HashSet::new(),
             must_use,
-            must_use_types: marked_types(&all, "must_use"),
+            must_use_types: marked_types(all_files, library, "must_use"),
             stmt_exprs: HashMap::new(),
             let_inits: HashMap::new(),
             types,
@@ -1490,9 +1539,7 @@ impl<'a> Cx<'a> {
             .map(|s| ((false, s.id.0), s.name.as_str()))
             .chain(hir.enums.iter().map(|e| ((true, e.id.0), e.name.as_str())))
             .filter_map(|(k, n)| {
-                let m = self
-                    .must_use_types
-                    .get(leaf(n.split("__").next().unwrap_or(n)))?;
+                let m = must_use_msg(&self.must_use_types, n.split("__").next().unwrap_or(n))?;
                 Some((k, m.clone()))
             })
             .collect();

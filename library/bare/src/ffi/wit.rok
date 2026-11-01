@@ -16,25 +16,55 @@ extern "rok" {
 
 const fn at<T>(a: i32) -> Ptr<T> { unsafe { from_exposed_provenance::<T>(a as u32 as usize) } }
 
+/// The `u8` at canonical ABI address `a`. UB unless `a` is in linear
+/// memory.
 pub unsafe fn load_u8(a: i32) -> u8 { at::<u8>(a).read() }
+/// The `u16` at canonical ABI address `a`. UB unless `a` is in linear
+/// memory and aligned.
 pub unsafe fn load_u16(a: i32) -> u16 { at::<u16>(a).read() }
+/// The `i32` at canonical ABI address `a`. UB unless `a` is in linear
+/// memory and aligned.
 pub unsafe fn load_i32(a: i32) -> i32 { at::<i32>(a).read() }
+/// The `i64` at canonical ABI address `a`. UB unless `a` is in linear
+/// memory and aligned.
 pub unsafe fn load_i64(a: i32) -> i64 { at::<i64>(a).read() }
+/// The `f32` at canonical ABI address `a`. UB unless `a` is in linear
+/// memory and aligned.
 pub unsafe fn load_f32(a: i32) -> f32 { at::<f32>(a).read() }
+/// The `f64` at canonical ABI address `a`. UB unless `a` is in linear
+/// memory and aligned.
 pub unsafe fn load_f64(a: i32) -> f64 { at::<f64>(a).read() }
+/// Store `v` at canonical ABI address `a`. UB unless `a` is writable
+/// linear memory.
 pub unsafe fn store_u8(a: i32, v: u8) { at::<u8>(a).write(v); }
+/// Store `v` at canonical ABI address `a`. UB unless `a` is writable,
+/// aligned linear memory.
 pub unsafe fn store_u16(a: i32, v: u16) { at::<u16>(a).write(v); }
+/// Store `v` at canonical ABI address `a`. UB unless `a` is writable,
+/// aligned linear memory.
 pub unsafe fn store_i32(a: i32, v: i32) { at::<i32>(a).write(v); }
+/// Store `v` at canonical ABI address `a`. UB unless `a` is writable,
+/// aligned linear memory.
 pub unsafe fn store_i64(a: i32, v: i64) { at::<i64>(a).write(v); }
+/// Store `v` at canonical ABI address `a`. UB unless `a` is writable,
+/// aligned linear memory.
 pub unsafe fn store_f32(a: i32, v: f32) { at::<f32>(a).write(v); }
+/// Store `v` at canonical ABI address `a`. UB unless `a` is writable,
+/// aligned linear memory.
 pub unsafe fn store_f64(a: i32, v: f64) { at::<f64>(a).write(v); }
 
 // Joined flat slots of a variant (canonical ABI `join`).
+/// The bits of `x` as an `i32` flat slot (canonical ABI `join`).
 pub fn f32_bits(x: f32) -> i32 { reinterpret(x) }
+/// The `f32` whose bits are the flat slot `x`.
 pub fn f32_from(x: i32) -> f32 { reinterpret(x) }
+/// The bits of `x` as an `i64` flat slot (canonical ABI `join`).
 pub fn f64_bits(x: f64) -> i64 { reinterpret(x) }
+/// The `f64` whose bits are the flat slot `x`.
 pub fn f64_from(x: i64) -> f64 { reinterpret(x) }
 
+/// The `char` of the flat slot `x`; panics when `x` is not a Unicode
+/// scalar value.
 pub const fn char_from(x: i32) -> char {
     match char::from_u32(x as u32) {
         c: char => c,
@@ -81,6 +111,7 @@ pub struct Blocks {
 }
 
 impl Blocks {
+    /// No blocks yet.
     pub const fn new() -> Blocks { Blocks { list: List::new() } }
 
     /// `size` bytes aligned to `align`; an empty block is the address
@@ -117,6 +148,7 @@ impl Blocks {
         (p, n)
     }
 
+    /// Free every block and empty the list.
     pub fn free(self) {
         for a in self.list.iter() {
             unsafe { free(a) };
@@ -133,9 +165,12 @@ pub struct Handle {
 }
 
 impl Handle {
+    /// An owned handle `h`: it can be passed on as `own`.
     pub const fn own(h: i32) -> Handle { Handle { cell: [h], owned: true } }
+    /// A borrowed handle `h`: it cannot be passed on as `own`.
     pub const fn borrowed(h: i32) -> Handle { Handle { cell: [h], owned: false } }
 
+    /// The handle; panics once it was dropped or passed on.
     pub const fn get(self) -> i32 {
         let h = self.cell[0];
         if h < 0 {
@@ -181,6 +216,7 @@ impl<T> Table<T> {
     /// bindings make one per component instance).
     pub unsafe fn new() -> Table<T> { Table { slots: List::new(), free: List::new() } }
 
+    /// Store `v` and return its `rep`, reusing a freed slot first.
     pub fn insert(self, v: T) -> i32 {
         match self.free.pop() {
             rep: i32 => {
@@ -194,6 +230,7 @@ impl<T> Table<T> {
         }
     }
 
+    /// The value of `rep`. Panics if it was taken already.
     pub fn get(self, rep: i32) -> T {
         match self.slots[rep as u32 as usize] {
             v: T => v,
@@ -232,6 +269,7 @@ pub struct ErrorContext {
 
 #[cfg(target_os = "wasi")]
 impl ErrorContext {
+    /// A new error context with the debug message `msg`.
     pub fn new(msg: str) -> ErrorContext {
         let b = Blocks::new();
         let (p, n) = b.str(msg);
@@ -253,6 +291,7 @@ impl ErrorContext {
     /// Its handle, for the generated bindings.
     pub fn raw(self) -> i32 { self.handle }
 
+    /// The error context of handle `h`, for the generated bindings.
     pub fn from_raw(h: i32) -> ErrorContext { ErrorContext { handle: h } }
 }
 

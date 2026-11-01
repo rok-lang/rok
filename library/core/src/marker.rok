@@ -9,14 +9,18 @@ use rok::core::collections::raw::{buf_cast, buf_erase};
 /// built-in `none`, here under its library name.
 pub type NoneSentinel = none;
 
+/// An explicit duplicate: `x.clone()`; `#[derive(Clone)]` clones every
+/// field.
 #[lang("clone_trait")]
 pub trait Clone {
+    /// A copy of `self`; collections copy their elements.
     fn clone(self) -> Self;
 }
 
 /// A type's default value (`0`, `false`, `'\0'`, `""`, empty
 /// collections); `#[derive(Default)]` defaults every field.
 pub trait Default {
+    /// The default value of `Self`.
     fn default() -> Self;
 }
 
@@ -60,10 +64,12 @@ copy_types!(
     i8, i16, i32, i64, isize, u8, u16, u32, u64, usize, f32, f64, bool, char, c_char, str
 );
 
-// Stdlib spec 2.13.4. `using` (refs-lang 3.17) calls `drop` on every way
-// out of its block. Plain `let`s get no implicit scope-exit drop
-// (2.13.4 RAII); `using` is the deterministic path.
+/// Cleanup on release (2.13.4). `using` (refs-lang 3.17) calls `drop` on
+/// every way out of its block. Plain `let`s get no implicit scope-exit
+/// drop (2.13.4 RAII); `using` is the deterministic path.
 pub trait Drop {
+    /// Releases what `self` holds; `using` calls it once on every way out of
+    /// its block.
     #[lang("drop_method")]
     fn drop(ref self);
 }
@@ -76,9 +82,12 @@ pub trait Drop {
 // function both. `unsafe impl Send for T {}` opts in, `impl !Send for T
 // {}` opts out. `Send`: safe to move to another thread. `Sync`: safe to
 // read through shared references from several threads.
+
+/// Safe to move to another thread.
 #[lang("send_trait")]
 pub trait Send {}
 
+/// Safe to read through shared references from several threads.
 #[lang("sync_trait")]
 pub trait Sync {}
 
@@ -97,6 +106,7 @@ impl<T> Handoff<T> {
         Handoff { value }
     }
 
+    /// The wrapped value.
     pub const fn get(self) -> T {
         self.value
     }
@@ -185,6 +195,7 @@ impl Memo {
     }
 
     /// The copy of `orig` noted earlier in this hand-off.
+    #[must_use]
     pub(pkg) const fn find<T>(self, orig: GcBuf<T>) -> GcBuf<T> | none {
         self.find_at::<T, T>(orig, 0, 0, 0)
     }
@@ -339,7 +350,9 @@ pub(pkg) const fn buf_is_null<T>(b: GcBuf<T>) -> bool {
 /// notes the handle as its own copy. Only the compiler's list of
 /// standard types is called; other impls are ignored.
 pub(pkg) trait Transfer {
+    /// Copies `self` for the hand-off; its elements are queued on `m`.
     fn transfer_copy(self, m: Memo) -> Self;
+    /// Notes `self` on `m` as its own copy and returns it.
     fn transfer_keep(self, m: Memo) -> Self;
     /// Note the handle for the memo's owner (`Memo::visit`), its
     /// elements queued.

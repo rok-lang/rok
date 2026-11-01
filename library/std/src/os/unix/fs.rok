@@ -82,85 +82,125 @@ pub(pkg) fn check_custom(custom: i32, path: str, fixed: str) throws (IoError) {
 
 // The open(2) flags of the target (libc's values).
 
+/// Open for reading only.
 pub const O_RDONLY: i32 = 0;
+/// Open for writing only.
 pub const O_WRONLY: i32 = 1;
+/// Open for reading and writing.
 pub const O_RDWR: i32 = 2;
+/// The mask of the access mode bits.
 pub const O_ACCMODE: i32 = 3;
 
+/// Create the file when missing.
 #[cfg(target_os = "linux")]
 pub const O_CREAT: i32 = 0x40;
+/// With `O_CREAT`, fail when the file exists.
 #[cfg(target_os = "linux")]
 pub const O_EXCL: i32 = 0x80;
+/// Do not make a terminal the controlling one.
 #[cfg(target_os = "linux")]
 pub const O_NOCTTY: i32 = 0x100;
+/// Empty the file on open.
 #[cfg(target_os = "linux")]
 pub const O_TRUNC: i32 = 0x200;
+/// Every write goes to the end.
 #[cfg(target_os = "linux")]
 pub const O_APPEND: i32 = 0x400;
+/// Non-blocking open and I/O.
 #[cfg(target_os = "linux")]
 pub const O_NONBLOCK: i32 = 0x800;
+/// Writes wait for the data to reach the device.
 #[cfg(target_os = "linux")]
 pub const O_DSYNC: i32 = 0x1000;
+/// Writes wait for data and metadata to reach the device.
 #[cfg(target_os = "linux")]
 pub const O_SYNC: i32 = 0x101000;
+/// Do not update the access time.
 #[cfg(target_os = "linux")]
 pub const O_NOATIME: i32 = 0x40000;
+/// Close the descriptor on `exec`.
 #[cfg(target_os = "linux")]
 pub const O_CLOEXEC: i32 = 0x80000;
+/// A descriptor for the path only, no I/O.
 #[cfg(target_os = "linux")]
 pub const O_PATH: i32 = 0x200000;
+/// An unnamed temporary file in the directory given.
 #[cfg(target_os = "linux")]
 pub const O_TMPFILE: i32 = 0x400000 | O_DIRECTORY;
 
+/// Fail unless the path is a directory.
 #[cfg(all(target_os = "linux", any(target_arch = "aarch64", target_arch = "arm", target_arch = "powerpc64")))]
 pub const O_DIRECTORY: i32 = 0x4000;
+/// Fail when the last component is a symbolic link.
 #[cfg(all(target_os = "linux", any(target_arch = "aarch64", target_arch = "arm", target_arch = "powerpc64")))]
 pub const O_NOFOLLOW: i32 = 0x8000;
+/// Bypass the page cache.
 #[cfg(all(target_os = "linux", any(target_arch = "aarch64", target_arch = "arm")))]
 pub const O_DIRECT: i32 = 0x10000;
+/// Bypass the page cache.
 #[cfg(all(target_os = "linux", target_arch = "powerpc64"))]
 pub const O_DIRECT: i32 = 0x20000;
+/// Fail unless the path is a directory.
 #[cfg(all(target_os = "linux", not(any(target_arch = "aarch64", target_arch = "arm", target_arch = "powerpc64"))))]
 pub const O_DIRECTORY: i32 = 0x10000;
+/// Fail when the last component is a symbolic link.
 #[cfg(all(target_os = "linux", not(any(target_arch = "aarch64", target_arch = "arm", target_arch = "powerpc64"))))]
 pub const O_NOFOLLOW: i32 = 0x20000;
+/// Bypass the page cache.
 #[cfg(all(target_os = "linux", not(any(target_arch = "aarch64", target_arch = "arm", target_arch = "powerpc64"))))]
 pub const O_DIRECT: i32 = 0x4000;
 
 // The BSDs share the low bits.
+/// Non-blocking open and I/O.
 #[cfg(not(target_os = "linux"))]
 pub const O_NONBLOCK: i32 = 0x4;
+/// Every write goes to the end.
 #[cfg(not(target_os = "linux"))]
 pub const O_APPEND: i32 = 0x8;
+/// Writes wait for data and metadata to reach the device.
 #[cfg(not(target_os = "linux"))]
 pub const O_SYNC: i32 = 0x80;
+/// Fail when the last component is a symbolic link.
 #[cfg(not(target_os = "linux"))]
 pub const O_NOFOLLOW: i32 = 0x100;
+/// Create the file when missing.
 #[cfg(not(target_os = "linux"))]
 pub const O_CREAT: i32 = 0x200;
+/// Empty the file on open.
 #[cfg(not(target_os = "linux"))]
 pub const O_TRUNC: i32 = 0x400;
+/// With `O_CREAT`, fail when the file exists.
 #[cfg(not(target_os = "linux"))]
 pub const O_EXCL: i32 = 0x800;
 
+/// Do not make a terminal the controlling one.
 #[cfg(target_os = "macos")]
 pub const O_NOCTTY: i32 = 0x20000;
+/// Fail unless the path is a directory.
 #[cfg(target_os = "macos")]
 pub const O_DIRECTORY: i32 = 0x100000;
+/// Writes wait for the data to reach the device.
 #[cfg(target_os = "macos")]
 pub const O_DSYNC: i32 = 0x400000;
+/// Close the descriptor on `exec`.
 #[cfg(target_os = "macos")]
 pub const O_CLOEXEC: i32 = 0x1000000;
 
+/// Do not make a terminal the controlling one.
 #[cfg(target_os = "freebsd")]
 pub const O_NOCTTY: i32 = 0x8000;
+/// Bypass the page cache.
 #[cfg(target_os = "freebsd")]
 pub const O_DIRECT: i32 = 0x10000;
+/// Fail unless the path is a directory.
 #[cfg(target_os = "freebsd")]
 pub const O_DIRECTORY: i32 = 0x20000;
+/// Close the descriptor on `exec`.
 #[cfg(target_os = "freebsd")]
 pub const O_CLOEXEC: i32 = 0x100000;
+/// A descriptor for the path only, no I/O.
 #[cfg(target_os = "freebsd")]
 pub const O_PATH: i32 = 0x400000;
+/// Writes wait for the data to reach the device.
 #[cfg(target_os = "freebsd")]
 pub const O_DSYNC: i32 = 0x1000000;

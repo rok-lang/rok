@@ -165,6 +165,7 @@ impl UnixListener {
         }
     }
 
+    /// `accept` that suspends the task until a connection arrives.
     pub async fn accept_async(ref self) throws (IoError) -> (UnixStream, Path | none) {
         loop {
             if let c: UnixStream = try self.accept_once() {
@@ -175,12 +176,15 @@ impl UnixListener {
         }
     }
 
+    /// The path this socket is bound to; `none` when unnamed.
     pub fn local_addr(self) throws (IoError) -> Path | none { try unix_path(self.sock, 0) }
 
+    /// Make `accept` throw `WouldBlock` instead of waiting.
     pub const fn set_nonblocking(self, nb: bool) throws (IoError) {
         unsafe { self.sock.opts[0] = if nb { 1i64 } else { 0i64 }; }
     }
 
+    /// A second handle to the same socket.
     pub fn try_clone(self) throws (IoError) -> UnixListener { UnixListener { sock: try self.sock.try_clone() } }
 
     /// Close now, throwing the OS's error.
@@ -200,10 +204,12 @@ impl Drop for UnixListener {
 }
 
 impl UnixStream {
+    /// Connect to the socket at `path`.
     pub fn connect<P: AsPath>(path: P) throws (IoError) -> UnixStream {
         UnixStream { sock: try unix_sock(1, path, 2, "connect") }
     }
 
+    /// `connect` that suspends the task until the connection is made.
     pub async fn connect_async<P: AsPath>(path: P) throws (IoError) -> UnixStream {
         let p = path.as_path().as_str();
         try await off(|| try UnixStream::connect(p))
@@ -220,6 +226,7 @@ impl UnixStream {
         try sock_send_fd(self.sock, buf.byte_slice(), fd)
     }
 
+    /// `send_with_fd` that suspends the task while the socket is full.
     pub async fn send_with_fd_async<B: AsBytes>(ref self, buf: B, fd: RawFd) throws (IoError) -> usize {
         try await sock_send_fd_async(self.sock, buf.byte_slice(), fd)
     }
@@ -230,27 +237,37 @@ impl UnixStream {
         try sock_recv_fd(self.sock, buf)
     }
 
+    /// `recv_with_fd` that suspends the task until data arrives.
     pub async fn recv_with_fd_async(ref self, buf: SliceMut<u8>) throws (IoError) -> (usize, RawFd | none) {
         try await sock_recv_fd_async(self.sock, buf)
     }
 
+    /// The peer's path; `none` when unnamed.
     pub fn peer_addr(self) throws (IoError) -> Path | none { try unix_path(self.sock, 1) }
 
+    /// The path this socket is bound to; `none` when unnamed.
     pub fn local_addr(self) throws (IoError) -> Path | none { try unix_path(self.sock, 0) }
 
+    /// Shut down reading, writing or both.
     pub fn shutdown(self, how: Shutdown) throws (IoError) { try self.sock.shutdown(how); }
 
     /// As `shutdown`, which never waits.
     pub async fn shutdown_async(ref self, how: Shutdown) throws (IoError) { try self.sock.shutdown(how); }
 
+    /// Limit blocking reads to `dur`, then `TimedOut`; `none` waits
+    /// forever.
     pub const fn set_read_timeout(self, dur: Duration | none) throws (IoError) { self.sock.set_timeout(0, dur); }
 
+    /// Limit blocking writes to `dur`, then `TimedOut`; `none` waits
+    /// forever.
     pub const fn set_write_timeout(self, dur: Duration | none) throws (IoError) { self.sock.set_timeout(1, dur); }
 
+    /// Make blocking calls throw `WouldBlock` instead of waiting.
     pub const fn set_nonblocking(self, nb: bool) throws (IoError) {
         unsafe { self.sock.opts[0] = if nb { 1i64 } else { 0i64 }; }
     }
 
+    /// A second handle to the same socket.
     pub fn try_clone(self) throws (IoError) -> UnixStream { UnixStream { sock: try self.sock.try_clone() } }
 
     /// Close now, throwing the OS's error.
@@ -325,6 +342,7 @@ impl UnixDatagram {
     /// Send the datagram `buf` to the connected peer; bytes sent.
     pub fn send<B: AsBytes>(self, buf: B) throws (IoError) -> usize { try self.sock.write(buf.byte_slice()) }
 
+    /// `send` that suspends the task while the socket is full.
     pub async fn send_async<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize {
         try await self.sock.write_async(buf.byte_slice())
     }
@@ -332,32 +350,43 @@ impl UnixDatagram {
     /// The next datagram into `buf[0..n]` (truncated to `buf.len()`).
     pub fn recv(self, buf: SliceMut<u8>) throws (IoError) -> usize { try self.sock.read(buf) }
 
+    /// `recv` that suspends the task until a datagram arrives.
     pub async fn recv_async(ref self, buf: SliceMut<u8>) throws (IoError) -> usize {
         try await self.sock.read_async(buf)
     }
 
+    /// `send` with `fd` passed alongside (`SCM_RIGHTS`).
     pub fn send_with_fd<B: AsBytes>(self, buf: B, fd: RawFd) throws (IoError) -> usize {
         try sock_send_fd(self.sock, buf.byte_slice(), fd)
     }
 
+    /// `send_with_fd` that suspends the task while the socket is full.
     pub async fn send_with_fd_async<B: AsBytes>(ref self, buf: B, fd: RawFd) throws (IoError) -> usize {
         try await sock_send_fd_async(self.sock, buf.byte_slice(), fd)
     }
 
+    /// `recv` with the descriptor passed alongside, if any.
     pub fn recv_with_fd(self, buf: SliceMut<u8>) throws (IoError) -> (usize, RawFd | none) {
         try sock_recv_fd(self.sock, buf)
     }
 
+    /// `recv_with_fd` that suspends the task until a datagram arrives.
     pub async fn recv_with_fd_async(ref self, buf: SliceMut<u8>) throws (IoError) -> (usize, RawFd | none) {
         try await sock_recv_fd_async(self.sock, buf)
     }
 
+    /// The path this socket is bound to; `none` when unnamed.
     pub fn local_addr(self) throws (IoError) -> Path | none { try unix_path(self.sock, 0) }
 
+    /// Limit blocking reads to `dur`, then `TimedOut`; `none` waits
+    /// forever.
     pub const fn set_read_timeout(self, dur: Duration | none) throws (IoError) { self.sock.set_timeout(0, dur); }
 
+    /// Limit blocking writes to `dur`, then `TimedOut`; `none` waits
+    /// forever.
     pub const fn set_write_timeout(self, dur: Duration | none) throws (IoError) { self.sock.set_timeout(1, dur); }
 
+    /// Make blocking calls throw `WouldBlock` instead of waiting.
     pub const fn set_nonblocking(self, nb: bool) throws (IoError) {
         unsafe { self.sock.opts[0] = if nb { 1i64 } else { 0i64 }; }
     }

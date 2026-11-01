@@ -8,6 +8,8 @@
 use rok::core::collections::raw::{GcBuf, buf_erase, buf_new};
 use rok::core::marker::{HAND_CELL, HAND_FINISHED, HAND_STARTED, Memo, Transfer, transfer};
 
+/// The state of a future after one `poll`: `Ready` with its output, or
+/// `Pending` until its waker fires.
 #[derive(Debug)]
 pub enum Poll<T> {
     Ready(T),
@@ -15,6 +17,7 @@ pub enum Poll<T> {
 }
 
 impl<T> Poll<T> {
+    /// `true` for `Ready`.
     pub const fn is_ready(self) -> bool {
         match self {
             Poll::Ready(_) => true,
@@ -22,6 +25,7 @@ impl<T> Poll<T> {
         }
     }
 
+    /// `true` for `Pending`.
     pub const fn is_pending(self) -> bool {
         !self.is_ready()
     }
@@ -43,6 +47,7 @@ impl Waker {
         rok::core::task::wake_task(self.task);
     }
 
+    /// Another handle to the same task.
     pub const fn clone(self) -> Waker {
         self
     }
@@ -63,10 +68,12 @@ impl Debug for Context {
 }
 
 impl Context {
+    /// A context that wakes through `waker`.
     pub const fn from_waker(waker: Waker) -> Context {
         Context { waker: waker }
     }
 
+    /// The waker of the task being polled.
     pub const fn waker(self) -> Waker {
         self.waker
     }
@@ -257,6 +264,7 @@ impl<T> Transfer for AsyncFuture<T> {
 /// comes out of `poll`, so `try await f()` (refs-lang 4.14.10). Not a
 /// `Future` (whose `poll` cannot throw); `await` and `task::try_block_on`
 /// take it.
+#[must_use("future is never awaited, so its body never runs: write `await {}`")]
 pub struct TryAsyncFuture<T, E> {
     resume: fn(Context) throws (E) -> Poll<T>;
 }
@@ -266,6 +274,8 @@ impl<T, E> Debug for TryAsyncFuture<T, E> {
 }
 
 impl<T, E> TryAsyncFuture<T, E> {
+    /// Resume the body: `Ready` with its value, or `Pending`; throws what the
+    /// body throws.
     pub const fn poll(ref self, ref ctx: Context) throws (E) -> Poll<T> {
         try (self.resume)(ctx)
     }

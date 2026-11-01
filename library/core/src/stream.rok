@@ -15,6 +15,8 @@ use rok::core::task;
 use rok::core::task::Task;
 use rok::core::time::Duration;
 
+/// An asynchronous source of items (2.8): `poll_next` gives `Ready(item)`,
+/// `Ready(none)` at the end, or `Pending`. The adapters are lazy.
 pub trait Stream {
     type Item;
     fn poll_next(ref self, ref ctx: Context) -> Poll<Item | none>;
@@ -67,6 +69,7 @@ pub trait Stream {
     }
 }
 
+/// A value `for await` can walk: `into_stream` turns it into a stream.
 pub trait IntoStream {
     type Item;
     type IntoStream: Stream<Item = Item>;
@@ -82,6 +85,7 @@ impl<S: Stream> IntoStream for S {
 
 /// `collect`'s target (2.8.6): a collection built from a stream's items.
 pub trait FromStream<T> {
+    /// Drain `s`, in order, into a new collection.
     async fn from_stream<S: IntoStream<Item = T>>(s: S) -> Self;
 }
 
@@ -117,6 +121,7 @@ impl<K: Hash, V> FromStream<(K, V)> for Dict<K, V> {
 
 /// The value of an `async yield fn` call / `async yield { .. }` block.
 // One library type per coroutine kind (refs-lang 4.1.11).
+#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
 pub struct AsyncStream<T> {
     resume: fn(Context) -> Poll<T | none>;
 }
@@ -134,6 +139,8 @@ impl<T> Stream for AsyncStream<T> {
 
 // adapters (2.8.5)
 
+/// The stream `map` returns: `f` of each item.
+#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
 pub struct Map<S, U> {
     s: S;
     f: fn(S::Item) -> U;
@@ -158,6 +165,8 @@ impl<S: Stream, U> Stream for Map<S, U> {
     }
 }
 
+/// The stream `filter` returns: the items `pred` accepts.
+#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
 pub struct Filter<S> {
     s: S;
     pred: fn(S::Item) -> bool;
@@ -189,6 +198,8 @@ impl<S: Stream> Stream for Filter<S> {
     }
 }
 
+/// The stream `take` returns: at most the first `n` items.
+#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
 pub struct Take<S> {
     s: S;
     left: usize;
@@ -216,6 +227,8 @@ impl<S: Stream> Stream for Take<S> {
     }
 }
 
+/// The stream `skip` returns: all but the first `n` items.
+#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
 pub struct Skip<S> {
     s: S;
     n: usize;
@@ -248,6 +261,8 @@ impl<S: Stream> Stream for Skip<S> {
     }
 }
 
+/// The stream `throttle` returns: the items, at most one per interval.
+#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
 pub struct Throttle<S> {
     inner: AsyncStream<S::Item>;
 }
@@ -263,6 +278,9 @@ impl<S: Stream> Stream for Throttle<S> {
     }
 }
 
+/// The stream `buffered` returns: the futures' outputs in stream order,
+/// up to `n` running at once.
+#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
 pub struct Buffered<S> {
     inner: AsyncStream< <S::Item as Future>::Output>;
 }
@@ -284,6 +302,9 @@ where
     }
 }
 
+/// The stream `buffer_unordered` returns: the futures' outputs in
+/// completion order, up to `n` running at once.
+#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
 pub struct BufferUnordered<S> {
     inner: AsyncStream< <S::Item as Future>::Output>;
 }
@@ -356,6 +377,9 @@ pub const fn select<S1: Stream, S2: Stream>(a: S1, b: S2) -> Select<S1, S2> {
     Select { m: Merge { a: a, b: b, a_done: false, b_done: false, either: true } }
 }
 
+/// The stream `merge` returns. Each poll tries the first stream before
+/// the second, so a first stream that is always ready starves the second.
+#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
 pub struct Merge<S1, S2> {
     a: S1;
     b: S2;
@@ -401,6 +425,8 @@ impl<S1: Stream, S2: Stream> Stream for Merge<S1, S2> {
     }
 }
 
+/// The stream `select` returns: `merge` that ends when either side does.
+#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
 pub struct Select<S1, S2> {
     m: Merge<S1, S2>;
 }
@@ -421,6 +447,8 @@ pub const fn zip<S1: Stream, S2: Stream>(a: S1, b: S2) -> Zip<S1, S2> {
     Zip { a: a, b: b, left: none, right: none }
 }
 
+/// The stream `zip` returns: pairs of items, until either side ends.
+#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
 pub struct Zip<S1, S2> {
     a: S1;
     b: S2;
@@ -465,6 +493,7 @@ impl<S1: Stream, S2: Stream> Stream for Zip<S1, S2> {
 /// A throwing stream (`async yield fn f() throws (E) -> T`): a
 /// `TryStream` whose `poll_next` throws what the body throws, stepped
 /// with `try for await x in s { .. }`.
+#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
 pub struct TryAsyncStream<T, E> {
     resume: fn(Context) throws (E) -> Poll<T | none>;
 }
@@ -481,6 +510,8 @@ impl<T, E> Debug for TryAsyncStream<T, E> {
 pub trait TryStream {
     type Item;
     type Error;
+    /// Resume the body: `Ready` with the next item (`none` when done), or
+    /// `Pending`; throws what the body throws.
     fn poll_next(ref self, ref ctx: Context) throws (Error) -> Poll<Item | none>;
 
     /// `f` of each item.
@@ -555,6 +586,8 @@ impl<T, E> TryStream for TryAsyncStream<T, E> {
     }
 }
 
+/// The stream `try_map` returns: `f` of each item.
+#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
 pub struct TryMap<S, U> {
     s: S;
     f: fn(S::Item) throws (S::Error) -> U;
@@ -576,6 +609,8 @@ impl<S: TryStream, U> TryStream for TryMap<S, U> {
     }
 }
 
+/// The stream `try_filter` returns: the items `pred` accepts.
+#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
 pub struct TryFilter<S> {
     s: S;
     pred: fn(S::Item) throws (S::Error) -> bool;
@@ -604,6 +639,8 @@ impl<S: TryStream> TryStream for TryFilter<S> {
     }
 }
 
+/// The stream `map_err` returns: each error passed through `f`.
+#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
 pub struct MapErr<S, E2> {
     s: S;
     f: fn(S::Error) -> E2;
@@ -619,6 +656,8 @@ impl<S: TryStream, E2> TryStream for MapErr<S, E2> {
     }
 }
 
+/// The stream `try_take` returns: at most the first `n` items.
+#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
 pub struct TryTake<S> {
     s: S;
     left: usize;
@@ -643,6 +682,8 @@ impl<S: TryStream> TryStream for TryTake<S> {
     }
 }
 
+/// The stream `try_skip` returns: all but the first `n` items.
+#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
 pub struct TrySkip<S> {
     s: S;
     n: usize;
@@ -673,6 +714,7 @@ impl<S: TryStream> TryStream for TrySkip<S> {
 }
 
 /// `results`'s adapter.
+#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
 pub struct Results<S> {
     s: S;
 }
@@ -695,6 +737,9 @@ impl<S: TryStream> Stream for Results<S> {
     }
 }
 
+/// The `TryStream` `stream::from_results` returns: an `Err` item is
+/// thrown.
+#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
 pub struct FromResults<S, T, E> {
     s: S;
 }

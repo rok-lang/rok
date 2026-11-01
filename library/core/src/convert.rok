@@ -13,11 +13,13 @@
 
 /// A lossless conversion from `U` (2.11.2).
 pub trait From<U> {
+    /// Converts `value` without loss.
     fn from(value: U) -> Self;
 }
 
 /// `x.into()` = `T::from(x)` (2.11.3); `T` from the expected type.
 pub trait Into {
+    /// Converts `self` to `T` through `T::from`.
     fn into<T: From<Self>>(self) -> T;
 }
 
@@ -35,6 +37,8 @@ pub trait TryFrom<U> {
 
 /// `x.try_into()` = `T::try_from(x)` (2.11.4); throws `T`'s `Error`.
 pub trait TryInto {
+    /// Converts `self` to `T` through `T::try_from`; throws `T::Error` when
+    /// the value does not fit.
     fn try_into<T: TryFrom<Self>>(self) throws (T::Error) -> T;
 }
 
@@ -44,10 +48,14 @@ impl<S> TryInto for S {
 
 /// Out-of-range values clamp to the nearest end (2.11.5).
 pub trait SaturatingFrom<U> {
+    /// Converts `value`, clamping it to the nearest end of `Self`'s range.
     fn saturating_from(value: U) -> Self;
 }
 
+/// `x.saturating_into()` = `T::saturating_from(x)` (2.11.5); `T` from the
+/// expected type.
 pub trait SaturatingInto {
+    /// Converts `self` to `T` through `T::saturating_from`.
     fn saturating_into<T: SaturatingFrom<Self>>(self) -> T;
 }
 
@@ -57,10 +65,14 @@ impl<S> SaturatingInto for S {
 
 /// Keep the low bits - `as` spelled as a method (2.11.5).
 pub trait WrappingFrom<U> {
+    /// Converts `value`, keeping the low bits that fit in `Self`.
     fn wrapping_from(value: U) -> Self;
 }
 
+/// `x.wrapping_into()` = `T::wrapping_from(x)` (2.11.5); `T` from the
+/// expected type.
 pub trait WrappingInto {
+    /// Converts `self` to `T` through `T::wrapping_from`.
     fn wrapping_into<T: WrappingFrom<Self>>(self) -> T;
 }
 

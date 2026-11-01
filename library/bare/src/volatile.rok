@@ -3,5 +3,9 @@
 
 use rok::bare::ptr::{ConstPtr, Ptr};
 
+/// The `T` at `src`, read exactly once as written. UB unless it points
+/// at a live, initialized `T`.
 pub unsafe fn read<T>(src: ConstPtr<T>) -> T { src.read_volatile() }
+/// Store `value` at `dst`, written exactly once as written. UB unless
+/// `dst` is writable `T` memory.
 pub unsafe fn write<T>(dst: Ptr<T>, value: T) { dst.write_volatile(value); }

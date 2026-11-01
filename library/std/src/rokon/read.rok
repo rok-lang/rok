@@ -307,6 +307,7 @@ struct Reader {
 }
 
 /// Read one document.
+#[must_use]
 pub fn parse(s: str) throws (RokonError) -> Value {
     let r = try reader(s, false, "");
     try r.document()

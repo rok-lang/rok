@@ -108,6 +108,7 @@ impl<K: Hash, V, S: BuildHasher + Default> FromIterator<(K, V)> for Dict<K, V, S
 }
 
 impl<K: Hash, V> Dict<K, V> {
+    /// An empty dict with room for 4 entries.
     pub const fn new() -> Dict<K, V> {
         Dict::with_capacity(4)
     }
@@ -148,12 +149,14 @@ impl<K: Hash, V, S: BuildHasher> Dict<K, V, S> {
         }
     }
 
+    /// The number of entries.
     pub const fn len(self) -> usize {
         unsafe {
             self.h[0].len
         }
     }
 
+    /// `true` when the dict has no entry.
     pub const fn is_empty(self) -> bool {
         self.len() == 0
     }
@@ -187,6 +190,7 @@ impl<K: Hash, V, S: BuildHasher> Dict<K, V, S> {
     }
 
     /// The entry holding `k` (hash `h`), or `ABSENT`.
+    #[must_use]
     const fn find(self, k: K, h: u64) -> usize {
         unsafe {
             let s = self.h[0];
@@ -276,6 +280,7 @@ impl<K: Hash, V, S: BuildHasher> Dict<K, V, S> {
         }
     }
 
+    /// The value under `k`; `none` when `k` is absent.
     pub const fn get(self, k: K) -> V | none {
         unsafe {
             let at = self.find(k, self.hash_of(k));
@@ -287,10 +292,12 @@ impl<K: Hash, V, S: BuildHasher> Dict<K, V, S> {
         }
     }
 
+    /// `true` when `k` has an entry.
     pub const fn contains_key(self, k: K) -> bool {
         self.find(k, self.hash_of(k)) != ABSENT
     }
 
+    /// Remove `k`'s entry and return its value; `none` when `k` is absent.
     #[discardable]
     pub const fn remove(self, k: K) -> V | none {
         unsafe {
@@ -389,6 +396,7 @@ impl<K, V, S> Debug for Entry<K, V, S> {
 }
 
 impl<K: Hash, V, S: BuildHasher> Entry<K, V, S> {
+    /// The entry's key.
     pub fn key(self) -> K {
         self.key
     }
@@ -431,6 +439,9 @@ impl<K: Hash, V: Default, S: BuildHasher> Entry<K, V, S> {
 // The iterators walk the live table; a dict changed while iterated
 // gives unspecified (but memory-safe) results.
 
+/// What `d.keys()` returns: the keys, in insertion order. Changing the
+/// dict while iterating gives unspecified (memory-safe) results.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct Keys<K, V, S = RandomState> {
     d: Dict<K, V, S>;
     at: usize;
@@ -455,6 +466,9 @@ impl<K: Hash, V, S: BuildHasher> Iterator for Keys<K, V, S> {
     }
 }
 
+/// What `d.values()` returns: the values, in insertion order. Changing
+/// the dict while iterating gives unspecified (memory-safe) results.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct Values<K, V, S = RandomState> {
     d: Dict<K, V, S>;
     at: usize;
@@ -479,6 +493,10 @@ impl<K: Hash, V, S: BuildHasher> Iterator for Values<K, V, S> {
     }
 }
 
+/// What `d.iter()` returns: `(key, value)` pairs, in insertion order.
+/// Changing the dict while iterating gives unspecified (memory-safe)
+/// results.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct DictIter<K, V, S = RandomState> {
     d: Dict<K, V, S>;
     at: usize;

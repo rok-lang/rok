@@ -14,6 +14,7 @@ pub type RawSocket = u64;
 /// The HANDLE behind a handle, still owned by it
 /// (`INVALID_HANDLE_VALUE`, -1, once the handle is closed).
 pub trait AsRawHandle {
+    /// The HANDLE, still owned by `self`.
     fn as_raw_handle(self) -> RawHandle;
 }
 
@@ -28,6 +29,7 @@ pub trait FromRawHandle {
 /// The SOCKET behind a socket, still owned by it (`INVALID_SOCKET`
 /// once it is closed).
 pub trait AsRawSocket {
+    /// The SOCKET, still owned by `self`.
     fn as_raw_socket(self) -> RawSocket;
 }
 

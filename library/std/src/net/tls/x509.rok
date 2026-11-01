@@ -272,6 +272,7 @@ const fn subtrees(b: Slice<u8>, ref dns: List<str>, ref ip: List<List<u8>>) thro
 }
 
 /// Parse a DER certificate.
+#[must_use]
 pub(pkg) fn parse(der_bytes: Slice<u8>) throws (TlsError) -> CertInfo {
     let top = Der::new(der_bytes);
     let cert = try top.enter(SEQUENCE);

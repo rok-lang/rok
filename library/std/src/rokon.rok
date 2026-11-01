@@ -162,6 +162,7 @@ pub struct RokonError {
 }
 
 impl RokonError {
+    /// An error with message `msg`, at no position yet.
     pub const fn new(msg: str) -> RokonError {
         RokonError { msg: msg, line: 0u32, col: 0u32, path: "", on_key: false }
     }
@@ -207,11 +208,14 @@ impl Error for RokonError {}
 
 /// A rok value as ROKON.
 pub trait ToRokon {
+    /// `self` as a ROKON value.
     fn to_rokon(self) -> Value;
 }
 
 /// A rok value from ROKON; the target type decides how `v` reads.
 pub trait FromRokon {
+    /// Read `v` as this type; throws `RokonError` when its shape does not
+    /// match.
     fn from_rokon(v: Value) throws (RokonError) -> Self;
 
     /// A struct field of this type that the document leaves out: an error,
@@ -222,6 +226,7 @@ pub trait FromRokon {
 }
 
 /// Read one ROKON document.
+#[must_use]
 pub fn parse(s: str) throws (RokonError) -> Value {
     try read::parse(s)
 }
@@ -380,6 +385,7 @@ impl Fields {
         f
     }
 
+    /// `true` when field `name` is present.
     pub(pkg) const fn has(self, name: str) -> bool { self.vals.contains_key(name) }
 
     /// Field `name` as a `T`: its value, or `T::from_missing()` when absent.

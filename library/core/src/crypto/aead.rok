@@ -8,6 +8,7 @@ use sup::aes::{aes_expand, aes_encrypt2};
 use sup::chacha::{ChaChaState, Poly1305State};
 use sup::secret::SecretWords;
 
+/// The AEAD ciphers `Aead` implements.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 #[non_exhaustive]
 pub enum AeadAlgorithm {
@@ -17,6 +18,7 @@ pub enum AeadAlgorithm {
 }
 
 impl AeadAlgorithm {
+    /// The key length in bytes: 16 for AES-128-GCM, else 32.
     pub const fn key_len(self) -> usize {
         match self {
             AeadAlgorithm::Aes128Gcm => 16,
@@ -24,8 +26,10 @@ impl AeadAlgorithm {
         }
     }
 
+    /// The nonce length in bytes: 12.
     pub const fn nonce_len(self) -> usize { 12 }
 
+    /// The tag length in bytes: 16.
     pub const fn tag_len(self) -> usize { 16 }
 }
 
@@ -44,6 +48,8 @@ impl Debug for Aead {
 }
 
 impl Aead {
+    /// A cipher for `alg` keyed by `key`. Throws `ValueError` when the key
+    /// is not the algorithm's key length.
     pub fn new<B: AsBytes>(alg: AeadAlgorithm, key: B) throws (ValueError) -> Aead {
         let k = key.byte_slice();
         if k.len() != alg.key_len() {
@@ -63,6 +69,7 @@ impl Aead {
         Aead { alg, k: w, rounds }
     }
 
+    /// The cipher this key is for.
     pub const fn algorithm(self) -> AeadAlgorithm { self.alg }
 
     /// Overwrite the key material with zeros now (every copy shares

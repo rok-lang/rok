@@ -9,17 +9,23 @@
 /// One step forward / back (2.7.3). Integers implement it; floats don't,
 /// so `Range<f64>` is no iterator.
 pub trait Step: PartialOrd + Clone {
+    /// `self` moved `count` steps forward, or `none` past the type's end.
     fn forward_checked(self, count: usize) -> Self | none;
+    /// `self` moved `count` steps back, or `none` past the type's start.
     fn backward_checked(self, count: usize) -> Self | none;
+    /// The steps from `start` to `end`, or `none` when `end` is before
+    /// `start` or the count overflows `usize`.
     fn steps_between(start: Self, end: Self) -> usize | none;
 }
 
+/// `a..b`: from `start` up to but not including `end`.
 #[lang("range_type")]
 pub struct Range<T> {
     pub start: T;
     pub end: T;
 }
 
+/// `a..=b`: from `start` up to and including `end`.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct RangeInclusive<T> {
     pub start: T;
@@ -28,11 +34,13 @@ pub struct RangeInclusive<T> {
     exhausted: bool = false;
 }
 
+/// `a..`: from `start` with no end.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct RangeFrom<T> {
     pub start: T;
 }
 
+/// `..b`: up to but not including `end`.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct RangeTo<T> {
     pub end: T;
@@ -45,6 +53,7 @@ pub struct RangeToInclusive<T> {
     pub end: T;
 }
 
+/// `..`: the whole range.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RangeFull;
 
@@ -560,31 +569,37 @@ impl Step for char {
 
 // Range literals (refs-lang 6.5.1).
 
+/// `a..b`: the half-open range from `start` up to `end`.
 #[literal(expr ".." expr)]
 pub(pkg) const fn range_literal<T>(start: T, end: T) -> Range<T> {
     return Range { start: start, end: end };
 }
 
+/// `a..=b`: the range from `start` through `end`.
 #[literal(expr "..=" expr)]
 pub(pkg) const fn range_inclusive_literal<T>(start: T, end: T) -> RangeInclusive<T> {
     return RangeInclusive { start: start, end: end };
 }
 
+/// `a..`: the range from `start` on, unbounded.
 #[literal(expr "..")]
 pub(pkg) const fn range_from_literal<T>(start: T) -> RangeFrom<T> {
     return RangeFrom { start: start };
 }
 
+/// `..b`: the range below `end`.
 #[literal(".." expr)]
 pub(pkg) const fn range_to_literal<T>(end: T) -> RangeTo<T> {
     return RangeTo { end: end };
 }
 
+/// `..=b`: the range through `end`.
 #[literal("..=" expr)]
 pub(pkg) const fn range_to_inclusive_literal<T>(end: T) -> RangeToInclusive<T> {
     return RangeToInclusive { end: end };
 }
 
+/// `..`: the full range.
 #[literal("..")]
 pub(pkg) const fn range_full_literal() -> RangeFull {
     return RangeFull;

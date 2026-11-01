@@ -7,12 +7,14 @@
 // `collections::slice`. Slices follow Python: bounds clamp to the
 // length (never panic), a negative step reads them from the end.
 
+/// `a[i]` and `a[i, j]` as a read: `index(i)`.
 #[lang("index_trait")]
 pub trait Index<I> {
     type Output;
     fn index(self, idx: I) -> Output;
 }
 
+/// `a[i] = v`: `index_set(i, v)`.
 #[lang("index_set_trait")]
 pub trait IndexSet<I> {
     type Value;

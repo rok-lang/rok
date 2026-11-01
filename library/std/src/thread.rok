@@ -25,6 +25,7 @@ pub struct ThreadId {
 }
 
 impl ThreadId {
+    /// The id as a number, unique among the threads of the process.
     pub const fn as_u64(self) -> u64 { self.id }
 }
 
@@ -79,7 +80,9 @@ impl Debug for Thread {
 }
 
 impl Thread {
+    /// The thread's id.
     pub const fn id(self) -> ThreadId { ThreadId { id: self.rec.id } }
+    /// The name given by `Builder::name`; `none` when it has none.
     pub const fn name(self) -> str | none { self.rec.name }
     /// Wake the thread from `park` (or make its next `park` return at
     /// once). No-op once the thread has ended.
@@ -133,12 +136,14 @@ const LOST: i32 = -1;
 const TAKEN: i32 = -2;
 
 impl JoinError {
+    /// Why the join failed.
     pub const fn kind(self) -> JoinErrorKind {
         if self.code == LOST { return JoinErrorKind::Lost; }
         if self.code == TAKEN { return JoinErrorKind::Taken; }
         JoinErrorKind::Os(self.code)
     }
 
+    /// What went wrong, without context.
     pub const fn message(self) -> str {
         match self.kind() {
             JoinErrorKind::Lost => "thread join failed: the thread ended with a failed REPL cell",
@@ -184,6 +189,7 @@ impl<T> JoinHandle<T> {
         }
     }
 
+    /// The thread this handle joins.
     pub const fn thread(self) -> Thread { self.thread }
 
     /// Let the thread run on its own; its OS resources are released when
@@ -210,14 +216,17 @@ impl<T: Send> IntoFuture for JoinHandle<T> {
 
 /// Spawn configuration.
 #[derive(Debug)]
+#[must_use("thread builder is never used: start the thread with `{}.spawn(f)`")]
 pub struct Builder {
     name: str | none;
     stack_size: usize | none;
 }
 
 impl Builder {
+    /// A builder with no name and the default stack size.
     pub const fn new() -> Builder { Builder { name: none, stack_size: none } }
 
+    /// The name of the new thread (`Thread::name`).
     pub const fn name(self, name: str) -> Builder {
         Builder { name: name, stack_size: self.stack_size }
     }
@@ -227,6 +236,8 @@ impl Builder {
         Builder { name: self.name, stack_size: size }
     }
 
+    /// Start `f` on a new thread with this name and stack size; throws the
+    /// OS error when the thread cannot be created.
     pub fn spawn<T: Send>(self, f: fn() -> T + Send) throws (IoError) -> JoinHandle<T> {
         unsafe {
             let result: GcBuf<T> = buf_new(1);

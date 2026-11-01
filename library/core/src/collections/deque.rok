@@ -5,6 +5,7 @@
 
 use rok::core::marker::{Memo, Transfer, buf_is_null, copy_buf};
 
+/// A growable ring buffer with O(1) push and pop at both ends.
 pub struct Deque<T> {
     meta: GcBuf<usize>;
     data: GcBuf<GcBuf<T>>;
@@ -187,6 +188,7 @@ impl<T> Deque<T> {
 }
 
 /// Front to back.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct DequeIter<T> {
     deque: Deque<T>;
     pos: GcBuf<usize>;

@@ -6,51 +6,92 @@ use rok::core::io::IoError;
 use rok::std::fs::{Dir, File};
 use rok::std::path::AsPath;
 
+/// Others may open the file for reading meanwhile.
 pub const FILE_SHARE_READ: u32 = 0x1u32;
+/// Others may open the file for writing meanwhile.
 pub const FILE_SHARE_WRITE: u32 = 0x2u32;
+/// Others may delete or rename the file meanwhile.
 pub const FILE_SHARE_DELETE: u32 = 0x4u32;
 
+/// Read access.
 pub const GENERIC_READ: u32 = 0x80000000u32;
+/// Write access.
 pub const GENERIC_WRITE: u32 = 0x40000000u32;
+/// Read the file's data.
 pub const FILE_READ_DATA: u32 = 0x1u32;
+/// Write the file's data.
 pub const FILE_WRITE_DATA: u32 = 0x2u32;
+/// Append to the file's data.
 pub const FILE_APPEND_DATA: u32 = 0x4u32;
+/// Read the file's attributes.
 pub const FILE_READ_ATTRIBUTES: u32 = 0x80u32;
+/// Write the file's attributes.
 pub const FILE_WRITE_ATTRIBUTES: u32 = 0x100u32;
+/// Delete the file.
 pub const DELETE: u32 = 0x10000u32;
+/// Wait on the handle.
 pub const SYNCHRONIZE: u32 = 0x100000u32;
 
+/// Create; fail when the file exists.
 pub const CREATE_NEW: u32 = 1u32;
+/// Create, or empty the file when it exists.
 pub const CREATE_ALWAYS: u32 = 2u32;
+/// Open; fail when the file is missing.
 pub const OPEN_EXISTING: u32 = 3u32;
+/// Open, creating the file when missing.
 pub const OPEN_ALWAYS: u32 = 4u32;
+/// Open and empty; fail when the file is missing.
 pub const TRUNCATE_EXISTING: u32 = 5u32;
 
+/// Read-only.
 pub const FILE_ATTRIBUTE_READONLY: u32 = 0x1u32;
+/// Hidden from ordinary listings.
 pub const FILE_ATTRIBUTE_HIDDEN: u32 = 0x2u32;
+/// Used by the OS.
 pub const FILE_ATTRIBUTE_SYSTEM: u32 = 0x4u32;
+/// Marked for backup.
 pub const FILE_ATTRIBUTE_ARCHIVE: u32 = 0x20u32;
+/// No other attribute.
 pub const FILE_ATTRIBUTE_NORMAL: u32 = 0x80u32;
+/// Temporary: kept in memory when possible.
 pub const FILE_ATTRIBUTE_TEMPORARY: u32 = 0x100u32;
+/// Its data is on offline storage.
 pub const FILE_ATTRIBUTE_OFFLINE: u32 = 0x1000u32;
+/// Not indexed by the content indexer.
 pub const FILE_ATTRIBUTE_NOT_CONTENT_INDEXED: u32 = 0x2000u32;
+/// Encrypted.
 pub const FILE_ATTRIBUTE_ENCRYPTED: u32 = 0x4000u32;
 
+/// Writes go through the cache to the disk.
 pub const FILE_FLAG_WRITE_THROUGH: u32 = 0x80000000u32;
+/// No system caching.
 pub const FILE_FLAG_NO_BUFFERING: u32 = 0x20000000u32;
+/// A hint: access is random.
 pub const FILE_FLAG_RANDOM_ACCESS: u32 = 0x10000000u32;
+/// A hint: access is sequential.
 pub const FILE_FLAG_SEQUENTIAL_SCAN: u32 = 0x8000000u32;
+/// Delete the file when its last handle closes.
 pub const FILE_FLAG_DELETE_ON_CLOSE: u32 = 0x4000000u32;
+/// Open for backup or restore; needed to open a directory.
 pub const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x2000000u32;
+/// Names are case-sensitive.
 pub const FILE_FLAG_POSIX_SEMANTICS: u32 = 0x1000000u32;
+/// Open a reparse point itself, not its target.
 pub const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x200000u32;
+/// Leave remote data in remote storage.
 pub const FILE_FLAG_OPEN_NO_RECALL: u32 = 0x100000u32;
 
+/// Impersonate the client anonymously.
 pub const SECURITY_ANONYMOUS: u32 = 0x0u32;
+/// Impersonate the client at identification level.
 pub const SECURITY_IDENTIFICATION: u32 = 0x10000u32;
+/// Impersonate the client at impersonation level.
 pub const SECURITY_IMPERSONATION: u32 = 0x20000u32;
+/// Impersonate the client at delegation level.
 pub const SECURITY_DELEGATION: u32 = 0x30000u32;
+/// The security tracking mode is dynamic.
 pub const SECURITY_CONTEXT_TRACKING: u32 = 0x40000u32;
+/// Only the enabled parts of the client's context are available.
 pub const SECURITY_EFFECTIVE_ONLY: u32 = 0x80000u32;
 
 /// Windows knobs of `Dir::open` / `File::open` (`OpenFlags.os`).

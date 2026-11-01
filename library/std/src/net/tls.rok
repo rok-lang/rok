@@ -64,6 +64,7 @@ impl TlsError {
         TlsError { kind: TlsErrorKind::Certificate, msg, alert: 42u8 }
     }
 
+    /// What kind of failure it is.
     pub const fn kind(self) -> TlsErrorKind { self.kind }
     /// What went wrong, without the `tls: ` that `Display` adds.
     pub const fn message(self) -> str { self.msg }
@@ -128,6 +129,8 @@ impl Hash for Certificate {
 }
 
 impl Certificate {
+    /// Parse one DER certificate; throws on bytes that are not X.509. The
+    /// bytes are copied.
     pub fn from_der<B: AsBytes>(der: B) throws (TlsError) -> Certificate {
         // Own the bytes: `info` views them, and a caller's list may change.
         let d: List<u8> = der.byte_slice().to_list();
@@ -149,6 +152,7 @@ impl Certificate {
 
     /// The validity period.
     pub const fn not_before(self) -> SystemTime { SystemTime::from_unix(self.info.not_before, 0u32) }
+    /// End of the validity period, Unix seconds.
     pub const fn not_after(self) -> SystemTime { SystemTime::from_unix(self.info.not_after, 0u32) }
 }
 
@@ -387,6 +391,7 @@ impl Debug for SessionCache {
 }
 
 impl SessionCache {
+    /// An empty cache.
     pub const fn new() -> SessionCache { SessionCache { m: unsafe { Mutex::new_unshared([]) } } }
 
     /// Tickets held.
@@ -396,6 +401,7 @@ impl SessionCache {
         n
     }
 
+    /// Drop every ticket held.
     pub fn clear(self) {
         using g = self.m.lock() { g.set([]); }
     }
@@ -485,6 +491,7 @@ impl Debug for TicketStore {
 }
 
 impl TicketStore {
+    /// An empty store.
     pub const fn new() -> TicketStore { TicketStore { m: unsafe { Mutex::new_unshared([]) } } }
 
     /// Sessions held.
@@ -505,6 +512,7 @@ impl TicketStore {
     }
 
     /// The live session with ticket `id`, left in the store.
+    #[must_use]
     pub(pkg) fn find(self, id: Slice<u8>) -> Session | none {
         let found: Session | none = none;
         using g = self.m.lock() {
@@ -966,13 +974,16 @@ impl Client {
     /// Switch to the next write key and ask the peer to do the same.
     pub fn key_update(self) throws (IoError) { try self.s.key_update(); }
 
+    /// `close_notify`, awaiting the socket instead of blocking.
     pub async fn close_notify_async(ref self) throws (IoError) { _ = try await self.s.op_async(OP_CLOSE_NOTIFY, no_buf(), nothing()); }
+    /// `key_update`, awaiting the socket instead of blocking.
     pub async fn key_update_async(ref self) throws (IoError) { _ = try await self.s.op_async(OP_KEY_UPDATE, no_buf(), nothing()); }
 
     /// close_notify (if the connection is healthy), then close the
     /// socket, throwing the OS's error.
     pub fn close(self) throws (IoError) { try self.s.close(); }
 
+    /// The ALPN protocol the server chose; `none` when none was negotiated.
     pub const fn negotiated_alpn(self) -> List<u8> | none { self.s.conn().alpn }
 
     /// The server's certificate chain as sent, leaf first (on a resumed
@@ -1084,14 +1095,20 @@ impl Server {
         Server { s }
     }
 
+    /// Tell the client no more data follows (the read side stays open).
     pub fn close_notify(self) throws (IoError) { try self.s.close_notify(); }
+    /// Switch to the next write key and ask the peer to do the same.
     pub fn key_update(self) throws (IoError) { try self.s.key_update(); }
 
+    /// `close_notify`, awaiting the socket instead of blocking.
     pub async fn close_notify_async(ref self) throws (IoError) { _ = try await self.s.op_async(OP_CLOSE_NOTIFY, no_buf(), nothing()); }
+    /// `key_update`, awaiting the socket instead of blocking.
     pub async fn key_update_async(ref self) throws (IoError) { _ = try await self.s.op_async(OP_KEY_UPDATE, no_buf(), nothing()); }
     /// close_notify (if the connection is healthy), then close the
     /// socket, throwing the OS's error.
     pub fn close(self) throws (IoError) { try self.s.close(); }
+    /// The ALPN protocol chosen for the client; `none` when none was
+    /// negotiated.
     pub const fn negotiated_alpn(self) -> List<u8> | none { self.s.conn().alpn }
 
     /// The client's validated certificate chain, leaf first (empty: it

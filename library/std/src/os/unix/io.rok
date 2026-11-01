@@ -10,6 +10,7 @@ pub type RawFd = i32;
 /// The descriptor behind a handle, still owned by it (`-1` once the
 /// handle is closed).
 pub trait AsRawFd {
+    /// The file descriptor, still owned by `self`.
     fn as_raw_fd(self) -> RawFd;
 }
 

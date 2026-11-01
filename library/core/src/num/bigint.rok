@@ -44,6 +44,7 @@ impl IntMag {
     }
 
     /// `d[0..n]` without its leading zero limbs (shares `d`).
+    #[must_use]
     const fn trim(d: GcBuf<u32>, n: usize) -> IntMag {
         unsafe {
             let k = n;
@@ -52,6 +53,7 @@ impl IntMag {
         }
     }
 
+    #[must_use]
     const fn from_u64(v: u64) -> IntMag {
         unsafe {
             let d: GcBuf<u32> = buf_new(2);
@@ -332,6 +334,7 @@ impl IntMag {
     /// floor(B^2n / self), `n = self.n`: `recip_approx` made exact. The
     /// residue D = B^2n - x self is a few `self` at most, so it comes
     /// from a product mod B^m - 1 (`m >= n + 2`).
+    #[must_use]
     fn recip(self) -> IntMag {
         let one = IntMag::from_u64(1u64);
         let n = self.n;
@@ -751,8 +754,14 @@ const fn mag_bit(m: IntMag, n: u64) -> bool {
 }
 
 impl Int {
+    /// The value `n`.
+    #[must_use]
     pub const fn from_i64(n: i64) -> Int { Int { small: n, neg: false, big: none } }
+    /// The value `n`.
+    #[must_use]
     pub const fn from_i32(n: i32) -> Int { Int::from_i64(n as i64) }
+    /// The value `n`.
+    #[must_use]
     pub const fn from_u64(n: u64) -> Int { Int::from_parts(false, IntMag::from_u64(n)) }
 
     /// An integer literal's digits (`_`, `0x` / `0o` / `0b` allowed):
@@ -780,6 +789,7 @@ impl Int {
     /// case. The grammar is the runtime's, the same the primitives'
     /// `FromStr` reads. Panics when `radix` is outside 2..=36.
     #[track_caller]
+    #[must_use]
     pub fn parse_radix(s: str, radix: u32) throws (ParseError) -> Int {
         if radix < 2u32 || radix > 36u32 {
             panic(f"Int::parse_radix: radix {radix} is out of 2..=36");
@@ -810,6 +820,7 @@ impl Int {
     /// The digits in base `radix` (2..=36, lowercase), `-` first when
     /// negative.
     #[track_caller]
+    #[must_use]
     pub fn to_str_radix(self, radix: u32) -> str {
         unsafe {
             if radix < 2u32 || radix > 36u32 { panic(f"Int::to_str_radix: radix {radix} is out of 2..=36"); }
@@ -829,17 +840,23 @@ impl Int {
         }
     }
 
+    /// The value as an `i32`; `none` when it does not fit.
+    #[must_use]
     pub const fn to_i32(self) -> i32 | none {
         let v = self.to_i64()?;
         if v < -2147483648 || v > 2147483647 { return none; }
         v as i32
     }
 
+    /// The value as an `i64`; `none` when it does not fit.
+    #[must_use]
     pub const fn to_i64(self) -> i64 | none {
         if self.big is none { return self.small; }
         none
     }
 
+    /// The value as a `u64`; `none` when negative or too large.
+    #[must_use]
     pub const fn to_u64(self) -> u64 | none {
         if self.big is none {
             if self.small < 0 { return none; }
@@ -851,29 +868,40 @@ impl Int {
     }
 
     /// The nearest `f64` (ties to even; `±inf` past `f64::MAX`).
+    #[must_use]
     pub fn to_f64(self) -> f64 {
         if self.big is none { return self.small as f64; }
         rok::core::num::bigfloat::Float::from_int(self).to_f64()
     }
 
+    /// `true` for 0.
+    #[must_use]
     pub const fn is_zero(self) -> bool { self.big is none && self.small == 0 }
+    /// `true` below 0.
+    #[must_use]
     pub const fn is_negative(self) -> bool {
         if self.big is none { self.small < 0 } else { self.neg }
     }
+    /// `true` above 0.
+    #[must_use]
     pub const fn is_positive(self) -> bool { !self.is_zero() && !self.is_negative() }
 
     /// `-1`, `0` or `1`.
+    #[must_use]
     pub const fn signum(self) -> Int {
         if self.is_zero() { return Int::from_i64(0); }
         if self.is_negative() { Int::from_i64(-1) } else { Int::from_i64(1) }
     }
 
+    /// The magnitude.
+    #[must_use]
     pub const fn abs(self) -> Int {
         if self.is_negative() { -self } else { self }
     }
 
     /// Bits of `|self|` without leading zeros (0 for zero; Python's
     /// `bit_length`).
+    #[must_use]
     pub const fn bit_length(self) -> u64 {
         let (_, m) = self.parts();
         m.bits()
@@ -881,6 +909,7 @@ impl Int {
 
     /// One bits of `|self|` (Python's `bit_count`): a negative number
     /// has infinitely many in two's complement.
+    #[must_use]
     pub const fn count_ones(self) -> u64 {
         unsafe {
             if self.big is none { return self.small.unsigned_abs().count_ones() as u64; }
@@ -897,6 +926,7 @@ impl Int {
 
     /// Zero bits below the lowest one bit, the same for `self` and
     /// `-self`; `none` for zero, which has no one bit.
+    #[must_use]
     pub const fn trailing_zeros(self) -> u64 | none {
         if self.is_zero() { return none; }
         if self.big is none { return self.small.trailing_zeros() as u64; }
@@ -906,6 +936,7 @@ impl Int {
 
     /// Bit `n` of `self` in two's complement, sign-extended forever: a
     /// negative number has every high bit set.
+    #[must_use]
     pub const fn bit(self, n: u64) -> bool {
         if self.big is none {
             if n >= 63u64 { return self.small < 0; }
@@ -929,9 +960,11 @@ impl Int {
     }
 
     /// `self == 2^k` for some `k`; false for zero and negatives.
+    #[must_use]
     pub const fn is_power_of_two(self) -> bool { self.is_positive() && self.count_ones() == 1u64 }
 
     /// The smallest power of two `>= self`; `1` for `self <= 1`.
+    #[must_use]
     pub const fn next_power_of_two(self) -> Int {
         if self <= Int::from_i64(1) { return Int::from_i64(1); }
         if self.is_power_of_two() { return self; }
@@ -940,8 +973,11 @@ impl Int {
 
     /// `floor(log2(self))`; panics unless `self > 0`.
     #[track_caller]
+    #[must_use]
     pub const fn ilog2(self) -> u64 { self.checked_ilog2() ?? panic("Int::ilog2: the number is not positive; use `checked_ilog2` to get `none` instead") }
 
+    /// `floor(log2(self))`; `none` unless `self > 0`.
+    #[must_use]
     pub const fn checked_ilog2(self) -> u64 | none {
         if !self.is_positive() { return none; }
         self.bit_length() - 1u64
@@ -950,9 +986,11 @@ impl Int {
     /// The shortest two's complement, least significant first: the top
     /// bit is the sign (`-1` is `[255]`, `128` is `[128, 0]`); zero is
     /// `[0]`. Fixed-width integers' `to_le_bytes` agree in their width.
+    #[must_use]
     pub fn to_le_bytes(self) -> List<u8> { self.bytes(true, false, "to_le_bytes") }
 
     /// As `to_le_bytes`, most significant first.
+    #[must_use]
     pub fn to_be_bytes(self) -> List<u8> { self.bytes(true, true, "to_be_bytes") }
 
     /// The magnitude, least significant first, with no sign bit (`255`
@@ -974,9 +1012,11 @@ impl Int {
 
     /// The `int` of `bytes` in two's complement, least significant
     /// first (a set top bit is negative). No bytes is zero.
+    #[must_use]
     pub fn from_le_bytes(bytes: List<u8> | Slice<u8>) -> Int { Int::from_bytes(bytes, true, false) }
 
     /// As `from_le_bytes`, most significant first.
+    #[must_use]
     pub fn from_be_bytes(bytes: List<u8> | Slice<u8>) -> Int { Int::from_bytes(bytes, true, true) }
 
     /// The `int` of the magnitude `bytes`, least significant first;
@@ -1046,6 +1086,7 @@ impl Int {
     }
 
     /// `self^exp` (square and multiply).
+    #[must_use]
     pub fn pow(self, exp: u32) -> Int {
         let acc = Int::from_i64(1);
         let base = self;
@@ -1062,6 +1103,7 @@ impl Int {
     /// (the sign of `m`, as `%%`). Panics if `m` is zero or `exp`
     /// negative.
     #[track_caller]
+    #[must_use]
     pub fn modpow(self, exp: Int, m: Int) -> Int {
         unsafe {
             if m.is_zero() { panic("Int::modpow: the modulus is zero"); }
@@ -1095,6 +1137,7 @@ impl Int {
     /// A runtime kernel (half-gcd reductions, then Lehmer's algorithm)
     /// after one division that brings the operands to about the same
     /// length.
+    #[must_use]
     pub fn gcd(self, other: Int) -> Int {
         unsafe {
             if self.big is none && other.big is none {
@@ -1122,6 +1165,7 @@ impl Int {
     }
 
     /// The least common multiple, never negative (`0` if either is).
+    #[must_use]
     pub fn lcm(self, other: Int) -> Int {
         if self.is_zero() || other.is_zero() { return Int::from_i64(0); }
         (self / self.gcd(other) * other).abs()
@@ -1130,6 +1174,7 @@ impl Int {
     /// The quotient rounded so that `rem_euclid` is never negative;
     /// panics on zero.
     #[track_caller]
+    #[must_use]
     pub fn div_euclid(self, rhs: Int) -> Int {
         let (q, r) = self.div_rem(rhs);
         if !r.is_negative() { return q; }
@@ -1138,6 +1183,7 @@ impl Int {
 
     /// The remainder in `0..rhs.abs()`; panics on zero.
     #[track_caller]
+    #[must_use]
     pub fn rem_euclid(self, rhs: Int) -> Int {
         let r = self % rhs;
         if r.is_negative() { r + rhs.abs() } else { r }
@@ -1145,6 +1191,7 @@ impl Int {
 
     /// floor(sqrt(self)); panics on a negative number.
     #[track_caller]
+    #[must_use]
     pub fn isqrt(self) -> Int {
         self.checked_isqrt() ?? panic("Int::isqrt: the number is negative; use `checked_isqrt` to get `none` instead")
     }
@@ -1153,6 +1200,7 @@ impl Int {
     /// doubling the precision (the recursion of Python's `math.isqrt`):
     /// each refines the root of the top `2d` bits from that of the top
     /// `2e` bits, `e = d / 2`.
+    #[must_use]
     pub fn checked_isqrt(self) -> Int | none {
         if self.is_negative() { return none; }
         if self.big is none { return Int::from_i64(self.small.isqrt()); }
@@ -1172,6 +1220,7 @@ impl Int {
     /// `(self / rhs, self % rhs)` in one division (truncating, like
     /// `/` and `%`); panics on zero.
     #[track_caller]
+    #[must_use]
     pub fn div_rem(self, rhs: Int) -> (Int, Int) {
         if rhs.is_zero() { panic("attempt to divide an int by zero"); }
         if self.big is none && rhs.big is none && !(self.small == -9223372036854775807 - 1 && rhs.small == -1) {

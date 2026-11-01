@@ -38,10 +38,13 @@ pub struct Codec {
 }
 
 impl Codec {
+    /// A codec over `alphabet`, with `padding`.
     pub const fn new(alphabet: Alphabet, padding: Padding) -> Codec { Codec { alphabet, padding } }
 
+    /// The alphabet.
     pub const fn alphabet(self) -> Alphabet { self.alphabet }
 
+    /// The padding rule.
     pub const fn padding(self) -> Padding { self.padding }
 
     const fn pads(self) -> bool {

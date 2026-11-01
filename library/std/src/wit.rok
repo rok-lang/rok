@@ -117,6 +117,7 @@ static LOOP: Loop = Loop {
 };
 
 /// An operation the host completes later: its event's payload.
+#[must_use("future is never awaited, so its body never runs: write `await {}`")]
 pub struct Waiting {
     /// `[done, payload]`.
     cell: List<i32>;
@@ -202,7 +203,7 @@ pub async fn subtask(status: i32) {
     if status & 15 == RETURNED {
         return;
     }
-    await wait(status >> 4);
+    _ = await wait(status >> 4);
 }
 
 /// An async export's call: `ret` returns the result of `f` (the

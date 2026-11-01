@@ -38,6 +38,7 @@ impl DecodeError {
         DecodeError { kind, position, msg }
     }
 
+    /// What kind of input was rejected.
     pub const fn kind(self) -> DecodeErrorKind { self.kind }
 
     /// The byte offset in the text where decoding failed.

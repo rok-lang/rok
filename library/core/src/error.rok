@@ -7,6 +7,8 @@
 // `Ok` / `Err` are bare names where a `Result` is expected (the
 // expected type picks the variant).
 
+/// A value or an error, kept as a value (2.14.6): `Ok(T)` or `Err(E)`.
+#[must_use("`Result` may hold an error that is never looked at: match on it, or write `_ = {};` to drop it")]
 pub enum Result<T, E> {
     Ok(T),
     Err(E),
@@ -18,6 +20,7 @@ impl<T, E> Result<T, E> {
         try Result::Ok(f()) catch e { Result::Err(e) }
     }
 
+    /// `true` for `Ok`.
     pub const fn is_ok(self) -> bool {
         match self {
             Result::Ok(_) => true,
@@ -25,6 +28,7 @@ impl<T, E> Result<T, E> {
         }
     }
 
+    /// `true` for `Err`.
     pub const fn is_err(self) -> bool {
         match self {
             Result::Ok(_) => false,
@@ -32,6 +36,7 @@ impl<T, E> Result<T, E> {
         }
     }
 
+    /// The value, or `none` when `self` is `Err`.
     pub const fn ok(self) -> T | none {
         match self {
             Result::Ok(v) => v,
@@ -39,6 +44,7 @@ impl<T, E> Result<T, E> {
         }
     }
 
+    /// The error, or `none` when `self` is `Ok`.
     pub fn err(self) -> E | none {
         match self {
             Result::Ok(_) => none,
@@ -60,6 +66,7 @@ impl<T, E> Result<T, E> {
         try! self.get()
     }
 
+    /// The value, or `default` on `Err`.
     pub const fn unwrap_or(self, default: T) -> T {
         match self {
             Result::Ok(v) => v,
@@ -67,6 +74,7 @@ impl<T, E> Result<T, E> {
         }
     }
 
+    /// The value, or `f` of the error on `Err`.
     pub const fn unwrap_or_else(self, f: fn(E) -> T) -> T {
         match self {
             Result::Ok(v) => v,
@@ -74,6 +82,7 @@ impl<T, E> Result<T, E> {
         }
     }
 
+    /// `f` applied to the value; an `Err` passes through.
     pub const fn map<U>(self, f: fn(T) -> U) -> Result<U, E> {
         match self {
             Result::Ok(v) => Result::Ok(f(v)),
@@ -81,6 +90,7 @@ impl<T, E> Result<T, E> {
         }
     }
 
+    /// `f` applied to the error; an `Ok` passes through.
     pub const fn map_err<F>(self, f: fn(E) -> F) -> Result<T, F> {
         match self {
             Result::Ok(v) => Result::Ok(v),
@@ -88,6 +98,7 @@ impl<T, E> Result<T, E> {
         }
     }
 
+    /// `f` of the value on `Ok`; an `Err` passes through.
     pub const fn and_then<U>(self, f: fn(T) -> Result<U, E>) -> Result<U, E> {
         match self {
             Result::Ok(v) => f(v),
@@ -95,6 +106,7 @@ impl<T, E> Result<T, E> {
         }
     }
 
+    /// `f` of the error on `Err`; an `Ok` passes through.
     pub const fn or_else<F>(self, f: fn(E) -> Result<T, F>) -> Result<T, F> {
         match self {
             Result::Ok(v) => Result::Ok(v),
@@ -144,8 +156,10 @@ pub struct ValueError {
 }
 
 impl ValueError {
+    /// An error saying `message`.
     pub const fn new(message: str) -> ValueError { ValueError { message } }
 
+    /// What went wrong, for display.
     pub const fn message(self) -> str { self.message }
 }
 
@@ -178,6 +192,7 @@ impl OverflowError {
     pub const fn operation(self) -> str { self.operation }
     /// The target type: `"i32"`, ...
     pub const fn type_name(self) -> str { self.type_name }
+    /// What went wrong, for display.
     pub const fn message(self) -> str { f"{self.operation}: value out of range for `{self.type_name}`" }
 }
 
@@ -199,8 +214,10 @@ pub struct ConversionError {
 }
 
 impl ConversionError {
+    /// An error saying `message`.
     pub const fn new(message: str) -> ConversionError { ConversionError { message } }
 
+    /// What went wrong, for display.
     pub const fn message(self) -> str { self.message }
 }
 
@@ -222,12 +239,14 @@ pub struct TypeError {
 }
 
 impl TypeError {
+    /// A mismatch: `expected` was wanted, `actual` was found.
     pub const fn new(expected: str, actual: str) -> TypeError { TypeError { expected, actual } }
 
     /// The type that was wanted.
     pub const fn expected(self) -> str { self.expected }
     /// The type that was found.
     pub const fn actual(self) -> str { self.actual }
+    /// What went wrong, for display.
     pub const fn message(self) -> str { f"expected `{self.expected}`, found `{self.actual}`" }
 }
 
@@ -246,10 +265,13 @@ impl Error for TypeError {}
 // Fatal errors (stdlib spec 2.14.4): never thrown; the runtime reports
 // these conditions and exits with 101.
 
+/// Fatal: the stack ran out. Never thrown; the runtime reports it and
+/// exits with 101.
 #[derive(Clone, PartialEq, Eq)]
 pub struct StackOverflowError;
 
 impl StackOverflowError {
+    /// What went wrong, for display.
     pub const fn message(self) -> str { "stack overflow" }
 }
 
@@ -263,10 +285,13 @@ impl Debug for StackOverflowError {
 
 impl Error for StackOverflowError {}
 
+/// Fatal: an allocation failed. Never thrown; the runtime reports it and
+/// exits with 101.
 #[derive(Clone, PartialEq, Eq)]
 pub struct OutOfMemoryError;
 
 impl OutOfMemoryError {
+    /// What went wrong, for display.
     pub const fn message(self) -> str { "out of memory" }
 }
 
@@ -280,10 +305,13 @@ impl Debug for OutOfMemoryError {
 
 impl Error for OutOfMemoryError {}
 
+/// Fatal: a compiler bug reached at run time. Never thrown; the runtime
+/// reports it and exits with 101.
 #[derive(Clone, PartialEq, Eq)]
 pub struct InternalError;
 
 impl InternalError {
+    /// What went wrong, for display.
     pub const fn message(self) -> str { "internal compiler error" }
 }
 

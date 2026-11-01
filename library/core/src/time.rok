@@ -38,52 +38,98 @@ pub struct Duration {
 }
 
 impl Duration {
+    /// `n` nanoseconds.
+    #[must_use]
     pub const fn ns(n: i64) -> Duration { Duration { ns: n } }
+    /// `n` microseconds; overflow panics where `i64 *` does, else saturates.
     #[track_caller]
+    #[must_use]
     pub const fn us(n: i64) -> Duration { Duration { ns: ns_mul(n, 1000) } }
+    /// `n` milliseconds; overflow panics where `i64 *` does, else saturates.
     #[track_caller]
+    #[must_use]
     pub const fn ms(n: i64) -> Duration { Duration { ns: ns_mul(n, 1000000) } }
+    /// `n` seconds; overflow panics where `i64 *` does, else saturates.
     #[track_caller]
+    #[must_use]
     pub const fn secs(n: i64) -> Duration { Duration { ns: ns_mul(n, 1000000000) } }
+    /// `n` minutes; overflow panics where `i64 *` does, else saturates.
     #[track_caller]
+    #[must_use]
     pub const fn mins(n: i64) -> Duration { Duration { ns: ns_mul(n, 60000000000) } }
+    /// `n` hours; overflow panics where `i64 *` does, else saturates.
     #[track_caller]
+    #[must_use]
     pub const fn hours(n: i64) -> Duration { Duration { ns: ns_mul(n, 3600000000000) } }
+    /// `n` days of 24 hours; overflow panics where `i64 *` does, else
+    /// saturates.
     #[track_caller]
+    #[must_use]
     pub const fn days(n: i64) -> Duration { Duration { ns: ns_mul(n, 86400000000000) } }
 
+    /// No time.
     pub const ZERO: Duration = Duration { ns: 0 };
+    /// The longest duration.
     pub const MAX: Duration = Duration { ns: 9223372036854775807 };
 
     /// `s` seconds, truncated to whole nanoseconds (saturating at the
     /// `i64` range, NaN → 0 - the `as` rules).
     pub const fn secs_f64(s: f64) -> Duration { Duration { ns: (s * 1000000000.0) as i64 } }
 
+    /// Whole nanoseconds.
+    #[must_use]
     pub const fn as_ns(self) -> i64 { self.ns }
+    /// Whole microseconds, truncated toward zero.
+    #[must_use]
     pub const fn as_us(self) -> i64 { self.ns / 1000 }
+    /// Whole milliseconds, truncated toward zero.
+    #[must_use]
     pub const fn as_ms(self) -> i64 { self.ns / 1000000 }
+    /// Whole seconds, truncated toward zero.
+    #[must_use]
     pub const fn as_secs(self) -> i64 { self.ns / 1000000000 }
+    /// Seconds as an `f64`, fraction included.
+    #[must_use]
     pub const fn as_secs_f64(self) -> f64 { self.ns as f64 / 1000000000.0 }
 
     /// The part below one second (of the magnitude for a negative span).
+    #[must_use]
     pub const fn subsec_ns(self) -> u32 { (self.ns % 1000000000).abs() as u32 }
+    /// `subsec_ns` in whole microseconds.
+    #[must_use]
     pub const fn subsec_us(self) -> u32 { self.subsec_ns() / 1000 }
+    /// `subsec_ns` in whole milliseconds.
+    #[must_use]
     pub const fn subsec_ms(self) -> u32 { self.subsec_ns() / 1000000 }
 
+    /// `self + rhs`; `none` on overflow.
+    #[must_use]
     pub const fn checked_add(self, rhs: Duration) -> Duration | none {
         Duration { ns: self.ns.checked_add(rhs.ns)? }
     }
+    /// `self - rhs`; `none` on overflow.
+    #[must_use]
     pub const fn checked_sub(self, rhs: Duration) -> Duration | none {
         Duration { ns: self.ns.checked_sub(rhs.ns)? }
     }
+    /// `self * factor`; `none` on overflow.
+    #[must_use]
     pub const fn checked_mul(self, factor: i64) -> Duration | none {
         Duration { ns: self.ns.checked_mul(factor)? }
     }
+    /// `self / divisor`; `none` when `divisor` is 0 or on overflow.
+    #[must_use]
     pub const fn checked_div(self, divisor: i64) -> Duration | none {
         Duration { ns: self.ns.checked_div(divisor)? }
     }
+    /// `self + rhs`, clamped to the `i64` nanosecond range.
+    #[must_use]
     pub const fn saturating_add(self, rhs: Duration) -> Duration { Duration { ns: self.ns.saturating_add(rhs.ns) } }
+    /// `self - rhs`, clamped to the `i64` nanosecond range.
+    #[must_use]
     pub const fn saturating_sub(self, rhs: Duration) -> Duration { Duration { ns: self.ns.saturating_sub(rhs.ns) } }
+    /// `self * factor`, clamped to the `i64` nanosecond range.
+    #[must_use]
     pub const fn saturating_mul(self, factor: i64) -> Duration { Duration { ns: self.ns.saturating_mul(factor) } }
 }
 
@@ -174,13 +220,20 @@ pub struct Instant {
 }
 
 impl Instant {
+    /// The current monotonic time.
     pub fn now() -> Instant { Instant { ns: unsafe { rok_time_now_ns() } } }
+    /// The time passed since `self`.
     pub fn elapsed(self) -> Duration { Instant::now().duration_since(self) }
     /// `self - earlier`, negative when `earlier` is later.
+    #[must_use]
     pub const fn duration_since(self, earlier: Instant) -> Duration {
         Duration { ns: ns_sub(self.ns, earlier.ns) }
     }
+    /// `self + d`; `none` on overflow.
+    #[must_use]
     pub const fn checked_add(self, d: Duration) -> Instant | none { Instant { ns: self.ns.checked_add(d.ns)? } }
+    /// `self - d`; `none` on overflow.
+    #[must_use]
     pub const fn checked_sub(self, d: Duration) -> Instant | none { Instant { ns: self.ns.checked_sub(d.ns)? } }
 }
 

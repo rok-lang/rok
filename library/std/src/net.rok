@@ -37,20 +37,25 @@ pub mod tls;
 
 // addresses (302.4)
 
+/// An IPv4 address.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Ipv4Addr {
     octets: [u8; 4];
 }
 
+/// An IPv6 address.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Ipv6Addr {
     segments: [u16; 8];
 }
 
 impl Ipv4Addr {
+    /// The loopback address.
     pub const LOCALHOST: Ipv4Addr = Ipv4Addr { octets: [127u8, 0u8, 0u8, 1u8] };
+    /// The unspecified (any) address.
     pub const UNSPECIFIED: Ipv4Addr = Ipv4Addr { octets: [0u8, 0u8, 0u8, 0u8] };
 
+    /// The address `a.b.c.d`.
     pub const fn new(a: u8, b: u8, c: u8, d: u8) -> Ipv4Addr {
         Ipv4Addr { octets: [a, b, c, d] }
     }
@@ -59,20 +64,27 @@ impl Ipv4Addr {
     pub const fn octets(self) -> [u8; 4] { self.octets }
 
     /// The address as a big-endian number (`a.b.c.d` = `a << 24 | ..`).
+    #[must_use]
     pub const fn to_bits(self) -> u32 {
         ((self.octets[0] as u32) << 24) | ((self.octets[1] as u32) << 16)
             | ((self.octets[2] as u32) << 8) | (self.octets[3] as u32)
     }
 
+    /// `true` for `127.0.0.0/8`.
     pub const fn is_loopback(self) -> bool { self.octets[0] == 127u8 }
+    /// `true` for `0.0.0.0`.
     pub const fn is_unspecified(self) -> bool { self.to_bits() == 0u32 }
+    /// `true` for `224.0.0.0/4`.
     pub const fn is_multicast(self) -> bool { self.octets[0] >= 224u8 && self.octets[0] <= 239u8 }
 }
 
 impl Ipv6Addr {
+    /// The loopback address.
     pub const LOCALHOST: Ipv6Addr = Ipv6Addr { segments: [0u16, 0u16, 0u16, 0u16, 0u16, 0u16, 0u16, 1u16] };
+    /// The unspecified (any) address.
     pub const UNSPECIFIED: Ipv6Addr = Ipv6Addr { segments: [0u16, 0u16, 0u16, 0u16, 0u16, 0u16, 0u16, 0u16] };
 
+    /// The address `a:b:c:d:e:f:g:h`, one 16-bit segment each.
     pub const fn new(a: u16, b: u16, c: u16, d: u16, e: u16, f: u16, g: u16, h: u16) -> Ipv6Addr {
         Ipv6Addr { segments: [a, b, c, d, e, f, g, h] }
     }
@@ -80,6 +92,7 @@ impl Ipv6Addr {
     /// The eight 16-bit groups, most significant first.
     pub const fn segments(self) -> [u16; 8] { self.segments }
 
+    /// `true` for `::1`.
     pub const fn is_loopback(self) -> bool {
         for i in 0..7 {
             if self.segments[i] != 0u16 { return false; }
@@ -154,6 +167,7 @@ pub enum IpAddr {
 }
 
 impl IpAddr {
+    /// `true` for an IPv4 address.
     pub const fn is_ipv4(self) -> bool {
         match self {
             IpAddr::V4(_) => true,
@@ -161,8 +175,10 @@ impl IpAddr {
         }
     }
 
+    /// `true` for an IPv6 address.
     pub const fn is_ipv6(self) -> bool { !self.is_ipv4() }
 
+    /// `true` for a loopback address (`127.0.0.0/8`, `::1`).
     pub const fn is_loopback(self) -> bool {
         match self {
             IpAddr::V4(a) => a.is_loopback(),
@@ -210,10 +226,15 @@ pub struct SocketAddrV4 {
 }
 
 impl SocketAddrV4 {
+    /// `ip:port`.
     pub const fn new(ip: Ipv4Addr, port: u16) -> SocketAddrV4 { SocketAddrV4 { ip, port } }
+    /// The IP address.
     pub const fn ip(self) -> Ipv4Addr { self.ip }
+    /// The port.
     pub const fn port(self) -> u16 { self.port }
+    /// Replace the IP address.
     pub const fn set_ip(ref self, ip: Ipv4Addr) { self.ip = ip; }
+    /// Replace the port.
     pub const fn set_port(ref self, port: u16) { self.port = port; }
 }
 
@@ -228,16 +249,25 @@ pub struct SocketAddrV6 {
 }
 
 impl SocketAddrV6 {
+    /// `[ip]:port`, with an optional flow label and scope id.
     pub const fn new(ip: Ipv6Addr, port: u16, flow_info: u32 = 0u32, scope_id: u32 = 0u32) -> SocketAddrV6 {
         SocketAddrV6 { ip, port, flow_info, scope_id }
     }
+    /// The IP address.
     pub const fn ip(self) -> Ipv6Addr { self.ip }
+    /// The port.
     pub const fn port(self) -> u16 { self.port }
+    /// The flow label (`sin6_flowinfo`).
     pub const fn flow_info(self) -> u32 { self.flow_info }
+    /// The scope id (`sin6_scope_id`), an interface index.
     pub const fn scope_id(self) -> u32 { self.scope_id }
+    /// Replace the IP address.
     pub const fn set_ip(ref self, ip: Ipv6Addr) { self.ip = ip; }
+    /// Replace the port.
     pub const fn set_port(ref self, port: u16) { self.port = port; }
+    /// Replace the flow label.
     pub const fn set_flow_info(ref self, flow_info: u32) { self.flow_info = flow_info; }
+    /// Replace the scope id.
     pub const fn set_scope_id(ref self, scope_id: u32) { self.scope_id = scope_id; }
 }
 
@@ -273,6 +303,7 @@ impl SocketAddr {
         }
     }
 
+    /// The IP address.
     pub const fn ip(self) -> IpAddr {
         match self {
             SocketAddr::V4(a) => IpAddr::V4(a.ip),
@@ -280,6 +311,7 @@ impl SocketAddr {
         }
     }
 
+    /// The port.
     pub const fn port(self) -> u16 {
         match self {
             SocketAddr::V4(a) => a.port,
@@ -293,6 +325,7 @@ impl SocketAddr {
         self = SocketAddr::new(ip, self.port());
     }
 
+    /// Replace the port.
     pub const fn set_port(ref self, port: u16) {
         self = match self {
             SocketAddr::V4(a) => SocketAddr::V4(SocketAddrV4::new(a.ip, port)),
@@ -300,6 +333,7 @@ impl SocketAddr {
         };
     }
 
+    /// `true` for an IPv4 address.
     pub const fn is_ipv4(self) -> bool {
         match self {
             SocketAddr::V4(_) => true,
@@ -307,6 +341,7 @@ impl SocketAddr {
         }
     }
 
+    /// `true` for an IPv6 address.
     pub const fn is_ipv6(self) -> bool { !self.is_ipv4() }
 
     const fn family(self) -> i32 { if self.is_ipv4() { 4 } else { 6 } }
@@ -486,7 +521,9 @@ fn resolve_raw(host: str, port: u16) throws (IoError) -> List<SocketAddr> {
 }
 
 /// Addresses of `host`: `"name:port"`, `"[v6]:port"`, a socket address,
-/// or a bare name / IP (port 0).
+/// or a bare name / IP (port 0). The addresses come in the system
+/// resolver's order (its preferred address first), at most 32; a name
+/// with none throws `NotFound`.
 pub fn resolve(host: str) throws (IoError) -> List<SocketAddr> {
     if let a: SocketAddr = parse_socket_addr(host) { return [a]; }
     let name = host;
@@ -510,6 +547,7 @@ pub fn resolve(host: str) throws (IoError) -> List<SocketAddr> {
 /// `"host:port"` text (resolved, `net::resolve`), an `(IpAddr, u16)`
 /// pair or a list of addresses.
 pub trait ToSocketAddrs {
+    /// The addresses, in the order to try them.
     fn to_socket_addrs(self) throws (IoError) -> List<SocketAddr>;
 }
 
@@ -1040,12 +1078,18 @@ pub struct Protocol {
 }
 
 impl Protocol {
+    /// ICMP for IPv4.
     pub const ICMPV4: Protocol = Protocol { number: 1 };
+    /// TCP.
     pub const TCP: Protocol = Protocol { number: 6 };
+    /// UDP.
     pub const UDP: Protocol = Protocol { number: 17 };
+    /// ICMP for IPv6.
     pub const ICMPV6: Protocol = Protocol { number: 58 };
 
+    /// The protocol numbered `number` (IANA).
     pub const fn new(number: i32) -> Protocol { Protocol { number } }
+    /// The IANA protocol number.
     pub const fn number(self) -> i32 { self.number }
 }
 
@@ -1069,6 +1113,7 @@ impl Socket {
         Socket { sock: try new_sock(domain.code(), ty.code(), p) }
     }
 
+    /// Bind to `addr`.
     pub fn bind(self, addr: SocketAddr) throws (IoError) {
         let fd = try self.sock.enter();
         let r = unsafe { rok_net_bind(fd, words_of(addr)) };
@@ -1076,6 +1121,7 @@ impl Socket {
         if r < 0 { throw IoError::from_os_code(-r, f"bind {addr}"); }
     }
 
+    /// Listen for connections, queueing at most `backlog` pending ones.
     pub fn listen(self, backlog: i32) throws (IoError) {
         let fd = try self.sock.enter();
         let r = unsafe { rok_net_listen(fd, backlog) };
@@ -1089,6 +1135,7 @@ impl Socket {
         try self.connect_within(addr, -1i64);
     }
 
+    /// `connect` that throws `TimedOut` after `dur`.
     pub fn connect_timeout(self, addr: SocketAddr, dur: Duration) throws (IoError) {
         try self.connect_within(addr, dur.as_ns());
     }
@@ -1128,14 +1175,18 @@ impl Socket {
         (Socket { sock: s }, a)
     }
 
+    /// `accept` that suspends the task until a connection arrives.
     pub async fn accept_async(ref self) throws (IoError) -> (Socket, SocketAddr) {
         let (s, a) = try await self.sock.accept_async();
         (Socket { sock: s }, a)
     }
 
+    /// The address this socket is bound to.
     pub fn local_addr(self) throws (IoError) -> SocketAddr { try self.sock.addr(0) }
+    /// The address of the connected peer.
     pub fn peer_addr(self) throws (IoError) -> SocketAddr { try self.sock.addr(1) }
 
+    /// Shut down reading, writing or both.
     pub fn shutdown(self, how: Shutdown) throws (IoError) { try self.sock.shutdown(how); }
 
     /// As `shutdown`, which never waits.
@@ -1146,6 +1197,7 @@ impl Socket {
         try self.sock.send_to(buf.byte_slice(), addr)
     }
 
+    /// `send_to` that suspends the task while the socket is full.
     pub async fn send_to_async<B: AsBytes>(ref self, buf: B, addr: SocketAddr) throws (IoError) -> usize {
         try await self.sock.send_to_async(buf.byte_slice(), addr)
     }
@@ -1154,27 +1206,37 @@ impl Socket {
     /// and its sender.
     pub fn recv_from(self, buf: SliceMut<u8>) throws (IoError) -> (usize, SocketAddr) { try self.sock.recv_from(buf) }
 
+    /// `recv_from` that suspends the task until a datagram arrives.
     pub async fn recv_from_async(ref self, buf: SliceMut<u8>) throws (IoError) -> (usize, SocketAddr) {
         try await self.sock.recv_from_async(buf)
     }
 
     /// Make the blocking calls throw `WouldBlock` instead of waiting.
     pub const fn set_nonblocking(self, nb: bool) { self.sock.set_nonblocking(nb); }
+    /// Limit blocking reads to `dur`, then `TimedOut`; `none` waits
+    /// forever.
     pub const fn set_read_timeout(self, dur: Duration | none) { self.sock.set_timeout(0, dur); }
+    /// Limit blocking writes to `dur`, then `TimedOut`; `none` waits
+    /// forever.
     pub const fn set_write_timeout(self, dur: Duration | none) { self.sock.set_timeout(1, dur); }
+    /// The read timeout; `none` for none.
     pub const fn read_timeout(self) -> Duration | none { self.sock.timeout(0) }
+    /// The write timeout; `none` for none.
     pub const fn write_timeout(self) -> Duration | none { self.sock.timeout(1) }
 
     /// `SO_REUSEADDR`.
     pub fn set_reuse_address(self, on: bool) throws (IoError) { try self.sock.setopt(7, flag(on)); }
+    /// `SO_REUSEADDR`.
     pub fn reuse_address(self) throws (IoError) -> bool { (try self.sock.getopt(7)) != 0i64 }
 
     /// `SO_REUSEPORT`; `Unsupported` off Unix.
     pub fn set_reuse_port(self, on: bool) throws (IoError) { try self.sock.setopt(8, flag(on)); }
+    /// `SO_REUSEPORT`.
     pub fn reuse_port(self) throws (IoError) -> bool { (try self.sock.getopt(8)) != 0i64 }
 
     /// `TCP_NODELAY`.
     pub fn set_nodelay(self, on: bool) throws (IoError) { try self.sock.setopt(1, flag(on)); }
+    /// `TCP_NODELAY`.
     pub fn nodelay(self) throws (IoError) -> bool { (try self.sock.getopt(1)) != 0i64 }
 
     /// Keepalive probes after `alive` idle (whole seconds); `none` = off.
@@ -1187,22 +1249,27 @@ impl Socket {
 
     /// `SO_BROADCAST`.
     pub fn set_broadcast(self, on: bool) throws (IoError) { try self.sock.setopt(3, flag(on)); }
+    /// `SO_BROADCAST`.
     pub fn broadcast(self) throws (IoError) -> bool { (try self.sock.getopt(3)) != 0i64 }
 
     /// `SO_RCVBUF` (the OS may round it, and Linux doubles it).
     pub fn set_recv_buffer_size(self, size: usize) throws (IoError) { try self.sock.setopt(9, size as i64); }
+    /// `SO_RCVBUF`, as the OS reports it.
     pub fn recv_buffer_size(self) throws (IoError) -> usize { (try self.sock.getopt(9)) as usize }
 
     /// `SO_SNDBUF`.
     pub fn set_send_buffer_size(self, size: usize) throws (IoError) { try self.sock.setopt(10, size as i64); }
+    /// `SO_SNDBUF`, as the OS reports it.
     pub fn send_buffer_size(self) throws (IoError) -> usize { (try self.sock.getopt(10)) as usize }
 
     /// `IP_TTL` of an IPv4 socket.
     pub fn set_ttl(self, ttl: u32) throws (IoError) { try self.sock.setopt(11, ttl as i64); }
+    /// `IP_TTL`.
     pub fn ttl(self) throws (IoError) -> u32 { (try self.sock.getopt(11)) as u32 }
 
     /// `IPV6_V6ONLY`: an IPv6 socket that takes no IPv4 traffic.
     pub fn set_only_v6(self, on: bool) throws (IoError) { try self.sock.setopt(12, flag(on)); }
+    /// `IPV6_V6ONLY`.
     pub fn only_v6(self) throws (IoError) -> bool { (try self.sock.getopt(12)) != 0i64 }
 
     /// `SO_LINGER` (whole seconds): `close` waits that long for unsent
@@ -1214,12 +1281,14 @@ impl Socket {
         }
     }
 
+    /// `SO_LINGER` in whole seconds; `none` when off.
     pub fn linger(self) throws (IoError) -> Duration | none {
         let s = try self.sock.getopt(13);
         if s < 0i64 { return none; }
         Duration::secs(s)
     }
 
+    /// A second handle to the same socket.
     pub fn try_clone(self) throws (IoError) -> Socket { Socket { sock: try self.sock.try_clone() } }
 
     /// Close now, throwing the OS's error; later calls fail with
@@ -1270,6 +1339,7 @@ impl Drop for Socket {
 
 // TCP (302.1)
 
+/// Which half of a connection `shutdown` closes.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Shutdown {
     Read,
@@ -1366,15 +1436,21 @@ impl TcpStream {
         throw last;
     }
 
+    /// The remote end's address.
     pub fn peer_addr(self) throws (IoError) -> SocketAddr { try self.sock.addr(1) }
+    /// This end's address.
     pub fn local_addr(self) throws (IoError) -> SocketAddr { try self.sock.addr(0) }
 
+    /// Shut down the read half, the write half or both; the peer reads end
+    /// of stream after `Write`.
     pub fn shutdown(self, how: Shutdown) throws (IoError) { try self.sock.shutdown(how); }
 
     /// As `shutdown`, which never waits.
     pub async fn shutdown_async(ref self, how: Shutdown) throws (IoError) { try self.sock.shutdown(how); }
 
+    /// Turn Nagle's algorithm off (`TCP_NODELAY`) or back on.
     pub fn set_nodelay(self, nodelay: bool) throws (IoError) { try self.sock.setopt(1, flag(nodelay)); }
+    /// `TCP_NODELAY`.
     pub fn nodelay(self) throws (IoError) -> bool { (try self.sock.getopt(1)) != 0i64 }
 
     /// Keepalive probes after `alive` idle (whole seconds); `none` = off.
@@ -1385,17 +1461,25 @@ impl TcpStream {
         }
     }
 
+    /// Set `IP_TTL`.
     pub fn set_ttl(self, ttl: u32) throws (IoError) { try self.sock.setopt(11, ttl as i64); }
+    /// `IP_TTL`.
     pub fn ttl(self) throws (IoError) -> u32 { (try self.sock.getopt(11)) as u32 }
 
+    /// Make a blocking read throw `TimedOut` after `dur`; `none` waits forever.
     pub const fn set_read_timeout(self, dur: Duration | none) throws (IoError) { self.sock.set_timeout(0, dur); }
+    /// Make a blocking write throw `TimedOut` after `dur`; `none` waits forever.
     pub const fn set_write_timeout(self, dur: Duration | none) throws (IoError) { self.sock.set_timeout(1, dur); }
+    /// The read timeout; `none` when reads wait forever.
     pub const fn read_timeout(self) -> Duration | none { self.sock.timeout(0) }
+    /// The write timeout; `none` when writes wait forever.
     pub const fn write_timeout(self) -> Duration | none { self.sock.timeout(1) }
 
     /// Make the blocking calls throw `WouldBlock` instead of waiting.
     pub const fn set_nonblocking(self, nb: bool) throws (IoError) { self.sock.set_nonblocking(nb); }
 
+    /// A second descriptor on the same socket (`dup`), with this one's
+    /// timeouts and blocking mode.
     pub fn try_clone(self) throws (IoError) -> TcpStream {
         TcpStream { sock: try self.sock.try_clone() }
     }
@@ -1519,15 +1603,20 @@ impl TcpListener {
         (TcpStream { sock: s }, a)
     }
 
+    /// The bound address (the port picked when bound to port 0).
     pub fn local_addr(self) throws (IoError) -> SocketAddr { try self.sock.addr(0) }
 
+    /// Set `IP_TTL`.
     pub fn set_ttl(self, ttl: u32) throws (IoError) { try self.sock.setopt(11, ttl as i64); }
+    /// `IP_TTL`.
     pub fn ttl(self) throws (IoError) -> u32 { (try self.sock.getopt(11)) as u32 }
 
+    /// A second descriptor on the same socket (`dup`).
     pub fn try_clone(self) throws (IoError) -> TcpListener {
         TcpListener { sock: try self.sock.try_clone() }
     }
 
+    /// Make the blocking calls throw `WouldBlock` instead of waiting.
     pub const fn set_nonblocking(self, nb: bool) throws (IoError) { self.sock.set_nonblocking(nb); }
 
     /// `try for s in l.incoming() { .. }`: connections forever; a failed
@@ -1559,6 +1648,7 @@ impl From<TcpListener> for Socket {
 }
 
 impl Close for TcpListener {
+    /// Stop listening now; later calls fail with `InvalidInput`.
     fn close(self) throws (IoError) { try self.sock.close(); }
 }
 
@@ -1571,6 +1661,7 @@ impl Drop for TcpListener {
 }
 
 /// `TcpListener::incoming`: a view of the listener.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct Incoming {
     sock: Sock;
 }
@@ -1617,6 +1708,7 @@ impl UdpSocket {
         try self.sock.send_to(buf.byte_slice(), try first_addr(addr))
     }
 
+    /// `send_to`, suspending the task instead of blocking.
     pub async fn send_to_async<B: AsBytes, A: ToSocketAddrs>(ref self, buf: B, addr: A) throws (IoError) -> usize {
         try await self.sock.send_to_async(buf.byte_slice(), try first_addr(addr))
     }
@@ -1625,6 +1717,7 @@ impl UdpSocket {
     /// and its sender.
     pub fn recv_from(self, buf: SliceMut<u8>) throws (IoError) -> (usize, SocketAddr) { try self.sock.recv_from(buf) }
 
+    /// `recv_from` that suspends the task until a datagram arrives.
     pub async fn recv_from_async(ref self, buf: SliceMut<u8>) throws (IoError) -> (usize, SocketAddr) {
         try await self.sock.recv_from_async(buf)
     }
@@ -1643,29 +1736,42 @@ impl UdpSocket {
     /// waits (a name in `addr` is resolved as `connect` does).
     pub async fn connect_async<A: ToSocketAddrs>(ref self, addr: A) throws (IoError) { try self.connect(addr); }
 
+    /// Send `buf` as one datagram to the peer set by `connect`.
     pub fn send<B: AsBytes>(self, buf: B) throws (IoError) -> usize {
         try self.sock.write(buf.byte_slice())
     }
 
+    /// `send`, suspending the task instead of blocking.
     pub async fn send_async<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize {
         try await self.sock.write_async(buf.byte_slice())
     }
 
+    /// The next datagram from the `connect` peer into `buf` (truncated to
+    /// `buf.len()`); its length.
     pub fn recv(self, buf: SliceMut<u8>) throws (IoError) -> usize { try self.sock.read(buf) }
 
+    /// `recv`, suspending the task instead of blocking.
     pub async fn recv_async(ref self, buf: SliceMut<u8>) throws (IoError) -> usize {
         try await self.sock.read_async(buf)
     }
 
+    /// The bound address.
     pub fn local_addr(self) throws (IoError) -> SocketAddr { try self.sock.addr(0) }
+    /// The peer set by `connect`; throws without one.
     pub fn peer_addr(self) throws (IoError) -> SocketAddr { try self.sock.addr(1) }
 
+    /// Allow sending to broadcast addresses (`SO_BROADCAST`).
     pub fn set_broadcast(self, on: bool) throws (IoError) { try self.sock.setopt(3, flag(on)); }
+    /// `SO_BROADCAST`.
     pub fn broadcast(self) throws (IoError) -> bool { (try self.sock.getopt(3)) != 0i64 }
 
+    /// Set `IP_TTL`.
     pub fn set_ttl(self, ttl: u32) throws (IoError) { try self.sock.setopt(11, ttl as i64); }
+    /// `IP_TTL`.
     pub fn ttl(self) throws (IoError) -> u32 { (try self.sock.getopt(11)) as u32 }
 
+    /// Join the multicast group `addr` on the interface `iface`
+    /// (`0.0.0.0`: the default).
     pub fn join_multicast_v4(self, addr: Ipv4Addr, iface: Ipv4Addr) throws (IoError) {
         let fd = try self.sock.enter();
         let r = unsafe { rok_net_multicast_v4(fd, addr.to_bits(), iface.to_bits(), 1) };
@@ -1673,6 +1779,7 @@ impl UdpSocket {
         try check(r as i64, "join_multicast_v4");
     }
 
+    /// Leave the multicast group `addr` on `iface`.
     pub fn leave_multicast_v4(self, addr: Ipv4Addr, iface: Ipv4Addr) throws (IoError) {
         let fd = try self.sock.enter();
         let r = unsafe { rok_net_multicast_v4(fd, addr.to_bits(), iface.to_bits(), 0) };
@@ -1680,8 +1787,10 @@ impl UdpSocket {
         try check(r as i64, "leave_multicast_v4");
     }
 
+    /// Whether this host receives its own multicast datagrams.
     pub fn set_multicast_loop_v4(self, on: bool) throws (IoError) { try self.sock.setopt(4, flag(on)); }
 
+    /// Hops a multicast datagram may take (`IP_MULTICAST_TTL`).
     pub fn set_multicast_ttl_v4(self, ttl: u32) throws (IoError) {
         try self.sock.setopt(5, ttl as i64);
     }
@@ -1691,11 +1800,15 @@ impl UdpSocket {
         try self.sock.setopt(6, size as i64);
     }
 
+    /// Make a blocking read throw `TimedOut` after `dur`; `none` waits forever.
     pub const fn set_read_timeout(self, dur: Duration | none) throws (IoError) { self.sock.set_timeout(0, dur); }
+    /// Make a blocking write throw `TimedOut` after `dur`; `none` waits forever.
     pub const fn set_write_timeout(self, dur: Duration | none) throws (IoError) { self.sock.set_timeout(1, dur); }
 
+    /// Make the blocking calls throw `WouldBlock` instead of waiting.
     pub const fn set_nonblocking(self, nb: bool) throws (IoError) { self.sock.set_nonblocking(nb); }
 
+    /// A second descriptor on the same socket (`dup`).
     pub fn try_clone(self) throws (IoError) -> UdpSocket {
         UdpSocket { sock: try self.sock.try_clone() }
     }

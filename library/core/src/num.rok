@@ -17,11 +17,13 @@ pub mod assign;
 /// The additive identity - where `Iterator::sum` starts (an empty sum is
 /// `0`).
 pub trait Zero {
+    /// `0` of `Self`.
     fn zero() -> Self;
 }
 
 /// The multiplicative identity - where `Iterator::product` starts.
 pub trait One {
+    /// `1` of `Self`.
     fn one() -> Self;
 }
 

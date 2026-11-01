@@ -264,6 +264,7 @@ impl SignalError {
     /// The OS error (errno; Windows: the error code), or `none` when
     /// the handler thread could not start for another reason.
     pub const fn os_code(self) -> i32 | none { self.os_code }
+    /// What went wrong, for display.
     pub const fn message(self) -> str {
         match self.os_code {
             c: i32 => f"cannot handle signal {self.signal:?} (os error {c})",
@@ -404,6 +405,7 @@ impl Debug for ChildStdout {
 }
 
 impl ChildStdout {
+    /// Close the pipe; the child's later writes fail.
     pub fn close(self) throws (IoError) { try self.file.close(); }
 }
 
@@ -445,6 +447,7 @@ impl Debug for ChildStderr {
 }
 
 impl ChildStderr {
+    /// Close the pipe; the child's later writes fail.
     pub fn close(self) throws (IoError) { try self.file.close(); }
 }
 
@@ -499,6 +502,8 @@ impl Debug for Command {
 }
 
 impl Command {
+    /// A command that runs `program` with no arguments; the child inherits
+    /// the environment, the working directory and the standard streams.
     pub const fn new<P: AsPath>(program: P) -> Command {
         Command {
             program: program.as_path(),
@@ -517,24 +522,28 @@ impl Command {
     // The lists are shared by copies of a command, so a builder that
     // changes one changes a fresh copy.
 
+    /// Append one argument.
     pub const fn arg(self, arg: str) -> Command {
         self.args = self.args.clone();
         self.args.push(arg);
         self
     }
 
+    /// Append each of `args`.
     pub const fn args<I: IntoIterator<Item = str>>(self, args: I) -> Command {
         self.args = self.args.clone();
         for a in args { self.args.push(a); }
         self
     }
 
+    /// Set `key` to `value` in the child's environment.
     pub const fn env(self, key: str, value: str) -> Command {
         self.envs = self.envs.clone();
         self.envs.insert(key, value);
         self
     }
 
+    /// Set each `(key, value)` in the child's environment, as `env`.
     pub fn envs<I: IntoIterator<Item = (str, str)>>(self, envs: I) -> Command {
         self.envs = self.envs.clone();
         for (k, v) in envs {
@@ -550,13 +559,17 @@ impl Command {
         self
     }
 
+    /// Run the child in `dir`.
     pub const fn current_dir<P: AsPath>(self, dir: P) -> Command {
         self.cwd = dir.as_path();
         self
     }
 
+    /// Where the child's standard input comes from (default `Stdio::Inherit`).
     pub const fn stdin(self, cfg: Stdio) -> Command { self.stdin = cfg; self }
+    /// Where the child's standard output goes (default `Stdio::Inherit`).
     pub const fn stdout(self, cfg: Stdio) -> Command { self.stdout = cfg; self }
+    /// Where the child's standard error goes (default `Stdio::Inherit`).
     pub const fn stderr(self, cfg: Stdio) -> Command { self.stderr = cfg; self }
 
     /// Kill the child when its `Child` is dropped by `using`.
@@ -705,6 +718,7 @@ impl Debug for Child {
 }
 
 impl Child {
+    /// The child's process id.
     pub const fn id(self) -> u32 { self.pid as u32 }
 
     /// `SIGKILL`.
@@ -805,6 +819,7 @@ pub struct ExitStatus {
 }
 
 impl ExitStatus {
+    /// `true` when the child exited with code 0.
     pub const fn success(self) -> bool { self.raw == 0 }
 
     /// The exit code; `none` if a signal ended it.

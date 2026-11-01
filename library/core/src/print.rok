@@ -9,7 +9,11 @@
 // `io::stderr()`; one call writes its line whole, so lines from
 // different threads never interleave. Write errors are dropped.
 
+/// Writes `v` to stdout.
 pub fn print<T: Display>(v: T = "")    { unsafe { rok_stdio_write(1, f"{v}", 0) }; }
+/// Writes `v` and a newline to stdout.
 pub fn println<T: Display>(v: T = "")  { unsafe { rok_stdio_write(1, f"{v}", 1) }; }
+/// Writes `v` to stderr.
 pub fn eprint<T: Display>(v: T = "")   { unsafe { rok_stdio_write(2, f"{v}", 0) }; }
+/// Writes `v` and a newline to stderr.
 pub fn eprintln<T: Display>(v: T = "") { unsafe { rok_stdio_write(2, f"{v}", 1) }; }

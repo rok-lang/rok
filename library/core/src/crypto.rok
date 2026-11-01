@@ -72,6 +72,7 @@ pub enum HashAlgorithm {
 }
 
 impl HashAlgorithm {
+    /// The digest length in bytes.
     pub const fn output_len(self) -> usize {
         match self {
             HashAlgorithm::Sha256 => 32,

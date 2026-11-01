@@ -130,6 +130,7 @@ unsafe impl<T> Sync for Atomic<rok::bare::ptr::Ptr<T>> {}
 // method is inlined (`-O1` and up). The ordering types leave out what an
 // operation cannot take, so nothing is checked at run time.
 impl<T: AtomicPrimitive + PartialEq> Atomic<T> {
+    /// An atomic cell holding `value`.
     pub const fn new(value: T) -> Atomic<T> {
         unsafe {
             let cell: GcBuf<T> = buf_new(1);
@@ -138,6 +139,7 @@ impl<T: AtomicPrimitive + PartialEq> Atomic<T> {
         }
     }
 
+    /// The current value.
     pub fn load(self, ordering: LoadOrdering = LoadOrdering::SeqCst) -> T {
         let c = self.cell;
         match ordering {
@@ -147,6 +149,7 @@ impl<T: AtomicPrimitive + PartialEq> Atomic<T> {
         }
     }
 
+    /// Write `value`.
     pub fn store(self, value: T, ordering: StoreOrdering = StoreOrdering::SeqCst) {
         let c = self.cell;
         match ordering {
@@ -156,6 +159,7 @@ impl<T: AtomicPrimitive + PartialEq> Atomic<T> {
         };
     }
 
+    /// Write `value` and return the previous one.
     #[discardable]
     pub fn swap(self, value: T, ordering: UpdateOrdering = UpdateOrdering::SeqCst) -> T {
         let c = self.cell;
@@ -191,7 +195,8 @@ impl<T: AtomicPrimitive + PartialEq> Atomic<T> {
         self.compare_exchange(current, new, success, failure)
     }
 
-    // Integer-only (`bool` is rejected by the intrinsic for add / sub).
+    /// Add `value` (wrapping) and return the previous value. Integers
+    /// only: the intrinsic rejects `bool` for add and sub.
     #[discardable]
     pub fn fetch_add(self, value: T, ordering: UpdateOrdering = UpdateOrdering::SeqCst) -> T {
         let c = self.cell;
@@ -203,6 +208,8 @@ impl<T: AtomicPrimitive + PartialEq> Atomic<T> {
             UpdateOrdering::SeqCst => atomic_add(c, 0, value, SeqCst),
         }
     }
+    /// Subtract `value` (wrapping) and return the previous value. Integers
+    /// only.
     #[discardable]
     pub fn fetch_sub(self, value: T, ordering: UpdateOrdering = UpdateOrdering::SeqCst) -> T {
         let c = self.cell;
@@ -214,6 +221,7 @@ impl<T: AtomicPrimitive + PartialEq> Atomic<T> {
             UpdateOrdering::SeqCst => atomic_sub(c, 0, value, SeqCst),
         }
     }
+    /// Bitwise-and `value` in and return the previous value.
     #[discardable]
     pub fn fetch_and(self, value: T, ordering: UpdateOrdering = UpdateOrdering::SeqCst) -> T {
         let c = self.cell;
@@ -225,6 +233,7 @@ impl<T: AtomicPrimitive + PartialEq> Atomic<T> {
             UpdateOrdering::SeqCst => atomic_and(c, 0, value, SeqCst),
         }
     }
+    /// Bitwise-or `value` in and return the previous value.
     #[discardable]
     pub fn fetch_or(self, value: T, ordering: UpdateOrdering = UpdateOrdering::SeqCst) -> T {
         let c = self.cell;
@@ -236,6 +245,7 @@ impl<T: AtomicPrimitive + PartialEq> Atomic<T> {
             UpdateOrdering::SeqCst => atomic_or(c, 0, value, SeqCst),
         }
     }
+    /// Bitwise-xor `value` in and return the previous value.
     #[discardable]
     pub fn fetch_xor(self, value: T, ordering: UpdateOrdering = UpdateOrdering::SeqCst) -> T {
         let c = self.cell;
@@ -316,6 +326,8 @@ impl<T> Debug for Mutex<T> {
 unsafe impl<T: Send> Sync for Mutex<T> {}
 
 impl<T> Mutex<T> {
+    /// An unlocked mutex owning `value` (handed over: the mutex gets its own
+    /// copy of the collections `value` reaches).
     pub const fn new(value: T) -> Mutex<T> {
         unsafe {
             let v: GcBuf<T> = buf_new(1);
@@ -345,6 +357,7 @@ impl<T> Mutex<T> {
         MutexGuard { mutex: self, noted: notes && unsafe { rok_lock_note(self.state, 0) } != 0 }
     }
 
+    /// The guard if the lock is free now, else `none`; never blocks.
     pub fn try_lock(self) -> MutexGuard<T> | none {
         let notes = lock_notes();
         if atomic_cas(self.state, 0, 0, 1, SeqCst, SeqCst) == 0 {
@@ -411,6 +424,7 @@ impl<T> Mutex<T> {
 }
 
 /// `Mutex::lock_async`.
+#[must_use("future is never awaited, so its body never runs: write `await {}`")]
 pub struct LockFuture<T> {
     mutex: Mutex<T>;
 }
@@ -522,6 +536,7 @@ impl<T> Debug for RwLock<T> {
 unsafe impl<T: Send + Sync> Sync for RwLock<T> {}
 
 impl<T> RwLock<T> {
+    /// An unlocked lock owning `value` (handed over, as `Mutex::new`).
     pub const fn new(value: T) -> RwLock<T> {
         unsafe {
             let v: GcBuf<T> = buf_new(1);
@@ -530,6 +545,8 @@ impl<T> RwLock<T> {
         }
     }
 
+    /// Block until no writer holds the lock, then share it for reading. Bind
+    /// the guard with `using`.
     pub fn read(self) -> RwLockReadGuard<T> {
         let notes = lock_notes();
         loop {
@@ -544,6 +561,8 @@ impl<T> RwLock<T> {
         }
     }
 
+    /// Block until no reader or writer holds the lock, then take it. Bind the
+    /// guard with `using`.
     pub fn write(self) -> RwLockWriteGuard<T> {
         let notes = lock_notes();
         loop {
@@ -555,6 +574,8 @@ impl<T> RwLock<T> {
         }
     }
 
+    /// A read guard if no writer holds the lock now, else `none`; never
+    /// blocks.
     pub fn try_read(self) -> RwLockReadGuard<T> | none {
         let notes = lock_notes();
         // Retry a CAS lost to another reader: only a writer makes it fail.
@@ -569,6 +590,7 @@ impl<T> RwLock<T> {
         none
     }
 
+    /// A write guard if the lock is free now, else `none`; never blocks.
     pub fn try_write(self) -> RwLockWriteGuard<T> | none {
         let notes = lock_notes();
         if atomic_cas(self.state, 0, 0, -1, SeqCst, SeqCst) == 0 {
@@ -591,6 +613,7 @@ impl<T> RwLock<T> {
 }
 
 /// `RwLock::read_async`.
+#[must_use("future is never awaited, so its body never runs: write `await {}`")]
 pub struct ReadFuture<T> {
     lock: RwLock<T>;
 }
@@ -617,6 +640,7 @@ impl<T> rok::core::future::Future for ReadFuture<T> {
 }
 
 /// `RwLock::write_async`.
+#[must_use("future is never awaited, so its body never runs: write `await {}`")]
 pub struct WriteFuture<T> {
     lock: RwLock<T>;
 }
@@ -642,6 +666,7 @@ impl<T> rok::core::future::Future for WriteFuture<T> {
     }
 }
 
+/// Holds an `RwLock` shared for reading until dropped (`using`).
 pub struct RwLockReadGuard<T> {
     lock: RwLock<T>;
     /// As `MutexGuard::noted`.
@@ -679,6 +704,7 @@ impl<T> Drop for RwLockReadGuard<T> {
     }
 }
 
+/// Holds an `RwLock` exclusively until dropped (`using`).
 pub struct RwLockWriteGuard<T> {
     lock: RwLock<T>;
     /// As `MutexGuard::noted`.
@@ -702,11 +728,14 @@ impl<T> RwLockWriteGuard<T> {
     pub const fn get_clone(self) -> T where T: Clone {
         self.get().clone()
     }
+    /// Replace the value under the write lock (handed over, as
+    /// `Mutex::new`).
     pub const fn set(self, value: T) {
         unsafe {
             self.lock.value[0] = hand_over::<T>(value);
         }
     }
+    /// Replace the protected value with `f(value)`.
     pub fn update(self, f: fn(T) -> T) {
         unsafe {
             let old = self.lock.value[0];
@@ -742,6 +771,7 @@ impl<T> Debug for Frozen<T> {
 unsafe impl<T: Send> Sync for Frozen<T> {}
 
 impl<T> Frozen<T> {
+    /// Freeze `value`: keep a copy of its collections nothing else reaches.
     #[track_caller]
     pub const fn new(value: T) -> Frozen<T> {
         unsafe {
@@ -769,6 +799,7 @@ impl Debug for Once {
 }
 
 impl Once {
+    /// A `Once` that has not run.
     pub const fn new() -> Once {
         Once { state: word(0) }
     }
@@ -796,6 +827,7 @@ impl Once {
         }
     }
 
+    /// Whether a `call_once` has finished.
     pub fn is_completed(self) -> bool {
         atomic_load(self.state, 0, SeqCst) == 2
     }
@@ -813,6 +845,7 @@ impl Debug for Condvar {
 }
 
 impl Condvar {
+    /// A condition variable with no waiter.
     pub const fn new() -> Condvar {
         Condvar { seq: two_words() }
     }
@@ -848,6 +881,7 @@ impl Condvar {
         unpark_parked(self.seq);
     }
 
+    /// Wake every thread and task waiting on this condvar.
     pub fn notify_all(self) {
         atomic_add(self.seq, 0, 1, SeqCst);
         wake(self.seq);
@@ -856,6 +890,7 @@ impl Condvar {
 }
 
 /// `Condvar::wait_async`.
+#[must_use("future is never awaited, so its body never runs: write `await {}`")]
 pub struct CondvarWait<T> {
     cv: Condvar;
     mutex: Mutex<T>;
@@ -926,6 +961,7 @@ impl<T> !Send for Cell<T> {}
 impl<T> !Sync for Cell<T> {}
 
 impl<T> Cell<T> {
+    /// A cell holding `value`.
     pub const fn new(value: T) -> Cell<T> {
         unsafe {
             let v: GcBuf<T> = buf_new(1);
@@ -933,17 +969,20 @@ impl<T> Cell<T> {
             Cell { value: v }
         }
     }
+    /// A copy of the value.
     pub const fn get(self) -> T where T: Copy {
         unsafe {
             self.value[0]
         }
     }
     // Copies share the one buffer, so a copy sees the update too.
+    /// Store `value`; copies of the cell share it, so they see it too.
     pub const fn set(ref self, value: T) {
         unsafe {
             self.value[0] = value;
         }
     }
+    /// Store `value` and return the old one.
     #[discardable]
     pub const fn replace(ref self, value: T) -> T {
         unsafe {

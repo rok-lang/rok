@@ -17,6 +17,7 @@ use sup::hmac::Hmac;
 use sup::bignum::Nat;
 use sup::ecfield::{Fe, fe_zero, mul_p256, add_p256, sub_p256, mul_p384, add_p384, sub_p384};
 
+/// The elliptic curves `Ecdsa` signs over: NIST P-256 and P-384.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 #[non_exhaustive]
 pub enum EcCurve {
@@ -571,8 +572,10 @@ impl SigningKey {
         SigningKey { d: Secret::new(fe_to_be(d, c.size)), public: VerifyingKey { curve, p } }
     }
 
+    /// The key's curve.
     pub const fn curve(self) -> EcCurve { self.public.curve }
 
+    /// The public key that checks this key's signatures.
     pub const fn verifying_key(self) -> VerifyingKey { self.public }
 
     /// Overwrite the scalar with zeros now (every copy shares it);
@@ -671,6 +674,7 @@ impl VerifyingKey {
         VerifyingKey { curve, p }
     }
 
+    /// The key's curve.
     pub const fn curve(self) -> EcCurve { self.curve }
 
     /// The SEC1 uncompressed point.

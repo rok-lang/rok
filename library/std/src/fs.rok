@@ -216,8 +216,11 @@ pub enum FileType {
 }
 
 impl FileType {
+    /// `true` for a regular file.
     pub const fn is_file(self) -> bool { self == FileType::File }
+    /// `true` for a directory.
     pub const fn is_dir(self) -> bool { self == FileType::Dir }
+    /// `true` for a symbolic link.
     pub const fn is_symlink(self) -> bool { self == FileType::Symlink }
 
     const fn index(self) -> i32 {
@@ -263,16 +266,22 @@ impl Debug for Metadata {
 }
 
 impl Metadata {
+    /// Size in bytes.
     pub const fn len(self) -> u64 { self.len }
+    /// What the path is: file, directory, symlink or other.
     pub const fn file_type(self) -> FileType {
         if self.kind == 1 { return FileType::File; }
         if self.kind == 2 { return FileType::Dir; }
         if self.kind == 3 { return FileType::Symlink; }
         FileType::Other
     }
+    /// `true` for a regular file.
     pub const fn is_file(self) -> bool { self.kind == 1 }
+    /// `true` for a directory.
     pub const fn is_dir(self) -> bool { self.kind == 2 }
+    /// `true` for a symbolic link (only from `symlink_metadata`).
     pub const fn is_symlink(self) -> bool { self.kind == 3 }
+    /// The permission bits.
     pub const fn permissions(self) -> Permissions { Permissions { mode: self.mode } }
     /// Last modification as a `SystemTime` (3.3.3). Never throws on
     /// Unix; `throws` keeps room for platforms without the field.
@@ -413,21 +422,26 @@ impl File {
         }
     }
 
+    /// Flush data and metadata to the device (`fsync`).
     pub fn sync_all(self) throws (IoError) {
         let fd = try self.live();
         try self.done_with(unsafe { rok_os_fsync(fd, 0) } as i64);
     }
 
+    /// Flush data to the device, metadata only as needed to read it back
+    /// (`fdatasync`).
     pub fn sync_data(self) throws (IoError) {
         let fd = try self.live();
         try self.done_with(unsafe { rok_os_fsync(fd, 1) } as i64);
     }
 
+    /// Truncate or zero-extend the file to `size` bytes.
     pub fn set_len(self, size: u64) throws (IoError) {
         let fd = try self.live();
         try self.done_with(unsafe { rok_os_ftruncate(fd, size) } as i64);
     }
 
+    /// The open file's metadata (`fstat`).
     pub fn metadata(self) throws (IoError) -> Metadata {
         let fd = try self.live();
         let m = try stat_at(-1, self.path, true, fd) catch e { self.done(); throw e; };
@@ -435,10 +449,12 @@ impl File {
         m
     }
 
+    /// The open file's permissions.
     pub fn permissions(self) throws (IoError) -> Permissions {
         (try self.metadata()).permissions()
     }
 
+    /// Set the open file's permissions (`fchmod`).
     pub fn set_permissions(self, perm: Permissions) throws (IoError) {
         let fd = try self.live();
         try self.done_with(unsafe { rok_os_fchmod(fd, perm.mode) } as i64);
@@ -451,11 +467,13 @@ impl File {
         file_of(new as i32, self.path)
     }
 
+    /// Take an exclusive advisory lock, blocking until it is free (`flock`).
     pub fn lock_exclusive(self) throws (IoError) {
         let fd = try self.live();
         try self.done_with(unsafe { rok_os_flock(fd, 2) } as i64);
     }
 
+    /// Take a shared advisory lock, blocking while an exclusive one is held.
     pub fn lock_shared(self) throws (IoError) {
         let fd = try self.live();
         try self.done_with(unsafe { rok_os_flock(fd, 1) } as i64);
@@ -467,6 +485,7 @@ impl File {
         (try self.done_with(unsafe { rok_os_flock(fd, 6) } as i64)) == 1
     }
 
+    /// Release this handle's advisory lock.
     pub fn unlock(self) throws (IoError) {
         let fd = try self.live();
         try self.done_with(unsafe { rok_os_flock(fd, 8) } as i64);
@@ -500,7 +519,9 @@ impl Debug for Mmap {
 }
 
 impl Mmap {
+    /// Bytes mapped; 0 once unmapped.
     pub const fn len(self) -> usize { if self.live() { self.len } else { 0 } }
+    /// `true` when no bytes are mapped.
     pub const fn is_empty(self) -> bool { self.len() == 0 }
 
     /// Byte `i`, or `none` past the end.
@@ -535,6 +556,8 @@ impl Mmap {
         out
     }
 
+    /// Unmap now; later reads see an empty mapping. Unmapping twice is a
+    /// no-op.
     pub fn unmap(self) {
         unsafe {
             let addr = take_handle(self.addr, 0, 0);
@@ -565,55 +588,82 @@ pub(pkg) async fn off<T: Send>(f: fn() throws (IoError) -> T + Send) throws (IoE
 }
 
 impl File {
+    /// `File::open` on the blocking lane: the task waits, its thread does not.
     pub async fn open_async<P: AsPath>(path: P, access: Access = Access::ReadOnly, flags: OpenFlags = OpenFlags {}) throws (IoError) -> File {
         try await Dir::root().open_async(path, access, flags)
     }
+    /// `File::create` on the blocking lane: the task waits, its thread does not.
     pub async fn create_async<P: AsPath>(path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
         try await Dir::root().create_async(path, flags)
     }
+    /// `File::create_new` on the blocking lane: the task waits, its
+    /// thread does not.
     pub async fn create_new_async<P: AsPath>(path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
         try await Dir::root().create_new_async(path, flags)
     }
+    /// `File::open_or_create` on the blocking lane: the task waits, its
+    /// thread does not.
     pub async fn open_or_create_async<P: AsPath>(path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
         try await Dir::root().open_or_create_async(path, flags)
     }
+    /// `File::append` on the blocking lane: the task waits, its thread
+    /// does not.
     pub async fn append_async<P: AsPath>(path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
         try await Dir::root().append_async(path, flags)
     }
 
+    /// `sync_all` on the blocking lane: the task waits, its thread does not.
     pub async fn sync_all_async(self) throws (IoError) { try await off(|| try self.sync_all()); }
+    /// `sync_data` on the blocking lane: the task waits, its thread does not.
     pub async fn sync_data_async(self) throws (IoError) { try await off(|| try self.sync_data()); }
+    /// `set_len` on the blocking lane: the task waits, its thread does not.
     pub async fn set_len_async(self, size: u64) throws (IoError) { try await off(|| try self.set_len(size)); }
+    /// `metadata` on the blocking lane: the task waits, its thread does not.
     pub async fn metadata_async(self) throws (IoError) -> Metadata { try await off(|| try self.metadata()) }
+    /// `lock_exclusive` on the blocking lane: the task waits, its thread does not.
     pub async fn lock_exclusive_async(self) throws (IoError) { try await off(|| try self.lock_exclusive()); }
+    /// `lock_shared` on the blocking lane: the task waits, its thread does not.
     pub async fn lock_shared_async(self) throws (IoError) { try await off(|| try self.lock_shared()); }
 }
 
 impl Dir {
+    /// `Dir::current` on the blocking lane: the task waits, its thread
+    /// does not.
     pub async fn current_async() throws (IoError) -> Dir { try await off(|| try Dir::current()) }
+    /// `Dir::home` on the blocking lane: the task waits, its thread does not.
     pub async fn home_async() throws (IoError) -> Dir { try await off(|| try Dir::home()) }
+    /// `Dir::temp` on the blocking lane: the task waits, its thread does not.
     pub async fn temp_async() throws (IoError) -> Dir { try await off(|| try Dir::temp()) }
 
+    /// `open` on the blocking lane: the task waits, its thread does not.
     pub async fn open_async<P: AsPath>(self, path: P, access: Access = Access::ReadOnly, flags: OpenFlags = OpenFlags {}) throws (IoError) -> File {
         let p = path.as_path();
         try await off(|| try self.open(p, access, flags))
     }
+    /// `create` on the blocking lane: the task waits, its thread does not.
     pub async fn create_async<P: AsPath>(self, path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
         let p = path.as_path();
         try await off(|| try self.create(p, flags))
     }
+    /// `create_new` on the blocking lane: the task waits, its thread
+    /// does not.
     pub async fn create_new_async<P: AsPath>(self, path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
         let p = path.as_path();
         try await off(|| try self.create_new(p, flags))
     }
+    /// `open_or_create` on the blocking lane: the task waits, its
+    /// thread does not.
     pub async fn open_or_create_async<P: AsPath>(self, path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
         let p = path.as_path();
         try await off(|| try self.open_or_create(p, flags))
     }
+    /// `append` on the blocking lane: the task waits, its thread does
+    /// not.
     pub async fn append_async<P: AsPath>(self, path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
         let p = path.as_path();
         try await off(|| try self.append(p, flags))
     }
+    /// `open_dir` on the blocking lane: the task waits, its thread does not.
     pub async fn open_dir_async<P: AsPath>(self, path: P) throws (IoError) -> Dir {
         let p = path.as_path();
         try await off(|| try self.open_dir(p))
@@ -625,62 +675,77 @@ impl Dir {
         let rd = try await off(|| try self.read_dir());
         stream_of(rd)
     }
+    /// `set_permissions` on the blocking lane: the task waits, its
+    /// thread does not.
     pub async fn set_permissions_async<P: AsPath>(self, path: P, perm: Permissions) throws (IoError) {
         let p = path.as_path();
         try await off(|| try self.set_permissions(p, perm));
     }
+    /// `metadata` on the blocking lane: the task waits, its thread does not.
     pub async fn metadata_async<P: AsPath>(self, path: P) throws (IoError) -> Metadata {
         let p = path.as_path();
         try await off(|| try self.metadata(p))
     }
+    /// `symlink_metadata` on the blocking lane: the task waits, its thread does not.
     pub async fn symlink_metadata_async<P: AsPath>(self, path: P) throws (IoError) -> Metadata {
         let p = path.as_path();
         try await off(|| try self.symlink_metadata(p))
     }
+    /// `exists` on the blocking lane: the task waits, its thread does not.
     pub async fn exists_async<P: AsPath>(self, path: P) -> bool {
         let p = path.as_path();
         await task::spawn_blocking(|| self.exists(p))
     }
+    /// `create_dir` on the blocking lane: the task waits, its thread does not.
     pub async fn create_dir_async<P: AsPath>(self, path: P) throws (IoError) {
         let p = path.as_path();
         try await off(|| try self.create_dir(p));
     }
+    /// `create_dir_all` on the blocking lane: the task waits, its thread does not.
     pub async fn create_dir_all_async<P: AsPath>(self, path: P) throws (IoError) {
         let p = path.as_path();
         try await off(|| try self.create_dir_all(p));
     }
+    /// `remove_file` on the blocking lane: the task waits, its thread does not.
     pub async fn remove_file_async<P: AsPath>(self, path: P) throws (IoError) {
         let p = path.as_path();
         try await off(|| try self.remove_file(p));
     }
+    /// `remove_dir` on the blocking lane: the task waits, its thread does not.
     pub async fn remove_dir_async<P: AsPath>(self, path: P) throws (IoError) {
         let p = path.as_path();
         try await off(|| try self.remove_dir(p));
     }
+    /// `remove_dir_all` on the blocking lane: the task waits, its thread does not.
     pub async fn remove_dir_all_async<P: AsPath>(self, path: P) throws (IoError) {
         let p = path.as_path();
         try await off(|| try self.remove_dir_all(p));
     }
+    /// `rename` on the blocking lane: the task waits, its thread does not.
     pub async fn rename_async<P: AsPath, Q: AsPath>(self, from: P, to: Q) throws (IoError) {
         let a = from.as_path();
         let b = to.as_path();
         try await off(|| try self.rename(a, b));
     }
+    /// `copy` on the blocking lane: the task waits, its thread does not.
     pub async fn copy_async<P: AsPath, Q: AsPath>(self, from: P, to: Q) throws (IoError) -> u64 {
         let a = from.as_path();
         let b = to.as_path();
         try await off(|| try self.copy(a, b))
     }
+    /// `symlink` on the blocking lane: the task waits, its thread does not.
     pub async fn symlink_async<P: AsPath, Q: AsPath>(self, target: P, link: Q) throws (IoError) {
         let a = target.as_path();
         let b = link.as_path();
         try await off(|| try self.symlink(a, b));
     }
+    /// `hardlink` on the blocking lane: the task waits, its thread does not.
     pub async fn hardlink_async<P: AsPath, Q: AsPath>(self, target: P, link: Q) throws (IoError) {
         let a = target.as_path();
         let b = link.as_path();
         try await off(|| try self.hardlink(a, b));
     }
+    /// `close` on the blocking lane: the task waits, its thread does not.
     pub async fn close_async(self) throws (IoError) { try await off(|| try self.close()); }
 }
 
@@ -691,6 +756,7 @@ const DIR_BATCH: usize = 64;
 /// to `DIR_BATCH` entries on a blocking thread while the task suspends.
 /// Closed at its end or on leaving `using`; a cancelled task's refill
 /// finishes in the background first.
+#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
 pub struct ReadDirStream {
     rd: ReadDir;
     /// Held by a refill while it reads, and by `drop` to close.
@@ -915,16 +981,20 @@ const fn dir_of(fd: i32, path: str) -> Dir {
 }
 
 impl Dir {
+    /// The whole namespace: absolute paths as given, relative ones from the
+    /// working directory.
     pub const fn root() -> Dir { dir_of(-1, "") }
 
     /// The working directory.
     pub fn current() throws (IoError) -> Dir { try Dir::root().open_dir(".") }
 
+    /// The home directory (`env::home_dir`); `NotFound` when it is not set.
     pub fn home() throws (IoError) -> Dir {
         if let home: Path = env::home_dir() { return try Dir::root().open_dir(home); }
         throw IoError::new(IoErrorKind::NotFound, "HOME is not set");
     }
 
+    /// The temp directory (`env::temp_dir`).
     pub fn temp() throws (IoError) -> Dir {
         try Dir::root().open_dir(env::temp_dir())
     }
@@ -1027,6 +1097,8 @@ impl Dir {
         file_of(fd as i32, shown)
     }
 
+    /// Open the subdirectory `path` as a new capability; `NotADirectory` if
+    /// it is not one.
     pub fn open_dir<P: AsPath>(self, path: P) throws (IoError) -> Dir {
         let p = try self.rel(path);
         let how = unsafe {
@@ -1112,11 +1184,14 @@ impl Dir {
         try stat_at(self.fd(), p, false, -1) catch e { throw e.retold(self.shown(p)); }
     }
 
+    /// Whether `path` exists (symlinks followed); any error reads as `false`.
     pub fn exists<P: AsPath>(self, path: P) -> bool {
         try self.metadata(path) catch _ { return false; };
         true
     }
 
+    /// Create the directory `path`; its parent must exist (`NotFound`), and
+    /// `AlreadyExists` if it is there.
     pub fn create_dir<P: AsPath>(self, path: P) throws (IoError) {
         let p = try self.rel(path);
         try check(unsafe { rok_os_mkdir(self.fd(), p, 0o777u32) } as i64, self.shown(p));
@@ -1143,6 +1218,7 @@ impl Dir {
         m.is_dir()
     }
 
+    /// Remove the file or symlink `path` (not a directory).
     pub fn remove_file<P: AsPath>(self, path: P) throws (IoError) {
         let p = try self.rel(path);
         try check(unsafe { rok_os_unlink(self.fd(), p, 0) } as i64, self.shown(p));
@@ -1177,6 +1253,7 @@ impl Dir {
         try check(unsafe { rok_os_unlink(self.fd(), p, 1) } as i64, self.shown(p));
     }
 
+    /// Rename `from` to `to`, replacing a file at `to`.
     pub fn rename<P: AsPath, Q: AsPath>(self, from: P, to: Q) throws (IoError) {
         let a = try self.rel(from);
         let b = try self.rel(to);
@@ -1212,6 +1289,7 @@ impl Dir {
         try check(unsafe { rok_os_link(self.fd(), target.as_path().as_str(), l, 0) } as i64, self.shown(l));
     }
 
+    /// `link` as a second name for the file `target` (a hard link).
     pub fn hardlink<P: AsPath, Q: AsPath>(self, target: P, link: Q) throws (IoError) {
         let t = try self.rel(target);
         let l = try self.rel(link);
@@ -1253,18 +1331,25 @@ impl Debug for DirEntry {
 impl DirEntry {
     /// The listed directory's path joined with the name.
     pub const fn path(self) -> Path { self.path }
+    /// The entry's name within its directory.
+    #[must_use]
     pub const fn file_name(self) -> str { self.name }
     /// Metadata of the entry itself (a symlink is not followed).
     pub const fn metadata(self) -> Metadata { self.meta }
+    /// What the entry is (the symlink itself, not its target).
     pub const fn file_type(self) -> FileType { self.meta.file_type() }
+    /// `true` for a directory (a symlink to one is not).
     pub const fn is_dir(self) -> bool { self.meta.is_dir() }
+    /// `true` for a regular file.
     pub const fn is_file(self) -> bool { self.meta.is_file() }
+    /// `true` for a symbolic link.
     pub const fn is_symlink(self) -> bool { self.meta.is_symlink() }
 }
 
 /// The entries of one directory, in the order the OS returns them
 /// (`.` / `..` skipped): a `TryIterator` (`try for e in
 /// fs::read_dir(p) { .. }`).
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct ReadDir {
     /// The `DIR*` (0 once closed), shared by copies of the handle.
     d: GcBuf<isize>;
@@ -1346,12 +1431,13 @@ fn close_dir(cell: GcBuf<isize>) {
     }
 }
 
-/// Recursive walk, depth first, the root first and each directory's
-/// entries sorted by name (Go `filepath.WalkDir`). Symlinks are listed,
+/// Recursive walk, depth first in pre-order (a directory before its
+/// entries), the root first and each directory's entries sorted by name (Go `filepath.WalkDir`). Symlinks are listed,
 /// not followed. Each directory is read whole when reached, so a `Walk`
 /// never holds a stream open (stopping early leaks nothing). An
 /// unreadable directory throws its error from `next`; calling `next`
 /// again goes on with the rest.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct Walk {
     stack: List<DirEntry>;
     errors: List<IoError>;
@@ -1399,6 +1485,7 @@ pub fn open<P: AsPath>(path: P) throws (IoError) -> File { try Dir::root().open(
 /// `File::create(path)`: created or emptied, for writing.
 pub fn create<P: AsPath>(path: P) throws (IoError) -> File { try Dir::root().create(path) }
 
+/// The whole file as bytes.
 pub fn read<P: AsPath>(path: P) throws (IoError) -> List<u8> {
     let f = try open(path);
     let r = try f.read_to_end() catch e { try f.close() catch _ {}; throw e; };
@@ -1406,6 +1493,7 @@ pub fn read<P: AsPath>(path: P) throws (IoError) -> List<u8> {
     r
 }
 
+/// The whole file as text; `InvalidData` if it is not UTF-8.
 pub fn read_to_str<P: AsPath>(path: P) throws (IoError) -> str {
     let f = try open(path);
     let r = try f.read_to_str() catch e { try f.close() catch _ {}; throw e; };
@@ -1458,21 +1546,37 @@ fn stage(f: File, data: Slice<u8>, tmp: Path, target: Path) throws (IoError) {
     try rename(tmp, target);
 }
 
+/// `path`'s metadata, symlinks followed.
 pub fn metadata<P: AsPath>(path: P) throws (IoError) -> Metadata { try Dir::root().metadata(path) }
+/// `path`'s metadata; a final symlink is described, not followed.
 pub fn symlink_metadata<P: AsPath>(path: P) throws (IoError) -> Metadata {
     try Dir::root().symlink_metadata(path)
 }
+/// Whether `path` exists (symlinks followed); any error reads as `false`.
 pub fn exists<P: AsPath>(path: P) -> bool { Dir::root().exists(path) }
+/// Create the directory `path`; its parent must exist.
 pub fn create_dir<P: AsPath>(path: P) throws (IoError) { try Dir::root().create_dir(path); }
+/// Create `path` and any missing parents; fine if it already is a
+/// directory.
 pub fn create_dir_all<P: AsPath>(path: P) throws (IoError) { try Dir::root().create_dir_all(path); }
+/// Remove the file or symlink `path`.
 pub fn remove_file<P: AsPath>(path: P) throws (IoError) { try Dir::root().remove_file(path); }
+/// Remove the empty directory `path`.
 pub fn remove_dir<P: AsPath>(path: P) throws (IoError) { try Dir::root().remove_dir(path); }
+/// Remove the directory `path` and everything under it (symlinks are
+/// removed, not followed).
 pub fn remove_dir_all<P: AsPath>(path: P) throws (IoError) { try Dir::root().remove_dir_all(path); }
+/// Rename `from` to `to`, replacing a file at `to`.
 pub fn rename<P: AsPath, Q: AsPath>(from: P, to: Q) throws (IoError) { try Dir::root().rename(from, to); }
+/// Copy contents and permissions of `from` to `to`; returns the byte
+/// count.
 #[discardable]
 pub fn copy<P: AsPath, Q: AsPath>(from: P, to: Q) throws (IoError) -> u64 { try Dir::root().copy(from, to) }
+/// `link` → `target` (a symbolic link; `target` is stored verbatim).
 pub fn symlink<P: AsPath, Q: AsPath>(target: P, link: Q) throws (IoError) { try Dir::root().symlink(target, link); }
+/// `link` as a second name for the file `target` (a hard link).
 pub fn hardlink<P: AsPath, Q: AsPath>(target: P, link: Q) throws (IoError) { try Dir::root().hardlink(target, link); }
+/// The entries of the directory `path`.
 pub fn read_dir<P: AsPath>(path: P) throws (IoError) -> ReadDir {
     try Dir::root().list(try Dir::root().rel(path))
 }
@@ -1493,79 +1597,97 @@ pub fn walk<P: AsPath>(root: P) -> Walk {
 
 // async convenience functions (see the top)
 
+/// `fs::open` on the blocking lane: the task waits, its thread does not.
 pub async fn open_async<P: AsPath>(path: P) throws (IoError) -> File {
     let p = path.as_path();
     try await off(|| try open(p))
 }
+/// `fs::create` on the blocking lane: the task waits, its thread does not.
 pub async fn create_async<P: AsPath>(path: P) throws (IoError) -> File {
     let p = path.as_path();
     try await off(|| try create(p))
 }
+/// `fs::read` on the blocking lane: the task waits, its thread does not.
 pub async fn read_async<P: AsPath>(path: P) throws (IoError) -> List<u8> {
     let p = path.as_path();
     try await off(|| try read(p))
 }
+/// `fs::read_to_str` on the blocking lane: the task waits, its thread does not.
 pub async fn read_to_str_async<P: AsPath>(path: P) throws (IoError) -> str {
     let p = path.as_path();
     try await off(|| try read_to_str(p))
 }
+/// `fs::write` on the blocking lane: the task waits, its thread does not.
 pub async fn write_async<P: AsPath, D: AsBytes>(path: P, data: D) throws (IoError) {
     let p = path.as_path();
     let s = unsafe { Handoff::new(data.byte_slice()) };
     try await off(|| try write(p, s.get()));
 }
+/// `fs::write_atomic` on the blocking lane: the task waits, its thread does not.
 pub async fn write_atomic_async<P: AsPath, D: AsBytes>(path: P, data: D) throws (IoError) {
     let p = path.as_path();
     let s = unsafe { Handoff::new(data.byte_slice()) };
     try await off(|| try write_atomic(p, s.get()));
 }
+/// `fs::metadata` on the blocking lane: the task waits, its thread does not.
 pub async fn metadata_async<P: AsPath>(path: P) throws (IoError) -> Metadata {
     let p = path.as_path();
     try await off(|| try metadata(p))
 }
+/// `fs::symlink_metadata` on the blocking lane: the task waits, its thread does not.
 pub async fn symlink_metadata_async<P: AsPath>(path: P) throws (IoError) -> Metadata {
     let p = path.as_path();
     try await off(|| try symlink_metadata(p))
 }
+/// `fs::exists` on the blocking lane: the task waits, its thread does not.
 pub async fn exists_async<P: AsPath>(path: P) -> bool {
     let p = path.as_path();
     await task::spawn_blocking(|| exists(p))
 }
+/// `fs::create_dir` on the blocking lane: the task waits, its thread does not.
 pub async fn create_dir_async<P: AsPath>(path: P) throws (IoError) {
     let p = path.as_path();
     try await off(|| try create_dir(p));
 }
+/// `fs::create_dir_all` on the blocking lane: the task waits, its thread does not.
 pub async fn create_dir_all_async<P: AsPath>(path: P) throws (IoError) {
     let p = path.as_path();
     try await off(|| try create_dir_all(p));
 }
+/// `fs::remove_file` on the blocking lane: the task waits, its thread does not.
 pub async fn remove_file_async<P: AsPath>(path: P) throws (IoError) {
     let p = path.as_path();
     try await off(|| try remove_file(p));
 }
+/// `fs::remove_dir` on the blocking lane: the task waits, its thread does not.
 pub async fn remove_dir_async<P: AsPath>(path: P) throws (IoError) {
     let p = path.as_path();
     try await off(|| try remove_dir(p));
 }
+/// `fs::remove_dir_all` on the blocking lane: the task waits, its thread does not.
 pub async fn remove_dir_all_async<P: AsPath>(path: P) throws (IoError) {
     let p = path.as_path();
     try await off(|| try remove_dir_all(p));
 }
+/// `fs::rename` on the blocking lane: the task waits, its thread does not.
 pub async fn rename_async<P: AsPath, Q: AsPath>(from: P, to: Q) throws (IoError) {
     let a = from.as_path();
     let b = to.as_path();
     try await off(|| try rename(a, b));
 }
+/// `fs::copy` on the blocking lane: the task waits, its thread does not.
 pub async fn copy_async<P: AsPath, Q: AsPath>(from: P, to: Q) throws (IoError) -> u64 {
     let a = from.as_path();
     let b = to.as_path();
     try await off(|| try copy(a, b))
 }
+/// `fs::symlink` on the blocking lane: the task waits, its thread does not.
 pub async fn symlink_async<P: AsPath, Q: AsPath>(target: P, link: Q) throws (IoError) {
     let a = target.as_path();
     let b = link.as_path();
     try await off(|| try symlink(a, b));
 }
+/// `fs::hardlink` on the blocking lane: the task waits, its thread does not.
 pub async fn hardlink_async<P: AsPath, Q: AsPath>(target: P, link: Q) throws (IoError) {
     let a = target.as_path();
     let b = link.as_path();
@@ -1578,6 +1700,8 @@ pub async fn read_dir_async<P: AsPath>(path: P) throws (IoError) -> ReadDirStrea
     let rd = try await off(|| try read_dir(p));
     stream_of(rd)
 }
+/// `fs::set_permissions` on the blocking lane: the task waits, its
+/// thread does not.
 pub async fn set_permissions_async<P: AsPath>(path: P, perm: Permissions) throws (IoError) {
     let p = path.as_path();
     try await off(|| try set_permissions(p, perm));

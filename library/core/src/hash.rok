@@ -18,16 +18,25 @@ pub trait Hasher {
 
     // Fixed-width integers: their little-endian bytes.
 
+    /// `x` as one byte.
     const fn write_u8(ref self, x: u8) { self.write([x]) }
+    /// `x` as 2 little-endian bytes.
     const fn write_u16(ref self, x: u16) { self.write(x.to_le_bytes()) }
+    /// `x` as 4 little-endian bytes.
     const fn write_u32(ref self, x: u32) { self.write(x.to_le_bytes()) }
+    /// `x` as 8 little-endian bytes.
     const fn write_u64(ref self, x: u64) { self.write(x.to_le_bytes()) }
     /// 8 bytes on every target, so a hash does not depend on the width.
     const fn write_usize(ref self, x: usize) { self.write_u64(x as u64) }
+    /// `x` as `write_u8` of its bits.
     const fn write_i8(ref self, x: i8) { self.write_u8(x as u8) }
+    /// `x` as `write_u16` of its bits.
     const fn write_i16(ref self, x: i16) { self.write_u16(x as u16) }
+    /// `x` as `write_u32` of its bits.
     const fn write_i32(ref self, x: i32) { self.write_u32(x as u32) }
+    /// `x` as `write_u64` of its bits.
     const fn write_i64(ref self, x: i64) { self.write_u64(x as u64) }
+    /// `x` as `write_u64` of its bits, on every target.
     const fn write_isize(ref self, x: isize) { self.write_u64(x as i64 as u64) }
 
     /// Before a variable-length run of `Hash` values (a list's items).
@@ -67,6 +76,8 @@ const fn process_keys() -> (u64, u64) {
 }
 
 impl RandomState {
+    /// The process's keys: every `RandomState` of the process hashes
+    /// alike.
     pub const fn new() -> RandomState {
         let (k0, k1) = process_keys();
         RandomState { k0, k1 }
@@ -153,6 +164,7 @@ pub struct SipHasher13 {
 }
 
 impl SipHasher13 {
+    /// A hasher under the 128-bit key `k0`, `k1`.
     pub const fn with_keys(k0: u64, k1: u64) -> SipHasher13 {
         SipHasher13 { s: Sip::new(k0, k1, false) }
     }
@@ -178,6 +190,7 @@ pub struct SipHasher24 {
 }
 
 impl SipHasher24 {
+    /// A hasher under the 128-bit key `k0`, `k1`.
     pub const fn with_keys(k0: u64, k1: u64) -> SipHasher24 {
         SipHasher24 { s: Sip::new(k0, k1, true) }
     }
@@ -202,6 +215,7 @@ impl Clone for SipHasher24 {
 pub struct BuildHasherDefault<H> {}
 
 impl<H: Hasher + Default> BuildHasherDefault<H> {
+    /// The builder; it holds nothing.
     pub const fn new() -> BuildHasherDefault<H> { BuildHasherDefault {} }
 }
 
