@@ -146,10 +146,6 @@ pub const LINTS: &[Lint] = &[
         since: "0.1.6",
     },
     warn_since(
-        "discarded_ref_write",
-        "a `ref self` method on an element or a `Dict` entry: the write is dropped",
-    ),
-    warn_since(
         "trait_not_in_scope",
         "a method from a trait outside `rok::` that is neither defined nor `use`d in the module",
     ),
@@ -213,6 +209,7 @@ pub const REMOVED_LINTS: &[&str] = &[
     "extern_static_unsafe",
     "improper_ctypes",
     "implicit_core_fn",
+    "discarded_ref_write",
 ];
 
 /// A lint added in 0.1.6.

@@ -1,0 +1,51 @@
+// spec: 004.07-ref-keyword
+// expect-exit: 0
+// expect-stdout:
+// caught
+// 99 2 4 4 1 7 8
+// 6 16 0
+
+// A `ref self` method on an element or a `Dict` entry writes the element
+// back through the index store, after a throw too. The index is read
+// once. An element that cannot be stored (a read-only `Index`) is a
+// temporary.
+#[derive(Debug)]
+struct Oops { v: i32; }
+impl Error for Oops {}
+impl Display for Oops {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("oops") }
+}
+struct Cell { v: i32; }
+impl Cell {
+    fn set(ref self, n: i32) { self.v = n; }
+    fn bump(ref self) -> i32 { self.v += 1; self.v }
+    fn fail(ref self) throws { self.v = 99; throw Oops { v: 1 }; }
+}
+struct Holder { c: Cell; }
+struct Ro { c: Cell; }
+impl Index<i64> for Ro {
+    type Output = Cell;
+    fn index(self, i: i64) -> Cell { self.c }
+}
+
+fn main() {
+    let cs = [Cell { v: 0 }, Cell { v: 0 }];
+    let d = {"a": Cell { v: 0 }};
+    cs[0].set(1);
+    d["a"].set(2);
+    let n = 0;
+    let next = [ref n] || { n += 1; 1 };
+    cs[next()].set(3);
+    let r = cs[1].bump();
+    try cs[0].fail() catch _ { println("caught"); };
+    let hs = [Holder { c: Cell { v: 0 } }];
+    hs[0].c.set(7);
+    let nest = [[Cell { v: 0 }]];
+    nest[0][0].set(8);
+    println(f"{cs[0].v} {d["a"].v} {cs[1].v} {r} {n} {hs[0].c.v} {nest[0][0].v}");
+    let arr: [Cell; 2] = [Cell { v: 0 }, Cell { v: 5 }];
+    let x = arr[1].bump() + 10;
+    let ro = Ro { c: Cell { v: 0 } };
+    ro[0].bump();
+    println(f"{arr[1].v} {x} {ro.c.v}");
+}
