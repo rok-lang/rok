@@ -30,10 +30,10 @@ fn work(k: i32) -> i64 {
     for i in 0..100 {
         using g = XS.lock() { g.get().push(k * 100 + i); }
         N.fetch_add(1);
-        TL.get().push(i);
+        TL.with(|l| l.push(i));
     }
     using g = D.lock() { g.get().insert(f"t{k}", k as i64); }
-    using g = NAME.read() { return g.get().len() as i64 + TL.get().len() as i64; }
+    using g = NAME.read() { return g.get().len() as i64 + TL.with(|l| l.len()) as i64; }
 }
 
 fn main() {
@@ -46,7 +46,7 @@ fn main() {
             println(f"{g.get().len()} {N.load()} {if ra == rb { 2 } else { 0 }} {h.get()}");
         }
     }
-    using g = D.lock() { println(f"{g.get().len()} {g.get()["a"]} {TL.get().len() + 3}"); }
+    using g = D.lock() { println(f"{g.get().len()} {g.get()["a"]} {TL.with(|l| l.len()) + 3}"); }
     let n = 0;
     let bump = [ref n] || { n += 1; };
     bump();

@@ -15,7 +15,8 @@ use rok::std::time::Duration;
 use rok::core::future::IntoFuture;
 use rok::core::marker::hand_over;
 use rok::core::task::Blocking;
-use rok::bare::mem::{GcBuf, buf_new};
+use rok::bare::mem::{GcBuf, buf_new, buf_same, size_of, transmute_unchecked};
+use rok::bare::ptr::Ptr;
 
 /// Identifies a thread for its lifetime (its runtime worker id).
 pub struct ThreadId {
@@ -39,6 +40,8 @@ struct Rec {
     park: Atomic<i32>;
     /// `ThreadLocal` key → that local's one-slot `List<T>` on this thread.
     locals: Dict<u64, any>;
+    /// Slots pinned by `ThreadLocal::as_ptr`, unpinned when the thread ends.
+    pins: List<GcBuf<u8>>;
 }
 
 // Every handle of a thread shares its `Rec`; `locals` is only touched by
@@ -47,7 +50,7 @@ unsafe impl Send for Rec {}
 unsafe impl Sync for Rec {}
 
 const fn new_rec(id: u64, name: str | none) -> Rec {
-    Rec { id: id, name: name, park: Atomic::new(0), locals: Dict::new() }
+    Rec { id: id, name: name, park: Atomic::new(0), locals: Dict::new(), pins: [] }
 }
 
 static THREADS: Mutex<Dict<u64, Rec>> = unsafe { Mutex::new_unshared(Dict::new()) };
@@ -234,6 +237,7 @@ impl Builder {
                 }
                 let result = cell.get();
                 result[0] = hand_over::<T>(f());
+                unpin_all(rec);
                 using g = THREADS.lock() { g.get().remove(id); }
             };
             let h = unsafe { rok_thread_spawn(run, self.stack_size ?? 0usize, id) };
@@ -308,7 +312,7 @@ pub struct ThreadLocal<T> {
 
 static NEXT_LOCAL: Atomic<u64> = Atomic::new(1);
 
-// Each `Cell` is only reached from its own thread.
+// Each slot is only reached from its own thread.
 unsafe impl<T> Send for ThreadLocal<T> {}
 unsafe impl<T> Sync for ThreadLocal<T> {}
 
@@ -328,18 +332,77 @@ impl<T> ThreadLocal<T> {
         c
     }
 
-    /// `f` of this thread's value.
+    /// `f` of this thread's value. The value is a scoped view: it may not
+    /// leave `f` (returned, stored, sent), so `f` is not `async` (E202).
     pub fn with<R>(self, f: fn(T) -> R) -> R {
-        f(self.get())
+        f(self.cell()[0])
     }
 
-    pub fn get(self) -> T {
-        self.cell()[0]
-    }
-
+    /// Replace this thread's value.
     pub fn set(self, value: T) {
         self.cell()[0] = value;
     }
+
+    /// Replace this thread's value, returning the old one.
+    pub fn replace(self, value: T) -> T {
+        let c = self.cell();
+        let old = c[0];
+        c[0] = value;
+        old
+    }
+
+    /// A pointer to this thread's value, valid until the thread ends (the
+    /// slot stays pinned until then). Reads and writes through it are the
+    /// caller's: nothing tracks them.
+    pub unsafe fn as_ptr(self) -> Ptr<T> {
+        let c = self.cell();
+        let (buf, start, _) = unsafe { c[0:1].raw_parts() };
+        let b: GcBuf<u8> = unsafe { transmute_unchecked::<GcBuf<T>, GcBuf<u8>>(buf) };
+        let rec = this_rec();
+        if !pinned(rec, b) {
+            unsafe { rok_gc_pin(b) };
+            rec.pins.push(b);
+        }
+        let at: usize = unsafe { transmute_unchecked::<GcBuf<u8>, usize>(b) };
+        // The payload follows the 16-byte object header (8.1).
+        Ptr::<T>::dangling().with_addr(at + 16 + start * size_of::<T>())
+    }
+}
+
+impl<T: Copy> ThreadLocal<T> {
+    /// A copy of this thread's value.
+    pub fn get(self) -> T {
+        self.cell()[0]
+    }
+}
+
+impl<T: Default> ThreadLocal<T> {
+    /// This thread's value, leaving `T::default()` in its place.
+    pub fn take(self) -> T {
+        self.replace(T::default())
+    }
+}
+
+extern "rok" {
+    fn rok_gc_pin(obj: GcBuf<u8>) -> GcBuf<u8>;
+    fn rok_gc_unpin(obj: GcBuf<u8>);
+}
+
+fn pinned(rec: Rec, b: GcBuf<u8>) -> bool {
+    for p in rec.pins {
+        if buf_same(p, b) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Release the slots `as_ptr` pinned on a thread that ends.
+fn unpin_all(rec: Rec) {
+    for b in rec.pins {
+        unsafe { rok_gc_unpin(b) };
+    }
+    rec.pins.clear();
 }
 
 /// A `ThreadLocal` whose per-thread value starts as `init()`.

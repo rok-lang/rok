@@ -1,16 +1,16 @@
 // needs: threads
-// expect-error: `W { l: g() }` can't be sent through a channel: other code reaches it through (a thread-local or a `Sync` object), so it would be used from two threads
+// expect-error: `W { l: l }` can't be sent through a channel: it is this thread's `ThreadLocal` value, lent to `with`'s closure
 // spec: std 213-marker §2.13.9
-// A thread-local's value sent through a helper / a struct.
+// spec: std 304-thread §3.4.4
+// A thread-local's value sent inside a struct.
 use rok::std::thread;
 static TL: thread::ThreadLocal<List<i32>> = thread::local(|| { let l: List<i32> = []; l });
 struct W { l: List<i32>; }
-fn g() -> List<i32> { TL.get() }
 fn main() {
     let (tx, rx) = channel::<W>();
     let t = thread::spawn(|| { if let w: W = rx.recv() { for i in 0..200000 { w.l.push(i); } } 0 });
-    try! tx.send(W { l: g() });
-    for i in 0..200000 { TL.get().push(i); }
+    TL.with(|l| { try! tx.send(W { l: l }); });
+    for i in 0..200000 { TL.with(|l| l.push(i)); }
     let _ = try! t.join();
-    println(f"len {TL.get().len()}");
+    println(f"len {TL.with(|l| l.len())}");
 }

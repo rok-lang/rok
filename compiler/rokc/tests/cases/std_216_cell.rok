@@ -18,8 +18,8 @@ fn main() {
     d.take();
     println(f"{old} {old} {d.get()} {c.get()}");
     let l = thread::local(|| List::<i32>::new());
-    l.get().push(1);
-    l.get().push(2);
+    l.with(|v| v.push(1));
+    l.with(|v| v.push(2));
     let n = thread::local(|| 3);
-    println(f"{l.get():?} {n.get()}");
+    println(f"{l.with(|v| v.clone()):?} {n.get()}");
 }

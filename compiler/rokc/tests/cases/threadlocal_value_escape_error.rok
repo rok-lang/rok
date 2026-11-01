@@ -1,0 +1,42 @@
+// needs: threads
+// spec: std 304-thread §3.4.4
+// spec: §6.2.9
+
+// `ThreadLocal::with` lends this thread's value to its closure: the value
+// can't be returned, stored past the call, sent, or kept by a callee, and
+// the closure can't be `async` (its future could resume on another
+// thread).
+use rok::std::thread;
+
+static TL: thread::ThreadLocal<List<i32>> = thread::local(|| -> List<i32> { [] });
+
+struct W { l: List<i32>; }
+
+fn keep(c: Cell<List<i32>>, xs: List<i32>) { c.set(xs); }
+
+fn main() {
+    let a = TL.with(|l| l);
+    let saved: List<List<i32>> = [];
+    TL.with(|l| { saved.push(l); });
+    let kept: List<i32> = [];
+    TL.with([ref kept] |l| { kept = l; });
+    let w = TL.with(|l| W { l: l });
+    let c: Cell<List<i32>> = Cell::new([]);
+    TL.with(|l| keep(c, l));
+    let (tx, rx) = channel::<List<i32>>();
+    TL.with(|l| { try! tx.send(l); });
+    let f = TL.with(async |l| { l.len() });
+    // Fine: what is computed from the value, a copy, a change in place.
+    let n = TL.with(|l| l.len());
+    let d = TL.with(|l| l.clone());
+    TL.with(|l| { l.push(1); });
+}
+
+// expect-error: 18:25: this returns this thread's `ThreadLocal` value out of `with`'s closure: the value is only lent to it
+// expect-error: help: return a copy (`.clone()`) or what you computed from it, or take the value out with `replace` / `take`
+// expect-error: 20:13: this closure keeps `l`, this thread's `ThreadLocal` value, past `with`
+// expect-error: 22:13: this closure keeps `l`, this thread's `ThreadLocal` value, past `with`: the value is only lent to the closure
+// expect-error: 23:25: this returns this thread's `ThreadLocal` value out of `with`'s closure
+// expect-error: 25:25: `l` is this thread's `ThreadLocal` value, lent to `with`'s closure, and `keep` keeps it past the call
+// expect-error: 27:32: `l` can't be sent through a channel: it is this thread's `ThreadLocal` value, lent to `with`'s closure
+// expect-error: 28:21: an `async` closure can't be given to `with`: its future would keep this thread's `ThreadLocal` value past the call

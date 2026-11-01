@@ -1,0 +1,37 @@
+// needs: threads
+// expect-exit: 0
+// spec: std 304-thread §3.4.4
+// expect-stdout:
+// 3 [1, 2, 3]
+// copy [1, 2, 3, 4]
+// worker 1
+// main 3
+// sum 10
+
+// `ThreadLocal::with` lends each thread its own value for the closure:
+// changes in place stay, what the closure computes (or a copy) comes
+// out.
+use rok::std::thread;
+
+static TL: thread::ThreadLocal<List<i32>> = thread::local(|| -> List<i32> { [] });
+
+fn add(x: i32) { TL.with(|l| l.push(x)); }
+
+fn main() {
+    add(1);
+    add(2);
+    TL.with(|l| { l.push(3); });
+    println(f"{TL.with(|l| l.len())} {TL.with(|l| l.clone()):?}");
+    let copy = TL.with(|l| l.clone());
+    copy.push(4);
+    println(f"copy {copy:?}");
+    let h = thread::spawn(|| { add(9); TL.with(|l| l.len()) });
+    println(f"worker {try! h.join()}");
+    println(f"main {TL.with(|l| l.len())}");
+    let sum = |l: List<i32>| -> i32 {
+        let s = 0;
+        for x in l { s += x; }
+        s
+    };
+    println(f"sum {TL.with(sum) + 4}");
+}

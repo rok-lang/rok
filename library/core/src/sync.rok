@@ -427,11 +427,18 @@ pub struct MutexGuard<T> {
 impl<T> !Sync for MutexGuard<T> {}
 
 impl<T> MutexGuard<T> {
-    /// The protected value (a copy of the handle for GC types).
+    /// A scoped view of the protected value (the handle itself for GC
+    /// types). Like the guard it is neither `Send` nor `Sync` and stays
+    /// inside the `using` block: returning, throwing or sending it, or
+    /// passing it to a callee that keeps it, is an error (E202).
     pub const fn get(self) -> T {
         unsafe {
             self.mutex.value[0]
         }
+    }
+    /// A deep copy of the protected value, free to outlive the lock.
+    pub const fn get_clone(self) -> T where T: Clone {
+        self.get().clone()
     }
     /// Replace the protected value (instead of spec `deref_mut`: rok has
     /// no `ref` returns).
@@ -594,10 +601,15 @@ pub struct RwLockReadGuard<T> {
 impl<T> !Sync for RwLockReadGuard<T> {}
 
 impl<T> RwLockReadGuard<T> {
+    /// A scoped view of the protected value, as `MutexGuard::get`.
     pub const fn get(self) -> T {
         unsafe {
             self.lock.value[0]
         }
+    }
+    /// A deep copy of the protected value, free to outlive the lock.
+    pub const fn get_clone(self) -> T where T: Clone {
+        self.get().clone()
     }
 }
 
@@ -622,10 +634,15 @@ pub struct RwLockWriteGuard<T> {
 impl<T> !Sync for RwLockWriteGuard<T> {}
 
 impl<T> RwLockWriteGuard<T> {
+    /// A scoped view of the protected value, as `MutexGuard::get`.
     pub const fn get(self) -> T {
         unsafe {
             self.lock.value[0]
         }
+    }
+    /// A deep copy of the protected value, free to outlive the lock.
+    pub const fn get_clone(self) -> T where T: Clone {
+        self.get().clone()
     }
     pub const fn set(self, value: T) {
         unsafe {

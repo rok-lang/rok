@@ -2,7 +2,10 @@
 //! `Mutex::new(xs)`, `tx.send(xs)` or `Handoff::new(xs)`, `xs` still names
 //! an object other threads now share, and a handle taken from a guard
 //! (`g.get()`, `g.set(v)`, `g.update(f)`) is unprotected once its `using`
-//! block ends.
+//! block ends. Such a handle is a scoped view: it may not be returned,
+//! thrown, yielded or sent out of the block, nor passed to a callee that
+//! keeps it. A `ThreadLocal::with` closure's value is one too, for the
+//! closure's body (`VIEW`).
 //!
 //! A forward flow over structured HIR. A place is a local plus a field path
 //! (`s`, `s.items`, `t.0`); it is gone on a path from the hand-off (or the
@@ -172,6 +175,10 @@ const RET_ROOT: u32 = u32::MAX;
 /// (an `unsafe impl Sync` type's field, a thread-local's slot).
 const WORLD: LocalId = LocalId(0x7fff_fffd);
 const WORLD_ROOT: u32 = u32::MAX - 1;
+/// The guard of a `ThreadLocal::with` closure's value: it lives for the
+/// whole closure body.
+const VIEW: LocalId = LocalId(0x7fff_fffc);
+const WITH: &str = "rok::std::thread::ThreadLocal__with";
 /// A path step: the elements of the buffer the place holds.
 const ELEM: u32 = 0x3fff_fffe;
 
@@ -1045,6 +1052,9 @@ struct Summary {
     /// Parts of `ref` parameters handed over and then given a new value on
     /// every path that hands them over: the caller's variable is usable.
     renews: BTreeSet<Root>,
+    /// Parameters the call keeps past it: stored into another parameter
+    /// (a field, a `Cell`, a capture) or into what other threads reach.
+    keeps: BTreeSet<u32>,
 }
 
 impl Summary {
@@ -1056,6 +1066,7 @@ impl Summary {
             && !self.sends
             && self.uses.is_empty()
             && self.renews.is_empty()
+            && self.keeps.is_empty()
     }
 
     /// The same facts (which hand-off is named does not matter).
@@ -1069,6 +1080,7 @@ impl Summary {
             && self.uses == o.uses
             && self.sent_from == o.sent_from
             && self.renews == o.renews
+            && self.keeps == o.keeps
     }
 
     /// `exits`, with every exit kind spelled out.
@@ -1142,6 +1154,7 @@ impl Summary {
             uses: self.uses.iter().filter_map(root).collect(),
             sent_from: self.sent_from.iter().filter_map(root).collect(),
             renews: self.renews.iter().filter_map(root).collect(),
+            keeps: self.keeps.iter().filter_map(|&i| map(i)).collect(),
         }
     }
 
@@ -1159,6 +1172,7 @@ impl Summary {
         self.sends |= o.sends;
         self.uses.extend(o.uses.iter().cloned());
         self.sent_from.extend(o.sent_from.iter().cloned());
+        self.keeps.extend(o.keeps.iter().copied());
         // A part renewed by every candidate.
         self.renews = self.renews.intersection(&o.renews).cloned().collect();
         self.exits = exits;
@@ -1205,6 +1219,9 @@ impl Summary {
         }
         if self.sends {
             out.push_str("h\n");
+        }
+        for i in &self.keeps {
+            out.push_str(&format!("p\t{i}\n"));
         }
         for (k, set) in [
             ("u", &self.uses),
@@ -1270,6 +1287,9 @@ impl Summary {
                     s.dups.insert(root(r)?);
                 }
                 ["h"] => s.sends = true,
+                ["p", i] => {
+                    s.keeps.insert(i.parse().ok()?);
+                }
                 ["u", r] => {
                     s.uses.insert(root(r)?);
                 }
@@ -1380,6 +1400,11 @@ struct Checker<'a> {
     parent: HashMap<FunctionId, FunctionId>,
     /// A call that handed something over (its span start) -> the callee.
     callees: RefCell<HashMap<(u32, u32), String>>,
+    /// `ThreadLocal::with` closures -> the parameter holding the value.
+    views: HashMap<FunctionId, usize>,
+    /// Where views a callee keeps were taken out, and those calls: what
+    /// follows from them is not reported again.
+    kept_at: RefCell<HashSet<(u32, u32)>>,
     cands: HashMap<usize, Vec<Cand>>,
     tracked_memo: RefCell<HashMap<HirTy, bool>>,
     whys: RefCell<(Vec<Why>, HashMap<Why, u32>)>,
@@ -1631,6 +1656,8 @@ pub(super) fn check(
         sums: RefCell::new(sums),
         parent: parents(&all),
         callees: RefCell::default(),
+        views: with_closures(&all),
+        kept_at: RefCell::default(),
         cands: HashMap::new(),
         tracked_memo: RefCell::default(),
         whys: RefCell::default(),
@@ -1805,6 +1832,99 @@ fn candidates(
     out
 }
 
+/// The functions passed to `ThreadLocal::with` (a closure, a function
+/// name, or a variable bound to one) -> their value parameter.
+fn with_closures<'h>(all: &[&'h HirFunction]) -> HashMap<FunctionId, usize> {
+    let ids: HashMap<FunctionId, &str> = all.iter().map(|f| (f.id, f.name.as_str())).collect();
+    let mut out = HashMap::new();
+    for f in all {
+        let Some(body) = &f.body else { continue };
+        let mut inits: HashMap<LocalId, &'h HirExpr> = HashMap::new();
+        let mut note = |b: &'h HirBlock| {
+            for s in &b.stmts {
+                if let HirStmt::Let { local, init } = s {
+                    inits.insert(*local, init);
+                }
+            }
+        };
+        note(body);
+        crate::each_block(body, &mut |e| {
+            if let HirExprKind::Block(b) = &e.kind {
+                note(b);
+            }
+        });
+        crate::each_block(body, &mut |e| {
+            let HirExprKind::Call { callee, args } = &e.kind else {
+                return;
+            };
+            if !ids.get(callee).is_some_and(|n| is_fn(n, WITH)) {
+                return;
+            }
+            let mut x = args.get(1);
+            for _ in 0..8 {
+                match x.map(|x| &x.kind) {
+                    Some(HirExprKind::ClosureValue { fn_id, .. }) => {
+                        out.insert(*fn_id, 1);
+                        return;
+                    }
+                    Some(HirExprKind::FnRef(id)) => {
+                        out.insert(*id, 0);
+                        return;
+                    }
+                    Some(HirExprKind::Local(l)) => x = inits.get(l).copied(),
+                    Some(HirExprKind::Block(b)) if b.stmts.is_empty() => x = b.trailing.as_ref(),
+                    _ => return,
+                }
+            }
+        });
+    }
+    out
+}
+
+/// Parameter `start` is kept past the call in `exit`: the whole of it, or
+/// a field of it, is the same object as a part of another parameter or
+/// as what other threads reach. Elements shared both ways (`xs.extend(ys)`)
+/// and the return value do not count: the caller follows those.
+fn keeps_param(
+    exit: &St,
+    start: &Place,
+    own: u32,
+    root_of: &dyn Fn(LocalId) -> Option<u32>,
+) -> bool {
+    let mut seen = HashSet::new();
+    let mut work = vec![(Vec::new(), start.clone())];
+    while let Some((sub, c)) = work.pop() {
+        if c.1.len() > MAX_DEPTH || sub.len() > MAX_DEPTH || !seen.insert(c.clone()) {
+            continue;
+        }
+        if let Some(r) = root_of(c.0).filter(|&r| r != own) {
+            if r == RET_ROOT {
+                continue;
+            }
+            if r == WORLD_ROOT || !c.1.is_empty() && !sub.contains(&ELEM) {
+                return true;
+            }
+        }
+        for e in exit.edges.of(c.0) {
+            let Edge::Same(a, b) = e else { continue };
+            for (x, y) in [(a, b), (b, a)] {
+                if within(y, &c) {
+                    work.push(([&sub[..], &y.1[c.1.len()..]].concat(), x.clone()));
+                } else if within(&c, y) {
+                    work.push((sub.clone(), extend(x, &c.1[y.1.len()..])));
+                }
+            }
+        }
+    }
+    false
+}
+
+/// `t` (`g.get()`, `xs`) as a deep copy: `g.get_clone()`, `xs.clone()`.
+fn deep_copy(t: &str) -> String {
+    t.strip_suffix(".get()")
+        .map_or_else(|| format!("{t}.clone()"), |g| format!("{g}.get_clone()"))
+}
+
 /// Each closure's and coroutine body's function -> the one making it.
 fn parents(all: &[&HirFunction]) -> HashMap<FunctionId, FunctionId> {
     let mut out = HashMap::new();
@@ -1921,13 +2041,54 @@ fn walk(c: &Checker<'_>, f: &HirFunction) -> WalkOut {
             }
         }
     });
+    // A `with` closure's value is tied to `VIEW` for the whole body.
+    let view = c
+        .views
+        .get(&f.id)
+        .and_then(|&i| f.params.get(i).map(|p| (i, p)));
+    let view = view.filter(|(_, p)| c.tracked(&p.ty));
+    if let Some((_, p)) = view {
+        w.tie(VIEW, (p.local, Vec::new()), f.span, Tie::Taken);
+        // An `async` closure's body is its future: `Future { coro_new .. }`.
+        let coro = |e: &HirExpr| match &e.kind {
+            HirExprKind::CoroNew { .. } => true,
+            HirExprKind::StructInit { fields, .. } => fields
+                .iter()
+                .any(|x| matches!(x.kind, HirExprKind::CoroNew { .. })),
+            _ => false,
+        };
+        if f.is_async || body.trailing.as_ref().is_some_and(coro) {
+            w.diags.push(
+                RokDiagnostic::error(
+                    ErrorKind::Handoff,
+                    f.span,
+                    "an `async` closure can't be given to `with`: its future would keep this \
+                     thread's `ThreadLocal` value past the call, and may resume on another \
+                     thread",
+                )
+                .with_note(
+                    "help: give `with` a plain closure, and `await` outside it on a copy \
+                     (`.clone()`) or on what you computed from the value (stdlib 3.4.4)",
+                ),
+            );
+        }
+    }
     w.block_to(body, Some(&RET_TAG));
     if let (Some(t), false) = (&body.trailing, w.cur.is_empty()) {
         w.store(&(RET, Vec::new()), t, false);
+        if view.is_some() {
+            w.escapes_guard(t, Exit::Return);
+        }
     }
     w.note_renews();
     w.exit_with(Some(&RET_TAG));
     let s = w.summarize();
+    #[allow(clippy::cast_possible_truncation)]
+    if let Some((i, p)) = view {
+        if s.keeps.contains(&(i as u32)) && !w.diags.iter().any(RokDiagnostic::is_error) {
+            w.view_kept(&p.name, f.span);
+        }
+    }
     ((s, w.deps), w.diags)
 }
 
@@ -2113,6 +2274,11 @@ impl<'h> Walk<'_, 'h> {
         if !self.c.tracked(ty) || self.c.in_unsafe(at) || self.copy_out(written, at) {
             return;
         }
+        // A view a callee kept was reported at the call.
+        let o = g.origin();
+        if self.c.kept_at.borrow().contains(&(o.file, o.start)) {
+            return;
+        }
         // A compiler-made local (`#..`) is not reported: what it is copied
         // into is. One holding a `using` block's value is the block's value
         // leaving the lock.
@@ -2181,7 +2347,8 @@ impl<'h> Walk<'_, 'h> {
                 .with_secondary(site, "the lock is released here")
                 .with_note(format!(
                     "help: a guard is only good inside its `using` block; do the work there, or \
-                     keep a copy of what it protects (`{gname}.get().clone()`) (stdlib 2.13.9)"
+                     keep a deep copy of what it protects (`{gname}.get_clone()`) (stdlib \
+                     2.13.9)"
                 ))
             };
             self.diags.push(d);
@@ -2576,7 +2743,7 @@ impl<'h> Walk<'_, 'h> {
                         tie.unwrap_or_else(|| format!("{gname}.get()"))
                     ))
                 } else {
-                    let copy = format!("keep a separate copy there with `{gname}.get().clone()`");
+                    let copy = format!("keep a deep copy there with `{gname}.get_clone()`");
                     err(format!(
                         "`{who}` came out of the `{ty}` at {line}, and `{gname}`'s `using` block \
                          released the lock"
@@ -2662,15 +2829,16 @@ impl<'h> Walk<'_, 'h> {
         self.cur = cur;
     }
 
-    fn assign_st(&self, mut s: St, p: &Place) -> St {
-        self.regain(&mut s, p);
-        for t in s.tied.values_mut() {
-            t.retain(|q, _| !within(q, p));
-        }
-        let (touch, keep): (Vec<Edge>, Vec<Edge>) =
-            s.edges.take_of(p.0).into_iter().partition(|e| e.touches(p));
-        let mut edges: BTreeSet<Edge> = BTreeSet::new();
-        // A copy that `p` is a field of: its other fields stay copies.
+    /// The edges of a copy that `p` is a field of, `p` given a new value:
+    /// its other fields stay copies, and its copy of `p` is still the old
+    /// value (`rep`).
+    fn field_copies(
+        &self,
+        keep: Vec<Edge>,
+        p: &Place,
+        rep: Option<&Place>,
+        edges: &mut BTreeSet<Edge>,
+    ) {
         for e in keep {
             let Edge::Same(a, b) = &e else {
                 edges.insert(e);
@@ -2689,18 +2857,32 @@ impl<'h> Walk<'_, 'h> {
                     for r in rest {
                         edges.insert(Edge::Same(extend(base, &r), extend(other, &r)));
                     }
+                    if let Some(r) = rep {
+                        edges.insert(Edge::Same(extend(other, &p.1[base.1.len()..]), r.clone()));
+                    }
                 }
                 None => {
                     edges.insert(e);
                 }
             }
         }
+    }
+
+    fn assign_st(&self, mut s: St, p: &Place) -> St {
+        self.regain(&mut s, p);
+        for t in s.tied.values_mut() {
+            t.retain(|q, _| !within(q, p));
+        }
+        let (touch, keep): (Vec<Edge>, Vec<Edge>) =
+            s.edges.take_of(p.0).into_iter().partition(|e| e.touches(p));
+        let mut edges: BTreeSet<Edge> = BTreeSet::new();
         // A copy of all of `p`'s old value stands in for it in the rest.
         let rep = touch.iter().find_map(|e| match e {
             Edge::Same(a, b) if a == p && !within(b, p) => Some(b.clone()),
             Edge::Same(a, b) if b == p && !within(a, p) => Some(a.clone()),
             _ => None,
         });
+        self.field_copies(keep, p, rep.as_ref(), &mut edges);
         if let Some(r) = rep {
             let swap = |u: &Place| {
                 if within(u, p) {
@@ -3551,6 +3733,7 @@ impl<'h> Walk<'_, 'h> {
                     self.copy_dup(&args);
                 }
                 if let Some(s) = self.callee(*callee) {
+                    self.kept_views(&s, &args, e, None);
                     let s = if literal {
                         Rc::new(Summary {
                             dups: BTreeSet::new(),
@@ -3595,6 +3778,7 @@ impl<'h> Walk<'_, 'h> {
                     _ => self.indirect(args),
                 };
                 if let Some(s) = s {
+                    self.kept_views(&s, &all, e, Some(callee));
                     self.apply(&s, &all, e, true, false);
                 }
             }
@@ -3606,6 +3790,7 @@ impl<'h> Walk<'_, 'h> {
                     _ => self.indirect(args),
                 };
                 if let Some(s) = s {
+                    self.kept_views(&s, &all, e, Some(closure));
                     self.apply(&s, &all, e, true, false);
                 }
             }
@@ -4361,6 +4546,61 @@ impl<'h> Walk<'_, 'h> {
     /// `using`) shares it with the lock's other users.
     fn guarded_handoff(&mut self, qs: &[Place], arg: Option<&HirExpr>, what: What) {
         let Some(arg) = arg else { return };
+        let Some((g, site)) = self.view_of(qs, arg) else {
+            return;
+        };
+        let text = self
+            .c
+            .src(arg.span)
+            .filter(|t| t.len() <= 40 && !t.contains('\n'))
+            .map_or_else(|| "this value".to_owned(), |t| format!("`{t}`"));
+        let to = match what {
+            What::Channel => "sent through a channel",
+            What::Task => "spawned as a task",
+            _ => "moved into a lock",
+        };
+        if g == VIEW {
+            self.diags.push(
+                RokDiagnostic::error(
+                    ErrorKind::Handoff,
+                    arg.span,
+                    format!(
+                        "{text} can't be {to}: it is this thread's `ThreadLocal` value, lent to \
+                         `with`'s closure"
+                    ),
+                )
+                .with_note(format!(
+                    "help: hand over a separate copy (`{}.clone()`), or take the value out with \
+                     `replace` / `take` (stdlib 3.4.4)",
+                    self.c.src(arg.span).unwrap_or("value")
+                )),
+            );
+            return;
+        }
+        let gname = self.name(g);
+        let ty = if self.guard_what(g) == What::RwLock {
+            "RwLock"
+        } else {
+            "Mutex"
+        };
+        self.diags.push(
+            RokDiagnostic::error(
+                ErrorKind::Handoff,
+                arg.span,
+                format!("{text} can't be {to}: the `{ty}` behind `{gname}` still holds it"),
+            )
+            .with_secondary(site, "taken out of the lock here")
+            .with_note(format!(
+                "help: hand over a deep copy (`{}`), or take it out of the lock first \
+                 (`{gname}.set(..)` a new value) (stdlib 2.13.9)",
+                deep_copy(self.c.src(arg.span).unwrap_or("value"))
+            )),
+        );
+    }
+
+    /// The guard (or `VIEW`) whose protected value `arg` (carrying `qs`)
+    /// is or holds, and where it was taken out.
+    fn view_of(&self, qs: &[Place], arg: &HirExpr) -> Option<(LocalId, Span)> {
         let mut hit: Option<(LocalId, Span)> = self.got_from(arg).map(|g| (g, arg.span));
         for (_, s) in &self.cur.0 {
             for (g, tied) in &s.tied {
@@ -4379,34 +4619,148 @@ impl<'h> Walk<'_, 'h> {
                 }
             }
         }
-        let Some((g, site)) = hit else { return };
-        let gname = self.name(g);
-        let ty = if self.guard_what(g) == What::RwLock {
-            "RwLock"
-        } else {
-            "Mutex"
+        hit
+    }
+
+    /// A call whose callee keeps an argument that is a scoped view (what
+    /// a lock protects, a `with` closure's value): the view would outlive
+    /// its scope.
+    fn kept_views(
+        &mut self,
+        s: &Summary,
+        args: &[&HirExpr],
+        call: &HirExpr,
+        callee: Option<&HirExpr>,
+    ) {
+        if s.keeps.is_empty() || self.c.in_unsafe(call.span) {
+            return;
+        }
+        let trusted = match &call.kind {
+            HirExprKind::Call { callee, .. } => self
+                .c
+                .fns
+                .get(callee)
+                .is_some_and(|f| TRUSTED.iter().any(|m| f.name.starts_with(m))),
+            _ => false,
         };
-        let text = self
-            .c
-            .src(arg.span)
-            .filter(|t| t.len() <= 40 && !t.contains('\n'))
-            .map_or_else(|| "this value".to_owned(), |t| format!("`{t}`"));
-        let to = match what {
-            What::Channel => "sent through a channel",
-            What::Task => "spawned as a task",
-            _ => "moved into a lock",
-        };
+        let params: HashSet<LocalId> = self.f.params.iter().map(|p| p.local).collect();
+        for &i in &s.keeps {
+            let Some(arg) = args.get(i as usize).copied() else {
+                continue;
+            };
+            if !self.c.tracked(&arg.ty)
+                || place(arg).is_some_and(|p| p.1.is_empty() && self.is_guard(p.0))
+            {
+                continue;
+            }
+            // A collection of this body keeping it is followed like the
+            // view itself (`live.push(t)`, then `g.set(live)`).
+            let into_local = trusted
+                && args.iter().enumerate().all(|(j, a)| {
+                    j == i as usize
+                        || !self.c.tracked(&a.ty)
+                        || place(a).is_some_and(|p| !params.contains(&p.0))
+                });
+            if into_local {
+                continue;
+            }
+            let mut fl = Vec::new();
+            self.flows(arg, &mut fl);
+            let qs: Vec<Place> = fl.into_iter().map(|(_, q)| q).collect();
+            let Some((g, site)) = self.view_of(&qs, arg) else {
+                continue;
+            };
+            {
+                let mut k = self.c.kept_at.borrow_mut();
+                for sp in [site, call.span, arg.span] {
+                    k.insert((sp.file, sp.start));
+                }
+            }
+            if !self
+                .reported
+                .insert(((g, vec![u32::MAX]), arg.span.file, arg.span.start))
+            {
+                continue;
+            }
+            let text = self
+                .c
+                .src(arg.span)
+                .filter(|t| t.len() <= 40 && !t.contains('\n'));
+            let shown = text.map_or_else(|| "this value".to_owned(), |t| format!("`{t}`"));
+            let named = callee.filter(|c| place(c).is_some_and(|p| !self.hidden(p.0)));
+            let who = match (callee.map(|c| &c.kind), &call.kind) {
+                (_, HirExprKind::Call { callee: id, .. }) | (Some(HirExprKind::FnRef(id)), _) => {
+                    self.c
+                        .fns
+                        .get(id)
+                        .map(|f| format!("`{}`", shown_fn(self.c, f)))
+                }
+                _ => named.map(|c| format!("`{}`", self.show(c))),
+            }
+            .unwrap_or_else(|| "the function called".to_owned());
+            let d = if g == VIEW {
+                RokDiagnostic::error(
+                    ErrorKind::Handoff,
+                    arg.span,
+                    format!(
+                        "{shown} is this thread's `ThreadLocal` value, lent to `with`'s closure, \
+                         and {who} keeps it past the call"
+                    ),
+                )
+                .with_note(format!(
+                    "help: the value may not leave the closure; pass a copy (`{}`), or take it \
+                     out with `replace` / `take` (stdlib 3.4.4)",
+                    deep_copy(text.unwrap_or("value"))
+                ))
+            } else {
+                let gname = self.name(g);
+                let ty = if self.guard_what(g) == What::RwLock {
+                    "RwLock"
+                } else {
+                    "Mutex"
+                };
+                let copy = self
+                    .c
+                    .src(site)
+                    .filter(|t| t.len() <= 40 && !t.contains('\n'))
+                    .map_or_else(|| format!("{gname}.get_clone()"), deep_copy);
+                let d = RokDiagnostic::error(
+                    ErrorKind::Handoff,
+                    arg.span,
+                    format!(
+                        "{shown} is a view of what the `{ty}` behind `{gname}` protects, and {who} \
+                         keeps it past the call"
+                    ),
+                );
+                let d = if site == arg.span {
+                    d
+                } else {
+                    d.with_secondary(site, "taken out of the lock here")
+                };
+                d.with_note(format!(
+                    "help: `{gname}`'s `using` block releases the lock while {who} still holds \
+                     it; pass a deep copy, `{copy}` (stdlib 2.16.3)"
+                ))
+            };
+            self.diags.push(d);
+        }
+    }
+
+    /// A `with` closure keeps its value (a capture, what other threads
+    /// reach) past the call.
+    fn view_kept(&mut self, name: &str, at: Span) {
         self.diags.push(
             RokDiagnostic::error(
                 ErrorKind::Handoff,
-                arg.span,
-                format!("{text} can't be {to}: the `{ty}` behind `{gname}` still holds it"),
+                at,
+                format!(
+                    "this closure keeps `{name}`, this thread's `ThreadLocal` value, past \
+                     `with`: the value is only lent to the closure"
+                ),
             )
-            .with_secondary(site, "taken out of the lock here")
             .with_note(format!(
-                "help: hand over a separate copy (`{}.clone()`), or take it out of the lock first \
-                 (`{gname}.set(..)` a new value) (stdlib 2.13.9)",
-                self.c.src(arg.span).unwrap_or("value")
+                "help: keep a copy (`{name}.clone()`), or take the value out with `replace` / \
+                 `take` (stdlib 3.4.4)"
             )),
         );
     }
@@ -4434,8 +4788,8 @@ impl<'h> Walk<'_, 'h> {
             .src(site)
             .filter(|t| t.len() <= 40 && !t.contains('\n'))
             .map_or_else(
-                || format!("`{gname}.get().clone()`"),
-                |t| format!("`{t}.clone()`"),
+                || format!("`{gname}.get_clone()`"),
+                |t| format!("`{}`", deep_copy(t)),
             );
         self.diags.push(
             RokDiagnostic::error(
@@ -4522,7 +4876,7 @@ impl<'h> Walk<'_, 'h> {
 
     /// A `return`, `yield` or `throw` inside a `using` block hands out
     /// what the lock protects: the block's end releases the lock before the
-    /// caller is done with it. A `throw` warns until 0.2.0.
+    /// caller is done with it. So does a `with` closure's value leaving it.
     fn escapes_guard(&mut self, e: &HirExpr, exit: Exit) {
         let yields = exit == Exit::Yield;
         let at = e.span;
@@ -4570,6 +4924,26 @@ impl<'h> Walk<'_, 'h> {
         {
             return;
         }
+        if g == VIEW {
+            let how = match exit {
+                Exit::Return => "returns",
+                Exit::Yield => "yields",
+                Exit::Throw => "throws",
+            };
+            let d = RokDiagnostic::error(
+                ErrorKind::Handoff,
+                at,
+                format!(
+                    "this {how} this thread's `ThreadLocal` value out of `with`'s closure: the \
+                     value is only lent to it"
+                ),
+            );
+            self.diags.push(d.with_note(
+                "help: return a copy (`.clone()`) or what you computed from it, or take the \
+                 value out with `replace` / `take` (stdlib 3.4.4)",
+            ));
+            return;
+        }
         let gname = self.name(g);
         let ty = if self.guard_what(g) == What::RwLock {
             "RwLock"
@@ -4594,7 +4968,7 @@ impl<'h> Walk<'_, 'h> {
             .filter(|t| t.len() <= 40 && !t.contains('\n'))
             .map_or_else(
                 || "a separate copy (`.clone()`)".to_owned(),
-                |t| format!("`{t}.clone()`"),
+                |t| format!("`{}`", deep_copy(t)),
             );
         let copy = if cloneable {
             copy
@@ -4609,11 +4983,11 @@ impl<'h> Walk<'_, 'h> {
                 .src(site)
                 .filter(|t| t.len() <= 40 && !t.contains('\n'))
                 .map_or_else(
-                    || "a copy (`.clone()`)".to_owned(),
-                    |t| format!("a copy, `{t}.clone()`"),
+                    || "a deep copy (`.clone()`)".to_owned(),
+                    |t| format!("a deep copy, `{}`", deep_copy(t)),
                 );
             self.diags.push(
-                RokDiagnostic::warning(
+                RokDiagnostic::error(
                     ErrorKind::Handoff,
                     at,
                     format!(
@@ -4624,10 +4998,8 @@ impl<'h> Walk<'_, 'h> {
                 .with_secondary(site, "taken out of the lock here")
                 .with_note(format!(
                     "help: the lock stops protecting it; build the error from {taken}, or \
-                     handle it inside the `using` block; 0.2.0 makes this an error (stdlib \
-                     2.13.9)"
-                ))
-                .with_lint("guard_escape"),
+                     handle it inside the `using` block (stdlib 2.13.9)"
+                )),
             );
             return;
         }
@@ -4855,6 +5227,11 @@ impl<'h> Walk<'_, 'h> {
                     s.edges
                         .insert(SEdge::Into((*r, Vec::new()), (r2, q.1.clone())));
                 }
+            }
+        }
+        for (r, start) in &roots {
+            if *r != RET_ROOT && *r != WORLD_ROOT && keeps_param(exit, start, *r, &root_of) {
+                s.keeps.insert(*r);
             }
         }
         for (g, tied) in &exit.tied {

@@ -798,6 +798,16 @@ pub(super) fn check_call_bounds(
                          to throw past the range"
                     )));
                 }
+                // `ThreadLocal::get` copies; other values are borrowed.
+                if fn_def.name.starts_with("rok::std::thread::ThreadLocal")
+                    && fn_def.name.ends_with("get")
+                {
+                    ctx.help_last(Some(
+                        "use the value inside `with`: `tl.with(|v| ..)`, or take it out with \
+                         `tl.replace(v)` / `tl.take()` (stdlib 3.4.4)"
+                            .to_owned(),
+                    ));
+                }
             }
         }
     }
