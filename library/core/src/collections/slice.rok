@@ -448,3 +448,341 @@ impl<T> Transfer for Slice<T> {
         self
     }
 }
+
+/// A writable view of a list's elements (stdlib 2.9.7), like Rust's
+/// `&mut [T]`: `s[i] = x` writes the list. A `List<T>` passed where a
+/// `SliceMut<T>` is expected views the whole list, and `xs[a:b]` there
+/// views `xs[a:b]`. Element `i` is `buf[start + i]`.
+///
+/// A view lives as long as nothing resizes its list. Resizing it
+/// (`push`, `insert`, `clear`, ...) while a view is still used later is a
+/// compile error where the compiler can see both; elsewhere the view
+/// notices the list's new version and panics on its next use.
+pub struct SliceMut<T> {
+    pub(pkg) buf: GcBuf<T>;
+    pub(pkg) start: usize;
+    pub(pkg) len: usize;
+    /// The list viewed and its `version` when the view was made.
+    pub(pkg) owner: List<T>;
+    pub(pkg) ver: usize;
+}
+
+// Shares its buffer like `List` (stdlib 2.13.9).
+impl<T> !Sync for SliceMut<T> {}
+
+/// A view of `xs[r]` (`r` clamped to the length).
+pub(pkg) const fn view_mut_of<T>(xs: List<T>, r: Range<usize>) -> SliceMut<T> {
+    let r = clamp_range(r, xs.len());
+    SliceMut { buf: xs.buffer(), start: r.start, len: r.end - r.start, owner: xs, ver: xs.version() }
+}
+
+#[track_caller]
+const fn stale_view() -> ! {
+    panic("SliceMut used after its list was resized (push, insert, clear, ...): make the view again after the resize")
+}
+
+impl<T> SliceMut<T> {
+    /// Panics when the list was resized since the view was made.
+    #[track_caller]
+    const fn live(self) {
+        if self.owner.version() != self.ver {
+            stale_view();
+        }
+    }
+
+    pub const fn len(self) -> usize {
+        self.len
+    }
+
+    pub const fn is_empty(self) -> bool {
+        self.len == 0
+    }
+
+    /// Element `i`, or `none` out of bounds.
+    #[track_caller]
+    pub const fn get(self, i: usize) -> T | none {
+        self.live();
+        unsafe {
+            if i >= self.len {
+                return none;
+            }
+            return self.buf[self.start + i];
+        }
+    }
+
+    #[track_caller]
+    pub const fn first(self) -> T | none {
+        self.get(0)
+    }
+
+    #[track_caller]
+    pub const fn last(self) -> T | none {
+        if self.len == 0 {
+            return none;
+        }
+        self.get(self.len - 1)
+    }
+
+    /// Overwrite every element with `x`.
+    #[track_caller]
+    pub const fn fill(self, x: T) {
+        self.live();
+        unsafe {
+            for i in 0..self.len {
+                self.buf[self.start + i] = x;
+            }
+        }
+    }
+
+    /// Exchange elements `i` and `j`; panics out of bounds.
+    #[track_caller]
+    pub const fn swap(self, i: usize, j: usize) {
+        self.live();
+        if i >= self.len {
+            index_oob("SliceMut::swap index", i, self.len);
+        }
+        if j >= self.len {
+            index_oob("SliceMut::swap index", j, self.len);
+        }
+        unsafe {
+            let x = self.buf[self.start + i];
+            self.buf[self.start + i] = self.buf[self.start + j];
+            self.buf[self.start + j] = x;
+        }
+    }
+
+    /// The elements in reverse order, in place.
+    #[track_caller]
+    pub const fn reverse(self) {
+        self.live();
+        unsafe {
+            let n = self.len;
+            for i in 0..n / 2 {
+                let a = self.start + i;
+                let b = self.start + n - 1 - i;
+                let x = self.buf[a];
+                self.buf[a] = self.buf[b];
+                self.buf[b] = x;
+            }
+        }
+    }
+
+    /// Overwrite the elements with those of `src`, which must be as long
+    /// (`s.copy_from_slice(ys[:])`); panics otherwise.
+    #[track_caller]
+    pub const fn copy_from_slice(self, src: Slice<T>) {
+        self.live();
+        if src.len != self.len {
+            panic(f"copy_from_slice: source length {src.len} does not match the view's {self.len}");
+        }
+        // `src` may view this very buffer: copy out first when it does.
+        let tmp = src.to_list();
+        unsafe {
+            for i in 0..self.len {
+                self.buf[self.start + i] = tmp[i];
+            }
+        }
+    }
+
+    /// Views of `[0, mid)` and `[mid, len)`, both writable; panics if
+    /// `mid` is past the length.
+    #[track_caller]
+    pub const fn split_at(self, mid: usize) -> (SliceMut<T>, SliceMut<T>) {
+        self.live();
+        if mid > self.len {
+            index_oob("split_at index", mid, self.len);
+        }
+        (self.slice(0..mid), self.slice(mid..self.len))
+    }
+
+    /// The same elements as a read-only `Slice`.
+    #[track_caller]
+    pub const fn as_slice(self) -> Slice<T> {
+        self.live();
+        Slice { buf: self.buf, start: self.start, len: self.len, stride: 1, whole: true }
+    }
+
+    #[track_caller]
+    pub const fn iter(self) -> SliceMutIter<T> {
+        self.live();
+        SliceMutIter { s: self, i: 0, back: 0 }
+    }
+
+    /// A new list holding the viewed elements.
+    #[track_caller]
+    pub const fn to_list(self) -> List<T> {
+        self.as_slice().to_list()
+    }
+
+    /// Ascending by `key(x)`, stable; `key` runs twice per comparison.
+    #[track_caller]
+    pub const fn sort_by_key<K: Ord>(self, key: fn(T) -> K) {
+        self.sort_by(|a: T, b: T| key(a).cmp(key(b)));
+    }
+
+    /// Stable merge sort by `cmp`: O(n log n), n extra slots.
+    #[track_caller]
+    pub const fn sort_by(self, cmp: fn(T, T) -> rok::core::cmp::Ordering) {
+        self.live();
+        unsafe {
+            rok::core::collections::list::sort_region(self.buf, self.start, self.len, cmp);
+        }
+    }
+
+    /// `(buffer, start, len)` of the viewed elements, for runtime calls
+    /// that fill a buffer region.
+    #[track_caller]
+    pub const unsafe fn raw_parts(self) -> (GcBuf<T>, usize, usize) {
+        self.live();
+        (self.buf, self.start, self.len)
+    }
+}
+
+impl<T: Ord> SliceMut<T> {
+    /// Ascending, stable.
+    #[track_caller]
+    pub const fn sort(self) {
+        self.sort_by(|a: T, b: T| a.cmp(b));
+    }
+}
+
+impl<T: PartialEq> SliceMut<T> {
+    /// `true` when an element equals `x`.
+    #[track_caller]
+    pub const fn contains(self, x: T) -> bool {
+        self.as_slice().contains(x)
+    }
+}
+
+/// `s.iter()` / `for x in s`: checks the view on every step.
+pub struct SliceMutIter<T> {
+    s: SliceMut<T>;
+    i: usize;
+    /// Items taken from the back (`next_back`).
+    back: usize = 0;
+}
+
+impl<T> Iterator for SliceMutIter<T> {
+    type Item = T;
+    #[track_caller]
+    const fn next(ref self) -> T | none {
+        self.s.live();
+        unsafe {
+            if self.i + self.back >= self.s.len {
+                return none;
+            }
+            self.i += 1;
+            return self.s.buf[self.s.start + self.i - 1];
+        }
+    }
+
+    const fn exact_len(self) -> usize | none { self.len() }
+
+    /// `ExactSizeIterator`: O(1) (2.7.10).
+    const fn count(self) -> usize { self.len() }
+}
+
+impl<T> DoubleEndedIterator for SliceMutIter<T> {
+    #[track_caller]
+    const fn next_back(ref self) -> T | none {
+        self.s.live();
+        unsafe {
+            if self.i + self.back >= self.s.len {
+                return none;
+            }
+            self.back += 1;
+            return self.s.buf[self.s.start + self.s.len - self.back];
+        }
+    }
+}
+
+impl<T> ExactSizeIterator for SliceMutIter<T> {
+    const fn len(self) -> usize { self.s.len - self.i - self.back }
+}
+
+impl<T> IntoIterator for SliceMut<T> {
+    type IntoIter = SliceMutIter<T>;
+    type Item = T;
+    #[track_caller]
+    const fn into_iter(self) -> SliceMutIter<T> {
+        self.iter()
+    }
+}
+
+/// `s[i]`; panics out of bounds.
+impl<T> Index<usize> for SliceMut<T> {
+    type Output = T;
+    #[track_caller]
+    const fn index(self, i: usize) -> T {
+        self.live();
+        unsafe {
+            if i >= self.len {
+                return index_oob("slice index", i, self.len);
+            }
+            self.buf[self.start + i]
+        }
+    }
+}
+
+/// `s[i] = x` writes element `i` of the list; panics out of bounds.
+impl<T> IndexSet<usize> for SliceMut<T> {
+    type Value = T;
+    #[track_caller]
+    const fn index_set(self, i: usize, value: T) {
+        self.live();
+        unsafe {
+            if i >= self.len {
+                index_oob("slice index", i, self.len);
+            }
+            self.buf[self.start + i] = value;
+        }
+    }
+}
+
+/// `s[a:b]`: a writable view of the view.
+impl<T> Sliceable<Range<usize>> for SliceMut<T> {
+    type Output = SliceMut<T>;
+    #[track_caller]
+    const fn slice(self, r: Range<usize>) -> SliceMut<T> {
+        self.live();
+        let r = clamp_range(r, self.len);
+        SliceMut { buf: self.buf, start: self.start + r.start, len: r.end - r.start, owner: self.owner, ver: self.ver }
+    }
+}
+
+/// Element-wise.
+impl<T: PartialEq> PartialEq for SliceMut<T> {
+    #[track_caller]
+    const fn eq(self, rhs: SliceMut<T>) -> bool {
+        self.as_slice() == rhs.as_slice()
+    }
+    #[track_caller]
+    fn ne(self, rhs: SliceMut<T>) -> bool { !self.eq(rhs) }
+}
+
+/// `[a, b, c]` like a list.
+impl<T: Debug> Debug for SliceMut<T> {
+    #[track_caller]
+    const fn fmt(self, ref f: Formatter) throws (FmtError) {
+        try Debug::fmt(self.as_slice(), ref f)
+    }
+}
+
+/// A hand-off's copy (stdlib 2.13.9): the list's copy, viewed at the
+/// same place, so the view still writes what the receiver's list holds.
+impl<T> Transfer for SliceMut<T> {
+    const fn transfer_copy(self, m: Memo) -> SliceMut<T> {
+        let owner = self.owner.transfer_copy(m);
+        SliceMut { buf: owner.buffer(), start: self.start, len: self.len, owner, ver: self.ver }
+    }
+
+    const fn transfer_keep(self, m: Memo) -> SliceMut<T> {
+        let _ = self.owner.transfer_keep(m);
+        self
+    }
+
+    const fn transfer_visit(self, m: Memo) -> SliceMut<T> {
+        let _ = self.owner.transfer_visit(m);
+        self
+    }
+}

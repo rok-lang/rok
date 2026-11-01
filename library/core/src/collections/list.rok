@@ -14,6 +14,8 @@ struct ListHead<T> {
     len: usize;
     cap: usize;
     buf: GcBuf<T>;
+    /// Bumped by every resize: a `SliceMut` made before one is stale.
+    ver: usize;
 }
 
 impl List<str> {
@@ -44,7 +46,7 @@ impl<T> List<T> {
     pub const fn with_capacity(cap: usize) -> List<T> {
         unsafe {
             let h: GcBuf<ListHead<T>> = buf_new(1);
-            h[0] = ListHead { len: 0, cap, buf: buf_new(buf_len(cap_add(cap, 1), size_of::<T>())) };
+            h[0] = ListHead { len: 0, cap, buf: buf_new(buf_len(cap_add(cap, 1), size_of::<T>())), ver: 0 };
             List { h }
         }
     }
@@ -72,6 +74,28 @@ impl<T> List<T> {
         }
     }
 
+    /// The resize count `SliceMut` checks its views against.
+    pub(pkg) const fn version(self) -> usize {
+        unsafe {
+            self.h[0].ver
+        }
+    }
+
+    /// A new length `n`: a resize.
+    const fn resize_to(self, n: usize) {
+        unsafe {
+            self.h[0].len = n;
+            self.h[0].ver = self.h[0].ver.wrapping_add(1);
+        }
+    }
+
+    /// A new buffer: a resize, though the length stays.
+    const fn bump(self) {
+        unsafe {
+            self.h[0].ver = self.h[0].ver.wrapping_add(1);
+        }
+    }
+
     /// Room for `additional` more elements (doubling).
     #[track_caller]
     pub const fn reserve(self, additional: usize) {
@@ -89,6 +113,7 @@ impl<T> List<T> {
                 store[i] = old[i];
             }
             self.h[0].buf = store;
+            self.bump();
             self.h[0].cap = new_cap;
         }
     }
@@ -106,6 +131,7 @@ impl<T> List<T> {
                 store[i] = old[i];
             }
             self.h[0].buf = store;
+            self.bump();
             self.h[0].cap = n;
         }
     }
@@ -137,7 +163,7 @@ impl<T> List<T> {
                 return self.push_grown(x);
             }
             self.h[0].buf[n] = x;
-            self.h[0].len = n + 1;
+            self.resize_to(n + 1);
         }
     }
 
@@ -151,7 +177,7 @@ impl<T> List<T> {
             let n = self.len();
             self.reserve(1);
             self.h[0].buf[n] = x;
-            self.h[0].len = n + 1;
+            self.resize_to(n + 1);
         }
     }
 
@@ -164,7 +190,7 @@ impl<T> List<T> {
             let store = self.h[0].buf;
             let x = store[n - 1];
             self.vacate(store, n - 1);
-            self.h[0].len = n - 1;
+            self.resize_to(n - 1);
             x
         }
     }
@@ -223,7 +249,7 @@ impl<T> List<T> {
                 i -= 1;
             }
             store[idx] = x;
-            self.h[0].len = n + 1;
+            self.resize_to(n + 1);
         }
     }
 
@@ -240,7 +266,7 @@ impl<T> List<T> {
                 store[i - 1] = store[i];
             }
             self.vacate(store, n - 1);
-            self.h[0].len = n - 1;
+            self.resize_to(n - 1);
             x
         }
     }
@@ -251,7 +277,7 @@ impl<T> List<T> {
             for i in 0..self.len() {
                 self.vacate(store, i);
             }
-            self.h[0].len = 0;
+            self.resize_to(0);
         }
     }
 
@@ -266,7 +292,7 @@ impl<T> List<T> {
             for i in len..n {
                 self.vacate(store, i);
             }
-            self.h[0].len = len;
+            self.resize_to(len);
         }
     }
 
@@ -291,7 +317,7 @@ impl<T> List<T> {
             for i in n - k..n {
                 self.vacate(store, i);
             }
-            self.h[0].len = n - k;
+            self.resize_to(n - k);
             out
         }
     }
@@ -305,7 +331,7 @@ impl<T> List<T> {
         if n > self.capacity() {
             panic("List::set_len: past the capacity");
         }
-        self.h[0].len = n;
+        self.resize_to(n);
     }
 
     pub const fn iter(self) -> ListIter<T> {
@@ -449,72 +475,88 @@ impl<T> List<T> {
     /// Stable bottom-up merge sort by `cmp`: O(n log n), n extra slots.
     pub const fn sort_by(self, cmp: fn(T, T) -> rok::core::cmp::Ordering) {
         unsafe {
-            let n = self.len();
-            if n < 2 {
-                return;
+            sort_region(self.h[0].buf, 0, self.len(), cmp);
+        }
+    }
+}
+
+/// Sort `src[base..base + n]` by `cmp`, stable: insertion-sorted runs
+/// of `SORT_RUN`, then bottom-up merges through `n` extra slots. Shared
+/// by `List` and `SliceMut`.
+pub(pkg) const unsafe fn sort_region<T>(
+    src: GcBuf<T>,
+    base: usize,
+    n: usize,
+    cmp: fn(T, T) -> rok::core::cmp::Ordering,
+) {
+    if n < 2 {
+        return;
+    }
+    let lo: usize = 0;
+    while lo < n {
+        let hi = (lo + SORT_RUN).min(n);
+        for i in lo + 1..hi {
+            let x = src[base + i];
+            let j = i;
+            while j > lo && cmp(src[base + j - 1], x).is_gt() {
+                src[base + j] = src[base + j - 1];
+                j -= 1;
             }
-            let src = self.h[0].buf;
-            let lo: usize = 0;
-            while lo < n {
-                let hi = (lo + SORT_RUN).min(n);
-                for i in lo + 1..hi {
-                    let x = src[i];
-                    let j = i;
-                    while j > lo && cmp(src[j - 1], x).is_gt() {
-                        src[j] = src[j - 1];
-                        j -= 1;
-                    }
-                    src[j] = x;
+            src[base + j] = x;
+        }
+        lo = hi;
+    }
+    if n <= SORT_RUN {
+        return;
+    }
+    // `a` / `b` start at `ao` / `bo`: the region, or the extra slots.
+    let a = src;
+    let ao = base;
+    let b: GcBuf<T> = buf_new(n);
+    let bo: usize = 0;
+    let width = SORT_RUN;
+    while width < n {
+        let start: usize = 0;
+        while start < n {
+            let mid = (start + width).min(n);
+            let end = (start + 2 * width).min(n);
+            let i = start;
+            let j = mid;
+            let k = start;
+            while i < mid && j < end {
+                // Ties take the left run: stable.
+                if cmp(a[ao + j], a[ao + i]).is_lt() {
+                    b[bo + k] = a[ao + j];
+                    j += 1;
+                } else {
+                    b[bo + k] = a[ao + i];
+                    i += 1;
                 }
-                lo = hi;
+                k += 1;
             }
-            if n <= SORT_RUN {
-                return;
+            while i < mid {
+                b[bo + k] = a[ao + i];
+                i += 1;
+                k += 1;
             }
-            let a = src;
-            let b: GcBuf<T> = buf_new(n);
-            let width = SORT_RUN;
-            while width < n {
-                let start: usize = 0;
-                while start < n {
-                    let mid = (start + width).min(n);
-                    let end = (start + 2 * width).min(n);
-                    let i = start;
-                    let j = mid;
-                    let k = start;
-                    while i < mid && j < end {
-                        // Ties take the left run: stable.
-                        if cmp(a[j], a[i]).is_lt() {
-                            b[k] = a[j];
-                            j += 1;
-                        } else {
-                            b[k] = a[i];
-                            i += 1;
-                        }
-                        k += 1;
-                    }
-                    while i < mid {
-                        b[k] = a[i];
-                        i += 1;
-                        k += 1;
-                    }
-                    while j < end {
-                        b[k] = a[j];
-                        j += 1;
-                        k += 1;
-                    }
-                    start = end;
-                }
-                let t = a;
-                a = b;
-                b = t;
-                width *= 2;
+            while j < end {
+                b[bo + k] = a[ao + j];
+                j += 1;
+                k += 1;
             }
-            if !buf_same(a, src) {
-                for i in 0..n {
-                    src[i] = a[i];
-                }
-            }
+            start = end;
+        }
+        let t = a;
+        a = b;
+        b = t;
+        let to = ao;
+        ao = bo;
+        bo = to;
+        width *= 2;
+    }
+    if !buf_same(a, src) {
+        for i in 0..n {
+            src[base + i] = a[ao + i];
         }
     }
 }
@@ -742,7 +784,7 @@ impl<T> Transfer for List<T> {
             let h: GcBuf<ListHead<T>> = buf_new(1);
             m.note(self.h, h);
             let buf = copy_shared(s.buf, s.len, cap_add(s.cap, 1), m);
-            h[0] = ListHead { len: s.len, cap: s.cap, buf };
+            h[0] = ListHead { len: s.len, cap: s.cap, buf, ver: s.ver };
             List { h }
         }
     }
