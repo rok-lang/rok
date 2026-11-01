@@ -1,0 +1,30 @@
+// spec: std 311-os §3.11.2
+// only-os: macos linux
+// expect-exit: 0
+// expect-stdout:
+// stdio: 0 1 2
+// file: true
+// adopted: hi
+
+// `os::unix::io`: `AsRawFd` gives the descriptor a handle owns (-1 once
+// closed), `FromRawFd` hands one to a new owner (`f` is shared, so
+// only `g` closes it).
+use rok::std::fs;
+use rok::std::fs::File;
+use rok::std::env;
+use rok::std::process;
+use rok::std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
+use rok::core::io::IoError;
+
+fn main() throws (IoError) {
+    println(f"stdio: {io::stdin().as_raw_fd()} {io::stdout().as_raw_fd()} {io::stderr().as_raw_fd()}");
+    let path = env::temp_dir() / f"rok_raw_fd_{process::id()}";
+    try fs::write(path, "hi");
+    let f = unsafe { rok::core::marker::share(try File::open(path)) };
+    let fd: RawFd = f.as_raw_fd();
+    println(f"file: {fd > 2}");
+    let g = unsafe { File::from_raw_fd(fd) };
+    println(f"adopted: {try g.read_to_str()}");
+    try g.close();
+    try fs::remove_file(path);
+}

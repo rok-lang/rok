@@ -13,8 +13,7 @@
 
 // Spec 306: args (argv saved by the runtime), var / vars / set_var /
 // remove_var, current_dir / set_current_dir, temp_dir, split_paths
-// (`;` between paths on Windows), parent_pid (none when unknown: a
-// Windows process a non-Windows one started, as under Wine).
+// (`;` between paths on Windows), the process id.
 
 use rok::std::env;
 use rok::core::io::IoError;
@@ -52,7 +51,7 @@ fn main() throws (IoError) {
     let parts = "";
     for p in env::split_paths(f"/a{LIST}{LIST}/b{LIST}/c") { parts = parts + " " + p.as_str(); }
     println("split:" + parts);
-    println(f"pid: {process::id() > 0u32 && (env::parent_pid() ?? 1u32) > 0u32}");
+    println(f"pid: {process::id() > 0u32}");
 }
 
 // spec: std 306-env

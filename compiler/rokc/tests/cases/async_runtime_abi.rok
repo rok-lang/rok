@@ -1,4 +1,5 @@
 // needs: net
+// only-os: macos linux windows
 // expect-exit: 0
 // expect-stdout:
 // timer: true
@@ -9,10 +10,21 @@
 // The runtime ABI (805 §8.5.5, 708 §7.8.8) from hand-written futures:
 // `rok_timer_register` wakes at a deadline, `rok_coro_park` /
 // `rok_coro_unpark` park on a frame address, `rok_io_register` wakes on
-// fd readiness. A waker crosses as a one-element `GcBuf<Waker>`.
+// fd readiness (the runtime's fd: the descriptor, or on Windows the
+// one it makes of the SOCKET). A waker crosses as a one-element
+// `GcBuf<Waker>`.
 use rok::bare::mem::{GcBuf, buf_new};
 use rok::core::marker::share;
 use rok::std::net::{TcpListener, TcpStream, SocketAddr};
+#[cfg(target_family = "unix")]
+use rok::std::os::unix::io::AsRawFd;
+#[cfg(target_os = "windows")]
+use rok::std::os::windows::io::AsRawSocket;
+
+#[cfg(target_family = "unix")]
+fn io_fd(s: TcpStream) -> i32 { s.as_raw_fd() }
+#[cfg(target_os = "windows")]
+fn io_fd(s: TcpStream) -> i32 { unsafe { rok_os_socket_fd(s.as_raw_socket()) } }
 
 extern "C" {
     fn rok_time_now_ns() -> i64;
@@ -20,6 +32,8 @@ extern "C" {
     fn rok_coro_park(frame: GcBuf<i32>, waker: GcBuf<future::Waker>);
     fn rok_coro_unpark(frame: GcBuf<i32>);
     fn rok_io_register(fd: i32, interest: u32, waker: GcBuf<future::Waker>);
+    #[cfg(target_os = "windows")]
+    fn rok_os_socket_fd(s: u64) -> i32;
 }
 
 fn boxed(w: future::Waker) -> GcBuf<future::Waker> {
@@ -85,7 +99,7 @@ try! server.set_nonblocking(true);
 let reader = task::spawn(async {
     let buf = List::filled(16, 0u8);
     loop {
-        await Readable { fd: server.fd(), armed: false };
+        await Readable { fd: io_fd(server), armed: false };
         let n = try server.read(buf) catch _ { 0 };
         if n > 0 { return n; }
     }

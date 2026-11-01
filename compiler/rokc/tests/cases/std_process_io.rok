@@ -14,7 +14,7 @@
 // pwd: /
 // env: ONLY=1
 // missing: NotFound
-// signal=9 code_none=true
+// signal=Kill code_none=true
 // try_wait ok, then: exit status: 0
 // id ok: true
 
@@ -87,7 +87,7 @@ fn main() throws (IoError) {
         false
     };
     let sig = try Command::new("sh").args(["-c", "kill -9 $$"]).status();
-    println(f"signal={sig.signal() ?? 0} code_none={sig.code() is none}");
+    println(f"signal={sig.signal():?} code_none={sig.code() is none}");
 
     let quick = try Command::new("true").spawn();
     let polled = try quick.try_wait();
