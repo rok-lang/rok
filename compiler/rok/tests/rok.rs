@@ -1185,8 +1185,10 @@ fn build_lints_using_through_prebuilt_std() {
          fn scoped(p: str) -> str {\n    using h = try! File::open(p) { try! h.read_to_str() }\n}\n\n\
          fn main() {\n    println(leaks(\"rok.rokon\"));\n    println(scoped(\"rok.rokon\"));\n}\n",
     );
+    // A `File` left open is an error now (closing can fail); the one
+    // bound with `using` is not reported.
     let out = rok(&home, &app, &["build"]);
-    ok(&out);
+    assert!(!out.status.success());
     let err = text(&out.stderr);
     assert!(
         err.contains("`f` holds a `File` that is never closed"),
