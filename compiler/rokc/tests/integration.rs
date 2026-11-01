@@ -39,8 +39,14 @@ fn end_to_end_cases() {
         .collect();
     cases.sort();
     if let Some(f) = std::env::var_os("ROK_TEST_FILTER") {
+        // `a,b`: a case runs when its name contains any of them.
         let f = f.to_string_lossy().into_owned();
-        cases.retain(|(name, _)| name.contains(&f));
+        let parts: Vec<&str> = f
+            .split(',')
+            .map(str::trim)
+            .filter(|p| !p.is_empty())
+            .collect();
+        cases.retain(|(name, _)| parts.iter().any(|p| name.contains(p)));
     }
     let cases = shard(cases);
 
