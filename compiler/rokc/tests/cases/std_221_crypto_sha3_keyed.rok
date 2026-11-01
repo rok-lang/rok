@@ -13,9 +13,9 @@
 // key longer than the block, and `Secret` as `AsBytes`.
 use rok::core::crypto::{Hmac, Hkdf, Sha3Algorithm, Secret};
 
-fn len_of<B: AsBytes>(b: B) -> usize { b.byte_slice().len() }
+fn len_of<B: convert::AsBytes>(b: B) -> usize { b.byte_slice().len() }
 
-fn first<B: collections::slice::AsBytes>(b: B) -> Slice<u8> { b.byte_slice() }
+fn first<B: convert::AsBytes>(b: B) -> Slice<u8> { b.byte_slice() }
 
 fn main() {
     let m = "The quick brown fox jumps over the lazy dog";
