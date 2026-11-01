@@ -27,6 +27,7 @@
 // mutated DER / PEM: 900, hostile DER rejected: 12 of 12
 
 // TLS against hostile peers and inputs: an alert, never a panic or a hang.
+use rok::core::convert::AsBytes;
 use rok::std::net::{tcp_listen, tcp_connect, TcpStream, Shutdown};
 use rok::std::net::tls::{Client, Server, ClientConfig, ServerConfig, Certificate, PrivateKey, CipherSuite};
 use rok::std::thread;

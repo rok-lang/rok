@@ -12,6 +12,7 @@
 // verification (RFC 6979 A.2.5, Wycheproof subsets in cases.rok).
 mod cases;
 
+use rok::core::convert::AsBytes;
 use rok::core::crypto::HashAlgorithm;
 use rok::core::crypto::ecdsa::{EcCurve, VerifyingKey};
 use rok::core::crypto::rsa::PublicKey;
