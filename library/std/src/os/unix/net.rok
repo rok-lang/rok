@@ -3,7 +3,7 @@
 // blocking calls, `*_async` suspend the task. A listener's `accept`
 // gives the peer's bound path (`none`: unnamed).
 
-use rok::core::collections::slice::AsBytes;
+use rok::core::convert::AsBytes;
 use rok::core::io::{Close, IoError, Read, Write, AsyncRead, AsyncWrite};
 use rok::std::sys::{check, would_block, region, mut_region};
 use rok::std::time::Duration;

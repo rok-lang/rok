@@ -2,10 +2,10 @@
 // spec: §6.2.7 §6.2.14
 // needs: posix-fs
 // expect-exit: 0
-// expect-lint: 41:57 use of deprecated method `Metadata::mtime`
-// expect-lint: 41:82 use of deprecated method `Metadata::mtime_nanos`
-// expect-lint: 42:76 use of deprecated method `Metadata::atime`
-// expect-lint: 43:88 use of deprecated method `Metadata::ctime`
+// expect-lint: 40:57 use of deprecated method `Metadata::mtime`
+// expect-lint: 40:82 use of deprecated method `Metadata::mtime_nanos`
+// expect-lint: 41:76 use of deprecated method `Metadata::atime`
+// expect-lint: 42:88 use of deprecated method `Metadata::ctime`
 // expect-warning: = note: use `modified()`
 // expect-warning: = note: use `accessed()`
 // expect-warning: = note: use `status_changed()` (last status change) or `created()`

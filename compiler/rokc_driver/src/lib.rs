@@ -2981,12 +2981,7 @@ mod tests {
         "Inspect",
     ];
     /// Added on unix targets, then on Linux: the OS Ext traits.
-    const PRELUDE_UNIX: &[&str] = &[
-        "PermissionsExt",
-        "OpenOptionsExt",
-        "CommandExt",
-        "ExitStatusExt",
-    ];
+    const PRELUDE_UNIX: &[&str] = &["PermissionsExt", "CommandExt", "ExitStatusExt"];
     const PRELUDE_LINUX: &[&str] = &["ChildExt", "TcpStreamExt"];
     const PRELUDE_FNS: &[&str] = &[
         "channel",

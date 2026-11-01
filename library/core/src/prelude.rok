@@ -44,7 +44,7 @@ pub use rok::core::reflect::Inspect;
 // OS Ext traits, on their targets only: their methods need no `use`
 // there, and elsewhere the call says where the method exists.
 #[cfg(target_family = "unix")]
-pub use rok::std::os::unix::fs::{PermissionsExt, OpenOptionsExt};
+pub use rok::std::os::unix::fs::PermissionsExt;
 #[cfg(target_family = "unix")]
 pub use rok::std::os::unix::process::{CommandExt, ExitStatusExt};
 #[cfg(target_os = "linux")]
