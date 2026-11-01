@@ -45,7 +45,7 @@ const ITER_METHODS: &[&str] = &[
 
 /// Names of the methods (taking `self`) a user calls on `ty`, sorted:
 /// visible, and neither they nor their trait's declaration marked
-/// `#[doc(hidden)]` (compiler hooks, left out of completion and docs).
+/// `#[doc(hidden)]` or `#[internal]` (left out of completion and docs).
 pub(super) fn method_names(ctx: &LowerCtx<'_>, ty: &HirTy) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     let user = |name: &str, info: Option<&MethodInfo>, def: Option<&FnDef>| {

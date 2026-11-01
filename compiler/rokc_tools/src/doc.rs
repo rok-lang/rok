@@ -13,7 +13,7 @@
 //!
 //! Documented: the user package, its `--extern` deps and, with `--std`,
 //! the standard library; `pub` items in `pub` modules, but not those
-//! marked `#[doc(hidden)]` (compiler hooks). Doc text comes from
+//! marked `#[doc(hidden)]` or `#[internal]`. Doc text comes from
 //! `#[doc]` (`///`, `//!`) in a markdown subset: headings, fenced code,
 //! inline code, links, `**bold**`, lists, paragraphs. Type names in
 //! signatures and code that name a documented item link to it.

@@ -2140,7 +2140,7 @@ const INSTALL_USAGE: &str = "usage: rok install <name>[@<req>] [--registry <url>
 /// `rok install`: an executable (package with `src/main.rok`, or a script)
 /// built `--release` into `$ROK_HOME/bin`, or a library (`src/lib.rok`
 /// only, or `--lib`) into the active environment; a package with both
-/// warns without `--lib` or `--bin`. An executable already
+/// is an error without `--lib` or `--bin`. An executable already
 /// installed from the same version or commit and features is kept unless
 /// `--force`; path installs always rebuild.
 fn cmd_install(g: &Global, args: &[String]) -> Result<i32, String> {

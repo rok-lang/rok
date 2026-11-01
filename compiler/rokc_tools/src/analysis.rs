@@ -119,7 +119,7 @@ pub fn isolate<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> Res
 /// `(module path, name, is a module)` of public items.
 pub type Names = Vec<(String, String, bool)>;
 
-/// The name of a `pub` item that is not `#[doc(hidden)]`.
+/// The name of a `pub` item that is not `#[doc(hidden)]` or `#[internal]`.
 fn shown(item: &Item) -> Option<&str> {
     use rokc_core::Visibility::Pub;
     let (vis, attrs, name) = match item {
@@ -204,8 +204,9 @@ impl Analysis {
         self.file(span).is_some_and(|(p, _)| p == path)
     }
 
-    /// Spans of the functions and types marked `#[doc(hidden)]`, or
-    /// inside a module so marked: compiler hooks completion leaves out.
+    /// Spans of the functions and types marked `#[doc(hidden)]` or
+    /// `#[internal]`, or inside a module so marked: completion leaves
+    /// them out.
     pub fn hidden_spans(&self) -> HashSet<Span> {
         fn walk(items: &[Item], all: bool, out: &mut HashSet<Span>) {
             for item in items {

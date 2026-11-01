@@ -508,7 +508,7 @@ pub(super) fn leaf_name(name: &str) -> &str {
 }
 
 /// `ty`'s `method_table` target: structs / enums directly, else mangled
-/// (as `impl_target_key`).
+/// (as `ty_mangle`).
 pub(super) fn method_target_for(ty: &HirTy) -> Option<MethodTarget> {
     match ty {
         HirTy::Struct(id) => Some(MethodTarget::Struct(*id)),

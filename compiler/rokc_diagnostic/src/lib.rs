@@ -820,7 +820,7 @@ impl SourceMap {
     /// `diag` as `report` prints it, newline-terminated (spec 9.1.8):
     ///
     /// ```text
-    /// error[E0026]: cannot find value `count` in this scope
+    /// error[E0027]: cannot find value `count` in this scope
     ///   --> src/main.rok:5:10
     ///    |
     ///  5 |     let x = count + 1;

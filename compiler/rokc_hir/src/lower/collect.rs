@@ -1852,7 +1852,7 @@ fn collect<'a>(
         let generic_base = p.generic_base.clone();
         let target = method_target_for(&target_ty);
         // `From<i32>` / `From<i8>` impls on one type keep their methods
-        // apart by the trait's arguments (`overload_args`).
+        // apart by the trait's arguments (`trait_args_key`).
         let trait_args_key: String = provides.as_ref().map_or_else(String::new, |r| {
             r.args
                 .iter()

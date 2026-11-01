@@ -693,8 +693,8 @@ fn real_main() {
     }
 }
 
-/// Find `rok/core` (the implicit prelude, spec 0.0.5) and
-/// `librokr.a` without flags.
+/// Find the library roots (`rok/core`, spec 0.5) and `librokr.a`
+/// without flags.
 fn with_defaults(mut a: Args) -> Args {
     let sys = rokc_interface::sysroot();
     if a.bootstrap.is_empty() {
@@ -2112,7 +2112,7 @@ fn cmd_profdata(a: &Args) {
     }
 }
 
-/// `rokc bindgen <header>` (std 1.7.6): spec 905.4 output, one block per
+/// `rokc bindgen <header>` (std 1.7.6, spec 9.1.3): one block per
 /// symbol.
 fn cmd_bindgen(a: &Args) {
     let [header] = a.positional.as_slice() else {

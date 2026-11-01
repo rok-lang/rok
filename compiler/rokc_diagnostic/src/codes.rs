@@ -714,8 +714,8 @@ codes! {
      Its output follows the message.";
 
     129 INVALID_WIT Module "invalid WIT"
-    "A `.wit` file named by `#[wit(..)]` cannot be parsed or resolved. Fix the WIT file at \
-     the place the message names.";
+    "A `.wit` file named by `ffi::wit::import { .. }` or `ffi::wit::export { .. }` cannot be \
+     parsed or resolved. Fix the WIT file at the place the message names.";
 
     130 UNSUPPORTED Unsupported "not supported by this backend"
     "The code uses something the selected code generator does not support yet. Build with \

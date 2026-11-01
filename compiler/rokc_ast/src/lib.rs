@@ -79,8 +79,7 @@ impl Attribute {
         }
     }
 
-    /// `#[doc(hidden)]`: public for the compiler's own use, left out of
-    /// the API docs and completion.
+    /// `#[doc(hidden)]`: left out of the API docs and completion.
     #[must_use]
     pub fn is_doc_hidden(&self) -> bool {
         self.name() == "doc"

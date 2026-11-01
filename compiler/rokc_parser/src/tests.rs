@@ -916,8 +916,8 @@ fn macro_pattern_position() {
 
 #[test]
 fn macro_expansion_is_recorded() {
-    // The expansion is recorded (surfaced by `rokc --emit expanded`, the
-    // "expand in place" source, spec 6.8.12 tooling).
+    // The expansion is recorded (surfaced by `rokc --emit=expansions`,
+    // spec 6.9.9).
     let (p, diags) = parse_meta(
         "#[impl_macro(twice)] pub @macro { (@e: expr) => { (@e, @e) } }\n\
          fn f() -> (i32, i32) { return twice!(1i32); }",
