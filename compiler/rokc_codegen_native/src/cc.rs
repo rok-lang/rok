@@ -77,7 +77,7 @@ pub fn leaves(ty: &MirTy, t: &Target, at: u32, out: &mut Vec<Leaf>) {
     };
     let wb = t.pointer_width / 8;
     match ty {
-        MirTy::Unit | MirTy::Mlir(_) => {}
+        MirTy::Unit => {}
         MirTy::Prim(PrimTy::Str) => {
             out.push(Leaf {
                 off: at,

@@ -1606,54 +1606,6 @@ impl<'a> FnBuilder<'a> {
                 });
                 Operand::Copy(dst)
             }
-            HirExprKind::MlirOp {
-                op,
-                attrs,
-                args,
-                regions,
-            } => {
-                let args = args
-                    .iter()
-                    .map(|a| {
-                        let t = self.ty(&a.ty);
-                        (self.lower_expr_to_operand(a), t)
-                    })
-                    .collect();
-                // Regions come after the operands (their text goes into
-                // the op, `Statement::MlirRegion`).
-                for (params, body) in regions {
-                    self.push_stmt(Statement::MlirRegion {
-                        params: params.clone(),
-                    });
-                    // The terminator op is the region's last op: a
-                    // trailing (non-`()`) value is not evaluated.
-                    let (stmts, tail) = match &body.kind {
-                        HirExprKind::Block(b) => (&b.stmts[..], b.trailing.as_ref()),
-                        _ => (&[][..], Some(body)),
-                    };
-                    for s in stmts {
-                        self.lower_stmt(s);
-                    }
-                    if let Some(t) = tail.filter(|t| self.ty(&t.ty) == MirTy::Unit) {
-                        self.push_loc(t.span);
-                        self.lower_expr_to_operand(t);
-                    }
-                    self.push_stmt(Statement::MlirRegionEnd);
-                }
-                let ty = self.ty(&e.ty);
-                let dst = self.fresh_local(ty.clone());
-                self.push_stmt(Statement::Assign {
-                    target: dst,
-                    rvalue: RValue::MlirOp {
-                        op: op.clone(),
-                        attrs: attrs.clone(),
-                        args,
-                        ty,
-                        regions: u32::try_from(regions.len()).expect("too many regions"),
-                    },
-                });
-                Operand::Copy(dst)
-            }
             HirExprKind::BufSet {
                 buf,
                 index,

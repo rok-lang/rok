@@ -14,4 +14,3 @@ impl Add for Meters {
 fn sized<T>() -> usize { return 0; }
 
 fn main() -> i32 { return 0; }
-// spec: std 109-mlir §1.9.7

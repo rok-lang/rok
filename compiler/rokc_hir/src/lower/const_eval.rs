@@ -689,7 +689,6 @@ impl<'b> Interp<'b> {
                 None => runtime("asks for a type layout"),
             },
             K::SizeOf { .. } => runtime("asks for a type layout"),
-            K::MlirOp { .. } => runtime("runs an MLIR operation"),
             K::UnionWrite { value, .. } => Ok(Value::Union(Box::new(self.expr(value, f)?))),
             K::UnionRead {
                 target, field_ty, ..
@@ -1424,9 +1423,6 @@ fn impure(
         }
         HirExprKind::CoroNew { .. } | HirExprKind::Suspend { .. } => {
             sites.push((e.span, Err("runs a coroutine".to_owned())));
-        }
-        HirExprKind::MlirOp { .. } => {
-            sites.push((e.span, Err("runs an MLIR operation".to_owned())));
         }
         _ => {}
     });

@@ -1763,7 +1763,7 @@ struct FnEmit<'a> {
     /// `None`: every one.
     rooted: Option<HashSet<LocalId>>,
     /// The frame's root cell for a rooted local, besides its own slot (not
-    /// arrays or `__mlir_op` bodies). Writes go to both; reads use the
+    /// arrays). Writes go to both; reads use the
     /// slot, which nothing else reaches, so loads survive calls (a root's
     /// object never moves, 704 §7.4.1).
     root_cells: HashMap<u32, String>,
@@ -1789,12 +1789,6 @@ struct FnEmit<'a> {
     /// (local id, `#di_var` alias, the declare's location).
     dbg: Option<crate::debug::FnDebug>,
     dbg_vars: Vec<(u32, String, String)>,
-    /// `__mlir_op` regions (bare 1.9): enclosing bodies of open regions,
-    /// text of closed ones for the next op, and root clears deferred until
-    /// out of every region (a loop region may reread the local).
-    region_outer: Vec<String>,
-    regions_closed: Vec<String>,
-    region_deaths: Vec<LocalId>,
     /// Position of the last `Statement::Loc`: a failed check reports it.
     at: rokc_diagnostic::Span,
     /// Lent `Emitter::quiet`.
@@ -1877,10 +1871,9 @@ pub fn stmt_safepoint(
             RValue::StaticLoad { name, .. } | RValue::StaticAddr(name) => {
                 pkgs.lazy_statics.contains_key(name)
             }
-            RValue::CallIndirect { .. }
-            | RValue::HeapAlloc { .. }
-            | RValue::BufAlloc { .. }
-            | RValue::MlirOp { .. } => true,
+            RValue::CallIndirect { .. } | RValue::HeapAlloc { .. } | RValue::BufAlloc { .. } => {
+                true
+            }
             _ => false,
         },
         Statement::StaticStore { name, .. } => pkgs.lazy_statics.contains_key(name),
@@ -2001,9 +1994,9 @@ pub fn body_safepoints(
 /// Functions some call cycle may pass through.
 ///
 /// Every such cycle polls (804 §8.4.2). Members of a direct-call cycle,
-/// callers of what this module can't see (indirect calls, C,
-/// `__mlir_op`), functions called from C or through a pointer, and `any`
-/// dispatchers; the rest are only entered from callers that poll.
+/// callers of what this module can't see (indirect calls, C), functions
+/// called from C or through a pointer, and `any` dispatchers; the rest
+/// are only entered from callers that poll.
 pub fn reentrant_functions(module: &MirModule) -> HashSet<FunctionId> {
     let index: HashMap<FunctionId, usize> = module
         .functions
@@ -2028,7 +2021,7 @@ pub fn reentrant_functions(module: &MirModule) -> HashSet<FunctionId> {
                     Some(&j) => next.push(j),
                     None => opaque = true,
                 },
-                RValue::CallIndirect { .. } | RValue::MlirOp { .. } => opaque = true,
+                RValue::CallIndirect { .. } => opaque = true,
                 RValue::FnAddr { callee, .. } => {
                     out.insert(*callee);
                 }
@@ -2224,9 +2217,6 @@ impl<'a> FnEmit<'a> {
             local_names,
             slot_names: vec![None; f.locals.len()],
             union_scratch: HashMap::new(),
-            region_outer: Vec::new(),
-            regions_closed: Vec::new(),
-            region_deaths: Vec::new(),
             at: f.span,
             block_param_set,
             next_ssa: 0,
@@ -2280,13 +2270,11 @@ impl<'a> FnEmit<'a> {
     }
 
     /// Address of TLS slot `slot` (803), off `tls_base`, computed once per
-    /// function so LLVM keeps it in a register; a fresh one inside an
-    /// `__mlir_op` region, which may not see the entry block's values.
+    /// function so LLVM keeps it in a register.
     fn tls_addr(&mut self, slot: Slot) -> String {
         self.needs.insert("rok_tls");
         let off = slot.offset(self.target.pointer_width / 8);
-        let inline = !self.region_outer.is_empty();
-        if let Some(a) = self.tls.get(&off).filter(|_| !inline) {
+        if let Some(a) = self.tls.get(&off) {
             return a.clone();
         }
         let base = self.tls_base();
@@ -2294,20 +2282,18 @@ impl<'a> FnEmit<'a> {
         let text = format!(
             "    {a} = llvm.getelementptr inbounds {base}[{off}] : (!llvm.ptr) -> !llvm.ptr, i8\n"
         );
-        self.tls_text(inline, &text, off, &a);
+        self.tls_text(&text, off, &a);
         a
     }
 
     /// The address of `rok_tls` on this thread: the caller's (`tls_arg`),
-    /// else one `threadlocal.address` in the entry block (or here, in an
-    /// `__mlir_op` region).
+    /// else one `threadlocal.address` in the entry block.
     fn tls_base(&mut self) -> String {
         self.needs.insert("rok_tls");
-        let inline = !self.region_outer.is_empty();
-        if let Some(a) = self.tls_arg.as_ref().filter(|_| !inline) {
+        if let Some(a) = &self.tls_arg {
             return a.clone();
         }
-        if let Some(b) = self.tls.get(&u32::MAX).filter(|_| !inline) {
+        if let Some(b) = self.tls.get(&u32::MAX) {
             return b.clone();
         }
         let [g, b] = std::array::from_fn(|_| self.fresh_value());
@@ -2316,19 +2302,15 @@ impl<'a> FnEmit<'a> {
     {b} = \"llvm.intr.threadlocal.address\"({g}) : (!llvm.ptr) -> !llvm.ptr
 "
         );
-        self.tls_text(inline, &text, u32::MAX, &b);
+        self.tls_text(&text, u32::MAX, &b);
         b
     }
 
-    /// `text` defining TLS address `a` (`tls` key `key`): in the region
-    /// `inline`, else in the entry block, remembered.
-    fn tls_text(&mut self, inline: bool, text: &str, key: u32, a: &str) {
-        if inline {
-            self.body.push_str(text);
-        } else {
-            self.entry_allocas.push_str(text);
-            self.tls.insert(key, a.to_owned());
-        }
+    /// `text` defining TLS address `a` (`tls` key `key`) in the entry
+    /// block, remembered.
+    fn tls_text(&mut self, text: &str, key: u32, a: &str) {
+        self.entry_allocas.push_str(text);
+        self.tls.insert(key, a.to_owned());
     }
 
     /// Whether a collection can run while this function is active
@@ -2735,20 +2717,10 @@ impl<'a> FnEmit<'a> {
         let _ = writeln!(self.body, "    {one} = llvm.mlir.constant(1 : i32) : i32");
         // A value read only later in its own block needs no slot, unless it
         // holds GC references, is an array, or `-g` describes it.
-        let regions = self
-            .f
-            .blocks
-            .iter()
-            .flat_map(|b| &b.stmts)
-            .any(|s| matches!(s, Statement::MlirRegion { .. }));
-        let ssa = if regions {
-            vec![false; self.f.locals.len()]
-        } else {
-            rokc_mir::block_local(self.f)
-        };
-        // Link and poll lazily (`plan_links`), except with `__mlir_op`
-        // regions or for functions entered from C or a pointer.
-        if !(regions || self.entry_poll && self.eager_poll) {
+        let ssa = rokc_mir::block_local(self.f);
+        // Link and poll lazily (`plan_links`), except for functions
+        // entered from C or a pointer.
+        if !(self.entry_poll && self.eager_poll) {
             let (quiet, pkgs, target) = (&*self.quiet, self.pkgs, self.target);
             let f = self.f;
             let skip: Vec<Option<usize>> = f.blocks.iter().map(rokc_mir::noreturn_call).collect();
@@ -2779,8 +2751,8 @@ impl<'a> FnEmit<'a> {
             }
         }
         // GC-holding locals no collection sees while live (`live_across`)
-        // need no root and may stay SSA values; with `__mlir_op` regions
-        // everything is rooted. `back`: back-edge polls count too.
+        // need no root and may stay SSA values. `back`: back-edge polls
+        // count too.
         let roots = |back: bool| {
             let (quiet, pkgs, target) = (&*self.quiet, self.pkgs, self.target);
             rokc_mir::live_across(
@@ -2812,13 +2784,11 @@ impl<'a> FnEmit<'a> {
                 self.entry_poll && self.links.is_none(),
             )
         };
-        if !regions {
-            self.real_roots = Some(roots(false));
-            self.rooted = Some(roots(true));
-            let entry = self.f.blocks.first().map(|b| b.id.0);
-            self.reentry = self.back_edges.values().flatten().copied().collect();
-            self.reentry.retain(|h| Some(*h) != entry);
-        }
+        self.real_roots = Some(roots(false));
+        self.rooted = Some(roots(true));
+        let entry = self.f.blocks.first().map(|b| b.id.0);
+        self.reentry = self.back_edges.values().flatten().copied().collect();
+        self.reentry.retain(|h| Some(*h) != entry);
         let result = self.result_locals(&ssa);
         for local in &self.f.locals {
             if self.is_block_param(local.id) || !is_slotted(&local.ty) {
@@ -3273,19 +3243,7 @@ impl<'a> FnEmit<'a> {
     }
 
     fn finish(self) -> String {
-        let body = self.entry_allocas + &self.body;
-        // A region's values are scoped to it: left as emitted.
-        let regions = self
-            .f
-            .blocks
-            .iter()
-            .flat_map(|b| &b.stmts)
-            .any(|s| matches!(s, Statement::MlirRegion { .. }));
-        let body = if regions {
-            body
-        } else {
-            crate::compact::compact(&body)
-        };
+        let body = crate::compact::compact(&(self.entry_allocas + &self.body));
         match &self.dbg {
             Some(d) => crate::debug::locate(&body, d),
             None => body,
@@ -3346,11 +3304,8 @@ impl<'a> FnEmit<'a> {
                 .get(pos)
                 .map(|d| d[i].clone())
                 .unwrap_or_default();
-            self.region_deaths.extend(dead);
-            if self.region_outer.is_empty() {
-                for l in std::mem::take(&mut self.region_deaths) {
-                    self.clear_root(l);
-                }
+            for l in dead {
+                self.clear_root(l);
             }
         }
         self.link_before(b.id.0, usize::MAX);
@@ -3707,29 +3662,6 @@ impl<'a> FnEmit<'a> {
                     );
                 }
             }
-            Statement::MlirRegion { params } => {
-                self.region_outer.push(std::mem::take(&mut self.body));
-                let args: Vec<(String, MirTy)> = params
-                    .iter()
-                    .map(|p| (self.fresh_value(), self.local_ty(*p)))
-                    .collect();
-                let header: Vec<String> = args
-                    .iter()
-                    .map(|(v, t)| format!("{v}: {}", mlir_type(t, self.target)))
-                    .collect();
-                let _ = writeln!(self.body, "  ^bb0({}):", header.join(", "));
-                for (p, (v, _)) in params.iter().zip(&args) {
-                    self.write_local(*p, v);
-                }
-            }
-            Statement::MlirRegionEnd => {
-                let outer = self.region_outer.pop().unwrap_or_default();
-                let text = std::mem::replace(&mut self.body, outer);
-                self.regions_closed.push(text);
-            }
-            // Inside a region the root stays until the liveness clear
-            // after the op.
-            Statement::StorageDead(_) if !self.region_outer.is_empty() => {}
             // A poll root's cell is null but on a yield path.
             Statement::StorageDead(l) if self.poll_roots.contains(&l.0) => {}
             Statement::StorageDead(l) => {
@@ -4085,13 +4017,6 @@ impl<'a> FnEmit<'a> {
                 elem_ty,
                 order,
             } => self.emit_buf_atomic(op, buf, index, args, elem_ty, *order),
-            RValue::MlirOp {
-                op,
-                attrs,
-                args,
-                ty,
-                regions,
-            } => self.emit_mlir_op(op, attrs, args, ty, *regions),
             RValue::HeapLoad { ptr, ty } => {
                 let p = self.materialize_operand(ptr, &MirTy::GcRef);
                 if self.target.any_inline(ty) {
@@ -4116,56 +4041,6 @@ impl<'a> FnEmit<'a> {
                 dst
             }
         }
-    }
-
-    /// `__mlir_op` (bare 1.9) in generic form,
-    /// `%r = "d.op"(%a, %b) ({ ^bb0(..): .. }, ..) {name = attr} : (A, B) -> R`,
-    /// closing the last `regions`. A unit result is none (nothing may
-    /// follow a region's terminator).
-    fn emit_mlir_op(
-        &mut self,
-        op: &str,
-        attrs: &[(String, String)],
-        args: &[(Operand, MirTy)],
-        ty: &MirTy,
-        regions: u32,
-    ) -> String {
-        let (vals, tys): (Vec<String>, Vec<String>) = args
-            .iter()
-            .map(|(a, t)| (self.materialize_operand(a, t), mlir_type(t, self.target)))
-            .unzip();
-        let attrs = if attrs.is_empty() {
-            String::new()
-        } else {
-            let kv: Vec<String> = attrs.iter().map(|(k, v)| format!("{k} = {v}")).collect();
-            format!(" {{{}}}", kv.join(", "))
-        };
-        let first = self.regions_closed.len() - regions as usize;
-        let regions = self.regions_closed.split_off(first);
-        let regions = if regions.is_empty() {
-            String::new()
-        } else {
-            format!(" ({{\n{}    }})", regions.join("    }, {\n"))
-        };
-        let unit = *ty == MirTy::Unit;
-        let ret = if unit {
-            "()".to_owned()
-        } else {
-            mlir_type(ty, self.target)
-        };
-        let v = self.fresh_value();
-        let lhs = if unit {
-            String::new()
-        } else {
-            format!("{v} = ")
-        };
-        let _ = writeln!(
-            self.body,
-            "    {lhs}\"{op}\"({}){regions}{attrs} : ({}) -> {ret}",
-            vals.join(", "),
-            tys.join(", ")
-        );
-        v
     }
 
     /// `rok_gc_alloc_slow(total_size, align, type_id)` and store the
@@ -5106,7 +4981,7 @@ impl<'a> FnEmit<'a> {
             }
             // Up to 16 bytes: compare the first and last `w` bytes of each
             // side (`w` = 8, 4, 2, 1 covers `w..=2w`) instead of a call.
-            ("rok_str_eq", [lhs, rhs]) if self.region_outer.is_empty() => {
+            ("rok_str_eq", [lhs, rhs]) => {
                 let sa = self.materialize_operand(lhs, &str_ty);
                 let sb = self.materialize_operand(rhs, &str_ty);
                 let k = self.next_check;
@@ -6063,7 +5938,6 @@ fn mlir_type(ty: &MirTy, target: &Target) -> String {
         // Function values are opaque pointers inside aggregates; each
         // call site supplies the `(args) -> ret` shape.
         MirTy::GcRef | MirTy::Fn(_, _) => "!llvm.ptr".to_owned(),
-        MirTy::Mlir(t) => t.clone(),
     }
 }
 
@@ -6391,10 +6265,10 @@ fn arith_binop(
     None
 }
 
-/// A local of type `ty` lives in an `llvm.alloca` slot; `()`, `any` and
-/// MLIR-typed values stay SSA.
+/// A local of type `ty` lives in an `llvm.alloca` slot; `()` and `any`
+/// values stay SSA.
 const fn is_slotted(ty: &MirTy) -> bool {
-    !matches!(ty, MirTy::Unit | MirTy::Any | MirTy::Mlir(_))
+    !matches!(ty, MirTy::Unit | MirTy::Any)
 }
 
 /// `(total_size, align)` of a GC object with a `ty` payload (801 §8.1.7).

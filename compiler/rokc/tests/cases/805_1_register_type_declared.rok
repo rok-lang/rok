@@ -1,13 +1,13 @@
 // spec: refs-lang §8.5.1 §8.2.13
-// rokc-arg: --mlir-pass canonicalize
+// rokc-arg: -C backend=llvm
 // expect-exit: 0
 // expect-stdout:
 // [1, 2] registered
 // [3]
 
-// A program that declares `rok_gc_register_type` itself, compiled as one
-// MLIR module (`--mlir-pass`): its declaration and the registration
-// codegen emits for the program's own GC types are one function.
+// A program that declares `rok_gc_register_type` itself, compiled by
+// LLVM: its declaration agrees with the registration codegen emits for
+// the program's own GC types.
 use rok::bare::mem::transmute_unchecked;
 use rok::bare::ptr::{addr_of, ConstPtr};
 

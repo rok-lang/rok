@@ -3535,7 +3535,6 @@ impl<'a> LowerCtx<'a> {
         match ty {
             HirTy::GcBuf(t) => format!("GcBuf<{}>", self.ty_name(t)),
             HirTy::Never => "!".to_owned(),
-            HirTy::Mlir(t) => format!("__mlir_type<{t:?}>"),
             HirTy::Struct(_) | HirTy::Enum(_) => {
                 let (name, generic_args) = match ty {
                     HirTy::Struct(id) => {
@@ -3813,7 +3812,6 @@ impl<'a> LowerCtx<'a> {
             HirTy::Prim(_)
             | HirTy::Unit
             | HirTy::Never
-            | HirTy::Mlir(_)
             | HirTy::Any
             | HirTy::Unknown
             | HirTy::Path(_)
@@ -4858,9 +4856,6 @@ impl<'a> LowerCtx<'a> {
                     {
                         if let (GC_BUF, [elem]) = (full.as_str(), generics) {
                             return HirTy::GcBuf(Box::new(rec(elem)));
-                        }
-                        if let Some(t) = resolve::mlir_ty(&full, generics) {
-                            return t;
                         }
                         let args: Vec<HirTy> = generics.iter().map(rec).collect();
                         // A new instance's bound errors point at this type.

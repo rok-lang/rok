@@ -1448,8 +1448,7 @@ fn children(e: &HirExpr) -> Vec<&HirExpr> {
         | K::EnumVariantInit { args: xs, .. }
         | K::Tuple { fields: xs }
         | K::ArrayInit { elements: xs, .. }
-        | K::CoroNew { args: xs, .. }
-        | K::MlirOp { args: xs, .. } => xs.iter().collect(),
+        | K::CoroNew { args: xs, .. } => xs.iter().collect(),
         K::CallIndirect {
             callee: c, args, ..
         }

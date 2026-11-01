@@ -105,11 +105,6 @@ fn print_stmt(out: &mut String, s: &Statement) {
         Statement::StorageDead(l) => {
             let _ = write!(out, "dead _{};", l.0);
         }
-        Statement::MlirRegion { params } => {
-            let ps: Vec<String> = params.iter().map(|p| format!("_{}", p.0)).collect();
-            let _ = write!(out, "region({}) {{", ps.join(", "));
-        }
-        Statement::MlirRegionEnd => out.push('}'),
         Statement::RawStore {
             addr, value, ty, ..
         } => {
@@ -324,16 +319,6 @@ fn print_rvalue(out: &mut String, r: &RValue) {
             print_operand(out, index);
             out.push(']');
         }
-        RValue::MlirOp { op, args, ty, .. } => {
-            let _ = write!(out, "mlir_op<{op:?}, {}>(", ty_str(ty));
-            for (i, (a, _)) in args.iter().enumerate() {
-                if i > 0 {
-                    out.push_str(", ");
-                }
-                print_operand(out, a);
-            }
-            out.push(')');
-        }
         RValue::BufAtomic {
             op,
             buf,
@@ -453,7 +438,6 @@ fn ty_str(t: &MirTy) -> String {
         MirTy::Prim(p) => p.name().to_owned(),
         MirTy::Any => "any".to_owned(),
         MirTy::GcRef => "gcref".to_owned(),
-        MirTy::Mlir(t) => format!("mlir<{t:?}>"),
         MirTy::Tuple(parts) => {
             let inner = parts.iter().map(ty_str).collect::<Vec<_>>().join(", ");
             format!("({inner})")

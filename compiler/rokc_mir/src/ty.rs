@@ -111,7 +111,6 @@ pub fn lower_ty(ty: &HirTy, module: &HirModule, target: &Target) -> MirTy {
         }
         HirTy::Throws { ok, err } => carrier(lower(ok), lower(err), target),
         HirTy::GcBuf(_) => MirTy::GcRef,
-        HirTy::Mlir(t) => MirTy::Mlir(t.clone()),
     }
 }
 

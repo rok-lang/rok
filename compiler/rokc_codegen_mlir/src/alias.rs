@@ -47,15 +47,11 @@ fn defs(f: &MirFunction) -> Defs<'_> {
     for b in &f.blocks {
         opaque.extend(b.params.iter().map(|p| p.0));
         for s in &b.stmts {
-            match s {
-                Statement::Assign { target, rvalue } => {
-                    if let RValue::AddrOf(l) = rvalue {
-                        opaque.insert(l.0);
-                    }
-                    by.entry(target.0).or_default().push(rvalue);
+            if let Statement::Assign { target, rvalue } = s {
+                if let RValue::AddrOf(l) = rvalue {
+                    opaque.insert(l.0);
                 }
-                Statement::MlirRegion { params } => opaque.extend(params.iter().map(|p| p.0)),
-                _ => {}
+                by.entry(target.0).or_default().push(rvalue);
             }
         }
     }

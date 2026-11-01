@@ -129,9 +129,7 @@ impl Target {
                 PrimTy::Isize | PrimTy::Usize => word,
                 PrimTy::Str => (2 * word.0, word.1),
             },
-            // An MLIR type's values stay SSA; only an aggregate holding
-            // one asks, and gets a word.
-            MirTy::Any | MirTy::GcRef | MirTy::Fn(_, _) | MirTy::Mlir(_) => word,
+            MirTy::Any | MirTy::GcRef | MirTy::Fn(_, _) => word,
             MirTy::Union(vs, n, _) => (
                 word.0 * n,
                 vs.iter()

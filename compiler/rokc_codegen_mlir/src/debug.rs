@@ -450,12 +450,9 @@ impl DebugInfo {
                 Self::composite("str", size, align, &[("ptr", ptr, 0), ("len", len, pw / 8)])
             }
             MirTy::Prim(p) => return self.basic_type(*p),
-            MirTy::GcRef | MirTy::Mlir(_) => {
-                let name = if *ty == MirTy::GcRef { "gcref" } else { "mlir" };
-                format!(
-                    "#llvm.di_derived_type<tag = DW_TAG_pointer_type, name = \"{name}\", sizeInBits = {pw}>"
-                )
-            }
+            MirTy::GcRef => format!(
+                "#llvm.di_derived_type<tag = DW_TAG_pointer_type, name = \"gcref\", sizeInBits = {pw}>"
+            ),
             // A pointer to its subroutine type (`()` parameters left out).
             MirTy::Fn(args, ret) => {
                 let mut types = vec![
@@ -648,8 +645,8 @@ pub fn locate(body: &str, d: &FnDebug) -> String {
         }
         out.push_str(l);
         let t = l.trim_start();
-        // A line opening a region (`"scf.if"(%c) ({`, `}, {`) is not the
-        // op's end; its location goes after the closing `})`.
+        // A line opening a region (ending in `{`) is not the op's end; its
+        // location goes after the closing `}`.
         if !(t.is_empty()
             || t.starts_with('^')
             || t.starts_with("//")

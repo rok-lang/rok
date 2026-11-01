@@ -104,7 +104,7 @@ fn leaves(ty: &MirTy, at: u32, target: &Target, out: &mut Vec<(u32, u32, Leaf)>)
             out.push((at, word, Leaf::Int));
             out.push((at + word, word, Leaf::Int));
         }
-        MirTy::Prim(_) | MirTy::Any | MirTy::GcRef | MirTy::Fn(..) | MirTy::Mlir(_) => {
+        MirTy::Prim(_) | MirTy::Any | MirTy::GcRef | MirTy::Fn(..) => {
             out.push((at, target.size_align(ty).0, Leaf::Int));
         }
         MirTy::Tuple(ps) | MirTy::Struct(_, ps) => {

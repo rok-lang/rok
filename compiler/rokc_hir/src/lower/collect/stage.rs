@@ -806,8 +806,6 @@ codec_enum!(Intrinsic {
     Atomic(x0),
     AnyCast,
     MethodTable,
-    MlirOp,
-    MlirAttr,
     Transfer,
     TransferNeeded,
     HandOver,

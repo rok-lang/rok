@@ -32,13 +32,10 @@ fn quiet(s: &Statement, leaf: &HashSet<FunctionId>) -> bool {
             | RValue::StaticAddr(_)
             | RValue::HeapBox { .. }
             | RValue::BufAlloc { .. }
-            | RValue::HeapAlloc { .. }
-            | RValue::MlirOp { .. } => false,
+            | RValue::HeapAlloc { .. } => false,
             _ => true,
         },
-        Statement::StaticStore { .. } | Statement::MlirRegion { .. } | Statement::MlirRegionEnd => {
-            false
-        }
+        Statement::StaticStore { .. } => false,
         _ => true,
     }
 }

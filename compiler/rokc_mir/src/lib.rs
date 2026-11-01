@@ -335,13 +335,6 @@ pub enum Statement {
         value: Operand,
         ty: MirTy,
     },
-    /// The statements up to the matching `MlirRegionEnd` are one region
-    /// of the next `RValue::MlirOp` (bare 1.9), its entry block taking
-    /// `params`. Regions nest; the op takes the last `regions` closed.
-    MlirRegion {
-        params: Vec<LocalId>,
-    },
-    MlirRegionEnd,
 }
 
 #[derive(Clone, Debug)]
@@ -474,16 +467,6 @@ pub enum RValue {
         elem_ty: MirTy,
         order: [&'static str; 2],
     },
-    // `HirExprKind::MlirOp`: one MLIR op in generic form; `args` with
-    // their types, the result is the target's `ty` (`Unit`: none);
-    // its `regions` are the last ones closed (`Statement::MlirRegion`).
-    MlirOp {
-        op: String,
-        attrs: Vec<(String, String)>,
-        args: Vec<(Operand, MirTy)>,
-        ty: MirTy,
-        regions: u32,
-    },
     // Load the `ty` payload of the `GcRef` `ptr` (a `HeapBox` object),
     // or unpack an inline payload.
     HeapLoad {
@@ -578,7 +561,4 @@ pub enum MirTy {
     /// ([`UnionKind::Sum`]) is scanned per the `i32` tag before it (802
     /// `SUM_PAYLOAD`); any other one as ambiguous words.
     Union(Vec<(u32, MirTy)>, u32, UnionKind),
-    /// `__mlir_type<"text">` (stdlib bare 1.9): an opaque MLIR type;
-    /// its values are SSA only (no slot, never in memory).
-    Mlir(String),
 }

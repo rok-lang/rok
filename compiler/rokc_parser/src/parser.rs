@@ -3809,12 +3809,11 @@ impl<'a> Parser<'a> {
                 )
             {
                 // Const argument (spec 2.11.4): a literal, `-lit`, or
-                // `{ expr }`; a string names an MLIR op (bare 1.9).
+                // `{ expr }`.
                 if matches!(
                     p.peek(),
                     TokenKind::IntLit(_)
                         | TokenKind::CharLit(_)
-                        | TokenKind::StrLit(_)
                         | TokenKind::Minus
                         | TokenKind::True
                         | TokenKind::False
@@ -3989,8 +3988,7 @@ impl<'a> Parser<'a> {
             if !self.eat(&TokenKind::ColonColon) {
                 break;
             }
-            // `f::<T, 3>(..)` (spec 2.11.4); type paths too
-            // (`__mlir_type::<"index">`, bare 1.9).
+            // `f::<T, 3>(..)` (spec 2.11.4); type paths too.
             if matches!(self.peek(), TokenKind::Lt) {
                 self.bump();
                 let args = self.nested_type_list(TokenKind::Gt)?;
@@ -7585,13 +7583,9 @@ impl<'a> Parser<'a> {
     fn parse_call_args_inner(&mut self) -> Option<Vec<CallArg>> {
         let mut args = Vec::new();
         while !matches!(self.peek(), TokenKind::RParen | TokenKind::Eof) {
-            // `name: expr` is a named argument (also `__mlir_op`'s
-            // `attributes = {..}` / `regions = [..]`, bare 1.9).
+            // `name: expr` is a named argument.
             if let Some(name) = self.peek_name() {
-                if matches!(self.peek_next(), Some(TokenKind::Colon))
-                    || (matches!(name.as_str(), "attributes" | "regions")
-                        && matches!(self.peek_next(), Some(TokenKind::Eq)))
-                {
+                if matches!(self.peek_next(), Some(TokenKind::Colon)) {
                     self.bump_name(); // ident
                     self.bump(); // `:`
                     let value = self.parse_expr()?;

@@ -383,8 +383,7 @@ fn live_in(f: &MirFunction) -> HashMap<BlockId, BTreeSet<LocalId>> {
                 } => ops.extend([Operand::Copy(*array), index.clone(), value.clone()]),
                 // A pinned local stays in the frame until its scope ends.
                 Statement::StorageDead(l) if f.pins.contains(l) => ops.push(Operand::Copy(*l)),
-                Statement::StorageDead(_) | Statement::Loc(..) | Statement::MlirRegionEnd => {}
-                Statement::MlirRegion { params } => defd.extend(params.iter().copied()),
+                Statement::StorageDead(_) | Statement::Loc(..) => {}
                 Statement::BufStore {
                     buf, index, value, ..
                 } => ops.extend([buf.clone(), index.clone(), value.clone()]),
@@ -498,7 +497,6 @@ pub fn rvalue_operands(r: &RValue, out: &mut Vec<Operand>) {
             out.push(callee.clone());
             out.extend(args.iter().cloned());
         }
-        RValue::MlirOp { args, .. } => out.extend(args.iter().map(|(a, _)| a.clone())),
         RValue::FnAddr { .. }
         | RValue::StaticLoad { .. }
         | RValue::StaticAddr(_)
