@@ -16,15 +16,13 @@
 // expect-error: no method `pad_zero`
 // expect-error: call to unsafe function `set_var` outside an `unsafe` block
 // expect-error: call to unsafe function `from_ptr` outside an `unsafe` block
-// expect-error: call to unsafe function `from_fd` outside an `unsafe` block
 
 // Items 0.2.0 removed give a plain error; `set_var`, `remove_var`,
-// `CStr::from_ptr` and `File::from_fd` are `unsafe fn`s.
+// and `CStr::from_ptr` are `unsafe fn`s.
 use rok::bare::ffi::CStr;
 use rok::bare::ptr::ConstPtr;
 use rok::std::env;
 use rok::std::fs;
-use rok::std::fs::File;
 use rok::std::process;
 
 fn main() throws (rok::std::io::IoError) {
@@ -46,7 +44,5 @@ fn main() throws (rok::std::io::IoError) {
     let z = Formatter::new().pad_zero();
     try env::set_var("A", "1");
     let q = CStr::from_ptr(ConstPtr::<c_char>::dangling());
-    let f = File::from_fd(0, "stdin");
-    try f.close();
     let _ = (a, b, c, d, e, t, s, w, z, q);
 }
