@@ -33,7 +33,7 @@ fn main() throws (IoError) {
     try g.close();
     try fs::remove_file(path);
 
-    using l = try TcpListener::bind(try "127.0.0.1:0".parse()) {
+    using l = try TcpListener::bind("127.0.0.1:0") {
         let c = unsafe { share(try TcpStream::connect(try l.local_addr())) };
         let s: RawSocket = c.as_raw_socket();
         println(f"socket: {s % 4u64 == 0u64}");
@@ -43,7 +43,7 @@ fn main() throws (IoError) {
         let buf: List<u8> = List::filled(4, 0u8);
         try peer.read_exact(buf);
         println(f"echo: {try str::from_utf8(buf)}");
-        peer.close();
-        d.close();
+        try peer.close();
+        try d.close();
     }
 }
