@@ -84,7 +84,8 @@ pub(super) enum Lookup {
     EnumInsts(String, Vec<EnumId>),
     Thunk(Key, Option<FunctionId>),
     AnyTag(HirTy, Option<u32>),
-    AnyDispatch(HirTy, String, String, Option<FunctionId>),
+    /// `(recv, trait, method, parameter and return types, answer)`.
+    AnyDispatch(HirTy, String, String, Vec<HirTy>, Option<FunctionId>),
     /// `inferred_ret`'s entry (`Some(None)`: being inferred).
     #[allow(clippy::option_option)]
     InferredRet(FunctionId, Option<Option<HirTy>>),
@@ -285,7 +286,7 @@ codec_enum!(Lookup {
     EnumInsts(x0, x1),
     Thunk(x0, x1),
     AnyTag(x0, x1),
-    AnyDispatch(x0, x1, x2, x3),
+    AnyDispatch(x0, x1, x2, x3, x4),
     InferredRet(x0, x1),
 });
 codec_enum!(Read {
@@ -371,7 +372,11 @@ codec_struct!(FnSig {
     param_refs,
     variadic
 });
-codec_struct!(RefOut { ret, refs });
+codec_struct!(RefOut {
+    ret,
+    refs,
+    deferred
+});
 codec_struct!(AnyDispatch {
     id,
     recv_ty,
@@ -2019,15 +2024,18 @@ fn answers(env: &Env<'_>, ids: &Ids, l: &Lookup) -> bool {
                 .map(|(_, tag)| *tag)
                 == *r
         }
-        Lookup::AnyDispatch(recv, trait_key, method, r) => {
+        Lookup::AnyDispatch(recv, trait_key, method, shape, r) => {
             let Some(recv) = ids.ty(recv) else {
+                return false;
+            };
+            let Some(shape) = shape.iter().map(|t| ids.ty(t)).collect::<Option<Vec<_>>>() else {
                 return false;
             };
             let now = sink
                 .any_dispatch
                 .borrow()
                 .iter()
-                .find(|d| d.recv_ty == recv && d.method == *method && d.trait_key == *trait_key)
+                .find(|d| d.is(&recv, trait_key, method, &shape))
                 .map(|d| d.id);
             fun(r, now)
         }

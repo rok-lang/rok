@@ -1,0 +1,50 @@
+// spec: 002.02.10-any-trait
+// expect-exit: 0
+// expect-stdout:
+// 6 6
+// 60
+// 4
+// 6
+
+// `write<B: AsBytes>` stays callable on `any Write`, the `async` twin
+// too (with its `ref self` written back on the concrete type).
+use rok::core::collections::slice::AsBytes;
+
+trait Write {
+    fn write<B: AsBytes>(self, buf: B) -> usize;
+    async fn write_async<B: AsBytes>(ref self, buf: B) -> usize;
+}
+
+struct Collect { out: List<u8>; n: usize; }
+struct Tens {}
+
+impl Write for Collect {
+    fn write<B: AsBytes>(self, buf: B) -> usize {
+        let s = buf.byte_slice();
+        for b in s { self.out.push(b); }
+        s.len()
+    }
+    async fn write_async<B: AsBytes>(ref self, buf: B) -> usize {
+        self.n += buf.byte_slice().len();
+        self.n
+    }
+}
+
+impl Write for Tens {
+    fn write<C: AsBytes>(self, buf: C) -> usize { buf.byte_slice().len() * 10 }
+    async fn write_async<C: AsBytes>(ref self, buf: C) -> usize { 0 }
+}
+
+async fn main() {
+    let c = Collect { out: [], n: 0 };
+    let w: any Write = c;
+    let n = w.write("abc") + w.write([1u8, 2]) + w.write(buf: "a");
+    println(f"{n} {c.out.len()}");
+    let t: any Write = Tens {};
+    println(f"{t.write("abcdef")}");
+    await c.write_async("abc");
+    await c.write_async([1u8]);
+    println(f"{c.n}");
+    let aw: any Write = c;
+    println(f"{await aw.write_async("xy")}");
+}

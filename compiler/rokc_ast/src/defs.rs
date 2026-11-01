@@ -52,6 +52,13 @@ impl FnDef {
 /// its coroutine (`rokc_driver::coro`): each call makes a fresh future.
 pub const CORO_FN_ATTR: &str = "#coro_fn";
 
+/// Marker attribute of what `#[cfg]` dropped, for not-found errors.
+///
+/// `[CFG_OFF_ATTR, kind..](name, pred, ..)`: on an `impl`, `["method"]`
+/// for each of its dropped methods; on an empty `extern` block standing
+/// in for a dropped item, none (an item), `["mod"]` or `["method", type]`.
+pub const CFG_OFF_ATTR: &str = "#cfg_off";
+
 /// Marker attribute of an `extern "ABI" fn f(..) { .. }` definition
 /// (spec 5.9.10), its value the ABI string.
 pub const EXTERN_FN_ATTR: &str = "#extern_fn";

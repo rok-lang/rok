@@ -1018,6 +1018,7 @@ pub(super) fn lower_for_iter(
     // run it.
     ctx.err_frames.push(ErrFrame::Finally {
         block: fin,
+        hir: Vec::new(),
         try_depth: ctx.try_depth,
         breakables: ctx.breakables.len() - 1,
     });

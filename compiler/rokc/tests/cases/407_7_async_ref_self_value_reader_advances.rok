@@ -1,0 +1,28 @@
+// spec: §4.7.7
+// expect-exit: 0
+// expect-stdout: sum 6 pos 3
+
+// A read loop over a value-type reader advances: each `await` writes the
+// receiver back.
+struct Reader { pos: usize; data: List<u8>; }
+
+impl Reader {
+    async fn read_one(ref self) -> u8 | none {
+        if self.pos >= self.data.len() { return none; }
+        let b = self.data[self.pos];
+        self.pos += 1;
+        b
+    }
+}
+
+async fn main() {
+    let r = Reader { pos: 0, data: [1u8, 2, 3] };
+    let sum = 0u32;
+    loop {
+        match await r.read_one() {
+            none => break,
+            x: u8 => { sum += x as u32; }
+        }
+    }
+    println(f"sum {sum} pos {r.pos}");
+}

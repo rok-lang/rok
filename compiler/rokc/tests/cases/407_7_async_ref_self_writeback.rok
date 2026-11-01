@@ -1,0 +1,56 @@
+// spec: §4.7.7
+// expect-exit: 0
+// expect-stdout:
+// pos 2
+// err past the end
+// pos 3
+// ticks 2 2
+// via any 3
+
+// An `async` method's `ref self` is written back when its future
+// completes, on a throw too. A field place, a call through a bound and
+// one through `any` work as a sync `ref self` call does.
+struct Reader { pos: usize; data: List<u8>; }
+
+impl Reader {
+    async fn skip(ref self, n: usize) throws (str) {
+        self.pos += 1;
+        if self.pos + n > self.data.len() { throw "past the end"; }
+        self.pos += n - 1;
+    }
+}
+
+struct Outer { r: Reader; }
+
+trait Counter {
+    async fn tick(ref self) -> i32;
+}
+
+struct C { n: i32; }
+
+impl Counter for C {
+    async fn tick(ref self) -> i32 {
+        self.n += 1;
+        self.n
+    }
+}
+
+async fn twice<T: Counter>(c: T) -> (i32, T) {
+    await c.tick();
+    (await c.tick(), c)
+}
+
+async fn via_any(a: any Counter) -> i32 {
+    await a.tick()
+}
+
+async fn main() {
+    let o = Outer { r: Reader { pos: 0, data: [5u8, 6, 7, 8] } };
+    try await o.r.skip(2) catch e { println(f"err {e}"); };
+    println(f"pos {o.r.pos}");
+    try await o.r.skip(5) catch e { println(f"err {e}"); };
+    println(f"pos {o.r.pos}");
+    let (r, c) = await twice(C { n: 0 });
+    println(f"ticks {r} {c.n}");
+    println(f"via any {await via_any(c)}");
+}

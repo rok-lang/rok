@@ -935,10 +935,15 @@ fn compile_unit_in(
             native,
             no_implicit: NO_IMPLICIT.with(|n| n.borrow()[lib_no_implicit..].to_vec()),
             hashes: Vec::new(),
+            dropped: rokc_hir::cfg_dropped(items.iter().map(|(m, i)| (m.as_str(), i))),
         }
     });
+    // A kept stage stands for the library's items, and so for what
+    // `#[cfg]` dropped from them.
+    let mut lib_dropped = Vec::new();
     if kept && !verify {
         NO_IMPLICIT.with(|n| n.borrow_mut().extend(parts.no_implicit.iter().cloned()));
+        lib_dropped.clone_from(&parts.dropped);
     }
     // A file the key did not see (the pre-pass did not read it).
     if !kept && files.len() != files_before {
@@ -1010,6 +1015,7 @@ fn compile_unit_in(
         }),
         library,
         stage: kept_stage.clone(),
+        cfg_dropped: lib_dropped,
     };
     let program = rokc_ast::Program {
         attrs: Vec::new(),
@@ -2095,6 +2101,8 @@ struct LibParts {
     no_implicit: Vec<String>,
     /// Each library package's hash (`package_hashes`).
     hashes: Vec<(String, String)>,
+    /// What `#[cfg]` dropped from its items (`rokc_hir::cfg_dropped`).
+    dropped: Vec<rokc_hir::CfgDropped>,
 }
 
 rokc_core::codec_struct!(LibParts {
@@ -2102,7 +2110,8 @@ rokc_core::codec_struct!(LibParts {
     diags,
     native,
     no_implicit,
-    hashes
+    hashes,
+    dropped
 });
 
 /// The parts of the library stage kept in this process, by key.

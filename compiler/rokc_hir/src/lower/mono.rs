@@ -628,6 +628,7 @@ pub(super) fn monomorphize_on(
     if infers_ret(fn_def, |s| ctx.env.diverges(s)) {
         preview_ret_ty = with_ok(preview_ret_ty, HirTy::Unknown);
     }
+    let deferred = defers_refs(fn_def);
     let refs: Vec<(usize, HirTy)> = fn_def
         .params
         .iter()
@@ -639,7 +640,7 @@ pub(super) fn monomorphize_on(
                 (Some(t), _) => resolve_in_mono(ctx, fn_def, &subst, self_hir.clone(), t),
                 (None, _) => HirTy::Any,
             };
-            (i, ty)
+            (i, ref_slot_ty(deferred, ty))
         })
         .collect();
     if !refs.is_empty() {
@@ -648,6 +649,7 @@ pub(super) fn monomorphize_on(
             RefOut {
                 ret: preview_ret_ty.clone(),
                 refs,
+                deferred,
             },
         );
     }
@@ -715,7 +717,7 @@ pub(super) fn monomorphize_on(
 
 /// Each `T: Bound` and `where` predicate of a call of `fn_def` under
 /// `subst` needs an impl.
-fn check_call_bounds(
+pub(super) fn check_call_bounds(
     ctx: &LowerCtx<'_>,
     fn_def: &FnDef,
     subst: &HashMap<String, HirTy>,
@@ -850,7 +852,7 @@ fn var_instance(
         .zip(&param_tys)
         .enumerate()
         .filter(|(_, (p, _))| p.by_ref)
-        .map(|(i, (_, t))| (i, t.clone()))
+        .map(|(i, (_, t))| (i, ref_slot_ty(defers_refs(fn_def), t.clone())))
         .collect();
     if !refs.is_empty() {
         ctx.env.sink.ref_out.borrow_mut().insert(
@@ -858,6 +860,7 @@ fn var_instance(
             RefOut {
                 ret: ret_ty.clone(),
                 refs,
+                deferred: defers_refs(fn_def),
             },
         );
     }
@@ -1242,8 +1245,11 @@ fn lower_fn_with(
     }
     // A `[ref]`-captured parameter moves into a cell (`let x = x;`).
     let mut prelude = Vec::new();
+    // An `async` method's `ref self` is shared with its future through a
+    // cell, which the call hands back (`defers_refs`).
+    ctx.ref_cells = defers_refs(fn_def);
     for (p, ap) in params.iter().zip(&fn_def.params) {
-        if ctx.ref_captured.contains(&(p.name.clone(), ap.span)) {
+        if ctx.ref_captured.contains(&(p.name.clone(), ap.span)) || (ctx.ref_cells && p.by_ref) {
             // A by-value `self` is not a slot to write.
             if p.name == "self" && !p.by_ref {
                 ctx.emit_error_at(
@@ -1265,7 +1271,10 @@ fn lower_fn_with(
     ctx.ref_params = params
         .iter()
         .filter(|p| p.by_ref)
-        .map(|p| (ctx.lookup(&p.name).unwrap_or(p.local), p.ty.clone()))
+        .map(|p| {
+            let l = ctx.lookup(&p.name).unwrap_or(p.local);
+            (l, ref_slot_ty(ctx.ref_cells, p.ty.clone()))
+        })
         .collect();
 
     let mut ret_ty = ctx.resolve_ast_ty(&sig_ret_ast(fn_def));
@@ -1804,6 +1813,25 @@ fn check_fn_body(ctx: &mut LowerCtx<'_>, mut block: HirBlock, fn_name: &str) -> 
     block
 }
 
+/// An `async` method with `ref self`: its future runs the body after the
+/// call returns, so the call hands back the parameter's cell, read once
+/// the future completes (`ref_unpack`).
+pub(super) fn defers_refs(f: &FnDef) -> bool {
+    f.params.iter().any(|p| p.by_ref)
+        && f.attrs
+            .iter()
+            .any(|a| a.path.first().map(String::as_str) == Some(rokc_ast::CORO_FN_ATTR))
+}
+
+/// A `ref` parameter's slot in the packed return: its cell when deferred.
+pub(super) fn ref_slot_ty(deferred: bool, t: HirTy) -> HirTy {
+    if deferred {
+        HirTy::GcBuf(Box::new(t))
+    } else {
+        t
+    }
+}
+
 /// A function with `ref` parameters returns `(ret, r1, ..)` (no unit `ret`;
 /// one field unwrapped). A throwing function's whole carrier is `ret`, so
 /// `ref` values come back on the error path too (spec 4.7) while the
@@ -1832,7 +1860,13 @@ pub(super) fn ref_pack(ctx: &LowerCtx<'_>, v: HirExpr, span: rokc_diagnostic::Sp
     let refs: Vec<HirExpr> = ctx
         .ref_params
         .iter()
-        .map(|(l, _)| ctx.read_local(*l, span))
+        .map(|(l, t)| {
+            if ctx.ref_cells {
+                hir_local(*l, t, span)
+            } else {
+                ctx.read_local(*l, span)
+            }
+        })
         .collect();
     let tys: Vec<HirTy> = refs.iter().map(|r| r.ty.clone()).collect();
     let ty = ref_packed(&v.ty, &tys);
@@ -1905,10 +1939,58 @@ pub(super) fn ref_unpack(
             span,
         }
     };
-    for (k, (pi, _)) in out.refs.iter().enumerate() {
+    let mut later = Vec::new();
+    for (k, (pi, ty)) in out.refs.iter().enumerate() {
         let place = places.get(*pi).and_then(Option::as_ref);
-        if let Some(st) = place.and_then(|p| assign_place(ctx, p, field(lead + k))) {
-            stmts.push(st);
+        let value = match ty {
+            // The cell the future writes: read when it completes.
+            HirTy::GcBuf(elem) if out.deferred => HirExpr {
+                kind: HirExprKind::BufGet {
+                    buf: Box::new(field(lead + k)),
+                    index: Box::new(hir_int(0, PrimTy::Usize, span)),
+                    elem: (**elem).clone(),
+                },
+                ty: (**elem).clone(),
+                span,
+            },
+            _ => field(lead + k),
+        };
+        if let Some(st) = place.and_then(|p| assign_place(ctx, p, value)) {
+            if out.deferred {
+                later.push((place.and_then(place_root), st));
+            } else {
+                stmts.push(st);
+            }
+        }
+    }
+    if !later.is_empty() {
+        if ctx.awaited == Some(span) {
+            ctx.awaited = None;
+            ctx.await_write_back = later.into_iter().map(|(_, st)| st).collect();
+        } else if let Some(l) = later.iter().filter_map(|(l, _)| *l).find(|l| {
+            ctx.locals[l.0 as usize]
+                .name
+                .as_deref()
+                .is_some_and(|n| !n.starts_with('#'))
+        }) {
+            // The future would hold the place until it completes, with
+            // nothing to write it back then.
+            let name = ctx.locals[l.0 as usize].name.clone().unwrap_or_default();
+            let text = ctx.src(span).filter(|t| t.len() <= 60 && !t.contains('\n'));
+            ctx.emit_error_at(
+                rokc_diagnostic::ErrorKind::Handoff,
+                span,
+                format!(
+                    "this `async` call takes `{name}` as `ref self`: its future holds `{name}` \
+                     until it completes, so it must be awaited where it is made"
+                ),
+            );
+            ctx.help_last(Some(match text {
+                Some(t) => format!("write `await {t}`; `{name}` gets the new value then"),
+                None => {
+                    format!("`await` the call where it is made; `{name}` gets the new value then")
+                }
+            }));
         }
     }
     let value = (lead == 1).then(|| field(0));

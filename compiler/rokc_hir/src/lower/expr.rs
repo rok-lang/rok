@@ -6451,7 +6451,7 @@ pub(super) fn method_call_on(
         return sum_min_max(ctx, recv_h, method, args, span);
     }
     if let HirTy::AnyTrait(bounds) = recv_h.ty.clone() {
-        return any_method_call(ctx, recv_h, &bounds, method, None, args, span);
+        return any_method_call(ctx, recv_h, &bounds, method, None, &type_args, args, span);
     }
     let pick = match pick_method(ctx, &recv_h.ty, method, None) {
         Ok(p) => {
@@ -6760,13 +6760,17 @@ fn pick_by_args<'e>(
 }
 
 /// `v.m(args)` on `any Tr`: only the bound traits' methods; the call
-/// switches on the tag over every implementor in the program.
+/// switches on the tag over every implementor in the program. A method
+/// with type parameters of its own gets one dispatcher per instantiation,
+/// fixed at the call (`type_args`, else the arguments' types).
+#[allow(clippy::too_many_arguments)]
 fn any_method_call(
     ctx: &mut LowerCtx<'_>,
     recv_h: HirExpr,
     bounds: &[TraitRef],
     method: &str,
     only: Option<&str>,
+    type_args: &[Ty],
     args: &[CallArg],
     span: rokc_diagnostic::Span,
 ) -> HirExpr {
@@ -6860,12 +6864,33 @@ fn any_method_call(
             ),
         );
     }
+    let decl = pinfo.decls.get(method);
+    let own: Vec<String> = decl.map(own_type_params).unwrap_or_default();
+    if own.is_empty() && !type_args.is_empty() {
+        discard_args(ctx, args);
+        return ctx.error_expr(span, super::mono::arity_msg(method, 0, 0, type_args.len()));
+    }
+    let mut method_subst = HashMap::new();
+    if let (Some(def), false) = (decl, own.is_empty()) {
+        match any_method_generics(ctx, &provider, &bound, def, &own, type_args, args, &recv_ty) {
+            Ok(s) => method_subst = s,
+            Err(msg) => {
+                discard_args(ctx, args);
+                return match msg {
+                    Some(msg) => ctx.error_expr(span, msg),
+                    None => poison(span),
+                };
+            }
+        }
+    }
     // The signature, the same for every implementor (checked above):
-    // a concrete impl's, else the trait declaration's.
+    // a concrete impl's, else the trait declaration's (the only one for
+    // a generic method).
     let concrete = ctx
         .env
         .impls
         .tys_of(&bounds[0].path)
+        .filter(|_| own.is_empty())
         .find(|t| {
             bounds
                 .iter()
@@ -6876,7 +6901,8 @@ fn any_method_call(
             _ => None,
         })
         .map(|sig| (sig.param_tys[1..].to_vec(), sig.ret_ty.clone()));
-    let Some((params, ret)) = concrete.or_else(|| trait_decl_sig(ctx, &provider, &bound, method))
+    let Some((params, ret)) =
+        concrete.or_else(|| trait_decl_sig(ctx, &provider, &bound, method, &method_subst))
     else {
         discard_args(ctx, args);
         return ctx.error_expr(
@@ -6895,7 +6921,15 @@ fn any_method_call(
         id: FunctionId(u32::MAX),
         ret_ty: ret.clone(),
         param_defaults: vec![None; param_tys.len()],
-        param_names: (0..param_tys.len()).map(|i| format!("#{i}")).collect(),
+        // The declaration's names, for named arguments.
+        param_names: (0..param_tys.len())
+            .map(|i| match decl.and_then(|d| d.params.get(i)) {
+                Some(p) if i > 0 && decl.is_some_and(|d| d.params.len() == param_tys.len()) => {
+                    p.name.clone()
+                }
+                _ => format!("#{i}"),
+            })
+            .collect(),
         param_refs: Vec::new(),
         param_tys,
         variadic: false,
@@ -6979,33 +7013,20 @@ fn any_fmt(
 }
 
 /// `method`'s signature from `provider`'s declaration with the trait's
-/// parameters and associated types from `bound`; `None` for too many
-/// arguments.
+/// parameters and associated types from `bound`, the method's own type
+/// parameters from `own`; `None` for too many arguments.
 fn trait_decl_sig(
     ctx: &LowerCtx<'_>,
     provider: &str,
     bound: &TraitRef,
     method: &str,
+    own: &HashMap<String, HirTy>,
 ) -> Option<(Vec<HirTy>, HirTy)> {
     let info = ctx.env.trait_of(provider)?;
     let def = info.decls.get(method)?;
-    if bound.args.len() > info.params.len() {
-        return None;
-    }
-    let subst: HashMap<String, HirTy> = info
-        .params
-        .iter()
-        .cloned()
-        .zip(bound.args.iter().cloned())
-        .chain(bound.binds.iter().cloned())
-        .collect();
-    let mut rc = LowerCtx::new(ctx.env, &subst, None, ctx.here());
-    rc.current_module.clone_from(&info.module);
-    let resolve = |t: &Ty| {
-        let mut t = t.clone();
-        strip_self_assoc(&mut t);
-        rc.resolve_ast_ty(&t)
-    };
+    let mut subst = trait_subst(info, bound)?;
+    subst.extend(own.iter().map(|(k, v)| (k.clone(), v.clone())));
+    let resolve = |t: &Ty| trait_decl_ty(ctx, info, &subst, t);
     let params = def
         .params
         .iter()
@@ -7013,6 +7034,144 @@ fn trait_decl_sig(
         .map(|p| p.ty.as_ref().map_or(HirTy::Unknown, resolve))
         .collect();
     Some((params, resolve(&sig_ret_ast(def))))
+}
+
+/// The trait's parameters and associated types as `bound` names them;
+/// `None` for too many arguments.
+fn trait_subst(info: &TraitInfo, bound: &TraitRef) -> Option<HashMap<String, HirTy>> {
+    (bound.args.len() <= info.params.len()).then(|| {
+        info.params
+            .iter()
+            .cloned()
+            .zip(bound.args.iter().cloned())
+            .chain(bound.binds.iter().cloned())
+            .collect()
+    })
+}
+
+/// Type `t` of a trait method declaration, resolved in the trait's
+/// module under `subst`.
+fn trait_decl_ty(
+    ctx: &LowerCtx<'_>,
+    info: &TraitInfo,
+    subst: &HashMap<String, HirTy>,
+    t: &Ty,
+) -> HirTy {
+    let mut rc = LowerCtx::new(ctx.env, subst, None, ctx.here());
+    rc.current_module.clone_from(&info.module);
+    let mut t = t.clone();
+    strip_self_assoc(&mut t);
+    rc.resolve_ast_ty(&t)
+}
+
+/// The type parameters a method declares itself.
+fn own_type_params(def: &FnDef) -> Vec<String> {
+    def.generics
+        .params
+        .iter()
+        .filter_map(|gp| match gp {
+            rokc_ast::GenericParam::Type { name, .. } => Some(name.clone()),
+            rokc_ast::GenericParam::Const { .. } => None,
+        })
+        .collect()
+}
+
+/// A generic trait method called on `any`: its own type parameters, from
+/// `::<..>` first, the rest from the arguments' types (a probe lowering,
+/// rolled back before the real one) or the expected type, checked
+/// against their bounds; `Err(None)` after reporting.
+#[allow(clippy::too_many_arguments)]
+fn any_method_generics(
+    ctx: &mut LowerCtx<'_>,
+    provider: &str,
+    bound: &TraitRef,
+    def: &FnDef,
+    own: &[String],
+    type_args: &[Ty],
+    args: &[CallArg],
+    recv: &HirTy,
+) -> Result<HashMap<String, HirTy>, Option<String>> {
+    let method = leaf_name(&def.name);
+    let Some(info) = ctx.env.trait_of(provider) else {
+        return Err(Some(format!("`{provider}` is not a trait")));
+    };
+    if type_args.len() > own.len() {
+        return Err(Some(super::mono::arity_msg(
+            method,
+            own.len(),
+            own.len(),
+            type_args.len(),
+        )));
+    }
+    let expected = ctx.current_expected().cloned();
+    let mut subst: HashMap<String, HirTy> = own
+        .iter()
+        .cloned()
+        .zip(type_args.iter().map(|t| ctx.resolve_ast_ty(t)))
+        .collect();
+    let outer = trait_subst(info, bound).unwrap_or_default();
+    let names: std::collections::HashSet<String> = own.iter().cloned().collect();
+    let params: Vec<&rokc_ast::Param> = def.params.iter().filter(|p| p.name != "self").collect();
+    let mark = ctx.probe_mark();
+    let mut next = 0;
+    for a in args {
+        let (i, e) = match a {
+            CallArg::Positional(e) | CallArg::Ref(e) => {
+                next += 1;
+                (Some(next - 1), e)
+            }
+            CallArg::Named { name, value } => {
+                let Some(i) = params.iter().position(|p| p.name == *name) else {
+                    ctx.rollback(&mark);
+                    return Err(Some(format!(
+                        "`{method}` has no parameter named `{name}` (spec 4.2.4)"
+                    )));
+                };
+                (Some(i), value)
+            }
+            CallArg::Spread(_) => continue,
+        };
+        let Some(t) = i.and_then(|i| params.get(i)).and_then(|p| p.ty.as_ref()) else {
+            continue;
+        };
+        // A slot naming a parameter not bound yet takes the argument's
+        // own type.
+        let open = own
+            .iter()
+            .any(|n| !subst.contains_key(n) && ast_ty_mentions(t, n));
+        let hint = if open {
+            HirTy::Unknown
+        } else {
+            let mut all = outer.clone();
+            all.extend(subst.iter().map(|(k, v)| (k.clone(), v.clone())));
+            trait_decl_ty(ctx, info, &all, t)
+        };
+        let h = lower_expected(ctx, e, hint);
+        if h.ty != HirTy::Unknown {
+            super::mono::unify_param_ty_with(t, &h.ty, &names, &mut subst, ctx);
+        }
+    }
+    ctx.rollback(&mark);
+    // `let x: T = v.m()`: a parameter only the return type names.
+    if let Some(want) = expected.filter(|t| !matches!(t, HirTy::Unknown | HirTy::Unit)) {
+        super::mono::unify_param_ty_with(&sig_ret_ast(def), &want, &names, &mut subst, ctx);
+    }
+    if let Some(n) = own.iter().find(|n| !subst.contains_key(*n)) {
+        return Err(Some(format!(
+            "cannot call `{method}` on `{}`: its type parameter `{n}` can't be inferred from \
+             the arguments or the expected type; name it: `.{method}::<{}>(..)`",
+            ctx.ty_name(recv),
+            own.join(", ")
+        )));
+    }
+    let mut all = outer;
+    all.extend(subst.iter().map(|(k, v)| (k.clone(), v.clone())));
+    let mark = ctx.probe_mark();
+    super::mono::check_call_bounds(ctx, def, &all, None, &info.module);
+    if !ctx.probe_clean(&mark) {
+        return Err(None);
+    }
+    Ok(subst)
 }
 
 /// `Self::Item` → `Item` (the associated type, bound by name).
@@ -7060,6 +7219,25 @@ pub(super) struct AnyDispatch {
     pub(super) span: rokc_diagnostic::Span,
 }
 
+impl AnyDispatch {
+    /// The dispatcher of `method` on `recv_ty` with parameter and return
+    /// types `shape`.
+    pub(super) fn is(
+        &self,
+        recv_ty: &HirTy,
+        trait_key: &str,
+        method: &str,
+        shape: &[HirTy],
+    ) -> bool {
+        self.recv_ty == *recv_ty
+            && self.method == method
+            && self.trait_key == trait_key
+            && shape
+                .split_last()
+                .is_some_and(|(ret, params)| *ret == self.ret && params == self.params.as_slice())
+    }
+}
+
 pub(super) fn any_dispatcher(
     ctx: &LowerCtx<'_>,
     recv_ty: &HirTy,
@@ -7069,17 +7247,22 @@ pub(super) fn any_dispatcher(
     span: rokc_diagnostic::Span,
 ) -> FunctionId {
     let mut all = ctx.env.sink.any_dispatch.borrow_mut();
+    // A generic method has one per instantiation: its signature is part
+    // of the key.
+    let mut shape = sig.param_tys[1..].to_vec();
+    shape.push(sig.ret_ty.clone());
     let found = all
         .iter()
-        .find(|d| d.recv_ty == *recv_ty && d.method == method && d.trait_key == trait_key)
+        .find(|d| d.is(recv_ty, trait_key, method, &shape))
         .map(|d| d.id);
     super::incr::log(
-        || format!("d|{recv_ty:?}|{trait_key}|{method}"),
+        || format!("d|{recv_ty:?}|{trait_key}|{method}|{shape:?}"),
         || {
             super::incr::Lookup::AnyDispatch(
                 recv_ty.clone(),
                 trait_key.to_owned(),
                 method.to_owned(),
+                shape.clone(),
                 found,
             )
         },
@@ -7327,7 +7510,9 @@ fn build_dispatcher(env: &Env<'_>, d: &AnyDispatch) -> HirFunction {
         } else if d.trait_key == super::reflect::REFLECT {
             super::reflect::dynamic(&mut c, recv, &d.method)
         } else {
-            call_impl_method(
+            // The return type fixes a type parameter only it names.
+            c.push_expected(d.ret.clone());
+            let call = call_impl_method(
                 &mut c,
                 &t,
                 &d.method,
@@ -7336,8 +7521,9 @@ fn build_dispatcher(env: &Env<'_>, d: &AnyDispatch) -> HirFunction {
                 &args,
                 &d.method,
                 span,
-            )
-            .unwrap_or_else(|| poison(span))
+            );
+            c.pop_expected();
+            call.unwrap_or_else(|| poison(span))
         };
         let body = coerce(&mut c, &d.ret, call, &|| {
             format!("`{}` of an `any` value", d.method)
@@ -9392,6 +9578,7 @@ fn path_call_via_impls(
                     &bounds,
                     method,
                     Some(&key),
+                    &[],
                     rest,
                     span,
                 ));

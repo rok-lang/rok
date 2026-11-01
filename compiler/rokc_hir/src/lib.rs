@@ -1,6 +1,7 @@
 //! High-level IR: the AST with names resolved, types checked and
 //! generics instantiated.
 
+mod cfg_off;
 mod codec;
 #[path = "../../../runtime/rokr/src/fmt_spec.rs"]
 mod fmt_spec;
@@ -21,6 +22,7 @@ mod unicode_tables;
 mod uses;
 pub mod walk;
 
+pub use cfg_off::{CfgDropped, cfg_dropped, cfg_preds};
 pub use lower::FN_BLOCK_LABEL;
 pub use lower::type_visible;
 pub use lower::{Bodies, BodyCache, BodyReuse, Unit};
@@ -107,6 +109,9 @@ pub struct HirInput {
     /// The stage of `library`, when the driver took it: what collecting
     /// the library's items made is taken from it.
     pub stage: Option<KeptLibrary>,
+    /// What `#[cfg]` dropped from library items HIR does not get (a kept
+    /// `stage`), for not-found errors.
+    pub cfg_dropped: Vec<CfgDropped>,
 }
 
 /// Marker on a trait / impl method, `[ASSOC_TYPES_ATTR, X, ..]`: bare `X`

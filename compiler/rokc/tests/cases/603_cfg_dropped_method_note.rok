@@ -1,0 +1,23 @@
+// spec: §6.3.7
+// expect-error: 22:9: no method `only_plan9` found for type `P`
+// expect-error: note: `only_plan9` is only available on plan9 (`#[cfg(target_os = "plan9")]`)
+// expect-error: help: put the code that uses it under the same `#[cfg(target_os = "plan9")]`
+// expect-error: 23:9: no method `whole_impl` found for type `P`
+// expect-error: note: `whole_impl` is only available on plan9 (`#[cfg(target_os = "plan9")]`)
+
+// A method `#[cfg]` dropped, alone or with its impl, is named where its
+// lookup fails, with the cfg it needs.
+struct P {}
+
+impl P {
+    #[cfg(target_os = "plan9")]
+    fn only_plan9(self) -> i32 { 1 }
+}
+
+#[cfg(target_os = "plan9")]
+impl P {
+    fn whole_impl(self) -> i32 { 2 }
+}
+
+let a = P {}.only_plan9();
+let b = P {}.whole_impl();

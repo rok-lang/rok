@@ -19,6 +19,9 @@ pub(super) enum ErrFrame {
     Catch(CatchFrame),
     Finally {
         block: Block,
+        /// Lowered statements run after `block` (a deferred `ref`
+        /// write-back around an `await`).
+        hir: Vec<HirStmt>,
         /// `try` nesting and breakable count where the `finally` sits;
         /// its block is lowered in that context at every exit.
         try_depth: u32,
@@ -337,11 +340,8 @@ pub(super) fn raise(
     }
     for i in (0..ctx.err_frames.len()).rev() {
         let (label, which) = match &ctx.err_frames[i] {
-            ErrFrame::Finally {
-                block, try_depth, ..
-            } => {
-                let (block, td) = (block.clone(), *try_depth);
-                out.push(run_finally(ctx, i, &block, td));
+            ErrFrame::Finally { .. } => {
+                out.push(run_finally(ctx, i));
                 continue;
             }
             ErrFrame::Catch(c) if c.takes(&ety) => (c.label.clone(), c.arms.as_ref().map(|a| a.1)),
@@ -898,14 +898,25 @@ pub(super) fn rethrows_value(
 
 /// Lower frame `i`'s `finally` block inline, outside that frame and
 /// everything nested in it (a raise inside it goes outward).
-fn run_finally(ctx: &mut LowerCtx<'_>, i: usize, block: &Block, try_depth: u32) -> HirStmt {
+fn run_finally(ctx: &mut LowerCtx<'_>, i: usize) -> HirStmt {
+    let ErrFrame::Finally {
+        block,
+        hir,
+        try_depth,
+        ..
+    } = &ctx.err_frames[i]
+    else {
+        unreachable!("frame {i} is a finally")
+    };
+    let (block, hir, try_depth) = (block.clone(), hir.clone(), *try_depth);
     let inner = ctx.err_frames.split_off(i);
     let saved = std::mem::replace(&mut ctx.try_depth, try_depth);
     ctx.push_expected(HirTy::Unit);
-    let b = lower_block(ctx, block);
+    let mut b = lower_block(ctx, &block);
     ctx.pop_expected();
     ctx.try_depth = saved;
     ctx.err_frames.extend(inner);
+    b.stmts.extend(hir);
     HirStmt::Expr(HirExpr {
         kind: HirExprKind::Block(Box::new(b)),
         ty: HirTy::Unit,
@@ -945,14 +956,7 @@ pub(super) fn exit_through(
         Some(hir_local(t, &ty, span))
     });
     for i in fins {
-        let ErrFrame::Finally {
-            block, try_depth, ..
-        } = &ctx.err_frames[i]
-        else {
-            unreachable!("filtered to finally frames")
-        };
-        let (block, td) = (block.clone(), *try_depth);
-        stmts.push(run_finally(ctx, i, &block, td));
+        stmts.push(run_finally(ctx, i));
     }
     stmts.push(jump(value));
     HirStmt::Expr(block_expr(stmts, span))
@@ -1637,6 +1641,7 @@ pub(super) fn lower_catch(
         finally_jumps(ctx, fin);
         ctx.err_frames.push(ErrFrame::Finally {
             block: fin.clone(),
+            hir: Vec::new(),
             try_depth: ctx.try_depth,
             breakables: ctx.breakables.len(),
         });

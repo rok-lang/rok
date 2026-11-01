@@ -1,0 +1,46 @@
+// spec: 002.02.10-any-trait
+// expect-exit: 0
+// expect-stdout:
+// t=1.5 u=true 1 3 0
+// t:1.5! u:true! 2 4 0
+// 7/t/1.5 7/u/true 1 3 0
+
+// A trait method with type parameters of its own is callable on `any`:
+// the arguments (or `::<..>`, or the expected type) fix them at the call,
+// and each instantiation dispatches over every implementor, generic
+// impls included.
+trait Show {
+    fn tagged<T: Display>(self, tag: str, x: T) -> str;
+    fn pick<T>(self, a: T, b: T) -> T;
+    fn make<T: Default>(self) -> T;
+}
+
+struct Plain {}
+struct Loud {}
+struct Wrap<X> { x: X; }
+
+impl Show for Plain {
+    fn tagged<T: Display>(self, tag: str, x: T) -> str { f"{tag}={x}" }
+    fn pick<T>(self, a: T, b: T) -> T { a }
+    fn make<T: Default>(self) -> T { T::default() }
+}
+
+impl Show for Loud {
+    fn tagged<U: Display>(self, tag: str, x: U) -> str { f"{tag}:{x}!" }
+    fn pick<U>(self, a: U, b: U) -> U { b }
+    fn make<U: Default>(self) -> U { U::default() }
+}
+
+impl<X: Display> Show for Wrap<X> {
+    fn tagged<T: Display>(self, tag: str, x: T) -> str { f"{self.x}/{tag}/{x}" }
+    fn pick<T>(self, a: T, b: T) -> T { a }
+    fn make<T: Default>(self) -> T { T::default() }
+}
+
+fn main() {
+    let all: List<any Show> = [Plain {}, Loud {}, Wrap { x: 7 }];
+    for s in all {
+        let zero: i64 = s.make();
+        println(f"{s.tagged("t", 1.5)} {s.tagged(tag: "u", x: true)} {s.pick(1, 2)} {s.pick::<i64>(3, 4)} {zero}");
+    }
+}

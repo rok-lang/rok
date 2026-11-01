@@ -86,6 +86,9 @@ pub struct Parser<'a> {
     fn_names: Vec<String>,
     /// The impl target's or trait's name while parsing its items.
     fn_owner: Option<String>,
+    /// `CFG_OFF_ATTR` markers for the methods the impl being parsed
+    /// dropped.
+    cfg_off: Vec<Attribute>,
     /// Lifted names given out so far.
     lifted_names: std::collections::HashSet<String>,
     /// The next primary starts a statement: if it is block-like, `(` / `[`
@@ -314,6 +317,7 @@ impl<'a> Parser<'a> {
             lifted: Vec::new(),
             fn_names: Vec::new(),
             fn_owner: None,
+            cfg_off: Vec::new(),
             lifted_names: std::collections::HashSet::new(),
             docs_used: std::collections::HashSet::new(),
             docs_dropped: std::collections::HashMap::new(),
@@ -2250,6 +2254,8 @@ impl<'a> Parser<'a> {
         let outer_owner = std::mem::replace(&mut self.fn_owner, owner);
         let items = self.parse_impl_items();
         self.fn_owner = outer_owner;
+        let mut attrs = attrs;
+        attrs.append(&mut self.cfg_off);
         let items = items?;
         Some(ImplDef {
             vis,
@@ -2280,6 +2286,7 @@ impl<'a> Parser<'a> {
                         let fs = if on {
                             self.expand_method(f, attrs_from)
                         } else {
+                            self.cfg_off.push(cfg_off_marker(&f));
                             Vec::new()
                         };
                         items.extend(fs.into_iter().map(ImplItem::Method));
@@ -8150,4 +8157,24 @@ fn fold_chain(e: Expr) -> Result<Expr, Expr> {
         kind: ExprKind::QuestionDot(x, tails),
         span,
     })
+}
+
+/// The `CFG_OFF_ATTR` marker for method `f`, which its `#[cfg]` dropped.
+fn cfg_off_marker(f: &rokc_ast::FnDef) -> Attribute {
+    let mut args = vec![rokc_ast::AttrArg::Word(f.name.clone())];
+    args.extend(
+        f.attrs
+            .iter()
+            .filter(|a| a.path == ["cfg"])
+            .filter_map(|a| match &a.body {
+                rokc_ast::AttrBody::Args(xs) if xs.len() == 1 => Some(xs[0].clone()),
+                _ => None,
+            }),
+    );
+    Attribute {
+        path: vec![rokc_ast::CFG_OFF_ATTR.to_owned(), "method".to_owned()],
+        body: rokc_ast::AttrBody::Args(args),
+        inner: false,
+        span: f.span,
+    }
 }

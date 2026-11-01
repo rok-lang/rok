@@ -502,7 +502,18 @@ pub(super) fn lower_await(
         .cloned()
         .and_then(|t| ctx.instantiate_struct(CoroKind::Async.wrapper(false), vec![t], ctx.here()))
         .map_or(HirTy::Unknown, HirTy::Struct);
+    // An `async` method's `ref self` call made here writes its receiver
+    // back once the future completes (`mono::ref_unpack`).
+    let outer = (
+        ctx.awaited.replace(e.span),
+        std::mem::take(&mut ctx.await_write_back),
+    );
     let fut = super::lower_expected(ctx, e, hint);
+    let write_back = std::mem::replace(&mut ctx.await_write_back, outer.1);
+    ctx.awaited = outer.0;
+    if !write_back.is_empty() {
+        return await_writing_back(ctx, fut, write_back, span);
+    }
     let has_poll =
         |ctx: &LowerCtx<'_>, t: &HirTy| matches!(pick_method(ctx, t, "poll", None), Ok(Some(_)));
     let fut = if fut.ty == HirTy::Unknown || has_poll(ctx, &fut.ty) {
@@ -526,6 +537,58 @@ pub(super) fn lower_await(
             trailing: Some(lp),
             label: None,
         })),
+        span,
+    }
+}
+
+/// `await` of an `async` method's future with its `ref self` write-back,
+/// run however the await ends: ready, its error raised, or cancelled.
+fn await_writing_back(
+    ctx: &mut LowerCtx<'_>,
+    fut: HirExpr,
+    write_back: Vec<HirStmt>,
+    span: rokc_diagnostic::Span,
+) -> HirExpr {
+    let fty = fut.ty.clone();
+    let f = ctx.declare(None, fty.clone());
+    ctx.err_frames.push(super::throws::ErrFrame::Finally {
+        block: Block {
+            stmts: Vec::new(),
+            trailing: None,
+            span,
+            label: None,
+        },
+        hir: write_back.clone(),
+        try_depth: ctx.try_depth,
+        breakables: ctx.breakables.len(),
+    });
+    let lp = poll_loop(ctx, f, &fty, "poll", span);
+    ctx.err_frames.pop();
+    let ty = lp.ty.clone();
+    let mut stmts = vec![HirStmt::Let {
+        local: f,
+        init: fut,
+    }];
+    let trailing = if super::hir_expr_diverges(&lp) {
+        stmts.push(HirStmt::Expr(lp));
+        None
+    } else if ty == HirTy::Unit {
+        stmts.push(HirStmt::Expr(lp));
+        stmts.extend(write_back);
+        None
+    } else {
+        let v = ctx.declare(None, ty.clone());
+        stmts.push(HirStmt::Let { local: v, init: lp });
+        stmts.extend(write_back);
+        Some(hir_local(v, &ty, span))
+    };
+    HirExpr {
+        kind: HirExprKind::Block(Box::new(HirBlock {
+            stmts,
+            trailing,
+            label: None,
+        })),
+        ty,
         span,
     }
 }
@@ -825,7 +888,11 @@ fn lower_coro_block<'a>(
             .into_iter()
             .filter_map(|name| {
                 let local = ctx.lookup(&name)?;
-                if from_closure && ctx.is_boxed(local) {
+                // An `async` method's `ref self` cell: the call hands it
+                // back, read once the future completes.
+                let ref_cell =
+                    from_fn && ctx.ref_cells && ctx.ref_params.iter().any(|(l, _)| *l == local);
+                if (from_closure || ref_cell) && ctx.is_boxed(local) {
                     return Some((name, local, ctx.local_ty(local), true));
                 }
                 let ty = ctx.var_ty(local);

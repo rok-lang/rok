@@ -237,6 +237,14 @@ pub fn lower_full(
     super::const_eval::set_pointer_width(input.pointer_width);
     super::const_eval::set_stdcall_system(input.stdcall_system);
     crate::clear_type_names();
+    let mut dropped = crate::cfg_dropped(
+        input
+            .item_modules
+            .iter()
+            .map(String::as_str)
+            .zip(&program.items),
+    );
+    dropped.extend(input.cfg_dropped.iter().cloned());
     let (mut lib, mut user) = (Program::default(), Program::default());
     let (mut lib_modules, mut user_modules) = (Vec::new(), Vec::new());
     for (item, module) in program.items.into_iter().zip(&input.item_modules) {
@@ -341,7 +349,9 @@ pub fn lower_full(
             t.elapsed().as_secs_f64() * 1e3
         );
     }
-    finish(c, [lib, user], raw_uses, &at)
+    let mut module = finish(c, [lib, user], raw_uses, &at);
+    crate::cfg_off::note_dropped(&mut module.diagnostics, &dropped);
+    module
 }
 
 mod stage;
@@ -2349,7 +2359,7 @@ fn collect<'a>(
     }
     let mut ref_out: Vec<(FunctionId, RefOut)> = sigs
         .values()
-        .filter_map(|s| Some((s.id, ref_out_of(s)?)))
+        .filter_map(|s| Some((s.id, ref_out_of(&env, s)?)))
         .collect();
     ref_out.sort_by_key(|(id, _)| *id);
     env.sink.ref_out.borrow_mut().extend(ref_out);
@@ -5136,7 +5146,10 @@ fn sig_stub(env: &Env<'_>, i: usize) -> HirFunction {
     for (k, (p, ty)) in f.params.iter().zip(&sig.param_tys).enumerate() {
         let local = rokc_ir_common::LocalId(u32::try_from(k).expect("LocalId overflow"));
         if p.by_ref {
-            refs.push(ty.clone());
+            refs.push(super::mono::ref_slot_ty(
+                super::mono::defers_refs(f),
+                ty.clone(),
+            ));
         }
         locals.push(HirLocal {
             id: local,
@@ -8052,17 +8065,19 @@ fn method_key(
 }
 
 /// The copy-out shape of a function with `ref` parameters (spec 4.7).
-pub(super) fn ref_out_of(sig: &FnSig) -> Option<RefOut> {
+pub(super) fn ref_out_of(env: &Env<'_>, sig: &FnSig) -> Option<RefOut> {
+    let deferred = env.decl(sig.id).is_some_and(|d| mono::defers_refs(d.def()));
     let refs: Vec<(usize, HirTy)> = sig
         .param_refs
         .iter()
         .enumerate()
         .filter(|(_, r)| **r)
-        .map(|(i, _)| (i, sig.param_tys[i].clone()))
+        .map(|(i, _)| (i, mono::ref_slot_ty(deferred, sig.param_tys[i].clone())))
         .collect();
     (!refs.is_empty()).then(|| RefOut {
         ret: sig.ret_ty.clone(),
         refs,
+        deferred,
     })
 }
 

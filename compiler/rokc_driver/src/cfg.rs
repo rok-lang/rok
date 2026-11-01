@@ -1,8 +1,12 @@
 //! `#[cfg(...)]` item filtering. The environment is the `--cfg` flags plus
 //! the target's `target_*` keys; an excluded inline `mod` goes with its
 //! subtree. Members and statements are dropped by the parser.
+//!
+//! A dropped item leaves an empty `extern` block marked `CFG_OFF_ATTR` in
+//! its place (the parser marks an impl's dropped methods on the impl), so
+//! not-found errors can say where it exists (`rokc_hir::note_dropped`).
 
-use rokc_ast::{Attribute, Item};
+use rokc_ast::{AttrArg, AttrBody, Attribute, ExternBlock, ImplItem, Item};
 
 pub use rokc_parser::CfgEnv;
 
@@ -36,6 +40,7 @@ pub fn filter_items(items: Vec<Item>, env: &CfgEnv) -> Vec<Item> {
     let mut out = Vec::with_capacity(items.len());
     for item in items {
         if !item_passes(&item, env) {
+            out.extend(stand_ins(&item));
             continue;
         }
         let item = match item {
@@ -64,4 +69,62 @@ fn item_passes(item: &Item, env: &CfgEnv) -> bool {
 /// Whether every `#[cfg(..)]` among `attrs` holds.
 pub fn attrs_pass(attrs: &[Attribute], env: &CfgEnv) -> bool {
     env.attrs_pass(attrs)
+}
+
+/// The marked empty `extern` blocks standing in for dropped `item`: one
+/// per name it declared (each method of an impl).
+fn stand_ins(item: &Item) -> Vec<Item> {
+    let preds = rokc_hir::cfg_preds(item.attrs());
+    if preds.is_empty() {
+        return Vec::new();
+    }
+    let block = |kind: Vec<String>, name: &str, extra: &[AttrArg]| {
+        let mut args = vec![AttrArg::Word(name.to_owned())];
+        args.extend(preds.iter().cloned());
+        args.extend(extra.iter().cloned());
+        let mut path = vec![rokc_ast::CFG_OFF_ATTR.to_owned()];
+        path.extend(kind);
+        Item::Extern(ExternBlock {
+            attrs: vec![Attribute {
+                path,
+                body: AttrBody::Args(args),
+                inner: false,
+                span: item.span(),
+            }],
+            abi: "C".to_owned(),
+            items: Vec::new(),
+            span: item.span(),
+            wit: None,
+        })
+    };
+    match item {
+        Item::Impl(i) => {
+            let owner = rokc_ast::print::print_ty(&i.self_ty);
+            i.items
+                .iter()
+                .filter_map(|m| match m {
+                    ImplItem::Method(f) => Some(block(
+                        vec!["method".to_owned(), owner.clone()],
+                        &f.name,
+                        &rokc_hir::cfg_preds(&f.attrs),
+                    )),
+                    _ => None,
+                })
+                .collect()
+        }
+        Item::Mod(m) => vec![block(vec!["mod".to_owned()], &m.name, &[])],
+        Item::Extern(e) => e
+            .items
+            .iter()
+            .filter_map(|x| match x {
+                rokc_ast::ExternItem::Fn(f) => Some(block(Vec::new(), &f.name, &[])),
+                rokc_ast::ExternItem::Static(_) => None,
+            })
+            .collect(),
+        other => other
+            .name()
+            .map(|n| block(Vec::new(), n, &[]))
+            .into_iter()
+            .collect(),
+    }
 }

@@ -1,0 +1,21 @@
+// spec: §4.7.7
+// expect-error: its future holds `c` until it completes, so it must be awaited where it is made
+
+// The future of an `async` `ref self` call holds the receiver until it
+// completes, so it is awaited where it is made: nothing can touch the
+// receiver meanwhile.
+struct C { n: i32; }
+
+impl C {
+    async fn tick(ref self) -> i32 {
+        self.n += 1;
+        self.n
+    }
+}
+
+async fn main() {
+    let c = C { n: 0 };
+    let f = c.tick();
+    c.n = 5;
+    println(f"{await f}");
+}

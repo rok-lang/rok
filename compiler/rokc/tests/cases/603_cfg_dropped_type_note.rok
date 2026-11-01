@@ -1,0 +1,14 @@
+// spec: §6.3.7
+// expect-error: 13:8: cannot find type `Plan9` in this scope
+// expect-error: note: `Plan9` is only available on plan9 (`#[cfg(target_os = "plan9")]`)
+// expect-error: 14:9: cannot find struct `Plan9Type` in this scope
+// expect-error: note: `Plan9Type` is only available on plan9 (`#[cfg(target_os = "plan9")]`)
+
+// Types `#[cfg]` dropped are named too.
+#[cfg(target_os = "plan9")]
+type Plan9 = i32;
+#[cfg(target_os = "plan9")]
+struct Plan9Type {}
+
+let x: Plan9 = 1;
+let t = Plan9Type {};
