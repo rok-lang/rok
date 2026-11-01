@@ -76,7 +76,7 @@ pub(pkg) fn check_custom(custom: i32, path: str, fixed: str) throws (IoError) {
     } else {
         return;
     };
-    throw IoError::with_kind(IoErrorKind::InvalidInput,
+    throw IoError::new(IoErrorKind::InvalidInput,
         f"{path}: os.custom_flags sets {name}, which {fixed} decides: {instead} instead, or DirExt::open_at for raw flags");
 }
 

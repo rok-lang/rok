@@ -84,7 +84,7 @@ fn main() throws (IoError) {
     try fs::set_permissions(base / "r", rw);
     println(f"readonly: {was} {(try fs::metadata(base / "r")).permissions().readonly()}");
 
-    println(f"async: {try task::block_on_try(twins(d, base.as_str()))}");
+    println(f"async: {try task::try_block_on(twins(d, base.as_str()))}");
 
     try d.close();
     try fs::remove_dir_all(base);
