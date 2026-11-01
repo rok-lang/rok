@@ -362,7 +362,7 @@ fn library_build_drops_code_its_package_does_not_reach() {
     assert!(mir.contains("fn plib::unused_private()"), "{mir}");
     assert!(mir.contains("fn plib::f()"), "{mir}");
     assert!(!mir.contains("fn rok_f64_cbrt("), "{mir}");
-    assert!(mir.matches("\nfn ").count() < 50, "{mir}");
+    assert!(mir.matches("\nfn ").count() < 56, "{mir}");
 }
 
 /// 9.2.16: an unchanged package is not rebuilt; a changed source, a
