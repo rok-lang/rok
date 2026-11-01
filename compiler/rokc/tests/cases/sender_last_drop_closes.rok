@@ -1,0 +1,31 @@
+// expect-exit: 0
+// expect-stdout:
+// got 6
+
+// spec: std 217-channel §2.17.3
+
+// The channel closes when its last sender leaves scope: no `close()`,
+// and the receiving loop still ends.
+
+use rok::core::channel::{Sender, channel};
+use rok::std::thread;
+
+fn produce(tx: Sender<i32>, n: i32) {
+    for i in 1..n + 1 { try! tx.send(i); }
+}
+
+fn main() {
+    let (tx, rx) = channel::<i32>();
+    let h = thread::spawn(|| {
+        let sum = 0;
+        for v in rx { sum += v; }
+        sum
+    });
+    {
+        let mine = tx;
+        let other = mine.clone();
+        produce(mine, 2);
+        produce(other, 2);
+    }
+    println(f"got {try! h.join()}");
+}

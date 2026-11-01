@@ -1,0 +1,21 @@
+// expect-exit: 0
+// expect-stdout:
+// 10 20
+// none
+
+// spec: std 217-channel §2.17.3
+
+// `close()` closes that sender only; the channel ends with the last one.
+
+use rok::core::channel::channel;
+
+fn main() {
+    let (tx, rx) = channel::<i32>();
+    let tx2 = tx.clone();
+    try! tx.send(10);
+    tx.close();
+    try! tx2.send(20);
+    println(f"{rx.recv() ?? 0} {rx.recv() ?? 0}");
+    tx2.close();
+    println(f"{if rx.recv() is none { "none" } else { "more" }}");
+}

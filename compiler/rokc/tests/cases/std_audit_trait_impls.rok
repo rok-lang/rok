@@ -19,6 +19,7 @@
 // for `bool`, `Range`'s `Clone` / `PartialEq`, channel errors as `Error`,
 // and `await` on a thread's `JoinHandle`.
 
+use rok::core::marker::share;
 use rok::std::thread;
 use rok::core::task;
 
@@ -40,8 +41,9 @@ fn main() -> i32 {
     let r = 0..3;
     let c = r.clone();
     println(f"{r == c} {(0..3) != (0..4)} {c.start}..{c.end}");
-    let tx = channel::<i32>().0;
-    tx.close();
+    let tx_own = channel::<i32>().0;
+    let tx = unsafe { share(tx_own) };
+    tx_own.close();
     let e1 = try { tx.send(1); "sent" } catch e: SendError<i32> { show(e) };
     let e2 = try { tx.send(1); "sent" } catch e: SendError<i32> { f"{e:?}" };
     let (btx, _brx) = channel_bounded::<i32>(1);

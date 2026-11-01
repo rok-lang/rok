@@ -482,52 +482,6 @@ fn builds_print_lints() {
     );
 }
 
-/// 6.2.9: `-D warnings` denies every `unclosed_resource` finding, the
-/// ones 0.1.6 added (a value closed on one path only) too.
-// spec: §6.2.9
-#[test]
-fn deny_warnings_takes_new_unclosed_findings() {
-    let dir = scratch("lint-unclosed-since");
-    let app = new_package(&dir, "app", false);
-    let new = "use rok::std::fs::File;\n\n\
-               pub fn one_path(p: str, c: bool) -> str {\n    \
-               let f = try! File::open(p);\n    \
-               let s = try! f.read_to_str();\n    \
-               if c { try! f.close(); }\n    \
-               s\n}\n\n\
-               fn main() {}\n";
-    put(app.join("src/main.rok"), new).unwrap();
-    let out = rokc(None, &app, &["lint"]);
-    assert_exit(&out, 0);
-    let err = text(&out.stderr);
-    assert!(
-        err.contains("warning[E503]: `f` holds a `File` that is not closed on every path"),
-        "{err}"
-    );
-    for deny in ["warnings", "unclosed_resource"] {
-        let out = rokc(None, &app, &["lint", "-D", deny]);
-        assert_exit(&out, 1);
-        let err = text(&out.stderr);
-        assert!(
-            err.contains("error[E503]: `f` holds a `File` that is not closed on every path"),
-            "{err}"
-        );
-    }
-    let old = "use rok::std::fs::File;\n\n\
-               pub fn never(p: str) -> str {\n    \
-               let f = try! File::open(p);\n    \
-               try! f.read_to_str()\n}\n\n\
-               fn main() {}\n";
-    put(app.join("src/main.rok"), old).unwrap();
-    let out = rokc(None, &app, &["lint", "-D", "warnings"]);
-    assert_exit(&out, 1);
-    let err = text(&out.stderr);
-    assert!(
-        err.contains("error[E503]: `f` holds a `File` that is never closed"),
-        "{err}"
-    );
-}
-
 /// 6.2.9: `warnings` holds every warning-level lint, later ones too, as
 /// a flag and as an attribute; `lint --list` shows each lint's release.
 // spec: §6.2.9

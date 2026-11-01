@@ -100,54 +100,6 @@ fn main() {
 }
 ";
 
-/// The GC never closes a descriptor (stdlib 2.13): a `File` only read
-/// through its own methods and never closed leaks; `using`, `close()`,
-/// or handing it on (returned, passed, stored) does not.
-// spec: §6.2.9
-#[test]
-fn lint_unclosed_resource() {
-    let src = "\
-use rok::std::fs::File;
-
-fn leaks(p: str) -> str {
-    let f = try! File::open(p);
-    try! f.read_to_str()
-}
-
-fn closes(p: str) -> str {
-    let g = try! File::open(p);
-    let s = try! g.read_to_str();
-    try! g.close();
-    s
-}
-
-fn scoped(p: str) -> str {
-    using h = try! File::open(p) { try! h.read_to_str() }
-}
-
-fn handed(p: str) -> File {
-    let k = try! File::open(p);
-    k
-}
-
-fn main() {
-    println(leaks(\"a\"));
-    println(closes(\"a\"));
-    println(scoped(\"a\"));
-    try! handed(\"a\").close();
-}
-";
-    let dir = package("lint_unclosed", &[("main.rok", src)]);
-    let (_, err) = exit(&rokc(&dir, &["lint"]), 0);
-    assert!(
-        err.contains("`f` holds a `File` that is never closed"),
-        "{err}"
-    );
-    for name in ["`g`", "`h`", "`k`"] {
-        assert!(!err.contains(&format!("{name} holds")), "{err}");
-    }
-}
-
 /// An item's `#[allow]` covers its variants even after a `#[derive]`
 /// (whose impls carry the attribute's span); an `_` between digits is
 /// still camel case (rustc's rule).

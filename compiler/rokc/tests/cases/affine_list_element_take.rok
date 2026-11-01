@@ -1,0 +1,22 @@
+// expect-exit: 0
+// expect-stdout:
+// took 1, left 2
+
+// spec: std 213-marker §2.13.4
+
+// A part moves out of a struct only through `replace` / `take`: the
+// place keeps a new value, the part has one owner.
+
+use rok::core::channel::{Sender, channel};
+use rok::core::marker::replace;
+
+struct Slots { a: Sender<i32> | none; b: Sender<i32> | none; }
+
+fn main() {
+    let (tx, rx) = channel::<i32>();
+    let s = Slots { a: tx.clone(), b: tx };
+    let a = replace(ref s.a, none);
+    if let t: Sender<i32> = a { try! t.send(1); t.close(); }
+    if let t: Sender<i32> = s.b { try! t.send(2); }
+    println(f"took {rx.recv() ?? 0}, left {rx.recv() ?? 0}");
+}

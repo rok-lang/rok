@@ -8,13 +8,15 @@
 // waits get the same status, and a signal after the child has ended
 // and is being reaped is a no-op, not an error.
 
+use rok::core::marker::share;
 use rok::std::process::{Command, ExitStatus, Signal};
 use rok::std::thread;
 
 fn main() throws (thread::JoinError) {
     let bad = 0;
     for _ in 0..50 {
-        let c = try! Command::new("sleep").arg("0.01").spawn();
+        let c_own = try! Command::new("sleep").arg("0.01").spawn();
+        let c = unsafe { share(c_own) };
         let signaller = thread::spawn(|| {
             let errors = 0;
             for _ in 0..200 {

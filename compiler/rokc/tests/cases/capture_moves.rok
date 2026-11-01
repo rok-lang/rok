@@ -1,0 +1,17 @@
+// expect-error: error[E202]: `tx` was moved at line 11, and is used here
+// expect-error: capture_moves.rok:14:10: `tx` was moved at line 11, and is used here
+// spec: §4.6 / std 213-marker §2.13.4
+
+// A closure or an `async` block that captures a resource takes it.
+
+use rok::core::channel::channel;
+
+async fn main() {
+    let (tx, rx) = channel::<i32>();
+    let t = task::spawn(async {
+        try! await tx.send_async(1);
+    });
+    try! tx.send(2);
+    await t;
+    println(f"{rx.recv() ?? 0}");
+}

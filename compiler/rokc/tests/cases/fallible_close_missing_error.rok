@@ -1,0 +1,43 @@
+// expect-error: error[E202]: `f` holds a `File` that is never closed
+// expect-error: fallible_close_missing_error.rok:16:13: `f` holds a `File` that is never closed
+// expect-error: help: closing a `File` can fail, so it is not closed for you: add `try f.close();` before it leaves its scope, or bind it with `using f = .. { .. }`
+// expect-error: fallible_close_missing_error.rok:21:13: `f` holds a `File` that is not closed on every path
+// expect-error: fallible_close_missing_error.rok:31:5: `f` still holds an open `File` when this replaces it
+// spec: std 213-marker §2.13.4
+
+// Closing a `File` can fail, so the compiler does not close one: leaving
+// its scope open on a path is an error. A path that leaves with an error
+// releases it.
+
+use rok::std::fs::File;
+use rok::std::io::IoError;
+
+pub fn never(p: str) -> str {
+    let f = try! File::open(p);
+    try! f.read_to_str()
+}
+
+pub fn one_path(p: str, c: bool) -> str {
+    let f = try! File::open(p);
+    let s = try! f.read_to_str();
+    if c {
+        try! f.close();
+    }
+    s
+}
+
+pub fn replaced(p: str) {
+    let f = try! File::open(p);
+    f = try! File::open(p);
+    try! f.close();
+}
+
+// Fine: closed on every path but the error ones.
+pub fn closed(p: str) throws (IoError) -> str {
+    let f = try File::open(p);
+    let s = try f.read_to_str();
+    try f.close();
+    s
+}
+
+fn main() {}

@@ -11,6 +11,7 @@
 // std::net (302): UDP round trips (blocking, async, connected), the
 // non-blocking / timeout modes, and many concurrent TCP connections
 // served by tasks on the pool.
+use rok::core::marker::share;
 use rok::std::net::{TcpListener, TcpStream, UdpSocket, SocketAddr};
 use rok::std::net;
 use rok::std::io::{IoError, IoErrorKind, byte_buf};
@@ -22,7 +23,8 @@ fn text(buf: List<u8>, n: usize) -> str {
 let any: SocketAddr = try! "127.0.0.1:0".parse::<SocketAddr>();
 
 // UDP, blocking.
-let a = try! UdpSocket::bind(any);
+let a_own = try! UdpSocket::bind(any);
+let a = unsafe { share(a_own) };
 let b = try! net::udp_bind("127.0.0.1:0");
 let a_addr = try! a.local_addr();
 try! b.send_to("ping".as_bytes(), a_addr);
@@ -77,7 +79,8 @@ try! a.close();
 try! b.close();
 
 // Many concurrent TCP connections on the pool.
-let l = try! TcpListener::bind(any);
+let l_own = try! TcpListener::bind(any);
+let l = unsafe { share(l_own) };
 let addr = try! l.local_addr();
 let open = Atomic::new(0);
 let peak = Mutex::new(0);

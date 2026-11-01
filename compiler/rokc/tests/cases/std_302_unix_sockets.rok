@@ -58,6 +58,7 @@ fn main() throws (IoError) {
     let f = unsafe { fs::File::from_fd(fd ?? -1, "passed") };
     let back: List<u8> = byte_buf(32);
     let m = try f.read(back);
+    try f.close();
     println(f"{try str::from_utf8(back[0:m])}");
 
     let (d1, d2) = try UnixDatagram::pair();

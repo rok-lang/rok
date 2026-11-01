@@ -10,6 +10,7 @@
 // `Sender::send_async` suspends the task while a bounded channel is full
 // (backpressure without blocking the worker); a rendezvous `try_send`
 // succeeds when the receiver is suspended in `recv_async`.
+use rok::core::marker::share;
 let (tx, rx) = channel_bounded::<i32>(2);
 let sent = Atomic::new(0);
 let producer = task::spawn(async {
@@ -64,7 +65,8 @@ match await waiter {
 }
 
 // Rendezvous `send_async` returns only once the value is taken.
-let (ztx, zrx) = channel_bounded::<i32>(0);
+let (ztx_own, zrx) = channel_bounded::<i32>(0);
+let ztx = unsafe { share(ztx_own) };
 let taken = Atomic::new(0);
 let sender = task::spawn(async {
     try! await ztx.send_async(7);

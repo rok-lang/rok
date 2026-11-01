@@ -7,6 +7,7 @@
 // read sees the file or "file is closed", never a file opened after the
 // close that got the same fd number.
 
+use rok::core::marker::share;
 use rok::std::{env, fs, io, process, thread};
 use rok::std::fs::File;
 use rok::std::io::SeekFrom;
@@ -20,7 +21,8 @@ fn main() throws (io::IoError | thread::JoinError) {
     try fs::write(b, "BBBBBBBBBBBBBBBB");
     let foreign = 0;
     for _ in 0..1000 {
-        let f = try File::open(a);
+        let f_own = try File::open(a);
+        let f = unsafe { share(f_own) };
         let reader = thread::spawn(|| {
             let buf = io::byte_buf(1);
             let seen = 0;
@@ -32,7 +34,7 @@ fn main() throws (io::IoError | thread::JoinError) {
             seen
         });
         thread::yield_now();
-        try f.close();
+        try f_own.close();
         // Likely the number `f` had, once it is released.
         let g = try File::open(b);
         foreign += try reader.join();

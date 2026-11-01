@@ -28,6 +28,7 @@
 // convenience functions over `Dir::root()` (write / write_atomic /
 // copy / rename / walk / remove_dir_all), and a confined `Dir`.
 
+use rok::core::marker::share;
 use rok::std::fs;
 use rok::std::fs::{Dir, File, OpenOptions, SeekFrom, Permissions};
 use rok::std::os::unix::fs::PermissionsExt;
@@ -58,8 +59,9 @@ fn main() throws (IoError) {
     let buf: List<u8> = [0u8, 0u8, 0u8];
     let n = try g.read(buf);
     println(f"read {n}: {buf[0]} {buf[1]} {buf[2]}");
+    let closed = unsafe { share(g) };
     try g.close();
-    println(try g.read_to_str() catch e { f"{e.kind():?}" });
+    println(try closed.read_to_str() catch e { f"{e.kind():?}" });
 
     let c = base / "a" / "b" / "c.txt";
     let perm: Permissions = PermissionsExt::from_mode(0o640u32);

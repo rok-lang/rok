@@ -1,0 +1,24 @@
+// expect-exit: 0
+// expect-stdout:
+// 1 2
+// closed copy: Closed
+// the clone still sends: 3
+
+// spec: std 217-channel §2.17.3
+
+// `clone()` makes an independent sender: closing one leaves the other open.
+
+use rok::core::channel::{SendError, channel};
+
+fn main() {
+    let (tx, rx) = channel::<i32>();
+    let tx2 = tx.clone();
+    try! tx.send(1);
+    try! tx2.send(2);
+    println(f"{rx.recv() ?? 0} {rx.recv() ?? 0}");
+    let probe = unsafe { rok::core::marker::share(tx) };
+    tx.close();
+    try probe.send(9) catch e: SendError<i32> { println("closed copy: Closed"); };
+    try! tx2.send(3);
+    println(f"the clone still sends: {rx.recv() ?? 0}");
+}

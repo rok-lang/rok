@@ -10,6 +10,7 @@
 // stdlib 3.7.3: `status` / `output`, and a `kill_on_drop` child bound
 // with `using` is killed and reaped when the block ends; a child outside
 // `using` is not.
+use rok::core::marker::share;
 use rok::std::process::{Command, ExitStatus, Stdio};
 use rok::std::env;
 use rok::std::io::IoError;
@@ -32,7 +33,7 @@ fn main() throws (IoError) {
 
     let start = Instant::now();
     let c = try Command::new(me).arg("sleep").kill_on_drop(true).spawn();
-    using guard = c {
+    using guard = unsafe { share(c) } {
         thread::sleep(Duration::ms(20));
     }
     let st = try c.try_wait();

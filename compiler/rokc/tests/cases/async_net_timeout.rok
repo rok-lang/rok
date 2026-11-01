@@ -11,13 +11,15 @@
 // the blocking calls; the async ones go through `task::timeout`, or
 // `task::select` with a `sleep`). After a timeout the read keeps going
 // until cancelled (707 §7.7.10).
+use rok::core::marker::share;
 use rok::std::net::{TcpListener, TcpStream, SocketAddr};
 use rok::std::io::byte_buf;
 
 let any: SocketAddr = try! "127.0.0.1:0".parse::<SocketAddr>();
 let listener = try! TcpListener::bind(any);
 let client = try! TcpStream::connect(try! listener.local_addr());
-let (server, _) = try! listener.accept();
+let (server_own, _) = try! listener.accept();
+let server = unsafe { share(server_own) };
 
 let read = task::spawn(async { try await server.read_async(byte_buf(16)) catch _ { 0 } });
 let r = try await task::timeout(Duration::ms(20), read) catch _: TimeoutError { 999 };

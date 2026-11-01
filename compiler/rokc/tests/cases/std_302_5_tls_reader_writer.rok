@@ -8,6 +8,7 @@
 // One connection's reader and writer on one worker: the reader answers
 // KeyUpdate requests while the writer's large write waits on a full
 // socket, and its records must not land inside the write's.
+use rok::core::marker::share;
 use rok::std::net::{TcpListener, SocketAddr};
 use rok::std::net;
 use rok::std::net::tls::{Client, Server, ClientConfig, ServerConfig, Certificate, PrivateKey};
@@ -62,7 +63,8 @@ let cfg = try! ServerConfig::new(try! Certificate::from_pem(CERT), try! PrivateK
 let server = task::spawn_local(async {
     let (s, _) = try! await l.accept_async();
     try! l.close();
-    let srv = try! await Server::new_async(s, cfg);
+    let srv_own = try! await Server::new_async(s, cfg);
+    let srv = unsafe { share(srv_own) };
     // A reader answering the client's KeyUpdate requests beside a writer
     // whose large write waits on a full socket.
     let reader = task::spawn_local(async {
@@ -83,7 +85,8 @@ let server = task::spawn_local(async {
 let ccfg = try! ClientConfig::new();
 ccfg.root_certs = try! Certificate::from_pem(CA);
 let s = try! await net::tcp_connect_async(f"{addr}");
-let c = try! await Client::with_config_async(s, "localhost", ccfg);
+let c_own = try! await Client::with_config_async(s, "localhost", ccfg);
+let c = unsafe { share(c_own) };
 let updates = task::spawn_local(async {
     let chunk = data(ROUNDS * 100);
     let r = "ok";

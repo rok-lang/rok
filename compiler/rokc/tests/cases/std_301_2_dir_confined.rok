@@ -27,8 +27,8 @@ fn main() {
     println(f"inside: {try! g.read_to_str()}");
     try! g.close();
     println(f"exists {d.exists("sub/a.txt")} missing {d.exists("sub/b.txt")}");
-    try d.open("/etc/hosts") catch _ { println("absolute rejected"); }
-    try d.open("sub/../../x") catch _ { println("parent rejected"); }
+    try (try d.open("/etc/hosts")).close() catch _ { println("absolute rejected"); }
+    try (try d.open("sub/../../x")).close() catch _ { println("parent rejected"); }
     try! d.rename("sub/a.txt", "sub/b.txt");
     let n = try! d.copy("sub/b.txt", "c.txt");
     println(f"renamed {d.exists("sub/b.txt")} copied {n}");

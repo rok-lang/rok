@@ -11,14 +11,17 @@
 // still works: hi
 
 // Cancelling a task in async I/O runs `finally` and drops its registrations.
+use rok::core::marker::share;
 use rok::std::net::{TcpListener, TcpStream, SocketAddr};
 use rok::std::io::byte_buf;
 
 let any: SocketAddr = try! "127.0.0.1:0".parse::<SocketAddr>();
 let listener = try! TcpListener::bind(any);
 let client = try! TcpStream::connect(try! listener.local_addr());
-let (server, _) = try! listener.accept();
-let idle = try! TcpListener::bind(any);
+let (server_own, _) = try! listener.accept();
+let server = unsafe { share(server_own) };
+let idle_own = try! TcpListener::bind(any);
+let idle = unsafe { share(idle_own) };
 let m = Mutex::new(0);
 let (tx, rx) = channel::<i32>();
 let finally_ran = Mutex::new(false);
