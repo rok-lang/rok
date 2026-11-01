@@ -2,7 +2,7 @@
 //! workspace takes no external crates.
 //!
 //! Exit codes (901.6): 0 ok, 1 user error (compile error / failed test),
-//! 2 usage error, 101 internal error. `run` exits with the program's own
+//! 2 usage error, 70 internal error. `run` exits with the program's own
 //! code.
 
 use std::ffi::OsString;
@@ -213,13 +213,6 @@ fn parse_args(raw: Vec<String>, mut tail: Vec<OsString>) -> Args {
                 };
             }
             "-o" | "--output" => a.output = Some(value(&name, inline, &mut it).into()),
-            "--out" => {
-                let v = value(&name, inline, &mut it);
-                rokc_core::warn_once(&format!(
-                    "`--out` is now `-o` or `--output` (write `-o {v}`); `--out` goes in 0.2.0"
-                ));
-                a.output = Some(v.into());
-            }
             "--bootstrap" => a.bootstrap.push(value(&name, inline, &mut it).into()),
             "--cfg" => a.cfg.push(value(&name, inline, &mut it)),
             "--print" => a.print = Some(value(&name, inline, &mut it)),
@@ -262,11 +255,6 @@ fn parse_args(raw: Vec<String>, mut tail: Vec<OsString>) -> Args {
             "--mlir-pass" => a.opts.mlir_passes.push(value(&name, inline, &mut it)),
             "--emit" => {
                 for k in value(&name, inline, &mut it).split(',') {
-                    if let Some(new) = EmitKind::renamed(k) {
-                        rokc_core::warn_once(&format!(
-                            "`--emit={k}` is now `--emit={new}`; `{k}` goes in 0.2.0"
-                        ));
-                    }
                     a.emit.push(
                         EmitKind::parse(k)
                             .unwrap_or_else(|| usage_error(&format!("unknown emit kind `{k}`"))),
@@ -373,16 +361,6 @@ fn parse_args(raw: Vec<String>, mut tail: Vec<OsString>) -> Args {
     if output && !a.opts.release() {
         a.opts.debug = true;
     }
-    let old = a.target.as_deref().and_then(|t| {
-        rokc_interface::RENAMED_TARGETS
-            .iter()
-            .find(|(old, _)| *old == t)
-    });
-    if let Some((t, new)) = old {
-        rokc_core::warn_once(&format!(
-            "target `{t}` is now `{new}` (write `--target {new}`); `{t}` goes in 0.2.0"
-        ));
-    }
     let mut spec = TargetSpec::resolve(a.target.as_deref()).unwrap_or_else(|e| fail(&e));
     spec.set_cpu(
         a.target_cpu.as_deref(),
@@ -397,7 +375,7 @@ fn parse_args(raw: Vec<String>, mut tail: Vec<OsString>) -> Args {
         };
         a.opts.profile = Profile::CsGenerate(p.clone(), g);
     }
-    if rokc_core::env_flag(rokc_core::env_name("ROK_VERBOSE")) {
+    if rokc_core::env_flag("ROK_VERBOSE") {
         a.verbose = a.verbose.max(1);
     }
     a
@@ -497,17 +475,18 @@ fn parse_extern(v: &str) -> (String, PathBuf) {
 const COMPILER_STACK: usize = 1 << 30;
 
 fn main() {
-    // `wasm-component-ld` runs rokc as its `wasm-ld` (a `wasm32-wasi` link).
+    // `wasm-component-ld` runs rokc as its `wasm-ld` (a `wasm32-wasip2` link).
     if std::env::var_os(rokc_interface::AS_WASM_LD).is_some() {
         process::exit(rokc_interface::wasm_ld_main());
     }
-    // Spec 901.6: an internal error (rokc panic) exits 101.
+    // Spec 901.6: an internal error (rokc panic) exits 70, apart from a
+    // program panic's 101.
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         rokc_interface::end_if_output_closed(info);
         default_hook(info);
         eprintln!("{}: internal compiler error", cli::invoked_as());
-        process::exit(101);
+        process::exit(rokc_core::ICE_EXIT);
     }));
     std::thread::Builder::new()
         .name("main".into())
@@ -528,13 +507,7 @@ fn real_main() {
         None | Some("cfg") => {}
         Some("target-list") => {
             for t in rokc_interface::BUILTIN_TARGETS {
-                match rokc_interface::RENAMED_TARGETS
-                    .iter()
-                    .find(|(old, _)| old == t)
-                {
-                    Some((_, new)) => println!("{new}\n{t} (deprecated: use {new})"),
-                    None => println!("{t}"),
-                }
+                println!("{t}");
             }
             return;
         }
@@ -583,9 +556,6 @@ fn real_main() {
             "unexpected argument `{extra}`: `{}` takes {takes}",
             a.cmd
         ));
-    }
-    if matches!(a.cmd.as_str(), "run" | "test" | "bench") {
-        rokc_core::warn_runtime_vars();
     }
     match a.cmd.as_str() {
         "build" => cmd_build(with_defaults(a)),
@@ -682,7 +652,7 @@ fn real_main() {
         "bindgen" => cmd_bindgen(&a),
         "demangle" => cmd_demangle(&a),
         "profdata" => cmd_profdata(&a),
-        "rokhir-text" | "inspect" => cmd_inspect(&a),
+        "inspect" => cmd_inspect(&a),
         "version" => {
             println!("rokc {}", VERSION);
             if a.verbose > 0 {
@@ -1035,7 +1005,7 @@ fn counts(errors: usize, warnings: usize) -> String {
 /// or under `$ROK_INCREMENTAL`. A lone file gets one only there;
 /// `ROK_INCREMENTAL=0` turns it off.
 fn incremental_dir(a: &Args, pkg: &Package) -> Option<PathBuf> {
-    let env = std::env::var_os(rokc_core::env_name("ROK_INCREMENTAL")).filter(|v| !v.is_empty());
+    let env = std::env::var_os("ROK_INCREMENTAL").filter(|v| !v.is_empty());
     let root = match env {
         Some(v) if v == "0" => return None,
         Some(v) => PathBuf::from(v),
@@ -1125,7 +1095,7 @@ fn out_dir(a: &Args, pkg: Option<&Package>) -> PathBuf {
         .target_dir
         .clone()
         .or_else(|| pkg.map(Package::target_dir))
-        .or_else(|| std::env::var_os(rokc_core::env_name("ROK_TARGET_DIR")).map(PathBuf::from))
+        .or_else(|| std::env::var_os("ROK_TARGET_DIR").map(PathBuf::from))
         .unwrap_or_else(lone_target_dir);
     if a.target.is_some() {
         dir.push(&a.spec().name);
@@ -1415,7 +1385,7 @@ fn place(a: &Args, pkg: &Package, from: &Path, to: &Path) {
     let root = a
         .target_dir
         .clone()
-        .or_else(|| std::env::var_os(rokc_core::env_name("ROK_TARGET_DIR")).map(PathBuf::from))
+        .or_else(|| std::env::var_os("ROK_TARGET_DIR").map(PathBuf::from))
         .unwrap_or_else(lone_target_dir);
     let abs = std::path::absolute(to).unwrap_or_else(|_| to.to_path_buf());
     let h = rokc_core::hash::fnv(abs.to_string_lossy().as_bytes());
@@ -1619,8 +1589,10 @@ fn cmd_run(mut a: Args) {
         };
         term::status("Running", &what);
     }
-    let status = Command::new(&exe)
-        .args(&a.run_args)
+    let mut c = Command::new(&exe);
+    c.args(&a.run_args);
+    rokc_core::strip_handoffs(&mut c);
+    let status = c
         .status()
         .unwrap_or_else(|e| fail(&format!("cannot run {}: {e}", exe.display())));
     #[cfg(unix)]
@@ -1688,11 +1660,9 @@ fn build_harness(a: &Args, pkg: &Package, mode: Mode) -> (PathBuf, Vec<String>) 
 fn test_threads(a: &Args) -> usize {
     a.threads
         .or_else(|| {
-            rokc_core::env_knob(
-                rokc_core::env_name("ROK_TEST_THREADS"),
-                "a positive number",
-                |v| v.parse().ok().filter(|&n| n > 0),
-            )
+            rokc_core::env_knob("ROK_TEST_THREADS", "a positive number", |v| {
+                v.parse().ok().filter(|&n| n > 0)
+            })
         })
         .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, usize::from))
 }
@@ -2168,27 +2138,20 @@ fn cmd_bindgen(a: &Args) {
     }
 }
 
-/// `inspect [--dump] <file>`, and its old name `rokhir-text <file>`.
+/// `inspect [--dump] <file>`.
 fn cmd_inspect(a: &Args) {
     let [file] = a.positional.as_slice() else {
         usage_error("usage: rokc inspect [--dump] <file.rokhir | lib<name>.a>");
     };
-    if a.cmd == "rokhir-text" {
-        let tool = cli::invoked_as();
-        rokc_core::warn_once(&format!(
-            "`{tool} rokhir-text` is now `{tool} inspect --dump` (write `{tool} inspect --dump \
-             {file}`); `rokhir-text` goes in 0.2.0"
-        ));
-    }
     let path = Path::new(file);
-    let out = if a.cmd == "inspect" && !a.dump {
-        rokc_interface::rokhir::inspect(path)
-    } else {
+    let out = if a.dump {
         let rokhir = rokc_interface::rokhir::companions(path).0;
         std::fs::read(&rokhir)
             .map_err(|e| format!("{}: {e}", rokhir.display()))
             .and_then(|b| rokc_interface::rokhir::Rokhir::decode(&b))
             .map(|r| r.text())
+    } else {
+        rokc_interface::rokhir::inspect(path)
     };
     print!("{}", out.unwrap_or_else(|e| fail(&e)));
 }

@@ -1,6 +1,6 @@
 // spec: std 307
 // spec: std 306
-// only-target: wasm32-wasi wasm32-wasi-threads wasm32-unknown-unknown
+// only-target: wasm32-wasip2 wasm32-wasip1-threads wasm32-unknown-unknown
 // expect-exit: 0
 // expect-stdout:
 // spawn: Unsupported

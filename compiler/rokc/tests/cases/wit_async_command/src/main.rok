@@ -1,5 +1,5 @@
 // spec: std §1.8.2
-// only-target: wasm32-wasi
+// only-target: wasm32-wasip2
 // expect-exit: 0
 // wasm-invoke: delayed-add(1, 2, 5) => 3
 // wasm-invoke: check(21) => ok(42)

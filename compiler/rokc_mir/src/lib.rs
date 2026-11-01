@@ -156,7 +156,7 @@ pub struct Link {
     pub wit: Option<WitLink>,
 }
 
-/// The WIT of a component (`wasm32-wasi`): the linker gets a directory
+/// The WIT of a component (`wasm32-wasip2`): the linker gets a directory
 /// holding `world` and, under `deps/`, the WIT sources it refers to.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct WitLink {

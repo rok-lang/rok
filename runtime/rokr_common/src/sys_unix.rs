@@ -2,9 +2,9 @@
 //! and WASI through wasi-libc.
 //!
 //! The heap reservation on WASI is linear memory (`memory.grow`). WASI
-//! without threads (no `atomics`: `wasm32-wasi`, the browser) has one
+//! without threads (no `atomics`: `wasm32-wasip2`, the browser) has one
 //! thread: locks are no-ops and a wait nobody can end is a deadlock;
-//! `wasm32-wasi-threads` has wasi-libc's pthreads.
+//! `wasm32-wasip1-threads` has wasi-libc's pthreads.
 
 // `static` primitives: `const fn new` is the constructor.
 #![allow(clippy::new_without_default)]

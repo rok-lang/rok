@@ -1013,7 +1013,7 @@ fn meta_hygiene_renames_locals_only() {
     assert!(!text.contains("Other__meta") && !text.contains("len__meta"));
 }
 
-/// `--emit=ast` (spec 9.9.10): printing a parsed file and parsing
+/// `--emit=source` (spec 9.9.10): printing a parsed file and parsing
 /// the print gives the same print back, for every library and test
 /// case file that parses without the extension operators.
 #[test]

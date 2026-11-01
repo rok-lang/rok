@@ -112,7 +112,7 @@ pub fn expand(
             fail(
                 diags,
                 format!(
-                    "`ffi::wit` builds a WebAssembly component: it needs `--target wasm32-wasi` \
+                    "`ffi::wit` builds a WebAssembly component: it needs `--target wasm32-wasip2` \
                      (or another component target), not {} (stdlib 1.8)",
                     target.name
                 ),

@@ -19,23 +19,23 @@
 //!   - `// debug-only`          - skipped under `ROK_TEST_OPT` (e.g.
 //!     overflow panics, which only `-O0` checks)
 //!   - `// gc-stress: N`        - run twice more, with
-//!     `ROK_GC_STRESS=N ROK_GC_EVAC=always` and with
-//!     `ROK_GC_STRESS=N ROK_GC_EVAC=always ROK_GC_CONCURRENT=always`,
+//!     `ROKR_GC_STRESS=N ROKR_GC_EVAC=always` and with
+//!     `ROKR_GC_STRESS=N ROKR_GC_EVAC=always ROKR_GC_CONCURRENT=always`,
 //!     same expectations
 //!   - `// rokc-arg: args`      - extra `rokc` arguments (`--cfg feat`)
 //!   - `// run-env: KEY=VALUE`  - (repeatable) set for every run of the
-//!     case (`ROK_WORKERS=3`)
+//!     case (`ROKR_WORKERS=3`)
 //!   - `// only-os: macos linux` - skipped unless the target's `target_os`
 //!     is listed (POSIX commands, paths, signals)
 //!   - `// only-pointer-width: 64` - skipped on targets of another width
 //!     (sizes, `usize::BITS`, layouts in the expected output)
 //!   - `// needs: threads net process fs posix-fs native-run` - skipped
-//!     on a target without one of them: threads only on `wasm32-wasi-threads`
-//!     among the wasm32 targets, sockets only on `wasm32-wasi`, no
+//!     on a target without one of them: threads only on `wasm32-wasip1-threads`
+//!     among the wasm32 targets, sockets only on `wasm32-wasip2`, no
 //!     processes or signals on wasm32 (stdlib 0.1.4, 3.x availability;
 //!     `process` also covers POSIX C calls), a browser no file system
 //!     (`fs`), WASI no `dup` / `flock` / `mmap` (`posix-fs`)
-//!   - `// only-target: wasm32-wasi ..` - run only on the listed
+//!   - `// only-target: wasm32-wasip2 ..` - run only on the listed
 //!     `ROK_TEST_TARGET`s (what one target reports that the others do
 //!     not, e.g. its `Unsupported` APIs)
 //!   - `// wasm-invoke: f(1, "a") => 2` - (repeatable) after the run, the
@@ -68,7 +68,7 @@
 //!     suite: CI splits a corpus over n jobs.
 //!   - `ROK_TEST_TARGET=<triple>` - build for that target (with a runtime
 //!     built for it), e.g. `x86_64-apple-darwin` run under Rosetta.
-//!     `wasm32-wasi` and `wasm32-wasi-threads` run each module with
+//!     `wasm32-wasip2` and `wasm32-wasip1-threads` run each module with
 //!     `ROK_TEST_WASM_RUNNER` (a `wasmtime` that still has wasi-threads:
 //!     46.0.3, the last);
 //!     `wasm32-unknown-unknown` with `node` and the toolchain's `rok.mjs`
@@ -371,7 +371,7 @@ pub fn spec() -> TargetSpec {
 }
 
 /// The Rust target the runtime is built for (WASI preview 2 for
-/// `wasm32-wasi`, ...); `None` for the host.
+/// `wasm32-wasip2`, ...); `None` for the host.
 pub fn rust_target() -> Option<String> {
     test_target().map(|_| spec().rust_target)
 }
@@ -436,7 +436,7 @@ fn lacks(need: &str) -> bool {
     }
 }
 
-/// A run's exit code `got` is the expected one. A `wasm32-wasi`
+/// A run's exit code `got` is the expected one. A `wasm32-wasip2`
 /// component exits through `wasi:cli/exit`, which carries only success
 /// or failure (1); wasmtime fails (1) a preview 1 module's exit with a
 /// code of 126 or more (a trap, such as `abort`'s, still gives 134).
@@ -474,7 +474,7 @@ fn runner_command(exe: &Path) -> Command {
     match t.object_format {
         ObjectFormat::Wasm if t.linker == Linker::WasmComponentLd => {
             let runner = env::var_os("ROK_TEST_WASM_RUNNER")
-                .expect("ROK_TEST_TARGET=wasm32-wasi needs ROK_TEST_WASM_RUNNER (wasmtime)");
+                .expect("ROK_TEST_TARGET=wasm32-wasip2 needs ROK_TEST_WASM_RUNNER (wasmtime)");
             let mut c = Command::new(runner);
             c.args([
                 "run",
@@ -496,7 +496,7 @@ fn runner_command(exe: &Path) -> Command {
         }
         ObjectFormat::Wasm if !t.reactor() => {
             let runner = env::var_os("ROK_TEST_WASM_RUNNER").expect(
-                "ROK_TEST_TARGET=wasm32-wasi-threads needs ROK_TEST_WASM_RUNNER (wasmtime)",
+                "ROK_TEST_TARGET=wasm32-wasip1-threads needs ROK_TEST_WASM_RUNNER (wasmtime)",
             );
             let mut c = Command::new(runner);
             c.args([
@@ -547,7 +547,7 @@ pub fn invoke_command(exe: &Path, call: &str) -> Command {
     c
 }
 
-/// The component model features `wasm32-wasi` components may use beyond
+/// The component model features `wasm32-wasip2` components may use beyond
 /// what wasmtime enables by default (async is on).
 const COMPONENT_FEATURES: &str =
     "component-model-fixed-length-lists=y,component-model-error-context=y";

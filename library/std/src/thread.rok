@@ -249,7 +249,7 @@ impl Builder {
             let h = unsafe { rok_thread_spawn(run, self.stack_size ?? 0usize, id) };
             if h == 0usize {
                 using g = THREADS.lock() { g.get().remove(id); }
-                // No threads on this target (wasm32-wasi, the browser).
+                // No threads on this target (wasm32-wasip2, the browser).
                 if unsafe { rok_cpu_count() } == 0 {
                     throw IoError::with_kind(IoErrorKind::Unsupported, "threads are not supported on this target");
                 }

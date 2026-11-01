@@ -1,9 +1,9 @@
-// refs-lang 7.7.8: `ROK_DYNAMIC_WORKERS=1` parks idle workers and takes
+// refs-lang 7.7.8: `ROKR_DYNAMIC_WORKERS=1` parks idle workers and takes
 // them back as work arrives; tasks, timers and blocking calls behave as
 // with a fixed pool.
 // needs: threads
-// run-env: ROK_WORKERS=4
-// run-env: ROK_DYNAMIC_WORKERS=1
+// run-env: ROKR_WORKERS=4
+// run-env: ROKR_DYNAMIC_WORKERS=1
 // expect-exit: 0
 // expect-stdout:
 // workers 4

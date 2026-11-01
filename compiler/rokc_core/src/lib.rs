@@ -54,59 +54,9 @@ pub fn env_knob<T>(
     r
 }
 
-/// Tool variables and their old spellings, read until 0.2.0.
-pub const RENAMED_VARS: &[(&str, &str)] = &[
-    ("ROK_TARGET_DIR", "ROKC_TARGET_DIR"),
-    ("ROK_INCREMENTAL", "ROKC_INCREMENTAL"),
-    ("ROK_INCREMENTAL_VERIFY", "ROKC_INCR_VERIFY"),
-    ("ROK_TEST_THREADS", "ROKC_NUM_JOBS"),
-    ("ROK_VERBOSE", "ROKC_VERBOSE"),
-];
-
-/// Runtime variables and their old spellings. The runtime reads both
-/// silently; `run`, `test` and `bench` warn about the old ones instead.
-pub const RUNTIME_VARS: &[(&str, &str)] = &[
-    ("ROKR_WORKERS", "ROK_WORKERS"),
-    ("ROKR_THREAD_PER_CORE", "ROK_THREAD_PER_CORE"),
-    ("ROKR_DYNAMIC_WORKERS", "ROK_DYNAMIC_WORKERS"),
-    ("ROKR_GC_STRESS", "ROK_GC_STRESS"),
-    ("ROKR_GC_EVAC", "ROK_GC_EVAC"),
-    ("ROKR_GC_CONCURRENT", "ROK_GC_CONCURRENT"),
-    ("ROKR_GC_STATS", "ROK_GC_STATS"),
-    ("ROKR_GC_LOG", "ROK_GC_LOG"),
-    ("ROKR_HEAP_DUMP", "ROK_HEAP_DUMP"),
-];
-
-fn set_var(name: &str) -> bool {
-    std::env::var_os(name).is_some_and(|v| !v.is_empty())
-}
-
-/// The variable to read for `new` (in [`RENAMED_VARS`]): `new` if set,
-/// else its old spelling if that is set, which warns once.
-#[must_use]
-pub fn env_name(new: &'static str) -> &'static str {
-    let Some(&(_, old)) = RENAMED_VARS.iter().find(|(n, _)| *n == new) else {
-        return new;
-    };
-    if set_var(new) || !set_var(old) {
-        return new;
-    }
-    renamed_warning(old, new, &format!("{old} goes in 0.2.0"));
-    old
-}
-
-/// Warn once about the old runtime variables that are set alone.
-pub fn warn_runtime_vars() {
-    for &(new, old) in RUNTIME_VARS {
-        if set_var(old) && !set_var(new) {
-            renamed_warning(old, new, &format!("programs read {old} until 0.2.0"));
-        }
-    }
-}
-
-fn renamed_warning(old: &str, new: &str, until: &str) {
-    warn_once(&format!("{old} is now {new}: set {new} instead ({until})"));
-}
+/// Exit code of an internal compiler error (`EX_SOFTWARE`), apart from a
+/// program panic's 101.
+pub const ICE_EXIT: i32 = 70;
 
 /// `rokc: warning: <msg>` (`rok: ..` under rok) on stderr, once per
 /// process.
@@ -126,11 +76,34 @@ pub fn warn_once(msg: &str) {
     }
 }
 
-/// Hand-off variable `name` from `rok`: `__<name>`, else its old spelling
-/// `<name>`.
+/// Hand-off variable `__<name>` from `rok`.
 #[must_use]
 pub fn handoff_var(name: &str) -> Option<std::ffi::OsString> {
-    std::env::var_os(format!("__{name}")).or_else(|| std::env::var_os(name))
+    std::env::var_os(format!("__{name}"))
+}
+
+/// Whether environment name `k` is a `rok` hand-off (`__ROK`,
+/// `__ROK_CLI`, ..). Windows names are case-insensitive.
+#[must_use]
+pub fn is_handoff(k: &std::ffi::OsStr) -> bool {
+    let k = k.as_encoded_bytes();
+    k.get(..5).is_some_and(|p| {
+        if cfg!(windows) {
+            p.eq_ignore_ascii_case(b"__ROK")
+        } else {
+            p == b"__ROK"
+        }
+    })
+}
+
+/// Keep the `rok` hand-offs out of the program `c` runs: they are for
+/// `rokc` alone.
+pub fn strip_handoffs(c: &mut std::process::Command) {
+    for (k, _) in std::env::vars_os() {
+        if is_handoff(&k) {
+            c.env_remove(k);
+        }
+    }
 }
 
 /// Knob `name` set to one of `choices` (`a|b|c`): that choice.

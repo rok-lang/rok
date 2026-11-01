@@ -2531,7 +2531,7 @@ fn rokc_within(cwd: &Path, home: &Path, args: &[&str]) -> Output {
         .env("HOME", home)
         .env("USERPROFILE", home)
         .env_remove("CLICOLOR_FORCE")
-        .env_remove("ROK_CLI")
+        .env_remove("__ROK_CLI")
         .args(args)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -2592,7 +2592,7 @@ fn fmt_outside_package_needs_path() {
     // Through rok, the message names `rok`.
     let out = Command::new(ROKC)
         .current_dir(&empty)
-        .env("ROK_CLI", "rok")
+        .env("__ROK_CLI", "rok")
         .arg("fmt")
         .output()
         .unwrap();
@@ -2924,8 +2924,8 @@ fn cross_targets_link_from_the_sysroot() {
         "armv7-unknown-linux-gnueabihf",
         "riscv64gc-unknown-linux-gnu",
         "i686-pc-windows-msvc",
-        "wasm32-wasi",
-        "wasm32-wasi-threads",
+        "wasm32-wasip2",
+        "wasm32-wasip1-threads",
         "wasm32-unknown-unknown",
     ] {
         if !targets.join(t).is_dir() {
@@ -3738,15 +3738,10 @@ fn prebuilt_dependency_is_linked_and_instantiated() {
     );
     assert_exit(&out, 0);
     let dump = text(&out.stdout);
-    // The old name prints the same, and warns.
     let old = rokc(None, &dir, &["rokhir-text", "geo/target/debug/geo.rokhir"]);
-    assert_exit(&old, 0);
-    assert_eq!(text(&old.stdout), dump);
+    assert_exit(&old, 2);
     assert!(
-        text(&old.stderr).contains(
-            "rokc: warning: `rokc rokhir-text` is now `rokc inspect --dump` (write `rokc inspect \
-             --dump geo/target/debug/geo.rokhir`); `rokhir-text` goes in 0.2.0"
-        ),
+        text(&old.stderr).contains("unknown command `rokhir-text`"),
         "{}",
         text(&old.stderr)
     );
@@ -4399,13 +4394,8 @@ fn print_target_list_and_spec() {
     let out = rokc(None, &dir, &["--print", "target-list"]);
     assert_exit(&out, 0);
     let list = text(&out.stdout);
-    let names: Vec<&str> = list.lines().filter(|l| !l.contains(' ')).collect();
-    let mut want: Vec<&str> = rokc_target::BUILTIN.to_vec();
-    for (old, new) in rokc_target::RENAMED {
-        let at = want.iter().position(|t| t == old).unwrap();
-        want[at] = new;
-    }
-    assert_eq!(names, want);
+    let names: Vec<&str> = list.lines().collect();
+    assert_eq!(names, rokc_target::BUILTIN);
     for t in rokc_target::BUILTIN {
         let out = rokc(None, &dir, &["--print", "target-spec", "--target", t]);
         assert_exit(&out, 0);
@@ -4894,7 +4884,7 @@ fn profdata_show_merge_warnings_and_context_sensitive_pgo() {
     assert!(text(&out.stderr).contains("needs -C profile-use"));
 }
 
-/// PGO for wasm32-wasi: the profile runtime (with wasi-libc's emulated
+/// PGO for wasm32-wasip2: the profile runtime (with wasi-libc's emulated
 /// mmap) writes through WASI; the component run by
 /// `ROK_TEST_WASM_RUNNER` (wasmtime) with the directory preopened.
 // spec: §9.9.7
@@ -4907,20 +4897,20 @@ fn profile_guided_optimization_on_wasm32_wasi() {
     let t = Path::new(ROKC)
         .parent()
         .unwrap()
-        .join("../lib/rok/targets/wasm32-wasi");
+        .join("../lib/rok/targets/wasm32-wasip2");
     if !t.join("libclang_rt.profile.a").is_file() {
-        eprintln!("skipped: no wasm32-wasi profile runtime (targets/build.sh)");
+        eprintln!("skipped: no wasm32-wasip2 profile runtime (targets/build.sh)");
         return;
     }
     put(dir.join("src/main.rok"), PGO_MAIN).unwrap();
     let build = |args: &[&str]| {
-        let base = ["-q", "build", "--target", "wasm32-wasi", "-O2"];
+        let base = ["-q", "build", "--target", "wasm32-wasip2", "-O2"];
         let out = rokc(None, &dir, &[&base[..], args].concat());
         assert_exit(&out, 0);
     };
     build(&["-C", "profile-generate=raw", "-o", "instr.wasm"]);
     let Some(runner) = std::env::var_os("ROK_TEST_WASM_RUNNER") else {
-        eprintln!("skipped: no ROK_TEST_WASM_RUNNER to run wasm32-wasi");
+        eprintln!("skipped: no ROK_TEST_WASM_RUNNER to run wasm32-wasip2");
         return;
     };
     let run = Command::new(runner)
@@ -4935,7 +4925,7 @@ fn profile_guided_optimization_on_wasm32_wasi() {
     build(&["-C", "profile-use=p.profdata", "-o", "pgo.wasm"]);
 }
 
-/// `ROK_CC` gets what a `wasm32-wasi` component link needs. A stand-in
+/// `ROK_CC` gets what a `wasm32-wasip2` component link needs. A stand-in
 /// driver records its arguments.
 // spec: §9.1.7 §9.2.14
 #[cfg(unix)]
@@ -4943,9 +4933,9 @@ fn profile_guided_optimization_on_wasm32_wasi() {
 fn rok_cc_links_wit_components() {
     use std::os::unix::fs::PermissionsExt;
     let Some(_env) = setup() else { return };
-    let rt = workspace().join("target/lib/rok/targets/wasm32-wasi/librokr.a");
+    let rt = workspace().join("target/lib/rok/targets/wasm32-wasip2/librokr.a");
     if !rt.is_file() {
-        eprintln!("skipped: no wasm32-wasi runtime (targets/build.sh wasm32-wasi)");
+        eprintln!("skipped: no wasm32-wasip2 runtime (targets/build.sh wasm32-wasip2)");
         return;
     }
     let dir = scratch("rok-cc-wit");
@@ -4977,7 +4967,7 @@ fn rok_cc_links_wit_components() {
         .args([
             "build",
             "main.rok",
-            "--target=wasm32-wasi",
+            "--target=wasm32-wasip2",
             "-o",
             "out.wasm",
         ])
@@ -5084,16 +5074,30 @@ fn run_passes_arguments_codes_and_progress() {
         "{}",
         text(&out.stderr)
     );
+}
 
+/// An internal compiler error exits 70, apart from a program panic's 101.
+// spec: §9.1.6
+#[test]
+fn ice_exit_70() {
+    if !cfg!(debug_assertions) {
+        return;
+    }
+    let dir = scratch("ice-exit");
     put(dir.join("ice.rok"), "let x = 1; // ice-here\n").unwrap();
     let out = Command::new(ROKC)
         .current_dir(&dir)
         .env("ROK_HOME", workspace())
-        .env("ROKC_TEST_ICE", "ice-here")
+        .env("ROK_TEST_ICE", "ice-here")
         .args(["check", "ice.rok"])
         .output()
         .unwrap();
-    assert_exit(&out, 101);
+    assert_exit(&out, 70);
+    assert!(
+        text(&out.stderr).contains("rokc: internal compiler error"),
+        "{}",
+        text(&out.stderr)
+    );
 }
 
 /// A failed build ends with what failed and the counts, as `check` does;
@@ -5485,7 +5489,7 @@ fn emitted_code_follows_the_runtime_abi() {
         ("aarch64-unknown-linux-gnu", "TPIDR_EL0"),
         ("aarch64-apple-darwin", "_rok_tls@TLVPPAGE"),
         ("x86_64-pc-windows-msvc", "_tls_index"),
-        ("wasm32-wasi-threads", "__tls_base"),
+        ("wasm32-wasip1-threads", "__tls_base"),
     ] {
         emit(&["--emit=asm", "--target", target]);
         let asm = read(&format!("{target}/debug/build/abi.s"));
@@ -5689,9 +5693,9 @@ fn runtime_symbols_carry_the_rok_prefix() {
 #[test]
 fn wit_prebuilt_dependency_carries_its_wit() {
     let Some(_env) = setup() else { return };
-    let rt = workspace().join("target/lib/rok/targets/wasm32-wasi/librokr.a");
+    let rt = workspace().join("target/lib/rok/targets/wasm32-wasip2/librokr.a");
     if !rt.is_file() {
-        eprintln!("skipped: no wasm32-wasi runtime (targets/build.sh wasm32-wasi)");
+        eprintln!("skipped: no wasm32-wasip2 runtime (targets/build.sh wasm32-wasip2)");
         return;
     }
     let dir = scratch("wit-prebuilt");
@@ -5720,7 +5724,7 @@ fn wit_prebuilt_dependency_carries_its_wit() {
     let out = rokc(
         None,
         &dir,
-        &["-q", "build", "calc", "--target", "wasm32-wasi"],
+        &["-q", "build", "calc", "--target", "wasm32-wasip2"],
     );
     assert_exit(&out, 0);
     fs::remove_dir_all(dir.join("calc/src")).unwrap();
@@ -5733,9 +5737,9 @@ fn wit_prebuilt_dependency_carries_its_wit() {
             "build",
             "app/main.rok",
             "--target",
-            "wasm32-wasi",
+            "wasm32-wasip2",
             "--extern",
-            "calc=calc/target/wasm32-wasi/debug/calc.rokhir",
+            "calc=calc/target/wasm32-wasip2/debug/calc.rokhir",
             "-o",
             "app.wasm",
         ],
@@ -6103,13 +6107,13 @@ fn bindgen_skips_what_rok_cannot_express() {
         0,
     );
 
-    // wasm32-wasi is never this machine: its headers are given.
+    // wasm32-wasip2 is never this machine: its headers are given.
     put(dir.join("s.h"), "#include <stdio.h>\nint f(FILE *f);\n").unwrap();
-    let out = bindgen(&dir, &["s.h", "--target", "wasm32-wasi"]).unwrap();
+    let out = bindgen(&dir, &["s.h", "--target", "wasm32-wasip2"]).unwrap();
     assert_exit(&out, 1);
     assert!(
         text(&out.stderr).contains(
-            "'stdio.h' file not found\nnote: wasm32-wasi is not this machine's platform, so its \
+            "'stdio.h' file not found\nnote: wasm32-wasip2 is not this machine's platform, so its \
              system headers are not used; give the target's after `--` (`-isystem <dir>` or \
              `--sysroot <dir>`)"
         ),
@@ -6121,7 +6125,7 @@ fn bindgen_skips_what_rok_cannot_express() {
     let args = [
         "s.h",
         "--target",
-        "wasm32-wasi",
+        "wasm32-wasip2",
         "--",
         "-isystem",
         inc.to_str().unwrap(),
@@ -6599,87 +6603,91 @@ fn env_knob_bad_value_warns() {
     );
 }
 
-/// The old `ROKC_*` names still work and warn once, naming the new one;
-/// the new name, when set too, wins without a warning. `test` (as `run`
-/// and `bench`) warns about the runtime's old names.
+/// The old `ROKC_*` names are plain variables: read by nothing, with no
+/// warning. The runtime's old `ROK_*` names likewise.
 // spec: §9.1.7 §9.9.8
 #[test]
-fn old_env_names_warn() {
+fn old_env_names_ignored() {
     let Some(env) = setup() else { return };
     let dir = scratch("env-old");
     let lib = new_package(&dir, "knobs", true);
-    let run = |vars: &[(&str, &Path)]| {
-        let mut c = Command::new(ROKC);
-        c.current_dir(&lib).env("ROK_HOME", workspace());
-        for (new, old) in rokc_core::RENAMED_VARS
-            .iter()
-            .chain(rokc_core::RUNTIME_VARS)
-        {
-            c.env_remove(new).env_remove(old);
-        }
-        c.envs(vars.iter().copied())
-            .args(["test", "-q", "--rokr"])
+    let old = dir.join("old");
+    let out = Command::new(ROKC)
+        .current_dir(&lib)
+        .env("ROK_HOME", workspace())
+        .env_remove("ROK_TARGET_DIR")
+        .env("ROKC_TARGET_DIR", &old)
+        .env("ROKC_NUM_JOBS", "0")
+        .env("ROK_WORKERS", "0")
+        .args(["test", "-q", "--rokr"])
+        .arg(&env.rokr)
+        .output()
+        .unwrap();
+    assert_exit(&out, 0);
+    assert!(
+        !text(&out.stderr).contains("warning"),
+        "{}",
+        text(&out.stderr)
+    );
+    assert!(!old.exists());
+    assert!(lib.join("target/debug").is_dir());
+}
+
+/// `rok`'s `__ROK*` hand-offs stay out of the program that `run` and
+/// `test` start; other variables reach it.
+// spec: §9.1.7
+#[test]
+fn program_env_no_rok_handoff() {
+    let Some(env) = setup() else { return };
+    let dir = scratch("env-handoff");
+    let app = dir.join("app");
+    let body = "    for (k, _) in env::vars() {\n        if k.starts_with(\"__ROK\") || k == \
+                \"ROK_KEEP\" { println(k); }\n    }\n";
+    put(
+        app.join("src/main.rok"),
+        format!("use rok::std::env;\n\nfn main() {{\n{body}}}\n"),
+    )
+    .unwrap();
+    put(
+        app.join("src/lib.rok"),
+        "use rok::std::env;\n\n#[test]\nfn sees() {\n    for (k, _) in env::vars() {\n        \
+         if k.starts_with(\"__ROK\") { panic(k); }\n    }\n}\n",
+    )
+    .unwrap();
+    let run = |args: &[&str]| {
+        Command::new(ROKC)
+            .current_dir(&app)
+            .env("ROK_HOME", workspace())
+            .env("__ROK_ENV", "default")
+            .env("__ROK_TEST_ONLY", "1")
+            .env("ROK_KEEP", "1")
+            .args(args)
+            .arg("--rokr")
             .arg(&env.rokr)
             .output()
             .unwrap()
     };
-    let warnings = |out: &Output| {
-        let mut w: Vec<String> = text(&out.stderr)
-            .lines()
-            .filter(|l| l.starts_with("rokc: warning: "))
-            .map(str::to_owned)
-            .collect();
-        w.sort();
-        w
-    };
-    let (old, new) = (dir.join("old"), dir.join("new"));
-    let out = run(&[
-        ("ROKC_TARGET_DIR", &old),
-        ("ROKC_NUM_JOBS", Path::new("2")),
-        ("ROK_WORKERS", Path::new("2")),
-    ]);
+    let out = run(&["run", "-q"]);
     assert_exit(&out, 0);
-    assert_eq!(
-        warnings(&out),
-        [
-            "rokc: warning: ROKC_NUM_JOBS is now ROK_TEST_THREADS: set ROK_TEST_THREADS instead \
-             (ROKC_NUM_JOBS goes in 0.2.0)",
-            "rokc: warning: ROKC_TARGET_DIR is now ROK_TARGET_DIR: set ROK_TARGET_DIR instead \
-             (ROKC_TARGET_DIR goes in 0.2.0)",
-            "rokc: warning: ROK_WORKERS is now ROKR_WORKERS: set ROKR_WORKERS instead (programs \
-             read ROK_WORKERS until 0.2.0)",
-        ]
-    );
-    assert!(old.join("debug").is_dir());
-    let out = run(&[
-        ("ROK_TARGET_DIR", &new),
-        ("ROKC_TARGET_DIR", &old),
-        ("ROKR_WORKERS", Path::new("2")),
-        ("ROK_WORKERS", Path::new("2")),
-    ]);
+    assert_eq!(text(&out.stdout), "ROK_KEEP\n", "{}", text(&out.stderr));
+    let out = run(&["test", "-q"]);
     assert_exit(&out, 0);
-    assert!(warnings(&out).is_empty(), "{}", text(&out.stderr));
-    assert!(new.join("debug").is_dir());
 }
 
-/// `--out` still names the output, with a warning that says `-o`; `-o`
-/// and `--output` do not warn.
+/// `--out` is not an option: `-o` and `--output` name the output.
 // spec: §9.1.2
 #[test]
-fn out_flag_warns() {
+fn out_flag_removed() {
     let dir = scratch("out-flag");
     put(dir.join("src/main.rok"), "fn main() {}\n").unwrap();
     let out = rokc(None, &dir, &["emit", "--emit=hir", "--out", "a.hir"]);
-    assert_exit(&out, 0);
+    assert_exit(&out, 2);
     assert!(
-        text(&out.stderr).contains(
-            "rokc: warning: `--out` is now `-o` or `--output` (write `-o a.hir`); `--out` goes \
-             in 0.2.0"
-        ),
+        text(&out.stderr).contains("unknown option `--out`"),
         "{}",
         text(&out.stderr)
     );
-    assert!(dir.join("a.hir").is_file());
+    assert!(!dir.join("a.hir").exists());
     for f in ["-o", "--output"] {
         let out = rokc(None, &dir, &["emit", "--emit=hir", f, "b.hir"]);
         assert_exit(&out, 0);
@@ -6691,11 +6699,11 @@ fn out_flag_warns() {
     }
 }
 
-/// `--emit=source` and `--emit=expansions` are the new names of `ast`
-/// and `expanded`, which still work and warn.
+/// `--emit=source` and `--emit=expansions`; `ast` and `expanded` are
+/// not emit kinds.
 // spec: §9.1.2 §9.9.10
 #[test]
-fn emit_new_names() {
+fn emit_names() {
     let dir = scratch("emit-names");
     put(
         dir.join("src/main.rok"),
@@ -6719,54 +6727,31 @@ fn emit_new_names() {
             &dir,
             &["emit", &format!("--emit={old}"), "-o", "o.rok"],
         );
-        assert_exit(&out, 0);
+        assert_exit(&out, 2);
         assert!(
-            text(&out.stderr).contains(&format!(
-                "rokc: warning: `--emit={old}` is now `--emit={new}`; `{old}` goes in 0.2.0"
-            )),
+            text(&out.stderr).contains(&format!("unknown emit kind `{old}`")),
             "{}",
             text(&out.stderr)
         );
-        let read = |f: &str| fs::read_to_string(dir.join(f)).unwrap();
-        assert_eq!(read("n.rok"), read("o.rok"), "{new}");
     }
 }
 
-/// The ecosystem's target names are aliases of the old ones, which warn.
+/// An old target name is an unknown target, with the new one suggested.
 // spec: §0.6.2 §9.1.4
 #[test]
-fn new_target_aliases() {
-    let dir = scratch("target-alias");
-    for (old, new) in rokc_target::RENAMED {
-        let spec = |t: &str| rokc(None, &dir, &["--print", "target-spec", "--target", t]);
-        let (a, b) = (spec(new), spec(old));
-        assert_exit(&a, 0);
-        assert_exit(&b, 0);
-        assert_eq!(text(&a.stdout), text(&b.stdout), "{new}");
-        assert!(!text(&a.stderr).contains("warning"), "{}", text(&a.stderr));
-        assert_eq!(
-            text(&b.stderr),
-            format!(
-                "rokc: warning: target `{old}` is now `{new}` (write `--target {new}`); `{old}` \
-                 goes in 0.2.0\n"
-            )
-        );
-    }
-}
-
-/// `--print target-list` lists each new name, and the old one after it
-/// marked deprecated.
-// spec: §9.1.4
-#[test]
-fn target_list_marks_deprecated() {
-    let dir = scratch("target-list-old");
-    let out = rokc(None, &dir, &["--print", "target-list"]);
-    assert_exit(&out, 0);
-    let list = text(&out.stdout);
-    for (old, new) in rokc_target::RENAMED {
+fn target_old_name_suggests() {
+    let dir = scratch("target-old");
+    for (old, new) in [
+        ("wasm32-wasi", "wasm32-wasip2"),
+        ("wasm32-wasi-threads", "wasm32-wasip1-threads"),
+        ("riscv32imac-unknown-none", "riscv32imac-unknown-none-elf"),
+    ] {
+        let out = rokc(None, &dir, &["--print", "target-spec", "--target", old]);
+        assert_exit(&out, 1);
         assert!(
-            list.contains(&format!("\n{new}\n{old} (deprecated: use {new})\n")),
-            "{list}"
+            text(&out.stderr).contains(&format!("unknown target `{old}`; did you mean `{new}`?")),
+            "{}",
+            text(&out.stderr)
         );
     }
 }

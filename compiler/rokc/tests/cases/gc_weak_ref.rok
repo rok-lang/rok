@@ -36,7 +36,7 @@ fn main() {
     unsafe { rok_gc_collect_young() };
     // A stress collection inside `weak_of` (while the object is still
     // held) may have promoted it; then only a full one frees it.
-    if young.get() is GcPtr<i64> && (try? env::var("ROK_GC_STRESS")) is str {
+    if young.get() is GcPtr<i64> && (try? env::var("ROKR_GC_STRESS")) is str {
         gc::collect();
     }
     println(f"young cleared {young.get() is none}");

@@ -5,7 +5,7 @@
 // that live as long as the process (N = online CPUs or `ROKR_WORKERS`),
 // the blocking lane and the I/O driver. `block_on` and `par::*` attach
 // the calling thread as a guest until their future and its
-// `spawn_local` tasks are done. Without threads (wasm32-wasi, the
+// `spawn_local` tasks are done. Without threads (wasm32-wasip2, the
 // browser) the guest runs everything itself, waiting in `rok_io_wait`.
 //
 // A worker has a local queue (`spawn_local`, never stolen) and a

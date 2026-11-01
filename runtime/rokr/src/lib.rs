@@ -909,13 +909,14 @@ mod tests {
         }
     }
 
-    /// `ROKR_WORKERS` wins over its old spelling `ROK_WORKERS`, which is
-    /// read alone. Not on Windows: `set_var` there does not reach the C
+    /// `ROKR_WORKERS` sets the pool size; the old `ROK_WORKERS` is not
+    /// read. Not on Windows: `set_var` there does not reach the C
     /// runtime's copy that `getenv` reads.
     #[cfg(not(windows))]
     #[test]
-    fn workers_new_name_first() {
-        if thread::rok_cpu_count() == 0 {
+    fn workers_new_name_only() {
+        let n = thread::rok_cpu_count();
+        if n == 0 {
             return;
         }
         // SAFETY: no other test reads or sets these.
@@ -923,7 +924,7 @@ mod tests {
             std::env::remove_var("ROKR_WORKERS");
             std::env::set_var("ROK_WORKERS", "3");
         }
-        assert_eq!(thread::rok_sched_workers(), 3);
+        assert_eq!(thread::rok_sched_workers(), n);
         // SAFETY: as above.
         unsafe { std::env::set_var("ROKR_WORKERS", "5") };
         assert_eq!(thread::rok_sched_workers(), 5);

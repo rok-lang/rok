@@ -1,5 +1,5 @@
 // spec: std 301
-// only-target: wasm32-wasi wasm32-wasi-threads
+// only-target: wasm32-wasip2 wasm32-wasip1-threads
 // expect-exit: 0
 // expect-stdout:
 // wrote: abc

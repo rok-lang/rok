@@ -63,8 +63,10 @@ pub fn run_to(
             s.spawn(|| {
                 while let Some(&name) = selected.get(next.fetch_add(1, Ordering::Relaxed)) {
                     let t = Instant::now();
-                    let r = Command::new(exe)
-                        .arg(name)
+                    let mut c = Command::new(exe);
+                    c.arg(name);
+                    rokc_core::strip_handoffs(&mut c);
+                    let r = c
                         .output()
                         .map_err(|e| format!("cannot run {}: {e}", exe.display()));
                     results

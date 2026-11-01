@@ -446,13 +446,10 @@ pub fn compile_source(
     files: &mut SourceMap,
 ) -> Result<CompiledProject, Vec<RokDiagnostic>> {
     // Tests of the tools' survival: a debug rokc panics on a root file
-    // containing `ROKC_TEST_ICE`.
+    // containing `ROK_TEST_ICE`.
     if cfg!(debug_assertions) {
-        if let Some(m) = std::env::var("ROKC_TEST_ICE")
-            .ok()
-            .filter(|m| !m.is_empty())
-        {
-            assert!(!source.contains(&m), "ROKC_TEST_ICE");
+        if let Some(m) = std::env::var("ROK_TEST_ICE").ok().filter(|m| !m.is_empty()) {
+            assert!(!source.contains(&m), "ROK_TEST_ICE");
         }
     }
     let mut diags: Vec<RokDiagnostic> = Vec::new();

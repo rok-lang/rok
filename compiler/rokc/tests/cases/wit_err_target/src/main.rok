@@ -1,8 +1,8 @@
 // spec: std §1.8.2
 // only-os: macos linux windows
-// expect-error: `ffi::wit` builds a WebAssembly component: it needs `--target wasm32-wasi`
+// expect-error: `ffi::wit` builds a WebAssembly component: it needs `--target wasm32-wasip2`
 
-// Stdlib 1.8: WIT bindings are for a component (`wasm32-wasi`); the WIT
+// Stdlib 1.8: WIT bindings are for a component (`wasm32-wasip2`); the WIT
 // itself is still checked.
 ffi::wit::export { "calc.wit" }
 

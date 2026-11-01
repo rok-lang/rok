@@ -77,6 +77,7 @@ pub fn run_to(
         let _ = out.flush();
         let t = Instant::now();
         let mut c = Command::new(exe);
+        rokc_core::strip_handoffs(&mut c);
         c.args([
             name.as_str(),
             iters.as_str(),

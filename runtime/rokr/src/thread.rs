@@ -450,7 +450,7 @@ pub extern "C" fn rok_cpu_count() -> usize {
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_sched_workers() -> usize {
     let n = rok_cpu_count();
-    match rokr_common::env_num(rokr_common::env_name(c"ROKR_WORKERS", c"ROK_WORKERS"), true) {
+    match rokr_common::env_num(c"ROKR_WORKERS", true) {
         Some(w) if n > 0 => usize::try_from(w).unwrap_or(usize::MAX),
         _ => n,
     }
@@ -458,13 +458,11 @@ pub extern "C" fn rok_sched_workers() -> usize {
 
 /// The executor's options: bit 0 thread-per-core (706 §7.6.8,
 /// `ROKR_THREAD_PER_CORE=1`), bit 1 dynamic worker count (707 §7.7.8,
-/// `ROKR_DYNAMIC_WORKERS=1`; the `ROK_` spellings until 0.2.0).
+/// `ROKR_DYNAMIC_WORKERS=1`).
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_sched_mode() -> u32 {
     let on = rokr_common::env_flag;
-    let name = rokr_common::env_name;
-    u32::from(on(name(c"ROKR_THREAD_PER_CORE", c"ROK_THREAD_PER_CORE")))
-        | (u32::from(on(name(c"ROKR_DYNAMIC_WORKERS", c"ROK_DYNAMIC_WORKERS"))) << 1)
+    u32::from(on(c"ROKR_THREAD_PER_CORE")) | (u32::from(on(c"ROKR_DYNAMIC_WORKERS")) << 1)
 }
 
 /// This thread's worker id (`rok_tls_worker_id`), the `ThreadId`.

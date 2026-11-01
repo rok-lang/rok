@@ -178,12 +178,12 @@ fn run_case(
     // Again with a collection every N allocations, each full one
     // evacuating, then with concurrent marking too.
     if let Some(n) = directive(&source, "gc-stress:") {
-        let env = [("ROK_GC_STRESS", n.trim()), ("ROK_GC_EVAC", "always")];
+        let env = [("ROKR_GC_STRESS", n.trim()), ("ROKR_GC_EVAC", "always")];
         check_run(&source, &exe, expected, &env).map_err(|e| format!("gc-stress: {e}"))?;
         let env = [
-            ("ROK_GC_STRESS", n.trim()),
-            ("ROK_GC_EVAC", "always"),
-            ("ROK_GC_CONCURRENT", "always"),
+            ("ROKR_GC_STRESS", n.trim()),
+            ("ROKR_GC_EVAC", "always"),
+            ("ROKR_GC_CONCURRENT", "always"),
         ];
         check_run(&source, &exe, expected, &env)
             .map_err(|e| format!("gc-stress concurrent: {e}"))?;
@@ -269,7 +269,7 @@ fn check_run(
         Some((program, _)) if exit != expected => program.to_owned(),
         _ => got,
     };
-    // wasmtime's notice on `-S threads` (wasm32-wasi-threads) and the
+    // wasmtime's notice on `-S threads` (wasm32-wasip1-threads) and the
     // blank padding around it are not the program's.
     let got = match got.split_once('\n') {
         Some((first, rest)) if first.starts_with("WARNING: the `-Sthreads` flag") => {

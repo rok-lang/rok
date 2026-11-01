@@ -15,7 +15,7 @@ use std::sync::OnceLock;
 
 use rokc_rokon::{Decoder, Kind, Value};
 
-pub use builtin::{BUILTIN, RENAMED};
+pub use builtin::BUILTIN;
 
 /// The target this rokc runs on, the default `--target`.
 pub const HOST: &str = env!("ROK_TARGET_HOST");
@@ -341,9 +341,12 @@ impl TargetSpec {
                 Self::load(Path::new(p))?
             }
             Some(n) => Self::builtin(n).ok_or_else(|| {
+                let near = rokc_core::suggest::suggest(n, BUILTIN.iter().copied())
+                    .map(|s| format!("; did you mean `{s}`?"))
+                    .unwrap_or_default();
                 format!(
-                    "unknown target `{n}` (`rokc --print target-list` lists the built-in ones; \
-                     a custom target is a `<name>.rokon` file)"
+                    "unknown target `{n}`{near} (`rokc --print target-list` lists the built-in \
+                     ones; a custom target is a `<name>.rokon` file)"
                 )
             })?,
         };
@@ -477,7 +480,7 @@ impl TargetSpec {
     /// not a command.
     #[must_use]
     pub fn reactor(&self) -> bool {
-        self.object_format == ObjectFormat::Wasm && self.os == "none"
+        self.object_format == ObjectFormat::Wasm && self.os == "unknown"
     }
 
     /// The file name of static library `name`.

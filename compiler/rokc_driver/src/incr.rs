@@ -447,7 +447,7 @@ pub fn bodies(i: std::sync::Arc<Incr>, files: &rokc_diagnostic::SourceMap) -> ro
 /// `ROK_INCREMENTAL_VERIFY=1`: lower with and without the stores and compare;
 /// a difference fails the build.
 pub fn verify() -> Option<fn(&rokc_hir::HirModule, &mut rokc_hir::HirModule)> {
-    rokc_core::env_flag(rokc_core::env_name("ROK_INCREMENTAL_VERIFY")).then_some(check)
+    rokc_core::env_flag("ROK_INCREMENTAL_VERIFY").then_some(check)
 }
 
 fn check(clean: &rokc_hir::HirModule, incr: &mut rokc_hir::HirModule) {

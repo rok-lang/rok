@@ -19,7 +19,7 @@
 #       Executables need glibc >= 2.34 (32-bit runtimes use time64): the
 #       stubs leave out newer symbol versions.
 #   wasm32  wasi-libc's crt objects and libc.a from the pinned Rust
-#       toolchain (wasip2 for wasm32-wasi, plus a pinned
+#       toolchain (wasm32-wasip2, plus a pinned
 #       wasm-component-ld; wasip1-threads; wasip1 for the browser, plus
 #       rok.mjs, its JS host).
 #   libclang_rt.profile.a  compiler-rt's profile runtime from the pinned
@@ -30,7 +30,7 @@
 # Needs rustup with llvm-tools, curl, make, python3, bash, clang (CC
 # overrides; on an arm64 Mac without CC the non-Apple targets use the
 # pinned LLVM release's clang, downloaded into the cache, since Apple's
-# has no RISC-V target; wasm32-wasi's profile runtime needs one with the
+# has no RISC-V target; wasm32-wasip2's profile runtime needs one with the
 # WebAssembly target) and the pinned LLVM's ld.lld (ROK_LLVM_PREFIX,
 # else llvm/build.sh's). Windows images name the first two
 # mingw32-make and python.
@@ -43,7 +43,7 @@ TARGETS="x86_64-apple-darwin aarch64-apple-darwin x86_64-unknown-linux-gnu
 aarch64-unknown-linux-gnu x86_64-unknown-linux-musl aarch64-unknown-linux-musl
 x86_64-pc-windows-msvc aarch64-pc-windows-msvc i686-unknown-linux-gnu
 i686-pc-windows-msvc armv7-unknown-linux-gnueabihf riscv64gc-unknown-linux-gnu
-wasm32-wasi wasm32-wasi-threads wasm32-unknown-unknown"
+wasm32-wasip2 wasm32-wasip1-threads wasm32-unknown-unknown"
 GLIBC=2.36-9+deb12u14
 GLIBC_URL=https://snapshot.debian.org/archive/debian/20260504T025922Z/pool/main/g/glibc
 LINUX=6.1.159-1
@@ -334,7 +334,7 @@ profile() {
       lib=clang_rt.profile.lib format=coff
       extra=$here/profile_windows.c
       ;;
-    wasm32-wasi)
+    wasm32-wasip2)
       if ! "$cc" --print-targets | grep -q wasm32; then
         echo "$t: no profile runtime ($cc has no WebAssembly target; set CC)" >&2
         return
@@ -402,8 +402,6 @@ for t in ${*:-$TARGETS}; do
     ;;
   esac
   case $t in
-    wasm32-wasi) rust=wasm32-wasip2 ;;
-    wasm32-wasi-threads) rust=wasm32-wasip1-threads ;;
     wasm32-unknown-unknown) rust=wasm32-wasip1 ;;
     *) rust=$t ;;
   esac
@@ -423,14 +421,14 @@ for t in ${*:-$TARGETS}; do
     wasm32-*)
       case $t in
         wasm32-unknown-unknown) crt1="crt1-reactor.o" ;;
-        wasm32-wasi) crt1="crt1-command.o crt1-reactor.o" ;;
+        wasm32-wasip2) crt1="crt1-command.o crt1-reactor.o" ;;
         *) crt1="crt1-command.o" ;;
       esac
       for f in $crt1 libc.a; do
         cp "$sysroot/lib/rustlib/$rust/lib/self-contained/$f" "$dir/"
       done
       case $t in
-        wasm32-wasi) component_ld "$dir" ;;
+        wasm32-wasip2) component_ld "$dir" ;;
         wasm32-unknown-unknown) cp "$here/rok.mjs" "$dir/" ;;
       esac
       ;;

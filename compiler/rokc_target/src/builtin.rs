@@ -14,26 +14,16 @@ pub const BUILTIN: &[&str] = &[
     "x86_64-unknown-linux-musl",
     "aarch64-unknown-linux-musl",
     "wasm32-unknown-unknown",
-    "wasm32-wasi",
-    "wasm32-wasi-threads",
+    "wasm32-wasip2",
+    "wasm32-wasip1-threads",
     "i686-unknown-linux-gnu",
     "i686-pc-windows-msvc",
     "armv7-unknown-linux-gnueabihf",
     "riscv64gc-unknown-linux-gnu",
     "powerpc64le-unknown-linux-gnu",
     "x86_64-unknown-freebsd",
-    "riscv32imac-unknown-none",
+    "riscv32imac-unknown-none-elf",
     "s390x-unknown-linux-gnu",
-];
-
-/// Built-in names that mean something else elsewhere: `(old, new)`.
-///
-/// The new name is 0.2.0's. Until then it is an alias of the old one,
-/// which stays the target's name (its directories, `cfg`).
-pub const RENAMED: &[(&str, &str)] = &[
-    ("wasm32-wasi", "wasm32-wasip2"),
-    ("wasm32-wasi-threads", "wasm32-wasip1-threads"),
-    ("riscv32imac-unknown-none", "riscv32imac-unknown-none-elf"),
 ];
 
 /// rok's thread stack: 8 MiB, as Linux's default rlimit and macOS give
@@ -232,12 +222,8 @@ fn wasm32(name: &str, rust_target: &str) -> TargetSpec {
     }
 }
 
-/// The built-in target `name` (or a new name in `RENAMED`).
+/// The built-in target `name`.
 pub fn spec(name: &str) -> Option<TargetSpec> {
-    let name = RENAMED
-        .iter()
-        .find(|(_, new)| *new == name)
-        .map_or(name, |(old, _)| old);
     Some(match name {
         "x86_64-unknown-linux-gnu" => x86_64(linux_gnu(
             name,
@@ -328,13 +314,16 @@ pub fn spec(name: &str) -> Option<TargetSpec> {
             }
         }
         // A WASI preview 2 component.
-        "wasm32-wasi" => TargetSpec {
+        "wasm32-wasip2" => TargetSpec {
+            // LLVM sees plain wasi; the linker makes the component.
+            llvm_target: s("wasm32-wasi"),
             linker: Linker::WasmComponentLd,
             ..wasm32(name, "wasm32-wasip2")
         },
         // Preview 1 with wasi-threads: host-provided shared memory and
         // `wasi_thread_start` as each thread's entry.
-        "wasm32-wasi-threads" => TargetSpec {
+        "wasm32-wasip1-threads" => TargetSpec {
+            llvm_target: s("wasm32-wasi-threads"),
             features: s("+simd128,+atomics,+bulk-memory,+mutable-globals"),
             pre_link_args: v(&[
                 "--shared-memory",
@@ -349,7 +338,7 @@ pub fn spec(name: &str) -> Option<TargetSpec> {
         // exports, flushing stdout (rok's and C's buffers) after each, since
         // no `exit` does.
         "wasm32-unknown-unknown" => TargetSpec {
-            os: s("none"),
+            os: s("unknown"),
             pre_link_args: v(&[
                 "--no-entry",
                 "--export-if-defined=rok_stdio_flush",
@@ -401,7 +390,7 @@ pub fn spec(name: &str) -> Option<TargetSpec> {
                 ..linux_gnu(name, "x86_64", "", "")
             })
         },
-        "riscv32imac-unknown-none" => TargetSpec {
+        "riscv32imac-unknown-none-elf" => TargetSpec {
             llvm_target: s("riscv32"),
             os: s("none"),
             env: s(""),

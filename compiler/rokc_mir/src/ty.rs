@@ -452,7 +452,7 @@ mod tests {
         let (str_, i64_) = (HirTy::Prim(PrimTy::Str), HirTy::Prim(PrimTy::I64));
         for triple in [
             "x86_64-unknown-linux-gnu",
-            "wasm32-wasi",
+            "wasm32-wasip2",
             "i686-unknown-linux-gnu",
         ] {
             let t = Target::builtin(triple);
