@@ -397,7 +397,7 @@ impl Pool {
             let pool = Pool {
                 workers: List::new(),
                 injector: queue_new(),
-                timers: unsafe { Mutex::new_unshared(BinaryHeap::by_ordering(|a: Timer, b: Timer| b.at.cmp(a.at))) },
+                timers: Mutex::new(BinaryHeap::by_ordering(|a: Timer, b: Timer| b.at.cmp(a.at))),
                 dead: buf_new(1),
                 signal: buf_new(5),
                 no_up: buf_new(0),

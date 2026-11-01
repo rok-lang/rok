@@ -19,7 +19,7 @@ fn main() -> i32 {
     }
     let best = "";
     let top: i64 = 0;
-    for (w, c) in counts.entries() {
+    for (w, c) in counts.iter() {
         if c > top || c == top && w < best {
             top = c;
             best = w;

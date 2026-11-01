@@ -1019,15 +1019,7 @@ const MUTATORS: &[&str] = &[
 ];
 
 /// Core collections: a `const` of one is built afresh at each use.
-const HEAP_CONSTS: &[&str] = &[
-    "List",
-    "Dict",
-    "Set",
-    "Deque",
-    "Heap",
-    "OrderedDict",
-    "OrderedSet",
-];
+const HEAP_CONSTS: &[&str] = &["List", "Dict", "Set", "Deque", "BinaryHeap"];
 
 /// A method call whose change to `receiver` is lost: any change to a
 /// `const` or a `ref self` write to a static (`dropped`) is an error.

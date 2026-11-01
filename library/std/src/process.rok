@@ -590,7 +590,7 @@ impl Command {
                         }
                     }
                 }
-                for (k, v) in self.envs.entries() {
+                for (k, v) in self.envs.iter() {
                     envs.push_str(f"{k}={v}");
                     envs.push_byte(0u8);
                     envc += 1;

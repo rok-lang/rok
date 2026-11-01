@@ -20,6 +20,6 @@ fn main() {
     println(f"var_os none: {env::var_os("ROK_PROBE_SURELY_UNSET_9") is none}");
     let exe = try env::current_exe() catch _ { Path::new("rel") };
     println(f"current_exe absolute: {exe.is_absolute()}");
-    let j = try env::join_paths([Path::new("/a"), Path::new("/b")].iter()) catch _ { "error" };
+    let j = try env::join_paths([Path::new("/a"), Path::new("/b")]) catch _ { "error" };
     println(f"join: {j == f"/a{LIST}/b"}");
 }

@@ -35,7 +35,7 @@ fn main() {
     println(f"keys {nk} values {sv}");
     let a = 0;
     let b = 0;
-    for (k, v) in d.entries() {
+    for (k, v) in d.iter() {
         if k == "a" { a = v; } else { b = v; }
     }
     println(f"entries a={a} b={b}");

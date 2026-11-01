@@ -4,30 +4,25 @@
 
 pub struct BinaryHeap<T> {
     items: List<T>;
-    before: fn(T, T) -> bool;
+    cmp: fn(T, T) -> rok::core::cmp::Ordering + Send;
 }
 
-// Shares its buffer like `List` (stdlib 2.13.9).
+// Shares its buffer like `List` (stdlib 2.13.9). The comparator is
+// `Send`, so a heap is `Send` when `T` is.
 impl<T> !Sync for BinaryHeap<T> {}
 
 impl<T: Ord> BinaryHeap<T> {
     /// A max-heap.
     pub const fn new() -> BinaryHeap<T> {
-        BinaryHeap { items: List::new(), before: |a: T, b: T| a > b }
+        BinaryHeap { items: List::new(), cmp: |a: T, b: T| a.cmp(b) }
     }
 }
 
 impl<T> BinaryHeap<T> {
     /// A heap whose top is the greatest item by `cmp`, as `new()` is by
     /// `Ord::cmp`: `by_ordering(|a, b| b.cmp(a))` pops the least first.
-    pub const fn by_ordering(cmp: fn(T, T) -> rok::core::cmp::Ordering) -> BinaryHeap<T> {
-        BinaryHeap { items: List::new(), before: |a: T, b: T| cmp(a, b).is_gt() }
-    }
-
-    /// A heap whose top is the item `before` ranks first.
-    #[deprecated(since = "0.1.6", note = "use `BinaryHeap::by_ordering`, whose comparator returns `Ordering` as `List::sort_by` does: `by(|a, b| a < b)` is `by_ordering(|a, b| b.cmp(a))`")]
-    pub const fn by(before: fn(T, T) -> bool) -> BinaryHeap<T> {
-        BinaryHeap { items: List::new(), before }
+    pub const fn by_ordering(cmp: fn(T, T) -> rok::core::cmp::Ordering + Send) -> BinaryHeap<T> {
+        BinaryHeap { items: List::new(), cmp }
     }
 
     /// The number of items.
@@ -52,7 +47,7 @@ impl<T> BinaryHeap<T> {
         let i = xs.len() - 1;
         while i > 0 {
             let p = (i - 1) / 2;
-            if !(self.before)(xs[i], xs[p]) {
+            if !self.before(xs[i], xs[p]) {
                 break;
             }
             self.swap(i, p);
@@ -96,8 +91,13 @@ impl<T> BinaryHeap<T> {
     }
 
     /// Every item, in no particular order.
-    pub const fn iter(self) -> ListIter<T> {
-        self.items.iter()
+    pub const fn iter(self) -> HeapIter<T> {
+        HeapIter { it: self.items.iter() }
+    }
+
+    /// `a` ranks above `b`.
+    const fn before(self, a: T, b: T) -> bool {
+        (self.cmp)(a, b).is_gt()
     }
 
     const fn swap(self, i: usize, j: usize) {
@@ -124,10 +124,10 @@ impl<T> BinaryHeap<T> {
             let l = 2 * i + 1;
             let r = l + 1;
             let m = i;
-            if l < n && (self.before)(xs[l], xs[m]) {
+            if l < n && self.before(xs[l], xs[m]) {
                 m = l;
             }
-            if r < n && (self.before)(xs[r], xs[m]) {
+            if r < n && self.before(xs[r], xs[m]) {
                 m = r;
             }
             if m == i {
@@ -139,11 +139,33 @@ impl<T> BinaryHeap<T> {
     }
 }
 
+/// The items of a heap, in no particular order.
+pub struct HeapIter<T> {
+    it: ListIter<T>;
+}
+
+impl<T> Iterator for HeapIter<T> {
+    type Item = T;
+    const fn next(ref self) -> T | none {
+        self.it.next()
+    }
+
+    const fn exact_len(self) -> usize | none { self.it.len() }
+
+    const fn count(self) -> usize { self.it.len() }
+}
+
+impl<T> ExactSizeIterator for HeapIter<T> {
+    const fn len(self) -> usize {
+        self.it.len()
+    }
+}
+
 /// `for x in h`, in no particular order (2.9.9).
 impl<T> IntoIterator for BinaryHeap<T> {
-    type IntoIter = ListIter<T>;
+    type IntoIter = HeapIter<T>;
     type Item = T;
-    const fn into_iter(self) -> ListIter<T> {
+    const fn into_iter(self) -> HeapIter<T> {
         self.iter()
     }
 }
@@ -156,7 +178,7 @@ impl<T: Ord> Default for BinaryHeap<T> {
 /// A new heap with every item cloned and the same order.
 impl<T: Clone> Clone for BinaryHeap<T> {
     const fn clone(self) -> BinaryHeap<T> {
-        BinaryHeap { items: self.items.clone(), before: self.before }
+        BinaryHeap { items: self.items.clone(), cmp: self.cmp }
     }
 }
 

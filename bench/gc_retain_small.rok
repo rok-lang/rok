@@ -1,5 +1,5 @@
 // Many small collections kept alive (a parsed document's shape): 500k
-// 9-element `List<str>` rows and 50k 9-key `collections::OrderedDict`s pushed into
+// 9-element `List<str>` rows and 50k 9-key `Dict`s pushed into
 // outer lists, then the same rows again with nothing retained.
 fn main() -> i32 {
     let rows: List<List<str>> = [];
@@ -14,10 +14,10 @@ fn main() -> i32 {
         rows.push(row);
         i += 1;
     }
-    let objs: List<collections::OrderedDict<str, str>> = [];
+    let objs: List<Dict<str, str>> = [];
     i = 0;
     while i < 50000 {
-        let o: collections::OrderedDict<str, str> = collections::OrderedDict::new();
+        let o: Dict<str, str> = Dict::new();
         let j = 0;
         while j < 9 {
             o.insert(f"k{j}", f"v{i}");

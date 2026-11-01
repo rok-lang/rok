@@ -308,9 +308,9 @@ impl<K: Hash, V> Dict<K, V> {
         ValuesIter { d: self, at: 0 }
     }
 
-    /// `(key, value)` pairs, lazily.
-    pub const fn entries(self) -> EntriesIter<K, V> {
-        EntriesIter { d: self, at: 0 }
+    /// `(key, value)` pairs, lazily (insertion order).
+    pub const fn iter(self) -> DictIter<K, V> {
+        DictIter { d: self, at: 0 }
     }
 
     /// `k`'s place in the dict, present or not (2.9.3).
@@ -409,12 +409,12 @@ impl<K: Hash, V> Iterator for ValuesIter<K, V> {
     }
 }
 
-pub struct EntriesIter<K, V> {
+pub struct DictIter<K, V> {
     d: Dict<K, V>;
     at: usize;
 }
 
-impl<K: Hash, V> Iterator for EntriesIter<K, V> {
+impl<K: Hash, V> Iterator for DictIter<K, V> {
     type Item = (K, V);
     const fn next(ref self) -> (K, V) | none {
         unsafe {
@@ -466,10 +466,10 @@ impl<K: Hash, V> AddAssign<Dict<K, V>> for Dict<K, V> {
 
 /// `for (k, v) in d` (2.9.9).
 impl<K: Hash, V> IntoIterator for Dict<K, V> {
-    type IntoIter = EntriesIter<K, V>;
+    type IntoIter = DictIter<K, V>;
     type Item = (K, V);
-    const fn into_iter(self) -> EntriesIter<K, V> {
-        self.entries()
+    const fn into_iter(self) -> DictIter<K, V> {
+        self.iter()
     }
 }
 

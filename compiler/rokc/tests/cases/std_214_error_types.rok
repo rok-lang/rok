@@ -1,31 +1,15 @@
 // spec: std §2.14.4
 // expect-exit: 0
 // expect-stdout:
-// [1, 9, 3] index 10 out of bounds (len 3)
-// IndexError { index: 10, len: 3 }
-// [7, 2] index 2 out of bounds (len 2)
 // expected `i32`, found `str` TypeError { expected: "i32", actual: "str" }
 // stack overflow out of memory internal compiler error InternalError
 // disk gone
 
-// Stdlib 2.14.4: `TypeError`, `IndexError`, the fatal error types, and
-// `List::set` / `Deque::set` throwing `IndexError` (2.3.5); std 3.5.0's
+// Stdlib 2.14.4: `TypeError`, the fatal error types, and std 3.5.0's
 // public `IoError::message`.
 fn show<E: Error>(e: E) -> str { f"{e}" }
 
 fn main() {
-    let xs: List<i32> = [1, 2, 3];
-    try xs.set(1, 9) catch e { println(f"unexpected {e}"); };
-    let msg = try { xs.set(10, 0); "no error" } catch e: error::IndexError { f"{e}" };
-    println(f"{xs:?} {msg}");
-    let d = try { xs.set(10, 0); error::IndexError { index: 0, len: 0 } } catch e: error::IndexError { e };
-    println(f"{d:?}");
-    let q: Deque<i32> = Deque::new();
-    q.push_back(1);
-    q.push_back(2);
-    try q.set(0, 7) catch e { println(f"unexpected {e}"); };
-    let m = try { q.set(2, 0); "no error" } catch e: error::IndexError { f"{e}" };
-    println(f"{q:?} {m}");
     let t = TypeError::new("i32", "str");
     println(f"{show(t)} {t:?}");
     println(f"{show(StackOverflowError)} {show(OutOfMemoryError)} {show(InternalError)} {InternalError:?}");

@@ -25,7 +25,7 @@ pub fn flat(v: Value) -> str {
         Value::Dict(d) => {
             if d.is_empty() { return "{}"; }
             let parts: List<str> = List::new();
-            for (k, x) in d.entries() { parts.push(flat(k) + ": " + flat(x)); }
+            for (k, x) in d.iter() { parts.push(flat(k) + ": " + flat(x)); }
             "{ " + parts.join(", ") + " }"
         },
         Value::Struct { name, fields } => {
@@ -42,7 +42,7 @@ pub fn flat(v: Value) -> str {
             }
             let parts: List<str> = List::new();
             for x in args { parts.push(flat(x)); }
-            for (k, x) in named.entries() { parts.push(k + ": " + flat(x)); }
+            for (k, x) in named.iter() { parts.push(k + ": " + flat(x)); }
             path + "(" + parts.join(", ") + ")"
         },
     }
@@ -57,7 +57,7 @@ fn flat_items(xs: List<Value>) -> str {
 fn flat_fields(fs: Dict<str, Value>) -> str {
     if fs.is_empty() { return "{}"; }
     let parts: List<str> = List::new();
-    for (k, x) in fs.entries() { parts.push(k + ": " + flat(x)); }
+    for (k, x) in fs.iter() { parts.push(k + ": " + flat(x)); }
     "{ " + parts.join(", ") + " }"
 }
 
@@ -83,7 +83,7 @@ pub fn pretty(v: Value, indent: usize, col: usize, tail: usize) -> str {
         },
         Value::Dict(d) => {
             b.push_str("{\n");
-            for (k, x) in d.entries() {
+            for (k, x) in d.iter() {
                 let key = flat(k) + ": ";
                 b.push_str(pad + key + pretty(x, inner, inner + key.char_count(), 1) + ",\n");
             }
@@ -100,7 +100,7 @@ pub fn pretty(v: Value, indent: usize, col: usize, tail: usize) -> str {
             } else {
                 b.push_str("(\n");
                 for x in args { b.push_str(pad + pretty(x, inner, inner, 1) + ",\n"); }
-                for (k, x) in named.entries() {
+                for (k, x) in named.iter() {
                     b.push_str(pad + k + ": " + pretty(x, inner, inner + k.char_count() + 2, 1) + ",\n");
                 }
                 b.push_str(" ".repeat(indent) + ")");
@@ -116,7 +116,7 @@ fn pretty_fields(fs: Dict<str, Value>, indent: usize) -> str {
     let inner = indent + 4;
     let b = StrBuf::new();
     b.push_str("{\n");
-    for (k, x) in fs.entries() {
+    for (k, x) in fs.iter() {
         b.push_str(" ".repeat(inner) + k + ": " + pretty(x, inner, inner + k.char_count() + 2, 1) + ",\n");
     }
     b.push_str(" ".repeat(indent) + "}");

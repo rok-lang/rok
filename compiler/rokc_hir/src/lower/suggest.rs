@@ -14,7 +14,7 @@ pub(super) const METHOD_SYNONYMS: &[(&str, &[&str])] = &[
     ("starts_with", &["startswith", "startsWith"]),
     ("ends_with", &["endswith", "endsWith"]),
     ("contains", &["includes", "has"]),
-    ("entries", &["items"]),
+    ("iter", &["items", "entries"]),
     ("remove", &["delete", "del"]),
     ("join", &["implode"]),
 ];
@@ -171,6 +171,13 @@ pub(super) fn no_method_help(
         return format!("`{shown}` is not an iterator: write `{r}.iter().{method}(..)`");
     }
     let r = recv_src.unwrap_or("x");
+    // `xs.set(i, v)`: the write is the index operator.
+    if method == "set" && ["List<", "Deque<"].iter().any(|b| shown.starts_with(b)) {
+        return format!(
+            "write `{r}[i] = v`, which panics past the end; check `i < {r}.len()` first to \
+             skip it"
+        );
+    }
     if let Some((plain, help)) = twin_help(ctx, ty, method, &format!("{r}.")) {
         if let Some(at) = method_span(ctx, recv.span, span, method) {
             ctx.fix_last(at, plain, format!("use `{plain}`"));

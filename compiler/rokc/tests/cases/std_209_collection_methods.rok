@@ -8,6 +8,7 @@
 // swap [3, 2, 1] [1]
 // split_at [1] [2, 3] [] [1, 2, 3] [1, 2, 3] []
 // binary_search 0 2 4 none none none
+// first 1 0 partition_point 3 0 5 3
 // windows ["[1, 2]", "[2, 3]", "[3, 4]"] 3 [] 0
 // chunks ["[1, 2]", "[3, 4]", "[5]"] 3 [] 0
 // slice [2, 3] [4] true false
@@ -20,10 +21,10 @@
 // array fill [9, 9, 9] [6, 5, 4]
 // array empty -1 -1 false 0 []
 
-// The collection methods List, Dict, Set, the ordered ones and arrays
+// The collection methods List, Dict, Set and arrays
 // share: contains / retain / dedup / fill / swap / split_at /
 // binary_search / windows / chunks on lists and views, retain / extend
-// on keyed collections (insertion order kept by the ordered ones), and
+// on keyed collections (insertion order kept), and
 // iter / first / last / contains / map / fill on arrays.
 
 fn main() {
@@ -78,6 +79,14 @@ fn main() {
         none => "none",
     };
     println(f"binary_search {bs(1)} {bs(5)} {bs(9)} {bs(0)} {bs(4)} {b0}");
+    let dup: List<i32> = [1, 2, 2, 2, 3];
+    let f1 = dup.binary_search(2) ?? 9;
+    let f2 = dup[1:].binary_search(2) ?? 9;
+    let p1 = sorted.partition_point(|e: i32| e < 6);
+    let p2 = sorted.partition_point(|e: i32| e < 0);
+    let p3 = sorted[:].partition_point(|e: i32| e < 100);
+    let p4 = dup[1:].partition_point(|e: i32| e <= 2);
+    println(f"first {f1} {f2} partition_point {p1} {p2} {p3} {p4}");
 
     let ws: List<i32> = [1, 2, 3, 4];
     let wl: List<str> = ws.windows(2).map(|v| f"{v:?}").collect();
@@ -106,12 +115,12 @@ fn main() {
     st.extend([8, 2, 4]);
     println(f"set retain {sr} {had} {odd} extend {st.len()} {st.contains(8)}");
 
-    let od = collections::OrderedDict::from([("a", 1), ("b", 2), ("c", 3)]);
+    let od = {"a": 1, "b": 2, "c": 3};
     od.retain(|k, _v| k != "b");
     od.extend([("d", 4), ("b", 20), ("a", 1)]);
     println(f"odict {od:?}");
 
-    let os = collections::OrderedSet::from([3, 1, 5]);
+    let os = {3, 1, 5};
     os.retain(|x| x != 1);
     os.extend([4, 3, 2, 5]);
     println(f"oset {os:?}");
@@ -122,9 +131,9 @@ fn main() {
     let es: Set<i32> = Set::new();
     es.retain(|_x| true);
     es.extend(none_);
-    let eod: collections::OrderedDict<str, i32> = collections::OrderedDict::new();
+    let eod: Dict<str, i32> = Dict::new();
     eod.retain(|_k, _v| true);
-    let eos: collections::OrderedSet<i32> = collections::OrderedSet::new();
+    let eos: Set<i32> = Set::new();
     eos.extend(none_);
     println(f"empty {ed.len()} {es.len()} {eod.len()} {eos.len()}");
 
