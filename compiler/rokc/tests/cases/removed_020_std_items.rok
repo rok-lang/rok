@@ -41,7 +41,7 @@ fn main() throws (rok::std::io::IoError) {
     try child.signal(9);
     let s = CStr::from_bytes_with_nul_unchecked("a\0".as_bytes());
     unsafe { try env::try_set_var("A", "1"); }
-    let spec = try! FormatSpec::parse("4");
+    let spec = try! fmt::FormatSpec::parse("4");
     let w = spec.width;
     let z = Formatter::new().pad_zero();
     try env::set_var("A", "1");
