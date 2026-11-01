@@ -81,6 +81,7 @@ fn implicit_generics(program: &mut Program) {
                     generics: Vec::new(),
                 }],
                 span: p.span,
+                origin: None,
             };
             p.ty = Some(Ty {
                 kind: AstTyKind::Path(path),
@@ -1487,7 +1488,7 @@ fn collect<'a>(
         let consts = impl_const_lists.remove(&idx).unwrap_or_default();
         let trait_name: Option<String> = impl_def.trait_path.as_ref().map(|tp| {
             let segs: Vec<&str> = tp.segments.iter().map(|s| s.name.as_str()).collect();
-            names.trait_key(&segs, &module, here)
+            names.trait_key(&segs, tp.origin.as_deref().unwrap_or(&module), here)
         });
         // A generic trait impl, or a generic inherent impl on a structural
         // type or on some instances of a base (`impl<V> P<str, V>`): matched
@@ -2479,6 +2480,7 @@ fn finish<'a>(
     check_impl_overlap(&env, &own);
     check_impl_rules(&env, checked, &programs, &own);
     check_internal_marks(&env, checked, &own);
+    check_templates(&env, &input.templates);
     let failed_derives: Vec<Span> = checked
         .iter()
         .flat_map(|p| check_derives(&env, p))
@@ -4957,7 +4959,7 @@ fn impl_consts(
     let module = impl_module(i);
     let trait_def = i.trait_path.as_ref().and_then(|tp| {
         let segs: Vec<&str> = tp.segments.iter().map(|s| s.name.as_str()).collect();
-        let key = names.trait_key(&segs, &module, i.span);
+        let key = names.trait_key(&segs, tp.origin.as_deref().unwrap_or(&module), i.span);
         let fits = |t: &rokc_ast::TraitDef| {
             t.name == key || (!key.contains("::") && leaf_name(&t.name) == key)
         };
@@ -5352,6 +5354,82 @@ fn check_pod(
     }
 }
 
+/// Spec 6.9.9: what a `pub` meta block's template names from a root must
+/// exist and be reachable from the block's module, so the error is the
+/// author's when the package builds, not each user's.
+fn check_templates(env: &Env<'_>, templates: &[crate::TemplateRefs]) {
+    let names = &env.names;
+    let item = |k: &str| {
+        let k = names.reexport(k).map_or(k, String::as_str);
+        let value = env.sig(k).is_some()
+            || env.generic_fn(k).is_some()
+            || env.konst(k).is_some()
+            || env.static_ty(k).is_some();
+        let ty = names.has_type(k) || names.is_trait(k) || names.is_variant(k);
+        (value || ty).then(|| {
+            let vis = if ty {
+                names.type_vis(k)
+            } else {
+                env.item_vis(k)
+            };
+            (k.to_owned(), vis.unwrap_or(Visibility::Pub))
+        })
+    };
+    for t in templates {
+        for (segs, at) in &t.paths {
+            let written: Vec<&str> = segs.iter().map(String::as_str).collect();
+            let Some(full) = resolve::root_path(&written, &t.module) else {
+                continue;
+            };
+            let shown = || {
+                let mut s = written.clone();
+                if let Some(p) = s
+                    .first_mut()
+                    .and_then(|r| r.strip_prefix(rokc_parser::PKG_ROOT))
+                {
+                    *s.first_mut().expect("a root") = if p.is_empty() { "pkg" } else { p };
+                }
+                s.join("::")
+            };
+            // The item, or a type whose associated item it names.
+            let found = (1..=full.len())
+                .rev()
+                .find_map(|n| item(&full[..n].join("::")).filter(|_| n == full.len() || n > 1))
+                .or_else(|| {
+                    let m = full.join("::");
+                    names
+                        .mod_vis
+                        .contains_key(&m)
+                        .then_some((m, Visibility::Pub))
+                });
+            let d = match found {
+                None => rokc_diagnostic::RokDiagnostic::error(
+                    rokc_diagnostic::ErrorKind::Resolve,
+                    *at,
+                    format!(
+                        "this meta template names `{}`, which does not exist (spec 6.9.9)",
+                        shown()
+                    ),
+                ),
+                Some((k, vis)) if !visible_from(&t.module, &module_of(&k), vis) => {
+                    rokc_diagnostic::RokDiagnostic::error(
+                        rokc_diagnostic::ErrorKind::Module,
+                        *at,
+                        format!(
+                            "this meta template names `{}`, which its module `{}` cannot see \
+                             (spec 6.9.9)",
+                            shown(),
+                            module_display(&t.module)
+                        ),
+                    )
+                }
+                Some(_) => continue,
+            };
+            env.sink.diagnostics.borrow_mut().push(d);
+        }
+    }
+}
+
 /// Every trait in a bound position must exist, with no more type arguments
 /// than parameters (stdlib 2.11.3).
 fn check_bound_names(
@@ -5376,6 +5454,7 @@ fn check_bound_names(
             return;
         };
         let segs: Vec<&str> = p.segments.iter().map(|s| s.name.as_str()).collect();
+        let module = p.origin.as_deref().unwrap_or(module);
         let key = names.trait_key(&segs, module, b.span);
         // A bootstrap trait keys by its leaf (see `trait_key`).
         let Some(found) = names.traits.get(&key) else {
@@ -5911,7 +5990,9 @@ fn check_impl_rules(
             continue;
         }
         let segs: Vec<&str> = tp.segments.iter().map(|s| s.name.as_str()).collect();
-        let key = env.names.trait_key(&segs, &module, i.span);
+        let key = env
+            .names
+            .trait_key(&segs, tp.origin.as_deref().unwrap_or(&module), i.span);
         let pkg = package_of(&module);
         let owner_module = module_of(&key);
         let owner = package_of(&owner_module);
@@ -6692,6 +6773,7 @@ fn canon_hir(ctx: &LowerCtx<'_>, t: &CanonTy) -> Option<HirTy> {
                 generics: Vec::new(),
             }],
             span: rokc_diagnostic::Span::default(),
+            origin: None,
         }),
         span: rokc_diagnostic::Span::default(),
     }) {
@@ -6848,7 +6930,7 @@ fn check_auto_impl(
         return true;
     };
     let segs: Vec<&str> = tp.segments.iter().map(|s| s.name.as_str()).collect();
-    let key = names.trait_key(&segs, module, impl_def.span);
+    let key = names.trait_key(&segs, tp.origin.as_deref().unwrap_or(module), impl_def.span);
     let target = impl_def_display(&impl_def.self_ty);
     let tr = segs.join("::");
     if key == super::reflect::REFLECT {
@@ -7500,6 +7582,7 @@ fn path_ty_named(name: &str, span: rokc_diagnostic::Span) -> Ty {
                 generics: Vec::new(),
             }],
             span,
+            origin: None,
         }),
         span,
     }
@@ -7599,7 +7682,11 @@ fn assoc_defaults(
         let Some(tp) = &i.trait_path else { continue };
         let module = impl_module(i);
         let segs: Vec<&str> = tp.segments.iter().map(|s| s.name.as_str()).collect();
-        let Some(td) = traits.get(names.trait_key(&segs, &module, i.span).as_str()) else {
+        let Some(td) = traits.get(
+            names
+                .trait_key(&segs, tp.origin.as_deref().unwrap_or(&module), i.span)
+                .as_str(),
+        ) else {
             continue;
         };
         let have = impl_assoc_types(i);
@@ -7805,7 +7892,11 @@ fn impl_param_types(
         }
         let module = impl_module(i);
         let segs: Vec<&str> = tp.segments.iter().map(|s| s.name.as_str()).collect();
-        let Some(td) = traits.get(names.trait_key(&segs, &module, i.span).as_str()) else {
+        let Some(td) = traits.get(
+            names
+                .trait_key(&segs, tp.origin.as_deref().unwrap_or(&module), i.span)
+                .as_str(),
+        ) else {
             continue;
         };
         let params = trait_param_args(td, i);

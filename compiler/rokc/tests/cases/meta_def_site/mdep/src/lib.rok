@@ -1,0 +1,46 @@
+pub trait Show {
+    fn show(self) -> str;
+}
+
+// Reached by the templates below, not by code passed to them.
+pub(pkg) fn helper(name: str) -> str {
+    return f"<{name}>";
+}
+
+fn secret() -> i32 {
+    return 7;
+}
+
+#[impl_macro(inner)] pub @macro {
+    ( @e: expr ) => { helper(@e) }
+}
+
+// `inner!` in the expansion is this package's, wherever it expands.
+#[impl_macro(outer)] pub @macro {
+    ( @e: expr ) => { inner!(@e) }
+}
+
+#[impl_macro(secret_plus)] pub @macro {
+    ( @e: expr ) => { secret() + @e }
+}
+
+// `validate` is looked up where the macro is used.
+#[impl_macro(checked)] pub @macro {
+    ( @e: expr ) => { @use_site(validate)(@e) }
+}
+
+// `show` comes from `Show`, in scope here though not at the use.
+#[impl_macro(shown)] pub @macro {
+    ( @e: expr ) => { @e.show() }
+}
+
+// `user_hook` exists only where the macro is used.
+#[impl_macro(free)] pub @macro {
+    () => { user_hook() }
+}
+
+#[impl_derive(Show)] pub @derive {
+    impl Show for @Self {
+        fn show(self) -> str { return helper(@Self.as_str()); }
+    }
+}

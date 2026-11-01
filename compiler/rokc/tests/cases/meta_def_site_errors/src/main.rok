@@ -1,0 +1,19 @@
+// rokc-arg: --extern mdep=tests/cases/meta_def_site/mdep
+// expect-error: function `mdep::helper` is `pub(pkg)`: visible only inside its package `mdep`
+// expect-error: cannot find function `user_hook` in this scope
+// expect-error: help: the meta template that wrote this name looks it up in module `mdep`; to look it up where the meta block is used, write `@use_site(..)` around it
+
+// Spec 6.9.9: code passed into a template gains no access (the template
+// may call `helper`, the argument may not), and a name the template
+// writes is not looked up where it is used.
+fn user_hook() -> i32 {
+    return 1;
+}
+
+fn main() {
+    println(mdep::inner!(mdep::helper("x")));
+    println(mdep::free!());
+}
+
+// spec: 006.09-meta-templates
+// spec: §6.9.9

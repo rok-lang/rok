@@ -1457,6 +1457,7 @@ pub(super) fn format_value(
                     generics: Vec::new(),
                 }],
                 span,
+                origin: None,
             }),
             span,
         },
@@ -1509,6 +1510,7 @@ fn concat_strs(
                                 generics: Vec::new(),
                             }],
                             span,
+                            origin: None,
                         }),
                         span,
                     },
@@ -1877,6 +1879,7 @@ pub(super) fn path_expr(name: &str, span: rokc_diagnostic::Span) -> Expr {
                 generics: Vec::new(),
             }],
             span,
+            origin: None,
         }),
         span,
     }

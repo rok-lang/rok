@@ -1099,6 +1099,7 @@ fn lower_method_call(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
         args,
         trailing_closure,
         type_args,
+        ..
     } = &expr.kind
     else {
         unreachable!("a method call")
@@ -1748,6 +1749,7 @@ fn tmp_path(ctx: &LowerCtx<'_>, what: &str, span: rokc_diagnostic::Span) -> Expr
                 generics: Vec::new(),
             }],
             span,
+            origin: None,
         }),
         span,
     }
@@ -1955,12 +1957,16 @@ fn guard_flow(ctx: &mut LowerCtx<'_>, expr: &Expr, e: &HirExpr) {
 }
 
 pub(super) fn lower_expr(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
+    // Names resolve where the expression's head was written (spec 6.9.9);
+    // its operands set their own.
+    let outer = ctx.set_access(head_origin(expr));
     let e = ctx.at_span(expr.span, |ctx| match expr.kind {
         ExprKind::While { .. } | ExprKind::For { .. } | ExprKind::Loop { .. } => {
             lower_loop(ctx, expr)
         }
         _ => lower_expr_inner(ctx, expr),
     });
+    ctx.access.replace(outer);
     guard_flow(ctx, expr, &e);
     if e.ty != HirTy::Never || hir_expr_diverges(&e) {
         return e;
@@ -1983,6 +1989,20 @@ pub(super) fn lower_expr(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
         })),
         ty,
         span,
+    }
+}
+
+/// The definition module of the name `expr` resolves first: a path, a
+/// called path, a struct literal's path, a method name (spec 6.9.9).
+fn head_origin(expr: &Expr) -> Option<&str> {
+    match &expr.kind {
+        ExprKind::Path(p) | ExprKind::StructInit { path: p, .. } => p.origin.as_deref(),
+        ExprKind::Call { callee, .. } => match &callee.kind {
+            ExprKind::Path(p) => p.origin.as_deref(),
+            _ => None,
+        },
+        ExprKind::MethodCall { origin, .. } => origin.as_deref(),
+        _ => None,
     }
 }
 
@@ -2819,6 +2839,7 @@ fn explicit_enum(ctx: &LowerCtx<'_>, p: &AstPath) -> Option<HirTy> {
         kind: AstTyKind::Path(AstPath {
             segments: p.segments[..n - 1].to_vec(),
             span: p.span,
+            origin: None,
         }),
         span: p.span,
     }))
@@ -4110,6 +4131,7 @@ pub(super) fn lower_args_ref(
                                 type_args: Vec::new(),
                                 args: Vec::new(),
                                 trailing_closure: None,
+                                origin: None,
                             },
                             span,
                         };
@@ -4332,6 +4354,7 @@ fn dict_spread(
                     type_args: Vec::new(),
                     args: vec![CallArg::Positional(lit(&pname))],
                     trailing_closure: None,
+                    origin: None,
                 },
                 span,
             };
@@ -4806,6 +4829,7 @@ pub(super) fn lower_variadic(
                 type_args: Vec::new(),
                 args: vec![CallArg::Positional(x)],
                 trailing_closure: None,
+                origin: None,
             })
         };
         for (many, name, _) in &temps {
@@ -6157,6 +6181,7 @@ fn check_direct_drop_path(ctx: &LowerCtx<'_>, p: &rokc_ast::Path) {
                 kind: rokc_ast::TyKind::Path(rokc_ast::Path {
                     segments: prefix.to_vec(),
                     span: p.span,
+                    origin: None,
                 }),
                 span: p.span,
             });
@@ -6258,7 +6283,11 @@ fn sum_structural_call(
         lower_expr(
             ctx,
             &Expr {
-                kind: ExprKind::Path(AstPath { segments, span }),
+                kind: ExprKind::Path(AstPath {
+                    segments,
+                    span,
+                    origin: None,
+                }),
                 span,
             },
         )
@@ -6315,6 +6344,7 @@ fn sum_structural_call(
                 generics: Vec::new(),
             }],
             span,
+            origin: None,
         }),
         span,
     };
@@ -6328,6 +6358,7 @@ fn sum_structural_call(
                 .into_iter()
                 .collect(),
             trailing_closure: None,
+            origin: None,
         },
         span,
     };
@@ -6365,6 +6396,7 @@ fn sum_structural_call(
                             })
                             .collect(),
                         span,
+                        origin: None,
                     }),
                     span,
                 };
@@ -6780,10 +6812,11 @@ pub(super) fn method_call_on(
         return any_method_call(ctx, recv_h, &bounds, method, None, &type_args, args, span);
     }
     let pick = match pick_method(ctx, &recv_h.ty, method, None) {
-        Ok(p) => {
-            trait_scope_lint(ctx, &recv_h.ty, method, p, span);
-            p
+        Ok(None) if trait_out_of_scope(ctx, &recv_h.ty, method, span) => {
+            lower_args_only(ctx);
+            return poison(span);
         }
+        Ok(p) => p,
         Err(msg) => {
             let recv = Some(recv_h.clone());
             if let Some(call) =
@@ -6976,6 +7009,7 @@ fn assign_trait_call(
             type_args: Vec::new(),
             args: vec![CallArg::Positional(value.clone())],
             trailing_closure: None,
+            origin: None,
         },
         span,
     };
@@ -7320,6 +7354,7 @@ fn any_fmt(
                 })
                 .collect(),
             span,
+            origin: None,
         }),
         span,
     };
@@ -7792,6 +7827,7 @@ fn build_dispatcher(env: &Env<'_>, d: &AnyDispatch) -> HirFunction {
                         generics: Vec::new(),
                     }],
                     span,
+                    origin: None,
                 }),
                 span,
             })
@@ -7823,6 +7859,7 @@ fn build_dispatcher(env: &Env<'_>, d: &AnyDispatch) -> HirFunction {
                             generics: Vec::new(),
                         }],
                         span,
+                        origin: None,
                     }),
                     span,
                 },
@@ -7953,14 +7990,26 @@ pub(super) enum MethodPick<'e> {
 }
 
 /// Method `method` of `ty` (spec 3.5.2 / 4.9.6), from `trait_key` if given:
-/// inherent first, then trait methods, where a trait defined or `use`d in
-/// this package beats a `rok::core` one, in scope everywhere (spec 3.5);
-/// other ties are ambiguous.
+/// inherent first, then methods of the traits in scope (3.5.2), where a
+/// trait defined or `use`d in this package beats one seen only through
+/// the implicit `rok::core::**`; other ties are ambiguous.
 pub(super) fn pick_method<'e>(
     ctx: &LowerCtx<'e>,
     ty: &HirTy,
     method: &str,
     trait_key: Option<&str>,
+) -> Result<Option<MethodPick<'e>>, String> {
+    pick_method_in(ctx, ty, method, trait_key, true)
+}
+
+/// `pick_method`; `scoped` drops the candidates of traits not in scope
+/// unless `trait_key` names the trait.
+fn pick_method_in<'e>(
+    ctx: &LowerCtx<'e>,
+    ty: &HirTy,
+    method: &str,
+    trait_key: Option<&str>,
+    scoped: bool,
 ) -> Result<Option<MethodPick<'e>>, String> {
     let env = ctx.env;
     let mut cands: Vec<(Option<&'e str>, MethodPick<'e>)> = Vec::new();
@@ -7989,6 +8038,8 @@ pub(super) fn pick_method<'e>(
     }
     if let Some(k) = trait_key {
         cands.retain(|(t, _)| *t == Some(k));
+    } else if scoped && !matches!(ty, HirTy::Param(_)) {
+        cands.retain(|(t, _)| t.is_none_or(|t| t.is_empty() || trait_in_scope(ctx, t, true)));
     }
     if let Some((_, p)) = cands.iter().find(|(t, _)| t.is_none()) {
         return Ok(Some(*p));
@@ -8031,7 +8082,7 @@ pub(super) fn pick_method<'e>(
 /// through the implicit core glob, or a user trait seen from core)?
 fn core_only_trait(ctx: &LowerCtx<'_>, key: &str) -> bool {
     let pkg = super::resolve::package_of;
-    if pkg(&module_of(key)) == pkg(&ctx.current_module) {
+    if pkg(&module_of(key)) == pkg(&ctx.access_module()) {
         return false;
     }
     let named = |e: &crate::uses::UseEntry| match e {
@@ -8039,10 +8090,10 @@ fn core_only_trait(ctx: &LowerCtx<'_>, key: &str) -> bool {
         crate::uses::UseEntry::Glob { prefix } => module_of(key) == *prefix,
         crate::uses::UseEntry::GlobDeep { prefix } => key.starts_with(&format!("{prefix}::")),
     };
-    !ctx.local_uses
+    !ctx.reach_uses()
         .iter()
         .flatten()
-        .chain(ctx.env.uses_of(&ctx.current_module).into_iter().flatten())
+        .chain(ctx.env.uses_of(&ctx.access_module()).into_iter().flatten())
         .any(named)
 }
 
@@ -8050,9 +8101,14 @@ fn core_only_trait(ctx: &LowerCtx<'_>, key: &str) -> bool {
 /// through a `pub use`), a bound of a type parameter, or (`implicit`) a
 /// `rok::` trait, which spec 3.5 makes visible everywhere?
 fn trait_in_scope(ctx: &LowerCtx<'_>, key: &str, implicit: bool) -> bool {
-    if module_of(key) == ctx.current_module
+    if module_of(key) == *ctx.access_module()
         || (implicit && key.starts_with("rok::"))
-        || ctx.ty_bounds.values().flatten().any(|b| b == key)
+        // A bound that failed to resolve keeps its bare name (reported).
+        || ctx
+            .ty_bounds
+            .values()
+            .flatten()
+            .any(|b| b == key || (!b.contains("::") && b == leaf_name(key)))
     {
         return true;
     }
@@ -8079,48 +8135,43 @@ fn trait_in_scope(ctx: &LowerCtx<'_>, key: &str, implicit: bool) -> bool {
         }
         crate::uses::UseEntry::GlobDeep { prefix } => key.starts_with(&format!("{prefix}::")),
     };
-    ctx.local_uses
+    ctx.reach_uses()
         .iter()
         .flatten()
-        .chain(ctx.env.uses_of(&ctx.current_module).into_iter().flatten())
+        .chain(ctx.env.uses_of(&ctx.access_module()).into_iter().flatten())
         .any(named)
 }
 
-/// Warn when the method `pick` comes from a trait not in scope here.
-fn trait_scope_lint(
-    ctx: &LowerCtx<'_>,
-    ty: &HirTy,
-    method: &str,
-    pick: Option<MethodPick<'_>>,
-    at: rokc_diagnostic::Span,
-) {
-    if matches!(ty, HirTy::Param(_)) || ctx.current_module.starts_with("rok::") {
-        return;
+/// Report a method of `ty` that only a trait out of scope provides,
+/// with the `use` that brings the trait in; false if there is none.
+fn trait_out_of_scope(ctx: &LowerCtx<'_>, ty: &HirTy, method: &str, at: Span) -> bool {
+    if matches!(ty, HirTy::Param(_)) {
+        return false;
     }
-    let key = match pick {
-        Some(MethodPick::Concrete(id)) => {
+    let key = match pick_method_in(ctx, ty, method, None, false) {
+        Ok(Some(MethodPick::Concrete(id))) => {
             ctx.env.method_info(id).and_then(|i| i.trait_name.clone())
         }
-        Some(MethodPick::Generic(gm)) => gm.info.trait_name.clone(),
-        None => None,
+        Ok(Some(MethodPick::Generic(gm))) => gm.info.trait_name.clone(),
+        _ => None,
     };
-    let Some(key) = key.filter(|k| !k.is_empty() && !trait_in_scope(ctx, k, true)) else {
-        return;
+    let Some(key) = key.filter(|k| !k.is_empty()) else {
+        return false;
     };
+    ctx.emit_error_at(
+        rokc_diagnostic::ErrorKind::Resolve,
+        at,
+        format!("method `{method}` comes from trait `{key}`, which is not in scope (spec 3.5.2)"),
+    );
     // From a submodule, the package's own items need `pkg::`.
     let own = super::resolve::package_of(&key).is_empty();
-    let rooted = format!("pkg::{key}");
-    let path = if own && !ctx.current_module.is_empty() {
-        &rooted
+    let path = if own && !ctx.access_module().is_empty() {
+        format!("pkg::{key}")
     } else {
-        &key
+        key
     };
-    ctx.emit_lint(
-        "trait_not_in_scope",
-        at,
-        format!("method `{method}` comes from trait `{key}`, which is not in scope"),
-        format!("add `use {path};`"),
-    );
+    ctx.help_last(Some(format!("add `use {path};`")));
+    true
 }
 
 /// `method` from the generic impl covering `ty` (`impl<T> Tr for Box<T>`,
@@ -8512,6 +8563,7 @@ fn generic_positional_args(
                             type_args: Vec::new(),
                             args: Vec::new(),
                             trailing_closure: None,
+                            origin: None,
                         },
                         span,
                     };
@@ -9219,6 +9271,7 @@ fn lower_path_call(
                     kind: AstTyKind::Path(rokc_ast::Path {
                         segments: p.segments[..n - 1].to_vec(),
                         span: p.span,
+                        origin: None,
                     }),
                     span: p.span,
                 })
@@ -9506,6 +9559,13 @@ fn lower_path_call(
                             }
                             discard_args(ctx, rest);
                         }
+                        let ty = ctx
+                            .lookup_struct(&full)
+                            .map(HirTy::Struct)
+                            .or_else(|| ctx.lookup_enum(&full).map(HirTy::Enum));
+                        if ty.is_some_and(|t| trait_out_of_scope(ctx, &t, &method, span)) {
+                            return poison(span);
+                        }
                         let e = ctx.error_expr(
                             span,
                             format!("no associated function `{method}` on `{full}`"),
@@ -9606,6 +9666,7 @@ fn named_type_call(
             kind: AstTyKind::Path(AstPath {
                 segments: ty_segs.to_vec(),
                 span,
+                origin: None,
             }),
             span,
         })
@@ -9899,6 +9960,7 @@ fn path_call_via_impls(
     let ty_path = rokc_ast::Path {
         segments: all_segs[..all_segs.len() - 1].to_vec(),
         span,
+        origin: None,
     };
     let ty_ast = rokc_ast::Ty {
         kind: rokc_ast::TyKind::Path(ty_path.clone()),
@@ -12047,6 +12109,7 @@ fn alias_path(ctx: &LowerCtx<'_>, p: &AstPath) -> Result<Option<AstPath>, String
         kind: AstTyKind::Path(AstPath {
             segments: prefix.to_vec(),
             span: p.span,
+            origin: None,
         }),
         span: p.span,
     };
@@ -12135,6 +12198,7 @@ fn alias_path(ctx: &LowerCtx<'_>, p: &AstPath) -> Result<Option<AstPath>, String
     Ok(through.then(|| AstPath {
         segments: tp.segments.into_iter().chain([last.clone()]).collect(),
         span: p.span,
+        origin: None,
     }))
 }
 
@@ -12349,6 +12413,7 @@ fn assoc_const_path(ctx: &mut LowerCtx<'_>, path: &AstPath) -> Option<HirExpr> {
             kind: AstTyKind::Path(AstPath {
                 segments: prefix.to_vec(),
                 span: path.span,
+                origin: None,
             }),
             span: path.span,
         };
@@ -12974,6 +13039,7 @@ fn lower_shape(
                     })
                     .collect(),
                 span,
+                origin: None,
             },
             args: args.clone(),
             priority: h.priority,
@@ -13150,6 +13216,7 @@ pub(super) fn splice(ctx: &mut LowerCtx<'_>, h: HirExpr) -> Expr {
                 generics: Vec::new(),
             }],
             span,
+            origin: None,
         }),
         span,
     }
@@ -13194,6 +13261,7 @@ pub(super) fn lang_fn(module: &str, name: &str, span: rokc_diagnostic::Span) -> 
             })
             .collect(),
         span,
+        origin: None,
     }
 }
 
@@ -13221,6 +13289,7 @@ fn isize_ty(span: rokc_diagnostic::Span) -> Ty {
                 generics: Vec::new(),
             }],
             span,
+            origin: None,
         }),
         span,
     }
@@ -13248,6 +13317,7 @@ fn len_of(recv: &Expr, span: rokc_diagnostic::Span) -> Expr {
             type_args: Vec::new(),
             args: Vec::new(),
             trailing_closure: None,
+            origin: None,
         },
         span,
     }
@@ -13335,6 +13405,7 @@ fn index_call(
             type_args: Vec::new(),
             args,
             trailing_closure: None,
+            origin: None,
         },
         span,
     };
@@ -13442,6 +13513,7 @@ fn lower_slice(
             type_args: Vec::new(),
             args: vec![CallArg::Positional(arg)],
             trailing_closure: None,
+            origin: None,
         },
         span,
     };
@@ -13481,6 +13553,7 @@ fn slice_desugar(
             type_args: Vec::new(),
             args: args.into_iter().map(CallArg::Positional).collect(),
             trailing_closure: None,
+            origin: None,
         },
         span,
     };
@@ -13493,6 +13566,7 @@ fn slice_desugar(
                     generics: Vec::new(),
                 }],
                 span,
+                origin: None,
             }),
             span,
         }

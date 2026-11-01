@@ -137,14 +137,6 @@ pub const LINTS: &[Lint] = &[
         desc: "a call of a `#[deprecated_safe]` function outside `unsafe`",
         since: "0.1.6",
     },
-    warn_since(
-        "trait_not_in_scope",
-        "a method from a trait outside `rok::` that is neither defined nor `use`d in the module",
-    ),
-    warn_since(
-        "unqualified_meta",
-        "another package's macro, derive or attribute used by its bare name: write `dep::name!` or `use dep::name!;`",
-    ),
     Lint {
         name: "assoc_type_shadowing",
         default: Level::Warn,
@@ -198,9 +190,13 @@ pub const REMOVED_LINTS: &[&str] = &[
     // Errors now: scoped guard and thread-local views.
     "guard_escape",
     "thread_local_across_await",
+    // Errors now: trait scope and meta names (spec 3.5.2, 6.9.9).
+    "trait_not_in_scope",
+    "unqualified_meta",
 ];
 
-/// A lint added in 0.1.6.
+/// A lint added in 0.1.6 (tests build a later-release table with it).
+#[cfg(test)]
 const fn warn_since(name: &'static str, desc: &'static str) -> Lint {
     Lint {
         name,

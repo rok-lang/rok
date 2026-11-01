@@ -52,7 +52,11 @@ pub(super) fn path_expr(full: &str, leaf: &str, span: Span) -> Expr {
         })
         .collect();
     Expr {
-        kind: ExprKind::Path(AstPath { segments, span }),
+        kind: ExprKind::Path(AstPath {
+            segments,
+            span,
+            origin: None,
+        }),
         span,
     }
 }

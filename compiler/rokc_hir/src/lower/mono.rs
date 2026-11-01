@@ -243,6 +243,7 @@ fn project_assoc(
         kind: rokc_ast::TyKind::Path(rokc_ast::Path {
             segments: vec![seg(subject), seg(assoc)],
             span,
+            origin: None,
         }),
         span,
     };

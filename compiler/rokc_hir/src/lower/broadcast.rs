@@ -280,6 +280,7 @@ pub(super) fn lower(ctx: &mut LowerCtx<'_>, e: &Expr) -> HirExpr {
             type_args: Vec::new(),
             args: args.into_iter().map(CallArg::Positional).collect(),
             trailing_closure: None,
+            origin: None,
         })
     };
     let for_range = |from: Expr, to: Expr, body: StmtKind| {

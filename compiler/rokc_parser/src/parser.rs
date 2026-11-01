@@ -116,13 +116,9 @@ pub struct Parser<'a> {
     /// Mount path of the package being parsed (`""`: the one being
     /// built); `pkg::name!` names its meta blocks (spec 6.8.11).
     package: String,
-    /// Paths the file's `use`s import (a glob ends in `*`): an
-    /// unqualified meta name they cover is not `unqualified_meta`.
+    /// Paths the file's `use`s import (a glob ends in `*`): where a
+    /// bare meta name may come from (spec 6.8.11).
     meta_imports: Vec<Vec<String>>,
-    /// Meta names `unqualified_meta` reported in this file, and the
-    /// warnings: kept apart from `diagnostics`, which a backtrack cuts.
-    meta_warned: std::collections::HashSet<String>,
-    meta_lints: Vec<RokDiagnostic>,
 }
 
 /// A closure or fn body being parsed.
@@ -162,6 +158,7 @@ pub fn variadic_slice_ty(elem: Ty) -> Ty {
                 })
                 .collect(),
             span,
+            origin: None,
         }),
         span,
     }
@@ -328,8 +325,6 @@ impl<'a> Parser<'a> {
             closure_returns: std::collections::HashMap::new(),
             package: String::new(),
             meta_imports: Vec::new(),
-            meta_warned: std::collections::HashSet::new(),
-            meta_lints: Vec::new(),
         }
     }
 
@@ -436,6 +431,7 @@ impl<'a> Parser<'a> {
                         generics: Vec::new(),
                     }],
                     span,
+                    origin: None,
                 })
             }
         };
@@ -764,6 +760,7 @@ impl<'a> Parser<'a> {
                     generics: Vec::new(),
                 }],
                 span,
+                origin: None,
             }),
         };
         let stmt = Stmt {
@@ -1128,7 +1125,6 @@ impl<'a> Parser<'a> {
         // marker; HIR reads it as `any Error` (spec 4.14).
         self.untyped_throws.clear();
         self.misplaced_docs();
-        self.diagnostics.append(&mut self.meta_lints);
         Program {
             attrs,
             items,
@@ -2735,6 +2731,7 @@ impl<'a> Parser<'a> {
         let prefix = Path {
             segments,
             span: prefix_start,
+            origin: None,
         };
         // Disambiguate the trailing form.
         let kind = match self.peek().clone() {
@@ -3029,6 +3026,7 @@ impl<'a> Parser<'a> {
                             generics: Vec::new(),
                         }],
                         span: inner_span,
+                        origin: None,
                     }),
                 };
                 self.pending_stmts.push(Stmt {
@@ -3080,6 +3078,7 @@ impl<'a> Parser<'a> {
                     generics: Vec::new(),
                 }],
                 span,
+                origin: None,
             }),
         };
         let pat = self.with_struct_expr(true, Self::parse_pattern_atom)?;
@@ -3983,6 +3982,7 @@ impl<'a> Parser<'a> {
 
     fn parse_path_inner(&mut self, allow_generics: bool) -> Option<Path> {
         let start = self.peek_span();
+        let origin = self.tokens.get(self.pos).and_then(Token::origin_module);
         let mut segments = Vec::new();
         loop {
             let TokenKind::Ident(name) = self.peek().clone() else {
@@ -4030,6 +4030,7 @@ impl<'a> Parser<'a> {
         Some(Path {
             segments,
             span: start,
+            origin,
         })
     }
 
@@ -4176,6 +4177,7 @@ impl<'a> Parser<'a> {
                     generics: vec![],
                 }],
                 span,
+                origin: None,
             }),
             span,
         };
@@ -4928,6 +4930,7 @@ impl<'a> Parser<'a> {
                                 generics: vec![],
                             }],
                             span: init_span,
+                            origin: None,
                         }),
                         span: init_span,
                     };
@@ -5829,7 +5832,8 @@ impl<'a> Parser<'a> {
         p.meta = std::sync::Arc::clone(&self.meta);
         p.literals = std::sync::Arc::clone(&self.literals);
         p.cfg.clone_from(&self.cfg);
-        p.package.clone_from(&def.package);
+        p.package.clone_from(&self.package);
+        p.meta_imports.clone_from(&self.meta_imports);
         p.meta_stack.clone_from(&self.meta_stack);
         p.meta_stack.push(key);
         let r = parse(&mut p);
@@ -6000,6 +6004,7 @@ impl<'a> Parser<'a> {
                                             generics: Vec::new(),
                                         }],
                                         span: *span,
+                                        origin: None,
                                     }),
                                 },
                             },
@@ -6021,6 +6026,7 @@ impl<'a> Parser<'a> {
                                 generics: Vec::new(),
                             }],
                             span,
+                            origin: None,
                         }),
                     };
                     let drop_call = Stmt {
@@ -6032,6 +6038,7 @@ impl<'a> Parser<'a> {
                                 type_args: Vec::new(),
                                 args: Vec::new(),
                                 trailing_closure: None,
+                                origin: None,
                             },
                         }),
                         span,
@@ -6500,6 +6507,7 @@ impl<'a> Parser<'a> {
                         generics: Vec::new(),
                     }],
                     span: start,
+                    origin: None,
                 };
                 self.parse_struct_init_body(path)?
             }
@@ -6664,6 +6672,7 @@ impl<'a> Parser<'a> {
                 }
                 TokenKind::Dot => {
                     self.bump();
+                    let origin = self.tokens.get(self.pos).and_then(Token::origin_module);
                     let name = match self.peek().clone() {
                         _ if self.peek_name().is_some() => {
                             let n = self.peek_name().unwrap_or_default();
@@ -6729,6 +6738,7 @@ impl<'a> Parser<'a> {
                                 type_args,
                                 args,
                                 trailing_closure,
+                                origin,
                             },
                         };
                     } else if let Some(closure) =
@@ -6743,6 +6753,7 @@ impl<'a> Parser<'a> {
                                 type_args,
                                 args: Vec::new(),
                                 trailing_closure: Some(closure),
+                                origin,
                             },
                         };
                     } else {
@@ -7372,6 +7383,7 @@ impl<'a> Parser<'a> {
                             generics: Vec::new(),
                         }],
                         span: self.peek_span(),
+                        origin: None,
                     }),
                 }
             };
@@ -7738,6 +7750,7 @@ impl<'a> Parser<'a> {
                         generics: Vec::new(),
                     }],
                     span,
+                    origin: None,
                 };
                 self.parse_struct_pattern_body(path)?
             }
@@ -7936,6 +7949,7 @@ fn path_ty(name: &str, span: Span) -> Ty {
                 generics: Vec::new(),
             }],
             span,
+            origin: None,
         }),
         span,
     }
@@ -8151,6 +8165,7 @@ fn fold_chain(e: Expr) -> Result<Expr, Expr> {
             type_args,
             mut args,
             trailing_closure,
+            ..
         } if matches!(receiver.kind, ExprKind::QuestionDot(..)) => {
             args.extend(trailing_closure.map(|c| CallArg::Positional(*c)));
             (

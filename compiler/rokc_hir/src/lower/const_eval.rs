@@ -2037,6 +2037,7 @@ pub(super) fn check_user_consts(env: &Env<'_>) {
                 generics: Vec::new(),
             }],
             span,
+            origin: None,
         };
         super::expr::lower_path(&mut ctx, &path, span);
     }

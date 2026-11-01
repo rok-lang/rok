@@ -1,0 +1,25 @@
+// spec: 006.09-meta-templates
+// spec: §6.9.9
+// expect-exit: 0
+// expect-stdout:
+// P { a: 1 }
+// 2
+
+// The `Rokon` derive's own names (`OrderedDict`, ..) are the standard
+// library's: a type of that name here does not take their place.
+use rok::std::rokon;
+
+struct OrderedDict {
+    n: i32;
+}
+
+#[derive(Rokon, Debug)]
+struct P {
+    a: i32;
+}
+
+fn main() {
+    let back: P = try! rokon::from_str(rokon::to_string(P { a: 1 }));
+    println(f"{back:?}");
+    println(OrderedDict { n: 2 }.n);
+}

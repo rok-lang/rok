@@ -771,6 +771,8 @@ fn compile_unit_in(
     for d in &mut metas.metas[lib_metas..] {
         d.set_package("");
     }
+    let deps: Vec<String> = config.externs.iter().map(|(n, _)| n.clone()).collect();
+    let templates = template_refs(&metas.metas[lib_metas..], &deps);
     let user_metas = format!("{:?}", &metas.metas[lib_metas..]);
     let ext = prec.ext_ops();
     relex_metas(&mut metas, &ext);
@@ -1082,6 +1084,7 @@ fn compile_unit_in(
         library,
         stage: kept_stage.clone(),
         cfg_dropped: lib_dropped,
+        templates,
     };
     let program = rokc_ast::Program {
         attrs: Vec::new(),
@@ -1334,6 +1337,54 @@ fn build_prec_table(
     table
 }
 
+/// The rooted paths the built package's `pub` meta blocks write
+/// (`pkg::f`, `rok::..`, `dep::..`; not macros), for HIR to check from
+/// each block's module (spec 6.9.9).
+fn template_refs(defs: &[MetaDef], deps: &[String]) -> Vec<rokc_hir::TemplateRefs> {
+    use rokc_lexer::TokenKind as K;
+    let mut out = Vec::new();
+    for d in defs.iter().filter(|d| d.public) {
+        let b = &d.body;
+        let mut paths = Vec::new();
+        let mut k = 0;
+        while k < b.len() {
+            let K::Ident(root) = &b[k].kind else {
+                k += 1;
+                continue;
+            };
+            let after_sep = k > 0 && matches!(b[k - 1].kind, K::ColonColon | K::Dot | K::At);
+            let rooted = root.starts_with(rokc_parser::PKG_ROOT)
+                || matches!(root.as_str(), "rok" | "sup")
+                || deps.contains(root);
+            if after_sep || !rooted || b.get(k + 1).map(|t| &t.kind) != Some(&K::ColonColon) {
+                k += 1;
+                continue;
+            }
+            let mut segs = vec![root.clone()];
+            let mut end = k + 1;
+            while end + 1 < b.len() && b[end].kind == K::ColonColon {
+                let K::Ident(n) = &b[end + 1].kind else {
+                    break;
+                };
+                segs.push(n.clone());
+                end += 2;
+            }
+            // A macro (`pkg::m!`) is the meta table's.
+            if segs.len() > 1 && b.get(end).map(|t| &t.kind) != Some(&K::Bang) {
+                paths.push((segs, b[k].span));
+            }
+            k = end;
+        }
+        if !paths.is_empty() {
+            out.push(rokc_hir::TemplateRefs {
+                module: d.module.clone(),
+                paths,
+            });
+        }
+    }
+    out
+}
+
 /// Pre-pass parses by path, with their file ids.
 type PreFiles = std::collections::HashMap<PathBuf, (u32, Prepassed)>;
 
@@ -1499,7 +1550,12 @@ fn prepass_tree(
     let Some((id, f)) = files.remove(path) else {
         return;
     };
+    let first = metas.metas.len();
     prepass_gather(&f.sum, &f.source, &path.display().to_string(), id, metas);
+    let file_module = module.join("::");
+    for d in &mut metas.metas[first..] {
+        d.set_module(&file_module);
+    }
     prepass_mods(&f.sum.skeleton, sub_dir, module, files, metas, out);
     let skeleton = rokc_ast::Program {
         attrs: Vec::new(),
@@ -1726,17 +1782,17 @@ fn relex_metas(metas: &mut PrePass, ext: &rokc_parser::ExtOps) {
     if symbols.is_empty() || metas.meta_files.is_empty() {
         return;
     }
-    // What the module tree gave each block: its package and the cfgs of
-    // enclosing modules.
+    // What the module tree gave each block: its package, module and the
+    // cfgs of enclosing modules.
     let placed: std::collections::HashMap<_, _> = std::mem::take(&mut metas.metas)
         .into_iter()
-        .map(|d| ((d.file, d.span), (d.package, d.cfg)))
+        .map(|d| ((d.file, d.span), (d.package, d.module, d.cfg)))
         .collect();
     for (file, source, id) in &metas.meta_files {
         let package = placed
             .iter()
             .find(|((f, _), _)| f == file)
-            .map_or("", |(_, (p, _))| p.as_str());
+            .map_or("", |(_, (p, ..))| p.as_str());
         let symbols = ext.in_package(package).symbols();
         let lexer = Lexer::new(source, file.clone()).with_ext_ops(symbols);
         let (mut tokens, _) = lexer.lex_all();
@@ -1744,8 +1800,9 @@ fn relex_metas(metas: &mut PrePass, ext: &rokc_parser::ExtOps) {
             t.span.file = *id;
         }
         for mut d in collect_meta_blocks(&tokens, file) {
-            if let Some((package, cfg)) = placed.get(&(d.file.clone(), d.span)) {
+            if let Some((package, module, cfg)) = placed.get(&(d.file.clone(), d.span)) {
                 d.set_package(package);
+                d.module.clone_from(module);
                 d.cfg.clone_from(cfg);
             }
             metas.metas.push(d);

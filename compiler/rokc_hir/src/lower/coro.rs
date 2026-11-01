@@ -145,6 +145,7 @@ fn local_path(name: &str, span: rokc_diagnostic::Span) -> Expr {
                 generics: Vec::new(),
             }],
             span,
+            origin: None,
         }),
         span,
     }
@@ -447,6 +448,7 @@ fn task_call(ctx: &mut LowerCtx<'_>, name: &str, span: rokc_diagnostic::Span) ->
             generics: Vec::new(),
         }],
         span,
+        origin: None,
     };
     let call = Expr {
         kind: ExprKind::Call {
@@ -617,6 +619,7 @@ pub(super) fn poll_loop(
                 generics: Vec::new(),
             }],
             span,
+            origin: None,
         }),
         span,
     });

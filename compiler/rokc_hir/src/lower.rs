@@ -920,6 +920,22 @@ impl TypeNames {
     }
 }
 
+/// `LowerCtx::access_module`: the current module, or a definition's.
+enum AccessModule<'a> {
+    Here(&'a str),
+    Def(std::rc::Rc<str>),
+}
+
+impl std::ops::Deref for AccessModule<'_> {
+    type Target = str;
+    fn deref(&self) -> &str {
+        match self {
+            Self::Here(m) => m,
+            Self::Def(m) => m,
+        }
+    }
+}
+
 /// Where a type is being resolved: the name index, the module the
 /// referencing item lives in, and the location its errors go to.
 #[derive(Clone, Copy)]
@@ -3055,6 +3071,10 @@ struct LowerCtx<'a> {
     expected_ty_stack: Vec<HirTy>,
     /// Module path of the function being lowered (`""` at the root).
     current_module: String,
+    /// While a name a meta template or the compiler wrote is resolved:
+    /// the module of its definition, whose scope and access it has
+    /// (spec 6.9.9).
+    access: std::cell::RefCell<Option<std::rc::Rc<str>>>,
     /// Block-scoped `use`s, one level per `push_scope`, searched before
     /// module uses.
     local_uses: Vec<Vec<crate::uses::UseEntry>>,
@@ -3263,6 +3283,7 @@ impl<'a> LowerCtx<'a> {
             break_tys: HashMap::new(),
             expected_ty_stack: Vec::new(),
             current_module: String::new(),
+            access: std::cell::RefCell::new(None),
             local_uses: vec![Vec::new()],
             nested_fns: vec![HashMap::new()],
             or_pattern_binders: Vec::new(),
@@ -3307,6 +3328,31 @@ impl<'a> LowerCtx<'a> {
         let r = f(self);
         self.at.set(outer);
         r
+    }
+
+    /// The module whose scope and access the name being resolved has:
+    /// its definition's for a name from a meta template (spec 6.9.9),
+    /// else the current one.
+    fn access_module(&self) -> AccessModule<'_> {
+        match self.access.borrow().as_ref() {
+            Some(m) => AccessModule::Def(std::rc::Rc::clone(m)),
+            None => AccessModule::Here(&self.current_module),
+        }
+    }
+
+    /// Block `use`s in reach: none for a name from a definition.
+    fn reach_uses(&self) -> &[Vec<crate::uses::UseEntry>] {
+        if self.access.borrow().is_some() {
+            &[]
+        } else {
+            &self.local_uses
+        }
+    }
+
+    /// Resolve names from `origin` (a path's definition module; `None`:
+    /// the current one) until the returned value is put back.
+    fn set_access(&self, origin: Option<&str>) -> Option<std::rc::Rc<str>> {
+        self.access.replace(origin.map(std::rc::Rc::from))
     }
 
     /// The source text under `span`, for help that quotes the user's code.
@@ -3424,6 +3470,15 @@ impl<'a> LowerCtx<'a> {
         help: Option<String>,
     ) -> HirExpr {
         self.emit_error(rokc_diagnostic::ErrorKind::Resolve, msg);
+        // A name a meta template wrote is looked up where the template is.
+        let help = match self.access.borrow().as_deref() {
+            Some(m) => Some(format!(
+                "the meta template that wrote this name looks it up in module `{}`; to look \
+                 it up where the meta block is used, write `@use_site(..)` around it (spec 6.9.9)",
+                module_display(m)
+            )),
+            None => help,
+        };
         self.help_last(help);
         poison(span)
     }
@@ -4461,14 +4516,6 @@ impl<'a> LowerCtx<'a> {
         Some(())
     }
 
-    fn scope(&self) -> Scope<'_> {
-        Scope {
-            names: &self.env.names,
-            module: &self.current_module,
-            at: self.here(),
-        }
-    }
-
     /// Canonical type-namespace name of a path, from this module and its
     /// `use`s.
     fn canon_type(&self, segments: &[&str]) -> Option<String> {
@@ -4477,8 +4524,8 @@ impl<'a> LowerCtx<'a> {
         }
         self.env.names.canon(
             segments,
-            &self.current_module,
-            &self.local_uses,
+            &self.access_module(),
+            self.reach_uses(),
             self.here(),
         )
     }
@@ -4562,8 +4609,8 @@ impl<'a> LowerCtx<'a> {
         };
         match resolve_name(
             segments,
-            &self.current_module,
-            &self.local_uses,
+            &self.access_module(),
+            self.reach_uses(),
             &self.env.names.uses,
             &set,
         ) {
@@ -4609,8 +4656,8 @@ impl<'a> LowerCtx<'a> {
         };
         match resolve_name(
             segments,
-            &self.current_module,
-            &self.local_uses,
+            &self.access_module(),
+            self.reach_uses(),
             &self.env.names.uses,
             &set,
         ) {
@@ -4664,7 +4711,7 @@ impl<'a> LowerCtx<'a> {
             format!(
                 "name `{name}` is ambiguous in module `{}` - multiple glob imports \
                  resolve it: {}",
-                module_display(&self.current_module),
+                module_display(&self.access_module()),
                 hits.join(", ")
             ),
         );
@@ -4673,7 +4720,7 @@ impl<'a> LowerCtx<'a> {
     /// Visibility check: can a caller in `self.current_module` see an
     /// item declared in `def_module` with the given visibility?
     fn is_visible(&self, def_module: &str, vis: Visibility) -> bool {
-        visible_from(&self.current_module, def_module, vis)
+        visible_from(&self.access_module(), def_module, vis)
     }
 
     /// Report use of a private value item (fn / const / static).
@@ -4683,10 +4730,11 @@ impl<'a> LowerCtx<'a> {
         }
         let vis = self.env.item_vis(full).unwrap_or(Visibility::Pub);
         let def_module = module_of(full);
-        if let Some(m) = self.env.names.hidden(&self.current_module, full) {
+        let from = self.access_module();
+        if let Some(m) = self.env.names.hidden(&from, full) {
             self.emit_error(
                 rokc_diagnostic::ErrorKind::Module,
-                resolve::hidden_module_msg(full, &m, &self.current_module),
+                resolve::hidden_module_msg(full, &m, &from),
             );
             return false;
         }
@@ -4711,7 +4759,7 @@ impl<'a> LowerCtx<'a> {
                 "{what} `{full}` is private to module `{}` and cannot be used from `{}` \
                  (spec 5.6 - add `pub` to expose it)",
                 module_display(&def_module),
-                module_display(&self.current_module)
+                module_display(&from)
             ),
         );
         self.help_last(resolve::own_library_privacy(&def_module));
@@ -4768,7 +4816,7 @@ impl<'a> LowerCtx<'a> {
         self.env
             .mark_pkg
             .as_deref()
-            .is_some_and(|p| package_of(&self.current_module) == p)
+            .is_some_and(|p| package_of(&self.access_module()) == p)
     }
 
     /// Uses here are checked against marks at all: the built package's,
@@ -4992,7 +5040,27 @@ impl<'a> LowerCtx<'a> {
     }
 
     fn resolve_ty_inner(&self, ty: &rokc_ast::Ty) -> HirTy {
+        // A type path names what the module it comes from sees (spec
+        // 6.9.9); its arguments carry their own origins.
+        let origin = match &ty.kind {
+            AstTyKind::Path(p) => p.origin.as_deref(),
+            _ => None,
+        };
+        let outer = self.set_access(origin);
+        let t = self.resolve_ty_here(ty);
+        self.access.replace(outer);
+        t
+    }
+
+    fn resolve_ty_here(&self, ty: &rokc_ast::Ty) -> HirTy {
         let rec = |t: &rokc_ast::Ty| self.resolve_ty_inner(t);
+        let module = self.access_module();
+        let module = &*module;
+        let scope = Scope {
+            names: &self.env.names,
+            module,
+            at: self.here(),
+        };
         match &ty.kind {
             // `Self` inside generic arguments (`Map<Self, ..>`) must be
             // concrete before the instantiation check.
@@ -5003,13 +5071,10 @@ impl<'a> LowerCtx<'a> {
                 if self
                     .env
                     .names
-                    .expand_alias(ty, &self.current_module, self.here())
+                    .expand_alias(ty, module, self.here())
                     .is_some() =>
             {
-                let t = self
-                    .env
-                    .names
-                    .expand_alias(ty, &self.current_module, self.here());
+                let t = self.env.names.expand_alias(ty, module, self.here());
                 t.map_or(HirTy::Unknown, |t| rec(&t))
             }
             AstTyKind::Path(p) => {
@@ -5018,16 +5083,14 @@ impl<'a> LowerCtx<'a> {
                     matches!(p.segments.as_slice(), [s] if self.ty_subst.contains_key(&s.name));
                 let names = &self.env.names;
                 let alias = (!param && names.alias_depth.get() < 32)
-                    .then(|| names.plain_alias(ty, &self.current_module, self.here()))
+                    .then(|| names.plain_alias(ty, module, self.here()))
                     .flatten();
                 if let Some(full) = alias {
                     // Reported at the alias.
                     if names.broken_aliases.borrow().contains(&full) {
                         return HirTy::Unknown;
                     }
-                    if let Some(t) =
-                        names.projection_alias(&full, &self.current_module, self.here())
-                    {
+                    if let Some(t) = names.projection_alias(&full, module, self.here()) {
                         let depth = &names.alias_depth;
                         depth.set(depth.get() + 1);
                         let r = rec(&t);
@@ -5109,7 +5172,7 @@ impl<'a> LowerCtx<'a> {
                         }
                     }
                 }
-                let mut t = resolve_ty_with_structs(ty, &self.env.defs, None, self.scope());
+                let mut t = resolve_ty_with_structs(ty, &self.env.defs, None, scope);
                 substitute_params(&mut t, &self.ty_subst);
                 t
             }
@@ -5123,7 +5186,7 @@ impl<'a> LowerCtx<'a> {
             AstTyKind::Tuple(parts) => HirTy::Tuple(parts.iter().map(rec).collect()),
             AstTyKind::Array(elem, len) => {
                 if let rokc_ast::ConstExpr::Literal(_) = len {
-                    return match resolve_ty_with_structs(ty, &self.env.defs, None, self.scope()) {
+                    return match resolve_ty_with_structs(ty, &self.env.defs, None, scope) {
                         HirTy::Array(_, n) => HirTy::Array(Box::new(rec(elem)), n),
                         other => other,
                     };
@@ -5147,13 +5210,11 @@ impl<'a> LowerCtx<'a> {
             AstTyKind::Fn(args, ret, b) => HirTy::Fn(
                 args.iter().map(rec).collect(),
                 Box::new(rec(ret)),
-                self.env
-                    .names
-                    .fn_bounds(b, &self.current_module, self.here()),
+                self.env.names.fn_bounds(b, module, self.here()),
             ),
             AstTyKind::Throws { ok, err } => crate::ty::throws_ty(rec(ok), rec(err)),
             AstTyKind::QPath(q) => self.qpath_ty(q),
-            _ => resolve_ty_with_structs(ty, &self.env.defs, None, self.scope()),
+            _ => resolve_ty_with_structs(ty, &self.env.defs, None, scope),
         }
     }
 
@@ -5210,6 +5271,7 @@ impl<'a> LowerCtx<'a> {
                     kind: AstTyKind::Path(AstPath {
                         segments: prefix.to_vec(),
                         span: p.span,
+                        origin: None,
                     }),
                     span: p.span,
                 };

@@ -52,6 +52,13 @@ pub struct MetaDef {
     pub file: String,
     /// The defining package (`""` for the one being built).
     pub package: String,
+    /// The module that holds the block: its template's names resolve
+    /// and are access-checked there (spec 6.9.9). Inline `mod`s of the
+    /// file until the driver prefixes the file's module.
+    pub module: String,
+    /// What the defining file's `use`s import (globs end in `*` / `**`):
+    /// where the template's bare meta names come from.
+    pub imports: Vec<Vec<String>>,
     /// The `#[impl_..]` attribute.
     pub span: Span,
     /// Tokens between the body's braces.
@@ -62,6 +69,25 @@ pub struct MetaDef {
 }
 
 impl MetaDef {
+    /// The file holding the block is module `module`.
+    pub fn set_module(&mut self, module: &str) {
+        self.module = match (module.is_empty(), self.module.is_empty()) {
+            (true, _) => self.module.clone(),
+            (false, true) => module.to_owned(),
+            (false, false) => format!("{module}::{}", self.module),
+        };
+    }
+
+    /// Where the tokens a template writes come from.
+    #[must_use]
+    pub fn origin(&self) -> Arc<rokc_lexer::Origin> {
+        Arc::new(rokc_lexer::Origin {
+            package: self.package.clone(),
+            module: self.module.clone(),
+            imports: self.imports.clone(),
+        })
+    }
+
     /// Mount path of the block's package (`""`: the one being built); its
     /// `pkg::` paths keep naming it wherever the block expands (6.9.8).
     pub fn set_package(&mut self, package: &str) {
@@ -253,6 +279,9 @@ impl MetaTable {
 #[must_use]
 pub fn collect_meta_blocks(tokens: &[Token], file: &str) -> Vec<MetaDef> {
     let mut p = Parser::new(tokens, file);
+    p.scan_meta_imports();
+    let imports = std::mem::take(&mut p.meta_imports);
+    let inline = inline_mods(tokens);
     let mut out = Vec::new();
     // Open inline `mod`s: the index of their closing `}` and their
     // `#[cfg(..)]`s, which hold for every block inside too.
@@ -267,12 +296,41 @@ pub fn collect_meta_blocks(tokens: &[Token], file: &str) -> Vec<MetaDef> {
             Some(Some(mut d)) => {
                 d.cfg
                     .extend(mods.iter().flat_map(|(_, c)| c.iter().cloned()));
+                d.imports.clone_from(&imports);
+                let at = p.pos;
+                d.module = inline
+                    .iter()
+                    .filter(|(open, close, _)| *open < at && at < *close)
+                    .map(|(.., name)| name.as_str())
+                    .collect::<Vec<_>>()
+                    .join("::");
                 out.push(d);
             }
             Some(None) => {}
             None => {
                 p.bump();
             }
+        }
+    }
+    out
+}
+
+/// The inline `mod name { .. }`s of a file: their braces and names,
+/// outermost first.
+fn inline_mods(tokens: &[Token]) -> Vec<(usize, usize, String)> {
+    let mut out = Vec::new();
+    for k in 0..tokens.len() {
+        if tokens[k].kind != TokenKind::Mod {
+            continue;
+        }
+        let (Some(TokenKind::Ident(name)), Some(TokenKind::LBrace)) = (
+            tokens.get(k + 1).map(|t| &t.kind),
+            tokens.get(k + 2).map(|t| &t.kind),
+        ) else {
+            continue;
+        };
+        if let Some(close) = close_of(tokens, k + 2) {
+            out.push((k + 2, close, name.clone()));
         }
     }
     out
@@ -458,6 +516,8 @@ const TOP: usize = usize::MAX;
 
 struct Expander<'a> {
     def: &'a MetaDef,
+    /// What the template's own tokens are stamped with.
+    origin: Arc<rokc_lexer::Origin>,
     t: &'a Target,
     out: Vec<Token>,
     diags: Vec<RokDiagnostic>,
@@ -738,7 +798,15 @@ impl Expander<'_> {
             TokenKind::FStrText(s) => TokenKind::FStrText(self.string_text(s, ctx)),
             k => k.clone(),
         };
-        self.out.push(tok(kind, t.span));
+        self.out
+            .push(self.stamp(tok(kind, t.span), t.origin.as_ref()));
+    }
+
+    /// `t` as written by the template: its definition's origin, unless
+    /// it already has one (a template that is itself expanded code).
+    fn stamp(&self, mut t: Token, had: Option<&Arc<rokc_lexer::Origin>>) -> Token {
+        t.origin = Some(Arc::clone(had.unwrap_or(&self.origin)));
+        t
     }
 
     /// Whether the bound name at `k` is a variable use / binding (not a
@@ -835,6 +903,7 @@ impl Expander<'_> {
                 | "apply_if"
                 | "accept"
                 | "where_all"
+                | "use_site"
         );
         let takes_block = matches!(
             full.as_str(),
@@ -1002,8 +1071,23 @@ impl Expander<'_> {
                 Vec::new()
             }
             "where_all" => {
-                self.where_all.push(b[args.0..args.1].to_vec());
+                let bounds = b[args.0..args.1]
+                    .iter()
+                    .map(|t| self.stamp(t.clone(), t.origin.as_ref()))
+                    .collect();
+                self.where_all.push(bounds);
                 Vec::new()
+            }
+            // The path resolves where the meta block is used.
+            "use_site" => {
+                let Some(p) = use_site_path(&b[args.0..args.1]) else {
+                    self.err(
+                        k,
+                        "`@use_site(..)` takes a path, e.g. `@use_site(validate)`",
+                    );
+                    return j;
+                };
+                p
             }
             "field" | "field.name" | "field.type" | "field.default" => {
                 let binding = self.binding(ctx);
@@ -1279,12 +1363,28 @@ fn fn_parts(item: &[Token]) -> Option<(Vec<Token>, Vec<Token>, Vec<Token>)> {
     Some((params, ret, item[lb + 1..rb].to_vec()))
 }
 
-/// A meta name `find_meta` resolved.
+/// A meta name `find_meta` resolved; short-lived, so the block is held
+/// whole.
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum MetaUse {
     Def(MetaDef),
     /// No one meta block: a wrong qualifier or an ambiguous bare name
     /// (reported).
     Bad,
+}
+
+/// Whether `imports` (a file's `use`s) import `def`: its path (`use
+/// json::log!;`, or `use mdep::Tag;` for a derive named like its trait)
+/// or a glob of its package.
+fn meta_imported(imports: &[Vec<String>], def: &MetaDef) -> bool {
+    let pkg: Vec<&str> = def.package.split("::").collect();
+    imports.iter().any(|p| {
+        p.len() > pkg.len()
+            && p.iter().zip(&pkg).all(|(a, b)| a == b)
+            && p.last().is_some_and(|l| {
+                *l == def.name || (p.len() == pkg.len() + 1 && (l == "*" || l == "**"))
+            })
+    })
 }
 
 /// The standard library's meta names stay bare (`#[derive(Inspect)]`).
@@ -1378,14 +1478,28 @@ impl Parser<'_> {
         let meta = std::sync::Arc::clone(&self.meta);
         let all: Vec<&MetaDef> = meta.find_all(kind, name).collect();
         if qual.is_empty() {
-            return match all.as_slice() {
-                [] => None,
-                [d] => {
-                    self.unqualified_meta(d, at);
-                    Some(MetaUse::Def((*d).clone()))
-                }
-                _ => Some(self.ambiguous_meta(kind, name, &all, at)),
-            };
+            if all.is_empty() {
+                return None;
+            }
+            // This package's block, then a `use`d one, then the standard
+            // library's (6.8.11).
+            let (package, imports) = self.meta_site(at, name);
+            if let Some(d) = all.iter().find(|d| d.package == package) {
+                return Some(MetaUse::Def((*d).clone()));
+            }
+            let used: Vec<&MetaDef> = all
+                .iter()
+                .filter(|d| meta_imported(&imports, d))
+                .copied()
+                .collect();
+            return Some(match used.as_slice() {
+                [d] => MetaUse::Def((*d).clone()),
+                [_, _, ..] => self.ambiguous_meta(kind, name, &used, at),
+                [] => match all.iter().find(|d| is_std(&d.package)) {
+                    Some(d) => MetaUse::Def((*d).clone()),
+                    None => self.unscoped_meta(kind, name, &all, at),
+                },
+            });
         }
         let package = self.meta_package(qual);
         if let Some(d) = all.iter().find(|d| d.package == package) {
@@ -1437,8 +1551,8 @@ impl Parser<'_> {
         Some(MetaUse::Bad)
     }
 
-    /// A bare `name` several packages register: this package's, else the
-    /// one a `use` imports; else an error saying which to write.
+    /// A bare `name` that `use`s of several packages import: an error
+    /// saying which to write.
     fn ambiguous_meta(
         &mut self,
         kind: MetaKind,
@@ -1446,13 +1560,6 @@ impl Parser<'_> {
         all: &[&MetaDef],
         at: Span,
     ) -> MetaUse {
-        let pick = all
-            .iter()
-            .find(|d| d.package == self.package)
-            .or_else(|| all.iter().find(|d| self.meta_imported(d)));
-        if let Some(d) = pick {
-            return MetaUse::Def((*d).clone());
-        }
         let forms: Vec<String> = all
             .iter()
             .filter_map(|d| self.meta_qualifier(&d.package))
@@ -1474,51 +1581,78 @@ impl Parser<'_> {
         MetaUse::Bad
     }
 
-    /// `unqualified_meta`: `def`, another package's, used by its bare name
-    /// and found only through the build-wide scope that 0.2.0 drops.
-    fn unqualified_meta(&mut self, def: &MetaDef, at: Span) {
-        if !self.meta_stack.is_empty()
-            || at.is_dummy()
-            || def.package == self.package
-            || is_std(&def.package)
-            || self.meta_imported(def)
-        {
-            return;
-        }
-        let Some(q) = self.meta_qualifier(&def.package) else {
-            return;
+    /// A bare `name` that none of the blocks `all` in reach of `site`
+    /// registers: an error naming the qualified forms (spec 6.8.11).
+    fn unscoped_meta(&mut self, kind: MetaKind, name: &str, all: &[&MetaDef], at: Span) -> MetaUse {
+        let forms: Vec<String> = all
+            .iter()
+            .filter_map(|d| self.meta_qualifier(&d.package))
+            .collect();
+        let at = self.name_span(at, name);
+        let mut help = match forms.as_slice() {
+            [q] => format!("write {}", meta_use(kind, q, name)),
+            _ => format!(
+                "write one of {}",
+                forms
+                    .iter()
+                    .map(|q| meta_use(kind, q, name))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
         };
-        if !self
-            .meta_warned
-            .insert(format!("{:?}:{}", def.kind, def.name))
-        {
-            return;
+        if let [q] = forms.as_slice() {
+            let import = if kind == MetaKind::Macro {
+                format!("{q}::{name}!")
+            } else {
+                format!("{q}::{name}")
+            };
+            help.push_str(&format!(", or add `use {import};`"));
         }
-        let at = self.name_span(at, &def.name);
-        let name = &def.name;
-        let mut help = format!("write {}", meta_use(def.kind, &q, name));
-        if def.kind == MetaKind::Macro {
-            help.push_str(&format!(" or add `use {q}::{name}!;`"));
-        }
-        let d = RokDiagnostic::warning(
-            ErrorKind::Meta,
+        let owner = match forms.as_slice() {
+            [q] => format!("package `{q}`'s {}", kind_word(kind)),
+            _ => format!("a {} of another package", kind_word(kind)),
+        };
+        let mut d = meta_err(
             at,
             format!(
-                "{} is package `{q}`'s {}, found only through the build-wide meta scope, \
-                 which Rok 0.2.0 removes",
-                meta_use(def.kind, "", name),
-                kind_word(def.kind)
+                "{} is {owner}, which a bare name does not reach: it names this package's \
+                 blocks, `use`d ones and the standard library's (spec 6.8.11)",
+                meta_use(kind, "", name)
             ),
         )
         .with_file(self.file.clone())
-        .with_help(help)
-        .with_fix(
-            at,
-            format!("{q}::{name}"),
-            format!("write {}", meta_use(def.kind, &q, name)),
-        )
-        .with_lint("unqualified_meta");
-        self.meta_lints.push(d);
+        .with_help(help);
+        if let [q] = forms.as_slice() {
+            d = d.with_fix(
+                at,
+                format!("{q}::{name}"),
+                format!("write {}", meta_use(kind, q, name)),
+            );
+        }
+        self.diagnostics.push(d);
+        MetaUse::Bad
+    }
+
+    /// The package and `use` imports a bare meta name at `at` is looked
+    /// up from: its definition's for a name a template wrote (spec
+    /// 6.9.9), else this file's.
+    fn meta_site(&self, at: Span, name: &str) -> (String, Vec<Vec<String>>) {
+        let is_name = |t: &&Token| matches!(&t.kind, TokenKind::Ident(n) if n == name);
+        let tok = match self
+            .tokens
+            .iter()
+            .position(|t| t.span == at && t.kind == TokenKind::HashLBracket)
+        {
+            Some(k) => self.tokens[k..]
+                .iter()
+                .take_while(|t| t.kind != TokenKind::RBracket)
+                .find(is_name),
+            None => self.tokens.iter().filter(|t| t.span == at).find(is_name),
+        };
+        match tok.and_then(|t| t.origin.as_deref()) {
+            Some(o) => (o.package.clone(), o.imports.clone()),
+            None => (self.package.clone(), self.meta_imports.clone()),
+        }
     }
 
     /// Where `name` is written in the attribute at `at` (`#[name]`,
@@ -1536,20 +1670,6 @@ impl Parser<'_> {
             .take_while(|t| t.kind != TokenKind::RBracket)
             .find(|t| matches!(&t.kind, TokenKind::Ident(n) if n == name))
             .map_or(at, |t| t.span)
-    }
-
-    /// Whether a `use` of the file imports `def`: its path (`use
-    /// json::log!;`, or `use mdep::Tag;` for a derive named like its
-    /// trait) or a glob of its package.
-    fn meta_imported(&self, def: &MetaDef) -> bool {
-        let pkg: Vec<&str> = def.package.split("::").collect();
-        self.meta_imports.iter().any(|p| {
-            p.len() > pkg.len()
-                && p.iter().zip(&pkg).all(|(a, b)| a == b)
-                && p.last().is_some_and(|l| {
-                    *l == def.name || (p.len() == pkg.len() + 1 && (l == "*" || l == "**"))
-                })
-        })
     }
 
     /// Note every path the file's `use`s import (`meta_imports`) before
@@ -1751,6 +1871,8 @@ impl Parser<'_> {
             public: vis != Visibility::Private,
             file: self.file.clone(),
             package: String::new(),
+            module: String::new(),
+            imports: Vec::new(),
             span: ma.span,
             body: self.tokens[body_start + 1..end].to_vec(),
             cfg: attrs.into_iter().filter(|a| a.name() == "cfg").collect(),
@@ -2042,6 +2164,7 @@ impl Parser<'_> {
         }
         let mut ex = Expander {
             def,
+            origin: def.origin(),
             t: target,
             out: Vec::new(),
             diags: Vec::new(),
@@ -2051,7 +2174,8 @@ impl Parser<'_> {
         };
         ex.scan_binders();
         ex.expand(0, def.body.len(), Ctx::default());
-        let (tokens, diags) = (ex.out, ex.diags);
+        let (mut tokens, diags) = (ex.out, ex.diags);
+        place_declared(&mut tokens);
         let failed = !diags.is_empty();
         self.diagnostics.extend(diags);
         if failed {
@@ -2074,7 +2198,10 @@ impl Parser<'_> {
         p.meta = Arc::clone(&self.meta);
         p.literals = Arc::clone(&self.literals);
         p.cfg.clone_from(&self.cfg);
-        p.package.clone_from(&def.package);
+        // Use-site tokens look meta names up as the use site does; the
+        // template's carry their definition's origin.
+        p.package.clone_from(&self.package);
+        p.meta_imports.clone_from(&self.meta_imports);
         p.meta_stack.clone_from(&self.meta_stack);
         p.meta_stack.push(key);
         let mut items = Vec::new();
@@ -2118,6 +2245,57 @@ impl Parser<'_> {
             i.attrs_mut().extend(cfgs.iter().map(|a| (*a).clone()));
         }
         items
+    }
+}
+
+/// The tokens of `@use_site(path)`'s argument, written at the use site;
+/// `None` unless it is a path (`a::b`, `pkg::f`).
+pub(crate) fn use_site_path(arg: &[Token]) -> Option<Vec<Token>> {
+    let mut want_name = true;
+    for t in arg {
+        match (&t.kind, want_name) {
+            (TokenKind::Ident(_), true) => want_name = false,
+            (TokenKind::ColonColon, false) => want_name = true,
+            _ => return None,
+        }
+    }
+    if want_name {
+        return None;
+    }
+    Some(arg.iter().map(|t| tok(t.kind.clone(), t.span)).collect())
+}
+
+/// An expansion's own items land at the use site (spec 6.9.9), so the
+/// names it declares there are looked up there too.
+pub(crate) fn place_declared(tokens: &mut [Token]) {
+    let mut depth = 0i32;
+    let mut names = HashSet::new();
+    for k in 0..tokens.len() {
+        match &tokens[k].kind {
+            TokenKind::LBrace | TokenKind::LParen | TokenKind::LBracket => depth += 1,
+            TokenKind::RBrace | TokenKind::RParen | TokenKind::RBracket => depth -= 1,
+            kind if depth == 0 => {
+                let declares = matches!(
+                    kind,
+                    TokenKind::Fn
+                        | TokenKind::Struct
+                        | TokenKind::Enum
+                        | TokenKind::Trait
+                        | TokenKind::Mod
+                ) || matches!(kind, TokenKind::Ident(w) if matches!(w.as_str(), "union" | "type" | "const" | "static"));
+                if let (true, Some(TokenKind::Ident(n))) =
+                    (declares, tokens.get(k + 1).map(|t| &t.kind))
+                {
+                    names.insert(n.clone());
+                }
+            }
+            _ => {}
+        }
+    }
+    for t in tokens.iter_mut() {
+        if matches!(&t.kind, TokenKind::Ident(n) if names.contains(n)) {
+            t.origin = None;
+        }
     }
 }
 
@@ -2254,6 +2432,8 @@ rokc_core::codec_struct!(MetaDef {
     public,
     file,
     package,
+    module,
+    imports,
     span,
     body,
     cfg

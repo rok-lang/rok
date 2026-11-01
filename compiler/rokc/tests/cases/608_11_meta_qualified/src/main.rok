@@ -1,8 +1,6 @@
 // rokc-arg: --extern alog=tests/cases/608_11_meta_qualified/alog
 // rokc-arg: --extern blog=tests/cases/608_11_meta_qualified/blog
 // expect-exit: 0
-// forbid-warning: unqualified_meta
-// forbid-warning: build-wide
 // expect-stdout:
 // a: 1
 // b: 2

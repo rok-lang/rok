@@ -1583,6 +1583,12 @@ fn qualified_macro_picks_its_package() {
     assert!(main_body(&p).contains("\"a\""));
     assert!(p.items.iter().all(|i| !matches!(i, Item::Use(_))));
     let (_, diags) = parse_in("", &deps, "fn main() { log!(1); }");
+    assert!(diags[0].message.contains("does not reach"), "{diags:?}");
+    let (_, diags) = parse_in(
+        "",
+        &deps,
+        "use a::log!;\nuse b::log!;\nfn main() { log!(1); }",
+    );
     assert!(diags[0].message.contains("ambiguous"), "{diags:?}");
     let (_, diags) = parse_in("", &deps, "fn main() { b::nope!(1); }");
     assert!(
@@ -1594,29 +1600,37 @@ fn qualified_macro_picks_its_package() {
 }
 
 #[test]
-fn unqualified_meta_warns_once_per_name() {
+fn bare_meta_name_reaches_its_scope() {
     let deps = [("a", LOG_A)];
     let src = "#[derive(Tr)] struct S {}\n#[traced] fn f() {}\n\
                fn main() { log!(1); log!(2); }";
     let (_, diags) = parse_in("", &deps, src);
-    let got: Vec<(Option<String>, String)> = diags
+    let got: Vec<(bool, String)> = diags
         .iter()
-        .map(|d| (d.lint.as_deref().cloned(), d.notes.join(";")))
+        .map(|d| (d.is_error(), d.notes.join(";")))
         .collect();
-    let lint = Some("unqualified_meta".to_owned());
     assert_eq!(
         got,
         [
-            (lint.clone(), "help: write `#[derive(a::Tr)]`".to_owned()),
-            (lint.clone(), "help: write `#[a::traced]`".to_owned()),
             (
-                lint,
-                "help: write `a::log!` or add `use a::log!;`".to_owned()
+                true,
+                "help: write `#[derive(a::Tr)]`, or add `use a::Tr;`".to_owned()
+            ),
+            (
+                true,
+                "help: write `#[a::traced]`, or add `use a::traced;`".to_owned()
+            ),
+            (
+                true,
+                "help: write `a::log!`, or add `use a::log!;`".to_owned()
+            ),
+            (
+                true,
+                "help: write `a::log!`, or add `use a::log!;`".to_owned()
             ),
         ]
     );
-    // Qualified, imported, its own package's, or the standard library's:
-    // quiet.
+    // Qualified, imported, its own package's, or the standard library's.
     for (pkg, src) in [
         (
             "",
@@ -1634,4 +1648,27 @@ fn unqualified_meta_warns_once_per_name() {
     }
     let (_, diags) = parse_in("", &[("rok::core", LOG_A)], "fn main() { log!(1); }");
     assert!(diags.is_empty(), "{diags:?}");
+}
+
+#[test]
+fn expansion_meta_names_resolve_at_definition() {
+    // `a::outer!`'s bare `log!` is `a`'s, though the user package has one.
+    let outer =
+        format!("{LOG_A}\n#[impl_macro(outer)] pub @macro {{ (@e: expr) => {{ log!(@e) }} }}");
+    let mine = "#[impl_macro(log)] pub @macro { (@e: expr) => { mine(@e) } }";
+    let deps = [("a", outer.as_str()), ("", mine)];
+    let (p, diags) = parse_in("", &deps, "fn main() { a::outer!(1); log!(2); }");
+    assert!(diags.is_empty(), "{diags:?}");
+    let body = main_body(&p);
+    assert!(
+        body.contains("\"a\"") && body.contains("\"mine\""),
+        "{body}"
+    );
+    // Tokens a call passes in keep the use site's lookup.
+    let (_, diags) = parse_in(
+        "",
+        &[("a", outer.as_str())],
+        "fn main() { a::outer!(log!(1)); }",
+    );
+    assert!(diags[0].message.contains("does not reach"), "{diags:?}");
 }

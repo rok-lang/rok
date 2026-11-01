@@ -112,6 +112,17 @@ pub struct HirInput {
     /// What `#[cfg]` dropped from library items HIR does not get (a kept
     /// `stage`), for not-found errors.
     pub cfg_dropped: Vec<CfgDropped>,
+    /// The rooted paths the package's `pub` meta blocks write, checked
+    /// from each block's module (spec 6.9.9).
+    pub templates: Vec<TemplateRefs>,
+}
+
+/// The rooted paths (`pkg::f`, `rok::..`, `dep::..`) one meta block's
+/// template writes, and the module that holds the block.
+#[derive(Clone, Debug, Default)]
+pub struct TemplateRefs {
+    pub module: String,
+    pub paths: Vec<(Vec<String>, rokc_diagnostic::Span)>,
 }
 
 /// Marker on a trait / impl method, `[ASSOC_TYPES_ATTR, X, ..]`: bare `X`

@@ -198,7 +198,8 @@ codec_enum!(ExprKind {
         method,
         type_args,
         args,
-        trailing_closure
+        trailing_closure,
+        origin
     },
     Call {
         callee,
@@ -295,7 +296,11 @@ codec_enum!(PatternKind {
     Or(x0),
 });
 codec_struct!(FieldPattern { name, pat });
-codec_struct!(Path { segments, span });
+codec_struct!(Path {
+    segments,
+    span,
+    origin
+});
 codec_struct!(PathSegment { name, generics });
 codec_struct!(Ty { kind, span });
 codec_struct!(FnTyBounds {

@@ -1,13 +1,14 @@
 // rokc-arg: --extern alog=tests/cases/608_11_meta_qualified/alog
 // rokc-arg: --extern blog=tests/cases/608_11_meta_qualified/blog
-// expect-error: `log!` is defined by several packages, so the bare name is ambiguous
+// expect-error: `log!` is a macro of another package, which a bare name does not reach
 // expect-error: help: write one of `alog::log!`, `blog::log!`
 // expect-error: package `alog` defines no macro `nope`, so `alog::nope!` names nothing
 // expect-error: `use log!;` does not name the package of `log!`
 // expect-warning: package `blog` defines no derive `Named`, so `#[derive(blog::Named)]` names nothing and does nothing
 // expect-warning: help: write `#[derive(alog::Named)]`
 
-// Spec 6.8.11: a bare name two packages define needs the package.
+// Spec 6.8.11: a bare name reaches no other package's block; two
+// packages that define it each need their name.
 use log!;
 
 #[derive(blog::Named)]

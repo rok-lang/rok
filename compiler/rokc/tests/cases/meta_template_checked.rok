@@ -1,0 +1,26 @@
+// spec: 006.09-meta-templates
+// spec: §6.9.9
+// expect-error: this meta template names `pkg::nope`, which does not exist
+// expect-error: this meta template names `pkg::inner::hidden`, which its module `<root>` cannot see
+
+// A `pub` meta block's rooted names are checked when its package builds,
+// unused or not: the error is the author's, not each user's.
+mod inner {
+    fn hidden() {}
+}
+
+#[impl_macro(missing)] pub @macro {
+    () => { pkg::nope() }
+}
+
+#[impl_macro(private)] pub @macro {
+    () => { pkg::inner::hidden() }
+}
+
+#[impl_macro(fine)] pub @macro {
+    () => { pkg::shown(rok::core::cmp::Ordering::Less) }
+}
+
+fn shown(o: rok::core::cmp::Ordering) {}
+
+fn main() {}

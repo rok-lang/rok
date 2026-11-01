@@ -713,18 +713,14 @@ fn literal_spread_mismatch_is_in_warnings() {
     );
 }
 
-/// The 0.1.6 semantic warning still listed, and the ones that are errors
-/// now gone from `--list`.
+/// The 0.1.6 semantic warnings that are errors now are gone from
+/// `--list`.
 #[test]
 fn semantic_warnings_are_in_warnings() {
     let dir = scratch("lint-semantic");
     let app = new_package(&dir, "app", false);
     let out = rokc(None, &app, &["lint", "--list"]);
     let list = text(&out.stdout);
-    assert!(
-        list.contains(&format!("{:<24} warn  0.1.6", "trait_not_in_scope")),
-        "{list}"
-    );
     // Lints that became errors are gone from the list.
     for name in [
         "capture_field_write",
@@ -736,6 +732,8 @@ fn semantic_warnings_are_in_warnings() {
         "implicit_core_fn",
         "discarded_ref_write",
         "fstring_g_precision",
+        "trait_not_in_scope",
+        "unqualified_meta",
     ] {
         assert!(!list.contains(name), "{list}");
     }
@@ -4097,7 +4095,8 @@ fn overflow_checks_on_in_every_profile() {
 fn dependency_trait_is_not_the_current_package() {
     let Some(env) = setup() else { return };
     let dir = scratch("clash");
-    // Spec 4.9.6: a dependency's trait ranks with core's unless `use`d.
+    // Spec 3.5.2: a dependency's trait is not in scope unless `use`d;
+    // `use`d, it beats core's.
     fs::create_dir_all(dir.join("dz")).unwrap();
     put(
         dir.join("dz/src/lib.rok"),
@@ -4112,12 +4111,8 @@ fn dependency_trait_is_not_the_current_package() {
     )
     .unwrap();
     let out = rokc(Some(&env), &dir, &["run", "app", "--extern", "dz=dz"]);
-    assert_exit(&out, 1);
-    assert!(
-        text(&out.stderr).contains("is ambiguous"),
-        "{}",
-        text(&out.stderr)
-    );
+    assert_exit(&out, 0);
+    assert_eq!(text(&out.stdout), "0\n");
     put(
         dir.join("app/src/main.rok"),
         "use dz::DepZero;\nprintln(f\"{i32::zero()}\");\n",

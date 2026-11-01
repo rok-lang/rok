@@ -592,6 +592,7 @@ fn path(names: &[&str], span: Span) -> AstPath {
             })
             .collect(),
         span,
+        origin: None,
     }
 }
 

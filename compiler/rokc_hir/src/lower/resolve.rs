@@ -620,6 +620,12 @@ pub(super) fn resolve_ty_with_structs(
     let rec = |t: &rokc_ast::Ty| resolve_ty_with_structs(t, defs, params, sc);
     match &ty.kind {
         AstTyKind::Path(p) => {
+            // From the module the path comes from (spec 6.9.9); `rec`
+            // keeps the outer one for its arguments.
+            let sc = Scope {
+                module: p.origin.as_deref().unwrap_or(sc.module),
+                ..sc
+            };
             if let ([seg], Some(params)) = (p.segments.as_slice(), params) {
                 if let Some(t) = params.get(&seg.name).filter(|_| seg.generics.is_empty()) {
                     return t.clone();
@@ -792,6 +798,7 @@ pub(super) fn trait_ref(
     let segs: Vec<&str> = p.segments.iter().map(|s| s.name.as_str()).collect();
     let generics = p.segments.last().map_or(&[][..], |s| s.generics.as_slice());
     let (args, binds) = trait_args(generics, rec);
+    let module = p.origin.as_deref().unwrap_or(module);
     TraitRef::new(names.trait_key(&segs, module, at), args, binds)
 }
 
