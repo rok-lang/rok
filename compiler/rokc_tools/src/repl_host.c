@@ -298,8 +298,8 @@ static void define(const char *name, void *addr) {
 }
 
 // Executable memory: Apple arm64 flips a `MAP_JIT` mapping per thread,
-// elsewhere RWX. `map_near`: `size` bytes at `at` if free, else anywhere;
-// NULL: none.
+// elsewhere RWX. `map_near`: `size` bytes at `at`, else the first free
+// place above it within 1 GiB, else anywhere; NULL: none.
 #if defined(_WIN32)
 #define jit_writable(on) ((void)0)
 #define flush_code(p, n) FlushInstructionCache(GetCurrentProcess(), p, n)
@@ -342,10 +342,28 @@ static void flush_code(char *p, size_t n) {
 }
 #endif
 
+#if defined(__linux__) && !defined(MAP_FIXED_NOREPLACE)
+#define MAP_FIXED_NOREPLACE 0x100000
+#endif
+
 static char *map_near(char *at, size_t size, int code) {
+    int prot = PROT_READ | PROT_WRITE | (code ? PROT_EXEC : 0);
+    int flags = MAP_PRIVATE | MAP_ANON | (code ? MAP_CODE : 0);
     at = (char *)(((uintptr_t)at + 0x3fff) & ~(uintptr_t)0x3fff);
-    char *p = mmap(at, size, PROT_READ | PROT_WRITE | (code ? PROT_EXEC : 0),
-                   MAP_PRIVATE | MAP_ANON | (code ? MAP_CODE : 0), -1, 0);
+#if defined(__linux__)
+    // Linux drops a hint whose range is taken (the heap, say) and maps
+    // at the top of the address space, out of `adrp` reach of the host:
+    // the first free 64 KiB boundary from `at` on, within 1 GiB.
+    for (char *a = at; a < at + ((size_t)1 << 30); a = (char *)(((uintptr_t)a + 0x10000) & ~(uintptr_t)0xffff)) {
+        char *p = mmap(a, size, prot, flags | MAP_FIXED_NOREPLACE, -1, 0);
+        if (p == a) return p;
+        // Before 4.17 the flag is ignored: a hint not taken.
+        if (p != MAP_FAILED) munmap(p, size);
+        else if (errno != EEXIST) break;
+    }
+#endif
+    // Darwin takes a hint as where to start looking.
+    char *p = mmap(at, size, prot, flags, -1, 0);
     return p == MAP_FAILED ? NULL : p;
 }
 #endif
