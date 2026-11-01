@@ -1041,7 +1041,7 @@ pub(super) fn decl_ret(ctx: &LowerCtx<'_>, id: FunctionId, declared: HirTy) -> H
     with_ok(declared, decl_ret_ok(ctx.env, id))
 }
 
-fn has_unknown(t: &HirTy) -> bool {
+pub(super) fn has_unknown(t: &HirTy) -> bool {
     match t {
         HirTy::Unknown => true,
         HirTy::Sum(ts) | HirTy::Tuple(ts) => ts.iter().any(has_unknown),

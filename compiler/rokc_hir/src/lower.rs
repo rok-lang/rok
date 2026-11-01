@@ -4809,9 +4809,14 @@ impl<'a> LowerCtx<'a> {
             let pkg = module_display(package_of(&def_module));
             let help = resolve::own_library_privacy(&def_module).unwrap_or_else(|| {
                 if is_toolchain_module(&def_module) {
-                    format!("it is a helper of `{pkg}`, not part of its API: use a `pub` item instead")
+                    format!(
+                        "it is a helper of `{pkg}`, not part of its API: use a `pub` item instead"
+                    )
                 } else {
-                    format!("use a `pub` item of `{pkg}`, or make `{}` `pub` there", leaf_name(full))
+                    format!(
+                        "use a `pub` item of `{pkg}`, or make `{}` `pub` there",
+                        leaf_name(full)
+                    )
                 }
             });
             self.help_last(Some(help));

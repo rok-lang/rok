@@ -7695,7 +7695,7 @@ fn any_method_generics(
 }
 
 /// `Self::Item` → `Item` (the associated type, bound by name).
-fn strip_self_assoc(ty: &mut Ty) {
+pub(super) fn strip_self_assoc(ty: &mut Ty) {
     match &mut ty.kind {
         AstTyKind::Path(p) => {
             if p.segments.len() >= 2 && p.segments[0].name == "Self" {

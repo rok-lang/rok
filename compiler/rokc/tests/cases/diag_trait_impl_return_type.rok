@@ -1,0 +1,35 @@
+// spec: §2.9.1
+// expect-error: diag_trait_impl_return_type.rok:23:5: `f` does not match its declaration in trait `T`: it returns `str` where the trait's returns `i32`
+// expect-error: help: write `-> i32`, the trait's `fn f(self) -> i32`
+// expect-error: diag_trait_impl_return_type.rok:26:5: `k` does not match its declaration in trait `G`: it returns `i32` where the trait's returns `i64`
+// expect-error: help: write `-> i64`, the trait's `fn k(self) -> X`
+// expect-error: diag_trait_impl_return_type.rok:30:5: `m` does not match its declaration in trait `A`: it returns `str` where the trait's returns `i64`
+// expect-error: help: write `-> i64`, the trait's `fn m(self) -> Self::Out`
+
+// An impl method returns the type its trait declares, with the trait's
+// parameters and associated types filled in by the impl; `Self` and the
+// impl's own names for them are the same type.
+trait T { fn f(self) -> i32; }
+trait G<X> { fn k(self) -> X; }
+trait A {
+    type Out;
+    fn m(self) -> Self::Out;
+    fn n(self) -> Self::Out | none;
+    fn me(self) -> Self;
+}
+
+struct S {}
+impl T for S {
+    fn f(self) -> str { "x" }
+}
+impl G<i64> for S {
+    fn k(self) -> i32 { 1 }
+}
+impl A for S {
+    type Out = i64;
+    fn m(self) -> str { "y" }
+    fn n(self) -> Out? { none }
+    fn me(self) -> S { self }
+}
+
+fn main() {}
