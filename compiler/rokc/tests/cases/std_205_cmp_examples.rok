@@ -61,7 +61,7 @@ fn main() {
     let s1 = {1, 2};
     let s2 = {2, 1};
     println(f"{[1, 2] < [1, 3]} {[1, 2] < [1, 2, 0]} {(1, "b") > (1, "a")} {d1 == d2} {s1 == s2}");
-    println(f"{[1, 2, 3] == [1, 2, 3]} {xs[2] is none} {xs[0] == 1} {[2, 0].cmp([1, 9]):?}");
+    println(f"{[1, 2, 3] == [1, 2, 3]} {xs[0] is none} {xs[1] == 1} {[2, 0].cmp([1, 9]):?}");
     let vs = [
         Version { major: 2, minor: 0, patch: 0 },
         Version { major: 1, minor: 10, patch: 0 },

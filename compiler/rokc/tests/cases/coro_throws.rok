@@ -49,7 +49,7 @@ fn main() {
         0
     } catch e: BadInput { e.at };
     println(f"{out} {caught}");
-    match try? g.next() { none => println("done after error"), _ => println("bad") }
+    match (try? g.next()) ?? none { none => println("done after error"), _ => println("bad") }
     println(f"{task::block_on(safe([1, 2, 3]))} {task::block_on(safe([1, -7, 3]))}");
     let r = try task::try_block_on(sum_parsed([5, 6])) catch e: BadInput { 0 };
     println(f"{r}");

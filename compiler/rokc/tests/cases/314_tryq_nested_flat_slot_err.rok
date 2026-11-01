@@ -1,0 +1,17 @@
+// A flat optional slot does not take `try?` over an optional: the layers
+// stay apart.
+// expect-error: `let r` expects `i32 | none`, found `(i32 | none)?`
+// expect-error: `try?` keeps a thrown error apart from a returned `none`: write `(try? find(0)) ?? none`
+
+fn find(x: i32) throws (i32) -> i32 | none {
+    if x < 0 { throw x; }
+    if x == 0 { return none; }
+    x
+}
+
+fn main() -> i32 {
+    let r: i32 | none = try? find(0);
+    0
+}
+
+// spec: 003.14-error-control-flow

@@ -1,0 +1,38 @@
+// expect-exit: 0
+// expect-stdout:
+// error: true false
+// absent: false true
+// value: false false
+// coalesce: none 7 3
+// peel: 0 -1 3
+
+// `try?` on a call returning `T | none` gives the nested `(T | none)?`:
+// a thrown error and a returned `none` stay apart (spec 3.14.3, 2.6.4).
+fn find(x: i32) throws (i32) -> i32 | none {
+    if x < 0 { throw x; }
+    if x == 0 { return none; }
+    x
+}
+
+fn peel(x: i32) -> i32 {
+    let r: (i32 | none)? = try? find(x);
+    let inner = r ?? -1;
+    match inner {
+        n: i32 => n,
+        none => 0,
+    }
+}
+
+fn main() -> i32 {
+    let e = try? find(-1);
+    let a = try? find(0);
+    let v = try? find(3);
+    println(f"error: {e is none} {(e ?? 1) is none}");
+    println(f"absent: {a is none} {(a ?? 1) is none}");
+    println(f"value: {v is none} {(v ?? 1) is none}");
+    println(f"coalesce: {(try? find(0)) ?? 7:?} {(try? find(-1)) ?? 7:?} {(try? find(3)) ?? 7:?}");
+    println(f"peel: {peel(0)} {peel(-1)} {peel(3)}");
+    0
+}
+
+// spec: 003.14-error-control-flow

@@ -2284,6 +2284,19 @@ fn sig_text<'n>(callee: &str, params: impl IntoIterator<Item = (&'n str, String)
 fn mismatch_help(ctx: &LowerCtx<'_>, slot: &HirTy, v: &HirExpr) {
     let src = suggest::short_src(ctx, v.span);
     if suggest::some_part(&v.ty).as_ref() == Some(slot) {
+        // `try?` over an optional nests (spec 3.14.3).
+        if let Some(s) = src.filter(|s| {
+            s.starts_with("try?") && matches!(slot, HirTy::Sum(ts) if ts.iter().any(HirTy::is_none))
+        }) {
+            let fix = format!("({s}) ?? none");
+            ctx.fix_last(v.span, fix.clone(), format!("use `{fix}`"));
+            ctx.help_last(Some(format!(
+                "`try?` keeps a thrown error apart from a returned `none`: write `{fix}` to \
+                 merge them, or annotate `{}`",
+                ctx.ty_name(&v.ty)
+            )));
+            return;
+        }
         let name = src.unwrap_or("v");
         let help = match (src, suggest::default_lit(slot)) {
             (Some(s), Some(d)) => {
@@ -3735,6 +3748,10 @@ impl<'a> LowerCtx<'a> {
                 // `T | none` defaults to `none`.
                 if trait_key == DEFAULT_TRAIT {
                     return vs.iter().any(HirTy::is_none);
+                }
+                // No order across two value terms (spec 2.6.4).
+                if expr::is_order_trait(self, trait_key) && expr::sum_value_terms(ty) > 1 {
+                    return false;
                 }
                 if expr::is_sum_trait(self, trait_key) {
                     return vs

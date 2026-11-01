@@ -7,12 +7,13 @@
 // nan: false false
 // smallest: (0, 9)
 // derive: true
-// sum: 3 "x" 1 none 5
-// clamp: 2 5 4
+// sum: none 1 none 5
+// clamp: 2 2 4
 
 // Tuples are `PartialOrd` / `Ord` lexicographically (stdlib 2.5.7), with
 // the operators (`<`, `==`, ..) and `Ord`'s `min` / `max` / `clamp`;
-// sums (compiler-dispatched `Ord`) get `min` / `max` / `clamp` too.
+// `T | none` (compiler-dispatched `Ord`, `none` first) gets `min` / `max` /
+// `clamp` too.
 fn name(o: Ordering) -> str {
     match o { Ordering::Less => "Less", Ordering::Equal => "Equal", Ordering::Greater => "Greater" }
 }
@@ -39,12 +40,10 @@ fn main() -> i32 {
     println(f"smallest: {smallest(ps):?}");
     println(f"derive: {Rec { k: (1, "a") } < Rec { k: (1, "b") }}");
 
-    let x: i32 | str = 3;
-    let s: i32 | str = "x";
     let n: i32 | none = none;
     let one: i32 | none = 1;
     let five: i32 | none = 5;
-    println(f"sum: {x.min(s):?} {x.max(s):?} {n.min(one):?} {n.max(one):?} {five.min(n):?}");
+    println(f"sum: {n.min(one):?} {n.max(one):?} {five.min(n):?} {five.max(one):?}");
     let lo: i32 | none = 2;
     let hi: i32 | none = 5;
     let v: i32 | none = 4;

@@ -1,0 +1,24 @@
+// expect-exit: 0
+// expect-stdout:
+// sorted: [none, 1, 3, none]
+// iter: none 3
+// cmp: true false true
+
+// In `T | none`, `none` sorts first (spec 2.6.4, stdlib 2.5.7).
+fn main() -> i32 {
+    let xs: List<i32 | none> = [3, none, 1];
+    xs.sort();
+    xs.push(none);
+    println(f"sorted: {xs:?}");
+    let ys: List<i32 | none> = [3, none, 1];
+    let lo = ys.iter().min();
+    let hi = ys.iter().max();
+    println(f"iter: {lo:?} {hi:?}");
+    let n: i32 | none = none;
+    let k: i32 | none = -5;
+    println(f"cmp: {n < k} {k <= n} {n.min(k) is none}");
+    0
+}
+
+// spec: §2.6.4
+// spec: std §2.5.7
