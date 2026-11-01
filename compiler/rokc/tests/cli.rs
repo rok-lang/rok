@@ -1722,7 +1722,7 @@ fn dict_seed_changes_placement_not_output() {
          \x20   d.remove(\"k3\");\n\
          \x20   d[\"k3\"] = 3;\n\
          \x20   println(f\"{d:?} {C[\"r\"]} {C.contains_key(\"q\")}\");\n\
-         \x20   println(rok::std::rokon::to_string(d));\n\
+         \x20   println(try! rok::std::rokon::to_str(d));\n\
          \x20   println(f\"{unsafe { rok_hash_seed() }}\");\n\
          }\n",
     )

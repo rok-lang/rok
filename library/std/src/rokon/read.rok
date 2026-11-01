@@ -384,6 +384,16 @@ impl Reader {
         if self.locating && self.hit_key == 0 && self.path == self.want { self.hit_key = at + 1; }
     }
 
+    /// A float literal; ROKON floats are `f64`, so one past its range
+    /// (`1e999`) is an error, as in the toolchain's reader.
+    fn float_lit(self, t: Tok) throws (RokonError) -> float {
+        let x = Float::from_literal(t.text);
+        if !x.to_f64().is_finite() {
+            throw self.err(t.at, f"float `{t.text}` is out of range (ROKON floats are f64, up to about 1.8e308)");
+        }
+        x
+    }
+
     fn value(ref self) throws (RokonError) -> Value {
         let t = self.peek();
         if self.locating && self.hit_val == 0 && self.path == self.want { self.hit_val = t.at + 1; }
@@ -394,7 +404,7 @@ impl Reader {
         }
         if t.kind == K_FLOAT {
             self.i += 1;
-            return Value::Float(Float::from_literal(t.text));
+            return Value::Float(try self.float_lit(t));
         }
         if t.kind == K_STR {
             self.i += 1;
@@ -413,7 +423,7 @@ impl Reader {
             }
             if n.kind == K_FLOAT {
                 self.i += 1;
-                return Value::Float(-Float::from_literal(n.text));
+                return Value::Float(-(try self.float_lit(n)));
             }
             throw self.err(t.at, "unary `-` applies only to a number literal");
         }
@@ -490,7 +500,7 @@ impl Reader {
         if self.at_punct("(") {
             self.i += 1;
             let args: List<Value> = List::new();
-            let named: OrderedDict<str, Value> = OrderedDict::new();
+            let named: Dict<str, Value> = Dict::new();
             while !self.at_punct(")") {
                 if self.peek().kind == K_IDENT && self.peek2().kind == K_PUNCT && self.peek2().text == ":" {
                     try self.field(named);
@@ -505,13 +515,13 @@ impl Reader {
             self.i += 1;
             return Value::Variant { path: path, args: args, named: named };
         }
-        if segs > 1 { return Value::Variant { path: path, args: List::new(), named: OrderedDict::new() }; }
+        if segs > 1 { return Value::Variant { path: path, args: List::new(), named: Dict::new() }; }
         throw self.err(t.at, f"bare identifier `{path}` is not allowed in ROKON (strings are quoted, variants are written `Enum::{path}`)");
     }
 
     /// `name: value` fields up to `}` (consumed).
-    fn fields(ref self) throws (RokonError) -> OrderedDict<str, Value> {
-        let out: OrderedDict<str, Value> = OrderedDict::new();
+    fn fields(ref self) throws (RokonError) -> Dict<str, Value> {
+        let out: Dict<str, Value> = Dict::new();
         while !self.at_punct("}") {
             try self.field(out);
             if !self.at_punct("}") { try self.expect(",", "`,` or `}`"); }
@@ -520,7 +530,7 @@ impl Reader {
         out
     }
 
-    fn field(ref self, out: OrderedDict<str, Value>) throws (RokonError) {
+    fn field(ref self, out: Dict<str, Value>) throws (RokonError) {
         let t = self.peek();
         if t.kind != K_IDENT { throw self.unexpected(t, "a field name"); }
         if out.contains_key(t.text) { throw self.err(t.at, f"field `{t.text}` is given twice"); }
@@ -540,7 +550,7 @@ impl Reader {
         if self.peek().kind == K_IDENT && self.peek2().kind == K_PUNCT && self.peek2().text == ":" {
             return Value::Struct { name: none, fields: try self.fields() };
         }
-        let out: OrderedDict<Value, Value> = OrderedDict::new();
+        let out: Dict<Value, Value> = Dict::new();
         while !self.at_punct("}") {
             let kt = self.peek();
             let old = self.enter("#key");
@@ -553,8 +563,8 @@ impl Reader {
                 throw self.unexpected(self.peek(), "`:` after a dict key");
             }
             self.i += 1;
-            if out.contains_key(k) { throw self.err(kt.at, f"duplicate key `{write::loose(k)}`"); }
-            let seg = if self.locating { "[" + write::loose(k) + "]" } else { "" };
+            if out.contains_key(k) { throw self.err(kt.at, f"duplicate key `{write::flat(k)}`"); }
+            let seg = if self.locating { "[" + write::flat(k) + "]" } else { "" };
             let old2 = self.enter(seg);
             self.mark_key(kt.at);
             out.insert(k, try self.value());

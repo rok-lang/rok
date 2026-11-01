@@ -56,14 +56,14 @@
 // { "k": 1, (1, true): none }
 
 // Spec 3.9.1: every ROKON value kind, read with `rokon::parse` and
-// written back in canonical form (`Value::to_string`).
+// written back in canonical form (`Value::to_str`).
 
 use rok::std::rokon;
 use rok::std::rokon::Value;
 
 fn show(s: str) {
     let v = try rokon::parse(s) catch e { println(f"error: {e}"); return; };
-    println(f"{v.kind()}: {v}");
+    println(f"{v.kind_name()}: {v}");
 }
 
 fn main() {
@@ -128,13 +128,13 @@ fn main() {
     let z = Value::Float(Float::from_f64(0.0));
     let nz = Value::Float(Float::from_f64(-0.0));
     println(f"floats: {nan == nan} {nan.hash() == nan.hash()} {z == nz} {Value::Int(Int::from(1)) == Value::Float(Float::from_f64(1.0))}");
-    let e = Value::Struct { name: none, fields: collections::OrderedDict::new() };
-    let ed = Value::Dict(collections::OrderedDict::new());
+    let e = Value::Struct { name: none, fields: Dict::new() };
+    let ed = Value::Dict(Dict::new());
     println(f"empty: {e == ed} {e.hash() == ed.hash()}");
-    let d: collections::OrderedDict<Value, Value> = collections::OrderedDict::new();
+    let d: Dict<Value, Value> = Dict::new();
     d.insert(Value::Str("k"), Value::Int(1));
     d.insert(Value::Tuple([Value::Int(1), Value::Bool(true)]), Value::None);
-    println(Value::Dict(d).to_string());
+    println(try! Value::Dict(d).to_str());
 }
 
 // spec: std 309-rokon

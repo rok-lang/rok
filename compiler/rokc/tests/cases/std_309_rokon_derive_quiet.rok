@@ -18,7 +18,7 @@ struct Config {
 
 fn main() {
     let c = Config { name: "a", limits: {"x": 1, "y": 2}, tags: ["t"] };
-    let text = rokon::to_string(c);
+    let text = try! rokon::to_str(c);
     let back: Config = try! rokon::from_str(text);
     println(f"{back:?}");
     println(f"{back == c}");
