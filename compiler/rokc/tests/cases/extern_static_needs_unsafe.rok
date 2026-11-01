@@ -1,0 +1,23 @@
+// only-os: macos linux
+// (POSIX optind)
+// expect-error: this writes extern static `optind` outside `unsafe`: Rok cannot check a C global
+// expect-error: this reads extern static `optind` outside `unsafe`
+// expect-error: help: write `unsafe { optind = 6; }`
+// expect-error: help: write `unsafe { optind += 1; }`
+// expect-error: help: write `unsafe { optind }`
+// spec: §5.9.3
+
+// An extern static is a C global Rok cannot check: reading or writing it
+// needs `unsafe`. `unsafe` blocks, `unsafe fn` bodies and `addr_of` are
+// fine (extern_static_unsafe_ok).
+
+extern "C" {
+    static mut optind: i32;
+}
+
+fn main() {
+    optind = 6;
+    optind += 1;
+    let c = optind;
+    println(f"{c}");
+}

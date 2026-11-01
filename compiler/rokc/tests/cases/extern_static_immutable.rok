@@ -4,7 +4,7 @@ extern "C" {
     static optind: i32;
 }
 fn main() -> i32 {
-    optind = 3;
+    unsafe { optind = 3; }
     return 0;
 }
 

@@ -1,0 +1,19 @@
+// expect-error: parameter `xs` of extern function `takes_list` has type `List<i64>`, which C cannot hold
+// expect-error: the result of extern function `gives_dict` has type `Dict<str, i64>`
+// expect-error: extern static `table` has type `List<i32>`
+// expect-error: parameter `x` of `extern "C" fn` `callback` has type `List<i64>`
+// expect-error: help: use a primitive, a `CPtr<T>` (`rok::bare::ptr`) and a length
+// spec: §5.9.4
+
+// A GC type crossing into C is an error: the collector may move or free
+// it while C holds it.
+
+extern "C" {
+    fn takes_list(xs: List<i64>) -> i32;
+    fn gives_dict() -> Dict<str, i64>;
+    static table: List<i32>;
+}
+
+extern "C" fn callback(x: List<i64>) -> i64 { x.len() as i64 }
+
+fn main() {}

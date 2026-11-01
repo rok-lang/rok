@@ -3,15 +3,16 @@
 // (POSIX environ / optind)
 // expect-exit: 0
 // expect-stdout: true 7
-// expect-warning: this writes extern static `optind` outside `unsafe`
-// expect-warning: this reads extern static `environ` outside `unsafe`
 
 // An extern `static` declared in a module has its type resolved there:
 // `sys` imports `CPtr` for `environ`'s type and uses it nowhere else.
 mod sys;
 
 fn main() {
-    let set = !environ.is_null();
-    optind = 6;
-    println(f"{set} {optind + 1}");
+    let set = unsafe { !environ.is_null() };
+    let next = unsafe {
+        optind = 6;
+        optind + 1
+    };
+    println(f"{set} {next}");
 }

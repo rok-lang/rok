@@ -8037,8 +8037,7 @@ fn template_marked(ctx: &LowerCtx<'_>, def: &FnDef, at: rokc_diagnostic::Span) {
 }
 
 /// Spec 5.9.3: an extern static is a C global Rok cannot check; reading
-/// or writing one outside `unsafe` warns until 0.2.0 makes it an error.
-/// Only the built package's uses warn.
+/// or writing one needs `unsafe`.
 fn extern_static_use(ctx: &LowerCtx<'_>, full: &str, write: bool, at: rokc_diagnostic::Span) {
     let name = leaf_name(full);
     // `rok_*` and `__rok_*` (the REPL's cells) are the toolchain's own.
@@ -8046,7 +8045,6 @@ fn extern_static_use(ctx: &LowerCtx<'_>, full: &str, write: bool, at: rokc_diagn
         || at.is_dummy()
         || name.starts_with("rok_")
         || name.starts_with("__rok_")
-        || !ctx.marks_apply()
         || !ctx.env.is_extern_static(full)
     {
         return;
@@ -8064,12 +8062,19 @@ fn extern_static_use(ctx: &LowerCtx<'_>, full: &str, write: bool, at: rokc_diagn
         (true, Some(t)) => ("writes", format!("`unsafe {{ {t}; }}`")),
         (true, None) => ("writes", format!("`unsafe {{ {name} = ..; }}`")),
     };
-    ctx.emit_lint(
-        "extern_static_unsafe",
+    ctx.emit_error_at(
+        rokc_diagnostic::ErrorKind::Type,
         at,
         format!("this {what} extern static `{name}` outside `unsafe`: Rok cannot check a C global"),
-        format!("write {fix}; 0.2.0 makes this an error (spec 5.9.3)"),
     );
+    ctx.help_last(Some(format!("write {fix} (spec 5.9.3)")));
+    if !write && ctx.src(at) == Some(name) {
+        ctx.fix_last(
+            at,
+            format!("unsafe {{ {name} }}"),
+            "wrap the read in `unsafe`",
+        );
+    }
 }
 
 /// Spec 4.15.3: an `unsafe fn` (or C function) is callable only in an

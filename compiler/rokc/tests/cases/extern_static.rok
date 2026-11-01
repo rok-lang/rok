@@ -3,16 +3,20 @@
 // expect-exit: 0
 // expect-stdout: true 7
 // Spec 5.9.3: `extern "C" { static .. }` names a C global; `static mut`
-// can be written. `environ` and `optind` are libc globals.
+// can be written, both inside `unsafe`. `environ` and `optind` are libc
+// globals.
 extern "C" {
     static environ: usize;
     static mut optind: i32;
 }
 
 fn main() {
-    let set = environ != 0usize;
-    optind = 6;
-    println(f"{set} {optind + 1}");
+    let set = unsafe { environ != 0usize };
+    let next = unsafe {
+        optind = 6;
+        optind + 1
+    };
+    println(f"{set} {next}");
 }
 
 // spec: 005.09-extern-block

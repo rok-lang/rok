@@ -159,14 +159,6 @@ pub const LINTS: &[Lint] = &[
         "a `ThreadLocal::get()` value used after an `await`: the task may resume on another thread",
     ),
     warn_since(
-        "extern_static_unsafe",
-        "an extern static read or written outside `unsafe`",
-    ),
-    warn_since(
-        "improper_ctypes",
-        "a GC type (`List`, `Dict`, a closure, a sum, ..) in an extern declaration or an `extern \"C\" fn`",
-    ),
-    warn_since(
         "unqualified_meta",
         "another package's macro, derive or attribute used by its bare name: write `dep::name!` or `use dep::name!;`",
     ),
@@ -197,6 +189,8 @@ pub const REMOVED_LINTS: &[&str] = &[
     "unclosed_resource",
     "unclosed_sender",
     "using_twice",
+    "extern_static_unsafe",
+    "improper_ctypes",
 ];
 
 /// A lint added in 0.1.6.
