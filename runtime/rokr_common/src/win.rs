@@ -50,6 +50,7 @@ pub const ERROR_FILENAME_EXCED_RANGE: i32 = 206;
 pub const ERROR_NO_DATA: i32 = 232;
 pub const ERROR_DIRECTORY: i32 = 267;
 pub const ERROR_DIRECTORY_NOT_SUPPORTED: i32 = 336;
+pub const ERROR_STOPPED_ON_SYMLINK: i32 = 681;
 pub const ERROR_OPERATION_ABORTED: i32 = 995;
 pub const ERROR_IO_PENDING: i32 = 997;
 pub const PIPE_ACCESS_INBOUND: DWORD = 0x1;
@@ -173,6 +174,16 @@ pub struct FILE_STANDARD_INFO {
 }
 
 #[repr(C)]
+pub struct CREATEFILE2_EXTENDED_PARAMETERS {
+    pub dwSize: DWORD,
+    pub dwFileAttributes: DWORD,
+    pub dwFileFlags: DWORD,
+    pub dwSecurityQosFlags: DWORD,
+    pub lpSecurityAttributes: *mut SECURITY_ATTRIBUTES,
+    pub hTemplateFile: HANDLE,
+}
+
+#[repr(C)]
 pub struct FILE_ATTRIBUTE_TAG_INFO {
     pub FileAttributes: DWORD,
     pub ReparseTag: DWORD,
@@ -211,6 +222,7 @@ pub const TRUNCATE_EXISTING: DWORD = 5;
 pub const FILE_FLAG_BACKUP_SEMANTICS: DWORD = 0x0200_0000;
 pub const FILE_FLAG_OPEN_REPARSE_POINT: DWORD = 0x0020_0000;
 pub const FILE_FLAG_OVERLAPPED: DWORD = 0x4000_0000;
+pub const SECURITY_SQOS_PRESENT: DWORD = 0x0010_0000;
 
 pub const FILE_TYPE_CHAR: DWORD = 2;
 
@@ -476,6 +488,13 @@ unsafe extern "system" {
         disposition: DWORD,
         flags: DWORD,
         template: HANDLE,
+    ) -> HANDLE;
+    pub fn CreateFile2(
+        name: *const u16,
+        access: DWORD,
+        share: DWORD,
+        disposition: DWORD,
+        ext: *const CREATEFILE2_EXTENDED_PARAMETERS,
     ) -> HANDLE;
     pub fn SetFilePointerEx(h: HANDLE, dist: i64, new: *mut i64, method: DWORD) -> BOOL;
     pub fn FlushFileBuffers(h: HANDLE) -> BOOL;

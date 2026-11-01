@@ -110,7 +110,9 @@ extern "rok" {
     fn rok_stdin_read(buf: GcBuf<u8>, off: usize, len: usize, delim: i32) -> isize;
 
     // Files and directories.
-    fn rok_os_open(dir: i32, path: str, flags: i32, mode: u32) -> i32;
+    fn rok_os_open(dir: i32, path: str, how: GcBuf<u32>) -> i32;
+    fn rok_os_openat_raw(dir: i32, path: str, oflag: i32, mode: u32) -> i32;
+    fn rok_os_create_file2(dir: i32, path: str, params: GcBuf<u32>) -> i32;
     fn rok_os_close(fd: i32) -> i32;
     fn rok_os_read(fd: i32, buf: GcBuf<u8>, off: usize, len: usize) -> isize;
     fn rok_os_write(fd: i32, buf: GcBuf<u8>, off: usize, len: usize) -> isize;
@@ -119,6 +121,7 @@ extern "rok" {
     fn rok_os_lseek(fd: i32, off: i64, whence: i32) -> i64;
     fn rok_os_dup(fd: i32) -> i32;
     fn rok_os_fchmod(fd: i32, mode: u32) -> i32;
+    fn rok_os_chmod(dir: i32, path: str, mode: u32) -> i32;
     fn rok_os_flock(fd: i32, op: i32) -> i32;
     fn rok_os_mmap(fd: i32, len: usize, offset: u64) -> i64;
     fn rok_os_munmap(addr: usize, len: usize) -> i32;
