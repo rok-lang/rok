@@ -1849,6 +1849,9 @@ struct RefOut {
     ret: HirTy,
     /// `(parameter index, type)` of each `ref` parameter.
     refs: Vec<(usize, HirTy)>,
+    /// An `async` method's `ref self`: `refs` hold the parameters' cells
+    /// (`GcBuf<T>`), read back once the future completes (`ref_unpack`).
+    deferred: bool,
 }
 
 /// A projection being resolved: base type, associated name, trait filter.
@@ -2903,6 +2906,13 @@ struct LowerCtx<'a> {
     /// The `ref` parameters' locals and types (`ref self` included);
     /// every return also hands their values back (copy-out).
     ref_params: Vec<(LocalId, HirTy)>,
+    /// `ref_params` are cells handed back as they are (an `async` method's
+    /// `ref self`, `mono::defers_refs`).
+    ref_cells: bool,
+    /// `await e`: the span of `e`, whose deferred `ref` write-back
+    /// (`mono::ref_unpack`) waits for the future, and that write-back.
+    awaited: Option<rokc_diagnostic::Span>,
+    await_write_back: Vec<HirStmt>,
     /// Bindings some closure captures as `[ref x]` (spec 4.6.2), by name and
     /// span; they live in a one-element `GcBuf` cell.
     ref_captured: std::collections::HashSet<(String, rokc_diagnostic::Span)>,
@@ -3129,6 +3139,9 @@ impl<'a> LowerCtx<'a> {
             implicit_main: false,
             harness_main: false,
             ref_params: Vec::new(),
+            ref_cells: false,
+            awaited: None,
+            await_write_back: Vec::new(),
             ref_captured: std::collections::HashSet::new(),
             pending_cells: Vec::new(),
             pending_resums: Vec::new(),

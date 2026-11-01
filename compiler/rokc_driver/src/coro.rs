@@ -74,8 +74,11 @@ fn rewrite_fn(f: &mut FnDef, root: bool, diags: &mut Vec<RokDiagnostic>) {
     // A trait method without a default body only changes its signature.
     let body = f.body.take();
     let span = f.span;
-    if f.params.iter().any(|p| p.by_ref) {
-        diags.push(RokDiagnostic::error(
+    // An `async` method's `ref self` is written back when its future
+    // completes (HIR `ref_unpack`); nothing else can wait for that.
+    let deferred = |p: &rokc_ast::Param| p.name == "self" && f.is_async && !f.is_generator;
+    if f.params.iter().any(|p| p.by_ref && !deferred(p)) {
+        let mut d = RokDiagnostic::error(
             ErrorKind::Type,
             span,
             format!(
@@ -83,7 +86,14 @@ fn rewrite_fn(f: &mut FnDef, root: bool, diags: &mut Vec<RokDiagnostic>) {
                  its body runs after the call returns",
                 f.name
             ),
-        ));
+        );
+        d = d.with_help(if f.is_async && !f.is_generator {
+            "only an `async` method's `ref self` is written back (when its future \
+             completes); return the new value instead"
+        } else {
+            "return the new value instead, or take the value and yield what changed"
+        });
+        diags.push(d);
     }
     let unit = Ty {
         kind: TyKind::Tuple(Vec::new()),

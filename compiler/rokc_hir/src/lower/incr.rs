@@ -369,7 +369,11 @@ codec_struct!(FnSig {
     param_refs,
     variadic
 });
-codec_struct!(RefOut { ret, refs });
+codec_struct!(RefOut {
+    ret,
+    refs,
+    deferred
+});
 codec_struct!(AnyDispatch {
     id,
     recv_ty,
