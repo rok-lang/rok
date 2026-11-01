@@ -1275,6 +1275,19 @@ fn lower_fn_with(
             prelude.push(ctx.cell_let(&p.name, p.ty.clone(), init));
         }
     }
+    ctx.owe_params = params
+        .iter()
+        .zip(&fn_def.params)
+        .filter(|(p, ap)| {
+            // An `async` / generator body runs in its coroutine, which
+            // owns the captured parameters instead.
+            !fn_def.is_async
+                && !fn_def.is_generator
+                && !p.by_ref
+                && !ctx.ref_captured.contains(&(p.name.clone(), ap.span))
+        })
+        .map(|(p, _)| (p.local, p.ty.clone()))
+        .collect();
     // A captured `ref` parameter hands back its cell, where the writes go.
     ctx.ref_params = params
         .iter()
@@ -1735,7 +1748,20 @@ pub(super) fn lower_fn_body(ctx: &mut LowerCtx<'_>, b: &Block, fn_name: &str) ->
     if let Some(t) = &b.trailing {
         super::expr::guard_sink(ctx, t);
     }
-    let block = lower_block(ctx, b);
+    // Parameters the body owns are released on its exits.
+    ctx.push_scope();
+    let owed = ctx.err_frames.len();
+    let mut flags = Vec::new();
+    for (l, ty) in std::mem::take(&mut ctx.owe_params) {
+        flags.extend(super::affine::owe(ctx, l, &ty));
+    }
+    let mut block = lower_block(ctx, b);
+    if !flags.is_empty() {
+        flags.append(&mut block.stmts);
+        block.stmts = flags;
+        super::affine::settle(ctx, owed, &mut block.stmts, &mut block.trailing, b.span);
+    }
+    ctx.pop_scope();
     ctx.pop_expected();
     let mut block = check_fn_body(ctx, block, fn_name);
     if ctx.uncaught_in_main {

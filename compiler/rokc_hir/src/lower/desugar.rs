@@ -977,7 +977,14 @@ pub(super) fn lower_for_iter(
     let it_ty = it_h.ty.clone();
     let close = owned && is_generator(ctx, &it_ty);
     let name = close.then(|| format!("#for_gen{}", ctx.locals.len()));
-    let it = ctx.declare(name.clone(), it_ty.clone());
+    // `#for`: the iterator a loop steps (a view of a resource it is given).
+    let it = ctx.declare(
+        Some(
+            name.clone()
+                .unwrap_or_else(|| format!("#for{}", ctx.locals.len())),
+        ),
+        it_ty.clone(),
+    );
     out.push(HirStmt::Let {
         local: it,
         init: it_h,

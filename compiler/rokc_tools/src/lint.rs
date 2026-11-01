@@ -109,10 +109,6 @@ pub const LINTS: &[Lint] = &[
         "use of a `#[deprecated]` function, method, field, type, constant or static",
     ),
     warn(
-        "unclosed_resource",
-        "a local holding a `Drop` resource (file, socket, child) that is never closed",
-    ),
-    warn(
         "write_to_copy",
         "a field set on a copy (a by-value parameter or `self`, a `for` binding, a `let` of `xs[i]`) that nothing reads afterwards",
     ),
@@ -153,14 +149,6 @@ pub const LINTS: &[Lint] = &[
     warn_since(
         "implicit_core_fn",
         "a core free function called bare through the implicit `use rok::core::**`",
-    ),
-    warn_since(
-        "unclosed_sender",
-        "a channel `Sender` (or a clone) that is not closed on every path: receivers wait forever",
-    ),
-    warn_since(
-        "using_twice",
-        "a second `using` of the same `Drop` value, or a use after its `using` released it",
     ),
     warn_since(
         "guard_escape",
@@ -205,6 +193,10 @@ pub const REMOVED_LINTS: &[&str] = &[
     "ambiguous_int_literal",
     "finally_jump",
     "float_to_bool",
+    // Errors now: affine resources (stdlib 2.13.4).
+    "unclosed_resource",
+    "unclosed_sender",
+    "using_twice",
 ];
 
 /// A lint added in 0.1.6.

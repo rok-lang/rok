@@ -374,6 +374,27 @@ pub(pkg) fn transfer_plain<T>() -> bool;
 #[intrinsic("rok.transfer_flat")]
 pub(pkg) fn transfer_flat<T>() -> bool;
 
+/// A second handle to `x`, which the compiler does not follow: it is
+/// neither moved nor released through it (stdlib 2.13.4). The owner's
+/// rules still hold; using the handle after the owner released the
+/// value is the caller's to rule out.
+pub unsafe fn share<T>(x: T) -> T { x }
+
+/// Put `value` into `dest` and return what it held: the way to move a
+/// part out of a struct (`replace(ref child.stdout, none)`).
+pub fn replace<T>(ref dest: T, value: T) -> T {
+    let old = dest;
+    dest = value;
+    old
+}
+
+/// `replace(ref dest, T::default())`.
+pub fn take<T: Default>(ref dest: T) -> T {
+    let old = dest;
+    dest = T::default();
+    old
+}
+
 /// What a hand-off gives the new owner: `x` with a copy of every
 /// collection it reaches (`x` itself, with no call, when there are none).
 #[intrinsic("rok.hand_over")]

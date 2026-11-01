@@ -1012,6 +1012,19 @@ fn lower_coro_block<'a>(
                 .map(HirStmt::Expr),
         );
     }
+    // Captured values the coroutine owns are released when it finishes
+    // (or is cancelled).
+    let owed = c.err_frames.len();
+    let captured: Vec<(rokc_ir_common::LocalId, HirTy)> = prelude
+        .iter()
+        .filter_map(|s| match s {
+            HirStmt::Let { local, init } if !c.is_boxed(*local) => Some((*local, init.ty.clone())),
+            _ => None,
+        })
+        .collect();
+    for (l, ty) in captured {
+        prelude.extend(super::affine::owe(&mut c, l, &ty));
+    }
     let out = c.fn_ret_ty.clone();
     let body_h = lower_expected(&mut c, &body_expr, out.clone());
     let body_h = if super::hir_expr_diverges(&body_h) || out == HirTy::Unit {
@@ -1019,6 +1032,7 @@ fn lower_coro_block<'a>(
     } else {
         super::coerce(&mut c, &out, body_h, &|| "the async body".to_owned())
     };
+    let body_h = super::affine::settle_expr(&mut c, owed, body_h);
     let coro = c.coro.clone().expect("coroutine ctx");
     let step_ty = coro.step_ty(&c, &out);
     let r = c.declare(None, out.clone());
