@@ -11,19 +11,17 @@
 use rok::std::thread;
 
 let release = Atomic::new(0);
-let done = Atomic::new(0);
 let started = Atomic::new(0);
 let landed = Atomic::new(0);
+let bl = task::spawn_blocking(|| {
+    while release.load() == 0 {
+        thread::sleep(Duration::ms(1));
+    }
+    landed.store(1);
+    7
+});
 // Pinned to this worker: it cannot run again until this body awaits.
 let t = task::spawn_local(async {
-    let bl = task::spawn_blocking(|| {
-        while release.load() == 0 {
-            thread::sleep(Duration::ms(1));
-        }
-        landed.store(1);
-        done.store(1);
-        7
-    });
     started.store(1);
     await bl
 });
@@ -34,7 +32,9 @@ while started.load() == 0 {
 await task::sleep(Duration::ms(5));
 t.cancel();
 release.store(1);
-while done.load() == 0 {
+// Wait for the task itself: its closure's last write comes before the
+// task is finished.
+while !bl.is_finished() {
     thread::sleep(Duration::ms(1));
 }
 let r = try await t.join() catch _: task::CancellationError { -1 };
