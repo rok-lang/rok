@@ -36,7 +36,8 @@ using held = m.lock() {
         1
     });
     let acceptor = task::spawn(async {
-        try await idle.accept_async() catch _ { return 0; };
+        let (s, _) = try await idle.accept_async() catch _ { return 0; };
+        try! s.close();
         1
     });
     let sleeper = task::spawn(async {
@@ -80,5 +81,9 @@ let got = await task::spawn(async {
     try! str::from_utf8(buf[0:n])
 });
 println(f"still works: {got}");
+try! client.close();
+try! server_own.close();
+try! idle_own.close();
+try! listener.close();
 
 // spec: 004.12-async

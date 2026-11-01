@@ -65,12 +65,14 @@ fn text(b: List<u8> | none) -> str {
 /// Serve `n` connections: each reply is `sni|alpn|request`, until the
 /// client's close_notify; a request "big" echoes the next 300000 bytes.
 fn serve(l: TcpListener, n: i32) {
-    let chain = [try Certificate::from_pem(LEAF) catch _ { return; }][0];
-    let cfg = try! ServerConfig::new(chain, try PrivateKey::from_pem(KEY) catch _ { return; });
-    cfg.alpn_protocols = ["http/1.1".as_bytes().to_list(), "h2".as_bytes().to_list()];
+    let cfg = ServerConfig {
+        cert_chain: try! Certificate::from_pem(LEAF),
+        private_key: try! PrivateKey::from_pem(KEY),
+        alpn_protocols: ["http/1.1".as_bytes().to_list(), "h2".as_bytes().to_list()],
+    };
     let seen = 0;
     for _ in 0..n {
-        let (s, _) = try l.accept() catch _ { return; };
+        let (s, _) = try! l.accept();
         seen += 1;
         let srv = try Server::new(s, cfg) catch _ { continue; };
         let buf: List<u8> = [];
@@ -98,6 +100,7 @@ fn serve(l: TcpListener, n: i32) {
         }
         try! srv.close();
     }
+    try! l.close();
 }
 
 fn ask(c: Client, req: str) -> str {
@@ -125,13 +128,34 @@ fn connect(port: u16, name: str, cfg: ClientConfig) throws (tls::TlsError) -> Cl
     try Client::with_config(s, name, cfg)
 }
 
+/// A handshake that must fail: what it threw.
+fn refused(what: str, port: u16, name: str, cfg: ClientConfig) {
+    let c = try connect(port, name, cfg) catch e {
+        println(f"{what}: {e.kind():?} {e.message()}");
+        return;
+    };
+    try! c.close();
+    println(f"{what}: connected");
+}
+
+/// `Client::new` over a fresh connection: what it threw.
+fn os_roots(port: u16) {
+    let s = try! tcp_connect(f"127.0.0.1:{port}");
+    let c = try Client::new(s, "localhost") catch e {
+        println(f"os roots: {e.kind():?} {e.message()}");
+        return;
+    };
+    try! c.close();
+    println("os roots: connected");
+}
+
 fn main() throws (tls::TlsError) {
-    let l = try tcp_listen("127.0.0.1:0") catch _ { return; };
-    let port = (try l.local_addr() catch _ { return; }).port();
+    let l = try! tcp_listen("127.0.0.1:0");
+    let port = (try! l.local_addr()).port();
     let t = thread::spawn(|| serve(l, 12));
     let roots = try Certificate::from_pem(CA);
 
-    let cfg = ClientConfig { root_certs: roots, cipher_suites: CipherSuite::all(), alpn_protocols: ["h2".as_bytes().to_list(), "http/1.1".as_bytes().to_list()], enable_pq: true, client_cert_chain: [], client_key: none, session_cache: none, early_data: [] };
+    let cfg = ClientConfig { root_certs: roots, alpn_protocols: ["h2".as_bytes().to_list(), "http/1.1".as_bytes().to_list()], session_cache: none };
     let c = try connect(port, "localhost", cfg);
     println(f"default: alpn {text(c.negotiated_alpn())} peer {c.peer_certificates().len()} certs -> {ask(c, "ping")}");
     try c.key_update() catch _ {};
@@ -139,12 +163,12 @@ fn main() throws (tls::TlsError) {
     try c.close_notify() catch _ {};
     try! c.close();
 
-    let plain = ClientConfig { root_certs: roots, cipher_suites: [CipherSuite::ChaCha20Poly1305Sha256], alpn_protocols: [], enable_pq: false, client_cert_chain: [], client_key: none, session_cache: none, early_data: [] };
+    let plain = ClientConfig { root_certs: roots, cipher_suites: [CipherSuite::ChaCha20Poly1305Sha256], enable_pq: false, session_cache: none };
     let c2 = try connect(port, "localhost", plain);
     println(f"chacha x25519: alpn {text(c2.negotiated_alpn())} -> {ask(c2, "hi")}");
     try! c2.close();
 
-    let a256 = ClientConfig { root_certs: roots, cipher_suites: [CipherSuite::Aes256GcmSha384], alpn_protocols: [], enable_pq: true, client_cert_chain: [], client_key: none, session_cache: none, early_data: [] };
+    let a256 = ClientConfig { cipher_suites: [CipherSuite::Aes256GcmSha384], enable_pq: true, ..plain };
     let c3 = try connect(port, "localhost", a256);
     println(f"aes256: -> {ask(c3, "hi")}");
     try! c3.close();
@@ -173,15 +197,12 @@ fn main() throws (tls::TlsError) {
     println(f"big: {back.len()} bytes back, intact {back == data}");
     try! c6.close();
 
-    try connect(port, "example.com", plain) catch e { println(f"wrong name: {e.kind():?} {e.message()}"); };
-    let none_cfg = ClientConfig { root_certs: [], cipher_suites: CipherSuite::all(), alpn_protocols: [], enable_pq: true, client_cert_chain: [], client_key: none, session_cache: none, early_data: [] };
-    try connect(port, "localhost", none_cfg) catch e { println(f"unknown root: {e.kind():?} {e.message()}"); };
-    let odd = ClientConfig { root_certs: roots, cipher_suites: CipherSuite::all(), alpn_protocols: ["spdy/1".as_bytes().to_list()], enable_pq: true, client_cert_chain: [], client_key: none, session_cache: none, early_data: [] };
-    try connect(port, "localhost", odd) catch e { println(f"no common alpn: {e.kind():?} {e.message()}"); };
+    refused("wrong name", port, "example.com", plain);
+    refused("unknown root", port, "localhost", ClientConfig { root_certs: [], session_cache: none });
+    refused("no common alpn", port, "localhost", ClientConfig { root_certs: roots, alpn_protocols: ["spdy/1".as_bytes().to_list()], session_cache: none });
 
     // `Client::new` trusts the OS store, which lacks the test CA.
-    let s8 = try tcp_connect(f"127.0.0.1:{port}") catch _ { return; };
-    try Client::new(s8, "localhost") catch e { println(f"os roots: {e.kind():?} {e.message()}"); };
+    os_roots(port);
     let c9 = try connect(port, "localhost", plain);
     println(f"traits -> {via_traits(c9)}");
     try! c9.close();

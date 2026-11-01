@@ -1,0 +1,35 @@
+// spec: std 213-marker §2.13.4 / std 218-task
+// needs: fs
+// expect-exit: 0
+// expect-stdout:
+// wrote 5
+// read hello
+
+// A coroutine that owns a resource closes it like a plain function: an
+// `await` before the close, and the way a cancelled task leaves, do not
+// make the close look missing.
+use rok::std::env;
+use rok::std::fs;
+use rok::std::fs::File;
+use rok::std::path::Path;
+use rok::core::io::{IoError, Read, Write};
+
+async fn write_then_close(f: File) -> usize {
+    await task::yield_now();
+    let n = try! f.write("hello");
+    try f.close() catch _ {};
+    n
+}
+
+async fn read_back(p: Path) throws (IoError) -> str {
+    let f = try fs::open(p);
+    await task::yield_now();
+    let s = try str::from_utf8(try f.read_to_end()) catch _ { "?" };
+    try f.close();
+    s
+}
+
+let p = env::temp_dir().join(Path::from(f"rok-affine-async-{rok::std::process::id()}.txt"));
+println(f"wrote {await write_then_close(try! fs::create(p))}");
+println(f"read {try! await read_back(p)}");
+try! fs::remove_file(p);

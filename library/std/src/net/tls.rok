@@ -23,11 +23,11 @@ use rok::bare::mem::{GcBuf, buf_new};
 use rok::std::net::{TcpStream, Shutdown};
 use rok::core::task;
 use rok::core::convert::AsBytes;
-use rok::core::io::{IoError, IoErrorKind, Read, Write, AsyncRead, AsyncWrite};
+use rok::core::io::{Close, IoError, IoErrorKind, Read, Write, AsyncRead, AsyncWrite};
 use rok::std::sys::{byte_buf, mut_region};
 use rok::std::fs;
 use rok::std::env;
-use rok::std::time::{Instant, Duration};
+use rok::std::time::{Instant, Duration, SystemTime};
 use rok::std::net::tls::x509::{CertInfo, PubKey};
 use rok::std::net::tls::conn::{Conn, new_conn, io_tls, OP_HANDSHAKE, OP_READ, OP_WRITE, OP_CLOSE_NOTIFY, OP_KEY_UPDATE};
 use rok::std::net::tls::der::{Der, SEQUENCE, INTEGER, OCTET_STRING, OID};
@@ -121,14 +121,14 @@ impl Certificate {
     }
 
     /// The DER encoding.
-    pub const fn der(self) -> List<u8> { self.der.clone() }
+    pub const fn to_der(self) -> List<u8> { self.der.clone() }
 
     /// The subjectAltName DNS names.
     pub const fn dns_names(self) -> List<str> { self.info.dns_names.clone() }
 
-    /// The validity period, Unix seconds.
-    pub const fn not_before(self) -> i64 { self.info.not_before }
-    pub const fn not_after(self) -> i64 { self.info.not_after }
+    /// The validity period.
+    pub const fn not_before(self) -> SystemTime { SystemTime::from_unix(self.info.not_before, 0u32) }
+    pub const fn not_after(self) -> SystemTime { SystemTime::from_unix(self.info.not_after, 0u32) }
 }
 
 /// A server's private key: Ed25519, ECDSA P-256 / P-384 or RSA.
@@ -255,88 +255,81 @@ impl PrivateKey {
     }
 }
 
+/// A client's settings: a record whose fields all have defaults except
+/// `root_certs`, which `new()` fills from the OS trust store:
+/// `ClientConfig { alpn_protocols: [b"h2"], ..try ClientConfig::new() }`.
+/// Fields added later have defaults too.
+#[non_exhaustive]
 pub struct ClientConfig {
     /// Trust anchors for the server's certificate.
     pub root_certs: List<Certificate>;
     /// In preference order; TLS 1.3 suites only.
-    pub cipher_suites: List<CipherSuite>;
+    pub cipher_suites: List<CipherSuite> = CipherSuite::all();
     /// ALPN protocols offered, in preference order (`"h2"`, ...).
-    pub alpn_protocols: List<List<u8>>;
+    pub alpn_protocols: List<List<u8>> = [];
     /// Offer the X25519MLKEM768 hybrid key exchange first.
-    pub enable_pq: bool;
+    pub enable_pq: bool = true;
     /// Sent when the server asks for a certificate: leaf first (empty:
     /// none), with the leaf's key.
-    pub client_cert_chain: List<Certificate>;
-    pub client_key: PrivateKey | none;
+    pub client_cert_chain: List<Certificate> = [];
+    pub client_key: PrivateKey | none = none;
     /// Tickets from earlier connections, to resume from (none: never
     /// resume).
-    pub session_cache: SessionCache | none;
+    pub session_cache: SessionCache | none = SessionCache::new();
     /// Sent as 0-RTT data when a resumed session allows that much, else
     /// as the first application data after the handshake.
-    pub early_data: List<u8>;
+    pub early_data: List<u8> = [];
 }
 
 impl ClientConfig {
-    /// The OS trust store, all suites, no ALPN, post-quantum on, no
-    /// client certificate, a new session cache, no early data. Throws
-    /// the `system_roots` error when no trust store is found or
-    /// readable.
+    /// The OS trust store and every default: all suites, no ALPN,
+    /// post-quantum on, no client certificate, a new session cache, no
+    /// early data. Throws the `system_roots` error when no trust store is
+    /// found or readable.
     pub fn new() throws (TlsError) -> ClientConfig {
-        ClientConfig::with_roots(try system_roots())
-    }
-
-    fn with_roots(roots: List<Certificate>) -> ClientConfig {
-        ClientConfig {
-            root_certs: roots,
-            cipher_suites: CipherSuite::all(),
-            alpn_protocols: [],
-            enable_pq: true,
-            client_cert_chain: [],
-            client_key: none,
-            session_cache: SessionCache::new(),
-            early_data: [],
-        }
+        ClientConfig { root_certs: try system_roots() }
     }
 }
 
+/// A server's settings: a record whose fields all have defaults except
+/// the certificate chain and its key:
+/// `ServerConfig { max_early_data: 16384u32, ..try ServerConfig::new(chain, key) }`,
+/// or a literal naming both; `Server::new` checks the key is the leaf's.
+#[non_exhaustive]
 pub struct ServerConfig {
     /// The server's certificate first, then intermediates.
     pub cert_chain: List<Certificate>;
     pub private_key: PrivateKey;
-    pub cipher_suites: List<CipherSuite>;
-    pub alpn_protocols: List<List<u8>>;
+    pub cipher_suites: List<CipherSuite> = CipherSuite::all();
+    pub alpn_protocols: List<List<u8>> = [];
     /// Non-empty: ask for a client certificate and validate it against
     /// these roots (clientAuth).
-    pub client_roots: List<Certificate>;
+    pub client_roots: List<Certificate> = [];
     /// With `client_roots`: refuse a client that sends no certificate.
-    pub require_client_cert: bool;
+    pub require_client_cert: bool = true;
     /// A DER OCSPResponse for the leaf, stapled when the client asks
     /// (empty: none).
-    pub ocsp_response: List<u8>;
+    pub ocsp_response: List<u8> = [];
     /// Issues and redeems session tickets (none: no resumption).
-    pub ticket_store: TicketStore | none;
+    pub ticket_store: TicketStore | none = TicketStore::new();
     /// 0-RTT data accepted per resumed connection, in bytes (0: none).
-    pub max_early_data: u32;
+    pub max_early_data: u32 = 0u32;
 }
 
 impl ServerConfig {
-    /// All suites, no ALPN, no client certificates, no OCSP response, a
-    /// new ticket store, no 0-RTT. The key must belong to the leaf.
+    /// `chain` and `key` with every default, checked now rather than at
+    /// the first handshake.
     pub fn new(cert_chain: List<Certificate>, private_key: PrivateKey) throws (TlsError) -> ServerConfig {
-        if cert_chain.len() == 0 { throw TlsError::certificate("ServerConfig without a certificate"); }
-        if !private_key.matches(cert_chain[0]) { throw TlsError::certificate("private key does not match the certificate"); }
-        ServerConfig {
-            cert_chain,
-            private_key,
-            cipher_suites: CipherSuite::all(),
-            alpn_protocols: [],
-            client_roots: [],
-            require_client_cert: true,
-            ocsp_response: [],
-            ticket_store: TicketStore::new(),
-            max_early_data: 0u32,
-        }
+        let cfg = ServerConfig { cert_chain, private_key };
+        try check_server_config(cfg);
+        cfg
     }
+}
+
+/// The chain must have a leaf, and the key must be the leaf's.
+fn check_server_config(cfg: ServerConfig) throws (TlsError) {
+    if cfg.cert_chain.len() == 0 { throw TlsError::certificate("ServerConfig without a certificate"); }
+    if !cfg.private_key.matches(cfg.cert_chain[0]) { throw TlsError::certificate("private key does not match the certificate"); }
 }
 
 /// A ticket the client holds (RFC 8446 4.6.1).
@@ -687,7 +680,7 @@ impl Shared {
             let c = self.c[0];
             if c.failed is none && c.done { try c.close_notify() catch _ {}; }
             let err: IoError | none = none;
-            try c.sock.close() catch e { err = e; };
+            try c.sock().close() catch e { err = e; };
             c.wipe();
             self.c[0] = c;
             if let e: IoError = err { throw e; }
@@ -724,7 +717,7 @@ impl Shared {
                         unsafe { self.c[0] = c; }
                         if out.len() > 0 {
                             let werr: TlsError | none = none;
-                            try await c.sock.write_all_async(out) catch e { werr = io_tls(e); };
+                            try await c.sock().write_all_async(out) catch e { werr = io_tls(e); };
                             if let e: TlsError = werr {
                                 if failure is none {
                                     unsafe {
@@ -749,7 +742,7 @@ impl Shared {
             }
             // More input.
             let b = byte_buf(16384 + 2048);
-            let n = try await c.sock.read_async(b) catch e {
+            let n = try await c.sock().read_async(b) catch e {
                 let t = io_tls(e);
                 unsafe {
                     let cur = self.c[0];
@@ -868,12 +861,12 @@ impl Client {
         let c = new_conn(stream, true);
         try c.client_start(server_name, ip_bytes(server_name), cfg) catch e {
             c.fail(e);
-            linger_close(c.sock);
+            linger_close(c.sock());
             throw e;
         };
         try c.handshake() catch e {
             c.fail(e);
-            linger_close(c.sock);
+            linger_close(c.sock());
             throw e;
         };
         Client { s: Shared::new(c) }
@@ -898,7 +891,7 @@ impl Client {
         c.nb = true;
         try c.client_start(server_name, ip_bytes(server_name), cfg) catch e {
             c.fail(e);
-            linger_close(c.sock);
+            linger_close(c.sock());
             throw e;
         };
         let s = Shared::new(c);
@@ -908,7 +901,7 @@ impl Client {
             0
         };
         if let e: TlsError = failed {
-            await linger_close_async(s.conn().sock);
+            await linger_close_async(s.conn().sock());
             throw e;
         }
         Client { s }
@@ -934,11 +927,11 @@ impl Client {
     pub const fn peer_certificates(self) -> List<Certificate> { self.s.conn().peer }
 
     /// Whether the handshake resumed a session.
-    pub const fn resumed(self) -> bool { self.s.conn().resumed }
+    pub const fn is_resumed(self) -> bool { self.s.conn().resumed }
 
     /// Whether the server took `ClientConfig::early_data` as 0-RTT data
     /// (else it was sent after the handshake).
-    pub const fn early_data_accepted(self) -> bool { self.s.conn().early_accepted }
+    pub const fn is_early_data_accepted(self) -> bool { self.s.conn().early_accepted }
 }
 
 impl Read for Client {
@@ -973,8 +966,12 @@ impl AsyncWrite for Client {
     }
     async fn flush_async(self) throws (IoError) {}
     async fn write_all_async<B: AsBytes>(self, buf: B) throws (IoError) {
-        try await self.s.op_async(OP_WRITE, no_buf(), buf.byte_slice());
+        _ = try await self.s.op_async(OP_WRITE, no_buf(), buf.byte_slice());
     }
+}
+
+impl Close for Client {
+    fn close(self) throws (IoError) { try self.s.close(); }
 }
 
 impl Drop for Client {
@@ -991,15 +988,15 @@ impl !Sync for Server {}
 impl Server {
     /// Handshake with the client on `stream`.
     pub fn new(stream: TcpStream, cfg: ServerConfig) throws (TlsError) -> Server {
-        if cfg.cert_chain.len() == 0 {
+        try check_server_config(cfg) catch e {
             try stream.close() catch _ {};
-            throw TlsError::certificate("ServerConfig without a certificate");
-        }
+            throw e;
+        };
         let c = new_conn(stream, false);
         c.server_start(cfg);
         try c.handshake() catch e {
             c.fail(e);
-            linger_close(c.sock);
+            linger_close(c.sock());
             throw e;
         };
         Server { s: Shared::new(c) }
@@ -1007,10 +1004,10 @@ impl Server {
 
     /// `new` without blocking the worker.
     pub async fn new_async(stream: TcpStream, cfg: ServerConfig) throws (TlsError) -> Server {
-        if cfg.cert_chain.len() == 0 {
+        try check_server_config(cfg) catch e {
             try stream.close() catch _ {};
-            throw TlsError::certificate("ServerConfig without a certificate");
-        }
+            throw e;
+        };
         let c = new_conn(stream, false);
         c.server_start(cfg);
         let s = Shared::new(c);
@@ -1020,7 +1017,7 @@ impl Server {
             0
         };
         if let e: TlsError = failed {
-            await linger_close_async(s.conn().sock);
+            await linger_close_async(s.conn().sock());
             throw e;
         }
         Server { s }
@@ -1031,6 +1028,8 @@ impl Server {
 
     pub async fn close_notify_async(self) throws (IoError) { _ = try await self.s.op_async(OP_CLOSE_NOTIFY, no_buf(), nothing()); }
     pub async fn key_update_async(self) throws (IoError) { _ = try await self.s.op_async(OP_KEY_UPDATE, no_buf(), nothing()); }
+    /// close_notify (if the connection is healthy), then close the
+    /// socket, throwing the OS's error.
     pub fn close(self) throws (IoError) { try self.s.close(); }
     pub const fn negotiated_alpn(self) -> List<u8> | none { self.s.conn().alpn }
 
@@ -1039,7 +1038,7 @@ impl Server {
     pub const fn peer_certificates(self) -> List<Certificate> { self.s.conn().peer }
 
     /// Whether the handshake resumed a session.
-    pub const fn resumed(self) -> bool { self.s.conn().resumed }
+    pub const fn is_resumed(self) -> bool { self.s.conn().resumed }
 
     /// The 0-RTT data accepted from the client (empty: none); `read`
     /// returns what follows it.
@@ -1081,8 +1080,12 @@ impl AsyncWrite for Server {
     }
     async fn flush_async(self) throws (IoError) {}
     async fn write_all_async<B: AsBytes>(self, buf: B) throws (IoError) {
-        try await self.s.op_async(OP_WRITE, no_buf(), buf.byte_slice());
+        _ = try await self.s.op_async(OP_WRITE, no_buf(), buf.byte_slice());
     }
+}
+
+impl Close for Server {
+    fn close(self) throws (IoError) { try self.s.close(); }
 }
 
 impl Drop for Server {

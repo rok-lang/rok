@@ -1003,6 +1003,22 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
         }
     }
 
+    /// On a cancelled task's way out: every open leaf of an owned
+    /// value whose close can fail counts as released.
+    fn cancel_releases(&self, st: &mut State) {
+        for root in &self.roots {
+            if !root.owned || root.kind != Kind::Close {
+                continue;
+            }
+            for i in 0..root.leaves.len() {
+                let b = get(st, root.base + i);
+                if b & LIVE != 0 {
+                    set(st, root.base + i, (b & !LIVE) | RELEASED);
+                }
+            }
+        }
+    }
+
     fn leaves_open(&mut self, r: usize, st: &State, at: Span) {
         let root = &self.roots[r];
         if !root.owned || root.kind != Kind::Close {
@@ -1204,10 +1220,16 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                 None
             }
             HirStmt::Break { label, value } => {
-                let (st, bv) = match value {
+                let (mut st, bv) = match value {
                     Some(v) => self.expr(v, st, Mode::Move),
                     None => (st, Val::Plain),
                 };
+                // A cancelled task's way out is not checked: what must be
+                // closed counts as released there. Drop values keep their
+                // state, so their release flags stay right.
+                if self.quiet {
+                    self.cancel_releases(&mut st);
+                }
                 let i = self.target(label.as_deref(), false);
                 if let Some(i) = i {
                     let depth = self.targets[i].depth;
@@ -1551,7 +1573,12 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                 } else {
                     self.block(then_block, st.clone(), mode)
                 };
+                // A coroutine's `if true { '#coro: { body } } else { undef }`:
+                // the `else` is never taken.
                 let (b, vb) = match else_branch {
+                    _ if matches!(cond.kind, HirExprKind::Const(ConstVal::Bool(true))) => {
+                        (None, Val::Plain)
+                    }
                     Some(x) => self.expr(x, st, mode),
                     None => (st, Val::Plain),
                 };

@@ -67,6 +67,10 @@ fn main() throws (IoError) {
     let db: List<u8> = List::filled(16, 0u8);
     let dn = try d2.recv(db);
     println(f"{try str::from_utf8(db[0:dn])}");
+    for c in [a, b, s, x, y, p, q] { try c.close(); }
+    try d1.close();
+    try d2.close();
+    try l.close();
     try fs::remove_file(path);
 }
 

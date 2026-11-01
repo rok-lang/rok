@@ -21,6 +21,7 @@ use rok::std::path::Path;
 fn main() throws (IoError) {
     let l = try net::tcp_listen("127.0.0.1:0");
     try l.try_close();
+    try l.close();
     let c = ClientConfig::try_new();
     let s = fmt::FormatSpec::try_parse("<4");
     let p = Path::new("a/b");

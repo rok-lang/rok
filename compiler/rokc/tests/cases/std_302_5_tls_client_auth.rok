@@ -124,20 +124,21 @@ fn serve(l: TcpListener, n: i32, required: bool) -> List<str> {
     cfg.require_client_cert = required;
     let log: List<str> = [];
     for _ in 0..n {
-        let (s, _) = try l.accept() catch _ { return log; };
+        let (s, _) = try! l.accept();
         let srv = try Server::new(s, cfg) catch e {
             log.push(f"error {e.message()} (alert {e.alert()})");
             continue;
         };
         let peer = srv.peer_certificates();
         let names: List<str> = if peer.len() > 0 { peer[0].dns_names() } else { [] };
-        log.push(f"peer {peer.len()} certs, names {names.len()}, resumed {srv.resumed()}");
+        log.push(f"peer {peer.len()} certs, names {names.len()}, resumed {srv.is_resumed()}");
         let buf: List<u8> = [];
         for _ in 0..64 { buf.push(0u8); }
         let _ = try srv.read(buf) catch _ { 0usize };
         try srv.write_all("hello") catch _ {};
         try! srv.close();
     }
+    try! l.close();
     log
 }
 
@@ -164,7 +165,7 @@ fn run(what: str, port: u16, cfg: ClientConfig) {
         try! c.close();
         return;
     };
-    println(f"{what}: {try str::from_utf8(r) catch _ { "?" }}, resumed {c.resumed()}");
+    println(f"{what}: {try str::from_utf8(r) catch _ { "?" }}, resumed {c.is_resumed()}");
     try! c.close();
 }
 

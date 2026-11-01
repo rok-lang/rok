@@ -24,6 +24,7 @@ let l = try! TcpListener::bind(any);
 let addr = try! l.local_addr();
 let server = task::spawn(async {
     let (s, _) = try! await l.accept_async();
+    try! l.close();
     let buf = List::filled(64, 0u8);
     let n = try! await s.read_async(buf);
     try! await s.write_all_async(buf[0:n]);
@@ -55,6 +56,7 @@ let rx = task::spawn(async {
         let (j, _) = try! await a.recv_from_async(got);
         sum += (got[0] - 48u8) as i32;
     }
+    try! a.close();
     sum
 });
 for i in 0..5 {
@@ -62,4 +64,5 @@ for i in 0..5 {
 }
 println(f"udp async: 5 datagrams, sum {await rx}");
 println(f"inherited listeners: {TcpListener::inherited().len()}");
+try! b.close();
 // spec: std 302-net §3.2.0 §3.2.6

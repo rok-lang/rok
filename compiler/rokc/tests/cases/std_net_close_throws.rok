@@ -8,7 +8,7 @@
 // read after close: InvalidInput
 
 // A socket's `close` throws what the OS reports; closing twice is a
-// no-op.
+// no-op, and a call after it fails with `InvalidInput`.
 use rok::core::marker::share;
 use rok::core::io::IoError;
 use rok::std::net;
@@ -20,7 +20,7 @@ fn main() throws (IoError) {
     // A second handle checks what a closed socket does.
     let c = unsafe { share(c_own) };
     let (s, _) = try l.accept();
-    try c_own.close();
+    try c.close();
     println(f"closed: {c.fd() == -1}");
     try c.close();
     println("again: ok");
@@ -28,4 +28,5 @@ fn main() throws (IoError) {
     try c.read(buf) catch e { println(f"read after close: {e.kind():?}"); 0 };
     try s.close();
     try l.close();
+    try c_own.close();
 }

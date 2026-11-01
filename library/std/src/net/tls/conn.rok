@@ -19,6 +19,7 @@ use sup::x509;
 use sup::ocsp;
 use sup::x509::{CertInfo, PubKey, SigAlg};
 use rok::std::net::TcpStream;
+use rok::bare::mem::{GcBuf, buf_new};
 use rok::core::io::{IoError, IoErrorKind};
 use rok::std::sys::byte_buf;
 use rok::std::crypto::random;
@@ -359,7 +360,9 @@ const fn nonce(d: Dir) -> List<u8> {
 
 /// Connection state; `Client` / `Server` share one through a GC cell.
 pub(pkg) struct Conn {
-    pub(pkg) sock: TcpStream;
+    /// The stream, in a cell: the connection's owner (`Client`,
+    /// `Server`, a failed handshake) closes it, not each copy of `Conn`.
+    stream: GcBuf<TcpStream>;
     pub(pkg) is_client: bool;
     rd: Dir;
     wr: Dir;
@@ -407,8 +410,10 @@ pub(pkg) struct Conn {
 }
 
 pub(pkg) fn new_conn(sock: TcpStream, is_client: bool) -> Conn {
+    let stream: GcBuf<TcpStream> = unsafe { buf_new(1) };
+    unsafe { stream[0] = sock; }
     Conn {
-        sock,
+        stream,
         is_client,
         rd: plain_dir(),
         wr: plain_dir(),
@@ -448,6 +453,8 @@ pub(pkg) const fn io_tls(e: IoError) -> TlsError {
 }
 
 impl Conn {
+    /// The stream (not followed by the ownership check: see `stream`).
+    pub(pkg) const fn sock(self) -> TcpStream { unsafe { self.stream[0] } }
 
     /// Read more bytes from the socket into `inbuf`.
     fn fill(ref self) throws (TlsError) {
@@ -457,7 +464,7 @@ impl Conn {
             throw TlsError { kind: TlsErrorKind::Io, msg: "would block", alert: ALERT_INTERNAL_ERROR };
         }
         let buf = byte_buf(MAX_PLAINTEXT + 2048);
-        let s = self.sock;
+        let s = unsafe { self.stream[0] };
         let n = try s.read(buf) catch e { throw io_tls(e); };
         if n == 0 { throw closed_early(); }
         let inb = self.inbuf;
@@ -572,7 +579,7 @@ impl Conn {
     fn flush_out(ref self) throws (TlsError) {
         let out = self.out;
         self.out = [];
-        let s = self.sock;
+        let s = unsafe { self.stream[0] };
         try s.write_all(out) catch e { throw io_tls(e); };
     }
 
