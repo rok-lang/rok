@@ -19,7 +19,8 @@
 // `BuildHasher`; a `RandomState` built at compile time stands for the
 // process key at run time.
 
-use rok::core::hash::{BuildHasher, BuildHasherDefault, RandomState, SipHasher13, SipHasher24};
+use rok::core::convert::AsBytes;
+use rok::core::hash::{BuildHasher, BuildHasherDefault, Hasher, RandomState, SipHasher13, SipHasher24};
 
 fn hash_of<T: Hash>(x: T) -> u64 {
     let h = RandomState::new().build_hasher();

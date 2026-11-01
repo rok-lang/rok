@@ -35,6 +35,8 @@ struct Bag { items: List<i32>; }
 #[derive(Debug)]
 struct Name { s: str; }
 
+use rok::core::hash::{BuildHasher, Hasher, RandomState};
+
 /// `x`'s hash under the process key.
 fn hash_of<T: Hash>(x: T) -> u64 {
     let h = RandomState::new().build_hasher();

@@ -9,6 +9,8 @@
 // lists compare in order, dicts and sets ignore insertion order (and
 // so does their hash); collections work as `Set` / `Dict` keys.
 
+use rok::core::hash::{BuildHasher, Hasher, RandomState};
+
 /// `x`'s hash under the process key.
 fn hash_of<T: Hash>(x: T) -> u64 {
     let h = RandomState::new().build_hasher();
