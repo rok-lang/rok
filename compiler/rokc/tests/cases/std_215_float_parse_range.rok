@@ -11,7 +11,7 @@
 // out-of-range literal is (1.6.4); `inf` itself parses.
 fn f64_of(s: str) -> f64 {
     try s.parse::<f64>() catch e: ParseError {
-        println(f"\"{s}\": {e.reason}");
+        println(f"\"{s}\": {e.message()}");
         0.0
     }
 }
@@ -21,7 +21,7 @@ fn main() {
     f64_of("-1e400");
     f64_of("1.2.3");
     try "1e39".parse::<f32>() catch e: ParseError {
-        println(f"\"1e39\": {e.reason}");
+        println(f"\"1e39\": {e.message()}");
         0.0f32
     };
     let big = try "3e38".parse::<f32>() catch _ { 0.0f32 };

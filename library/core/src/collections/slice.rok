@@ -69,7 +69,7 @@ impl<T> Slice<T> {
     #[track_caller]
     pub const fn step(self, k: isize) -> Slice<T> {
         if k == 0 {
-            panic("slice step must not be zero");
+            panic("Slice::step: the step is zero; use a positive step, or a negative one to go back to front");
         }
         let m = if k < 0 { -k } else { k };
         let n = (self.len + (m as usize) - 1) / (m as usize);
@@ -86,7 +86,7 @@ impl<T> Slice<T> {
     #[track_caller]
     pub const fn split_at(self, mid: usize) -> (Slice<T>, Slice<T>) {
         if mid > self.len {
-            index_oob("split_at index", mid, self.len);
+            index_oob("Slice::split_at: index", mid, self.len);
         }
         (self.slice(0..mid), self.slice(mid..self.len))
     }
@@ -96,7 +96,7 @@ impl<T> Slice<T> {
     #[track_caller]
     pub const fn windows(self, size: usize) -> SliceWindows<T> {
         if size == 0 {
-            panic("windows: size must be positive, e.g. `windows(2)`");
+            panic("Slice::windows: size must be positive, e.g. `windows(2)`");
         }
         SliceWindows { s: self, size: size, i: 0 }
     }
@@ -106,7 +106,7 @@ impl<T> Slice<T> {
     #[track_caller]
     pub const fn chunks(self, size: usize) -> SliceChunks<T> {
         if size == 0 {
-            panic("chunks: size must be positive, e.g. `chunks(2)`");
+            panic("Slice::chunks: size must be positive, e.g. `chunks(2)`");
         }
         SliceChunks { s: self, size: size, i: 0 }
     }

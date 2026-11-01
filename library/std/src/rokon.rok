@@ -148,15 +148,12 @@ const fn entries_hash<K: Hash>(d: OrderedDict<K, Value>) -> u64 {
 /// A read or decode error. `line` / `col` (1-based, code points) are 0
 /// when the value did not come from text (`T::from_rokon(v)` directly);
 /// `path` names the failing part (`.servers[2].port`, empty at the root).
+#[derive(Clone, PartialEq, Eq)]
 pub struct RokonError {
-    #[deprecated(since = "0.1.6", note = "use `RokonError::message()`")]
-    pub msg: str;
-    #[deprecated(since = "0.1.6", note = "use `RokonError::line()`")]
-    pub line: u32;
-    #[deprecated(since = "0.1.6", note = "use `RokonError::column()`")]
-    pub col: u32;
-    #[deprecated(since = "0.1.6", note = "use `RokonError::path()`")]
-    pub path: str;
+    pub(sub) msg: str;
+    pub(sub) line: u32;
+    pub(sub) col: u32;
+    pub(sub) path: str;
     /// The error is about a field name / dict key, not its value
     /// (`from_str` points at the key).
     pub(sub) on_key: bool;

@@ -3,12 +3,10 @@
 // needs: process threads
 // only-os: macos linux
 // expect-exit: 0
-// expect-lint: 39:9 use of deprecated method `Child::signal`
-// expect-lint: 52:13 use of deprecated function `kill`
-// expect-lint: 53:13 use of deprecated function `signal`
+// expect-lint: 37:9 use of deprecated method `Child::signal`
+// expect-lint: 50:13 use of deprecated function `kill`
 // expect-warning: = note: use `Child::send_signal(Signal::..)`
 // expect-warning: = note: use `process::send_signal(pid, Signal::..)`
-// expect-warning: = note: use `process::on_signal(Signal::.., handler)`
 // expect-stdout:
 // numbers: 2 9 15
 // terminated: ExitStatus { signal: 15 }
@@ -50,7 +48,6 @@ fn main() throws (IoError) {
     println(f"handled: {seen.load()}");
     if false {
         try process::kill(process::id(), 0);
-        try process::signal(10, || {}) catch _ {};
     }
     println(f"{Signal::Kill:?}");
 }

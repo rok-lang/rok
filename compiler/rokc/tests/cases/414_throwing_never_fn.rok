@@ -16,7 +16,7 @@ impl Display for E {
 }
 
 fn fail(msg: str) throws -> ! {
-    throw ValueError { msg: msg };
+    throw ValueError::new(msg);
 }
 
 fn fail_typed(code: i32) throws (E) -> ! {
@@ -31,7 +31,7 @@ fn pick(k: i32) throws -> i32 {
 fn main() -> i32 {
     let a = try pick(3) catch _ { -1 };
     if a != 3 { return 1; }
-    let b = try pick(-1) catch e: ValueError { e.msg.len() as i32 } catch _ { -1 };
+    let b = try pick(-1) catch e: ValueError { e.message().len() as i32 } catch _ { -1 };
     if b != 3 { return 2; }
     let c = try fail("x") catch _ { 5 };
     if c != 5 { return 3; }

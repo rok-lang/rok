@@ -14,7 +14,7 @@
 // f-string or one call each.
 
 use rok::std::io;
-use rok::std::io::{IoError, Writer};
+use rok::std::io::{IoError, IoErrorKind, Writer};
 use rok::std::fs;
 use rok::std::env;
 use rok::std::process;
@@ -54,7 +54,7 @@ struct Memory { writes: List<str>; count: i32; }
 
 impl Writer for Memory {
     fn write(ref self, buf: List<u8>) throws (IoError) -> usize {
-        try self.write_str(try str::from_utf8(buf) catch _ { throw IoError::new("not UTF-8"); });
+        try self.write_str(try str::from_utf8(buf) catch _ { throw IoError::new(IoErrorKind::Other, "not UTF-8"); });
         buf.len()
     }
     fn write_str(ref self, s: str) throws (IoError) {

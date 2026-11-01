@@ -68,7 +68,7 @@ impl<S> WrappingInto for S {
     const fn wrapping_into<T: WrappingFrom<S>>(self) -> T { T::wrapping_from(self) }
 }
 
-const fn overflow(ty: str) -> OverflowError { OverflowError { op: "try_from", ty } }
+const fn overflow(ty: str) -> OverflowError { OverflowError::new("try_from", ty) }
 
 // From (lossless)
 

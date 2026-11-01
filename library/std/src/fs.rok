@@ -188,7 +188,7 @@ impl Metadata {
     /// system keeps none (Linux before 4.11, some file systems).
     pub const fn created(self) throws (IoError) -> SystemTime {
         if !self.has_btime {
-            throw IoError::with_kind(IoErrorKind::Unsupported, "creation time is not available on this platform or file system");
+            throw IoError::new(IoErrorKind::Unsupported, "creation time is not available on this platform or file system");
         }
         SystemTime::from_unix(self.btime, self.btime_ns as u32)
     }
@@ -265,7 +265,7 @@ impl File {
     fn live(self) throws (IoError) -> i32 {
         let fd = unsafe { self.fd[0] };
         if fd < 0 || !use_begin(self.fd, 1) {
-            throw IoError::with_kind(IoErrorKind::InvalidInput, f"{self.path}: file is closed");
+            throw IoError::new(IoErrorKind::InvalidInput, f"{self.path}: file is closed");
         }
         fd
     }
@@ -723,7 +723,7 @@ impl Dir {
 
     pub fn home() throws (IoError) -> Dir {
         if let home: Path = env::home_dir() { return try Dir::root().open_dir(home); }
-        throw IoError::with_kind(IoErrorKind::NotFound, "HOME is not set");
+        throw IoError::new(IoErrorKind::NotFound, "HOME is not set");
     }
 
     pub fn temp() throws (IoError) -> Dir {
@@ -746,7 +746,7 @@ impl Dir {
                 if c is Component::ParentDir || c is Component::RootDir || c is Component::Prefix { escapes = true; }
             }
             if escapes {
-                throw IoError::with_kind(IoErrorKind::PermissionDenied,
+                throw IoError::new(IoErrorKind::PermissionDenied,
                     f"{path}: path escapes the directory capability");
             }
         }
@@ -799,13 +799,13 @@ impl Dir {
     /// Follows symlinks.
     pub fn metadata<P: AsPath>(self, path: P) throws (IoError) -> Metadata {
         let p = try self.rel(path);
-        try stat_at(self.fd(), p, true, -1) catch e { throw IoError::from_os(e.code(), self.shown(p)); }
+        try stat_at(self.fd(), p, true, -1) catch e { throw e.retold(self.shown(p)); }
     }
 
     /// Does not follow a final symlink.
     pub fn symlink_metadata<P: AsPath>(self, path: P) throws (IoError) -> Metadata {
         let p = try self.rel(path);
-        try stat_at(self.fd(), p, false, -1) catch e { throw IoError::from_os(e.code(), self.shown(p)); }
+        try stat_at(self.fd(), p, false, -1) catch e { throw e.retold(self.shown(p)); }
     }
 
     pub fn exists<P: AsPath>(self, path: P) -> bool {
@@ -979,13 +979,13 @@ impl Iterator for ReadDir {
             let n = rok_os_readdir(d, buf, at, cap);
             if n <= 0 {
                 close_dir(self.d);
-                if n < 0 { return Result::Err(IoError::from_os((0 - n) as i32, self.dir.shown(self.base))); }
+                if n < 0 { return Result::Err(IoError::from_os_code((0 - n) as i32, self.dir.shown(self.base))); }
                 return none;
             }
             let name = try text_of(list_of(self.name[0:n as usize])) catch e { return Result::Err(e); };
             let path = Path::new(self.base).join(Path::new(name));
             let meta = try stat_at(self.dir.fd(), path.as_str(), false, -1) catch e {
-                return Result::Err(IoError::from_os(e.code(), self.dir.shown(path.as_str())));
+                return Result::Err(e.retold(self.dir.shown(path.as_str())));
             };
             let shown = Path::new(self.dir.shown(path.as_str()));
             Result::Ok(DirEntry { path: shown, name: name, meta: meta })
@@ -1084,7 +1084,7 @@ pub fn write<P: AsPath, D: AsBytes>(path: P, data: D) throws (IoError) {
 pub fn write_atomic<P: AsPath, D: AsBytes>(path: P, data: D) throws (IoError) {
     let target = path.as_path();
     let name = target.file_name() ?? "";
-    if name == "" { throw IoError::with_kind(IoErrorKind::InvalidInput, f"{target}: no file name"); }
+    if name == "" { throw IoError::new(IoErrorKind::InvalidInput, f"{target}: no file name"); }
     let parent = target.parent() ?? Path::empty();
     // A fresh temp name: pid + the first free counter.
     let pid = unsafe { rok_os_getpid() };

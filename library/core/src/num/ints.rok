@@ -217,7 +217,7 @@ impl i8 {
     /// Integer square root; panics on a negative number.
     #[track_caller]
     pub const fn isqrt(self) -> i8 {
-        if self < 0 { panic("isqrt of a negative number"); }
+        if self < 0 { panic("i8::isqrt: the number is negative; use `checked_isqrt` to get `none` instead"); }
         (self as u8).isqrt() as i8
     }
     pub const fn checked_isqrt(self) -> i8 | none {
@@ -226,12 +226,12 @@ impl i8 {
     }
     /// `floor(log2(self))`; panics unless `self > 0`.
     #[track_caller]
-    pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("ilog2 of a non-positive number") }
+    pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("i8::ilog2: the number is not positive; use `checked_ilog2` to get `none` instead") }
     #[track_caller]
-    pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("ilog10 of a non-positive number") }
+    pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("i8::ilog10: the number is not positive; use `checked_ilog10` to get `none` instead") }
     #[track_caller]
     pub const fn ilog(self, base: i8) -> u32 {
-        self.checked_ilog(base) ?? panic("ilog of a non-positive number or a base below 2")
+        self.checked_ilog(base) ?? panic("i8::ilog: the number is not positive or the base is below 2; use `checked_ilog` to get `none` instead")
     }
     pub const fn checked_ilog2(self) -> u32 | none {
         if self <= 0 { return none; }
@@ -461,7 +461,7 @@ impl i16 {
     /// Integer square root; panics on a negative number.
     #[track_caller]
     pub const fn isqrt(self) -> i16 {
-        if self < 0 { panic("isqrt of a negative number"); }
+        if self < 0 { panic("i16::isqrt: the number is negative; use `checked_isqrt` to get `none` instead"); }
         (self as u16).isqrt() as i16
     }
     pub const fn checked_isqrt(self) -> i16 | none {
@@ -470,12 +470,12 @@ impl i16 {
     }
     /// `floor(log2(self))`; panics unless `self > 0`.
     #[track_caller]
-    pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("ilog2 of a non-positive number") }
+    pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("i16::ilog2: the number is not positive; use `checked_ilog2` to get `none` instead") }
     #[track_caller]
-    pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("ilog10 of a non-positive number") }
+    pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("i16::ilog10: the number is not positive; use `checked_ilog10` to get `none` instead") }
     #[track_caller]
     pub const fn ilog(self, base: i16) -> u32 {
-        self.checked_ilog(base) ?? panic("ilog of a non-positive number or a base below 2")
+        self.checked_ilog(base) ?? panic("i16::ilog: the number is not positive or the base is below 2; use `checked_ilog` to get `none` instead")
     }
     pub const fn checked_ilog2(self) -> u32 | none {
         if self <= 0 { return none; }
@@ -705,7 +705,7 @@ impl i32 {
     /// Integer square root; panics on a negative number.
     #[track_caller]
     pub const fn isqrt(self) -> i32 {
-        if self < 0 { panic("isqrt of a negative number"); }
+        if self < 0 { panic("i32::isqrt: the number is negative; use `checked_isqrt` to get `none` instead"); }
         (self as u32).isqrt() as i32
     }
     pub const fn checked_isqrt(self) -> i32 | none {
@@ -714,12 +714,12 @@ impl i32 {
     }
     /// `floor(log2(self))`; panics unless `self > 0`.
     #[track_caller]
-    pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("ilog2 of a non-positive number") }
+    pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("i32::ilog2: the number is not positive; use `checked_ilog2` to get `none` instead") }
     #[track_caller]
-    pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("ilog10 of a non-positive number") }
+    pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("i32::ilog10: the number is not positive; use `checked_ilog10` to get `none` instead") }
     #[track_caller]
     pub const fn ilog(self, base: i32) -> u32 {
-        self.checked_ilog(base) ?? panic("ilog of a non-positive number or a base below 2")
+        self.checked_ilog(base) ?? panic("i32::ilog: the number is not positive or the base is below 2; use `checked_ilog` to get `none` instead")
     }
     pub const fn checked_ilog2(self) -> u32 | none {
         if self <= 0 { return none; }
@@ -949,7 +949,7 @@ impl i64 {
     /// Integer square root; panics on a negative number.
     #[track_caller]
     pub const fn isqrt(self) -> i64 {
-        if self < 0 { panic("isqrt of a negative number"); }
+        if self < 0 { panic("i64::isqrt: the number is negative; use `checked_isqrt` to get `none` instead"); }
         (self as u64).isqrt() as i64
     }
     pub const fn checked_isqrt(self) -> i64 | none {
@@ -958,12 +958,12 @@ impl i64 {
     }
     /// `floor(log2(self))`; panics unless `self > 0`.
     #[track_caller]
-    pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("ilog2 of a non-positive number") }
+    pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("i64::ilog2: the number is not positive; use `checked_ilog2` to get `none` instead") }
     #[track_caller]
-    pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("ilog10 of a non-positive number") }
+    pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("i64::ilog10: the number is not positive; use `checked_ilog10` to get `none` instead") }
     #[track_caller]
     pub const fn ilog(self, base: i64) -> u32 {
-        self.checked_ilog(base) ?? panic("ilog of a non-positive number or a base below 2")
+        self.checked_ilog(base) ?? panic("i64::ilog: the number is not positive or the base is below 2; use `checked_ilog` to get `none` instead")
     }
     pub const fn checked_ilog2(self) -> u32 | none {
         if self <= 0 { return none; }
@@ -1231,7 +1231,7 @@ impl isize {
     /// Integer square root; panics on a negative number.
     #[track_caller]
     pub const fn isqrt(self) -> isize {
-        if self < 0 { panic("isqrt of a negative number"); }
+        if self < 0 { panic("isize::isqrt: the number is negative; use `checked_isqrt` to get `none` instead"); }
         (self as usize).isqrt() as isize
     }
     pub const fn checked_isqrt(self) -> isize | none {
@@ -1240,12 +1240,12 @@ impl isize {
     }
     /// `floor(log2(self))`; panics unless `self > 0`.
     #[track_caller]
-    pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("ilog2 of a non-positive number") }
+    pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("isize::ilog2: the number is not positive; use `checked_ilog2` to get `none` instead") }
     #[track_caller]
-    pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("ilog10 of a non-positive number") }
+    pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("isize::ilog10: the number is not positive; use `checked_ilog10` to get `none` instead") }
     #[track_caller]
     pub const fn ilog(self, base: isize) -> u32 {
-        self.checked_ilog(base) ?? panic("ilog of a non-positive number or a base below 2")
+        self.checked_ilog(base) ?? panic("isize::ilog: the number is not positive or the base is below 2; use `checked_ilog` to get `none` instead")
     }
     pub const fn checked_ilog2(self) -> u32 | none {
         if self <= 0 { return none; }
@@ -1434,7 +1434,7 @@ impl u8 {
     /// The smallest power of two `>= self`; panics past `MAX`.
     #[track_caller]
     pub const fn next_power_of_two(self) -> u8 {
-        self.checked_next_power_of_two() ?? panic("next_power_of_two overflowed")
+        self.checked_next_power_of_two() ?? panic("u8::next_power_of_two: the result overflows; use `checked_next_power_of_two` to get `none` instead")
     }
     pub const fn checked_next_power_of_two(self) -> u8 | none {
         if self <= 1 { return 1; }
@@ -1445,12 +1445,12 @@ impl u8 {
     }
     /// `floor(log2(self))`; panics unless `self > 0`.
     #[track_caller]
-    pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("ilog2 of a non-positive number") }
+    pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("u8::ilog2: the number is not positive; use `checked_ilog2` to get `none` instead") }
     #[track_caller]
-    pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("ilog10 of a non-positive number") }
+    pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("u8::ilog10: the number is not positive; use `checked_ilog10` to get `none` instead") }
     #[track_caller]
     pub const fn ilog(self, base: u8) -> u32 {
-        self.checked_ilog(base) ?? panic("ilog of a non-positive number or a base below 2")
+        self.checked_ilog(base) ?? panic("u8::ilog: the number is not positive or the base is below 2; use `checked_ilog` to get `none` instead")
     }
     pub const fn checked_ilog2(self) -> u32 | none {
         if self <= 0 { return none; }
@@ -1648,7 +1648,7 @@ impl u16 {
     /// The smallest power of two `>= self`; panics past `MAX`.
     #[track_caller]
     pub const fn next_power_of_two(self) -> u16 {
-        self.checked_next_power_of_two() ?? panic("next_power_of_two overflowed")
+        self.checked_next_power_of_two() ?? panic("u16::next_power_of_two: the result overflows; use `checked_next_power_of_two` to get `none` instead")
     }
     pub const fn checked_next_power_of_two(self) -> u16 | none {
         if self <= 1 { return 1; }
@@ -1659,12 +1659,12 @@ impl u16 {
     }
     /// `floor(log2(self))`; panics unless `self > 0`.
     #[track_caller]
-    pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("ilog2 of a non-positive number") }
+    pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("u16::ilog2: the number is not positive; use `checked_ilog2` to get `none` instead") }
     #[track_caller]
-    pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("ilog10 of a non-positive number") }
+    pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("u16::ilog10: the number is not positive; use `checked_ilog10` to get `none` instead") }
     #[track_caller]
     pub const fn ilog(self, base: u16) -> u32 {
-        self.checked_ilog(base) ?? panic("ilog of a non-positive number or a base below 2")
+        self.checked_ilog(base) ?? panic("u16::ilog: the number is not positive or the base is below 2; use `checked_ilog` to get `none` instead")
     }
     pub const fn checked_ilog2(self) -> u32 | none {
         if self <= 0 { return none; }
@@ -1862,7 +1862,7 @@ impl u32 {
     /// The smallest power of two `>= self`; panics past `MAX`.
     #[track_caller]
     pub const fn next_power_of_two(self) -> u32 {
-        self.checked_next_power_of_two() ?? panic("next_power_of_two overflowed")
+        self.checked_next_power_of_two() ?? panic("u32::next_power_of_two: the result overflows; use `checked_next_power_of_two` to get `none` instead")
     }
     pub const fn checked_next_power_of_two(self) -> u32 | none {
         if self <= 1 { return 1; }
@@ -1873,12 +1873,12 @@ impl u32 {
     }
     /// `floor(log2(self))`; panics unless `self > 0`.
     #[track_caller]
-    pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("ilog2 of a non-positive number") }
+    pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("u32::ilog2: the number is not positive; use `checked_ilog2` to get `none` instead") }
     #[track_caller]
-    pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("ilog10 of a non-positive number") }
+    pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("u32::ilog10: the number is not positive; use `checked_ilog10` to get `none` instead") }
     #[track_caller]
     pub const fn ilog(self, base: u32) -> u32 {
-        self.checked_ilog(base) ?? panic("ilog of a non-positive number or a base below 2")
+        self.checked_ilog(base) ?? panic("u32::ilog: the number is not positive or the base is below 2; use `checked_ilog` to get `none` instead")
     }
     pub const fn checked_ilog2(self) -> u32 | none {
         if self <= 0 { return none; }
@@ -2076,7 +2076,7 @@ impl u64 {
     /// The smallest power of two `>= self`; panics past `MAX`.
     #[track_caller]
     pub const fn next_power_of_two(self) -> u64 {
-        self.checked_next_power_of_two() ?? panic("next_power_of_two overflowed")
+        self.checked_next_power_of_two() ?? panic("u64::next_power_of_two: the result overflows; use `checked_next_power_of_two` to get `none` instead")
     }
     pub const fn checked_next_power_of_two(self) -> u64 | none {
         if self <= 1 { return 1; }
@@ -2087,12 +2087,12 @@ impl u64 {
     }
     /// `floor(log2(self))`; panics unless `self > 0`.
     #[track_caller]
-    pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("ilog2 of a non-positive number") }
+    pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("u64::ilog2: the number is not positive; use `checked_ilog2` to get `none` instead") }
     #[track_caller]
-    pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("ilog10 of a non-positive number") }
+    pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("u64::ilog10: the number is not positive; use `checked_ilog10` to get `none` instead") }
     #[track_caller]
     pub const fn ilog(self, base: u64) -> u32 {
-        self.checked_ilog(base) ?? panic("ilog of a non-positive number or a base below 2")
+        self.checked_ilog(base) ?? panic("u64::ilog: the number is not positive or the base is below 2; use `checked_ilog` to get `none` instead")
     }
     pub const fn checked_ilog2(self) -> u32 | none {
         if self <= 0 { return none; }
@@ -2272,7 +2272,7 @@ impl usize {
     /// The smallest power of two `>= self`; panics past `MAX`.
     #[track_caller]
     pub const fn next_power_of_two(self) -> usize {
-        self.checked_next_power_of_two() ?? panic("next_power_of_two overflowed")
+        self.checked_next_power_of_two() ?? panic("usize::next_power_of_two: the result overflows; use `checked_next_power_of_two` to get `none` instead")
     }
     pub const fn checked_next_power_of_two(self) -> usize | none {
         if self <= 1 { return 1; }
@@ -2283,12 +2283,12 @@ impl usize {
     }
     /// `floor(log2(self))`; panics unless `self > 0`.
     #[track_caller]
-    pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("ilog2 of a non-positive number") }
+    pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("usize::ilog2: the number is not positive; use `checked_ilog2` to get `none` instead") }
     #[track_caller]
-    pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("ilog10 of a non-positive number") }
+    pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("usize::ilog10: the number is not positive; use `checked_ilog10` to get `none` instead") }
     #[track_caller]
     pub const fn ilog(self, base: usize) -> u32 {
-        self.checked_ilog(base) ?? panic("ilog of a non-positive number or a base below 2")
+        self.checked_ilog(base) ?? panic("usize::ilog: the number is not positive or the base is below 2; use `checked_ilog` to get `none` instead")
     }
     pub const fn checked_ilog2(self) -> u32 | none {
         if self <= 0 { return none; }

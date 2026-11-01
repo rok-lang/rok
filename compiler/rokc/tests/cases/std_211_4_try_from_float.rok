@@ -24,7 +24,7 @@ fn ok() throws (OverflowError) {
 }
 
 fn fails(f: fn() throws (OverflowError)) -> str {
-    try f() catch e: OverflowError { return e.ty; }
+    try f() catch e: OverflowError { return e.type_name(); }
     return "ok";
 }
 

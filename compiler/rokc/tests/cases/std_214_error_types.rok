@@ -26,8 +26,8 @@ fn main() {
     try q.set(0, 7) catch e { println(f"unexpected {e}"); };
     let m = try { q.set(2, 0); "no error" } catch e: IndexError { f"{e}" };
     println(f"{q:?} {m}");
-    let t = TypeError { expected: "i32", actual: "str" };
+    let t = TypeError::new("i32", "str");
     println(f"{show(t)} {t:?}");
     println(f"{show(StackOverflowError)} {show(OutOfMemoryError)} {show(InternalError)} {InternalError:?}");
-    println(rok::std::io::IoError::new("disk gone").message());
+    println(rok::std::io::IoError::new(rok::std::io::IoErrorKind::Other, "disk gone").message());
 }

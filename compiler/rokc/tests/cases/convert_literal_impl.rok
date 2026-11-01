@@ -16,7 +16,7 @@
 struct Even { v: i64; }
 impl TryFrom<i64> for Even {
     fn try_from(value: i64) throws (Self::Error) -> Even {
-        if value < 0 { throw ConversionError { msg: "negative" }; }
+        if value < 0 { throw ConversionError::new("negative"); }
         Even { v: value }
     }
 }

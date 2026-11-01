@@ -1,0 +1,33 @@
+// spec: std 305-io §3.5.0
+// needs: fs
+// expect-exit: 0
+// expect-stdout:
+// new: none InvalidInput bad name
+// os: 2 NotFound true
+// context: true
+// open: true NotFound
+
+// `os_code()` is the OS number for an OS failure and `none` for one the
+// library raised. Code 2 is ENOENT and Windows' ERROR_FILE_NOT_FOUND.
+use rok::std::io::{IoError, IoErrorKind};
+use rok::std::fs;
+
+fn shown(c: i32 | none) -> str {
+    match c {
+        n: i32 => f"{n}",
+        none => "none",
+    }
+}
+
+fn main() {
+    let e = IoError::new(IoErrorKind::InvalidInput, "bad name");
+    println(f"new: {shown(e.os_code())} {e.kind():?} {e.message()}");
+    let o = IoError::from_os_code(2);
+    println(f"os: {shown(o.os_code())} {o.kind():?} {o.message().len() > 0}");
+    let c = IoError::from_os_code(2, "x.txt");
+    println(f"context: {c.message().starts_with("x.txt: ")}");
+    try fs::read_to_str("ioerror_os_code_none.missing") catch f {
+        println(f"open: {f.os_code() is i32} {f.kind():?}");
+        ""
+    };
+}

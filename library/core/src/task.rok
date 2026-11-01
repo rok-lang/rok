@@ -1454,7 +1454,7 @@ impl<T> Join<T> {
                 return Poll::Pending;
             }
             if no_result(self.task.task) {
-                throw CancellationError {};
+                throw CancellationError;
             }
             Poll::Ready(task_result(self.task))
         }
@@ -1494,6 +1494,7 @@ impl Debug for TaskId {
 }
 
 /// The running task's id; panics outside a task (`current_id`).
+#[track_caller]
 pub fn id() -> TaskId {
     current_id() ?? panic("task::id() outside a task; use `task::current_id()`, which is `none` there")
 }
@@ -1509,10 +1510,15 @@ pub fn current_id() -> TaskId | none {
 }
 
 /// A task was cancelled (2.18.4).
-pub struct CancellationError {}
+#[derive(Clone, PartialEq, Eq)]
+pub struct CancellationError;
+
+impl CancellationError {
+    pub const fn message(self) -> str { "task cancelled" }
+}
 
 impl Display for CancellationError {
-    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("task cancelled") }
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(self.message()) }
 }
 
 impl Debug for CancellationError {
@@ -1646,6 +1652,7 @@ impl<T> Future for Race<T> {
 /// for `Task::cancel`) and dropped; one whose cleanups await goes on as a
 /// task of its own until they end, and `select` does not wait for it.
 /// Panics on an empty list.
+#[track_caller]
 pub const fn select<F: Future>(futs: List<F>) -> SelectFuture<F> {
     unsafe {
         if futs.len() == 0 {
@@ -1854,7 +1861,7 @@ impl<T> Timeout<T> {
                 return Poll::Ready(task_result(self.task));
             }
             if now_ns() >= self.deadline {
-                throw TimeoutError {};
+                throw TimeoutError;
             }
             add_timer(self.deadline, ctx.waker);
             Poll::Pending
@@ -1863,10 +1870,15 @@ impl<T> Timeout<T> {
 }
 
 /// `task::timeout` ran out.
-pub struct TimeoutError {}
+#[derive(Clone, PartialEq, Eq)]
+pub struct TimeoutError;
+
+impl TimeoutError {
+    pub const fn message(self) -> str { "timed out" }
+}
 
 impl Display for TimeoutError {
-    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("timed out") }
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(self.message()) }
 }
 
 impl Debug for TimeoutError {

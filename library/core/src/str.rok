@@ -70,8 +70,9 @@ impl str {
     }
 
     /// Byte `i`, O(1); panics if `i >= len()`.
+    #[track_caller]
     pub const fn byte(self, i: usize) -> u8 {
-        if i >= self.len() { index_oob("str byte index", i, self.len()); }
+        if i >= self.len() { index_oob("str::byte: index", i, self.len()); }
         unsafe { rok_str_byte(self, i) }
     }
 
@@ -545,7 +546,7 @@ impl char {
     /// The value of this digit in base `radix` (2..=36, either letter
     /// case); throws if it is not one.
     pub const fn to_digit(self, radix: u32) throws (ValueError) -> u32 {
-        if radix < 2u32 || radix > 36u32 { throw ValueError { msg: "radix must be in 2..=36" }; }
+        if radix < 2u32 || radix > 36u32 { throw ValueError::new("radix must be in 2..=36"); }
         let c = self as u32;
         let d = 99u32;
         if c >= 0x30u32 && c <= 0x39u32 {
@@ -555,7 +556,7 @@ impl char {
         } else if c >= 0x41u32 && c <= 0x5Au32 {
             d = c - 0x41u32 + 10u32;
         }
-        if d >= radix { throw ValueError { msg: f"{self:?} is not a base-{radix} digit" }; }
+        if d >= radix { throw ValueError::new(f"{self:?} is not a base-{radix} digit"); }
         d
     }
 
@@ -659,7 +660,7 @@ impl TryFrom<u32> for char {
     const fn try_from(value: u32) throws (OverflowError) -> char {
         let c = char::from_u32(value);
         if c is char { return c; }
-        throw OverflowError { op: "try_from", ty: "char" };
+        throw OverflowError::new("try_from", "char");
     }
 }
 
@@ -835,12 +836,20 @@ impl Display for StrBuf {
 }
 
 /// Bytes that are not UTF-8 (`str::from_utf8`).
+#[derive(Clone, PartialEq, Eq)]
 pub struct Utf8Error {
-    pub valid_up_to: usize;
+    valid_up_to: usize;
+}
+
+impl Utf8Error {
+    /// Length of the valid prefix, in bytes (a Windows path's: UTF-16
+    /// units).
+    pub const fn valid_up_to(self) -> usize { self.valid_up_to }
+    pub const fn message(self) -> str { f"invalid UTF-8 at byte {self.valid_up_to}" }
 }
 
 impl Display for Utf8Error {
-    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"invalid UTF-8 at byte {self.valid_up_to}") }
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(self.message()) }
 }
 
 impl Debug for Utf8Error {
@@ -862,9 +871,9 @@ const fn int_of(s: str, signed: i32, bits: u32) throws (ParseError) -> i64 {
     unsafe {
         let out: GcBuf<i64> = buf_new(1);
         let st = rok_str_parse_int(s, 10u32, signed, bits, out);
-        if st == 1 { throw ParseError { input: s, pos: 0, reason: "empty string" }; }
-        if st == 2 { throw ParseError { input: s, pos: 0, reason: "invalid digit" }; }
-        if st == 3 { throw ParseError { input: s, pos: 0, reason: "number out of range" }; }
+        if st == 1 { throw ParseError::new(s, 0, "empty string"); }
+        if st == 2 { throw ParseError::new(s, 0, "invalid digit"); }
+        if st == 3 { throw ParseError::new(s, 0, "number out of range"); }
         out[0]
     }
 }
@@ -877,8 +886,8 @@ const fn float_of(s: str) throws (ParseError) -> f64 {
     unsafe {
         let out: GcBuf<f64> = buf_new(1);
         let st = rok_str_parse_float(s, out);
-        if st == 2 { throw ParseError { input: s, pos: 0, reason: "invalid float literal" }; }
-        if st == 3 { throw ParseError { input: s, pos: 0, reason: "number out of range" }; }
+        if st == 2 { throw ParseError::new(s, 0, "invalid float literal"); }
+        if st == 3 { throw ParseError::new(s, 0, "number out of range"); }
         out[0]
     }
 }
@@ -933,7 +942,7 @@ impl FromStr for f32 {
         let v = try float_of(s);
         let r = v as f32;
         if v.is_finite() && !r.is_finite() {
-            throw ParseError { input: s, pos: 0, reason: "number out of range" };
+            throw ParseError::new(s, 0, "number out of range");
         }
         r
     }
@@ -943,7 +952,7 @@ impl FromStr for bool {
     const fn from_str(s: str) throws (ParseError) -> bool {
         if s == "true" { return true; }
         if s == "false" { return false; }
-        throw ParseError { input: s, pos: 0, reason: "expected `true` or `false`" };
+        throw ParseError::new(s, 0, "expected `true` or `false`");
     }
 }
 impl FromStr for char {
@@ -951,8 +960,8 @@ impl FromStr for char {
     const fn from_str(s: str) throws (ParseError) -> char {
         let it = s.chars();
         let first = it.next();
-        if s.len() == 0 { throw ParseError { input: s, pos: 0, reason: "empty string" }; }
-        if it.next() is char { throw ParseError { input: s, pos: 0, reason: "too many characters" }; }
+        if s.len() == 0 { throw ParseError::new(s, 0, "empty string"); }
+        if it.next() is char { throw ParseError::new(s, 0, "too many characters"); }
         first ?? ' '
     }
 }

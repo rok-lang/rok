@@ -41,6 +41,7 @@ pub fn id() -> u32 { unsafe { rok_os_getpid() } }
 /// A signal to send or handle. Windows: only `Kill` can be sent
 /// (`TerminateProcess`), and only `Interrupt` (Ctrl-C) and `Hangup`
 /// (console closed) handled.
+#[derive(Clone, Copy)]
 #[non_exhaustive]
 pub enum Signal {
     /// `SIGHUP`.
@@ -107,6 +108,8 @@ impl PartialEq for Signal {
     const fn ne(self, rhs: Signal) -> bool { self.number() != rhs.number() }
 }
 
+impl Eq for Signal {}
+
 impl Debug for Signal {
     const fn fmt(self, ref f: Formatter) throws (FmtError) {
         try f.write_str(match self {
@@ -129,7 +132,7 @@ impl Debug for Signal {
 /// `sig` cannot be sent on Windows.
 fn unsent(sig: Signal) throws (IoError) {
     if WINDOWS && !sig.on_windows(false) {
-        throw IoError::with_kind(IoErrorKind::Unsupported, f"kill: Windows can send only Signal::Kill, not Signal::{sig:?}");
+        throw IoError::new(IoErrorKind::Unsupported, f"kill: Windows can send only Signal::Kill, not Signal::{sig:?}");
     }
 }
 
@@ -152,17 +155,37 @@ pub fn raise(sig: i32) throws (IoError) {
 
 /// `signal` could not route the signal (`SIGKILL` / `SIGSTOP`, a bad
 /// number, or the OS refused).
+#[derive(Clone, PartialEq, Eq)]
 pub struct SignalError {
-    pub sig: i32;
-    /// The errno.
-    pub code: i32;
+    signal: Signal;
+    os_code: i32 | none;
+}
+
+impl SignalError {
+    /// The signal that could not be routed.
+    pub const fn signal(self) -> Signal { self.signal }
+    /// The OS error (errno; Windows: the error code), or `none` when
+    /// the handler thread could not start for another reason.
+    pub const fn os_code(self) -> i32 | none { self.os_code }
+    pub const fn message(self) -> str {
+        match self.os_code {
+            c: i32 => f"cannot handle signal {self.signal:?} (os error {c})",
+            none => f"cannot handle signal {self.signal:?}",
+        }
+    }
 }
 
 impl Display for SignalError {
-    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"cannot handle signal {self.sig} (errno {self.code})") }
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(self.message()) }
 }
 impl Debug for SignalError {
-    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"SignalError {{ sig: {self.sig}, code: {self.code} }}") }
+    const fn fmt(self, ref f: Formatter) throws (FmtError) {
+        let code = match self.os_code {
+            c: i32 => f"{c}",
+            none => "none",
+        };
+        try f.write_str(f"SignalError {{ signal: {self.signal:?}, os_code: {code} }}")
+    }
 }
 impl Error for SignalError {}
 
@@ -171,32 +194,25 @@ static SIGNAL_HANDLERS: Mutex<Dict<i32, fn() + Send>> = unsafe { Mutex::new_unsh
 /// Call `handler` (on the `rok-signal` thread) each time the process
 /// receives `sig`; a later `on_signal` for the same `sig` replaces it.
 pub fn on_signal(sig: Signal, handler: fn() + Send) throws (SignalError) {
-    let n = sig.number();
     // ERROR_NOT_SUPPORTED.
-    if WINDOWS && !sig.on_windows(true) { throw SignalError { sig: n, code: 50 }; }
-    try install(n, handler);
-}
-
-/// Call `handler` (on the `rok-signal` thread) each time the process
-/// receives `sig`; a later `signal` for the same `sig` replaces it.
-#[deprecated(since = "0.1.6", note = "use `process::on_signal(Signal::.., handler)`")]
-pub fn signal(sig: i32, handler: fn() + Send) throws (SignalError) {
+    if WINDOWS && !sig.on_windows(true) { throw SignalError { signal: sig, os_code: 50 }; }
     try install(sig, handler);
 }
 
-fn install(sig: i32, handler: fn() + Send) throws (SignalError) {
+fn install(signal: Signal, handler: fn() + Send) throws (SignalError) {
+    let sig = signal.number();
     unsafe {
         using g = SIGNAL_HANDLERS.lock() { g.get().insert(sig, handler); }
         let fd: GcBuf<i32> = buf_new(1);
         let r = rok_os_signal_install(sig, fd);
         if r < 0 {
             using g = SIGNAL_HANDLERS.lock() { g.get().remove(sig); }
-            throw SignalError { sig: sig, code: -r };
+            throw SignalError { signal, os_code: -r };
         }
         if fd[0] >= 0 {
             let pipe = File::from_fd(fd[0], "signal pipe");
             let h = try thread::Builder::new().name("rok-signal").spawn(|| dispatch_signals(pipe))
-                catch e { throw SignalError { sig: sig, code: e.code() }; };
+                catch e { throw SignalError { signal, os_code: e.os_code() }; };
             h.detach();
         }
     }

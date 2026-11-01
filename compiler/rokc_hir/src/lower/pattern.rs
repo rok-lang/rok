@@ -947,7 +947,7 @@ pub(super) fn lower_pattern_inner(
         }
         HirPattern::Wildcard
     };
-    // `ValueError { msg }` / `E::A(x)` on an `any` value: narrow to that
+    // `MyError { code }` / `E::A(x)` on an `any` value: narrow to that
     // type, then match its payload (`catch` of an untyped `throws`).
     if let (
         HirTy::AnyTrait(bounds),

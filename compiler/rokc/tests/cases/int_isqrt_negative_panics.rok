@@ -2,7 +2,7 @@
 // stdlib spec 2.1.2: `isqrt` of a negative `int` panics at the call.
 // expect-exit: 101
 // expect-stderr: thread 'main' panicked at tests/cases/int_isqrt_negative_panics.rok:10:16:
-// expect-stderr: isqrt of a negative number
+// expect-stderr: Int::isqrt: the number is negative; use `checked_isqrt` to get `none` instead
 // expect-stdout:
 
 fn main() {

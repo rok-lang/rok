@@ -59,7 +59,7 @@ fn find(xs: List<i32>) -> usize | none {
 }
 let q = (try? "x".parse::<i32>()) ?? 0;
 fn neg(k: i32) throws -> i32 {
-    if k < 0 { throw ValueError { msg: "negative" }; }
+    if k < 0 { throw ValueError::new("negative"); }
     k
 }
 let r = try neg(-1) catch _ { -1 };

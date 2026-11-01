@@ -265,7 +265,7 @@ fn decrypt(dk: Slice<u8>, c: Slice<u8>) -> Secret {
 }
 
 const fn need(b: Slice<u8>, n: usize, what: str) throws (ValueError) {
-    if b.len() != n { throw ValueError { msg: f"ML-KEM-768: {what} must be {n} bytes" }; }
+    if b.len() != n { throw ValueError::new(f"ML-KEM-768: {what} must be {n} bytes"); }
 }
 
 /// ML-KEM-768 key encapsulation. The functions are the deterministic
@@ -328,7 +328,7 @@ impl MlKem768 {
         try need(mv, 32, "m");
         let t = decode(e[0:384 * K], K * N, 12u32);
         for i in 0..K * N {
-            if t[i] >= Q { throw ValueError { msg: "ML-KEM-768: encapsulation key coefficient out of range" }; }
+            if t[i] >= Q { throw ValueError::new("ML-KEM-768: encapsulation key coefficient out of range"); }
         }
         let g = Sha3_512::new();
         g.update(mv);
@@ -353,7 +353,7 @@ impl MlKem768 {
         let hd = Sha3_256::digest(ek);
         let bad = 0u8;
         for i in 0..32 { bad = bad | (hd[i] ^ h[i]); }
-        if bad != 0u8 { throw ValueError { msg: "ML-KEM-768: decapsulation key hash mismatch" }; }
+        if bad != 0u8 { throw ValueError::new("ML-KEM-768: decapsulation key hash mismatch"); }
         let m = decrypt(d, cv);
         let g = Sha3_512::new();
         g.update(m);

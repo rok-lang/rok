@@ -1,0 +1,67 @@
+// spec: stdlib 0.5.10
+// spec: std 214-error §2.14.4
+// expect-exit: 0
+// expect-stdout:
+// parse: x7 1 invalid digit | cannot parse "x7": invalid digit | true
+// value: bad input | true false
+// overflow: try_from u8 | try_from: value out of range for `u8` | true
+// conversion: odd | true
+// type: i32 str | expected `i32`, found `str` | true
+// utf8: 1 | invalid UTF-8 at byte 1 | true
+// nul: 1 | nul byte found at position 1 | true
+// nul-terminated: true | true
+// layout: align is not a power of two | true
+// fmt: an error occurred when formatting | true
+// unit: task cancelled timed out | true true
+// zero: zero is not a valid `NonZero` value | true
+// fatal: stack overflow out of memory internal compiler error
+// channel: true true
+
+// Core errors: built with `new`, read through getters and `message()`,
+// compared and cloned.
+use rok::bare::alloc::Layout;
+use rok::bare::ffi::{CStr, CString};
+use rok::core::task::{CancellationError, TimeoutError};
+use rok::core::channel;
+
+fn as_error(e: any Error) -> str { f"{e}" }
+
+fn same<T: Clone + Eq>(x: T) -> bool { x.clone() == x }
+
+fn main() {
+    let p = ParseError::new("x7", 1, "invalid digit");
+    println(f"parse: {p.input()} {p.position()} {p.message()} | {p} | {same(p)}");
+    let v = ValueError::new("bad input");
+    println(f"value: {v.message()} | {same(v)} {v == ValueError::new("other")}");
+    let o = try { u8::try_from(300); OverflowError::new("", "") } catch e: OverflowError { e };
+    println(f"overflow: {o.operation()} {o.type_name()} | {o.message()} | {o == OverflowError::new("try_from", "u8")}");
+    let c = ConversionError::new("odd");
+    println(f"conversion: {c.message()} | {same(c)}");
+    let t = TypeError::new("i32", "str");
+    println(f"type: {t.expected()} {t.actual()} | {t.message()} | {same(t)}");
+    let u: Utf8Error | none = try { str::from_utf8([0x61u8, 0xffu8]); none } catch e { e };
+    if let u: Utf8Error = u {
+        println(f"utf8: {u.valid_up_to()} | {u.message()} | {same(u)}");
+    }
+    let n = try { CString::from_str("a\0b"); "made" } catch n {
+        f"{n.position()} | {n.message()} | {same(n)}"
+    };
+    println(f"nul: {n}");
+    let raw: List<u8> = [0x61u8];
+    let b = try { CStr::from_bytes_with_nul(raw[0:1]); "made" } catch b {
+        f"{b.message().len() > 0} | {same(b)}"
+    };
+    println(f"nul-terminated: {b}");
+    let l = try { Layout::from_size_align(8, 3); "made" } catch l {
+        f"{l.message()} | {same(l)}"
+    };
+    println(f"layout: {l}");
+    println(f"fmt: {as_error(FmtError)} | {FmtError == FmtError}");
+    println(f"unit: {CancellationError.message()} {TimeoutError.message()} | {CancellationError == CancellationError} {same(TimeoutError)}");
+    let z: ZeroError | none = try { NonZero::<i32>::try_from(0); none } catch e { e };
+    if let z: ZeroError = z {
+        println(f"zero: {z.message()} | {same(z)}");
+    }
+    println(f"fatal: {StackOverflowError.message()} {OutOfMemoryError.message()} {InternalError.message()}");
+    println(f"channel: {channel::Empty == channel::Empty} {channel::Closed == channel::Closed}");
+}

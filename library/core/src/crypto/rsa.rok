@@ -100,18 +100,18 @@ impl RsaPublicKey {
         let nb = strip(view(n));
         let eb = strip(view(e));
         if nb.len() == 0 || nb.len() > 512 {
-            throw ValueError { msg: "RSA modulus must be 2048 to 4096 bits" };
+            throw ValueError::new("RSA modulus must be 2048 to 4096 bits");
         }
-        let m: List<u32> = Nat::from_be(nb, (nb.len() + 3) / 4) else { throw ValueError { msg: "bad RSA modulus" }; };
+        let m: List<u32> = Nat::from_be(nb, (nb.len() + 3) / 4) else { throw ValueError::new("bad RSA modulus"); };
         let bits = Nat::bits(m);
         if bits < 2048 || bits > 4096 {
-            throw ValueError { msg: "RSA modulus must be 2048 to 4096 bits" };
+            throw ValueError::new("RSA modulus must be 2048 to 4096 bits");
         }
         if m[0] & 1u32 == 0u32 {
-            throw ValueError { msg: "RSA modulus must be odd" };
+            throw ValueError::new("RSA modulus must be odd");
         }
         if eb.len() == 0 || eb.len() > 5 || (eb.len() == 5 && eb[0] > 1u8) || eb[eb.len() - 1] & 1u8 == 0u8 || (eb.len() == 1 && eb[0] < 3u8) {
-            throw ValueError { msg: "RSA exponent must be odd, at least 3 and below 2^33" };
+            throw ValueError::new("RSA exponent must be odd, at least 3 and below 2^33");
         }
         RsaPublicKey { md: Modulus::new(m), e: eb.to_list(), bits }
     }
@@ -120,7 +120,7 @@ impl RsaPublicKey {
     /// publicExponent INTEGER }`.
     pub fn from_pkcs1_der(der: ByteInput) throws (ValueError) -> RsaPublicKey {
         let s = view(der);
-        let bad = ValueError { msg: "malformed RSAPublicKey" };
+        let bad = ValueError::new("malformed RSAPublicKey");
         if s.len() < 2 || s[0] != 0x30u8 { throw bad; }
         let t2: (usize, usize) = der_len(s, 1) else { throw bad; };
         let (len, at) = t2;
@@ -220,7 +220,7 @@ const fn pad_be(b: Slice<u8>, len: usize) -> List<u8> {
 
 /// A prime factor as a modulus: odd, at most `nlimbs` limbs.
 fn factor(b: Slice<u8>, nlimbs: usize) throws (ValueError) -> Modulus {
-    let bad = ValueError { msg: "bad RSA private key" };
+    let bad = ValueError::new("bad RSA private key");
     if b.len() == 0 { throw bad; }
     let m: List<u32> = Nat::from_be(b, (b.len() + 3) / 4) else { throw bad; };
     if m[0] & 1u32 == 0u32 || m.len() > nlimbs { throw bad; }
@@ -232,7 +232,7 @@ impl RsaPrivateKey {
     /// p, q, d mod (p - 1), d mod (q - 1), q^-1 mod p).
     pub fn from_pkcs1_der(der: ByteInput) throws (ValueError) -> RsaPrivateKey {
         let s = view(der);
-        let bad = ValueError { msg: "malformed RSAPrivateKey" };
+        let bad = ValueError::new("malformed RSAPrivateKey");
         if s.len() < 2 || s[0] != 0x30u8 { throw bad; }
         let t: (usize, usize) = der_len(s, 1) else { throw bad; };
         let (len, start) = t;
@@ -279,8 +279,8 @@ impl RsaPrivateKey {
         let e = self.public.e[0:self.public.e.len()];
         let blinded = md.from_mont(md.mul(md.to_mont(m), md.pow(md.to_mont(r), e)));
         // Per prime: (m r^e)^dp = m^dp r, times r^-1.
-        let rp: List<u32> = fp.inv(fp.reduce(r)) else { throw ValueError { msg: "RSA blinding factor not invertible" }; };
-        let rq: List<u32> = fq.inv(fq.reduce(r)) else { throw ValueError { msg: "RSA blinding factor not invertible" }; };
+        let rp: List<u32> = fp.inv(fp.reduce(r)) else { throw ValueError::new("RSA blinding factor not invertible"); };
+        let rq: List<u32> = fq.inv(fq.reduce(r)) else { throw ValueError::new("RSA blinding factor not invertible"); };
         let sp = fp.mul(fp.pow(fp.to_mont(fp.reduce(blinded)), self.dp[0:self.dp.len()]), fp.to_mont(rp));
         let sq = fq.mul(fq.pow(fq.to_mont(fq.reduce(blinded)), self.dq[0:self.dq.len()]), fq.to_mont(rq));
         // Garner: s = sq + q ((sp - sq) q^-1 mod p); q h < n, so the
@@ -290,7 +290,7 @@ impl RsaPrivateKey {
         let qh = md.from_mont(md.mul(md.to_mont(Nat::resize(fq.m, md.n)), md.to_mont(Nat::resize(h, md.n))));
         let s = md.add(qh, Nat::resize(sq_plain, md.n));
         let back = md.from_mont(md.pow(md.to_mont(s), e));
-        if !Nat::eq(back, m) { throw ValueError { msg: "RSA private key is inconsistent" }; }
+        if !Nat::eq(back, m) { throw ValueError::new("RSA private key is inconsistent"); }
         s
     }
 
@@ -300,7 +300,7 @@ impl RsaPrivateKey {
     pub fn sign_pss(self, hash: HashAlgorithm, msg: ByteInput, salt: ByteInput) throws (ValueError) -> List<u8> {
         let hl = hash.output_len();
         let sb = view(salt);
-        if sb.len() != hl { throw ValueError { msg: "PSS salt must be as long as the hash" }; }
+        if sb.len() != hl { throw ValueError::new("PSS salt must be as long as the hash"); }
         let bits = self.public.bits;
         let k = (bits + 7) / 8;
         let em_bits = bits - 1;
@@ -340,7 +340,7 @@ impl RsaPrivateKey {
     fn sign_encoded(self, em: List<u8>, salt: ByteInput, mh: List<u8>) throws (ValueError) -> List<u8> {
         let k = em.len();
         let n = self.public.md.n;
-        let m: List<u32> = Nat::from_be(em[0:k], n) else { throw ValueError { msg: "RSA encoding" }; };
+        let m: List<u32> = Nat::from_be(em[0:k], n) else { throw ValueError::new("RSA encoding"); };
         // The blinding factor, below 2^(8 (k - 1)) <= 2^(bits - 1) < n.
         let ikm = self.dp.clone();
         for x in self.dq { ikm.push(x); }
@@ -348,7 +348,7 @@ impl RsaPrivateKey {
         for x in mh { info.push(x); }
         let rb = try Hkdf::expand(HashAlgorithm::Sha512, Hkdf::extract(HashAlgorithm::Sha512, salt, ikm), info, k);
         rb[0] = 0u8;
-        let r: List<u32> = Nat::from_be(rb[0:k], n) else { throw ValueError { msg: "RSA blinding" }; };
+        let r: List<u32> = Nat::from_be(rb[0:k], n) else { throw ValueError::new("RSA blinding"); };
         rb.wipe();
         Nat::to_be(try self.private_op(m, r), k)
     }

@@ -116,6 +116,7 @@ impl<T: AtomicPrimitive + PartialEq> Atomic<T> {
     }
 
     /// Panics on `Release` / `AcqRel` (not load orderings).
+    #[track_caller]
     pub fn load(self, ordering: AtomicOrdering = SeqCst) -> T {
         let c = self.cell;
         match ordering {
@@ -144,6 +145,7 @@ impl<T: AtomicPrimitive + PartialEq> Atomic<T> {
     /// `Ok(previous)` if it held `current` (now `new`), else
     /// `Err(actual)`. `failure` is a load ordering (panics on `Release`
     /// / `AcqRel`).
+    #[track_caller]
     pub fn compare_exchange(
         self, current: T, new: T, success: AtomicOrdering, failure: AtomicOrdering,
     ) -> Result<T, T> {

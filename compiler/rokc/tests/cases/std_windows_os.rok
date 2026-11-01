@@ -32,7 +32,7 @@ fn main() {
     bad.push(0xD800u16);
     bad.push(98u16);
     let r = RawPath::from_wide(bad);
-    try r.try_to_path() catch e { println(f"lone surrogate at {e.valid_up_to}"); };
+    try r.try_to_path() catch e { println(f"lone surrogate at {e.valid_up_to()}"); };
     println(r.to_path_lossy().as_str().replace("\u{FFFD}", "?"));
     let rs = env::RawStr::from_wide(bad);
     println(f"rawstr {rs.len()} {rs.as_wide() == bad}");

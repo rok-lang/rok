@@ -467,7 +467,7 @@ impl Curve {
     /// The secret scalar `d` from big-endian bytes: `1 <= d < q`.
     fn scalar(self, b: ByteInput) throws (ValueError) -> Fe {
         let s = view(b);
-        let bad = ValueError { msg: "bad ECDSA private key" };
+        let bad = ValueError::new("bad ECDSA private key");
         if s.len() > self.size { throw bad; }
         let d: Fe = fe_from_be(s, self.fp.n) else { throw bad; };
         if fe_is_zero(d) || !fe_lt(d, self.fq.m, self.fp.n) { throw bad; }

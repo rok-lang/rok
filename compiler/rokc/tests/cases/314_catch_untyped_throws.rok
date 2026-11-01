@@ -5,7 +5,7 @@
 // expect-stdout:
 // 4 -1 14 5 -2 7
 
-struct Other {}
+struct Other { n: i32; }
 
 impl Error for Other {}
 
@@ -18,8 +18,8 @@ impl Debug for Other {
 }
 
 fn bad(k: i32) throws -> i32 {
-    if k == 0 { throw ValueError { msg: "zero" }; }
-    if k == 1 { throw Other {}; }
+    if k == 0 { throw ValueError::new("zero"); }
+    if k == 1 { throw Other { n: 4 }; }
     k
 }
 
@@ -28,11 +28,11 @@ fn rethrows_other(k: i32) throws -> i32 {
 }
 
 fn main() -> i32 {
-    let a = try bad(0) catch e: ValueError { e.msg.len() as i32 } catch _ { -1 };
+    let a = try bad(0) catch e: ValueError { e.message().len() as i32 } catch _ { -1 };
     if a != 4 { return 1; }
     let b = try bad(1) catch e: ValueError { 100 } catch _ { -1 };
     if b != -1 { return 2; }
-    let c = try bad(0) catch ValueError { msg } { msg.len() as i32 + 10 } catch _ { -1 };
+    let c = try bad(1) catch Other { n } { n + 10 } catch _ { -1 };
     if c != 14 { return 3; }
     let d = try bad(5) catch _ { -1 };
     if d != 5 { return 4; }

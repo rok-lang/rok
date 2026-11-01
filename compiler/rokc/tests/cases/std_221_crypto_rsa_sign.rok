@@ -53,7 +53,7 @@ fn main() {
         if first.len() == 0 { first = der; }
         let key = try! RsaPrivateKey::from_pkcs1_der(der);
         let msg = f"rok pss {f[0]}";
-        let sig = try key.sign_pss(h, msg, unhex(f[3])) catch e { println(f"FAIL {f[0]}: {e.msg}"); [] };
+        let sig = try key.sign_pss(h, msg, unhex(f[3])) catch e { println(f"FAIL {f[0]}: {e.message()}"); [] };
         let pk = key.public_key();
         println(f"ok {f[0]} {f[1]}: bits {key.bits()}, signature {if sig == unhex(f[4]) { "matches" } else { "differs" }}, verifies {pk.verify_pss(h, msg, sig)}, other message {pk.verify_pss(h, "other", sig)}");
     }

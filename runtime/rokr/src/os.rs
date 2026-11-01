@@ -148,7 +148,9 @@ mod kind {
 #[unsafe(no_mangle)]
 pub const extern "C" fn rok_os_errno_kind(code: i32) -> i32 {
     match code {
-        libc::ENOENT | EAI_BASE.. => kind::NOT_FOUND,
+        libc::ENOENT => kind::NOT_FOUND,
+        // A name that does not resolve; other resolver failures are Other.
+        c if c == EAI_BASE + libc::EAI_NONAME.abs() => kind::NOT_FOUND,
         libc::EACCES | libc::EPERM => kind::PERMISSION_DENIED,
         libc::EEXIST => kind::ALREADY_EXISTS,
         libc::ENOTDIR => kind::NOT_A_DIRECTORY,
@@ -1857,7 +1859,14 @@ mod tests {
         assert_eq!(rok_os_errno_kind(libc::EACCES), kind::PERMISSION_DENIED);
         assert_eq!(rok_os_errno_kind(libc::EEXIST), kind::ALREADY_EXISTS);
         assert_eq!(rok_os_errno_kind(libc::ENOTSUP), kind::UNSUPPORTED);
-        assert_eq!(rok_os_errno_kind(EAI_BASE + 8), kind::NOT_FOUND);
+        assert_eq!(
+            rok_os_errno_kind(EAI_BASE + libc::EAI_NONAME.abs()),
+            kind::NOT_FOUND
+        );
+        assert_eq!(
+            rok_os_errno_kind(EAI_BASE + libc::EAI_AGAIN.abs()),
+            kind::OTHER
+        );
         assert_eq!(rok_os_errno_kind(0), kind::OTHER);
         assert_eq!(rok_os_errno_kind(-1), kind::OTHER);
     }

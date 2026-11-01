@@ -12,7 +12,7 @@ pub struct Ed25519;
 /// the nonce prefix is the second.
 fn expand(seed: ByteInput) throws (ValueError) -> ([u8; 32], [u8; 64]) {
     let s = view(seed);
-    if s.len() != 32 { throw ValueError { msg: "Ed25519 seed must be 32 bytes" }; }
+    if s.len() != 32 { throw ValueError::new("Ed25519 seed must be 32 bytes"); }
     let d = Digest::new(HashAlgorithm::Sha512);
     d.update(s);
     let h = d.finish_raw();

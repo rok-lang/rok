@@ -421,7 +421,7 @@ pub(super) fn raise(
             if ety != HirTy::Prim(PrimTy::Str) {
                 ctx.help_last(Some(format!(
                     "add `impl Error for {name} {{}}` (it needs `Display` and `Debug`), or \
-                     throw a `ValueError`: `throw ValueError {{ msg: .. }};`"
+                     throw a `ValueError`: `throw ValueError::new(..);`"
                 )));
             }
         } else {
@@ -1030,7 +1030,7 @@ pub(super) fn lower_throw(
     if let (true, Some(msg)) = (is_str, ctx.src(value.span)) {
         ctx.help_since(
             since,
-            format!("throw a `ValueError`: `throw ValueError {{ msg: {msg} }};`"),
+            format!("throw a `ValueError`: `throw ValueError::new({msg});`"),
         );
     }
     HirStmt::Expr(block_expr(stmts, span))

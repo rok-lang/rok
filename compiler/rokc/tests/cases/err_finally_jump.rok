@@ -7,7 +7,7 @@
 // drop the error in flight: an error. Jumps that stay inside the block,
 // or inside a closure in it, are fine (`h`).
 fn boom() throws -> i32 {
-    throw ValueError { msg: "boom" };
+    throw ValueError::new("boom");
 }
 fn f() throws -> i32 { try { boom() } finally { return 7; } }
 fn g() throws -> i32 {

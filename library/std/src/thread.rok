@@ -82,10 +82,9 @@ impl Thread {
 }
 
 /// The thread could not be joined (`JoinError::kind`).
-#[derive(Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct JoinError {
-    #[deprecated(since = "0.1.6", note = "use `JoinError::kind()`")]
-    pub code: i32;
+    code: i32;
 }
 
 /// Why a join failed.
@@ -124,16 +123,6 @@ const fn code_of(k: JoinErrorKind) -> i32 {
         JoinErrorKind::Taken => TAKEN,
     }
 }
-
-/// `JoinError::code` of a thread a failed REPL cell's rollback ended
-/// (the session went back to before the cell; the thread is gone).
-#[deprecated(since = "0.1.6", note = "use `JoinErrorKind::Lost`")]
-pub const JOIN_LOST: i32 = -1;
-
-/// `JoinError::code` of a handle already joined or detached, through it
-/// or a copy of it: the OS thread handle is released once.
-#[deprecated(since = "0.1.6", note = "use `JoinErrorKind::Taken`")]
-pub const JOIN_TAKEN: i32 = -2;
 
 // `JoinError.code` of the two kinds that are not OS errors.
 const LOST: i32 = -1;
@@ -251,9 +240,9 @@ impl Builder {
                 using g = THREADS.lock() { g.get().remove(id); }
                 // No threads on this target (wasm32-wasip2, the browser).
                 if unsafe { rok_cpu_count() } == 0 {
-                    throw IoError::with_kind(IoErrorKind::Unsupported, "threads are not supported on this target");
+                    throw IoError::new(IoErrorKind::Unsupported, "threads are not supported on this target");
                 }
-                throw IoError::new("could not create an OS thread");
+                throw IoError::new(IoErrorKind::Other, "could not create an OS thread");
             }
             JoinHandle { handle: h, result: cell.get(), thread: Thread { rec: rec }, taken: Atomic::new(false) }
         }
@@ -261,6 +250,7 @@ impl Builder {
 }
 
 /// Run `f` on a new OS thread.
+#[track_caller]
 pub fn spawn<T: Send>(f: fn() -> T + Send) -> JoinHandle<T> {
     try! Builder::new().spawn(f)
 }

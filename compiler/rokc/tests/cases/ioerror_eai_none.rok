@@ -1,0 +1,19 @@
+// spec: std 305-io §3.5.0
+// spec: std 302-net §3.2.4
+// needs: net
+// only-os: linux macos
+// expect-exit: 0
+// expect-stdout:
+// resolve: none true
+
+// A name that does not resolve fails with a resolver (EAI) code, which
+// is no OS error code: `os_code()` is `none`. `.invalid` never resolves
+// (RFC 2606); without a network the resolver fails too.
+use rok::std::net;
+
+fn main() {
+    let r = try { net::resolve("no-such-host.invalid:80"); "resolved" } catch e {
+        f"{if e.os_code() is none { "none" } else { "code" }} {e.message().starts_with("no-such-host.invalid: ")}"
+    };
+    println(f"resolve: {r}");
+}

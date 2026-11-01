@@ -13,9 +13,34 @@ extern "rok" {
 }
 
 /// Why a `Layout` cannot be made.
+// By hand: bare cannot use the derives, which expand to core paths.
 pub struct LayoutError {
-    pub reason: str;
+    message: str;
 }
+
+impl LayoutError {
+    pub const fn message(self) -> str { self.message }
+}
+
+impl PartialEq for LayoutError {
+    const fn eq(self, rhs: LayoutError) -> bool { self.message == rhs.message }
+}
+
+impl Eq for LayoutError {}
+
+impl Clone for LayoutError {
+    fn clone(self) -> LayoutError { LayoutError { message: self.message } }
+}
+
+impl Display for LayoutError {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(self.message) }
+}
+
+impl Debug for LayoutError {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"LayoutError({self.message:?})") }
+}
+
+impl Error for LayoutError {}
 
 /// Size and alignment of a raw block.
 pub struct Layout {
@@ -34,7 +59,7 @@ impl Layout {
         let half = 1usize << (size_of::<usize>() * 8usize - 1usize);
         let max = half - 1usize + half;
         if size != 0 && n > max / size {
-            throw LayoutError { reason: "array size overflows usize" };
+            throw LayoutError { message: "array size overflows usize" };
         }
         Layout { size: size * n, align: align_of::<T>() }
     }
@@ -42,7 +67,7 @@ impl Layout {
     /// `align` must be a power of two.
     pub const fn from_size_align(size: usize, align: usize) throws (LayoutError) -> Layout {
         if align == 0 || (align & (align - 1)) != 0 {
-            throw LayoutError { reason: "align is not a power of two" };
+            throw LayoutError { message: "align is not a power of two" };
         }
         Layout { size, align }
     }
@@ -97,7 +122,7 @@ impl<T> Allocation<T> {
         let size = if layout.size == 0 { 1 } else { layout.size };
         let at = unsafe { rok_alloc_raw(size, layout.align, 1) };
         if at == 0 {
-            throw LayoutError { reason: "out of memory" };
+            throw LayoutError { message: "out of memory" };
         }
         Allocation { ptr: Ptr::<T>::dangling().with_addr(at), len: n }
     }
