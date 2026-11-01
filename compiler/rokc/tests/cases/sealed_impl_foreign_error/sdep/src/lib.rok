@@ -1,0 +1,13 @@
+/// Only this package implements it.
+#[sealed]
+pub trait Shape {
+    fn sides(self) -> i32;
+}
+
+pub struct Tri {}
+
+impl Shape for Tri {
+    fn sides(self) -> i32 { 3 }
+}
+
+pub fn sides_of<T: Shape>(x: T) -> i32 { x.sides() }

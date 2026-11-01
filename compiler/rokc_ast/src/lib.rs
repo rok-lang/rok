@@ -88,10 +88,13 @@ impl Attribute {
     }
 }
 
-/// Whether `attrs` hide their item (`#[doc(hidden)]`).
+/// Whether `attrs` hide their item from docs and completion:
+/// `#[doc(hidden)]`, or `#[internal]` (no API to show).
 #[must_use]
 pub fn doc_hidden(attrs: &[Attribute]) -> bool {
-    attrs.iter().any(Attribute::is_doc_hidden)
+    attrs
+        .iter()
+        .any(|a| a.is_doc_hidden() || a.path == ["internal"])
 }
 
 #[derive(Clone, Debug)]

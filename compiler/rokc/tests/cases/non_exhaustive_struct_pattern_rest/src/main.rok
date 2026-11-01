@@ -1,0 +1,23 @@
+// spec: §6.2.10
+// rokc-arg: --extern ndep=tests/cases/non_exhaustive_struct_pattern_rest/ndep
+// expect-error: pattern on `ndep::Config` needs `..`: it is `#[non_exhaustive]` in another package, which may add fields; write `Config { port, verbose, .. }`
+// expect-error: src/main.rok:19:5
+// expect-error: write `Config { .. }`
+// expect-error: src/main.rok:21:9
+
+// A pattern on another package's `#[non_exhaustive]` struct ends in
+// `..`. Its literals and `..base` spreads are allowed.
+use ndep::Config;
+
+fn main() {
+    let a = Config { port: 8080 };
+    let b = Config { verbose: true, ..Config::local() };
+    let Config { port, .. } = a;
+    if let Config { verbose: true, .. } = b {
+        println(f"{port} {b.port} {ndep::port_of(a)}");
+    }
+    let Config { port, verbose } = b;
+    match a {
+        Config {} => println(f"{port} {verbose}"),
+    }
+}

@@ -469,6 +469,7 @@ fn collect<'a>(
         names: base_names,
         decls,
         non_exhaustive,
+        sealed,
         fn_marks,
         marks,
         mark_pkg: _,
@@ -1692,6 +1693,15 @@ fn collect<'a>(
                     _ => None,
                 }))
                 .collect(),
+            sealed: sealed
+                .into_iter()
+                .chain(program.items.iter().filter_map(|i| match i {
+                    Item::Trait(t) if t.attrs.iter().any(|a| a.path == ["sealed"]) => {
+                        Some(t.name.clone())
+                    }
+                    _ => None,
+                }))
+                .collect(),
             fn_marks: HashMap::new(),
             marks: marks.into_iter().chain(item_marks(program)).collect(),
             // The std's own uses never warn.
@@ -2128,6 +2138,12 @@ fn collect<'a>(
             .and_then(|t| env.trait_info.get(t))
             .and_then(|t| t.decls.get(leaf_name(&f.name)));
         let mark = mark_of(&f.attrs).or_else(|| declared.and_then(|t| mark_of(&t.attrs)));
+        // `#[internal]` outside the toolchain is reported where it is
+        // written (`check_internal_marks`), not at every use.
+        let mark = mark.and_then(|mut m| {
+            m.internal &= is_toolchain_module(&module);
+            (m != crate::marks::Mark::default()).then_some(m)
+        });
         if let Some(mark) = mark {
             if mark.deprecated_safe.is_some()
                 && package_of(&module).is_empty()
@@ -2438,6 +2454,7 @@ fn finish<'a>(
     };
     check_impl_overlap(&env, &own);
     check_impl_rules(&env, checked, &programs, &own);
+    check_internal_marks(&env, checked, &own);
     let failed_derives: Vec<Span> = checked
         .iter()
         .flat_map(|p| check_derives(&env, p))
@@ -5748,6 +5765,64 @@ fn check_statics_sync(env: &Env<'_>, programs: &[&Program]) {
     }
 }
 
+/// Spec 6.2.16: `#[internal]` marks what the toolchain's packages share;
+/// on any other package's item it is an error.
+fn check_internal_marks(env: &Env<'_>, checked: &[&Program], own: &dyn Fn(&str) -> bool) {
+    let mut found: Vec<(String, Span)> = Vec::new();
+    let mut add = |name: &str, attrs: &[rokc_ast::Attribute], span: Span| {
+        if attrs.iter().any(|a| a.path == ["internal"]) {
+            found.push((leaf_name(name).to_owned(), span));
+        }
+    };
+    for item in checked.iter().flat_map(|p| &p.items) {
+        let module = match item {
+            Item::Impl(i) => i.module.clone(),
+            Item::Fn(f) => module_of(&f.name),
+            Item::Struct(s) => module_of(&s.name),
+            Item::Const(c) => module_of(&c.name),
+            Item::Static(s) => module_of(&s.name),
+            _ => continue,
+        };
+        if !own(&module) || is_toolchain_module(&module) {
+            continue;
+        }
+        match item {
+            Item::Fn(f) => add(&f.name, &f.attrs, f.span),
+            Item::Const(c) => add(&c.name, &c.attrs, c.span),
+            Item::Static(s) => add(&s.name, &s.attrs, s.span),
+            Item::Struct(s) => {
+                if let AstStructKind::Named(fs) = &s.kind {
+                    for f in fs {
+                        add(&f.name, &f.attrs, f.span);
+                    }
+                }
+            }
+            Item::Impl(i) => {
+                for it in &i.items {
+                    match it {
+                        rokc_ast::ImplItem::Method(m) => add(&m.name, &m.attrs, m.span),
+                        rokc_ast::ImplItem::Const(c) => add(&c.name, &c.attrs, c.span),
+                        rokc_ast::ImplItem::AssocType { .. } => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut sink = env.sink.diagnostics.borrow_mut();
+    for (name, span) in found {
+        sink.push(rokc_diagnostic::RokDiagnostic::error(
+            rokc_diagnostic::ErrorKind::Meta,
+            span,
+            format!(
+                "`#[internal]` on `{name}`: it marks items the Rok toolchain's own packages \
+                 share (spec 6.2.16); to keep an item inside this package, write `pub(pkg)` \
+                 instead"
+            ),
+        ));
+    }
+}
+
 /// Spec 2.9.3: one impl per trait and type (a concrete impl a generic one
 /// covers is a duplicate); the orphan rule (2.9.5); supertraits (2.8.4,
 /// for every instance a generic impl's bounds allow).
@@ -5780,9 +5855,9 @@ fn check_impl_rules(
         let segs: Vec<&str> = tp.segments.iter().map(|s| s.name.as_str()).collect();
         let key = env.names.trait_key(&segs, &module, i.span);
         let pkg = package_of(&module);
-        if package_of(&module_of(&key)) != pkg
-            && target_package(env, i, &module).as_deref() != Some(pkg)
-        {
+        let owner_module = module_of(&key);
+        let owner = package_of(&owner_module);
+        if owner != pkg && target_package(env, i, &module).as_deref() != Some(pkg) {
             env.sink
                 .diagnostics
                 .borrow_mut()
@@ -5796,6 +5871,31 @@ fn check_impl_rules(
                         impl_def_display(&i.self_ty)
                     ),
                 ));
+            continue;
+        }
+        if env.is_sealed(&key) && owner != pkg {
+            env.sink.diagnostics.borrow_mut().push(
+                rokc_diagnostic::RokDiagnostic::error(
+                    rokc_diagnostic::ErrorKind::Type,
+                    i.span,
+                    format!(
+                        "`impl {} for {}`: trait `{}` is sealed, so only `{}` implements it \
+                             (spec 6.2.15)",
+                        leaf_name(&key),
+                        impl_def_display(&i.self_ty),
+                        leaf_name(&key),
+                        if owner.is_empty() {
+                            "its package"
+                        } else {
+                            owner
+                        },
+                    ),
+                )
+                .with_note(
+                    "a sealed trait still works in bounds and calls: use the types that \
+                         already implement it",
+                ),
+            );
             continue;
         }
         if i.negative {

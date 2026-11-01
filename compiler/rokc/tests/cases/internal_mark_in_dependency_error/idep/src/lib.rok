@@ -1,0 +1,8 @@
+// A package outside the toolchain can neither call an internal item
+// nor mark its own.
+pub fn wake(fd: i32) {
+    task::wake_io(fd);
+}
+
+#[internal]
+pub fn mine() -> i32 { 1 }

@@ -769,6 +769,7 @@ pub(super) fn bind_irrefutable(
             .as_deref()
             == Some(enum_base_name(&ctx.struct_def(sid).name)) =>
         {
+            super::pattern::struct_pattern_rest(ctx, pat, &value.ty);
             let parts: Vec<(String, Option<&AstPattern>)> = match &pat.kind {
                 AstPatternKind::Struct { fields, .. } => fields
                     .iter()

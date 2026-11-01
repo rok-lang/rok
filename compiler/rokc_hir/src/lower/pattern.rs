@@ -804,6 +804,48 @@ fn in_instance(ctx: &LowerCtx<'_>) -> bool {
             .any(|t| super::bounds::has_param(ctx, t))
 }
 
+/// Spec 6.2.10: a struct pattern `pat` on `ty`, a `#[non_exhaustive]`
+/// struct of another package, ends in `..` (its package may add fields).
+pub(super) fn struct_pattern_rest(ctx: &LowerCtx<'_>, pat: &AstPattern, ty: &HirTy) {
+    let AstPatternKind::Struct {
+        path,
+        fields,
+        rest: false,
+    } = &pat.kind
+    else {
+        return;
+    };
+    let listed: Vec<&str> = fields.iter().map(|f| f.name.as_str()).collect();
+    missing_rest(ctx, pat.span, path, &listed, ty);
+}
+
+/// `struct_pattern_rest` of a pattern without `..` that lists `listed`.
+pub(super) fn missing_rest(
+    ctx: &LowerCtx<'_>,
+    at: rokc_diagnostic::Span,
+    path: &rokc_ast::Path,
+    listed: &[&str],
+    ty: &HirTy,
+) {
+    let Some(name) = foreign_non_exhaustive(ctx, ty) else {
+        return;
+    };
+    let segs: Vec<&str> = path.segments.iter().map(|s| s.name.as_str()).collect();
+    let help = if listed.is_empty() {
+        format!("{} {{ .. }}", segs.join("::"))
+    } else {
+        format!("{} {{ {}, .. }}", segs.join("::"), listed.join(", "))
+    };
+    ctx.emit_error_at(
+        rokc_diagnostic::ErrorKind::Type,
+        at,
+        format!(
+            "pattern on `{name}` needs `..`: it is `#[non_exhaustive]` in another package, \
+             which may add fields; write `{help}`"
+        ),
+    );
+}
+
 /// `ty`'s name when it is a `#[non_exhaustive]` struct / enum of another
 /// package.
 fn foreign_non_exhaustive(ctx: &LowerCtx<'_>, ty: &HirTy) -> Option<String> {
@@ -1405,6 +1447,7 @@ pub(super) fn lower_pattern_inner(
             if *scrut_ty != HirTy::Struct(struct_id) {
                 return mismatch(ctx, format!("struct pattern `{}`", segs.join("::")));
             }
+            struct_pattern_rest(ctx, pat, scrut_ty);
             let def = ctx.struct_def(struct_id);
             let mut lowered: Vec<(u32, HirPattern)> = Vec::new();
             for fp in fields {

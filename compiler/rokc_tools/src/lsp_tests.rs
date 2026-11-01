@@ -863,6 +863,76 @@ fn completion_skips_doc_hidden() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Completion leaves out the library's `#[internal]` items.
+#[test]
+fn internal_hidden_from_completion() {
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let bootstrap = workspace.join("library/core/src/lib.rok");
+    let dir = rokc_core::tmp::test_dir("lsp-internal");
+    std::fs::create_dir_all(&dir).unwrap();
+    let uri = path_to_uri(
+        &dir.join("internal.rok").display().to_string(),
+        cfg!(windows),
+    );
+    let uri = uri.as_str();
+    let base = "let n = 1;\n";
+    let script = [
+        request(
+            1,
+            "initialize",
+            Json::obj([("capabilities", Json::obj([]))]),
+        ),
+        notify(
+            "textDocument/didOpen",
+            Json::obj([(
+                "textDocument",
+                Json::obj([
+                    ("uri", Json::str(uri)),
+                    ("languageId", Json::str("rok")),
+                    ("version", Json::num(1)),
+                    ("text", Json::str(base)),
+                ]),
+            )]),
+        ),
+        change(uri, &format!("{base}rok::core::task::\n")),
+        request(2, "textDocument/completion", at(uri, 1, 17)),
+        change(uri, &format!("{base}rok::core::marker::\n")),
+        request(3, "textDocument/completion", at(uri, 1, 19)),
+        request(4, "shutdown", Json::Null),
+        notify("exit", Json::Null),
+    ];
+    let input: String = script.iter().map(frame).collect();
+    let mut out = Vec::new();
+    let code = serve(
+        Cursor::new(input.into_bytes()),
+        &mut out,
+        vec![bootstrap],
+        Vec::new(),
+        Vec::new(),
+    );
+    assert_eq!(code, 0);
+    let msgs = messages(&out);
+    let labels = |id: u32| match msgs
+        .iter()
+        .find(|m| m.get("id") == &Json::num(id))
+        .unwrap_or_else(|| panic!("no reply {id}"))
+        .get("result")
+    {
+        Json::Arr(items) => items
+            .iter()
+            .filter_map(|i| i.get("label").as_str().map(str::to_owned))
+            .collect::<Vec<_>>(),
+        r => panic!("completion {id}: {r}"),
+    };
+    let has = |id: u32, name: &str| labels(id).iter().any(|l| l == name);
+    assert!(has(2, "block_on"), "{:?}", labels(2));
+    for name in ["wake_io", "host_enter", "host_run", "host_leave"] {
+        assert!(!has(2, name), "{name} in {:?}", labels(2));
+    }
+    assert!(!has(3, "hand_over"), "{:?}", labels(3));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 // The server highlights macro calls and user-defined literal suffixes via
 // semantic tokens (spec 6.5 / 6.8.12), which the static grammar cannot.
 #[test]

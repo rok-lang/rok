@@ -552,6 +552,7 @@ fn enc_plain(c: &Collected<'_>, e: &mut Enc) {
     t.literal_shapes.enc(e);
     t.names.enc(e);
     t.non_exhaustive.enc(e);
+    t.sealed.enc(e);
     t.fn_marks.enc(e);
     t.marks.enc(e);
     c.early.enc(e);
@@ -613,6 +614,7 @@ fn dec_plain(d: &mut Dec<'_>) -> Option<Collected<'static>> {
     t.literal_shapes = Codec::dec(d)?;
     t.names = Codec::dec(d)?;
     t.non_exhaustive = Codec::dec(d)?;
+    t.sealed = Codec::dec(d)?;
     t.fn_marks = Codec::dec(d)?;
     t.marks = Codec::dec(d)?;
     c.early = Codec::dec(d)?;
