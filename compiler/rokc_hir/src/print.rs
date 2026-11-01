@@ -337,10 +337,6 @@ fn print_expr(out: &mut String, e: &HirExpr) {
             print_expr(out, value);
             out.push(')');
         }
-        HirExprKind::MlirOp { op, args, .. } => {
-            let _ = write!(out, "__mlir_op::<{op:?}>");
-            print_args(out, args);
-        }
         HirExprKind::BufAtomic {
             op,
             buf,
@@ -611,7 +607,6 @@ fn ty_str(t: &HirTy) -> String {
     match t {
         HirTy::GcBuf(e) => format!("GcBuf<{}>", ty_str(e)),
         HirTy::Never => "!".to_owned(),
-        HirTy::Mlir(t) => format!("__mlir_type<{t:?}>"),
         HirTy::Unknown => "?".to_owned(),
         HirTy::Unit => "()".to_owned(),
         HirTy::Prim(p) => p.name().to_owned(),

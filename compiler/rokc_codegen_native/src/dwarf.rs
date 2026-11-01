@@ -696,11 +696,10 @@ impl Info<'_> {
                 }
                 self.pointer_to(sub)
             }
-            MirTy::GcRef | MirTy::Mlir(_) => {
-                let name = if *ty == MirTy::GcRef { "gcref" } else { "mlir" };
+            MirTy::GcRef => {
                 let o = self.b.len() as u32;
                 self.b.push(A_PTR_NAMED);
-                cstr(&mut self.b, name);
+                cstr(&mut self.b, "gcref");
                 uleb(&mut self.b, u64::from(w));
                 o
             }

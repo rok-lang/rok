@@ -704,7 +704,7 @@ impl Flow<'_> {
 
     fn may_hold(&mut self, ty: &HirTy) -> bool {
         match ty {
-            HirTy::Prim(_) | HirTy::Unit | HirTy::Never | HirTy::Mlir(_) => false,
+            HirTy::Prim(_) | HirTy::Unit | HirTy::Never => false,
             HirTy::Tuple(ts) | HirTy::Sum(ts) => ts.iter().any(|t| self.may_hold(t)),
             HirTy::Array(e, _) | HirTy::GcBuf(e) => self.may_hold(e),
             HirTy::Throws { ok, err } => self.may_hold(ok) || self.may_hold(err),
@@ -966,7 +966,6 @@ impl Flow<'_> {
             | K::AddrOf { .. }
             | K::RawWrite { .. }
             | K::BufAtomic { .. }
-            | K::MlirOp { .. }
             | K::SumWrap { value: None, .. } => {
                 let mut kids = Vec::new();
                 each_child(e, &mut |c| kids.push(c));
@@ -1086,10 +1085,6 @@ pub(super) fn each_child<'e>(e: &'e HirExpr, out: &mut dyn FnMut(Child<'e>)) {
             out(Child::E(index));
             args.iter().for_each(|a| out(Child::E(a)));
         }
-        K::MlirOp { args, regions, .. } => args
-            .iter()
-            .chain(regions.iter().map(|(_, b)| b))
-            .for_each(|a| out(Child::E(a))),
         K::ArrayIndex { array, index, .. } => {
             out(Child::E(array));
             out(Child::E(index));

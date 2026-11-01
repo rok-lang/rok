@@ -63,8 +63,7 @@ Pushing a `v<version>` tag runs `release.yml`:
      of its own architecture. The container's LLVM is downloaded from S3
      (`dist-llvm/<version>/<triple>/`), not built from source.
    - each uploads its `rok-<version>-<triple>` archives (`.tar.gz` +
-     `.tar.xz`; Windows a `.zip`), the `rok-mlir-dev-<version>-<triple>`
-     bundle (none for static musl), a `.sha256` beside each, and a
+     `.tar.xz`; Windows a `.zip`), a `.sha256` beside each, and a
      `rok-version` file.
 4. `publish`, once every build passed: gathers every archive, runs
    `release.sh --dir dist` to verify that every target's archives and

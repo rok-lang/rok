@@ -2,8 +2,8 @@
 # Build the static musl release archive: dist-native.sh in Alpine
 # (dist-linux-musl.Containerfile), so rok, rokc, rokls and librokr.a link
 # against musl and run anywhere, Alpine and old glibc included. A static
-# rokc ships no libclang (`rokc bindgen` is unavailable) and no MLIR dev
-# bundle; dist-native.sh handles that when the host is musl.
+# rokc ships no libclang (`rokc bindgen` is unavailable); dist-native.sh
+# handles that when the host is musl.
 #
 #   scripts/dist-linux-musl.sh [--out <dir>]
 #

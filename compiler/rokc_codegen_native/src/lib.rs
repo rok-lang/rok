@@ -23,7 +23,7 @@ mod wrap;
 mod x64;
 
 use rokc_diagnostic::{ErrorKind, RokDiagnostic};
-use rokc_mir::{MirModule, MirTy, RValue, Statement};
+use rokc_mir::MirModule;
 
 /// How to generate code for a module (its target is `MirModule::target`).
 #[derive(Clone, Debug, Default)]
@@ -51,27 +51,11 @@ pub struct Output {
 }
 
 /// Why this backend can't compile `module` (LLVM then does): no
-/// instruction selector or object writer for the target, or `__mlir_op`.
+/// instruction selector or object writer for the target.
 #[must_use]
 pub fn unsupported(module: &MirModule) -> Option<String> {
     let t = &module.target;
-    if !t.native_backend {
-        return Some(format!("no native backend for {}", t.name));
-    }
-    let mlir = module.functions.iter().any(|f| {
-        f.locals.iter().any(|l| matches!(l.ty, MirTy::Mlir(_)))
-            || f.blocks.iter().flat_map(|b| &b.stmts).any(|s| {
-                matches!(
-                    s,
-                    Statement::MlirRegion { .. }
-                        | Statement::Assign {
-                            rvalue: RValue::MlirOp { .. },
-                            ..
-                        }
-                )
-            })
-    });
-    mlir.then(|| "the module uses `__mlir_op`".to_owned())
+    (!t.native_backend).then(|| format!("no native backend for {}", t.name))
 }
 
 /// Compile `module` to an object file.

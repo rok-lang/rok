@@ -26,8 +26,8 @@ pub use rokc_driver::native::chosen as native_backend;
 pub use rokc_driver::units::UnitCounts;
 pub use rokc_driver::{
     AS_WASM_LD, BuildOptions, Demangled, EmitKind, LLVM_VERSION, Profile, ReplCell, ReplFn,
-    SourceFile, Subsystem, TargetSpec, TempDir, bootstrap_tiers, demangle, feature_of,
-    find_mlir_plugin, link_host, profdata_merge, profdata_show, repl_host, rokhir, wasm_ld_main,
+    SourceFile, Subsystem, TargetSpec, TempDir, bootstrap_tiers, demangle, feature_of, link_host,
+    profdata_merge, profdata_show, repl_host, rokhir, wasm_ld_main,
 };
 pub use rokc_target::BUILTIN as BUILTIN_TARGETS;
 

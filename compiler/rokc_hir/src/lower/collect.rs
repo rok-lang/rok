@@ -3918,9 +3918,6 @@ pub(super) fn hir_expr_has_unknown(e: &HirExpr) -> bool {
         K::BufAtomic {
             buf, index, args, ..
         } => hir_expr_has_unknown(buf) || hir_expr_has_unknown(index) || any(args),
-        K::MlirOp { args, regions, .. } => {
-            any(args) || regions.iter().any(|(_, b)| hir_expr_has_unknown(b))
-        }
     }
 }
 
@@ -7076,8 +7073,6 @@ pub(super) enum Intrinsic {
     FieldTable,
     /// `rok.shown`: the argument as `{x:?}`, or `<T>` without `Debug`.
     Shown,
-    MlirOp,
-    MlirAttr,
     /// `rok.transfer`: a hand-off copy of the value (stdlib 2.13.9).
     Transfer,
     /// `rok.transfer_keep`: note every collection reached as its own copy.
@@ -7119,8 +7114,6 @@ impl Intrinsic {
             "method_table" => Self::MethodTable,
             "field_table" => Self::FieldTable,
             "shown" => Self::Shown,
-            "mlir.op" => Self::MlirOp,
-            "mlir.attr" => Self::MlirAttr,
             "transfer" => Self::Transfer,
             "transfer_keep" => Self::TransferKeep,
             "transfer_visit" => Self::TransferVisit,

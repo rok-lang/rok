@@ -577,16 +577,6 @@ pub enum HirExprKind {
         /// (success, failure), the others the first.
         order: [&'static str; 2],
     },
-    /// `__mlir_op::<"dialect.op", R>(..)` (bare 1.9): one MLIR op in
-    /// generic form, `attrs` verbatim, typed by its result. Each region is
-    /// its block arguments (locals here) and a straight-line body ending in
-    /// the terminator.
-    MlirOp {
-        op: String,
-        attrs: Vec<(String, String)>,
-        args: Vec<HirExpr>,
-        regions: Vec<(Vec<LocalId>, HirExpr)>,
-    },
     // `arr[idx]` - element read.
     ArrayIndex {
         array: Box<HirExpr>,
@@ -926,9 +916,6 @@ pub enum HirTy {
     /// `!`: the type of a diverging expression (`panic(..)`, `exit(..)`,
     /// `loop {}` without `break`). Flows into any slot.
     Never,
-    /// `rok::bare::mlir::__mlir_type<"text">` (stdlib bare 1.9): an
-    /// opaque MLIR type, written verbatim into the MLIR text.
-    Mlir(String),
 }
 
 impl HirTy {
@@ -1222,10 +1209,6 @@ pub fn each_expr<'a>(e: &'a HirExpr, f: &mut impl FnMut(&'a HirExpr)) {
             go(index);
             args.iter().for_each(go);
         }
-        HirExprKind::MlirOp { args, regions, .. } => {
-            args.iter().for_each(&mut go);
-            regions.iter().for_each(|(_, b)| go(b));
-        }
     }
 }
 
@@ -1352,10 +1335,6 @@ pub fn each_expr_mut(e: &mut HirExpr, f: &mut impl FnMut(&mut HirExpr)) {
             go(buf);
             go(index);
             args.iter_mut().for_each(go);
-        }
-        HirExprKind::MlirOp { args, regions, .. } => {
-            args.iter_mut().for_each(&mut go);
-            regions.iter_mut().for_each(|(_, b)| go(b));
         }
     }
 }

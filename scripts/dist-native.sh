@@ -17,12 +17,6 @@
 #       install.sh install.ps1 README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE
 #       COPYING.mingw-w64 (Windows module definitions embedded in rokc)
 #
-#   dist/rok-mlir-dev-<version>-<triple>.tar.gz (Windows: .zip; none for musl)
-#     rok-mlir-dev-<version>-<triple>/     MLIR plugin development
-#       include/{llvm,llvm-c,mlir,mlir-c,rok}  the headers plugins build with
-#       lib/rokc.lib                        (Windows) rokc.exe's import library
-#       example/answer.cpp README.md        docs/mlir-plugins.md
-#
 # plus their .sha256 and dist/rok-version; every file is a release asset.
 #
 #   scripts/dist-native.sh [--out <dir>]    (Windows: Git Bash in a Developer prompt)
@@ -84,8 +78,7 @@ case $(uname -s) in
 esac
 
 # A musl rokc is static: it loads nothing at run time, so it ships no
-# libclang (`rokc bindgen` says it cannot load one) and exports no
-# symbols for MLIR plugins (no development bundle).
+# libclang (`rokc bindgen` says it cannot load one).
 static=""
 case $(rustc -vV | sed -n 's/^host: //p') in *-musl) static=1 ;; esac
 [ -n "${ROK_LLVM_PREFIX-}" ] || $build_llvm
@@ -120,8 +113,7 @@ grep -q "^version=\"\${ROK_VERSION:-$version}\"" install.sh &&
 stage=$out/$name
 rm -rf "$stage" "$out/$name".tar.* "$out/$name.$ext" "$out/$name.$ext.sha256"
 mkdir -p "$stage/bin" "$stage/lib/rok"
-# Without debug info and local symbols. rokc keeps its exported symbols:
-# the MLIR plugins it loads bind to them.
+# Without debug info and local symbols.
 mb() { echo "$(($(wc -c < "$1") / 1000000)) MB"; }
 for t in rok rokc rokls; do
   cp "$target/$t$exe" "$stage/bin/"
@@ -129,19 +121,6 @@ for t in rok rokc rokls; do
   [ -n "$exe" ] || strip -x "$stage/bin/$t"
   echo "$t: $(mb "$target/$t$exe") -> $(mb "$stage/bin/$t$exe")"
 done
-dev=$target/mlir-plugin-dev
-devname=""
-if [ -z "$static" ]; then
-  devname=rok-mlir-dev-$version-$triple
-  [ -n "$exe" ] || nm -g "$stage/bin/rokc" | grep -q '[^U] _*_ZN4llvm24DisableABIBreakingChecksE$' || {
-    echo "dist-native.sh: the stripped rokc does not export its LLVM / MLIR symbols" >&2
-    exit 1
-  }
-fi
-[ -z "$exe" ] || [ -f "$dev/lib/rokc.lib" ] || {
-  echo "dist-native.sh: rokc.exe's link left no import library ($dev/lib/rokc.lib)" >&2
-  exit 1
-}
 runtime/rokr/localize.sh "$target/$rt" "$stage/lib/$rt"
 # The library sources.
 tar -C library -cf - core/src std/src bare/src lldb | tar -C "$stage/lib/rok" -xf -
@@ -231,44 +210,28 @@ fi
 rm -rf "$stage/check.h" "$stage/check.rok" "$stage/check$exe" "$stage/.check$exe.fp" "$stage/check.pdb" \
   "$stage/check$exe.dSYM" "$stage/lib/rok-cache"
 
-# The MLIR plugin development bundle (docs/mlir-plugins.md): rokc_llvm's
-# plugin tree for this build.
-if [ -n "$devname" ]; then
-  devstage=$out/$devname
-  rm -rf "$devstage" "$out/$devname.$ext" "$out/$devname.$ext.sha256"
-  mkdir -p "$devstage/example"
-  cp -R "$dev/include" "$devstage/"
-  [ -z "$exe" ] || cp -R "$dev/lib" "$devstage/"
-  cp docs/mlir-plugins.md "$devstage/README.md"
-  cp compiler/rokc/tests/plugin/answer.cpp "$devstage/example/"
-fi
-
 sum=$(command -v sha256sum || echo "shasum -a 256")
 if [ "$ext" != zip ] && ! command -v xz > /dev/null 2>&1; then
   echo "dist-native.sh: xz is needed for the .tar.xz archive (Debian / Ubuntu: apt install xz-utils; macOS: brew install xz)" >&2
   exit 1
 fi
-for n in "$name" $devname; do
-  exts=$ext
-  case $ext in
-    # cmake (needed for LLVM anyway) writes zip; Git Bash's tar does not.
-    zip) (cd "$out" && cmake -E tar cf "$n.zip" --format=zip "$n") ;;
-    *)
-      tar -C "$out" -czf "$out/$n.$ext" "$n"
-      # rok toolchain install reads the .tar.gz; install.sh prefers this.
-      [ "$n" != "$name" ] || {
-        tar -C "$out" -cf - "$n" | xz -9 -T0 > "$out/$n.tar.xz"
-        exts="$ext tar.xz"
-      }
-      ;;
-  esac
-  for e in $exts; do
-    (cd "$out" && $sum "$n.$e" > "$n.$e.sha256")
-    echo "archive: $(mb "$out/$n.$e")"
-    echo "$out/$n.$e"
-  done
-  rm -rf "${out:?}/$n"
+exts=$ext
+case $ext in
+  # cmake (needed for LLVM anyway) writes zip; Git Bash's tar does not.
+  zip) (cd "$out" && cmake -E tar cf "$name.zip" --format=zip "$name") ;;
+  *)
+    tar -C "$out" -czf "$out/$name.$ext" "$name"
+    # rok toolchain install reads the .tar.gz; install.sh prefers this.
+    tar -C "$out" -cf - "$name" | xz -9 -T0 > "$out/$name.tar.xz"
+    exts="$ext tar.xz"
+    ;;
+esac
+for e in $exts; do
+  (cd "$out" && $sum "$name.$e" > "$name.$e.sha256")
+  echo "archive: $(mb "$out/$name.$e")"
+  echo "$out/$name.$e"
 done
+rm -rf "${out:?}/$name"
 # Listing a .zip takes unzip; release.sh checks every archive again.
 if [ "$ext" != zip ]; then
   scripts/check-archive.sh "$version" "$out/$name.tar.gz" "$out/$name.tar.xz"

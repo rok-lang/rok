@@ -753,10 +753,6 @@ impl Key<'_> {
                 self.operand(value);
                 self.ty(ty);
             }
-            Statement::MlirRegion { params } => {
-                let _ = write!(self.b, "region {params:?}");
-            }
-            Statement::MlirRegionEnd => self.b.push_str("endregion"),
         }
     }
 
@@ -911,20 +907,6 @@ impl Key<'_> {
                 self.operands(args);
                 self.ty(elem_ty);
             }
-            RValue::MlirOp {
-                op,
-                attrs,
-                args,
-                ty,
-                regions,
-            } => {
-                let _ = write!(self.b, "mlir {op} {attrs:?} {regions} ");
-                for (a, t) in args {
-                    self.operand(a);
-                    self.ty(t);
-                }
-                self.ty(ty);
-            }
             RValue::HeapLoad { ptr, ty } => {
                 self.b.push_str("hload ");
                 self.operand(ptr);
@@ -1047,9 +1029,6 @@ impl Key<'_> {
                     self.b.push(',');
                 }
                 self.b.push('>');
-            }
-            MirTy::Mlir(s) => {
-                let _ = write!(self.b, "mlir<{s:?}>");
             }
         }
         self.b.push(' ');

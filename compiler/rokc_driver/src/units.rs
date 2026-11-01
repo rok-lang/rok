@@ -28,14 +28,9 @@ pub struct UnitCounts {
 }
 
 /// Whether `module` builds by units: a program or library (not a REPL
-/// cell) without whole-module features (MLIR plugins and passes, PGO).
+/// cell) without whole-module features (PGO).
 pub fn applies(_module: &CompiledModule, opts: &BuildOptions) -> bool {
-    opts.incremental.is_some()
-        && opts.repl.is_none()
-        && opts.profile == crate::Profile::Off
-        && opts.mlir_passes.is_empty()
-        && opts.mlir_dialect_plugins.is_empty()
-        && opts.mlir_pass_plugins.is_empty()
+    opts.incremental.is_some() && opts.repl.is_none() && opts.profile == crate::Profile::Off
 }
 
 /// The objects of `module` (`applies`), from `dir` where its units are
@@ -281,7 +276,7 @@ fn by_llvm_o0(
     let fresh: Vec<Option<Vec<u8>>> = paths.iter().map(|p| std::fs::read(p).ok()).collect();
     let want: Vec<bool> = fresh.iter().map(Option::is_none).collect();
     let texts = mlir(module, sources, opts, plan, data_layout, &want)?;
-    let pipeline = rokc_llvm::mlir_pipeline(false, &[]);
+    let pipeline = rokc_llvm::mlir_pipeline(false);
     let c = llvm_options(t, &pipeline, rokc_llvm::OptLevel::O0);
     let objects = rokc_diagnostic::time("llvm", || {
         in_parallel(plan.units.len(), |u| match (&fresh[u], &texts[u]) {
@@ -339,7 +334,7 @@ fn by_thin_link(
         .collect();
     let opt = rokc_llvm::OptLevel::parse(&opts.opt_level)
         .ok_or_else(|| err(format!("unknown optimization level `{}`", opts.opt_level)))?;
-    let pipeline = rokc_llvm::mlir_pipeline(true, &[]);
+    let pipeline = rokc_llvm::mlir_pipeline(true);
     let c = llvm_options(t, &pipeline, opt);
     let alloc = rokc_codegen_mlir::alloc_module(&module.mir.target);
     let cache = dir.join("thin");
@@ -368,7 +363,7 @@ fn by_thin_link(
     Ok(finish_counts(plan, objects, Some(out.cached), paths))
 }
 
-/// LLVM's options for a unit: no plugins, no profile (`applies`).
+/// LLVM's options for a unit: no profile (`applies`).
 const fn llvm_options<'a>(
     t: &'a rokc_llvm::Target,
     pipeline: &'a str,
@@ -380,8 +375,6 @@ const fn llvm_options<'a>(
         emit: rokc_llvm::Emit::Obj,
         tls_initial_exec: true,
         mlir_pipeline: pipeline,
-        dialect_plugins: &[],
-        pass_plugins: &[],
         profile: rokc_llvm::Profile::None,
     }
 }

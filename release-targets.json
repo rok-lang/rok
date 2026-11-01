@@ -1,11 +1,11 @@
 {
-  "_comment": "The six release targets, the single source read by release.yml (build matrix), release.sh (archives to verify), and check-targets.sh (install-script lists). Fields: runs-on (ci.yml's runner images); kind (native=dist-native.sh, gnu/musl=container scripts); archive (file set: unix, win, musl).",
+  "_comment": "The six release targets, the single source read by release.yml (build matrix), release.sh (archives to verify), and check-targets.sh (install-script lists). Fields: runs-on (ci.yml's runner images); kind (native=dist-native.sh, gnu/musl=container scripts); archive (file set: unix, win).",
   "targets": [
     { "name": "macos",            "triple": "aarch64-apple-darwin",       "runs-on": "macos-26",         "kind": "native", "archive": "unix" },
     { "name": "windows",          "triple": "x86_64-pc-windows-msvc",     "runs-on": "windows-2022",     "kind": "native", "archive": "win"  },
     { "name": "linux-gnu-x64",    "triple": "x86_64-unknown-linux-gnu",   "runs-on": "ubuntu-24.04",     "kind": "gnu",    "archive": "unix" },
     { "name": "linux-gnu-arm64",  "triple": "aarch64-unknown-linux-gnu",  "runs-on": "ubuntu-24.04-arm", "kind": "gnu",    "archive": "unix" },
-    { "name": "linux-musl-x64",   "triple": "x86_64-unknown-linux-musl",  "runs-on": "ubuntu-24.04",     "kind": "musl",   "archive": "musl" },
-    { "name": "linux-musl-arm64", "triple": "aarch64-unknown-linux-musl", "runs-on": "ubuntu-24.04-arm", "kind": "musl",   "archive": "musl" }
+    { "name": "linux-musl-x64",   "triple": "x86_64-unknown-linux-musl",  "runs-on": "ubuntu-24.04",     "kind": "musl",   "archive": "unix" },
+    { "name": "linux-musl-arm64", "triple": "aarch64-unknown-linux-musl", "runs-on": "ubuntu-24.04-arm", "kind": "musl",   "archive": "unix" }
   ]
 }

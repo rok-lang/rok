@@ -73,8 +73,6 @@ pub fn link_args(
             emit: rokc_llvm::Emit::Obj,
             tls_initial_exec: false,
             mlir_pipeline: "",
-            dialect_plugins: &[],
-            pass_plugins: &[],
             profile: rokc_llvm::Profile::None,
         },
     )?;
@@ -352,8 +350,6 @@ mod tests {
                     emit: rokc_llvm::Emit::Obj,
                     tls_initial_exec: false,
                     mlir_pipeline: "",
-                    dialect_plugins: &[],
-                    pass_plugins: &[],
                     profile: rokc_llvm::Profile::None,
                 },
             )

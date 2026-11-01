@@ -477,7 +477,6 @@ fn ty_text(hir: &HirModule, ty: &HirTy, full: bool) -> String {
         HirTy::Unknown => "{unknown}".to_owned(),
         HirTy::Unit => "()".to_owned(),
         HirTy::Never => "!".to_owned(),
-        HirTy::Mlir(t) => format!("__mlir_type<{t:?}>"),
         HirTy::Prim(p) => p.name().to_owned(),
         HirTy::Any => "any".to_owned(),
         HirTy::AnyTrait(b) if b.is_empty() => "any".to_owned(),

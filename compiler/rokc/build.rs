@@ -42,34 +42,24 @@ fn main() {
         "cargo:rustc-env=ROK_HOST={}",
         std::env::var("TARGET").unwrap_or_default()
     );
-    // Export what rokc_llvm lists so MLIR plugins bind to rokc's own MLIR
-    // and LLVM; the linker strips the rest. Windows plugins link rokc.exe's
-    // import library instead (`plugin_dev`). No list: no LLVM.
-    if std::env::var("CARGO_PKG_NAME").as_deref() == Ok("rokc") {
-        println!("cargo:rerun-if-env-changed=DEP_ROKC_LLVM_EXPORTS");
-        println!("cargo:rerun-if-env-changed=DEP_ROKC_LLVM_PLUGIN_DEV");
+    // The prefix's lld for identical code folding, as link.exe does under
+    // /OPT:ICF: MLIR/LLVM template instances fold by the thousand. No
+    // prefix: no LLVM. A static (musl) rokc keeps the system linker.
+    let env_is = |k: &str, v: &str| std::env::var(k).as_deref() == Ok(v);
+    if env_is("CARGO_PKG_NAME", "rokc") {
         println!("cargo:rerun-if-env-changed=DEP_ROKC_LLVM_PREFIX");
-        if let Ok(list) = std::env::var("DEP_ROKC_LLVM_EXPORTS") {
+        let gnu_or_apple =
+            !env_is("CARGO_CFG_TARGET_ENV", "msvc") && !env_is("CARGO_CFG_TARGET_ENV", "musl");
+        if let (Ok(prefix), true) = (std::env::var("DEP_ROKC_LLVM_PREFIX"), gnu_or_apple) {
             let link = |flag: String| println!("cargo:rustc-link-arg-bin=rokc={flag}");
-            if std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc") {
-                let dev = std::env::var("DEP_ROKC_LLVM_PLUGIN_DEV").unwrap();
-                link(format!("/DEF:{list}"));
-                link(format!("/IMPLIB:{dev}/lib/rokc.lib"));
+            let bin = format!("{prefix}/bin");
+            if env_is("CARGO_CFG_TARGET_VENDOR", "apple") {
+                link(format!("-fuse-ld={bin}/ld64.lld"));
             } else {
-                // The prefix's lld for identical code folding, as link.exe
-                // does under /OPT:ICF: MLIR/LLVM template instances fold by
-                // the thousand.
-                let bin = format!("{}/bin", std::env::var("DEP_ROKC_LLVM_PREFIX").unwrap());
-                if std::env::var("CARGO_CFG_TARGET_VENDOR").as_deref() == Ok("apple") {
-                    link(format!("-fuse-ld={bin}/ld64.lld"));
-                    link(format!("-Wl,-exported_symbols_list,{list}"));
-                } else {
-                    link(format!("-B{bin}"));
-                    link("-fuse-ld=lld".into());
-                    link(format!("-Wl,--dynamic-list={list}"));
-                }
-                link("-Wl,--icf=safe".into());
+                link(format!("-B{bin}"));
+                link("-fuse-ld=lld".into());
             }
+            link("-Wl,--icf=safe".into());
         }
     }
 }

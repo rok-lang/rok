@@ -62,9 +62,6 @@ fn last_use(dir: &Path) -> SystemTime {
 pub fn prebuilt_std(key: &StdKey<'_>, on_build: &dyn Fn()) -> Option<PathBuf> {
     let o = key.opts;
     let plain = o.repl.is_none()
-        && o.mlir_dialect_plugins.is_empty()
-        && o.mlir_pass_plugins.is_empty()
-        && o.mlir_passes.is_empty()
         // The standard library is profiled, or at -O3 optimized, with
         // the program.
         && o.profile == crate::Profile::Off

@@ -237,12 +237,6 @@ codec_enum!(HirExprKind {
         elem,
         order
     },
-    MlirOp {
-        op,
-        attrs,
-        args,
-        regions
-    },
     ArrayIndex {
         array,
         index,
@@ -386,12 +380,8 @@ impl Codec for HirTy {
                 t.enc(e);
             }
             Self::Never => e.u(20),
-            Self::Mlir(t) => {
-                e.u(21);
-                t.enc(e);
-            }
             Self::Param(n) => {
-                e.u(22);
+                e.u(21);
                 n.enc(e);
             }
         }
@@ -428,8 +418,7 @@ impl Codec for HirTy {
             },
             19 => Self::GcBuf(Codec::dec(d)?),
             20 => Self::Never,
-            21 => Self::Mlir(Codec::dec(d)?),
-            22 => Self::Param(Codec::dec(d)?),
+            21 => Self::Param(Codec::dec(d)?),
             _ => return None,
         })
     }

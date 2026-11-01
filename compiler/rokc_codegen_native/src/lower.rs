@@ -1962,9 +1962,6 @@ impl<'c, 'a> FnLower<'c, 'a> {
                 let p = self.static_addr(name);
                 self.store(v, ty, Mem::Ind(p, 0));
             }
-            Statement::MlirRegion { .. } | Statement::MlirRegionEnd => {
-                self.err("`__mlir_op` regions".to_owned());
-            }
         }
     }
 
@@ -2490,7 +2487,6 @@ impl<'c, 'a> FnLower<'c, 'a> {
                     }
                 }
             }
-            RValue::MlirOp { .. } => self.err("`__mlir_op`".to_owned()),
         }
     }
 

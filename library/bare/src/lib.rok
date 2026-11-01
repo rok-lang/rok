@@ -6,7 +6,6 @@ pub mod alloc;
 pub mod ffi;
 pub mod gc;
 pub mod mem;
-pub mod mlir;
 pub mod ptr;
 pub mod volatile;
 

@@ -121,13 +121,6 @@ build options:
   --print target-spec          print the --target's spec as ROKON and exit
   --print lldbinit             print the lldb command that loads Rok's
                                formatters (sums, any) and exit
-  --load-mlir-plugin <path|name>
-                               MLIR dialect plugin (a name is searched
-                               in $ROK_MLIR_PLUGIN_PATH; repeatable)
-  --load-mlir-pass-plugin <path|name>
-                               MLIR pass plugin
-  --mlir-pass <pass>           extra MLIR pass, before the LLVM
-                               lowering (repeatable)
   --bootstrap <file>           library root to preload (repeatable; default:
                                <sysroot>/lib/rok/{core,std,bare}/src/lib.rok)
   --rokr <lib>                 runtime library: path, or name for -l<name>
@@ -193,8 +186,6 @@ environment:
                     (default: target/<profile>/incremental/; 0: nowhere)
   ROK_INCREMENTAL_VERIFY
                     1: lower every body again and fail on a difference
-  ROK_MLIR_PLUGIN_PATH
-                    directories searched for an MLIR plugin given by name
   ROK_LLVM_CACHE    where bindgen also looks for libclang
   ROK_HOME          the toolchains, environments and caches (default:
                     ~/.rok)
