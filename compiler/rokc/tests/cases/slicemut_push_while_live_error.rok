@@ -1,0 +1,48 @@
+// expect-error: 28:5: `s` views `xs`, which `xs.push(..)` resized at line 27
+// expect-error: 32:16: `a` views `xs`, which `ys.truncate(..)` resized at line 31
+// expect-error: 34:5: a view of `xs` is used here after `xs.insert(..)` resized it at line 35
+// expect-error: 39:9: `w` views `xs`, which `xs.pop(..)` resized at line 40
+// expect-error: 44:5: `v` views `xs`, which `xs += ..` resized at line 43
+
+// Stdlib 2.9.7a: resizing a list while a view of it is still used is a
+// compile error (E202), through copies of the list, views of the view,
+// a loop over the view and the next pass of a loop. A view made again,
+// or a resize on a path that leaves, is fine.
+fn fine(xs: List<i32>) {
+    let s: SliceMut<i32> = xs[0:2];
+    s[0] = 1;
+    xs.push(3);
+    s = xs;
+    s[0] = 2;
+    if xs.len() > 9 {
+        xs.clear();
+        return;
+    }
+    s[1] = 2;
+}
+
+fn main() {
+    let xs: List<i32> = [1, 2, 3];
+    let s: SliceMut<i32> = xs[1:];
+    xs.push(4);
+    s[0] = 9;
+    let ys = xs;
+    let (a, _b) = SliceMut::split_at(xs, 1);
+    ys.truncate(1);
+    println(f"{a:?}");
+    let u: SliceMut<i32> = xs;
+    for x in u {
+        xs.insert(0, x);
+    }
+    let w: SliceMut<i32> = xs;
+    while xs.len() > 1 {
+        w[0] = 1;
+        xs.pop();
+    }
+    let v: SliceMut<i32> = xs;
+    xs += 1;
+    v.fill(0);
+    fine(xs);
+}
+
+// spec: std 209-collections §2.9.7a / refs-lang 009.09 §9.9.4

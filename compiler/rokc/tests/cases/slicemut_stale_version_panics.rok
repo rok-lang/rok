@@ -1,0 +1,33 @@
+// expect-exit: 101
+// expect-stderr: thread 'main' panicked at tests/cases/slicemut_stale_version_panics.rok:29:5:
+// expect-stderr: SliceMut used after its list was resized (push, insert, clear, ...): make the view again after the resize
+// expect-stdout:
+// [10, 2, 3]
+// [10, 20, 3, 9] fresh
+
+// Stdlib 2.9.7a: a resize the compiler cannot see (inside another
+// function) bumps the list's version; a view made before it panics on
+// its next use.
+fn grow(xs: List<i32>) {
+    xs.push(9);
+}
+
+fn view(xs: List<i32>) -> SliceMut<i32> {
+    xs
+}
+
+fn main() {
+    let xs: List<i32> = [1, 2, 3];
+    let s = view(xs);
+    s[0] = 10;
+    println(f"{xs:?}");
+    grow(xs);
+    let t = view(xs);
+    t[1] = 20;
+    println(f"{xs:?} fresh");
+    grow(xs);
+    s[1] = 20;
+    println("not reached");
+}
+
+// spec: std 209-collections §2.9.7a

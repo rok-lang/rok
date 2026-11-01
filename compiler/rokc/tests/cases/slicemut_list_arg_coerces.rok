@@ -1,0 +1,49 @@
+// expect-exit: 0
+// expect-stdout:
+// [0, 0, 0]
+// [7, 7, 0]
+// [1, 2, 3] sorted
+// len 4
+// [5, 6, 3]
+
+// Stdlib 2.9.7a: a `List<T>` passed where a `SliceMut<T>` is expected
+// views the whole list; `xs[a:b]` there views that part.
+fn zero(s: SliceMut<i32>) {
+    s.fill(0);
+}
+
+fn sevens(s: SliceMut<i32>) {
+    for i in 0..s.len() {
+        s[i] = 7;
+    }
+}
+
+fn len_of(s: SliceMut<u8>) -> usize {
+    s.len()
+}
+
+struct Sorter {}
+
+impl Sorter {
+    fn run(self, s: SliceMut<i32>) {
+        s.sort();
+    }
+}
+
+fn main() {
+    let xs: List<i32> = [4, 5, 6];
+    zero(xs);
+    println(f"{xs:?}");
+    sevens(xs[:2]);
+    println(f"{xs:?}");
+    let ys: List<i32> = [3, 1, 2];
+    Sorter {}.run(ys);
+    println(f"{ys:?} sorted");
+    let bytes: List<u8> = [1, 2, 3, 4];
+    println(f"len {len_of(bytes)}");
+    let s: SliceMut<i32> = ys;
+    s.copy_from_slice([5, 6, 3][:]);
+    println(f"{ys:?}");
+}
+
+// spec: std 209-collections §2.9.7a / refs-lang 002.14

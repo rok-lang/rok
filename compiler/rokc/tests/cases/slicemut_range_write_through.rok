@@ -1,0 +1,37 @@
+// expect-exit: 0
+// expect-stdout:
+// [5, 4, 1, 2, 3, 0]
+// [5, 4, 3, 2, 1, 0]
+// left [5, 4, 3] right [2, 1, 0]
+// [9, 4, 3, 2, 1, 8]
+// [9, 4, 3, 2, 1, 8] 27
+// [9, 3, 2, 2, 1, 8]
+// sub [3, 2]
+
+// Stdlib 2.9.7a: a view of a range writes through to the list; views of
+// a view (`s[a:b]`, `split_at`) write the same list.
+fn main() {
+    let xs: List<i32> = [5, 4, 3, 2, 1, 0];
+    let mid: SliceMut<i32> = xs[2:5];
+    mid.sort();
+    println(f"{xs:?}");
+    mid.sort_by(|a: i32, b: i32| b.cmp(a));
+    println(f"{xs:?}");
+    let all: SliceMut<i32> = xs;
+    let (l, r) = all.split_at(3);
+    println(f"left {l:?} right {r:?}");
+    l[0] = 9;
+    r[-1] = 8;
+    println(f"{xs:?}");
+    let total = 0;
+    for x in all {
+        total += x;
+    }
+    println(f"{all.to_list():?} {total}");
+    let sub: SliceMut<i32> = all[1:3];
+    sub.copy_from_slice(all[2:4].as_slice());
+    println(f"{xs:?}");
+    println(f"sub {sub:?}");
+}
+
+// spec: std 209-collections §2.9.7a / refs-lang 003.06-indexing-and-slicing

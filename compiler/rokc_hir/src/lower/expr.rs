@@ -4153,6 +4153,42 @@ fn is_str_dict(ctx: &LowerCtx<'_>, ty: &HirTy) -> bool {
 const DICT: &str = "rok::core::collections::dict::Dict";
 const LIST: &str = "rok::core::collections::list::List";
 const SLICE: &str = "rok::core::collections::slice::Slice";
+const SLICE_MUT: &str = "rok::core::collections::slice::SliceMut";
+
+/// `ty` is `SliceMut<T>`.
+pub(super) fn is_slice_mut(ctx: &LowerCtx<'_>, ty: &HirTy) -> bool {
+    matches!(ty, HirTy::Struct(id) if enum_base_name(&ctx.struct_def(*id).name) == SLICE_MUT)
+}
+
+/// `ty` is `List<T>`.
+fn is_list(ctx: &LowerCtx<'_>, ty: &HirTy) -> bool {
+    matches!(ty, HirTy::Struct(id) if enum_base_name(&ctx.struct_def(*id).name) == LIST)
+}
+
+/// A `List<T>` in a `SliceMut<T>` slot: a writable view of the whole
+/// list (stdlib 2.9.7). Anything else is left to `coerce`.
+pub(super) fn list_into_view(ctx: &mut LowerCtx<'_>, slot: &HirTy, value: HirExpr) -> HirExpr {
+    let (HirTy::Struct(want), HirTy::Struct(have)) = (slot, &value.ty) else {
+        return value;
+    };
+    if !is_slice_mut(ctx, slot) || !is_list(ctx, &value.ty) {
+        return value;
+    }
+    if ctx.struct_def(*want).generic_args != ctx.struct_def(*have).generic_args {
+        return value;
+    }
+    let span = value.span;
+    let none = Expr {
+        kind: ExprKind::Literal(AstLit::None),
+        span,
+    };
+    let xs = splice(ctx, value);
+    lower_expected(
+        ctx,
+        &index_fn("slice_mut", vec![xs, none], span),
+        slot.clone(),
+    )
+}
 
 /// `b"..."`: a `[u8; N]` of its bytes; where a `Slice<u8>` is expected
 /// (alone, or in a sum without an array member), a view of that array.
@@ -5321,6 +5357,7 @@ fn drop_glue(
 /// `Task`, files, sockets).
 const TRANSFER_TYPES: &[&str] = &[
     "rok::core::collections::list::List",
+    "rok::core::collections::slice::SliceMut",
     "rok::core::collections::dict::Dict",
     "rok::core::collections::deque::Deque",
     "rok::core::collections::slice::Slice",
@@ -8190,7 +8227,9 @@ fn call_generic_positional(
             lowered.push(poison(e.span));
             continue;
         }
+        ctx.want_view = !matches!(hint, HirTy::Struct(_)) && view_param(def, i, e);
         let h = lower_expected(ctx, e, hint);
+        ctx.want_view = false;
         bind_from_arg(ctx, def, self_ty, i, &h.ty, &mut subst);
         if is_ref && super::mono::place_root(&h).is_some() {
             if let Some(p) = places.get_mut(i) {
@@ -8318,6 +8357,31 @@ fn call_generic_positional(
 
 /// The expected type of argument `i` of a generic call, under the
 /// parameters bound so far.
+/// Argument `e` is a slice (`xs[a:b]`, `xs[..]`) for parameter `i`
+/// of `def`, declared `SliceMut<..>`.
+fn view_param(def: &FnDef, i: usize, e: &Expr) -> bool {
+    let slice = match &e.kind {
+        ExprKind::Slice { step, .. } => step.is_none(),
+        ExprKind::Index(_, idx) => matches!(
+            idx.kind,
+            ExprKind::Range {
+                inclusive: false,
+                ..
+            }
+        ),
+        _ => false,
+    };
+    slice
+        && def
+            .params
+            .get(i)
+            .and_then(|p| p.ty.as_ref())
+            .is_some_and(|t| match &t.kind {
+                AstTyKind::Path(p) => p.segments.last().is_some_and(|s| s.name == "SliceMut"),
+                _ => false,
+            })
+}
+
 fn generic_arg_hint(
     ctx: &LowerCtx<'_>,
     def: &FnDef,
@@ -12832,10 +12896,22 @@ fn lower_slice(
     step: Option<&Expr>,
     span: rokc_diagnostic::Span,
 ) -> HirExpr {
+    let want_mut = std::mem::take(&mut ctx.want_view)
+        || ctx.current_expected().is_some_and(|t| is_slice_mut(ctx, t));
     let t_h = lower_expected(ctx, target, HirTy::Unknown);
     if !takes_position(ctx, &t_h.ty, "slice") {
         let t = splice(ctx, t_h);
-        return lower_expr(ctx, &slice_desugar(&t, start, end, step, span));
+        return lower_expr(ctx, &slice_desugar(&t, start, end, step, false, span));
+    }
+    // `xs[a:b]` of a list where a `SliceMut` is expected: a writable view.
+    let view = want_mut && is_list(ctx, &t_h.ty);
+    if view && step.is_some() {
+        return ctx.error_expr(
+            span,
+            "a `SliceMut` views a contiguous run of a list: drop the step, or copy the \
+             elements with `xs[a:b:k].to_list()`"
+                .to_owned(),
+        );
     }
     let a = start.map(|e| lower_position(ctx, e));
     let b = end.map(|e| lower_position(ctx, e));
@@ -12844,7 +12920,10 @@ fn lower_slice(
         let t = splice(ctx, t_h);
         let a = a.map(|h| splice(ctx, h));
         let b = b.map(|h| splice(ctx, h));
-        return lower_expr(ctx, &slice_desugar(&t, a.as_ref(), b.as_ref(), None, span));
+        return lower_expr(
+            ctx,
+            &slice_desugar(&t, a.as_ref(), b.as_ref(), None, view, span),
+        );
     }
     let t = tmp_path(ctx, "t", span);
     let recv = splice(ctx, t_h);
@@ -12865,7 +12944,7 @@ fn lower_slice(
             })
         };
         let (a, b) = (pos(a), pos(b));
-        let body = slice_desugar(&t, a.as_ref(), b.as_ref(), None, span);
+        let body = slice_desugar(&t, a.as_ref(), b.as_ref(), None, view, span);
         return lower_expr(ctx, &block_of(vec![let_stmt(&t, recv)], body, span));
     };
     let kt = tmp_path(ctx, "k", span);
@@ -12911,12 +12990,14 @@ fn lower_slice(
 
 /// Spec 3.6.2: `t[a:b]` is `t.slice(a..b)` and `t[a:b:k]`
 /// `t.slice(a..b).step(k)`; a missing `a` is `0`, a missing `b` is
-/// `t.len()` with `t` evaluated once.
+/// `t.len()` with `t` evaluated once. `view`: the writable view
+/// `slice_mut(t, a..b)` instead.
 fn slice_desugar(
     target: &Expr,
     start: Option<&Expr>,
     end: Option<&Expr>,
     step: Option<&Expr>,
+    view: bool,
     span: rokc_diagnostic::Span,
 ) -> Expr {
     const TEMP: &str = "__rok_slice_target";
@@ -12960,7 +13041,11 @@ fn slice_desugar(
         },
         span,
     };
-    let mut e = call(recv, "slice", vec![range]);
+    let mut e = if view {
+        index_fn("slice_mut", vec![recv, range], span)
+    } else {
+        call(recv, "slice", vec![range])
+    };
     if let Some(k) = step {
         e = call(e, "step", vec![k.clone()]);
     }

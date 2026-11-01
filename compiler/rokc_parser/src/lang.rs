@@ -73,6 +73,7 @@ pub const KNOWN_SLOTS: &[&str] = &[
     "index_from_end_fn",
     "slice_bound_fn",
     "slice_range_fn",
+    "slice_mut_fn",
     "fstr_display_fn",
     "fstr_debug_fn",
     "fstr_num_fn",

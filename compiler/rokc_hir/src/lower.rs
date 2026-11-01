@@ -44,6 +44,7 @@ pub use resolve::{hidden_module, hidden_module_msg, module_visibility, visibilit
 mod send_check;
 mod suggest;
 mod throws;
+mod views;
 
 use collect::collect_unknown_paths;
 pub use collect::{KeptLibrary, LibraryStage, keep_library, kept_library, lower_full, stage};
@@ -2125,6 +2126,7 @@ fn coerce(
     let value = adapt_fn_value(ctx, slot, value);
     let value = box_into_any(ctx, slot, value);
     let value = drop_fn_bounds(slot, value);
+    let value = expr::list_into_view(ctx, slot, value);
     // Spec 2.6.4: a sum flows into any sum holding all its members; one
     // that is a layer of the slot goes into that layer.
     let value = match (&value.ty, slot) {
@@ -2926,6 +2928,9 @@ struct LowerCtx<'a> {
     /// Set by a path call whose first argument fills `self`: whether it was
     /// `ref`. Taken by that call's argument lowering.
     explicit_recv: Option<bool>,
+    /// The slice expression being lowered fills a generic `SliceMut<T>`
+    /// parameter: a list's range is a writable view.
+    want_view: bool,
     /// Spans of calls whose `ref self` receiver is no place to write
     /// back to (an element, a static, a const): the write is dropped.
     dropped_ref_recv: Vec<Span>,
@@ -3145,6 +3150,7 @@ impl<'a> LowerCtx<'a> {
             hook_call: std::cell::Cell::new(false),
             addr_place: false,
             explicit_recv: None,
+            want_view: false,
             dropped_ref_recv: Vec::new(),
             breakables: Vec::new(),
             break_tys: HashMap::new(),

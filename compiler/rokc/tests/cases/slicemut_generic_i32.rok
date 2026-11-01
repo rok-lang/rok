@@ -1,0 +1,43 @@
+// expect-exit: 0
+// expect-stdout:
+// [3, 2, 1] ["c", "b", "a"]
+// [1, 2, 3] ["a", "b", "c"]
+// [0, 0, 3] ["z", "b", "c"]
+// true false
+// [[2], [1, 1]]
+
+// Stdlib 2.9.7a: `SliceMut<T>` is generic, like Rust's `&mut [T]`; a
+// generic function taking one infers `T` from a list argument.
+fn rev<T>(s: SliceMut<T>) {
+    s.reverse();
+}
+
+fn put<T>(s: SliceMut<T>, x: T) {
+    s[0] = x;
+}
+
+fn sorted<T: Ord>(s: SliceMut<T>) {
+    s.sort();
+}
+
+fn main() {
+    let xs: List<i32> = [1, 2, 3];
+    let ws: List<str> = ["a", "b", "c"];
+    rev(xs);
+    rev(ws);
+    println(f"{xs:?} {ws:?}");
+    sorted(xs);
+    sorted(ws[..]);
+    println(f"{xs:?} {ws:?}");
+    let s: SliceMut<i32> = xs[:2];
+    s.fill(0);
+    put(ws, "z");
+    println(f"{xs:?} {ws:?}");
+    println(f"{s.contains(0)} {s.contains(3)}");
+    let ls: List<List<i32>> = [[1, 1], [2]];
+    let v: SliceMut<List<i32>> = ls;
+    v.sort_by_key(|l: List<i32>| l.len());
+    println(f"{ls:?}");
+}
+
+// spec: std 209-collections §2.9.7a
