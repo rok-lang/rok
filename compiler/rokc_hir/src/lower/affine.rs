@@ -82,18 +82,26 @@ pub(super) fn affine(ctx: &LowerCtx<'_>, ty: &HirTy) -> Option<Kind> {
     ) {
         return None;
     }
-    if let Some(k) = ctx.env.affine_memo.borrow().get(ty) {
-        return *k;
-    }
-    let k = affine_in(ctx, ty, 0);
-    ctx.env.affine_memo.borrow_mut().insert(ty.clone(), k);
-    k
+    affine_in(ctx, ty, 0)
 }
 
+/// `affine`, memoized per type: a type nesting itself twice per level
+/// (`W<W<W<..>>>` with two fields) is walked once per distinct type. A
+/// type met again while it is being classified counts as not affine.
 fn affine_in(ctx: &LowerCtx<'_>, ty: &HirTy, depth: u32) -> Option<Kind> {
     if depth > DEPTH {
         return None;
     }
+    if let Some(k) = ctx.env.affine_memo.borrow().get(ty) {
+        return *k;
+    }
+    ctx.env.affine_memo.borrow_mut().insert(ty.clone(), None);
+    let k = affine_walk(ctx, ty, depth);
+    ctx.env.affine_memo.borrow_mut().insert(ty.clone(), k);
+    k
+}
+
+fn affine_walk(ctx: &LowerCtx<'_>, ty: &HirTy, depth: u32) -> Option<Kind> {
     let join = |a: Option<Kind>, b: Option<Kind>| match (a, b) {
         (Some(Kind::Close), _) | (_, Some(Kind::Close)) => Some(Kind::Close),
         (Some(_), _) | (_, Some(_)) => Some(Kind::Auto),
