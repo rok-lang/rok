@@ -954,6 +954,17 @@ pub(super) fn lower_fn_inner(
 /// Spec 4.1.3: without `-> T`, the return type comes from the body when it
 /// has a value or may diverge everywhere (4.3.7). `main` keeps `()`.
 pub(super) fn infers_ret(f: &FnDef, may_diverge: impl Fn(rokc_diagnostic::Span) -> bool) -> bool {
+    let Some(body) = &f.body else {
+        return false;
+    };
+    if f.ret_ty.is_some() || f.is_async || f.is_generator || f.name == "main" {
+        return false;
+    }
+    gives_value(body) || may_diverge(f.span)
+}
+
+/// Body `b` ends in a value or has a `return v` of its own.
+pub(super) fn gives_value(b: &Block) -> bool {
     struct V {
         depth: u32,
         found: bool,
@@ -971,20 +982,14 @@ pub(super) fn infers_ret(f: &FnDef, may_diverge: impl Fn(rokc_diagnostic::Span) 
             self.depth -= 1;
         }
     }
-    let Some(body) = &f.body else {
-        return false;
-    };
-    if f.ret_ty.is_some() || f.is_async || f.is_generator || f.name == "main" {
-        return false;
-    }
-    if body.trailing.is_some() || may_diverge(f.span) {
+    if b.trailing.is_some() {
         return true;
     }
     let mut v = V {
         depth: 0,
         found: false,
     };
-    crate::walk::walk_block(&mut v, body);
+    crate::walk::walk_block(&mut v, b);
     v.found
 }
 
@@ -1158,6 +1163,7 @@ fn infer_ret_of(
         }
         HirTy::sum(parts)
     };
+    let ret = unit_ret(&probe, fn_def, ret, !tentative, !subst.is_empty());
     if tentative {
         env.sink
             .inferred_ret
@@ -1192,6 +1198,81 @@ fn infer_ret_of(
         return (ret, Some(f));
     }
     (ret, None)
+}
+
+/// Spec 4.1.3: a `pub` fn without `->` (`UNIT_RET_ATTR`) returns `()`,
+/// also when its body diverges; a body with a value is an error (with
+/// `report`) that names the `-> T` to write (in a generic `instance`,
+/// the type of that instance).
+fn unit_ret(ctx: &LowerCtx<'_>, f: &FnDef, ret: HirTy, report: bool, instance: bool) -> HirTy {
+    if !f.attrs.iter().any(|a| a.path == [rokc_ast::UNIT_RET_ATTR]) {
+        return ret;
+    }
+    let Some(body) = f.body.as_deref() else {
+        return ret;
+    };
+    // An `async fn`'s body is the `async` block its fn returns.
+    let (val, body, coro) = match (&ret, body.trailing.as_deref().map(|e| &e.kind)) {
+        (HirTy::Struct(id), Some(ExprKind::AsyncBlock(b)))
+            if b.label.as_deref() == Some(super::FN_BLOCK_LABEL) =>
+        {
+            (
+                ctx.struct_def(*id)
+                    .generic_args
+                    .first()
+                    .cloned()
+                    .unwrap_or(HirTy::Unknown),
+                b,
+                true,
+            )
+        }
+        _ => (ret.clone(), body, false),
+    };
+    let ty = match val {
+        HirTy::Unit | HirTy::Unknown => return ret,
+        HirTy::Never if coro => return ret,
+        HirTy::Never => return HirTy::Unit,
+        t => ctx.ty_name(&t),
+    };
+    // An untyped parameter (`T#x`) already has its error.
+    let untyped =
+        f.generics.params.iter().any(
+            |g| matches!(g, rokc_ast::GenericParam::Type { name, .. } if name.starts_with("T#")),
+        );
+    if !report || untyped || !ctx.env.sink.unit_ret_errs.borrow_mut().insert(f.span) {
+        return ret;
+    }
+    let leaf = leaf_name(&f.name).replacen("__", "::", 1);
+    let vis = if f.vis == Visibility::Pkg {
+        "pub(pkg)"
+    } else {
+        "pub"
+    };
+    let at = body.trailing.as_deref().map_or(f.span, |e| e.span);
+    let mut d = rokc_diagnostic::RokDiagnostic::error(
+        Code::PUB_SIGNATURE,
+        at,
+        format!(
+            "`{vis} fn {leaf}` has no `->`, so it returns `()`, but its body gives `{ty}` \
+             (spec 4.1.3)"
+        ),
+    );
+    if !instance && f.generics.params.is_empty() && f.where_clause.is_empty() {
+        let at = rokc_diagnostic::Span {
+            end: body.span.start,
+            ..body.span
+        };
+        d = d
+            .with_help(format!("write `-> {ty}` before the body"))
+            .with_fix(at, format!("-> {ty} "), format!("add `-> {ty}`"));
+    } else {
+        d = d.with_help(format!(
+            "write the return type before the body: `-> {ty}` here, or the type \
+             parameter it comes from"
+        ));
+    }
+    ctx.emit_diag(d);
+    ret
 }
 
 /// `lower_fn_inner` with the ok side of the return type given (`ret`;

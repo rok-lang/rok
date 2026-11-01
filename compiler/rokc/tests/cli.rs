@@ -774,6 +774,34 @@ fn flipped_lint_errors_carry_fixes() {
     }
 }
 
+/// A `pub` fn without `->` whose body gives a value: the fix writes the
+/// inferred type before the body, after a `throws` clause.
+// spec: §4.1.3 §9.9.4
+#[test]
+fn pub_fn_nonunit_body_fix() {
+    let Some(env) = setup() else { return };
+    let dir = scratch("pub-fn-ret-fix");
+    put(
+        dir.join("bad.rok"),
+        "pub fn double(x: i32) { x * 2 }\n\
+         pub fn half(x: i32) throws (str) { if x < 0 { throw \"neg\"; } x / 2 }\n",
+    )
+    .unwrap();
+    let out = rokc(
+        Some(&env),
+        &dir,
+        &["check", "--message-format=json", "bad.rok"],
+    );
+    assert_exit(&out, 1);
+    let stdout = text(&out.stdout);
+    for fix in [
+        r#""line_start":1,"col_start":23,"byte_start":22,"byte_end":22,"text":"-> i32 ","title":"add `-> i32`""#,
+        r#""line_start":2,"col_start":34,"byte_start":65,"byte_end":65,"text":"-> i32 ","title":"add `-> i32`""#,
+    ] {
+        assert!(stdout.contains(fix), "{fix}\n{stdout}");
+    }
+}
+
 /// 9.10.7: a cached script is linked again when the runtime changes.
 // spec: §9.10.7 §9.2.16
 #[test]

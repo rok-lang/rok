@@ -759,6 +759,13 @@ codes! {
     "A view of a list (a `SliceMut` or a slice) is used after the list was resized; a \
      resize may move the elements, so the view no longer points at them. Make the view \
      again after the resize, or resize before making it.";
+
+    139 PUB_SIGNATURE Type "`pub` function signature not written out"
+    "A `pub` or `pub(pkg)` function is called from other modules, so its signature is \
+     written out, not inferred from the body. Give every parameter a type, `x: i32` (or a \
+     type parameter, `fn f<T>(x: T)`, for any type). Without `->` it returns `()`; when \
+     the body gives a value, write its type, `-> i32`, as the fix-it shows. Trait impl \
+     methods take the trait's types and private functions keep inference.";
 }
 
 #[cfg(test)]

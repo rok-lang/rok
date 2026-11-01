@@ -52,6 +52,11 @@ impl FnDef {
 /// its coroutine (`rokc_driver::coro`): each call makes a fresh future.
 pub const CORO_FN_ATTR: &str = "#coro_fn";
 
+/// Marker attribute of a `pub` / `pub(pkg)` fn without `->` (spec 4.1.3):
+/// it returns `()`. HIR still infers its body's type, to name the `-> T`
+/// to write when the body gives a value.
+pub const UNIT_RET_ATTR: &str = "#unit_ret";
+
 /// Marker attribute of what `#[cfg]` dropped, for not-found errors.
 ///
 /// `[CFG_OFF_ATTR, kind..](name, pred, ..)`: on an `impl`, `["method"]`
