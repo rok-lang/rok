@@ -62,6 +62,7 @@ impl SigningKey {
     /// A copy of the seed.
     pub fn seed(self) -> Secret { Secret::new(self.seed) }
 
+    /// The public key that checks this key's signatures.
     pub const fn verifying_key(self) -> VerifyingKey { self.public }
 
     /// The 64-byte signature `R || S` of `msg` (deterministic).
@@ -111,6 +112,7 @@ impl VerifyingKey {
         VerifyingKey { b: array32(s) }
     }
 
+    /// The key's 32 bytes.
     pub const fn to_bytes(self) -> [u8; 32] { self.b }
 
     /// Whether `sig` is a valid signature of `msg`: `S < L` and the

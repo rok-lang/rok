@@ -159,18 +159,23 @@ impl Debug for Sha3_256 {
 }
 
 impl Sha3_256 {
+    /// The digest length in bytes.
     pub const OUTPUT_LEN: usize = 32;
 
+    /// An empty running hash.
     pub const fn new() -> Sha3_256 { Sha3_256 { k: Keccak::new(136, 0x06u8) } }
 
+    /// The 32-byte SHA3-256 digest of `data`, in one call.
     pub fn digest<B: AsBytes>(data: B) -> List<u8> {
         let h = Sha3_256::new();
         h.update(data);
         h.finish()
     }
 
+    /// Feed `data` into the hash; call `finish` for the digest.
     pub fn update<B: AsBytes>(ref self, data: B) { self.k.absorb(data); }
 
+    /// The 32-byte digest of everything fed so far.
     pub const fn finish(self) -> List<u8> { self.k.squeeze(32) }
 }
 
@@ -185,18 +190,23 @@ impl Debug for Sha3_512 {
 }
 
 impl Sha3_512 {
+    /// The digest length in bytes.
     pub const OUTPUT_LEN: usize = 64;
 
+    /// An empty running hash.
     pub const fn new() -> Sha3_512 { Sha3_512 { k: Keccak::new(72, 0x06u8) } }
 
+    /// The 64-byte SHA3-512 digest of `data`, in one call.
     pub fn digest<B: AsBytes>(data: B) -> List<u8> {
         let h = Sha3_512::new();
         h.update(data);
         h.finish()
     }
 
+    /// Feed `data` into the hash; call `finish` for the digest.
     pub fn update<B: AsBytes>(ref self, data: B) { self.k.absorb(data); }
 
+    /// The 64-byte digest of everything fed so far.
     pub const fn finish(self) -> List<u8> { self.k.squeeze(64) }
 
     /// `finish` into the first 64 bytes of an array.
@@ -214,14 +224,17 @@ impl Debug for Shake128 {
 }
 
 impl Shake128 {
+    /// An empty sponge.
     pub const fn new() -> Shake128 { Shake128 { k: Keccak::new(168, 0x1fu8) } }
 
+    /// Feed `data` in; call `squeeze` for output.
     #[track_caller]
     pub fn update<B: AsBytes>(ref self, data: B) {
         if self.k.squeezing { panic("Shake128::update: called after squeeze; start a new Shake128 for new input"); }
         self.k.absorb(data);
     }
 
+    /// The next `n` bytes of output.
     pub const fn squeeze(ref self, n: usize) -> List<u8> { self.k.squeeze(n) }
 }
 
@@ -235,14 +248,17 @@ impl Debug for Shake256 {
 }
 
 impl Shake256 {
+    /// An empty sponge.
     pub const fn new() -> Shake256 { Shake256 { k: Keccak::new(136, 0x1fu8) } }
 
+    /// Feed `data` in; call `squeeze` for output.
     #[track_caller]
     pub fn update<B: AsBytes>(ref self, data: B) {
         if self.k.squeezing { panic("Shake256::update: called after squeeze; start a new Shake256 for new input"); }
         self.k.absorb(data);
     }
 
+    /// The next `n` bytes of output.
     pub const fn squeeze(ref self, n: usize) -> List<u8> { self.k.squeeze(n) }
 
     /// `squeeze` of `n <= 168` bytes into an array.

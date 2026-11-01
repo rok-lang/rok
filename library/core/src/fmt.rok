@@ -16,6 +16,7 @@ use rok::core::collections::raw::{GcBuf, buf_new};
 pub struct FmtError;
 
 impl FmtError {
+    /// What went wrong, for display.
     pub const fn message(self) -> str { "an error occurred when formatting" }
 }
 
@@ -92,12 +93,14 @@ impl Default for FormatSpec {
 /// What `f"{x}"` writes.
 #[lang("display_trait")]
 pub trait Display {
+    /// Writes `self` for display to `f`; throws `FmtError` when `f` fails.
     fn fmt(self, ref f: Formatter) throws (FmtError);
 }
 
 /// What `f"{x:?}"` writes.
 #[lang("debug_trait")]
 pub trait Debug {
+    /// Writes `self` for debugging to `f`; throws `FmtError` when `f` fails.
     fn fmt(self, ref f: Formatter) throws (FmtError);
 }
 
@@ -122,12 +125,15 @@ impl FormatSpec {
     pub const fn fill(self) -> char { self.fill }
     /// `none` when the spec names no alignment.
     pub const fn align(self) -> Alignment | none { self.align }
+    /// `+` or `-`; `none` when the spec names no sign.
     pub const fn sign(self) -> Sign | none { self.sign }
     /// `#`.
     pub const fn alternate(self) -> bool { self.alt }
     /// `0`.
     pub const fn zero_pad(self) -> bool { self.zero }
+    /// The minimum width; `none` when not given.
     pub const fn width(self) -> usize | none { self.width }
+    /// The precision; `none` when not given.
     pub const fn precision(self) -> usize | none { self.precision }
     /// The type letter (`'\0'` for none or `s d`).
     pub const fn ty(self) -> char { self.ty }
@@ -199,6 +205,7 @@ const fn count_bits(v: usize | none) -> u64 {
 }
 
 impl Formatter {
+    /// An empty formatter with the plain spec, room for 16 bytes.
     pub const fn new() -> Formatter { Formatter::with_capacity(16) }
 
     /// Empty, with room for `cap` bytes.
@@ -248,11 +255,14 @@ impl Formatter {
     /// The text written, as a `str` (no copy); the formatter is spent.
     pub const fn finish(self) -> str { unsafe { rok_fmt_finish(self.t) } }
 
+    /// Append `s`; throws what a `to_sink` formatter's sink throws when the
+    /// text spills to it.
     pub const fn write_str(ref self, s: str) throws (FmtError) {
         self.t = unsafe { rok_fmt_str(self.t, s) };
         try self.spill();
     }
 
+    /// Append `c`; never throws.
     pub const fn write_char(ref self, c: char) throws (FmtError) { self.t = unsafe { rok_fmt_char(self.t, c as u32) }; }
 
     /// `s` cut to `precision` chars and padded to `width` (text aligns
@@ -272,17 +282,23 @@ impl Formatter {
         self.t = unsafe { rok_fmt_integral(self.t, self.flags, self.counts, nonneg, prefix, buf) };
     }
 
+    /// The spec's fill character (`' '` when none is given).
     pub const fn fill(self) -> char { char::from_u32((self.flags & 0xFFFFFFFFu64) as u32) ?? ' ' }
 
     /// `none` when the spec names no alignment: numbers then align
     /// right, other values left.
     pub const fn align(self) -> Alignment | none { align_of_byte(self.byte(32u64)) }
 
+    /// The spec's sign (`+` or `-`); `none` when it names none.
     pub const fn sign(self) -> Sign | none { sign_of_byte(self.byte(40u64)) }
 
+    /// The spec's `#` flag.
     pub const fn alternate(self) -> bool { ((self.flags >> 56u64) & 1u64) != 0u64 }
+    /// The spec's `0` flag.
     pub const fn zero_pad(self) -> bool { ((self.flags >> 57u64) & 1u64) != 0u64 }
+    /// The spec's minimum width; `none` when not given.
     pub const fn width(self) -> usize | none { count_of(self.counts) }
+    /// The spec's precision; `none` when not given.
     pub const fn precision(self) -> usize | none { count_of(self.counts >> 32u64) }
 
     /// The spec's type letter (`'\0'` for none or `s d`).

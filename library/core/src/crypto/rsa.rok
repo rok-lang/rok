@@ -140,6 +140,7 @@ impl PublicKey {
         try PublicKey::new(n, e)
     }
 
+    /// The modulus length in bits.
     pub const fn bits(self) -> usize { self.bits }
 
     /// The modulus, big-endian without leading zeros.
@@ -281,8 +282,10 @@ impl PrivateKey {
         for x in [self.p, self.q, self.dp, self.dq, self.qinv] { x.wipe(); }
     }
 
+    /// The public half.
     pub const fn public_key(self) -> PublicKey { self.public }
 
+    /// The modulus length in bits.
     pub const fn bits(self) -> usize { self.public.bits }
 
     /// `m^d mod n` for `m < n` by the CRT, blinded with `r` (`r^e`

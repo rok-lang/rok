@@ -20,16 +20,20 @@ pub enum SendError<T> {
     Closed(T),
 }
 
+/// What `try_send` hands back when the value was not sent: the channel
+/// was full, or every receiver is gone.
 pub enum TrySendError<T> {
     Full(T),
     Closed(T),
 }
 
 impl<T> SendError<T> {
+    /// What went wrong, for display.
     pub const fn message(self) -> str { "sending on a closed channel" }
 }
 
 impl<T> TrySendError<T> {
+    /// What went wrong, for display.
     pub const fn message(self) -> str {
         match self {
             TrySendError::Full(_) => "sending on a full channel",
@@ -570,6 +574,8 @@ impl<T> IntoIterator for Receiver<T> {
     }
 }
 
+/// The iterator `for x in rx` walks: each item is a blocking `recv`; it
+/// ends when the channel is closed and drained.
 pub struct ReceiverIter<T> {
     rx: Receiver<T>;
 }
@@ -655,6 +661,9 @@ impl<T> SendFuture<T> {
         }
     }
 
+    /// One step of an async send: `Ready(())` once the value is queued,
+    /// `Pending` while the channel is full. Throws `SendError::Closed` with
+    /// the value when every receiver is gone.
     pub fn poll(ref self, ref ctx: rok::core::future::Context) throws (SendError<T>) -> rok::core::future::Poll<()> {
         let ch = self.ch;
         // A cancelled task does not send.

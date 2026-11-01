@@ -15,6 +15,8 @@ impl Debug for Hmac {
 }
 
 impl Hmac {
+    /// An incremental HMAC with `key` (any length; a key longer than the
+    /// block is hashed first).
     pub fn new<B: AsBytes>(alg: HashAlgorithm, key: B) -> Hmac {
         let k = key.byte_slice();
         let bl = alg.block_len();
@@ -50,8 +52,10 @@ impl Hmac {
         constant_time_eq(Hmac::mac(alg, key, data), tag)
     }
 
+    /// Feed `data` into the MAC; call `finish` for the tag.
     pub fn update<B: AsBytes>(ref self, data: B) { self.inner.update(data); }
 
+    /// The tag of everything fed so far, the hash's output length.
     pub const fn finish(self) -> List<u8> {
         self.outer_raw().finish()
     }

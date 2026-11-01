@@ -20,6 +20,7 @@ pub struct LayoutError {
 }
 
 impl LayoutError {
+    /// What went wrong, for display.
     pub const fn message(self) -> str { self.message }
 }
 
@@ -99,18 +100,25 @@ impl Layout {
         Layout { size, align }
     }
 
+    /// The size in bytes.
     pub const fn size(self) -> usize { self.size }
+    /// The alignment in bytes, a power of two.
     pub const fn align(self) -> usize { self.align }
 }
 
+/// A block for `layout` outside the GC, uninitialized; null when out of
+/// memory. Free it with `dealloc` and the same layout.
 pub unsafe fn alloc(layout: Layout) -> CPtr<u8> {
     CPtr::from_addr(rok_alloc_raw(layout.size, layout.align, 0))
 }
 
+/// Like `alloc`, with every byte zero.
 pub unsafe fn alloc_zeroed(layout: Layout) -> CPtr<u8> {
     CPtr::from_addr(rok_alloc_raw(layout.size, layout.align, 1))
 }
 
+/// Free a block from `alloc` / `alloc_zeroed` / `realloc`. UB unless
+/// `ptr` came from one of them and is not freed yet.
 pub unsafe fn dealloc(ptr: Ptr<u8>, layout: Layout) {
     rok_free(ptr.addr());
 }
@@ -122,16 +130,24 @@ pub unsafe fn realloc(ptr: Ptr<u8>, old_layout: Layout, new_size: usize) -> CPtr
     )
 }
 
+/// An uninitialized block for one `T`; null when out of memory. Free it
+/// with `dealloc_one`.
 pub unsafe fn alloc_one<T>() -> CPtr<T> {
     CPtr::from_addr(rok_alloc_raw(size_of::<T>(), align_of::<T>(), 0))
 }
 
+/// An uninitialized block for `n` `T`s; null when out of memory. Free it
+/// with `dealloc_array`.
 pub unsafe fn alloc_array<T>(n: usize) -> CPtr<T> {
     CPtr::from_addr(rok_alloc_raw(size_of::<T>() * n, align_of::<T>(), 0))
 }
 
+/// Free a block from `alloc_one`. UB unless `ptr` came from it and is not
+/// freed yet; the `T` is not dropped.
 pub unsafe fn dealloc_one<T>(ptr: Ptr<T>) { rok_free(ptr.addr()); }
 
+/// Free a block of `n` `T`s from `alloc_array`. UB unless `ptr` came
+/// from it and is not freed yet; the elements are not dropped.
 pub unsafe fn dealloc_array<T>(ptr: Ptr<T>, n: usize) { rok_free(ptr.addr()); }
 
 /// `n` `T`s outside the GC, freed when the `using` block holding it ends
@@ -158,8 +174,11 @@ impl<T> Allocation<T> {
         Allocation { ptr: Ptr::<T>::dangling().with_addr(at), len: n }
     }
 
+    /// The first element.
     pub const fn as_ptr(self) -> Ptr<T> { self.ptr }
+    /// The first element, as a pointer to the run.
     pub const fn as_many(self) -> ManyPtr<T> { self.ptr.as_many() }
+    /// The number of `T`s it has room for.
     pub const fn len(self) -> usize { self.len }
 }
 

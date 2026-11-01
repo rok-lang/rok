@@ -14,6 +14,8 @@ use rok::core::io::IoError;
 use rok::std::sys::{fetch, text_of, list_of_str};
 use rok::bare::mem::GcBuf;
 
+/// A filesystem path, held as text. Not checked against the filesystem
+/// until an fs call uses it.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct Path {
     s: str;
@@ -79,6 +81,7 @@ pub enum Component {
 }
 
 impl Component {
+    /// The component as it is written in a path (`/`, `.`, `..`, the name).
     pub const fn as_str(self) -> str {
         match self {
             Component::RootDir => SEP,
@@ -104,6 +107,7 @@ impl Debug for Component {
 
 /// What the fs functions take: a `Path` or a `str` spelling one.
 pub trait AsPath {
+    /// `self` as a `Path`.
     fn as_path(self) -> Path;
 }
 
@@ -128,13 +132,16 @@ impl Path {
     /// The empty path.
     pub const fn empty() -> Path { Path { s: "" } }
 
+    /// The path joining each of `components` in turn (`Path::join`).
     pub const fn from_components<I: IntoIterator<Item = str>>(components: I) -> Path {
         let p = Path::empty();
         for c in components { p = p.join(Path::new(c)); }
         p
     }
 
+    /// The path as text.
     pub const fn as_str(self) -> str { self.s }
+    /// The path as OS bytes (Unix) or WTF-16 units (Windows).
     pub const fn to_raw(self) -> RawPath { raw_of(self.s) }
 
     /// Unix: rooted. Windows: a prefix and a root (`C:\x`, `\\srv\s\x`).
@@ -142,7 +149,9 @@ impl Path {
         let (p, root) = prefix_of(self.s);
         root && (p > 0 || !WINDOWS)
     }
+    /// `true` when the path is not absolute.
     pub const fn is_relative(self) -> bool { !self.is_absolute() }
+    /// `true` when the path starts at a root (`/`, `\`, `C:\`).
     pub const fn has_root(self) -> bool { prefix_of(self.s).1 }
 
     /// The path without its last component; `none` for `/` and `""`.
@@ -187,6 +196,8 @@ impl Path {
         name[dot + 1:]
     }
 
+    /// The components, front to back: repeated separators and inner `.`
+    /// dropped, a leading `.` and every `..` kept.
     pub const fn components(self) -> Components {
         Components { items: self.component_list(), pos: 0 }
     }
@@ -236,11 +247,13 @@ impl Path {
         Path { s: self.s + SEP + other.s }
     }
 
+    /// `self` with its last component replaced by `name`.
     pub const fn with_file_name(self, name: str) -> Path {
         let parent = self.parent() ?? Path::empty();
         parent.join(Path::new(name))
     }
 
+    /// `self` with its extension replaced by `ext`; an empty `ext` removes it.
     pub const fn with_extension(self, ext: str) -> Path {
         let stem = self.file_stem() ?? "";
         if ext == "" { return self.with_file_name(stem); }
@@ -310,23 +323,31 @@ impl Path {
         out
     }
 
+    /// Whether the path exists (symlinks followed); any error reads as
+    /// `false`.
     pub fn exists(self) -> bool { fs::exists(self) }
 
+    /// Whether the path is a regular file (symlinks followed); `false` on
+    /// any error.
     pub fn is_file(self) -> bool {
         let m = try fs::metadata(self) catch _ { return false; };
         m.is_file()
     }
 
+    /// Whether the path is a directory (symlinks followed); `false` on any
+    /// error.
     pub fn is_dir(self) -> bool {
         let m = try fs::metadata(self) catch _ { return false; };
         m.is_dir()
     }
 
+    /// Whether the path itself is a symlink; `false` on any error.
     pub fn is_symlink(self) -> bool {
         let m = try fs::symlink_metadata(self) catch _ { return false; };
         m.is_symlink()
     }
 
+    /// The path's metadata, symlinks followed (`fs::metadata`).
     pub fn metadata(self) throws (IoError) -> Metadata { try fs::metadata(self) }
 
     /// Absolute, symlinks resolved (`realpath`).
@@ -359,8 +380,10 @@ const fn raw_of(s: str) -> RawPath { RawPath { raw: list_of_str(s) } }
 
 #[cfg(not(target_os = "windows"))]
 impl RawPath {
+    /// The path with OS bytes `bytes`.
     pub const fn from_bytes<B: AsBytes>(bytes: B) -> RawPath { RawPath { raw: bytes.byte_slice().to_list() } }
 
+    /// The OS bytes.
     pub const fn as_bytes(self) -> Slice<u8> { self.raw[0:self.raw.len()] }
 
     /// The path; throws if the bytes are not UTF-8.
@@ -434,12 +457,14 @@ fn decode_wide(w: List<u16>) -> (str, usize) {
 
 #[cfg(target_os = "windows")]
 impl RawPath {
+    /// The path of the UTF-16 units `wide`, which need not be valid.
     pub fn from_wide(wide: Slice<u16>) -> RawPath {
         let out: List<u16> = List::with_capacity(wide.len());
         for u in wide { out.push(u); }
         RawPath { raw: out }
     }
 
+    /// The UTF-16 units of the path.
     pub fn as_wide(self) -> Slice<u16> { self.raw[0:self.raw.len()] }
 
     /// The path; throws if the units are not valid UTF-16
@@ -477,6 +502,7 @@ impl Debug for Path {
     const fn fmt(self, ref f: Formatter) throws (FmtError) { try Debug::fmt(self.s, ref f) }
 }
 
+/// `Path::components`: the parts, from the root or first name.
 pub struct Components {
     items: List<Component>;
     pos: usize;
@@ -495,6 +521,7 @@ impl Iterator for Components {
     }
 }
 
+/// `Path::ancestors`: the path, then each parent up to the root.
 pub struct Ancestors {
     next: Path | none;
 }

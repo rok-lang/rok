@@ -318,6 +318,7 @@ impl Debug for Digest {
 }
 
 impl Digest {
+    /// An empty running hash of `alg`.
     pub const fn new(alg: HashAlgorithm) -> Digest {
         let s512 = match alg {
             HashAlgorithm::Sha384 => Sha512State::new(IV384, 48),
@@ -327,8 +328,10 @@ impl Digest {
         Digest { alg, s256: Sha256State::new(), s512, k: Keccak::new(rate, 0x06u8) }
     }
 
+    /// The algorithm it runs.
     pub const fn algorithm(self) -> HashAlgorithm { self.alg }
 
+    /// Feed `data` into the hash; call `finish` for the digest.
     pub fn update<B: AsBytes>(ref self, data: B) {
         match self.alg {
             HashAlgorithm::Sha256 => self.s256.update(data),
@@ -339,6 +342,7 @@ impl Digest {
         }
     }
 
+    /// The digest of everything fed so far, `alg.output_len()` bytes.
     pub const fn finish(self) -> List<u8> {
         let d = self.finish_raw();
         let out: List<u8> = List::with_capacity(self.alg.output_len());

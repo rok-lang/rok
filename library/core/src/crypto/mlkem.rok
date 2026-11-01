@@ -345,6 +345,7 @@ impl DecapsulationKey768 {
     /// A copy of the 2400-byte expanded encoding.
     pub fn to_expanded_bytes(self) -> Secret { Secret::new(self.dk) }
 
+    /// The public key that pairs with this one.
     pub fn encapsulation_key(self) -> EncapsulationKey768 {
         EncapsulationKey768 { ek: self.dk[384 * K:768 * K + 32].to_list() }
     }
@@ -395,7 +396,9 @@ impl Debug for DecapsulationKey768 {
 }
 
 impl EncapsulationKey768 {
+    /// The encoded key length in bytes.
     pub const LEN: usize = 1184;
+    /// The ciphertext length in bytes.
     pub const CIPHERTEXT_LEN: usize = 1088;
 
     /// From the 1184-byte encoding: every coefficient below q (the
@@ -410,6 +413,7 @@ impl EncapsulationKey768 {
         EncapsulationKey768 { ek: e.to_list() }
     }
 
+    /// The key's encoded bytes.
     pub const fn to_bytes(self) -> List<u8> { self.ek.clone() }
 
     /// Encaps with the 32-byte message `m` (the deterministic

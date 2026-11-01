@@ -751,8 +751,11 @@ const fn mag_bit(m: IntMag, n: u64) -> bool {
 }
 
 impl Int {
+    /// The value `n`.
     pub const fn from_i64(n: i64) -> Int { Int { small: n, neg: false, big: none } }
+    /// The value `n`.
     pub const fn from_i32(n: i32) -> Int { Int::from_i64(n as i64) }
+    /// The value `n`.
     pub const fn from_u64(n: u64) -> Int { Int::from_parts(false, IntMag::from_u64(n)) }
 
     /// An integer literal's digits (`_`, `0x` / `0o` / `0b` allowed):
@@ -829,17 +832,20 @@ impl Int {
         }
     }
 
+    /// The value as an `i32`; `none` when it does not fit.
     pub const fn to_i32(self) -> i32 | none {
         let v = self.to_i64()?;
         if v < -2147483648 || v > 2147483647 { return none; }
         v as i32
     }
 
+    /// The value as an `i64`; `none` when it does not fit.
     pub const fn to_i64(self) -> i64 | none {
         if self.big is none { return self.small; }
         none
     }
 
+    /// The value as a `u64`; `none` when negative or too large.
     pub const fn to_u64(self) -> u64 | none {
         if self.big is none {
             if self.small < 0 { return none; }
@@ -856,10 +862,13 @@ impl Int {
         rok::core::num::bigfloat::Float::from_int(self).to_f64()
     }
 
+    /// `true` for 0.
     pub const fn is_zero(self) -> bool { self.big is none && self.small == 0 }
+    /// `true` below 0.
     pub const fn is_negative(self) -> bool {
         if self.big is none { self.small < 0 } else { self.neg }
     }
+    /// `true` above 0.
     pub const fn is_positive(self) -> bool { !self.is_zero() && !self.is_negative() }
 
     /// `-1`, `0` or `1`.
@@ -868,6 +877,7 @@ impl Int {
         if self.is_negative() { Int::from_i64(-1) } else { Int::from_i64(1) }
     }
 
+    /// The magnitude.
     pub const fn abs(self) -> Int {
         if self.is_negative() { -self } else { self }
     }
@@ -942,6 +952,7 @@ impl Int {
     #[track_caller]
     pub const fn ilog2(self) -> u64 { self.checked_ilog2() ?? panic("Int::ilog2: the number is not positive; use `checked_ilog2` to get `none` instead") }
 
+    /// `floor(log2(self))`; `none` unless `self > 0`.
     pub const fn checked_ilog2(self) -> u64 | none {
         if !self.is_positive() { return none; }
         self.bit_length() - 1u64

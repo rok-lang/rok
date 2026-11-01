@@ -26,6 +26,8 @@ static MEASURED: Atomic<bool> = Atomic::new(false);
 // not, and the runner says it measured nothing.
 pub(pkg) fn measured() -> bool { MEASURED.load() }
 
+/// A benchmark's measuring handle: the generated harness passes one to
+/// each `#[bench]` fn, which calls `iter` with the code to time.
 pub struct Bench {
     name: str;
     iters: i64; // 0: calibrate
@@ -38,6 +40,7 @@ pub struct Bench {
 
 impl Bench {
     // The generated harness builds this from argv.
+    /// The generated harness builds this from argv.
     pub(pkg) fn new(name: str, iters: i64, samples: i64, tty: bool, width: usize) -> Bench {
         Bench {
             name: name,
@@ -50,13 +53,13 @@ impl Bench {
         }
     }
 
-    // Report throughput: `n` bytes processed per call.
+    /// Report throughput: `n` bytes processed per call.
     pub fn bytes(ref self, n: i64) { self.bytes = n; }
 
-    // Report throughput: `n` items processed per call.
+    /// Report throughput: `n` items processed per call.
     pub fn items(ref self, n: i64) { self.items = n; }
 
-    // Measure `f`. Calibrate (unless fixed), warm up, sample, report.
+    /// Measure `f`. Calibrate (unless fixed), warm up, sample, report.
     pub fn iter<T>(ref self, f: fn() -> T) {
         MEASURED.store(true);
         let iters = if self.iters > 0 { self.iters } else { calibrate(f) };

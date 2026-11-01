@@ -1372,6 +1372,7 @@ impl<T> Debug for Task<T> {
 unsafe impl<T: Send> Send for Task<T> {}
 
 impl<T> Task<T> {
+    /// Whether the task has finished, with a result or cancelled.
     pub fn is_finished(self) -> bool { is_done(self.task) }
 
     /// This task's id (what `task::id()` returns inside it).
@@ -1387,6 +1388,7 @@ impl<T> Task<T> {
         cancel_by(self.task, BY_CANCEL);
     }
 
+    /// Whether `cancel` was called on the task.
     pub fn is_cancelled(self) -> bool { is_cancelled(self.task) }
 
     /// Await the result, throwing `CancellationError` for a cancelled
@@ -1477,6 +1479,8 @@ impl<T> Debug for Join<T> {
 }
 
 impl<T> Join<T> {
+    /// One step of `join`: `Ready` with the result once the task finished,
+    /// `Pending` before. Throws `CancellationError` for a cancelled task.
     pub fn poll(ref self, ref ctx: Context) throws (CancellationError) -> Poll<T> {
         unsafe {
             if !join_later(self.task.task, ctx.waker) {
@@ -1500,6 +1504,7 @@ pub struct TaskId {
 static NEXT_TASK_ID: Atomic<u64> = Atomic::new(1);
 
 impl TaskId {
+    /// The id as a number, unique for the process's run.
     pub const fn as_u64(self) -> u64 { self.id }
 }
 
@@ -1543,6 +1548,7 @@ pub fn current_id() -> TaskId | none {
 pub struct CancellationError;
 
 impl CancellationError {
+    /// What went wrong, for display.
     pub const fn message(self) -> str { "task cancelled" }
 }
 
@@ -1699,6 +1705,8 @@ pub const fn select<I: IntoIterator<Item = F>, F: Future>(iter: I) -> SelectFutu
     }
 }
 
+/// The future `select` returns: `(index, output)` of the first future to
+/// complete.
 pub struct SelectFuture<F> {
     futs: List<F>;
     started: GcBuf<bool>;
@@ -1903,6 +1911,8 @@ struct Timeout<T> {
 }
 
 impl<T> Timeout<T> {
+    /// One step of `timeout`: `Ready` with the result once the task finished,
+    /// `Pending` before the deadline. Throws `TimeoutError` once it passed.
     pub fn poll(ref self, ref ctx: Context) throws (TimeoutError) -> Poll<T> {
         unsafe {
             if join_later(self.task.task, ctx.waker) {
@@ -1922,6 +1932,7 @@ impl<T> Timeout<T> {
 pub struct TimeoutError;
 
 impl TimeoutError {
+    /// What went wrong, for display.
     pub const fn message(self) -> str { "timed out" }
 }
 
@@ -2200,6 +2211,8 @@ pub const fn writable(fd: i32) -> IoReady {
     IoReady { fd: fd, write: 1, armed: false }
 }
 
+/// The future `readable` / `writable` return: completes once the fd may
+/// be ready (possibly spuriously).
 pub(pkg) struct IoReady {
     fd: i32;
     write: i32;

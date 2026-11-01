@@ -202,7 +202,7 @@ pub async fn subtask(status: i32) {
     if status & 15 == RETURNED {
         return;
     }
-    await wait(status >> 4);
+    _ = await wait(status >> 4);
 }
 
 /// An async export's call: `ret` returns the result of `f` (the

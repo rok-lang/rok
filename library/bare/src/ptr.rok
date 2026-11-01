@@ -39,16 +39,20 @@ impl<T> Ptr<T> {
 
     /// The address (provenance is lost).
     pub const fn addr(self) -> usize { self.address }
+    /// The same pointer at address `addr`.
     pub const fn with_addr(self, addr: usize) -> Ptr<T> { Ptr { address: addr } }
+    /// The same pointer at the address `f` maps the current one to.
     pub const fn map_addr(self, f: fn(usize) -> usize) -> Ptr<T> { Ptr { address: f(self.address) } }
 
     /// `count` elements further (`count * size_of::<T>()` bytes).
     pub fn offset(self, count: isize) -> Ptr<T> {
         Ptr { address: (self.address as isize + count * size_of::<T>() as isize) as usize }
     }
+    /// `count` elements further; no overflow check.
     pub const fn add(self, count: usize) -> Ptr<T> {
         Ptr { address: self.address + count * size_of::<T>() }
     }
+    /// `count` elements back; no overflow check.
     pub const fn sub(self, count: usize) -> Ptr<T> {
         Ptr { address: self.address - count * size_of::<T>() }
     }
@@ -60,6 +64,7 @@ impl<T> Ptr<T> {
     pub const fn distance(self, origin: Ptr<T>) -> isize {
         (self.address as isize - origin.address as isize) / size_of::<T>() as isize
     }
+    /// `true` when the address is a multiple of `align_of::<T>()`.
     pub const fn is_aligned(self) -> bool { self.address % align_of::<T>() == 0 }
     /// Elements to `add` so the address is a multiple of `align`, or
     /// `usize::MAX` when no element count gets there.
@@ -76,14 +81,18 @@ impl<T> Ptr<T> {
 
     /// The same address as a pointer to `U` (alignment is the caller's).
     pub const fn cast<U>(self) -> Ptr<U> { Ptr { address: self.address } }
+    /// The same address as a read-only pointer.
     pub const fn as_const(self) -> ConstPtr<T> { ConstPtr { address: self.address } }
+    /// The same address as a pointer to a run of `T`s.
     pub const fn as_many(self) -> ManyPtr<T> { ManyPtr { address: self.address } }
 
     /// The `T` it points at. UB unless it points at a live, initialized `T`.
     pub unsafe fn read(self) -> T { raw_read(self) }
     /// Store `value` where it points. UB unless that is writable `T` memory.
     pub unsafe fn write(self, value: T) { raw_write(self, value); }
+    /// `read` that the optimizer keeps exactly as written (`volatile`).
     pub unsafe fn read_volatile(self) -> T { raw_read_volatile(self) }
+    /// `write` that the optimizer keeps exactly as written (`volatile`).
     pub unsafe fn write_volatile(self, value: T) { raw_write_volatile(self, value); }
 }
 
@@ -99,23 +108,33 @@ impl<T> Debug for ConstPtr<T> {
 }
 
 impl<T> ConstPtr<T> {
+    /// Well aligned, never dereferenceable.
     pub const fn dangling() -> ConstPtr<T> { ConstPtr { address: align_of::<T>() } }
+    /// The address (provenance is lost).
     pub const fn addr(self) -> usize { self.address }
+    /// The same pointer at address `addr`.
     pub const fn with_addr(self, addr: usize) -> ConstPtr<T> { ConstPtr { address: addr } }
+    /// Moved by `count` elements, either way; no overflow check.
     pub fn offset(self, count: isize) -> ConstPtr<T> {
         ConstPtr {
             address: (self.address as isize + count * size_of::<T>() as isize) as usize,
         }
     }
+    /// `count` elements further; no overflow check.
     pub const fn add(self, count: usize) -> ConstPtr<T> {
         ConstPtr { address: self.address + count * size_of::<T>() }
     }
+    /// Moved back by `count` elements; no overflow check.
     pub fn sub(self, count: usize) -> ConstPtr<T> {
         ConstPtr { address: self.address - count * size_of::<T>() }
     }
+    /// The same address as a pointer to `U` (alignment is the caller's).
     pub fn cast<U>(self) -> ConstPtr<U> { ConstPtr { address: self.address } }
+    /// The same address as a pointer to a run of `T`s.
     pub fn as_many(self) -> ManyPtr<T> { ManyPtr { address: self.address } }
+    /// The `T` it points at. UB unless it points at a live, initialized `T`.
     pub unsafe fn read(self) -> T { raw_read(self) }
+    /// `read` that the optimizer keeps exactly as written (`volatile`).
     pub unsafe fn read_volatile(self) -> T { raw_read_volatile(self) }
 }
 
@@ -131,13 +150,17 @@ impl<T> Debug for ManyPtr<T> {
 }
 
 impl<T> ManyPtr<T> {
+    /// The address (provenance is lost).
     pub const fn addr(self) -> usize { self.address }
+    /// The same pointer at address `addr`.
     pub fn with_addr(self, addr: usize) -> ManyPtr<T> { ManyPtr { address: addr } }
+    /// Moved by `count` elements, either way; no overflow check.
     pub fn offset(self, count: isize) -> ManyPtr<T> {
         ManyPtr {
             address: (self.address as isize + count * size_of::<T>() as isize) as usize,
         }
     }
+    /// Moved forward by `count` elements; no overflow check.
     pub fn add(self, count: usize) -> ManyPtr<T> {
         ManyPtr { address: self.address + count * size_of::<T>() }
     }
@@ -145,12 +168,15 @@ impl<T> ManyPtr<T> {
     pub const fn as_one(self) -> Ptr<T> { Ptr { address: self.address } }
     /// The same address as a pointer to `U`s (alignment is the caller's).
     pub const fn cast<U>(self) -> ManyPtr<U> { ManyPtr { address: self.address } }
+    /// The same address as a read-only pointer to a run of `T`s.
     pub fn as_const(self) -> ConstPtr<T> { ConstPtr { address: self.address } }
     /// Element `idx` (no bounds: the caller knows the length).
     pub unsafe fn read(self, idx: usize) -> T {
         let p: Ptr<T> = Ptr { address: self.address + idx * size_of::<T>() };
         raw_read(p)
     }
+    /// Store `value` as element `idx` (no bounds: the caller knows the
+    /// length). UB unless that is writable `T` memory.
     pub unsafe fn write(self, idx: usize, value: T) {
         let p: Ptr<T> = Ptr { address: self.address + idx * size_of::<T>() };
         raw_write(p, value);
@@ -177,11 +203,17 @@ impl<T> Debug for CPtr<T> {
 }
 
 impl<T> CPtr<T> {
+    /// The null pointer.
     pub const fn null() -> CPtr<T> { CPtr { address: 0 } }
+    /// The non-null `p` as a nullable pointer.
     pub fn from_ptr(p: Ptr<T>) -> CPtr<T> { CPtr { address: p.address } }
+    /// The read-only `p` as a nullable pointer (C `const T*`).
     pub const fn from_const(p: ConstPtr<T>) -> CPtr<T> { CPtr { address: p.address } }
+    /// A pointer at address `addr`; 0 is null.
     pub const fn from_addr(addr: usize) -> CPtr<T> { CPtr { address: addr } }
+    /// `true` when the address is 0.
     pub const fn is_null(self) -> bool { self.address == 0 }
+    /// The address; 0 when null.
     pub const fn addr(self) -> usize { self.address }
     /// `none` when null.
     pub const fn as_ptr(self) -> Ptr<T> | none {
@@ -189,6 +221,7 @@ impl<T> CPtr<T> {
         let p: Ptr<T> = Ptr { address: self.address };
         p
     }
+    /// The same address read-only; `none` when null.
     pub fn as_const(self) -> ConstPtr<T> | none {
         if self.address == 0 { return none; }
         let p: ConstPtr<T> = ConstPtr { address: self.address };

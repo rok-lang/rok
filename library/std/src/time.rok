@@ -25,6 +25,7 @@ pub struct SystemTime {
 pub const UNIX_EPOCH: SystemTime = SystemTime { ns: 0, mono: NO_MONO };
 
 impl SystemTime {
+    /// The wall clock now.
     pub fn now() -> SystemTime {
         let mono = unsafe { rok_time_now_ns() };
         SystemTime { ns: unsafe { rok_time_realtime_ns() }, mono: mono }
@@ -45,15 +46,18 @@ impl SystemTime {
         Duration::ns(unsafe { rok_time_now_ns() }) - Duration::ns(self.mono)
     }
 
+    /// `self + dur`; `none` when it overflows `i64` nanoseconds.
     pub const fn checked_add(self, dur: Duration) -> SystemTime | none {
         let ns = self.ns.checked_add(dur.as_ns())?;
         SystemTime { ns: ns, mono: shift(self.mono, dur) }
     }
+    /// `self - dur`; `none` when it overflows `i64` nanoseconds.
     pub const fn checked_sub(self, dur: Duration) -> SystemTime | none {
         let ns = self.ns.checked_sub(dur.as_ns())?;
         SystemTime { ns: ns, mono: shift(self.mono, Duration::ZERO - dur) }
     }
 
+    /// The time `secs` seconds and `nanos` nanoseconds after the Unix epoch.
     pub const fn from_unix(secs: i64, nanos: u32) -> SystemTime {
         SystemTime { ns: (Duration::secs(secs) + Duration::ns(nanos as i64)).as_ns(), mono: NO_MONO }
     }
@@ -118,7 +122,9 @@ pub struct BootTime {
 }
 
 impl BootTime {
+    /// The boot clock now.
     pub fn now() -> BootTime { BootTime { ns: unsafe { rok_time_boot_ns() } } }
+    /// Time from `self` to now.
     pub fn elapsed(self) -> Duration { BootTime::now().duration_since(self) }
     /// `self - earlier`, negative when `earlier` is later.
     pub const fn duration_since(self, earlier: BootTime) -> Duration { Duration::ns(self.ns) - Duration::ns(earlier.ns) }

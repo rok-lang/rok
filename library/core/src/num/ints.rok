@@ -17,14 +17,20 @@ const BIG_ENDIAN: bool = true;
 // i8
 
 impl i8 {
+    /// The smallest value.
     pub const MIN: i8 = -127 - 1;
+    /// The largest value.
     pub const MAX: i8 = 127;
+    /// The width in bits.
     pub const BITS: u32 = 8;
 
+    /// `self + rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_add.i8")]
     pub const fn wrapping_add(self, rhs: i8) -> i8 { self.wrapping_add(rhs) }
+    /// `self - rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_sub.i8")]
     pub const fn wrapping_sub(self, rhs: i8) -> i8 { self.wrapping_sub(rhs) }
+    /// `self * rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_mul.i8")]
     pub const fn wrapping_mul(self, rhs: i8) -> i8 { self.wrapping_mul(rhs) }
     #[intrinsic("rok.ctpop.i8")]
@@ -34,64 +40,92 @@ impl i8 {
     #[intrinsic("rok.cttz.i8")]
     const fn cttz(self) -> i8 { self.cttz() }
 
+    /// The number of one bits.
     pub const fn count_ones(self) -> u32 { self.ctpop() as u32 }
+    /// The number of zero bits.
     pub const fn count_zeros(self) -> u32 { (~self).ctpop() as u32 }
+    /// The number of zero bits above the highest one bit.
     pub const fn leading_zeros(self) -> u32 { self.ctlz() as u32 }
+    /// The number of zero bits below the lowest one bit.
     pub const fn trailing_zeros(self) -> u32 { self.cttz() as u32 }
+    /// The number of one bits above the highest zero bit.
     pub const fn leading_ones(self) -> u32 { (~self).ctlz() as u32 }
+    /// The number of one bits below the lowest zero bit.
     pub const fn trailing_ones(self) -> u32 { (~self).cttz() as u32 }
 
+    /// The bits shifted left by `n`, those shifted out coming back on the right.
     pub const fn rotate_left(self, n: u32) -> i8 { (self as u8).rotate_left(n) as i8 }
+    /// The bits shifted right by `n`, those shifted out coming back on the left.
     pub const fn rotate_right(self, n: u32) -> i8 { (self as u8).rotate_right(n) as i8 }
+    /// The bytes in reverse order.
     pub const fn swap_bytes(self) -> i8 { (self as u8).swap_bytes() as i8 }
 
+    /// `self` in big-endian byte order (unchanged on a big-endian target).
     pub const fn to_be(self) -> i8 { if BIG_ENDIAN { self } else { self.swap_bytes() } }
+    /// `self` in little-endian byte order (unchanged on a little-endian target).
     pub const fn to_le(self) -> i8 { if BIG_ENDIAN { self.swap_bytes() } else { self } }
+    /// The number whose big-endian bytes are `x`.
     pub const fn from_be(x: i8) -> i8 { x.to_be() }
+    /// The number whose little-endian bytes are `x`.
     pub const fn from_le(x: i8) -> i8 { x.to_le() }
+    /// The bytes, least significant first.
     pub const fn to_le_bytes(self) -> [u8; 1] { [self as u8] }
+    /// The bytes, most significant first.
     pub const fn to_be_bytes(self) -> [u8; 1] { [self as u8] }
+    /// The bytes in the target's byte order.
     pub const fn to_ne_bytes(self) -> [u8; 1] { if BIG_ENDIAN { self.to_be_bytes() } else { self.to_le_bytes() } }
+    /// The number of `bytes`, least significant first.
     pub const fn from_le_bytes(bytes: [u8; 1]) -> i8 { bytes[0] as i8 }
+    /// The number of `bytes`, most significant first.
     pub const fn from_be_bytes(bytes: [u8; 1]) -> i8 { bytes[0] as i8 }
+    /// The number of `bytes`, in the target's byte order.
     pub const fn from_ne_bytes(bytes: [u8; 1]) -> i8 { if BIG_ENDIAN { i8::from_be_bytes(bytes) } else { i8::from_le_bytes(bytes) } }
 
+    /// `self + rhs`, or `none` on overflow.
     pub const fn checked_add(self, rhs: i8) -> i8 | none {
         let r = self.wrapping_add(rhs);
         if (self ^ r) & (rhs ^ r) < 0 { return none; }
         r
     }
+    /// `self - rhs`, or `none` on overflow.
     pub const fn checked_sub(self, rhs: i8) -> i8 | none {
         let r = self.wrapping_sub(rhs);
         if (self ^ rhs) & (self ^ r) < 0 { return none; }
         r
     }
+    /// `self * rhs`, or `none` on overflow.
     pub const fn checked_mul(self, rhs: i8) -> i8 | none {
         if self == -1 { return rhs.checked_neg(); }
         let r = self.wrapping_mul(rhs);
         if self != 0 && r / self != rhs { return none; }
         r
     }
+    /// `self / rhs`, or `none` when `rhs` is 0 or the quotient overflows (`MIN / -1`).
     pub const fn checked_div(self, rhs: i8) -> i8 | none {
         if rhs == 0 || self == i8::MIN && rhs == -1 { return none; }
         self / rhs
     }
+    /// `self % rhs`, or `none` when `rhs` is 0 or the division overflows (`MIN % -1`).
     pub const fn checked_rem(self, rhs: i8) -> i8 | none {
         if rhs == 0 || self == i8::MIN && rhs == -1 { return none; }
         self % rhs
     }
+    /// `-self`, or `none` for `MIN`.
     pub const fn checked_neg(self) -> i8 | none {
         if self == i8::MIN { return none; }
         -self
     }
+    /// `self << n`, or `none` when `n` is at least `BITS`.
     pub const fn checked_shl(self, n: u32) -> i8 | none {
         if n >= 8 { return none; }
         self << (n as i8)
     }
+    /// `self >> n`, or `none` when `n` is at least `BITS`.
     pub const fn checked_shr(self, n: u32) -> i8 | none {
         if n >= 8 { return none; }
         self >> (n as i8)
     }
+    /// `self` to the `exp`, or `none` on overflow.
     pub const fn checked_pow(self, exp: u32) -> i8 | none {
         if exp == 0 { return 1; }
         let base = self;
@@ -105,17 +139,23 @@ impl i8 {
         acc.checked_mul(base)
     }
 
+    /// `self / rhs`; `MIN / -1` wraps to `MIN`. Panics when `rhs` is 0.
     pub const fn wrapping_div(self, rhs: i8) -> i8 {
         if self == i8::MIN && rhs == -1 { return self; }
         self / rhs
     }
+    /// `self % rhs`; `MIN % -1` is 0. Panics when `rhs` is 0.
     pub const fn wrapping_rem(self, rhs: i8) -> i8 {
         if rhs == -1 { return 0; }
         self % rhs
     }
+    /// `-self`, wrapping around: `MIN` stays `MIN`.
     pub const fn wrapping_neg(self) -> i8 { i8::wrapping_sub(0, self) }
+    /// `self << (n % BITS)`.
     pub const fn wrapping_shl(self, n: u32) -> i8 { self << ((n % 8) as i8) }
+    /// `self >> (n % BITS)`.
     pub const fn wrapping_shr(self, n: u32) -> i8 { self >> ((n % 8) as i8) }
+    /// `self` to the `exp`, wrapping around at the bounds.
     pub const fn wrapping_pow(self, exp: u32) -> i8 {
         let base = self;
         let acc: i8 = 1;
@@ -128,38 +168,52 @@ impl i8 {
         acc
     }
 
+    /// `self + rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_add(self, rhs: i8) -> i8 {
         self.checked_add(rhs) ?? (if rhs > 0 { i8::MAX } else { i8::MIN })
     }
+    /// `self - rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_sub(self, rhs: i8) -> i8 {
         self.checked_sub(rhs) ?? (if rhs < 0 { i8::MAX } else { i8::MIN })
     }
+    /// `self * rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_mul(self, rhs: i8) -> i8 {
         self.checked_mul(rhs) ?? (if (self < 0) != (rhs < 0) { i8::MIN } else { i8::MAX })
     }
+    /// `-self`, clamped: `MIN` gives `MAX`.
     pub const fn saturating_neg(self) -> i8 { self.checked_neg() ?? i8::MAX }
+    /// `self` to the `exp`, clamped to `MIN..=MAX`.
     pub const fn saturating_pow(self, exp: u32) -> i8 {
         self.checked_pow(exp) ?? (if self < 0 && exp % 2 == 1 { i8::MIN } else { i8::MAX })
     }
 
+    /// `self + rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_add(self, rhs: i8) -> (i8, bool) {
         (self.wrapping_add(rhs), self.checked_add(rhs) is none)
     }
+    /// `self - rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_sub(self, rhs: i8) -> (i8, bool) {
         (self.wrapping_sub(rhs), self.checked_sub(rhs) is none)
     }
+    /// `self * rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_mul(self, rhs: i8) -> (i8, bool) {
         (self.wrapping_mul(rhs), self.checked_mul(rhs) is none)
     }
+    /// `self / rhs` wrapped, and whether it overflowed (`MIN / -1`). Panics when `rhs` is 0.
     pub const fn overflowing_div(self, rhs: i8) -> (i8, bool) {
         (self.wrapping_div(rhs), self == i8::MIN && rhs == -1)
     }
+    /// `self % rhs` wrapped, and whether it overflowed (`MIN % -1`). Panics when `rhs` is 0.
     pub const fn overflowing_rem(self, rhs: i8) -> (i8, bool) {
         (self.wrapping_rem(rhs), self == i8::MIN && rhs == -1)
     }
+    /// `-self` wrapped, and whether it overflowed (`MIN`).
     pub const fn overflowing_neg(self) -> (i8, bool) { (self.wrapping_neg(), self == i8::MIN) }
+    /// `self << (n % BITS)`, and whether `n` was at least `BITS`.
     pub const fn overflowing_shl(self, n: u32) -> (i8, bool) { (self.wrapping_shl(n), n >= 8) }
+    /// `self >> (n % BITS)`, and whether `n` was at least `BITS`.
     pub const fn overflowing_shr(self, n: u32) -> (i8, bool) { (self.wrapping_shr(n), n >= 8) }
+    /// `self` to the `exp` wrapped, and whether it overflowed.
     pub const fn overflowing_pow(self, exp: u32) -> (i8, bool) {
         (self.wrapping_pow(exp), self.checked_pow(exp) is none)
     }
@@ -178,11 +232,17 @@ impl i8 {
         }
         acc * base
     }
+    /// The absolute value; `MIN.abs()` overflows (panic in debug, wrap in release).
     pub const fn abs(self) -> i8 { if self < 0 { -self } else { self } }
+    /// The absolute value, or `none` for `MIN`.
     pub const fn checked_abs(self) -> i8 | none { if self < 0 { self.checked_neg() } else { self } }
+    /// The absolute value, wrapping around: `MIN` stays `MIN`.
     pub const fn wrapping_abs(self) -> i8 { if self < 0 { self.wrapping_neg() } else { self } }
+    /// The absolute value, clamped: `MIN` gives `MAX`.
     pub const fn saturating_abs(self) -> i8 { if self < 0 { self.saturating_neg() } else { self } }
+    /// The absolute value as the unsigned type of the same width; never overflows.
     pub const fn unsigned_abs(self) -> u8 { self.wrapping_abs() as u8 }
+    /// `|self - rhs|`, as the unsigned type of the same width; never overflows.
     pub const fn abs_diff(self, rhs: i8) -> u8 {
         if self < rhs {
             (rhs as u8).wrapping_sub(self as u8)
@@ -196,7 +256,9 @@ impl i8 {
         if self < 0 { return -1; }
         0
     }
+    /// `true` when `self > 0`.
     pub const fn is_positive(self) -> bool { self > 0 }
+    /// `true` when `self < 0`.
     pub const fn is_negative(self) -> bool { self < 0 }
     /// Quotient rounded so that `rem_euclid` is never negative.
     pub const fn div_euclid(self, rhs: i8) -> i8 {
@@ -220,6 +282,7 @@ impl i8 {
         if self < 0 { panic("i8::isqrt: the number is negative; use `checked_isqrt` to get `none` instead"); }
         (self as u8).isqrt() as i8
     }
+    /// The integer square root, or `none` for a negative number.
     pub const fn checked_isqrt(self) -> i8 | none {
         if self < 0 { return none; }
         (self as u8).isqrt() as i8
@@ -227,17 +290,22 @@ impl i8 {
     /// `floor(log2(self))`; panics unless `self > 0`.
     #[track_caller]
     pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("i8::ilog2: the number is not positive; use `checked_ilog2` to get `none` instead") }
+    /// `floor(log10(self))`; panics unless `self > 0`.
     #[track_caller]
     pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("i8::ilog10: the number is not positive; use `checked_ilog10` to get `none` instead") }
+    /// `floor(log(self, base))`; panics unless `self > 0` and `base >= 2`.
     #[track_caller]
     pub const fn ilog(self, base: i8) -> u32 {
         self.checked_ilog(base) ?? panic("i8::ilog: the number is not positive or the base is below 2; use `checked_ilog` to get `none` instead")
     }
+    /// `floor(log2(self))`, or `none` unless `self > 0`.
     pub const fn checked_ilog2(self) -> u32 | none {
         if self <= 0 { return none; }
         7 - self.leading_zeros()
     }
+    /// `floor(log10(self))`, or `none` unless `self > 0`.
     pub const fn checked_ilog10(self) -> u32 | none { self.checked_ilog(10) }
+    /// `floor(log(self, base))`, or `none` unless `self > 0` and `base >= 2`.
     pub const fn checked_ilog(self, base: i8) -> u32 | none {
         if self <= 0 || base < 2 { return none; }
         let n: u32 = 0;
@@ -253,14 +321,20 @@ impl i8 {
 // i16
 
 impl i16 {
+    /// The smallest value.
     pub const MIN: i16 = -32767 - 1;
+    /// The largest value.
     pub const MAX: i16 = 32767;
+    /// The width in bits.
     pub const BITS: u32 = 16;
 
+    /// `self + rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_add.i16")]
     pub const fn wrapping_add(self, rhs: i16) -> i16 { self.wrapping_add(rhs) }
+    /// `self - rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_sub.i16")]
     pub const fn wrapping_sub(self, rhs: i16) -> i16 { self.wrapping_sub(rhs) }
+    /// `self * rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_mul.i16")]
     pub const fn wrapping_mul(self, rhs: i16) -> i16 { self.wrapping_mul(rhs) }
     #[intrinsic("rok.ctpop.i16")]
@@ -270,72 +344,100 @@ impl i16 {
     #[intrinsic("rok.cttz.i16")]
     const fn cttz(self) -> i16 { self.cttz() }
 
+    /// The number of one bits.
     pub const fn count_ones(self) -> u32 { self.ctpop() as u32 }
+    /// The number of zero bits.
     pub const fn count_zeros(self) -> u32 { (~self).ctpop() as u32 }
+    /// The number of zero bits above the highest one bit.
     pub const fn leading_zeros(self) -> u32 { self.ctlz() as u32 }
+    /// The number of zero bits below the lowest one bit.
     pub const fn trailing_zeros(self) -> u32 { self.cttz() as u32 }
+    /// The number of one bits above the highest zero bit.
     pub const fn leading_ones(self) -> u32 { (~self).ctlz() as u32 }
+    /// The number of one bits below the lowest zero bit.
     pub const fn trailing_ones(self) -> u32 { (~self).cttz() as u32 }
 
+    /// The bits shifted left by `n`, those shifted out coming back on the right.
     pub const fn rotate_left(self, n: u32) -> i16 { (self as u16).rotate_left(n) as i16 }
+    /// The bits shifted right by `n`, those shifted out coming back on the left.
     pub const fn rotate_right(self, n: u32) -> i16 { (self as u16).rotate_right(n) as i16 }
+    /// The bytes in reverse order.
     pub const fn swap_bytes(self) -> i16 { (self as u16).swap_bytes() as i16 }
 
+    /// `self` in big-endian byte order (unchanged on a big-endian target).
     pub const fn to_be(self) -> i16 { if BIG_ENDIAN { self } else { self.swap_bytes() } }
+    /// `self` in little-endian byte order (unchanged on a little-endian target).
     pub const fn to_le(self) -> i16 { if BIG_ENDIAN { self.swap_bytes() } else { self } }
+    /// The number whose big-endian bytes are `x`.
     pub const fn from_be(x: i16) -> i16 { x.to_be() }
+    /// The number whose little-endian bytes are `x`.
     pub const fn from_le(x: i16) -> i16 { x.to_le() }
+    /// The bytes, least significant first.
     pub const fn to_le_bytes(self) -> [u8; 2] { [self as u8, (self >> 8) as u8] }
+    /// The bytes, most significant first.
     pub const fn to_be_bytes(self) -> [u8; 2] { [(self >> 8) as u8, self as u8] }
+    /// The bytes in the target's byte order.
     pub const fn to_ne_bytes(self) -> [u8; 2] { if BIG_ENDIAN { self.to_be_bytes() } else { self.to_le_bytes() } }
+    /// The number of `bytes`, least significant first.
     pub const fn from_le_bytes(bytes: [u8; 2]) -> i16 {
         let x: u16 = 0;
         for i in 0..2 { x = x | (bytes[i] as u16) << (8 * i as u16); }
         x as i16
     }
+    /// The number of `bytes`, most significant first.
     pub const fn from_be_bytes(bytes: [u8; 2]) -> i16 {
         let x: u16 = 0;
         for i in 0..2 { x = x << 8 | bytes[i] as u16; }
         x as i16
     }
+    /// The number of `bytes`, in the target's byte order.
     pub const fn from_ne_bytes(bytes: [u8; 2]) -> i16 { if BIG_ENDIAN { i16::from_be_bytes(bytes) } else { i16::from_le_bytes(bytes) } }
 
+    /// `self + rhs`, or `none` on overflow.
     pub const fn checked_add(self, rhs: i16) -> i16 | none {
         let r = self.wrapping_add(rhs);
         if (self ^ r) & (rhs ^ r) < 0 { return none; }
         r
     }
+    /// `self - rhs`, or `none` on overflow.
     pub const fn checked_sub(self, rhs: i16) -> i16 | none {
         let r = self.wrapping_sub(rhs);
         if (self ^ rhs) & (self ^ r) < 0 { return none; }
         r
     }
+    /// `self * rhs`, or `none` on overflow.
     pub const fn checked_mul(self, rhs: i16) -> i16 | none {
         if self == -1 { return rhs.checked_neg(); }
         let r = self.wrapping_mul(rhs);
         if self != 0 && r / self != rhs { return none; }
         r
     }
+    /// `self / rhs`, or `none` when `rhs` is 0 or the quotient overflows (`MIN / -1`).
     pub const fn checked_div(self, rhs: i16) -> i16 | none {
         if rhs == 0 || self == i16::MIN && rhs == -1 { return none; }
         self / rhs
     }
+    /// `self % rhs`, or `none` when `rhs` is 0 or the division overflows (`MIN % -1`).
     pub const fn checked_rem(self, rhs: i16) -> i16 | none {
         if rhs == 0 || self == i16::MIN && rhs == -1 { return none; }
         self % rhs
     }
+    /// `-self`, or `none` for `MIN`.
     pub const fn checked_neg(self) -> i16 | none {
         if self == i16::MIN { return none; }
         -self
     }
+    /// `self << n`, or `none` when `n` is at least `BITS`.
     pub const fn checked_shl(self, n: u32) -> i16 | none {
         if n >= 16 { return none; }
         self << (n as i16)
     }
+    /// `self >> n`, or `none` when `n` is at least `BITS`.
     pub const fn checked_shr(self, n: u32) -> i16 | none {
         if n >= 16 { return none; }
         self >> (n as i16)
     }
+    /// `self` to the `exp`, or `none` on overflow.
     pub const fn checked_pow(self, exp: u32) -> i16 | none {
         if exp == 0 { return 1; }
         let base = self;
@@ -349,17 +451,23 @@ impl i16 {
         acc.checked_mul(base)
     }
 
+    /// `self / rhs`; `MIN / -1` wraps to `MIN`. Panics when `rhs` is 0.
     pub const fn wrapping_div(self, rhs: i16) -> i16 {
         if self == i16::MIN && rhs == -1 { return self; }
         self / rhs
     }
+    /// `self % rhs`; `MIN % -1` is 0. Panics when `rhs` is 0.
     pub const fn wrapping_rem(self, rhs: i16) -> i16 {
         if rhs == -1 { return 0; }
         self % rhs
     }
+    /// `-self`, wrapping around: `MIN` stays `MIN`.
     pub const fn wrapping_neg(self) -> i16 { i16::wrapping_sub(0, self) }
+    /// `self << (n % BITS)`.
     pub const fn wrapping_shl(self, n: u32) -> i16 { self << ((n % 16) as i16) }
+    /// `self >> (n % BITS)`.
     pub const fn wrapping_shr(self, n: u32) -> i16 { self >> ((n % 16) as i16) }
+    /// `self` to the `exp`, wrapping around at the bounds.
     pub const fn wrapping_pow(self, exp: u32) -> i16 {
         let base = self;
         let acc: i16 = 1;
@@ -372,38 +480,52 @@ impl i16 {
         acc
     }
 
+    /// `self + rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_add(self, rhs: i16) -> i16 {
         self.checked_add(rhs) ?? (if rhs > 0 { i16::MAX } else { i16::MIN })
     }
+    /// `self - rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_sub(self, rhs: i16) -> i16 {
         self.checked_sub(rhs) ?? (if rhs < 0 { i16::MAX } else { i16::MIN })
     }
+    /// `self * rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_mul(self, rhs: i16) -> i16 {
         self.checked_mul(rhs) ?? (if (self < 0) != (rhs < 0) { i16::MIN } else { i16::MAX })
     }
+    /// `-self`, clamped: `MIN` gives `MAX`.
     pub const fn saturating_neg(self) -> i16 { self.checked_neg() ?? i16::MAX }
+    /// `self` to the `exp`, clamped to `MIN..=MAX`.
     pub const fn saturating_pow(self, exp: u32) -> i16 {
         self.checked_pow(exp) ?? (if self < 0 && exp % 2 == 1 { i16::MIN } else { i16::MAX })
     }
 
+    /// `self + rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_add(self, rhs: i16) -> (i16, bool) {
         (self.wrapping_add(rhs), self.checked_add(rhs) is none)
     }
+    /// `self - rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_sub(self, rhs: i16) -> (i16, bool) {
         (self.wrapping_sub(rhs), self.checked_sub(rhs) is none)
     }
+    /// `self * rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_mul(self, rhs: i16) -> (i16, bool) {
         (self.wrapping_mul(rhs), self.checked_mul(rhs) is none)
     }
+    /// `self / rhs` wrapped, and whether it overflowed (`MIN / -1`). Panics when `rhs` is 0.
     pub const fn overflowing_div(self, rhs: i16) -> (i16, bool) {
         (self.wrapping_div(rhs), self == i16::MIN && rhs == -1)
     }
+    /// `self % rhs` wrapped, and whether it overflowed (`MIN % -1`). Panics when `rhs` is 0.
     pub const fn overflowing_rem(self, rhs: i16) -> (i16, bool) {
         (self.wrapping_rem(rhs), self == i16::MIN && rhs == -1)
     }
+    /// `-self` wrapped, and whether it overflowed (`MIN`).
     pub const fn overflowing_neg(self) -> (i16, bool) { (self.wrapping_neg(), self == i16::MIN) }
+    /// `self << (n % BITS)`, and whether `n` was at least `BITS`.
     pub const fn overflowing_shl(self, n: u32) -> (i16, bool) { (self.wrapping_shl(n), n >= 16) }
+    /// `self >> (n % BITS)`, and whether `n` was at least `BITS`.
     pub const fn overflowing_shr(self, n: u32) -> (i16, bool) { (self.wrapping_shr(n), n >= 16) }
+    /// `self` to the `exp` wrapped, and whether it overflowed.
     pub const fn overflowing_pow(self, exp: u32) -> (i16, bool) {
         (self.wrapping_pow(exp), self.checked_pow(exp) is none)
     }
@@ -422,11 +544,17 @@ impl i16 {
         }
         acc * base
     }
+    /// The absolute value; `MIN.abs()` overflows (panic in debug, wrap in release).
     pub const fn abs(self) -> i16 { if self < 0 { -self } else { self } }
+    /// The absolute value, or `none` for `MIN`.
     pub const fn checked_abs(self) -> i16 | none { if self < 0 { self.checked_neg() } else { self } }
+    /// The absolute value, wrapping around: `MIN` stays `MIN`.
     pub const fn wrapping_abs(self) -> i16 { if self < 0 { self.wrapping_neg() } else { self } }
+    /// The absolute value, clamped: `MIN` gives `MAX`.
     pub const fn saturating_abs(self) -> i16 { if self < 0 { self.saturating_neg() } else { self } }
+    /// The absolute value as the unsigned type of the same width; never overflows.
     pub const fn unsigned_abs(self) -> u16 { self.wrapping_abs() as u16 }
+    /// `|self - rhs|`, as the unsigned type of the same width; never overflows.
     pub const fn abs_diff(self, rhs: i16) -> u16 {
         if self < rhs {
             (rhs as u16).wrapping_sub(self as u16)
@@ -440,7 +568,9 @@ impl i16 {
         if self < 0 { return -1; }
         0
     }
+    /// `true` when `self > 0`.
     pub const fn is_positive(self) -> bool { self > 0 }
+    /// `true` when `self < 0`.
     pub const fn is_negative(self) -> bool { self < 0 }
     /// Quotient rounded so that `rem_euclid` is never negative.
     pub const fn div_euclid(self, rhs: i16) -> i16 {
@@ -464,6 +594,7 @@ impl i16 {
         if self < 0 { panic("i16::isqrt: the number is negative; use `checked_isqrt` to get `none` instead"); }
         (self as u16).isqrt() as i16
     }
+    /// The integer square root, or `none` for a negative number.
     pub const fn checked_isqrt(self) -> i16 | none {
         if self < 0 { return none; }
         (self as u16).isqrt() as i16
@@ -471,17 +602,22 @@ impl i16 {
     /// `floor(log2(self))`; panics unless `self > 0`.
     #[track_caller]
     pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("i16::ilog2: the number is not positive; use `checked_ilog2` to get `none` instead") }
+    /// `floor(log10(self))`; panics unless `self > 0`.
     #[track_caller]
     pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("i16::ilog10: the number is not positive; use `checked_ilog10` to get `none` instead") }
+    /// `floor(log(self, base))`; panics unless `self > 0` and `base >= 2`.
     #[track_caller]
     pub const fn ilog(self, base: i16) -> u32 {
         self.checked_ilog(base) ?? panic("i16::ilog: the number is not positive or the base is below 2; use `checked_ilog` to get `none` instead")
     }
+    /// `floor(log2(self))`, or `none` unless `self > 0`.
     pub const fn checked_ilog2(self) -> u32 | none {
         if self <= 0 { return none; }
         15 - self.leading_zeros()
     }
+    /// `floor(log10(self))`, or `none` unless `self > 0`.
     pub const fn checked_ilog10(self) -> u32 | none { self.checked_ilog(10) }
+    /// `floor(log(self, base))`, or `none` unless `self > 0` and `base >= 2`.
     pub const fn checked_ilog(self, base: i16) -> u32 | none {
         if self <= 0 || base < 2 { return none; }
         let n: u32 = 0;
@@ -497,14 +633,20 @@ impl i16 {
 // i32
 
 impl i32 {
+    /// The smallest value.
     pub const MIN: i32 = -2147483647 - 1;
+    /// The largest value.
     pub const MAX: i32 = 2147483647;
+    /// The width in bits.
     pub const BITS: u32 = 32;
 
+    /// `self + rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_add.i32")]
     pub const fn wrapping_add(self, rhs: i32) -> i32 { self.wrapping_add(rhs) }
+    /// `self - rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_sub.i32")]
     pub const fn wrapping_sub(self, rhs: i32) -> i32 { self.wrapping_sub(rhs) }
+    /// `self * rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_mul.i32")]
     pub const fn wrapping_mul(self, rhs: i32) -> i32 { self.wrapping_mul(rhs) }
     #[intrinsic("rok.ctpop.i32")]
@@ -514,72 +656,100 @@ impl i32 {
     #[intrinsic("rok.cttz.i32")]
     const fn cttz(self) -> i32 { self.cttz() }
 
+    /// The number of one bits.
     pub const fn count_ones(self) -> u32 { self.ctpop() as u32 }
+    /// The number of zero bits.
     pub const fn count_zeros(self) -> u32 { (~self).ctpop() as u32 }
+    /// The number of zero bits above the highest one bit.
     pub const fn leading_zeros(self) -> u32 { self.ctlz() as u32 }
+    /// The number of zero bits below the lowest one bit.
     pub const fn trailing_zeros(self) -> u32 { self.cttz() as u32 }
+    /// The number of one bits above the highest zero bit.
     pub const fn leading_ones(self) -> u32 { (~self).ctlz() as u32 }
+    /// The number of one bits below the lowest zero bit.
     pub const fn trailing_ones(self) -> u32 { (~self).cttz() as u32 }
 
+    /// The bits shifted left by `n`, those shifted out coming back on the right.
     pub const fn rotate_left(self, n: u32) -> i32 { (self as u32).rotate_left(n) as i32 }
+    /// The bits shifted right by `n`, those shifted out coming back on the left.
     pub const fn rotate_right(self, n: u32) -> i32 { (self as u32).rotate_right(n) as i32 }
+    /// The bytes in reverse order.
     pub const fn swap_bytes(self) -> i32 { (self as u32).swap_bytes() as i32 }
 
+    /// `self` in big-endian byte order (unchanged on a big-endian target).
     pub const fn to_be(self) -> i32 { if BIG_ENDIAN { self } else { self.swap_bytes() } }
+    /// `self` in little-endian byte order (unchanged on a little-endian target).
     pub const fn to_le(self) -> i32 { if BIG_ENDIAN { self.swap_bytes() } else { self } }
+    /// The number whose big-endian bytes are `x`.
     pub const fn from_be(x: i32) -> i32 { x.to_be() }
+    /// The number whose little-endian bytes are `x`.
     pub const fn from_le(x: i32) -> i32 { x.to_le() }
+    /// The bytes, least significant first.
     pub const fn to_le_bytes(self) -> [u8; 4] { [self as u8, (self >> 8) as u8, (self >> 16) as u8, (self >> 24) as u8] }
+    /// The bytes, most significant first.
     pub const fn to_be_bytes(self) -> [u8; 4] { [(self >> 24) as u8, (self >> 16) as u8, (self >> 8) as u8, self as u8] }
+    /// The bytes in the target's byte order.
     pub const fn to_ne_bytes(self) -> [u8; 4] { if BIG_ENDIAN { self.to_be_bytes() } else { self.to_le_bytes() } }
+    /// The number of `bytes`, least significant first.
     pub const fn from_le_bytes(bytes: [u8; 4]) -> i32 {
         let x: u32 = 0;
         for i in 0..4 { x = x | (bytes[i] as u32) << (8 * i as u32); }
         x as i32
     }
+    /// The number of `bytes`, most significant first.
     pub const fn from_be_bytes(bytes: [u8; 4]) -> i32 {
         let x: u32 = 0;
         for i in 0..4 { x = x << 8 | bytes[i] as u32; }
         x as i32
     }
+    /// The number of `bytes`, in the target's byte order.
     pub const fn from_ne_bytes(bytes: [u8; 4]) -> i32 { if BIG_ENDIAN { i32::from_be_bytes(bytes) } else { i32::from_le_bytes(bytes) } }
 
+    /// `self + rhs`, or `none` on overflow.
     pub const fn checked_add(self, rhs: i32) -> i32 | none {
         let r = self.wrapping_add(rhs);
         if (self ^ r) & (rhs ^ r) < 0 { return none; }
         r
     }
+    /// `self - rhs`, or `none` on overflow.
     pub const fn checked_sub(self, rhs: i32) -> i32 | none {
         let r = self.wrapping_sub(rhs);
         if (self ^ rhs) & (self ^ r) < 0 { return none; }
         r
     }
+    /// `self * rhs`, or `none` on overflow.
     pub const fn checked_mul(self, rhs: i32) -> i32 | none {
         if self == -1 { return rhs.checked_neg(); }
         let r = self.wrapping_mul(rhs);
         if self != 0 && r / self != rhs { return none; }
         r
     }
+    /// `self / rhs`, or `none` when `rhs` is 0 or the quotient overflows (`MIN / -1`).
     pub const fn checked_div(self, rhs: i32) -> i32 | none {
         if rhs == 0 || self == i32::MIN && rhs == -1 { return none; }
         self / rhs
     }
+    /// `self % rhs`, or `none` when `rhs` is 0 or the division overflows (`MIN % -1`).
     pub const fn checked_rem(self, rhs: i32) -> i32 | none {
         if rhs == 0 || self == i32::MIN && rhs == -1 { return none; }
         self % rhs
     }
+    /// `-self`, or `none` for `MIN`.
     pub const fn checked_neg(self) -> i32 | none {
         if self == i32::MIN { return none; }
         -self
     }
+    /// `self << n`, or `none` when `n` is at least `BITS`.
     pub const fn checked_shl(self, n: u32) -> i32 | none {
         if n >= 32 { return none; }
         self << (n as i32)
     }
+    /// `self >> n`, or `none` when `n` is at least `BITS`.
     pub const fn checked_shr(self, n: u32) -> i32 | none {
         if n >= 32 { return none; }
         self >> (n as i32)
     }
+    /// `self` to the `exp`, or `none` on overflow.
     pub const fn checked_pow(self, exp: u32) -> i32 | none {
         if exp == 0 { return 1; }
         let base = self;
@@ -593,17 +763,23 @@ impl i32 {
         acc.checked_mul(base)
     }
 
+    /// `self / rhs`; `MIN / -1` wraps to `MIN`. Panics when `rhs` is 0.
     pub const fn wrapping_div(self, rhs: i32) -> i32 {
         if self == i32::MIN && rhs == -1 { return self; }
         self / rhs
     }
+    /// `self % rhs`; `MIN % -1` is 0. Panics when `rhs` is 0.
     pub const fn wrapping_rem(self, rhs: i32) -> i32 {
         if rhs == -1 { return 0; }
         self % rhs
     }
+    /// `-self`, wrapping around: `MIN` stays `MIN`.
     pub const fn wrapping_neg(self) -> i32 { i32::wrapping_sub(0, self) }
+    /// `self << (n % BITS)`.
     pub const fn wrapping_shl(self, n: u32) -> i32 { self << ((n % 32) as i32) }
+    /// `self >> (n % BITS)`.
     pub const fn wrapping_shr(self, n: u32) -> i32 { self >> ((n % 32) as i32) }
+    /// `self` to the `exp`, wrapping around at the bounds.
     pub const fn wrapping_pow(self, exp: u32) -> i32 {
         let base = self;
         let acc: i32 = 1;
@@ -616,38 +792,52 @@ impl i32 {
         acc
     }
 
+    /// `self + rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_add(self, rhs: i32) -> i32 {
         self.checked_add(rhs) ?? (if rhs > 0 { i32::MAX } else { i32::MIN })
     }
+    /// `self - rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_sub(self, rhs: i32) -> i32 {
         self.checked_sub(rhs) ?? (if rhs < 0 { i32::MAX } else { i32::MIN })
     }
+    /// `self * rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_mul(self, rhs: i32) -> i32 {
         self.checked_mul(rhs) ?? (if (self < 0) != (rhs < 0) { i32::MIN } else { i32::MAX })
     }
+    /// `-self`, clamped: `MIN` gives `MAX`.
     pub const fn saturating_neg(self) -> i32 { self.checked_neg() ?? i32::MAX }
+    /// `self` to the `exp`, clamped to `MIN..=MAX`.
     pub const fn saturating_pow(self, exp: u32) -> i32 {
         self.checked_pow(exp) ?? (if self < 0 && exp % 2 == 1 { i32::MIN } else { i32::MAX })
     }
 
+    /// `self + rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_add(self, rhs: i32) -> (i32, bool) {
         (self.wrapping_add(rhs), self.checked_add(rhs) is none)
     }
+    /// `self - rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_sub(self, rhs: i32) -> (i32, bool) {
         (self.wrapping_sub(rhs), self.checked_sub(rhs) is none)
     }
+    /// `self * rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_mul(self, rhs: i32) -> (i32, bool) {
         (self.wrapping_mul(rhs), self.checked_mul(rhs) is none)
     }
+    /// `self / rhs` wrapped, and whether it overflowed (`MIN / -1`). Panics when `rhs` is 0.
     pub const fn overflowing_div(self, rhs: i32) -> (i32, bool) {
         (self.wrapping_div(rhs), self == i32::MIN && rhs == -1)
     }
+    /// `self % rhs` wrapped, and whether it overflowed (`MIN % -1`). Panics when `rhs` is 0.
     pub const fn overflowing_rem(self, rhs: i32) -> (i32, bool) {
         (self.wrapping_rem(rhs), self == i32::MIN && rhs == -1)
     }
+    /// `-self` wrapped, and whether it overflowed (`MIN`).
     pub const fn overflowing_neg(self) -> (i32, bool) { (self.wrapping_neg(), self == i32::MIN) }
+    /// `self << (n % BITS)`, and whether `n` was at least `BITS`.
     pub const fn overflowing_shl(self, n: u32) -> (i32, bool) { (self.wrapping_shl(n), n >= 32) }
+    /// `self >> (n % BITS)`, and whether `n` was at least `BITS`.
     pub const fn overflowing_shr(self, n: u32) -> (i32, bool) { (self.wrapping_shr(n), n >= 32) }
+    /// `self` to the `exp` wrapped, and whether it overflowed.
     pub const fn overflowing_pow(self, exp: u32) -> (i32, bool) {
         (self.wrapping_pow(exp), self.checked_pow(exp) is none)
     }
@@ -666,11 +856,17 @@ impl i32 {
         }
         acc * base
     }
+    /// The absolute value; `MIN.abs()` overflows (panic in debug, wrap in release).
     pub const fn abs(self) -> i32 { if self < 0 { -self } else { self } }
+    /// The absolute value, or `none` for `MIN`.
     pub const fn checked_abs(self) -> i32 | none { if self < 0 { self.checked_neg() } else { self } }
+    /// The absolute value, wrapping around: `MIN` stays `MIN`.
     pub const fn wrapping_abs(self) -> i32 { if self < 0 { self.wrapping_neg() } else { self } }
+    /// The absolute value, clamped: `MIN` gives `MAX`.
     pub const fn saturating_abs(self) -> i32 { if self < 0 { self.saturating_neg() } else { self } }
+    /// The absolute value as the unsigned type of the same width; never overflows.
     pub const fn unsigned_abs(self) -> u32 { self.wrapping_abs() as u32 }
+    /// `|self - rhs|`, as the unsigned type of the same width; never overflows.
     pub const fn abs_diff(self, rhs: i32) -> u32 {
         if self < rhs {
             (rhs as u32).wrapping_sub(self as u32)
@@ -684,7 +880,9 @@ impl i32 {
         if self < 0 { return -1; }
         0
     }
+    /// `true` when `self > 0`.
     pub const fn is_positive(self) -> bool { self > 0 }
+    /// `true` when `self < 0`.
     pub const fn is_negative(self) -> bool { self < 0 }
     /// Quotient rounded so that `rem_euclid` is never negative.
     pub const fn div_euclid(self, rhs: i32) -> i32 {
@@ -708,6 +906,7 @@ impl i32 {
         if self < 0 { panic("i32::isqrt: the number is negative; use `checked_isqrt` to get `none` instead"); }
         (self as u32).isqrt() as i32
     }
+    /// The integer square root, or `none` for a negative number.
     pub const fn checked_isqrt(self) -> i32 | none {
         if self < 0 { return none; }
         (self as u32).isqrt() as i32
@@ -715,17 +914,22 @@ impl i32 {
     /// `floor(log2(self))`; panics unless `self > 0`.
     #[track_caller]
     pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("i32::ilog2: the number is not positive; use `checked_ilog2` to get `none` instead") }
+    /// `floor(log10(self))`; panics unless `self > 0`.
     #[track_caller]
     pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("i32::ilog10: the number is not positive; use `checked_ilog10` to get `none` instead") }
+    /// `floor(log(self, base))`; panics unless `self > 0` and `base >= 2`.
     #[track_caller]
     pub const fn ilog(self, base: i32) -> u32 {
         self.checked_ilog(base) ?? panic("i32::ilog: the number is not positive or the base is below 2; use `checked_ilog` to get `none` instead")
     }
+    /// `floor(log2(self))`, or `none` unless `self > 0`.
     pub const fn checked_ilog2(self) -> u32 | none {
         if self <= 0 { return none; }
         31 - self.leading_zeros()
     }
+    /// `floor(log10(self))`, or `none` unless `self > 0`.
     pub const fn checked_ilog10(self) -> u32 | none { self.checked_ilog(10) }
+    /// `floor(log(self, base))`, or `none` unless `self > 0` and `base >= 2`.
     pub const fn checked_ilog(self, base: i32) -> u32 | none {
         if self <= 0 || base < 2 { return none; }
         let n: u32 = 0;
@@ -741,14 +945,20 @@ impl i32 {
 // i64
 
 impl i64 {
+    /// The smallest value.
     pub const MIN: i64 = -9223372036854775807 - 1;
+    /// The largest value.
     pub const MAX: i64 = 9223372036854775807;
+    /// The width in bits.
     pub const BITS: u32 = 64;
 
+    /// `self + rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_add.i64")]
     pub const fn wrapping_add(self, rhs: i64) -> i64 { self.wrapping_add(rhs) }
+    /// `self - rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_sub.i64")]
     pub const fn wrapping_sub(self, rhs: i64) -> i64 { self.wrapping_sub(rhs) }
+    /// `self * rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_mul.i64")]
     pub const fn wrapping_mul(self, rhs: i64) -> i64 { self.wrapping_mul(rhs) }
     #[intrinsic("rok.ctpop.i64")]
@@ -758,72 +968,100 @@ impl i64 {
     #[intrinsic("rok.cttz.i64")]
     const fn cttz(self) -> i64 { self.cttz() }
 
+    /// The number of one bits.
     pub const fn count_ones(self) -> u32 { self.ctpop() as u32 }
+    /// The number of zero bits.
     pub const fn count_zeros(self) -> u32 { (~self).ctpop() as u32 }
+    /// The number of zero bits above the highest one bit.
     pub const fn leading_zeros(self) -> u32 { self.ctlz() as u32 }
+    /// The number of zero bits below the lowest one bit.
     pub const fn trailing_zeros(self) -> u32 { self.cttz() as u32 }
+    /// The number of one bits above the highest zero bit.
     pub const fn leading_ones(self) -> u32 { (~self).ctlz() as u32 }
+    /// The number of one bits below the lowest zero bit.
     pub const fn trailing_ones(self) -> u32 { (~self).cttz() as u32 }
 
+    /// The bits shifted left by `n`, those shifted out coming back on the right.
     pub const fn rotate_left(self, n: u32) -> i64 { (self as u64).rotate_left(n) as i64 }
+    /// The bits shifted right by `n`, those shifted out coming back on the left.
     pub const fn rotate_right(self, n: u32) -> i64 { (self as u64).rotate_right(n) as i64 }
+    /// The bytes in reverse order.
     pub const fn swap_bytes(self) -> i64 { (self as u64).swap_bytes() as i64 }
 
+    /// `self` in big-endian byte order (unchanged on a big-endian target).
     pub const fn to_be(self) -> i64 { if BIG_ENDIAN { self } else { self.swap_bytes() } }
+    /// `self` in little-endian byte order (unchanged on a little-endian target).
     pub const fn to_le(self) -> i64 { if BIG_ENDIAN { self.swap_bytes() } else { self } }
+    /// The number whose big-endian bytes are `x`.
     pub const fn from_be(x: i64) -> i64 { x.to_be() }
+    /// The number whose little-endian bytes are `x`.
     pub const fn from_le(x: i64) -> i64 { x.to_le() }
+    /// The bytes, least significant first.
     pub const fn to_le_bytes(self) -> [u8; 8] { [self as u8, (self >> 8) as u8, (self >> 16) as u8, (self >> 24) as u8, (self >> 32) as u8, (self >> 40) as u8, (self >> 48) as u8, (self >> 56) as u8] }
+    /// The bytes, most significant first.
     pub const fn to_be_bytes(self) -> [u8; 8] { [(self >> 56) as u8, (self >> 48) as u8, (self >> 40) as u8, (self >> 32) as u8, (self >> 24) as u8, (self >> 16) as u8, (self >> 8) as u8, self as u8] }
+    /// The bytes in the target's byte order.
     pub const fn to_ne_bytes(self) -> [u8; 8] { if BIG_ENDIAN { self.to_be_bytes() } else { self.to_le_bytes() } }
+    /// The number of `bytes`, least significant first.
     pub const fn from_le_bytes(bytes: [u8; 8]) -> i64 {
         let x: u64 = 0;
         for i in 0..8 { x = x | (bytes[i] as u64) << (8 * i as u64); }
         x as i64
     }
+    /// The number of `bytes`, most significant first.
     pub const fn from_be_bytes(bytes: [u8; 8]) -> i64 {
         let x: u64 = 0;
         for i in 0..8 { x = x << 8 | bytes[i] as u64; }
         x as i64
     }
+    /// The number of `bytes`, in the target's byte order.
     pub const fn from_ne_bytes(bytes: [u8; 8]) -> i64 { if BIG_ENDIAN { i64::from_be_bytes(bytes) } else { i64::from_le_bytes(bytes) } }
 
+    /// `self + rhs`, or `none` on overflow.
     pub const fn checked_add(self, rhs: i64) -> i64 | none {
         let r = self.wrapping_add(rhs);
         if (self ^ r) & (rhs ^ r) < 0 { return none; }
         r
     }
+    /// `self - rhs`, or `none` on overflow.
     pub const fn checked_sub(self, rhs: i64) -> i64 | none {
         let r = self.wrapping_sub(rhs);
         if (self ^ rhs) & (self ^ r) < 0 { return none; }
         r
     }
+    /// `self * rhs`, or `none` on overflow.
     pub const fn checked_mul(self, rhs: i64) -> i64 | none {
         if self == -1 { return rhs.checked_neg(); }
         let r = self.wrapping_mul(rhs);
         if self != 0 && r / self != rhs { return none; }
         r
     }
+    /// `self / rhs`, or `none` when `rhs` is 0 or the quotient overflows (`MIN / -1`).
     pub const fn checked_div(self, rhs: i64) -> i64 | none {
         if rhs == 0 || self == i64::MIN && rhs == -1 { return none; }
         self / rhs
     }
+    /// `self % rhs`, or `none` when `rhs` is 0 or the division overflows (`MIN % -1`).
     pub const fn checked_rem(self, rhs: i64) -> i64 | none {
         if rhs == 0 || self == i64::MIN && rhs == -1 { return none; }
         self % rhs
     }
+    /// `-self`, or `none` for `MIN`.
     pub const fn checked_neg(self) -> i64 | none {
         if self == i64::MIN { return none; }
         -self
     }
+    /// `self << n`, or `none` when `n` is at least `BITS`.
     pub const fn checked_shl(self, n: u32) -> i64 | none {
         if n >= 64 { return none; }
         self << (n as i64)
     }
+    /// `self >> n`, or `none` when `n` is at least `BITS`.
     pub const fn checked_shr(self, n: u32) -> i64 | none {
         if n >= 64 { return none; }
         self >> (n as i64)
     }
+    /// `self` to the `exp`, or `none` on overflow.
     pub const fn checked_pow(self, exp: u32) -> i64 | none {
         if exp == 0 { return 1; }
         let base = self;
@@ -837,17 +1075,23 @@ impl i64 {
         acc.checked_mul(base)
     }
 
+    /// `self / rhs`; `MIN / -1` wraps to `MIN`. Panics when `rhs` is 0.
     pub const fn wrapping_div(self, rhs: i64) -> i64 {
         if self == i64::MIN && rhs == -1 { return self; }
         self / rhs
     }
+    /// `self % rhs`; `MIN % -1` is 0. Panics when `rhs` is 0.
     pub const fn wrapping_rem(self, rhs: i64) -> i64 {
         if rhs == -1 { return 0; }
         self % rhs
     }
+    /// `-self`, wrapping around: `MIN` stays `MIN`.
     pub const fn wrapping_neg(self) -> i64 { i64::wrapping_sub(0, self) }
+    /// `self << (n % BITS)`.
     pub const fn wrapping_shl(self, n: u32) -> i64 { self << ((n % 64) as i64) }
+    /// `self >> (n % BITS)`.
     pub const fn wrapping_shr(self, n: u32) -> i64 { self >> ((n % 64) as i64) }
+    /// `self` to the `exp`, wrapping around at the bounds.
     pub const fn wrapping_pow(self, exp: u32) -> i64 {
         let base = self;
         let acc: i64 = 1;
@@ -860,38 +1104,52 @@ impl i64 {
         acc
     }
 
+    /// `self + rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_add(self, rhs: i64) -> i64 {
         self.checked_add(rhs) ?? (if rhs > 0 { i64::MAX } else { i64::MIN })
     }
+    /// `self - rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_sub(self, rhs: i64) -> i64 {
         self.checked_sub(rhs) ?? (if rhs < 0 { i64::MAX } else { i64::MIN })
     }
+    /// `self * rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_mul(self, rhs: i64) -> i64 {
         self.checked_mul(rhs) ?? (if (self < 0) != (rhs < 0) { i64::MIN } else { i64::MAX })
     }
+    /// `-self`, clamped: `MIN` gives `MAX`.
     pub const fn saturating_neg(self) -> i64 { self.checked_neg() ?? i64::MAX }
+    /// `self` to the `exp`, clamped to `MIN..=MAX`.
     pub const fn saturating_pow(self, exp: u32) -> i64 {
         self.checked_pow(exp) ?? (if self < 0 && exp % 2 == 1 { i64::MIN } else { i64::MAX })
     }
 
+    /// `self + rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_add(self, rhs: i64) -> (i64, bool) {
         (self.wrapping_add(rhs), self.checked_add(rhs) is none)
     }
+    /// `self - rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_sub(self, rhs: i64) -> (i64, bool) {
         (self.wrapping_sub(rhs), self.checked_sub(rhs) is none)
     }
+    /// `self * rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_mul(self, rhs: i64) -> (i64, bool) {
         (self.wrapping_mul(rhs), self.checked_mul(rhs) is none)
     }
+    /// `self / rhs` wrapped, and whether it overflowed (`MIN / -1`). Panics when `rhs` is 0.
     pub const fn overflowing_div(self, rhs: i64) -> (i64, bool) {
         (self.wrapping_div(rhs), self == i64::MIN && rhs == -1)
     }
+    /// `self % rhs` wrapped, and whether it overflowed (`MIN % -1`). Panics when `rhs` is 0.
     pub const fn overflowing_rem(self, rhs: i64) -> (i64, bool) {
         (self.wrapping_rem(rhs), self == i64::MIN && rhs == -1)
     }
+    /// `-self` wrapped, and whether it overflowed (`MIN`).
     pub const fn overflowing_neg(self) -> (i64, bool) { (self.wrapping_neg(), self == i64::MIN) }
+    /// `self << (n % BITS)`, and whether `n` was at least `BITS`.
     pub const fn overflowing_shl(self, n: u32) -> (i64, bool) { (self.wrapping_shl(n), n >= 64) }
+    /// `self >> (n % BITS)`, and whether `n` was at least `BITS`.
     pub const fn overflowing_shr(self, n: u32) -> (i64, bool) { (self.wrapping_shr(n), n >= 64) }
+    /// `self` to the `exp` wrapped, and whether it overflowed.
     pub const fn overflowing_pow(self, exp: u32) -> (i64, bool) {
         (self.wrapping_pow(exp), self.checked_pow(exp) is none)
     }
@@ -910,11 +1168,17 @@ impl i64 {
         }
         acc * base
     }
+    /// The absolute value; `MIN.abs()` overflows (panic in debug, wrap in release).
     pub const fn abs(self) -> i64 { if self < 0 { -self } else { self } }
+    /// The absolute value, or `none` for `MIN`.
     pub const fn checked_abs(self) -> i64 | none { if self < 0 { self.checked_neg() } else { self } }
+    /// The absolute value, wrapping around: `MIN` stays `MIN`.
     pub const fn wrapping_abs(self) -> i64 { if self < 0 { self.wrapping_neg() } else { self } }
+    /// The absolute value, clamped: `MIN` gives `MAX`.
     pub const fn saturating_abs(self) -> i64 { if self < 0 { self.saturating_neg() } else { self } }
+    /// The absolute value as the unsigned type of the same width; never overflows.
     pub const fn unsigned_abs(self) -> u64 { self.wrapping_abs() as u64 }
+    /// `|self - rhs|`, as the unsigned type of the same width; never overflows.
     pub const fn abs_diff(self, rhs: i64) -> u64 {
         if self < rhs {
             (rhs as u64).wrapping_sub(self as u64)
@@ -928,7 +1192,9 @@ impl i64 {
         if self < 0 { return -1; }
         0
     }
+    /// `true` when `self > 0`.
     pub const fn is_positive(self) -> bool { self > 0 }
+    /// `true` when `self < 0`.
     pub const fn is_negative(self) -> bool { self < 0 }
     /// Quotient rounded so that `rem_euclid` is never negative.
     pub const fn div_euclid(self, rhs: i64) -> i64 {
@@ -952,6 +1218,7 @@ impl i64 {
         if self < 0 { panic("i64::isqrt: the number is negative; use `checked_isqrt` to get `none` instead"); }
         (self as u64).isqrt() as i64
     }
+    /// The integer square root, or `none` for a negative number.
     pub const fn checked_isqrt(self) -> i64 | none {
         if self < 0 { return none; }
         (self as u64).isqrt() as i64
@@ -959,17 +1226,22 @@ impl i64 {
     /// `floor(log2(self))`; panics unless `self > 0`.
     #[track_caller]
     pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("i64::ilog2: the number is not positive; use `checked_ilog2` to get `none` instead") }
+    /// `floor(log10(self))`; panics unless `self > 0`.
     #[track_caller]
     pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("i64::ilog10: the number is not positive; use `checked_ilog10` to get `none` instead") }
+    /// `floor(log(self, base))`; panics unless `self > 0` and `base >= 2`.
     #[track_caller]
     pub const fn ilog(self, base: i64) -> u32 {
         self.checked_ilog(base) ?? panic("i64::ilog: the number is not positive or the base is below 2; use `checked_ilog` to get `none` instead")
     }
+    /// `floor(log2(self))`, or `none` unless `self > 0`.
     pub const fn checked_ilog2(self) -> u32 | none {
         if self <= 0 { return none; }
         63 - self.leading_zeros()
     }
+    /// `floor(log10(self))`, or `none` unless `self > 0`.
     pub const fn checked_ilog10(self) -> u32 | none { self.checked_ilog(10) }
+    /// `floor(log(self, base))`, or `none` unless `self > 0` and `base >= 2`.
     pub const fn checked_ilog(self, base: i64) -> u32 | none {
         if self <= 0 || base < 2 { return none; }
         let n: u32 = 0;
@@ -986,65 +1258,104 @@ impl i64 {
 
 #[cfg(target_pointer_width = "64")]
 impl isize {
+    /// The smallest value.
     pub const MIN: isize = -9223372036854775807 - 1;
+    /// The largest value.
     pub const MAX: isize = 9223372036854775807;
+    /// The width in bits.
     pub const BITS: u32 = 64;
 
+    /// The bytes, least significant first.
     pub const fn to_le_bytes(self) -> [u8; 8] { (self as i64).to_le_bytes() }
+    /// The bytes, most significant first.
     pub const fn to_be_bytes(self) -> [u8; 8] { (self as i64).to_be_bytes() }
+    /// The bytes in the target's byte order.
     pub const fn to_ne_bytes(self) -> [u8; 8] { (self as i64).to_ne_bytes() }
+    /// The number of `bytes`, least significant first.
     pub const fn from_le_bytes(bytes: [u8; 8]) -> isize { i64::from_le_bytes(bytes) as isize }
+    /// The number of `bytes`, most significant first.
     pub const fn from_be_bytes(bytes: [u8; 8]) -> isize { i64::from_be_bytes(bytes) as isize }
+    /// The number of `bytes`, in the target's byte order.
     pub const fn from_ne_bytes(bytes: [u8; 8]) -> isize { i64::from_ne_bytes(bytes) as isize }
 }
 
 #[cfg(target_pointer_width = "64")]
 impl usize {
+    /// The smallest value.
     pub const MIN: usize = 0;
+    /// The largest value.
     pub const MAX: usize = 18446744073709551615;
+    /// The width in bits.
     pub const BITS: u32 = 64;
 
+    /// The bytes, least significant first.
     pub const fn to_le_bytes(self) -> [u8; 8] { (self as u64).to_le_bytes() }
+    /// The bytes, most significant first.
     pub const fn to_be_bytes(self) -> [u8; 8] { (self as u64).to_be_bytes() }
+    /// The bytes in the target's byte order.
     pub const fn to_ne_bytes(self) -> [u8; 8] { (self as u64).to_ne_bytes() }
+    /// The number of `bytes`, least significant first.
     pub const fn from_le_bytes(bytes: [u8; 8]) -> usize { u64::from_le_bytes(bytes) as usize }
+    /// The number of `bytes`, most significant first.
     pub const fn from_be_bytes(bytes: [u8; 8]) -> usize { u64::from_be_bytes(bytes) as usize }
+    /// The number of `bytes`, in the target's byte order.
     pub const fn from_ne_bytes(bytes: [u8; 8]) -> usize { u64::from_ne_bytes(bytes) as usize }
 }
 
 #[cfg(target_pointer_width = "32")]
 impl isize {
+    /// The smallest value.
     pub const MIN: isize = -2147483647 - 1;
+    /// The largest value.
     pub const MAX: isize = 2147483647;
+    /// The width in bits.
     pub const BITS: u32 = 32;
 
+    /// The bytes, least significant first.
     pub fn to_le_bytes(self) -> [u8; 4] { (self as i32).to_le_bytes() }
+    /// The bytes, most significant first.
     pub fn to_be_bytes(self) -> [u8; 4] { (self as i32).to_be_bytes() }
+    /// The bytes in the target's byte order.
     pub fn to_ne_bytes(self) -> [u8; 4] { (self as i32).to_ne_bytes() }
+    /// The number of `bytes`, least significant first.
     pub fn from_le_bytes(bytes: [u8; 4]) -> isize { i32::from_le_bytes(bytes) as isize }
+    /// The number of `bytes`, most significant first.
     pub fn from_be_bytes(bytes: [u8; 4]) -> isize { i32::from_be_bytes(bytes) as isize }
+    /// The number of `bytes`, in the target's byte order.
     pub fn from_ne_bytes(bytes: [u8; 4]) -> isize { i32::from_ne_bytes(bytes) as isize }
 }
 
 #[cfg(target_pointer_width = "32")]
 impl usize {
+    /// The smallest value.
     pub const MIN: usize = 0;
+    /// The largest value.
     pub const MAX: usize = 4294967295;
+    /// The width in bits.
     pub const BITS: u32 = 32;
 
+    /// The bytes, least significant first.
     pub fn to_le_bytes(self) -> [u8; 4] { (self as u32).to_le_bytes() }
+    /// The bytes, most significant first.
     pub fn to_be_bytes(self) -> [u8; 4] { (self as u32).to_be_bytes() }
+    /// The bytes in the target's byte order.
     pub fn to_ne_bytes(self) -> [u8; 4] { (self as u32).to_ne_bytes() }
+    /// The number of `bytes`, least significant first.
     pub fn from_le_bytes(bytes: [u8; 4]) -> usize { u32::from_le_bytes(bytes) as usize }
+    /// The number of `bytes`, most significant first.
     pub fn from_be_bytes(bytes: [u8; 4]) -> usize { u32::from_be_bytes(bytes) as usize }
+    /// The number of `bytes`, in the target's byte order.
     pub fn from_ne_bytes(bytes: [u8; 4]) -> usize { u32::from_ne_bytes(bytes) as usize }
 }
 
 impl isize {
+    /// `self + rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_add.isize")]
     pub const fn wrapping_add(self, rhs: isize) -> isize { self.wrapping_add(rhs) }
+    /// `self - rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_sub.isize")]
     pub const fn wrapping_sub(self, rhs: isize) -> isize { self.wrapping_sub(rhs) }
+    /// `self * rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_mul.isize")]
     pub const fn wrapping_mul(self, rhs: isize) -> isize { self.wrapping_mul(rhs) }
     #[intrinsic("rok.ctpop.isize")]
@@ -1054,58 +1365,80 @@ impl isize {
     #[intrinsic("rok.cttz.isize")]
     const fn cttz(self) -> isize { self.cttz() }
 
+    /// The number of one bits.
     pub const fn count_ones(self) -> u32 { self.ctpop() as u32 }
+    /// The number of zero bits.
     pub const fn count_zeros(self) -> u32 { (~self).ctpop() as u32 }
+    /// The number of zero bits above the highest one bit.
     pub const fn leading_zeros(self) -> u32 { self.ctlz() as u32 }
+    /// The number of zero bits below the lowest one bit.
     pub const fn trailing_zeros(self) -> u32 { self.cttz() as u32 }
+    /// The number of one bits above the highest zero bit.
     pub const fn leading_ones(self) -> u32 { (~self).ctlz() as u32 }
+    /// The number of one bits below the lowest zero bit.
     pub const fn trailing_ones(self) -> u32 { (~self).cttz() as u32 }
 
+    /// The bits shifted left by `n`, those shifted out coming back on the right.
     pub const fn rotate_left(self, n: u32) -> isize { (self as usize).rotate_left(n) as isize }
+    /// The bits shifted right by `n`, those shifted out coming back on the left.
     pub const fn rotate_right(self, n: u32) -> isize { (self as usize).rotate_right(n) as isize }
+    /// The bytes in reverse order.
     pub const fn swap_bytes(self) -> isize { (self as usize).swap_bytes() as isize }
 
+    /// `self` in big-endian byte order (unchanged on a big-endian target).
     pub const fn to_be(self) -> isize { if BIG_ENDIAN { self } else { self.swap_bytes() } }
+    /// `self` in little-endian byte order (unchanged on a little-endian target).
     pub const fn to_le(self) -> isize { if BIG_ENDIAN { self.swap_bytes() } else { self } }
+    /// The number whose big-endian bytes are `x`.
     pub const fn from_be(x: isize) -> isize { x.to_be() }
+    /// The number whose little-endian bytes are `x`.
     pub const fn from_le(x: isize) -> isize { x.to_le() }
 
+    /// `self + rhs`, or `none` on overflow.
     pub const fn checked_add(self, rhs: isize) -> isize | none {
         let r = self.wrapping_add(rhs);
         if (self ^ r) & (rhs ^ r) < 0 { return none; }
         r
     }
+    /// `self - rhs`, or `none` on overflow.
     pub const fn checked_sub(self, rhs: isize) -> isize | none {
         let r = self.wrapping_sub(rhs);
         if (self ^ rhs) & (self ^ r) < 0 { return none; }
         r
     }
+    /// `self * rhs`, or `none` on overflow.
     pub const fn checked_mul(self, rhs: isize) -> isize | none {
         if self == -1 { return rhs.checked_neg(); }
         let r = self.wrapping_mul(rhs);
         if self != 0 && r / self != rhs { return none; }
         r
     }
+    /// `self / rhs`, or `none` when `rhs` is 0 or the quotient overflows (`MIN / -1`).
     pub const fn checked_div(self, rhs: isize) -> isize | none {
         if rhs == 0 || self == isize::MIN && rhs == -1 { return none; }
         self / rhs
     }
+    /// `self % rhs`, or `none` when `rhs` is 0 or the division overflows (`MIN % -1`).
     pub const fn checked_rem(self, rhs: isize) -> isize | none {
         if rhs == 0 || self == isize::MIN && rhs == -1 { return none; }
         self % rhs
     }
+    /// `-self`, or `none` for `MIN`.
     pub const fn checked_neg(self) -> isize | none {
         if self == isize::MIN { return none; }
         -self
     }
+    /// `self << n`, or `none` when `n` is at least `BITS`.
     pub const fn checked_shl(self, n: u32) -> isize | none {
         if n >= usize::BITS { return none; }
         self << (n as isize)
     }
+    /// `self >> n`, or `none` when `n` is at least `BITS`.
     pub const fn checked_shr(self, n: u32) -> isize | none {
         if n >= usize::BITS { return none; }
         self >> (n as isize)
     }
+    /// `self` to the `exp`, or `none` on overflow.
     pub const fn checked_pow(self, exp: u32) -> isize | none {
         if exp == 0 { return 1; }
         let base = self;
@@ -1119,17 +1452,23 @@ impl isize {
         acc.checked_mul(base)
     }
 
+    /// `self / rhs`; `MIN / -1` wraps to `MIN`. Panics when `rhs` is 0.
     pub const fn wrapping_div(self, rhs: isize) -> isize {
         if self == isize::MIN && rhs == -1 { return self; }
         self / rhs
     }
+    /// `self % rhs`; `MIN % -1` is 0. Panics when `rhs` is 0.
     pub const fn wrapping_rem(self, rhs: isize) -> isize {
         if rhs == -1 { return 0; }
         self % rhs
     }
+    /// `-self`, wrapping around: `MIN` stays `MIN`.
     pub const fn wrapping_neg(self) -> isize { isize::wrapping_sub(0, self) }
+    /// `self << (n % BITS)`.
     pub const fn wrapping_shl(self, n: u32) -> isize { self << ((n % usize::BITS) as isize) }
+    /// `self >> (n % BITS)`.
     pub const fn wrapping_shr(self, n: u32) -> isize { self >> ((n % usize::BITS) as isize) }
+    /// `self` to the `exp`, wrapping around at the bounds.
     pub const fn wrapping_pow(self, exp: u32) -> isize {
         let base = self;
         let acc: isize = 1;
@@ -1142,38 +1481,52 @@ impl isize {
         acc
     }
 
+    /// `self + rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_add(self, rhs: isize) -> isize {
         self.checked_add(rhs) ?? (if rhs > 0 { isize::MAX } else { isize::MIN })
     }
+    /// `self - rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_sub(self, rhs: isize) -> isize {
         self.checked_sub(rhs) ?? (if rhs < 0 { isize::MAX } else { isize::MIN })
     }
+    /// `self * rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_mul(self, rhs: isize) -> isize {
         self.checked_mul(rhs) ?? (if (self < 0) != (rhs < 0) { isize::MIN } else { isize::MAX })
     }
+    /// `-self`, clamped: `MIN` gives `MAX`.
     pub const fn saturating_neg(self) -> isize { self.checked_neg() ?? isize::MAX }
+    /// `self` to the `exp`, clamped to `MIN..=MAX`.
     pub const fn saturating_pow(self, exp: u32) -> isize {
         self.checked_pow(exp) ?? (if self < 0 && exp % 2 == 1 { isize::MIN } else { isize::MAX })
     }
 
+    /// `self + rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_add(self, rhs: isize) -> (isize, bool) {
         (self.wrapping_add(rhs), self.checked_add(rhs) is none)
     }
+    /// `self - rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_sub(self, rhs: isize) -> (isize, bool) {
         (self.wrapping_sub(rhs), self.checked_sub(rhs) is none)
     }
+    /// `self * rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_mul(self, rhs: isize) -> (isize, bool) {
         (self.wrapping_mul(rhs), self.checked_mul(rhs) is none)
     }
+    /// `self / rhs` wrapped, and whether it overflowed (`MIN / -1`). Panics when `rhs` is 0.
     pub const fn overflowing_div(self, rhs: isize) -> (isize, bool) {
         (self.wrapping_div(rhs), self == isize::MIN && rhs == -1)
     }
+    /// `self % rhs` wrapped, and whether it overflowed (`MIN % -1`). Panics when `rhs` is 0.
     pub const fn overflowing_rem(self, rhs: isize) -> (isize, bool) {
         (self.wrapping_rem(rhs), self == isize::MIN && rhs == -1)
     }
+    /// `-self` wrapped, and whether it overflowed (`MIN`).
     pub const fn overflowing_neg(self) -> (isize, bool) { (self.wrapping_neg(), self == isize::MIN) }
+    /// `self << (n % BITS)`, and whether `n` was at least `BITS`.
     pub const fn overflowing_shl(self, n: u32) -> (isize, bool) { (self.wrapping_shl(n), n >= usize::BITS) }
+    /// `self >> (n % BITS)`, and whether `n` was at least `BITS`.
     pub const fn overflowing_shr(self, n: u32) -> (isize, bool) { (self.wrapping_shr(n), n >= usize::BITS) }
+    /// `self` to the `exp` wrapped, and whether it overflowed.
     pub const fn overflowing_pow(self, exp: u32) -> (isize, bool) {
         (self.wrapping_pow(exp), self.checked_pow(exp) is none)
     }
@@ -1192,11 +1545,17 @@ impl isize {
         }
         acc * base
     }
+    /// The absolute value; `MIN.abs()` overflows (panic in debug, wrap in release).
     pub const fn abs(self) -> isize { if self < 0 { -self } else { self } }
+    /// The absolute value, or `none` for `MIN`.
     pub const fn checked_abs(self) -> isize | none { if self < 0 { self.checked_neg() } else { self } }
+    /// The absolute value, wrapping around: `MIN` stays `MIN`.
     pub const fn wrapping_abs(self) -> isize { if self < 0 { self.wrapping_neg() } else { self } }
+    /// The absolute value, clamped: `MIN` gives `MAX`.
     pub const fn saturating_abs(self) -> isize { if self < 0 { self.saturating_neg() } else { self } }
+    /// The absolute value as the unsigned type of the same width; never overflows.
     pub const fn unsigned_abs(self) -> usize { self.wrapping_abs() as usize }
+    /// `|self - rhs|`, as the unsigned type of the same width; never overflows.
     pub const fn abs_diff(self, rhs: isize) -> usize {
         if self < rhs {
             (rhs as usize).wrapping_sub(self as usize)
@@ -1210,7 +1569,9 @@ impl isize {
         if self < 0 { return -1; }
         0
     }
+    /// `true` when `self > 0`.
     pub const fn is_positive(self) -> bool { self > 0 }
+    /// `true` when `self < 0`.
     pub const fn is_negative(self) -> bool { self < 0 }
     /// Quotient rounded so that `rem_euclid` is never negative.
     pub const fn div_euclid(self, rhs: isize) -> isize {
@@ -1234,6 +1595,7 @@ impl isize {
         if self < 0 { panic("isize::isqrt: the number is negative; use `checked_isqrt` to get `none` instead"); }
         (self as usize).isqrt() as isize
     }
+    /// The integer square root, or `none` for a negative number.
     pub const fn checked_isqrt(self) -> isize | none {
         if self < 0 { return none; }
         (self as usize).isqrt() as isize
@@ -1241,17 +1603,22 @@ impl isize {
     /// `floor(log2(self))`; panics unless `self > 0`.
     #[track_caller]
     pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("isize::ilog2: the number is not positive; use `checked_ilog2` to get `none` instead") }
+    /// `floor(log10(self))`; panics unless `self > 0`.
     #[track_caller]
     pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("isize::ilog10: the number is not positive; use `checked_ilog10` to get `none` instead") }
+    /// `floor(log(self, base))`; panics unless `self > 0` and `base >= 2`.
     #[track_caller]
     pub const fn ilog(self, base: isize) -> u32 {
         self.checked_ilog(base) ?? panic("isize::ilog: the number is not positive or the base is below 2; use `checked_ilog` to get `none` instead")
     }
+    /// `floor(log2(self))`, or `none` unless `self > 0`.
     pub const fn checked_ilog2(self) -> u32 | none {
         if self <= 0 { return none; }
         usize::BITS - 1 - self.leading_zeros()
     }
+    /// `floor(log10(self))`, or `none` unless `self > 0`.
     pub const fn checked_ilog10(self) -> u32 | none { self.checked_ilog(10) }
+    /// `floor(log(self, base))`, or `none` unless `self > 0` and `base >= 2`.
     pub const fn checked_ilog(self, base: isize) -> u32 | none {
         if self <= 0 || base < 2 { return none; }
         let n: u32 = 0;
@@ -1267,14 +1634,20 @@ impl isize {
 // u8
 
 impl u8 {
+    /// The smallest value.
     pub const MIN: u8 = 0;
+    /// The largest value.
     pub const MAX: u8 = 255;
+    /// The width in bits.
     pub const BITS: u32 = 8;
 
+    /// `self + rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_add.u8")]
     pub const fn wrapping_add(self, rhs: u8) -> u8 { self.wrapping_add(rhs) }
+    /// `self - rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_sub.u8")]
     pub const fn wrapping_sub(self, rhs: u8) -> u8 { self.wrapping_sub(rhs) }
+    /// `self * rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_mul.u8")]
     pub const fn wrapping_mul(self, rhs: u8) -> u8 { self.wrapping_mul(rhs) }
     #[intrinsic("rok.ctpop.u8")]
@@ -1284,67 +1657,95 @@ impl u8 {
     #[intrinsic("rok.cttz.u8")]
     const fn cttz(self) -> u8 { self.cttz() }
 
+    /// The number of one bits.
     pub const fn count_ones(self) -> u32 { self.ctpop() as u32 }
+    /// The number of zero bits.
     pub const fn count_zeros(self) -> u32 { (~self).ctpop() as u32 }
+    /// The number of zero bits above the highest one bit.
     pub const fn leading_zeros(self) -> u32 { self.ctlz() as u32 }
+    /// The number of zero bits below the lowest one bit.
     pub const fn trailing_zeros(self) -> u32 { self.cttz() as u32 }
+    /// The number of one bits above the highest zero bit.
     pub const fn leading_ones(self) -> u32 { (~self).ctlz() as u32 }
+    /// The number of one bits below the lowest zero bit.
     pub const fn trailing_ones(self) -> u32 { (~self).cttz() as u32 }
 
+    /// The bits shifted left by `n`, those shifted out coming back on the right.
     pub const fn rotate_left(self, n: u32) -> u8 {
         let k = n % 8;
         if k == 0 { return self; }
         self << (k as u8) | self >> ((8 - k) as u8)
     }
+    /// The bits shifted right by `n`, those shifted out coming back on the left.
     pub const fn rotate_right(self, n: u32) -> u8 { self.rotate_left(8 - n % 8) }
+    /// The bytes in reverse order.
     pub const fn swap_bytes(self) -> u8 { self }
 
+    /// `self` in big-endian byte order (unchanged on a big-endian target).
     pub const fn to_be(self) -> u8 { if BIG_ENDIAN { self } else { self.swap_bytes() } }
+    /// `self` in little-endian byte order (unchanged on a little-endian target).
     pub const fn to_le(self) -> u8 { if BIG_ENDIAN { self.swap_bytes() } else { self } }
+    /// The number whose big-endian bytes are `x`.
     pub const fn from_be(x: u8) -> u8 { x.to_be() }
+    /// The number whose little-endian bytes are `x`.
     pub const fn from_le(x: u8) -> u8 { x.to_le() }
+    /// The bytes, least significant first.
     pub const fn to_le_bytes(self) -> [u8; 1] { [self as u8] }
+    /// The bytes, most significant first.
     pub const fn to_be_bytes(self) -> [u8; 1] { [self as u8] }
+    /// The bytes in the target's byte order.
     pub const fn to_ne_bytes(self) -> [u8; 1] { if BIG_ENDIAN { self.to_be_bytes() } else { self.to_le_bytes() } }
+    /// The number of `bytes`, least significant first.
     pub const fn from_le_bytes(bytes: [u8; 1]) -> u8 { bytes[0] as u8 }
+    /// The number of `bytes`, most significant first.
     pub const fn from_be_bytes(bytes: [u8; 1]) -> u8 { bytes[0] as u8 }
+    /// The number of `bytes`, in the target's byte order.
     pub const fn from_ne_bytes(bytes: [u8; 1]) -> u8 { if BIG_ENDIAN { u8::from_be_bytes(bytes) } else { u8::from_le_bytes(bytes) } }
 
+    /// `self + rhs`, or `none` on overflow.
     pub const fn checked_add(self, rhs: u8) -> u8 | none {
         let r = self.wrapping_add(rhs);
         if r < self { return none; }
         r
     }
+    /// `self - rhs`, or `none` on overflow.
     pub const fn checked_sub(self, rhs: u8) -> u8 | none {
         let r = self.wrapping_sub(rhs);
         if self < rhs { return none; }
         r
     }
+    /// `self * rhs`, or `none` on overflow.
     pub const fn checked_mul(self, rhs: u8) -> u8 | none {
         let r = self.wrapping_mul(rhs);
         if self != 0 && r / self != rhs { return none; }
         r
     }
+    /// `self / rhs`, or `none` when `rhs` is 0.
     pub const fn checked_div(self, rhs: u8) -> u8 | none {
         if rhs == 0 { return none; }
         self / rhs
     }
+    /// `self % rhs`, or `none` when `rhs` is 0.
     pub const fn checked_rem(self, rhs: u8) -> u8 | none {
         if rhs == 0 { return none; }
         self % rhs
     }
+    /// `-self`: `0` for 0, `none` for any other value.
     pub const fn checked_neg(self) -> u8 | none {
         if self != 0 { return none; }
         self
     }
+    /// `self << n`, or `none` when `n` is at least `BITS`.
     pub const fn checked_shl(self, n: u32) -> u8 | none {
         if n >= 8 { return none; }
         self << (n as u8)
     }
+    /// `self >> n`, or `none` when `n` is at least `BITS`.
     pub const fn checked_shr(self, n: u32) -> u8 | none {
         if n >= 8 { return none; }
         self >> (n as u8)
     }
+    /// `self` to the `exp`, or `none` on overflow.
     pub const fn checked_pow(self, exp: u32) -> u8 | none {
         if exp == 0 { return 1; }
         let base = self;
@@ -1358,15 +1759,21 @@ impl u8 {
         acc.checked_mul(base)
     }
 
+    /// `self / rhs` (it never overflows). Panics when `rhs` is 0.
     pub const fn wrapping_div(self, rhs: u8) -> u8 {
         self / rhs
     }
+    /// `self % rhs` (it never overflows). Panics when `rhs` is 0.
     pub const fn wrapping_rem(self, rhs: u8) -> u8 {
         self % rhs
     }
+    /// `0 - self`, wrapping around.
     pub const fn wrapping_neg(self) -> u8 { u8::wrapping_sub(0, self) }
+    /// `self << (n % BITS)`.
     pub const fn wrapping_shl(self, n: u32) -> u8 { self << ((n % 8) as u8) }
+    /// `self >> (n % BITS)`.
     pub const fn wrapping_shr(self, n: u32) -> u8 { self >> ((n % 8) as u8) }
+    /// `self` to the `exp`, wrapping around at the bounds.
     pub const fn wrapping_pow(self, exp: u32) -> u8 {
         let base = self;
         let acc: u8 = 1;
@@ -1379,25 +1786,38 @@ impl u8 {
         acc
     }
 
+    /// `self + rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_add(self, rhs: u8) -> u8 { self.checked_add(rhs) ?? u8::MAX }
+    /// `self - rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_sub(self, rhs: u8) -> u8 { self.checked_sub(rhs) ?? 0 }
+    /// `self * rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_mul(self, rhs: u8) -> u8 { self.checked_mul(rhs) ?? u8::MAX }
+    /// `self` to the `exp`, clamped to `MIN..=MAX`.
     pub const fn saturating_pow(self, exp: u32) -> u8 { self.checked_pow(exp) ?? u8::MAX }
 
+    /// `self + rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_add(self, rhs: u8) -> (u8, bool) {
         (self.wrapping_add(rhs), self.checked_add(rhs) is none)
     }
+    /// `self - rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_sub(self, rhs: u8) -> (u8, bool) {
         (self.wrapping_sub(rhs), self.checked_sub(rhs) is none)
     }
+    /// `self * rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_mul(self, rhs: u8) -> (u8, bool) {
         (self.wrapping_mul(rhs), self.checked_mul(rhs) is none)
     }
+    /// `self / rhs` and `false` (it never overflows). Panics when `rhs` is 0.
     pub const fn overflowing_div(self, rhs: u8) -> (u8, bool) { (self / rhs, false) }
+    /// `self % rhs` and `false` (it never overflows). Panics when `rhs` is 0.
     pub const fn overflowing_rem(self, rhs: u8) -> (u8, bool) { (self % rhs, false) }
+    /// `0 - self` wrapped, and whether it overflowed (any value but 0).
     pub const fn overflowing_neg(self) -> (u8, bool) { (self.wrapping_neg(), self != 0) }
+    /// `self << (n % BITS)`, and whether `n` was at least `BITS`.
     pub const fn overflowing_shl(self, n: u32) -> (u8, bool) { (self.wrapping_shl(n), n >= 8) }
+    /// `self >> (n % BITS)`, and whether `n` was at least `BITS`.
     pub const fn overflowing_shr(self, n: u32) -> (u8, bool) { (self.wrapping_shr(n), n >= 8) }
+    /// `self` to the `exp` wrapped, and whether it overflowed.
     pub const fn overflowing_pow(self, exp: u32) -> (u8, bool) {
         (self.wrapping_pow(exp), self.checked_pow(exp) is none)
     }
@@ -1416,8 +1836,11 @@ impl u8 {
         }
         acc * base
     }
+    /// `|self - rhs|`, as the unsigned type of the same width; never overflows.
     pub const fn abs_diff(self, rhs: u8) -> u8 { if self < rhs { rhs - self } else { self - rhs } }
+    /// `self / rhs` (the same as `/` for unsigned numbers). Panics when `rhs` is 0.
     pub const fn div_euclid(self, rhs: u8) -> u8 { self / rhs }
+    /// `self % rhs` (the same as `%` for unsigned numbers). Panics when `rhs` is 0.
     pub const fn rem_euclid(self, rhs: u8) -> u8 { self % rhs }
     /// Integer square root (rounded down).
     #[track_caller]
@@ -1430,12 +1853,14 @@ impl u8 {
         while x + 1 <= self / (x + 1) { x += 1; }
         x
     }
+    /// `true` when exactly one bit is set.
     pub const fn is_power_of_two(self) -> bool { self != 0 && self & (self - 1) == 0 }
     /// The smallest power of two `>= self`; panics past `MAX`.
     #[track_caller]
     pub const fn next_power_of_two(self) -> u8 {
         self.checked_next_power_of_two() ?? panic("u8::next_power_of_two: the result overflows; use `checked_next_power_of_two` to get `none` instead")
     }
+    /// The smallest power of two `>= self`, or `none` past `MAX`.
     pub const fn checked_next_power_of_two(self) -> u8 | none {
         if self <= 1 { return 1; }
         let p = 8 - (self - 1).leading_zeros();
@@ -1446,17 +1871,22 @@ impl u8 {
     /// `floor(log2(self))`; panics unless `self > 0`.
     #[track_caller]
     pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("u8::ilog2: the number is not positive; use `checked_ilog2` to get `none` instead") }
+    /// `floor(log10(self))`; panics unless `self > 0`.
     #[track_caller]
     pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("u8::ilog10: the number is not positive; use `checked_ilog10` to get `none` instead") }
+    /// `floor(log(self, base))`; panics unless `self > 0` and `base >= 2`.
     #[track_caller]
     pub const fn ilog(self, base: u8) -> u32 {
         self.checked_ilog(base) ?? panic("u8::ilog: the number is not positive or the base is below 2; use `checked_ilog` to get `none` instead")
     }
+    /// `floor(log2(self))`, or `none` unless `self > 0`.
     pub const fn checked_ilog2(self) -> u32 | none {
         if self <= 0 { return none; }
         7 - self.leading_zeros()
     }
+    /// `floor(log10(self))`, or `none` unless `self > 0`.
     pub const fn checked_ilog10(self) -> u32 | none { self.checked_ilog(10) }
+    /// `floor(log(self, base))`, or `none` unless `self > 0` and `base >= 2`.
     pub const fn checked_ilog(self, base: u8) -> u32 | none {
         if self <= 0 || base < 2 { return none; }
         let n: u32 = 0;
@@ -1472,14 +1902,20 @@ impl u8 {
 // u16
 
 impl u16 {
+    /// The smallest value.
     pub const MIN: u16 = 0;
+    /// The largest value.
     pub const MAX: u16 = 65535;
+    /// The width in bits.
     pub const BITS: u32 = 16;
 
+    /// `self + rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_add.u16")]
     pub const fn wrapping_add(self, rhs: u16) -> u16 { self.wrapping_add(rhs) }
+    /// `self - rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_sub.u16")]
     pub const fn wrapping_sub(self, rhs: u16) -> u16 { self.wrapping_sub(rhs) }
+    /// `self * rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_mul.u16")]
     pub const fn wrapping_mul(self, rhs: u16) -> u16 { self.wrapping_mul(rhs) }
     #[intrinsic("rok.ctpop.u16")]
@@ -1489,76 +1925,104 @@ impl u16 {
     #[intrinsic("rok.cttz.u16")]
     const fn cttz(self) -> u16 { self.cttz() }
 
+    /// The number of one bits.
     pub const fn count_ones(self) -> u32 { self.ctpop() as u32 }
+    /// The number of zero bits.
     pub const fn count_zeros(self) -> u32 { (~self).ctpop() as u32 }
+    /// The number of zero bits above the highest one bit.
     pub const fn leading_zeros(self) -> u32 { self.ctlz() as u32 }
+    /// The number of zero bits below the lowest one bit.
     pub const fn trailing_zeros(self) -> u32 { self.cttz() as u32 }
+    /// The number of one bits above the highest zero bit.
     pub const fn leading_ones(self) -> u32 { (~self).ctlz() as u32 }
+    /// The number of one bits below the lowest zero bit.
     pub const fn trailing_ones(self) -> u32 { (~self).cttz() as u32 }
 
+    /// The bits shifted left by `n`, those shifted out coming back on the right.
     pub const fn rotate_left(self, n: u32) -> u16 {
         let k = n % 16;
         if k == 0 { return self; }
         self << (k as u16) | self >> ((16 - k) as u16)
     }
+    /// The bits shifted right by `n`, those shifted out coming back on the left.
     pub const fn rotate_right(self, n: u32) -> u16 { self.rotate_left(16 - n % 16) }
+    /// The bytes in reverse order.
     #[intrinsic("rok.bswap.u16")]
     pub const fn swap_bytes(self) -> u16 { self.swap_bytes() }
 
+    /// `self` in big-endian byte order (unchanged on a big-endian target).
     pub const fn to_be(self) -> u16 { if BIG_ENDIAN { self } else { self.swap_bytes() } }
+    /// `self` in little-endian byte order (unchanged on a little-endian target).
     pub const fn to_le(self) -> u16 { if BIG_ENDIAN { self.swap_bytes() } else { self } }
+    /// The number whose big-endian bytes are `x`.
     pub const fn from_be(x: u16) -> u16 { x.to_be() }
+    /// The number whose little-endian bytes are `x`.
     pub const fn from_le(x: u16) -> u16 { x.to_le() }
+    /// The bytes, least significant first.
     pub const fn to_le_bytes(self) -> [u8; 2] { [self as u8, (self >> 8) as u8] }
+    /// The bytes, most significant first.
     pub const fn to_be_bytes(self) -> [u8; 2] { [(self >> 8) as u8, self as u8] }
+    /// The bytes in the target's byte order.
     pub const fn to_ne_bytes(self) -> [u8; 2] { if BIG_ENDIAN { self.to_be_bytes() } else { self.to_le_bytes() } }
+    /// The number of `bytes`, least significant first.
     pub const fn from_le_bytes(bytes: [u8; 2]) -> u16 {
         let x: u16 = 0;
         for i in 0..2 { x = x | (bytes[i] as u16) << (8 * i as u16); }
         x
     }
+    /// The number of `bytes`, most significant first.
     pub const fn from_be_bytes(bytes: [u8; 2]) -> u16 {
         let x: u16 = 0;
         for i in 0..2 { x = x << 8 | bytes[i] as u16; }
         x
     }
+    /// The number of `bytes`, in the target's byte order.
     pub const fn from_ne_bytes(bytes: [u8; 2]) -> u16 { if BIG_ENDIAN { u16::from_be_bytes(bytes) } else { u16::from_le_bytes(bytes) } }
 
+    /// `self + rhs`, or `none` on overflow.
     pub const fn checked_add(self, rhs: u16) -> u16 | none {
         let r = self.wrapping_add(rhs);
         if r < self { return none; }
         r
     }
+    /// `self - rhs`, or `none` on overflow.
     pub const fn checked_sub(self, rhs: u16) -> u16 | none {
         let r = self.wrapping_sub(rhs);
         if self < rhs { return none; }
         r
     }
+    /// `self * rhs`, or `none` on overflow.
     pub const fn checked_mul(self, rhs: u16) -> u16 | none {
         let r = self.wrapping_mul(rhs);
         if self != 0 && r / self != rhs { return none; }
         r
     }
+    /// `self / rhs`, or `none` when `rhs` is 0.
     pub const fn checked_div(self, rhs: u16) -> u16 | none {
         if rhs == 0 { return none; }
         self / rhs
     }
+    /// `self % rhs`, or `none` when `rhs` is 0.
     pub const fn checked_rem(self, rhs: u16) -> u16 | none {
         if rhs == 0 { return none; }
         self % rhs
     }
+    /// `-self`: `0` for 0, `none` for any other value.
     pub const fn checked_neg(self) -> u16 | none {
         if self != 0 { return none; }
         self
     }
+    /// `self << n`, or `none` when `n` is at least `BITS`.
     pub const fn checked_shl(self, n: u32) -> u16 | none {
         if n >= 16 { return none; }
         self << (n as u16)
     }
+    /// `self >> n`, or `none` when `n` is at least `BITS`.
     pub const fn checked_shr(self, n: u32) -> u16 | none {
         if n >= 16 { return none; }
         self >> (n as u16)
     }
+    /// `self` to the `exp`, or `none` on overflow.
     pub const fn checked_pow(self, exp: u32) -> u16 | none {
         if exp == 0 { return 1; }
         let base = self;
@@ -1572,15 +2036,21 @@ impl u16 {
         acc.checked_mul(base)
     }
 
+    /// `self / rhs` (it never overflows). Panics when `rhs` is 0.
     pub const fn wrapping_div(self, rhs: u16) -> u16 {
         self / rhs
     }
+    /// `self % rhs` (it never overflows). Panics when `rhs` is 0.
     pub const fn wrapping_rem(self, rhs: u16) -> u16 {
         self % rhs
     }
+    /// `0 - self`, wrapping around.
     pub const fn wrapping_neg(self) -> u16 { u16::wrapping_sub(0, self) }
+    /// `self << (n % BITS)`.
     pub const fn wrapping_shl(self, n: u32) -> u16 { self << ((n % 16) as u16) }
+    /// `self >> (n % BITS)`.
     pub const fn wrapping_shr(self, n: u32) -> u16 { self >> ((n % 16) as u16) }
+    /// `self` to the `exp`, wrapping around at the bounds.
     pub const fn wrapping_pow(self, exp: u32) -> u16 {
         let base = self;
         let acc: u16 = 1;
@@ -1593,25 +2063,38 @@ impl u16 {
         acc
     }
 
+    /// `self + rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_add(self, rhs: u16) -> u16 { self.checked_add(rhs) ?? u16::MAX }
+    /// `self - rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_sub(self, rhs: u16) -> u16 { self.checked_sub(rhs) ?? 0 }
+    /// `self * rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_mul(self, rhs: u16) -> u16 { self.checked_mul(rhs) ?? u16::MAX }
+    /// `self` to the `exp`, clamped to `MIN..=MAX`.
     pub const fn saturating_pow(self, exp: u32) -> u16 { self.checked_pow(exp) ?? u16::MAX }
 
+    /// `self + rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_add(self, rhs: u16) -> (u16, bool) {
         (self.wrapping_add(rhs), self.checked_add(rhs) is none)
     }
+    /// `self - rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_sub(self, rhs: u16) -> (u16, bool) {
         (self.wrapping_sub(rhs), self.checked_sub(rhs) is none)
     }
+    /// `self * rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_mul(self, rhs: u16) -> (u16, bool) {
         (self.wrapping_mul(rhs), self.checked_mul(rhs) is none)
     }
+    /// `self / rhs` and `false` (it never overflows). Panics when `rhs` is 0.
     pub const fn overflowing_div(self, rhs: u16) -> (u16, bool) { (self / rhs, false) }
+    /// `self % rhs` and `false` (it never overflows). Panics when `rhs` is 0.
     pub const fn overflowing_rem(self, rhs: u16) -> (u16, bool) { (self % rhs, false) }
+    /// `0 - self` wrapped, and whether it overflowed (any value but 0).
     pub const fn overflowing_neg(self) -> (u16, bool) { (self.wrapping_neg(), self != 0) }
+    /// `self << (n % BITS)`, and whether `n` was at least `BITS`.
     pub const fn overflowing_shl(self, n: u32) -> (u16, bool) { (self.wrapping_shl(n), n >= 16) }
+    /// `self >> (n % BITS)`, and whether `n` was at least `BITS`.
     pub const fn overflowing_shr(self, n: u32) -> (u16, bool) { (self.wrapping_shr(n), n >= 16) }
+    /// `self` to the `exp` wrapped, and whether it overflowed.
     pub const fn overflowing_pow(self, exp: u32) -> (u16, bool) {
         (self.wrapping_pow(exp), self.checked_pow(exp) is none)
     }
@@ -1630,8 +2113,11 @@ impl u16 {
         }
         acc * base
     }
+    /// `|self - rhs|`, as the unsigned type of the same width; never overflows.
     pub const fn abs_diff(self, rhs: u16) -> u16 { if self < rhs { rhs - self } else { self - rhs } }
+    /// `self / rhs` (the same as `/` for unsigned numbers). Panics when `rhs` is 0.
     pub const fn div_euclid(self, rhs: u16) -> u16 { self / rhs }
+    /// `self % rhs` (the same as `%` for unsigned numbers). Panics when `rhs` is 0.
     pub const fn rem_euclid(self, rhs: u16) -> u16 { self % rhs }
     /// Integer square root (rounded down).
     #[track_caller]
@@ -1644,12 +2130,14 @@ impl u16 {
         while x + 1 <= self / (x + 1) { x += 1; }
         x
     }
+    /// `true` when exactly one bit is set.
     pub const fn is_power_of_two(self) -> bool { self != 0 && self & (self - 1) == 0 }
     /// The smallest power of two `>= self`; panics past `MAX`.
     #[track_caller]
     pub const fn next_power_of_two(self) -> u16 {
         self.checked_next_power_of_two() ?? panic("u16::next_power_of_two: the result overflows; use `checked_next_power_of_two` to get `none` instead")
     }
+    /// The smallest power of two `>= self`, or `none` past `MAX`.
     pub const fn checked_next_power_of_two(self) -> u16 | none {
         if self <= 1 { return 1; }
         let p = 16 - (self - 1).leading_zeros();
@@ -1660,17 +2148,22 @@ impl u16 {
     /// `floor(log2(self))`; panics unless `self > 0`.
     #[track_caller]
     pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("u16::ilog2: the number is not positive; use `checked_ilog2` to get `none` instead") }
+    /// `floor(log10(self))`; panics unless `self > 0`.
     #[track_caller]
     pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("u16::ilog10: the number is not positive; use `checked_ilog10` to get `none` instead") }
+    /// `floor(log(self, base))`; panics unless `self > 0` and `base >= 2`.
     #[track_caller]
     pub const fn ilog(self, base: u16) -> u32 {
         self.checked_ilog(base) ?? panic("u16::ilog: the number is not positive or the base is below 2; use `checked_ilog` to get `none` instead")
     }
+    /// `floor(log2(self))`, or `none` unless `self > 0`.
     pub const fn checked_ilog2(self) -> u32 | none {
         if self <= 0 { return none; }
         15 - self.leading_zeros()
     }
+    /// `floor(log10(self))`, or `none` unless `self > 0`.
     pub const fn checked_ilog10(self) -> u32 | none { self.checked_ilog(10) }
+    /// `floor(log(self, base))`, or `none` unless `self > 0` and `base >= 2`.
     pub const fn checked_ilog(self, base: u16) -> u32 | none {
         if self <= 0 || base < 2 { return none; }
         let n: u32 = 0;
@@ -1686,14 +2179,20 @@ impl u16 {
 // u32
 
 impl u32 {
+    /// The smallest value.
     pub const MIN: u32 = 0;
+    /// The largest value.
     pub const MAX: u32 = 4294967295;
+    /// The width in bits.
     pub const BITS: u32 = 32;
 
+    /// `self + rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_add.u32")]
     pub const fn wrapping_add(self, rhs: u32) -> u32 { self.wrapping_add(rhs) }
+    /// `self - rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_sub.u32")]
     pub const fn wrapping_sub(self, rhs: u32) -> u32 { self.wrapping_sub(rhs) }
+    /// `self * rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_mul.u32")]
     pub const fn wrapping_mul(self, rhs: u32) -> u32 { self.wrapping_mul(rhs) }
     #[intrinsic("rok.ctpop.u32")]
@@ -1703,76 +2202,104 @@ impl u32 {
     #[intrinsic("rok.cttz.u32")]
     const fn cttz(self) -> u32 { self.cttz() }
 
+    /// The number of one bits.
     pub const fn count_ones(self) -> u32 { self.ctpop() as u32 }
+    /// The number of zero bits.
     pub const fn count_zeros(self) -> u32 { (~self).ctpop() as u32 }
+    /// The number of zero bits above the highest one bit.
     pub const fn leading_zeros(self) -> u32 { self.ctlz() as u32 }
+    /// The number of zero bits below the lowest one bit.
     pub const fn trailing_zeros(self) -> u32 { self.cttz() as u32 }
+    /// The number of one bits above the highest zero bit.
     pub const fn leading_ones(self) -> u32 { (~self).ctlz() as u32 }
+    /// The number of one bits below the lowest zero bit.
     pub const fn trailing_ones(self) -> u32 { (~self).cttz() as u32 }
 
+    /// The bits shifted left by `n`, those shifted out coming back on the right.
     pub const fn rotate_left(self, n: u32) -> u32 {
         let k = n % 32;
         if k == 0 { return self; }
         self << k | self >> (32 - k)
     }
+    /// The bits shifted right by `n`, those shifted out coming back on the left.
     pub const fn rotate_right(self, n: u32) -> u32 { self.rotate_left(32 - n % 32) }
+    /// The bytes in reverse order.
     #[intrinsic("rok.bswap.u32")]
     pub const fn swap_bytes(self) -> u32 { self.swap_bytes() }
 
+    /// `self` in big-endian byte order (unchanged on a big-endian target).
     pub const fn to_be(self) -> u32 { if BIG_ENDIAN { self } else { self.swap_bytes() } }
+    /// `self` in little-endian byte order (unchanged on a little-endian target).
     pub const fn to_le(self) -> u32 { if BIG_ENDIAN { self.swap_bytes() } else { self } }
+    /// The number whose big-endian bytes are `x`.
     pub const fn from_be(x: u32) -> u32 { x.to_be() }
+    /// The number whose little-endian bytes are `x`.
     pub const fn from_le(x: u32) -> u32 { x.to_le() }
+    /// The bytes, least significant first.
     pub const fn to_le_bytes(self) -> [u8; 4] { [self as u8, (self >> 8) as u8, (self >> 16) as u8, (self >> 24) as u8] }
+    /// The bytes, most significant first.
     pub const fn to_be_bytes(self) -> [u8; 4] { [(self >> 24) as u8, (self >> 16) as u8, (self >> 8) as u8, self as u8] }
+    /// The bytes in the target's byte order.
     pub const fn to_ne_bytes(self) -> [u8; 4] { if BIG_ENDIAN { self.to_be_bytes() } else { self.to_le_bytes() } }
+    /// The number of `bytes`, least significant first.
     pub const fn from_le_bytes(bytes: [u8; 4]) -> u32 {
         let x: u32 = 0;
         for i in 0..4 { x = x | (bytes[i] as u32) << (8 * i as u32); }
         x
     }
+    /// The number of `bytes`, most significant first.
     pub const fn from_be_bytes(bytes: [u8; 4]) -> u32 {
         let x: u32 = 0;
         for i in 0..4 { x = x << 8 | bytes[i] as u32; }
         x
     }
+    /// The number of `bytes`, in the target's byte order.
     pub const fn from_ne_bytes(bytes: [u8; 4]) -> u32 { if BIG_ENDIAN { u32::from_be_bytes(bytes) } else { u32::from_le_bytes(bytes) } }
 
+    /// `self + rhs`, or `none` on overflow.
     pub const fn checked_add(self, rhs: u32) -> u32 | none {
         let r = self.wrapping_add(rhs);
         if r < self { return none; }
         r
     }
+    /// `self - rhs`, or `none` on overflow.
     pub const fn checked_sub(self, rhs: u32) -> u32 | none {
         let r = self.wrapping_sub(rhs);
         if self < rhs { return none; }
         r
     }
+    /// `self * rhs`, or `none` on overflow.
     pub const fn checked_mul(self, rhs: u32) -> u32 | none {
         let r = self.wrapping_mul(rhs);
         if self != 0 && r / self != rhs { return none; }
         r
     }
+    /// `self / rhs`, or `none` when `rhs` is 0.
     pub const fn checked_div(self, rhs: u32) -> u32 | none {
         if rhs == 0 { return none; }
         self / rhs
     }
+    /// `self % rhs`, or `none` when `rhs` is 0.
     pub const fn checked_rem(self, rhs: u32) -> u32 | none {
         if rhs == 0 { return none; }
         self % rhs
     }
+    /// `-self`: `0` for 0, `none` for any other value.
     pub const fn checked_neg(self) -> u32 | none {
         if self != 0 { return none; }
         self
     }
+    /// `self << n`, or `none` when `n` is at least `BITS`.
     pub const fn checked_shl(self, n: u32) -> u32 | none {
         if n >= 32 { return none; }
         self << (n as u32)
     }
+    /// `self >> n`, or `none` when `n` is at least `BITS`.
     pub const fn checked_shr(self, n: u32) -> u32 | none {
         if n >= 32 { return none; }
         self >> (n as u32)
     }
+    /// `self` to the `exp`, or `none` on overflow.
     pub const fn checked_pow(self, exp: u32) -> u32 | none {
         if exp == 0 { return 1; }
         let base = self;
@@ -1786,15 +2313,21 @@ impl u32 {
         acc.checked_mul(base)
     }
 
+    /// `self / rhs` (it never overflows). Panics when `rhs` is 0.
     pub const fn wrapping_div(self, rhs: u32) -> u32 {
         self / rhs
     }
+    /// `self % rhs` (it never overflows). Panics when `rhs` is 0.
     pub const fn wrapping_rem(self, rhs: u32) -> u32 {
         self % rhs
     }
+    /// `0 - self`, wrapping around.
     pub const fn wrapping_neg(self) -> u32 { u32::wrapping_sub(0, self) }
+    /// `self << (n % BITS)`.
     pub const fn wrapping_shl(self, n: u32) -> u32 { self << ((n % 32) as u32) }
+    /// `self >> (n % BITS)`.
     pub const fn wrapping_shr(self, n: u32) -> u32 { self >> ((n % 32) as u32) }
+    /// `self` to the `exp`, wrapping around at the bounds.
     pub const fn wrapping_pow(self, exp: u32) -> u32 {
         let base = self;
         let acc: u32 = 1;
@@ -1807,25 +2340,38 @@ impl u32 {
         acc
     }
 
+    /// `self + rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_add(self, rhs: u32) -> u32 { self.checked_add(rhs) ?? u32::MAX }
+    /// `self - rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_sub(self, rhs: u32) -> u32 { self.checked_sub(rhs) ?? 0 }
+    /// `self * rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_mul(self, rhs: u32) -> u32 { self.checked_mul(rhs) ?? u32::MAX }
+    /// `self` to the `exp`, clamped to `MIN..=MAX`.
     pub const fn saturating_pow(self, exp: u32) -> u32 { self.checked_pow(exp) ?? u32::MAX }
 
+    /// `self + rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_add(self, rhs: u32) -> (u32, bool) {
         (self.wrapping_add(rhs), self.checked_add(rhs) is none)
     }
+    /// `self - rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_sub(self, rhs: u32) -> (u32, bool) {
         (self.wrapping_sub(rhs), self.checked_sub(rhs) is none)
     }
+    /// `self * rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_mul(self, rhs: u32) -> (u32, bool) {
         (self.wrapping_mul(rhs), self.checked_mul(rhs) is none)
     }
+    /// `self / rhs` and `false` (it never overflows). Panics when `rhs` is 0.
     pub const fn overflowing_div(self, rhs: u32) -> (u32, bool) { (self / rhs, false) }
+    /// `self % rhs` and `false` (it never overflows). Panics when `rhs` is 0.
     pub const fn overflowing_rem(self, rhs: u32) -> (u32, bool) { (self % rhs, false) }
+    /// `0 - self` wrapped, and whether it overflowed (any value but 0).
     pub const fn overflowing_neg(self) -> (u32, bool) { (self.wrapping_neg(), self != 0) }
+    /// `self << (n % BITS)`, and whether `n` was at least `BITS`.
     pub const fn overflowing_shl(self, n: u32) -> (u32, bool) { (self.wrapping_shl(n), n >= 32) }
+    /// `self >> (n % BITS)`, and whether `n` was at least `BITS`.
     pub const fn overflowing_shr(self, n: u32) -> (u32, bool) { (self.wrapping_shr(n), n >= 32) }
+    /// `self` to the `exp` wrapped, and whether it overflowed.
     pub const fn overflowing_pow(self, exp: u32) -> (u32, bool) {
         (self.wrapping_pow(exp), self.checked_pow(exp) is none)
     }
@@ -1844,8 +2390,11 @@ impl u32 {
         }
         acc * base
     }
+    /// `|self - rhs|`, as the unsigned type of the same width; never overflows.
     pub const fn abs_diff(self, rhs: u32) -> u32 { if self < rhs { rhs - self } else { self - rhs } }
+    /// `self / rhs` (the same as `/` for unsigned numbers). Panics when `rhs` is 0.
     pub const fn div_euclid(self, rhs: u32) -> u32 { self / rhs }
+    /// `self % rhs` (the same as `%` for unsigned numbers). Panics when `rhs` is 0.
     pub const fn rem_euclid(self, rhs: u32) -> u32 { self % rhs }
     /// Integer square root (rounded down).
     #[track_caller]
@@ -1858,12 +2407,14 @@ impl u32 {
         while x + 1 <= self / (x + 1) { x += 1; }
         x
     }
+    /// `true` when exactly one bit is set.
     pub const fn is_power_of_two(self) -> bool { self != 0 && self & (self - 1) == 0 }
     /// The smallest power of two `>= self`; panics past `MAX`.
     #[track_caller]
     pub const fn next_power_of_two(self) -> u32 {
         self.checked_next_power_of_two() ?? panic("u32::next_power_of_two: the result overflows; use `checked_next_power_of_two` to get `none` instead")
     }
+    /// The smallest power of two `>= self`, or `none` past `MAX`.
     pub const fn checked_next_power_of_two(self) -> u32 | none {
         if self <= 1 { return 1; }
         let p = 32 - (self - 1).leading_zeros();
@@ -1874,17 +2425,22 @@ impl u32 {
     /// `floor(log2(self))`; panics unless `self > 0`.
     #[track_caller]
     pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("u32::ilog2: the number is not positive; use `checked_ilog2` to get `none` instead") }
+    /// `floor(log10(self))`; panics unless `self > 0`.
     #[track_caller]
     pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("u32::ilog10: the number is not positive; use `checked_ilog10` to get `none` instead") }
+    /// `floor(log(self, base))`; panics unless `self > 0` and `base >= 2`.
     #[track_caller]
     pub const fn ilog(self, base: u32) -> u32 {
         self.checked_ilog(base) ?? panic("u32::ilog: the number is not positive or the base is below 2; use `checked_ilog` to get `none` instead")
     }
+    /// `floor(log2(self))`, or `none` unless `self > 0`.
     pub const fn checked_ilog2(self) -> u32 | none {
         if self <= 0 { return none; }
         31 - self.leading_zeros()
     }
+    /// `floor(log10(self))`, or `none` unless `self > 0`.
     pub const fn checked_ilog10(self) -> u32 | none { self.checked_ilog(10) }
+    /// `floor(log(self, base))`, or `none` unless `self > 0` and `base >= 2`.
     pub const fn checked_ilog(self, base: u32) -> u32 | none {
         if self <= 0 || base < 2 { return none; }
         let n: u32 = 0;
@@ -1900,14 +2456,20 @@ impl u32 {
 // u64
 
 impl u64 {
+    /// The smallest value.
     pub const MIN: u64 = 0;
+    /// The largest value.
     pub const MAX: u64 = 18446744073709551615;
+    /// The width in bits.
     pub const BITS: u32 = 64;
 
+    /// `self + rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_add.u64")]
     pub const fn wrapping_add(self, rhs: u64) -> u64 { self.wrapping_add(rhs) }
+    /// `self - rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_sub.u64")]
     pub const fn wrapping_sub(self, rhs: u64) -> u64 { self.wrapping_sub(rhs) }
+    /// `self * rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_mul.u64")]
     pub const fn wrapping_mul(self, rhs: u64) -> u64 { self.wrapping_mul(rhs) }
     #[intrinsic("rok.ctpop.u64")]
@@ -1917,76 +2479,104 @@ impl u64 {
     #[intrinsic("rok.cttz.u64")]
     const fn cttz(self) -> u64 { self.cttz() }
 
+    /// The number of one bits.
     pub const fn count_ones(self) -> u32 { self.ctpop() as u32 }
+    /// The number of zero bits.
     pub const fn count_zeros(self) -> u32 { (~self).ctpop() as u32 }
+    /// The number of zero bits above the highest one bit.
     pub const fn leading_zeros(self) -> u32 { self.ctlz() as u32 }
+    /// The number of zero bits below the lowest one bit.
     pub const fn trailing_zeros(self) -> u32 { self.cttz() as u32 }
+    /// The number of one bits above the highest zero bit.
     pub const fn leading_ones(self) -> u32 { (~self).ctlz() as u32 }
+    /// The number of one bits below the lowest zero bit.
     pub const fn trailing_ones(self) -> u32 { (~self).cttz() as u32 }
 
+    /// The bits shifted left by `n`, those shifted out coming back on the right.
     pub const fn rotate_left(self, n: u32) -> u64 {
         let k = n % 64;
         if k == 0 { return self; }
         self << (k as u64) | self >> ((64 - k) as u64)
     }
+    /// The bits shifted right by `n`, those shifted out coming back on the left.
     pub const fn rotate_right(self, n: u32) -> u64 { self.rotate_left(64 - n % 64) }
+    /// The bytes in reverse order.
     #[intrinsic("rok.bswap.u64")]
     pub const fn swap_bytes(self) -> u64 { self.swap_bytes() }
 
+    /// `self` in big-endian byte order (unchanged on a big-endian target).
     pub const fn to_be(self) -> u64 { if BIG_ENDIAN { self } else { self.swap_bytes() } }
+    /// `self` in little-endian byte order (unchanged on a little-endian target).
     pub const fn to_le(self) -> u64 { if BIG_ENDIAN { self.swap_bytes() } else { self } }
+    /// The number whose big-endian bytes are `x`.
     pub const fn from_be(x: u64) -> u64 { x.to_be() }
+    /// The number whose little-endian bytes are `x`.
     pub const fn from_le(x: u64) -> u64 { x.to_le() }
+    /// The bytes, least significant first.
     pub const fn to_le_bytes(self) -> [u8; 8] { [self as u8, (self >> 8) as u8, (self >> 16) as u8, (self >> 24) as u8, (self >> 32) as u8, (self >> 40) as u8, (self >> 48) as u8, (self >> 56) as u8] }
+    /// The bytes, most significant first.
     pub const fn to_be_bytes(self) -> [u8; 8] { [(self >> 56) as u8, (self >> 48) as u8, (self >> 40) as u8, (self >> 32) as u8, (self >> 24) as u8, (self >> 16) as u8, (self >> 8) as u8, self as u8] }
+    /// The bytes in the target's byte order.
     pub const fn to_ne_bytes(self) -> [u8; 8] { if BIG_ENDIAN { self.to_be_bytes() } else { self.to_le_bytes() } }
+    /// The number of `bytes`, least significant first.
     pub const fn from_le_bytes(bytes: [u8; 8]) -> u64 {
         let x: u64 = 0;
         for i in 0..8 { x = x | (bytes[i] as u64) << (8 * i as u64); }
         x
     }
+    /// The number of `bytes`, most significant first.
     pub const fn from_be_bytes(bytes: [u8; 8]) -> u64 {
         let x: u64 = 0;
         for i in 0..8 { x = x << 8 | bytes[i] as u64; }
         x
     }
+    /// The number of `bytes`, in the target's byte order.
     pub const fn from_ne_bytes(bytes: [u8; 8]) -> u64 { if BIG_ENDIAN { u64::from_be_bytes(bytes) } else { u64::from_le_bytes(bytes) } }
 
+    /// `self + rhs`, or `none` on overflow.
     pub const fn checked_add(self, rhs: u64) -> u64 | none {
         let r = self.wrapping_add(rhs);
         if r < self { return none; }
         r
     }
+    /// `self - rhs`, or `none` on overflow.
     pub const fn checked_sub(self, rhs: u64) -> u64 | none {
         let r = self.wrapping_sub(rhs);
         if self < rhs { return none; }
         r
     }
+    /// `self * rhs`, or `none` on overflow.
     pub const fn checked_mul(self, rhs: u64) -> u64 | none {
         let r = self.wrapping_mul(rhs);
         if self != 0 && r / self != rhs { return none; }
         r
     }
+    /// `self / rhs`, or `none` when `rhs` is 0.
     pub const fn checked_div(self, rhs: u64) -> u64 | none {
         if rhs == 0 { return none; }
         self / rhs
     }
+    /// `self % rhs`, or `none` when `rhs` is 0.
     pub const fn checked_rem(self, rhs: u64) -> u64 | none {
         if rhs == 0 { return none; }
         self % rhs
     }
+    /// `-self`: `0` for 0, `none` for any other value.
     pub const fn checked_neg(self) -> u64 | none {
         if self != 0 { return none; }
         self
     }
+    /// `self << n`, or `none` when `n` is at least `BITS`.
     pub const fn checked_shl(self, n: u32) -> u64 | none {
         if n >= 64 { return none; }
         self << (n as u64)
     }
+    /// `self >> n`, or `none` when `n` is at least `BITS`.
     pub const fn checked_shr(self, n: u32) -> u64 | none {
         if n >= 64 { return none; }
         self >> (n as u64)
     }
+    /// `self` to the `exp`, or `none` on overflow.
     pub const fn checked_pow(self, exp: u32) -> u64 | none {
         if exp == 0 { return 1; }
         let base = self;
@@ -2000,15 +2590,21 @@ impl u64 {
         acc.checked_mul(base)
     }
 
+    /// `self / rhs` (it never overflows). Panics when `rhs` is 0.
     pub const fn wrapping_div(self, rhs: u64) -> u64 {
         self / rhs
     }
+    /// `self % rhs` (it never overflows). Panics when `rhs` is 0.
     pub const fn wrapping_rem(self, rhs: u64) -> u64 {
         self % rhs
     }
+    /// `0 - self`, wrapping around.
     pub const fn wrapping_neg(self) -> u64 { u64::wrapping_sub(0, self) }
+    /// `self << (n % BITS)`.
     pub const fn wrapping_shl(self, n: u32) -> u64 { self << ((n % 64) as u64) }
+    /// `self >> (n % BITS)`.
     pub const fn wrapping_shr(self, n: u32) -> u64 { self >> ((n % 64) as u64) }
+    /// `self` to the `exp`, wrapping around at the bounds.
     pub const fn wrapping_pow(self, exp: u32) -> u64 {
         let base = self;
         let acc: u64 = 1;
@@ -2021,25 +2617,38 @@ impl u64 {
         acc
     }
 
+    /// `self + rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_add(self, rhs: u64) -> u64 { self.checked_add(rhs) ?? u64::MAX }
+    /// `self - rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_sub(self, rhs: u64) -> u64 { self.checked_sub(rhs) ?? 0 }
+    /// `self * rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_mul(self, rhs: u64) -> u64 { self.checked_mul(rhs) ?? u64::MAX }
+    /// `self` to the `exp`, clamped to `MIN..=MAX`.
     pub const fn saturating_pow(self, exp: u32) -> u64 { self.checked_pow(exp) ?? u64::MAX }
 
+    /// `self + rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_add(self, rhs: u64) -> (u64, bool) {
         (self.wrapping_add(rhs), self.checked_add(rhs) is none)
     }
+    /// `self - rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_sub(self, rhs: u64) -> (u64, bool) {
         (self.wrapping_sub(rhs), self.checked_sub(rhs) is none)
     }
+    /// `self * rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_mul(self, rhs: u64) -> (u64, bool) {
         (self.wrapping_mul(rhs), self.checked_mul(rhs) is none)
     }
+    /// `self / rhs` and `false` (it never overflows). Panics when `rhs` is 0.
     pub const fn overflowing_div(self, rhs: u64) -> (u64, bool) { (self / rhs, false) }
+    /// `self % rhs` and `false` (it never overflows). Panics when `rhs` is 0.
     pub const fn overflowing_rem(self, rhs: u64) -> (u64, bool) { (self % rhs, false) }
+    /// `0 - self` wrapped, and whether it overflowed (any value but 0).
     pub const fn overflowing_neg(self) -> (u64, bool) { (self.wrapping_neg(), self != 0) }
+    /// `self << (n % BITS)`, and whether `n` was at least `BITS`.
     pub const fn overflowing_shl(self, n: u32) -> (u64, bool) { (self.wrapping_shl(n), n >= 64) }
+    /// `self >> (n % BITS)`, and whether `n` was at least `BITS`.
     pub const fn overflowing_shr(self, n: u32) -> (u64, bool) { (self.wrapping_shr(n), n >= 64) }
+    /// `self` to the `exp` wrapped, and whether it overflowed.
     pub const fn overflowing_pow(self, exp: u32) -> (u64, bool) {
         (self.wrapping_pow(exp), self.checked_pow(exp) is none)
     }
@@ -2058,8 +2667,11 @@ impl u64 {
         }
         acc * base
     }
+    /// `|self - rhs|`, as the unsigned type of the same width; never overflows.
     pub const fn abs_diff(self, rhs: u64) -> u64 { if self < rhs { rhs - self } else { self - rhs } }
+    /// `self / rhs` (the same as `/` for unsigned numbers). Panics when `rhs` is 0.
     pub const fn div_euclid(self, rhs: u64) -> u64 { self / rhs }
+    /// `self % rhs` (the same as `%` for unsigned numbers). Panics when `rhs` is 0.
     pub const fn rem_euclid(self, rhs: u64) -> u64 { self % rhs }
     /// Integer square root (rounded down).
     #[track_caller]
@@ -2072,12 +2684,14 @@ impl u64 {
         while x + 1 <= self / (x + 1) { x += 1; }
         x
     }
+    /// `true` when exactly one bit is set.
     pub const fn is_power_of_two(self) -> bool { self != 0 && self & (self - 1) == 0 }
     /// The smallest power of two `>= self`; panics past `MAX`.
     #[track_caller]
     pub const fn next_power_of_two(self) -> u64 {
         self.checked_next_power_of_two() ?? panic("u64::next_power_of_two: the result overflows; use `checked_next_power_of_two` to get `none` instead")
     }
+    /// The smallest power of two `>= self`, or `none` past `MAX`.
     pub const fn checked_next_power_of_two(self) -> u64 | none {
         if self <= 1 { return 1; }
         let p = 64 - (self - 1).leading_zeros();
@@ -2088,17 +2702,22 @@ impl u64 {
     /// `floor(log2(self))`; panics unless `self > 0`.
     #[track_caller]
     pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("u64::ilog2: the number is not positive; use `checked_ilog2` to get `none` instead") }
+    /// `floor(log10(self))`; panics unless `self > 0`.
     #[track_caller]
     pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("u64::ilog10: the number is not positive; use `checked_ilog10` to get `none` instead") }
+    /// `floor(log(self, base))`; panics unless `self > 0` and `base >= 2`.
     #[track_caller]
     pub const fn ilog(self, base: u64) -> u32 {
         self.checked_ilog(base) ?? panic("u64::ilog: the number is not positive or the base is below 2; use `checked_ilog` to get `none` instead")
     }
+    /// `floor(log2(self))`, or `none` unless `self > 0`.
     pub const fn checked_ilog2(self) -> u32 | none {
         if self <= 0 { return none; }
         63 - self.leading_zeros()
     }
+    /// `floor(log10(self))`, or `none` unless `self > 0`.
     pub const fn checked_ilog10(self) -> u32 | none { self.checked_ilog(10) }
+    /// `floor(log(self, base))`, or `none` unless `self > 0` and `base >= 2`.
     pub const fn checked_ilog(self, base: u64) -> u32 | none {
         if self <= 0 || base < 2 { return none; }
         let n: u32 = 0;
@@ -2114,10 +2733,13 @@ impl u64 {
 // usize
 
 impl usize {
+    /// `self + rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_add.usize")]
     pub const fn wrapping_add(self, rhs: usize) -> usize { self.wrapping_add(rhs) }
+    /// `self - rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_sub.usize")]
     pub const fn wrapping_sub(self, rhs: usize) -> usize { self.wrapping_sub(rhs) }
+    /// `self * rhs`, wrapping around at the bounds.
     #[intrinsic("rok.wrapping_mul.usize")]
     pub const fn wrapping_mul(self, rhs: usize) -> usize { self.wrapping_mul(rhs) }
     #[intrinsic("rok.ctpop.usize")]
@@ -2127,62 +2749,84 @@ impl usize {
     #[intrinsic("rok.cttz.usize")]
     const fn cttz(self) -> usize { self.cttz() }
 
+    /// The number of one bits.
     pub const fn count_ones(self) -> u32 { self.ctpop() as u32 }
+    /// The number of zero bits.
     pub const fn count_zeros(self) -> u32 { (~self).ctpop() as u32 }
+    /// The number of zero bits above the highest one bit.
     pub const fn leading_zeros(self) -> u32 { self.ctlz() as u32 }
+    /// The number of zero bits below the lowest one bit.
     pub const fn trailing_zeros(self) -> u32 { self.cttz() as u32 }
+    /// The number of one bits above the highest zero bit.
     pub const fn leading_ones(self) -> u32 { (~self).ctlz() as u32 }
+    /// The number of one bits below the lowest zero bit.
     pub const fn trailing_ones(self) -> u32 { (~self).cttz() as u32 }
 
+    /// The bits shifted left by `n`, those shifted out coming back on the right.
     pub const fn rotate_left(self, n: u32) -> usize {
         let k = n % usize::BITS;
         if k == 0 { return self; }
         self << (k as usize) | self >> ((usize::BITS - k) as usize)
     }
+    /// The bits shifted right by `n`, those shifted out coming back on the left.
     pub const fn rotate_right(self, n: u32) -> usize { self.rotate_left(64 - n % usize::BITS) }
+    /// The bytes in reverse order.
     #[intrinsic("rok.bswap.usize")]
     pub const fn swap_bytes(self) -> usize { self.swap_bytes() }
 
+    /// `self` in big-endian byte order (unchanged on a big-endian target).
     pub const fn to_be(self) -> usize { if BIG_ENDIAN { self } else { self.swap_bytes() } }
+    /// `self` in little-endian byte order (unchanged on a little-endian target).
     pub const fn to_le(self) -> usize { if BIG_ENDIAN { self.swap_bytes() } else { self } }
+    /// The number whose big-endian bytes are `x`.
     pub const fn from_be(x: usize) -> usize { x.to_be() }
+    /// The number whose little-endian bytes are `x`.
     pub const fn from_le(x: usize) -> usize { x.to_le() }
 
+    /// `self + rhs`, or `none` on overflow.
     pub const fn checked_add(self, rhs: usize) -> usize | none {
         let r = self.wrapping_add(rhs);
         if r < self { return none; }
         r
     }
+    /// `self - rhs`, or `none` on overflow.
     pub const fn checked_sub(self, rhs: usize) -> usize | none {
         let r = self.wrapping_sub(rhs);
         if self < rhs { return none; }
         r
     }
+    /// `self * rhs`, or `none` on overflow.
     pub const fn checked_mul(self, rhs: usize) -> usize | none {
         let r = self.wrapping_mul(rhs);
         if self != 0 && r / self != rhs { return none; }
         r
     }
+    /// `self / rhs`, or `none` when `rhs` is 0.
     pub const fn checked_div(self, rhs: usize) -> usize | none {
         if rhs == 0 { return none; }
         self / rhs
     }
+    /// `self % rhs`, or `none` when `rhs` is 0.
     pub const fn checked_rem(self, rhs: usize) -> usize | none {
         if rhs == 0 { return none; }
         self % rhs
     }
+    /// `-self`: `0` for 0, `none` for any other value.
     pub const fn checked_neg(self) -> usize | none {
         if self != 0 { return none; }
         self
     }
+    /// `self << n`, or `none` when `n` is at least `BITS`.
     pub const fn checked_shl(self, n: u32) -> usize | none {
         if n >= usize::BITS { return none; }
         self << (n as usize)
     }
+    /// `self >> n`, or `none` when `n` is at least `BITS`.
     pub const fn checked_shr(self, n: u32) -> usize | none {
         if n >= usize::BITS { return none; }
         self >> (n as usize)
     }
+    /// `self` to the `exp`, or `none` on overflow.
     pub const fn checked_pow(self, exp: u32) -> usize | none {
         if exp == 0 { return 1; }
         let base = self;
@@ -2196,15 +2840,21 @@ impl usize {
         acc.checked_mul(base)
     }
 
+    /// `self / rhs` (it never overflows). Panics when `rhs` is 0.
     pub const fn wrapping_div(self, rhs: usize) -> usize {
         self / rhs
     }
+    /// `self % rhs` (it never overflows). Panics when `rhs` is 0.
     pub const fn wrapping_rem(self, rhs: usize) -> usize {
         self % rhs
     }
+    /// `0 - self`, wrapping around.
     pub const fn wrapping_neg(self) -> usize { usize::wrapping_sub(0, self) }
+    /// `self << (n % BITS)`.
     pub const fn wrapping_shl(self, n: u32) -> usize { self << ((n % usize::BITS) as usize) }
+    /// `self >> (n % BITS)`.
     pub const fn wrapping_shr(self, n: u32) -> usize { self >> ((n % usize::BITS) as usize) }
+    /// `self` to the `exp`, wrapping around at the bounds.
     pub const fn wrapping_pow(self, exp: u32) -> usize {
         let base = self;
         let acc: usize = 1;
@@ -2217,25 +2867,38 @@ impl usize {
         acc
     }
 
+    /// `self + rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_add(self, rhs: usize) -> usize { self.checked_add(rhs) ?? usize::MAX }
+    /// `self - rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_sub(self, rhs: usize) -> usize { self.checked_sub(rhs) ?? 0 }
+    /// `self * rhs`, clamped to `MIN..=MAX`.
     pub const fn saturating_mul(self, rhs: usize) -> usize { self.checked_mul(rhs) ?? usize::MAX }
+    /// `self` to the `exp`, clamped to `MIN..=MAX`.
     pub const fn saturating_pow(self, exp: u32) -> usize { self.checked_pow(exp) ?? usize::MAX }
 
+    /// `self + rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_add(self, rhs: usize) -> (usize, bool) {
         (self.wrapping_add(rhs), self.checked_add(rhs) is none)
     }
+    /// `self - rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_sub(self, rhs: usize) -> (usize, bool) {
         (self.wrapping_sub(rhs), self.checked_sub(rhs) is none)
     }
+    /// `self * rhs` wrapped, and whether it overflowed.
     pub const fn overflowing_mul(self, rhs: usize) -> (usize, bool) {
         (self.wrapping_mul(rhs), self.checked_mul(rhs) is none)
     }
+    /// `self / rhs` and `false` (it never overflows). Panics when `rhs` is 0.
     pub const fn overflowing_div(self, rhs: usize) -> (usize, bool) { (self / rhs, false) }
+    /// `self % rhs` and `false` (it never overflows). Panics when `rhs` is 0.
     pub const fn overflowing_rem(self, rhs: usize) -> (usize, bool) { (self % rhs, false) }
+    /// `0 - self` wrapped, and whether it overflowed (any value but 0).
     pub const fn overflowing_neg(self) -> (usize, bool) { (self.wrapping_neg(), self != 0) }
+    /// `self << (n % BITS)`, and whether `n` was at least `BITS`.
     pub const fn overflowing_shl(self, n: u32) -> (usize, bool) { (self.wrapping_shl(n), n >= usize::BITS) }
+    /// `self >> (n % BITS)`, and whether `n` was at least `BITS`.
     pub const fn overflowing_shr(self, n: u32) -> (usize, bool) { (self.wrapping_shr(n), n >= usize::BITS) }
+    /// `self` to the `exp` wrapped, and whether it overflowed.
     pub const fn overflowing_pow(self, exp: u32) -> (usize, bool) {
         (self.wrapping_pow(exp), self.checked_pow(exp) is none)
     }
@@ -2254,8 +2917,11 @@ impl usize {
         }
         acc * base
     }
+    /// `|self - rhs|`, as the unsigned type of the same width; never overflows.
     pub const fn abs_diff(self, rhs: usize) -> usize { if self < rhs { rhs - self } else { self - rhs } }
+    /// `self / rhs` (the same as `/` for unsigned numbers). Panics when `rhs` is 0.
     pub const fn div_euclid(self, rhs: usize) -> usize { self / rhs }
+    /// `self % rhs` (the same as `%` for unsigned numbers). Panics when `rhs` is 0.
     pub const fn rem_euclid(self, rhs: usize) -> usize { self % rhs }
     /// Integer square root (rounded down).
     #[track_caller]
@@ -2268,12 +2934,14 @@ impl usize {
         while x + 1 <= self / (x + 1) { x += 1; }
         x
     }
+    /// `true` when exactly one bit is set.
     pub const fn is_power_of_two(self) -> bool { self != 0 && self & (self - 1) == 0 }
     /// The smallest power of two `>= self`; panics past `MAX`.
     #[track_caller]
     pub const fn next_power_of_two(self) -> usize {
         self.checked_next_power_of_two() ?? panic("usize::next_power_of_two: the result overflows; use `checked_next_power_of_two` to get `none` instead")
     }
+    /// The smallest power of two `>= self`, or `none` past `MAX`.
     pub const fn checked_next_power_of_two(self) -> usize | none {
         if self <= 1 { return 1; }
         let p = usize::BITS - (self - 1).leading_zeros();
@@ -2284,17 +2952,22 @@ impl usize {
     /// `floor(log2(self))`; panics unless `self > 0`.
     #[track_caller]
     pub const fn ilog2(self) -> u32 { self.checked_ilog2() ?? panic("usize::ilog2: the number is not positive; use `checked_ilog2` to get `none` instead") }
+    /// `floor(log10(self))`; panics unless `self > 0`.
     #[track_caller]
     pub const fn ilog10(self) -> u32 { self.checked_ilog10() ?? panic("usize::ilog10: the number is not positive; use `checked_ilog10` to get `none` instead") }
+    /// `floor(log(self, base))`; panics unless `self > 0` and `base >= 2`.
     #[track_caller]
     pub const fn ilog(self, base: usize) -> u32 {
         self.checked_ilog(base) ?? panic("usize::ilog: the number is not positive or the base is below 2; use `checked_ilog` to get `none` instead")
     }
+    /// `floor(log2(self))`, or `none` unless `self > 0`.
     pub const fn checked_ilog2(self) -> u32 | none {
         if self <= 0 { return none; }
         usize::BITS - 1 - self.leading_zeros()
     }
+    /// `floor(log10(self))`, or `none` unless `self > 0`.
     pub const fn checked_ilog10(self) -> u32 | none { self.checked_ilog(10) }
+    /// `floor(log(self, base))`, or `none` unless `self > 0` and `base >= 2`.
     pub const fn checked_ilog(self, base: usize) -> u32 | none {
         if self <= 0 || base < 2 { return none; }
         let n: u32 = 0;

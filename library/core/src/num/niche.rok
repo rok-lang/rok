@@ -23,7 +23,9 @@ impl NicheInt for usize {}
 /// The float types `NonNan` / `Finite` wrap.
 #[sealed]
 pub trait NicheFloat: Copy + PartialOrd + Display + Debug + Add<Output = Self> + Sub<Output = Self> + Mul<Output = Self> + Div<Output = Self> {
+    /// Whether `self` is NaN.
     fn niche_nan(self) -> bool;
+    /// Whether `self` is finite (not NaN or infinite).
     fn niche_finite(self) -> bool;
     /// The bits, widened, with `-0.0` as `0.0` (`Hash`).
     fn key(self) -> u64;
@@ -46,6 +48,7 @@ impl NicheFloat for f64 {
 pub struct ZeroError;
 
 impl ZeroError {
+    /// What went wrong, for display.
     pub const fn message(self) -> str { "zero is not a valid `NonZero` value" }
 }
 
@@ -66,6 +69,7 @@ impl Error for ZeroError {}
 pub struct NonZero<T>(T);
 
 impl<T: NicheInt> NonZero<T> {
+    /// `value` as a `NonZero`; `none` when it is 0.
     pub const fn new(value: T) -> NonZero<T> | none {
         if value == T::zero() { none } else { NonZero(value) }
     }
@@ -73,6 +77,7 @@ impl<T: NicheInt> NonZero<T> {
     /// `value` must not be 0.
     pub const unsafe fn new_unchecked(value: T) -> NonZero<T> { NonZero(value) }
 
+    /// The value.
     pub const fn get(self) -> T { self.0 }
 }
 
@@ -170,6 +175,7 @@ nonzero_div!(i8, i16, i32, i64, isize, u8, u16, u32, u64, usize);
 pub struct Positive<T>(T);
 
 impl<T: NicheInt> Positive<T> {
+    /// `value` as a `Positive`; `none` when it is negative.
     pub const fn new(value: T) -> Positive<T> | none {
         if value < T::zero() { none } else { Positive(value) }
     }
@@ -177,6 +183,7 @@ impl<T: NicheInt> Positive<T> {
     /// `value` must not be negative.
     pub unsafe fn new_unchecked(value: T) -> Positive<T> { Positive(value) }
 
+    /// The value.
     pub const fn get(self) -> T { self.0 }
 }
 
@@ -224,6 +231,7 @@ impl<T: NicheInt> Debug for Positive<T> {
 pub struct NonNan<F>(F);
 
 impl<F: NicheFloat> NonNan<F> {
+    /// `value` as a `NonNan`; `none` when it is NaN.
     pub const fn new(value: F) -> NonNan<F> | none {
         if value.niche_nan() { none } else { NonNan(value) }
     }
@@ -231,6 +239,7 @@ impl<F: NicheFloat> NonNan<F> {
     /// `value` must not be NaN.
     pub unsafe fn new_unchecked(value: F) -> NonNan<F> { NonNan(value) }
 
+    /// The wrapped float.
     pub fn get(self) -> F { self.0 }
 }
 
@@ -323,6 +332,7 @@ impl From<NonNan<f64>> for f64 {
 pub struct Finite<F>(F);
 
 impl<F: NicheFloat> Finite<F> {
+    /// `value` as a `Finite`; `none` when it is NaN or ±∞.
     pub const fn new(value: F) -> Finite<F> | none {
         if value.niche_finite() { Finite(value) } else { none }
     }
@@ -330,6 +340,7 @@ impl<F: NicheFloat> Finite<F> {
     /// `value` must be finite.
     pub unsafe fn new_unchecked(value: F) -> Finite<F> { Finite(value) }
 
+    /// The wrapped float.
     pub fn get(self) -> F { self.0 }
 }
 

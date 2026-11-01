@@ -2,6 +2,8 @@
 // over a `List` laid out as an implicit binary tree. `new()` pops the
 // greatest item first; `by_ordering(cmp)` pops the greatest by `cmp`.
 
+/// A priority queue: `new()` pops the greatest item first,
+/// `by_ordering(cmp)` the greatest by `cmp`.
 pub struct BinaryHeap<T> {
     items: List<T>;
     cmp: fn(T, T) -> rok::core::cmp::Ordering + Send;

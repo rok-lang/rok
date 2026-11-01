@@ -206,11 +206,13 @@ impl IoError {
         }
     }
 
+    /// What kind of failure this is.
     pub const fn kind(self) -> IoErrorKind { self.kind }
     /// The platform's code (errno; Windows: `GetLastError` / WSA), or
     /// `none` when the library raised the error or a name did not
     /// resolve.
     pub const fn os_code(self) -> i32 | none { self.os_code }
+    /// What went wrong, for display.
     pub const fn message(self) -> str { self.message }
 }
 
@@ -322,6 +324,7 @@ const fn upto(s: Slice<u8>, delim: u8) -> (usize, bool) {
 /// scope open is an error, since a close error would be lost (2.13.4).
 #[lang("close_trait")]
 pub trait Close {
+    /// Close now, throwing the error the OS reports; later use fails.
     fn close(self) throws (IoError);
 }
 
@@ -536,14 +539,17 @@ pub enum SeekFrom {
     Current(i64),
 }
 
+/// Moves a byte cursor: files, `Cursor` and buffered readers.
 pub trait Seek {
     /// Move the cursor; the new offset from the start.
     fn seek(ref self, pos: SeekFrom) throws (IoError) -> u64;
 
+    /// Back to the start: `seek(SeekFrom::Start(0))`.
     fn rewind(ref self) throws (IoError) {
         _ = try self.seek(SeekFrom::Start(0u64));
     }
 
+    /// The offset from the start: `seek(SeekFrom::Current(0))`.
     fn stream_position(ref self) throws (IoError) -> u64 {
         try self.seek(SeekFrom::Current(0i64))
     }
@@ -556,6 +562,7 @@ pub trait AsyncRead {
     /// As `Read::read`.
     async fn read_async(ref self, buf: SliceMut<u8>) throws (IoError) -> usize;
 
+    /// As `Read::read_vectored`.
     async fn read_vectored_async(ref self, bufs: Slice<SliceMut<u8>>) throws (IoError) -> usize {
         for b in bufs {
             if b.len() > 0 { return try await self.read_async(b); }
@@ -563,6 +570,7 @@ pub trait AsyncRead {
         0
     }
 
+    /// As `Read::read_exact`.
     async fn read_exact_async(ref self, buf: SliceMut<u8>) throws (IoError) {
         let at = 0usize;
         let n = buf.len();
@@ -573,6 +581,7 @@ pub trait AsyncRead {
         }
     }
 
+    /// As `Read::read_to_end_into`.
     async fn read_to_end_into_async(ref self, out: List<u8>) throws (IoError) -> usize {
         let start = out.len();
         loop {
@@ -587,12 +596,14 @@ pub trait AsyncRead {
         }
     }
 
+    /// As `Read::read_to_end`.
     async fn read_to_end_async(ref self) throws (IoError) -> List<u8> {
         let out: List<u8> = List::new();
         _ = try await self.read_to_end_into_async(out);
         out
     }
 
+    /// As `Read::read_to_str`.
     async fn read_to_str_async(ref self) throws (IoError) -> str {
         try text_of(try await self.read_to_end_async())
     }
@@ -605,11 +616,13 @@ pub trait AsyncRead {
 
 /// `BufRead` that suspends the task.
 pub trait AsyncBufRead: AsyncRead {
+    /// As `BufRead::fill_buf`.
     async fn fill_buf_async(ref self) throws (IoError) -> Slice<u8>;
 
     /// As `BufRead::consume` (it never waits).
     fn consume(ref self, n: usize);
 
+    /// As `BufRead::read_until`.
     async fn read_until_async(ref self, delim: u8, out: List<u8>) throws (IoError) -> usize {
         let total = 0usize;
         loop {
@@ -623,6 +636,7 @@ pub trait AsyncBufRead: AsyncRead {
         }
     }
 
+    /// As `BufRead::read_line`.
     async fn read_line_async(ref self, out: StrBuf) throws (IoError) -> usize {
         let line: List<u8> = List::new();
         let n = try await self.read_until_async(10u8, line);
@@ -638,9 +652,12 @@ pub trait AsyncBufRead: AsyncRead {
 
 /// `Write` that suspends the task.
 pub trait AsyncWrite {
+    /// As `Write::write`.
     async fn write_async<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize;
+    /// As `Write::flush`.
     async fn flush_async(ref self) throws (IoError);
 
+    /// As `Write::write_vectored`.
     async fn write_vectored_async(ref self, bufs: Slice<Slice<u8>>) throws (IoError) -> usize {
         for b in bufs {
             if b.len() > 0 { return try await self.write_async(b); }
@@ -648,6 +665,7 @@ pub trait AsyncWrite {
         0
     }
 
+    /// As `Write::write_all`.
     async fn write_all_async<B: AsBytes>(ref self, buf: B) throws (IoError) {
         let rest = buf.byte_slice();
         while rest.len() > 0 {
@@ -660,11 +678,14 @@ pub trait AsyncWrite {
 
 /// `Seek` that suspends the task.
 pub trait AsyncSeek {
+    /// As `Seek::seek`.
     async fn seek_async(ref self, pos: SeekFrom) throws (IoError) -> u64;
 }
 
 /// `Close` that suspends the task while the resource closes.
 pub trait AsyncClose {
+    /// Close without blocking the thread, throwing the error the OS
+    /// reports; later use fails.
     async fn close_async(self) throws (IoError);
 }
 
@@ -778,7 +799,9 @@ pub struct Take<R> {
 impl<R> Take<R> {
     /// Bytes still allowed.
     pub const fn limit(self) -> u64 { self.left[0] }
+    /// Allow `limit` more bytes.
     pub const fn set_limit(self, limit: u64) { self.left[0] = limit; }
+    /// The reader, giving up the limit.
     pub const fn into_inner(self) -> R { self.r }
 }
 
@@ -802,6 +825,7 @@ pub struct Chain<A, B> {
 }
 
 impl<A, B> Chain<A, B> {
+    /// The two readers, giving up the chain.
     pub const fn into_inner(self) -> (A, B) { (self.a, self.b) }
 }
 
@@ -832,8 +856,10 @@ impl<R> Debug for BufReader<R> {
 }
 
 impl<R> BufReader<R> {
+    /// A buffered `inner` with the default capacity.
     pub const fn new(inner: R) -> BufReader<R> { BufReader::with_capacity(CHUNK, inner) }
 
+    /// A buffered `inner` with a `cap`-byte buffer.
     pub const fn with_capacity(cap: usize, inner: R) -> BufReader<R> {
         BufReader { inner: inner, chunk: zeroed(if cap == 0 { 1 } else { cap }), at: [0usize, 0usize] }
     }
@@ -844,6 +870,7 @@ impl<R> BufReader<R> {
     /// Bytes buffered and not yet read.
     pub const fn buffer_len(self) -> usize { self.at[1] - self.at[0] }
 
+    /// The buffer's size in bytes.
     pub const fn capacity(self) -> usize { self.chunk.len() }
 
     const fn buffered(self) -> Slice<u8> { self.chunk[self.at[0]:self.at[1]] }
@@ -944,8 +971,10 @@ impl<W> Debug for BufWriter<W> {
 }
 
 impl<W> BufWriter<W> {
+    /// A buffered `inner` with the default capacity.
     pub const fn new(inner: W) -> BufWriter<W> { BufWriter::with_capacity(CHUNK, inner) }
 
+    /// A buffered `inner` with a `cap`-byte buffer.
     pub const fn with_capacity(cap: usize, inner: W) -> BufWriter<W> {
         BufWriter { inner: inner, cap: cap, pending: List::with_capacity(cap), by_line: false }
     }
@@ -953,6 +982,7 @@ impl<W> BufWriter<W> {
     /// Bytes buffered and not yet written.
     pub const fn buffer_len(self) -> usize { self.pending.len() }
 
+    /// The buffer's size in bytes.
     pub const fn capacity(self) -> usize { self.cap }
 
     /// Append `buf`: whether the batch is due (full, or a line ended).
@@ -1044,6 +1074,7 @@ impl<W> Debug for LineWriter<W> {
 }
 
 impl<W> LineWriter<W> {
+    /// `inner` behind a buffer flushed at each newline.
     pub const fn new(inner: W) -> LineWriter<W> {
         LineWriter { buf: BufWriter { inner: inner, cap: CHUNK, pending: List::with_capacity(CHUNK), by_line: true } }
     }
@@ -1090,10 +1121,15 @@ pub struct Cursor<T> {
 }
 
 impl<T> Cursor<T> {
+    /// A cursor over `inner` at position 0.
     pub const fn new(inner: T) -> Cursor<T> { Cursor { inner: inner, pos: [0u64] } }
+    /// The cursor's offset.
     pub const fn position(self) -> u64 { self.pos[0] }
+    /// Move the cursor to `pos`; past the end, reads give nothing.
     pub const fn set_position(self, pos: u64) { self.pos[0] = pos; }
+    /// The underlying buffer.
     pub const fn get_ref(self) -> T { self.inner }
+    /// The underlying buffer, giving up the cursor.
     pub const fn into_inner(self) -> T { self.inner }
 }
 
@@ -1198,8 +1234,11 @@ pub struct Repeat {
     byte: u8;
 }
 
+/// A reader at its end.
 pub const fn empty() -> Empty { Empty {} }
+/// A writer that discards everything.
 pub const fn sink() -> Sink { Sink {} }
+/// A reader of `byte` forever.
 pub const fn repeat(byte: u8) -> Repeat { Repeat { byte: byte } }
 
 impl Read for Empty {
@@ -1306,8 +1345,11 @@ impl Debug for Stderr {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Stderr") }
 }
 
+/// A handle to standard input.
 pub const fn stdin() -> Stdin { Stdin { line: List::new(), at: [0usize] } }
+/// A handle to standard output.
 pub const fn stdout() -> Stdout { Stdout {} }
+/// A handle to standard error.
 pub const fn stderr() -> Stderr { Stderr {} }
 
 /// One stdin read into `buf`, stopping after `delim` (`-1`: none).

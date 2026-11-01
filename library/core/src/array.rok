@@ -83,6 +83,7 @@ impl<T: Hash, const N: usize> Hash for [T; N] {
 impl<T, const N: usize> [T; N] {
     /// The element count `N`.
     pub const fn len(self) -> usize { N }
+    /// `true` when `N` is 0.
     pub const fn is_empty(self) -> bool { N == 0 }
 
     /// The elements front to back, over a copy (arrays are values).
@@ -90,6 +91,7 @@ impl<T, const N: usize> [T; N] {
         self[:].iter()
     }
 
+    /// The first element; `none` when `N` is 0.
     pub const fn first(self) -> T | none {
         if N == 0 {
             return none;
@@ -97,6 +99,7 @@ impl<T, const N: usize> [T; N] {
         self[0]
     }
 
+    /// The last element; `none` when `N` is 0.
     pub const fn last(self) -> T | none {
         if N == 0 {
             return none;

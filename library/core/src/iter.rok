@@ -8,6 +8,8 @@
 // `next` takes `ref self` (2.7.1): an iterator's state lives in its
 // fields, written back into the caller's binding after each call.
 
+/// A source of items, one per `next` call; `none` ends it. The adapters
+/// below are lazy: nothing runs until the iterator is consumed.
 #[lang("iterator_trait")]
 pub trait Iterator {
     type Item;
@@ -367,6 +369,7 @@ pub trait Iterator {
 
 /// An iterator that can also step from the back (2.7.9).
 pub trait DoubleEndedIterator: Iterator {
+    /// The next item from the back, or `none` when the two ends meet.
     fn next_back(ref self) -> Item | none;
 
     /// `fold` from the back.
@@ -382,9 +385,12 @@ pub trait DoubleEndedIterator: Iterator {
 
 /// An iterator that knows how many items remain (2.7.10).
 pub trait ExactSizeIterator: Iterator {
+    /// The number of items left.
     fn len(self) -> usize;
 }
 
+/// A value `for` can walk (2.7.2): `into_iter` turns it into an
+/// iterator.
 #[lang("into_iterator_trait")]
 pub trait IntoIterator {
     type IntoIter: Iterator<Item = Item>;
@@ -403,9 +409,11 @@ impl<I: Iterator> IntoIterator for I {
 
 /// A collection buildable from an iterator (`collect`, 2.9.9).
 pub trait FromIterator<A> {
+    /// A collection holding the items of `it`, in iteration order.
     fn from_iter<I: IntoIterator<Item = A>>(it: I) -> Self;
 }
 
+/// The iterator `map` returns: `f` of each item.
 pub struct Map<I, U> {
     it: I;
     f: fn(I::Item) -> U;
@@ -437,6 +445,7 @@ impl<I: ExactSizeIterator, U> ExactSizeIterator for Map<I, U> {
     const fn len(self) -> usize { self.it.len() }
 }
 
+/// The iterator `filter` returns: the items `pred` accepts, in order.
 pub struct Filter<I> {
     it: I;
     pred: fn(I::Item) -> bool;
@@ -469,6 +478,7 @@ impl<I: DoubleEndedIterator> DoubleEndedIterator for Filter<I> {
     }
 }
 
+/// The iterator `enumerate` returns: `(index, item)` pairs from 0.
 pub struct Enumerate<I> {
     it: I;
     i: usize;
@@ -505,6 +515,8 @@ impl<I: DoubleEndedIterator + ExactSizeIterator> DoubleEndedIterator for Enumera
     }
 }
 
+/// The iterator `zip` returns: pairs of items; ends with the shorter
+/// side.
 pub struct Zip<I, J> {
     a: I;
     b: J;
@@ -546,6 +558,8 @@ impl<I: DoubleEndedIterator + ExactSizeIterator, J: DoubleEndedIterator + ExactS
     }
 }
 
+/// The iterator `chain` returns: every item of the first, then of the
+/// second.
 pub struct Chain<I, J> {
     a: I;
     b: J;
@@ -575,6 +589,7 @@ impl<I: DoubleEndedIterator, J: DoubleEndedIterator> DoubleEndedIterator for Cha
     }
 }
 
+/// The iterator `step_by` returns: the first item, then every `step`th.
 pub struct StepBy<I> {
     it: I;
     step: usize;
@@ -633,6 +648,7 @@ impl<I: DoubleEndedIterator + ExactSizeIterator> DoubleEndedIterator for StepBy<
     }
 }
 
+/// The iterator `rev` returns: the items from the back.
 pub struct Rev<I> {
     it: I;
 }
@@ -727,6 +743,8 @@ impl<I: Iterator, U: IntoIterator> Iterator for FlatMap<I, U> {
     }
 }
 
+/// The iterator `peekable` returns: `peek` looks at the next item
+/// without taking it.
 pub struct Peekable<I> {
     it: I;
     peeked: I::Item | none;
@@ -759,6 +777,7 @@ impl<I: Iterator> Iterator for Peekable<I> {
     }
 }
 
+/// The iterator `take` returns: at most the first `n` items.
 pub struct Take<I> {
     it: I;
     left: usize;
@@ -803,6 +822,7 @@ impl<I: DoubleEndedIterator + ExactSizeIterator> DoubleEndedIterator for Take<I>
     }
 }
 
+/// The iterator `skip` returns: all but the first `n` items.
 pub struct Skip<I> {
     it: I;
     n: usize;
@@ -838,6 +858,8 @@ impl<I: DoubleEndedIterator + ExactSizeIterator> DoubleEndedIterator for Skip<I>
     }
 }
 
+/// The iterator `take_while` returns: items up to the first that `pred`
+/// rejects.
 pub struct TakeWhile<I> {
     it: I;
     pred: fn(I::Item) -> bool;
@@ -864,6 +886,8 @@ impl<I: Iterator> Iterator for TakeWhile<I> {
     }
 }
 
+/// The iterator `skip_while` returns: items from the first that `pred`
+/// rejects on.
 pub struct SkipWhile<I> {
     it: I;
     pred: fn(I::Item) -> bool;
@@ -891,6 +915,7 @@ impl<I: Iterator> Iterator for SkipWhile<I> {
     }
 }
 
+/// The iterator `scan` returns: each running state of `f`.
 pub struct Scan<I, S> {
     it: I;
     state: S;
@@ -953,6 +978,8 @@ impl<I: ExactSizeIterator> ExactSizeIterator for InspectIter<I> {
     const fn len(self) -> usize { self.it.len() }
 }
 
+/// The iterator `cycle` returns: the items over and over; empty if the
+/// source is.
 pub struct Cycle<I> {
     /// The iterator as `cycle` got it: each round restarts from a copy.
     orig: I;
@@ -985,6 +1012,8 @@ impl<I: Iterator> Iterator for Cycle<I> {
     }
 }
 
+/// The iterator `chunks` returns: lists of `size` items, the last one
+/// shorter when the items run out.
 pub struct Chunks<I> {
     it: I;
     size: usize;
@@ -1023,6 +1052,8 @@ impl<I: ExactSizeIterator> ExactSizeIterator for Chunks<I> {
     }
 }
 
+/// The iterator `windows` returns: every run of `size` consecutive items,
+/// overlapping, as lists.
 pub struct Windows<I> {
     it: I;
     size: usize;
@@ -1120,6 +1151,8 @@ impl<T, E> Debug for TryGenIter<T, E> {
 impl<T, E> TryIterator for TryGenIter<T, E> {
     type Item = T;
     type Error = E;
+    /// Resume the generator: the next item, or `none` when it is done; throws
+    /// what the body throws.
     const fn next(ref self) throws (E) -> T | none {
         try (self.resume)(false)
     }
@@ -1459,6 +1492,7 @@ pub const fn try_from_fn<T, E>(f: fn() throws (E) -> (T | none)) -> TryFromFn<T,
     TryFromFn { f: f }
 }
 
+/// The iterator `try_map` returns: `f` of each item.
 pub struct TryMap<I, U> {
     it: I;
     f: fn(I::Item) throws (I::Error) -> U;
@@ -1475,6 +1509,7 @@ impl<I: TryIterator, U> TryIterator for TryMap<I, U> {
     }
 }
 
+/// The iterator `try_filter` returns: the items `pred` accepts.
 pub struct TryFilter<I> {
     it: I;
     pred: fn(I::Item) throws (I::Error) -> bool;
@@ -1493,6 +1528,7 @@ impl<I: TryIterator> TryIterator for TryFilter<I> {
     }
 }
 
+/// The iterator `map_err` returns: each error passed through `f`.
 pub struct MapErr<I, E2> {
     it: I;
     f: fn(I::Error) -> E2;
@@ -1508,6 +1544,7 @@ impl<I: TryIterator, E2> TryIterator for MapErr<I, E2> {
     }
 }
 
+/// The iterator `try_enumerate` returns: `(index, item)` pairs from 0.
 pub struct TryEnumerate<I> {
     it: I;
     i: usize;
@@ -1526,6 +1563,8 @@ impl<I: TryIterator> TryIterator for TryEnumerate<I> {
     }
 }
 
+/// The iterator `try_zip` returns: pairs of items; ends with the
+/// shorter side.
 pub struct TryZip<I, J> {
     a: I;
     b: J;
@@ -1544,6 +1583,8 @@ impl<I: TryIterator, J: Iterator> TryIterator for TryZip<I, J> {
     }
 }
 
+/// The iterator `try_chain` returns: every item of the first, then of
+/// the second.
 pub struct TryChain<I, J> {
     a: I;
     b: J;
@@ -1564,6 +1605,7 @@ impl<I: TryIterator, J: TryIterator<Item = I::Item, Error = I::Error>> TryIterat
     }
 }
 
+/// The iterator `try_take` returns: at most the first `n` items.
 pub struct TryTake<I> {
     it: I;
     left: usize;
@@ -1581,6 +1623,7 @@ impl<I: TryIterator> TryIterator for TryTake<I> {
     }
 }
 
+/// The iterator `try_skip` returns: all but the first `n` items.
 pub struct TrySkip<I> {
     it: I;
     n: usize;
@@ -1600,6 +1643,8 @@ impl<I: TryIterator> TryIterator for TrySkip<I> {
     }
 }
 
+/// The iterator `try_step_by` returns: the first item, then every
+/// `step`th.
 pub struct TryStepBy<I> {
     it: I;
     step: usize;
@@ -1618,6 +1663,8 @@ impl<I: TryIterator> TryIterator for TryStepBy<I> {
     }
 }
 
+/// The iterator `try_take_while` returns: items while `pred` accepts
+/// them.
 pub struct TryTakeWhile<I> {
     it: I;
     pred: fn(I::Item) throws (I::Error) -> bool;
@@ -1642,6 +1689,8 @@ impl<I: TryIterator> TryIterator for TryTakeWhile<I> {
     }
 }
 
+/// The iterator `try_skip_while` returns: items from the first `pred`
+/// rejects.
 pub struct TrySkipWhile<I> {
     it: I;
     pred: fn(I::Item) throws (I::Error) -> bool;
@@ -1694,6 +1743,8 @@ impl<I: TryIterator, U: IntoIterator> TryIterator for TryFlatMap<I, U> {
     }
 }
 
+/// The iterator `try_scan` returns: `f` of a running state and each
+/// item.
 pub struct TryScan<I, S> {
     it: I;
     state: S;
@@ -1713,6 +1764,8 @@ impl<I: TryIterator, S> TryIterator for TryScan<I, S> {
     }
 }
 
+/// The iterator `try_inspect` returns: the items, each shown to `f`
+/// first.
 pub struct TryInspect<I> {
     it: I;
     f: fn(I::Item) throws (I::Error);
@@ -1730,6 +1783,8 @@ impl<I: TryIterator> TryIterator for TryInspect<I> {
     }
 }
 
+/// The iterator `try_peekable` returns: the items, with a look at the
+/// next.
 pub struct TryPeekable<I> {
     it: I;
     peeked: I::Item | none;
@@ -1803,6 +1858,8 @@ impl<I: TryIterator> Iterator for Results<I> {
     }
 }
 
+/// The `TryIterator` `iter::from_results` returns: an `Err` item is
+/// thrown.
 pub struct FromResults<I, T, E> {
     it: I;
 }
@@ -1818,6 +1875,8 @@ impl<I: Iterator<Item = Result<T, E>>, T, E> TryIterator for FromResults<I, T, E
     }
 }
 
+/// The `TryIterator` `iter::infallible` returns: the items, never an
+/// error.
 pub struct Infallible<I, E> {
     it: I;
     /// Never set: it only carries `E`.
@@ -1835,6 +1894,7 @@ impl<I: Iterator, E> TryIterator for Infallible<I, E> {
     }
 }
 
+/// The `TryIterator` `iter::try_from_fn` returns: each item is `f()`.
 pub struct TryFromFn<T, E> {
     f: fn() throws (E) -> (T | none);
 }

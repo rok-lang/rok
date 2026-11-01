@@ -23,11 +23,10 @@ extern "rok" {
     fn rok_free(ptr: usize);
 }
 
-// `GcBuf<T>` (stdlib 2.9.12, re-exported as
-// `rok::core::collections::raw::GcBuf`): one GC reference to an object
-// holding a run of `T`s, compiler-known. The functions are compiler
-// intrinsics (unchecked indexing); their bodies never run.
-
+/// One GC reference to an object holding a run of `T`s (stdlib 2.9.12,
+/// re-exported as `rok::core::collections::raw::GcBuf`). Compiler-known:
+/// its functions are intrinsics (unchecked indexing) whose bodies never
+/// run.
 pub struct GcBuf<T> {}
 
 impl<T> Debug for GcBuf<T> {
@@ -36,8 +35,11 @@ impl<T> Debug for GcBuf<T> {
 
 /// The method forms of `buf_new` / `buf_get` / `buf_set` (2.9.12).
 impl<T> GcBuf<T> {
+    /// `buf_new`: a zeroed buffer of `len` elements.
     pub const unsafe fn new(len: usize) -> GcBuf<T> { unsafe { buf_new(len) } }
+    /// `buf_get`: element `i`. UB when `i` is out of bounds.
     pub const unsafe fn get(self, i: usize) -> T { unsafe { buf_get(self, i) } }
+    /// `buf_set`: store `v` at `i`. UB when `i` is out of bounds.
     pub const unsafe fn set(self, i: usize, v: T) { unsafe { buf_set(self, i, v); } }
 }
 
@@ -123,7 +125,10 @@ pub unsafe fn transmute_unchecked<A, B>(a: A) -> B {
     b
 }
 
+/// The `T` at `src`. UB unless it points at a live, initialized `T`.
 pub unsafe fn read<T>(src: ConstPtr<T>) -> T { src.read() }
+/// Store `value` at `dst` without reading or dropping the old one. UB
+/// unless `dst` is writable `T` memory.
 pub unsafe fn write<T>(dst: Ptr<T>, value: T) { dst.write(value); }
 
 /// Copy `count` `T`s; the ranges may overlap.
@@ -157,6 +162,7 @@ pub unsafe fn write_bytes<T>(dst: Ptr<T>, value: u8, count: usize) {
     }
 }
 
+/// Swap the `T`s at `a` and `b`; they may be the same place.
 pub unsafe fn swap<T>(a: Ptr<T>, b: Ptr<T>) {
     let t = a.read();
     a.write(b.read());
@@ -190,8 +196,10 @@ impl<T> Debug for MaybeUninit<T> {
 }
 
 impl<T> MaybeUninit<T> {
+    /// A `MaybeUninit` not written yet; its bits are zero (`zeroed`).
     pub fn uninit() -> MaybeUninit<T> { MaybeUninit::zeroed() }
 
+    /// A `MaybeUninit` with every byte zero. Panics when out of memory.
     #[track_caller]
     pub fn zeroed() -> MaybeUninit<T> {
         let size = if size_of::<T>() == 0 { 1 } else { size_of::<T>() };
@@ -206,13 +214,17 @@ impl<T> MaybeUninit<T> {
         }
     }
 
+    /// An initialized `value`.
     pub const fn new(value: T) -> MaybeUninit<T> { MaybeUninit { value: value } }
 
+    /// Store `value`, overwriting what was there without dropping it.
     pub const fn write(ref self, value: T) { self.value = value; }
 
     /// A pointer to this variable's `T` (the receiver must be a place).
     #[intrinsic("rok.addr_of")]
     pub fn as_ptr(self) -> ConstPtr<T>;
+    /// A writable pointer to this variable's `T` (the receiver must be a
+    /// place); write through it to initialize.
     #[intrinsic("rok.addr_of")]
     pub fn as_mut_ptr(ref self) -> Ptr<T>;
 

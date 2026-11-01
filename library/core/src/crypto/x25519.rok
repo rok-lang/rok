@@ -66,6 +66,7 @@ fn key32<B: AsBytes>(b: B, what: str) throws (ValueError) -> Slice<u8> {
 }
 
 impl PrivateKey {
+    /// The key of 32 bytes; throws `ValueError` on another length.
     pub fn from_bytes<B: AsBytes>(bytes: B) throws (ValueError) -> PrivateKey {
         PrivateKey { k: Secret::new(try key32(bytes, "private key")) }
     }
@@ -73,6 +74,7 @@ impl PrivateKey {
     /// A copy of the 32 bytes.
     pub fn to_secret(self) -> Secret { Secret::new(self.k) }
 
+    /// The public key that pairs with this one.
     pub fn public_key(self) -> PublicKey {
         let base: [u8; 32] = [0u8; 32];
         base[0] = 9u8;
@@ -116,5 +118,6 @@ impl PublicKey {
         PublicKey { b }
     }
 
+    /// The key's 32 bytes.
     pub const fn to_bytes(self) -> [u8; 32] { self.b }
 }

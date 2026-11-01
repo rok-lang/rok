@@ -12,39 +12,64 @@ union F64Bits {
 }
 
 impl f64 {
+    /// The gap between 1.0 and the next larger value.
     pub const EPSILON: f64 = 2.2204460492503131e-16;
+    /// The largest value.
     pub const MAX: f64 = 1.7976931348623157e308;
+    /// The smallest value.
     pub const MIN: f64 = -1.7976931348623157e308;
+    /// The smallest positive normal value.
     pub const MIN_POSITIVE: f64 = 2.2250738585072014e-308;
+    /// Not a number.
     pub const NAN: f64 = 0.0 / 0.0;
+    /// Positive infinity.
     pub const INFINITY: f64 = 1.0 / 0.0;
+    /// Negative infinity.
     pub const NEG_INFINITY: f64 = -1.0 / 0.0;
+    /// π.
     pub const PI: f64 = 3.14159265358979323846264338327950288;
+    /// τ = 2π.
     pub const TAU: f64 = 6.28318530717958647692528676655900577;
+    /// Euler's number e.
     pub const E: f64 = 2.71828182845904523536028747135266250;
+    /// π/2.
     pub const FRAC_PI_2: f64 = 1.57079632679489661923132169163975144;
+    /// π/4.
     pub const FRAC_PI_4: f64 = 0.785398163397448309615660845819875721;
+    /// 1/π.
     pub const FRAC_1_PI: f64 = 0.318309886183790671537767526745028724;
+    /// √2.
     pub const SQRT_2: f64 = 1.41421356237309504880168872420969808;
+    /// 1/√2.
     pub const FRAC_1_SQRT_2: f64 = 0.707106781186547524400844362104849039;
+    /// ln 2.
     pub const LN_2: f64 = 0.693147180559945309417232121458176568;
+    /// ln 10.
     pub const LN_10: f64 = 2.30258509299404568401799145468436421;
+    /// log₂ e.
     pub const LOG2_E: f64 = 1.44269504088896340735992468100189214;
+    /// log₁₀ e.
     pub const LOG10_E: f64 = 0.434294481903251827651128918916605082;
 
     /// The IEEE 754 bit pattern.
     pub const fn to_bits(self) -> u64 { unsafe { F64Bits { f: self }.u } }
+    /// The f64 with the IEEE 754 bit pattern `bits`.
     pub const fn from_bits(bits: u64) -> f64 { unsafe { F64Bits { u: bits }.f } }
 
+    /// `true` for NaN.
     pub const fn is_nan(self) -> bool { self != self }
+    /// `true` for `inf` or `-inf`.
     pub const fn is_infinite(self) -> bool { self.to_bits() & 0x7fffffffffffffff == 0x7ff0000000000000 }
+    /// `true` unless infinite or NaN.
     pub const fn is_finite(self) -> bool { self.to_bits() & 0x7ff0000000000000 != 0x7ff0000000000000 }
     /// Neither zero, subnormal, infinite nor NaN.
     pub const fn is_normal(self) -> bool {
         let e = self.to_bits() & 0x7ff0000000000000;
         e != 0 && e != 0x7ff0000000000000
     }
+    /// `true` when the sign bit is clear (`0.0`, `+inf`, a positive NaN).
     pub const fn is_sign_positive(self) -> bool { self.to_bits() & 0x8000000000000000 == 0 }
+    /// `true` when the sign bit is set (`-0.0`, `-inf`, a negative NaN).
     pub const fn is_sign_negative(self) -> bool { self.to_bits() & 0x8000000000000000 != 0 }
 
     /// Largest integer `<= self`.
@@ -55,7 +80,9 @@ impl f64 {
     pub const fn round(self) -> f64 { unsafe { rok_f64_round(self) } }
     /// Integer part (toward zero).
     pub const fn trunc(self) -> f64 { unsafe { rok_f64_trunc(self) } }
+    /// The magnitude (sign bit cleared).
     pub const fn abs(self) -> f64 { unsafe { rok_f64_abs(self) } }
+    /// Cube root.
     pub fn cbrt(self) -> f64 { unsafe { rok_f64_cbrt(self) } }
     /// `e^self`.
     pub fn exp(self) -> f64 { unsafe { rok_f64_exp(self) } }
@@ -67,19 +94,33 @@ impl f64 {
     pub fn ln(self) -> f64 { unsafe { rok_f64_ln(self) } }
     /// `ln(1 + self)`, exact near zero.
     pub fn ln_1p(self) -> f64 { unsafe { rok_f64_ln_1p(self) } }
+    /// Base-2 logarithm.
     pub fn log2(self) -> f64 { unsafe { rok_f64_log2(self) } }
+    /// Base-10 logarithm.
     pub fn log10(self) -> f64 { unsafe { rok_f64_log10(self) } }
+    /// Sine of `self` in radians.
     pub fn sin(self) -> f64 { unsafe { rok_f64_sin(self) } }
+    /// Cosine of `self` in radians.
     pub fn cos(self) -> f64 { unsafe { rok_f64_cos(self) } }
+    /// Tangent of `self` in radians.
     pub fn tan(self) -> f64 { unsafe { rok_f64_tan(self) } }
+    /// Arcsine in radians, in `[-π/2, π/2]`; NaN outside `[-1, 1]`.
     pub fn asin(self) -> f64 { unsafe { rok_f64_asin(self) } }
+    /// Arccosine in radians, in `[0, π]`; NaN outside `[-1, 1]`.
     pub fn acos(self) -> f64 { unsafe { rok_f64_acos(self) } }
+    /// Arctangent in radians, in `[-π/2, π/2]`.
     pub fn atan(self) -> f64 { unsafe { rok_f64_atan(self) } }
+    /// Hyperbolic sine.
     pub fn sinh(self) -> f64 { unsafe { rok_f64_sinh(self) } }
+    /// Hyperbolic cosine.
     pub fn cosh(self) -> f64 { unsafe { rok_f64_cosh(self) } }
+    /// Hyperbolic tangent.
     pub fn tanh(self) -> f64 { unsafe { rok_f64_tanh(self) } }
+    /// Inverse hyperbolic sine.
     pub fn asinh(self) -> f64 { unsafe { rok_f64_asinh(self) } }
+    /// Inverse hyperbolic cosine; NaN below `1`.
     pub fn acosh(self) -> f64 { unsafe { rok_f64_acosh(self) } }
+    /// Inverse hyperbolic tangent; NaN outside `[-1, 1]`.
     pub fn atanh(self) -> f64 { unsafe { rok_f64_atanh(self) } }
     /// `self - self.trunc()`.
     pub const fn fract(self) -> f64 { self - self.trunc() }
@@ -90,8 +131,11 @@ impl f64 {
         if self < 0.0 { return -1.0; }
         self
     }
+    /// `1.0 / self`.
     pub const fn recip(self) -> f64 { 1.0 / self }
+    /// Radians to degrees.
     pub const fn to_degrees(self) -> f64 { self * (180.0 / f64::PI) }
+    /// Degrees to radians.
     pub const fn to_radians(self) -> f64 { self * (f64::PI / 180.0) }
     /// `ln(self) / ln(base)`.
     pub fn log(self, base: f64) -> f64 { self.ln() / base.ln() }
@@ -120,6 +164,7 @@ impl f64 {
         if self > hi { return hi; }
         self
     }
+    /// The quotient rounded so that `rem_euclid` is never negative.
     pub const fn div_euclid(self, rhs: f64) -> f64 {
         let q = (self / rhs).trunc();
         if self % rhs < 0.0 {
@@ -127,6 +172,7 @@ impl f64 {
         }
         q
     }
+    /// The remainder in `[0, |rhs|)`; NaN when `rhs` is 0.
     pub const fn rem_euclid(self, rhs: f64) -> f64 {
         let r = self % rhs;
         if r < 0.0 { r + rhs.abs() } else { r }
@@ -172,39 +218,64 @@ union F32Bits {
 }
 
 impl f32 {
+    /// The gap between 1.0 and the next larger value.
     pub const EPSILON: f32 = 1.1920929e-7;
+    /// The largest value.
     pub const MAX: f32 = 3.40282347e38;
+    /// The smallest value.
     pub const MIN: f32 = -3.40282347e38;
+    /// The smallest positive normal value.
     pub const MIN_POSITIVE: f32 = 1.17549435e-38;
+    /// Not a number.
     pub const NAN: f32 = 0.0 / 0.0;
+    /// Positive infinity.
     pub const INFINITY: f32 = 1.0 / 0.0;
+    /// Negative infinity.
     pub const NEG_INFINITY: f32 = -1.0 / 0.0;
+    /// π.
     pub const PI: f32 = 3.14159265358979323846264338327950288;
+    /// τ = 2π.
     pub const TAU: f32 = 6.28318530717958647692528676655900577;
+    /// Euler's number e.
     pub const E: f32 = 2.71828182845904523536028747135266250;
+    /// π/2.
     pub const FRAC_PI_2: f32 = 1.57079632679489661923132169163975144;
+    /// π/4.
     pub const FRAC_PI_4: f32 = 0.785398163397448309615660845819875721;
+    /// 1/π.
     pub const FRAC_1_PI: f32 = 0.318309886183790671537767526745028724;
+    /// √2.
     pub const SQRT_2: f32 = 1.41421356237309504880168872420969808;
+    /// 1/√2.
     pub const FRAC_1_SQRT_2: f32 = 0.707106781186547524400844362104849039;
+    /// ln 2.
     pub const LN_2: f32 = 0.693147180559945309417232121458176568;
+    /// ln 10.
     pub const LN_10: f32 = 2.30258509299404568401799145468436421;
+    /// log₂ e.
     pub const LOG2_E: f32 = 1.44269504088896340735992468100189214;
+    /// log₁₀ e.
     pub const LOG10_E: f32 = 0.434294481903251827651128918916605082;
 
     /// The IEEE 754 bit pattern.
     pub const fn to_bits(self) -> u32 { unsafe { F32Bits { f: self }.u } }
+    /// The f32 with the IEEE 754 bit pattern `bits`.
     pub const fn from_bits(bits: u32) -> f32 { unsafe { F32Bits { u: bits }.f } }
 
+    /// `true` for NaN.
     pub const fn is_nan(self) -> bool { self != self }
+    /// `true` for `inf` or `-inf`.
     pub const fn is_infinite(self) -> bool { self.to_bits() & 0x7fffffff == 0x7f800000 }
+    /// `true` unless infinite or NaN.
     pub const fn is_finite(self) -> bool { self.to_bits() & 0x7f800000 != 0x7f800000 }
     /// Neither zero, subnormal, infinite nor NaN.
     pub const fn is_normal(self) -> bool {
         let e = self.to_bits() & 0x7f800000;
         e != 0 && e != 0x7f800000
     }
+    /// `true` when the sign bit is clear (`0.0`, `+inf`, a positive NaN).
     pub const fn is_sign_positive(self) -> bool { self.to_bits() & 0x80000000 == 0 }
+    /// `true` when the sign bit is set (`-0.0`, `-inf`, a negative NaN).
     pub const fn is_sign_negative(self) -> bool { self.to_bits() & 0x80000000 != 0 }
 
     /// Largest integer `<= self`.
@@ -215,7 +286,9 @@ impl f32 {
     pub const fn round(self) -> f32 { unsafe { rok_f32_round(self) } }
     /// Integer part (toward zero).
     pub const fn trunc(self) -> f32 { unsafe { rok_f32_trunc(self) } }
+    /// The magnitude (sign bit cleared).
     pub const fn abs(self) -> f32 { unsafe { rok_f32_abs(self) } }
+    /// Cube root.
     pub fn cbrt(self) -> f32 { unsafe { rok_f32_cbrt(self) } }
     /// `e^self`.
     pub fn exp(self) -> f32 { unsafe { rok_f32_exp(self) } }
@@ -227,19 +300,33 @@ impl f32 {
     pub fn ln(self) -> f32 { unsafe { rok_f32_ln(self) } }
     /// `ln(1 + self)`, exact near zero.
     pub fn ln_1p(self) -> f32 { unsafe { rok_f32_ln_1p(self) } }
+    /// Base-2 logarithm.
     pub fn log2(self) -> f32 { unsafe { rok_f32_log2(self) } }
+    /// Base-10 logarithm.
     pub fn log10(self) -> f32 { unsafe { rok_f32_log10(self) } }
+    /// Sine of `self` in radians.
     pub fn sin(self) -> f32 { unsafe { rok_f32_sin(self) } }
+    /// Cosine of `self` in radians.
     pub fn cos(self) -> f32 { unsafe { rok_f32_cos(self) } }
+    /// Tangent of `self` in radians.
     pub fn tan(self) -> f32 { unsafe { rok_f32_tan(self) } }
+    /// Arcsine in radians, in `[-π/2, π/2]`; NaN outside `[-1, 1]`.
     pub fn asin(self) -> f32 { unsafe { rok_f32_asin(self) } }
+    /// Arccosine in radians, in `[0, π]`; NaN outside `[-1, 1]`.
     pub fn acos(self) -> f32 { unsafe { rok_f32_acos(self) } }
+    /// Arctangent in radians, in `[-π/2, π/2]`.
     pub fn atan(self) -> f32 { unsafe { rok_f32_atan(self) } }
+    /// Hyperbolic sine.
     pub fn sinh(self) -> f32 { unsafe { rok_f32_sinh(self) } }
+    /// Hyperbolic cosine.
     pub fn cosh(self) -> f32 { unsafe { rok_f32_cosh(self) } }
+    /// Hyperbolic tangent.
     pub fn tanh(self) -> f32 { unsafe { rok_f32_tanh(self) } }
+    /// Inverse hyperbolic sine.
     pub fn asinh(self) -> f32 { unsafe { rok_f32_asinh(self) } }
+    /// Inverse hyperbolic cosine; NaN below `1`.
     pub fn acosh(self) -> f32 { unsafe { rok_f32_acosh(self) } }
+    /// Inverse hyperbolic tangent; NaN outside `[-1, 1]`.
     pub fn atanh(self) -> f32 { unsafe { rok_f32_atanh(self) } }
     /// `self - self.trunc()`.
     pub const fn fract(self) -> f32 { self - self.trunc() }
@@ -250,8 +337,11 @@ impl f32 {
         if self < 0.0 { return -1.0; }
         self
     }
+    /// `1.0 / self`.
     pub const fn recip(self) -> f32 { 1.0 / self }
+    /// Radians to degrees.
     pub const fn to_degrees(self) -> f32 { self * (180.0 / f32::PI) }
+    /// Degrees to radians.
     pub const fn to_radians(self) -> f32 { self * (f32::PI / 180.0) }
     /// `ln(self) / ln(base)`.
     pub fn log(self, base: f32) -> f32 { self.ln() / base.ln() }
@@ -280,6 +370,7 @@ impl f32 {
         if self > hi { return hi; }
         self
     }
+    /// The quotient rounded so that `rem_euclid` is never negative.
     pub const fn div_euclid(self, rhs: f32) -> f32 {
         let q = (self / rhs).trunc();
         if self % rhs < 0.0 {
@@ -287,6 +378,7 @@ impl f32 {
         }
         q
     }
+    /// The remainder in `[0, |rhs|)`; NaN when `rhs` is 0.
     pub const fn rem_euclid(self, rhs: f32) -> f32 {
         let r = self % rhs;
         if r < 0.0 { r + rhs.abs() } else { r }

@@ -11,17 +11,30 @@
 // field get / set through `any`, and the type's inherent methods. Private
 // fields are listed too: deriving it is the type's consent.
 
+/// Type facts every type has; the compiler implements it (6.10.1).
 pub trait Reflect {
+    /// The type's name.
     fn type_name() -> str;
+    /// The type's size in bytes.
     fn size() -> usize;
+    /// The type's alignment in bytes.
     fn align() -> usize;
+    /// The name of `self`'s type.
     fn type_name_of_val(self) -> str;
+    /// The size of `self`'s type in bytes.
     fn size_of_val(self) -> usize;
 }
 
+/// Field and method listing, opt-in through `#[derive(Inspect)]`
+/// (6.10.2).
 pub trait Inspect: Reflect {
+    /// The field names, in declaration order.
     fn field_names() -> List<str>;
+    /// The value of field `name` (of the current variant for an enum), or
+    /// `none` when there is no such field.
     fn get_field(self, name: str) -> any | none;
+    /// Sets field `name` to `value`; `false` when there is no such field or
+    /// `value` holds another type.
     fn set_field(ref self, name: str, value: any) -> bool;
     /// The inherent methods, by name.
     fn methods() -> List<MethodInfo> {

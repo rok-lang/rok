@@ -3,6 +3,8 @@
 // stay with the other operator traits in `ops.rok`. `Eq` is a pure
 // marker with no methods, so it has no slot.
 
+/// Total equality: `==` is reflexive, symmetric and transitive (no NaN).
+/// A marker over `PartialEq` with no methods (2.5.3).
 pub trait Eq: PartialEq {}
 
 /// The result of a three-way comparison (2.5.4).
@@ -14,9 +16,13 @@ pub enum Ordering {
 }
 
 impl Ordering {
+    /// `true` for `Less`.
     pub const fn is_lt(self) -> bool { match self { Ordering::Less => true, _ => false } }
+    /// `true` for `Equal`.
     pub const fn is_eq(self) -> bool { match self { Ordering::Equal => true, _ => false } }
+    /// `true` for `Greater`.
     pub const fn is_gt(self) -> bool { match self { Ordering::Greater => true, _ => false } }
+    /// `Less` and `Greater` swapped; `Equal` stays.
     pub const fn reverse(self) -> Ordering {
         match self {
             Ordering::Less => Ordering::Greater,
@@ -39,16 +45,20 @@ impl Debug for Ordering {
 /// A total order (2.5.5).
 #[lang("ord_trait")]
 pub trait Ord: PartialOrd + Eq {
+    /// Compares `self` with `rhs`: `Less`, `Equal` or `Greater`.
     fn cmp(self, rhs: Self) -> Ordering;
 
+    /// The smaller of `self` and `rhs`; `self` when they are equal.
     const fn min(self, rhs: Self) -> Self {
         if self.le(rhs) { self } else { rhs }
     }
 
+    /// The larger of `self` and `rhs`; `self` when they are equal.
     const fn max(self, rhs: Self) -> Self {
         if self.ge(rhs) { self } else { rhs }
     }
 
+    /// `low` when `self` is below it, `high` when above it, else `self`.
     const fn clamp(self, low: Self, high: Self) -> Self {
         if self.lt(low) { return low; }
         if self.gt(high) { return high; }
@@ -60,5 +70,6 @@ pub trait Ord: PartialOrd + Eq {
 /// writes, so `a == b` hashes alike - what `Dict` / `Set` rely on.
 #[lang("hash_trait")]
 pub trait Hash: Eq {
+    /// The hash of `self`; equal values hash equal.
     fn hash<H: Hasher>(self, ref h: H);
 }

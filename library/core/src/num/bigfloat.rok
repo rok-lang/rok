@@ -41,6 +41,7 @@ const fn split_f64(x: f64) -> (f64, i64) {
 fn pow10(k: i64) -> Int { Int::from_i64(10).pow(k as u32) }
 
 impl Float {
+    /// The value `x`, exactly (subnormals, NaN and ±inf included).
     pub const fn from_f64(x: f64) -> Float {
         if x != 0.0 && exp_field(x) == 0 {
             // Subnormal: exact as a promoted value.
@@ -49,6 +50,7 @@ impl Float {
         Float::plain(x)
     }
 
+    /// The value `x`, exactly.
     pub const fn from_f32(x: f32) -> Float { Float::from_f64(x as f64) }
 
     const fn plain(x: f64) -> Float { Float { m: x, e: 0 } }
@@ -79,11 +81,17 @@ impl Float {
         (Int::from_u64((m.abs() * pow2(52)) as u64), e - 52)
     }
 
+    /// `true` for NaN.
     pub const fn is_nan(self) -> bool { self.m != self.m }
+    /// `true` for `inf` or `-inf`.
     pub const fn is_infinite(self) -> bool { self.e == 0 && !self.m.is_nan() && !self.m.is_finite() }
+    /// `true` unless infinite or NaN.
     pub const fn is_finite(self) -> bool { self.e != 0 || self.m.is_finite() }
+    /// `true` for `0.0` or `-0.0`.
     pub const fn is_zero(self) -> bool { self.e == 0 && self.m == 0.0 }
+    /// `true` when the sign is negative (`-0.0` too).
     pub const fn is_sign_negative(self) -> bool { self.m.is_sign_negative() }
+    /// The magnitude.
     pub const fn abs(self) -> Float { Float { m: self.m.abs(), e: self.e } }
 
     /// The nearest `f64`: ±inf past `f64::MAX`, ties to even into the

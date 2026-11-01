@@ -8,6 +8,7 @@
 use rok::core::marker::{Memo, Transfer, buf_is_null};
 
 impl str {
+    /// The empty string.
     pub const fn new() -> str { "" }
 
     /// `bytes` as a `str`; throws if they are not UTF-8 (2.15.6).
@@ -72,22 +73,28 @@ impl str {
 
     /// Byte length (not the char count).
     pub const fn len(self) -> usize { unsafe { rok_str_len(self) } }
+    /// `true` when the string has no bytes.
     pub const fn is_empty(self) -> bool { unsafe { rok_str_len(self) } == 0 }
     /// Number of chars (`s.chars().count()` in the spec).
     pub const fn char_count(self) -> usize { unsafe { rok_str_char_count(self) } }
 
+    /// `true` when `pat` occurs in `self` (always for an empty `pat`).
     pub const fn contains(self, pat: str) -> bool { unsafe { rok_str_find(self, pat) } >= 0 }
+    /// `true` when `self` begins with `pat`.
     pub const fn starts_with(self, pat: str) -> bool { unsafe { rok_str_eq_at(self, 0, pat) } != 0 }
+    /// `true` when `self` ends with `pat`.
     pub const fn ends_with(self, pat: str) -> bool {
         let n = self.len();
         let m = pat.len();
         m <= n && unsafe { rok_str_eq_at(self, n - m, pat) } != 0
     }
+    /// Byte index of the first occurrence of `pat`; `none` if absent.
     pub const fn find(self, pat: str) -> usize | none {
         let i = unsafe { rok_str_find(self, pat) };
         if i < 0 { return none; }
         i as usize
     }
+    /// Byte index of the last occurrence of `pat`; `none` if absent.
     pub const fn rfind(self, pat: str) -> usize | none {
         let i = unsafe { rok_str_rfind(self, pat) };
         if i < 0 { return none; }
@@ -118,11 +125,16 @@ impl str {
         b.to_str()
     }
 
+    /// `self` without leading and trailing Unicode whitespace.
     pub const fn trim(self) -> str { unsafe { rok_str_trim(self, 0) } }
+    /// `self` without leading Unicode whitespace.
     pub const fn trim_start(self) -> str { unsafe { rok_str_trim(self, 1) } }
+    /// `self` without trailing Unicode whitespace.
     pub const fn trim_end(self) -> str { unsafe { rok_str_trim(self, 2) } }
     /// `self` without every leading and trailing repeat of `pat`.
     pub const fn trim_matches(self, pat: str) -> str { self.trim_start_matches(pat).trim_end_matches(pat) }
+    /// `self` without every leading repeat of `pat` (unchanged for an empty
+    /// `pat`).
     pub const fn trim_start_matches(self, pat: str) -> str {
         let m = pat.len();
         if m == 0 { return self; }
@@ -130,6 +142,8 @@ impl str {
         while i + m <= self.len() && unsafe { rok_str_eq_at(self, i, pat) } != 0 { i += m; }
         self[i:]
     }
+    /// `self` without every trailing repeat of `pat` (unchanged for an empty
+    /// `pat`).
     pub const fn trim_end_matches(self, pat: str) -> str {
         let m = pat.len();
         if m == 0 { return self; }
@@ -141,7 +155,10 @@ impl str {
     /// Full Unicode case mapping (`"ß"` → `"SS"`, final `σ` → `ς`); no
     /// locale rules.
     pub const fn to_lowercase(self) -> str { unsafe { rok_str_case(self, 0) } }
+    /// Full Unicode uppercase mapping (`"ß"` → `"SS"`); no locale rules.
     pub const fn to_uppercase(self) -> str { unsafe { rok_str_case(self, 1) } }
+    /// A copy with every non-overlapping `from` replaced by `to`, left to
+    /// right.
     pub const fn replace(self, from: str, to: str) -> str { unsafe { rok_str_replace(self, from, to) } }
 
     /// Unicode scalar values, in order.
@@ -230,6 +247,7 @@ impl Hash for str {
 /// What `s.bytes()` returns (2.15.1): the bytes of the `as_bytes` view.
 pub type Bytes = SliceIter<u8>;
 
+/// What `s.chars()` returns: the Unicode scalar values, in order.
 pub struct Chars {
     s: str;
     pos: usize;
@@ -265,6 +283,8 @@ impl Iterator for Chars {
     }
 }
 
+/// What `s.split(sep)` returns: the pieces between occurrences of `sep`,
+/// left to right.
 pub struct Split {
     rest: str;
     sep: str;
@@ -291,6 +311,8 @@ impl Iterator for Split {
     }
 }
 
+/// What `s.splitn(n, sep)` returns: at most `n` pieces, the last one the
+/// unsplit rest.
 pub struct SplitN {
     rest: str;
     sep: str;
@@ -318,6 +340,7 @@ impl Iterator for SplitN {
     }
 }
 
+/// What `s.rsplit(sep)` returns: the pieces of `split`, last first.
 pub struct RSplit {
     rest: str;
     sep: str;
@@ -348,6 +371,8 @@ impl Iterator for RSplit {
     }
 }
 
+/// What `s.rsplitn(n, sep)` returns: at most `n` pieces from the end, the
+/// last one the unsplit start.
 pub struct RSplitN {
     rest: str;
     sep: str;
@@ -379,6 +404,8 @@ impl Iterator for RSplitN {
     }
 }
 
+/// What `s.match_indices(pat)` returns: `(byte offset, match)` pairs, left
+/// to right.
 pub struct MatchIndices {
     s: str;
     pat: str;
@@ -402,6 +429,7 @@ impl Iterator for MatchIndices {
     }
 }
 
+/// What `s.lines()` returns: the lines without their `\n` / `\r\n`.
 pub struct Lines {
     rest: str;
 }
@@ -428,6 +456,7 @@ impl Iterator for Lines {
     }
 }
 
+/// What `s.char_indices()` returns: `(byte offset, char)` pairs, in order.
 pub struct CharIndices {
     chars: Chars;
 }
@@ -499,6 +528,8 @@ const fn space_at_wide(s: str, pos: usize, b: u8) -> usize {
     if c.is_whitespace() { it.pos - pos } else { 0usize }
 }
 
+/// What `s.split_whitespace()` returns: the non-empty pieces between runs
+/// of whitespace, left to right.
 pub struct SplitWhitespace {
     s: str;
     pos: usize;
@@ -610,13 +641,17 @@ impl char {
         2
     }
 
+    /// Unicode `Alphabetic`.
     pub const fn is_alphabetic(self) -> bool { char_props(self) & 1u32 != 0u32 }
+    /// Unicode `Lowercase`.
     pub const fn is_lowercase(self) -> bool { char_props(self) & 2u32 != 0u32 }
+    /// Unicode `Uppercase`.
     pub const fn is_uppercase(self) -> bool { char_props(self) & 4u32 != 0u32 }
     /// Unicode `White_Space`.
     pub const fn is_whitespace(self) -> bool { char_props(self) & 8u32 != 0u32 }
     /// General category `Nd`, `Nl` or `No`.
     pub const fn is_numeric(self) -> bool { char_props(self) & 16u32 != 0u32 }
+    /// `is_alphabetic` or `is_numeric`.
     pub const fn is_alphanumeric(self) -> bool { char_props(self) & 17u32 != 0u32 }
     /// General category `Cc`.
     pub const fn is_control(self) -> bool {
@@ -650,12 +685,19 @@ impl char {
         unsafe { char::from_u32_unchecked(rok_char_to_case(self as u32, 2)) }
     }
 
+    /// `true` for U+0000 ..= U+007F.
     pub const fn is_ascii(self) -> bool { (self as u32) < 0x80u32 }
+    /// `A` ..= `Z`.
     pub const fn is_ascii_uppercase(self) -> bool { self >= 'A' && self <= 'Z' }
+    /// `a` ..= `z`.
     pub const fn is_ascii_lowercase(self) -> bool { self >= 'a' && self <= 'z' }
+    /// An ASCII letter.
     pub const fn is_ascii_alphabetic(self) -> bool { self.is_ascii_uppercase() || self.is_ascii_lowercase() }
+    /// `0` ..= `9`.
     pub const fn is_ascii_digit(self) -> bool { self >= '0' && self <= '9' }
+    /// An ASCII letter or digit.
     pub const fn is_ascii_alphanumeric(self) -> bool { self.is_ascii_alphabetic() || self.is_ascii_digit() }
+    /// `0` ..= `9`, `a` ..= `f` or `A` ..= `F`.
     pub const fn is_ascii_hexdigit(self) -> bool {
         self.is_ascii_digit() || (self >= 'a' && self <= 'f') || (self >= 'A' && self <= 'F')
     }
@@ -663,19 +705,24 @@ impl char {
     pub const fn is_ascii_whitespace(self) -> bool {
         self == ' ' || self == '\t' || self == '\n' || self == '\x0C' || self == '\r'
     }
+    /// U+0000 ..= U+001F or U+007F.
     pub const fn is_ascii_control(self) -> bool { (self as u32) < 0x20u32 || self == '\x7F' }
     /// `!` ..= `~` (printable, not space).
     pub const fn is_ascii_graphic(self) -> bool { self >= '!' && self <= '~' }
+    /// An ASCII graphic char that is not a letter or digit.
     pub const fn is_ascii_punctuation(self) -> bool { self.is_ascii_graphic() && !self.is_ascii_alphanumeric() }
 
+    /// The uppercase of an ASCII letter; any other char unchanged.
     pub const fn to_ascii_uppercase(self) -> char {
         if self.is_ascii_lowercase() { return ((self as u8) - 32u8) as char; }
         self
     }
+    /// The lowercase of an ASCII letter; any other char unchanged.
     pub const fn to_ascii_lowercase(self) -> char {
         if self.is_ascii_uppercase() { return ((self as u8) + 32u8) as char; }
         self
     }
+    /// `true` when the two chars are equal up to ASCII case.
     pub const fn eq_ignore_ascii_case(self, other: char) -> bool {
         self.to_ascii_lowercase() == other.to_ascii_lowercase()
     }
@@ -727,8 +774,10 @@ struct StrBufHead {
 impl !Sync for StrBuf {}
 
 impl StrBuf {
+    /// An empty buffer with room for 16 bytes.
     pub const fn new() -> StrBuf { StrBuf::with_capacity(16) }
 
+    /// An empty buffer with room for `cap` bytes.
     #[track_caller]
     pub const fn with_capacity(cap: usize) -> StrBuf {
         unsafe {
@@ -744,12 +793,15 @@ impl StrBuf {
             self.h[0].len
         }
     }
+    /// `true` when the buffer holds no bytes.
     pub const fn is_empty(self) -> bool { self.len() == 0 }
+    /// Bytes the buffer holds before it grows.
     pub const fn capacity(self) -> usize {
         unsafe {
             self.h[0].cap
         }
     }
+    /// Empty the buffer; its capacity stays.
     pub const fn clear(self) {
         unsafe {
             self.h[0].len = 0;
@@ -795,6 +847,7 @@ impl StrBuf {
         }
     }
 
+    /// Append `s`, growing the buffer as needed.
     pub const fn push_str(self, s: str) {
         unsafe {
             let m = s.len();
@@ -895,6 +948,7 @@ impl Utf8Error {
     /// Length of the valid prefix, in bytes (a Windows path's: UTF-16
     /// units).
     pub const fn valid_up_to(self) -> usize { self.valid_up_to }
+    /// What went wrong, for display.
     pub const fn message(self) -> str { f"invalid UTF-8 at byte {self.valid_up_to}" }
 }
 
