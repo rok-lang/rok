@@ -143,36 +143,12 @@ pub const LINTS: &[Lint] = &[
         since: "0.1.6",
     },
     warn_since(
-        "capture_field_write",
-        "a field write on a value-captured struct: it changes the closure's own copy",
-    ),
-    warn_since(
-        "const_item_mutation",
-        "a `ref self` or mutating method called on a `const`: it changes a fresh copy",
-    ),
-    warn_since(
-        "pattern_binds_const",
-        "a pattern name that is a const, a static or a misspelled variant: it binds every value",
-    ),
-    warn_since(
         "discarded_ref_write",
-        "a `ref self` method on an element, a `Dict` entry or a static: the write is dropped",
-    ),
-    warn_since(
-        "ambiguous_int_literal",
-        "an unsuffixed integer literal into a sum with several integer members and a float",
+        "a `ref self` method on an element or a `Dict` entry: the write is dropped",
     ),
     warn_since(
         "trait_not_in_scope",
         "a method from a trait outside `rok::` that is neither defined nor `use`d in the module",
-    ),
-    warn_since(
-        "finally_jump",
-        "`return`, `break` or `continue` that leaves a `finally` block and drops the error",
-    ),
-    warn_since(
-        "float_to_bool",
-        "a float `as bool`: it truncates first, so `0.5 as bool` is false",
     ),
     warn_since(
         "implicit_core_fn",
@@ -212,12 +188,6 @@ pub const LINTS: &[Lint] = &[
         desc: "an associated type named like an outer type, which it hides inside its trait or impl",
         since: "0.2.0",
     },
-    Lint {
-        name: "builtin_attribute_name",
-        default: Level::Warn,
-        desc: "a meta block that takes the name of a built-in attribute",
-        since: "0.2.0",
-    },
 ];
 
 /// Names of lints that are gone (most became errors). Naming one in
@@ -229,6 +199,12 @@ pub const REMOVED_LINTS: &[&str] = &[
     "try_coalesce_precedence",
     "trailing_closure_operator",
     "trailing_closure_return",
+    "capture_field_write",
+    "const_item_mutation",
+    "pattern_binds_const",
+    "ambiguous_int_literal",
+    "finally_jump",
+    "float_to_bool",
 ];
 
 /// A lint added in 0.1.6.
@@ -786,6 +762,16 @@ fn collect_traits(items: &[Item], out: &mut HashSet<String>) {
     }
 }
 
+fn collect_variants(items: &[Item], out: &mut HashSet<String>) {
+    for i in items {
+        match i {
+            Item::Enum(e) => out.extend(e.variants.iter().map(|v| v.name.clone())),
+            Item::Mod(m) => collect_variants(m.items.as_deref().unwrap_or(&[]), out),
+            _ => {}
+        }
+    }
+}
+
 /// Every function in `items` by short name: per attribute in `attrs`, its
 /// message, for names no unmarked function shares.
 fn marked_fns<const N: usize>(items: &[&[Item]], attrs: [&str; N]) -> [HashMap<String, String>; N] {
@@ -949,6 +935,9 @@ struct Cx<'a> {
     /// type's own impl does not warn about it.
     impl_of: Option<String>,
     traits: HashSet<String>,
+    /// Every enum variant name: a bare one in a pattern may be a `use`d
+    /// variant, not a binding.
+    variants: HashSet<String>,
 }
 
 const fn key(s: Span) -> (u32, u32) {
@@ -972,8 +961,10 @@ impl<'a> Cx<'a> {
             .chain(library.map(|p| p.items.as_slice()))
             .collect();
         let mut traits = HashSet::new();
+        let mut variants = HashSet::new();
         for items in &all {
             collect_traits(items, &mut traits);
+            collect_variants(items, &mut variants);
         }
         let [must_use] = marked_fns(&all, ["must_use"]);
         let mut types = TypeMarks::default();
@@ -1007,6 +998,7 @@ impl<'a> Cx<'a> {
             impl_head: false,
             impl_of: None,
             traits,
+            variants,
         }
     }
 
@@ -1872,7 +1864,7 @@ impl AstVisitor for Cx<'_> {
     }
 
     fn bind_at(&mut self, name: &str, at: Span) {
-        if name == "self" || name.starts_with('_') || name.starts_with(|c: char| c.is_uppercase()) {
+        if name == "self" || name.starts_with('_') || self.variants.contains(name) {
             return;
         }
         let is_loop = self.loop_pats.contains(&key(at));
