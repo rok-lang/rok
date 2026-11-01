@@ -95,7 +95,7 @@ fn main() {
     check(Value::Str("quote \" back \\ nl \n tab \t nul \0 bell \x07 c1 \u{85} rlo \u{202E} é"));
     check(Value::Char('\''));
 
-    let bad = Value::List([Value::Float(Float::from_f64(f64::nan()))]);
+    let bad = Value::List([Value::Float(Float::from_f64(f64::NAN))]);
     println(f"debug: {bad:?}");
     println(bad.to_string());
 }

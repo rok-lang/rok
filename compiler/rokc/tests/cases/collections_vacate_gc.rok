@@ -66,7 +66,7 @@ fn main() {
     for k in 0..8usize { s.remove("x".repeat(BIG * 8usize + k)); }
     println(f"set remove {freed(before)}");
 
-    let h: BinaryHeap<List<i64>> = BinaryHeap::by(|a: List<i64>, b: List<i64>| a[0] > b[0]);
+    let h: BinaryHeap<List<i64>> = BinaryHeap::by_ordering(|a: List<i64>, b: List<i64>| a[0].cmp(b[0]));
     for k in 0..8i64 { h.push(big(k)); }
     before = live();
     for _ in 0..8 { h.pop(); }

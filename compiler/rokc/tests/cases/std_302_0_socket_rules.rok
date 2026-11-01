@@ -34,7 +34,7 @@ fn main() throws (IoError) {
     try dup.write_str("x");
     println("clone after close: ok");
     let buf = byte_buf(4);
-    let k = try s.read(buf) catch e: IoError { if e.kind == IoErrorKind::InvalidInput { 99 } else { 98 } };
+    let k = try s.read(buf) catch e: IoError { if e.kind() == IoErrorKind::InvalidInput { 99 } else { 98 } };
     println(f"closed: {if k == 99 { "InvalidInput" } else { "other" }}");
 
     using d = dup {

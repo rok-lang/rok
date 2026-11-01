@@ -18,8 +18,8 @@ fn main() {
     println(f"epoch {try! UNIX_EPOCH.unix_seconds()} {try! UNIX_EPOCH.unix_nanos()}");
     let t = SystemTime::from_unix(1700000000, 250000000);
     println(f"from_unix {try! t.unix_seconds()} {try! t.unix_nanos()}");
-    let later = t + Duration::sec(10);
-    let before = t - Duration::sec(1);
+    let later = t + Duration::secs(10);
+    let before = t - Duration::secs(1);
     println(f"plus {try! later.unix_seconds()} minus {try! before.unix_seconds()}");
     println(f"since {try! later.duration_since(t)}");
     try t.duration_since(later) catch e: SystemTimeError {

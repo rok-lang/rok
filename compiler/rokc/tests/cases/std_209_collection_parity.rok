@@ -75,7 +75,7 @@ fn main() {
     while let x: i32 = c.pop() { out.push(x); }
     println(f"heap collect {out:?}");
 
-    let m: BinaryHeap<i32> = BinaryHeap::by(|a: i32, b: i32| a < b);
+    let m: BinaryHeap<i32> = BinaryHeap::by_ordering(|a: i32, b: i32| b.cmp(a));
     for x in [3, 1, 2] { m.push(x); }
     let k = m.clone();
     k.push(0);

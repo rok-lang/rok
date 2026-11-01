@@ -8,7 +8,7 @@
 // waits get the same status, and a signal after the child has ended
 // and is being reaped is a no-op, not an error.
 
-use rok::std::process::{Command, ExitStatus};
+use rok::std::process::{Command, ExitStatus, Signal};
 use rok::std::thread;
 
 fn main() throws (thread::JoinError) {
@@ -18,7 +18,7 @@ fn main() throws (thread::JoinError) {
         let signaller = thread::spawn(|| {
             let errors = 0;
             for _ in 0..200 {
-                try c.signal(0) catch _ { errors += 1; };
+                try c.send_signal(Signal::Continue) catch _ { errors += 1; };
             }
             errors
         });

@@ -68,7 +68,7 @@ let server = task::spawn_local(async {
     }
     log
 });
-let ccfg = ClientConfig::new();
+let ccfg = try! ClientConfig::try_new();
 ccfg.root_certs = try! Certificate::from_pem(CA);
 ccfg.early_data = "GET /async".as_bytes().to_list();
 for i in 0..3 {

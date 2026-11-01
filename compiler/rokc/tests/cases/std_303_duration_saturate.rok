@@ -14,7 +14,7 @@ use rok::std::time::{Duration, Instant, SystemTime};
 fn main() {
     let max = Duration::MAX;
     let min = Duration::ns(-9223372036854775807 - 1);
-    println(f"{Duration::sec(9223372036854775807) == max} {Duration::days(-9223372036854775807) == min} {max + Duration::ns(1) == max} {min - Duration::ns(1) == min}");
+    println(f"{Duration::secs(9223372036854775807) == max} {Duration::days(-9223372036854775807) == min} {max + Duration::ns(1) == max} {min - Duration::ns(1) == min}");
     println(f"{max * 2 == max} {max * -2 == min} {min / -1 == max}");
     let now = Instant::now();
     println(f"{(now + max).duration_since(now) <= max} {SystemTime::from_unix(9223372036854775807, 0) == SystemTime::from_unix(9223372036854775806, 0) + max} {(SystemTime::from_unix(0, 0) - max) < SystemTime::from_unix(0, 0)}");

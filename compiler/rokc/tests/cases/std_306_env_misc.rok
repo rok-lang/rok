@@ -12,7 +12,7 @@ use rok::std::path::Path;
 
 fn main() {
     println("missing var: " + (try env::var("ROK_PROBE_SURELY_UNSET_9") catch e { f"{e:?}" }));
-    env::set_var("HOME", "/tmp/rokhome");
+    unsafe { env::set_var("HOME", "/tmp/rokhome"); }
     println(f"home: {(env::home_dir() ?? Path::new()).as_str() == "/tmp/rokhome"}");
 }
 // only-os: macos linux

@@ -42,7 +42,7 @@ fn child() throws (IoError) {
     println(": 5");
     try out.flush();
     try io::stderr().write_str("to stderr");
-    env::exit(5);
+    process::exit(5);
 }
 
 fn text(bytes: List<u8>) -> str { return (try! str::from_utf8(bytes)).trim(); }
@@ -83,7 +83,7 @@ fn main() throws (IoError) {
     println("env: " + text(clean.stdout));
 
     let missing = try Command::new("no-such-program-rok").status().success() catch e {
-        println("missing: " + f"{e.kind:?}");
+        println("missing: " + f"{e.kind():?}");
         false
     };
     let sig = try Command::new("sh").args(["-c", "kill -9 $$"]).status();
@@ -93,7 +93,7 @@ fn main() throws (IoError) {
     let polled = try quick.try_wait();
     let done = try quick.wait();
     println(f"try_wait ok, then: {done}");
-    println(f"id ok: {process::id() == env::pid()}");
+    println(f"id ok: {process::id() > 0u32}");
 }
 
 // spec: std 307-process

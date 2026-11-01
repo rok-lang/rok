@@ -142,7 +142,7 @@ fn attempt(label: str, chain: str, name: str) {
     let cfg = ClientConfig { root_certs: certs([CA]), cipher_suites: CipherSuite::all(), alpn_protocols: [], enable_pq: false, client_cert_chain: [], client_key: none, session_cache: none, early_data: [] };
     let s = try tcp_connect(f"127.0.0.1:{port}") catch _ { return; };
     let c = try Client::with_config(s, name, cfg) catch e {
-        println(f"{label}: {e.msg}");
+        println(f"{label}: {e.message()}");
         try t.join() catch _ {};
         return;
     };
@@ -165,7 +165,7 @@ fn main() {
     let ec = try PrivateKey::from_pem(EC_KEY) catch _ { return; };
     println(f"ec key: {ec is PrivateKey}");
     let x25519 = "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VuBCIEIAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8g\n-----END PRIVATE KEY-----\n";
-    try PrivateKey::from_pem(x25519) catch e { println(f"bad key: {e.msg}"); };
+    try PrivateKey::from_pem(x25519) catch e { println(f"bad key: {e.message()}"); };
     let roots = try tls::system_roots() catch _ { [] };
     println(f"system roots: {roots.len() > 0}");
 }

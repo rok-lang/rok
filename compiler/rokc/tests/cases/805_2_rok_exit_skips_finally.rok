@@ -4,15 +4,15 @@
 // before
 // inner
 
-// spec 8.5.2: `rok_exit` (behind `env::exit`) ends the process at once
+// spec 8.5.2: `rok_exit` (behind `process::exit`) ends the process at once
 // with the code; `finally` and `Drop` do not run, but what was already
 // printed is not lost.
-use rok::std::env;
+use rok::std::process;
 
 fn work() throws (str) {
     try {
         println("inner");
-        env::exit(3);
+        process::exit(3);
     } finally {
         println("finally ran");
     }

@@ -17,9 +17,10 @@ use rok::std::fs;
 use rok::std::fs::{Dir, File, OpenOptions};
 use rok::std::io::IoError;
 use rok::std::env;
+use rok::std::process;
 
 fn main() throws (IoError) {
-    let base = env::temp_dir() / f"rok_probe_301_{env::pid()}";
+    let base = env::temp_dir() / f"rok_probe_301_{process::id()}";
     try fs::create_dir_all(base / "sub");
     let d = try Dir::root().open_dir(base);
     let f = try d.create("x.txt");
@@ -43,7 +44,7 @@ fn main() throws (IoError) {
 
     try fs::remove_file(base / "x.txt");
     println(f"remove_file: {fs::exists(base / "x.txt")}");
-    try fs::remove_file(base / "x.txt") catch e { println(f"remove missing: {e.kind:?}"); };
+    try fs::remove_file(base / "x.txt") catch e { println(f"remove missing: {e.kind():?}"); };
 
     try fs::write(base / "sub" / "z", "z");
     let failed = false;

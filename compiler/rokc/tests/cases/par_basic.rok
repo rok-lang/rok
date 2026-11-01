@@ -12,7 +12,7 @@
 // 8
 // 3
 
-// par (2.19) on the thread pool: for_each / map (ordered) / reduce
+// par (2.19) on the thread pool: for_each / map (ordered) / fold
 // (chunk folds, then `init` + chunk results in order; empty -> init) /
 // filter (ordered) / join / scope (spawned tasks finish before it
 // returns; handles join early).
@@ -25,7 +25,7 @@ fn main() -> i32 {
     println(f"{seen.load()}");
     let sq: List<i64> = par::map(xs, |x: i64| x * x);
     println(f"{sq[999]}");
-    println(f"{par::reduce(sq, 0i64, |a: i64, b: i64| a + b)}");
+    println(f"{par::fold(sq, 0i64, |a: i64, b: i64| a + b)}");
     let ev: List<i64> = par::filter(xs, |x: i64| x % 2 == 0);
     println(f"{ev.len() as i64}");
     println(f"{ev[10]}");
@@ -47,7 +47,7 @@ fn main() -> i32 {
     let one: List<i64> = par::map([7i64], |x: i64| x + 1);
     println(f"{one[0]}");
     let empty: List<i64> = [];
-    println(f"{par::reduce(empty, 3i64, |a: i64, b: i64| a + b)}");
+    println(f"{par::fold(empty, 3i64, |a: i64, b: i64| a + b)}");
     return 0;
 }
 

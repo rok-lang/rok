@@ -106,7 +106,7 @@ using w = await rw.write_async() {
         1
     }));
     // Until all three are parked.
-    let deadline = Instant::now() + Duration::sec(60);
+    let deadline = Instant::now() + Duration::secs(60);
     while task::registrations() < base + 3 && Instant::now() < deadline {
         await task::yield_now();
     }

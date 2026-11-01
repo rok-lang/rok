@@ -45,14 +45,14 @@ println(f"{await f}");
 let mk = async |x: i32| { await task::yield_now(); x * base };
 println(f"{await mk(3)}");
 // Margins of seconds: scheduling noise can't flip the results.
-let slow = task::spawn(async { await task::sleep(Duration::sec(5)); 1 });
+let slow = task::spawn(async { await task::sleep(Duration::secs(5)); 1 });
 let fast = task::spawn(async { await task::sleep(Duration::ms(5)); 2 });
 println(f"race {await task::race([slow, fast])}");
-let late = task::spawn(async { await task::sleep(Duration::sec(5)); 3 });
+let late = task::spawn(async { await task::sleep(Duration::secs(5)); 3 });
 let r = try await task::timeout(Duration::ms(10), late) catch e: TimeoutError { -1 };
 println(f"timeout {r}");
 let ok = task::spawn(async { 4 });
-let r2 = try await task::timeout(Duration::sec(5), ok) catch e: TimeoutError { -1 };
+let r2 = try await task::timeout(Duration::secs(5), ok) catch e: TimeoutError { -1 };
 println(f"in time {r2}");
 let start = Instant::now();
 await task::sleep(Duration::ms(20));

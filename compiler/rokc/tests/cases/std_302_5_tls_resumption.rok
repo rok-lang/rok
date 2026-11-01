@@ -103,7 +103,7 @@ fn main() {
     let port2 = (try! l2.local_addr()).port();
     let t2 = thread::spawn(|| serve(l2, 2, 0u32, TicketStore::new()));
 
-    let cfg = ClientConfig::new();
+    let cfg = try! ClientConfig::try_new();
     cfg.root_certs = try! Certificate::from_pem(CA);
     run("full", port, "localhost", cfg, "GET /1");
     run("resumed", port, "localhost", cfg, "GET /2");

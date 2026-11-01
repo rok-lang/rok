@@ -4,7 +4,7 @@
 // ok
 // ok
 
-// par::reduce / map over a length that does not split evenly into the
+// par::fold / map over a length that does not split evenly into the
 // pool's chunk count (4 per CPU): 4 * cpus + 1 items give chunks of 2,
 // and no chunk may start past the end.
 fn main() -> i32 {
@@ -14,7 +14,7 @@ fn main() -> i32 {
         xs.push(i as i64);
     }
     let want = (n * (n - 1) / 2) as i64;
-    let got = par::reduce(xs, 0i64, |a: i64, b: i64| a + b);
+    let got = par::fold(xs, 0i64, |a: i64, b: i64| a + b);
     println(if got == want { "ok" } else { f"reduce {got}, want {want}" });
     let ys: List<i64> = par::map(xs, |x: i64| x + 1);
     println(if ys.len() == n && ys[n - 1] == n as i64 { "ok" } else { "map" });

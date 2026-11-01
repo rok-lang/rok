@@ -1,13 +1,13 @@
 // spec: refs-lang §4.16.4
 // expect-exit: 7
 // expect-stdout: 1
-// `rok::std::env::exit(code)` ends the process at once with `code`
+// `rok::std::process::exit(code)` ends the process at once with `code`
 // (spec 4.16.4); nothing after it runs.
 
-use rok::std::env;
+use rok::std::process;
 
 fn main() {
     println(f"{1}");
-    env::exit(7);
+    process::exit(7);
     println(f"{2}");
 }

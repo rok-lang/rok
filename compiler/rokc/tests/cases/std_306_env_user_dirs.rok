@@ -21,21 +21,21 @@ fn under(p: Path | none, home: str) -> bool {
 }
 
 fn main() {
-    env::set_var("ROK_PROBE_VARS_OS", "v1");
+    unsafe { env::set_var("ROK_PROBE_VARS_OS", "v1"); }
     let found = false;
     for (k, v) in env::vars_os() {
         if (try k.to_str() catch _ { "" }) == "ROK_PROBE_VARS_OS" && (try v.to_str() catch _ { "" }) == "v1" { found = true; }
     }
     println(f"vars_os: {found}");
-    env::set_var("HOME", "/tmp/rokhome");
-    env::set_var("XDG_CONFIG_HOME", "/x/cfg");
-    env::set_var("XDG_CACHE_HOME", "relative");
-    env::remove_var("XDG_DATA_HOME");
+    unsafe { env::set_var("HOME", "/tmp/rokhome"); }
+    unsafe { env::set_var("XDG_CONFIG_HOME", "/x/cfg"); }
+    unsafe { env::set_var("XDG_CACHE_HOME", "relative"); }
+    unsafe { env::remove_var("XDG_DATA_HOME"); }
     println(f"config: {under(env::config_dir(), "/tmp/rokhome/")}");
     println(f"cache: {under(env::cache_dir(), "/tmp/rokhome/")}");
     println(f"data: {under(env::data_dir(), "/tmp/rokhome/")}");
-    env::remove_var("HOME");
-    env::remove_var("XDG_CACHE_HOME");
+    unsafe { env::remove_var("HOME"); }
+    unsafe { env::remove_var("XDG_CACHE_HOME"); }
     println(f"no home: {env::cache_dir() is none}");
 }
 // only-os: macos linux

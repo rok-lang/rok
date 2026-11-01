@@ -23,5 +23,5 @@ fn main() {
     println(f"{one / z} {nan == nan} {nan != nan}");
     let lit: float = 1e400;
     let n: float = 3;
-    println(f"{lit} {n / 2} {float::from_f64(2.5) + 1} {float::try_parse("1e-400") ?? z}");
+    println(f"{lit} {n / 2} {float::from_f64(2.5) + 1} {float::parse_or_none("1e-400") ?? z}");
 }

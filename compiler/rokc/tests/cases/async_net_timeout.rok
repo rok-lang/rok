@@ -29,7 +29,7 @@ println(f"registrations left: {task::registrations()}");
 
 let read2 = task::spawn(async { try await server.read_async(byte_buf(16)) catch _ { 0 } });
 try! client.write_str("hi");
-let n = try await task::timeout(Duration::sec(10), read2) catch _: TimeoutError { 999 };
+let n = try await task::timeout(Duration::secs(10), read2) catch _: TimeoutError { 999 };
 println(f"read in time: {n}");
 
 let (which, _) = await task::select([

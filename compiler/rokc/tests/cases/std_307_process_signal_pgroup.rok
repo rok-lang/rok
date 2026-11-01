@@ -7,11 +7,11 @@
 // sigkill: SignalError { sig: 9, code: 22 }
 
 // spec 3.7.1: `Command::process_group(0)` makes the child lead a new
-// process group. 3.7.5: `signal(sig, handler)` runs `handler` when the
+// process group. 3.7.5: `on_signal(sig, handler)` runs `handler` when the
 // signal arrives (on a dispatcher thread), `raise(sig)` sends one to
 // this process, and an uncatchable signal throws `SignalError`.
 use rok::std::process;
-use rok::std::process::Command;
+use rok::std::process::{Command, Signal};
 use rok::std::thread;
 use rok::std::time::Duration;
 use rok::std::io::IoError;
@@ -25,7 +25,7 @@ fn main() throws (IoError) {
     println(f"plain: {try leads_group(Command::new("sh"))}");
 
     let hits: Atomic<i64> = Atomic::new(0);
-    try! process::signal(1, || { hits.fetch_add(1, SeqCst); });
+    try! process::on_signal(Signal::Hangup, || { hits.fetch_add(1, SeqCst); });
     try process::raise(1);
     // Wait for the dispatcher before the next one: a second signal
     // still pending in the kernel would merge with the first.
@@ -34,7 +34,7 @@ fn main() throws (IoError) {
     for _ in 0..200 { if hits.load(SeqCst) >= 2 { break; } thread::sleep(Duration::ms(10)); }
     println(f"handled: {hits.load(SeqCst)}");
 
-    let e = try { process::signal(9, || {}); "ok" } catch e { f"{e:?}" };
+    let e = try { process::on_signal(Signal::Kill, || {}); "ok" } catch e { f"{e:?}" };
     println(f"sigkill: {e}");
 }
 // only-os: macos linux

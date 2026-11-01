@@ -7,7 +7,7 @@
 // [1, 2, 3]
 // sorted true stable true
 
-// `Deque` (ring growth, both ends), `BinaryHeap` (max-heap, `by` order,
+// `Deque` (ring growth, both ends), `BinaryHeap` (max-heap, `by_ordering` order,
 // `retain`) and `List::sort` / `sort_by` (stable merge sort past one
 // insertion-sorted run).
 
@@ -32,7 +32,7 @@ fn main() -> i32 {
     let out = "";
     while let x: i32 = h.pop() { out += f"{x} "; }
     println(out.trim());
-    let m: BinaryHeap<i32> = BinaryHeap::by(|a: i32, b: i32| a < b);
+    let m: BinaryHeap<i32> = BinaryHeap::by_ordering(|a: i32, b: i32| b.cmp(a));
     for x in [3, 1, 2] { m.push(x); }
     let firsts: List<i32> = [];
     while let x: i32 = m.pop() { firsts.push(x); }

@@ -114,7 +114,7 @@ fn main() {
     {
         let c = try! CString::from_str(mk("K", 9)); let p = c.as_ptr();
         churn();
-        match CStr::from_ptr(p) { x: CStr => check("K", mk("K", 9), try! x.to_str()), none => println("FAIL K null") }
+        match unsafe { CStr::from_ptr(p) } { x: CStr => check("K", mk("K", 9), try! x.to_str()), none => println("FAIL K null") }
     }
     {
         let s = mk("R", 10); let n = s.len();

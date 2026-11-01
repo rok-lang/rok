@@ -40,7 +40,7 @@ fn main() {
     // Simple names, paths and generic application (a trailing comma too).
     let p: Point = Point { x: 1, y: 2 };
     let xs: List<i32> = [p.x, p.y];
-    let dur: rok::std::time::Duration = Duration::sec(1);
+    let dur: rok::std::time::Duration = Duration::secs(1);
     let pr: Pair<i32, f64,> = Pair { a: 3, b: 2.5 };
     let d: Dict<str, i32> = {"k": 7};
     println(f"{pr.a} {pr.b} {d["k"]}");

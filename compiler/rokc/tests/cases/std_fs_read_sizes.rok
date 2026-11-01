@@ -20,6 +20,7 @@ use rok::std::fs;
 use rok::std::fs::SeekFrom;
 use rok::std::io::IoError;
 use rok::std::env;
+use rok::std::process;
 
 fn bytes(n: usize) -> List<u8> {
     let b: List<u8> = List::new();
@@ -28,7 +29,7 @@ fn bytes(n: usize) -> List<u8> {
 }
 
 fn main() throws (IoError) {
-    let base = env::temp_dir() / f"rok_fs_read_sizes_{env::pid()}";
+    let base = env::temp_dir() / f"rok_fs_read_sizes_{process::id()}";
     try fs::create_dir_all(base);
     for n in [0usize, 1, 4096, 16384, 16385, 70000] {
         let p = base / f"f{n}";

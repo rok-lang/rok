@@ -55,8 +55,8 @@ async fn main() {
     let t: Task<i32> = spawn(four());
     let got = (await t) + 1;
     let doubled = par::map([1, 2], |x| x * 2);
-    let d = Duration::sec(2);
+    let d = Duration::secs(2);
     let start = Instant::now();
-    println(f"{got} {doubled:?} {par::reduce([1, 1, 1], 0, |a, b| a + b)} {d}");
+    println(f"{got} {doubled:?} {par::fold([1, 1, 1], 0, |a, b| a + b)} {d}");
     let _ = start;
 }

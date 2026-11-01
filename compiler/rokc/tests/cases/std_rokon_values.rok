@@ -124,7 +124,7 @@ fn main() {
     let q = try! rokon::parse("P { y: { \"b\": 2, \"a\": 1 }, x: 1 }");
     let r = try! rokon::parse("Q { y: { \"b\": 2, \"a\": 1 }, x: 1 }");
     println(f"unordered: {p == q} {p.hash() == q.hash()} {p == r}");
-    let nan = Value::Float(Float::from_f64(f64::nan()));
+    let nan = Value::Float(Float::from_f64(f64::NAN));
     let z = Value::Float(Float::from_f64(0.0));
     let nz = Value::Float(Float::from_f64(-0.0));
     println(f"floats: {nan == nan} {nan.hash() == nan.hash()} {z == nz} {Value::Int(Int::from(1)) == Value::Float(Float::from_f64(1.0))}");

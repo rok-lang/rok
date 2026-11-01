@@ -8,8 +8,8 @@
 // 2.18.6: `Duration` constructors in ns units; `Instant::elapsed` is
 // monotonic.
 fn main() {
-    println(f"ns {Duration::ns(1).as_ns()} us {Duration::us(1).as_ns()} ms {Duration::ms(1).as_ns()} sec {Duration::sec(1).as_ns()}");
-    println(f"min {Duration::min(1).as_ns()} hours {Duration::hours(1).as_ns()}");
+    println(f"ns {Duration::ns(1).as_ns()} us {Duration::us(1).as_ns()} ms {Duration::ms(1).as_ns()} sec {Duration::secs(1).as_ns()}");
+    println(f"min {Duration::mins(1).as_ns()} hours {Duration::hours(1).as_ns()}");
     let t = Instant::now();
     println(f"elapsed nonnegative {t.elapsed().as_ns() >= 0}");
 }

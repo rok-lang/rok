@@ -135,7 +135,7 @@ for r in l3.incoming() {
 try! t3.join();
 l3.close();
 
-let found = try! net::resolve_one("localhost", 80u16);
+let found = (try! net::resolve("localhost:80"))[0];
 println(f"resolve localhost: {found.port() == 80u16}");
 
 // Nobody listens on the closed listener's port any more.

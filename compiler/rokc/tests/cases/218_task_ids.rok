@@ -7,14 +7,14 @@
 // finished true cancelled false
 
 // 2.18.1 `TaskId`: `task::id()` inside a task equals that task's
-// `Task::id()`; ids are never reused; `try_id()` is `none` outside a
+// `Task::id()`; ids are never reused; `current_id()` is `none` outside a
 // task. 2.18.2: `is_finished` / `is_cancelled`.
 async fn me() -> u64 {
     task::id().as_u64()
 }
 
 fn main() {
-    println(f"outside {task::try_id() == none}");
+    println(f"outside {task::current_id() == none}");
     task::block_on(async {
         let a = task::spawn(me());
         let b = task::spawn(me());
