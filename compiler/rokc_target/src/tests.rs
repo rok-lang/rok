@@ -1,4 +1,4 @@
-use crate::{BUILTIN, CAbi, HOST, Libc, Linker, RENAMED, TargetSpec};
+use crate::{BUILTIN, CAbi, HOST, Libc, Linker, TargetSpec};
 
 fn t(name: &str) -> TargetSpec {
     TargetSpec::builtin(name).unwrap()
@@ -44,7 +44,7 @@ fn renamed_copy() {
 
 #[test]
 fn custom_spec_errors() {
-    let text = t("wasm32-wasi").to_rokon();
+    let text = t("wasm32-wasip2").to_rokon();
     let unknown = text.replacen("TargetSpec {", "TargetSpec {\n    colour: \"red\",", 1);
     let e = TargetSpec::from_rokon(&unknown, "x.rokon", "x").unwrap_err();
     assert!(
@@ -104,18 +104,25 @@ fn tier1_properties() {
     assert!(!musl.dynamic_linking && musl.native_backend);
     let b = t("wasm32-unknown-unknown");
     assert!(b.reactor() && b.profile_runtime.is_empty());
-    assert_eq!((b.os.as_str(), b.family.as_str()), ("none", "wasm"));
-    assert_eq!(t("wasm32-wasi").linker, Linker::WasmComponentLd);
-    assert!(t("wasm32-wasi-threads").threads && !t("wasm32-wasi").threads);
+    assert_eq!((b.os.as_str(), b.family.as_str()), ("unknown", "wasm"));
+    assert_eq!(t("wasm32-wasip2").linker, Linker::WasmComponentLd);
+    assert!(t("wasm32-wasip1-threads").threads && !t("wasm32-wasip2").threads);
     assert_eq!(t("s390x-unknown-linux-gnu").endian, "big");
 }
 
-/// A target's 0.2.0 name is an alias: the same spec, under the old name.
+/// An old target name is unknown, with the new one suggested.
 #[test]
-fn new_names_are_aliases() {
-    for (old, new) in RENAMED {
-        assert!(BUILTIN.contains(old) && !BUILTIN.contains(new), "{old}");
-        assert_eq!(t(new), t(old), "{new}");
-        assert_eq!(TargetSpec::resolve(Some(new)).unwrap().name, *old);
+fn target_old_name_suggests() {
+    for (old, new) in [
+        ("wasm32-wasi", "wasm32-wasip2"),
+        ("wasm32-wasi-threads", "wasm32-wasip1-threads"),
+        ("riscv32imac-unknown-none", "riscv32imac-unknown-none-elf"),
+    ] {
+        assert!(TargetSpec::builtin(old).is_none(), "{old}");
+        let e = TargetSpec::resolve(Some(old)).unwrap_err();
+        assert!(
+            e.starts_with(&format!("unknown target `{old}`; did you mean `{new}`?")),
+            "{e}"
+        );
     }
 }

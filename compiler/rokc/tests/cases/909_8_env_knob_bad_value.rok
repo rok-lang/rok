@@ -1,24 +1,24 @@
 // spec: refs-lang 909-debug-tools §9.9.8
 // needs: threads
-// run-env: ROK_GC_STRESS=often
-// run-env: ROK_GC_EVAC=never
-// run-env: ROK_GC_CONCURRENT=never
-// run-env: ROK_GC_STATS=yes
-// run-env: ROK_GC_LOG=2
-// run-env: ROK_HEAP_DUMP=always
-// run-env: ROK_WORKERS=0
-// run-env: ROK_THREAD_PER_CORE=on
-// run-env: ROK_DYNAMIC_WORKERS=true
+// run-env: ROKR_GC_STRESS=often
+// run-env: ROKR_GC_EVAC=never
+// run-env: ROKR_GC_CONCURRENT=never
+// run-env: ROKR_GC_STATS=yes
+// run-env: ROKR_GC_LOG=2
+// run-env: ROKR_HEAP_DUMP=always
+// run-env: ROKR_WORKERS=0
+// run-env: ROKR_THREAD_PER_CORE=on
+// run-env: ROKR_DYNAMIC_WORKERS=true
 // expect-exit: 0
-// expect-stderr: rok: warning: ignoring ROK_GC_STRESS=often (expected a number)
-// expect-stderr: rok: warning: ignoring ROK_GC_EVAC=never (expected always)
-// expect-stderr: rok: warning: ignoring ROK_GC_CONCURRENT=never (expected auto|always|off)
-// expect-stderr: rok: warning: ignoring ROK_GC_STATS=yes (expected 0|1)
-// expect-stderr: rok: warning: ignoring ROK_GC_LOG=2 (expected 0|1)
-// expect-stderr: rok: warning: ignoring ROK_HEAP_DUMP=always (expected on_oom)
-// expect-stderr: rok: warning: ignoring ROK_THREAD_PER_CORE=on (expected 0|1)
-// expect-stderr: rok: warning: ignoring ROK_DYNAMIC_WORKERS=true (expected 0|1)
-// expect-stderr: rok: warning: ignoring ROK_WORKERS=0 (expected a positive number)
+// expect-stderr: rok: warning: ignoring ROKR_GC_STRESS=often (expected a number)
+// expect-stderr: rok: warning: ignoring ROKR_GC_EVAC=never (expected always)
+// expect-stderr: rok: warning: ignoring ROKR_GC_CONCURRENT=never (expected auto|always|off)
+// expect-stderr: rok: warning: ignoring ROKR_GC_STATS=yes (expected 0|1)
+// expect-stderr: rok: warning: ignoring ROKR_GC_LOG=2 (expected 0|1)
+// expect-stderr: rok: warning: ignoring ROKR_HEAP_DUMP=always (expected on_oom)
+// expect-stderr: rok: warning: ignoring ROKR_THREAD_PER_CORE=on (expected 0|1)
+// expect-stderr: rok: warning: ignoring ROKR_DYNAMIC_WORKERS=true (expected 0|1)
+// expect-stderr: rok: warning: ignoring ROKR_WORKERS=0 (expected a positive number)
 // expect-stdout:
 // workers true
 // sum 5050

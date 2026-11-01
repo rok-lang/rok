@@ -17,7 +17,7 @@ use crate::CompiledModule;
 /// Intermediate artifact selectable with `--emit=<kind>` (spec 901).
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EmitKind {
-    /// `source` (old name `ast`): the package's whole AST after meta
+    /// `source`: the package's whole AST after meta
     /// expansion and desugaring, as source (needs `keep_ast`);
     /// `expansions` shows meta expansions alone.
     Ast,
@@ -27,7 +27,7 @@ pub enum EmitKind {
     LlvmIr,
     Asm,
     Obj,
-    /// `expansions` (old name `expanded`): meta expansions as source
+    /// `expansions`: meta expansions as source
     /// text (spec 6.9.9); needs the parsed
     /// sources (`Session::set_keep_ast`), so `CompileResult::emit` makes it.
     Expanded,
@@ -37,26 +37,16 @@ impl EmitKind {
     #[must_use]
     pub fn parse(s: &str) -> Option<Self> {
         Some(match s {
-            "source" | "ast" => Self::Ast,
+            "source" => Self::Ast,
             "hir" => Self::Hir,
             "mir" => Self::Mir,
             "mlir" => Self::Mlir,
             "llvmir" | "llvm-ir" | "ll" => Self::LlvmIr,
             "asm" => Self::Asm,
             "obj" => Self::Obj,
-            "expansions" | "expanded" => Self::Expanded,
+            "expansions" => Self::Expanded,
             _ => return None,
         })
-    }
-
-    /// The new name of old kind name `s`, read until 0.2.0.
-    #[must_use]
-    pub fn renamed(s: &str) -> Option<&'static str> {
-        match s {
-            "ast" => Some("source"),
-            "expanded" => Some("expansions"),
-            _ => None,
-        }
     }
 
     /// File extension used under `target/`.
@@ -323,11 +313,13 @@ pub fn emit(
         EmitKind::Ast => Err(RokDiagnostic::error(
             rokc_diagnostic::ErrorKind::Internal,
             rokc_diagnostic::Span::DUMMY,
-            "--emit=ast needs the parsed files (keep_ast)",
+            "--emit=source needs the parsed files (keep_ast)",
         )),
         EmitKind::Hir => Ok(rokc_hir::print_hir(&module.hir).into_bytes()),
         EmitKind::Mir => Ok(rokc_mir::print_mir(&module.mir).into_bytes()),
-        EmitKind::Expanded => Err(err("`--emit=expanded` needs the parsed sources".to_owned())),
+        EmitKind::Expanded => Err(err(
+            "`--emit=expansions` needs the parsed sources".to_owned()
+        )),
         EmitKind::Mlir => Ok(mlir_text(module, sources, opts)?.text.into_bytes()),
         EmitKind::LlvmIr => Ok(lower_to_llvm(module, sources, opts)?.0.into_bytes()),
         EmitKind::Asm => Ok(llvm(module, sources, opts, rokc_llvm::Emit::Asm, 1)?
@@ -810,7 +802,7 @@ fn native_lib_args(
     Ok(a)
 }
 
-/// `rok_tls` (803 §8.3.1) for `wasm32-wasi-threads` in wasm TLS, with the
+/// `rok_tls` (803 §8.3.1) for `wasm32-wasip1-threads` in wasm TLS, with the
 /// accessor the runtime uses (`rokr_common::tls`; stable Rust can't define
 /// it there), written to `dir`.
 fn wasm_tls_object(t: &TargetSpec, dir: &Path) -> Result<PathBuf, RokDiagnostic> {

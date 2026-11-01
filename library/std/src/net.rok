@@ -894,7 +894,7 @@ impl TcpListener {
 
     /// The listening sockets the host handed this program, in order:
     /// WASI's pre-opened sockets (wasmtime `-S tcplisten=ADDR`, preview 1:
-    /// `wasm32-wasi-threads`), systemd socket activation (`LISTEN_FDS`) on
+    /// `wasm32-wasip1-threads`), systemd socket activation (`LISTEN_FDS`) on
     /// Unix; none on Windows. Where a program cannot bind sockets
     /// itself, these are how it serves.
     pub fn inherited() -> List<TcpListener> {

@@ -376,7 +376,7 @@ pub fn wasm_ld_main() -> i32 {
     }
 }
 
-/// `wasm32-wasi` is a preview 2 component: `wasm-component-ld` (shipped
+/// `wasm32-wasip2` is a preview 2 component: `wasm-component-ld` (shipped
 /// with wasi-libc) links with rokc as its `wasm-ld`, then wraps the module
 /// with its embedded preview 1 adapter. Returns what it printed; errors
 /// carry it.

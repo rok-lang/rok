@@ -222,7 +222,7 @@ pub enum TokenKind {
 }
 
 impl TokenKind {
-    /// The token as source text (`rokc build --emit=expanded`, spec
+    /// The token as source text (`rokc build --emit=expansions`, spec
     /// 6.9.9): lexing the result gives the token back.
     #[must_use]
     pub fn text(&self) -> String {

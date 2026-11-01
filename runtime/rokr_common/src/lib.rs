@@ -55,17 +55,6 @@ pub fn fatal(msg: &[u8]) -> ! {
     unsafe { libc::exit(101) }
 }
 
-/// Knob `new` if set and not empty, else its old spelling `old` (read
-/// until 0.2.0, silently: a program's stderr is its own).
-pub fn env_name<'a>(new: &'a core::ffi::CStr, old: &'a core::ffi::CStr) -> &'a core::ffi::CStr {
-    // SAFETY: as in `env_knob`.
-    let set = unsafe {
-        let p = libc::getenv(new.as_ptr());
-        !p.is_null() && *p != 0
-    };
-    if set { new } else { old }
-}
-
 /// Env knob `name` as `parse` reads it; `None` if unset or empty. A
 /// value `parse` rejects is warned about on stderr, naming `expected`,
 /// and reads as unset (the default).

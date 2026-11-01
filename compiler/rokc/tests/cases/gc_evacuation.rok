@@ -37,7 +37,7 @@ fn junk(i: i64) -> i64 {
 }
 
 fn main() {
-    // From the start: with `ROK_GC_STRESS` the collections during the
+    // From the start: with `ROKR_GC_STRESS` the collections during the
     // loop may already have moved (and compacted) everything.
     let before = unsafe { rok_gc_stats_moved_bytes() };
     let strs: List<str> = [];

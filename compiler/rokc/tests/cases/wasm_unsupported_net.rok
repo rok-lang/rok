@@ -1,5 +1,5 @@
 // spec: std 302
-// only-target: wasm32-wasi-threads wasm32-unknown-unknown
+// only-target: wasm32-wasip1-threads wasm32-unknown-unknown
 // expect-exit: 0
 // expect-stdout:
 // bind: Unsupported
@@ -9,7 +9,7 @@
 // inherited: 0
 
 // No socket of its own: a browser has none, and WASI preview 1
-// (`wasm32-wasi-threads`) only serves listeners the host hands in
+// (`wasm32-wasip1-threads`) only serves listeners the host hands in
 // (`TcpListener::inherited`, none here). Everything else reports
 // `IoErrorKind::Unsupported` at run time.
 use rok::std::net::{TcpListener, TcpStream, UdpSocket, SocketAddr};

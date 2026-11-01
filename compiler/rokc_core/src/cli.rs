@@ -51,7 +51,6 @@ commands:
                          items and archive members (--dump: its whole
                          ROKHIR); <file> is <name>.rokhir or the
                          lib<name>.a beside it
-  rokhir-text <file>     old name of `inspect --dump`, until 0.2.0
   emit [path]            write an intermediate artifact (see --emit)
   profdata merge [-o <file>] <file | dir>...
                          merge the .profraw / .profdata files (a directory:
@@ -83,20 +82,15 @@ global options:
                                override)
 
 build options:
-  -o, --output <path>          output file (--out: its old name, until 0.2.0)
+  -o, --output <path>          output file
   --emit=<kind>[,<kind>...]    source | hir | mir | mlir | llvmir | asm | obj |
                                expansions (source: the package's whole AST
                                after meta expansion and desugaring, as Rok
                                source; expansions: each meta expansion's
-                               output; ast and expanded: their old names,
-                               until 0.2.0) (written to
+                               output) (written to
                                target/<profile>/build/<name>.<ext> unless -o)
   --target=<target>            a built-in target (--print target-list) or
-                               a custom one's <name>.rokon file;
-                               wasm32-wasip2, wasm32-wasip1-threads and
-                               riscv32imac-unknown-none-elf are the 0.2.0
-                               names of wasm32-wasi, wasm32-wasi-threads
-                               and riscv32imac-unknown-none
+                               a custom one's <name>.rokon file
   --release                    optimized build (same as -O2)
   -O0 | -O1 | -O2 | -O3 | -Os  optimization level (default -O0); -O2 / -O3 / -Os
                                build the release profile (no debug info, code
@@ -199,9 +193,6 @@ environment:
                     (default: target/<profile>/incremental/; 0: nowhere)
   ROK_INCREMENTAL_VERIFY
                     1: lower every body again and fail on a difference
-  ROKC_TARGET_DIR, ROKC_VERBOSE, ROKC_NUM_JOBS, ROKC_INCREMENTAL,
-  ROKC_INCR_VERIFY  the old names of the five above: read when the new
-                    one is not set, with a warning, until 0.2.0
   ROK_MLIR_PLUGIN_PATH
                     directories searched for an MLIR plugin given by name
   ROK_LLVM_CACHE    where bindgen also looks for libclang
@@ -224,14 +215,11 @@ environment:
                     libraries (`rok` sets them)
   __ROK             the `rok` that REPL :add and the language server run
                     (`rok` sets it)
-                    (`rok` sets each of these four without `__` too, and
-                    rokc reads that when the `__` one is not set, until
-                    0.2.0)
+                    (run, test and bench keep these four out of the
+                    program's environment)
 
 Programs read ROKR_WORKERS, ROKR_THREAD_PER_CORE, ROKR_DYNAMIC_WORKERS,
-ROKR_GC_* and ROKR_HEAP_DUMP (spec 7.6, 9.9.8), and their old names
-without the R until 0.2.0; run, test and bench warn when only an old
-name is set.
+ROKR_GC_* and ROKR_HEAP_DUMP (spec 7.6, 9.9.8).
 ";
 
 /// One command's help. `{tool}` in `usage`, `about` and `examples`
@@ -602,22 +590,13 @@ or the lib<name>.a beside it.",
         ..CmdHelp::EMPTY
     },
     CmdHelp {
-        name: "rokhir-text",
-        summary: "old name of `inspect --dump`",
-        usage: &["rokhir-text <file>"],
-        about: "\
-The old name of `inspect --dump`, read until 0.2.0 with a warning.",
-        examples: &[("{tool} inspect --dump target/debug/libgeom.a", "")],
-        ..CmdHelp::EMPTY
-    },
-    CmdHelp {
         name: "emit",
         summary: "write an intermediate form",
         usage: &["emit [path] [--emit=<kind>[,<kind>...]] [options]"],
         about: "\
 Write intermediate forms of the package to target/<profile>/build/ (or
 -o): source, hir, mir, mlir (the default), llvmir, asm, obj or
-expansions (ast and expanded are their old names, until 0.2.0).",
+expansions.",
         examples: &[
             ("{tool} emit", "the MLIR"),
             ("{tool} emit --emit=llvmir,asm", "LLVM IR and assembly"),

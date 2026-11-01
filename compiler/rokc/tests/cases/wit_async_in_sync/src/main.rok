@@ -1,5 +1,5 @@
 // spec: std §1.8.2
-// only-target: wasm32-wasi
+// only-target: wasm32-wasip2
 // expect-exit: 101
 // expect-stdout: zero wait done
 // expect-stderr: thread 'main' panicked at library/std/src/wit.rok:*:

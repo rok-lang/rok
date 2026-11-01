@@ -5,7 +5,7 @@
 #
 #   targets/test-wasm.sh [<target>..]   (default: all three)
 #
-# wasm32-wasi (a preview 2 component) and wasm32-wasi-threads (preview 1
+# wasm32-wasip2 (a preview 2 component) and wasm32-wasip1-threads (preview 1
 # with wasi-threads) run under wasmtime v46.0.3, the last release with
 # wasi-threads, fetched (SHA-256 checked) into the cache of
 # targets/build.sh, as is wac v0.12.0, which composes the components of
@@ -84,7 +84,7 @@ if [ -n "$wac" ]; then
   chmod +x "$ROK_TEST_WAC"
 fi
 
-[ $# -gt 0 ] || set -- wasm32-wasi wasm32-wasi-threads wasm32-unknown-unknown
+[ $# -gt 0 ] || set -- wasm32-wasip2 wasm32-wasip1-threads wasm32-unknown-unknown
 "$here/build.sh" "$@"
 
 export ROK_REQUIRE_LLVM=1 ROK_TEST_WASM_RUNNER="$runner" ROK_TEST_WAC

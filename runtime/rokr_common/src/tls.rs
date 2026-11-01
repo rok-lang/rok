@@ -12,7 +12,7 @@
 //! elsewhere (the runtime is always linked into the executable; arm reads
 //! `TPIDRURO`). COFF: `.tls$` through `_tls_index`, which rokc's startup
 //! object defines with the TLS directory. wasm32: a plain global, or wasm
-//! TLS on `wasm32-wasi-threads` (defined by rokc's startup object).
+//! TLS on `wasm32-wasip1-threads` (defined by rokc's startup object).
 //!
 //! `{size}` in the assembly is the block's size.
 
@@ -188,7 +188,7 @@ macro_rules! tls_block {
     };
 }
 
-// `wasm32-wasi-threads` gets the block from rokc (`wasm_tls_object`,
+// `wasm32-wasip1-threads` gets the block from rokc (`wasm_tls_object`,
 // rokc_driver toolchain.rs).
 #[cfg(not(target_family = "wasm"))]
 tls_block!();
@@ -208,7 +208,7 @@ const SIZE: usize = tls_abi::SIZE.offset(size_of::<usize>() as u32) as usize;
 )))]
 compile_error!("rokr: no `rok_tls` definition for this target");
 
-/// Address of this thread's block (on `wasm32-wasi-threads` rokc's
+/// Address of this thread's block (on `wasm32-wasip1-threads` rokc's
 /// startup object defines the block and the accessor: stable Rust cannot
 /// define wasm TLS).
 #[cfg(not(rok_solo))]

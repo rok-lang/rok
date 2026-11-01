@@ -29,7 +29,7 @@ pub use rokc_driver::{
     SourceFile, Subsystem, TargetSpec, TempDir, bootstrap_tiers, demangle, feature_of,
     find_mlir_plugin, link_host, profdata_merge, profdata_show, repl_host, rokhir, wasm_ld_main,
 };
-pub use rokc_target::{BUILTIN as BUILTIN_TARGETS, RENAMED as RENAMED_TARGETS};
+pub use rokc_target::BUILTIN as BUILTIN_TARGETS;
 
 #[derive(Default)]
 pub struct Session {
@@ -298,7 +298,7 @@ impl CompileResult {
     }
 
     /// The package's files after meta expansion as source, each under a
-    /// `// <file> (<module>)` line (`--emit=ast`; needs `set_keep_ast`).
+    /// `// <file> (<module>)` line (`--emit=source`; needs `set_keep_ast`).
     #[must_use]
     pub fn ast_source(&self) -> String {
         let mut out = String::new();

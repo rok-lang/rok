@@ -511,7 +511,7 @@ jobs:
 
   # The wasm32 corpora (targets/test-wasm.sh), a job per target:
   # wasmtime and node (the image's, 18+); the image's clang has the
-  # WebAssembly target, so wasm32-wasi's profile runtime and PGO test are
+  # WebAssembly target, so wasm32-wasip2's profile runtime and PGO test are
   # built too.
   wasm:
     needs: [plan, llvm-prefix, check]
@@ -519,7 +519,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [wasm32-wasi, wasm32-wasi-threads, wasm32-unknown-unknown]
+        target: [wasm32-wasip2, wasm32-wasip1-threads, wasm32-unknown-unknown]
     name: wasm (${{ matrix.target }})
     runs-on: ${{ fromJSON(needs.plan.outputs.runners)['linux-x64'] }}
     timeout-minutes: 180

@@ -217,7 +217,7 @@ package or native record each, then a summary.",
 An executable package (src/main.rok) is built --release into
 $ROK_HOME/bin; a library (src/lib.rok only, or with --lib) goes into the
 active environment, for `rok repl` and `rok jupyter`; a package with
-both installs its executable and warns unless --bin or --lib says which.
+both needs --bin or --lib to say which.
 A script file is
 built into $ROK_HOME/bin. An executable already installed from the same
 stone version or git commit is kept unless --force; one from a path is
@@ -257,25 +257,22 @@ Remove each from the active environment, or else from $ROK_HOME/bin.",
         name: "publish",
         summary: "publish this package to the index",
         usage: &[
-            "publish [--dry-run | --commit] [--registry <url> | --index-dir <dir>]",
-            "publish --native <file> [--dry-run | --commit] [--registry <url> | --index-dir <dir>]",
+            "publish [--dry-run] [--registry <url> | --index-dir <dir>]",
+            "publish --native <file> [--dry-run] [--registry <url> | --index-dir <dir>]",
         ],
         about: "\
 Make the index entry for this package: its git remote `origin` (an
-https:// URL), HEAD commit and tree; sources are not uploaded. --dry-run
-only checks it, against the index checkout <dir> if given. --commit
-commits it to <dir>, or without --index-dir sends it to the registry API
-of the configured index or of --registry <url> (log in first with `rok
-login`, or set $ROK_REGISTRY_TOKEN). Without either it is a dry run that
-warns: from 0.2.0 a bare `rok publish` publishes and --dry-run previews,
-so --commit is no longer needed. --index is the old name of --index-dir.",
+https:// URL), HEAD commit and tree; sources are not uploaded. It is
+committed to the index checkout <dir>, or without --index-dir sent to
+the registry API of the configured index or of --registry <url> (log in
+first with `rok login`, or set $ROK_REGISTRY_TOKEN). --dry-run only
+checks it, against <dir> if given.",
         examples: &[
             ("rok publish --dry-run", "check what would be published"),
-            ("rok publish --commit", "publish it"),
+            ("rok publish", "publish it"),
         ],
         flags: &[
             ("--dry-run", "only check"),
-            ("--commit", "really publish (the default from 0.2.0)"),
             ("--registry <url>", "another index than the configured one"),
             ("--index-dir <dir>", "a checkout of the index"),
             (
@@ -294,8 +291,7 @@ so --commit is no longer needed. --index is the old name of --index-dir.",
         about: "\
 Mark a version yanked, so new resolutions skip it: committed to the index
 checkout <dir>, or through the registry API of the configured index or of
---registry <url> (log in with `rok login`). The old form `--vers
-<version> [name]` (default: this package) warns.",
+--registry <url> (log in with `rok login`).",
         examples: &[
             ("rok yank num@1.2.0", "yank num 1.2.0"),
             ("rok yank num@1.2.0 --undo", "take it back"),

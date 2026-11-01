@@ -5,7 +5,7 @@
 //! `-errno`; byte data is a `GcBuf<u8>` region.
 //!
 //! WASI preview 2 has the BSD API through wasi-libc. Preview 1
-//! (`wasm32-wasi-threads`, the browser) only uses sockets the host hands
+//! (`wasm32-wasip1-threads`, the browser) only uses sockets the host hands
 //! in ([`rok_net_listeners`]); the rest fails with `ENOSYS`.
 //!
 //! Sockets are non-blocking; blocking calls wait in [`rok_net_wait`].
@@ -1429,7 +1429,7 @@ fn poll_armed(out: *mut u8, max: usize, ms: i32) -> Option<i32> {
     Some(n as i32)
 }
 
-/// [`rok_io_poll`] for the driver thread (`wasm32-wasi-threads`): a
+/// [`rok_io_poll`] for the driver thread (`wasm32-wasip1-threads`): a
 /// watch armed meanwhile is seen within a 10 ms slice.
 #[cfg(target_os = "wasi")]
 #[unsafe(no_mangle)]

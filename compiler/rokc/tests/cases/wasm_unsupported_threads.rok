@@ -1,6 +1,6 @@
 // spec: std 304
 // spec: refs-lang 007.06
-// only-target: wasm32-wasi wasm32-unknown-unknown
+// only-target: wasm32-wasip2 wasm32-unknown-unknown
 // expect-exit: 0
 // expect-stdout:
 // spawn: Unsupported
@@ -11,7 +11,7 @@
 // cpus 1, workers 1
 // tasks: 6
 
-// One thread (stdlib 0.1.4, 304's table: wasm32-wasi and the browser):
+// One thread (stdlib 0.1.4, 304's table: wasm32-wasip2 and the browser):
 // spawning reports `IoErrorKind::Unsupported`; the one thread (unnamed),
 // its thread-locals and park / unpark work, and the executor runs every
 // task on it.

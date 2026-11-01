@@ -1,10 +1,10 @@
-// refs-lang 7.6.8: with `ROK_THREAD_PER_CORE=1` every task stays on one
+// refs-lang 7.6.8: with `ROKR_THREAD_PER_CORE=1` every task stays on one
 // worker: tasks spawned off the pool take the workers in turn, a task's
 // children stay on its worker, and a task woken from another worker
-// (a channel send) resumes on its own. `ROK_WORKERS` sets the pool size.
+// (a channel send) resumes on its own. `ROKR_WORKERS` sets the pool size.
 // needs: threads
-// run-env: ROK_WORKERS=3
-// run-env: ROK_THREAD_PER_CORE=1
+// run-env: ROKR_WORKERS=3
+// run-env: ROKR_THREAD_PER_CORE=1
 // expect-exit: 0
 // expect-stdout:
 // workers 3

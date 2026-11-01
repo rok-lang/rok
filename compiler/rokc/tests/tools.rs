@@ -1108,7 +1108,7 @@ fn lsp_rok_add_command_runs_rok() {
     .map(|m| frame(&m))
     .concat();
     let stub = stub.display().to_string();
-    let out = piped_env(ROKC, &["lsp"], &input, &[("ROK", &stub)]);
+    let out = piped_env(ROKC, &["lsp"], &input, &[("__ROK", &stub)]);
     assert_eq!(out.status.code(), Some(0), "{}", text(&out.stderr));
     let stdout = text(&out.stdout);
     assert!(stdout.contains(r#""id":2,"result":null"#), "{stdout}");
@@ -1195,7 +1195,7 @@ fn lsp_sees_prebuilt_dependencies() {
     assert!(def.contains(r#""start":{"line":1,"#), "{def}");
 }
 
-/// An internal compiler error (`ROKC_TEST_ICE`, a debug rokc's) in an
+/// An internal compiler error (`ROK_TEST_ICE`, a debug rokc's) in an
 /// analysis is that buffer's diagnostic; the server keeps serving.
 // spec: §9.1.6 §9.7.5
 #[test]
@@ -1206,7 +1206,7 @@ fn lsp_survives_a_compiler_panic() {
     let mut child = Command::new(ROKC)
         .current_dir(&dir)
         .env("ROK_HOME", workspace())
-        .env("ROKC_TEST_ICE", "ice-here")
+        .env("ROK_TEST_ICE", "ice-here")
         .arg("lsp")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -1251,7 +1251,7 @@ fn lsp_survives_a_compiler_panic() {
     );
     let diags = next("publishDiagnostics");
     assert!(
-        diags.contains("internal compiler error") && diags.contains("ROKC_TEST_ICE"),
+        diags.contains("internal compiler error") && diags.contains("ROK_TEST_ICE"),
         "{diags}"
     );
     send(
@@ -1300,12 +1300,12 @@ fn repl_survives_a_compiler_panic() {
         ROKC,
         &["repl", "--rokr", &rokr],
         "let x = 40;\nx + 1 // ice-here\nx + 2\n",
-        &[("ROKC_TEST_ICE", "ice-here")],
+        &[("ROK_TEST_ICE", "ice-here")],
     );
     let stderr = text(&out.stderr);
     assert_eq!(text(&out.stdout), "42\n", "{stderr}");
     assert!(
-        stderr.contains("internal compiler error") && stderr.contains("ROKC_TEST_ICE"),
+        stderr.contains("internal compiler error") && stderr.contains("ROK_TEST_ICE"),
         "{stderr}"
     );
     assert_eq!(out.status.code(), Some(0), "{stderr}");

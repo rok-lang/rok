@@ -1,5 +1,5 @@
 // spec: 0.6.1
-// only-target: wasm32-wasi wasm32-wasi-threads wasm32-unknown-unknown
+// only-target: wasm32-wasip2 wasm32-wasip1-threads wasm32-unknown-unknown
 // expect-exit: 0
 // expect-stdout:
 // live 1200 MB in 300000 strings + 18750 large

@@ -52,8 +52,8 @@
 //! Debug knobs (read once): `ROKR_GC_STRESS=N` (a collection every `N`
 //! runtime allocations, every 8th full), `ROKR_GC_EVAC=always`,
 //! `ROKR_GC_CONCURRENT=always|off`, `ROKR_GC_STATS=1`, `ROKR_GC_LOG=1`
-//! ([`Pause`]), `ROKR_HEAP_DUMP=on_oom` ([`heap_dump`]); until 0.2.0
-//! also spelled `ROK_..`. Other values warn ([`rokr_common::env_knob`]).
+//! ([`Pause`]), `ROKR_HEAP_DUMP=on_oom` ([`heap_dump`]). Other values warn
+//! ([`rokr_common::env_knob`]).
 
 #![cfg_attr(not(test), no_std)]
 
@@ -68,7 +68,7 @@ use rokr_common::object_header::{
     FLAG_SATB, FLAG_SCANNED, FLAG_STICKY, FLAG_UNLOGGED, FLAG_WIPE, HEADER_ALIGN, HEADER_SIZE,
     ObjectHeader,
 };
-use rokr_common::{env_choice, env_flag, env_name, env_num, fatal, sys};
+use rokr_common::{env_choice, env_flag, env_num, fatal, sys};
 
 mod concurrent;
 pub mod world;
@@ -551,12 +551,9 @@ fn configure(h: &mut Heap) {
         return;
     }
     h.configured = true;
-    h.stress = env_num(env_name(c"ROKR_GC_STRESS", c"ROK_GC_STRESS"), false).unwrap_or(0);
-    h.evac_always = env_choice(env_name(c"ROKR_GC_EVAC", c"ROK_GC_EVAC"), "always").is_some();
-    h.concurrent = match env_choice(
-        env_name(c"ROKR_GC_CONCURRENT", c"ROK_GC_CONCURRENT"),
-        "auto|always|off",
-    ) {
+    h.stress = env_num(c"ROKR_GC_STRESS", false).unwrap_or(0);
+    h.evac_always = env_choice(c"ROKR_GC_EVAC", "always").is_some();
+    h.concurrent = match env_choice(c"ROKR_GC_CONCURRENT", "auto|always|off") {
         Some("always") => Concurrent::Always,
         Some("off") => Concurrent::Off,
         _ => Concurrent::Auto,
@@ -565,11 +562,11 @@ fn configure(h: &mut Heap) {
     if cfg!(rok_solo) {
         h.concurrent = Concurrent::Off;
     }
-    if env_flag(env_name(c"ROKR_GC_STATS", c"ROK_GC_STATS")) {
+    if env_flag(c"ROKR_GC_STATS") {
         sys::atexit(print_stats);
     }
-    h.log = env_flag(env_name(c"ROKR_GC_LOG", c"ROK_GC_LOG"));
-    if env_choice(env_name(c"ROKR_HEAP_DUMP", c"ROK_HEAP_DUMP"), "on_oom").is_some() {
+    h.log = env_flag(c"ROKR_GC_LOG");
+    if env_choice(c"ROKR_HEAP_DUMP", "on_oom").is_some() {
         rokr_common::set_oom_hook(heap_dump);
     }
 }

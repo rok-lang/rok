@@ -5,7 +5,7 @@
 // log: 3 lines, full true, minor true, fields true
 // dump: exit 101, out of memory true, totals true, types true, large true
 
-// `ROK_GC_LOG=1` and `ROK_HEAP_DUMP=on_oom`; the program reruns itself with each.
+// `ROKR_GC_LOG=1` and `ROKR_HEAP_DUMP=on_oom`; the program reruns itself with each.
 use rok::bare::gc;
 use rok::std::env;
 use rok::std::process::Command;
@@ -42,8 +42,8 @@ fn main() {
     }
     let exe = try! env::current_exe();
     // The children count their own collections: no inherited stress.
-    let o = try! Command::new(exe).env("GC_DIAG_CHILD", "log").env("ROK_GC_LOG", "1")
-        .env("ROK_GC_STRESS", "0").output();
+    let o = try! Command::new(exe).env("GC_DIAG_CHILD", "log").env("ROKR_GC_LOG", "1")
+        .env("ROKR_GC_STRESS", "0").output();
     let lines: List<str> = text(o.stderr).trim().lines().collect();
     let (full, minor, fields) = (0, 0, 0usize);
     for l in lines {
@@ -60,8 +60,8 @@ fn main() {
     }
     println(f"log: {lines.len()} lines, full {full == 2}, minor {minor == 1}, fields {fields == lines.len()}");
 
-    let d = try! Command::new(exe).env("GC_DIAG_CHILD", "oom").env("ROK_HEAP_DUMP", "on_oom")
-        .env("ROK_GC_STRESS", "0").output();
+    let d = try! Command::new(exe).env("GC_DIAG_CHILD", "oom").env("ROKR_HEAP_DUMP", "on_oom")
+        .env("ROKR_GC_STRESS", "0").output();
     let err = text(d.stderr);
     let large = false;
     for l in err.lines() {
