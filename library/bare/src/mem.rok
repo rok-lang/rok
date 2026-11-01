@@ -87,21 +87,23 @@ pub @derive {
 
 /// The bits of `a` as a `B`; both are `Pod` and the same size (a size
 /// mismatch panics).
+#[track_caller]
 pub fn reinterpret<A: Pod, B: Pod>(a: A) -> B {
     if size_of::<A>() != size_of::<B>() {
-        panic(f"reinterpret: {size_of::<A>()} bytes into {size_of::<B>()}");
+        panic(f"mem::reinterpret: {size_of::<A>()} bytes do not fit {size_of::<B>()}; both types must have the same size");
     }
     unsafe { transmute_unchecked(a) }
 }
 
 /// The bits of `a` as a `B`, unchecked: validity, size and the GC
 /// references inside are the caller's problem.
+#[track_caller]
 pub unsafe fn transmute_unchecked<A, B>(a: A) -> B {
     let size = if size_of::<A>() > size_of::<B>() { size_of::<A>() } else { size_of::<B>() };
     let align = if align_of::<A>() > align_of::<B>() { align_of::<A>() } else { align_of::<B>() };
     let at = rok_alloc_raw(if size == 0 { 1 } else { size }, align, 1);
     if at == 0 {
-        panic("transmute_unchecked: out of memory");
+        panic("mem::transmute_unchecked: out of memory");
     }
     Ptr::<A>::dangling().with_addr(at).write(a);
     let b = Ptr::<B>::dangling().with_addr(at).read();
@@ -180,6 +182,7 @@ pub struct MaybeUninit<T> {
 impl<T> MaybeUninit<T> {
     pub fn uninit() -> MaybeUninit<T> { MaybeUninit::zeroed() }
 
+    #[track_caller]
     pub fn zeroed() -> MaybeUninit<T> {
         let size = if size_of::<T>() == 0 { 1 } else { size_of::<T>() };
         unsafe {

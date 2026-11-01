@@ -237,7 +237,11 @@ pub struct Shake128 {
 impl Shake128 {
     pub const fn new() -> Shake128 { Shake128 { k: Keccak::new(168, 0x1fu8) } }
 
-    pub fn update(ref self, data: ByteInput) { self.k.absorb(data); }
+    #[track_caller]
+    pub fn update(ref self, data: ByteInput) {
+        if self.k.squeezing { panic("Shake128::update: called after squeeze; start a new Shake128 for new input"); }
+        self.k.absorb(data);
+    }
 
     pub const fn squeeze(ref self, n: usize) -> List<u8> { self.k.squeeze(n) }
 }
@@ -250,7 +254,11 @@ pub struct Shake256 {
 impl Shake256 {
     pub const fn new() -> Shake256 { Shake256 { k: Keccak::new(136, 0x1fu8) } }
 
-    pub fn update(ref self, data: ByteInput) { self.k.absorb(data); }
+    #[track_caller]
+    pub fn update(ref self, data: ByteInput) {
+        if self.k.squeezing { panic("Shake256::update: called after squeeze; start a new Shake256 for new input"); }
+        self.k.absorb(data);
+    }
 
     pub const fn squeeze(ref self, n: usize) -> List<u8> { self.k.squeeze(n) }
 

@@ -3,7 +3,7 @@
 // call (no modular inverse).
 // expect-exit: 101
 // expect-stderr: thread 'main' panicked at tests/cases/int_modpow_negative_exp_panics.rok:11:16:
-// expect-stderr: modpow with a negative exponent
+// expect-stderr: Int::modpow: the exponent is negative
 // expect-stdout:
 
 fn main() {

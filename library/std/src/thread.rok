@@ -250,6 +250,7 @@ impl Builder {
 }
 
 /// Run `f` on a new OS thread.
+#[track_caller]
 pub fn spawn<T: Send>(f: fn() -> T + Send) -> JoinHandle<T> {
     try! Builder::new().spawn(f)
 }

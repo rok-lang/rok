@@ -783,7 +783,7 @@ impl Int {
     #[track_caller]
     pub fn parse_radix(s: str, radix: u32) throws (ParseError) -> Int {
         if radix < 2u32 || radix > 36u32 {
-            panic(f"Int::parse_radix: radix {radix} out of 2..=36");
+            panic(f"Int::parse_radix: radix {radix} is out of 2..=36");
         }
         unsafe {
             let out: GcBuf<i64> = buf_new(1);
@@ -810,9 +810,10 @@ impl Int {
 
     /// The digits in base `radix` (2..=36, lowercase), `-` first when
     /// negative.
+    #[track_caller]
     pub fn to_str_radix(self, radix: u32) -> str {
         unsafe {
-            if radix < 2u32 || radix > 36u32 { panic(f"to_str_radix: radix {radix} out of 2..=36"); }
+            if radix < 2u32 || radix > 36u32 { panic(f"Int::to_str_radix: radix {radix} is out of 2..=36"); }
             let (neg, m) = self.parts();
             if m.n == 0 { return "0"; }
             let (_, per) = radix_chunk(radix);
@@ -940,7 +941,7 @@ impl Int {
 
     /// `floor(log2(self))`; panics unless `self > 0`.
     #[track_caller]
-    pub const fn ilog2(self) -> u64 { self.checked_ilog2() ?? panic("ilog2 of a non-positive number") }
+    pub const fn ilog2(self) -> u64 { self.checked_ilog2() ?? panic("Int::ilog2: the number is not positive; use `checked_ilog2` to get `none` instead") }
 
     pub const fn checked_ilog2(self) -> u64 | none {
         if !self.is_positive() { return none; }
@@ -974,7 +975,7 @@ impl Int {
         unsafe {
             let (neg, m) = self.parts();
             if neg && !signed {
-                panic(f"{name}(signed: false) of a negative int; use signed: true for two's complement or take .abs() first");
+                panic(f"Int::{name}: a negative int with signed: false; use signed: true for two's complement or take .abs() first");
             }
             // Sign bit included: -m needs the bits of m - 1, plus one.
             let nb = if !signed {
@@ -1039,8 +1040,8 @@ impl Int {
     #[track_caller]
     pub fn modpow(self, exp: Int, m: Int) -> Int {
         unsafe {
-            if m.is_zero() { panic("modpow with a zero modulus"); }
-            if exp.is_negative() { panic("modpow with a negative exponent"); }
+            if m.is_zero() { panic("Int::modpow: the modulus is zero"); }
+            if exp.is_negative() { panic("Int::modpow: the exponent is negative"); }
             let (_, mm) = m.parts();
             let (_, em) = exp.parts();
             let (_, b) = (self %% m.abs()).parts();
@@ -1121,7 +1122,7 @@ impl Int {
     /// floor(sqrt(self)); panics on a negative number.
     #[track_caller]
     pub fn isqrt(self) -> Int {
-        self.checked_isqrt() ?? panic("isqrt of a negative number")
+        self.checked_isqrt() ?? panic("Int::isqrt: the number is negative; use `checked_isqrt` to get `none` instead")
     }
 
     /// floor(sqrt(self)), `none` for a negative number. Newton steps

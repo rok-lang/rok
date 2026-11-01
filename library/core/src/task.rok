@@ -1494,6 +1494,7 @@ impl Debug for TaskId {
 }
 
 /// The running task's id; panics outside a task (`current_id`).
+#[track_caller]
 pub fn id() -> TaskId {
     current_id() ?? panic("task::id() outside a task; use `task::current_id()`, which is `none` there")
 }
@@ -1651,6 +1652,7 @@ impl<T> Future for Race<T> {
 /// for `Task::cancel`) and dropped; one whose cleanups await goes on as a
 /// task of its own until they end, and `select` does not wait for it.
 /// Panics on an empty list.
+#[track_caller]
 pub const fn select<F: Future>(futs: List<F>) -> SelectFuture<F> {
     unsafe {
         if futs.len() == 0 {

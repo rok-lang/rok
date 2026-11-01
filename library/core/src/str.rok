@@ -70,8 +70,9 @@ impl str {
     }
 
     /// Byte `i`, O(1); panics if `i >= len()`.
+    #[track_caller]
     pub const fn byte(self, i: usize) -> u8 {
-        if i >= self.len() { index_oob("str byte index", i, self.len()); }
+        if i >= self.len() { index_oob("str::byte: index", i, self.len()); }
         unsafe { rok_str_byte(self, i) }
     }
 
