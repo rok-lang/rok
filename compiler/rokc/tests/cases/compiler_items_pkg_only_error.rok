@@ -1,0 +1,30 @@
+// spec: refs-lang §5.6.4 §6.9.9
+// expect-error: function `rok::core::collections::list::list_literal` is `pub(pkg)`
+// expect-error: function `rok::core::range::range_literal` is `pub(pkg)`
+// expect-error: function `rok::core::marker::default_of` is `pub(pkg)`
+// expect-error: function `rok::core::collections::broadcast::check_len` is `pub(pkg)`
+// expect-error: function `rok::core::bench::measured` is `pub(pkg)`
+// expect-error: function `rok::std::rokon::variant_of` is `pub(pkg)`
+// expect-error: method `Int::from_literal` is internal to the Rok toolchain
+// forbid-error: deprecated
+
+// What the compiler writes into a package (a literal's handler, a
+// derive's helpers) is checked where it is defined, so those items are
+// `pub(pkg)`: the literals and derives work, a direct call does not.
+#[derive(Default, Rokon)]
+struct P { x: i32; ys: List<i32>; }
+
+fn main() {
+    let xs: List<i32> = [1, 2];
+    let r = 0..3;
+    let p: P = P::default();
+    let big: int = 1_000_000_000_000_000_000_000;
+    println(f"{xs.len()} {r.len()} {p.x} {big}");
+    let _ = rok::core::collections::list::list_literal(1, 2);
+    let _ = rok::core::range::range_literal(0, 1);
+    let _: i32 = rok::core::marker::default_of();
+    rok::core::collections::broadcast::check_len(1, 1);
+    let _ = rok::core::bench::measured();
+    let _ = try? rok::std::rokon::variant_of(rok::std::rokon::Value::None, "P");
+    let _ = int::from_literal("1");
+}

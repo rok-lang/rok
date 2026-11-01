@@ -75,7 +75,8 @@ fn main() {
     let parsed: int = try! "123456789012345678901234567890".parse::<int>();
     println(f"{parsed == lit} {(try? int::parse_radix("12x", 10u32)) is none} {(try? int::parse_radix("", 10u32)) is none} {(try? int::parse_radix("+z", 36u32)) ?? 0 as int}");
     let hexlit: int = 0xffff_ffff_ffff_ffff_ffff;
-    println(f"{hexlit} {int::from_literal("0b1_0000_0000")}");
+    let binlit: int = 0b1_0000_0000;
+    println(f"{hexlit} {binlit}");
 
     // f-strings: the magnitude in the base, sign first.
     let n: int = 255;
