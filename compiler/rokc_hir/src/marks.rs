@@ -1,5 +1,6 @@
-//! `#[deprecated]` (spec 6.2.7), `#[deprecated_safe]` (6.2.14) and
-//! `#[internal]` (6.2.16): what an item's attributes say about using it.
+//! `#[deprecated]` (spec 6.2.7), `#[deprecated_safe]` (6.2.14),
+//! `#[internal]` (6.2.16) and `#[discardable]` (6.2.11): what an item's
+//! attributes say about using it.
 
 use rokc_ast::{AttrArg, AttrBody, Attribute, Literal};
 use rokc_core::codec_struct;
@@ -13,6 +14,8 @@ pub struct Mark {
     pub deprecated_safe: Option<String>,
     /// `#[internal]`: only the toolchain's packages may use it.
     pub internal: bool,
+    /// `#[discardable]`: a call statement may drop the result.
+    pub discardable: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -26,7 +29,8 @@ pub struct Deprecation {
 codec_struct!(Mark {
     deprecated,
     deprecated_safe,
-    internal
+    internal,
+    discardable
 });
 codec_struct!(Deprecation { note, since });
 
@@ -117,6 +121,7 @@ pub fn mark_of(attrs: &[Attribute]) -> Option<Mark> {
         match a.path.as_slice() {
             [n] if n == "deprecated" => m.deprecated = deprecation(a),
             [n] if n == "internal" => m.internal = true,
+            [n] if n == "discardable" => m.discardable = true,
             [n] if n == "deprecated_safe" => {
                 m.deprecated_safe = Some(match &a.body {
                     AttrBody::Value(l) => text(l).unwrap_or_default(),

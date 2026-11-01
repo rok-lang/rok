@@ -1,0 +1,45 @@
+// expect-exit: 0
+// spec: §6.2.9
+// expect-lint: 17:5 `pub fn bare` has no doc comment
+// expect-lint: 19:5 `pub struct Point` has no doc comment
+// expect-lint: 27:9 `pub fn norm` has no doc comment
+// expect-lint: 30:5 `pub trait Shape` has no doc comment
+// expect-lint: 33:5 `pub fn area` has no doc comment
+// expect-stdout:
+// 5
+
+// `missing_docs` is allowed by default; a package turns it on. Private
+// items, trait impls and `#[doc(hidden)]` ones need no docs.
+#![warn(missing_docs)]
+
+/// Documented.
+pub fn documented() {}
+pub fn bare() {}
+
+pub struct Point {
+    x: i32;
+    y: i32;
+}
+
+impl Point {
+    /// Documented.
+    pub fn sum(self) -> i32 { self.x + self.y }
+    pub fn norm(self) -> i32 { self.x * self.x + self.y * self.y }
+}
+
+pub trait Shape {
+    /// Documented.
+    fn sides(self) -> i32;
+    fn area(self) -> i32;
+}
+
+impl Shape for Point {
+    fn sides(self) -> i32 { 0 }
+    fn area(self) -> i32 { 0 }
+}
+
+#[doc(hidden)]
+pub fn hidden() {}
+
+let p = Point { x: 1, y: 2 };
+println(f"{p.norm()}");

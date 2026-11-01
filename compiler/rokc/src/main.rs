@@ -1448,6 +1448,7 @@ fn cmd_check(mut a: Args, codegen: bool) {
         discover_arg(&a)
     };
     prebuild(&mut a, Some(&pkg)).unwrap_or_else(|e| fail(&e));
+    a.lint_levels.library = a.check_library;
     let started = started();
     progress(&a, "Checking", &pkg);
     let source = stdin.then(|| {

@@ -483,6 +483,7 @@ fn collect<'a>(
         fn_marks,
         marks,
         mark_pkg: _,
+        lint_library: _,
         bound_methods: _,
         bound_traits: _,
     } = base_t;
@@ -1719,6 +1720,7 @@ fn collect<'a>(
                 Some("rok") => None,
                 lib => Some(lib.unwrap_or_default().to_owned()),
             },
+            lint_library: input.check_library,
             bound_methods,
             bound_traits,
         },
