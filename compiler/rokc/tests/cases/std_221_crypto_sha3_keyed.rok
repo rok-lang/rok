@@ -27,7 +27,7 @@ fn main() {
     println(encoding::hex::encode(okm.as_bytes()));
     okm.wipe();
     let tag = Hmac::mac(HashAlgorithm::Sha3_256, "key", m);
-    println(f"{Hmac::verify(HashAlgorithm::Sha3_256, "key", m, tag)} {Hmac::verify(HashAlgorithm::Sha3_512, "key", m, tag)} {HashAlgorithm::Sha3_256.digest("") == Sha3_256::digest("")}");
+    println(f"{Hmac::verify(HashAlgorithm::Sha3_256, "key", m, tag)} {Hmac::verify(HashAlgorithm::Sha3_512, "key", m, tag)} {HashAlgorithm::Sha3_256.digest("") == crypto::Sha3_256::digest("")}");
     let s = Secret::new("abc");
     println(f"{len_of("abc")} {try! str::from_utf8(first(s))}");
 }
