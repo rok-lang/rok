@@ -968,7 +968,7 @@ impl AsyncRead for Client {
 impl AsyncWrite for Client {
     async fn write_async<B: AsBytes>(self, buf: B) throws (IoError) -> usize {
         let b = buf.byte_slice();
-        try await self.s.op_async(OP_WRITE, no_buf(), b);
+        _ = try await self.s.op_async(OP_WRITE, no_buf(), b);
         b.len()
     }
     async fn flush_async(self) throws (IoError) {}
@@ -1076,7 +1076,7 @@ impl AsyncRead for Server {
 impl AsyncWrite for Server {
     async fn write_async<B: AsBytes>(self, buf: B) throws (IoError) -> usize {
         let b = buf.byte_slice();
-        try await self.s.op_async(OP_WRITE, no_buf(), b);
+        _ = try await self.s.op_async(OP_WRITE, no_buf(), b);
         b.len()
     }
     async fn flush_async(self) throws (IoError) {}

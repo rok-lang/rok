@@ -10,7 +10,7 @@
 // A socket's `close` throws what the OS reports; closing twice is a
 // no-op.
 use rok::core::marker::share;
-use rok::std::io::IoError;
+use rok::core::io::IoError;
 use rok::std::net;
 
 fn main() throws (IoError) {

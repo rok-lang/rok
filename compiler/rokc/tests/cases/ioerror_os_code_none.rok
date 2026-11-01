@@ -9,7 +9,7 @@
 
 // `os_code()` is the OS number for an OS failure and `none` for one the
 // library raised. Code 2 is ENOENT and Windows' ERROR_FILE_NOT_FOUND.
-use rok::std::io::{IoError, IoErrorKind};
+use rok::core::io::{IoError, IoErrorKind};
 use rok::std::fs;
 
 fn shown(c: i32 | none) -> str {

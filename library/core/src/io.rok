@@ -235,7 +235,7 @@ fn write_zero() -> IoError {
 
 /// Bytes as text, or `InvalidData`.
 fn text_of<B: AsBytes>(bytes: B) throws (IoError) -> str {
-    try str::from_utf8(bytes) catch _ {
+    try str::from_utf8(bytes.byte_slice()) catch _ {
         throw IoError::new(IoErrorKind::InvalidData, "stream did not contain valid UTF-8");
     }
 }
@@ -349,7 +349,7 @@ pub trait Read {
     /// Every remaining byte.
     fn read_to_end(ref self) throws (IoError) -> List<u8> {
         let out: List<u8> = List::new();
-        try self.read_to_end_into(out);
+        _ = try self.read_to_end_into(out);
         out
     }
 
@@ -569,7 +569,7 @@ pub trait AsyncRead {
         // Until async methods take `ref self`: keep the receiver.
         let me = unsafe { share(self) };
         let out: List<u8> = List::new();
-        try await me.read_to_end_into_async(out);
+        _ = try await me.read_to_end_into_async(out);
         out
     }
 

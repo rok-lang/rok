@@ -13,7 +13,7 @@
 // rather than one `str` of the whole text; several values go in an
 // f-string or one call each.
 
-use rok::core::collections::slice::AsBytes;
+use rok::core::convert::AsBytes;
 use rok::core::io::{IoError, IoErrorKind};
 use rok::std::fs;
 use rok::std::env;
@@ -54,7 +54,7 @@ struct Memory { writes: List<str>; count: i32; }
 
 impl Write for Memory {
     fn write<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize {
-        let s = try str::from_utf8(buf) catch _ { throw IoError::new(IoErrorKind::Other, "not UTF-8"); };
+        let s = try str::from_utf8(buf.byte_slice()) catch _ { throw IoError::new(IoErrorKind::Other, "not UTF-8"); };
         self.writes.push(s);
         self.count += 1;
         s.len()

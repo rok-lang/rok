@@ -14,7 +14,7 @@ use rok::core::io::{IoError, IoErrorKind};
 struct Closing { room: i32; taken: i32; }
 
 impl Write for Closing {
-    fn write<B: convert::AsBytes>(ref self, buf: B) throws (IoError) -> usize {
+    fn write<B: rok::core::convert::AsBytes>(ref self, buf: B) throws (IoError) -> usize {
         if self.taken == self.room {
             throw IoError::new(IoErrorKind::BrokenPipe, "pipe closed");
         }

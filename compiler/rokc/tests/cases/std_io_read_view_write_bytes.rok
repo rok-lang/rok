@@ -13,7 +13,7 @@ use rok::core::io::IoError;
 struct Sink { got: List<u8>; }
 
 impl Write for Sink {
-    fn write<B: convert::AsBytes>(ref self, buf: B) throws (IoError) -> usize {
+    fn write<B: rok::core::convert::AsBytes>(ref self, buf: B) throws (IoError) -> usize {
         let b = buf.byte_slice();
         for x in b { self.got.push(x); }
         b.len()
