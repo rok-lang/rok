@@ -270,7 +270,7 @@ fn main() {
     let e = f"{update_sync(Mutex::new([]))} {in_unsafe()} {returned_first(true) + 9}";
     let f = f"{tag_only()} {send_once_in_loop(tx)}";
     let g = f"{kept_on_error(tx)} {kept_on_try_q(tx)} {kept_on_none(tx)} {kept_on_false(tx)}";
-    let h = f"{try! task::block_on_try(kept_on_async_error(tx))} {flagged(tx, false)} {sent_then_break(tx)}";
+    let h = f"{try! task::try_block_on(kept_on_async_error(tx))} {flagged(tx, false)} {sent_then_break(tx)}";
     for _ in 0..4 {
         let _ = rx.recv();
     }

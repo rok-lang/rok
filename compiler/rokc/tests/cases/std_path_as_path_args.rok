@@ -5,18 +5,21 @@
 // true true false
 // true false
 // b | none | b
+// true true
 
-// `join`, `starts_with` and `ends_with` take a `str` as well as a
-// `Path`; `strip_prefix_or_none` returns `none` where `strip_prefix` throws.
+// `join`, `starts_with`, `ends_with` and `strip_prefix` take a `str` as
+// well as a `Path`; `strip_prefix` is `none` when the base is no prefix.
+// `Path::from` is `From<str>`; `Path::empty()` is the empty path.
 use rok::std::path::Path;
 
 fn main() {
-    let p = Path::from("a/b");
-    println(f"{p.join("c") == p.join(Path::from("c"))} {p.join("c").ends_with("b/c")}");
-    println(f"{p.starts_with("a")} {p.starts_with(Path::from("a/b"))} {p.starts_with("b")}");
+    let p = Path::new("a/b");
+    println(f"{p.join("c") == p.join(Path::new("c"))} {p.join("c").ends_with("b/c")}");
+    println(f"{p.starts_with("a")} {p.starts_with(Path::new("a/b"))} {p.starts_with("b")}");
     println(f"{p.ends_with("b")} {p.ends_with("a")}");
-    let rest = p.strip_prefix_or_none("a") ?? Path::from("?");
-    let none_shown = match p.strip_prefix_or_none("x") { q: Path => q.as_str(), none => "none" };
-    let thrown = try p.strip_prefix(Path::from("a")) catch _ { Path::from("?") };
-    println(f"{rest} | {none_shown} | {thrown}");
+    let rest = p.strip_prefix("a") ?? Path::new("?");
+    let none_shown = match p.strip_prefix("x") { q: Path => q.as_str(), none => "none" };
+    let typed = p.strip_prefix(Path::new("a")) ?? Path::new("?");
+    println(f"{rest} | {none_shown} | {typed}");
+    println(f"{Path::from("a/b") == p} {Path::empty().as_str() == ""}");
 }

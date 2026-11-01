@@ -61,7 +61,7 @@ let addr = try! l.local_addr();
 let cfg = try! ServerConfig::new(try! Certificate::from_pem(CERT), try! PrivateKey::from_pem(KEY));
 let server = task::spawn_local(async {
     let (s, _) = try! await l.accept_async();
-    l.close();
+    try! l.close();
     let srv = try! await Server::new_async(s, cfg);
     // A reader answering the client's KeyUpdate requests beside a writer
     // whose large write waits on a full socket.
@@ -77,10 +77,10 @@ let server = task::spawn_local(async {
     try await srv.write_all_async(data(BIG)) catch e { wrote = f"write: {e.message()}"; };
     let _ = try? await srv.close_notify_async();
     let r = await reader;
-    srv.close();
+    try! srv.close();
     f"wrote {wrote}, read {r}"
 });
-let ccfg = try! ClientConfig::try_new();
+let ccfg = try! ClientConfig::new();
 ccfg.root_certs = try! Certificate::from_pem(CA);
 let s = try! await net::tcp_connect_async(f"{addr}");
 let c = try! await Client::with_config_async(s, "localhost", ccfg);
@@ -100,5 +100,5 @@ let back = try await c.read_to_end_async() catch e { println(f"client read: {e.m
 println(f"client got {back.len()} bytes, intact {back == data(BIG)}");
 println(f"client updates: {await updates}");
 println(f"server: {await server}");
-c.close();
+try! c.close();
 // spec: std 302-net §3.2.5

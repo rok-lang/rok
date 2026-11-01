@@ -14,8 +14,8 @@ use rok::std::path::Path;
 
 fn main() throws (io::IoError | thread::JoinError) {
     let dir = env::temp_dir();
-    let a = dir.join(Path::from(f"rok_close_while_reading_a_{process::id()}"));
-    let b = dir.join(Path::from(f"rok_close_while_reading_b_{process::id()}"));
+    let a = dir.join(Path::new(f"rok_close_while_reading_a_{process::id()}"));
+    let b = dir.join(Path::new(f"rok_close_while_reading_b_{process::id()}"));
     try fs::write(a, "AAAAAAAAAAAAAAAA");
     try fs::write(b, "BBBBBBBBBBBBBBBB");
     let foreign = 0;

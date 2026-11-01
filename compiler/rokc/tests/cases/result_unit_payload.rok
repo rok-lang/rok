@@ -97,6 +97,6 @@ fn main() -> i32 {
     match Unitish::U(()) { Unitish::U(u) => { let _w: () = id(u); println("enum unit"); }, Unitish::N(_) => println("bad") };
     ok.unwrap();
     println("unwrap ok");
-    try task::block_on_try(unit_task()) catch E::Bad { println("async err"); };
+    try task::try_block_on(unit_task()) catch E::Bad { println("async err"); };
     0
 }

@@ -153,10 +153,10 @@ fn rewrite_fn(f: &mut FnDef, root: bool, diags: &mut Vec<RokDiagnostic>) {
     if is_main {
         // 4.16.5: the body is the executor's top-level task. The future's
         // type comes from the signature, so a non-throwing body still fits
-        // `block_on_try::<T, E>`.
+        // `try_block_on::<T, E>`.
         let (runner, generics, throws) = match err {
             Some(e) => (
-                "block_on_try",
+                "try_block_on",
                 vec![val.clone(), e.clone()],
                 ThrowsKind::Typed(vec![e]),
             ),

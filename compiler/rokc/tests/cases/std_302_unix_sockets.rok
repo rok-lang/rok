@@ -34,14 +34,14 @@ fn main() throws (IoError) {
     println(f"pair {n} {try str::from_utf8(buf[0:n])}");
 
     let dir = env::temp_dir();
-    let path = dir.join(Path::from(f"rok-ux-{rok::std::process::id()}.sock"));
+    let path = dir.join(Path::new(f"rok-ux-{rok::std::process::id()}.sock"));
     try fs::remove_file(path) catch _ {};
     let l = try UnixListener::bind(path);
     println(f"bound {(try l.local_addr()) == path}");
     let t = thread::spawn(|| {
         let c = try UnixStream::connect(path) catch _ { return; };
         try c.write_all("hello") catch _ {};
-        c.close();
+        try! c.close();
     });
     let (s, peer) = try l.accept();
     println(f"peer {peer:?} {try str::from_utf8(try s.read_to_end())}");

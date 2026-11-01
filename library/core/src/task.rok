@@ -1174,7 +1174,7 @@ pub fn block_on<F: Future>(fut: F) -> F::Output {
 }
 
 /// `block_on` for a throwing `async` body: its error is thrown here.
-pub fn block_on_try<T, E>(fut: TryAsyncFuture<T, E>) throws (E) -> T {
+pub fn try_block_on<T, E>(fut: TryAsyncFuture<T, E>) throws (E) -> T {
     unsafe {
         let cell: GcBuf<TryAsyncFuture<T, E>> = buf_new(1);
         cell[0] = fut;
@@ -1506,12 +1506,6 @@ pub fn current_id() -> TaskId | none {
         let t = w.running[0]?;
         TaskId { id: t.id }
     }
-}
-
-/// `current_id`.
-#[deprecated(since = "0.1.6", note = "use `task::current_id`; `try_` names forms that throw or do not block")]
-pub fn try_id() -> TaskId | none {
-    current_id()
 }
 
 /// A task was cancelled (2.18.4).

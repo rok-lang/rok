@@ -16,14 +16,14 @@ use rok::std::path::Path;
 use rok::std::process;
 
 fn main() {
-    let base = env::temp_dir() / Path::from(f"rok_dircap_{process::id()}");
+    let base = env::temp_dir() / Path::new(f"rok_dircap_{process::id()}");
     try? Dir::root().remove_dir_all(base);
     try! Dir::root().create_dir_all(base / "sub");
     let d = try! Dir::root().open_dir(base);
     let f = try! d.create("sub/a.txt");
     try! f.write_all("data");
     try! f.close();
-    let g = try! d.open(Path::from("sub") / "a.txt");
+    let g = try! d.open(Path::new("sub") / "a.txt");
     println(f"inside: {try! g.read_to_str()}");
     try! g.close();
     println(f"exists {d.exists("sub/a.txt")} missing {d.exists("sub/b.txt")}");

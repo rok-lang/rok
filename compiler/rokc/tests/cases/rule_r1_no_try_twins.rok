@@ -1,0 +1,30 @@
+// spec: std 005-notation §0.5.8 §0.5.9
+// expect-error: no method `try_close` found for type `TcpListener`
+// expect-error: `close` throws its error itself; there is no `try_` form: write `try l.close(..)`
+// expect-error: no associated function `try_new` on `rok::std::net::tls::ClientConfig`
+// expect-error: `new` throws its error itself; there is no `try_` form: write `try ClientConfig::new(..)`
+// expect-error: no associated function `try_parse` on `rok::core::fmt::FormatSpec`
+// expect-error: `parse` throws its error itself; there is no `try_` form: write `try FormatSpec::parse(..)`
+// expect-error: no method `strip_prefix_or_none` found for type `Path`
+// expect-error: `strip_prefix` gives `none` itself: write `p.strip_prefix(..)`
+// expect-error: no associated function `parse_or_none` on `rok::core::num::bigfloat::Float`
+// expect-error: cannot find function `task::try_id` in this scope
+
+// A function has one failure channel (stdlib 0.5.9): a throwing function
+// has no `try_` twin and no `_or_none` twin. The error names the plain
+// function and how to call it.
+use rok::std::io::IoError;
+use rok::std::net;
+use rok::std::net::tls::ClientConfig;
+use rok::std::path::Path;
+
+fn main() throws (IoError) {
+    let l = try net::tcp_listen("127.0.0.1:0");
+    try l.try_close();
+    let c = ClientConfig::try_new();
+    let s = FormatSpec::try_parse("<4");
+    let p = Path::new("a/b");
+    let q = p.strip_prefix_or_none("a");
+    let f = float::parse_or_none("1.5");
+    let t = task::try_id();
+}

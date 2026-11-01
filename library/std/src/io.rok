@@ -54,7 +54,7 @@ pub enum IoErrorKind {
 
 impl IoErrorKind {
     /// The kind's number.
-    pub const fn index(self) -> i32 {
+    pub(pkg) const fn index(self) -> i32 {
         match self {
             IoErrorKind::Other => KIND_OTHER,
             IoErrorKind::NotFound => KIND_NOT_FOUND,

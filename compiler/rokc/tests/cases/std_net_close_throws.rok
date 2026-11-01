@@ -1,0 +1,28 @@
+// spec: std 302-net §3.2.1 §3.2.4
+// spec: std 005-notation §0.5.9
+// needs: net
+// expect-exit: 0
+// expect-stdout:
+// closed: true
+// again: ok
+// read after close: InvalidInput
+
+// A socket's `close` throws what the OS reports; closing twice is a
+// no-op.
+use rok::std::io::IoError;
+use rok::std::net;
+
+fn main() throws (IoError) {
+    let l = try net::tcp_listen("127.0.0.1:0");
+    let addr = try l.local_addr();
+    let c = try net::tcp_connect(addr);
+    let (s, _) = try l.accept();
+    try c.close();
+    println(f"closed: {c.fd() == -1}");
+    try c.close();
+    println("again: ok");
+    let buf: List<u8> = [0u8];
+    try c.read(buf) catch e { println(f"read after close: {e.kind():?}"); 0 };
+    try s.close();
+    try l.close();
+}

@@ -20,7 +20,7 @@ fn main() {
     let set_level = (try? env::var("ROK_ENV_EXAMPLE_LEVEL")) ?? "info";
     println(f"log level: {log_level} {set_level}");
 
-    let home = env::home_dir() ?? Path::from("nohome");
+    let home = env::home_dir() ?? Path::new("nohome");
     let config = home / ".config" / "myapp.toml";
     println(f"config: {config.file_name() ?? "?"} {config.starts_with(home)}");
 

@@ -20,14 +20,14 @@ fn text(b: List<u8>) -> str {
 }
 
 fn main() {
-    let o = try! Command::new(Path::from("/bin/sh")).args(["-c", "echo $0 $1", "a"]).arg("b").output();
+    let o = try! Command::new(Path::new("/bin/sh")).args(["-c", "echo $0 $1", "a"]).arg("b").output();
     println(f"out: [{text(o.stdout)}]");
-    o = try! Command::new(Path::from("/bin/sh")).args(["-c", "echo $K"]).env_clear().env("K", "v1").output();
+    o = try! Command::new(Path::new("/bin/sh")).args(["-c", "echo $K"]).env_clear().env("K", "v1").output();
     println(f"env: [{text(o.stdout)}]");
-    o = try! Command::new(Path::from("/bin/sh")).arg("-c").arg("pwd").current_dir(Path::from("/")).output();
+    o = try! Command::new(Path::new("/bin/sh")).arg("-c").arg("pwd").current_dir(Path::new("/")).output();
     println(f"cwd: [{text(o.stdout)}]");
-    o = try! Command::new(Path::from("/bin/sh")).args(["-c", "echo e >&2; exit 3"]).output();
+    o = try! Command::new(Path::new("/bin/sh")).args(["-c", "echo e >&2; exit 3"]).output();
     println(f"err: [{text(o.stderr)}] code {o.status.code() ?? -1}");
-    let s = try! Command::new(Path::from("/bin/sh")).args(["-c", "echo hidden"]).stdout(Stdio::Null).status();
+    let s = try! Command::new(Path::new("/bin/sh")).args(["-c", "echo hidden"]).stdout(Stdio::Null).status();
     println(f"null ok {s.success()}");
 }

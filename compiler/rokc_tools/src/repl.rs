@@ -3391,7 +3391,7 @@ mod tests {
         r.bindings.clear();
         r.state
             .items
-            .push(Item::new(None, "use rok::std::env::exit;".to_owned()));
+            .push(Item::new(None, "use rok::std::process::exit;".to_owned()));
         assert!(r.defines("exit"));
         // Without one the bare word ends the session, as `:q` does.
         let mut r = repl();

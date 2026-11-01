@@ -46,11 +46,11 @@ fn main() {
 
     // Parse.
     let p: float = try! "6.02214076e123456".parse::<float>();
-    println(f"{float::parse_or_none("1e-5000") ?? z} {float::parse_or_none("abc") is none} {float::parse_or_none("-inf") ?? z} {float::parse_or_none(".5") ?? z} {p} {p / p}");
+    println(f"{(try? float::from_str("1e-5000")) ?? z} {(try? float::from_str("abc")) is none} {(try? float::from_str("-inf")) ?? z} {(try? float::from_str(".5")) ?? z} {p} {p / p}");
 
     // f-strings.
     println(f"[{h:.3e}] [{big:.3e}] [{tiny:E}] [{a:>8}] [{big:>15}] [{one:+.2f}] [{lit:.2}]");
-    println(f"[{float::parse_or_none("1e30") ?? z:.1f}] [{tiny:.3f}]");
+    println(f"[{(try? float::from_str("1e30")) ?? z:.1f}] [{tiny:.3f}]");
 
     // `%` is exact (fmod), `%%` floored.
     let r: float = 7.5;
@@ -64,7 +64,7 @@ fn main() {
     let y: f64 = h.into();
     let bad: i32 | none = try? big.try_into::<i32>();
     println(f"{i} {j} {x} {y} {big as f64} {h as f32} {float::from(1.5f32)} {bad is none}");
-    let fi: float = float::from_int(int::parse_radix("123456789012345678901234567890123", 10u32) ?? 0 as int);
+    let fi: float = float::from_int((try? int::parse_radix("123456789012345678901234567890123", 10u32)) ?? 0 as int);
     println(f"{fi} {fi.to_int() ?? 0 as int} {inf.to_int() is none} {(big.to_int() ?? 0 as int).bit_length()} {(r.to_int() ?? 0 as int)}");
     let s = [a, b, h].iter().fold(z, |acc, v| acc + v);
     println(f"{s} {float::default()} {big.is_finite()} {inf.is_infinite()} {nan.is_nan()} {big.abs()}");

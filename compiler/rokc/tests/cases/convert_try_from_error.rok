@@ -64,10 +64,10 @@ fn main() {
     let bad = RawPath::from_bytes([0x61, 0xff]);
     let p = try Path::try_from(bad) catch e: NonUtf8Error {
         println(f"path: {e}");
-        Path::new()
+        Path::empty()
     };
     let ok: Path = try RawPath::from_bytes([0x61, 0x2f, 0x62]).try_into() catch _: NonUtf8Error {
-        Path::new()
+        Path::empty()
     };
     println(f"path ok {ok.as_str()}");
 

@@ -393,12 +393,6 @@ pub fn resolve(host: str) throws (IoError) -> List<SocketAddr> {
     try resolve_raw(name, port)
 }
 
-/// The first address of `host` with `port`.
-#[deprecated(since = "0.1.6", note = "use `net::resolve` on `host:port` (an IPv6 host in `[..]`) and take its first address")]
-pub fn resolve_one(host: str, port: u16) throws (IoError) -> SocketAddr {
-    (try resolve_raw(host, port))[0]
-}
-
 fn addrs_of(addr: str | SocketAddr) throws (IoError) -> List<SocketAddr> {
     match addr {
         a: SocketAddr => [a],
@@ -488,10 +482,11 @@ impl Sock {
         }
     }
 
-    /// Close the fd; a task waiting on its readiness wakes and finds it
-    /// closed (the kernel sends no event for a closed fd). With calls in
-    /// flight through other copies, the last of them releases the fd.
-    fn close(self) {
+    /// Close the fd, dropping the OS's error (`Drop`, error paths); a
+    /// task waiting on its readiness wakes and finds it closed (the
+    /// kernel sends no event for a closed fd). With calls in flight
+    /// through other copies, the last of them releases the fd.
+    fn discard(self) {
         let fd = unsafe { self.fd[0] };
         if use_close(self.fd, 1) == 0 {
             self.release();
@@ -500,9 +495,9 @@ impl Sock {
         }
     }
 
-    /// `close`, throwing the OS's error. Released by a call in flight,
-    /// or closed already: nothing to report.
-    fn try_close(self) throws (IoError) {
+    /// `discard`, throwing the OS's error. Released by a call in
+    /// flight, or closed already: nothing to report.
+    fn close(self) throws (IoError) {
         let fd = unsafe { self.fd[0] };
         if use_close(self.fd, 1) != 0 {
             if fd >= 0 { task::wake_io(fd); }
@@ -725,7 +720,7 @@ fn connect_start(addr: SocketAddr) throws (IoError) -> (Sock, bool) {
     let s = try new_sock(addr.family(), 1);
     let r = unsafe { rok_net_connect(try s.live(), words_of(addr)) };
     if r < 0 {
-        s.close();
+        s.discard();
         throw IoError::from_os(-r, f"connect {addr}");
     }
     (s, r == 1)
@@ -734,7 +729,7 @@ fn connect_start(addr: SocketAddr) throws (IoError) -> (Sock, bool) {
 fn connect_finish(s: Sock, addr: SocketAddr) throws (IoError) -> TcpStream {
     let e = unsafe { rok_net_sock_error(try s.live()) };
     if e < 0 {
-        s.close();
+        s.discard();
         throw IoError::from_os(-e, f"connect {addr}");
     }
     TcpStream { sock: s }
@@ -745,7 +740,7 @@ fn connect_wait(addr: SocketAddr, limit: i64) throws (IoError) -> TcpStream {
     if pending {
         let r = unsafe { rok_net_wait(try s.live(), 1, limit) };
         if r <= 0 {
-            s.close();
+            s.discard();
             if r == 0 { throw timed_out(f"connect {addr}"); }
             throw IoError::from_os(-r, f"connect {addr}");
         }
@@ -853,11 +848,9 @@ impl TcpStream {
         TcpStream { sock: try self.sock.try_clone() }
     }
 
-    /// Close now; later calls fail with `InvalidInput`.
-    pub fn close(self) { self.sock.close(); }
-
-    /// `close`, but an error the OS reports is thrown.
-    pub fn try_close(self) throws (IoError) { try self.sock.try_close(); }
+    /// Close now, throwing the OS's error; later calls fail with
+    /// `InvalidInput`.
+    pub fn close(self) throws (IoError) { try self.sock.close(); }
 }
 
 impl Reader for TcpStream {
@@ -875,7 +868,7 @@ impl Writer for TcpStream {
 }
 
 impl Drop for TcpStream {
-    fn drop(ref self) { self.sock.close(); }
+    fn drop(ref self) { self.sock.discard(); }
 }
 
 impl TcpListener {
@@ -886,7 +879,7 @@ impl TcpListener {
         let r = unsafe { rok_net_bind(try s.live(), words_of(addr)) };
         if r >= 0 { r = unsafe { rok_net_listen(try s.live(), 128) }; }
         if r < 0 {
-            s.close();
+            s.discard();
             throw IoError::from_os(-r, f"bind {addr}");
         }
         TcpListener { sock: s }
@@ -955,14 +948,11 @@ impl TcpListener {
 
     pub const fn fd(self) -> i32 { self.sock.fd() }
 
-    pub fn close(self) { self.sock.close(); }
-
-    /// `close`, but an error the OS reports is thrown.
-    pub fn try_close(self) throws (IoError) { try self.sock.try_close(); }
+    pub fn close(self) throws (IoError) { try self.sock.close(); }
 }
 
 impl Drop for TcpListener {
-    fn drop(ref self) { self.sock.close(); }
+    fn drop(ref self) { self.sock.discard(); }
 }
 
 /// `TcpListener::incoming`.
@@ -990,7 +980,7 @@ impl UdpSocket {
         let s = try new_sock(addr.family(), 2);
         let r = unsafe { rok_net_bind(try s.live(), words_of(addr)) };
         if r < 0 {
-            s.close();
+            s.discard();
             throw IoError::from_os(-r, f"bind {addr}");
         }
         UdpSocket { sock: s }
@@ -1124,14 +1114,11 @@ impl UdpSocket {
 
     pub const fn fd(self) -> i32 { self.sock.fd() }
 
-    pub fn close(self) { self.sock.close(); }
-
-    /// `close`, but an error the OS reports is thrown.
-    pub fn try_close(self) throws (IoError) { try self.sock.try_close(); }
+    pub fn close(self) throws (IoError) { try self.sock.close(); }
 }
 
 impl Drop for UdpSocket {
-    fn drop(ref self) { self.sock.close(); }
+    fn drop(ref self) { self.sock.discard(); }
 }
 
 // Unix domain sockets (302.3)
@@ -1188,7 +1175,7 @@ fn unix_path(s: Sock, peer: i32) throws (IoError) -> Path | none {
     let k = try check(r as i64, "getsockname");
     if k == 0 { return none; }
     unsafe { buf.set_len(k as usize) };
-    Path::from(try str::from_utf8(buf) catch _ { return none; })
+    Path::new(try str::from_utf8(buf) catch _ { return none; })
 }
 
 #[cfg(target_family = "unix")]
@@ -1235,15 +1222,12 @@ impl UnixListener {
 
     pub const fn fd(self) -> i32 { self.sock.fd() }
 
-    pub fn close(self) { self.sock.close(); }
-
-    /// `close`, but an error the OS reports is thrown.
-    pub fn try_close(self) throws (IoError) { try self.sock.try_close(); }
+    pub fn close(self) throws (IoError) { try self.sock.close(); }
 }
 
 #[cfg(target_family = "unix")]
 impl Drop for UnixListener {
-    fn drop(ref self) { self.sock.close(); }
+    fn drop(ref self) { self.sock.discard(); }
 }
 
 #[cfg(target_family = "unix")]
@@ -1326,10 +1310,7 @@ impl UnixStream {
 
     pub const fn fd(self) -> i32 { self.sock.fd() }
 
-    pub fn close(self) { self.sock.close(); }
-
-    /// `close`, but an error the OS reports is thrown.
-    pub fn try_close(self) throws (IoError) { try self.sock.try_close(); }
+    pub fn close(self) throws (IoError) { try self.sock.close(); }
 }
 
 #[cfg(target_family = "unix")]
@@ -1350,7 +1331,7 @@ impl Writer for UnixStream {
 
 #[cfg(target_family = "unix")]
 impl Drop for UnixStream {
-    fn drop(ref self) { self.sock.close(); }
+    fn drop(ref self) { self.sock.discard(); }
 }
 
 #[cfg(target_family = "unix")]
@@ -1395,15 +1376,12 @@ impl UnixDatagram {
 
     pub const fn fd(self) -> i32 { self.sock.fd() }
 
-    pub fn close(self) { self.sock.close(); }
-
-    /// `close`, but an error the OS reports is thrown.
-    pub fn try_close(self) throws (IoError) { try self.sock.try_close(); }
+    pub fn close(self) throws (IoError) { try self.sock.close(); }
 }
 
 #[cfg(target_family = "unix")]
 impl Drop for UnixDatagram {
-    fn drop(ref self) { self.sock.close(); }
+    fn drop(ref self) { self.sock.discard(); }
 }
 
 // zero-copy hooks (302.7, Linux)

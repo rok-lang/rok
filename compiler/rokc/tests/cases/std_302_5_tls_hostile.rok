@@ -489,8 +489,8 @@ fn ask(port: u16, roots: List<Certificate>) -> str {
     let c = try Client::with_config(s, "localhost", client_cfg(roots)) catch e { return f"{e.kind():?} alert {e.alert()}: {e.message()}"; };
     try c.write_all("ping") catch e { return f"write: {e}"; };
     let buf = zeros(64);
-    let k = try c.read(buf) catch e { c.close(); return f"read: {e}"; };
-    c.close();
+    let k = try c.read(buf) catch e { try! c.close(); return f"read: {e}"; };
+    try! c.close();
     f"ok {try str::from_utf8(buf[0:k]) catch _ { "?" }}"
 }
 
@@ -503,7 +503,7 @@ fn targeted() {
             let (s, _) = try! l.accept();
             try! s.set_read_timeout(Duration::secs(10));
             evil_serve(s, ref r, evil_case(i));
-            s.close();
+            try! s.close();
         }
     });
     let roots = try! Certificate::from_pem(CA);
@@ -527,7 +527,7 @@ fn fuzz_evil_server(n: usize) {
             e.what = i % 8;
             e.post = msg(24u8, [0u8]);
             evil_serve(s, ref r, e);
-            s.close();
+            try! s.close();
         }
     });
     let roots = try! Certificate::from_pem(CA);
@@ -671,7 +671,7 @@ fn fuzz_evil_client(n: usize) {
             if let v: Server = srv {
                 if i % 8 == 1 || i % 8 == 2 { forged += 1; }
                 let _ = try v.read(zeros(64)) catch _ { 0 };
-                v.close();
+                try! v.close();
             }
             let ms = t0.elapsed().as_ms();
             if ms > slow { slow = ms; }
@@ -683,7 +683,7 @@ fn fuzz_evil_client(n: usize) {
         let s = try! tcp_connect(f"127.0.0.1:{port}");
         try! s.set_read_timeout(Duration::secs(10));
         evil_client(s, ref r, i % 8);
-        s.close();
+        try! s.close();
     }
     try! t.join();
 }
@@ -743,7 +743,7 @@ fn fuzz_hellos(hello: List<u8>, n: usize) {
         try s.write_all(mutate(ref r, hello)) catch _ {};
         try s.shutdown(Shutdown::Write) catch _ {};
         let _ = drain(s);
-        s.close();
+        try! s.close();
         let ms = t0.elapsed().as_ms();
         if ms > slow { slow = ms; }
     }
@@ -785,7 +785,7 @@ fn fuzz_flights(flight: List<u8>, n: usize) {
         try s.write_all(m) catch _ {};
         try s.shutdown(Shutdown::Write) catch _ {};
         let _ = drain(s);
-        s.close();
+        try! s.close();
     }
     try! t.join();
 }
@@ -832,7 +832,7 @@ fn closes_after_alert() {
     try! s.set_read_timeout(Duration::secs(5));
     try! s.write_all([22u8, 3u8, 1u8, 0u8, 4u8, 1u8, 0u8, 0u8, 0u8]);
     let (got, closed) = drain(s);
-    s.close();
+    try! s.close();
     try! t.join();
     println(f"failed handshake: record {got[0]} alert {got[got.len() - 1]}, then closed: {closed}");
 }

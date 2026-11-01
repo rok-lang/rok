@@ -96,7 +96,7 @@ fn serve(l: TcpListener, n: i32) {
             }
             try reply(srv, f"{sni}|{text(srv.negotiated_alpn())}|{req}") catch _ { break; };
         }
-        srv.close();
+        try! srv.close();
     }
 }
 
@@ -137,25 +137,25 @@ fn main() throws (tls::TlsError) {
     try c.key_update() catch _ {};
     println(f"after key update -> {ask(c, "again")}");
     try c.close_notify() catch _ {};
-    c.close();
+    try! c.close();
 
     let plain = ClientConfig { root_certs: roots, cipher_suites: [CipherSuite::ChaCha20Poly1305Sha256], alpn_protocols: [], enable_pq: false, client_cert_chain: [], client_key: none, session_cache: none, early_data: [] };
     let c2 = try connect(port, "localhost", plain);
     println(f"chacha x25519: alpn {text(c2.negotiated_alpn())} -> {ask(c2, "hi")}");
-    c2.close();
+    try! c2.close();
 
     let a256 = ClientConfig { root_certs: roots, cipher_suites: [CipherSuite::Aes256GcmSha384], alpn_protocols: [], enable_pq: true, client_cert_chain: [], client_key: none, session_cache: none, early_data: [] };
     let c3 = try connect(port, "localhost", a256);
     println(f"aes256: -> {ask(c3, "hi")}");
-    c3.close();
+    try! c3.close();
 
     let c4 = try connect(port, "127.0.0.1", plain);
     println(f"ip: -> {ask(c4, "hi")}");
-    c4.close();
+    try! c4.close();
 
     let c5 = try connect(port, "a.rok.test", plain);
     println(f"wildcard: -> {ask(c5, "hi")}");
-    c5.close();
+    try! c5.close();
 
     let c6 = try connect(port, "localhost", plain);
     let data: List<u8> = [];
@@ -171,7 +171,7 @@ fn main() throws (tls::TlsError) {
         for i in 0..k { back.push(buf[i]); }
     }
     println(f"big: {back.len()} bytes back, intact {back == data}");
-    c6.close();
+    try! c6.close();
 
     try connect(port, "example.com", plain) catch e { println(f"wrong name: {e.kind():?} {e.message()}"); };
     let none_cfg = ClientConfig { root_certs: [], cipher_suites: CipherSuite::all(), alpn_protocols: [], enable_pq: true, client_cert_chain: [], client_key: none, session_cache: none, early_data: [] };
@@ -184,11 +184,11 @@ fn main() throws (tls::TlsError) {
     try Client::new(s8, "localhost") catch e { println(f"os roots: {e.kind():?} {e.message()}"); };
     let c9 = try connect(port, "localhost", plain);
     println(f"traits -> {via_traits(c9)}");
-    c9.close();
+    try! c9.close();
 
     let c7 = try connect(port, "localhost", plain);
     println(f"server saw {ask(c7, "count")} connections");
-    c7.close();
+    try! c7.close();
     try t.join() catch _ {};
 }
 

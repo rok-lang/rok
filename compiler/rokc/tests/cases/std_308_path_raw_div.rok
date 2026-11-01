@@ -18,13 +18,13 @@
 use rok::std::path::{Path, RawPath};
 
 fn main() {
-    println((Path::from("/etc") / "nginx" / Path::from("nginx.conf")).as_str());
-    let p = Path::from("/a");
-    p /= Path::from("b");
+    println((Path::new("/etc") / "nginx" / Path::new("nginx.conf")).as_str());
+    let p = Path::new("/a");
+    p /= Path::new("b");
     p /= "c";
     println(p.as_str());
     let good = RawPath::from_bytes([97u8, 47u8, 98u8]);
-    let gp = try Path::try_from(good) catch _ { Path::from("?") };
+    let gp = try Path::try_from(good) catch _ { Path::new("?") };
     println(f"ok {gp.as_str()} {gp.to_raw() == good}");
     let bad = RawPath::from_bytes([97u8, 0xFFu8, 98u8]);
     let msg = try bad.try_to_path().as_str() catch e { f"{e.valid_up_to}" };

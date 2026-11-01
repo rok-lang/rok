@@ -76,7 +76,7 @@ fn serve(l: TcpListener, n: i32, early: u32, store: TicketStore) -> i32 {
             reply = if got.len() > 100 { f"read:{got.len()} bytes" } else { f"read:{try str::from_utf8(got) catch _ { "?" }}" };
         }
         try srv.write_all(reply) catch _ {};
-        srv.close();
+        try! srv.close();
     }
     seen
 }
@@ -91,7 +91,7 @@ fn run(what: str, port: u16, name: str, cfg: ClientConfig, req: str) {
         none => 0usize,
     };
     println(f"{what}: resumed {c.resumed()}, peer {c.peer_certificates().len()}, early {c.early_data_accepted()}, cache {cached} -> {try str::from_utf8(back) catch _ { "?" }}");
-    c.close();
+    try! c.close();
 }
 
 fn main() {
@@ -103,7 +103,7 @@ fn main() {
     let port2 = (try! l2.local_addr()).port();
     let t2 = thread::spawn(|| serve(l2, 2, 0u32, TicketStore::new()));
 
-    let cfg = try! ClientConfig::try_new();
+    let cfg = try! ClientConfig::new();
     cfg.root_certs = try! Certificate::from_pem(CA);
     run("full", port, "localhost", cfg, "GET /1");
     run("resumed", port, "localhost", cfg, "GET /2");

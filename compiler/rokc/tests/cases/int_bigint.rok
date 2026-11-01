@@ -70,10 +70,10 @@ fn main() {
     println(f"{huge / d} {huge % d} {huge %% d} {(huge / d) * d + huge % d == huge}");
 
     // Parse / print.
-    let h = int::parse_radix("-ffffffffffffffffffffffffffffffff", 16u32) ?? 0 as int;
+    let h = (try? int::parse_radix("-ffffffffffffffffffffffffffffffff", 16u32)) ?? 0 as int;
     println(f"{h} {h.to_str_radix(16u32)} {h.to_str_radix(36u32)} {h.to_str_radix(2u32).len()}");
     let parsed: int = try! "123456789012345678901234567890".parse::<int>();
-    println(f"{parsed == lit} {int::parse_radix("12x", 10u32) is none} {int::parse_radix("", 10u32) is none} {int::parse_radix("+z", 36u32) ?? 0 as int}");
+    println(f"{parsed == lit} {(try? int::parse_radix("12x", 10u32)) is none} {(try? int::parse_radix("", 10u32)) is none} {(try? int::parse_radix("+z", 36u32)) ?? 0 as int}");
     let hexlit: int = 0xffff_ffff_ffff_ffff_ffff;
     println(f"{hexlit} {int::from_literal("0b1_0000_0000")}");
 

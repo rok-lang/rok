@@ -33,7 +33,7 @@ fn err(e: TlsError) -> str { f"error {e.kind():?} alert {e.alert()}" }
 fn line(buf: List<u8>, k: usize) -> str { (try str::from_utf8(buf[0:k]) catch _ { "?" }).trim() }
 
 fn client(args: List<str>) {
-    let cfg = try! ClientConfig::try_new();
+    let cfg = try! ClientConfig::new();
     cfg.root_certs = try! Certificate::from_pem(read_file(args[4]));
     cfg.cipher_suites = suites(opt(args, "suite"));
     cfg.enable_pq = opt(args, "pq") != "0";
@@ -62,7 +62,7 @@ fn client(args: List<str>) {
         };
         println(f"conn {i}: resumed {c.resumed()} early {c.early_data_accepted()} reply {line(buf, k)}");
         try c.close_notify() catch _ {};
-        c.close();
+        try! c.close();
     }
 }
 
@@ -92,7 +92,7 @@ fn server(args: List<str>) {
         let early = (try str::from_utf8(srv.early_data()) catch _ { "?" }).trim();
         println(f"srv {i}: resumed {srv.resumed()} early {early} peer certs {srv.peer_certificates().len()}");
         try srv.close_notify() catch _ {};
-        srv.close();
+        try! srv.close();
     }
 }
 

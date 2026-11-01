@@ -2,12 +2,12 @@
 // needs: fs
 // expect-exit: 0
 // expect-stdout:
-// unreadable: new 0 roots, try_new Certificate
-// bundle: new 1 roots, try_new 1 roots
+// unreadable: Certificate
+// bundle: 1 roots
 
-// `ClientConfig::try_new` throws when the trust store cannot be read,
-// where `new` leaves `root_certs` empty. `SSL_CERT_FILE` picks the
-// store, so neither network nor an OS store is needed.
+// `ClientConfig::new` throws when the trust store cannot be read.
+// `SSL_CERT_FILE` picks the store, so neither network nor an OS store
+// is needed.
 use rok::std::env;
 use rok::std::fs;
 use rok::std::path::Path;
@@ -28,19 +28,18 @@ gDBrha3fDQ==
 
 fn check(label: str, path: Path) {
     unsafe { env::set_var("SSL_CERT_FILE", path.as_str()); }
-    let n = ClientConfig::new().root_certs.len();
-    let c = try ClientConfig::try_new() catch e {
-        println(f"{label}: new {n} roots, try_new {e.kind():?}");
+    let c = try ClientConfig::new() catch e {
+        println(f"{label}: {e.kind():?}");
         return;
     };
-    println(f"{label}: new {n} roots, try_new {c.root_certs.len()} roots");
+    println(f"{label}: {c.root_certs.len()} roots");
 }
 
 fn main() {
     let dir = env::temp_dir();
     let pid = process::id();
-    check("unreadable", dir.join(Path::from(f"rok-tls-try-new-missing-{pid}.pem")));
-    let bundle = dir.join(Path::from(f"rok-tls-try-new-{pid}.pem"));
+    check("unreadable", dir.join(Path::new(f"rok-tls-config-new-missing-{pid}.pem")));
+    let bundle = dir.join(Path::new(f"rok-tls-config-new-{pid}.pem"));
     try! fs::write(bundle, CA);
     check("bundle", bundle);
     try! fs::remove_file(bundle);

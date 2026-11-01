@@ -159,7 +159,7 @@ fn serve(l: TcpListener) {
         let (s, _) = try l.accept() catch _ { return; };
         let srv = try Server::new(s, cfg) catch _ { continue; };
         try srv.write_all("hello") catch _ {};
-        srv.close();
+        try! srv.close();
     }
 }
 
@@ -167,7 +167,7 @@ fn main() {
     let l = try! tcp_listen("127.0.0.1:0");
     let port = (try! l.local_addr()).port();
     let t = thread::spawn(|| serve(l));
-    let cfg = try! ClientConfig::try_new();
+    let cfg = try! ClientConfig::new();
     cfg.root_certs = try! Certificate::from_pem(CA);
     for what in ["good", "delegated responder", "sha-256 CertID", "revoked", "for another certificate", "bad signature", "not successful", "none stapled", "must-staple, none stapled", "must-staple, good"] {
         let s = try! tcp_connect(f"127.0.0.1:{port}");
@@ -177,7 +177,7 @@ fn main() {
         };
         let got = try c.read_to_end() catch e { println(f"{what}: read {e}"); continue; };
         println(f"{what}: {try str::from_utf8(got) catch _ { "?" }}");
-        c.close();
+        try! c.close();
     }
     try! t.join();
 }

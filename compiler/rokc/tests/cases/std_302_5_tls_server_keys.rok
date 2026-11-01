@@ -140,9 +140,9 @@ fn serve(l: TcpListener) -> i32 {
         let buf = byte_buf(64);
         let k = try! srv.read(buf);
         try! srv.write_all(f"{srv.server_name() ?? "none"}|{names[i]}|{try! str::from_utf8(buf[0:k])}");
-        srv.close();
+        try! srv.close();
     }
-    l.close();
+    try! l.close();
     n
 }
 
@@ -152,13 +152,13 @@ fn main() {
     let t = thread::spawn(|| serve(l));
     let roots = try! Certificate::from_pem(CA);
     for what in ["p256 (PKCS #8)", "p384 (SEC1)", "rsa (PKCS #1)"] {
-        let cfg = try! ClientConfig::try_new();
+        let cfg = try! ClientConfig::new();
         cfg.root_certs = roots;
         let c = try! Client::with_config(try! tcp_connect(f"127.0.0.1:{port}"), "localhost", cfg);
         try! c.write_all("x");
         let back = try! str::from_utf8(try! c.read_to_end());
         println(f"{what} -> {back[0:back.len() - 2]}");
-        c.close();
+        try! c.close();
     }
     println(f"server saw {try t.join() catch _ { -1 }} connections");
 

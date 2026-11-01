@@ -130,8 +130,8 @@ impl Float {
     /// `s` as a decimal (`-1.5e400`, `.5`, `inf`, `nan`), correctly
     /// rounded; `none` when it isn't one. Decimal exponents past ±10^6
     /// are `none`: the exact conversion would need a million-digit power
-    /// of ten. `FromStr` throws instead.
-    pub fn parse_or_none(s: str) -> Float | none {
+    /// of ten. Callers use `FromStr`, which throws.
+    fn parse_decimal(s: str) -> Float | none {
         let bs = s.as_bytes();
         let n = s.len();
         let i = 0usize;
@@ -185,16 +185,10 @@ impl Float {
         decimal(neg, digits.to_str(), exp - frac)
     }
 
-    /// `parse_or_none`.
-    #[deprecated(since = "0.1.6", note = "use `Float::parse_or_none`; `try_` names forms that throw or do not block")]
-    pub fn try_parse(s: str) -> Float | none {
-        Float::parse_or_none(s)
-    }
-
     /// An unsuffixed float literal (`_` allowed) too large or small for
     /// `f64` in a `float` slot.
     pub fn from_literal(s: str) -> Float {
-        match Float::parse_or_none(s.replace("_", "")) {
+        match Float::parse_decimal(s.replace("_", "")) {
             v: Float => v,
             none => panic(f"malformed float literal `{s}`"),
         }
@@ -324,7 +318,7 @@ fn round_scaled(neg: bool, q: Int, exp2: i64, sticky: bool) -> Float {
 
 /// `±digits * 10^k`, correctly rounded.
 fn decimal(neg: bool, digits: str, k: i64) -> Float | none {
-    let d = Int::parse_radix(digits, 10u32)?;
+    let d = (try? Int::parse_radix(digits, 10u32))?;
     if d.is_zero() { return Float::plain(if neg { -0.0 } else { 0.0 }); }
     // Clinger's fast path: both exact in `f64`, one rounding.
     if let v: i64 = d.to_i64() {
@@ -545,7 +539,7 @@ impl Debug for Float {
 impl FromStr for Float {
     type Err = ParseError;
     fn from_str(s: str) throws (ParseError) -> Float {
-        match Float::parse_or_none(s) {
+        match Float::parse_decimal(s) {
             v: Float => v,
             none => throw ParseError { input: s, pos: 0, reason: "invalid float literal" },
         }

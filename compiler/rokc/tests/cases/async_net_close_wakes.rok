@@ -48,22 +48,22 @@ let (c1, s1) = pair(listener);
 let t1 = await read_in_task(s1);
 try! s1.shutdown(Shutdown::Read);
 println(f"shutdown(Read): {outcome(await t1)}");
-c1.close();
-s1.close();
+try! c1.close();
+try! s1.close();
 
 let (c2, s2) = pair(listener);
 let t2 = await read_in_task(s2);
-s2.close();
+try! s2.close();
 println(f"close: {outcome(await t2)}");
-c2.close();
+try! c2.close();
 
 let (c3, s3) = pair(listener);
 let t3 = await read_in_task(s3);
 try! s3.shutdown(Shutdown::Both);
-s3.close();
+try! s3.close();
 await t3;
 println("shutdown(Both) + close: finished");
-c3.close();
+try! c3.close();
 
 let idle = try! TcpListener::bind(any);
 let acc = task::spawn(async {
@@ -74,7 +74,7 @@ let acc = task::spawn(async {
     r
 });
 await parked(1);
-idle.close();
+try! idle.close();
 println(f"listener close: {await acc}");
 println(f"registrations left: {task::registrations()}");
 
