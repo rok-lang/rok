@@ -9,6 +9,7 @@
 // 20000 tasks: 199990000
 
 // Injected tasks run, locals survive migration, busy workers still fire timers.
+use rok::core::sync::{LoadOrdering, StoreOrdering};
 use rok::std::thread;
 
 async fn steps() -> str {
@@ -30,28 +31,28 @@ fn main() -> i32 {
     let r = task::block_on(async {
         task::spawn(async {
             await task::sleep(Duration::ms(5));
-            later.store(1, SeqCst);
+            later.store(1, StoreOrdering::SeqCst);
         });
         1
     });
     let waited = 0;
-    while later.load(SeqCst) == 0 && waited < 5000 {
+    while later.load(LoadOrdering::SeqCst) == 0 && waited < 5000 {
         thread::sleep(Duration::ms(1));
         waited += 1;
     }
-    println(f"block_on returned {r}, later task done: {later.load(SeqCst) == 1}");
+    println(f"block_on returned {r}, later task done: {later.load(LoadOrdering::SeqCst) == 1}");
 
     println(f"locals across awaits: {task::block_on(async { await task::spawn(steps()) })}");
 
     let woke = Atomic::new(0);
-    let busy = task::workers() * 2;
+    let busy = task::worker_count() * 2;
     let ok = task::block_on(async {
         let ts: List<Task<i32>> = [];
         for _ in 0..busy {
             ts.push(task::spawn(async {
                 let n = 0;
                 // Bounded: a starved timer ends this after ~10 s anyway.
-                while woke.load(SeqCst) == 0 && n < 2_000_000 {
+                while woke.load(LoadOrdering::SeqCst) == 0 && n < 2_000_000 {
                     n += 1;
                     await task::yield_now();
                 }
@@ -59,11 +60,11 @@ fn main() -> i32 {
             }));
         }
         await task::sleep(Duration::ms(10));
-        woke.store(1, SeqCst);
+        woke.store(1, StoreOrdering::SeqCst);
         await task::join(ts);
         true
     });
-    println(f"timer woke while workers busy: {ok && woke.load(SeqCst) == 1}");
+    println(f"timer woke while workers busy: {ok && woke.load(LoadOrdering::SeqCst) == 1}");
 
     let total = task::block_on(async {
         let ts: List<Task<i64>> = [];

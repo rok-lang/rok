@@ -10,7 +10,7 @@
 // `Condvar` (Rust-shaped).
 
 use rok::core::marker::{hand_over, hand_over_into};
-use rok::core::rt::{atomic_add, atomic_and, atomic_cas, atomic_load, atomic_or, atomic_sub, atomic_xchg, atomic_xor, key};
+use rok::core::rt::{atomic_add, atomic_and, atomic_cas, atomic_load, atomic_or, atomic_store, atomic_sub, atomic_xchg, atomic_xor, key};
 
 /// Whether guards note their locks (`rok_lock_note`): this is a REPL
 /// session host. Asked before a lock is taken, so nothing runs between
@@ -67,9 +67,24 @@ const fn two_words() -> GcBuf<i32> {
     }
 }
 
-/// Memory ordering of an atomic operation (2.16.2). Spec name: `Ordering`,
-/// which would collide with `cmp::Ordering` in the prelude.
-pub enum AtomicOrdering {
+/// Memory ordering of an atomic load (2.16.2), and of the load a failed
+/// compare-exchange does. A load cannot release.
+pub enum LoadOrdering {
+    Relaxed,
+    Acquire,
+    SeqCst,
+}
+
+/// Memory ordering of an atomic store (2.16.2). A store cannot acquire.
+pub enum StoreOrdering {
+    Relaxed,
+    Release,
+    SeqCst,
+}
+
+/// Memory ordering of a read-modify-write (2.16.2): `swap`, the
+/// `fetch_*` ops and a compare-exchange that succeeds.
+pub enum UpdateOrdering {
     Relaxed,
     Acquire,
     Release,
@@ -105,7 +120,8 @@ unsafe impl<T> Sync for Atomic<rok::bare::ptr::Ptr<T>> {}
 
 // Each method maps its ordering argument onto the intrinsic's literal
 // ordering; with a constant argument the `match` folds away once the
-// method is inlined (`-O1` and up).
+// method is inlined (`-O1` and up). The ordering types leave out what an
+// operation cannot take, so nothing is checked at run time.
 impl<T: AtomicPrimitive + PartialEq> Atomic<T> {
     pub const fn new(value: T) -> Atomic<T> {
         unsafe {
@@ -115,46 +131,45 @@ impl<T: AtomicPrimitive + PartialEq> Atomic<T> {
         }
     }
 
-    /// Panics on `Release` / `AcqRel` (not load orderings).
-    #[track_caller]
-    pub fn load(self, ordering: AtomicOrdering = SeqCst) -> T {
+    pub fn load(self, ordering: LoadOrdering = LoadOrdering::SeqCst) -> T {
         let c = self.cell;
         match ordering {
-            AtomicOrdering::Relaxed => atomic_load(c, 0, Relaxed),
-            AtomicOrdering::Acquire => atomic_load(c, 0, Acquire),
-            AtomicOrdering::SeqCst => atomic_load(c, 0, SeqCst),
-            _ => panic("Atomic::load: `Release` / `AcqRel` is not a load ordering"),
+            LoadOrdering::Relaxed => atomic_load(c, 0, Relaxed),
+            LoadOrdering::Acquire => atomic_load(c, 0, Acquire),
+            LoadOrdering::SeqCst => atomic_load(c, 0, SeqCst),
         }
     }
 
-    pub fn store(self, value: T, ordering: AtomicOrdering = SeqCst) {
-        self.swap(value, ordering);
+    pub fn store(self, value: T, ordering: StoreOrdering = StoreOrdering::SeqCst) {
+        let c = self.cell;
+        match ordering {
+            StoreOrdering::Relaxed => atomic_store(c, 0, value, Relaxed),
+            StoreOrdering::Release => atomic_store(c, 0, value, Release),
+            StoreOrdering::SeqCst => atomic_store(c, 0, value, SeqCst),
+        };
     }
 
     #[discardable]
-    pub fn swap(self, value: T, ordering: AtomicOrdering = SeqCst) -> T {
+    pub fn swap(self, value: T, ordering: UpdateOrdering = UpdateOrdering::SeqCst) -> T {
         let c = self.cell;
         match ordering {
-            AtomicOrdering::Relaxed => atomic_xchg(c, 0, value, Relaxed),
-            AtomicOrdering::Acquire => atomic_xchg(c, 0, value, Acquire),
-            AtomicOrdering::Release => atomic_xchg(c, 0, value, Release),
-            AtomicOrdering::AcqRel => atomic_xchg(c, 0, value, AcqRel),
-            AtomicOrdering::SeqCst => atomic_xchg(c, 0, value, SeqCst),
+            UpdateOrdering::Relaxed => atomic_xchg(c, 0, value, Relaxed),
+            UpdateOrdering::Acquire => atomic_xchg(c, 0, value, Acquire),
+            UpdateOrdering::Release => atomic_xchg(c, 0, value, Release),
+            UpdateOrdering::AcqRel => atomic_xchg(c, 0, value, AcqRel),
+            UpdateOrdering::SeqCst => atomic_xchg(c, 0, value, SeqCst),
         }
     }
 
     /// `Ok(previous)` if it held `current` (now `new`), else
-    /// `Err(actual)`. `failure` is a load ordering (panics on `Release`
-    /// / `AcqRel`).
-    #[track_caller]
+    /// `Err(actual)`. `failure` orders the load of a failed exchange.
     pub fn compare_exchange(
-        self, current: T, new: T, success: AtomicOrdering, failure: AtomicOrdering,
+        self, current: T, new: T, success: UpdateOrdering, failure: LoadOrdering,
     ) -> Result<T, T> {
         let old = match failure {
-            AtomicOrdering::Relaxed => cas_relaxed_fail(self.cell, current, new, success),
-            AtomicOrdering::Acquire => cas_acquire_fail(self.cell, current, new, success),
-            AtomicOrdering::SeqCst => cas_seqcst_fail(self.cell, current, new, success),
-            _ => panic("Atomic::compare_exchange: `Release` / `AcqRel` is not a failure ordering"),
+            LoadOrdering::Relaxed => cas_relaxed_fail(self.cell, current, new, success),
+            LoadOrdering::Acquire => cas_acquire_fail(self.cell, current, new, success),
+            LoadOrdering::SeqCst => cas_seqcst_fail(self.cell, current, new, success),
         };
         if old == current {
             return Result::Ok(old);
@@ -164,79 +179,83 @@ impl<T: AtomicPrimitive + PartialEq> Atomic<T> {
 
     /// Never fails spuriously here (same as `compare_exchange`).
     pub fn compare_exchange_weak(
-        self, current: T, new: T, success: AtomicOrdering, failure: AtomicOrdering,
+        self, current: T, new: T, success: UpdateOrdering, failure: LoadOrdering,
     ) -> Result<T, T> {
         self.compare_exchange(current, new, success, failure)
     }
 
     // Integer-only (`bool` is rejected by the intrinsic for add / sub).
     #[discardable]
-    pub fn fetch_add(self, value: T, ordering: AtomicOrdering = SeqCst) -> T {
+    pub fn fetch_add(self, value: T, ordering: UpdateOrdering = UpdateOrdering::SeqCst) -> T {
         let c = self.cell;
         match ordering {
-            AtomicOrdering::Relaxed => atomic_add(c, 0, value, Relaxed),
-            AtomicOrdering::Acquire => atomic_add(c, 0, value, Acquire),
-            AtomicOrdering::Release => atomic_add(c, 0, value, Release),
-            AtomicOrdering::AcqRel => atomic_add(c, 0, value, AcqRel),
-            AtomicOrdering::SeqCst => atomic_add(c, 0, value, SeqCst),
+            UpdateOrdering::Relaxed => atomic_add(c, 0, value, Relaxed),
+            UpdateOrdering::Acquire => atomic_add(c, 0, value, Acquire),
+            UpdateOrdering::Release => atomic_add(c, 0, value, Release),
+            UpdateOrdering::AcqRel => atomic_add(c, 0, value, AcqRel),
+            UpdateOrdering::SeqCst => atomic_add(c, 0, value, SeqCst),
         }
     }
     #[discardable]
-    pub fn fetch_sub(self, value: T, ordering: AtomicOrdering = SeqCst) -> T {
+    pub fn fetch_sub(self, value: T, ordering: UpdateOrdering = UpdateOrdering::SeqCst) -> T {
         let c = self.cell;
         match ordering {
-            AtomicOrdering::Relaxed => atomic_sub(c, 0, value, Relaxed),
-            AtomicOrdering::Acquire => atomic_sub(c, 0, value, Acquire),
-            AtomicOrdering::Release => atomic_sub(c, 0, value, Release),
-            AtomicOrdering::AcqRel => atomic_sub(c, 0, value, AcqRel),
-            AtomicOrdering::SeqCst => atomic_sub(c, 0, value, SeqCst),
+            UpdateOrdering::Relaxed => atomic_sub(c, 0, value, Relaxed),
+            UpdateOrdering::Acquire => atomic_sub(c, 0, value, Acquire),
+            UpdateOrdering::Release => atomic_sub(c, 0, value, Release),
+            UpdateOrdering::AcqRel => atomic_sub(c, 0, value, AcqRel),
+            UpdateOrdering::SeqCst => atomic_sub(c, 0, value, SeqCst),
         }
     }
     #[discardable]
-    pub fn fetch_and(self, value: T, ordering: AtomicOrdering = SeqCst) -> T {
+    pub fn fetch_and(self, value: T, ordering: UpdateOrdering = UpdateOrdering::SeqCst) -> T {
         let c = self.cell;
         match ordering {
-            AtomicOrdering::Relaxed => atomic_and(c, 0, value, Relaxed),
-            AtomicOrdering::Acquire => atomic_and(c, 0, value, Acquire),
-            AtomicOrdering::Release => atomic_and(c, 0, value, Release),
-            AtomicOrdering::AcqRel => atomic_and(c, 0, value, AcqRel),
-            AtomicOrdering::SeqCst => atomic_and(c, 0, value, SeqCst),
+            UpdateOrdering::Relaxed => atomic_and(c, 0, value, Relaxed),
+            UpdateOrdering::Acquire => atomic_and(c, 0, value, Acquire),
+            UpdateOrdering::Release => atomic_and(c, 0, value, Release),
+            UpdateOrdering::AcqRel => atomic_and(c, 0, value, AcqRel),
+            UpdateOrdering::SeqCst => atomic_and(c, 0, value, SeqCst),
         }
     }
     #[discardable]
-    pub fn fetch_or(self, value: T, ordering: AtomicOrdering = SeqCst) -> T {
+    pub fn fetch_or(self, value: T, ordering: UpdateOrdering = UpdateOrdering::SeqCst) -> T {
         let c = self.cell;
         match ordering {
-            AtomicOrdering::Relaxed => atomic_or(c, 0, value, Relaxed),
-            AtomicOrdering::Acquire => atomic_or(c, 0, value, Acquire),
-            AtomicOrdering::Release => atomic_or(c, 0, value, Release),
-            AtomicOrdering::AcqRel => atomic_or(c, 0, value, AcqRel),
-            AtomicOrdering::SeqCst => atomic_or(c, 0, value, SeqCst),
+            UpdateOrdering::Relaxed => atomic_or(c, 0, value, Relaxed),
+            UpdateOrdering::Acquire => atomic_or(c, 0, value, Acquire),
+            UpdateOrdering::Release => atomic_or(c, 0, value, Release),
+            UpdateOrdering::AcqRel => atomic_or(c, 0, value, AcqRel),
+            UpdateOrdering::SeqCst => atomic_or(c, 0, value, SeqCst),
         }
     }
     #[discardable]
-    pub fn fetch_xor(self, value: T, ordering: AtomicOrdering = SeqCst) -> T {
+    pub fn fetch_xor(self, value: T, ordering: UpdateOrdering = UpdateOrdering::SeqCst) -> T {
         let c = self.cell;
         match ordering {
-            AtomicOrdering::Relaxed => atomic_xor(c, 0, value, Relaxed),
-            AtomicOrdering::Acquire => atomic_xor(c, 0, value, Acquire),
-            AtomicOrdering::Release => atomic_xor(c, 0, value, Release),
-            AtomicOrdering::AcqRel => atomic_xor(c, 0, value, AcqRel),
-            AtomicOrdering::SeqCst => atomic_xor(c, 0, value, SeqCst),
+            UpdateOrdering::Relaxed => atomic_xor(c, 0, value, Relaxed),
+            UpdateOrdering::Acquire => atomic_xor(c, 0, value, Acquire),
+            UpdateOrdering::Release => atomic_xor(c, 0, value, Release),
+            UpdateOrdering::AcqRel => atomic_xor(c, 0, value, AcqRel),
+            UpdateOrdering::SeqCst => atomic_xor(c, 0, value, SeqCst),
         }
     }
 }
 
 impl Atomic<i32> {
-    /// Block while the value is `expected`, at most `timeout` ns (< 0:
-    /// no limit), or until `wake`; may return spuriously, so re-check.
-    pub fn wait(self, expected: i32, timeout_ns: i64 = -1) {
-        unsafe { rok_sync_wait(self.cell, 0, expected, timeout_ns) };
+    /// Block while the value is `expected`, or until `wake`; may return
+    /// spuriously, so re-check.
+    pub fn wait(self, expected: i32) {
+        unsafe { rok_sync_wait(self.cell, 0, expected, -1) };
     }
 
-    /// `wait` for at most `timeout` (a negative one: no limit).
+    /// `wait` for at most `timeout` (none left: returns at once).
     pub fn wait_timeout(self, expected: i32, timeout: rok::core::task::time::Duration) {
-        self.wait(expected, timeout.as_ns());
+        let ns = timeout.as_ns();
+        if ns < 0 {
+            ns = 0;
+        }
+        unsafe { rok_sync_wait(self.cell, 0, expected, ns) };
     }
 
     /// Wake every thread in `wait` on this cell.
@@ -246,31 +265,31 @@ impl Atomic<i32> {
 }
 
 // `compare_exchange` per failure ordering, each choosing the success one.
-fn cas_relaxed_fail<T>(c: GcBuf<T>, cur: T, new: T, success: AtomicOrdering) -> T {
+fn cas_relaxed_fail<T>(c: GcBuf<T>, cur: T, new: T, success: UpdateOrdering) -> T {
     match success {
-        AtomicOrdering::Relaxed => atomic_cas(c, 0, cur, new, Relaxed, Relaxed),
-        AtomicOrdering::Acquire => atomic_cas(c, 0, cur, new, Acquire, Relaxed),
-        AtomicOrdering::Release => atomic_cas(c, 0, cur, new, Release, Relaxed),
-        AtomicOrdering::AcqRel => atomic_cas(c, 0, cur, new, AcqRel, Relaxed),
-        AtomicOrdering::SeqCst => atomic_cas(c, 0, cur, new, SeqCst, Relaxed),
+        UpdateOrdering::Relaxed => atomic_cas(c, 0, cur, new, Relaxed, Relaxed),
+        UpdateOrdering::Acquire => atomic_cas(c, 0, cur, new, Acquire, Relaxed),
+        UpdateOrdering::Release => atomic_cas(c, 0, cur, new, Release, Relaxed),
+        UpdateOrdering::AcqRel => atomic_cas(c, 0, cur, new, AcqRel, Relaxed),
+        UpdateOrdering::SeqCst => atomic_cas(c, 0, cur, new, SeqCst, Relaxed),
     }
 }
-fn cas_acquire_fail<T>(c: GcBuf<T>, cur: T, new: T, success: AtomicOrdering) -> T {
+fn cas_acquire_fail<T>(c: GcBuf<T>, cur: T, new: T, success: UpdateOrdering) -> T {
     match success {
-        AtomicOrdering::Relaxed => atomic_cas(c, 0, cur, new, Relaxed, Acquire),
-        AtomicOrdering::Acquire => atomic_cas(c, 0, cur, new, Acquire, Acquire),
-        AtomicOrdering::Release => atomic_cas(c, 0, cur, new, Release, Acquire),
-        AtomicOrdering::AcqRel => atomic_cas(c, 0, cur, new, AcqRel, Acquire),
-        AtomicOrdering::SeqCst => atomic_cas(c, 0, cur, new, SeqCst, Acquire),
+        UpdateOrdering::Relaxed => atomic_cas(c, 0, cur, new, Relaxed, Acquire),
+        UpdateOrdering::Acquire => atomic_cas(c, 0, cur, new, Acquire, Acquire),
+        UpdateOrdering::Release => atomic_cas(c, 0, cur, new, Release, Acquire),
+        UpdateOrdering::AcqRel => atomic_cas(c, 0, cur, new, AcqRel, Acquire),
+        UpdateOrdering::SeqCst => atomic_cas(c, 0, cur, new, SeqCst, Acquire),
     }
 }
-fn cas_seqcst_fail<T>(c: GcBuf<T>, cur: T, new: T, success: AtomicOrdering) -> T {
+fn cas_seqcst_fail<T>(c: GcBuf<T>, cur: T, new: T, success: UpdateOrdering) -> T {
     match success {
-        AtomicOrdering::Relaxed => atomic_cas(c, 0, cur, new, Relaxed, SeqCst),
-        AtomicOrdering::Acquire => atomic_cas(c, 0, cur, new, Acquire, SeqCst),
-        AtomicOrdering::Release => atomic_cas(c, 0, cur, new, Release, SeqCst),
-        AtomicOrdering::AcqRel => atomic_cas(c, 0, cur, new, AcqRel, SeqCst),
-        AtomicOrdering::SeqCst => atomic_cas(c, 0, cur, new, SeqCst, SeqCst),
+        UpdateOrdering::Relaxed => atomic_cas(c, 0, cur, new, Relaxed, SeqCst),
+        UpdateOrdering::Acquire => atomic_cas(c, 0, cur, new, Acquire, SeqCst),
+        UpdateOrdering::Release => atomic_cas(c, 0, cur, new, Release, SeqCst),
+        UpdateOrdering::AcqRel => atomic_cas(c, 0, cur, new, AcqRel, SeqCst),
+        UpdateOrdering::SeqCst => atomic_cas(c, 0, cur, new, SeqCst, SeqCst),
     }
 }
 
@@ -886,7 +905,7 @@ impl<T: Default> Cell<T> {
 
 // The module paths of stdlib 2.16.6.
 pub mod atomic {
-    pub use rok::core::sync::{Atomic, AtomicOrdering, AtomicPrimitive};
+    pub use rok::core::sync::{Atomic, AtomicPrimitive, LoadOrdering, StoreOrdering, UpdateOrdering};
 }
 pub mod mutex {
     pub use rok::core::sync::{Mutex, MutexGuard, LockFuture};

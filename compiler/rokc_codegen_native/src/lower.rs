@@ -2461,6 +2461,23 @@ impl<'c, 'a> FnLower<'c, 'a> {
                 let d = out(self, elem_ty);
                 match *op {
                     "load" => self.push(Inst::AtomicLoad { k, dst: d, ptr }),
+                    // An exchange whose old value is dropped; it yields the
+                    // value stored.
+                    "store" => {
+                        let old = self.tmp_k(k);
+                        self.push(Inst::AtomicRmw {
+                            op: Rmw::Xchg,
+                            k,
+                            dst: old,
+                            ptr,
+                            val: ops[0],
+                        });
+                        self.push(Inst::Mov {
+                            k,
+                            dst: d,
+                            src: ops[0],
+                        });
+                    }
                     "cas" => self.push(Inst::Cas {
                         k,
                         dst: d,

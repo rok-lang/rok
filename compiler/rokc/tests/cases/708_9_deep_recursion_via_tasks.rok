@@ -8,8 +8,10 @@
 // recursion is split into tasks: awaiting a spawned task only parks the
 // awaiting frame, the stack never grows with the depth. Each level is
 // its own heap frame (7.8.6 / 8.10.5: one frame per coroutine call).
+use rok::core::sync::{LoadOrdering, UpdateOrdering};
+
 async fn deep(n: i32, frames: Atomic<i32>) -> i32 {
-    frames.fetch_add(1, SeqCst);
+    frames.fetch_add(1, UpdateOrdering::SeqCst);
     if n == 0 { return 0; }
     1 + await task::spawn_local(deep(n - 1, frames))
 }
@@ -17,5 +19,5 @@ async fn deep(n: i32, frames: Atomic<i32>) -> i32 {
 async fn main() {
     let frames = Atomic::new(0);
     println(f"depth {await deep(50000, frames)} via tasks");
-    println(f"frames: {frames.load(SeqCst)}");
+    println(f"frames: {frames.load(LoadOrdering::SeqCst)}");
 }

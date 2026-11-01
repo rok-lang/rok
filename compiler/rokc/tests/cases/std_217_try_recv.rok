@@ -4,8 +4,7 @@
 // expect-stdout:
 // empty 7 closed
 
-// `try_recv_status` tells an empty channel from a closed one, which
-// `try_recv` reports alike as `none`.
+// `try_recv` tells an empty channel from a closed one.
 fn show(r: i32 | channel::Empty | channel::Closed) -> str {
     match r {
         v: i32 => f"{v}",
@@ -16,10 +15,10 @@ fn show(r: i32 | channel::Empty | channel::Closed) -> str {
 
 fn main() {
     let (tx, rx) = channel::<i32>();
-    let a = show(rx.try_recv_status());
+    let a = show(rx.try_recv());
     try! tx.send(7);
     tx.close();
-    let b = show(rx.try_recv_status());
-    let c = show(rx.try_recv_status());
+    let b = show(rx.try_recv());
+    let c = show(rx.try_recv());
     println(f"{a} {b} {c}");
 }

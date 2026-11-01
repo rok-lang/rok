@@ -10,6 +10,7 @@
 // process group. 3.7.5: `on_signal(sig, handler)` runs `handler` when the
 // signal arrives (on a dispatcher thread), `raise(sig)` sends one to
 // this process, and an uncatchable signal throws `SignalError`.
+use rok::core::sync::{LoadOrdering, UpdateOrdering};
 use rok::std::process;
 use rok::std::process::{Command, Signal};
 use rok::std::thread;
@@ -25,14 +26,14 @@ fn main() throws (IoError) {
     println(f"plain: {try leads_group(Command::new("sh"))}");
 
     let hits: Atomic<i64> = Atomic::new(0);
-    try! process::on_signal(Signal::Hangup, || { hits.fetch_add(1, SeqCst); });
+    try! process::on_signal(Signal::Hangup, || { hits.fetch_add(1, UpdateOrdering::SeqCst); });
     try process::raise(1);
     // Wait for the dispatcher before the next one: a second signal
     // still pending in the kernel would merge with the first.
-    for _ in 0..200 { if hits.load(SeqCst) >= 1 { break; } thread::sleep(Duration::ms(10)); }
+    for _ in 0..200 { if hits.load(LoadOrdering::SeqCst) >= 1 { break; } thread::sleep(Duration::ms(10)); }
     try process::raise(1);
-    for _ in 0..200 { if hits.load(SeqCst) >= 2 { break; } thread::sleep(Duration::ms(10)); }
-    println(f"handled: {hits.load(SeqCst)}");
+    for _ in 0..200 { if hits.load(LoadOrdering::SeqCst) >= 2 { break; } thread::sleep(Duration::ms(10)); }
+    println(f"handled: {hits.load(LoadOrdering::SeqCst)}");
 
     let e = try { process::on_signal(Signal::Kill, || {}); "ok" } catch e { f"{e:?}" };
     println(f"sigkill: {e}");

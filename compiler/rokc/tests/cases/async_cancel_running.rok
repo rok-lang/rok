@@ -6,13 +6,17 @@
 // A task cancelled while a worker is polling it (its `await` already
 // checked the flag) is polled again and leaves through its `finally`.
 // The main task's `sleep` must also fire while every worker is busy with
-// tasks that never park.
+// tasks that never park. A task cancelled before its first poll never
+// runs, so each round waits until all of its tasks have started.
 let cleanups = Mutex::new(0);
+let started = Mutex::new(0);
+let want = 0;
 let cancelled = 0;
 for round in 0..8 {
     let tasks: List<Task<i32>> = List::new();
     for i in 0..64 {
         tasks.push(task::spawn(async {
+            using s = started.lock() { s.set(s.get() + 1); }
             let _ = {
                 while true { await task::yield_now(); }
             } finally {
@@ -21,7 +25,12 @@ for round in 0..8 {
             1
         }));
     }
-    await task::sleep(Duration::ms(1));
+    want += 64;
+    let ready = false;
+    while !ready {
+        await task::sleep(Duration::ms(1));
+        using s = started.lock() { ready = s.get() == want; }
+    }
     for t in tasks { t.cancel(); }
     for t in tasks {
         try await t.join() catch e: task::CancellationError { cancelled += 1; 0 };

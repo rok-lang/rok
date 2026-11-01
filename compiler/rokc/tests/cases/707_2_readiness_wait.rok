@@ -12,6 +12,7 @@
 // reactor (7.7.1) and parks the task; the worker runs other tasks
 // meanwhile, and the readiness edge from another thread's write wakes
 // the task, which then reads. A pipe's write end is writable at once.
+use rok::core::sync::{LoadOrdering, StoreOrdering, UpdateOrdering};
 use rok::bare::alloc::{Layout, alloc};
 use rok::bare::ptr::{CPtr, Ptr};
 use rok::bare::mem::transmute_unchecked;
@@ -44,7 +45,7 @@ fn main() throws (rok::bare::alloc::LayoutError) -> i32 {
     let ticks = Atomic::new(0);
     let done = Atomic::new(0);
     let writer = thread::spawn(|| {
-        while ticks.load(SeqCst) < 3 { thread::sleep(Duration::ms(1)); }
+        while ticks.load(LoadOrdering::SeqCst) < 3 { thread::sleep(Duration::ms(1)); }
         let c = byte(base, 12);
         unsafe { c.write(122u8) };
         unsafe { write(wfd, c, 1usize) };
@@ -54,12 +55,12 @@ fn main() throws (rok::bare::alloc::LayoutError) -> i32 {
             await task::readable(rfd);
             let b = byte(base, 8);
             let n = unsafe { read(rfd, b, 1usize) };
-            done.store(1, SeqCst);
+            done.store(1, StoreOrdering::SeqCst);
             f"{n} {char::from_u32(unsafe { b.read() } as u32) ?? '?'}"
         });
         let other = task::spawn(async {
-            while done.load(SeqCst) == 0 {
-                ticks.fetch_add(1, SeqCst);
+            while done.load(LoadOrdering::SeqCst) == 0 {
+                ticks.fetch_add(1, UpdateOrdering::SeqCst);
                 await task::sleep(Duration::ms(1));
             }
         });
@@ -68,7 +69,7 @@ fn main() throws (rok::bare::alloc::LayoutError) -> i32 {
         r
     });
     try! writer.join();
-    println(f"other task ran while parked: {ticks.load(SeqCst) >= 3}");
+    println(f"other task ran while parked: {ticks.load(LoadOrdering::SeqCst) >= 3}");
     println(f"read after readiness: {got}");
     return 0;
 }

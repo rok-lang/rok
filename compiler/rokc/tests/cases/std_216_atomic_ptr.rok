@@ -6,6 +6,7 @@
 
 // Stdlib 2.16.2: `Atomic<Ptr<T>>` (`AtomicPrimitive` covers `Ptr`):
 // load / store / swap / compare_exchange on the address word.
+use rok::core::sync::{LoadOrdering, UpdateOrdering};
 use rok::bare::ptr::Ptr;
 
 fn main() {
@@ -14,7 +15,7 @@ fn main() {
     let c = a.with_addr(24);
     let at: Atomic<Ptr<u64>> = Atomic::new(a);
     let first = at.swap(b);
-    let ok = at.compare_exchange(b, c, SeqCst, SeqCst).is_ok();
-    let bad = at.compare_exchange(b, a, SeqCst, SeqCst).is_ok();
+    let ok = at.compare_exchange(b, c, UpdateOrdering::SeqCst, LoadOrdering::SeqCst).is_ok();
+    let bad = at.compare_exchange(b, a, UpdateOrdering::SeqCst, LoadOrdering::SeqCst).is_ok();
     println(f"{first.addr()} {b.addr()} {ok} {b.addr()} {at.load().addr()} {bad}");
 }

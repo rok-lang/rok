@@ -234,7 +234,7 @@ pub const fn byte_buf(n: usize) -> List<u8> {
 
 #[intrinsic("rok.atomic.xchg")]
 #[discardable]
-fn atomic_xchg<T>(buf: GcBuf<T>, i: usize, v: T, o: AtomicOrdering) -> T;
+fn atomic_xchg<T>(buf: GcBuf<T>, i: usize, v: T, o: rok::core::sync::UpdateOrdering) -> T;
 
 /// The OS handle in `cell[i]`, leaving `empty` there. Copies of a handle
 /// share its cell, so of any that release it, even at once from several
@@ -246,15 +246,15 @@ pub(pkg) fn take_handle<T>(cell: GcBuf<T>, i: usize, empty: T) -> T {
 
 #[intrinsic("rok.atomic.cas")]
 #[discardable]
-fn atomic_cas<T>(buf: GcBuf<T>, i: usize, current: T, new: T, success: AtomicOrdering, failure: AtomicOrdering) -> T;
+fn atomic_cas<T>(buf: GcBuf<T>, i: usize, current: T, new: T, success: rok::core::sync::UpdateOrdering, failure: rok::core::sync::LoadOrdering) -> T;
 #[intrinsic("rok.atomic.sub")]
 #[discardable]
-fn atomic_sub<T>(buf: GcBuf<T>, i: usize, v: T, o: AtomicOrdering) -> T;
+fn atomic_sub<T>(buf: GcBuf<T>, i: usize, v: T, o: rok::core::sync::UpdateOrdering) -> T;
 #[intrinsic("rok.atomic.or")]
 #[discardable]
-fn atomic_or<T>(buf: GcBuf<T>, i: usize, v: T, o: AtomicOrdering) -> T;
+fn atomic_or<T>(buf: GcBuf<T>, i: usize, v: T, o: rok::core::sync::UpdateOrdering) -> T;
 #[intrinsic("rok.atomic.load")]
-fn atomic_load<T>(buf: GcBuf<T>, i: usize, o: AtomicOrdering) -> T;
+fn atomic_load<T>(buf: GcBuf<T>, i: usize, o: rok::core::sync::LoadOrdering) -> T;
 
 // Calls in flight on a handle that copies share. `cell[u]` counts them
 // by 2, and bit 0 is set once the handle is closed. A close while calls

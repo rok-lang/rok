@@ -1,0 +1,40 @@
+// spec: std 200-core/218-task §2.18.1 / §2.18.4
+// expect-exit: 0
+// expect-stdout:
+// race fast
+// loser cancelled true
+// loser join: cancelled
+// finished loser 1
+// timeout TimeoutError
+// timed out cancelled true
+// timed out join: cancelled
+
+// `race` cancels the tasks that lose and `timeout` the task that runs
+// out: `join` on one throws `CancellationError`. A loser that finished
+// before the cancel keeps its value.
+async fn after(ms: i64, name: str) -> str {
+    await task::sleep(Duration::ms(ms));
+    name
+}
+
+async fn main() {
+    let slow = task::spawn(after(5000, "slow"));
+    let first = await task::race([slow, task::spawn(after(1, "fast"))]);
+    println(f"race {first}");
+    println(f"loser cancelled {slow.is_cancelled()}");
+    let l = try await slow.join() catch _: task::CancellationError { "cancelled" };
+    println(f"loser join: {l}");
+
+    let a = task::spawn(async { 1 });
+    let b = task::spawn(async { 2 });
+    await task::sleep(Duration::ms(20));
+    let won = await task::race([a, b]);
+    println(f"finished loser {won + (await b) - 2}");
+
+    let late = task::spawn(after(5000, "late"));
+    let w = try await task::timeout(Duration::ms(5), late) catch e: task::TimeoutError { f"{e:?}" };
+    println(f"timeout {w}");
+    println(f"timed out cancelled {late.is_cancelled()}");
+    let j = try await late.join() catch _: task::CancellationError { "cancelled" };
+    println(f"timed out join: {j}");
+}

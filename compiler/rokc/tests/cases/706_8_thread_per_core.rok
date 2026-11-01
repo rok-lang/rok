@@ -36,7 +36,7 @@ async fn hop() -> bool {
 }
 
 async fn run() -> i32 {
-    println(f"workers {task::workers()}");
+    println(f"workers {task::worker_count()}");
     let tasks: List<Task<(u64, bool)>> = List::new();
     for i in 0..6 {
         tasks.push(task::spawn(async {

@@ -7208,10 +7208,12 @@ impl Intrinsic {
                     return (tys.split('.').count() == 2).then_some(Self::Convert);
                 }
                 if let Some(op) = rest.strip_prefix("atomic.") {
-                    return ["load", "xchg", "add", "sub", "and", "or", "xor", "cas"]
-                        .into_iter()
-                        .find(|o| *o == op)
-                        .map(Self::Atomic);
+                    return [
+                        "load", "store", "xchg", "add", "sub", "and", "or", "xor", "cas",
+                    ]
+                    .into_iter()
+                    .find(|o| *o == op)
+                    .map(Self::Atomic);
                 }
                 // `rok.OP_assign.TYPE` (stdlib 2.4.6): the op, written
                 // back through the `ref self` receiver.

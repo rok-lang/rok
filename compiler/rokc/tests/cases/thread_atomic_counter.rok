@@ -11,6 +11,7 @@
 // std::thread (304): eight OS threads bump one `Atomic<i32>` (2.16.2);
 // `join` returns each closure's value. A `()` closure, `Builder`, and
 // `ThreadId`.
+use rok::core::sync::UpdateOrdering;
 use rok::std::thread;
 use rok::std::time::Duration;
 
@@ -23,7 +24,7 @@ fn main() -> i32 {
         hs.push(thread::spawn(|| {
             let j = 0;
             while j < 100000 {
-                n.fetch_add(1, Relaxed);
+                n.fetch_add(1, UpdateOrdering::Relaxed);
                 j += 1;
             }
             k * 10

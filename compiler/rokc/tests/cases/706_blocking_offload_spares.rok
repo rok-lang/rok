@@ -11,7 +11,7 @@ use rok::std::thread;
 use rok::std::time::Duration;
 
 async fn run() -> i32 {
-    let n = task::workers();
+    let n = task::worker_count();
     let seen: Set<u64> = Set::new();
     for round in 0..8 {
         let sleepers: List<Task<u64>> = List::new();

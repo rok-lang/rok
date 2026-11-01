@@ -42,7 +42,7 @@ let used = 0usize;
 using g = pool_ids.lock() { used = g.get().len(); }
 println(f"16 tasks {calls} calls within 16 threads {used <= 16}");
 
-let jobs: List<task::Blocking<(i32, u64)>> = List::new();
+let jobs: List<Task<(i32, u64)>> = List::new();
 for i in 0..1000 {
     jobs.push(task::spawn_blocking(|| {
         thread::sleep(Duration::ms(1));

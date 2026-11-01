@@ -29,7 +29,7 @@ println(f"local: {slot.get()}");
 thread::current().unpark();
 thread::park();
 println("park after unpark returns");
-println(f"cpus {task::cpu_count()}, workers {task::workers()}");
+println(f"cpus {task::cpu_count()}, workers {task::worker_count()}");
 let a = task::spawn(async { 1 + 2 });
 let b = task::spawn(async { await task::sleep(Duration::ms(2)); 3 });
 println(f"tasks: {(await a) + (await b)}");

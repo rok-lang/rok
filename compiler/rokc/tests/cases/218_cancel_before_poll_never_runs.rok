@@ -1,0 +1,17 @@
+// spec: std 200-core/218-task §2.18.4
+// expect-exit: 0
+// expect-stdout:
+// ran false
+// join: cancelled
+
+// A task cancelled before its first poll never runs, not even up to its
+// first `await`. `spawn_local` queues it behind this task, which cancels
+// it before yielding.
+async fn main() {
+    let ran = Cell::new(false);
+    let t = task::spawn_local(async { ran.set(true); 1 });
+    t.cancel();
+    let j = try await t.join() catch _: task::CancellationError { -1 };
+    println(f"ran {ran.get()}");
+    println(f"join: {if j == -1 { "cancelled" } else { "value" }}");
+}

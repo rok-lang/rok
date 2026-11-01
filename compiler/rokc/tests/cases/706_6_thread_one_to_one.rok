@@ -9,6 +9,7 @@
 // spec 7.6.6: `thread::spawn` maps 1:1 onto an OS thread - each spawned
 // thread has its own id, distinct from the main thread - and `join`
 // hands back the closure's value. `rok_cpu_count` reports >= 1.
+use rok::core::sync::UpdateOrdering;
 use rok::std::thread;
 
 extern "C" {
@@ -25,7 +26,7 @@ fn main() -> i32 {
     while i < 4 {
         let k = i;
         hs.push(thread::spawn(|| {
-            gate.fetch_add(1, Relaxed);
+            gate.fetch_add(1, UpdateOrdering::Relaxed);
             k * 10
         }));
         i += 1;

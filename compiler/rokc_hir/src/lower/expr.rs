@@ -10721,8 +10721,8 @@ fn lower_atomic_intrinsic(
         discard_args(ctx, args);
         return ctx.error_expr(span, format!("`atomic_{op}` takes {want} argument(s)"));
     }
-    // The orderings must be literal `AtomicOrdering` variants: LLVM fixes
-    // them per instruction.
+    // The orderings must be literal ordering variants: LLVM fixes them
+    // per instruction.
     let mut order = ["seq_cst"; 2];
     for (k, e) in pos[2 + values..].iter().enumerate() {
         let name = match &e.kind {
@@ -10740,19 +10740,25 @@ fn lower_atomic_intrinsic(
                 return ctx.error_expr(
                     span,
                     format!(
-                        "`atomic_{op}`: the memory ordering must be a constant `AtomicOrdering` \
+                        "`atomic_{op}`: the memory ordering must be a constant ordering \
                          variant (`Relaxed`, `Acquire`, `Release`, `AcqRel`, `SeqCst`)"
                     ),
                 );
             }
         };
-        // A load cannot release; a failed `cas` is a load.
-        if (op == "load" || k == 1) && matches!(llvm, "release" | "acq_rel") {
+        // A load cannot release, a store cannot acquire; a failed `cas` is
+        // a load.
+        let bad = if op == "store" {
+            matches!(llvm, "acquire" | "acq_rel")
+        } else {
+            (op == "load" || k == 1) && matches!(llvm, "release" | "acq_rel")
+        };
+        if bad {
             discard_args(ctx, args);
-            let what = if op == "load" {
-                "a load"
-            } else {
-                "a failed compare-exchange"
+            let what = match op {
+                "load" => "a load",
+                "store" => "a store",
+                _ => "a failed compare-exchange",
             };
             return ctx.error_expr(
                 span,
@@ -10767,7 +10773,7 @@ fn lower_atomic_intrinsic(
     let buf = lower_expected(ctx, pos[0], HirTy::Unknown);
     if let HirTy::GcBuf(e) = &buf.ty {
         if let Some((id, word)) = transparent_word(ctx, e) {
-            if !matches!(op, "load" | "xchg" | "cas") {
+            if !matches!(op, "load" | "store" | "xchg" | "cas") {
                 discard_args(ctx, &args[1..]);
                 return ctx.error_expr(
                     span,

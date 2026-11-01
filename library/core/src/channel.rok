@@ -64,10 +64,10 @@ impl<T> Debug for TrySendError<T> {
 
 impl<T> Error for TrySendError<T> {}
 
-/// `try_recv_status`: nothing is queued, and a sender is still open.
+/// `try_recv`: nothing is queued, and a sender is still open.
 pub struct Empty;
 
-/// `try_recv_status`: nothing is queued, and every sender has closed.
+/// `try_recv`: nothing is queued, and every sender has closed.
 pub struct Closed;
 
 // By hand: a derive's `Closed` would also name the send errors'
@@ -535,15 +535,9 @@ impl<T> Receiver<T> {
         }
     }
 
-    /// The next value if one is queued; `none` if empty or closed
-    /// (`try_recv_status` tells the two apart).
-    pub fn try_recv(self) -> T | none {
-        self.ch.take()
-    }
-
     /// The next value if one is queued, else whether a sender may still
     /// send one (`Empty`) or every sender has closed (`Closed`).
-    pub fn try_recv_status(self) -> T | Empty | Closed {
+    pub fn try_recv(self) -> T | Empty | Closed {
         // `closed` first, as in `recv`.
         let closed = self.ch.senders() == 0;
         if let v: T = self.ch.take() {

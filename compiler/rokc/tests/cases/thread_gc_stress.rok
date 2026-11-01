@@ -7,6 +7,7 @@
 // ok
 
 // Four threads make garbage while two check live data across collections.
+use rok::core::sync::{LoadOrdering, UpdateOrdering};
 use rok::std::thread;
 
 extern "C" {
@@ -22,7 +23,7 @@ fn note_peak(peak: Atomic<usize>) {
     let live = unsafe { rok_gc_stats_live_bytes() };
     let cur = peak.load();
     while live > cur {
-        match peak.compare_exchange(cur, live, SeqCst, SeqCst) {
+        match peak.compare_exchange(cur, live, UpdateOrdering::SeqCst, LoadOrdering::SeqCst) {
             Result::Ok(_) => return,
             Result::Err(now) => { cur = now; },
         }

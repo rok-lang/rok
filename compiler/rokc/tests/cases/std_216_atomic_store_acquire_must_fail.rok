@@ -1,0 +1,11 @@
+// spec: std 216-sync §2.16.2
+// expect-error: no variant `Acquire`
+
+// A store cannot acquire: `StoreOrdering` has no `Acquire`, so the
+// mistake is a compile error, not a silent `SeqCst` or a panic.
+use rok::core::sync::StoreOrdering;
+
+fn main() {
+    let a = Atomic::new(0);
+    a.store(1, StoreOrdering::Acquire);
+}
