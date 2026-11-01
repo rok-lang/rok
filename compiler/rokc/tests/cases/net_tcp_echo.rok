@@ -55,7 +55,7 @@ println(f"blocking echo: {text(back, back.len())}");
 let peer_port = try! server.join();
 println(f"peer is local: {(try! c.local_addr()).port() as i32 == peer_port}");
 try! c.close();
-try! listener.close();
+try! listener_own.close();
 
 // Async: the server task accepts, a task per connection echoes.
 let l2_own = try! TcpListener::bind(any);
@@ -114,11 +114,12 @@ let big = task::spawn(async {
     });
     let got = try! await s.read_to_end_async();
     await w;
+    try! s_own.close();
     got.len()
 });
 println(f"async read_to_end: {await big} bytes");
 await srv;
-try! l2.close();
+try! l2_own.close();
 
 // `incoming()` over a blocking listener.
 let l3_own = try! net::tcp_listen("127.0.0.1:0");
@@ -130,21 +131,25 @@ let t3 = thread::spawn(|| {
     try! c.close();
     0
 });
-for r in l3.incoming() {
-    let s = try! r.get();
+try for s in l3.incoming() {
     let all = try! s.read_to_end();
     println(f"incoming: {text(all, all.len())}");
     try! s.close();
     break;
+} catch e: IoError {
+    println(f"incoming: {e}");
 }
 try! t3.join();
-try! l3.close();
+try! l3_own.close();
 
 let found = (try! net::resolve("localhost:80"))[0];
 println(f"resolve localhost: {found.port() == 80u16}");
 
 // Nobody listens on the closed listener's port any more.
 let refused = false;
-try TcpStream::connect(a3) catch e: IoError { refused = true; };
+try {
+    let s = TcpStream::connect(a3);
+    s.close();
+} catch e: IoError { refused = true; };
 println(f"refused: {refused}");
 // spec: std 302-net §3.2.1

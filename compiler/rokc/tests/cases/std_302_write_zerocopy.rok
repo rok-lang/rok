@@ -27,7 +27,7 @@ fn main() throws (IoError) {
     while sent < buf.len() {
         sent += try c.write_zerocopy(list_tail(buf, sent));
     }
-    try c.close();
+    try! c.close();
     let got = try! h.join();
     let sum = 0u64;
     for b in got { sum += b as u64; }

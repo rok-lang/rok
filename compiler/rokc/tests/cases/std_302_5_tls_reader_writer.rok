@@ -79,7 +79,7 @@ let server = task::spawn_local(async {
     try await srv.write_all_async(data(BIG)) catch e { wrote = f"write: {e.message()}"; };
     let _ = try? await srv.close_notify_async();
     let r = await reader;
-    try! srv.close();
+    try! srv_own.close();
     f"wrote {wrote}, read {r}"
 });
 let ccfg = try! ClientConfig::new();
@@ -103,5 +103,5 @@ let back = try await c.read_to_end_async() catch e { println(f"client read: {e.m
 println(f"client got {back.len()} bytes, intact {back == data(BIG)}");
 println(f"client updates: {await updates}");
 println(f"server: {await server}");
-try! c.close();
+try! c_own.close();
 // spec: std 302-net §3.2.5

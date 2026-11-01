@@ -70,7 +70,8 @@ let idle_own = try! TcpListener::bind(any);
 let idle = unsafe { share(idle_own) };
 let acc = task::spawn(async {
     let r: str = try {
-        await idle.accept_async();
+        let (s, _) = await idle.accept_async();
+        try s.close();
         "accepted"
     } catch e: IoError { f"{e.kind():?} {e.message()}" };
     r
@@ -79,5 +80,7 @@ await parked(1);
 try! idle.close();
 println(f"listener close: {await acc}");
 println(f"registrations left: {task::registrations()}");
+try! idle_own.close();
+try! listener.close();
 
 // spec: std 302-net §3.2.0

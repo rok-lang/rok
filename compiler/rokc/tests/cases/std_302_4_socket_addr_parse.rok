@@ -3,25 +3,48 @@
 // expect-stdout:
 // 127.0.0.1:8080 port 8080 v4 true
 // [::1]:443 v6 true
-// with_port 127.0.0.1:9
+// set_port 127.0.0.1:9 old 127.0.0.1:8080
+// set_ip [::1]:9
+// new 10.0.0.1:80 eq true ne true
+// v6 [fe80::1]:22 flow 7 scope 3 default 0 0
+// ip ::1 v6 true loopback true
 // loopback true unspecified true bits 2130706433
 // v6 loopback true
 // bad rejected
 
-// 3.2.4: `SocketAddr` / `Ipv4Addr` / `Ipv6Addr` parse (`FromStr`),
-// print (`Display`) and expose their parts; no lookup for a literal.
-use rok::std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
+// 3.2.4: `SocketAddr` / `IpAddr` / `Ipv4Addr` / `Ipv6Addr` parse
+// (`FromStr`), print (`Display`) and expose their parts through getters
+// and setters; `==` compares the parts; no lookup for a literal.
+use rok::std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
 
 fn main() {
     let a: SocketAddr = try! "127.0.0.1:8080".parse();
     println(f"{a} port {a.port()} v4 {a.is_ipv4()}");
     let b: SocketAddr = try! "[::1]:443".parse();
     println(f"{b} v6 {b.is_ipv6()}");
-    println(f"with_port {a.with_port(9)}");
-    let ip = Ipv4Addr::new(127, 0, 0, 1);
-    println(f"loopback {ip.is_loopback()} unspecified {Ipv4Addr::UNSPECIFIED.is_unspecified()} bits {ip.to_bits()}");
-    let v6: Ipv6Addr = try! "::1".parse();
-    println(f"v6 loopback {v6.is_loopback()}");
+
+    let c = a;
+    c.set_port(9);
+    println(f"set_port {c} old {a}");
+    c.set_ip(IpAddr::V6(Ipv6Addr::LOCALHOST));
+    println(f"set_ip {c}");
+
+    let d = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1)), 80);
+    let e = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(10, 0, 0, 1), 80));
+    println(f"new {d} eq {d == e} ne {d != a}");
+
+    let v6: Ipv6Addr = try! "fe80::1".parse();
+    let s6 = SocketAddrV6::new(v6, 22, 7, 3);
+    let plain = SocketAddrV6::new(v6, 22);
+    println(f"v6 {s6} flow {s6.flow_info()} scope {s6.scope_id()} default {plain.flow_info()} {plain.scope_id()}");
+
+    let ip: IpAddr = try! "::1".parse();
+    println(f"ip {ip} v6 {ip.is_ipv6()} loopback {ip.is_loopback()}");
+
+    let ip4 = Ipv4Addr::new(127, 0, 0, 1);
+    println(f"loopback {ip4.is_loopback()} unspecified {Ipv4Addr::UNSPECIFIED.is_unspecified()} bits {ip4.to_bits()}");
+    let l6: Ipv6Addr = try! "::1".parse();
+    println(f"v6 loopback {l6.is_loopback()}");
     let bad: Ipv4Addr | ParseError = try "300.1.1.1".parse::<Ipv4Addr>() catch e { e };
     match bad {
         _: Ipv4Addr => println("bad accepted"),

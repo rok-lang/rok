@@ -191,11 +191,12 @@ fn config(cert: str, key: str) throws (TlsError) -> ServerConfig {
 fn serve(l: TcpListener) {
     for (cert, key) in [(PSS, PSS_KEY), (PSS_ANY, PSS_ANY_KEY)] {
         let cfg = try! config(cert, key);
-        let (s, _) = try l.accept() catch _ { return; };
+        let (s, _) = try! l.accept();
         let srv = try Server::new(s, cfg) catch _ { continue; };
         try srv.write_all("hello") catch _ {};
         try! srv.close();
     }
+    try! l.close();
 }
 
 fn main() {

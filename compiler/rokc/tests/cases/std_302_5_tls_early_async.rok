@@ -61,11 +61,12 @@ let server = task::spawn_local(async {
             let n = try! await srv.read_async(buf);
             got = buf[0:n].to_list();
         }
-        log.push(f"resumed {srv.resumed()}, early {early.len()} bytes, got {try! str::from_utf8(got)}");
+        log.push(f"resumed {srv.is_resumed()}, early {early.len()} bytes, got {try! str::from_utf8(got)}");
         try! await srv.write_all_async("ok");
         try! await srv.close_notify_async();
         try! srv.close();
     }
+    try! l.close();
     log
 });
 let ccfg = try! ClientConfig::new();
@@ -75,7 +76,7 @@ for i in 0..3 {
     let s = try! await net::tcp_connect_async(f"{addr}");
     let c = try! await Client::with_config_async(s, "localhost", ccfg);
     let back = try! await c.read_to_end_async();
-    println(f"client {i}: resumed {c.resumed()}, early accepted {c.early_data_accepted()}, reply {try! str::from_utf8(back)}");
+    println(f"client {i}: resumed {c.is_resumed()}, early accepted {c.is_early_data_accepted()}, reply {try! str::from_utf8(back)}");
     try! c.close();
 }
 for line in await server { println(f"server: {line}"); }

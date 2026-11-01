@@ -156,11 +156,12 @@ fn serve(l: TcpListener) {
         let cfg = try! ServerConfig::new(try! Certificate::from_pem(leaf), try! PrivateKey::from_pem(key));
         cfg.ocsp_response = resp;
         cfg.ticket_store = none;
-        let (s, _) = try l.accept() catch _ { return; };
+        let (s, _) = try! l.accept();
         let srv = try Server::new(s, cfg) catch _ { continue; };
         try srv.write_all("hello") catch _ {};
         try! srv.close();
     }
+    try! l.close();
 }
 
 fn main() {
@@ -175,7 +176,7 @@ fn main() {
             println(f"{what}: {e.kind():?} {e.message()} (alert {e.alert()})");
             continue;
         };
-        let got = try c.read_to_end() catch e { println(f"{what}: read {e}"); continue; };
+        let got = try c.read_to_end() catch e { println(f"{what}: read {e}"); try! c.close(); continue; };
         println(f"{what}: {try str::from_utf8(got) catch _ { "?" }}");
         try! c.close();
     }

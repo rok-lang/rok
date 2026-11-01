@@ -3,11 +3,11 @@
 // expect-exit: 0
 // expect-stdout:
 // unreadable: Certificate
-// bundle: 1 roots
+// bundle: 1 roots, alpn 1, pq true
 
-// `ClientConfig::new` throws when the trust store cannot be read.
-// `SSL_CERT_FILE` picks the store, so neither network nor an OS store
-// is needed.
+// `ClientConfig::new` throws when the trust store cannot be read; its
+// other fields have defaults, and a spread keeps them. `SSL_CERT_FILE`
+// picks the store, so neither network nor an OS store is needed.
 use rok::std::env;
 use rok::std::fs;
 use rok::std::path::Path;
@@ -32,7 +32,8 @@ fn check(label: str, path: Path) {
         println(f"{label}: {e.kind():?}");
         return;
     };
-    println(f"{label}: {c.root_certs.len()} roots");
+    let h2 = ClientConfig { alpn_protocols: ["h2".as_bytes().to_list()], ..c };
+    println(f"{label}: {h2.root_certs.len()} roots, alpn {h2.alpn_protocols.len()}, pq {h2.enable_pq}");
 }
 
 fn main() {

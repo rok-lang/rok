@@ -130,17 +130,18 @@ fn certs(pems: List<str>) -> List<Certificate> {
 /// Serve one connection with `chain`; then try `name` against it.
 fn attempt(label: str, chain: str, name: str) {
     let l = try tcp_listen("127.0.0.1:0") catch _ { return; };
-    let port = (try l.local_addr() catch _ { return; }).port();
+    let port = (try! l.local_addr()).port();
     let t = thread::spawn(|| {
-        let (s, _) = try l.accept() catch _ { return; };
-        let key = try PrivateKey::from_pem(KEY) catch _ { return; };
-        let certs = try Certificate::from_pem(chain) catch _ { return; };
+        let (s, _) = try! l.accept();
+        try! l.close();
+        let key = try! PrivateKey::from_pem(KEY);
+        let certs = try! Certificate::from_pem(chain);
         let srv = try Server::new(s, try! ServerConfig::new(certs, key)) catch _ { return; };
         try srv.write_all("x") catch _ {};
         try! srv.close();
     });
     let cfg = ClientConfig { root_certs: certs([CA]), cipher_suites: CipherSuite::all(), alpn_protocols: [], enable_pq: false, client_cert_chain: [], client_key: none, session_cache: none, early_data: [] };
-    let s = try tcp_connect(f"127.0.0.1:{port}") catch _ { return; };
+    let s = try! tcp_connect(f"127.0.0.1:{port}");
     let c = try Client::with_config(s, name, cfg) catch e {
         println(f"{label}: {e.message()}");
         try t.join() catch _ {};

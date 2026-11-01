@@ -73,7 +73,8 @@ let server = task::spawn_local(async {
     // The second client rejects the certificate.
     let (s2, _) = try! await l.accept_async();
     try! l.close();
-    let _ = try await Server::new_async(s2, cfg) catch e { return f"{e.kind():?} {e.message()}"; };
+    let srv2 = try await Server::new_async(s2, cfg) catch e { return f"{e.kind():?} {e.message()}"; };
+    try! srv2.close();
     "unexpected success"
 });
 let ccfg = try! ClientConfig::new();

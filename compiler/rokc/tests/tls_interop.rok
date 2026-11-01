@@ -54,13 +54,15 @@ fn client(args: List<str>) {
         for _ in 0..4096 { buf.push(0u8); }
         try c.write_all("ping\n") catch e {
             println(f"conn {i}: write {e}");
+            try! c.close();
             continue;
         };
         let k = try c.read(buf) catch e {
             println(f"conn {i}: read {e}");
+            try! c.close();
             continue;
         };
-        println(f"conn {i}: resumed {c.resumed()} early {c.early_data_accepted()} reply {line(buf, k)}");
+        println(f"conn {i}: resumed {c.is_resumed()} early {c.is_early_data_accepted()} reply {line(buf, k)}");
         try c.close_notify() catch _ {};
         try! c.close();
     }
@@ -90,10 +92,11 @@ fn server(args: List<str>) {
             if t.contains("bye") { break; }
         }
         let early = (try str::from_utf8(srv.early_data()) catch _ { "?" }).trim();
-        println(f"srv {i}: resumed {srv.resumed()} early {early} peer certs {srv.peer_certificates().len()}");
+        println(f"srv {i}: resumed {srv.is_resumed()} early {early} peer certs {srv.peer_certificates().len()}");
         try srv.close_notify() catch _ {};
         try! srv.close();
     }
+    try! l.close();
 }
 
 fn main() {

@@ -57,7 +57,7 @@ fn serve(l: TcpListener, n: i32, early: u32, store: TicketStore) -> i32 {
     cfg.ticket_store = store;
     let seen = 0;
     for _ in 0..n {
-        let (s, _) = try l.accept() catch _ { return seen; };
+        let (s, _) = try! l.accept();
         let srv = try Server::new(s, cfg) catch _ { continue; };
         seen += 1;
         let early = srv.early_data();
@@ -78,6 +78,7 @@ fn serve(l: TcpListener, n: i32, early: u32, store: TicketStore) -> i32 {
         try srv.write_all(reply) catch _ {};
         try! srv.close();
     }
+    try! l.close();
     seen
 }
 
@@ -85,12 +86,12 @@ fn run(what: str, port: u16, name: str, cfg: ClientConfig, req: str) {
     let s = try tcp_connect(f"127.0.0.1:{port}") catch e { println(f"{what}: connect {e}"); return; };
     let c = try Client::with_config(s, name, cfg) catch e { println(f"{what}: {e}"); return; };
     if cfg.early_data.len() == 0 { try c.write_all(req) catch e { println(f"{what}: write {e}"); }; }
-    let back = try c.read_to_end() catch e { println(f"{what}: read {e}"); return; };
+    let back = try c.read_to_end() catch e { println(f"{what}: read {e}"); try! c.close(); return; };
     let cached = match cfg.session_cache {
         k: SessionCache => k.len(),
         none => 0usize,
     };
-    println(f"{what}: resumed {c.resumed()}, peer {c.peer_certificates().len()}, early {c.early_data_accepted()}, cache {cached} -> {try str::from_utf8(back) catch _ { "?" }}");
+    println(f"{what}: resumed {c.is_resumed()}, peer {c.peer_certificates().len()}, early {c.is_early_data_accepted()}, cache {cached} -> {try str::from_utf8(back) catch _ { "?" }}");
     try! c.close();
 }
 

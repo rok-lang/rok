@@ -20,6 +20,7 @@ async fn echo(word: str) -> str {
     let addr = try! l.local_addr();
     let server = task::spawn_local(async {
         let (s, _) = try! await l.accept_async();
+        try! l.close();
         let buf = List::filled(64, 0u8);
         let n = try! await s.read_async(buf);
         try! await s.write_all_async(buf[0:n]);

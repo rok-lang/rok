@@ -313,7 +313,7 @@ fn drain(s: TcpStream) -> (List<u8>, bool) {
     }
 }
 
-fn pem_der(pem: str) -> List<u8> { (try! Certificate::from_pem(pem))[0].der() }
+fn pem_der(pem: str) -> List<u8> { (try! Certificate::from_pem(pem))[0].to_der() }
 
 fn cert_msg(der: List<u8>, entry_exts: List<u8>) -> List<u8> { msg(11u8, cat(v8([]), v24(cat(v24(der), v16(entry_exts))))) }
 
@@ -496,7 +496,7 @@ fn ask(port: u16, roots: List<Certificate>) -> str {
     let s = try! tcp_connect(f"127.0.0.1:{port}");
     try! s.set_read_timeout(Duration::secs(10));
     let c = try Client::with_config(s, "localhost", client_cfg(roots)) catch e { return f"{e.kind():?} alert {e.alert()}: {e.message()}"; };
-    try c.write_all("ping") catch e { return f"write: {e}"; };
+    try c.write_all("ping") catch e { try! c.close(); return f"write: {e}"; };
     let buf = zeros(64);
     let k = try c.read(buf) catch e { try! c.close(); return f"read: {e}"; };
     try! c.close();
@@ -514,6 +514,7 @@ fn targeted() {
             evil_serve(s, ref r, evil_case(i));
             try! s.close();
         }
+        try! l.close();
     });
     let roots = try! Certificate::from_pem(CA);
     for i in 0..CASES.len() {
@@ -538,6 +539,7 @@ fn fuzz_evil_server(n: usize) {
             evil_serve(s, ref r, e);
             try! s.close();
         }
+        try! l.close();
     });
     let roots = try! Certificate::from_pem(CA);
     let forged = 0;
@@ -680,11 +682,12 @@ fn fuzz_evil_client(n: usize) {
             if let v: Server = srv {
                 if i % 8 == 1 || i % 8 == 2 { forged += 1; }
                 let _ = try v.read(zeros(64)) catch _ { 0 };
-                try! v.close();
+                try v.close() catch _ {};
             }
             let ms = t0.elapsed().as_ms();
             if ms > slow { slow = ms; }
         }
+        try! l.close();
         println(f"mutated client flights: {n}, forged CertificateVerify / Finished accepted: {forged}, under 5 s each: {slow < 5000}");
     });
     let r = Rng { s: 13u64 };
@@ -709,23 +712,27 @@ fn capture() -> (List<u8>, List<u8>) {
         let cfg = client_cfg(try! Certificate::from_pem(CA));
         cfg.enable_pq = true;
         cfg.cipher_suites = CipherSuite::all();
-        let _ = try Client::with_config(s, "localhost", cfg) catch _ { return; };
+        if let c: Client = try? Client::with_config(s, "localhost", cfg) { try c.close() catch _ {}; }
     });
     let (s, _) = try! l.accept();
     try! s.set_read_timeout(Duration::ms(300));
     let (hello, _) = drain(s);
+    try! s.close();
     try! t.join();
+    try! l.close();
     let l2 = try! tcp_listen("127.0.0.1:0");
     let port2 = (try! l2.local_addr()).port();
     let t2 = thread::spawn(|| {
         let (s, _) = try! l2.accept();
         try! s.set_read_timeout(Duration::ms(300));
-        let _ = try Server::new(s, server_cfg()) catch _ { return; };
+        try! l2.close();
+        if let v: Server = try? Server::new(s, server_cfg()) { try v.close() catch _ {}; }
     });
     let s2 = try! tcp_connect(f"127.0.0.1:{port2}");
     try! s2.write_all(hello);
     try! s2.set_read_timeout(Duration::ms(300));
     let (flight, _) = drain(s2);
+    try! s2.close();
     try! t2.join();
     (hello, flight)
 }
@@ -740,8 +747,9 @@ fn fuzz_hellos(hello: List<u8>, n: usize) {
         for _ in 0..n {
             let (s, _) = try! l.accept();
             try! s.set_read_timeout(Duration::secs(10));
-            let _ = try? Server::new(s, cfg);
+            if let v: Server = try? Server::new(s, cfg) { try v.close() catch _ {}; }
         }
+        try! l.close();
     });
     let r = Rng { s: 17u64 };
     let slow = 0i64;
@@ -775,7 +783,7 @@ fn fuzz_flights(flight: List<u8>, n: usize) {
             let cfg = client_cfg(roots);
             cfg.enable_pq = true;
             cfg.cipher_suites = CipherSuite::all();
-            let _ = try? Client::with_config(s, "localhost", cfg);
+            if let c: Client = try? Client::with_config(s, "localhost", cfg) { try c.close() catch _ {}; }
             let ms = t0.elapsed().as_ms();
             if ms > slow { slow = ms; }
         }
@@ -797,6 +805,7 @@ fn fuzz_flights(flight: List<u8>, n: usize) {
         try! s.close();
     }
     try! t.join();
+    try! l.close();
 }
 
 /// Mutated and hostile DER / PEM into the certificate and key parsers.
@@ -835,7 +844,8 @@ fn closes_after_alert() {
     let port = (try! l.local_addr()).port();
     let t = thread::spawn(|| {
         let (s, _) = try! l.accept();
-        let _ = try? Server::new(s, server_cfg());
+        try! l.close();
+        if let v: Server = try? Server::new(s, server_cfg()) { try v.close() catch _ {}; }
     });
     let s = try! tcp_connect(f"127.0.0.1:{port}");
     try! s.set_read_timeout(Duration::secs(5));

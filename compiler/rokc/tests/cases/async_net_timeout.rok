@@ -38,6 +38,9 @@ let (which, _) = await task::select([
     async { await task::sleep(Duration::ms(20)); 0 },
 ]);
 println(f"select: {if which == 1 { "timed out" } else { "data" }}");
+try! client.close();
+try! server_own.close();
+try! listener.close();
 
 // spec: 004.12-async
 // spec: std 302-net §3.2.0

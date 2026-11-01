@@ -11,6 +11,7 @@
 // `rok_coro_unpark` park on a frame address, `rok_io_register` wakes on
 // fd readiness. A waker crosses as a one-element `GcBuf<Waker>`.
 use rok::bare::mem::{GcBuf, buf_new};
+use rok::core::marker::share;
 use rok::std::net::{TcpListener, TcpStream, SocketAddr};
 
 extern "C" {
@@ -78,7 +79,8 @@ println(f"coro: {await waiter}");
 let any: SocketAddr = try! "127.0.0.1:0".parse::<SocketAddr>();
 let listener = try! TcpListener::bind(any);
 let client = try! TcpStream::connect(try! listener.local_addr());
-let (server, _) = try! listener.accept();
+let (server_own, _) = try! listener.accept();
+let server = unsafe { share(server_own) };
 try! server.set_nonblocking(true);
 let reader = task::spawn(async {
     let buf = List::filled(16, 0u8);
@@ -91,6 +93,9 @@ let reader = task::spawn(async {
 await task::sleep(Duration::ms(10));
 try! client.write_all("hello");
 println(f"io: {await reader} bytes");
+try! client.close();
+try! server_own.close();
+try! listener.close();
 println(f"registrations left: {task::registrations()}");
 
 // spec: 004.12-async
