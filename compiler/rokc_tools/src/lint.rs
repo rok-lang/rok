@@ -32,8 +32,6 @@ use crate::analysis::each_block;
 
 pub use rokc_core::lint::Level;
 
-mod release;
-
 pub struct Lint {
     pub name: &'static str,
     pub default: Level,
@@ -144,14 +142,6 @@ pub const LINTS: &[Lint] = &[
         "a method from a trait outside `rok::` that is neither defined nor `use`d in the module",
     ),
     warn_since(
-        "guard_escape",
-        "a `throw` inside `using` whose error holds what the lock protects",
-    ),
-    warn_since(
-        "thread_local_across_await",
-        "a `ThreadLocal::get()` value used after an `await`: the task may resume on another thread",
-    ),
-    warn_since(
         "unqualified_meta",
         "another package's macro, derive or attribute used by its bare name: write `dep::name!` or `use dep::name!;`",
     ),
@@ -205,6 +195,9 @@ pub const REMOVED_LINTS: &[&str] = &[
     "implicit_core_fn",
     "discarded_ref_write",
     "fstring_g_precision",
+    // Errors now: scoped guard and thread-local views.
+    "guard_escape",
+    "thread_local_across_await",
 ];
 
 /// A lint added in 0.1.6.
@@ -1493,21 +1486,6 @@ impl<'a> Cx<'a> {
                     }
                     _ => {}
                 }
-            });
-        }
-        let resources = release::Resources::new(hir);
-        let mut released = Vec::new();
-        for f in &own {
-            release::check(&resources, f, &files, &mut released);
-        }
-        for h in released {
-            self.findings.push(Finding {
-                lint: h.lint,
-                span: h.span,
-                msg: h.msg,
-                notes: h.notes,
-                secondary: h.secondary,
-                base: None,
             });
         }
         let types: MustUse = hir
