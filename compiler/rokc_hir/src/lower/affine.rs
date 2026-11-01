@@ -1208,6 +1208,11 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                     Some(v) => self.expr(v, st, Mode::Move),
                     None => (st, Val::Plain),
                 };
+                // A cancelled task's way out reaches no code that is
+                // checked: its release flags are not known here.
+                if self.quiet {
+                    return None;
+                }
                 let i = self.target(label.as_deref(), false);
                 if let Some(i) = i {
                     let depth = self.targets[i].depth;
@@ -1551,7 +1556,12 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                 } else {
                     self.block(then_block, st.clone(), mode)
                 };
+                // A coroutine's `if true { '#coro: { body } } else { undef }`:
+                // the `else` is never taken.
                 let (b, vb) = match else_branch {
+                    _ if matches!(cond.kind, HirExprKind::Const(ConstVal::Bool(true))) => {
+                        (None, Val::Plain)
+                    }
                     Some(x) => self.expr(x, st, mode),
                     None => (st, Val::Plain),
                 };
