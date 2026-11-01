@@ -108,17 +108,17 @@ const NO_COUNT: u64 = 0xFFFF_FFFF;
 #[allow(dead_code)] // the compiler's
 pub const PLAIN: (u64, u64) = (b' ' as u64, NO_COUNT | (NO_COUNT << 32));
 
+/// `#` in [`pack`]'s flags.
+#[allow(dead_code)] // the compiler's
+pub const ALT: u64 = 1 << 56;
+
 /// `spec` as the two words `core::fmt::Formatter` carries: flags - fill
-/// (bits 0..32), align, sign, type (a byte each from bit 32; `s d g` as
+/// (bits 0..32), align, sign, type (a byte each from bit 32; `s d` as
 /// none), `#` (bit 56), `0` (bit 57) - and counts - width, precision
 /// (32 bits each, all ones when absent).
 #[must_use]
 pub fn pack(s: &FmtSpec) -> (u64, u64) {
-    let ty = if matches!(s.ty, b's' | b'd' | b'g') {
-        0
-    } else {
-        s.ty
-    };
+    let ty = if matches!(s.ty, b's' | b'd') { 0 } else { s.ty };
     let flags = u64::from(u32::from(s.fill))
         | (u64::from(s.align) << 32)
         | (u64::from(s.sign) << 40)

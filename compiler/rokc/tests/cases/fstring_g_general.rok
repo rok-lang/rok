@@ -1,0 +1,22 @@
+// spec: 001.07.3-format-string
+// expect-exit: 0
+// expect-stdout:
+// 1.23e+03 1234.57 1234.568
+// |     1e+03| 1234.568 1.2e+03
+// 1e+20 0.0001 1e-05 0 -0
+// 1.00 1.23457e+06 -42 +1.5
+// 1.5e+400
+
+// `g` is the general format of C and Python: `precision` significant
+// digits (6 by default), the exponent form when the exponent is below
+// -4 or not below the precision, trailing zeros dropped unless `#`.
+fn main() {
+    let x = 1234.5678;
+    let p = 2;
+    println(f"{x:.3g} {x:g} {x:.3}");
+    println(f"|{x:>10.1g}| {x:#.7g} {x:.{p}g}");
+    println(f"{1e20:g} {0.0001:g} {0.00001:g} {0.0:g} {-0.0:g}");
+    println(f"{1.0:#.3g} {1234567:g} {-42:g} {1.5f32:+g}");
+    let big: float = 1.5e400;
+    println(f"{big:g}");
+}

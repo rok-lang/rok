@@ -1030,8 +1030,8 @@ const HEAP_CONSTS: &[&str] = &[
 ];
 
 /// A method call whose change to `receiver` is lost: any change to a
-/// `const` or a `ref self` write to a static is an error; a `ref self`
-/// write to an element or entry (`dropped`) warns.
+/// `const` or a `ref self` write to a static (`dropped`) is an error.
+/// An element or entry is written back (`element_write_back`).
 fn receiver_write(
     ctx: &LowerCtx<'_>,
     receiver: &Expr,
@@ -1087,20 +1087,186 @@ fn receiver_write(
                 );
             }
         }
-        ExprKind::Index(..) if dropped => ctx.emit_lint(
-            "discarded_ref_write",
-            span,
-            format!(
-                "the write to `{text}` is discarded: `{method}` takes `ref self` and changes a \
-                 copy of the element"
-            ),
-            format!(
-                "copy it out, call `{method}`, and store it back: `let v = {text}; \
-                 v.{method}(..); {text} = v;`"
-            ),
-        ),
         _ => {}
     }
+}
+
+/// `receiver.method(args)` (`expr`).
+fn lower_method_call(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
+    let ExprKind::MethodCall {
+        receiver,
+        method,
+        args,
+        trailing_closure,
+        type_args,
+    } = &expr.kind
+    else {
+        unreachable!("a method call")
+    };
+    let span = expr.span;
+    let all_args = with_trailing_closure(args, trailing_closure.as_deref());
+    let elem = element_receiver(receiver).map(|_| (ctx.probe_mark(), ctx.throwing_calls));
+    let recv_h = literal_conv_receiver(ctx, receiver, method)
+        .unwrap_or_else(|| lower_receiver(ctx, receiver));
+    ctx.method_type_args.clone_from(type_args);
+    let method = match drop_method(ctx, &recv_h.ty, method, span) {
+        Ok(m) => m,
+        Err(e) => return e,
+    };
+    if method == rokc_ast::USING_DROP_METHOD {
+        if let HirExprKind::Local(l) = recv_h.kind {
+            ctx.guard_lets.retain(|g| g.0 != l);
+        }
+        let stmts = drop_glue(ctx, recv_h, span, 0);
+        return HirExpr {
+            kind: HirExprKind::Block(Box::new(HirBlock {
+                stmts,
+                trailing: None,
+                label: None,
+            })),
+            ty: HirTy::Unit,
+            span,
+        };
+    }
+    let mark = ctx.dropped_ref_recv.len();
+    let call = method_call_on(ctx, recv_h, method, &all_args, span);
+    let dropped = ctx.dropped_ref_recv[mark..].contains(&span);
+    ctx.dropped_ref_recv.truncate(mark);
+    receiver_write(ctx, receiver, method, dropped, span);
+    let call = unpack_call(ctx, call);
+    match elem {
+        Some((mark, calls)) if dropped => {
+            element_write_back(ctx, expr, &mark, calls).unwrap_or(call)
+        }
+        _ => call,
+    }
+}
+
+/// The `xs` and `i` of the `xs[i]` under the field chain of `receiver`,
+/// unless `i` is a range (a slice view writes through by itself).
+const fn element_receiver(receiver: &Expr) -> Option<(&Expr, &Expr)> {
+    let mut root = receiver;
+    while let ExprKind::Field(inner, _) | ExprKind::TupleField(inner, _) = &root.kind {
+        root = inner;
+    }
+    match &root.kind {
+        ExprKind::Index(arr, idx) if !matches!(idx.kind, ExprKind::Range { .. }) => {
+            Some((arr, idx))
+        }
+        _ => None,
+    }
+}
+
+/// Replace the root under the field chain of `e` with `root`.
+fn put_root(e: &mut Expr, root: Expr) {
+    match &mut e.kind {
+        ExprKind::Field(inner, _) | ExprKind::TupleField(inner, _) => put_root(inner, root),
+        _ => *e = root,
+    }
+}
+
+/// Whether reading `e` twice finds the same storage: a variable, `self`,
+/// a field of one, or an element at a literal or named index.
+fn stable_place(e: &Expr) -> bool {
+    match &e.kind {
+        ExprKind::Path(_) | ExprKind::SelfLower => true,
+        ExprKind::Field(inner, _) | ExprKind::TupleField(inner, _) => stable_place(inner),
+        ExprKind::Index(inner, idx) => {
+            matches!(idx.kind, ExprKind::Literal(_) | ExprKind::Path(_)) && stable_place(inner)
+        }
+        _ => false,
+    }
+}
+
+/// `xs[i].m(..)` (`call`) with `m` taking `ref self`: copy the element
+/// out, call `m` on the copy and store the copy back, after a throw too
+/// (spec 4.7):
+///
+/// `{ let e = xs[i]; let r = e.m(..); xs[i] = e; r }`
+///
+/// `mark` and `calls` are from before `call` was lowered the plain way,
+/// which this undoes. `None` keeps that lowering: the store does not
+/// type, so the element is a temporary.
+fn element_write_back(
+    ctx: &mut LowerCtx<'_>,
+    call: &Expr,
+    mark: &ProbeMark,
+    calls: u32,
+) -> Option<HirExpr> {
+    let ExprKind::MethodCall { receiver, .. } = &call.kind else {
+        unreachable!("a method call")
+    };
+    let (arr, idx) = element_receiver(receiver)?;
+    let throws = ctx.throwing_calls != calls;
+    let span = call.span;
+    let mut stmts = Vec::new();
+    let arr = if stable_place(arr) {
+        arr.clone()
+    } else {
+        let a = tmp_path(ctx, "arr", span);
+        stmts.push(let_stmt(&a, arr.clone()));
+        a
+    };
+    let idx = if matches!(idx.kind, ExprKind::Literal(_) | ExprKind::Path(_)) {
+        idx.clone()
+    } else {
+        let i = tmp_path(ctx, "idx", span);
+        stmts.push(let_stmt(&i, idx.clone()));
+        i
+    };
+    let at = Expr {
+        kind: ExprKind::Index(Box::new(arr), Box::new(idx)),
+        span: receiver.span,
+    };
+    let elem = tmp_path(ctx, "elem", span);
+    stmts.push(let_stmt(&elem, at.clone()));
+    let mut on_copy = call.clone();
+    if let ExprKind::MethodCall { receiver, .. } = &mut on_copy.kind {
+        put_root(receiver, elem.clone());
+    }
+    let store = assign_stmt(at, elem);
+    let trailing = if throws {
+        Expr {
+            kind: ExprKind::Catch {
+                body: Box::new(on_copy),
+                catches: Vec::new(),
+                finally: Some(Block {
+                    stmts: vec![store],
+                    trailing: None,
+                    span,
+                    label: None,
+                }),
+            },
+            span,
+        }
+    } else {
+        let r = tmp_path(ctx, "ret", span);
+        stmts.push(let_stmt(&r, on_copy));
+        stmts.push(store);
+        r
+    };
+    let block = Expr {
+        kind: ExprKind::Block(Block {
+            stmts,
+            trailing: Some(Box::new(trailing)),
+            span,
+            label: None,
+        }),
+        span,
+    };
+    let retry = ctx.probe_mark();
+    let mut probe = ctx.clone();
+    lower_expr(&mut probe, &block);
+    let failed = ctx
+        .rollback(&retry)
+        .iter()
+        .any(|d| d.severity == rokc_diagnostic::Severity::Error);
+    if failed {
+        return None;
+    }
+    ctx.rollback(mark);
+    ctx.throwing_calls = calls;
+    Some(lower_expr(ctx, &block))
 }
 
 /// `snippet(e)`, parenthesised unless it is a single term.
@@ -2044,43 +2210,7 @@ fn lower_expr_inner(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
             print_args_help(ctx, callee, &all_args, since);
             unpack_call(ctx, call)
         }
-        ExprKind::MethodCall {
-            receiver,
-            method,
-            args,
-            trailing_closure,
-            type_args,
-        } => {
-            let all_args = with_trailing_closure(args, trailing_closure.as_deref());
-            let recv_h = literal_conv_receiver(ctx, receiver, method)
-                .unwrap_or_else(|| lower_receiver(ctx, receiver));
-            ctx.method_type_args.clone_from(type_args);
-            let method = match drop_method(ctx, &recv_h.ty, method, span) {
-                Ok(m) => m,
-                Err(e) => return e,
-            };
-            if method == rokc_ast::USING_DROP_METHOD {
-                if let HirExprKind::Local(l) = recv_h.kind {
-                    ctx.guard_lets.retain(|g| g.0 != l);
-                }
-                let stmts = drop_glue(ctx, recv_h, span, 0);
-                return HirExpr {
-                    kind: HirExprKind::Block(Box::new(HirBlock {
-                        stmts,
-                        trailing: None,
-                        label: None,
-                    })),
-                    ty: HirTy::Unit,
-                    span,
-                };
-            }
-            let mark = ctx.dropped_ref_recv.len();
-            let call = method_call_on(ctx, recv_h, method, &all_args, span);
-            let dropped = ctx.dropped_ref_recv[mark..].contains(&span);
-            ctx.dropped_ref_recv.truncate(mark);
-            receiver_write(ctx, receiver, method, dropped, span);
-            unpack_call(ctx, call)
-        }
+        ExprKind::MethodCall { .. } => lower_method_call(ctx, expr),
         ExprKind::If {
             cond,
             then_branch,

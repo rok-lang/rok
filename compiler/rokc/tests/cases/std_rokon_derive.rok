@@ -3,9 +3,9 @@
 // expect-stdout:
 // geom retries=3 ratio=0.1 big=123456789012345678901234567890 on=true letter=λ
 // proxy=none mode=Slow seen=true cpu=2
-// shapes=[Dot, Circle(1, Point { x: 0.5, y: -2 }), Rect { w: 2, h: none }, Rect { w: 4, h: 5 }]
+// shapes=[Dot, Circle(1.0, Point { x: 0.5, y: -2.0 }), Rect { w: 2, h: none }, Rect { w: 4, h: 5 }]
 // pair=Pair(7, "seven") corner=-1 18446744073709551615 grid=3 mark=Marker
-// wrapped=Point { x: 1, y: 2 } tree sum=6
+// wrapped=Point { x: 1.0, y: 2.0 } tree sum=6
 // Config {
 //     name: "geom",
 //     retries: 3,

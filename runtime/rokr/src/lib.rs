@@ -847,6 +847,7 @@ mod tests {
         str::tests::string_ops();
         fmt::tests::fmt_ops();
         fmt::tests::exp_rounding();
+        fmt::tests::general_and_debug();
         fmt::tests::formatter_ops();
         fuzz_tests::allocating();
     }

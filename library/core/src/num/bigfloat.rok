@@ -508,8 +508,8 @@ impl One for Float {
 }
 
 /// `f64`'s formatting in its range. A promoted value prints `e` / `E`
-/// (and Display) as `d.ddde<k>`, and `f` with its exact integer digits
-/// when huge or zero when tiny.
+/// (and Display) as `d.ddde<k>`, `g` as `d.ddde+<k>`, and `f` with its
+/// exact integer digits when huge or zero when tiny.
 impl Display for Float {
     fn fmt(self, ref f: Formatter) throws (FmtError) {
         let ty = f.ty();
@@ -525,6 +525,12 @@ impl Display for Float {
             }
             let p = f.precision() ?? 6;
             if p > 0 { body = body + "." + "0".repeat(p); }
+        } else if ty == 'g' {
+            // Past f64's range: always the exponent form, `1.5e+400`.
+            let p = f.precision() ?? 6;
+            let (m, k) = self.sci(if p > 1 { p - 1 } else { 0 }, false).split_once("e") ?? ("0", "0");
+            if !f.alternate() && m.contains(".") { m = m.trim_end_matches("0").trim_end_matches("."); }
+            body = m + (if k.starts_with("-") { "e" } else { "e+" }) + k;
         } else {
             body = self.sci(f.precision(), ty == 'E');
         }
@@ -533,7 +539,9 @@ impl Display for Float {
 }
 
 impl Debug for Float {
-    fn fmt(self, ref f: Formatter) throws (FmtError) { try Display::fmt(self, ref f) }
+    fn fmt(self, ref f: Formatter) throws (FmtError) {
+        if self.e == 0 { try Debug::fmt(self.m, ref f) } else { try Display::fmt(self, ref f) }
+    }
 }
 
 impl FromStr for Float {

@@ -1300,9 +1300,9 @@ fn run_extern(name: &str, args: &[Value]) -> Result<Value, Ext> {
             fmt_text::integral(w, &spec(flags, counts)?, int_of(nonneg)? != 0, prefix, buf);
             Ok(())
         })?,
-        ("rok_fmt_f64", [t, flags, counts, v, is_f32]) => text(t, &|w| {
-            let is_f32 = int_of(is_f32)? != 0;
-            fmt_text::float_number(w, &spec(flags, counts)?, float_of(v)?, is_f32)
+        ("rok_fmt_f64", [t, flags, counts, v, mode]) => text(t, &|w| {
+            let mode = u32::try_from(int_of(mode)?)?;
+            fmt_text::float_number(w, &spec(flags, counts)?, float_of(v)?, mode)
                 .map_err(|m| Ext::Panic(m.to_owned()))
         })?,
         ("rok_fmt_pad", [t, flags, counts, start, mid, numeric]) => text(t, &|w| {

@@ -510,30 +510,22 @@ fn debug_fn(body: &str) -> String {
 }
 
 /// The writes showing `name` with `fields` (label, value): `Name`,
-/// `Name(a, b)` or `Name { x: a, y: b }`, literal runs merged.
+/// `Name(a, b)` or `Name { x: a, y: b }` (`{:#?}`: a field a line).
 fn debug_writes(name: &str, named: bool, fields: &[(Option<&str>, String)], ind: &str) -> String {
-    let mut out = String::new();
-    let mut lit = name.to_owned();
-    let flush = |lit: &mut String, out: &mut String| {
-        out.push_str(&format!("{ind}try f.write_str(\"{lit}\");\n"));
-        lit.clear();
-    };
-    if !fields.is_empty() {
-        lit.push_str(if named { " { " } else { "(" });
-        for (i, (label, value)) in fields.iter().enumerate() {
-            if i > 0 {
-                lit.push_str(", ");
-            }
-            if let Some(l) = label {
-                lit.push_str(&format!("{l}: "));
-            }
-            flush(&mut lit, &mut out);
-            out.push_str(&format!(
-                "{ind}try rok::core::fmt::Debug::fmt({value}, ref f);\n"
-            ));
-        }
-        lit.push_str(if named { " }" } else { ")" });
+    if fields.is_empty() {
+        return format!("{ind}try f.write_str(\"{name}\");\n");
     }
-    flush(&mut lit, &mut out);
+    let (open, close) = if named { (" {", "}") } else { ("(", ")") };
+    let mut out = format!("{ind}try f.write_str(\"{name}{open}\");\n");
+    for (i, (label, value)) in fields.iter().enumerate() {
+        let label = label.map_or_else(String::new, |l| format!("{l}: "));
+        out.push_str(&format!(
+            "{ind}try f.debug_entry(\"{label}\", {value}, {}, {named});\n",
+            i == 0
+        ));
+    }
+    out.push_str(&format!(
+        "{ind}try f.debug_close(\"{close}\", false, {named});\n"
+    ));
     out
 }

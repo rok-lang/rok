@@ -7,7 +7,7 @@
 // caught zero is not a valid `NonZero` value
 // 42 5 5 5 9
 // true 1.5 3 true true Greater NonNan(1.5)
-// true true 0 2 Finite(2)
+// true true 0 2 Finite(2.0)
 // true false 0
 // 3,9,
 // zero one

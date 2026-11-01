@@ -537,13 +537,10 @@ impl<K: Hash + Debug, V: Debug> Debug for Dict<K, V> {
         try f.write_str("{");
         let first = true;
         for (k, v) in self {
-            if !first { try f.write_str(", "); }
-            try Debug::fmt(k, ref f);
-            try f.write_str(": ");
-            try Debug::fmt(v, ref f);
+            try f.debug_pair(k, v, first);
             first = false;
         }
-        try f.write_str("}")
+        try f.debug_close("}", first, false)
     }
 }
 

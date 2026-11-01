@@ -11,14 +11,15 @@
 //!          let #s = rok_fmt_len(#t); #t = rok_fmt_str(#t, #f1);
 //!          #t = rok_fmt_pad(#t, <`^5` packed>, #s, #s, 0);
 //!          #t = rok_fmt_str(#t, " ");
-//!          #t = rok::core::fmt::fstr_debug(#t, #f2);
+//!          #t = rok::core::fmt::fstr_debug(#t, #f2, <no spec>);
 //!          rok_fmt_finish(#t) }
 //! ```
 //!
 //! Holes and `${..}` specs are evaluated left to right into temps, then
 //! written in order: primitives by the runtime, other values through
 //! `Display::fmt` / `Debug::fmt` (`fstr_display` / `fstr_debug`). Numbers
-//! honour their spec; anything else is written plain, then cut and padded.
+//! honour their spec; anything else is written plain (but for `#`), then
+//! cut and padded.
 //! A static spec is checked here with the runtime's own parser, a dynamic
 //! one at run time.
 
@@ -209,6 +210,14 @@ fn write_hole(ctx: &mut LowerCtx<'_>, stmts: &mut Vec<HirStmt>, t: &Expr, h: Hol
     let at = h.value.span;
     let plain = || words(fmt_spec::PLAIN, at);
     let (flags, counts) = match &h.spec {
+        // A number's `{x:?}` is its rendering under type `?`.
+        Spec::None if h.debug && h.kind.number() => words(
+            (
+                fmt_spec::PLAIN.0 | (u64::from(b'?') << 48),
+                fmt_spec::PLAIN.1,
+            ),
+            at,
+        ),
         Spec::None => plain(),
         Spec::Static(s) => words(fmt_spec::pack(s), at),
         Spec::Dynamic(_) if !h.kind.number() && h.both => {
@@ -237,10 +246,27 @@ fn write_hole(ctx: &mut LowerCtx<'_>, stmts: &mut Vec<HirStmt>, t: &Expr, h: Hol
         );
         return;
     }
-    // Written plain, then cut and padded as text.
+    // Written plain, then cut and padded as text. `#` (`{x:#?}`) reaches
+    // the value's own `fmt`.
     let len = lower_expr(ctx, &rt("rok_fmt_len", vec![t.clone()], at));
     let start = bind_hir(ctx, stmts, "#s", len, at);
     let (pf, pc) = plain();
+    let lit = |v: u64| mk(ExprKind::Literal(AstLit::Int(v.to_string())), at);
+    let op = |o: &str, a: Expr, b: Expr| {
+        mk(
+            ExprKind::OpInfix {
+                op: o.to_owned(),
+                lhs: Box::new(a),
+                rhs: Box::new(b),
+            },
+            at,
+        )
+    };
+    let pf = match &h.spec {
+        Spec::Static(s) if s.alt => lit(fmt_spec::PLAIN.0 | fmt_spec::ALT),
+        Spec::Dynamic(_) => op("|", pf, op("&", flags.clone(), lit(fmt_spec::ALT))),
+        _ => pf,
+    };
     write(
         ctx,
         stmts,
@@ -328,8 +354,8 @@ fn plain_write(t: &Expr, value: Expr, kind: Kind, debug: bool, flags: Expr, coun
             vec![t.clone(), cast(value, "u32", false)],
             at,
         ),
-        (_, true) => fmt("fstr_debug", vec![t.clone(), value]),
-        (_, false) => fmt("fstr_display", vec![t.clone(), value]),
+        (_, true) => fmt("fstr_debug", vec![t.clone(), value, flags]),
+        (_, false) => fmt("fstr_display", vec![t.clone(), value, flags]),
     }
 }
 
@@ -473,7 +499,7 @@ fn static_hole(ctx: &LowerCtx<'_>, value: Expr, ty: &HirTy, text: &str) -> Optio
     };
     let needs = match spec.ty {
         b'b' | b'o' | b'x' | b'X' if !int => Some("an integer (stdlib 2.10.5)"),
-        b'e' | b'E' | b'f' if !int && !float => Some("a number (stdlib 2.10.6)"),
+        b'e' | b'E' | b'f' | b'g' if !int && !float => Some("a number (stdlib 2.10.6)"),
         _ => None,
     };
     if let Some(needs) = needs {
@@ -487,23 +513,11 @@ fn static_hole(ctx: &LowerCtx<'_>, value: Expr, ty: &HirTy, text: &str) -> Optio
         );
         return None;
     }
-    if spec.ty == b'g' && spec.precision.is_some() && (int || float) {
-        let plain = text.strip_suffix('g').unwrap_or(text);
-        ctx.emit_lint(
-            "fstring_g_precision",
-            ctx.here(),
-            format!(
-                "`{{:{text}}}` prints like `{{:{plain}}}` today; from Rok 0.2.0 `g` is the \
-                 general format (`1.23e+03`)"
-            ),
-            format!("write `{{:{plain}}}` to keep this output"),
-        );
-    }
     let number = kind_of(ctx, ty).number();
     let debug = spec.ty == b'?';
     // Nothing to apply: the plain rendering (a non-number's sign / `0` /
     // `#` flags do nothing).
-    let nothing = matches!(spec.ty, 0 | b's' | b'd' | b'g')
+    let nothing = matches!(spec.ty, 0 | b's' | b'd')
         && spec.width.is_none()
         && spec.precision.is_none()
         && (!number || (spec.sign != b'+' && spec.sign != b' '));

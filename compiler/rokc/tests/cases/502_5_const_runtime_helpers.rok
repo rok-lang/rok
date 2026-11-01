@@ -3,7 +3,7 @@
 // expect-stdout:
 // [ ASSA A | assa a |aßa a|aßa a | aßa a| <>ß<> <> |. .a.ß.a. .a. .|1|6|true|true|true| aßa a !|aß|aßa a ]
 // [true|false|false|true|σ|Σ false|true|false|false|٣|٣ false|false|true|false|　|　]
-// [42|42|42 -7|none|-7 300|none|300 none|none|1000 none|none|none]
+// [42|42|42.0 -7|none|-7.0 300|none|300.0 none|none|1000.0 none|none|none]
 // [2|3|3|2|2.5|0|2.5|-2.5|6|3 -3|-2|-3|-2|2.5|-2.5|0|-2.5|-4|-3 0|1|0|0|0.49999999999999994|0|0.49999999999999994|-0.49999999999999994|2|1]
 // true true true true
 

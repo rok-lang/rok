@@ -3,7 +3,7 @@
 // (`#[link("m")]`: no separate libm on Windows / wasm32)
 // expect-exit: 0
 // expect-stdout:
-// Point { x: 1, y: 2 } true
+// Point { x: 1.0, y: 2.0 } true
 // 3 7 2
 // 5 5 1
 
