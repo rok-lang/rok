@@ -93,7 +93,7 @@ fn main() {
     let y = tun(three, u, true);
     let name = match y {
         inner: i32 | none => match inner {
-            n: i32 => n.type_name_of(),
+            n: i32 => n.type_name_of_val(),
             none => "inner none",
         },
         _ => "other",
