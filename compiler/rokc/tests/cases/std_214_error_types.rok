@@ -29,5 +29,5 @@ fn main() {
     let t = TypeError { expected: "i32", actual: "str" };
     println(f"{show(t)} {t:?}");
     println(f"{show(StackOverflowError)} {show(OutOfMemoryError)} {show(InternalError)} {InternalError:?}");
-    println(rok::std::io::IoError::new("disk gone").message);
+    println(rok::std::io::IoError::new("disk gone").message());
 }

@@ -27,6 +27,7 @@ use rok::std::io::{IoError, IoErrorKind, Reader, Writer};
 use rok::std::fs;
 use rok::std::env;
 use rok::std::path::{Path, RawPath};
+use rok::std::process;
 
 /// Hands out at most `step` bytes per `read`.
 struct Trickle {
@@ -55,14 +56,14 @@ fn main() throws (IoError) {
     try t.read_exact(a);
     let b = io::byte_buf(4);
     try t.read_exact(b);
-    let kind = try { t.read_exact(io::byte_buf(4)); "none" } catch e { f"{e.kind:?}" };
+    let kind = try { t.read_exact(io::byte_buf(4)); "none" } catch e { f"{e.kind():?}" };
     println(f"exact: [{text(a)}] [{text(b)}] eof: {kind}");
 
     // Its own directory: other processes come and go in the temp dir.
-    let dir = env::temp_dir() / f"rok_bytes_io_{env::pid()}";
+    let dir = env::temp_dir() / f"rok_bytes_io_{process::id()}";
     try fs::create_dir_all(dir);
-    let src = dir / f"rok_bytes_io_{env::pid()}.bin";
-    let dst = dir / f"rok_bytes_io_{env::pid()}.out";
+    let src = dir / f"rok_bytes_io_{process::id()}.bin";
+    let dst = dir / f"rok_bytes_io_{process::id()}.out";
     let big: List<u8> = List::new();
     for i in 0..20000 { big.push((i % 251) as u8); }
     try fs::write(src, big);
@@ -101,10 +102,10 @@ fn main() throws (IoError) {
     try out.flush();
     try io::stderr().write_all([104u8, 105u8, 10u8]);
 
-    env::set_var("ROK_BYTES_IO", "v");
+    unsafe { env::set_var("ROK_BYTES_IO", "v"); }
     let v = env::var_os("ROK_BYTES_IO");
     let present = if let x: env::RawStr = v { (try! x.to_str()) == "v" } else { false };
-    env::remove_var("ROK_BYTES_IO");
+    unsafe { env::remove_var("ROK_BYTES_IO"); }
     let gone = if env::var_os("ROK_BYTES_IO") is none { "none" } else { "set" };
     println(f"env: {present} {gone}");
 
@@ -116,7 +117,7 @@ fn main() throws (IoError) {
     using rd = try fs::read_dir(dir) {
         for entry in rd {
             let name = (try entry.get()).file_name();
-            if name.starts_with(f"rok_bytes_io_{env::pid()}") { names += 1; }
+            if name.starts_with(f"rok_bytes_io_{process::id()}") { names += 1; }
         }
     }
     println(f"read_dir names: {names}");

@@ -344,7 +344,7 @@ impl<T> Mutex<T> {
     /// Whether an `unlock` by the running task was owed: then it is
     /// settled (and that `unlock` does nothing).
     fn forgive(self) -> bool {
-        let me = match rok::core::task::try_id() {
+        let me = match rok::core::task::current_id() {
             id: rok::core::task::TaskId => id.as_u64(),
             none => return false,
         };

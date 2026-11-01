@@ -126,7 +126,7 @@ fn serve(l: TcpListener, n: i32, required: bool) -> List<str> {
     for _ in 0..n {
         let (s, _) = try l.accept() catch _ { return log; };
         let srv = try Server::new(s, cfg) catch e {
-            log.push(f"error {e.msg} (alert {e.alert})");
+            log.push(f"error {e.message()} (alert {e.alert()})");
             continue;
         };
         let peer = srv.peer_certificates();
@@ -142,7 +142,7 @@ fn serve(l: TcpListener, n: i32, required: bool) -> List<str> {
 }
 
 fn with_cert(cert: str, key: str) -> ClientConfig {
-    let cfg = ClientConfig::new();
+    let cfg = try! ClientConfig::try_new();
     cfg.root_certs = try! Certificate::from_pem(CA);
     cfg.session_cache = none;
     if cert != "" {
@@ -155,7 +155,7 @@ fn with_cert(cert: str, key: str) -> ClientConfig {
 fn run(what: str, port: u16, cfg: ClientConfig) {
     let s = try tcp_connect(f"127.0.0.1:{port}") catch e { println(f"{what}: connect {e}"); return; };
     let c = try Client::with_config(s, "localhost", cfg) catch e {
-        println(f"{what}: handshake: {e.kind:?} {e.msg}");
+        println(f"{what}: handshake: {e.kind():?} {e.message()}");
         return;
     };
     try c.write_all("hi") catch _ {};

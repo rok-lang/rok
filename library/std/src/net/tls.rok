@@ -291,14 +291,17 @@ impl ClientConfig {
     /// store that cannot be read leaves `root_certs` empty, so every
     /// handshake fails; `try_new` reports that instead.
     #[deprecated(since = "0.1.6", note = "use `ClientConfig::try_new()`, which throws when the OS trust store cannot be read")]
-    pub fn new() -> ClientConfig {
-        ClientConfig::with_roots(try system_roots() catch _ { [] })
-    }
+    pub fn new() -> ClientConfig { ClientConfig::system_or_empty() }
 
     /// `new`, but throws the `system_roots` error (no trust store found
     /// or readable) instead of leaving `root_certs` empty.
     pub fn try_new() throws (TlsError) -> ClientConfig {
         ClientConfig::with_roots(try system_roots())
+    }
+
+    /// The OS trust store, or no roots when it cannot be read.
+    fn system_or_empty() -> ClientConfig {
+        ClientConfig::with_roots(try system_roots() catch _ { [] })
     }
 
     fn with_roots(roots: List<Certificate>) -> ClientConfig {
@@ -797,7 +800,7 @@ impl Shared {
 
 /// A configured client key must belong to the client certificate.
 /// How long a failed handshake waits for the peer's remaining input.
-const LINGER: Duration = Duration::sec(1);
+const LINGER: Duration = Duration::secs(1);
 
 /// Close after a fatal alert: half-close, read what the peer still
 /// sends (for at most `LINGER`), then close. Closing with unread input
@@ -853,9 +856,10 @@ pub struct Client {
 impl !Sync for Client {}
 
 impl Client {
-    /// Handshake as `server_name` with `ClientConfig::new()`.
+    /// Handshake as `server_name` trusting the OS store (none when it
+    /// cannot be read).
     pub fn new(stream: TcpStream, server_name: str) throws (TlsError) -> Client {
-        try Client::with_config(stream, server_name, ClientConfig::new())
+        try Client::with_config(stream, server_name, ClientConfig::system_or_empty())
     }
 
     /// Handshake as `server_name` (a DNS name, or an IP address checked
@@ -881,7 +885,7 @@ impl Client {
 
     /// `new` without blocking the worker.
     pub async fn new_async(stream: TcpStream, server_name: str) throws (TlsError) -> Client {
-        try await Client::with_config_async(stream, server_name, ClientConfig::new())
+        try await Client::with_config_async(stream, server_name, ClientConfig::system_or_empty())
     }
 
     /// `with_config` without blocking the worker.

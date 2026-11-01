@@ -19,7 +19,7 @@ use rok::std::time::{Duration, Instant};
 fn main() throws (IoError) {
     let args = env::args();
     if args.len() > 1 {
-        if args[1] == "sleep" { thread::sleep(Duration::sec(30)); }
+        if args[1] == "sleep" { thread::sleep(Duration::secs(30)); }
         print("from child");
         return;
     }
@@ -40,7 +40,7 @@ fn main() throws (IoError) {
         none => "running",
         s: ExitStatus => if s.success() { "exited" } else { "killed" },
     };
-    println(f"on drop: {how} fast: {start.elapsed() < Duration::sec(20)}");
+    println(f"on drop: {how} fast: {start.elapsed() < Duration::secs(20)}");
 
     let plain = try Command::new(me).arg("sleep").kill_on_drop(true).spawn();
     thread::sleep(Duration::ms(20));

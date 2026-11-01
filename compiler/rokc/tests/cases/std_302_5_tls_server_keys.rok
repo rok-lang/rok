@@ -125,7 +125,7 @@ fn config(cert: str, key: str) -> ServerConfig {
 }
 
 fn key_error(pem: str) -> str {
-    let _ = try PrivateKey::from_pem(pem) catch e { return f"{e.kind:?} {e.msg}"; };
+    let _ = try PrivateKey::from_pem(pem) catch e { return f"{e.kind():?} {e.message()}"; };
     "ok"
 }
 
@@ -152,7 +152,7 @@ fn main() {
     let t = thread::spawn(|| serve(l));
     let roots = try! Certificate::from_pem(CA);
     for what in ["p256 (PKCS #8)", "p384 (SEC1)", "rsa (PKCS #1)"] {
-        let cfg = ClientConfig::new();
+        let cfg = try! ClientConfig::try_new();
         cfg.root_certs = roots;
         let c = try! Client::with_config(try! tcp_connect(f"127.0.0.1:{port}"), "localhost", cfg);
         try! c.write_all("x");

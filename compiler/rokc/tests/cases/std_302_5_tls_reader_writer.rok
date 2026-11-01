@@ -68,19 +68,19 @@ let server = task::spawn_local(async {
     let reader = task::spawn_local(async {
         let err = "";
         let got = try await srv.read_to_end_async() catch e {
-            err = f"read: {e.message}";
+            err = f"read: {e.message()}";
             List::<u8>::new()
         };
         if err.len() > 0 { err } else { f"{got.len()} bytes, intact {got == data(ROUNDS * 100)}" }
     });
     let wrote = "ok";
-    try await srv.write_all_async(data(BIG)) catch e { wrote = f"write: {e.message}"; };
+    try await srv.write_all_async(data(BIG)) catch e { wrote = f"write: {e.message()}"; };
     let _ = try? await srv.close_notify_async();
     let r = await reader;
     srv.close();
     f"wrote {wrote}, read {r}"
 });
-let ccfg = ClientConfig::new();
+let ccfg = try! ClientConfig::try_new();
 ccfg.root_certs = try! Certificate::from_pem(CA);
 let s = try! await net::tcp_connect_async(f"{addr}");
 let c = try! await Client::with_config_async(s, "localhost", ccfg);
@@ -88,15 +88,15 @@ let updates = task::spawn_local(async {
     let chunk = data(ROUNDS * 100);
     let r = "ok";
     for i in 0..ROUNDS {
-        try await c.write_all_async(chunk[i * 100:(i + 1) * 100]) catch e { r = f"write: {e.message}"; };
-        try await c.key_update_async() catch e { r = f"key update: {e.message}"; };
+        try await c.write_all_async(chunk[i * 100:(i + 1) * 100]) catch e { r = f"write: {e.message()}"; };
+        try await c.key_update_async() catch e { r = f"key update: {e.message()}"; };
         if r != "ok" { break; }
         await task::yield_now();
     }
     let _ = try? await c.close_notify_async();
     r
 });
-let back = try await c.read_to_end_async() catch e { println(f"client read: {e.message}"); [] };
+let back = try await c.read_to_end_async() catch e { println(f"client read: {e.message()}"); [] };
 println(f"client got {back.len()} bytes, intact {back == data(BIG)}");
 println(f"client updates: {await updates}");
 println(f"server: {await server}");

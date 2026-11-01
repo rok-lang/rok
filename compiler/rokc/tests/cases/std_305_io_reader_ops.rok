@@ -17,10 +17,11 @@ use rok::std::io::{IoError, IoErrorKind, Reader, Writer};
 use rok::std::fs;
 use rok::std::fs::File;
 use rok::std::env;
+use rok::std::process;
 
 fn main() throws (IoError) {
-    let p = env::temp_dir() / f"rok_probe_305_{env::pid()}.txt";
-    let q = env::temp_dir() / f"rok_probe_305_{env::pid()}.out";
+    let p = env::temp_dir() / f"rok_probe_305_{process::id()}.txt";
+    let q = env::temp_dir() / f"rok_probe_305_{process::id()}.out";
     try fs::write(p, "abcdef\ng");
     let f = try File::open(p);
     let buf: List<u8> = [0u8, 0u8, 0u8];
@@ -29,7 +30,7 @@ fn main() throws (IoError) {
     let big: List<u8> = List::new();
     let i = 0;
     while i < 64 { big.push(0u8); i += 1; }
-    try f.read_exact(big) catch e { println(f"short read_exact: {e.kind:?}"); };
+    try f.read_exact(big) catch e { println(f"short read_exact: {e.kind():?}"); };
     try f.seek(rok::std::io::SeekFrom::Start(6u64));
     let pos = try f.stream_position();
     try f.rewind();

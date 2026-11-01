@@ -30,12 +30,14 @@
 
 use rok::std::fs;
 use rok::std::fs::{Dir, File, OpenOptions, SeekFrom, Permissions};
+use rok::std::os::unix::fs::PermissionsExt;
 use rok::std::io::{IoError, IoErrorKind};
 use rok::std::path::Path;
 use rok::std::env;
+use rok::std::process;
 
 fn main() throws (IoError) {
-    let base = env::temp_dir() / f"rok_std_fs_{env::pid()}";
+    let base = env::temp_dir() / f"rok_std_fs_{process::id()}";
     try fs::create_dir_all(base / "a" / "b");
     try fs::create_dir_all(base / "a"); // already there: fine
     let f = base / "a" / "hello.txt";
@@ -57,12 +59,13 @@ fn main() throws (IoError) {
     let n = try g.read(buf);
     println(f"read {n}: {buf[0]} {buf[1]} {buf[2]}");
     try g.close();
-    println(try g.read_to_str() catch e { f"{e.kind:?}" });
+    println(try g.read_to_str() catch e { f"{e.kind():?}" });
 
     let c = base / "a" / "b" / "c.txt";
-    using pf = try File::open(f) { try pf.set_permissions(Permissions::from_mode(0o640u32)); }
+    let perm: Permissions = PermissionsExt::from_mode(0o640u32);
+    using pf = try File::open(f) { try pf.set_permissions(perm); }
     let copied = try fs::copy(f, c);
-    println(f"copied {copied}, mode kept: {(try fs::metadata(c)).permissions().mode() == 0o640u32}");
+    println(f"copied {copied}, mode kept: {PermissionsExt::mode((try fs::metadata(c)).permissions()) == 0o640u32}");
     try fs::rename(c, base / "a" / "b" / "d.txt");
     try fs::write(base / "z.bin", [1u8, 2u8, 255u8]);
     let bytes = try fs::read(base / "z.bin");
@@ -91,13 +94,13 @@ fn main() throws (IoError) {
     }
     println(f"early-stopped read_dir under using: {opened}");
 
-    let missing = try fs::read_to_str(base / "nope") catch e { f"{e.kind:?}" + " " + f"{e}" };
+    let missing = try fs::read_to_str(base / "nope") catch e { f"{e.kind():?}" + " " + f"{e}" };
     println(missing.replace(base.as_str(), "BASE"));
-    try fs::create_dir(base / "a") catch e { println(f"{e.kind:?}"); };
+    try fs::create_dir(base / "a") catch e { println(f"{e.kind():?}"); };
 
     let d = try Dir::root().open_dir(base);
-    let up = try f"{d.open("../x").fd()}" catch e { f"{e.kind:?}" };
-    let abs = try f"{d.open("/etc/hosts").fd()}" catch e { f"{e.kind:?}" };
+    let up = try f"{d.open("../x").fd()}" catch e { f"{e.kind():?}" };
+    let abs = try f"{d.open("/etc/hosts").fd()}" catch e { f"{e.kind():?}" };
     println(f"escape: {up} {abs}");
     using inner = try d.open("a/hello.txt") {
         println(try inner.read_to_str());

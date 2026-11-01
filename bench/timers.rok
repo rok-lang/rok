@@ -12,7 +12,7 @@ let mid = Instant::now();
 
 let long: List<Task<i32>> = List::new();
 for i in 0..20000 {
-    long.push(task::spawn(async { await task::sleep(Duration::sec(3600)); 1 }));
+    long.push(task::spawn(async { await task::sleep(Duration::secs(3600)); 1 }));
 }
 await task::sleep(Duration::ms(10));
 for t in long { t.cancel(); }

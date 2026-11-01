@@ -16,7 +16,7 @@ let cleaned = Mutex::new(false);
 let started = Mutex::new(0);
 
 let (i, v) = await task::select([
-    async { await task::sleep(Duration::sec(3600)); "slow" },
+    async { await task::sleep(Duration::secs(3600)); "slow" },
     async { await task::sleep(Duration::ms(5)); "fast" },
 ]);
 println(f"first: {i} {v}");
@@ -60,7 +60,7 @@ println(f"lock still free: {m.try_lock() is MutexGuard<i32>}");
 let (tx, rx) = channel::<i32>();
 for round in 0..200 {
     let _ = await task::select([
-        async { await task::sleep(Duration::sec(3600)); 0 },
+        async { await task::sleep(Duration::secs(3600)); 0 },
         async { (await rx.recv_async()) ?? 0 },
         async { await task::yield_now(); 1 },
     ]);
@@ -72,7 +72,7 @@ let inner = Mutex::new(false);
 let t = task::spawn(async {
     let _ = await task::select([
         async {
-            let _ = { await task::sleep(Duration::sec(3600)); 0 } finally {
+            let _ = { await task::sleep(Duration::secs(3600)); 0 } finally {
                 using c = inner.lock() { c.set(true); }
             };
             0

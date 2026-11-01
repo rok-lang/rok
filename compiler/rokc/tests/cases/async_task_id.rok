@@ -7,12 +7,12 @@
 // nested par keeps the outer id: true
 
 // `TaskId`: `task::id()` inside a task, `Task::id()` on its handle; ids
-// are unique; `try_id` is `none` outside any task.
+// are unique; `current_id` is `none` outside any task.
 
 let seen: Set<TaskId> = Set::new();
 let main_id = task::id();
 println(f"main has an id: {main_id.as_u64() > 0}");
-let blocking = await task::spawn_blocking(|| task::try_id() is none);
+let blocking = await task::spawn_blocking(|| task::current_id() is none);
 println(f"outside: {if blocking { "none" } else { "some" }}");
 
 let tasks: List<Task<TaskId>> = List::new();

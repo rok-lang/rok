@@ -38,7 +38,7 @@ using held = m.lock() {
         1
     });
     let sleeper = task::spawn(async {
-        await task::sleep(Duration::sec(3600));
+        await task::sleep(Duration::secs(3600));
         1
     });
     let locker = task::spawn(async {
@@ -51,7 +51,7 @@ using held = m.lock() {
     });
 
     // Until all five are parked (a loaded machine may take long).
-    let deadline = Instant::now() + Duration::sec(60);
+    let deadline = Instant::now() + Duration::secs(60);
     while task::registrations() < 5 && Instant::now() < deadline {
         await task::yield_now();
     }

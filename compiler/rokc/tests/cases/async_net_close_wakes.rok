@@ -16,7 +16,7 @@ let listener = try! TcpListener::bind(any);
 
 /// Until `n` wakers are parked (a loaded machine may take long).
 async fn parked(n: usize) {
-    let deadline = Instant::now() + Duration::sec(60);
+    let deadline = Instant::now() + Duration::secs(60);
     while task::registrations() < n && Instant::now() < deadline {
         await task::yield_now();
     }
@@ -31,7 +31,7 @@ fn pair(l: TcpListener) -> (TcpStream, TcpStream) {
 fn outcome(r: usize | IoError) -> str {
     match r {
         n: usize => f"read {n}",
-        e: IoError => f"{e.kind:?} {e.message}",
+        e: IoError => f"{e.kind():?} {e.message()}",
     }
 }
 
@@ -70,7 +70,7 @@ let acc = task::spawn(async {
     let r: str = try {
         await idle.accept_async();
         "accepted"
-    } catch e: IoError { f"{e.kind:?} {e.message}" };
+    } catch e: IoError { f"{e.kind():?} {e.message()}" };
     r
 });
 await parked(1);

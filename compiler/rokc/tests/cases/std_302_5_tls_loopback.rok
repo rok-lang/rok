@@ -121,7 +121,7 @@ fn via_traits<T: Reader + Writer>(c: T) -> str {
 fn reply<W: Writer>(w: W, msg: str) throws (IoError) { try w.write_all(msg.as_bytes().to_list()); }
 
 fn connect(port: u16, name: str, cfg: ClientConfig) throws (tls::TlsError) -> Client {
-    let s = try tcp_connect(f"127.0.0.1:{port}") catch e { throw tls::TlsError { kind: tls::TlsErrorKind::Io, msg: f"{e}", alert: 0u8 }; };
+    let s = try! tcp_connect(f"127.0.0.1:{port}");
     try Client::with_config(s, name, cfg)
 }
 
@@ -173,15 +173,15 @@ fn main() throws (tls::TlsError) {
     println(f"big: {back.len()} bytes back, intact {back == data}");
     c6.close();
 
-    try connect(port, "example.com", plain) catch e { println(f"wrong name: {e.kind:?} {e.msg}"); };
+    try connect(port, "example.com", plain) catch e { println(f"wrong name: {e.kind():?} {e.message()}"); };
     let none_cfg = ClientConfig { root_certs: [], cipher_suites: CipherSuite::all(), alpn_protocols: [], enable_pq: true, client_cert_chain: [], client_key: none, session_cache: none, early_data: [] };
-    try connect(port, "localhost", none_cfg) catch e { println(f"unknown root: {e.kind:?} {e.msg}"); };
+    try connect(port, "localhost", none_cfg) catch e { println(f"unknown root: {e.kind():?} {e.message()}"); };
     let odd = ClientConfig { root_certs: roots, cipher_suites: CipherSuite::all(), alpn_protocols: ["spdy/1".as_bytes().to_list()], enable_pq: true, client_cert_chain: [], client_key: none, session_cache: none, early_data: [] };
-    try connect(port, "localhost", odd) catch e { println(f"no common alpn: {e.kind:?} {e.msg}"); };
+    try connect(port, "localhost", odd) catch e { println(f"no common alpn: {e.kind():?} {e.message()}"); };
 
     // `Client::new` trusts the OS store, which lacks the test CA.
     let s8 = try tcp_connect(f"127.0.0.1:{port}") catch _ { return; };
-    try Client::new(s8, "localhost") catch e { println(f"os roots: {e.kind:?} {e.msg}"); };
+    try Client::new(s8, "localhost") catch e { println(f"os roots: {e.kind():?} {e.message()}"); };
     let c9 = try connect(port, "localhost", plain);
     println(f"traits -> {via_traits(c9)}");
     c9.close();

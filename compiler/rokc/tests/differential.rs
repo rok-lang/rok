@@ -568,7 +568,7 @@ fn float_suite(rng: &mut Rng) -> Suite {
                 }
                 s.hole(
                     "parse",
-                    &format!("fb(try {}.parse::<f64>() catch _ {{ f64::nan() }})", rq(&t)),
+                    &format!("fb(try {}.parse::<f64>() catch _ {{ f64::NAN }})", rq(&t)),
                     &format!("BF(float('{t}'))"),
                     Cmp::Exact,
                 );

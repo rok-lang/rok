@@ -38,7 +38,7 @@ let waiter = task::spawn(async {
     1
 });
 // Until it waits on `cv` (a loaded machine may take long).
-let deadline = Instant::now() + Duration::sec(60);
+let deadline = Instant::now() + Duration::secs(60);
 while task::registrations() < 1 && Instant::now() < deadline { await task::yield_now(); }
 using held = await m.lock_async() {
     waiter.cancel();

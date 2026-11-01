@@ -15,15 +15,15 @@
 // tables): each call reports `IoErrorKind::Unsupported` at run time, and
 // the process id is 0 (WASI has no such concept).
 use rok::std::process;
-use rok::std::process::{Command, SignalError};
+use rok::std::process::{Command, Signal, SignalError};
 use rok::std::io::{IoError, IoErrorKind};
 use rok::std::env;
 
 try Command::new("ls").spawn() catch e: IoError { println(f"spawn: {e.kind():?}"); };
 try Command::new("ls").arg("-l").output() catch e: IoError { println(f"output: {e.kind():?}"); };
-try process::kill(1u32, 15) catch e: IoError { println(f"kill: {e.kind():?}"); };
+try process::send_signal(1u32, Signal::Terminate) catch e: IoError { println(f"kill: {e.kind():?}"); };
 try process::raise(15) catch e: IoError { println(f"raise: {e.kind():?}"); };
-try process::signal(15, || {}) catch e: SignalError {
+try process::on_signal(Signal::Terminate, || {}) catch e: SignalError {
     println(f"signal: {IoError::from_os(e.code, "signal").kind():?}");
 };
 try env::current_exe() catch e: IoError { println(f"current_exe: {e.kind():?}"); };

@@ -24,7 +24,7 @@ let producer = task::spawn(async {
 });
 // Nobody receives yet: the producer stops after filling the queue (once
 // it has, it gets more time to overrun it).
-let deadline = Instant::now() + Duration::sec(60);
+let deadline = Instant::now() + Duration::secs(60);
 while sent.load() < 2 && Instant::now() < deadline { await task::yield_now(); }
 await task::sleep(Duration::ms(20));
 println(f"queued while full: {sent.load()}");
@@ -52,7 +52,7 @@ let (rtx, rrx) = channel_bounded::<i32>(0);
 let waiter = task::spawn(async { await rrx.recv_async() });
 // Until the receiver is suspended.
 let ok = false;
-deadline = Instant::now() + Duration::sec(60);
+deadline = Instant::now() + Duration::secs(60);
 while !ok && Instant::now() < deadline {
     ok = true;
     try rtx.try_send(42) catch e: TrySendError<i32> { ok = false; };

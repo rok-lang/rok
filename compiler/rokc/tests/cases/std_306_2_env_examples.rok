@@ -12,9 +12,10 @@
 // exits 1. `set_var` is called first thing (3.6.3).
 use rok::std::env;
 use rok::std::path::Path;
+use rok::std::process;
 
 fn main() {
-    env::set_var("ROK_ENV_EXAMPLE_LEVEL", "debug");
+    unsafe { env::set_var("ROK_ENV_EXAMPLE_LEVEL", "debug"); }
     let log_level = (try? env::var("ROK_ENV_EXAMPLE_UNSET")) ?? "info";
     let set_level = (try? env::var("ROK_ENV_EXAMPLE_LEVEL")) ?? "info";
     println(f"log level: {log_level} {set_level}");
@@ -31,7 +32,7 @@ fn main() {
     let args = env::args();
     if args.len() < 2 {
         eprintln("usage: tool <input>");
-        env::exit(1);
+        process::exit(1);
     }
     println(f"input: {args[1]}");
 }

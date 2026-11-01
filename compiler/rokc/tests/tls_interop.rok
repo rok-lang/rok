@@ -28,12 +28,12 @@ fn suites(s: str) -> List<CipherSuite> {
     CipherSuite::all()
 }
 
-fn err(e: TlsError) -> str { f"error {e.kind:?} alert {e.alert}" }
+fn err(e: TlsError) -> str { f"error {e.kind():?} alert {e.alert()}" }
 
 fn line(buf: List<u8>, k: usize) -> str { (try str::from_utf8(buf[0:k]) catch _ { "?" }).trim() }
 
 fn client(args: List<str>) {
-    let cfg = ClientConfig::new();
+    let cfg = try! ClientConfig::try_new();
     cfg.root_certs = try! Certificate::from_pem(read_file(args[4]));
     cfg.cipher_suites = suites(opt(args, "suite"));
     cfg.enable_pq = opt(args, "pq") != "0";
@@ -45,7 +45,7 @@ fn client(args: List<str>) {
     for i in 0..count(args) {
         if i > 0 { cfg.early_data = opt(args, "early").as_bytes().to_list(); }
         let s = try! tcp_connect(f"127.0.0.1:{args[2]}");
-        try! s.set_read_timeout(Duration::sec(20));
+        try! s.set_read_timeout(Duration::secs(20));
         let c = try Client::with_config(s, args[3], cfg) catch e {
             println(f"conn {i}: {err(e)}");
             continue;
@@ -75,7 +75,7 @@ fn server(args: List<str>) {
     eprintln(f"listening {(try! l.local_addr()).port()}");
     for i in 0..count(args) {
         let (s, _) = try! l.accept();
-        try! s.set_read_timeout(Duration::sec(20));
+        try! s.set_read_timeout(Duration::secs(20));
         let srv = try Server::new(s, cfg) catch e {
             println(f"srv {i}: {err(e)}");
             continue;

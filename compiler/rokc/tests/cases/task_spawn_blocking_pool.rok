@@ -70,7 +70,7 @@ let t = task::spawn(async {
         0
     });
 });
-let deadline = Instant::now() + Duration::sec(60);
+let deadline = Instant::now() + Duration::secs(60);
 while started.load() == 0 && Instant::now() < deadline { await task::yield_now(); }
 t.cancel();
 let seen = false;

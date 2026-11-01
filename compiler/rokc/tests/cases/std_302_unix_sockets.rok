@@ -55,7 +55,7 @@ fn main() throws (IoError) {
     let (k, fd) = try y.recv_with_fd(got);
     println(f"recv {k} {fd is i32}");
     try p.write_all("via passed fd");
-    let f = fs::File::from_fd(fd ?? -1, "passed");
+    let f = unsafe { fs::File::from_fd(fd ?? -1, "passed") };
     let back: List<u8> = byte_buf(32);
     let m = try f.read(back);
     println(f"{try str::from_utf8(back[0:m])}");

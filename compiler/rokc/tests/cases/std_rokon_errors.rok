@@ -80,7 +80,7 @@ fn read(s: str) {
 
 fn decode(s: str) {
     let _ = try rokon::from_str::<Config>(s) catch e {
-        println(f"decode: {e} [{e.path}]");
+        println(f"decode: {e} [{e.path()}]");
         return;
     };
     println("decode: ok");

@@ -27,10 +27,10 @@ gDBrha3fDQ==
 ";
 
 fn check(label: str, path: Path) {
-    env::set_var("SSL_CERT_FILE", path.as_str());
+    unsafe { env::set_var("SSL_CERT_FILE", path.as_str()); }
     let n = ClientConfig::new().root_certs.len();
     let c = try ClientConfig::try_new() catch e {
-        println(f"{label}: new {n} roots, try_new {e.kind:?}");
+        println(f"{label}: new {n} roots, try_new {e.kind():?}");
         return;
     };
     println(f"{label}: new {n} roots, try_new {c.root_certs.len()} roots");

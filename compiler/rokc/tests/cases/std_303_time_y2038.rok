@@ -26,7 +26,7 @@ fn main() throws (SystemTimeError | IoError) -> i32 {
     // 2100-01-01T00:00:00Z.
     let t = SystemTime::from_unix(4102444800, 7);
     println(f"{try t.unix_seconds()} {try t.duration_since(UNIX_EPOCH)}");
-    let later = t + Duration::sec(86400 * 366);
+    let later = t + Duration::secs(86400 * 366);
     println(f"{(try later.duration_since(t)).as_secs() / 86400}d {later > t}");
     let y2038 = SystemTime::from_unix(2147483647, 0);
     println(f"{try t.duration_since(y2038)} {y2038 < t}");

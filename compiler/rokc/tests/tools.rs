@@ -884,7 +884,7 @@ kept + 1
 fn down(n: i32) -> i32 { if n == 0 { panic(\"deep\") } else { down(n - 1) + 1 } }
 down(50)
 kept + 2
-rok::std::env::exit(3);
+rok::std::process::exit(3);
 fn f() -> i32 { 1 }
 f()
 fn f() -> i32 { panic(\"v2\") }
@@ -1930,7 +1930,7 @@ fn boom(n: i32) {
 boom(5)
 fn t() throws { throw ValueError { msg: \"bad\" }; }
 kept += 1; try t()
-kept += 1; rok::std::env::exit(3);
+kept += 1; rok::std::process::exit(3);
 kept
 ";
     let out = piped(ROKC, &["repl", "--rokr", &rokr], input);
@@ -2371,7 +2371,7 @@ fn jupyter_kernel_speaks_the_wire_protocol() {
     let (_, reply, _) = request(
         &mut shell,
         "execute_request",
-        exec("rok::std::env::exit(3);"),
+        exec("rok::std::process::exit(3);"),
     );
     assert_eq!(
         reply.get("evalue").as_str(),

@@ -48,7 +48,7 @@ let r = try await t.join() catch e: CancellationError { println(f"join: {e:?}");
 
 // Nested: the inner coroutine leaves first, then its awaiting caller.
 async fn inner() -> i32 {
-    let r = { await task::sleep(Duration::sec(30)); 5 } finally { println("inner finally"); };
+    let r = { await task::sleep(Duration::secs(30)); 5 } finally { println("inner finally"); };
     r
 }
 let t2 = task::spawn(async {

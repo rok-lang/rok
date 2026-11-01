@@ -46,11 +46,11 @@ fn main() {
 
     // Parse.
     let p: float = try! "6.02214076e123456".parse::<float>();
-    println(f"{float::try_parse("1e-5000") ?? z} {float::try_parse("abc") is none} {float::try_parse("-inf") ?? z} {float::try_parse(".5") ?? z} {p} {p / p}");
+    println(f"{float::parse_or_none("1e-5000") ?? z} {float::parse_or_none("abc") is none} {float::parse_or_none("-inf") ?? z} {float::parse_or_none(".5") ?? z} {p} {p / p}");
 
     // f-strings.
     println(f"[{h:.3e}] [{big:.3e}] [{tiny:E}] [{a:>8}] [{big:>15}] [{one:+.2f}] [{lit:.2}]");
-    println(f"[{float::try_parse("1e30") ?? z:.1f}] [{tiny:.3f}]");
+    println(f"[{float::parse_or_none("1e30") ?? z:.1f}] [{tiny:.3f}]");
 
     // `%` is exact (fmod), `%%` floored.
     let r: float = 7.5;

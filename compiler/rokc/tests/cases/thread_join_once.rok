@@ -9,7 +9,7 @@
 // spec: std 304 §3.4
 // A `JoinHandle` copy shares the handle: the OS thread is joined or
 // detached once. A second `join` (through any copy), or a `join` after
-// `detach`, throws `JoinError` with `JOIN_TAKEN`; a second `detach` does
+// `detach`, throws `JoinError` of kind `Taken`; a second `detach` does
 // nothing.
 use rok::std::thread;
 
@@ -17,8 +17,8 @@ fn main() {
     let h = thread::spawn(|| 7);
     let copy = h;
     println(f"{try! h.join()}");
-    let code = try copy.join() catch e: thread::JoinError { println(f"{e}"); e.code };
-    println(f"{code == thread::JOIN_TAKEN}");
+    let taken = try { copy.join(); false } catch e: thread::JoinError { println(f"{e}"); e.kind() == thread::JoinErrorKind::Taken };
+    println(f"{taken}");
     let d = thread::spawn(|| 1);
     d.detach();
     d.detach();

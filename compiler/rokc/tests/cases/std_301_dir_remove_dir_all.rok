@@ -12,10 +12,11 @@
 use rok::std::fs;
 use rok::std::fs::Dir;
 use rok::std::env;
+use rok::std::process;
 
 // A relative base, under the temp directory.
 try! env::set_current_dir(env::temp_dir());
-let base = f"rok_std_301_rm_{env::pid()}";
+let base = f"rok_std_301_rm_{process::id()}";
 try! fs::create_dir_all(base);
 let d = try! Dir::root().open_dir(base);
 try! d.create_dir_all("many/deep");

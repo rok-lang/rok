@@ -20,9 +20,10 @@ use rok::std::io;
 use rok::std::io::{IoError, Reader, Writer, BufReader, BufWriter, LineWriter};
 use rok::std::fs;
 use rok::std::env;
+use rok::std::process;
 
 fn main() throws (IoError) {
-    let p = env::temp_dir() / f"rok_std_io_buf_{env::pid()}.txt";
+    let p = env::temp_dir() / f"rok_std_io_buf_{process::id()}.txt";
     using f = try fs::create(p) {
         let w = BufWriter::with_capacity(16, f);
         let i = 0;
@@ -48,7 +49,7 @@ fn main() throws (IoError) {
         println(f"bytes: {n}");
     }
 
-    let q = env::temp_dir() / f"rok_std_io_buf2_{env::pid()}.txt";
+    let q = env::temp_dir() / f"rok_std_io_buf2_{process::id()}.txt";
     let out = try fs::create(q);
     using w = BufWriter::new(out) {
         try w.write_str("kept by drop");

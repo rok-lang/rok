@@ -37,7 +37,7 @@ impl SystemTime {
     }
 
     pub const fn from_unix(secs: i64, nanos: u32) -> SystemTime {
-        SystemTime { ns: (Duration::sec(secs) + Duration::ns(nanos as i64)).as_ns() }
+        SystemTime { ns: (Duration::secs(secs) + Duration::ns(nanos as i64)).as_ns() }
     }
     /// Whole seconds since the epoch; throws before it.
     pub const fn unix_seconds(self) throws (SystemTimeError) -> i64 { (try self.duration_since(UNIX_EPOCH)).as_secs() }
