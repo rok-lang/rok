@@ -3,21 +3,15 @@
 // needs: process threads
 // only-os: macos linux
 // expect-exit: 0
-// expect-lint: 37:9 use of deprecated method `Child::signal`
-// expect-lint: 50:13 use of deprecated function `kill`
-// expect-warning: = note: use `Child::send_signal(Signal::..)`
-// expect-warning: = note: use `process::send_signal(pid, Signal::..)`
 // expect-stdout:
 // numbers: 2 9 15
 // terminated: ExitStatus { signal: 15 }
 // killed: ExitStatus { signal: 9 }
-// old kill: ExitStatus { signal: 9 }
 // exited: ExitStatus { code: 3 }
 // handled: true
 // Kill
 
-// `Signal` replaces the `i32` signal numbers; the `i32` forms still
-// work and warn. `ExitStatus` has `Debug`.
+// `Signal` names the signals sent and handled. `ExitStatus` has `Debug`.
 use rok::core::io::IoError;
 use rok::std::process;
 use rok::std::process::{Command, Signal};
@@ -33,9 +27,6 @@ fn main() throws (IoError) {
     let b = try sleeper();
     try process::send_signal(b.id(), Signal::Kill);
     println(f"killed: {try b.wait():?}");
-    let c = try sleeper();
-    try c.signal(9);
-    println(f"old kill: {try c.wait():?}");
     let d = try Command::new("sh").args(["-c", "exit 3"]).spawn();
     println(f"exited: {try d.wait():?}");
     let seen = Atomic::<bool>::new(false);
@@ -46,8 +37,5 @@ fn main() throws (IoError) {
         thread::sleep(Duration::ms(2));
     }
     println(f"handled: {seen.load()}");
-    if false {
-        try process::kill(process::id(), 0);
-    }
     println(f"{Signal::Kill:?}");
 }

@@ -29,7 +29,7 @@ fn main() throws (IoError) {
     let args = env::args();
     println(f"args: {args.len()} {args[0].len() > 0}");
 
-    unsafe { env::set_var("ROK_STD_ENV_TEST", "hello"); }
+    unsafe { try! env::set_var("ROK_STD_ENV_TEST", "hello"); }
     println("var: " + (try env::var("ROK_STD_ENV_TEST") catch _ { "?" }));
     let seen = false;
     for kv in env::vars() {
@@ -37,7 +37,7 @@ fn main() throws (IoError) {
         if k == "ROK_STD_ENV_TEST" && v == "hello" { seen = true; }
     }
     println(f"vars has it: {seen}");
-    unsafe { env::remove_var("ROK_STD_ENV_TEST"); }
+    unsafe { try! env::remove_var("ROK_STD_ENV_TEST"); }
     println("removed: " + (try env::var("ROK_STD_ENV_TEST") catch e { f"{e:?}" }));
 
     let start = try env::current_dir();

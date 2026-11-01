@@ -46,36 +46,55 @@ impl Debug for NulError {
 
 impl Error for NulError {}
 
-/// Bytes that are not one C string: no final NUL, or one before it.
-pub struct FromBytesWithNulError {
-    message: str;
+/// Bytes that are not one C string (`CStr::from_bytes_with_nul`).
+#[derive(Clone, PartialEq, Eq)]
+pub enum FromBytesWithNulError {
+    /// A NUL before the last byte, at `position`.
+    InteriorNul { position: usize; },
+    /// The last byte is not a NUL (or there is none).
+    NotNulTerminated,
 }
 
 impl FromBytesWithNulError {
-    pub const fn message(self) -> str { self.message }
-}
-
-impl PartialEq for FromBytesWithNulError {
-    const fn eq(self, rhs: FromBytesWithNulError) -> bool { self.message == rhs.message }
-}
-
-impl Eq for FromBytesWithNulError {}
-
-impl Clone for FromBytesWithNulError {
-    fn clone(self) -> FromBytesWithNulError { FromBytesWithNulError { message: self.message } }
+    pub const fn message(self) -> str {
+        match self {
+            FromBytesWithNulError::InteriorNul { position } => f"interior nul byte at {position}",
+            FromBytesWithNulError::NotNulTerminated => "data provided is not nul terminated",
+        }
+    }
 }
 
 impl Display for FromBytesWithNulError {
-    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(self.message) }
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(self.message()) }
 }
 
 impl Debug for FromBytesWithNulError {
     const fn fmt(self, ref f: Formatter) throws (FmtError) {
-        try f.write_str(f"FromBytesWithNulError({self.message})")
+        match self {
+            FromBytesWithNulError::InteriorNul { position } => try f.write_str(f"InteriorNul {{ position: {position} }}"),
+            FromBytesWithNulError::NotNulTerminated => try f.write_str("NotNulTerminated"),
+        }
     }
 }
 
 impl Error for FromBytesWithNulError {}
+
+/// Bytes with no NUL at all (`CStr::from_bytes_until_nul`).
+pub struct FromBytesUntilNulError {}
+
+impl FromBytesUntilNulError {
+    pub const fn message(self) -> str { "data provided does not contain a nul" }
+}
+
+impl Display for FromBytesUntilNulError {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(self.message()) }
+}
+
+impl Debug for FromBytesUntilNulError {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("FromBytesUntilNulError") }
+}
+
+impl Error for FromBytesUntilNulError {}
 
 /// `bytes` and a final NUL as one `str` object.
 const fn with_nul(bytes: Slice<u8>) -> str {
@@ -107,10 +126,11 @@ pub struct CStr {
 }
 
 impl CStr {
-    /// The C string at `p` (copied in); `none` for a null pointer.
-    /// Without a NUL terminator the behavior is undefined.
-    #[deprecated_safe("`p` must be null or point at a live NUL-terminated string")]
-    pub fn from_ptr(p: ConstPtr<c_char>) -> CStr | none {
+    /// The C string at `p`, copied up to its NUL; `none` for a null
+    /// pointer.
+    ///
+    /// Safety: `p` must be null or point at a live NUL-terminated string.
+    pub unsafe fn from_ptr(p: ConstPtr<c_char>) -> CStr | none {
         if p.addr() == 0 {
             return none;
         }
@@ -132,18 +152,19 @@ impl CStr {
         let n = b.len();
         match nul_in(b) {
             i: usize if i + 1 == n => CStr { s: with_nul(b[0:i]) },
-            i: usize => throw FromBytesWithNulError { message: f"interior nul byte at {i}" },
-            none => throw FromBytesWithNulError { message: "data provided is not nul terminated" },
+            i: usize => throw FromBytesWithNulError::InteriorNul { position: i },
+            none => throw FromBytesWithNulError::NotNulTerminated,
         }
     }
 
-    /// `bytes`, whose last byte must be the only NUL (not checked).
-    /// Empty `bytes` gives the empty string.
-    pub const fn from_bytes_with_nul_unchecked<B: AsBytes>(bytes: B) -> CStr {
+    /// The bytes up to the first NUL, which must be there; the rest is
+    /// ignored (a fixed-size C buffer).
+    pub const fn from_bytes_until_nul<B: AsBytes>(bytes: B) throws (FromBytesUntilNulError) -> CStr {
         let b = bytes.byte_slice();
-        let n = b.len();
-        if n == 0 { return CStr { s: with_nul(b) }; }
-        CStr { s: with_nul(b[0:n - 1]) }
+        match nul_in(b) {
+            i: usize => CStr { s: with_nul(b[0:i]) },
+            none => throw FromBytesUntilNulError {},
+        }
     }
 
     pub fn as_ptr(self) -> ConstPtr<c_char> {

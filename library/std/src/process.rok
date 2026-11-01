@@ -245,12 +245,6 @@ pub fn send_signal(pid: u32, sig: Signal) throws (IoError) {
     try check(unsafe { rok_os_kill(pid as i32, sig.number()) } as i64, "kill");
 }
 
-/// Send signal `sig` to process `pid`.
-#[deprecated(since = "0.1.6", note = "use `process::send_signal(pid, Signal::..)`")]
-pub fn kill(pid: u32, sig: i32) throws (IoError) {
-    try check(unsafe { rok_os_kill(pid as i32, sig) } as i64, "kill");
-}
-
 /// Send `sig` to this process. Windows: only `Interrupt` and `Hangup`,
 /// which reach an `on_signal` handler (`Interrupt` without one ends the
 /// process).
@@ -666,10 +660,6 @@ impl Child {
         try unsent(sig);
         try self.raw_signal(sig.number());
     }
-
-    /// A no-op once the child has ended and is being reaped.
-    #[deprecated(since = "0.1.6", note = "use `Child::send_signal(Signal::..)`")]
-    pub fn signal(self, sig: i32) throws (IoError) { try self.raw_signal(sig); }
 
     fn raw_signal(self, sig: i32) throws (IoError) {
         if !use_begin(self.state, 3) { return; }

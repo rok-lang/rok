@@ -98,25 +98,17 @@ pub trait Debug {
 
 /// An f-string spec, `[[fill]align][sign][#][0][width][.precision][type]`
 /// (refs-lang 1.7.3). An absent `ty` is `'\0'`; the Display letters
-/// `s d` read as absent. Read it with the getters; the fields stop
-/// being `pub` in 0.2.0.
+/// `s d` read as absent. Build one with `parse`, read it with the
+/// getters.
 pub struct FormatSpec {
-    #[deprecated(since = "0.1.6", note = "read it with `spec.fill()`; build a spec with `FormatSpec::parse`")]
-    pub fill: char;
-    #[deprecated(since = "0.1.6", note = "read it with `spec.align()`; build a spec with `FormatSpec::parse`")]
-    pub align: Alignment | none;
-    #[deprecated(since = "0.1.6", note = "read it with `spec.sign()`; build a spec with `FormatSpec::parse`")]
-    pub sign: Sign | none;
-    #[deprecated(since = "0.1.6", note = "read it with `spec.alternate()`; build a spec with `FormatSpec::parse`")]
-    pub alt: bool;
-    #[deprecated(since = "0.1.6", note = "read it with `spec.zero_pad()`; build a spec with `FormatSpec::parse`")]
-    pub zero: bool;
-    #[deprecated(since = "0.1.6", note = "read it with `spec.width()`; build a spec with `FormatSpec::parse`")]
-    pub width: usize | none;
-    #[deprecated(since = "0.1.6", note = "read it with `spec.precision()`; build a spec with `FormatSpec::parse`")]
-    pub precision: usize | none;
-    #[deprecated(since = "0.1.6", note = "read it with `spec.ty()`; build a spec with `FormatSpec::parse`")]
-    pub ty: char;
+    fill: char;
+    align: Alignment | none;
+    sign: Sign | none;
+    alt: bool;
+    zero: bool;
+    width: usize | none;
+    precision: usize | none;
+    ty: char;
 }
 
 impl FormatSpec {
@@ -280,8 +272,6 @@ impl Formatter {
 
     pub const fn alternate(self) -> bool { ((self.flags >> 56u64) & 1u64) != 0u64 }
     pub const fn zero_pad(self) -> bool { ((self.flags >> 57u64) & 1u64) != 0u64 }
-    #[deprecated(since = "0.1.6", note = "use `zero_pad`")]
-    pub const fn pad_zero(self) -> bool { self.zero_pad() }
     pub const fn width(self) -> usize | none { count_of(self.counts) }
     pub const fn precision(self) -> usize | none { count_of(self.counts >> 32u64) }
 

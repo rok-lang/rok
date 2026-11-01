@@ -1470,7 +1470,8 @@ pub extern "C" fn rok_os_getenv(name: RokStr, buf: *mut u8, off: usize, len: usi
     }
 }
 
-/// Set (`value` given) or remove a variable. 0 or `-error`.
+/// Set (`value` given) or remove a variable. 0 or `-error`; removing an
+/// absent one is 0, as `unsetenv`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_os_setenv(name: RokStr, value: RokStr, unset: i32) -> i32 {
     let mut n = wide(name.bytes());
@@ -1479,7 +1480,15 @@ pub extern "C" fn rok_os_setenv(name: RokStr, value: RokStr, unset: i32) -> i32 
     let ok = unsafe {
         win::SetEnvironmentVariableW(n.ptr(), if unset != 0 { ptr::null() } else { v.ptr() })
     };
-    if ok == 0 { fail() } else { 0 }
+    if ok != 0 {
+        return 0;
+    }
+    let e = fail();
+    if unset != 0 && e == -win::ERROR_ENVVAR_NOT_FOUND {
+        0
+    } else {
+        e
+    }
 }
 
 // Processes

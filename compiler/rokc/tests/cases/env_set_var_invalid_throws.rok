@@ -1,0 +1,26 @@
+// spec: std 306-env §3.6.3
+// expect-exit: 0
+// expect-stdout:
+// "": InvalidInput: invalid environment variable name ""
+// "A=B": InvalidInput: invalid environment variable name "A=B"
+// "A\0": InvalidInput
+// value: InvalidInput: value of environment variable ROK_ENV_BAD holds a NUL
+// remove "=": InvalidInput
+// remove absent: ok
+// still unset: true
+
+// A bad name or value throws `InvalidInput` on every target, before the
+// environment is touched; removing an unset variable is not an error.
+use rok::std::env;
+
+fn main() {
+    for name in ["", "A=B"] {
+        try unsafe { env::set_var(name, "1") } catch e { println(f"{name:?}: {e.kind():?}: {e}"); };
+    }
+    try unsafe { env::set_var("A\0", "1") } catch e { println(f"\"A\\0\": {e.kind():?}"); };
+    try unsafe { env::set_var("ROK_ENV_BAD", "a\0b") } catch e { println(f"value: {e.kind():?}: {e}"); };
+    try unsafe { env::remove_var("=") } catch e { println(f"remove \"=\": {e.kind():?}"); };
+    unsafe { try! env::remove_var("ROK_ENV_NEVER_SET"); }
+    println("remove absent: ok");
+    println(f"still unset: {env::var_os("ROK_ENV_BAD") is none}");
+}

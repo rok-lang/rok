@@ -267,17 +267,6 @@ impl Metadata {
     pub const fn is_dir(self) -> bool { self.kind == 2 }
     pub const fn is_symlink(self) -> bool { self.kind == 3 }
     pub const fn permissions(self) -> Permissions { Permissions { mode: self.mode } }
-    /// Last modification, Unix seconds (+ `mtime_nanos` within it).
-    #[deprecated(since = "0.1.6", note = "use `modified()`")]
-    pub const fn mtime(self) -> i64 { self.mtime }
-    /// The nanoseconds within the `mtime` second.
-    #[deprecated(since = "0.1.6", note = "use `modified()`")]
-    pub const fn mtime_nanos(self) -> i64 { self.mtime_ns }
-    #[deprecated(since = "0.1.6", note = "use `accessed()`")]
-    pub const fn atime(self) -> i64 { self.atime }
-    /// The last status change (not creation), Unix seconds.
-    #[deprecated(since = "0.1.6", note = "use `status_changed()` (last status change) or `created()`")]
-    pub const fn ctime(self) -> i64 { self.ctime }
     /// Last modification as a `SystemTime` (3.3.3). Never throws on
     /// Unix; `throws` keeps room for platforms without the field.
     pub const fn modified(self) throws (IoError) -> SystemTime { SystemTime::from_unix(self.mtime, self.mtime_ns as u32) }

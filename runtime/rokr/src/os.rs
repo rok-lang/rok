@@ -1323,7 +1323,8 @@ pub extern "C" fn rok_os_getenv(name: RokStr, buf: *mut u8, off: usize, len: usi
 /// `setenv` (`value` given) / `unsetenv`. 0 or `-errno`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_os_setenv(name: RokStr, value: RokStr, unset: i32) -> i32 {
-    // SAFETY: C strings. No global env lock (spec 306.3).
+    // SAFETY: C strings. std's env lock serializes Rok's own callers
+    // (spec 306.3).
     let r = unsafe {
         if unset != 0 {
             libc::unsetenv(cs(name).p())
