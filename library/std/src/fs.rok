@@ -173,6 +173,7 @@ const fn check_knobs(_custom: u32, _path: str, _name: str) throws (IoError) {}
 /// A file's permissions: Unix permission bits (Windows: the read-only
 /// attribute; `PermissionsExt` in `rok::std::os::unix::fs` reads and sets
 /// the bits).
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Permissions {
     pub(pkg) mode: u32;
 }
@@ -191,6 +192,12 @@ impl Permissions {
     }
 }
 
+impl Debug for Permissions {
+    fn fmt(self, ref f: Formatter) throws (FmtError) {
+        try f.write_str(f"Permissions {{ mode: {self.mode:#o}, readonly: {self.readonly()} }}")
+    }
+}
+
 /// `0o666` before the umask (Windows: not read-only): what a created
 /// file gets.
 impl Default for Permissions {
@@ -199,6 +206,7 @@ impl Default for Permissions {
 
 /// What a directory entry is (301.1).
 #[non_exhaustive]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FileType {
     File,
     Dir,
@@ -220,11 +228,6 @@ impl FileType {
             FileType::Other => 0,
         }
     }
-}
-
-impl PartialEq for FileType {
-    const fn eq(self, rhs: FileType) -> bool { self.index() == rhs.index() }
-    const fn ne(self, rhs: FileType) -> bool { self.index() != rhs.index() }
 }
 
 impl Debug for FileType {
@@ -253,6 +256,10 @@ pub struct Metadata {
     btime: i64;
     btime_ns: i64;
     has_btime: bool;
+}
+
+impl Debug for Metadata {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"Metadata {{ file_type: {self.file_type():?}, len: {self.len}, permissions: {self.permissions():?} }}") }
 }
 
 impl Metadata {
@@ -319,6 +326,10 @@ pub struct File {
     /// `[fd, calls in flight]` (`io::use_begin`).
     fd: GcBuf<i32>;
     path: str;
+}
+
+impl Debug for File {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"File {{ path: {self.path:?} }}") }
 }
 
 pub(pkg) const fn file_of(fd: i32, path: str) -> File {
@@ -482,6 +493,10 @@ impl File {
 pub struct Mmap {
     addr: GcBuf<usize>;
     len: usize;
+}
+
+impl Debug for Mmap {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"Mmap {{ len: {self.len} }}") }
 }
 
 impl Mmap {
@@ -685,6 +700,10 @@ pub struct ReadDirStream {
     pending: Task<List<Result<DirEntry, IoError>>> | none;
 }
 
+impl Debug for ReadDirStream {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("ReadDirStream") }
+}
+
 const fn stream_of(rd: ReadDir) -> ReadDirStream {
     ReadDirStream { rd: rd, lock: Mutex::new(0), batch: List::new(), pos: 0, pending: none }
 }
@@ -877,6 +896,10 @@ impl Drop for File {
 pub struct Dir {
     fd: GcBuf<i32>;
     path: str;
+}
+
+impl Debug for Dir {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"Dir {{ path: {self.path:?} }}") }
 }
 
 const fn dir_of(fd: i32, path: str) -> Dir {
@@ -1219,6 +1242,10 @@ pub struct DirEntry {
     meta: Metadata;
 }
 
+impl Debug for DirEntry {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"DirEntry({self.path:?})") }
+}
+
 impl DirEntry {
     /// The listed directory's path joined with the name.
     pub const fn path(self) -> Path { self.path }
@@ -1257,6 +1284,10 @@ impl DirView {
         if self.path == "" { return p; }
         Path::new(self.path).join(Path::new(p)).as_str()
     }
+}
+
+impl Debug for ReadDir {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("ReadDir") }
 }
 
 /// Room for any entry name (macOS `d_name` holds 1024 bytes).
@@ -1320,6 +1351,10 @@ fn close_dir(cell: GcBuf<isize>) {
 pub struct Walk {
     stack: List<DirEntry>;
     errors: List<IoError>;
+}
+
+impl Debug for Walk {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Walk") }
 }
 
 impl TryIterator for Walk {

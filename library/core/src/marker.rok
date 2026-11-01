@@ -338,6 +338,7 @@ pub(pkg) const fn buf_is_null<T>(b: GcBuf<T>) -> bool {
 /// makes the copy (its elements queued on the memo), `transfer_keep`
 /// notes the handle as its own copy. Only the compiler's list of
 /// standard types is called; other impls are ignored.
+#[sealed]
 pub trait Transfer {
     fn transfer_copy(self, m: Memo) -> Self;
     fn transfer_keep(self, m: Memo) -> Self;

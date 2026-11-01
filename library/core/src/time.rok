@@ -109,6 +109,11 @@ impl Mul<Duration> for f64 {
     const fn mul(self, rhs: Duration) -> Duration { Duration { ns: (self * rhs.ns as f64) as i64 } }
 }
 
+/// `Duration::ZERO`.
+impl Default for Duration {
+    const fn default() -> Duration { Duration::ZERO }
+}
+
 /// The largest unit the span reaches, fraction without trailing zeros:
 /// `1.234s`, `5ms`, `1.5µs`, `100ns`, `0ns`, `-2s`.
 impl Display for Duration {

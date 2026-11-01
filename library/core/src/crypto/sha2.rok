@@ -313,6 +313,10 @@ pub struct Digest {
     k: Keccak;
 }
 
+impl Debug for Digest {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"Digest {{ algorithm: {self.alg:?}, .. }}") }
+}
+
 impl Digest {
     pub const fn new(alg: HashAlgorithm) -> Digest {
         let s512 = match alg {

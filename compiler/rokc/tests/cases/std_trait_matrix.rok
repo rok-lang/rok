@@ -1,0 +1,44 @@
+// spec: std 005-notation §0.5.13
+// only-os: macos linux
+// expect-exit: 0
+// expect-stdout:
+// 1 1 1 true Equal
+// 0..3 1..=4 .. "ab" Start(3) Both
+// not found ThreadId
+// Permissions { mode: 0o444, readonly: true } 127.0.0.1:80
+// Map
+
+// Value types work as keys, order and print.
+use rok::std::path::Path;
+use rok::std::net::{IpAddr, Ipv4Addr, Shutdown, SocketAddr};
+use rok::core::io::{IoErrorKind, SeekFrom};
+use rok::std::fs::Permissions;
+use rok::std::os::unix::fs::PermissionsExt;
+use rok::std::thread;
+use rok::core::cmp::Ordering;
+use rok::core::str::StrBuf;
+
+fn main() {
+    let d: Dict<Path, i32> = Dict::new();
+    d.insert(Path::from("a"), 1);
+    let s: Set<Ipv4Addr> = Set::new();
+    s.insert(Ipv4Addr::LOCALHOST);
+    let o: Dict<Ordering, i32> = Dict::new();
+    o.insert(Ordering::Less, 2);
+    let eq = Ordering::Equal.clone();
+    println(f"{d.len()} {s.len()} {o.len()} {Ordering::Less < Ordering::Greater} {eq:?}");
+
+    let full = ..;
+    let b = StrBuf::new();
+    b.push_str("ab");
+    println(f"{(0..3):?} {(1..=4):?} {full:?} {b:?} {SeekFrom::Start(3u64):?} {Shutdown::Both:?}");
+
+    let id = f"{thread::current().id():?}";
+    println(f"{IoErrorKind::NotFound} {id.split("(").next() ?? ""}");
+
+    let p: Permissions = Permissions::from_mode(0o644u32);
+    p.set_readonly(true);
+    println(f"{p:?} {SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 80u16):?}");
+
+    println(f"{[1, 2].iter().map(|x| x + 1):?}");
+}

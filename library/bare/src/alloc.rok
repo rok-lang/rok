@@ -49,6 +49,32 @@ pub struct Layout {
     align: usize;
 }
 
+// By hand: `rok::bare` cannot use `#[derive]` (its impls name `rok::core`).
+impl Clone for Layout {
+    const fn clone(self) -> Layout { self }
+}
+
+impl Copy for Layout {}
+
+impl PartialEq for Layout {
+    const fn eq(self, rhs: Layout) -> bool { self.size == rhs.size && self.align == rhs.align }
+}
+
+impl Eq for Layout {}
+
+impl Hash for Layout {
+    const fn hash<H: Hasher>(self, ref h: H) {
+        self.size.hash(ref h);
+        self.align.hash(ref h);
+    }
+}
+
+impl Debug for Layout {
+    fn fmt(self, ref f: Formatter) throws (FmtError) {
+        try f.write_str(f"Layout {{ size: {self.size}, align: {self.align} }}")
+    }
+}
+
 impl Layout {
     /// The layout of one `T`.
     pub const fn new<T>() -> Layout { Layout { size: size_of::<T>(), align: align_of::<T>() } }
@@ -113,6 +139,10 @@ pub unsafe fn dealloc_array<T>(ptr: Ptr<T>, n: usize) { rok_free(ptr.addr()); }
 pub struct Allocation<T> {
     ptr: Ptr<T>;
     len: usize;
+}
+
+impl<T> Debug for Allocation<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"Allocation {{ len: {self.len} }}") }
 }
 
 impl<T> Allocation<T> {

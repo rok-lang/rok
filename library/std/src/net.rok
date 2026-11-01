@@ -36,12 +36,12 @@ pub mod tls;
 
 // addresses (302.4)
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Ipv4Addr {
     octets: [u8; 4];
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Ipv6Addr {
     segments: [u16; 8];
 }
@@ -85,21 +85,6 @@ impl Ipv6Addr {
         }
         self.segments[7] == 1u16
     }
-}
-
-impl PartialEq for Ipv4Addr {
-    const fn eq(self, rhs: Ipv4Addr) -> bool { self.to_bits() == rhs.to_bits() }
-    const fn ne(self, rhs: Ipv4Addr) -> bool { !self.eq(rhs) }
-}
-
-impl PartialEq for Ipv6Addr {
-    const fn eq(self, rhs: Ipv6Addr) -> bool {
-        for i in 0..8 {
-            if self.segments[i] != rhs.segments[i] { return false; }
-        }
-        true
-    }
-    const fn ne(self, rhs: Ipv6Addr) -> bool { !self.eq(rhs) }
 }
 
 impl Display for Ipv4Addr {
@@ -160,11 +145,8 @@ const fn hex(n: u64) -> str {
     out
 }
 
-impl Eq for Ipv4Addr {}
-impl Eq for Ipv6Addr {}
-
 /// An IPv4 or IPv6 address.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IpAddr {
     V4(Ipv4Addr),
     V6(Ipv6Addr),
@@ -220,7 +202,7 @@ impl FromStr for IpAddr {
 }
 
 /// An IPv4 address and a port.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SocketAddrV4 {
     ip: Ipv4Addr;
     port: u16;
@@ -236,7 +218,7 @@ impl SocketAddrV4 {
 
 /// An IPv6 address, a port, the flow label and the scope (interface)
 /// id.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SocketAddrV6 {
     ip: Ipv6Addr;
     port: u16;
@@ -275,7 +257,7 @@ impl Debug for SocketAddrV6 {
 }
 
 /// An IPv4 or IPv6 socket address.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SocketAddr {
     V4(SocketAddrV4),
     V6(SocketAddrV6),
@@ -1270,6 +1252,7 @@ impl Drop for Socket {
 
 // TCP (302.1)
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Shutdown {
     Read,
     Write,
@@ -1282,9 +1265,17 @@ pub struct TcpStream {
     sock: Sock;
 }
 
+impl Debug for TcpStream {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TcpStream") }
+}
+
 /// A listening TCP socket.
 pub struct TcpListener {
     sock: Sock;
+}
+
+impl Debug for TcpListener {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TcpListener") }
 }
 
 /// Start connecting `addr`: the socket and whether it is still pending.
@@ -1555,6 +1546,10 @@ pub struct Incoming {
     sock: Sock;
 }
 
+impl Debug for Incoming {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Incoming") }
+}
+
 impl TryIterator for Incoming {
     type Item = TcpStream;
     type Error = IoError;
@@ -1575,6 +1570,10 @@ fn udp_on(addr: SocketAddr) throws (IoError) -> UdpSocket {
     let s = try new_sock(addr.family(), 2, 0);
     try s.bind_listen(addr, -1);
     UdpSocket { sock: s }
+}
+
+impl Debug for UdpSocket {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("UdpSocket") }
 }
 
 impl UdpSocket {

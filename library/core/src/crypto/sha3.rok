@@ -154,6 +154,10 @@ pub struct Sha3_256 {
     k: Keccak;
 }
 
+impl Debug for Sha3_256 {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Sha3_256 { .. }") }
+}
+
 impl Sha3_256 {
     pub const OUTPUT_LEN: usize = 32;
 
@@ -174,6 +178,10 @@ impl Sha3_256 {
 /// as `Digest::new(HashAlgorithm::Sha3_512)`.
 pub struct Sha3_512 {
     k: Keccak;
+}
+
+impl Debug for Sha3_512 {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Sha3_512 { .. }") }
 }
 
 impl Sha3_512 {
@@ -201,6 +209,10 @@ pub struct Shake128 {
     k: Keccak;
 }
 
+impl Debug for Shake128 {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Shake128 { .. }") }
+}
+
 impl Shake128 {
     pub const fn new() -> Shake128 { Shake128 { k: Keccak::new(168, 0x1fu8) } }
 
@@ -216,6 +228,10 @@ impl Shake128 {
 /// SHAKE256, like `Shake128`.
 pub struct Shake256 {
     k: Keccak;
+}
+
+impl Debug for Shake256 {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Shake256 { .. }") }
 }
 
 impl Shake256 {

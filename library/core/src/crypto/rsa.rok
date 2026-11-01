@@ -14,6 +14,10 @@ pub struct PublicKey {
     bits: usize;
 }
 
+impl Debug for PublicKey {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"PublicKey {{ bits: {self.bits} }}") }
+}
+
 /// `b` without its leading zero bytes.
 const fn strip(b: Slice<u8>) -> Slice<u8> {
     let i = 0usize;

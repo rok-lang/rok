@@ -8,6 +8,7 @@
 use rok::core::collections::raw::{GcBuf, buf_erase, buf_new};
 use rok::core::marker::{HAND_CELL, HAND_FINISHED, HAND_STARTED, Memo, Transfer, transfer};
 
+#[derive(Debug)]
 pub enum Poll<T> {
     Ready(T),
     Pending,
@@ -32,6 +33,10 @@ pub struct Waker {
     pub(pkg) task: rok::core::task::TaskRef;
 }
 
+impl Debug for Waker {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Waker") }
+}
+
 impl Waker {
     /// Schedule the task again.
     pub fn wake(self) {
@@ -51,6 +56,10 @@ pub struct Context {
     /// one that has reports it, and neither runs any of its body.
     pub(pkg) prime: bool = false;
     pub(pkg) pdata: GcBuf<Prime> | none = none;
+}
+
+impl Debug for Context {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Context") }
 }
 
 impl Context {
@@ -210,6 +219,10 @@ pub struct AsyncFuture<T> {
     resume: fn(Context) -> Poll<T>;
 }
 
+impl<T> Debug for AsyncFuture<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("AsyncFuture") }
+}
+
 // `Send` follows the output (and error) type; `task::spawn` checks the
 // frame's captures and locals held across `await` separately
 // (`rokc_hir::lower::send_check`), and copies the captures (`Transfer`).
@@ -246,6 +259,10 @@ impl<T> Transfer for AsyncFuture<T> {
 /// take it.
 pub struct TryAsyncFuture<T, E> {
     resume: fn(Context) throws (E) -> Poll<T>;
+}
+
+impl<T, E> Debug for TryAsyncFuture<T, E> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TryAsyncFuture") }
 }
 
 impl<T, E> TryAsyncFuture<T, E> {

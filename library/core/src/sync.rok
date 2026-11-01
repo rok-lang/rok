@@ -69,6 +69,7 @@ const fn two_words() -> GcBuf<i32> {
 
 /// Memory ordering of an atomic load (2.16.2), and of the load a failed
 /// compare-exchange does. A load cannot release.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum LoadOrdering {
     Relaxed,
     Acquire,
@@ -76,6 +77,7 @@ pub enum LoadOrdering {
 }
 
 /// Memory ordering of an atomic store (2.16.2). A store cannot acquire.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum StoreOrdering {
     Relaxed,
     Release,
@@ -84,6 +86,7 @@ pub enum StoreOrdering {
 
 /// Memory ordering of a read-modify-write (2.16.2): `swap`, the
 /// `fetch_*` ops and a compare-exchange that succeeds.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum UpdateOrdering {
     Relaxed,
     Acquire,
@@ -111,6 +114,10 @@ impl<T> PartialEq for rok::bare::ptr::Ptr<T> {
 /// A lock-free cell (2.16.2). Send + Sync.
 pub struct Atomic<T> {
     cell: GcBuf<T>;
+}
+
+impl<T> Debug for Atomic<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Atomic") }
 }
 
 // The cell holds an address, not what it points at: an `Atomic<Ptr<T>>`
@@ -302,6 +309,10 @@ pub struct Mutex<T> {
     value: GcBuf<T>;
 }
 
+impl<T> Debug for Mutex<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Mutex") }
+}
+
 unsafe impl<T: Send> Sync for Mutex<T> {}
 
 impl<T> Mutex<T> {
@@ -404,6 +415,10 @@ pub struct LockFuture<T> {
     mutex: Mutex<T>;
 }
 
+impl<T> Debug for LockFuture<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("LockFuture") }
+}
+
 impl<T> rok::core::future::Future for LockFuture<T> {
     type Output = MutexGuard<T>;
     fn poll(ref self, ref ctx: rok::core::future::Context) -> rok::core::future::Poll<MutexGuard<T>> {
@@ -439,6 +454,10 @@ pub struct MutexGuard<T> {
     /// (`rok_lock_note`): released if its thread is gone after a failed
     /// cell.
     noted: bool;
+}
+
+impl<T> Debug for MutexGuard<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("MutexGuard") }
 }
 
 // A copy of a guard outlives its `using` block unprotected: the hand-off
@@ -493,6 +512,10 @@ impl<T> Drop for MutexGuard<T> {
 pub struct RwLock<T> {
     state: GcBuf<i32>;
     value: GcBuf<T>;
+}
+
+impl<T> Debug for RwLock<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("RwLock") }
 }
 
 // Readers share the value: it must be `Sync` too.
@@ -572,6 +595,10 @@ pub struct ReadFuture<T> {
     lock: RwLock<T>;
 }
 
+impl<T> Debug for ReadFuture<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("ReadFuture") }
+}
+
 impl<T> rok::core::future::Future for ReadFuture<T> {
     type Output = RwLockReadGuard<T>;
     fn poll(ref self, ref ctx: rok::core::future::Context) -> rok::core::future::Poll<RwLockReadGuard<T>> {
@@ -592,6 +619,10 @@ impl<T> rok::core::future::Future for ReadFuture<T> {
 /// `RwLock::write_async`.
 pub struct WriteFuture<T> {
     lock: RwLock<T>;
+}
+
+impl<T> Debug for WriteFuture<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("WriteFuture") }
 }
 
 impl<T> rok::core::future::Future for WriteFuture<T> {
@@ -615,6 +646,10 @@ pub struct RwLockReadGuard<T> {
     lock: RwLock<T>;
     /// As `MutexGuard::noted`.
     noted: bool;
+}
+
+impl<T> Debug for RwLockReadGuard<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("RwLockReadGuard") }
 }
 
 impl<T> !Sync for RwLockReadGuard<T> {}
@@ -648,6 +683,10 @@ pub struct RwLockWriteGuard<T> {
     lock: RwLock<T>;
     /// As `MutexGuard::noted`.
     noted: bool;
+}
+
+impl<T> Debug for RwLockWriteGuard<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("RwLockWriteGuard") }
 }
 
 impl<T> !Sync for RwLockWriteGuard<T> {}
@@ -696,6 +735,10 @@ pub struct Frozen<T> {
     value: GcBuf<T>;
 }
 
+impl<T> Debug for Frozen<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Frozen") }
+}
+
 unsafe impl<T: Send> Sync for Frozen<T> {}
 
 impl<T> Frozen<T> {
@@ -719,6 +762,10 @@ impl<T> Frozen<T> {
 // `state`: 0 new, 1 running, 2 done.
 pub struct Once {
     state: GcBuf<i32>;
+}
+
+impl Debug for Once {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Once") }
 }
 
 impl Once {
@@ -759,6 +806,10 @@ impl Once {
 // `seq[1]`: a task is parked on it (`wait_async`).
 pub struct Condvar {
     seq: GcBuf<i32>;
+}
+
+impl Debug for Condvar {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Condvar") }
 }
 
 impl Condvar {
@@ -815,6 +866,10 @@ pub struct CondvarWait<T> {
     st: GcBuf<i32>;
 }
 
+impl<T> Debug for CondvarWait<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("CondvarWait") }
+}
+
 impl<T> rok::core::future::Future for CondvarWait<T> {
     type Output = MutexGuard<T>;
     fn poll(ref self, ref ctx: rok::core::future::Context) -> rok::core::future::Poll<MutexGuard<T>> {
@@ -861,6 +916,10 @@ impl<T> rok::core::future::Future for CondvarWait<T> {
 /// Single-task interior mutability (2.16.5): neither Send nor Sync.
 pub struct Cell<T> {
     value: GcBuf<T>;
+}
+
+impl<T> Debug for Cell<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Cell") }
 }
 
 impl<T> !Send for Cell<T> {}

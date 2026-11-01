@@ -566,6 +566,10 @@ pub struct ListIter<T> {
     back: usize;
 }
 
+impl<T> Debug for ListIter<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("ListIter") }
+}
+
 impl<T> Iterator for ListIter<T> {
     type Item = T;
     const fn next(ref self) -> T | none {

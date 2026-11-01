@@ -24,6 +24,7 @@ pub fn collect() { unsafe { rok_gc_collect() } }
 /// What `pin` keeps in place for a value: the GC object holding its
 /// data, `none` when nothing can move (an empty list; a `str`, which
 /// stays in place while the `Pinned` holding it is in scope, 2.15.2).
+#[sealed]
 pub trait Pinnable {
     #[doc(hidden)]
     fn gc_object(self) -> GcBuf<u8> | none;
@@ -59,6 +60,10 @@ pub struct GcPtr<T> {
     obj: GcBuf<T>;
 }
 
+impl<T> Debug for GcPtr<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("GcPtr") }
+}
+
 // Shares its object like `List` (stdlib 2.13.9).
 impl<T> !Sync for GcPtr<T> {}
 
@@ -87,6 +92,10 @@ impl<T> GcPtr<T> {
 pub struct Weak<T> {
     /// A runtime weak cell: its one word is a `WEAK_REF`.
     cell: GcBuf<GcPtr<T>>;
+}
+
+impl<T> Debug for Weak<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Weak") }
 }
 
 impl<T> !Sync for Weak<T> {}
@@ -119,6 +128,10 @@ impl<T> Weak<T> {
 pub struct Pinned<T> {
     obj: T;
     held: GcBuf<u8> | none;
+}
+
+impl<T> Debug for Pinned<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Pinned") }
 }
 
 /// Pin `obj`'s data until the returned guard is dropped; bind it with

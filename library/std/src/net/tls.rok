@@ -37,7 +37,7 @@ use rok::core::crypto::ecdsa::EcCurve;
 use rok::core::crypto::Secret;
 
 /// What failed.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 #[non_exhaustive]
 pub enum TlsErrorKind {
     /// The underlying stream failed or closed.
@@ -82,7 +82,8 @@ impl Debug for TlsError {
 impl Error for TlsError {}
 
 /// A TLS 1.3 cipher suite.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[non_exhaustive]
 pub enum CipherSuite {
     Aes128GcmSha256,
     Aes256GcmSha384,
@@ -102,10 +103,29 @@ pub struct Certificate {
     pub(pkg) info: CertInfo;
 }
 
+impl Debug for Certificate {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"Certificate {{ dns_names: {self.info.dns_names:?}, not_after: {self.info.not_after} }}") }
+}
+
 // Never changed once parsed, and its accessors give copies: threads may
 // share one, and a hand-off or `Frozen::get` of a config does not copy
 // its certificates.
 unsafe impl Sync for Certificate {}
+
+// Equal when the DER bytes are; `info` is parsed from them.
+impl Clone for Certificate {
+    fn clone(self) -> Certificate { Certificate { der: self.der.clone(), info: self.info } }
+}
+
+impl PartialEq for Certificate {
+    fn eq(self, rhs: Certificate) -> bool { self.der == rhs.der }
+}
+
+impl Eq for Certificate {}
+
+impl Hash for Certificate {
+    fn hash<H: Hasher>(self, ref h: H) { self.der.hash(ref h); }
+}
 
 impl Certificate {
     pub fn from_der<B: AsBytes>(der: B) throws (TlsError) -> Certificate {
@@ -135,6 +155,10 @@ impl Certificate {
 /// A server's private key: Ed25519, ECDSA P-256 / P-384 or RSA.
 pub struct PrivateKey {
     pub(pkg) key: KeyKind;
+}
+
+impl Debug for PrivateKey {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("PrivateKey { .. }") }
 }
 
 pub(pkg) enum KeyKind {
@@ -261,6 +285,7 @@ impl PrivateKey {
 /// `ClientConfig { alpn_protocols: [b"h2"], ..try ClientConfig::new() }`.
 /// Fields added later have defaults too.
 #[non_exhaustive]
+#[derive(Debug)]
 pub struct ClientConfig {
     /// Trust anchors for the server's certificate.
     pub root_certs: List<Certificate>;
@@ -297,6 +322,7 @@ impl ClientConfig {
 /// `ServerConfig { max_early_data: 16384u32, ..try ServerConfig::new(chain, key) }`,
 /// or a literal naming both; `Server::new` checks the key is the leaf's.
 #[non_exhaustive]
+#[derive(Debug)]
 pub struct ServerConfig {
     /// The server's certificate first, then intermediates.
     pub cert_chain: List<Certificate>;
@@ -354,6 +380,10 @@ const CACHE_MAX: usize = 64;
 /// is used once (RFC 8446 C.4).
 pub struct SessionCache {
     m: Mutex<List<Ticket>>;
+}
+
+impl Debug for SessionCache {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("SessionCache") }
 }
 
 impl SessionCache {
@@ -448,6 +478,10 @@ pub(pkg) const TICKET_LIFETIME: u32 = 7200u32;
 /// when the store is full.
 pub struct TicketStore {
     m: Mutex<List<Session>>;
+}
+
+impl Debug for TicketStore {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TicketStore") }
 }
 
 impl TicketStore {
@@ -839,6 +873,10 @@ pub struct Client {
     s: Shared;
 }
 
+impl Debug for Client {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Client") }
+}
+
 impl !Sync for Client {}
 
 impl Client {
@@ -982,6 +1020,10 @@ impl Drop for Client {
 /// A TLS server connection. Copies share the connection.
 pub struct Server {
     s: Shared;
+}
+
+impl Debug for Server {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Server") }
 }
 
 impl !Sync for Server {}
