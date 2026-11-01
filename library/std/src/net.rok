@@ -19,7 +19,8 @@
 // any `AsBytes`. No IPv6 multicast. TLS 1.3 is `tls` (302.5).
 
 use rok::core::convert::AsBytes;
-use rok::core::io::{Close, IoError, IoErrorKind, Read, Write, AsyncRead, AsyncWrite};
+use rok::core::io::{Close, IoError, IoErrorKind, Read, Write, AsyncRead, AsyncWrite, AsyncClose};
+use rok::std::fs::off;
 use rok::std::sys::{check, would_block, region, mut_region, take_handle, use_begin, use_end, use_close};
 use rok::core::time::Duration;
 use rok::bare::mem::{GcBuf, buf_new};
@@ -670,6 +671,16 @@ impl Sock {
         try check(r as i64, "close");
     }
 
+    /// `close` that suspends the task: on a blocking thread when
+    /// `SO_LINGER` makes it wait for unsent data, else at once.
+    pub(pkg) async fn close_async(self) throws (IoError) {
+        if (try self.getopt(13) catch _ { -1i64 }) <= 0i64 {
+            try self.close();
+            return;
+        }
+        try await off(|| try self.close());
+    }
+
     /// `shutdown(2)`; waiting tasks wake to see the end of stream or the
     /// write error.
     pub(pkg) fn shutdown(self, how: Shutdown) throws (IoError) {
@@ -1099,7 +1110,7 @@ impl Socket {
     }
 
     /// `connect` that suspends the task during the handshake.
-    pub async fn connect_async(self, addr: SocketAddr) throws (IoError) {
+    pub async fn connect_async(ref self, addr: SocketAddr) throws (IoError) {
         let r = unsafe { rok_net_connect(try self.sock.live(), words_of(addr)) };
         if r < 0 { throw IoError::from_os_code(-r, f"connect {addr}"); }
         if r == 0 { return; }
@@ -1117,7 +1128,7 @@ impl Socket {
         (Socket { sock: s }, a)
     }
 
-    pub async fn accept_async(self) throws (IoError) -> (Socket, SocketAddr) {
+    pub async fn accept_async(ref self) throws (IoError) -> (Socket, SocketAddr) {
         let (s, a) = try await self.sock.accept_async();
         (Socket { sock: s }, a)
     }
@@ -1127,12 +1138,15 @@ impl Socket {
 
     pub fn shutdown(self, how: Shutdown) throws (IoError) { try self.sock.shutdown(how); }
 
+    /// As `shutdown`, which never waits.
+    pub async fn shutdown_async(ref self, how: Shutdown) throws (IoError) { try self.sock.shutdown(how); }
+
     /// Send the datagram `buf` to `addr`; bytes sent.
     pub fn send_to<B: AsBytes>(self, buf: B, addr: SocketAddr) throws (IoError) -> usize {
         try self.sock.send_to(buf.byte_slice(), addr)
     }
 
-    pub async fn send_to_async<B: AsBytes>(self, buf: B, addr: SocketAddr) throws (IoError) -> usize {
+    pub async fn send_to_async<B: AsBytes>(ref self, buf: B, addr: SocketAddr) throws (IoError) -> usize {
         try await self.sock.send_to_async(buf.byte_slice(), addr)
     }
 
@@ -1140,7 +1154,7 @@ impl Socket {
     /// and its sender.
     pub fn recv_from(self, buf: SliceMut<u8>) throws (IoError) -> (usize, SocketAddr) { try self.sock.recv_from(buf) }
 
-    pub async fn recv_from_async(self, buf: SliceMut<u8>) throws (IoError) -> (usize, SocketAddr) {
+    pub async fn recv_from_async(ref self, buf: SliceMut<u8>) throws (IoError) -> (usize, SocketAddr) {
         try await self.sock.recv_from_async(buf)
     }
 
@@ -1228,22 +1242,26 @@ impl Write for Socket {
 }
 
 impl AsyncRead for Socket {
-    async fn read_async(self, buf: SliceMut<u8>) throws (IoError) -> usize { try await self.sock.read_async(buf) }
-    async fn read_to_end_async(self) throws (IoError) -> List<u8> { try await self.sock.read_to_end_async() }
+    async fn read_async(ref self, buf: SliceMut<u8>) throws (IoError) -> usize { try await self.sock.read_async(buf) }
+    async fn read_to_end_async(ref self) throws (IoError) -> List<u8> { try await self.sock.read_to_end_async() }
 }
 
 impl AsyncWrite for Socket {
-    async fn write_async<B: AsBytes>(self, buf: B) throws (IoError) -> usize {
+    async fn write_async<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize {
         try await self.sock.write_async(buf.byte_slice())
     }
-    async fn flush_async(self) throws (IoError) {}
-    async fn write_all_async<B: AsBytes>(self, buf: B) throws (IoError) {
+    async fn flush_async(ref self) throws (IoError) {}
+    async fn write_all_async<B: AsBytes>(ref self, buf: B) throws (IoError) {
         try await self.sock.write_all_async(buf.byte_slice());
     }
 }
 
 impl Close for Socket {
     fn close(self) throws (IoError) { try self.sock.close(); }
+}
+
+impl AsyncClose for Socket {
+    async fn close_async(self) throws (IoError) { try await self.sock.close_async(); }
 }
 
 impl Drop for Socket {
@@ -1353,6 +1371,9 @@ impl TcpStream {
 
     pub fn shutdown(self, how: Shutdown) throws (IoError) { try self.sock.shutdown(how); }
 
+    /// As `shutdown`, which never waits.
+    pub async fn shutdown_async(ref self, how: Shutdown) throws (IoError) { try self.sock.shutdown(how); }
+
     pub fn set_nodelay(self, nodelay: bool) throws (IoError) { try self.sock.setopt(1, flag(nodelay)); }
     pub fn nodelay(self) throws (IoError) -> bool { (try self.sock.getopt(1)) != 0i64 }
 
@@ -1421,22 +1442,26 @@ impl Write for TcpStream {
 
 /// Cancel-safe: a cancelled read or write moved no bytes.
 impl AsyncRead for TcpStream {
-    async fn read_async(self, buf: SliceMut<u8>) throws (IoError) -> usize { try await self.sock.read_async(buf) }
-    async fn read_to_end_async(self) throws (IoError) -> List<u8> { try await self.sock.read_to_end_async() }
+    async fn read_async(ref self, buf: SliceMut<u8>) throws (IoError) -> usize { try await self.sock.read_async(buf) }
+    async fn read_to_end_async(ref self) throws (IoError) -> List<u8> { try await self.sock.read_to_end_async() }
 }
 
 impl AsyncWrite for TcpStream {
-    async fn write_async<B: AsBytes>(self, buf: B) throws (IoError) -> usize {
+    async fn write_async<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize {
         try await self.sock.write_async(buf.byte_slice())
     }
-    async fn flush_async(self) throws (IoError) {}
-    async fn write_all_async<B: AsBytes>(self, buf: B) throws (IoError) {
+    async fn flush_async(ref self) throws (IoError) {}
+    async fn write_all_async<B: AsBytes>(ref self, buf: B) throws (IoError) {
         try await self.sock.write_all_async(buf.byte_slice());
     }
 }
 
 impl Close for TcpStream {
     fn close(self) throws (IoError) { try self.sock.close(); }
+}
+
+impl AsyncClose for TcpStream {
+    async fn close_async(self) throws (IoError) { try await self.sock.close_async(); }
 }
 
 impl Drop for TcpStream {
@@ -1489,7 +1514,7 @@ impl TcpListener {
     }
 
     /// `accept` that suspends the task until a connection arrives.
-    pub async fn accept_async(self) throws (IoError) -> (TcpStream, SocketAddr) {
+    pub async fn accept_async(ref self) throws (IoError) -> (TcpStream, SocketAddr) {
         let (s, a) = try await self.sock.accept_async();
         (TcpStream { sock: s }, a)
     }
@@ -1535,6 +1560,10 @@ impl From<TcpListener> for Socket {
 
 impl Close for TcpListener {
     fn close(self) throws (IoError) { try self.sock.close(); }
+}
+
+impl AsyncClose for TcpListener {
+    async fn close_async(self) throws (IoError) { try await self.sock.close_async(); }
 }
 
 impl Drop for TcpListener {
@@ -1588,7 +1617,7 @@ impl UdpSocket {
         try self.sock.send_to(buf.byte_slice(), try first_addr(addr))
     }
 
-    pub async fn send_to_async<B: AsBytes, A: ToSocketAddrs>(self, buf: B, addr: A) throws (IoError) -> usize {
+    pub async fn send_to_async<B: AsBytes, A: ToSocketAddrs>(ref self, buf: B, addr: A) throws (IoError) -> usize {
         try await self.sock.send_to_async(buf.byte_slice(), try first_addr(addr))
     }
 
@@ -1596,7 +1625,7 @@ impl UdpSocket {
     /// and its sender.
     pub fn recv_from(self, buf: SliceMut<u8>) throws (IoError) -> (usize, SocketAddr) { try self.sock.recv_from(buf) }
 
-    pub async fn recv_from_async(self, buf: SliceMut<u8>) throws (IoError) -> (usize, SocketAddr) {
+    pub async fn recv_from_async(ref self, buf: SliceMut<u8>) throws (IoError) -> (usize, SocketAddr) {
         try await self.sock.recv_from_async(buf)
     }
 
@@ -1610,17 +1639,21 @@ impl UdpSocket {
         });
     }
 
+    /// As `connect`: a UDP connect only records the peer, so it never
+    /// waits (a name in `addr` is resolved as `connect` does).
+    pub async fn connect_async<A: ToSocketAddrs>(ref self, addr: A) throws (IoError) { try self.connect(addr); }
+
     pub fn send<B: AsBytes>(self, buf: B) throws (IoError) -> usize {
         try self.sock.write(buf.byte_slice())
     }
 
-    pub async fn send_async<B: AsBytes>(self, buf: B) throws (IoError) -> usize {
+    pub async fn send_async<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize {
         try await self.sock.write_async(buf.byte_slice())
     }
 
     pub fn recv(self, buf: SliceMut<u8>) throws (IoError) -> usize { try self.sock.read(buf) }
 
-    pub async fn recv_async(self, buf: SliceMut<u8>) throws (IoError) -> usize {
+    pub async fn recv_async(ref self, buf: SliceMut<u8>) throws (IoError) -> usize {
         try await self.sock.read_async(buf)
     }
 
@@ -1692,6 +1725,10 @@ impl From<UdpSocket> for Socket {
 
 impl Close for UdpSocket {
     fn close(self) throws (IoError) { try self.sock.close(); }
+}
+
+impl AsyncClose for UdpSocket {
+    async fn close_async(self) throws (IoError) { try await self.sock.close_async(); }
 }
 
 impl Drop for UdpSocket {

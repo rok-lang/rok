@@ -1,0 +1,29 @@
+// spec: std 2.13.4
+// needs: fs
+// expect-exit: 0
+// expect-stdout:
+// [ab]
+
+// A resource with its own `Drop` and plain fields beside the affine one
+// (`BufWriter<File>`) moves into an `async fn` whole; an async `ref self`
+// call on it writes it back without counting as a second owner.
+use rok::std::fs;
+use rok::std::fs::File;
+use rok::std::env;
+use rok::std::path::Path;
+use rok::core::io::{IoError, BufWriter};
+
+async fn finish(w: BufWriter<File>) throws (IoError) {
+    try await w.write_all_async("b");
+    try w.close();
+}
+
+async fn main() throws (IoError) {
+    let p = env::temp_dir().join(Path::new(f"rok-affine-async-{rok::std::process::id()}.txt"));
+    let w = BufWriter::new(try fs::create(p));
+    try await w.write_all_async("a");
+    try await w.flush_async();
+    try await finish(w);
+    println(f"[{try fs::read_to_str(p)}]");
+    try fs::remove_file(p);
+}

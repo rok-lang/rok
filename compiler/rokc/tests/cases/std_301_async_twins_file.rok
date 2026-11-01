@@ -1,0 +1,45 @@
+// spec: std 301-fs §3.1.1
+// needs: fs
+// needs: threads
+// expect-exit: 0
+// expect-stdout:
+// at 5
+// seek 1: [ello]
+// flushed
+// closed; then: InvalidInput
+// buffered: [abc]
+
+// A `File`'s async twins come from the io traits: `AsyncWrite`
+// (`write_all_async`, `flush_async`), `AsyncSeek`, `AsyncRead`, and
+// `AsyncClose`, whose `close_async` consumes the file and throws the
+// close's error.
+use rok::std::fs;
+use rok::std::fs::{File, CreateFlags};
+use rok::std::env;
+use rok::std::path::Path;
+use rok::core::io::{IoError, SeekFrom, AsyncSeek, AsyncClose, BufWriter};
+
+async fn main() throws (IoError) {
+    let p = env::temp_dir().join(Path::new(f"rok-twins-{rok::std::process::id()}.txt"));
+    let f = try await File::create_async(p, CreateFlags { read: true });
+    try await f.write_all_async("hello");
+    println(f"at {try await f.seek_async(SeekFrom::Current(0))}");
+    _ = try await f.seek_async(SeekFrom::Start(1));
+    let rest = try await f.read_to_str_async();
+    println(f"seek 1: [{rest}]");
+    try await f.flush_async();
+    println("flushed");
+    let g = unsafe { rok::core::marker::share(f) };
+    try await f.close_async();
+    let r: str = try {
+        _ = try await g.read_to_end_async();
+        "open"
+    } catch e: IoError { f"{e.kind():?}" };
+    println(f"closed; then: {r}");
+
+    let w = BufWriter::new(try await File::create_async(p));
+    try await w.write_all_async("abc");
+    try await w.close_async();
+    println(f"buffered: [{try fs::read_to_str(p)}]");
+    try fs::remove_file(p);
+}

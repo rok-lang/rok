@@ -1,0 +1,42 @@
+// spec: std 307-process §3.7.2
+// only-os: macos linux
+// (/bin/sh: the one program path every Unix has, NixOS too)
+// needs: process
+// needs: threads
+// expect-exit: 0
+// expect-stdout:
+// output: [hi] code 0
+// status: code 4
+// piped: [abc]
+// wait: code 0
+
+// `Command::output_async` / `status_async` and `Child::wait_async`
+// suspend the task while the child runs; the child's pipes have the
+// io traits' twins (`write_all_async`, `read_to_str_async`,
+// `close_async`).
+use rok::std::path::Path;
+use rok::std::process::{Command, Stdio, ChildStdin, ChildStdout};
+use rok::core::io::{IoError, AsyncClose};
+
+fn sh(script: str) -> Command {
+    Command::new(Path::new("/bin/sh")).args(["-c", script])
+}
+
+async fn main() throws (IoError) {
+    let o = try await sh("echo hi").output_async();
+    println(f"output: [{(try! str::from_utf8(o.stdout)).trim()}] code {o.status.code() ?? -1}");
+    let st = try await sh("exit 4").status_async();
+    println(f"status: code {st.code() ?? -1}");
+
+    let child = try sh("cat").stdin(Stdio::Piped).stdout(Stdio::Piped).spawn();
+    if let si: ChildStdin = rok::core::marker::take(ref child.stdin) {
+        try await si.write_all_async("abc");
+        try await si.close_async();
+    }
+    if let so: ChildStdout = rok::core::marker::take(ref child.stdout) {
+        println(f"piped: [{try await so.read_to_str_async()}]");
+        try await so.close_async();
+    }
+    let w = try await child.wait_async();
+    println(f"wait: code {w.code() ?? -1}");
+}

@@ -554,37 +554,31 @@ pub trait Seek {
 /// `Read` that suspends the task instead of blocking the thread.
 pub trait AsyncRead {
     /// As `Read::read`.
-    async fn read_async(self, buf: SliceMut<u8>) throws (IoError) -> usize;
+    async fn read_async(ref self, buf: SliceMut<u8>) throws (IoError) -> usize;
 
-    async fn read_vectored_async(self, bufs: Slice<SliceMut<u8>>) throws (IoError) -> usize {
-        // Until async methods take `ref self`: keep the receiver.
-        let me = unsafe { share(self) };
+    async fn read_vectored_async(ref self, bufs: Slice<SliceMut<u8>>) throws (IoError) -> usize {
         for b in bufs {
-            if b.len() > 0 { return try await me.read_async(b); }
+            if b.len() > 0 { return try await self.read_async(b); }
         }
         0
     }
 
-    async fn read_exact_async(self, buf: SliceMut<u8>) throws (IoError) {
-        // Until async methods take `ref self`: keep the receiver.
-        let me = unsafe { share(self) };
+    async fn read_exact_async(ref self, buf: SliceMut<u8>) throws (IoError) {
         let at = 0usize;
         let n = buf.len();
         while at < n {
-            let k = try await me.read_async(buf[at:n]);
+            let k = try await self.read_async(buf[at:n]);
             if k == 0 { throw unexpected_eof(); }
             at += k;
         }
     }
 
-    async fn read_to_end_into_async(self, out: List<u8>) throws (IoError) -> usize {
-        // Until async methods take `ref self`: keep the receiver.
-        let me = unsafe { share(self) };
+    async fn read_to_end_into_async(ref self, out: List<u8>) throws (IoError) -> usize {
         let start = out.len();
         loop {
             let want = room(out);
             let m = grow(out, want);
-            let k = try await me.read_async(out[m:m + want]) catch e {
+            let k = try await self.read_async(out[m:m + want]) catch e {
                 unsafe { out.set_len(m) };
                 throw e;
             };
@@ -593,18 +587,14 @@ pub trait AsyncRead {
         }
     }
 
-    async fn read_to_end_async(self) throws (IoError) -> List<u8> {
-        // Until async methods take `ref self`: keep the receiver.
-        let me = unsafe { share(self) };
+    async fn read_to_end_async(ref self) throws (IoError) -> List<u8> {
         let out: List<u8> = List::new();
-        _ = try await me.read_to_end_into_async(out);
+        _ = try await self.read_to_end_into_async(out);
         out
     }
 
-    async fn read_to_str_async(self) throws (IoError) -> str {
-        // Until async methods take `ref self`: keep the receiver.
-        let me = unsafe { share(self) };
-        try text_of(try await me.read_to_end_async())
+    async fn read_to_str_async(ref self) throws (IoError) -> str {
+        try text_of(try await self.read_to_end_async())
     }
 
     /// The remaining bytes as a stream, one `read_async` each.
@@ -615,31 +605,27 @@ pub trait AsyncRead {
 
 /// `BufRead` that suspends the task.
 pub trait AsyncBufRead: AsyncRead {
-    async fn fill_buf_async(self) throws (IoError) -> Slice<u8>;
+    async fn fill_buf_async(ref self) throws (IoError) -> Slice<u8>;
 
     /// As `BufRead::consume` (it never waits).
     fn consume(ref self, n: usize);
 
-    async fn read_until_async(self, delim: u8, out: List<u8>) throws (IoError) -> usize {
-        // Until async methods take `ref self`: keep the receiver.
-        let me = unsafe { share(self) };
+    async fn read_until_async(ref self, delim: u8, out: List<u8>) throws (IoError) -> usize {
         let total = 0usize;
         loop {
-            let avail = try await me.fill_buf_async();
+            let avail = try await self.fill_buf_async();
             if avail.len() == 0 { return total; }
             let (take, found) = upto(avail, delim);
             append(out, avail[0:take]);
-            AsyncBufRead::consume(ref me, take);
+            AsyncBufRead::consume(ref self, take);
             total += take;
             if found { return total; }
         }
     }
 
-    async fn read_line_async(self, out: StrBuf) throws (IoError) -> usize {
-        // Until async methods take `ref self`: keep the receiver.
-        let me = unsafe { share(self) };
+    async fn read_line_async(ref self, out: StrBuf) throws (IoError) -> usize {
         let line: List<u8> = List::new();
-        let n = try await me.read_until_async(10u8, line);
+        let n = try await self.read_until_async(10u8, line);
         out.push_str(try text_of(line));
         n
     }
@@ -652,24 +638,20 @@ pub trait AsyncBufRead: AsyncRead {
 
 /// `Write` that suspends the task.
 pub trait AsyncWrite {
-    async fn write_async<B: AsBytes>(self, buf: B) throws (IoError) -> usize;
-    async fn flush_async(self) throws (IoError);
+    async fn write_async<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize;
+    async fn flush_async(ref self) throws (IoError);
 
-    async fn write_vectored_async(self, bufs: Slice<Slice<u8>>) throws (IoError) -> usize {
-        // Until async methods take `ref self`: keep the receiver.
-        let me = unsafe { share(self) };
+    async fn write_vectored_async(ref self, bufs: Slice<Slice<u8>>) throws (IoError) -> usize {
         for b in bufs {
-            if b.len() > 0 { return try await me.write_async(b); }
+            if b.len() > 0 { return try await self.write_async(b); }
         }
         0
     }
 
-    async fn write_all_async<B: AsBytes>(self, buf: B) throws (IoError) {
-        // Until async methods take `ref self`: keep the receiver.
-        let me = unsafe { share(self) };
+    async fn write_all_async<B: AsBytes>(ref self, buf: B) throws (IoError) {
         let rest = buf.byte_slice();
         while rest.len() > 0 {
-            let n = try await me.write_async(rest);
+            let n = try await self.write_async(rest);
             if n == 0 { throw write_zero(); }
             rest = rest[n:rest.len()];
         }
@@ -678,7 +660,12 @@ pub trait AsyncWrite {
 
 /// `Seek` that suspends the task.
 pub trait AsyncSeek {
-    async fn seek_async(self, pos: SeekFrom) throws (IoError) -> u64;
+    async fn seek_async(ref self, pos: SeekFrom) throws (IoError) -> u64;
+}
+
+/// `Close` that suspends the task while the resource closes.
+pub trait AsyncClose {
+    async fn close_async(self) throws (IoError);
 }
 
 async yield fn bytes_of<R: AsyncRead>(r: R) throws (IoError) -> u8 {
@@ -885,6 +872,11 @@ impl<R: Close> Close for BufReader<R> {
     fn close(self) throws (IoError) { try self.inner.close(); }
 }
 
+impl<R: AsyncClose> AsyncClose for BufReader<R> {
+    /// As `close`.
+    async fn close_async(self) throws (IoError) { try await self.inner.close_async(); }
+}
+
 impl<R: Read> Read for BufReader<R> {
     fn read(ref self, buf: SliceMut<u8>) throws (IoError) -> usize {
         if buf.len() == 0 { return 0; }
@@ -912,28 +904,24 @@ impl<R: Read> BufRead for BufReader<R> {
 }
 
 impl<R: AsyncRead> AsyncRead for BufReader<R> {
-    async fn read_async(self, buf: SliceMut<u8>) throws (IoError) -> usize {
-        // Until async methods take `ref self`: keep the receiver.
-        let me = unsafe { share(self) };
+    async fn read_async(ref self, buf: SliceMut<u8>) throws (IoError) -> usize {
         if buf.len() == 0 { return 0; }
-        if me.buffer_len() == 0 && buf.len() >= me.chunk.len() {
-            return try await me.inner.read_async(buf);
+        if self.buffer_len() == 0 && buf.len() >= self.chunk.len() {
+            return try await self.inner.read_async(buf);
         }
-        if (try await me.fill_buf_async()).len() == 0 { return 0; }
-        me.drain(buf)
+        if (try await self.fill_buf_async()).len() == 0 { return 0; }
+        self.drain(buf)
     }
 }
 
 impl<R: AsyncRead> AsyncBufRead for BufReader<R> {
-    async fn fill_buf_async(self) throws (IoError) -> Slice<u8> {
-        // Until async methods take `ref self`: keep the receiver.
-        let me = unsafe { share(self) };
-        if me.buffer_len() == 0 {
-            let n = try await me.inner.read_async(me.chunk);
-            me.at[0] = 0;
-            me.at[1] = n;
+    async fn fill_buf_async(ref self) throws (IoError) -> Slice<u8> {
+        if self.buffer_len() == 0 {
+            let n = try await self.inner.read_async(self.chunk);
+            self.at[0] = 0;
+            self.at[1] = n;
         }
-        me.buffered()
+        self.buffered()
     }
 
     #[track_caller]
@@ -990,12 +978,10 @@ impl<W: Write> BufWriter<W> {
 }
 
 impl<W: AsyncWrite> BufWriter<W> {
-    async fn write_out_async(self) throws (IoError) {
-        // Until async methods take `ref self`: keep the receiver.
-        let me = unsafe { share(self) };
-        if me.pending.len() == 0 { return; }
-        try await me.inner.write_all_async(me.pending);
-        me.pending.clear();
+    async fn write_out_async(ref self) throws (IoError) {
+        if self.pending.len() == 0 { return; }
+        try await self.inner.write_all_async(self.pending);
+        self.pending.clear();
     }
 }
 
@@ -1013,19 +999,15 @@ impl<W: Write> Write for BufWriter<W> {
 }
 
 impl<W: AsyncWrite> AsyncWrite for BufWriter<W> {
-    async fn write_async<B: AsBytes>(self, buf: B) throws (IoError) -> usize {
-        // Until async methods take `ref self`: keep the receiver.
-        let me = unsafe { share(self) };
+    async fn write_async<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize {
         let b = buf.byte_slice();
-        if me.add(b) { try await me.write_out_async(); }
+        if self.add(b) { try await self.write_out_async(); }
         b.len()
     }
 
-    async fn flush_async(self) throws (IoError) {
-        // Until async methods take `ref self`: keep the receiver.
-        let me = unsafe { share(self) };
-        try await me.write_out_async();
-        try await me.inner.flush_async();
+    async fn flush_async(ref self) throws (IoError) {
+        try await self.write_out_async();
+        try await self.inner.flush_async();
     }
 }
 
@@ -1034,6 +1016,14 @@ impl<W: Write + Close> Close for BufWriter<W> {
     fn close(self) throws (IoError) {
         let inner = try self.into_inner();
         try inner.close();
+    }
+}
+
+impl<W: AsyncWrite + AsyncClose> AsyncClose for BufWriter<W> {
+    /// As `close`.
+    async fn close_async(self) throws (IoError) {
+        try await self.write_out_async();
+        try await self.inner.close_async();
     }
 }
 
@@ -1070,8 +1060,8 @@ impl<W: Write> Write for LineWriter<W> {
 }
 
 impl<W: AsyncWrite> AsyncWrite for LineWriter<W> {
-    async fn write_async<B: AsBytes>(self, buf: B) throws (IoError) -> usize { try await self.buf.write_async(buf) }
-    async fn flush_async(self) throws (IoError) { try await self.buf.flush_async(); }
+    async fn write_async<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize { try await self.buf.write_async(buf) }
+    async fn flush_async(ref self) throws (IoError) { try await self.buf.flush_async(); }
 }
 
 impl<W: Write + Close> Close for LineWriter<W> {
@@ -1079,6 +1069,10 @@ impl<W: Write + Close> Close for LineWriter<W> {
         let inner = try self.buf.into_inner();
         try inner.close();
     }
+}
+
+impl<W: AsyncWrite + AsyncClose> AsyncClose for LineWriter<W> {
+    async fn close_async(self) throws (IoError) { try await self.buf.close_async(); }
 }
 
 impl<W: Write> Drop for LineWriter<W> {
@@ -1153,18 +1147,18 @@ impl<T: AsBytes> Seek for Cursor<T> {
 }
 
 impl<T: AsBytes> AsyncRead for Cursor<T> {
-    async fn read_async(self, buf: SliceMut<u8>) throws (IoError) -> usize { try self.read(buf) }
+    async fn read_async(ref self, buf: SliceMut<u8>) throws (IoError) -> usize { try self.read(buf) }
 }
 
 impl<T: AsBytes> AsyncBufRead for Cursor<T> {
-    async fn fill_buf_async(self) throws (IoError) -> Slice<u8> { self.rest() }
+    async fn fill_buf_async(ref self) throws (IoError) -> Slice<u8> { self.rest() }
 
     #[track_caller]
     fn consume(ref self, n: usize) { BufRead::consume(ref self, n); }
 }
 
 impl<T: AsBytes> AsyncSeek for Cursor<T> {
-    async fn seek_async(self, pos: SeekFrom) throws (IoError) -> u64 { try self.seek(pos) }
+    async fn seek_async(ref self, pos: SeekFrom) throws (IoError) -> u64 { try self.seek(pos) }
 }
 
 impl Write for Cursor<List<u8>> {
@@ -1189,8 +1183,8 @@ impl Write for Cursor<List<u8>> {
 }
 
 impl AsyncWrite for Cursor<List<u8>> {
-    async fn write_async<B: AsBytes>(self, buf: B) throws (IoError) -> usize { try self.write(buf) }
-    async fn flush_async(self) throws (IoError) {}
+    async fn write_async<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize { try self.write(buf) }
+    async fn flush_async(ref self) throws (IoError) {}
 }
 
 // utilities (2.23.7)
@@ -1221,7 +1215,7 @@ impl BufRead for Empty {
 }
 
 impl AsyncRead for Empty {
-    async fn read_async(self, buf: SliceMut<u8>) throws (IoError) -> usize { 0 }
+    async fn read_async(ref self, buf: SliceMut<u8>) throws (IoError) -> usize { 0 }
 }
 
 impl Write for Sink {
@@ -1230,8 +1224,8 @@ impl Write for Sink {
 }
 
 impl AsyncWrite for Sink {
-    async fn write_async<B: AsBytes>(self, buf: B) throws (IoError) -> usize { buf.byte_slice().len() }
-    async fn flush_async(self) throws (IoError) {}
+    async fn write_async<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize { buf.byte_slice().len() }
+    async fn flush_async(ref self) throws (IoError) {}
 }
 
 impl Read for Repeat {
@@ -1242,10 +1236,8 @@ impl Read for Repeat {
 }
 
 impl AsyncRead for Repeat {
-    async fn read_async(self, buf: SliceMut<u8>) throws (IoError) -> usize {
-        // Until async methods take `ref self`: keep the receiver.
-        let me = unsafe { share(self) };
-        buf.fill(me.byte);
+    async fn read_async(ref self, buf: SliceMut<u8>) throws (IoError) -> usize {
+        buf.fill(self.byte);
         buf.len()
     }
 }

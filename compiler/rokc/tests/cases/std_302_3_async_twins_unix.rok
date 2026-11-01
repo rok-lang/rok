@@ -1,0 +1,82 @@
+// spec: std 302-net §3.2.3
+// only-os: macos linux
+// (Unix domain sockets are unix-only, std 3.2.3)
+// needs: net
+// needs: threads
+// expect-exit: 0
+// expect-stdout:
+// passed fd: [via fd]
+// stream: [ping] then end
+// connect_async: [hi]
+// dgram: [one] [two]
+// closed
+
+// The async twins of `os::unix::net`: stream io through the io traits,
+// `close_async` through `AsyncClose`, and the socket's own
+// `connect_async`, `shutdown_async`, `send_with_fd_async`,
+// `recv_with_fd_async`, `send_async` / `recv_async` (datagrams).
+use rok::std::os::unix::net::{UnixListener, UnixStream, UnixDatagram};
+use rok::std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
+use rok::std::net::Shutdown;
+use rok::std::fs;
+use rok::std::env;
+use rok::std::path::Path;
+use rok::core::marker::share;
+use rok::core::io::{IoError, AsyncClose};
+
+async fn main() throws (IoError) {
+    let (a, b) = try UnixStream::pair();
+    let (c, d) = try UnixStream::pair();
+    _ = try await c.send_with_fd_async("x", a.as_raw_fd());
+    let one = List::filled(4, 0u8);
+    let (_, got) = try await d.recv_with_fd_async(one);
+    if let fd: RawFd = got {
+        let passed = unsafe { UnixStream::from_raw_fd(fd) };
+        try await passed.write_all_async("via fd");
+        try await passed.close_async();
+    }
+    let six = List::filled(6, 0u8);
+    try await b.read_exact_async(six);
+    println(f"passed fd: [{try! str::from_utf8(six)}]");
+    try await c.close_async();
+    try await d.close_async();
+
+    try await a.write_all_async("ping");
+    try await a.flush_async();
+    try await a.shutdown_async(Shutdown::Write);
+    println(f"stream: [{try await b.read_to_str_async()}] then end");
+    try await a.close_async();
+    try await b.close_async();
+
+    let path = env::temp_dir().join(Path::new(f"rok-ux-async-{rok::std::process::id()}.sock"));
+    try fs::remove_file(path) catch _ {};
+    let l = try UnixListener::bind(path);
+    let lv = unsafe { share(l) };
+    let server = task::spawn(async {
+        let r: str = try {
+            let (s, _) = try await lv.accept_async();
+            try await s.write_all_async("hi");
+            try await s.close_async();
+            "ok"
+        } catch e: IoError { f"{e}" };
+        r
+    });
+    let s = try await UnixStream::connect_async(path);
+    _ = await server;
+    println(f"connect_async: [{try await s.read_to_str_async()}]");
+    try await s.close_async();
+    try await l.close_async();
+    try fs::remove_file(path);
+
+    let (x, y) = try UnixDatagram::pair();
+    _ = try await x.send_async("one");
+    _ = try await x.send_async("two");
+    let m = List::filled(8, 0u8);
+    let n1 = try await y.recv_async(m);
+    let first = try! str::from_utf8(m[0:n1]);
+    let n2 = try await y.recv_async(m);
+    println(f"dgram: [{first}] [{try! str::from_utf8(m[0:n2])}]");
+    try await x.close_async();
+    try await y.close_async();
+    println("closed");
+}

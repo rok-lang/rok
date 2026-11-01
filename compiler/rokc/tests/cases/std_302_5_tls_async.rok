@@ -69,7 +69,7 @@ let server = task::spawn_local(async {
     println(f"server got {got.len()} bytes, intact {got == data()}");
     try! await srv.write_all_async(got);
     try! await srv.close_notify_async();
-    try! srv.close();
+    try! await srv.close_async();
     // The second client rejects the certificate.
     let (s2, _) = try! await l.accept_async();
     try! l.close();
@@ -89,7 +89,7 @@ try! await c.write_all_async(data()[100000:300000]);
 try! await c.close_notify_async();
 let back = try! await c.read_to_end_async();
 println(f"client got {back.len()} bytes back, intact {back == data()}");
-try! c.close();
+try! await c.close_async();
 
 let s2 = try! await net::tcp_connect_async(f"{addr}");
 println(f"wrong name: {await connect(s2, "example.com", ccfg)}");
