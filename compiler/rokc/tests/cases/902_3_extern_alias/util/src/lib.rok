@@ -1,0 +1,21 @@
+pub mod shapes;
+
+pub trait Named {
+    fn name(self) -> str;
+}
+
+#[impl_macro(shout)] pub @macro {
+    ( @e: expr ) => { println(f"{@e}!") }
+}
+
+#[impl_derive(Named)] pub @derive {
+    impl pkg::Named for @Self {
+        fn name(self) -> str { return "named"; }
+    }
+}
+
+pub struct Point { pub x: i32 }
+
+pub fn origin() -> Point {
+    return Point { x: 0 };
+}

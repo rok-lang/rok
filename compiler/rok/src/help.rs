@@ -179,7 +179,8 @@ rewrite rok.lock.",
         usage: &["deps [--dev] [--format json] [feature options]"],
         about: "\
 Print the resolved dependencies as name=lib.rok, each after its own
-dependencies and followed by its features (--extern-feature=<name>=<f>).
+dependencies, then a line per other name its dependents call it, then
+its features (--extern-feature=<name>=<f>).
 Native packages print as `# native <name> <version>` and their compiler
 arguments. --format json prints one JSON object per line instead: a
 package or native record each, then a summary.",

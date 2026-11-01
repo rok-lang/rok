@@ -34,9 +34,15 @@ impl DepBuild<'_> {
         externs: &[(String, PathBuf)],
     ) -> Result<Vec<(String, PathBuf)>, String> {
         let mut out: Vec<(String, PathBuf)> = Vec::new();
-        for (name, root) in externs {
+        for (i, (name, root)) in externs.iter().enumerate() {
             if root.extension().is_some_and(|e| e == "rokhir") {
                 out.push((name.clone(), root.clone()));
+                continue;
+            }
+            // Another name of an earlier path: an alias, built once.
+            if let Some(j) = externs[..i].iter().position(|(_, r)| r == root) {
+                let built = out[j].1.clone();
+                out.push((name.clone(), built));
                 continue;
             }
             std::fs::create_dir_all(self.dir)

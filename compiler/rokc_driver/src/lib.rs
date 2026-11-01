@@ -87,6 +87,7 @@ pub struct CompilerConfig {
     /// Dependencies (`--extern name=path`, spec 902.3), each mounted at
     /// top-level `name`: a `lib.rok` compiles with the package, a
     /// `<name>.rokhir` (904) is prebuilt and links its `lib<name>.a`.
+    /// A name whose path an earlier one has is an alias of that one.
     pub externs: Vec<(String, PathBuf)>,
     /// The extern that is the package's own library (`src/lib.rok` of
     /// the `src/main.rok` being built, spec 0.3.1).
@@ -201,8 +202,14 @@ fn load_prebuilt(
     {
         out.push(r);
     }
+    // An alias's `.rokhir` and the `lib.rok` it was overlaid as.
+    let mut loaded: Vec<(PathBuf, PathBuf)> = Vec::new();
     for (name, root) in &mut config.externs {
         if root.extension().is_none_or(|e| e != "rokhir") {
+            continue;
+        }
+        if let Some((_, lib)) = loaded.iter().find(|(r, _)| r == root) {
+            *root = lib.clone();
             continue;
         }
         let r = match rokhir::Rokhir::load(root) {
@@ -250,7 +257,9 @@ fn load_prebuilt(
             }
         });
         let archive = rokhir::companions(root).1;
-        *root = r.src_dir.join("lib.rok");
+        let lib = r.src_dir.join("lib.rok");
+        loaded.push((root.clone(), lib.clone()));
+        *root = lib;
         out.push(Prebuilt { rokhir: r, archive });
     }
     (config, out)
@@ -318,13 +327,68 @@ fn lib_roots(config: &CompilerConfig) -> Vec<LibRoot> {
             (vec!["rok".to_owned(), tier], root.clone())
         })
         .collect();
-    out.extend(
-        config
-            .externs
-            .iter()
-            .map(|(name, root)| (vec![name.clone()], root.clone())),
-    );
+    out.extend(mounted(&config.externs).map(|(name, root)| (vec![name.clone()], root.clone())));
     out
+}
+
+/// The externs mounted: the first name of each path.
+fn mounted(externs: &[(String, PathBuf)]) -> impl Iterator<Item = &(String, PathBuf)> {
+    externs
+        .iter()
+        .enumerate()
+        .filter(|(i, (_, p))| !externs[..*i].iter().any(|(_, q)| q == p))
+        .map(|(_, e)| e)
+}
+
+/// `(alias, name)`: another name of a path is an alias of its first
+/// name; packages may call one dependency differently (9.10.2).
+fn extern_aliases(externs: &[(String, PathBuf)]) -> Vec<(String, String)> {
+    externs
+        .iter()
+        .enumerate()
+        .filter_map(|(i, (alias, p))| {
+            let (name, _) = externs[..i].iter().find(|(_, q)| q == p)?;
+            (name != alias).then(|| (alias.clone(), name.clone()))
+        })
+        .collect()
+}
+
+/// The externs' aliases, applied to every meta block's template: they
+/// expand where no parse renames their paths.
+fn alias_metas(metas: &mut PrePass, externs: &[(String, PathBuf)]) -> Vec<(String, String)> {
+    let aliases = extern_aliases(externs);
+    for m in &mut metas.metas {
+        apply_aliases(&mut m.body, &aliases);
+    }
+    aliases
+}
+
+/// A path that starts with an alias (`alias::..`, not after `::` or `.`)
+/// names the package it stands for.
+fn apply_aliases(tokens: &mut [rokc_lexer::Token], aliases: &[(String, String)]) {
+    use rokc_lexer::TokenKind;
+    if aliases.is_empty() {
+        return;
+    }
+    for i in 0..tokens.len() {
+        let TokenKind::Ident(name) = &tokens[i].kind else {
+            continue;
+        };
+        let Some((_, to)) = aliases.iter().find(|(a, _)| a == name) else {
+            continue;
+        };
+        let path = tokens
+            .get(i + 1)
+            .is_some_and(|t| t.kind == TokenKind::ColonColon);
+        let inner = i > 0
+            && matches!(
+                tokens[i - 1].kind,
+                TokenKind::ColonColon | TokenKind::Dot | TokenKind::QuestionDot
+            );
+        if path && !inner && !tokens[i].raw {
+            tokens[i].kind = TokenKind::Ident(to.clone());
+        }
+    }
 }
 
 /// A parsed file as tools see it: after `#[cfg]`, before modules are
@@ -710,6 +774,7 @@ fn compile_unit_in(
     let user_metas = format!("{:?}", &metas.metas[lib_metas..]);
     let ext = prec.ext_ops();
     relex_metas(&mut metas, &ext);
+    let aliases = std::sync::Arc::new(alias_metas(&mut metas, &config.externs));
     let cfg_env = cfg_env(config);
     // Per package: the user's, then each library root's.
     let cfgs: Vec<CfgEnv> = std::iter::once(cfg_env.clone())
@@ -763,6 +828,7 @@ fn compile_unit_in(
             key: std::sync::OnceLock::new(),
             target: config.target.clone(),
             cfg: cfgs[i].clone(),
+            aliases: std::sync::Arc::clone(&aliases),
         })
         .collect();
     let incr = incr::current();
@@ -992,7 +1058,7 @@ fn compile_unit_in(
     coro::rewrite_items(&mut all_items, &mut diags);
     let (item_modules, items): (Vec<String>, Vec<rokc_ast::Item>) = all_items.into_iter().unzip();
     let input = rokc_hir::HirInput {
-        packages: config.externs.iter().map(|(n, _)| n.clone()).collect(),
+        packages: mounted(&config.externs).map(|(n, _)| n.clone()).collect(),
         own_library: config.own_library.clone(),
         lib: lib.map(str::to_owned),
         prebuilt: prebuilt.iter().map(|p| p.rokhir.name.clone()).collect(),
@@ -1468,6 +1534,7 @@ fn reusable(p: &Prepassed, ext: &ExtOps, metas: &MetaCtx) -> bool {
             matches!(n.as_str(), "cfg" | "cfg_attr")
                 || metas.table.defines(n)
                 || metas.keywords.iter().any(|(k, ..)| k == n)
+                || metas.aliases.iter().any(|(a, _)| a == n)
         })
         && !sum.kinds.iter().any(|k| prefixes.contains(k))
 }
@@ -2060,6 +2127,7 @@ fn parse_file(
             p.span.file = file_id;
         }
     }
+    apply_aliases(&mut tokens, &metas.aliases);
     apply_keywords(&mut tokens, &metas.keywords, &mut diags);
     let (program, mut parse_diags) = parse_program_meta(
         &tokens,
@@ -2304,6 +2372,8 @@ struct MetaCtx {
     target: rokc_mir::Target,
     /// The package's cfg (`package_cfg`).
     cfg: CfgEnv,
+    /// `(alias, name)` of the dependencies (`extern_aliases`).
+    aliases: std::sync::Arc<Vec<(String, String)>>,
 }
 
 impl MetaCtx {
@@ -2320,6 +2390,7 @@ impl MetaCtx {
                 format!("{:?}", self.keywords).as_bytes(),
                 format!("{:?}", self.literals).as_bytes(),
                 incr::target_key(&self.cfg, &self.target).as_bytes(),
+                format!("{:?}", self.aliases).as_bytes(),
             ])
         })
     }

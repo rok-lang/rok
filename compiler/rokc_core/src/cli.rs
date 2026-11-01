@@ -136,7 +136,8 @@ build options:
                                (prebuilt into target/<profile>/deps/ first,
                                each after the ones before it), or a prebuilt
                                <name>.rokhir / lib<name>.a; importable as
-                               `use name::..` (repeatable; `rok` passes these)
+                               `use name::..`; another name for the same path
+                               is an alias (repeatable; `rok` passes these)
   --extern-feature <name>=<f>  build source dependency <name> with
                                cfg feature=<f> (repeatable; `--cfg
                                feature=..` is the package's own)

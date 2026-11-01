@@ -1179,10 +1179,14 @@ fn positional(args: &[String]) -> Option<&str> {
     None
 }
 
-/// `--extern=<name>=<lib.rok>` and its `--extern-feature=<name>=<f>`s.
+/// `--extern=<name>=<lib.rok>`, one more per other name its dependents
+/// give it (rokc's aliases), and its `--extern-feature=<name>=<f>`s.
 fn extern_args(p: &Resolved) -> Vec<String> {
     let name = manifest::code_name(&p.code);
-    let mut out = vec![format!("--extern={name}={}", p.root.display())];
+    let mut out: Vec<String> = std::iter::once(&p.code)
+        .chain(&p.aliases)
+        .map(|n| format!("--extern={}={}", manifest::code_name(n), p.root.display()))
+        .collect();
     out.extend(
         p.features
             .iter()
@@ -2606,11 +2610,10 @@ fn cmd_deps(g: &Global, args: &[String]) -> Result<i32, String> {
         return deps_json(g, &graph);
     }
     for p in &graph.packages {
-        let mut lines = extern_args(p).into_iter();
-        // The first line is `name=<lib.rok>`.
-        let first = lines.next().unwrap_or_default();
-        println!("{}", first.trim_start_matches("--extern="));
-        lines.for_each(|l| println!("{l}"));
+        // `name=<lib.rok>` per name, then the features.
+        for l in extern_args(p) {
+            println!("{}", l.strip_prefix("--extern=").unwrap_or(&l));
+        }
     }
     for n in &graph.natives {
         println!("# native {} {}", n.entry.name, n.entry.version);
