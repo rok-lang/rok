@@ -648,6 +648,9 @@ struct Walk<'c, 'a, 'e> {
     slots: usize,
     /// Slot -> where it last moved, and whether that released it.
     why: HashMap<usize, (Span, bool)>,
+    /// Slot -> the match arm that left it open: its binding, the
+    /// binding's type and the arm's body.
+    arm_open: HashMap<usize, (LocalId, HirTy, Span)>,
     scopes: Vec<Vec<usize>>,
     targets: Vec<Target>,
     out: Summary,
@@ -717,6 +720,7 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             alias_of: HashMap::new(),
             slots: 0,
             why: HashMap::new(),
+            arm_open: HashMap::new(),
             scopes: vec![Vec::new()],
             targets: Vec::new(),
             out: Summary::default(),
@@ -889,6 +893,7 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
         for i in 0..root.leaves.len() {
             set(st, root.base + i, LIVE);
             self.why.remove(&(root.base + i));
+            self.arm_open.remove(&(root.base + i));
         }
         // A variable leaves with the scope that declared it (an
         // assignment declares nothing).
@@ -1170,6 +1175,21 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             .filter(|&i| get(st, root.base + i) & LIVE != 0)
             .collect();
         let Some(&first) = open.first() else { return };
+        if let Some((l, ty, arm)) = self.arm_open.get(&(root.base + first)).cloned() {
+            if let Some(name) = self.local_name(l) {
+                let ty = self.c.ty_name(&ty);
+                let msg = format!("`{name}` holds a `{ty}` that this arm never closes");
+                let help = format!(
+                    "help: closing a `{ty}` can fail, so it is not closed for you: add \
+                     `try {name}.close();` at the end of this arm (stdlib 2.13.4)"
+                );
+                self.error(Code::UNCLOSED_RESOURCE, root.at, msg, |d| {
+                    d.with_secondary(arm, "it is still open when this arm ends")
+                        .with_note(help)
+                });
+                return;
+            }
+        }
         let path = root.leaves[first].clone();
         let who = self.shown(r, &path);
         let somewhere = get(st, root.base + first) & (MOVED | RELEASED) != 0;
@@ -1674,14 +1694,16 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             }
             HirExprKind::Block(b) => self.block(b, st, mode),
             HirExprKind::Call { callee, args } => self.call(*callee, args, e, st),
-            HirExprKind::CallIndirect { callee, args, .. } => {
-                let (st, _) = self.expr(callee, st, Mode::Use);
-                let st = args.iter().fold(st, |s, a| self.expr(a, s, Mode::Use).0);
-                (st, if affine { Val::Owned } else { Val::Plain })
+            // A function value has no summary: it takes what it is passed,
+            // as a callee that keeps its parameters does.
+            HirExprKind::CallIndirect {
+                callee: c, args, ..
             }
-            HirExprKind::CallClosure { closure, args, .. } => {
-                let (st, _) = self.expr(closure, st, Mode::Use);
-                let st = args.iter().fold(st, |s, a| self.expr(a, s, Mode::Use).0);
+            | HirExprKind::CallClosure {
+                closure: c, args, ..
+            } => {
+                let (st, _) = self.expr(c, st, Mode::Use);
+                let st = args.iter().fold(st, |s, a| self.expr(a, s, Mode::Move).0);
                 (st, if affine { Val::Owned } else { Val::Plain })
             }
             HirExprKind::StructInit { fields, .. } | HirExprKind::Tuple { fields } => {
@@ -2066,10 +2088,11 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
         let (st, sv) = self.expr(scrutinee, st, mode_s);
         let mut out: State = None;
         let mut val: Option<Val> = None;
-        // Per member of a sum, or variant of an enum: whether it holds a
-        // resource.
-        let members: Option<Vec<bool>> = match &scrutinee.ty {
-            HirTy::Sum(ts) => Some(ts.iter().map(|t| self.c.shape(t).is_some()).collect()),
+        // Per member of a sum, or variant of an enum: how the resource it
+        // holds is released, if it holds one.
+        let kind = |t: &HirTy| self.c.shape(t).map(|s| s.0);
+        let members: Option<Vec<Option<Kind>>> = match &scrutinee.ty {
+            HirTy::Sum(ts) => Some(ts.iter().map(kind).collect()),
             HirTy::Enum(eid) => Some(
                 self.c
                     .ctx
@@ -2079,7 +2102,8 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                     .map(|v| {
                         super::expr::variant_arg_tys(v)
                             .iter()
-                            .any(|t| self.c.shape(t).is_some())
+                            .filter_map(kind)
+                            .max_by_key(|k| *k == Kind::Close)
                     })
                     .collect(),
             ),
@@ -2121,11 +2145,20 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                 }
                 let empty = here
                     .iter()
-                    .all(|&i| !ms.get(i as usize).copied().unwrap_or(false));
-                if empty {
+                    .all(|&i| ms.get(i as usize).copied().unwrap_or(None).is_none());
+                // Every member here is released for the program: the arm
+                // owes no close, the flag still releases what it holds.
+                let auto = here.iter().all(|&i| {
+                    ms.get(i as usize)
+                        .copied()
+                        .unwrap_or(None)
+                        .is_none_or(|k| k == Kind::Auto)
+                });
+                if empty || (auto && self.roots[*r].kind == Kind::Close) {
                     for x in self.slots_at(*r, p) {
-                        if get(&s, x) & LIVE != 0 {
-                            set(&mut s, x, 0);
+                        let v = get(&s, x);
+                        if v & LIVE != 0 {
+                            set(&mut s, x, if empty { 0 } else { v & !LIVE });
                         }
                     }
                 }
@@ -2150,6 +2183,9 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                 s = self.expr(g, s, Mode::Use).0;
             }
             let (s, v) = self.expr(&a.body, s, mode);
+            if let (Some((r, p)), true) = (&at, s.is_some()) {
+                self.arm_left_open(*r, p, &a.pat, &s, a.body.span);
+            }
             let depth = self.scopes.len() - 1;
             if s.is_some() {
                 self.leave(&s, depth, a.body.span);
@@ -2168,6 +2204,26 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             out = join(out, s);
         }
         (out, val.unwrap_or(Val::Plain))
+    }
+
+    /// Note the slots of `(r, p)` an arm binding a must-close member
+    /// leaves open, so a missing close names that binding and that arm.
+    fn arm_left_open(&mut self, r: usize, p: &[u32], pat: &HirPattern, s: &State, body: Span) {
+        if self.roots[r].kind != Kind::Close {
+            return;
+        }
+        let mut bound = None;
+        pattern_bindings(pat, &mut |l, ty| {
+            if bound.is_none() && self.c.shape(ty).is_some_and(|x| x.0 == Kind::Close) {
+                bound = Some((l, ty.clone()));
+            }
+        });
+        let Some((l, ty)) = bound else { return };
+        for x in self.slots_at(r, p) {
+            if get(s, x) & LIVE != 0 {
+                self.arm_open.insert(x, (l, ty.clone(), body));
+            }
+        }
     }
 
     fn looped(

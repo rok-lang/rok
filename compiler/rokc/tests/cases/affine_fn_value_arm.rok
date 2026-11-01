@@ -1,0 +1,72 @@
+// spec: std 213-marker §2.13.4
+// expect-exit: 0
+// expect-stdout:
+// sent 1
+// owned 1
+// closed -1
+// read 3
+
+// A match arm that sees only a `Sender` owes no close: the compiler
+// releases it. The arm that sees a `File` closes it. A function value
+// takes what it is passed, sync or awaited, so the caller has nothing
+// left to close.
+
+use rok::std::fs;
+use rok::std::fs::File;
+use rok::std::env;
+use rok::std::path::Path;
+use rok::core::io::IoError;
+use rok::core::future::AsyncFuture;
+
+fn either(c: File | Sender<i32>) {
+    match c {
+        t: Sender<i32> => { let _ = try? t.send(1); },
+        f: File => { let _ = try? f.close(); },
+    }
+}
+
+fn owned(p: Path, tx: Sender<i32>, file: bool) {
+    let c: File | Sender<i32> = if file { try! File::open(p) } else { tx };
+    match c {
+        t: Sender<i32> => { let _ = try? t.send(1); },
+        f: File => { let _ = try? f.close(); },
+    }
+}
+
+fn size(f: File) -> i32 {
+    let s = try! f.read_to_str();
+    try! f.close();
+    s.len() as i32
+}
+
+async fn size_async(f: File) -> i32 {
+    size(f)
+}
+
+fn handed(p: Path, g: fn(File) -> i32) throws (IoError) -> i32 {
+    let f = try File::open(p);
+    g(f)
+}
+
+async fn handed_async(p: Path, g: fn(File) -> AsyncFuture<i32>) throws (IoError) -> i32 {
+    let f = try File::open(p);
+    await g(f)
+}
+
+async fn main() throws (IoError) {
+    let (tx, rx) = channel::<i32>();
+    // Closing in one arm makes `either` keep its argument; it releases
+    // the `Sender` it got when it returns.
+    either(tx.clone());
+    println(f"sent {rx.recv() ?? 0}");
+    let p = env::temp_dir().join(Path::new(f"rok-affine-fn-value-{rok::std::process::id()}.txt"));
+    owned(p, tx.clone(), false);
+    println(f"owned {rx.recv() ?? 0}");
+    tx.close();
+    println(f"closed {rx.recv() ?? -1}");
+    try fs::write(p, "abc");
+    let a = try handed(p, size);
+    let b = try await handed_async(p, size_async);
+    if a == b { println(f"read {a}"); }
+    try fs::remove_file(p);
+}
