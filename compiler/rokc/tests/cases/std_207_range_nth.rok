@@ -1,0 +1,48 @@
+// spec: std 207-iter §2.7.3 §2.7.4
+// expect-exit: 0
+// expect-stdout:
+// 3 4 none
+// none none
+// 7 8 none
+// 254 none none
+// 4611686018427387904 2
+// 0 3 6 9
+
+// `nth` and `step_by` on a range take one `forward_checked`, so a huge
+// skip is instant. A `..` range stops below the type's maximum, as
+// `next` does.
+fn show(x: i64 | none) -> str {
+    match x { v: i64 => f"{v}", none => "none" }
+}
+
+fn show8(x: u8 | none) -> str {
+    match x { v: u8 => f"{v}", none => "none" }
+}
+
+fn main() {
+    let r = 0i64..5;
+    let a = r.nth(3);
+    let b = r.next();
+    let c = r.next();
+    println(f"{show(a)} {show(b)} {show(c)}");
+    let r2 = 0i64..5;
+    let d = r2.nth(7);
+    let d2 = r2.next();
+    println(f"{show(d)} {show(d2)}");
+    let ri = 0i64..=8;
+    let e = ri.nth(7);
+    let f = ri.nth(0);
+    let g = ri.next();
+    println(f"{show(e)} {show(f)} {show(g)}");
+    let rf = 250u8..;
+    let h = rf.nth(4);
+    let i = rf.next();
+    let rf2 = 250u8..;
+    let j = rf2.nth(100);
+    println(f"{show8(h)} {show8(i)} {show8(j)}");
+    let big = (0i64..i64::MAX).nth(1usize << 62);
+    let steps: List<i64> = (0i64..i64::MAX).step_by(1usize << 62).collect();
+    println(f"{show(big)} {steps.len()}");
+    let small: List<i64> = (0i64..10).step_by(3).collect();
+    println(f"{small[0]} {small[1]} {small[2]} {small[3]}");
+}

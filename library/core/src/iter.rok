@@ -50,10 +50,12 @@ pub trait Iterator {
         Skip { it: self, n: n }
     }
 
-    /// Every `step`th item, starting with the first (`step` > 0).
+    /// Every `step`th item, starting with the first. Panics when `step`
+    /// is 0.
+    #[track_caller]
     const fn step_by(self, step: usize) -> StepBy<Self> {
         if step == 0 {
-            panic("Iterator::step_by: step must be positive");
+            panic("Iterator::step_by: step is 0; pass a positive step, e.g. `step_by(2)`");
         }
         StepBy { it: self, step: step, first: true }
     }
@@ -111,7 +113,7 @@ pub trait Iterator {
     #[track_caller]
     const fn chunks(self, size: usize) -> Chunks<Self> {
         if size == 0 {
-            panic("Iterator::chunks: size must be positive, e.g. `chunks(2)`");
+            panic("Iterator::chunks: size is 0; pass a positive size, e.g. `chunks(2)`");
         }
         Chunks { it: self, size: size }
     }
@@ -121,7 +123,7 @@ pub trait Iterator {
     #[track_caller]
     const fn windows(self, size: usize) -> Windows<Self> {
         if size == 0 {
-            panic("Iterator::windows: size must be positive, e.g. `windows(2)`");
+            panic("Iterator::windows: size is 0; pass a positive size, e.g. `windows(2)`");
         }
         Windows { it: self, size: size, win: List::new(), started: false }
     }
@@ -1252,7 +1254,7 @@ pub trait TryIterator {
     #[track_caller]
     const fn step_by(self, step: usize) -> TryStepBy<Self> {
         if step == 0 {
-            panic("TryIterator::step_by: step must be positive");
+            panic("TryIterator::step_by: step is 0; pass a positive step, e.g. `step_by(2)`");
         }
         TryStepBy { it: self, step: step, first: true }
     }
@@ -1291,7 +1293,7 @@ pub trait TryIterator {
     #[track_caller]
     const fn chunks(self, size: usize) -> TryChunks<Self> {
         if size == 0 {
-            panic("TryIterator::chunks: size must be positive, e.g. `chunks(2)`");
+            panic("TryIterator::chunks: size is 0; pass a positive size, e.g. `chunks(2)`");
         }
         TryChunks { it: self, size: size }
     }
@@ -1433,6 +1435,7 @@ pub trait TryIterator {
         acc
     }
 
+    /// The smallest item (the first of equals).
     const fn min(self) throws (Error) -> Item | none where Item: Ord {
         let best: Item | none = none;
         try for x in self {
@@ -1447,11 +1450,12 @@ pub trait TryIterator {
         best
     }
 
+    /// The largest item (the last of equals).
     const fn max(self) throws (Error) -> Item | none where Item: Ord {
         let best: Item | none = none;
         try for x in self {
             if let b: Item = best {
-                if x.cmp(b).is_gt() {
+                if !x.cmp(b).is_lt() {
                     best = x;
                 }
             } else {
