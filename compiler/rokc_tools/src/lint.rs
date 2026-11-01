@@ -362,8 +362,9 @@ fn demangle(name: &str) -> &str {
 /// A name a meta template generated (`@variant.pattern` binds payload
 /// field `n` of `V` as `V__meta<n>`): nobody wrote it, so no lint names it.
 fn generated(name: &str) -> bool {
-    name.rsplit_once("__meta")
-        .is_some_and(|(base, n)| !base.is_empty() && !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+    name.rsplit_once("__meta").is_some_and(|(base, n)| {
+        !base.is_empty() && !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())
+    })
 }
 
 /// A level set for a lint: the level and the note naming where (`None`:
@@ -1493,11 +1494,7 @@ impl<'a> Cx<'a> {
             && !self.all_names.contains(&*name)
         {
             let at = word_after(self.texts, f.span, "fn", &name).unwrap_or(f.span);
-            self.hit(
-                "dead_code",
-                at,
-                format!("function `{name}` is never used"),
-            );
+            self.hit("dead_code", at, format!("function `{name}` is never used"));
         }
     }
 
