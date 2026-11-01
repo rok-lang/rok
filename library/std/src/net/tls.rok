@@ -23,7 +23,7 @@ use rok::bare::mem::{GcBuf, buf_new};
 use rok::std::net::{TcpStream, Shutdown};
 use rok::core::task;
 use rok::core::convert::AsBytes;
-use rok::core::io::{Close, IoError, IoErrorKind, Read, Write, AsyncRead, AsyncWrite};
+use rok::core::io::{Close, IoError, IoErrorKind, Read, Write, AsyncRead, AsyncWrite, AsyncClose};
 use rok::std::sys::{byte_buf, mut_region};
 use rok::std::fs;
 use rok::std::env;
@@ -722,6 +722,20 @@ impl Shared {
         }
     }
 
+    /// `close` that suspends the task while close_notify is sent.
+    async fn close_async(self) throws (IoError) {
+        let c = unsafe { self.c[0] };
+        if c.failed is none && c.done {
+            _ = try await self.op_async(OP_CLOSE_NOTIFY, no_buf(), nothing()) catch _ { 0 };
+        }
+        let cur = unsafe { self.c[0] };
+        let err: IoError | none = none;
+        try await cur.sock().close_async() catch e { err = e; };
+        cur.wipe();
+        unsafe { self.c[0] = cur; }
+        if let e: IoError = err { throw e; }
+    }
+
     const fn conn(self) -> Conn { unsafe { self.c[0] } }
 
     /// Run `op` (`Conn::step`) without blocking: the connection's
@@ -952,8 +966,8 @@ impl Client {
     /// Switch to the next write key and ask the peer to do the same.
     pub fn key_update(self) throws (IoError) { try self.s.key_update(); }
 
-    pub async fn close_notify_async(self) throws (IoError) { _ = try await self.s.op_async(OP_CLOSE_NOTIFY, no_buf(), nothing()); }
-    pub async fn key_update_async(self) throws (IoError) { _ = try await self.s.op_async(OP_KEY_UPDATE, no_buf(), nothing()); }
+    pub async fn close_notify_async(ref self) throws (IoError) { _ = try await self.s.op_async(OP_CLOSE_NOTIFY, no_buf(), nothing()); }
+    pub async fn key_update_async(ref self) throws (IoError) { _ = try await self.s.op_async(OP_KEY_UPDATE, no_buf(), nothing()); }
 
     /// close_notify (if the connection is healthy), then close the
     /// socket, throwing the OS's error.
@@ -993,24 +1007,28 @@ impl Write for Client {
 }
 
 impl AsyncRead for Client {
-    async fn read_async(self, buf: SliceMut<u8>) throws (IoError) -> usize { try await self.s.read_async(buf) }
-    async fn read_to_end_async(self) throws (IoError) -> List<u8> { try await self.s.read_to_end_async() }
+    async fn read_async(ref self, buf: SliceMut<u8>) throws (IoError) -> usize { try await self.s.read_async(buf) }
+    async fn read_to_end_async(ref self) throws (IoError) -> List<u8> { try await self.s.read_to_end_async() }
 }
 
 impl AsyncWrite for Client {
-    async fn write_async<B: AsBytes>(self, buf: B) throws (IoError) -> usize {
+    async fn write_async<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize {
         let b = buf.byte_slice();
         _ = try await self.s.op_async(OP_WRITE, no_buf(), b);
         b.len()
     }
-    async fn flush_async(self) throws (IoError) {}
-    async fn write_all_async<B: AsBytes>(self, buf: B) throws (IoError) {
+    async fn flush_async(ref self) throws (IoError) {}
+    async fn write_all_async<B: AsBytes>(ref self, buf: B) throws (IoError) {
         _ = try await self.s.op_async(OP_WRITE, no_buf(), buf.byte_slice());
     }
 }
 
 impl Close for Client {
     fn close(self) throws (IoError) { try self.s.close(); }
+}
+
+impl AsyncClose for Client {
+    async fn close_async(self) throws (IoError) { try await self.s.close_async(); }
 }
 
 impl Drop for Client {
@@ -1069,8 +1087,8 @@ impl Server {
     pub fn close_notify(self) throws (IoError) { try self.s.close_notify(); }
     pub fn key_update(self) throws (IoError) { try self.s.key_update(); }
 
-    pub async fn close_notify_async(self) throws (IoError) { _ = try await self.s.op_async(OP_CLOSE_NOTIFY, no_buf(), nothing()); }
-    pub async fn key_update_async(self) throws (IoError) { _ = try await self.s.op_async(OP_KEY_UPDATE, no_buf(), nothing()); }
+    pub async fn close_notify_async(ref self) throws (IoError) { _ = try await self.s.op_async(OP_CLOSE_NOTIFY, no_buf(), nothing()); }
+    pub async fn key_update_async(ref self) throws (IoError) { _ = try await self.s.op_async(OP_KEY_UPDATE, no_buf(), nothing()); }
     /// close_notify (if the connection is healthy), then close the
     /// socket, throwing the OS's error.
     pub fn close(self) throws (IoError) { try self.s.close(); }
@@ -1111,24 +1129,28 @@ impl Write for Server {
 }
 
 impl AsyncRead for Server {
-    async fn read_async(self, buf: SliceMut<u8>) throws (IoError) -> usize { try await self.s.read_async(buf) }
-    async fn read_to_end_async(self) throws (IoError) -> List<u8> { try await self.s.read_to_end_async() }
+    async fn read_async(ref self, buf: SliceMut<u8>) throws (IoError) -> usize { try await self.s.read_async(buf) }
+    async fn read_to_end_async(ref self) throws (IoError) -> List<u8> { try await self.s.read_to_end_async() }
 }
 
 impl AsyncWrite for Server {
-    async fn write_async<B: AsBytes>(self, buf: B) throws (IoError) -> usize {
+    async fn write_async<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize {
         let b = buf.byte_slice();
         _ = try await self.s.op_async(OP_WRITE, no_buf(), b);
         b.len()
     }
-    async fn flush_async(self) throws (IoError) {}
-    async fn write_all_async<B: AsBytes>(self, buf: B) throws (IoError) {
+    async fn flush_async(ref self) throws (IoError) {}
+    async fn write_all_async<B: AsBytes>(ref self, buf: B) throws (IoError) {
         _ = try await self.s.op_async(OP_WRITE, no_buf(), buf.byte_slice());
     }
 }
 
 impl Close for Server {
     fn close(self) throws (IoError) { try self.s.close(); }
+}
+
+impl AsyncClose for Server {
+    async fn close_async(self) throws (IoError) { try await self.s.close_async(); }
 }
 
 impl Drop for Server {

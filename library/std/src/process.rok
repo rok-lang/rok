@@ -18,13 +18,15 @@
 // (`os::unix::process`, `os::linux::process`), so a call on another
 // target names the cfg it needs.
 //
-// `output()` drains stdout and stderr together.
+// `output()` drains stdout and stderr together. The `_async` twins
+// (`wait_async`, `output_async`, `status_async`, the pipes' async io)
+// run their sync twin on the blocking lane, as `fs` does.
 //
 // `on_signal(sig, f)`: the C handler writes the signal number to a pipe
 // and a dispatcher thread (`rok-signal`) calls `f`, never in signal
 // context. A burst that fills the pipe drops signals.
 
-use rok::std::fs::{File, file_of};
+use rok::std::fs::{File, file_of, off};
 #[cfg(target_family = "unix")]
 use rok::std::os::unix::io::{AsRawFd, RawFd};
 #[cfg(target_family = "unix")]
@@ -33,7 +35,7 @@ use rok::std::os::unix::process::{CommandExt, ExitStatusExt};
 use rok::std::os::linux::process::ChildExt;
 #[cfg(target_os = "windows")]
 use rok::std::os::windows::io::{AsRawHandle, RawHandle, raw_handle};
-use rok::core::io::{Close, IoError, IoErrorKind, Read, Write};
+use rok::core::io::{Close, IoError, IoErrorKind, Read, Write, AsyncRead, AsyncWrite, AsyncClose};
 use rok::std::sys::{check, byte_buf, read_more, take_handle, use_begin, use_end, use_close, word_at};
 use rok::std::path::Path;
 use rok::std::path::AsPath;
@@ -369,8 +371,17 @@ impl Write for ChildStdin {
     const fn flush(ref self) throws (IoError) {}
 }
 
+impl AsyncWrite for ChildStdin {
+    async fn write_async<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize { try await self.file.write_async(buf) }
+    async fn flush_async(ref self) throws (IoError) {}
+}
+
 impl Close for ChildStdin {
     fn close(self) throws (IoError) { try self.file.close(); }
+}
+
+impl AsyncClose for ChildStdin {
+    async fn close_async(self) throws (IoError) { try await self.file.close_async(); }
 }
 
 #[cfg(target_family = "unix")]
@@ -402,8 +413,16 @@ impl Read for ChildStdout {
     const fn copy_handle(self) -> i32 { self.file.fd() }
 }
 
+impl AsyncRead for ChildStdout {
+    async fn read_async(ref self, buf: SliceMut<u8>) throws (IoError) -> usize { try await self.file.read_async(buf) }
+}
+
 impl Close for ChildStdout {
     fn close(self) throws (IoError) { try self.file.close(); }
+}
+
+impl AsyncClose for ChildStdout {
+    async fn close_async(self) throws (IoError) { try await self.file.close_async(); }
 }
 
 #[cfg(target_family = "unix")]
@@ -435,8 +454,16 @@ impl Read for ChildStderr {
     const fn copy_handle(self) -> i32 { self.file.fd() }
 }
 
+impl AsyncRead for ChildStderr {
+    async fn read_async(ref self, buf: SliceMut<u8>) throws (IoError) -> usize { try await self.file.read_async(buf) }
+}
+
 impl Close for ChildStderr {
     fn close(self) throws (IoError) { try self.file.close(); }
+}
+
+impl AsyncClose for ChildStderr {
+    async fn close_async(self) throws (IoError) { try await self.file.close_async(); }
 }
 
 #[cfg(target_family = "unix")]
@@ -567,10 +594,23 @@ impl Command {
         Output { status: status, stdout: out, stderr: errs }
     }
 
+    /// `output` that suspends the task.
+    pub async fn output_async(self) throws (IoError) -> Output {
+        // The task waits for the call: one thread uses the command at a time.
+        let c = unsafe { Handoff::new(self) };
+        try await off(|| try c.get().output())
+    }
+
     /// Run to completion with inherited streams.
     pub fn status(self) throws (IoError) -> ExitStatus {
         let child = try self.spawn();
         try child.wait()
+    }
+
+    /// `status` that suspends the task.
+    pub async fn status_async(self) throws (IoError) -> ExitStatus {
+        let c = unsafe { Handoff::new(self) };
+        try await off(|| try c.get().status())
     }
 
     fn start(self) throws (IoError) -> Child {
@@ -733,6 +773,12 @@ impl Child {
         if si is ChildStdin { try si.close(); }
         _ = try self.reap(true);
         ExitStatus { raw: unsafe { self.state[1] } }
+    }
+
+    /// `wait` that suspends the task.
+    pub async fn wait_async(ref self) throws (IoError) -> ExitStatus {
+        let c = unsafe { Handoff::new(rok::core::marker::share(self)) };
+        try await off(|| try c.get().wait())
     }
 
     /// The status if it has ended, without blocking.

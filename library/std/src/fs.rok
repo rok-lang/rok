@@ -21,7 +21,7 @@
 // in batches.
 
 use rok::core::convert::AsBytes;
-use rok::core::io::{Close, IoError, IoErrorKind, Read, Write, Seek, SeekFrom, AsyncRead, AsyncWrite, AsyncSeek};
+use rok::core::io::{Close, IoError, IoErrorKind, Read, Write, Seek, SeekFrom, AsyncRead, AsyncWrite, AsyncSeek, AsyncClose};
 use rok::std::sys::{check, region, mut_region, read_all, take_handle, write_region, text_of, byte_buf, list_of, use_begin, use_end, use_close};
 use rok::bare::mem::{GcBuf, buf_new, transmute_unchecked};
 use rok::std::path::{Path, AsPath, Component};
@@ -559,7 +559,7 @@ impl Drop for Mmap {
 // async (see the top)
 
 /// `f()` on a blocking thread, its error thrown here.
-async fn off<T: Send>(f: fn() throws (IoError) -> T + Send) throws (IoError) -> T {
+pub(pkg) async fn off<T: Send>(f: fn() throws (IoError) -> T + Send) throws (IoError) -> T {
     let r = await task::spawn_blocking(|| Result::catching(f));
     try r.get()
 }
@@ -847,39 +847,43 @@ impl Seek for File {
 // The async twins run the call on a blocking thread; the task suspends.
 // Not cancel-safe: a cancelled call still runs, and its result is lost.
 impl AsyncRead for File {
-    async fn read_async(self, buf: SliceMut<u8>) throws (IoError) -> usize {
+    async fn read_async(ref self, buf: SliceMut<u8>) throws (IoError) -> usize {
         // The caller awaits the read: one thread uses `buf` at a time.
         let b = unsafe { Handoff::new(buf) };
         try await off(|| try self.read(b.get()))
     }
 
-    async fn read_to_end_async(self) throws (IoError) -> List<u8> {
+    async fn read_to_end_async(ref self) throws (IoError) -> List<u8> {
         try await off(|| try self.read_to_end())
     }
 }
 
 impl AsyncWrite for File {
-    async fn write_async<B: AsBytes>(self, buf: B) throws (IoError) -> usize {
+    async fn write_async<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize {
         let s = unsafe { Handoff::new(buf.byte_slice()) };
         try await off(|| try self.write(s.get()))
     }
 
-    async fn flush_async(self) throws (IoError) {}
+    async fn flush_async(ref self) throws (IoError) {}
 
-    async fn write_all_async<B: AsBytes>(self, buf: B) throws (IoError) {
+    async fn write_all_async<B: AsBytes>(ref self, buf: B) throws (IoError) {
         let s = unsafe { Handoff::new(buf.byte_slice()) };
         try await off(|| try self.write_all(s.get()));
     }
 }
 
 impl AsyncSeek for File {
-    async fn seek_async(self, pos: SeekFrom) throws (IoError) -> u64 {
+    async fn seek_async(ref self, pos: SeekFrom) throws (IoError) -> u64 {
         try await off(|| try self.seek(pos))
     }
 }
 
 impl Close for File {
     fn close(self) throws (IoError) { try self.close(); }
+}
+
+impl AsyncClose for File {
+    async fn close_async(self) throws (IoError) { try await off(|| try self.close()); }
 }
 
 /// `using f = try fs::open(..) { .. }` closes `f` on the way out.

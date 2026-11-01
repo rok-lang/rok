@@ -1,0 +1,63 @@
+// spec: std 302-net §3.2.1
+// needs: net
+// expect-exit: 0
+// expect-stdout:
+// server read: [hello]
+// client read: [bye]
+// closed: InvalidInput
+// listener closed
+// udp: [ping] from the connected peer
+// udp closed
+
+// The twins of the socket types: reads and writes through the io
+// traits (`AsyncRead` / `AsyncWrite`), `close_async` through
+// `AsyncClose`; `shutdown_async`, `accept_async` and `connect_async`
+// stay methods of their own.
+use rok::core::marker::share;
+use rok::core::io::{IoError, AsyncClose};
+use rok::std::net::{TcpListener, TcpStream, UdpSocket, SocketAddr, Shutdown};
+
+async fn main() throws (IoError) {
+    let any = try! "127.0.0.1:0".parse::<SocketAddr>();
+    let l = try TcpListener::bind(any);
+    let at = try l.local_addr();
+    let lv = unsafe { share(l) };
+    let server = task::spawn(async {
+        let r: str = try {
+            let (s, _) = try await lv.accept_async();
+            let got = try await s.read_to_str_async();
+            try await s.write_all_async("bye");
+            try await s.flush_async();
+            try await s.close_async();
+            got
+        } catch e: IoError { f"{e}" };
+        r
+    });
+    let c = try await TcpStream::connect_async(at);
+    try await c.write_all_async("hello");
+    try await c.flush_async();
+    try await c.shutdown_async(Shutdown::Write);
+    println(f"server read: [{await server}]");
+    println(f"client read: [{try await c.read_to_str_async()}]");
+    let c2 = unsafe { share(c) };
+    try await c.close_async();
+    let r: str = try {
+        _ = try await c2.write_async("x");
+        "open"
+    } catch e: IoError { f"{e.kind():?}" };
+    println(f"closed: {r}");
+    try await l.close_async();
+    println("listener closed");
+
+    let a = try UdpSocket::bind(any);
+    let b = try UdpSocket::bind(any);
+    try await a.connect_async(try b.local_addr());
+    try await b.connect_async(try a.local_addr());
+    _ = try await a.send_async("ping");
+    let buf = List::filled(16, 0u8);
+    let n = try await b.recv_async(buf);
+    println(f"udp: [{try! str::from_utf8(buf[0:n])}] from the connected peer");
+    try await a.close_async();
+    try await b.close_async();
+    println("udp closed");
+}
