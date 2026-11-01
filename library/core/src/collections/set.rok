@@ -80,6 +80,7 @@ impl<T: Hash, S: BuildHasher> Set<T, S> {
 
     /// The members of either set: those of `self` in its order, then
     /// those only in `other` in its order.
+    #[must_use]
     pub const fn union(self, other: Set<T, S>) -> Set<T, S> {
         let out: Set<T, S> = Set::with_hasher(self.hasher());
         for x in self.d.keys() {
@@ -92,6 +93,7 @@ impl<T: Hash, S: BuildHasher> Set<T, S> {
     }
 
     /// The members of both sets, in `self`'s order.
+    #[must_use]
     pub const fn intersection(self, other: Set<T, S>) -> Set<T, S> {
         let out: Set<T, S> = Set::with_hasher(self.hasher());
         for x in self.d.keys() {
@@ -103,6 +105,7 @@ impl<T: Hash, S: BuildHasher> Set<T, S> {
     }
 
     /// The members of `self` not in `other`, in `self`'s order.
+    #[must_use]
     pub const fn difference(self, other: Set<T, S>) -> Set<T, S> {
         let out: Set<T, S> = Set::with_hasher(self.hasher());
         for x in self.d.keys() {
@@ -115,6 +118,7 @@ impl<T: Hash, S: BuildHasher> Set<T, S> {
 
     /// The members of exactly one set: those only in `self` in its
     /// order, then those only in `other` in its order.
+    #[must_use]
     pub const fn symmetric_difference(self, other: Set<T, S>) -> Set<T, S> {
         self.difference(other).union(other.difference(self))
     }
@@ -151,6 +155,7 @@ impl<T: Hash, S: BuildHasher> Set<T, S> {
 }
 
 /// The members of a set, in insertion order.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct SetIter<T, S = RandomState> {
     it: Keys<T, bool, S>;
 }

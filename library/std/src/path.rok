@@ -82,6 +82,7 @@ pub enum Component {
 
 impl Component {
     /// The component as it is written in a path (`/`, `.`, `..`, the name).
+    #[must_use]
     pub const fn as_str(self) -> str {
         match self {
             Component::RootDir => SEP,
@@ -140,22 +141,28 @@ impl Path {
     }
 
     /// The path as text.
+    #[must_use]
     pub const fn as_str(self) -> str { self.s }
     /// The path as OS bytes (Unix) or WTF-16 units (Windows).
+    #[must_use]
     pub const fn to_raw(self) -> RawPath { raw_of(self.s) }
 
     /// Unix: rooted. Windows: a prefix and a root (`C:\x`, `\\srv\s\x`).
+    #[must_use]
     pub const fn is_absolute(self) -> bool {
         let (p, root) = prefix_of(self.s);
         root && (p > 0 || !WINDOWS)
     }
     /// `true` when the path is not absolute.
+    #[must_use]
     pub const fn is_relative(self) -> bool { !self.is_absolute() }
     /// `true` when the path starts at a root (`/`, `\`, `C:\`).
+    #[must_use]
     pub const fn has_root(self) -> bool { prefix_of(self.s).1 }
 
     /// The path without its last component; `none` for `/` and `""`.
     /// `Path::new("a").parent()` is `""` (as in Rust).
+    #[must_use]
     pub const fn parent(self) -> Path | none {
         let comps = self.component_list();
         let n = comps.len();
@@ -170,6 +177,7 @@ impl Path {
     }
 
     /// The last component unless it is `..` / `/`.
+    #[must_use]
     pub const fn file_name(self) -> str | none {
         let comps = self.component_list();
         let n = comps.len();
@@ -181,6 +189,7 @@ impl Path {
     }
 
     /// `file_name` without its extension.
+    #[must_use]
     pub const fn file_stem(self) -> str | none {
         let name = self.file_name()?;
         let dot = name.rfind(".") ?? 0usize;
@@ -189,6 +198,7 @@ impl Path {
     }
 
     /// After the last `.` of `file_name` (`none` for `.bashrc`, `a`).
+    #[must_use]
     pub const fn extension(self) -> str | none {
         let name = self.file_name()?;
         let dot = name.rfind(".") ?? 0usize;
@@ -198,11 +208,13 @@ impl Path {
 
     /// The components, front to back: repeated separators and inner `.`
     /// dropped, a leading `.` and every `..` kept.
+    #[must_use]
     pub const fn components(self) -> Components {
         Components { items: self.component_list(), pos: 0 }
     }
 
     /// `self`, its parent, its grandparent, ...
+    #[must_use]
     pub const fn ancestors(self) -> Ancestors {
         Ancestors { next: self }
     }
@@ -233,6 +245,7 @@ impl Path {
     /// `other` (a `Path` or a `str`) appended; an absolute `other`
     /// replaces `self`. Windows: so does one with a prefix (`D:x`), and a
     /// rooted one without (`\x`) keeps `self`'s prefix.
+    #[must_use]
     pub const fn join<P: AsPath>(self, with: P) -> Path {
         let other = with.as_path();
         if other.is_absolute() || self.s == "" { return other; }
@@ -248,12 +261,14 @@ impl Path {
     }
 
     /// `self` with its last component replaced by `name`.
+    #[must_use]
     pub const fn with_file_name(self, name: str) -> Path {
         let parent = self.parent() ?? Path::empty();
         parent.join(Path::new(name))
     }
 
     /// `self` with its extension replaced by `ext`; an empty `ext` removes it.
+    #[must_use]
     pub const fn with_extension(self, ext: str) -> Path {
         let stem = self.file_stem() ?? "";
         if ext == "" { return self.with_file_name(stem); }
@@ -261,6 +276,7 @@ impl Path {
     }
 
     /// Component-wise prefix test.
+    #[must_use]
     pub const fn starts_with<P: AsPath>(self, base: P) -> bool {
         unsafe {
             let a = self.component_list();
@@ -274,6 +290,7 @@ impl Path {
     }
 
     /// Component-wise suffix test.
+    #[must_use]
     pub const fn ends_with<P: AsPath>(self, suffix: P) -> bool {
         unsafe {
             let a = self.component_list();
@@ -289,6 +306,7 @@ impl Path {
 
     /// The rest of `self` after `base` (component-wise), or `none` when
     /// `self` does not start with it (`str::strip_prefix` alike).
+    #[must_use]
     pub const fn strip_prefix<P: AsPath>(self, base: P) -> Path | none {
         let b = base.as_path();
         if !self.starts_with(b) { return none; }
@@ -301,6 +319,7 @@ impl Path {
     }
 
     /// Lexical `.` / `..` resolution (no filesystem access).
+    #[must_use]
     pub const fn normalize(self) -> Path {
         let kept: List<Component> = List::new();
         for c in self.component_list() {
@@ -503,6 +522,7 @@ impl Debug for Path {
 }
 
 /// `Path::components`: the parts, from the root or first name.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct Components {
     items: List<Component>;
     pos: usize;
@@ -522,6 +542,7 @@ impl Iterator for Components {
 }
 
 /// `Path::ancestors`: the path, then each parent up to the root.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct Ancestors {
     next: Path | none;
 }

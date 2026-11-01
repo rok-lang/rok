@@ -1470,6 +1470,7 @@ const fn handed<T>(t: Task<T>) -> Task<T> {
 }
 
 /// `Task::join`.
+#[must_use("future is never awaited, so its body never runs: write `await {}`")]
 pub struct Join<T> {
     task: Task<T>;
 }
@@ -1707,6 +1708,7 @@ pub const fn select<I: IntoIterator<Item = F>, F: Future>(iter: I) -> SelectFutu
 
 /// The future `select` returns: `(index, output)` of the first future to
 /// complete.
+#[must_use("future is never awaited, so its body never runs: write `await {}`")]
 pub struct SelectFuture<F> {
     futs: List<F>;
     started: GcBuf<bool>;
@@ -2213,6 +2215,7 @@ pub const fn writable(fd: i32) -> IoReady {
 
 /// The future `readable` / `writable` return: completes once the fd may
 /// be ready (possibly spuriously).
+#[must_use("future is never awaited, so its body never runs: write `await {}`")]
 pub(pkg) struct IoReady {
     fd: i32;
     write: i32;

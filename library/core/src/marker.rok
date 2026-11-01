@@ -195,6 +195,7 @@ impl Memo {
     }
 
     /// The copy of `orig` noted earlier in this hand-off.
+    #[must_use]
     pub(pkg) const fn find<T>(self, orig: GcBuf<T>) -> GcBuf<T> | none {
         self.find_at::<T, T>(orig, 0, 0, 0)
     }

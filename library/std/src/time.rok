@@ -33,6 +33,7 @@ impl SystemTime {
 
     /// `self - earlier` on the wall clock, negative when `earlier` is
     /// later.
+    #[must_use]
     pub const fn duration_since(self, earlier: SystemTime) -> Duration {
         Duration::ns(self.ns) - Duration::ns(earlier.ns)
     }
@@ -47,11 +48,13 @@ impl SystemTime {
     }
 
     /// `self + dur`; `none` when it overflows `i64` nanoseconds.
+    #[must_use]
     pub const fn checked_add(self, dur: Duration) -> SystemTime | none {
         let ns = self.ns.checked_add(dur.as_ns())?;
         SystemTime { ns: ns, mono: shift(self.mono, dur) }
     }
     /// `self - dur`; `none` when it overflows `i64` nanoseconds.
+    #[must_use]
     pub const fn checked_sub(self, dur: Duration) -> SystemTime | none {
         let ns = self.ns.checked_sub(dur.as_ns())?;
         SystemTime { ns: ns, mono: shift(self.mono, Duration::ZERO - dur) }
@@ -127,5 +130,6 @@ impl BootTime {
     /// Time from `self` to now.
     pub fn elapsed(self) -> Duration { BootTime::now().duration_since(self) }
     /// `self - earlier`, negative when `earlier` is later.
+    #[must_use]
     pub const fn duration_since(self, earlier: BootTime) -> Duration { Duration::ns(self.ns) - Duration::ns(earlier.ns) }
 }

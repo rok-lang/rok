@@ -190,6 +190,7 @@ impl<K: Hash, V, S: BuildHasher> Dict<K, V, S> {
     }
 
     /// The entry holding `k` (hash `h`), or `ABSENT`.
+    #[must_use]
     const fn find(self, k: K, h: u64) -> usize {
         unsafe {
             let s = self.h[0];
@@ -440,6 +441,7 @@ impl<K: Hash, V: Default, S: BuildHasher> Entry<K, V, S> {
 
 /// What `d.keys()` returns: the keys, in insertion order. Changing the
 /// dict while iterating gives unspecified (memory-safe) results.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct Keys<K, V, S = RandomState> {
     d: Dict<K, V, S>;
     at: usize;
@@ -466,6 +468,7 @@ impl<K: Hash, V, S: BuildHasher> Iterator for Keys<K, V, S> {
 
 /// What `d.values()` returns: the values, in insertion order. Changing
 /// the dict while iterating gives unspecified (memory-safe) results.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct Values<K, V, S = RandomState> {
     d: Dict<K, V, S>;
     at: usize;
@@ -493,6 +496,7 @@ impl<K: Hash, V, S: BuildHasher> Iterator for Values<K, V, S> {
 /// What `d.iter()` returns: `(key, value)` pairs, in insertion order.
 /// Changing the dict while iterating gives unspecified (memory-safe)
 /// results.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct DictIter<K, V, S = RandomState> {
     d: Dict<K, V, S>;
     at: usize;

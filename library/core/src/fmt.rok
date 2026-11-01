@@ -148,6 +148,7 @@ impl FormatSpec {
 
     /// `text` parsed by the runtime with the parser the compiler checks
     /// static specs with; throws on a malformed spec.
+    #[must_use]
     pub const fn parse(text: str) throws (ValueError) -> FormatSpec {
         let why = unsafe { rok_fmt_spec_error(text) };
         if !why.is_empty() {

@@ -446,6 +446,7 @@ pub trait Subset<Rhs = Self> {
 pub trait Union<Rhs = Self> {
     type Output;
     #[infix("∪")]
+    #[must_use]
     fn union(self, rhs: Rhs) -> Output;
 }
 
@@ -453,6 +454,7 @@ pub trait Union<Rhs = Self> {
 pub trait Intersect<Rhs = Self> {
     type Output;
     #[infix("∩")]
+    #[must_use]
     fn intersection(self, rhs: Rhs) -> Output;
 }
 
@@ -490,11 +492,13 @@ impl<T: Hash> Subset for Set<T> {
 
 impl<T: Hash> Union for Set<T> {
     type Output = Set<T>;
+    #[must_use]
     const fn union(self, rhs: Set<T>) -> Set<T> { Set::union(self, rhs) }
 }
 
 impl<T: Hash> Intersect for Set<T> {
     type Output = Set<T>;
+    #[must_use]
     const fn intersection(self, rhs: Set<T>) -> Set<T> { Set::intersection(self, rhs) }
 }
 

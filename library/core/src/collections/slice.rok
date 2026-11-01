@@ -146,6 +146,7 @@ impl<T> Slice<T> {
 }
 
 /// `s.iter()` / `for x in s`, in view order.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct SliceIter<T> {
     s: Slice<T>;
     i: usize;
@@ -243,6 +244,7 @@ impl<T: PartialEq> Slice<T> {
 }
 
 /// `s.windows(size)`: each window is a view of `s`, no copy.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct Windows<T> {
     s: Slice<T>;
     size: usize;
@@ -278,6 +280,7 @@ impl<T> ExactSizeIterator for Windows<T> {
 }
 
 /// `s.chunks(size)`: each chunk is a view of `s`, no copy.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct Chunks<T> {
     s: Slice<T>;
     size: usize;
@@ -382,6 +385,7 @@ impl Slice<u8> {
     /// The offset of the first occurrence of `needle`, or `none`; an
     /// empty needle is at 0.
     // Naive O(n * m) scan.
+    #[must_use]
     pub const fn find<B: AsBytes>(self, needle: B) -> usize | none {
         let p = needle.byte_slice();
         let m = p.len;
@@ -403,6 +407,7 @@ impl Slice<u8> {
 
 impl List<u8> {
     /// `self[:].find(needle)`.
+    #[must_use]
     pub const fn find<B: AsBytes>(self, needle: B) -> usize | none {
         self[:].find(needle)
     }
@@ -702,6 +707,7 @@ impl<T: PartialEq> SliceMut<T> {
 }
 
 /// `s.iter()` / `for x in s`: checks the view on every step.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct SliceMutIter<T> {
     s: SliceMut<T>;
     i: usize;

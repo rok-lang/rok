@@ -188,6 +188,7 @@ impl<T> Deque<T> {
 }
 
 /// Front to back.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct DequeIter<T> {
     deque: Deque<T>;
     pos: GcBuf<usize>;

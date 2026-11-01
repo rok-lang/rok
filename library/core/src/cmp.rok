@@ -49,16 +49,19 @@ pub trait Ord: PartialOrd + Eq {
     fn cmp(self, rhs: Self) -> Ordering;
 
     /// The smaller of `self` and `rhs`; `self` when they are equal.
+    #[must_use]
     const fn min(self, rhs: Self) -> Self {
         if self.le(rhs) { self } else { rhs }
     }
 
     /// The larger of `self` and `rhs`; `self` when they are equal.
+    #[must_use]
     const fn max(self, rhs: Self) -> Self {
         if self.ge(rhs) { self } else { rhs }
     }
 
     /// `low` when `self` is below it, `high` when above it, else `self`.
+    #[must_use]
     const fn clamp(self, low: Self, high: Self) -> Self {
         if self.lt(low) { return low; }
         if self.gt(high) { return high; }

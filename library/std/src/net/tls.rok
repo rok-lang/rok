@@ -512,6 +512,7 @@ impl TicketStore {
     }
 
     /// The live session with ticket `id`, left in the store.
+    #[must_use]
     pub(pkg) fn find(self, id: Slice<u8>) -> Session | none {
         let found: Session | none = none;
         using g = self.m.lock() {

@@ -574,6 +574,7 @@ pub(pkg) const unsafe fn sort_region<T>(
 
 /// `xs.iter()` / `for x in xs`: walks a list front to back. Its state
 /// is its own (`next(ref self)`, 2.7.1): a copy walks on its own.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct ListIter<T> {
     list: List<T>;
     /// The next index from the front.

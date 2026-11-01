@@ -51,6 +51,7 @@ impl str {
 
     /// The UTF-8 bytes as a read-only view of the string itself (no
     /// copy, O(1)).
+    #[must_use]
     pub const fn as_bytes(self) -> Slice<u8> {
         Slice { buf: unsafe { rok_str_bytes_buf(self) }, start: 0, len: self.len(), stride: 1, whole: false }
     }
@@ -66,35 +67,44 @@ impl str {
 
     /// Byte `i`, O(1); panics if `i >= len()`.
     #[track_caller]
+    #[must_use]
     pub const fn byte(self, i: usize) -> u8 {
         if i >= self.len() { index_oob("str::byte: index", i, self.len()); }
         unsafe { rok_str_byte(self, i) }
     }
 
     /// Byte length (not the char count).
+    #[must_use]
     pub const fn len(self) -> usize { unsafe { rok_str_len(self) } }
     /// `true` when the string has no bytes.
+    #[must_use]
     pub const fn is_empty(self) -> bool { unsafe { rok_str_len(self) } == 0 }
     /// Number of chars (`s.chars().count()` in the spec).
+    #[must_use]
     pub const fn char_count(self) -> usize { unsafe { rok_str_char_count(self) } }
 
     /// `true` when `pat` occurs in `self` (always for an empty `pat`).
+    #[must_use]
     pub const fn contains(self, pat: str) -> bool { unsafe { rok_str_find(self, pat) } >= 0 }
     /// `true` when `self` begins with `pat`.
+    #[must_use]
     pub const fn starts_with(self, pat: str) -> bool { unsafe { rok_str_eq_at(self, 0, pat) } != 0 }
     /// `true` when `self` ends with `pat`.
+    #[must_use]
     pub const fn ends_with(self, pat: str) -> bool {
         let n = self.len();
         let m = pat.len();
         m <= n && unsafe { rok_str_eq_at(self, n - m, pat) } != 0
     }
     /// Byte index of the first occurrence of `pat`; `none` if absent.
+    #[must_use]
     pub const fn find(self, pat: str) -> usize | none {
         let i = unsafe { rok_str_find(self, pat) };
         if i < 0 { return none; }
         i as usize
     }
     /// Byte index of the last occurrence of `pat`; `none` if absent.
+    #[must_use]
     pub const fn rfind(self, pat: str) -> usize | none {
         let i = unsafe { rok_str_rfind(self, pat) };
         if i < 0 { return none; }
@@ -103,22 +113,26 @@ impl str {
 
     /// `self` without a leading `prefix`, or `none` if it does not start
     /// with it.
+    #[must_use]
     pub const fn strip_prefix(self, prefix: str) -> str | none {
         if !self.starts_with(prefix) { return none; }
         self[prefix.len():]
     }
     /// `self` without a trailing `suffix`, or `none`.
+    #[must_use]
     pub const fn strip_suffix(self, suffix: str) -> str | none {
         if !self.ends_with(suffix) { return none; }
         self[:self.len() - suffix.len()]
     }
     /// The pieces before and after the first `sep`, or `none`.
+    #[must_use]
     pub const fn split_once(self, sep: str) -> (str, str) | none {
         let i = self.find(sep)?;
         (self[:i], self[i + sep.len():])
     }
     /// `n` copies back to back.
     #[track_caller]
+    #[must_use]
     pub const fn repeat(self, n: usize) -> str {
         let b = StrBuf::with_capacity(cap_mul(self.len(), n));
         for _ in 0..n { b.push_str(self); }
@@ -126,15 +140,20 @@ impl str {
     }
 
     /// `self` without leading and trailing Unicode whitespace.
+    #[must_use]
     pub const fn trim(self) -> str { unsafe { rok_str_trim(self, 0) } }
     /// `self` without leading Unicode whitespace.
+    #[must_use]
     pub const fn trim_start(self) -> str { unsafe { rok_str_trim(self, 1) } }
     /// `self` without trailing Unicode whitespace.
+    #[must_use]
     pub const fn trim_end(self) -> str { unsafe { rok_str_trim(self, 2) } }
     /// `self` without every leading and trailing repeat of `pat`.
+    #[must_use]
     pub const fn trim_matches(self, pat: str) -> str { self.trim_start_matches(pat).trim_end_matches(pat) }
     /// `self` without every leading repeat of `pat` (unchanged for an empty
     /// `pat`).
+    #[must_use]
     pub const fn trim_start_matches(self, pat: str) -> str {
         let m = pat.len();
         if m == 0 { return self; }
@@ -144,6 +163,7 @@ impl str {
     }
     /// `self` without every trailing repeat of `pat` (unchanged for an empty
     /// `pat`).
+    #[must_use]
     pub const fn trim_end_matches(self, pat: str) -> str {
         let m = pat.len();
         if m == 0 { return self; }
@@ -154,47 +174,61 @@ impl str {
 
     /// Full Unicode case mapping (`"ß"` → `"SS"`, final `σ` → `ς`); no
     /// locale rules.
+    #[must_use]
     pub const fn to_lowercase(self) -> str { unsafe { rok_str_case(self, 0) } }
     /// Full Unicode uppercase mapping (`"ß"` → `"SS"`); no locale rules.
+    #[must_use]
     pub const fn to_uppercase(self) -> str { unsafe { rok_str_case(self, 1) } }
     /// A copy with every non-overlapping `from` replaced by `to`, left to
     /// right.
+    #[must_use]
     pub const fn replace(self, from: str, to: str) -> str { unsafe { rok_str_replace(self, from, to) } }
 
     /// Unicode scalar values, in order.
+    #[must_use]
     pub const fn chars(self) -> Chars { Chars { s: self, pos: 0 } }
     /// UTF-8 bytes, in order.
+    #[must_use]
     pub fn bytes(self) -> Bytes { self.as_bytes().iter() }
     /// The pieces between occurrences of `sep` (all of them, empty ones
     /// included).
+    #[must_use]
     pub const fn split(self, sep: str) -> Split { Split { rest: self, sep: sep, done: false } }
     /// At most `n` pieces split on `sep` from the start; the last one is
     /// the unsplit rest (`n == 0` yields nothing).
+    #[must_use]
     pub const fn splitn(self, n: usize, sep: str) -> SplitN { SplitN { rest: self, sep: sep, left: n } }
     /// The pieces `split` yields, last first.
+    #[must_use]
     pub const fn rsplit(self, sep: str) -> RSplit { RSplit { rest: self, sep: sep, done: false } }
     /// At most `n` pieces split on `sep` from the end, last first; the
     /// final one is the unsplit start.
+    #[must_use]
     pub const fn rsplitn(self, n: usize, sep: str) -> RSplitN { RSplitN { rest: self, sep: sep, left: n } }
     /// `(byte offset, match)` for each non-overlapping `pat`, left to
     /// right; an empty `pat` matches nothing.
+    #[must_use]
     pub const fn match_indices(self, pat: str) -> MatchIndices {
         MatchIndices { s: self, pat: pat, pos: 0 }
     }
     /// Lines without their `\n` / `\r\n`; a final line ending adds no
     /// empty line.
+    #[must_use]
     pub const fn lines(self) -> Lines { Lines { rest: self } }
     /// `(byte offset, char)` pairs.
+    #[must_use]
     pub const fn char_indices(self) -> CharIndices {
         CharIndices { chars: Chars { s: self, pos: 0 } }
     }
     /// The non-empty pieces between runs of Unicode `White_Space` (the
     /// set `trim` strips).
+    #[must_use]
     pub const fn split_whitespace(self) -> SplitWhitespace {
         SplitWhitespace { s: self, pos: 0 }
     }
 
     /// `T`'s value spelled by this string (stdlib 2.15.7).
+    #[must_use]
     pub const fn parse<T: FromStr>(self) throws (T::Err) -> T { try T::from_str(self) }
 }
 
@@ -248,6 +282,7 @@ impl Hash for str {
 pub type Bytes = SliceIter<u8>;
 
 /// What `s.chars()` returns: the Unicode scalar values, in order.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct Chars {
     s: str;
     pos: usize;
@@ -285,6 +320,7 @@ impl Iterator for Chars {
 
 /// What `s.split(sep)` returns: the pieces between occurrences of `sep`,
 /// left to right.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct Split {
     rest: str;
     sep: str;
@@ -313,6 +349,7 @@ impl Iterator for Split {
 
 /// What `s.splitn(n, sep)` returns: at most `n` pieces, the last one the
 /// unsplit rest.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct SplitN {
     rest: str;
     sep: str;
@@ -341,6 +378,7 @@ impl Iterator for SplitN {
 }
 
 /// What `s.rsplit(sep)` returns: the pieces of `split`, last first.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct RSplit {
     rest: str;
     sep: str;
@@ -373,6 +411,7 @@ impl Iterator for RSplit {
 
 /// What `s.rsplitn(n, sep)` returns: at most `n` pieces from the end, the
 /// last one the unsplit start.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct RSplitN {
     rest: str;
     sep: str;
@@ -406,6 +445,7 @@ impl Iterator for RSplitN {
 
 /// What `s.match_indices(pat)` returns: `(byte offset, match)` pairs, left
 /// to right.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct MatchIndices {
     s: str;
     pat: str;
@@ -430,6 +470,7 @@ impl Iterator for MatchIndices {
 }
 
 /// What `s.lines()` returns: the lines without their `\n` / `\r\n`.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct Lines {
     rest: str;
 }
@@ -457,6 +498,7 @@ impl Iterator for Lines {
 }
 
 /// What `s.char_indices()` returns: `(byte offset, char)` pairs, in order.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct CharIndices {
     chars: Chars;
 }
@@ -530,6 +572,7 @@ const fn space_at_wide(s: str, pos: usize, b: u8) -> usize {
 
 /// What `s.split_whitespace()` returns: the non-empty pieces between runs
 /// of whitespace, left to right.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct SplitWhitespace {
     s: str;
     pos: usize;

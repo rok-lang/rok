@@ -226,6 +226,7 @@ pub trait FromRokon {
 }
 
 /// Read one ROKON document.
+#[must_use]
 pub fn parse(s: str) throws (RokonError) -> Value {
     try read::parse(s)
 }

@@ -216,6 +216,7 @@ impl<T: Send> IntoFuture for JoinHandle<T> {
 
 /// Spawn configuration.
 #[derive(Debug)]
+#[must_use("thread builder is never used: start the thread with `{}.spawn(f)`")]
 pub struct Builder {
     name: str | none;
     stack_size: usize | none;

@@ -756,6 +756,7 @@ const DIR_BATCH: usize = 64;
 /// to `DIR_BATCH` entries on a blocking thread while the task suspends.
 /// Closed at its end or on leaving `using`; a cancelled task's refill
 /// finishes in the background first.
+#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
 pub struct ReadDirStream {
     rd: ReadDir;
     /// Held by a refill while it reads, and by `drop` to close.
@@ -1331,6 +1332,7 @@ impl DirEntry {
     /// The listed directory's path joined with the name.
     pub const fn path(self) -> Path { self.path }
     /// The entry's name within its directory.
+    #[must_use]
     pub const fn file_name(self) -> str { self.name }
     /// Metadata of the entry itself (a symlink is not followed).
     pub const fn metadata(self) -> Metadata { self.meta }
@@ -1347,6 +1349,7 @@ impl DirEntry {
 /// The entries of one directory, in the order the OS returns them
 /// (`.` / `..` skipped): a `TryIterator` (`try for e in
 /// fs::read_dir(p) { .. }`).
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct ReadDir {
     /// The `DIR*` (0 once closed), shared by copies of the handle.
     d: GcBuf<isize>;
@@ -1434,6 +1437,7 @@ fn close_dir(cell: GcBuf<isize>) {
 /// never holds a stream open (stopping early leaks nothing). An
 /// unreadable directory throws its error from `next`; calling `next`
 /// again goes on with the rest.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct Walk {
     stack: List<DirEntry>;
     errors: List<IoError>;

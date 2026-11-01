@@ -576,6 +576,7 @@ impl<T> IntoIterator for Receiver<T> {
 
 /// The iterator `for x in rx` walks: each item is a blocking `recv`; it
 /// ends when the channel is closed and drained.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct ReceiverIter<T> {
     rx: Receiver<T>;
 }
@@ -592,6 +593,7 @@ impl<T> Iterator for ReceiverIter<T> {
 }
 
 /// `Receiver::recv_async`.
+#[must_use("future is never awaited, so its body never runs: write `await {}`")]
 pub struct RecvFuture<T> {
     rx: Receiver<T>;
 }
@@ -635,6 +637,7 @@ impl<T> rok::core::stream::Stream for Receiver<T> {
 }
 
 /// `Sender::send_async`.
+#[must_use("future is never awaited, so its body never runs: write `await {}`")]
 pub struct SendFuture<T> {
     /// The sender's channel and open flag: the future borrows the sender,
     /// which stays with its owner.

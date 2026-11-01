@@ -64,6 +64,7 @@ impl Ipv4Addr {
     pub const fn octets(self) -> [u8; 4] { self.octets }
 
     /// The address as a big-endian number (`a.b.c.d` = `a << 24 | ..`).
+    #[must_use]
     pub const fn to_bits(self) -> u32 {
         ((self.octets[0] as u32) << 24) | ((self.octets[1] as u32) << 16)
             | ((self.octets[2] as u32) << 8) | (self.octets[3] as u32)
@@ -1660,6 +1661,7 @@ impl Drop for TcpListener {
 }
 
 /// `TcpListener::incoming`: a view of the listener.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct Incoming {
     sock: Sock;
 }

@@ -8,6 +8,7 @@
 // expected type picks the variant).
 
 /// A value or an error, kept as a value (2.14.6): `Ok(T)` or `Err(E)`.
+#[must_use("`Result` may hold an error that is never looked at: match on it, or write `_ = {};` to drop it")]
 pub enum Result<T, E> {
     Ok(T),
     Err(E),

@@ -424,6 +424,7 @@ impl<T> Mutex<T> {
 }
 
 /// `Mutex::lock_async`.
+#[must_use("future is never awaited, so its body never runs: write `await {}`")]
 pub struct LockFuture<T> {
     mutex: Mutex<T>;
 }
@@ -612,6 +613,7 @@ impl<T> RwLock<T> {
 }
 
 /// `RwLock::read_async`.
+#[must_use("future is never awaited, so its body never runs: write `await {}`")]
 pub struct ReadFuture<T> {
     lock: RwLock<T>;
 }
@@ -638,6 +640,7 @@ impl<T> rok::core::future::Future for ReadFuture<T> {
 }
 
 /// `RwLock::write_async`.
+#[must_use("future is never awaited, so its body never runs: write `await {}`")]
 pub struct WriteFuture<T> {
     lock: RwLock<T>;
 }
@@ -887,6 +890,7 @@ impl Condvar {
 }
 
 /// `Condvar::wait_async`.
+#[must_use("future is never awaited, so its body never runs: write `await {}`")]
 pub struct CondvarWait<T> {
     cv: Condvar;
     mutex: Mutex<T>;
