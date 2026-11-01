@@ -645,7 +645,7 @@ fn put_digits(x: IntMag, pw: List<Pow>, w: GcBuf<u32>, wn: usize, k: usize, per:
     if x.cmp3(d.p) < 0 { return put_digits(x, pw, w, wn, k - 1, per, out, end, width, radix); }
     let (q, r) = if d.inv.n > 0 { x.barrett(d, w, wn) } else { x.divmod(d.p) };
     let s = per << (k - 1);
-    put_digits(r, pw, w, wn, k - 1, per, out, end, s, radix);
+    _ = put_digits(r, pw, w, wn, k - 1, per, out, end, s, radix);
     put_digits(q, pw, w, wn, k - 1, per, out, end - s, if width > s { width - s } else { 0 }, radix)
 }
 

@@ -275,6 +275,7 @@ impl File {
     }
 
     /// `done`, then `r` checked.
+    #[discardable]
     fn done_with(self, r: i64) throws (IoError) -> i64 {
         self.done();
         try check(r, self.path)
@@ -283,7 +284,7 @@ impl File {
     fn release(self) {
         unsafe {
             let fd = take_handle(self.fd, 0, -1);
-            if fd >= 0 { rok_os_close(fd); }
+            if fd >= 0 { _ = rok_os_close(fd); }
         }
     }
 
@@ -460,7 +461,7 @@ impl Mmap {
         unsafe {
             let addr = take_handle(self.addr, 0, 0);
             if addr != 0 {
-                rok_os_munmap(addr, self.len);
+                _ = rok_os_munmap(addr, self.len);
             }
         }
     }
@@ -880,6 +881,7 @@ impl Dir {
     }
 
     /// Copy contents and permissions; returns the byte count.
+    #[discardable]
     pub fn copy<P: AsPath, Q: AsPath>(self, from: P, to: Q) throws (IoError) -> u64 {
         let src = try self.open(from);
         let meta = try src.metadata() catch e { try src.close() catch _ {}; throw e; };
@@ -930,7 +932,7 @@ impl Drop for Dir {
         unsafe {
             let fd = take_handle(self.fd, 0, -1);
             if fd >= 0 {
-                rok_os_close(fd);
+                _ = rok_os_close(fd);
             }
         }
     }
@@ -1129,6 +1131,7 @@ pub fn remove_file<P: AsPath>(path: P) throws (IoError) { try Dir::root().remove
 pub fn remove_dir<P: AsPath>(path: P) throws (IoError) { try Dir::root().remove_dir(path); }
 pub fn remove_dir_all<P: AsPath>(path: P) throws (IoError) { try Dir::root().remove_dir_all(path); }
 pub fn rename<P: AsPath, Q: AsPath>(from: P, to: Q) throws (IoError) { try Dir::root().rename(from, to); }
+#[discardable]
 pub fn copy<P: AsPath, Q: AsPath>(from: P, to: Q) throws (IoError) -> u64 { try Dir::root().copy(from, to) }
 pub fn symlink<P: AsPath, Q: AsPath>(target: P, link: Q) throws (IoError) { try Dir::root().symlink(target, link); }
 pub fn hardlink<P: AsPath, Q: AsPath>(target: P, link: Q) throws (IoError) { try Dir::root().hardlink(target, link); }

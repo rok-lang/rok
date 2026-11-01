@@ -186,7 +186,7 @@ fn finish(t: TaskRef) {
             if t.state[5] != 0 {
                 atomic_add(h.locals, 0, -1, SeqCst);
             }
-            wake_worker(h);
+            _ = wake_worker(h);
         }
     }
 }
@@ -208,6 +208,7 @@ fn push(q: Queue, t: TaskRef) {
     }
 }
 
+#[discardable]
 fn pop_front(q: Queue) -> TaskRef | none {
     if q.len.load() == 0 {
         return none;
@@ -442,7 +443,7 @@ impl Pool {
         if active < n {
             let a = active as i32;
             if atomic_cas(self.signal, ACTIVE, a, a + 1, SeqCst, SeqCst) == a {
-                wake_worker(self.workers[active]);
+                _ = wake_worker(self.workers[active]);
             }
         }
     }
@@ -488,7 +489,7 @@ fn start_monitor(pool: Pool) {
         if h == 0 {
             panic("task executor: cannot start the monitor thread");
         }
-        rok_thread_detach(h);
+        _ = rok_thread_detach(h);
     }
 }
 
@@ -501,7 +502,7 @@ fn start_worker(w: Worker) {
         if h == 0 {
             panic("task executor: cannot start a worker thread");
         }
-        rok_thread_detach(h);
+        _ = rok_thread_detach(h);
     }
 }
 
@@ -722,7 +723,7 @@ fn schedule(t: TaskRef) {
         let pool = executor();
         if let h: Worker = t.home[0] {
             push(h.local, t);
-            wake_worker(h);
+            _ = wake_worker(h);
             pool.wake_helpers();
             return;
         }
@@ -816,7 +817,7 @@ fn run(t: TaskRef) {
         // Blocking calls of the poll may hand the worker on (706 §7.6.7).
         let armed = rok_lane_arm(1);
         let ready = poll(ctx);
-        rok_lane_arm(armed);
+        _ = rok_lane_arm(armed);
         // The worker may have been handed on: this thread's guest held
         // what the poll's `spawn_local`s made since.
         let now = current_worker();
@@ -983,7 +984,7 @@ fn timers_while_busy(pool: Pool, ran: i64) -> i64 {
     if ran < 31 {
         return ran + 1;
     }
-    fire_timers(pool);
+    _ = fire_timers(pool);
     0
 }
 
@@ -1535,7 +1536,7 @@ impl Error for CancellationError {}
 #[track_caller]
 pub fn spawn<F: Future + Send>(fut: F) -> Task<F::Output> where F::Output: Send {
     unsafe {
-        current_worker();
+        _ = current_worker();
         let slot: GcBuf<F::Output> = buf_new(1);
         let t = new_task(poll_fn(hand_over::<F>(fut), slot), none);
         Task { task: t, slot: slot }
@@ -1549,7 +1550,7 @@ pub fn spawn<F: Future + Send>(fut: F) -> Task<F::Output> where F::Output: Send 
 #[track_caller]
 pub(pkg) fn spawn_plain<F: Future + Send>(fut: F) -> Task<F::Output> where F::Output: Send {
     unsafe {
-        current_worker();
+        _ = current_worker();
         let slot: GcBuf<F::Output> = buf_new(1);
         let t = new_task(poll_fn(fut, slot), none);
         Task { task: t, slot: slot }
@@ -2061,7 +2062,7 @@ fn spawn_driver(pool: Pool) {
         if h == 0 {
             panic("task executor: cannot start the I/O driver thread");
         }
-        rok_thread_detach(h);
+        _ = rok_thread_detach(h);
     }
 }
 
@@ -2349,7 +2350,7 @@ impl BlockingPool {
                         set_current(k);
                     }
                 } else {
-                    rok_thread_detach(h);
+                    _ = rok_thread_detach(h);
                 }
             }
         }

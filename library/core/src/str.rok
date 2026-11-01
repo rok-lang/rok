@@ -561,7 +561,7 @@ impl char {
     }
 
     pub const fn is_digit(self, radix: u32) -> bool {
-        try { self.to_digit(radix); true } catch _ { false }
+        try { _ = self.to_digit(radix); true } catch _ { false }
     }
 
     /// Bytes in UTF-8.

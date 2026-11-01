@@ -35,11 +35,13 @@ impl<T: Hash> OrderedSet<T> {
     }
 
     /// `true` when `x` was not there yet.
+    #[discardable]
     pub const fn insert(self, x: T) -> bool {
         self.d.insert(x, true) is none
     }
 
     /// `true` when `x` was there.
+    #[discardable]
     pub const fn remove(self, x: T) -> bool {
         !(self.d.remove(x) is none)
     }

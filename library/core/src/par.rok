@@ -8,7 +8,7 @@ use rok::core::marker::{distinct, hand_over};
 /// Run `job(c)` for every `c` in `0..chunks` across the workers (this
 /// thread included); returns once all have finished.
 fn run_chunks(chunks: usize, job: fn(usize) + Send) {
-    task::in_pool(|| {
+    _ = task::in_pool(|| {
         let workers = task::workers();
         if workers > chunks {
             workers = chunks;
@@ -206,7 +206,7 @@ pub fn join<T1: Send, T2: Send>(f1: fn() -> T1 + Send, f2: fn() -> T2 + Send) ->
 /// Structured spawning (2.19.3): every task `s.spawn`s has finished
 /// when `scope` returns.
 pub fn scope(f: fn(Scope)) {
-    task::in_pool(|| {
+    _ = task::in_pool(|| {
         run_scope(f);
         true
     });

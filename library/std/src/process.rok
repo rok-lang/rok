@@ -517,7 +517,7 @@ impl Child {
             let fd = self.state[2];
             if fd >= 0 { rok_os_pidfd_signal(fd, sig) } else { rok_os_kill(self.pid, sig) }
         };
-        use_end(self.state, 3);
+        _ = use_end(self.state, 3);
         try check(r as i64, "kill");
     }
 
@@ -539,7 +539,7 @@ impl Child {
             if word_at(self.state, 0) == 0 && use_begin(self.state, 3) {
                 let out: GcBuf<i32> = buf_new(1);
                 let r = rok_os_waitpid(self.pid, if block { 2 } else { 3 }, out);
-                use_end(self.state, 3);
+                _ = use_end(self.state, 3);
                 if r == 0 { return false; }
                 try check(r as i64, "waitpid");
                 // The first to close reaps.
@@ -565,7 +565,7 @@ impl Child {
         self.state[1] = raw;
         let fd = take_handle(self.state, 2, -9);
         if fd >= 0 {
-            rok_os_close(fd);
+            _ = rok_os_close(fd);
         }
         take_handle(self.state, 0, 1);
     }
@@ -575,7 +575,7 @@ impl Child {
     pub fn wait(self) throws (IoError) -> ExitStatus {
         let si = self.stdin;
         if si is ChildStdin { try si.close(); }
-        try self.reap(true);
+        _ = try self.reap(true);
         ExitStatus { raw: unsafe { self.state[1] } }
     }
 

@@ -61,6 +61,7 @@ impl<T> BinaryHeap<T> {
     }
 
     /// Remove and return the top item; O(log n).
+    #[discardable]
     pub const fn pop(self) -> T | none {
         let xs = self.items;
         let n = xs.len();

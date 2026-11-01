@@ -209,6 +209,7 @@ impl Debug for IoError {
 impl Error for IoError {}
 
 /// `r`, or its OS error thrown when `r < 0` (the runtime's `-errno`).
+#[discardable]
 pub(pkg) fn check(r: i64, context: str) throws (IoError) -> i64 {
     if r < 0 { throw IoError::from_os_code((0 - r) as i32, context); }
     r
@@ -233,20 +234,25 @@ pub const fn byte_buf(n: usize) -> List<u8> {
 }
 
 #[intrinsic("rok.atomic.xchg")]
+#[discardable]
 fn atomic_xchg<T>(buf: GcBuf<T>, i: usize, v: T, o: AtomicOrdering) -> T;
 
 /// The OS handle in `cell[i]`, leaving `empty` there. Copies of a handle
 /// share its cell, so of any that release it, even at once from several
 /// threads, exactly one gets the handle; the rest get `empty`.
+#[discardable]
 pub(pkg) fn take_handle<T>(cell: GcBuf<T>, i: usize, empty: T) -> T {
     unsafe { atomic_xchg(cell, i, empty, SeqCst) }
 }
 
 #[intrinsic("rok.atomic.cas")]
+#[discardable]
 fn atomic_cas<T>(buf: GcBuf<T>, i: usize, current: T, new: T, success: AtomicOrdering, failure: AtomicOrdering) -> T;
 #[intrinsic("rok.atomic.sub")]
+#[discardable]
 fn atomic_sub<T>(buf: GcBuf<T>, i: usize, v: T, o: AtomicOrdering) -> T;
 #[intrinsic("rok.atomic.or")]
+#[discardable]
 fn atomic_or<T>(buf: GcBuf<T>, i: usize, v: T, o: AtomicOrdering) -> T;
 #[intrinsic("rok.atomic.load")]
 fn atomic_load<T>(buf: GcBuf<T>, i: usize, o: AtomicOrdering) -> T;
@@ -540,7 +546,7 @@ pub trait Seek {
     fn seek(ref self, pos: SeekFrom) throws (IoError) -> u64;
 
     fn rewind(ref self) throws (IoError) {
-        try self.seek(SeekFrom::Start(0u64));
+        _ = try self.seek(SeekFrom::Start(0u64));
     }
 
     fn stream_position(ref self) throws (IoError) -> u64 {
@@ -754,6 +760,7 @@ impl<W: Writer> Drop for LineWriter<W> {
 /// OS descriptors (`raw_fd`) go to the runtime, which lets the kernel
 /// move the bytes where their kinds allow (`copy_file_range` /
 /// `sendfile` / `splice`); other streams copy through `read` / `write`.
+#[discardable]
 pub fn copy<R: Reader, W: Writer>(ref reader: R, ref writer: W) throws (IoError) -> u64 {
     let (from, to) = (Reader::raw_fd(reader), Writer::raw_fd(writer));
     if from >= 0 && to >= 0 {

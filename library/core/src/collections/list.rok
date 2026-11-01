@@ -181,6 +181,7 @@ impl<T> List<T> {
         }
     }
 
+    #[discardable]
     pub const fn pop(self) -> T | none {
         unsafe {
             let n = self.len();
@@ -254,6 +255,7 @@ impl<T> List<T> {
     }
 
     #[track_caller]
+    #[discardable]
     pub const fn remove(self, idx: usize) -> T {
         unsafe {
             let n = self.len();
@@ -299,6 +301,7 @@ impl<T> List<T> {
     /// Remove the elements in `r` and return them, in order; the rest
     /// close up. Panics if `r` is reversed or ends past the length.
     #[track_caller]
+    #[discardable]
     pub const fn drain(self, r: Range<usize>) -> List<T> {
         unsafe {
             let n = self.len();

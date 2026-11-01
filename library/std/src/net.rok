@@ -475,7 +475,7 @@ impl Sock {
         unsafe {
             let fd = take_handle(self.fd, 0, -1);
             if fd >= 0 {
-                rok_os_close(fd);
+                _ = rok_os_close(fd);
                 task::wake_io(fd);
             }
         }

@@ -239,7 +239,7 @@ fn encrypt(ek: Slice<u8>, m: Slice<u8>, r: Slice<u8>) -> List<u8> {
     compress(v, 4u32);
     let c = Secret::zeroed(1088);
     let at = encode(u, K * N, 10u32, c, 0);
-    encode(v, N, 4u32, c, at);
+    _ = encode(v, N, 4u32, c, at);
     for w in [y, e1, e2, mu, u, v] { w.wipe(); }
     c.as_bytes().to_list()
 }
@@ -259,7 +259,7 @@ fn decrypt(dk: Slice<u8>, c: Slice<u8>) -> Secret {
     for c in 0..N { w[c] = sub_q(v[c], w[c]); }
     compress(w, 1u32);
     let m = Secret::zeroed(32);
-    encode(w, N, 1u32, m, 0);
+    _ = encode(w, N, 1u32, m, 0);
     for x in [u, v, s, w] { x.wipe(); }
     m
 }
