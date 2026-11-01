@@ -151,6 +151,7 @@ mod kind {
     pub const CROSSES_DEVICES: i32 = 13;
     pub const UNSUPPORTED: i32 = 14;
     pub const FILESYSTEM_LOOP: i32 = 18;
+    pub const RESOURCE_BUSY: i32 = 19;
 }
 
 /// The `IoErrorKind` discriminant of error code `code`.
@@ -174,6 +175,7 @@ pub const extern "C" fn rok_os_errno_kind(code: i32) -> i32 {
         libc::EXDEV => kind::CROSSES_DEVICES,
         libc::ENOSYS | libc::ENOTSUP => kind::UNSUPPORTED,
         libc::ELOOP => kind::FILESYSTEM_LOOP,
+        libc::EBUSY | libc::ETXTBSY => kind::RESOURCE_BUSY,
         _ => kind::OTHER,
     }
 }
@@ -1931,6 +1933,8 @@ mod tests {
         assert_eq!(rok_os_errno_kind(libc::EACCES), kind::PERMISSION_DENIED);
         assert_eq!(rok_os_errno_kind(libc::EEXIST), kind::ALREADY_EXISTS);
         assert_eq!(rok_os_errno_kind(libc::ENOTSUP), kind::UNSUPPORTED);
+        assert_eq!(rok_os_errno_kind(libc::EBUSY), kind::RESOURCE_BUSY);
+        assert_eq!(rok_os_errno_kind(libc::ETXTBSY), kind::RESOURCE_BUSY);
         assert_eq!(
             rok_os_errno_kind(EAI_BASE + EAI_NONAME.abs()),
             kind::NOT_FOUND

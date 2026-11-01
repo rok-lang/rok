@@ -259,6 +259,7 @@ mod kind {
     pub const CROSSES_DEVICES: i32 = 13;
     pub const UNSUPPORTED: i32 = 14;
     pub const FILESYSTEM_LOOP: i32 = 18;
+    pub const RESOURCE_BUSY: i32 = 19;
 }
 
 /// The `IoErrorKind` discriminant of Win32 / Winsock error `code`.
@@ -273,12 +274,11 @@ pub const extern "C" fn rok_os_errno_kind(code: i32) -> i32 {
         | ERROR_ENVVAR_NOT_FOUND
         | WSAHOST_NOT_FOUND
         | WSANO_DATA => kind::NOT_FOUND,
+        ERROR_ACCESS_DENIED | ERROR_WRITE_PROTECT | ERROR_PRIVILEGE_NOT_HELD | WSAEACCES => {
+            kind::PERMISSION_DENIED
+        }
         // Another handle's share mode denies this access.
-        ERROR_ACCESS_DENIED
-        | ERROR_WRITE_PROTECT
-        | ERROR_PRIVILEGE_NOT_HELD
-        | ERROR_SHARING_VIOLATION
-        | WSAEACCES => kind::PERMISSION_DENIED,
+        ERROR_SHARING_VIOLATION => kind::RESOURCE_BUSY,
         ERROR_FILE_EXISTS | ERROR_ALREADY_EXISTS => kind::ALREADY_EXISTS,
         ERROR_DIRECTORY => kind::NOT_A_DIRECTORY,
         ERROR_DIRECTORY_NOT_SUPPORTED => kind::IS_A_DIRECTORY,

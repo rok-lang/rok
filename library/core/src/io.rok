@@ -31,6 +31,7 @@ const KIND_UNEXPECTED_EOF: i32 = 15;
 const KIND_INVALID_DATA: i32 = 16;
 const KIND_WRITE_ZERO: i32 = 17;
 const KIND_FILESYSTEM_LOOP: i32 = 18;
+const KIND_RESOURCE_BUSY: i32 = 19;
 
 /// Bytes per read when the size is unknown.
 const CHUNK: usize = 8192;
@@ -63,6 +64,9 @@ pub enum IoErrorKind {
     /// Too many symbolic links, or a final symbolic link where an open
     /// said not to follow one (`follow_symlinks: false`).
     FilesystemLoop,
+    /// The file or device is in use: another handle's share mode denies
+    /// this access (Windows), or it is busy (`EBUSY`, `ETXTBSY`).
+    ResourceBusy,
 }
 
 impl IoErrorKind {
@@ -88,6 +92,7 @@ impl IoErrorKind {
             IoErrorKind::InvalidData => KIND_INVALID_DATA,
             IoErrorKind::WriteZero => KIND_WRITE_ZERO,
             IoErrorKind::FilesystemLoop => KIND_FILESYSTEM_LOOP,
+            IoErrorKind::ResourceBusy => KIND_RESOURCE_BUSY,
         }
     }
 
@@ -110,6 +115,7 @@ impl IoErrorKind {
         if k == KIND_CROSSES_DEVICES { return IoErrorKind::CrossesDevices; }
         if k == KIND_UNSUPPORTED { return IoErrorKind::Unsupported; }
         if k == KIND_FILESYSTEM_LOOP { return IoErrorKind::FilesystemLoop; }
+        if k == KIND_RESOURCE_BUSY { return IoErrorKind::ResourceBusy; }
         IoErrorKind::Other
     }
 }
@@ -136,6 +142,7 @@ impl Debug for IoErrorKind {
             IoErrorKind::InvalidData => "InvalidData",
             IoErrorKind::WriteZero => "WriteZero",
             IoErrorKind::FilesystemLoop => "FilesystemLoop",
+            IoErrorKind::ResourceBusy => "ResourceBusy",
         })
     }
 }
@@ -163,6 +170,7 @@ impl Display for IoErrorKind {
             IoErrorKind::InvalidData => "invalid data",
             IoErrorKind::WriteZero => "write zero",
             IoErrorKind::FilesystemLoop => "filesystem loop",
+            IoErrorKind::ResourceBusy => "resource busy",
         })
     }
 }
