@@ -42,10 +42,8 @@ version=$(cat "$dir/rok-version")
 tag=v$version
 
 # <triple> <archive> per target, from release-targets.json (the single
-# source of truth). unix: .tar.gz + .tar.xz + the rok-mlir-dev .tar.gz.
-# win: .zip + the rok-mlir-dev .zip. musl: .tar.gz + .tar.xz, static, no
-# dev bundle. Intel Mac and Windows on arm64 have no archive (build from
-# source).
+# source of truth). unix: .tar.gz + .tar.xz. win: .zip. Intel Mac and
+# Windows on arm64 have no archive (build from source).
 targets=$(jq -r '.targets[] | "\(.triple) \(.archive)"' \
   "$(dirname "$0")/../release-targets.json")
 
@@ -75,15 +73,9 @@ echo "$targets" | while read -r t kind; do
     unix)
       want "rok-$version-$t.tar.gz"
       want "rok-$version-$t.tar.xz"
-      want "rok-mlir-dev-$version-$t.tar.gz"
       ;;
     win)
       want "rok-$version-$t.zip"
-      want "rok-mlir-dev-$version-$t.zip"
-      ;;
-    musl)
-      want "rok-$version-$t.tar.gz"
-      want "rok-$version-$t.tar.xz"
       ;;
   esac
 done > "$dir/.release-check"
