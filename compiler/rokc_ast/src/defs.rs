@@ -128,7 +128,11 @@ pub fn untyped_throws_ty(span: Span) -> Ty {
         })
         .collect();
     Ty {
-        kind: TyKind::AnyTrait(vec![Path { segments, span }]),
+        kind: TyKind::AnyTrait(vec![Path {
+            segments,
+            span,
+            origin: None,
+        }]),
         span,
     }
 }
@@ -418,6 +422,9 @@ pub enum ExprKind {
         type_args: Vec<Ty>,
         args: Vec<CallArg>,
         trailing_closure: Option<Box<Expr>>,
+        /// As `Path::origin`, for the method name: its traits are those
+        /// in scope there.
+        origin: Option<String>,
     },
     Call {
         callee: Box<Expr>,
@@ -599,6 +606,22 @@ pub struct FieldPattern {
 pub struct Path {
     pub segments: Vec<PathSegment>,
     pub span: Span,
+    /// The module a meta template (or the compiler) that wrote the first
+    /// segment is defined in: the path resolves and is access-checked
+    /// there (spec 6.9.9). `None`: where it is written.
+    pub origin: Option<String>,
+}
+
+impl Path {
+    /// A path written at the use site.
+    #[must_use]
+    pub const fn new(segments: Vec<PathSegment>, span: Span) -> Self {
+        Self {
+            segments,
+            span,
+            origin: None,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]

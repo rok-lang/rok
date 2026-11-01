@@ -158,6 +158,7 @@ pub(crate) fn derive_items(item: &Item, file: &str) -> (Vec<Item>, Vec<RokDiagno
     for t in &mut tokens {
         t.span = span;
     }
+    compiler_written(&mut tokens);
     let mut p = Parser::new(&tokens, file);
     let mut items = Vec::new();
     while !p.at_eof() {
@@ -170,6 +171,57 @@ pub(crate) fn derive_items(item: &Item, file: &str) -> (Vec<Item>, Vec<RokDiagno
     }
     diags.extend(p.diagnostics);
     (items, diags)
+}
+
+/// Items the derives name, beside the traits; written by the compiler,
+/// so seen from core (spec 6.9.9), while the item's own names stay the
+/// user's.
+const COMPILER_PATHS: &[&str] = &[
+    ORDERING,
+    "rok::core::fmt::Formatter",
+    "rok::core::fmt::FmtError",
+    "rok::core::marker::default_of",
+];
+
+/// Stamp the compiler's paths in derive output with their core module.
+fn compiler_written(tokens: &mut [rokc_lexer::Token]) {
+    use rokc_lexer::TokenKind as K;
+    let mut k = 0;
+    while k < tokens.len() {
+        let starts = matches!(&tokens[k].kind, K::Ident(n) if n == "rok")
+            && (k == 0 || tokens[k - 1].kind != K::ColonColon);
+        if !starts {
+            k += 1;
+            continue;
+        }
+        let mut end = k + 1;
+        let mut path = "rok".to_owned();
+        while end + 1 < tokens.len() && tokens[end].kind == K::ColonColon {
+            let K::Ident(n) = &tokens[end + 1].kind else {
+                break;
+            };
+            path.push_str("::");
+            path.push_str(n);
+            end += 2;
+        }
+        let known = DERIVABLE
+            .iter()
+            .map(|(_, p)| *p)
+            .chain(COMPILER_PATHS.iter().copied())
+            .any(|p| path == p || path.starts_with(&format!("{p}::")));
+        if known {
+            let module = path.split("::").take(3).collect::<Vec<_>>().join("::");
+            let origin = std::sync::Arc::new(rokc_lexer::Origin {
+                package: "rok::core".to_owned(),
+                module,
+                imports: Vec::new(),
+            });
+            for t in &mut tokens[k..end] {
+                t.origin = Some(std::sync::Arc::clone(&origin));
+            }
+        }
+        k = end;
+    }
 }
 
 /// `<T: Tr, const N: usize>` - every type parameter bound by the trait.

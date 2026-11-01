@@ -757,7 +757,13 @@ pub fn user_suffix(text: &str) -> Option<&str> {
     (!s.is_empty() && !INT_SUFFIXES.contains(&s) && !FLOAT_SUFFIXES.contains(&s)).then_some(s)
 }
 
+/// A handler's call: written by the compiler, so seen from the handler's
+/// own module, and the handler may have any visibility (spec 6.9.9).
 fn path_of(segs: &[String], span: Span) -> Path {
+    let module = segs.split_last().map(|(_, m)| match m.split_first() {
+        Some((root, rest)) if root == "pkg" => rest.join("::"),
+        _ => m.join("::"),
+    });
     Path {
         segments: segs
             .iter()
@@ -767,6 +773,7 @@ fn path_of(segs: &[String], span: Span) -> Path {
             })
             .collect(),
         span,
+        origin: module,
     }
 }
 

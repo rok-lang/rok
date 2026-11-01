@@ -12,6 +12,9 @@ pub struct Token {
     /// Written `r#name` (spec 1.4.4): never a keyword, contextual or
     /// reserved.
     pub raw: bool,
+    /// Where a meta template or the compiler wrote it (spec 6.9.9);
+    /// `None`: at the use site, the file being parsed.
+    pub origin: Option<std::sync::Arc<Origin>>,
 }
 
 impl Token {
@@ -22,8 +25,30 @@ impl Token {
             span,
             docs: Vec::new(),
             raw: false,
+            origin: None,
         }
     }
+
+    /// The module a name this token starts resolves from, when that is
+    /// not the use site.
+    #[must_use]
+    pub fn origin_module(&self) -> Option<String> {
+        self.origin.as_ref().map(|o| o.module.clone())
+    }
+}
+
+/// The definition a token of an expansion comes from: a meta block's
+/// template, or code the compiler writes (spec 6.9.9).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Origin {
+    /// The defining package (`""`: the one being built).
+    pub package: String,
+    /// The module that holds the definition; names resolve and are
+    /// access-checked there.
+    pub module: String,
+    /// What the defining file's `use`s import (each a path, a glob ending
+    /// in `*` / `**`): where its bare meta names come from.
+    pub imports: Vec<Vec<String>>,
 }
 
 pub use rokc_core::UNUSED_KEYWORDS;
@@ -422,7 +447,13 @@ rokc_core::codec_struct!(Token {
     kind,
     span,
     docs,
-    raw
+    raw,
+    origin
+});
+rokc_core::codec_struct!(Origin {
+    package,
+    module,
+    imports
 });
 rokc_core::codec_struct!(DocLine { inner, text, span });
 rokc_core::codec_enum!(TokenKind {

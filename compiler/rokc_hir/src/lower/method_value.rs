@@ -166,6 +166,7 @@ fn shape(
         kind: AstTyKind::Path(AstPath {
             segments: segments.to_vec(),
             span,
+            origin: None,
         }),
         span,
     };

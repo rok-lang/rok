@@ -1002,6 +1002,7 @@ pub(super) fn lower_for_iter(
                         generics: Vec::new(),
                     }],
                     span,
+                    origin: None,
                 }),
                 span,
             }),
@@ -1009,6 +1010,7 @@ pub(super) fn lower_for_iter(
             type_args: Vec::new(),
             args: Vec::new(),
             trailing_closure: None,
+            origin: None,
         },
         span,
     };

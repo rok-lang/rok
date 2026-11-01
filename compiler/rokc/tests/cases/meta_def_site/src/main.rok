@@ -1,0 +1,35 @@
+// rokc-arg: --extern mdep=tests/cases/meta_def_site/mdep
+// expect-exit: 0
+// expect-stdout:
+// <7>
+// 10
+// ok 4
+// <S>
+// user
+
+// Spec 6.9.9: what a template writes resolves and is access-checked in
+// the module of its meta block: a `pub(pkg)` or private helper there, a
+// bare meta name of that package, the traits in scope there. Names
+// passed in, and `@use_site(..)`, stay at the use site; the expansion's
+// own items land here.
+fn helper(n: str) -> str {
+    return "user";
+}
+
+fn validate(n: i32) -> str {
+    return f"ok {n}";
+}
+
+#[derive(mdep::Show)]
+struct S {}
+
+fn main() {
+    println(mdep::outer!("7"));
+    println(mdep::secret_plus!(3));
+    println(mdep::checked!(4));
+    println(mdep::shown!(S {}));
+    println(helper("x"));
+}
+
+// spec: 006.09-meta-templates
+// spec: §6.9.9 §6.8.11

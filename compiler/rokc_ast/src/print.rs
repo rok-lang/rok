@@ -1360,6 +1360,7 @@ impl Printer {
                 type_args,
                 args,
                 trailing_closure,
+                ..
             } => {
                 self.receiver(receiver);
                 self.s(".");

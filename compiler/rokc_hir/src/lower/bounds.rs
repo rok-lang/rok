@@ -566,6 +566,7 @@ fn self_assoc(name: &str) -> Ty {
         kind: AstTyKind::Path(AstPath {
             segments: vec![seg("Self"), seg(name)],
             span: Span::DUMMY,
+            origin: None,
         }),
         span: Span::DUMMY,
     }
@@ -581,6 +582,7 @@ fn own_assoc(key: &str, info: &TraitInfo, name: &str) -> Ty {
                 generics: Vec::new(),
             }],
             span: Span::DUMMY,
+            origin: None,
         }),
         span: Span::DUMMY,
     };
@@ -605,6 +607,7 @@ fn own_assoc(key: &str, info: &TraitInfo, name: &str) -> Ty {
                     generics: args,
                 }],
                 span: Span::DUMMY,
+                origin: None,
             },
             item: name.to_owned(),
             member: None,

@@ -11,6 +11,7 @@
 // module (or a library's) works for a private type.
 
 use rok::core::reflect::Inspect;
+use greet::{Count, Greet};
 
 mod greet {
     pub trait Greet {

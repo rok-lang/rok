@@ -903,6 +903,7 @@ fn bare_type_patterns(
                     generics: Vec::new(),
                 }],
                 span: p.span,
+                origin: None,
             }),
             span: p.span,
         };
@@ -929,12 +930,27 @@ fn bare_type_patterns(
     }
 }
 
-#[allow(clippy::cognitive_complexity)] // one arm per pattern kind
 pub(super) fn lower_pattern_inner(
     ctx: &mut LowerCtx<'_>,
     pat: &AstPattern,
     scrut_ty: &HirTy,
 ) -> HirPattern {
+    // A path pattern resolves where it was written (spec 6.9.9); its
+    // sub-patterns set their own.
+    let origin = match &pat.kind {
+        AstPatternKind::Struct { path, .. } | AstPatternKind::EnumVariant { path, .. } => {
+            path.origin.as_deref()
+        }
+        _ => None,
+    };
+    let outer = ctx.set_access(origin);
+    let p = lower_pattern_here(ctx, pat, scrut_ty);
+    ctx.access.replace(outer);
+    p
+}
+
+#[allow(clippy::cognitive_complexity)] // one arm per pattern kind
+fn lower_pattern_here(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy) -> HirPattern {
     let mismatch = |ctx: &LowerCtx<'_>, what: String| {
         if *scrut_ty != HirTy::Unknown {
             ctx.emit_error(
@@ -980,6 +996,7 @@ pub(super) fn lower_pattern_inner(
             let path = rokc_ast::Path {
                 segments,
                 span: pat.span,
+                origin: None,
             };
             let variant = AstPattern {
                 kind: AstPatternKind::EnumVariant {

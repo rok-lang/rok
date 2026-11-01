@@ -6,9 +6,10 @@
 //! rather than a type's shape.
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use rokc_diagnostic::{ErrorKind, RokDiagnostic, Span};
-use rokc_lexer::{Token, TokenKind};
+use rokc_lexer::{Origin, Token, TokenKind};
 
 use crate::MetaDef;
 
@@ -396,7 +397,8 @@ pub(super) fn expand_macro(
     for rule in &rules {
         let mut binds = Bindings::new();
         if match_items(&rule.matcher, call, &mut binds, None) {
-            let (out, errs) = transcribe(&rule.template, &binds, at);
+            let (mut out, errs) = transcribe(&rule.template, &binds, at, &def.origin());
+            super::meta::place_declared(&mut out);
             return (Some(out), errs);
         }
     }
@@ -412,13 +414,21 @@ pub(super) fn expand_macro(
     )
 }
 
-/// Transcribe a template with the bindings, remapping spans to the call;
-/// the tokens and any diagnostics (an unknown `@token` in the template).
-fn transcribe(template: &[Token], binds: &Bindings, at: Span) -> (Vec<Token>, Vec<RokDiagnostic>) {
+/// Transcribe a template with the bindings, remapping spans to the call
+/// and stamping the template's own tokens with `origin` (captures keep
+/// theirs); the tokens and any diagnostics (an unknown `@token` in the
+/// template).
+fn transcribe(
+    template: &[Token],
+    binds: &Bindings,
+    at: Span,
+    origin: &Arc<Origin>,
+) -> (Vec<Token>, Vec<RokDiagnostic>) {
     let bound = template_binders(template, binds);
     let mut out = Vec::new();
     let mut errs = Vec::new();
-    emit(template, binds, &bound, None, at, &mut out, &mut errs);
+    let site = Site { at, origin };
+    emit(template, binds, &bound, None, &site, &mut out, &mut errs);
     (out, errs)
 }
 
@@ -478,15 +488,39 @@ fn interp(s: &str, binds: &Bindings, rep: Option<&Bindings>) -> String {
 /// Emit `template`, substituting metavariables and `@for` / `@concat`,
 /// renaming template-bound locals. `rep` is the current `@for` element's
 /// bindings, if inside one.
+/// Where a transcription lands: the call, and the definition its
+/// template tokens come from.
+struct Site<'a> {
+    at: Span,
+    origin: &'a Arc<Origin>,
+}
+
+impl Site<'_> {
+    /// A token the template writes.
+    fn template(&self, kind: TokenKind, had: Option<&Arc<Origin>>) -> Token {
+        let mut t = tok(kind, self.at);
+        t.origin = Some(Arc::clone(had.unwrap_or(self.origin)));
+        t
+    }
+
+    /// A token the call passed in.
+    fn passed(&self, s: Token) -> Token {
+        let mut t = tok(s.kind, self.at);
+        t.origin = s.origin;
+        t
+    }
+}
+
 fn emit(
     template: &[Token],
     binds: &Bindings,
     bound: &HashSet<String>,
     rep: Option<&Bindings>,
-    at: Span,
+    site: &Site<'_>,
     out: &mut Vec<Token>,
     errs: &mut Vec<RokDiagnostic>,
 ) {
+    let at = site.at;
     let get = |name: &str| -> Option<Vec<Token>> {
         if let Some(r) = rep {
             if let Some(Binding::One(t)) = r.get(name) {
@@ -504,17 +538,21 @@ fn emit(
         if t.kind == TokenKind::At {
             // `for` is a keyword token, not an identifier.
             if template.get(k + 1).map(|t| &t.kind) == Some(&TokenKind::For) {
-                k = emit_for(template, k, binds, bound, at, out, errs);
+                k = emit_for(template, k, binds, bound, site, out, errs);
                 continue;
             }
             if let Some(TokenKind::Ident(head)) = template.get(k + 1).map(|t| &t.kind) {
                 if head == "concat" {
-                    k = emit_concat(template, k, binds, rep, at, out);
+                    k = emit_concat(template, k, binds, rep, site, out);
+                    continue;
+                }
+                if head == "use_site" {
+                    k = emit_use_site(template, k, site, out, errs);
                     continue;
                 }
                 if let Some(toks) = get(head) {
                     for s in toks {
-                        out.push(tok(s.kind, at));
+                        out.push(site.passed(s));
                     }
                     k += 2;
                     continue;
@@ -526,7 +564,7 @@ fn emit(
                     at,
                     format!(
                         "`@{head}` is not valid in a macro template; use a metavariable, \
-                         `@for` or `@concat` (spec 6.8.12)"
+                         `@for`, `@concat` or `@use_site` (spec 6.8.12)"
                     ),
                 ));
                 k += 2;
@@ -543,9 +581,33 @@ fn emit(
             TokenKind::FStrText(s) => TokenKind::FStrText(interp(s, binds, rep)),
             other => other.clone(),
         };
-        out.push(tok(kind, at));
+        out.push(site.template(kind, t.origin.as_ref()));
         k += 1;
     }
+}
+
+/// `@use_site(path)`: the path, looked up where the macro is called.
+fn emit_use_site(
+    template: &[Token],
+    at_tok: usize,
+    site: &Site<'_>,
+    out: &mut Vec<Token>,
+    errs: &mut Vec<RokDiagnostic>,
+) -> usize {
+    let lp = at_tok + 2;
+    let path = (template.get(lp).map(|t| &t.kind) == Some(&TokenKind::LParen))
+        .then(|| close_of(template, lp))
+        .flatten()
+        .and_then(|rp| Some((rp, super::meta::use_site_path(&template[lp + 1..rp])?)));
+    let Some((rp, toks)) = path else {
+        errs.push(err(
+            site.at,
+            "`@use_site(..)` takes a path, e.g. `@use_site(validate)` (spec 6.9.9)",
+        ));
+        return lp;
+    };
+    out.extend(toks.into_iter().map(|t| tok(t.kind, site.at)));
+    rp + 1
 }
 
 /// `@for @name { body }`: emit `body` once per element of `@name`'s
@@ -555,7 +617,7 @@ fn emit_for(
     at_tok: usize,
     binds: &Bindings,
     bound: &HashSet<String>,
-    at: Span,
+    site: &Site<'_>,
     out: &mut Vec<Token>,
     errs: &mut Vec<RokDiagnostic>,
 ) -> usize {
@@ -593,7 +655,7 @@ fn emit_for(
                 }
             }
         }
-        emit(body, binds, bound, Some(&elem), at, out, errs);
+        emit(body, binds, bound, Some(&elem), site, out, errs);
     }
     end + 1
 }
@@ -605,9 +667,11 @@ fn emit_concat(
     at_tok: usize,
     binds: &Bindings,
     rep: Option<&Bindings>,
-    at: Span,
+    site: &Site<'_>,
     out: &mut Vec<Token>,
 ) -> usize {
+    // The template's name only if every piece is the template's.
+    let mut passed = false;
     let lp = at_tok + 2;
     let Some(TokenKind::LParen) = template.get(lp).map(|t| &t.kind) else {
         return lp;
@@ -623,6 +687,7 @@ fn emit_concat(
                 if let Some(TokenKind::Ident(n)) = inner.get(k + 1).map(|t| &t.kind) {
                     let toks = rep.and_then(|r| r.get(n)).or_else(|| binds.get(n)).cloned();
                     if let Some(Binding::One(ts)) = toks {
+                        passed |= ts.iter().any(|s| s.origin.is_none());
                         for s in &ts {
                             match &s.kind {
                                 // `r#match` pastes as `match`.
@@ -641,7 +706,11 @@ fn emit_concat(
         }
         k += 1;
     }
-    out.push(tok(TokenKind::Ident(name), at));
+    out.push(if passed {
+        tok(TokenKind::Ident(name), site.at)
+    } else {
+        site.template(TokenKind::Ident(name), None)
+    });
     rp + 1
 }
 

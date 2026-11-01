@@ -22,6 +22,7 @@ pub use parsing::lexer;
 pub use parsing::lexer::chars::classify as kind;
 
 use prelude::*;
+use geom::Shape;
 
 let p = Point { x: 3.0, y: 4.0 };
 println(f"{dist(p)} {geom::inner::half(7.0)} {geom::CALLS.load()} {p.name()}");

@@ -59,6 +59,7 @@ pub fn path(segs: &[&str], generics: Vec<Ty>, span: Span) -> Path {
             })
             .collect(),
         span,
+        origin: None,
     }
 }
 

@@ -7,4 +7,4 @@ pub mod unicode;
 mod unicode_tables;
 
 pub use lexer::Lexer;
-pub use token::{DocLine, Token, TokenKind};
+pub use token::{DocLine, Origin, Token, TokenKind};
