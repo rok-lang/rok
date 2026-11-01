@@ -442,7 +442,7 @@ const fn closed_early() -> TlsError {
 }
 
 pub(pkg) const fn io_tls(e: IoError) -> TlsError {
-    TlsError { kind: TlsErrorKind::Io, msg: e.message, alert: ALERT_INTERNAL_ERROR }
+    TlsError { kind: TlsErrorKind::Io, msg: e.message(), alert: ALERT_INTERNAL_ERROR }
 }
 
 impl Conn {

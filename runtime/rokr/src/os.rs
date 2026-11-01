@@ -1526,7 +1526,7 @@ extern "C" fn on_signal(sig: libc::c_int) {
     }
 }
 
-/// Route signal `sig` to the signal pipe (`process::signal`). The first
+/// Route signal `sig` to the signal pipe (`process::on_signal`). The first
 /// call creates the pipe; `*read_end` gets its read end (blocking,
 /// close-on-exec) on that call, -1 after. 0 or `-errno` (`EINVAL` for
 /// `SIGKILL` / `SIGSTOP` / a bad number).

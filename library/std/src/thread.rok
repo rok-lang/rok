@@ -120,8 +120,8 @@ impl Debug for JoinErrorKind {
 const fn code_of(k: JoinErrorKind) -> i32 {
     match k {
         JoinErrorKind::Os(n) => n,
-        JoinErrorKind::Lost => JOIN_LOST,
-        JoinErrorKind::Taken => JOIN_TAKEN,
+        JoinErrorKind::Lost => LOST,
+        JoinErrorKind::Taken => TAKEN,
     }
 }
 
@@ -135,10 +135,14 @@ pub const JOIN_LOST: i32 = -1;
 #[deprecated(since = "0.1.6", note = "use `JoinErrorKind::Taken`")]
 pub const JOIN_TAKEN: i32 = -2;
 
+// `JoinError.code` of the two kinds that are not OS errors.
+const LOST: i32 = -1;
+const TAKEN: i32 = -2;
+
 impl JoinError {
     pub const fn kind(self) -> JoinErrorKind {
-        if self.code == JOIN_LOST { return JoinErrorKind::Lost; }
-        if self.code == JOIN_TAKEN { return JoinErrorKind::Taken; }
+        if self.code == LOST { return JoinErrorKind::Lost; }
+        if self.code == TAKEN { return JoinErrorKind::Taken; }
         JoinErrorKind::Os(self.code)
     }
 
@@ -172,10 +176,10 @@ impl<T> JoinHandle<T> {
     pub fn join(self) throws (JoinError) -> T {
         unsafe {
             if rok_thread_lost(self.thread.rec.id) != 0 {
-                throw JoinError { code: JOIN_LOST };
+                throw JoinError { code: LOST };
             }
             if self.taken.swap(true) {
-                throw JoinError { code: JOIN_TAKEN };
+                throw JoinError { code: TAKEN };
             }
             let code = rok_thread_join(self.handle);
             if code != 0 { throw JoinError { code }; }
@@ -186,7 +190,7 @@ impl<T> JoinHandle<T> {
     pub const fn thread(self) -> Thread { self.thread }
 
     /// Let the thread run on its own; its OS resources are released when
-    /// it ends. A later `join` throws `JoinError` (`JOIN_TAKEN`); a
+    /// it ends. A later `join` throws `JoinError` (`Taken`); a
     /// handle already joined or detached is left alone.
     pub fn detach(self) {
         if !self.taken.swap(true) {

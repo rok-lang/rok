@@ -196,7 +196,7 @@ fn install(sig: i32, handler: fn() + Send) throws (SignalError) {
         if fd[0] >= 0 {
             let pipe = File::from_fd(fd[0], "signal pipe");
             let h = try thread::Builder::new().name("rok-signal").spawn(|| dispatch_signals(pipe))
-                catch e { throw SignalError { sig: sig, code: e.code }; };
+                catch e { throw SignalError { sig: sig, code: e.code() }; };
             h.detach();
         }
     }

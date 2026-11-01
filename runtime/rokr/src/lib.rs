@@ -725,7 +725,7 @@ pub extern "C" fn rok_panic_str(msg: RokStr) -> ! {
 
 // 8.5.12 appendix: convenience symbols (no ABI stability)
 
-/// `rok::std::env::exit(code)` (spec 4.16.4): exit now with `code`.
+/// `rok::std::process::exit(code)` (spec 4.16.4): exit now with `code`.
 /// `finally` and `Drop` do not run; `exit` flushes buffered stdout.
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_exit(code: i32) -> ! {

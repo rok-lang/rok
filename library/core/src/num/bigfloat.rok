@@ -90,7 +90,7 @@ impl Float {
     /// subnormals, ±0 below them.
     pub const fn to_f64(self) -> f64 {
         if self.e == 0 { return self.m; }
-        if self.e > 0 { return self.m * f64::infinity(); }
+        if self.e > 0 { return self.m * f64::INFINITY; }
         if self.e < -1100 { return self.m * 0.0; }
         // One rounding: `m 2^-1022` is exact, the second factor normal.
         (self.m * pow2(-1022)) * pow2(self.e + 1022)
@@ -132,12 +132,6 @@ impl Float {
     /// are `none`: the exact conversion would need a million-digit power
     /// of ten. `FromStr` throws instead.
     pub fn parse_or_none(s: str) -> Float | none {
-        Float::try_parse(s)
-    }
-
-    /// `parse_or_none`.
-    #[deprecated(since = "0.1.6", note = "use `Float::parse_or_none`; `try_` names forms that throw or do not block")]
-    pub fn try_parse(s: str) -> Float | none {
         let bs = s.as_bytes();
         let n = s.len();
         let i = 0usize;
@@ -148,9 +142,9 @@ impl Float {
         }
         let word = s[i:].to_lowercase();
         if word == "inf" || word == "infinity" {
-            return Float::plain(if neg { -f64::infinity() } else { f64::infinity() });
+            return Float::plain(if neg { -f64::INFINITY } else { f64::INFINITY });
         }
-        if word == "nan" { return Float::plain(f64::nan()); }
+        if word == "nan" { return Float::plain(f64::NAN); }
         let digits = StrBuf::new();
         let frac = 0i64;
         let seen_point = false;
@@ -191,10 +185,16 @@ impl Float {
         decimal(neg, digits.to_str(), exp - frac)
     }
 
+    /// `parse_or_none`.
+    #[deprecated(since = "0.1.6", note = "use `Float::parse_or_none`; `try_` names forms that throw or do not block")]
+    pub fn try_parse(s: str) -> Float | none {
+        Float::parse_or_none(s)
+    }
+
     /// An unsuffixed float literal (`_` allowed) too large or small for
     /// `f64` in a `float` slot.
     pub fn from_literal(s: str) -> Float {
-        match Float::try_parse(s.replace("_", "")) {
+        match Float::parse_or_none(s.replace("_", "")) {
             v: Float => v,
             none => panic(f"malformed float literal `{s}`"),
         }
@@ -435,7 +435,7 @@ impl Rem for Float {
     type Output = Float;
     fn rem(self, rhs: Float) -> Float {
         if self.e == 0 && rhs.e == 0 { return Float::from_f64(self.m % rhs.m); }
-        if !self.is_finite() || rhs.is_zero() || rhs.is_nan() { return Float::plain(f64::nan()); }
+        if !self.is_finite() || rhs.is_zero() || rhs.is_nan() { return Float::plain(f64::NAN); }
         if !rhs.is_finite() || self.is_zero() { return self; }
         let (a, ka) = self.mant_exp();
         let (b, kb) = rhs.mant_exp();
@@ -545,7 +545,7 @@ impl Debug for Float {
 impl FromStr for Float {
     type Err = ParseError;
     fn from_str(s: str) throws (ParseError) -> Float {
-        match Float::try_parse(s) {
+        match Float::parse_or_none(s) {
             v: Float => v,
             none => throw ParseError { input: s, pos: 0, reason: "invalid float literal" },
         }

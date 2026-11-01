@@ -389,7 +389,7 @@ impl Pool {
             let pool = Pool {
                 workers: List::new(),
                 injector: queue_new(),
-                timers: unsafe { Mutex::new_unshared(BinaryHeap::by(|a: Timer, b: Timer| a.at < b.at)) },
+                timers: unsafe { Mutex::new_unshared(BinaryHeap::by_ordering(|a: Timer, b: Timer| b.at.cmp(a.at))) },
                 dead: buf_new(1),
                 signal: buf_new(5),
                 no_up: buf_new(0),
@@ -1495,23 +1495,23 @@ impl Debug for TaskId {
 
 /// The running task's id; panics outside a task (`current_id`).
 pub fn id() -> TaskId {
-    try_id() ?? panic("task::id() outside a task; use `task::current_id()`, which is `none` there")
+    current_id() ?? panic("task::id() outside a task; use `task::current_id()`, which is `none` there")
 }
 
 /// The running task's id, or `none` outside a task (sync code, a
 /// `spawn_blocking` thread).
 pub fn current_id() -> TaskId | none {
-    try_id()
-}
-
-/// `current_id`.
-#[deprecated(since = "0.1.6", note = "use `task::current_id`; `try_` names forms that throw or do not block")]
-pub fn try_id() -> TaskId | none {
     unsafe {
         let w = current()?;
         let t = w.running[0]?;
         TaskId { id: t.id }
     }
+}
+
+/// `current_id`.
+#[deprecated(since = "0.1.6", note = "use `task::current_id`; `try_` names forms that throw or do not block")]
+pub fn try_id() -> TaskId | none {
+    current_id()
 }
 
 /// A task was cancelled (2.18.4).
