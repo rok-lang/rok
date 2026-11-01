@@ -4,7 +4,7 @@
 // expect-error: no associated function `try_new` on `rok::std::net::tls::ClientConfig`
 // expect-error: `new` throws its error itself; there is no `try_` form: write `try ClientConfig::new(..)`
 // expect-error: no associated function `try_parse` on `rok::core::fmt::FormatSpec`
-// expect-error: `parse` throws its error itself; there is no `try_` form: write `try FormatSpec::parse(..)`
+// expect-error: `parse` throws its error itself; there is no `try_` form: write `try fmt::FormatSpec::parse(..)`
 // expect-error: no method `strip_prefix_or_none` found for type `Path`
 // expect-error: `strip_prefix` gives `none` itself: write `p.strip_prefix(..)`
 // expect-error: no associated function `parse_or_none` on `rok::core::num::bigfloat::Float`
@@ -22,7 +22,7 @@ fn main() throws (IoError) {
     let l = try net::tcp_listen("127.0.0.1:0");
     try l.try_close();
     let c = ClientConfig::try_new();
-    let s = FormatSpec::try_parse("<4");
+    let s = fmt::FormatSpec::try_parse("<4");
     let p = Path::new("a/b");
     let q = p.strip_prefix_or_none("a");
     let f = float::parse_or_none("1.5");
