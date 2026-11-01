@@ -1,0 +1,30 @@
+// expect-exit: 0
+// spec: §6.2.11
+// expect-lint: 19:5 the `i32` result of `one` is never used
+// expect-lint: 20:5 the `str` result of `trim` is never used
+// expect-lint: 21:5 this `i32` value is never used
+// expect-lint: 22:5 this `i32` value is never used
+// expect-stdout:
+// ok
+
+// An expression statement that drops a value other than `()`, `none` or
+// `Never` warns; `if` / `match` statements and `()` calls do not.
+fn one() -> i32 { 1 }
+fn nothing() {}
+fn maybe() -> none { none }
+fn stop() -> ! { panic("stop") }
+
+fn run(go: bool) {
+    let x = 1;
+    one();
+    " a ".trim();
+    one() + 1;
+    x;
+    nothing();
+    maybe();
+    if one() > 0 { one() } else { 2 };
+    if go { stop(); }
+}
+
+run(false);
+println("ok");

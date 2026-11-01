@@ -159,6 +159,7 @@ pub unsafe fn swap<T>(a: Ptr<T>, b: Ptr<T>) {
 }
 
 /// Store `value` at `dst` and return what was there.
+#[discardable]
 pub unsafe fn replace<T>(dst: Ptr<T>, value: T) -> T {
     let old = dst.read();
     dst.write(value);

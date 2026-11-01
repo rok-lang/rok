@@ -1,0 +1,31 @@
+// expect-exit: 0
+// spec: §6.2.11
+// forbid-warning: never used
+// expect-stdout:
+// 1 1 0 1
+
+// A `#[discardable]` function's result may be dropped: the library's
+// displaced-value mutators, and a program's own.
+#[discardable]
+fn bump(xs: List<i32>) -> usize {
+    xs.push(1);
+    xs.len()
+}
+
+let d: Dict<str, i32> = Dict::new();
+d.insert("a", 1);
+d.insert("b", 2);
+d.remove("b");
+let xs = [1, 2, 3];
+xs.pop();
+xs.remove(0);
+xs.remove(0);
+bump(xs);
+xs.remove(0);
+let s: Set<i32> = Set::new();
+s.insert(1);
+s.insert(1);
+let n: Atomic<i32> = Atomic::new(0);
+n.fetch_add(1);
+n.swap(1);
+println(f"{d.len()} {s.len()} {xs.len()} {n.load()}");

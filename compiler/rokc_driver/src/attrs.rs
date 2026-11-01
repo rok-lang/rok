@@ -228,7 +228,7 @@ impl Cx<'_> {
                     _ => Some("`#[inline]`, `#[inline(always)]` or `#[inline(never)]`"),
                 },
             ),
-            "cold" => (&fns, empty(a)),
+            "cold" | "discardable" => (&fns, empty(a)),
             "track_caller" => (&[P::Fn, P::Method, P::ExternFn], empty(a)),
             "must_use" => (&[P::Fn, P::Method, P::Struct, P::Enum], message(a)),
             "test" | "bench" => (&[P::Fn], empty(a)),

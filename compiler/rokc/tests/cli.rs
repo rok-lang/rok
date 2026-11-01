@@ -3907,10 +3907,11 @@ fn stale_rokhir_is_rejected() {
 fn check_library_checks_every_body() {
     let dir = scratch("check-lib");
     put(dir.join("main.rok"), "fn main() {}\n").unwrap();
-    assert_exit(
-        &rokc(None, &dir, &["check", "--check-library", "main.rok"]),
-        0,
-    );
+    let out = rokc(None, &dir, &["check", "--check-library", "main.rok"]);
+    assert_exit(&out, 0);
+    // The library drops no result it does not mean to (6.2.11).
+    let err = text(&out.stderr);
+    assert!(!err.contains("is never used"), "{err}");
 }
 
 /// `-C target-feature` / `-C target-cpu` reach LLVM; the native backend

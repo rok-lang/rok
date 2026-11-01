@@ -1089,7 +1089,7 @@ impl Conn {
                 let anchors: List<CertInfo> = [];
                 for r in x.roots { anchors.push(r.info); }
                 let now = (try SystemTime::now().unix_seconds() catch _ { 0i64 });
-                try x509::verify_client(infos, anchors, now);
+                _ = try x509::verify_client(infos, anchors, now);
                 self.peer = certs;
                 x.infos = infos;
                 x.state = S_CCV;

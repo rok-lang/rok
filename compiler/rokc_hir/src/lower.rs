@@ -1398,6 +1398,8 @@ struct Tables<'a> {
     marks: HashMap<String, crate::marks::Mark>,
     /// The package whose uses of marked items warn: the one built.
     mark_pkg: Option<String>,
+    /// `--check-library`: `unused_result` also checks the library's code.
+    lint_library: bool,
     /// Per `(trait, method)`: the template a call on a type parameter
     /// bounded by the trait goes through (`bounds::templates`).
     bound_methods: HashMap<(String, String), GenericMethod>,
@@ -1735,6 +1737,7 @@ impl Tables<'_> {
             fn_marks: HashMap::new(),
             marks: HashMap::new(),
             mark_pkg: None,
+            lint_library: false,
             bound_methods: HashMap::new(),
             bound_traits: HashMap::new(),
         }
@@ -2967,6 +2970,8 @@ struct LowerCtx<'a> {
     /// Set by a call through a lang slot (`expr::lang_fn`): lowering
     /// made it, so the hook's own marks do not warn. Taken by the call.
     hook_call: std::cell::Cell<bool>,
+    /// Spans of calls to `#[discardable]` functions (`unused_result`).
+    discardable_calls: std::cell::RefCell<Vec<Span>>,
     /// Lowering `addr_of`'s place: taking an extern static's address
     /// reads nothing.
     addr_place: bool,
@@ -3180,6 +3185,7 @@ impl<'a> LowerCtx<'a> {
             value_captured: std::collections::HashSet::new(),
             unsafe_depth: 0,
             hook_call: std::cell::Cell::new(false),
+            discardable_calls: std::cell::RefCell::new(Vec::new()),
             addr_place: false,
             explicit_recv: None,
             want_view: false,
@@ -4663,6 +4669,24 @@ impl<'a> LowerCtx<'a> {
     /// in a dependency built from source too).
     fn marks_checked(&self) -> bool {
         self.marks_apply() || !is_toolchain_module(&self.current_module)
+    }
+
+    /// Statements here warn `unused_result`: the built package's, and
+    /// with `--check-library` the library's.
+    fn results_apply(&self) -> bool {
+        self.marks_apply()
+            || (self.env.lint_library && {
+                let p = package_of(&self.current_module);
+                p == "rok" || p.starts_with("rok::")
+            })
+    }
+
+    /// A call at `at` of a function with marks `mark`: a discardable one
+    /// is remembered for `unused_result`.
+    fn call_marked(&self, mark: &crate::marks::Mark, at: Span) {
+        if mark.discardable && self.results_apply() {
+            self.discardable_calls.borrow_mut().push(at);
+        }
     }
 
     /// A use at `at` of `name`, a `what` with marks `mark` (spec 6.2.7,

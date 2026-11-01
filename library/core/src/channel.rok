@@ -127,6 +127,7 @@ impl<T> Chan<T> {
     }
 
     /// The oldest value, waking senders waiting for room; `none` if empty.
+    #[discardable]
     fn take(self) -> T | none {
         let v = match self.queue {
             q: Ring<T> => q.pop(),
@@ -255,6 +256,7 @@ impl<T> Ring<T> {
         }
     }
 
+    #[discardable]
     fn pop(self) -> T | none {
         unsafe {
             loop {
@@ -339,6 +341,7 @@ impl<T> Segments<T> {
         0
     }
 
+    #[discardable]
     fn pop(self) -> T | none {
         unsafe {
             using g = self.lock.lock() {

@@ -131,6 +131,7 @@ impl<T: AtomicPrimitive + PartialEq> Atomic<T> {
         self.swap(value, ordering);
     }
 
+    #[discardable]
     pub fn swap(self, value: T, ordering: AtomicOrdering = SeqCst) -> T {
         let c = self.cell;
         match ordering {
@@ -169,6 +170,7 @@ impl<T: AtomicPrimitive + PartialEq> Atomic<T> {
     }
 
     // Integer-only (`bool` is rejected by the intrinsic for add / sub).
+    #[discardable]
     pub fn fetch_add(self, value: T, ordering: AtomicOrdering = SeqCst) -> T {
         let c = self.cell;
         match ordering {
@@ -179,6 +181,7 @@ impl<T: AtomicPrimitive + PartialEq> Atomic<T> {
             AtomicOrdering::SeqCst => atomic_add(c, 0, value, SeqCst),
         }
     }
+    #[discardable]
     pub fn fetch_sub(self, value: T, ordering: AtomicOrdering = SeqCst) -> T {
         let c = self.cell;
         match ordering {
@@ -189,6 +192,7 @@ impl<T: AtomicPrimitive + PartialEq> Atomic<T> {
             AtomicOrdering::SeqCst => atomic_sub(c, 0, value, SeqCst),
         }
     }
+    #[discardable]
     pub fn fetch_and(self, value: T, ordering: AtomicOrdering = SeqCst) -> T {
         let c = self.cell;
         match ordering {
@@ -199,6 +203,7 @@ impl<T: AtomicPrimitive + PartialEq> Atomic<T> {
             AtomicOrdering::SeqCst => atomic_and(c, 0, value, SeqCst),
         }
     }
+    #[discardable]
     pub fn fetch_or(self, value: T, ordering: AtomicOrdering = SeqCst) -> T {
         let c = self.cell;
         match ordering {
@@ -209,6 +214,7 @@ impl<T: AtomicPrimitive + PartialEq> Atomic<T> {
             AtomicOrdering::SeqCst => atomic_or(c, 0, value, SeqCst),
         }
     }
+    #[discardable]
     pub fn fetch_xor(self, value: T, ordering: AtomicOrdering = SeqCst) -> T {
         let c = self.cell;
         match ordering {
@@ -843,6 +849,7 @@ impl<T> Cell<T> {
             self.value[0] = value;
         }
     }
+    #[discardable]
     pub const fn replace(ref self, value: T) -> T {
         unsafe {
             let old = self.value[0];
@@ -854,6 +861,7 @@ impl<T> Cell<T> {
 
 impl<T: Default> Cell<T> {
     /// The value, leaving `T::default()` in its place.
+    #[discardable]
     pub const fn take(ref self) -> T {
         self.replace(T::default())
     }

@@ -1,0 +1,21 @@
+// expect-exit: 0
+// spec: §6.2.11
+// forbid-warning: never used
+// forbid-warning: ignored
+// expect-stdout:
+// ok
+
+// `_ = expr;` drops a value on purpose, as does `let _ = expr;`.
+fn one() -> i32 { 1 }
+fn two() throws -> i32 { 2 }
+
+fn run() throws {
+    _ = one();
+    _ = try two();
+    let _ = one();
+    let _ = try? two();
+    _ = " a ".trim();
+}
+
+try! run();
+println("ok");

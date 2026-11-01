@@ -336,20 +336,27 @@ extern "rok" {
 #[intrinsic("rok.atomic.load")]
 pub(pkg) fn atomic_load<T>(buf: GcBuf<T>, i: usize, o: AtomicOrdering) -> T;
 #[intrinsic("rok.atomic.xchg")]
+#[discardable]
 pub(pkg) fn atomic_xchg<T>(buf: GcBuf<T>, i: usize, v: T, o: AtomicOrdering) -> T;
 #[intrinsic("rok.atomic.add")]
+#[discardable]
 pub(pkg) fn atomic_add<T>(buf: GcBuf<T>, i: usize, v: T, o: AtomicOrdering) -> T;
 #[intrinsic("rok.atomic.sub")]
+#[discardable]
 pub(pkg) fn atomic_sub<T>(buf: GcBuf<T>, i: usize, v: T, o: AtomicOrdering) -> T;
 #[intrinsic("rok.atomic.and")]
+#[discardable]
 pub(pkg) fn atomic_and<T>(buf: GcBuf<T>, i: usize, v: T, o: AtomicOrdering) -> T;
 #[intrinsic("rok.atomic.or")]
+#[discardable]
 pub(pkg) fn atomic_or<T>(buf: GcBuf<T>, i: usize, v: T, o: AtomicOrdering) -> T;
 #[intrinsic("rok.atomic.xor")]
+#[discardable]
 pub(pkg) fn atomic_xor<T>(buf: GcBuf<T>, i: usize, v: T, o: AtomicOrdering) -> T;
 /// Store `new` if the element equals `current`; the previous value
 /// either way.
 #[intrinsic("rok.atomic.cas")]
+#[discardable]
 pub(pkg) fn atomic_cas<T>(
     buf: GcBuf<T>, i: usize, current: T, new: T, success: AtomicOrdering, failure: AtomicOrdering,
 ) -> T;

@@ -41,7 +41,7 @@ fn main() {
         S { b: 0 }
     };
     let h = thread::spawn(|| 1);
-    try! h.join();
+    _ = try! h.join();
     try h.join() catch x {
         println(f"join: {x.kind():?} {x.kind() == JoinErrorKind::Taken} | {same(x)}");
         0

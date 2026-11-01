@@ -176,6 +176,24 @@ pub const LINTS: &[Lint] = &[
         desc: "an associated type named like an outer type, which it hides inside its trait or impl",
         since: "0.2.0",
     },
+    Lint {
+        name: "builtin_attribute_name",
+        default: Level::Warn,
+        desc: "a meta block that takes the name of a built-in attribute",
+        since: "0.2.0",
+    },
+    Lint {
+        name: "unused_result",
+        default: Level::Warn,
+        desc: "a statement drops a value other than `()` or `none`: use it, or write `_ = expr;`",
+        since: "0.2.0",
+    },
+    Lint {
+        name: "missing_docs",
+        default: Level::Allow,
+        desc: "a `pub` item, method or module without a `///` doc comment",
+        since: "0.2.0",
+    },
 ];
 
 /// Names of lints that are gone (most became errors). Naming one in
@@ -220,6 +238,7 @@ const GROUPS: &[(&str, &[&str])] = &[
             "dead_code",
             "unreachable_code",
             "unused_must_use",
+            "unused_result",
             "unused_doc_comments",
         ],
     ),
@@ -288,16 +307,22 @@ fn unknown(name: &str, at: &str) -> String {
 pub struct Levels {
     pub flags: Vec<(Level, String)>,
     pub manifest: Option<(String, usize)>,
+    /// `--check-library`: the library's own files are linted too, at
+    /// the library's levels (`LIBRARY_LEVELS`) under the flags.
+    pub library: bool,
 }
 
 impl From<Vec<(Level, String)>> for Levels {
     fn from(flags: Vec<(Level, String)>) -> Self {
         Self {
             flags,
-            manifest: None,
+            ..Self::default()
         }
     }
 }
+
+/// The library's lint levels: its manifest, were it a package.
+const LIBRARY_LEVELS: &[(Level, &str)] = &[(Level::Warn, "missing_docs")];
 
 /// `rokc lint --list` text.
 #[must_use]
@@ -367,10 +392,7 @@ type Set = (Level, Option<String>);
 #[must_use]
 pub fn run(result: &CompileResult, levels: &Levels) -> Vec<RokDiagnostic> {
     let mut out = Vec::new();
-    let mut base: HashMap<&'static str, Vec<Set>> = LINTS
-        .iter()
-        .map(|l| (l.name, vec![(l.default, None)]))
-        .collect();
+    let mut base = defaults(levels.library);
     for (i, (lvl, name)) in levels.flags.iter().enumerate() {
         let (from, at) = match &levels.manifest {
             Some((path, n)) if i < *n => (
@@ -415,6 +437,17 @@ pub fn run(result: &CompileResult, levels: &Levels) -> Vec<RokDiagnostic> {
             cx.file(f);
         }
         cx.dead_code(&user);
+        // The library's own files with `--check-library`.
+        let library = result
+            .sources
+            .iter()
+            .filter(|f| levels.library && f.package.starts_with("rok::"));
+        for items in user.iter().copied().chain(library).map(|f| &f.items) {
+            missing_docs(items, &mut cx.findings);
+        }
+        if let Some(p) = result.library.filter(|_| levels.library) {
+            missing_docs(&p.items, &mut cx.findings);
+        }
     });
     if let Some(m) = result.modules.first() {
         rokc_diagnostic::time("lints hir", || cx.hir(&m.hir, &user));
@@ -440,6 +473,13 @@ pub fn run(result: &CompileResult, levels: &Levels) -> Vec<RokDiagnostic> {
     let mut findings = cx.findings;
     findings.sort_by_key(|f| (f.span.file, f.span.start, f.lint));
     findings.dedup_by(|a, b| a.lint == b.lint && a.span == b.span);
+    // A dropped `#[must_use]` value or `try?` error has its own lint.
+    let stronger: HashSet<(u32, u32)> = findings
+        .iter()
+        .filter(|f| matches!(f.lint, "unused_must_use" | "ignored_error"))
+        .map(|f| key(f.span))
+        .collect();
+    findings.retain(|f| f.lint != "unused_result" || !stronger.contains(&key(f.span)));
     for f in findings {
         let generated = text_at(texts, f.span).is_some_and(|t| t.starts_with('#'));
         if generated {
@@ -501,6 +541,21 @@ pub fn run(result: &CompileResult, levels: &Levels) -> Vec<RokDiagnostic> {
         out.push(d);
     }
     out
+}
+
+/// Each lint's default level; with `library` the library's levels on top.
+fn defaults(library: bool) -> HashMap<&'static str, Vec<Set>> {
+    let mut base: HashMap<&'static str, Vec<Set>> = LINTS
+        .iter()
+        .map(|l| (l.name, vec![(l.default, None)]))
+        .collect();
+    for &(lvl, name) in LIBRARY_LEVELS.iter().filter(|_| library) {
+        if let Some(sets) = base.get_mut(name) {
+            let from = format!("`{name}` is {} in the library", lvl.name());
+            sets.push((lvl, Some(from)));
+        }
+    }
+    base
 }
 
 /// The source text from `span` to the end of its line.
@@ -712,6 +767,73 @@ fn has_attr(attrs: &[Attribute], names: &[&str]) -> bool {
     attrs
         .iter()
         .any(|a| names.contains(&a.name()) || a.path.first().is_some_and(|p| p.starts_with('#')))
+}
+
+/// `missing_docs`: the `pub` items of `items` without a doc comment, and
+/// the `pub` methods of their inherent impls and of `pub` traits. A
+/// `mod m;` (or the empty stub a library stage keeps) is left out: its
+/// file's `//!` documents it.
+fn missing_docs(items: &[Item], out: &mut Vec<Finding>) {
+    // `#[doc(hidden)]` counts as documented; a parser marker is no item
+    // the user wrote.
+    let documented = |attrs: &[Attribute]| {
+        attrs
+            .iter()
+            .any(|a| a.name() == "doc" || a.path.first().is_some_and(|p| p.starts_with('#')))
+    };
+    let hit = |what: &str, name: &str, span: Span| Finding {
+        lint: "missing_docs",
+        span,
+        msg: format!("`pub {what} {}` has no doc comment", leaf(name)),
+        notes: vec![format!(
+            "help: add a `///` line above it that says what it {}",
+            if what == "fn" { "does" } else { "is" }
+        )],
+        secondary: None,
+        base: None,
+    };
+    for item in items {
+        match item {
+            Item::Impl(im) if im.trait_path.is_none() => {
+                for ii in &im.items {
+                    if let ImplItem::Method(m) = ii {
+                        if m.vis == Visibility::Pub && !documented(&m.attrs) {
+                            out.push(hit("fn", &m.name, m.span));
+                        }
+                    }
+                }
+                continue;
+            }
+            Item::Mod(m) => {
+                if let (Some(inner), Visibility::Pub) = (&m.items, m.vis) {
+                    if !inner.is_empty() && !documented(&m.attrs) {
+                        out.push(hit("mod", &m.name, m.span));
+                    }
+                    missing_docs(inner, out);
+                }
+                continue;
+            }
+            _ => {}
+        }
+        let Some((what, name, vis, attrs)) = crate::doc::item_info(item) else {
+            continue;
+        };
+        if vis != Visibility::Pub {
+            continue;
+        }
+        if !documented(attrs) {
+            out.push(hit(what, name, item.span()));
+        }
+        if let Item::Trait(t) = item {
+            for ti in &t.items {
+                if let TraitItem::Method(m) = ti {
+                    if !documented(&m.attrs) {
+                        out.push(hit("fn", &m.name, m.span));
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Every function in `items`, impl / trait methods and inline modules
@@ -2055,7 +2177,7 @@ mod tests {
         assert!(is_upper("MAX_N") && !is_upper("Max"));
         assert_eq!(to_snake("myVarName"), "my_var_name");
         assert_eq!(to_camel("my_type"), "MyType");
-        assert_eq!(expand("unused").unwrap().len(), 6);
+        assert_eq!(expand("unused").unwrap().len(), 7);
         assert_eq!(expand("all").unwrap().len(), LINTS.len());
         assert!(expand("nope").is_none());
         assert_eq!(Level::parse("deny"), Some(Level::Deny));

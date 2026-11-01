@@ -105,6 +105,7 @@ impl<T> Deque<T> {
     }
 
     /// Remove and return the front item.
+    #[discardable]
     pub const fn pop_front(self) -> T | none {
         unsafe {
             let n = self.meta[1];
@@ -122,6 +123,7 @@ impl<T> Deque<T> {
     }
 
     /// Remove and return the back item.
+    #[discardable]
     pub const fn pop_back(self) -> T | none {
         unsafe {
             let n = self.meta[1];

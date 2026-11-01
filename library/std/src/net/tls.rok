@@ -952,8 +952,8 @@ impl Client {
 
     pub async fn write_all_async<B: AsBytes>(self, buf: B) throws (IoError) { try await self.s.op_async(OP_WRITE, [], buf.byte_slice()); }
     pub async fn flush_async(self) throws (IoError) {}
-    pub async fn close_notify_async(self) throws (IoError) { try await self.s.op_async(OP_CLOSE_NOTIFY, [], nothing()); }
-    pub async fn key_update_async(self) throws (IoError) { try await self.s.op_async(OP_KEY_UPDATE, [], nothing()); }
+    pub async fn close_notify_async(self) throws (IoError) { _ = try await self.s.op_async(OP_CLOSE_NOTIFY, [], nothing()); }
+    pub async fn key_update_async(self) throws (IoError) { _ = try await self.s.op_async(OP_KEY_UPDATE, [], nothing()); }
 
     /// close_notify (if the connection is healthy), then close the
     /// socket, throwing the OS's error.
@@ -1062,8 +1062,8 @@ impl Server {
 
     pub async fn write_all_async<B: AsBytes>(self, buf: B) throws (IoError) { try await self.s.op_async(OP_WRITE, [], buf.byte_slice()); }
     pub async fn flush_async(self) throws (IoError) {}
-    pub async fn close_notify_async(self) throws (IoError) { try await self.s.op_async(OP_CLOSE_NOTIFY, [], nothing()); }
-    pub async fn key_update_async(self) throws (IoError) { try await self.s.op_async(OP_KEY_UPDATE, [], nothing()); }
+    pub async fn close_notify_async(self) throws (IoError) { _ = try await self.s.op_async(OP_CLOSE_NOTIFY, [], nothing()); }
+    pub async fn key_update_async(self) throws (IoError) { _ = try await self.s.op_async(OP_KEY_UPDATE, [], nothing()); }
     pub fn close(self) throws (IoError) { try self.s.close(); }
     pub const fn negotiated_alpn(self) -> List<u8> | none { self.s.conn().alpn }
 

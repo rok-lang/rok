@@ -199,6 +199,7 @@ impl<K: Hash, V> Dict<K, V> {
     }
 
     /// Insert or replace; the old value, or `none`.
+    #[discardable]
     pub const fn insert(self, k: K, v: V) -> V | none {
         unsafe {
             let h = self.hash_of(k);
@@ -232,6 +233,7 @@ impl<K: Hash, V> Dict<K, V> {
         self.find(k, self.hash_of(k)) != ABSENT
     }
 
+    #[discardable]
     pub const fn remove(self, k: K) -> V | none {
         unsafe {
             let at = self.find(k, self.hash_of(k));

@@ -675,6 +675,7 @@ fn lower_stmt_inner(ctx: &mut LowerCtx<'_>, stmt: &Stmt) -> Option<HirStmt> {
                     ),
                 );
             }
+            unused_result(ctx, expr, &h.ty);
             Some(HirStmt::Expr(h))
         }
         // A block-like statement without `;` before more statements
@@ -900,6 +901,85 @@ pub(super) fn rejoin_unnarrowings(ctx: &mut LowerCtx<'_>, ended: Vec<(String, Lo
             }
         }
     }
+}
+
+/// A value a statement may drop silently: `()`, `none`, `Never`, and
+/// what an error left unknown.
+fn droppable(ty: &HirTy) -> bool {
+    match ty {
+        HirTy::Unit
+        | HirTy::None
+        | HirTy::Never
+        | HirTy::Unknown
+        | HirTy::Any
+        | HirTy::NoThrow
+        | HirTy::Var(_) => true,
+        HirTy::Sum(ts) => ts.iter().all(droppable),
+        _ => false,
+    }
+}
+
+/// `unused_result` (spec 6.2.11): expression statement `e` of type `ty`
+/// drops a value. A call of a `#[discardable]` function may; `try? f();`
+/// is `ignored_error`'s, and a block-like statement's value is its arms'.
+fn unused_result(ctx: &LowerCtx<'_>, e: &Expr, ty: &HirTy) {
+    if droppable(ty) || e.span.is_dummy() || !ctx.results_apply() {
+        return;
+    }
+    let mut inner = e;
+    loop {
+        inner = match &inner.kind {
+            ExprKind::Try {
+                kind: rokc_ast::TryKind::Plain | rokc_ast::TryKind::Force,
+                operand,
+            } => operand,
+            ExprKind::Await(x) | ExprKind::InModule(_, x) => x,
+            ExprKind::Try { .. }
+            | ExprKind::Block(_)
+            | ExprKind::Unsafe(_)
+            | ExprKind::If { .. }
+            | ExprKind::Match { .. }
+            | ExprKind::Loop { .. }
+            | ExprKind::While { .. }
+            | ExprKind::For { .. }
+            | ExprKind::Catch { .. }
+            | ExprKind::Closure { .. }
+            | ExprKind::Yield(_)
+            | ExprKind::AsyncBlock(_)
+            | ExprKind::YieldBlock(_)
+            | ExprKind::AsyncYieldBlock(_) => return,
+            _ => break,
+        };
+    }
+    // The outermost call ends where the statement does; a call in its
+    // arguments ends before.
+    let discardable = ctx.discardable_calls.borrow().iter().any(|c| {
+        c.file == inner.span.file && c.end == inner.span.end && c.start >= inner.span.start
+    });
+    if discardable {
+        return;
+    }
+    let what = match &inner.kind {
+        ExprKind::Call { callee, .. } => match &callee.kind {
+            ExprKind::Path(p) => p.segments.last().map(|s| format!("`{}`", s.name)),
+            _ => None,
+        },
+        ExprKind::MethodCall { method, .. } => Some(format!("`{method}`")),
+        _ => None,
+    };
+    let msg = match what {
+        Some(f) => format!("the `{}` result of {f} is never used", ctx.ty_name(ty)),
+        None => format!("this `{}` value is never used", ctx.ty_name(ty)),
+    };
+    ctx.emit_lint(
+        "unused_result",
+        e.span,
+        msg,
+        format!(
+            "use it, or write `_ = {};` to drop it on purpose",
+            snippet(e)
+        ),
+    );
 }
 
 /// `e` as source for a diagnostic's suggested fix; `..` when long.
@@ -8005,10 +8085,11 @@ fn item_marked(ctx: &LowerCtx<'_>, what: &str, key: &str, at: rokc_diagnostic::S
 
 /// A use at `at` of function `id`: its marks' warnings.
 fn fn_marked(ctx: &LowerCtx<'_>, id: FunctionId, at: rokc_diagnostic::Span) {
-    if ctx.hook_call.replace(false) || !ctx.marks_checked() {
+    if ctx.hook_call.replace(false) || !(ctx.marks_checked() || ctx.results_apply()) {
         return;
     }
     if let Some((name, mark)) = ctx.env.fn_mark(id) {
+        ctx.call_marked(mark, at);
         let what = if name.contains("::") {
             "method"
         } else {
@@ -8021,12 +8102,13 @@ fn fn_marked(ctx: &LowerCtx<'_>, id: FunctionId, at: rokc_diagnostic::Span) {
 /// A use at `at` of generic function or method template `def`
 /// (`m::Box__get` for `Box::get`).
 fn template_marked(ctx: &LowerCtx<'_>, def: &FnDef, at: rokc_diagnostic::Span) {
-    if ctx.hook_call.replace(false) || !ctx.marks_checked() {
+    if ctx.hook_call.replace(false) || !(ctx.marks_checked() || ctx.results_apply()) {
         return;
     }
     let Some(mark) = crate::marks::mark_of(&def.attrs) else {
         return;
     };
+    ctx.call_marked(&mark, at);
     let leaf = leaf_name(&def.name);
     let leaf = leaf.split("__by_").next().unwrap_or(leaf);
     let (what, name) = match leaf.split_once("__") {

@@ -1,0 +1,25 @@
+// expect-exit: 0
+// spec: §6.2.11
+// expect-lint: 15:5 the `i32` result of `two` is never used
+// expect-lint: 16:5 `try?` result discarded: the error is silently ignored
+// expect-lint: 20:5 the `i32` result of `next` is never used
+// expect-stdout:
+// ok
+
+// Through `try` and `await` the dropped value is the call's; `try? f();`
+// is `ignored_error`'s alone.
+fn two() throws -> i32 { 2 }
+async fn next() -> i32 { 3 }
+
+fn run() throws {
+    try two();
+    try? two();
+}
+
+async fn go() {
+    await next();
+}
+
+try! run();
+task::block_on(go());
+println("ok");

@@ -139,7 +139,7 @@ fn page(pkg: &str, rel: &[String]) -> String {
     p + "/index.html"
 }
 
-fn item_info(item: &Item) -> Option<(&'static str, &str, Visibility, &[Attribute])> {
+pub(crate) fn item_info(item: &Item) -> Option<(&'static str, &str, Visibility, &[Attribute])> {
     // An item in a function body is no API (spec 3.9.1).
     if item.is_local() {
         return None;

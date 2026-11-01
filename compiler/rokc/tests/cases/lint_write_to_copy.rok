@@ -53,7 +53,7 @@ println(f"{c.n} {c.with_n(5).n - 5}");
 let a = P { x: 1, y: 0 };
 lost(a);
 spin(a);
-feeds(a);
+_ = feeds(a);
 kept(ref a);
 println(f"{moved(a).x - 1} {a.x}");
 shown(a);
