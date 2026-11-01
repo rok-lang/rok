@@ -14,7 +14,7 @@ struct Config { host: str; port: i32; }
 let c = Config { host: "localhost", port: 8080 };
 println(f"{Config::field_names():?}");
 match c.get_field("port") {
-    v: any => println(v.type_name_of()),
+    v: any => println(v.type_name_of_val()),
     none => println("none"),
 }
 println(f"{c.set_field("port", 9090)}");

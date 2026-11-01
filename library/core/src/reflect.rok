@@ -2,9 +2,9 @@
 //
 // `Reflect` is implemented by the compiler for every type (no impl in
 // source; a manual one is an error): `T::type_name()`, `T::size()`,
-// `T::align()` are constants, and `x.type_name_of()` / `x.size_of()` look
-// at the variant an `any` or sum value holds at run time. A type's own
-// method of the same name wins.
+// `T::align()` are the type's answer, constants; `x.type_name_of_val()` /
+// `x.size_of_val()` are the value's: they look at the variant an `any` or
+// sum value holds at run time. A type's own method of the same name wins.
 //
 // `Inspect` is opt-in through `#[derive(Inspect)]`, written below as a
 // meta block (6.10.2): field names and types, enum variant names, dynamic
@@ -15,15 +15,18 @@ pub trait Reflect {
     fn type_name() -> str;
     fn size() -> usize;
     fn align() -> usize;
-    fn type_name_of(self) -> str;
-    fn size_of(self) -> usize;
+    fn type_name_of_val(self) -> str;
+    fn size_of_val(self) -> usize;
 }
 
 pub trait Inspect: Reflect {
     fn field_names() -> List<str>;
     fn get_field(self, name: str) -> any | none;
     fn set_field(ref self, name: str, value: any) -> bool;
-    fn methods() -> List<MethodInfo>;
+    /// The inherent methods, by name.
+    fn methods() -> List<MethodInfo> {
+        return methods_of::<Self>();
+    }
 
     /// The fields with their types, in declaration order.
     fn fields() -> List<FieldInfo> {
@@ -37,12 +40,12 @@ pub trait Inspect: Reflect {
 
     /// The variant `self` holds (`"Circle"`); for a struct, its type name.
     fn variant_name(self) -> str {
-        return self.type_name_of();
+        return self.type_name_of_val();
     }
 
     /// The fields `self` holds: a struct's fields, or the fields of the
     /// variant an enum value holds (`"0"`, `"1"` for a tuple variant).
-    fn field_names_of(self) -> List<str> {
+    fn field_names_of_val(self) -> List<str> {
         let names: List<str> = List::new();
         for f in fields_of::<Self>() {
             names.push(f.name);
@@ -82,8 +85,8 @@ pub fn cast<T>(value: any) -> T | none;
 #[intrinsic("rok.method_table")]
 fn method_table<T>() -> str;
 
-/// `T`'s inherent methods, by name.
-pub const fn methods_of<T>() -> List<MethodInfo> {
+/// `T`'s inherent methods, by name: the body of `Inspect::methods`.
+pub(pkg) const fn methods_of<T>() -> List<MethodInfo> {
     let out: List<MethodInfo> = List::new();
     for line in method_table::<T>().split("\n") {
         if line.len() == 0 {
@@ -115,8 +118,9 @@ pub const fn methods_of<T>() -> List<MethodInfo> {
 #[intrinsic("rok.field_table")]
 fn field_table<T>() -> str;
 
-/// `T`'s fields with their types, in declaration order.
-pub const fn fields_of<T: Inspect>() -> List<FieldInfo> {
+/// `T`'s fields with their types, in declaration order: the body of
+/// `Inspect::fields`.
+pub(pkg) const fn fields_of<T: Inspect>() -> List<FieldInfo> {
     let out: List<FieldInfo> = List::new();
     for line in field_table::<T>().split("\n") {
         if line.len() == 0 {
@@ -133,7 +137,7 @@ pub const fn fields_of<T: Inspect>() -> List<FieldInfo> {
 
 // The type's own fields are the struct's; an enum has none at the type
 // level (`@for_fields` needs a variant), only per value: `get_field`
-// and `field_names_of` look at the variant held. A variant's payload is
+// and `field_names_of_val` look at the variant held. A variant's payload is
 // read-only here, `set_field` on an enum is `false`. A field is boxed in
 // `any` first so a `T | none` field holding `none` is not "no field".
 #[impl_derive(Inspect)]
@@ -194,10 +198,6 @@ pub @derive {
             return false;
         }
 
-        fn methods() -> List<rok::core::reflect::MethodInfo> {
-            return rok::core::reflect::methods_of::<@Self>();
-        }
-
         @if_enum {
             fn variant_name(self) -> str {
                 return match self {
@@ -215,7 +215,7 @@ pub @derive {
                 return names;
             }
 
-            fn field_names_of(self) -> List<str> {
+            fn field_names_of_val(self) -> List<str> {
                 let names: List<str> = List::new();
                 match self {
                     @for_variants {

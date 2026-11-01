@@ -21,7 +21,7 @@ struct User {
 fn dump_struct<T: Inspect>(x: T) {
     for name in T::field_names() {
         if let v: any = x.get_field(name) {
-            println(f"{name} = {v.type_name_of()}");
+            println(f"{name} = {v.type_name_of_val()}");
         }
     }
 }
@@ -29,7 +29,7 @@ fn dump_struct<T: Inspect>(x: T) {
 let u = User { id: 1, name: "Alice", email: "a@b" };
 println(f"{User::field_names():?}");
 match u.get_field("name") {
-    v: any => println(v.type_name_of()),
+    v: any => println(v.type_name_of_val()),
     none => println("none"),
 }
 println(f"{u.set_field("id", 42)}");

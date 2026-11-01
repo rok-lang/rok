@@ -35,7 +35,7 @@ fn main() {
     let d = 1_000_000i64;
     let e = 2f32;
     let f = 1f64;
-    println(f"{a.type_name_of()} {b.type_name_of()} {c.type_name_of()} {d.type_name_of()} {e.type_name_of()} {f.type_name_of()} {(w() + (1 + 2)).type_name_of()} {(if a > 0 { 0 } else { w() }).type_name_of()}");
+    println(f"{a.type_name_of_val()} {b.type_name_of_val()} {c.type_name_of_val()} {d.type_name_of_val()} {e.type_name_of_val()} {f.type_name_of_val()} {(w() + (1 + 2)).type_name_of_val()} {(if a > 0 { 0 } else { w() }).type_name_of_val()}");
     // 1.6.3: the expected type, then the other operand, then the defaults.
     let x: f64 = 1;
     let s: f64 = 2.0;
@@ -44,7 +44,7 @@ fn main() {
     let m: u8 = 2 * 100;
     let k = 1 + 2;
     let p = 7i64 - 2;
-    println(f"{x.type_name_of()} {(s * 2).type_name_of()} {r.type_name_of()} {v.type_name_of()} {m.type_name_of()} {k.type_name_of()} {p.type_name_of()}");
+    println(f"{x.type_name_of_val()} {(s * 2).type_name_of_val()} {r.type_name_of_val()} {v.type_name_of_val()} {m.type_name_of_val()} {k.type_name_of_val()} {p.type_name_of_val()}");
     // 1.6.4 / 1.6.6: `as` for a bit pattern; `-` admits MAX + 1.
     let g = 0xFFu8 as i8;
     let h = -128i8;

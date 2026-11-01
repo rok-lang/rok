@@ -10,7 +10,7 @@
 // str
 
 // 6.10.1 / 2.12.2: every type has `Reflect` with no derive - static
-// `T::type_name()` / `size()` / `align()`, and `type_name_of()` that
+// `T::type_name()` / `size()` / `align()`, and `type_name_of_val()` that
 // looks at the variant an `any` / sum value holds.
 fn pick() -> i32 | f64 { return 2.5; }
 
@@ -18,11 +18,11 @@ println(i32::type_name());
 println(f"{i32::size()}");
 println(f"{i32::align()}");
 let x: any = 42i32;
-println(x.type_name_of());
+println(x.type_name_of_val());
 let y: i32 | f64 = 42i32;
-println(y.type_name_of());
+println(y.type_name_of_val());
 let v: i32 | f64 = pick();
-println(v.type_name_of());
+println(v.type_name_of_val());
 let z: any = "hello";
-println(z.type_name_of());
+println(z.type_name_of_val());
 // spec: §6.10.1

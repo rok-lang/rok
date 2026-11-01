@@ -25,26 +25,26 @@ enum Color { Red, Green(i32) }
 struct Own { n: i32; }
 impl Own { fn size(self) -> i32 { 7 } }
 
-fn describe<T: reflect::Reflect>(x: T) -> str { f"{T::type_name()}/{x.type_name_of()}" }
+fn describe<T: reflect::Reflect>(x: T) -> str { f"{T::type_name()}/{x.type_name_of_val()}" }
 fn pick() -> i32 | f64 { return 2.5; }
 
 println(f"{i32::type_name()} {i32::size()} {i32::align()} {u8::size()}");
 println(f"{Config::type_name()} {List::<i64>::type_name()} {Box::<f64>::type_name()}");
 let s: any Shape = Sq { s: 2 };
-println(s.type_name_of());
-println(f"{s.size_of()}");
+println(s.type_name_of_val());
+println(f"{s.size_of_val()}");
 let o: i32 | none = none;
 let a: any = o;
-println(a.type_name_of());
+println(a.type_name_of_val());
 let o2: i32 | none = 3;
 let a2: any = o2;
-println(a2.type_name_of());
-println(o.type_name_of());
+println(a2.type_name_of_val());
+println(o.type_name_of_val());
 let c = Color::Green(3);
-println(c.type_name_of());
-println(reflect::Reflect::type_name_of(c));
-println((1, 2.0).type_name_of());
-println([1, 2, 3].type_name_of());
+println(c.type_name_of_val());
+println(reflect::Reflect::type_name_of_val(c));
+println((1, 2.0).type_name_of_val());
+println([1, 2, 3].type_name_of_val());
 let v: i32 | f64 = pick();
 println(describe(v));
 println(describe(Sq { s: 1 }));

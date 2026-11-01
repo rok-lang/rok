@@ -58,6 +58,6 @@ fn main() {
     println(Hid::twice());
     println(Hid {}.shout());
     let p = Pt { x: 1, y: 2 };
-    println(f"{Pt::field_names():?} {p.field_names_of().len()}");
+    println(f"{Pt::field_names():?} {p.field_names_of_val().len()}");
     println(Kind::total());
 }

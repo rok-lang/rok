@@ -2456,7 +2456,7 @@ impl Fmt {
         match self {
             Self::Display => format!("f\"{{{n}}}\""),
             Self::Debug => format!("f\"{{{n}:?}}\""),
-            Self::Type => format!("{n}.type_name_of()"),
+            Self::Type => format!("{n}.type_name_of_val()"),
         }
     }
 }

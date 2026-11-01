@@ -71,13 +71,13 @@ fn main() {
     zs.push(2);
     let ws = empty();
     let n = takes_ints(ws);
-    println(f"{xs.len() + n} {zs.len()} {zs.type_name_of()}");
+    println(f"{xs.len() + n} {zs.len()} {zs.type_name_of_val()}");
     // An integer literal's default yields to a later `i64` use.
     let ys = List::new();
     ys.push(1);
     let total = sum_i64(ys);
     let z: i32 = Zero::zero();
-    println(f"{ys.type_name_of()} {total} {z}");
+    println(f"{ys.type_name_of_val()} {total} {z}");
     // 2.10.3 / 2.10.4: bounds and `where`, `Output = V` included.
     println(f"{sum([1, 2, 3])} {join_all([1, 2, 3])}");
     let v: f64 = complex(7.0, 0.5);

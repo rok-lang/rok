@@ -25,5 +25,5 @@ fn main() {
     println(f"{Wide::size()} {Foo::size()}");
     let x: Bar = 1;
     let y: Bar = 1.0f32;
-    println(f"{x.type_name_of()} {y.type_name_of()}");
+    println(f"{x.type_name_of_val()} {y.type_name_of_val()}");
 }

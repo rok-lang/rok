@@ -7,10 +7,10 @@
 // integer
 // float
 
-// 6.10.5: `type_name_of` on an `any` slot; a type pattern on a sum.
+// 6.10.5: `type_name_of_val` on an `any` slot; a type pattern on a sum.
 fn handle(x: any) -> str {
-    if x.type_name_of() == "i32" { return "int"; }
-    else if x.type_name_of() == "str" { return "str"; }
+    if x.type_name_of_val() == "i32" { return "int"; }
+    else if x.type_name_of_val() == "str" { return "str"; }
     return "other";
 }
 

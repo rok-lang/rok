@@ -19,7 +19,7 @@ fn main() {
     let n: i32 = 100;
     let w: i64 = n.into();
     let v = n.into::<i64>();
-    println(f"{w} {v.type_name_of()} {v}");
+    println(f"{w} {v.type_name_of_val()} {v}");
     // `.try_into()` throws on failure.
     let big: i64 = 10_000_000_000i64;
     let r = try big.try_into::<i32>() catch e {

@@ -97,7 +97,7 @@ fn pad<T: Copy, const N: usize>(a: [T; N], x: T) -> [T; N + 1] {
 
 // What every type has needs no bound: `Reflect` (spec 6.10.1), an
 // `any` slot, a sum with `none`.
-fn kind<T>(x: T) -> str { f"{T::type_name()} {x.size_of()}" }
+fn kind<T>(x: T) -> str { f"{T::type_name()} {x.size_of_val()}" }
 fn boxed<T>(x: T) -> any { x }
 fn maybe<T>(x: T, keep: bool) -> T | none { if keep { x } else { none } }
 

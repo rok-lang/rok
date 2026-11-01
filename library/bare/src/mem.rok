@@ -118,10 +118,14 @@ pub unsafe fn transmute_unchecked<A, B>(a: A) -> B {
     b
 }
 
-/// Size of `T` (the value's own type; rok has no unsized values yet).
-pub const fn size_of_val<T>(val: T) -> usize { size_of::<T>() }
-pub const fn align_of_val<T>(val: T) -> usize { align_of::<T>() }
-pub const fn min_align_of<T>() -> usize { align_of::<T>() }
+/// Size of `T` in bytes. A value's size at run time is
+/// `x.size_of_val()` (`Reflect`).
+#[intrinsic("rok.size_of")]
+pub fn size_of<T>() -> usize;
+
+/// Alignment of `T` in bytes.
+#[intrinsic("rok.align_of")]
+pub fn align_of<T>() -> usize;
 
 pub unsafe fn read<T>(src: ConstPtr<T>) -> T { src.read() }
 pub unsafe fn write<T>(dst: Ptr<T>, value: T) { dst.write(value); }

@@ -14,10 +14,10 @@ fn main() {
     let w: i64 = 0;
     let big: int = 2147483647;
     big = big + 1;
-    println(f"{n.type_name_of()} {f.type_name_of()} {w.type_name_of()} {big}");
+    println(f"{n.type_name_of_val()} {f.type_name_of_val()} {w.type_name_of_val()} {big}");
     let a: i8 = 1; let b: i16 = 1; let c: u8 = 1; let d: u16 = 1;
     let e: u32 = 1; let g: u64 = 1; let h: isize = 1; let i: usize = 1;
     let j: f32 = 1.0; let k: bool = true; let l: c_char = c'a'; let m: char = 'a';
     let s: str = "s"; let fl: float = 1.5;
-    println(f"{a.type_name_of()} {b.type_name_of()} {c.type_name_of()} {d.type_name_of()} {e.type_name_of()} {g.type_name_of()} {h.type_name_of()} {i.type_name_of()} {j.type_name_of()} {k.type_name_of()} {l.type_name_of()} {m.type_name_of()} {s.type_name_of()} {big.type_name_of()} {fl.type_name_of()}");
+    println(f"{a.type_name_of_val()} {b.type_name_of_val()} {c.type_name_of_val()} {d.type_name_of_val()} {e.type_name_of_val()} {g.type_name_of_val()} {h.type_name_of_val()} {i.type_name_of_val()} {j.type_name_of_val()} {k.type_name_of_val()} {l.type_name_of_val()} {m.type_name_of_val()} {s.type_name_of_val()} {big.type_name_of_val()} {fl.type_name_of_val()}");
 }

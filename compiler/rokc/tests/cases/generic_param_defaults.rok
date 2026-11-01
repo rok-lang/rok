@@ -27,11 +27,11 @@ fn main() -> i32 {
     let s: S<u8> = S { a: 1, b: 2 };
     let d: Dflt<str> = Dflt { k: "k", v: ["a", "b"] };
     let xs = mk();
-    println(w.type_name_of());
-    println(e.type_name_of());
-    println(s.type_name_of());
-    println(d.type_name_of());
-    println(xs.type_name_of());
+    println(w.type_name_of_val());
+    println(e.type_name_of_val());
+    println(s.type_name_of_val());
+    println(d.type_name_of_val());
+    println(xs.type_name_of_val());
     println(f"{take(W { v: 4 })}");
     let n = match e { E::A(x) => x, E::B => 0i64 };
     println(f"{n}");

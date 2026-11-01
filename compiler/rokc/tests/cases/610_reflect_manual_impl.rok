@@ -7,7 +7,7 @@ impl reflect::Reflect for P {
     fn type_name() -> str { "P" }
     fn size() -> usize { 4 }
     fn align() -> usize { 4 }
-    fn type_name_of(self) -> str { "P" }
-    fn size_of(self) -> usize { 4 }
+    fn type_name_of_val(self) -> str { "P" }
+    fn size_of_val(self) -> usize { 4 }
 }
 // spec: §6.10.1

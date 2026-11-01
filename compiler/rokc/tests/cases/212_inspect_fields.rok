@@ -63,7 +63,7 @@ for f in bank::Account::fields() {
 }
 let a = bank::Account::open("ann");
 match a.get_field("balance") {
-    v: any => println(f"{v.type_name_of()} {rok::core::reflect::cast::<i64>(v) ?? 0}"),
+    v: any => println(f"{v.type_name_of_val()} {rok::core::reflect::cast::<i64>(v) ?? 0}"),
     none => println("none"),
 }
 show::<Box<f64>>();
@@ -72,12 +72,12 @@ show::<Pair>();
 println(f"{Unit::fields().len()} {Unit::field_names():?}");
 show::<Outer>();
 println(f"{a.variant_name()} {Pair(1, none).variant_name()} {Unit.variant_name()}");
-println(f"{a.field_names_of():?} {Pair(1, "x").field_names_of():?}");
-let fs = reflect::fields_of::<bank::Account>();
+println(f"{a.field_names_of_val():?} {Pair(1, "x").field_names_of_val():?}");
+let fs = bank::Account::fields();
 println(f"{fs.len()} {fs[0].name}");
 let b = Box { v: 1.5, items: [2.5] };
 println(b.variant_name());
 let m = Manual { k: 1 };
-println(f"{m.field_names_of():?} {m.variant_name()} {Manual::variant_names():?} {Manual::fields().len()}");
+println(f"{m.field_names_of_val():?} {m.variant_name()} {Manual::variant_names():?} {Manual::fields().len()}");
 
 // spec: §6.10.2
