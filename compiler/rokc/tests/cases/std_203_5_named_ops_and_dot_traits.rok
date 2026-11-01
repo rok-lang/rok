@@ -8,13 +8,13 @@
 // by name (`a.add(b)`, `Add::add(a, b)`) are one operation. 2.3.8: `+`
 // and `.+` dispatch to different traits (`Add`, `DotAdd`).
 struct V { x: i32; }
-impl Add for V { type Output = V; fn add(self, o: V) -> V { V { x: self.x + o.x } } }
-impl DotAdd for V { type Output = V; fn dot_add(self, o: V) -> V { V { x: self.x * 10 + o.x } } }
+impl ops::Add for V { type Output = V; fn add(self, o: V) -> V { V { x: self.x + o.x } } }
+impl ops::DotAdd for V { type Output = V; fn dot_add(self, o: V) -> V { V { x: self.x * 10 + o.x } } }
 
 fn main() {
     let a = 2;
     let b = 3;
-    println(f"{a + b} {a.add(b)} {Add::add(a, b)} {2.5f64.mul(2.0)}");
+    println(f"{a + b} {a.add(b)} {ops::Add::add(a, b)} {2.5f64.mul(2.0)}");
     let p = V { x: 1 };
     let q = V { x: 2 };
     println(f"{(p + q).x} {(p .+ q).x}");

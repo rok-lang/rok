@@ -7,12 +7,12 @@
 // spec 3.6.1: `m[i, j]` is `m[(i, j)]` - one `Index<(I, J)>` call.
 struct Grid { w: usize; cells: List<i32>; }
 
-impl Index<(usize, usize)> for Grid {
+impl index::Index<(usize, usize)> for Grid {
     type Output = i32;
     fn index(self, at: (usize, usize)) -> i32 { self.cells[at.0 * self.w + at.1] }
 }
 
-impl Index<(usize, usize, usize)> for Grid {
+impl index::Index<(usize, usize, usize)> for Grid {
     type Output = i32;
     fn index(self, at: (usize, usize, usize)) -> i32 { (at.0 + at.1 + at.2) as i32 }
 }

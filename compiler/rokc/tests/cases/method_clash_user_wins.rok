@@ -44,7 +44,7 @@ fn main() {
     println(f"{i32::zero()} {xs.iter().sum()}");
     let c = C { n: 0 };
     println(f"{c.any()} {C { n: 0 }.sum()}");
-    let z: i32 = Zero::zero();
+    let z: i32 = num::Zero::zero();
     let hit = Iterator::any(C { n: 0 }, |x: i32| x > 2);
     println(f"{hit as i32} {z + 2}");
     println(f"{Left::side(c)} {Right::side(c)}");

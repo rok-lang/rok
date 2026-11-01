@@ -17,12 +17,12 @@
 // of its type. Path calls select the same way.
 struct W { v: i64; }
 
-impl Add<i64> for W {
+impl ops::Add<i64> for W {
     type Output = str;
     fn add(self, rhs: i64) -> str { f"i64 {rhs}" }
 }
 
-impl Add<i32> for W {
+impl ops::Add<i32> for W {
     type Output = str;
     fn add(self, rhs: i32) -> str { f"i32 {rhs}" }
 }

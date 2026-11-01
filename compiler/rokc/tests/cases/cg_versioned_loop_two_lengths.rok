@@ -6,7 +6,7 @@
 // expect-stderr: b out of bounds
 // expect-stdout:
 
-use rok::core::collections::raw::GcBuf;
+use rok::bare::mem::GcBuf;
 
 // Two runs in one object: `a` with `meta[0]` elements, `b` with `meta[1]`.
 struct Pair {

@@ -28,7 +28,7 @@ async fn fails(x: i32) throws (str) -> i32 {
 }
 
 async fn main() {
-    let s: AsyncStream<i32> = nums(3);
+    let s: stream::AsyncStream<i32> = nums(3);
     let t = s;
     let a = 0;
     let b = 0;
@@ -39,15 +39,15 @@ async fn main() {
     }
     println(f"{a} {b} {c}");
     print("zip");
-    for await p in zip(nums(5), letters().take(2)) { print(f" {p:?}"); }
+    for await p in stream::zip(nums(5), letters().take(2)) { print(f" {p:?}"); }
     println("");
     let n = 0;
     for await _ in stream::select(nums(2), nums(1)).take(1) { n += 1; }
     println(f"select {n}");
-    let f: AsyncFuture<i32> = six();
-    let g: AsyncFuture<i32> = async { 4 };
+    let f: future::AsyncFuture<i32> = six();
+    let g: future::AsyncFuture<i32> = async { 4 };
     println(f"typed {await f} {await g}");
-    let ok: TryAsyncFuture<i32, str> = fails(1);
+    let ok: future::TryAsyncFuture<i32, str> = fails(1);
     let v = try await ok catch _ { -1 };
     let w = try await fails(3) catch e { print(f"try {v} "); println(f"caught {e}"); 0 };
     if w != 0 { println("not caught"); }

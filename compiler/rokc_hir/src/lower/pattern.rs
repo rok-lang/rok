@@ -990,24 +990,20 @@ pub(super) fn lower_pattern_inner(
             };
             lower_pattern(ctx, &variant, scrut_ty)
         }
-        // A bare name that is an unimported variant of the scrutinee's enum
-        // would bind everything: an error, matched as the variant so later
-        // arms don't read unreachable.
+        // A bare name that is a variant of the scrutinee's enum is that
+        // variant (spec 3.11, 5.7.1).
         AstPatternKind::Binding { name, sub: None }
             if variant_named(ctx, scrut_ty, name).is_some() =>
         {
             let (enum_id, idx, base) = variant_named(ctx, scrut_ty, name).expect("guard");
-            ctx.emit_error_at(
-                rokc_diagnostic::ErrorKind::Type,
-                pat.span,
-                format!(
-                    "`{name}` here is a new variable that matches every value, not the \
-                     variant `{base}::{name}`"
-                ),
-            );
             let args = ctx.enum_def(enum_id).variants[idx].arity;
-            let rest = if args == 0 { "" } else { "(..)" };
-            ctx.help_last(Some(format!("did you mean `{base}::{name}{rest}`?")));
+            if args != 0 {
+                ctx.emit_error_at(
+                    rokc_diagnostic::ErrorKind::Type,
+                    pat.span,
+                    format!("variant `{base}::{name}` has a payload: match it as `{name}(..)`"),
+                );
+            }
             HirPattern::EnumVariant {
                 enum_id,
                 variant_index: u32::try_from(idx).expect("variant overflow"),
@@ -1106,6 +1102,22 @@ pub(super) fn lower_pattern_inner(
             // `name: T` - narrow a sum scrutinee to variant `T` (or, on a
             // non-sum of exactly type `T`, bind it).
             let target_ty = ctx.resolve_ast_ty(ty);
+            // An unknown name, said as such (not as a mismatch).
+            let mut unknown = Vec::new();
+            super::collect::collect_unknown_paths(&target_ty, &mut unknown);
+            if let Some(name) = unknown.iter().find(|n| !n.starts_with(['_', '#'])) {
+                let segs: Vec<&str> = name.split("::").collect();
+                ctx.emit_error_at(
+                    rokc_diagnostic::ErrorKind::Resolve,
+                    ty.span,
+                    format!("cannot find type `{name}` in this scope"),
+                );
+                ctx.help_last(ctx.type_help(&segs));
+                if let Some(name) = binder {
+                    ctx.declare_bound(name, HirTy::Unknown, pat.span);
+                }
+                return HirPattern::Wildcard;
+            }
             let bind = |ctx: &mut LowerCtx<'_>| {
                 binder
                     .as_ref()
@@ -1498,6 +1510,7 @@ fn tuple_struct_pattern(
             rokc_diagnostic::ErrorKind::Type,
             format!("cannot find enum variant `{}`", segs.join("::")),
         );
+        ctx.help_last(ctx.value_help(segs));
         // Rust's `Some(x)` on a `T | none`: a type-test pattern.
         if let (["Some"], [arg], HirTy::Sum(vs)) = (segs, args, scrut_ty) {
             let inner: Vec<String> = vs
@@ -1723,7 +1736,6 @@ fn variant_named(
     let HirTy::Enum(id) = scrut_ty else {
         return None;
     };
-    let def = ctx.enum_def(*id);
-    let idx = def.variants.iter().position(|v| v.name == name)?;
-    Some((*id, idx, enum_base_name(&def.name).to_owned()))
+    let (id, idx) = super::expr::target_variant(ctx, name, &HirTy::Enum(*id))?;
+    Some((id, idx, enum_base_name(&ctx.enum_def(id).name).to_owned()))
 }

@@ -948,7 +948,7 @@ fn compile_unit_in(
     }
     check_dependency_names(&all_items, &all_uses, &config.externs, &mut diags);
     // Mount each library root (`rok::<tier>`, then dependencies); HIR gives
-    // every module an implicit `use rok::core::**;` (stdlib 0.1).
+    // every module its implicit import (stdlib 0.2).
     let key = format!(
         "{roots:?}|{}|{}|{}|{ext:?}|{user_metas}|{keywords:?}",
         incr::target_key(&cfg_env, &config.target),
@@ -1930,7 +1930,7 @@ thread_local! {
     /// This compile's real parses by file path (`real_parse`).
     static PARSED: std::cell::RefCell<std::collections::HashMap<PathBuf, Parsed>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
-    /// The modules whose file opts out of `use rok::core::**;`
+    /// The modules whose file opts out of the implicit import
     /// (`#![no_implicit_rok]`, stdlib 0.2.5).
     static NO_IMPLICIT: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
 }
@@ -2165,7 +2165,7 @@ struct LibParts {
     uses: RawUses,
     diags: Vec<RokDiagnostic>,
     native: NativeLibs,
-    /// Its modules without the implicit `use rok::core::**;`.
+    /// Its modules without the implicit import.
     no_implicit: Vec<String>,
     /// Each library package's hash (`package_hashes`).
     hashes: Vec<(String, String)>,
@@ -2829,6 +2829,197 @@ fn native_libs<'i>(
 
 #[cfg(test)]
 mod tests {
+    /// The prelude's names (stdlib 0.2, normative): modules, types and
+    /// traits share a namespace, functions have their own.
+    const PRELUDE_TYPES: &[&str] = &[
+        "array",
+        "bench",
+        "channel",
+        "cmp",
+        "collections",
+        "convert",
+        "crypto",
+        "encoding",
+        "error",
+        "fmt",
+        "future",
+        "hint",
+        "index",
+        "iter",
+        "marker",
+        "num",
+        "ops",
+        "panic",
+        "par",
+        "print",
+        "range",
+        "reflect",
+        "str",
+        "stream",
+        "sync",
+        "task",
+        "tuple",
+        "List",
+        "Dict",
+        "Set",
+        "Deque",
+        "BinaryHeap",
+        "Slice",
+        "StrBuf",
+        "Range",
+        "RangeInclusive",
+        "Int",
+        "Float",
+        "Result",
+        "Ordering",
+        "Duration",
+        "Instant",
+        "Mutex",
+        "RwLock",
+        "Atomic",
+        "Cell",
+        "Sender",
+        "Receiver",
+        "Task",
+        "Formatter",
+        "FmtError",
+        "ParseError",
+        "ValueError",
+        "OverflowError",
+        "ConversionError",
+        "TypeError",
+        "StackOverflowError",
+        "OutOfMemoryError",
+        "InternalError",
+        "Clone",
+        "Copy",
+        "Drop",
+        "Default",
+        "Send",
+        "Sync",
+        "PartialEq",
+        "Eq",
+        "PartialOrd",
+        "Ord",
+        "Hash",
+        "Debug",
+        "Display",
+        "Error",
+        "Iterator",
+        "IntoIterator",
+        "FromIterator",
+        "Future",
+        "IntoFuture",
+        "From",
+        "Into",
+        "TryFrom",
+        "TryInto",
+        "FromStr",
+        "Inspect",
+    ];
+    const PRELUDE_FNS: &[&str] = &[
+        "channel",
+        "channel_bounded",
+        "print",
+        "println",
+        "eprint",
+        "eprintln",
+        "panic",
+        "assert",
+        "assert_eq",
+        "assert_ne",
+        "unreachable",
+    ];
+
+    /// Each name `rok::core::prelude` brings in, per target: once in its
+    /// namespace, and the set is the normative one.
+    #[test]
+    fn prelude_names_unique() {
+        fn leaves(t: &rokc_ast::UseTree, out: &mut Vec<(String, String)>) {
+            let path = |t: &rokc_ast::UseTree| {
+                t.prefix
+                    .segments
+                    .iter()
+                    .map(|s| s.name.clone())
+                    .collect::<Vec<_>>()
+            };
+            match &t.kind {
+                rokc_ast::UseTreeKind::Simple(alias) => {
+                    let p = path(t);
+                    let leaf = alias
+                        .clone()
+                        .or_else(|| p.last().cloned())
+                        .unwrap_or_default();
+                    out.push((leaf, p.join("::")));
+                }
+                rokc_ast::UseTreeKind::Group(ts) => {
+                    for c in ts {
+                        let mut sub = Vec::new();
+                        leaves(c, &mut sub);
+                        let base = path(t).join("::");
+                        out.extend(sub.into_iter().map(|(l, p)| (l, format!("{base}::{p}"))));
+                    }
+                }
+                _ => panic!("the prelude names each item: no globs"),
+            }
+        }
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../library/core/src");
+        let source = std::fs::read_to_string(root.join("prelude.rok")).unwrap();
+        let lib = std::fs::read_to_string(root.join("lib.rok")).unwrap();
+        let is_module = |p: &str| {
+            p.strip_prefix("rok::core::")
+                .is_some_and(|m| !m.contains("::") && lib.contains(&format!("pub mod {m};")))
+        };
+        let (tokens, lex) = rokc_lexer::Lexer::new(&source, "prelude.rok".to_owned()).lex_all();
+        let (program, parse) = super::parse_program(&tokens, "prelude.rok");
+        assert!(lex.is_empty() && parse.is_empty(), "{lex:?} {parse:?}");
+        let sorted = |v: &[&str]| {
+            let mut v: Vec<String> = v.iter().map(|s| (*s).to_owned()).collect();
+            v.sort();
+            v
+        };
+        for triple in rokc_target::BUILTIN {
+            let mut env = super::CfgEnv::new();
+            super::cfg::add_target(&mut env, &super::Target::builtin(triple));
+            let items = super::cfg::filter_items(program.items.clone(), &env);
+            let mut names = Vec::new();
+            for item in &items {
+                match item {
+                    rokc_ast::Item::Use(u) => {
+                        assert_eq!(
+                            u.vis,
+                            rokc_core::Visibility::Pub,
+                            "{triple}: a `use` that is not `pub`"
+                        );
+                        leaves(&u.tree, &mut names);
+                    }
+                    _ => panic!("{triple}: the prelude holds `pub use`s only"),
+                }
+            }
+            let (mut fns, mut types): (Vec<String>, Vec<String>) = (Vec::new(), Vec::new());
+            for (leaf, path) in names {
+                let ns = if !is_module(&path) && PRELUDE_FNS.contains(&leaf.as_str()) {
+                    &mut fns
+                } else {
+                    &mut types
+                };
+                assert!(
+                    !ns.contains(&leaf),
+                    "{triple}: `{leaf}` twice in the prelude"
+                );
+                ns.push(leaf);
+            }
+            types.sort();
+            fns.sort();
+            assert_eq!(
+                types,
+                sorted(PRELUDE_TYPES),
+                "{triple}: modules, types, traits"
+            );
+            assert_eq!(fns, sorted(PRELUDE_FNS), "{triple}: functions");
+        }
+    }
+
     #[test]
     fn package_hash_known_answer() {
         // python3: sha256(b"lib.rok\0pub mod m;\n\0m.rok\0fn f() {}\n\0")

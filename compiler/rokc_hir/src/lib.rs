@@ -89,7 +89,7 @@ pub struct HirInput {
     /// Module path of each item by index (missing: root); HIR qualifies
     /// item names with it.
     pub item_modules: Vec<String>,
-    /// The modules without the implicit `use rok::core::**;`
+    /// The modules without the implicit import
     /// (`#![no_implicit_rok]`, stdlib 0.2.5).
     pub no_implicit_rok: Vec<String>,
     /// What lowering depends on besides the program (the target and

@@ -11,7 +11,7 @@
 // member access and calls.
 async fn five() -> i32 { 5 }
 async fn maybe(b: bool) -> i32 | none { if b { 7 } else { none } }
-struct Box { f: AsyncFuture<i32>; }
+struct Box { f: future::AsyncFuture<i32>; }
 
 let a = await five() == 5;
 let b = await five() + 1 == 5;

@@ -49,7 +49,7 @@ fn read_after(l: RwLock<List<i32>>) -> i64 {
 fn try_locked(m: Mutex<List<i32>>) -> i64 {
     let got: List<i32> = [];
     match m.try_lock() {
-        v: MutexGuard<List<i32>> => using g = v { got = g.get(); },
+        v: sync::MutexGuard<List<i32>> => using g = v { got = g.get(); },
         none => {},
     }
     got.len() as i64

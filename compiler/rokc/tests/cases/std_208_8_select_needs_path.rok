@@ -1,0 +1,16 @@
+// spec: 002.10-generics
+// spec: std 208-stream §2.8.8 / std 002-import §0.2.3
+// expect-error: 15:20: cannot find function `select` in this scope
+// expect-error: help: write `task::select`
+
+// stdlib 2.8.8 / 0.2.3: `stream::select` and `task::select` are not in
+// the prelude, so a bare `select` names neither; write the module path.
+async yield fn nums(n: i32) -> i32 {
+    for i in 1..=n {
+        yield i;
+    }
+}
+
+async fn main() {
+    for await _ in select(nums(2), nums(1)) {}
+}

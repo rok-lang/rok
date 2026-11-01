@@ -13,6 +13,8 @@
 // whole built first.
 
 // The runtime's numbering of the kinds (`rok_os_errno_kind`).
+use rok::bare::mem::GcBuf;
+
 const KIND_OTHER: i32 = 0;
 const KIND_NOT_FOUND: i32 = 1;
 const KIND_PERMISSION_DENIED: i32 = 2;

@@ -25,7 +25,7 @@ enum Color { Red, Green(i32) }
 struct Own { n: i32; }
 impl Own { fn size(self) -> i32 { 7 } }
 
-fn describe<T: Reflect>(x: T) -> str { f"{T::type_name()}/{x.type_name_of()}" }
+fn describe<T: reflect::Reflect>(x: T) -> str { f"{T::type_name()}/{x.type_name_of()}" }
 fn pick() -> i32 | f64 { return 2.5; }
 
 println(f"{i32::type_name()} {i32::size()} {i32::align()} {u8::size()}");
@@ -42,7 +42,7 @@ println(a2.type_name_of());
 println(o.type_name_of());
 let c = Color::Green(3);
 println(c.type_name_of());
-println(Reflect::type_name_of(c));
+println(reflect::Reflect::type_name_of(c));
 println((1, 2.0).type_name_of());
 println([1, 2, 3].type_name_of());
 let v: i32 | f64 = pick();

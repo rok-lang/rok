@@ -15,6 +15,7 @@ use rok::std::time::Duration;
 use rok::core::future::IntoFuture;
 use rok::core::marker::hand_over;
 use rok::core::task::Blocking;
+use rok::bare::mem::{GcBuf, buf_new};
 
 /// Identifies a thread for its lifetime (its runtime worker id).
 pub struct ThreadId {

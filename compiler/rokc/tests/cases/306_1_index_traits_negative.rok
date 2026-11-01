@@ -11,15 +11,15 @@
 
 // Negative signed indexes count from the end; user types index via traits.
 struct Grid { cells: List<i32>; }
-impl Index<(i32, i32)> for Grid {
+impl index::Index<(i32, i32)> for Grid {
     type Output = str;
     fn index(self, at: (i32, i32)) -> str { f"grid {at.0 + at.1}" }
 }
-impl IndexSet<i32> for Grid {
+impl index::IndexSet<i32> for Grid {
     type Value = i32;
     fn index_set(ref self, i: i32, v: i32) { self.cells[i] = v; }
 }
-impl Sliceable<Range<usize>> for Grid {
+impl index::Sliceable<Range<usize>> for Grid {
     type Output = str;
     fn slice(self, r: Range<usize>) -> str { f"sl {r.start}..{r.end}" }
 }

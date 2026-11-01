@@ -18,12 +18,12 @@ impl Degrees for i32 {
     fn degrees(self) -> Angle { return Angle { d: self }; }
 }
 
-impl Neg for Angle {
+impl ops::Neg for Angle {
     type Output = Angle;
     fn neg(self) -> Angle { return Angle { d: 0 - self.d }; }
 }
 
-impl Add for Angle {
+impl ops::Add for Angle {
     type Output = Angle;
     fn add(self, rhs: Angle) -> Angle { return Angle { d: self.d + rhs.d }; }
 }

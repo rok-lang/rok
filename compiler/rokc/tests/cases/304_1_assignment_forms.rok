@@ -12,13 +12,13 @@ struct Pair(i32, i32);
 struct Acc { total: i32; adds: i32; }
 struct Plain { v: i32; }
 
-impl AddAssign<i32> for Acc {
+impl ops::AddAssign<i32> for Acc {
     fn add_assign(ref self, rhs: i32) {
         self.total += rhs;
         self.adds += 1;
     }
 }
-impl Add<i32> for Plain {
+impl ops::Add<i32> for Plain {
     type Output = Plain;
     fn add(self, rhs: i32) -> Plain { Plain { v: self.v + rhs } }
 }

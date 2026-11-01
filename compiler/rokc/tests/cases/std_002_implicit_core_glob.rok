@@ -8,7 +8,7 @@
 // 1 2
 
 // stdlib 0.2: `use m::**` brings in the pub items of `m` and of every
-// submodule; the implicit `use rok::core::**;` makes core's items
+// submodule; the implicit prelude import makes core's items
 // (`List`, `Iterator::sum`, `println`, `Mutex`, the `task` module)
 // usable without a `use`, and the full path names the same item.
 mod geo {

@@ -63,9 +63,11 @@ pub fn build_use_table(
                         vis: *vis,
                     });
                 }
-                let taken = existing
-                    .iter()
-                    .any(|e| matches!(e, UseEntry::Single { local: l, .. } if l == local));
+                // A second target is kept: a module and a value may share
+                // the name, and lookup tries each in its namespace.
+                let taken = existing.iter().any(
+                    |e| matches!(e, UseEntry::Single { local: l, full: f } if l == local && f == full),
+                );
                 if taken {
                     continue;
                 }
@@ -84,9 +86,12 @@ pub fn check_use_clashes(
     raw: &[(String, Visibility, UseTree)],
     table: &UseTable,
     reexports: &[ReExport],
+    is_value: &dyn Fn(&str) -> bool,
 ) -> Vec<RokDiagnostic> {
     let mut diags = Vec::new();
-    let mut first: HashMap<(&str, String), String> = HashMap::new();
+    // Values are a namespace of their own, as where items are declared: a
+    // name may import a module or type and a function (`channel`).
+    let mut first: HashMap<(&str, String, bool), String> = HashMap::new();
     for (module_path, _, tree) in raw {
         let earlier = table.get(module_path).map_or(&[][..], Vec::as_slice);
         let mut leaves = Vec::new();
@@ -95,8 +100,9 @@ pub fn check_use_clashes(
             let UseEntry::Single { local, full } = entry else {
                 continue;
             };
+            let value = is_value(&reexport_end(reexports, &full));
             let prev = first
-                .entry((module_path.as_str(), local.clone()))
+                .entry((module_path.as_str(), local.clone(), value))
                 .or_insert_with(|| full.clone());
             if *prev == full || reexport_end(reexports, prev) == reexport_end(reexports, &full) {
                 continue;
@@ -570,7 +576,7 @@ pub fn check_use_targets(
                 continue;
             }
             // Spec 5.7.1: a bare root may also be a name this module sees
-            // through a glob of its own or the implicit `use rok::core::**`.
+            // through a glob of its own or the implicit import.
             if bare {
                 let written = path
                     .strip_prefix(module_path.as_str())
@@ -583,12 +589,16 @@ pub fn check_use_targets(
                         .iter()
                         .any(|k| k.starts_with(&prefix) && k.ends_with(&tail))
                 };
-                let globbed = earlier.iter().any(|e| match e {
-                    UseEntry::Glob { prefix } => known.contains(&format!("{prefix}{tail}")),
+                let implicit = crate::lower::implicit_use(module_path);
+                let globbed = earlier.iter().chain(&implicit).any(|e| match e {
+                    UseEntry::Glob { prefix } => {
+                        known.contains(&format!("{prefix}{tail}"))
+                            || through_module(&reexported, &known, &format!("{prefix}{tail}"))
+                    }
                     UseEntry::GlobDeep { prefix } => under(prefix),
                     UseEntry::Single { .. } => false,
                 });
-                if globbed || under(crate::lower::CORE_PREFIX) {
+                if globbed {
                     continue;
                 }
             }
@@ -895,6 +905,16 @@ impl GlobNames {
         }
         out
     }
+}
+
+/// `path` exists once a re-exported module on it is followed
+/// (`rok::core::prelude::task::sleep` through `pub use rok::core::task`).
+fn through_module(reexported: &HashMap<String, &str>, known: &HashSet<String>, path: &str) -> bool {
+    path.match_indices("::").any(|(i, _)| {
+        reexported
+            .get(&path[..i])
+            .is_some_and(|m| known.contains(&format!("{m}{}", &path[i..])))
+    })
 }
 
 /// Public alias of `flatten_tree` for the lower pass to expand a

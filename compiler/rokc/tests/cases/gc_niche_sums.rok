@@ -11,7 +11,7 @@ extern "C" {
     fn rok_gc_collect();
 }
 
-struct Rec { name: str; id: NonZero<u32>; tags: List<str>; }
+struct Rec { name: str; id: num::niche::NonZero<u32>; tags: List<str>; }
 
 enum Slot { Name(str), Num(i64) }
 
@@ -26,18 +26,18 @@ fn junk(i: i64) -> i64 {
 
 fn rec(i: u32) -> Rec | none {
     if i % 3 == 0 { return none; }
-    let id = NonZero::new(i) ?? panic("zero");
+    let id = num::niche::NonZero::new(i) ?? panic("zero");
     Rec { name: f"rec-{i}", id, tags: [f"t{i}", f"u{i}"] }
 }
 
 fn main() {
     let recs: List<Rec | none> = [];
-    let dict: Dict<NonZero<u32>, Rec | none> = Dict::new();
+    let dict: Dict<num::niche::NonZero<u32>, Rec | none> = Dict::new();
     let slots: List<Slot | none> = [];
     let i: u32 = 1;
     while i <= 600 {
         recs.push(rec(i));
-        dict[NonZero::new(i) ?? panic("zero")] = rec(i);
+        dict[num::niche::NonZero::new(i) ?? panic("zero")] = rec(i);
         slots.push(if i % 2 == 0 { Slot::Name(f"s{i}") } else if i % 5 == 0 { none } else { Slot::Num(i as i64) });
         junk(i as i64);
         if i % 100 == 0 { unsafe { rok_gc_collect(); } }
@@ -56,7 +56,7 @@ fn main() {
     let dok = true;
     let j: u32 = 1;
     while j <= 600 {
-        let r = dict[NonZero::new(j) ?? panic("zero")];
+        let r = dict[num::niche::NonZero::new(j) ?? panic("zero")];
         dok = dok && match r { none => j % 3 == 0, x: Rec => x.tags[0] == f"t{j}" };
         j += 1;
     }

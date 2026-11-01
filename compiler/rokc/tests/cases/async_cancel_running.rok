@@ -24,7 +24,7 @@ for round in 0..8 {
     await task::sleep(Duration::ms(1));
     for t in tasks { t.cancel(); }
     for t in tasks {
-        try await t.join() catch e: CancellationError { cancelled += 1; 0 };
+        try await t.join() catch e: task::CancellationError { cancelled += 1; 0 };
     }
 }
 println(f"cancelled {cancelled} of 512");

@@ -7,6 +7,8 @@
 // float 0:2.5 2
 
 // The runtime's string helpers called directly through `extern "rok"`.
+use rok::bare::mem::{GcBuf, buf_new};
+
 extern "rok" {
     fn rok_str_eq(a: str, b: str) -> i32;
     fn rok_str_byte(s: str, i: usize) -> u8;

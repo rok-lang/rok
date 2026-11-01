@@ -721,30 +721,25 @@ fn semantic_warnings_are_in_warnings() {
     let app = new_package(&dir, "app", false);
     let src = "struct C { v: i32; }\n\
                impl C { fn set(ref self, n: i32) { self.v = n; } }\n\
-               fn main() {\n    let cs = [C { v: 0 }];\n    cs[0].set(1);\n    quiet(cs);\n    println(f\"{cpu_count() > 0}\");\n}\n\
+               fn main() {\n    let cs = [C { v: 0 }];\n    cs[0].set(1);\n    quiet(cs);\n}\n\
                #[allow(discarded_ref_write)]\n\
                fn quiet(ds: List<C>) { ds[0].set(2); }\n";
     put(app.join("src/main.rok"), src).unwrap();
     let elem = "warning[E503]: the write to `cs[0]` is discarded";
-    let core = "warning[E503]: `cpu_count` is `rok::core::task::cpu_count`";
     let out = rokc(None, &app, &["lint"]);
     assert_exit(&out, 0);
     let err = text(&out.stderr);
-    assert!(err.contains(elem) && err.contains(core), "{err}");
+    assert!(err.contains(elem), "{err}");
     assert!(!err.contains("the write to `ds[0]`"), "{err}");
     for deny in ["warnings", "all"] {
         assert_exit(&rokc(None, &app, &["lint", "-D", deny]), 1);
     }
-    let out = rokc(None, &app, &["lint", "-A", "implicit_core_fn"]);
+    let out = rokc(None, &app, &["lint", "-A", "discarded_ref_write"]);
     let err = text(&out.stderr);
-    assert!(err.contains(elem) && !err.contains(core), "{err}");
+    assert!(!err.contains(elem), "{err}");
     let out = rokc(None, &app, &["lint", "--list"]);
     let list = text(&out.stdout);
-    for name in [
-        "discarded_ref_write",
-        "trait_not_in_scope",
-        "implicit_core_fn",
-    ] {
+    for name in ["discarded_ref_write", "trait_not_in_scope"] {
         assert!(list.contains(&format!("{name:<24} warn  0.1.6")), "{list}");
     }
     // Lints that became errors are gone from the list.
@@ -755,6 +750,7 @@ fn semantic_warnings_are_in_warnings() {
         "ambiguous_int_literal",
         "finally_jump",
         "float_to_bool",
+        "implicit_core_fn",
     ] {
         assert!(!list.contains(name), "{list}");
     }

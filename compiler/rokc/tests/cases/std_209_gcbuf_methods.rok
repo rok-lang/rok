@@ -8,7 +8,7 @@
 // `buf_new` / `buf_get` / `buf_set`). Stdlib 2.11 / 2.13: primitive
 // `From` / `Clone` are the `rok.cast.FROM.TO` / `rok.clone.copy`
 // intrinsics.
-use rok::core::collections::raw::{GcBuf, buf_get};
+use rok::bare::mem::{GcBuf, buf_get};
 
 fn main() {
     let b: GcBuf<i64> = unsafe { GcBuf::new(3) };

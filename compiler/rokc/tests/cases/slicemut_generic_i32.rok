@@ -8,15 +8,15 @@
 
 // Stdlib 2.9.7a: `SliceMut<T>` is generic, like Rust's `&mut [T]`; a
 // generic function taking one infers `T` from a list argument.
-fn rev<T>(s: SliceMut<T>) {
+fn rev<T>(s: collections::SliceMut<T>) {
     s.reverse();
 }
 
-fn put<T>(s: SliceMut<T>, x: T) {
+fn put<T>(s: collections::SliceMut<T>, x: T) {
     s[0] = x;
 }
 
-fn sorted<T: Ord>(s: SliceMut<T>) {
+fn sorted<T: Ord>(s: collections::SliceMut<T>) {
     s.sort();
 }
 
@@ -29,13 +29,13 @@ fn main() {
     sorted(xs);
     sorted(ws[..]);
     println(f"{xs:?} {ws:?}");
-    let s: SliceMut<i32> = xs[:2];
+    let s: collections::SliceMut<i32> = xs[:2];
     s.fill(0);
     put(ws, "z");
     println(f"{xs:?} {ws:?}");
     println(f"{s.contains(0)} {s.contains(3)}");
     let ls: List<List<i32>> = [[1, 1], [2]];
-    let v: SliceMut<List<i32>> = ls;
+    let v: collections::SliceMut<List<i32>> = ls;
     v.sort_by_key(|l: List<i32>| l.len());
     println(f"{ls:?}");
 }

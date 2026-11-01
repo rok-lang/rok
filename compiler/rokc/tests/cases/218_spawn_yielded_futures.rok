@@ -6,10 +6,10 @@
 // expect-stdout:
 // 400000 0
 async fn grow(x: List<i32>) -> usize { for i in 0..200000 { x.push(i); } x.len() }
-yield fn two(x: List<i32>) -> AsyncFuture<usize> { yield grow(x); yield grow(x); }
+yield fn two(x: List<i32>) -> future::AsyncFuture<usize> { yield grow(x); yield grow(x); }
 async fn amain() -> usize {
     let a: List<i32> = [];
-    let fs = two(a).collect::<List<AsyncFuture<usize>>>();
+    let fs = two(a).collect::<List<future::AsyncFuture<usize>>>();
     let ts: List<Task<usize>> = [];
     for f in fs { ts.push(task::spawn(f)); }
     let s: usize = 0;

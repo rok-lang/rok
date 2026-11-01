@@ -60,14 +60,14 @@ using held = m.lock() {
     }
     println(f"waiting: {task::registrations() >= 5}");
     for t in [reader, acceptor, sleeper, locker, receiver] { t.cancel(); }
-    let r = try await reader.join() catch _: CancellationError { -1 };
+    let r = try await reader.join() catch _: task::CancellationError { -1 };
     using f = finally_ran.lock() {
         println(f"socket read: {if r == -1 { "cancelled" } else { "finished" }}, finally ran {f.get()}");
     }
     let names = ["accept", "sleep", "lock", "recv"];
     let rest = [acceptor, sleeper, locker, receiver];
     for i in 0..4 {
-        let v = try await rest[i].join() catch _: CancellationError { -1 };
+        let v = try await rest[i].join() catch _: task::CancellationError { -1 };
         println(f"{names[i]}: {if v == -1 { "cancelled" } else { "finished" }}");
     }
 }

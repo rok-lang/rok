@@ -11,13 +11,13 @@
 // Adapter types as the spec names them, written in signatures and fields.
 use rok::core::iter::Map;
 
-fn first_two(p: Peekable<ListIter<i32>>) -> i32 {
+fn first_two(p: iter::Peekable<collections::ListIter<i32>>) -> i32 {
     let a = p.peek() ?? 0;
     let b = p.next() ?? 0;
     return a + b;
 }
 
-struct Holder { it: Map<ListIter<i32>, str>; }
+struct Holder { it: Map<collections::ListIter<i32>, str>; }
 
 fn main() {
     let xs: List<i32> = [1, 2, 3, 4];

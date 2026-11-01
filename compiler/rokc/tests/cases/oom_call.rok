@@ -5,6 +5,6 @@
 
 // `oom()` (stdlib 2.14.5) is `-> !`: it fits an `i32` slot.
 fn main() -> i32 {
-    let n: i32 = oom();
+    let n: i32 = panic::oom();
     return n;
 }

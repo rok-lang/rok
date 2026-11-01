@@ -8,13 +8,13 @@
 
 // Primitives, `int`, `float` and `str` implement the `*Assign` traits,
 // so `T: AddAssign` bounds accept them and the methods are callable.
-fn grow<T: AddAssign<T>>(a: T, b: T) -> T {
+fn grow<T: ops::AddAssign<T>>(a: T, b: T) -> T {
     let r = a;
     r += b;
     r
 }
 
-fn scale<T: MulAssign<T> + ShlAssign<T>>(a: T, k: T, s: T) -> T {
+fn scale<T: ops::MulAssign<T> + ops::ShlAssign<T>>(a: T, k: T, s: T) -> T {
     let r = a;
     r *= k;
     r <<= s;

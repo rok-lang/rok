@@ -4,12 +4,12 @@
 // true
 
 // `..=b` builds a `RangeToInclusive`; `..b` is a `RangeTo`.
-fn upto(r: RangeTo<i32>, x: i32) -> bool { x < r.end }
-fn through(r: RangeToInclusive<i32>, x: i32) -> bool { x <= r.end }
+fn upto(r: range::RangeTo<i32>, x: i32) -> bool { x < r.end }
+fn through(r: range::RangeToInclusive<i32>, x: i32) -> bool { x <= r.end }
 
 fn main() {
     let a = ..5;
-    let b: RangeToInclusive<i32> = ..=6;
+    let b: range::RangeToInclusive<i32> = ..=6;
     println(f"{a.end} {b.end} {through(..=5, 5)} {upto(a, 5)}");
     // Parenthesized, `..5` is a `RangeTo` argument, not a spread.
     println(f"{upto((..5), 4)}");

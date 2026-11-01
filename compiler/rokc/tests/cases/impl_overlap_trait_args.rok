@@ -7,11 +7,11 @@
 // for T` covers `M` once `M: Mul`, but `DotMul<List<M>>` is not
 // `DotMul<M>` (the default `Rhs = Self`).
 struct M { v: f64; }
-impl Mul for M {
+impl ops::Mul for M {
     type Output = M;
     fn mul(self, rhs: M) -> M { return M { v: self.v * rhs.v }; }
 }
-impl DotMul for M {
+impl ops::DotMul for M {
     type Output = M;
     fn dot_mul(self, rhs: M) -> M { return M { v: self.v * rhs.v }; }
 }

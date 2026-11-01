@@ -6,11 +6,11 @@
 
 // `try_recv_status` tells an empty channel from a closed one, which
 // `try_recv` reports alike as `none`.
-fn show(r: i32 | Empty | Closed) -> str {
+fn show(r: i32 | channel::Empty | channel::Closed) -> str {
     match r {
         v: i32 => f"{v}",
-        _: Empty => "empty",
-        _: Closed => "closed",
+        _: channel::Empty => "empty",
+        _: channel::Closed => "closed",
     }
 }
 

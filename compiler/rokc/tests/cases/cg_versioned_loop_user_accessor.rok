@@ -6,7 +6,7 @@
 // expect-stderr: Vec2 index out of bounds
 // expect-stdout:
 
-use rok::core::collections::raw::GcBuf;
+use rok::bare::mem::GcBuf;
 
 struct Vec2 {
     meta: GcBuf<usize>;

@@ -25,15 +25,15 @@ fn main() {
     println(f"{show(rx.recv())} {show(rx.recv())} {show(rx.recv())}");
     println(f"after close: {show(rx.recv())} {show(rx.try_recv())}");
     try tx.send(9) catch e {
-        match e { SendError::Closed(v) => println(f"send after close: Closed({v})") };
+        match e { channel::SendError::Closed(v) => println(f"send after close: Closed({v})") };
     };
 
     let (btx, brx) = channel_bounded::<i32>(1);
     try! btx.send(7);
     try btx.try_send(8) catch e {
         match e {
-            TrySendError::Full(v) => println(f"bounded full: Full({v})"),
-            TrySendError::Closed(v) => println(f"bounded closed: {v}"),
+            channel::TrySendError::Full(v) => println(f"bounded full: Full({v})"),
+            channel::TrySendError::Closed(v) => println(f"bounded closed: {v}"),
         };
     };
 

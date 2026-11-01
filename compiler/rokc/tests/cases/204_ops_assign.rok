@@ -14,25 +14,25 @@
 // `a = a op b`.
 struct V { x: i32; adds: i32; }
 
-impl AddAssign for V {
+impl ops::AddAssign for V {
     fn add_assign(ref self, rhs: V) {
         self.x = self.x + rhs.x * 2;
         self.adds = self.adds + 1;
     }
 }
 
-impl MulAssign<i32> for V {
+impl ops::MulAssign<i32> for V {
     fn mul_assign(ref self, k: i32) { self.x = self.x * k; }
 }
 
 struct Vec3 { x: f64; y: f64; z: f64; }
 
-impl Add for Vec3 {
+impl ops::Add for Vec3 {
     type Output = Vec3;
     fn add(self, r: Vec3) -> Vec3 { Vec3 { x: self.x + r.x, y: self.y + r.y, z: self.z + r.z } }
 }
 
-fn grow<T: AddAssign<T>>(a: T, b: T) -> T {
+fn grow<T: ops::AddAssign<T>>(a: T, b: T) -> T {
     let r = a;
     r += b;
     r

@@ -9,12 +9,12 @@
 struct Seven {}
 impl Future for Seven {
     type Output = i32;
-    fn poll(ref self, ref ctx: Context) -> Poll<i32> { Poll::Ready(7) }
+    fn poll(ref self, ref ctx: future::Context) -> future::Poll<i32> { future::Poll::Ready(7) }
 }
 struct MakeCell {}
 impl Future for MakeCell {
     type Output = Cell<i32>;
-    fn poll(ref self, ref ctx: Context) -> Poll<Cell<i32>> { Poll::Ready(Cell::new(8)) }
+    fn poll(ref self, ref ctx: future::Context) -> future::Poll<Cell<i32>> { future::Poll::Ready(Cell::new(8)) }
 }
 
 println(f"{await task::spawn(Seven {})}");

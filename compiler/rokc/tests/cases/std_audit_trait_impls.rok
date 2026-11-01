@@ -44,11 +44,11 @@ fn main() -> i32 {
     let tx_own = channel::<i32>().0;
     let tx = unsafe { share(tx_own) };
     tx_own.close();
-    let e1 = try { tx.send(1); "sent" } catch e: SendError<i32> { show(e) };
-    let e2 = try { tx.send(1); "sent" } catch e: SendError<i32> { f"{e:?}" };
+    let e1 = try { tx.send(1); "sent" } catch e: channel::SendError<i32> { show(e) };
+    let e2 = try { tx.send(1); "sent" } catch e: channel::SendError<i32> { f"{e:?}" };
     let (btx, _brx) = channel_bounded::<i32>(1);
     try! btx.try_send(1);
-    let e3 = try { btx.try_send(2); "sent" } catch e: TrySendError<i32> { show(e) };
+    let e3 = try { btx.try_send(2); "sent" } catch e: channel::TrySendError<i32> { show(e) };
     println(f"{e1} | {e2} | {e3}");
     let h = thread::spawn(|| 40 + 2);
     let v = task::block_on(async { await h });

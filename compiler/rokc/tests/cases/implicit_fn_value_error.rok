@@ -1,0 +1,15 @@
+// spec: std 002-import §0.2.3
+// expect-error: 12:13: cannot find function `cpu_count` in this scope
+// expect-error: help: write `task::cpu_count`, or add `use rok::core::task::cpu_count;`
+// expect-error: 13:13: cannot find value `sleep` in this scope
+// expect-error: help: write `task::sleep`, or add `use rok::core::task::sleep;`
+// expect-error: 14:13: cannot find function `constant_time_eq` in this scope
+
+// A core free function outside the prelude is not a bare name, called
+// or as a value: the error names the path to write.
+
+fn main() {
+    let a = cpu_count();
+    let f = sleep;
+    let b = constant_time_eq("a", "b");
+}

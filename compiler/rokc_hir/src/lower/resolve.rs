@@ -143,19 +143,61 @@ pub(super) fn resolve_name(
             LookupOutcome::None => {}
         }
     }
-    // The implicit `use rok::core::**;` (stdlib 0.1) comes last so local
-    // names shadow it, unless the file opts out (0.2.5).
-    if NO_IMPLICIT.with(|n| n.borrow().iter().any(|m| m == module)) {
+    // The implicit import (stdlib 0.2) comes last so local names shadow
+    // it, unless the file opts out (0.2.5).
+    let Some(implicit) = implicit_use(module) else {
         return Ok(None);
+    };
+    let implicit = [implicit];
+    // `use task::sleep;`: a `use` whose root is a name of the implicit
+    // import (a `use` path is relative to its module, spec 5.7.1).
+    let own = |full: &str| match module {
+        "" => Some(full.to_owned()),
+        m => full.strip_prefix(m)?.strip_prefix("::").map(str::to_owned),
+    };
+    let named = local_uses
+        .iter()
+        .rev()
+        .flatten()
+        .chain(uses.get(module).into_iter().flatten());
+    for entry in named {
+        let crate::uses::UseEntry::Single { local, full } = entry else {
+            continue;
+        };
+        let Some(written) = own(full).filter(|_| segments.first() == Some(&local.as_str())) else {
+            continue;
+        };
+        let path: Vec<&str> = written
+            .split("::")
+            .chain(segments[1..].iter().copied())
+            .collect();
+        if let LookupOutcome::Resolved(s) =
+            lookup_in_use_entries_full(&implicit, &path, &path.join("::"), set)
+        {
+            return Ok(Some(s));
+        }
     }
-    let core = [crate::uses::UseEntry::GlobDeep {
-        prefix: CORE_PREFIX.to_owned(),
-    }];
-    match lookup_in_use_entries_full(&core, segments, &suffix, set) {
-        LookupOutcome::Resolved(s) => Ok(Some(s)),
+    match lookup_in_use_entries_full(&implicit, segments, &suffix, set) {
+        LookupOutcome::Resolved(s) => Ok(Some(through_prelude(&s, uses, set).unwrap_or(s))),
         LookupOutcome::Ambiguous(hits) => Err(hits),
         LookupOutcome::None => Ok(None),
     }
+}
+
+/// `rok::core::prelude::task::sleep` as the path it re-exports,
+/// `rok::core::task::sleep`, so names and messages show the item's own.
+fn through_prelude(key: &str, uses: &crate::uses::UseTable, set: &NameSet<'_>) -> Option<String> {
+    let rest = key.strip_prefix(PRELUDE)?.strip_prefix("::")?;
+    let (head, tail) = rest
+        .split_once("::")
+        .map_or((rest, None), |(h, t)| (h, Some(t)));
+    uses.get(PRELUDE)?.iter().find_map(|e| match e {
+        crate::uses::UseEntry::Single { local, full } if local == head => {
+            let k = tail.map_or_else(|| full.clone(), |t| format!("{full}::{t}"));
+            (set.exists)(&k).then_some(k)
+        }
+        _ => None,
+    })
 }
 
 /// The absolute path a rooted path names from `module` (spec 5.7): `pkg::`
@@ -228,6 +270,27 @@ pub(super) fn str_lit_of(e: &rokc_ast::Expr) -> Option<&str> {
 /// Module path the driver mounts `library/core` under.
 pub const CORE_PREFIX: &str = "rok::core";
 
+/// The module user code imports implicitly (stdlib 0.2).
+pub const PRELUDE: &str = "rok::core::prelude";
+
+/// The implicit import of `module`, or `None` under `#![no_implicit_rok]`:
+/// `use rok::core::prelude::*;` in user code; the library's own modules
+/// keep `use rok::core::**;`.
+pub fn implicit_use(module: &str) -> Option<crate::uses::UseEntry> {
+    if NO_IMPLICIT.with(|n| n.borrow().iter().any(|m| m == module)) {
+        return None;
+    }
+    Some(if module == "rok" || module.starts_with("rok::") {
+        crate::uses::UseEntry::GlobDeep {
+            prefix: CORE_PREFIX.to_owned(),
+        }
+    } else {
+        crate::uses::UseEntry::Glob {
+            prefix: PRELUDE.to_owned(),
+        }
+    })
+}
+
 /// Can code in `cur_module` see an item declared in `def_module` with
 /// visibility `vis`? (spec 5.6)
 pub fn visible_from(cur_module: &str, def_module: &str, vis: Visibility) -> bool {
@@ -257,21 +320,13 @@ pub fn set_packages(names: Vec<String>) {
 }
 
 thread_local! {
-    /// The modules without the implicit `use rok::core::**;`
+    /// The modules without the implicit import
     /// (`HirInput::no_implicit_rok`).
     static NO_IMPLICIT: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 pub fn set_no_implicit(modules: Vec<String>) {
     NO_IMPLICIT.with(|n| *n.borrow_mut() = modules);
-}
-
-/// `f` with the implicit `use rok::core::**;` off in `module`.
-pub(super) fn without_implicit<R>(module: &str, f: impl FnOnce() -> R) -> R {
-    NO_IMPLICIT.with(|n| n.borrow_mut().push(module.to_owned()));
-    let r = f();
-    NO_IMPLICIT.with(|n| n.borrow_mut().pop());
-    r
 }
 
 pub fn is_dependency(name: &str) -> bool {

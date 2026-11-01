@@ -984,6 +984,7 @@ fn repl_failed_cell_loses_no_work_and_no_lock() {
     let Some(env) = setup() else { return };
     let rokr = env.rokr.display().to_string();
     let input = "\
+use rok::core::sync::Once;
 use rok::core::task;
 use rok::core::task::time::Instant;
 use rok::std::thread;

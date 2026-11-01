@@ -49,7 +49,7 @@ impl Inspect for Manual {
     fn field_names() -> List<str> { ["k"] }
     fn get_field(self, name: str) -> any | none { none }
     fn set_field(ref self, name: str, value: any) -> bool { false }
-    fn methods() -> List<MethodInfo> { [] }
+    fn methods() -> List<reflect::MethodInfo> { [] }
 }
 
 fn show<T: Inspect>() {
@@ -73,7 +73,7 @@ println(f"{Unit::fields().len()} {Unit::field_names():?}");
 show::<Outer>();
 println(f"{a.variant_name()} {Pair(1, none).variant_name()} {Unit.variant_name()}");
 println(f"{a.field_names_of():?} {Pair(1, "x").field_names_of():?}");
-let fs = fields_of::<bank::Account>();
+let fs = reflect::fields_of::<bank::Account>();
 println(f"{fs.len()} {fs[0].name}");
 let b = Box { v: 1.5, items: [2.5] };
 println(b.variant_name());

@@ -3,8 +3,8 @@
 //       task, par, fmt, reflect, future, crypto (algorithms), encoding.
 // Bootstraps operator dispatch (`#[infix]`, `#[prefix]`, `#[postfix]`) and
 // literal handlers (`#[literal]`).
-// User code gets an implicit `use rok::core::**;` (stdlib spec 0.1, 0.2) -
-// there is no separate prelude module.
+// User code gets an implicit `use rok::core::prelude::*;` (stdlib spec
+// 0.2); the library's own modules see all of `rok::core::**`.
 
 pub mod array;
 pub mod bench;
@@ -24,6 +24,7 @@ pub mod marker;
 pub mod num;
 pub mod ops;
 pub mod panic;
+pub mod prelude;
 pub mod par;
 pub mod print;
 pub mod range;

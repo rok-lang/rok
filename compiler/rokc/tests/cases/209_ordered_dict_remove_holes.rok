@@ -9,7 +9,7 @@
 // Stdlib 2.9.5: OrderedDict / OrderedSet remove in O(1) (holes), order kept
 // across removal, re-insertion appends, holes skipped by iteration.
 fn main() -> i32 {
-    let d: OrderedDict<str, i32> = OrderedDict::new();
+    let d: collections::OrderedDict<str, i32> = collections::OrderedDict::new();
     for i in 0..8 {
         d.insert(f"k{i}", i);
     }
@@ -22,7 +22,7 @@ fn main() -> i32 {
         d.remove(k);
     }
     println(f"{d.get("k7"):?} {d.get("k2"):?} {d.len()} {d:?}");
-    let s = OrderedSet::from([3, 1, 2]);
+    let s = collections::OrderedSet::from([3, 1, 2]);
     s.remove(1);
     s.insert(1);
     println(f"{s.to_list():?} {s.len()}");

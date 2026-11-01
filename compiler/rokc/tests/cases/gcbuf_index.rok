@@ -6,6 +6,8 @@
 
 // `b[i]` / `b[i] = v` / `b[i] += v` on a `GcBuf<T>` lower to the
 // `rok.buf_get` / `rok.buf_set` primitives (unchecked, no call).
+use rok::bare::mem::{GcBuf, buf_get, buf_new, buf_set};
+
 struct Cell { meta: GcBuf<usize>; }
 
 fn main() {

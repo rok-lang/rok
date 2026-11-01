@@ -11,10 +11,10 @@ use rok::std::thread;
 
 struct Cfg { names: List<str>; limits: Dict<str, i32>; hits: Mutex<i32>; }
 
-static CFG: Frozen<List<i32>> = Frozen::new([1, 2, 3]);
+static CFG: sync::Frozen<List<i32>> = sync::Frozen::new([1, 2, 3]);
 
 fn main() {
-    let c = Frozen::new(Cfg { names: ["a", "b"], limits: {"x": 1}, hits: Mutex::new(0) });
+    let c = sync::Frozen::new(Cfg { names: ["a", "b"], limits: {"x": 1}, hits: Mutex::new(0) });
     let ts: List<thread::JoinHandle<i32>> = [];
     for _ in 0..4 {
         ts.push(thread::spawn(|| {

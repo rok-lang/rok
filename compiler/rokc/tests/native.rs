@@ -1160,6 +1160,7 @@ long ptr_read_or(long *p, long d) { return p ? *p : d; }
 
 const NICHE_ROK: &str = r#"
 use rok::bare::ptr::Ptr;
+use rok::core::num::niche::NonZero;
 
 struct Cb { f: extern "C" fn(i64) -> i64 | none; x: i64; }
 

@@ -25,7 +25,7 @@ async fn main() {
     let t = task::spawn(sleeper());
     await task::sleep(Duration::ms(20));
     t.cancel();
-    let r = try await t.join() catch _: CancellationError { -1 };
+    let r = try await t.join() catch _: task::CancellationError { -1 };
     println(f"cancelled promptly: {t0.elapsed().as_ms() < 5000}");
     println(f"result: {if r == -1 { "cancelled" } else { "finished" }}");
 }

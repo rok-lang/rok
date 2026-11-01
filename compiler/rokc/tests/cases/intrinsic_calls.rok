@@ -11,7 +11,7 @@
 // `#[intrinsic("rok.OP.TYPE")]` - calling them by name lowers to the
 // machine op (method call, path call, through a type parameter).
 
-fn twice<T: Mul<T, Output = T>>(x: T, k: T) -> T { return T::mul(x, k); }
+fn twice<T: ops::Mul<T, Output = T>>(x: T, k: T) -> T { return T::mul(x, k); }
 
 fn main() -> i32 {
     println(f"{3.add(4)}");

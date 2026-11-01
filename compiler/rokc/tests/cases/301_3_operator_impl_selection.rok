@@ -8,19 +8,19 @@
 // Operators are trait calls; the right operand's type picks the impl.
 struct V { x: i32; y: i32; }
 
-impl Add for V {
+impl ops::Add for V {
     type Output = V;
     fn add(self, rhs: V) -> V { V { x: self.x + rhs.x, y: self.y + rhs.y } }
 }
-impl Neg for V {
+impl ops::Neg for V {
     type Output = V;
     fn neg(self) -> V { V { x: -self.x, y: -self.y } }
 }
-impl Mul<i32> for V {
+impl ops::Mul<i32> for V {
     type Output = V;
     fn mul(self, k: i32) -> V { V { x: self.x * k, y: self.y * k } }
 }
-impl Mul<f64> for V {
+impl ops::Mul<f64> for V {
     type Output = f64;
     fn mul(self, k: f64) -> f64 { (self.x + self.y) as f64 * k }
 }

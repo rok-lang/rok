@@ -43,7 +43,7 @@ async fn main() {
     let fields: List<str> = Point::field_names();
     let methods: List<MethodInfo> = [];
     println(f"{Point::type_name()} {fields:?}");
-    println(report(IndexError { index: 10, len: 3 }));
+    println(report(error::IndexError { index: 10, len: 3 }));
     println(report(ValueError::new("bad")));
     let buf = StrBuf::new();
     buf.push_str("ab");

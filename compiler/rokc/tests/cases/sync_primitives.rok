@@ -45,7 +45,7 @@ fn main() -> i32 {
     using r = l.read(), r2 = l.read() { println(f"{r.get() + r2.get()}"); }
     using w = l.write() { w.set(9); }
     using r = l.read() { println(f"{r.get()}"); }
-    let once = Once::new();
+    let once = sync::Once::new();
     let n = Atomic::new(0);
     once.call_once(|| { n.fetch_add(1); });
     once.call_once(|| { n.fetch_add(1); });

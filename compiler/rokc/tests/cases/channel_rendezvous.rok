@@ -39,8 +39,8 @@ fn main() -> i32 {
     let (lonely, _unused) = channel_bounded::<i64>(0);
     try lonely.try_send(9) catch e {
         match e {
-            TrySendError::Full(v) => println(f"full {v}"),
-            TrySendError::Closed(_) => println("closed"),
+            channel::TrySendError::Full(v) => println(f"full {v}"),
+            channel::TrySendError::Closed(_) => println("closed"),
         };
     };
     try! tx.send(6);

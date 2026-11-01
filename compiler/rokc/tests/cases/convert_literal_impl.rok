@@ -39,8 +39,8 @@ impl From<int> for B { fn from(x: int) -> B { B { v: x } } }
 impl From<str> for B { fn from(x: str) -> B { B { v: 0 } } }
 
 struct D { v: i64; }
-impl Mul<i64> for D { type Output = D; fn mul(self, k: i64) -> D { D { v: self.v * k } } }
-impl Mul<D> for D { type Output = D; fn mul(self, k: D) -> D { D { v: self.v * k.v } } }
+impl ops::Mul<i64> for D { type Output = D; fn mul(self, k: i64) -> D { D { v: self.v * k } } }
+impl ops::Mul<D> for D { type Output = D; fn mul(self, k: D) -> D { D { v: self.v * k.v } } }
 
 fn main() {
     let e = try Even::try_from(-1) catch e: ConversionError { println(f"{e}"); Even { v: 0 } };

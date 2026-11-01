@@ -52,7 +52,7 @@ let _ = await task::select([
     },
 ]);
 using s = started.lock() { println(f"never started: {s.get()}"); }
-println(f"lock still free: {m.try_lock() is MutexGuard<i32>}");
+println(f"lock still free: {m.try_lock() is sync::MutexGuard<i32>}");
 
 // Each child registers with the select's own waker, dropped when the
 // select ends: a loop with a long `sleep` and a parked `recv_async`
@@ -82,7 +82,7 @@ let t = task::spawn(async {
 });
 await task::sleep(Duration::ms(10));
 t.cancel();
-try await t.join() catch _: CancellationError { 0 };
+try await t.join() catch _: task::CancellationError { 0 };
 using c = inner.lock() { println(f"cancel reaches the children: {c.get()}"); }
 
 // spec: 004.12-async

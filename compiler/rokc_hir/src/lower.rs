@@ -40,8 +40,8 @@ mod mono;
 mod pattern;
 mod reflect;
 mod resolve;
-pub use resolve::{CORE_PREFIX, is_dependency, root_path, set_packages, visible_from};
 pub use resolve::{hidden_module, hidden_module_msg, module_visibility, visibility_rank};
+pub use resolve::{implicit_use, is_dependency, root_path, set_packages, visible_from};
 mod send_check;
 mod suggest;
 mod throws;
@@ -736,8 +736,19 @@ impl TypeNames {
         mut keys: Vec<String>,
         vis: impl Fn(&str) -> Option<Visibility>,
     ) -> Option<String> {
+        // The shortest path the prelude gives (`task::sleep`), before the
+        // spellings through it are dropped.
+        let open = |k: &str| {
+            self.hidden(cur, k).is_none()
+                && visible_from(cur, &module_of(k), vis(k).unwrap_or(Visibility::Pub))
+        };
+        let write = self.prelude_write(cur, keys.iter().filter(|k| open(k)));
+        let prelude = format!("{}::", resolve::PRELUDE);
         keys.retain(|k| {
-            module_of(k) != cur && !k.contains('/') && !k.split("::").any(|s| s.starts_with("__"))
+            module_of(k) != cur
+                && !k.contains('/')
+                && !k.starts_with(&prelude)
+                && !k.split("::").any(|s| s.starts_with("__"))
         });
         keys.sort();
         keys.dedup();
@@ -747,10 +758,17 @@ impl TypeNames {
             _ => 2,
         };
         keys.sort_by_key(|k| (tier(k), k.matches("::").count()));
-        let open = |k: &str| {
-            self.hidden(cur, k).is_none()
-                && visible_from(cur, &module_of(k), vis(k).unwrap_or(Visibility::Pub))
-        };
+        if let Some(w) = write {
+            // The `use` of the same item the path names.
+            let same = format!("::{w}");
+            let import = (keys.iter().filter(|k| open(k)))
+                .find(|k| k.ends_with(&same))
+                .or_else(|| keys.iter().find(|k| open(k)));
+            return Some(match import {
+                Some(k) => format!("write `{w}`, or add `use {k};`"),
+                None => format!("write `{w}`"),
+            });
+        }
         let lines: Vec<String> = keys
             .iter()
             .filter(|k| open(k))
@@ -781,6 +799,57 @@ impl TypeNames {
             (Some(p), Some(i)) => Some(format!("{p}; or {i}")),
             (p, i) => p.or(i),
         }
+    }
+
+    /// The shortest of `keys` as code in `cur` writes it through the
+    /// prelude (`rok::core::task::sleep`: `task::sleep`), if it applies
+    /// there.
+    fn prelude_write<'k>(
+        &self,
+        cur: &str,
+        keys: impl Iterator<Item = &'k String>,
+    ) -> Option<String> {
+        let prelude = resolve::PRELUDE;
+        if !matches!(implicit_use(cur), Some(crate::uses::UseEntry::Glob { prefix }) if prefix == prelude)
+        {
+            return None;
+        }
+        incr::read(|| incr::Read::Uses(prelude.to_owned()));
+        let entries = self.uses.get(prelude)?;
+        let entries: Vec<(&str, &str)> = (entries.iter())
+            .filter_map(|e| match e {
+                crate::uses::UseEntry::Single { local, full } => {
+                    Some((local.as_str(), full.as_str()))
+                }
+                _ => None,
+            })
+            .collect();
+        // A key spelled through the prelude (`rok::core::prelude::task::x`)
+        // stands for its own path (`rok::core::task::x`).
+        let real = |k: &str| {
+            let Some(rest) = k.strip_prefix(prelude).and_then(|r| r.strip_prefix("::")) else {
+                return k.to_owned();
+            };
+            let (head, tail) = rest.split_once("::").unwrap_or((rest, ""));
+            match entries.iter().find(|(local, _)| *local == head) {
+                Some((_, full)) if tail.is_empty() => (*full).to_owned(),
+                Some((_, full)) => format!("{full}::{tail}"),
+                None => k.to_owned(),
+            }
+        };
+        let entries = &entries;
+        keys.map(|k| real(k))
+            .filter(|k| self.hidden(cur, k).is_none())
+            .flat_map(|k| {
+                entries.iter().filter_map(move |(local, full)| {
+                    if k == *full {
+                        return Some((*local).to_owned());
+                    }
+                    let rest = k.strip_prefix(full)?.strip_prefix("::")?;
+                    Some(format!("{local}::{rest}"))
+                })
+            })
+            .min_by_key(|p| (p.matches("::").count(), p.len(), p.clone()))
     }
 
     /// Value key `k` is a type's associated item (`Duration::MAX`,
@@ -3325,21 +3394,6 @@ impl<'a> LowerCtx<'a> {
         self.push_warning(lint_diag(lint, at, msg, help));
     }
 
-    /// `emit_lint` with the edit `help` asks for, for editors to apply
-    /// (an empty `fix.span` inserts). Errors take theirs by `fix_last`.
-    fn emit_lint_fix(
-        &self,
-        lint: &str,
-        at: Span,
-        msg: String,
-        help: String,
-        fix: rokc_diagnostic::Fix,
-    ) {
-        let mut d = lint_diag(lint, at, msg, help);
-        d.fixes.push(fix);
-        self.push_warning(d);
-    }
-
     fn push_warning(&self, d: rokc_diagnostic::RokDiagnostic) {
         if self.ty_subst.is_empty() {
             self.env.sink.diagnostics.borrow_mut().push(d);
@@ -3505,10 +3559,16 @@ impl<'a> LowerCtx<'a> {
             }
             // `T::f` with `T` a type not imported.
             let names = &self.env.names;
+            let cur = self.current_module.as_str();
             return self.import_help(segs).or_else(|| match segs {
-                [ty, _] => names.import_help(&self.current_module, names.type_leaf(ty), |k| {
-                    names.type_vis(k)
-                }),
+                [ty, member] => {
+                    let keys = names.type_leaf(ty);
+                    let open = keys.iter().filter(|k| names.hidden(cur, k).is_none());
+                    match names.prelude_write(cur, open) {
+                        Some(w) => Some(format!("write `{w}::{member}`")),
+                        None => names.import_help(cur, keys, |k| names.type_vis(k)),
+                    }
+                }
                 _ => None,
             });
         };
@@ -3559,6 +3619,48 @@ impl<'a> LowerCtx<'a> {
         let typo = rokc_diagnostic::suggest(name, locals.chain(items))
             .map(|s| format!("did you mean `{s}`?"));
         join_help(import, typo)
+    }
+
+    /// A bare `name` that is only some enum's variant, with no expected
+    /// type to pick it (spec 5.7.1): the error and its help, naming the
+    /// variant by its shortest path here.
+    fn variant_not_in_scope(&self, name: &str) -> Option<(String, String)> {
+        // Another language's spelling has its own help (`none`).
+        if matches!(
+            name,
+            "null" | "nil" | "None" | "NULL" | "True" | "False" | "Some"
+        ) {
+            return None;
+        }
+        let names = &self.env.names;
+        let cur = self.current_module.as_str();
+        let write = |e: &String| {
+            if self.canon_type(&[leaf_name(e)]).as_ref() == Some(e) {
+                return leaf_name(e).to_owned();
+            }
+            names
+                .prelude_write(cur, std::iter::once(e))
+                .unwrap_or_else(|| resolve::use_path(cur, e))
+        };
+        let mut paths: Vec<String> = names
+            .variant_leaf(name)
+            .iter()
+            .map(|k| module_of(k))
+            .filter(|e| {
+                names.hidden(cur, e).is_none()
+                    && names
+                        .type_vis(e)
+                        .is_none_or(|v| visible_from(cur, &module_of(e), v))
+            })
+            .map(|e| format!("{}::{name}", write(&e)))
+            .collect();
+        paths.sort_by_key(|p| (p.matches("::").count(), p.len(), p.clone()));
+        paths.dedup();
+        let first = paths.first()?;
+        let msg = format!("`{name}` is not in scope: it is the variant `{first}`");
+        let picks: Vec<String> = paths.iter().take(3).map(|p| format!("`{p}`")).collect();
+        let help = format!("write {}", picks.join(" or "));
+        Some((msg, help))
     }
 
     /// `m::f` naming an item of a module `m` that is not imported: the
@@ -3722,7 +3824,12 @@ impl<'a> LowerCtx<'a> {
             .map(|n| segs[segs.len() - n..].join("::"))
             .find(|s| {
                 let tail = format!("::{s}");
-                others.iter().all(|o| o == full || !o.ends_with(&tail))
+                // The prelude's re-exports name the same items.
+                others.iter().all(|o| {
+                    o == full
+                        || !o.ends_with(&tail)
+                        || o.starts_with(&format!("{}::", resolve::PRELUDE))
+                })
             })
             .unwrap_or_else(|| full.to_owned())
     }

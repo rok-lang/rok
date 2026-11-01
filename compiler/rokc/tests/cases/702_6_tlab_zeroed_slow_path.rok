@@ -9,6 +9,7 @@
 // Fresh objects read zero; the slow path fills the header; overflow aborts.
 use rok::bare::mem::transmute_unchecked;
 use rok::bare::ptr::ConstPtr;
+use rok::bare::mem::{GcBuf, buf_new};
 
 extern "C" {
     fn rok_gc_collect();

@@ -87,8 +87,8 @@ struct Config {
     tags: List<str>;
     seen: Set<i32>;
     limits: Dict<str, i64>;
-    order: OrderedDict<str, u8>;
-    picked: OrderedSet<str>;
+    order: collections::OrderedDict<str, u8>;
+    picked: collections::OrderedSet<str>;
     mode: Mode;
     proxy: str | none;
     shapes: List<Shape>;

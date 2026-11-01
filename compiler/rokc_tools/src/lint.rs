@@ -154,10 +154,6 @@ pub const LINTS: &[Lint] = &[
         "a method from a trait outside `rok::` that is neither defined nor `use`d in the module",
     ),
     warn_since(
-        "implicit_core_fn",
-        "a core free function called bare through the implicit `use rok::core::**`",
-    ),
-    warn_since(
         "guard_escape",
         "a `throw` inside `using` whose error holds what the lock protects",
     ),
@@ -216,6 +212,7 @@ pub const REMOVED_LINTS: &[&str] = &[
     "using_twice",
     "extern_static_unsafe",
     "improper_ctypes",
+    "implicit_core_fn",
 ];
 
 /// A lint added in 0.1.6.

@@ -1,0 +1,23 @@
+// spec: std 002-import §0.2.4 §0.2.3
+// expect-exit: 0
+// expect-stdout:
+// mine 3 1
+// 7
+
+// A user item named like a prelude name wins in its module; a `use` may
+// start with a prelude module; a user enum's variant wins over a core
+// variant of the same name.
+use task::block_on;
+
+struct List { n: i32; }
+fn println(s: str) { print(f"mine {s}\n"); }
+enum Mode { Less, More }
+
+fn pick(m: Mode) -> i32 { match m { Less => 1, More => 2 } }
+
+fn main() {
+    let l = List { n: 3 };
+    println(f"{l.n} {pick(Less)}");
+    let v = block_on(async { 7 });
+    print(f"{v}\n");
+}

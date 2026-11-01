@@ -6,7 +6,7 @@
 struct MakeCell {}
 impl Future for MakeCell {
     type Output = Cell<i32>;
-    fn poll(ref self, ref ctx: Context) -> Poll<Cell<i32>> { Poll::Ready(Cell::new(1)) }
+    fn poll(ref self, ref ctx: future::Context) -> future::Poll<Cell<i32>> { future::Poll::Ready(Cell::new(1)) }
 }
 
 let t = task::spawn(MakeCell {});

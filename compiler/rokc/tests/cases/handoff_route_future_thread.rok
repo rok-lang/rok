@@ -10,8 +10,8 @@ async fn grow(xs: List<i32>) -> usize {
 fn main() {
     let a: List<i32> = [];
     let f = grow(a);
-    let (tx, rx) = channel::<AsyncFuture<usize>>();
-    let t = thread::spawn(|| { if let g: AsyncFuture<usize> = rx.recv() { task::block_on(g) } else { 0 as usize } });
+    let (tx, rx) = channel::<future::AsyncFuture<usize>>();
+    let t = thread::spawn(|| { if let g: future::AsyncFuture<usize> = rx.recv() { task::block_on(g) } else { 0 as usize } });
     try! tx.send(f);
     for i in 0..200000 { a.push(i); }
     let _ = try! t.join();

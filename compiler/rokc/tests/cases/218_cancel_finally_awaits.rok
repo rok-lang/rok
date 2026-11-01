@@ -31,7 +31,7 @@ async fn main() {
     let t = task::spawn(worker("cancelled"));
     await task::sleep(Duration::ms(20));
     t.cancel();
-    let r = try await t.join() catch _: CancellationError { -1 };
+    let r = try await t.join() catch _: task::CancellationError { -1 };
     println(f"join -> {r}");
     let (i, v) = await task::select([worker("select loser"), fast()]);
     println(f"select -> {i} {v}");

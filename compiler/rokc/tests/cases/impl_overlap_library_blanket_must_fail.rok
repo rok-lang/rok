@@ -9,7 +9,7 @@ struct P {
     x: i32;
 }
 
-impl DotEq<List<P>> for P {
+impl ops::DotEq<List<P>> for P {
     type Output = List<bool>;
     fn dot_eq(self, rhs: List<P>) -> List<bool> { return [true]; }
 }

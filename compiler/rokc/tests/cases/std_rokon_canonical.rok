@@ -74,16 +74,16 @@ fn main() {
     // One column more breaks the list.
     check(items(4, 22));
     // Inside a struct the field line counts its indent, name and comma.
-    let fs: OrderedDict<str, Value> = OrderedDict::new();
+    let fs: collections::OrderedDict<str, Value> = collections::OrderedDict::new();
     fs.insert("fits", items(3, 23));
     fs.insert("breaks", items(3, 26));
     fs.insert("t", Value::Tuple([items(2, 30), Value::Int(1), items(2, 30)]));
-    let named: OrderedDict<str, Value> = OrderedDict::new();
+    let named: collections::OrderedDict<str, Value> = collections::OrderedDict::new();
     named.insert("label", Value::Str("y".repeat(60)));
     fs.insert("v", Value::Variant { path: "Shape::Tagged", args: [Value::Str("z".repeat(40))], named: named });
-    let d: OrderedDict<Value, Value> = OrderedDict::new();
+    let d: collections::OrderedDict<Value, Value> = collections::OrderedDict::new();
     d.insert(Value::Str("k".repeat(30)), items(3, 25));
-    d.insert(Value::Int(2), Value::Struct { name: none, fields: OrderedDict::new() });
+    d.insert(Value::Int(2), Value::Struct { name: none, fields: collections::OrderedDict::new() });
     fs.insert("d", Value::Dict(d));
     check(Value::Struct { name: "Config", fields: fs });
 

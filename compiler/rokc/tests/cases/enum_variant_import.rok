@@ -7,8 +7,8 @@
 // 9
 // 1
 
-// Bare variants: `Ok` / `Err` come in through the implicit
-// `use rok::core::**` (stdlib 2.14 examples write them bare); user
+// Bare variants: `Ok` / `Err` from the expected `Result` type
+// (stdlib 2.14 examples write them bare); user
 // enum variants through `use E::*` / `use E::{A as B}`.
 
 struct HttpErr { code: i32; }

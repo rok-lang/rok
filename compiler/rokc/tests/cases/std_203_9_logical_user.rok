@@ -14,11 +14,11 @@
 // `bool` they still short-circuit.
 struct B { v: bool; }
 
-impl LogicalAnd for B {
+impl ops::LogicalAnd for B {
     fn logical_and(self, rhs: B) -> bool { println("and"); self.v && rhs.v }
 }
 
-impl LogicalOr for B {
+impl ops::LogicalOr for B {
     fn logical_or(self, rhs: B) -> bool { println("or"); self.v || rhs.v }
 }
 

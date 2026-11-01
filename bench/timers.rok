@@ -18,6 +18,6 @@ await task::sleep(Duration::ms(10));
 for t in long { t.cancel(); }
 let cancelled = 0;
 for t in long {
-    try await t.join() catch _: CancellationError { cancelled += 1; 0 };
+    try await t.join() catch _: task::CancellationError { cancelled += 1; 0 };
 }
 println(f"fired {fired} in {fire_ms} ms, cancelled {cancelled} in {mid.elapsed().as_ms()} ms, left {task::registrations()}");

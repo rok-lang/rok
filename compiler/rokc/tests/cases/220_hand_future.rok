@@ -11,12 +11,12 @@ struct Countdown { left: i32; polls: List<i32>; }
 
 impl Future for Countdown {
     type Output = i32;
-    fn poll(ref self, ref ctx: Context) -> Poll<i32> {
+    fn poll(ref self, ref ctx: future::Context) -> future::Poll<i32> {
         self.polls.push(self.left);
-        if self.left == 0 { return Poll::Ready(99); }
+        if self.left == 0 { return future::Poll::Ready(99); }
         self.left = self.left - 1;
         ctx.waker().wake();
-        Poll::Pending
+        future::Poll::Pending
     }
 }
 
@@ -25,7 +25,7 @@ async fn main() {
     let c = Countdown { left: 2, polls: polls };
     let v = await c;
     println(f"polls {polls.len()} value {v}");
-    let r: Poll<i32> = Poll::Ready(1);
-    let p: Poll<i32> = Poll::Pending;
+    let r: future::Poll<i32> = future::Poll::Ready(1);
+    let p: future::Poll<i32> = future::Poll::Pending;
     println(f"ready {r.is_ready()} pending {p.is_pending()}");
 }

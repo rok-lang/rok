@@ -27,7 +27,7 @@ fn g(x: i64) -> i64 {
 
 struct V { n: i64; }
 
-impl DotAdd<i64> for V {
+impl ops::DotAdd<i64> for V {
     type Output = V;
     fn dot_add(self, k: i64) -> V { V { n: self.n + k } }
 }

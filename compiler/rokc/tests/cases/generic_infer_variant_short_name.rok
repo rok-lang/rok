@@ -1,10 +1,10 @@
-// expect-error: 7:16: type annotations needed: cannot infer the type arguments of `Result` for `Ok`
+// expect-error: 7:16: type annotations needed: cannot infer the type arguments of `Result` for `Result::Ok`
 
 // A variant whose enum's type arguments stay open in a closure body: the
 // error names the enum as the user writes it, not by its library path.
 fn main() -> i32 {
     let ok = || -> Result<i32, str> { Ok(1) };
-    let f = || Ok(1);
+    let f = || Result::Ok(1);
     return ok().unwrap_or(0);
 }
 

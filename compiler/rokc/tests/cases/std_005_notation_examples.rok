@@ -9,7 +9,7 @@
 // type implements the `Add<Rhs = Self>` signature as written; the
 // saturating / checked variants are separate methods.
 struct V { x: i32; y: i32; }
-impl Add for V {
+impl ops::Add for V {
     type Output = V;
     fn add(self, rhs: V) -> V { return V { x: self.x + rhs.x, y: self.y + rhs.y }; }
 }

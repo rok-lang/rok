@@ -4,7 +4,7 @@
 // 3
 
 // stdlib 0.2.5: `#![no_implicit_rok]` drops the implicit
-// `use rok::core::**;` from the file; what it uses is imported.
+// prelude import from the file; what it uses is imported.
 #![no_implicit_rok]
 
 use rok::core::ops::Add;

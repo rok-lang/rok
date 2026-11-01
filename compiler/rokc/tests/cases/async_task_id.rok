@@ -9,13 +9,13 @@
 // `TaskId`: `task::id()` inside a task, `Task::id()` on its handle; ids
 // are unique; `current_id` is `none` outside any task.
 
-let seen: Set<TaskId> = Set::new();
+let seen: Set<task::TaskId> = Set::new();
 let main_id = task::id();
 println(f"main has an id: {main_id.as_u64() > 0}");
 let blocking = await task::spawn_blocking(|| task::current_id() is none);
 println(f"outside: {if blocking { "none" } else { "some" }}");
 
-let tasks: List<Task<TaskId>> = List::new();
+let tasks: List<Task<task::TaskId>> = List::new();
 for i in 0..100 {
     tasks.push(task::spawn(async {
         await task::yield_now();

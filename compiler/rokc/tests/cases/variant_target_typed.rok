@@ -1,0 +1,38 @@
+// spec: §2.4.8
+// expect-exit: 0
+// expect-stdout:
+// 3
+// 2 1 1 5 2 2 1 true true lt 2 none
+
+// A bare variant takes its enum from the expected type, for user and
+// core enums alike: let, argument, default value, return, tail, field,
+// list element, `==` / `!=`, match and `if let` patterns.
+enum Shape { Circle, Square, Tri(i32) }
+struct Holder { s: Shape; }
+
+fn pick(s: Shape = Square) -> i32 {
+    match s { Circle => 1, Square => 2, Tri(n) => n }
+}
+fn back() -> Shape { return Circle; }
+fn tail() -> Shape { Tri(5) }
+fn res(x: i32) -> Result<i32, str> {
+    if x > 0 { return Ok(x); }
+    Err("neg")
+}
+
+fn main() {
+    let a: Shape = Tri(3);
+    let o: Ordering = Less;
+    let h = Holder { s: Square };
+    let xs: List<Shape> = [Circle, Square];
+    let at = Atomic::new(1);
+    let v = at.load(SeqCst);
+    let eq = 3.cmp(4) == Less;
+    let ne = o != Greater;
+    let m = match 1.cmp(2) { Less => "lt", Equal => "eq", Greater => "gt" };
+    let r = match res(2) { Ok(v) => v, Err(_) => 0 };
+    if let Tri(n) = a { println(f"{n}"); }
+    let maybe: Shape | none = none;
+    let w = if let _s: Shape = maybe { "some" } else { "none" };
+    println(f"{pick()} {pick(Circle)} {pick(back())} {pick(tail())} {pick(h.s)} {xs.len()} {v} {eq} {ne} {m} {r} {w}");
+}

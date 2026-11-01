@@ -3,8 +3,8 @@
 // 1 2
 // Sha384
 
-// A program's own struct shadows a core enum variant of the same name
-// that the implicit `use rok::core::**;` brings in bare
+// A program's own struct named like a core enum variant is the struct,
+// with or without an expected type that has the variant
 // (`rok::core::crypto::sha2::HashAlgorithm::Sha256`).
 struct Sha256 { x: i32; }
 struct P256 { y: i32; }

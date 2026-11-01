@@ -56,7 +56,7 @@ fn guard_frames() {
     let f = hold_none();
     using g = M.lock() { f = hold(g); }
     let _ = task::block_on(f);
-    let b: AsyncFuture<usize> = async { 0usize };
+    let b: future::AsyncFuture<usize> = async { 0usize };
     using g = M.lock() { b = async { g.get()[0].len() }; }
     let _ = task::block_on(b);
 }

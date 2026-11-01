@@ -16,6 +16,7 @@
 
 use rok::core::convert::AsBytes;
 use rok::std::io::{Close, IoError, IoErrorKind, Reader, Writer, Seek, check, region, read_all, take_handle, write_region, text_of, byte_buf, list_of, use_begin, use_end, use_close};
+use rok::bare::mem::{GcBuf, buf_new};
 pub use rok::std::io::SeekFrom;
 use rok::std::path::{Path, AsPath, Component};
 use rok::std::env;

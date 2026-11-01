@@ -21,7 +21,8 @@
 
 use rok::bare::mem::size_of;
 use rok::bare::ptr::Ptr;
-use rok::core::collections::raw::{buf_get, buf_new};
+use rok::bare::mem::{buf_get, buf_new};
+use rok::bare::mem::{GcBuf, buf_get, buf_new};
 
 #[niche(0)]
 struct Id(i32);

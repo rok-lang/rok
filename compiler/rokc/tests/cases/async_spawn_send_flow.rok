@@ -14,10 +14,10 @@ fn launch<F: Future + Send>(f: F) -> Task<F::Output> {
 }
 
 struct Job {
-    fut: AsyncFuture<i32>;
+    fut: future::AsyncFuture<i32>;
 }
 
-fn helper() -> AsyncFuture<i32> {
+fn helper() -> future::AsyncFuture<i32> {
     let from_helper = Cell::new(3);
     async { from_helper.get() }
 }

@@ -21,9 +21,9 @@ async fn main() {
     ]);
     println(f"race {first}");
 
-    let v = try await task::timeout(Duration::secs(5), task::spawn(async { 7 })) catch e: TimeoutError { -1 };
+    let v = try await task::timeout(Duration::secs(5), task::spawn(async { 7 })) catch e: task::TimeoutError { -1 };
     println(f"timeout ok {v}");
 
-    let w = try await task::timeout(Duration::ms(5), task::spawn(after(5000, "late"))) catch e: TimeoutError { f"{e:?}" };
+    let w = try await task::timeout(Duration::ms(5), task::spawn(after(5000, "late"))) catch e: task::TimeoutError { f"{e:?}" };
     println(f"timeout {w}");
 }

@@ -66,8 +66,8 @@ async fn main() {
     let t = task::spawn(outer());
     await task::sleep(Duration::ms(20));
     t.cancel();
-    let r = try await t.join() catch _: CancellationError { -1 };
+    let r = try await t.join() catch _: task::CancellationError { -1 };
     println(if r == -1 { "join -> cancelled" } else { "join -> value" });
-    println(f"lock free = {M.try_lock() is MutexGuard<i64>}");
+    println(f"lock free = {M.try_lock() is sync::MutexGuard<i64>}");
     println(f"next task runs: {await task::spawn(seven())}");
 }

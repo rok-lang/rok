@@ -31,7 +31,7 @@ fn takes_ints(xs: List<i32>) -> usize { xs.len() }
 
 fn sum_i64(xs: List<i64>) -> i64 { xs.iter().sum() }
 
-fn sum<T: Zero + Add<T, Output = T> + Clone>(xs: List<T>) -> T {
+fn sum<T: Zero + ops::Add<T, Output = T> + Clone>(xs: List<T>) -> T {
     let acc: T = T::zero();
     for x in xs { acc = acc + x; }
     acc
@@ -48,7 +48,7 @@ fn join_all<T: Display + Clone>(items: List<T>) -> str {
 
 fn complex<T, U, V>(a: T, b: U) -> V
 where
-    T: Add<U, Output = V>,
+    T: ops::Add<U, Output = V>,
     V: Display + Clone,
 {
     a + b

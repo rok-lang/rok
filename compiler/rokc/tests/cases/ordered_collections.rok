@@ -11,7 +11,7 @@
 // collected {"x": 1, "y": 2} {5, 4}
 // cleared 0 {}
 fn main() {
-    let d = OrderedDict::from([("z", 1), ("a", 2), ("m", 3)]);
+    let d = collections::OrderedDict::from([("z", 1), ("a", 2), ("m", 3)]);
     let old = d.insert("z", 10);
     println(f"{d:?} len {d.len()}");
     println(f"old {old ?? 0} get {d.get("a") ?? 0} miss {d.get("q") is none}");
@@ -24,13 +24,13 @@ fn main() {
     for v in d.values() { vs = vs + f"{v} "; }
     println(vs.trim());
 
-    let s = OrderedSet::from([3, 1, 2, 1]);
+    let s = collections::OrderedSet::from([3, 1, 2, 1]);
     println(f"{s:?} contains {s.contains(2)} insert-dup {s.insert(3)}");
-    let t = OrderedSet::from([9, 1]);
-    println(f"union {s.union(t):?} inter {s.intersection(t):?} diff {s.difference(t):?} sub {OrderedSet::from([2, 3]).is_subset(s)}");
+    let t = collections::OrderedSet::from([9, 1]);
+    println(f"union {s.union(t):?} inter {s.intersection(t):?} diff {s.difference(t):?} sub {collections::OrderedSet::from([2, 3]).is_subset(s)}");
 
-    let c: OrderedDict<str, i32> = [("x", 1), ("y", 2)].iter().collect();
-    let cs: OrderedSet<i32> = [5, 4, 5].iter().collect();
+    let c: collections::OrderedDict<str, i32> = [("x", 1), ("y", 2)].iter().collect();
+    let cs: collections::OrderedSet<i32> = [5, 4, 5].iter().collect();
     println(f"collected {c:?} {cs:?}");
     c.clear();
     println(f"cleared {c.len()} {c:?}");

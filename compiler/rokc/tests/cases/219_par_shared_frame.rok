@@ -10,24 +10,24 @@
 
 struct Grab {}
 impl Future for Grab {
-    type Output = Waker;
-    fn poll(ref self, ref ctx: Context) -> Poll<Waker> { Poll::Ready(ctx.waker()) }
+    type Output = future::Waker;
+    fn poll(ref self, ref ctx: future::Context) -> future::Poll<future::Waker> { future::Poll::Ready(ctx.waker()) }
 }
 async fn work() -> usize {
     let l: List<i32> = [];
     for i in 0..200000 { l.push(i); if i % 50 == 0 { await task::yield_now(); } }
     l.len()
 }
-struct H { f: AsyncFuture<usize>; w: Waker; }
+struct H { f: future::AsyncFuture<usize>; w: future::Waker; }
 async fn main() {
     let w = await Grab {};
     let f = work();
     let hs: List<H> = [H { f, w }, H { f, w }];
     let ns = par::map(hs, |h: H| {
-        let ctx = Context::from_waker(h.w);
+        let ctx = future::Context::from_waker(h.w);
         let n: usize = 0;
         loop {
-            if let Poll::Ready(v) = h.f.poll(ref ctx) { n = v; break; }
+            if let Ready(v) = h.f.poll(ref ctx) { n = v; break; }
         }
         n
     });

@@ -19,7 +19,7 @@ pub(pkg) mod x509;
 pub(pkg) mod ocsp;
 pub(pkg) mod conn;
 
-use rok::core::collections::raw::{GcBuf, buf_new};
+use rok::bare::mem::{GcBuf, buf_new};
 use rok::std::net::{TcpStream, Shutdown};
 use rok::core::task;
 use rok::core::convert::AsBytes;

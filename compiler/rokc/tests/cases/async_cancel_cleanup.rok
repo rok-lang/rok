@@ -44,7 +44,7 @@ while true {
     await task::sleep(Duration::ms(1));
 }
 t.cancel();
-let r = try await t.join() catch e: CancellationError { println(f"join: {e:?}"); -1 };
+let r = try await t.join() catch e: task::CancellationError { println(f"join: {e:?}"); -1 };
 
 // Nested: the inner coroutine leaves first, then its awaiting caller.
 async fn inner() -> i32 {
@@ -58,7 +58,7 @@ let t2 = task::spawn(async {
 });
 await task::sleep(Duration::ms(5));
 t2.cancel();
-try await t2.join() catch e: CancellationError { 0 };
+try await t2.join() catch e: task::CancellationError { 0 };
 
 using s = steps.lock() { println(f"steps {s.get()}"); }
 

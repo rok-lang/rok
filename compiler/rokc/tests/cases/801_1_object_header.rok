@@ -16,6 +16,7 @@
 // The 16-byte object header, sizes, LOS placement and the PINNED / STICKY bits.
 use rok::bare::mem::transmute_unchecked;
 use rok::bare::ptr::ConstPtr;
+use rok::bare::mem::{GcBuf, buf_new};
 
 extern "C" {
     fn rok_gc_collect();

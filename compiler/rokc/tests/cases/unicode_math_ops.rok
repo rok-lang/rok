@@ -16,19 +16,19 @@
 // fixed levels; `÷ ≤ ≥ ≠ ≡` are synonyms of `/ <= >= != ==`.
 struct V { x: i32; y: i32; }
 
-impl Dot for V {
+impl ops::Dot for V {
     type Output = i32;
     fn dot(self, rhs: V) -> i32 { return self.x * rhs.x + self.y * rhs.y; }
 }
 
-impl Cross for V {
+impl ops::Cross for V {
     type Output = i32;
     fn cross(self, rhs: V) -> i32 { return self.x * rhs.y - self.y * rhs.x; }
 }
 
 struct Bits { b: i32; }
 
-impl Contains<i32> for Bits {
+impl ops::Contains<i32> for Bits {
     fn contains(self, item: i32) -> bool { return (self.b >> item) & 1 == 1; }
 }
 

@@ -3,7 +3,7 @@
 // expect-stdout:
 // 12 9
 
-fn filter_sum<T: Add<T, Output = T> + Default>(xs: [T; 6], pred: fn(T) -> bool) -> T {
+fn filter_sum<T: ops::Add<T, Output = T> + Default>(xs: [T; 6], pred: fn(T) -> bool) -> T {
     let acc = T::default();
     for v in xs {
         if pred(v) {
