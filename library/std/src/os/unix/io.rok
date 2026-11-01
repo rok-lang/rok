@@ -1,0 +1,33 @@
+// rok::std::os::unix::io: raw file descriptors (stdlib 305.9). `File`,
+// the sockets, the child pipes and the standard streams implement
+// `AsRawFd`; `FromRawFd` takes ownership of a descriptor.
+
+use rok::core::io::{Stdin, Stdout, Stderr};
+
+/// A file descriptor.
+pub type RawFd = i32;
+
+/// The descriptor behind a handle, still owned by it (`-1` once the
+/// handle is closed).
+pub trait AsRawFd {
+    fn as_raw_fd(self) -> RawFd;
+}
+
+/// A handle that owns descriptor `fd` from now on: closing the handle
+/// closes `fd`.
+pub trait FromRawFd {
+    /// Safety: `fd` must be open, and nothing else may close it.
+    unsafe fn from_raw_fd(fd: RawFd) -> Self;
+}
+
+impl AsRawFd for Stdin {
+    const fn as_raw_fd(self) -> RawFd { 0 }
+}
+
+impl AsRawFd for Stdout {
+    const fn as_raw_fd(self) -> RawFd { 1 }
+}
+
+impl AsRawFd for Stderr {
+    const fn as_raw_fd(self) -> RawFd { 2 }
+}

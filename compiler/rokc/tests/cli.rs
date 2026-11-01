@@ -4406,7 +4406,7 @@ fn pointer_sized_limits_follow_the_target() {
     }
 }
 
-/// `#[cfg]` on an impl member (stdlib 3.7.2 `Child::pidfd`, Linux only):
+/// `#[cfg]` on an impl (stdlib 3.7.5 `ChildExt::pidfd`, Linux only):
 /// the method exists for a Linux target and not for macOS.
 #[test]
 fn cfg_on_impl_members_follows_the_target() {

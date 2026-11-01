@@ -2907,7 +2907,10 @@ fn check_tiers(
             self.check(p);
         }
     }
+    // The prelude is what user code imports, not core code: on unix
+    // targets it names std's OS Ext traits (stdlib 0.2).
     let tier = |module: &str| match package_of(module) {
+        _ if module == super::resolve::PRELUDE => None,
         "rok::bare" => Some("rok::bare"),
         "rok::core" => Some("rok::core"),
         _ => None,

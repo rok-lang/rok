@@ -2980,6 +2980,9 @@ mod tests {
         "FromStr",
         "Inspect",
     ];
+    /// Added on unix targets, then on Linux: the OS Ext traits.
+    const PRELUDE_UNIX: &[&str] = &["PermissionsExt", "CommandExt", "ExitStatusExt"];
+    const PRELUDE_LINUX: &[&str] = &["ChildExt", "TcpStreamExt"];
     const PRELUDE_FNS: &[&str] = &[
         "channel",
         "channel_bounded",
@@ -3074,11 +3077,15 @@ mod tests {
             }
             types.sort();
             fns.sort();
-            assert_eq!(
-                types,
-                sorted(PRELUDE_TYPES),
-                "{triple}: modules, types, traits"
-            );
+            let cfg = env.lines();
+            let mut want = PRELUDE_TYPES.to_vec();
+            if cfg.iter().any(|l| l == "target_family=\"unix\"") {
+                want.extend(PRELUDE_UNIX);
+            }
+            if cfg.iter().any(|l| l == "target_os=\"linux\"") {
+                want.extend(PRELUDE_LINUX);
+            }
+            assert_eq!(types, sorted(&want), "{triple}: modules, types, traits");
             assert_eq!(fns, sorted(PRELUDE_FNS), "{triple}: functions");
         }
     }

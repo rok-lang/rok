@@ -21,7 +21,8 @@ fn main() throws (IoError) {
     let c = unsafe { share(c_own) };
     let (s, _) = try l.accept();
     try c.close();
-    println(f"closed: {c.fd() == -1}");
+    let closed = try { _ = try c.local_addr(); false } catch _ { true };
+    println(f"closed: {closed}");
     try c.close();
     println("again: ok");
     let buf: List<u8> = [0u8];

@@ -33,6 +33,7 @@ use rok::std::fs;
 use rok::std::fs::{Dir, File, Permissions};
 use rok::core::io::SeekFrom;
 use rok::std::os::unix::fs::PermissionsExt;
+use rok::std::os::unix::io::AsRawFd;
 use rok::core::io::{IoError, IoErrorKind};
 use rok::std::path::Path;
 use rok::std::env;
@@ -101,8 +102,8 @@ fn main() throws (IoError) {
     try fs::create_dir(base / "a") catch e { println(f"{e.kind():?}"); };
 
     let d = try Dir::root().open_dir(base);
-    let up = try f"{d.open("../x").fd()}" catch e { f"{e.kind():?}" };
-    let abs = try f"{d.open("/etc/hosts").fd()}" catch e { f"{e.kind():?}" };
+    let up = try f"{d.open("../x").as_raw_fd()}" catch e { f"{e.kind():?}" };
+    let abs = try f"{d.open("/etc/hosts").as_raw_fd()}" catch e { f"{e.kind():?}" };
     println(f"escape: {up} {abs}");
     using inner = try d.open("a/hello.txt") {
         println(try inner.read_to_str());

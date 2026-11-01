@@ -1,18 +1,22 @@
 // spec: std 307-process §3.7.1 §3.7.5
+// spec: std 311-os §3.11.5
 // expect-exit: 0
 // expect-stdout:
 // grouped: true
 // plain: false
 // handled: 2
 // sigkill: SignalError { signal: Kill, os_code: 22 }
+// parent: true
 
-// spec 3.7.1: `Command::process_group(0)` makes the child lead a new
+// spec 3.7.1: `CommandExt::process_group(0)` makes the child lead a new
 // process group. 3.7.5: `on_signal(sig, handler)` runs `handler` when the
 // signal arrives (on a dispatcher thread), `raise(sig)` sends one to
 // this process, and an uncatchable signal throws `SignalError`.
 use rok::core::sync::{LoadOrdering, UpdateOrdering};
+// `os::unix::process::parent_id` is the parent's pid.
 use rok::std::process;
 use rok::std::process::{Command, Signal};
+use rok::std::os::unix::process as process_unix;
 use rok::std::thread;
 use rok::std::time::Duration;
 use rok::core::io::IoError;
@@ -27,15 +31,16 @@ fn main() throws (IoError) {
 
     let hits: Atomic<i64> = Atomic::new(0);
     try! process::on_signal(Signal::Hangup, || { hits.fetch_add(1, UpdateOrdering::SeqCst); });
-    try process::raise(1);
+    try process::raise(Signal::Hangup);
     // Wait for the dispatcher before the next one: a second signal
     // still pending in the kernel would merge with the first.
     for _ in 0..200 { if hits.load(LoadOrdering::SeqCst) >= 1 { break; } thread::sleep(Duration::ms(10)); }
-    try process::raise(1);
+    try process::raise(Signal::Hangup);
     for _ in 0..200 { if hits.load(LoadOrdering::SeqCst) >= 2 { break; } thread::sleep(Duration::ms(10)); }
     println(f"handled: {hits.load(LoadOrdering::SeqCst)}");
 
     let e = try { process::on_signal(Signal::Kill, || {}); "ok" } catch e { f"{e:?}" };
     println(f"sigkill: {e}");
+    println(f"parent: {process_unix::parent_id() > 0u32}");
 }
 // only-os: macos linux

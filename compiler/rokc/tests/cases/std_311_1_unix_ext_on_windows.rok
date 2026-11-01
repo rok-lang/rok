@@ -1,0 +1,16 @@
+// spec: std 311-os §3.11.1
+// only-os: windows
+// expect-error: 14:13: no method `process_group` found for type `Command`
+// expect-error: note: `process_group` is only available on unix (`#[cfg(target_family = "unix")]`)
+// expect-error: 15:13: no method `as_raw_fd` found for type `File`
+// expect-error: note: `as_raw_fd` is only available on unix (`#[cfg(target_family = "unix")]`)
+
+// The unix Ext traits are in the prelude on unix targets only: on
+// Windows their methods do not exist, and the error says where they do.
+use rok::std::fs::File;
+use rok::std::process::Command;
+
+fn main() {
+    let c = Command::new("x").process_group(0);
+    let f = (try! File::open("x")).as_raw_fd();
+}

@@ -2,15 +2,13 @@
 // spec: §6.2.7 §6.2.14
 // needs: posix-fs
 // expect-exit: 0
-// expect-lint: 44:57 use of deprecated method `Metadata::mtime`
-// expect-lint: 44:82 use of deprecated method `Metadata::mtime_nanos`
-// expect-lint: 45:76 use of deprecated method `Metadata::atime`
-// expect-lint: 46:88 use of deprecated method `Metadata::ctime`
-// expect-lint: 53:15 `File::from_fd` will need `unsafe` in a later release: wrap the call in `unsafe { .. }`
+// expect-lint: 40:57 use of deprecated method `Metadata::mtime`
+// expect-lint: 40:82 use of deprecated method `Metadata::mtime_nanos`
+// expect-lint: 41:76 use of deprecated method `Metadata::atime`
+// expect-lint: 42:88 use of deprecated method `Metadata::ctime`
 // expect-warning: = note: use `modified()`
 // expect-warning: = note: use `accessed()`
 // expect-warning: = note: use `status_changed()` (last status change) or `created()`
-// expect-warning: = note: `fd` must be open, and nothing else may close it
 // expect-stdout:
 // File Dir true false
 // entry: File true
@@ -18,10 +16,8 @@
 // accessed = atime: true
 // status_changed = ctime: true
 // created: true
-// from_fd: InvalidInput: none: file is closed
 
-// `file_type`, `changed` and `created` replace the raw Unix times;
-// `File::from_fd` warns outside `unsafe`.
+// `file_type`, `changed` and `created` replace the raw Unix times.
 use rok::std::fs;
 use rok::std::fs::{File, FileType};
 use rok::core::io::{IoError, IoErrorKind};
@@ -50,10 +46,5 @@ fn main() throws (IoError) {
         t
     };
     println(f"created: {try! born.unix_seconds() > 0}");
-    let bad = File::from_fd(-1, "none");
-    let quiet = unsafe { File::from_fd(-1, "quiet") };
-    try bad.read_to_str() catch e { println(f"from_fd: {e.kind():?}: {e}"); "" };
-    try bad.close();
-    try quiet.close();
     try fs::remove_dir_all(dir);
 }

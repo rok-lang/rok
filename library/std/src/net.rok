@@ -1,4 +1,6 @@
-// rok::std::net (stdlib 302): TCP / UDP / Unix sockets, addresses, DNS.
+// rok::std::net (stdlib 302): TCP / UDP sockets, addresses, DNS. Unix
+// sockets are `os::unix::net`, the Linux kernel copies
+// `os::linux::net::TcpStreamExt`.
 //
 // Three layers: `Socket` (domain, type, protocol and options, each call
 // one system call), the typed `TcpStream::connect` / `TcpListener::bind` /
@@ -14,17 +16,21 @@
 // the worker, because a sync fn cannot suspend a stackless coroutine.
 //
 // `read(buf)` fills `buf[0..n]` of a pre-sized `List<u8>`; writes take
-// any `AsBytes`. A Unix listener's `accept` gives the peer's bound path
-// (`none`: unnamed). `sendfile` / `splice` are Linux only; no IPv6
-// multicast or `MSG_ZEROCOPY` (302.7). TLS 1.3 is `tls` (302.5).
+// any `AsBytes`. No IPv6 multicast. TLS 1.3 is `tls` (302.5).
 
 use rok::core::convert::AsBytes;
 use rok::core::io::{Close, IoError, IoErrorKind, Read, Write, AsyncRead, AsyncWrite};
 use rok::std::sys::{check, would_block, region, mut_region, take_handle, use_begin, use_end, use_close};
 use rok::std::time::Duration;
-use rok::std::fs::File;
-use rok::std::path::{AsPath, Path};
 use rok::bare::mem::{GcBuf, buf_new};
+#[cfg(target_family = "unix")]
+use rok::std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
+#[cfg(target_os = "linux")]
+use rok::std::os::linux::net::TcpStreamExt;
+#[cfg(target_os = "linux")]
+use rok::std::fs::File;
+#[cfg(target_os = "windows")]
+use rok::std::os::windows::io::{AsRawSocket, FromRawSocket, RawSocket, raw_socket, socket_fd};
 
 pub mod tls;
 
@@ -439,7 +445,7 @@ impl FromStr for SocketAddr {
 
 // runtime marshalling: `[family, port, flow, scope, bytes..16]`
 
-const ADDR_WORDS: usize = 20;
+pub(pkg) const ADDR_WORDS: usize = 20;
 
 const fn words_of(a: SocketAddr) -> GcBuf<i64> {
     unsafe {
@@ -575,12 +581,12 @@ fn first_addr<A: ToSocketAddrs>(addr: A) throws (IoError) -> SocketAddr {
 /// `[fd, calls in flight]` (`io::use_begin`) shared by copies of a
 /// handle, plus `[nonblocking, read timeout ns, write timeout ns]`
 /// (timeouts -1: none).
-struct Sock {
-    fd: GcBuf<i32>;
-    opts: GcBuf<i64>;
+pub(pkg) struct Sock {
+    pub(pkg) fd: GcBuf<i32>;
+    pub(pkg) opts: GcBuf<i64>;
 }
 
-const fn sock_of(fd: i32) -> Sock {
+pub(pkg) const fn sock_of(fd: i32) -> Sock {
     unsafe {
         let cell: GcBuf<i32> = buf_new(2);
         cell[0] = fd;
@@ -607,7 +613,7 @@ impl Sock {
     /// The fd for `io::copy`'s kernel path: only without timeouts or
     /// non-blocking mode, which the kernel copy would not keep (`-1`;
     /// also on Windows, where a socket is no file handle).
-    const fn copy_fd(self) -> i32 {
+    pub(pkg) const fn copy_fd(self) -> i32 {
         unsafe {
             if cfg!(target_os = "windows") || self.opts[0] != 0i64 || self.opts[1] >= 0i64 || self.opts[2] >= 0i64 { return -1; }
             self.fd()
@@ -615,7 +621,7 @@ impl Sock {
     }
 
     /// The fd (`-1` once closed).
-    const fn fd(self) -> i32 {
+    pub(pkg) const fn fd(self) -> i32 {
         unsafe {
             if (self.fd[1] & 1) != 0 { return -1; }
             self.fd[0]
@@ -624,7 +630,7 @@ impl Sock {
 
     /// The fd to wait on for readiness (no call on it), or of a sock not
     /// shared yet.
-    const fn live(self) throws (IoError) -> i32 {
+    pub(pkg) const fn live(self) throws (IoError) -> i32 {
         let fd = self.fd();
         if fd < 0 { throw IoError::new(IoErrorKind::InvalidInput, "socket is closed"); }
         fd
@@ -632,7 +638,7 @@ impl Sock {
 
     /// The fd for one call, which `done` ends. A `close` meanwhile
     /// leaves the fd open until then.
-    fn enter(self) throws (IoError) -> i32 {
+    pub(pkg) fn enter(self) throws (IoError) -> i32 {
         let fd = unsafe { self.fd[0] };
         if fd < 0 || !use_begin(self.fd, 1) {
             throw IoError::new(IoErrorKind::InvalidInput, "socket is closed");
@@ -640,11 +646,11 @@ impl Sock {
         fd
     }
 
-    fn done(self) {
+    pub(pkg) fn done(self) {
         if use_end(self.fd, 1) { self.release(); }
     }
 
-    fn release(self) {
+    pub(pkg) fn release(self) {
         unsafe {
             let fd = take_handle(self.fd, 0, -1);
             if fd >= 0 {
@@ -658,7 +664,7 @@ impl Sock {
     /// task waiting on its readiness wakes and finds it closed (the
     /// kernel sends no event for a closed fd). With calls in flight
     /// through other copies, the last of them releases the fd.
-    fn discard(self) {
+    pub(pkg) fn discard(self) {
         let fd = unsafe { self.fd[0] };
         if use_close(self.fd, 1) == 0 {
             self.release();
@@ -669,7 +675,7 @@ impl Sock {
 
     /// `discard`, throwing the OS's error. Released by a call in
     /// flight, or closed already: nothing to report.
-    fn close(self) throws (IoError) {
+    pub(pkg) fn close(self) throws (IoError) {
         let fd = unsafe { self.fd[0] };
         if use_close(self.fd, 1) != 0 {
             if fd >= 0 { task::wake_io(fd); }
@@ -684,7 +690,7 @@ impl Sock {
 
     /// `shutdown(2)`; waiting tasks wake to see the end of stream or the
     /// write error.
-    fn shutdown(self, how: Shutdown) throws (IoError) {
+    pub(pkg) fn shutdown(self, how: Shutdown) throws (IoError) {
         let h = match how { Shutdown::Read => 0, Shutdown::Write => 1, Shutdown::Both => 2 };
         let fd = try self.enter();
         let r = unsafe { rok_net_shutdown(fd, h) };
@@ -695,7 +701,7 @@ impl Sock {
 
     /// After a `WouldBlock`: throw it (non-blocking mode) or wait for
     /// readiness within the timeout.
-    fn block(self, write: i32, what: str) throws (IoError) {
+    pub(pkg) fn block(self, write: i32, what: str) throws (IoError) {
         unsafe {
             if self.opts[0] != 0i64 {
                 throw IoError::new(IoErrorKind::WouldBlock, what + ": operation would block");
@@ -708,7 +714,7 @@ impl Sock {
         }
     }
 
-    const fn set_timeout(self, write: usize, dur: Duration | none) {
+    pub(pkg) const fn set_timeout(self, write: usize, dur: Duration | none) {
         unsafe {
             self.opts[1 + write] = match dur {
                 d: Duration => d.as_ns(),
@@ -717,7 +723,7 @@ impl Sock {
         }
     }
 
-    const fn timeout(self, write: usize) -> Duration | none {
+    pub(pkg) const fn timeout(self, write: usize) -> Duration | none {
         unsafe {
             let ns = self.opts[1 + write];
             if ns < 0i64 { return none; }
@@ -725,7 +731,7 @@ impl Sock {
         }
     }
 
-    fn addr(self, peer: i32) throws (IoError) -> SocketAddr {
+    pub(pkg) fn addr(self, peer: i32) throws (IoError) -> SocketAddr {
         unsafe {
             let out: GcBuf<i64> = buf_new(ADDR_WORDS);
             let fd = try self.enter();
@@ -736,14 +742,14 @@ impl Sock {
         }
     }
 
-    fn setopt(self, opt: i32, val: i64) throws (IoError) {
+    pub(pkg) fn setopt(self, opt: i32, val: i64) throws (IoError) {
         let fd = try self.enter();
         let r = unsafe { rok_net_setopt(fd, opt, val) };
         self.done();
         try check(r as i64, "setsockopt");
     }
 
-    fn getopt(self, opt: i32) throws (IoError) -> i64 {
+    pub(pkg) fn getopt(self, opt: i32) throws (IoError) -> i64 {
         unsafe {
             let out: GcBuf<i64> = buf_new(1);
             let fd = try self.enter();
@@ -754,7 +760,7 @@ impl Sock {
         }
     }
 
-    const fn set_nonblocking(self, nb: bool) {
+    pub(pkg) const fn set_nonblocking(self, nb: bool) {
         unsafe {
             self.opts[0] = if nb { 1i64 } else { 0i64 };
         }
@@ -762,7 +768,7 @@ impl Sock {
 
     /// Bind `addr`, then listen when `backlog >= 0`; the sock is closed
     /// on failure.
-    fn bind_listen(self, addr: SocketAddr, backlog: i32) throws (IoError) {
+    pub(pkg) fn bind_listen(self, addr: SocketAddr, backlog: i32) throws (IoError) {
         let r = unsafe { rok_net_bind(try self.live(), words_of(addr)) };
         if r >= 0 && backlog >= 0 { r = unsafe { rok_net_listen(try self.live(), backlog) }; }
         if r < 0 {
@@ -772,7 +778,7 @@ impl Sock {
     }
 
     /// One accepted connection and its peer, or `none` on `WouldBlock`.
-    fn accept_once(self) throws (IoError) -> (Sock, SocketAddr) | none {
+    pub(pkg) fn accept_once(self) throws (IoError) -> (Sock, SocketAddr) | none {
         unsafe {
             let out: GcBuf<i64> = buf_new(ADDR_WORDS);
             let l = try self.enter();
@@ -784,14 +790,14 @@ impl Sock {
         }
     }
 
-    fn accept(self) throws (IoError) -> (Sock, SocketAddr) {
+    pub(pkg) fn accept(self) throws (IoError) -> (Sock, SocketAddr) {
         loop {
             if let c: (Sock, SocketAddr) = try self.accept_once() { return c; }
             try self.block(0, "accept");
         }
     }
 
-    async fn accept_async(self) throws (IoError) -> (Sock, SocketAddr) {
+    pub(pkg) async fn accept_async(self) throws (IoError) -> (Sock, SocketAddr) {
         loop {
             if let c: (Sock, SocketAddr) = try self.accept_once() { return c; }
             await task::readable(try self.live());
@@ -800,7 +806,7 @@ impl Sock {
 
     /// One datagram from `buf[at..at + n]` to `addr`: the count, or
     /// `none` on `WouldBlock`.
-    fn send_to_once(self, buf: GcBuf<u8>, at: usize, n: usize, addr: SocketAddr) throws (IoError) -> usize | none {
+    pub(pkg) fn send_to_once(self, buf: GcBuf<u8>, at: usize, n: usize, addr: SocketAddr) throws (IoError) -> usize | none {
         let fd = try self.enter();
         let r = unsafe { rok_net_send_to(fd, buf, at, n, words_of(addr)) } as i64;
         self.done();
@@ -810,7 +816,7 @@ impl Sock {
 
     /// One datagram into `buf`: its length and sender, or `none` on
     /// `WouldBlock`.
-    fn recv_from_once(self, buf: SliceMut<u8>) throws (IoError) -> (usize, SocketAddr) | none {
+    pub(pkg) fn recv_from_once(self, buf: SliceMut<u8>) throws (IoError) -> (usize, SocketAddr) | none {
         unsafe {
             let out: GcBuf<i64> = buf_new(ADDR_WORDS);
             let (b, at, n) = mut_region(buf);
@@ -822,7 +828,7 @@ impl Sock {
         }
     }
 
-    fn send_to(self, data: Slice<u8>, addr: SocketAddr) throws (IoError) -> usize {
+    pub(pkg) fn send_to(self, data: Slice<u8>, addr: SocketAddr) throws (IoError) -> usize {
         let (b, at, n) = unsafe { data.raw_parts() };
         loop {
             if let k: usize = try self.send_to_once(b, at, n, addr) { return k; }
@@ -830,7 +836,7 @@ impl Sock {
         }
     }
 
-    async fn send_to_async(self, data: Slice<u8>, addr: SocketAddr) throws (IoError) -> usize {
+    pub(pkg) async fn send_to_async(self, data: Slice<u8>, addr: SocketAddr) throws (IoError) -> usize {
         let (b, at, n) = unsafe { data.raw_parts() };
         loop {
             if let k: usize = try self.send_to_once(b, at, n, addr) { return k; }
@@ -838,14 +844,14 @@ impl Sock {
         }
     }
 
-    fn recv_from(self, buf: SliceMut<u8>) throws (IoError) -> (usize, SocketAddr) {
+    pub(pkg) fn recv_from(self, buf: SliceMut<u8>) throws (IoError) -> (usize, SocketAddr) {
         loop {
             if let r: (usize, SocketAddr) = try self.recv_from_once(buf) { return r; }
             try self.block(0, "recv_from");
         }
     }
 
-    async fn recv_from_async(self, buf: SliceMut<u8>) throws (IoError) -> (usize, SocketAddr) {
+    pub(pkg) async fn recv_from_async(self, buf: SliceMut<u8>) throws (IoError) -> (usize, SocketAddr) {
         loop {
             if let r: (usize, SocketAddr) = try self.recv_from_once(buf) { return r; }
             await task::readable(try self.live());
@@ -853,7 +859,7 @@ impl Sock {
     }
 
     /// The handle in a new cell: `self` and its copies see it closed.
-    const fn moved(self) -> Sock {
+    pub(pkg) const fn moved(self) -> Sock {
         unsafe {
             let s = sock_of(take_handle(self.fd, 0, -1));
             for i in 0..3usize { s.opts[i] = self.opts[i]; }
@@ -861,7 +867,7 @@ impl Sock {
         }
     }
 
-    fn try_clone(self) throws (IoError) -> Sock {
+    pub(pkg) fn try_clone(self) throws (IoError) -> Sock {
         unsafe {
             let old = try self.enter();
             let r = rok_os_dup(old);
@@ -874,7 +880,7 @@ impl Sock {
     }
 
     /// One read into `buf[at..at + n]`: the count, or `none` on `WouldBlock`.
-    fn read_once(self, buf: GcBuf<u8>, at: usize, n: usize) throws (IoError) -> usize | none {
+    pub(pkg) fn read_once(self, buf: GcBuf<u8>, at: usize, n: usize) throws (IoError) -> usize | none {
         let fd = try self.enter();
         let r = unsafe { rok_net_recv(fd, buf, at, n) } as i64;
         self.done();
@@ -883,7 +889,7 @@ impl Sock {
     }
 
     /// One write of `buf[at..at + n]`: the count, or `none` on `WouldBlock`.
-    fn write_once(self, buf: GcBuf<u8>, at: usize, n: usize) throws (IoError) -> usize | none {
+    pub(pkg) fn write_once(self, buf: GcBuf<u8>, at: usize, n: usize) throws (IoError) -> usize | none {
         let fd = try self.enter();
         let r = unsafe { rok_net_send(fd, buf, at, n) } as i64;
         self.done();
@@ -891,31 +897,31 @@ impl Sock {
         (try check(r, "write")) as usize
     }
 
-    fn read_into(self, buf: GcBuf<u8>, at: usize, n: usize) throws (IoError) -> usize {
+    pub(pkg) fn read_into(self, buf: GcBuf<u8>, at: usize, n: usize) throws (IoError) -> usize {
         loop {
             if let k: usize = try self.read_once(buf, at, n) { return k; }
             try self.block(0, "read");
         }
     }
 
-    async fn read_into_async(self, buf: GcBuf<u8>, at: usize, n: usize) throws (IoError) -> usize {
+    pub(pkg) async fn read_into_async(self, buf: GcBuf<u8>, at: usize, n: usize) throws (IoError) -> usize {
         loop {
             if let k: usize = try self.read_once(buf, at, n) { return k; }
             await task::readable(try self.live());
         }
     }
 
-    fn read(self, buf: SliceMut<u8>) throws (IoError) -> usize {
+    pub(pkg) fn read(self, buf: SliceMut<u8>) throws (IoError) -> usize {
         let (b, at, n) = mut_region(buf);
         try self.read_into(b, at, n)
     }
 
-    async fn read_async(self, buf: SliceMut<u8>) throws (IoError) -> usize {
+    pub(pkg) async fn read_async(self, buf: SliceMut<u8>) throws (IoError) -> usize {
         let (b, at, n) = mut_region(buf);
         try await self.read_into_async(b, at, n)
     }
 
-    fn read_to_end(self) throws (IoError) -> List<u8> {
+    pub(pkg) fn read_to_end(self) throws (IoError) -> List<u8> {
         let out: List<u8> = List::new();
         loop {
             let m = out.len();
@@ -928,7 +934,7 @@ impl Sock {
         }
     }
 
-    async fn read_to_end_async(self) throws (IoError) -> List<u8> {
+    pub(pkg) async fn read_to_end_async(self) throws (IoError) -> List<u8> {
         let out: List<u8> = List::new();
         loop {
             let m = out.len();
@@ -941,7 +947,7 @@ impl Sock {
         }
     }
 
-    fn write(self, data: Slice<u8>) throws (IoError) -> usize {
+    pub(pkg) fn write(self, data: Slice<u8>) throws (IoError) -> usize {
         let (b, at, n) = unsafe { data.raw_parts() };
         loop {
             if let k: usize = try self.write_once(b, at, n) { return k; }
@@ -949,7 +955,7 @@ impl Sock {
         }
     }
 
-    async fn write_async(self, data: Slice<u8>) throws (IoError) -> usize {
+    pub(pkg) async fn write_async(self, data: Slice<u8>) throws (IoError) -> usize {
         let (b, at, n) = unsafe { data.raw_parts() };
         loop {
             if let k: usize = try self.write_once(b, at, n) { return k; }
@@ -957,7 +963,7 @@ impl Sock {
         }
     }
 
-    fn write_all(self, data: Slice<u8>) throws (IoError) {
+    pub(pkg) fn write_all(self, data: Slice<u8>) throws (IoError) {
         let (b, at, n) = unsafe { data.raw_parts() };
         let done = 0usize;
         while done < n {
@@ -971,7 +977,7 @@ impl Sock {
         }
     }
 
-    async fn write_all_async(self, data: Slice<u8>) throws (IoError) {
+    pub(pkg) async fn write_all_async(self, data: Slice<u8>) throws (IoError) {
         let (b, at, n) = unsafe { data.raw_parts() };
         let done = 0usize;
         while done < n {
@@ -1220,9 +1226,6 @@ impl Socket {
 
     pub fn try_clone(self) throws (IoError) -> Socket { Socket { sock: try self.sock.try_clone() } }
 
-    /// The OS socket descriptor (`-1` once closed).
-    pub const fn fd(self) -> i32 { self.sock.fd() }
-
     /// Close now, throwing the OS's error; later calls fail with
     /// `InvalidInput`.
     pub fn close(self) throws (IoError) { try self.sock.close(); }
@@ -1353,9 +1356,6 @@ impl TcpStream {
         }
         throw last;
     }
-
-    /// The OS socket descriptor (`-1` once closed).
-    pub const fn fd(self) -> i32 { self.sock.fd() }
 
     pub fn peer_addr(self) throws (IoError) -> SocketAddr { try self.sock.addr(1) }
     pub fn local_addr(self) throws (IoError) -> SocketAddr { try self.sock.addr(0) }
@@ -1519,8 +1519,6 @@ impl TcpListener {
     /// owner's to close.
     pub const fn incoming(self) -> Incoming { Incoming { sock: self.sock } }
 
-    pub const fn fd(self) -> i32 { self.sock.fd() }
-
     /// Close now, throwing the OS's error.
     pub fn close(self) throws (IoError) { try self.sock.close(); }
 }
@@ -1670,8 +1668,6 @@ impl UdpSocket {
         UdpSocket { sock: try self.sock.try_clone() }
     }
 
-    pub const fn fd(self) -> i32 { self.sock.fd() }
-
     /// Close now, throwing the OS's error.
     pub fn close(self) throws (IoError) { try self.sock.close(); }
 }
@@ -1703,301 +1699,93 @@ impl Drop for UdpSocket {
     fn drop(ref self) { self.sock.discard(); }
 }
 
-// Unix domain sockets (302.3)
+// raw sockets (305.9)
 
-/// A Unix stream socket. Copies share the socket; `close()` (or leaving
-/// a `using` block) closes it for all.
 #[cfg(target_family = "unix")]
-pub struct UnixStream {
-    sock: Sock;
-}
-
-/// A listening Unix stream socket bound to a path.
-#[cfg(target_family = "unix")]
-pub struct UnixListener {
-    sock: Sock;
-}
-
-/// A Unix datagram socket.
-#[cfg(target_family = "unix")]
-pub struct UnixDatagram {
-    sock: Sock;
-}
-
-/// A Unix socket of `kind` (1 stream / 2 datagram) at `path` (`op` 0
-/// unbound, 1 bind, 2 connect).
-#[cfg(target_family = "unix")]
-fn unix_sock<P: AsPath>(kind: i32, path: P, op: i32, what: str) throws (IoError) -> Sock {
-    let p = path.as_path().as_str();
-    let fd = try check(unsafe { rok_net_unix(kind, p, op) } as i64, f"{what} {p}");
-    sock_of(fd as i32)
-}
-
-/// Both ends of a `socketpair`.
-#[cfg(target_family = "unix")]
-fn unix_pair(kind: i32) throws (IoError) -> (Sock, Sock) {
-    unsafe {
-        let fds: GcBuf<i32> = buf_new(2);
-        try check(rok_net_unix_pair(kind, fds) as i64, "socketpair");
-        (sock_of(fds[0]), sock_of(fds[1]))
-    }
-}
-
-/// The bound path of the socket (`peer` 1: the other end's); `none` when
-/// unnamed.
-#[cfg(target_family = "unix")]
-fn unix_path(s: Sock, peer: i32) throws (IoError) -> Path | none {
-    let buf: List<u8> = List::new();
-    buf.reserve(256);
-    unsafe { buf.set_len(256) };
-    let (b, at, n) = region(buf);
-    let fd = try s.enter();
-    let r = unsafe { rok_net_unix_path(fd, peer, b, at, n) };
-    s.done();
-    let k = try check(r as i64, "getsockname");
-    if k == 0 { return none; }
-    unsafe { buf.set_len(k as usize) };
-    Path::new(try str::from_utf8(buf) catch _ { return none; })
+impl AsRawFd for TcpStream {
+    const fn as_raw_fd(self) -> RawFd { self.sock.fd() }
 }
 
 #[cfg(target_family = "unix")]
-impl UnixListener {
-    /// Bind `path` (it must not exist yet) and listen (backlog 128).
-    pub fn bind<P: AsPath>(path: P) throws (IoError) -> UnixListener {
-        UnixListener { sock: try unix_sock(1, path, 1, "bind") }
-    }
-
-    fn accept_once(self) throws (IoError) -> UnixStream | none {
-        // The peer is read with `peer_addr` (`out` holds no Unix address).
-        let out: GcBuf<i64> = unsafe { buf_new(ADDR_WORDS) };
-        let l = try self.sock.enter();
-        let fd = unsafe { rok_net_accept(l, out) } as i64;
-        self.sock.done();
-        if would_block(fd) { return none; }
-        try check(fd, "accept");
-        UnixStream { sock: sock_of(fd as i32) }
-    }
-
-    /// The next connection and the path its peer is bound to (`none`:
-    /// unnamed, the usual case), blocking until one arrives.
-    pub fn accept(self) throws (IoError) -> (UnixStream, Path | none) {
-        loop {
-            if let c: UnixStream = try self.accept_once() {
-                let peer = try c.peer_addr();
-                return (c, peer);
-            }
-            try self.sock.block(0, "accept");
-        }
-    }
-
-    pub async fn accept_async(self) throws (IoError) -> (UnixStream, Path | none) {
-        loop {
-            if let c: UnixStream = try self.accept_once() {
-                let peer = try c.peer_addr();
-                return (c, peer);
-            }
-            await task::readable(try self.sock.live());
-        }
-    }
-
-    pub fn local_addr(self) throws (IoError) -> Path | none { try unix_path(self.sock, 0) }
-
-    pub const fn set_nonblocking(self, nb: bool) throws (IoError) {
-        unsafe { self.sock.opts[0] = if nb { 1i64 } else { 0i64 }; }
-    }
-
-    pub fn try_clone(self) throws (IoError) -> UnixListener { UnixListener { sock: try self.sock.try_clone() } }
-
-    pub const fn fd(self) -> i32 { self.sock.fd() }
-
-    /// Close now, throwing the OS's error.
-    pub fn close(self) throws (IoError) { try self.sock.close(); }
+impl AsRawFd for TcpListener {
+    const fn as_raw_fd(self) -> RawFd { self.sock.fd() }
 }
 
 #[cfg(target_family = "unix")]
-impl Close for UnixListener {
-    fn close(self) throws (IoError) { try self.sock.close(); }
+impl AsRawFd for UdpSocket {
+    const fn as_raw_fd(self) -> RawFd { self.sock.fd() }
 }
 
 #[cfg(target_family = "unix")]
-impl Drop for UnixListener {
-    fn drop(ref self) { self.sock.discard(); }
+impl FromRawFd for TcpStream {
+    unsafe fn from_raw_fd(fd: RawFd) -> TcpStream { TcpStream { sock: sock_of(fd) } }
 }
 
 #[cfg(target_family = "unix")]
-impl UnixStream {
-    pub fn connect<P: AsPath>(path: P) throws (IoError) -> UnixStream {
-        UnixStream { sock: try unix_sock(1, path, 2, "connect") }
-    }
-
-    /// Two connected ends (`socketpair`).
-    pub fn pair() throws (IoError) -> (UnixStream, UnixStream) {
-        let (a, b) = try unix_pair(1);
-        (UnixStream { sock: a }, UnixStream { sock: b })
-    }
-
-    /// `buf` with fd `fd` alongside (`SCM_RIGHTS`): the bytes sent.
-    pub fn send_with_fd<B: AsBytes>(self, buf: B, fd: i32) throws (IoError) -> usize {
-        let (b, at, n) = unsafe { buf.byte_slice().raw_parts() };
-        loop {
-            let s = try self.sock.enter();
-            let r = unsafe { rok_net_send_fd(s, b, at, n, fd) } as i64;
-            self.sock.done();
-            if !would_block(r) { return (try check(r, "sendmsg")) as usize; }
-            try self.sock.block(1, "sendmsg");
-        }
-    }
-
-    /// One read into `buf` and the fd passed with it, if any (the caller
-    /// owns it; it is close-on-exec).
-    pub fn recv_with_fd(self, buf: SliceMut<u8>) throws (IoError) -> (usize, i32 | none) {
-        let (b, at, n) = mut_region(buf);
-        unsafe {
-            let got: GcBuf<i32> = buf_new(1);
-            loop {
-                let fd = try self.sock.enter();
-                let r = rok_net_recv_fd(fd, b, at, n, got) as i64;
-                self.sock.done();
-                if !would_block(r) {
-                    let k = (try check(r, "recvmsg")) as usize;
-                    if got[0] < 0 { return (k, none); }
-                    return (k, got[0]);
-                }
-                try self.sock.block(0, "recvmsg");
-            }
-        }
-    }
-
-    pub fn peer_addr(self) throws (IoError) -> Path | none { try unix_path(self.sock, 1) }
-
-    pub fn local_addr(self) throws (IoError) -> Path | none { try unix_path(self.sock, 0) }
-
-    pub fn shutdown(self, how: Shutdown) throws (IoError) { try self.sock.shutdown(how); }
-
-    pub const fn set_read_timeout(self, dur: Duration | none) throws (IoError) { self.sock.set_timeout(0, dur); }
-
-    pub const fn set_write_timeout(self, dur: Duration | none) throws (IoError) { self.sock.set_timeout(1, dur); }
-
-    pub const fn set_nonblocking(self, nb: bool) throws (IoError) {
-        unsafe { self.sock.opts[0] = if nb { 1i64 } else { 0i64 }; }
-    }
-
-    pub fn try_clone(self) throws (IoError) -> UnixStream { UnixStream { sock: try self.sock.try_clone() } }
-
-    pub const fn fd(self) -> i32 { self.sock.fd() }
-
-    /// Close now, throwing the OS's error.
-    pub fn close(self) throws (IoError) { try self.sock.close(); }
+impl FromRawFd for TcpListener {
+    unsafe fn from_raw_fd(fd: RawFd) -> TcpListener { TcpListener { sock: sock_of(fd) } }
 }
 
 #[cfg(target_family = "unix")]
-impl Read for UnixStream {
-    fn read(ref self, buf: SliceMut<u8>) throws (IoError) -> usize { try self.sock.read(buf) }
-    #[internal]
-    const fn copy_handle(self) -> i32 { self.sock.copy_fd() }
-    fn read_to_end(ref self) throws (IoError) -> List<u8> { try self.sock.read_to_end() }
+impl FromRawFd for UdpSocket {
+    unsafe fn from_raw_fd(fd: RawFd) -> UdpSocket { UdpSocket { sock: sock_of(fd) } }
+}
+
+#[cfg(target_os = "windows")]
+impl AsRawSocket for TcpStream {
+    fn as_raw_socket(self) -> RawSocket { raw_socket(self.sock.fd()) }
+}
+
+#[cfg(target_os = "windows")]
+impl AsRawSocket for TcpListener {
+    fn as_raw_socket(self) -> RawSocket { raw_socket(self.sock.fd()) }
+}
+
+#[cfg(target_os = "windows")]
+impl AsRawSocket for UdpSocket {
+    fn as_raw_socket(self) -> RawSocket { raw_socket(self.sock.fd()) }
+}
+
+#[cfg(target_os = "windows")]
+impl FromRawSocket for TcpStream {
+    unsafe fn from_raw_socket(s: RawSocket) -> TcpStream { TcpStream { sock: sock_of(socket_fd(s)) } }
+}
+
+#[cfg(target_os = "windows")]
+impl FromRawSocket for TcpListener {
+    unsafe fn from_raw_socket(s: RawSocket) -> TcpListener { TcpListener { sock: sock_of(socket_fd(s)) } }
+}
+
+#[cfg(target_os = "windows")]
+impl FromRawSocket for UdpSocket {
+    unsafe fn from_raw_socket(s: RawSocket) -> UdpSocket { UdpSocket { sock: sock_of(socket_fd(s)) } }
 }
 
 #[cfg(target_family = "unix")]
-impl Write for UnixStream {
-    fn write<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize { try self.sock.write(buf.byte_slice()) }
-    /// Nothing to flush: writes go straight to the socket.
-    const fn flush(ref self) throws (IoError) {}
-    #[internal]
-    const fn copy_handle(self) -> i32 { self.sock.copy_fd() }
-    fn write_all<B: AsBytes>(ref self, buf: B) throws (IoError) { try self.sock.write_all(buf.byte_slice()); }
+impl AsRawFd for Socket {
+    const fn as_raw_fd(self) -> RawFd { self.sock.fd() }
 }
 
 #[cfg(target_family = "unix")]
-impl AsyncRead for UnixStream {
-    async fn read_async(self, buf: SliceMut<u8>) throws (IoError) -> usize { try await self.sock.read_async(buf) }
-    async fn read_to_end_async(self) throws (IoError) -> List<u8> { try await self.sock.read_to_end_async() }
+impl FromRawFd for Socket {
+    unsafe fn from_raw_fd(fd: RawFd) -> Socket { Socket { sock: sock_of(fd) } }
 }
 
-#[cfg(target_family = "unix")]
-impl AsyncWrite for UnixStream {
-    async fn write_async<B: AsBytes>(self, buf: B) throws (IoError) -> usize {
-        try await self.sock.write_async(buf.byte_slice())
-    }
-    async fn flush_async(self) throws (IoError) {}
-    async fn write_all_async<B: AsBytes>(self, buf: B) throws (IoError) {
-        try await self.sock.write_all_async(buf.byte_slice());
-    }
+#[cfg(target_os = "windows")]
+impl AsRawSocket for Socket {
+    fn as_raw_socket(self) -> RawSocket { raw_socket(self.sock.fd()) }
 }
 
-#[cfg(target_family = "unix")]
-impl Close for UnixStream {
-    fn close(self) throws (IoError) { try self.sock.close(); }
-}
-
-#[cfg(target_family = "unix")]
-impl Drop for UnixStream {
-    fn drop(ref self) { self.sock.discard(); }
-}
-
-#[cfg(target_family = "unix")]
-impl UnixDatagram {
-    /// A datagram socket bound to `path`.
-    pub fn bind<P: AsPath>(path: P) throws (IoError) -> UnixDatagram {
-        UnixDatagram { sock: try unix_sock(2, path, 1, "bind") }
-    }
-
-    /// A datagram socket connected to `path` (unbound itself).
-    pub fn connect<P: AsPath>(path: P) throws (IoError) -> UnixDatagram {
-        UnixDatagram { sock: try unix_sock(2, path, 2, "connect") }
-    }
-
-    /// Two connected datagram ends (`socketpair`).
-    pub fn pair() throws (IoError) -> (UnixDatagram, UnixDatagram) {
-        let (a, b) = try unix_pair(2);
-        (UnixDatagram { sock: a }, UnixDatagram { sock: b })
-    }
-
-    pub fn send<B: AsBytes>(self, buf: B) throws (IoError) -> usize { try self.sock.write(buf.byte_slice()) }
-
-    pub fn recv(self, buf: SliceMut<u8>) throws (IoError) -> usize { try self.sock.read(buf) }
-
-    pub fn send_with_fd<B: AsBytes>(self, buf: B, fd: i32) throws (IoError) -> usize {
-        try UnixStream { sock: self.sock }.send_with_fd(buf, fd)
-    }
-
-    pub fn recv_with_fd(self, buf: SliceMut<u8>) throws (IoError) -> (usize, i32 | none) {
-        try UnixStream { sock: self.sock }.recv_with_fd(buf)
-    }
-
-    pub fn local_addr(self) throws (IoError) -> Path | none { try unix_path(self.sock, 0) }
-
-    pub const fn set_read_timeout(self, dur: Duration | none) throws (IoError) { self.sock.set_timeout(0, dur); }
-
-    pub const fn set_write_timeout(self, dur: Duration | none) throws (IoError) { self.sock.set_timeout(1, dur); }
-
-    pub const fn set_nonblocking(self, nb: bool) throws (IoError) {
-        unsafe { self.sock.opts[0] = if nb { 1i64 } else { 0i64 }; }
-    }
-
-    pub const fn fd(self) -> i32 { self.sock.fd() }
-
-    /// Close now, throwing the OS's error.
-    pub fn close(self) throws (IoError) { try self.sock.close(); }
-}
-
-#[cfg(target_family = "unix")]
-impl Close for UnixDatagram {
-    fn close(self) throws (IoError) { try self.sock.close(); }
-}
-
-#[cfg(target_family = "unix")]
-impl Drop for UnixDatagram {
-    fn drop(ref self) { self.sock.discard(); }
+#[cfg(target_os = "windows")]
+impl FromRawSocket for Socket {
+    unsafe fn from_raw_socket(s: RawSocket) -> Socket { Socket { sock: sock_of(socket_fd(s)) } }
 }
 
 // zero-copy hooks (302.7, Linux)
 
 #[cfg(target_os = "linux")]
-impl TcpStream {
-    /// `file[offset..offset + count]` to the socket in the kernel
-    /// (`sendfile(2)`): the bytes sent, fewer if the file ends first.
-    pub fn sendfile(self, ref file: File, offset: u64, count: u64) throws (IoError) -> u64 {
+impl TcpStreamExt for TcpStream {
+    fn sendfile(self, ref file: File, offset: u64, count: u64) throws (IoError) -> u64 {
         let done = 0u64;
         while done < count {
             let fd = try self.sock.enter();
@@ -2014,9 +1802,7 @@ impl TcpStream {
         done
     }
 
-    /// Up to `count` bytes from `src`'s offset to the socket through a
-    /// kernel pipe (`splice(2)`): the bytes moved, fewer if `src` ends.
-    pub fn splice(self, ref src: File, count: u64) throws (IoError) -> u64 {
+    fn splice(self, ref src: File, count: u64) throws (IoError) -> u64 {
         let done = 0u64;
         while done < count {
             let fd = try self.sock.enter();
@@ -2029,9 +1815,7 @@ impl TcpStream {
         done
     }
 
-    /// Some prefix of `buf` sent with `MSG_ZEROCOPY` (Linux 4.14+): the
-    /// kernel reads `buf` in place; returns once it no longer needs it.
-    pub fn write_zerocopy(self, buf: List<u8>) throws (IoError) -> usize {
+    fn write_zerocopy(self, buf: List<u8>) throws (IoError) -> usize {
         let (b, at, n) = region(buf);
         loop {
             let fd = try self.sock.enter();

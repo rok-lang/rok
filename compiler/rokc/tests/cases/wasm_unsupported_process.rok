@@ -22,7 +22,7 @@ use rok::std::env;
 try Command::new("ls").spawn() catch e: IoError { println(f"spawn: {e.kind():?}"); };
 try Command::new("ls").arg("-l").output() catch e: IoError { println(f"output: {e.kind():?}"); };
 try process::send_signal(1u32, Signal::Terminate) catch e: IoError { println(f"kill: {e.kind():?}"); };
-try process::raise(15) catch e: IoError { println(f"raise: {e.kind():?}"); };
+try process::raise(Signal::Terminate) catch e: IoError { println(f"raise: {e.kind():?}"); };
 try process::on_signal(Signal::Terminate, || {}) catch e: SignalError {
     println(f"signal: {IoError::from_os_code(e.code, "signal").kind():?}");
 };

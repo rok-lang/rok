@@ -200,6 +200,45 @@ pub const fn fd_of(s: win::SOCKET) -> i32 {
     s as i32 | 1
 }
 
+// The fd encoding stays inside the runtime: `os::windows::io` hands out
+// and takes the full HANDLE / SOCKET. Kernel handles carry 32
+// significant bits (sign-extended), so the fd holds them whole.
+
+/// The HANDLE behind fd `fd` (`INVALID_HANDLE_VALUE` for a closed fd or
+/// a socket).
+#[unsafe(no_mangle)]
+pub extern "C" fn rok_os_raw_handle(fd: i32) -> isize {
+    if fd < 0 || sock_of(fd).is_some() {
+        return win::INVALID_HANDLE_VALUE;
+    }
+    h(fd)
+}
+
+/// The SOCKET behind fd `fd` (`INVALID_SOCKET` for anything else).
+#[unsafe(no_mangle)]
+pub extern "C" fn rok_os_raw_socket(fd: i32) -> u64 {
+    sock_of(fd).unwrap_or(win::INVALID_SOCKET) as u64
+}
+
+/// The fd for HANDLE `hd` (`-1`: not a kernel handle the fd can hold).
+#[unsafe(no_mangle)]
+pub const extern "C" fn rok_os_handle_fd(hd: isize) -> i32 {
+    let fd = hd as i32;
+    if fd as isize != hd || fd <= 0 || fd & 3 != 0 {
+        return -1;
+    }
+    fd
+}
+
+/// The fd for SOCKET `s` (`-1`: not one the fd can hold).
+#[unsafe(no_mangle)]
+pub extern "C" fn rok_os_socket_fd(s: u64) -> i32 {
+    if s > u64::from(u32::MAX) || s & 3 != 0 {
+        return -1;
+    }
+    fd_of(s as win::SOCKET)
+}
+
 // Errors
 
 /// `IoErrorKind` discriminants (library/std/src/io.rok declares the same).

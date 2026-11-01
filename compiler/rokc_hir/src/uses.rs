@@ -602,6 +602,14 @@ pub fn check_use_targets(
                     continue;
                 }
             }
+            // The prelude names std's OS Ext traits: a build of core
+            // alone (`--bootstrap`) has no std to take them from.
+            if module_path.as_str() == "rok::core::prelude"
+                && path.starts_with("rok::std::")
+                && !known.iter().any(|k| k.starts_with("rok::std::"))
+            {
+                continue;
+            }
             let mut d = RokDiagnostic::error(
                 ErrorKind::Module,
                 span,

@@ -41,6 +41,17 @@ pub use rok::core::convert::{From, Into, TryFrom, TryInto};
 pub use rok::core::str::FromStr;
 pub use rok::core::reflect::Inspect;
 
+// OS Ext traits, on their targets only: their methods need no `use`
+// there, and elsewhere the call says where the method exists.
+#[cfg(target_family = "unix")]
+pub use rok::std::os::unix::fs::PermissionsExt;
+#[cfg(target_family = "unix")]
+pub use rok::std::os::unix::process::{CommandExt, ExitStatusExt};
+#[cfg(target_os = "linux")]
+pub use rok::std::os::linux::process::ChildExt;
+#[cfg(target_os = "linux")]
+pub use rok::std::os::linux::net::TcpStreamExt;
+
 // Functions.
 pub use rok::core::channel::{channel, channel_bounded};
 pub use rok::core::print::{print, println, eprint, eprintln};

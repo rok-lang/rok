@@ -1,0 +1,20 @@
+// rok::std::os::linux::net: Linux-only socket calls (stdlib 302.7). The
+// trait is in the prelude on Linux targets.
+
+use rok::core::io::IoError;
+use rok::std::fs::File;
+
+/// Kernel-side copies into a `TcpStream`.
+pub trait TcpStreamExt {
+    /// `file[offset..offset + count]` to the socket in the kernel
+    /// (`sendfile(2)`): the bytes sent, fewer if the file ends first.
+    fn sendfile(self, ref file: File, offset: u64, count: u64) throws (IoError) -> u64;
+
+    /// Up to `count` bytes from `src`'s offset to the socket through a
+    /// kernel pipe (`splice(2)`): the bytes moved, fewer if `src` ends.
+    fn splice(self, ref src: File, count: u64) throws (IoError) -> u64;
+
+    /// Some prefix of `buf` sent with `MSG_ZEROCOPY` (Linux 4.14+): the
+    /// kernel reads `buf` in place; returns once it no longer needs it.
+    fn write_zerocopy(self, buf: List<u8>) throws (IoError) -> usize;
+}

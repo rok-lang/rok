@@ -1,6 +1,10 @@
-// rok::std::os: what only some OSes have.
+// rok::std::os: what only some OSes have. Each module exists only on
+// its targets; the Ext traits of `unix` (and `linux` on Linux) are in
+// the prelude there, so their methods need no `use`.
 
 #[cfg(target_family = "unix")]
 pub mod unix;
+#[cfg(target_os = "linux")]
+pub mod linux;
 #[cfg(target_os = "windows")]
 pub mod windows;
