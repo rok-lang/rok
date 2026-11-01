@@ -1635,9 +1635,12 @@ fn path_and_filter(a: &Args) -> (&str, Option<&str>) {
 }
 
 /// `rokc test` / `rokc bench [path] [filter]` (`-O2` unless given): build
-/// the harness and emit the manifest `rok` runs (spec 9.1). `rokc` no
-/// longer runs the cases; `--emit-harness` names the manifest file.
+/// the harness and emit the manifest `rok` runs (spec 9.1). `rok` runs
+/// the cases; `--emit-harness` names the manifest file.
 fn cmd_harness(mut a: Args, mode: Mode) {
+    if mode != Mode::Bench && a.rokbench {
+        usage_error("`--format` for test takes human or json; `rokbench` is for bench");
+    }
     if mode == Mode::Bench && !a.opt_set {
         "2".clone_into(&mut a.opts.opt_level);
         set_overflow_checks(&mut a);

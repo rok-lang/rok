@@ -439,7 +439,7 @@ pub fn inspect(path: &Path) -> Result<String, String> {
         "Package: {}\nHash: {}\nrokc version: {}\nROKHIR version: {VERSION}\nGC type ids: {}..{}\n",
         r.name,
         r.hash,
-        r.producer,
+        r.producer.strip_prefix("rokc ").unwrap_or(&r.producer),
         r.type_offset,
         r.type_end()
     );

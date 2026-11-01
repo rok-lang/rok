@@ -13,6 +13,10 @@ pub const GLOBAL: &[(&str, &str)] = &[
     ("--offline", "never fetch (git dependencies must be cached)"),
     ("--locked", "fail instead of changing rok.lock"),
     ("--cwd <dir>", "change directory first"),
+    (
+        "--explain <code>",
+        "what an error code (E0001) means, then exit",
+    ),
     ("--color <when>", "auto|always|never (--no-color: never)"),
     ("-q, --quiet", "less output"),
     ("-v, --verbose", "more output"),
@@ -218,11 +222,10 @@ package or native record each, then a summary.",
 An executable package (src/main.rok) is built --release into
 $ROK_HOME/bin; a library (src/lib.rok only, or with --lib) goes into the
 active environment, for `rok repl` and `rok jupyter`; a package with
-both needs --bin or --lib to say which.
-A script file is
-built into $ROK_HOME/bin. An executable already installed from the same
-stone version or git commit is kept unless --force; one from a path is
-always rebuilt.",
+both needs --bin or --lib to say which. A script file is built into
+$ROK_HOME/bin. An executable already installed from the same stone
+version or git commit is kept unless --force; one from a path is always
+rebuilt.",
         examples: &[
             ("rok install fmtx", "an executable stone"),
             ("rok install --path .", "the package here"),
@@ -357,8 +360,8 @@ or with --all every token.",
             "env shell [name]",
         ],
         about: "\
-An environment holds the libraries `rok install` puts there, for the REPL,
-Jupyter and scripts outside a package. The active one is --env, else
+An environment holds the libraries `rok install` puts there, for the REPL
+and Jupyter. The active one is --env, else
 $ROK_ENV, else the one `rok env use` chose, else `default`. `list` marks
 the active one with `*`; `shell` starts $SHELL with ROK_ENV=<name>.",
         examples: &[
