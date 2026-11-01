@@ -577,18 +577,19 @@ impl<R: Reader> Iterator for Lines<R> {
     }
 }
 
-/// `reader.bytes()`: each item is a byte or the error that ended the stream.
+/// `reader.bytes()`: the bytes one at a time; a failed read throws, and
+/// the next `next` reads on.
 pub struct Bytes<R> {
     reader: R;
     one: List<u8>;
 }
 
-impl<R: Reader> Iterator for Bytes<R> {
-    type Item = Result<u8, IoError>;
-    fn next(ref self) -> Result<u8, IoError> | none {
-        let n = try self.reader.read(self.one) catch e { return Result::Err(e); };
-        if n == 0 { return none; }
-        Result::Ok(self.one[0])
+impl<R: Reader> TryIterator for Bytes<R> {
+    type Item = u8;
+    type Error = IoError;
+    fn next(ref self) throws (IoError) -> u8 | none {
+        if try self.reader.read(self.one) == 0 { return none; }
+        self.one[0]
     }
 }
 

@@ -43,8 +43,7 @@ fn main() throws (IoError) {
     }
     using h = try fs::open(p) {
         let n = 0;
-        for b in unsafe { share(BufReader::new(share(h))) }.bytes() {
-            try b.get();
+        try for _ in unsafe { share(BufReader::new(share(h))) }.bytes() {
             n += 1;
         }
         println(f"bytes: {n}");
