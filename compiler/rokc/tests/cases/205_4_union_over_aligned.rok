@@ -9,7 +9,7 @@
 
 // A byte-array union takes its most aligned member's alignment, also
 // past 8 (`#[repr(align(16))]`), and holds all of its bytes.
-use rok::bare::ptr::{align_of, size_of};
+use rok::bare::mem::{align_of, size_of};
 
 #[repr(align(16))]
 struct V { a: u64; b: u64; c: u64; d: u64; }
