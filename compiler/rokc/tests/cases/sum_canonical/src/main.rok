@@ -1,20 +1,15 @@
 // expect-exit: 0
 // expect-stdout:
 // flow: 7 s
-// order: true false true
+// eq: true true true
 // nested: 1 7 -1
 // dup: 4
 // generic: 7 5
-// cmp: Less Greater
 
 // A sum is a set: spelling and order do not matter.
 mod other;
 
 use other::{Mixed, make, tag_of};
-
-fn name(o: Ordering) -> str {
-    match o { Ordering::Less => "Less", Ordering::Equal => "Equal", Ordering::Greater => "Greater" }
-}
 
 fn or_default<T>(x: T | none, def: T) -> T {
     match x {
@@ -37,11 +32,11 @@ fn main() -> i32 {
     let c: i32 | str = b;
     println(f"flow: {show(a)} {show(c)}");
 
-    // `str | i32` and `i32 | str` order the same way.
+    // `str | i32` and `i32 | str` compare as one type.
     let x: str | i32 = "a";
     let y: i32 | str = 1;
     let y2: str | i32 = y;
-    println(f"order: {y2 < x} {x < y2} {y < x}");
+    println(f"eq: {y2 == y} {x != y2} {y != x}");
 
     // Nested (through an alias) and reordered: flattened.
     let m: Mixed = 7;
@@ -58,8 +53,6 @@ fn main() -> i32 {
     let q: str | i32 | none = none;
     let five: i32 | str = 5;
     println(f"generic: {show(or_default(p, five))} {show(or_default(q, five))}");
-
-    println(f"cmp: {name(y.cmp(x))} {name(x.cmp(y2))}");
     0
 }
 

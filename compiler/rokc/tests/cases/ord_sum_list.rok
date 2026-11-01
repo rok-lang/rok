@@ -1,17 +1,16 @@
 // expect-exit: 0
 // expect-stdout:
-// sum: true false true true false true
-// cmp: Less Equal Greater Less
+// sum: true false false true true
+// cmp: Less Equal Greater Greater
 // list: true true false true false true
 // lcmp: Less Equal Greater
 // derive: true false
 // eq: true true false
-// generic: 1 1
+// generic: 1 none
 
-// `PartialOrd` / `Ord` for sum types (canonical variant order, spec
-// 2.6.4: structural with `none` last; then the payload), compiler-dispatched
-// like the sum's Clone / Eq / Hash, and for `List<T>` (lexicographic,
-// stdlib 2.5.7).
+// `PartialOrd` / `Ord` for `T | none` (`none` first, then the payload,
+// spec 2.6.4), compiler-dispatched like the sum's Clone / Eq / Hash, and
+// for `List<T>` (lexicographic, stdlib 2.5.7).
 fn name(o: Ordering) -> str {
     match o { Ordering::Less => "Less", Ordering::Equal => "Equal", Ordering::Greater => "Greater" }
 }
@@ -28,13 +27,12 @@ fn smallest<T: Ord>(xs: List<T>) -> T {
 struct Rec { k: i32 | none; tag: List<i32>; }
 
 fn main() -> i32 {
-    let a: i32 | str = 1;
-    let b: i32 | str = 2;
-    let s: i32 | str = "x";
+    let a: i32 | none = 1;
+    let b: i32 | none = 2;
     let n: i32 | none = none;
     let m: i32 | none = 5;
-    println(f"sum: {a < b} {b < a} {a < s} {s >= s} {s < a} {m < n}");
-    println(f"cmp: {name(a.cmp(b))} {name(n.cmp(n))} {name(s.cmp(b))} {name(m.cmp(n))}");
+    println(f"sum: {a < b} {b < a} {m < n} {n <= n} {n < a}");
+    println(f"cmp: {name(a.cmp(b))} {name(n.cmp(n))} {name(b.cmp(a))} {name(m.cmp(n))}");
 
     let x: List<i32> = [1, 2, 3];
     let y: List<i32> = [1, 2, 4];
@@ -45,7 +43,7 @@ fn main() -> i32 {
     let r1 = Rec { k: 1, tag: x };
     let r2 = Rec { k: 1, tag: y };
     println(f"derive: {r1 < r2} {r2 < r1}");
-    println(f"eq: {a == a} {a != s} {n == m}");
+    println(f"eq: {a == a} {a != n} {n == m}");
 
     let opts: List<i32 | none> = [3, none, 1];
     let low = smallest(opts);

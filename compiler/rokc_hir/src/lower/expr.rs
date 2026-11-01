@@ -5862,6 +5862,44 @@ pub(super) fn is_sum_trait(ctx: &LowerCtx<'_>, key: &str) -> bool {
         || [COPY_TRAIT, EQ_TRAIT].contains(&key)
 }
 
+/// `PartialOrd` or `Ord`?
+pub(super) fn is_order_trait(ctx: &LowerCtx<'_>, key: &str) -> bool {
+    key == ctx.lang("cmp_trait") || key == ctx.lang("ord_trait")
+}
+
+/// The terms of a sum other than `none` (a nested layer counts once).
+pub(super) fn sum_value_terms(ty: &HirTy) -> usize {
+    match ty {
+        HirTy::Sum(vs) => vs.iter().filter(|v| !v.is_none()).count(),
+        _ => 0,
+    }
+}
+
+/// Spec 2.6.4: a sum with two value terms has no order. `what` is the
+/// operation (`<`, `min`, ..).
+pub(super) fn sum_order_error(
+    ctx: &LowerCtx<'_>,
+    ty: &HirTy,
+    what: &str,
+    span: rokc_diagnostic::Span,
+) -> HirExpr {
+    let msg = format!(
+        "`{what}` needs an order, and `{}` has none: its terms are different types",
+        ctx.ty_name(ty)
+    );
+    ctx.emit_diag(
+        rokc_diagnostic::RokDiagnostic::error(rokc_diagnostic::ErrorKind::Type, span, msg)
+            .with_help(sum_order_help().to_owned()),
+    );
+    poison(span)
+}
+
+/// What to write instead of ordering a sum of two value types.
+pub(super) const fn sum_order_help() -> &'static str {
+    "order by a key: `xs.sort_by_key(|v| ..)`, `xs.sort_by(|a, b| ..)`, \
+     `iter.min_by_key(|v| ..)`, or `match` on the terms"
+}
+
 /// Their methods, dispatched on the variant by `sum_structural_call`.
 const SUM_METHODS: &[&str] = &[
     "clone", "fmt", "eq", "ne", "hash", "lt", "gt", "le", "ge", "cmp",
@@ -5869,9 +5907,8 @@ const SUM_METHODS: &[&str] = &[
 
 /// `clone` / `Debug::fmt` / `eq` / `ne` / `hash` / `lt`.. / `cmp` on a sum:
 /// a `match` calling the variant's method. Across variants `eq` is false
-/// and ordering follows the canonical member order (`HirTy::sum`), like a
-/// derived enum. `none` clones, prints, compares and hashes as itself.
-/// `lowered_rhs`: an operator's already lowered right operand.
+/// and `none` orders first (spec 2.6.4). `none` clones, prints, compares
+/// and hashes as itself. `lowered_rhs`: an operator's already lowered right operand.
 fn sum_structural_call(
     ctx: &mut LowerCtx<'_>,
     recv: HirExpr,
@@ -6056,18 +6093,18 @@ fn sum_structural_call(
                 }
             }
             (_, Some(r)) => {
-                // Same variant: compare payloads; else the variant order
-                // decides.
+                // Same variant: compare payloads; else `none` first, then
+                // the variant order (only `T | none` reaches here).
                 let eq_like = matches!(method, "eq" | "ne");
                 let mut inner = Vec::new();
-                for j in 0..variants.len() {
+                for (j, vj) in variants.iter().enumerate() {
                     if j != i && eq_like {
                         continue;
                     }
                     ctx.push_scope();
                     let inner_pat = arm_pat(ctx, j, "#b");
                     let body = if j != i {
-                        across(ctx, i < j)
+                        across(ctx, none || (i < j && !vj.is_none()))
                     } else if none {
                         same_none(ctx)
                     } else {
@@ -6396,6 +6433,14 @@ pub(super) fn method_call_on(
     if recv_h.ty == HirTy::Unknown {
         lower_args_only(ctx);
         return recv_h;
+    }
+    if matches!(
+        method,
+        "lt" | "gt" | "le" | "ge" | "cmp" | "partial_cmp" | "min" | "max" | "clamp"
+    ) && sum_value_terms(&recv_h.ty) > 1
+    {
+        lower_args_only(ctx);
+        return sum_order_error(ctx, &recv_h.ty, method, span);
     }
     if matches!(recv_h.ty, HirTy::Sum(_)) && SUM_METHODS.contains(&method) {
         return sum_structural_call(ctx, recv_h, method, args, None, span);
@@ -10838,6 +10883,9 @@ fn lower_infix_typed(
             Some("eq" | "ne") => ctx.lang("eq_trait"),
             _ => ctx.lang("cmp_trait"),
         };
+        if matches!(method, Some("lt" | "gt" | "le" | "ge")) && sum_value_terms(&lhs_h.ty) > 1 {
+            return sum_order_error(ctx, &lhs_h.ty, op, span);
+        }
         if let Some(m) = method.filter(|_| ctx.has_trait(&lhs_h.ty, key)) {
             return sum_structural_call(ctx, lhs_h, m, &[], Some(rhs_h), span);
         }

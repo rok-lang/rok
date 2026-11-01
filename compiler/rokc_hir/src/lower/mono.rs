@@ -777,6 +777,14 @@ fn check_call_bounds(
                 if want.path == super::reflect::INSPECT {
                     ctx.help_last(super::reflect::derive_inspect_help(ctx, concrete));
                 }
+                if super::expr::is_order_trait(ctx, &want.path)
+                    && super::expr::sum_value_terms(concrete) > 1
+                {
+                    ctx.help_last(Some(format!(
+                        "a sum of different types has no order; {}",
+                        super::expr::sum_order_help()
+                    )));
+                }
             }
         }
     }

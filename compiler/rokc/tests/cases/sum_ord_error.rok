@@ -1,0 +1,18 @@
+// A sum with two value terms has no order (spec 2.6.4).
+// expect-error: does not satisfy trait bound `Ord` required by `List::sort`
+// expect-error: `<` needs an order, and `i32 | str` has none
+// expect-error: `max` needs an order, and `i32 | str | none` has none
+// expect-error: order by a key: `xs.sort_by_key(|v| ..)`
+
+fn main() -> i32 {
+    let xs: List<i32 | str> = [1, "a"];
+    xs.sort();
+    let u: i32 | str = 1;
+    let v: i32 | str = "a";
+    let b = u < v;
+    let w: i32 | str | none = none;
+    let m = w.max(w);
+    0
+}
+
+// spec: §2.6.4

@@ -3724,6 +3724,10 @@ impl<'a> LowerCtx<'a> {
                 if trait_key == DEFAULT_TRAIT {
                     return vs.iter().any(HirTy::is_none);
                 }
+                // No order across two value terms (spec 2.6.4).
+                if expr::is_order_trait(self, trait_key) && expr::sum_value_terms(ty) > 1 {
+                    return false;
+                }
                 if expr::is_sum_trait(self, trait_key) {
                     return vs
                         .iter()
