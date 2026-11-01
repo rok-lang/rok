@@ -27,7 +27,8 @@ use rok::core::io::{Close, IoError, IoErrorKind, Read, Write, AsyncRead, AsyncWr
 use rok::std::sys::{byte_buf, mut_region};
 use rok::std::fs;
 use rok::std::env;
-use rok::std::time::{Instant, Duration, SystemTime};
+use rok::core::time::{Duration, Instant};
+use rok::std::time::SystemTime;
 use rok::std::net::tls::x509::{CertInfo, PubKey};
 use rok::std::net::tls::conn::{Conn, new_conn, io_tls, OP_HANDSHAKE, OP_READ, OP_WRITE, OP_CLOSE_NOTIFY, OP_KEY_UPDATE};
 use rok::std::net::tls::der::{Der, SEQUENCE, INTEGER, OCTET_STRING, OID};

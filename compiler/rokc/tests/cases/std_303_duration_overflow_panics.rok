@@ -6,7 +6,7 @@
 
 // spec: 3.3.5
 // With overflow checks (the default) `Duration` overflow panics.
-use rok::std::time::Duration;
+use rok::core::time::Duration;
 
 fn main() {
     println(f"{Duration::secs(1)}");

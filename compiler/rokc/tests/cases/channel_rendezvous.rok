@@ -13,7 +13,7 @@
 // waiting); `for v in rx` (IntoIterator); a received value is not kept
 // alive by the channel.
 use rok::std::thread;
-use rok::std::time::{Duration, Instant};
+use rok::core::time::{Duration, Instant};
 
 extern "C" {
     fn rok_gc_collect();

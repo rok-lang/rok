@@ -15,7 +15,7 @@ use rok::core::range::Range;
 use rok::core::reflect::{Reflect, Inspect, MethodInfo};
 use rok::core::marker::NoneSentinel;
 use rok::core::task::{spawn, join, race, timeout, Task};
-use rok::core::task::time::{Duration, Instant};
+use rok::core::time::{Duration, Instant};
 use rok::core::future::{Future, IntoFuture};
 use rok::core::par;
 

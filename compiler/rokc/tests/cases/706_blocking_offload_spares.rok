@@ -8,7 +8,7 @@
 // takes the next handoff, so rounds of blocking calls on every worker
 // do not start new threads each round.
 use rok::std::thread;
-use rok::std::time::Duration;
+use rok::core::time::Duration;
 
 async fn run() -> i32 {
     let n = task::worker_count();

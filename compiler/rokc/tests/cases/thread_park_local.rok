@@ -14,7 +14,7 @@
 // `JoinHandle::detach`.
 use rok::core::sync::{LoadOrdering, StoreOrdering};
 use rok::std::thread;
-use rok::std::time::Duration;
+use rok::core::time::Duration;
 
 fn main() -> i32 {
     let counter = thread::local(|| 100);

@@ -11,7 +11,7 @@
 // another thread runs, promptly.
 use rok::core::sync::{LoadOrdering, StoreOrdering};
 use rok::std::thread;
-use rok::std::time::Instant;
+use rok::core::time::Instant;
 
 extern "C" {
     fn rok_gc_collect();

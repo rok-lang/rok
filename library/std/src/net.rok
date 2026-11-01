@@ -21,7 +21,7 @@
 use rok::core::convert::AsBytes;
 use rok::core::io::{Close, IoError, IoErrorKind, Read, Write, AsyncRead, AsyncWrite};
 use rok::std::sys::{check, would_block, region, mut_region, take_handle, use_begin, use_end, use_close};
-use rok::std::time::Duration;
+use rok::core::time::Duration;
 use rok::bare::mem::{GcBuf, buf_new};
 #[cfg(target_family = "unix")]
 use rok::std::os::unix::io::{AsRawFd, FromRawFd, RawFd};

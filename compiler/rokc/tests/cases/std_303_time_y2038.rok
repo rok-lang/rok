@@ -14,7 +14,7 @@
 use rok::bare::ptr::{Ptr, addr_of};
 use rok::std::fs;
 use rok::core::io::IoError;
-use rok::std::time::{Duration, SystemTime, SystemTimeError, UNIX_EPOCH};
+use rok::std::time::{SystemTime, UNIX_EPOCH};
 
 extern "C" {
     // `struct timeval times[2]`, each `{ tv_sec, tv_usec }` in 16 bytes
@@ -22,21 +22,21 @@ extern "C" {
     fn utimes(path: str, times: Ptr<i64>) -> i32;
 }
 
-fn main() throws (SystemTimeError | IoError) -> i32 {
+fn main() throws (IoError) -> i32 {
     // 2100-01-01T00:00:00Z.
     let t = SystemTime::from_unix(4102444800, 7);
-    println(f"{try t.unix_seconds()} {try t.duration_since(UNIX_EPOCH)}");
+    println(f"{t.unix_secs()} {t.duration_since(UNIX_EPOCH)}");
     let later = t + Duration::secs(86400 * 366);
-    println(f"{(try later.duration_since(t)).as_secs() / 86400}d {later > t}");
+    println(f"{later.duration_since(t).as_secs() / 86400}d {later > t}");
     let y2038 = SystemTime::from_unix(2147483647, 0);
-    println(f"{try t.duration_since(y2038)} {y2038 < t}");
+    println(f"{t.duration_since(y2038)} {y2038 < t}");
 
     let path = "target_std_303_y2038.txt";
     try fs::write(path, "x");
     let times: [i64; 4] = [4102444800, 0, 4102444800, 0];
     let r = unsafe { utimes(path, addr_of(times[0])) };
     let m = try (try fs::metadata(path)).modified();
-    println(f"utimes {r} mtime {try m.unix_seconds()} {m == SystemTime::from_unix(4102444800, 0)}");
+    println(f"utimes {r} mtime {m.unix_secs()} {m == SystemTime::from_unix(4102444800, 0)}");
     try fs::remove_file(path);
     0
 }

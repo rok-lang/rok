@@ -30,14 +30,14 @@ fn main() throws (IoError) {
         println(f"entry: {e.file_type():?} {e.file_type() == e.metadata().file_type()}");
     }
     let t = try m.modified();
-    println(f"modified: {try! t.unix_seconds() > 0}");
-    println(f"accessed: {try! (try m.accessed()).unix_seconds() > 0}");
-    println(f"status_changed: {try! (try m.status_changed()).unix_seconds() > 0}");
+    println(f"modified: {t.unix_secs() > 0}");
+    println(f"accessed: {(try m.accessed()).unix_secs() > 0}");
+    println(f"status_changed: {(try m.status_changed()).unix_secs() > 0}");
     // Some file systems keep no creation time.
     let born = try m.created() catch e {
         if e.kind() != IoErrorKind::Unsupported { throw e; }
         t
     };
-    println(f"created: {try! born.unix_seconds() > 0}");
+    println(f"created: {born.unix_secs() > 0}");
     try fs::remove_dir_all(dir);
 }

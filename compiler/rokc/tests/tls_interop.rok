@@ -8,7 +8,7 @@ use rok::std::net::{tcp_listen, tcp_connect};
 use rok::std::net::tls::{Client, Server, ClientConfig, ServerConfig, Certificate, PrivateKey, CipherSuite, SessionCache, TlsError};
 use rok::std::fs::File;
 use rok::std::env;
-use rok::std::time::Duration;
+use rok::core::time::Duration;
 
 fn read_file(p: str) -> str { try! (try! File::open(p)).read_to_str() }
 

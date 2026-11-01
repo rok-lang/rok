@@ -1,0 +1,17 @@
+// spec: std 303-time §3.3.4
+// expect-exit: 0
+// forbid-warning: warning
+// expect-stdout:
+// true true true
+
+// `BootTime` spans are signed like `Instant`'s: negative when `earlier`
+// is later.
+use rok::std::time::BootTime;
+
+fn main() {
+    let a = BootTime::now();
+    rok::std::thread::sleep(Duration::ms(2));
+    let b = BootTime::now();
+    let fwd = b.duration_since(a);
+    println(f"{fwd > Duration::ZERO} {a.duration_since(b) == Duration::ZERO - fwd} {b.elapsed() >= Duration::ZERO}");
+}
