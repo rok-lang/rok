@@ -1,6 +1,6 @@
 // expect-error: error[E202]: `ys` came out of the `Mutex` at line 27, and `g`'s `using` block released the lock
 // expect-error: handoff_guard_errors.rok:30:5: `ys` came out of the `Mutex` at line 27, and `g`'s `using` block released the lock
-// expect-error: help: the lock no longer protects `ys`; use it inside the `using` block, or keep a separate copy there with `g.get().clone()`
+// expect-error: help: the lock no longer protects `ys`; use it inside the `using` block, or keep a deep copy there with `g.get_clone()`
 // expect-error: handoff_guard_errors.rok:38:5: `zs` was given to the `Mutex` at line 36
 // expect-error: handoff_guard_errors.rok:46:5: `a` came out of the `RwLock` at line 44, and `g`'s `using` block released the lock
 // expect-error: handoff_guard_errors.rok:55:5: `got` came out of the `Mutex` at line 52, and `g`'s `using` block released the lock

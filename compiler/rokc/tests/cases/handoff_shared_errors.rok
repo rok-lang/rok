@@ -1,8 +1,8 @@
 // needs: threads
 // spec: std 213-marker §2.13.9 / std 216-sync §2.16.3
-// A value other threads reach without the hand-off (a thread-local's
-// value) can't be handed over, and a value the lock protects can't be
-// returned out of its `using` block.
+// A thread-local's value, lent to `with`'s closure, can't be handed
+// over, and a value the lock protects can't be returned out of its
+// `using` block.
 use rok::std::thread;
 
 static TL: thread::ThreadLocal<List<i32>> = thread::local(|| { let l: List<i32> = []; l });
@@ -14,10 +14,10 @@ fn grab() -> List<i32> {
 
 fn main() {
     let (tx, rx) = channel::<List<i32>>();
-    try! tx.send(TL.get());
+    TL.with(|l| { try! tx.send(l); });
     grab().push(1);
     let _ = rx.recv();
 }
 
 // expect-error: handoff_shared_errors.rok:12:26: this returns a value out of the `Mutex`, and `g`'s `using` block releases the lock before the caller uses it
-// expect-error: handoff_shared_errors.rok:17:18: `TL.get()` can't be sent through a channel: other code reaches it through `TL` (a thread-local or a `Sync` object), so it would be used from two threads
+// expect-error: handoff_shared_errors.rok:17:32: `l` can't be sent through a channel: it is this thread's `ThreadLocal` value, lent to `with`'s closure

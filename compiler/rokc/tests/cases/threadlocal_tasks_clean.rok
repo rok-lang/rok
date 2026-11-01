@@ -1,0 +1,30 @@
+// needs: threads
+// expect-exit: 0
+// spec: std 304-thread §3.4.4
+// expect-stdout:
+// tasks 64 pushed 128000
+
+// The 0.1 race: 64 tasks each held a thread-local list across an `await`
+// and pushed to it after resuming on another worker. `with` keeps each
+// use on one thread, between two `await`s.
+use rok::std::thread;
+
+static TL: thread::ThreadLocal<List<i64>> = thread::local(|| -> List<i64> { [] });
+static PUSHED: Atomic<i64> = Atomic::new(0);
+
+async fn work(n: i64) -> i64 {
+    await task::yield_now();
+    TL.with(|l| { for i in 0..n { l.push(i); } });
+    PUSHED.fetch_add(n);
+    await task::yield_now();
+    TL.with(|l| { l.clear(); });
+    1
+}
+
+async fn main() {
+    let ts: List<Task<i64>> = [];
+    for _ in 0..64 { ts.push(task::spawn(work(2000))); }
+    let done = 0i64;
+    for t in ts { done += await t; }
+    println(f"tasks {done} pushed {PUSHED.load()}");
+}

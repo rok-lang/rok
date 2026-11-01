@@ -10,7 +10,7 @@ fn main() {
     let a: List<i32> = [];
     TL.set(a);
     try! tx.send(a);
-    for i in 0..200000 { TL.get().push(i); }
+    for i in 0..200000 { TL.with(|l| l.push(i)); }
     let _ = try! t.join();
-    println(f"len {TL.get().len()}");
+    println(f"len {TL.with(|l| l.len())}");
 }
