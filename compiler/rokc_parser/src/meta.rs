@@ -237,16 +237,26 @@ impl MetaTable {
             )));
         }
         if def.kind == MetaKind::Attribute && LATE_RESERVED_ATTRS.contains(&def.name.as_str()) {
+            // Inside the `#[..]`: `rokc lint` takes a finding at `#` for
+            // derive output and drops it.
+            let s = def.span;
+            let at = Span {
+                start: s.start + 2,
+                end: (s.end - 1).max(s.start + 2),
+                col: s.col + 2,
+                ..s
+            };
             let warn = RokDiagnostic::warning(
                 ErrorKind::Meta,
-                def.span,
+                at,
                 format!(
                     "`#[{0}]` is a built-in attribute; a meta block taking its name \
                      becomes an error in 0.2.0: rename it, e.g. \
                      `#[impl_attribute(my_{0})]` (spec 6.2)",
                     def.name
                 ),
-            );
+            )
+            .with_lint("builtin_attribute_name");
             self.defs.push(def);
             return Some(warn);
         }

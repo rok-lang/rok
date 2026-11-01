@@ -632,6 +632,41 @@ fn manifest_lint_note_names_rok_rokon() {
     }
 }
 
+/// 6.2.9: a removed lint named in `#[allow]`, `-A` or `rok.rokon`
+/// `lints` is accepted silently, even under `-D warnings`; an unknown
+/// name in the same places is still reported.
+// spec: §6.2.9
+#[test]
+fn removed_lint_names_are_silent() {
+    let dir = scratch("lint-removed");
+    let app = new_package(&dir, "app", false);
+    let manifest = app.join("rok.rokon");
+    put(&manifest, "Package { name: \"app\" }\n").unwrap();
+    let from = format!("--lints-from-manifest={}", manifest.display());
+    let check = |name: &str| {
+        put(
+            app.join("src/main.rok"),
+            format!("#[allow({name})]\nfn main() {{}}\n"),
+        )
+        .unwrap();
+        let args = ["lint", "-A", name, &from, "-A", name, "-D", "warnings"];
+        let out = rokc(None, &app, &args);
+        (out.status.success(), text(&out.stderr))
+    };
+    for name in rokc_tools::lint::REMOVED_LINTS {
+        let (ok, err) = check(name);
+        assert!(ok && !err.contains(name), "`{name}`:\n{err}");
+    }
+    let (_, err) = check("nope");
+    for want in [
+        "unknown lint `nope` in `lints` of rok.rokon",
+        "unknown lint `nope` on the command line",
+        "unknown lint `nope` (",
+    ] {
+        assert!(err.contains(want), "missing {want:?}:\n{err}");
+    }
+}
+
 /// 6.2.9: a compiler warning that belongs to a lint takes the lint's
 /// level: `-A`, `#[allow]` and `-D` reach it.
 // spec: §6.2.9 §1.4.2

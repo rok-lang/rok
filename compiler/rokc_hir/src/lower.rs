@@ -158,6 +158,13 @@ fn join_help(import: Option<String>, typo: Option<String>) -> Option<String> {
     import.or(typo)
 }
 
+/// A warning at `at` that belongs to `lint`, with a `help:` note.
+fn lint_diag(lint: &str, at: Span, msg: String, help: String) -> rokc_diagnostic::RokDiagnostic {
+    rokc_diagnostic::RokDiagnostic::warning(rokc_diagnostic::ErrorKind::Type, at, msg)
+        .with_help(help)
+        .with_lint(lint)
+}
+
 /// Keys by their last `::` segment.
 type Leaves = HashMap<String, Vec<String>>;
 
@@ -3253,11 +3260,22 @@ impl<'a> LowerCtx<'a> {
     /// A warning at `at` that belongs to `lint`, so `-A lint` and
     /// `#[allow(lint)]` silence it.
     fn emit_lint(&self, lint: &str, at: Span, msg: String, help: String) {
-        self.push_warning(
-            rokc_diagnostic::RokDiagnostic::warning(rokc_diagnostic::ErrorKind::Type, at, msg)
-                .with_note(format!("help: {help}"))
-                .with_lint(lint),
-        );
+        self.push_warning(lint_diag(lint, at, msg, help));
+    }
+
+    /// `emit_lint` with the edit `help` asks for, for editors to apply
+    /// (an empty `fix.span` inserts). Errors take theirs by `fix_last`.
+    fn emit_lint_fix(
+        &self,
+        lint: &str,
+        at: Span,
+        msg: String,
+        help: String,
+        fix: rokc_diagnostic::Fix,
+    ) {
+        let mut d = lint_diag(lint, at, msg, help);
+        d.fixes.push(fix);
+        self.push_warning(d);
     }
 
     fn push_warning(&self, d: rokc_diagnostic::RokDiagnostic) {

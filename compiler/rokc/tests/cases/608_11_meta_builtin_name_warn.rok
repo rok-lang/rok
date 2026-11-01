@@ -2,6 +2,8 @@
 // expect-exit: 0
 // expect-warning: `#[bench]` is a built-in attribute; a meta block taking its name becomes an error in 0.2.0: rename it, e.g. `#[impl_attribute(my_bench)]`
 // expect-warning: `#[path]` is a built-in attribute
+// expect-lint: 13:3 `#[bench]` is a built-in attribute; a meta block taking its name becomes an error in 0.2.0: rename it, e.g. `#[impl_attribute(my_bench)]`
+// expect-lint: 22:3 `#[path]` is a built-in attribute; a meta block taking its name becomes an error in 0.2.0: rename it, e.g. `#[impl_attribute(my_path)]`
 // expect-stdout:
 // bench f
 // 3
