@@ -236,7 +236,24 @@ pub const LINTS: &[Lint] = &[
         "unqualified_meta",
         "another package's macro, derive or attribute used by its bare name: write `dep::name!` or `use dep::name!;`",
     ),
+    Lint {
+        name: "assoc_type_shadowing",
+        default: Level::Warn,
+        desc: "an associated type named like an outer type, which it hides inside its trait or impl",
+        since: "0.2.0",
+    },
+    Lint {
+        name: "builtin_attribute_name",
+        default: Level::Warn,
+        desc: "a meta block that takes the name of a built-in attribute",
+        since: "0.2.0",
+    },
 ];
+
+/// Names of lints that are gone (most became errors). Naming one in
+/// `#[allow/warn/deny]`, `-A/-W/-D` or `rok.rokon` `lints` is accepted
+/// and does nothing, so old level settings keep building.
+pub const REMOVED_LINTS: &[&str] = &[];
 
 /// A lint added in 0.1.6.
 const fn warn_since(name: &'static str, desc: &'static str) -> Lint {
@@ -272,14 +289,18 @@ const GROUPS: &[(&str, &[&str])] = &[
     ),
 ];
 
-/// The lints `name` stands for (a lint, a group, `all`, `warnings`), or
-/// `None`.
+/// The lints `name` stands for (a lint, a group, `all`, `warnings`, a
+/// removed lint: none), or `None` for an unknown name.
 #[must_use]
 pub fn expand(name: &str) -> Option<Vec<&'static str>> {
-    expand_in(LINTS, name)
+    expand_in(LINTS, REMOVED_LINTS, name)
 }
 
-fn expand_in(lints: &'static [Lint], name: &str) -> Option<Vec<&'static str>> {
+/// A removed name stands for no lint: known, but sets nothing.
+fn expand_in(lints: &'static [Lint], removed: &[&str], name: &str) -> Option<Vec<&'static str>> {
+    if removed.contains(&name) {
+        return Some(Vec::new());
+    }
     match name {
         "all" => return Some(lints.iter().map(|l| l.name).collect()),
         "warnings" => {
@@ -2166,7 +2187,33 @@ mod tests {
                 since: "0.1.6",
             },
         ];
-        assert_eq!(expand_in(FAKE, "warnings").unwrap(), ["old", "new"]);
-        assert_eq!(expand_in(FAKE, "all").unwrap(), ["old", "new", "quiet"]);
+        assert_eq!(expand_in(FAKE, &[], "warnings").unwrap(), ["old", "new"]);
+        assert_eq!(
+            expand_in(FAKE, &[], "all").unwrap(),
+            ["old", "new", "quiet"]
+        );
+    }
+
+    #[test]
+    fn removed_names_set_nothing() {
+        static FAKE: &[Lint] = &[warn("live", "a lint still checked")];
+        let removed = ["gone"];
+        assert_eq!(expand_in(FAKE, &removed, "gone"), Some(Vec::new()));
+        assert_eq!(expand_in(FAKE, &removed, "live").unwrap(), ["live"]);
+        assert_eq!(expand_in(FAKE, &removed, "all").unwrap(), ["live"]);
+        assert!(expand_in(FAKE, &removed, "nope").is_none());
+    }
+
+    #[test]
+    fn removed_names_are_not_lints() {
+        for &r in REMOVED_LINTS {
+            assert!(
+                !LINTS.iter().any(|l| l.name == r)
+                    && !GROUPS.iter().any(|(g, _)| *g == r)
+                    && !["all", "warnings"].contains(&r),
+                "`{r}` is both removed and live"
+            );
+            assert_eq!(expand(r), Some(Vec::new()), "{r}");
+        }
     }
 }

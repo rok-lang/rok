@@ -8559,11 +8559,21 @@ fn implicit_core_fn(
     if explicit.is_some() {
         return;
     }
-    ctx.emit_lint(
+    // `at` starts with `name` (checked above): insert the module before it.
+    let fix = rokc_diagnostic::Fix {
+        span: rokc_diagnostic::Span {
+            end: at.start,
+            ..at
+        },
+        text: format!("{module}::"),
+        title: format!("write `{module}::{name}`"),
+    };
+    ctx.emit_lint_fix(
         "implicit_core_fn",
         at,
         format!("`{name}` is `rok::core::{module}::{name}`, reached only through the implicit `use rok::core::**`"),
         format!("write `{module}::{name}(..)`, or `use rok::core::{module}::{name};`"),
+        fix,
     );
 }
 

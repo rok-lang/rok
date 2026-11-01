@@ -1648,12 +1648,20 @@ fn binds_const(ctx: &LowerCtx<'_>, name: &str, scrut_ty: &HirTy, at: rokc_diagno
         };
         let base = enum_base_name(&def.name);
         let rest = if v.arity == 0 { "" } else { "(..)" };
-        ctx.emit_lint(
-            "pattern_binds_const",
-            at,
-            format!("`{name}` here is a new variable that matches every value"),
-            format!("did you mean the variant `{base}::{}{rest}`?", v.name),
-        );
+        let msg = format!("`{name}` here is a new variable that matches every value");
+        let help = format!("did you mean the variant `{base}::{}{rest}`?", v.name);
+        // Only a unit variant is a drop-in replacement for the name.
+        if v.arity == 0 && ctx.src(at) == Some(name) {
+            let text = format!("{base}::{}", v.name);
+            let fix = rokc_diagnostic::Fix {
+                span: at,
+                title: format!("write `{text}`"),
+                text,
+            };
+            ctx.emit_lint_fix("pattern_binds_const", at, msg, help, fix);
+        } else {
+            ctx.emit_lint("pattern_binds_const", at, msg, help);
+        }
         return;
     };
     ctx.emit_lint(

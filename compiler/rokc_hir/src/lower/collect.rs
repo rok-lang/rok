@@ -7713,7 +7713,8 @@ fn warn_assoc_shadowing(
                         "associated type `{a}` shadows the outer type `{a}` inside the {owner}; \
                          there `{a}` and `Self::{a}` both mean the associated type (spec 2.8.3)"
                     ),
-                ));
+                )
+                .with_lint("assoc_type_shadowing"));
             }
         }
     }

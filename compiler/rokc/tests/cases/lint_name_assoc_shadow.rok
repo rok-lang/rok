@@ -1,0 +1,40 @@
+// spec: §2.8.3 §6.2.9
+// expect-exit: 0
+// expect-lint: 18:1 associated type `Out` shadows the outer type `Out` inside the trait `Src`; there `Out` and `Self::Out` both mean the associated type
+// expect-lint: 30:1 associated type `Out` shadows the outer type `Out` inside the impl for `N`; there `Out` and `Self::Out` both mean the associated type
+// expect-stdout:
+// 7
+
+// Spec 2.8.3 / 6.2.9: an associated type that hides an outer type is
+// the `assoc_type_shadowing` lint, so `#[allow]` silences it.
+struct Out { n: i32; }
+struct Item { n: i32; }
+
+#[allow(assoc_type_shadowing)]
+trait Bag {
+    type Item;
+}
+
+trait Src {
+    type Out;
+    fn get(ref self) -> Self::Out;
+}
+
+struct N { n: i32; }
+
+#[allow(assoc_type_shadowing)]
+impl Bag for N {
+    type Item = i32;
+}
+
+impl Src for N {
+    type Out = i32;
+    fn get(ref self) -> i32 { self.n }
+}
+
+fn main() -> i32 {
+    let o = Out { n: 1 };
+    let i = Item { n: 2 };
+    println(N { n: 4 }.get() + o.n + i.n);
+    return 0;
+}
