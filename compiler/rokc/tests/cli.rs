@@ -765,38 +765,75 @@ fn literal_spread_mismatch_is_in_warnings() {
 fn semantic_warnings_are_in_warnings() {
     let dir = scratch("lint-semantic");
     let app = new_package(&dir, "app", false);
-    let src = "const LIMIT: i32 = 5;\n\
-               fn main() {\n    let b = 0.5 as bool;\n    match 3 { LIMIT => println(f\"{b} {quiet()}\") };\n}\n\
-               #[allow(float_to_bool)]\n\
-               fn quiet() -> bool { 1.5 as bool }\n";
+    let src = "struct C { v: i32; }\n\
+               impl C { fn set(ref self, n: i32) { self.v = n; } }\n\
+               fn main() {\n    let cs = [C { v: 0 }];\n    cs[0].set(1);\n    quiet(cs);\n    println(f\"{cpu_count() > 0}\");\n}\n\
+               #[allow(discarded_ref_write)]\n\
+               fn quiet(ds: List<C>) { ds[0].set(2); }\n";
     put(app.join("src/main.rok"), src).unwrap();
-    let cast = "warning[E503]: `0.5 as bool` truncates first";
-    let pat = "warning[E503]: `LIMIT` here is a new variable that matches every value";
+    let elem = "warning[E503]: the write to `cs[0]` is discarded";
+    let core = "warning[E503]: `cpu_count` is `rok::core::task::cpu_count`";
     let out = rokc(None, &app, &["lint"]);
     assert_exit(&out, 0);
     let err = text(&out.stderr);
-    assert!(err.contains(cast) && err.contains(pat), "{err}");
-    assert!(!err.contains("`1.5 as bool` truncates"), "{err}");
+    assert!(err.contains(elem) && err.contains(core), "{err}");
+    assert!(!err.contains("the write to `ds[0]`"), "{err}");
     for deny in ["warnings", "all"] {
         assert_exit(&rokc(None, &app, &["lint", "-D", deny]), 1);
     }
-    let out = rokc(None, &app, &["lint", "-A", "pattern_binds_const"]);
+    let out = rokc(None, &app, &["lint", "-A", "implicit_core_fn"]);
     let err = text(&out.stderr);
-    assert!(err.contains(cast) && !err.contains(pat), "{err}");
+    assert!(err.contains(elem) && !err.contains(core), "{err}");
     let out = rokc(None, &app, &["lint", "--list"]);
     let list = text(&out.stdout);
+    for name in [
+        "discarded_ref_write",
+        "trait_not_in_scope",
+        "implicit_core_fn",
+    ] {
+        assert!(list.contains(&format!("{name:<24} warn  0.1.6")), "{list}");
+    }
+    // Lints that became errors are gone from the list.
     for name in [
         "capture_field_write",
         "const_item_mutation",
         "pattern_binds_const",
-        "discarded_ref_write",
         "ambiguous_int_literal",
-        "trait_not_in_scope",
         "finally_jump",
         "float_to_bool",
-        "implicit_core_fn",
     ] {
-        assert!(list.contains(&format!("{name:<24} warn  0.1.6")), "{list}");
+        assert!(!list.contains(name), "{list}");
+    }
+}
+
+/// The errors that replaced the `float_to_bool` and `pattern_binds_const`
+/// lints carry the edit their help asks for.
+// spec: §9.9.4
+#[test]
+fn flipped_lint_errors_carry_fixes() {
+    let Some(env) = setup() else { return };
+    let dir = scratch("diag-flip-fix");
+    put(
+        dir.join("bad.rok"),
+        "enum Color { Red, Green }\n\
+         let n = 3;\nlet a = n as bool;\nlet b = (n + 1) as bool;\nlet c = 0.5 as bool;\n\
+         match Color::Green { Color::Red => println(\"r\"), Gren => println(\"g\") };\n",
+    )
+    .unwrap();
+    let out = rokc(
+        Some(&env),
+        &dir,
+        &["check", "--message-format=json", "bad.rok"],
+    );
+    assert_exit(&out, 1);
+    let stdout = text(&out.stdout);
+    for fix in [
+        r#""text":"n != 0","title":"write `n != 0`""#,
+        r#""text":"(n + 1) != 0","title":"write `(n + 1) != 0`""#,
+        r#""text":"0.5 != 0.0","title":"write `0.5 != 0.0`""#,
+        r#""text":"Color::Green","title":"write `Color::Green`""#,
+    ] {
+        assert!(stdout.contains(fix), "{fix}\n{stdout}");
     }
 }
 

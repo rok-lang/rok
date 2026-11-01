@@ -3249,6 +3249,12 @@ impl<'a> LowerCtx<'a> {
         self.env.sink.diagnostics.borrow_mut().push(d);
     }
 
+    /// An error at `at` with a `help:` note.
+    fn emit_error_help(&self, at: Span, msg: String, help: String) {
+        self.emit_error_at(rokc_diagnostic::ErrorKind::Type, at, msg);
+        self.help_last(Some(help));
+    }
+
     /// A warning. In a generic instance it is held and reported only if
     /// every instance raised it: a `rethrows` instance with a non-throwing
     /// argument would otherwise flag every `try`.

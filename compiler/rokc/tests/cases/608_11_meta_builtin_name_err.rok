@@ -1,15 +1,10 @@
 // spec: 006.02-built-in-attributes
-// expect-exit: 0
-// expect-warning: `#[bench]` is a built-in attribute; a meta block taking its name becomes an error in 0.2.0: rename it, e.g. `#[impl_attribute(my_bench)]`
-// expect-warning: `#[path]` is a built-in attribute
-// expect-lint: 13:3 `#[bench]` is a built-in attribute; a meta block taking its name becomes an error in 0.2.0: rename it, e.g. `#[impl_attribute(my_bench)]`
-// expect-lint: 22:3 `#[path]` is a built-in attribute; a meta block taking its name becomes an error in 0.2.0: rename it, e.g. `#[impl_attribute(my_path)]`
-// expect-stdout:
-// bench f
-// 3
+// expect-error: `#[bench]` is a built-in attribute; a meta block cannot redefine it
+// expect-error: `#[path]` is a built-in attribute; a meta block cannot redefine it
+// expect-error: help: rename it, e.g. `#[impl_attribute(my_bench)]`
 
-// Spec 6.2: built-in attribute names are reserved. A meta block that
-// took one before it was listed still expands, with a warning.
+// Spec 6.2: built-in attribute names are reserved, those listed late
+// (`bench`, `path`, ..) too: a meta block taking one is an error.
 #[impl_attribute(bench)]
 pub @attribute {
     @accept(fn)
@@ -25,7 +20,6 @@ pub @attribute {
     @item
 }
 
-#[bench]
 fn f() -> i32 { return 1; }
 
 fn main() -> i32 {

@@ -1,17 +1,15 @@
 // spec: 004.06.7-capturing-structs
-// expect-exit: 0
-// expect-lint: 16:9 `p` is value-captured: this write changes the closure's copy, not the outer `p`
-// expect-warning: help: add `[ref p]` to the closure's capture list
-// expect-stdout: 0 1 5
+// expect-error: 14:9: cannot assign to a field of `p`: it is value-captured, so the write would change the closure's copy, not the outer `p`
+// expect-error: help: add `[ref p]` to the closure's capture list
 
-// A field write on a value-captured struct changes the closure's own
-// copy; `[ref p]` writes the outer variable.
+// A field write on a value-captured struct would change the closure's
+// own copy: an error, like rebinding the capture. `[ref p]` writes the
+// outer variable.
 struct Point { x: i32; y: i32; }
 
 fn main() {
     let p = Point { x: 0, y: 0 };
     let q = Point { x: 0, y: 0 };
-    // The closure reads its copy back: the outer `p` stays.
     let f = || {
         p.x = 5;
         p.x

@@ -1,15 +1,16 @@
 // spec: 003.11.1-identifier-pattern
-// expect-exit: 0
-// expect-lint: 18:15 `LIMIT` here is a new variable that matches every value, not the const `LIMIT`
-// expect-lint: 19:15 `ORIGIN` here is a new variable that matches every value, not the static `ORIGIN`
-// expect-lint: 20:57 `Gren` here is a new variable that matches every value
-// expect-warning: help: to compare with the const, write `x if x == LIMIT`
-// expect-warning: help: did you mean the variant `Color::Green`?
-// expect-stdout: limit 3 | origin 4 | gren? | Foo=7 | five 5 | green
+// expect-error: 19:15: `LIMIT` here would be a new variable that matches every value, not the const `LIMIT`
+// expect-error: 20:15: `ORIGIN` here would be a new variable that matches every value, not the static `ORIGIN`
+// expect-error: 21:15: `limit` here would be a new variable that matches every value, not the const `limit`
+// expect-error: 22:57: `Gren` here would be a new variable that matches every value
+// expect-error: help: to compare with the const, write `x if x == LIMIT`
+// expect-error: help: did you mean the variant `Color::Green`?
 
-// A const, a static or a misspelled variant in a pattern is a new
-// binding that matches everything: a warning names what to write.
+// A const or a static (whatever its case), or a misspelled variant, in
+// a pattern would be a new binding that matches everything: an error
+// that names what to write.
 const LIMIT: i32 = 5;
+const limit: i32 = 6;
 static ORIGIN: i32 = 0;
 enum Color { Red, Green }
 
@@ -17,10 +18,11 @@ fn main() {
     let out = [];
     match 3 { LIMIT => out.push(f"limit {LIMIT}") };
     match 4 { ORIGIN => out.push(f"origin {ORIGIN}") };
+    match 6 { limit => out.push(f"lower {limit}") };
     match Color::Green { Color::Red => out.push("red"), Gren => out.push("gren?") };
-    // Capitalised but neither a value nor close to a variant: no warning.
+    // Capitalised but neither a value nor close to a variant: a binding.
     match 7 { Foo => out.push(f"Foo={Foo}") };
-    // What the warning suggests.
+    // What the error suggests.
     match 5 { x if x == LIMIT => out.push(f"five {x}"), _ => out.push("other") };
     match Color::Green { Color::Red => out.push("red"), Color::Green => out.push("green") };
     println(out.join(" | "));
