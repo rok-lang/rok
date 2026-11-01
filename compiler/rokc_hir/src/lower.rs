@@ -3111,6 +3111,9 @@ struct LowerCtx<'a> {
     err_frames: Vec<ErrFrame>,
     /// By-value parameters whose release the body owes (`affine`).
     owe_params: Vec<(LocalId, HirTy)>,
+    /// Where each local with an inserted release was bound: what an error
+    /// in that release (it has no span) points at.
+    owed_at: HashMap<LocalId, rokc_diagnostic::Span>,
     /// Probe pass over a closure body: collects the error types that
     /// escape it instead of reporting them.
     throws_probe: Option<Vec<HirTy>>,
@@ -3308,6 +3311,7 @@ impl<'a> LowerCtx<'a> {
             in_try_for_body: 0,
             err_frames: Vec::new(),
             owe_params: Vec::new(),
+            owed_at: HashMap::new(),
             throws_probe: None,
             uncaught_in_main: false,
             throwing_calls: 0,

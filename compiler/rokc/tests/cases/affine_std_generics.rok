@@ -1,0 +1,83 @@
+// needs: net threads
+// expect-exit: 0
+// expect-stdout: ok 5
+// spec: std 213-marker §2.13.4 / std 217-channel / std 218-task
+
+// Generic std code moves a value it is given, so an element that must be
+// closed (a `TcpStream`) goes through channels and tasks like any other:
+// the receiver, the awaiting task or the winner owns it and closes it.
+// A `try!` that fails panics, so the error it holds needs no close.
+use rok::std::net::{TcpListener, TcpStream, SocketAddr};
+use rok::core::io::IoError;
+use rok::core::channel::TrySendError;
+use rok::core::time::Duration;
+
+async fn dial(addr: SocketAddr) throws (IoError) -> TcpStream {
+    try await TcpStream::connect_async(addr)
+}
+
+fn conn(addr: SocketAddr) -> TcpStream {
+    try! TcpStream::connect(addr)
+}
+
+let any: SocketAddr = try! "127.0.0.1:0".parse::<SocketAddr>();
+let l = try! TcpListener::bind(any);
+let addr = try! l.local_addr();
+let n: usize = 0;
+
+// send / recv, iter
+let (tx, rx) = channel::<TcpStream>();
+try! tx.send(conn(addr));
+let got = rx.recv() ?? panic("closed");
+try! got.close();
+try tx.send(conn(addr)) catch _ { panic("send") };
+tx.close();
+for c in rx {
+    try! c.close();
+    n += 1;
+}
+
+// try_send on a full bounded channel throws the value back
+let (btx, brx) = channel_bounded::<TcpStream>(1);
+try btx.try_send(conn(addr)) catch _ { panic("try_send") };
+try btx.try_send(conn(addr)) catch e {
+    match e {
+        TrySendError::Full(c) => { try! c.close(); n += 1; }
+        TrySendError::Closed(c) => { try! c.close(); }
+    }
+};
+match brx.try_recv() {
+    c: TcpStream => { try! c.close(); }
+    _ => {}
+}
+btx.close();
+
+// send_async / recv_async
+let (atx, arx) = channel::<TcpStream>();
+let t = task::spawn(async {
+    try await atx.send_async(conn(addr)) catch _ { panic("send_async") };
+    atx.close();
+});
+await t;
+let c = await arx.recv_async() ?? panic("closed");
+try! c.close();
+
+// a task's output, select, join, race, timeout, spawn_blocking
+let s = await task::spawn(async { try! await dial(addr) });
+try! s.close();
+let (i, w) = await task::select([async { try! await dial(addr) }, async { try! await dial(addr) }]);
+try! w.close();
+if i < 2 { n += 1; }
+let all = await task::join([task::spawn(async { try! await dial(addr) }), task::spawn_local(async { try! await dial(addr) })]);
+for c in all {
+    try! c.close();
+    n += 1;
+}
+let r = await task::race([task::spawn(async { try! await dial(addr) })]);
+try! r.close();
+let o = try! await task::timeout(Duration::secs(5), task::spawn(async { try! await dial(addr) }));
+try! o.close();
+let b = await task::spawn_blocking(|| try! TcpStream::connect(addr));
+try! b.close();
+try! l.close();
+println(f"ok {n}");

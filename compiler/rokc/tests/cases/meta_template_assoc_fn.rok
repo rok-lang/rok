@@ -1,0 +1,37 @@
+// expect-exit: 0
+// spec: 006.09-meta-templates
+// spec: §6.9.9
+// expect-stdout: x
+
+// A `pub` meta block may name a type's associated function through
+// `pkg::`: in the root package's own build that path is `E::new`, with
+// no package in front, and still names an item of the type.
+pub struct E {
+    m: str;
+}
+
+impl E {
+    pub fn new(m: str) -> E { E { m } }
+}
+
+pub trait Make {
+    fn make() -> Self;
+}
+
+#[impl_derive(Make)]
+pub @derive {
+    impl pkg::Make for @Self {
+        fn make() -> Self {
+            let e = pkg::E::new("x");
+            println(e.m);
+            @Self
+        }
+    }
+}
+
+#[derive(Make)]
+struct U;
+
+fn main() {
+    let _u = U::make();
+}

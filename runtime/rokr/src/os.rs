@@ -126,6 +126,13 @@ fn until_nul(buf: &[u8]) -> &[u8] {
 /// First resolver code: `getaddrinfo` failure `e` is `EAI_BASE + |e|`.
 pub const EAI_BASE: i32 = 100_000;
 
+/// `getaddrinfo`'s "name does not resolve"; the libc crate lacks it for
+/// WASI, where wasi-libc numbers it as musl does.
+#[cfg(unix)]
+const EAI_NONAME: i32 = libc::EAI_NONAME;
+#[cfg(not(unix))]
+const EAI_NONAME: i32 = -2;
+
 /// `IoErrorKind` discriminants (library/std/src/io.rok declares the same).
 mod kind {
     pub const OTHER: i32 = 0;
@@ -144,6 +151,7 @@ mod kind {
     pub const CROSSES_DEVICES: i32 = 13;
     pub const UNSUPPORTED: i32 = 14;
     pub const FILESYSTEM_LOOP: i32 = 18;
+    pub const RESOURCE_BUSY: i32 = 19;
 }
 
 /// The `IoErrorKind` discriminant of error code `code`.
@@ -152,7 +160,7 @@ pub const extern "C" fn rok_os_errno_kind(code: i32) -> i32 {
     match code {
         libc::ENOENT => kind::NOT_FOUND,
         // A name that does not resolve; other resolver failures are Other.
-        c if c == EAI_BASE + libc::EAI_NONAME.abs() => kind::NOT_FOUND,
+        c if c == EAI_BASE + EAI_NONAME.abs() => kind::NOT_FOUND,
         libc::EACCES | libc::EPERM => kind::PERMISSION_DENIED,
         libc::EEXIST => kind::ALREADY_EXISTS,
         libc::ENOTDIR => kind::NOT_A_DIRECTORY,
@@ -167,6 +175,7 @@ pub const extern "C" fn rok_os_errno_kind(code: i32) -> i32 {
         libc::EXDEV => kind::CROSSES_DEVICES,
         libc::ENOSYS | libc::ENOTSUP => kind::UNSUPPORTED,
         libc::ELOOP => kind::FILESYSTEM_LOOP,
+        libc::EBUSY | libc::ETXTBSY => kind::RESOURCE_BUSY,
         _ => kind::OTHER,
     }
 }
@@ -1924,8 +1933,10 @@ mod tests {
         assert_eq!(rok_os_errno_kind(libc::EACCES), kind::PERMISSION_DENIED);
         assert_eq!(rok_os_errno_kind(libc::EEXIST), kind::ALREADY_EXISTS);
         assert_eq!(rok_os_errno_kind(libc::ENOTSUP), kind::UNSUPPORTED);
+        assert_eq!(rok_os_errno_kind(libc::EBUSY), kind::RESOURCE_BUSY);
+        assert_eq!(rok_os_errno_kind(libc::ETXTBSY), kind::RESOURCE_BUSY);
         assert_eq!(
-            rok_os_errno_kind(EAI_BASE + libc::EAI_NONAME.abs()),
+            rok_os_errno_kind(EAI_BASE + EAI_NONAME.abs()),
             kind::NOT_FOUND
         );
         assert_eq!(

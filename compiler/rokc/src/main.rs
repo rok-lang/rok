@@ -963,7 +963,10 @@ fn compile(a: &Args, pkg: &Package, mode: Mode) -> (CompileResult, String, Insta
                 .collect::<String>(),
         );
         result.report_errors();
-        could_not_build(a, pkg, result.errors.len(), result.warnings.len());
+        // A failed compile's list holds its warnings too.
+        let e = result.errors.iter().filter(|d| d.is_error()).count();
+        let w = result.warnings.len() + result.errors.len() - e;
+        could_not_build(a, pkg, e, w);
     }
     let diags = if lints {
         rokc_tools::lint::run(&result, &a.lint_levels)

@@ -1,0 +1,17 @@
+// spec: std 223-io §2.23
+// only-os: macos linux
+// expect-exit: 0
+// expect-stdout:
+// ResourceBusy resource busy
+// ResourceBusy ResourceBusy
+
+// A file or device in use is `ResourceBusy`: `EBUSY` and `ETXTBSY` here,
+// a sharing violation on Windows.
+use rok::core::io::IoErrorKind;
+
+fn main() {
+    let k = IoErrorKind::ResourceBusy;
+    println(f"{k:?} {k}");
+    // EBUSY is 16 and ETXTBSY 26 on Linux and macOS.
+    println(f"{IoErrorKind::of_os(16):?} {IoErrorKind::of_os(26):?}");
+}

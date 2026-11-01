@@ -1667,15 +1667,15 @@ pub async fn race<I: IntoIterator<Item = Task<T>>, T>(tasks: I) -> T {
         panic("task::race of no tasks");
     }
     let won: usize = list.len();
-    try {
-        won = await FirstDone { tasks: list };
-    } finally {
+    // The losers are cancelled however this ends, the awaiting task's
+    // cancellation included.
+    let _ = { won = await FirstDone { tasks: list }; } finally {
         for i in 0..list.len() {
             if i != won && !is_done(list[i].task) {
                 cancel_by(list[i].task, BY_RACE);
             }
         }
-    }
+    };
     task_result(list[won])
 }
 

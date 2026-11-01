@@ -1,0 +1,39 @@
+// spec: std 213-marker §2.13.4
+// expect-exit: 0
+// expect-stdout:
+// 0 a
+// 1 b
+// 2
+
+// A generic body is checked with its type parameters opaque, and the
+// struct instances made for that check are dropped after it; a later
+// instance that takes over one's id is not a resource because the
+// dropped one was (no release, and no `using` error without a span).
+struct Pipe<T> {
+    tx: Sender<T>;
+    rx: Receiver<T>;
+}
+
+fn pipe<T: Send>() -> Pipe<T> {
+    let (tx, rx) = channel::<T>();
+    Pipe { tx, rx }
+}
+
+fn count<T: Send>(v: T) -> usize {
+    let p = pipe::<T>();
+    try! p.tx.send(v);
+    p.tx.close();
+    let n: usize = 0;
+    for _ in p.rx {
+        n += 1;
+    }
+    n
+}
+
+fn main() {
+    let names: List<str> = ["a", "b"];
+    for (i, s) in names.iter().enumerate() {
+        println(f"{i} {s}");
+    }
+    println(f"{count(1) + count("x")}");
+}

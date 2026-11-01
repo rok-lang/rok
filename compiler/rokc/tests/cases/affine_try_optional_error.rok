@@ -1,0 +1,33 @@
+// spec: std 213-marker §2.13.4
+// expect-error: affine_try_optional_error.rok:13:5: `try?` drops the `SendError<TcpStream>` it catches, which can hold a value that must be closed
+// expect-error: affine_try_optional_error.rok:17:13: `try?` drops the `SendError<TcpStream>` it catches
+// expect-error: help: catch it instead: `try .. catch e { .. }`, take the value out of the `SendError<TcpStream>` and close it
+// forbid-error: affine_try_optional_error.rok:21
+
+// `try?` drops the error it catches: one that can hold a value whose
+// close can fail (the stream a failed send gives back) must be caught.
+use rok::std::net::TcpStream;
+use rok::core::channel::SendError;
+
+fn dropped(tx: Sender<TcpStream>, c: TcpStream) {
+    try? tx.send(c);
+}
+
+fn bound(tx: Sender<TcpStream>, c: TcpStream) -> bool {
+    let r = try? tx.send(c);
+    r is none
+}
+
+fn caught(tx: Sender<TcpStream>, c: TcpStream) throws (rok::core::io::IoError) {
+    try tx.send(c) catch e {
+        match e {
+            SendError::Closed(x) => try x.close(),
+        }
+    };
+}
+
+fn plain(tx: Sender<i32>) {
+    try? tx.send(1);
+}
+
+fn main() {}

@@ -259,6 +259,7 @@ mod kind {
     pub const CROSSES_DEVICES: i32 = 13;
     pub const UNSUPPORTED: i32 = 14;
     pub const FILESYSTEM_LOOP: i32 = 18;
+    pub const RESOURCE_BUSY: i32 = 19;
 }
 
 /// The `IoErrorKind` discriminant of Win32 / Winsock error `code`.
@@ -276,6 +277,8 @@ pub const extern "C" fn rok_os_errno_kind(code: i32) -> i32 {
         ERROR_ACCESS_DENIED | ERROR_WRITE_PROTECT | ERROR_PRIVILEGE_NOT_HELD | WSAEACCES => {
             kind::PERMISSION_DENIED
         }
+        // Another handle's share mode denies this access.
+        ERROR_SHARING_VIOLATION => kind::RESOURCE_BUSY,
         ERROR_FILE_EXISTS | ERROR_ALREADY_EXISTS => kind::ALREADY_EXISTS,
         ERROR_DIRECTORY => kind::NOT_A_DIRECTORY,
         ERROR_DIRECTORY_NOT_SUPPORTED => kind::IS_A_DIRECTORY,
@@ -283,7 +286,8 @@ pub const extern "C" fn rok_os_errno_kind(code: i32) -> i32 {
         ERROR_INVALID_PARAMETER | ERROR_INVALID_NAME | WSAEINVAL => kind::INVALID_INPUT,
         ERROR_BROKEN_PIPE | ERROR_NO_DATA | WSAESHUTDOWN => kind::BROKEN_PIPE,
         WSAEINTR => kind::INTERRUPTED,
-        WSAEWOULDBLOCK => kind::WOULD_BLOCK,
+        // A byte range another handle locked: what EAGAIN is for a lock.
+        WSAEWOULDBLOCK | ERROR_LOCK_VIOLATION => kind::WOULD_BLOCK,
         ERROR_TIMEOUT | WSAETIMEDOUT => kind::TIMED_OUT,
         ERROR_HANDLE_DISK_FULL | ERROR_DISK_FULL => kind::STORAGE_FULL,
         ERROR_NOT_SAME_DEVICE => kind::CROSSES_DEVICES,
@@ -512,21 +516,27 @@ pub unsafe extern "C" fn rok_os_open(dir: i32, path: RokStr, how: *const u8) -> 
     });
     if hd == win::INVALID_HANDLE_VALUE {
         // Without FILE_FLAG_BACKUP_SEMANTICS a directory is ACCESS_DENIED.
+        // A link not followed is the link, a directory's included.
         if e == win::ERROR_ACCESS_DENIED && !how.directory {
             // SAFETY: a NUL-terminated path.
             let a = unsafe { win::GetFileAttributesW(p.ptr()) };
-            if a != win::INVALID_FILE_ATTRIBUTES && a & win::FILE_ATTRIBUTE_DIRECTORY != 0 {
-                return -win::ERROR_DIRECTORY_NOT_SUPPORTED;
+            if a != win::INVALID_FILE_ATTRIBUTES {
+                if how.nofollow && a & win::FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+                    return -win::ERROR_STOPPED_ON_SYMLINK;
+                }
+                if a & win::FILE_ATTRIBUTE_DIRECTORY != 0 {
+                    return -win::ERROR_DIRECTORY_NOT_SUPPORTED;
+                }
             }
         }
         return -e;
     }
     let hd = Owned(hd);
-    if how.directory && !is_dir(hd.0) {
-        return -win::ERROR_DIRECTORY;
-    }
     if how.nofollow && is_symlink(hd.0) {
         return -win::ERROR_STOPPED_ON_SYMLINK;
+    }
+    if how.directory && !is_dir(hd.0) {
+        return -win::ERROR_DIRECTORY;
     }
     if how.disposition == 1 && e == win::ERROR_ALREADY_EXISTS {
         if let Err(e) = truncate_existing(hd.0, how.attrs) {
@@ -1201,10 +1211,69 @@ pub extern "C" fn rok_os_rename(dir: i32, from: RokStr, to_dir: i32, to: RokStr)
         Ok(b) => b,
         Err(e) => return e,
     };
-    // SAFETY: NUL-terminated paths.
-    on_path(dir, from, |a| unsafe {
-        win::MoveFileExW(a, b.ptr(), win::MOVEFILE_REPLACE_EXISTING)
-    })
+    let mut a = match path_w(dir, from) {
+        Ok(a) => a,
+        Err(e) => return e,
+    };
+    let (r, _) = native(|| rename_posix(&mut a, &mut b));
+    match r {
+        Err(
+            win::ERROR_INVALID_PARAMETER | win::ERROR_NOT_SUPPORTED | win::ERROR_INVALID_FUNCTION,
+        ) => {
+            // SAFETY: NUL-terminated paths.
+            let (ok, e) = native(|| unsafe {
+                win::MoveFileExW(a.ptr(), b.ptr(), win::MOVEFILE_REPLACE_EXISTING)
+            });
+            if ok == 0 { -e } else { 0 }
+        }
+        Err(e) => -e,
+        Ok(()) => 0,
+    }
+}
+
+/// Rename `from` over `to` with POSIX semantics: `to` is replaced even
+/// while another handle has it open (`MoveFileExW` fails there). A file
+/// system without them fails with `ERROR_INVALID_PARAMETER` or
+/// `ERROR_NOT_SUPPORTED`.
+fn rename_posix(from: &mut Wide, to: &mut Wide) -> Result<(), i32> {
+    let mut full = fill_wide(|buf, n| {
+        // SAFETY: `buf` is writable for `n` units; `to` is NUL-terminated.
+        unsafe { win::GetFullPathNameW(to.ptr(), n, buf, ptr::null_mut()) }
+    })?;
+    // SAFETY: a NUL-terminated path; a link is renamed, not its target.
+    let hd = unsafe {
+        win::CreateFileW(
+            from.ptr(),
+            win::DELETE,
+            win::FILE_SHARE_READ | win::FILE_SHARE_WRITE | win::FILE_SHARE_DELETE,
+            ptr::null_mut(),
+            win::OPEN_EXISTING,
+            win::FILE_FLAG_BACKUP_SEMANTICS | win::FILE_FLAG_OPEN_REPARSE_POINT,
+            0,
+        )
+    };
+    if hd == win::INVALID_HANDLE_VALUE {
+        return Err(errno());
+    }
+    let hd = Owned(hd);
+    let name = full.as_slice().len() * 2;
+    let at = core::mem::offset_of!(win::FILE_RENAME_INFO, FileName);
+    let n = at + name + 2;
+    let mut buf: MBuf<u64> = MBuf::new();
+    buf.reserve(n.div_ceil(8));
+    // SAFETY: `buf` has room for `n` bytes, 8-aligned; every field and
+    // the NUL-terminated name are written before the call reads them.
+    let ok = unsafe {
+        let info = buf.as_mut_ptr().cast::<win::FILE_RENAME_INFO>();
+        (*info).Flags =
+            win::FILE_RENAME_FLAG_REPLACE_IF_EXISTS | win::FILE_RENAME_FLAG_POSIX_SEMANTICS;
+        (*info).RootDirectory = 0;
+        (*info).FileNameLength = name as DWORD;
+        let dst = (&raw mut (*info).FileName).cast::<u16>();
+        ptr::copy_nonoverlapping(full.ptr(), dst, name / 2 + 1);
+        win::SetFileInformationByHandle(hd.0, win::FileRenameInfoEx, info.cast(), n as DWORD)
+    };
+    if ok == 0 { Err(errno()) } else { Ok(()) }
 }
 
 /// `hard == 0`: symlink `link` → `target` (`target` kept as given,
