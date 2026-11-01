@@ -789,6 +789,8 @@ pub struct UnionDef {
 pub struct TraitDef {
     pub vis: Visibility,
     pub attrs: Vec<Attribute>,
+    /// `unsafe trait`: every impl must be `unsafe impl`.
+    pub is_unsafe: bool,
     pub name: String,
     pub generics: Generics,
     pub supertraits: Vec<Ty>,
@@ -819,7 +821,7 @@ pub struct ImplDef {
     pub attrs: Vec<Attribute>,
     pub generics: Generics,
     pub trait_path: Option<Path>,
-    /// `unsafe impl` (manual `Send` / `Sync` opt-in).
+    /// `unsafe impl` (manual `Send` / `Sync` opt-in, an `unsafe trait`).
     pub is_unsafe: bool,
     /// `impl !Tr for T` (auto-trait opt-out).
     pub negative: bool,

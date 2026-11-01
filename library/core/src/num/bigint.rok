@@ -17,6 +17,7 @@
 // NTT transforms for an operand multiplied many times.
 
 use rok::core::collections::raw::{GcBuf, buf_new};
+use rok::core::convert::AsBytes;
 
 /// Divisor limbs below which (or quotient limbs below which) division
 /// is schoolbook (Knuth D); limb / digit counts below which radix
@@ -1013,18 +1014,60 @@ impl Int {
     /// The `int` of `bytes` in two's complement, least significant
     /// first (a set top bit is negative). No bytes is zero.
     #[must_use]
-    pub fn from_le_bytes(bytes: List<u8> | Slice<u8>) -> Int { Int::from_bytes(bytes, true, false) }
+    pub fn from_le_bytes<B: AsBytes>(bytes: B) -> Int { Int::from_bytes(bytes.byte_slice(), true, false) }
 
     /// As `from_le_bytes`, most significant first.
     #[must_use]
-    pub fn from_be_bytes(bytes: List<u8> | Slice<u8>) -> Int { Int::from_bytes(bytes, true, true) }
+    pub fn from_be_bytes<B: AsBytes>(bytes: B) -> Int { Int::from_bytes(bytes.byte_slice(), true, true) }
 
     /// The `int` of the magnitude `bytes`, least significant first;
     /// never negative. No bytes is zero.
-    pub fn from_le_bytes_unsigned(bytes: List<u8> | Slice<u8>) -> Int { Int::from_bytes(bytes, false, false) }
+    #[must_use]
+    pub fn from_le_bytes_unsigned<B: AsBytes>(bytes: B) -> Int { Int::from_bytes(bytes.byte_slice(), false, false) }
 
     /// As `from_le_bytes_unsigned`, most significant first.
-    pub fn from_be_bytes_unsigned(bytes: List<u8> | Slice<u8>) -> Int { Int::from_bytes(bytes, false, true) }
+    #[must_use]
+    pub fn from_be_bytes_unsigned<B: AsBytes>(bytes: B) -> Int { Int::from_bytes(bytes.byte_slice(), false, true) }
+
+    /// `self` in two's complement in exactly `out.len()` bytes, least
+    /// significant first, sign-extended. Panics if it needs more bytes
+    /// (`byte_len() > out.len()`).
+    #[track_caller]
+    pub fn write_le_bytes(self, out: SliceMut<u8>) { self.write_bytes(out, true, false, "write_le_bytes") }
+
+    /// As `write_le_bytes`, most significant first.
+    #[track_caller]
+    pub fn write_be_bytes(self, out: SliceMut<u8>) { self.write_bytes(out, true, true, "write_be_bytes") }
+
+    /// The magnitude in exactly `out.len()` bytes, least significant
+    /// first, zero-extended. Panics on a negative number or if it needs
+    /// more bytes (`byte_len_unsigned() > out.len()`).
+    #[track_caller]
+    pub fn write_le_bytes_unsigned(self, out: SliceMut<u8>) { self.write_bytes(out, false, false, "write_le_bytes_unsigned") }
+
+    /// As `write_le_bytes_unsigned`, most significant first.
+    #[track_caller]
+    pub fn write_be_bytes_unsigned(self, out: SliceMut<u8>) { self.write_bytes(out, false, true, "write_be_bytes_unsigned") }
+
+    #[track_caller]
+    fn write_bytes(self, out: SliceMut<u8>, signed: bool, be: bool, name: str) {
+        unsafe {
+            let nb = out.len();
+            if !self.is_zero() {
+                let need = self.byte_count(signed, name);
+                if need > nb {
+                    panic(f"Int::{name}: the value needs {need} bytes but `out` has {nb}; pass a view of at least {need} bytes");
+                }
+            }
+            let limbs = self.twos(nb / 4 + 1);
+            let i = 0usize;
+            while i < nb {
+                let k = if be { nb - 1 - i } else { i };
+                out[i] = (limbs[k / 4] >> ((k % 4) as u32 * 8u32)) as u8;
+                i += 1;
+            }
+        }
+    }
 
     #[track_caller]
     fn byte_count(self, signed: bool, name: str) -> usize {
@@ -1061,12 +1104,8 @@ impl Int {
         }
     }
 
-    fn from_bytes(bytes: List<u8> | Slice<u8>, signed: bool, be: bool) -> Int {
+    fn from_bytes(v: Slice<u8>, signed: bool, be: bool) -> Int {
         unsafe {
-            let v = match bytes {
-                l: List<u8> => l[0:l.len()],
-                s: Slice<u8> => s,
-            };
             let n = v.len();
             if n == 0 { return Int::from_i64(0); }
             // One spare byte or more: room for the sign extension.

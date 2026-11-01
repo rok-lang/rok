@@ -6,8 +6,12 @@
 use rok::bare::mem::GcBuf;
 use rok::core::crypto::Secret;
 
-/// Overwrite every byte of `buf` with random bytes.
-pub fn fill(buf: List<u8>) { fill_view(buf[0:buf.len()]); }
+/// Overwrite every byte of `buf` with random bytes. A `List<u8>`
+/// passes as a view of all of it.
+pub fn fill(buf: SliceMut<u8>) {
+    let (b, off, len) = unsafe { buf.raw_parts() };
+    fill_raw(b, off, len);
+}
 
 /// `n` random bytes.
 pub fn bytes(n: usize) -> List<u8> {
@@ -20,13 +24,13 @@ pub fn bytes(n: usize) -> List<u8> {
 /// `n` random bytes in secret storage (keys, seeds): no other copy.
 pub fn secret(n: usize) -> Secret {
     let s = Secret::zeroed(n);
-    fill_view(s.as_bytes());
+    let (b, off, len) = unsafe { s.as_bytes().raw_parts() };
+    fill_raw(b, off, len);
     s
 }
 
-fn fill_view(v: Slice<u8>) {
-    if v.len() == 0 { return; }
-    let (b, off, len) = unsafe { v.raw_parts() };
+fn fill_raw(b: GcBuf<u8>, off: usize, len: usize) {
+    if len == 0 { return; }
     let r = unsafe { rok_os_random(b, off, len) };
     if r != 0 { panic(f"OS random source failed (error {-r})"); }
 }

@@ -485,8 +485,9 @@ codes! {
 
     78 INVALID_IMPL Type "impl not allowed"
     "This impl is not allowed: an inherent impl on a type parameter, a manual impl of \
-     `Reflect`, or an `unsafe impl` / `impl !Trait` of a trait that is not an auto trait \
-     (`Send`, `Sync`). Remove it, or write the form the message gives.";
+     `Reflect`, an `unsafe impl` of a trait that is neither an auto trait (`Send`, `Sync`) \
+     nor an `unsafe trait`, an `impl !Trait` of a trait that is not an auto trait, or a \
+     plain `impl` of an `unsafe trait`. Remove it, or write the form the message gives.";
 
     79 CONST_EVAL Type "cannot evaluate at compile time"
     "A const, array length, const generic argument or `const fn` body uses something that \

@@ -106,6 +106,8 @@ struct TypeNames {
     /// Structural auto traits (`#[lang("send_trait" | "sync_trait")]`):
     /// a type has them unless a component lacks them.
     auto_traits: std::collections::HashSet<String>,
+    /// `unsafe trait`s: implemented only by `unsafe impl`.
+    unsafe_traits: std::collections::HashSet<String>,
     /// The `#[lang]` slots (spec 6.4).
     lang: rokc_parser::LangTable,
     /// Every enum variant as `a::E::V` (generic bases unmangled). A
@@ -1843,6 +1845,7 @@ impl TypeNames {
             names: std::collections::HashSet::new(),
             traits: std::collections::HashSet::new(),
             auto_traits: std::collections::HashSet::new(),
+            unsafe_traits: std::collections::HashSet::new(),
             lang: rokc_parser::LangTable::default(),
             variants: std::collections::HashSet::new(),
             reexports: HashMap::new(),
@@ -4932,6 +4935,7 @@ impl<'a> LowerCtx<'a> {
         }
         // Code a toolchain template or the compiler wrote is checked
         // where it is defined (spec 6.9.9).
+        let name = &shown_mark_name(name);
         if let Some(note) = mark
             .internal
             .as_ref()
@@ -5921,4 +5925,20 @@ fn ref_captured_bindings(
     };
     crate::walk::walk_block(&mut v, body);
     v.out
+}
+
+/// A marked item's name as the user knows it: a bound's method
+/// (`#Tr::m`) as `Tr::m`, a generic impl's (`::impl1c8e475a_m`) as `m`.
+fn shown_mark_name(name: &str) -> String {
+    let (ty, m) = name.rsplit_once("::").unwrap_or(("", name));
+    let m = match m.strip_prefix("impl").and_then(|r| r.split_once('_')) {
+        Some((hex, rest)) if !hex.is_empty() && hex.chars().all(|c| c.is_ascii_hexdigit()) => rest,
+        _ => m,
+    };
+    let ty = ty.trim_start_matches('#');
+    if ty.is_empty() {
+        m.to_owned()
+    } else {
+        format!("{ty}::{m}")
+    }
 }

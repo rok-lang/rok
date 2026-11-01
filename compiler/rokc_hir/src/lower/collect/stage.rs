@@ -682,6 +682,7 @@ impl Codec for TypeNames {
         self.names.enc(e);
         self.traits.enc(e);
         self.auto_traits.enc(e);
+        self.unsafe_traits.enc(e);
         self.lang.enc(e);
         self.variants.enc(e);
         self.reexports.enc(e);
@@ -704,6 +705,7 @@ impl Codec for TypeNames {
         n.names = Codec::dec(d)?;
         n.traits = Codec::dec(d)?;
         n.auto_traits = Codec::dec(d)?;
+        n.unsafe_traits = Codec::dec(d)?;
         n.lang = Codec::dec(d)?;
         n.variants = Codec::dec(d)?;
         n.reexports = Codec::dec(d)?;

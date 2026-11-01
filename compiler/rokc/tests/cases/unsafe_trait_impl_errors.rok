@@ -1,0 +1,23 @@
+// expect-error: `Zeroable` is an `unsafe trait`: the impl promises what the compiler cannot check; write `unsafe impl Zeroable for i32`
+// expect-error: `Plain` is not an auto trait or an `unsafe trait` - `unsafe impl` is only for `Send`, `Sync` and `unsafe trait`s, `impl !Trait` only for `Send` / `Sync`; write `impl Plain for i32`
+// expect-error: `impl !Zeroable`: `impl !Trait` is only for the auto traits `Send` / `Sync`; remove it (a type without `unsafe impl Zeroable` does not have it)
+// expect-error: `Pod` is an `unsafe trait`: the impl promises what the compiler cannot check; write `unsafe impl Pod for Pair`
+
+// An `unsafe trait` takes only `unsafe impl`; a safe trait never does.
+use rok::bare::mem::Pod;
+
+unsafe trait Zeroable {}
+trait Plain {}
+
+impl Zeroable for i32 {}
+unsafe impl Plain for i32 {}
+impl !Zeroable for u8 {}
+
+#[repr(C)]
+struct Pair { a: u32; b: u32; }
+
+impl Pod for Pair {}
+
+fn main() {}
+
+// spec: refs-lang §4.15.4

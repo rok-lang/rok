@@ -1170,6 +1170,7 @@ impl<'a> Parser<'a> {
                 Some(
                     TokenKind::Fn
                         | TokenKind::Impl
+                        | TokenKind::Trait
                         | TokenKind::Unsafe
                         | TokenKind::Async
                         | TokenKind::Yield
@@ -1890,6 +1891,15 @@ impl<'a> Parser<'a> {
             return self.parse_type_alias(vis, attrs).map(Item::TypeAlias);
         }
         match self.peek() {
+            TokenKind::Unsafe if self.peek_next() == Some(TokenKind::Trait) => {
+                self.bump();
+                self.parse_trait(vis, attrs).map(|t| {
+                    Item::Trait(TraitDef {
+                        is_unsafe: true,
+                        ..t
+                    })
+                })
+            }
             TokenKind::Unsafe if self.peek_next() == Some(TokenKind::Impl) => {
                 self.bump();
                 self.parse_impl(vis, attrs).map(|i| {
@@ -2910,6 +2920,7 @@ impl<'a> Parser<'a> {
         Some(TraitDef {
             vis,
             attrs,
+            is_unsafe: false,
             name,
             generics,
             supertraits,

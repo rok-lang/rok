@@ -21,6 +21,7 @@
 // from 65535 -1 0 0 128 -128 18446744073709551615 -1 255 -1
 // set 1267650600228229401496703205376 true 0 -1180591620717411303425 false -1 5 7
 // 1267650600228229401496703205377 0 3
+// write [254, 255, 255, 255] [255, 255, 255, 254] [0, 1, 0] [0, 1, 0] [] 513 0
 // 128 4 1 true 340282366920938463463374607431768211456
 
 // `int` bit queries (two's complement, sign-extended forever) and byte
@@ -51,6 +52,15 @@ fn main() {
                 let n = x.to_le_bytes().len();
                 ok = ok && x.byte_len() == n && a.byte_len_unsigned() == a.to_le_bytes_unsigned().len();
                 ok = ok && (n == 1 || int::from_le_bytes(x.to_le_bytes()[0:n - 1]) != x);
+                // Fixed width: sign- or zero-extended into a wider view.
+                let w: List<u8> = List::new();
+                for _ in 0..n + 2 { w.push(0u8); }
+                x.write_le_bytes(w);
+                ok = ok && int::from_le_bytes(w) == x;
+                x.write_be_bytes(w[1:n + 2]);
+                ok = ok && int::from_be_bytes(w[1:n + 2]) == x;
+                a.write_be_bytes_unsigned(w);
+                ok = ok && int::from_be_bytes_unsigned(w) == a;
             }
         }
         e += 1u32;
@@ -84,5 +94,17 @@ fn main() {
     let big = a;
     big.set_bit(0, true);
     println(f"{big} {big.trailing_zeros() ?? 99} {int::from(-8).trailing_zeros() ?? 99}");
+    let w4: List<u8> = [0u8, 0u8, 0u8, 0u8];
+    let w3: List<u8> = [9u8, 9u8, 9u8];
+    let w0: List<u8> = List::new();
+    int::from(-2).write_le_bytes(w4);
+    let le4 = f"{w4:?}";
+    int::from(-2).write_be_bytes(w4);
+    let be4 = f"{w4:?}";
+    int::from(256).write_le_bytes_unsigned(w3);
+    let le3 = f"{w3:?}";
+    int::from(256).write_be_bytes_unsigned(w3);
+    z.write_le_bytes(w0);
+    println(f"write {le4} {be4} {le3} {w3:?} {w0:?} {int::from_le_bytes([1u8, 2u8])} {int::from_le_bytes("")}");
     println(f"{int::from(65).next_power_of_two()} {int::from(4).next_power_of_two()} {int::from(-7).next_power_of_two()} {p2(127).is_power_of_two()} {(p2(127) + int::from(1)).next_power_of_two()}");
 }
