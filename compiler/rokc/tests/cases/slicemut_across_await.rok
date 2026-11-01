@@ -7,14 +7,14 @@
 // Stdlib 2.9.7a: a `SliceMut` may be an `async fn`'s argument and live
 // across an `await`; a resize while it waits is caught by the run-time
 // check, not rejected.
-async fn fill_later(s: SliceMut<u8>, b: u8) -> usize {
+async fn fill_later(s: collections::SliceMut<u8>, b: u8) -> usize {
     await task::yield_now();
     s.fill(b);
     s.len()
 }
 
 async fn twice(buf: List<u8>) -> usize {
-    let s: SliceMut<u8> = buf[0:2];
+    let s: collections::SliceMut<u8> = buf[0:2];
     await task::yield_now();
     s.fill(5);
     s.len()

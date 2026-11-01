@@ -39,8 +39,8 @@ fn main() {
     println(f"conversion: {c.message()} | {same(c)}");
     let t = TypeError::new("i32", "str");
     println(f"type: {t.expected()} {t.actual()} | {t.message()} | {same(t)}");
-    let u: Utf8Error | none = try { str::from_utf8([0x61u8, 0xffu8]); none } catch e { e };
-    if let u: Utf8Error = u {
+    let u: str::Utf8Error | none = try { str::from_utf8([0x61u8, 0xffu8]); none } catch e { e };
+    if let u: str::Utf8Error = u {
         println(f"utf8: {u.valid_up_to()} | {u.message()} | {same(u)}");
     }
     let n = try { CString::new("a\0b"); "made" } catch n {

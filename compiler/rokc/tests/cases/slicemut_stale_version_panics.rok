@@ -12,7 +12,7 @@ fn grow(xs: List<i32>) {
     xs.push(9);
 }
 
-fn view(xs: List<i32>) -> SliceMut<i32> {
+fn view(xs: List<i32>) -> collections::SliceMut<i32> {
     xs
 }
 

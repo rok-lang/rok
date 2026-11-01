@@ -11,7 +11,7 @@
 // a negative index counts from the end, like `xs[i]`.
 fn main() {
     let xs: List<i32> = [1, 2, 3, 4];
-    let s: SliceMut<i32> = xs[1:3];
+    let s: collections::SliceMut<i32> = xs[1:3];
     s[0] = 20;
     s[1] = 30;
     println(f"{xs:?} {s:?} {s.len()}");
@@ -24,11 +24,11 @@ fn main() {
     s.swap(0, 1);
     s.reverse();
     println(f"{xs:?}");
-    let all: SliceMut<i32> = xs[..];
+    let all: collections::SliceMut<i32> = xs[..];
     all.reverse();
     all[2..].reverse();
     println(f"{xs:?}");
-    let e: SliceMut<i32> = xs[9:];
+    let e: collections::SliceMut<i32> = xs[9:];
     println(f"empty {e.is_empty()} {e:?}");
 }
 

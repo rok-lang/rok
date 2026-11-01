@@ -8,24 +8,24 @@
 
 // Stdlib 2.9.7a: a `List<T>` passed where a `SliceMut<T>` is expected
 // views the whole list; `xs[a:b]` there views that part.
-fn zero(s: SliceMut<i32>) {
+fn zero(s: collections::SliceMut<i32>) {
     s.fill(0);
 }
 
-fn sevens(s: SliceMut<i32>) {
+fn sevens(s: collections::SliceMut<i32>) {
     for i in 0..s.len() {
         s[i] = 7;
     }
 }
 
-fn len_of(s: SliceMut<u8>) -> usize {
+fn len_of(s: collections::SliceMut<u8>) -> usize {
     s.len()
 }
 
 struct Sorter {}
 
 impl Sorter {
-    fn run(self, s: SliceMut<i32>) {
+    fn run(self, s: collections::SliceMut<i32>) {
         s.sort();
     }
 }
@@ -41,7 +41,7 @@ fn main() {
     println(f"{ys:?} sorted");
     let bytes: List<u8> = [1, 2, 3, 4];
     println(f"len {len_of(bytes)}");
-    let s: SliceMut<i32> = ys;
+    let s: collections::SliceMut<i32> = ys;
     s.copy_from_slice([5, 6, 3][:]);
     println(f"{ys:?}");
 }
