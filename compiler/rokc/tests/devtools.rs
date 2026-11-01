@@ -90,6 +90,7 @@ fn main() {
     if t == true { println(\"t\"); }
     let k = 1;
     k = k;
+    if f == f64::NAN { println(\"nan\"); }
     important();
     println(f\"{old()} {helper()}\");
     try? thrower();
@@ -143,7 +144,8 @@ fn lint_counts_extern_types_as_uses() {
 #[test]
 fn lint_finds_each_kind_and_honors_levels() {
     let dir = package("lint", &[("main.rok", LINTED)]);
-    let (_, err) = exit(&rokc(&dir, &["lint"]), 0);
+    // `self_assignment` and `nan_comparison` deny by default.
+    let (_, err) = exit(&rokc(&dir, &["lint"]), 1);
     for want in [
         "unused import `rok::core::str::StrBuf`",
         "function `unusedFn` is never used",
@@ -163,6 +165,10 @@ fn lint_finds_each_kind_and_honors_levels() {
         "`while true` is `loop`",
         "unreachable statement",
         "`#[warn(unused_variables)]` on by default",
+        "error[E503]: `k` is assigned to itself",
+        "`#[deny(self_assignment)]` on by default",
+        "error[E503]: comparison with NaN is always false",
+        "`#[deny(nan_comparison)]` on by default",
     ] {
         assert!(err.contains(want), "missing {want:?}:\n{err}");
     }
@@ -180,7 +186,7 @@ fn lint_finds_each_kind_and_honors_levels() {
         err.contains("deprecated function") && !err.contains("unused"),
         "{err}"
     );
-    let (_, err) = exit(&rokc(&dir, &["lint", "-A", "nope"]), 0);
+    let (_, err) = exit(&rokc(&dir, &["lint", "-A", "nope"]), 1);
     assert!(err.contains("unknown lint `nope`"), "{err}");
 
     // Attributes beat the command line, innermost first.

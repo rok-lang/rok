@@ -78,16 +78,23 @@ pub const LINTS: &[Lint] = &[
         "shadowed_loop_var",
         "a `let` in a `for` body re-binds the loop variable",
     ),
-    warn(
-        "nan_comparison",
-        "comparing with NaN is always false (`!=`: true)",
-    ),
+    Lint {
+        name: "nan_comparison",
+        default: Level::Deny,
+        desc: "comparing with NaN is always false (`!=`: true)",
+        since: "0.1.0",
+    },
     warn("none_comparison", "`x == none` instead of `x is none`"),
     warn(
         "bool_comparison",
         "comparing a `bool` with `true` / `false`",
     ),
-    warn("self_assignment", "`x = x;`"),
+    Lint {
+        name: "self_assignment",
+        default: Level::Deny,
+        desc: "`x = x;`",
+        since: "0.1.0",
+    },
     warn("while_true", "`while true` instead of `loop`"),
     warn("redundant_cast", "`x as T` where `x` already has type `T`"),
     warn("redundant_clone", "`.clone()` of a primitive value"),
