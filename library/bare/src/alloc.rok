@@ -137,10 +137,15 @@ pub unsafe fn alloc_one<T>() -> CPtr<T> {
     CPtr::from_addr(rok_alloc_raw(size_of::<T>(), align_of::<T>(), 0))
 }
 
-/// An uninitialized block for `n` `T`s; null when out of memory or when
-/// the size is 0. Free it with `dealloc_array`.
+/// An uninitialized block for `n` `T`s; null when out of memory, when
+/// the size is 0 or when `n * size_of::<T>()` overflows. Free it with
+/// `dealloc_array`.
 pub unsafe fn alloc_array<T>(n: usize) -> CPtr<T> {
-    CPtr::from_addr(rok_alloc_raw(size_of::<T>() * n, align_of::<T>(), 0))
+    let elem = size_of::<T>();
+    if elem != 0 && n > usize::MAX / elem {
+        return CPtr::null();
+    }
+    CPtr::from_addr(rok_alloc_raw(elem * n, align_of::<T>(), 0))
 }
 
 /// Free a block from `alloc_one`. UB unless `ptr` came from it and is not

@@ -9,6 +9,7 @@
 // true 1.5 3 true true Greater NonNan(1.5)
 // true true 0 2 Finite(2.0)
 // true false 0
+// 7 7 caught a negative value is not a valid `Positive` value
 // 3,9,
 // zero one
 // -4 -0 1.5
@@ -54,6 +55,9 @@ fn main() {
     let p: num::niche::Positive<i32> | none = num::niche::Positive::new(-3);
     let q: num::niche::Positive<i32> | none = num::niche::Positive::new(0);
     println(f"{p is none} {q is none} {(q ?? num::niche::Positive::new(5) ?? panic("neg")).get()}");
+    let pp: num::niche::Positive<i32> = try num::niche::Positive::<i32>::try_from(7) catch _ { num::niche::Positive::new(0) ?? panic("neg") };
+    let back: i32 = pp.into();
+    _ = try num::niche::Positive::<i32>::try_from(-1) catch err: ConversionError { println(f"{back} {i32::from(pp)} caught {err}"); pp };
     let xs: List<num::niche::NonZero<u64> | none> = List::new();
     xs.push(num::niche::NonZero::new(3 as u64));
     xs.push(none);

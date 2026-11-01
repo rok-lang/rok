@@ -187,6 +187,29 @@ impl<T: NicheInt> Positive<T> {
     pub const fn get(self) -> T { self.0 }
 }
 
+impl<T: NicheInt> TryFrom<T> for Positive<T> {
+    type Error = ConversionError;
+    const fn try_from(value: T) throws (ConversionError) -> Positive<T> {
+        let p: Positive<T> = Positive::new(value) else {
+            throw ConversionError::new("a negative value is not a valid `Positive` value");
+        };
+        p
+    }
+}
+
+// `T::from(p)`, one impl per integer type.
+#[impl_macro(positive_from)] @macro {
+    (@rep[sep = ","] { @t: ty }) => {
+        @for @t {
+            impl From<Positive<@t>> for @t {
+                const fn from(value: Positive<@t>) -> @t { value.0 }
+            }
+        }
+    }
+}
+
+positive_from!(i8, i16, i32, i64, isize, u8, u16, u32, u64, usize);
+
 impl<T: NicheInt> Clone for Positive<T> {
     fn clone(self) -> Positive<T> { self }
 }
