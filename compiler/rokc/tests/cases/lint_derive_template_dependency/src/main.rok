@@ -1,0 +1,30 @@
+// spec: §6.9.9 §9.1.5
+// rokc-arg: --extern tdep=tests/cases/lint_derive_template_dependency/tdep
+// expect-exit: 0
+// expect-lint: 30:4 function `unused` is never used
+// forbid-warning: `helper` is never used
+// forbid-warning: snake case
+// expect-stdout:
+// 10 S::Line
+
+// A helper only a derive template calls is used. Code another package's
+// template wrote (std's `Rokon`, binding payloads as generated names) is
+// linted there, not here. A dead function's caret covers its name.
+use rok::std::rokon::ToRokon;
+use tdep::Ten;
+
+#[derive(Ten)]
+struct T {}
+
+#[derive(Rokon)]
+enum S { Dot, Line(i64) }
+
+fn main() {
+    let v = S::Line(3).to_rokon();
+    match v {
+        rok::std::rokon::Value::Variant { path, .. } => println(f"{T {}.ten()} {path}"),
+        _ => println("other"),
+    }
+}
+
+fn unused() {}

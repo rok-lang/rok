@@ -410,6 +410,8 @@ pub struct SourceFile {
     pub stmts: Vec<rokc_ast::Stmt>,
     /// Its meta expansions as source text (`--emit=expansions`).
     pub expanded: Vec<String>,
+    /// The names its meta blocks' templates write (uses for `dead_code`).
+    pub template_names: Vec<String>,
 }
 
 /// A user module named like a dependency would merge with it (902.3).
@@ -2147,6 +2149,7 @@ fn settle(
         items: items.clone(),
         stmts: program.stmts.clone(),
         expanded: program.expanded,
+        template_names: metas.table.names_in(&path.display().to_string()),
     });
     Parsed {
         items,

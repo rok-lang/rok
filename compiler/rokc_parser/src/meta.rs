@@ -185,6 +185,25 @@ impl MetaTable {
             .any(|d| d.name == name && d.kind != MetaKind::Macro)
     }
 
+    /// Every name the templates of the blocks in `file` write: their
+    /// uses, for `dead_code`.
+    #[must_use]
+    pub fn names_in(&self, file: &str) -> Vec<String> {
+        let mut out: Vec<String> = self
+            .defs
+            .iter()
+            .filter(|d| d.file == file)
+            .flat_map(|d| &d.body)
+            .filter_map(|t| match &t.kind {
+                TokenKind::Ident(n) => Some(n.clone()),
+                _ => None,
+            })
+            .collect();
+        out.sort_unstable();
+        out.dedup();
+        out
+    }
+
     /// The macro `name!` a meta block registers, if any (spec 6.8.12).
     #[must_use]
     pub fn find_macro(&self, name: &str) -> Option<&MetaDef> {

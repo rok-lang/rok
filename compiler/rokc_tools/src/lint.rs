@@ -359,6 +359,13 @@ fn demangle(name: &str) -> &str {
     name
 }
 
+/// A name a meta template generated (`@variant.pattern` binds payload
+/// field `n` of `V` as `V__meta<n>`): nobody wrote it, so no lint names it.
+fn generated(name: &str) -> bool {
+    name.rsplit_once("__meta")
+        .is_some_and(|(base, n)| !base.is_empty() && !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+}
+
 /// A level set for a lint: the level and the note naming where (`None`:
 /// the default).
 type Set = (Level, Option<String>);
@@ -459,7 +466,14 @@ pub fn run(result: &CompileResult, levels: &Levels) -> Vec<RokDiagnostic> {
         .map(|f| key(f.span))
         .collect();
     findings.retain(|f| f.lint != "unused_result" || !stronger.contains(&key(f.span)));
+    let files: HashSet<u32> = user.iter().map(|f| f.file_id).collect();
     for f in findings {
+        // Code another package's template wrote is linted in that
+        // package, not where it expands. `--check-library` lints the
+        // library too.
+        if !levels.library && !f.span.is_dummy() && !files.contains(&f.span.file) {
+            continue;
+        }
         let generated = text_at(texts, f.span).is_some_and(|t| t.starts_with('#'));
         if generated {
             continue;
@@ -546,9 +560,21 @@ fn text_at(texts: &[(String, String)], span: Span) -> Option<&str> {
 
 /// The name `name` a `let` at `at` binds (`at` covers `let` only).
 fn name_span(texts: &[(String, String)], at: Span, name: &str) -> Option<Span> {
+    text_at(texts, at)?.starts_with("let").then_some(())?;
+    word_after(texts, at, "let", name)
+}
+
+/// The name `name` after keyword `kw` on the line from `at` on (`fn f`,
+/// `const fn f`).
+fn word_after(texts: &[(String, String)], at: Span, kw: &str, name: &str) -> Option<Span> {
     let line = text_at(texts, at)?;
-    let rest = line.strip_prefix("let")?;
-    let off = 3 + rest.find(|c: char| !c.is_whitespace())?;
+    let k = if line.starts_with(kw) {
+        0
+    } else {
+        line.find(&format!(" {kw} "))? + 1
+    };
+    let rest = &line[k + kw.len()..];
+    let off = k + kw.len() + rest.find(|c: char| !c.is_whitespace())?;
     let word = line.get(off..)?;
     let end = word
         .find(|c: char| !c.is_alphanumeric() && c != '_')
@@ -1212,6 +1238,8 @@ impl<'a> Cx<'a> {
         self.unused_imports(&f.items);
         let names = std::mem::take(&mut self.file_names);
         self.all_names.extend(names);
+        // A template's paths are uses even where it never expands.
+        self.all_names.extend(f.template_names.iter().cloned());
     }
 
     fn attr_names(&mut self, a: &Attribute) {
@@ -1464,9 +1492,10 @@ impl<'a> Cx<'a> {
             && !has_attr(&f.attrs, ROOTS)
             && !self.all_names.contains(&*name)
         {
+            let at = word_after(self.texts, f.span, "fn", &name).unwrap_or(f.span);
             self.hit(
                 "dead_code",
-                f.span,
+                at,
                 format!("function `{name}` is never used"),
             );
         }
@@ -1994,7 +2023,11 @@ impl AstVisitor for Cx<'_> {
     }
 
     fn bind_at(&mut self, name: &str, at: Span) {
-        if name == "self" || name.starts_with('_') || self.variants.contains(name) {
+        if name == "self"
+            || name.starts_with('_')
+            || generated(name)
+            || self.variants.contains(name)
+        {
             return;
         }
         let is_loop = self.loop_pats.contains(&key(at));

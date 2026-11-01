@@ -489,7 +489,7 @@ pub @derive {
                             }
                             @apply_if(@variant.is_named) {
                                 @for_variant_fields {
-                                    named.insert(@field.name.as_str(), rok::std::rokon::to_value::<@field.type>(@field));
+                                    _ = named.insert(@field.name.as_str(), rok::std::rokon::to_value::<@field.type>(@field));
                                 }
                             }
                             rok::std::rokon::Value::Variant {
@@ -544,7 +544,7 @@ pub @derive {
                 @for_variants {
                     if name == @variant.name.as_str() {
                         @apply_if(@variant.is_unit) {
-                            try rok::std::rokon::variant_args(args, named, @Self.as_str() + "::" + name, 0);
+                            _ = try rok::std::rokon::variant_args(args, named, @Self.as_str() + "::" + name, 0);
                             return @Self.name::@variant.name;
                         }
                         @apply_if(@variant.is_tuple) {
