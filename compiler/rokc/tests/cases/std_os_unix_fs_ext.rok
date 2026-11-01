@@ -20,7 +20,7 @@
 use rok::std::fs;
 use rok::std::fs::{OpenOptions, Permissions};
 use rok::std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
-use rok::std::io::IoError;
+use rok::core::io::IoError;
 use rok::std::env;
 use rok::std::process;
 

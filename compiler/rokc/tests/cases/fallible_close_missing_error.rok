@@ -10,7 +10,7 @@
 // releases it.
 
 use rok::std::fs::File;
-use rok::std::io::IoError;
+use rok::core::io::IoError;
 
 pub fn never(p: str) -> str {
     let f = try! File::open(p);

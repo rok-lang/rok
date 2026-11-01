@@ -16,7 +16,7 @@
 // the process id is 0 (WASI has no such concept).
 use rok::std::process;
 use rok::std::process::{Command, Signal, SignalError};
-use rok::std::io::{IoError, IoErrorKind};
+use rok::core::io::{IoError, IoErrorKind};
 use rok::std::env;
 
 try Command::new("ls").spawn() catch e: IoError { println(f"spawn: {e.kind():?}"); };

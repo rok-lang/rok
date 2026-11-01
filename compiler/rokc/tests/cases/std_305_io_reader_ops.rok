@@ -1,19 +1,19 @@
-// spec: std 305-io §3.5.1
+// spec: std 223-io §2.23.1
 // needs: fs
 // expect-exit: 0
 // expect-stdout:
 // read_exact: abc
 // short read_exact: UnexpectedEof
 // pos 6, rewind 0
-// line [abcdef\n] then end []
+// line [abcdef\n] 7 then end 0 []
 // copied 8
 // copy: [abcdef\ng]
 
 // spec 3.5.1: `read_exact` fills the whole buffer or throws
-// `UnexpectedEof`; `stream_position` / `rewind`; `read_line` keeps `\n`
-// and returns "" at end; `io::copy(reader, writer)` returns bytes copied.
-use rok::std::io;
-use rok::std::io::{IoError, IoErrorKind, Reader, Writer};
+// `UnexpectedEof`; `stream_position` / `rewind`; `BufRead::read_line`
+// appends the line with its `\n` and returns 0 at the end;
+// `io::copy(ref r, ref w)` returns the bytes copied.
+use rok::core::io::{IoError, IoErrorKind};
 use rok::std::fs;
 use rok::std::fs::File;
 use rok::std::env;
@@ -31,15 +31,18 @@ fn main() throws (IoError) {
     let i = 0;
     while i < 64 { big.push(0u8); i += 1; }
     try f.read_exact(big) catch e { println(f"short read_exact: {e.kind():?}"); };
-    try f.seek(rok::std::io::SeekFrom::Start(6u64));
+    try f.seek(rok::core::io::SeekFrom::Start(6u64));
     let pos = try f.stream_position();
     try f.rewind();
     println(f"pos {pos}, rewind {try f.stream_position()}");
-    let l1 = try f.read_line();
-    try f.read_line();
-    let l3 = try f.read_line();
-    println("line [" + l1.replace("\n", "\\n") + "] then end [" + l3 + "]");
-    try f.close();
+    let r = io::BufReader::new(f);
+    let l1 = StrBuf::new();
+    let n1 = try r.read_line(l1);
+    try r.read_line(StrBuf::new());
+    let l3 = StrBuf::new();
+    let n3 = try r.read_line(l3);
+    println("line [" + l1.to_str().replace("\n", "\\n") + f"] {n1} then end {n3} [" + l3.to_str() + "]");
+    try r.close();
 
     let src = try File::open(p);
     let dst = try fs::create(q);
@@ -51,4 +54,4 @@ fn main() throws (IoError) {
     try fs::remove_file(p);
     try fs::remove_file(q);
 }
-// spec: std 305-io §3.5.0 §3.5.4
+// spec: std 223-io §2.23.0 §2.23.7

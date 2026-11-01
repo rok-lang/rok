@@ -1,4 +1,4 @@
-// spec: std 305-io §3.5.0
+// spec: std 223-io §2.23.0
 // spec: std 302-net §3.2.4 §3.2.5
 // spec: std 304-thread §3.4.1
 // spec: std 309-rokon §3.9.3
@@ -17,7 +17,7 @@
 
 // std errors read through methods: private fields, `message()`, and
 // `PartialEq` / `Clone` on every one.
-use rok::std::io::{IoError, IoErrorKind};
+use rok::core::io::{IoError, IoErrorKind};
 use rok::std::net::{Ipv4Addr, Ipv6Addr};
 use rok::std::net::tls::{Certificate, TlsErrorKind};
 use rok::std::rokon;

@@ -14,7 +14,6 @@
 // itself while it has nothing to run.
 use rok::std::net::{TcpListener, UdpSocket, SocketAddr};
 use rok::std::net;
-use rok::std::io::byte_buf;
 
 fn text(buf: List<u8>, n: usize) -> str {
     return try! str::from_utf8(buf[0:n]);
@@ -25,7 +24,7 @@ let l = try! TcpListener::bind(any);
 let addr = try! l.local_addr();
 let server = task::spawn(async {
     let (s, _) = try! await l.accept_async();
-    let buf = byte_buf(64);
+    let buf = List::filled(64, 0u8);
     let n = try! await s.read_async(buf);
     try! await s.write_all_async(buf[0:n]);
     try! s.close();
@@ -33,7 +32,7 @@ let server = task::spawn(async {
 });
 let c = try! await net::tcp_connect_async(f"{addr}");
 try! await c.write_all_async("hello tasks");
-let back = byte_buf(64);
+let back = List::filled(64, 0u8);
 let n = try! await c.read_async(back);
 println(f"tcp echo: {text(back, n)} (server read {await server})");
 try! c.close();
@@ -42,7 +41,7 @@ let a = try! UdpSocket::bind(any);
 let b = try! UdpSocket::bind(any);
 let a_addr = try! a.local_addr();
 try! b.send_to("ping".as_bytes(), a_addr);
-let buf = byte_buf(64);
+let buf = List::filled(64, 0u8);
 let (k, from) = try! a.recv_from(buf);
 let ping = text(buf, k);
 try! a.send_to("pong".as_bytes(), from);
@@ -51,7 +50,7 @@ println(f"udp: {ping} from {if from == (try! b.local_addr()) { "b" } else { "?" 
 
 let rx = task::spawn(async {
     let sum = 0;
-    let got = byte_buf(8);
+    let got = List::filled(8, 0u8);
     for i in 0..5 {
         let (j, _) = try! await a.recv_from_async(got);
         sum += (got[0] - 48u8) as i32;

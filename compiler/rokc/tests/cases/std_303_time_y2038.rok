@@ -13,7 +13,7 @@
 // `utimes` reads back exactly.
 use rok::bare::ptr::{Ptr, addr_of};
 use rok::std::fs;
-use rok::std::io::IoError;
+use rok::core::io::IoError;
 use rok::std::time::{Duration, SystemTime, SystemTimeError, UNIX_EPOCH};
 
 extern "C" {

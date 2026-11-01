@@ -14,7 +14,7 @@
 // `IoErrorKind::Unsupported` at run time.
 use rok::std::net::{TcpListener, TcpStream, UdpSocket, SocketAddr};
 use rok::std::net;
-use rok::std::io::{IoError, IoErrorKind};
+use rok::core::io::{IoError, IoErrorKind};
 
 let any: SocketAddr = try! "127.0.0.1:0".parse::<SocketAddr>();
 try TcpListener::bind(any) catch e: IoError { println(f"bind: {e.kind():?}"); };

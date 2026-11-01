@@ -17,8 +17,8 @@
 // hold; a read from mid-file gets the rest.
 
 use rok::std::fs;
-use rok::std::fs::SeekFrom;
-use rok::std::io::IoError;
+use rok::core::io::SeekFrom;
+use rok::core::io::IoError;
 use rok::std::env;
 use rok::std::process;
 

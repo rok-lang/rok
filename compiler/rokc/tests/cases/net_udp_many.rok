@@ -14,7 +14,7 @@
 use rok::core::marker::share;
 use rok::std::net::{TcpListener, TcpStream, UdpSocket, SocketAddr};
 use rok::std::net;
-use rok::std::io::{IoError, IoErrorKind, byte_buf};
+use rok::core::io::{IoError, IoErrorKind};
 
 fn text(buf: List<u8>, n: usize) -> str {
     return try! str::from_utf8(buf[0:n]);
@@ -28,7 +28,7 @@ let a = unsafe { share(a_own) };
 let b = try! net::udp_bind("127.0.0.1:0");
 let a_addr = try! a.local_addr();
 try! b.send_to("ping".as_bytes(), a_addr);
-let buf = byte_buf(64);
+let buf = List::filled(64, 0u8);
 let (n, from) = try! a.recv_from(buf);
 let ping = text(buf, n);
 try! a.send_to("pong".as_bytes(), from);
@@ -40,7 +40,7 @@ println(f"udp blocking: {ping} from {local} -> {text(buf, m)}");
 let rx = task::spawn(async {
     let sum: i32 = 0;
     let count: i32 = 0;
-    let rbuf = byte_buf(16);
+    let rbuf = List::filled(16, 0u8);
     while count < 10 {
         let (k, _) = try! await a.recv_from_async(rbuf);
         sum = sum + (rbuf[0] as i32);
@@ -92,7 +92,7 @@ let server = task::spawn(async {
         conns.push(task::spawn(async {
             let cur = open.fetch_add(1) + 1;
             using g = peak.lock() { if cur > g.get() { g.set(cur); } }
-            let rb = byte_buf(64);
+            let rb = List::filled(64, 0u8);
             let rounds = 0;
             while true {
                 let k = try! await c.read_async(rb);
@@ -119,11 +119,11 @@ while k < clients {
     tasks.push(task::spawn(async {
         let s = try! await TcpStream::connect_async(addr);
         let ok = true;
-        let cb = byte_buf(64);
+        let cb = List::filled(64, 0u8);
         let r = 0;
         while r < 5 {
             let msg = f"c{me}r{r}";
-            try! await s.write_str_async(msg);
+            try! await s.write_all_async(msg);
             let n = try! await s.read_async(cb);
             if text(cb, n) != msg { ok = false; }
             await task::sleep(Duration::ms(2));

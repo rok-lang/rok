@@ -8,21 +8,18 @@
 // the writer's `IoError`, with the writes before it kept and nothing
 // formatted after it; a `Display` that fails by itself is `Other`.
 
-use rok::std::io::{IoError, IoErrorKind, Writer};
+use rok::core::io::{IoError, IoErrorKind};
 
 /// Takes `room` writes, then fails like a closed pipe.
 struct Closing { room: i32; taken: i32; }
 
-impl Writer for Closing {
-    fn write(ref self, buf: List<u8>) throws (IoError) -> usize {
-        try self.write_str("");
-        buf.len()
-    }
-    fn write_str(ref self, s: str) throws (IoError) {
+impl Write for Closing {
+    fn write<B: convert::AsBytes>(ref self, buf: B) throws (IoError) -> usize {
         if self.taken == self.room {
             throw IoError::new(IoErrorKind::BrokenPipe, "pipe closed");
         }
         self.taken += 1;
+        buf.byte_slice().len()
     }
     fn flush(ref self) throws (IoError) {}
 }
@@ -71,5 +68,5 @@ fn main() {
     try send(ref w2) catch e { println(f"thrown: {e.kind():?}"); };
 }
 
-// spec: std 305-io §3.5.0 §3.5.1
+// spec: std 223-io §2.23.0 §2.23.3
 // spec: std 210-fmt §2.10.12

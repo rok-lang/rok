@@ -15,7 +15,7 @@
 // `remove_dir` (fails on a non-empty dir), `exists`.
 use rok::std::fs;
 use rok::std::fs::{Dir, File, OpenOptions};
-use rok::std::io::IoError;
+use rok::core::io::IoError;
 use rok::std::env;
 use rok::std::process;
 
@@ -24,7 +24,7 @@ fn main() throws (IoError) {
     try fs::create_dir_all(base / "sub");
     let d = try Dir::root().open_dir(base);
     let f = try d.create("x.txt");
-    try f.write_str("abcdef");
+    try f.write_all("abcdef");
     try f.close();
     println(f"created: {fs::exists(base / "x.txt")}");
 

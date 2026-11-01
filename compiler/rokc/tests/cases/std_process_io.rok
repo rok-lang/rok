@@ -19,30 +19,29 @@
 // id ok: true
 
 // Spec 305 / 307 / 306: the program re-runs itself as a child with
-// piped stdio (`Command`, `env::args`, `io::stdin` read_line / lines,
+// piped stdio (`Command`, `env::args`, `io::read_line`, stdin `lines`,
 // stdout / stderr writers), then drives `sh` / `tr` / `env` through
 // `output` / `spawn` / `status` with env, cwd, signals.
 
 use rok::core::marker::share;
 use rok::std::process;
 use rok::std::process::{Command, Stdio};
-use rok::std::io;
-use rok::std::io::{IoError, Reader, Writer};
+use rok::core::io::IoError;
 use rok::std::env;
 
 fn child() throws (IoError) {
     let a = env::args();
     let out = io::stdout();
-    try out.write_str(f"child args: {a[1]} {a[2]} {a[3]}\n");
-    let first = try io::stdin().read_line();
-    try out.write_str("first: [" + first.trim_end() + "]\n");
-    for line in io::stdin().lock().lines() {
-        println("line: [" + (try line.get()) + "]");
+    try out.write_all(f"child args: {a[1]} {a[2]} {a[3]}\n");
+    let first = try io::read_line() ?? "";
+    try out.write_all("first: [" + first + "]\n");
+    try for line in io::stdin().lines() {
+        println("line: [" + line + "]");
     }
     try out.write_all([98u8, 121u8, 116u8, 101u8, 115u8]);
     println(": 5");
     try out.flush();
-    try io::stderr().write_str("to stderr");
+    try io::stderr().write_all("to stderr");
     process::exit(5);
 }
 
@@ -55,7 +54,7 @@ fn main() throws (IoError) {
     let me = try Command::new(args[0]).args(["child", "x", "y"])
         .stdin(Stdio::Piped).stdout(Stdio::Piped).stderr(Stdio::Piped).spawn();
     let si = unsafe { share(me.stdin) } ?? panic("stdin not piped");
-    try si.write_str("one\ntwo\r\nthree");
+    try si.write_all("one\ntwo\r\nthree");
     try si.close();
     print(try (unsafe { share(me.stdout) } ?? panic("stdout not piped")).read_to_str());
     println("child stderr: [" + (try (unsafe { share(me.stderr) } ?? panic("stderr not piped")).read_to_str()) + "]");
@@ -73,7 +72,7 @@ fn main() throws (IoError) {
     let tr = try Command::new("tr").arg("a-z").arg("A-Z")
         .stdin(Stdio::Piped).stdout(Stdio::Piped).spawn();
     let tin = unsafe { share(tr.stdin) } ?? panic("no stdin");
-    try tin.write_str("piped text\n");
+    try tin.write_all("piped text\n");
     try tin.close();
     print(try (unsafe { share(tr.stdout) } ?? panic("no stdout")).read_to_str());
     println(f"{try tr.wait()}");
@@ -100,4 +99,4 @@ fn main() throws (IoError) {
 // spec: std 307-process
 // only-os: macos linux
 // needs: native-run
-// spec: std 305-io §3.5.2 §3.5.5, 307-process §3.7.3
+// spec: std 223-io §2.23.8 §2.23.9, 307-process §3.7.3

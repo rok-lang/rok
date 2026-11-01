@@ -11,14 +11,13 @@
 // (`Reader`s); `output` pipes streams left inherited.
 use rok::core::marker::replace;
 use rok::std::process::{Command, Stdio, ChildStdin, ChildStdout};
-use rok::std::io::{Reader, Writer};
 use rok::std::path::Path;
 
 fn main() throws (IoError) {
     let c = try Command::new(Path::new("tr")).args(["a-z", "A-Z"])
         .stdin(Stdio::Piped).stdout(Stdio::Piped).spawn();
     let si: ChildStdin = replace(ref c.stdin, none) ?? panic("no stdin");
-    try si.write_str("hello\n");
+    try si.write_all("hello\n");
     try si.close();
     let so: ChildStdout = replace(ref c.stdout, none) ?? panic("no stdout");
     print(try so.read_to_str());

@@ -12,7 +12,7 @@
 use rok::core::marker::share;
 use rok::std::net;
 use rok::std::net::{Shutdown, TcpStream};
-use rok::std::io::{IoError, IoErrorKind, byte_buf};
+use rok::core::io::{IoError, IoErrorKind};
 
 fn main() throws (IoError) {
     let l = try net::tcp_listen("127.0.0.1:0");
@@ -21,7 +21,7 @@ fn main() throws (IoError) {
     let (s, _) = try l.accept();
 
     let bytes: List<u8> = [43u8, 108u8, 105u8, 115u8, 116u8];
-    try c.write_str("str");
+    try c.write_all("str");
     try c.write_all(bytes);
     try c.write_all("+slice!"[0:6]);
     let alias = unsafe { share(c) };
@@ -33,14 +33,14 @@ fn main() throws (IoError) {
     let dup = try s.try_clone();
     let s_closed = unsafe { share(s) };
     try! s.close();
-    try dup.write_str("x");
+    try dup.write_all("x");
     println("clone after close: ok");
-    let buf = byte_buf(4);
+    let buf = List::filled(4, 0u8);
     let k = try s_closed.read(buf) catch e: IoError { if e.kind() == IoErrorKind::InvalidInput { 99 } else { 98 } };
     println(f"closed: {if k == 99 { "InvalidInput" } else { "other" }}");
 
     using d = dup {
-        try d.write_str("y");
+        try d.write_all("y");
     }
     let rest = try c.read_to_end();
     let n = try c.read(buf);

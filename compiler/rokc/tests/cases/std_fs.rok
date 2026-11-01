@@ -30,9 +30,10 @@
 
 use rok::core::marker::share;
 use rok::std::fs;
-use rok::std::fs::{Dir, File, OpenOptions, SeekFrom, Permissions};
+use rok::std::fs::{Dir, File, OpenOptions, Permissions};
+use rok::core::io::SeekFrom;
 use rok::std::os::unix::fs::PermissionsExt;
-use rok::std::io::{IoError, IoErrorKind};
+use rok::core::io::{IoError, IoErrorKind};
 use rok::std::path::Path;
 use rok::std::env;
 use rok::std::process;
@@ -50,7 +51,7 @@ fn main() throws (IoError) {
     println(f"len={m.len()} file={m.is_file()} dir={m.is_dir()}");
 
     using h = try File::open_with(f, OpenOptions::new().append(true)) {
-        try h.write_str(" more");
+        try h.write_all(" more");
     }
     println(try fs::read_to_str(f));
 

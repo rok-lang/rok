@@ -13,7 +13,6 @@
 // until cancelled (707 §7.7.10).
 use rok::core::marker::share;
 use rok::std::net::{TcpListener, TcpStream, SocketAddr};
-use rok::std::io::byte_buf;
 
 let any: SocketAddr = try! "127.0.0.1:0".parse::<SocketAddr>();
 let listener = try! TcpListener::bind(any);
@@ -21,7 +20,7 @@ let client = try! TcpStream::connect(try! listener.local_addr());
 let (server_own, _) = try! listener.accept();
 let server = unsafe { share(server_own) };
 
-let read = task::spawn(async { try await server.read_async(byte_buf(16)) catch _ { 0 } });
+let read = task::spawn(async { try await server.read_async(List::filled(16, 0u8)) catch _ { 0 } });
 let r = try await task::timeout(Duration::ms(20), read) catch _: task::TimeoutError { 999 };
 println(f"read: {if r == 999 { "timed out" } else { "data" }}");
 read.cancel();
@@ -29,13 +28,13 @@ let gone = try await read.join() catch _: task::CancellationError { 999 };
 println(f"cancelled: {gone == 999}");
 println(f"registrations left: {task::registrations()}");
 
-let read2 = task::spawn(async { try await server.read_async(byte_buf(16)) catch _ { 0 } });
-try! client.write_str("hi");
+let read2 = task::spawn(async { try await server.read_async(List::filled(16, 0u8)) catch _ { 0 } });
+try! client.write_all("hi");
 let n = try await task::timeout(Duration::secs(10), read2) catch _: task::TimeoutError { 999 };
 println(f"read in time: {n}");
 
 let (which, _) = await task::select([
-    async { try await server.read_async(byte_buf(16)) catch _ { 0 } },
+    async { try await server.read_async(List::filled(16, 0u8)) catch _ { 0 } },
     async { await task::sleep(Duration::ms(20)); 0 },
 ]);
 println(f"select: {if which == 1 { "timed out" } else { "data" }}");

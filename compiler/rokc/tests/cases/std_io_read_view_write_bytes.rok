@@ -1,29 +1,30 @@
-// spec: std 305-io §3.5.1
+// spec: std 223-io §2.23.1 §2.23.3
 // expect-exit: 0
 // expect-stdout:
 // wrote: hi abc yz
 // read 3 into 2..5: [0, 0, 104, 105, 32, 0]
 // end: 0
 
-// `Writer::write_bytes` takes anything `AsBytes` (a `Slice<u8>` too);
-// `Reader::read_into` reads into part of a buffer. Both are default
-// methods, so every reader and writer has them.
-use rok::std::io::{IoError, Reader, Writer, byte_buf};
+// `Write::write` takes anything `AsBytes` (a `Slice<u8>` too), and so
+// do the default `write_all`; `Read::read` fills a `SliceMut<u8>`, so a
+// part of a buffer is `buf[a:b]`.
+use rok::core::io::IoError;
 
 struct Sink { got: List<u8>; }
 
-impl Writer for Sink {
-    fn write(ref self, buf: List<u8>) throws (IoError) -> usize {
-        for b in buf { self.got.push(b); }
-        buf.len()
+impl Write for Sink {
+    fn write<B: convert::AsBytes>(ref self, buf: B) throws (IoError) -> usize {
+        let b = buf.byte_slice();
+        for x in b { self.got.push(x); }
+        b.len()
     }
     fn flush(ref self) throws (IoError) {}
 }
 
 struct Src { data: List<u8>; at: usize; }
 
-impl Reader for Src {
-    fn read(ref self, buf: List<u8>) throws (IoError) -> usize {
+impl Read for Src {
+    fn read(ref self, buf: collections::SliceMut<u8>) throws (IoError) -> usize {
         let n = 0usize;
         while n < buf.len() && self.at < self.data.len() {
             buf[n] = self.data[self.at];
@@ -34,20 +35,20 @@ impl Reader for Src {
     }
 }
 
-fn emit<W: Writer>(ref w: W, data: Slice<u8>) throws (IoError) { try w.write_bytes(data); }
+fn emit<W: Write>(ref w: W, data: Slice<u8>) throws (IoError) { try w.write_all(data); }
 
 fn main() throws (IoError) {
     let s = Sink { got: [] };
-    try s.write_bytes("hi ");
+    try s.write_all("hi ");
     let list: List<u8> = [97u8, 98u8, 99u8, 32u8];
-    try s.write_bytes(list);
+    try s.write_all(list);
     let tail: List<u8> = [120u8, 121u8, 122u8];
     try emit(ref s, tail[1:3]);
     println(f"wrote: {try! str::from_utf8(s.got)}");
     let r = Src { data: s.got, at: 0 };
-    let buf = byte_buf(6);
-    let n = try r.read_into(buf, 2..5);
+    let buf = List::filled(6, 0u8);
+    let n = try r.read(buf[2:5]);
     println(f"read {n} into 2..5: {buf:?}");
     r.at = r.data.len();
-    println(f"end: {try r.read_into(buf, 0..6)}");
+    println(f"end: {try r.read(buf)}");
 }

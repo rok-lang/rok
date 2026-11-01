@@ -16,7 +16,7 @@
 use rok::core::marker::share;
 use rok::std::net::{TcpListener, TcpStream, SocketAddr, Ipv4Addr, Ipv6Addr, Shutdown};
 use rok::std::net;
-use rok::std::io::{IoError, Reader, Writer, byte_buf};
+use rok::core::io::IoError;
 use rok::std::thread;
 
 fn text(buf: List<u8>, n: usize) -> str {
@@ -35,7 +35,7 @@ let listener = unsafe { share(listener_own) };
 let addr = try! listener.local_addr();
 let server = thread::spawn(|| {
     let (conn, peer) = try! listener.accept();
-    let buf = byte_buf(64);
+    let buf = List::filled(64, 0u8);
     loop {
         let n = try! conn.read(buf);
         if n == 0 { break; }
@@ -48,7 +48,7 @@ let server = thread::spawn(|| {
     peer.port() as i32
 });
 let c = try! TcpStream::connect(addr);
-try! c.write_str("hello over tcp");
+try! c.write_all("hello over tcp");
 try! c.shutdown(Shutdown::Write);
 let back = try! c.read_to_end();
 println(f"blocking echo: {text(back, back.len())}");
@@ -66,7 +66,7 @@ let srv = task::spawn(async {
     while served < 4 {
         let (conn, peer) = try! await l2.accept_async();
         task::spawn(async {
-            let buf = byte_buf(4096);
+            let buf = List::filled(4096, 0u8);
             loop {
                 let n = try! await conn.read_async(buf);
                 if n == 0 { break; }
@@ -89,8 +89,8 @@ while k < 3 {
     clients.push(task::spawn(async {
         let s = try! await TcpStream::connect_async(a2);
         let msg = f"client {me}";
-        try! await s.write_str_async(msg);
-        let buf = byte_buf(64);
+        try! await s.write_all_async(msg);
+        let buf = List::filled(64, 0u8);
         let n = try! await s.read_async(buf);
         try! s.close();
         text(buf, n) == msg
@@ -107,7 +107,7 @@ let big = task::spawn(async {
     let s = unsafe { share(s_own) };
     // The writer task owns its buffer: a list cannot be shared with it.
     let w = task::spawn(async {
-        let data = byte_buf(100000);
+        let data = List::filled(100000, 0u8);
         try! await s.write_all_async(data);
         try! s.shutdown(Shutdown::Write);
         0
@@ -126,7 +126,7 @@ let l3 = unsafe { share(l3_own) };
 let a3 = try! l3.local_addr();
 let t3 = thread::spawn(|| {
     let c = try! net::tcp_connect(f"{a3}");
-    try! c.write_str("ping");
+    try! c.write_all("ping");
     try! c.close();
     0
 });

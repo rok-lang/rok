@@ -9,14 +9,14 @@
 
 use rok::std::fs;
 use rok::std::fs::File;
-use rok::std::io::{Close, IoError};
+use rok::core::io::{Close, IoError};
 use rok::std::{env, process};
 
 struct Log { f: File; lines: i32; }
 
 impl Log {
     fn add(self, s: str) throws (IoError) -> Log {
-        try self.f.write_str(s);
+        try self.f.write_all(s);
         Log { f: self.f, lines: self.lines + 1 }
     }
 }

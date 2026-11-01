@@ -20,7 +20,7 @@
 use rok::std::time::{Duration, Instant, SystemTime, SystemTimeError, BootTime, UNIX_EPOCH};
 use rok::std::fs;
 use rok::std::env;
-use rok::std::io::IoError;
+use rok::core::io::IoError;
 use rok::std::process;
 
 fn main() throws (SystemTimeError | IoError) {

@@ -13,7 +13,7 @@
 // `IoErrorKind::Unsupported` at run time.
 use rok::std::fs;
 use rok::std::fs::File;
-use rok::std::io::{IoError, IoErrorKind};
+use rok::core::io::{IoError, IoErrorKind};
 use rok::std::env;
 
 let p = env::temp_dir() / "rok_wasm_unsupported_fs_ext.txt";

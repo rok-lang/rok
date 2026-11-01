@@ -5,7 +5,7 @@
 // wrote 3 [ell|lo]
 use rok::std::fs;
 use rok::std::env;
-use rok::std::io::IoError;
+use rok::core::io::IoError;
 use rok::std::process;
 
 // `Slice<u8>` as a byte view: `str::as_bytes`, `str::from_utf8`, and the
