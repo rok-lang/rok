@@ -1101,8 +1101,7 @@ impl<T> Iterator for GenIter<T> {
 impl<T> GenIter<T> {
     /// End the generator where it waits: its cleanups run, then `next`
     /// gives `none`. What `for` calls when it leaves the loop early.
-    #[doc(hidden)]
-    pub const fn close(ref self) {
+    pub(pkg) const fn close(ref self) {
         (self.resume)(true);
     }
 }
@@ -1129,8 +1128,7 @@ impl<T, E> TryIterator for TryGenIter<T, E> {
 impl<T, E> TryGenIter<T, E> {
     /// `GenIter::close`; an error its cleanups throw is dropped (the loop
     /// is already leaving).
-    #[doc(hidden)]
-    pub const fn close(ref self) {
+    pub(pkg) const fn close(ref self) {
         try (self.resume)(true) catch _ { none };
     }
 }

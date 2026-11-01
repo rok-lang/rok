@@ -24,8 +24,7 @@ static MEASURED: Atomic<bool> = Atomic::new(false);
 
 // Whether this process's bench called `iter`; the harness exits 3 when
 // not, and the runner says it measured nothing.
-#[doc(hidden)]
-pub fn measured() -> bool { MEASURED.load() }
+pub(pkg) fn measured() -> bool { MEASURED.load() }
 
 pub struct Bench {
     name: str;
@@ -39,7 +38,7 @@ pub struct Bench {
 
 impl Bench {
     // The generated harness builds this from argv.
-    pub fn new(name: str, iters: i64, samples: i64, tty: bool, width: usize) -> Bench {
+    pub(pkg) fn new(name: str, iters: i64, samples: i64, tty: bool, width: usize) -> Bench {
         Bench {
             name: name,
             iters: iters,

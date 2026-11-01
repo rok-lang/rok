@@ -4903,7 +4903,9 @@ impl<'a> LowerCtx<'a> {
         if at.is_dummy() {
             return;
         }
-        if mark.internal && !is_toolchain_module(&self.current_module) {
+        // Code a toolchain template or the compiler wrote is checked
+        // where it is defined (spec 6.9.9).
+        if mark.internal && !is_toolchain_module(&self.access_module()) {
             let e = rokc_diagnostic::RokDiagnostic::error(
                 rokc_diagnostic::ErrorKind::Module,
                 at,

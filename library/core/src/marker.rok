@@ -22,7 +22,7 @@ pub trait Default {
 
 /// `T::default()` where only the expected type names `T`
 /// (`#[derive(Default)]` field initializers).
-pub const fn default_of<T: Default>() -> T {
+pub(pkg) const fn default_of<T: Default>() -> T {
     T::default()
 }
 
@@ -144,7 +144,7 @@ struct Work {
 /// buffers left to fix. `none` for one collection whose elements need no
 /// copy: nothing can be reached twice. A visit (`distinct`) notes what
 /// each item reaches in `vis` instead.
-pub struct Memo {
+pub(pkg) struct Memo {
     obj: GcBuf<u8> | none;
     work: List<Work> | none;
     vis: GcBuf<u8> | none;
@@ -338,8 +338,7 @@ pub(pkg) const fn buf_is_null<T>(b: GcBuf<T>) -> bool {
 /// makes the copy (its elements queued on the memo), `transfer_keep`
 /// notes the handle as its own copy. Only the compiler's list of
 /// standard types is called; other impls are ignored.
-#[sealed]
-pub trait Transfer {
+pub(pkg) trait Transfer {
     fn transfer_copy(self, m: Memo) -> Self;
     fn transfer_keep(self, m: Memo) -> Self;
     /// Note the handle for the memo's owner (`Memo::visit`), its

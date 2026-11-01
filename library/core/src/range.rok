@@ -561,31 +561,31 @@ impl Step for char {
 // Range literals (refs-lang 6.5.1).
 
 #[literal(expr ".." expr)]
-pub const fn range_literal<T>(start: T, end: T) -> Range<T> {
+pub(pkg) const fn range_literal<T>(start: T, end: T) -> Range<T> {
     return Range { start: start, end: end };
 }
 
 #[literal(expr "..=" expr)]
-pub const fn range_inclusive_literal<T>(start: T, end: T) -> RangeInclusive<T> {
+pub(pkg) const fn range_inclusive_literal<T>(start: T, end: T) -> RangeInclusive<T> {
     return RangeInclusive { start: start, end: end };
 }
 
 #[literal(expr "..")]
-pub const fn range_from_literal<T>(start: T) -> RangeFrom<T> {
+pub(pkg) const fn range_from_literal<T>(start: T) -> RangeFrom<T> {
     return RangeFrom { start: start };
 }
 
 #[literal(".." expr)]
-pub const fn range_to_literal<T>(end: T) -> RangeTo<T> {
+pub(pkg) const fn range_to_literal<T>(end: T) -> RangeTo<T> {
     return RangeTo { end: end };
 }
 
 #[literal("..=" expr)]
-pub const fn range_to_inclusive_literal<T>(end: T) -> RangeToInclusive<T> {
+pub(pkg) const fn range_to_inclusive_literal<T>(end: T) -> RangeToInclusive<T> {
     return RangeToInclusive { end: end };
 }
 
 #[literal("..")]
-pub const fn range_full_literal() -> RangeFull {
+pub(pkg) const fn range_full_literal() -> RangeFull {
     return RangeFull;
 }

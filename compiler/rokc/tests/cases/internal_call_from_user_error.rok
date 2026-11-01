@@ -4,6 +4,7 @@
 // expect-error: function `hand_over` is internal to the Rok toolchain
 // expect-error: function `host_enter` is internal to the Rok toolchain
 // expect-error: function `host_run` is internal to the Rok toolchain
+// expect-error: function `readable` is internal to the Rok toolchain
 // expect-error: `#[internal]` on `helper`
 // forbid-error: deprecated
 
@@ -21,6 +22,7 @@ fn main() {
     let x = hand_over::<i32>(5);
     let f = task::host_enter;
     let _ = task::host_run;
+    let _ = task::readable;
     f();
     helper();
     let t = thread::spawn(|| [x]);

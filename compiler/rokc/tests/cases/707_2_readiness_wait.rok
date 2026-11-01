@@ -8,14 +8,15 @@
 // other task ran while parked: true
 // read after readiness: 1 z
 
-// spec 7.7.2: `await task::readable(fd)` registers the fd with the
-// reactor (7.7.1) and parks the task; the worker runs other tasks
-// meanwhile, and the readiness edge from another thread's write wakes
-// the task, which then reads. A pipe's write end is writable at once.
+// spec 7.7.2: a readiness wait (`rok_io_register`, 8.5.5) registers
+// the fd with the reactor (7.7.1) and parks the task; the worker runs
+// other tasks meanwhile, and the readiness edge from another thread's
+// write wakes the task, which then reads. A pipe's write end is
+// writable at once.
 use rok::core::sync::{LoadOrdering, StoreOrdering, UpdateOrdering};
 use rok::bare::alloc::{Layout, alloc};
 use rok::bare::ptr::{CPtr, Ptr};
-use rok::bare::mem::transmute_unchecked;
+use rok::bare::mem::{GcBuf, buf_new, transmute_unchecked};
 use rok::std::thread;
 
 /// Byte `at` of the scratch memory (an address is `Send`, a `Ptr` not).
@@ -25,6 +26,21 @@ extern "C" {
     fn pipe(fds: Ptr<i32>) -> i32;
     fn read(fd: i32, buf: Ptr<u8>, n: usize) -> isize;
     fn write(fd: i32, buf: Ptr<u8>, n: usize) -> isize;
+    fn rok_io_register(fd: i32, interest: u32, waker: GcBuf<future::Waker>);
+}
+
+/// Ready once `fd` may be read (`interest` 1) or written (2).
+struct Ready { fd: i32; interest: u32; armed: bool; }
+impl Future for Ready {
+    type Output = ();
+    fn poll(ref self, ref ctx: future::Context) -> future::Poll<()> {
+        if self.armed { return future::Poll::Ready(()); }
+        self.armed = true;
+        let w: GcBuf<future::Waker> = unsafe { buf_new(1) };
+        unsafe { w[0] = ctx.waker() };
+        unsafe { rok_io_register(self.fd, self.interest, w) };
+        future::Poll::Pending
+    }
 }
 
 fn main() throws (rok::bare::alloc::LayoutError) -> i32 {
@@ -37,7 +53,7 @@ fn main() throws (rok::bare::alloc::LayoutError) -> i32 {
     let base = mem.addr();
 
     let w = task::block_on(async {
-        await task::writable(wfd);
+        await Ready { fd: wfd, interest: 2, armed: false };
         true
     });
     println(f"writable at once: {w}");
@@ -52,7 +68,7 @@ fn main() throws (rok::bare::alloc::LayoutError) -> i32 {
     });
     let got = task::block_on(async {
         let reader = task::spawn(async {
-            await task::readable(rfd);
+            await Ready { fd: rfd, interest: 1, armed: false };
             let b = byte(base, 8);
             let n = unsafe { read(rfd, b, 1usize) };
             done.store(1, StoreOrdering::SeqCst);

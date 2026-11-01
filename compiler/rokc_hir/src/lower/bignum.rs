@@ -42,7 +42,15 @@ pub(super) fn big_of(ctx: &LowerCtx<'_>, ty: &HirTy) -> Option<Big> {
         .find(|b| ctx.lookup_struct(ctx.lang(b.slot())) == Some(*id))
 }
 
+/// `full::leaf`, written by the compiler: it resolves and is
+/// access-checked from the module that defines it (spec 6.9.9), so the
+/// item may be `pub(pkg)`.
 pub(super) fn path_expr(full: &str, leaf: &str, span: Span) -> Expr {
+    // `full` names a module, or a type in one.
+    let module = match full.rsplit_once("::") {
+        Some((m, last)) if last.starts_with(char::is_uppercase) => m,
+        _ => full,
+    };
     let segments = full
         .split("::")
         .chain(std::iter::once(leaf))
@@ -55,7 +63,7 @@ pub(super) fn path_expr(full: &str, leaf: &str, span: Span) -> Expr {
         kind: ExprKind::Path(AstPath {
             segments,
             span,
-            origin: None,
+            origin: Some(module.to_owned()),
         }),
         span,
     }

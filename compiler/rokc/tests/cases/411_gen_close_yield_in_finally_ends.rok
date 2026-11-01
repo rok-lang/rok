@@ -6,7 +6,6 @@
 // outer cleanup
 // after: 0
 // drained: 0 1 99 100
-// unstarted: true
 
 // 4.11.10: a `yield` reached while a generator is being closed ends it:
 // the cleanups around that `yield` still run, the yielded value goes
@@ -51,8 +50,4 @@ fn main() {
         all = f"{all} {x}";
     }
     println(all);
-    // Closed before its first `next`: none of the body runs.
-    let g = tail();
-    g.close();
-    println(f"unstarted: {g.next() is none}");
 }

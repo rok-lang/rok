@@ -295,8 +295,7 @@ pub const fn from_value<T: FromRokon>(v: Value) throws (RokonError) -> T {
 }
 
 /// `from_value`, errors placed under `seg` (`.name`, `[3]`).
-#[doc(hidden)]
-pub const fn from_value_at<T: FromRokon>(v: Value, seg: str) throws (RokonError) -> T {
+pub(pkg) const fn from_value_at<T: FromRokon>(v: Value, seg: str) throws (RokonError) -> T {
     try T::from_rokon(v) catch e { throw e.within(seg); }
 }
 
@@ -312,13 +311,11 @@ const fn last_seg(path: str) -> str {
     }
 }
 
-// derive support (used by `#[derive(Rokon)]`). Not API: hidden, and
-// `pub` only because the derive expands in the user's package; they
-// become `pub(pkg)` once expansions resolve at the definition site.
+// derive support (used by `#[derive(Rokon)]`): the template's names
+// are checked here, so these are `pub(pkg)`.
 
 /// The named fields read into a struct or a named variant.
-#[doc(hidden)]
-pub struct Fields {
+pub(pkg) struct Fields {
     vals: Dict<str, Value>;
     /// Each field's path segment (`.f`, or `[i]` when given by position).
     segs: Dict<str, str>;
@@ -329,7 +326,7 @@ impl Fields {
     /// `v` as the fields of struct `name` (`Name { .. }`, `{ .. }`,
     /// `m::Name { .. }`, or `{}`); a field not in `names` is skipped, or
     /// an error when `deny` (`#[rokon(deny_unknown_fields)]`).
-    pub const fn of_struct(v: Value, name: str, names: List<str>, deny: bool) throws (RokonError) -> Fields {
+    pub(pkg) const fn of_struct(v: Value, name: str, names: List<str>, deny: bool) throws (RokonError) -> Fields {
         let given: Dict<str, Value> = match v {
             Value::Struct { name: n, fields } => {
                 if let w: str = n {
@@ -354,7 +351,7 @@ impl Fields {
 
     /// A named variant's values: positional ones fill the fields in
     /// order, then the named ones (`E::V(1, b: 2)`, `E::V { a: 1, b: 2 }`).
-    pub const fn of_variant(args: List<Value>, named: Dict<str, Value>, ctx: str, names: List<str>, deny: bool) throws (RokonError) -> Fields {
+    pub(pkg) const fn of_variant(args: List<Value>, named: Dict<str, Value>, ctx: str, names: List<str>, deny: bool) throws (RokonError) -> Fields {
         try Fields::make(args, named, ctx, names, deny)
     }
 
@@ -383,10 +380,10 @@ impl Fields {
         f
     }
 
-    pub const fn has(self, name: str) -> bool { self.vals.contains_key(name) }
+    pub(pkg) const fn has(self, name: str) -> bool { self.vals.contains_key(name) }
 
     /// Field `name` as a `T`: its value, or `T::from_missing()` when absent.
-    pub const fn get<T: FromRokon>(self, name: str) throws (RokonError) -> T {
+    pub(pkg) const fn get<T: FromRokon>(self, name: str) throws (RokonError) -> T {
         if let v: Value = self.vals.get(name) {
             let seg = self.segs.get(name) ?? "";
             return try from_value_at::<T>(v, seg);
@@ -396,8 +393,7 @@ impl Fields {
 }
 
 /// `v` as the values of tuple struct `name` (`Name(a, b)`), `n` of them.
-#[doc(hidden)]
-pub const fn struct_args(v: Value, name: str, n: usize) throws (RokonError) -> List<Value> {
+pub(pkg) const fn struct_args(v: Value, name: str, n: usize) throws (RokonError) -> List<Value> {
     match v {
         Value::Variant { path, args, named } => {
             if last_seg(path) == name && named.is_empty() {
@@ -411,8 +407,7 @@ pub const fn struct_args(v: Value, name: str, n: usize) throws (RokonError) -> L
 
 /// `v` as a variant of enum `name`: (variant name, positional values,
 /// named values).
-#[doc(hidden)]
-pub const fn variant_of(v: Value, name: str) throws (RokonError) -> (str, List<Value>, Dict<str, Value>) {
+pub(pkg) const fn variant_of(v: Value, name: str) throws (RokonError) -> (str, List<Value>, Dict<str, Value>) {
     match v {
         Value::Variant { path, args, named } => {
             let head = match path.rfind("::") {
@@ -429,8 +424,7 @@ pub const fn variant_of(v: Value, name: str) throws (RokonError) -> (str, List<V
 }
 
 /// A tuple variant's (or unit variant's, `n` = 0) values.
-#[doc(hidden)]
-pub const fn variant_args(args: List<Value>, named: Dict<str, Value>, ctx: str, n: usize) throws (RokonError) -> List<Value> {
+pub(pkg) const fn variant_args(args: List<Value>, named: Dict<str, Value>, ctx: str, n: usize) throws (RokonError) -> List<Value> {
     for (k, _) in named.iter() {
         throw RokonError::new(f"{ctx} has no named fields (found `{k}`)").within("." + k).at_key();
     }
@@ -445,8 +439,7 @@ const fn count_args(args: List<Value>, ctx: str, n: usize) throws (RokonError) -
     args
 }
 
-#[doc(hidden)]
-pub const fn unknown_variant(v: str, ctx: str) -> RokonError {
+pub(pkg) const fn unknown_variant(v: str, ctx: str) -> RokonError {
     RokonError::new(f"`{ctx}::{v}` is not a variant of {ctx}")
 }
 

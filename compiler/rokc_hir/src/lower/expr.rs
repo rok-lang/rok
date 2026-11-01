@@ -8243,6 +8243,10 @@ pub(super) fn generic_trait_method_for<'e>(
 }
 
 pub(super) fn check_method_info_visible(ctx: &LowerCtx<'_>, info: &MethodInfo, method: &str) {
+    // The generated harness builds the library's `Bench` itself.
+    if ctx.harness_main {
+        return;
+    }
     if !ctx.is_visible(&info.module, info.vis) {
         ctx.emit_error(
             rokc_diagnostic::ErrorKind::Module,
@@ -13082,7 +13086,11 @@ fn lower_shape(
                     })
                     .collect(),
                 span,
-                origin: None,
+                // Called as if from the handler's own module (spec 6.9.9).
+                origin: h.name.rsplit_once("::").map(|(m, _)| {
+                    let m = if m == "pkg" { "" } else { m };
+                    m.strip_prefix("pkg::").unwrap_or(m).to_owned()
+                }),
             },
             args: args.clone(),
             priority: h.priority,
