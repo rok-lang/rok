@@ -45,10 +45,11 @@ fn main() {
                 let x = s * (p2(e) + int::from(d));
                 ok = ok && int::from_le_bytes(x.to_le_bytes()) == x && int::from_be_bytes(x.to_be_bytes()) == x;
                 let a = x.abs();
-                ok = ok && int::from_le_bytes(a.to_le_bytes(signed: false), signed: false) == a;
-                ok = ok && int::from_be_bytes(a.to_be_bytes(signed: false), signed: false) == a;
+                ok = ok && int::from_le_bytes_unsigned(a.to_le_bytes_unsigned()) == a;
+                ok = ok && int::from_be_bytes_unsigned(a.to_be_bytes_unsigned()) == a;
                 // Shortest: one byte fewer would lose the value.
                 let n = x.to_le_bytes().len();
+                ok = ok && x.byte_len() == n && a.byte_len_unsigned() == a.to_le_bytes_unsigned().len();
                 ok = ok && (n == 1 || int::from_le_bytes(x.to_le_bytes()[0:n - 1]) != x);
             }
         }
@@ -57,13 +58,13 @@ fn main() {
     println(if ok { "round trip ok" } else { "round trip FAILED" });
 
     let z: int = 0;
-    println(f"unsigned {int::from(255).to_le_bytes(signed: false):?} {z.to_le_bytes(signed: false):?} {p2(64).to_be_bytes(signed: false):?} {p2(64).to_le_bytes(signed: false):?}");
+    println(f"unsigned {int::from(255).to_le_bytes_unsigned():?} {z.to_le_bytes_unsigned():?} {p2(64).to_be_bytes_unsigned():?} {p2(64).to_le_bytes_unsigned():?}");
 
     let none_: List<u8> = List::new();
     let ff: List<u8> = [255u8, 255u8];
     let top: List<u8> = [128u8];
     let wide: List<u8> = [255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8, 255u8];
-    println(f"from {int::from_be_bytes(ff, signed: false)} {int::from_be_bytes(ff)} {int::from_le_bytes(none_)} {int::from_le_bytes(none_, signed: false)} {int::from_le_bytes(top, signed: false)} {int::from_le_bytes(top)} {int::from_le_bytes(wide, signed: false)} {int::from_le_bytes(wide)} {int::from_be_bytes(ff[1:2], signed: false)} {int::from_be_bytes(ff[1:2])}");
+    println(f"from {int::from_be_bytes_unsigned(ff)} {int::from_be_bytes(ff)} {int::from_le_bytes(none_)} {int::from_le_bytes_unsigned(none_)} {int::from_le_bytes_unsigned(top)} {int::from_le_bytes(top)} {int::from_le_bytes_unsigned(wide)} {int::from_le_bytes(wide)} {int::from_be_bytes_unsigned(ff[1:2])} {int::from_be_bytes(ff[1:2])}");
 
     let y: int = 0;
     y.set_bit(100, true);

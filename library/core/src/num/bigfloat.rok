@@ -550,10 +550,25 @@ impl FromStr for Float {
 
 impl From<f32> for Float { const fn from(value: f32) -> Float { Float::from_f32(value) } }
 impl From<f64> for Float { const fn from(value: f64) -> Float { Float::from_f64(value) } }
-/// `float → f64` (`into`, spec 2.11.8): rounds; ±inf / 0 past the range.
-impl From<Float> for f64 { const fn from(value: Float) -> f64 { value.to_f64() } }
-impl WrappingFrom<Float> for f64 { const fn wrapping_from(value: Float) -> f64 { value.to_f64() } }
-impl WrappingFrom<Float> for f32 { const fn wrapping_from(value: Float) -> f32 { value.to_f64() as f32 } }
+/// Rounds to nearest; throws when a finite value is past `±f64::MAX`
+/// (as `TryFrom<f64> for f32`). `to_f64` is the infallible form.
+impl TryFrom<Float> for f64 {
+    type Error = OverflowError;
+    const fn try_from(value: Float) throws (OverflowError) -> f64 {
+        let r = value.to_f64();
+        if value.is_finite() && r.is_infinite() { throw OverflowError { op: "try_from", ty: "f64" }; }
+        r
+    }
+}
+
+/// Rounds to nearest; a finite value past the range is `±f64::MAX`.
+impl SaturatingFrom<Float> for f64 {
+    const fn saturating_from(value: Float) -> f64 {
+        let r = value.to_f64();
+        if value.is_finite() && r.is_infinite() { return if r < 0.0 { -f64::MAX } else { f64::MAX }; }
+        r
+    }
+}
 
 /// Truncated toward zero (spec 2.11.8 `float → i32`: `try_into`
 /// truncates); NaN, ±inf or out of range throw.

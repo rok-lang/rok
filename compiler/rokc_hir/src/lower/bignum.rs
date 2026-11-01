@@ -206,6 +206,26 @@ pub(super) fn cast(
             ),
         );
     };
+    // `int` / `float` to `f32` / `f64` rounds, which is not a wrapping
+    // conversion: name the method that rounds.
+    if into.is_none() && matches!(to_ty, HirTy::Prim(p) if p.is_float()) {
+        let from = ctx.ty_name(from_ty);
+        let to = ctx.ty_name(to_ty);
+        let help = if to == "f64" {
+            "use `x.to_f64()` (rounds), or `try f64::try_from(x)` to throw past the range"
+        } else {
+            "use `x.to_f64() as f32` (rounds)"
+        };
+        ctx.emit_error_at(
+            rokc_diagnostic::ErrorKind::Type,
+            span,
+            format!(
+                "cannot cast `{from}` as `{to}`: `as` keeps the low bits, and a float has none"
+            ),
+        );
+        ctx.help_last(Some(help.to_owned()));
+        return poison(span);
+    }
     // Into `int` / `float`: the lossless `From` (none from `f64` to `int`,
     // reported as such); out of one: stdlib 2.11.1's wrapping conversion.
     let method = if into.is_some() {
