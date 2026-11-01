@@ -452,11 +452,11 @@ pub @derive {
                     return rok::std::rokon::Value::Variant {
                         path: @Self.as_str(),
                         args: [@for_fields { rok::std::rokon::encode::<@field.type>(self.@field), }],
-                        named: OrderedDict::new(),
+                        named: rok::core::collections::OrderedDict::new(),
                     };
                 }
                 @apply_if(!@Self.is_tuple) {
-                    let fs: OrderedDict<str, rok::std::rokon::Value> = OrderedDict::new();
+                    let fs: rok::core::collections::OrderedDict<str, rok::std::rokon::Value> = rok::core::collections::OrderedDict::new();
                     @for_fields {
                         fs.insert(@field.name.as_str(), rok::std::rokon::encode::<@field.type>(self.@field));
                     }
@@ -468,7 +468,7 @@ pub @derive {
                     @for_variants {
                         @variant.pattern => {
                             let args: List<rok::std::rokon::Value> = List::new();
-                            let named: OrderedDict<str, rok::std::rokon::Value> = OrderedDict::new();
+                            let named: rok::core::collections::OrderedDict<str, rok::std::rokon::Value> = rok::core::collections::OrderedDict::new();
                             @apply_if(@variant.is_tuple) {
                                 @for_variant_fields {
                                     args.push(rok::std::rokon::encode::<@field.type>(@field));

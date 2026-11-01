@@ -544,7 +544,21 @@ fn collect<'a>(
         input.lib.is_none().then_some(missing),
     );
     early.extend(use_diags);
-    early.extend(crate::uses::check_use_clashes(raw_uses, uses, &reexports));
+    let values: std::collections::HashSet<&str> = (all_items.iter())
+        .filter_map(|i| match i {
+            Item::Fn(f) => Some(f.name.as_str()),
+            Item::Const(c) => Some(c.name.as_str()),
+            Item::Static(s) => Some(s.name.as_str()),
+            _ => None,
+        })
+        .collect();
+    early.extend(crate::uses::check_use_clashes(
+        raw_uses,
+        uses,
+        &reexports,
+        &|k| values.contains(k),
+    ));
+    drop(values);
     let (hiding_diags, hiding): (Vec<_>, Vec<_>) = hiding.into_iter().unzip();
     pre_diags.extend(hiding_diags);
     early.extend(check_tiers(raw_uses, &owned.items, item_modules));
@@ -674,13 +688,9 @@ fn collect<'a>(
     }
     // `pub use` aliases → what they name, chains followed to the item.
     let aliases = reexport_aliases(&reexports);
-    names.reexports = aliases
-        .iter()
-        .filter(|(_, end)| names.names.contains(*end))
-        .map(|(a, end)| (a.clone(), end.clone()))
-        .collect();
+    names.reexports = first_alias(aliases.iter().filter(|(_, end)| names.names.contains(end)));
     // `Enum::Variant` keys, so `use E::{A}` / `use E::*` (and the
-    // implicit `rok::core::**`) can bring variants in bare.
+    // library's implicit `rok::core::**`) can bring variants in bare.
     names.variants.extend(
         program
             .items
@@ -734,11 +744,11 @@ fn collect<'a>(
         })
         .chain(static_tys.keys().map(String::as_str))
         .collect();
-    names.value_reexports = aliases
-        .iter()
-        .filter(|(_, end)| names.consts.contains_key(*end) || statics.contains(end.as_str()))
-        .map(|(a, end)| (a.clone(), end.clone()))
-        .collect();
+    names.value_reexports = first_alias(
+        aliases
+            .iter()
+            .filter(|(_, end)| names.consts.contains_key(end) || statics.contains(end.as_str())),
+    );
     drop(statics);
     let aliased: Vec<(String, (Ty, Expr))> = names
         .value_reexports
@@ -3124,26 +3134,45 @@ fn resolve_projection_aliases(env: &Env<'_>, program: &Program) {
     }
 }
 
-/// `pub use` alias key → the end of its re-export chain (a cycle stops
-/// where it closes); the first re-export of a key wins.
-fn reexport_aliases(reexports: &[crate::uses::ReExport]) -> HashMap<String, String> {
-    let mut direct: HashMap<String, &str> = HashMap::new();
+/// Each `pub use` alias key with the end of its re-export chain (a cycle
+/// stops where it closes), in re-export order. A key may name a module
+/// and a value at once (`channel`); a chain goes on through a key with
+/// one target only.
+fn reexport_aliases(reexports: &[crate::uses::ReExport]) -> Vec<(String, String)> {
+    let mut direct: HashMap<String, Vec<&str>> = HashMap::new();
     for re in reexports {
-        direct
-            .entry(reexport_key(re))
-            .or_insert(re.full_path.as_str());
+        let to = direct.entry(reexport_key(re)).or_default();
+        if !to.contains(&re.full_path.as_str()) {
+            to.push(&re.full_path);
+        }
     }
-    direct
-        .iter()
-        .map(|(alias, first)| {
-            let mut seen = std::collections::HashSet::from([alias.as_str()]);
-            let mut end = *first;
-            while let Some(next) = direct.get(end).copied().filter(|_| seen.insert(end)) {
-                end = next;
-            }
-            (alias.clone(), end.to_owned())
-        })
-        .collect()
+    let mut out: Vec<(String, String)> = Vec::new();
+    let mut have = std::collections::HashSet::new();
+    for re in reexports {
+        let alias = reexport_key(re);
+        let mut seen = std::collections::HashSet::from([alias.as_str()]);
+        let mut end = re.full_path.as_str();
+        while let Some([next]) = direct
+            .get(end)
+            .map(Vec::as_slice)
+            .filter(|_| seen.insert(end))
+        {
+            end = next;
+        }
+        if have.insert((alias.clone(), end.to_owned())) {
+            out.push((alias, end.to_owned()));
+        }
+    }
+    out
+}
+
+/// Alias → end, the first re-export of a key winning.
+fn first_alias<'p>(pairs: impl Iterator<Item = &'p (String, String)>) -> HashMap<String, String> {
+    let mut out = HashMap::new();
+    for (alias, end) in pairs {
+        out.entry(alias.clone()).or_insert_with(|| end.clone());
+    }
+    out
 }
 
 /// Source-ish rendering of an AST type for diagnostics.
@@ -5426,7 +5455,10 @@ fn check_bound_names(
                 }
                 for ti in &t.items {
                     match ti {
-                        rokc_ast::TraitItem::Method(m) => fn_bounds(m, &mut generics),
+                        // A trait method's name is its leaf: the trait's module.
+                        rokc_ast::TraitItem::Method(m) => {
+                            generics(&m.generics, &m.where_clause, &module);
+                        }
                         rokc_ast::TraitItem::AssocType { bounds, .. } => {
                             impl_paths.extend(
                                 bounds

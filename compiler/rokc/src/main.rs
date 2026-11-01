@@ -683,7 +683,7 @@ fn real_main() {
     }
 }
 
-/// Find `rok/core` (implicit `use rok::core::**;`, spec 0.0.5) and
+/// Find `rok/core` (the implicit prelude, spec 0.0.5) and
 /// `librokr.a` without flags.
 fn with_defaults(mut a: Args) -> Args {
     let sys = rokc_interface::sysroot();

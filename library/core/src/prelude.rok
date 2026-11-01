@@ -1,0 +1,46 @@
+// rok::core::prelude - the names every file outside `rok::` sees bare
+// (stdlib spec 0.2): user code gets an implicit `use rok::core::prelude::*;`
+// unless the file says `#![no_implicit_rok]`. Each name appears once.
+// Variants are not here: a bare variant resolves from the expected type.
+
+// Modules.
+pub use rok::core::{
+    array, bench, channel, cmp, collections, convert, crypto, encoding, error, fmt, future,
+    hint, index, iter, marker, num, ops, panic, par, print, range, reflect, str, stream, sync,
+    task, tuple,
+};
+
+// Types.
+pub use rok::core::collections::{List, Dict, Set, Deque, BinaryHeap, Slice};
+pub use rok::core::str::StrBuf;
+pub use rok::core::range::{Range, RangeInclusive};
+pub use rok::core::num::bigint::Int;
+pub use rok::core::num::bigfloat::Float;
+pub use rok::core::error::Result;
+pub use rok::core::cmp::Ordering;
+pub use rok::core::task::time::{Duration, Instant};
+pub use rok::core::sync::{Mutex, RwLock, Atomic, Cell};
+pub use rok::core::channel::{Sender, Receiver};
+pub use rok::core::task::Task;
+pub use rok::core::fmt::{Formatter, FmtError};
+pub use rok::core::error::{
+    ParseError, ValueError, OverflowError, ConversionError, TypeError, StackOverflowError,
+    OutOfMemoryError, InternalError,
+};
+
+// Traits.
+pub use rok::core::marker::{Clone, Copy, Drop, Default, Send, Sync};
+pub use rok::core::ops::{PartialEq, PartialOrd};
+pub use rok::core::cmp::{Eq, Ord, Hash};
+pub use rok::core::fmt::{Debug, Display};
+pub use rok::core::error::Error;
+pub use rok::core::iter::{Iterator, IntoIterator, FromIterator};
+pub use rok::core::future::{Future, IntoFuture};
+pub use rok::core::convert::{From, Into, TryFrom, TryInto};
+pub use rok::core::str::FromStr;
+pub use rok::core::reflect::Inspect;
+
+// Functions.
+pub use rok::core::channel::{channel, channel_bounded};
+pub use rok::core::print::{print, println, eprint, eprintln};
+pub use rok::core::panic::{panic, assert, assert_eq, assert_ne, unreachable};

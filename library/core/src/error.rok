@@ -4,8 +4,8 @@
 // `throws`; keep it → `Result`". `?` does not apply to it (`T | none`
 // only).
 //
-// `Ok` / `Err` are bare names everywhere through the implicit
-// `use rok::core::**` (variants are reachable by globs).
+// `Ok` / `Err` are bare names where a `Result` is expected (the
+// expected type picks the variant).
 
 pub enum Result<T, E> {
     Ok(T),

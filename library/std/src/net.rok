@@ -18,6 +18,7 @@ use rok::std::io::{IoError, IoErrorKind, RawFd, Reader, Writer, check, would_blo
 use rok::std::time::Duration;
 use rok::std::fs::File;
 use rok::std::path::{AsPath, Path};
+use rok::bare::mem::{GcBuf, buf_new};
 
 pub mod tls;
 

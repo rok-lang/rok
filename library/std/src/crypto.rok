@@ -6,7 +6,7 @@
 /// `random_get` on WASI). A failing source is not recoverable: it
 /// panics.
 pub mod random {
-    use rok::core::collections::raw::GcBuf;
+    use rok::bare::mem::GcBuf;
     use rok::core::crypto::Secret;
 
     /// Overwrite every byte of `buf` with random bytes.

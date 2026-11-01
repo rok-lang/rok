@@ -149,6 +149,9 @@ pub struct Analysis {
     pub library: Option<&'static rokc_ast::Program>,
 }
 
+/// `rok::core::prelude`'s source: the names every user file sees.
+const PRELUDE: &str = include_str!("../../../library/core/src/prelude.rok");
+
 /// Check `source` as the root file `path` (no codegen), `isolate`d: an
 /// internal compiler error is the analysis's one diagnostic.
 pub fn analyze(mut session: Session, source: &str, path: &Path, levels: &Levels) -> Analysis {
@@ -297,8 +300,8 @@ impl Analysis {
     }
 
     /// Names the root file can use without a path besides its own: the
-    /// core library's (implicit `use rok::core::**;`) and those its `use`
-    /// items bring in. Sorted, without duplicates.
+    /// prelude's (implicit `use rok::core::prelude::*;`) and those its
+    /// `use` items bring in. Sorted, without duplicates.
     pub fn scope_names(&self) -> Vec<String> {
         // `**` brings in the items of every module below, but only the
         // modules right below by name.
@@ -334,7 +337,15 @@ impl Analysis {
         }
         let names = self.public_items();
         let mut out = Vec::new();
-        glob(&names, "rok::core", true, &mut out);
+        // The prelude is `pub use`s with full paths (stdlib 0.2), shipped
+        // with this toolchain.
+        let (tokens, _) = rokc_lexer::Lexer::new(PRELUDE, "prelude.rok".to_owned()).lex_all();
+        let (prelude, _) = rokc_parser::parse_program(&tokens, "prelude.rok");
+        for item in &prelude.items {
+            if let Item::Use(u) = item {
+                uses(&names, &u.tree, "", &mut out);
+            }
+        }
         let root = self.sources.iter().filter(|f| f.package.is_empty());
         if let Some(f) = root.min_by_key(|f| f.module.len()) {
             for item in &f.items {

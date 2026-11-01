@@ -25,6 +25,7 @@ use rok::std::path::Path;
 use rok::std::path::AsPath;
 use rok::std::env;
 use rok::std::thread;
+use rok::bare::mem::{GcBuf, buf_new};
 
 /// Abnormal termination (`SIGABRT`); nothing is cleaned up.
 pub const fn abort() -> ! { unsafe { rok_os_abort() }; }

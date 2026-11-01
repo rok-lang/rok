@@ -2448,7 +2448,13 @@ pub(super) fn resolve_enum_variant(
     arg_tys: Option<&[HirTy]>,
 ) -> EnumRes {
     let Some((full, vname)) = ctx.enum_path(segs) else {
-        return EnumRes::NotEnum;
+        return match (segs, hint) {
+            ([name], Some(t)) => match target_variant(ctx, name, t) {
+                Some((eid, i)) => EnumRes::Found(eid, i),
+                None => EnumRes::NotEnum,
+            },
+            _ => EnumRes::NotEnum,
+        };
     };
     let variant_of = |eid: EnumId| {
         ctx.enum_def(eid)
@@ -2494,6 +2500,29 @@ pub(super) fn resolve_enum_variant(
             format!("enum `{full}` has no variant `{vname}`"),
         );
         EnumRes::Error
+    }
+}
+
+/// A bare name that ordinary lookup missed, as a variant of the expected
+/// type (spec 5.7.1): an enum with a variant `name`, or the one enum
+/// member of a sum that has one.
+pub(super) fn target_variant(
+    ctx: &LowerCtx<'_>,
+    name: &str,
+    want: &HirTy,
+) -> Option<(EnumId, usize)> {
+    let variant = |t: &HirTy| match t {
+        HirTy::Enum(e) => (ctx.enum_def(*e).variants.iter())
+            .position(|v| v.name == name)
+            .map(|i| (*e, i)),
+        _ => None,
+    };
+    match want {
+        HirTy::Sum(parts) => {
+            let mut hits = parts.iter().filter_map(variant);
+            hits.next().filter(|_| hits.next().is_none())
+        }
+        t => variant(t),
     }
 }
 
@@ -2666,7 +2695,7 @@ fn explicit_enum(ctx: &LowerCtx<'_>, p: &AstPath) -> Option<HirTy> {
 }
 
 /// The variant a struct-literal path names, if any. A non-core struct
-/// beats a same-named core variant from the implicit `rok::core::**`
+/// beats a same-named core variant from the library's `rok::core::**`
 /// (`struct Sha256` vs `HashAlgorithm::Sha256`), and any struct beats a
 /// variant without named fields (`struct Sha3_256` vs
 /// `Sha3Algorithm::Sha3_256`): that literal could never build it.
@@ -7795,7 +7824,7 @@ pub(super) enum MethodPick<'e> {
 
 /// Method `method` of `ty` (spec 3.5.2 / 4.9.6), from `trait_key` if given:
 /// inherent first, then trait methods, where a trait defined or `use`d in
-/// this package beats one seen only through the implicit `rok::core::**`;
+/// this package beats a `rok::core` one, in scope everywhere (spec 3.5);
 /// other ties are ambiguous.
 pub(super) fn pick_method<'e>(
     ctx: &LowerCtx<'e>,
@@ -8959,69 +8988,6 @@ fn plain_spawn<'a>(ctx: &LowerCtx<'a>, full: &str, args: &[CallArg]) -> Option<&
         .flatten()
 }
 
-/// Core free functions that stay bare names: printing, panics and
-/// `channel` (stdlib 2.17 writes `channel::<T>()`).
-const PRELUDE_FNS: &[&str] = &[
-    "rok::core::channel::channel",
-    "rok::core::channel::channel_bounded",
-    "rok::core::print::print",
-    "rok::core::print::println",
-    "rok::core::print::eprint",
-    "rok::core::print::eprintln",
-    "rok::core::panic::panic",
-    "rok::core::panic::assert",
-    "rok::core::panic::assert_eq",
-    "rok::core::panic::assert_ne",
-    "rok::core::panic::unreachable",
-    "rok::core::panic::oom",
-];
-
-/// Warn on a bare call of a core submodule's free function (`sleep`)
-/// that only the implicit `use rok::core::**` brings in.
-fn implicit_core_fn(
-    ctx: &LowerCtx<'_>,
-    segs: &[&str],
-    full: Option<&str>,
-    at: rokc_diagnostic::Span,
-) {
-    let (Some(full), [name]) = (full, segs) else {
-        return;
-    };
-    let Some((module, _)) = full
-        .strip_prefix("rok::core::")
-        .and_then(|rest| rest.rsplit_once("::"))
-    else {
-        return;
-    };
-    if PRELUDE_FNS.contains(&full)
-        || ctx.current_module.starts_with("rok::")
-        || ctx.src(at).and_then(|t| t.split("::<").next()) != Some(*name)
-    {
-        return;
-    }
-    let explicit =
-        super::resolve::without_implicit(&ctx.current_module, || ctx.resolve_any_fn(segs));
-    if explicit.is_some() {
-        return;
-    }
-    // `at` starts with `name` (checked above): insert the module before it.
-    let fix = rokc_diagnostic::Fix {
-        span: rokc_diagnostic::Span {
-            end: at.start,
-            ..at
-        },
-        text: format!("{module}::"),
-        title: format!("write `{module}::{name}`"),
-    };
-    ctx.emit_lint_fix(
-        "implicit_core_fn",
-        at,
-        format!("`{name}` is `rok::core::{module}::{name}`, reached only through the implicit `use rok::core::**`"),
-        format!("write `{module}::{name}(..)`, or `use rok::core::{module}::{name};`"),
-        fix,
-    );
-}
-
 /// A hook's call needs no visibility (`lang_fn`); any other does.
 fn hook_visible(ctx: &LowerCtx<'_>, hook: bool, full: &str) {
     if !hook {
@@ -9065,13 +9031,6 @@ fn lower_path_call(
         discard_args(ctx, args);
         return poison(span);
     }
-    implicit_core_fn(
-        ctx,
-        &segs,
-        concrete.as_deref().or(generic.as_deref()),
-        p.span,
-    );
-
     // Free function / extern / re-export, module-aware.
     if let Some(full) = concrete {
         hook_visible(ctx, hook, &full);
@@ -9465,6 +9424,13 @@ fn call_item_value(
             ),
             Some(help),
         );
+    }
+    if let Some((msg, help)) = segs
+        .first()
+        .filter(|_| segs.len() == 1)
+        .and_then(|n| ctx.variant_not_in_scope(n))
+    {
+        return ctx.unknown_name(span, msg, Some(help));
     }
     let help = habit_call_help(ctx, segs, args).or_else(|| ctx.value_help(segs));
     ctx.unknown_name(
@@ -12557,6 +12523,13 @@ pub(super) fn lower_path(
                  function as an argument"
             )),
         );
+    }
+    if let Some((msg, help)) = segs
+        .first()
+        .filter(|_| segs.len() == 1)
+        .and_then(|n| ctx.variant_not_in_scope(n))
+    {
+        return ctx.unknown_name(span, msg, Some(help));
     }
     let help = ctx.value_help(&segs);
     ctx.unknown_name(

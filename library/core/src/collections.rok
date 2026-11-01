@@ -5,7 +5,7 @@
 // copying the handle shares the collection, so the mutating methods
 // take `self` (spec writes `ref self`; the handle makes that moot).
 
-pub mod raw;
+pub(pkg) mod raw;
 pub mod list;
 pub mod deque;
 pub mod heap;

@@ -68,7 +68,7 @@ const fn two_words() -> GcBuf<i32> {
 }
 
 /// Memory ordering of an atomic operation (2.16.2). Spec name: `Ordering`,
-/// which would collide with `cmp::Ordering` under `use rok::core::**`.
+/// which would collide with `cmp::Ordering` in the prelude.
 pub enum AtomicOrdering {
     Relaxed,
     Acquire,
