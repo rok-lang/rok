@@ -1,39 +1,166 @@
-// rok::std::os::unix::fs: Unix permission bits on the cross-platform fs
-// types (stdlib 301.1).
+// rok::std::os::unix::fs: the Unix side of the cross-platform fs types
+// (stdlib 301.6): permission bits, the open functions' `os` records, and
+// `openat(2)` itself with its `O_*` flags.
 
-use rok::std::fs::{OpenOptions, Permissions};
+use rok::core::io::{IoError, IoErrorKind};
+use rok::std::fs::{Dir, File, Permissions};
+use rok::std::path::AsPath;
 
-/// The Unix permission bits of a `Permissions`. Until 0.2.0 the
-/// deprecated inherent `Permissions::from_mode` / `mode` win method
-/// lookup: reach these as `PermissionsExt::mode(p)` and
-/// `let p: Permissions = PermissionsExt::from_mode(m)`.
+/// The Unix permission bits of a `Permissions`.
 pub trait PermissionsExt {
     /// Permissions with bits `mode` (`0o644`; bits past `0o7777` are
     /// dropped).
     fn from_mode(mode: u32) -> Self;
     /// The permission bits.
     fn mode(self) -> u32;
-    /// `self` with bits `mode` (as `from_mode`).
-    fn set_mode(self, mode: u32) -> Self;
+    /// Set the bits to `mode` (as `from_mode`).
+    fn set_mode(ref self, mode: u32);
 }
 
 impl PermissionsExt for Permissions {
     const fn from_mode(mode: u32) -> Permissions { Permissions { mode: mode & 0o7777u32 } }
     const fn mode(self) -> u32 { self.mode }
-    const fn set_mode(self, mode: u32) -> Permissions { Permissions { mode: mode & 0o7777u32 } }
+    const fn set_mode(ref self, mode: u32) { self.mode = mode & 0o7777u32; }
 }
 
-/// The Unix permission bits of a file `open_with` creates. Until 0.2.0
-/// the deprecated inherent `OpenOptions::mode` wins method lookup: reach
-/// this one as `OpenOptionsExt::mode(opts, m)`.
-pub trait OpenOptionsExt {
-    /// The bits a created file gets, before the umask (default `0o666`).
-    fn mode(self, mode: u32) -> Self;
+/// Unix knobs of `Dir::open` / `File::open` (`OpenFlags.os`).
+#[non_exhaustive]
+pub struct OsOpenFlags {
+    /// More `O_*` flags for open(2): `O_NOATIME`, `O_DIRECT`, `O_SYNC`,
+    /// `O_NONBLOCK`, ... The bits the open function decides (access,
+    /// `O_CREAT`, `O_EXCL`, `O_TRUNC`, `O_APPEND`, `O_DIRECTORY`,
+    /// `O_NOFOLLOW`) are `InvalidInput`.
+    pub custom_flags: i32 = 0;
 }
 
-impl OpenOptionsExt for OpenOptions {
-    const fn mode(self, mode: u32) -> OpenOptions {
-        self.mode = mode;
-        self
+/// Unix knobs of the functions that may create the file
+/// (`CreateFlags.os`); the create mode is `CreateFlags.permissions`.
+#[non_exhaustive]
+pub struct OsCreateFlags {
+    /// As `OsOpenFlags.custom_flags`.
+    pub custom_flags: i32 = 0;
+}
+
+/// open(2) as the OS has it, for what the typed functions leave out
+/// (truncating an existing file only, `O_TMPFILE`, `O_PATH`, ...).
+pub trait DirExt {
+    /// `openat(2)` under this directory with `oflag` as given
+    /// (`O_CLOEXEC` is always added) and `mode` for a created file;
+    /// nothing else is checked. `Dir::root()` is `AT_FDCWD`.
+    fn open_at<P: AsPath>(self, path: P, oflag: i32, mode: u32 = 0o666u32) throws (IoError) -> File;
+}
+
+impl DirExt for Dir {
+    fn open_at<P: AsPath>(self, path: P, oflag: i32, mode: u32 = 0o666u32) throws (IoError) -> File {
+        try self.open_raw(path, oflag, mode)
     }
 }
+
+/// `InvalidInput` when `custom` sets a bit the open function decides.
+pub(pkg) fn check_custom(custom: i32, path: str, fixed: str) throws (IoError) {
+    if custom == 0 { return; }
+    let (name, instead) = if (custom & O_ACCMODE) != 0 {
+        ("O_WRONLY / O_RDWR", "pass the access: File::open(p, ReadWrite)")
+    } else if (custom & O_TRUNC) != 0 {
+        ("O_TRUNC", "use File::create")
+    } else if (custom & O_EXCL) != 0 {
+        ("O_EXCL", "use File::create_new")
+    } else if (custom & O_CREAT) != 0 {
+        ("O_CREAT", "use File::open_or_create")
+    } else if (custom & O_APPEND) != 0 {
+        ("O_APPEND", "use File::append")
+    } else if (custom & O_DIRECTORY) != 0 {
+        ("O_DIRECTORY", "use Dir::open_dir")
+    } else if (custom & O_NOFOLLOW) != 0 {
+        ("O_NOFOLLOW", "set follow_symlinks: false")
+    } else {
+        return;
+    };
+    throw IoError::with_kind(IoErrorKind::InvalidInput,
+        f"{path}: os.custom_flags sets {name}, which {fixed} decides: {instead} instead, or DirExt::open_at for raw flags");
+}
+
+// The open(2) flags of the target (libc's values).
+
+pub const O_RDONLY: i32 = 0;
+pub const O_WRONLY: i32 = 1;
+pub const O_RDWR: i32 = 2;
+pub const O_ACCMODE: i32 = 3;
+
+#[cfg(target_os = "linux")]
+pub const O_CREAT: i32 = 0x40;
+#[cfg(target_os = "linux")]
+pub const O_EXCL: i32 = 0x80;
+#[cfg(target_os = "linux")]
+pub const O_NOCTTY: i32 = 0x100;
+#[cfg(target_os = "linux")]
+pub const O_TRUNC: i32 = 0x200;
+#[cfg(target_os = "linux")]
+pub const O_APPEND: i32 = 0x400;
+#[cfg(target_os = "linux")]
+pub const O_NONBLOCK: i32 = 0x800;
+#[cfg(target_os = "linux")]
+pub const O_DSYNC: i32 = 0x1000;
+#[cfg(target_os = "linux")]
+pub const O_SYNC: i32 = 0x101000;
+#[cfg(target_os = "linux")]
+pub const O_NOATIME: i32 = 0x40000;
+#[cfg(target_os = "linux")]
+pub const O_CLOEXEC: i32 = 0x80000;
+#[cfg(target_os = "linux")]
+pub const O_PATH: i32 = 0x200000;
+#[cfg(target_os = "linux")]
+pub const O_TMPFILE: i32 = 0x400000 | O_DIRECTORY;
+
+#[cfg(all(target_os = "linux", any(target_arch = "aarch64", target_arch = "arm", target_arch = "powerpc64")))]
+pub const O_DIRECTORY: i32 = 0x4000;
+#[cfg(all(target_os = "linux", any(target_arch = "aarch64", target_arch = "arm", target_arch = "powerpc64")))]
+pub const O_NOFOLLOW: i32 = 0x8000;
+#[cfg(all(target_os = "linux", any(target_arch = "aarch64", target_arch = "arm")))]
+pub const O_DIRECT: i32 = 0x10000;
+#[cfg(all(target_os = "linux", target_arch = "powerpc64"))]
+pub const O_DIRECT: i32 = 0x20000;
+#[cfg(all(target_os = "linux", not(any(target_arch = "aarch64", target_arch = "arm", target_arch = "powerpc64"))))]
+pub const O_DIRECTORY: i32 = 0x10000;
+#[cfg(all(target_os = "linux", not(any(target_arch = "aarch64", target_arch = "arm", target_arch = "powerpc64"))))]
+pub const O_NOFOLLOW: i32 = 0x20000;
+#[cfg(all(target_os = "linux", not(any(target_arch = "aarch64", target_arch = "arm", target_arch = "powerpc64"))))]
+pub const O_DIRECT: i32 = 0x4000;
+
+// The BSDs share the low bits.
+#[cfg(not(target_os = "linux"))]
+pub const O_NONBLOCK: i32 = 0x4;
+#[cfg(not(target_os = "linux"))]
+pub const O_APPEND: i32 = 0x8;
+#[cfg(not(target_os = "linux"))]
+pub const O_SYNC: i32 = 0x80;
+#[cfg(not(target_os = "linux"))]
+pub const O_NOFOLLOW: i32 = 0x100;
+#[cfg(not(target_os = "linux"))]
+pub const O_CREAT: i32 = 0x200;
+#[cfg(not(target_os = "linux"))]
+pub const O_TRUNC: i32 = 0x400;
+#[cfg(not(target_os = "linux"))]
+pub const O_EXCL: i32 = 0x800;
+
+#[cfg(target_os = "macos")]
+pub const O_NOCTTY: i32 = 0x20000;
+#[cfg(target_os = "macos")]
+pub const O_DIRECTORY: i32 = 0x100000;
+#[cfg(target_os = "macos")]
+pub const O_DSYNC: i32 = 0x400000;
+#[cfg(target_os = "macos")]
+pub const O_CLOEXEC: i32 = 0x1000000;
+
+#[cfg(target_os = "freebsd")]
+pub const O_NOCTTY: i32 = 0x8000;
+#[cfg(target_os = "freebsd")]
+pub const O_DIRECT: i32 = 0x10000;
+#[cfg(target_os = "freebsd")]
+pub const O_DIRECTORY: i32 = 0x20000;
+#[cfg(target_os = "freebsd")]
+pub const O_CLOEXEC: i32 = 0x100000;
+#[cfg(target_os = "freebsd")]
+pub const O_PATH: i32 = 0x400000;
+#[cfg(target_os = "freebsd")]
+pub const O_DSYNC: i32 = 0x1000000;
