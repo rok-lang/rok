@@ -788,6 +788,7 @@ fn missing_docs(items: &[Item], out: &mut Vec<Finding>) {
         rokc_ast::CORO_FN_ATTR,
         rokc_ast::EXTERN_FN_ATTR,
         rokc_ast::C_VARIADIC_ATTR,
+        rokc_ast::UNIT_RET_ATTR,
     ];
     let documented = |attrs: &[Attribute]| {
         attrs.iter().any(|a| {

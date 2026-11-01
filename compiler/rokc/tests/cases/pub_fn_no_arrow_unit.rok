@@ -1,0 +1,39 @@
+// spec: 004.01.3-omitting-the-return-type
+// expect-exit: 0
+// expect-stdout:
+// hi
+// one
+// done
+// 3 7
+
+// A `pub` fn without `->` returns `()`, also when its body diverges or
+// ends in a unit call; a private fn keeps inference.
+
+pub fn greet(s: str) {
+    println(s);
+}
+
+pub fn first(xs: List<str>) {
+    greet(xs[0])
+}
+
+pub fn stop(why: str) {
+    panic(why)
+}
+
+pub async fn wait() {
+    println("done");
+}
+
+fn three() { 3 }
+pub fn seven() -> i32 { 7 }
+
+greet("hi");
+let u: () = first(["one"]);
+_ = u;
+if false {
+    let v: () = stop("never");
+    _ = v;
+}
+task::block_on(wait());
+println(f"{three()} {seven()}");

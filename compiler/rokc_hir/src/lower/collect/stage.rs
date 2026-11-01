@@ -757,6 +757,7 @@ codec_struct!(ClosureSink {
     tentative_ret,
     params,
     failed,
+    unit_ret_errs,
     bodies,
     assumed,
     const_names,

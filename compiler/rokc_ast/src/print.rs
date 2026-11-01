@@ -257,6 +257,7 @@ impl Printer {
                     crate::CONST_FN_ATTR,
                     crate::LOCAL_ITEM_ATTR,
                     crate::BLOCK_GLOB_ATTR,
+                    crate::UNIT_RET_ATTR,
                 ]
                 .contains(&a.path[0].as_str())
             {

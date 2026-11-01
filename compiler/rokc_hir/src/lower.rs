@@ -1774,6 +1774,7 @@ impl ClosureSink {
             tentative_ret: std::cell::RefCell::default(),
             params: std::cell::RefCell::default(),
             failed: std::cell::RefCell::default(),
+            unit_ret_errs: std::cell::RefCell::default(),
             bodies: std::cell::RefCell::default(),
             assumed: std::cell::RefCell::default(),
             const_names: std::cell::RefCell::default(),
@@ -2995,6 +2996,9 @@ struct ClosureSink {
     /// Templates whose definition check failed, by span: their
     /// instances (and a trait default's copies) report nothing more.
     failed: std::cell::RefCell<std::collections::HashSet<Span>>,
+    /// `pub` fns whose body gave a value without `->`, by span: one
+    /// error for all their instances.
+    unit_ret_errs: std::cell::RefCell<std::collections::HashSet<Span>>,
     /// The declarations whose bodies are being lowered, innermost last.
     bodies: std::cell::RefCell<Vec<Span>>,
     /// The `where` clauses on other types than a parameter of the body

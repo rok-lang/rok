@@ -62,6 +62,81 @@ fn within(pkg: &str, p: &str) -> bool {
         .is_some_and(|r| r.is_empty() || r.starts_with("::"))
 }
 
+/// Spec 4.1.3 / 4.2.2: a `pub` / `pub(pkg)` fn writes its parameter types
+/// (an error per untyped one), and without `->` returns `()`: set here
+/// when the body gives no value, else marked `UNIT_RET_ATTR` so the
+/// inferred type names the `-> T` to write. Trait impl methods take the
+/// trait's types.
+fn pub_signatures(program: &mut Program, diags: &mut Vec<rokc_diagnostic::RokDiagnostic>) {
+    let mut fix = |f: &mut FnDef| {
+        if !matches!(f.vis, Visibility::Pub | Visibility::Pkg) {
+            return;
+        }
+        let Some(body) = &f.body else {
+            return;
+        };
+        let leaf = leaf_name(&f.name).to_owned();
+        let vis = if f.vis == Visibility::Pkg {
+            "pub(pkg)"
+        } else {
+            "pub"
+        };
+        for p in &f.params {
+            if p.ty.is_some() || p.name == "self" || p.variadic {
+                continue;
+            }
+            diags.push(
+                rokc_diagnostic::RokDiagnostic::error(
+                    Code::PUB_SIGNATURE,
+                    p.span,
+                    format!(
+                        "parameter `{}` of `{vis} fn {leaf}` has no type (spec 4.2.2)",
+                        p.name
+                    ),
+                )
+                .with_help(format!(
+                    "write the type it takes, as in `{0}: i32`, or declare `<T>` and write \
+                     `{0}: T` to take any type",
+                    p.name
+                )),
+            );
+        }
+        if f.ret_ty.is_some() || f.name == "main" || f.is_generator {
+            return;
+        }
+        let coro = f
+            .attrs
+            .iter()
+            .any(|a| a.path.first().map(String::as_str) == Some(rokc_ast::CORO_FN_ATTR));
+        if !coro && !mono::gives_value(body) {
+            f.ret_ty = Some(Ty {
+                kind: AstTyKind::Tuple(Vec::new()),
+                span: f.span,
+            });
+        } else if !f.attrs.iter().any(|a| a.path == [rokc_ast::UNIT_RET_ATTR]) {
+            f.attrs.push(rokc_ast::Attribute {
+                path: vec![rokc_ast::UNIT_RET_ATTR.to_owned()],
+                body: rokc_ast::AttrBody::Empty,
+                inner: false,
+                span: f.span,
+            });
+        }
+    };
+    for item in &mut program.items {
+        match item {
+            Item::Fn(f) => fix(f),
+            Item::Impl(i) if i.trait_path.is_none() => {
+                for it in &mut i.items {
+                    if let AstImplItem::Method(f) = it {
+                        fix(f);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 /// Spec 4.2.2 / 2.10.7: an untyped parameter is an implicit type parameter
 /// (`fn id(x)` is `fn id<T#x>(x: T#x)`), checked per instance, no bound
 /// synthesized. Free fns and inherent methods only (trait impl methods
@@ -570,6 +645,7 @@ fn collect<'a>(
         r.item(&mut owned.items[i]);
     }
     add_lazy_static_inits(owned);
+    pub_signatures(owned, &mut pre_diags);
     implicit_generics(owned);
     let err = |code: Code, pre: &mut Vec<rokc_diagnostic::RokDiagnostic>, at: Span, msg: String| {
         pre.push(rokc_diagnostic::RokDiagnostic::error(code, at, msg));
@@ -7959,7 +8035,11 @@ fn may_diverge(
     );
     let open: Vec<&FnDef> = fns
         .into_iter()
-        .filter(|f| f.ret_ty.is_none() && f.body.is_some())
+        .filter(|f| {
+            f.ret_ty.is_none()
+                && f.body.is_some()
+                && !f.attrs.iter().any(|a| a.path == [rokc_ast::UNIT_RET_ATTR])
+        })
         .collect();
     let mut out = HashSet::new();
     loop {
