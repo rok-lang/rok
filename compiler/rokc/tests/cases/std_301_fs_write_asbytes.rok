@@ -7,7 +7,7 @@
 // spec 301: `fn write<B: AsBytes>(self, data: B)` / `write_all<B: AsBytes>`
 // on `File` accept a `str` as well as bytes (like `fs::write`).
 use rok::std::fs;
-use rok::std::io::IoError;
+use rok::core::io::IoError;
 use rok::std::env;
 use rok::std::process;
 

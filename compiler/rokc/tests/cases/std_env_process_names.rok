@@ -14,7 +14,7 @@
 
 // `set_var` / `remove_var` warn outside `unsafe`; `try_set_var` throws.
 use rok::std::env;
-use rok::std::io::IoError;
+use rok::core::io::IoError;
 use rok::std::process;
 
 fn main() throws (IoError) {

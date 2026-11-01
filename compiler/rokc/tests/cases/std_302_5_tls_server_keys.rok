@@ -16,7 +16,6 @@ use rok::std::net::{tcp_listen, tcp_connect, TcpListener};
 use rok::std::net::tls;
 use rok::std::net::tls::{Client, Server, ClientConfig, ServerConfig, Certificate, PrivateKey};
 use rok::std::thread;
-use rok::std::io::byte_buf;
 
 const CA: str = "-----BEGIN CERTIFICATE-----
 MIIBUzCCAQWgAwIBAgIUHuDQmdyLUvVYGHs5rDw1vYU8bIIwBQYDK2VwMBYxFDAS
@@ -137,9 +136,10 @@ fn serve(l: TcpListener) -> i32 {
         let (s, _) = try! l.accept();
         let srv = try Server::new(s, cfgs[i]) catch e { println(f"server: {e}"); continue; };
         n += 1;
-        let buf = byte_buf(64);
+        let buf = List::filled(64, 0u8);
         let k = try! srv.read(buf);
-        try! srv.write_all(f"{srv.server_name() ?? "none"}|{names[i]}|{try! str::from_utf8(buf[0:k])}");
+        let reply = f"{srv.server_name() ?? "none"}|{names[i]}|{try! str::from_utf8(buf[0:k])}";
+        try! srv.write_all(reply);
         try! srv.close();
     }
     try! l.close();

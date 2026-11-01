@@ -10,7 +10,7 @@
 // / `code` (none when signal-terminated) / `signal`; `Child::kill` then
 // `wait`; `output()` collects stdout.
 use rok::std::process::{Command, Stdio};
-use rok::std::io::IoError;
+use rok::core::io::IoError;
 
 fn main() throws (IoError) {
     let t = try Command::new("true").status();

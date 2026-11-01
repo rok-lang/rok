@@ -6,7 +6,7 @@
 // Modules.
 pub use rok::core::{
     array, bench, channel, cmp, collections, convert, crypto, encoding, error, fmt, future,
-    hint, index, iter, marker, num, ops, panic, par, print, range, reflect, str, stream, sync,
+    hint, index, io, iter, marker, num, ops, panic, par, print, range, reflect, str, stream, sync,
     task, tuple,
 };
 
@@ -36,6 +36,7 @@ pub use rok::core::fmt::{Debug, Display};
 pub use rok::core::error::Error;
 pub use rok::core::iter::{Iterator, IntoIterator, FromIterator, TryIterator};
 pub use rok::core::future::{Future, IntoFuture};
+pub use rok::core::io::{Read, Write, AsyncRead, AsyncWrite};
 pub use rok::core::convert::{From, Into, TryFrom, TryInto};
 pub use rok::core::str::FromStr;
 pub use rok::core::reflect::Inspect;

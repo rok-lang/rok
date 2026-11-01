@@ -1,0 +1,79 @@
+// spec: std 223-io §2.23.1 §2.23.2 §2.23.3 §2.23.5 §2.23.6 §2.23.7 §2.23.8
+// expect-exit: 0
+// expect-stdout:
+// read_line 6 "alpha\n" buffered 2
+// line beta
+// line gamma
+// into 17 18
+// take 3 [1, 2, 3, 0]
+// chain abcd
+// split [a][b][][c]
+// bytes 3
+// empty [] sink 3 repeat [7, 7]
+// cursor [104, 105, 0, 33, 33]
+// copy 5 hello
+// buffered 42
+// async alpha
+// async beta
+// async gamma
+// stdin none
+
+// The io traits on in-memory streams: `BufRead` line, delimiter and byte
+// reads, `read_to_end_into`, the `Take` / `Chain` adapters, `Cursor`
+// reads, writes and seeks, the utilities, `copy`, `BufWriter`, the async
+// twins, and `io::read_line` at the end of stdin.
+use rok::core::io::{IoError, BufRead, Seek, SeekFrom, Cursor, BufReader, BufWriter};
+
+fn main() throws (IoError) {
+    let text = "alpha\nbeta\r\ngamma";
+    let r = BufReader::with_capacity(4, Cursor::new(text));
+    let line = StrBuf::new();
+    let n = try r.read_line(line);
+    println(f"read_line {n} {line.to_str():?} buffered {r.buffer_len()}");
+    try for l in r.lines() { println(f"line {l}"); }
+
+    let out: List<u8> = [9u8];
+    let k = try Cursor::new(text).read_to_end_into(out);
+    println(f"into {k} {out.len()}");
+
+    let t = Cursor::new([1u8, 2u8, 3u8, 4u8, 5u8]).take(3u64);
+    let b: List<u8> = [0u8, 0u8, 0u8, 0u8];
+    println(f"take {try t.read(b)} {b:?}");
+    println(f"chain {try Cursor::new("ab").chain(Cursor::new("cd")).read_to_str()}");
+
+    let pieces = "split ";
+    try for p in Cursor::new("a,b,,c").split(44u8) { pieces += f"[{try! str::from_utf8(p)}]"; }
+    println(pieces);
+
+    let count = 0;
+    try for _ in Cursor::new("xyz").bytes() { count += 1; }
+    println(f"bytes {count}");
+
+    let z: List<u8> = [0u8, 0u8];
+    try io::repeat(7u8).read_exact(z);
+    println(f"empty {try io::empty().read_to_end():?} sink {try io::sink().write("abc")} repeat {z:?}");
+
+    let w = Cursor::new([0u8, 0u8, 0u8]);
+    try w.write_all("hi");
+    try w.seek(SeekFrom::End(0i64));
+    try w.write_all("!!");
+    println(f"cursor {w.into_inner():?}");
+
+    let src = Cursor::new("hello");
+    let dst = Cursor::new(List::<u8>::new());
+    let copied = try io::copy(ref src, ref dst);
+    println(f"copy {copied} {try! str::from_utf8(dst.into_inner())}");
+
+    let bw = BufWriter::new(io::stdout());
+    try bw.write_all("buffered ");
+    try bw.write_display(42);
+    try bw.write_all("\n");
+    try bw.flush();
+
+    task::block_on(async {
+        let a = BufReader::new(Cursor::new(text));
+        try for await l in a.lines_async() { println(f"async {l}"); } catch e { println(f"failed {e}"); }
+    });
+
+    println(f"stdin {try io::read_line():?}");
+}

@@ -11,7 +11,7 @@
 // A browser has no file system (stdlib 300 README: `rok::std::fs` ✗ on
 // wasm32): every call reports `IoErrorKind::Unsupported` at run time.
 use rok::std::fs;
-use rok::std::io::{IoError, IoErrorKind};
+use rok::core::io::{IoError, IoErrorKind};
 
 try fs::write("/data.txt", "x") catch e: IoError { println(f"write: {e.kind():?}"); };
 try fs::read_to_str("/data.txt") catch e: IoError { println(f"read: {e.kind():?}"); };

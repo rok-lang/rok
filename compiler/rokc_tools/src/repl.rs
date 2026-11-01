@@ -3274,7 +3274,7 @@ mod tests {
             ("using g = m.lock() { g.get() }", false),
             ("if let Some(x) = o { x } else { 0 }", false),
             ("(a, b) = (b, a)", true),
-            ("use rok::std::io::stdin", true),
+            ("use rok::core::io::stdin", true),
             ("use rok::std::fs::{read, write}", true),
             ("pub(crate) use a::b", true),
             ("const N: i32 = 3", true),

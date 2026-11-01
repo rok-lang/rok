@@ -13,7 +13,7 @@
 use rok::core::marker::share;
 use rok::std::process::{Command, ExitStatus, Stdio};
 use rok::std::env;
-use rok::std::io::IoError;
+use rok::core::io::IoError;
 use rok::std::thread;
 use rok::std::time::{Duration, Instant};
 

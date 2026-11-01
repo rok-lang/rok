@@ -14,7 +14,7 @@
 use rok::core::marker::share;
 use rok::std::fs;
 use rok::std::fs::Dir;
-use rok::std::io::IoError;
+use rok::core::io::IoError;
 use rok::std::env;
 use rok::std::process;
 
@@ -28,7 +28,7 @@ println(f"made: {await d.exists_async("sub/inner")}");
 let many = try! await d.open_dir_async("many");
 for i in 0..150 {
     let f = try! await many.create_async(f"{i}.txt");
-    try! await f.write_str_async(f"{i}");
+    try! await f.write_all_async(f"{i}");
     try! f.close();
 }
 let seen = Set::<str>::new();
@@ -47,7 +47,7 @@ try! await sub.rename_async("inner", "gone");
 try! await sub.remove_dir_async("gone");
 let a_own = try! await sub.create_async("a.txt");
 let a = unsafe { share(a_own) };
-try! await a.write_str_async("abc");
+try! await a.write_all_async("abc");
 try! a_own.close();
 try! await sub.copy_async("a.txt", "b.txt");
 let names: List<str> = List::new();

@@ -13,7 +13,7 @@
 // A function has one failure channel (stdlib 0.5.9): a throwing function
 // has no `try_` twin and no `_or_none` twin. The error names the plain
 // function and how to call it.
-use rok::std::io::IoError;
+use rok::core::io::IoError;
 use rok::std::net;
 use rok::std::net::tls::ClientConfig;
 use rok::std::path::Path;

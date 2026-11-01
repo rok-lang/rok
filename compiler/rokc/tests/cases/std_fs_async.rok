@@ -20,7 +20,7 @@
 // the sync API; a cancelled task's call still finishes in the background.
 use rok::std::fs;
 use rok::std::fs::{File, OpenOptions};
-use rok::std::io::IoError;
+use rok::core::io::IoError;
 use rok::std::env;
 use rok::std::thread;
 use rok::std::process;
@@ -51,7 +51,7 @@ println(f"len={m.len()} file={m.is_file()}");
 try! r.close();
 
 let w = try! await File::create_async(base / "d" / "y.txt");
-try! await w.write_str_async("y");
+try! await w.write_all_async("y");
 try! await w.sync_all_async();
 try! w.close();
 let names: List<str> = List::new();

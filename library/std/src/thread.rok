@@ -10,7 +10,7 @@
 // closure returns, or on another thread's first `current()` / `park` /
 // thread-local use.
 
-use rok::std::io::{IoError, IoErrorKind};
+use rok::core::io::{IoError, IoErrorKind};
 use rok::std::time::Duration;
 use rok::core::future::IntoFuture;
 use rok::core::marker::hand_over;

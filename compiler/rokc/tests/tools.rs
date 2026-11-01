@@ -2076,8 +2076,7 @@ fn repl_ctrl_c_interrupts_the_cell() {
 fn repl_piped_cells_read_no_input() {
     let env = setup_runtime();
     let rokr = env.rokr.display().to_string();
-    let input = "use rok::std::io::Reader;\n\
-                 (try rok::std::io::stdin().read_line() catch _ { \"failed\" }).len()\n\
+    let input = "((try io::read_line() catch _ { \"failed\" }) ?? \"\").len()\n\
                  40 + 2\n";
     let out = piped(ROKC, &["repl", "--rokr", &rokr], input);
     assert_eq!(text(&out.stdout), "0\n42\n", "{}", text(&out.stderr));
@@ -2150,16 +2149,14 @@ fn repl_cells_read_the_terminal() {
         }
     };
     wait_for(">>> ", 1);
-    master.write_all(b"use rok::std::io::Reader;\r").unwrap();
-    wait_for(">>> ", 2);
     master
-        .write_all(b"println(\"name?\"); let name = try rok::std::io::stdin().read_line() catch _ { \"failed\" };\r")
+        .write_all(b"println(\"name?\"); let name = (try io::read_line() catch _ { \"failed\" }) ?? \"none\";\r")
         .unwrap();
     wait_for("name?\r\n", 1);
     master.write_all(b"rok\r").unwrap();
-    wait_for(">>> ", 3);
+    wait_for(">>> ", 2);
     master.write_all(b"\"[\" + name + \"]\"\r").unwrap();
-    wait_for("[rok\r\n]", 1);
+    wait_for("[rok]", 1);
     master.write_all(b":quit\r").unwrap();
     let deadline = Instant::now() + Duration::from_secs(60);
     while child.try_wait().unwrap().is_none() {
@@ -2481,8 +2478,8 @@ fn streams_and_asks(
     assert_eq!(streamed(iopub, &id, "late\n"), "late\n");
 
     // A read asks the client, after the prompt the cell printed.
-    let code = "use rok::std::io::Reader;\nprint(\"name? \");\n\
-                let name = try rok::std::io::stdin().read_line() catch _ { \"failed\" };\n\
+    let code = "print(\"name? \");\n\
+                let name = (try io::read_line() catch _ { \"failed\" }) ?? \"none\";\n\
                 println(\"hello [\" + name + \"]\");";
     let header = execute(shell, code, true);
     let id = header.get("msg_id").clone();
@@ -2495,11 +2492,10 @@ fn streams_and_asks(
     let frames = encode(key, "test", &[], "input_reply", &ask.header, &answer);
     write_msg(stdin, &frames).unwrap();
     assert_eq!(reply(shell, &id).get("status").as_str(), Some("ok"));
-    assert_eq!(streamed(iopub, &id, "hello [rok\n]\n"), "hello [rok\n]\n");
+    assert_eq!(streamed(iopub, &id, "hello [rok]\n"), "hello [rok]\n");
 
     // Without `allow_stdin` a read is the end of input.
-    let code = "use rok::std::io::Reader;\n\
-                let line = try rok::std::io::stdin().read_line() catch _ { \"failed\" };\n\
+    let code = "let line = (try io::read_line() catch _ { \"failed\" }) ?? \"\";\n\
                 println(line.len());";
     let id = execute(shell, code, false).get("msg_id").clone();
     assert_eq!(reply(shell, &id).get("status").as_str(), Some("ok"));

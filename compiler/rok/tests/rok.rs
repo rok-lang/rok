@@ -2475,9 +2475,9 @@ fn script_dependencies() {
     }
 }
 
-const ECHO: &str = "#!/usr/bin/env rok\nuse rok::std::env;\nuse rok::std::io;\n\
+const ECHO: &str = "#!/usr/bin/env rok\nuse rok::std::env;\n\
                     use rok::std::process;\n\
-                    let line = try! io::stdin().read_line();\n\
+                    let line = (try! io::read_line()) ?? \"\";\n\
                     println(f\"{env::args()[1..]:?} {line.trim()}\");\n\
                     eprintln(\"err\");\nprocess::exit(3);\n";
 

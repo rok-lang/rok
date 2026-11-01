@@ -14,7 +14,8 @@
 // multicast or `MSG_ZEROCOPY` (302.7). TLS 1.3 is `tls` (302.5).
 
 use rok::core::convert::AsBytes;
-use rok::std::io::{IoError, IoErrorKind, RawFd, Reader, Writer, check, would_block, region, take_handle, use_begin, use_end, use_close};
+use rok::core::io::{IoError, IoErrorKind, Read, Write, AsyncRead, AsyncWrite};
+use rok::std::sys::{check, would_block, region, mut_region, take_handle, use_begin, use_end, use_close};
 use rok::std::time::Duration;
 use rok::std::fs::File;
 use rok::std::path::{AsPath, Path};
@@ -616,13 +617,13 @@ impl Sock {
         }
     }
 
-    fn read(self, buf: List<u8>) throws (IoError) -> usize {
-        let (b, at, n) = region(buf);
+    fn read(self, buf: SliceMut<u8>) throws (IoError) -> usize {
+        let (b, at, n) = mut_region(buf);
         try self.read_into(b, at, n)
     }
 
-    async fn read_async(self, buf: List<u8>) throws (IoError) -> usize {
-        let (b, at, n) = region(buf);
+    async fn read_async(self, buf: SliceMut<u8>) throws (IoError) -> usize {
+        let (b, at, n) = mut_region(buf);
         try await self.read_into_async(b, at, n)
     }
 
@@ -775,47 +776,6 @@ impl TcpStream {
     /// The OS socket descriptor (`-1` once closed).
     pub const fn fd(self) -> i32 { self.sock.fd() }
 
-    /// Read up to `buf.len()` bytes into `buf[0..n]`; 0 at end of stream.
-    pub fn read(self, buf: List<u8>) throws (IoError) -> usize { try self.sock.read(buf) }
-
-    /// `read` that suspends the task until data arrives.
-    pub async fn read_async(self, buf: List<u8>) throws (IoError) -> usize {
-        try await self.sock.read_async(buf)
-    }
-
-    /// Everything until the peer closes its side.
-    pub fn read_to_end(self) throws (IoError) -> List<u8> { try self.sock.read_to_end() }
-
-    pub async fn read_to_end_async(self) throws (IoError) -> List<u8> {
-        try await self.sock.read_to_end_async()
-    }
-
-    /// Write some prefix of `buf`; its length.
-    pub fn write<B: AsBytes>(self, buf: B) throws (IoError) -> usize {
-        try self.sock.write(buf.byte_slice())
-    }
-
-    pub async fn write_async<B: AsBytes>(self, buf: B) throws (IoError) -> usize {
-        try await self.sock.write_async(buf.byte_slice())
-    }
-
-    pub fn write_all<B: AsBytes>(self, buf: B) throws (IoError) {
-        try self.sock.write_all(buf.byte_slice());
-    }
-
-    pub async fn write_all_async<B: AsBytes>(self, buf: B) throws (IoError) {
-        try await self.sock.write_all_async(buf.byte_slice());
-    }
-
-    pub fn write_str(self, s: str) throws (IoError) { try self.sock.write_all(s.as_bytes()); }
-
-    pub async fn write_str_async(self, s: str) throws (IoError) {
-        try await self.sock.write_all_async(s.as_bytes());
-    }
-
-    /// Nothing to flush: writes go straight to the socket.
-    pub const fn flush(self) throws (IoError) {}
-
     pub fn peer_addr(self) throws (IoError) -> SocketAddr { try self.sock.addr(1) }
     pub fn local_addr(self) throws (IoError) -> SocketAddr { try self.sock.addr(0) }
 
@@ -854,18 +814,36 @@ impl TcpStream {
     pub fn close(self) throws (IoError) { try self.sock.close(); }
 }
 
-impl Reader for TcpStream {
-    fn read(ref self, buf: List<u8>) throws (IoError) -> usize { try self.sock.read(buf) }
-    const fn raw_fd(self) -> RawFd { self.sock.copy_fd() }
+impl Read for TcpStream {
+    fn read(ref self, buf: SliceMut<u8>) throws (IoError) -> usize { try self.sock.read(buf) }
+    #[internal]
+    const fn copy_handle(self) -> i32 { self.sock.copy_fd() }
     fn read_to_end(ref self) throws (IoError) -> List<u8> { try self.sock.read_to_end() }
 }
 
-impl Writer for TcpStream {
-    fn write(ref self, buf: List<u8>) throws (IoError) -> usize { try self.sock.write(buf.byte_slice()) }
-    const fn raw_fd(self) -> RawFd { self.sock.copy_fd() }
-    fn write_all(ref self, buf: List<u8>) throws (IoError) { try self.sock.write_all(buf.byte_slice()); }
-    fn write_str(ref self, s: str) throws (IoError) { try self.sock.write_all(s.as_bytes()); }
+impl Write for TcpStream {
+    fn write<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize { try self.sock.write(buf.byte_slice()) }
+    /// Nothing to flush: writes go straight to the socket.
     const fn flush(ref self) throws (IoError) {}
+    #[internal]
+    const fn copy_handle(self) -> i32 { self.sock.copy_fd() }
+    fn write_all<B: AsBytes>(ref self, buf: B) throws (IoError) { try self.sock.write_all(buf.byte_slice()); }
+}
+
+/// Cancel-safe: a cancelled read or write moved no bytes.
+impl AsyncRead for TcpStream {
+    async fn read_async(self, buf: SliceMut<u8>) throws (IoError) -> usize { try await self.sock.read_async(buf) }
+    async fn read_to_end_async(self) throws (IoError) -> List<u8> { try await self.sock.read_to_end_async() }
+}
+
+impl AsyncWrite for TcpStream {
+    async fn write_async<B: AsBytes>(self, buf: B) throws (IoError) -> usize {
+        try await self.sock.write_async(buf.byte_slice())
+    }
+    async fn flush_async(self) throws (IoError) {}
+    async fn write_all_async<B: AsBytes>(self, buf: B) throws (IoError) {
+        try await self.sock.write_all_async(buf.byte_slice());
+    }
 }
 
 impl Drop for TcpStream {
@@ -999,10 +977,10 @@ impl UdpSocket {
 
     /// One datagram into `buf`: its length and sender, or `none` on
     /// `WouldBlock`.
-    fn recv_from_once(self, buf: List<u8>) throws (IoError) -> (usize, SocketAddr) | none {
+    fn recv_from_once(self, buf: SliceMut<u8>) throws (IoError) -> (usize, SocketAddr) | none {
         unsafe {
             let out: GcBuf<i64> = buf_new(ADDR_WORDS);
-            let (b, at, n) = region(buf);
+            let (b, at, n) = mut_region(buf);
             let fd = try self.sock.enter();
             let r = rok_net_recv_from(fd, b, at, n, out) as i64;
             self.sock.done();
@@ -1030,14 +1008,14 @@ impl UdpSocket {
 
     /// The next datagram into `buf[0..n]` (truncated to `buf.len()`)
     /// and its sender.
-    pub fn recv_from(self, buf: List<u8>) throws (IoError) -> (usize, SocketAddr) {
+    pub fn recv_from(self, buf: SliceMut<u8>) throws (IoError) -> (usize, SocketAddr) {
         loop {
             if let r: (usize, SocketAddr) = try self.recv_from_once(buf) { return r; }
             try self.sock.block(0, "recv_from");
         }
     }
 
-    pub async fn recv_from_async(self, buf: List<u8>) throws (IoError) -> (usize, SocketAddr) {
+    pub async fn recv_from_async(self, buf: SliceMut<u8>) throws (IoError) -> (usize, SocketAddr) {
         loop {
             if let r: (usize, SocketAddr) = try self.recv_from_once(buf) { return r; }
             await task::readable(try self.sock.live());
@@ -1060,9 +1038,9 @@ impl UdpSocket {
         try await self.sock.write_async(buf.byte_slice())
     }
 
-    pub fn recv(self, buf: List<u8>) throws (IoError) -> usize { try self.sock.read(buf) }
+    pub fn recv(self, buf: SliceMut<u8>) throws (IoError) -> usize { try self.sock.read(buf) }
 
-    pub async fn recv_async(self, buf: List<u8>) throws (IoError) -> usize {
+    pub async fn recv_async(self, buf: SliceMut<u8>) throws (IoError) -> usize {
         try await self.sock.read_async(buf)
     }
 
@@ -1249,26 +1227,8 @@ impl UnixStream {
         (UnixStream { sock: a }, UnixStream { sock: b })
     }
 
-    pub fn read(self, buf: List<u8>) throws (IoError) -> usize { try self.sock.read(buf) }
-
-    pub async fn read_async(self, buf: List<u8>) throws (IoError) -> usize { try await self.sock.read_async(buf) }
-
-    pub fn read_to_end(self) throws (IoError) -> List<u8> { try self.sock.read_to_end() }
-
-    pub fn write<B: AsBytes>(self, buf: B) throws (IoError) -> usize { try self.sock.write(buf.byte_slice()) }
-
-    pub async fn write_async<B: AsBytes>(self, buf: B) throws (IoError) -> usize {
-        try await self.sock.write_async(buf.byte_slice())
-    }
-
-    pub fn write_all<B: AsBytes>(self, buf: B) throws (IoError) { try self.sock.write_all(buf.byte_slice()); }
-
-    pub fn write_str(self, s: str) throws (IoError) { try self.sock.write_all(s.as_bytes()); }
-
-    pub const fn flush(self) throws (IoError) {}
-
     /// `buf` with fd `fd` alongside (`SCM_RIGHTS`): the bytes sent.
-    pub fn send_with_fd<B: AsBytes>(self, buf: B, fd: RawFd) throws (IoError) -> usize {
+    pub fn send_with_fd<B: AsBytes>(self, buf: B, fd: i32) throws (IoError) -> usize {
         let (b, at, n) = unsafe { buf.byte_slice().raw_parts() };
         loop {
             let s = try self.sock.enter();
@@ -1281,8 +1241,8 @@ impl UnixStream {
 
     /// One read into `buf` and the fd passed with it, if any (the caller
     /// owns it; it is close-on-exec).
-    pub fn recv_with_fd(self, buf: List<u8>) throws (IoError) -> (usize, RawFd | none) {
-        let (b, at, n) = region(buf);
+    pub fn recv_with_fd(self, buf: SliceMut<u8>) throws (IoError) -> (usize, i32 | none) {
+        let (b, at, n) = mut_region(buf);
         unsafe {
             let got: GcBuf<i32> = buf_new(1);
             loop {
@@ -1321,19 +1281,38 @@ impl UnixStream {
 }
 
 #[cfg(target_family = "unix")]
-impl Reader for UnixStream {
-    fn read(ref self, buf: List<u8>) throws (IoError) -> usize { try self.sock.read(buf) }
-    const fn raw_fd(self) -> RawFd { self.sock.copy_fd() }
+impl Read for UnixStream {
+    fn read(ref self, buf: SliceMut<u8>) throws (IoError) -> usize { try self.sock.read(buf) }
+    #[internal]
+    const fn copy_handle(self) -> i32 { self.sock.copy_fd() }
     fn read_to_end(ref self) throws (IoError) -> List<u8> { try self.sock.read_to_end() }
 }
 
 #[cfg(target_family = "unix")]
-impl Writer for UnixStream {
-    fn write(ref self, buf: List<u8>) throws (IoError) -> usize { try self.sock.write(buf.byte_slice()) }
-    const fn raw_fd(self) -> RawFd { self.sock.copy_fd() }
-    fn write_all(ref self, buf: List<u8>) throws (IoError) { try self.sock.write_all(buf.byte_slice()); }
-    fn write_str(ref self, s: str) throws (IoError) { try self.sock.write_all(s.as_bytes()); }
+impl Write for UnixStream {
+    fn write<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize { try self.sock.write(buf.byte_slice()) }
+    /// Nothing to flush: writes go straight to the socket.
     const fn flush(ref self) throws (IoError) {}
+    #[internal]
+    const fn copy_handle(self) -> i32 { self.sock.copy_fd() }
+    fn write_all<B: AsBytes>(ref self, buf: B) throws (IoError) { try self.sock.write_all(buf.byte_slice()); }
+}
+
+#[cfg(target_family = "unix")]
+impl AsyncRead for UnixStream {
+    async fn read_async(self, buf: SliceMut<u8>) throws (IoError) -> usize { try await self.sock.read_async(buf) }
+    async fn read_to_end_async(self) throws (IoError) -> List<u8> { try await self.sock.read_to_end_async() }
+}
+
+#[cfg(target_family = "unix")]
+impl AsyncWrite for UnixStream {
+    async fn write_async<B: AsBytes>(self, buf: B) throws (IoError) -> usize {
+        try await self.sock.write_async(buf.byte_slice())
+    }
+    async fn flush_async(self) throws (IoError) {}
+    async fn write_all_async<B: AsBytes>(self, buf: B) throws (IoError) {
+        try await self.sock.write_all_async(buf.byte_slice());
+    }
 }
 
 #[cfg(target_family = "unix")]
@@ -1361,13 +1340,13 @@ impl UnixDatagram {
 
     pub fn send<B: AsBytes>(self, buf: B) throws (IoError) -> usize { try self.sock.write(buf.byte_slice()) }
 
-    pub fn recv(self, buf: List<u8>) throws (IoError) -> usize { try self.sock.read(buf) }
+    pub fn recv(self, buf: SliceMut<u8>) throws (IoError) -> usize { try self.sock.read(buf) }
 
-    pub fn send_with_fd<B: AsBytes>(self, buf: B, fd: RawFd) throws (IoError) -> usize {
+    pub fn send_with_fd<B: AsBytes>(self, buf: B, fd: i32) throws (IoError) -> usize {
         try UnixStream { sock: self.sock }.send_with_fd(buf, fd)
     }
 
-    pub fn recv_with_fd(self, buf: List<u8>) throws (IoError) -> (usize, RawFd | none) {
+    pub fn recv_with_fd(self, buf: SliceMut<u8>) throws (IoError) -> (usize, i32 | none) {
         try UnixStream { sock: self.sock }.recv_with_fd(buf)
     }
 

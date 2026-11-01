@@ -9,7 +9,7 @@
 // Each function has one failure channel: a socket's `close` throws,
 // `Path::strip_prefix` is `Path | none`, `Int::parse_radix` throws (its
 // `T | none` form is `try?`), and the empty path is `Path::empty()`.
-use rok::std::io::IoError;
+use rok::core::io::IoError;
 use rok::std::net;
 use rok::std::path::Path;
 

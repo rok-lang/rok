@@ -8,13 +8,13 @@
 // largest write under 4200: true
 // last: [row 1999: (1999, -1999)]
 
-// Spec 305.1a: `Writer::write_display` writes a value through `Display`
+// Spec 305.1a: `Write::write_display` writes a value through `Display`
 // into any writer (stdout, a file, a user writer in memory) in chunks
 // rather than one `str` of the whole text; several values go in an
 // f-string or one call each.
 
-use rok::std::io;
-use rok::std::io::{IoError, IoErrorKind, Writer};
+use rok::core::convert::AsBytes;
+use rok::core::io::{IoError, IoErrorKind};
 use rok::std::fs;
 use rok::std::env;
 use rok::std::process;
@@ -52,14 +52,12 @@ impl Display for Rows {
 /// writer's own changes reach the caller.
 struct Memory { writes: List<str>; count: i32; }
 
-impl Writer for Memory {
-    fn write(ref self, buf: List<u8>) throws (IoError) -> usize {
-        try self.write_str(try str::from_utf8(buf) catch _ { throw IoError::new(IoErrorKind::Other, "not UTF-8"); });
-        buf.len()
-    }
-    fn write_str(ref self, s: str) throws (IoError) {
+impl Write for Memory {
+    fn write<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize {
+        let s = try str::from_utf8(buf.byte_slice()) catch _ { throw IoError::new(IoErrorKind::Other, "not UTF-8"); };
         self.writes.push(s);
         self.count += 1;
+        s.len()
     }
     fn flush(ref self) throws (IoError) {}
 }
@@ -95,5 +93,5 @@ fn main() throws (IoError) {
     println("last: [" + tail[tail.rfind("row ") ?? 0:].trim_end() + "]");
 }
 
-// spec: std 305-io §3.5.1
+// spec: std 223-io §2.23.3
 // spec: std 210-fmt §2.10.2

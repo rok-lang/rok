@@ -19,7 +19,7 @@ use rok::std::env;
 use rok::std::path::Path;
 use rok::std::thread;
 use rok::core::convert::AsBytes;
-use rok::std::io::{IoError, byte_buf};
+use rok::core::io::IoError;
 
 /// Any `AsBytes` value writes, not only the library's own.
 struct Msg { s: str; }
@@ -30,7 +30,7 @@ impl AsBytes for Msg {
 fn main() throws (IoError) {
     let (a, b) = try UnixStream::pair();
     try a.write_all(Msg { s: "ping" });
-    let buf: List<u8> = byte_buf(16);
+    let buf: List<u8> = List::filled(16, 0u8);
     let n = try b.read(buf);
     println(f"pair {n} {try str::from_utf8(buf[0:n])}");
 
@@ -52,19 +52,19 @@ fn main() throws (IoError) {
     let (x, y) = try UnixStream::pair();
     let (p, q) = try UnixStream::pair();
     try x.send_with_fd("fd", q.fd());
-    let got: List<u8> = byte_buf(8);
+    let got: List<u8> = List::filled(8, 0u8);
     let (k, fd) = try y.recv_with_fd(got);
     println(f"recv {k} {fd is i32}");
     try p.write_all("via passed fd");
     let f = unsafe { fs::File::from_fd(fd ?? -1, "passed") };
-    let back: List<u8> = byte_buf(32);
+    let back: List<u8> = List::filled(32, 0u8);
     let m = try f.read(back);
     try f.close();
     println(f"{try str::from_utf8(back[0:m])}");
 
     let (d1, d2) = try UnixDatagram::pair();
     try d1.send("dgram");
-    let db: List<u8> = byte_buf(16);
+    let db: List<u8> = List::filled(16, 0u8);
     let dn = try d2.recv(db);
     println(f"{try str::from_utf8(db[0:dn])}");
     try fs::remove_file(path);

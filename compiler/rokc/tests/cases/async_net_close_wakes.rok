@@ -10,7 +10,7 @@
 // `shutdown` / `close` from another task wake a pending socket operation.
 use rok::core::marker::share;
 use rok::std::net::{TcpListener, TcpStream, SocketAddr, Shutdown};
-use rok::std::io::{IoError, byte_buf};
+use rok::core::io::IoError;
 
 let any: SocketAddr = try! "127.0.0.1:0".parse::<SocketAddr>();
 let listener = try! TcpListener::bind(any);
@@ -38,7 +38,7 @@ fn outcome(r: usize | IoError) -> str {
 
 async fn read_in_task(s: TcpStream) -> Task<usize | IoError> {
     let t = task::spawn(async {
-        let r: usize | IoError = try await s.read_async(byte_buf(16)) catch e { e };
+        let r: usize | IoError = try await s.read_async(List::filled(16, 0u8)) catch e { e };
         r
     });
     await parked(1);

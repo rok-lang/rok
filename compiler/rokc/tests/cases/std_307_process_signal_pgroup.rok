@@ -15,7 +15,7 @@ use rok::std::process;
 use rok::std::process::{Command, Signal};
 use rok::std::thread;
 use rok::std::time::Duration;
-use rok::std::io::IoError;
+use rok::core::io::IoError;
 
 fn leads_group(cmd: Command) throws (IoError) -> bool {
     try cmd.args(["-c", "kill -0 -$$ 2>/dev/null"]).status().success()

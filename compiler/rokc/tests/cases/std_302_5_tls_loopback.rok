@@ -23,7 +23,7 @@ use rok::std::net::{tcp_listen, tcp_connect, TcpListener};
 use rok::std::net::tls;
 use rok::std::net::tls::{Client, Server, ClientConfig, ServerConfig, Certificate, PrivateKey, CipherSuite};
 use rok::std::thread;
-use rok::std::io::{IoError, Reader, Writer};
+use rok::core::io::IoError;
 
 const CA: str = "-----BEGIN CERTIFICATE-----
 MIIBUzCCAQWgAwIBAgIUHuDQmdyLUvVYGHs5rDw1vYU8bIIwBQYDK2VwMBYxFDAS
@@ -109,8 +109,8 @@ fn ask(c: Client, req: str) -> str {
 }
 
 /// A request and its reply through `Writer` / `Reader`.
-fn via_traits<T: Reader + Writer>(c: T) -> str {
-    try c.write_str("via traits") catch e { return f"write: {e}"; };
+fn via_traits<T: Read + Write>(c: T) -> str {
+    try c.write_all("via traits") catch e { return f"write: {e}"; };
     let buf: List<u8> = [];
     for _ in 0..64 { buf.push(0u8); }
     let k = try c.read(buf) catch e { return f"read: {e}"; };
@@ -118,7 +118,7 @@ fn via_traits<T: Reader + Writer>(c: T) -> str {
 }
 
 /// `msg` through `Writer`.
-fn reply<W: Writer>(w: W, msg: str) throws (IoError) { try w.write_all(msg.as_bytes().to_list()); }
+fn reply<W: Write>(w: W, msg: str) throws (IoError) { try w.write_all(msg.as_bytes().to_list()); }
 
 fn connect(port: u16, name: str, cfg: ClientConfig) throws (tls::TlsError) -> Client {
     let s = try! tcp_connect(f"127.0.0.1:{port}");

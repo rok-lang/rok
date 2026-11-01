@@ -13,7 +13,6 @@
 // Cancelling a task in async I/O runs `finally` and drops its registrations.
 use rok::core::marker::share;
 use rok::std::net::{TcpListener, TcpStream, SocketAddr};
-use rok::std::io::byte_buf;
 
 let any: SocketAddr = try! "127.0.0.1:0".parse::<SocketAddr>();
 let listener = try! TcpListener::bind(any);
@@ -30,7 +29,7 @@ let finally_ran = Mutex::new(false);
 using held = m.lock() {
     let reader = task::spawn(async {
         let _ = {
-            try await server.read_async(byte_buf(16)) catch _ { 0 }
+            try await server.read_async(List::filled(16, 0u8)) catch _ { 0 }
         } finally {
             using f = finally_ran.lock() { f.set(true); }
         };
@@ -74,9 +73,9 @@ using held = m.lock() {
 println(f"registrations left: {task::registrations()}");
 
 // The socket is still usable by a later task.
-try! client.write_str("hi");
+try! client.write_all("hi");
 let got = await task::spawn(async {
-    let buf = byte_buf(16);
+    let buf = List::filled(16, 0u8);
     let n = try! await server.read_async(buf);
     try! str::from_utf8(buf[0:n])
 });

@@ -8,9 +8,9 @@
 // close that got the same fd number.
 
 use rok::core::marker::share;
-use rok::std::{env, fs, io, process, thread};
+use rok::std::{env, fs, process, thread};
 use rok::std::fs::File;
-use rok::std::io::SeekFrom;
+use rok::core::io::SeekFrom;
 use rok::std::path::Path;
 
 fn main() throws (io::IoError | thread::JoinError) {
@@ -24,7 +24,7 @@ fn main() throws (io::IoError | thread::JoinError) {
         let f_own = try File::open(a);
         let f = unsafe { share(f_own) };
         let reader = thread::spawn(|| {
-            let buf = io::byte_buf(1);
+            let buf = List::filled(1, 0u8);
             let seen = 0;
             loop {
                 try f.seek(SeekFrom::Start(0u64)) catch _ { break; };

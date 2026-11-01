@@ -22,8 +22,7 @@
 // `canonicalize`, `current_exe`, byte writes to stdout, and the
 // `StrBuf` / `str` byte primitives.
 
-use rok::std::io;
-use rok::std::io::{IoError, IoErrorKind, Reader, Writer};
+use rok::core::io::{IoError, IoErrorKind};
 use rok::std::fs;
 use rok::std::env;
 use rok::std::path::{Path, RawPath};
@@ -36,8 +35,8 @@ struct Trickle {
     step: usize;
 }
 
-impl Reader for Trickle {
-    fn read(ref self, buf: List<u8>) throws (IoError) -> usize {
+impl Read for Trickle {
+    fn read(ref self, buf: collections::SliceMut<u8>) throws (IoError) -> usize {
         let n = 0usize;
         while n < buf.len() && n < self.step && self.pos < self.data.len() {
             buf[n] = self.data[self.pos];
@@ -52,11 +51,11 @@ fn text(b: List<u8>) -> str { try! str::from_utf8(b) }
 
 fn main() throws (IoError) {
     let t = Trickle { data: "abcdefghij".as_bytes().to_list(), pos: 0, step: 3 };
-    let a = io::byte_buf(4);
+    let a = List::filled(4, 0u8);
     try t.read_exact(a);
-    let b = io::byte_buf(4);
+    let b = List::filled(4, 0u8);
     try t.read_exact(b);
-    let kind = try { t.read_exact(io::byte_buf(4)); "none" } catch e { f"{e.kind():?}" };
+    let kind = try { t.read_exact(List::filled(4, 0u8)); "none" } catch e { f"{e.kind():?}" };
     println(f"exact: [{text(a)}] [{text(b)}] eof: {kind}");
 
     // Its own directory: other processes come and go in the temp dir.
@@ -98,7 +97,7 @@ fn main() throws (IoError) {
 
     let out = io::stdout();
     try out.write_all("stdout bytes: ".as_bytes().to_list());
-    try out.write_str("ok\n");
+    try out.write_all("ok\n");
     try out.flush();
     try io::stderr().write_all([104u8, 105u8, 10u8]);
 
@@ -124,5 +123,5 @@ fn main() throws (IoError) {
     try fs::remove_dir_all(dir);
 }
 
-// spec: std 305-io
-// spec: std 305-io §3.5.2 §3.5.4
+// spec: std 223-io
+// spec: std 223-io §2.23.8 §2.23.7

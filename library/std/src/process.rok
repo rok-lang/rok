@@ -20,7 +20,8 @@
 // context. A burst that fills the pipe drops signals.
 
 use rok::std::fs::File;
-use rok::std::io::{IoError, IoErrorKind, RawFd, Reader, Writer, check, byte_buf, read_more, take_handle, use_begin, use_end, use_close, word_at};
+use rok::core::io::{Close, IoError, IoErrorKind, Read, Write};
+use rok::std::sys::{check, byte_buf, read_more, take_handle, use_begin, use_end, use_close, word_at};
 use rok::std::path::Path;
 use rok::std::path::AsPath;
 use rok::std::env;
@@ -258,15 +259,20 @@ pub struct ChildStdin {
 }
 
 impl ChildStdin {
-    pub const fn fd(self) -> RawFd { self.file.fd() }
+    pub const fn fd(self) -> i32 { self.file.fd() }
     /// Close the pipe: the child reads end of input.
     pub fn close(self) throws (IoError) { try self.file.close(); }
 }
 
-impl Writer for ChildStdin {
-    fn write(ref self, buf: List<u8>) throws (IoError) -> usize { try self.file.write(buf) }
-    const fn raw_fd(self) -> RawFd { self.file.fd() }
+impl Write for ChildStdin {
+    fn write<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize { try self.file.write(buf) }
+    #[internal]
+    const fn copy_handle(self) -> i32 { self.file.fd() }
     const fn flush(ref self) throws (IoError) {}
+}
+
+impl Close for ChildStdin {
+    fn close(self) throws (IoError) { try self.file.close(); }
 }
 
 /// A child's stdout: the read end of its pipe.
@@ -275,13 +281,18 @@ pub struct ChildStdout {
 }
 
 impl ChildStdout {
-    pub const fn fd(self) -> RawFd { self.file.fd() }
+    pub const fn fd(self) -> i32 { self.file.fd() }
     pub fn close(self) throws (IoError) { try self.file.close(); }
 }
 
-impl Reader for ChildStdout {
-    fn read(ref self, buf: List<u8>) throws (IoError) -> usize { try self.file.read(buf) }
-    const fn raw_fd(self) -> RawFd { self.file.fd() }
+impl Read for ChildStdout {
+    fn read(ref self, buf: SliceMut<u8>) throws (IoError) -> usize { try self.file.read(buf) }
+    #[internal]
+    const fn copy_handle(self) -> i32 { self.file.fd() }
+}
+
+impl Close for ChildStdout {
+    fn close(self) throws (IoError) { try self.file.close(); }
 }
 
 /// A child's stderr: the read end of its pipe.
@@ -290,13 +301,18 @@ pub struct ChildStderr {
 }
 
 impl ChildStderr {
-    pub const fn fd(self) -> RawFd { self.file.fd() }
+    pub const fn fd(self) -> i32 { self.file.fd() }
     pub fn close(self) throws (IoError) { try self.file.close(); }
 }
 
-impl Reader for ChildStderr {
-    fn read(ref self, buf: List<u8>) throws (IoError) -> usize { try self.file.read(buf) }
-    const fn raw_fd(self) -> RawFd { self.file.fd() }
+impl Read for ChildStderr {
+    fn read(ref self, buf: SliceMut<u8>) throws (IoError) -> usize { try self.file.read(buf) }
+    #[internal]
+    const fn copy_handle(self) -> i32 { self.file.fd() }
+}
+
+impl Close for ChildStderr {
+    fn close(self) throws (IoError) { try self.file.close(); }
 }
 
 /// A process to run (307.1). Builder methods return the updated command.
@@ -529,7 +545,7 @@ impl Child {
     /// The pidfd tracking the child (Linux 5.3+), valid until it is
     /// reaped (`wait` / `try_wait` close it).
     #[cfg(target_os = "linux")]
-    pub fn pidfd(self) throws (IoError) -> RawFd {
+    pub fn pidfd(self) throws (IoError) -> i32 {
         let fd = unsafe { self.state[2] };
         try check(fd as i64, "pidfd");
         fd

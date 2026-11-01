@@ -1,4 +1,4 @@
-// spec: std 305-io §3.5.4
+// spec: std 223-io §2.23.7
 // needs: net threads
 // only-os: macos linux
 // expect-exit: 0
@@ -12,8 +12,7 @@
 
 // `io::copy` takes each kernel path, or the loop, from the reader's offset.
 use rok::core::marker::share;
-use rok::std::io;
-use rok::std::io::{IoError, Reader, Writer, BufReader, byte_buf};
+use rok::core::io::{IoError, BufReader};
 use rok::std::fs;
 use rok::std::env;
 use rok::std::net::{TcpListener, TcpStream, SocketAddr, Shutdown};
@@ -59,7 +58,7 @@ fn main() throws (IoError) {
     let want = tail(big, 10);
 
     using r = try fs::open(src) {
-        try r.read_exact(byte_buf(10));
+        try r.read_exact(List::filled(10, 0u8));
         using w = try fs::create(dst) {
             let n = try io::copy(ref r, ref w);
             let again = try io::copy(ref r, ref w);
@@ -80,7 +79,7 @@ fn main() throws (IoError) {
     });
     let s = try TcpStream::connect(addr);
     using r = try fs::open(src) {
-        try r.read_exact(byte_buf(10));
+        try r.read_exact(List::filled(10, 0u8));
         let n = try io::copy(ref r, ref s);
         try s.shutdown(Shutdown::Write);
         println(f"file to socket: {n} {(try! got.join()) == want}");
@@ -104,7 +103,7 @@ fn main() throws (IoError) {
 
     // A buffered reader has no descriptor of its own.
     using f = try fs::open(src) {
-        try f.read_exact(byte_buf(10));
+        try f.read_exact(List::filled(10, 0u8));
         let br = unsafe { share(BufReader::new(share(f))) };
         using w = try fs::create(dst) {
             let n = try io::copy(ref br, ref w);

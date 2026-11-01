@@ -13,7 +13,6 @@ ffi::wit::import { "wit" }
 use wasi::clocks::monotonic_clock;
 use rok::std::net::{SocketAddr, TcpListener};
 use rok::std::net;
-use rok::std::io::byte_buf;
 
 async fn echo(word: str) -> str {
     let any: SocketAddr = try! "127.0.0.1:0".parse::<SocketAddr>();
@@ -21,7 +20,7 @@ async fn echo(word: str) -> str {
     let addr = try! l.local_addr();
     let server = task::spawn_local(async {
         let (s, _) = try! await l.accept_async();
-        let buf = byte_buf(64);
+        let buf = List::filled(64, 0u8);
         let n = try! await s.read_async(buf);
         try! await s.write_all_async(buf[0:n]);
         try! s.close();
@@ -29,7 +28,7 @@ async fn echo(word: str) -> str {
     });
     let c = try! await net::tcp_connect_async(f"{addr}");
     try! await c.write_all_async(word);
-    let back = byte_buf(64);
+    let back = List::filled(64, 0u8);
     let n = try! await c.read_async(back);
     try! c.close();
     f"{try! str::from_utf8(back[0:n])} (server read {await server})"

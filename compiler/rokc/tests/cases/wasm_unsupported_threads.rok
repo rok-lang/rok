@@ -16,7 +16,7 @@
 // its thread-locals and park / unpark work, and the executor runs every
 // task on it.
 use rok::std::thread;
-use rok::std::io::{IoError, IoErrorKind};
+use rok::core::io::{IoError, IoErrorKind};
 
 try thread::Builder::new().spawn(|| 1) catch e: IoError { println(f"spawn: {e.kind():?}"); };
 try thread::Builder::new().name("w").spawn(|| 1) catch e: IoError {

@@ -1,9 +1,9 @@
 // File IO with small calls: 300k 16-byte writes, then 16-byte reads
 // and seeks back over the file. Bound by syscalls and the per-call cost
 // of the File handle.
-use rok::std::{env, fs, io, process};
+use rok::std::{env, fs, process};
 use rok::std::fs::{File, OpenOptions};
-use rok::std::io::SeekFrom;
+use rok::core::io::SeekFrom;
 use rok::std::path::Path;
 
 fn main() -> i32 {
@@ -15,7 +15,7 @@ fn main() -> i32 {
         try! f.write_all(line);
     }
     try! f.seek(SeekFrom::Start(0u64));
-    let buf = io::byte_buf(16);
+    let buf = List::filled(16, 0u8);
     let total = 0usize;
     let sum = 0u64;
     loop {

@@ -12,38 +12,36 @@
 // partial done
 // ends_with: true false true
 
-// Spec 305.3: `BufWriter` (batches, `write_fmt` with an f-string,
-// flush on `using` exit), `BufReader` (`read_line` / `lines` / `bytes`
-// across chunk edges that split a UTF-8 char), `line_writer`.
+// `BufWriter` (batches, `close` writes out the rest), `BufReader`
+// (`read_line` / `lines` / `bytes` across chunk edges that split a
+// UTF-8 char), `LineWriter`.
 
 use rok::core::marker::share;
-use rok::std::io;
-use rok::std::io::{IoError, Reader, Writer, BufReader, BufWriter, LineWriter};
+use rok::core::io::{IoError, BufReader, BufWriter, LineWriter};
 use rok::std::fs;
 use rok::std::env;
 use rok::std::process;
 
 fn main() throws (IoError) {
     let p = env::temp_dir() / f"rok_std_io_buf_{process::id()}.txt";
-    using f = try fs::create(p) {
-        let w = unsafe { share(BufWriter::with_capacity(16, share(f))) };
+    using w = BufWriter::with_capacity(16, try fs::create(p)) {
         let i = 0;
         while i < 5 {
-            try w.write_fmt(f"line {i} é\n");
+            try w.write_all(f"line {i} é\n");
             i += 1;
         }
         try w.write_all([120u8, 10u8]);
-        try w.flush();
     }
-    using g = try fs::open(p) {
-        // 7-byte chunks: every `é` straddles a chunk edge at some point.
-        let r = unsafe { share(BufReader::with_capacity(7, share(g))) };
-        println("first: [" + (try r.read_line()).trim_end() + "]");
-        for l in r.lines() { println("> " + (try l.get())); }
+    // 7-byte chunks: every `é` straddles a chunk edge at some point.
+    using r = BufReader::with_capacity(7, try fs::open(p)) {
+        let first = StrBuf::new();
+        try r.read_line(first);
+        println("first: [" + first.to_str().trim_end() + "]");
+        try for l in r.lines() { println("> " + l); }
     }
-    using h = try fs::open(p) {
+    using r = BufReader::new(try fs::open(p)) {
         let n = 0;
-        try for _ in unsafe { share(BufReader::new(share(h))) }.bytes() {
+        try for _ in r.bytes() {
             n += 1;
         }
         println(f"bytes: {n}");
@@ -52,18 +50,18 @@ fn main() throws (IoError) {
     let q = env::temp_dir() / f"rok_std_io_buf2_{process::id()}.txt";
     let out = try fs::create(q);
     using w = BufWriter::new(unsafe { share(out) }) {
-        try w.write_str("kept by drop");
+        try w.write_all("kept by drop");
     }
     try out.close();
     println("dropped: [" + (try fs::read_to_str(q)) + "]");
 
     let lw = LineWriter::new(io::stdout());
-    try lw.write_str("partial ");
-    try lw.write_str("done\n");
+    try lw.write_all("partial ");
+    try lw.write_all("done\n");
     println(f"ends_with: {"a세".ends_with("세")} {"a세".ends_with("\r")} {"세a".starts_with("세")}");
     try fs::remove_file(p);
     try fs::remove_file(q);
 }
 
-// spec: std 305-io
-// spec: std 305-io §3.5.3 §3.5.5
+// spec: std 223-io
+// spec: std 223-io §2.23.6 §2.23.9

@@ -8,7 +8,6 @@
 // Std 3.2.7: `TcpStream::write_zerocopy` (MSG_ZEROCOPY): the bytes go
 // out unchanged and the call returns once the kernel is done with them.
 use rok::std::net::{TcpStream, tcp_listen};
-use rok::std::io::{Reader, Writer};
 use rok::std::thread;
 
 fn main() throws (IoError) {

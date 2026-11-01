@@ -12,7 +12,6 @@
 // fd readiness. A waker crosses as a one-element `GcBuf<Waker>`.
 use rok::bare::mem::{GcBuf, buf_new};
 use rok::std::net::{TcpListener, TcpStream, SocketAddr};
-use rok::std::io::byte_buf;
 
 extern "C" {
     fn rok_time_now_ns() -> i64;
@@ -82,7 +81,7 @@ let client = try! TcpStream::connect(try! listener.local_addr());
 let (server, _) = try! listener.accept();
 try! server.set_nonblocking(true);
 let reader = task::spawn(async {
-    let buf = byte_buf(16);
+    let buf = List::filled(16, 0u8);
     loop {
         await Readable { fd: server.fd(), armed: false };
         let n = try server.read(buf) catch _ { 0 };
@@ -90,7 +89,7 @@ let reader = task::spawn(async {
     }
 });
 await task::sleep(Duration::ms(10));
-try! client.write_str("hello");
+try! client.write_all("hello");
 println(f"io: {await reader} bytes");
 println(f"registrations left: {task::registrations()}");
 

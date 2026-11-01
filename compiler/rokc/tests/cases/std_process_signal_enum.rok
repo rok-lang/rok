@@ -18,7 +18,7 @@
 
 // `Signal` replaces the `i32` signal numbers; the `i32` forms still
 // work and warn. `ExitStatus` has `Debug`.
-use rok::std::io::IoError;
+use rok::core::io::IoError;
 use rok::std::process;
 use rok::std::process::{Command, Signal};
 use rok::std::thread;
