@@ -77,6 +77,8 @@ jobs:
         run: just version-check
       - name: target consistency
         run: just check-targets
+      - name: release.sh against a stubbed gh
+        run: just test-release
       - name: PSScriptAnalyzer
         shell: pwsh
         run: |
@@ -213,7 +215,7 @@ jobs:
           esac
           bindgen='[]' dist='[]'
           case " $jobs " in *" bindgen "*) bindgen=$(echo "$picked" | jq -c '[.[] | select(.name | IN("linux-x64", "windows-x64")) | .name]') ;; esac
-          case " $jobs " in *" dist "*) dist=$(echo "$picked" | jq -c '[.[] | select(.name == "windows-x64") | .name]') ;; esac
+          case " $jobs " in *" dist "*) dist=$(echo "$picked" | jq -c '[.[] | select(.name | IN("linux-x64", "windows-x64")) | .name]') ;; esac
           prefixes=$(jq -cn --argjson p "$picked" --argjson c "$cross" --argjson b "$bindgen" --argjson d "$dist" \
             '[($p[] | select(.gate) | .name), ($c[].host | sub("windows-arm64"; "windows-x64")), $b[], $d[]] | unique')
           sh_linux=false sh_windows=false
@@ -564,10 +566,12 @@ jobs:
           targets/build.sh "$(rustc -vV | sed -n 's/^host: //p')"
       - run: ROK_REQUIRE_LLVM=1 ROK_REQUIRE_LIBCLANG=1 cargo test --test cli -- bindgen
 
-  # The release archive (dist-native.sh) and its install (install.ps1
-  # -NoModifyPath into a scratch ROK_HOME), nightly on windows-x64: a
-  # program, and a package's build / run / test, with nothing but the
-  # installed toolchain on PATH.
+  # The release archive, nightly on linux-x64 (dist-linux-gnu.sh) and
+  # windows-x64 (dist-native.sh). Windows installs it (install.ps1
+  # -NoModifyPath into a scratch ROK_HOME): a program, and a package's
+  # build / run / test, with nothing but the installed toolchain on PATH.
+  # Both then update the last 0.1.x release to it (test-update.sh /
+  # test-update.ps1).
   dist:
     needs: [plan, llvm-prefix, check, corpus, cross]
     if: ${{ !cancelled() && needs.plan.result == 'success' && needs.check.result != 'failure' && needs.corpus.result != 'failure' && needs.cross.result != 'failure' && needs.plan.outputs.dist != '[]' }}
@@ -581,12 +585,28 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/llvm-prefix
+        if: runner.os == 'Windows'
       - uses: ./.github/actions/libclang-prefix
+        if: runner.os == 'Windows'
       - name: toolchain (rust-toolchain.toml)
+        if: runner.os == 'Windows'
         run: rustup toolchain install && rustc -vV
       - name: dist-native.sh
+        if: runner.os == 'Windows'
         run: scripts/dist-native.sh --out "$RUNNER_TEMP/dist"
+      # In a container, LLVM from S3, as release.yml builds it.
+      - name: dist-linux-gnu.sh
+        if: runner.os == 'Linux'
+        run: scripts/dist-linux-gnu.sh --out "$RUNNER_TEMP/dist"
+      - name: update from 0.1.x (test-update.sh)
+        if: runner.os == 'Linux'
+        run: scripts/test-update.sh "$RUNNER_TEMP/dist"
+      - name: update from 0.1.x (test-update.ps1)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/test-update.ps1 -Dist "$env:RUNNER_TEMP\dist"
       - name: install.ps1, then rok alone
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $env:ROK_HOME = "$env:RUNNER_TEMP\rok-home"

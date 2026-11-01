@@ -61,11 +61,16 @@ arm64, `windows-2022` x86_64, `windows-11-arm` aarch64 (cross only). x86_64-appl
   self-hosted runner kept in the default cache directory). Then the `rokc bindgen` tests (`cargo test --test
   cli -- bindgen`) with `ROK_REQUIRE_LIBCLANG=1`. Elsewhere those tests skip with a notice when no libclang
   is built.
-- `dist` (windows-x64, nightly and manual runs only): `scripts/dist-native.sh` (Git Bash with the MSVC environment of
+- `dist` (linux-x64 and windows-x64, nightly and manual runs only): the release archive. linux-x64 builds it
+  with `scripts/dist-linux-gnu.sh` (in a container, as `release.yml` does). windows-x64 builds it with
+  `scripts/dist-native.sh` (Git Bash with the MSVC environment of
   `llvm-prefix`, the LLVM and libclang prefixes above; `targets/build.sh` falls back to the image's `python`
   / `mingw32-make`), then `install.ps1 -NoModifyPath` into a scratch `ROK_HOME` and, with only
   its `bin\` on PATH, `rok run` of a file and a `rok new --lib --bin` package's build / run / `--release`
-  build / test.
+  build / test. Both then update the last 0.1.x release to that archive, served over a local http server
+  (`scripts/test-update.sh`, `scripts/test-update.ps1`; docs/releasing.md "Installer contract").
+- `lint` also runs `scripts/test-release.sh`: `release.sh --publish` against a stubbed `gh`, an `-rc.N`
+  version a prerelease and an archive that breaks the installer contract refused.
 - `ci-gate`: the one required status check. It passes when `lint`, `plan`, `llvm-prefix`, `check`, `test` and
   `corpus` passed or were skipped, and fails if any failed or was cancelled. A release tag needs it green
   on `main` (docs/releasing.md).

@@ -53,3 +53,8 @@ version-check:
 # the install scripts.
 check-targets:
     scripts/check-targets.sh
+
+# release.sh --publish against a stubbed gh: -rc.N is a prerelease, and an
+# archive that breaks the installer contract stops the release.
+test-release:
+    scripts/test-release.sh
