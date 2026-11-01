@@ -83,13 +83,6 @@ pub struct BuildOptions {
     pub repl: Option<rokc_codegen_mlir::ReplCell>,
     /// `-C overflow-checks=yes|no`; `None` = on at `-O0` only.
     pub overflow_checks: Option<bool>,
-    /// `--load-mlir-plugin`: MLIR dialect plugins (stdlib bare 1.10).
-    pub mlir_dialect_plugins: Vec<PathBuf>,
-    /// `--load-mlir-pass-plugin`: MLIR pass plugins.
-    pub mlir_pass_plugins: Vec<PathBuf>,
-    /// `--mlir-pass <pass>`: extra MLIR passes, run before the
-    /// lowering to the LLVM dialect (a plugin dialect's own lowering).
-    pub mlir_passes: Vec<String>,
     /// `-C backend=native|llvm` (else `ROK_BACKEND`): who generates the
     /// machine code (`native::object`).
     pub backend: Option<String>,
@@ -167,9 +160,6 @@ impl Default for BuildOptions {
             debug: false,
             repl: None,
             overflow_checks: None,
-            mlir_dialect_plugins: Vec::new(),
-            mlir_pass_plugins: Vec::new(),
-            mlir_passes: Vec::new(),
             backend: rokc_core::env_choice("ROK_BACKEND", "native|llvm").map(str::to_owned),
             lib_dirs: Vec::new(),
             libs: Vec::new(),
@@ -443,8 +433,8 @@ pub fn lower_to_llvm(
 /// more than the cores win back.
 const SPLIT_MIN: usize = 1 << 20;
 
-/// The module through LLVM in process: MLIR passes (plugins' first), LLVM
-/// IR, `-O<level>` and codegen. `parts` 0: as many objects as the size
+/// The module through LLVM in process: MLIR passes, LLVM IR, `-O<level>`
+/// and codegen. `parts` 0: as many objects as the size
 /// warrants (in-process `ThinLTO` above -O0, so inlining sees everything).
 fn llvm(
     module: &CompiledModule,
@@ -457,17 +447,7 @@ fn llvm(
     let t = &module.mir.target.spec;
     let opt = rokc_llvm::OptLevel::parse(&opts.opt_level)
         .ok_or_else(|| err(format!("unknown optimization level `{}`", opts.opt_level)))?;
-    let pipeline = rokc_llvm::mlir_pipeline(opts.opt_level != "0", &opts.mlir_passes);
-    let dialects: Vec<&Path> = opts
-        .mlir_dialect_plugins
-        .iter()
-        .map(PathBuf::as_path)
-        .collect();
-    let passes: Vec<&Path> = opts
-        .mlir_pass_plugins
-        .iter()
-        .map(PathBuf::as_path)
-        .collect();
+    let pipeline = rokc_llvm::mlir_pipeline(opts.opt_level != "0");
     let c = rokc_llvm::Compile {
         target: t,
         opt,
@@ -476,8 +456,6 @@ fn llvm(
         // descriptors; the ELF loader resolves initial exec.
         tls_initial_exec: opts.repl.is_none() || t.object_format != ObjectFormat::MachO,
         mlir_pipeline: &pipeline,
-        dialect_plugins: &dialects,
-        pass_plugins: &passes,
         profile: match &opts.profile {
             Profile::Off => rokc_llvm::Profile::None,
             Profile::Generate(p) => rokc_llvm::Profile::Generate(p),
@@ -823,8 +801,6 @@ fn wasm_tls_object(t: &TargetSpec, dir: &Path) -> Result<PathBuf, RokDiagnostic>
             emit: rokc_llvm::Emit::Obj,
             tls_initial_exec: false,
             mlir_pipeline: "",
-            dialect_plugins: &[],
-            pass_plugins: &[],
             profile: rokc_llvm::Profile::None,
         },
     )
@@ -866,44 +842,6 @@ fn rokr_arg(opts: &BuildOptions, t: &TargetSpec) -> String {
         t.staticlib(&opts.rokr)
     } else {
         format!("-l{}", opts.rokr)
-    }
-}
-
-/// `--load-mlir-plugin <path | name>` (stdlib bare 1.10.3): a path must
-/// exist; a bare name is looked up ([`mlir_plugin_files`]) in
-/// `ROK_MLIR_PLUGIN_PATH`.
-///
-/// # Errors
-/// The plugin is not there.
-pub fn find_mlir_plugin(spec: &str) -> Result<PathBuf, String> {
-    let p = Path::new(spec);
-    if p.components().count() > 1 || p.extension().is_some() {
-        return if p.is_file() {
-            Ok(p.to_path_buf())
-        } else {
-            Err(format!("MLIR plugin `{spec}`: no such file"))
-        };
-    }
-    let dirs = std::env::var_os("ROK_MLIR_PLUGIN_PATH").unwrap_or_default();
-    let names = mlir_plugin_files(spec, std::env::consts::OS);
-    std::env::split_paths(&dirs)
-        .flat_map(|d| names.iter().map(move |n| d.join(n)))
-        .find(|c| c.is_file())
-        .ok_or_else(|| {
-            format!(
-                "MLIR plugin `{spec}` not found (looked for {} in ROK_MLIR_PLUGIN_PATH)",
-                names.join(" / ")
-            )
-        })
-}
-
-/// File names of plugin `name` on `os`: `<name>.dll`, `lib<name>.so`, and
-/// on macOS `lib<name>.dylib` first (cmake modules are `.so` there too).
-fn mlir_plugin_files(name: &str, os: &str) -> Vec<String> {
-    match os {
-        "windows" => vec![format!("{name}.dll")],
-        "macos" => vec![format!("lib{name}.dylib"), format!("lib{name}.so")],
-        _ => vec![format!("lib{name}.so")],
     }
 }
 
@@ -1048,21 +986,4 @@ fn run(cmd: &mut Command, what: &str) -> Result<(), RokDiagnostic> {
         )));
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn mlir_plugins_are_found_by_path_or_name() {
-        assert!(super::find_mlir_plugin("/no/such/libx.so").is_err());
-        assert!(super::find_mlir_plugin("no_such_plugin_xyz").is_err());
-    }
-
-    #[test]
-    fn mlir_plugin_names_follow_the_host() {
-        use super::mlir_plugin_files as f;
-        assert_eq!(f("d", "windows"), ["d.dll"]);
-        assert_eq!(f("d", "macos"), ["libd.dylib", "libd.so"]);
-        assert_eq!(f("d", "linux"), ["libd.so"]);
-    }
 }

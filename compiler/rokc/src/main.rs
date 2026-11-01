@@ -243,16 +243,6 @@ fn parse_args(raw: Vec<String>, mut tail: Vec<OsString>) -> Args {
                 .opts
                 .runtime_files
                 .push(value(&name, inline, &mut it).into()),
-            "--load-mlir-plugin" | "--load-mlir-pass-plugin" => {
-                let v = value(&name, inline, &mut it);
-                let p = rokc_interface::find_mlir_plugin(&v).unwrap_or_else(|e| fail(&e));
-                if name == "--load-mlir-plugin" {
-                    a.opts.mlir_dialect_plugins.push(p);
-                } else {
-                    a.opts.mlir_pass_plugins.push(p);
-                }
-            }
-            "--mlir-pass" => a.opts.mlir_passes.push(value(&name, inline, &mut it)),
             "--emit" => {
                 for k in value(&name, inline, &mut it).split(',') {
                     a.emit.push(
@@ -1296,8 +1286,6 @@ fn fingerprint(a: &Args, pkg: &Package, out: &Path) -> Fingerprint {
     }
     stamped.extend(a.opts.profile_rt.clone());
     stamped.extend(a.opts.profile.used().map(Path::to_path_buf));
-    stamped.extend(a.opts.mlir_dialect_plugins.iter().cloned());
-    stamped.extend(a.opts.mlir_pass_plugins.iter().cloned());
     for b in &a.bootstrap {
         words.push(b.display().to_string());
         inputs.push(b.parent().map_or_else(|| b.clone(), Path::to_path_buf));

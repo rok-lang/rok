@@ -296,9 +296,8 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
       # Every test binary, with rokc, rok and rokls, for the test and
       # corpus jobs, which run it without a build. Its compile-time paths
-      # (CARGO_BIN_EXE_*, CARGO_MANIFEST_DIR, rokc_llvm::PLUGIN_DEV) hold
-      # because every job checks out at the same path on a GitHub-hosted
-      # runner.
+      # (CARGO_BIN_EXE_*, CARGO_MANIFEST_DIR) hold because every job
+      # checks out at the same path on a GitHub-hosted runner.
       - name: build the tests
         if: ${{ !cancelled() }}
         run: cargo nextest archive --workspace --archive-file "$RUNNER_TEMP/tests.tar.zst"

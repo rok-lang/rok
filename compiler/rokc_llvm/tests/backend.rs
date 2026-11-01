@@ -32,8 +32,6 @@ const fn opts<'a>(t: &'a Target, opt: OptLevel, emit: Emit, pipeline: &'a str) -
         emit,
         tls_initial_exec: true,
         mlir_pipeline: pipeline,
-        dialect_plugins: &[],
-        pass_plugins: &[],
         profile: rokc_llvm::Profile::None,
     }
 }
@@ -111,7 +109,7 @@ module {
 }
 ";
     let t = Target::builtin("x86_64-unknown-linux-gnu").unwrap();
-    let p = rokc_llvm::mlir_pipeline(true, &[]);
+    let p = rokc_llvm::mlir_pipeline(true);
     let parts = rokc_llvm::compile_mlir_split(src, &opts(&t, OptLevel::O2, Emit::Obj, &p), 2)
         .unwrap()
         .0;
@@ -151,7 +149,7 @@ fn mlir_lowers_to_llvm_ir_with_initial_exec_tls() {
     let src = "module {\n  llvm.mlir.global external thread_local @rok_tls_flag() : i8\n  \
                llvm.mlir.global external thread_local @other() : i8\n}\n";
     let t = Target::host().clone();
-    let p = rokc_llvm::mlir_pipeline(false, &[]);
+    let p = rokc_llvm::mlir_pipeline(false);
     let ll = rokc_llvm::compile_mlir(src, &opts(&t, OptLevel::O0, Emit::LlvmIr, &p)).unwrap();
     let ll = String::from_utf8(ll).unwrap();
     assert!(ll.starts_with("; ModuleID = 'LLVMDialectModule'"), "{ll}");
@@ -171,7 +169,7 @@ fn mlir_errors_are_reported() {
         return;
     }
     let t = Target::host().clone();
-    let p = rokc_llvm::mlir_pipeline(true, &[]);
+    let p = rokc_llvm::mlir_pipeline(true);
     let e = rokc_llvm::compile_mlir(
         "module { func.func @f() -> i32 { return } }",
         &opts(&t, OptLevel::O0, Emit::Obj, &p),
@@ -202,7 +200,7 @@ fn mlir_hello_links_and_runs() {
         (OptLevel::O2, true),
         (OptLevel::Os, true),
     ] {
-        let p = rokc_llvm::mlir_pipeline(optimize, &[]);
+        let p = rokc_llvm::mlir_pipeline(optimize);
         let obj = rokc_llvm::compile_mlir(HELLO_MLIR, &opts(&host, opt, Emit::Obj, &p)).unwrap();
         let o = dir.join("hello.o");
         std::fs::write(&o, obj).unwrap();
@@ -234,7 +232,7 @@ fn split_objects_link_and_dsymutil_bundles_them() {
     }
     let dir = scratch("split");
     let host = Target::host().clone();
-    let p = rokc_llvm::mlir_pipeline(true, &[]);
+    let p = rokc_llvm::mlir_pipeline(true);
     let parts =
         rokc_llvm::compile_mlir_split(HELLO_MLIR, &opts(&host, OptLevel::O2, Emit::Obj, &p), 3)
             .unwrap()

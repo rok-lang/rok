@@ -53,7 +53,7 @@ pub const LLVM_VERSION: Option<&str> = if rokc_llvm::AVAILABLE {
 
 pub use toolchain::{
     BuildOptions, EmitKind, Profile, TempDir, build_archive, cache_dir, cell_object, check_codegen,
-    emit, find_mlir_plugin, link_executable, link_host, link_object, lower_to_llvm, mlir_text,
+    emit, link_executable, link_host, link_object, lower_to_llvm, mlir_text,
 };
 
 // Independent switches, one per session setter.

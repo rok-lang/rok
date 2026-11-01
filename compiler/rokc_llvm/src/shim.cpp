@@ -54,73 +54,16 @@
 #include "mlir/IR/Diagnostics.h"
 #include "mlir/IR/MLIRContext.h"
 #include "mlir/Conversion/FuncToLLVM/ConvertFuncToLLVM.h"
-#include "mlir/Conversion/GPUCommon/GPUToLLVM.h"
 #include "mlir/Conversion/Passes.h"
-#include "mlir/Dialect/Affine/IR/AffineOps.h"
-#include "mlir/Dialect/Affine/IR/ValueBoundsOpInterfaceImpl.h"
-#include "mlir/Dialect/Affine/Transforms/Passes.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
-#include "mlir/Dialect/Arith/IR/ValueBoundsOpInterfaceImpl.h"
-#include "mlir/Dialect/Arith/Transforms/BufferDeallocationOpInterfaceImpl.h"
-#include "mlir/Dialect/Arith/Transforms/BufferViewFlowOpInterfaceImpl.h"
-#include "mlir/Dialect/Arith/Transforms/BufferizableOpInterfaceImpl.h"
-#include "mlir/Dialect/Arith/Transforms/Passes.h"
-#include "mlir/Dialect/Async/IR/Async.h"
-#include "mlir/Dialect/Async/Passes.h"
-#include "mlir/Dialect/Bufferization/IR/Bufferization.h"
-#include "mlir/Dialect/Bufferization/Pipelines/Passes.h"
-#include "mlir/Dialect/Bufferization/Transforms/FuncBufferizableOpInterfaceImpl.h"
-#include "mlir/Dialect/Bufferization/Transforms/Passes.h"
 #include "mlir/Dialect/ControlFlow/IR/ControlFlow.h"
-#include "mlir/Dialect/ControlFlow/Transforms/BufferDeallocationOpInterfaceImpl.h"
-#include "mlir/Dialect/ControlFlow/Transforms/BufferizableOpInterfaceImpl.h"
 #include "mlir/Dialect/DLTI/DLTI.h"
-#include "mlir/Dialect/Func/Extensions/InlinerExtension.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
-#include "mlir/Dialect/Func/Transforms/Passes.h"
-#include "mlir/Dialect/GPU/IR/GPUDialect.h"
-#include "mlir/Dialect/GPU/IR/ValueBoundsOpInterfaceImpl.h"
-#include "mlir/Dialect/GPU/Transforms/BufferDeallocationOpInterfaceImpl.h"
-#include "mlir/Dialect/GPU/Transforms/Passes.h"
 #include "mlir/Dialect/Index/IR/IndexDialect.h"
 #include "mlir/Dialect/LLVMIR/LLVMDialect.h"
-#include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
-#include "mlir/Dialect/LLVMIR/Transforms/Passes.h"
-#include "mlir/Dialect/Linalg/IR/Linalg.h"
-#include "mlir/Dialect/Linalg/IR/ValueBoundsOpInterfaceImpl.h"
-#include "mlir/Dialect/Linalg/Passes.h"
-#include "mlir/Dialect/Linalg/Transforms/BufferizableOpInterfaceImpl.h"
-#include "mlir/Dialect/Linalg/Transforms/RuntimeOpVerification.h"
-#include "mlir/Dialect/Linalg/Transforms/SubsetInsertionOpInterfaceImpl.h"
-#include "mlir/Dialect/Linalg/Transforms/TilingInterfaceImpl.h"
 #include "mlir/Dialect/Math/IR/Math.h"
-#include "mlir/Dialect/Math/Transforms/Passes.h"
-#include "mlir/Dialect/MemRef/IR/MemRef.h"
-#include "mlir/Dialect/MemRef/IR/MemRefMemorySlot.h"
-#include "mlir/Dialect/MemRef/IR/ValueBoundsOpInterfaceImpl.h"
-#include "mlir/Dialect/MemRef/Transforms/AllocationOpInterfaceImpl.h"
-#include "mlir/Dialect/MemRef/Transforms/BufferViewFlowOpInterfaceImpl.h"
-#include "mlir/Dialect/MemRef/Transforms/Passes.h"
-#include "mlir/Dialect/MemRef/Transforms/RuntimeOpVerification.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
-#include "mlir/Dialect/SCF/IR/ValueBoundsOpInterfaceImpl.h"
-#include "mlir/Dialect/SCF/Transforms/BufferDeallocationOpInterfaceImpl.h"
-#include "mlir/Dialect/SCF/Transforms/BufferizableOpInterfaceImpl.h"
-#include "mlir/Dialect/SCF/Transforms/Passes.h"
-#include "mlir/Dialect/Tensor/IR/Tensor.h"
-#include "mlir/Dialect/Tensor/IR/TensorInferTypeOpInterfaceImpl.h"
-#include "mlir/Dialect/Tensor/IR/TensorTilingInterfaceImpl.h"
-#include "mlir/Dialect/Tensor/IR/ValueBoundsOpInterfaceImpl.h"
-#include "mlir/Dialect/Tensor/Transforms/BufferizableOpInterfaceImpl.h"
-#include "mlir/Dialect/Tensor/Transforms/Passes.h"
-#include "mlir/Dialect/Tensor/Transforms/RuntimeOpVerification.h"
-#include "mlir/Dialect/Tensor/Transforms/SubsetInsertionOpInterfaceImpl.h"
 #include "mlir/Dialect/UB/IR/UBOps.h"
-#include "mlir/Dialect/Vector/IR/ValueBoundsOpInterfaceImpl.h"
-#include "mlir/Dialect/Vector/IR/VectorOps.h"
-#include "mlir/Dialect/Vector/Transforms/BufferizableOpInterfaceImpl.h"
-#include "mlir/Dialect/Vector/Transforms/Passes.h"
-#include "mlir/Dialect/Vector/Transforms/SubsetOpInterfaceImpl.h"
 #include "mlir/Interfaces/CastInterfaces.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Pass/PassManager.h"
@@ -129,8 +72,6 @@
 #include "mlir/Target/LLVMIR/Dialect/LLVMIR/LLVMToLLVMIRTranslation.h"
 #include "mlir/Target/LLVMIR/Export.h"
 #include "mlir/Transforms/Passes.h"
-#include "mlir/Tools/Plugins/DialectPlugin.h"
-#include "mlir/Tools/Plugins/PassPlugin.h"
 
 #include <algorithm>
 #include <atomic>
@@ -171,10 +112,6 @@ struct RokCompile {
   // A textual MLIR pass pipeline on builtin.module, mlir-opt syntax
   // without the anchor: "canonicalize,cse,convert-scf-to-cf,...".
   const char *mlir_pipeline;
-  const char *const *dialect_plugins;
-  size_t n_dialect_plugins;
-  const char *const *pass_plugins;
-  size_t n_pass_plugins;
   // Objects to split the module into, optimized and compiled in parallel
   // (`out` holds this many); 1 for one object, an IR text or assembly.
   size_t parts;
@@ -217,122 +154,38 @@ void init_llvm() {
   });
 }
 
-// Pass names, like mlir-opt's. Plugins add theirs under the same lock.
-std::mutex pass_registry_lock;
-
-// Dialects rokc lowers to and those `__mlir_op` offers (spec 8.7.1,
-// 8.7.5), with what lowering them needs (bufferization; ub and DLTI for the
-// LLVM conversions). Plugins build on these.
+// Dialects rokc lowers to (spec 8.7.1), with what lowering them needs (ub
+// and DLTI for the LLVM conversions). No others: the linker leaves the
+// rest of MLIR out.
 void register_dialects(mlir::DialectRegistry &r) {
   using namespace mlir;
-  r.insert<affine::AffineDialect, arith::ArithDialect, async::AsyncDialect,
-           bufferization::BufferizationDialect, cf::ControlFlowDialect,
-           DLTIDialect, func::FuncDialect, gpu::GPUDialect,
-           index::IndexDialect, linalg::LinalgDialect, LLVM::LLVMDialect,
-           math::MathDialect, memref::MemRefDialect, scf::SCFDialect,
-           tensor::TensorDialect, ub::UBDialect, vector::VectorDialect>();
-  affine::registerValueBoundsOpInterfaceExternalModels(r);
-  arith::registerBufferDeallocationOpInterfaceExternalModels(r);
-  arith::registerBufferizableOpInterfaceExternalModels(r);
-  arith::registerBufferViewFlowOpInterfaceExternalModels(r);
-  arith::registerValueBoundsOpInterfaceExternalModels(r);
-  bufferization::func_ext::registerBufferizableOpInterfaceExternalModels(r);
+  r.insert<arith::ArithDialect, cf::ControlFlowDialect, DLTIDialect,
+           func::FuncDialect, index::IndexDialect, LLVM::LLVMDialect,
+           math::MathDialect, scf::SCFDialect, ub::UBDialect>();
   builtin::registerCastOpInterfaceExternalModels(r);
-  cf::registerBufferizableOpInterfaceExternalModels(r);
-  cf::registerBufferDeallocationOpInterfaceExternalModels(r);
-  func::registerInlinerExtension(r);
-  gpu::registerBufferDeallocationOpInterfaceExternalModels(r);
-  gpu::registerValueBoundsOpInterfaceExternalModels(r);
-  LLVM::registerInlinerInterface(r);
-  linalg::registerBufferizableOpInterfaceExternalModels(r);
-  linalg::registerRuntimeVerifiableOpInterfaceExternalModels(r);
-  linalg::registerSubsetOpInterfaceExternalModels(r);
-  linalg::registerTilingInterfaceExternalModels(r);
-  linalg::registerValueBoundsOpInterfaceExternalModels(r);
-  memref::registerAllocationOpInterfaceExternalModels(r);
-  memref::registerBufferViewFlowOpInterfaceExternalModels(r);
-  memref::registerMemorySlotExternalModels(r);
-  memref::registerRuntimeVerifiableOpInterfaceExternalModels(r);
-  memref::registerValueBoundsOpInterfaceExternalModels(r);
-  scf::registerBufferDeallocationOpInterfaceExternalModels(r);
-  scf::registerBufferizableOpInterfaceExternalModels(r);
-  scf::registerValueBoundsOpInterfaceExternalModels(r);
-  tensor::registerBufferizableOpInterfaceExternalModels(r);
-  tensor::registerInferTypeOpInterfaceExternalModels(r);
-  tensor::registerRuntimeVerifiableOpInterfaceExternalModels(r);
-  tensor::registerSubsetOpInterfaceExternalModels(r);
-  tensor::registerTilingInterfaceExternalModels(r);
-  tensor::registerValueBoundsOpInterfaceExternalModels(r);
-  vector::registerBufferizableOpInterfaceExternalModels(r);
-  vector::registerSubsetOpInterfaceExternalModels(r);
-  vector::registerValueBoundsOpInterfaceExternalModels(r);
   // For convert-to-llvm.
   arith::registerConvertArithToLLVMInterface(r);
   cf::registerConvertControlFlowToLLVMInterface(r);
   registerConvertFuncToLLVMInterface(r);
-  gpu::registerConvertGpuToLLVMInterface(r);
   index::registerConvertIndexToLLVMInterface(r);
   registerConvertMathToLLVMInterface(r);
-  registerConvertMemRefToLLVMInterface(r);
   ub::registerConvertUBToLLVMInterface(r);
-  vector::registerConvertVectorToLLVMInterface(r);
   registerBuiltinDialectTranslation(r);
   registerLLVMDialectTranslation(r);
 }
 
-// Pass names for pipelines and `--mlir-pass`, as mlir-opt spells them.
+// Pass names for pipelines, as mlir-opt spells them.
 void register_passes() {
   using namespace mlir;
   registerTransformsPasses();
-  affine::registerAffinePasses();
-  arith::registerArithPasses();
-  registerAsyncPasses();
-  bufferization::registerBufferizationPasses();
-  bufferization::registerBufferizationPipelines();
-  func::registerFuncPasses();
-  registerLinalgPasses();
-  math::registerMathPasses();
-  memref::registerMemRefPasses();
-  registerSCFPasses();
-  tensor::registerTensorPasses();
-  vector::registerVectorPasses();
-  registerGpuAsyncRegionPass();
-  registerGpuDecomposeMemrefsPass();
-  registerGpuEliminateBarriers();
-  registerGpuKernelOutliningPass();
-  registerGpuLaunchSinkIndexComputationsPass();
-  registerGpuMapParallelLoopsPass();
-  LLVM::registerDIScopeForLLVMFuncOpPass();
-  LLVM::registerLLVMAddComdats();
-  LLVM::registerLLVMLegalizeForExportPass();
-  LLVM::registerLLVMRequestCWrappersPass();
-  LLVM::registerLLVMUseDefaultVisibilityPass();
-  registerArithToAPFloatConversionPass();
   registerArithToLLVMConversionPass();
-  registerConvertAffineForToGPUPass();
-  registerConvertAsyncToLLVMPass();
-  registerConvertBufferizationToMemRefPass();
   registerConvertControlFlowToLLVMPass();
   registerConvertFuncToLLVMPass();
   registerConvertIndexToLLVMPass();
-  registerConvertLinalgToStandardPass();
-  registerConvertMathToFuncs();
   registerConvertMathToLibmPass();
   registerConvertMathToLLVMPass();
-  registerConvertParallelLoopToGpuPass();
-  registerConvertTensorToLinalgPass();
-  registerConvertToLLVMPass();
-  registerConvertVectorToLLVMPass();
-  registerConvertVectorToSCF();
-  registerFinalizeMemRefToLLVMConversionPass();
-  registerGpuToLLVMConversionPass();
-  registerLiftControlFlowToSCFPass();
-  registerLowerAffinePass();
-  registerMathToAPFloatConversionPass();
   registerReconcileUnrealizedCastsPass();
   registerSCFToControlFlowPass();
-  registerSetLLVMModuleDataLayoutPass();
-  registerUBToLLVMConversionPass();
 }
 
 void init_passes() {
@@ -1065,30 +918,7 @@ std::unique_ptr<llvm::Module> translate(llvm::StringRef src,
                                         RokBuf *err) {
   mlir::DialectRegistry registry;
   register_dialects(registry);
-  for (size_t i = 0; i < o.n_dialect_plugins; ++i) {
-    auto p = mlir::DialectPlugin::load(o.dialect_plugins[i]);
-    if (!p) {
-      fail(err, "Failed to load dialect plugin " +
-                    std::string(o.dialect_plugins[i]) + ": " +
-                    llvm::toString(p.takeError()));
-      return nullptr;
-    }
-    p->registerDialectRegistryCallbacks(registry);
-  }
   init_passes();
-  {
-    std::lock_guard<std::mutex> lock(pass_registry_lock);
-    for (size_t i = 0; i < o.n_pass_plugins; ++i) {
-      auto p = mlir::PassPlugin::load(o.pass_plugins[i]);
-      if (!p) {
-        fail(err, "Failed to load pass plugin " +
-                      std::string(o.pass_plugins[i]) + ": " +
-                      llvm::toString(p.takeError()));
-        return nullptr;
-      }
-      p->registerPassRegistryCallbacks();
-    }
-  }
   // Nested passes run on one pool shared by every compile in the process,
   // not a pool per context.
   static llvm::DefaultThreadPool threads;

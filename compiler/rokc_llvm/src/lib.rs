@@ -12,10 +12,6 @@ pub const LLVM_VERSION: &str = "22.1.8";
 /// Whether this build links LLVM.
 pub const AVAILABLE: bool = cfg!(rok_llvm);
 
-/// The MLIR plugin development tree of this build (`include/`, and
-/// `lib/rokc.lib` on Windows; docs/mlir-plugins.md).
-pub const PLUGIN_DEV: Option<&str> = option_env!("ROK_LLVM_PLUGIN_DEV");
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum OptLevel {
     O0,
@@ -76,8 +72,6 @@ pub struct Compile<'a> {
     pub tls_initial_exec: bool,
     /// The MLIR pass pipeline ([`mlir_pipeline`]).
     pub mlir_pipeline: &'a str,
-    pub dialect_plugins: &'a [&'a Path],
-    pub pass_plugins: &'a [&'a Path],
     pub profile: Profile<'a>,
 }
 
@@ -97,31 +91,28 @@ pub enum Profile<'a> {
 
 /// MLIR passes run before translation to LLVM IR.
 ///
-/// `extra` (plugin lowerings) first, the cleanup when optimizing, then
-/// conversion to the LLVM dialect. Op-agnostic passes run nested
-/// (`any(..)`) per function and global, in parallel.
+/// The cleanup when optimizing, then conversion to the LLVM dialect.
+/// Op-agnostic passes run nested (`any(..)`) per function and global, in
+/// parallel.
 #[must_use]
-pub fn mlir_pipeline(optimize: bool, extra: &[String]) -> String {
-    let mut v: Vec<&str> = extra.iter().map(String::as_str).collect();
-    // `scf` / `memref` ops written with `__mlir_op` (bare 1.9).
-    v.extend([
+pub fn mlir_pipeline(optimize: bool) -> String {
+    [
         if optimize {
             "any(canonicalize,cse,convert-scf-to-cf)"
         } else {
             "any(convert-scf-to-cf)"
         },
-        // `math` ops (bare 1.9.3): LLVM intrinsics where there is one,
-        // libm calls (declared as `func`s) for the rest.
+        // `math` ops: LLVM intrinsics where there is one, libm calls
+        // (declared as `func`s) for the rest.
         "any(convert-math-to-llvm)",
         "convert-math-to-libm",
         "convert-func-to-llvm",
         "any(convert-index-to-llvm)",
         "any(convert-arith-to-llvm)",
         "convert-cf-to-llvm",
-        "finalize-memref-to-llvm",
         "any(reconcile-unrealized-casts)",
-    ]);
-    v.join(",")
+    ]
+    .join(",")
 }
 
 /// MLIR text in the standard dialects → `c.emit`.
@@ -520,10 +511,6 @@ mod ffi {
         emit: c_int,
         tls_initial_exec: c_int,
         mlir_pipeline: *const c_char,
-        dialect_plugins: *const *const c_char,
-        n_dialect_plugins: usize,
-        pass_plugins: *const *const c_char,
-        n_pass_plugins: usize,
         parts: usize,
         profile_generate: *const c_char,
         profile_use: *const c_char,
@@ -599,10 +586,6 @@ mod ffi {
         CString::new(s).map_err(|_| format!("`{s}` contains NUL"))
     }
 
-    fn paths(ps: &[&Path]) -> Result<Vec<CString>, String> {
-        ps.iter().map(|p| super::cstr(p.as_os_str())).collect()
-    }
-
     /// `f` of the shim's form of `o`.
     fn with_opts<R>(
         o: &Compile<'_>,
@@ -615,10 +598,6 @@ mod ffi {
             c(&o.target.features)?,
         );
         let pipeline = c(o.mlir_pipeline)?;
-        let dialects = paths(o.dialect_plugins)?;
-        let passes = paths(o.pass_plugins)?;
-        let dialect_ptrs: Vec<*const c_char> = dialects.iter().map(|s| s.as_ptr()).collect();
-        let pass_ptrs: Vec<*const c_char> = passes.iter().map(|s| s.as_ptr()).collect();
         let (generate, used) = match o.profile {
             Profile::None => (None, None),
             Profile::Generate(p) => (Some(p), None),
@@ -639,10 +618,6 @@ mod ffi {
             },
             tls_initial_exec: c_int::from(o.tls_initial_exec),
             mlir_pipeline: pipeline.as_ptr(),
-            dialect_plugins: dialect_ptrs.as_ptr(),
-            n_dialect_plugins: dialect_ptrs.len(),
-            pass_plugins: pass_ptrs.as_ptr(),
-            n_pass_plugins: pass_ptrs.len(),
             parts,
             profile_generate: generate.as_ptr(),
             profile_use: used.as_ptr(),
@@ -784,10 +759,6 @@ mod ffi {
             emit: 2,
             tls_initial_exec: 0,
             mlir_pipeline: none.as_ptr(),
-            dialect_plugins: std::ptr::null(),
-            n_dialect_plugins: 0,
-            pass_plugins: std::ptr::null(),
-            n_pass_plugins: 0,
             parts: 1,
             profile_generate: none.as_ptr(),
             profile_use: none.as_ptr(),

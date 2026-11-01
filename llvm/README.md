@@ -149,16 +149,10 @@ only and links with the system's `cc`, reports `llvm: none` in
 not hold this LLVM with MLIR, lld and the dsymutil sources fails the
 build. `dist-native.sh` runs `build.sh` when no prefix is given.
 
-rokc registers only the MLIR dialects it lowers to and those
-`__mlir_op` offers (`register_dialects` / `register_passes` in
-`src/shim.cpp`), so the linker leaves the rest of MLIR out. It exports
-the non-weak symbols of the MLIR it links and all of LLVMSupport /
-LLVMDemangle, for MLIR plugins to bind to (`write_exports` in
-`build.rs`: `-exported_symbols_list` on macOS, `--dynamic-list` on
-Linux, with `nm`; on Windows a `/DEF` module definition file from the
-archives' COFF symbol tables, whose import library `rokc.lib` plugins
-link); everything else is dead-stripped. The headers plugins build with
-are in `target/<profile>/mlir-plugin-dev` (docs/mlir-plugins.md).
+rokc registers only the MLIR dialects and passes it lowers with
+(`register_dialects` / `register_passes` in `src/shim.cpp`), so the
+linker leaves the rest of MLIR out. rokc exports no symbols; everything
+it does not reach is dead-stripped.
 
 Homebrew's `llvm` (22.1.8) has static LLVM and MLIR archives but ships lld
 only as shared libraries, so it cannot serve as the prefix; release and

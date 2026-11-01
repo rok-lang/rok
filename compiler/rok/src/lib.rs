@@ -1128,7 +1128,7 @@ fn post_args(c: &mut Command, post: &[String], tail: &[std::ffi::OsString]) {
 }
 
 /// rokc's options that take a separate value (`--target x86_64-..`).
-const VALUE_OPTIONS: [&str; 35] = [
+const VALUE_OPTIONS: [&str; 32] = [
     "--color",
     "--cwd",
     "--message-format",
@@ -1146,9 +1146,6 @@ const VALUE_OPTIONS: [&str; 35] = [
     "-L",
     "-l",
     "--native-runtime",
-    "--load-mlir-plugin",
-    "--load-mlir-pass-plugin",
-    "--mlir-pass",
     "--emit",
     "-C",
     "--codegen",
