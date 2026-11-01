@@ -38,7 +38,7 @@ async fn main() {
     let wide: i64 = From::from(7i32);
     let back: i32 = 8i64.wrapping_into();
     let sat: u8 = 300i32.saturating_into();
-    println(f"{wide.type_name_of()} {wide} {back} {sat}");
+    println(f"{wide.type_name_of_val()} {wide} {back} {sat}");
     let fields: List<str> = Point::field_names();
     let methods: List<MethodInfo> = [];
     println(f"{Point::type_name()} {fields:?}");
@@ -49,7 +49,7 @@ async fn main() {
     let cc: c_char = c'a';
     let n: NoneSentinel = none;
     let s: str = buf.to_str();
-    println(f"{s} {ch} {cc as i32 - 96} {n.type_name_of()} {methods.is_empty()}");
+    println(f"{s} {ch} {cc as i32 - 96} {n.type_name_of_val()} {methods.is_empty()}");
     let t: Task<i32> = spawn(four());
     let got = (await t) + 1;
     let doubled = par::map([1, 2], |x| x * 2);

@@ -50,7 +50,7 @@ impl Color {
 fn dump<T: Inspect>(x: T) {
     for name in T::field_names() {
         if let v: any = x.get_field(name) {
-            println(f"{name} = {v.type_name_of()}");
+            println(f"{name} = {v.type_name_of_val()}");
         }
     }
 }
@@ -58,11 +58,11 @@ fn dump<T: Inspect>(x: T) {
 let c = Config { host: "localhost", port: 8080 };
 println(f"{Config::field_names():?}");
 match c.get_field("port") {
-    p: any => println(p.type_name_of()),
+    p: any => println(p.type_name_of_val()),
     none => println("none"),
 }
 match c.get_field("nope") {
-    p: any => println(p.type_name_of()),
+    p: any => println(p.type_name_of_val()),
     none => println("none"),
 }
 println(f"{c.set_field("port", 9090)} {c.port}");
@@ -74,7 +74,7 @@ for m in Config::methods() {
     println(f"{m.name} {m.arity} {m.is_static} {m.arg_types:?} {m.return_type}");
 }
 let b = Box { v: 1.5, n: 2 };
-println(f"{b.type_name_of()} {Box::<f64>::field_names():?}");
+println(f"{b.type_name_of_val()} {Box::<f64>::field_names():?}");
 println(f"{b.set_field("v", 2.5)} {b.v}");
 for m in Box::<f64>::methods() {
     println(f"{m.name} {m.arity} {m.arg_types:?} {m.return_type}");

@@ -498,7 +498,7 @@ fn bigint_suite(rng: &mut Rng) -> Suite {
             4 => s.line(
                 "parse",
                 "",
-                &format!("f\"{{try {}.parse::<int>() catch _ {{ int::new() }}}}\"", rq(&a)),
+                &format!("f\"{{try {}.parse::<int>() catch _ {{ int::zero() }}}}\"", rq(&a)),
                 &a,
             ),
             _ => s.line(

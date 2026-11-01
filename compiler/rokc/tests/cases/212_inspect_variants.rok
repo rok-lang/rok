@@ -14,7 +14,7 @@
 // Shape
 
 // Stdlib 2.12.3: on an enum, `variant_names()` lists the variants and a
-// value's `variant_name()` / `field_names_of()` / `get_field` look at the
+// value's `variant_name()` / `field_names_of_val()` / `get_field` look at the
 // variant it holds; `set_field` on an enum is `false`. Generic enums and
 // a sum holding an `Inspect` value.
 #[derive(Inspect)]
@@ -29,10 +29,10 @@ enum Shape {
 enum Maybe<T> { Some(T), None }
 
 fn describe(s: Shape) {
-    print(f"{s.variant_name()} {s.field_names_of():?}");
-    for n in s.field_names_of() {
+    print(f"{s.variant_name()} {s.field_names_of_val():?}");
+    for n in s.field_names_of_val() {
         match s.get_field(n) {
-            v: any => print(f" {n}={v.type_name_of()}"),
+            v: any => print(f" {n}={v.type_name_of_val()}"),
             none => print(f" {n}=?"),
         }
     }
@@ -50,7 +50,7 @@ for s in all {
     describe(s);
 }
 match Shape::Circle(1.0).get_field("w") {
-    v: any => println(v.type_name_of()),
+    v: any => println(v.type_name_of_val()),
     none => println("none"),
 }
 let r = Shape::Rect { w: 2.0, h: 3.0 };
@@ -60,16 +60,16 @@ match r.get_field("w") {
 }
 let m: Maybe<i32> = Maybe::Some(4);
 match m.get_field("0") {
-    v: any => println(f"{m.variant_name()} {m.field_names_of():?} {v.type_name_of()}"),
+    v: any => println(f"{m.variant_name()} {m.field_names_of_val():?} {v.type_name_of_val()}"),
     none => println("none"),
 }
 let n: Maybe<i32> = Maybe::None;
-println(f"{n.variant_name()} {n.field_names_of():?}");
+println(f"{n.variant_name()} {n.field_names_of_val():?}");
 let held: Shape | none = Shape::Circle(1.0);
 match held {
     s: Shape => println(s.variant_name()),
     none => println("none"),
 }
-println(held.type_name_of());
+println(held.type_name_of_val());
 
 // spec: §6.10.2

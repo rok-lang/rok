@@ -43,7 +43,7 @@ fn main() {
     let x: i32 | f32 = 42i32;
     let y: i32 | f32 = 3.14f32;
     let z: i32 | str | bool = "s";
-    println(f"{x.type_name_of()} {y.type_name_of()} {z.type_name_of()}");
+    println(f"{x.type_name_of_val()} {y.type_name_of_val()} {z.type_name_of_val()}");
     // 2.6.4: nesting, duplicates and order normalize away.
     let a: (i32 | f64) | str = 1;
     let b: str | f64 | i32 | i32 = a;
@@ -69,11 +69,11 @@ fn main() {
     let small: i32 | none = 7;
     let big: i32 | str | none = small;
     let got = unwrap_or(big, 0i32);
-    println(f"{got is i32} {got.type_name_of()}");
+    println(f"{got is i32} {got.type_name_of_val()}");
     println(f"{classify(2)} | {classify("s")} | {classify(none)}");
     let w: Number = 9i64;
     let s: Either = "e";
-    println(f"{w.type_name_of()} {s.type_name_of()}");
+    println(f"{w.type_name_of_val()} {s.type_name_of_val()}");
     // 2.6.7: an enum names its variants; a sum uses the types.
     let o = Res::Ok(1);
     let t: Either = 2;

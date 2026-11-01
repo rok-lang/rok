@@ -38,10 +38,10 @@ fn main() {
     let cn = c'\n';
     let cd = c'\x7F';
     let cf = c'\u{FF}';
-    println(f"{ca as i32} {cn as i32} {cd as i32} {cf as u8} {ca.type_name_of()}");
+    println(f"{ca as i32} {cn as i32} {cd as i32} {cf as u8} {ca.type_name_of_val()}");
     // 1.9: `true` / `false` are `bool`; `none` fills a sum's empty slot.
     let t = true;
-    println(f"{t} {!t} {t.type_name_of() == "bool"}");
+    println(f"{t} {!t} {t.type_name_of_val() == "bool"}");
     let miss = find([1, 2], 3);
     match miss {
         none => println("absent"),

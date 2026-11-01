@@ -548,25 +548,25 @@ impl<T> Receiver<T> {
     }
 
     /// Values until the channel closes (also `for v in rx`).
-    pub fn iter(self) -> ChannelIter<T> {
-        ChannelIter { rx: self }
+    pub fn iter(self) -> ReceiverIter<T> {
+        ReceiverIter { rx: self }
     }
 }
 
 /// `for v in rx` (2.17.5).
 impl<T> IntoIterator for Receiver<T> {
-    type IntoIter = ChannelIter<T>;
+    type IntoIter = ReceiverIter<T>;
     type Item = T;
-    const fn into_iter(self) -> ChannelIter<T> {
-        ChannelIter { rx: self }
+    const fn into_iter(self) -> ReceiverIter<T> {
+        ReceiverIter { rx: self }
     }
 }
 
-pub struct ChannelIter<T> {
+pub struct ReceiverIter<T> {
     rx: Receiver<T>;
 }
 
-impl<T> Iterator for ChannelIter<T> {
+impl<T> Iterator for ReceiverIter<T> {
     type Item = T;
     fn next(ref self) -> T | none {
         self.rx.recv()

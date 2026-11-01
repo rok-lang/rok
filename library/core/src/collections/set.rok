@@ -130,7 +130,7 @@ impl<T: Hash> Set<T> {
 
 /// The members of a set, in insertion order.
 pub struct SetIter<T> {
-    it: KeysIter<T, bool>;
+    it: Keys<T, bool>;
 }
 
 impl<T: Hash> Iterator for SetIter<T> {

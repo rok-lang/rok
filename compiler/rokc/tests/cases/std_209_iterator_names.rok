@@ -3,19 +3,21 @@
 // expect-stdout:
 // 6 3 [1] 2 a 98
 // a 1 2
+// b 2 x 2 12 7
 
-// Stdlib 2.9.2 / 2.9.3 / 2.15.1: the iterator types are named
-// `ListIntoIter`, `KeysIter` / `ValuesIter` / `DictIter`, `SetIter`,
-// `HeapIter`, `BytesIter`.
+// Stdlib 0.5.11 / 2.9.2 / 2.9.3 / 2.15.1: `iter()` returns `<Type>Iter`
+// (`DictIter`, `SetIter`, `HeapIter`); any other iterator method returns
+// its own name in CamelCase, in the defining module (`slice::Windows`
+// beside the adapter `iter::Windows`).
 fn main() {
     let xs: List<i32> = [1, 2, 3];
     let it: collections::ListIntoIter<i32> = xs.into_iter();
     let d: Dict<str, i32> = Dict::new();
     d["a"] = 2;
-    let ks: collections::KeysIter<str, i32> = d.keys();
-    let vs: collections::ValuesIter<str, i32> = d.values();
+    let ks: collections::Keys<str, i32> = d.keys();
+    let vs: collections::Values<str, i32> = d.values();
     let es: collections::DictIter<str, i32> = d.iter();
-    let bs: str::BytesIter = "ab".bytes();
+    let bs: str::Bytes = "ab".bytes();
     bs.next();
     let one: List<i32> = [1];
     let (k, v) = es.next() ?? ("", 0);
@@ -26,4 +28,14 @@ fn main() {
     h.push(2);
     let hi: collections::HeapIter<i32> = h.into_iter();
     println(f"{k} {si.next() ?? 0} {hi.next() ?? 0}");
+    let cs: str::Chars = "ab".chars();
+    cs.next();
+    let ls: str::Lines = "1\n2".lines();
+    let sp: str::Split = "x,y".split(",");
+    let ws: collections::slice::Windows<i32> = xs.windows(2);
+    let (tx, rx) = channel::<i32>();
+    try! tx.send(7);
+    tx.close();
+    let ri: channel::ReceiverIter<i32> = rx.iter();
+    println(f"{cs.next() ?? ' '} {ls.count()} {sp.next() ?? ""} {ws.count()} {k.len()}{v} {ri.next() ?? 0}");
 }

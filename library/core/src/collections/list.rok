@@ -393,14 +393,14 @@ impl<T> List<T> {
 
     /// Views of `size` consecutive elements, sliding by one (`size` > 0).
     #[track_caller]
-    pub const fn windows(self, size: usize) -> SliceWindows<T> {
+    pub const fn windows(self, size: usize) -> slice::Windows<T> {
         self[:].windows(size)
     }
 
     /// Views of `size` elements in order, the last one shorter
     /// (`size` > 0).
     #[track_caller]
-    pub const fn chunks(self, size: usize) -> SliceChunks<T> {
+    pub const fn chunks(self, size: usize) -> slice::Chunks<T> {
         self[:].chunks(size)
     }
 }

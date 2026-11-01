@@ -23,7 +23,7 @@ fn main() {
     let i = 42;
     let f = 3.14;
     let s = "hello";
-    println(f"{i.type_name_of()} {f.type_name_of()} {s.type_name_of()} {n is none}");
+    println(f"{i.type_name_of_val()} {f.type_name_of_val()} {s.type_name_of_val()} {n is none}");
     let xs = [1, 2, 3, 4];
     xs[0] = 10;
     let t = 0;

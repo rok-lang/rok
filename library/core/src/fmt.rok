@@ -6,7 +6,7 @@
 // such text: literal pieces and primitive holes go to the runtime
 // directly, any other hole through `Display::fmt` / `Debug::fmt`
 // (`fstr_*` below), and `rok_fmt_finish` hands the text over as the
-// `str` without a copy. A formatter made by `to_sink` instead hands its
+// `str` without a copy. A formatter made by `from_sink` instead hands its
 // text out in chunks as it grows (`io::Write::write_display`).
 
 use rok::core::collections::raw::{GcBuf, buf_new};
@@ -166,7 +166,7 @@ pub struct Formatter {
     pub(pkg) t: str;
     pub(pkg) flags: u64;
     pub(pkg) counts: u64;
-    /// Where full chunks go (`to_sink`); `none` keeps all the text.
+    /// Where full chunks go (`from_sink`); `none` keeps all the text.
     sink: (fn(str) -> bool) | none;
 }
 
@@ -199,11 +199,11 @@ impl Formatter {
     /// the whole text is never held at once. `sink` returns `false` when
     /// it cannot take a chunk; the write then fails with `FmtError`.
     /// Call `flush` after the last write.
-    pub fn to_sink(sink: fn(str) -> bool) -> Formatter {
+    pub fn from_sink(sink: fn(str) -> bool) -> Formatter {
         Formatter { t: unsafe { rok_fmt_new(SINK_CHUNK) }, flags: PLAIN_FLAGS, counts: PLAIN_COUNTS, sink: sink }
     }
 
-    /// Hand what a `to_sink` formatter holds to its sink; nothing for
+    /// Hand what a `from_sink` formatter holds to its sink; nothing for
     /// any other.
     pub const fn flush(ref self) throws (FmtError) {
         let k: fn(str) -> bool = self.sink else { return; };

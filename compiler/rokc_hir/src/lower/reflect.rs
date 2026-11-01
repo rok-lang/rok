@@ -1,6 +1,6 @@
 //! `Reflect` (refs-lang 6.10.1, stdlib 2.12.2): every type has it without
 //! an impl. Calls nothing else answers land here: `T::type_name()` /
-//! `size()` / `align()` are constants; `x.type_name_of()` / `x.size_of()`
+//! `size()` / `align()` are constants; `x.type_name_of_val()` / `x.size_of_val()`
 //! switch on an `any` or sum's held variant. Also `rok.any_cast`,
 //! `rok.method_table` and `rok.field_table`, behind `#[derive(Inspect)]`.
 
@@ -110,7 +110,7 @@ const fn str_const(s: String, span: rokc_diagnostic::Span) -> HirExpr {
 /// whose type is fixed) of `ty`.
 fn constant(ctx: &LowerCtx<'_>, ty: &HirTy, method: &str, span: rokc_diagnostic::Span) -> HirExpr {
     match method {
-        "type_name" | "type_name_of" => str_const(type_name(ctx, ty), span),
+        "type_name" | "type_name_of_val" => str_const(type_name(ctx, ty), span),
         _ => HirExpr {
             kind: HirExprKind::SizeOf {
                 ty: ty.clone(),
@@ -135,20 +135,20 @@ pub(super) fn static_call(
         .then(|| constant(ctx, ty, method, span))
 }
 
-/// `recv.type_name_of()` / `recv.size_of()`; `None` for any other call.
+/// `recv.type_name_of_val()` / `recv.size_of_val()`; `None` for any other call.
 pub(super) fn method_call(
     ctx: &mut LowerCtx<'_>,
     recv: HirExpr,
     method: &str,
     args: &[CallArg],
 ) -> Result<HirExpr, HirExpr> {
-    if !args.is_empty() || !matches!(method, "type_name_of" | "size_of") {
+    if !args.is_empty() || !matches!(method, "type_name_of_val" | "size_of_val") {
         return Err(recv);
     }
     Ok(dynamic(ctx, recv, method))
 }
 
-/// `Reflect::type_name_of(x)` / `Reflect::type_name()` - the trait named
+/// `Reflect::type_name_of_val(x)` / `Reflect::type_name()` - the trait named
 /// as the path.
 pub(super) fn trait_call(
     ctx: &mut LowerCtx<'_>,
@@ -168,7 +168,7 @@ pub(super) fn trait_call(
 /// constant (after evaluating `recv`).
 pub(super) fn dynamic(ctx: &mut LowerCtx<'_>, recv: HirExpr, method: &str) -> HirExpr {
     let span = recv.span;
-    let ret = if method == "type_name_of" {
+    let ret = if method == "type_name_of_val" {
         HirTy::Prim(PrimTy::Str)
     } else {
         HirTy::Prim(PrimTy::Usize)

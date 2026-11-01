@@ -491,7 +491,7 @@ pub trait Write {
     /// thrown as it is; a `Display` that fails on its own is `Other`.
     fn write_display<T: Display>(ref self, x: T) throws (IoError) {
         let failed: IoError | none = none;
-        let out = Formatter::to_sink([ref self, ref failed] |s: str| -> bool {
+        let out = Formatter::from_sink([ref self, ref failed] |s: str| -> bool {
             try self.write_all(s) catch err {
                 failed = err;
                 return false;
