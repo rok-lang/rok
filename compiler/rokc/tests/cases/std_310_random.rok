@@ -5,9 +5,9 @@
 // spread true
 // fill true
 
-// rok::std::crypto::random: the OS random source fills lists of any
+// rok::std::random: the OS random source fills lists of any
 // length (getentropy's 256-byte limit is chunked).
-use rok::std::crypto::random;
+use rok::std::random;
 
 fn main() {
     let a = random::bytes(32);
@@ -29,4 +29,4 @@ fn main() {
     println(f"fill {nonzero}");
 }
 
-// spec: std 310-crypto §3.10.1
+// spec: std 310-random §3.10.1

@@ -9,7 +9,7 @@
 // expect-error: 35:13: cannot find value `LIMIT` in this scope
 // expect-error: help: add `use geo::LIMIT;`
 // expect-error: 36:13: cannot find function `secret` in this scope
-// expect-error: help: `geo::secret` has that name, but it is private to module `geo`: add `pub` to it; or add `use rok::std::crypto::random::secret;`
+// expect-error: help: `geo::secret` has that name, but it is private to module `geo`: add `pub` to it; or add `use rok::std::random::secret;`
 // expect-error: 37:13: cannot find function `deep` in this scope
 // expect-error: help: `geo::inner::deep` has that name, but module `geo::inner` is private: add `pub` to its `mod`
 // expect-error: 25:43: cannot find function `sides` in this scope

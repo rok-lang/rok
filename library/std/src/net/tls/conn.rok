@@ -22,8 +22,9 @@ use rok::std::net::TcpStream;
 use rok::bare::mem::{GcBuf, buf_new};
 use rok::core::io::{IoError, IoErrorKind};
 use rok::std::sys::byte_buf;
-use rok::std::crypto::random;
-use rok::std::time::{SystemTime, Instant};
+use rok::std::random;
+use rok::core::time::Instant;
+use rok::std::time::SystemTime;
 use rok::core::crypto::HashAlgorithm;
 use rok::core::crypto::sha2::Digest;
 use rok::core::crypto::hmac::Hmac;
@@ -973,7 +974,7 @@ impl Conn {
             for c in certs { infos.push(c.info); }
             let anchors: List<CertInfo> = [];
             for r in x.roots { anchors.push(r.info); }
-            let now = (try SystemTime::now().unix_seconds() catch _ { 0i64 });
+            let now = SystemTime::now().unix_secs();
             let path = try x509::verify_server(infos, anchors, now, x.host, x.ip);
             match status {
                 r: List<u8> => try ocsp::check(r[0:r.len()], path[0], path[1], now),
@@ -1097,7 +1098,7 @@ impl Conn {
                 for c in certs { infos.push(c.info); }
                 let anchors: List<CertInfo> = [];
                 for r in x.roots { anchors.push(r.info); }
-                let now = (try SystemTime::now().unix_seconds() catch _ { 0i64 });
+                let now = SystemTime::now().unix_secs();
                 _ = try x509::verify_client(infos, anchors, now);
                 self.peer = certs;
                 x.infos = infos;

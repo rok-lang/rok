@@ -1,5 +1,5 @@
 // Cryptographic algorithms: pure computation, no OS (randomness is
-// `rok::std::crypto::random`). Secret data is handled in constant time:
+// `rok::std::random`). Secret data is handled in constant time:
 // no branch or memory index depends on it.
 
 pub mod secret;
