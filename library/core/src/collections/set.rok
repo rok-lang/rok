@@ -259,7 +259,7 @@ impl<T: Hash + Debug, S: BuildHasher> Debug for Set<T, S> {
 
 /// `{a, b}` / `{a,}` (refs-lang 6.5.1, 6.5.6; `{ a }` is a block).
 #[literal("{" {expr} % "," + "}")]
-pub const fn set_literal<T: Hash>(items: ...T) -> Set<T> {
+pub(pkg) const fn set_literal<T: Hash>(items: ...T) -> Set<T> {
     let s: Set<T> = Set::new();
     for x in items {
         s.insert(x);

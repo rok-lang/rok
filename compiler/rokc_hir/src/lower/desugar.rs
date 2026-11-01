@@ -1035,7 +1035,8 @@ pub(super) fn lower_for_iter(
             type_args: Vec::new(),
             args: Vec::new(),
             trailing_closure: None,
-            origin: None,
+            // `close` is the library's, not the user's (spec 6.9.9).
+            origin: Some(GEN_MODULE.to_owned()),
         },
         span,
     };
@@ -1058,7 +1059,9 @@ pub(super) fn lower_for_iter(
     });
     let lp = for_next_loop(ctx, label, pat, next, body, span);
     ctx.err_frames.pop();
+    let outer = ctx.set_access(Some(GEN_MODULE));
     let closed = method_call_on(ctx, hir_local(it, &it_ty, span), "close", &[], span);
+    ctx.access.replace(outer);
     HirExpr {
         kind: HirExprKind::Block(Box::new(HirBlock {
             stmts: vec![HirStmt::Expr(lp), HirStmt::Expr(closed)],
@@ -1069,6 +1072,9 @@ pub(super) fn lower_for_iter(
         span,
     }
 }
+
+/// Where `GenIter` / `TryGenIter` and their `pub(pkg)` `close` live.
+const GEN_MODULE: &str = "rok::core::iter";
 
 /// A `GenIter` / `TryGenIter`.
 fn is_generator(ctx: &LowerCtx<'_>, ty: &HirTy) -> bool {

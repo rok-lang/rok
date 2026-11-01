@@ -742,7 +742,7 @@ impl<T: Debug> Debug for List<T> {
 /// `[a, b, c]` (refs-lang 6.5.1): a `List` - a fixed array only in a
 /// `[T; N]` slot, which the compiler builds itself.
 #[literal("[" {expr} % "," * "]")]
-pub const fn list_literal<T>(items: ...T) -> List<T> {
+pub(pkg) const fn list_literal<T>(items: ...T) -> List<T> {
     let l: List<T> = List::new();
     for x in items {
         l.push(x);

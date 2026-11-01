@@ -2189,16 +2189,18 @@ const fn io_armed() -> bool { false }
 /// Completes once `fd` may be readable (`await task::readable(fd)`
 /// after a read hit `WouldBlock`); it may also complete spuriously, so
 /// retry the operation in a loop.
+#[internal]
 pub const fn readable(fd: i32) -> IoReady {
     IoReady { fd: fd, write: 0, armed: false }
 }
 
 /// `readable` for writes.
+#[internal]
 pub const fn writable(fd: i32) -> IoReady {
     IoReady { fd: fd, write: 1, armed: false }
 }
 
-pub struct IoReady {
+pub(pkg) struct IoReady {
     fd: i32;
     write: i32;
     armed: bool;
