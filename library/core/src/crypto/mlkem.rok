@@ -338,7 +338,7 @@ impl DecapsulationKey768 {
         let hd = Sha3_256::digest(d[384 * K:768 * K + 32]);
         let bad = 0u8;
         for i in 0usize..32 { bad = bad | (hd[i] ^ d[768 * K + 32 + i]); }
-        if bad != 0u8 { throw ValueError { msg: "ML-KEM-768: decapsulation key hash mismatch" }; }
+        if bad != 0u8 { throw ValueError::new("ML-KEM-768: decapsulation key hash mismatch"); }
         DecapsulationKey768 { dk: Secret::new(d) }
     }
 

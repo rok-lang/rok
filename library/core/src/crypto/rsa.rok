@@ -290,7 +290,7 @@ impl PrivateKey {
         // only in secret storage.
         let fp = try factor(self.p[0:self.p.len()], md.n);
         let fq = try factor(self.q[0:self.q.len()], md.n);
-        let qi: List<u32> = Nat::from_be(self.qinv[0:self.qinv.len()], fp.n) else { throw ValueError { msg: "bad RSA private key" }; };
+        let qi: List<u32> = Nat::from_be(self.qinv[0:self.qinv.len()], fp.n) else { throw ValueError::new("bad RSA private key"); };
         let qinv = fp.to_mont(qi);
         let e = self.public.e[0:self.public.e.len()];
         let blinded = md.from_mont(md.mul(md.to_mont(m), md.pow(md.to_mont(r), e)));
