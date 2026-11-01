@@ -1,6 +1,6 @@
 // spec: refs-lang §5.3 §5.3.9
-// expect-error: 13:1: a `static` is shared by every thread, so it can't be a `Dict<i64, i64, RandomState>`: two threads could change it at once
-// expect-error: help: write `static D: Mutex<Dict<i64, i64, RandomState>> = Mutex::new(Dict::new());` and use it inside `using g = D.lock() { .. }`
+// expect-error: 13:1: a `static` is shared by every thread, so it can't be a `Dict<i64, i64>`: two threads could change it at once
+// expect-error: help: write `static D: Mutex<Dict<i64, i64>> = Mutex::new(Dict::new());` and use it inside `using g = D.lock() { .. }`
 // expect-error: 14:1: a `static` is shared by every thread, so it can't be a `StrBuf`: two threads could change it at once
 // expect-error: help: write `static B: Mutex<StrBuf> = Mutex::new(StrBuf::new());` and use it inside `using g = B.lock() { .. }`
 // expect-error: 15:1: a `static` is shared by every thread, so it can't be a `RwLock<List<i32>>`: two threads could change it at once

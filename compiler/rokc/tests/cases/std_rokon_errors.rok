@@ -44,7 +44,7 @@
 // decode: 1:89: expected i32, found string [.shape.h]
 // decode: 1:91: unknown field `d` in Shape::Rect [.shape.d]
 // decode: 1:27: Mode::Fast takes 0 values, found 1 [.mode]
-// decode: 1:60: expected Dict<str, i32, RandomState>, found list [.limits]
+// decode: 1:60: expected Dict<str, i32>, found list [.limits]
 // decode: ok
 // value: at [1]: expected i32, found string
 

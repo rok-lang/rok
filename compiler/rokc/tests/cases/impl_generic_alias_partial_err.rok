@@ -1,5 +1,5 @@
 // spec: §2.9.4
-// expect-error: no method `count` found for type `Dict<i32, i32, RandomState>`
+// expect-error: no method `count` found for type `Dict<i32, i32>`
 
 // `type Names<V> = Dict<str, V>`: an impl on `Names<V>` covers only the
 // `Dict`s keyed by `str`.
