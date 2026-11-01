@@ -64,12 +64,13 @@ copy_types!(
     i8, i16, i32, i64, isize, u8, u16, u32, u64, usize, f32, f64, bool, char, c_char, str
 );
 
-/// Cleanup on release (2.13.4). `using` (refs-lang 3.17) calls `drop` on
-/// every way out of its block. Plain `let`s get no implicit scope-exit
-/// drop (2.13.4 RAII); `using` is the deterministic path.
+/// Cleanup on release (2.13.4). A `Drop` value has one owner: `let b = a`
+/// moves it, and the compiler calls `drop` where its owner leaves scope (on
+/// every exit, and when a task ends) or where a `using` block (refs-lang
+/// 3.17) ends.
 pub trait Drop {
-    /// Releases what `self` holds; `using` calls it once on every way out of
-    /// its block.
+    /// Releases what `self` holds; called once, where the value is
+    /// released.
     #[lang("drop_method")]
     fn drop(ref self);
 }

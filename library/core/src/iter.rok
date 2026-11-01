@@ -1164,7 +1164,7 @@ impl<T> GenIter<T> {
 /// A throwing generator (`yield fn f() throws (E) -> T`): a
 /// `TryIterator` whose `next` throws what the body throws (refs-lang
 /// 4.14.10), stepped with `try for x in g { .. }`.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryGenIter<T, E> {
     resume: fn(bool) throws (E) -> (T | none);
 }
@@ -1517,8 +1517,8 @@ pub const fn try_from_fn<T, E>(f: fn() throws (E) -> (T | none)) -> TryFromFn<T,
     TryFromFn { f: f }
 }
 
-/// The iterator `try_map` returns: `f` of each item.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+/// The iterator `TryIterator::map` returns: `f` of each item.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryMap<I, U> {
     it: I;
     f: fn(I::Item) throws (I::Error) -> U;
@@ -1535,8 +1535,8 @@ impl<I: TryIterator, U> TryIterator for TryMap<I, U> {
     }
 }
 
-/// The iterator `try_filter` returns: the items `pred` accepts.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+/// The iterator `TryIterator::filter` returns: the items `pred` accepts.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryFilter<I> {
     it: I;
     pred: fn(I::Item) throws (I::Error) -> bool;
@@ -1556,7 +1556,7 @@ impl<I: TryIterator> TryIterator for TryFilter<I> {
 }
 
 /// The iterator `map_err` returns: each error passed through `f`.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct MapErr<I, E2> {
     it: I;
     f: fn(I::Error) -> E2;
@@ -1572,8 +1572,8 @@ impl<I: TryIterator, E2> TryIterator for MapErr<I, E2> {
     }
 }
 
-/// The iterator `try_enumerate` returns: `(index, item)` pairs from 0.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+/// The iterator `TryIterator::enumerate` returns: `(index, item)` pairs from 0.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryEnumerate<I> {
     it: I;
     i: usize;
@@ -1592,9 +1592,9 @@ impl<I: TryIterator> TryIterator for TryEnumerate<I> {
     }
 }
 
-/// The iterator `try_zip` returns: pairs of items; ends with the
+/// The iterator `TryIterator::zip` returns: pairs of items; ends with the
 /// shorter side.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryZip<I, J> {
     a: I;
     b: J;
@@ -1613,9 +1613,9 @@ impl<I: TryIterator, J: Iterator> TryIterator for TryZip<I, J> {
     }
 }
 
-/// The iterator `try_chain` returns: every item of the first, then of
+/// The iterator `TryIterator::chain` returns: every item of the first, then of
 /// the second.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryChain<I, J> {
     a: I;
     b: J;
@@ -1636,8 +1636,8 @@ impl<I: TryIterator, J: TryIterator<Item = I::Item, Error = I::Error>> TryIterat
     }
 }
 
-/// The iterator `try_take` returns: at most the first `n` items.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+/// The iterator `TryIterator::take` returns: at most the first `n` items.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryTake<I> {
     it: I;
     left: usize;
@@ -1655,8 +1655,8 @@ impl<I: TryIterator> TryIterator for TryTake<I> {
     }
 }
 
-/// The iterator `try_skip` returns: all but the first `n` items.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+/// The iterator `TryIterator::skip` returns: all but the first `n` items.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TrySkip<I> {
     it: I;
     n: usize;
@@ -1676,9 +1676,9 @@ impl<I: TryIterator> TryIterator for TrySkip<I> {
     }
 }
 
-/// The iterator `try_step_by` returns: the first item, then every
+/// The iterator `TryIterator::step_by` returns: the first item, then every
 /// `step`th.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryStepBy<I> {
     it: I;
     step: usize;
@@ -1697,9 +1697,9 @@ impl<I: TryIterator> TryIterator for TryStepBy<I> {
     }
 }
 
-/// The iterator `try_take_while` returns: items while `pred` accepts
+/// The iterator `TryIterator::take_while` returns: items while `pred` accepts
 /// them.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryTakeWhile<I> {
     it: I;
     pred: fn(I::Item) throws (I::Error) -> bool;
@@ -1724,9 +1724,9 @@ impl<I: TryIterator> TryIterator for TryTakeWhile<I> {
     }
 }
 
-/// The iterator `try_skip_while` returns: items from the first `pred`
+/// The iterator `TryIterator::skip_while` returns: items from the first `pred`
 /// rejects.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TrySkipWhile<I> {
     it: I;
     pred: fn(I::Item) throws (I::Error) -> bool;
@@ -1752,7 +1752,7 @@ impl<I: TryIterator> TryIterator for TrySkipWhile<I> {
 }
 
 /// `flat_map`: `cur` is the inner iterator being drained.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryFlatMap<I, U> {
     it: I;
     f: fn(I::Item) throws (I::Error) -> U;
@@ -1780,9 +1780,9 @@ impl<I: TryIterator, U: IntoIterator> TryIterator for TryFlatMap<I, U> {
     }
 }
 
-/// The iterator `try_scan` returns: `f` of a running state and each
+/// The iterator `TryIterator::scan` returns: `f` of a running state and each
 /// item.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryScan<I, S> {
     it: I;
     state: S;
@@ -1802,9 +1802,9 @@ impl<I: TryIterator, S> TryIterator for TryScan<I, S> {
     }
 }
 
-/// The iterator `try_inspect` returns: the items, each shown to `f`
+/// The iterator `TryIterator::inspect` returns: the items, each shown to `f`
 /// first.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryInspect<I> {
     it: I;
     f: fn(I::Item) throws (I::Error);
@@ -1822,9 +1822,9 @@ impl<I: TryIterator> TryIterator for TryInspect<I> {
     }
 }
 
-/// The iterator `try_peekable` returns: the items, with a look at the
+/// The iterator `TryIterator::peekable` returns: the items, with a look at the
 /// next.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryPeekable<I> {
     it: I;
     peeked: I::Item | none;
@@ -1856,7 +1856,7 @@ impl<I: TryIterator> TryIterator for TryPeekable<I> {
 }
 
 /// A throw drops the chunk being built.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryChunks<I> {
     it: I;
     size: usize;
@@ -1902,7 +1902,7 @@ impl<I: TryIterator> Iterator for Results<I> {
 
 /// The `TryIterator` `iter::from_results` returns: an `Err` item is
 /// thrown.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct FromResults<I, T, E> {
     it: I;
 }
@@ -1920,7 +1920,7 @@ impl<I: Iterator<Item = Result<T, E>>, T, E> TryIterator for FromResults<I, T, E
 
 /// The `TryIterator` `iter::infallible` returns: the items, never an
 /// error.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct Infallible<I, E> {
     it: I;
     /// Never set: it only carries `E`.
@@ -1939,7 +1939,7 @@ impl<I: Iterator, E> TryIterator for Infallible<I, E> {
 }
 
 /// The `TryIterator` `iter::try_from_fn` returns: each item is `f()`.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryFromFn<T, E> {
     f: fn() throws (E) -> (T | none);
 }

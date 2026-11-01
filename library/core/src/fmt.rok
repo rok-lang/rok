@@ -256,8 +256,8 @@ impl Formatter {
     /// The text written, as a `str` (no copy); the formatter is spent.
     pub const fn finish(self) -> str { unsafe { rok_fmt_finish(self.t) } }
 
-    /// Append `s`; throws what a `to_sink` formatter's sink throws when the
-    /// text spills to it.
+    /// Append `s`; throws `FmtError` when a `from_sink` formatter's sink
+    /// refuses a chunk.
     pub const fn write_str(ref self, s: str) throws (FmtError) {
         self.t = unsafe { rok_fmt_str(self.t, s) };
         try self.spill();

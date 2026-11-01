@@ -299,8 +299,9 @@ impl Debug for Scope {
 
 impl Scope {
     /// Run `f` on the parallel pool and return a handle to join its result.
-    /// The task is cancelled with the scope; every task is joined before
-    /// `par::scope` returns. Panics if called after the scope ended.
+    /// Under `try_scope` the task is cancelled when the scope is; every task
+    /// is joined before the scope returns. Panics if called after the scope
+    /// ended.
     #[track_caller]
     pub fn spawn<T: Send>(self, f: fn() -> T + Send) -> ScopeHandle<T> {
         if self.closed.load() {

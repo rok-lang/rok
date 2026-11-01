@@ -272,8 +272,8 @@ const fn need(b: Slice<u8>, n: usize, what: str) throws (ValueError) {
 pub const SHARED_KEY_LEN: usize = 32;
 
 /// An ML-KEM-768 decapsulation key (the 2400-byte expanded encoding)
-/// in secret storage. Copies share the storage; `wipe` and `using` release clear
-/// it.
+/// in secret storage. It has one owner (`let b = a` moves it); `wipe`
+/// and its release clear it.
 pub struct DecapsulationKey768 {
     dk: Secret;
 }
@@ -385,7 +385,7 @@ impl DecapsulationKey768 {
     pub fn wipe(self) { self.dk.wipe(); }
 }
 
-/// `using` release wipes.
+/// Wiped where it is released.
 impl Drop for DecapsulationKey768 {
     fn drop(ref self) { self.wipe(); }
 }

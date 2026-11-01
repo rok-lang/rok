@@ -1,4 +1,4 @@
-// rok::std::thread: OS threads, 1:1 (stdlib 304, refs-lang 7.6.6). Each
+// rok::std::thread: OS threads, 1:1 (stdlib 3.4, refs-lang 7.6.6). Each
 // thread is a GC mutator; blocking calls let a collection run without it.
 //
 // A panic in any thread ends the process (exit 101), so `join` never
@@ -70,7 +70,7 @@ fn this_rec() -> Rec {
     fresh
 }
 
-/// A thread's identity (non-generic, 304.1).
+/// A thread's identity (non-generic, 3.4.2).
 pub struct Thread {
     rec: Rec;
 }
@@ -270,7 +270,8 @@ impl Builder {
     }
 }
 
-/// Run `f` on a new OS thread.
+/// Run `f` on a new OS thread. Panics when the OS cannot create one (and
+/// always on wasm); `Builder::spawn` throws instead.
 #[track_caller]
 pub fn spawn<T: Send>(f: fn() -> T + Send) -> JoinHandle<T> {
     try! Builder::new().spawn(f)
@@ -320,7 +321,7 @@ pub fn park_timeout(dur: Duration) {
     token.store(0);
 }
 
-/// A value per thread, made by `init` on each thread's first use (304.4).
+/// A value per thread, made by `init` on each thread's first use (3.4.4).
 /// It lives in the thread's record and goes with it.
 pub struct ThreadLocal<T> {
     init: fn() -> T + Sync;

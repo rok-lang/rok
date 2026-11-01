@@ -7,9 +7,8 @@
 // anything `AsBytes`. Bytes cross to the runtime as `GcBuf<u8>` regions
 // `(buf, off, len)`, and become a `str` only through the UTF-8 check.
 //
-// Async methods take `self`: every `AsyncRead` / `AsyncWrite` value is a
-// handle, and copies share the stream and its position. The buffers and
-// `Cursor` keep their state in shared lists for that reason.
+// Async methods take `ref self`. A buffer or `Cursor` copy shares the
+// stream and its position: they keep their state in shared lists.
 
 // The runtime's numbering of the kinds (`rok_os_errno_kind`).
 const KIND_OTHER: i32 = 0;
@@ -715,7 +714,7 @@ async yield fn lines_of<R: AsyncBufRead>(r: R) throws (IoError) -> str {
 }
 
 /// `bytes_async()`: a `TryStream` of the bytes.
-#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
+#[must_use("stream is lazy and does nothing unless polled: walk it with `try for await`, or call `try await {}.collect()`")]
 pub struct BytesStream {
     s: TryAsyncStream<u8, IoError>;
 }
@@ -729,7 +728,7 @@ impl TryStream for BytesStream {
 }
 
 /// `lines_async()`: a `TryStream` of the lines.
-#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
+#[must_use("stream is lazy and does nothing unless polled: walk it with `try for await`, or call `try await {}.collect()`")]
 pub struct LinesStream {
     s: TryAsyncStream<str, IoError>;
 }
@@ -745,7 +744,7 @@ impl TryStream for LinesStream {
 // iterators and adapters
 
 /// `r.lines()`: each line without `\n` / `\r\n`; a failed read throws.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct Lines<R> {
     r: R;
 }
@@ -765,7 +764,7 @@ impl<R: BufRead> TryIterator for Lines<R> {
 }
 
 /// `r.split(delim)`: the pieces between `delim` bytes.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct Split<R> {
     r: R;
     delim: u8;
@@ -784,7 +783,7 @@ impl<R: BufRead> TryIterator for Split<R> {
 
 /// `r.bytes()`: the bytes one at a time; a failed read throws, and the
 /// next `next` reads on.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct Bytes<R> {
     r: R;
     one: List<u8>;

@@ -6,8 +6,8 @@ use sup::sha2::Digest;
 use sup::curve25519::{EdPoint, ge_base, ge_add, ge_negate, ge_encode, ge_decode, ge_mul_ct, sc25519_reduce, sc25519_muladd, sc25519_is_canonical};
 
 /// A signing key: the 32-byte seed and its expansion, in secret
-/// storage. Copies share the storage; `wipe` and `using` release
-/// clear it.
+/// storage. It has one owner (`let b = a` moves it); `wipe` and its
+/// release clear it.
 pub struct SigningKey {
     seed: Secret;
     // The clamped scalar, then the nonce prefix (SHA-512 of the seed).
@@ -90,7 +90,7 @@ impl SigningKey {
     }
 }
 
-/// `using` release wipes.
+/// Wiped where it is released.
 impl Drop for SigningKey {
     fn drop(ref self) { self.wipe(); }
 }

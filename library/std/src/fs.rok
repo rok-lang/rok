@@ -1,4 +1,4 @@
-// rok::std::fs (stdlib 301): files and directories over the `openat`
+// rok::std::fs (stdlib 3.1): files and directories over the `openat`
 // family, so a `Dir` handle is a capability.
 //
 // `Dir::root()` resolves relative paths against the working directory;
@@ -52,7 +52,7 @@ const DISP_OPEN_OR_CREATE: u32 = 3u32;
 const HOW_LEN: usize = 9;
 const SHARE_ALL: u32 = 7u32;
 
-/// What `open` opens an existing file for (301.1.1a).
+/// What `open` opens an existing file for (3.1.1a).
 #[non_exhaustive]
 pub enum Access {
     ReadOnly,
@@ -93,7 +93,7 @@ impl Debug for Access {
     }
 }
 
-/// Knobs of `open` (301.1.1a).
+/// Knobs of `open` (3.1.1a).
 #[non_exhaustive]
 pub struct OpenFlags {
     /// `false`: a final symbolic link is `FilesystemLoop`, not followed.
@@ -103,7 +103,7 @@ pub struct OpenFlags {
     pub os: OsOpenFlags = OsOpenFlags {};
 }
 
-/// Knobs of the functions that may create the file (301.1.1a).
+/// Knobs of the functions that may create the file (3.1.1a).
 #[non_exhaustive]
 pub struct CreateFlags {
     /// Open for reading too.
@@ -204,7 +204,7 @@ impl Default for Permissions {
     const fn default() -> Permissions { Permissions { mode: 0o666u32 } }
 }
 
-/// What a directory entry is (301.1).
+/// What a directory entry is (3.1.1).
 #[non_exhaustive]
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FileType {
@@ -244,7 +244,7 @@ impl Debug for FileType {
     }
 }
 
-/// `stat` of a file (301.1).
+/// `stat` of a file (3.1.1).
 pub struct Metadata {
     kind: i64;
     len: u64;
@@ -329,8 +329,8 @@ fn stat_at(dir: i32, path: str, follow: bool, fd: i32) throws (IoError) -> Metad
     }
 }
 
-/// An open file. `fd` is shared by copies of the handle, so `close()`
-/// through any copy closes it for all.
+/// An open file. It has one owner: `let b = a` moves it, and `try_clone`
+/// opens an independent handle. Close it with `try f.close()` or `using`.
 pub struct File {
     /// `[fd, calls in flight]` (`io::use_begin`).
     fd: GcBuf<i32>;
@@ -349,7 +349,7 @@ pub(pkg) const fn file_of(fd: i32, path: str) -> File {
     }
 }
 
-// Each opens as `Dir::root()`'s function of the same name (301.1.1a).
+// Each opens as `Dir::root()`'s function of the same name (3.1.1a).
 impl File {
     /// An existing file, opened for `access`; missing: `NotFound`.
     pub fn open<P: AsPath>(path: P, access: Access = Access::ReadOnly, flags: OpenFlags = OpenFlags {}) throws (IoError) -> File {
@@ -505,10 +505,10 @@ impl File {
     }
 }
 
-// Mmap (301.3)
+// Mmap (3.1.3)
 
 /// A read-only shared mapping from `File::mmap`. Unmapped by `unmap` or
-/// on leaving `using`; reads after that see an empty mapping.
+/// where its owner leaves scope; reads after that see an empty mapping.
 pub struct Mmap {
     addr: GcBuf<usize>;
     len: usize;
@@ -754,9 +754,9 @@ const DIR_BATCH: usize = 64;
 
 /// `read_dir_async`: a `ReadDir` as a `TryStream`. Each refill reads up
 /// to `DIR_BATCH` entries on a blocking thread while the task suspends.
-/// Closed at its end or on leaving `using`; a cancelled task's refill
-/// finishes in the background first.
-#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
+/// Closed at its end or where its owner leaves scope; a cancelled task's
+/// refill finishes in the background first.
+#[must_use("stream is lazy and does nothing unless polled: walk it with `try for await`, or call `try await {}.collect()`")]
 pub struct ReadDirStream {
     rd: ReadDir;
     /// Held by a refill while it reads, and by `drop` to close.
@@ -959,7 +959,7 @@ impl Drop for File {
     }
 }
 
-// Dir (301.2)
+// Dir (3.1.2)
 
 /// A directory capability. `fd < 0` is `root()`: the whole namespace,
 /// relative paths from the working directory.
@@ -1030,7 +1030,7 @@ impl Dir {
     }
 
     /// An existing file, opened for `access`; missing: `NotFound`
-    /// (301.1.1a).
+    /// (3.1.1a).
     pub fn open<P: AsPath>(self, path: P, access: Access = Access::ReadOnly, flags: OpenFlags = OpenFlags {}) throws (IoError) -> File {
         try self.open_file(path, access.index(), DISP_OPEN, flags.follow_symlinks, 0u32, open_knobs(flags.os), "open")
     }
@@ -1349,7 +1349,7 @@ impl DirEntry {
 /// The entries of one directory, in the order the OS returns them
 /// (`.` / `..` skipped): a `TryIterator` (`try for e in
 /// fs::read_dir(p) { .. }`).
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct ReadDir {
     /// The `DIR*` (0 once closed), shared by copies of the handle.
     d: GcBuf<isize>;
@@ -1413,9 +1413,8 @@ impl TryIterator for ReadDir {
     }
 }
 
-/// `using rd = try fs::read_dir(p) { .. }` closes the stream even when
-/// the loop stops early. A `ReadDir` held by a plain `let` and dropped
-/// before its end keeps the stream open until the process exits.
+/// A `ReadDir` left before its end closes its stream where its owner
+/// leaves scope.
 impl Drop for ReadDir {
     fn drop(ref self) {
         close_dir(self.d);
@@ -1432,12 +1431,12 @@ fn close_dir(cell: GcBuf<isize>) {
 }
 
 /// Recursive walk, depth first in pre-order (a directory before its
-/// entries), the root first and each directory's entries sorted by name (Go `filepath.WalkDir`). Symlinks are listed,
-/// not followed. Each directory is read whole when reached, so a `Walk`
+/// entries), the root first and each directory's entries sorted by name
+/// (Go `filepath.WalkDir`). Symlinks are listed, not followed. Each directory is read whole when reached, so a `Walk`
 /// never holds a stream open (stopping early leaks nothing). An
 /// unreadable directory throws its error from `next`; calling `next`
 /// again goes on with the rest.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct Walk {
     stack: List<DirEntry>;
     errors: List<IoError>;
@@ -1477,7 +1476,7 @@ impl TryIterator for Walk {
     }
 }
 
-// convenience functions (301.4) over Dir::root()
+// convenience functions (3.1.4) over Dir::root()
 
 /// `File::open(path)`: an existing file, for reading. The other ways
 /// of opening are on `File` and `Dir`.

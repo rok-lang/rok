@@ -22,7 +22,7 @@
 // searches until it finds work, and the last searcher to find a task
 // wakes the next (tokio's scheme). No worker spins before sleeping.
 //
-// I/O (707): a driver thread blocks in kqueue / epoll and unparks the
+// I/O (707): a driver thread blocks in kqueue / epoll / IOCP and unparks the
 // tasks waiting on a ready fd.
 //
 // Blocking calls (706 §7.6.7): each pool thread has a runtime lane that
@@ -33,12 +33,12 @@
 // At most 512 extra threads. A worker with live `spawn_local` tasks is
 // never handed on.
 //
-// Cancellation (2.18.4, 707 §7.7.10): `Task::cancel` sets a flag and
+// Cancellation (2.18.4, 707 §7.7.9): `Task::cancel` sets a flag and
 // wakes the task; each `await` checks it on entry and after each resume
 // and leaves the body like a `return`, running `finally` / `using`. A
 // task cancelled before its first poll is never polled.
 //
-// Timers: one binary heap behind a `Mutex` (707 §7.7.5).
+// Timers: one binary heap behind a `Mutex` (707 §7.7.4).
 //
 // `ROKR_THREAD_PER_CORE=1` (706 §7.6.8) keeps every task on one worker's
 // local queue, so nothing is stolen. `ROKR_DYNAMIC_WORKERS=1` (707
@@ -1295,7 +1295,7 @@ pub fn worker_count() -> usize {
     executor().workers()
 }
 
-/// Online CPUs: the executor's pool threads.
+/// Online CPUs (the default pool size).
 pub fn cpu_count() -> usize {
     unsafe { rok_cpu_count() }.max(1)
 }

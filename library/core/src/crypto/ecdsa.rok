@@ -525,8 +525,8 @@ const fn der_int(out: List<u8>, v: List<u8>) {
 }
 
 /// A signing key: the secret scalar (big-endian, the curve's size) in
-/// secret storage, and its public point. Copies share the storage;
-/// `wipe` and `using` release clear it.
+/// secret storage, and its public point. It has one owner (`let b = a`
+/// moves it); `wipe` and its release clear it.
 pub struct SigningKey {
     d: Secret;
     public: VerifyingKey;
@@ -657,7 +657,7 @@ impl Debug for SigningKey {
     }
 }
 
-/// `using` release wipes.
+/// Wiped where it is released.
 impl Drop for SigningKey {
     fn drop(ref self) { self.wipe(); }
 }

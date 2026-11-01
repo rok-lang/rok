@@ -229,7 +229,7 @@ impl<T> CPtr<T> {
     }
 }
 
-// Raw pointers never cross threads implicitly (E3).
+// Raw pointers never cross threads implicitly.
 impl<T> !Send for Ptr<T> {}
 impl<T> !Sync for Ptr<T> {}
 impl<T> !Send for ConstPtr<T> {}

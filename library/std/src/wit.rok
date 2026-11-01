@@ -11,8 +11,6 @@ extern "rok" {
     fn rok_stdio_flush() -> i32;
 }
 
-// The component model's async ABI (WASI preview 3).
-//
 // An async export call is a task lifted with a callback; the call and
 // every event delivered to it run all runnable rok tasks
 // (`task::host_run`). Each call has its own waitable set (its id is the

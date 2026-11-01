@@ -83,7 +83,8 @@ pub const DROPPED: i32 = 1;
 /// A block freed by `free`.
 pub unsafe fn free(a: i32) { rok_free(a as u32 as usize); }
 
-/// The `n` UTF-8 bytes at `p` as a `str`; frees the block.
+/// The `n` UTF-8 bytes at `p` as a `str`; frees the block. Panics when
+/// the bytes are not UTF-8 (the block is not freed).
 pub unsafe fn str_take(p: i32, n: i32) -> str {
     if n == 0 {
         return "";

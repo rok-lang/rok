@@ -1,4 +1,4 @@
-// rok::std::process (stdlib 307): child processes.
+// rok::std::process (stdlib 3.7): child processes.
 //
 // Spawning is `posix_spawnp`; the program is looked up in this
 // process's `PATH` (not the child's `env`) unless it contains `/`. Every
@@ -230,7 +230,7 @@ impl Debug for Signal {
 /// `sig` cannot be sent on Windows.
 fn unsent(sig: Signal) throws (IoError) {
     if WINDOWS && !sig.on_windows(false) {
-        throw IoError::new(IoErrorKind::Unsupported, f"kill: Windows can send only Signal::Kill, not Signal::{sig:?}");
+        throw IoError::new(IoErrorKind::Unsupported, f"send_signal: Windows can send only Signal::Kill, not Signal::{sig:?}");
     }
 }
 
@@ -250,7 +250,7 @@ pub fn raise(sig: Signal) throws (IoError) {
     try check(unsafe { rok_os_raise(sig.number()) } as i64, "raise");
 }
 
-/// `signal` could not route the signal (`SIGKILL` / `SIGSTOP`, a bad
+/// `on_signal` could not route the signal (`SIGKILL` / `SIGSTOP`, a bad
 /// number, or the OS refused).
 #[derive(Clone, PartialEq, Eq)]
 pub struct SignalError {
@@ -351,7 +351,7 @@ const fn stdio_mode(s: Stdio) -> i32 {
     }
 }
 
-/// A child's stdin: the write end of its pipe (307.2).
+/// A child's stdin: the write end of its pipe (3.7.2).
 pub struct ChildStdin {
     file: File;
 }
@@ -479,7 +479,7 @@ impl AsRawHandle for ChildStderr {
     fn as_raw_handle(self) -> RawHandle { raw_handle(self.file.fd()) }
 }
 
-/// A process to run (307.1). Builder methods return the updated command
+/// A process to run (3.7.1). Builder methods return the updated command
 /// and leave the one they were called on as it was, so copies are
 /// independent. The streams start as `Inherit`; `output` pipes an
 /// inherited stdout / stderr and reads stdin from null.
@@ -572,7 +572,8 @@ impl Command {
     /// Where the child's standard error goes (default `Stdio::Inherit`).
     pub const fn stderr(self, cfg: Stdio) -> Command { self.stderr = cfg; self }
 
-    /// Kill the child when its `Child` is dropped by `using`.
+    /// Kill the child when its `Child` is released (its owner leaves scope
+    /// or its `using` block ends).
     pub const fn kill_on_drop(self, on: bool) -> Command { self.kill_on_drop = on; self }
 
     /// Start the child.
@@ -698,7 +699,7 @@ fn fill(fd: i32, out: List<u8>, context: str) throws (IoError) -> usize {
 
 const WINDOWS: bool = cfg!(target_os = "windows");
 
-/// A running (or finished) child (307.2).
+/// A running (or finished) child (3.7.2).
 pub struct Child {
     pid: i32;
     pub stdin: ChildStdin | none;
@@ -802,7 +803,7 @@ impl Child {
     }
 }
 
-/// `using child = ..`: kill (with `kill_on_drop`) and reap.
+/// With `kill_on_drop`: kill and reap when released; otherwise nothing.
 impl Drop for Child {
     fn drop(ref self) {
         if self.kill_on_drop && unsafe { word_at(self.state, 0) } == 0 {

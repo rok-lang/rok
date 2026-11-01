@@ -1,4 +1,4 @@
-//! Winsock sockets behind `rok::std::net` (stdlib 302) and the I/O
+//! Winsock sockets behind `rok::std::net` (stdlib 3.2) and the I/O
 //! driver's poller (707) on Windows. Same `rok_net_*` / `rok_io_*`
 //! symbols and conventions as the POSIX `net`; error codes are Winsock
 //! codes. A socket's fd is its handle with bit 0 set (`os::fd_of`).

@@ -422,7 +422,7 @@ impl PartialOrd for f64 {
     const fn ge(self, rhs: f64) -> bool { self >= rhs }
 }
 
-// `!x` on an integer is its bitwise complement, as `~x` (2.3.4).
+// `!x` on an integer is its bitwise complement, as `~x` (2.3.2).
 impl Not for i8 {
     type Output = i8;
     #[intrinsic("rok.not.i8")]

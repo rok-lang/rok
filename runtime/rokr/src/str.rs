@@ -217,7 +217,8 @@ pub extern "C" fn rok_str_byte(s: RokStr, i: usize) -> u8 {
     s.bytes().get(i).copied().unwrap_or(0)
 }
 
-/// `s` as UTF-8 text (it always is: `str` holds UTF-8).
+/// `s` as UTF-8 text; "" when it is not (`rok_os_arg` / `rok_os_env_at`
+/// hand raw OS bytes over as a `str`, which std checks later).
 pub fn text(s: &RokStr) -> &str {
     core::str::from_utf8(s.bytes()).unwrap_or("")
 }

@@ -1,5 +1,5 @@
 // rok::std::os::unix::process: Unix-only parts of `process` (stdlib
-// 307.5). The traits are in the prelude on Unix targets.
+// 3.11.5). The traits are in the prelude on Unix targets.
 
 use rok::std::process::Signal;
 

@@ -382,7 +382,7 @@ impl PrivateKey {
     }
 }
 
-/// `using` release wipes.
+/// Wiped where it is released.
 impl Drop for PrivateKey {
     fn drop(ref self) { self.wipe(); }
 }

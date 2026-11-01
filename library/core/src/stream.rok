@@ -493,7 +493,7 @@ impl<S1: Stream, S2: Stream> Stream for Zip<S1, S2> {
 /// A throwing stream (`async yield fn f() throws (E) -> T`): a
 /// `TryStream` whose `poll_next` throws what the body throws, stepped
 /// with `try for await x in s { .. }`.
-#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
+#[must_use("stream is lazy and does nothing unless polled: walk it with `try for await`, or call `try await {}.collect()`")]
 pub struct TryAsyncStream<T, E> {
     resume: fn(Context) throws (E) -> Poll<T | none>;
 }
@@ -586,8 +586,8 @@ impl<T, E> TryStream for TryAsyncStream<T, E> {
     }
 }
 
-/// The stream `try_map` returns: `f` of each item.
-#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
+/// The stream `TryStream::map` returns: `f` of each item.
+#[must_use("stream is lazy and does nothing unless polled: walk it with `try for await`, or call `try await {}.collect()`")]
 pub struct TryMap<S, U> {
     s: S;
     f: fn(S::Item) throws (S::Error) -> U;
@@ -609,8 +609,8 @@ impl<S: TryStream, U> TryStream for TryMap<S, U> {
     }
 }
 
-/// The stream `try_filter` returns: the items `pred` accepts.
-#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
+/// The stream `TryStream::filter` returns: the items `pred` accepts.
+#[must_use("stream is lazy and does nothing unless polled: walk it with `try for await`, or call `try await {}.collect()`")]
 pub struct TryFilter<S> {
     s: S;
     pred: fn(S::Item) throws (S::Error) -> bool;
@@ -640,7 +640,7 @@ impl<S: TryStream> TryStream for TryFilter<S> {
 }
 
 /// The stream `map_err` returns: each error passed through `f`.
-#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
+#[must_use("stream is lazy and does nothing unless polled: walk it with `try for await`, or call `try await {}.collect()`")]
 pub struct MapErr<S, E2> {
     s: S;
     f: fn(S::Error) -> E2;
@@ -656,8 +656,8 @@ impl<S: TryStream, E2> TryStream for MapErr<S, E2> {
     }
 }
 
-/// The stream `try_take` returns: at most the first `n` items.
-#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
+/// The stream `TryStream::take` returns: at most the first `n` items.
+#[must_use("stream is lazy and does nothing unless polled: walk it with `try for await`, or call `try await {}.collect()`")]
 pub struct TryTake<S> {
     s: S;
     left: usize;
@@ -682,8 +682,8 @@ impl<S: TryStream> TryStream for TryTake<S> {
     }
 }
 
-/// The stream `try_skip` returns: all but the first `n` items.
-#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
+/// The stream `TryStream::skip` returns: all but the first `n` items.
+#[must_use("stream is lazy and does nothing unless polled: walk it with `try for await`, or call `try await {}.collect()`")]
 pub struct TrySkip<S> {
     s: S;
     n: usize;
@@ -739,7 +739,7 @@ impl<S: TryStream> Stream for Results<S> {
 
 /// The `TryStream` `stream::from_results` returns: an `Err` item is
 /// thrown.
-#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
+#[must_use("stream is lazy and does nothing unless polled: walk it with `try for await`, or call `try await {}.collect()`")]
 pub struct FromResults<S, T, E> {
     s: S;
 }

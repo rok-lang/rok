@@ -1,4 +1,4 @@
-// rok::std::os::unix::net: Unix domain sockets (stdlib 302.3). Like
+// rok::std::os::unix::net: Unix domain sockets (stdlib 3.11.4). Like
 // the TCP ones: non-blocking underneath, `set_*_timeout` bounds the
 // blocking calls, `*_async` suspend the task. A listener's `accept`
 // gives the peer's bound path (`none`: unnamed). A stream `connect`

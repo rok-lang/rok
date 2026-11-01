@@ -3,7 +3,8 @@
 //!
 //! fds 0 / 1 / 2 stand for the standard handles; any other "fd" the
 //! runtime hands out is a kernel handle value (a multiple of 4, so the
-//! two never collide; handles fit in 32 bits by design).
+//! two never collide; handles fit in 32 bits by design), or a socket
+//! with bit 0 set.
 //!
 //! Text crossing the API is WTF-8 on the rok side (UTF-8, plus
 //! encoded lone surrogates) and UTF-16 on the Windows side.

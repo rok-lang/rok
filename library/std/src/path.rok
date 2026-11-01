@@ -1,4 +1,4 @@
-// rok::std::path (stdlib spec 308): `Path`, a UTF-8 path value with
+// rok::std::path (stdlib 3.8): `Path`, a UTF-8 path value with
 // Python-style `/` joining. Separators follow the target: `/` on Unix;
 // `\` or `/` on Windows, where a path may start with a prefix (`C:`,
 // `\\server\share`, `\\?\..`, `\\.\..`), is absolute only with a prefix
@@ -502,12 +502,13 @@ impl Debug for RawPath {
     const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"RawPath({self.to_path_lossy().as_str():?})") }
 }
 
-/// `Path::try_from(raw)`: `raw` as a path; throws if it is not UTF-8
-/// (3.8.4).
+/// `Path::from(s)`: the text as a path, as `Path::new`.
 impl From<str> for Path {
     const fn from(s: str) -> Path { Path { s: s } }
 }
 
+/// `Path::try_from(raw)`: `raw` as a path; throws if it is not UTF-8
+/// (3.8.4).
 impl TryFrom<RawPath> for Path {
     type Error = Utf8Error;
     const fn try_from(raw: RawPath) throws (Utf8Error) -> Path { try raw.to_path() }

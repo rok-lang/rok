@@ -46,8 +46,7 @@ pub struct RangeTo<T> {
     pub end: T;
 }
 
-/// `..=b`: up to and including `end` (the spec's range grammar has no
-/// `..=b` form; this mirrors `RangeTo`).
+/// `..=b`: up to and including `end`.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct RangeToInclusive<T> {
     pub end: T;

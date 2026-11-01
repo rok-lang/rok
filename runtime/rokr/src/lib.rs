@@ -6,7 +6,7 @@
 //! appendix (no ABI stability). The executor is rok code
 //! (`rok::core::task`) over OS threads. The GC (`rokr_gc`) is an
 //! Immix-style mark-region (703) with opportunistic evacuation, sticky
-//! mark-bit generations (704) and optional concurrent marking (705).
+//! mark-bit generations (703) and optional concurrent marking (705).
 //! Objects a root reaches never move, so a GC pointer a runtime function
 //! got as an argument stays valid across its allocations.
 
@@ -268,7 +268,8 @@ pub extern "C" fn rok_gc_collect_young() {
     rokr_gc::collect_young();
 }
 
-/// Bytes held by not-yet-swept GC objects, headers included (tests,
+/// Bytes held by GC objects (headers included) as of the last
+/// collection, plus everything handed out since in whole TLABs (tests,
 /// diagnostics; no ABI stability).
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_gc_stats_live_bytes() -> usize {
@@ -445,7 +446,7 @@ pub unsafe extern "C" fn rok_task_key(obj: *mut u8) -> usize {
 
 /// The process's 128-bit hash key into `out[0..2]`, a `GcBuf<u64>`.
 ///
-/// `RandomState`'s key (stdlib 2.5: hash values change between runs):
+/// `RandomState`'s key (stdlib 2.5.11: hash values change between runs):
 /// OS randomness read once, else the clock and an address. Neither word
 /// is 0, so a key is never all zero, the reserved key of a state built
 /// at compile time.
@@ -794,8 +795,8 @@ fn exit(code: i32) -> ! {
     unsafe { libc::exit(code) }
 }
 
-/// `rok::bare::alloc::alloc` (stdlib 1.4): null on failure (`size == 0`, bad `align`, overflow, OOM) instead of
-/// aborting. `zeroed != 0` zero-fills. Freed with `rok_free`.
+/// `rok::bare::alloc::alloc` (stdlib 1.4): null on failure (`size == 0`,
+/// bad `align`, overflow, OOM) instead of aborting. `zeroed != 0` zero-fills. Freed with `rok_free`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_alloc_raw(size: usize, align: usize, zeroed: i32) -> *mut u8 {
     if size == 0 || !align.is_power_of_two() {

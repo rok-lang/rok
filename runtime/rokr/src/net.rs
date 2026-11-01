@@ -1,4 +1,4 @@
-//! Sockets behind `rok::std::net` (stdlib 302) and the readiness poller
+//! Sockets behind `rok::std::net` (stdlib 3.2) and the readiness poller
 //! of the I/O driver (707): kqueue on BSD / macOS, epoll on Linux, `poll`
 //! (`poll_oneoff` / `wasi:io/poll`) on WASI. No ABI stability (805
 //! §8.5.12 appendix). Conventions as in `os`: results are `>= 0` or
@@ -808,7 +808,7 @@ pub extern "C" fn rok_net_resolve(host: RokStr, port: u16, out: *mut u8, max: us
     n as i32
 }
 
-// Unix domain sockets (302.3)
+// Unix domain sockets (stdlib 3.11.4)
 
 /// `path` as a `sockaddr_un` and its length; `None` when it does not fit
 /// `sun_path` (with its NUL).

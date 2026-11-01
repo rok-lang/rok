@@ -1,7 +1,7 @@
 // rok::core::tuple - Clone / Copy / Default / Debug / PartialEq / Eq /
 // Hash for tuples of 1 to 12 elements, component-wise, and PartialOrd /
-// Ord, lexicographic (stdlib 2.5.7, 2.10.9, 2.13.6). One block per (arity, trait), all the same shape;
-// keep every arity in step.
+// Ord, lexicographic (stdlib 2.5.7, 2.10.9, 2.13.6). One block per
+// (arity, trait), all the same shape; keep every arity in step.
 
 // 1-tuples
 impl<A: Clone> Clone for (A,) {
