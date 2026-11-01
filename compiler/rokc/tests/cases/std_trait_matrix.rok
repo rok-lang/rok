@@ -11,7 +11,7 @@
 // Value types work as keys, order and print.
 use rok::std::path::Path;
 use rok::std::net::{Ipv4Addr, Shutdown, SocketAddr};
-use rok::std::io::{IoErrorKind, SeekFrom};
+use rok::core::io::{IoErrorKind, SeekFrom};
 use rok::std::fs::Permissions;
 use rok::std::os::unix::fs::PermissionsExt;
 use rok::std::thread;
