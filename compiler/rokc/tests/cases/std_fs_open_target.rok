@@ -1,0 +1,42 @@
+// spec: std 301-fs
+// needs: fs
+// only-os: macos linux windows
+// expect-exit: 0
+// expect-stdout:
+// replaced: new
+// reader kept: old
+// dir link: FilesystemLoop
+
+// `write_atomic` replaces a file another handle still has open (the
+// handle keeps reading what it opened), and a link to a directory not
+// followed is `FilesystemLoop`, as one to a file is.
+use rok::std::fs;
+use rok::std::fs::{File, OpenFlags};
+use rok::core::io::{IoError, IoErrorKind};
+use rok::std::env;
+use rok::std::process;
+
+fn main() throws (IoError) {
+    let dir = env::temp_dir() / f"rok_fs_open_target_{process::id()}";
+    try fs::create_dir_all(dir);
+    let p = dir / "f";
+    try fs::write(p, "old");
+    let reader = try File::open(p);
+    try fs::write_atomic(p, "new");
+    println(f"replaced: {try fs::read_to_str(p)}");
+    println(f"reader kept: {try str::from_utf8(try reader.read_to_end()) catch _ { "?" }}");
+    try reader.close();
+
+    try fs::create_dir(dir / "d");
+    try fs::symlink("d", dir / "dlink");
+    let kind = IoErrorKind::Other;
+    let f: File | none = try File::open(dir / "dlink", flags: OpenFlags { follow_symlinks: false }) catch e {
+        kind = e.kind();
+        none
+    };
+    if let x: File = f {
+        try x.close();
+    }
+    println(f"dir link: {kind:?}");
+    try fs::remove_dir_all(dir);
+}

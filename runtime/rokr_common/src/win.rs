@@ -27,6 +27,7 @@ pub const ERROR_FILE_NOT_FOUND: i32 = 2;
 pub const ERROR_PATH_NOT_FOUND: i32 = 3;
 pub const ERROR_ACCESS_DENIED: i32 = 5;
 pub const ERROR_INVALID_HANDLE: i32 = 6;
+pub const ERROR_INVALID_FUNCTION: i32 = 1;
 pub const ERROR_NOT_ENOUGH_MEMORY: i32 = 8;
 pub const ERROR_INVALID_DRIVE: i32 = 15;
 pub const ERROR_NOT_SAME_DEVICE: i32 = 17;
@@ -194,6 +195,20 @@ pub const FileBasicInfo: i32 = 0;
 pub const FileStandardInfo: i32 = 1;
 pub const FileEndOfFileInfo: i32 = 6;
 pub const FileAttributeTagInfo: i32 = 9;
+pub const FileRenameInfoEx: i32 = 22;
+
+pub const FILE_RENAME_FLAG_REPLACE_IF_EXISTS: DWORD = 0x1;
+pub const FILE_RENAME_FLAG_POSIX_SEMANTICS: DWORD = 0x2;
+
+/// `FILE_RENAME_INFO` with `Flags` (`FileRenameInfoEx`); the name runs
+/// on past the struct.
+#[repr(C)]
+pub struct FILE_RENAME_INFO {
+    pub Flags: DWORD,
+    pub RootDirectory: HANDLE,
+    pub FileNameLength: DWORD,
+    pub FileName: [u16; 1],
+}
 
 pub const FILE_ATTRIBUTE_READONLY: DWORD = 0x1;
 pub const FILE_ATTRIBUTE_DIRECTORY: DWORD = 0x10;
@@ -553,6 +568,12 @@ unsafe extern "system" {
     pub fn DeleteFileW(name: *const u16) -> BOOL;
     pub fn RemoveDirectoryW(name: *const u16) -> BOOL;
     pub fn MoveFileExW(from: *const u16, to: *const u16, flags: DWORD) -> BOOL;
+    pub fn GetFullPathNameW(
+        name: *const u16,
+        n: DWORD,
+        buf: *mut u16,
+        file_part: *mut *mut u16,
+    ) -> DWORD;
     pub fn CopyFileExW(
         from: *const u16,
         to: *const u16,
