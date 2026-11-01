@@ -268,18 +268,28 @@ const fn need(b: Slice<u8>, n: usize, what: str) throws (ValueError) {
     if b.len() != n { throw ValueError::new(f"ML-KEM-768: {what} must be {n} bytes"); }
 }
 
-/// ML-KEM-768 key encapsulation. The functions are the deterministic
-/// `_internal` forms: the caller supplies the random seeds.
-pub struct MlKem768;
+/// The shared key length.
+pub const SHARED_KEY_LEN: usize = 32;
 
-impl MlKem768 {
-    pub const ENCAPSULATION_KEY_LEN: usize = 1184;
-    pub const DECAPSULATION_KEY_LEN: usize = 2400;
-    pub const CIPHERTEXT_LEN: usize = 1088;
-    pub const SHARED_KEY_LEN: usize = 32;
+/// An ML-KEM-768 decapsulation key (the 2400-byte encoding) in secret
+/// storage. Copies share the storage; `wipe` and `using` release clear
+/// it.
+pub struct DecapsulationKey768 {
+    dk: Secret;
+}
 
-    /// KeyGen from 32-byte seeds `d` and `z`: `(ek, dk)`.
-    pub fn keygen<D: AsBytes, Z: AsBytes>(d: D, z: Z) throws (ValueError) -> (List<u8>, Secret) {
+impl !Sync for DecapsulationKey768 {}
+
+/// An ML-KEM-768 encapsulation key, checked (FIPS 203 7.2).
+#[derive(Clone, PartialEq, Eq)]
+pub struct EncapsulationKey768 {
+    ek: List<u8>;
+}
+
+impl DecapsulationKey768 {
+    /// KeyGen from 32-byte seeds `d` and `z` (the deterministic
+    /// `_internal` form: the caller supplies the random seeds).
+    pub fn from_seed<D: AsBytes, Z: AsBytes>(d: D, z: Z) throws (ValueError) -> DecapsulationKey768 {
         let dv = d.byte_slice();
         let zv = z.byte_slice();
         try need(dv, 32, "d");
@@ -316,44 +326,22 @@ impl MlKem768 {
         for x in Sha3_256::digest(ek) { dk[at] = x; at += 1; }
         for x in zv { dk[at] = x; at += 1; }
         for w in [s, e, t] { w.wipe(); }
-        (ek, dk)
+        DecapsulationKey768 { dk }
     }
 
-    /// Encaps with the 32-byte message `m`: `(shared key, ciphertext)`.
-    /// `ek` must pass the length and modulus checks (FIPS 203 7.2).
-    pub fn encapsulate<E: AsBytes, M: AsBytes>(ek: E, m: M) throws (ValueError) -> (Secret, List<u8>) {
-        let e = ek.byte_slice();
-        let mv = m.byte_slice();
-        try need(e, 1184, "encapsulation key");
-        try need(mv, 32, "m");
-        let t = decode(e[0:384 * K], K * N, 12u32);
-        for i in 0..K * N {
-            if t[i] >= Q { throw ValueError::new("ML-KEM-768: encapsulation key coefficient out of range"); }
-        }
-        let g = Sha3_512::new();
-        g.update(mv);
-        g.update(Sha3_256::digest(e));
-        let kr = g.finish_raw();
-        let r = secret_of(kr, 32, 32);
-        let c = encrypt(e, mv, r[0:32]);
-        r.wipe();
-        (secret_of(kr, 0, 32), c)
+    pub fn encapsulation_key(self) -> EncapsulationKey768 {
+        EncapsulationKey768 { ek: self.dk[384 * K:768 * K + 32].to_list() }
     }
 
     /// Decaps: the shared key, or (implicit rejection) a key derived
     /// from `z` and `c` when `c` does not re-encrypt to itself.
-    pub fn decapsulate<D: AsBytes, C: AsBytes>(dk: D, c: C) throws (ValueError) -> Secret {
-        let d = dk.byte_slice();
+    pub fn decapsulate<C: AsBytes>(self, c: C) throws (ValueError) -> Secret {
+        let d = self.dk[0:2400];
         let cv = c.byte_slice();
-        try need(d, 2400, "decapsulation key");
         try need(cv, 1088, "ciphertext");
         let ek = d[384 * K:768 * K + 32];
         let h = d[768 * K + 32:768 * K + 64];
         let z = d[768 * K + 64:2400];
-        let hd = Sha3_256::digest(ek);
-        let bad = 0u8;
-        for i in 0..32 { bad = bad | (hd[i] ^ h[i]); }
-        if bad != 0u8 { throw ValueError::new("ML-KEM-768: decapsulation key hash mismatch"); }
         let m = decrypt(d, cv);
         let g = Sha3_512::new();
         g.update(m);
@@ -374,5 +362,53 @@ impl MlKem768 {
         let out = Secret::zeroed(32);
         for i in 0..32 { out[i] = kr[i] ^ (mask & (kr[i] ^ kbar[i])); }
         out
+    }
+
+    /// Overwrite the key with zeros now (every copy shares it).
+    pub fn wipe(self) { self.dk.wipe(); }
+}
+
+/// `using` release wipes.
+impl Drop for DecapsulationKey768 {
+    fn drop(ref self) { self.wipe(); }
+}
+
+/// Nothing of the key.
+impl Debug for DecapsulationKey768 {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("DecapsulationKey768(..)") }
+}
+
+impl EncapsulationKey768 {
+    pub const LEN: usize = 1184;
+    pub const CIPHERTEXT_LEN: usize = 1088;
+
+    /// From the 1184-byte encoding: every coefficient below q (the
+    /// modulus check of FIPS 203 7.2).
+    pub fn from_bytes<B: AsBytes>(bytes: B) throws (ValueError) -> EncapsulationKey768 {
+        let e = bytes.byte_slice();
+        try need(e, 1184, "encapsulation key");
+        let t = decode(e[0:384 * K], K * N, 12u32);
+        for i in 0..K * N {
+            if t[i] >= Q { throw ValueError::new("ML-KEM-768: encapsulation key coefficient out of range"); }
+        }
+        EncapsulationKey768 { ek: e.to_list() }
+    }
+
+    pub const fn to_bytes(self) -> List<u8> { self.ek.clone() }
+
+    /// Encaps with the 32-byte message `m` (the deterministic
+    /// `_internal` form): `(shared key, ciphertext)`.
+    pub fn encapsulate<M: AsBytes>(self, m: M) throws (ValueError) -> (Secret, List<u8>) {
+        let e = self.ek[0:1184];
+        let mv = m.byte_slice();
+        try need(mv, 32, "m");
+        let g = Sha3_512::new();
+        g.update(mv);
+        g.update(Sha3_256::digest(e));
+        let kr = g.finish_raw();
+        let r = secret_of(kr, 32, 32);
+        let c = encrypt(e, mv, r[0:32]);
+        r.wipe();
+        (secret_of(kr, 0, 32), c)
     }
 }

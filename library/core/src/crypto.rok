@@ -5,6 +5,7 @@
 pub mod secret;
 pub mod sha2;
 pub mod hmac;
+pub mod hkdf;
 pub mod sha3;
 pub(pkg) mod aes;
 pub(pkg) mod chacha;
@@ -20,14 +21,10 @@ pub mod mlkem;
 
 pub use secret::Secret;
 pub use sha2::{HashAlgorithm, Digest};
-pub use sha3::{Sha3Algorithm, Sha3_256, Sha3_512, Shake128, Shake256};
-pub use hmac::{Hmac, Hkdf};
+pub use sha3::{Sha3_256, Sha3_512, Shake128, Shake256};
+pub use hmac::Hmac;
 pub use aead::{AeadAlgorithm, Aead};
-pub use x25519::X25519;
-pub use mlkem::MlKem768;
-pub use ed25519::Ed25519;
-pub use ecdsa::{EcCurve, Ecdsa};
-pub use rsa::{RsaPublicKey, RsaPrivateKey};
+pub use ecdsa::EcCurve;
 
 use rok::core::sync::{Atomic, LoadOrdering};
 

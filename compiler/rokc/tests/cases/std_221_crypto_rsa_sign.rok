@@ -9,7 +9,7 @@
 // RSA PSS signing against a reference; the 2049-bit key's leading zero byte.
 
 use rok::core::crypto::sha2::HashAlgorithm;
-use rok::core::crypto::rsa::RsaPrivateKey;
+use rok::core::crypto::rsa::PrivateKey;
 
 fn nib(c: u8) -> u8 {
     if c >= 0x30u8 && c <= 0x39u8 { return c - 0x30u8; }
@@ -51,24 +51,24 @@ fn main() {
         let h = hash(f[1]);
         let der = unhex(f[2]);
         if first.len() == 0 { first = der; }
-        let key = try! RsaPrivateKey::from_pkcs1_der(der);
+        let key = try! PrivateKey::from_pkcs1_der(der);
         let msg = f"rok pss {f[0]}";
         let sig = try key.sign_pss(h, msg, unhex(f[3])) catch e { println(f"FAIL {f[0]}: {e.message()}"); [] };
         let pk = key.public_key();
         println(f"ok {f[0]} {f[1]}: bits {key.bits()}, signature {if sig == unhex(f[4]) { "matches" } else { "differs" }}, verifies {pk.verify_pss(h, msg, sig)}, other message {pk.verify_pss(h, "other", sig)}");
     }
 
-    let key = try! RsaPrivateKey::from_pkcs1_der(first);
+    let key = try! PrivateKey::from_pkcs1_der(first);
     let short = (try key.sign_pss(HashAlgorithm::Sha256, "m", unhex("00")) catch _ { [] }).len() == 0;
     // Flip a bit of q^-1 mod p (the last field): the fault check fails.
     let damaged = first.clone();
     damaged[damaged.len() - 1] = damaged[damaged.len() - 1] ^ 1u8;
-    let dk = try! RsaPrivateKey::from_pkcs1_der(damaged);
+    let dk = try! PrivateKey::from_pkcs1_der(damaged);
     let salt: List<u8> = [];
     for _ in 0..32 { salt.push(7u8); }
     let fault = (try dk.sign_pss(HashAlgorithm::Sha256, "m", salt) catch _ { [] }).len() == 0;
     let cut = first[0:first.len() - 1].to_list();
-    let malformed = try RsaPrivateKey::from_pkcs1_der(cut).bits() == 0 catch _ { true };
+    let malformed = try PrivateKey::from_pkcs1_der(cut).bits() == 0 catch _ { true };
     println(f"rejected: short salt {short}, damaged key {fault}, malformed {malformed}");
 }
 

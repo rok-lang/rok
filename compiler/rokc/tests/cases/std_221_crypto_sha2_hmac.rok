@@ -26,7 +26,8 @@
 // rok::core::crypto: SHA-2 (FIPS 180-4 examples), HMAC (RFC 4231
 // cases 1, 2, 6), HKDF (RFC 5869 cases 1, 3), constant-time compare.
 use rok::core::crypto::sha2::{HashAlgorithm, Digest};
-use rok::core::crypto::hmac::{Hmac, Hkdf};
+use rok::core::crypto::hmac::Hmac;
+use rok::core::crypto::hkdf;
 use rok::core::crypto::{constant_time_eq, Secret};
 
 fn hex(b: List<u8>) -> str {
@@ -94,14 +95,14 @@ fn main() {
     println(f"hmac verify {Hmac::verify(HashAlgorithm::Sha256, k1, "Hi There", tag)} {Hmac::verify(HashAlgorithm::Sha256, k1, "Hi There", bad)}");
 
     let ikm = unhex("0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b");
-    let prk = Hkdf::extract(HashAlgorithm::Sha256, unhex("000102030405060708090a0b0c"), ikm);
+    let prk = hkdf::extract(HashAlgorithm::Sha256, unhex("000102030405060708090a0b0c"), ikm);
     println(f"hkdf prk {hex(prk.as_bytes().to_list())}");
-    let okm = try Hkdf::expand(HashAlgorithm::Sha256, prk, unhex("f0f1f2f3f4f5f6f7f8f9"), 42) catch _ { Secret::zeroed(0) };
+    let okm = try hkdf::expand(HashAlgorithm::Sha256, prk, unhex("f0f1f2f3f4f5f6f7f8f9"), 42) catch _ { Secret::zeroed(0) };
     println(f"hkdf okm {hex(okm.as_bytes().to_list())}");
-    let prk3 = Hkdf::extract(HashAlgorithm::Sha256, "", ikm);
-    let okm3 = try Hkdf::expand(HashAlgorithm::Sha256, prk3, "", 42) catch _ { Secret::zeroed(0) };
+    let prk3 = hkdf::extract(HashAlgorithm::Sha256, "", ikm);
+    let okm3 = try hkdf::expand(HashAlgorithm::Sha256, prk3, "", 42) catch _ { Secret::zeroed(0) };
     println(f"hkdf okm nosalt {hex(okm3.as_bytes().to_list())}");
-    try Hkdf::expand(HashAlgorithm::Sha256, prk3, "", 255 * 32 + 1) catch e { println(f"hkdf too long: {e}"); };
+    try hkdf::expand(HashAlgorithm::Sha256, prk3, "", 255 * 32 + 1) catch e { println(f"hkdf too long: {e}"); };
     println(f"ct_eq {constant_time_eq("ab", "ab")} {constant_time_eq("ab", "ac")} {constant_time_eq("ab", "a")}");
 }
 

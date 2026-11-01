@@ -3,8 +3,20 @@
 use sup::Secret;
 use sup::curve25519::{Fe25519, f25519_zero, f25519_one, f25519_small, f25519_add, f25519_sub, f25519_mul, f25519_sq, f25519_invert, f25519_cswap, f25519_to_bytes, f25519_from_bytes};
 
-/// X25519 key agreement. Keys are 32 bytes.
-pub struct X25519;
+/// A private key: 32 bytes in secret storage (clamped when used, as
+/// RFC 7748 says). Copies share the storage; `wipe` and `using`
+/// release clear it.
+pub struct PrivateKey {
+    k: Secret;
+}
+
+impl !Sync for PrivateKey {}
+
+/// A public key: a 32-byte u coordinate.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct PublicKey {
+    b: [u8; 32];
+}
 
 /// `[k]u` with the clamped scalar `k`: a Montgomery ladder, swapping
 /// by mask (RFC 7748 5).
@@ -53,21 +65,24 @@ fn key32<B: AsBytes>(b: B, what: str) throws (ValueError) -> Slice<u8> {
     s
 }
 
-impl X25519 {
-    /// The public key of a 32-byte secret (clamped as RFC 7748 says).
-    pub fn public_key<B: AsBytes>(secret: B) throws (ValueError) -> List<u8> {
-        let base: [u8; 32] = [0u8; 32];
-        base[0] = 9u8;
-        let p = ladder(try key32(secret, "secret"), base[0:32]);
-        let out: List<u8> = List::with_capacity(32);
-        for i in 0usize..32 { out.push(p[i]); }
-        out
+impl PrivateKey {
+    pub fn from_bytes<B: AsBytes>(bytes: B) throws (ValueError) -> PrivateKey {
+        PrivateKey { k: Secret::new(try key32(bytes, "private key")) }
     }
 
-    /// The shared secret with `peer_public`; `none` when it is all
-    /// zero (a small-order peer key, RFC 7748 6.1).
-    pub fn shared_secret<S: AsBytes, P: AsBytes>(secret: S, peer_public: P) throws (ValueError) -> Secret | none {
-        let k = ladder(try key32(secret, "secret"), try key32(peer_public, "public key"));
+    /// A copy of the 32 bytes.
+    pub fn to_secret(self) -> Secret { Secret::new(self.k) }
+
+    pub fn public_key(self) -> PublicKey {
+        let base: [u8; 32] = [0u8; 32];
+        base[0] = 9u8;
+        PublicKey { b: ladder(self.k[0:32], base[0:32]) }
+    }
+
+    /// The shared secret with `peer`; `none` when it is all zero (a
+    /// small-order peer key, RFC 7748 6.1).
+    pub fn diffie_hellman(self, peer: PublicKey) -> Secret | none {
+        let k = ladder(self.k[0:32], peer.b[0:32]);
         let out = Secret::zeroed(32);
         let d = 0u8;
         for i in 0usize..32 {
@@ -77,4 +92,29 @@ impl X25519 {
         if d == 0u8 { return none; }
         out
     }
+
+    /// Overwrite the key with zeros now (every copy shares it).
+    pub fn wipe(self) { self.k.wipe(); }
+}
+
+/// `using` release wipes.
+impl Drop for PrivateKey {
+    fn drop(ref self) { self.wipe(); }
+}
+
+/// Nothing of the key.
+impl Debug for PrivateKey {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("PrivateKey(..)") }
+}
+
+impl PublicKey {
+    /// Any 32 bytes (RFC 7748 5: every u coordinate is accepted).
+    pub fn from_bytes<B: AsBytes>(bytes: B) throws (ValueError) -> PublicKey {
+        let s = try key32(bytes, "public key");
+        let b: [u8; 32] = [0u8; 32];
+        for i in 0usize..32 { b[i] = s[i]; }
+        PublicKey { b }
+    }
+
+    pub const fn to_bytes(self) -> [u8; 32] { self.b }
 }

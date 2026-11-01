@@ -2849,7 +2849,7 @@ fn explicit_enum(ctx: &LowerCtx<'_>, p: &AstPath) -> Option<HirTy> {
 /// beats a same-named core variant from the library's `rok::core::**`
 /// (`struct Sha256` vs `HashAlgorithm::Sha256`), and any struct beats a
 /// variant without named fields (`struct Sha3_256` vs
-/// `Sha3Algorithm::Sha3_256`): that literal could never build it.
+/// `HashAlgorithm::Sha3_256`): that literal could never build it.
 fn init_variant(ctx: &LowerCtx<'_>, segs: &[&str], hint: Option<&HirTy>) -> EnumRes {
     let unnamed = |e: &str, v: &str| {
         ctx.lookup_enum(e).is_some_and(|id| {

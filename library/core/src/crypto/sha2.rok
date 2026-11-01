@@ -1,5 +1,8 @@
-// SHA-2 (FIPS 180-4): SHA-256, SHA-384 and SHA-512, chosen by
-// `HashAlgorithm`; `Digest` is a running hash.
+// SHA-2 (FIPS 180-4): SHA-256, SHA-384 and SHA-512. `HashAlgorithm`
+// chooses a SHA-2 or a SHA-3 function (`sha3`); `Digest` is a running
+// hash of either.
+
+use sup::sha3::Keccak;
 
 const K256: [u32; 64] = [
     0x428a2f98u32, 0x71374491u32, 0xb5c0fbcfu32, 0xe9b5dba5u32, 0x3956c25bu32, 0x59f111f1u32, 0x923f82a4u32, 0xab1c5ed5u32,
@@ -184,7 +187,7 @@ impl Sha256State {
     }
 
     /// `update` with `b[0:len]`.
-    const fn update_raw(ref self, b: [u8; 128], len: usize) {
+    const fn update_raw(ref self, b: [u8; 168], len: usize) {
         let h = self.h;
         let buf = self.buf;
         let n = self.n;
@@ -260,7 +263,7 @@ impl Sha512State {
         self.total = self.total.wrapping_add(s.len() as u64);
     }
 
-    const fn update_raw(ref self, b: [u8; 128], len: usize) {
+    const fn update_raw(ref self, b: [u8; 168], len: usize) {
         let h = self.h;
         let buf = self.buf;
         let n = self.n;
@@ -301,12 +304,15 @@ impl Sha512State {
     }
 }
 
-/// A SHA-2 function chosen at run time (HMAC, HKDF, signatures, TLS).
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+/// A hash function chosen at run time (HMAC, HKDF, signatures, TLS).
+#[non_exhaustive]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum HashAlgorithm {
     Sha256,
     Sha384,
     Sha512,
+    Sha3_256,
+    Sha3_512,
 }
 
 impl HashAlgorithm {
@@ -315,13 +321,19 @@ impl HashAlgorithm {
             HashAlgorithm::Sha256 => 32,
             HashAlgorithm::Sha384 => 48,
             HashAlgorithm::Sha512 => 64,
+            HashAlgorithm::Sha3_256 => 32,
+            HashAlgorithm::Sha3_512 => 64,
         }
     }
 
+    /// The block length; for SHA-3 the sponge rate (HMAC's block).
     pub const fn block_len(self) -> usize {
         match self {
             HashAlgorithm::Sha256 => 64,
-            _ => 128,
+            HashAlgorithm::Sha384 => 128,
+            HashAlgorithm::Sha512 => 128,
+            HashAlgorithm::Sha3_256 => 136,
+            HashAlgorithm::Sha3_512 => 72,
         }
     }
 
@@ -329,6 +341,10 @@ impl HashAlgorithm {
         let d = Digest::new(self);
         d.update(data);
         d.finish()
+    }
+
+    const fn is_sha3(self) -> bool {
+        self == HashAlgorithm::Sha3_256 || self == HashAlgorithm::Sha3_512
     }
 }
 
@@ -338,6 +354,7 @@ pub struct Digest {
     alg: HashAlgorithm;
     s256: Sha256State;
     s512: Sha512State;
+    k: Keccak;
 }
 
 impl Digest {
@@ -346,7 +363,8 @@ impl Digest {
             HashAlgorithm::Sha384 => Sha512State::new(IV384, 48),
             _ => Sha512State::new(IV512, 64),
         };
-        Digest { alg, s256: Sha256State::new(), s512 }
+        let rate = if alg.is_sha3() { alg.block_len() } else { 136 };
+        Digest { alg, s256: Sha256State::new(), s512, k: Keccak::new(rate, 0x06u8) }
     }
 
     pub const fn algorithm(self) -> HashAlgorithm { self.alg }
@@ -354,7 +372,10 @@ impl Digest {
     pub fn update<B: AsBytes>(ref self, data: B) {
         match self.alg {
             HashAlgorithm::Sha256 => self.s256.update(data),
-            _ => self.s512.update(data),
+            HashAlgorithm::Sha384 => self.s512.update(data),
+            HashAlgorithm::Sha512 => self.s512.update(data),
+            HashAlgorithm::Sha3_256 => self.k.absorb(data),
+            HashAlgorithm::Sha3_512 => self.k.absorb(data),
         }
     }
 
@@ -366,18 +387,25 @@ impl Digest {
     }
 
     /// `update` with `b[0:len]`: secret input that is in no list.
-    pub(pkg) const fn update_raw(ref self, b: [u8; 128], len: usize) {
+    pub(pkg) const fn update_raw(ref self, b: [u8; 168], len: usize) {
         match self.alg {
             HashAlgorithm::Sha256 => self.s256.update_raw(b, len),
-            _ => self.s512.update_raw(b, len),
+            HashAlgorithm::Sha384 => self.s512.update_raw(b, len),
+            HashAlgorithm::Sha512 => self.s512.update_raw(b, len),
+            HashAlgorithm::Sha3_256 => self.k.absorb_raw(b, len),
+            HashAlgorithm::Sha3_512 => self.k.absorb_raw(b, len),
         }
     }
 
     /// `finish` into the first `output_len` bytes of an array.
     pub(pkg) const fn finish_raw(self) -> [u8; 64] {
-        match self.alg {
-            HashAlgorithm::Sha256 => self.s256.finish(),
-            _ => self.s512.finish(),
+        if self.alg.is_sha3() {
+            let k = self.k;
+            let s = k.squeeze_raw(self.alg.output_len());
+            let out: [u8; 64] = [0u8; 64];
+            for i in 0..self.alg.output_len() { out[i] = s[i]; }
+            return out;
         }
+        if self.alg == HashAlgorithm::Sha256 { self.s256.finish() } else { self.s512.finish() }
     }
 }

@@ -13,8 +13,8 @@
 mod cases;
 
 use rok::core::crypto::sha2::HashAlgorithm;
-use rok::core::crypto::ecdsa::{Ecdsa, EcCurve};
-use rok::core::crypto::rsa::RsaPublicKey;
+use rok::core::crypto::ecdsa::{EcCurve, VerifyingKey};
+use rok::core::crypto::rsa::PublicKey;
 
 fn nib(c: u8) -> u8 {
     if c >= 0x30u8 && c <= 0x39u8 { return c - 0x30u8; }
@@ -40,11 +40,17 @@ fn fields(e: str) -> List<str> {
     r
 }
 
+/// False for a key that is not a curve point, as for a bad signature.
+fn ec_verify<M: AsBytes>(curve: EcCurve, hash: HashAlgorithm, pk: List<u8>, msg: M, sig: List<u8>) -> bool {
+    let k = try VerifyingKey::from_sec1(curve, pk) catch _ { return false; };
+    k.verify(hash, msg, sig)
+}
+
 fn run_ec(name: str, curve: EcCurve, hash: HashAlgorithm, xs: List<str>) {
     let bad = 0;
     for e in xs {
         let f = fields(e);
-        let got = Ecdsa::verify(curve, hash, unhex(f[0]), unhex(f[1]), unhex(f[2]));
+        let got = ec_verify(curve, hash, unhex(f[0]), unhex(f[1]), unhex(f[2]));
         if got != (f[3] == "1") {
             bad += 1;
             println(f"FAIL {name}: {e}");
@@ -56,15 +62,15 @@ fn run_ec(name: str, curve: EcCurve, hash: HashAlgorithm, xs: List<str>) {
 fn run_rsa(name: str, pss: bool, hash: HashAlgorithm, xs: List<str>) {
     let bad = 0;
     let last = "";
-    let key: RsaPublicKey | none = none;
+    let key: PublicKey | none = none;
     for e in xs {
         let f = fields(e);
         if f[0] != "=" && f[0] != last {
             last = f[0];
-            key = try RsaPublicKey::from_pkcs1_der(unhex(f[0])) catch _ { none };
+            key = try PublicKey::from_pkcs1_der(unhex(f[0])) catch _ { none };
         }
         let got = match key {
-            k: RsaPublicKey => if pss { k.verify_pss(hash, unhex(f[1]), unhex(f[2])) } else { k.verify_pkcs1v15(hash, unhex(f[1]), unhex(f[2])) },
+            k: PublicKey => if pss { k.verify_pss(hash, unhex(f[1]), unhex(f[2])) } else { k.verify_pkcs1v15(hash, unhex(f[1]), unhex(f[2])) },
             none => false,
         };
         if got != (f[3] == "1") {
@@ -79,7 +85,7 @@ fn main() {
     // RFC 6979 A.2.5: P-256, SHA-256, "sample".
     let pk = unhex("0460fed4ba255a9d31c961eb74c6356d68c049b8923b61fa6ce669622e60f29fb67903fe1008b8bc99a41ae9e95628bc64f2f1b20c2d7e9f5177a3c294d4462299");
     let sig = unhex("3046022100efd48b2aacb6a8fd1140dd9cd45e81d69d2c877b56aaf991c34d0ea84eaf3716022100f7cb1c942d657c41d436c7a1b6e29f65f3e900dbb9aff4064dc4ab2f843acda8");
-    println(f"rfc6979 p256 {Ecdsa::verify(EcCurve::P256, HashAlgorithm::Sha256, pk, "sample", sig)} {Ecdsa::verify(EcCurve::P256, HashAlgorithm::Sha256, pk, "samplf", sig)}");
+    println(f"rfc6979 p256 {ec_verify(EcCurve::P256, HashAlgorithm::Sha256, pk, "sample", sig)} {ec_verify(EcCurve::P256, HashAlgorithm::Sha256, pk, "samplf", sig)}");
 
     run_ec("p256", EcCurve::P256, HashAlgorithm::Sha256, cases::p256());
     run_ec("p384", EcCurve::P384, HashAlgorithm::Sha384, cases::p384());
