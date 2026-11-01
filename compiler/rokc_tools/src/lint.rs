@@ -301,7 +301,7 @@ impl From<Vec<(Level, String)>> for Levels {
 }
 
 /// The library's lint levels: its manifest, were it a package.
-const LIBRARY_LEVELS: &[(Level, &str)] = &[(Level::Warn, "missing_docs")];
+const LIBRARY_LEVELS: &[(Level, &str)] = &[(Level::Deny, "missing_docs")];
 
 /// `rokc lint --list` text.
 #[must_use]
