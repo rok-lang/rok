@@ -29,7 +29,7 @@ pub use ed25519::Ed25519;
 pub use ecdsa::{EcCurve, Ecdsa};
 pub use rsa::{RsaPublicKey, RsaPrivateKey};
 
-use rok::core::sync::{Atomic, AtomicOrdering};
+use rok::core::sync::{Atomic, LoadOrdering};
 
 /// Always 0, but loaded at run time: a mask built through `ct_mask*`
 /// is a value the optimizer cannot prove is 0 or all ones, so the
@@ -39,15 +39,15 @@ static CT_ZERO: Atomic<u32> = Atomic::new(0u32);
 
 /// All ones when `bit` is 1, zero when it is 0.
 pub(pkg) fn ct_mask(bit: u32) -> u32 {
-    0u32.wrapping_sub(bit) ^ CT_ZERO.load(AtomicOrdering::Relaxed)
+    0u32.wrapping_sub(bit) ^ CT_ZERO.load(LoadOrdering::Relaxed)
 }
 
 pub(pkg) fn ct_mask64(bit: u64) -> u64 {
-    0u64.wrapping_sub(bit) ^ (CT_ZERO.load(AtomicOrdering::Relaxed) as u64)
+    0u64.wrapping_sub(bit) ^ (CT_ZERO.load(LoadOrdering::Relaxed) as u64)
 }
 
 pub(pkg) fn ct_mask_i64(bit: i64) -> i64 {
-    -bit ^ (CT_ZERO.load(AtomicOrdering::Relaxed) as i64)
+    -bit ^ (CT_ZERO.load(LoadOrdering::Relaxed) as i64)
 }
 
 /// Whether `a` and `b` are equal, in time that depends only on their

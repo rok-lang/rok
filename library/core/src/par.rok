@@ -4,12 +4,13 @@
 // Chunks are claimed from a shared counter by one job per worker.
 
 use rok::core::marker::{distinct, hand_over};
+use rok::core::sync::{LoadOrdering, UpdateOrdering};
 
 /// Run `job(c)` for every `c` in `0..chunks` across the workers (this
 /// thread included); returns once all have finished.
 fn run_chunks(chunks: usize, job: fn(usize) + Send) {
     _ = task::in_pool(|| {
-        let workers = task::workers();
+        let workers = task::worker_count();
         if workers > chunks {
             workers = chunks;
         }
@@ -115,10 +116,51 @@ pub fn map<I: IntoIterator<Item = T>, T: Send, U: Send>(iter: I, f: fn(T) -> U +
 
 /// Fold with an associative `f` (2.19.4): chunks fold in parallel, then
 /// `init` and the chunk results fold in order.
-pub fn fold<T: Send + Sync, I: IntoIterator<Item = T>>(iter: I, init: T, f: fn(T, T) -> T + Send + Sync) -> T {
+#[track_caller]
+pub fn fold<I: IntoIterator<Item = T>, T: Send>(iter: I, init: T, f: fn(T, T) -> T + Send + Sync) -> T {
+    let acc = init;
+    for x in chunk_folds(iter, f, "par::fold") {
+        acc = f(acc, x);
+    }
+    acc
+}
+
+/// Combine the items with an associative `f` (2.19.4), as
+/// `Iterator::reduce`: chunks reduce in parallel, then the chunk
+/// results in order; `none` for no items.
+#[track_caller]
+pub fn reduce<I: IntoIterator<Item = T>, T: Send>(iter: I, f: fn(T, T) -> T + Send + Sync) -> T | none {
+    let parts = chunk_folds(iter, f, "par::reduce");
+    if parts.len() == 0 {
+        return none;
+    }
+    let acc = parts[0];
+    for i in 1..parts.len() {
+        acc = f(acc, parts[i]);
+    }
+    acc
+}
+
+/// Each chunk's items combined with `f`, in chunk order.
+#[track_caller]
+fn chunk_folds<I: IntoIterator<Item = T>, T: Send>(iter: I, f: fn(T, T) -> T + Send + Sync, what: str) -> List<T> {
     unsafe {
         let items: List<T> = collect_items(iter);
         let n = items.len();
+        // Two items reaching one collection would race in two workers:
+        // one chunk, folded here.
+        if !distinct(items) {
+            rok_par_sequential(what);
+            let one: List<T> = [];
+            if n > 0 {
+                let acc = items[0];
+                for i in 1..n {
+                    acc = f(acc, items[i]);
+                }
+                one.push(acc);
+            }
+            return one;
+        }
         let (chunks, size) = chunking(n);
         let partial: GcBuf<T> = buf_new(chunks);
         let shared = Handoff::new((items, partial));
@@ -131,23 +173,17 @@ pub fn fold<T: Send + Sync, I: IntoIterator<Item = T>>(iter: I, init: T, f: fn(T
             }
             partial[c] = acc;
         });
-        let acc = init;
+        let out: List<T> = List::with_capacity(chunks);
         for c in 0..chunks {
-            acc = f(acc, partial[c]);
+            out.push(partial[c]);
         }
-        acc
+        out
     }
-}
-
-/// `fold`.
-#[deprecated(since = "0.1.6", note = "use `par::fold`, which is the same; `par::reduce` takes no `init` in 0.2.0, as `Iterator::reduce`")]
-pub fn reduce<T: Send + Sync, I: IntoIterator<Item = T>>(iter: I, init: T, f: fn(T, T) -> T + Send + Sync) -> T {
-    fold(iter, init, f)
 }
 
 /// The items `pred` accepts, in order.
 #[track_caller]
-pub fn filter<T: Send, I: IntoIterator<Item = T>>(iter: I, pred: fn(T) -> bool + Send + Sync) -> List<T> {
+pub fn filter<I: IntoIterator<Item = T>, T: Send>(iter: I, pred: fn(T) -> bool + Send + Sync) -> List<T> {
     unsafe {
         let items: List<T> = collect_items(iter);
         let n = items.len();
@@ -343,7 +379,7 @@ impl<E: Send> TryScope<E> {
         unsafe {
             // Only the first: a skipped task's `join` reads `err` once it sees
             // the scope cancelled.
-            if self.failed.compare_exchange(false, true, SeqCst, SeqCst).is_ok() {
+            if self.failed.compare_exchange(false, true, UpdateOrdering::SeqCst, LoadOrdering::SeqCst).is_ok() {
                 let err = self.err.get();
                 err[0] = e;
                 self.scope.cancelled.store(true);

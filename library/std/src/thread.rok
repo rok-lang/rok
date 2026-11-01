@@ -14,7 +14,7 @@ use rok::std::io::{IoError, IoErrorKind};
 use rok::std::time::Duration;
 use rok::core::future::IntoFuture;
 use rok::core::marker::hand_over;
-use rok::core::task::Blocking;
+use rok::core::task::Task;
 use rok::bare::mem::{GcBuf, buf_new, buf_same, size_of, transmute_unchecked};
 use rok::bare::ptr::Ptr;
 
@@ -196,8 +196,8 @@ impl<T> JoinHandle<T> {
 /// lane, so only the task waits; a failed OS join panics.
 impl<T: Send> IntoFuture for JoinHandle<T> {
     type Output = T;
-    type IntoFuture = Blocking<T>;
-    fn into_future(self) -> Blocking<T> {
+    type IntoFuture = Task<T>;
+    fn into_future(self) -> Task<T> {
         // Handed to the lane, not shared: only `T: Send` is needed.
         let h = unsafe { rok::core::marker::Handoff::new(self) };
         rok::core::task::spawn_blocking(|| try! h.get().join())
@@ -286,20 +286,21 @@ pub const fn panicking() -> bool { unsafe { rok_thread_panicking() } != 0 }
 /// Block until this thread is `unpark`ed (an earlier `unpark` makes it
 /// return at once). May also return spuriously: re-check the condition.
 pub fn park() {
-    park_ns(-1);
-}
-
-/// `park`, for at most `dur`.
-pub fn park_timeout(dur: Duration) {
-    park_ns(dur.as_ns());
-}
-
-fn park_ns(timeout_ns: i64) {
     let token = this_rec().park;
     if token.swap(0) == 1 {
         return;
     }
-    token.wait(0, timeout_ns);
+    token.wait(0);
+    token.store(0);
+}
+
+/// `park`, for at most `dur`.
+pub fn park_timeout(dur: Duration) {
+    let token = this_rec().park;
+    if token.swap(0) == 1 {
+        return;
+    }
+    token.wait_timeout(0, dur);
     token.store(0);
 }
 

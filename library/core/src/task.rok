@@ -34,7 +34,8 @@
 //
 // Cancellation (2.18.4, 707 §7.7.10): `Task::cancel` sets a flag and
 // wakes the task; each `await` checks it on entry and after each resume
-// and leaves the body like a `return`, running `finally` / `using`.
+// and leaves the body like a `return`, running `finally` / `using`. A
+// task cancelled before its first poll is never polled.
 //
 // Timers: one binary heap behind a `Mutex` (707 §7.7.5).
 //
@@ -68,17 +69,23 @@ const RUNNING: i32 = 2;
 const NOTIFIED: i32 = 3;
 const DONE: i32 = 4;
 
+// `TaskRef::state[8]`: who cancelled the task.
+const BY_CANCEL: i32 = 0;
+const BY_RACE: i32 = 1;
+const BY_TIMEOUT: i32 = 2;
+
 /// A task as the executor sees it (what a `Waker` holds).
 #[deprecated(since = "0.1.6", note = "internal to the executor, not public in 0.2.0: use the task's `Waker` (`ctx.waker`) and `task::id()`")]
 pub struct TaskRef {
     /// `[state, cancelled, timed, proxy, unwinding, local, handed,
-    /// cleaning]` (`timed`: it has added a timer; `proxy`: a `select`
-    /// stand-in, see `up`; `unwinding`: a cancellation point saw the
-    /// cancel; `local`: a `spawn_local` task, counted in its home's
-    /// `locals`; `handed`: its `Task` went through a hand-off or a `par`
-    /// item, so it may have joiners on other threads; `cleaning`: in this
-    /// poll a frame left by the cancel runs its cleanups, which no
-    /// cancellation point cuts short).
+    /// cleaning, cause, started]` (`timed`: it has added a timer; `proxy`:
+    /// a `select` stand-in, see `up`; `unwinding`: a cancellation point
+    /// saw the cancel; `local`: a `spawn_local` task, counted in its
+    /// home's `locals`; `handed`: its `Task` went through a hand-off or a
+    /// `par` item, so it may have joiners on other threads; `cleaning`: in
+    /// this poll a frame left by the cancel runs its cleanups, which no
+    /// cancellation point cuts short; `cause`: who cancelled it, for the
+    /// panic of an `await` on it (`BY_*`); `started`: it was polled).
     state: GcBuf<i32>;
     /// One poll of the task's future; `true` once it is done.
     poll: GcBuf<fn(Context) -> bool>;
@@ -247,7 +254,7 @@ const ASLEEP: i32 = 1;
 const WOKEN: i32 = 2;
 
 /// The process's work-stealing executor.
-#[deprecated(since = "0.1.6", note = "internal to the executor, not public in 0.2.0: use `task::workers()` and `task::cpu_count()`")]
+#[deprecated(since = "0.1.6", note = "internal to the executor, not public in 0.2.0: use `task::worker_count()` and `task::cpu_count()`")]
 pub struct Pool {
     workers: List<Worker>;
     injector: Queue;
@@ -280,7 +287,7 @@ unsafe impl Send for Pool {}
 unsafe impl Sync for Pool {}
 
 /// A thread running tasks: a pool thread, or a guest (`block_on`).
-#[deprecated(since = "0.1.6", note = "internal to the executor, not public in 0.2.0: use `task::workers()` and `task::cpu_count()`")]
+#[deprecated(since = "0.1.6", note = "internal to the executor, not public in 0.2.0: use `task::worker_count()` and `task::cpu_count()`")]
 pub struct Worker {
     pool: Pool;
     /// Its position in `pool.workers`; 0 for a guest.
@@ -806,6 +813,13 @@ fn run(t: TaskRef) {
         // finish without running its `finally` / `using` cleanups. A cleanup
         // that awaits keeps it polled until the cleanup ends.
         let cancelled = is_cancelled(t);
+        if cancelled && t.state[9] == 0 {
+            // Cancelled before its first poll: it never runs (no result).
+            atomic_xchg(t.state, 4, 1, SeqCst);
+            finish(t);
+            return;
+        }
+        t.state[9] = 1;
         t.state[7] = 0;
         let poll = t.poll[0];
         let ctx = Context::from_waker(Waker { task: t });
@@ -1098,7 +1112,7 @@ fn make_task(poll: fn(Context) -> bool, local: Worker | none) -> TaskRef {
     unsafe {
         let pool = executor();
         let home = pool.no_home;
-        let state: GcBuf<i32> = buf_new(8);
+        let state: GcBuf<i32> = buf_new(10);
         state[0] = SCHEDULED;
         if let w: Worker = local {
             home = buf_new(1);
@@ -1290,7 +1304,7 @@ pub fn host_run(slice: fn() -> i64) -> bool {
 
 /// Workers of the executor this thread runs tasks on (1 outside one,
 /// and without threads, where the one thread runs every task).
-pub fn workers() -> usize {
+pub fn worker_count() -> usize {
     if current() is none || executor().solo {
         return 1;
     }
@@ -1377,13 +1391,12 @@ impl<T> Task<T> {
 
     /// Ask the task to stop (2.18.4): it is woken, its current `await`
     /// leaves the body (running the `finally` / `using` cleanups on the
-    /// way out) and it finishes without a result. Awaiting it then
-    /// panics; use `try await t.join()` to see `CancellationError`. A
-    /// task that reaches no cancellation point after the cancel finishes
-    /// normally, with its result.
+    /// way out) and it finishes without a result; one not yet polled
+    /// never runs. Awaiting it then panics; use `try await t.join()` to
+    /// see `CancellationError`. A task that reaches no cancellation point
+    /// after the cancel finishes normally, with its result.
     pub fn cancel(self) {
-        atomic_xchg(self.task.state, 1, 1, SeqCst);
-        wake_task(self.task);
+        cancel_by(self.task, BY_CANCEL);
     }
 
     pub fn is_cancelled(self) -> bool { is_cancelled(self.task) }
@@ -1403,11 +1416,34 @@ impl<T> Future for Task<T> {
                 return Poll::Pending;
             }
             if no_result(self.task) {
-                panic("awaited a cancelled task (use `try await t.join()`)");
+                panic(cancelled_message(self.task));
             }
             Poll::Ready(task_result(self))
         }
     }
+}
+
+/// Cancel `t`, noting who did (the first cancel's cause stands).
+fn cancel_by(t: TaskRef, cause: i32) {
+    unsafe {
+        if atomic_load(t.state, 1, SeqCst) == 0 {
+            t.state[8] = cause;
+        }
+    }
+    atomic_xchg(t.state, 1, 1, SeqCst);
+    wake_task(t);
+}
+
+/// The panic of an `await` on a task that left by its cancel.
+fn cancelled_message(t: TaskRef) -> str {
+    let cause = unsafe { t.state[8] };
+    if cause == BY_RACE {
+        return "awaited a task cancelled by `task::race`; use `try await t.join()`";
+    }
+    if cause == BY_TIMEOUT {
+        return "awaited a task cancelled by `task::timeout`; use `try await t.join()`";
+    }
+    "awaited a cancelled task (use `try await t.join()`)"
 }
 
 /// A finished task's result for one joiner: a copy of its own once the
@@ -1611,7 +1647,7 @@ pub fn spawn_local<F: Future>(fut: F) -> Task<F::Output> {
 }
 
 /// Every task's result, in order (2.18.1).
-pub async fn join<T>(tasks: List<Task<T>>) -> List<T> {
+pub async fn join<I: IntoIterator<Item = Task<T>>, T>(tasks: I) -> List<T> {
     let out: List<T> = List::new();
     for t in tasks {
         out.push(await t);
@@ -1619,27 +1655,29 @@ pub async fn join<T>(tasks: List<Task<T>>) -> List<T> {
     out
 }
 
-/// The result of whichever task finishes first (2.18.1).
-pub async fn race<T>(tasks: List<Task<T>>) -> T {
-    await Race { tasks: tasks }
-}
-
-struct Race<T> {
-    tasks: List<Task<T>>;
-}
-
-impl<T> Future for Race<T> {
-    type Output = T;
-    fn poll(ref self, ref ctx: Context) -> Poll<T> {
-        unsafe {
-            for t in self.tasks {
-                if join_later(t.task, ctx.waker) {
-                    return Poll::Ready(task_result(t));
-                }
+/// The result of whichever task finishes first (2.18.1); ties go to the
+/// earlier one. The others are cancelled (by the time `race` returns
+/// they may still run their cleanups), and so are all of them when the
+/// awaiting task is. Panics on no tasks.
+pub async fn race<I: IntoIterator<Item = Task<T>>, T>(tasks: I) -> T {
+    let list: List<Task<T>> = List::new();
+    for t in tasks {
+        list.push(t);
+    }
+    if list.len() == 0 {
+        panic("task::race of no tasks");
+    }
+    let won: usize = list.len();
+    try {
+        won = await FirstDone { tasks: list };
+    } finally {
+        for i in 0..list.len() {
+            if i != won && !is_done(list[i].task) {
+                cancel_by(list[i].task, BY_RACE);
             }
-            Poll::Pending
         }
     }
+    task_result(list[won])
 }
 
 /// The first of `futs` to complete, with its index: `let (i, v) = await
@@ -1652,10 +1690,14 @@ impl<T> Future for Race<T> {
 /// more as cancelled (its `await` leaves through `finally` / `using`, as
 /// for `Task::cancel`) and dropped; one whose cleanups await goes on as a
 /// task of its own until they end, and `select` does not wait for it.
-/// Panics on an empty list.
+/// Panics on no futures.
 #[track_caller]
-pub const fn select<F: Future>(futs: List<F>) -> SelectFuture<F> {
+pub const fn select<I: IntoIterator<Item = F>, F: Future>(iter: I) -> SelectFuture<F> {
     unsafe {
+        let futs: List<F> = List::new();
+        for f in iter {
+            futs.push(f);
+        }
         if futs.len() == 0 {
             panic("task::select of no futures");
         }
@@ -1738,6 +1780,7 @@ fn spawn_cleanup<F: Future>(fut: F) {
         let t = make_task(poll_fn(fut, slot), h);
         t.state[1] = 1;
         t.state[4] = 1;
+        t.state[9] = 1;
         if buf_same(h.locals, w.locals) {
             schedule(t);
         } else {
@@ -1750,7 +1793,7 @@ fn spawn_cleanup<F: Future>(fut: F) {
 /// go to `parent` until it is done.
 const fn proxy_task(parent: Waker) -> TaskRef {
     unsafe {
-        let state: GcBuf<i32> = buf_new(8);
+        let state: GcBuf<i32> = buf_new(10);
         state[3] = 1;
         state[5] = parent.task.state[5];
         let p: GcBuf<fn(Context) -> bool> = buf_new(1);
@@ -1845,9 +1888,17 @@ impl Future for YieldNow {
 }
 
 /// `task`'s result, or `TimeoutError` once `dur` has passed since the
-/// first poll (2.18.1): `try await task::timeout(d, t)`.
+/// first poll (2.18.1): `try await task::timeout(d, t)`. On expiry the
+/// task is cancelled (it may still run its cleanups when `timeout`
+/// throws), and so it is when the awaiting task is.
 pub async fn timeout<T>(dur: Duration, task: Task<T>) throws (TimeoutError) -> T {
-    try await Timeout { task: task, deadline: now_ns() + dur.as_ns() }
+    try {
+        try await Timeout { task: task, deadline: now_ns() + dur.as_ns() }
+    } finally {
+        if !is_done(task.task) {
+            cancel_by(task.task, BY_TIMEOUT);
+        }
+    }
 }
 
 struct Timeout<T> {
@@ -2227,37 +2278,37 @@ extern "C" fn hook_unpark(frame: GcBuf<u8>) {
 
 // the blocking lane (regular files)
 
-/// Run `f` on the executor's blocking lane; the future completes with
-/// its result (tokio's `spawn_blocking`). For syscalls with no readiness
-/// to wait on, like regular files under kqueue / epoll. `f` is queued at
-/// once; a cancelled awaiter leaves it to finish in the background and
-/// its result is dropped.
-pub fn spawn_blocking<T: Send>(f: fn() -> T + Send) -> Blocking<T> {
+/// Run `f` on the executor's blocking lane as a task (tokio's
+/// `spawn_blocking`). For syscalls with no readiness to wait on, like
+/// regular files under kqueue / epoll. `f` is queued at once. A cancel
+/// before the lane takes it means it never runs (`join` throws
+/// `CancellationError`); once it runs it finishes with its result, as it
+/// has no cancellation point.
+pub fn spawn_blocking<T: Send>(f: fn() -> T + Send) -> Task<T> {
     unsafe {
         let slot: GcBuf<T> = buf_new(1);
-        let done: GcBuf<bool> = buf_new(1);
-        let waiter: Mutex<Waker | none> = Mutex::new(none);
-        // Written once on the lane, read by the awaiter after `done`.
+        // Never scheduled: the lane runs it and finishes it.
+        let t = make_task(|ctx: Context| -> bool { true }, none);
+        t.state[0] = RUNNING;
+        // Its result comes from the lane thread: every joiner copies it.
+        t.state[6] = 1;
+        // Written once on the lane, read by joiners once it is done.
         let cell = Handoff::new(slot);
         // The job returns its completion, which the lane runs once it is
-        // idle again or holds its next job: an awaiter that sees `done`
-        // before any wake (its first poll) still finds the thread there.
+        // idle again or holds its next job: a joiner that sees it done
+        // before any wake still finds the thread there.
         let job: fn() -> (fn() + Send) + Send = || -> (fn() + Send) {
-            let slot = cell.get();
-            slot[0] = hand_over::<T>(f());
-            || {
-                let w: Waker | none = none;
-                using g = waiter.lock() {
-                    done[0] = true;
-                    w = g.get();
-                }
-                if let k: Waker = w {
-                    k.wake();
-                }
+            if is_cancelled(t) {
+                atomic_xchg(t.state, 4, 1, SeqCst);
+            } else {
+                t.state[9] = 1;
+                let slot = cell.get();
+                slot[0] = hand_over::<T>(f());
             }
+            || { finish(t); }
         };
         executor().blocking.submit(job);
-        Blocking { slot: cell.get(), done: done, waiter: waiter }
+        Task { task: t, slot: cell.get() }
     }
 }
 
@@ -2490,37 +2541,6 @@ impl BlockingPool {
                 }
                 coming = true;
             }
-        }
-    }
-}
-
-pub struct Blocking<T> {
-    slot: GcBuf<T>;
-    /// Set under `waiter`'s lock, after `slot`.
-    done: GcBuf<bool>;
-    waiter: Mutex<Waker | none>;
-}
-
-impl<T> Future for Blocking<T> {
-    type Output = T;
-    fn poll(ref self, ref ctx: Context) -> Poll<T> {
-        // A cancelled waiter discards the result even when the job just
-        // finished (2.18.4): its `await` leaves.
-        if cancel_requested(ctx) {
-            return Poll::Pending;
-        }
-        unsafe {
-            let done = false;
-            using g = self.waiter.lock() {
-                done = self.done[0];
-                if !done {
-                    g.set(ctx.waker);
-                }
-            }
-            if done {
-                return Poll::Ready(hand_over::<T>(self.slot[0]));
-            }
-            Poll::Pending
         }
     }
 }

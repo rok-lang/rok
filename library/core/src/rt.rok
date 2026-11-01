@@ -6,7 +6,7 @@
 
 use rok::bare::ptr::{ConstPtr, Ptr};
 use rok::core::collections::raw::GcBuf;
-use rok::core::sync::AtomicOrdering;
+use rok::core::sync::{LoadOrdering, StoreOrdering, UpdateOrdering};
 use rok::core::future::Waker;
 
 extern "rok" {
@@ -330,35 +330,38 @@ extern "rok" {
 }
 
 // LLVM atomics on buffer element `i` (integer or `bool` elements); each
-// returns the element's previous value. The ordering arguments must be
-// literal `AtomicOrdering` variants: they pick the instruction's
-// ordering at compile time.
+// returns the element's previous value (`store`: the value stored). The
+// ordering arguments must be literal variants: they pick the
+// instruction's ordering at compile time.
 #[intrinsic("rok.atomic.load")]
-pub(pkg) fn atomic_load<T>(buf: GcBuf<T>, i: usize, o: AtomicOrdering) -> T;
+pub(pkg) fn atomic_load<T>(buf: GcBuf<T>, i: usize, o: LoadOrdering) -> T;
+#[intrinsic("rok.atomic.store")]
+#[discardable]
+pub(pkg) fn atomic_store<T>(buf: GcBuf<T>, i: usize, v: T, o: StoreOrdering) -> T;
 #[intrinsic("rok.atomic.xchg")]
 #[discardable]
-pub(pkg) fn atomic_xchg<T>(buf: GcBuf<T>, i: usize, v: T, o: AtomicOrdering) -> T;
+pub(pkg) fn atomic_xchg<T>(buf: GcBuf<T>, i: usize, v: T, o: UpdateOrdering) -> T;
 #[intrinsic("rok.atomic.add")]
 #[discardable]
-pub(pkg) fn atomic_add<T>(buf: GcBuf<T>, i: usize, v: T, o: AtomicOrdering) -> T;
+pub(pkg) fn atomic_add<T>(buf: GcBuf<T>, i: usize, v: T, o: UpdateOrdering) -> T;
 #[intrinsic("rok.atomic.sub")]
 #[discardable]
-pub(pkg) fn atomic_sub<T>(buf: GcBuf<T>, i: usize, v: T, o: AtomicOrdering) -> T;
+pub(pkg) fn atomic_sub<T>(buf: GcBuf<T>, i: usize, v: T, o: UpdateOrdering) -> T;
 #[intrinsic("rok.atomic.and")]
 #[discardable]
-pub(pkg) fn atomic_and<T>(buf: GcBuf<T>, i: usize, v: T, o: AtomicOrdering) -> T;
+pub(pkg) fn atomic_and<T>(buf: GcBuf<T>, i: usize, v: T, o: UpdateOrdering) -> T;
 #[intrinsic("rok.atomic.or")]
 #[discardable]
-pub(pkg) fn atomic_or<T>(buf: GcBuf<T>, i: usize, v: T, o: AtomicOrdering) -> T;
+pub(pkg) fn atomic_or<T>(buf: GcBuf<T>, i: usize, v: T, o: UpdateOrdering) -> T;
 #[intrinsic("rok.atomic.xor")]
 #[discardable]
-pub(pkg) fn atomic_xor<T>(buf: GcBuf<T>, i: usize, v: T, o: AtomicOrdering) -> T;
+pub(pkg) fn atomic_xor<T>(buf: GcBuf<T>, i: usize, v: T, o: UpdateOrdering) -> T;
 /// Store `new` if the element equals `current`; the previous value
 /// either way.
 #[intrinsic("rok.atomic.cas")]
 #[discardable]
 pub(pkg) fn atomic_cas<T>(
-    buf: GcBuf<T>, i: usize, current: T, new: T, success: AtomicOrdering, failure: AtomicOrdering,
+    buf: GcBuf<T>, i: usize, current: T, new: T, success: UpdateOrdering, failure: LoadOrdering,
 ) -> T;
 
 /// `obj`'s address as a parking key; the collector never moves it from

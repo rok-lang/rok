@@ -23,7 +23,7 @@ use rok::std::env;
 use rok::std::time::SystemTime;
 use rok::core::future::{Context, Poll};
 use rok::core::stream::Stream;
-use rok::core::task::Blocking;
+use rok::core::task::Task;
 
 const O_READ: i32 = 1;
 const O_WRITE: i32 = 2;
@@ -618,7 +618,7 @@ pub struct ReadDirStream {
     lock: Mutex<i32>;
     batch: List<Result<DirEntry, IoError>>;
     pos: usize;
-    pending: Blocking<List<Result<DirEntry, IoError>>> | none;
+    pending: Task<List<Result<DirEntry, IoError>>> | none;
 }
 
 impl Stream for ReadDirStream {
@@ -631,7 +631,7 @@ impl Stream for ReadDirStream {
                     return Poll::Ready(self.batch[self.pos - 1]);
                 }
                 let job = match self.pending {
-                    b: Blocking<List<Result<DirEntry, IoError>>> => b,
+                    b: Task<List<Result<DirEntry, IoError>>> => b,
                     none => {
                         if self.rd.d[0] == 0 { return Poll::Ready(none); }
                         // Only the refill holding `lock` touches `rd`.

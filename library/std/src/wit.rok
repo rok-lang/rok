@@ -474,7 +474,7 @@ pub fn stream_out<T>(ops: StreamOps<T>, rx: Receiver<T>) -> i32 {
             while vals.len() < CHUNK as usize {
                 match rx.try_recv() {
                     v: T => vals.push(v),
-                    none => break,
+                    _ => break,
                 }
             }
             let b = Blocks::new();

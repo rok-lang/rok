@@ -4296,8 +4296,20 @@ impl<'a> FnEmit<'a> {
                 w
             })
             .collect();
-        let v = self.fresh_value();
+        // A store yields the value it stored.
+        let v = if op == "store" {
+            ops[0].clone()
+        } else {
+            self.fresh_value()
+        };
         match op {
+            "store" => {
+                let _ = writeln!(
+                    self.body,
+                    "    llvm.store {v}, {p} atomic {} {{alignment = {align} : i64}} : {at}, !llvm.ptr",
+                    order[0]
+                );
+            }
             "load" => {
                 let _ = writeln!(
                     self.body,
