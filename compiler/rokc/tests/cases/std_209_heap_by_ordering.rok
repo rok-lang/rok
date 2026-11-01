@@ -25,7 +25,7 @@ fn main() {
     try! tx.send(h);
     let got = rx.recv() ?? BinaryHeap::new();
     println(f"sent {got.pop() ?? 0} {got.len()}");
-    let it: HeapIter<i32> = b.iter();
+    let it: collections::HeapIter<i32> = b.iter();
     let xs: List<i32> = it.collect();
     xs.sort();
     println(f"{xs:?}");
