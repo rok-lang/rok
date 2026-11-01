@@ -556,7 +556,7 @@ impl TryFrom<Float> for f64 {
     type Error = OverflowError;
     const fn try_from(value: Float) throws (OverflowError) -> f64 {
         let r = value.to_f64();
-        if value.is_finite() && r.is_infinite() { throw OverflowError { op: "try_from", ty: "f64" }; }
+        if value.is_finite() && r.is_infinite() { throw OverflowError::new("try_from", "f64"); }
         r
     }
 }
