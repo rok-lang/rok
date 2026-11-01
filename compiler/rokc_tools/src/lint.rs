@@ -919,8 +919,9 @@ struct Cx<'a> {
     /// `(file, start)` of user-written casts (`x as T`; f-strings
     /// desugar to casts too).
     casts: HashSet<(u32, u32)>,
-    /// `(file, start)` of user-written `x.clone()` calls.
-    clones: HashSet<(u32, u32)>,
+    /// `(file, start, end)` of the receivers of user-written `x.clone()`
+    /// calls: a primitive's clone lowers to exactly that span.
+    clones: HashSet<(u32, u32, u32)>,
     must_use: HashMap<String, String>,
     /// `#[must_use]` structs and enums by short name: the message.
     must_use_types: HashMap<String, String>,
@@ -1368,9 +1369,13 @@ impl<'a> Cx<'a> {
                         ));
                     }
                     // A primitive's `clone` is the `rok.clone.copy` intrinsic,
-                    // lowered to its receiver, which starts with the call.
+                    // lowered to its receiver. Match the receiver's whole
+                    // span: a call on the clone (`x.clone().len()`) or an
+                    // f-string hole's temps start at the same place.
                     _ if matches!(e.ty, HirTy::Prim(_))
-                        && self.clones.contains(&key(e.span))
+                        && self
+                            .clones
+                            .contains(&(e.span.file, e.span.start, e.span.end))
                         && cloned.insert(key(e.span)) =>
                     {
                         hits.push((
@@ -1958,9 +1963,15 @@ impl AstVisitor for Cx<'_> {
                     }
                 }
             }
-            ExprKind::MethodCall { method, args, .. } => {
+            ExprKind::MethodCall {
+                receiver,
+                method,
+                args,
+                ..
+            } => {
                 if method == "clone" && args.is_empty() {
-                    self.clones.insert(key(e.span));
+                    let r = receiver.span;
+                    self.clones.insert((r.file, r.start, r.end));
                 }
                 self.file_names.insert(method.clone());
                 for a in args {

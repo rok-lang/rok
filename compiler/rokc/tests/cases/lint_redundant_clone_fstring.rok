@@ -1,0 +1,24 @@
+// expect-exit: 0
+// expect-lint: 22:13 redundant `.clone()` of a `i32`: the value is copied anyway
+// expect-lint: 23:16 redundant `.clone()` of a `i32`: the value is copied anyway
+// spec: §6.2.9
+// expect-stdout:
+// [1, 2] 2 1
+// {"a": 1} 2
+// 3 3
+
+// `redundant_clone` in f-string holes: a hole is judged like any other
+// use. Cloning a list or dict (`{v.clone():?}`), or calling a method on
+// the clone (`{v.clone().len()}`), is not a clone of a primitive, in a
+// hole as outside one; a primitive's clone in a hole still is one.
+
+fn main() {
+    let v = [1, 2];
+    let d = {"a": 1};
+    let n = 3;
+    let k = v.clone().len();
+    println(f"{v.clone():?} {v.clone().len()} {v.clone()[0]}");
+    println(f"{d.clone():?} {k}");
+    let m = n.clone();
+    println(f"{n.clone()} {m}");
+}
