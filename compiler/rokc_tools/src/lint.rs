@@ -223,7 +223,13 @@ pub const LINTS: &[Lint] = &[
 /// Names of lints that are gone (most became errors). Naming one in
 /// `#[allow/warn/deny]`, `-A/-W/-D` or `rok.rokon` `lints` is accepted
 /// and does nothing, so old level settings keep building.
-pub const REMOVED_LINTS: &[&str] = &[];
+pub const REMOVED_LINTS: &[&str] = &[
+    "keyword_idents",
+    "zero_prefixed_literal",
+    "try_coalesce_precedence",
+    "trailing_closure_operator",
+    "trailing_closure_return",
+];
 
 /// A lint added in 0.1.6.
 const fn warn_since(name: &'static str, desc: &'static str) -> Lint {

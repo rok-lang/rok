@@ -107,8 +107,8 @@ pub struct Parser<'a> {
     /// The bare `return;`s of each trailing closure, by its span start:
     /// one in a statement's trailing closure is an error.
     closure_returns: std::collections::HashMap<(u32, u32), Vec<Span>>,
-    /// Start of the expression statement being parsed: an operator may
-    /// not start the line after its trailing-closure call.
+    /// Start of the expression statement being parsed: a trailing-closure
+    /// call starting it ends it at its `}`.
     stmt_at: Option<u32>,
     /// Mount path of the package being parsed (`""`: the one being
     /// built); `pkg::name!` names its meta blocks (spec 6.8.11).
@@ -5318,10 +5318,9 @@ impl<'a> Parser<'a> {
             // `??` is a language-level desugar (spec 3.8.4), level 1,
             // right-assoc.
             if sym == "??" {
-                if COALESCE_PREC < min_bp {
+                if COALESCE_PREC < min_bp || self.closure_stmt_ends(&lhs) {
                     break;
                 }
-                self.closure_operator(&lhs, &sym);
                 self.bump();
                 let rhs = self.parse_expr_bp(COALESCE_PREC)?;
                 let span = self.to_prev(lhs.span);
@@ -5338,7 +5337,7 @@ impl<'a> Parser<'a> {
                 Assoc::Left | Assoc::None => (prec, prec + 1),
                 Assoc::Right => (prec + 1, prec),
             };
-            if left_bp < min_bp {
+            if left_bp < min_bp || self.closure_stmt_ends(&lhs) {
                 break;
             }
             // Spec 3.2.5: non-associative ops don't chain. Without this
@@ -5353,7 +5352,6 @@ impl<'a> Parser<'a> {
                     ),
                 );
             }
-            self.closure_operator(&lhs, &sym);
             self.bump();
             let rhs = self.parse_expr_bp(right_bp)?;
             let span = self.to_prev(lhs.span);
@@ -5558,31 +5556,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// `op` starting the line after the `}` of a trailing-closure call
-    /// that starts a statement (`run { .. }` then `-x;`) is an error: it
-    /// reads as a new statement but would continue the call.
-    fn closure_operator(&mut self, lhs: &Expr, op: &str) {
-        if self.stmt_at != Some(lhs.span.start) || is_block_like(lhs) || !ends_stmt(lhs) {
-            return;
-        }
-        let Some(prev) = self.prev_span() else { return };
-        let at = self.peek_span();
-        if at.line <= prev.line {
-            return;
-        }
-        self.diagnostics.push(
-            RokDiagnostic::error(
-                ErrorKind::Parse,
-                at,
-                format!("`{op}` can't start the line after a trailing-closure call"),
-            )
-            .with_file(self.file.clone())
-            .with_help(format!(
-                "write `;` after the closure's `}}` to end the call there; to keep one \
-                 expression, move `{op}` to the end of the line above"
-            ))
-            .with_fix(self.after_prev(), ";", "end the call with `;`"),
-        );
+    /// `lhs` is a trailing-closure call that starts a statement: like a
+    /// block-like statement, it ends at its `}`, so a binary operator
+    /// after it starts a new statement (`run { .. }` then `-x;`).
+    fn closure_stmt_ends(&self, lhs: &Expr) -> bool {
+        self.stmt_at == Some(lhs.span.start) && !is_block_like(lhs) && ends_stmt(lhs)
     }
 
     /// The current token as a `fixity` operator; tokens that are also

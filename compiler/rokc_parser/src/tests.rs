@@ -1399,7 +1399,7 @@ fn raw_contextual_keyword_is_a_name() {
 }
 
 #[test]
-fn try_coalesce_and_closure_operator_errors() {
+fn try_coalesce_needs_parentheses() {
     assert_eq!(
         parse_errors("fn f() { let a = try? g() ?? 1; }"),
         ["`try? g() ?? 1` needs parentheses"]
@@ -1412,22 +1412,34 @@ fn try_coalesce_and_closure_operator_errors() {
     ] {
         assert!(parse_errors(ok).is_empty(), "{ok}");
     }
-    let err = ["`-` can't start the line after a trailing-closure call"];
-    assert_eq!(
-        parse_errors("fn f() {\n    run {\n        a();\n    }\n    - x;\n}\n"),
-        err
-    );
-    assert_eq!(
-        parse_errors("fn f() {\n    xs.each |x| { a(x); }\n    * y;\n}\n"),
-        ["`*` can't start the line after a trailing-closure call"]
-    );
-    for ok in [
-        "fn f() {\n    run {\n        a();\n    };\n    - x;\n}\n",
+}
+
+#[test]
+fn statement_trailing_closure_call_ends_at_brace() {
+    // The statement count of the body: two statements, or one.
+    let stmts = |src: &str| {
+        let p = parse(src);
+        let Item::Fn(f) = &p.items[0] else { panic!() };
+        let b = f.body.as_ref().unwrap();
+        b.stmts.len() + usize::from(b.trailing.is_some())
+    };
+    for two in [
+        "fn f() {\n    run {\n        a();\n    }\n    - x;\n}\n",
+        "fn f() {\n    xs.each |x| { a(x); }\n    - y;\n}\n",
         "fn f() {\n    run { a(); } - x;\n}\n",
-        "fn f() {\n    let v = run { a(); }\n        - x;\n}\n",
+        "fn f() {\n    run { a(); };\n    - x;\n}\n",
         "fn f() {\n    if c { a(); }\n    - x;\n}\n",
     ] {
-        assert!(parse_errors(ok).is_empty(), "{ok}");
+        assert!(parse_errors(two).is_empty(), "{two}");
+        assert_eq!(stmts(two), 2, "{two}");
+    }
+    for one in [
+        "fn f() {\n    let v = run { a(); }\n        - x;\n}\n",
+        "fn f() {\n    run(a) + x;\n}\n",
+        "fn f() {\n    run { a(); }.len();\n}\n",
+    ] {
+        assert!(parse_errors(one).is_empty(), "{one}");
+        assert_eq!(stmts(one), 1, "{one}");
     }
 }
 
