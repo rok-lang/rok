@@ -1,0 +1,12 @@
+// spec: §2.6.4
+// `T | none` with `T = i32 | none` is two layers, not the flat
+// `i32 | none` (the written `none` overlaps).
+// expect-error: `let f` expects `i32 | none`, found `(i32 | none)?`
+
+fn opt<T>(x: T) -> T | none { x }
+
+fn main() {
+    let c: i32 | none = none;
+    let f: i32 | none = opt(c);
+    println(f"{f ?? 0}");
+}

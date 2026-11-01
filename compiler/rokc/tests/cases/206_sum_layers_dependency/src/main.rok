@@ -1,0 +1,57 @@
+// spec: §2.6.4 §2.6.6
+// rokc-arg: --extern ldep=tests/cases/206_sum_layers_dependency/ldep
+// expect-exit: 0
+// expect-stdout:
+// 5 none 5
+// 7 inner none outer none
+// inner in | outer out | outer none
+// 7 inner none outer none
+// inner in | outer out | outer none
+
+// Layered sums keep their tags across a package boundary, both ways.
+use ldep::{Maybe, Over};
+
+fn show(v: i32 | none) -> str {
+    match v {
+        n: i32 => f"{n}",
+        none => "none",
+    }
+}
+
+fn read(v: Maybe<i32 | none>) -> str {
+    match v {
+        inner: i32 | none => match inner {
+            n: i32 => f"{n}",
+            none => "inner none",
+        },
+        none => "outer none",
+    }
+}
+
+fn read_over(v: Over<i32 | str>) -> str {
+    match v {
+        inner: i32 | str => match inner {
+            n: i32 => f"inner {n}",
+            s: str => f"inner {s}",
+        },
+        s: str => f"outer {s}",
+        none => "outer none",
+    }
+}
+
+fn main() {
+    let c: i32 | none = none;
+    let here: i32 | none = ldep::tu(c, 5, false);
+    println(f"{show(ldep::mixed(false))} {show(ldep::mixed(true))} {show(here)}");
+    println(f"{read(ldep::nested(0))} {read(ldep::nested(1))} {read(ldep::nested(2))}");
+    println(f"{read_over(ldep::over(0))} | {read_over(ldep::over(1))} | {read_over(ldep::over(2))}");
+    let seven: i32 | none = 7;
+    let a: Maybe<i32 | none> = ldep::opt(seven, true);
+    let b: Maybe<i32 | none> = ldep::opt(c, true);
+    let s: i32 | str = "in";
+    let o1: Over<i32 | str> = s;
+    let o2: Over<i32 | str> = "out";
+    let o3: Over<i32 | str> = none;
+    println(f"{ldep::read(a)} {ldep::read(b)} {ldep::read(ldep::opt(c, false))}");
+    println(f"{ldep::read_over(o1)} | {ldep::read_over(o2)} | {ldep::read_over(o3)}");
+}

@@ -53,6 +53,36 @@ fn sums_are_sets_with_none_last() {
 }
 
 #[test]
+fn generic_terms_layer_against_written_terms_only() {
+    let inner = HirTy::sum([I32, HirTy::None]);
+    // `T | none`, `T = i32 | none`: the written `none` overlaps.
+    assert_eq!(
+        HirTy::layered(vec![HirTy::None], vec![inner.clone()]),
+        HirTy::Sum(vec![inner.clone(), HirTy::None])
+    );
+    // `T | U`, `T = i32 | none`, `U = i32` or `U = none`: no written
+    // term, so nothing nests.
+    assert_eq!(HirTy::layered(vec![], vec![inner.clone(), I32]), inner);
+    assert_eq!(
+        HirTy::layered(vec![], vec![inner.clone(), HirTy::None]),
+        inner
+    );
+    // `T | str | none`, `T = i32 | str`: `str` overlaps.
+    let is = HirTy::sum([I32, STR]);
+    assert_eq!(
+        HirTy::layered(vec![STR, HirTy::None], vec![is.clone()]),
+        HirTy::Sum(vec![STR, is, HirTy::None])
+    );
+    // `T | U | none`, `T = i32 | none`, `U = i32`: only `T` overlaps a
+    // written term. The result is canonical.
+    let tun = HirTy::layered(vec![HirTy::None], vec![inner.clone(), I32]);
+    assert_eq!(tun, HirTy::Sum(vec![I32, inner, HirTy::None]));
+    let mut again = tun.clone();
+    again.canonicalize();
+    assert_eq!(again, tun);
+}
+
+#[test]
 fn written_types_lower_by_spelling() {
     // Spec 2.6.4: a written sum spreads its written members.
     assert_eq!(

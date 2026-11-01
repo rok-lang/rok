@@ -2117,9 +2117,12 @@ fn coerce(
     let value = adapt_fn_value(ctx, slot, value);
     let value = box_into_any(ctx, slot, value);
     let value = drop_fn_bounds(slot, value);
-    // Spec 2.6.4: a sum flows into any sum holding all its members.
+    // Spec 2.6.4: a sum flows into any sum holding all its members; one
+    // that is a layer of the slot goes into that layer.
     let value = match (&value.ty, slot) {
-        (HirTy::Sum(vs), HirTy::Sum(ws)) if vs != ws && vs.iter().all(|v| ws.contains(v)) => {
+        (HirTy::Sum(vs), HirTy::Sum(ws))
+            if vs != ws && !ws.contains(&value.ty) && vs.iter().all(|v| ws.contains(v)) =>
+        {
             resum(ctx, value, slot)
         }
         // Into a nested optional's inner sum (spec 2.6.4): a sub-sum of

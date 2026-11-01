@@ -951,26 +951,36 @@ impl HirTy {
     /// Spec 2.6.4: a sum is a set. Nested sums flatten, duplicates drop and
     /// members take one canonical order, so `A | B` and `B | A` are one
     /// `HirTy`; a single member is that type. Build every `HirTy::Sum` here
-    /// (or `canonicalize` after editing members).
+    /// or with `layered` (or `canonicalize` after editing members).
     ///
-    /// A member sum that overlaps the outer members stays one nested layer:
-    /// generic substitution makes `T | none` with `T = i32 | none` into
-    /// `(i32 | none)?`. Disjoint members flatten; written sums are
-    /// `spread` first.
+    /// Each member sum is taken as a generic term and each other member
+    /// as a written one (see `layered`): `item | none` with
+    /// `item = i32 | none` is `(i32 | none)?`. Written sums are `spread`
+    /// first. A canonical sum maps to itself.
     ///
     /// Order: `none` last, the rest by `stable_key` (structs and enums by
     /// full name), so tags agree across separately compiled packages.
     #[must_use]
     pub fn sum(parts: impl IntoIterator<Item = Self>) -> Self {
-        let parts: Vec<Self> = parts.into_iter().collect();
-        let own: Vec<Self> = parts
-            .iter()
-            .filter(|p| !matches!(p, Self::Sum(_)))
-            .cloned()
-            .collect();
-        let mut out = Vec::new();
-        for p in parts {
-            match p {
+        let (generic, written): (Vec<Self>, Vec<Self>) =
+            parts.into_iter().partition(|p| matches!(p, Self::Sum(_)));
+        Self::layered(written, generic)
+    }
+
+    /// Spec 2.6.4, layers of generic sums: `written` are the terms written
+    /// in the sum (written sums already `spread`; a sum among them is a
+    /// nested layer kept as is), `generic` what its generic terms (type
+    /// parameters, `Self`, projections, generic alias parameters) stand
+    /// for. A generic term that is a sum sharing a term with `written`
+    /// stays one nested layer; any other spreads. Overlap between generic
+    /// terms does not nest: `T | U` with `T = i32 | none`, `U = none` is
+    /// `i32 | none`.
+    #[must_use]
+    pub fn layered(written: Vec<Self>, generic: Vec<Self>) -> Self {
+        let mut out = written;
+        let own = out.clone();
+        for t in generic {
+            match t {
                 Self::Sum(ps) if !ps.iter().any(|m| own.contains(m)) => out.extend(ps),
                 t => out.push(t),
             }

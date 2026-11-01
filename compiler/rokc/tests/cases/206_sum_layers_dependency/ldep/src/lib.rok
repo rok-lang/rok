@@ -1,0 +1,45 @@
+pub type Maybe<T> = T | none;
+pub type Over<T> = T | str | none;
+
+pub fn tu<T, U>(x: T, y: U, first: bool) -> T | U { if first { x } else { y } }
+
+pub fn opt<T>(x: T, some: bool) -> T | none { if some { x } else { none } }
+
+// Instantiated here: the dependent sees the same flat type.
+pub fn mixed(first: bool) -> i32 | none {
+    let c: i32 | none = none;
+    tu(c, 5, first)
+}
+
+// Layered sums built here and read there, and the reverse.
+pub fn nested(n: i32) -> Maybe<i32 | none> {
+    let c: i32 | none = 7;
+    let e: i32 | none = none;
+    if n == 0 { opt(c, true) } else if n == 1 { opt(e, true) } else { none }
+}
+
+pub fn over(n: i32) -> Over<i32 | str> {
+    let s: i32 | str = "in";
+    if n == 0 { s } else if n == 1 { "out" } else { none }
+}
+
+pub fn read(v: Maybe<i32 | none>) -> str {
+    match v {
+        inner: i32 | none => match inner {
+            n: i32 => f"{n}",
+            none => "inner none",
+        },
+        none => "outer none",
+    }
+}
+
+pub fn read_over(v: Over<i32 | str>) -> str {
+    match v {
+        inner: i32 | str => match inner {
+            n: i32 => f"inner {n}",
+            s: str => f"inner {s}",
+        },
+        s: str => f"outer {s}",
+        none => "outer none",
+    }
+}

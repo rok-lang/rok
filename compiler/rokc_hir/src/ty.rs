@@ -8,8 +8,9 @@ use crate::HirTy;
 
 /// A written sum (spec 2.6.4): written-sum members (or aliases of one)
 /// spread, so `(i32 | none) | none` is `i32 | none`. A generic member
-/// (`param`, `Self`, projections, `Nest`) stays one, so `HirTy::sum` can
-/// keep it nested: `T | none` with `T = i32 | none` is `(i32 | none)?`.
+/// (`param`, `Self`, projections, `Nest`) is a generic term for
+/// `HirTy::layered`: `T | none` with `T = i32 | none` is `(i32 | none)?`,
+/// while `T | U` with `T = i32 | none`, `U = i32` is `i32 | none`.
 pub fn written_sum(
     parts: &[Ty],
     param: impl Fn(&str) -> bool,
@@ -23,17 +24,18 @@ pub fn written_sum(
             .is_some_and(|s| s.name == "Self" || param(&s.name)),
         _ => false,
     };
-    let mut out = Vec::new();
+    let mut written = Vec::new();
+    let mut subst = Vec::new();
     for p in parts {
         if let Some(inner) = p.nest_inner() {
-            out.push(rec(inner));
+            subst.push(rec(inner));
         } else if generic(p) {
-            out.push(rec(p));
+            subst.push(rec(p));
         } else {
-            rec(p).spread(&mut out);
+            rec(p).spread(&mut written);
         }
     }
-    HirTy::sum(out)
+    HirTy::layered(written, subst)
 }
 
 /// Resolve an AST type to HIR. Unknown paths are kept as `HirTy::Path`

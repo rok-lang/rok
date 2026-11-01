@@ -1,0 +1,113 @@
+// spec: §2.6.4
+// expect-exit: 0
+// expect-stdout:
+// flat none | flat 5 | flat none
+// flat 1 | flat none
+// inner none | outer none | 3
+// inner s | outer s | outer none
+// i32 left right
+// inner -1 | outer 5 | inner 3
+
+// Overlap is checked against the written terms only: substituted generic
+// terms never nest against each other, whatever the argument shapes.
+
+struct ParseErr { msg: str; }
+
+fn tu<T, U>(x: T, y: U, first: bool) -> T | U { if first { x } else { y } }
+
+fn opt<T>(x: T, some: bool) -> T | none { if some { x } else { none } }
+
+fn tsn<T>(x: T, some: bool) -> T | str | none { if some { x } else { none } }
+
+fn tun<T, U>(x: T, y: U, first: bool) -> T | U | none { if first { x } else { y } }
+
+type Maybe<T> = T | none;
+type Over<T> = T | str | none;
+
+fn show(v: i32 | none) -> str {
+    match v {
+        n: i32 => f"flat {n}",
+        none => "flat none",
+    }
+}
+
+fn show_str(v: i32 | str | none) -> str {
+    match v {
+        n: i32 => f"flat {n}",
+        s: str => f"flat {s}",
+        none => "flat none",
+    }
+}
+
+fn layer(v: (i32 | none)?) -> str {
+    match v {
+        inner: i32 | none => match inner {
+            none => "inner none",
+            n: i32 => f"{n}",
+        },
+        none => "outer none",
+    }
+}
+
+fn layer_str(v: Over<i32 | str>) -> str {
+    match v {
+        inner: i32 | str => match inner {
+            s: str => f"inner {s}",
+            n: i32 => f"inner {n}",
+        },
+        s: str => f"outer {s}",
+        none => "outer none",
+    }
+}
+
+fn side(v: Maybe<i32 | none> | i32) -> str {
+    match v {
+        inner: i32 | none => f"inner {inner ?? -1}",
+        n: i32 => f"outer {n}",
+        none => "outer none",
+    }
+}
+
+fn main() {
+    let c: i32 | none = none;
+    let d: i32 | str = 1;
+    // `T | U` flattens whatever overlaps between `T` and `U`.
+    let a: i32 | none = tu(c, 5, true);
+    let b: i32 | none = tu(c, none, true);
+    let e: i32 | str | none = tu(c, d, false);
+    println(f"{show(a)} | {show(tu(c, 5, false))} | {show(b)}");
+    println(f"{show_str(e)} | {show_str(tu(none, d, true))}");
+    // `T | none` with `T = i32 | none` keeps a layer; a nested `none`
+    // stays apart from the outer one.
+    let n1: (i32 | none)? = opt(c, true);
+    let n2: Maybe<i32 | none> = opt(c, false);
+    let three: i32 | none = 3;
+    println(f"{layer(n1)} | {layer(n2)} | {layer(opt(three, true))}");
+    // `T | str | none` with `T = i32 | str`: `str` overlaps.
+    let s: i32 | str = "s";
+    println(f"{layer_str(tsn(s, true))} | {layer_str(tsn("s", true))} | {layer_str(tsn(s, false))}");
+    // `T | U | none`: each generic term layers against `none` alone.
+    let u: str | none = none;
+    let w = tun(c, u, true);
+    let x = tun(c, u, false);
+    let y = tun(three, u, true);
+    let name = match y {
+        inner: i32 | none => match inner {
+            n: i32 => n.type_name_of(),
+            none => "inner none",
+        },
+        _ => "other",
+    };
+    let kinds = match w {
+        _: i32 | none => "left",
+        _ => "other",
+    };
+    let kinds2 = match x {
+        _: str | none => "right",
+        _ => "other",
+    };
+    println(f"{name} {kinds} {kinds2}");
+    // A value of a layer's own type goes into that layer, not into the
+    // outer `i32` and `none`.
+    println(f"{side(tun(c, 5, true))} | {side(tun(c, 5, false))} | {side(tun(three, 5, true))}");
+}

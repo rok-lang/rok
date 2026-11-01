@@ -473,9 +473,10 @@ pub(super) fn method_target_for(ty: &HirTy) -> Option<MethodTarget> {
     }
 }
 
-/// Substitute `params` (and `Self`) in `ty`. A parameter bound to a sum
-/// with `none` stays one member, so `T | none` with `T = i32 | none` is
-/// `(i32 | none)?` (spec 2.6.4).
+/// Substitute `params` (and `Self`) in `ty`. In a sum a substituted
+/// parameter is a generic term (spec 2.6.4): `T | none` with
+/// `T = i32 | none` is `(i32 | none)?`, `T | U` with `U = i32` is
+/// `i32 | none`.
 pub(super) fn substitute_params(ty: &mut HirTy, params: &HashMap<String, HirTy>) {
     let rec = |t: &mut HirTy| substitute_params(t, params);
     match ty {
@@ -487,10 +488,18 @@ pub(super) fn substitute_params(ty: &mut HirTy, params: &HashMap<String, HirTy>)
             }
         }
         HirTy::Sum(parts) => {
-            // A parameter may have become a sum (or a member already
-            // present): back to the canon.
-            parts.iter_mut().for_each(rec);
-            *ty = HirTy::sum(std::mem::take(parts));
+            let (mut written, mut generic) = (Vec::new(), Vec::new());
+            for mut p in std::mem::take(parts) {
+                let param =
+                    matches!(&p, HirTy::Path(ps) if ps.len() == 1 && params.contains_key(&ps[0]));
+                rec(&mut p);
+                if param {
+                    generic.push(p);
+                } else {
+                    written.push(p);
+                }
+            }
+            *ty = HirTy::layered(written, generic);
         }
         HirTy::Tuple(parts) => parts.iter_mut().for_each(rec),
         HirTy::Array(elem, _) | HirTy::GcBuf(elem) => rec(elem),
