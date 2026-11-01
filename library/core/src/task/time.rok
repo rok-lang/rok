@@ -1,9 +1,9 @@
 // rok::core::task::time - `Duration` / `Instant` (stdlib spec 2.18.6,
 // 3.3.2). `rok::std::time` re-exports both.
 
-// Spec 3.3.5: arithmetic overflow panics in debug builds and saturates
-// in release. The helpers below redo the overflowing op unchecked: with
-// overflow checks on (debug) that op panics; past it, saturate.
+// Spec 3.3.5: arithmetic overflow panics, and saturates with overflow
+// checks off. The helpers below redo the overflowing op unchecked: with
+// overflow checks on that op panics; past it, saturate.
 
 #[track_caller]
 const fn ns_add(a: i64, b: i64) -> i64 {

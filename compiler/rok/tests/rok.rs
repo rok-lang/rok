@@ -1166,6 +1166,44 @@ fn lint_and_doc_with_dependencies() {
     assert!(read(&app.join("target/doc/index.html")).contains("app/index.html"));
 }
 
+/// Overflow checks are on in both profiles; `profile` in rok.rokon turns
+/// them off for one, and `-C overflow-checks` beats it.
+// spec: §9.1.2 §9.10.3
+#[test]
+fn manifest_profile_overflow_checks() {
+    if !llvm() {
+        return;
+    }
+    let root = scratch("ovfprofile");
+    let home = root.join("home");
+    let app = root.join("app");
+    write(
+        &app.join("rok.rokon"),
+        "Package {\n    name: \"app\",\n    \
+         profile: { \"release\": { overflow_checks: false } },\n}\n",
+    );
+    write(
+        &app.join("src/main.rok"),
+        "fn add(a: i32, b: i32) -> i32 { a + b }\nprintln(f\"{add(2147483647, 1)}\");\n",
+    );
+    fails(
+        &rok(&home, &app, &["-q", "run"]),
+        "attempt to add with overflow",
+    );
+    assert_eq!(
+        ok(&rok(&home, &app, &["-q", "run", "--release"])),
+        "-2147483648\n"
+    );
+    fails(
+        &rok(
+            &home,
+            &app,
+            &["-q", "run", "--release", "-C", "overflow-checks"],
+        ),
+        "attempt to add with overflow",
+    );
+}
+
 /// `rok build` lints against the prebuilt std, whose `using` cleanup is
 /// `File.drop__by_Drop`: that is a close, not a use that leaks.
 // spec: §6.2.9

@@ -5,7 +5,7 @@
 // expect-stderr: attempt to add with overflow
 
 // spec: 3.3.5
-// With overflow checks (debug) `Duration` overflow panics.
+// With overflow checks (the default) `Duration` overflow panics.
 use rok::std::time::Duration;
 
 fn main() {

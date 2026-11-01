@@ -56,7 +56,7 @@ pub struct ReplCell {
 /// How to generate code for a module (its target is `MirModule::target`).
 #[derive(Clone, Debug, Default)]
 pub struct CodegenOptions {
-    /// Panic on integer overflow (debug builds).
+    /// Panic on integer overflow (unless `-C overflow-checks=no`).
     pub overflow_checks: bool,
     /// `-g`: DWARF debug info (spec 9.9.6).
     pub debug: bool,

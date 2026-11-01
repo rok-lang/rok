@@ -70,9 +70,6 @@ fn run_case(
     scratch: &std::path::Path,
 ) -> Result<(), String> {
     let source = fs::read_to_string(path).unwrap();
-    if optimized() && directives(&source, "debug-only").next().is_some() {
-        return Ok(());
-    }
     if skipped_on_target(&source) {
         return Ok(());
     }

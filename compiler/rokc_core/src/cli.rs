@@ -96,7 +96,7 @@ build options:
                                build the release profile (no debug info, code
                                folded, symbols stripped), the others the
                                debug profile (debug info)
-  -C overflow-checks[=yes|no]  integer overflow panics (default: on at -O0)
+  -C overflow-checks[=yes|no]  integer overflow panics (default: on)
   -C backend=native|llvm       code generator (default: native at -O0, else LLVM)
   -C target-cpu=<cpu>|native   build for that CPU instead of the target's
                                baseline (native: this machine's); LLVM only

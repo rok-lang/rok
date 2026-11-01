@@ -16,8 +16,6 @@
 //!   - `// expect-lint: L:C message` - (repeatable) `rokc lint` on the
 //!     case reports exactly these `E503` lints, in order: line, column
 //!     and headline
-//!   - `// debug-only`          - skipped under `ROK_TEST_OPT` (e.g.
-//!     overflow panics, which only `-O0` checks)
 //!   - `// gc-stress: N`        - run twice more, with
 //!     `ROKR_GC_STRESS=N ROKR_GC_EVAC=always` and with
 //!     `ROKR_GC_STRESS=N ROKR_GC_EVAC=always ROKR_GC_CONCURRENT=always`,

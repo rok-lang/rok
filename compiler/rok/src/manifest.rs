@@ -35,6 +35,7 @@
 //!     dev_deps: {},
 //!     lints_from: "..",                 // ../rok.rokon's lints first
 //!     lints: { "dead_code": "allow" },
+//!     profile: { "release": { overflow_checks: false } },
 //!     native: {                              // prebuilt C libraries (`native`)
 //!         "zlib": "^1.3",                    // = Dep::native("^1.3")
 //!         "png": Dep::native(url: "vendor/png.rokon", sha256: "<hex>"),
@@ -57,7 +58,7 @@ pub const EMPTY: &str = "Package {\n    deps: {},\n}\n";
 /// `keywords` and `categories` hold at most this many.
 pub const MAX_KEYWORDS: usize = 5;
 
-const FIELDS: [&str; 25] = [
+const FIELDS: [&str; 26] = [
     "name",
     "version",
     "toolchain",
@@ -83,7 +84,11 @@ const FIELDS: [&str; 25] = [
     "lints_from",
     "native",
     "features",
+    "profile",
 ];
+
+/// The build profiles `profile` may set (spec 9.2.15).
+const PROFILES: [&str; 2] = ["debug", "release"];
 
 /// A dependency's feature arguments (`Dep::..(.., optional: true)`).
 const DEP_FLAGS: [&str; 5] = [
@@ -466,6 +471,8 @@ pub struct Manifest {
     /// `native`: prebuilt C libraries (a namespace of their own).
     pub native: Vec<NativeDep>,
     pub features: Features,
+    /// `profile`: the profiles whose `overflow_checks` is false.
+    pub no_overflow_checks: Vec<String>,
     /// Problems that do not stop a build: a name no file can carry on
     /// some OS, a `version` that is not semver (`load` prints them).
     pub warnings: Vec<String>,
@@ -757,6 +764,23 @@ pub fn parse(text: &str, file: &str) -> Result<Manifest, String> {
             lints.push((k.string()?, level));
         }
     }
+    let mut no_overflow_checks = Vec::new();
+    if let Some(d) = pkg.opt("profile") {
+        for (k, v) in d.dict()? {
+            let name = k.string()?;
+            if !PROFILES.contains(&name.as_str()) {
+                return Err(k.error(&format!(
+                    "there is no profile `{name}`; write \"debug\" or \"release\", e.g. \
+                     `profile: {{ \"release\": {{ overflow_checks: false }} }}`"
+                )));
+            }
+            let p = v.record("Profile")?;
+            p.only(&["overflow_checks"])?;
+            if p.opt("overflow_checks").map(|d| d.bool()).transpose()? == Some(false) {
+                no_overflow_checks.push(name);
+            }
+        }
+    }
     // The package name is the dependency name others give it.
     if let Some(d) = pkg.opt("name") {
         let name = d.string()?;
@@ -846,6 +870,7 @@ pub fn parse(text: &str, file: &str) -> Result<Manifest, String> {
         lints_from: string("lints_from")?,
         native,
         features,
+        no_overflow_checks,
         warnings,
     })
 }
@@ -1444,6 +1469,21 @@ mod tests {
                 ("all".to_owned(), Level::Deny)
             ]
         );
+        let m = parse(
+            "Package { profile: { \"release\": { overflow_checks: false }, \
+             \"debug\": Profile { overflow_checks: true } } }",
+            "rok.rokon",
+        )
+        .unwrap();
+        assert_eq!(m.no_overflow_checks, ["release"]);
+        let e = parse(
+            "{ profile: { \"dev\": { overflow_checks: false } } }",
+            "rok.rokon",
+        )
+        .unwrap_err();
+        assert!(e.contains("no profile `dev`"), "{e}");
+        let e = parse("{ profile: { \"release\": { lto: true } } }", "rok.rokon").unwrap_err();
+        assert!(e.contains("unknown field `lto`"), "{e}");
         assert_eq!(
             parse("Package { name: \"a\\u{62}\" }", "f")
                 .unwrap()

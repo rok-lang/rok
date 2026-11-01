@@ -81,8 +81,9 @@ pub struct BuildOptions {
     pub debug: bool,
     /// Codegen a REPL cell (`cell_ir`).
     pub repl: Option<rokc_codegen_mlir::ReplCell>,
-    /// `-C overflow-checks=yes|no`; `None` = on at `-O0` only.
-    pub overflow_checks: Option<bool>,
+    /// Integer overflow panics (`-C overflow-checks`, the manifest's
+    /// profile `overflow_checks`); on unless turned off.
+    pub overflow_checks: bool,
     /// `-C backend=native|llvm` (else `ROK_BACKEND`): who generates the
     /// machine code (`native::object`).
     pub backend: Option<String>,
@@ -159,7 +160,7 @@ impl Default for BuildOptions {
             keep_temps: false,
             debug: false,
             repl: None,
-            overflow_checks: None,
+            overflow_checks: true,
             backend: rokc_core::env_choice("ROK_BACKEND", "native|llvm").map(str::to_owned),
             lib_dirs: Vec::new(),
             libs: Vec::new(),
@@ -279,7 +280,7 @@ pub fn codegen_options(
     data_layout: Option<String>,
 ) -> rokc_codegen_mlir::CodegenOptions {
     rokc_codegen_mlir::CodegenOptions {
-        overflow_checks: opts.overflow_checks.unwrap_or(opts.opt_level == "0"),
+        overflow_checks: opts.overflow_checks,
         debug: opts.debug,
         optimized: opts.opt_level != "0",
         repl: opts.repl.clone(),

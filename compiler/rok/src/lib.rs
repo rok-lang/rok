@@ -766,6 +766,7 @@ fn script_target(file: &Path, env: &str) -> Result<Target, String> {
         }
         if m.dev_deps.len() + m.lints.len() + m.features.len() > 0
             || m.lints_from.is_some()
+            || !m.no_overflow_checks.is_empty()
             || m.name.is_some()
             || m.version.is_some()
         {
@@ -1078,6 +1079,10 @@ fn rokc_command(
                     g.quiet,
                 )?);
             }
+        }
+        // rokc picks the profile; `-C overflow-checks` beats these.
+        for p in &t.ctx.manifest.no_overflow_checks {
+            extra.push(format!("--no-overflow-checks-in={p}"));
         }
         // `lints` go first: the command line's own `-A/-W/-D` win.
         manifest_lints = Some(push_lints(&mut extra, &t.ctx.manifest.lints));

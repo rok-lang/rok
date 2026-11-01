@@ -1,7 +1,7 @@
 // rok::core::num::ints: the integer primitives' methods and limits
 // (stdlib 2.1.4): bit operations, byte order, and the `checked_` /
 // `wrapping_` / `saturating_` / `overflowing_` families that spell out
-// what plain `+ - *` leave to the profile (2.3).
+// what plain `+ - *` do only with overflow checks off (2.3).
 //
 // `wrapping_add` / `_sub` / `_mul` and the bit counts are intrinsics;
 // the rest is built on them. One regular block per type.
@@ -164,8 +164,8 @@ impl i8 {
         (self.wrapping_pow(exp), self.checked_pow(exp) is none)
     }
 
-    /// `self` to the `exp`; overflow is the arithmetic's (panic in
-    /// debug, wrap in release).
+    /// `self` to the `exp`; overflow is the arithmetic's (a panic;
+    /// a wrap with overflow checks off).
     pub const fn pow(self, exp: u32) -> i8 {
         if exp == 0 { return 1; }
         let base = self;
@@ -408,8 +408,8 @@ impl i16 {
         (self.wrapping_pow(exp), self.checked_pow(exp) is none)
     }
 
-    /// `self` to the `exp`; overflow is the arithmetic's (panic in
-    /// debug, wrap in release).
+    /// `self` to the `exp`; overflow is the arithmetic's (a panic;
+    /// a wrap with overflow checks off).
     pub const fn pow(self, exp: u32) -> i16 {
         if exp == 0 { return 1; }
         let base = self;
@@ -652,8 +652,8 @@ impl i32 {
         (self.wrapping_pow(exp), self.checked_pow(exp) is none)
     }
 
-    /// `self` to the `exp`; overflow is the arithmetic's (panic in
-    /// debug, wrap in release).
+    /// `self` to the `exp`; overflow is the arithmetic's (a panic;
+    /// a wrap with overflow checks off).
     pub const fn pow(self, exp: u32) -> i32 {
         if exp == 0 { return 1; }
         let base = self;
@@ -896,8 +896,8 @@ impl i64 {
         (self.wrapping_pow(exp), self.checked_pow(exp) is none)
     }
 
-    /// `self` to the `exp`; overflow is the arithmetic's (panic in
-    /// debug, wrap in release).
+    /// `self` to the `exp`; overflow is the arithmetic's (a panic;
+    /// a wrap with overflow checks off).
     pub const fn pow(self, exp: u32) -> i64 {
         if exp == 0 { return 1; }
         let base = self;
@@ -1178,8 +1178,8 @@ impl isize {
         (self.wrapping_pow(exp), self.checked_pow(exp) is none)
     }
 
-    /// `self` to the `exp`; overflow is the arithmetic's (panic in
-    /// debug, wrap in release).
+    /// `self` to the `exp`; overflow is the arithmetic's (a panic;
+    /// a wrap with overflow checks off).
     pub const fn pow(self, exp: u32) -> isize {
         if exp == 0 { return 1; }
         let base = self;
@@ -1402,8 +1402,8 @@ impl u8 {
         (self.wrapping_pow(exp), self.checked_pow(exp) is none)
     }
 
-    /// `self` to the `exp`; overflow is the arithmetic's (panic in
-    /// debug, wrap in release).
+    /// `self` to the `exp`; overflow is the arithmetic's (a panic;
+    /// a wrap with overflow checks off).
     pub const fn pow(self, exp: u32) -> u8 {
         if exp == 0 { return 1; }
         let base = self;
@@ -1616,8 +1616,8 @@ impl u16 {
         (self.wrapping_pow(exp), self.checked_pow(exp) is none)
     }
 
-    /// `self` to the `exp`; overflow is the arithmetic's (panic in
-    /// debug, wrap in release).
+    /// `self` to the `exp`; overflow is the arithmetic's (a panic;
+    /// a wrap with overflow checks off).
     pub const fn pow(self, exp: u32) -> u16 {
         if exp == 0 { return 1; }
         let base = self;
@@ -1830,8 +1830,8 @@ impl u32 {
         (self.wrapping_pow(exp), self.checked_pow(exp) is none)
     }
 
-    /// `self` to the `exp`; overflow is the arithmetic's (panic in
-    /// debug, wrap in release).
+    /// `self` to the `exp`; overflow is the arithmetic's (a panic;
+    /// a wrap with overflow checks off).
     pub const fn pow(self, exp: u32) -> u32 {
         if exp == 0 { return 1; }
         let base = self;
@@ -2044,8 +2044,8 @@ impl u64 {
         (self.wrapping_pow(exp), self.checked_pow(exp) is none)
     }
 
-    /// `self` to the `exp`; overflow is the arithmetic's (panic in
-    /// debug, wrap in release).
+    /// `self` to the `exp`; overflow is the arithmetic's (a panic;
+    /// a wrap with overflow checks off).
     pub const fn pow(self, exp: u32) -> u64 {
         if exp == 0 { return 1; }
         let base = self;
@@ -2240,8 +2240,8 @@ impl usize {
         (self.wrapping_pow(exp), self.checked_pow(exp) is none)
     }
 
-    /// `self` to the `exp`; overflow is the arithmetic's (panic in
-    /// debug, wrap in release).
+    /// `self` to the `exp`; overflow is the arithmetic's (a panic;
+    /// a wrap with overflow checks off).
     pub const fn pow(self, exp: u32) -> usize {
         if exp == 0 { return 1; }
         let base = self;
