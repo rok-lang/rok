@@ -7,8 +7,15 @@
 // `reinterpret` checks the sizes when called (the spec's `where
 // sizeof::<A>() == sizeof::<B>()` has no compile-time form yet).
 
-pub use rok::bare::ptr::{align_of, size_of};
 use rok::bare::ptr::{ConstPtr, Ptr};
+
+/// Size of `T` in bytes.
+#[intrinsic("rok.size_of")]
+pub fn size_of<T>() -> usize;
+
+/// Alignment of `T` in bytes.
+#[intrinsic("rok.align_of")]
+pub fn align_of<T>() -> usize;
 
 extern "rok" {
     fn rok_alloc_raw(size: usize, align: usize, zeroed: i32) -> usize;
@@ -118,8 +125,6 @@ pub const fn min_align_of<T>() -> usize { align_of::<T>() }
 
 pub unsafe fn read<T>(src: ConstPtr<T>) -> T { src.read() }
 pub unsafe fn write<T>(dst: Ptr<T>, value: T) { dst.write(value); }
-pub unsafe fn read_volatile<T>(src: ConstPtr<T>) -> T { src.read_volatile() }
-pub unsafe fn write_volatile<T>(dst: Ptr<T>, value: T) { dst.write_volatile(value); }
 
 /// Copy `count` `T`s; the ranges may overlap.
 pub unsafe fn copy<T>(src: ConstPtr<T>, dst: Ptr<T>, count: usize) {

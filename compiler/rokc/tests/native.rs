@@ -1400,7 +1400,7 @@ double twice(double d) { return d * 2; }
 ";
 
 const REPR_ROK: &str = r#"
-use rok::bare::ptr::{align_of, size_of};
+use rok::bare::mem::{align_of, size_of};
 
 #[repr(C)]
 struct C1 { a: i8; b: i32; c: i8; }

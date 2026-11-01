@@ -19,7 +19,7 @@ use rok::std::net::{TcpListener, TcpStream, SocketAddr, Shutdown};
 use rok::std::process::{Command, Stdio, ChildStdin, ChildStdout};
 use rok::std::path::Path;
 use rok::std::thread;
-use rok::std::time::Duration;
+use rok::core::time::Duration;
 
 fn pattern(n: usize, k: usize) -> List<u8> {
     let out: List<u8> = List::with_capacity(n);

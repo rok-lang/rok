@@ -11,7 +11,7 @@
 // thread-local use.
 
 use rok::core::io::{IoError, IoErrorKind};
-use rok::std::time::Duration;
+use rok::core::time::Duration;
 use rok::core::future::IntoFuture;
 use rok::core::marker::hand_over;
 use rok::core::task::Task;

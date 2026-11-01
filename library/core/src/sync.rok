@@ -250,7 +250,7 @@ impl Atomic<i32> {
     }
 
     /// `wait` for at most `timeout` (none left: returns at once).
-    pub fn wait_timeout(self, expected: i32, timeout: rok::core::task::time::Duration) {
+    pub fn wait_timeout(self, expected: i32, timeout: rok::core::time::Duration) {
         let ns = timeout.as_ns();
         if ns < 0 {
             ns = 0;
@@ -901,18 +901,4 @@ impl<T: Default> Cell<T> {
     pub const fn take(ref self) -> T {
         self.replace(T::default())
     }
-}
-
-// The module paths of stdlib 2.16.6.
-pub mod atomic {
-    pub use rok::core::sync::{Atomic, AtomicPrimitive, LoadOrdering, StoreOrdering, UpdateOrdering};
-}
-pub mod mutex {
-    pub use rok::core::sync::{Mutex, MutexGuard, LockFuture};
-}
-pub mod rwlock {
-    pub use rok::core::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard, ReadFuture, WriteFuture};
-}
-pub mod cell {
-    pub use rok::core::sync::Cell;
 }

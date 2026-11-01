@@ -8,7 +8,7 @@
 
 // 3.3.5: `Display` picks one unit by magnitude (trailing zeros dropped);
 // extraction, arithmetic and ordering.
-use rok::std::time::Duration;
+use rok::core::time::Duration;
 
 fn main() {
     println(f"{Duration::ms(1234)} {Duration::ms(5)} {Duration::ns(1500)} {Duration::ns(-20)} {Duration::secs(2)}");

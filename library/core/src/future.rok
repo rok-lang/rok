@@ -271,17 +271,3 @@ impl<T, E> Transfer for TryAsyncFuture<T, E> {
         self
     }
 }
-
-// The module paths of stdlib 2.20.9.
-pub mod poll {
-    pub use rok::core::future::Poll;
-}
-pub mod context {
-    pub use rok::core::future::Context;
-}
-pub mod waker {
-    pub use rok::core::future::Waker;
-}
-pub mod into_future {
-    pub use rok::core::future::IntoFuture;
-}

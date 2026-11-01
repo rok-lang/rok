@@ -11,7 +11,7 @@
 // task (behind a timer); main blocks too, so only a worker handed on
 // to a new thread can run the sender and fire the timer.
 use rok::std::thread;
-use rok::std::time::Duration;
+use rok::core::time::Duration;
 
 async fn run() -> i32 {
     let n = task::worker_count();

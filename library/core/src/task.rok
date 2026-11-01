@@ -1,5 +1,6 @@
 // rok::core::task: tasks on the work-stealing executor (stdlib 2.18,
-// refs-lang 7.6) and `block_on` (2.20.6); time is `task::time`.
+// refs-lang 7.6) and `block_on` (2.20.6); `Duration` / `Instant` are
+// `rok::core::time`.
 //
 // One executor per process, started on first use: N workers on threads
 // that live as long as the process (N = online CPUs or `ROKR_WORKERS`),
@@ -50,9 +51,7 @@
 // `rok_session_pass` (between tasks, holding no lock) while a hold is
 // requested, so no task is mid-poll in a saved session.
 
-pub mod time;
-
-use rok::core::task::time::{Duration, Instant};
+use rok::core::time::{Duration, Instant};
 use rok::core::future::{Context, Future, Poll, TryAsyncFuture, Waker};
 use rok::core::collections::raw::{GcBuf, buf_new, buf_same};
 use rok::core::marker::{Memo, Transfer, hand_over};

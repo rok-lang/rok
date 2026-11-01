@@ -9,7 +9,8 @@
 // Without overflow checks (`-C overflow-checks=off`) `Duration` / `Instant` /
 // `SystemTime` arithmetic saturates instead of wrapping
 // (`std_303_duration_overflow_panics`: with them it panics).
-use rok::std::time::{Duration, Instant, SystemTime};
+use rok::core::time::{Duration, Instant};
+use rok::std::time::SystemTime;
 
 fn main() {
     let max = Duration::MAX;

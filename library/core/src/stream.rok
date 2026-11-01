@@ -13,7 +13,7 @@
 use rok::core::future::{AsyncFuture, Context, Future, Poll};
 use rok::core::task;
 use rok::core::task::Task;
-use rok::core::task::time::Duration;
+use rok::core::time::Duration;
 
 pub trait Stream {
     type Item;
@@ -679,18 +679,4 @@ impl<S: TryStream> Stream for Shunt<S> {
             Poll::Ready(none)
         }
     }
-}
-
-// The module paths of stdlib 2.8.9.
-pub mod stream {
-    pub use rok::core::stream::Stream;
-}
-pub mod into_stream {
-    pub use rok::core::stream::IntoStream;
-}
-pub mod adapter {
-    pub use rok::core::stream::{Map, Filter, Take, Skip, Throttle, Buffered, BufferUnordered};
-}
-pub mod combinator {
-    pub use rok::core::stream::{merge, zip, select, Merge, Zip, Select};
 }

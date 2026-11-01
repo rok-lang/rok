@@ -12,7 +12,7 @@
 // The payload of an enum holds every byte of its largest variant and
 // is as aligned as its most aligned one (`#[repr(align(16))]`), with or
 // without a GC reference among the variants.
-use rok::bare::ptr::{align_of, size_of};
+use rok::bare::mem::{align_of, size_of};
 
 #[repr(align(16))]
 struct V { a: u64; b: u64; c: u64; d: u64; }

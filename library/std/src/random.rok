@@ -1,0 +1,32 @@
+// rok::std::random - cryptographically secure random bytes from the OS
+// (`getrandom` on Linux, `getentropy` on macOS, `BCryptGenRandom` on
+// Windows, `random_get` on WASI). A failing source is not recoverable:
+// it panics. The algorithms that use them are `rok::core::crypto`.
+
+use rok::bare::mem::GcBuf;
+use rok::core::crypto::Secret;
+
+/// Overwrite every byte of `buf` with random bytes.
+pub fn fill(buf: List<u8>) { fill_view(buf[0:buf.len()]); }
+
+/// `n` random bytes.
+pub fn bytes(n: usize) -> List<u8> {
+    let out: List<u8> = List::with_capacity(n);
+    for _ in 0..n { out.push(0u8); }
+    fill(out);
+    out
+}
+
+/// `n` random bytes in secret storage (keys, seeds): no other copy.
+pub fn secret(n: usize) -> Secret {
+    let s = Secret::zeroed(n);
+    fill_view(s.as_bytes());
+    s
+}
+
+fn fill_view(v: Slice<u8>) {
+    if v.len() == 0 { return; }
+    let (b, off, len) = unsafe { v.raw_parts() };
+    let r = unsafe { rok_os_random(b, off, len) };
+    if r != 0 { panic(f"OS random source failed (error {-r})"); }
+}

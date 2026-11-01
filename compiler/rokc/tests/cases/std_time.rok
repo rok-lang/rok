@@ -8,7 +8,7 @@
 // true true true
 // 3ms true true
 // 1700000000 1700000000000000005 true
-// second time provided was later than self by 1700000000.000000005s
+// -1700000000.000000005s
 // 1700000000.000000005s true
 // boot true
 // mtime true true
@@ -17,17 +17,17 @@
 // Stdlib spec 303: `Duration` arithmetic / formatting / checked forms,
 // `Instant - Instant`, `SystemTime` + `UNIX_EPOCH`, `BootTime`, and
 // `Metadata::modified` (301 + 3.3.3).
-use rok::std::time::{Duration, Instant, SystemTime, SystemTimeError, BootTime, UNIX_EPOCH};
+use rok::std::time::{SystemTime, BootTime, UNIX_EPOCH};
 use rok::std::fs;
 use rok::std::env;
 use rok::core::io::IoError;
 use rok::std::process;
 
-fn main() throws (SystemTimeError | IoError) {
+fn main() throws (IoError) {
     let d = Duration::ms(1234);
     println(f"{d} {d:?} {Duration::ms(5)} {Duration::ns(100)} {Duration::ZERO} {Duration::ns(1500)} {Duration::secs(-2)}");
     println(f"{d.as_ns()} {d.as_us()} {d.as_ms()} {d.as_secs()} {d.as_secs_f64()} {d.subsec_ms()} {d.subsec_us()} {d.subsec_ns()}");
-    println(f"{Duration::from_secs_f64(1.5)} {d * 2} {d / 2} {2.0 * d} {d + d} {d - Duration::ms(234)}");
+    println(f"{Duration::secs_f64(1.5)} {d * 2} {d / 2} {2.0 * d} {d + d} {d - Duration::ms(234)}");
     let over = Duration::MAX.checked_add(Duration::ns(1));
     println(f"{if over is none { "none" } else { "some" }} {Duration::MAX.saturating_add(d) == Duration::MAX} {d.checked_div(0) is none} {d.saturating_mul(3)}");
     println(f"{d < Duration::secs(2)} {Duration::secs(1) == Duration::ms(1000)} {Duration::MAX.checked_mul(2) is none}");
@@ -37,9 +37,9 @@ fn main() throws (SystemTimeError | IoError) {
     println(f"{b - a} {(b - Duration::ms(3)) == a} {a < b}");
 
     let t = SystemTime::from_unix(1700000000, 5);
-    println(f"{try t.unix_seconds()} {try t.unix_nanos()} {(try SystemTime::now().unix_seconds()) > 1700000000}");
-    println(try f"{UNIX_EPOCH.duration_since(t)}" catch e { f"{e}" });
-    println(f"{try t.duration_since(UNIX_EPOCH)} {(t + Duration::secs(1)) - Duration::secs(1) == t}");
+    println(f"{t.unix_secs()} {t.unix_nanos()} {SystemTime::now().unix_secs() > 1700000000}");
+    println(f"{UNIX_EPOCH.duration_since(t)}");
+    println(f"{t.duration_since(UNIX_EPOCH)} {(t + Duration::secs(1)) - Duration::secs(1) == t}");
 
     let bt = BootTime::now();
     println(f"boot {bt.elapsed() >= Duration::ZERO}");
@@ -47,8 +47,8 @@ fn main() throws (SystemTimeError | IoError) {
     let path = env::temp_dir() / f"rok_std_time_probe_{process::id()}.txt";
     try fs::write(path, "x");
     let m = try (try fs::metadata(path)).modified();
-    let age = try SystemTime::now().duration_since(m) catch e { Duration::ZERO };
-    println(f"mtime {age < Duration::secs(60)} {(try m.unix_seconds()) == (try (try (try fs::metadata(path)).modified()).unix_seconds())}");
+    let age = m.elapsed();
+    println(f"mtime {age < Duration::secs(60)} {m.unix_secs() == (try (try fs::metadata(path)).modified()).unix_secs()}");
     try fs::remove_file(path);
 
     println(f"{2.0 * 3.0} {Duration::ms(1) * 1000 == Duration::secs(1)}");

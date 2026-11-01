@@ -986,7 +986,7 @@ fn repl_failed_cell_loses_no_work_and_no_lock() {
     let input = "\
 use rok::core::sync::Once;
 use rok::core::task;
-use rok::core::task::time::Instant;
+use rok::core::time::Instant;
 use rok::std::thread;
 static POLLED: Atomic<i64> = Atomic::new(0);
 static JOB: Atomic<i64> = Atomic::new(0);

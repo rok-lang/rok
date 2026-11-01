@@ -17,7 +17,7 @@
 // `align(N)` (raises the alignment, rounds the size, pads its users),
 // `transparent`, and an integer tag for a fieldless enum. Values of
 // each go through locals, arrays, `List` buffers and closures.
-use rok::bare::ptr::{align_of, size_of};
+use rok::bare::mem::{align_of, size_of};
 
 #[repr(C)]
 struct C1 { a: u8; b: i32; c: u8; }

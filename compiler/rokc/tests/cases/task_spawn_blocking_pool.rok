@@ -8,7 +8,7 @@
 
 // `spawn_blocking` reuses idle pool threads and stays within the cap.
 use rok::std::thread;
-use rok::std::time::Duration;
+use rok::core::time::Duration;
 
 fn tid() -> u64 {
     thread::current().id().as_u64()

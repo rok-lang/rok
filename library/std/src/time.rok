@@ -1,73 +1,114 @@
-// rok::std::time (stdlib spec 303): `Duration` / `Instant` live in
-// `rok::core::task::time` (2.18.6) and are re-exported here; the wall
-// clock (`SystemTime`) and the boot clock (`BootTime`) are std-only.
-// Their arithmetic goes through `Duration`'s, which panics on overflow
-// in debug builds and saturates in release (3.3.5).
+// rok::std::time (stdlib spec 303): the wall clock (`SystemTime`) and
+// the boot clock (`BootTime`). `Duration` / `Instant` are
+// `rok::core::time`. Every span is an exact signed `Duration`; the
+// arithmetic goes through `Duration`'s, which panics on overflow in
+// debug builds and saturates in release (3.3.5).
 
-pub use rok::core::task::time::{Duration, Instant};
+use rok::core::time::Duration;
+
+// No monotonic reading: the time did not come from `now()`.
+const NO_MONO: i64 = -9223372036854775807 - 1;
 
 /// A wall-clock (UTC) point: `i64` nanoseconds from `UNIX_EPOCH`
 /// (1678..2262). It can step backwards (NTP, the user).
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+///
+/// `now()` also takes a monotonic reading, which `elapsed()` uses, so a
+/// clock step cannot change it. Comparison and hashing see the wall
+/// reading only.
+#[derive(Clone, Copy)]
 pub struct SystemTime {
     ns: i64;
+    mono: i64;
 }
 
 /// 1970-01-01 00:00:00 UTC.
-pub const UNIX_EPOCH: SystemTime = SystemTime { ns: 0 };
+pub const UNIX_EPOCH: SystemTime = SystemTime { ns: 0, mono: NO_MONO };
 
 impl SystemTime {
-    pub fn now() -> SystemTime { SystemTime { ns: unsafe { rok_time_realtime_ns() } } }
+    pub fn now() -> SystemTime {
+        let mono = unsafe { rok_time_now_ns() };
+        SystemTime { ns: unsafe { rok_time_realtime_ns() }, mono: mono }
+    }
 
-    /// `self - earlier`; throws when `earlier` is later, carrying how much.
-    pub const fn duration_since(self, earlier: SystemTime) throws (SystemTimeError) -> Duration {
-        if earlier.ns > self.ns {
-            throw SystemTimeError { duration: Duration::ns(earlier.ns) - Duration::ns(self.ns) };
-        }
+    /// `self - earlier` on the wall clock, negative when `earlier` is
+    /// later.
+    pub const fn duration_since(self, earlier: SystemTime) -> Duration {
         Duration::ns(self.ns) - Duration::ns(earlier.ns)
     }
 
-    pub fn elapsed(self) throws (SystemTimeError) -> Duration { try SystemTime::now().duration_since(self) }
+    /// Time since `self` on the monotonic clock (the `Instant` one) when
+    /// `self` came from `now()`, else on the wall clock.
+    pub fn elapsed(self) -> Duration {
+        if self.mono == NO_MONO {
+            return SystemTime::now().duration_since(self);
+        }
+        Duration::ns(unsafe { rok_time_now_ns() }) - Duration::ns(self.mono)
+    }
 
     pub const fn checked_add(self, dur: Duration) -> SystemTime | none {
-        SystemTime { ns: self.ns.checked_add(dur.as_ns())? }
+        let ns = self.ns.checked_add(dur.as_ns())?;
+        SystemTime { ns: ns, mono: shift(self.mono, dur) }
     }
     pub const fn checked_sub(self, dur: Duration) -> SystemTime | none {
-        SystemTime { ns: self.ns.checked_sub(dur.as_ns())? }
+        let ns = self.ns.checked_sub(dur.as_ns())?;
+        SystemTime { ns: ns, mono: shift(self.mono, Duration::ZERO - dur) }
     }
 
     pub const fn from_unix(secs: i64, nanos: u32) -> SystemTime {
-        SystemTime { ns: (Duration::secs(secs) + Duration::ns(nanos as i64)).as_ns() }
+        SystemTime { ns: (Duration::secs(secs) + Duration::ns(nanos as i64)).as_ns(), mono: NO_MONO }
     }
-    /// Whole seconds since the epoch; throws before it.
-    pub const fn unix_seconds(self) throws (SystemTimeError) -> i64 { (try self.duration_since(UNIX_EPOCH)).as_secs() }
-    /// Nanoseconds since the epoch (`i64`: no `i128` yet); throws before it.
-    pub const fn unix_nanos(self) throws (SystemTimeError) -> i64 { (try self.duration_since(UNIX_EPOCH)).as_ns() }
+    /// Whole seconds since the epoch, rounded down (negative before it):
+    /// `from_unix(t.unix_secs(), ..)` gives `t` back.
+    pub const fn unix_secs(self) -> i64 {
+        let s = self.ns / 1000000000;
+        if self.ns % 1000000000 < 0 { s - 1 } else { s }
+    }
+    /// Nanoseconds since the epoch, negative before it (`i64`: no
+    /// `i128` yet).
+    pub const fn unix_nanos(self) -> i64 { self.ns }
+}
+
+// The monotonic reading moved with the wall one; dropped when it would
+// overflow.
+const fn shift(mono: i64, d: Duration) -> i64 {
+    if mono == NO_MONO { return NO_MONO; }
+    let r = mono.checked_add(d.as_ns());
+    if r is i64 { r } else { NO_MONO }
 }
 
 impl Add<Duration> for SystemTime {
     type Output = SystemTime;
-    const fn add(self, rhs: Duration) -> SystemTime { SystemTime { ns: (Duration::ns(self.ns) + rhs).as_ns() } }
+    const fn add(self, rhs: Duration) -> SystemTime {
+        SystemTime { ns: (Duration::ns(self.ns) + rhs).as_ns(), mono: shift(self.mono, rhs) }
+    }
 }
 
 impl Sub<Duration> for SystemTime {
     type Output = SystemTime;
-    const fn sub(self, rhs: Duration) -> SystemTime { SystemTime { ns: (Duration::ns(self.ns) - rhs).as_ns() } }
+    const fn sub(self, rhs: Duration) -> SystemTime {
+        SystemTime { ns: (Duration::ns(self.ns) - rhs).as_ns(), mono: shift(self.mono, Duration::ZERO - rhs) }
+    }
 }
 
-/// `SystemTime::duration_since` with `earlier` later than `self`.
-pub struct SystemTimeError {
-    /// How far `earlier` was ahead.
-    pub duration: Duration;
+impl PartialEq for SystemTime {
+    const fn eq(self, rhs: SystemTime) -> bool { self.ns == rhs.ns }
 }
-
-impl Display for SystemTimeError {
-    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"second time provided was later than self by {self.duration}") }
+impl Eq for SystemTime {}
+impl PartialOrd for SystemTime {
+    const fn lt(self, rhs: SystemTime) -> bool { self.ns < rhs.ns }
+    const fn gt(self, rhs: SystemTime) -> bool { self.ns > rhs.ns }
+    const fn le(self, rhs: SystemTime) -> bool { self.ns <= rhs.ns }
+    const fn ge(self, rhs: SystemTime) -> bool { self.ns >= rhs.ns }
 }
-impl Debug for SystemTimeError {
-    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"SystemTimeError({self.duration})") }
+impl Ord for SystemTime {
+    const fn cmp(self, rhs: SystemTime) -> Ordering { self.ns.cmp(rhs.ns) }
 }
-impl Error for SystemTimeError {}
+impl Hash for SystemTime {
+    const fn hash(self) -> u64 { self.ns.hash() }
+}
+impl Debug for SystemTime {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"SystemTime {{ ns: {self.ns} }}") }
+}
 
 /// Time since boot, counting suspend (3.3.4): `CLOCK_BOOTTIME` on Linux;
 /// on macOS `CLOCK_MONOTONIC`, which counts sleep there.
@@ -79,19 +120,6 @@ pub struct BootTime {
 impl BootTime {
     pub fn now() -> BootTime { BootTime { ns: unsafe { rok_time_boot_ns() } } }
     pub fn elapsed(self) -> Duration { BootTime::now().duration_since(self) }
+    /// `self - earlier`, negative when `earlier` is later.
     pub const fn duration_since(self, earlier: BootTime) -> Duration { Duration::ns(self.ns) - Duration::ns(earlier.ns) }
-    /// `none` when `earlier` is later, as `Instant`'s.
-    pub const fn checked_duration_since(self, earlier: BootTime) -> Duration | none {
-        if earlier.ns > self.ns {
-            return none;
-        }
-        self.duration_since(earlier)
-    }
-    /// Zero when `earlier` is later, as `Instant`'s.
-    pub const fn saturating_duration_since(self, earlier: BootTime) -> Duration {
-        if earlier.ns > self.ns {
-            return Duration::ZERO;
-        }
-        self.duration_since(earlier)
-    }
 }

@@ -7,7 +7,7 @@
 pub use rok::core::{
     array, bench, channel, cmp, collections, convert, crypto, encoding, error, fmt, future,
     hint, index, io, iter, marker, num, ops, panic, par, print, range, reflect, str, stream, sync,
-    task, tuple,
+    task, time, tuple,
 };
 
 // Types.
@@ -18,7 +18,7 @@ pub use rok::core::num::bigint::Int;
 pub use rok::core::num::bigfloat::Float;
 pub use rok::core::error::Result;
 pub use rok::core::cmp::Ordering;
-pub use rok::core::task::time::{Duration, Instant};
+pub use rok::core::time::{Duration, Instant};
 pub use rok::core::sync::{Mutex, RwLock, Atomic, Cell};
 pub use rok::core::channel::{Sender, Receiver};
 pub use rok::core::task::Task;

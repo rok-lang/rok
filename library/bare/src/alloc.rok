@@ -4,7 +4,8 @@
 //
 // `Allocation<T>` frees its block when its `using` block ends.
 
-use rok::bare::ptr::{CPtr, ManyPtr, Ptr, align_of, size_of};
+use rok::bare::mem::{align_of, size_of};
+use rok::bare::ptr::{CPtr, ManyPtr, Ptr};
 
 extern "rok" {
     fn rok_alloc_raw(size: usize, align: usize, zeroed: i32) -> usize;

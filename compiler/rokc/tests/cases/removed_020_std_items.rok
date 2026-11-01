@@ -1,4 +1,4 @@
-// expect-error: no associated function `sec` on `rok::core::task::time::Duration`
+// expect-error: no associated function `sec` on `rok::core::time::Duration`
 // expect-error: no associated function `by` on `rok::core::collections::heap::BinaryHeap
 // expect-error: no associated function `nan` on `f64`
 // expect-error: no associated function `infinity` on `f64`
