@@ -23,7 +23,7 @@ impl Cell {
 }
 struct Holder { c: Cell; }
 struct Ro { c: Cell; }
-impl Index<i64> for Ro {
+impl index::Index<i64> for Ro {
     type Output = Cell;
     fn index(self, i: i64) -> Cell { self.c }
 }
