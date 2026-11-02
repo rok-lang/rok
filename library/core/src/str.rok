@@ -777,9 +777,13 @@ impl char {
 
 /// Code point order.
 impl PartialOrd for char {
+    #[intrinsic("rok.lt.char")]
     const fn lt(self, rhs: char) -> bool { (self as u32) < (rhs as u32) }
+    #[intrinsic("rok.le.char")]
     const fn le(self, rhs: char) -> bool { (self as u32) <= (rhs as u32) }
+    #[intrinsic("rok.gt.char")]
     const fn gt(self, rhs: char) -> bool { (self as u32) > (rhs as u32) }
+    #[intrinsic("rok.ge.char")]
     const fn ge(self, rhs: char) -> bool { (self as u32) >= (rhs as u32) }
 }
 

@@ -546,16 +546,22 @@ impl Hash for char {
 // c_char (stdlib 2.5): compared and hashed as its byte.
 
 impl PartialEq for c_char {
+    #[intrinsic("rok.eq.c_char")]
     const fn eq(self, rhs: c_char) -> bool { (self as u8) == (rhs as u8) }
+    #[intrinsic("rok.ne.c_char")]
     const fn ne(self, rhs: c_char) -> bool { (self as u8) != (rhs as u8) }
 }
 
 impl Eq for c_char {}
 
 impl PartialOrd for c_char {
+    #[intrinsic("rok.lt.c_char")]
     const fn lt(self, rhs: c_char) -> bool { (self as u8) < (rhs as u8) }
+    #[intrinsic("rok.gt.c_char")]
     const fn gt(self, rhs: c_char) -> bool { (self as u8) > (rhs as u8) }
+    #[intrinsic("rok.le.c_char")]
     const fn le(self, rhs: c_char) -> bool { (self as u8) <= (rhs as u8) }
+    #[intrinsic("rok.ge.c_char")]
     const fn ge(self, rhs: c_char) -> bool { (self as u8) >= (rhs as u8) }
 }
 

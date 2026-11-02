@@ -1,0 +1,22 @@
+// spec: std 201-numbers §2.1.4
+// spec: std 215-string §2.15.5
+// expect-exit: 0
+// expect-stdout:
+// true false true true false Less
+// true false true Greater
+// true false true false Greater 255
+
+// `char` and `c_char` compare through their intrinsics, `bool` by a
+// plain body (`false < true`); `char` by scalar value, `c_char` as its
+// byte (`c as u8`).
+fn main() {
+    let f = false;
+    let t = true;
+    println(f"{f < t} {t < f} {f <= f} {t >= f} {t > t} {f.cmp(t):?}");
+    let a = 'a';
+    let z = '\u{10FFFF}';
+    println(f"{a < z} {z <= a} {a == 'a'} {z.cmp(a):?}");
+    let hi = 255u8 as c_char;
+    let one = 1u8 as c_char;
+    println(f"{hi > one} {hi < one} {hi == 255u8 as c_char} {hi != hi} {hi.cmp(one):?} {hi as u8}");
+}
