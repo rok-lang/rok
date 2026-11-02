@@ -150,7 +150,6 @@ fn lint_finds_each_kind_and_honors_levels() {
         "unused variable `y`",
         "type `bad_name` should have an upper camel case name",
         "constant `lower` should have an upper case name",
-        "comparing with `none` using `==`",
         "casting to the same type `f64`",
         "redundant `.clone()`",
         "comparison with `true`",

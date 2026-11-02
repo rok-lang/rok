@@ -1,7 +1,7 @@
 // gc-stress: 50
 // expect-exit: 0
 // expect-stdout:
-// i32 7
+// i64 7
 // str seven
 // List [7, 7]
 // other
@@ -11,9 +11,9 @@
 struct P { x: i32; }
 
 fn kind(v: any) -> str {
-    if let n: i32 = v { return f"i32 {n}"; }
+    if let n: i64 = v { return f"i64 {n}"; }
     if let s: str = v { return f"str {s}"; }
-    if let xs: List<i32> = v { return f"List {xs:?}"; }
+    if let xs: List<i64> = v { return f"List {xs:?}"; }
     "other"
 }
 

@@ -1,5 +1,5 @@
 // expect-error: argument 1 of `spawn_blocking` expects `fn() -> usize + Send`, found `closure() -> usize`
-// expect-error: the closure captures `lock` (type `RwLock<List<i32>>`), which is not `Sync`: its readers could change the `List<i32>` inside at once; use `Mutex<List<i32>>` and `.lock()` in place of `.read()` / `.write()`
+// expect-error: the closure captures `lock` (type `RwLock<List<i64>>`), which is not `Sync`: its readers could change the `List<i64>` inside at once; use `Mutex<List<i64>>` and `.lock()` in place of `.read()` / `.write()`
 
 // `RwLock<T>` is `Sync` only when `T` is: a collection inside cannot
 // reach another thread, and the error names the capture, the trait and

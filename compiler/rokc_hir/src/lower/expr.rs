@@ -810,6 +810,20 @@ fn lower_stmt_inner(ctx: &mut LowerCtx<'_>, stmt: &Stmt) -> Option<HirStmt> {
 /// (`B::new().with(1)`) is retried against the call's expected type when
 /// that fixes it exactly: builder chains.
 fn lower_receiver(ctx: &mut LowerCtx<'_>, receiver: &Expr) -> HirExpr {
+    // `let n: i32 = 7.max(-2)`: a literal receiver of a number slot has
+    // the slot's type.
+    if is_untyped_literal(receiver) {
+        let int = is_untyped_int(receiver);
+        let slot = ctx.current_expected().and_then(|t| match t {
+            HirTy::Prim(p) if (int && p.is_int() && *p != PrimTy::Char) || p.is_float() => {
+                Some(t.clone())
+            }
+            _ => None,
+        });
+        if let Some(t) = slot {
+            return lower_expected(ctx, receiver, t);
+        }
+    }
     let mark = ctx.probe_mark();
     let recv = lower_expected(ctx, receiver, HirTy::Unknown);
     if ctx.env.sink.uninferred.get() == mark.uninferred {
@@ -1098,6 +1112,8 @@ fn droppable(ty: &HirTy) -> bool {
 /// drops a value. A call of a `#[discardable]` function may; `try? f();`
 /// is `ignored_error`'s, and a block-like statement's value is its arms'.
 fn unused_result(ctx: &LowerCtx<'_>, e: &Expr, ty: &HirTy) {
+    // An open literal is the number it holds.
+    let ty = &super::infer::zonk(ctx, ty);
     if droppable(ty) || e.span.is_dummy() || !ctx.results_apply() {
         return;
     }
@@ -2192,7 +2208,8 @@ pub(super) fn check_jump_target(
 
 /// Array indices are integers.
 pub(super) fn check_index_ty(ctx: &LowerCtx<'_>, idx: &HirExpr) {
-    if !matches!(&idx.ty, HirTy::Prim(p) if p.is_int()) && idx.ty != HirTy::Unknown {
+    let ty = super::infer::zonk(ctx, &idx.ty);
+    if !matches!(&ty, HirTy::Prim(p) if p.is_int()) && ty != HirTy::Unknown {
         ctx.emit_error(
             Code::INVALID_INDEX,
             format!(
@@ -2283,6 +2300,13 @@ fn guard_flow(ctx: &mut LowerCtx<'_>, expr: &Expr, e: &HirExpr) {
 }
 
 pub(super) fn lower_expr(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
+    // A tuple / list literal into a sum: the member of its shape.
+    if let Some(m) = ctx
+        .current_expected()
+        .and_then(|t| super::sum_member_for(ctx, expr, t))
+    {
+        return lower_expected(ctx, expr, m);
+    }
     // Names resolve where the expression's head was written;
     // its operands set their own.
     let outer = ctx.set_access(head_origin(expr));
@@ -2292,6 +2316,11 @@ pub(super) fn lower_expr(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
         }
         _ => lower_expr_inner(ctx, expr),
     });
+    // Only a literal's open variable is left in the type.
+    let mut e = e;
+    if super::infer::has_var(ctx, &e.ty) {
+        e.ty = super::infer::resolve(ctx, &e.ty);
+    }
     ctx.access.replace(outer);
     guard_flow(ctx, expr, &e);
     if e.ty != HirTy::Never || hir_expr_diverges(&e) {
@@ -2343,7 +2372,8 @@ fn lower_cast(
     let operand_h = lower_expected(ctx, operand, HirTy::Unknown);
     // In a monomorphized body `as T` names the concrete type.
     let to_ty = ctx.resolve_ast_ty(ty);
-    let from_ty = operand_h.ty.clone();
+    // An open literal casts as the number it holds.
+    let from_ty = super::infer::zonk(ctx, &operand_h.ty);
     // `int` / `float`: a conversion call.
     if super::bignum::big_of(ctx, &from_ty).is_some()
         || super::bignum::big_of(ctx, &to_ty).is_some()
@@ -2428,8 +2458,12 @@ fn lower_cast(
     }
     HirExpr {
         kind: HirExprKind::Cast {
+            from_ty: if super::infer::has_var(ctx, &operand_h.ty) {
+                operand_h.ty.clone()
+            } else {
+                from_ty
+            },
             operand: Box::new(operand_h),
-            from_ty,
             to_ty: to_ty.clone(),
         },
         ty: to_ty,
@@ -3001,18 +3035,24 @@ pub(super) fn lower_break_value(ctx: &mut LowerCtx<'_>, depth: usize, e: &Expr) 
             )));
             h
         }
-        Some((t, true)) if v.ty != HirTy::Unknown && !coercible(ctx, &t, &v.ty) => ctx.error_expr(
-            Code::BRANCH_TYPES,
-            v.span,
-            format!(
-                "`break` values have different types `{}` and `{}` - rok does not infer \
+        Some((t, true))
+            if v.ty != HirTy::Unknown
+                && !super::infer::agree(ctx, &t, &v.ty, false)
+                && !coercible(ctx, &t, &v.ty) =>
+        {
+            ctx.error_expr(
+                Code::BRANCH_TYPES,
+                v.span,
+                format!(
+                    "`break` values have different types `{}` and `{}` - rok does not infer \
                      a sum type; annotate the slot (`let v: {} | {} = loop ...`)",
-                ctx.ty_name(&t),
-                ctx.ty_name(&v.ty),
-                ctx.ty_name(&t),
-                ctx.ty_name(&v.ty)
-            ),
-        ),
+                    ctx.ty_name(&t),
+                    ctx.ty_name(&v.ty),
+                    ctx.ty_name(&t),
+                    ctx.ty_name(&v.ty)
+                ),
+            )
+        }
         Some((t, _)) => coerce(ctx, &t, v, &|| "this `break` value".to_owned()),
     }
 }
@@ -3670,12 +3710,14 @@ pub(super) fn field_default(
     let saved_module = std::mem::replace(&mut ctx.current_module, module);
     let saved_uses = std::mem::replace(&mut ctx.local_uses, vec![Vec::new()]);
     let saved_scopes = std::mem::replace(&mut ctx.scopes, vec![HashMap::new()]);
-    let v = lower_expected(ctx, value, ty.clone());
+    let what = format!("the default of field `{field}`");
+    let v = super::infer::scoped(ctx, |ctx| {
+        let v = lower_expected(ctx, value, ty.clone());
+        coerce(ctx, ty, v, &|| what.clone())
+    });
     ctx.current_module = saved_module;
     ctx.local_uses = saved_uses;
     ctx.scopes = saved_scopes;
-    let what = format!("the default of field `{field}`");
-    let v = coerce(ctx, ty, v, &|| what.clone());
     super::const_eval::constant(ctx, &what, v)
 }
 
@@ -4132,7 +4174,13 @@ pub(super) fn lower_if(
         HirTy::Unit
     } else if then_div {
         else_ty
-    } else if else_div || then_ty == else_ty || super::infer::join(ctx, &then_ty, &else_ty) {
+    } else if else_div
+        || then_ty == else_ty
+        || then_h
+            .trailing
+            .as_ref()
+            .is_some_and(|t| super::infer::join(ctx, t, &else_h))
+    {
         then_ty
     } else if then_ty == HirTy::Unknown || else_ty == HirTy::Unknown {
         HirTy::Unknown
@@ -4764,7 +4812,16 @@ fn lower_args_ref_inner(
                         ArgSrc::Ast(e)
                     });
                 } else {
-                    c_varargs.push(lower_expected(ctx, e, HirTy::Unknown));
+                    // An unsuffixed integer is a C `int` there, a float a
+                    // `double`.
+                    let want = if is_untyped_int(e) {
+                        HirTy::Prim(PrimTy::I32)
+                    } else if is_untyped_literal(e) {
+                        HirTy::Prim(PrimTy::F64)
+                    } else {
+                        HirTy::Unknown
+                    };
+                    c_varargs.push(lower_expected(ctx, e, want));
                 }
                 next += 1;
             }
@@ -4789,8 +4846,15 @@ fn lower_args_ref_inner(
                 }
             }
             CallArg::Spread(e) => {
-                // `f(..t)` with a tuple value.
-                let lh = lower_expected(ctx, e, HirTy::Unknown);
+                // `f(..t)` with a tuple value. A list of literals takes
+                // the next parameter's type (`add(..[1, 2])`).
+                let hint = match (&e.kind, sig.param_tys.get(next)) {
+                    (ExprKind::List(_), Some(t @ HirTy::Prim(_))) => ctx
+                        .instantiate_struct(LIST, vec![t.clone()], ctx.here())
+                        .map_or(HirTy::Unknown, HirTy::Struct),
+                    _ => HirTy::Unknown,
+                };
+                let lh = lower_expected(ctx, e, hint);
                 match lh.ty.clone() {
                     HirTy::Tuple(parts) => {
                         // Evaluate the tuple once into a temp, then read
@@ -5153,7 +5217,14 @@ fn dict_value_fits(ctx: &LowerCtx<'_>, p: &HirTy, v: &HirTy) -> bool {
             )
         })
     };
-    open(p) || open(v) || coercible(ctx, p, v)
+    if open(p) {
+        return true;
+    }
+    // An open literal fits what it can become.
+    if super::infer::literal_default(ctx, v).is_some() {
+        return super::infer::trial(ctx, &|| super::infer::unify(ctx, p, v));
+    }
+    open(v) || coercible(ctx, p, v)
 }
 
 /// What to write for an argument `p` given twice.
@@ -5198,7 +5269,7 @@ fn is_str_dict(ctx: &LowerCtx<'_>, ty: &HirTy) -> bool {
 }
 
 const DICT: &str = "rok::core::collections::dict::Dict";
-const LIST: &str = "rok::core::collections::list::List";
+pub(super) const LIST: &str = "rok::core::collections::list::List";
 const SLICE: &str = "rok::core::collections::slice::Slice";
 const SLICE_MUT: &str = "rok::core::collections::slice::SliceMut";
 
@@ -7559,6 +7630,36 @@ fn format_help(ctx: &LowerCtx<'_>, args: &[CallArg], span: rokc_diagnostic::Span
     }
 }
 
+/// A method call on a receiver over open literals: the one choice of
+/// number types that has the method (`9.once()`, `(1, 2).foo()`), else
+/// their defaults, fixed here.
+fn literal_receiver(ctx: &LowerCtx<'_>, ty: &HirTy, method: &str) -> Option<HirTy> {
+    if !super::infer::active(ctx) || !super::infer::has_var(ctx, ty) {
+        return None;
+    }
+    let mut vs = Vec::new();
+    super::infer::open_literals_in(ctx, ty, &mut vs);
+    // Found as it is (`xs.push(1)` on a `List<#var>`, a blanket impl's
+    // method): its bounds fix the literal, or the body's end does.
+    if vs.is_empty() || matches!(pick_method(ctx, ty, method, None), Ok(Some(_))) {
+        return None;
+    }
+    super::infer::pick_literals_or(
+        ctx,
+        ty,
+        &|t| matches!(pick_method(ctx, t, method, None), Ok(Some(_))),
+        &|t| {
+            ctx.env
+                .methods_on(t, method)
+                .is_some_and(|ids| !ids.is_empty())
+        },
+        // A bare literal is fixed here; one inside a type may still meet
+        // the method another way (`xs.map(f)` through `xs.iter()`).
+        matches!(ty, HirTy::Var(_)),
+    );
+    Some(super::infer::resolve(ctx, ty))
+}
+
 pub(super) fn method_call_on(
     ctx: &mut LowerCtx<'_>,
     recv_h: HirExpr,
@@ -7568,6 +7669,10 @@ pub(super) fn method_call_on(
 ) -> HirExpr {
     let lower_args_only = |ctx: &mut LowerCtx<'_>| discard_args(ctx, args);
     let type_args = std::mem::take(&mut ctx.method_type_args);
+    let mut recv_h = recv_h;
+    if let Some(t) = literal_receiver(ctx, &recv_h.ty, method) {
+        recv_h.ty = t;
+    }
     if recv_h.ty == HirTy::Unknown {
         lower_args_only(ctx);
         return recv_h;
@@ -7848,7 +7953,9 @@ fn assign_trait_call(
     let mark = ctx.probe_mark();
     let ty = lower_expected(ctx, target, HirTy::Unknown).ty;
     ctx.rollback(&mark);
-    if ty == HirTy::Unknown || !ctx.has_impl(&ty, &TraitRef::plain(&key), 0) {
+    // An open literal takes `a = a op b`, where its operand meets it.
+    if matches!(ty, HirTy::Unknown | HirTy::Var(_)) || !ctx.has_impl(&ty, &TraitRef::plain(&key), 0)
+    {
         return None;
     }
     let env = ctx.env;
@@ -8098,7 +8205,14 @@ fn any_method_call(
     let mut method_subst = HashMap::new();
     if let (Some(def), false) = (decl, own.is_empty()) {
         match any_method_generics(ctx, &provider, &bound, def, &own, type_args, args, &recv_ty) {
-            Ok(s) => method_subst = s,
+            // Each instantiation dispatches on its own: open literals take
+            // their defaults here.
+            Ok(s) => {
+                method_subst = s;
+                for t in method_subst.values_mut() {
+                    *t = super::infer::fix_literals(ctx, t);
+                }
+            }
             Err(msg) => {
                 discard_args(ctx, args);
                 return match msg {
@@ -9584,6 +9698,9 @@ fn call_generic_positional(
     if let (Some(t), Some(hint)) = (self_ty, self_hint) {
         bind_self(ctx, def, t, hint, &mut subst);
     }
+    // The slot the call's value goes to hints the arguments' types
+    // (`let t: Task<i32> = spawn(|| 5)`); arguments still decide.
+    let expected_subst = super::mono::expected_subst(ctx, def);
     let mut lowered: Vec<HirExpr> = Vec::with_capacity(args.len() + 1);
     let mut places: Vec<Option<HirExpr>> = vec![None; def.params.len()];
     let has_receiver = receiver.is_some();
@@ -9634,7 +9751,7 @@ fn call_generic_positional(
         if !is_ref {
             reads.extend(crate::walk::free_places(&[], e));
         }
-        let mut hint = generic_arg_hint(ctx, def, &subst, hint_self, i, e);
+        let mut hint = expected_arg_hint(ctx, def, &subst, &expected_subst, hint_self, i, e);
         // A slot several bounds of the trait type differently: an
         // unsuffixed literal takes the one it fits.
         if let (HirTy::Unknown, Some(HirTy::Param(p))) = (&hint, hint_self) {
@@ -9862,6 +9979,80 @@ fn generic_arg_hint(
     )
 }
 
+/// The `X` of parameter `i`'s `IntoIterator<Item = X>` / `Iterator<Item =
+/// X>` bound, when its type is a bare type parameter.
+fn iter_item_bound(def: &FnDef, i: usize) -> Option<&Ty> {
+    let rokc_ast::TyKind::Path(p) = &def.params.get(i)?.ty.as_ref()?.kind else {
+        return None;
+    };
+    let [seg] = p.segments.as_slice() else {
+        return None;
+    };
+    def.generics.params.iter().find_map(|gp| match gp {
+        rokc_ast::GenericParam::Type { name, bounds, .. } if *name == seg.name => {
+            bounds.iter().find_map(|b| {
+                let rokc_ast::TyKind::Path(bp) = &b.kind else {
+                    return None;
+                };
+                let last = bp.segments.last()?;
+                if !matches!(last.name.as_str(), "IntoIterator" | "Iterator") {
+                    return None;
+                }
+                last.generics.iter().find_map(|g| match &g.kind {
+                    rokc_ast::TyKind::Binding(n, t) if n == "Item" => Some(&**t),
+                    _ => None,
+                })
+            })
+        }
+        _ => None,
+    })
+}
+
+/// `generic_arg_hint`, else with the parameters the call's slot fixes
+/// (`expected_subst`) where the other arguments have not.
+fn expected_arg_hint(
+    ctx: &LowerCtx<'_>,
+    def: &FnDef,
+    subst: &HashMap<String, HirTy>,
+    expected: &HashMap<String, HirTy>,
+    self_ty: Option<&HirTy>,
+    i: usize,
+    e: &Expr,
+) -> HirTy {
+    let hint = generic_arg_hint(ctx, def, subst, self_ty, i, e);
+    if hint != HirTy::Unknown {
+        return hint;
+    }
+    // A list literal for `I: IntoIterator<Item = X>`: a `List<X>`
+    // (`xs.extend([1, 2])` on a `List<i32>`).
+    if let Some(item) = matches!(e.kind, ExprKind::List(_))
+        .then(|| iter_item_bound(def, i))
+        .flatten()
+    {
+        let list = Ty {
+            kind: rokc_ast::TyKind::Path(rokc_ast::Path::new(
+                vec![rokc_ast::PathSegment {
+                    name: "List".to_owned(),
+                    generics: vec![item.clone()],
+                }],
+                item.span,
+            )),
+            span: item.span,
+        };
+        let h = ty_hint(ctx, def, subst, self_ty, Some(&list), e);
+        if !matches!(&h, HirTy::Struct(id) if ctx.struct_def(*id).generic_args.iter().any(|a| matches!(a, HirTy::Path(_))))
+        {
+            return h;
+        }
+    }
+    if expected.is_empty() {
+        return hint;
+    }
+    let mut merged = expected.clone();
+    merged.extend(subst.iter().map(|(k, v)| (k.clone(), v.clone())));
+    generic_arg_hint(ctx, def, &merged, self_ty, i, e)
+}
+
 /// The expected type of argument `e` for a parameter of `def` typed
 /// `param` (see `generic_arg_hint`).
 fn ty_hint(
@@ -9966,7 +10157,7 @@ fn bind_explicit_generics(
 
 /// `g(..5)` spreads `5`; a range argument needs parentheses.
 fn spread_range_help(ctx: &LowerCtx<'_>, e: &Expr, ty: &HirTy) {
-    if matches!(ty, HirTy::Prim(p) if p.is_int()) {
+    if matches!(super::infer::zonk(ctx, ty), HirTy::Prim(p) if p.is_int()) {
         ctx.help_last(Some(format!(
             "to pass the range `..{0}`, write it in parentheses: `(..{0})`",
             snippet(e)
@@ -10924,7 +11115,7 @@ fn path_call_via_impls(
             .then(|| ctx.current_expected().cloned())
             .flatten()
             .filter(|t| *t != HirTy::Unknown);
-        let (recv, rest) = match args.split_first() {
+        let (mut recv, rest) = match args.split_first() {
             _ if static_self.is_some() => (None, args),
             Some((a @ (CallArg::Positional(e) | CallArg::Ref(e)), rest)) => {
                 let r = lower_expected(ctx, e, HirTy::Unknown);
@@ -10933,6 +11124,14 @@ fn path_call_via_impls(
             }
             _ => (None, args),
         };
+        // `Wave::hi(3)`: the one number type with the trait, else the
+        // default, here.
+        if let Some(r) = recv.as_mut().filter(|r| super::infer::has_var(ctx, &r.ty)) {
+            super::infer::pick_literals(ctx, &r.ty, &|t| {
+                ctx.has_impl(t, &TraitRef::plain(&key), 0)
+            });
+            r.ty = super::infer::resolve(ctx, &r.ty);
+        }
         let self_ty = static_self
             .or_else(|| recv.as_ref().map(|r| r.ty.clone()))
             .or_else(|| ctx.current_expected().cloned())
@@ -11262,6 +11461,14 @@ fn call_overload(
             }
         }
     };
+    // An open literal picks the overload: the one number type with one,
+    // else its default.
+    let arg_ty = if super::infer::has_var(ctx, &arg_ty) {
+        super::infer::pick_literals(ctx, &arg_ty, &|t| params.contains(t));
+        super::infer::resolve(ctx, &arg_ty)
+    } else {
+        arg_ty
+    };
     let Some(i) = params.iter().position(|p| *p == arg_ty) else {
         if recv.is_some() && !literal {
             return None;
@@ -11345,7 +11552,7 @@ fn pick_literal_impl(
         return Ok(None);
     };
     let default = match v {
-        LitVal::Int(_) => HirTy::Prim(PrimTy::I32),
+        LitVal::Int(_) => HirTy::Prim(DEFAULT_INT),
         LitVal::Float(_) => HirTy::Prim(PrimTy::F64),
     };
     if let Some(i) = params.iter().position(|p| *p == default) {
@@ -12221,7 +12428,7 @@ pub(super) fn discard_args(ctx: &mut LowerCtx<'_>, args: &[CallArg]) {
 pub(super) fn is_arith_op(op: &str) -> bool {
     matches!(
         op,
-        "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>"
+        "+" | "-" | "*" | "/" | "%" | "%%" | "&" | "|" | "^" | "<<" | ">>"
     )
 }
 
@@ -12317,14 +12524,28 @@ pub(super) fn lower_infix(
     if lhs_h.ty == HirTy::Unknown || rhs_h.ty == HirTy::Unknown {
         return poison(span);
     }
+    let open_tys = (lhs_h.ty.clone(), rhs_h.ty.clone());
     let open = super::infer::meet(ctx, &mut lhs_h, &mut rhs_h);
     let since = ctx.env.sink.diagnostics.borrow().len();
     let tys = (lhs_h.ty.clone(), rhs_h.ty.clone());
     let mut e = lower_infix_typed(ctx, op, lhs_h, rhs_h, rhs, span);
+    // The operands keep their open types: the body's end gives both the
+    // solved one.
+    if let (Some(_), HirExprKind::PrimBinOp { lhs, rhs, .. }) = (&open, &mut e.kind) {
+        for (side, t) in [(lhs, open_tys.0), (rhs, open_tys.1)] {
+            if super::infer::has_var(ctx, &t) && super::infer::zonk(ctx, &t) == side.ty {
+                side.ty = t;
+            }
+        }
+    }
     // An open operand's arithmetic stays open.
     if let Some(open) = open.filter(|_| is_arith_op(op) && e.ty == tys.0) {
         e.ty = open;
     }
+    let tys = (
+        super::infer::zonk(ctx, &tys.0),
+        super::infer::zonk(ctx, &tys.1),
+    );
     if ctx.env.sink.diagnostics.borrow().len() > since
         && !lit_operand_help(ctx, (lhs, &tys.0), (rhs, &tys.1))
     {
@@ -12537,7 +12758,7 @@ fn lower_infix_typed(
     }
     // A primitive on the left of a user type (`impl Mul<Duration> for f64`),
     // or an operator with no primitive lowering.
-    if let HirTy::Prim(lp) = lhs_h.ty {
+    if let HirTy::Prim(lp) = super::infer::zonk(ctx, &lhs_h.ty) {
         if matches!(rhs_h.ty, HirTy::Struct(_) | HirTy::Enum(_)) || infix_for_prim(op, lp).is_none()
         {
             return dispatch_user_op_lit(
@@ -12622,6 +12843,12 @@ fn dyn_op(
         P::CChar,
         P::Char,
     ];
+    // The dispatch is over the other operand's type: an open literal
+    // takes its default here.
+    let (mut lhs, mut rhs) = (lhs, rhs);
+    for e in [Some(&mut lhs), rhs.as_mut()].into_iter().flatten() {
+        e.ty = super::infer::fix_literals(ctx, &e.ty);
+    }
     let is_dyn = |t: &HirTy| matches!(t, HirTy::AnyTrait(_));
     let fixed = [Some(&lhs.ty), rhs.as_ref().map(|r| &r.ty)]
         .into_iter()
@@ -12841,10 +13068,34 @@ pub(super) fn lower_prefix(
                 .unwrap_or_else(|| lower_literal(ctx, lit, true, span));
         }
     }
-    let operand_h = lower_expr(ctx, operand);
+    let mut operand_h = lower_expr(ctx, operand);
     if operand_h.ty == HirTy::Unknown {
         return operand_h;
     }
+    // `-total` of an open literal stays open (`abs(-total)` fixes it).
+    if let (true, Some(d)) = (
+        matches!(op, "-" | "~"),
+        super::infer::literal_default(ctx, &operand_h.ty),
+    ) {
+        let open = std::mem::replace(&mut operand_h.ty, d);
+        let mut e = lower_prefix_typed(ctx, op, operand_h, span);
+        if matches!(e.ty, HirTy::Prim(_)) {
+            e.ty = open.clone();
+        }
+        if let HirExprKind::PrimUnaryOp { operand, .. } = &mut e.kind {
+            operand.ty = open;
+        }
+        return e;
+    }
+    lower_prefix_typed(ctx, op, operand_h, span)
+}
+
+fn lower_prefix_typed(
+    ctx: &mut LowerCtx<'_>,
+    op: &str,
+    operand_h: HirExpr,
+    span: rokc_diagnostic::Span,
+) -> HirExpr {
     if matches!(
         operand_h.ty,
         HirTy::Struct(_) | HirTy::Enum(_) | HirTy::Param(_)
@@ -12932,6 +13183,20 @@ pub(super) fn dispatch_user_op_lit(
     // full path), not another trait that happens to share its name.
     let is_op_trait = |t: &str| t == op_trait;
     let shown = leaf_name(op_trait);
+    // `180°`, `2 ∈ [1, 2]`: open literals take the number types with the
+    // operator, else their defaults, here.
+    let mut lhs = lhs;
+    if super::infer::active(ctx) && super::infer::has_var(ctx, &lhs.ty) {
+        // With a typed right operand, the impl for it (`84 / nz`).
+        let want = match rhs.as_ref().map(|r| &r.ty) {
+            Some(r) if !super::infer::has_var(ctx, r) && *r != HirTy::Unknown => {
+                TraitRef::new(op_trait.to_owned(), vec![r.clone()], Vec::new())
+            }
+            _ => TraitRef::plain(op_trait),
+        };
+        super::infer::pick_literals(ctx, &lhs.ty, &|t| ctx.has_impl(t, &want, 0));
+        lhs.ty = super::infer::resolve(ctx, &lhs.ty);
+    }
     if let HirTy::Param(p) = lhs.ty {
         return param_op(ctx, p, sym, &method, op_trait, lhs, rhs, lit_rhs, span);
     }
@@ -12960,9 +13225,10 @@ pub(super) fn dispatch_user_op_lit(
             .cloned()
             .unwrap_or(HirTy::Unknown)
     };
-    let exact = rhs
-        .as_ref()
-        .and_then(|r| impls.iter().copied().find(|id| rhs_param(ctx, *id) == r.ty));
+    let exact = rhs.as_ref().and_then(|r| {
+        let t = super::infer::zonk(ctx, &r.ty);
+        impls.iter().copied().find(|id| rhs_param(ctx, *id) == t)
+    });
     let mut rhs = rhs;
     let mut lit_pick = None;
     if let (None, Some(e)) = (exact, lit_rhs) {
@@ -13187,9 +13453,13 @@ fn generic_op_by_rhs<'e>(
             }
             None => lhs.clone(),
         };
-        if want == rhs.ty {
+        // An open literal operand as the type it holds.
+        let rhs_ty = super::infer::zonk(ctx, &rhs.ty);
+        let open_fits = super::infer::literal_default(ctx, &rhs.ty).is_some()
+            && super::infer::trial(ctx, &|| super::infer::unify(ctx, &want, &rhs.ty));
+        if want == rhs_ty || want == rhs.ty || open_fits {
             exact.push(gm);
-        } else if coercible(ctx, &want, &rhs.ty) {
+        } else if coercible(ctx, &want, &rhs_ty) {
             loose.push(gm);
         } else if let (HirTy::Prim(_), Some(v)) = (&want, lit_rhs.and_then(untyped_lit_value)) {
             if literal_fits(ctx, v, &want) {
@@ -13722,7 +13992,8 @@ pub(super) fn lower_path(
         let saved_uses = std::mem::replace(&mut ctx.local_uses, vec![Vec::new()]);
         let saved_scopes = std::mem::replace(&mut ctx.scopes, vec![HashMap::new()]);
         let Some(v) = super::const_eval::guard(ctx, &full, span, |ctx| {
-            lower_expected(ctx, &value, ty.clone())
+            let v = lower_expected(ctx, &value, ty.clone());
+            coerce(ctx, &ty, v, &|| format!("const `{full}`"))
         }) else {
             ctx.current_module = saved_module;
             ctx.local_uses = saved_uses;
@@ -13732,7 +14003,6 @@ pub(super) fn lower_path(
         ctx.current_module = saved_module;
         ctx.local_uses = saved_uses;
         ctx.scopes = saved_scopes;
-        let v = coerce(ctx, &ty, v, &|| format!("const `{full}`"));
         return super::const_eval::const_item(ctx, &full, v);
     }
     // Module-level `static` - a load through the global address.
@@ -13939,14 +14209,24 @@ pub(super) fn lower_path(
 pub(super) fn expected_prim(ctx: &LowerCtx<'_>, want: fn(PrimTy) -> bool) -> Option<PrimTy> {
     match &super::infer::zonk(ctx, ctx.current_expected()?) {
         HirTy::Prim(p) if want(*p) => Some(*p),
-        // `let x: i64 | none = 5` - the sum's single matching variant.
+        // `let x: i64 | none = 5` - the sum's single matching variant,
+        // in a nested layer too (`(i32 | none)?`).
         HirTy::Sum(vs) => {
-            let mut hits = vs.iter().filter_map(|v| match v {
-                HirTy::Prim(p) if want(*p) => Some(*p),
+            fn prims(vs: &[HirTy], want: fn(PrimTy) -> bool, out: &mut Vec<PrimTy>) {
+                for v in vs {
+                    match v {
+                        HirTy::Prim(p) if want(*p) => out.push(*p),
+                        HirTy::Sum(ws) => prims(ws, want, out),
+                        _ => {}
+                    }
+                }
+            }
+            let mut hits = Vec::new();
+            prims(vs, want, &mut hits);
+            match hits[..] {
+                [one] => Some(one),
                 _ => None,
-            });
-            let first = hits.next()?;
-            hits.next().is_none().then_some(first)
+            }
         }
         _ => None,
     }
@@ -14068,7 +14348,7 @@ pub(super) fn lower_literal(
             let ty = if has_int_suffix(text) {
                 suffix_ty
             } else {
-                expected_prim(ctx, int_slot).unwrap_or(PrimTy::I32)
+                expected_prim(ctx, int_slot).unwrap_or(DEFAULT_INT)
             };
             if negate && !ty.is_signed_int() {
                 return ctx.error_expr(
@@ -14093,6 +14373,9 @@ pub(super) fn lower_literal(
                 );
             }
             let open = !has_int_suffix(text) && expected_prim(ctx, int_slot).is_none();
+            if open {
+                ctx.env.sink.default_lits.borrow_mut().insert(span);
+            }
             konst(
                 ConstVal::Int { value, ty },
                 super::infer::literal_ty(ctx, span, ty, open, negate),
@@ -14129,6 +14412,9 @@ pub(super) fn lower_literal(
                 v.to_bits()
             };
             let open = !suffixed && expected_prim(ctx, PrimTy::is_float).is_none();
+            if open {
+                ctx.env.sink.default_lits.borrow_mut().insert(span);
+            }
             konst(
                 ConstVal::Float { bits, ty },
                 super::infer::literal_ty(ctx, span, ty, open, negate),
@@ -14179,7 +14465,43 @@ pub(super) fn parse_char_literal(text: &str) -> Option<u32> {
     chars.next().is_none().then_some(c as u32)
 }
 
-/// Parse an integer literal; an unsuffixed one defaults to `i32`.
+/// A literal typed by default meeting a number slot of its kind (a
+/// generic call's argument once the parameter is known) takes the slot's
+/// type when its value fits.
+pub(super) fn retype_default_literal(ctx: &LowerCtx<'_>, slot: &HirTy, mut v: HirExpr) -> HirExpr {
+    let HirTy::Prim(to) = *slot else {
+        return v;
+    };
+    if v.ty == *slot || !ctx.env.sink.default_lits.borrow().contains(&v.span) {
+        return v;
+    }
+    match &mut v.kind {
+        HirExprKind::Const(ConstVal::Int { value, ty })
+            if to.is_int()
+                && !matches!(to, PrimTy::Char | PrimTy::CChar)
+                && super::pattern::int_fits(*value, to) =>
+        {
+            *ty = to;
+            v.ty = slot.clone();
+        }
+        HirExprKind::Const(ConstVal::Float { bits, ty })
+            if to == PrimTy::F32 && *ty == PrimTy::F64 =>
+        {
+            #[allow(clippy::cast_possible_truncation)]
+            let f = f64::from_bits(*bits) as f32;
+            *bits = u64::from(f.to_bits());
+            *ty = to;
+            v.ty = slot.clone();
+        }
+        _ => {}
+    }
+    v
+}
+
+/// The type of an unsuffixed integer literal nothing fixes.
+pub(super) const DEFAULT_INT: PrimTy = PrimTy::I64;
+
+/// Parse an integer literal; an unsuffixed one is `DEFAULT_INT`.
 pub(super) fn parse_int_literal(text: &str) -> Option<(i128, PrimTy)> {
     const SUFFIXES: &[(&str, PrimTy)] = &[
         ("isize", PrimTy::Isize),
@@ -14198,7 +14520,7 @@ pub(super) fn parse_int_literal(text: &str) -> Option<(i128, PrimTy)> {
     let (digits, ty) = SUFFIXES
         .iter()
         .find_map(|(suf, ty)| text.strip_suffix(suf).map(|d| (d, *ty)))
-        .unwrap_or((text, PrimTy::I32));
+        .unwrap_or((text, DEFAULT_INT));
 
     let cleaned: String = digits.chars().filter(|c| *c != '_').collect();
     let (radix, body) = if let Some(rest) = cleaned
@@ -14454,8 +14776,10 @@ pub(super) fn splice(ctx: &mut LowerCtx<'_>, h: HirExpr) -> Expr {
     }
 }
 
-const fn is_signed(ty: &HirTy) -> bool {
-    matches!(ty, HirTy::Prim(p) if p.is_signed_int())
+/// A signed index counts from the end when negative; an open literal is
+/// as signed as the type it holds.
+fn is_signed(ctx: &LowerCtx<'_>, ty: &HirTy) -> bool {
+    matches!(super::infer::zonk(ctx, ty), HirTy::Prim(p) if p.is_signed_int())
 }
 
 /// An index / slice bound in a `usize` position slot: a negative
@@ -14572,7 +14896,7 @@ fn len_of(recv: &Expr, span: rokc_diagnostic::Span) -> Expr {
 fn array_position(ctx: &mut LowerCtx<'_>, idx: &Expr, n: u32) -> HirExpr {
     let i = lower_position(ctx, idx);
     check_index_ty(ctx, &i);
-    if !is_signed(&i.ty) {
+    if !is_signed(ctx, &i.ty) {
         return i;
     }
     let span = i.span;
@@ -14634,7 +14958,7 @@ fn index_call(
         return method_call_on(ctx, recv_h, method, &args, span);
     }
     let i = lower_position(ctx, idx);
-    if !is_signed(&i.ty) {
+    if !is_signed(ctx, &i.ty) {
         args.insert(0, CallArg::Positional(splice(ctx, i)));
         return method_call_on(ctx, recv_h, method, &args, span);
     }
@@ -14704,7 +15028,7 @@ fn lower_slice(
     }
     let a = start.map(|e| lower_position(ctx, e));
     let b = end.map(|e| lower_position(ctx, e));
-    let signed = |h: &Option<HirExpr>| h.as_ref().is_some_and(|h| is_signed(&h.ty));
+    let signed = |h: &Option<HirExpr>| h.as_ref().is_some_and(|h| is_signed(ctx, &h.ty));
     if step.is_none() && !signed(&a) && !signed(&b) {
         let t = splice(ctx, t_h);
         let a = a.map(|h| splice(ctx, h));
@@ -14716,7 +15040,7 @@ fn lower_slice(
     }
     let t = tmp_path(ctx, "t", span);
     let recv = splice(ctx, t_h);
-    let mut bound = |h: Option<HirExpr>| h.map(|h| (is_signed(&h.ty), splice(ctx, h)));
+    let mut bound = |h: Option<HirExpr>| h.map(|h| (is_signed(ctx, &h.ty), splice(ctx, h)));
     let (a, b) = (bound(a), bound(b));
     let Some(k) = step else {
         let pos = |x: Option<(bool, Expr)>| {
@@ -14765,7 +15089,7 @@ fn lower_slice(
     let body = call(call(t.clone(), "slice", range), "step", kt.clone());
     // Any signed integer step widens to `isize`.
     let k_h = lower_expected(ctx, k, HirTy::Prim(PrimTy::Isize));
-    let k_signed = is_signed(&k_h.ty);
+    let k_signed = is_signed(ctx, &k_h.ty);
     let k_e = splice(ctx, k_h);
     let let_k = Stmt {
         span,

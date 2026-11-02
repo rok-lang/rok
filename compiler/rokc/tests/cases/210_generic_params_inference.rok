@@ -2,7 +2,7 @@
 // expect-stdout:
 // 42 3.14 hello
 // 3 a 7
-// 0 2 List<i32>
+// 0 2 List<i64>
 // List<i64> 1 0
 // 6 1,2,3
 // 7.5 seen

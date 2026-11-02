@@ -1,7 +1,7 @@
 // expect-error: `addr_of` needs a place: a local variable or `static`, or a field or array element of one
 // expect-error: `as_mut_ptr` needs a place
 // expect-error: call to unsafe function `from_exposed_provenance` outside an `unsafe` block
-// expect-error: cannot cast `Ptr<i32>` as `usize`
+// expect-error: cannot cast `Ptr<i64>` as `usize`
 // A pointer comes from a place, not a temporary; a fresh provenance is
 // `unsafe`; `as` never converts a pointer (strict provenance).
 use rok::bare::mem::MaybeUninit;

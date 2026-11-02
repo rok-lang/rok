@@ -3992,9 +3992,6 @@ pub(super) fn collect_unknown_paths(ty: &HirTy, out: &mut Vec<String>) {
         HirTy::Path(p) => {
             out.push(p.join("::"));
         }
-        // Open until inference or a binding fixes them (an inference
-        // variable shows as `_`).
-        HirTy::Var(_) => out.push("_".to_owned()),
         HirTy::OpenConst(n) => out.push(n.clone()),
         HirTy::NoThrow => out.push("#nothrow".to_owned()),
         HirTy::Sum(parts) | HirTy::Tuple(parts) => {
@@ -6059,7 +6056,8 @@ fn unmet_bounds(
     }
     let mut out = Vec::new();
     for (ty, bounds) in goals {
-        if ty == HirTy::Unknown {
+        // An instance over an inference variable is a probe's, dropped.
+        if ty == HirTy::Unknown || super::infer::has_var(&rcx, &ty) {
             continue;
         }
         for b in bounds {

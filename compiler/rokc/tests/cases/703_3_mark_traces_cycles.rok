@@ -29,18 +29,18 @@ fn main() -> i32 {
     nodes = [];
     unsafe { rok_gc_collect(); rok_gc_collect(); }
     let cur = start;
-    let seen: List<i32> = [];
+    let seen: List<i64> = [];
     let steps = 0;
     while steps < 100 {
         if seen.len() < 3 {
-            if let v: i32 = cur[0] { seen.push(v); }
+            if let v: i64 = cur[0] { seen.push(v); }
         }
         if let n: List<any> = cur[1] { cur = n; }
         steps += 1;
     }
     println(f"ring of 100: {seen[0]} -> {seen[1]} -> {seen[2]}");
     let back = false;
-    if let v: i32 = cur[0] { back = v == 0; }
+    if let v: i64 = cur[0] { back = v == 0; }
     println(f"back to start after 100 steps: {back}");
     return 0;
 }

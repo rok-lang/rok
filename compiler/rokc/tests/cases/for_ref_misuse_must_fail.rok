@@ -1,6 +1,6 @@
 // expect-error: 14:27: a closure cannot capture `p`: it names an element of a `for ref` loop
 // expect-error: help: copy the element first and capture the copy: `let v = p;`
-// expect-error: 16:14: `for ref` needs a `List`, an array or a `SliceMut`, whose elements are places; found `Dict<str, i32>`
+// expect-error: 16:14: `for ref` needs a `List`, an array or a `SliceMut`, whose elements are places; found `Dict<str, i64>`
 // expect-error: help: to read the items, write `for v in ..`
 // expect-error: 17:14: `for ref` writes an array where it is kept, and a temporary array is kept nowhere
 // expect-error: help: keep the array in a variable first: `let xs = make(); for ref p in xs { .. }`

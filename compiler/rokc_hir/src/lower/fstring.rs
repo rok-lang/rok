@@ -62,6 +62,8 @@ enum Kind {
     },
     Float {
         f32: bool,
+        /// An open literal's: always converted, its type may change.
+        open: bool,
     },
     /// `int` / `float`.
     Big,
@@ -77,14 +79,18 @@ impl Kind {
 }
 
 fn kind_of(ctx: &LowerCtx<'_>, ty: &HirTy) -> Kind {
+    // An open literal formats as the number it holds; the body's end
+    // gives the runtime call its final type (`infer::Fixer`).
+    let open = matches!(ty, HirTy::Var(_));
+    let ty = &super::infer::zonk(ctx, ty);
     match ty {
         HirTy::Prim(p) if p.is_signed_int() || p.is_unsigned_int() => Kind::Int {
-            i64: *p == PrimTy::I64,
+            i64: *p == PrimTy::I64 && !open,
             signed: p.is_signed_int(),
             bits: p.bit_width(super::const_eval::pointer_width()),
         },
-        HirTy::Prim(PrimTy::F32) => Kind::Float { f32: true },
-        HirTy::Prim(PrimTy::F64) => Kind::Float { f32: false },
+        HirTy::Prim(PrimTy::F32) => Kind::Float { f32: true, open },
+        HirTy::Prim(PrimTy::F64) => Kind::Float { f32: false, open },
         HirTy::Prim(PrimTy::Str) => Kind::Str,
         HirTy::Prim(PrimTy::Char) => Kind::Char,
         _ if super::bignum::big_of(ctx, ty).is_some() => Kind::Big,
@@ -516,13 +522,13 @@ fn plain_write(t: &Expr, value: Expr, kind: Kind, debug: bool, flags: Expr, coun
             ],
             at,
         ),
-        (Kind::Float { f32 }, _) => rt(
+        (Kind::Float { f32, open }, _) => rt(
             "rok_fmt_f64",
             vec![
                 t.clone(),
                 flags,
                 counts,
-                cast(value, "f64", !f32),
+                cast(value, "f64", !f32 && !open),
                 flag(f32),
             ],
             at,
@@ -677,7 +683,8 @@ fn static_hole(ctx: &LowerCtx<'_>, value: Expr, ty: &HirTy, text: &str) -> Optio
             return None;
         }
     };
-    let (int, float) = match (ty, super::bignum::big_of(ctx, ty)) {
+    let held = &super::infer::zonk(ctx, ty);
+    let (int, float) = match (held, super::bignum::big_of(ctx, held)) {
         (HirTy::Prim(p), _) => (p.is_int(), p.is_float()),
         (_, Some(b)) => (b == Big::Int, b == Big::Float),
         _ => (false, false),

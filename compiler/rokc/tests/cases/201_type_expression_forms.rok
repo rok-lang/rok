@@ -67,7 +67,7 @@ fn main() {
     // Dynamic slots, constrained ones included.
     let e: any Display = "boom";
     let it: any = 9;
-    println(f"{e} {it is i32}");
+    println(f"{e} {it is i64}");
     let ys = [2, 3];
     let fst = first(ys.iter());
     println(f"{fst ?? 0} {ys[1]}");

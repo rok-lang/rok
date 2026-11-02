@@ -18,8 +18,8 @@ struct Sq { s: i32; }
 impl Shape for Sq { fn area(self) -> i32 { return self.s * self.s; } }
 
 fn f(v: any) -> i32 {
-    if v is i32 {
-        return v + 1i32;
+    if v is i64 {
+        return (v + 1) as i32;
     }
     if v is Sq { return v.area(); } else if v is bool { return 7; }
     let r = if v is f64 { 1 } else { 2 };
@@ -32,7 +32,7 @@ println(f"{f(true)}");
 println(f"{f(1.5)}");
 println(f"{f(3i8)}");
 let v: any = 41;
-let b = v is i32 && !(v is f64);
+let b = v is i64 && !(v is f64);
 if b { println(f"{1}"); }
 let s: any Shape = Sq { s: 2 };
 if s is Sq { println(f"{s.s}"); }
@@ -41,6 +41,6 @@ if o is i32 { println(f"{o + 1}"); }
 // `is` on a struct field (no narrowing: only a bare local narrows).
 struct Box1 { inner: any; }
 let bx = Box1 { inner: 5 };
-println(f"{if bx.inner is i32 { 5 } else { 0 }}");
+println(f"{if bx.inner is i64 { 5 } else { 0 }}");
 println(f"{if bx.inner is Sq { 5 } else { 0 }}");
 

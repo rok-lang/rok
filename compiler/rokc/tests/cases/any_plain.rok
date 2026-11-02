@@ -36,14 +36,14 @@ fn show(v: any) -> i32 {
         c: char => c as i32,
         q: Sq => q.s,
         g: Big => (g.a + g.b) as i32 + g.c,
-        t: (i32, i32) => t.0 + t.1,
+        t: (i64, i64) => (t.0 + t.1) as i32,
         k: Color => match k { Color::Blue => 3, _ => 0 },
         o: i32 | none => 11,
         _ => 0 - 1,
     };
 }
 
-let v: any = 42;
+let v: any = 42i32;
 println(f"{show(v)}");
 v = 1.0;
 println(f"{show(v)}");

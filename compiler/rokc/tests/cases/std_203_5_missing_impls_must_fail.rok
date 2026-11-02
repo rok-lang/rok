@@ -1,6 +1,6 @@
 // expect-error: operator `&` cannot be applied to `f32`: it needs `impl BitAnd for f32`
 // expect-error: cannot index into a value of type `str`
-// expect-error: cannot index into a value of type `(i32, i32)`
+// expect-error: cannot index into a value of type `(i64, i64)`
 
 // Floats have no bitwise traits, `str` has no
 // `Index<usize>` and a tuple no `Index` (`.0` only); an operation

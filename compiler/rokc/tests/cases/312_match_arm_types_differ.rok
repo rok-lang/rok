@@ -1,4 +1,4 @@
-// expect-error: `match` arms have different types `i32` and `bool` (arm 2)
+// expect-error: `match` arms have different types `bool` and `i64` (arm 1)
 
 // Differing match arm types are not inferred as a sum type.
 let n = 3;

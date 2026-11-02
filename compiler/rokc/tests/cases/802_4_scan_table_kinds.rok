@@ -62,7 +62,7 @@ fn main() {
         });
     }
     println(f"results {shown.join(" | ")}");
-    let a0: i32 = match anys[0] { v: i32 => v, _ => 0 };
+    let a0: i64 = match anys[0] { v: i64 => v, _ => 0 };
     let a1: str = match anys[1] { s: str => s, _ => "?" };
     let a2: bool = match anys[2] { b: bool => b, _ => false };
     let a3: f64 = match anys[3] { f: f64 => f, _ => 0.0 };

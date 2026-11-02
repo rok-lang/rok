@@ -1,5 +1,5 @@
-// expect-error: it captures `c: Cell<i32>`, which is not `Send`
-// expect-error: it holds `local: Cell<i32>`, which is not `Send`, across an `await`
+// expect-error: it captures `c: Cell<i64>`, which is not `Send`
+// expect-error: it holds `local: Cell<i64>`, which is not `Send`, across an `await`
 // expect-error: it holds `kept: Cell<i32>`, which is not `Send`, across an `await`
 
 // `task::spawn` checks the coroutine frame: captures and

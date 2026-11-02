@@ -1878,7 +1878,7 @@ pub(super) fn guard(
         return None;
     }
     stack.borrow_mut().push(name.to_owned());
-    let v = lower(ctx);
+    let v = super::infer::scoped(ctx, lower);
     ctx.env.sink.const_stack.borrow_mut().pop();
     Some(v)
 }

@@ -1,4 +1,4 @@
-// expect-error: 21:13: `add`: the literal fits several `Add` impls of `U` (`i64`, `u64`); add a suffix or `as`
+// expect-error: 21:13: `add`: the literal fits several `Add` impls of `U` (`i32`, `u64`); add a suffix or `as`
 // expect-error: 22:13: `add`: no `Add<f64>` impl for `W`
 
 // No impl for the default type and several the literal fits: a suffix
@@ -13,7 +13,7 @@ impl ops::Add<i32> for W {
     fn add(self, rhs: i32) -> i64 { 0 }
 }
 struct U { v: i64; }
-impl ops::Add<i64> for U { type Output = i64; fn add(self, rhs: i64) -> i64 { rhs } }
+impl ops::Add<i32> for U { type Output = i64; fn add(self, rhs: i32) -> i64 { rhs as i64 } }
 impl ops::Add<u64> for U { type Output = i64; fn add(self, rhs: u64) -> i64 { 0 } }
 
 fn main() {

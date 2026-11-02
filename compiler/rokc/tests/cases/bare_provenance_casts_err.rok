@@ -1,4 +1,4 @@
-// expect-error: cannot cast `i32` as `Ptr<i32>`
+// expect-error: cannot cast `i64` as `Ptr<i32>`
 // expect-error: cannot cast `Ptr<i32>` as `Ptr<u8>`
 // expect-error: cannot cast `Ptr<i32>` as `ConstPtr<i32>`
 // expect-error: cannot cast `ManyPtr<i32>` as `usize`
@@ -13,7 +13,7 @@ use rok::bare::ptr::{ConstPtr, ManyPtr, Ptr, addr_of, many_addr_of};
 struct Holder { p: Ptr<i32>; }
 
 fn main() -> i32 {
-    let x = 1;
+    let x: i32 = 1;
     let a = 16 as Ptr<i32>;
     let b = addr_of(x) as Ptr<u8>;
     let c = addr_of(x) as ConstPtr<i32>;

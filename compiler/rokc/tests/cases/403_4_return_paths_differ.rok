@@ -1,5 +1,5 @@
-// expect-error: 5:1: the return paths of `g` have different types `i32` and `str`
-// expect-error: help: write the return type: `-> i32 | str`
+// expect-error: 5:1: the return paths of `g` have different types `i64` and `str`
+// expect-error: help: write the return type: `-> i64 | str`
 
 // No sum is invented for return paths of different types.
 fn g(c: bool) { if c { return 1; } "x" }

@@ -1,4 +1,4 @@
-// expect-error: 10:9: mismatched types: argument `b` of `f` expects `str`, found `i32`
+// expect-error: 10:9: mismatched types: argument `b` of `f` expects `str`, found `i64`
 // expect-error: 12:9: mismatched types: argument `x` of `m` expects `i32`, found `str`
 
 // An argument type mismatch points at the argument, not the call.

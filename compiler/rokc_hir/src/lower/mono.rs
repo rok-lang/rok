@@ -165,6 +165,31 @@ pub(super) fn bind_from_arg(
     bind_assoc_bindings(ctx, fn_def, self_param.map(|_| arg_ty), subst);
 }
 
+/// What the expected type of a call of `fn_def` says of its type
+/// parameters (none for a loose slot: `any`, `()`).
+pub(super) fn expected_subst(ctx: &LowerCtx<'_>, fn_def: &FnDef) -> HashMap<String, HirTy> {
+    let mut out = HashMap::new();
+    let Some(expected) = ctx.current_expected().filter(|t| {
+        !matches!(
+            t,
+            HirTy::Unknown | HirTy::Unit | HirTy::Any | HirTy::AnyTrait(_) | HirTy::Never
+        ) && !super::infer::has_var(ctx, t)
+    }) else {
+        return out;
+    };
+    if fn_def.generics.params.is_empty() {
+        return out;
+    }
+    let ret = sig_ret_ast(fn_def);
+    let ok = match &ret.kind {
+        rokc_ast::TyKind::Throws { ok, .. } => ok.as_ref(),
+        _ => &ret,
+    };
+    let names = type_param_names(fn_def);
+    unify_param_ty_with(ok, expected, &names, &mut out, ctx);
+    out
+}
+
 /// The type parameter names of `fn_def`.
 fn type_param_names(fn_def: &FnDef) -> std::collections::HashSet<String> {
     fn_def
@@ -466,19 +491,39 @@ pub(super) fn monomorphize_on(
     args: &[HirExpr],
     span: rokc_diagnostic::Span,
 ) -> Option<(FunctionId, HirTy)> {
-    let fn_module = module_of(&fn_def.name);
     // Unify each parameter's AST type with its argument's type; the
     // argument type check reports conflicts.
     let mut subst: HashMap<String, HirTy> = ctx.explicit_generics.clone();
     if let (Some(t), Some(hint)) = (self_ty, self_hint) {
         bind_self(ctx, fn_def, t, hint, &mut subst);
     }
-    for (i, arg) in args.iter().enumerate() {
+    // An unsuffixed literal binds a parameter last: the other arguments and
+    // the expected type win (`id(5)` into an `i32`, `apply(f_i32, 5)`).
+    let default_lit = |a: &HirExpr| {
+        matches!(
+            a.kind,
+            HirExprKind::Const(ConstVal::Int { .. } | ConstVal::Float { .. })
+        ) && ctx.env.sink.default_lits.borrow().contains(&a.span)
+    };
+    for (i, arg) in args.iter().enumerate().filter(|(_, a)| !default_lit(a)) {
         bind_from_arg(ctx, fn_def, self_ty, i, &arg.ty, &mut subst);
     }
+    let before: std::collections::HashSet<String> = subst.keys().cloned().collect();
+    for (i, arg) in args.iter().enumerate().filter(|(_, a)| default_lit(a)) {
+        bind_from_arg(ctx, fn_def, self_ty, i, &arg.ty, &mut subst);
+    }
+    let from_literal: Vec<String> = subst
+        .keys()
+        .filter(|k| !before.contains(*k))
+        .cloned()
+        .collect();
     // A parameter the arguments leave open (only in the return type, or
-    // only met `!`) binds from the expected type.
+    // only met `!`, or a literal) binds from the expected type.
     if let Some(expected) = ctx.current_expected().filter(|t| **t != HirTy::Unknown) {
+        let literal_bound: Vec<(String, HirTy)> = from_literal
+            .iter()
+            .filter_map(|k| Some((k.clone(), subst.remove(k)?)))
+            .collect();
         let names: std::collections::HashSet<String> = fn_def
             .generics
             .params
@@ -493,6 +538,11 @@ pub(super) fn monomorphize_on(
                 _ => None,
             })
             .collect();
+        let restore = |subst: &mut HashMap<String, HirTy>| {
+            for (k, t) in &literal_bound {
+                subst.entry(k.clone()).or_insert_with(|| t.clone());
+            }
+        };
         if !names.is_empty() {
             let ret = sig_ret_ast(fn_def);
             let ok = match &ret.kind {
@@ -501,6 +551,7 @@ pub(super) fn monomorphize_on(
             };
             unify_param_ty_with(ok, expected, &names, &mut subst, ctx);
         }
+        restore(&mut subst);
     }
 
     if let Some(HirTy::Param(p)) = self_hint {
@@ -582,9 +633,106 @@ pub(super) fn monomorphize_on(
         // An argument already failed to lower (reported).
         return None;
     }
-    if subst_tys.iter().any(|t| super::infer::has_var(ctx, t)) {
-        return Some(var_instance(ctx, fn_def, self_ty, self_hint, &subst));
+    let open_self = self_hint.is_some_and(|t| super::infer::has_var(ctx, t));
+    if open_self || subst_tys.iter().any(|t| super::infer::has_var(ctx, t)) {
+        unify_bounds(ctx, fn_def, self_ty, self_hint, &subst);
+        let mut inst = var_instance(ctx, fn_def, self_ty, self_hint, &subst);
+        if let Some(r) = open_body(ctx, fn_def, inst.0, self_hint, &subst) {
+            let ret = with_ok(inst.1, r);
+            if let Some(sig) = ctx.env.sink.mono_sigs.borrow_mut().get_mut(&inst.0) {
+                sig.ret_ty = ret.clone();
+            }
+            inst.1 = ret;
+        }
+        // Made for the solved types when the body ends.
+        if super::infer::active(ctx) {
+            ctx.env.sink.open_insts.borrow_mut().push(OpenInst {
+                id: inst.0,
+                def: std::sync::Arc::new(fn_def.clone()),
+                self_ty: self_ty.cloned(),
+                self_hint: self_hint.cloned(),
+                subst,
+                at: span,
+            });
+        }
+        return Some(inst);
     }
+    instance_for(ctx, fn_def, self_ty, self_hint, &subst, subst_tys, span)
+}
+
+/// An instance asked for over open types, made once they are solved.
+#[derive(Clone)]
+pub(super) struct OpenInst {
+    pub(super) id: FunctionId,
+    def: std::sync::Arc<FnDef>,
+    self_ty: Option<Ty>,
+    self_hint: Option<HirTy>,
+    subst: HashMap<String, HirTy>,
+    at: rokc_diagnostic::Span,
+}
+
+rokc_core::codec_struct!(OpenInst {
+    id,
+    def,
+    self_ty,
+    self_hint,
+    subst,
+    at
+});
+
+/// The instance `p` stands for, under the solved types (`None`: still
+/// open, or it failed and said why).
+pub(super) fn solve_instance(ctx: &LowerCtx<'_>, p: &OpenInst) -> Option<FunctionId> {
+    let subst: HashMap<String, HirTy> = p
+        .subst
+        .iter()
+        .map(|(k, t)| (k.clone(), super::infer::zonk(ctx, t)))
+        .collect();
+    let hint = p.self_hint.as_ref().map(|t| super::infer::zonk(ctx, t));
+    if subst
+        .values()
+        .chain(&hint)
+        .any(|t| super::infer::has_var(ctx, t))
+    {
+        return None;
+    }
+    let subst_tys: Vec<HirTy> = p
+        .def
+        .generics
+        .params
+        .iter()
+        .filter_map(|gp| match gp {
+            rokc_ast::GenericParam::Type { name, .. }
+            | rokc_ast::GenericParam::Const { name, .. } => subst.get(name).cloned(),
+        })
+        .collect();
+    let at = ctx.at.replace(p.at);
+    let made = instance_for(
+        ctx,
+        &p.def,
+        p.self_ty.as_ref(),
+        hint.as_ref(),
+        &subst,
+        subst_tys,
+        p.at,
+    );
+    ctx.at.set(at);
+    made.map(|(id, _)| id)
+}
+
+/// The instance of `fn_def` for `subst` (in `subst_tys` order), lowered
+/// on first use.
+fn instance_for(
+    ctx: &LowerCtx<'_>,
+    fn_def: &FnDef,
+    self_ty: Option<&Ty>,
+    self_hint: Option<&HirTy>,
+    subst: &HashMap<String, HirTy>,
+    subst_tys: Vec<HirTy>,
+    span: rokc_diagnostic::Span,
+) -> Option<(FunctionId, HirTy)> {
+    let fn_module = module_of(&fn_def.name);
+    let subst = subst.clone();
     if subst_tys.iter().any(|t| ty_size(t) > MONO_TYPE_SIZE_LIMIT)
         || ctx.env.sink.mono_depth.get() >= MONO_DEPTH_LIMIT
     {
@@ -897,8 +1045,91 @@ fn lower_instance(
     f
 }
 
-/// An instance over `let` inference variables (`infer`): its signature
-/// only - the probe that asked for it is rolled back.
+/// An implicit generic (`fn add(a, b) { a + b }`) has no signature to
+/// say what its parameters must be, nor one without `-> T` what it
+/// returns: its body is lowered over the open arguments, so its uses fix
+/// them (`add(1, x_i32)`), then undone. Returns the type it returns.
+fn open_body(
+    ctx: &LowerCtx<'_>,
+    fn_def: &FnDef,
+    id: FunctionId,
+    self_hint: Option<&HirTy>,
+    subst: &HashMap<String, HirTy>,
+) -> Option<HirTy> {
+    let sink = &ctx.env.sink;
+    let implicit =
+        fn_def.generics.params.iter().any(
+            |g| matches!(g, rokc_ast::GenericParam::Type { name, .. } if name.starts_with("T#")),
+        );
+    let infers = infers_ret(fn_def, |s| ctx.env.diverges(s));
+    if !(implicit || infers) || !super::infer::active(ctx) || sink.implicit_depth.get() > 0 {
+        return None;
+    }
+    let mut marker = LowerCtx::new(ctx.env, subst, None, fn_def.span);
+    let mark = marker.probe_mark();
+    sink.implicit_depth.set(1);
+    let mut tys = Vec::new();
+    let _ = lower_fn_with(
+        ctx.env,
+        fn_def,
+        id,
+        fn_def.name.clone(),
+        self_hint.cloned(),
+        fn_module(ctx.env, fn_def),
+        subst,
+        infers.then_some(HirTy::Unknown),
+        infers.then_some(&mut tys),
+    );
+    sink.implicit_depth.set(0);
+    marker.rollback(&mark);
+    if !infers {
+        return None;
+    }
+    tys.retain(|t| !matches!(t, HirTy::Never | HirTy::Unit));
+    let (first, rest) = tys.split_first()?;
+    rest.iter()
+        .all(|t| super::infer::unify(ctx, first, t))
+        .then(|| super::infer::resolve(ctx, first))
+}
+
+/// An open instance's bounds fix its variables where one impl decides
+/// (`collect::<List<i32>>()` over `#var` items: `FromIterator<#var>`).
+fn unify_bounds(
+    ctx: &LowerCtx<'_>,
+    fn_def: &FnDef,
+    self_ty: Option<&Ty>,
+    self_hint: Option<&HirTy>,
+    subst: &HashMap<String, HirTy>,
+) {
+    let module = module_of(&fn_def.name);
+    let self_hir = self_hint
+        .cloned()
+        .or_else(|| self_ty.map(|t| resolve_in_mono(ctx, fn_def, subst, None, t)));
+    let mut goals: Vec<(HirTy, &Vec<Ty>)> = Vec::new();
+    for gp in &fn_def.generics.params {
+        if let rokc_ast::GenericParam::Type { name, bounds, .. } = gp {
+            if let Some(t) = subst.get(name) {
+                goals.push((t.clone(), bounds));
+            }
+        }
+    }
+    for w in &fn_def.where_clause {
+        let t = resolve_in_mono(ctx, fn_def, subst, self_hir.clone(), &w.ty);
+        goals.push((t, &w.bounds));
+    }
+    for (t, bounds) in goals {
+        let t = &t;
+        for b in bounds {
+            let want = ctx.bound_ref(b, &module, |x| {
+                resolve_in_mono(ctx, fn_def, subst, self_hir.clone(), x)
+            });
+            if let Some(want) = want {
+                let _ = ctx.implements_trait(t, &want, 0);
+            }
+        }
+    }
+}
+
 fn var_instance(
     ctx: &LowerCtx<'_>,
     fn_def: &FnDef,
@@ -1487,7 +1718,13 @@ fn unit_ret(ctx: &LowerCtx<'_>, f: &FnDef, ret: HirTy, report: bool, instance: b
         f.generics.params.iter().any(
             |g| matches!(g, rokc_ast::GenericParam::Type { name, .. } if name.starts_with("T#")),
         );
-    if !report || untyped || !ctx.env.sink.unit_ret_errs.borrow_mut().insert(f.span) {
+    // A probe of an implicit body reports nothing (and must not use up
+    // the once).
+    if !report
+        || untyped
+        || ctx.env.sink.implicit_depth.get() > 0
+        || !ctx.env.sink.unit_ret_errs.borrow_mut().insert(f.span)
+    {
         return ret;
     }
     let leaf = leaf_name(&f.name).replacen("__", "::", 1);
@@ -1558,6 +1795,10 @@ fn lower_fn_with(
         .borrow_mut()
         .insert(id, (is_const, is_std));
     let mut ctx = LowerCtx::new(env, subst, self_ty, fn_def.span);
+    let scope = fn_def
+        .body
+        .as_ref()
+        .map(|b| super::infer::open_scope(env, b.span));
     if let Some(body) = &fn_def.body {
         ctx.sole_names = sole_names(body);
     }
@@ -1611,7 +1852,7 @@ fn lower_fn_with(
             if has_unknown(&ty) {
                 continue;
             }
-            let v = lower_expected(&mut cx, d, ty);
+            let v = super::infer::scoped(&mut cx, |cx| lower_expected(cx, d, ty));
             super::const_eval::constant(&cx, &format!("the default of parameter `{}`", p.name), v);
         }
     }
@@ -1692,7 +1933,8 @@ fn lower_fn_with(
         block.stmts.splice(0..0, prelude);
         block
     });
-    if let Some(out) = ret_tys {
+    let mut ret_tys = ret_tys;
+    if let Some(out) = ret_tys.as_deref_mut() {
         *out = ctx.ret_tys.take().unwrap_or_default();
     }
     env.sink.instances.borrow_mut().pop();
@@ -1701,12 +1943,12 @@ fn lower_fn_with(
     let ref_tys: Vec<HirTy> = ctx.ref_params.iter().map(|(_, t)| t.clone()).collect();
     ret_ty = ref_packed(&ret_ty, &ref_tys);
 
-    HirFunction {
+    let mut f = HirFunction {
         id,
         def_id: None,
         name,
         params,
-        locals: ctx.into_locals(),
+        locals: std::mem::take(&mut ctx.locals),
         ret_ty,
         body,
         is_async: false,
@@ -1716,7 +1958,11 @@ fn lower_fn_with(
             inline: inline_hint(&fn_def.attrs),
             ..rokc_ir_common::FnFacts::default()
         },
+    };
+    if let Some(s) = scope {
+        super::infer::close_scope(&ctx, s, &mut f, ret_tys);
     }
+    f
 }
 
 /// The `#[inline]` hint of a function; `#[cold]`

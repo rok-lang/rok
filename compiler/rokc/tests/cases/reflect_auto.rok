@@ -9,8 +9,8 @@
 // none
 // Color
 // Color
-// (i32, f64)
-// List<i32>
+// (i64, f64)
+// List<i64>
 // f64 | i32/f64
 // Sq/Sq
 // 7

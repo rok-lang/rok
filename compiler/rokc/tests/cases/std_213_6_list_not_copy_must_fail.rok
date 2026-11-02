@@ -1,4 +1,4 @@
-// expect-error: type `List<i32>` does not satisfy trait bound `Copy` required by `dup`
+// expect-error: type `List<i64>` does not satisfy trait bound `Copy` required by `dup`
 
 // A collection is not `Copy`: copying its handle would
 // not copy its contents.

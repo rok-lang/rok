@@ -364,7 +364,10 @@ pub(super) fn lower_yield(
             span,
         };
     }
-    let opt = HirTy::sum([coro.item.clone(), HirTy::None]);
+    // Linked literal variables wrap as one member.
+    let mut v = v;
+    v.ty = super::infer::resolve(ctx, &v.ty);
+    let opt = HirTy::sum([super::infer::resolve(ctx, &coro.item), HirTy::None]);
     let some = wrap_into_sum(&opt, v);
     let value = match coro.kind {
         CoroKind::Stream => {
