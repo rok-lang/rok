@@ -189,7 +189,9 @@ jobs:
               [ -n "$(gh api "repos/$GH_REPO/actions/workflows/ci.yml/runs?head_sha=$PUSH_AFTER&event=merge_group&status=success" --jq '.workflow_runs[0].id // empty')" ]; then
               skip="the merge queue passed this commit"
             elif [ -n "$changed" ]; then
-              relevant=$(printf '%s\n' "$changed" | while IFS= read -r f; do
+              # A here-string, not a pipe: the loop stops early and pipefail
+              # would fail the writer on a long list.
+              relevant=$(while IFS= read -r f; do
                 [ -n "$f" ] || continue
                 case $f in
                 docs/* | *.md | LICENSE* | assets/* | .gitignore | .github/ISSUE_TEMPLATE/* | .github/dependabot.yml | .github/CODEOWNERS | .github/workflows/*) ;;
@@ -198,7 +200,7 @@ jobs:
                   break
                   ;;
                 esac
-              done)
+              done <<< "$changed")
               [ -z "$relevant" ] && skip="inert change (docs / CI config only)"
             fi
             [ -z "$skip" ] || {
