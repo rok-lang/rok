@@ -1,0 +1,15 @@
+// expect-error: 12:9: invalid assignment target
+// expect-error: help: assign to a variable, a field (`s.x = v`) or an element (`xs[i] = v`)
+// expect-error: 13:6: `c` is not declared; a variable is created only by `let`
+// expect-error: help: declare `c` with `let` before this line
+// expect-error: 14:5: tuple destructure length mismatch: pattern has 2 elements, value has 3
+
+// Each element on the left is a place that already exists; the shapes
+// must match.
+fn main() {
+    let a = 1;
+    let b = 2;
+    (a, 1) = (3, 4);
+    (c, b) = (5, 6);
+    (a, b) = (1, 2, 3);
+}

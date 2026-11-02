@@ -468,6 +468,54 @@ impl<'a> Parser<'a> {
         Expr { kind, span }
     }
 
+    /// `target = value` for a tuple `target` of places (nested tuples and
+    /// `_` too): `let (t0, t1) = value;` then `p0 = t0; p1 = t1;`.
+    fn destructure_assign(&mut self, target: Expr, value: Expr, out: &mut Vec<Stmt>) {
+        let span = target.span;
+        let ExprKind::Tuple(elems) = target.kind else {
+            out.push(Stmt {
+                kind: StmtKind::Assign(target, value),
+                span,
+            });
+            return;
+        };
+        let mut names = Vec::new();
+        let mut rest = Vec::new();
+        for e in elems {
+            let discard = matches!(&e.kind, ExprKind::Path(p)
+                if p.segments.len() == 1 && p.segments[0].name == "_");
+            if discard {
+                names.push("_".to_owned());
+                continue;
+            }
+            let name = self.fresh_destructure_temp();
+            names.push(name.clone());
+            let read = Expr {
+                span: e.span,
+                kind: ExprKind::Path(Path::new(
+                    vec![PathSegment {
+                        name,
+                        generics: Vec::new(),
+                    }],
+                    e.span,
+                )),
+            };
+            rest.push((e, read));
+        }
+        out.push(Stmt {
+            kind: StmtKind::LetTuple {
+                names,
+                rest: None,
+                ty: None,
+                init: value,
+            },
+            span,
+        });
+        for (place, read) in rest {
+            self.destructure_assign(place, read, out);
+        }
+    }
+
     /// Recover from a failed item / statement that began at `from`: one
     /// diagnostic per mistake. Close braces opened since `from` (not
     /// parens / brackets: an unclosed one is often the error), then stop
@@ -5459,9 +5507,31 @@ impl<'a> Parser<'a> {
                     self.bump();
                     let value = self.parse_expr()?;
                     self.stmt_semi()?;
+                    if !matches!(expr.kind, ExprKind::Tuple(_)) {
+                        return Some((
+                            Stmt {
+                                kind: StmtKind::Assign(expr, value),
+                                span: start,
+                            },
+                            false,
+                        ));
+                    }
+                    // `(a, b) = (b, a + b)`: the right side first, then
+                    // each place from left to right.
+                    let mut stmts = Vec::new();
+                    self.destructure_assign(expr, value, &mut stmts);
+                    let block = Block {
+                        stmts,
+                        trailing: None,
+                        span: start,
+                        label: None,
+                    };
                     return Some((
                         Stmt {
-                            kind: StmtKind::Assign(expr, value),
+                            kind: StmtKind::Expr(Expr {
+                                kind: ExprKind::Block(block),
+                                span: start,
+                            }),
                             span: start,
                         },
                         false,

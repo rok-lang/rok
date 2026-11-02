@@ -1514,7 +1514,14 @@ pub(super) fn lower_assign(
                 Code::INVALID_ASSIGNMENT,
                 format!("`{name}` is not declared; a variable is created only by `let`"),
             );
+            // `(a, b) = ..` reads each value from a parser temporary.
+            let value_text = snippet(value);
+            let in_tuple = value_text.starts_with("__destruct");
             ctx.help_last(Some(match near {
+                _ if in_tuple => format!(
+                    "declare `{name}` with `let` before this line, or declare every name at once \
+                     with `let (..) = ..;`"
+                ),
                 Some(n) => format!(
                     "did you mean `{n}`? To declare a new variable, write `let {name} = {};`",
                     snippet(value)
@@ -1880,15 +1887,8 @@ pub(super) fn lower_assign(
             super::mono::assign_place(ctx, &root_place, acc)
         }
         _ => {
-            let help = if matches!(target.kind, ExprKind::Tuple(_)) {
-                format!(
-                    "a tuple is not a place; destructure into new variables: `let {} = {};`",
-                    snippet(target),
-                    snippet(value)
-                )
-            } else {
-                "assign to a variable, a field (`s.x = v`) or an element (`xs[i] = v`)".to_owned()
-            };
+            let help =
+                "assign to a variable, a field (`s.x = v`) or an element (`xs[i] = v`)".to_owned();
             ctx.emit_error_at(
                 Code::INVALID_ASSIGNMENT,
                 target.span,
