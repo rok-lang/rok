@@ -1,10 +1,10 @@
-//! Use after hand-off is an error. A plain value is a shared handle:
-//! after `Mutex::new(xs)` or `tx.send(xs)`, `xs` still names
-//! an object other threads now share, and a handle taken from a guard
-//! (`g.get()`, `g.set(v)`, `g.update(f)`) is unprotected once its `using`
-//! block ends. Such a handle is a scoped view: it may not be returned,
-//! thrown, yielded or sent out of the block, nor passed to a callee that
-//! keeps it. A `ThreadLocal::with` closure's value is one too, for the
+//! Use after hand-off is an error. A hand-off copies the value at run time:
+//! after `Mutex::new(xs)` or `tx.send(xs)`, `xs` names an object no other
+//! thread uses, so a write through it never reaches the new owner. A handle
+//! taken from a guard (`g.get()`, `g.set(v)`, `g.update(f)`) is unprotected
+//! once its `using` block ends. Such a handle is a scoped view: it may not be
+//! returned, thrown, yielded or sent out of the block, nor passed to a callee
+//! that keeps it. A `ThreadLocal::with` closure's value is one too, for the
 //! closure's body (`VIEW`).
 //!
 //! A forward flow over structured HIR. A place is a local plus a field path
@@ -34,8 +34,9 @@
 //! the result (error, `none`, `false`). An `async` future carries its
 //! body's final tag. Summaries are a call-graph fixpoint and ship in ROKHIR.
 //! A call through a function value may reach any function used as a value
-//! with those parameter types (closed world, as for `any`); `extern` and
-//! intrinsics keep nothing; a `Handoff::new` never leaves its function.
+//! with those parameter types and return type (unless loose; closed world,
+//! as for `any`); `extern` and intrinsics keep nothing; a `Handoff::new`
+//! never leaves its function.
 //! Elements are not told apart by index: copying elements from one buffer
 //! into another takes them to be distinct objects unless the source may hold
 //! one twice.

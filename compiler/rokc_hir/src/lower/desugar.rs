@@ -1157,6 +1157,8 @@ fn lower_for_ref(
 
 /// `for pat in xs` otherwise: `let it = xs.into_iter();
 /// loop { match it.next() { v: T => { let pat = v; body } none => break } }`.
+/// A `TryIterator` in a variable or a field of one has no `into_iter`: it
+/// is stepped in place (`xs.next()`), so the variable keeps its progress.
 /// A generator the loop owns (`owned`) is closed after the loop and on
 /// every exit leaving it: a `finally { it.close() }` that
 /// `continue` and `break` of this loop skip.
