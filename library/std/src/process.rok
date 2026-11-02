@@ -38,6 +38,7 @@ use rok::std::os::windows::io::{AsRawHandle, RawHandle, raw_handle};
 use rok::core::io::{Close, IoError, IoErrorKind, Read, Write, AsyncRead, AsyncWrite, AsyncClose};
 use rok::std::sys::{check, byte_buf, read_more, take_handle, use_begin, use_end, use_close, word_at};
 use rok::std::path::Path;
+use rok::core::marker::replace;
 use rok::std::path::AsPath;
 use rok::std::env;
 use rok::std::thread;
@@ -338,7 +339,9 @@ fn dispatch_signals(pipe: File) {
     }
 }
 
-/// Where a child's standard stream goes.
+/// Where a child's standard stream goes. A `File` moved in belongs to
+/// the command: running it closes the parent's copy, whether the spawn
+/// succeeds or fails.
 #[non_exhaustive]
 #[derive(Debug)]
 pub enum Stdio {
@@ -348,12 +351,35 @@ pub enum Stdio {
     File(File),
 }
 
-const fn stdio_mode(s: Stdio) -> i32 {
+/// The runtime's mode for `s`: an fd, or -1 / -2 / -3.
+fn stdio_mode(s: Stdio, program: str) throws (IoError) -> i32 {
     match s {
         Stdio::Inherit => -1,
         Stdio::Null => -2,
         Stdio::Piped => -3,
-        Stdio::File(f) => f.fd(),
+        Stdio::File(f) => {
+            let fd = f.fd();
+            // A closed file must not read as -1 (inherit).
+            if fd < 0 {
+                throw IoError::new(IoErrorKind::InvalidInput, f"{program}: the Stdio::File was closed by an earlier run of this command; give each run its own file (`File::try_clone`)");
+            }
+            fd
+        }
+    }
+}
+
+/// Close the files the command owns; the first error.
+fn close_stdio(s: Stdio, first: IoError | none) -> IoError | none {
+    if let f: File = file_in(s) {
+        try f.close() catch e { return first ?? e; };
+    }
+    first
+}
+
+const fn file_in(s: Stdio) -> File | none {
+    match s {
+        Stdio::File(f) => f,
+        _ => none,
     }
 }
 
@@ -596,9 +622,8 @@ impl Command {
         if c.stderr is Stdio::Inherit { c.stderr = Stdio::Piped; }
         let child = try c.start();
         // Both pipes drain together (poll), so neither can fill and stall.
-        // They stay the child's: these handles only close them.
-        let so = unsafe { rok::core::marker::share(child.stdout) };
-        let se = unsafe { rok::core::marker::share(child.stderr) };
+        let so = child.take_stdout();
+        let se = child.take_stderr();
         let out: List<u8> = List::new();
         let errs: List<u8> = List::new();
         let fd_out = if so is ChildStdout { so.file.fd() } else { -1 };
@@ -662,29 +687,52 @@ impl Command {
                 }
             }
             let fds: GcBuf<i32> = buf_new(3);
-            let pid = unsafe {
-                rok_os_spawn(
-                    argv.to_str(), self.args.len() + 1, envs.to_str(), envc,
-                    if let d: Path = self.cwd { d.as_str() } else { "" },
-                    stdio_mode(self.stdin),
-                    stdio_mode(self.stdout),
-                    stdio_mode(self.stderr),
-                    self.process_group ?? -1,
-                    fds,
-                )
+            let pid = try self.spawn_raw(argv, envs, envc, fds) catch e {
+                throw self.release_stdio(e) ?? e;
             };
-            try check(pid as i64, self.program.as_str());
             let state: GcBuf<i32> = buf_new(4);
             state[2] = rok_os_pidfd_open(pid);
-            Child {
+            let child = Child {
                 pid: pid,
                 stdin: if fds[0] < 0 { none } else { ChildStdin { file: file_of(fds[0], "child stdin") } },
                 stdout: if fds[1] < 0 { none } else { ChildStdout { file: file_of(fds[1], "child stdout") } },
                 stderr: if fds[2] < 0 { none } else { ChildStderr { file: file_of(fds[2], "child stderr") } },
                 state: state,
                 kill_on_drop: self.kill_on_drop,
+            };
+            // The child has its own copies now. If ours fail to close, the
+            // spawn fails and takes the child down with it.
+            if let e: IoError = self.release_stdio(none) {
+                try child.raw_signal(9) catch _ {};
+                child.close_pipes();
+                try child.reap(true) catch _ { false };
+                throw e;
             }
+            child
         }
+    }
+
+    unsafe fn spawn_raw(self, argv: StrBuf, envs: StrBuf, envc: isize, fds: GcBuf<i32>) throws (IoError) -> i32 {
+        let prog = self.program.as_str();
+        let pid = rok_os_spawn(
+            argv.to_str(), self.args.len() + 1, envs.to_str(), envc,
+            if let d: Path = self.cwd { d.as_str() } else { "" },
+            try stdio_mode(self.stdin, prog),
+            try stdio_mode(self.stdout, prog),
+            try stdio_mode(self.stderr, prog),
+            self.process_group ?? -1,
+            fds,
+        );
+        try check(pid as i64, prog);
+        pid
+    }
+
+    /// Close the files moved into the streams; `first`, else the first
+    /// close error.
+    fn release_stdio(self, first: IoError | none) -> IoError | none {
+        let e = close_stdio(self.stdin, first);
+        e = close_stdio(self.stdout, e);
+        close_stdio(self.stderr, e)
     }
 }
 
@@ -705,12 +753,14 @@ fn fill(fd: i32, out: List<u8>, context: str) throws (IoError) -> usize {
 
 const WINDOWS: bool = cfg!(target_os = "windows");
 
-/// A running (or finished) child.
+/// A running (or finished) child. Its `Piped` streams stay in it until
+/// taken (`take_stdin` / `take_stdout` / `take_stderr`); the ones never
+/// taken close where the `Child` is released.
 pub struct Child {
     pid: i32;
-    pub stdin: ChildStdin | none;
-    pub stdout: ChildStdout | none;
-    pub stderr: ChildStderr | none;
+    stdin: ChildStdin | none;
+    stdout: ChildStdout | none;
+    stderr: ChildStderr | none;
     /// `[reaped, raw status, pidfd or -errno, calls in flight]`, shared
     /// by copies of the handle. `reaped`: 0 not yet, 1 reaped, `-errno`
     /// if reaping failed. Signals and waits hold a call (`io::use_begin`)
@@ -727,6 +777,29 @@ impl Debug for Child {
 impl Child {
     /// The child's process id.
     pub const fn id(self) -> u32 { self.pid as u32 }
+
+    /// Take the write end of the child's stdin pipe (`none` unless
+    /// `Stdio::Piped`, or once taken). The taker closes it; close it
+    /// before `wait` if the child reads to end of input.
+    pub fn take_stdin(ref self) -> ChildStdin | none { replace(ref self.stdin, none) }
+
+    /// Take the read end of the child's stdout pipe (`none` unless
+    /// `Stdio::Piped`, or once taken). The taker closes it.
+    pub fn take_stdout(ref self) -> ChildStdout | none { replace(ref self.stdout, none) }
+
+    /// Take the read end of the child's stderr pipe (`none` unless
+    /// `Stdio::Piped`, or once taken). The taker closes it.
+    pub fn take_stderr(ref self) -> ChildStderr | none { replace(ref self.stderr, none) }
+
+    /// Close the pipes not taken; closing cannot report to anyone here.
+    fn close_pipes(self) {
+        let si = unsafe { rok::core::marker::share(self.stdin) };
+        if si is ChildStdin { try si.close() catch _ {}; }
+        let so = unsafe { rok::core::marker::share(self.stdout) };
+        if so is ChildStdout { try so.close() catch _ {}; }
+        let se = unsafe { rok::core::marker::share(self.stderr) };
+        if se is ChildStderr { try se.close() catch _ {}; }
+    }
 
     /// `SIGKILL`.
     pub fn kill(self) throws (IoError) { try self.raw_signal(9); }
@@ -809,13 +882,15 @@ impl Child {
     }
 }
 
-/// With `kill_on_drop`: kill and reap when released; otherwise nothing.
+/// Closes the pipes not taken; with `kill_on_drop`, also kills and
+/// reaps the child.
 impl Drop for Child {
     fn drop(ref self) {
         if self.kill_on_drop && unsafe { word_at(self.state, 0) } == 0 {
             try self.raw_signal(9) catch _ {};
             try self.wait() catch _ { ExitStatus { raw: 0 } };
         }
+        self.close_pipes();
     }
 }
 

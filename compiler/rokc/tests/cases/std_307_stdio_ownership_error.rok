@@ -1,0 +1,22 @@
+// expect-error: std_307_stdio_ownership_error.rok:17:9: `f` was moved at line 16, and is used here
+// expect-error: error[E0034]: field `stdout` of `Child` is private to module `rok::std::process` (take it with `.take_stdout()`)
+// spec: std 307-process §3.7.1 §3.7.2
+// only-os: macos linux
+
+// A file moved into `Stdio::File` is the command's: the program cannot
+// close it again. A child's pipes are taken, not read off its fields.
+use rok::core::io::IoError;
+use rok::std::fs::File;
+use rok::std::path::Path;
+use rok::std::process::{Command, Stdio};
+
+fn main() throws (IoError) {
+    let f = try File::create("/dev/null");
+    let cmd = Command::new(Path::new("/bin/sh")).args(["-c", "echo x"]);
+    let st = try cmd.stdout(Stdio::File(f)).status();
+    try f.close();
+    println(f"{st}");
+    let child = try cmd.stdout(Stdio::Piped).spawn();
+    println(f"{child.stdout is none}");
+    _ = try child.wait();
+}

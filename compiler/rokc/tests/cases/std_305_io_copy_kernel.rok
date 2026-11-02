@@ -115,14 +115,15 @@ fn main() throws (IoError) {
     let small = pattern(1000, 3);
     try fs::write(src, small);
     let child = try Command::new(Path::new("cat")).stdin(Stdio::Piped).stdout(Stdio::Piped).spawn();
-    let si: ChildStdin = unsafe { share(child.stdin) } ?? panic("no stdin");
-    let so: ChildStdout = unsafe { share(child.stdout) } ?? panic("no stdout");
+    let si: ChildStdin = child.take_stdin() ?? panic("no stdin");
+    let so: ChildStdout = child.take_stdout() ?? panic("no stdout");
     using r = try fs::open(src) {
         let n = try io::copy(ref r, ref si);
         try si.close();
         using w = try fs::create(dst) {
             try io::copy(ref so, ref w);
         }
+        try so.close();
         println(f"pipes: {n} {(try fs::read(dst)) == small} {(try child.wait()).success()}");
     }
     try fs::remove_dir_all(dir);
