@@ -38,7 +38,7 @@ pub struct ReExport {
 ///
 /// A `pub use` gives both an entry and a re-export. A short name imported
 /// from two paths keeps its first entry; `check_use_clashes` reports it
-/// once the re-exports are known (spec 5.5.12).
+/// once the re-exports are known.
 #[must_use]
 pub fn build_use_table(
     raw: &[(String, Visibility, UseTree)],
@@ -51,7 +51,7 @@ pub fn build_use_table(
         let mut entries = Vec::new();
         let existing = table.entry(module_path.clone()).or_default();
         flatten_tree(tree, None, module_path, existing, &mut entries);
-        // The same full path imported twice is fine (spec 5.5.11).
+        // The same full path imported twice is fine.
         let existing = table.entry(module_path.clone()).or_default();
         for (entry, _) in entries {
             if let UseEntry::Single { local, full } = &entry {
@@ -79,8 +79,8 @@ pub fn build_use_table(
 }
 
 /// A short name imported twice in one module whose paths reach different
-/// items (spec 5.5.12). Two paths to one item, as through a `pub use`, are
-/// one import (5.5.11).
+/// items. Two paths to one item, as through a `pub use`, are
+/// one import.
 #[must_use]
 pub fn check_use_clashes(
     raw: &[(String, Visibility, UseTree)],
@@ -179,9 +179,9 @@ fn alias_for(full: &str, local: &str) -> String {
     }
 }
 
-/// `reexports` plus one per item a `pub use p::*` / `p::**` reaches (spec
-/// 5.8.6), through re-exported modules too (5.8.8). Items the module can't
-/// see are left out; narrower ones keep their reach (5.8.12). A name that
+/// `reexports` plus one per item a `pub use p::*` / `p::**` reaches,
+/// through re-exported modules too. Items the module can't see are left
+/// out; narrower ones keep their reach. A name that
 /// already means something else in the module is an error.
 #[must_use]
 pub fn glob_reexports(
@@ -383,7 +383,7 @@ impl Missing<'_> {
         if self.packages.iter().any(|p| p == first) {
             return None;
         }
-        // Another language's roots (spec 5.7).
+        // Another language's roots.
         let other = match root {
             "crate" => Some("this package's root is `pkg`: write `use pkg::..`"),
             "super" => Some("the parent module is `sup`: write `use sup::..`"),
@@ -530,7 +530,7 @@ pub fn check_use_targets(
                     hiding.push(hidden);
                     continue;
                 }
-                // Spec 5.8.10: re-exports that lead back to themselves.
+                // Re-exports that lead back to themselves.
                 if *use_vis != Visibility::Private {
                     let mut at = full.as_str();
                     let mut chain = vec![me.as_str()];
@@ -565,7 +565,7 @@ pub fn check_use_targets(
                     ));
                     continue;
                 }
-                // Spec 5.8.4: a named re-export reaches no further than
+                // A named re-export reaches no further than
                 // its item.
                 if let Some(&vis) = item_vis.get(full.as_str()) {
                     let rank = crate::lower::visibility_rank;
@@ -587,7 +587,7 @@ pub fn check_use_targets(
             if path.is_empty() || known.contains(path) {
                 continue;
             }
-            // Spec 5.7.1: a bare root may also be a name this module sees
+            // A bare root may also be a name this module sees
             // through a glob of its own or the implicit import.
             if bare {
                 let written = path
@@ -836,7 +836,7 @@ impl GlobNames {
                 Item::Mod(m) => put(&m.name, m.vis),
                 Item::Enum(e) => {
                     put(&e.name, e.vis);
-                    // A variant is as visible as its enum (spec 5.6.9).
+                    // A variant is as visible as its enum.
                     for v in &e.variants {
                         let k = format!("{}::{}", e.name, v.name);
                         variants.push((k, e.vis, module(&e.name)));
@@ -865,7 +865,7 @@ impl GlobNames {
         Self(out)
     }
 
-    /// Spec 3.9.1: names the enclosing blocks' `use p::*`s bring into the
+    /// Names the enclosing blocks' `use p::*`s bring into the
     /// headers of an item lifted into `module` (`blocks` innermost first).
     /// Module items win, inner blocks beat outer; a name two globs of one
     /// block disagree on is left to the module.
@@ -1017,7 +1017,7 @@ fn resolve_root(segs: &[String], module_path: &str, earlier: &[UseEntry]) -> Vec
     match segs[0].as_str() {
         // A dependency's name is a top-level name in every module (902.3).
         first if crate::lower::is_dependency(first) => segs.to_vec(),
-        // Spec 5.5: a name an earlier `use` of this module brought in
+        // A name an earlier `use` of this module brought in
         // (`use a::b; use b::c;`).
         first
             if earlier

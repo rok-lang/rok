@@ -1,4 +1,4 @@
-//! Use after hand-off (stdlib 2.13.9) is an error. rok has no moves: after
+//! Use after hand-off is an error. rok has no moves: after
 //! `Mutex::new(xs)`, `tx.send(xs)` or `Handoff::new(xs)`, `xs` still names
 //! an object other threads now share, and a handle taken from a guard
 //! (`g.get()`, `g.set(v)`, `g.update(f)`) is unprotected once its `using`
@@ -25,7 +25,7 @@
 //! variant, carrier error) so `if`/`while`/`match`/`catch`/`try?`/`??`
 //! pass only the paths they let through; equal paths merge, and past
 //! `MAX_PATHS` or `MAX_SPLIT_PASSES` all do. Joins are unions; loops run to
-//! a fixpoint. Exempt: `Sync` types, `unsafe` (spec 4.15.2), a `match` on a
+//! a fixpoint. Exempt: `Sync` types, `unsafe`, a `match` on a
 //! variable (its bindings are the uses) and compiler-made locals.
 //!
 //! Calls go through per-function summaries: what happens to each parameter

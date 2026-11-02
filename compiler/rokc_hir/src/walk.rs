@@ -510,7 +510,7 @@ pub fn walk_pat(v: &mut impl AstVisitor, p: &Pattern) {
                 walk_pat(v, x);
             }
         }
-        // Spec 3.11.4: every alternative binds the same names.
+        // Every alternative binds the same names.
         PatternKind::Or(alts) => {
             for x in alts {
                 walk_pat(v, x);

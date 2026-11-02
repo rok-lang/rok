@@ -1,4 +1,4 @@
-//! `rokc test` / `rokc bench` harness (spec 901, 6.2.5): the entry point is
+//! `rokc test` / `rokc bench` harness: the entry point is
 //! replaced by a generated `main` running the `#[test]` named by
 //! `argv[1]`; the runner spawns one process per test, so a panic (101) or
 //! escaping error (1) fails only that test. `bench_main` times rounds of

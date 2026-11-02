@@ -1,17 +1,17 @@
-//! `#[literal(pattern)]` (refs-lang 6.5): source matching a registered
+//! `#[literal(pattern)]`: source matching a registered
 //! pattern is a call of its handler.
 //!
-//! Patterns (6.5.3): `"tok"` matches a token; `expr` / `number` /
+//! Patterns: `"tok"` matches a token; `expr` / `number` /
 //! `string` / `ident` capture; `{ .. }` / `( .. )` group; `% "sep"`
-//! separates repetitions; `*` / `+` / `?` repeat; `, priority = N` (6.5.5).
+//! separates repetitions; `*` / `+` / `?` repeat; `, priority = N`.
 //!
 //! - Built-in shapes (`[..]`, `{k: v}`, `{a, b}`, ranges) keep the
-//!   language's own parse (6.5.6, 3.7); HIR dispatches them by exact
+//!   language's own parse; HIR dispatches them by exact
 //!   pattern (`shape`).
-//! - `number "suffix"` (1.6.2): a numeric literal with an unknown suffix.
+//! - `number "suffix"`: a numeric literal with an unknown suffix.
 //! - Any other pattern starting with a quoted token is tried at every
 //!   expression start before the grammar (`Parser::try_magic_literal`);
-//!   longest match wins, ties go to HIR as candidates (6.5.5).
+//!   longest match wins, ties go to HIR as candidates.
 //!
 //! Captures are handler arguments in order; a `?` group's are each a value
 //! or `none`; a `*` / `+` repetition is one argument of items (a value, a
@@ -124,7 +124,7 @@ impl Pattern {
         parse_pattern(&toks, &[]).ok()
     }
 
-    /// 6.5.7: what the pattern registers, or why it can't.
+    /// What the pattern registers, or why it can't.
     pub fn kind(&self) -> Result<PatKind, String> {
         let text = self.render();
         if let Some((_, s)) = SHAPES.iter().find(|(p, _)| *p == text) {
@@ -520,7 +520,7 @@ impl Parser<'_> {
         }
     }
 
-    /// Spec 6.5.4: registered patterns, tried before the grammar. `None`
+    /// Registered patterns, tried before the grammar. `None`
     /// consumes nothing.
     pub(super) fn try_magic_literal(&mut self) -> Option<Expr> {
         let span = self.peek_span();
@@ -567,7 +567,7 @@ impl Parser<'_> {
     }
 
     /// `2i`: a numeric literal whose suffix the language doesn't define
-    /// is its `#[literal(number "i")]` handler's call (spec 1.6.2).
+    /// is its `#[literal(number "i")]` handler's call.
     fn suffix_literal(&mut self, text: &str, span: Span) -> Option<Expr> {
         let (body, suffix) = split_suffix(text);
         if suffix.is_empty() || INT_SUFFIXES.contains(&suffix) || FLOAT_SUFFIXES.contains(&suffix) {
@@ -759,7 +759,7 @@ pub fn user_suffix(text: &str) -> Option<&str> {
 }
 
 /// A handler's call: written by the compiler, so seen from the handler's
-/// own module, and the handler may have any visibility (spec 6.9.9).
+/// own module, and the handler may have any visibility.
 fn path_of(segs: &[String], span: Span) -> Path {
     let module = segs.split_last().map(|(_, m)| match m.split_first() {
         Some((root, rest)) if root == "pkg" => rest.join("::"),

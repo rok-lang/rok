@@ -1,4 +1,4 @@
-//! `cfg` predicates (spec 6.3): the environment and its evaluation,
+//! `cfg` predicates: the environment and its evaluation,
 //! shared by item filtering (driver), `#[cfg_attr]` and `cfg!(..)`
 //! (parser).
 
@@ -82,7 +82,7 @@ impl CfgEnv {
     }
 }
 
-/// Why `arg` is not a well-formed predicate (spec 6.3), if it is not.
+/// Why `arg` is not a well-formed predicate, if it is not.
 #[must_use]
 pub fn check_pred(arg: &AttrArg) -> Option<String> {
     match arg {

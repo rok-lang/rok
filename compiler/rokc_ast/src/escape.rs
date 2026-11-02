@@ -1,4 +1,4 @@
-//! Escape decoding for string / char literal bodies (spec 1.7.1, 1.8.1).
+//! Escape decoding for string / char literal bodies.
 //! Literals keep the raw body; the lexer validates and later passes
 //! decode with the same functions.
 
@@ -79,7 +79,7 @@ pub fn unescape(body: &str, mode: EscapeMode) -> Result<String, (usize, String)>
             }
             '\n' | '\r' if mode == EscapeMode::Str => {
                 // Line continuation: drop `\`, the terminator and the
-                // next line's leading whitespace (spec 1.7.1).
+                // next line's leading whitespace.
                 while it
                     .next_if(|(_, w)| matches!(w, ' ' | '\t' | '\n' | '\r' | '\x0B' | '\x0C'))
                     .is_some()

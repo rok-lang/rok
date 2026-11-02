@@ -1,5 +1,5 @@
 //! A dependency's `target`: a target name (`x86_64-unknown-linux-gnu`)
-//! or `cfg(<predicate>)` over the target's keys (spec 6.3.2), as in
+//! or `cfg(<predicate>)` over the target's keys, as in
 //! `#[cfg(..)]`: `target_os = "linux"`, `all(..)`, `any(..)`, `not(..)`.
 
 use rokc_target::TargetSpec;

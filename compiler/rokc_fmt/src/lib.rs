@@ -1,4 +1,4 @@
-//! `rokc fmt` (spec 901): the standard layout for `.rok` and `.rokon`.
+//! `rokc fmt`: the standard layout for `.rok` and `.rokon`.
 //!
 //! Layout only: re-indent by bracket nesting (4 spaces), strip trailing
 //! whitespace, collapse blank-line runs, end with one newline. Tokens
@@ -24,7 +24,7 @@ pub fn format_file(path: &Path, src: &str) -> Result<String, String> {
 fn format_source(src: &str) -> Result<String, String> {
     let (mut tokens, mut diags) = Lexer::new(src, "<fmt>").lex_all();
     if diags.iter().any(rokc_diagnostic::RokDiagnostic::is_error) {
-        // Re-lex with the file's own extension operators (spec 1.10.4);
+        // Re-lex with the file's own extension operators;
         // other files' aren't seen.
         let (program, _) = rokc_parser::parse_program(&tokens, "<fmt>");
         let ops = rokc_parser::collect_prec_table(&program, &[])
@@ -39,7 +39,7 @@ fn format_source(src: &str) -> Result<String, String> {
     // Multi-line regions whose inside must stay byte-for-byte: tokens
     // (strings), whole f-strings and block comments that span a newline.
     let mut verbatim: Vec<(usize, usize)> = Vec::new();
-    // A shebang line (spec 1.2.3) is not trivia to scan.
+    // A shebang line is not trivia to scan.
     let bom = if src.starts_with('\u{FEFF}') { 3 } else { 0 };
     let mut prev_end = bom + rokc_core::shebang_len(&src[bom..]);
     let mut fstrings = Vec::new();

@@ -1,4 +1,4 @@
-//! CLI behavior (spec 9.1 / 9.2 / 9.5): spawn the built `rokc` on
+//! CLI behavior: spawn the built `rokc` on
 //! scratch package directories. Tests that build native code skip
 //! when rokc is built without LLVM (see `common::setup`).
 
@@ -105,7 +105,7 @@ fn declarative_macros_run_end_to_end() {
 }
 
 // WrappingFrom (the as-cast conversion matrix) is macro-generated in
-// convert.rok (spec 6.8.12); check a couple of wrapping conversions.
+// convert.rok; check a couple of wrapping conversions.
 #[test]
 fn macro_generated_wrapping_casts_work() {
     let Some(env) = setup() else { return };
@@ -127,7 +127,7 @@ fn macro_generated_wrapping_casts_work() {
 }
 
 // The integer operator impls (Add, Sub, .. Ord) are macro-generated in
-// num.rok (spec 6.8.12); check arithmetic across signed and unsigned.
+// num.rok; check arithmetic across signed and unsigned.
 #[test]
 fn macro_generated_integer_ops_work() {
     let Some(env) = setup() else { return };
@@ -152,7 +152,7 @@ fn macro_generated_integer_ops_work() {
     assert_eq!(text(&out.stdout), "10 4 21 2 1 2 7 5 8 4 -5 1 1 201\n");
 }
 
-// The integer `*Assign` impls are macro-generated (spec 6.8.12); check a
+// The integer `*Assign` impls are macro-generated; check a
 // few compound assignments across types actually work at runtime.
 #[test]
 fn macro_generated_compound_assigns_work() {
@@ -181,7 +181,7 @@ fn new_bin_package_runs_from_its_directory() {
     assert_eq!(text(&out.stdout), "Hello, world!\n");
     assert!(text(&out.stderr).contains("Compiling app"));
 
-    // A file inside the package builds the package (9.2.2), and `-q`
+    // A file inside the package builds the package, and `-q`
     // silences progress.
     put(app.join("src/util/x.rok"), "fn unused() {}\n").unwrap();
     let out = rokc(Some(&env), &dir, &["-q", "build", "app/src/util/x.rok"]);
@@ -193,7 +193,7 @@ fn new_bin_package_runs_from_its_directory() {
     assert!(!app.join("target").exists());
 }
 
-/// 0.3.1: the package is `src/`; `.rok` files beside it are not part of
+/// The package is `src/`; `.rok` files beside it are not part of
 /// it (not compiled, not build inputs, not formatted), and one of them
 /// runs as a script of its own.
 #[test]
@@ -314,7 +314,7 @@ fn lib_and_main_package() {
     assert!(index.contains("add"), "{index}");
 }
 
-/// `--emit=source` (9.9.10): the package after meta expansion, as rok
+/// `--emit=source`: the package after meta expansion, as rok
 /// source (derived impls, `if let` as `match`; no comments).
 #[test]
 fn emit_ast_shows_derives_and_desugaring() {
@@ -337,7 +337,7 @@ fn emit_ast_shows_derives_and_desugaring() {
     );
 }
 
-/// 9.2.8 in a library build: every function of the package is a root
+/// In a library build every function of the package is a root
 /// (even a private one nothing calls), library code it does not reach
 /// is dropped.
 #[test]
@@ -359,7 +359,7 @@ fn library_build_drops_code_its_package_does_not_reach() {
     assert!(mir.matches("\nfn ").count() < 56, "{mir}");
 }
 
-/// 9.2.16: an unchanged package is not rebuilt; a changed source, a
+/// An unchanged package is not rebuilt; a changed source, a
 /// different option or a replaced output rebuilds it.
 #[test]
 fn unchanged_package_is_fresh() {
@@ -404,7 +404,7 @@ fn unchanged_package_is_fresh() {
     assert_eq!(built(&["run"]), (true, "2\n".to_owned()));
 }
 
-/// 6.2.9: `build` / `run` / `test` lint as `check` does: warnings do not
+/// `build` / `run` / `test` lint as `check` does: warnings do not
 /// fail the build, `-D` and `#[deny]` do, `-A` and `#[allow]` silence
 /// them, and a fresh build or cached script prints them again.
 #[test]
@@ -478,7 +478,7 @@ fn builds_print_lints() {
     );
 }
 
-/// 6.2.9: `warnings` holds every warning-level lint, later ones too, as
+/// `warnings` holds every warning-level lint, later ones too, as
 /// a flag and as an attribute; `lint --list` shows each lint's release.
 #[test]
 fn deny_warnings_takes_new_lints() {
@@ -544,7 +544,7 @@ fn deny_warnings_takes_new_lints() {
     );
 }
 
-/// 6.2.9: `rok` names the manifest's `lints` as where a level came from;
+/// `rok` names the manifest's `lints` as where a level came from;
 /// the command line's own flags after them still say so.
 #[test]
 fn manifest_lint_note_names_rok_rokon() {
@@ -580,7 +580,7 @@ fn manifest_lint_note_names_rok_rokon() {
     }
 }
 
-/// 6.2.9: a removed lint named in `#[allow]`, `-A` or `rok.rokon`
+/// A removed lint named in `#[allow]`, `-A` or `rok.rokon`
 /// `lints` is accepted silently, even under `-D warnings`; an unknown
 /// name in the same places is still reported.
 #[test]
@@ -614,7 +614,7 @@ fn removed_lint_names_are_silent() {
     }
 }
 
-/// 6.2.9: a compiler warning that belongs to a lint takes the lint's
+/// A compiler warning that belongs to a lint takes the lint's
 /// level: `-A`, `#[allow]` and `-D` reach it.
 #[test]
 fn compiler_warning_with_lint_can_be_allowed() {
@@ -788,8 +788,7 @@ fn pub_fn_nonunit_body_fix() {
     }
 }
 
-/// 9.10.7: a cached script is linked again when the runtime changes.
-// spec: §9.10.7 §9.2.16
+/// A cached script is linked again when the runtime changes.
 #[test]
 fn runtime_change_relinks_script() {
     let Some(env) = setup() else { return };
@@ -819,7 +818,7 @@ fn runtime_change_relinks_script() {
     assert!(!run());
 }
 
-/// 9.2.15: the `debug` profile has debug info and symbols; the `release`
+/// The `debug` profile has debug info and symbols; the `release`
 /// one neither (unless `-g`), and a panic still names its location.
 #[test]
 fn profiles_differ() {
@@ -1345,7 +1344,7 @@ fn library_stage_persists_across_builds() {
     assert_eq!(build(), (true, "6 28 8 0\n".to_owned()));
 }
 
-/// 2.10.9 / 9.2.16: a generic body is checked against its bounds in
+/// A generic body is checked against its bounds in
 /// every build, incremental or not: breaking it fails the build while
 /// the plain bodies replay, and fixing it builds again.
 #[test]
@@ -1576,7 +1575,7 @@ fn anonymous_file_reuses_its_units() {
         text(&out.stderr)
     };
     assert!(!run().contains(" 0 compiled"));
-    // The cached executable runs again without a build (spec 9.10.7).
+    // The cached executable runs again without a build.
     assert!(run().contains("Fresh hello"));
     // Built again, it reuses every unit.
     fs::remove_dir_all(cache.join("debug/scripts")).unwrap();
@@ -1637,8 +1636,7 @@ fn new_file_under_debug_info_recompiles_its_importers() {
     assert_eq!(text(&run.stdout), "1 2 3\n");
 }
 
-/// `-vv` (9.9.5): the files read and the generic instances made.
-// spec: §9.1.5 §9.9.5
+/// `-vv`: the files read and the generic instances made.
 #[test]
 fn very_verbose_lists_files_and_instances() {
     let dir = scratch("very_verbose");
@@ -1682,9 +1680,7 @@ fn nested_fn_item_names() {
 }
 
 /// A fresh future kept in a local nothing else names is spawned with no
-/// hand-off; one with a second handle still goes through the copy
-/// (stdlib 2.18.1).
-// spec: §2.18.1
+/// hand-off; one with a second handle still goes through the copy.
 #[test]
 fn spawn_of_a_sole_local_future_skips_the_hand_off() {
     let hir = |name: &str, body: &str| {
@@ -1715,7 +1711,7 @@ fn spawn_of_a_sole_local_future_skips_the_hand_off() {
     assert!(aliased.contains(copy) && !aliased.contains(plain));
 }
 
-/// Stdlib 2.5, 2.9.3: the hash key is drawn per process, so hashes
+/// The hash key is drawn per process, so hashes
 /// differ between runs, but what a `Dict` prints and writes (insertion
 /// order) does not.
 #[test]
@@ -1795,7 +1791,7 @@ fn lib_package_builds_archive_and_runs_tests() {
         "{stdout}"
     );
 
-    // `#[test]` functions are not part of a normal build (6.2.5).
+    // `#[test]` functions are not part of a normal build.
     assert_exit(&rokc(Some(&env), &lib, &["build"]), 0);
 }
 
@@ -2277,7 +2273,7 @@ fn lone_file_is_an_anonymous_package() {
     assert!(!dir.join("target").exists());
     assert!(dir.join(exe_name("hello")).is_file());
 
-    // Spec 4.16.8: `mod m;` loads m.rok beside the file, as in a
+    // `mod m;` loads m.rok beside the file, as in a
     // package's src/, and a change to it is a new build.
     put(dir.join("m.rok"), "pub fn f() { println(\"m\"); }\n").unwrap();
     put(dir.join("sub.rok"), "mod m;\nm::f();\n").unwrap();
@@ -2497,7 +2493,7 @@ fn fmt_check_and_rewrite() {
     );
 }
 
-/// A file saved with CRLF (spec 1.1.3) is formatted to LF line ends;
+/// A file saved with CRLF is formatted to LF line ends;
 /// a line break inside a string literal is its value and stays.
 #[test]
 fn fmt_writes_lf_and_keeps_literal_crlf() {
@@ -2751,7 +2747,7 @@ fn symbols_follow_the_mangling_scheme() {
     for want in ["rok_marker_fn", "main", &format!("_Y{}__main_", a[0].0)] {
         assert!(a_all.iter().any(|s| s == want), "no {want}: {a_all:?}");
     }
-    // 9.5.5: `_Y` is followed by the lowercase hex package hash, never
+    // `_Y` is followed by the lowercase hex package hash, never
     // by the reserved `_YK` / `_YL` / `_YI` / `_YM`.
     for s in a_all.iter().filter_map(|s| s.strip_prefix("_Y")) {
         assert!(
@@ -3132,7 +3128,7 @@ fn check_linux_elf(spec: &TargetSpec, b: &[u8]) {
 
 /// A glibc runtime archive: on 32-bit targets it calls the 64-bit time
 /// and file-offset interfaces (glibc 2.34+), none of the 32-bit `time_t`
-/// / `off_t` ones (stdlib spec 3.3: no 2038 limit).
+/// / `off_t` ones (no 2038 limit).
 fn check_glibc_runtime(spec: &TargetSpec, a: &[u8]) {
     if spec.pointer_width == 64 {
         return;
@@ -3236,7 +3232,7 @@ fn extern_dependencies_are_top_level_names() {
     let out = rokc(Some(&env), &dir, &["run", "app", "--extern", "greet=greet"]);
     assert_exit(&out, 0);
     assert_eq!(text(&out.stdout), "41 42\n");
-    // Prebuilt into deps/ with its fingerprint (9.2.3).
+    // Prebuilt into deps/ with its fingerprint.
     for f in ["libgreet.a", "greet.rokhir", "greet.fp"] {
         assert!(dir.join("app/target/debug/deps").join(f).is_file(), "{f}");
     }
@@ -3542,8 +3538,8 @@ fn prebuilt_dependency_keeps_handoff_summaries() {
     );
 }
 
-/// Aggregates over 64 bytes cross a prebuilt dependency by address
-/// (spec 8.6.6), both ways and through function values, whichever
+/// Aggregates over 64 bytes cross a prebuilt dependency by address,
+/// both ways and through function values, whichever
 /// backend built each side (`-O0`: native, `-O2`: LLVM).
 #[test]
 fn prebuilt_dependency_passes_large_aggregates_by_address() {
@@ -3749,7 +3745,7 @@ fn prebuilt_dependency_is_linked_and_instantiated() {
 }
 
 /// A prebuilt library's interface carries its `include_str!` /
-/// `include_bytes!` data (spec 9.4.7): moved away from its sources and
+/// `include_bytes!` data: moved away from its sources and
 /// data files, its generic and `const` users still get the bytes.
 #[test]
 fn moved_prebuilt_library_keeps_its_included_files() {
@@ -3818,7 +3814,7 @@ fn stale_rokhir_is_rejected() {
     );
 
     let good = fs::read(&rokhir).unwrap();
-    // The layout (9.4.3 - 9.4.7): header, sized strings (producer, meta),
+    // The layout: header, sized strings (producer, meta),
     // then at the body offset the cut files and hand-off summaries.
     let word = |i: usize| u32::from_le_bytes(good[i..i + 4].try_into().unwrap());
     assert_eq!(&good[..4], b"ROKH");
@@ -3849,7 +3845,7 @@ fn stale_rokhir_is_rejected() {
     assert_eq!(string(&mut at), "pub fn one() -> i32 ;\n");
     assert_eq!(varint(&mut at), 0);
     assert_eq!(at, good.len());
-    // 9.3.5: the archive's functions are global `_Y` symbols.
+    // The archive's functions are global `_Y` symbols.
     if !cfg!(windows) && Command::new("nm").arg("--version").output().is_ok() {
         let nm = Command::new("nm")
             .arg(dir.join("dep/target/debug/libdep.a"))
@@ -3897,7 +3893,7 @@ fn check_library_checks_every_body() {
     put(dir.join("main.rok"), "fn main() {}\n").unwrap();
     let out = rokc(None, &dir, &["check", "--check-library", "main.rok"]);
     assert_exit(&out, 0);
-    // The library drops no result it does not mean to (6.2.11).
+    // The library drops no result it does not mean to.
     let err = text(&out.stderr);
     assert!(!err.contains("is never used"), "{err}");
 }
@@ -3972,7 +3968,7 @@ fn target_cpu_and_features() {
     assert!(text(&out.stderr).contains("is not the build machine's platform"));
 }
 
-/// Stdlib 0.1.2: `rok::bare` names neither `rok::core` nor `rok::std`, and
+/// `rok::bare` names neither `rok::core` nor `rok::std`, and
 /// `rok::core` does not name `rok::std` (copies of the tiers, with one
 /// module each that does).
 #[test]
@@ -4100,7 +4096,7 @@ fn overflow_checks_on_in_every_profile() {
 fn dependency_trait_is_not_the_current_package() {
     let Some(env) = setup() else { return };
     let dir = scratch("clash");
-    // Spec 3.5.2: a dependency's trait is not in scope unless `use`d;
+    // A dependency's trait is not in scope unless `use`d;
     // `use`d, it beats core's.
     fs::create_dir_all(dir.join("dz")).unwrap();
     put(
@@ -4128,7 +4124,7 @@ fn dependency_trait_is_not_the_current_package() {
     assert_eq!(text(&out.stdout), "7\n");
 }
 
-/// Spec 6.9.8: `pkg::` in a meta block names the block's own package
+/// `pkg::` in a meta block names the block's own package
 /// wherever it expands, not the use site's.
 #[test]
 fn meta_block_pkg_names_its_package() {
@@ -4159,7 +4155,7 @@ fn meta_block_pkg_names_its_package() {
     assert_eq!(text(&out.stdout), "<Outer>\n<Inner>\n");
 }
 
-/// Spec 2.9.5: a user impl overlapping a dependency's bounded blanket
+/// A user impl overlapping a dependency's bounded blanket
 /// impl is an error at its declaration; without the bound's impl for
 /// the user type, the two are disjoint.
 #[test]
@@ -4197,8 +4193,7 @@ fn dependency_blanket_impl_overlaps_user_impl() {
     );
 }
 
-/// `rokc --print cfg` (spec 6.3.11): the target's keys and `--cfg`.
-// spec: §6.3.11 §9.1.4
+/// `rokc --print cfg`: the target's keys and `--cfg`.
 #[test]
 fn print_cfg_lists_the_active_cfg() {
     let dir = scratch("print_cfg");
@@ -4370,8 +4365,8 @@ fn custom_target_file() {
     );
 }
 
-/// `isize` / `usize` limits follow the target's pointer width (stdlib
-/// 2.1.4): a 32-bit target folds them to 32-bit values.
+/// `isize` / `usize` limits follow the target's pointer width: a
+/// 32-bit target folds them to 32-bit values.
 #[test]
 fn pointer_sized_limits_follow_the_target() {
     let Some(env) = setup() else { return };
@@ -4408,7 +4403,7 @@ fn pointer_sized_limits_follow_the_target() {
     }
 }
 
-/// `#[cfg]` on an impl (stdlib 3.7.5 `ChildExt::pidfd`, Linux only):
+/// `#[cfg]` on an impl (`ChildExt::pidfd`, Linux only):
 /// the method exists for a Linux target and not for macOS.
 #[test]
 fn cfg_on_impl_members_follows_the_target() {
@@ -4427,7 +4422,7 @@ fn cfg_on_impl_members_follows_the_target() {
     assert!(text(&out.stderr).contains("no method `pidfd`"));
 }
 
-/// `#[non_exhaustive]` (spec 6.2.10): a match on the type from another
+/// `#[non_exhaustive]`: a match on the type from another
 /// package needs a `_` arm even when it names every variant; inside its
 /// own package it does not.
 #[test]
@@ -4464,8 +4459,7 @@ fn non_exhaustive_needs_a_catch_all_across_packages() {
 }
 
 /// A native build links the prebuilt standard library, except at `-O3`,
-/// where it is compiled with the program (9.2.16).
-// spec: §9.3.6 / std §0.1.3
+/// where it is compiled with the program.
 #[test]
 fn o3_compiles_std_from_source() {
     let Some(env) = setup() else { return };
@@ -5275,7 +5269,7 @@ fn emitted_code_follows_the_runtime_abi() {
     for unwanted in ["invoke ", "landingpad", "personality", "addrspace("] {
         assert!(!ll.contains(unwanted), "{unwanted:?} in the LLVM IR");
     }
-    // A rok body takes its caller's `rok_tls` address last (8.3.8): only
+    // A rok body takes its caller's `rok_tls` address last: only
     // what is entered from outside rok (the C `main`; a lazy static's
     // initializer, off the hot path) reads TLS.
     let readers: Vec<&str> = ll
@@ -5333,7 +5327,7 @@ fn emitted_code_follows_the_runtime_abi() {
     );
 }
 
-/// `#[cold]` (6.2.6): at -O2 the function keeps its call, out of the
+/// `#[cold]`: at -O2 the function keeps its call, out of the
 /// caller's hot path, and LLVM sees it as cold.
 #[test]
 fn cold_functions_stay_out_of_line() {
@@ -5504,7 +5498,7 @@ fn runtime_symbols_carry_the_rok_prefix() {
     }
 }
 
-/// Stdlib 1.8: a prebuilt dependency's ROKHIR carries the `.wit` files
+/// A prebuilt dependency's ROKHIR carries the `.wit` files
 /// its `ffi::wit` items read (one outside its source dir, with its
 /// `deps/`): a dependent builds, links and runs with them gone.
 #[test]
@@ -6378,7 +6372,7 @@ fn tls_interop_openssl() {
     );
 }
 
-/// A compiler knob (9.1.7, 9.9.5) set to a value outside its accepted
+/// A compiler knob set to a value outside its accepted
 /// ones warns once on stderr and keeps its default.
 #[test]
 fn env_knob_bad_value_warns() {

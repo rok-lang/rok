@@ -1,4 +1,4 @@
-//! `rokc jupyter`: a Jupyter kernel (spec 908) on the REPL engine.
+//! `rokc jupyter`: a Jupyter kernel on the REPL engine.
 //!
 //! Messaging 5.3 over a minimal hand-written ZMTP 3.0 (TCP, NULL
 //! mechanism): shell, control and stdin as ROUTER, iopub as PUB, heartbeat

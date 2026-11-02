@@ -1,6 +1,6 @@
-//! `f"..."` (refs-lang 1.7.3) from the lexer's f-string tokens: text
+//! `f"..."` from the lexer's f-string tokens: text
 //! runs and holes (`ExprKind::FString`). Hole code is ordinary tokens;
-//! HIR reads the spec and formats by the hole's type (stdlib 2.10).
+//! HIR reads the spec and formats by the hole's type.
 
 use rokc_ast::{Expr, ExprKind, FStringPart, SpecPiece};
 use rokc_diagnostic::{Code, RokDiagnostic};

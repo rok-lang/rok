@@ -1,4 +1,4 @@
-//! `ffi::wit::import` / `export` (stdlib 1.8): modules holding them get
+//! `ffi::wit::import` / `export`: modules holding them get
 //! `rokc_wit`'s bindings, the link the component's world.
 
 use std::path::Path;

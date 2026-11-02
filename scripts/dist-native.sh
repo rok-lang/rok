@@ -1,5 +1,5 @@
 #!/bin/sh
-# Build a release toolchain archive (spec 9.2.19):
+# Build a release toolchain archive:
 #
 #   dist/rok-<version>-<triple>.tar.gz     (Windows: .zip)
 #   dist/rok-<version>-<triple>.tar.xz     the same files, about half the
@@ -174,7 +174,7 @@ if [ "$(uname -s)" = Linux ] && [ -z "$static" ]; then
     exit 1
   }
 fi
-# The installer contract (spec 9.10.6): 0.1.x `rok toolchain update` reads
+# The installer contract: 0.1.x `rok toolchain update` reads
 # the version from `rokc <version>` and the host from `host: <triple>`.
 v=$("$stage/bin/rokc$exe" --version --verbose)
 printf '%s\n' "$v" | head -n 1 | grep -Eq "^rokc $version( |\$)" &&

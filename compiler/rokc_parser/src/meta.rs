@@ -1,4 +1,4 @@
-//! User meta blocks (refs-lang 6.8 / 6.9): `#[impl_derive(Tr)]`,
+//! User meta blocks: `#[impl_derive(Tr)]`,
 //! `#[impl_derive_attribute(Tr, attr)]` and `#[impl_attribute(name)]`.
 //!
 //! Bodies stay tokens. A driver pre-pass collects them into a `MetaTable`
@@ -7,7 +7,7 @@
 //! ...) and parsing the result, to a fixpoint. Tokens keep their origin's
 //! spans; errors point at the template with a label at the use.
 //!
-//! Hygiene (6.9.8): template locals are renamed `x__meta` so they neither
+//! Hygiene: template locals are renamed `x__meta` so they neither
 //! capture nor shadow the item's names; enum payloads get generated names.
 
 // Slice indexing and one flat template match; `meta_block` tells "not a
@@ -36,7 +36,7 @@ pub enum MetaKind {
     Derive,
     /// `#[impl_attribute]` - used as `#[name]` / `#[name(args)]`.
     Attribute,
-    /// `#[impl_macro]` - used as `name!(..)` at a call site (spec 6.8.12).
+    /// `#[impl_macro]` - used as `name!(..)` at a call site.
     Macro,
 }
 
@@ -57,7 +57,7 @@ pub struct MetaDef {
     /// The defining package (`""` for the one being built).
     pub package: String,
     /// The module that holds the block: its template's names resolve
-    /// and are access-checked there (spec 6.9.9). Inline `mod`s of the
+    /// and are access-checked there. Inline `mod`s of the
     /// file until the driver prefixes the file's module.
     pub module: String,
     /// What the defining file's `use`s import (globs end in `*` / `**`):
@@ -68,7 +68,7 @@ pub struct MetaDef {
     /// Tokens between the body's braces.
     pub body: Vec<Token>,
     /// The block's own `#[cfg(..)]` attributes: the driver registers it
-    /// only when they hold (6.9.8: cfg runs before expansion).
+    /// only when they hold (cfg runs before expansion).
     pub cfg: Vec<Attribute>,
 }
 
@@ -93,7 +93,7 @@ impl MetaDef {
     }
 
     /// Mount path of the block's package (`""`: the one being built); its
-    /// `pkg::` paths keep naming it wherever the block expands (6.9.8).
+    /// `pkg::` paths keep naming it wherever the block expands.
     pub fn set_package(&mut self, package: &str) {
         package.clone_into(&mut self.package);
         for k in 0..self.body.len() {
@@ -120,7 +120,7 @@ pub struct MetaTable {
     defs: Vec<MetaDef>,
 }
 
-/// Attributes the compiler owns (6.2 - 6.7); `#[impl_attribute]` can't
+/// Attributes the compiler owns; `#[impl_attribute]` can't
 /// take their names. Every name the driver checks is here (a driver test
 /// holds it).
 pub const BUILTIN_ATTRS: &[&str] = &[
@@ -165,8 +165,7 @@ pub const BUILTIN_ATTRS: &[&str] = &[
     "warn",
 ];
 
-/// Compiler built-in `!`-forms ([6.3](603)/[6.11](611)); a macro cannot
-/// take their names (spec 6.8.12).
+/// Compiler built-in `!`-forms; a macro cannot take their names.
 const BUILTIN_BANGS: &[&str] = &["cfg", "include_bytes", "include_str"];
 
 impl MetaTable {
@@ -204,7 +203,7 @@ impl MetaTable {
         out
     }
 
-    /// The macro `name!` a meta block registers, if any (spec 6.8.12).
+    /// The macro `name!` a meta block registers, if any.
     #[must_use]
     pub fn find_macro(&self, name: &str) -> Option<&MetaDef> {
         self.find(MetaKind::Macro, name)
@@ -246,7 +245,7 @@ impl MetaTable {
 
     /// Register `def`; a second block for the same name in one package,
     /// or one taking a built-in derive / attribute name, is an error. Two
-    /// packages may each register a name: a use then says which (6.8.11).
+    /// packages may each register a name: a use then says which.
     pub fn add(&mut self, def: MetaDef) -> Option<RokDiagnostic> {
         let clash = |code: Code, msg: String| RokDiagnostic::error(code, def.span, msg);
         if let Some(old) = self
@@ -923,7 +922,7 @@ impl Expander<'_> {
         let head = match b.get(k + 1).map(|t| &t.kind) {
             Some(TokenKind::SelfUpper) => "Self".to_owned(),
             Some(TokenKind::Ident(n)) => n.clone(),
-            // Spec 6.9.8: `@for` and `@concat` are macro-only.
+            // `@for` and `@concat` are macro-only.
             Some(TokenKind::For) => {
                 self.err(
                     k,
@@ -1580,7 +1579,7 @@ impl Parser<'_> {
                 return None;
             }
             // This package's block, then a `use`d one, then the standard
-            // library's (6.8.11).
+            // library's.
             let (package, imports) = self.meta_site(at, name);
             if let Some(d) = all.iter().find(|d| d.package == package) {
                 return Some(MetaUse::Def((*d).clone()));
@@ -1672,7 +1671,7 @@ impl Parser<'_> {
     }
 
     /// A bare `name` that none of the blocks `all` in reach of `site`
-    /// registers: an error naming the qualified forms (spec 6.8.11).
+    /// registers: an error naming the qualified forms.
     fn unscoped_meta(&mut self, kind: MetaKind, name: &str, all: &[&MetaDef], at: Span) -> MetaUse {
         let forms: Vec<String> = all
             .iter()
@@ -1725,8 +1724,8 @@ impl Parser<'_> {
     }
 
     /// The package and `use` imports a bare meta name at `at` is looked
-    /// up from: its definition's for a name a template wrote (spec
-    /// 6.9.9), else this file's.
+    /// up from: its definition's for a name a template wrote,
+    /// else this file's.
     fn meta_site(&self, at: Span, name: &str) -> (String, Vec<Vec<String>>) {
         let is_name = |t: &&Token| matches!(&t.kind, TokenKind::Ident(n) if n == name);
         let tok = match self
@@ -1980,7 +1979,7 @@ impl Parser<'_> {
         }))
     }
 
-    /// Whether `def` may be used from this file (6.8.6: a private block
+    /// Whether `def` may be used from this file (a private block
     /// only in its own module).
     fn meta_visible(&mut self, def: &MetaDef, at: Span) -> bool {
         if def.public || def.file == self.file {
@@ -2305,7 +2304,7 @@ impl Parser<'_> {
     }
 
     /// Expand `def` over `target` and parse the result (expanding again
-    /// what it produces - 6.8.8).
+    /// what it produces).
     fn run_meta(&mut self, def: &MetaDef, target: &Target, item: &Item) -> Vec<Item> {
         let key = format!("{:?}:{}:{}", def.kind, def.name, def.package);
         if self.meta_stack.contains(&key) || self.meta_stack.len() >= 32 {
@@ -2405,7 +2404,7 @@ impl Parser<'_> {
             }
             self.diagnostics.push(d);
         }
-        // 6.9.8: `#[cfg]` runs before expansion - what the item's cfg
+        // `#[cfg]` runs before expansion - what the item's cfg
         // removes, its expansion goes with it.
         let cfgs: Vec<&Attribute> = item.attrs().iter().filter(|a| a.name() == "cfg").collect();
         for i in &mut items {
@@ -2432,7 +2431,7 @@ pub(crate) fn use_site_path(arg: &[Token]) -> Option<Vec<Token>> {
     Some(arg.iter().map(|t| tok(t.kind.clone(), t.span)).collect())
 }
 
-/// An expansion's own items land at the use site (spec 6.9.9), so the
+/// An expansion's own items land at the use site, so the
 /// names it declares there are looked up there too.
 pub(crate) fn place_declared(tokens: &mut [Token]) {
     let mut depth = 0i32;

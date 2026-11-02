@@ -1,4 +1,4 @@
-//! Entry point rules (spec 4.16): `main.rok` provides either an explicit
+//! Entry point rules: `main.rok` provides either an explicit
 //! `fn main` or top-level statements (the implicit `main`), never both.
 //! Every other file is definitions-only.
 
@@ -75,18 +75,18 @@ fn implicit_main(stmts: Vec<Stmt>) -> FnDef {
             }
             .into(),
         ),
-        // Spec 4.16.5: `await` at top level makes it `async fn main`.
+        // `await` at top level makes it `async fn main`.
         is_async,
         is_generator: false,
         is_unsafe: false,
-        // Spec 4.16.4: the implicit `main` is `fn main() throws` (untyped).
+        // The implicit `main` is `fn main() throws` (untyped).
         throws: ThrowsKind::Typed(vec![rokc_ast::untyped_throws_ty(span)]),
         where_clause: Vec::new(),
         span,
     }
 }
 
-/// Spec 4.16.3: no parameters, generics or `unsafe`; `()` or `i32`, or
+/// No parameters, generics or `unsafe`; `()` or `i32`, or
 /// `()` with `throws (E)` (an escaping error exits 1). `Result` isn't an
 /// entry form.
 fn check_main_signature(f: &FnDef, diags: &mut Vec<RokDiagnostic>) {

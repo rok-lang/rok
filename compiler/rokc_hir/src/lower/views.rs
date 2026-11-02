@@ -1,4 +1,4 @@
-//! A `SliceMut` used after its list was resized (stdlib 2.9.7) is an
+//! A `SliceMut` used after its list was resized is an
 //! error where one function shows both.
 //!
 //! A forward flow over structured HIR, per function. A view local holds

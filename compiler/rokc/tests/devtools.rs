@@ -1,4 +1,4 @@
-//! `rokc lint`, `rokc doc`, `rokc bench` (spec 9.1) on scratch packages.
+//! `rokc lint`, `rokc doc`, `rokc bench` on scratch packages.
 //! Lint and doc need no LLVM; bench builds native code and skips without
 //! the toolchain (see `common::setup`).
 
@@ -465,7 +465,7 @@ fn tests_and_benches_directories() {
         "pub fn add(a: i64, b: i64) -> i64 { a + b }\n",
     );
     // tests/ and benches/ sit beside src/, reach the package through
-    // pkg::, and are collected only by `test` / `bench` (spec 0.3.5).
+    // pkg::, and are collected only by `test` / `bench`.
     write(
         "tests/basic.rok",
         "use pkg::add;\n#[test]\nfn adds() { if add(40i64, 2i64) != 42i64 { panic(\"broke\"); } }\n",

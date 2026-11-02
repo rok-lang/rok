@@ -1,4 +1,4 @@
-//! `#[derive(...)]` (refs-lang 6.2.1).
+//! `#[derive(...)]`.
 //!
 //! Each trait becomes an `impl` written as source and parsed, every token
 //! carrying the attribute's span so diagnostics point there. Field bounds
@@ -88,7 +88,7 @@ pub(crate) fn derive_items(item: &Item, file: &str) -> (Vec<Item>, Vec<RokDiagno
     let has = |n: &str| derived.iter().any(|(d, _)| d == n);
     for (tr, at) in derived.iter().cloned() {
         span = Some(at);
-        // Spec 2.5.1: `Eq: PartialEq`, `Ord: PartialOrd + Eq`.
+        // `Eq: PartialEq`, `Ord: PartialOrd + Eq`.
         let needs: &[&str] = match tr.as_str() {
             "Eq" => &["PartialEq"],
             "Ord" => &["PartialOrd", "Eq"],
@@ -174,7 +174,7 @@ pub(crate) fn derive_items(item: &Item, file: &str) -> (Vec<Item>, Vec<RokDiagno
 }
 
 /// Items the derives name, beside the traits; written by the compiler,
-/// so seen from core (spec 6.9.9), while the item's own names stay the
+/// so seen from core, while the item's own names stay the
 /// user's.
 const COMPILER_PATHS: &[&str] = &[
     ORDERING,

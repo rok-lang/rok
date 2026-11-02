@@ -6,7 +6,7 @@ use rokc_ir_common::PrimTy;
 use crate::gc_abi::{AMBIGUOUS, ANY_SLOT, INTERIOR_REF, STRONG_REF};
 use crate::{MirTy, UnionKind};
 
-/// What the collector must see of a value (802 §8.2.3), offsets in
+/// What the collector must see of a value, offsets in
 /// bytes from the same base.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum GcSlot {
@@ -250,8 +250,8 @@ impl Target {
         !slots.is_empty()
     }
 
-    /// An `any` payload of type `ty` is the payload word itself (spec
-    /// 2.2.2): a number / bool / char no wider than a pointer.
+    /// An `any` payload of type `ty` is the payload word
+    /// itself: a number / bool / char no wider than a pointer.
     #[must_use]
     pub fn any_inline(&self, ty: &MirTy) -> bool {
         matches!(ty, MirTy::Prim(p)

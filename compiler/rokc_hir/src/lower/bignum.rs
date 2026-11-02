@@ -1,4 +1,4 @@
-//! `int` / `float` (stdlib 2.1.2, 2.1.3) are library structs the compiler
+//! `int` / `float` are library structs the compiler
 //! knows by path; an unsuffixed literal in such a slot becomes a
 //! constructor call:
 //!
@@ -9,8 +9,8 @@
 //! let d: float = 1e400;     ==>  Float::from_literal("1e400")   (past f64)
 //! ```
 //!
-//! `x as T` with `int` / `float` on either side is a conversion trait call
-//! (stdlib 2.11.1): `Int as i32` → `i32::wrapping_from(x)`, `i32 as int` →
+//! `x as T` with `int` / `float` on either side is a conversion trait call:
+//! `Int as i32` → `i32::wrapping_from(x)`, `i32 as int` →
 //! `Int::from(x)`.
 
 #[allow(clippy::wildcard_imports)]
@@ -25,7 +25,7 @@ pub(super) enum Big {
 }
 
 impl Big {
-    /// Its lang slot (stdlib 0.4.2).
+    /// Its lang slot.
     const fn slot(self) -> &'static str {
         match self {
             Self::Int => "int_type",
@@ -43,7 +43,7 @@ pub(super) fn big_of(ctx: &LowerCtx<'_>, ty: &HirTy) -> Option<Big> {
 }
 
 /// `full::leaf`, written by the compiler: it resolves and is
-/// access-checked from the module that defines it (spec 6.9.9), so the
+/// access-checked from the module that defines it, so the
 /// item may be `pub(pkg)`.
 pub(super) fn path_expr(full: &str, leaf: &str, span: Span) -> Expr {
     // `full` names a module, or a type in one.
@@ -240,7 +240,7 @@ pub(super) fn cast(
         return poison(span);
     }
     // Into `int` / `float`: the lossless `From` (none from `f64` to `int`,
-    // reported as such); out of one: stdlib 2.11.1's wrapping conversion.
+    // reported as such); out of one: the wrapping conversion.
     let method = if into.is_some() {
         "from"
     } else {

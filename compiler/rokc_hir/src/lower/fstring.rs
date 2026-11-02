@@ -1,4 +1,4 @@
-//! `f"..."` (refs-lang 1.7.3, stdlib 2.10) written into one runtime
+//! `f"..."` written into one runtime
 //! text (a `core::fmt::Formatter`'s; `rok_fmt_*` return it, maybe moved):
 //!
 //! ```text

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install a rok toolchain into $ROK_HOME (default ~/.rok, spec 9.2.19):
+# Install a rok toolchain into $ROK_HOME (default ~/.rok):
 # $ROK_HOME/toolchains/<version>-<triple>/, made the default, with the
 # proxies $ROK_HOME/bin/{rok,rokc,rokls}.
 #
@@ -19,7 +19,7 @@
 # ROK_NO_MODIFY_PATH=1) touches none of them and says what to add.
 #
 # Output goes to stderr in the style of `rok toolchain update`: status
-# words right-aligned, coloured as rok colours them (spec 9.1.8): on a
+# words right-aligned, coloured as rok colours them: on a
 # terminal or with CLICOLOR_FORCE, never with NO_COLOR or TERM=dumb.
 # -q prints errors only, -v adds notes (URLs, paths).
 set -eu

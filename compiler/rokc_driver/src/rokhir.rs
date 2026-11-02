@@ -1,4 +1,4 @@
-//! ROKHIR (spec 904): the interface of a prebuilt library package,
+//! ROKHIR: the interface of a prebuilt library package,
 //! `<name>.rokhir` next to its `lib<name>.a`.
 //!
 //! ```text
@@ -14,7 +14,7 @@
 //! `str` is a `PrefixVarInt` length + UTF-8 (904.7). The body is every
 //! source file with concrete function bodies cut to `;` (line breaks kept
 //! for diagnostics), then the `.wit` files `ffi::wit` reads, then the
-//! use-after-hand-off summaries (stdlib 2.13.9) a cut body can't show.
+//! use-after-hand-off summaries a cut body can't show.
 // Source rather than 904.9-11's binary sections: monomorphization works on
 // AST anyway, and a binary tree would only save the cheap parse.
 
@@ -34,7 +34,7 @@ pub struct Rokhir {
     pub producer: String,
     /// The package's mount name (`--extern <name>=`): it is in symbols.
     pub name: String,
-    /// Package hash (spec 0.3.3) its symbols were mangled with.
+    /// Package hash its symbols were mangled with.
     pub hash: String,
     /// Where the package's sources were: the body's files live there
     /// (an overlay; the disk is not read).
@@ -428,7 +428,7 @@ pub fn interface(
     out
 }
 
-/// `rokc inspect` (909 §9.9.14) of a `.rokhir` (or the `lib<name>.a`
+/// `rokc inspect` of a `.rokhir` (or the `lib<name>.a`
 /// beside it): build meta, exports, generic items, archive members.
 pub fn inspect(path: &Path) -> Result<String, String> {
     let (rokhir_path, archive) = companions(path);
@@ -467,7 +467,7 @@ pub fn inspect(path: &Path) -> Result<String, String> {
     Ok(s)
 }
 
-/// The WIT files package `pkg`'s `ffi::wit` items read (stdlib 1.8),
+/// The WIT files package `pkg`'s `ffi::wit` items read,
 /// by path relative to its source dir `dir`.
 #[must_use]
 pub fn wit_files(w: &rokc_mir::WitLink, pkg: &str, dir: &Path) -> Vec<(String, String)> {

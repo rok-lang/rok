@@ -1,4 +1,4 @@
-//! WIT for rok (stdlib 1.8): `.wit` files named by `ffi::wit::import` /
+//! WIT for rok: `.wit` files named by `ffi::wit::import` /
 //! `export` are parsed and resolved ([`load`]) and bound through the
 //! canonical ABI ([`bind`]), plus the world for `wasm-component-ld`.
 //!

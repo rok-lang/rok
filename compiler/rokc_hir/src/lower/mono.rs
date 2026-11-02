@@ -77,7 +77,7 @@ pub(super) fn unify_param_ty_with(
                 rec(p, a);
             }
         }
-        // Sums are sets (spec 2.6.4): members named outright cancel and a
+        // Sums are sets: members named outright cancel and a
         // lone parameter takes the rest (`T | none` against
         // `i32 | str | none` binds `T = i32 | str`).
         (rokc_ast::TyKind::Sum(parts), HirTy::Sum(arg_parts)) => {
@@ -487,7 +487,7 @@ pub(super) fn monomorphize_on(
         }
     }
 
-    // Spec 2.10.5: unbound params take their defaults. One pass: a default
+    // Unbound params take their defaults. One pass: a default
     // can't depend on another default.
     for gp in &fn_def.generics.params {
         if let rokc_ast::GenericParam::Type {
@@ -826,7 +826,7 @@ fn being_inferred(env: &Env<'_>, id: FunctionId) -> bool {
 }
 
 /// `lower_fn_inner` for an instance; one of an implicit generic
-/// (spec 4.2.2) records its call site for the body's errors.
+/// records its call site for the body's errors.
 #[allow(clippy::too_many_arguments)]
 fn lower_instance(
     ctx: &LowerCtx<'_>,
@@ -951,8 +951,8 @@ pub(super) fn lower_fn_inner(
     lower_fn_with(env, fn_def, id, name, self_ty, module, subst, ret, None)
 }
 
-/// Spec 4.1.3: without `-> T`, the return type comes from the body when it
-/// has a value or may diverge everywhere (4.3.7). `main` keeps `()`.
+/// Without `-> T`, the return type comes from the body when it
+/// has a value or may diverge everywhere. `main` keeps `()`.
 pub(super) fn infers_ret(f: &FnDef, may_diverge: impl Fn(rokc_diagnostic::Span) -> bool) -> bool {
     let Some(body) = &f.body else {
         return false;
@@ -1071,7 +1071,7 @@ fn with_ok(declared: HirTy, ok: HirTy) -> HirTy {
 }
 
 /// Lower the body with an open return type and join its `return` and tail
-/// types (spec 4.3.4: they must agree). With
+/// types (they must agree). With
 /// `keep`, a body whose paths agree (no `throws`, no `ref` parameter) is
 /// final as lowered; otherwise it is rolled back.
 #[allow(clippy::too_many_arguments)]
@@ -1145,7 +1145,7 @@ fn infer_ret_of(
         );
         HirTy::Unknown
     };
-    // No path reaches the end or a `return`: `!` (spec 4.3.7).
+    // No path reaches the end or a `return`: `!`.
     let ret = if tys.is_empty() && !unit {
         HirTy::Never
     } else if tys.is_empty() {
@@ -1157,7 +1157,7 @@ fn infer_ret_of(
             fail("one path returns a value and another none")
         }
     } else if let Some(other) = tys.iter().find(|t| **t != tys[0] && !has_unknown(t)) {
-        // Spec 4.3.4: no sum is invented for differing return paths.
+        // No sum is invented for differing return paths.
         if !tentative && !has_unknown(&tys[0]) {
             let (a, b) = (probe.ty_name(&tys[0]), probe.ty_name(other));
             probe.emit_error_at(
@@ -1212,7 +1212,7 @@ fn infer_ret_of(
     (ret, None)
 }
 
-/// Spec 4.1.3: a `pub` fn without `->` (`UNIT_RET_ATTR`) returns `()`,
+/// A `pub` fn without `->` (`UNIT_RET_ATTR`) returns `()`,
 /// also when its body diverges; a body with a value is an error (with
 /// `report`) that names the `-> T` to write (in a generic `instance`,
 /// the type of that instance).
@@ -1353,7 +1353,7 @@ fn lower_fn_with(
         .flat_map(|a| a.path[1..].iter().cloned())
         .collect();
     ctx.unsafe_depth = u32::from(fn_def.is_unsafe);
-    // The synthesized entry (spec 4.16.2).
+    // The synthesized entry.
     ctx.implicit_main = env.implicit_main && name == "main" && ctx.self_ty.is_none();
     ctx.harness_main = env.harness_main
         && name == "main"
@@ -1363,7 +1363,7 @@ fn lower_fn_with(
     if let Some(b) = &fn_def.body {
         ctx.ref_captured = ref_captured_bindings(&fn_def.params, b);
     }
-    // Spec 4.2.3: a default is a `const` expression, checked here once
+    // A default is a `const` expression, checked here once
     // (an instance's defaults are its template's).
     if subst.is_empty() {
         for p in &fn_def.params {
@@ -1439,7 +1439,7 @@ fn lower_fn_with(
     }
     if let HirTy::Throws { ok, err } = &ret_ty {
         ctx.fn_ret_ty = (**ok).clone();
-        // Spec 4.16.3: an error escaping a throwing `main` is reported by
+        // An error escaping a throwing `main` is reported by
         // the entry itself (exit 1); `main` keeps a plain C return type.
         if name == "main" && ctx.self_ty.is_none() {
             ctx.uncaught_in_main = true;
@@ -1483,7 +1483,7 @@ fn lower_fn_with(
     }
 }
 
-/// The `#[inline]` hint of a function (spec 6.2.4); `#[cold]` (6.2.6)
+/// The `#[inline]` hint of a function; `#[cold]`
 /// unless it is `#[inline(always)]`.
 fn inline_hint(attrs: &[rokc_ast::Attribute]) -> rokc_ir_common::Inline {
     use rokc_ast::{AttrArg, AttrBody};
@@ -1519,7 +1519,7 @@ pub(super) fn generic_subst(
     subst
 }
 
-/// Every parameter has a default (spec 2.10.5).
+/// Every parameter has a default.
 pub(super) fn all_defaulted(generics: &rokc_ast::Generics) -> bool {
     generics.params.iter().all(|p| {
         matches!(
@@ -1532,7 +1532,7 @@ pub(super) fn all_defaulted(generics: &rokc_ast::Generics) -> bool {
     })
 }
 
-/// Spec 2.10.5: omitted trailing type arguments take their defaults. Then
+/// Omitted trailing type arguments take their defaults. Then
 /// `args` must fit `generics`: too long is cut, too short padded with
 /// `Unknown` (so uses add no errors), and the error comes back.
 pub(super) fn fit_args(
@@ -1653,7 +1653,7 @@ fn param_name(p: &rokc_ast::GenericParam) -> &str {
     name
 }
 
-/// Spec 2.11.3: const argument `v` for `name: ty`, range-checked and
+/// Const argument `v` for `name: ty`, range-checked and
 /// tagged with the parameter's type.
 pub(super) fn typed_const(
     ctx: &LowerCtx<'_>,
@@ -2007,8 +2007,8 @@ pub(super) fn ref_slot_ty(deferred: bool, t: HirTy) -> HirTy {
 
 /// A function with `ref` parameters returns `(ret, r1, ..)` (no unit `ret`;
 /// one field unwrapped). A throwing function's whole carrier is `ret`, so
-/// `ref` values come back on the error path too (spec 4.7) while the
-/// payload overlays ok and error (8.6.5).
+/// `ref` values come back on the error path too while the
+/// payload overlays ok and error.
 pub(super) fn ref_packed(ret: &HirTy, refs: &[HirTy]) -> HirTy {
     if refs.is_empty() {
         return ret.clone();

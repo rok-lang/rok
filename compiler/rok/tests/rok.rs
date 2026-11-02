@@ -800,7 +800,7 @@ fn new_and_init_write_a_manifest() {
         version.starts_with(&format!("rok {}", env!("CARGO_PKG_VERSION"))),
         "{version}"
     );
-    // Usage errors exit 2 (spec 9.1.6); the rest 1.
+    // Usage errors exit 2; the rest 1.
     let usage = |args: &[&str]| rok(&home, &root, args).status.code();
     assert_eq!(usage(&["new"]), Some(2));
     assert_eq!(usage(&["add", "x", "--frob"]), Some(2));
@@ -6055,7 +6055,7 @@ fn new_templates_build_run_and_test() {
     assert_eq!(script_out(&home, &calc, &["run"]), "7 12 10\n");
 }
 
-/// A package with `src/lib.rok` and `src/main.rok` (spec 0.3.1): `rok new
+/// A package with `src/lib.rok` and `src/main.rok`: `rok new
 /// --lib --bin` makes one, a dependent gets its library, `rok install`
 /// installs its executable (`--lib`: its library), and `rok publish`
 /// takes it, as it takes an executable-only package; a stone without a

@@ -78,19 +78,19 @@ pub struct CompilerConfig {
     /// items in `CompiledProject::library` (lints and tools read items;
     /// `rokc doc` reads files).
     pub library_items: bool,
-    /// The input is a lone file outside any package (spec 4.16.8): it is
+    /// The input is a lone file outside any package: it is
     /// the anonymous package's `main.rok` and cannot have `mod foo;`.
     pub anonymous: bool,
     /// Source files read from these texts instead of the disk (an
     /// editor's unsaved buffers), by absolute path.
     pub buffers: Vec<(PathBuf, String)>,
-    /// Dependencies (`--extern name=path`, spec 902.3), each mounted at
+    /// Dependencies (`--extern name=path`), each mounted at
     /// top-level `name`: a `lib.rok` compiles with the package, a
     /// `<name>.rokhir` (904) is prebuilt and links its `lib<name>.a`.
     /// A name whose path an earlier one has is an alias of that one.
     pub externs: Vec<(String, PathBuf)>,
     /// The extern that is the package's own library (`src/lib.rok` of
-    /// the `src/main.rok` being built, spec 0.3.1).
+    /// the `src/main.rok` being built).
     pub own_library: Option<String>,
     /// Build as prebuilt dependency `name`: mounted as its users see it,
     /// every body compiled, ROKHIR in `CompiledModule::interface`.
@@ -112,7 +112,7 @@ pub struct CompilerConfig {
     /// The prebuilt bootstrap tiers (`rok.rokhir` + `librok.a`): linked, not
     /// compiled. Ignored when stale or not these tiers.
     pub std_prebuilt: Option<PathBuf>,
-    /// The package's incremental directory (spec 9.2.16): parses and
+    /// The package's incremental directory: parses and
     /// lowered bodies of the last build are kept there for the next.
     pub incremental: Option<PathBuf>,
 }
@@ -127,7 +127,7 @@ fn script_env() -> Option<(String, Vec<String>)> {
     Some((env, libs.collect()))
 }
 
-/// The build's cfg (spec 6.3): the target's keys, `--cfg` and `test`.
+/// The build's cfg: the target's keys, `--cfg` and `test`.
 #[must_use]
 pub fn cfg_env(config: &CompilerConfig) -> CfgEnv {
     package_cfg(config, None)
@@ -300,7 +300,7 @@ fn tier_of(root: &Path) -> Option<&str> {
 }
 
 /// The bootstrap roots `files` names, with `bare/src/lib.rok` beside a
-/// `core/src/lib.rok` added when missing: core is built on bare (stdlib 0.1).
+/// `core/src/lib.rok` added when missing: core is built on bare.
 #[must_use]
 pub fn bootstrap_tiers(files: &[PathBuf]) -> Vec<PathBuf> {
     let mut out = files.to_vec();
@@ -341,7 +341,7 @@ fn mounted(externs: &[(String, PathBuf)]) -> impl Iterator<Item = &(String, Path
 }
 
 /// `(alias, name)`: another name of a path is an alias of its first
-/// name; packages may call one dependency differently (9.10.2).
+/// name; packages may call one dependency differently.
 fn extern_aliases(externs: &[(String, PathBuf)]) -> Vec<(String, String)> {
     externs
         .iter()
@@ -728,7 +728,7 @@ fn compile_unit_in(
     let mut diags: Vec<RokDiagnostic> = Vec::new();
 
     // Bootstrap the PrecTable from operator declarations; the same pre-pass
-    // gathers every meta block (spec 6.8) before derives expand.
+    // gathers every meta block before derives expand.
     let roots = lib_roots(config);
     // Cache the library's parses across builds (REPL) unless prebuilt deps
     // (sources are an overlay) or kept ASTs are involved.
@@ -748,7 +748,7 @@ fn compile_unit_in(
     });
     diags.append(&mut d);
     let lib_metas = metas.metas.len();
-    // Spec 6.7.11: the user package's own `#[infix]` registrations are
+    // The user package's own `#[infix]` registrations are
     // gathered by the same pre-pass, so its extension tokens lex.
     metas.idents = Some(Vec::new());
     let mut user = Vec::new();
@@ -799,7 +799,7 @@ fn compile_unit_in(
         .map_or_else(|| PathBuf::from("."), Path::to_path_buf);
     let pkgs = package_roots(&root_dir_kw, &roots);
     // A meta block or keyword handler is judged by the cfg of the
-    // package that defines it (6.6.13: a false one registers nothing).
+    // package that defines it (a false one registers nothing).
     let holds = |file: &str, attrs: &[rokc_ast::Attribute]| {
         package_of(&pkgs, Path::new(file)).is_some_and(|(i, _)| cfg::attrs_pass(attrs, &cfgs[i]))
     };
@@ -887,7 +887,7 @@ fn compile_unit_in(
     let root_dir = path
         .parent()
         .map_or_else(|| PathBuf::from("."), Path::to_path_buf);
-    // Spec 4.16.8: a script's file submodules are beside it, as in a
+    // A script's file submodules are beside it, as in a
     // package's `src/`; stdin and a REPL session have none.
     let script_file = config.anonymous && !config.cache_library && path.is_file();
     let sub_dir = (!config.anonymous || script_file).then_some(root_dir.as_path());
@@ -918,7 +918,7 @@ fn compile_unit_in(
     let mut no_entry = false;
     if config.test || config.bench {
         // Mount tests/ (a test build) or benches/ (a bench build) beside
-        // src/ as a synthetic root module (spec 0.3.5), so the #[test] /
+        // src/ as a synthetic root module, so the #[test] /
         // #[bench] functions there are collected too. A synthesized body
         // declares `mod <file>;` for each top-level .rok, and the usual
         // machinery resolves the folder form and submodules under it.
@@ -952,7 +952,7 @@ fn compile_unit_in(
     }
     check_dependency_names(&all_items, &all_uses, &config.externs, &mut diags);
     // Mount each library root (`rok::<tier>`, then dependencies); HIR gives
-    // every module its implicit import (stdlib 0.2).
+    // every module its implicit import.
     let key = format!(
         "{roots:?}|{}|{}|{}|{ext:?}|{user_metas}|{keywords:?}",
         incr::target_key(&cfg_env, &config.target),
@@ -1226,7 +1226,7 @@ pub fn relower(m: &mut CompiledModule) {
     m.mir.link = link;
 }
 
-/// Spec 0.3.3: each package's hash (`rok::<tier>` per library root, `""`
+/// Each package's hash (`rok::<tier>` per library root, `""`
 /// for the user's) over its files; a file belongs to its closest package
 /// directory, longest prefix first. `known`: hashes already taken.
 fn package_hashes(
@@ -1277,7 +1277,7 @@ fn package_hashes(
     out
 }
 
-/// Spec 0.3.3: SHA-256 over files in byte order of their package-relative
+/// SHA-256 over files in byte order of their package-relative
 /// `/` paths, each `path \0 content \0`; the first 8 hex digits. Cached
 /// per process by a fast hash of the files (a REPL rehashes every cell).
 fn hash_package(files: &mut Vec<(String, &str)>) -> String {
@@ -1341,7 +1341,7 @@ fn build_prec_table(
 
 /// The rooted paths the built package's `pub` meta blocks write
 /// (`pkg::f`, `rok::..`, `dep::..`; not macros), for HIR to check from
-/// each block's module (spec 6.9.9).
+/// each block's module.
 fn template_refs(defs: &[MetaDef], deps: &[String]) -> Vec<rokc_hir::TemplateRefs> {
     use rokc_lexer::TokenKind as K;
     let mut out = Vec::new();
@@ -1637,8 +1637,8 @@ fn prepass_mods(
 }
 
 /// The file of `mod name;` in a module whose submodules live in `dir`
-/// (spec 5.4.4) and its own submodule directory. `#[path("f.rok")]`
-/// (5.4.6) is relative to `dir`, submodules in `f/`.
+/// and its own submodule directory. `#[path("f.rok")]`
+/// is relative to `dir`, submodules in `f/`.
 fn mod_file(
     m: &rokc_ast::ModDef,
     dir: Option<&Path>,
@@ -1673,7 +1673,7 @@ fn mod_file(
         }
         None => (dir.join(format!("{name}.rok")), dir.join(name)),
     };
-    // A module's file is named after the module (spec 5.4.4); mod.rok is
+    // A module's file is named after the module; mod.rok is
     // never a body file, so reject it even when reached through #[path].
     if body.file_name().is_some_and(|n| n == "mod.rok") {
         return Err(err(format!(
@@ -1736,7 +1736,7 @@ fn prepass_gather(sum: &Summary, source: &str, file: &str, id: u32, metas: &mut 
     metas.literals.extend(sum.literals.iter().cloned());
 }
 
-/// Spec 1.4.2: confusable names across a package's files warn (the lexer
+/// Confusable names across a package's files warn (the lexer
 /// checks within a file).
 fn cross_file_confusables(idents: Vec<(String, rokc_diagnostic::Span)>) -> Vec<RokDiagnostic> {
     if idents.iter().all(|(n, _)| n.is_ascii()) {
@@ -1772,7 +1772,7 @@ fn cross_file_confusables(idents: Vec<(String, rokc_diagnostic::Span)>) -> Vec<R
     out
 }
 
-/// Re-gather meta block bodies with the extension operators (spec 1.10.4)
+/// Re-gather meta block bodies with the extension operators
 /// so templates can use `⊕`.
 fn relex_metas(metas: &mut PrePass, ext: &rokc_parser::ExtOps) {
     let symbols = ext.symbols();
@@ -1807,8 +1807,8 @@ fn relex_metas(metas: &mut PrePass, ext: &rokc_parser::ExtOps) {
     }
 }
 
-/// What the pre-pass gathers besides operators: meta blocks (6.8) and
-/// keyword registrations (6.6).
+/// What the pre-pass gathers besides operators: meta blocks and
+/// keyword registrations.
 #[derive(Clone, Default)]
 struct PrePass {
     metas: Vec<MetaDef>,
@@ -1985,7 +1985,7 @@ thread_local! {
     static PARSED: std::cell::RefCell<std::collections::HashMap<PathBuf, Parsed>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
     /// The modules whose file opts out of the implicit import
-    /// (`#![no_implicit_rok]`, stdlib 0.2.5).
+    /// (`#![no_implicit_rok]`).
     static NO_IMPLICIT: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
@@ -2414,7 +2414,7 @@ fn cached<T: Clone>(
 }
 
 /// What a package's parse needs from the pre-pass: every meta block,
-/// and the package's own keywords (6.6.5) with their handler paths.
+/// and the package's own keywords with their handler paths.
 struct MetaCtx {
     /// `""` for the package being built, else its library root's path.
     package: String,
@@ -2451,8 +2451,8 @@ impl MetaCtx {
     }
 }
 
-/// Spec 6.6: per package (user first), its keywords and handler paths. A
-/// keyword registered twice is an error (6.6.4). Type keywords
+/// Per package (user first), its keywords and handler paths. A
+/// keyword registered twice is an error. Type keywords
 /// (`#[keyword("int")] struct Int`) apply everywhere and only the
 /// standard library may register them.
 fn keyword_tables(
@@ -2563,7 +2563,7 @@ fn handler_path(
     Some((i, path))
 }
 
-/// Spec 6.5: the `#[literal]` patterns the parser matches: the libraries'
+/// The `#[literal]` patterns the parser matches: the libraries'
 /// (for everyone) and the package's own. HIR dispatches the built-in
 /// shapes; the real parse reports bad patterns.
 fn literal_tables(
@@ -2607,8 +2607,8 @@ fn literal_tables(
     (std::sync::Arc::new(lib), std::sync::Arc::new(user))
 }
 
-/// Mount tests/ (or benches/) beside src/ as a synthetic root module
-/// (spec 0.3.5): a generated body declares `mod <file>;` for each
+/// Mount tests/ (or benches/) beside src/ as a synthetic root module:
+/// a generated body declares `mod <file>;` for each
 /// top-level .rok, so the ordinary machinery resolves the folder form
 /// and the submodules under it, rooted at `tests` / `benches`.
 #[allow(clippy::too_many_arguments)] // mirrors collect_module_tree
@@ -2763,7 +2763,7 @@ fn flatten_module_items(
                     continue;
                 }
                 mods.push(m.name.clone());
-                // 5.4.5: an inline module has no file or folder of its name.
+                // An inline module has no file or folder of its name.
                 if let (Some(_), Some(dir)) = (&m.items, submodule_dir) {
                     let file = dir.join(format!("{}.rok", m.name));
                     let folder = dir.join(&m.name);
@@ -2785,8 +2785,7 @@ fn flatten_module_items(
                 }
                 let mut child_path = module_path.to_vec();
                 child_path.push(m.name.clone());
-                // An empty stub keeps the module's visibility for HIR
-                // (spec 5.6.13).
+                // An empty stub keeps the module's visibility for HIR.
                 out.push((
                     module_key.clone(),
                     rokc_ast::Item::Mod(rokc_ast::ModDef {
@@ -2842,7 +2841,7 @@ fn flatten_module_items(
 }
 
 /// `#[link("z")]` / `#[link(name = "z", kind = "static")]` on the
-/// `extern` blocks of `items` (spec 6.2.3).
+/// `extern` blocks of `items`.
 fn native_libs<'i>(
     items: impl IntoIterator<Item = &'i rokc_ast::Item>,
     out: &mut Vec<(String, bool)>,
@@ -2882,7 +2881,7 @@ fn native_libs<'i>(
 
 #[cfg(test)]
 mod tests {
-    /// The prelude's names (stdlib 0.2, normative): modules, types and
+    /// The prelude's names (normative): modules, types and
     /// traits share a namespace, functions have their own.
     const PRELUDE_TYPES: &[&str] = &[
         "array",

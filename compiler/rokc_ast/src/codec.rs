@@ -1,5 +1,5 @@
 //! `Codec` for the AST (the parse cache, and the position-free
-//! fingerprints of the incremental HIR cache, spec 9.2.16).
+//! fingerprints of the incremental HIR cache).
 
 use rokc_core::{codec_enum, codec_struct};
 

@@ -1,4 +1,4 @@
-//! Declarative macro expansion (spec 6.8.12): match a `name!(..)` call's
+//! Declarative macro expansion: match a `name!(..)` call's
 //! token tree against a rule's matcher, bind the metavariables, and
 //! transcribe the rule's template. The output tokens are re-parsed at the
 //! call position by the parser. This is the call-site meta definition; it

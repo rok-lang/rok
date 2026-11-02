@@ -1,4 +1,4 @@
-//! Incremental body lowering (spec 9.2.16): a declaration's lowered
+//! Incremental body lowering: a declaration's lowered
 //! body, with everything its lowering added to the shared state
 //! (closures, instances, type instances, `any` tags, warnings), is kept
 //! as a unit and replayed in a later build instead of lowered again.

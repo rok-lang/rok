@@ -1,4 +1,4 @@
-//! Affine resources (stdlib 2.13.4): a value whose type implements `Drop`
+//! Affine resources: a value whose type implements `Drop`
 //! (a `File`, a socket, a channel `Sender`, an `Allocation`, ..) has one
 //! owner. `let b = a`, storing it into a struct, a tuple, an enum or a
 //! container, capturing it in a closure or an `async` block and returning
@@ -47,7 +47,7 @@ pub(super) enum Kind {
     Close,
 }
 
-/// Lock guards: only `using` releases one (stdlib 2.16.3), checked apart.
+/// Lock guards: only `using` releases one, checked apart.
 const GUARDS: &[&str] = &[
     "rok::core::sync::MutexGuard",
     "rok::core::sync::RwLockReadGuard",

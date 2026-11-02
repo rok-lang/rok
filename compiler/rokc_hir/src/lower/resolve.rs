@@ -91,8 +91,8 @@ pub(super) fn lookup_in_use_entries_full(
 }
 
 /// Path resolution for the value and type namespaces: `pkg::` / `sup::` /
-/// `rok::` roots are absolute; else the current module (no ancestor walk,
-/// spec 5.7), then local `use`s innermost first, then module `use`s.
+/// `rok::` roots are absolute; else the current module (no ancestor walk),
+/// then local `use`s innermost first, then module `use`s.
 /// `Err(hits)`: an ambiguous glob (sorted).
 pub(super) fn resolve_name(
     segments: &[&str],
@@ -115,7 +115,7 @@ pub(super) fn resolve_name(
     let resolved_segs: Vec<&str> = resolved.iter().map(String::as_str).collect();
     let segments = resolved_segs.as_slice();
     let suffix = segments.join("::");
-    // Spec 5.7: the current module's items and children, then `rok::`;
+    // The current module's items and children, then `rok::`;
     // parents need `sup::` or a `use`.
     let candidate = if module.is_empty() || absolute {
         suffix.clone()
@@ -144,14 +144,14 @@ pub(super) fn resolve_name(
             LookupOutcome::None => {}
         }
     }
-    // The implicit import (stdlib 0.2) comes last so local names shadow
-    // it, unless the file opts out (0.2.5).
+    // The implicit import comes last so local names shadow
+    // it, unless the file opts out.
     let Some(implicit) = implicit_use(module) else {
         return Ok(None);
     };
     let implicit = [implicit];
     // `use task::sleep;`: a `use` whose root is a name of the implicit
-    // import (a `use` path is relative to its module, spec 5.7.1).
+    // import (a `use` path is relative to its module).
     let own = |full: &str| match module {
         "" => Some(full.to_owned()),
         m => full.strip_prefix(m)?.strip_prefix("::").map(str::to_owned),
@@ -201,7 +201,7 @@ fn through_prelude(key: &str, uses: &crate::uses::UseTable, set: &NameSet<'_>) -
     })
 }
 
-/// The absolute path a rooted path names from `module` (spec 5.7): `pkg::`
+/// The absolute path a rooted path names from `module`: `pkg::`
 /// from the package root (a dependency's own inside it), each `sup::` up
 /// one, `rok::` absolute; `None` for other roots.
 pub fn root_path(segments: &[&str], module: &str) -> Option<Vec<String>> {
@@ -252,7 +252,7 @@ pub const GC_BUF: &str = "rok::bare::mem::GcBuf";
 /// An array type whose length waits for the full const evaluator.
 pub(super) const OPEN_LEN: &str = "[_; _]";
 
-/// Core traits the compiler names that have no lang slot (stdlib 0.4).
+/// Core traits the compiler names that have no lang slot.
 pub const COPY_TRAIT: &str = "rok::core::marker::Copy";
 pub const EQ_TRAIT: &str = "rok::core::cmp::Eq";
 pub const DEFAULT_TRAIT: &str = "rok::core::marker::Default";
@@ -271,7 +271,7 @@ pub(super) fn str_lit_of(e: &rokc_ast::Expr) -> Option<&str> {
 /// Module path the driver mounts `library/core` under.
 pub const CORE_PREFIX: &str = "rok::core";
 
-/// The module user code imports implicitly (stdlib 0.2).
+/// The module user code imports implicitly.
 pub const PRELUDE: &str = "rok::core::prelude";
 
 /// The implicit import of `module`, or `None` under `#![no_implicit_rok]`:
@@ -293,11 +293,11 @@ pub fn implicit_use(module: &str) -> Option<crate::uses::UseEntry> {
 }
 
 /// Can code in `cur_module` see an item declared in `def_module` with
-/// visibility `vis`? (spec 5.6)
+/// visibility `vis`?
 pub fn visible_from(cur_module: &str, def_module: &str, vis: Visibility) -> bool {
     match vis {
         Visibility::Pub => true,
-        // Spec 5.6.4: the package the item is declared in.
+        // The package the item is declared in.
         Visibility::Pkg => package_of(cur_module) == package_of(def_module),
         Visibility::Sub => {
             package_of(cur_module) == package_of(def_module)
@@ -305,7 +305,7 @@ pub fn visible_from(cur_module: &str, def_module: &str, vis: Visibility) -> bool
                     || cur_module == def_module
                     || cur_module.starts_with(&format!("{def_module}::")))
         }
-        // Spec 5.6.2: no keyword = visible in the declaring module only.
+        // No keyword = visible in the declaring module only.
         Visibility::Private => cur_module == def_module,
     }
 }
@@ -345,7 +345,7 @@ pub fn set_own_library(name: Option<String>) {
 }
 
 /// The help for an item of `def_module` the executable may not see,
-/// when that is in its package's own library (spec 0.3.1).
+/// when that is in its package's own library.
 pub(super) fn own_library_privacy(def_module: &str) -> Option<String> {
     OWN_LIBRARY.with(|l| {
         let l = l.borrow();
@@ -357,8 +357,8 @@ pub(super) fn own_library_privacy(def_module: &str) -> Option<String> {
     })
 }
 
-/// The `use` for `name` when one of `paths` is in the package's own library
-/// (spec 0.3.1), which the executable doesn't see unqualified.
+/// The `use` for `name` when one of `paths` is in the package's own library,
+/// which the executable doesn't see unqualified.
 pub(super) fn own_library_import<'a>(
     name: &str,
     paths: impl Iterator<Item = &'a str>,
@@ -377,7 +377,7 @@ pub(super) fn own_library_import<'a>(
     })
 }
 
-/// The package of `module`: `rok::<tier>` (each tier its own, spec 5.7), a
+/// The package of `module`: `rok::<tier>` (each tier its own), a
 /// dependency's name, or `""` for the one being compiled.
 /// Whether `module` is in one of the toolchain's packages (`rok::bare`,
 /// `rok::core`, `rok::std`).
@@ -436,7 +436,7 @@ pub fn module_visibility<'i>(
         .collect()
 }
 
-/// Spec 5.6.2 / 5.6.13: the first module on `full`'s path that code in
+/// The first module on `full`'s path that code in
 /// `cur` can't see (a module is visible inside itself and below).
 pub fn hidden_module(
     mod_vis: &HashMap<String, Visibility>,
@@ -470,7 +470,7 @@ pub fn hidden_module_msg(full: &str, module: &str, cur: &str) -> String {
     )
 }
 
-/// Order of reach for spec 5.8.4: a re-export may not be wider than its
+/// Order of reach: a re-export may not be wider than its
 /// item.
 pub const fn visibility_rank(v: Visibility) -> u8 {
     match v {
@@ -519,7 +519,7 @@ pub(super) fn method_target_for(ty: &HirTy) -> Option<MethodTarget> {
 }
 
 /// Substitute `params` (and `Self`) in `ty`. In a sum a substituted
-/// parameter is a generic term (spec 2.6.4): `T | none` with
+/// parameter is a generic term: `T | none` with
 /// `T = i32 | none` is `(i32 | none)?`, `T | U` with `U = i32` is
 /// `i32 | none`.
 pub(super) fn substitute_params(ty: &mut HirTy, params: &HashMap<String, HirTy>) {
@@ -609,8 +609,8 @@ pub(super) fn instance(
     .map(HirTy::Enum)
 }
 
-/// `resolve_ty` plus struct / enum / alias lookup, instantiating generics
-/// (spec 2.10); `params` binds parameters by name. Unresolved names stay
+/// `resolve_ty` plus struct / enum / alias lookup, instantiating generics;
+/// `params` binds parameters by name. Unresolved names stay
 /// `HirTy::Path` for `check_unresolved_types`.
 pub(super) fn resolve_ty_with_structs(
     ty: &rokc_ast::Ty,
@@ -621,7 +621,7 @@ pub(super) fn resolve_ty_with_structs(
     let rec = |t: &rokc_ast::Ty| resolve_ty_with_structs(t, defs, params, sc);
     match &ty.kind {
         AstTyKind::Path(p) => {
-            // From the module the path comes from (spec 6.9.9); `rec`
+            // From the module the path comes from; `rec`
             // keeps the outer one for its arguments.
             let sc = Scope {
                 module: p.origin.as_deref().unwrap_or(sc.module),

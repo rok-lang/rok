@@ -1,4 +1,4 @@
-//! ROKON (Rok Object Notation, spec std 3.9): data files written with
+//! ROKON (Rok Object Notation): data files written with
 //! rok's literal syntax, extension `.rokon` (`rok.rokon`, `rok.lock`).
 //!
 //! A file is one value, lexed and parsed by the rok lexer / parser
@@ -167,7 +167,7 @@ impl Error {
         }
     }
 
-    /// The syntax error as `rokc` prints diagnostics (spec 9.1.8).
+    /// The syntax error as `rokc` prints diagnostics.
     pub fn render(&self, text: &str, file: &str) -> String {
         let r = render(text, file, self.span, Code::SYNTAX, &self.message);
         match &self.help {
@@ -186,7 +186,7 @@ pub fn line_col(src: &str, offset: usize) -> (usize, usize) {
     (line, before[start..].chars().count() + 1)
 }
 
-/// An error at `span` of `src` in the diagnostic layout of spec 9.1.8:
+/// An error at `span` of `src` in rokc's diagnostic layout:
 /// `error[code]: message`, `--> file:line:col`, then the line with
 /// `^^^` under the span (its first line).
 pub fn render(src: &str, file: &str, span: Span, code: Code, message: &str) -> String {
@@ -500,7 +500,7 @@ impl Conv<'_> {
                 let f: f64 = format!("{sign}{digits}")
                     .parse()
                     .map_err(|_| self.err(e, format!("invalid float `{t}`")))?;
-                // Infinity has no ROKON form (spec 3.9.1).
+                // Infinity has no ROKON form.
                 if !f.is_finite() {
                     return Err(self.err(
                         e,

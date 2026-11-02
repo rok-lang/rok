@@ -393,7 +393,7 @@ impl<W: Write> Server<W> {
     /// Check `text` as buffer `path`: the package root (902.2) with this
     /// buffer as root or the root as open / on disk; files outside any
     /// package are anonymous. Open buffers stand for their files. With both
-    /// root files (0.3.1), a file the library reaches is the library's, any
+    /// root files, a file the library reaches is the library's, any
     /// other the executable's, which mounts the library (as edited) as
     /// dependency `<name>`.
     fn compile(&self, path: &Path, text: &str) -> Analysis {
@@ -656,7 +656,7 @@ impl<W: Write> Server<W> {
 }
 
 /// Hover markdown: the code in a `rok` fence, then a function's doc
-/// text from its `#[doc]` attributes (spec 1.2).
+/// text from its `#[doc]` attributes.
 pub(crate) fn hover(a: &Analysis, key: &str, text: &str, off: usize) -> Option<String> {
     let hir = a.hir.as_ref()?;
     let fenced = |code: String| format!("```rok\n{code}\n```");
@@ -1475,8 +1475,8 @@ fn offset(text: &str, line: u32, col: u32) -> usize {
 
 /// LSP position of a byte offset.
 /// If `off` is inside a `name!(..)` macro call whose macro is defined in
-/// this file, its expansion rendered as markdown (spec 6.8.12 tooling:
-/// "expand in place", surfaced through hover).
+/// this file, its expansion rendered as markdown
+/// ("expand in place", surfaced through hover).
 fn macro_hover(text: &str, off: usize) -> Option<String> {
     use rokc_lexer::{Lexer, TokenKind};
     use rokc_parser::MetaKind;
@@ -1548,7 +1548,7 @@ fn line_col(text: &str, off: usize) -> (u32, u32) {
 
 /// LSP semantic tokens (delta-encoded) for what the grammar cannot know:
 /// macro calls `name!(..)` (type `macro`) and user-defined literal
-/// suffixes `123suffix` (type `decorator`) - spec 6.5 / 6.8.12.
+/// suffixes `123suffix` (type `decorator`).
 fn semantic_tokens(text: &str) -> Vec<u32> {
     use rokc_lexer::{Lexer, TokenKind};
     let (raw, _) = Lexer::new(text, "").lex_all();
@@ -1571,7 +1571,7 @@ fn semantic_tokens(text: &str) -> Vec<u32> {
         .collect();
     let (toks, _) = Lexer::new(text, "").with_ext_ops(ops).lex_all();
     // User-defined literal suffixes registered in this file by
-    // `#[literal(number "x")]` - only these are highlighted (spec 6.5), so
+    // `#[literal(number "x")]` - only these are highlighted, so
     // `5kg` lights up when the user defined `kg`, not for any stray suffix.
     let suffixes: std::collections::HashSet<String> = rokc_parser::collect_literals(&toks, "")
         .iter()

@@ -147,7 +147,7 @@ d?
     );
 }
 
-/// Piped input that ends inside a cell (9.7.8 continuation) is an error,
+/// Piped input that ends inside a cell (a continuation) is an error,
 /// not a silently dropped cell.
 #[test]
 #[cfg_attr(
@@ -461,7 +461,7 @@ b
     assert_eq!(text(&out.stdout), "x\n2\ny\n3\n", "stderr: {stderr}");
 }
 
-/// `repl <lib>` (9.1.2): the library is loaded and its items
+/// `repl <lib>`: the library is loaded and its items
 /// are in scope from the first cell, also after `:reset`.
 #[test]
 #[cfg_attr(
@@ -613,7 +613,7 @@ match q { x: Q => x.v, _ => 0 }
     let out = piped(ROKC, &["repl", "--rokr", &rokr], input);
     let stdout = text(&out.stdout);
     let stderr = text(&out.stderr);
-    // An `any Debug` shows the `Debug` of what it holds (6.10.3).
+    // An `any Debug` shows the `Debug` of what it holds.
     assert_eq!(stdout, "3\n5\nQ { v: 9 }\n9\n", "stderr: {stderr}");
     assert!(
         stderr.contains("`h: Hid` cannot be kept for later cells (`geo::Hid` is private"),
@@ -2561,7 +2561,7 @@ fn completion_inspect_history(
         "{reply}"
     );
 
-    // Members, paths and doc comments (9.8.5 / 9.8.6).
+    // Members, paths and doc comments.
     let code = "struct P { x: i32; y: i32; }\n\
                 impl P {\n    /// Sum of the coordinates.\n    fn sum(self) -> i32 { self.x + self.y }\n}";
     let exec = Json::obj([("code", Json::str(code)), ("silent", Json::Bool(false))]);

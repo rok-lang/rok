@@ -1,4 +1,4 @@
-//! `rok`, the toolchain front (spec 901): manifests and locks, dependency
+//! `rok`, the toolchain front: manifests and locks, dependency
 //! resolution, stones and the git cache, environments, toolchains,
 //! scaffolding and the Jupyter kernelspec. It runs the `rokc` beside it
 //! with resolved deps as `--extern name=lib.rok`; a pin naming another
@@ -115,7 +115,7 @@ fn config_text(path: &Path) -> Result<String, String> {
 }
 
 /// String field `field` of the config text `text`, read from `file`.
-/// Fields a newer rok wrote are skipped (spec 9.10.6).
+/// Fields a newer rok wrote are skipped.
 fn config_field(text: &str, file: &str, field: &str) -> Result<Option<String>, String> {
     let doc = rokc_rokon::Doc::parse(text, file)?;
     let c = doc.root().record("Config")?;
@@ -163,7 +163,7 @@ fn set_config(home: &Path, field: &str, value: &str) -> Result<(), String> {
         .map_err(|e| format!("cannot write {file}: {e}"))
 }
 
-/// `new`, an edit of ROKON text `old`: in canonical form (spec 3.9.4)
+/// `new`, an edit of ROKON text `old`: in canonical form
 /// when `old` was, else as edited (comments and layout kept).
 fn canonical_edit(old: &str, new: &str) -> String {
     let canon = |t: &str| rokc_rokon::parse(t).ok().map(|v| rokc_rokon::to_string(&v));
@@ -266,7 +266,7 @@ pub fn main_with_os(args: Vec<std::ffi::OsString>) -> i32 {
                 g.verbose = true;
                 rest.push(a);
             }
-            // `rok +<version> ..` (spec 9.10.6), before the command.
+            // `rok +<version> ..`, before the command.
             t if t.len() > 1 && t.starts_with('+') && rest.iter().all(|r| r.starts_with('-')) => {
                 g.toolchain = Some(t[1..].to_owned());
             }
@@ -434,7 +434,7 @@ fn unknown_command(cmd: &str) -> String {
     format!("unknown command `{cmd}`{hint}")
 }
 
-/// Errors that are about the command line (exit code 2, spec 9.1.6).
+/// Errors that are about the command line (exit code 2).
 fn is_usage(e: &str) -> bool {
     [
         "usage:",
@@ -451,7 +451,7 @@ fn is_usage(e: &str) -> bool {
 fn run(g: &Global, cmd: &str, pre: &[String], post: &[String]) -> i32 {
     VERBOSE.store(g.verbose && !g.quiet, std::sync::atomic::Ordering::Relaxed);
     // A pin naming another toolchain: its own rok runs the command, so rok
-    // and rokc always come from one toolchain (spec 9.10.6). Commands that
+    // and rokc always come from one toolchain. Commands that
     // run rokc decide in `rokc_command`, by the package they work on.
     if !matches!(
         cmd,
@@ -937,7 +937,7 @@ fn delegate(g: &Global, cmd: &str, pre: &[String], post: &[String]) -> Result<i3
 
 /// `rok test` / `rok bench`: `rokc` builds the harness and writes a
 /// manifest (the built executables and their cases); the runner here runs
-/// each case, out of the compiler (spec 9.1).
+/// each case, out of the compiler.
 fn harness(g: &Global, cmd: &str, pre: &[String], post: &[String]) -> Result<i32, String> {
     let (mut c, rokc) = rokc_command(g, cmd, pre, post, None)?;
     let tmp = TempEntry::dir("rok-harness-").map_err(|e| e.to_string())?;
@@ -1003,7 +1003,7 @@ fn rokc_command(
     let stdin = first == Some("-");
     let package = package_dir(start);
     // `doc --std` without a path documents the standard library alone and
-    // needs no package (spec 9.1).
+    // needs no package.
     let std_doc = cmd == "doc" && first.is_none() && post.iter().any(|a| a == "--std");
     // Without a path, a REPL / kernel / language server may use an
     // environment from inside a package.
@@ -1058,7 +1058,7 @@ fn rokc_command(
     };
     let mut extra: Vec<String> = Vec::new();
     let mut manifest_lints = None;
-    // The manifest's `name` is the package's (spec 9.10.3).
+    // The manifest's `name` is the package's.
     let named = package.as_deref().filter(|_| t.env.is_none() && !stdin);
     if let (Some(name), Some(_)) = (&t.ctx.manifest.name, named) {
         if !matches!(
@@ -1341,7 +1341,7 @@ fn cmd_new(g: &Global, cmd: &str, args: &[String]) -> Result<i32, String> {
     } else if dir.exists() {
         return Err(format!("`{}` already exists", dir.display()));
     }
-    // The package name is the directory's (spec 9.10.3).
+    // The package name is the directory's.
     let abs = std::path::absolute(&dir).map_err(|e| e.to_string())?;
     let dir_name = abs.file_name().and_then(|n| n.to_str()).unwrap_or("app");
     let name = if init {
@@ -2728,7 +2728,7 @@ fn cmd_search(g: &Global, args: &[String]) -> Result<i32, String> {
     };
     let url = registry::default_url(&home())?;
     let index = registry::open(&home(), &url, g.offline, g.quiet)?;
-    // `-` and `_` are one (9.10.3); file names are lowercase.
+    // `-` and `_` are one; file names are lowercase.
     let q = q.to_ascii_lowercase().replace('_', "-");
     let mut names: Vec<String> = registry::names(&index, &url, native)?
         .into_iter()

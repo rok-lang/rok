@@ -272,7 +272,7 @@ fn ops_follow_operand_types() {
     assert!(body(&one(PrimOp::Shr, &u32_), "f").contains("arith.shrui"));
 }
 
-/// A frame links before the first safepoint of each path (804 §8.4.7):
+/// A frame links before the first safepoint of each path:
 /// not on a path that reaches none, before a loop whose back edge polls,
 /// and at the end of a block whose successor is linked from elsewhere.
 #[test]

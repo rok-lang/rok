@@ -1,4 +1,4 @@
-//! `task::spawn` moves a future to another worker (stdlib 2.18.1), so its
+//! `task::spawn` moves a future to another worker, so its
 //! coroutine frame must be `Send`. Future types are shared wrappers
 //! (`AsyncFuture<T>` is `Send` when `T` is) and say nothing about the
 //! frame, so this pass checks frames:
@@ -21,7 +21,7 @@
 // The flow is context-insensitive, and a store through an alias the callee
 // did not get as a parameter is missed: two `List<AsyncFuture<i32>>` filled
 // by `push` look like one. Exact would be per-coroutine future types
-// (4.1.11) checked by the `Send` bound itself.
+// checked by the `Send` bound itself.
 
 use rokc_diagnostic::Code;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -215,7 +215,7 @@ fn frame(ctx: &LowerCtx<'_>, send: &str, sync: Option<&str>, f: &HirFunction) ->
             .unwrap_or_else(|| "a temporary".to_owned())
     };
     let ty_of = |l: LocalId| f.locals.iter().find(|x| x.id == l).map(|x| &x.ty);
-    // A `[ref x]` cell: written by both sides, never `Sync` (spec 4.6.9).
+    // A `[ref x]` cell: written by both sides, never `Sync`.
     let cell = |l: LocalId| f.locals.iter().any(|x| x.id == l && x.boxed);
     let lacks = |t: &HirTy, k: &str| {
         !matches!(

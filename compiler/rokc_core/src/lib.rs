@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 pub use def::{DefId, DefInfo, DefKind, DefTable, Visibility};
 
 /// `$ROK_HOME`, else the home the running executable sits in, else
-/// `~/.rok` (`%USERPROFILE%\.rok`). Spec 9.2.19.
+/// `~/.rok` (`%USERPROFILE%\.rok`).
 #[must_use]
 pub fn rok_home() -> Option<PathBuf> {
     if let Some(h) = std::env::var_os("ROK_HOME").filter(|h| !h.is_empty()) {
@@ -301,7 +301,7 @@ pub fn home_of(exe: &Path) -> Option<PathBuf> {
 /// The standard library's package name.
 pub const STD_PKG: &str = "rok";
 
-/// Reserved keywords (spec 1.5); the lexer's list. The last six
+/// Reserved keywords; the lexer's list. The last six
 /// ([`UNUSED_KEYWORDS`]) have no syntax yet: the lexer gives them as
 /// identifiers and the parser rejects them where a name is expected.
 pub const KEYWORDS: &[&str] = &[
@@ -394,7 +394,7 @@ pub fn check_os_name(kind: &str, name: &str) -> Result<(), String> {
     ))
 }
 
-/// Length of the shebang line (spec 1.2.3), terminator excluded; 0 if
+/// Length of the shebang line, terminator excluded; 0 if
 /// none. `#!` followed (past whitespace and comments) by `[` is an inner
 /// attribute, not a shebang.
 #[must_use]

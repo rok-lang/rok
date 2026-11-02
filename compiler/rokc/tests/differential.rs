@@ -1064,8 +1064,7 @@ fn aggregate_suite(rng: &mut Rng) -> Suite {
                 r - 1,
                 c - 1
             );
-            // Half the time through a function value (spec 8.6.6 covers
-            // both).
+            // Half the time through a function value.
             let call = if rng.chance(50) {
                 format!(
                     "let f: fn({arr}, usize, usize) -> {arr} = agg{i};\n        let b = f(a, {y}, {x});"

@@ -1,5 +1,5 @@
-//! An unannotated `let`'s type from the code after it (spec 2.10.2
-//! extension): `let xs = List::new(); xs.push(1);` makes `xs: List<i32>`.
+//! An unannotated `let`'s type from the code after it:
+//! `let xs = List::new(); xs.push(1);` makes `xs: List<i32>`.
 //!
 //! Lowering is eager, so this is a probe: the initializer is lowered with
 //! unfixed type parameters as inference variables (`#var N`), the rest of

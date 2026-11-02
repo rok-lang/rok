@@ -1,4 +1,4 @@
-//! Method path values (spec 3.5.3): `T::m`, `Tr::m`, `<T as Tr>::m`,
+//! Method path values: `T::m`, `Tr::m`, `<T as Tr>::m`,
 //! `i32::add` without a call are `fn` values (`fn(args) -> R` static,
 //! `fn(Self, args) -> R` instance). The value is the capture-free
 //! eta-expansion `|a, b| T::m(a, b)`, whose body is the ordinary path call

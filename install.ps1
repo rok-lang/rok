@@ -1,5 +1,5 @@
-# Install a rok toolchain into $env:ROK_HOME (default %USERPROFILE%\.rok,
-# spec 9.2.19) on Windows: $ROK_HOME\toolchains\<version>-<triple>\,
+# Install a rok toolchain into $env:ROK_HOME (default
+# %USERPROFILE%\.rok) on Windows: $ROK_HOME\toolchains\<version>-<triple>\,
 # made the default, with the proxies $ROK_HOME\bin\{rok,rokc,rokls}.exe,
 # and $ROK_HOME\bin put on the user's PATH. The counterpart of install.sh.
 #
@@ -20,7 +20,7 @@
 # alone and says what to add.
 #
 # Output is that of install.sh and `rok toolchain update`: status words
-# right-aligned, coloured as rok colours them (spec 9.1.8): on a console
+# right-aligned, coloured as rok colours them: on a console
 # that takes escapes or with CLICOLOR_FORCE, never with NO_COLOR or
 # TERM=dumb. -Quiet prints errors only, -Verbose adds notes (URLs, paths).
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '',

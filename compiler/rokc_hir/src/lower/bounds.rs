@@ -1,4 +1,4 @@
-//! Generic bodies checked at their definition (spec 2.10.9).
+//! Generic bodies checked at their definition.
 //!
 //! Each generic body (fn, impl or trait method, trait default) is lowered
 //! once with its type parameters (and a default's `Self`) as opaque
@@ -12,10 +12,10 @@
 //!
 //! Monomorphization stays the code path; an instance of a template that
 //! failed its check reports nothing more (`failed`). Implicit type
-//! parameters (spec 4.2.2) are checked per instance only. A `const`
+//! parameters are checked per instance only. A `const`
 //! parameter gets a distinct prime past the unrolled array lengths, so
-//! `[T; N]` and `[T; M]` differ but `[T; M * N]` and `[T; N * M]` agree
-//! (spec 2.11.5); diagnostics show its name.
+//! `[T; N]` and `[T; M]` differ but `[T; M * N]` and `[T; N * M]` agree;
+//! diagnostics show its name.
 
 #[allow(clippy::wildcard_imports)]
 use super::*;
@@ -99,13 +99,13 @@ fn in_trait<'a>(
     let subst: &'a TySubst = subst;
     let mut rcx = LowerCtx::new(ctx.env, subst, Some(self_ty.clone()), ctx.here());
     rcx.current_module.clone_from(&info.module);
-    // A bare associated type is `Self::X` (spec 2.8.3).
+    // A bare associated type is `Self::X`.
     rcx.assoc_names = info.assoc.iter().map(|(n, _)| n.clone()).collect();
     rcx
 }
 
 /// `r` (a bound on `self_ty`) with the trait's omitted arguments taken
-/// from its parameter defaults (`Add` is `Add<Self>`, spec 2.10.5).
+/// from its parameter defaults (`Add` is `Add<Self>`).
 fn complete(ctx: &LowerCtx<'_>, mut r: TraitRef, self_ty: &HirTy) -> TraitRef {
     let Some(info) = ctx.env.trait_of(&r.path) else {
         return r;
@@ -198,7 +198,7 @@ fn fits_wants(r: &TraitRef, wants: &[TraitRef]) -> bool {
 
 /// The one bound of `p` that associated item `name` comes from (of
 /// `traits`, agreeing with `wants`, accepted by `has`). Two left
-/// (`T: Add<i32> + Add<f64>` for `T::Output`) is ambiguous (spec 2.8.3).
+/// (`T: Add<i32> + Add<f64>` for `T::Output`) is ambiguous.
 fn item_bound(
     ctx: &LowerCtx<'_>,
     p: u32,
@@ -362,8 +362,8 @@ pub(super) fn bind_trait_args(
 }
 
 /// With `p` bounded by the trait more than once, the bound a call goes
-/// through: the one whose arguments the call bound (spec 3.1.3). None or
-/// several is an error (spec 4.9.6).
+/// through: the one whose arguments the call bound. None or
+/// several is an error.
 pub(super) fn pick_bound(
     ctx: &LowerCtx<'_>,
     fn_def: &FnDef,
@@ -446,7 +446,7 @@ pub(super) fn pick_bound(
 
 /// The types parameter `i` takes under each of `p`'s bounds when it is a
 /// bare trait parameter they give differently (`From<T>::from` under
-/// `From<i64> + From<str>`): an unsuffixed literal's choices (spec 3.1.3).
+/// `From<i64> + From<str>`): an unsuffixed literal's choices.
 pub(super) fn slot_choices(ctx: &LowerCtx<'_>, fn_def: &FnDef, p: u32, i: usize) -> Vec<HirTy> {
     let Some(key) = ctx.env.bound_trait(&fn_def.name) else {
         return Vec::new();
@@ -502,7 +502,7 @@ pub(super) fn templates(
             let Some(i) = trait_info.get(k) else { continue };
             for (n, _) in &i.assoc {
                 // The trait's own `X` is its bound's, `<Self as Tr<A>>::X`:
-                // `Self` may have `Tr<B>`, or another trait's `X` (2.8.3).
+                // `Self` may have `Tr<B>`, or another trait's `X`.
                 let own = (k == key).then(|| own_assoc(key, i, n));
                 assoc
                     .entry(n.clone())
@@ -617,7 +617,7 @@ fn own_assoc(key: &str, info: &TraitInfo, name: &str) -> Ty {
     }
 }
 
-/// Is `f` checked per instance only (an implicit parameter, spec 4.2.2)?
+/// Is `f` checked per instance only (an implicit parameter)?
 fn implicit(f: &FnDef) -> bool {
     f.generics
         .params
@@ -694,7 +694,7 @@ pub(super) fn check_all(
     check_decl_types(env, &wanted);
 }
 
-/// Spec 2.10.4: generic alias bounds in types no body check sees (generic
+/// Generic alias bounds in types no body check sees (generic
 /// fields, generic trait impl arguments and associated types, bodiless
 /// method signatures) must hold by the declaration's bounds.
 fn check_decl_types(env: &Env<'_>, wanted: &impl Fn(&str) -> bool) {
@@ -951,7 +951,7 @@ fn check_one(
             let id = FunctionId(env.sink.next_id.get());
             env.sink.next_id.set(id.0 + 1);
             mono::lower_fn_inner(env, f, id, f.name.clone(), self_hir, module, subst);
-            // Spec 2.10.4: a generic alias's bounds on these parameters
+            // A generic alias's bounds on these parameters
             // hold by theirs.
             let uses = env.names.alias_uses.borrow()[from..].to_vec();
             let mut seen = std::collections::HashSet::new();
@@ -1110,7 +1110,7 @@ pub(super) fn const_name(env: &Env<'_>, v: i128) -> Option<String> {
     names.iter().find(|(n, _)| *n == v).map(|(_, s)| s.clone())
 }
 
-/// `T::NAME` (spec 2.8.3a): the bound trait's const, of its declared type.
+/// `T::NAME`: the bound trait's const, of its declared type.
 /// An integer, `bool` or `char` gets a value unique in the body (like a
 /// `const` parameter); other types are opaque.
 pub(super) fn assoc_const(

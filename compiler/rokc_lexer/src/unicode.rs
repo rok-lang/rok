@@ -1,4 +1,4 @@
-//! Identifier character classes and normalization (spec 1.4), over the
+//! Identifier character classes and normalization, over the
 //! generated tables in `unicode_tables.rs`.
 
 use crate::unicode_tables as t;
@@ -37,7 +37,7 @@ pub const fn is_emoji_component(c: char) -> bool {
         | '\u{E0020}'..='\u{E007F}')
 }
 
-/// Spec 1.4.1: `_`, `XID_Start`, the UAX31 math profile start set plus
+/// `_`, `XID_Start`, the UAX31 math profile start set plus
 /// `∑ ∏ ∫`, and pictographs.
 #[must_use]
 pub fn is_ident_start(c: char) -> bool {
@@ -50,7 +50,7 @@ pub fn is_ident_start(c: char) -> bool {
         || is_pictographic(c)
 }
 
-/// Spec 1.4.1: `XID_Continue`, the math profile set, primes, pictographs
+/// `XID_Continue`, the math profile set, primes, pictographs
 /// and emoji components; not ZWJ (the lexer's).
 #[must_use]
 pub fn is_ident_continue(c: char) -> bool {
@@ -178,7 +178,7 @@ fn normalize(s: &str, compat: bool) -> String {
     out.into_iter().collect()
 }
 
-/// NFC (spec 1.4.2).
+/// NFC.
 #[must_use]
 pub fn nfc(s: &str) -> String {
     normalize(s, false)
@@ -190,7 +190,7 @@ pub fn nfkc(s: &str) -> String {
     normalize(s, true)
 }
 
-/// Spec 1.4.2: an identifier's canonical spelling - NFC, then the emoji
+/// An identifier's canonical spelling - NFC, then the emoji
 /// variation selectors U+FE0E / U+FE0F removed.
 #[must_use]
 pub fn normalize_ident(s: &str) -> String {
@@ -201,7 +201,7 @@ pub fn normalize_ident(s: &str) -> String {
 }
 
 /// Bidirectional formatting controls (U+202A-202E, U+2066-2069): never
-/// allowed in source text (spec 1.1).
+/// allowed in source text.
 #[must_use]
 pub const fn is_bidi_control(c: char) -> bool {
     matches!(c, '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}')

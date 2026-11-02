@@ -1,4 +1,4 @@
-//! `rokc lint` (spec 901, 6.2.9): style and common-mistake checks over a
+//! `rokc lint`: style and common-mistake checks over a
 //! type-checked package (no codegen).
 //!
 //! Most lints walk the parsed AST; `redundant_cast` / `redundant_clone`
@@ -173,7 +173,7 @@ pub const REMOVED_LINTS: &[&str] = &[
     "ambiguous_int_literal",
     "finally_jump",
     "float_to_bool",
-    // Errors now: affine resources (stdlib 2.13.4).
+    // Errors now: affine resources.
     "unclosed_resource",
     "unclosed_sender",
     "using_twice",
@@ -186,7 +186,7 @@ pub const REMOVED_LINTS: &[&str] = &[
     "guard_escape",
     // Retired: the `with(|v| ..)` shape prevents the case.
     "thread_local_across_await",
-    // Errors now: trait scope and meta names (spec 3.5.2, 6.9.9).
+    // Errors now: trait scope and meta names.
     "trait_not_in_scope",
     "unqualified_meta",
 ];
@@ -1181,7 +1181,7 @@ impl<'a> Cx<'a> {
     }
 
     fn name_lint(&mut self, what: &str, name: &str, span: Span, kind: u8) {
-        // An item in a block by its own name (spec 3.9.1).
+        // An item in a block by its own name.
         let leaf = rokc_core::local::leaf(name);
         let name = demangle(&leaf);
         let (ok, lint, fixed, style) = match kind {
@@ -1418,7 +1418,7 @@ impl<'a> Cx<'a> {
 
     fn unused_imports(&mut self, items: &[Item]) {
         // `use a::inner; use inner::f;` - a path's first segment may be an
-        // earlier import (spec 5.5).
+        // earlier import.
         for item in items {
             if let Item::Use(u) = item {
                 if let Some(first) = u.tree.prefix.segments.first() {
@@ -1482,7 +1482,7 @@ impl<'a> Cx<'a> {
             "literal",
             "keyword",
         ];
-        // A fn in a block by its own name (spec 4.10).
+        // A fn in a block by its own name.
         let name = rokc_core::local::leaf(&f.name);
         if f.vis != Visibility::Pub
             && name != "main"
@@ -1570,7 +1570,7 @@ impl<'a> Cx<'a> {
             .filter_map(|(k, n)| {
                 let base = n.split("__").next().unwrap_or(n);
                 let m = must_use_msg(&self.must_use_types, base)?;
-                // Spec 6.2.11: without a message the warning names the type.
+                // Without a message the warning names the type.
                 if m.is_empty() {
                     let leaf = base.rsplit("::").next().unwrap_or(base);
                     return Some((k, format!("value of type `{leaf}` is never used")));

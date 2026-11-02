@@ -78,7 +78,7 @@ pub(super) fn lower_block(ctx: &mut LowerCtx<'_>, block: &Block) -> HirBlock {
         super::affine::owe_lets(ctx, &mut stmts, from);
     }
     // The tail inherits the block's expected type; in a labelled block it
-    // is a `break` to it (spec 3.9.6) and must agree with the others.
+    // is a `break` to it and must agree with the others.
     let label_target = (ctx.breakables.len().checked_sub(1))
         .filter(|&i| block.label.is_some() && ctx.breakables[i].0 == block.label);
     let mut trailing = block.trailing.as_ref().map(|e| match label_target {
@@ -94,7 +94,7 @@ pub(super) fn lower_block(ctx: &mut LowerCtx<'_>, block: &Block) -> HirBlock {
     }
 }
 
-/// The nested fns of `block` (spec 4.10), visible in the whole block
+/// The nested fns of `block`, visible in the whole block
 /// (hoisted): the ones declared here over those of enclosing blocks.
 fn declare_nested_fns(ctx: &mut LowerCtx<'_>, block: &Block) {
     // Name → the statement and the fn of its first definition here.
@@ -183,7 +183,7 @@ fn declare_nested_fns(ctx: &mut LowerCtx<'_>, block: &Block) {
     }
 }
 
-/// Spec 3.9.1: a block-local item sees no local or generic parameter of
+/// A block-local item sees no local or generic parameter of
 /// the code around it.
 fn check_local_item(ctx: &LowerCtx<'_>, item: &Item) {
     use crate::walk::AstVisitor;
@@ -409,7 +409,7 @@ pub(super) fn lower_let_struct(
 }
 
 /// `let (a, b, ..rest) [: T] = init;` → fresh tuple local plus per-name
-/// index reads (spec 3.15.2 / 3.15.3).
+/// index reads.
 pub(super) fn lower_let_tuple(
     ctx: &mut LowerCtx<'_>,
     names: &[String],
@@ -440,7 +440,7 @@ pub(super) fn lower_let_tuple(
             vec![HirTy::Unknown; names.len()]
         }
     };
-    // Spec 3.15.2/3.15.3: length must match (no rest), or be ≥
+    // Length must match (no rest), or be ≥
     // names.len() when a `..` is present.
     let needed = names.len();
     let have = elem_tys.len();
@@ -721,7 +721,7 @@ fn lower_stmt_inner(ctx: &mut LowerCtx<'_>, stmt: &Stmt) -> Option<HirStmt> {
             if let Some(call) = assign_trait_call(ctx, target, op, value, stmt.span) {
                 return Some(HirStmt::Expr(call));
             }
-            // Stdlib 2.4.1: without an `*Assign` impl, `a = a op b`
+            // Without an `*Assign` impl, `a = a op b`
             // (also a primitive's intrinsic impl: its call is the op).
             let op = op.trim_end_matches('=').to_owned();
             let combined = Expr {
@@ -863,7 +863,7 @@ fn assign_local(ctx: &mut LowerCtx<'_>, name: &str, local: LocalId, value: &Expr
     ctx.store_local(local, value)
 }
 
-/// Spec 2.2.6: assigning a value the narrowed `local` can't hold ends the
+/// Assigning a value the narrowed `local` can't hold ends the
 /// narrowing for the rest of the scope; the value goes to the innermost
 /// binding that takes it (else the declared one, which reports it).
 fn unnarrow(ctx: &mut LowerCtx<'_>, name: &str, local: LocalId, value: &Expr) -> LocalId {
@@ -894,7 +894,7 @@ fn unnarrow(ctx: &mut LowerCtx<'_>, name: &str, local: LocalId, value: &Expr) ->
 }
 
 /// Restore narrowings ended since `mark` for the next branch;
-/// `rejoin_unnarrowings` ends them again at the join (spec 2.2.6).
+/// `rejoin_unnarrowings` ends them again at the join.
 pub(super) fn branch_unnarrowings(
     ctx: &mut LowerCtx<'_>,
     mark: usize,
@@ -935,7 +935,7 @@ fn droppable(ty: &HirTy) -> bool {
     }
 }
 
-/// `unused_result` (spec 6.2.11): expression statement `e` of type `ty`
+/// `unused_result`: expression statement `e` of type `ty`
 /// drops a value. A call of a `#[discardable]` function may; `try? f();`
 /// is `ignored_error`'s, and a block-like statement's value is its arms'.
 fn unused_result(ctx: &LowerCtx<'_>, e: &Expr, ty: &HirTy) {
@@ -1197,8 +1197,7 @@ fn stable_place(e: &Expr) -> bool {
 }
 
 /// `xs[i].m(..)` (`call`) with `m` taking `ref self`: copy the element
-/// out, call `m` on the copy and store the copy back, after a throw too
-/// (spec 4.7):
+/// out, call `m` on the copy and store the copy back, after a throw too:
 ///
 /// `{ let e = xs[i]; let r = e.m(..); xs[i] = e; r }`
 ///
@@ -1304,7 +1303,7 @@ pub(super) fn operand_text(e: &Expr) -> String {
 }
 
 /// A loop body that ends an outer narrowing is lowered again with it
-/// ended from the entry, since the head joins the back edge (spec 2.2.6).
+/// ended from the entry, since the head joins the back edge.
 fn lower_loop(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
     let mark = ctx.probe_mark();
     let log = ctx.unnarrowed.len();
@@ -1334,7 +1333,7 @@ pub(super) fn lower_assign(
 ) -> Option<HirStmt> {
     match &target.kind {
         // Bare-name assignment (local, else `static`).
-        // Spec 4.2.7: `_ = e;` evaluates `e` and discards it.
+        // `_ = e;` evaluates `e` and discards it.
         ExprKind::Path(p) if p.segments.len() == 1 && p.segments[0].name == "_" => {
             let v = lower_expected(ctx, value, HirTy::Unknown);
             Some(HirStmt::Expr(v))
@@ -1384,7 +1383,7 @@ pub(super) fn lower_assign(
             }
             // Only `let` declares. Declare it anyway so later uses don't
             // report again.
-            // Spec 5.1.2: a misspelt name is the likelier mistake.
+            // A misspelt name is the likelier mistake.
             let near = rokc_diagnostic::suggest(
                 name,
                 ctx.scopes.iter().flat_map(|s| s.keys().map(String::as_str)),
@@ -1404,7 +1403,7 @@ pub(super) fn lower_assign(
             let v = lower_expected(ctx, value, HirTy::Unknown);
             Some(ctx.declare_var(name, v.ty.clone(), v, span))
         }
-        // Spec 4.7: `ref self` names the caller's slot; `self = v` writes it
+        // `ref self` names the caller's slot; `self = v` writes it
         // (from a `[ref self]` closure too, through the shared cell).
         ExprKind::SelfLower
             if ctx.lookup("self").is_some_and(|l| {
@@ -1586,7 +1585,7 @@ pub(super) fn lower_assign(
             let root_place = root_h.clone();
             let mut steps: Vec<Step> = Vec::new();
             let mut step_ty = root_h.ty.clone();
-            // Spec 2.5.2: writing a union field (safe) rebuilds the union
+            // Writing a union field (safe) rebuilds the union
             // from that field; it must be the last step of the target.
             let mut union_value: Option<HirExpr> = None;
             for (ci, name) in chain.iter().enumerate() {
@@ -1915,7 +1914,7 @@ pub(super) fn check_index_ty(ctx: &LowerCtx<'_>, idx: &HirExpr) {
     }
 }
 
-/// Stdlib 2.16.3: a guard received without `using` must be bound with
+/// A guard received without `using` must be bound with
 /// `using`. `e` (and its branches) may hand one over unreleased: to a
 /// binding or out of the function.
 pub(super) fn guard_sink(ctx: &mut LowerCtx<'_>, e: &Expr) {
@@ -1995,7 +1994,7 @@ fn guard_flow(ctx: &mut LowerCtx<'_>, expr: &Expr, e: &HirExpr) {
 }
 
 pub(super) fn lower_expr(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
-    // Names resolve where the expression's head was written (spec 6.9.9);
+    // Names resolve where the expression's head was written;
     // its operands set their own.
     let outer = ctx.set_access(head_origin(expr));
     let e = ctx.at_span(expr.span, |ctx| match expr.kind {
@@ -2031,7 +2030,7 @@ pub(super) fn lower_expr(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
 }
 
 /// The definition module of the name `expr` resolves first: a path, a
-/// called path, a struct literal's path, a method name (spec 6.9.9).
+/// called path, a struct literal's path, a method name.
 fn head_origin(expr: &Expr) -> Option<&str> {
     match &expr.kind {
         ExprKind::Path(p) | ExprKind::StructInit { path: p, .. } => p.origin.as_deref(),
@@ -2044,7 +2043,7 @@ fn head_origin(expr: &Expr) -> Option<&str> {
     }
 }
 
-/// `operand as ty` (spec 2.10.5): numeric / bool / char casts.
+/// `operand as ty`: numeric / bool / char casts.
 fn lower_cast(
     ctx: &mut LowerCtx<'_>,
     operand: &Expr,
@@ -2056,7 +2055,7 @@ fn lower_cast(
     // In a monomorphized body `as T` names the concrete type.
     let to_ty = ctx.resolve_ast_ty(ty);
     let from_ty = operand_h.ty.clone();
-    // `int` / `float`: a conversion call (stdlib 2.11.1).
+    // `int` / `float`: a conversion call.
     if super::bignum::big_of(ctx, &from_ty).is_some()
         || super::bignum::big_of(ctx, &to_ty).is_some()
     {
@@ -2197,7 +2196,7 @@ fn wrapped(src: &str) -> bool {
     depth == 0
 }
 
-/// `x as T?` casts to the type `T?` (spec 2.6.5); say so when the cast
+/// `x as T?` casts to the type `T?`; say so when the cast
 /// fails, since `?` propagation was likely meant.
 fn optional_cast_hint(ty: &Ty) -> &'static str {
     let optional = matches!(&ty.kind, AstTyKind::Sum(ps)
@@ -2249,7 +2248,7 @@ fn lower_expr_inner(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
                 ctx.breakables.push((b.label.clone(), false));
             }
             let block = lower_block(ctx, b);
-            // Spec 3.9.10: a labelled block's value may come from
+            // A labelled block's value may come from
             // `break 'label value`.
             let break_ty = if labelled {
                 ctx.breakables.pop();
@@ -2284,7 +2283,7 @@ fn lower_expr_inner(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
             args,
             trailing_closure,
         } => {
-            // Spec 4.8: trailing closure becomes the last arg.
+            // Trailing closure becomes the last arg.
             let all_args = with_trailing_closure(args, trailing_closure.as_deref());
             if let ExprKind::Path(p) = &callee.kind {
                 check_direct_drop_path(ctx, p);
@@ -2389,7 +2388,7 @@ fn lower_expr_inner(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
                         format!("tuple index {index} out of range for a {}-tuple", ts.len()),
                     ),
                 },
-                // Spec 2.7.4: tuple-form structs (`struct Foo(i32);`)
+                // Tuple-form structs (`struct Foo(i32);`)
                 // expose their fields via the same `.N` syntax.
                 HirTy::Struct(sid) => {
                     let def = ctx.struct_def(sid);
@@ -2424,7 +2423,7 @@ fn lower_expr_inner(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
         }
         ExprKind::List(items) => lower_list_lit(ctx, items, span),
         ExprKind::ArrayRepeat { value, len } => lower_array_repeat(ctx, value, len, span),
-        // `xs[a..b]` / `xs[..]` (stdlib 2.9.7 spelling) is `xs[a:b]` / `xs[:]`.
+        // `xs[a..b]` / `xs[..]` (range spelling) is `xs[a:b]` / `xs[:]`.
         ExprKind::Index(arr, idx)
             if matches!(
                 &idx.kind,
@@ -2441,7 +2440,7 @@ fn lower_expr_inner(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
         }
         ExprKind::Index(arr, idx) => {
             let arr_h = lower_expected(ctx, arr, HirTy::Unknown);
-            // A struct / enum indexes through `Index::index` (spec 3.6).
+            // A struct / enum indexes through `Index::index`.
             if matches!(arr_h.ty, HirTy::Struct(_) | HirTy::Enum(_)) {
                 return index_call(ctx, arr_h, "index", idx, &[], span);
             }
@@ -2591,7 +2590,7 @@ pub(super) fn lower_cond(ctx: &mut LowerCtx<'_>, cond: &Expr) -> HirExpr {
 pub(super) fn lower_loop_body(ctx: &mut LowerCtx<'_>, body: &Block) -> HirBlock {
     ctx.push_expected(HirTy::Unit);
     // The body of `try for` is outside the `try`: its throwing calls
-    // carry their own (spec 3.13.3).
+    // carry their own.
     let outside = ctx
         .try_for_body
         .take_if(|(at, _)| *at == body.span)
@@ -2760,7 +2759,7 @@ pub(super) fn resolve_enum_variant(
 }
 
 /// A bare name that ordinary lookup missed, as a variant of the expected
-/// type (spec 5.7.1): an enum with a variant `name`, or the one enum
+/// type: an enum with a variant `name`, or the one enum
 /// member of a sum that has one.
 pub(super) fn target_variant(
     ctx: &LowerCtx<'_>,
@@ -2921,7 +2920,7 @@ fn generic_template<'a>(
     ))
 }
 
-/// `Self` of an impl of a struct, as a struct path (spec 4.9.4).
+/// `Self` of an impl of a struct, as a struct path.
 pub(super) fn self_struct_id(ctx: &LowerCtx<'_>, segs: &[&str]) -> Option<StructId> {
     match (segs, &ctx.self_ty) {
         (["Self"], Some(HirTy::Struct(id))) => Some(*id),
@@ -2977,7 +2976,7 @@ fn init_variant(ctx: &LowerCtx<'_>, segs: &[&str], hint: Option<&HirTy>) -> Enum
     resolve_enum_variant(ctx, segs, hint, None)
 }
 
-/// `S { a: v, .. }`, or with `spread` `S { a: v, ..base }` (spec 2.3.4):
+/// `S { a: v, .. }`, or with `spread` `S { a: v, ..base }`:
 /// unwritten fields come from `base`, evaluated after the written ones.
 #[allow(clippy::cognitive_complexity)] // struct, enum variant, `Self` and generic forms
 pub(super) fn lower_struct_init(
@@ -2989,7 +2988,7 @@ pub(super) fn lower_struct_init(
 ) -> HirExpr {
     let segs: Vec<&str> = path.segments.iter().map(|s| s.name.as_str()).collect();
     check_duplicate_fields(ctx, &segs, fields);
-    // `Enum::Variant { x: .., y: .. }` (spec 2.4): fields packed into the
+    // `Enum::Variant { x: .., y: .. }`: fields packed into the
     // tuple payload in declaration order.
     let mut hint = explicit_enum(ctx, path).or_else(|| ctx.current_expected().cloned());
     match init_variant(ctx, &segs, hint.as_ref()) {
@@ -3067,7 +3066,7 @@ pub(super) fn lower_struct_init(
         for (_, e) in fields {
             lower_expected(ctx, e, HirTy::Unknown);
         }
-        // Spec 4.8.4: `run { }` / `zero { n }` after a function's name is
+        // `run { }` / `zero { n }` after a function's name is
         // a struct literal; the closure needs the parentheses.
         let written = segs.join("::");
         if ctx.resolve_any_fn(&segs).is_some() {
@@ -3294,7 +3293,7 @@ pub(super) fn lower_struct_init(
             (None, Some(default_expr)) => {
                 out.push(field_default(ctx, &def.name, &f.name, &f.ty, default_expr));
             }
-            // Spec 5.6.8: a field this code cannot see is omitted only
+            // A field this code cannot see is omitted only
             // when it has a default.
             (None, None) if ctx.field_hidden(struct_id, &f.name).is_some() => {
                 ctx.emit_error(
@@ -3331,7 +3330,7 @@ pub(super) fn lower_struct_init(
     }
 }
 
-/// Field default of `owner` (spec 2.3.3): a constant expression resolved in
+/// Field default of `owner`: a constant expression resolved in
 /// the struct's module, evaluated and embedded like a const.
 pub(super) fn field_default(
     ctx: &mut LowerCtx<'_>,
@@ -3434,7 +3433,7 @@ pub(super) fn lower_field(
         HirTy::Unknown => true,
         _ => false,
     };
-    // Spec 3.5.4: `obj.method` is not a function value.
+    // `obj.method` is not a function value.
     if !has_field && matches!(pick_method(ctx, &target_h.ty, name, None), Ok(Some(_))) {
         let recv = rokc_ast::print::print_expr(target);
         let r = ctx.error_expr(
@@ -3489,7 +3488,7 @@ pub(super) fn field_access(
     // A union field read is a `UnionRead`: a cast/bitcast of the one
     // `__data` slot.
     if let Some(union_kind) = def.union_kind.clone() {
-        // Spec 4.15.2: reinterpreting the bits can make an invalid value
+        // Reinterpreting the bits can make an invalid value
         // (a bad `bool`, a forged GC reference).
         if ctx.unsafe_depth == 0 {
             ctx.emit_error(
@@ -3624,7 +3623,7 @@ pub(super) fn hir_binop(
     }
 }
 
-// Decode a `"..."` literal body (spec 1.7.1). The lexer already
+// Decode a `"..."` literal body. The lexer already
 // rejected malformed escapes, so the fallback is never taken.
 pub(super) fn decode_str_escapes(s: &str) -> String {
     rokc_ast::escape::unescape(s, rokc_ast::escape::EscapeMode::Str)
@@ -3696,7 +3695,7 @@ pub(super) fn lower_if(
             else_h.ty = t;
         }
     }
-    // Spec 3.14.1: a diverging branch (`return` / `throw` / ...) takes
+    // A diverging branch (`return` / `throw` / ...) takes
     // the other branch's type.
     let then_ty = then_h
         .trailing
@@ -3830,7 +3829,7 @@ fn fit_if_branch(
     v
 }
 
-/// Spec 2.2.6: the `x is T` conjuncts of `cond` (`a && b && ..`): locals
+/// The `x is T` conjuncts of `cond` (`a && b && ..`): locals
 /// that are `T` wherever `cond` holds.
 fn narrowings(ctx: &LowerCtx<'_>, cond: &Expr) -> Vec<(String, rokc_ast::Ty)> {
     match &cond.kind {
@@ -3984,7 +3983,7 @@ pub(super) fn write_through(
     }))
 }
 
-/// Spec 2.2.5: `v is T` - `match v { _: T => true, _ => false }`.
+/// `v is T` - `match v { _: T => true, _ => false }`.
 fn lower_is(
     ctx: &mut LowerCtx<'_>,
     operand: &Expr,
@@ -4072,8 +4071,8 @@ fn lower_is(
 }
 
 thread_local! {
-    /// Spans of trailing closures (spec 4.8): they fill the last parameter
-    /// (4.8.3), past defaulted or named ones (4.8.9).
+    /// Spans of trailing closures: they fill the last parameter
+    ///, past defaulted or named ones.
     static TRAILING_CLOSURES: std::cell::RefCell<std::collections::HashSet<(u32, u32)>> =
         std::cell::RefCell::default();
 }
@@ -4092,7 +4091,7 @@ fn with_trailing_closure(args: &[CallArg], tc: Option<&Expr>) -> Vec<CallArg> {
     all
 }
 
-/// Lower arguments against a signature (spec 4.2): named ones to their
+/// Lower arguments against a signature: named ones to their
 /// slot, tuple spreads to consecutive slots, missing trailing ones to
 /// defaults, each checked. `receiver` fills slot 0.
 pub(super) fn lower_args_for(
@@ -4108,7 +4107,7 @@ pub(super) fn lower_args_for(
 }
 
 /// `lower_args_for`, also returning each `ref` parameter's argument
-/// place (by parameter index) for the copy-out (spec 4.7).
+/// place (by parameter index) for the copy-out.
 pub(super) fn lower_args_ref(
     ctx: &mut LowerCtx<'_>,
     sig: &FnSig,
@@ -4117,7 +4116,7 @@ pub(super) fn lower_args_ref(
     args: &[CallArg],
     span: rokc_diagnostic::Span,
 ) -> (Vec<HirExpr>, Vec<HirStmt>, Vec<Option<HirExpr>>) {
-    // Spec 4.8.3: a trailing closure fills the last parameter only; for
+    // A trailing closure fills the last parameter only; for
     // a function parameter elsewhere, its mismatches say little.
     let fn_like = |t: &HirTy| {
         matches!(
@@ -4186,11 +4185,11 @@ fn lower_args_ref_inner(
         }
         next = 1;
     }
-    // Spec 4.2.5: a variadic `...T` (the last slot) takes every argument
+    // A variadic `...T` (the last slot) takes every argument
     // from its position on, spreads included.
     let var_at = if sig.variadic { n - 1 } else { usize::MAX };
     let mut var_parts: Vec<VarPart<'_>> = Vec::new();
-    // Slot → its argument's written position (spec 4.2.8).
+    // Slot → its argument's written position.
     let mut written: Vec<Option<usize>> = vec![None; n];
     // `..d` with `d: Dict<str, V>`: its temp and written position.
     let mut dicts: Vec<(String, usize, HirTy)> = Vec::new();
@@ -4249,7 +4248,7 @@ fn lower_args_ref_inner(
                 }
             }
             CallArg::Spread(e) => {
-                // `f(..t)` with a tuple value (spec 4.2.6).
+                // `f(..t)` with a tuple value.
                 let lh = lower_expected(ctx, e, HirTy::Unknown);
                 match lh.ty.clone() {
                     HirTy::Tuple(parts) => {
@@ -4477,7 +4476,7 @@ fn lower_args_ref_inner(
         ctx.at.set(outer);
     }
     check_ref_exclusive(ctx, callee, &out, &places, &reads, has_receiver);
-    // Spec 4.2.8: written order. Named arguments out of parameter order go
+    // Written order. Named arguments out of parameter order go
     // through temps, after the receiver.
     let mut order: Vec<(usize, usize)> = written
         .iter()
@@ -4502,7 +4501,7 @@ fn lower_args_ref_inner(
     (out, lets, places)
 }
 
-/// Spec 4.2.6: dict spreads as named arguments. Each parameter in `empty`
+/// Dict spreads as named arguments. Each parameter in `empty`
 /// reads `#d["p"]` from the first dict with key `p`, else its default (or
 /// panics in `Dict::index`); every key must name one (`spread_names`,
 /// checked at run time). A defaulted parameter skips a dict whose value
@@ -4673,7 +4672,7 @@ fn is_list(ctx: &LowerCtx<'_>, ty: &HirTy) -> bool {
 }
 
 /// A `List<T>` in a `SliceMut<T>` slot: a writable view of the whole
-/// list (stdlib 2.9.7). Anything else is left to `coerce`.
+/// list. Anything else is left to `coerce`.
 pub(super) fn list_into_view(ctx: &mut LowerCtx<'_>, slot: &HirTy, value: HirExpr) -> HirExpr {
     let (HirTy::Struct(want), HirTy::Struct(have)) = (slot, &value.ty) else {
         return value;
@@ -4841,7 +4840,7 @@ fn spreads_at_run_time(ctx: &LowerCtx<'_>, ty: &HirTy) -> bool {
 }
 
 /// A `List` literal item: `..x` spreads a tuple, array, `List` or `Slice`
-/// (the handler is variadic, spec 4.2.6); otherwise it's a range.
+/// (the handler is variadic); otherwise it's a range.
 fn list_item(ctx: &mut LowerCtx<'_>, e: &Expr) -> CallArg {
     let ExprKind::Range {
         start: None,
@@ -4868,7 +4867,7 @@ fn list_item(ctx: &mut LowerCtx<'_>, e: &Expr) -> CallArg {
     })
 }
 
-/// One trailing argument of a variadic `...T` call (spec 4.2.5).
+/// One trailing argument of a variadic `...T` call.
 pub(super) enum VarPart<'e> {
     Arg(&'e Expr),
     /// `..x`: a tuple's fields, or a `List` / `Slice` / array's elements.
@@ -4891,7 +4890,7 @@ pub(super) fn variadic_elem(ctx: &LowerCtx<'_>, ty: &HirTy) -> HirTy {
     }
 }
 
-/// Spec 4.2.5 / 4.2.6: a variadic call's trailing arguments as one
+/// A variadic call's trailing arguments as one
 /// `Slice<T>` (`elem` `Unknown`: the first argument's type). Plain
 /// arguments become a fixed array viewed as a slice; a spread makes a fresh
 /// `List`.
@@ -5152,8 +5151,8 @@ fn check_arity(
     Vec::new()
 }
 
-/// C default argument promotions past a variadic declaration's parameters
-/// (spec 8.6.10): narrow integers and `bool` to `i32`, `f32` to `f64`.
+/// C default argument promotions past a variadic declaration's parameters:
+/// narrow integers and `bool` to `i32`, `f32` to `f64`.
 /// Aggregates are refused.
 fn c_vararg_promote(ctx: &LowerCtx<'_>, callee: &str, a: HirExpr) -> HirExpr {
     let to = match &a.ty {
@@ -5188,7 +5187,7 @@ fn c_vararg_promote(ctx: &LowerCtx<'_>, callee: &str, a: HirExpr) -> HirExpr {
 }
 
 /// A path call's first argument standing for `self` (`T::m(ref x)`):
-/// `ref` exactly when `self` is (spec 4.7.3). `explicit`: `None` for a
+/// `ref` exactly when `self` is. `explicit`: `None` for a
 /// method call.
 fn check_path_receiver(
     ctx: &LowerCtx<'_>,
@@ -5255,7 +5254,7 @@ fn field_path(ctx: &LowerCtx<'_>, e: &HirExpr) -> Vec<String> {
     }
 }
 
-/// Spec 4.7.2: a place passed `ref` may not be passed `ref` again or read
+/// A place passed `ref` may not be passed `ref` again or read
 /// by another argument of the same call through an overlapping path, when
 /// visible syntactically.
 fn check_ref_exclusive(
@@ -5400,7 +5399,7 @@ pub(super) fn call_sig(
             }
         }
     }
-    // Stdlib spec 0.3.2: an intrinsic method's call is its primitive op.
+    // An intrinsic method's call is its primitive op.
     let kind = match (ctx.env.intrinsic(sig.id), <[HirExpr; 2]>::try_from(lowered)) {
         (Some(&Intrinsic::Prim(op)), Ok([lhs, rhs])) => HirExprKind::PrimBinOp {
             op,
@@ -5569,7 +5568,7 @@ pub(super) fn with_lets(lets: Vec<HirStmt>, e: HirExpr) -> HirExpr {
 
 /// Bind explicit `::<..>` arguments by position to `def`'s parameters not
 /// fixed by `self_ty`. Too many is an error; too few leave the rest to
-/// inference (1.2.2).
+/// inference.
 pub(super) fn bind_explicit(
     ctx: &LowerCtx<'_>,
     def: &FnDef,
@@ -5656,7 +5655,7 @@ pub(super) fn ast_ty_mentions(ty: &Ty, name: &str) -> bool {
 }
 
 /// `x.drop()` is banned for `Drop::drop`; the `using` desugar's
-/// `x.#drop()` requires `Drop` (spec 3.17.7).
+/// `x.#drop()` requires `Drop`.
 fn drop_method<'m>(
     ctx: &LowerCtx<'_>,
     recv_ty: &HirTy,
@@ -5691,7 +5690,7 @@ fn drop_method<'m>(
 const DROP_GLUE_DEPTH: u32 = 64;
 
 /// Does releasing a `ty` run any `Drop::drop` - its own, or one of a
-/// field / tuple element / payload's (stdlib spec 2.13.4)?
+/// field / tuple element / payload's?
 pub(super) fn needs_drop(ctx: &LowerCtx<'_>, ty: &HirTy, depth: u32) -> bool {
     if depth > DROP_GLUE_DEPTH {
         return false;
@@ -5724,7 +5723,7 @@ pub(super) fn needs_drop(ctx: &LowerCtx<'_>, ty: &HirTy, depth: u32) -> bool {
     }
 }
 
-/// A `using` exit for `value` (stdlib 2.13.4): its `drop`, then each
+/// A `using` exit for `value`: its `drop`, then each
 /// `Drop` field / element in reverse order, recursively; a sum releases
 /// the held variant's payload.
 fn drop_glue(
@@ -5873,7 +5872,7 @@ fn drop_glue(
 }
 
 /// The standard handle types a hand-off copies through their
-/// `Transfer::transfer_copy` (stdlib 2.13.9); a coroutine future's copies
+/// `Transfer::transfer_copy`; a coroutine future's copies
 /// what its frame captured. Other types are copied part by part, or kept
 /// when `Sync` or `unsafe impl Send` (they manage their own sharing:
 /// `Task`, files, sockets).
@@ -6398,7 +6397,7 @@ fn is_drop_method(ctx: &LowerCtx<'_>, ty: &HirTy) -> bool {
     trait_name.as_deref() == Some(ctx.lang("drop_method"))
 }
 
-/// Spec 2.13.4: `Drop::drop` runs only on `using` exit; a direct call is
+/// `Drop::drop` runs only on `using` exit; a direct call is
 /// an error outside `unsafe` bare-tier code.
 fn direct_drop_error(ctx: &LowerCtx<'_>, span: rokc_diagnostic::Span) -> Option<HirExpr> {
     if ctx.unsafe_depth > 0 && ctx.current_module.starts_with("rok::bare") {
@@ -6445,7 +6444,7 @@ fn check_direct_drop_path(ctx: &LowerCtx<'_>, p: &rokc_ast::Path) {
     }
 }
 
-/// A trait a sum has when all its members do (spec 2.13.6, 2.5.7, 2.10.9)?
+/// A trait a sum has when all its members do?
 pub(super) fn is_sum_trait(ctx: &LowerCtx<'_>, key: &str) -> bool {
     [
         "clone_trait",
@@ -6473,7 +6472,7 @@ pub(super) fn sum_value_terms(ty: &HirTy) -> usize {
     }
 }
 
-/// Spec 2.6.4: a sum with two value terms has no order. `what` is the
+/// A sum with two value terms has no order. `what` is the
 /// operation (`<`, `min`, ..).
 pub(super) fn sum_order_error(
     ctx: &LowerCtx<'_>,
@@ -6505,7 +6504,7 @@ const SUM_METHODS: &[&str] = &[
 
 /// `clone` / `Debug::fmt` / `eq` / `ne` / `hash` / `lt`.. / `cmp` on a sum:
 /// a `match` calling the variant's method. Across variants `eq` is false
-/// and `none` orders first (spec 2.6.4). `none` clones, prints, compares
+/// and `none` orders first. `none` clones, prints, compares
 /// and hashes as itself. `lowered_rhs`: an operator's already lowered right operand.
 fn sum_structural_call(
     ctx: &mut LowerCtx<'_>,
@@ -7206,7 +7205,7 @@ pub(super) fn method_call_on(
                 ),
             );
         }
-        // Spec 3.5.2: a missing method is a hard error, not a silent
+        // A missing method is a hard error, not a silent
         // unit return - unless `Reflect` (every type's) answers it.
         let recv_h = match super::reflect::method_call(ctx, recv_h, method, args) {
             Ok(r) => return r,
@@ -7227,7 +7226,7 @@ pub(super) fn method_call_on(
         retain_since(ctx, since, |d| {
             d.tag != rokc_diagnostic::Tag::ClosureParamInfer
         });
-        // `s[a:b:k]` desugars to `.slice(..).step(k)` (spec 3.6.2).
+        // `s[a:b:k]` desugars to `.slice(..).step(k)`.
         if method == "step" && recv_h.ty == HirTy::Prim(PrimTy::Str) {
             let e = ctx.error_expr(
                 Code::INVALID_INDEX,
@@ -7290,7 +7289,7 @@ fn retain_since(
     }
 }
 
-/// Stdlib 2.4.1: `a op= b` is `a.op_assign(b)` when `a`'s type implements
+/// `a op= b` is `a.op_assign(b)` when `a`'s type implements
 /// the `op=` trait; `None` otherwise, or for a primitive's `#[intrinsic]`
 /// impl, and the caller writes `a = a op b`.
 fn assign_trait_call(
@@ -7357,7 +7356,7 @@ fn assign_trait_call(
 /// A trait implemented with several arguments (`Index<usize>` and
 /// `Index<(usize, usize)>`): the one impl whose first parameter takes the
 /// first argument (tried in rolled-back probes), or with no argument the
-/// one returning the expected type (spec 3.1.3).
+/// one returning the expected type.
 fn pick_by_args<'e>(
     ctx: &mut LowerCtx<'e>,
     ty: &HirTy,
@@ -7968,7 +7967,7 @@ pub(super) fn any_dispatcher(
     id
 }
 
-/// `any` across packages (spec 904). Dispatchers are closed-world, so each
+/// `any` across packages. Dispatchers are closed-world, so each
 /// gets a stable symbol `rok.any.<hash>` (weak in a prebuilt library,
 /// strong in its user), and a library ships its stored types and
 /// dispatchers as rok source `seeds` in its ROKHIR for the user to
@@ -8265,7 +8264,7 @@ fn build_dispatcher(env: &Env<'_>, d: &AnyDispatch) -> HirFunction {
     }
 }
 
-/// Spec 5.6 for methods: an inherent method without `pub` is private to
+/// For methods: an inherent method without `pub` is private to
 /// the module of its impl block.
 pub(super) fn check_method_visible(ctx: &LowerCtx<'_>, fn_id: FunctionId, method: &str) {
     if let Some(info) = ctx.env.method_info(fn_id) {
@@ -8290,7 +8289,7 @@ pub(super) fn generic_method_for<'e>(
             (d.name, d.generic_args)
         }
         HirTy::Prim(p) => (p.name().to_owned(), Vec::new()),
-        // `impl<T> GcBuf<T>` (stdlib 2.9.12).
+        // `impl<T> GcBuf<T>`.
         HirTy::GcBuf(_) => (super::resolve::GC_BUF.to_owned(), Vec::new()),
         _ => return &[],
     };
@@ -8312,8 +8311,8 @@ pub(super) enum MethodPick<'e> {
     Generic(&'e GenericMethod),
 }
 
-/// Method `method` of `ty` (spec 3.5.2 / 4.9.6), from `trait_key` if given:
-/// inherent first, then methods of the traits in scope (3.5.2), where a
+/// Method `method` of `ty`, from `trait_key` if given:
+/// inherent first, then methods of the traits in scope, where a
 /// trait defined or `use`d in this package beats one seen only through
 /// the implicit `rok::core::**`; other ties are ambiguous.
 pub(super) fn pick_method<'e>(
@@ -8336,7 +8335,7 @@ fn pick_method_in<'e>(
 ) -> Result<Option<MethodPick<'e>>, String> {
     let env = ctx.env;
     let mut cands: Vec<(Option<&'e str>, MethodPick<'e>)> = Vec::new();
-    // A type parameter's bounds declare it (spec 2.10.9); one candidate
+    // A type parameter's bounds declare it; one candidate
     // per bound trait.
     if let HirTy::Param(p) = ty {
         for gm in super::bounds::bound_methods(ctx, *p, method, trait_key) {
@@ -8422,7 +8421,7 @@ fn core_only_trait(ctx: &LowerCtx<'_>, key: &str) -> bool {
 
 /// Is trait `key` in scope here: defined in this module, `use`d (also
 /// through a `pub use`), a bound of a type parameter, or (`implicit`) a
-/// `rok::` trait, which spec 3.5 makes visible everywhere?
+/// `rok::` trait, visible everywhere?
 fn trait_in_scope(ctx: &LowerCtx<'_>, key: &str, implicit: bool) -> bool {
     if module_of(key) == *ctx.access_module()
         || (implicit && key.starts_with("rok::"))
@@ -8668,7 +8667,7 @@ fn template_marked(ctx: &LowerCtx<'_>, def: &FnDef, at: rokc_diagnostic::Span) {
     ctx.use_marked(what, &name, &mark, at);
 }
 
-/// Spec 5.9.3: an extern static is a C global Rok cannot check; reading
+/// An extern static is a C global Rok cannot check; reading
 /// or writing one needs `unsafe`.
 fn extern_static_use(ctx: &LowerCtx<'_>, full: &str, write: bool, at: rokc_diagnostic::Span) {
     let name = leaf_name(full);
@@ -8709,7 +8708,7 @@ fn extern_static_use(ctx: &LowerCtx<'_>, full: &str, write: bool, at: rokc_diagn
     }
 }
 
-/// Spec 4.15.3: an `unsafe fn` (or C function) is callable only in an
+/// An `unsafe fn` (or C function) is callable only in an
 /// `unsafe fn` body or `unsafe { }` block.
 fn check_unsafe_call(ctx: &LowerCtx<'_>, callee: &str) {
     if ctx.unsafe_depth == 0 {
@@ -8784,9 +8783,9 @@ pub(super) fn call_generic_on(
     }
 }
 
-/// A generic call's named and spread arguments as positional ones (spec
-/// 4.2): skipped parameters take defaults, a spread tuple goes through a
-/// temp in `lets`, a trailing closure fills the last parameter (4.8.3);
+/// A generic call's named and spread arguments as positional ones:
+/// skipped parameters take defaults, a spread tuple goes through a
+/// temp in `lets`, a trailing closure fills the last parameter;
 /// `offset` receiver slots first. `None` after an error.
 fn generic_positional_args(
     ctx: &mut LowerCtx<'_>,
@@ -8800,7 +8799,7 @@ fn generic_positional_args(
     let n = params.len();
     let mut slots: Vec<Option<CallArg>> = vec![None; n];
     let (mut next, mut extra) = (0usize, 0usize);
-    // Spec 4.2.6: a variadic `...T` takes every argument past its slot
+    // A variadic `...T` takes every argument past its slot
     // (spread tuple fields too); `call_generic_positional` wraps them.
     let variadic = params.last().is_some_and(|p| p.variadic);
     let mut rest: Vec<CallArg> = Vec::new();
@@ -9018,7 +9017,7 @@ fn call_generic_positional(
         check_unsafe_call(ctx, callee);
     }
     template_marked(ctx, def, span);
-    // Spec 4.2.5: a variadic call's trailing arguments become one
+    // A variadic call's trailing arguments become one
     // `Slice<T>` once the others are in (`lower_variadic`).
     let (args, tail) = match def.params.last().filter(|p| p.variadic) {
         Some(_) => {
@@ -9095,7 +9094,7 @@ fn call_generic_positional(
         }
         let mut hint = generic_arg_hint(ctx, def, &subst, hint_self, i, e);
         // A slot several bounds of the trait type differently: an
-        // unsuffixed literal takes the one it fits (spec 3.1.3).
+        // unsuffixed literal takes the one it fits.
         if let (HirTy::Unknown, Some(HirTy::Param(p))) = (&hint, hint_self) {
             let choices = super::bounds::slot_choices(ctx, def, *p, i);
             if !choices.is_empty() {
@@ -9373,8 +9372,8 @@ fn ty_hint(
             _ => HirTy::Unknown,
         }
     });
-    // `[T; N]` with `N` open and an array literal: the literal's length
-    // (spec 2.11.6), not a `List` default.
+    // `[T; N]` with `N` open and an array literal: the literal's length,
+    // not a `List` default.
     match (&hint, param, &e.kind) {
         (HirTy::Unknown, Some(t), ExprKind::List(items)) => match &t.kind {
             rokc_ast::TyKind::Array(elem, _) => {
@@ -9488,7 +9487,7 @@ const SPAWN_PLAIN: &str = "rok::core::task::spawn_plain";
 /// `task::spawn(e)`'s `e` makes the future right there (an `async` block,
 /// an `async fn` call) and captures nothing a hand-off copies (a
 /// collection, a future, a `[ref x]` cell): no other handle has its frame,
-/// so `spawn_plain` hands nothing over (stdlib 2.18.1).
+/// so `spawn_plain` hands nothing over.
 fn plain_fresh_future(ctx: &LowerCtx<'_>, args: &[CallArg]) -> bool {
     let [CallArg::Positional(e)] = args else {
         return false;
@@ -9728,7 +9727,7 @@ fn lower_path_call(
             .collect();
         return lower_struct_init(ctx, p, &fields, None, span);
     }
-    // `Foo(arg, ...)` - tuple-struct constructor (spec 2.7.4).
+    // `Foo(arg, ...)` - tuple-struct constructor.
     if let Some(sid) = ctx
         .canon_type(&segs)
         .and_then(|full| ctx.lookup_struct(&full))
@@ -9747,7 +9746,7 @@ fn lower_path_call(
                 format!("`{display}` is not a tuple struct - use `{display} {{ field: ... }}`"),
             );
         }
-        // Spec 5.6: constructing needs every field visible here.
+        // Constructing needs every field visible here.
         def.fields
             .iter()
             .for_each(|f| ctx.check_field_visible(sid, &f.name));
@@ -10067,7 +10066,7 @@ fn named_type_call(
     super::reflect::static_call(ctx, &own, method, args, span)
 }
 
-/// A range (stdlib 2.7.4, spec 6.5.1): each shape calls its `#[literal]`
+/// A range: each shape calls its `#[literal]`
 /// handler (core's `Range`, `RangeInclusive`, ...).
 fn lower_range_value(
     ctx: &mut LowerCtx<'_>,
@@ -10122,7 +10121,7 @@ fn path_method_hits(
     Ok(hits)
 }
 
-/// `<T as Tr>::m(args)` (spec 2.13.4): `Tr`'s `m` for `T`, the first
+/// `<T as Tr>::m(args)`: `Tr`'s `m` for `T`, the first
 /// argument as `self`; `<T as Tr>::X::m(args)`: `m` of associated type `X`.
 fn qpath_member_call(
     ctx: &mut LowerCtx<'_>,
@@ -10363,7 +10362,7 @@ fn path_call_via_impls(
         return Some(call.unwrap_or_else(|| qualified_miss(ctx, &t, &key, method, span)));
     }
     // Only paths the struct / enum lookup can't take: type parameters,
-    // primitives, `Self`, associated types (2.8.3).
+    // primitives, `Self`, associated types.
     let ty_path = rokc_ast::Path {
         segments: all_segs[..all_segs.len() - 1].to_vec(),
         span,
@@ -10391,7 +10390,7 @@ fn path_call_via_impls(
         discard_args(ctx, args);
         return Some(poison(span));
     }
-    // `T::default()` for a `T | none` sum is `none` (stdlib 2.13).
+    // `T::default()` for a `T | none` sum is `none`.
     if let (HirTy::Sum(vs), "default", []) = (&t, method, args) {
         if let Some(i) = vs.iter().position(HirTy::is_none) {
             return Some(HirExpr {
@@ -10566,7 +10565,7 @@ fn named_type_overload(
 }
 
 /// A trait implemented over several types (`From<i32>` + `From<i8>`):
-/// pick by the first parameter the impls disagree on (spec 3.1.3), an
+/// pick by the first parameter the impls disagree on, an
 /// unsuffixed literal via `pick_literal_impl`, anything else by exact
 /// type. `None` if `method` isn't overloaded so, or (method call) no impl
 /// has a non-literal argument's type.
@@ -10707,7 +10706,7 @@ fn literal_fits(ctx: &LowerCtx<'_>, v: LitVal, ty: &HirTy) -> bool {
     }
 }
 
-/// Spec 3.1.3: which impl an unsuffixed literal takes among candidate slot
+/// Which impl an unsuffixed literal takes among candidate slot
 /// types `params` (`a * 2`, `T::from(2)`, `2.into()`): its default type if
 /// offered, else the one it fits. `Ok(None)`: not a literal or nothing
 /// fits; `Err`: several fit (named for the diagnostic).
@@ -10762,7 +10761,7 @@ fn literal_conv_receiver(ctx: &mut LowerCtx<'_>, receiver: &Expr, method: &str) 
     Some(lower_expected(ctx, receiver, params[i].clone()))
 }
 
-/// `[a, b]` is a `List` (spec 6.5.1); a fixed array only in a slot
+/// `[a, b]` is a `List`; a fixed array only in a slot
 /// typed `[T; N]`.
 fn lower_list_lit(ctx: &mut LowerCtx<'_>, items: &[Expr], span: rokc_diagnostic::Span) -> HirExpr {
     let Some(HirTy::Array(e, _)) = ctx.current_expected().cloned() else {
@@ -11022,7 +11021,7 @@ fn is_addr_intrinsic(def: &FnDef, module: &str) -> bool {
         })
 }
 
-/// `addr_of(place)` / `many_addr_of(place)` (bare 1.1): a pointer to
+/// `addr_of(place)` / `many_addr_of(place)`: a pointer to
 /// the place itself, not to a copy.
 fn lower_addr_of(
     ctx: &mut LowerCtx<'_>,
@@ -11431,7 +11430,7 @@ fn lower_buf_intrinsic(
 }
 
 /// A `#[repr(transparent)]` struct around one integer (`Ptr<T>`): its id
-/// and that integer type, which atomics operate on (stdlib 2.16.2).
+/// and that integer type, which atomics operate on.
 fn transparent_word(ctx: &LowerCtx<'_>, ty: &HirTy) -> Option<(StructId, HirTy)> {
     let HirTy::Struct(id) = ty else { return None };
     let def = ctx.struct_def(*id);
@@ -11607,7 +11606,7 @@ pub(super) fn lower_infix(
     rhs: &Expr,
     span: rokc_diagnostic::Span,
 ) -> HirExpr {
-    // Spec 3.2 / 3.1: `&&` and `||` short-circuit. Desugar before
+    // `&&` and `||` short-circuit. Desugar before
     // lowering rhs so that side effects in rhs only run when needed.
     if op == "&&" || op == "||" {
         return lower_short_circuit(ctx, op, lhs, rhs, span);
@@ -11788,7 +11787,7 @@ fn lower_infix_typed(
     if matches!(lhs_h.ty, HirTy::AnyTrait(_)) || matches!(rhs_h.ty, HirTy::AnyTrait(_)) {
         return dyn_op(ctx, op, lhs_h, Some(rhs_h), span);
     }
-    // Spec 6.7.2 `swap`: `a ∈ s` is `s.contains(a)`. Operands still
+    // `swap`: `a ∈ s` is `s.contains(a)`. Operands still
     // evaluate left to right: `a` goes to a temp first.
     if ctx
         .env
@@ -11820,9 +11819,9 @@ fn lower_infix_typed(
             span,
         };
     }
-    // Spec 0.4 / 3.1: on user types, `str`, tuples / arrays (core's
-    // component-wise impls) and with any Unicode math operator (spec
-    // 1.10.3, primitives too) the operator is its trait's method.
+    // On user types, `str`, tuples / arrays (core's
+    // component-wise impls) and with any Unicode math operator
+    // (primitives too) the operator is its trait's method.
     if matches!(
         lhs_h.ty,
         HirTy::Struct(_)
@@ -11893,7 +11892,7 @@ fn lower_infix_typed(
     )
 }
 
-/// Spec 2.2.3 / 808: an operator on `any` switches on the tag over the
+/// An operator on `any` switches on the tag over the
 /// primitives that have it (same type both sides; a static operand fixes
 /// it). Arithmetic results are boxed back into `any`, comparisons give
 /// `bool`; a type without the operator panics.
@@ -12084,13 +12083,13 @@ pub(super) fn lower_short_circuit(
     let bool_ty = HirTy::Prim(PrimTy::Bool);
     let lhs_h = lower_expected(ctx, lhs, bool_ty.clone());
     // A user `LogicalAnd` / `LogicalOr` impl: a plain call, both operands
-    // evaluated (stdlib 2.3.9).
+    // evaluated.
     if matches!(lhs_h.ty, HirTy::Struct(_) | HirTy::Enum(_)) {
         let rhs_h = lower_expr(ctx, rhs);
         return dispatch_user_op(ctx, op, Fixity::Infix, lhs_h, Some(rhs_h), span);
     }
     let lhs_h = coerce(ctx, &bool_ty, lhs_h, &|| "the condition".to_owned());
-    // `x is T && rhs`: `x` is `T` in `rhs` (spec 2.2.6).
+    // `x is T && rhs`: `x` is `T` in `rhs`.
     let rhs_h = if op == "&&" {
         ctx.push_scope();
         let lets = bind_narrowed(ctx, lhs);
@@ -12177,7 +12176,7 @@ pub(super) fn lower_prefix(
     )
 }
 
-/// An operator on a user type calls its trait method (spec 0.4: `a + b` ≡
+/// An operator on a user type calls its trait method (`a + b` ≡
 /// `Add::add(a, b)`); only from a trait impl, not a same-named inherent
 /// method.
 pub(super) fn dispatch_user_op(
@@ -12212,7 +12211,7 @@ pub(super) fn dispatch_user_op_lit(
     };
     let method = entry.method_name.clone();
     let op_trait = &entry.trait_name;
-    // Spec 6.7.8: the binding works only where its trait is visible.
+    // The binding works only where its trait is visible.
     let names = &ctx.env.names;
     let cur = &ctx.current_module;
     let visible = names
@@ -12285,7 +12284,7 @@ pub(super) fn dispatch_user_op_lit(
     }
     let fn_id = exact.or(lit_pick).or_else(|| impls.first().copied());
     let Some(fn_id) = fn_id else {
-        // `impl<T> Add for Pair<T>` (spec 2.9.4): monomorphize on the
+        // `impl<T> Add for Pair<T>`: monomorphize on the
         // operand types.
         let gm = if rhs.is_some() {
             generic_op_by_rhs(ctx, &lhs.ty, rhs.as_ref(), lit_rhs, &method)
@@ -12348,7 +12347,7 @@ pub(super) fn dispatch_user_op_lit(
     }
 }
 
-/// Operator `sym` on a type parameter (spec 2.10.9): the bound on the
+/// Operator `sym` on a type parameter: the bound on the
 /// operator's trait gives the method, and its `Rhs` types the right side.
 #[allow(clippy::too_many_arguments)]
 fn param_op(
@@ -12378,7 +12377,7 @@ fn param_op(
     let mut args = vec![lhs];
     if let Some(r) = rhs {
         // The bound whose `Rhs` is the right operand's type, else the
-        // one an unsuffixed literal takes (spec 3.1.3).
+        // one an unsuffixed literal takes.
         let rhs_of = |b: &TraitRef| b.args.first().cloned().unwrap_or(HirTy::Unknown);
         let params: Vec<HirTy> = bounds.iter().map(rhs_of).collect();
         let lit = lit_rhs.filter(|e| is_untyped_literal(e));
@@ -12534,7 +12533,7 @@ pub(super) fn prefix_for_prim(sym: &str, prim: PrimTy) -> Option<(PrimOp, HirTy)
     match sym {
         "-" if prim.is_signed_int() || prim.is_float() => Some((PrimOp::Neg, same_ty)),
         "!" if matches!(prim, PrimTy::Bool) => Some((PrimOp::LogicalNot, same_ty)),
-        // On an integer `!` is the bitwise complement, as `~` (stdlib 2.3.4).
+        // On an integer `!` is the bitwise complement, as `~`.
         "~" | "!" if prim.is_int() => Some((PrimOp::Not, same_ty)),
         _ => None,
     }
@@ -12793,7 +12792,7 @@ fn qpath_trait(ctx: &LowerCtx<'_>, q: &rokc_ast::QPath) -> Option<String> {
 }
 
 /// `<T as Tr>::N` (an associated const) or `<T as Tr>::m` (a method
-/// value) not in call position (spec 2.13.4).
+/// value) not in call position.
 fn lower_qpath_value(
     ctx: &mut LowerCtx<'_>,
     expr: &Expr,
@@ -12853,7 +12852,7 @@ fn lower_qpath_value(
 }
 
 /// `Type::N` / `Box::<i32>::N`, `T::N` / `Self::N`: an associated const
-/// from the impl covering that type (spec 2.8.3a).
+/// from the impl covering that type.
 fn assoc_const_path(ctx: &mut LowerCtx<'_>, path: &AstPath) -> Option<HirExpr> {
     // `Type::N` / `Box::<i32>::N`: the impl covering that type.
     if let [prefix @ .., name] = path.segments.as_slice() {
@@ -12922,7 +12921,7 @@ pub(super) fn lower_path(
             return ctx.read_local(local, span);
         }
     }
-    // Spec 2.11.10: a const generic parameter is a value.
+    // A const generic parameter is a value.
     if let [name] = segs.as_slice() {
         if let Some((v, Some(p))) = ctx.ty_subst.get(*name).and_then(HirTy::as_const) {
             let value = match p {
@@ -12938,7 +12937,7 @@ pub(super) fn lower_path(
         }
     }
     // `const NAME: T = expr;` is inlined, typed by its declaration; `T::N`
-    // / `Self::N` reads the concrete type's const (spec 2.8.3a).
+    // / `Self::N` reads the concrete type's const.
     if let Some(v) = assoc_const_path(ctx, path) {
         return v;
     }
@@ -13047,7 +13046,7 @@ pub(super) fn lower_path(
             .last()
             .map_or(&[][..], |s| s.generics.as_slice());
         // `let f: fn(i32) -> i32 = id;`: the receiving fn type picks the
-        // instance (spec 4.4.7).
+        // instance.
         let from_slot = if targs.is_empty() {
             generic_fn_args_from_slot(ctx, def)
         } else {
@@ -13106,7 +13105,7 @@ pub(super) fn lower_path(
             ),
         );
     }
-    // `S::new` / `i32::add` / `Tr::m` without a call (spec 3.5.3).
+    // `S::new` / `i32::add` / `Tr::m` without a call.
     let callee = ExprKind::Path(path.clone());
     if let Some(v) = super::method_value::method_path_value(ctx, &callee, span) {
         return v;
@@ -13423,7 +13422,7 @@ pub(super) fn lower_literal(
 }
 
 // `'A'` / `c'A'` payload is the body as written (without quotes);
-// decode it with the shared escape table (spec 1.8).
+// decode it with the shared escape table.
 pub(super) fn parse_char_literal(text: &str) -> Option<u32> {
     let decoded = rokc_ast::escape::unescape(text, rokc_ast::escape::EscapeMode::CChar).ok()?;
     let mut chars = decoded.chars();
@@ -13492,7 +13491,7 @@ pub(super) fn parse_float_literal(text: &str) -> Option<(u64, PrimTy)> {
 }
 
 /// A built-in literal shape (`[..]`, `{k: v}`, `{a, b}`, ranges) calls the
-/// handlers registered for it (spec 6.5.1, 6.5.4); a user package's apply
+/// handlers registered for it; a user package's apply
 /// to its own code.
 fn lower_shape(
     ctx: &mut LowerCtx<'_>,
@@ -13518,7 +13517,7 @@ fn lower_shape(
                     })
                     .collect(),
                 span,
-                // Called as if from the handler's own module (spec 6.9.9).
+                // Called as if from the handler's own module.
                 origin: h.name.rsplit_once("::").map(|(m, _)| {
                     let m = if m == "pkg" { "" } else { m };
                     m.strip_prefix("pkg::").unwrap_or(m).to_owned()
@@ -13573,7 +13572,7 @@ fn handler_ret_leaf(ctx: &LowerCtx<'_>, name: &str) -> Option<String> {
     }
 }
 
-/// Spec 6.5.4 / 6.5.5: pick the handler (return type is the slot's, then
+/// Pick the handler (return type is the slot's, then
 /// highest `priority`; still several is an error) and call it.
 fn lower_magic(
     ctx: &mut LowerCtx<'_>,
@@ -13731,7 +13730,7 @@ pub(super) fn lang_slot(seg: &str) -> Option<&str> {
 }
 
 /// The path of hook `rok::core::<module>::<name>`, which lowered code
-/// calls: through lang slot `<name>_fn` (stdlib 0.4.4), by path when no
+/// calls: through lang slot `<name>_fn`, by path when no
 /// item fills it. Not by name, so the hook need not be visible, and its
 /// `#[deprecated]` warns only about calls the user wrote.
 pub(super) fn lang_fn(module: &str, name: &str, span: rokc_diagnostic::Span) -> rokc_ast::Path {
@@ -13799,7 +13798,7 @@ fn as_isize(e: Expr, span: rokc_diagnostic::Span) -> Expr {
     }
 }
 
-/// Spec 3.6: `rok::core::index::index_from_end(i as isize, len)` - a
+/// `rok::core::index::index_from_end(i as isize, len)` - a
 /// signed position `i` < 0 is `len + i`.
 fn from_end(i: Expr, len: Expr, span: rokc_diagnostic::Span) -> Expr {
     index_fn("index_from_end", vec![as_isize(i, span), len], span)
@@ -13820,7 +13819,7 @@ fn len_of(recv: &Expr, span: rokc_diagnostic::Span) -> Expr {
 }
 
 /// Index `idx` of a fixed array of length `n`; a signed one counts
-/// from the end (spec 3.6).
+/// from the end.
 fn array_position(ctx: &mut LowerCtx<'_>, idx: &Expr, n: u32) -> HirExpr {
     let i = lower_position(ctx, idx);
     check_index_ty(ctx, &i);
@@ -13869,7 +13868,7 @@ fn takes_position(ctx: &LowerCtx<'_>, ty: &HirTy, method: &str) -> bool {
     param.is_some_and(|p| p == want || p.ends_with(&format!("::{want}")))
 }
 
-/// `recv.index(idx)` / `recv.index_set(idx, ..)` (spec 3.6). A signed index
+/// `recv.index(idx)` / `recv.index_set(idx, ..)`. A signed index
 /// on a positional receiver counts from the end via `index_from_end`;
 /// unsigned ones are plain calls.
 fn index_call(
@@ -14030,7 +14029,7 @@ fn lower_slice(
     lower_expr(ctx, &block_of(vec![let_stmt(&t, recv), let_k], body, span))
 }
 
-/// Spec 3.6.2: `t[a:b]` is `t.slice(a..b)` and `t[a:b:k]`
+/// `t[a:b]` is `t.slice(a..b)` and `t[a:b:k]`
 /// `t.slice(a..b).step(k)`; a missing `a` is `0`, a missing `b` is
 /// `t.len()` with `t` evaluated once. `view`: the writable view
 /// `slice_mut(t, a..b)` instead.

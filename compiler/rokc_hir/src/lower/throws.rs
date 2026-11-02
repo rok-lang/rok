@@ -1,8 +1,8 @@
-//! Value-based errors (spec 4.14): `throws`, `throw`, `try` / `try?` /
+//! Value-based errors: `throws`, `throw`, `try` / `try?` /
 //! `try!`, `catch` / `finally`.
 //!
 //! `throws (E) -> T` returns the carrier `HirTy::Throws { ok, err }` (MIR:
-//! `is_err` plus one payload, spec 8.6.5). Nothing unwinds: `try` tests
+//! `is_err` plus one payload). Nothing unwinds: `try` tests
 //! `is_err` and `raise`s the payload through `err_frames` innermost first,
 //! running `finally` blocks inline until a `catch` that may take the type
 //! parks the value and breaks to its dispatch; with no frame left the
@@ -445,7 +445,7 @@ pub(super) fn raise(
     } else if let Some(decl) = ctx.fn_throws.clone() {
         if let Some(v) = convert_err(ctx, value, &decl) {
             let ok = carrier_ok(ctx);
-            // `ref` parameters go back on the error path too (spec 4.7).
+            // `ref` parameters go back on the error path too.
             let c = super::mono::ref_pack(ctx, carrier(&ok, &decl, Err(v), span), span);
             out.extend(super::coro::frame_end(ctx, span));
             out.push(HirStmt::Return(Some(c)));
@@ -570,7 +570,7 @@ fn value_meets(ctx: &LowerCtx<'_>, ty: &HirTy, want: &crate::FnBounds) -> bool {
     }
 }
 
-/// Spec 4.4.9: a function value throwing less than its slot goes through
+/// A function value throwing less than its slot goes through
 /// `fn #thunk(args) throws (E) -> T { try f(args) }`; a named fn is called
 /// directly, other values captured.
 pub(super) fn adapt_fn_value(ctx: &LowerCtx<'_>, slot: &HirTy, value: HirExpr) -> HirExpr {
@@ -738,7 +738,7 @@ pub(super) fn adapt_fn_value(ctx: &LowerCtx<'_>, slot: &HirTy, value: HirExpr) -
     }
 }
 
-/// Spec 4.4: `fn(..) -> !` fits a `fn(..) -> R` slot through a thunk
+/// `fn(..) -> !` fits a `fn(..) -> R` slot through a thunk
 /// `fn #thunk(args) -> R { f(args) }` (a throwing one passes its error
 /// on); a named fn is called directly, other values captured.
 pub(super) fn adapt_never_fn(ctx: &LowerCtx<'_>, slot: &HirTy, value: HirExpr) -> HirExpr {
@@ -1038,7 +1038,7 @@ pub(super) fn lower_return(
                 span,
             ))
         }
-        // `ref` parameters (spec 4.7): hand their values back too.
+        // `ref` parameters: hand their values back too.
         None if !ctx.ref_params.is_empty() => Some(super::mono::ref_pack(
             ctx,
             value.unwrap_or_else(|| unit_value(span)),
@@ -1292,14 +1292,14 @@ pub(super) fn lower_try(
     }
     dropped_resources(ctx, &frame, span);
     // `try?` in statement position just drops the error; elsewhere a
-    // `()` operand gives `() | none` (spec 3.14.3).
+    // `()` operand gives `() | none`.
     if expected == HirTy::Unit {
         if !frame.hit {
             return body;
         }
         return shell(ctx, &frame, body, HirTy::Unit, (Vec::new(), None), span);
     }
-    // `T?` with the operand as `T` (spec 2.6.4): an optional operand
+    // `T?` with the operand as `T`: an optional operand
     // nests, so a thrown error and a returned `none` stay apart.
     let result_ty = if body.ty == HirTy::Unknown {
         body.ty.clone()
@@ -1315,7 +1315,7 @@ pub(super) fn lower_try(
 }
 
 /// `try?` drops the error it catches: one that can hold a value whose
-/// close can fail would leave it open (stdlib 2.13.4).
+/// close can fail would leave it open.
 fn dropped_resources(ctx: &LowerCtx<'_>, frame: &CatchFrame, span: rokc_diagnostic::Span) {
     for ety in &frame.raised {
         if super::affine::affine(ctx, ety) != Some(super::affine::Kind::Close) {
@@ -1339,7 +1339,7 @@ fn dropped_resources(ctx: &LowerCtx<'_>, frame: &CatchFrame, span: rokc_diagnost
     }
 }
 
-/// Wrap a throwing `main`'s body (spec 4.16.3): an error escaping it
+/// Wrap a throwing `main`'s body: an error escaping it
 /// prints a message and exits with status 1.
 pub(super) fn uncaught_in_main(
     ctx: &mut LowerCtx<'_>,
@@ -1403,8 +1403,8 @@ pub(super) fn uncaught_in_main(
     }
 }
 
-/// A failed `try!`'s panic (spec 3.14.8): the error as an uncaught one
-/// prints (4.16.4) and where it was thrown; the panic's own position is
+/// A failed `try!`'s panic: the error as an uncaught one
+/// prints and where it was thrown; the panic's own position is
 /// the `try!`.
 fn force_report(
     ctx: &mut LowerCtx<'_>,
@@ -1507,7 +1507,7 @@ pub(super) fn main_frame(ctx: &mut LowerCtx<'_>) {
     }));
 }
 
-/// Spec 4.16.4: an uncaught error prints as its `Display`, else its
+/// An uncaught error prints as its `Display`, else its
 /// `Debug`, else its type name.
 fn describe_err(ctx: &mut LowerCtx<'_>, err: HirExpr, span: rokc_diagnostic::Span) -> HirExpr {
     if ctx.has_trait(&err.ty, ctx.lang("display_trait")) {
@@ -1823,7 +1823,7 @@ fn lower_catch_arms(
         );
     }
     for (i, (arm, filter)) in arms.iter().zip(&filters).enumerate() {
-        // Spec 3.14.4: reached by an error no earlier arm takes whole.
+        // Reached by an error no earlier arm takes whole.
         let earlier = |t: &HirTy| {
             arms[..i]
                 .iter()

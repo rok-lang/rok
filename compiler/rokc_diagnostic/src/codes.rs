@@ -1,4 +1,4 @@
-//! Error codes (spec 9.9.4): one serial code per kind of error, in the
+//! Error codes: one serial code per kind of error, in the
 //! order they were added. A code is never reused: a kind that goes away
 //! keeps its number in the table, marked retired, and new kinds take the
 //! next free number. `rokc --explain` and the docs error pages read the

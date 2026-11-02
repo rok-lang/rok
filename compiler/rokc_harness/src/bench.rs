@@ -1,4 +1,4 @@
-//! The `rok bench` runner (spec 9.1).
+//! The `rok bench` runner.
 //!
 //! Each benchmark runs in its own process with inherited stdout, so the
 //! library builds a `rok::core::bench::Bench` from the arguments and the

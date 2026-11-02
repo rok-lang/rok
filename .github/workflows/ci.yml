@@ -1,6 +1,6 @@
 name: ci
 
-# Three tiers (docs/ci.md):
+# Three tiers:
 #   fast     pull request: linux-x64 and windows-x64, -O0
 #   main     merge queue, push to main: every gate host at -O0; a push
 #            the merge queue already passed runs lint only

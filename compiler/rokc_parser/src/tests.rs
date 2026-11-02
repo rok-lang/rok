@@ -173,7 +173,7 @@ fn pratt_prefix_neg() {
 
 #[test]
 fn as_binds_below_prefix_above_arith() {
-    // Spec 3.2.3: `-x as i64` is `(-x) as i64`, `a + b as i64` is
+    // `-x as i64` is `(-x) as i64`, `a + b as i64` is
     // `a + (b as i64)`.
     let p = parse("fn t() { return -x as i64; }");
     let ExprKind::Cast(inner, _) = &return_expr(&p).kind else {
@@ -545,7 +545,7 @@ fn paren_type_grouping_vs_tuple() {
     assert!(
         matches!(&fn_param_ty(&parse("fn f(x: ()) { }")).kind, TyKind::Tuple(v) if v.is_empty())
     );
-    // `fn() -> A | B` is `(fn() -> A) | B` (spec 2.1.10).
+    // `fn() -> A | B` is `(fn() -> A) | B`.
     let p = parse("fn f(x: fn(i32) -> i32 | none) { }");
     let ty = fn_param_ty(&p);
     let TyKind::Sum(v) = &ty.kind else {
@@ -804,7 +804,7 @@ fn meta_derive_expands_fields() {
 
 #[test]
 fn meta_macro_block_registers() {
-    // `#[impl_macro(name)] @macro { (matcher) => { template } }` (spec 6.8.12)
+    // `#[impl_macro(name)] @macro { (matcher) => { template } }`
     // is collected as a Macro meta definition and registered as `name!`.
     let src = "#[impl_macro(dup)] pub @macro { (@e: expr) => { (@e, @e) } }\n";
     let (tokens, _) = Lexer::new(src, "test").lex_all();
@@ -913,8 +913,7 @@ fn macro_pattern_position() {
 
 #[test]
 fn macro_expansion_is_recorded() {
-    // The expansion is recorded (surfaced by `rokc --emit=expansions`,
-    // spec 6.9.9).
+    // The expansion is recorded (surfaced by `rokc --emit=expansions`).
     let (p, diags) = parse_meta(
         "#[impl_macro(twice)] pub @macro { (@e: expr) => { (@e, @e) } }\n\
          fn f() -> (i32, i32) { return twice!(1i32); }",
@@ -1020,7 +1019,7 @@ fn meta_hygiene_renames_locals_only() {
     assert!(!text.contains("Other__meta") && !text.contains("len__meta"));
 }
 
-/// `--emit=source` (spec 9.9.10): printing a parsed file and parsing
+/// `--emit=source`: printing a parsed file and parsing
 /// the print gives the same print back, for every library and test
 /// case file that parses without the extension operators.
 #[test]
@@ -1249,7 +1248,7 @@ fn macro_probe_nested_rep() {
 #[test]
 fn macro_rejects_shape_tokens() {
     // Type-driven template tokens (@apply_if, @Self, @field, ..) are not
-    // valid in a macro; it has no shape to test (spec 6.8.12).
+    // valid in a macro; it has no shape to test.
     let (_, d) = parse_meta(
         "#[impl_macro(ai)] pub @macro { (@e: expr) => { @apply_if(true) { @e } } }\n\
          fn f() -> i32 { return ai!(5i32); }",

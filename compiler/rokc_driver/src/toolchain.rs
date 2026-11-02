@@ -1,4 +1,4 @@
-//! The back half of the pipeline (spec 902.11-902.14), in process: MLIR
+//! The back half of the pipeline, in process: MLIR
 //! passes, LLVM IR, LLVM optimization and codegen, and the lld link, all
 //! statically linked (`rokc_llvm`). `ROK_CC` links instead when set.
 
@@ -14,7 +14,7 @@ use rokc_target::{Linker, ObjectFormat};
 
 use crate::CompiledModule;
 
-/// Intermediate artifact selectable with `--emit=<kind>` (spec 901).
+/// Intermediate artifact selectable with `--emit=<kind>`.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EmitKind {
     /// `source`: the package's whole AST after meta
@@ -28,7 +28,7 @@ pub enum EmitKind {
     Asm,
     Obj,
     /// `expansions`: meta expansions as source
-    /// text (spec 6.9.9); needs the parsed
+    /// text; needs the parsed
     /// sources (`Session::set_keep_ast`), so `CompileResult::emit` makes it.
     Expanded,
 }
@@ -77,7 +77,7 @@ pub struct BuildOptions {
     pub libc: Option<PathBuf>,
     /// Keep the scratch directory instead of deleting it.
     pub keep_temps: bool,
-    /// `-g`: DWARF debug info (spec 9.9.6).
+    /// `-g`: DWARF debug info.
     pub debug: bool,
     /// Codegen a REPL cell (`cell_object`).
     pub repl: Option<rokc_codegen_mlir::ReplCell>,
@@ -105,8 +105,7 @@ pub struct BuildOptions {
     /// The profile runtime an instrumented executable links
     /// (`<sysroot>/lib/rok/targets/<target>/`).
     pub profile_rt: Option<PathBuf>,
-    /// Build by codegen units, reusing unchanged units' objects from here
-    /// (spec 9.2.16).
+    /// Build by codegen units, reusing unchanged units' objects from here.
     pub incremental: Option<PathBuf>,
 }
 
@@ -144,7 +143,7 @@ impl Profile {
 }
 
 impl BuildOptions {
-    /// The `release` profile (spec 9.2.15): `-O2`, `-O3` or `-Os`.
+    /// The `release` profile: `-O2`, `-O3` or `-Os`.
     #[must_use]
     pub fn release(&self) -> bool {
         matches!(self.opt_level.as_str(), "2" | "3" | "s")
@@ -364,7 +363,7 @@ pub fn link_executable(
     Ok(counts)
 }
 
-/// Library build (spec 902.13): `libfoo.a`.
+/// Library build: `libfoo.a`.
 ///
 /// By codegen units with `opts.incremental`, else as many members as LLVM
 /// compiles in parallel. A prebuilt-library build writes `foo.rokhir`
@@ -655,7 +654,7 @@ pub fn link_object(
     Ok(())
 }
 
-/// lld arguments of a `release` link (9.2.15): safe identical code folding
+/// lld arguments of a `release` link: safe identical code folding
 /// and, without `-g`, only the symbols the loader needs. COFF folds
 /// without `/debug` already; wasm keeps its name section.
 fn release_link_args(t: &TargetSpec, opts: &BuildOptions) -> Vec<&'static str> {
@@ -681,7 +680,7 @@ fn cc_profile_args(t: &TargetSpec, opts: &BuildOptions) -> &'static [&'static st
     }
 }
 
-/// `wasm-component-ld` arguments for `ffi::wit` (stdlib 1.8): the world in
+/// `wasm-component-ld` arguments for `ffi::wit`: the world in
 /// a directory under `tmp`, its sources under `deps/`, and the core
 /// exports backing the world's functions.
 fn wit_link_args(w: &rokc_mir::WitLink, tmp: &Path) -> Result<Vec<OsString>, RokDiagnostic> {
@@ -797,7 +796,7 @@ fn native_lib_args(
     Ok(a)
 }
 
-/// `rok_tls` (803 §8.3.1) for `wasm32-wasip1-threads` in wasm TLS, with the
+/// `rok_tls` for `wasm32-wasip1-threads` in wasm TLS, with the
 /// accessor the runtime uses (`rokr_common::tls`; stable Rust can't define
 /// it there), written to `dir`.
 fn wasm_tls_object(t: &TargetSpec, dir: &Path) -> Result<PathBuf, RokDiagnostic> {

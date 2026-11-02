@@ -87,7 +87,7 @@ const FIELDS: [&str; 26] = [
     "profile",
 ];
 
-/// The build profiles `profile` may set (spec 9.2.15).
+/// The build profiles `profile` may set.
 const PROFILES: [&str; 2] = ["debug", "release"];
 
 /// A dependency's feature arguments (`Dep::..(.., optional: true)`).
@@ -1159,8 +1159,7 @@ pub fn remove_dep(
 
 /// `$ROK_HOME/installs.rokon` (a `Package` with `deps`): its entries, and
 /// what it holds that this rok skipped. Every toolchain shares the file,
-/// so fields, arguments and entry kinds a newer rok wrote are skipped
-/// (spec 9.10.6).
+/// so fields, arguments and entry kinds a newer rok wrote are skipped.
 pub fn parse_installs(text: &str, file: &str) -> Result<(Vec<Dep>, Vec<String>), String> {
     let doc = Doc::parse(text, file)?;
     let pkg = doc.root().record("Package")?;

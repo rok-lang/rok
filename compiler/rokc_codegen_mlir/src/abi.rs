@@ -1,5 +1,4 @@
-//! C ABI lowering of `extern "C"` aggregate parameters and results (spec
-//! 8.6.3).
+//! C ABI lowering of `extern "C"` aggregate parameters and results.
 //!
 //! LLVM does not classify aggregates, so, like clang, the front end rewrites
 //! a by-value `struct` into what the platform C ABI uses and converts
@@ -65,14 +64,14 @@ pub enum RetAbi {
 pub struct FnAbi {
     pub ret: RetAbi,
     pub args: Vec<ArgAbi>,
-    /// C variadic (spec 8.6.10): an `llvm.func` called with `llvm.call`;
+    /// C variadic: an `llvm.func` called with `llvm.call`;
     /// arguments past `args` are its `...`.
     pub variadic: bool,
     /// A runtime (`extern "rok"`) call: `str` crosses as its `(ptr, len)`
     /// pair, not as a `char*`.
     pub rok: bool,
-    /// `extern "system"` where it is `stdcall` (32-bit x86 Windows, spec
-    /// 5.9.2): an `llvm.func` / `llvm.call` with `x86_stdcallcc` (the
+    /// `extern "system"` where it is `stdcall` (32-bit x86
+    /// Windows): an `llvm.func` / `llvm.call` with `x86_stdcallcc` (the
     /// callee pops its arguments; LLVM decorates the symbol `_f@N`).
     pub stdcall: bool,
 }
@@ -228,7 +227,7 @@ pub fn classify(target: &Target, params: &[MirTy], ret: &MirTy, variadic: bool) 
     })
 }
 
-/// A runtime (`extern "rok"`) declaration (spec 8.5): the C ABI, with
+/// A runtime (`extern "rok"`) declaration: the C ABI, with
 /// `str` a by-value `(ptr, len)` C struct like `RokFn`.
 ///
 /// `None` means a plain call already matches C: LLVM splits a two-word pair
@@ -290,7 +289,7 @@ pub fn classify_rok(target: &Target, params: &[MirTy], ret: &MirTy) -> Option<Fn
 /// Aggregates larger than this go between rok functions by address.
 pub const BY_REF_BYTES: u32 = 64;
 
-/// A rok-to-rok argument or result passed by address (spec 8.6.6).
+/// A rok-to-rok argument or result passed by address.
 ///
 /// An aggregate over [`BY_REF_BYTES`], or on 32-bit Arm an array of 1- or
 /// 2-byte elements (LLVM's Arm lowering writes their stack leaves in 4-byte

@@ -1,4 +1,4 @@
-//! `Codec` for HIR (the incremental body cache, spec 9.2.16).
+//! `Codec` for HIR (the incremental body cache).
 
 use rokc_core::codec::{Codec, Dec, Enc, IdKind};
 use rokc_core::{codec_enum, codec_struct};

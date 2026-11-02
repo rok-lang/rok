@@ -24,7 +24,7 @@ const X86_64: Defs = defs!("x86_64");
 const AARCH64: Defs = defs!("aarch64");
 const I686: Defs = defs!("i686");
 
-/// `-C subsystem=console|windows` (spec 9.5.9): entry `mainCRTStartup`, or
+/// `-C subsystem=console|windows`: entry `mainCRTStartup`, or
 /// `WinMainCRTStartup` calling `WinMain`.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum Subsystem {
@@ -95,7 +95,7 @@ pub fn link_args(
     a.push(format!("/subsystem:{sub}").into());
     a.push(format!("/entry:{entry}").into());
     // 8 MiB main stack like Linux, macOS and the runtime's own threads
-    // (nested `await` runs on it, 7.8.10); Windows' default is 1 MiB.
+    // (nested `await` runs on it); Windows' default is 1 MiB.
     a.push(format!("/stack:{}", t.stack_size).into());
     // Nothing refers to the TLS directory but the loader. (`/include`
     // takes the symbol, C names `_`-prefixed on x86.)
@@ -251,7 +251,7 @@ declare i32 @main()
 
 /// `printf` / `fprintf` / `sprintf` / `snprintf`: UCRT exports none (its
 /// headers inline them over `__stdio_common_v*printf`), so C variadic
-/// calls (spec 8.6.10) reach these. `va_list` is a pointer on every
+/// calls reach these. `va_list` is a pointer on every
 /// Windows arch. Selectany COMDATs, like a C object's inline copies.
 fn stdio_ir(t: &rokc_llvm::Target) -> String {
     let n = format!("i{}", t.pointer_width);

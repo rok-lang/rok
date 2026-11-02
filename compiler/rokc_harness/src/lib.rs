@@ -43,7 +43,7 @@ pub fn check_version(text: &str) -> Result<(), String> {
 /// optional `filter` (raw to end of line), then an `exe <path>` per built
 /// executable each followed by its `case <name>` lines. A package with
 /// both roots lists the library first; a failing library run ends the
-/// command (spec 9.1). With `format json`, `out` gets the JSON records
+/// command. With `format json`, `out` gets the JSON records
 /// and the human text goes to stderr.
 pub fn run_manifest(text: &str, out: &mut dyn Write) -> i32 {
     run_manifest_to(text, out, &mut std::io::stderr())
@@ -138,7 +138,7 @@ fn ms(d: std::time::Duration) -> Json {
     Json::num((d.as_secs_f64() * 1e6).round() / 1e3)
 }
 
-/// Test / bench filter (spec 9.1: "regex or plain substring"): unanchored,
+/// Test / bench filter ("regex or plain substring"): unanchored,
 /// with `^ $ . * + ?` and `\`; no classes, groups or alternation.
 #[must_use]
 pub fn re_match(re: &str, text: &str) -> bool {

@@ -38,10 +38,10 @@ pub enum RootMain {
     /// Declared by the program (or none, for a library).
     #[default]
     Declared,
-    /// Made from the entry file's top-level statements (spec 4.16.2).
+    /// Made from the entry file's top-level statements.
     Implicit,
     /// The `rokc test` / `rokc bench` harness: it reaches every test, so
-    /// visibility doesn't apply to its paths (spec 9.1, 6.2.5).
+    /// visibility doesn't apply to its paths.
     Harness,
 }
 
@@ -64,13 +64,13 @@ pub struct HirInput {
     /// package, `pkg::` in a dependency is that dependency, and a path
     /// starting with its name reaches it from anywhere.
     pub packages: Vec<String>,
-    /// The dependency that is this package's own library (spec 0.3.1), so
+    /// The dependency that is this package's own library, so
     /// errors say how the executable sees its items.
     pub own_library: Option<String>,
     /// The dependency package this build compiles as a prebuilt library
     /// (`lib<name>.a` + `<name>.rokhir`): every body of it is lowered.
     pub lib: Option<String>,
-    /// Packages loaded from ROKHIR (spec 904): their body-less functions
+    /// Packages loaded from ROKHIR: their body-less functions
     /// are declarations of the symbols in their archives.
     pub prebuilt: Vec<String>,
     /// Lower (and so check) every library body, reached or not
@@ -90,12 +90,12 @@ pub struct HirInput {
     /// item names with it.
     pub item_modules: Vec<String>,
     /// The modules without the implicit import
-    /// (`#![no_implicit_rok]`, stdlib 0.2.5).
+    /// (`#![no_implicit_rok]`).
     pub no_implicit_rok: Vec<String>,
     /// What lowering depends on besides the program (the target and
     /// cfg, the compiler): part of every key of `bodies`.
     pub fingerprint: u64,
-    /// Where lowered bodies are kept for the next build (spec 9.2.16).
+    /// Where lowered bodies are kept for the next build.
     pub bodies: Option<Bodies>,
     /// The use-after-hand-off summaries of the prebuilt libraries'
     /// functions (their ROKHIR): `(function, summary)`.
@@ -113,7 +113,7 @@ pub struct HirInput {
     /// `stage`), for not-found errors.
     pub cfg_dropped: Vec<CfgDropped>,
     /// The rooted paths the package's `pub` meta blocks write, checked
-    /// from each block's module (spec 6.9.9).
+    /// from each block's module.
     pub templates: Vec<TemplateRefs>,
 }
 
@@ -126,7 +126,7 @@ pub struct TemplateRefs {
 }
 
 /// Marker on a trait / impl method, `[ASSOC_TYPES_ATTR, X, ..]`: bare `X`
-/// in the body means `Self::X` (spec 2.8.3).
+/// in the body means `Self::X`.
 pub const ASSOC_TYPES_ATTR: &str = "#assoc";
 
 pub use ty::resolve_ty;
@@ -180,7 +180,7 @@ pub struct HirStaticDef {
     /// Initial value: a literal or const-folded primitive.
     pub init: ConstVal,
     pub is_mut: bool,
-    /// `extern "C" { static .. }` (spec 5.9.3): no initializer here.
+    /// `extern "C" { static .. }`: no initializer here.
     pub is_extern: bool,
     /// An extern static of a block not linked `kind = "static"`: on
     /// Windows a DLL's data, reached through its import address.
@@ -197,7 +197,7 @@ pub struct EnumId(pub u32);
 #[derive(Clone, Debug)]
 pub struct HirEnumDef {
     pub id: EnumId,
-    /// `#[repr(..)]` (spec 6.2.2): an integer tag type.
+    /// `#[repr(..)]`: an integer tag type.
     pub repr: Repr,
     pub def_id: Option<DefId>,
     pub name: String,
@@ -228,7 +228,7 @@ pub struct StructId(pub u32);
 #[derive(Clone, Debug)]
 pub struct HirStructDef {
     pub id: StructId,
-    /// `#[repr(..)]` (spec 6.2.2).
+    /// `#[repr(..)]`.
     pub repr: Repr,
     pub def_id: Option<DefId>,
     pub name: String,
@@ -239,12 +239,12 @@ pub struct HirStructDef {
     /// `Some` for a `union`: one synthetic `__data` field typed by its
     /// `UnionStorage`; declared fields live in `aliases`.
     pub union_kind: Option<HirUnionKind>,
-    /// `#[niche(..)]` (spec 2.7.4): bit patterns the single field never
+    /// `#[niche(..)]`: bit patterns the single field never
     /// holds. Empty without the attribute.
     pub niche: Vec<NicheArg>,
 }
 
-/// `#[repr(..)]` (spec 6.2.2). The default layout is already C's, so `C`
+/// `#[repr(..)]`. The default layout is already C's, so `C`
 /// changes nothing there.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Repr {
@@ -580,7 +580,7 @@ pub enum HirExprKind {
         value: Box<HirExpr>,
         elem: HirTy,
     },
-    /// `rok.atomic.OP` (stdlib 2.16.2) on element `i` of an integer /
+    /// `rok.atomic.OP` on element `i` of an integer /
     /// `bool` buffer; yields the previous value. `args`: the operand
     /// (`cas`: expected, new).
     BufAtomic {
@@ -802,7 +802,7 @@ pub fn type_name(enum_: bool, id: u32) -> Option<String> {
     })
 }
 
-/// A trait as bounded or provided (`Get<i32, Item = u8>`, spec 2.8, 2.10):
+/// A trait as bounded or provided (`Get<i32, Item = u8>`):
 /// full path, positional arguments, associated bindings sorted by name.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TraitRef {
@@ -859,9 +859,9 @@ impl TraitRef {
 pub struct FnBounds {
     /// `+ Send + Sync`: sorted auto-trait keys.
     pub auto: Vec<String>,
-    /// `unsafe fn(..)` (spec 4.15): calling it needs an unsafe scope.
+    /// `unsafe fn(..)`: calling it needs an unsafe scope.
     pub unsafe_fn: bool,
-    /// `extern "C" fn(..)` (spec 5.9.4): a thin C function pointer.
+    /// `extern "C" fn(..)`: a thin C function pointer.
     pub c_abi: bool,
     /// `extern "system" fn(..)` where it is `stdcall` (32-bit x86
     /// Windows; elsewhere it is `extern "C" fn`), with `c_abi`.
@@ -885,9 +885,9 @@ pub enum HirTy {
     /// A type name not resolved (yet): a type parameter, `Self`, or an
     /// unknown name reported later.
     Path(Vec<String>),
-    /// The type of `none` (spec 2.13).
+    /// The type of `none`.
     None,
-    /// A const generic argument (spec 2.11) in a type substitution: its
+    /// A const generic argument in a type substitution: its
     /// value, and the parameter's declared type once known.
     Const(i128, Option<PrimTy>),
     /// A const parameter not bound yet (argument hints before inference).
@@ -897,7 +897,7 @@ pub enum HirTy {
     NoThrow,
     /// An inference variable of an un-annotated `let` (`lower::infer`).
     Var(u32),
-    /// A type parameter while its generic body is checked (spec 2.10.9):
+    /// A type parameter while its generic body is checked:
     /// opaque, with only what its bounds give.
     Param(u32),
     Sum(Vec<HirTy>),
@@ -916,7 +916,7 @@ pub enum HirTy {
         ret: Box<HirTy>,
         env: Box<HirTy>,
         /// It captures a `[ref x]` cell, which the creator keeps using:
-        /// never `Send` / `Sync` (spec 4.6.9).
+        /// never `Send` / `Sync`.
         shares: bool,
     },
     // `throws (err) -> ok` carrier `{ is_err, ok, err }` (no unwinding);
@@ -936,7 +936,7 @@ pub enum HirTy {
 
 impl HirTy {
     /// An `extern "C" fn(..)` type: a thin C function pointer, called
-    /// with the C ABI (spec 5.9.4), rather than a `{code, env}` value.
+    /// with the C ABI, rather than a `{code, env}` value.
     #[must_use]
     pub const fn is_c_fn(&self) -> bool {
         matches!(self, Self::Fn(_, _, b) if b.c_abi)
@@ -951,7 +951,7 @@ impl HirTy {
         Self::AnyTrait(bounds)
     }
 
-    /// Spec 2.6.4: a sum is a set. Nested sums flatten, duplicates drop and
+    /// A sum is a set. Nested sums flatten, duplicates drop and
     /// members take one canonical order, so `A | B` and `B | A` are one
     /// `HirTy`; a single member is that type. Build every `HirTy::Sum` here
     /// or with `layered` (or `canonicalize` after editing members).
@@ -961,7 +961,7 @@ impl HirTy {
     /// `item = i32 | none` is `(i32 | none)?`. Written sums are `spread`
     /// first. A canonical sum maps to itself.
     ///
-    /// Order (spec 2.6.4): `none` last, the rest by `canon_key`, so tags
+    /// Order: `none` last, the rest by `canon_key`, so tags
     /// agree across separately compiled packages.
     #[must_use]
     pub fn sum(parts: impl IntoIterator<Item = Self>) -> Self {
@@ -970,7 +970,7 @@ impl HirTy {
         Self::layered(written, generic)
     }
 
-    /// Spec 2.6.4, layers of generic sums: `written` are the terms written
+    /// Layers of generic sums: `written` are the terms written
     /// in the sum (written sums already `spread`; a sum among them is a
     /// nested layer kept as is), `generic` what its generic terms (type
     /// parameters, `Self`, projections, generic alias parameters) stand
@@ -997,7 +997,7 @@ impl HirTy {
         }
     }
 
-    /// A sum term's key in the canonical order (spec 2.6.4): a primitive
+    /// A sum term's key in the canonical order: a primitive
     /// by its name, a struct or enum by its full path (an instance as
     /// `path<arg keys>`), a layer as `(` + its terms' keys joined by `|`
     /// + `)`. Other terms fall back to `stable_key`.

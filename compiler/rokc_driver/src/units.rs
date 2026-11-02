@@ -1,4 +1,4 @@
-//! Incremental builds by codegen units (spec 9.2.16): a package's objects
+//! Incremental builds by codegen units: a package's objects
 //! from its units (`rokc_codegen_mlir::units`), each recompiled only when
 //! its key changed. Directory layout:
 //!

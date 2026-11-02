@@ -107,7 +107,7 @@ struct RokCompile {
   int opt;
   int emit;
   // rok_tls (the TLS block) uses the initial-exec
-  // TLS model (spec 8.3.8).
+  // TLS model.
   int tls_initial_exec;
   // A textual MLIR pass pipeline on builtin.module, mlir-opt syntax
   // without the anchor: "canonicalize,cse,convert-scf-to-cf,...".
@@ -154,7 +154,7 @@ void init_llvm() {
   });
 }
 
-// Dialects rokc lowers to (spec 8.7.1), with what lowering them needs (ub
+// Dialects rokc lowers to, with what lowering them needs (ub
 // and DLTI for the LLVM conversions). No others: the linker leaves the
 // rest of MLIR out.
 void register_dialects(mlir::DialectRegistry &r) {

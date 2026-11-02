@@ -1,6 +1,6 @@
 #!/bin/sh
 # Check a collected set of release archives and, with --publish, cut the
-# GitHub release (spec 9.2.19, docs/releasing.md).
+# GitHub release.
 #
 #   scripts/release.sh [--dir <dir>] [--publish]
 #

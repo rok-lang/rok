@@ -265,7 +265,7 @@ pub enum ErrorKind {
     Visibility,
     Module,
     Pattern,
-    /// A value used after another owner took it (stdlib 2.13.9).
+    /// A value used after another owner took it.
     Handoff,
     Meta,
     Lowering,
@@ -493,7 +493,7 @@ impl RokDiagnostic {
 }
 
 /// `leaf` defined at both `a` and `b`; no overloading, so the later one
-/// is the error. `callable`: suggest default parameters (spec 4.2.3).
+/// is the error. `callable`: suggest default parameters.
 #[must_use]
 pub fn duplicate(
     code: Code,
@@ -573,7 +573,7 @@ fn underline(text: &str, span: Span, source: &str) -> (String, usize) {
     (lead, width)
 }
 
-/// How `report` prints (spec 901.8 / 909.4); set once by the CLI. JSON,
+/// How `report` prints; set once by the CLI. JSON,
 /// else the colour depth of the text.
 static STYLE: AtomicU8 = AtomicU8::new(0);
 const STYLE_JSON: u8 = 2;
@@ -609,9 +609,9 @@ pub const JSON_SCHEMA: u32 = 2;
 pub const RECORD_SCHEMA: u32 = 1;
 
 impl SourceMap {
-    /// `diag` as one-line JSON (spec 909.4):
-    /// `{"type","code","kind","message","spans":[..],"notes":[..],"fixes":[..],"spec":[..],
-    /// "help":[..],"lint","schema"}`.
+    /// `diag` as one-line JSON:
+    /// `{"type","code","kind","message","spans":[..],"notes":[..],"fixes":[..],"help":[..],
+    /// "lint","schema"}`.
     #[must_use]
     pub fn json(&self, diag: &RokDiagnostic) -> String {
         let end = |span: Span| match self.end(span) {
@@ -782,7 +782,7 @@ pub fn print_rendered(text: &str) {
 }
 
 impl SourceMap {
-    /// `diag` as `report` prints it, newline-terminated (spec 9.1.8):
+    /// `diag` as `report` prints it, newline-terminated:
     ///
     /// ```text
     /// error[E0027]: cannot find value `count` in this scope

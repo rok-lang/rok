@@ -1,6 +1,6 @@
 //! Aggregates built where they go. `t = rv; .. x = t`, where the
 //! temporary `t` is read only by that copy, becomes `x = rv`: a value in
-//! memory (over 64 bytes, 8.6.6) is then built in `x`'s slot, a call's
+//! memory (over 64 bytes) is then built in `x`'s slot, a call's
 //! by-address result written straight into it, instead of in `t`'s
 //! and copied.
 

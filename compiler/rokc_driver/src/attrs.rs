@@ -1,6 +1,6 @@
-//! Attribute placement and argument checks (spec 6.1 / 6.2 / 6.3), after
+//! Attribute placement and argument checks, after
 //! `#[cfg]` filtering and meta expansion. A name neither built in nor
-//! defined by a meta block is an error (6.1.6).
+//! defined by a meta block is an error.
 
 use rokc_ast::{
     AttrArg, AttrBody, Attribute, EnumVariantKind, ExternItem, ImplItem, Item, Literal, StructKind,
@@ -56,7 +56,7 @@ impl Pos {
 }
 
 /// Attributes the compiler gives meaning to in places of its own
-/// choosing (magic, 6.4 - 6.8); only their names are checked.
+/// choosing (magic); only their names are checked.
 const MAGIC: &[&str] = &[
     "lang",
     "intrinsic",
@@ -200,7 +200,7 @@ impl Cx<'_> {
                 let code = if msg.contains("` cannot be attached to ") {
                     Code::MISPLACED_ATTRIBUTE
                 } else if a.path == ["cfg"] || a.path == ["cfg_attr"] {
-                    // As on a statement and in `cfg!` (spec 6.3).
+                    // As on a statement and in `cfg!`.
                     Code::INVALID_CFG
                 } else {
                     Code::INVALID_ATTRIBUTE
@@ -256,7 +256,7 @@ impl Cx<'_> {
             "no_safepoint" => (&[P::Extern], empty(a)),
             "path" => (&[P::Mod], None),
             "no_implicit_rok" => (&[P::File], empty(a)),
-            // What a WIT export (stdlib 1.8) runs.
+            // What a WIT export runs.
             "wit::export" => (&[P::Fn, P::Struct], empty(a)),
             "deprecated" => (
                 anywhere,
@@ -264,7 +264,7 @@ impl Cx<'_> {
                     "no argument, a message string, or `(since = \"0.1.6\", note = \"..\")`",
                 ),
             ),
-            // Spec 6.2.14: a safe library function a later release makes
+            // A safe library function a later release makes
             // `unsafe`. A meta block of the name from before keeps it.
             "deprecated_safe" if !self.metas.knows_attribute("deprecated_safe") => {
                 (&[P::Fn, P::Method, P::ExternFn, P::Static], message(a))
@@ -325,7 +325,7 @@ fn empty(a: &Attribute) -> Option<&'static str> {
     (!matches!(a.body, AttrBody::Empty)).then_some("no arguments")
 }
 
-/// Spec 6.2.3: `#[link("m")]`, or `name = ".."` with an optional
+/// `#[link("m")]`, or `name = ".."` with an optional
 /// `kind = "static" | "dylib"` and `wasm_import_module = ".."`.
 fn link_args(a: &Attribute) -> Option<&'static str> {
     let form = "`(\"lib\")`, or `(name = \"lib\")` with optional `kind = \"static\"` / \

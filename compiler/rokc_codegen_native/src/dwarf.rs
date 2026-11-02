@@ -1,4 +1,4 @@
-//! `-g` (spec 9.9.6): DWARF 4 matching the MLIR emitter's debug info
+//! `-g`: DWARF 4 matching the MLIR emitter's debug info
 //! (`rokc_codegen_mlir::debug`): a subprogram per positioned function
 //! (and generated ones) named by rok path, parameters and named locals in
 //! `fp`-relative slots within lexical blocks, their types (as the LLVM
@@ -917,7 +917,7 @@ pub fn write(obj: &mut Obj, m: &MirModule, sources: &rokc_diagnostic::SourceMap)
             (true, false) => A_SUB_RET_LEAF,
             (false, false) => A_SUB_LEAF,
         });
-        // An item in a block by its own name (spec 3.9.1).
+        // An item in a block by its own name.
         cstr(&mut info.b, &rokc_core::local::unmangle(&d.name));
         uleb(&mut info.b, u64::from(fid(d.file)));
         uleb(&mut info.b, u64::from(d.line));

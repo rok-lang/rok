@@ -317,7 +317,7 @@ pub struct Func {
     pub debug: Option<FnDebug>,
 }
 
-/// `-g` facts of a function (spec 9.9.6).
+/// `-g` facts of a function.
 #[derive(Clone, Debug)]
 pub struct FnDebug {
     /// The rok path.

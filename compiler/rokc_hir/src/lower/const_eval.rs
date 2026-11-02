@@ -1,4 +1,4 @@
-//! Compile-time evaluation (spec 5.2, 6.5.8): an interpreter over HIR for
+//! Compile-time evaluation: an interpreter over HIR for
 //! consts, array lengths, const generic arguments, static initializers and
 //! `const fn` literal handlers. Callees come from `Bodies`: lowered on
 //! demand with a context (`CtxBodies`), none in the pre-body pass
@@ -7,7 +7,7 @@
 //! Integers are `i128` tagged with their primitive and range-checked:
 //! overflow, division by zero, bad shifts and failed float-to-int casts are
 //! errors (only `wrapping_*` wraps). `STEP_LIMIT` / `DEPTH_LIMIT` bound
-//! loops and calls. Only `const fn`s are entered (spec 5.2.5).
+//! loops and calls. Only `const fn`s are entered.
 
 // `a` / `b` operands, `p` their primitive, `f` the frame, `v` a value.
 #![allow(clippy::many_single_char_names)]
@@ -747,7 +747,7 @@ impl<'b> Interp<'b> {
             Callee::Refused(why) => return Err(Stop::Runtime(span, why)),
             Callee::Poisoned => return Err(Stop::Poisoned),
         };
-        // A hand-off's copy (stdlib 2.13.9) of a value built at compile
+        // A hand-off's copy of a value built at compile
         // time: nothing else reaches it, so it is the value itself.
         let base = func.name.split("__").next().unwrap_or(&func.name);
         if std && base == "rok::core::marker::hand_over_copy" && args.len() == 1 {
@@ -914,7 +914,7 @@ fn plain_size(ty: &HirTy) -> Option<u32> {
 
 /// Runtime functions evaluable at compile time: the pure ones core uses,
 /// sharing the runtime's own code where nontrivial (`#[path]`), so a
-/// constant equals the run-time result (5.2.5). Not libm's inexact ones
+/// constant equals the run-time result. Not libm's inexact ones
 /// (the target's may round differently) nor the `int` kernels.
 const EVALUABLE: &[&str] = &[
     "rok_hash_keys",
@@ -1367,7 +1367,7 @@ fn bad_spec(spec: &str, why: &str) -> Ext {
     Ext::Panic(m)
 }
 
-/// Spec 5.2.5: a `const fn` calls only `const fn`s and reads no `static`,
+/// A `const fn` calls only `const fn`s and reads no `static`,
 /// evaluated or not. Lifted closures are checked with their definer.
 pub(super) fn check_const_fns(env: &Env<'_>, fns: &[&HirFunction]) {
     let Some(first) = fns.first() else { return };
@@ -1397,7 +1397,7 @@ fn impure(
     memo: &mut HashMap<FunctionId, Option<String>>,
 ) -> Option<(Span, String)> {
     // A panic's message is never needed: reaching the panic fails the
-    // evaluation anyway (5.2.4).
+    // evaluation anyway.
     let mut in_panic: std::collections::HashSet<*const HirExpr> = std::collections::HashSet::new();
     let mark = |b: &HirBlock, in_panic: &mut std::collections::HashSet<*const HirExpr>| {
         for s in &b.stmts {
@@ -1883,7 +1883,7 @@ pub(super) fn guard(
     Some(v)
 }
 
-/// A const item's value at a use (spec 5.2): evaluated, and embedded
+/// A const item's value at a use: evaluated, and embedded
 /// as a constant when it is plain data. Not evaluable is an error.
 pub(super) fn const_item(ctx: &LowerCtx<'_>, name: &str, v: HirExpr) -> HirExpr {
     constant(ctx, &format!("const `{}`", leaf_name(name)), v)
@@ -1912,7 +1912,7 @@ pub(super) fn constant(ctx: &LowerCtx<'_>, what: &str, v: HirExpr) -> HirExpr {
     }
 }
 
-/// A `#[literal]` handler call (spec 6.5.8) runs now when its arguments
+/// A `#[literal]` handler call runs now when its arguments
 /// are constants; a panic or `throw` inside is a compile error at the
 /// literal.
 pub(super) fn fold_literal(ctx: &LowerCtx<'_>, h: &mut HirExpr, at: Span) {
@@ -2016,7 +2016,7 @@ pub(super) fn eval_scalar(ctx: &LowerCtx<'_>, e: &Expr) -> Result<(i128, Option<
     r
 }
 
-/// Evaluate every const item of the user's package once (spec 5.2.7),
+/// Evaluate every const item of the user's package once,
 /// so an unused one is checked too.
 pub(super) fn check_user_consts(env: &Env<'_>) {
     let no_subst = HashMap::new();
@@ -2046,7 +2046,7 @@ pub(super) fn check_user_consts(env: &Env<'_>) {
         };
         super::expr::lower_path(&mut ctx, &path, span);
     }
-    // Field defaults of the package's non-generic structs (spec 2.3.3).
+    // Field defaults of the package's non-generic structs.
     let structs: Vec<HirStructDef> = env
         .defs
         .structs
@@ -2066,7 +2066,7 @@ pub(super) fn check_user_consts(env: &Env<'_>) {
     }
 }
 
-/// A static's initializer function, run now (spec 5.3.1): its value
+/// A static's initializer function, run now: its value
 /// when it is a primitive constant; `None` keeps the lazy initializer.
 pub(super) fn static_init(env: &Env<'_>, init_fn: &HirFunction) -> Option<ConstVal> {
     let no_subst = HashMap::new();

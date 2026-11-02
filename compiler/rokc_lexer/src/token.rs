@@ -9,10 +9,10 @@ pub struct Token {
     /// The `///` / `//!` lines in the trivia before this token; the
     /// parser turns them into `#[doc]` / `#![doc]` attributes.
     pub docs: Vec<DocLine>,
-    /// Written `r#name` (spec 1.4.4): never a keyword, contextual or
+    /// Written `r#name`: never a keyword, contextual or
     /// reserved.
     pub raw: bool,
-    /// Where a meta template or the compiler wrote it (spec 6.9.9);
+    /// Where a meta template or the compiler wrote it;
     /// `None`: at the use site, the file being parsed.
     pub origin: Option<std::sync::Arc<Origin>>,
 }
@@ -38,7 +38,7 @@ impl Token {
 }
 
 /// The definition a token of an expansion comes from: a meta block's
-/// template, or code the compiler writes (spec 6.9.9).
+/// template, or code the compiler writes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Origin {
     /// The defining package (`""`: the one being built).
@@ -81,7 +81,7 @@ pub enum TokenKind {
     RawStrLit(String),
     /// `b"bytes"` (a `[u8; N]`).
     ByteStrLit(String),
-    // `f"x = {x:>{w}}"` (spec 1.7.3): `FStrStart`, `FStrText` runs and
+    // `f"x = {x:>{w}}"`: `FStrStart`, `FStrText` runs and
     // holes, `FStrEnd`. A hole: `HoleStart`, code tokens, optional
     // `HoleSpec` with `SpecText` and nested holes, `HoleEnd`.
     /// `f"` or (`true`) `f"""`.
@@ -154,7 +154,7 @@ pub enum TokenKind {
     Star,
     Slash,
     Percent,
-    /// `%%` floored modulo (spec 1.10.3).
+    /// `%%` floored modulo.
     PercentPercent,
     EqEq,
     NotEq,
@@ -171,10 +171,10 @@ pub enum TokenKind {
     Tilde,
     Shl,
     Shr,
-    /// Unicode math operator (spec 1.10.3): `× ⋅ ∘ √ ∈ ∉ ⊂ ⊆ ∪ ∩`.
+    /// Unicode math operator: `× ⋅ ∘ √ ∈ ∉ ⊂ ⊆ ∪ ∩`.
     /// `÷ ≡ ≠ ≤ ≥` lex as their ASCII synonyms (`Slash`, `EqEq`, ...).
     MathOp(char),
-    /// Registered extension operator token (spec 1.10.4, `like = ..`).
+    /// Registered extension operator token (`like = ..`).
     ExtOp(String),
 
     // Broadcast (`.` prefix).
@@ -247,8 +247,8 @@ pub enum TokenKind {
 }
 
 impl TokenKind {
-    /// The token as source text (`rokc build --emit=expansions`, spec
-    /// 6.9.9): lexing the result gives the token back.
+    /// The token as source text (`rokc build
+    /// --emit=expansions`): lexing the result gives the token back.
     #[must_use]
     pub fn text(&self) -> String {
         if let Some(k) = keyword_str(self) {
@@ -386,7 +386,7 @@ impl TokenKind {
     }
 }
 
-/// Reserved keywords (spec 1.5).
+/// Reserved keywords.
 ///
 /// `type`, `any`, `in`, `where`, `throws`, `rethrows`, `catch`, `finally`,
 /// `const`, `static`, `extern`, `mut`, `union`, `pkg`, `sub`, `sup` and

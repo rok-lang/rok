@@ -1,6 +1,6 @@
 //! Alias scopes of `List`s (LLVM scoped `noalias` metadata).
 //!
-//! A `List`'s object and buffer belong to it alone (stdlib 2.9.2), so
+//! A `List`'s object and buffer belong to it alone, so
 //! locals that only ever take lists fresh from calls never share memory. A
 //! call touching only its first argument's list (`xs[i]`, `xs.len()`) gets
 //! its local's scope and `noalias` for the others; LLVM keeps both on the

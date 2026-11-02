@@ -1,5 +1,5 @@
-//! `write_to_copy` (spec 6.2.9): a field write on a copy nothing reads
-//! afterwards. Structs are values (spec 2.3.8), so by-value parameters,
+//! `write_to_copy`: a field write on a copy nothing reads
+//! afterwards. Structs are values, so by-value parameters,
 //! `for` bindings and `let x = xs[i]` hold copies.
 //!
 //! Reported when no read of the variable can follow: none later, and none

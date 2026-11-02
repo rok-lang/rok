@@ -6,7 +6,7 @@ use rokc_ir_common::PrimTy;
 
 use crate::HirTy;
 
-/// A written sum (spec 2.6.4): written-sum members (or aliases of one)
+/// A written sum: written-sum members (or aliases of one)
 /// spread, so `(i32 | none) | none` is `i32 | none`. A generic member
 /// (`param`, `Self`, projections, `Nest`) is a generic term for
 /// `HirTy::layered`: `T | none` with `T = i32 | none` is `(i32 | none)?`,

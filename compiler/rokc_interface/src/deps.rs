@@ -1,4 +1,4 @@
-//! Prebuilt dependencies (spec 902.3 / 904): each source `--extern` is
+//! Prebuilt dependencies: each source `--extern` is
 //! built once into `lib<name>.a` + `<name>.rokhir` and the build goes on
 //! with the ROKHIR; rebuilt when its fingerprint changes. Each sees the
 //! ones before it (its deps, and the GC type ids to start after), so

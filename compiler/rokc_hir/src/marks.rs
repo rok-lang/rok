@@ -1,5 +1,5 @@
-//! `#[deprecated]` (spec 6.2.7), `#[deprecated_safe]` (6.2.14),
-//! `#[internal]` (6.2.16) and `#[discardable]` (6.2.11): what an item's
+//! `#[deprecated]`, `#[deprecated_safe]`,
+//! `#[internal]` and `#[discardable]`: what an item's
 //! attributes say about using it.
 
 use rokc_ast::{AttrArg, AttrBody, Attribute, Literal};

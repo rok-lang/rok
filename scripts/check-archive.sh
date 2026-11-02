@@ -1,5 +1,5 @@
 #!/bin/sh
-# Check toolchain archives against the installer contract (spec 9.10.6),
+# Check toolchain archives against the installer contract,
 # which every 0.1.x `rok toolchain update` and install script relies on:
 #
 #   rok-<version>-<triple>.tar.gz / .tar.xz / .zip, one top directory
