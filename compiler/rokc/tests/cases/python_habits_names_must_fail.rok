@@ -1,0 +1,77 @@
+// expect-error: cannot find function `len` in this scope
+// expect-error: help: write `xs.len()`
+// expect-error: cannot find function `str` in this scope
+// expect-error: help: write `n.to_str()` or `f"{n}"`
+// expect-error: `int` is a type, not a conversion function
+// expect-error: help: parse text with `try "42".parse::<int>()`; a number converts with `x as i64`
+// expect-error: `float` is a type, not a conversion function
+// expect-error: help: parse text with `try "1.5".parse::<f64>()`; a number converts with `x as f64`
+// expect-error: cannot find function `sorted` in this scope
+// expect-error: help: write `xs.sorted()`
+// expect-error: cannot find function `enumerate` in this scope
+// expect-error: help: write `xs.enumerate()`
+// expect-error: cannot find function `min` in this scope
+// expect-error: help: write `3.min(4)`
+// expect-error: cannot find function `abs` in this scope
+// expect-error: help: write `n.abs()`
+// expect-error: no method `join` found for type `str`
+// expect-error: help: Rok joins from the list: `words.join(", ")`
+// expect-error: cannot find value `pass` in this scope
+// expect-error: help: Rok needs no `pass`: an empty block `{}` is complete; delete it
+// expect-error: the condition expects `bool`, found `List<i32>`
+// expect-error: help: Rok has no truthiness: write `!xs.is_empty()`
+// expect-error: the condition expects `bool`, found `i32 | none`
+// expect-error: help: Rok has no truthiness: write `!(found is none)`
+// expect-error: the condition expects `bool`, found `i32`
+// expect-error: help: Rok has no truthiness: write `n != 0`
+// expect-error: operator `!` cannot be applied to `str`
+// expect-error: help: Rok has no truthiness: an emptiness test is `s.is_empty()`
+// expect-error: operator `*` cannot be applied to `str`
+// expect-error: help: write `"ab".repeat(3)`
+// expect-error: `Cfg` is not a tuple struct
+// expect-error: help: write `Cfg { host: "h", port: 1 }`
+// expect-error: `self` is only available inside methods
+// expect-error: help: a method takes `self` first: `fn f(self, ..)` in an `impl` (`ref self` to change its fields)
+// expect-error: `get` is an associated function, not a method
+// expect-error: help: or, to call it on a value, take `self` first: `fn get(self, ..)`
+
+// Python builtins, truthiness and classes: each error names the Rok form.
+
+struct Cfg { host: str; port: i32; }
+
+struct C { n: i32; }
+
+impl C {
+    fn get() -> i32 { self.n }
+}
+
+fn find() -> i32 | none { none }
+
+fn builtins(xs: List<i32>, n: i32, words: List<str>) {
+    let a = len(xs);
+    let b = str(n);
+    let c = int("42");
+    let d = float("1.5");
+    let e = sorted(xs);
+    let f = enumerate(xs);
+    let g = min(3, 4);
+    let h = abs(n);
+    let i = ", ".join(words);
+}
+
+fn truthy(xs: List<i32>, n: i32, s: str) {
+    if xs { pass }
+    let found = find();
+    if found { println("found"); }
+    if n { println("nonzero"); }
+    if !s { println("empty"); }
+    let t = "ab" * 3;
+}
+
+fn class_like() {
+    let c = Cfg("h", 1);
+    let v = C { n: 1 };
+    println(f"{v.get()}");
+}
+
+fn main() {}

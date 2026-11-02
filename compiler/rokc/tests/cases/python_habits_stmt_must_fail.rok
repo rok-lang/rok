@@ -1,0 +1,58 @@
+// expect-error: Rok has no `elif`
+// expect-error: help: write `else if`
+// expect-error: Rok has no `except`
+// expect-error: help: write `catch e: ParseError { .. }`
+// expect-error: Rok has no `with` statement
+// expect-error: help: write `using f = try File::open("data.txt");` (after `use rok::std::fs::File;`): `f` is closed when its scope ends
+// expect-error: `assert` is a function in Rok
+// expect-error: help: call it: `assert(n == 2, "boom");`
+// expect-error: a `for` over pairs needs parentheses around the names
+// expect-error: help: write `for (i, x) in xs.enumerate()`
+// expect-error: found identifier `println`
+// expect-error: help: `//` starts a comment in Rok, so `// 2;` was skipped; floor division is `n.div_floor(2)` (integer `/` rounds toward zero)
+// expect-error: found string literal
+// expect-error: help: Rok has no `"""` strings: an ordinary `".."` string may span lines
+
+// Python habits in statements: each error names the Rok form, and the
+// statement after it still parses.
+
+fn grade(n: i32) {
+    if n > 90 {
+        println("a");
+    } elif n > 80 {
+        println("b");
+    }
+}
+
+fn parse(s: str) {
+    try { s.parse::<i32>() } except ParseError as e { println(f"{e}"); }
+}
+
+fn read() {
+    with open("data.txt") as f {
+        println(f.read());
+    }
+    println("after");
+}
+
+fn check(n: i32) {
+    assert n == 2, "boom"
+    println("after");
+}
+
+fn pairs(xs: List<i32>) {
+    for i, x in enumerate(xs) {
+        println(f"{i} {x}");
+    }
+}
+
+fn half(n: i32) {
+    let q = n // 2;
+    println(f"{q}");
+}
+
+fn doc() {
+    let s = """text""";
+}
+
+fn main() {}

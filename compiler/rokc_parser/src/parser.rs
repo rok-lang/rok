@@ -25,6 +25,8 @@ mod macros;
 pub use macros::expand_to_text;
 #[path = "meta.rs"]
 pub mod meta;
+#[path = "python.rs"]
+mod python;
 
 /// `rest` of a `let (..)` tuple pattern: splice index + optional name.
 type LetTupleRest = (usize, Option<String>);
@@ -1167,9 +1169,12 @@ impl<'a> Parser<'a> {
         false
     }
 
-    /// `c ? a : b`: there is no such operator; read it whole for the
-    /// message and keep `c`.
+    /// `c ? a : b` (no such operator) or Python's `a if c else b` (`cond`
+    /// is `a`): read it whole for the message and keep `cond`.
     fn ternary(&mut self, cond: Expr) -> Option<Expr> {
+        if self.prev_kind() != Some(&TokenKind::Question) {
+            return self.python_ternary(cond);
+        }
         let q = self.prev_span()?;
         let c = self.text_in(cond.span);
         let c = c.strip_suffix('?').unwrap_or(&c).trim_end().to_owned();
@@ -1439,6 +1444,13 @@ impl<'a> Parser<'a> {
                 .with_span(here, "")
                 .with_help(help)
                 .with_fix(here, "", "delete `!`");
+        }
+        if let Some(py) = self.python_expected(kind) {
+            let d = d.with_span(py.span, "").with_help(py.help);
+            return match py.fix {
+                Some((at, text, title)) => d.with_fix(at, text, title),
+                None => d,
+            };
         }
         match kind {
             TokenKind::Semi if prev.is_some_and(|p| p.line < here.line || here.is_dummy()) => {
@@ -5432,6 +5444,9 @@ impl<'a> Parser<'a> {
     #[allow(clippy::cognitive_complexity)] // one arm per statement form
     fn parse_stmt(&mut self) -> Option<(Stmt, bool)> {
         let start = self.peek_span();
+        if let Some(s) = self.python_stmt() {
+            return Some((s, false));
+        }
         if self.at_nested_fn() {
             return Some((self.parse_nested_fn()?, false));
         }
@@ -5985,14 +6000,21 @@ impl<'a> Parser<'a> {
     /// `catch pat? { .. }` arms and `finally { .. }` around `body`;
     /// loosest binding, so `try a() + b() catch _ { 0 }` covers both.
     fn parse_catch_tail(&mut self, body: Expr) -> Option<Expr> {
-        if !(self.at_kw("catch") || self.at_kw("finally")) {
+        if !(self.at_kw("catch") || self.at_kw("finally") || self.at_except()) {
             return Some(body);
         }
         let mut catches: Vec<CatchArm> = Vec::new();
-        while self.at_kw("catch") {
+        while self.at_kw("catch") || self.at_except() {
             let span = self.peek_span();
-            self.bump();
-            let pat = if matches!(self.peek(), TokenKind::LBrace) {
+            let except_as = if self.at_except() {
+                self.python_except()
+            } else {
+                self.bump();
+                false
+            };
+            let pat = if except_as {
+                self.python_except_as()?
+            } else if matches!(self.peek(), TokenKind::LBrace) {
                 Pattern {
                     kind: PatternKind::Wildcard,
                     span,
@@ -6083,6 +6105,7 @@ impl<'a> Parser<'a> {
                 }
                 let is_cast = matches!(self.peek(), TokenKind::As);
                 self.bump();
+                self.python_is_not(lhs.span, is_cast);
                 let ty_span = self.peek_span();
                 let ty = self.parse_cast_type()?;
                 let span = lhs.span;
@@ -6183,7 +6206,7 @@ impl<'a> Parser<'a> {
             last_none = matches!(assoc, Assoc::None).then(|| (prec, op_of(&lhs)));
             cmp_chain = None;
         }
-        if min_bp == 0 && self.ternary_ahead() {
+        if min_bp == 0 && (self.ternary_ahead() || self.python_ternary_ahead()) {
             return self.ternary(lhs);
         }
         Some(lhs)
@@ -6800,6 +6823,7 @@ impl<'a> Parser<'a> {
     #[allow(clippy::cognitive_complexity)] // one arm per primary-expression token
     fn parse_primary(&mut self) -> Option<Expr> {
         let stmt_head = std::mem::take(&mut self.stmt_head);
+        self.python_pow();
         if let Some(e) = self
             .try_magic_literal()
             .or_else(|| self.cfg_macro())
@@ -6809,6 +6833,17 @@ impl<'a> Parser<'a> {
             return Some(e);
         }
         let start = self.peek_span();
+        if matches!(
+            self.peek(),
+            TokenKind::LBracket | TokenKind::LBrace | TokenKind::LParen
+        ) && self.comprehension(self.pos)
+        {
+            self.bump();
+            return Some(Expr {
+                kind: ExprKind::Tuple(Vec::new()),
+                span: self.to_prev(start),
+            });
+        }
         let kind = match self.peek().clone() {
             // `<Type as Trait>::method(...)`. At the start of
             // a primary, `<` cannot begin a comparison.
@@ -6986,9 +7021,7 @@ impl<'a> Parser<'a> {
                         self.bump();
                         let is_await = self.eat(&TokenKind::Await);
                         let by_ref = self.eat(&TokenKind::Ref);
-                        let pat = self.parse_pattern()?;
-                        self.expect_kw("in")?;
-                        let iter = self.parse_head()?;
+                        let (pat, iter) = self.parse_for_head()?;
                         let body = self.parse_block()?;
                         ExprKind::For {
                             label: Some(label_name),
@@ -7026,9 +7059,7 @@ impl<'a> Parser<'a> {
                 let is_await = self.eat(&TokenKind::Await);
                 // `for ref x in xs`: each element as a place.
                 let by_ref = self.eat(&TokenKind::Ref);
-                let pat = self.parse_pattern()?;
-                self.expect_kw("in")?;
-                let iter = self.parse_head()?;
+                let (pat, iter) = self.parse_for_head()?;
                 let body = self.parse_block()?;
                 ExprKind::For {
                     label: None,
@@ -7207,7 +7238,7 @@ impl<'a> Parser<'a> {
                         span: then_span,
                         kind: ExprKind::Block(then_block),
                     };
-                    let else_body = if self.eat(&TokenKind::Else) {
+                    let else_body = if self.eat_else() {
                         if matches!(self.peek(), TokenKind::If) {
                             self.parse_primary()?
                         } else {
@@ -7246,7 +7277,7 @@ impl<'a> Parser<'a> {
                 } else {
                     let cond = self.parse_head()?;
                     let then_branch = self.parse_block()?;
-                    let else_branch = if self.eat(&TokenKind::Else) {
+                    let else_branch = if self.eat_else() {
                         if matches!(self.peek(), TokenKind::If) {
                             // Chained `else if`: recurse into another primary.
                             Some(Box::new(self.parse_primary()?))
@@ -8773,10 +8804,13 @@ impl<'a> Parser<'a> {
 
     fn parse_call_args_inner(&mut self) -> Option<Vec<CallArg>> {
         let mut args = Vec::new();
+        if self.prev_kind() == Some(&TokenKind::LParen) && self.comprehension(self.pos - 1) {
+            return Some(args);
+        }
         while !matches!(self.peek(), TokenKind::RParen | TokenKind::Eof) {
             // `name: expr` is a named argument.
             if let Some(name) = self.peek_name() {
-                if matches!(self.peek_next(), Some(TokenKind::Colon)) {
+                if matches!(self.peek_next(), Some(TokenKind::Colon)) || self.python_named_arg() {
                     self.bump_name(); // ident
                     self.bump(); // `:`
                     let value = self.parse_expr()?;
@@ -9148,6 +9182,9 @@ fn import_help(file: &str, tokens: &[Token], name: &str) -> Option<String> {
         return Some(format!(
             "to load {name}.rok, write `mod {name};` then call `{name}::f()` or `use {name}::f;`"
         ));
+    }
+    if let Some(help) = python::python_module(name) {
+        return Some(help.to_owned());
     }
     let declared = tokens.windows(2).any(|w| {
         w[0].kind == TokenKind::Mod && matches!(&w[1].kind, TokenKind::Ident(n) if n == name)

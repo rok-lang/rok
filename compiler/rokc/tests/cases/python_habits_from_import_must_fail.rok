@@ -1,0 +1,7 @@
+// expect-error: 5:1: expected `;` after top-level expression, found identifier `collections`
+// expect-error: help: write `use collections::{deque, Counter};`
+
+// Python's `from m import a, b` is a `use` with `::`.
+from collections import deque, Counter
+
+fn main() {}

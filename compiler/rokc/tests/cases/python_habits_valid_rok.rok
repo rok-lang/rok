@@ -1,0 +1,43 @@
+// expect-exit: 0
+// expect-stdout:
+// 36
+// 3
+// 1
+// pos 6 false
+// 10
+// [2, 3]
+// done
+
+// Rok that looks like the Python habits the parser reports: names
+// spelled like Python keywords, `assert(..)`, `let .. else`, a pair
+// pattern, a block after `else`, a comment after an operand.
+
+fn with(x: i32) -> i32 { x * 2 }
+
+fn main() {
+    let and = 1;
+    let or = 2;
+    let not = 3;
+    let lambda = 4;
+    let pass = 5;
+    let elif = 6;
+    let except = 7;
+    let from = 8;
+    println(and + or + not + lambda + pass + elif + except + from);
+    assert(and == 1, "and");
+    println(with(1) + and);
+    let xs = [1, 2, 3];
+    for (i, x) in xs.enumerate() {
+        if i == 0 { println(x); }
+    }
+    let v: i32 | none = 1;
+    let n: i32 = v else { return; };
+    let t = if n > 0 { "pos" } else { "neg" };
+    let e = { let q = 2; q * 3 };
+    println(f"{t} {e} {v is none}");
+    let total = n * 10 // the scale
+        ;
+    println(total);
+    println(f"{xs.filter(|x| x > 1).to_list():?}");
+    println("done");
+}

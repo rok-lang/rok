@@ -461,3 +461,101 @@ pub(super) fn optional_method(
     ctx.help_last(Some(help));
     Some(e)
 }
+
+/// `src` as the receiver of a method call: parenthesised unless it is a
+/// name, call, index or string literal.
+fn receiver(src: &str) -> String {
+    let plain = src
+        .chars()
+        .all(|c| c.is_alphanumeric() || matches!(c, '_' | '.' | '(' | ')' | '[' | ']'));
+    let string = src.len() >= 2 && src.starts_with('"') && src.ends_with('"');
+    if plain || string {
+        src.to_owned()
+    } else {
+        format!("({src})")
+    }
+}
+
+fn has_method(ctx: &LowerCtx<'_>, ty: &HirTy, name: &str) -> bool {
+    method_names(ctx, ty).iter().any(|n| n == name)
+}
+
+/// Rok has no truthiness: the test Python's `if x:` means for `c`.
+pub(super) fn truthy_help(ctx: &LowerCtx<'_>, c: &HirExpr) -> Option<String> {
+    let x = ctx.src(c.span).unwrap_or("x");
+    let test = match &c.ty {
+        HirTy::Sum(ms) if ms.contains(&HirTy::None) => format!("!({x} is none)"),
+        HirTy::Prim(p) if p.is_int() => format!("{x} != 0"),
+        HirTy::Prim(p) if p.is_float() => format!("{x} != 0.0"),
+        ty if has_method(ctx, ty, "is_empty") => format!("!{}.is_empty()", receiver(x)),
+        _ => return None,
+    };
+    Some(format!("Rok has no truthiness: write `{test}`"))
+}
+
+/// Help for operator `sym` on `lhs` (and `rhs`) that Python reads
+/// another way: `not xs` for emptiness, `s * 3`.
+pub(super) fn op_habit_help(
+    ctx: &LowerCtx<'_>,
+    sym: &str,
+    lhs: &HirExpr,
+    rhs: Option<&HirExpr>,
+) -> Option<String> {
+    let x = receiver(ctx.src(lhs.span).unwrap_or("x"));
+    match rhs {
+        None if sym == "!" && has_method(ctx, &lhs.ty, "is_empty") => Some(format!(
+            "Rok has no truthiness: an emptiness test is `{x}.is_empty()`"
+        )),
+        Some(r)
+            if sym == "*"
+                && lhs.ty == HirTy::Prim(PrimTy::Str)
+                && matches!(r.ty, HirTy::Prim(p) if p.is_int()) =>
+        {
+            Some(format!(
+                "write `{x}.repeat({})`",
+                ctx.src(r.span).unwrap_or("n")
+            ))
+        }
+        _ => None,
+    }
+}
+
+/// `", ".join(xs)`: Rok joins from the list.
+pub(super) fn join_help(ctx: &LowerCtx<'_>, sep: &HirExpr, args: &[CallArg]) -> String {
+    let sep = ctx.src(sep.span).unwrap_or("\", \"");
+    let xs = match args {
+        [CallArg::Positional(e)] => receiver(ctx.src(e.span).unwrap_or("xs")),
+        _ => "xs".to_owned(),
+    };
+    format!("Rok joins from the list: `{xs}.join({sep})`")
+}
+
+/// The Rok form of a Python builtin call `name(args)`.
+pub(super) fn python_builtin_help(name: &str, args: &[&str]) -> Option<String> {
+    let r = |i: usize| receiver(args[i]);
+    let method = |m: &str| format!("write `{}.{m}()`", r(0));
+    Some(match (name, args.len()) {
+        ("len" | "abs" | "round" | "sorted" | "sum" | "enumerate" | "min" | "max", 1) => {
+            method(name)
+        }
+        ("min" | "max", 2) => format!("write `{}.{name}({})`", r(0), args[1]),
+        ("reversed", 1) => method("rev"),
+        ("str", 1) => format!("write `{}.to_str()` or `f\"{{{}}}\"`", r(0), args[0]),
+        ("repr", 1) => format!("write `f\"{{{}:?}}\"`", args[0]),
+        ("list", 1) => method("to_list"),
+        ("set", 1) => method("to_set"),
+        ("zip", 2) => format!("write `{}.zip({}.iter())`", r(0), r(1)),
+        ("any" | "all", 1) => format!("write `{}.{name}(|x| x)`", r(0)),
+        ("map" | "filter", 2) => format!("write `{}.{name}({})`", r(1), args[0]),
+        ("isinstance", 2) => format!("write `{} is {}`", args[0], args[1]),
+        ("input", 0 | 1) => format!(
+            "write `try io::input({})`",
+            args.first().copied().unwrap_or_default()
+        ),
+        ("open", 1..) => format!(
+            "write `try File::open({})` after `use rok::std::fs::File;`",
+            args.join(", ")
+        ),
+        _ => return None,
+    })
+}
