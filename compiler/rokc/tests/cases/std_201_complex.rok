@@ -1,0 +1,17 @@
+// expect-exit: 0
+// expect-stdout:
+// 3+4i 5 3-4i -7+24i 1.5+2i -1+0i 6+8i
+// Complex { re: 3.0, im: 4.0 } 0+1i 1-2i
+// -1+0.00000000000000012246467991473532i 0.9272952180016122 -7+24i 0.12-0.16i
+// true
+
+// `Complex<T>` and the `i` suffix: arithmetic with reals on either side,
+// abs / conj / arg / exp / sqrt / powi / recip, Display `3+4i`.
+use rok::core::num::Complex;
+
+let z = 3.0 + 4.0i;
+println(z, z.abs(), z.conj(), z * z, z / 2.0, 1i * 1i, 2.0 * z);
+println(f"{z:?} {(-1.0 + 0.0i).sqrt()} {Complex::new(1.0f32, -2.0f32)}");
+let w = 1i;
+println((f64::PI * w).exp(), z.arg(), z.powi(2), z.recip());
+println(z == Complex::new(3.0, 4.0));

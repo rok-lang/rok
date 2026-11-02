@@ -318,6 +318,22 @@ impl i8 {
     /// `true` when `self < 0`.
     #[must_use]
     pub const fn is_negative(self) -> bool { self < 0 }
+    /// Quotient rounded toward negative infinity (Python's `//`);
+    /// `rem_floor` is the matching remainder.
+    #[must_use]
+    #[track_caller]
+    pub const fn div_floor(self, rhs: i8) -> i8 {
+        let q = self / rhs;
+        if self % rhs != 0 && ((self < 0) != (rhs < 0)) {
+            return q - 1;
+        }
+        q
+    }
+    /// The remainder with the divisor's sign (Python's `%`, Rok's
+    /// `%%`): `self == self.div_floor(rhs) * rhs + self.rem_floor(rhs)`.
+    #[must_use]
+    #[track_caller]
+    pub const fn rem_floor(self, rhs: i8) -> i8 { self %% rhs }
     /// Quotient rounded so that `rem_euclid` is never negative.
     #[must_use]
     pub const fn div_euclid(self, rhs: i8) -> i8 {
@@ -701,6 +717,22 @@ impl i16 {
     /// `true` when `self < 0`.
     #[must_use]
     pub const fn is_negative(self) -> bool { self < 0 }
+    /// Quotient rounded toward negative infinity (Python's `//`);
+    /// `rem_floor` is the matching remainder.
+    #[must_use]
+    #[track_caller]
+    pub const fn div_floor(self, rhs: i16) -> i16 {
+        let q = self / rhs;
+        if self % rhs != 0 && ((self < 0) != (rhs < 0)) {
+            return q - 1;
+        }
+        q
+    }
+    /// The remainder with the divisor's sign (Python's `%`, Rok's
+    /// `%%`): `self == self.div_floor(rhs) * rhs + self.rem_floor(rhs)`.
+    #[must_use]
+    #[track_caller]
+    pub const fn rem_floor(self, rhs: i16) -> i16 { self %% rhs }
     /// Quotient rounded so that `rem_euclid` is never negative.
     #[must_use]
     pub const fn div_euclid(self, rhs: i16) -> i16 {
@@ -1084,6 +1116,22 @@ impl i32 {
     /// `true` when `self < 0`.
     #[must_use]
     pub const fn is_negative(self) -> bool { self < 0 }
+    /// Quotient rounded toward negative infinity (Python's `//`);
+    /// `rem_floor` is the matching remainder.
+    #[must_use]
+    #[track_caller]
+    pub const fn div_floor(self, rhs: i32) -> i32 {
+        let q = self / rhs;
+        if self % rhs != 0 && ((self < 0) != (rhs < 0)) {
+            return q - 1;
+        }
+        q
+    }
+    /// The remainder with the divisor's sign (Python's `%`, Rok's
+    /// `%%`): `self == self.div_floor(rhs) * rhs + self.rem_floor(rhs)`.
+    #[must_use]
+    #[track_caller]
+    pub const fn rem_floor(self, rhs: i32) -> i32 { self %% rhs }
     /// Quotient rounded so that `rem_euclid` is never negative.
     #[must_use]
     pub const fn div_euclid(self, rhs: i32) -> i32 {
@@ -1467,6 +1515,22 @@ impl i64 {
     /// `true` when `self < 0`.
     #[must_use]
     pub const fn is_negative(self) -> bool { self < 0 }
+    /// Quotient rounded toward negative infinity (Python's `//`);
+    /// `rem_floor` is the matching remainder.
+    #[must_use]
+    #[track_caller]
+    pub const fn div_floor(self, rhs: i64) -> i64 {
+        let q = self / rhs;
+        if self % rhs != 0 && ((self < 0) != (rhs < 0)) {
+            return q - 1;
+        }
+        q
+    }
+    /// The remainder with the divisor's sign (Python's `%`, Rok's
+    /// `%%`): `self == self.div_floor(rhs) * rhs + self.rem_floor(rhs)`.
+    #[must_use]
+    #[track_caller]
+    pub const fn rem_floor(self, rhs: i64) -> i64 { self %% rhs }
     /// Quotient rounded so that `rem_euclid` is never negative.
     #[must_use]
     pub const fn div_euclid(self, rhs: i64) -> i64 {
@@ -1933,6 +1997,22 @@ impl isize {
     /// `true` when `self < 0`.
     #[must_use]
     pub const fn is_negative(self) -> bool { self < 0 }
+    /// Quotient rounded toward negative infinity (Python's `//`);
+    /// `rem_floor` is the matching remainder.
+    #[must_use]
+    #[track_caller]
+    pub const fn div_floor(self, rhs: isize) -> isize {
+        let q = self / rhs;
+        if self % rhs != 0 && ((self < 0) != (rhs < 0)) {
+            return q - 1;
+        }
+        q
+    }
+    /// The remainder with the divisor's sign (Python's `%`, Rok's
+    /// `%%`): `self == self.div_floor(rhs) * rhs + self.rem_floor(rhs)`.
+    #[must_use]
+    #[track_caller]
+    pub const fn rem_floor(self, rhs: isize) -> isize { self %% rhs }
     /// Quotient rounded so that `rem_euclid` is never negative.
     #[must_use]
     pub const fn div_euclid(self, rhs: isize) -> isize {
@@ -2260,6 +2340,16 @@ impl u8 {
     /// `|self - rhs|`, as the unsigned type of the same width; never overflows.
     #[must_use]
     pub const fn abs_diff(self, rhs: u8) -> u8 { if self < rhs { rhs - self } else { self - rhs } }
+    /// Quotient rounded toward negative infinity: `/` for an unsigned
+    /// type (Python's `//`).
+    #[must_use]
+    #[track_caller]
+    pub const fn div_floor(self, rhs: u8) -> u8 { self / rhs }
+    /// The remainder with the divisor's sign: `%` for an unsigned type
+    /// (Python's `%`).
+    #[must_use]
+    #[track_caller]
+    pub const fn rem_floor(self, rhs: u8) -> u8 { self % rhs }
     /// `self / rhs` (the same as `/` for unsigned numbers). Panics when `rhs` is 0.
     #[must_use]
     pub const fn div_euclid(self, rhs: u8) -> u8 { self / rhs }
@@ -2601,6 +2691,16 @@ impl u16 {
     /// `|self - rhs|`, as the unsigned type of the same width; never overflows.
     #[must_use]
     pub const fn abs_diff(self, rhs: u16) -> u16 { if self < rhs { rhs - self } else { self - rhs } }
+    /// Quotient rounded toward negative infinity: `/` for an unsigned
+    /// type (Python's `//`).
+    #[must_use]
+    #[track_caller]
+    pub const fn div_floor(self, rhs: u16) -> u16 { self / rhs }
+    /// The remainder with the divisor's sign: `%` for an unsigned type
+    /// (Python's `%`).
+    #[must_use]
+    #[track_caller]
+    pub const fn rem_floor(self, rhs: u16) -> u16 { self % rhs }
     /// `self / rhs` (the same as `/` for unsigned numbers). Panics when `rhs` is 0.
     #[must_use]
     pub const fn div_euclid(self, rhs: u16) -> u16 { self / rhs }
@@ -2942,6 +3042,16 @@ impl u32 {
     /// `|self - rhs|`, as the unsigned type of the same width; never overflows.
     #[must_use]
     pub const fn abs_diff(self, rhs: u32) -> u32 { if self < rhs { rhs - self } else { self - rhs } }
+    /// Quotient rounded toward negative infinity: `/` for an unsigned
+    /// type (Python's `//`).
+    #[must_use]
+    #[track_caller]
+    pub const fn div_floor(self, rhs: u32) -> u32 { self / rhs }
+    /// The remainder with the divisor's sign: `%` for an unsigned type
+    /// (Python's `%`).
+    #[must_use]
+    #[track_caller]
+    pub const fn rem_floor(self, rhs: u32) -> u32 { self % rhs }
     /// `self / rhs` (the same as `/` for unsigned numbers). Panics when `rhs` is 0.
     #[must_use]
     pub const fn div_euclid(self, rhs: u32) -> u32 { self / rhs }
@@ -3283,6 +3393,16 @@ impl u64 {
     /// `|self - rhs|`, as the unsigned type of the same width; never overflows.
     #[must_use]
     pub const fn abs_diff(self, rhs: u64) -> u64 { if self < rhs { rhs - self } else { self - rhs } }
+    /// Quotient rounded toward negative infinity: `/` for an unsigned
+    /// type (Python's `//`).
+    #[must_use]
+    #[track_caller]
+    pub const fn div_floor(self, rhs: u64) -> u64 { self / rhs }
+    /// The remainder with the divisor's sign: `%` for an unsigned type
+    /// (Python's `%`).
+    #[must_use]
+    #[track_caller]
+    pub const fn rem_floor(self, rhs: u64) -> u64 { self % rhs }
     /// `self / rhs` (the same as `/` for unsigned numbers). Panics when `rhs` is 0.
     #[must_use]
     pub const fn div_euclid(self, rhs: u64) -> u64 { self / rhs }
@@ -3591,6 +3711,16 @@ impl usize {
     /// `|self - rhs|`, as the unsigned type of the same width; never overflows.
     #[must_use]
     pub const fn abs_diff(self, rhs: usize) -> usize { if self < rhs { rhs - self } else { self - rhs } }
+    /// Quotient rounded toward negative infinity: `/` for an unsigned
+    /// type (Python's `//`).
+    #[must_use]
+    #[track_caller]
+    pub const fn div_floor(self, rhs: usize) -> usize { self / rhs }
+    /// The remainder with the divisor's sign: `%` for an unsigned type
+    /// (Python's `%`).
+    #[must_use]
+    #[track_caller]
+    pub const fn rem_floor(self, rhs: usize) -> usize { self % rhs }
     /// `self / rhs` (the same as `/` for unsigned numbers). Panics when `rhs` is 0.
     #[must_use]
     pub const fn div_euclid(self, rhs: usize) -> usize { self / rhs }
