@@ -1,4 +1,4 @@
-// rok::core::io (stdlib 2.23): `IoError`, the byte-stream traits `Read`,
+// rok::core::io: `IoError`, the byte-stream traits `Read`,
 // `BufRead`, `Write`, `Seek` and their async twins, the buffers, `Cursor`,
 // `copy` and the standard streams. The prelude names the module `io` and
 // the traits `Read`, `Write`, `AsyncRead`, `AsyncWrite`.
@@ -35,7 +35,7 @@ const KIND_RESOURCE_BUSY: i32 = 19;
 /// Bytes per read when the size is unknown.
 const CHUNK: usize = 8192;
 
-// errors (2.23.0)
+// errors
 
 /// What went wrong, from the OS error (`os_code`) or the library itself.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -324,18 +324,18 @@ const fn upto(s: Slice<u8>, delim: u8) -> (usize, bool) {
     (s.len(), false)
 }
 
-// close (2.23.3)
+// close
 
 /// A resource whose close can fail: a file, a socket, a pipe, a buffered
 /// writer. Its owner closes it, `try x.close()` or `using`; leaving its
-/// scope open is an error, since a close error would be lost (2.13.4).
+/// scope open is an error, since a close error would be lost.
 #[lang("close_trait")]
 pub trait Close {
     /// Close now, throwing the error the OS reports; later use fails.
     fn close(self) throws (IoError);
 }
 
-// Read (2.23.1)
+// Read
 
 /// A source of bytes.
 pub trait Read {
@@ -414,7 +414,7 @@ pub trait Read {
     }
 }
 
-// BufRead (2.23.2)
+// BufRead
 
 /// A `Read` with a buffer: line and delimiter reads cost no call per
 /// byte.
@@ -483,7 +483,7 @@ pub fn read_line() throws (IoError) -> str | none {
     chomp(out.to_str())
 }
 
-// Write (2.23.3)
+// Write
 
 /// A sink of bytes.
 pub trait Write {
@@ -536,7 +536,7 @@ pub trait Write {
     }
 }
 
-// Seek (2.23.4)
+// Seek
 
 /// A position for `Seek::seek`.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -562,7 +562,7 @@ pub trait Seek {
     }
 }
 
-// async twins (2.23.5)
+// async twins
 
 /// `Read` that suspends the task instead of blocking the thread.
 pub trait AsyncRead {
@@ -872,7 +872,7 @@ impl<A: Read, B: Read> Read for Chain<A, B> {
     }
 }
 
-// buffers (2.23.6)
+// buffers
 
 /// Reads `inner` in chunks, so small reads (`read_line`, `bytes`) do not
 /// each cost a system call. A handle: copies share the buffer.
@@ -1259,7 +1259,7 @@ impl AsyncWrite for Cursor<List<u8>> {
     async fn flush_async(ref self) throws (IoError) {}
 }
 
-// utilities (2.23.7)
+// utilities
 
 /// `empty()`: a stream at its end.
 pub struct Empty {}
@@ -1364,7 +1364,7 @@ pub async fn copy_async<R: AsyncRead, W: AsyncWrite>(r: R, w: W) throws (IoError
     }
 }
 
-// standard streams (2.23.8)
+// standard streams
 
 /// The process's standard input, read through the runtime's shared
 /// buffer. `fill_buf` holds at most the rest of one line in the handle,

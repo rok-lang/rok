@@ -13,7 +13,7 @@ pub struct Deque<T> {
     zero: GcBuf<T>;
 }
 
-// Shares its buffer like `List` (stdlib 2.13.9).
+// Shares its buffer like `List`.
 impl<T> !Sync for Deque<T> {}
 
 impl<T> Deque<T> {
@@ -246,7 +246,7 @@ impl<T> FromIterator<T> for Deque<T> {
     }
 }
 
-/// `d += x`: push `x` at the back (stdlib 2.4.6).
+/// `d += x`: push `x` at the back.
 impl<T> AddAssign<T> for Deque<T> {
     const fn add_assign(ref self, rhs: T) {
         self.push_back(rhs);
@@ -308,7 +308,7 @@ impl<T: Debug> Debug for Deque<T> {
     }
 }
 
-/// A hand-off's copy (stdlib 2.13.9): the same ring; its slots go
+/// A hand-off's copy: the same ring; its slots go
 /// through `transfer` from the memo's queue. The memo keeps the copy in a
 /// box (a deque is three buffers).
 impl<T> Transfer for Deque<T> {

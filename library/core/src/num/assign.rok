@@ -1,11 +1,11 @@
-// rok::core::num::assign - the `*Assign` impls (stdlib 2.4.6) of the
+// rok::core::num::assign - the `*Assign` impls of the
 // primitives, `int` / `float` and `str`. A primitive's method is
 // `#[intrinsic("rok.OP_assign.TYPE")]`: `a += b` and a by-name call both
 // lower to `a = a op b`. `%%=` has no machine op; it calls `Modulo`.
 // One block per (type, trait); keep it regular.
 
-// i8 .. usize share one block per (type, trait); a macro generates them
-// (spec 6.8.12). `@t` in the intrinsic name interpolates the type.
+// i8 .. usize share one block per (type, trait); a macro generates them.
+// `@t` in the intrinsic name interpolates the type.
 
 #[impl_macro(int_assign_ops)] @macro {
     (@rep[sep = ","] { @t: ty }) => {

@@ -1,9 +1,9 @@
-// rok::core::collections - List / Dict / Set / Slice (stdlib spec 2.9),
+// rok::core::collections - List / Dict / Set / Slice,
 // Deque and BinaryHeap.
 //
 // Each collection is a small handle struct over GC buffers (`raw`):
 // copying the handle shares the collection, so the mutating methods
-// take `self` (spec writes `ref self`; the handle makes that moot).
+// take `self` (not `ref self`: the handle is what they change).
 
 pub(pkg) mod raw;
 pub mod list;
@@ -14,7 +14,7 @@ pub mod set;
 pub mod slice;
 pub mod broadcast;
 
-// `use rok::core::collections::List` (stdlib 2.9).
+// `use rok::core::collections::List`.
 pub use list::{List, ListIter, ListIntoIter};
 pub use deque::{Deque, DequeIter};
 pub use heap::{BinaryHeap, HeapIter};

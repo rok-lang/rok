@@ -1,9 +1,9 @@
-// rok::core::time - `Duration` / `Instant` (stdlib spec 3.3.1, 3.3.2).
+// rok::core::time - `Duration` / `Instant`.
 // The wall and boot clocks are `rok::std::time`. Every span between two
 // readings is an exact signed `Duration`: an earlier minus a later one
 // is negative, never an error or zero.
 
-// Spec 3.3.5: arithmetic overflow panics, and saturates with overflow
+// Arithmetic overflow panics, and saturates with overflow
 // checks off. The helpers below redo the overflowing op unchecked: with
 // overflow checks on that op panics; past it, saturate.
 
@@ -42,7 +42,7 @@ const fn ns_f64(x: f64) -> i64 {
     0
 }
 
-/// A span of time: `i64` nanoseconds (about ±292 years, 3.3.1).
+/// A span of time: `i64` nanoseconds (about ±292 years).
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Duration {
     ns: i64;
@@ -227,7 +227,7 @@ impl Sub for Duration {
     const fn sub(self, rhs: Duration) -> Duration { Duration { ns: ns_sub(self.ns, rhs.ns) } }
 }
 
-/// A point on the monotonic clock (3.3.2); only meaningful within one
+/// A point on the monotonic clock; only meaningful within one
 /// process.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct Instant {

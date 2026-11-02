@@ -1,4 +1,4 @@
-// rok::core::sync - concurrency primitives (stdlib spec 2.16).
+// rok::core::sync - concurrency primitives.
 //
 // Every type is a handle over GC buffers: copying it (into a closure,
 // another thread) shares the one primitive. Blocking goes through the
@@ -64,7 +64,7 @@ const fn two_words() -> GcBuf<i32> {
     }
 }
 
-/// Memory ordering of an atomic load (2.16.2), and of the load a failed
+/// Memory ordering of an atomic load, and of the load a failed
 /// compare-exchange does. A load cannot release.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum LoadOrdering {
@@ -73,7 +73,7 @@ pub enum LoadOrdering {
     SeqCst,
 }
 
-/// Memory ordering of an atomic store (2.16.2). A store cannot acquire.
+/// Memory ordering of an atomic store. A store cannot acquire.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum StoreOrdering {
     Relaxed,
@@ -81,7 +81,7 @@ pub enum StoreOrdering {
     SeqCst,
 }
 
-/// Memory ordering of a read-modify-write (2.16.2): `swap`, the
+/// Memory ordering of a read-modify-write: `swap`, the
 /// `fetch_*` ops and a compare-exchange that succeeds.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum UpdateOrdering {
@@ -95,7 +95,7 @@ pub enum UpdateOrdering {
 /// The element types `Atomic<T>` supports.
 #[sealed]
 pub trait AtomicPrimitive {}
-// Every integer and bool is an atomic primitive (spec 6.8.12).
+// Every integer and bool is an atomic primitive.
 #[impl_macro(atomic_prims)] @macro {
     (@rep[sep = ","] { @t: ty }) => { @for @t { impl AtomicPrimitive for @t {} } }
 }
@@ -103,7 +103,7 @@ atomic_prims!(i8, i16, i32, i64, isize, u8, u16, u32, u64, usize, bool);
 /// One address word: load / store / swap / compare_exchange.
 impl<T> AtomicPrimitive for rok::bare::ptr::Ptr<T> {}
 
-/// A lock-free cell (2.16.2). Send + Sync.
+/// A lock-free cell. Send + Sync.
 pub struct Atomic<T> {
     cell: GcBuf<T>;
 }
@@ -302,7 +302,7 @@ fn cas_seqcst_fail<T>(c: GcBuf<T>, cur: T, new: T, success: UpdateOrdering) -> T
     }
 }
 
-/// Exclusive lock around a `T` (2.16.3). No poisoning (spec): a panic
+/// Exclusive lock around a `T`. No poisoning: a panic
 /// ends the process, and an error leaving `using` drops the guard.
 // `state[0]`: 0 unlocked, 1 locked, 2 locked with (possible) waiters;
 // `state[1]`: entries in `OWED` (a cancelled `Condvar::wait_async`).
@@ -328,7 +328,7 @@ impl<T> Mutex<T> {
         }
     }
 
-    /// `new` without the hand-off copy (2.13.9): the caller guarantees
+    /// `new` without the hand-off copy: the caller guarantees
     /// that nothing else reaches `value`'s collections (a value just made).
     pub const unsafe fn new_unshared(value: T) -> Mutex<T> {
         unsafe {
@@ -467,7 +467,7 @@ impl<T> Debug for MutexGuard<T> {
 }
 
 // A copy of a guard outlives its `using` block unprotected: the hand-off
-// check follows guards like the collections they hand out (2.13.9).
+// check follows guards like the collections they hand out.
 impl<T> !Sync for MutexGuard<T> {}
 
 impl<T> MutexGuard<T> {
@@ -512,7 +512,7 @@ impl<T> Drop for MutexGuard<T> {
     }
 }
 
-/// Many readers or one writer (2.16.4).
+/// Many readers or one writer.
 // `state[0]`: 0 free, -1 writer, n > 0 readers; `state[1]`: a task is
 // parked on it (`read_async` / `write_async`).
 pub struct RwLock<T> {
@@ -940,7 +940,7 @@ impl<T> rok::core::future::Future for CondvarWait<T> {
     }
 }
 
-/// Single-task interior mutability (2.16.5): neither Send nor Sync.
+/// Single-task interior mutability: neither Send nor Sync.
 pub struct Cell<T> {
     value: GcBuf<T>;
 }

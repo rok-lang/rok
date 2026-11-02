@@ -1,4 +1,4 @@
-// rok::std::fs (stdlib 3.1): files and directories over the `openat`
+// rok::std::fs: files and directories over the `openat`
 // family, so a `Dir` handle is a capability.
 //
 // `Dir::root()` resolves relative paths against the working directory;
@@ -192,7 +192,7 @@ impl Default for Permissions {
     const fn default() -> Permissions { Permissions { mode: 0o666u32 } }
 }
 
-/// What a directory entry is (3.1.1).
+/// What a directory entry is.
 #[non_exhaustive]
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FileType {
@@ -232,7 +232,7 @@ impl Debug for FileType {
     }
 }
 
-/// `stat` of a file (3.1.1).
+/// `stat` of a file.
 pub struct Metadata {
     kind: i64;
     len: u64;
@@ -271,7 +271,7 @@ impl Metadata {
     pub const fn is_symlink(self) -> bool { self.kind == 3 }
     /// The permission bits.
     pub const fn permissions(self) -> Permissions { Permissions { mode: self.mode } }
-    /// Last modification as a `SystemTime` (3.3.3). Never throws on
+    /// Last modification as a `SystemTime`. Never throws on
     /// Unix; `throws` keeps room for platforms without the field.
     pub const fn modified(self) throws (IoError) -> SystemTime { SystemTime::from_unix(self.mtime, self.mtime_ns as u32) }
     /// Last access as a `SystemTime`.
@@ -493,7 +493,7 @@ impl File {
     }
 }
 
-// Mmap (3.1.3)
+// Mmap
 
 /// A read-only shared mapping from `File::mmap`. Unmapped by `unmap` or
 /// where its owner leaves scope; reads after that see an empty mapping.
@@ -947,7 +947,7 @@ impl Drop for File {
     }
 }
 
-// Dir (3.1.2)
+// Dir
 
 /// A directory capability. `fd < 0` is `root()`: the whole namespace,
 /// relative paths from the working directory.
@@ -1465,7 +1465,7 @@ impl TryIterator for Walk {
     }
 }
 
-// convenience functions (3.1.4) over Dir::root()
+// convenience functions over Dir::root()
 
 /// `File::open(path)`: an existing file, for reading. The other ways
 /// of opening are on `File` and `Dir`.

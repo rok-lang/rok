@@ -1,5 +1,5 @@
 // rok::core::print - `print` / `println` / `eprint` / `eprintln`
-// (stdlib 2.23.8: the prelude names them, so they need no `use`). Each
+// (the prelude names them, so they need no `use`). Each
 // takes one value and renders it with `Display`; the argument defaults to
 // the empty string, so `println()` writes a blank line.
 // Format or combine several values with an f-string:

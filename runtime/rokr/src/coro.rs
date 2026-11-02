@@ -1,5 +1,5 @@
-//! A hand-off of a coroutine future (stdlib 2.13.9,
-//! `rok::core::future::hand_frame`): the new owner gets a frame of its
+//! A hand-off of a coroutine future
+//! (`rok::core::future::hand_frame`): the new owner gets a frame of its
 //! own, a word-for-word copy of the frame object that the copy's first
 //! (priming) resume then fixes up.
 

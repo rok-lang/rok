@@ -1,4 +1,4 @@
-// rok::bare::alloc - raw allocation outside the GC (stdlib spec 1.4).
+// rok::bare::alloc - raw allocation outside the GC.
 // Over the runtime's `rok_alloc_raw` / `rok_realloc_raw` / `rok_free`
 // (system malloc); failure is a null `CPtr`, never an abort.
 //
@@ -156,7 +156,7 @@ pub unsafe fn dealloc_one<T>(ptr: Ptr<T>) { rok_free(ptr.addr()); }
 /// from it and is not freed yet; the elements are not dropped.
 pub unsafe fn dealloc_array<T>(ptr: Ptr<T>, n: usize) { rok_free(ptr.addr()); }
 
-/// `n` `T`s outside the GC (spec 1.4.2). It has one owner (`let b = a`
+/// `n` `T`s outside the GC. It has one owner (`let b = a`
 /// moves it), and the block is freed where that owner leaves scope.
 pub struct Allocation<T> {
     ptr: Ptr<T>;

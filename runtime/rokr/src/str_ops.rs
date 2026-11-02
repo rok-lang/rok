@@ -1,5 +1,5 @@
-//! The computations behind the runtime's pure `str` entries (stdlib
-//! 2.15), on plain bytes. The one implementation: `str.rs` wraps them
+//! The computations behind the runtime's pure `str` entries,
+//! on plain bytes. The one implementation: `str.rs` wraps them
 //! for compiled code and the compiler's constant evaluator (`rokc_hir`,
 //! through `#[path]`) calls them directly. Uses `core` only.
 

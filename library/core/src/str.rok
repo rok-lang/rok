@@ -1,6 +1,6 @@
-// rok::core::str - `str` methods and trait impls (stdlib 2.15).
+// rok::core::str - `str` methods and trait impls.
 //
-// `str` is an immutable `(ptr, len)` value (2.15.1): literals are static
+// `str` is an immutable `(ptr, len)` value: literals are static
 // bytes, run-time strings GC objects, and a slice shares its source's
 // bytes, so slicing, `lines`, `split*`, `match_indices`, `trim*` and
 // `strip_*` copy nothing. `StrBuf` is the growable buffer.
@@ -12,7 +12,7 @@ impl str {
     #[must_use]
     pub const fn new() -> str { "" }
 
-    /// `bytes` as a `str`; throws if they are not UTF-8 (2.15.6).
+    /// `bytes` as a `str`; throws if they are not UTF-8.
     #[must_use]
     pub const fn from_utf8<B: AsBytes>(bytes: B) throws (Utf8Error) -> str {
         let view = bytes.byte_slice();
@@ -62,7 +62,7 @@ impl str {
     /// The first byte's address, for FFI (`len()` bytes, no NUL
     /// promised; an empty `str` gives a dangling pointer). Valid while a
     /// variable holding the string is in scope in a function where a
-    /// pointer type appears (2.15.2); pin it to keep it longer.
+    /// pointer type appears; pin it to keep it longer.
     #[must_use]
     pub fn as_ptr(self) -> rok::bare::ptr::ConstPtr<u8> {
         let p = rok::bare::ptr::ConstPtr::<u8>::dangling();
@@ -83,7 +83,7 @@ impl str {
     /// `true` when the string has no bytes.
     #[must_use]
     pub const fn is_empty(self) -> bool { unsafe { rok_str_len(self) } == 0 }
-    /// Number of chars (`s.chars().count()` in the spec).
+    /// Number of chars, as `s.chars().count()`.
     #[must_use]
     pub const fn char_count(self) -> usize { unsafe { rok_str_char_count(self) } }
 
@@ -231,12 +231,12 @@ impl str {
         SplitWhitespace { s: self, pos: 0 }
     }
 
-    /// `T`'s value spelled by this string (stdlib 2.15.7).
+    /// `T`'s value spelled by this string.
     #[must_use]
     pub const fn parse<T: FromStr>(self) throws (T::Err) -> T { try T::from_str(self) }
 }
 
-/// `s[a:b]` by byte offsets (2.15.3): O(1), sharing `s`'s bytes. The
+/// `s[a:b]` by byte offsets: O(1), sharing `s`'s bytes. The
 /// bounds clamp to the length (like Python); a clamped bound off a char
 /// boundary panics.
 impl Sliceable<Range<usize>> for str {
@@ -280,9 +280,9 @@ impl Hash for str {
     const fn hash<H: Hasher>(self, ref h: H) { h.write_str(self) }
 }
 
-// Iterators (stdlib 2.15.2).
+// Iterators.
 
-/// What `s.bytes()` returns (2.15.2): the bytes of the `as_bytes` view.
+/// What `s.bytes()` returns: the bytes of the `as_bytes` view.
 pub type Bytes = SliceIter<u8>;
 
 /// What `s.chars()` returns: the Unicode scalar values, in order.
@@ -611,7 +611,7 @@ impl Iterator for SplitWhitespace {
     }
 }
 
-// `char` (stdlib 2.15.4).
+// `char`.
 //
 // The Unicode properties and case maps are runtime tables generated
 // from the UCD (`runtime/rokr/gen_unicode.py`).
@@ -791,8 +791,8 @@ impl Ord for char {
     const fn cmp(self, other: char) -> Ordering { (self as u32).cmp(other as u32) }
 }
 
-/// `char::try_from(n)` (2.15.4): throws for a surrogate or a value past
-/// U+10FFFF (`OverflowError`, as spec 2.15.4 says).
+/// `char::try_from(n)`: throws for a surrogate or a value past
+/// U+10FFFF (`OverflowError`).
 impl TryFrom<u32> for char {
     type Error = OverflowError;
     const fn try_from(value: u32) throws (OverflowError) -> char {
@@ -802,7 +802,7 @@ impl TryFrom<u32> for char {
     }
 }
 
-// `StrBuf` (stdlib 2.15.2).
+// `StrBuf`.
 
 /// A growable UTF-8 buffer. A handle like the collections: copies
 /// share the buffer, one object holding the length, the capacity and
@@ -821,7 +821,7 @@ struct StrBufHead {
     bytes: GcBuf<u8>;
 }
 
-// Shares its buffer like `List` (stdlib 2.13.9).
+// Shares its buffer like `List`.
 impl !Sync for StrBuf {}
 
 impl StrBuf {
@@ -923,7 +923,7 @@ impl StrBuf {
     }
 
     /// Append one byte. `unsafe`: `to_str` hands out the bytes as a
-    /// `str`, which must be UTF-8 (2.15.1); the caller keeps them so by
+    /// `str`, which must be UTF-8; the caller keeps them so by
     /// the time it is called. Bytes of unknown encoding go through
     /// `str::from_utf8`.
     pub const unsafe fn push_byte(self, b: u8) {
@@ -950,7 +950,7 @@ impl StrBuf {
 
 /// `b[a:b]`: the bytes `a..b` of the current contents as a new `str`,
 /// checked like `str` slicing (clamped). O(b - a): only the range is
-/// copied, so later edits of the buffer never show through (2.15.1).
+/// copied, so later edits of the buffer never show through.
 impl Sliceable<Range<usize>> for StrBuf {
     type Output = str;
     #[track_caller]
@@ -961,7 +961,7 @@ impl Sliceable<Range<usize>> for StrBuf {
     }
 }
 
-/// `chars.collect::<str>()` (2.15.7).
+/// `chars.collect::<str>()`.
 impl FromIterator<char> for str {
     const fn from_iter<I: IntoIterator<Item = char>>(it: I) -> str {
         let b = StrBuf::new();
@@ -970,7 +970,7 @@ impl FromIterator<char> for str {
     }
 }
 
-/// `parts.collect::<str>()`: the pieces concatenated (2.15.7).
+/// `parts.collect::<str>()`: the pieces concatenated.
 impl FromIterator<str> for str {
     const fn from_iter<I: IntoIterator<Item = str>>(it: I) -> str {
         let b = StrBuf::new();
@@ -1013,7 +1013,7 @@ impl Debug for Utf8Error {
 
 impl Error for Utf8Error {}
 
-// `FromStr` (stdlib 2.15.7).
+// `FromStr`.
 
 /// `str.parse::<T>()` dispatch.
 pub trait FromStr {
@@ -1125,7 +1125,7 @@ impl FromStr for str {
     const fn from_str(s: str) throws (ParseError) -> str { s }
 }
 
-/// A hand-off's copy (stdlib 2.13.9): a new head and byte buffer.
+/// A hand-off's copy: a new head and byte buffer.
 impl Transfer for StrBuf {
     const fn transfer_copy(self, m: Memo) -> StrBuf {
         if buf_is_null(self.h) {

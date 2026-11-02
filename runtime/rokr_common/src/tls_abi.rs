@@ -1,4 +1,4 @@
-//! The mutator TLS block `rok_tls` (803 §8.3.1): slot offsets the
+//! The mutator TLS block `rok_tls`: slot offsets the
 //! compiler and the runtime agree on. Plain constants only: `rokc_mir`
 //! includes this file by path.
 
@@ -33,7 +33,7 @@ pub const STACK_GUARD: Slot = at(8, 0);
 pub const WORKER_ID: Slot = at(10, 0);
 pub const YIELD_FLAG: Slot = at(10, 8);
 pub const MUTATOR_STATE: Slot = at(10, 9);
-/// Implementation-defined slots (not 803's) follow the ABI part.
+/// Implementation-defined slots (outside the ABI) follow the ABI part.
 /// Depth of the `#[no_safepoint]` calls a debug rokc brackets (`u8`).
 pub const NO_SAFEPOINT: Slot = at(10, 10);
 /// How the thread joined the runtime (`u8`, `tls::ATTACHED_*`; 0: not).

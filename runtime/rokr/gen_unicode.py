@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Generate runtime/rokr/src/unicode_tables.rs (stdlib 2.15 `char` / `str`).
+"""Generate runtime/rokr/src/unicode_tables.rs (`char` / `str`).
 
 Reads the UCD files checked in under `compiler/rokc_lexer/ucd/` (shared
 with the lexer's `gen_unicode.py`; UCD 18.0.0 from
-https://www.unicode.org/Public/18.0.0/ucd/, the version spec 2.15.4
-names), so regeneration is offline:
+https://www.unicode.org/Public/18.0.0/ucd/), so regeneration is offline:
 - DerivedCoreProperties.txt: Alphabetic, Lowercase, Uppercase, Cased,
   Case_Ignorable
 - PropList.txt: White_Space

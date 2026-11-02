@@ -1,5 +1,5 @@
-// rok::core::task: tasks on the work-stealing executor (stdlib 2.18,
-// refs-lang 7.6) and `block_on` (2.20.6); `Duration` / `Instant` are
+// rok::core::task: tasks on the work-stealing executor
+// and `block_on`; `Duration` / `Instant` are
 // `rok::core::time`.
 //
 // One executor per process, started on first use: N workers on threads
@@ -22,10 +22,10 @@
 // searches until it finds work, and the last searcher to find a task
 // wakes the next (tokio's scheme). No worker spins before sleeping.
 //
-// I/O (707): a driver thread blocks in kqueue / epoll / IOCP and unparks the
+// I/O: a driver thread blocks in kqueue / epoll / IOCP and unparks the
 // tasks waiting on a ready fd.
 //
-// Blocking calls (706 §7.6.7): each pool thread has a runtime lane that
+// Blocking calls: each pool thread has a runtime lane that
 // is marked blocked for the length of a blocking call. A monitor scans
 // the lanes every millisecond; a worker blocked across a whole scan is
 // handed to a spare or new thread, and the blocked thread finishes its
@@ -33,16 +33,16 @@
 // At most 512 extra threads. A worker with live `spawn_local` tasks is
 // never handed on.
 //
-// Cancellation (2.18.4, 707 §7.7.9): `Task::cancel` sets a flag and
+// Cancellation: `Task::cancel` sets a flag and
 // wakes the task; each `await` checks it on entry and after each resume
 // and leaves the body like a `return`, running `finally` / `using`. A
 // task cancelled before its first poll is never polled.
 //
-// Timers: one binary heap behind a `Mutex` (707 §7.7.4).
+// Timers: one binary heap behind a `Mutex`.
 //
-// `ROKR_THREAD_PER_CORE=1` (706 §7.6.8) keeps every task on one worker's
-// local queue, so nothing is stolen. `ROKR_DYNAMIC_WORKERS=1` (707
-// §7.7.8) wakes only active workers and activates one more when all are
+// `ROKR_THREAD_PER_CORE=1` keeps every task on one worker's
+// local queue, so nothing is stolen. `ROKR_DYNAMIC_WORKERS=1`
+// wakes only active workers and activates one more when all are
 // busy.
 //
 // REPL sessions are saved between cells (`rok_session_hold`): every
@@ -273,9 +273,9 @@ pub(pkg) struct Pool {
     driver_id: GcBuf<u64>;
     /// No threads: the guest is the whole executor.
     solo: bool;
-    /// Thread-per-core (706 §7.6.8): every task has a home worker.
+    /// Thread-per-core: every task has a home worker.
     pinned: bool;
-    /// Dynamic worker count (707 §7.7.8).
+    /// Dynamic worker count.
     dynamic: bool;
 }
 
@@ -298,7 +298,7 @@ pub(pkg) struct Worker {
     sleep: GcBuf<i32>;
     /// The task it is polling (`task::id`).
     running: GcBuf<TaskRef | none>;
-    /// xorshift state: where its steals start (spec 7.6.4).
+    /// xorshift state: where its steals start.
     seed: GcBuf<u64>;
     /// A pool thread's runtime lane (`rok_lane_new`), replaced when the
     /// worker moves to a new thread.
@@ -637,7 +637,7 @@ impl Spares {
     }
 }
 
-/// The monitor (706 §7.6.7): a worker whose lane stays blocked across a
+/// The monitor: a worker whose lane stays blocked across a
 /// scan goes to a new thread. Scans every tick while some lane blocks;
 /// after 20 quiet ones it sleeps until a lane blocks.
 fn monitor(pool: Pool) {
@@ -777,7 +777,7 @@ fn find_task(w: Worker) -> TaskRef | none {
     if let t: TaskRef = pop_front(pool.injector) {
         return t;
     }
-    // Victims round-robin from a random one (spec 7.6.4), so idle
+    // Victims round-robin from a random one, so idle
     // workers do not all hit the same deque first.
     let n = pool.workers();
     if n == 0 {
@@ -823,7 +823,7 @@ fn run(t: TaskRef) {
         let w = current_worker();
         let outer = w.running[0];
         w.running[0] = t;
-        // Blocking calls of the poll may hand the worker on (706 §7.6.7).
+        // Blocking calls of the poll may hand the worker on.
         let armed = rok_lane_arm(1);
         let ready = poll(ctx);
         _ = rok_lane_arm(armed);
@@ -849,8 +849,8 @@ fn run(t: TaskRef) {
     }
 }
 
-/// Is the task polling with `ctx` cancelled? (2.18.4 cancellation
-/// points.) A true answer means the caller leaves: the cancelled task (or
+/// Is the task polling with `ctx` cancelled? (A
+/// cancellation point.) A true answer means the caller leaves: the cancelled task (or
 /// `select` proxy) is marked `unwinding`. False while the task runs the
 /// cleanups of its cancel: an `await` there completes.
 pub(pkg) fn cancel_requested(ctx: Context) -> bool {
@@ -866,7 +866,7 @@ pub(pkg) fn cancel_requested(ctx: Context) -> bool {
     }
 }
 
-/// The compiler's cancellation point in an `await` (2.18.4): like
+/// The compiler's cancellation point in an `await`: like
 /// `cancel_requested`, but none fires while a frame of the task runs the
 /// cleanups of its own cancel, so awaits inside `finally` / `using`
 /// complete. A true answer starts those cleanups.
@@ -951,7 +951,7 @@ fn cancel_source(t: TaskRef) -> TaskRef | none {
 
 /// Wake every due timer; the nanoseconds to the next one (-1: none).
 /// The wakes happen under the lock, so two threads firing at once queue
-/// their tasks in deadline order too (707 §7.7.4): one that popped an
+/// their tasks in deadline order too: one that popped an
 /// earlier deadline cannot be overtaken between its pop and its wake.
 fn fire_timers(pool: Pool) -> i64 {
     let fired = false;
@@ -1162,7 +1162,7 @@ fn run_guest(main: fn(Context) -> bool) {
     unsafe { rok_task_worker_clear() };
 }
 
-/// Run `fut` to completion from synchronous code (2.20.6). It returns
+/// Run `fut` to completion from synchronous code. It returns
 /// once the `spawn_local` tasks pinned to this thread are done too.
 pub fn block_on<F: Future>(fut: F) -> F::Output {
     unsafe {
@@ -1202,7 +1202,7 @@ pub fn try_block_on<T, E>(fut: TryAsyncFuture<T, E>) throws (E) -> T {
     }
 }
 
-// A WebAssembly component's async exports (stdlib 1.8) run on the host's
+// A WebAssembly component's async exports run on the host's
 // event loop: each export call and event enters, runs what is runnable
 // and returns to the host, which calls back with the next event. The
 // thread works as one guest worker for all of them, kept between turns.
@@ -1359,7 +1359,7 @@ pub(pkg) fn help_until(t: Task<bool>) {
     unsafe { rok_lane_arm(armed) };
 }
 
-/// A spawned task; `await` it for its result (2.18.2).
+/// A spawned task; `await` it for its result.
 pub struct Task<T> {
     task: TaskRef;
     slot: GcBuf<T>;
@@ -1378,7 +1378,7 @@ impl<T> Task<T> {
     /// This task's id (what `task::id()` returns inside it).
     pub const fn id(self) -> TaskId { TaskId { id: self.task.id } }
 
-    /// Ask the task to stop (2.18.4): it is woken, its current `await`
+    /// Ask the task to stop: it is woken, its current `await`
     /// leaves the body (running the `finally` / `using` cleanups on the
     /// way out) and it finishes without a result; one not yet polled
     /// never runs. Awaiting it then panics; use `try await t.join()` to
@@ -1544,7 +1544,7 @@ pub fn current_id() -> TaskId | none {
     }
 }
 
-/// A task was cancelled (2.18.4).
+/// A task was cancelled.
 #[derive(Clone, PartialEq, Eq)]
 pub struct CancellationError;
 
@@ -1564,9 +1564,9 @@ impl Debug for CancellationError {
 impl Error for CancellationError {}
 
 /// Run `fut` as a new task on any worker, concurrently with the
-/// spawner (2.18.1). Needs a running executor (inside `async fn main` /
+/// spawner. Needs a running executor (inside `async fn main` /
 /// `block_on`). The task gets its own copy of every collection `fut`
-/// holds, what its coroutine captured included (2.13.9): the spawner
+/// holds, what its coroutine captured included: the spawner
 /// keeps the originals.
 #[track_caller]
 pub fn spawn<F: Future + Send>(fut: F) -> Task<F::Output> where F::Output: Send {
@@ -1645,7 +1645,7 @@ pub fn spawn_local<F: Future>(fut: F) -> Task<F::Output> {
     }
 }
 
-/// Every task's result, in order (2.18.1).
+/// Every task's result, in order.
 pub async fn join<I: IntoIterator<Item = Task<T>>, T>(tasks: I) -> List<T> {
     let out: List<T> = List::new();
     for t in tasks {
@@ -1654,7 +1654,7 @@ pub async fn join<I: IntoIterator<Item = Task<T>>, T>(tasks: I) -> List<T> {
     out
 }
 
-/// The result of whichever task finishes first (2.18.1); ties go to the
+/// The result of whichever task finishes first; ties go to the
 /// earlier one. The others are cancelled (by the time `race` returns
 /// they may still run their cleanups), and so are all of them when the
 /// awaiting task is. Panics on no tasks.
@@ -1680,8 +1680,7 @@ pub async fn race<I: IntoIterator<Item = Task<T>>, T>(tasks: I) -> T {
 }
 
 /// The first of `futs` to complete, with its index: `let (i, v) = await
-/// task::select([a, b])` (refs-lang 4.12.9 names `select`; 2.18 gives no
-/// signature). Unlike `race` the futures are not spawned: they run inside
+/// task::select([a, b])`. Unlike `race` the futures are not spawned: they run inside
 /// the awaiting task, polled in list order (ties go to the lower index).
 /// The futures share one type: `async { .. }` blocks with the same
 /// output do (wrap differing outputs, `async { Msg::A(await a) }`).
@@ -1847,7 +1846,7 @@ impl<T> Future for FirstDone<T> {
     }
 }
 
-/// Completes once `dur` has passed since its first poll (2.18.1).
+/// Completes once `dur` has passed since its first poll.
 pub async fn sleep(dur: Duration) {
     await Sleep { deadline: now_ns() + dur.as_ns() };
 }
@@ -1872,7 +1871,7 @@ impl Future for Sleep {
     }
 }
 
-/// Let the other ready tasks run once (2.18.1).
+/// Let the other ready tasks run once.
 pub async fn yield_now() {
     await YieldNow { yielded: false };
 }
@@ -1894,7 +1893,7 @@ impl Future for YieldNow {
 }
 
 /// `task`'s result, or `TimeoutError` once `dur` has passed since the
-/// first poll (2.18.1): `try await task::timeout(d, t)`. On expiry the
+/// first poll: `try await task::timeout(d, t)`. On expiry the
 /// task is cancelled (it may still run its cleanups when `timeout`
 /// throws), and so it is when the awaiting task is.
 pub async fn timeout<T>(dur: Duration, task: Task<T>) throws (TimeoutError) -> T {
@@ -1952,8 +1951,8 @@ impl Error for TimeoutError {}
 
 /// Tasks waiting on a key (a primitive's GC address, or an fd's
 /// `io_key`): `Mutex::lock_async`, `Receiver::recv_async`, socket I/O
-/// park here; whoever may have made the key ready unparks it (708's
-/// park / unpark at the task level). One process-wide table behind one
+/// park here; whoever may have made the key ready unparks it (the
+/// runtime's park / unpark at the task level). One process-wide table behind one
 /// lock.
 struct Parking {
     lock: Mutex<i32>;
@@ -2075,7 +2074,7 @@ pub(pkg) fn unpark(key: usize) {
     }
 }
 
-// the I/O driver (707)
+// the I/O driver
 
 /// The parking key of `fd`'s read (`write == 0`) or write readiness:
 /// odd, so never a GC address (8-aligned) at any pointer width.
@@ -2084,7 +2083,7 @@ const fn io_key(fd: i32, write: i32) -> usize {
 }
 
 /// Wake every task waiting on `fd`'s readiness: after a `shutdown` or
-/// a close, which may raise no poller event (stdlib 2.18.1).
+/// a close, which may raise no poller event.
 #[internal]
 pub fn wake_io(fd: i32) {
     unpark(io_key(fd, 0));
@@ -2243,7 +2242,7 @@ impl Future for IoReady {
     }
 }
 
-// runtime ABI hooks (805 §8.5.3, §8.5.5)
+// runtime ABI hooks
 //
 // `rok_io_register` / `rok_timer_register` / `rok_coro_park` /
 // `rok_coro_unpark` call these, for hand-written futures and foreign

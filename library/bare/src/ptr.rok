@@ -1,11 +1,11 @@
-// rok::bare::ptr - raw pointers (stdlib spec 1.1). A pointer is its
-// address; reading / writing through it is `unsafe` (refs-lang 4.15.2).
+// rok::bare::ptr - raw pointers. A pointer is its
+// address; reading / writing through it is `unsafe`.
 //
 // Provenance is not tracked at run time: `expose_provenance` /
 // `from_exposed_provenance` are the address itself, and the latter is
 // `unsafe` (it makes a pointer out of a plain integer). `Ptr` /
 // `ConstPtr` / `ManyPtr` are never null: `#[niche(0)]` makes
-// `Ptr<T> | none` one address, null = `none` (spec 2.7.2).
+// `Ptr<T> | none` one address, null = `none`.
 
 // Compiler intrinsics over a pointer struct (field 0 = address); `T` is
 // the pointer's type argument.
@@ -324,26 +324,25 @@ impl<T> !Sync for ManyPtr<T> {}
 impl<T> !Send for CPtr<T> {}
 impl<T> !Sync for CPtr<T> {}
 
-/// The same address as a pointer to `U` (spec 1.2.2: `ptr_cast::<U>(p)`;
+/// The same address as a pointer to `U` (`ptr_cast::<U>(p)`;
 /// alignment is the caller's problem).
 pub const fn ptr_cast<U, T>(p: Ptr<T>) -> Ptr<U> { Ptr { address: p.address } }
 
-/// `p` as a `Ptr<T>` when its address suits `T`'s alignment (1.2.3).
+/// `p` as a `Ptr<T>` when its address suits `T`'s alignment.
 pub const fn align_cast<T>(p: Ptr<u8>) -> Ptr<T> | none {
     if p.address % align_of::<T>() != 0 { return none; }
     let q: Ptr<T> = Ptr { address: p.address };
     q
 }
 
-/// `p` as a `Ptr<T>` with no alignment check, not even in debug builds
-/// (1.2.3).
+/// `p` as a `Ptr<T>` with no alignment check, not even in debug builds.
 pub const fn align_cast_unchecked<T>(p: Ptr<u8>) -> Ptr<T> { Ptr { address: p.address } }
 
-/// Drop the `const` (1.2.4): writing through the result is the caller's
+/// Drop the `const`: writing through the result is the caller's
 /// responsibility.
 pub const fn const_cast<T>(p: ConstPtr<T>) -> Ptr<T> { Ptr { address: p.address } }
 
-/// The address of `p`, marked as escaping (1.1.2 strict provenance).
+/// The address of `p`, marked as escaping (strict provenance).
 pub const fn expose_provenance<T>(p: Ptr<T>) -> usize { p.address }
 
 /// A pointer at `addr`, assumed to carry an exposed provenance.

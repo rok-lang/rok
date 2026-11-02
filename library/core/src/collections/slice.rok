@@ -1,8 +1,8 @@
-// rok::core::collections::slice: `Slice<T>`, a zero-copy view (stdlib
-// 2.9.7); element `i` is `buf[start + i * stride]`, and the view keeps
+// rok::core::collections::slice: `Slice<T>`, a zero-copy view;
+// element `i` is `buf[start + i * stride]`, and the view keeps
 // its buffer alive.
 //
-// `xs[a:b]` is `xs.slice(a..b)` (2.3.4) and `xs[a:b:k]` is
+// `xs[a:b]` is `xs.slice(a..b)` and `xs[a:b:k]` is
 // `xs.slice(index::slice_range(a, b, k, len)).step(k)`, with Python's
 // semantics (bounds clamp, `xs[::-1]` reverses). A view of a `List` sees
 // later element writes but not a regrowth, which moves the list to a new
@@ -10,7 +10,7 @@
 
 use rok::core::marker::{Memo, Transfer, buf_is_null, buf_slots, copy_buf, copy_shared};
 
-/// A zero-copy view of a buffer (2.9.7): element `i` is
+/// A zero-copy view of a buffer: element `i` is
 /// `buf[start + i * stride]`. A view of a `List` sees later element writes
 /// but not a regrowth; a view of an array or `StrBuf` views a copy.
 pub struct Slice<T> {
@@ -24,7 +24,7 @@ pub struct Slice<T> {
     pub(pkg) whole: bool;
 }
 
-// Shares its buffer like `List` (stdlib 2.13.9).
+// Shares its buffer like `List`.
 impl<T> !Sync for Slice<T> {}
 
 /// A contiguous view of `buf[r]` (`r` clamped to the length `n`).
@@ -173,7 +173,7 @@ impl<T> Iterator for SliceIter<T> {
 
     const fn exact_len(self) -> usize | none { self.len() }
 
-    /// `ExactSizeIterator`: O(1) (2.7.10).
+    /// `ExactSizeIterator`: O(1).
     const fn count(self) -> usize { self.len() }
 }
 
@@ -269,7 +269,7 @@ impl<T> Iterator for Windows<T> {
 
     const fn exact_len(self) -> usize | none { self.len() }
 
-    /// `ExactSizeIterator`: O(1) (2.7.10).
+    /// `ExactSizeIterator`: O(1).
     const fn count(self) -> usize { self.len() }
 }
 
@@ -306,7 +306,7 @@ impl<T> Iterator for Chunks<T> {
 
     const fn exact_len(self) -> usize | none { self.len() }
 
-    /// `ExactSizeIterator`: O(1) (2.7.10).
+    /// `ExactSizeIterator`: O(1).
     const fn count(self) -> usize { self.len() }
 }
 
@@ -341,7 +341,7 @@ impl<T> Sliceable<Range<usize>> for Slice<T> {
     }
 }
 
-/// `xs[a:b]` (2.9.8): a view of the list's current buffer.
+/// `xs[a:b]`: a view of the list's current buffer.
 impl<T> Sliceable<Range<usize>> for List<T> {
     type Output = Slice<T>;
     const fn slice(self, r: Range<usize>) -> Slice<T> {
@@ -436,7 +436,7 @@ impl<T: Debug> Debug for Slice<T> {
     }
 }
 
-/// A hand-off's copy (stdlib 2.13.9): a view of a whole buffer views
+/// A hand-off's copy: a view of a whole buffer views
 /// that buffer's one copy, which every other view of it and its list
 /// share. Any other view (a `str`'s bytes) copies only its elements into
 /// a buffer of their own; its buffer word is never read as an object, so
@@ -496,7 +496,7 @@ impl<T> Transfer for Slice<T> {
     }
 }
 
-/// A writable view of a list's elements (stdlib 2.9.7), like Rust's
+/// A writable view of a list's elements, like Rust's
 /// `&mut [T]`: `s[i] = x` writes the list. A `List<T>` passed where a
 /// `SliceMut<T>` is expected views the whole list, and `xs[a:b]` there
 /// views `xs[a:b]`. Element `i` is `buf[start + i]`.
@@ -514,7 +514,7 @@ pub struct SliceMut<T> {
     pub(pkg) ver: usize;
 }
 
-// Shares its buffer like `List` (stdlib 2.13.9).
+// Shares its buffer like `List`.
 impl<T> !Sync for SliceMut<T> {}
 
 /// A view of `xs[r]` (`r` clamped to the length).
@@ -735,7 +735,7 @@ impl<T> Iterator for SliceMutIter<T> {
 
     const fn exact_len(self) -> usize | none { self.len() }
 
-    /// `ExactSizeIterator`: O(1) (2.7.10).
+    /// `ExactSizeIterator`: O(1).
     const fn count(self) -> usize { self.len() }
 }
 
@@ -825,7 +825,7 @@ impl<T: Debug> Debug for SliceMut<T> {
     }
 }
 
-/// A hand-off's copy (stdlib 2.13.9): the list's copy, viewed at the
+/// A hand-off's copy: the list's copy, viewed at the
 /// same place, so the view still writes what the receiver's list holds.
 impl<T> Transfer for SliceMut<T> {
     const fn transfer_copy(self, m: Memo) -> SliceMut<T> {

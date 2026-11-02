@@ -1,4 +1,4 @@
-//! Thread registry and stop-the-world (008-abi/804).
+//! Thread registry and stop-the-world.
 //!
 //! One process-wide "world lock" guards the heap, the registry and the
 //! stop protocol. A collector holds it, sets `STOP`, raises every other
@@ -6,14 +6,14 @@
 //! each one is out of `RUNNING`:
 //!
 //! - `GC_COOPERATING`: parked in [`safepoint`] (compiled code polls at
-//!   entries and back edges, 804 §8.4.2) or blocked on the world lock
+//!   entries and back edges) or blocked on the world lock
 //!   ([`lock`] cooperates first);
 //! - `PARKED`: in a blocking call bracketed by [`enter_native`] /
-//!   [`leave_native`] (804 §8.4.10); leaving waits out a running stop;
+//!   [`leave_native`]; leaving waits out a running stop;
 //! - not attached yet.
 //!
 //! Then every registered thread's shadow-stack chain is a root set.
-//! TLABs (702) keep ordinary allocation off the lock.
+//! TLABs keep ordinary allocation off the lock.
 
 use core::cell::UnsafeCell;
 use core::mem::size_of;
@@ -198,7 +198,7 @@ static STOP: AtomicBool = AtomicBool::new(false);
 /// The process is exiting ([`halt`]): no thread runs rok code again.
 static HALT: AtomicBool = AtomicBool::new(false);
 
-/// `rok_runtime_shutdown` (805 §8.5.2): no other thread runs rok code
+/// `rok_runtime_shutdown`: no other thread runs rok code
 /// again.
 ///
 /// The worker pool and threads still running stop for good at their
@@ -237,7 +237,7 @@ pub fn no_safepoint(step: i8) {
 /// Fail if a `#[no_safepoint]` call is about to stop this thread.
 ///
 /// A thread stops for a collection only at a safepoint the compiler
-/// counts or at a back-edge poll (804 §8.4.8): the poll's yield path is
+/// counts or at a back-edge poll: the poll's yield path is
 /// the only place locals only polls see are rooted.
 pub fn may_stop(what: &[u8]) {
     // SAFETY: this thread's own 1-byte slot.
@@ -300,7 +300,7 @@ pub fn lock() {
     cooperate();
 }
 
-/// `rok_runtime_yield` (804 §8.4.3): the slow path of a safepoint poll.
+/// `rok_runtime_yield`: the slow path of a safepoint poll.
 pub fn safepoint() {
     may_stop(b"a #[no_safepoint] runtime call reached a safepoint");
     if HALT.load(Ordering::Relaxed) {

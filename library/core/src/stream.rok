@@ -1,11 +1,10 @@
-// rok::core::stream - `Stream` / `IntoStream` / `FromStream` (stdlib
-// spec 2.8).
+// rok::core::stream - `Stream` / `IntoStream` / `FromStream`.
 //
 // `for await x in s` polls `s.poll_next(ref ctx)` (after
 // `s.into_stream()` when `s` has no `poll_next`) like `await`, until it
 // is `Ready(none)`.
 //
-// The adapters (2.8.5) are provided methods of `Stream` returning the
+// The adapters are provided methods of `Stream` returning the
 // structs below (`stream::Map<S, U>` is not `iter::Map`). `throttle` /
 // `buffered` / `buffer_unordered` wrap an `async yield` stream built by
 // a generic helper, the others poll their source directly.
@@ -15,7 +14,7 @@ use rok::core::task;
 use rok::core::task::Task;
 use rok::core::time::Duration;
 
-/// An asynchronous source of items (2.8): `poll_next` gives `Ready(item)`,
+/// An asynchronous source of items: `poll_next` gives `Ready(item)`,
 /// `Ready(none)` at the end, or `Pending`. The adapters are lazy.
 pub trait Stream {
     type Item;
@@ -59,7 +58,7 @@ pub trait Stream {
         BufferUnordered { inner: buffered_of(self, n, false) }
     }
 
-    /// All items gathered into a `FromStream` collection (2.8.6); a
+    /// All items gathered into a `FromStream` collection; a
     /// `List` when the slot does not pick one.
     async fn collect<C: FromStream<Item> = List<Item>>(self) -> C {
         await C::from_stream(self)
@@ -79,14 +78,14 @@ pub trait IntoStream {
     fn into_stream(self) -> IntoStream;
 }
 
-/// Every stream is its own `IntoStream` (as `IntoIterator`, 2.7).
+/// Every stream is its own `IntoStream` (as `IntoIterator`).
 impl<S: Stream> IntoStream for S {
     type Item = S::Item;
     type IntoStream = S;
     fn into_stream(self) -> S { self }
 }
 
-/// `collect`'s target (2.8.6): a collection built from a stream's items.
+/// `collect`'s target: a collection built from a stream's items.
 pub trait FromStream<T> {
     /// Drain `s`, in order, into a new collection.
     async fn from_stream<S: IntoStream<Item = T>>(s: S) -> Self;
@@ -123,7 +122,7 @@ impl<K: Hash, V> FromStream<(K, V)> for Dict<K, V> {
 }
 
 /// The value of an `async yield fn` call / `async yield { .. }` block.
-// One library type per coroutine kind (refs-lang 4.1.11).
+// One library type per coroutine kind.
 #[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
 pub struct AsyncStream<T> {
     resume: fn(Context) -> Poll<T | none>;
@@ -140,7 +139,7 @@ impl<T> Stream for AsyncStream<T> {
     }
 }
 
-// adapters (2.8.5)
+// adapters
 
 /// The stream `map` returns: `f` of each item.
 #[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
@@ -368,7 +367,7 @@ async fn for_each_of<S: Stream>(s: S, f: fn(S::Item)) {
     }
 }
 
-// combinators (2.8.8)
+// combinators
 
 /// Both streams' items as they come; ends when both have.
 pub const fn merge<S1: Stream, S2: Stream>(a: S1, b: S2) -> Merge<S1, S2> {
@@ -505,7 +504,7 @@ impl<T, E> Debug for TryAsyncStream<T, E> {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TryAsyncStream") }
 }
 
-// fallible streams (2.8.11)
+// fallible streams
 
 /// A stream whose `poll_next` can fail: an item, `none` at the end, or a
 /// thrown `Error` (the async `TryIterator`). `try for await x in s { .. }`

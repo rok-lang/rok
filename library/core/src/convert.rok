@@ -1,5 +1,5 @@
-// rok::core::convert: conversion traits (stdlib 2.11) and primitive
-// impls (2.11.8). Four policies, each named at the call: lossless `into`,
+// rok::core::convert: conversion traits and primitive
+// impls. Four policies, each named at the call: lossless `into`,
 // fallible `try_into` (throws `TryFrom::Error`, `OverflowError` for
 // numbers), `saturating_into`, and `wrapping_into` (= `as`).
 //
@@ -8,16 +8,16 @@
 // so each `*Into` trait has one generic method (`T` from the expected
 // type, like `parse`) and one blanket impl; the conversions are the
 // `*From` impls. `SaturatingFrom` / `WrappingFrom` back the last two
-// policies. The lossless impls are also `rok.cast.*` intrinsics
-// (2.11.12); their bodies are the same `as`.
+// policies. The lossless impls are also `rok.cast.*` intrinsics;
+// their bodies are the same `as`.
 
-/// A lossless conversion from `U` (2.11.2).
+/// A lossless conversion from `U`.
 pub trait From<U> {
     /// Converts `value` without loss.
     fn from(value: U) -> Self;
 }
 
-/// `x.into()` = `T::from(x)` (2.11.3); `T` from the expected type.
+/// `x.into()` = `T::from(x)`; `T` from the expected type.
 pub trait Into {
     /// Converts `self` to `T` through `T::from`.
     fn into<T: From<Self>>(self) -> T;
@@ -27,7 +27,7 @@ impl<S> Into for S {
     const fn into<T: From<S>>(self) -> T { T::from(self) }
 }
 
-/// A conversion that can fail (2.11.4). `Error` is what it throws:
+/// A conversion that can fail. `Error` is what it throws:
 /// `ConversionError` unless the impl names another (the numeric impls
 /// say `OverflowError`).
 pub trait TryFrom<U> {
@@ -36,7 +36,7 @@ pub trait TryFrom<U> {
     fn try_from(value: U) throws (Self::Error) -> Self;
 }
 
-/// `x.try_into()` = `T::try_from(x)` (2.11.4); throws `T`'s `Error`.
+/// `x.try_into()` = `T::try_from(x)`; throws `T`'s `Error`.
 pub trait TryInto {
     /// Converts `self` to `T` through `T::try_from`; throws `T::Error` when
     /// the value does not fit.
@@ -47,13 +47,13 @@ impl<S> TryInto for S {
     const fn try_into<T: TryFrom<S>>(self) throws (T::Error) -> T { try T::try_from(self) }
 }
 
-/// Out-of-range values clamp to the nearest end (2.11.5).
+/// Out-of-range values clamp to the nearest end.
 pub trait SaturatingFrom<U> {
     /// Converts `value`, clamping it to the nearest end of `Self`'s range.
     fn saturating_from(value: U) -> Self;
 }
 
-/// `x.saturating_into()` = `T::saturating_from(x)` (2.11.5); `T` from the
+/// `x.saturating_into()` = `T::saturating_from(x)`; `T` from the
 /// expected type.
 pub trait SaturatingInto {
     /// Converts `self` to `T` through `T::saturating_from`.
@@ -64,13 +64,13 @@ impl<S> SaturatingInto for S {
     const fn saturating_into<T: SaturatingFrom<S>>(self) -> T { T::saturating_from(self) }
 }
 
-/// Keep the low bits - `as` spelled as a method (2.11.5).
+/// Keep the low bits - `as` spelled as a method.
 pub trait WrappingFrom<U> {
     /// Converts `value`, keeping the low bits that fit in `Self`.
     fn wrapping_from(value: U) -> Self;
 }
 
-/// `x.wrapping_into()` = `T::wrapping_from(x)` (2.11.5); `T` from the
+/// `x.wrapping_into()` = `T::wrapping_from(x)`; `T` from the
 /// expected type.
 pub trait WrappingInto {
     /// Converts `self` to `T` through `T::wrapping_from`.
@@ -795,7 +795,7 @@ impl TryFrom<usize> for u32 {
     }
 }
 
-// TryFrom (floating-point → integer, 2.11.4): truncates toward zero;
+// TryFrom (floating-point → integer): truncates toward zero;
 // NaN, infinities and values outside the target's range throw.
 
 impl TryFrom<f32> for i8 {
@@ -987,7 +987,7 @@ impl TryFrom<f64> for f32 {
     }
 }
 
-// TryFrom<str> (2.11.9): `FromStr`'s parse; any failure (empty, a bad
+// TryFrom<str>: `FromStr`'s parse; any failure (empty, a bad
 // digit, out of range) throws its `ParseError`.
 
 impl TryFrom<str> for i8 {

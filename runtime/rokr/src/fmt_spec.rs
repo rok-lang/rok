@@ -1,4 +1,4 @@
-//! f-string format spec (refs-lang 1.7.3, stdlib 2.10.7):
+//! f-string format spec:
 //! `[[fill]align][sign]['#']['0'][width]['.' precision][type]`.
 //!
 //! The one spec parser: the runtime parses every spec with it at format

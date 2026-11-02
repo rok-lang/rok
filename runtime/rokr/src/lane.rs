@@ -1,5 +1,4 @@
-//! Executor lanes: blocking calls hand their worker to a new thread
-//! (706 §7.6.7).
+//! Executor lanes: blocking calls hand their worker to a new thread.
 //!
 //! Each pool thread has one malloc'd lane (`rok_tls_task_lane`). While
 //! it is armed ([`rok_lane_arm`], i.e. polling a task), every blocking

@@ -1,5 +1,5 @@
-// rok::std::os::linux::process: Linux-only parts of `process` (stdlib
-// 3.11.5). The trait is in the prelude on Linux targets.
+// rok::std::os::linux::process: Linux-only parts of `process`.
+// The trait is in the prelude on Linux targets.
 
 use rok::core::io::IoError;
 use rok::std::os::unix::io::RawFd;

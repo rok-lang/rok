@@ -1,9 +1,9 @@
-// rok::core::num::floats - `f32` / `f64` inherent methods and constants
-// (stdlib spec 2.1.4). The math functions are libm's (`floor`, `sin`,
+// rok::core::num::floats - `f32` / `f64` inherent methods and constants.
+// The math functions are libm's (`floor`, `sin`,
 // `pow`, ..) behind the runtime's `rok_f64_*` / `rok_f32_*` symbols
 // (`runtime/rokr/src/math.rs`); the LLVM backend compiles the exact
 // ones (rounding, `abs`, `copysign`, `min` / `max`, `mul_add`) to
-// `math` ops instead (spec 8.7.3). `to_bits` / `from_bits` reinterpret
+// `math` ops instead. `to_bits` / `from_bits` reinterpret
 // through a union. `sqrt` is the `Sqrt` trait's (num.rok).
 
 // f64
@@ -179,7 +179,7 @@ impl f64 {
     /// `ln(self) / ln(base)`.
     #[must_use]
     pub fn log(self, base: f64) -> f64 { self.ln() / base.ln() }
-    /// `self^exp` (spec 2.1.4; `powf` in Rust).
+    /// `self^exp` (`powf` in Rust).
     #[must_use]
     pub fn pow(self, exp: f64) -> f64 { unsafe { rok_f64_pow(self, exp) } }
     /// Angle of the point `(other, self)`.
@@ -438,7 +438,7 @@ impl f32 {
     /// `ln(self) / ln(base)`.
     #[must_use]
     pub fn log(self, base: f32) -> f32 { self.ln() / base.ln() }
-    /// `self^exp` (spec 2.1.4; `powf` in Rust).
+    /// `self^exp` (`powf` in Rust).
     #[must_use]
     pub fn pow(self, exp: f32) -> f32 { unsafe { rok_f32_pow(self, exp) } }
     /// Angle of the point `(other, self)`.

@@ -1,7 +1,7 @@
-// rok::core::num::ints: the integer primitives' methods and limits
-// (stdlib 2.1.4): bit operations, byte order, and the `checked_` /
+// rok::core::num::ints: the integer primitives' methods and limits:
+// bit operations, byte order, and the `checked_` /
 // `wrapping_` / `saturating_` / `overflowing_` families that spell out
-// overflow handling explicitly (2.3).
+// overflow handling explicitly.
 //
 // `wrapping_add` / `_sub` / `_mul` and the bit counts are intrinsics;
 // the rest is built on them. One regular block per type.

@@ -1,5 +1,5 @@
-// rok::bare::volatile - accesses the optimizer keeps exactly as written
-// (stdlib spec 1.5): MMIO, signal flags, DMA buffers. Not atomic.
+// rok::bare::volatile - accesses the optimizer keeps exactly as written:
+// MMIO, signal flags, DMA buffers. Not atomic.
 
 use rok::bare::ptr::{ConstPtr, Ptr};
 

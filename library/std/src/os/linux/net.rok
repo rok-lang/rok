@@ -1,4 +1,4 @@
-// rok::std::os::linux::net: Linux-only socket calls (stdlib 3.11.6). The
+// rok::std::os::linux::net: Linux-only socket calls. The
 // trait is in the prelude on Linux targets.
 
 use rok::core::io::IoError;

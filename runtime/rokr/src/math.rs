@@ -1,5 +1,5 @@
-//! libm behind `rok_`-prefixed symbols for core's `f32` / `f64` methods
-//! (stdlib spec 2.1.4). core cannot declare `floor` / `log` itself: an
+//! libm behind `rok_`-prefixed symbols for core's `f32` / `f64` methods.
+//! core cannot declare `floor` / `log` itself: an
 //! extern's name is global in rok, so a user `fn log` would clash. The
 //! driver links `-lm` (the UCRT on Windows). `abs` / `copysign` / `min`
 //! / `max` are Rust's `core` (bit operations; the UCRT does not export

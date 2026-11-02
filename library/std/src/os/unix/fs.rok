@@ -1,5 +1,5 @@
-// rok::std::os::unix::fs: the Unix side of the cross-platform fs types
-// (stdlib 3.1.6): permission bits, the open functions' `os` records, and
+// rok::std::os::unix::fs: the Unix side of the cross-platform fs types:
+// permission bits, the open functions' `os` records, and
 // `openat(2)` itself with its `O_*` flags.
 
 use rok::core::io::{IoError, IoErrorKind};

@@ -1,5 +1,4 @@
-// rok::std::os::windows::process: Windows-only parts of `process`
-// (stdlib 3.11.7).
+// rok::std::os::windows::process: Windows-only parts of `process`.
 
 use rok::core::io::IoError;
 use rok::std::process::install_handler;

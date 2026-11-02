@@ -1,9 +1,9 @@
 // rok::core::future - `Future` / `Poll` / `Context` / `Waker` /
-// `IntoFuture` (stdlib spec 2.20).
+// `IntoFuture`.
 //
 // `await e` (inside an `async` body) polls `e` - or `e.into_future()` when
 // `e` has no `poll` - until `Ready`, suspending the coroutine with
-// `Pending` in between (refs-lang 4.12, `rokc_hir::lower::coro`).
+// `Pending` in between (`rokc_hir::lower::coro`).
 
 use rok::core::collections::raw::{GcBuf, buf_erase, buf_new};
 use rok::core::marker::{HAND_CELL, HAND_FINISHED, HAND_STARTED, Memo, Transfer, transfer};
@@ -31,7 +31,7 @@ impl<T> Poll<T> {
     }
 }
 
-/// Asks the executor to poll a task again (2.20.2): a handle to the task
+/// Asks the executor to poll a task again: a handle to the task
 /// (`rok::core::task`), usable from any thread.
 pub struct Waker {
     pub(pkg) task: rok::core::task::TaskRef;
@@ -53,7 +53,7 @@ impl Clone for Waker {
     const fn clone(self) -> Waker { self }
 }
 
-/// What a `poll` gets from the executor (2.20.2).
+/// What a `poll` gets from the executor.
 pub struct Context {
     pub(pkg) waker: Waker;
     /// A hand-off's poll (`Transfer` of a coroutine future, `pdata`): a
@@ -132,7 +132,7 @@ extern "rok" {
     fn rok_frame_plain(frame: GcBuf<u8>) -> bool;
 }
 
-/// A hand-off of coroutine future `resume` (2.13.9): a frame of its own
+/// A hand-off of coroutine future `resume`: a frame of its own
 /// for the new owner, which takes copies of what it captured. Two owners
 /// never run one frame. Only a frame that has not started can be handed
 /// over: a started one holds what it made and read so far, as it is.
@@ -196,7 +196,7 @@ const fn visit_frame<S>(resume: S, m: Memo) {
     }
 }
 
-/// An asynchronous computation (2.20.1).
+/// An asynchronous computation.
 #[lang("future_trait")]
 pub trait Future {
     type Output;
@@ -205,7 +205,7 @@ pub trait Future {
     fn poll(ref self, ref ctx: Context) -> Poll<Output>;
 }
 
-/// What `await` accepts besides a `Future` (2.20.5).
+/// What `await` accepts besides a `Future`.
 pub trait IntoFuture {
     type Output;
     type IntoFuture: Future<Output = Output>;
@@ -213,7 +213,7 @@ pub trait IntoFuture {
     fn into_future(self) -> IntoFuture;
 }
 
-/// Every future is its own `IntoFuture` (2.20.5).
+/// Every future is its own `IntoFuture`.
 impl<F: Future> IntoFuture for F {
     type Output = F::Output;
     type IntoFuture = F;
@@ -223,7 +223,7 @@ impl<F: Future> IntoFuture for F {
 /// The value of an `async fn` call / `async { .. }` block: `resume` runs
 /// the body to its next pending `await` (its env is the coroutine frame).
 // One library type per coroutine kind, not a fresh anonymous type per
-// coroutine (refs-lang 4.1.11).
+// coroutine.
 #[must_use("future is never awaited, so its body never runs: write `await {}`")]
 pub struct AsyncFuture<T> {
     resume: fn(Context) -> Poll<T>;
@@ -247,7 +247,7 @@ impl<T> Future for AsyncFuture<T> {
 }
 
 // A hand-off (`task::spawn`, a channel send) gives the frame copies of
-// what it captured: the sender keeps the originals (2.13.9).
+// what it captured: the sender keeps the originals.
 impl<T> Transfer for AsyncFuture<T> {
     #[track_caller]
     const fn transfer_copy(self, m: Memo) -> AsyncFuture<T> {
@@ -264,7 +264,7 @@ impl<T> Transfer for AsyncFuture<T> {
 }
 
 /// A throwing `async` body (`async fn f() throws (E) -> T`): the error
-/// comes out of `poll`, so `try await f()` (refs-lang 4.14.10). Not a
+/// comes out of `poll`, so `try await f()`. Not a
 /// `Future` (whose `poll` cannot throw); `await` and `task::try_block_on`
 /// take it.
 #[must_use("future is never awaited, so its body never runs: write `await {}`")]

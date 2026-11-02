@@ -1,4 +1,4 @@
-// rok::core::bench - the engine `rokc bench` drives (spec 9.9.11).
+// rok::core::bench - the engine `rokc bench` drives.
 //
 // A #[bench] fn takes a `Bench` and calls `iter` on the code to measure;
 // work set up outside `iter` is not timed. `iter` calibrates the call

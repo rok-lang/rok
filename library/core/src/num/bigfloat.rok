@@ -1,9 +1,8 @@
-// rok::core::num::bigfloat: `float` (stdlib 2.1.3). `#[keyword("float")]`
+// rok::core::num::bigfloat: `float`. `#[keyword("float")]`
 // routes the type name here; an unsuffixed literal in a `float` slot is
 // `Float::from_f64`, or `Float::from_literal` when `f64` can't hold it.
 //
-// A `float` has `f64`'s 53-bit significand and an `i64` exponent (2.1.3
-// leaves the precision open). In `f64`'s normal range it is an `f64`
+// A `float` has `f64`'s 53-bit significand and an `i64` exponent. In `f64`'s normal range it is an `f64`
 // (`e == 0`) with IEEE 754 operations. A finite result outside that range
 // is promoted to `m * 2^e`, `1 <= |m| < 2`, rounded to nearest-even
 // instead of becoming ±inf / 0 / subnormal, so arithmetic never
@@ -115,8 +114,8 @@ impl Float {
         (self.m * pow2(-1022)) * pow2(self.e + 1022)
     }
 
-    /// `none` when a finite value is past `f32`'s range (spec 2.1.3
-    /// leaves precision loss open: it rounds).
+    /// `none` when a finite value is past `f32`'s range; a
+    /// finite value inside it rounds.
     #[must_use]
     pub const fn to_f32(self) -> f32 | none {
         let v = self.to_f64();
@@ -493,7 +492,7 @@ impl Neg for Float {
     const fn neg(self) -> Float { Float { m: -self.m, e: self.e } }
 }
 
-/// IEEE equality: NaN is unequal to everything (no `Eq`, spec 2.1.3).
+/// IEEE equality: NaN is unequal to everything (no `Eq`).
 impl PartialEq for Float {
     const fn eq(self, rhs: Float) -> bool { self.cmp3(rhs) == 0 }
     const fn ne(self, rhs: Float) -> bool { self.cmp3(rhs) != 0 }
@@ -577,7 +576,7 @@ impl FromStr for Float {
     }
 }
 
-// conversions (stdlib 2.11.8)
+// conversions
 
 impl From<f32> for Float { const fn from(value: f32) -> Float { Float::from_f32(value) } }
 impl From<f64> for Float { const fn from(value: f64) -> Float { Float::from_f64(value) } }
@@ -601,8 +600,7 @@ impl SaturatingFrom<Float> for f64 {
     }
 }
 
-/// Truncated toward zero (spec 2.11.8 `float → i32`: `try_into`
-/// truncates); NaN, ±inf or out of range throw.
+/// Truncated toward zero; NaN, ±inf or out of range throw.
 impl TryFrom<Float> for i32 {
     type Error = OverflowError;
     const fn try_from(value: Float) throws (OverflowError) -> i32 {

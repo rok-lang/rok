@@ -272,7 +272,7 @@ impl Cond {
 }
 
 /// Timed waits run on the system tick (15.6 ms by default); 1 ms
-/// matches the executor's timer tick (707 §7.7.5). Set once, on the
+/// matches the executor's timer tick. Set once, on the
 /// first timed wait.
 fn fine_timers() {
     static SET: AtomicBool = AtomicBool::new(false);
@@ -297,7 +297,7 @@ fn qpc_freq() -> i64 {
     f
 }
 
-/// Monotonic nanoseconds (`QueryPerformanceCounter`, spec 3.3.7).
+/// Monotonic nanoseconds (`QueryPerformanceCounter`).
 pub fn monotonic_ns() -> i64 {
     let mut t = 0;
     // SAFETY: valid out-pointer.
@@ -322,7 +322,7 @@ pub const fn filetime_ticks(ft: win::FILETIME) -> i64 {
     ((ft.hi as i64) << 32) | ft.lo as i64
 }
 
-/// Time since boot: the `Instant` clock (spec 3.3.7).
+/// Time since boot: the `Instant` clock.
 pub fn boot_ns() -> i64 {
     monotonic_ns()
 }

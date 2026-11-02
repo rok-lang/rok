@@ -1,5 +1,5 @@
 // rok::core::fmt - `Formatter`, `Display` / `Debug`, `FormatSpec` and the
-// f-string lowering targets (stdlib 2.10, refs-lang 1.7.3).
+// f-string lowering targets.
 //
 // Every rendering writes into a `Formatter`: the runtime's growing text
 // plus the spec of the value being written. HIR lowers `f"..."` to one
@@ -11,7 +11,7 @@
 
 use rok::core::collections::raw::{GcBuf, buf_new};
 
-/// A failed write (2.10.12). Writing to memory never fails.
+/// A failed write. Writing to memory never fails.
 #[derive(Clone, PartialEq, Eq)]
 pub struct FmtError;
 
@@ -104,8 +104,8 @@ pub trait Debug {
     fn fmt(self, ref f: Formatter) throws (FmtError);
 }
 
-/// An f-string spec, `[[fill]align][sign][#][0][width][.precision][type]`
-/// (refs-lang 1.7.3). An absent `ty` is `'\0'`; the Display letters
+/// An f-string spec, `[[fill]align][sign][#][0][width][.precision][type]`.
+/// An absent `ty` is `'\0'`; the Display letters
 /// `s d` read as absent. Build one with `parse`, read it with the
 /// getters.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -171,7 +171,7 @@ impl FormatSpec {
     }
 }
 
-/// Where a value's text goes, with the spec it is written by (2.10.2):
+/// Where a value's text goes, with the spec it is written by:
 /// the runtime's growing text (`rok_fmt_*`) and the spec packed in two
 /// words - `flags`: fill (bits 0..32), align, sign, type (a byte each
 /// from bit 32), `#` (bit 56), `0` (bit 57); `counts`: width, precision
@@ -399,7 +399,7 @@ pub(pkg) const fn fstr_text_any<T: Display + Debug>(t: str, v: T, spec: str) -> 
 }
 
 // Integers: `b o x X` show a fixed-width integer's two's complement at
-// its width (2.10.5).
+// its width.
 impl Display for i8 { const fn fmt(self, ref f: Formatter) throws (FmtError) { f.t = unsafe { rok_fmt_int(f.t, f.flags, f.counts, self as i64, 1u32, 8u32) }; } }
 impl Display for i16 { const fn fmt(self, ref f: Formatter) throws (FmtError) { f.t = unsafe { rok_fmt_int(f.t, f.flags, f.counts, self as i64, 1u32, 16u32) }; } }
 impl Display for i32 { const fn fmt(self, ref f: Formatter) throws (FmtError) { f.t = unsafe { rok_fmt_int(f.t, f.flags, f.counts, self as i64, 1u32, 32u32) }; } }
@@ -437,7 +437,7 @@ impl Debug for f32 { const fn fmt(self, ref f: Formatter) throws (FmtError) { f.
 impl Debug for f64 { const fn fmt(self, ref f: Formatter) throws (FmtError) { f.t = unsafe { rok_fmt_f64(f.t, f.flags, f.counts, self, 2u32) }; } }
 
 /// A rok literal: quotes, `\\`, `\n` `\r` `\t` `\0` escaped, other
-/// control and bidi chars as `\u{..}` (2.10.4).
+/// control and bidi chars as `\u{..}`.
 impl Debug for char {
     const fn fmt(self, ref f: Formatter) throws (FmtError) {
         f.t = unsafe { rok_fmt_escaped(f.t, rok_str_from_char(self as u32), 39u32) };

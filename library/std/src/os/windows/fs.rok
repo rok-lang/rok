@@ -1,5 +1,5 @@
 // rok::std::os::windows::fs: the Windows side of the cross-platform fs
-// types (stdlib 3.1.6): the open functions' `os` records and
+// types: the open functions' `os` records and
 // `CreateFile2` itself with its constants.
 
 use rok::core::io::IoError;

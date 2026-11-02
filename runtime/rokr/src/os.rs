@@ -1,6 +1,6 @@
-//! POSIX helpers behind `rok::std` (stdlib 3: fs, env, process)
-//! and `rok::core::io` (stdlib 2.23).
-//! No ABI stability (805 §8.5.12 appendix). WASI through wasi-libc:
+//! POSIX helpers behind `rok::std` (fs, env, process)
+//! and `rok::core::io`.
+//! No ABI stability. WASI through wasi-libc:
 //! what preview 1 lacks (processes, signals, `mmap`, locks, `dup`)
 //! fails with `-ENOSYS`.
 //!
@@ -12,7 +12,7 @@
 //!   `GcBuf<u8>`. Variable-length results are copied in up to `len`
 //!   bytes and return their full length, so the caller can retry.
 //! - Blocking calls are bracketed by `lane::block_begin` / `block_end`
-//!   (804 §8.4.10, 706 §7.6.7) and allocate no GC memory meanwhile; the
+//!   and allocate no GC memory meanwhile; the
 //!   caller roots every GC argument.
 
 use core::mem::size_of;
@@ -1333,8 +1333,7 @@ pub extern "C" fn rok_os_getenv(name: RokStr, buf: *mut u8, off: usize, len: usi
 /// `unset == 0`: `setenv`, else `unsetenv`. 0 or `-errno`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_os_setenv(name: RokStr, value: RokStr, unset: i32) -> i32 {
-    // SAFETY: C strings. std's env lock serializes Rok's own callers
-    // (stdlib 3.6.3).
+    // SAFETY: C strings. std's env lock serializes Rok's own callers.
     let r = unsafe {
         if unset != 0 {
             libc::unsetenv(cs(name).p())
@@ -1380,7 +1379,7 @@ unsafe extern "C" {
 #[cfg(all(unix, not(target_vendor = "apple")))]
 use libc::posix_spawn_file_actions_addchdir_np;
 
-/// `posix_spawnp` (307 §3.7.4). `argv` / `envs` hold `argc` / `envc`
+/// `posix_spawnp`. `argv` / `envs` hold `argc` / `envc`
 /// NUL-terminated pieces (`envc < 0`: inherit the environment; the
 /// program is looked up on this process's `PATH` either way); `cwd`
 /// empty = inherit; `pgid >= 0` joins that process group (0: a new one

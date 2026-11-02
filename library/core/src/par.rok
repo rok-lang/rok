@@ -1,4 +1,4 @@
-// rok::core::par - data-parallel helpers (stdlib spec 2.19), on the
+// rok::core::par - data-parallel helpers, on the
 // process's task executor (`rok::core::task`): from async code on the
 // worker it runs on, from sync code with the caller as a guest worker.
 // Chunks are claimed from a shared counter by one job per worker.
@@ -114,7 +114,7 @@ pub fn map<I: IntoIterator<Item = T>, T: Send, U: Send>(iter: I, f: fn(T) -> U +
     }
 }
 
-/// Fold with an associative `f` (2.19.4): chunks fold in parallel, then
+/// Fold with an associative `f`: chunks fold in parallel, then
 /// `init` and the chunk results fold in order.
 #[track_caller]
 pub fn fold<I: IntoIterator<Item = T>, T: Send>(iter: I, init: T, f: fn(T, T) -> T + Send + Sync) -> T {
@@ -125,7 +125,7 @@ pub fn fold<I: IntoIterator<Item = T>, T: Send>(iter: I, init: T, f: fn(T, T) ->
     acc
 }
 
-/// Combine the items with an associative `f` (2.19.4), as
+/// Combine the items with an associative `f`, as
 /// `Iterator::reduce`: chunks reduce in parallel, then the chunk
 /// results in order; `none` for no items.
 #[track_caller]
@@ -239,7 +239,7 @@ pub fn join<T1: Send, T2: Send>(f1: fn() -> T1 + Send, f2: fn() -> T2 + Send) ->
     }
 }
 
-/// Structured spawning (2.19.3): every task `s.spawn`s has finished
+/// Structured spawning: every task `s.spawn`s has finished
 /// when `scope` returns.
 pub fn scope(f: fn(Scope)) {
     _ = task::in_pool(|| {
@@ -349,9 +349,8 @@ impl<T> ScopeHandle<T> {
     }
 }
 
-/// `scope` whose body and tasks may throw (2.19.3: "an exception cancels
-/// the children"). The first error cancels the scope: tasks that have
-/// not started never run (a running one finishes: a sync closure has no
+/// `scope` whose body and tasks may throw. The first error cancels the scope: tasks that
+/// have not started never run (a running one finishes: a sync closure has no
 /// cancellation point), `try_scope` waits for the rest and throws that
 /// error.
 pub fn try_scope<E: Send>(f: fn(TryScope<E>) throws (E)) throws (E) {

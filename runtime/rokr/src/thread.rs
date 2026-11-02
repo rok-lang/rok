@@ -1,6 +1,6 @@
-//! OS threads (706 §7.6.6, 805 §8.5.4) and the one address-keyed wait
+//! OS threads and the one address-keyed wait
 //! queue every blocking wait in the runtime and in `rok::core::sync`
-//! goes through. wasm32 has one thread (stdlib 0.1.4): no spawn, and a
+//! goes through. wasm32 has one thread: no spawn, and a
 //! wait that only another thread could end is a deadlock.
 
 use core::mem::size_of;
@@ -11,7 +11,7 @@ use rokr_common::object_header::HEADER_SIZE;
 use rokr_common::{sys, tls};
 use rokr_gc::world;
 
-/// A rok `fn()` value: `{code, env}`; `code` takes the env first (808).
+/// A rok `fn()` value: `{code, env}`; `code` takes the env first.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct RokFn {
@@ -299,7 +299,7 @@ pub extern "C" fn rok_thread_new_id() -> u64 {
 /// stack, 0 = default) whose `rok_tls_worker_id` is `id` (from
 /// [`rok_thread_new_id`]). Returns an opaque join handle, or 0 if the
 /// thread could not be created. `f`'s environment stays a GC root until
-/// the thread ends. 805 has `rok_thread_spawn(closure: Ptr<u8>)`; a rok
+/// the thread ends. The ABI has `rok_thread_spawn(closure: Ptr<u8>)`; a rok
 /// closure crosses as its `{code, env}` pair.
 #[cfg(not(rok_solo))]
 #[unsafe(no_mangle)]
@@ -445,7 +445,7 @@ pub extern "C" fn rok_cpu_count() -> usize {
     0
 }
 
-/// The executor's pool size (706 §7.6.1): `ROKR_WORKERS` when set to a
+/// The executor's pool size: `ROKR_WORKERS` when set to a
 /// positive number, else the online CPUs; 0 without threads.
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_sched_workers() -> usize {
@@ -456,9 +456,9 @@ pub extern "C" fn rok_sched_workers() -> usize {
     }
 }
 
-/// The executor's options: bit 0 thread-per-core (706 §7.6.8,
-/// `ROKR_THREAD_PER_CORE=1`), bit 1 dynamic worker count (707 §7.7.8,
-/// `ROKR_DYNAMIC_WORKERS=1`).
+/// The executor's options: bit 0 thread-per-core
+/// (`ROKR_THREAD_PER_CORE=1`), bit 1 dynamic worker count
+/// (`ROKR_DYNAMIC_WORKERS=1`).
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_sched_mode() -> u32 {
     let on = rokr_common::env_flag;
@@ -845,7 +845,7 @@ fn set_initializing_head(head: *mut Initializing) {
 /// 1: the caller runs the initializer, then calls
 /// [`rok_static_init_end`]. 0: it is ready (another thread may have
 /// just finished it while this one waited). An initializer that reads
-/// its own static panics (refs-lang 5.3) at `at` (`at_len` bytes), the
+/// its own static panics at `at` (`at_len` bytes), the
 /// location of the read.
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_static_init_begin(
@@ -928,7 +928,7 @@ pub extern "C" fn rok_static_init_end(state: *const AtomicU8) {
 mod tests {
     use super::*;
 
-    // 0 = uninitialized, 1 = running, 2 = ready (refs-lang 5.3).
+    // 0 = uninitialized, 1 = running, 2 = ready.
     #[test]
     fn static_init_states_nest() {
         let outer = AtomicU8::new(0);

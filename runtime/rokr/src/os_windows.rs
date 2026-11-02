@@ -1,6 +1,6 @@
-//! Win32 helpers behind `rok::std` (stdlib 3: fs, env, process)
-//! and `rok::core::io` (stdlib 2.23).
-//! No ABI stability (805 §8.5.12 appendix). The same `rok_os_*` symbols
+//! Win32 helpers behind `rok::std` (fs, env, process)
+//! and `rok::core::io`.
+//! No ABI stability. The same `rok_os_*` symbols
 //! and conventions as the POSIX `os`, with these differences:
 //!
 //! - An "fd" is a handle value (0 / 1 / 2: the standard handles). A

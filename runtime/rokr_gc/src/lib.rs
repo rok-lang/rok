@@ -1,22 +1,22 @@
-//! Garbage collector: mark-region (Immix-style blocks and lines, 703
-//! §7.3.1), generational, with opportunistic evacuation and concurrent
+//! Garbage collector: mark-region (Immix-style blocks and
+//! lines), generational, with opportunistic evacuation and concurrent
 //! marking ([`concurrent`]). Precise in the heap and roots; ambiguous
 //! words pin what they reach.
 //!
 //! Objects below [`LOS_THRESHOLD`] live in 32 KiB blocks of 128-byte
-//! lines. Each thread bump-allocates from its TLAB (702 §7.2.1); compiled
-//! code inlines the bump (809 §8.9.9) and calls [`alloc`] only on refill,
+//! lines. Each thread bump-allocates from its TLAB; compiled
+//! code inlines the bump and calls [`alloc`] only on refill,
 //! which takes the world lock and zeroes the lines it hands out. Large
-//! objects (702 §7.2.9) are one allocation each, linked through a hidden
+//! objects are one allocation each, linked through a hidden
 //! [`Prefix`].
 //!
-//! Every `gc_word` (801 §8.1.4) holds the object's size (its new address
+//! Every `gc_word` holds the object's size (its new address
 //! while evacuating) and block objects have a nonzero `type_id`, so a
 //! block is parsable: non-object memory is zero. Per-block object-start
 //! bitmaps are filled lazily, so an unreachable young block is freed
 //! without being read.
 //!
-//! Generations use sticky mark bits (703 §7.3.2). A minor collection
+//! Generations use sticky mark bits. A minor collection
 //! marks from the roots and the remembered set and sweeps only lines
 //! handed out since the last collection. The write barrier tests
 //! `UNLOGGED` on an old object; the slow path ([`write_barrier_slow`])
@@ -34,13 +34,13 @@
 //! Free pages beyond the next cycle's budget go back to the OS. Block
 //! objects are remembered whole; sweep and evacuation run in pauses.
 //!
-//! Roots (704 §7.4.1): compiled code links a frame
+//! Roots: compiled code links a frame
 //! `{ prev, count, slots[count] }` into `rok_tls_shadow_stack_top` before
 //! the first safepoint of each path and unlinks it on every return of a
 //! path that linked it; each slot is the address of a word holding a GC
 //! reference (0 = none).
 //!
-//! Children (802): [`register_type`] maps `type_id` to a `ScanTable`
+//! Children: [`register_type`] maps `type_id` to a `ScanTable`
 //! ([`for_each_ref`]): `STRONG_REF` / `INTERIOR_REF` words, `ANY_SLOT`
 //! (a reference iff the tag has [`ANY_BOXED`]), `SUM_PAYLOAD` (the tag
 //! selects the variant, [`visit_sum`]), `AMBIGUOUS` and `WEAK_REF`
@@ -87,12 +87,12 @@ static WEAK_TABLE: [u32; 4] = [24, 1 | (1 << 16), 16, WEAK_REF];
 const MIN_HEAP: usize = 4 << 20;
 const TABLE_ARRAY: u16 = rokr_common::gc_abi::TABLE_ARRAY as u16;
 
-/// Immix block / line geometry (703 §7.3.1).
+/// Immix block / line geometry.
 pub const BLOCK_SIZE: usize = 32 << 10;
 pub const LINE_SIZE: usize = 128;
 const LINES: usize = BLOCK_SIZE / LINE_SIZE;
 const GRANULES: usize = BLOCK_SIZE / 8;
-/// Objects this large (header included) go to the LOS (702 §7.2.3).
+/// Objects this large (header included) go to the LOS.
 pub const LOS_THRESHOLD: usize = rokr_common::gc_abi::LOS_THRESHOLD as usize;
 /// Card size of an old LOS object (`FLAG_CARDED`): a reference store
 /// dirties the card(s) of its slot and a minor collection scans only
@@ -100,7 +100,7 @@ pub const LOS_THRESHOLD: usize = rokr_common::gc_abi::LOS_THRESHOLD as usize;
 pub const CARD_SIZE: usize = 1 << rokr_common::gc_abi::CARD_SHIFT;
 /// Address space reserved for blocks (committed one block at a time):
 /// one reservation, the first of these sizes the OS grants. 64-bit: the
-/// block heap is capped at 64 GiB. 32-bit (spec 0.6.3, a heap of about
+/// block heap is capped at 64 GiB. 32-bit (a heap of about
 /// 3.5 GB): at most 2 GiB, the rest of the address space left to LOS
 /// objects, `malloc` and the program. wasm32 reserves nothing: see
 /// [`grow_blocks`].
@@ -469,7 +469,7 @@ pub fn alloc(size: usize, align: usize, type_id: u32) -> *mut u8 {
     }
     let size = size.max(rokr_common::gc_abi::MIN_OBJECT_SIZE as usize);
     let size8 = size.next_multiple_of(8);
-    // Type id 0 (invalid, 801 §8.1.2) would read as free memory in a
+    // Type id 0 (invalid) would read as free memory in a
     // block.
     if size8 >= LOS_THRESHOLD || align > HEADER_ALIGN || type_id == 0 {
         return alloc_large(size, align, type_id, 0);
@@ -641,7 +641,7 @@ static DUMP: Global<Dump> = Global(UnsafeCell::new(Dump {
 }));
 
 /// `ROKR_HEAP_DUMP=on_oom`: the object count and bytes of each type (most
-/// bytes first; type ids, 801 §8.1.2) and the largest LOS objects, to
+/// bytes first) and the largest LOS objects, to
 /// stderr. Runs on the failing thread without taking the world lock (it
 /// may hold it): other threads' newest objects may be missed.
 fn heap_dump() {
@@ -1056,7 +1056,7 @@ pub unsafe fn wipe(obj: *mut u8) {
     core::sync::atomic::compiler_fence(Ordering::SeqCst);
 }
 
-/// Register the 802 `ScanTable` for `type_id`. Ids below the user range
+/// Register the `ScanTable` for `type_id`. Ids below the user range
 /// are not used by the compiler yet and are ignored.
 pub fn register_type(type_id: u32, table: *const u8) {
     let Some(i) = type_id.checked_sub(USER_TYPE_BASE) else {
@@ -1108,7 +1108,7 @@ fn scan_table(type_id: u32) -> *const u8 {
 
 /// Set the start bits of every object in the `TAKEN` lines of the block
 /// at `block` by parsing them: an object has a nonzero `type_id` (0 is
-/// reserved, 801 §8.1.2) and its size in `gc_word`; everything else is
+/// reserved) and its size in `gc_word`; everything else is
 /// zero. A run of `TAKEN` lines was all free when handed out, so no
 /// object crosses its ends.
 fn parse_taken(block: usize, m: &mut BlockMeta) {
@@ -1278,7 +1278,7 @@ pub unsafe fn unpin(obj: *mut u8) {
     });
 }
 
-/// A new weak cell referring to `obj` (802 §8.2.8).
+/// A new weak cell referring to `obj`.
 ///
 /// The collection that frees `obj` sets the cell's word to 0, one that
 /// moves it updates it. The cell is never written again, so (young when
@@ -1604,7 +1604,7 @@ fn drain(mut batch: usize) {
 // general `for_each_ref` otherwise.
 #[allow(clippy::cast_ptr_alignment)] // tables are 4-aligned, payloads 8
 fn scan_children(o: *mut u8) {
-    // SAFETY: `o` is a live GC object; its ScanTable (802) describes it.
+    // SAFETY: `o` is a live GC object; its ScanTable describes it.
     unsafe {
         let type_id = (*header(o)).type_id;
         if type_id == SCAN_WORDS_TYPE_ID {
@@ -1678,14 +1678,14 @@ fn scan_range(o: *mut u8, lo: usize, hi: usize) {
 
 /// `f(offset, kind)` for every word of the live object `o` at byte
 /// offsets `lo..hi` (from the header) that may hold a reference, per
-/// its `ScanTable` (802). `kind`: `STRONG_REF` (a reference or an
+/// its `ScanTable`. `kind`: `STRONG_REF` (a reference or an
 /// address outside the heap), `AMBIGUOUS` (anything) or `WEAK_REF` (a
 /// reference or 0, not to be followed). An `ANY_SLOT` yields its payload
 /// word only when the tag says it is a box. An object whose type was
 /// never registered has none.
 #[allow(clippy::cast_ptr_alignment)] // tables are 4-aligned, payloads 8
 fn for_each_ref(o: *mut u8, lo: usize, hi: usize, mut f: impl FnMut(usize, u32)) {
-    // SAFETY: `o` is a live GC object; its ScanTable (802) describes it.
+    // SAFETY: `o` is a live GC object; its ScanTable describes it.
     unsafe {
         let hd = &*header(o);
         if hd.type_id == SCAN_WORDS_TYPE_ID {
@@ -1790,7 +1790,7 @@ fn visit_entries(
 #[allow(clippy::cast_ptr_alignment)] // tables and tags are 4-aligned
 fn visit_sum(o: *mut u8, t: *const u8, kind: u32, at: usize, f: &mut impl FnMut(usize, u32)) {
     // SAFETY: the tag of a sum inside the live `o`; the descriptor and
-    // its variants' entries lie inside the table (802, `gc_abi`).
+    // its variants' entries lie inside the table (`gc_abi`).
     unsafe {
         let tag = load_u32(o.add(at));
         let t32 = t.cast::<u32>();
@@ -2146,7 +2146,7 @@ fn sweep_los(full: bool, concurrent: bool) -> usize {
 }
 
 /// After a full collection's sweep: choose the evacuation candidates
-/// (703 §7.3.1 opportunistic defragmentation) from the exact line
+/// (opportunistic defragmentation) from the exact line
 /// states the sweep left: when free lines are at least a quarter of the
 /// used blocks' lines, every block at most half occupied - if together
 /// they hold an eighth of the used lines free. `ROKR_GC_EVAC=always`:
@@ -2451,7 +2451,7 @@ fn release_free_blocks() {
 /// The remembered set: old objects that had a reference
 /// stored into them since the last collection, each logged once (its
 /// `UNLOGGED` bit cleared by the barrier). Each thread appends to its
-/// own chunk through `rok_tls_wb_log_cursor` / `_limit` (803) without
+/// own chunk through `rok_tls_wb_log_cursor` / `_limit` without
 /// a lock; a full chunk (and every thread's chunk at a collection or
 /// thread exit) is retired onto the lock-free [`LOG_FULL`] stack.
 #[repr(C)]
@@ -2647,7 +2647,7 @@ mod tests {
     #[test]
     #[allow(clippy::cast_ptr_alignment)] // GC objects are 8-aligned
     fn collect_frees_unreachable_and_keeps_traced_children() {
-        // 802 table: total 32, version 1, one STRONG_REF at offset 16.
+        // ScanTable: total 32, version 1, one STRONG_REF at offset 16.
         static TABLE: [u32; 4] = [32, 1 | (1 << 16), 16, STRONG_REF];
         rokr_common::tls::thread_init();
         world::attach_current();

@@ -1,12 +1,12 @@
-// rok::core::collections::list - `List<T>`, a growable array (stdlib
-// spec 2.9.2): one object holding the length, the capacity and the
+// rok::core::collections::list - `List<T>`, a growable array:
+// one object holding the length, the capacity and the
 // current element buffer, swapped for a bigger one on growth. The buffer has one
 // slot past the capacity that is never written: a zero `T` that vacated
 // slots are overwritten with, so the list keeps no removed value alive.
 
 use rok::core::marker::{Memo, Transfer, buf_is_null, copy_shared};
 
-/// A growable array (2.9.2); copies share one buffer.
+/// A growable array; copies share one buffer.
 pub struct List<T> {
     h: GcBuf<ListHead<T>>;
 }
@@ -34,7 +34,7 @@ impl List<str> {
 }
 
 // Copies of a collection handle share one mutable buffer with no lock,
-// so a collection cannot be shared between threads (stdlib 2.13.9):
+// so a collection cannot be shared between threads:
 // share it through `Mutex` / `RwLock` / a channel.
 impl<T> !Sync for List<T> {}
 
@@ -573,7 +573,7 @@ pub(pkg) const unsafe fn sort_region<T>(
 }
 
 /// `xs.iter()` / `for x in xs`: walks a list front to back. Its state
-/// is its own (`next(ref self)`, 2.7.1): a copy walks on its own.
+/// is its own (`next(ref self)`): a copy walks on its own.
 #[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct ListIter<T> {
     list: List<T>;
@@ -600,7 +600,7 @@ impl<T> Iterator for ListIter<T> {
 
     const fn exact_len(self) -> usize | none { self.len() }
 
-    /// `ExactSizeIterator`: O(1) (2.7.10).
+    /// `ExactSizeIterator`: O(1).
     const fn count(self) -> usize { self.len() }
 }
 
@@ -621,7 +621,7 @@ impl<T> ExactSizeIterator for ListIter<T> {
     }
 }
 
-/// What `xs.into_iter()` returns (2.9.2): the same walk as `iter`.
+/// What `xs.into_iter()` returns: the same walk as `iter`.
 pub type ListIntoIter<T> = ListIter<T>;
 
 impl<T> IntoIterator for List<T> {
@@ -636,7 +636,7 @@ impl<T> Default for List<T> {
     const fn default() -> List<T> { List::new() }
 }
 
-/// A new list with every element cloned (stdlib 2.13.2).
+/// A new list with every element cloned.
 impl<T: Clone> Clone for List<T> {
     const fn clone(self) -> List<T> {
         let r: List<T> = List::new();
@@ -675,7 +675,7 @@ impl<T> IndexSet<usize> for List<T> {
     }
 }
 
-/// `it.collect()` into a list (2.9.9).
+/// `it.collect()` into a list.
 impl<T> FromIterator<T> for List<T> {
     const fn from_iter<I: IntoIterator<Item = T>>(it: I) -> List<T> {
         let out: List<T> = List::new();
@@ -701,7 +701,7 @@ impl<T: PartialEq> PartialEq for List<T> {
 
 impl<T: Eq> Eq for List<T> {}
 
-/// Lexicographic (stdlib 2.5.7): the first differing element decides,
+/// Lexicographic: the first differing element decides,
 /// else the shorter list comes first.
 impl<T: PartialEq + PartialOrd> PartialOrd for List<T> {
     const fn lt(self, rhs: List<T>) -> bool {
@@ -756,7 +756,7 @@ impl<T: Debug> Debug for List<T> {
     }
 }
 
-/// `[a, b, c]` (refs-lang 6.5.1): a `List` - a fixed array only in a
+/// `[a, b, c]`: a `List` - a fixed array only in a
 /// `[T; N]` slot, which the compiler builds itself.
 #[literal("[" {expr} % "," * "]")]
 pub(pkg) const fn list_literal<T>(items: ...T) -> List<T> {
@@ -767,7 +767,7 @@ pub(pkg) const fn list_literal<T>(items: ...T) -> List<T> {
     return l;
 }
 
-/// `xs += x`: push (stdlib 2.4.6).
+/// `xs += x`: push.
 impl<T> AddAssign<T> for List<T> {
     const fn add_assign(ref self, rhs: T) {
         self.push(rhs);
@@ -783,7 +783,7 @@ impl<T> AddAssign<List<T>> for List<T> {
     }
 }
 
-/// A hand-off's copy (stdlib 2.13.9): a new head and buffer; the
+/// A hand-off's copy: a new head and buffer; the
 /// elements go through `transfer` from the memo's queue.
 impl<T> Transfer for List<T> {
     const fn transfer_copy(self, m: Memo) -> List<T> {

@@ -1,5 +1,5 @@
 // rok::std::rokon - ROKON (Rok Object Notation, `.rokon`): one value
-// written in rok literal syntax (stdlib spec 3.9).
+// written in rok literal syntax.
 //
 // `parse` reads a document into a `Value`, `to_str` writes the
 // canonical form, and `ToRokon` / `FromRokon` (with `#[derive(Rokon)]`)
@@ -35,7 +35,7 @@ pub enum Value {
 }
 
 impl Value {
-    /// The canonical text (spec 3.9.4): 4-space indent, one line when it
+    /// The canonical text: 4-space indent, one line when it
     /// fits in 100 columns, otherwise one element per line with a
     /// trailing comma. A float with no ROKON form (NaN, infinity, past
     /// the `f64` range) is thrown, with its path.
@@ -232,7 +232,7 @@ pub fn parse(s: str) throws (RokonError) -> Value {
     try read::parse(s)
 }
 
-/// `v` in canonical ROKON (spec 3.9.4). A float with no ROKON form (NaN,
+/// `v` in canonical ROKON. A float with no ROKON form (NaN,
 /// infinity, past the `f64` range) is thrown, with its path.
 pub fn to_str<T: ToRokon>(v: T) throws (RokonError) -> str {
     try v.to_rokon().to_str()
@@ -640,7 +640,7 @@ fn out_of_range<T>(n: int) -> RokonError {
     RokonError::new(f"integer {n} is out of range for {T::type_name()}")
 }
 
-// ToRokon / FromRokon for every integer type (spec 6.8.12).
+// ToRokon / FromRokon for every integer type.
 #[impl_macro(rokon_int)] @macro {
     (@rep[sep = ","] { @t: ty }) => {
         @for @t {
@@ -664,7 +664,7 @@ impl FromRokon for Float {
     fn from_rokon(v: Value) throws (RokonError) -> float { try float_of::<float>(v) }
 }
 
-/// A float target takes an integer too (spec 3.9.2).
+/// A float target takes an integer too.
 fn float_of<T>(v: Value) throws (RokonError) -> float {
     match v {
         Value::Float(x) => x,
@@ -826,7 +826,7 @@ const fn tuple_of<T>(v: Value, n: usize) throws (RokonError) -> List<Value> {
     xs
 }
 
-// Tuples up to 6 elements (spec 3.9.5).
+// Tuples up to 6 elements.
 impl<A: ToRokon> ToRokon for (A,) {
     fn to_rokon(self) -> Value { Value::Tuple([self.0.to_rokon()]) }
 }

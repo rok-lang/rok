@@ -28,7 +28,7 @@ pub unsafe fn write_stderr(msg: *const u8, len: usize) {
     }
 }
 
-/// Out of memory (stdlib 2.14.5 `oom_fn`; Fatal, exit 101): the one
+/// Out of memory (fatal, exit 101): the one
 /// path every allocation failure and `rok::core::panic::oom()` take.
 pub fn oom() -> ! {
     let hook = OOM_HOOK.swap(core::ptr::null_mut(), core::sync::atomic::Ordering::Relaxed);

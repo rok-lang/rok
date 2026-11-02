@@ -4,8 +4,8 @@
 //       crypto (algorithms), encoding, io (byte streams, stdio).
 // Bootstraps operator dispatch (`#[infix]`, `#[prefix]`, `#[postfix]`) and
 // literal handlers (`#[literal]`).
-// User code gets an implicit `use rok::core::prelude::*;` (stdlib spec
-// 0.2); the library's own modules see all of `rok::core::**`.
+// User code gets an implicit `use rok::core::prelude::*;`,
+// the library's own modules see all of `rok::core::**`.
 
 pub mod array;
 pub mod bench;

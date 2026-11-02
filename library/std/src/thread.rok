@@ -1,4 +1,4 @@
-// rok::std::thread: OS threads, 1:1 (stdlib 3.4, refs-lang 7.6.6). Each
+// rok::std::thread: OS threads, 1:1. Each
 // thread is a GC mutator; blocking calls let a collection run without it.
 //
 // A panic in any thread ends the process (exit 101), so `join` never
@@ -70,7 +70,7 @@ fn this_rec() -> Rec {
     fresh
 }
 
-/// A thread's identity (non-generic, 3.4.2).
+/// A thread's identity (non-generic).
 pub struct Thread {
     rec: Rec;
 }
@@ -213,7 +213,7 @@ impl<T> JoinHandle<T> {
     }
 }
 
-/// `await handle` (2.20.5): the join runs on the executor's blocking
+/// `await handle`: the join runs on the executor's blocking
 /// lane, so only the task waits; a failed OS join panics.
 impl<T: Send> IntoFuture for JoinHandle<T> {
     type Output = T;
@@ -332,7 +332,7 @@ pub fn park_timeout(dur: Duration) {
     token.store(0);
 }
 
-/// A value per thread, made by `init` on each thread's first use (3.4.4).
+/// A value per thread, made by `init` on each thread's first use.
 /// It lives in the thread's record and goes with it.
 pub struct ThreadLocal<T> {
     init: fn() -> T + Sync;
@@ -397,7 +397,7 @@ impl<T> ThreadLocal<T> {
             rec.pins.push(b);
         }
         let at: usize = unsafe { transmute_unchecked::<GcBuf<u8>, usize>(b) };
-        // The payload follows the 16-byte object header (8.1).
+        // The payload follows the 16-byte object header.
         Ptr::<T>::dangling().with_addr(at + 16 + start * size_of::<T>())
     }
 }
