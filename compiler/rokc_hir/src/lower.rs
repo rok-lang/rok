@@ -4899,13 +4899,18 @@ impl<'a> LowerCtx<'a> {
             }
         }
         if let Some(def_module) = self.field_hidden(sid, field) {
-            // A getter of the same name is what to write instead.
-            let getter = self
-                .env
-                .methods_on(&HirTy::Struct(sid), field)
-                .is_some_and(|m| !m.is_empty());
-            let fix = if getter {
+            // A getter of the same name, or a `take_` one for an owned
+            // part, is what to write instead.
+            let has = |m: &str| {
+                self.env
+                    .methods_on(&HirTy::Struct(sid), m)
+                    .is_some_and(|m| !m.is_empty())
+            };
+            let take = format!("take_{field}");
+            let fix = if has(field) {
                 format!("read it with `.{field}()`")
+            } else if has(&take) {
+                format!("take it with `.{take}()`")
             } else {
                 "spec 5.6 - add `pub` to the field to expose it".to_owned()
             };
