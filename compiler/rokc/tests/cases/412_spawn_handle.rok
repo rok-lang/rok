@@ -1,11 +1,10 @@
-// spec: 004.12-async §4.12.9 / §4.12.12
 // expect-exit: 0
 // expect-stdout:
 // spawned 21
 // join 1 4 9
 
-// 4.12.12: `task::spawn` runs a future as its own task and returns an
-// awaitable `Task<T>`; 4.12.9: `task::join` awaits all, in input order.
+// `task::spawn` runs a future as its own task and returns an
+// awaitable `Task<T>`; `task::join` awaits all, in input order.
 fn compute() -> i32 { 3 * 7 }
 
 async fn sq(x: i32) -> i32 {

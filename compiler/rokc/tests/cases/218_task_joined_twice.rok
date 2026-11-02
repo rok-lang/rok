@@ -1,6 +1,5 @@
 // needs: threads
 // gc-stress: 5
-// spec: std 218-task §2.18.2
 // Copies of one `Task` may each await it: every joiner gets its own copy
 // of the result, so their writes never meet.
 // expect-exit: 0

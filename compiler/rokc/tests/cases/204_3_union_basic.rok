@@ -1,9 +1,8 @@
-// spec: refs-lang §2.5.1 §2.5.2
 // expect-exit: 0
 // expect-stdout:
 // 5
 
-// spec 2.x: `union { ... }` single-storage initializer + field read.
+// `union { ... }` single-storage initializer + field read.
 union ED { ptr: usize; fd: i32; val: u64; }
 
 fn main() -> i32 {

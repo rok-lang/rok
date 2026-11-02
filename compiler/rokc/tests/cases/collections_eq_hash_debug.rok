@@ -54,4 +54,3 @@ fn main() {
     let shown: List<List<i32>> = [[1], [2, 3]];
     println(f"nested: {seen.len()} {shown:?}");
 }
-// spec: std §2.5.6

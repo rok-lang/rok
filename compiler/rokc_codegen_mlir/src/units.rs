@@ -1,4 +1,4 @@
-//! Codegen units (spec 9.2.16): a package cut into parts compiled to
+//! Codegen units: a package cut into parts compiled to
 //! separate objects; an incremental build recompiles only units whose key
 //! changed.
 //!

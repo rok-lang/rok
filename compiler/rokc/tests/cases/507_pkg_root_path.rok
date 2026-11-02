@@ -1,9 +1,8 @@
-// spec: 005.07.2-pkg-path
 // expect-exit: 7
 // expect-stdout:
 // 7 7
 
-// spec 5.7.2: a `pkg::` path is absolute from the package root, so a child
+// A `pkg::` path is absolute from the package root, so a child
 // module's function is reachable the same way from the root.
 mod inner {
     pub fn hello() -> i32 { return 7; }

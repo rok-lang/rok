@@ -1,7 +1,6 @@
-// spec: §3.13.2 §3.13.3 std §2.9.2
 // Two-pointer loops and `ctr + k` indexes are versioned too.
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at tests/cases/cg_versioned_loop_two_pointer.rok:24:18:
+// expect-stderr: thread 'main' panicked at tests/cases/cg_versioned_loop_two_pointer.rok:23:18:
 // expect-stderr: index 2 out of bounds for length 2
 // expect-stdout:
 // [5, 4, 3, 2, 1] [1, 2, 3, 4, 5] [2, 1, 3]

@@ -1,10 +1,9 @@
-// spec: std §2.16.2
 // only-pointer-width: 64
 // expect-exit: 0
 // expect-stdout:
 // 8 16 true 16 24 false
 
-// Stdlib 2.16.2: `Atomic<Ptr<T>>` (`AtomicPrimitive` covers `Ptr`):
+// `Atomic<Ptr<T>>` (`AtomicPrimitive` covers `Ptr`):
 // load / store / swap / compare_exchange on the address word.
 use rok::core::sync::{LoadOrdering, UpdateOrdering};
 use rok::bare::ptr::Ptr;

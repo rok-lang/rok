@@ -1,9 +1,9 @@
 // expect-error: 11:19: unreachable match arm 3
 // expect-error: 18:22: unreachable match arm 2
 
-// spec 3.12.6: integer / char literals and ranges subsume each other -
+// Integer / char literals and ranges subsume each other -
 // an arm inside the union of earlier ranges is unreachable. The domain
-// stays open (3.12.5), so the `_` arm is still required.
+// stays open, so the `_` arm is still required.
 fn f(x: i32) -> i32 {
     return match x {
         0..=10 => 1,
@@ -23,5 +23,3 @@ fn main() -> i32 {
     return f(1) + g('a');
 }
 
-// spec: 003.12-match-expression
-// spec: §3.12.6

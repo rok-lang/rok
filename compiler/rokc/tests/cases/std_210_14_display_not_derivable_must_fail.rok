@@ -1,7 +1,6 @@
-// spec: std §2.10.14
 // expect-error: cannot derive `Display` for `P`
 
-// Stdlib 2.10.14: of the fmt traits only `Debug` derives; `Display` is
+// Of the fmt traits only `Debug` derives; `Display` is
 // written by hand.
 #[derive(Debug, Display)]
 struct P { x: i32; }

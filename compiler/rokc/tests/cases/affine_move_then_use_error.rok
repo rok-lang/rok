@@ -1,8 +1,7 @@
-// expect-error: error[E0134]: `tx` was moved at line 14, and is used here
-// expect-error: affine_move_then_use_error.rok:15:10: `tx` was moved at line 14, and is used here
+// expect-error: error[E0134]: `tx` was moved at line 13, and is used here
+// expect-error: affine_move_then_use_error.rok:14:10: `tx` was moved at line 13, and is used here
 // expect-error: help: a `Sender<i32>` has one owner, and `tx` gave it away; use the new owner, or keep a copy with `.clone()` before it moves
-// expect-error: affine_move_then_use_error.rok:26:5: `a` may have been moved at line 23, and is used here
-// spec: std 213-marker §2.13.4
+// expect-error: affine_move_then_use_error.rok:25:5: `a` may have been moved at line 22, and is used here
 
 // A `Drop` resource has one owner: `let b = a` moves it, and `a` is gone.
 

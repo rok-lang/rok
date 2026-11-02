@@ -1,8 +1,7 @@
-// spec: std §2.7.1
 // expect-error: type `f64` does not satisfy trait bound `Ord`
 // expect-error: type `str` does not satisfy trait bound `Zero`
 
-// Stdlib 2.7.1: `min` / `max` need `Item: Ord`, `sum` needs
+// `min` / `max` need `Item: Ord`, `sum` needs
 // `Item: Add<Output = Item> + Zero` (method `where` bounds on a trait's
 // default methods).
 fn main() {

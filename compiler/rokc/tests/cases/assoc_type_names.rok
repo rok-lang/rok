@@ -1,4 +1,3 @@
-// spec: refs-lang §2.8.3
 // expect-exit: 0
 // expect-stdout:
 // trait: 3 1 | 5 2
@@ -6,7 +5,7 @@
 // generic: 9 1 6
 // bag: 7
 
-// Spec 2.8.3: inside a trait or impl, bare `X` and `Self::X` both name
+// Inside a trait or impl, bare `X` and `Self::X` both name
 // the associated type `X` (signatures and bodies). With an outer type
 // `X` the bare name is an error (err_assoc_type_shadow_use).
 trait Src {

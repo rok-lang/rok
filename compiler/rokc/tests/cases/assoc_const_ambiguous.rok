@@ -1,6 +1,5 @@
-// spec: refs-lang 002.08-trait §2.8.3
 // expect-error: associated const `N` of `S` is ambiguous: `A` and `B` define it
-// Spec 2.8.3a: two impls giving a type the same const name need the
+// Two impls giving a type the same const name need the
 // qualified form `<S as A>::N`.
 trait A { const N: i32; }
 trait B { const N: i32; }

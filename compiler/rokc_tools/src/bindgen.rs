@@ -1,4 +1,4 @@
-//! `rokc bindgen` (stdlib 1.7.6): rok declarations from a C header via
+//! `rokc bindgen`: rok declarations from a C header via
 //! libclang loaded at run time.
 //!
 //! Binds what the header and its non-system includes declare (a system

@@ -1,4 +1,3 @@
-// spec: 003.13.3-for
 // An unsupported for-loop target is rejected explicitly.
 // expect-error: cannot iterate over a value of type `S`
 

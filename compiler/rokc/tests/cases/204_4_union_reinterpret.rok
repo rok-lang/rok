@@ -1,9 +1,8 @@
-// spec: refs-lang §2.5.2 §2.5.3 §2.5.6
 // expect-exit: 0
 // expect-stdout:
 // 5
 
-// spec 2.x: `let x = ED { fd: 5 }; let v = x.val;` reinterprets the bits
+// `let x = ED { fd: 5 }; let v = x.val;` reinterprets the bits
 // under another field: i32 -> u64 keeps the pattern, so 5 reads back.
 union ED { fd: i32; val: u64; }
 

@@ -1,10 +1,9 @@
-// spec: refs-lang §2.9.1
 // expect-exit: 0
 // expect-stdout:
 // 3 4 5 6 7
 // 8 9 10 11
 
-// Spec 2.9.1: an impl target / trait argument is any type, resolved once
+// An impl target / trait argument is any type, resolved once
 // every item is registered: a projection through another impl (also one
 // whose own target is a projection, declared later), and types and
 // aliases declared after the impl.

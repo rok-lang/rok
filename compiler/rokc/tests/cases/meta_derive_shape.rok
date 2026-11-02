@@ -7,7 +7,7 @@
 // Two(3)
 // B { x: 4 }
 
-// Template tokens beyond spec 6.9 (used by `#[derive(Rokon)]`):
+// Template tokens beyond the basic ones (used by `#[derive(Rokon)]`):
 // `@Self.is_named` / `.is_tuple` / `.is_unit` (a struct's shape),
 // `@Self.name` (the bare name, for `Name::Variant { .. }` on a generic
 // enum), `@field.has_default` / `@field.default` (a field's `= expr`).
@@ -94,5 +94,3 @@ fn main() {
     println(f"{E::<i32>::mk(4):?}");
 }
 
-// spec: 006.08-meta-blocks
-// spec: §6.9.2

@@ -1,4 +1,3 @@
-// spec: 006.07.2
 // An operator dispatches through the trait that registered it, named by
 // its full path: a same-named trait in another module with the same
 // method does not count.
@@ -32,4 +31,3 @@ fn main() {
     let r = N { v: 2 } ⊕ N { v: 4 };
     print(f"{r.v}");
 }
-// spec: §6.7.3

@@ -19,4 +19,3 @@ fn main() -> i32 {
     return p.sum() + 9;
 }
 
-// spec: 002.10-generics

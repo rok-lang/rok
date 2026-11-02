@@ -1,9 +1,8 @@
-// spec: 005.02-const-fn
 // expect-exit: 0
 // expect-stdout:
 // 12
 
-// spec 5.2: `const fn` - compile-time evaluatable pure fn.
+// `const fn` - compile-time evaluatable pure fn.
 const fn double(x: i32) -> i32 {
     return x * 2;
 }
@@ -14,4 +13,3 @@ fn main() -> i32 {
     println(f"{SIX + double(3)}");
     return 0;
 }
-// spec: §5.2.5

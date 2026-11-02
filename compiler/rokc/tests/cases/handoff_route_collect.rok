@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `q` may hold one object twice, and one of them was handed to another owner
-// spec: std 213-marker §2.13.9
 // collect from a callback returning one object for several items:
 // the list holds `a` twice but is not seen as a duplicate.
 use rok::std::thread;

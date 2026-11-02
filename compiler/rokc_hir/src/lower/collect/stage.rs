@@ -1,4 +1,4 @@
-//! The library's collected stage serialized (spec 9.2.16), so a build of
+//! The library's collected stage serialized, so a build of
 //! the same library skips collecting it. Borrows into the items are
 //! written as (item, member) positions and re-borrowed on read.
 

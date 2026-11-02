@@ -1,10 +1,9 @@
-// spec: refs-lang §1.10.4 §3.2.7
 // expect-exit: 0
 // expect-stdout:
 // 11
 // 7
 
-// Spec 1.10.4 / 6.7.2: a registered extension token lexes and takes the
+// A registered extension token lexes and takes the
 // level of its `like` token (`⊕` like `+`, below `*`).
 trait XorAdd {
     #[infix("⊕", like = "+")]
@@ -31,5 +30,3 @@ fn main() -> i32 {
     println(f"{s.v}");
     return 0;
 }
-// spec: §6.7.2 §6.7.9
-// spec: §3.1.7

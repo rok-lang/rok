@@ -1,8 +1,7 @@
-// spec: 004.08.1-trailing-closure-zero-arg
 // expect-exit: 99
 // expect-stdout:
 
-// spec 4.8.1: zero-parameter shorthand `f { body }` == `f(|| { body })`.
+// Zero-parameter shorthand `f { body }` == `f(|| { body })`.
 fn run(f: fn() -> i32) -> i32 {
     return f();
 }

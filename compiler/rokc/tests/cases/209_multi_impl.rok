@@ -1,10 +1,9 @@
-// spec: 002.09.3-multi-impl-blocks
 // expect-exit: 0
 // expect-stdout:
 // 5
 // 25
 
-// spec 2.9.3: several impl blocks for one type, for grouping.
+// Several impl blocks for one type, for grouping.
 struct V { n: i32; }
 
 impl V {

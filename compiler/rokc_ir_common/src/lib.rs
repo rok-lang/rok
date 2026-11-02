@@ -28,7 +28,7 @@ pub enum PrimTy {
     Bool,
     /// C `char` (FFI; `c'A'`).
     CChar,
-    /// Unicode scalar value (`'가'`); 32-bit code point (spec 808).
+    /// Unicode scalar value (`'가'`); 32-bit code point.
     Char,
     /// stdlib `str` (UTF-8 view, primitive).
     Str,
@@ -171,9 +171,9 @@ pub enum Abi {
     /// `{code, env}`. Every rok function and `extern "rok"` declaration.
     #[default]
     Rok,
-    /// Platform C ABI (spec 8.6): `str` is a NUL-terminated `char*`, `fn`
+    /// Platform C ABI: `str` is a NUL-terminated `char*`, `fn`
     /// a bare function pointer, aggregates classified. `system`:
-    /// `stdcall` on 32-bit Windows, C elsewhere (spec 5.9.2).
+    /// `stdcall` on 32-bit Windows, C elsewhere.
     C { variadic: bool, system: bool },
 }
 
@@ -185,13 +185,13 @@ pub enum Linkage {
     Defined,
     /// A declaration of an outside symbol, under its own name.
     Extern,
-    /// A declaration of a prebuilt dependency's function (spec 904):
+    /// A declaration of a prebuilt dependency's function:
     /// mangled, in the dependency's archive.
     Prebuilt,
 }
 
-/// `#[inline]` / `#[inline(always)]` / `#[inline(never)]` (spec 6.2.4),
-/// or `#[cold]` (6.2.6): never inlined, laid out away from hot code.
+/// `#[inline]` / `#[inline(always)]` / `#[inline(never)]`,
+/// or `#[cold]`: never inlined, laid out away from hot code.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum Inline {
     #[default]
@@ -219,10 +219,10 @@ pub enum FnRole {
 pub struct FnFacts {
     pub abi: Abi,
     pub linkage: Linkage,
-    /// `#[export_name("sym")]` (spec 905.8).
+    /// `#[export_name("sym")]`.
     pub export_name: Option<String>,
     /// wasm32 core import `(module, name)`: `#[link(wasm_import_module)]`
-    /// and `#[link_name]` or the own name (spec 6.2.3).
+    /// and `#[link_name]` or the own name.
     pub wasm_import: Option<(String, String)>,
     /// `#[link_name = "sym"]` of an extern function outside a
     /// `wasm_import_module` block: the symbol it links to.
@@ -256,7 +256,7 @@ impl FnFacts {
     }
 
     /// Whether the body takes the caller's `rok_tls` address as a hidden
-    /// last argument (8.3.8). All but the `any` dispatcher and
+    /// last argument. All but the `any` dispatcher and
     /// `#[export_name]` functions, which are entered from outside.
     #[must_use]
     pub fn takes_tls(&self) -> bool {

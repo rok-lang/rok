@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `s` still holds `a`, which was handed to another owner
-// spec: std 213-marker §2.13.9
 // Set of lists: one handed over while still a member.
 use rok::std::thread;
 

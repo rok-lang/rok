@@ -1,7 +1,5 @@
-// spec: 003.09.1-form
-// spec: 004.10.2-scope
 // Two nested fns of one name in one block: both are pointed at.
-// expect-error: 10:5: nested function `post_later` is defined twice in this block
+// expect-error: 8:5: nested function `post_later` is defined twice in this block
 // expect-error: first defined here
 // expect-error: help: rename one of them, e.g. `post_later2`; there is no overloading
 

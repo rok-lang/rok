@@ -1,5 +1,4 @@
-// spec: §4.7.4 §4.7.5
-// expect-error: 12:18: `[ref self]` needs a `ref self` method
+// expect-error: 11:18: `[ref self]` needs a `ref self` method
 
 // `[ref self]` shares the caller's receiver slot; a by-value `self` has
 // none to write back to.

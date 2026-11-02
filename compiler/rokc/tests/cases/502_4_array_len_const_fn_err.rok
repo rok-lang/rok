@@ -1,4 +1,4 @@
-// Spec 5.2.4: an item-level array length the const evaluator rejects is
+// An item-level array length the const evaluator rejects is
 // an error, wherever the type is written.
 // expect-error: array length must be a compile-time integer: calls `plain`, which is not a `const fn`
 // expect-error: array length must be a compile-time integer: length -1 is out of range
@@ -29,4 +29,3 @@ fn main() {
     let g = G::<2> { v: [0; 4] };
 }
 
-// spec: 005.02-const §5.2.4

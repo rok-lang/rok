@@ -1,7 +1,6 @@
 // needs: threads
 // gc-stress: 5
 // expect-exit: 0
-// spec: std 213-marker §2.13.9 / std 209-collections §2.9.7
 // expect-stdout:
 // list 30 a 30 b 30 a-again 30 lens 4 4
 // views first 30 30 6

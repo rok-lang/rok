@@ -1,10 +1,9 @@
-// spec: §3.5.4
-// expect-error: 14:13: `p.get` names a method without calling it; `.method` is not a function value
+// expect-error: 13:13: `p.get` names a method without calling it; `.method` is not a function value
 // expect-error: or use the method path `P::get`
-// expect-error: 15:13: `[1, 2].len` names a method without calling it
+// expect-error: 14:13: `[1, 2].len` names a method without calling it
 
 // `obj.method` without parentheses is neither a call nor a function
-// value (3.5.4); the diagnostic says so instead of "no field".
+// value; the diagnostic says so instead of "no field".
 
 struct P { a: i32; }
 impl P { fn get(self) -> i32 { self.a } }

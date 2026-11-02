@@ -1,4 +1,3 @@
-// spec: 002.09-stdlib-trait-impl
 // expect-exit: 10
 // expect-stdout:
 

@@ -1,4 +1,4 @@
-//! Entry point rules (spec 4.16): `main.rok` provides either an explicit
+//! Entry point rules: `main.rok` provides either an explicit
 //! `fn main` or top-level statements (the implicit `main`), never both.
 //! Every other file is definitions-only.
 
@@ -13,7 +13,7 @@ pub fn stmts_outside_entry(file: &Path) -> RokDiagnostic {
         Span::DUMMY,
         format!(
             "{}: top-level statements are only allowed in the entry file `main.rok`; \
-             modules are definitions-only (spec 4.16.6)",
+             modules are definitions-only",
             file.display()
         ),
     )
@@ -37,7 +37,7 @@ pub fn resolve_entry(
                     Code::ENTRY_POINT,
                     Span::DUMMY,
                     "`main.rok` has both top-level statements and `fn main`; use exactly one \
-                 entry point (spec 4.16.1)",
+                 entry point",
                 )
                 .with_span(stmts[0].span, "a top-level statement")
                 .with_secondary(f.span, "`fn main` here"),
@@ -75,18 +75,18 @@ fn implicit_main(stmts: Vec<Stmt>) -> FnDef {
             }
             .into(),
         ),
-        // Spec 4.16.5: `await` at top level makes it `async fn main`.
+        // `await` at top level makes it `async fn main`.
         is_async,
         is_generator: false,
         is_unsafe: false,
-        // Spec 4.16.4: the implicit `main` is `fn main() throws` (untyped).
+        // The implicit `main` is `fn main() throws` (untyped).
         throws: ThrowsKind::Typed(vec![rokc_ast::untyped_throws_ty(span)]),
         where_clause: Vec::new(),
         span,
     }
 }
 
-/// Spec 4.16.3: no parameters, generics or `unsafe`; `()` or `i32`, or
+/// No parameters, generics or `unsafe`; `()` or `i32`, or
 /// `()` with `throws (E)` (an escaping error exits 1). `Result` isn't an
 /// entry form.
 fn check_main_signature(f: &FnDef, diags: &mut Vec<RokDiagnostic>) {
@@ -94,7 +94,7 @@ fn check_main_signature(f: &FnDef, diags: &mut Vec<RokDiagnostic>) {
         diags.push(RokDiagnostic::error(
             Code::ENTRY_POINT,
             f.span,
-            format!("`fn main`: {msg} (spec 4.16.3)"),
+            format!("`fn main`: {msg}"),
         ));
     };
     if !f.params.is_empty() {

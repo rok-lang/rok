@@ -1,11 +1,10 @@
-// spec: 004.06.4-value-capture-reassign-must-fail
 // expect-error: error[E0057]
 
-// spec 4.6.4: reassigning a value-captured variable in the closure body is a
+// Reassigning a value-captured variable in the closure body is a
 // compile error; capture it with `[ref count]`.
 fn main() -> i32 {
     let count = 0;
-    let f = || { count = count + 1 };  // ERROR per spec 4.6.4
+    let f = || { count = count + 1 };  // ERROR: a value capture is read-only
     f();
     return 0;
 }

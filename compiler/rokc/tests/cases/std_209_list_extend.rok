@@ -1,11 +1,10 @@
-// spec: std 209-collections §2.9.2
 // expect-exit: 0
 // expect-stdout:
 // cap ok true
 // [1, 2, 3, 4]
 // shrunk true
 
-// spec 2.9.2 lists `extend<I: IntoIterator<Item = T>>` and `shrink_to_fit`
+// Lists `extend<I: IntoIterator<Item = T>>` and `shrink_to_fit`
 // among List's core methods.
 fn main() {
     let xs: List<i32> = List::with_capacity(16);

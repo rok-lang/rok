@@ -1,12 +1,11 @@
-// spec: §3.6.4 §3.4.4 §3.7.3
-// expect-error: 13:16: expected index expression
-// expect-error: 14:21: expected `]`, found `:`
-// expect-error: 15:11: expected `;`, found `=`
-// expect-error: 16:17: range operators cannot be chained
+// expect-error: 12:16: expected index expression
+// expect-error: 13:21: expected `]`, found `:`
+// expect-error: 14:11: expected `;`, found `=`
+// expect-error: 15:17: range operators cannot be chained
 
-// spec 3.6.4: empty brackets and three or more colons are rejected by
-// the parser. 3.4.4: chained assignment `a = b = 1` is not allowed.
-// 3.7.3: the range operators are non-associative.
+// Empty brackets and three or more colons are rejected by
+// the parser. Chained assignment `a = b = 1` is not allowed.
+// The range operators are non-associative.
 fn main() -> i32 {
     let xs = [1, 2];
     let a = 0;

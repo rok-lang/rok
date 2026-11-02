@@ -3,7 +3,6 @@
 // expect-stdout:
 // 3 10 0
 
-// spec: std 213-marker §2.13.9
 // The flush helper takes `ref self`: its `self.buf = []` after the send
 // reaches the caller, so the batcher is usable again. (With a plain
 // `self` the caller keeps the sent list: that is an error.)

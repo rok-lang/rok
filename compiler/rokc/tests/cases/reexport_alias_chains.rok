@@ -2,8 +2,8 @@
 // expect-stdout:
 // 35 7 7
 
-// A `pub use` chain and a type alias chain of any length resolve
-// (spec 5.8, 2.12): each link names the previous one.
+// A `pub use` chain and a type alias chain of any length resolve:
+// each link names the previous one.
 mod m0 {
     pub struct Point { pub x: i32; }
     pub fn seven() -> i32 { 7i32 }
@@ -41,4 +41,3 @@ fn main() -> i32 {
     println(f"{p.x} {m5::seven()} {m1::seven()}");
     return p.x + m5::seven();
 }
-// spec: §5.8.11

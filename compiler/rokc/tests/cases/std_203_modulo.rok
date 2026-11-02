@@ -1,16 +1,15 @@
-// spec: std 203-ops §2.3 Modulo, 204-ops-assign
 // expect-exit: 0
 // expect-stdout:
 // rem: 1 -1 1 -1
 // mod: 1 2 -2 -1
-// spec: 1 -1 0.5
+// float: 1 -1 0.5
 // wrap: 7
 // unsigned: 1
 // assign: 4
 // user: 3
 
-// spec 2.3 `Modulo` (`%%`): the result takes the divisor's sign (the
-// table under 2.3: `-7 %% 3 = 2`, `7 %% -3 = -2`); floats too; `%%=`
+// `Modulo` (`%%`): the result takes the divisor's sign (the
+// `-7 %% 3 = 2`, `7 %% -3 = -2`); floats too; `%%=`
 // is `a = a %% b`; a user type implements `Modulo`.
 struct Clock { h: i32; }
 
@@ -22,7 +21,7 @@ impl ops::Modulo<i32> for Clock {
 fn main() {
     println(f"rem: {7 % 3} {-7 % 3} {7 % -3} {-7 % -3}");
     println(f"mod: {7 %% 3} {-7 %% 3} {7 %% -3} {-7 %% -3}");
-    println(f"spec: {(-5i32) %% 3i32} {5i32 %% (-3i32)} {(-7.5f64) %% 2.0f64}");
+    println(f"float: {(-5i32) %% 3i32} {5i32 %% (-3i32)} {(-7.5f64) %% 2.0f64}");
     let i: i32 = -1;
     let len: i32 = 8;
     println(f"wrap: {i %% len}");

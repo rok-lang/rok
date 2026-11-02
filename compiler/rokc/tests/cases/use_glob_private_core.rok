@@ -1,9 +1,9 @@
 // expect-exit: 0
 // expect-stdout: 10 22 10
 // A private core helper (`rok::core::num::bigint::radix_chunk` /
-// `digit_of`) is not imported by the implicit prelude import (spec
-// 5.6), and a generic fn reached by the module's own `use` beats any core
-// glob hit whether the core item is generic or not (spec 5.7).
+// `digit_of`) is not imported by the implicit prelude import,
+// and a generic fn reached by the module's own `use` beats any core
+// glob hit whether the core item is generic or not.
 
 mod util {
     pub fn radix_chunk<T>(x: T) -> T { x }
@@ -19,4 +19,3 @@ fn main() {
     println(f"{radix_chunk(10i32)} {digit_of(11i32)} {pow10(10i32)}");
 }
 
-// spec: 005.05-use

@@ -1,7 +1,6 @@
-// spec: §3.14.2 §3.14.3
 // `try!` on a value that may be none: `try` is for throwing calls; the
 // help gives `??`. No mismatch follows.
-// expect-error: 9:14: `try!` is for calls that throw; `xs.pop()` gives `i32 | none`, which may be none
+// expect-error: 8:14: `try!` is for calls that throw; `xs.pop()` gives `i32 | none`, which may be none
 // expect-error: help: write `xs.pop() ?? 0`, or `if let x: i32 = xs.pop() { .. }`
 // forbid-error: mismatched types
 // forbid-error: covers no throwing call

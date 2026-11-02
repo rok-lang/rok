@@ -1,4 +1,3 @@
-// spec: 3.16.4
 // expect-exit: 0
 // `let-else` with a refutable variant / struct pattern.
 // expect-stdout:

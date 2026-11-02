@@ -1,4 +1,3 @@
-// spec: 001.10.3-broadcast-rem
 // expect-error: operator `.%` cannot be applied to `i32`
 
 // `.%` is a fixed token; arithmetic needs a `DotRem` impl, which the

@@ -1,4 +1,3 @@
-// spec: §2.6.3 §8.8.8
 // expect-exit: 0
 // `i64 | f64` keeps both payloads exact (no value conversion through f64).
 // expect-stdout:

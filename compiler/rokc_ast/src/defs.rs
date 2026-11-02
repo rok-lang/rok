@@ -19,7 +19,7 @@ pub struct FnDef {
     pub body: Option<rokc_core::codec::Lazy<Block>>,
     pub is_async: bool,
     pub is_generator: bool,
-    /// `unsafe fn` (spec 4.15.1): callers need an unsafe scope.
+    /// `unsafe fn`: callers need an unsafe scope.
     pub is_unsafe: bool,
     pub throws: ThrowsKind,
     pub where_clause: Vec<WherePred>,
@@ -52,7 +52,7 @@ impl FnDef {
 /// its coroutine (`rokc_driver::coro`): each call makes a fresh future.
 pub const CORO_FN_ATTR: &str = "#coro_fn";
 
-/// Marker attribute of a `pub` / `pub(pkg)` fn without `->` (spec 4.1.3):
+/// Marker attribute of a `pub` / `pub(pkg)` fn without `->`:
 /// it returns `()`. HIR still infers its body's type, to name the `-> T`
 /// to write when the body gives a value.
 pub const UNIT_RET_ATTR: &str = "#unit_ret";
@@ -64,8 +64,8 @@ pub const UNIT_RET_ATTR: &str = "#unit_ret";
 /// in for a dropped item, none (an item), `["mod"]` or `["method", type]`.
 pub const CFG_OFF_ATTR: &str = "#cfg_off";
 
-/// Marker attribute of an `extern "ABI" fn f(..) { .. }` definition
-/// (spec 5.9.10), its value the ABI string.
+/// Marker attribute of an `extern "ABI" fn f(..) { .. }` definition,
+/// its value the ABI string.
 pub const EXTERN_FN_ATTR: &str = "#extern_fn";
 
 /// The ABI of an `extern "ABI" fn` definition with attributes `attrs`.
@@ -90,39 +90,37 @@ pub fn inline_wanted(attrs: &[crate::Attribute]) -> bool {
     })
 }
 
-/// Marks a nested `fn` statement (spec 4.10), lifted to a module item
+/// Marks a nested `fn` statement, lifted to a module item
 /// named by the string (`outer/f`); a second `true` marks a sibling
 /// visible from an enclosing block.
 pub const NESTED_FN_ATTR: &str = "#nested_fn";
 
-/// Marks an item lifted from a block (spec 3.9.1); the string is the
+/// Marks an item lifted from a block; the string is the
 /// enclosing fn's lifted path. Uses in scope are renamed to
 /// `outer/name` (`rename`); a copy stays in the block.
 pub const LOCAL_ITEM_ATTR: &str = "#local_item";
 
 /// Marker attribute of a block's `use` copied into the bodies of the fns
-/// lifted from the block (spec 3.9.1).
+/// lifted from the block.
 pub const INHERITED_USE_ATTR: &str = "#inherited_use";
 
-/// Marks a block-lifted item with `use p::*`s in scope (spec 3.9.1), one
+/// Marks a block-lifted item with `use p::*`s in scope, one
 /// prefix per glob. HIR resolves them into the item's headers; its fn
 /// bodies carry the `use`s themselves.
 pub const BLOCK_GLOB_ATTR: &str = "#block_glob";
 
-/// Marker attribute of a `const fn` (spec 5.2.5): callable in const
+/// Marker attribute of a `const fn`: callable in const
 /// contexts, evaluated at compile time there.
 pub const CONST_FN_ATTR: &str = "#const_fn";
 
-/// Marker attribute of a C variadic declaration `fn printf(fmt: str, ...)`
-/// (spec 8.6.10).
+/// Marker attribute of a C variadic declaration `fn printf(fmt: str, ...)`.
 pub const C_VARIADIC_ATTR: &str = "#c_variadic";
 
 /// Method name of the `using` desugar's release call (`x.#drop()`):
-/// `Drop::drop`, exempt from the direct-call ban (spec 2.13.4).
+/// `Drop::drop`, exempt from the direct-call ban.
 pub const USING_DROP_METHOD: &str = "#drop";
 
-/// The error type of an untyped `throws`: `any rok::core::error::Error`
-/// (spec 4.14.3).
+/// The error type of an untyped `throws`: `any rok::core::error::Error`.
 #[must_use]
 pub fn untyped_throws_ty(span: Span) -> Ty {
     let segments = UNTYPED_THROWS_TRAIT
@@ -161,7 +159,7 @@ pub fn as_assoc_binding(ty: &Ty) -> Option<(&str, &Ty)> {
     }
 }
 
-/// `throws` clause (spec 4.14). The parser desugars `rethrows` into
+/// `throws` clause. The parser desugars `rethrows` into
 /// `Typed` over synthetic error parameters (`#E0`, ...), one per throwing
 /// fn-typed parameter.
 #[derive(Clone, Debug, Default)]
@@ -182,7 +180,7 @@ pub struct Generics {
 
 #[derive(Clone, Debug)]
 pub enum GenericParam {
-    /// `T`, `T: Bound`, or `T = Default` (spec 2.10.5); the default applies
+    /// `T`, `T: Bound`, or `T = Default`; the default applies
     /// when nothing else fixes `T`.
     Type {
         name: String,
@@ -236,7 +234,7 @@ pub enum StmtKind {
         init: Expr,
     },
     /// `let (a, b, ...) [: ty] = init;`; `_` discards. `rest` is a `..` /
-    /// `..name` (spec 3.15.3) spliced in before `names[index]`:
+    /// `..name` spliced in before `names[index]`:
     ///   `(first, ..rest)`      → `names=["first"], rest=(1, Some("rest"))`
     ///   `(head, ..mid, tail)`  → `names=["head","tail"], rest=(1, Some("mid"))`
     ///   `(..)`                 → `names=[], rest=(0, None)`
@@ -322,7 +320,7 @@ pub struct Expr {
     pub span: Span,
 }
 
-/// A qualified path `<T as Tr>::item` (spec 2.13.4): `item` of the impl
+/// A qualified path `<T as Tr>::item`: `item` of the impl
 /// of `Tr` for `T` (an associated type, method or const).
 #[derive(Clone, Debug)]
 pub struct QPath {
@@ -339,24 +337,24 @@ pub enum ExprKind {
     Literal(Literal),
     /// Bare identifier reference (variable or item).
     Path(Path),
-    /// `<T as Tr>::m` / `<T as Tr>::N` (spec 2.13.4).
+    /// `<T as Tr>::m` / `<T as Tr>::N`.
     QPath(Box<QPath>),
     SelfLower,
     SelfUpper,
     Tuple(Vec<Expr>),
     List(Vec<Expr>),
-    /// `[v; N]` - `v` repeated `N` times, a `[T; N]` (spec 2.11).
+    /// `[v; N]` - `v` repeated `N` times, a `[T; N]`.
     ArrayRepeat {
         value: Box<Expr>,
         len: ConstExpr,
     },
     Dict(Vec<(Expr, Expr)>),
     Set(Vec<Expr>),
-    /// Source matched by `#[literal(..)]` patterns (spec 6.5.4), one
+    /// Source matched by `#[literal(..)]` patterns, one
     /// candidate per handler; HIR picks by slot type, then priority.
     MagicLiteral(Vec<LitCand>),
     Block(Block),
-    /// `unsafe { ... }` (spec 4.15.2).
+    /// `unsafe { ... }`.
     Unsafe(Block),
     If {
         cond: Box<Expr>,
@@ -381,7 +379,7 @@ pub enum ExprKind {
         pat: Pattern,
         iter: Box<Expr>,
         body: Block,
-        /// `for await` over a `Stream` (spec 4.13.5).
+        /// `for await` over a `Stream`.
         is_await: bool,
     },
     /// Prefix `try e` / `try? e` / `try! e`: marks the throwing calls in
@@ -449,7 +447,7 @@ pub enum ExprKind {
         inclusive: bool,
     },
     /// `x?.a.b(..)[i]`: the links after `?.` are all skipped when `x` is
-    /// `none` (spec 3.8.8).
+    /// `none`.
     QuestionDot(Box<Expr>, Vec<AccessTail>),
     /// `lhs ?? rhs` - language-level sum-type-aware coalesce.
     NullishCoalesce(Box<Expr>, Box<Expr>),
@@ -466,7 +464,7 @@ pub enum ExprKind {
     },
     Await(Box<Expr>),
     /// `expr` resolved in `module`'s scope with no locals: a parameter /
-    /// field default spliced into a use in another module (spec 4.2.3).
+    /// field default spliced into a use in another module.
     InModule(String, Box<Expr>),
     Yield(Option<Box<Expr>>),
     AsyncBlock(Block),
@@ -477,14 +475,14 @@ pub enum ExprKind {
         fields: Vec<(String, Expr)>,
         spread: Option<Box<Expr>>,
     },
-    /// `f.(a, b)` (spec 3.3.3): `f` applied to each element of the
+    /// `f.(a, b)`: `f` applied to each element of the
     /// `List` / `Slice` / array arguments (others are passed as is).
     Broadcast {
         callee: Box<Expr>,
         args: Vec<CallArg>,
     },
-    /// `f"..."` (spec 1.7.3): literal runs and `{expr:spec}` holes,
-    /// formatted by type in HIR (stdlib 2.10).
+    /// `f"..."`: literal runs and `{expr:spec}` holes,
+    /// formatted by type in HIR.
     FString(Vec<FStringPart>),
 }
 
@@ -528,7 +526,7 @@ pub enum CallArg {
         value: Expr,
     },
     Spread(Expr),
-    /// `f(ref x)`: pass the binding `x` by reference (spec 4.7.3).
+    /// `f(ref x)`: pass the binding `x` by reference.
     Ref(Expr),
 }
 
@@ -613,7 +611,7 @@ pub struct Path {
     pub span: Span,
     /// The module a meta template (or the compiler) that wrote the first
     /// segment is defined in: the path resolves and is access-checked
-    /// there (spec 6.9.9). `None`: where it is written.
+    /// there. `None`: where it is written.
     pub origin: Option<String>,
 }
 
@@ -669,7 +667,7 @@ pub struct FnTyBounds {
 pub enum TyKind {
     /// Path type (`i32`, `List<T>`, `std::time::Duration`).
     Path(Path),
-    /// `<T as Tr>::X` (spec 2.13.4).
+    /// `<T as Tr>::X`.
     QPath(Box<QPath>),
     /// Sum type `A | B | C`.
     Sum(Vec<Ty>),
@@ -679,11 +677,10 @@ pub enum TyKind {
     /// a `Throws` return type.
     Fn(Vec<Ty>, Box<Ty>, FnTyBounds),
     /// A sum member kept as one layer (`T` of `T?`, a substituted
-    /// associated type): `HirTy::sum` keeps it nested when it overlaps
-    /// (spec 2.6.4).
+    /// associated type): `HirTy::sum` keeps it nested when it overlaps.
     Nest(Box<Ty>),
     /// An associated-type binding `Name = Ty` among a trait's generic
-    /// arguments (`Iterator<Item = i32>`, spec 2.1 `trait_arg`).
+    /// arguments (`Iterator<Item = i32>`).
     Binding(String, Box<Ty>),
     /// Return slot of `fn(..) throws (err) -> ok`; only appears as the
     /// return type of `Fn`.
@@ -701,7 +698,7 @@ pub enum TyKind {
     /// `!` - the never type of a diverging function (`panic`, `exit`).
     Never,
     /// A const generic argument in a type-argument list (`Matrix<f64, 3, 4>`,
-    /// `replicate::<i32, 8>`; spec 2.11.4).
+    /// `replicate::<i32, 8>`).
     Const(ConstExpr),
 }
 
@@ -720,7 +717,7 @@ pub struct StructDef {
     pub name: String,
     pub generics: Generics,
     pub kind: StructKind,
-    /// `where` predicates after the header (spec 2.10.4).
+    /// `where` predicates after the header.
     pub where_clause: Vec<WherePred>,
     pub span: Span,
 }
@@ -757,7 +754,7 @@ pub struct EnumDef {
     pub name: String,
     pub generics: Generics,
     pub variants: Vec<EnumVariant>,
-    /// `where` predicates after the header (spec 2.10.4).
+    /// `where` predicates after the header.
     pub where_clause: Vec<WherePred>,
     pub span: Span,
 }
@@ -785,7 +782,7 @@ pub struct UnionDef {
     pub name: String,
     pub generics: Generics,
     pub fields: Vec<NamedField>,
-    /// `where` predicates after the header (spec 2.10.4).
+    /// `where` predicates after the header.
     pub where_clause: Vec<WherePred>,
     pub span: Span,
 }
@@ -812,7 +809,7 @@ pub enum TraitItem {
         bounds: Vec<Ty>,
         default: Option<Ty>,
     },
-    /// `const N: T;` / `const N: T = v;` (spec 2.8.3a).
+    /// `const N: T;` / `const N: T = v;`.
     Const {
         name: String,
         ty: Ty,
@@ -874,7 +871,7 @@ pub struct TypeAliasDef {
     pub name: String,
     pub generics: Generics,
     pub ty: Ty,
-    /// `where` predicates after the header (spec 2.10.4).
+    /// `where` predicates after the header.
     pub where_clause: Vec<WherePred>,
     pub span: Span,
 }
@@ -916,8 +913,8 @@ pub struct ExternBlock {
     pub abi: String,
     pub items: Vec<ExternItem>,
     pub span: Span,
-    /// `ffi::wit::import { "a.wit", .. }` / `ffi::wit::export { .. }`
-    /// (stdlib 1.8): no items; the driver adds the bindings.
+    /// `ffi::wit::import { "a.wit", .. }` / `ffi::wit::export { .. }`:
+    /// no items; the driver adds the bindings.
     pub wit: Option<WitRef>,
 }
 

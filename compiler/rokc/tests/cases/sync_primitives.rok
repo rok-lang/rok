@@ -14,7 +14,7 @@
 // 1
 // 5
 
-// core::sync (2.16) on one thread: `Atomic` ops (default `SeqCst`,
+// core::sync on one thread: `Atomic` ops (default `SeqCst`,
 // explicit orderings, CAS success / failure, `bool`, `u64` bit ops),
 // `Mutex` / `RwLock` guards under `using`, `Once`, `Cell`. Bare
 // `Ordering` stays `cmp::Ordering`.
@@ -58,4 +58,3 @@ fn main() -> i32 {
     println(f"{c.replace(0)}");
     return 0;
 }
-// spec: std §2.16.2

@@ -1,10 +1,9 @@
-// spec: std 200-core/218-task §2.18.1 / refs-lang 004.12 §4.12.9
 // expect-exit: 0
 // expect-stdout:
 // a b c
 // 3 tasks finished true
 
-// stdlib 2.18.1: `task::join` awaits every task and returns the results in
+// `task::join` awaits every task and returns the results in
 // the order of the input list, not completion order (the first task
 // sleeps longest).
 async fn after(ms: i64, name: str) -> str {

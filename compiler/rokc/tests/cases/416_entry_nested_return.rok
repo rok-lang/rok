@@ -1,7 +1,6 @@
-// spec: 004.16-entry-nested-return
 // expect-error: `return` is not allowed in top-level statements
 
-// spec 4.16.4: a `return` nested in a top-level block is still a
+// A `return` nested in a top-level block is still a
 // top-level `return`.
 let x = 1;
 if x > 0 {

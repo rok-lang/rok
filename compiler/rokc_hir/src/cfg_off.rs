@@ -1,4 +1,4 @@
-//! Items `#[cfg]` left out of the build (spec 6.3), named in the errors
+//! Items `#[cfg]` left out of the build, named in the errors
 //! of a lookup that would have found them: "`process_group` is only
 //! available on unix (`#[cfg(unix)]`)".
 

@@ -1,9 +1,8 @@
-// spec: §4.7.3 §4.7.5
 // expect-exit: 0
 // expect-stdout: 12 5
 
-// Path calls of `ref self` methods pass the receiver with `ref` (spec
-// 4.7.3): inherent, trait and generic-impl methods write it back.
+// Path calls of `ref self` methods pass the receiver with `ref`:
+// inherent, trait and generic-impl methods write it back.
 
 struct Counter { c: i32; }
 impl Counter {

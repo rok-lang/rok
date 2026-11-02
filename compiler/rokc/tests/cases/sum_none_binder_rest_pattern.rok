@@ -46,4 +46,3 @@ fn main() {
     println(f"{kind(K::C(1, "s", 2))} / {kind(K::C(2, "s", 2))} / {kind(K::B(4))} / first {first} / last {last}");
 }
 
-// spec: 002.06-sum-types

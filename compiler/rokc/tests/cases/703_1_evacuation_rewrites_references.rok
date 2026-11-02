@@ -1,4 +1,3 @@
-// spec: 007.03-gc-algorithm §7.3.1
 // gc-stress: 50
 // expect-exit: 0
 // expect-stdout:
@@ -6,7 +5,7 @@
 // 499 a499 [499, 998]
 // shared: 7
 
-// spec 7.3.1: evacuation leaves a forwarding pointer and rewrites every
+// Evacuation leaves a forwarding pointer and rewrites every
 // precise reference (the gc-stress run evacuates on every full
 // collection): values, and two references to one list, stay intact.
 extern "C" {

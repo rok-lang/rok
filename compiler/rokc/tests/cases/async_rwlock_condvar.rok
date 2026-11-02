@@ -121,4 +121,3 @@ let free = rw.try_write() is sync::RwLockWriteGuard<i32> && m2.try_lock() is syn
 println(f"all free: {free}");
 println(f"registrations left: {task::registrations()}");
 
-// spec: 004.12-async

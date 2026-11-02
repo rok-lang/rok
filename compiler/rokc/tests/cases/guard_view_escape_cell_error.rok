@@ -1,10 +1,8 @@
 // needs: threads
-// expect-error: 27:34: `g.get()` is a view of what the `Mutex` behind `g` protects, and `keep` keeps it past the call
+// expect-error: 25:34: `g.get()` is a view of what the `Mutex` behind `g` protects, and `keep` keeps it past the call
 // expect-error: help: `g`'s `using` block releases the lock while `keep` still holds it; pass a deep copy, `g.get_clone()`
-// expect-error: 35:15: `v` is a view of what the `Mutex` behind `g` protects, and `Bag::put` keeps it past the call
-// expect-error: 40:32: `g.get()` is a view of what the `Mutex` behind `g` protects, and `stash` keeps it past the call
-// spec: std 216-sync §2.16.3
-// spec: std 213-marker §2.13.9
+// expect-error: 33:15: `v` is a view of what the `Mutex` behind `g` protects, and `Bag::put` keeps it past the call
+// expect-error: 38:32: `g.get()` is a view of what the `Mutex` behind `g` protects, and `stash` keeps it past the call
 
 // `MutexGuard::get()` is a scoped view: a callee that keeps it (in a
 // `Cell`, a field, a capture) would let it outlive the lock, and two

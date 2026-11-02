@@ -1,6 +1,6 @@
 // expect-error: type `Cell<i32>` does not satisfy trait bound `Send` required by `task::spawn`
 
-// 2.18.1 `spawn(..) where F::Output: Send`: a `Send` future whose
+// `spawn(..) where F::Output: Send`: a `Send` future whose
 // output is not `Send` (a hand-written one: `AsyncFuture<T>` is only
 // `Send` for `T: Send`, so the `F: Send` bound would catch it first).
 struct MakeCell {}
@@ -11,4 +11,3 @@ impl Future for MakeCell {
 
 let t = task::spawn(MakeCell {});
 
-// spec: 004.12-async

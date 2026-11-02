@@ -1,4 +1,4 @@
-//! `rokc`, the rok compiler (spec 901). Arguments are parsed by hand: the
+//! `rokc`, the rok compiler. Arguments are parsed by hand: the
 //! workspace takes no external crates.
 //!
 //! Exit codes (901.6): 0 ok, 1 user error (compile error / failed test),
@@ -89,7 +89,7 @@ struct Args {
     open: bool,
     /// `--emit-harness <file>`: write the test / bench harness manifest
     /// (built executables and their cases) to `<file>` instead of running;
-    /// `rok` reads it and runs the cases (its runner, spec 9.1).
+    /// `rok` reads it and runs the cases (its runner).
     emit_harness: Option<PathBuf>,
     /// An `-O` level or `--release` was given.
     opt_set: bool,
@@ -358,7 +358,7 @@ fn parse_args(raw: Vec<String>, mut tail: Vec<OsString>) -> Args {
         usage_error("missing command (e.g. `build`)");
     }
     set_overflow_checks(&mut a);
-    // Debug builds carry debug info; `-g` adds it to release (9.2.15).
+    // Debug builds carry debug info; `-g` adds it to release.
     let output = matches!(a.cmd.as_str(), "build" | "run" | "test") && a.emit.is_empty();
     if output && !a.opts.release() {
         a.opts.debug = true;
@@ -384,7 +384,7 @@ fn parse_args(raw: Vec<String>, mut tail: Vec<OsString>) -> Args {
 }
 
 /// Overflow checks are on in every profile; `-C overflow-checks=no` or
-/// the manifest's profile turns them off (spec 9.1.2).
+/// the manifest's profile turns them off.
 fn set_overflow_checks(a: &mut Args) {
     let profile = if a.opts.release() { "release" } else { "debug" };
     a.opts.overflow_checks = a
@@ -446,7 +446,7 @@ fn parse_lib(v: &str) -> (String, bool) {
     (name.to_owned(), kind == "static")
 }
 
-/// `--extern name=path` (spec 902.3): a package directory, its
+/// `--extern name=path`: a package directory, its
 /// `src/lib.rok`, or a prebuilt `<name>.rokhir` / `lib<name>.a` (904).
 fn parse_extern(v: &str) -> (String, PathBuf) {
     let Some((name, path)) = v.split_once('=') else {
@@ -490,7 +490,7 @@ fn main() {
     if std::env::var_os(rokc_interface::AS_WASM_LD).is_some() {
         process::exit(rokc_interface::wasm_ld_main());
     }
-    // Spec 901.6: an internal error (rokc panic) exits 70, apart from a
+    // An internal error (rokc panic) exits 70, apart from a
     // program panic's 101.
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
@@ -693,7 +693,7 @@ fn real_main() {
     }
 }
 
-/// Find the library roots (`rok/core`, spec 0.5) and `librokr.a`
+/// Find the library roots (`rok/core`) and `librokr.a`
 /// without flags.
 fn with_defaults(mut a: Args) -> Args {
     let sys = rokc_interface::sysroot();
@@ -958,7 +958,7 @@ fn compile(a: &Args, pkg: &Package, mode: Mode) -> (CompileResult, String, Insta
     }
     session.set_test(mode == Mode::Test);
     session.set_bench(mode == Mode::Bench);
-    // A build lints as `check` does (6.2.9).
+    // A build lints as `check` does.
     let lints = mode != Mode::Doc;
     let library_files = a.emit.contains(&EmitKind::Expanded) || a.emit.contains(&EmitKind::Ast);
     session.set_keep_ast(true);
@@ -1022,7 +1022,7 @@ fn counts(errors: usize, warnings: usize) -> String {
     )
 }
 
-/// Incremental directory (spec 9.2.16): `<out>/incremental/<name>-<hash>`,
+/// Incremental directory: `<out>/incremental/<name>-<hash>`,
 /// or under `$ROK_INCREMENTAL`. A lone file gets one only there;
 /// `ROK_INCREMENTAL=0` turns it off.
 fn incremental_dir(a: &Args, pkg: &Package) -> Option<PathBuf> {
@@ -1054,7 +1054,7 @@ fn unit_name(pkg: &Package) -> String {
 }
 
 /// Package with both root files: build the library and mount it as dep
-/// `<name>` of the executable (spec 0.3.1).
+/// `<name>` of the executable.
 fn mount_library(a: &mut Args, pkg: &Package) {
     let Some(lib) = pkg.library_target() else {
         return;
@@ -1350,7 +1350,7 @@ fn also(a: &Args, pkg: &Package, out: &Path) -> Vec<PathBuf> {
 /// Lone-file executables unused this long go when another is built.
 const SCRIPT_KEPT: std::time::Duration = std::time::Duration::from_secs(24 * 3600);
 
-/// Lone file `pkg`'s executable, cached (spec 9.10.7) at
+/// Lone file `pkg`'s executable, cached at
 /// `scripts/<key>/<name>`, `<key>` hashing everything the build reads. A
 /// hit compiles nothing and reprints the warnings. Racing runs build one
 /// at a time, under a lock named after the file's units, and a waiter finds
@@ -1559,7 +1559,7 @@ fn banner() -> String {
 
 /// What a session on `pkg` loads: a library becomes a session dependency
 /// with `use <name>::*;` as the first cell (901.2); a program is loaded,
-/// with its package's library (0.3.1) as a dependency.
+/// with its package's library as a dependency.
 fn repl_load(a: &mut Args, pkg: Option<&Package>) -> (Option<String>, Option<(PathBuf, bool)>) {
     let Some(p) = pkg else {
         return (None, None);
@@ -1635,7 +1635,7 @@ fn path_and_filter(a: &Args) -> (&str, Option<&str>) {
 }
 
 /// `rokc test` / `rokc bench [path] [filter]` (`-O2` unless given): build
-/// the harness and emit the manifest `rok` runs (spec 9.1). `rok` runs
+/// the harness and emit the manifest `rok` runs. `rok` runs
 /// the cases; `--emit-harness` names the manifest file.
 fn cmd_harness(mut a: Args, mode: Mode) {
     if mode != Mode::Bench && a.rokbench {
@@ -1649,7 +1649,7 @@ fn cmd_harness(mut a: Args, mode: Mode) {
     let filter = filter.map(str::to_owned);
     let pkg = discover_at(&a, path);
     prebuild(&mut a, Some(&pkg)).unwrap_or_else(|e| fail(&e));
-    // `rokc` builds the harness; the `rok` runner (spec 9.1) runs it. A
+    // `rokc` builds the harness; the `rok` runner runs it. A
     // package with both roots builds the library's first, the
     // executable's second. Each goes into the target directory so it
     // survives this process, and its path and cases go to the manifest.
@@ -1691,7 +1691,7 @@ fn test_threads(a: &Args) -> usize {
         .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, usize::from))
 }
 
-/// Write the harness manifest `rok` runs (spec 9.1): the run options
+/// Write the harness manifest `rok` runs: the run options
 /// `rokc` resolved, then each executable with its cases. Without
 /// `--emit-harness`, name the built executables for a human instead.
 fn write_harness_manifest(
@@ -1778,7 +1778,7 @@ fn cmd_doc(mut a: Args) {
         a.positional.push(main.display().to_string());
         a.name.get_or_insert_with(|| "rok".to_owned());
     }
-    // A package with both root files: its library (0.3.1).
+    // A package with both root files: its library.
     let pkg = discover_arg(&a);
     let pkg = pkg.library_target().unwrap_or(pkg);
     prebuild(&mut a, Some(&pkg)).unwrap_or_else(|e| fail(&e));
@@ -2112,7 +2112,7 @@ fn cmd_profdata(a: &Args) {
     }
 }
 
-/// `rokc bindgen <header>` (std 1.7.6, spec 9.1.3): one block per
+/// `rokc bindgen <header>`: one block per
 /// symbol.
 fn cmd_bindgen(a: &Args) {
     let [header] = a.positional.as_slice() else {

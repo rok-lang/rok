@@ -1,7 +1,6 @@
-// spec: std §2.1.2
-// stdlib spec 2.1.2: `int` division by zero panics at the operator.
+// `int` division by zero panics at the operator.
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at tests/cases/int_div_zero_panics.rok:10:16:
+// expect-stderr: thread 'main' panicked at tests/cases/int_div_zero_panics.rok:9:16:
 // expect-stderr: attempt to divide an int by zero
 // expect-stdout:
 

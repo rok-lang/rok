@@ -4,7 +4,7 @@
 // pub: name
 // 3
 
-// Spec 6.8.4 / 6.9.5 / 6.9.6: `#[impl_derive_attribute(Trait, attr)]`,
+// `#[impl_derive_attribute(Trait, attr)]`,
 // `@has_derive_attr` / `@derive_attr`, `@apply_if` with `!` / `&&` /
 // `||`, `@field.has_attr`, `@field.is_pub`.
 fn fmt_show<T: Display>(v: T) -> str { f"{v}" }
@@ -50,7 +50,7 @@ trait Count {
     fn count() -> i32;
 }
 
-// Hygiene (6.9.8): the template's local `n` and the field-named locals
+// Hygiene: the template's local `n` and the field-named locals
 // `let @field.name = ..` don't capture each other.
 #[impl_derive(Count)]
 pub @derive {
@@ -86,5 +86,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 006.08-meta-blocks
-// spec: §6.8.4 §6.9.5 §6.9.6

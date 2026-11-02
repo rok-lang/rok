@@ -4,7 +4,7 @@
 // fmt failed: Other: a `Display` implementation failed (FmtError)
 // thrown: BrokenPipe
 
-// Spec 305.1a: an I/O error while `write_display` formats is thrown as
+// An I/O error while `write_display` formats is thrown as
 // the writer's `IoError`, with the writes before it kept and nothing
 // formatted after it; a `Display` that fails by itself is `Other`.
 
@@ -68,5 +68,3 @@ fn main() {
     try send(ref w2) catch e { println(f"thrown: {e.kind():?}"); };
 }
 
-// spec: std 223-io §2.23.0 §2.23.3
-// spec: std 210-fmt §2.10.12

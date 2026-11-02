@@ -1,4 +1,4 @@
-//! `f"..."` (refs-lang 1.7.3, stdlib 2.10) written into one runtime
+//! `f"..."` written into one runtime
 //! text (a `core::fmt::Formatter`'s; `rok_fmt_*` return it, maybe moved):
 //!
 //! ```text
@@ -487,7 +487,7 @@ fn static_hole(ctx: &LowerCtx<'_>, value: Expr, ty: &HirTy, text: &str) -> Optio
         Err(why) => {
             ctx.emit_error(
                 Code::INVALID_FORMAT,
-                format!("invalid format spec `{text}`: {why} (refs-lang 1.7.3)"),
+                format!("invalid format spec `{text}`: {why}"),
             );
             return None;
         }
@@ -498,8 +498,8 @@ fn static_hole(ctx: &LowerCtx<'_>, value: Expr, ty: &HirTy, text: &str) -> Optio
         _ => (false, false),
     };
     let needs = match spec.ty {
-        b'b' | b'o' | b'x' | b'X' if !int => Some("an integer (stdlib 2.10.5)"),
-        b'e' | b'E' | b'f' | b'g' if !int && !float => Some("a number (stdlib 2.10.6)"),
+        b'b' | b'o' | b'x' | b'X' if !int => Some("an integer"),
+        b'e' | b'E' | b'f' | b'g' if !int && !float => Some("a number"),
         _ => None,
     };
     if let Some(needs) = needs {

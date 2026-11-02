@@ -58,5 +58,3 @@ let start = Instant::now();
 await task::sleep(Duration::ms(20));
 println(f"slept {start.elapsed().as_ms() >= 20}");
 
-// spec: 004.12-async
-// spec: std §2.8.4 §2.20.7 §2.20.8

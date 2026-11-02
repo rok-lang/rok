@@ -1,7 +1,6 @@
-// spec: std §1.8.2
 // expect-error: bad.wit:3:24: expected a type, found `;`
 
-// Stdlib 1.8: a WIT syntax error names its file, line and column, on
+// A WIT syntax error names its file, line and column, on
 // any target.
 ffi::wit::import { "bad.wit" }
 

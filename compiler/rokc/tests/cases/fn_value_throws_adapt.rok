@@ -1,4 +1,3 @@
-// spec: refs-lang §4.4.9
 // expect-exit: 0
 // expect-stdout:
 // 4
@@ -6,7 +5,7 @@
 // 9
 // -2
 
-// Spec 4.4.9: a function value that throws less goes into a `fn` slot
+// A function value that throws less goes into a `fn` slot
 // that throws more through a compiler adapter, including a `fn`-typed
 // variable or a capturing closure (the adapter captures the callee).
 struct Negative { v: i32; }

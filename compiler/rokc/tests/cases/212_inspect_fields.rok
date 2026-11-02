@@ -1,4 +1,3 @@
-// spec: std §2.12.3
 // expect-exit: 0
 // expect-stdout:
 // owner: str pub=true
@@ -19,7 +18,7 @@
 // Box<f64>
 // ["k"] Manual [] 1
 
-// Stdlib 2.12.3: `fields()` lists each field with its instantiated type
+// `fields()` lists each field with its instantiated type
 // and whether it is `pub`; private fields are listed too (deriving
 // `Inspect` is the type's consent). Named, tuple, unit, generic and
 // nested structs; a struct's `variant_name()` is its type name. A hand
@@ -80,4 +79,3 @@ println(b.variant_name());
 let m = Manual { k: 1 };
 println(f"{m.field_names_of_val():?} {m.variant_name()} {Manual::variant_names():?} {Manual::fields().len()}");
 
-// spec: §6.10.2

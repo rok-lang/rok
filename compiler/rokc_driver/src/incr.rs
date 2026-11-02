@@ -1,4 +1,4 @@
-//! Incremental compilation below the package (spec 9.2.16). A store is a
+//! Incremental compilation below the package. A store is a
 //! file of entries by key in the incremental directory; a build reads what
 //! it needs and writes back what it used or made. Spans keep their file
 //! paths and are renumbered on read; an entry that doesn't read back is a

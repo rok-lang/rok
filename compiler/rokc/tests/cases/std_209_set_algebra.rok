@@ -1,4 +1,3 @@
-// spec: std 209-collections §2.9.4
 // expect-exit: 0
 // expect-stdout:
 // union 4 inter 2 diff 1 sym 2
@@ -7,7 +6,7 @@
 // insert new true dup false, remove true false
 // order-free eq true
 
-// spec 2.9.4: `Set<T>` algebra and predicates; `insert` / `remove` report
+// `Set<T>` algebra and predicates; `insert` / `remove` report
 // whether the set changed; Sets compare independent of order.
 fn main() {
     let a: Set<i32> = {1, 2, 3};

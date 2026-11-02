@@ -1,4 +1,3 @@
-// spec: std §2.21.1
 // expect-exit: 0
 // expect-stdout:
 // sha256 32 64
@@ -15,7 +14,7 @@
 // rsa true
 // same type true
 
-// The unique names of 2.21 are reachable flat at `crypto::`, the submodule
+// The unique crypto names are reachable flat at `crypto::`, the submodule
 // path naming the same definition; keys and HKDF are under their algorithm
 // module.
 use rok::core::crypto;

@@ -1,11 +1,10 @@
-// spec: §2.9.5
-// expect-error: 21:15: conflicting implementations of trait `X`: `impl<..> X for W<T | A>` and `impl<..> X for W<A | U>` overlap
-// expect-error: 23:15: conflicting implementations of trait `X`: `impl<..> X for V<fn(T) -> i32>` and `impl<..> X for V<fn(str) -> U>` overlap on `V<fn(str) -> i32>`
-// expect-error: 25:15: conflicting implementations of trait `X`: `impl<..> X for (T, List<i32>)` and `impl<..> X for (str, IntList)` overlap on `(str, List<i32>)`
-// expect-error: 27:15: conflicting implementations of trait `X`: `impl<..> X for Z<fn(T) -> i32>` and `impl<..> X for Z<fn(U) -> i32 + Send>` overlap
+// expect-error: 20:15: conflicting implementations of trait `X`: `impl<..> X for W<T | A>` and `impl<..> X for W<A | U>` overlap
+// expect-error: 22:15: conflicting implementations of trait `X`: `impl<..> X for V<fn(T) -> i32>` and `impl<..> X for V<fn(str) -> U>` overlap on `V<fn(str) -> i32>`
+// expect-error: 24:15: conflicting implementations of trait `X`: `impl<..> X for (T, List<i32>)` and `impl<..> X for (str, IntList)` overlap on `(str, List<i32>)`
+// expect-error: 26:15: conflicting implementations of trait `X`: `impl<..> X for Z<fn(T) -> i32>` and `impl<..> X for Z<fn(U) -> i32 + Send>` overlap
 
-// Coherence (2.9.5) unifies generic impl targets structurally: sum
-// members as a set (2.6.4), `fn` types (auto bounds don't separate: a
+// Coherence unifies generic impl targets structurally: sum
+// members as a set, `fn` types (auto bounds don't separate: a
 // `+ Send` value fits the plain impl too), and through type aliases.
 
 trait X { fn x(self) -> i32; }

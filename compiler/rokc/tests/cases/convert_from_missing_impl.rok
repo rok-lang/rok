@@ -1,7 +1,6 @@
-// spec: std §2.11.8
 // expect-error: no `From<u64>` impl for `i64`
 
-// Stdlib spec 2.11.8: `u64 → i64` may not fit, so `i64` has no
+// `u64 → i64` may not fit, so `i64` has no
 // `From<u64>` among its `From` impls.
 fn main() {
     let x = i64::from(5u64);

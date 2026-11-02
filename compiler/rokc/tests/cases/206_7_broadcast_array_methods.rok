@@ -1,8 +1,7 @@
-// spec: std 206-broadcast §2.6.7
 // expect-exit: 0
 // expect-stdout: 0 0 [1, 4, 9] [true, false, false] [false, false] [1, 2, 3]
 
-// Stdlib 2.6.7: the `[T; N]` dot trait impls, called as methods, work
+// The `[T; N]` dot trait impls, called as methods, work
 // for every `N` including 0 and leave the receiver unchanged.
 fn main() -> i32 {
     let x: [i32; 0] = [];

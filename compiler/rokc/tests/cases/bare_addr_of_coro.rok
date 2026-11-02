@@ -1,5 +1,4 @@
 // expect-exit: 0
-// spec: std 101-ptr §1.1.2
 // expect-stdout:
 // 10
 // 11

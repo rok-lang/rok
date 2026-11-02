@@ -217,7 +217,7 @@ pub(super) fn no_method_help(
 
 /// Help for `try_x` / `x_or_none`, which `ty` lacks while it has `x`:
 /// a function has one failure channel and `try?` turns a throw into
-/// `none` (stdlib 0.5.9), so the plain name is the one to call. `owner`
+/// `none`, so the plain name is the one to call. `owner`
 /// is what goes before the name (`s.`, `Path::`). `None` when `x` is
 /// missing, or for `try_x` when `x` does not throw (another meaning).
 pub(super) fn twin_help<'n>(
@@ -325,7 +325,7 @@ fn read_only_view_help(
         .unwrap_or("xs[a:b]");
     Some(format!(
         "`{}` is a read-only view; a view that writes the list is a `SliceMut<{elem}>`: \
-         `let s: SliceMut<{elem}> = {src};` (stdlib 2.9.7a)",
+         `let s: SliceMut<{elem}> = {src};`",
         ctx.ty_name(ty)
     ))
 }

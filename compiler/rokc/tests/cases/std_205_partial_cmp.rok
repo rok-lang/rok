@@ -1,4 +1,3 @@
-// spec: std 205-cmp §2.5.3
 // expect-exit: 0
 // expect-stdout:
 // Less Equal Greater
@@ -6,7 +5,7 @@
 // str: Less
 // user: Greater none
 
-// spec 2.5.3: `PartialOrd::partial_cmp` (provided) returns
+// `PartialOrd::partial_cmp` (provided) returns
 // `Ordering | none`; `none` for incomparable values (NaN).
 struct Half { v: f64; }
 

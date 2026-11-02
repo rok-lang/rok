@@ -1,4 +1,3 @@
-// spec: §2.10.9
 // expect-error: no method `area` on type parameter `B::Elem`: it has no bounds
 // expect-error: operator `+` cannot be applied to `i64` and `I::Item`
 // expect-error: mismatched types: the return value expects `T`, found `T::Output`

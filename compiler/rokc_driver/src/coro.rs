@@ -1,4 +1,4 @@
-//! `yield fn` / `async fn` / `async yield fn` (spec 4.1.11) as plain
+//! `yield fn` / `async fn` / `async yield fn` as plain
 //! functions returning the coroutine wrapper, the body a coroutine block:
 //!
 //! ```text
@@ -8,8 +8,8 @@
 //!      }
 //! ```
 //!
-//! The error leaves through the coroutine (`await` / `next`, spec 4.14.10),
-//! so the rewritten function doesn't throw. `async fn main` (4.16.5) runs
+//! The error leaves through the coroutine (`await` / `next`),
+//! so the rewritten function doesn't throw. `async fn main` runs
 //! its body on the executor:
 //! `fn main() -> T { rok::core::task::block_on(async { body }) }`.
 
@@ -19,7 +19,7 @@ use rokc_ast::{
 };
 use rokc_diagnostic::{Code, RokDiagnostic, Span};
 
-/// The flattened items; a root `main` is the entry (spec 4.16.5).
+/// The flattened items; a root `main` is the entry.
 pub fn rewrite_items(items: &mut [(String, Item)], diags: &mut Vec<RokDiagnostic>) {
     for (module, item) in items {
         match item {
@@ -100,7 +100,7 @@ fn rewrite_fn(f: &mut FnDef, root: bool, diags: &mut Vec<RokDiagnostic>) {
         kind: TyKind::Tuple(Vec::new()),
         span,
     };
-    // Spec 4.1.3: an `async fn` without `-> T` takes its result type
+    // An `async fn` without `-> T` takes its result type
     // from the body (HIR infers the fn's return type from the block).
     let infer = f.ret_ty.is_none()
         && f.is_async
@@ -115,7 +115,7 @@ fn rewrite_fn(f: &mut FnDef, root: bool, diags: &mut Vec<RokDiagnostic>) {
                 Code::INVALID_SIGNATURE,
                 f.span,
                 format!(
-                    "`yield fn {}` needs its item type: `yield fn {}(..) -> T` (spec 4.11.12)",
+                    "`yield fn {}` needs its item type: `yield fn {}(..) -> T`",
                     f.name, f.name
                 ),
             ));
@@ -162,7 +162,7 @@ fn rewrite_fn(f: &mut FnDef, root: bool, diags: &mut Vec<RokDiagnostic>) {
         });
     }
     if is_main {
-        // 4.16.5: the body is the executor's top-level task. The future's
+        // The body is the executor's top-level task. The future's
         // type comes from the signature, so a non-throwing body still fits
         // `try_block_on::<T, E>`.
         let (runner, generics, throws) = match err {
@@ -236,7 +236,7 @@ fn trailing(e: Expr, span: Span) -> Block {
     }
 }
 
-/// Spec 4.16.5: top-level statements with an `await` (or `for await`)
+/// Top-level statements with an `await` (or `for await`)
 /// outside any `async` block / closure make the implicit `main` async.
 pub fn has_top_level_await(stmts: &[Stmt]) -> bool {
     struct V {

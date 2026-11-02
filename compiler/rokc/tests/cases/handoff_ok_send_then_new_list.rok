@@ -4,7 +4,6 @@
 // 1
 // got 9
 
-// spec: std 213-marker §2.13.9
 // Send a list, start a new one under the same name in a loop.
 use rok::std::thread;
 fn main() {

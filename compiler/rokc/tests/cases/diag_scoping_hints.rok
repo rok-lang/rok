@@ -1,7 +1,6 @@
-// spec: §5.4.9 §4.16.7
-// expect-error: diag_scoping_hints.rok:18:20: cannot find type `Point` in module `util`: it is defined in the parent module, and a module sees only its own items and what it imports
+// expect-error: diag_scoping_hints.rok:17:20: cannot find type `Point` in module `util`: it is defined in the parent module, and a module sees only its own items and what it imports
 // expect-error: help: add `use sup::Point;` inside `mod util`
-// expect-error: diag_scoping_hints.rok:16:33: cannot find value `base`: it is a top-level `let`, a variable of the program's statements, and a `fn` cannot see those
+// expect-error: diag_scoping_hints.rok:15:33: cannot find value `base`: it is a top-level `let`, a variable of the program's statements, and a `fn` cannot see those
 // expect-error: help: make it a constant and use that name, `const BASE: i32 = 10;`, or pass `base` to the function as an argument
 // forbid-error: no field `x`
 // forbid-error: EdPoint

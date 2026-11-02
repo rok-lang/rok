@@ -19,4 +19,3 @@ println(f"{s.area()}");
 let maybe: any Shape | none = none;
 match maybe { v: any Shape => println(f"{v.area()}"), none => println(f"{0}"), }
 
-// spec: 002.02-any-slot

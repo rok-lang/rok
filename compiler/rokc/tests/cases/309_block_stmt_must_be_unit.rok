@@ -1,6 +1,6 @@
 // expect-error: 7:5: this block-like statement leaves a value of type `i32` without `;`
 
-// 3.9: a block-like statement ends without `;`, so its value would be
+// A block-like statement ends without `;`, so its value would be
 // dropped silently; it must be `()` (or end the block as its value).
 fn f(c: bool) -> i32 {
     if c { println("unit"); } else {}
@@ -11,4 +11,3 @@ fn f(c: bool) -> i32 {
 fn main() {
     println(f"{f(true)}");
 }
-// spec: §3.9.5

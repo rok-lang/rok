@@ -1,5 +1,5 @@
 #!/bin/sh
-# Builds what rokc links for a --target (spec 9.2.14) into
+# Builds what rokc links for a --target into
 # <cargo target dir>/lib/rok/targets/<triple>/.
 #
 #   targets/build.sh [<triple>...]

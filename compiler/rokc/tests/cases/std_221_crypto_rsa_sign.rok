@@ -72,4 +72,3 @@ fn main() {
     println(f"rejected: short salt {short}, damaged key {fault}, malformed {malformed}");
 }
 
-// spec: std 221-crypto §2.21.4

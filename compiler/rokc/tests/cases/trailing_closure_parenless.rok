@@ -4,7 +4,7 @@
 // 6 3 9
 // 1 2 3
 
-// Spec 4.8.1: `primary trailing_closure` - the call's `( )` may go when
+// `primary trailing_closure` - the call's `( )` may go when
 // a `|params| { .. }` trailing closure follows (`xs.map |x| { .. }`,
 // `f |x| { .. }`). Without the `{` body it is the `|` operator.
 
@@ -30,4 +30,3 @@ fn main() -> i32 {
     0
 }
 
-// spec: 004.08-trailing-closure

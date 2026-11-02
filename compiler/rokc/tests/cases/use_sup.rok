@@ -14,4 +14,3 @@ fn main() {
     println(f"{parent::child::caller()}");
 }
 
-// spec: 005.05-use

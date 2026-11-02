@@ -1,6 +1,5 @@
 // needs: threads
 // expect-exit: 0
-// spec: std 304-thread §3.4.4
 // expect-stdout:
 // tasks 64 pushed 128000
 

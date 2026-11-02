@@ -1,4 +1,3 @@
-// spec: §6.2.15
 // rokc-arg: --extern sdep=tests/cases/sealed_impl_foreign_error/sdep
 // expect-error: `impl Shape for Square`: trait `Shape` is sealed, so only `sdep` implements it
 // expect-error: = note: a sealed trait still works in bounds and calls: use the types that already implement it

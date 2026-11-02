@@ -1,5 +1,3 @@
-// spec: std §2.13.5
-// spec: §3.17.2 §3.17.3 §3.17.4
 // expect-exit: 0
 // expect-stdout:
 // drop 1
@@ -11,10 +9,10 @@
 // drop 4
 // drop 3
 
-// spec 3.17.2: the body's tail is the value; the resource drops at the
-// end. 3.17.3: `using f = try open(..)`: a failed acquisition binds
+// The body's tail is the value; the resource drops at the
+// end. `using f = try open(..)`: a failed acquisition binds
 // nothing, so nothing drops; an error in the body drops first, then
-// propagates. 3.17.4: nested `using` releases inner first.
+// propagates. Nested `using` releases inner first.
 struct IoError { code: i32; }
 struct File { id: i32; }
 

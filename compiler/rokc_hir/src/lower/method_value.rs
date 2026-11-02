@@ -1,4 +1,4 @@
-//! Method path values (spec 3.5.3): `T::m`, `Tr::m`, `<T as Tr>::m`,
+//! Method path values: `T::m`, `Tr::m`, `<T as Tr>::m`,
 //! `i32::add` without a call are `fn` values (`fn(args) -> R` static,
 //! `fn(Self, args) -> R` instance). The value is the capture-free
 //! eta-expansion `|a, b| T::m(a, b)`, whose body is the ordinary path call
@@ -59,7 +59,7 @@ pub(super) fn method_path_value(
             span,
             format!(
                 "`{display}` has a `ref` parameter (or `ref self`) and cannot be used as a `fn` \
-                 value - a `fn` type has no `ref` parameters (spec 4.7.6)"
+                 value - a `fn` type has no `ref` parameters"
             ),
         ));
     }
@@ -87,7 +87,7 @@ pub(super) fn method_path_value(
                 format!(
                     "type annotations needed: the `fn` type of `{display}` as a value - annotate \
                      the binding (`let f: fn(..) -> R = {display};`), pass it to a `fn` \
-                     parameter, or name the type arguments (spec 3.5.3)"
+                     parameter, or name the type arguments"
                 ),
             ));
         }

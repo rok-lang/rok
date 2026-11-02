@@ -8,7 +8,7 @@
 // w
 // ids differ
 
-// std::thread (304): eight OS threads bump one `Atomic<i32>` (2.16.2);
+// std::thread (304): eight OS threads bump one `Atomic<i32>`;
 // `join` returns each closure's value. A `()` closure, `Builder`, and
 // `ThreadId`.
 use rok::core::sync::UpdateOrdering;
@@ -46,4 +46,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: std 304-thread

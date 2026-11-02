@@ -1,11 +1,10 @@
-// spec: 007.04-barriers-and-roots §7.4.1
 // expect-exit: 0
 // expect-stdout:
 // alpha-0 beta-1
 // gamma 3
 // depth 20 ok
 
-// spec 7.4.1: every GC reference held in a local (or a struct field in a
+// Every GC reference held in a local (or a struct field in a
 // local) across a call is a shadow-stack root; a collection inside a
 // callee must not free or corrupt it, at any call depth.
 extern "C" {

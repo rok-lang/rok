@@ -30,4 +30,3 @@ fn main() -> i32 {
     return s + 5;
 }
 
-// spec: std 207-iter

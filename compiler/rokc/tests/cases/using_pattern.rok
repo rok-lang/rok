@@ -6,7 +6,7 @@
 // close 4
 // 7
 
-// Spec 3.17.1 `using_binding ::= pattern "=" expr`: the pattern binds
+// `using_binding ::= pattern "=" expr`: the pattern binds
 // from the resource, and the whole resource is dropped.
 struct File { fd: i32; path: str; }
 
@@ -39,5 +39,3 @@ fn main() -> i32 {
     0
 }
 
-// spec: 003.17-using-expression
-// spec: §3.17.1

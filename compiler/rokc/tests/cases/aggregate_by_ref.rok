@@ -1,4 +1,3 @@
-// spec: refs-lang §8.6.6
 // expect-exit: 0
 // expect-stdout:
 // 130816 0
@@ -10,7 +9,7 @@
 // 8779 133 41 132 40
 
 // Aggregates over 64 bytes go to and from a function only its module
-// calls directly by address (other calls keep spec 8.6.6: values): a
+// calls directly by address (other calls keep values): a
 // copy for the callee, the result through the caller's memory. The
 // semantics stay those of values.
 struct Big { a: [i64; 8]; tag: i64; }

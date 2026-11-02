@@ -1,8 +1,7 @@
-// spec: §4.16.1 §4.16.6
 // expect-exit: 0
 // expect-stdout: 7 8
 
-// Spec 4.16: only the root module's `main` is the entry; a module's
+// Only the root module's `main` is the entry; a module's
 // `main` (also an `async` one) is an ordinary function beside the
 // implicit `main` made from the top-level statements.
 mod a {

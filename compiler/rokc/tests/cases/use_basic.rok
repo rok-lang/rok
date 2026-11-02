@@ -15,4 +15,3 @@ fn main() {
     println(f"{one()} {second()} {three()}");
 }
 
-// spec: 005.05-use

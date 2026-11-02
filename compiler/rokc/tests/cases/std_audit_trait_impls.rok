@@ -1,9 +1,3 @@
-// spec: std 205-cmp §2.5.2
-// spec: std 205-cmp §2.5.7
-// spec: std 203-ops §2.3.4
-// spec: std 214-error §2.14.3
-// spec: std 220-future §2.20.5
-// spec: std 213-marker §2.13.2
 // needs: threads
 // expect-exit: 0
 // expect-stdout:

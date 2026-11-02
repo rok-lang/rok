@@ -1,5 +1,3 @@
-// spec: std 210-fmt §2.10.2 §2.10.12
-// spec: §6.2.7
 // expect-exit: 0
 // expect-stdout:
 // ab-c
@@ -8,10 +6,10 @@
 // none none false false - -
 // [  -0x2a]
 
-// Stdlib 2.10.2: a `Formatter` on its own buffer (`new`, `with_spec`,
+// A `Formatter` on its own buffer (`new`, `with_spec`,
 // `finish`), `pad` applying fill / align / width / precision, the spec
 // accessors after `FormatSpec::parse`, `pad_integral`; writes to memory
-// never throw `FmtError` (2.10.12).
+// never throw `FmtError`.
 fn show_align(a: fmt::Alignment | none) -> str {
     match a {
         none => "-",

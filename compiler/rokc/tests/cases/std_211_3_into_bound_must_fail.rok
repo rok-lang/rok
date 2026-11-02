@@ -1,10 +1,9 @@
-// spec: std §2.11.3 / refs-lang §2.8.5
 // expect-error: `Into` takes no generic arguments but 1 was given
 // expect-error: `Tr` takes 1 generic argument but 2 were given
 
-// Stdlib 2.11.3: `Into` has no type parameter, so there is no bound
+// `Into` has no type parameter, so there is no bound
 // `T: Into<U>` (write `U: From<T>`); a bound gives a trait at most as
-// many type arguments as it declares (2.8.5).
+// many type arguments as it declares.
 trait Tr<A> { fn f(self, a: A); }
 fn widen2<T: Into<U>, U>(x: T) -> U { x.into() }
 fn two<T: Tr<i32, i64>>(x: T) {}

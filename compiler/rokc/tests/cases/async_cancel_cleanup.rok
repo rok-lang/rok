@@ -9,7 +9,7 @@
 // steps 3
 // done before cancel: 7
 
-// `Task::cancel` (stdlib 2.18.4, refs-lang 7.7.10): the task's current
+// `Task::cancel`: the task's current
 // `await` is a cancellation point; the body is left like a `return`,
 // running the `finally` blocks and `using` drops on the way out.
 struct Guard {
@@ -68,4 +68,3 @@ let v = await t3;
 t3.cancel();
 println(f"done before cancel: {v}");
 
-// spec: 004.12-async

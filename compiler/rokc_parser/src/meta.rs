@@ -1,4 +1,4 @@
-//! User meta blocks (refs-lang 6.8 / 6.9): `#[impl_derive(Tr)]`,
+//! User meta blocks: `#[impl_derive(Tr)]`,
 //! `#[impl_derive_attribute(Tr, attr)]` and `#[impl_attribute(name)]`.
 //!
 //! Bodies stay tokens. A driver pre-pass collects them into a `MetaTable`
@@ -7,7 +7,7 @@
 //! ...) and parsing the result, to a fixpoint. Tokens keep their origin's
 //! spans; errors point at the template with a label at the use.
 //!
-//! Hygiene (6.9.8): template locals are renamed `x__meta` so they neither
+//! Hygiene: template locals are renamed `x__meta` so they neither
 //! capture nor shadow the item's names; enum payloads get generated names.
 
 // Slice indexing and one flat template match; `meta_block` tells "not a
@@ -36,7 +36,7 @@ pub enum MetaKind {
     Derive,
     /// `#[impl_attribute]` - used as `#[name]` / `#[name(args)]`.
     Attribute,
-    /// `#[impl_macro]` - used as `name!(..)` at a call site (spec 6.8.12).
+    /// `#[impl_macro]` - used as `name!(..)` at a call site.
     Macro,
 }
 
@@ -57,7 +57,7 @@ pub struct MetaDef {
     /// The defining package (`""` for the one being built).
     pub package: String,
     /// The module that holds the block: its template's names resolve
-    /// and are access-checked there (spec 6.9.9). Inline `mod`s of the
+    /// and are access-checked there. Inline `mod`s of the
     /// file until the driver prefixes the file's module.
     pub module: String,
     /// What the defining file's `use`s import (globs end in `*` / `**`):
@@ -68,7 +68,7 @@ pub struct MetaDef {
     /// Tokens between the body's braces.
     pub body: Vec<Token>,
     /// The block's own `#[cfg(..)]` attributes: the driver registers it
-    /// only when they hold (6.9.8: cfg runs before expansion).
+    /// only when they hold (cfg runs before expansion).
     pub cfg: Vec<Attribute>,
 }
 
@@ -93,7 +93,7 @@ impl MetaDef {
     }
 
     /// Mount path of the block's package (`""`: the one being built); its
-    /// `pkg::` paths keep naming it wherever the block expands (6.9.8).
+    /// `pkg::` paths keep naming it wherever the block expands.
     pub fn set_package(&mut self, package: &str) {
         package.clone_into(&mut self.package);
         for k in 0..self.body.len() {
@@ -120,7 +120,7 @@ pub struct MetaTable {
     defs: Vec<MetaDef>,
 }
 
-/// Attributes the compiler owns (6.2 - 6.7); `#[impl_attribute]` can't
+/// Attributes the compiler owns; `#[impl_attribute]` can't
 /// take their names. Every name the driver checks is here (a driver test
 /// holds it).
 pub const BUILTIN_ATTRS: &[&str] = &[
@@ -165,8 +165,7 @@ pub const BUILTIN_ATTRS: &[&str] = &[
     "warn",
 ];
 
-/// Compiler built-in `!`-forms ([6.3](603)/[6.11](611)); a macro cannot
-/// take their names (spec 6.8.12).
+/// Compiler built-in `!`-forms; a macro cannot take their names.
 const BUILTIN_BANGS: &[&str] = &["cfg", "include_bytes", "include_str"];
 
 impl MetaTable {
@@ -204,7 +203,7 @@ impl MetaTable {
         out
     }
 
-    /// The macro `name!` a meta block registers, if any (spec 6.8.12).
+    /// The macro `name!` a meta block registers, if any.
     #[must_use]
     pub fn find_macro(&self, name: &str) -> Option<&MetaDef> {
         self.find(MetaKind::Macro, name)
@@ -246,7 +245,7 @@ impl MetaTable {
 
     /// Register `def`; a second block for the same name in one package,
     /// or one taking a built-in derive / attribute name, is an error. Two
-    /// packages may each register a name: a use then says which (6.8.11).
+    /// packages may each register a name: a use then says which.
     pub fn add(&mut self, def: MetaDef) -> Option<RokDiagnostic> {
         let clash = |code: Code, msg: String| RokDiagnostic::error(code, def.span, msg);
         if let Some(old) = self
@@ -264,7 +263,7 @@ impl MetaTable {
             return Some(
                 clash(
                     Code::DUPLICATE_DEFINITION,
-                    format!("{what} is defined by two meta blocks (spec 6.8.11)"),
+                    format!("{what} is defined by two meta blocks"),
                 )
                 .with_secondary(old.span, "first defined here"),
             );
@@ -273,7 +272,7 @@ impl MetaTable {
             return Some(clash(
                 Code::INVALID_META_BLOCK,
                 format!(
-                    "`{}` is a built-in derive; a meta block cannot redefine it (spec 6.2.1)",
+                    "`{}` is a built-in derive; a meta block cannot redefine it",
                     def.name
                 ),
             ));
@@ -283,7 +282,7 @@ impl MetaTable {
                 clash(
                     Code::INVALID_META_BLOCK,
                     format!(
-                        "`#[{}]` is a built-in attribute; a meta block cannot redefine it (spec 6.2)",
+                        "`#[{}]` is a built-in attribute; a meta block cannot redefine it",
                         def.name
                     ),
                 )
@@ -297,7 +296,7 @@ impl MetaTable {
             return Some(clash(
                 Code::INVALID_META_BLOCK,
                 format!(
-                    "`{}!` is a built-in form; a macro cannot take its name (spec 6.8.12)",
+                    "`{}!` is a built-in form; a macro cannot take its name",
                     def.name
                 ),
             ));
@@ -923,25 +922,22 @@ impl Expander<'_> {
         let head = match b.get(k + 1).map(|t| &t.kind) {
             Some(TokenKind::SelfUpper) => "Self".to_owned(),
             Some(TokenKind::Ident(n)) => n.clone(),
-            // Spec 6.9.8: `@for` and `@concat` are macro-only.
+            // `@for` and `@concat` are macro-only.
             Some(TokenKind::For) => {
                 self.err(
                     k,
                     "`@for` belongs to `@macro` templates only; a derive or attribute \
-                     repeats with `@for_fields { .. }` / `@for_variants { .. }` (spec 6.9.8)",
+                     repeats with `@for_fields { .. }` / `@for_variants { .. }`",
                 );
                 return k + 2;
             }
             _ => {
-                self.err(k, "expected a template token name after `@` (spec 6.9.1)");
+                self.err(k, "expected a template token name after `@`");
                 return k + 1;
             }
         };
         if head == "concat" {
-            self.err(
-                k,
-                "`@concat` belongs to `@macro` templates only (spec 6.9.8)",
-            );
+            self.err(k, "`@concat` belongs to `@macro` templates only");
             return k + 2;
         }
         let mut j = k + 2;
@@ -999,7 +995,7 @@ impl Expander<'_> {
                     j = end + 1;
                 }
                 _ => {
-                    self.err(k, format!("`@{full}` needs `(..)` arguments (spec 6.9)"));
+                    self.err(k, format!("`@{full}` needs `(..)` arguments"));
                     return j;
                 }
             }
@@ -1012,7 +1008,7 @@ impl Expander<'_> {
                     j = end + 1;
                 }
                 _ => {
-                    self.err(k, format!("`@{full}` needs a `{{ .. }}` block (spec 6.9)"));
+                    self.err(k, format!("`@{full}` needs a `{{ .. }}` block"));
                     return j;
                 }
             }
@@ -1039,7 +1035,7 @@ impl Expander<'_> {
         if attr_only && self.def.kind != MetaKind::Attribute {
             self.err(
                 k,
-                format!("`@{full}` is only meaningful in an `@attribute` block (spec 6.8.7)"),
+                format!("`@{full}` is only meaningful in an `@attribute` block"),
             );
             return j;
         }
@@ -1050,7 +1046,7 @@ impl Expander<'_> {
         {
             self.err(
                 k,
-                format!("`@{full}` needs `#[impl_derive_attribute(Trait, attr)]` (spec 6.9.6)"),
+                format!("`@{full}` needs `#[impl_derive_attribute(Trait, attr)]`"),
             );
             return j;
         }
@@ -1140,8 +1136,8 @@ impl Expander<'_> {
                     self.err(
                         k,
                         format!(
-                            "`#[{}]` cannot be applied to a {} (`@accept` at the template; \
-                             spec 6.9.5)",
+                            "`#[{}]` cannot be applied to a {} (`@accept` at the \
+                             template)",
                             self.def.name, self.t.kind
                         ),
                     );
@@ -1276,7 +1272,7 @@ impl Expander<'_> {
             }
             "attribute" => self.t.attr_args.clone(),
             _ => {
-                self.err(k, format!("unknown template token `@{full}` (spec 6.9)"));
+                self.err(k, format!("unknown template token `@{full}`"));
                 return j;
             }
         };
@@ -1583,7 +1579,7 @@ impl Parser<'_> {
                 return None;
             }
             // This package's block, then a `use`d one, then the standard
-            // library's (6.8.11).
+            // library's.
             let (package, imports) = self.meta_site(at, name);
             if let Some(d) = all.iter().find(|d| d.package == package) {
                 return Some(MetaUse::Def((*d).clone()));
@@ -1621,7 +1617,7 @@ impl Parser<'_> {
             }
             None if kind == MetaKind::Macro => format!(
                 "no package defines `{name}!`; a package defines one with \
-                 `#[impl_macro({name})] pub @macro {{ .. }}` (spec 6.8.12)"
+                 `#[impl_macro({name})] pub @macro {{ .. }}`"
             ),
             None if crate::derive::derivable(name).is_some() => {
                 format!("write `#[derive({name})]`: it is built in")
@@ -1661,7 +1657,7 @@ impl Parser<'_> {
             Code::META_NAME,
             at,
             format!(
-                "{} is defined by several packages, so the bare name is ambiguous (spec 6.8.11)",
+                "{} is defined by several packages, so the bare name is ambiguous",
                 meta_use(kind, "", name)
             ),
         )
@@ -1675,7 +1671,7 @@ impl Parser<'_> {
     }
 
     /// A bare `name` that none of the blocks `all` in reach of `site`
-    /// registers: an error naming the qualified forms (spec 6.8.11).
+    /// registers: an error naming the qualified forms.
     fn unscoped_meta(&mut self, kind: MetaKind, name: &str, all: &[&MetaDef], at: Span) -> MetaUse {
         let forms: Vec<String> = all
             .iter()
@@ -1710,7 +1706,7 @@ impl Parser<'_> {
             at,
             format!(
                 "{} is {owner}, which a bare name does not reach: it names this package's \
-                 blocks, `use`d ones and the standard library's (spec 6.8.11)",
+                 blocks, `use`d ones and the standard library's",
                 meta_use(kind, "", name)
             ),
         )
@@ -1728,8 +1724,8 @@ impl Parser<'_> {
     }
 
     /// The package and `use` imports a bare meta name at `at` is looked
-    /// up from: its definition's for a name a template wrote (spec
-    /// 6.9.9), else this file's.
+    /// up from: its definition's for a name a template wrote,
+    /// else this file's.
     fn meta_site(&self, at: Span, name: &str) -> (String, Vec<Vec<String>>) {
         let is_name = |t: &&Token| matches!(&t.kind, TokenKind::Ident(n) if n == name);
         let tok = match self
@@ -1918,7 +1914,7 @@ impl Parser<'_> {
                 Code::INVALID_META_BLOCK,
                 ma.span,
                 format!(
-                    "`#[{}(..)]` needs a `{}@{want} {{ .. }}` body (spec 6.8)",
+                    "`#[{}(..)]` needs a `{}@{want} {{ .. }}` body",
                     ma.name(),
                     if vis == Visibility::Private {
                         ""
@@ -1936,7 +1932,7 @@ impl Parser<'_> {
                 Code::INVALID_META_BLOCK,
                 ma.span,
                 format!(
-                    "`#[{}(..)]` takes an `@{want} {{ .. }}` body, not `@{starter}` (spec 6.8.7)",
+                    "`#[{}(..)]` takes an `@{want} {{ .. }}` body, not `@{starter}`",
                     ma.name()
                 ),
             ));
@@ -1959,10 +1955,7 @@ impl Parser<'_> {
             self.diagnostics.push(meta_err(
                 Code::INVALID_META_BLOCK,
                 ma.span,
-                format!(
-                    "`#[{}]` takes {arity} name argument(s) (spec 6.8.1)",
-                    ma.name()
-                ),
+                format!("`#[{}]` takes {arity} name argument(s)", ma.name()),
             ));
             return Some(None);
         }
@@ -1986,7 +1979,7 @@ impl Parser<'_> {
         }))
     }
 
-    /// Whether `def` may be used from this file (6.8.6: a private block
+    /// Whether `def` may be used from this file (a private block
     /// only in its own module).
     fn meta_visible(&mut self, def: &MetaDef, at: Span) -> bool {
         if def.public || def.file == self.file {
@@ -1997,7 +1990,7 @@ impl Parser<'_> {
                 Code::PRIVATE_ITEM,
                 at,
                 format!(
-                    "meta block `{}` is private to `{}` (mark it `pub @..`; spec 6.8.6)",
+                    "meta block `{}` is private to `{}` (mark it `pub @..`)",
                     def.name, def.file
                 ),
             )
@@ -2311,7 +2304,7 @@ impl Parser<'_> {
     }
 
     /// Expand `def` over `target` and parse the result (expanding again
-    /// what it produces - 6.8.8).
+    /// what it produces).
     fn run_meta(&mut self, def: &MetaDef, target: &Target, item: &Item) -> Vec<Item> {
         let key = format!("{:?}:{}:{}", def.kind, def.name, def.package);
         if self.meta_stack.contains(&key) || self.meta_stack.len() >= 32 {
@@ -2325,7 +2318,7 @@ impl Parser<'_> {
                     Code::EXPANSION_LIMIT,
                     target.at,
                     format!(
-                        "cyclic meta expansion: {} → {} (spec 6.8.8)",
+                        "cyclic meta expansion: {} → {}",
                         chain.join(" → "),
                         def.name
                     ),
@@ -2411,7 +2404,7 @@ impl Parser<'_> {
             }
             self.diagnostics.push(d);
         }
-        // 6.9.8: `#[cfg]` runs before expansion - what the item's cfg
+        // `#[cfg]` runs before expansion - what the item's cfg
         // removes, its expansion goes with it.
         let cfgs: Vec<&Attribute> = item.attrs().iter().filter(|a| a.name() == "cfg").collect();
         for i in &mut items {
@@ -2438,7 +2431,7 @@ pub(crate) fn use_site_path(arg: &[Token]) -> Option<Vec<Token>> {
     Some(arg.iter().map(|t| tok(t.kind.clone(), t.span)).collect())
 }
 
-/// An expansion's own items land at the use site (spec 6.9.9), so the
+/// An expansion's own items land at the use site, so the
 /// names it declares there are looked up there too.
 pub(crate) fn place_declared(tokens: &mut [Token]) {
     let mut depth = 0i32;

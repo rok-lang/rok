@@ -1,5 +1,3 @@
-// spec: 006.09-meta-templates
-// spec: §6.9.9
 // expect-error: this meta template names `pkg::nope`, which does not exist
 // expect-error: this meta template names `pkg::shown::nope`, which does not exist
 // expect-error: this meta template names `pkg::inner::hidden`, which its module `<root>` cannot see

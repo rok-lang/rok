@@ -1,4 +1,4 @@
-//! `#[derive(...)]` (refs-lang 6.2.1).
+//! `#[derive(...)]`.
 //!
 //! Each trait becomes an `impl` written as source and parsed, every token
 //! carrying the attribute's span so diagnostics point there. Field bounds
@@ -88,7 +88,7 @@ pub(crate) fn derive_items(item: &Item, file: &str) -> (Vec<Item>, Vec<RokDiagno
     let has = |n: &str| derived.iter().any(|(d, _)| d == n);
     for (tr, at) in derived.iter().cloned() {
         span = Some(at);
-        // Spec 2.5.1: `Eq: PartialEq`, `Ord: PartialOrd + Eq`.
+        // `Eq: PartialEq`, `Ord: PartialOrd + Eq`.
         let needs: &[&str] = match tr.as_str() {
             "Eq" => &["PartialEq"],
             "Ord" => &["PartialOrd", "Eq"],
@@ -101,7 +101,7 @@ pub(crate) fn derive_items(item: &Item, file: &str) -> (Vec<Item>, Vec<RokDiagno
                 at,
                 format!(
                     "`#[derive({tr})]` on `{name}` needs `{missing}` too - derive both \
-                         (`#[derive({missing}, {tr})]`; spec 2.5.1)"
+                         (`#[derive({missing}, {tr})]`)"
                 ),
             ));
             continue;
@@ -109,8 +109,8 @@ pub(crate) fn derive_items(item: &Item, file: &str) -> (Vec<Item>, Vec<RokDiagno
         let Some(path) = derivable(&tr) else {
             let why = if tr == "Display" {
                 "`Display` is written by hand - its format is the type's own choice \
-                 (stdlib 2.10.10)"
-                    .to_owned()
+                "
+                .to_owned()
             } else {
                 format!(
                     "`{tr}` is not a derivable trait (derivable: {})",
@@ -124,7 +124,7 @@ pub(crate) fn derive_items(item: &Item, file: &str) -> (Vec<Item>, Vec<RokDiagno
             diags.push(RokDiagnostic::error(
                 Code::CANNOT_DERIVE,
                 at,
-                format!("cannot derive `{tr}` for `{name}`: {why} (spec 6.2.1)"),
+                format!("cannot derive `{tr}` for `{name}`: {why}"),
             ));
             continue;
         };
@@ -174,7 +174,7 @@ pub(crate) fn derive_items(item: &Item, file: &str) -> (Vec<Item>, Vec<RokDiagno
 }
 
 /// Items the derives name, beside the traits; written by the compiler,
-/// so seen from core (spec 6.9.9), while the item's own names stay the
+/// so seen from core, while the item's own names stay the
 /// user's.
 const COMPILER_PATHS: &[&str] = &[
     ORDERING,

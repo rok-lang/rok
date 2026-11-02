@@ -1,4 +1,3 @@
-// spec: §2.1.8 §2.11.6
 // expect-exit: 0
 // expect-stdout:
 // 4096 7
@@ -6,7 +5,7 @@
 // 40 hi
 // 3
 
-// Spec 2.11: a long `[v; N]` fills its elements with a loop.
+// A long `[v; N]` fills its elements with a loop.
 fn sum<const N: usize>(a: [i32; N]) -> i32 {
     let s = 0;
     for i in 0..N { s = s + a[i]; }

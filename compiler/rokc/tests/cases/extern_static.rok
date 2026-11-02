@@ -2,7 +2,7 @@
 // (POSIX environ / optind)
 // expect-exit: 0
 // expect-stdout: true 7
-// Spec 5.9.3: `extern "C" { static .. }` names a C global; `static mut`
+// `extern "C" { static .. }` names a C global; `static mut`
 // can be written, both inside `unsafe`. `environ` and `optind` are libc
 // globals.
 extern "C" {
@@ -19,4 +19,3 @@ fn main() {
     println(f"{set} {next}");
 }
 
-// spec: 005.09-extern-block

@@ -1,4 +1,3 @@
-// spec: §2.2.5 §3.11.1
 // expect-exit: 0
 // expect-stdout:
 // is: true false true
@@ -8,7 +7,7 @@
 // match: sum 3
 // narrow: 4
 
-// Spec 2.2.5 / 3.11: on a plain value of type `A`, `is (A | B)` and
+// On a plain value of type `A`, `is (A | B)` and
 // the type pattern `v: A | B` test membership of `A` in the sum; the
 // binder is the value as `A | B`.
 fn sub_sum<T>(x: T) -> bool { x is (i32 | str) }

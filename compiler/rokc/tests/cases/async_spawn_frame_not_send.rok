@@ -2,7 +2,7 @@
 // expect-error: it holds `local: Cell<i32>`, which is not `Send`, across an `await`
 // expect-error: it holds `kept: Cell<i32>`, which is not `Send`, across an `await`
 
-// `task::spawn` checks the coroutine frame (stdlib 2.18.1): captures and
+// `task::spawn` checks the coroutine frame: captures and
 // locals held across an `await` must be `Send`; `spawn_local` takes any.
 async fn holds() -> i32 {
     let kept = Cell::new(1);
@@ -30,4 +30,3 @@ let ok = task::spawn(fine());
 let c2 = Cell::new(1);
 let ok2 = task::spawn_local(async { c2.get() });
 
-// spec: 004.12-async

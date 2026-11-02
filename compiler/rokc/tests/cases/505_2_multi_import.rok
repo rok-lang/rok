@@ -1,8 +1,7 @@
-// spec: 005.05.2-use-multi-import
 // expect-exit: 7
 // expect-stdout:
 
-// spec 5.5.2: multi-import `use foo::{a, b, c}`.
+// Multi-import `use foo::{a, b, c}`.
 mod m {
     pub fn one() -> i32 { 1i32 }
     pub fn two() -> i32 { 2i32 }

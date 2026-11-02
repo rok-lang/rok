@@ -1,4 +1,4 @@
-# Update a 0.1.x install to a staged release set (spec 9.10.6) on
+# Update a 0.1.x install to a staged release set on
 # Windows: the archives dist-native.sh left in -Dist, served over http
 # in the GitHub releases' layout. The counterpart of test-update.sh; three
 # updates, each on a fresh ROK_HOME holding the 0.1.x release:

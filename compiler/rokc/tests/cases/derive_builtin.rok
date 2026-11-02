@@ -14,7 +14,7 @@
 // [1, 2] [1, 2, 3]
 // Name { s: "a\nb" }
 
-// Spec 6.2.1 / stdlib 2.5.9 / 2.10.10 / 2.13: `#[derive(..)]` of the
+// `#[derive(..)]` of the
 // built-in traits on structs, enums and generic types.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct Point { x: i32; y: i32; }
@@ -80,6 +80,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 006.02-built-in-attributes
-// spec: std §2.5.9 §2.13.11
-// spec: §6.2.1

@@ -1,7 +1,6 @@
 // needs: threads
 // expect-exit: 0
 // expect-stdout: 3 2 1 4 1 5 3 2 4 2 7 4 2 2 3 2 5 9 3 2 2 3 4 1 2 3 3
-// spec: std 213-marker §2.13.9 / std 216-sync §2.16.3 / refs-lang §4.15.2
 
 // What stays usable after a hand-off.
 use rok::core::marker::Handoff;
@@ -253,7 +252,7 @@ fn sent_then_break(tx: Sender<List<i32>>) -> i64 {
     n
 }
 
-// The program vouches for it: `unsafe` (spec 4.15.2).
+// The program vouches for it: `unsafe`.
 fn in_unsafe() -> i64 {
     let xs: List<i32> = [1, 2, 3, 4, 5];
     let h = unsafe { Handoff::new(xs) };

@@ -1,11 +1,10 @@
 // expect-exit: 0
-// spec: §6.2.9
-// expect-lint: 26:20 `self.n` is set on a copy of the receiver, so the change is lost when `inc` returns
-// expect-lint: 31:17 `p.x` is set on a copy of the argument, so the change is lost when `lost` returns
-// expect-lint: 32:33 `p.x` is set on a copy of the argument, so the change is lost when `spin` returns
-// expect-lint: 34:34 `p.y` is set on a copy of the argument, so the change is lost when `feeds` returns
-// expect-lint: 61:15 `p.x` is set on a copy of the element, so `ps` does not change
-// expect-lint: 70:1 `first.x` is set on a copy of `ps[1]`, so `ps[1]` does not change
+// expect-lint: 25:20 `self.n` is set on a copy of the receiver, so the change is lost when `inc` returns
+// expect-lint: 30:17 `p.x` is set on a copy of the argument, so the change is lost when `lost` returns
+// expect-lint: 31:33 `p.x` is set on a copy of the argument, so the change is lost when `spin` returns
+// expect-lint: 33:34 `p.y` is set on a copy of the argument, so the change is lost when `feeds` returns
+// expect-lint: 60:15 `p.x` is set on a copy of the element, so `ps` does not change
+// expect-lint: 69:1 `first.x` is set on a copy of `ps[1]`, so `ps[1]` does not change
 // expect-stdout:
 // 1 0
 // 2 2
@@ -15,7 +14,7 @@
 // 2 3
 // 1 1
 
-// `write_to_copy`: a field set on a copy (spec 2.3.8) that no read can
+// `write_to_copy`: a field set on a copy that no read can
 // follow. A write some later read, loop iteration, return or call sees
 // is not one.
 

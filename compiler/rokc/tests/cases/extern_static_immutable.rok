@@ -1,5 +1,5 @@
 // expect-error: cannot assign to static `optind`: statics are immutable
-// An `extern` `static` without `mut` is read-only (spec 5.9.3).
+// An `extern` `static` without `mut` is read-only.
 extern "C" {
     static optind: i32;
 }
@@ -8,5 +8,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 005.09-extern-block
-// spec: §5.3.10 §5.9.3

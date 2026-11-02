@@ -1,5 +1,3 @@
-// spec: refs-lang §0.4.3
-// spec: 003.01-operator-dispatch
 // A user trait named `Add` is not the lang-slot trait, so `+` does not use it.
 // expect-error: it needs `impl Add for V`
 
@@ -8,4 +6,3 @@ struct V { x: i32; }
 impl Add for V { fn add(self, o: V) -> V { return V { x: self.x + o.x }; } }
 
 fn main() -> i32 { let a = V { x: 1 }; let c = a + V { x: 2 }; return c.x; }
-// spec: §6.7.8

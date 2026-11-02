@@ -16,4 +16,3 @@ fn main() {
     g(xs);
 }
 
-// spec: std 106-gc-pin §1.6.2

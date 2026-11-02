@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `p.1` shares `p.0`, which was sent through a channel
-// spec: std 213-marker §2.13.9
 // zip of a list with itself: each pair holds one object twice.
 use rok::std::thread;
 fn main() {

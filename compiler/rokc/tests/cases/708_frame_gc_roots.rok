@@ -1,4 +1,3 @@
-// spec: 007.08-coroutine §7.8.4 / §7.8.11
 // expect-exit: 0
 // expect-stdout:
 // item0:item0
@@ -8,7 +7,7 @@
 // async kept abcabcabc
 // collected true
 
-// spec 7.8.4 / 7.8.11: the coroutine frame is a GC object and keeps the
+// The coroutine frame is a GC object and keeps the
 // references held across `yield` / `await` alive through collections.
 extern "C" {
     fn rok_gc_collect();

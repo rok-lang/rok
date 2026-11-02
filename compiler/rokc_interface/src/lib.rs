@@ -48,14 +48,14 @@ impl Session {
         self.config.bootstrap_files.push(path);
     }
 
-    /// A dependency package (`--extern name=root`, spec 902.3): its
+    /// A dependency package (`--extern name=root`): its
     /// `lib.rok` is compiled with this build and mounted at `name`.
     pub fn add_extern(&mut self, name: String, root: PathBuf) {
         self.config.externs.push((name, root));
     }
 
     /// Extern `name` is the package's own library, which the executable
-    /// being built uses (spec 0.3.1).
+    /// being built uses.
     pub fn set_own_library(&mut self, name: Option<String>) {
         self.config.own_library = name;
     }
@@ -98,12 +98,12 @@ impl Session {
     }
 
     /// Build the library package as prebuilt dependency `name`
-    /// (`archive` then also writes `<name>.rokhir`, spec 904).
+    /// (`archive` then also writes `<name>.rokhir`).
     pub fn set_lib_name(&mut self, name: Option<String>) {
         self.config.lib_name = name;
     }
 
-    /// The input is a lone file outside any package (spec 4.16.8).
+    /// The input is a lone file outside any package.
     pub const fn set_anonymous(&mut self, on: bool) {
         self.config.anonymous = on;
     }
@@ -146,7 +146,7 @@ impl Session {
     }
 
     /// Keep parses and lowered bodies in `dir` for the next compile of
-    /// the package (spec 9.2.16).
+    /// the package.
     pub fn set_incremental(&mut self, dir: Option<PathBuf>) {
         self.config.incremental = dir;
     }
@@ -345,7 +345,7 @@ impl CompileResult {
         }
     }
 
-    /// Build a library archive at `out` (spec 902.13); with
+    /// Build a library archive at `out`; with
     /// `opts.incremental` by codegen units, returning how many compiled.
     pub fn archive(
         &self,
@@ -356,7 +356,7 @@ impl CompileResult {
     }
 }
 
-/// The standard library and runtime of this `rokc` (spec 9.2.19).
+/// The standard library and runtime of this `rokc`.
 ///
 /// Under its sysroot (`lib/rok/{core,std,bare}/src/`, `lib/librokr.a`,
 /// `lib\rokr.lib`), else in a repository build the `library/` and the

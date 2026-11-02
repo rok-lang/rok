@@ -1,5 +1,4 @@
 // only-pointer-width: 32
-// spec: 000.06-platform-targets §0.6.3
 // expect-exit: 0
 // expect-stdout:
 // usize 4 isize 4 str 8 bits 32
@@ -7,7 +6,7 @@
 // 4294967295 0
 // ok
 
-// spec 0.6.3: on a 32-bit target `usize` follows the pointer width,
+// On a 32-bit target `usize` follows the pointer width,
 // 64-bit integers keep their size, and `usize` arithmetic wraps at 32
 // bits; GC objects still allocate and collect.
 use rok::bare::mem::size_of;

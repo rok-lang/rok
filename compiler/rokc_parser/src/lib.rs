@@ -1,5 +1,5 @@
-//! Parser: tokens to AST. Precedence is fixed by the language (spec
-//! 3.2.3, `prec.rs`); `#[infix]` / `#[prefix]` / `#[postfix]` only bind
+//! Parser: tokens to AST. Precedence is fixed by the language
+//! (`prec.rs`); `#[infix]` / `#[prefix]` / `#[postfix]` only bind
 //! tokens to trait methods (`PrecTable`).
 
 pub mod cfg;

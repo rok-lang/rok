@@ -1,8 +1,7 @@
-// spec: §3.9.1
 // A body's value of the wrong type is underlined, not `fn`.
-// expect-error: 7:20: mismatched types: the body of `name` expects `str`, found `i32`
+// expect-error: 6:20: mismatched types: the body of `name` expects `str`, found `i32`
 // expect-error: help: to make text from it, write `f"{42}"`
-// expect-error: 9:5: mismatched types: the body of `half` expects `i32`, found `f64`
+// expect-error: 8:5: mismatched types: the body of `half` expects `i32`, found `f64`
 // expect-error: help: convert it with `as`: `(x / 2.0) as i32`
 fn name() -> str { 42 }
 fn half(x: f64) -> i32 {

@@ -20,4 +20,3 @@ fn main() {
     println(f"{a()} {b()} {c()}");
 }
 
-// spec: 005.05-use

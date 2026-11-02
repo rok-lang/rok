@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `b.items` was sent through a channel
-// spec: std 213-marker §2.13.9
 // A user Clone that shares a field: the help says `.clone()`.
 use rok::std::thread;
 struct Bag { items: List<i32>; }

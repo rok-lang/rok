@@ -1,6 +1,5 @@
-// spec: 001.06-numeric-literals
-// expect-error: 15:15: ambiguous literal: integer literal `1` into `f32 | u16 | u8`, which has more than one integer member
-// expect-error: 16:29: ambiguous literal: integer literal `5` into `f32 | u16 | u8`, which has more than one integer member
+// expect-error: 14:15: ambiguous literal: integer literal `1` into `f32 | u16 | u8`, which has more than one integer member
+// expect-error: 15:29: ambiguous literal: integer literal `5` into `f32 | u16 | u8`, which has more than one integer member
 // expect-error: help: write `1u16` or `1u8`, or `1.0` for the `f32`
 
 // An unsuffixed integer into a sum with several integer members and a

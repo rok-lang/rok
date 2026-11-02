@@ -14,4 +14,3 @@ fn main() {
     println(f"{apply(inc, 5)}");
 }
 
-// spec: 003.14-error-control-flow

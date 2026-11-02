@@ -1,9 +1,8 @@
-// spec: §1.3.4
-// expect-error: 9:21: expected `;`, found identifier `x`
-// expect-error: 10:25: expected `;`, found keyword `let`
-// expect-error: 11:14: expected `;`, found identifier `x`
+// expect-error: 8:21: expected `;`, found identifier `x`
+// expect-error: 9:25: expected `;`, found keyword `let`
+// expect-error: 10:14: expected `;`, found identifier `x`
 
-// spec 1.3.4: only the last statement before `}` may omit its `;`.
+// Only the last statement before `}` may omit its `;`.
 fn main() -> i32 {
     let x = 0;
     if true { x = 1 x = 2 }

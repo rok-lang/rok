@@ -9,7 +9,7 @@
 // 126
 // 9
 
-// Spec 2.2.3: an operator on an `any` operand switches on the tag over
+// An operator on an `any` operand switches on the tag over
 // the primitive types with that operator. Arithmetic results come back
 // as `any`; comparisons give `bool`.
 fn show(v: any) -> i32 {
@@ -33,4 +33,3 @@ println(f"{show(!b)}");
 println(f"{show(3i32 * v)}");
 if f < 2.0 { println(f"{9}"); }
 
-// spec: 002.02-any-slot

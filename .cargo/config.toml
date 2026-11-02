@@ -1,8 +1,7 @@
 # 32-bit glibc (i686, armv7): the `libc` crate binds the 64-bit time
 # interfaces (`__clock_gettime64`, `__fstat64_time64`, ..., glibc 2.34+)
 # and, with them, the large-file ones (`lseek64`, `readdir64`, ...):
-# no 2038 limit, no EOVERFLOW past 2 GiB (stdlib spec 3.3). No effect on
-# other targets.
+# no 2038 limit, no EOVERFLOW past 2 GiB. No effect on other targets.
 [env]
 RUST_LIBC_UNSTABLE_GNU_TIME_BITS = "64"
 

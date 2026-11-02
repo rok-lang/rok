@@ -1,13 +1,12 @@
-// spec: §5.7.1 §2.10.3 §2.8.4
 // A trait another module declares is not in scope without a `use`, in
 // any position that names one; each says which `use` brings it in, and
 // the parameter it bounds raises nothing more.
-// expect-error: 19:9: cannot find trait `Shape` (named in a bound)
+// expect-error: 18:9: cannot find trait `Shape` (named in a bound)
 // expect-error: help: add `use geo::Shape;`
-// expect-error: 20:31: cannot find trait `Shape` (named in a bound)
-// expect-error: 21:6: cannot find trait `Shape` (named in an impl)
-// expect-error: 22:12: cannot find trait `Shape` (named as a supertrait)
-// expect-error: 23:13: cannot find trait `Shape` in this scope
+// expect-error: 19:31: cannot find trait `Shape` (named in a bound)
+// expect-error: 20:6: cannot find trait `Shape` (named in an impl)
+// expect-error: 21:12: cannot find trait `Shape` (named as a supertrait)
+// expect-error: 22:13: cannot find trait `Shape` in this scope
 // expect-error: help: add `use geo::Shape;`
 mod geo {
     pub trait Shape { fn area(self) -> i32; }

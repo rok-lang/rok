@@ -1,7 +1,6 @@
-// spec: refs-lang §5.7.10
-// expect-error: 9:13: expected expression, found `::`
+// expect-error: 8:13: expected expression, found `::`
 
-// 5.7.10: a leading `::` is no path (absolute paths start with `pkg::`).
+// A leading `::` is no path (absolute paths start with `pkg::`).
 struct A {}
 
 fn main() {

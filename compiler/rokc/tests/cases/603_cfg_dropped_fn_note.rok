@@ -1,9 +1,8 @@
-// spec: §6.3.7
-// expect-error: 19:5: cannot find function `plan9_fn` in this scope
+// expect-error: 18:5: cannot find function `plan9_fn` in this scope
 // expect-error: note: `plan9_fn` is only available on plan9 (`#[cfg(target_os = "plan9")]`)
-// expect-error: 20:5: cannot find function `plan9::inner` in this scope
+// expect-error: 19:5: cannot find function `plan9::inner` in this scope
 // expect-error: note: module `plan9` is only available on plan9 (`#[cfg(target_os = "plan9")]`)
-// expect-error: 21:5: cannot find function `sys::extra` in this scope
+// expect-error: 20:5: cannot find function `sys::extra` in this scope
 // expect-error: note: `extra` is only available with feature `extra` (`#[cfg(feature = "extra")]`)
 
 // Free functions and modules `#[cfg]` dropped are named too.

@@ -1,4 +1,3 @@
-// spec: std 215-string §2.15.3-2.15.5
 // expect-exit: 0
 // expect-stdout:
 // 14 10 세계 세계! !
@@ -6,9 +5,9 @@
 // A 5 65 A A true
 // 65 10 1 true 5
 
-// Stdlib 2.15: `str` slices are byte ranges, clamped, negative from the
-// end (2.15.3); the `char` examples and conversions (2.15.4); `c_char`
-// literals are one C byte, passed to C as `ConstPtr<c_char>` (2.15.5).
+// `str` slices are byte ranges, clamped, negative from the
+// end; the `char` examples and conversions; `c_char`
+// literals are one C byte, passed to C as `ConstPtr<c_char>`.
 use rok::bare::mem::size_of;
 use rok::bare::ptr::{ConstPtr, addr_of};
 

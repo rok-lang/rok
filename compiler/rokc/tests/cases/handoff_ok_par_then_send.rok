@@ -4,7 +4,6 @@
 // even chunk 2
 // got 3
 
-// spec: std 213-marker §2.13.9
 // par::map over chunks, then send the results.
 use rok::std::thread;
 fn main() {

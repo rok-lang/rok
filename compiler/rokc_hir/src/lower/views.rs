@@ -1,4 +1,4 @@
-//! A `SliceMut` used after its list was resized (stdlib 2.9.7) is an
+//! A `SliceMut` used after its list was resized is an
 //! error where one function shows both.
 //!
 //! A forward flow over structured HIR, per function. A view local holds
@@ -207,7 +207,7 @@ impl Walk<'_> {
             .with_note(format!(
                 "help: a resize may move the list's elements, so a view made before it cannot \
                  be used after it: make {again} again after the resize (`{list}[a:b]` where a \
-                 `SliceMut` is expected), or resize before making the view (stdlib 2.9.7a)"
+                 `SliceMut` is expected), or resize before making the view"
             ));
         self.diags.push(d);
     }

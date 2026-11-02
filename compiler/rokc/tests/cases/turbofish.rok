@@ -2,7 +2,7 @@
 // expect-stdout:
 // 5 2.5 7 3 9
 
-// Explicit generic arguments (spec 4.4 / 3.5 / 2.13): `f::<T>(..)`,
+// Explicit generic arguments: `f::<T>(..)`,
 // `x.m::<T>(..)`, `Type::<T>::assoc(..)`, `id::<i32>` as a value. They
 // override inference; a partial list leaves the rest to inference.
 fn id<T>(x: T) -> T { return x; }
@@ -31,4 +31,3 @@ fn main() -> i32 {
     return n ?? 0;
 }
 
-// spec: 003.05-member-access-and-method-call

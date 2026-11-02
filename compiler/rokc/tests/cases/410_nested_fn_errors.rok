@@ -1,12 +1,9 @@
-// spec: 004.10.2-scope
-// spec: 004.10.3-capturing-outer-variables-none
-// spec: 004.10.8-nested-function-and-outer-variable-with-the-same-name
 // A nested fn sees no outer variable and is not visible outside its
 // block; a variable and a nested fn of one name in one block conflict.
-// expect-error: 13:17: cannot find value `n`
-// expect-error: 20:5: cannot find function `helper`
-// expect-error: 24:5: `helper` names both a variable and a nested function in this block
-// expect-error: 30:5: nested function `twice` is defined twice in this block
+// expect-error: 10:17: cannot find value `n`
+// expect-error: 17:5: cannot find function `helper`
+// expect-error: 21:5: `helper` names both a variable and a nested function in this block
+// expect-error: 27:5: nested function `twice` is defined twice in this block
 
 fn outer(n: i32) -> i32 {
     fn inner() -> i32 {

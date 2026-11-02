@@ -21,5 +21,3 @@ fn main() -> i32 {
     return a + a + b + b + b + c + d + e;
 }
 
-// spec: 003.12-match-expression
-// spec: §3.11.1

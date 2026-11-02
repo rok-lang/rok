@@ -4,7 +4,7 @@
 // expect-stdout:
 // 1
 
-// Spec 4.4.8: a `fn() -> !` value fits a `fn() -> R` slot - a named
+// A `fn() -> !` value fits a `fn() -> R` slot - a named
 // function and a `fn` variable alike (the adapter captures the
 // variable's value). Calling it never returns: it panics (exit 101).
 fn die() -> ! { panic("die"); }
@@ -15,4 +15,3 @@ fn main() -> i32 {
     println(f"{1}");
     return run(g);
 }
-// spec: refs-lang §4.4.8

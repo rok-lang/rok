@@ -1,8 +1,7 @@
-// spec: 003.05.1-tuple-position-access
 // expect-exit: 3
 // expect-stdout:
 
-// spec 3.5.1: positional tuple access `.0`, `.1`.
+// Positional tuple access `.0`, `.1`.
 fn main() -> i32 {
     let pair = (1, 2);
     return pair.0 + pair.1;

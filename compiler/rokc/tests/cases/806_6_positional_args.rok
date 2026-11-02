@@ -41,4 +41,3 @@ fn main() {
     println(f"{if p == "abc" { "eq" } else { "ne" }} {if long_a == long_b { "eq" } else { "ne" }}");
 }
 
-// spec: 008.06.6-rok-to-rok-calling-convention

@@ -1,9 +1,8 @@
-// spec: 006.03-cfg-flag
 // expect-exit: 0
 // expect-stdout:
 // inactive
 
-// spec 6.3: `#[cfg(feature = "x")]` conditional compilation. Without
+// `#[cfg(feature = "x")]` conditional compilation. Without
 // `--cfg feature=test` only the `not(feature="test")` branch survives
 // (two survivors would be a fn redefinition).
 #[cfg(feature = "test")]
@@ -16,4 +15,3 @@ fn main() -> i32 {
     if enabled() == 0 { println("inactive"); }
     return 0;
 }
-// spec: §6.3.6 §6.3.8

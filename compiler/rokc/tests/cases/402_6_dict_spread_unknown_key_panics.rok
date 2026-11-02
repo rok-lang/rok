@@ -1,7 +1,6 @@
-// spec: 004.02.6-spread-args
 // Every key of a dict spread must name a parameter (checked at run time).
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at tests/cases/402_6_dict_spread_unknown_key_panics.rok:12:5:
+// expect-stderr: thread 'main' panicked at tests/cases/402_6_dict_spread_unknown_key_panics.rok:11:5:
 // expect-stderr: spread of key "z", which names no parameter left to fill
 // expect-stdout:
 

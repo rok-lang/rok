@@ -5,7 +5,7 @@ use super::*;
 use rokc_diagnostic::Code;
 
 /// Lift a closure into an anonymous function and return its value.
-/// Captures copy at creation; `[ref x]` shares `x`'s cell (spec 4.6.2). A
+/// Captures copy at creation; `[ref x]` shares `x`'s cell. A
 /// non-capturing closure is a plain function pointer.
 pub(super) fn lower_closure_expr(
     ctx: &mut LowerCtx<'_>,
@@ -37,13 +37,11 @@ pub(super) fn lower_closure_expr(
             Some(l) if ctx.is_boxed(l) => {}
             Some(_) => ctx.emit_error(
                 Code::INVALID_CAPTURE,
-                format!(
-                    "`[ref {n}]` needs `{n}` to be a `let` variable or a parameter (spec 4.6.2)"
-                ),
+                format!("`[ref {n}]` needs `{n}` to be a `let` variable or a parameter"),
             ),
             None => ctx.emit_error(
                 Code::INVALID_CAPTURE,
-                format!("`[ref {n}]` names no variable in scope (spec 4.6.2)"),
+                format!("`[ref {n}]` names no variable in scope"),
             ),
         }
     }
@@ -68,7 +66,7 @@ pub(super) fn lower_closure_expr(
             Code::INVALID_SIGNATURE,
             format!(
                 "closure parameter `{}` cannot be `ref` - a `fn` type has no `ref` \
-                 parameters (spec 4.7.6)",
+                 parameters",
                 p.name
             ),
         );
@@ -77,7 +75,7 @@ pub(super) fn lower_closure_expr(
     let closure_id = FunctionId(ctx.env.sink.next_id.get());
     ctx.env.sink.next_id.set(closure_id.0 + 1);
 
-    // Spec 4.5 / 4.8: with an expected function type (or a sum holding
+    // With an expected function type (or a sum holding
     // exactly one), unannotated parameters and the return come from it.
     let expected = ctx.current_expected().and_then(|t| match t {
         HirTy::Sum(vs) => {
@@ -464,7 +462,7 @@ pub(super) fn sum_none(sum_ty: &HirTy, span: rokc_diagnostic::Span) -> HirExpr {
 }
 
 /// `x?.tail` → `match x { v: T => v.tail, none => none }`, typed
-/// `tail_ty | none` (`?.` chains compose, spec 3.8.2).
+/// `tail_ty | none` (`?.` chains compose).
 pub(super) fn desugar_question_dot(
     ctx: &mut LowerCtx<'_>,
     recv: HirExpr,
@@ -475,7 +473,7 @@ pub(super) fn desugar_question_dot(
         return recv;
     }
     let Some((none_idx, some)) = optional_parts(&recv.ty) else {
-        // Spec 3.8: `?.` on a non-optional receiver is an error.
+        // `?.` on a non-optional receiver is an error.
         return ctx.error_expr(
             Code::OPTIONAL_OPERATOR,
             span,
@@ -602,7 +600,7 @@ pub(super) fn apply_access_tail(
     }
 }
 
-/// `expr?` (spec 3.14): unwrap `T | none` or return `none` from the
+/// `expr?`: unwrap `T | none` or return `none` from the
 /// enclosing function (whose return must hold `none`). Several payload
 /// members keep the rest of the sum.
 pub(super) fn desugar_try_q(
@@ -619,7 +617,7 @@ pub(super) fn desugar_try_q(
             span,
             format!(
                 "`?` only works on `T | none`, found `{}` - to propagate errors use `throws` \
-                 and `try` (spec 3.14 / 4.14)",
+                 and `try`",
                 ctx.ty_name(&inner.ty)
             ),
         );
@@ -684,13 +682,13 @@ pub(super) fn desugar_nullish_coalesce(
     };
     let mut value_ty = without_none(&some);
     let rhs_h = lower_expected(ctx, rhs, value_ty.clone());
-    // `a ?? b` with `b: T | none` too is a fallback chain typed `T | none`
-    // (spec 3.8.4). Only that case; other sums still need `T`.
+    // `a ?? b` with `b: T | none` too is a fallback chain typed `T | none`.
+    // Only that case; other sums still need `T`.
     if rhs_h.ty == lhs.ty {
         value_ty = lhs.ty.clone();
     } else if rhs_h.ty != value_ty && rhs_h.ty != HirTy::Unknown {
         // Branches of different types take the receiving slot's type,
-        // never a widened sum (spec 3.8.4: `let r: i32 | str = a ?? "d"`).
+        // never a widened sum (`let r: i32 | str = a ?? "d"`).
         if let Some(slot) = ctx
             .current_expected()
             .filter(|t| matches!(t, HirTy::Sum(_)))
@@ -846,7 +844,7 @@ pub(super) fn bind_irrefutable(
     }
 }
 
-/// `for pat in iter` (spec 3.9) over an integer range (bounds evaluated
+/// `for pat in iter` over an integer range (bounds evaluated
 /// once) or an array: `{ setup; while cond { step; let pat = ..; body } }`,
 /// stepping first so `continue` can't skip it; `label` goes on the
 /// `While`.
@@ -943,10 +941,10 @@ pub(super) fn lower_for(
     }
 }
 
-/// `for pat in xs` otherwise (stdlib 2.7.2): `let it = xs.into_iter();
+/// `for pat in xs` otherwise: `let it = xs.into_iter();
 /// loop { match it.next() { v: T => { let pat = v; body } none => break } }`.
 /// A generator the loop owns (`owned`) is closed after the loop and on
-/// every exit leaving it (spec 4.11.10): a `finally { it.close() }` that
+/// every exit leaving it: a `finally { it.close() }` that
 /// `continue` and `break` of this loop skip.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn lower_for_iter(
@@ -974,7 +972,7 @@ pub(super) fn lower_for_iter(
             format!(
                 "cannot iterate over a value of type `{}` - `for` needs an integer range, \
                  an array, an `IntoIterator` / `Iterator` impl, or a `TryIterator` \
-                 (`try for`) (stdlib 2.7.2)",
+                 (`try for`)",
                 ctx.ty_name(&iter_h.ty)
             ),
         );
@@ -984,7 +982,7 @@ pub(super) fn lower_for_iter(
         let mut d = rokc_diagnostic::RokDiagnostic::error(
             Code::UNHANDLED_ERROR,
             span,
-            format!("`next` of `{t}` can throw, so this loop must be `try for` (spec 3.13.3)"),
+            format!("`next` of `{t}` can throw, so this loop must be `try for`"),
         )
         .with_help(
             "write `try for x in ..` (`try!` / `try?` to panic / stop on an error), \
@@ -1045,7 +1043,7 @@ pub(super) fn lower_for_iter(
             type_args: Vec::new(),
             args: Vec::new(),
             trailing_closure: None,
-            // `close` is the library's, not the user's (spec 6.9.9).
+            // `close` is the library's, not the user's.
             origin: Some(GEN_MODULE.to_owned()),
         },
         span,
@@ -1097,7 +1095,7 @@ fn is_generator(ctx: &LowerCtx<'_>, ty: &HirTy) -> bool {
         .any(|base| def.name == mangle_inst(base, &def.generic_args))
 }
 
-/// `for await pat in s` (stdlib 2.8.2): `s.into_stream()` unless already
+/// `for await pat in s`: `s.into_stream()` unless already
 /// a `Stream`, then loop awaiting `poll_next(ref ctx)`.
 #[allow(clippy::too_many_arguments)]
 fn lower_for_stream(
@@ -1345,7 +1343,7 @@ pub(super) fn lower_for_range(
     span: rokc_diagnostic::Span,
     out: &mut Vec<HirStmt>,
 ) -> Option<HirExpr> {
-    // `a..` (spec 3.7.8) counts up until a `break` (or overflow panics).
+    // `a..` counts up until a `break` (or overflow panics).
     let (start_h, end_h) = match end_e {
         Some(end_e) => {
             let (s, e) = lower_sibling_pair(ctx, start_e, end_e, HirTy::Unknown);

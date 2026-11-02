@@ -14,7 +14,7 @@
 // bad key: unsupported private key algorithm 1.3.101.110 (Ed25519, EC, rsaEncryption, RSASSA-PSS)
 // system roots: true
 
-// Stdlib 3.2.5: certificate path validation of net::tls (RFC 5280):
+// Certificate path validation of net::tls (RFC 5280):
 // intermediates in any order, pathLenConstraint, DNS name constraints,
 // validity, extendedKeyUsage serverAuth, issuers that are not CAs, name
 // mismatch; PKCS #8 keys; the OS trust store loads.
@@ -171,4 +171,3 @@ fn main() {
     println(f"system roots: {roots.len() > 0}");
 }
 
-// spec: std 302-net §3.2.5

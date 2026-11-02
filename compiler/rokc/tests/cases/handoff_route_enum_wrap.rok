@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `q0` may hold one object twice
-// spec: std 213-marker §2.13.9
 // An enum payload stored twice through a helper.
 use rok::std::thread;
 enum Slot { Full(List<i32>), Empty }

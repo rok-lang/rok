@@ -4,7 +4,6 @@
 // 3
 // got 0
 
-// spec: std 213-marker §2.13.9
 // Gather results from one channel, send the list on.
 use rok::std::thread;
 fn main() {

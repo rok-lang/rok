@@ -1,4 +1,3 @@
-// spec: std 200-core/218-task §2.18.4
 // expect-exit: 0
 // expect-stdout:
 // cancelled: finally start
@@ -9,7 +8,7 @@
 // select loser: finally end
 // main done
 
-// 2.18.4: an `await` inside the cleanups a cancel runs completes; a
+// An `await` inside the cleanups a cancel runs completes; a
 // `select` loser finishes its cleanups after `select` returns.
 async fn worker(name: str) -> i64 {
     try {

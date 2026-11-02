@@ -1,5 +1,5 @@
 // expect-error: cannot derive `Display` for `P`: `Display` is written by hand
-// Stdlib 2.10.10: `Display` is not derivable.
+// `Display` is not derivable.
 #[derive(Display)]
 struct P { x: i32; }
 
@@ -7,6 +7,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 006.02-built-in-attributes
-// spec: std §2.10.10
-// spec: §6.2.1

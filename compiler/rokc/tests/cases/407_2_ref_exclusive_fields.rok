@@ -1,10 +1,9 @@
-// spec: refs-lang §4.7.2
-// expect-error: 21:5: `p.a` is passed as `ref` to `add` and also read by another argument
-// expect-error: 22:5: `p` is passed as `ref` to `put` and also read by another argument
-// expect-error: 23:5: `p.n` is passed as `ref` to `take` and also read by another argument
-// expect-error: 24:5: `p.n.c` is passed as `ref` to `add` and also read by another argument
-// expect-error: 25:13: `p.a` is passed as `ref` to `sum` and also read by another argument
-// expect-error: 26:5: `p.n` and `p.n.d` overlap and are both passed as `ref` in one call to `swap_in`
+// expect-error: 20:5: `p.a` is passed as `ref` to `add` and also read by another argument
+// expect-error: 21:5: `p` is passed as `ref` to `put` and also read by another argument
+// expect-error: 22:5: `p.n` is passed as `ref` to `take` and also read by another argument
+// expect-error: 23:5: `p.n.c` is passed as `ref` to `add` and also read by another argument
+// expect-error: 24:13: `p.a` is passed as `ref` to `sum` and also read by another argument
+// expect-error: 25:5: `p.n` and `p.n.d` overlap and are both passed as `ref` in one call to `swap_in`
 
 // A place passed as `ref` must not be read or passed `ref` again by
 // another argument through an overlapping path.

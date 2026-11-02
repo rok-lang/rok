@@ -1,9 +1,8 @@
-// spec: 004.11-generators §4.11.2
 // expect-exit: 0
 // expect-stdout:
 // steps 3
 
-// spec 4.11.2: `yield;` advances one step without a value (unit).
+// `yield;` advances one step without a value (unit).
 yield fn ticks(n: i32) -> () {
     let i = 0;
     while i < n {

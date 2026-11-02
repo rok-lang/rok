@@ -4,7 +4,7 @@
 // 2
 // ok
 
-// 3.9: a postfix chain after a block-like statement continues it
+// A postfix chain after a block-like statement continues it
 // (`match .. {}.len();`, `match .. {}?;`); `;;` is an empty statement.
 fn opt(v: i32) -> i32 | none {
     if v == 0 { none } else { v }
@@ -23,4 +23,3 @@ fn main() {
     println(f"{first(3) ?? 0}");;
     println("ok");
 }
-// spec: §3.9.5

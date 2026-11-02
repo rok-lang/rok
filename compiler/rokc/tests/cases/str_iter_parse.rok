@@ -8,9 +8,8 @@
 // cannot parse "12x": invalid digit
 // cannot parse "300": number out of range
 
-// `str` iterators (stdlib 2.15.3) and `parse::<T>()` / `FromStr`
-// (2.15.7).
-// No `main` combines `throws` with `-> i32` (spec 4.16.3).
+// `str` iterators and `parse::<T>()` / `FromStr`.
+// No `main` combines `throws` with `-> i32`.
 fn main() -> i32 { try! run() }
 
 fn run() throws (ParseError) -> i32 {
@@ -54,4 +53,3 @@ fn run() throws (ParseError) -> i32 {
     return bad + big as i32;
 }
 
-// spec: std 215-string

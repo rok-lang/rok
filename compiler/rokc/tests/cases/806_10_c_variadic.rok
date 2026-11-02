@@ -1,8 +1,7 @@
-// spec: 008.06-calling-convention §8.6.10
 // expect-exit: 0
 // expect-stdout: sum=14 x=-3
 
-// §8.6.10: C variadic functions (`printf`) are callable through
+// C variadic functions (`printf`) are callable through
 // `extern "C" { fn printf(fmt: ConstPtr<c_char>, ...); }`, following the
 // platform's C variadic convention.
 extern "C" {

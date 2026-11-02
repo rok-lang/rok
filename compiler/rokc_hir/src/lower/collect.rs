@@ -8,7 +8,7 @@ use rokc_diagnostic::Code;
 use rokc_ir_common::{Abi, FnRole, Linkage};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-/// An `extern` block marked `#[link(.., kind = "static")]` (spec 6.2.3):
+/// An `extern` block marked `#[link(.., kind = "static")]`:
 /// its statics are in the image, not imported from a DLL.
 fn links_static(attrs: &[rokc_ast::Attribute]) -> bool {
     use rokc_ast::{AttrArg, AttrBody, Literal};
@@ -62,7 +62,7 @@ fn within(pkg: &str, p: &str) -> bool {
         .is_some_and(|r| r.is_empty() || r.starts_with("::"))
 }
 
-/// Spec 4.1.3 / 4.2.2: a `pub` / `pub(pkg)` fn writes its parameter types
+/// A `pub` / `pub(pkg)` fn writes its parameter types
 /// (an error per untyped one), and without `->` returns `()`: set here
 /// when the body gives no value, else marked `UNIT_RET_ATTR` so the
 /// inferred type names the `-> T` to write. Trait impl methods take the
@@ -89,10 +89,7 @@ fn pub_signatures(program: &mut Program, diags: &mut Vec<rokc_diagnostic::RokDia
                 rokc_diagnostic::RokDiagnostic::error(
                     Code::PUB_SIGNATURE,
                     p.span,
-                    format!(
-                        "parameter `{}` of `{vis} fn {leaf}` has no type (spec 4.2.2)",
-                        p.name
-                    ),
+                    format!("parameter `{}` of `{vis} fn {leaf}` has no type", p.name),
                 )
                 .with_help(format!(
                     "write the type it takes, as in `{0}: i32`, or declare `<T>` and write \
@@ -137,7 +134,7 @@ fn pub_signatures(program: &mut Program, diags: &mut Vec<rokc_diagnostic::RokDia
     }
 }
 
-/// Spec 4.2.2 / 2.10.7: an untyped parameter is an implicit type parameter
+/// An untyped parameter is an implicit type parameter
 /// (`fn id(x)` is `fn id<T#x>(x: T#x)`), checked per instance, no bound
 /// synthesized. Free fns and inherent methods only (trait impl methods
 /// take the trait's types).
@@ -568,8 +565,8 @@ fn collect<'a>(
     for (item, module) in owned.items.iter_mut().zip(item_modules) {
         qualify(item, module);
     }
-    // Spec 6.4: `#[lang(...)]` slots over library + user items; a slot
-    // bound twice (6.4.6) stops lowering.
+    // `#[lang(...)]` slots over library + user items; a slot
+    // bound twice stops lowering.
     let (lang, lang_diags) = rokc_parser::collect_lang_table_onto(base_names.lang.clone(), owned);
     if lang_diags
         .iter()
@@ -584,7 +581,7 @@ fn collect<'a>(
     let all_items: Vec<&Item> = lib.iter().chain(&owned.items).collect();
     let (mut stage_reexports, glob_diags) =
         crate::uses::glob_reexports(raw_uses, &all_items, uses, reexports);
-    // Spec 5.9: a `pub` function of an `extern` block in module `m` is
+    // A `pub` function of an `extern` block in module `m` is
     // also `m::f` (its symbol stays `f`).
     for (item, module) in owned.items.iter().zip(item_modules) {
         let Item::Extern(b) = item else { continue };
@@ -651,7 +648,7 @@ fn collect<'a>(
         pre.push(rokc_diagnostic::RokDiagnostic::error(code, at, msg));
     };
     let program: &Program = &*owned;
-    // Spec 6.2: `#[derive]` expanded into impls by the parser; a union has
+    // `#[derive]` expanded into impls by the parser; a union has
     // no field-wise meaning.
     for item in &program.items {
         if let Item::Union(u) = item {
@@ -660,7 +657,7 @@ fn collect<'a>(
                     Code::CANNOT_DERIVE,
                     &mut pre_diags,
                     *at,
-                    format!("cannot derive traits for union `{}` (spec 6.2.1)", u.name),
+                    format!("cannot derive traits for union `{}`", u.name),
                 );
             }
         }
@@ -1027,8 +1024,8 @@ fn collect<'a>(
         }
     }
     for (idx, item) in program.items.iter().enumerate() {
-        // Spec 2.9.1: an impl's `const` is `Type::NAME`; a trait impl also gets
-        // the trait's defaults (2.8.3a).
+        // An impl's `const` is `Type::NAME`; a trait impl also gets
+        // the trait's defaults.
         let item_consts: Vec<(String, Ty, Expr)> = match item {
             Item::Const(c) => vec![(c.name.clone(), c.ty.clone(), c.value.clone())],
             Item::Impl(i) => {
@@ -1135,7 +1132,7 @@ fn collect<'a>(
                 span: s.span,
             });
         }
-        // Spec 5.9.3: `extern "C" { static errno: i32; }` - a C global,
+        // `extern "C" { static errno: i32; }` - a C global,
         // read (and with `mut` written) like a `static`.
         if let Item::Extern(blk) = item {
             let dll_import = !links_static(&blk.attrs);
@@ -1374,7 +1371,7 @@ fn collect<'a>(
                     let rokc_ast::ExternItem::Fn(fn_def) = ei else {
                         continue;
                     };
-                    // `rok_*` is the runtime's prefix (8.5), whose `str` is
+                    // `rok_*` is the runtime's prefix, whose `str` is
                     // `(ptr, len)`; `extern "C"` would make it a `char*`.
                     let is_str = |t: &rokc_ast::Ty| matches!(&t.kind, AstTyKind::Path(p) if p.segments.len() == 1 && p.segments[0].name == "str");
                     if !rok_abi
@@ -1392,8 +1389,8 @@ fn collect<'a>(
                             fn_def.span,
                             format!(
                                 "`{}`: a `rok_*` symbol is the runtime's, whose `str` is \
-                                 `(ptr, len)`; an `extern \"C\"` `str` is a `char*` (spec 5.9.4, \
-                                 8.5) - give the C function another name",
+                                 `(ptr, len)`; an `extern \"C\"` `str` is a `char*` \
+                                 - give the C function another name",
                                 fn_def.name
                             ),
                         );
@@ -1408,7 +1405,7 @@ fn collect<'a>(
                     }
                     extern_fns.insert(fn_def.name.clone(), module.clone());
                     let id = FunctionId(u32::try_from(decls.len()).expect("FunctionId overflow"));
-                    // Spec 4.15.1: an extern function is `unsafe` to call.
+                    // An extern function is `unsafe` to call.
                     unsafe_fns.insert(id);
                     let sc = Scope {
                         names: &names,
@@ -1629,7 +1626,7 @@ fn collect<'a>(
                     here,
                     format!(
                         "an inherent `impl` attaches methods to a type, and `{target}` is a \
-                         type parameter of this `impl` (spec 2.9.1); methods for every type \
+                         type parameter of this `impl`; methods for every type \
                          belong to a trait: `impl<{target}> Tr for {target} {{ .. }}`"
                     ),
                 );
@@ -1955,8 +1952,8 @@ fn collect<'a>(
                         here,
                         format!("method `{leaf}` is not a member of trait `{}`", td.name),
                     ),
-                    // Spec 4.14.11: a throwing fn can't fill a non-throwing
-                    // slot. The operator traits (stdlib 2.3) never throw.
+                    // A throwing fn can't fill a non-throwing
+                    // slot. The operator traits never throw.
                     Some(tm) if is_throwing(&m.throws) && !is_throwing(&tm.throws) => {
                         err(
                             Code::IMPL_MISMATCH,
@@ -1964,7 +1961,7 @@ fn collect<'a>(
                             here,
                             format!(
                                 "`{leaf}` throws but `{}::{leaf}` is declared without \
-                                 `throws`, so an impl can't add one (spec 4.14.11){}",
+                                 `throws`, so an impl can't add one{}",
                                 td.name,
                                 if td.attrs.iter().any(|a| a.path == ["lang"]) {
                                     " - operators don't throw; return a `Result` or use \
@@ -2235,7 +2232,7 @@ fn collect<'a>(
                 here,
                 format!(
                     "`{}`: a C variadic `...` parameter is only allowed on a declaration in an \
-                     `extern \"C\" {{ .. }}` block (spec 8.6.10)",
+                     `extern \"C\" {{ .. }}` block",
                     f.name
                 ),
             );
@@ -2270,7 +2267,7 @@ fn collect<'a>(
                     here,
                     format!(
                         "`#[deprecated_safe]` on `{}`: it marks a library function that a later \
-                         release makes `unsafe` (spec 6.2.14); in a program, write `unsafe fn` \
+                         release makes `unsafe`; in a program, write `unsafe fn` \
                          instead",
                         leaf_name(&f.name)
                     ),
@@ -2401,7 +2398,7 @@ fn collect<'a>(
     }
     install_sigs(&mut env.fn_table, &sigs);
     resolve_open_members(&env, &struct_decls, &enum_decls);
-    // Spec 5.9.4: one extern namespace; a second declaration with another
+    // One extern namespace; a second declaration with another
     // signature is an error, reported against the runtime's declaration
     // (`rok::core::rt`) when one is involved.
     let no_subst = HashMap::new();
@@ -2449,7 +2446,7 @@ fn collect<'a>(
                 at,
                 format!(
                     "extern function `{}` is declared twice with different signatures: `{here}` \
-                     here, `{other}` elsewhere{} (spec 5.9.4)",
+                     here, `{other}` elsewhere{}",
                     f.name,
                     if f.name.starts_with("rok_") {
                         "; a `rok_*` symbol is the runtime's: declare it with the runtime's signature"
@@ -2618,7 +2615,7 @@ fn finish<'a>(
             super::incr::Incr::new(&env, &*b.0, &programs, raw_uses, input, lib_decls)
         })
     });
-    // Spec 2.10.9: the package's own generic bodies (a dependency's when
+    // The package's own generic bodies (a dependency's when
     // it is built prebuilt); every library's with `--check-library`.
     rokc_diagnostic::time("hir generic bodies", || {
         super::bounds::check_all(&env, incr.as_ref(), |module| {
@@ -2665,7 +2662,7 @@ fn finish<'a>(
         super::const_eval::check_const_fns(&env, &fns);
     });
 
-    // Spec 5.3.1: an initializer evaluated now needs no lazy init.
+    // An initializer evaluated now needs no lazy init.
     let folded_statics: HashMap<String, ConstVal> = static_defs
         .iter()
         .filter_map(|s| {
@@ -2881,7 +2878,7 @@ fn finish<'a>(
                 .as_ref()
                 .is_some_and(|l| failed_derives.contains(&l.span))
     });
-    // A block-local item's capture error (spec 3.9.1) says why its name
+    // A block-local item's capture error says why its name
     // is not found there.
     let captured: std::collections::HashSet<_> = (module.diagnostics.iter())
         .filter(|d| d.message.contains(" and can't use `"))
@@ -2900,7 +2897,7 @@ fn finish<'a>(
     module
 }
 
-/// Show block-declared items (spec 3.9.1, 4.10) as written: `f/S` reads
+/// Show block-declared items as written: `f/S` reads
 /// `S`, or `f::S` when the file has another `S`. A name not found where
 /// such an item has it gets a note on its scope.
 fn show_local_names(program: &Program, diags: &mut [rokc_diagnostic::RokDiagnostic]) {
@@ -2951,7 +2948,7 @@ fn show_local_names(program: &Program, diags: &mut [rokc_diagnostic::RokDiagnost
             let outer = qualified(rokc_core::local::outer(l));
             d.notes.push(format!(
                 "`{}` is declared inside `{outer}` and visible only in its block; move it to \
-                 module level to use it here (spec 3.9.1)",
+                 module level to use it here",
                 leaf(l)
             ));
         }
@@ -2964,7 +2961,7 @@ fn show_local_names(program: &Program, diags: &mut [rokc_diagnostic::RokDiagnost
     }
 }
 
-/// Stdlib 0.1.2: `rok::bare` names neither `rok::core` nor `rok::std`, and
+/// `rok::bare` names neither `rok::core` nor `rok::std`, and
 /// `rok::core` doesn't name `rok::std`.
 fn check_tiers(
     raw_uses: &[(String, Visibility, rokc_ast::UseTree)],
@@ -2988,10 +2985,7 @@ fn check_tiers(
                 self.out.push(rokc_diagnostic::RokDiagnostic::error(
                     Code::DEPENDENCY,
                     p.span,
-                    format!(
-                        "`{}` must not depend on `rok::{}` (stdlib spec 0.1.2)",
-                        self.tier, t.name
-                    ),
+                    format!("`{}` must not depend on `rok::{}`", self.tier, t.name),
                 ));
             }
         }
@@ -3002,7 +2996,7 @@ fn check_tiers(
         }
     }
     // The prelude is what user code imports, not core code: on unix
-    // targets it names std's OS Ext traits (stdlib 0.2).
+    // targets it names std's OS Ext traits.
     let tier = |module: &str| match package_of(module) {
         _ if module == super::resolve::PRELUDE => None,
         "rok::bare" => Some("rok::bare"),
@@ -3124,7 +3118,7 @@ pub(super) fn reexport_key(re: &crate::uses::ReExport) -> String {
 }
 
 /// Headers of block-lifted items with `use p::*`s (`#block_glob`) name
-/// what the globs bring in by path, as named `use`s do (spec 3.9.1).
+/// what the globs bring in by path, as named `use`s do.
 fn block_glob_renames(
     items: &[Item],
     item_modules: &[String],
@@ -3660,7 +3654,7 @@ const MAX_VALUE_BYTES: u64 = 1 << 32;
 /// A struct / enum containing itself by value has no finite size; one past
 /// the layout caps is refused before MIR expands it.
 /// Statics whose initializers name each other directly form a cycle no
-/// order can initialize (spec 5.3.6). A cycle through a function call
+/// order can initialize. A cycle through a function call
 /// stays the run-time panic.
 fn check_static_cycles(module: &mut HirModule) {
     use std::collections::HashMap;
@@ -3905,7 +3899,7 @@ fn check_value_types(module: &mut HirModule) {
     }
 }
 
-/// Spec 6.2.2: a `#[repr(packed)]` struct is for C data; its fields may
+/// A `#[repr(packed)]` struct is for C data; its fields may
 /// sit unaligned, where the collector cannot read a reference.
 fn check_packed(module: &mut HirModule) {
     fn gc(m: &HirModule, t: &HirTy, seen: &mut Vec<HirTy>) -> bool {
@@ -3958,7 +3952,7 @@ fn check_packed(module: &mut HirModule) {
                 span,
                 format!(
                     "`#[repr(packed)]` struct `{}` holds a GC reference (`str`, a collection, \
-                     a closure ..); a packed struct is for C data (spec 6.2.2)",
+                     a closure ..); a packed struct is for C data",
                     leaf_name(&name)
                 ),
             ));
@@ -4126,7 +4120,7 @@ pub(super) fn lower_enum_def(
                     named_fields: Vec::new(),
                     arity: tys.len(),
                 },
-                // `Move { x: i32; y: i32; }` (spec 2.4): a tuple payload in
+                // `Move { x: i32; y: i32; }`: a tuple payload in
                 // declaration order, with field names for init / patterns.
                 AstEnumVariantKind::Named(fields) => HirEnumVariant {
                     name: v.name.clone(),
@@ -4154,7 +4148,7 @@ pub(super) fn lower_enum_def(
     }
 }
 
-/// `#[niche(..)]` arguments (spec 2.7.4): integers, `MIN` / `MAX`, `NAN` /
+/// `#[niche(..)]` arguments: integers, `MIN` / `MAX`, `NAN` /
 /// `INFINITY` / `NEG_INFINITY`, and ranges. Empty without the attribute;
 /// `Err` names the first unreadable argument.
 pub(super) fn niche_args(attrs: &[rokc_ast::Attribute]) -> Result<Vec<NicheArg>, String> {
@@ -4238,7 +4232,7 @@ pub(super) fn niche_args(attrs: &[rokc_ast::Attribute]) -> Result<Vec<NicheArg>,
         .collect()
 }
 
-/// `#[repr(..)]` arguments (spec 6.2.2), unchecked against the item.
+/// `#[repr(..)]` arguments, unchecked against the item.
 pub(super) fn repr_of(attrs: &[rokc_ast::Attribute]) -> Result<crate::Repr, String> {
     use rokc_ast::{AttrArg, AttrBody, Literal};
     let mut r = crate::Repr::default();
@@ -4289,7 +4283,7 @@ pub(super) fn repr_of(attrs: &[rokc_ast::Attribute]) -> Result<crate::Repr, Stri
     Ok(r)
 }
 
-/// `#[repr(..)]` arguments and placement (spec 6.2.2).
+/// `#[repr(..)]` arguments and placement.
 fn check_repr_attrs(program: &rokc_ast::Program, diags: &mut Vec<rokc_diagnostic::RokDiagnostic>) {
     for item in &program.items {
         let attrs = match item {
@@ -4358,7 +4352,7 @@ fn check_repr_attrs(program: &rokc_ast::Program, diags: &mut Vec<rokc_diagnostic
     }
 }
 
-/// Value variants (spec 2.4.2): all or none; each value a const integer
+/// Value variants: all or none; each value a const integer
 /// that fits the tag type and is unique.
 fn assign_discriminants(env: &Env<'_>, decls: &[(EnumId, &AstEnumDef)]) {
     let no_subst = HashMap::new();
@@ -4432,7 +4426,7 @@ fn assign_discriminants(env: &Env<'_>, decls: &[(EnumId, &AstEnumDef)]) {
     }
 }
 
-/// `#[niche]` placement (spec 2.7.5): a single-field struct only.
+/// `#[niche]` placement: a single-field struct only.
 fn check_niche_attrs(program: &rokc_ast::Program, diags: &mut Vec<rokc_diagnostic::RokDiagnostic>) {
     for item in &program.items {
         // `misplaced`: what the attribute sits on, if not one field.
@@ -4457,9 +4451,7 @@ fn check_niche_attrs(program: &rokc_ast::Program, diags: &mut Vec<rokc_diagnosti
         };
         let msg = match misplaced {
             None => niche_args(attrs).err(),
-            Some(w) => Some(format!(
-                "`#[niche]` goes on a single-field struct, not {w} (spec 2.7.5)"
-            )),
+            Some(w) => Some(format!("`#[niche]` goes on a single-field struct, not {w}")),
         };
         if let Some(msg) = msg {
             diags.push(rokc_diagnostic::RokDiagnostic::error(
@@ -4488,7 +4480,7 @@ pub(super) fn lower_struct_def(
             })
             .collect(),
         // Tuple struct: fields named "0", "1", ... so `n.0` reads like a
-        // named field (spec 2.7.4).
+        // named field.
         AstStructKind::Tuple(fs) => fs
             .iter()
             .enumerate()
@@ -4995,7 +4987,7 @@ fn impl_heads(
                             Code::CONFLICTING_IMPLS,
                             p.def.span,
                             format!(
-                                "`{shown}` is implemented more than once for `{}` (spec 2.9.3)",
+                                "`{shown}` is implemented more than once for `{}`",
                                 impl_def_display(&p.def.self_ty)
                             ),
                         )
@@ -5037,7 +5029,7 @@ fn impl_head(
         .and_then(|tp| tp.segments.last())
         .map(|s| s.generics.iter().map(|g| rcx.resolve_ast_ty(g)).collect())
         .unwrap_or_default();
-    // Spec 2.10.5: omitted trait arguments take the parameter's default
+    // Omitted trait arguments take the parameter's default
     // (`trait Add<Rhs = Self>`: `impl Add for V` is `impl Add<V> for V`).
     if let Some(td) = trait_def {
         for gp in td.generics.params.iter().skip(args.len()) {
@@ -5127,7 +5119,7 @@ fn impl_consts(
                     i.span,
                     format!(
                         "impl of `{}` for `{}` is missing associated const `{name}` \
-                         (spec 2.8.3a)",
+                        ",
                         leaf_name(&t.name),
                         impl_def_display(&i.self_ty)
                     ),
@@ -5360,7 +5352,7 @@ fn sig_stub(env: &Env<'_>, i: usize) -> HirFunction {
     }
 }
 
-/// Spec 6.2.1: `#[derive(Tr)]` needs every field to implement `Tr` (here
+/// `#[derive(Tr)]` needs every field to implement `Tr` (here
 /// for non-generic types; generic impls bound their parameters), and
 /// `Copy` excludes `Drop`. Returns the failed attributes' spans.
 fn check_derives(env: &Env<'_>, program: &Program) -> Vec<rokc_diagnostic::Span> {
@@ -5421,7 +5413,7 @@ fn check_derives(env: &Env<'_>, program: &Program) -> Vec<rokc_diagnostic::Span>
                         Code::CANNOT_DERIVE,
                         format!(
                             "cannot derive `{tr}` for `{}`: `{field}` has type `{}`, which does \
-                             not implement `{tr}` (spec 6.2.1)",
+                             not implement `{tr}`",
                             leaf_name(name),
                             ctx.ty_name(ty)
                         ),
@@ -5436,7 +5428,7 @@ fn check_derives(env: &Env<'_>, program: &Program) -> Vec<rokc_diagnostic::Span>
                 ctx.emit_error(
                     Code::CANNOT_DERIVE,
                     format!(
-                        "cannot derive `Copy` for `{}`: it implements `Drop` (stdlib 2.13.3)",
+                        "cannot derive `Copy` for `{}`: it implements `Drop`",
                         leaf_name(name)
                     ),
                 );
@@ -5446,7 +5438,7 @@ fn check_derives(env: &Env<'_>, program: &Program) -> Vec<rokc_diagnostic::Span>
     failed
 }
 
-/// `Pod` (stdlib 1.3.3): a `#[repr(C)]` / `#[repr(transparent)]` struct of
+/// `Pod`: a `#[repr(C)]` / `#[repr(transparent)]` struct of
 /// `Pod` fields without `Drop`.
 fn check_pod(
     ctx: &LowerCtx<'_>,
@@ -5462,10 +5454,7 @@ fn check_pod(
     let fail = |why: String| {
         ctx.emit_error(
             Code::CANNOT_DERIVE,
-            format!(
-                "`{}` cannot be `Pod`: {why} (stdlib 1.3.3)",
-                leaf_name(name)
-            ),
+            format!("`{}` cannot be `Pod`: {why}", leaf_name(name)),
         );
     };
     if !matches!(ty, HirTy::Struct(_)) {
@@ -5488,7 +5477,7 @@ fn check_pod(
     }
 }
 
-/// Spec 6.9.9: what a `pub` meta block's template names from a root must
+/// What a `pub` meta block's template names from a root must
 /// exist and be reachable from the block's module, so the error is the
 /// author's when the package builds, not each user's.
 fn check_templates(env: &Env<'_>, templates: &[crate::TemplateRefs]) {
@@ -5545,7 +5534,7 @@ fn check_templates(env: &Env<'_>, templates: &[crate::TemplateRefs]) {
                     Code::UNRESOLVED_NAME,
                     *at,
                     format!(
-                        "this meta template names `{}`, which does not exist (spec 6.9.9)",
+                        "this meta template names `{}`, which does not exist",
                         shown()
                     ),
                 ),
@@ -5555,7 +5544,7 @@ fn check_templates(env: &Env<'_>, templates: &[crate::TemplateRefs]) {
                         *at,
                         format!(
                             "this meta template names `{}`, which its module `{}` cannot see \
-                             (spec 6.9.9)",
+                            ",
                             shown(),
                             module_display(&t.module)
                         ),
@@ -5569,7 +5558,7 @@ fn check_templates(env: &Env<'_>, templates: &[crate::TemplateRefs]) {
 }
 
 /// Every trait in a bound position must exist, with no more type arguments
-/// than parameters (stdlib 2.11.3).
+/// than parameters.
 fn check_bound_names(
     program: &Program,
     names: &TypeNames,
@@ -5710,7 +5699,7 @@ fn check_bound_names(
     }
 }
 
-/// Spec 2.10.4: every generic struct / union / enum instantiation must
+/// Every generic struct / union / enum instantiation must
 /// meet its parameters' bounds, inline (`T: Tr`) and `where` alike.
 fn check_type_bounds(env: &Env<'_>) {
     // (display name, item's module, arguments, generics, `where`, use site)
@@ -5776,7 +5765,7 @@ fn check_type_bounds(env: &Env<'_>) {
             ));
         }
     }
-    // Spec 2.10.4: a non-generic alias's `where` holds once (at the
+    // A non-generic alias's `where` holds once (at the
     // alias); a generic alias's bounds hold at each use.
     for (full, def) in &env.names.generic_aliases {
         if def.generics.params.is_empty() {
@@ -5930,7 +5919,7 @@ fn unmet_bounds(
                 span,
                 format!(
                     "type `{name}` does not satisfy trait bound `{}` required by `{shown}` \
-                     (spec 2.10.4)",
+                    ",
                     rcx.trait_name(&want),
                 ),
             );
@@ -5948,7 +5937,7 @@ fn unmet_bounds(
     out
 }
 
-/// Spec 5.3: a `static` is read by every thread, so it must be `Sync`; the
+/// A `static` is read by every thread, so it must be `Sync`; the
 /// error suggests a `Mutex`, or an `Atomic` for a `Cell` of a number.
 fn check_statics_sync(env: &Env<'_>, programs: &[&Program]) {
     let no_subst = HashMap::new();
@@ -6026,7 +6015,7 @@ fn check_statics_sync(env: &Env<'_>, programs: &[&Program]) {
             s.span,
             format!(
                 "a `static` is shared by every thread, so it can't be a `{}`: two threads could \
-                 change it at once (spec 5.3)",
+                 change it at once",
                 ctx.ty_name(ty)
             ),
         );
@@ -6036,7 +6025,7 @@ fn check_statics_sync(env: &Env<'_>, programs: &[&Program]) {
     }
 }
 
-/// Spec 6.2.16: `#[internal]` marks what the toolchain's packages share;
+/// `#[internal]` marks what the toolchain's packages share;
 /// on any other package's item it is an error.
 fn check_internal_marks(env: &Env<'_>, checked: &[&Program], own: &dyn Fn(&str) -> bool) {
     let mut found: Vec<(String, Span)> = Vec::new();
@@ -6087,16 +6076,16 @@ fn check_internal_marks(env: &Env<'_>, checked: &[&Program], own: &dyn Fn(&str) 
             span,
             format!(
                 "`#[internal]` on `{name}`: it marks items the Rok toolchain's own packages \
-                 share (spec 6.2.16); to keep an item inside this package, write `pub(pkg)` \
+                 share; to keep an item inside this package, write `pub(pkg)` \
                  instead"
             ),
         ));
     }
 }
 
-/// Spec 2.9.3: one impl per trait and type (a concrete impl a generic one
-/// covers is a duplicate); the orphan rule (2.9.5); supertraits (2.8.4,
-/// for every instance a generic impl's bounds allow).
+/// One impl per trait and type (a concrete impl a generic one
+/// covers is a duplicate); the orphan rule; supertraits (for
+/// every instance a generic impl's bounds allow).
 fn check_impl_rules(
     env: &Env<'_>,
     checked: &[&Program],
@@ -6139,7 +6128,7 @@ fn check_impl_rules(
                     i.span,
                     format!(
                         "`impl {} for {}`: neither the trait nor the type is defined in this \
-                         package (orphan rule, spec 2.9.5)",
+                         package (orphan rule)",
                         leaf_name(&key),
                         impl_def_display(&i.self_ty)
                     ),
@@ -6153,7 +6142,7 @@ fn check_impl_rules(
                     i.span,
                     format!(
                         "`impl {} for {}`: trait `{}` is sealed, so only `{}` implements it \
-                             (spec 6.2.15)",
+                            ",
                         leaf_name(&key),
                         impl_def_display(&i.self_ty),
                         leaf_name(&key),
@@ -6195,7 +6184,7 @@ fn check_impl_rules(
             ctx.emit_error(
                 Code::MISSING_SUPERTRAIT,
                 format!(
-                    "`{}` implements `{}` but not its supertrait `{}` (spec 2.8.4)",
+                    "`{}` implements `{}` but not its supertrait `{}`",
                     ctx.ty_name(&target),
                     leaf_name(&key),
                     leaf_name(sup)
@@ -6210,7 +6199,7 @@ fn check_impl_rules(
     }
 }
 
-/// Spec 2.9.4: a concrete impl's method takes and returns the types the
+/// A concrete impl's method takes and returns the types the
 /// trait declares, with `Self`, the trait's parameters and associated
 /// types replaced by the impl's. Generic methods and unresolved types are left
 /// to the call sites.
@@ -6285,7 +6274,7 @@ fn check_impl_returns(
         let differ = |got: &HirTy, want: &HirTy| {
             got != want && !mono::has_unknown(got) && !mono::has_unknown(want)
         };
-        // Spec 2.9.4: written parameter types are the trait's; an untyped
+        // Written parameter types are the trait's; an untyped
         // one takes the trait's.
         if def.params.len() == tm.params.len() {
             let bad = def.params.iter().zip(&tm.params).find_map(|(p, tp)| {
@@ -6351,7 +6340,7 @@ fn check_impl_returns(
     }
 }
 
-/// Spec 2.8.3: the bounds a trait declares on its associated types
+/// The bounds a trait declares on its associated types
 /// (`type Label: Display;`), as `(name, the impl's type, bound key)`.
 fn assoc_bound_goals<'i>(
     ctx: &LowerCtx<'_>,
@@ -6386,7 +6375,7 @@ fn assoc_bound_error(ctx: &LowerCtx<'_>, td: &str, name: &str, ty: &str, bound: 
         Code::UNSATISFIED_BOUND,
         format!(
             "associated type `{name}` = `{ty}` does not implement `{}`{every}, a bound of \
-             `{}::{name}` (spec 2.8.3)",
+             `{}::{name}`",
             leaf_name(bound),
             leaf_name(td)
         ),
@@ -6403,7 +6392,7 @@ fn check_assoc_bounds(ctx: &LowerCtx<'_>, td: &rokc_ast::TraitDef, i: &rokc_ast:
     }
 }
 
-/// Spec 2.8.4 for a generic impl: its target, parameters opaque under their
+/// For a generic impl: its target, parameters opaque under their
 /// bounds, must implement each supertrait.
 fn check_generic_supers(
     ctx: &LowerCtx<'_>,
@@ -6471,7 +6460,7 @@ fn check_generic_supers(
             Code::MISSING_SUPERTRAIT,
             format!(
                 "`{}` implements `{}` but not its supertrait `{}` for every `{params}` the \
-                 impl allows (spec 2.8.4)",
+                 impl allows",
                 target.to_string().replace("#r.", ""),
                 leaf_name(key),
                 leaf_name(sup),
@@ -6643,7 +6632,7 @@ fn check_impl_overlap(env: &Env<'_>, own: &dyn Fn(&str) -> bool) {
                     gi.self_ty.span,
                     format!(
                         "conflicting implementations of trait `{}` for `{}`: the concrete \
-                         impl overlaps `impl<..> {} for {}` (spec 2.9.3 - one impl per \
+                         impl overlaps `impl<..> {} for {}` (one impl per \
                          trait and type; no specialization)",
                         ctx.display_path(&gi.trait_key),
                         ctx.ty_name(ty),
@@ -6713,7 +6702,7 @@ fn check_impl_overlap(env: &Env<'_>, own: &dyn Fn(&str) -> bool) {
                     format!(
                         "conflicting implementations of trait `{}`: `impl<..> {} for {}` and \
                          `impl<..> {} for {}` overlap on `{t}` - bounds don't make impls \
-                         disjoint (no specialization; spec 2.9.5)",
+                         disjoint (no specialization)",
                         ctx.display_path(&a.trait_key),
                         ctx.display_path(&a.trait_key),
                         impl_def_display(&a.self_ty),
@@ -6957,7 +6946,7 @@ fn canon_ast_ty(
         }
         AstTyKind::Tuple(ts) => CanonTy::Tuple(ts.iter().map(rec).collect::<Option<_>>()?),
         AstTyKind::Sum(ts) => {
-            // Written sums flatten (2.6.4; a nested layer `Nest` stays
+            // Written sums flatten (a nested layer `Nest` stays
             // one member); duplicates collapse.
             let mut set: Vec<CanonTy> = Vec::new();
             for t in ts {
@@ -7153,7 +7142,7 @@ impl Unifier {
         }
     }
 
-    /// Sums are sets (2.6.4): some pairing of the members unifies.
+    /// Sums are sets: some pairing of the members unifies.
     fn unify_set(&mut self, xs: &[CanonTy], ys: &[CanonTy]) -> Option<()> {
         let Some((x, rest)) = xs.split_first() else {
             return Some(());
@@ -7215,7 +7204,7 @@ fn check_auto_impl(
             diags,
             format!(
                 "`Reflect` is implemented by the compiler for every type; remove `impl {tr} for \
-                 {target}` (spec 6.10.1)"
+                 {target}`"
             ),
         );
         return false;
@@ -7293,7 +7282,7 @@ fn check_auto_impl(
     true
 }
 
-/// Spec 5.9.10: an `extern "C" fn` definition is called from C: no
+/// An `extern "C" fn` definition is called from C: no
 /// captures, generics or `throws` (errors can't cross into C), FFI types
 /// only.
 fn check_extern_fn(f: &FnDef, abi: &str, diags: &mut Vec<rokc_diagnostic::RokDiagnostic>) {
@@ -7301,10 +7290,7 @@ fn check_extern_fn(f: &FnDef, abi: &str, diags: &mut Vec<rokc_diagnostic::RokDia
         diags.push(rokc_diagnostic::RokDiagnostic::error(
             Code::FFI,
             f.span,
-            format!(
-                "`extern {abi:?} fn {}`: {msg} (spec 5.9.10)",
-                leaf_name(&f.name)
-            ),
+            format!("`extern {abi:?} fn {}`: {msg}", leaf_name(&f.name)),
         ));
     };
     if abi != "C" && abi != "system" {
@@ -7330,7 +7316,7 @@ fn check_extern_fn(f: &FnDef, abi: &str, diags: &mut Vec<rokc_diagnostic::RokDia
     }
 }
 
-/// Spec 5.9.4: what of `ty` C cannot hold, a GC reference the collector
+/// What of `ty` C cannot hold, a GC reference the collector
 /// may move or free (`List<i64>`, a closure), else `None`. `str` is a
 /// `char*` in an extern declaration; a bare `str` is checked elsewhere.
 /// A pointer or C function pointer `| none` is a nullable C pointer.
@@ -7361,7 +7347,7 @@ fn gc_part(env: &Env<'_>, ty: &HirTy, depth: u32) -> Option<HirTy> {
     }
 }
 
-/// `m | none` has C's pointer layout, `none` being null (spec 2.7.2):
+/// `m | none` has C's pointer layout, `none` being null:
 /// `m` is a C function pointer or a `#[niche(0)]` pointer struct.
 fn null_niche(env: &Env<'_>, m: &HirTy) -> bool {
     match m {
@@ -7383,7 +7369,7 @@ fn toolchain_symbol(name: &str) -> bool {
     n.starts_with("rok_") || n.starts_with("__rok_")
 }
 
-/// Spec 5.9.4: GC types in the package's `extern "C"` blocks and
+/// GC types in the package's `extern "C"` blocks and
 /// `extern "C" fn` definitions.
 fn check_extern_ffi(env: &Env<'_>, programs: &[&Program]) {
     let no_subst = HashMap::new();
@@ -7401,7 +7387,7 @@ fn check_extern_ffi(env: &Env<'_>, programs: &[&Program]) {
             )
             .with_note(
                 "help: use a primitive, a `CPtr<T>` (`rok::bare::ptr`) and a length, or a \
-                 `#[repr(C)]` struct of those (spec 5.9.4)"
+                 `#[repr(C)]` struct of those"
                     .to_owned(),
             ),
         );
@@ -7461,8 +7447,8 @@ fn check_extern_ffi(env: &Env<'_>, programs: &[&Program]) {
     }
 }
 
-/// `#[link(wasm_import_module = "m")]` on an `extern` block (spec
-/// 6.2.3): the core module its functions are imported from on wasm32.
+/// `#[link(wasm_import_module = "m")]` on an `extern` block:
+/// the core module its functions are imported from on wasm32.
 fn wasm_import_module(attrs: &[rokc_ast::Attribute]) -> Option<String> {
     attrs
         .iter()
@@ -7480,7 +7466,7 @@ fn wasm_import_module(attrs: &[rokc_ast::Attribute]) -> Option<String> {
         })
 }
 
-/// `#[link_name = "sym"]` on an extern function (spec 5.9.9): the symbol
+/// `#[link_name = "sym"]` on an extern function: the symbol
 /// it links to; in a `wasm_import_module` block, its import name.
 fn link_name_of(f: &FnDef) -> Option<String> {
     let a = f.attrs.iter().find(|a| a.path == ["link_name"])?;
@@ -7490,7 +7476,7 @@ fn link_name_of(f: &FnDef) -> Option<String> {
     }
 }
 
-/// `#[export_name("sym")]` (spec 905): the symbol it names.
+/// `#[export_name("sym")]`: the symbol it names.
 fn export_name(f: &FnDef) -> Option<String> {
     let a = f.attrs.iter().find(|a| a.name() == "export_name")?;
     match &a.body {
@@ -7502,7 +7488,7 @@ fn export_name(f: &FnDef) -> Option<String> {
     }
 }
 
-/// What a `#[intrinsic("rok.NAME")]` function is (stdlib spec 0.3): its
+/// What a `#[intrinsic("rok.NAME")]` function is: its
 /// calls become the operation; the body is only a fallback.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum Intrinsic {
@@ -7538,7 +7524,7 @@ pub(super) enum Intrinsic {
     FieldTable,
     /// `rok.shown`: the argument as `{x:?}`, or `<T>` without `Debug`.
     Shown,
-    /// `rok.transfer`: a hand-off copy of the value (stdlib 2.13.9).
+    /// `rok.transfer`: a hand-off copy of the value.
     Transfer,
     /// `rok.transfer_keep`: note every collection reached as its own copy.
     TransferKeep,
@@ -7598,7 +7584,7 @@ impl Intrinsic {
                     .find(|o| *o == op)
                     .map(Self::Atomic);
                 }
-                // `rok.OP_assign.TYPE` (stdlib 2.4.6): the op, written
+                // `rok.OP_assign.TYPE`: the op, written
                 // back through the `ref self` receiver.
                 let op = rest.split('.').next()?;
                 Self::Prim(match op.strip_suffix("_assign").unwrap_or(op) {
@@ -7637,7 +7623,7 @@ impl Intrinsic {
     }
 }
 
-/// `m`'s `#[intrinsic(..)]`, standard library only (stdlib 0.3.5).
+/// `m`'s `#[intrinsic(..)]`, standard library only.
 pub(super) fn intrinsic_of(
     m: &FnDef,
     module: &str,
@@ -7655,7 +7641,7 @@ pub(super) fn intrinsic_of(
     if !module.starts_with("rok::") {
         return err(format!(
             "`#[intrinsic]` on `{}`: the intrinsic attribute is for the standard library only \
-             (stdlib spec 0.3.5)",
+            ",
             m.name
         ));
     }
@@ -7669,7 +7655,7 @@ pub(super) fn intrinsic_of(
     let Some(intrinsic) = name.as_deref().and_then(Intrinsic::parse) else {
         return err(format!(
             "`#[intrinsic({})]` on `{}`: unknown intrinsic - expected `rok.OP.TYPE` \
-             (stdlib spec 0.3.3)",
+            ",
             name.map_or_else(String::new, |n| format!("\"{n}\"")),
             m.name
         ));
@@ -7779,7 +7765,7 @@ fn const_literal_ty(v: i128, span: rokc_diagnostic::Span) -> Ty {
 }
 
 /// Trait type parameter → the impl's argument (or the parameter's
-/// default, `Self` meaning the impl target; spec 2.10.5).
+/// default, `Self` meaning the impl target).
 fn trait_param_args(t: &rokc_ast::TraitDef, impl_def: &rokc_ast::ImplDef) -> HashMap<String, Ty> {
     let given: &[Ty] = impl_def
         .trait_path
@@ -7889,7 +7875,7 @@ fn path_ty_named(name: &str, span: rokc_diagnostic::Span) -> Ty {
     }
 }
 
-/// Spec 2.6.4 / 2.8.3 / 2.13.4: in a trait or impl, `X` and `Self::X` name
+/// In a trait or impl, `X` and `Self::X` name
 /// the associated type, shadowing outer `X`. Impl signatures get the
 /// impl's type; methods are marked `ASSOC_TYPES_ATTR` so bodies read `X`
 /// as `Self::X`.
@@ -8020,7 +8006,7 @@ fn assoc_defaults(
     out
 }
 
-/// Bodies without `-> T` that may diverge on every path (spec 4.3.7), by
+/// Bodies without `-> T` that may diverge on every path, by
 /// span, so their return type is inferred (`!` if lowering confirms): each
 /// ends in `throw`, a `loop`, a call of a known diverging name, or
 /// branches that all do. Names match by leaf (lowering settles it);
@@ -8277,7 +8263,7 @@ fn bare_uses(it: &Item, name: &str) -> Vec<rokc_diagnostic::Span> {
     v.out
 }
 
-/// Spec 2.8.3: an associated type that hides an outer type of the same
+/// An associated type that hides an outer type of the same
 /// name inside its trait / impl. A bare use of the name there is an
 /// error; the declaration alone warns.
 fn check_assoc_shadowing(
@@ -8335,7 +8321,7 @@ fn check_assoc_shadowing(
                         *at,
                         format!(
                             "`{a}` is ambiguous here: the associated type `{a}` shadows the \
-                             outer type `{a}` inside the {owner} (spec 2.8.3)"
+                             outer type `{a}` inside the {owner}"
                         ),
                     )
                     .with_help(format!(
@@ -8349,7 +8335,7 @@ fn check_assoc_shadowing(
                     it.span(),
                     format!(
                         "associated type `{a}` shadows the outer type `{a}` inside the {owner}; \
-                         there a bare `{a}` is ambiguous (spec 2.8.3)"
+                         there a bare `{a}` is ambiguous"
                     ),
                 )
                 .with_help(format!(
@@ -8435,7 +8421,7 @@ pub(super) fn subst_assoc_ty(ty: &mut Ty, assoc: &HashMap<String, Ty>) {
                 let before = matches!(&t.kind, AstTyKind::Path(p) if p.segments.len() <= 2)
                     .then(|| format!("{:?}", t.kind));
                 subst_assoc_ty(t, assoc);
-                // A replaced parameter stays one member (spec 2.6.4).
+                // A replaced parameter stays one member.
                 if before.is_some_and(|b| b != format!("{:?}", t.kind)) {
                     let span = t.span;
                     let inner = std::mem::replace(
@@ -8534,7 +8520,7 @@ fn method_key(
     (!fn_table.contains_key(&alt)).then_some(alt)
 }
 
-/// The copy-out shape of a function with `ref` parameters (spec 4.7).
+/// The copy-out shape of a function with `ref` parameters.
 pub(super) fn ref_out_of(env: &Env<'_>, sig: &FnSig) -> Option<RefOut> {
     let deferred = env.decl(sig.id).is_some_and(|d| mono::defers_refs(d.def()));
     let refs: Vec<(usize, HirTy)> = sig
@@ -8551,7 +8537,7 @@ pub(super) fn ref_out_of(env: &Env<'_>, sig: &FnSig) -> Option<RefOut> {
     })
 }
 
-/// Spec 6.5: every `#[literal]` function's signature against its
+/// Every `#[literal]` function's signature against its
 /// pattern's captures; the built-in shapes' handlers.
 fn literal_handlers(
     program: &Program,
@@ -8560,7 +8546,7 @@ fn literal_handlers(
     use rokc_parser::{ArgKind, PatKind, Pattern};
     let mut out = Vec::new();
     // (pattern, priority, return type leaf) → first handler; a second is
-    // ambiguous wherever the pattern matches (6.5.5).
+    // ambiguous wherever the pattern matches.
     let mut seen: HashMap<(String, i64, String), (String, rokc_diagnostic::Span)> = HashMap::new();
     for item in &program.items {
         let Item::Fn(f) = item else { continue };
@@ -8605,7 +8591,7 @@ fn literal_handlers(
                     attr.span,
                     format!(
                         "`#[literal({text})]` handler `{}` must take {} parameter(s): {} \
-                         (spec 6.5.4)",
+                        ",
                         f.name,
                         want.len(),
                         if shape.is_empty() {
@@ -8632,7 +8618,7 @@ fn literal_handlers(
                     format!(
                         "`#[literal({text})]` is already registered by `{first}` with the same \
                          priority and return type: every use would be ambiguous - drop one, or \
-                         give one a `priority = N` (spec 6.5.5)"
+                         give one a `priority = N`"
                     ),
                 )
                 .with_secondary(*first_span, "first registered here"),

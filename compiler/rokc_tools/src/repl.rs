@@ -890,7 +890,7 @@ impl Repl {
             })
     }
 
-    /// Help for the name at `code[start..end]` (9.8.6): the language
+    /// Help for the name at `code[start..end]`: the language
     /// server's hover as text, from the cell checked in the session, else
     /// from the expression ending at the name alone.
     pub fn help(&self, code: &str, start: usize, end: usize) -> Option<String> {
@@ -985,7 +985,7 @@ impl Repl {
     }
 
     /// The session as a script (`:save`). A file may not declare a name
-    /// twice in one scope (5.1.4): a cell that declares one again with
+    /// twice in one scope: a cell that declares one again with
     /// the same type assigns it; otherwise it opens a block that lasts
     /// to the end. `SAVED` heads it and `CELL` marks each cell, so
     /// `:load` replays the cells (`replay`) and keeps what a block hides.
@@ -1342,7 +1342,7 @@ impl Repl {
         for b in &self.bindings {
             let _ = writeln!(src, "let {} = {};", b.name, b.sym);
         }
-        // Its own block: a `let` may rebind a name (907.3, 5.1.4). None
+        // Its own block: a `let` may rebind a name (907.3). None
         // without a body: a loaded program's `fn main` is the entry then.
         if body.is_empty() && show.is_none() {
             return src;
@@ -1542,7 +1542,7 @@ impl Repl {
             // Full paths, so later cells name the type without a `use`.
             let ty = ty_path(hir, &l.ty);
             // Closures, unresolved types, and types the session's top level
-            // can't see (spec 5.6) can't be kept.
+            // can't see can't be kept.
             let why = if ty.contains('{') || ty.starts_with("closure") {
                 Some("its type has no name".to_owned())
             } else {
@@ -2713,7 +2713,7 @@ fn holds_any(hir: &HirModule, ty: &HirTy, seen: &mut Vec<HirTy>) -> bool {
 
 /// The functions that may hold the session's top level: `main`, then the
 /// coroutine bodies it starts (a top-level `await` makes `main` run its
-/// body on the executor, 4.16.5).
+/// body on the executor).
 fn top_fns(hir: &HirModule) -> Vec<usize> {
     let Some(main) = hir.functions.iter().position(|f| f.name == "main") else {
         return Vec::new();

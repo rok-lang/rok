@@ -1,11 +1,10 @@
-// spec: 004.16.4-implicit-main-throws
 // expect-exit: 1
 // expect-stderr: error: `main` returned an uncaught error: bad 7
-// expect-stderr: --> tests/cases/416_entry_top_try.rok:22:13
+// expect-stderr: --> tests/cases/416_entry_top_try.rok:21:13
 // expect-stdout:
 // 1
 
-// spec 4.16.4: the implicit `main` is `fn main() throws`; an error a
+// The implicit `main` is `fn main() throws`; an error a
 // top-level `try` lets escape is printed (Display) and exits 1.
 struct Bad { n: i32; }
 impl Display for Bad { fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"bad {self.n}") } }

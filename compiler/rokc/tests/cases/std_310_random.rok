@@ -38,4 +38,3 @@ fn main() {
     println(f"part {inner && part[0] == 0u8 && part[1] == 0u8 && part[18] == 0u8 && part[19] == 0u8}");
 }
 
-// spec: std 310-random §3.10.1

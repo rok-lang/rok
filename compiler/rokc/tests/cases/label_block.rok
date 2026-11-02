@@ -21,4 +21,3 @@ fn main() -> i32 {
     println(f"{classify(-5)} {classify(0)} {classify(7)} {classify(15)} {classify(101)}");
     return total - 1;        // (-1 + 0 + 14 + 30) - 1 = 42
 }
-// spec: §3.9.10

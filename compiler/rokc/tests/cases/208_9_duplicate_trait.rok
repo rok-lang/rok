@@ -1,5 +1,4 @@
-// spec: §2.8.9
-// expect-error: 6:1: type `Shape` is defined more than once
+// expect-error: 5:1: type `Shape` is defined more than once
 
 // Two traits of one name in one module are an error.
 trait Shape { fn area(self) -> f64; }

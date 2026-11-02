@@ -1,6 +1,5 @@
-// spec: §3.9.1
-// expect-error: 14:19: mismatched types: `let o` expects `Only`, found `bool`
-// expect-error: 16:16: mismatched types: `let s` expects `f::S`, found `S`
+// expect-error: 13:19: mismatched types: `let o` expects `Only`, found `bool`
+// expect-error: 15:16: mismatched types: `let s` expects `f::S`, found `S`
 // forbid-error: f/
 
 // Diagnostics name an item in a block as written, and by the fns it is

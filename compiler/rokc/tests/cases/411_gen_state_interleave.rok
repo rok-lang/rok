@@ -1,12 +1,11 @@
-// spec: 004.11-generators §4.11.11 / §4.11.13
 // expect-exit: 0
 // expect-stdout:
 // a0 b100 a1 b101 a2 b102
 // evens 2 4 6
 
-// spec 4.11.11: each generator keeps its own locals and position between
+// Each generator keeps its own locals and position between
 // `next()` calls, so two live generators interleave independently.
-// 4.11.13: `yield fn` as a method.
+// `yield fn` as a method.
 yield fn from(start: i32) -> i32 {
     let i = start;
     loop {

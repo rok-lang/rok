@@ -20,4 +20,3 @@ impl Pod for Pair {}
 
 fn main() {}
 
-// spec: refs-lang §4.15.4

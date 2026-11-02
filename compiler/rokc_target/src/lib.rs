@@ -40,7 +40,7 @@ macro_rules! named_enum {
 }
 
 named_enum! {
-    /// Platform C calling convention for aggregates (spec 8.6.3).
+    /// Platform C calling convention for aggregates.
     CAbi {
         Aarch64,
         X86_64SysV,
@@ -235,8 +235,8 @@ macro_rules! spec {
         const FIELDS: &[&str] = &[$(stringify!($f)),*];
 
         impl TargetSpec {
-    /// `extern "system"` is `stdcall` here (32-bit x86 Windows, spec
-    /// 5.9.2), not the C ABI.
+    /// `extern "system"` is `stdcall` here (32-bit x86
+    /// Windows), not the C ABI.
     #[must_use]
     pub fn stdcall_system(&self) -> bool {
         self.arch == "x86" && self.os == "windows"
@@ -263,7 +263,7 @@ spec! {
     /// The minimum OS version, appended to `llvm_target` (Mach-O:
     /// `MACOSX_DEPLOYMENT_TARGET` overrides it); empty elsewhere.
     deployment_target: String,
-    /// `target_arch` (spec 6.3.2).
+    /// `target_arch`.
     arch: String,
     /// `target_os`; `none` without an operating system.
     os: String,
@@ -283,7 +283,7 @@ spec! {
     c_abi: CAbi,
     /// LLVM's `target datalayout`.
     data_layout: String,
-    /// LLVM's CPU and features (spec 0.6.4's SIMD baseline).
+    /// LLVM's CPU and features (the target's SIMD baseline).
     cpu: String,
     features: String,
     object_format: ObjectFormat,

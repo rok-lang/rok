@@ -1,4 +1,3 @@
-// spec: §4.5.2 §4.5.3 §4.5.4 §4.5.5 §4.5.6 §4.5.7 §4.5.8 §4.5.9 §4.5.11 §4.5.12
 // needs: threads
 // expect-exit: 0
 // expect-stdout:
@@ -12,7 +11,7 @@
 // stream 3
 // spawned 9
 
-// Spec 4.5: closure parameter / return typing, captures, closures as
+// Closure parameter / return typing, captures, closures as
 // values (variables, arguments, returns, collections), IIFE, the
 // `async` / `yield` variants and the `{ body }` zero-argument form.
 use rok::std::thread;

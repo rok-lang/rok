@@ -1,4 +1,3 @@
-// spec: §4.5.10 §4.8.2 §4.8.4 §4.8.5 §4.8.6 §4.8.7 §4.8.8 §4.8.9
 // expect-exit: 0
 // expect-stdout:
 // 2 2 2
@@ -12,7 +11,7 @@
 // inner outer
 // 3 1 4
 
-// Spec 4.8: trailing closures are optional; `{ body }` after a call is a
+// Trailing closures are optional; `{ body }` after a call is a
 // zero-parameter closure (empty parentheses may go), a lone `{ }` is a
 // block; they nest and mix with positional and named arguments; `|`
 // without the `|params| {` shape stays bitwise OR.

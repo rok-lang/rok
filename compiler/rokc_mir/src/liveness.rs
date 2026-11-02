@@ -1,5 +1,5 @@
 //! Where locals die: backward liveness over the MIR CFG, so codegen can
-//! clear a GC root slot right after its last use (704 §7.4.1: a slot
+//! clear a GC root slot right after its last use (a slot
 //! whose variable is dead may be nulled) instead of at function end.
 //!
 //! A block param is defined on block entry. An array write is a partial

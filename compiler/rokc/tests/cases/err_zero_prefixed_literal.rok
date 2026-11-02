@@ -1,10 +1,9 @@
-// spec: 001.06.1-basic-form
 // expect-error: `0755`: a decimal literal can't start with `0`
 // expect-error: `00`: a decimal literal can't start with `0`
 // expect-error: help: write `0o755` for an octal number, or `755` for decimal
 // expect-error: help: write `0`
 
-// A decimal literal can't start with `0` (spec 1.6.1): `0o755` is octal,
+// A decimal literal can't start with `0`: `0o755` is octal,
 // `755` decimal. `0`, `0.5` and `0o17` are fine.
 fn main() {
     let mode = 0755;

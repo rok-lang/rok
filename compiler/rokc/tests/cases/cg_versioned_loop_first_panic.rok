@@ -1,9 +1,8 @@
-// spec: §3.13.3 std §2.9.2
 // A counted loop whose invariant index is out of bounds fails the test
 // in front of its unchecked copy: the checked loop runs, and its first
 // iteration panics at that access, not at the in-bounds one before it.
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at tests/cases/cg_versioned_loop_first_panic.rok:14:14:
+// expect-stderr: thread 'main' panicked at tests/cases/cg_versioned_loop_first_panic.rok:13:14:
 // expect-stderr: index 1 out of bounds for length 1
 // expect-stdout:
 

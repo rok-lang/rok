@@ -1,4 +1,3 @@
-// spec: 004.02.2-omitting-the-type
 // An untyped parameter of a trait impl method takes the trait's type
 // at that position (trait arguments and associated types substituted);
 // an untyped parameter with a default takes the default's type when

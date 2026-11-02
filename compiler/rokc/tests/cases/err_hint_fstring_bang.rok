@@ -1,6 +1,5 @@
-// spec: §1.7.3 §3.8.4
 // A postfix `!` in an f-string hole gets the same help as outside one.
-// expect-error: 7:13: unexpected tokens in f-string hole (expected `}`)
+// expect-error: 6:13: unexpected tokens in f-string hole (expected `}`)
 // expect-error: help: rok has no `!` to unwrap; for a value that may be none, write `v ?? default`
 let xs: List<i32> = [1, 2];
 let v = xs.pop();

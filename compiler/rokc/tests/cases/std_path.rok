@@ -18,7 +18,7 @@
 // a, ""
 // RootDir ParentDir . .. /
 
-// Spec 308: `Path` (UTF-8 newtype, `/` joining), parent / file_name /
+// `Path` (UTF-8 newtype, `/` joining), parent / file_name /
 // extension, `Components` / `Ancestors` iterators, lexical normalize.
 
 use rok::std::path::{Path, Component};
@@ -71,5 +71,4 @@ fn main() {
     println(names + Component::RootDir.as_str());
 }
 
-// spec: std 308-path
 // only-os: macos linux

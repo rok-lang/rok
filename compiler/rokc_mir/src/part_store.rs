@@ -1,6 +1,6 @@
 //! Partial element stores. `xs[i].f = v` on a `GcBuf` of structs reads
 //! the element, replaces the field in the copy and stores the copy back
-//! (spec 3.4: the element is a value). When nothing writes memory
+//! (the element is a value). When nothing writes memory
 //! between that load and store, storing only field `f` is the same, and
 //! skips the write barrier of the fields that hold GC references.
 

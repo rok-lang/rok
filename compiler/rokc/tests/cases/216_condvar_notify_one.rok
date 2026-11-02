@@ -39,4 +39,3 @@ fn main() -> i32 {
     println(f"after notify_all: {returned.load()} returned");
     0
 }
-// spec: std §2.16.4a

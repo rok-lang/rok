@@ -3,7 +3,7 @@
 // 5 a
 // 5 b 9
 
-// 3.4: `t.0 = v` writes one element of a plain tuple, nested too.
+// `t.0 = v` writes one element of a plain tuple, nested too.
 struct S { p: (i32, str); }
 
 fn main() {
@@ -16,4 +16,3 @@ fn main() {
     n.0.1 = 9;
     println(f"{s.p.0} {s.p.1} {n.0.1}");
 }
-// spec: §3.4.1

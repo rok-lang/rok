@@ -1,4 +1,3 @@
-// spec: 002.10-generics
 // expect-error: does not satisfy trait bound `Source<Item = i32>`
 
 // A generic impl answers a bound's associated-type binding with its own

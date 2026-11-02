@@ -3,7 +3,6 @@
 // expect-stdout:
 // 1 2 1 2
 
-// spec: std 213-marker §2.13.9
 // A helper given a list and an unrelated label list, and one given two
 // halves of a split.
 use rok::std::thread;

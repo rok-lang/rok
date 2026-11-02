@@ -1,4 +1,3 @@
-// spec: §3.13.3 §3.13.5
 // Rotated counted loops step their counter at the bottom test: `continue`,
 // `break`, nesting and a counter read after the loop all see the same
 // values as before.

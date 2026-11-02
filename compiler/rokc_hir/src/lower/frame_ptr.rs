@@ -1,4 +1,4 @@
-//! Stdlib bare 1.1.2: in a coroutine a pointer to a local is valid only
+//! In a coroutine a pointer to a local is valid only
 //! until the next suspend, since each resume reloads the frame into new
 //! slots. A `rok::bare::ptr` local built from such an address (or another
 //! such local) used after a suspend it was live at is an error. Read off
@@ -53,7 +53,7 @@ pub(super) fn check(env: &Env<'_>, functions: &[HirFunction]) {
                 format!(
                     "`{name}` points to a local of this coroutine and is used after a \
                      suspension point: such a pointer is valid only until the next `await` / \
-                     `yield` (stdlib bare 1.1.2)"
+                     `yield`"
                 ),
             );
         }

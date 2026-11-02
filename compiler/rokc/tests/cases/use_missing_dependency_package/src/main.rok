@@ -1,8 +1,7 @@
-// expect-error: src/main.rok:6:5: unresolved import: `json::parse` does not exist
+// expect-error: src/main.rok:5:5: unresolved import: `json::parse` does not exist
 // expect-error: = help: `json` is not a dependency of this package: add it to rok.rokon (`rok add json`)
 // A package gets its dependencies from its rok.rokon alone; the help
-// says so (spec 9.10.5).
-// spec: §9.10.5
+// says so.
 use json::parse;
 
 fn main() -> i32 { return 0; }

@@ -1,4 +1,3 @@
-// spec: std 005-notation §0.5.8 §0.5.9
 // expect-error: no method `try_close` found for type `TcpListener`
 // expect-error: `close` throws its error itself; there is no `try_` form: write `try l.close(..)`
 // expect-error: no associated function `try_new` on `rok::std::net::tls::ClientConfig`
@@ -10,7 +9,7 @@
 // expect-error: no associated function `parse_or_none` on `rok::core::num::bigfloat::Float`
 // expect-error: cannot find function `task::try_id` in this scope
 
-// A function has one failure channel (stdlib 0.5.9): a throwing function
+// A function has one failure channel: a throwing function
 // has no `try_` twin and no `_or_none` twin. The error names the plain
 // function and how to call it.
 use rok::core::io::IoError;

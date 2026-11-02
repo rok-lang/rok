@@ -1,10 +1,9 @@
-// spec: 003.11-or-pattern-multi-const
 // expect-exit: 0
 // expect-stdout:
 // digit
 // punct
 
-// spec 311.4: an or-pattern grouping several constants (no binding).
+// An or-pattern grouping several constants (no binding).
 fn classify(n: i32) -> i32 {
     let r = match n {
         48 | 49 | 50 | 51 | 52 => 1,    // '0'..='4'
@@ -19,4 +18,3 @@ fn main() -> i32 {
     if classify(33) == 2 { println("punct"); }
     return 0;
 }
-// spec: §3.12.7

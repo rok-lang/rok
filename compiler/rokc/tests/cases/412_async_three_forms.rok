@@ -1,4 +1,3 @@
-// spec: 004.12-async §4.12.3-4.12.5 / §4.12.13
 // expect-exit: 0
 // expect-stdout:
 // fn 41
@@ -6,9 +5,9 @@
 // closure 3 4
 // method 15
 
-// spec 4.12.3-5: `async fn`, `async { }` and `async || { }` each give a
+// `async fn`, `async { }` and `async || { }` each give a
 // future the caller awaits; each call of an async closure makes a new
-// future (4.12.5). 4.12.13: `async` methods.
+// future. `async` methods.
 async fn add(a: i32, b: i32) -> i32 { a + b }
 
 async fn twice(x: i32) -> i32 {
@@ -39,5 +38,3 @@ async fn main() {
     let acc = Acc { base: 10 };
     println(f"method {await acc.plus(5)}");
 }
-// spec: std §2.20.4
-// spec: §4.12.1 §4.12.6

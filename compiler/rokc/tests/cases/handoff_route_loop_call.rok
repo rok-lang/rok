@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `q` may hold one object twice
-// spec: std 213-marker §2.13.9
 // A helper that stores once, called twice in a loop.
 use rok::std::thread;
 fn add(q: List<List<i32>>, a: List<i32>) { q.push(a); }

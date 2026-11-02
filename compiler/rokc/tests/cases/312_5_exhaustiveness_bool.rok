@@ -1,7 +1,6 @@
-// spec: 003.12.5-exhaustiveness-bool
 // expect-error: `false` not covered
 
-// spec 3.12.5: a bool match must cover both true and false.
+// A bool match must cover both true and false.
 fn main() -> i32 {
     let x = true;
     let r = match x {

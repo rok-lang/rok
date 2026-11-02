@@ -4,7 +4,7 @@
 // expect-error: `align(N)` takes a power of two
 // expect-error: an integer `#[repr]` goes on an enum, not a struct
 
-// Spec 6.2.2: the `#[repr]` arguments each item kind takes.
+// The `#[repr]` arguments each item kind takes.
 #[repr(transparent)]
 struct Two { a: i32; b: i32; }
 
@@ -21,4 +21,3 @@ struct Odd { a: i32; }
 struct Tagged { a: i32; }
 
 fn main() {}
-// spec: §6.2.2

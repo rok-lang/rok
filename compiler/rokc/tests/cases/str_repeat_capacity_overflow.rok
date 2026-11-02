@@ -1,7 +1,6 @@
-// spec: std §2.15.2
 // expect-exit: 101
 // expect-stdout: ab
-// expect-stderr: thread 'main' panicked at tests/cases/str_repeat_capacity_overflow.rok:11:13:
+// expect-stderr: thread 'main' panicked at tests/cases/str_repeat_capacity_overflow.rok:10:13:
 // expect-stderr: capacity overflow
 
 // `len * n` in `str::repeat` (and the byte size of any collection

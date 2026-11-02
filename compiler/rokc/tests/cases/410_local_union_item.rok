@@ -1,9 +1,8 @@
-// spec: §3.9.1 §2.5
 // expect-exit: 0
 // expect-stdout:
 // 1065353216
 
-// `union Name` starts an item in a block too (spec 1.5.4).
+// `union Name` starts an item in a block too.
 fn main() {
     union U { f: f32; i: u32; }
     let u = U { f: 1.0f32 };

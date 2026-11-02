@@ -1,4 +1,4 @@
-//! `-g` (spec 9.9.6): DWARF through MLIR's LLVM-dialect debug attributes.
+//! `-g`: DWARF through MLIR's LLVM-dialect debug attributes.
 //! A function with a span gets a `#llvm.di_subprogram` named by its rok
 //! path (no linkage name: lldb can't demangle `_Y` and would show it), each
 //! op the `file:line:col` of the preceding `Statement::Loc`, and each named
@@ -211,7 +211,7 @@ impl DebugInfo {
             "{sp} = #llvm.di_subprogram<id = distinct[{n}]<>, compileUnit = #di_cu, scope = {file}, \
              name = \"{}\", file = {file}, line = {line}, scopeLine = {line}, \
              subprogramFlags = Definition, type = {ty}>",
-            // An item in a block by its own name (spec 3.9.1).
+            // An item in a block by its own name.
             escape(&rokc_core::local::unmangle(name)),
         );
         Some(FnDebug {

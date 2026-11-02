@@ -1,4 +1,3 @@
-// spec: §4.11.7
 // expect-error: `yield` outside a generator
 
 fn g() {

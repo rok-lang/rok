@@ -1,4 +1,3 @@
-// spec: std §2.13.9
 // expect-error: must be `unsafe impl Send for X {}`
 // Opting in to an auto trait is `unsafe impl`.
 struct X { v: i32; }

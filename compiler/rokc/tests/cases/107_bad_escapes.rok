@@ -1,13 +1,11 @@
-// spec: 001.07-string-escapes / 001.08-char-literals
 // expect-error: unknown escape sequence `\q`
 
 // Unknown escapes, `\x` above 0x7F and multi-code-point char literals are
-// lexical errors (spec 1.7.1, 1.8.3), not passed through verbatim.
+// lexical errors, not passed through verbatim.
 fn main() -> i32 {
     println("\q \x80");
     let c = 'ab';
     return 0;
 }
 
-// spec: §1.7.1 §1.8.3
-// expect-error: 8:13: char literal must contain exactly one code point
+// expect-error: 7:13: char literal must contain exactly one code point

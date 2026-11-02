@@ -11,7 +11,7 @@
 // 5
 // 0
 
-// Spec 2.2.5-2.2.6: `v is T` tests the runtime type (`any`, `any Tr`,
+// `v is T` tests the runtime type (`any`, `any Tr`,
 // sums); `if v is T { .. }` narrows `v` to `T` inside the then-block.
 trait Shape { fn area(self) -> i32; }
 struct Sq { s: i32; }
@@ -44,4 +44,3 @@ let bx = Box1 { inner: 5 };
 println(f"{if bx.inner is i32 { 5 } else { 0 }}");
 println(f"{if bx.inner is Sq { 5 } else { 0 }}");
 
-// spec: 002.02-any-slot

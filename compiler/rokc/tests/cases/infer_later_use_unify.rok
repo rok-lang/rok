@@ -1,4 +1,3 @@
-// spec: §2.10.2 §5.1.7
 // expect-exit: 0
 // expect-stdout:
 // 2 1 1 1
@@ -12,8 +11,8 @@
 // 2 5 1
 
 // An un-annotated `let` whose initializer leaves a type parameter open
-// is solved by unification with the later code of the same body (spec
-// 2.10.2): method arguments, call slots, assignments, `return`, closures,
+// is solved by unification with the later code of the same body:
+// method arguments, call slots, assignments, `return`, closures,
 // other open `let`s.
 
 fn wrap<T>(v: i32) -> Result<i32, T> { return Ok(v); }

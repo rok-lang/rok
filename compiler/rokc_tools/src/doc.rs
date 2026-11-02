@@ -1,4 +1,4 @@
-//! `rokc doc` (spec 901 `rokc doc`, 6.2.8): static HTML API docs.
+//! `rokc doc`: static HTML API docs.
 //!
 //! Layout under the output directory (`target/doc/`):
 //!
@@ -140,7 +140,7 @@ fn page(pkg: &str, rel: &[String]) -> String {
 }
 
 pub(crate) fn item_info(item: &Item) -> Option<(&'static str, &str, Visibility, &[Attribute])> {
-    // An item in a function body is no API (spec 3.9.1).
+    // An item in a function body is no API.
     if item.is_local() {
         return None;
     }
@@ -408,7 +408,7 @@ impl Docs {
             });
         }
         // Impl blocks attach to their type in this module (not one in a
-        // function body: spec 3.9.1).
+        // function body).
         for item in items.iter().filter(|i| !i.is_local()) {
             let Item::Impl(im) = item else { continue };
             let TyKind::Path(p) = &im.self_ty.kind else {
@@ -1067,7 +1067,7 @@ mod tests {
         assert_eq!(doc_text(&f.attrs), "Adds \"1\".\n\n\\n");
     }
 
-    /// Items in a function body (spec 3.9.1) are not the package's API.
+    /// Items in a function body are not the package's API.
     #[test]
     fn block_local_items_are_not_documented() {
         let src = "pub trait Show { fn show(self) -> str; }\npub struct P {}\n\

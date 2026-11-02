@@ -1,6 +1,5 @@
-// expect-error: 13:13: type `List<i64>` does not satisfy trait bound `Copy` required by `ThreadLocal::get`
+// expect-error: 12:13: type `List<i64>` does not satisfy trait bound `Copy` required by `ThreadLocal::get`
 // expect-error: help: use the value inside `with`: `tl.with(|v| ..)`, or take it out with `tl.replace(v)` / `tl.take()`
-// spec: std 304-thread §3.4.4
 
 // `ThreadLocal::get` copies the value, so it needs `T: Copy`: a shared
 // handle kept across an `await` could be used from two threads once the

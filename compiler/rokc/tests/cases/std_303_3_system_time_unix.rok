@@ -1,5 +1,3 @@
-// spec: std §3.3.7
-// spec: std 303-time §3.3.3 / §3.3.4
 // expect-exit: 0
 // expect-stdout:
 // epoch 0 0
@@ -11,9 +9,9 @@
 // now elapsed true
 // boot monotonic true
 
-// 3.3.3: `SystemTime` is ns from `UNIX_EPOCH`; `from_unix` /
+// `SystemTime` is ns from `UNIX_EPOCH`; `from_unix` /
 // `unix_secs` / `unix_nanos`, `± Duration`, and `duration_since`
-// negative when `earlier` is later. 3.3.4: `BootTime`.
+// negative when `earlier` is later. `BootTime`.
 use rok::std::time::{BootTime, SystemTime, UNIX_EPOCH};
 
 fn main() {

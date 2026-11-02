@@ -1,8 +1,7 @@
-// spec: 004.05.1-closure-typed-param
 // expect-exit: 6
 // expect-stdout:
 
-// spec 4.5.1: closure parameters may be typed: `|x: i32| x * 2`.
+// Closure parameters may be typed: `|x: i32| x * 2`.
 fn main() -> i32 {
     let f = |x: i32| x * 2;
     return f(3);

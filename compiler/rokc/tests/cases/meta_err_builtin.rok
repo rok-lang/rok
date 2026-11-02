@@ -1,5 +1,5 @@
 // expect-error: `Clone` is a built-in derive; a meta block cannot redefine it
-// Spec 6.2.1 / 6.8.11: built-in derives are not meta blocks.
+// Built-in derives are not meta blocks.
 #[impl_derive(Clone)]
 pub @derive {
     impl Clone for @Self {
@@ -11,5 +11,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 006.08-meta-blocks
-// spec: §6.8.11 §6.2.1

@@ -1,9 +1,8 @@
-// spec: 003.05-method-chain
 // expect-exit: 0
 // expect-stdout:
 // 14
 
-// spec 3.5.2: method chaining.
+// Method chaining.
 struct V { n: i32; }
 
 impl V {
@@ -17,4 +16,3 @@ fn main() -> i32 {
     println(f"{r}");
     return 0;
 }
-// spec: §3.5.2

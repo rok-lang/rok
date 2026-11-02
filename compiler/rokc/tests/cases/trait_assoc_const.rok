@@ -11,7 +11,7 @@
 // 16
 // 2
 
-// Spec 2.8.3a: traits declare associated consts (optionally with a
+// Traits declare associated consts (optionally with a
 // default), impls provide them, `T::N` reads them through a bound and
 // `Self::N` inside a trait's default method.
 trait Shape {
@@ -82,5 +82,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 002.08-trait
-// spec: §5.2.2

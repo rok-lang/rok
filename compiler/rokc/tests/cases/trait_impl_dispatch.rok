@@ -43,4 +43,3 @@ fn main() -> i32 {
     return c.tally() + c.bonus() + c.raw() + 5;
 }
 
-// spec: 002.08-trait

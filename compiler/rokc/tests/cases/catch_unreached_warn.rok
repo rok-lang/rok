@@ -21,4 +21,3 @@ fn main() -> i32 {
     return a + b + c;
 }
 
-// spec: 003.14-error-control-flow

@@ -1,8 +1,7 @@
-// spec: §3.4.3
 // `i++` / `i--` (C, JS): compound assignment instead.
-// expect-error: 8:18: rok has no `++` operator
+// expect-error: 7:18: rok has no `++` operator
 // expect-error: help: write `i += 1`
-// expect-error: 9:20: rok has no `--` operator
+// expect-error: 8:20: rok has no `--` operator
 // expect-error: help: write `xs[0] -= 1`
 let i = 0;
 while (i < 3) { i++; }

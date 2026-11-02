@@ -1,9 +1,8 @@
-// expect-error: `r.n` was moved at line 23, and is used here
-// expect-error: `f` was moved at line 29, and is used here
+// expect-error: `r.n` was moved at line 22, and is used here
+// expect-error: `f` was moved at line 28, and is used here
 // expect-error: help: a `R` has one owner, and `r.n` gave it away; use the new owner
 // expect-error: help: a `File` has one owner, and `f` gave it away; use the new owner, or keep a copy with `.try_clone()` before it moves
 // forbid-error: keep a copy with `.clone()`
-// spec: std 213-marker §2.13.4
 
 // The use-after-move help offers a copy only in a way the type has one:
 // `clone()`, `try_clone()`, or none.

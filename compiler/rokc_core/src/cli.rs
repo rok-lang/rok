@@ -212,7 +212,7 @@ environment:
                     program's environment)
 
 Programs read ROKR_WORKERS, ROKR_THREAD_PER_CORE, ROKR_DYNAMIC_WORKERS,
-ROKR_GC_* and ROKR_HEAP_DUMP (spec 7.6, 9.9.8).
+ROKR_GC_* and ROKR_HEAP_DUMP.
 ";
 
 /// One command's help. `{tool}` in `usage`, `about` and `examples`

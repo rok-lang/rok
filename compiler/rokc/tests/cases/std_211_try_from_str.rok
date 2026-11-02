@@ -1,4 +1,3 @@
-// spec: std 211-conversion §2.11.9
 // expect-exit: 0
 // expect-stdout:
 // 42 -9000000000 255 18446744073709551615 -128
@@ -6,7 +5,7 @@
 // [300] / [x] / []
 // 7
 
-// Spec 2.11.9: `impl TryFrom<str> for i32` with `type Error =
+// `impl TryFrom<str> for i32` with `type Error =
 // ParseError`, so `try "42".try_into()` parses; every fixed-width
 // integer has it, by its `FromStr`. Empty text, a bad digit and an
 // out-of-range value all throw that `FromStr`'s `ParseError`.

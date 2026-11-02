@@ -1,10 +1,9 @@
-// spec: std 200-core/220-future §2.20.6
 // expect-exit: 0
 // expect-stdout:
 // block_on 42
 // twice 8
 
-// 2.20.6: a sync caller gets a future's result with `task::block_on`.
+// A sync caller gets a future's result with `task::block_on`.
 async fn answer() -> i32 {
     await task::yield_now();
     42

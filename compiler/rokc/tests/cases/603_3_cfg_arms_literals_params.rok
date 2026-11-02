@@ -1,11 +1,10 @@
-// spec: §6.1.3 §6.3.7
 // expect-exit: 0
 // expect-stdout:
 // 6 1
 // one other
 // 4
 
-// Spec 6.1.3 / 6.3.7: `#[cfg]` on match arms, struct literal fields and
+// `#[cfg]` on match arms, struct literal fields and
 // fn parameters. A false parameter leaves the signature, so calls pass
 // what the filtered signature takes.
 struct S {

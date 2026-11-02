@@ -1,5 +1,4 @@
-// spec: 005.01.7-let
 // expect-error: cannot infer the type of `xs`
 
-// An empty list literal (`[]` is a `List`, 6.5.1) has no element type; annotate it.
+// An empty list literal (`[]` is a `List`) has no element type; annotate it.
 let xs = [];

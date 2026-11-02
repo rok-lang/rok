@@ -1,9 +1,9 @@
-//! Broadcast (spec 3.3, stdlib 2.6): a tree of dot operators and `f.(..)`
+//! Broadcast: a tree of dot operators and `f.(..)`
 //! over core `List` / `Slice` / arrays lowers to one fused loop with no
-//! intermediates (2.6.6): `let #n = #b0.len(); (lengths checked) let #out
+//! intermediates: `let #n = #b0.len(); (lengths checked) let #out
 //! = List::with_capacity(#n); for #i in 0..#n { #out.push(..) }`. All-array
 //! trees give an array (lengths checked at compile time). `.&&` / `.||`
-//! don't short-circuit (2.6.2). Anything else dispatches the dot trait.
+//! don't short-circuit. Anything else dispatches the dot trait.
 
 use super::expr::{block_of, lower_infix, splice, spread_item_at};
 #[allow(clippy::wildcard_imports)]
@@ -168,7 +168,7 @@ fn rebuild(e: &Expr, next: &mut usize, fused: bool, leaf: &mut dyn FnMut(usize) 
     Expr { kind, span }
 }
 
-/// `e`, a dot operator or a function broadcast (spec 3.3).
+/// `e`, a dot operator or a function broadcast.
 pub(super) fn lower(ctx: &mut LowerCtx<'_>, e: &Expr) -> HirExpr {
     let span = e.span;
     let mut leaves = Vec::new();
@@ -220,8 +220,7 @@ pub(super) fn lower(ctx: &mut LowerCtx<'_>, e: &Expr) -> HirExpr {
             _ => ctx.error_expr(
                 Code::BROADCAST,
                 span,
-                "a broadcast `f.(..)` needs a `List`, `Slice` or array argument (spec 3.3.3)"
-                    .to_owned(),
+                "a broadcast `f.(..)` needs a `List`, `Slice` or array argument".to_owned(),
             ),
         };
     }
@@ -237,10 +236,7 @@ pub(super) fn lower(ctx: &mut LowerCtx<'_>, e: &Expr) -> HirExpr {
         return ctx.error_expr(
             Code::BROADCAST,
             span,
-            format!(
-                "broadcast over arrays of lengths {} and {n} (stdlib 2.6.4)",
-                fixed[0]
-            ),
+            format!("broadcast over arrays of lengths {} and {n}", fixed[0]),
         );
     }
     // Leaves into temps, in order; the element expression reads them.
@@ -378,7 +374,7 @@ pub(super) fn lower(ctx: &mut LowerCtx<'_>, e: &Expr) -> HirExpr {
     lower_expr(ctx, &block_of(stmts, path(&out), span))
 }
 
-/// Stdlib 2.6.7: a `T | none` operand propagates `none`. The first optional
+/// A `T | none` operand propagates `none`. The first optional
 /// leaf is matched; its `T` arm runs the tree (recursing for further
 /// optional operands), anything else gives `none`.
 fn propagate_none(ctx: &mut LowerCtx<'_>, e: &Expr, leaves: Vec<Leaf>, tag: usize) -> HirExpr {

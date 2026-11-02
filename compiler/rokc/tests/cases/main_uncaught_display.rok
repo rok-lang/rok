@@ -3,7 +3,7 @@
 // expect-stderr: error: `main` returned an uncaught error: not found
 // expect-stderr: --> tests/cases/main_uncaught_display.rok:20:31
 
-// Spec 4.16.4: an error escaping a throwing `main` is printed through
+// An error escaping a throwing `main` is printed through
 // its `Display` (here behind `any Error`), then exit status 1.
 struct NotFound { id: i32; }
 impl Display for NotFound { fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("not found") } }
@@ -20,4 +20,3 @@ fn main() throws {
     let v = try find(3) + try find(40);
     println(v);
 }
-// spec: refs-lang §4.16.4

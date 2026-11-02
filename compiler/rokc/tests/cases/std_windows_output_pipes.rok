@@ -1,6 +1,5 @@
 // only-os: windows
 // expect-exit: 0
-// spec: std 307 §3.7.1
 //
 // `output()` reads a child's stdout and stderr together (overlapped pipe
 // reads, whichever has data first): both arrive whole, in order, also

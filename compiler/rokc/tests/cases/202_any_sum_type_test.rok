@@ -7,7 +7,7 @@
 // other
 // str whole
 
-// 2.2.5 / 3.11.1: `is (A | B)` and `x: A | B` on an `any` value test each
+// `is (A | B)` and `x: A | B` on an `any` value test each
 // member's tag; the binder is the value narrowed to the sum.
 fn wide(w: any) -> str {
     match w {
@@ -32,4 +32,3 @@ fn main() {
     println(wide(s));
 }
 
-// spec: §2.2.5

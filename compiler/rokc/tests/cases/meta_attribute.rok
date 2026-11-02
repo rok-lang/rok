@@ -9,7 +9,7 @@
 // helper 9
 // Tag
 
-// Spec 6.8.3 / 6.9.7 / 6.8.8: `#[impl_attribute]` with `@accept`,
+// `#[impl_attribute]` with `@accept`,
 // `@item`, `@item.name` / `.params` / `.return_type` / `.body`,
 // `@attribute`; hygiene of the template's locals against the item's
 // parameters; fixed-point expansion (the expansion's own `#[derive]`).
@@ -44,7 +44,7 @@ pub @derive {
     }
 }
 
-// Generates a struct carrying a user derive: expanded again (6.8.8).
+// Generates a struct carrying a user derive: expanded again.
 #[impl_attribute(with_tag)]
 pub @attribute {
     @item
@@ -83,5 +83,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 006.08-meta-blocks
-// spec: §6.8.3 §6.8.8 §6.9.7 §6.1.7

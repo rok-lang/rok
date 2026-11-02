@@ -71,4 +71,3 @@ for round in 0..200 {
 println(f"cancelled as it parks, held lock untouched: {unlocked == 0}");
 println(f"registrations left: {task::registrations()}");
 
-// spec: 004.12-async

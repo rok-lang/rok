@@ -17,4 +17,3 @@ fn main() -> i32 {
     return total + result;   // 4 + 7 = 11
 }
 
-// spec: 003.14-error-control-flow

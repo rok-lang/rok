@@ -1,10 +1,9 @@
-// spec: §4.4.8 §4.3.7
 // expect-exit: 12
 // expect-stdout:
 // 5 5 7 5
 
 // `!` in generics: a diverging argument does not fix `T`. A named
-// `fn() -> !` fits a `fn() -> R` slot (spec 4.4) through a thunk.
+// `fn() -> !` fits a `fn() -> R` slot through a thunk.
 fn choose<T>(a: T, b: T, first: bool) -> T {
     if first { return a; }
     return b;

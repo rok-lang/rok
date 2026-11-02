@@ -1,4 +1,4 @@
-//! `Reflect` (refs-lang 6.10.1, stdlib 2.12.2): every type has it without
+//! `Reflect`: every type has it without
 //! an impl. Calls nothing else answers land here: `T::type_name()` /
 //! `size()` / `align()` are constants; `x.type_name_of_val()` / `x.size_of_val()`
 //! switch on an `any` or sum's held variant. Also `rok.any_cast`,
@@ -30,7 +30,7 @@ const INTS: [PrimTy; 10] = [
 ];
 
 /// `ty`'s `type_name`: no module paths (`List<i64>`), block-local items by
-/// their own name (spec 3.9.1).
+/// their own name.
 pub(super) fn type_name(ctx: &LowerCtx<'_>, ty: &HirTy) -> String {
     let full = ctx.ty_name(ty);
     let full = rokc_core::local::unmangle(&full);

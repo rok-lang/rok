@@ -1,12 +1,11 @@
-// spec: §3.5.2
 // Method names other languages use point at rok's: `length` / `size`
 // are `len`, `append` is `push`, `upper` is `to_uppercase`.
-// expect-error: 13:9: no method `length` found for type `List<i32>`
+// expect-error: 12:9: no method `length` found for type `List<i32>`
 // expect-error: help: did you mean `len`?
-// expect-error: 14:9: no method `size` found for type `List<i32>`
-// expect-error: 15:1: no method `append` found for type `List<i32>`
+// expect-error: 13:9: no method `size` found for type `List<i32>`
+// expect-error: 14:1: no method `append` found for type `List<i32>`
 // expect-error: help: did you mean `push`?
-// expect-error: 16:9: no method `upper` found for type `str`
+// expect-error: 15:9: no method `upper` found for type `str`
 // expect-error: help: did you mean `to_uppercase`?
 // forbid-error: in an `impl
 let xs: List<i32> = [1, 2];

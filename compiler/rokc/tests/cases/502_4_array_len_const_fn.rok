@@ -1,4 +1,4 @@
-// Spec 5.2.4: array lengths in item types (struct fields, signatures,
+// Array lengths in item types (struct fields, signatures,
 // statics, generic structs and fns) use the full const evaluator:
 // `const fn` calls, consts defined by them and const parameters.
 // expect-exit: 0
@@ -40,4 +40,3 @@ fn main() {
     println(f"{make::<2>([0; 5])} {make::<4>([0; 9])}");
 }
 
-// spec: 005.02-const §5.2.4

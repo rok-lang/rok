@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate compiler/rokc_lexer/src/unicode_tables.rs (spec 1.4).
+"""Generate compiler/rokc_lexer/src/unicode_tables.rs.
 
 Reads the UCD 18.0.0 files checked in under `ucd/` (from
 https://www.unicode.org/Public/18.0.0/ucd/; emoji-data.txt from its

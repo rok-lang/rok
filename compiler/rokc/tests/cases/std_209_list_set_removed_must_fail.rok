@@ -1,4 +1,3 @@
-// spec: std 209-collections §2.9.2
 // expect-error: no method `set` found for type `List<i32>`
 // expect-error: help: write `xs[i] = v`, which panics past the end
 

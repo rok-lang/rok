@@ -78,7 +78,7 @@ fn value(rng: &mut Rng, depth: u32) -> Value {
             0 => Kind::List(vs(rng)),
             1 => Kind::Tuple(vs(rng)),
             // Scalar keys, never `none`: `{ none: 1 }` reads as a block
-            // (a documented limit, std 3.9.1).
+            // (a documented limit).
             2 => Kind::Dict(
                 (0..n)
                     .map(|_| {

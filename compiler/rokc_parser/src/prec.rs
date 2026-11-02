@@ -1,6 +1,6 @@
-//! Operator precedence is the language's (spec 3.2.3, `fixed_prec`).
+//! Operator precedence is the language's (`fixed_prec`).
 //! `#[infix]` / `#[prefix]` / `#[postfix]` only bind tokens to trait
-//! methods (6.7); `PrecTable` records that for HIR.
+//! methods; `PrecTable` records that for HIR.
 
 use std::collections::HashMap;
 
@@ -23,15 +23,15 @@ pub enum Assoc {
     None,
 }
 
-/// Binding power of the prefix unary operators and `await` (spec 3.2.3,
-/// right-assoc).
+/// Binding power of the prefix unary operators and `await`
+/// (right-assoc).
 pub const PREFIX_PREC: u32 = 13;
-/// Binding power of `as` / `is` (spec 3.2.3, left-assoc).
+/// Binding power of `as` / `is` (left-assoc).
 pub const CAST_PREC: u32 = 12;
 /// Binding power of `??` (level 1, right-assoc).
 pub const COALESCE_PREC: u32 = 1;
 
-/// A built-in operator's precedence (spec 3.2.3), Rust's order; dotted
+/// A built-in operator's precedence, Rust's order; dotted
 /// broadcast tokens share their scalar's row. `None` outside the table.
 #[must_use]
 pub fn fixed_prec(symbol: &str, fixity: Fixity) -> Option<(u32, Assoc)> {
@@ -45,7 +45,7 @@ pub fn fixed_prec(symbol: &str, fixity: Fixity) -> Option<(u32, Assoc)> {
             matches!(symbol, "-" | "!" | "~" | "√").then_some((PREFIX_PREC, Assoc::Right))
         }
         // The postfix row (`?`, member access). `?` itself is language
-        // syntax; it is here only as a `like` target (spec 6.7.1).
+        // syntax; it is here only as a `like` target.
         Fixity::Postfix => (symbol == "?").then_some((14, Assoc::Left)),
         Fixity::Infix => Some(match base {
             "∘" => (11, Assoc::Left),
@@ -64,7 +64,7 @@ pub fn fixed_prec(symbol: &str, fixity: Fixity) -> Option<(u32, Assoc)> {
     }
 }
 
-/// Compound assignment tokens (spec 3.4.3): statements, so no binding
+/// Compound assignment tokens: statements, so no binding
 /// level; their `#[infix]` binds the `*Assign` method.
 #[must_use]
 pub fn is_assign_token(symbol: &str) -> bool {
@@ -84,9 +84,9 @@ pub struct OpEntry {
     /// Trait method the operator dispatches to (`add` for `+`).
     pub method_name: String,
     /// Trait declaring that method, by its full path (`rok::core::ops::Add`,
-    /// `m::Dot`); only its impls make a type support the operator (spec 6.4).
+    /// `m::Dot`); only its impls make a type support the operator.
     pub trait_name: String,
-    /// `#[infix("∈", swap)]`: `a ∈ s` calls `s.contains(a)` (spec 6.7.2).
+    /// `#[infix("∈", swap)]`: `a ∈ s` calls `s.contains(a)`.
     pub swap: bool,
     /// Binding level: the table's, or `like`'s for an extension token.
     pub level: (u32, Assoc),
@@ -173,7 +173,7 @@ impl PrecTable {
         self.by_key.values()
     }
 
-    /// Extension tokens (spec 1.10.4): registered symbols outside the
+    /// Extension tokens: registered symbols outside the
     /// fixed table, with the level they took from `like`.
     #[must_use]
     pub fn ext_ops(&self) -> ExtOps {
@@ -224,8 +224,8 @@ impl PrecTable {
 
 /// Collect `#[infix]` / `#[prefix]` / `#[postfix]` on trait methods.
 ///
-/// Errors: precedence arguments (6.7.2), `like` on a table token, a
-/// non-table token without `like`, aliases on different levels (6.7.12),
+/// Errors: precedence arguments, `like` on a table token, a
+/// non-table token without `like`, aliases on different levels,
 /// one token bound to two methods.
 pub fn collect_prec_table(program: &Program, module: &[String]) -> (PrecTable, Vec<RokDiagnostic>) {
     let mut table = PrecTable::new();
@@ -267,10 +267,7 @@ fn collect_items(
                 if matches!(p.as_str(), "infix" | "prefix" | "postfix") {
                     diags.push(meta_err(
                         attr,
-                        format!(
-                            "`#[{p}]` can be attached only to a trait method signature (spec \
-                             6.7.13)"
-                        ),
+                        format!("`#[{p}]` can be attached only to a trait method signature"),
                     ));
                 }
             }
@@ -293,7 +290,7 @@ fn collect_items(
                     diags.push(meta_err(
                         attr,
                         format!(
-                            "operator aliases of `{}` must share one precedence level (spec 6.7.12)",
+                            "operator aliases of `{}` must share one precedence level",
                             m.name
                         ),
                     ));
@@ -317,7 +314,7 @@ fn collect_items(
     }
 }
 
-/// Spec 1.10.4: a registered token is `Pattern_Syntax` code points only
+/// A registered token is `Pattern_Syntax` code points only
 /// (no identifier character, no space) and no fixed token.
 fn bad_new_token(symbol: &str) -> Option<&'static str> {
     if symbol.is_empty() {
@@ -385,7 +382,7 @@ fn collect_attr(
                     attr,
                     format!(
                         "`#[{name}]` takes only an operator token, `like = \"..\"` and `swap`: \
-                         precedence and associativity are fixed by the language (spec 3.2.3)"
+                         precedence and associativity are fixed by the language"
                     ),
                 ));
                 return None;
@@ -421,9 +418,7 @@ fn collect_attr(
         (Some(_), Some(_)) => {
             diags.push(meta_err(
                 attr,
-                format!(
-                    "`{symbol}` has a fixed precedence (spec 3.2.3); `like` is only for new tokens"
-                ),
+                format!("`{symbol}` has a fixed precedence; `like` is only for new tokens"),
             ));
             return None;
         }
@@ -431,7 +426,7 @@ fn collect_attr(
             if let Some(why) = bad_new_token(&symbol) {
                 diags.push(meta_err(
                     attr,
-                    format!("`{symbol}` can't be a new operator token: {why} (spec 1.10.4)"),
+                    format!("`{symbol}` can't be a new operator token: {why}"),
                 ));
                 return None;
             }

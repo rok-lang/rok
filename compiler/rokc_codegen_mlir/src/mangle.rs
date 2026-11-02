@@ -1,4 +1,4 @@
-//! Symbol mangling (spec 905).
+//! Symbol mangling.
 //!
 //! `_Y<pkg8>_<path>_<name>_<typehash16>`; concrete items end in `_`
 //! (empty typehash). `extern` declarations keep their C name (905.8).
@@ -118,7 +118,7 @@ pub fn pkg_hash(content: &str) -> String {
     hex(&sha256(content.as_bytes()))[..8].to_owned()
 }
 
-/// A `_Y` symbol taken apart (spec 905.4).
+/// A `_Y` symbol taken apart.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Demangled {
     pub pkg: String,

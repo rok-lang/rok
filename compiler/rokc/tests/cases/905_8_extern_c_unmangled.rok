@@ -1,11 +1,10 @@
-// spec: 009.05-symbol-mangling §9.5.8
 // expect-exit: 0
 // expect-stdout:
 // strlen 5
 // abs 7
 // export 30
 
-// spec 9.5.8: functions of an `extern "C"` block link by their plain C
+// Functions of an `extern "C"` block link by their plain C
 // names (no rok mangling); `#[export_name]` on an ordinary `pub fn`
 // gives it that exact symbol.
 extern "C" {

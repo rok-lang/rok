@@ -6,7 +6,7 @@
 // 4
 // 12
 
-// Spec 2.9.1: `const` items inside `impl` are `Type::NAME`, and
+// `const` items inside `impl` are `Type::NAME`, and
 // `Self::NAME` inside the impl.
 struct Grid { w: i32; }
 
@@ -35,5 +35,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 002.09-impl
-// spec: §5.2.2

@@ -1,11 +1,10 @@
-// spec: std 200-core/218-task §2.18.1 / §2.18.3 / refs-lang 007.06
 // expect-exit: 0
 // expect-stdout:
 // outside 1
 // pool matches cpus true
 // result 42
 
-// stdlib 2.18.1/2.18.3: outside `block_on` `worker_count()` is 1; `block_on`
+// Outside `block_on` `worker_count()` is 1; `block_on`
 // runs a pool of `cpu_count()` workers and returns the future's output.
 async fn compute() -> i32 {
     let t = task::spawn(async { 40 });

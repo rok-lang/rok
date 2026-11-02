@@ -1,7 +1,6 @@
-// spec: std §2.13.6
 // expect-error: type `List<i32>` does not satisfy trait bound `Copy` required by `dup`
 
-// Stdlib 2.13.6: a collection is not `Copy`: copying its handle would
+// A collection is not `Copy`: copying its handle would
 // not copy its contents.
 fn dup<T: Copy>(x: T) -> (T, T) { (x, x) }
 

@@ -6,7 +6,7 @@ use rokc_ir_common::PrimTy;
 use crate::{DebugTy, MirTy, Target, UnionKind};
 
 /// Struct id marking the MIR type of an `any Tr` value, so the
-/// collector's `ScanTable` gets an `ANY_SLOT` (802 §8.2.7) for it.
+/// collector's `ScanTable` gets an `ANY_SLOT` for it.
 pub const ANY_STRUCT: rokc_hir::StructId = rokc_hir::StructId(u32::MAX);
 
 /// `any Tr`: `(i32 tag, payload word)`. The payload is the value itself
@@ -30,7 +30,7 @@ pub fn code_ty(args: Vec<MirTy>, ret: MirTy) -> MirTy {
     MirTy::Fn(all, Box::new(ret))
 }
 
-/// Return value of a throwing function (spec 8.6.5): `(is_err, payload)`,
+/// Return value of a throwing function: `(is_err, payload)`,
 /// the payload one slot for `ok` (tag 0) and `err` (tag 1), or `err`
 /// alone when `ok` is unit. HIR still names `(is_err, ok, err)`; MIR
 /// lowering maps those fields onto the slot (`carrier_field`). A
@@ -100,7 +100,7 @@ pub fn lower_ty(ty: &HirTy, module: &HirModule, target: &Target) -> MirTy {
             }
         }
         HirTy::Array(elem, n) => MirTy::Array(Box::new(lower(elem)), *n),
-        // Spec 4.4: every function value (named fn or closure) is
+        // Every function value (named fn or closure) is
         // `{code, env}`: `code` takes the `GcRef` env first; a named fn's
         // env is null. A C function pointer is the bare code pointer.
         HirTy::Fn(args, ret, _) if ty.is_c_fn() => {
@@ -439,7 +439,7 @@ mod tests {
         );
     }
 
-    /// Spec 8.6.5: `{i1, union(T, E)}`. An `i32` tag (a payload with GC
+    /// `{i1, union(T, E)}`. An `i32` tag (a payload with GC
     /// references) keeps the `i1` layout: same offsets and size.
     #[test]
     fn carriers_overlay_ok_and_err() {

@@ -1,4 +1,4 @@
-// refs-lang 7.6.8: with `ROKR_THREAD_PER_CORE=1` every task stays on one
+// With `ROKR_THREAD_PER_CORE=1` every task stays on one
 // worker: tasks spawned off the pool take the workers in turn, a task's
 // children stay on its worker, and a task woken from another worker
 // (a channel send) resumes on its own. `ROKR_WORKERS` sets the pool size.
@@ -14,7 +14,7 @@
 
 // The thread a task runs on: the runtime's id (what `ThreadId` holds),
 // read without `thread::current()`'s registry lock, a blocking call that
-// under contention may hand the worker on to another thread (706 §7.6.7).
+// under contention may hand the worker on to another thread.
 extern "C" {
     fn rok_thread_id() -> u64;
 }
@@ -76,4 +76,3 @@ fn main() -> i32 {
     task::block_on(run())
 }
 
-// spec: 007.06-scheduler §7.6.8

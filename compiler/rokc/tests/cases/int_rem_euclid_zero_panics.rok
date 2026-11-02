@@ -1,7 +1,6 @@
-// spec: std §2.1.2
-// stdlib spec 2.1.2: `rem_euclid` by zero panics at the call, as `%`.
+// `rem_euclid` by zero panics at the call, as `%`.
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at tests/cases/int_rem_euclid_zero_panics.rok:11:16:
+// expect-stderr: thread 'main' panicked at tests/cases/int_rem_euclid_zero_panics.rok:10:16:
 // expect-stderr: attempt to divide an int by zero
 // expect-stdout:
 

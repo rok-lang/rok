@@ -1,11 +1,11 @@
 //! Calling conventions: where each scalar of a signature goes.
 //!
 //! A rok function's parameters and result are LLVM first-class values
-//! (spec 8.6.6: the plain platform C ABI), except aggregates over 64 bytes,
+//! (the plain platform C ABI), except aggregates over 64 bytes,
 //! passed by address (`FnLower::rok_shapes`). LLVM passes an aggregate
 //! leaf by leaf, so this backend does too and objects of both backends
 //! call each other. C signatures are classified by
-//! `rokc_codegen_mlir::abi` (8.6.3) first, then placed the same way.
+//! `rokc_codegen_mlir::abi` first, then placed the same way.
 
 use rokc_ir_common::PrimTy;
 use rokc_mir::{MirTy, Target};

@@ -1,5 +1,4 @@
-// spec: refs-lang §5.9.4
-// `extern "C" fn(..)` values (spec 5.9.4): a rok `extern "C" fn` and a C
+// `extern "C" fn(..)` values: a rok `extern "C" fn` and a C
 // declaration (`abs`) as C function pointers, called from rok.
 // expect-exit: 0
 // expect-stdout: 7 5 6

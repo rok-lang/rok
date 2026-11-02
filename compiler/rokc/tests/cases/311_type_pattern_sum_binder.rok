@@ -4,7 +4,7 @@
 // i64 2
 // s
 
-// 3.11.1: `n: i32 | i64` is one type pattern narrowing to the sum
+// `n: i32 | i64` is one type pattern narrowing to the sum
 // `i32 | i64` (not `n: i32` or-ed with an `i64` pattern).
 fn g(v: i32 | i64 | str) -> str {
     match v {
@@ -22,4 +22,3 @@ fn main() {
     println(g("s"));
 }
 
-// spec: §2.6.4 §2.6.8

@@ -48,4 +48,3 @@ println(f"{r}");
 let a = try await sum_stream([4, 5]) catch e: Bad { -1 };
 let b = try await sum_stream([4, -9, 5]) catch e: Bad { e.at };
 println(f"{a} {b}");
-// spec: std §2.7.10a §2.8.8a

@@ -1,11 +1,10 @@
-// spec: §4.14.13
 // needs: threads
 // expect-exit: 101
-// expect-stderr: thread '<unnamed>' panicked at tests/cases/414_13_panic_report_thread.rok:13:25:
+// expect-stderr: thread '<unnamed>' panicked at tests/cases/414_13_panic_report_thread.rok:12:25:
 // expect-stderr: boom
 // expect-stdout:
 
-// Spec 4.14.13: a panic is not a `throws` error: it reports
+// A panic is not a `throws` error: it reports
 // `thread '<name>' panicked at <path>:<line>:<col>:` and the message
 // (an unnamed thread is `<unnamed>`), and ends the process.
 use rok::std::thread;

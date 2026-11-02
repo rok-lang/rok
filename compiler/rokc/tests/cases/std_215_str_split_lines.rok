@@ -1,4 +1,3 @@
-// spec: std 215-string §2.15.2
 // expect-exit: 0
 // expect-stdout:
 // split: [a] [] [b]
@@ -8,9 +7,9 @@
 // 14 10 세계
 // trim [a b] start [a b ] end [ a b]
 
-// spec 2.15.2: `split` keeps empty pieces ("a,,b" -> "a", "", "b");
+// `split` keeps empty pieces ("a,,b" -> "a", "", "b");
 // `lines` drops a trailing `\r` and does not yield a final empty line;
-// `find` / `rfind` return byte offsets or none; spec 2.15.3: `len` is in
+// `find` / `rfind` return byte offsets or none: `len` is in
 // bytes, `chars().count()` in scalars, `s[7:13]` slices on byte offsets.
 fn show(v: usize | none) -> str {
     match v { x: usize => f"{x}", none => "none" }

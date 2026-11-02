@@ -1,6 +1,5 @@
-// spec: §3.6.1
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at tests/cases/cg_index_oob_panics.rok:10:12:
+// expect-stderr: thread 'main' panicked at tests/cases/cg_index_oob_panics.rok:9:12:
 // expect-stderr: index out of bounds
 // expect-stdout:
 

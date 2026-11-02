@@ -1,11 +1,10 @@
-// spec: §6.2.7 §6.2.9
 // expect-exit: 0
-// expect-lint: 35:36 use of deprecated function `twice`
-// expect-lint: 36:12 use of deprecated type `Old`
-// expect-lint: 36:18 use of deprecated type `Old`
-// expect-lint: 37:22 use of deprecated constant `MAX`
-// expect-lint: 37:28 use of deprecated static `COUNT`
-// expect-lint: 37:36 use of deprecated function `twice`
+// expect-lint: 34:36 use of deprecated function `twice`
+// expect-lint: 35:12 use of deprecated type `Old`
+// expect-lint: 35:18 use of deprecated type `Old`
+// expect-lint: 36:22 use of deprecated constant `MAX`
+// expect-lint: 36:28 use of deprecated static `COUNT`
+// expect-lint: 36:36 use of deprecated function `twice`
 // expect-warning: deprecated since 0.1.6
 // expect-warning: = note: use New
 // expect-warning: `#[allow(deprecated)]` on the item that uses `COUNT`

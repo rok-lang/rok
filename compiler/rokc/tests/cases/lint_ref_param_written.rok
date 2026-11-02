@@ -1,6 +1,5 @@
 // expect-exit: 0
-// spec: §6.2.9
-// expect-lint: 30:9 unused variable `n`
+// expect-lint: 29:9 unused variable `n`
 // expect-stdout:
 // 3
 // 5

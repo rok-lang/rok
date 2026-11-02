@@ -6,7 +6,6 @@
 // true
 // thread join failed: the handle was already joined or detached
 
-// spec: std 304 §3.4
 // A `JoinHandle` copy shares the handle: the OS thread is joined or
 // detached once. A second `join` (through any copy), or a `join` after
 // `detach`, throws `JoinError` of kind `Taken`; a second `detach` does

@@ -1,7 +1,6 @@
 // needs: net threads
 // expect-exit: 0
 // expect-stdout: ok 5
-// spec: std 213-marker §2.13.4 / std 217-channel / std 218-task
 
 // Generic std code moves a value it is given, so an element that must be
 // closed (a `TcpStream`) goes through channels and tasks like any other:

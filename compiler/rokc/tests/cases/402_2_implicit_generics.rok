@@ -1,5 +1,3 @@
-// spec: 004.02.2-omitting-the-type
-// spec: 002.10.7-combination-with-gradual-typing
 // expect-exit: 0
 // expect-stdout:
 // 8 5

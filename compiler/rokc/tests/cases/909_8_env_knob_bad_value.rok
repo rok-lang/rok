@@ -1,4 +1,3 @@
-// spec: refs-lang 909-debug-tools §9.9.8
 // needs: threads
 // run-env: ROKR_GC_STRESS=often
 // run-env: ROKR_GC_EVAC=never

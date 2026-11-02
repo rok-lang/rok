@@ -1,7 +1,6 @@
-// spec: 003.11.1-identifier-pattern
 // expect-exit: 0
 // expect-stdout: 7 red
-// expect-lint: 13:23 variable `Foo` should have a snake case name
+// expect-lint: 12:23 variable `Foo` should have a snake case name
 
 // A capitalised binding that is neither a const, a static nor a variant
 // is a plain binding: it gets the naming lint. A `use`d variant written

@@ -1,9 +1,8 @@
-// spec: 003.04-compound-assign-field
 // expect-exit: 0
 // expect-stdout:
 // 15
 
-// spec 3.4: `a += b` where `a` is a struct field.
+// `a += b` where `a` is a struct field.
 struct C { n: i32; }
 
 fn main() -> i32 {

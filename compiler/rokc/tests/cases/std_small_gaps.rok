@@ -1,4 +1,3 @@
-// spec: std §2.9.2 §2.9.3 §2.15.2
 // expect-exit: 0
 // expect-stdout:
 // [1, 2, 3, 4, 5] cap 5

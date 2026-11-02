@@ -1,5 +1,3 @@
-// spec: std 302
-// spec: refs-lang 007.07
 // needs: net
 // expect-exit: 0
 // expect-stdout:
@@ -65,4 +63,3 @@ for i in 0..5 {
 println(f"udp async: 5 datagrams, sum {await rx}");
 println(f"inherited listeners: {TcpListener::inherited().len()}");
 try! b.close();
-// spec: std 302-net §3.2.0 §3.2.6

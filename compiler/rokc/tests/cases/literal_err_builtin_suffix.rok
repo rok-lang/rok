@@ -7,4 +7,3 @@ fn my_i32(n: i32) -> i32 {
 fn main() -> i32 {
     return 0;
 }
-// spec: §6.5.7

@@ -1,10 +1,9 @@
-// spec: 006.05-literal-magic
 // expect-exit: 0
 // expect-stdout: 1 2 3 -1 23 12
 
-// Spec 6.5.4: a `?` group passes a value or `none`; a nested repetition
+// A `?` group passes a value or `none`; a nested repetition
 // in a variadic `...[T; C]` slot passes one array per row, and the
-// first row's length fixes `C` (the 6.5.2 matrix example).
+// first row's length fixes `C` (a matrix).
 struct V { a: i64; b: i64; }
 
 #[literal("v" "[" expr {"," expr}? "]")]

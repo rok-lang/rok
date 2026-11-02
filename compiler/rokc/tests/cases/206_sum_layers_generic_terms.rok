@@ -1,4 +1,3 @@
-// spec: §2.6.4
 // expect-exit: 0
 // expect-stdout:
 // flat none | flat 5 | flat none

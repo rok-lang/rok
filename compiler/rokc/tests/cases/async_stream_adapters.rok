@@ -8,7 +8,7 @@
 // zip 6
 // select stops early true
 
-// Stream adapters (stdlib 2.8.5 / 2.8.8).
+// Stream adapters.
 async yield fn nums(n: i32, ms: i64) -> i32 {
     let i = 0;
     while i < n {
@@ -46,5 +46,3 @@ let c = 0;
 for await x in stream::select(nums(2, 1), nums(50, 1)) { c = c + 1; }
 println(f"select stops early {c < 10}");
 
-// spec: 004.12-async
-// spec: std §2.8.8

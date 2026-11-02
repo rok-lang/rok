@@ -3,7 +3,6 @@
 // expect-stdout:
 // 2 got 1
 
-// spec: std 213-marker §2.13.9
 // Rows made by a helper in a loop; one popped and sent; the rest used.
 use rok::std::thread;
 fn row(i: i32) -> List<i32> { [i] }

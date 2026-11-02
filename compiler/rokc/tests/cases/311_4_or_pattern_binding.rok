@@ -1,9 +1,8 @@
-// spec: 003.11.4-or-pattern-binding
 // expect-exit: 0
 // expect-stdout:
 // 5
 
-// spec 311.4: an or-pattern binding the same name with the same type in
+// An or-pattern binding the same name with the same type in
 // each alternative (`Ok(x) | OkAlt(x)`) is allowed.
 enum E {
     A(i32),

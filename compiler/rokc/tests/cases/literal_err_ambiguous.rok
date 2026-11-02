@@ -1,5 +1,5 @@
 // expect-error: ambiguous literal: handlers `bag_literal`, `rok::core::collections::list::list_literal` all match
-// Spec 6.5.5: two handlers for `[..]` with the same priority and no
+// Two handlers for `[..]` with the same priority and no
 // slot type to choose between them.
 struct Bag {
     n: i32;
@@ -14,4 +14,3 @@ fn main() -> i32 {
     let l = [1, 2];
     return 0;
 }
-// spec: §6.5.5

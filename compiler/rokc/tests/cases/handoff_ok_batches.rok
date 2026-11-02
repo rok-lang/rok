@@ -3,7 +3,6 @@
 // expect-stdout:
 // got 95
 
-// spec: std 213-marker §2.13.9
 // Producer sends fixed-size batches, starting a fresh one each time.
 use rok::std::thread;
 fn main() {

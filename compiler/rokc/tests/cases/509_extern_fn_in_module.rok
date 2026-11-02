@@ -1,11 +1,10 @@
-// spec: §5.9.4
 // expect-exit: 0
 // expect-stdout:
 // 4 4 5
 
 // A `pub` function of an `extern` block in a module is reachable by its
 // path; inside the module and elsewhere its bare name still works (one
-// global name space of extern functions, 5.9.4).
+// global name space of extern functions).
 mod m {
     extern "C" {
         pub fn abs(x: i32) -> i32;

@@ -20,4 +20,3 @@ fn main() -> i32 {
     return s + extra;
 }
 
-// spec: 003.12-match-expression

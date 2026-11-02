@@ -13,4 +13,3 @@ fn main() {
     let _ = greet("hi from rok");
 }
 
-// spec: std 215-string

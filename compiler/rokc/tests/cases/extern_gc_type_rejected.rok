@@ -3,7 +3,6 @@
 // expect-error: extern static `table` has type `List<i32>`
 // expect-error: parameter `x` of `extern "C" fn` `callback` has type `List<i64>`
 // expect-error: help: use a primitive, a `CPtr<T>` (`rok::bare::ptr`) and a length
-// spec: §5.9.4
 
 // A GC type crossing into C is an error: the collector may move or free
 // it while C holds it.

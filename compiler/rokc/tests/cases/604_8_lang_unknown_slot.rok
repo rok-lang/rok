@@ -1,7 +1,6 @@
-// spec: 006.04.8-lang-unknown-slot
 // expect-error: unknown lang slot `nonexistent_slot`
 
-// spec 6.4.8: an unknown slot name is a compile error.
+// An unknown slot name is a compile error.
 #[lang("nonexistent_slot")]
 trait T {
     fn foo(self) -> i32;
@@ -10,4 +9,3 @@ trait T {
 fn main() -> i32 {
     return 0;
 }
-// spec: std 004-lang-slot-table §0.4.7

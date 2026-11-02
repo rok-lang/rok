@@ -17,7 +17,7 @@ pub fn feature_of(flag: &str) -> Option<&str> {
     (k.trim() == "feature").then(|| v.trim().trim_matches('"'))
 }
 
-/// The target's cfg keys (spec 6.3.2); `target_family` / `target_env`
+/// The target's cfg keys; `target_family` / `target_env`
 /// only when the target has one.
 pub fn add_target(env: &mut CfgEnv, target: &rokc_mir::Target) {
     env.add_pair("target_os", &target.os);
@@ -59,7 +59,7 @@ pub fn filter_items(items: Vec<Item>, env: &CfgEnv) -> Vec<Item> {
 
 fn item_passes(item: &Item, env: &CfgEnv) -> bool {
     let attrs = item.attrs();
-    // Spec 6.2.5: `#[test]` implies `#[cfg(test)]`; so does `#[bench]`
+    // `#[test]` implies `#[cfg(test)]`; so does `#[bench]`
     // (a bench build is a test build, as with cargo).
     (env.has_flag("test")
         || !(crate::harness::is_test(attrs) || crate::harness::has_attr(attrs, "bench")))

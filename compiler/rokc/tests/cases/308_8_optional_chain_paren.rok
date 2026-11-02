@@ -1,4 +1,3 @@
-// spec: 003.08.8-short-circuit-evaluation-of-optional-chaining
 // Parentheses end an optional chain: the link after them applies to
 // the `T | none` value.
 // expect-error: this value is a `str | none`, and only a `str` has the method `len`

@@ -3,7 +3,7 @@
 // expect-stdout:
 // 4
 
-// `extern "C" fn` (spec 5.9.10): a rok function with the C ABI, passed
+// `extern "C" fn`: a rok function with the C ABI, passed
 // to C as a plain function pointer. `raise` runs the handler at once on
 // this thread.
 extern "C" {
@@ -24,5 +24,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 005.09-extern-block
-// spec: §5.9.4 §5.9.10

@@ -1,5 +1,5 @@
 // expect-error: expanded from this `#[derive(T)]`
-// Spec 6.9.8: the expansion must be rok code; its errors point at the
+// The expansion must be rok code; its errors point at the
 // template and at the derive use.
 trait T { fn t(self) -> i32; }
 
@@ -18,6 +18,4 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 006.08-meta-blocks
-// spec: §6.9.8 §6.9.9
 // expect-error: expected an item

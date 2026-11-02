@@ -1,7 +1,6 @@
-// spec: 005.03-static-mut-storage-pattern
 // expect-error: `static mut` is only allowed inside `extern "C"
 
-// spec 5.3: `static mut` is not allowed in ordinary code, so this storage
+// `static mut` is not allowed in ordinary code, so this storage
 // pattern must be rejected; use `Atomic` / `Mutex` / `Cell` instead.
 static mut COUNTER: i32 = 0;
 
@@ -13,4 +12,3 @@ fn bump() -> i32 {
 fn main() -> i32 {
     return bump();
 }
-// spec: §5.3.5

@@ -1,7 +1,6 @@
-// spec: §5.9.4
-// expect-error: 6:14: `rok_str_cstr`: a `rok_*` symbol is the runtime's, whose `str` is `(ptr, len)`; an `extern "C"` `str` is a `char*` - give the C function another name
+// expect-error: 5:14: `rok_str_cstr`: a `rok_*` symbol is the runtime's, whose `str` is `(ptr, len)`; an `extern "C"` `str` is a `char*` - give the C function another name
 
-// 5.9.4 / 8.5: `rok_*` names the runtime's functions, whose `str` is
+// `rok_*` names the runtime's functions, whose `str` is
 // `(ptr, len)`; an `extern "C"` `str` is a NUL-terminated `char*`.
 extern "C" { fn rok_str_cstr(s: str) -> usize; }
 

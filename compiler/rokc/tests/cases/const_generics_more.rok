@@ -16,7 +16,7 @@
 // 2
 // 5
 
-// Spec 2.11: `[v; N]` repeat literals, const parameters on enums /
+// `[v; N]` repeat literals, const parameters on enums /
 // impls / traits / type aliases, and a const that appears only in the
 // return type, inferred from the expected type.
 fn zeros<const N: usize>() -> [f64; N] { return [0.0; N]; }
@@ -97,4 +97,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 002.11-const-generics

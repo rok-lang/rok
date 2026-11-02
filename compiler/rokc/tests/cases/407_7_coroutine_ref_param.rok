@@ -1,7 +1,6 @@
-// spec: §4.7.7
 // expect-error: a coroutine (`async` / `yield`) fn cannot take `ref` parameters
 
-// Spec 4.7.7: a coroutine body runs after the call returns, so there is
+// A coroutine body runs after the call returns, so there is
 // no point to write a `ref` parameter back.
 yield fn count_up(ref n: i32) -> i32 { n += 1; yield n; }
 

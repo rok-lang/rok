@@ -17,4 +17,3 @@ fn main() {
     println(f"{keep("a")} {keep(3)}");
 }
 
-// spec: 003.14-error-control-flow

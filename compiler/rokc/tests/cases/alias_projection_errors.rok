@@ -1,12 +1,11 @@
-// spec: §2.6.9 §2.13.3
 // A plain alias naming a projection is checked once, at its body, after
 // impls are registered; its uses add no errors. A cyclic one is
 // reported at its declaration.
-// expect-error: 15:10: `A` has no associated type `Nope` of `P`
-// expect-error: 16:10: `A` has no associated type `Nope` (no trait impl
-// expect-error: 17:1: type alias `E` is cyclic
-// expect-error: 18:1: type alias `F` is cyclic
-// expect-error: 19:10: `i32` has no associated type `Out` of `P`
+// expect-error: 14:10: `A` has no associated type `Nope` of `P`
+// expect-error: 15:10: `A` has no associated type `Nope` (no trait impl
+// expect-error: 16:1: type alias `E` is cyclic
+// expect-error: 17:1: type alias `F` is cyclic
+// expect-error: 18:10: `i32` has no associated type `Out` of `P`
 // forbid-error: errors.rok:2
 
 trait P { type Out; }

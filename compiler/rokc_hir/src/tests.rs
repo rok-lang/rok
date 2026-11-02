@@ -75,7 +75,7 @@ fn generic_terms_layer_against_written_terms_only() {
     );
     // `T | U | none`, `T = i32 | none`, `U = i32`: only `T` overlaps a
     // written term. The result is canonical: a layer's key `(..)` sorts
-    // before a primitive's name (spec 2.6.4).
+    // before a primitive's name.
     let tun = HirTy::layered(vec![HirTy::None], vec![inner.clone(), I32]);
     assert_eq!(tun, HirTy::Sum(vec![inner, I32, HirTy::None]));
     let mut again = tun.clone();
@@ -85,7 +85,7 @@ fn generic_terms_layer_against_written_terms_only() {
 
 #[test]
 fn written_types_lower_by_spelling() {
-    // Spec 2.6.4: a written sum spreads its written members.
+    // A written sum spreads its written members.
     assert_eq!(
         resolve_ty(&ty("(i32 | none) | none")),
         HirTy::sum([I32, HirTy::None])

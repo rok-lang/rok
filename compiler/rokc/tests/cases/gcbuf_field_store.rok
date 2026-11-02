@@ -49,4 +49,3 @@ fn main() {
         println(f"{names[2].m + names[1].m + names[0].m} {names[0].s} {names[1].s} {names[2].s}");
     }
 }
-// spec: 008.09-lowering-control §8.9.10

@@ -1,5 +1,5 @@
 // Recursive-descent evaluation of generated arithmetic: every grammar
-// level is a throwing call (spec 4.14) on the hot path; a division by
+// level is a throwing call on the hot path; a division by
 // zero throws and is caught per expression. Output matches
 // bench/c/throw_parse.c.
 struct DivZero { at: usize; }

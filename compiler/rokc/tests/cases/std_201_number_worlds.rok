@@ -1,12 +1,11 @@
-// spec: std §2.1.1 §2.1.9
 // expect-exit: 0
 // expect-stdout:
 // i32 f64 i64 2147483648
 // i8 i16 u8 u16 u32 u64 isize usize f32 bool c_char char str int float
 
-// Stdlib 2.1.1: an unsuffixed literal is `i32` / `f64` without an
+// An unsuffixed literal is `i32` / `f64` without an
 // expected type and follows one when there is; `int` promotes past the
-// `i32` range instead of overflowing. 2.1.9: the primitive names and the
+// `i32` range instead of overflowing. The primitive names and the
 // `int` / `float` keywords.
 fn main() {
     let n = 0;

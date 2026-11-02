@@ -1,8 +1,7 @@
-// spec: std 205-cmp §2.5.5
 // `Ord::clamp` with `low > high` is a caller bug and panics, as float
 // clamp does.
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at tests/cases/std_205_clamp_bounds_panic.rok:12:13:
+// expect-stderr: thread 'main' panicked at tests/cases/std_205_clamp_bounds_panic.rok:11:13:
 // expect-stderr: Ord::clamp: low > high; pass the bounds in order, `x.clamp(low, high)`
 // expect-stdout: 5
 

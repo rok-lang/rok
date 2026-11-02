@@ -1,6 +1,5 @@
 // needs: threads
 // gc-stress: 5
-// spec: std 218-task §2.18.1 / std 213-marker §2.13.9
 // `task::spawn` gives the task a frame of its own holding copies of what
 // the future captured, through one hand-off: what the captures shared
 // (one list twice, a list and a future over it) they still share. An

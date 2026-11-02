@@ -1,10 +1,10 @@
-//! `#[keyword("name")]` (refs-lang 6.6).
+//! `#[keyword("name")]`.
 //!
 //! A driver pre-pass collects them (`collect_keywords`) before the package
 //! is lexed for real; `apply_keywords` then rewrites each `name` token to
 //! the handler's path, so `with(m) { .. }` calls `pkg::with_handler(m)
 //! { .. }`, and `name` in a declaration position is an error. The
-//! handler's signature decides the call shape (6.6.8).
+//! handler's signature decides the call shape.
 //!
 //! On a `struct` (`#[keyword("int")] struct Int`) the keyword is a type
 //! name, `name::item` included. Standard library type keywords apply to
@@ -27,7 +27,7 @@ pub struct KeywordDef {
     /// The `#[keyword(..)]` attribute.
     pub span: Span,
     /// The item's and its enclosing modules' `#[cfg(..)]`s: the driver
-    /// registers it only when they hold (6.6.13).
+    /// registers it only when they hold.
     pub cfg: Vec<Attribute>,
 }
 
@@ -72,7 +72,7 @@ fn collect_in(
             _ => (String::new(), false),
         };
         push_keywords(attrs, &handler, ty, &cfg, file, out);
-        // A method or trait item can't be a handler (6.6.2).
+        // A method or trait item can't be a handler.
         let methods: Vec<&FnDef> = match item {
             Item::Impl(i) => i
                 .items
@@ -174,7 +174,7 @@ pub(crate) fn handler_at(tokens: &[Token], attr: usize, after: usize) -> String 
     path.join("::")
 }
 
-/// 6.6.4: a reserved / contextual keyword can't be registered, nor can
+/// A reserved / contextual keyword can't be registered, nor can
 /// a name that is not an identifier.
 #[must_use]
 pub fn check_keyword(def: &KeywordDef) -> Option<RokDiagnostic> {
@@ -187,9 +187,7 @@ pub fn check_keyword(def: &KeywordDef) -> Option<RokDiagnostic> {
     };
     let n = def.name.as_str();
     if RESERVED.contains(&n) || keyword_kind(n).is_some() || CONTEXTUAL.contains(&n) {
-        return err(format!(
-            "`#[keyword(\"{n}\")]`: `{n}` is already a keyword (spec 6.6.4)"
-        ));
+        return err(format!("`#[keyword(\"{n}\")]`: `{n}` is already a keyword"));
     }
     let ident = n
         .chars()
@@ -198,12 +196,12 @@ pub fn check_keyword(def: &KeywordDef) -> Option<RokDiagnostic> {
         && n.chars().all(|c| c.is_alphanumeric() || c == '_');
     if !ident {
         return err(format!(
-            "`#[keyword(\"{n}\")]`: a keyword must be an identifier (spec 6.6.2)"
+            "`#[keyword(\"{n}\")]`: a keyword must be an identifier"
         ));
     }
     if def.handler.is_empty() {
         return err(format!(
-            "`#[keyword(\"{n}\")]` must be on a free function - its handler (spec 6.6.2)"
+            "`#[keyword(\"{n}\")]` must be on a free function - its handler"
         ));
     }
     None
@@ -230,7 +228,7 @@ pub fn apply_keywords(tokens: &mut Vec<Token>, kws: &KeywordTable, diags: &mut V
         };
         let prev = k.checked_sub(1).map(|p| &tokens[p].kind);
         let next = tokens.get(k + 1).map(|t| &t.kind);
-        // A keyword can't name anything (6.6.3).
+        // A keyword can't name anything.
         let names = matches!(
             prev,
             Some(
@@ -252,7 +250,7 @@ pub fn apply_keywords(tokens: &mut Vec<Token>, kws: &KeywordTable, diags: &mut V
                     Code::RESERVED_NAME,
                     t.span,
                     format!(
-                        "`{n}` is a keyword registered with `#[keyword(\"{n}\")]` and can't be used as a name (spec 6.6.3)"
+                        "`{n}` is a keyword registered with `#[keyword(\"{n}\")]` and can't be used as a name"
                     ),
                 ),
             );

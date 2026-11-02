@@ -1,11 +1,10 @@
-// spec: 008.08-lowering-types §8.8.11 / §8.8.12
 // expect-exit: 0
 // expect-stdout:
 // add 5 mul 6
 // table 3 8
 // captured 15 13
 
-// spec 8.8.11 / 8.8.12: a function is a value that can be stored and
+// A function is a value that can be stored and
 // called through; a closure carries its captured environment with it.
 fn add(a: i32, b: i32) -> i32 { a + b }
 fn mul(a: i32, b: i32) -> i32 { a * b }

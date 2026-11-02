@@ -1,4 +1,3 @@
-// spec: §4.7.3 §4.7.10
 // expect-error: `x` is passed as `ref` to `add_to` and also read by another argument
 
 fn inc(ref n: i32) { n = n + 1; }

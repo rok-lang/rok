@@ -1,4 +1,3 @@
-// spec: §4.6.9 std §2.13.9
 // expect-error: type `closure(i32) -> i32` does not satisfy trait bound `Send`
 // A closure is `Send` iff its captures are.
 struct Tok { v: i32; }

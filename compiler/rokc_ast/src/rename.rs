@@ -1,4 +1,4 @@
-//! Renaming block-local items (spec 3.9.1).
+//! Renaming block-local items.
 //!
 //! A block's item is lifted under a name no source can write and every use
 //! in scope is renamed. Values (`static`, unit / tuple structs) are renamed

@@ -5,7 +5,7 @@
 // 3.14 3 ff 0xFF 00000101 0o17 "rok\n" true 한 'x' 2.5
 // p = (1, 2) "nested"|
 
-// f-strings (refs-lang 1.7.3, stdlib 2.10): holes call `display()` (or
+// f-strings: holes call `display()` (or
 // `debug()` for `?`), then the spec's fill / align / sign / `0` / width
 // / precision / radix apply; `{{` `}}` are literal braces.
 struct P { x: i32; y: i32; }
@@ -22,4 +22,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 001.07-string-literals

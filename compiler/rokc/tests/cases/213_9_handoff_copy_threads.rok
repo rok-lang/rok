@@ -1,7 +1,6 @@
 // needs: threads
 // gc-stress: 5
 // expect-exit: 0
-// spec: std 213-marker §2.13.9 / std 217-channel §2.17.1
 // expect-stdout:
 // same object twice 20000
 // element and argument 20000
@@ -18,7 +17,7 @@
 // Routes that give one list to two threads, run the way they would if
 // the static hand-off check missed them: each sends a list and keeps a
 // handle to it. The receiver works on a copy, so both sides count to
-// N on their own. `unsafe` turns the check off (spec 4.15.2).
+// N on their own. `unsafe` turns the check off.
 use rok::std::thread;
 
 const N: i32 = 20000;

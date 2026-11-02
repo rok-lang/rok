@@ -1,5 +1,4 @@
-// spec: §2.10.8
-// expect-error: 8:24: mismatched types: argument 2 of `pair` expects `i32`, found `f64`
+// expect-error: 7:24: mismatched types: argument 2 of `pair` expects `i32`, found `f64`
 
 // One generic parameter is one type within a call.
 fn pair<T>(a: T, b: T) -> (T, T) { (a, b) }

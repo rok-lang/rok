@@ -1,11 +1,10 @@
-// spec: 008.06-calling-convention §8.6.5
 // expect-exit: 0
 // expect-stdout:
 // ok 10
 // err 10
 // ok 30 30
 
-// spec 8.6.5: the error channel is part of the signature, so `T` and `E`
+// The error channel is part of the signature, so `T` and `E`
 // may be the same type; a large `T` (sret) still round-trips.
 struct Big { a: i64; b: i64; c: i64; d: i64; }
 

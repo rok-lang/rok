@@ -89,10 +89,10 @@ struct NameSet<'b> {
     exists: &'b dyn Fn(&str) -> bool,
     keys: &'b dyn Fn(&str) -> Vec<String>,
     /// Is the key visible from the resolving module? A glob brings in only
-    /// what it can see (spec 5.6), so core's private helpers never compete.
+    /// what it can see, so core's private helpers never compete.
     visible: &'b dyn Fn(&str) -> bool,
     /// Does a deep glob's matched path end at a type before the name? Then
-    /// the key is an associated item, which `**` doesn't reach (spec 5.5.7).
+    /// the key is an associated item, which `**` doesn't reach.
     in_type: &'b dyn Fn(&str) -> bool,
 }
 
@@ -108,10 +108,10 @@ struct TypeNames {
     auto_traits: std::collections::HashSet<String>,
     /// `unsafe trait`s: implemented only by `unsafe impl`.
     unsafe_traits: std::collections::HashSet<String>,
-    /// The `#[lang]` slots (spec 6.4).
+    /// The `#[lang]` slots.
     lang: rokc_parser::LangTable,
     /// Every enum variant as `a::E::V` (generic bases unmangled). A
-    /// variant is as visible as its enum (spec 5.6.9).
+    /// variant is as visible as its enum.
     variants: std::collections::HashSet<String>,
     /// `pub use` alias key → the type its re-export chain ends at.
     reexports: HashMap<String, String>,
@@ -188,7 +188,7 @@ fn leaves<'k>(keys: impl IntoIterator<Item = &'k String>) -> Leaves {
 /// (alias full name, arguments, module of the use, span of the use).
 type AliasUse = (String, Vec<Ty>, String, rokc_diagnostic::Span);
 
-/// Can code in `module` name the type-like item `full` (spec 5.6)?
+/// Can code in `module` name the type-like item `full`?
 /// Unknown names (primitives, ..) are visible.
 #[must_use]
 pub fn type_visible(m: &crate::HirModule, full: &str, module: &str) -> bool {
@@ -198,7 +198,7 @@ pub fn type_visible(m: &crate::HirModule, full: &str, module: &str) -> bool {
 }
 
 impl TypeNames {
-    /// The item bound to lang slot `slot` (spec 6.4), `""` if unbound; a
+    /// The item bound to lang slot `slot`, `""` if unbound; a
     /// method slot (`drop_method`) gives its trait.
     fn lang_item(&self, slot: &str) -> &str {
         self.lang.lookup(slot).map_or("", |e| {
@@ -486,7 +486,7 @@ impl TypeNames {
         let item = |k: &String| self.reexport(k).unwrap_or(k).clone();
         let mut full = match resolve_name(segments, module, local_uses, &self.uses, &set) {
             Ok(r) => r?,
-            // An item and its re-exports are one item (spec 5.8.4).
+            // An item and its re-exports are one item.
             Err(hits) if hits.iter().all(|h| item(h) == item(&hits[0])) => item(&hits[0]),
             Err(hits) => {
                 self.error(
@@ -503,7 +503,7 @@ impl TypeNames {
                 hits.into_iter().next()?
             }
         };
-        // Spec 5.6.13: every module on the path as written (a re-export
+        // Every module on the path as written (a re-export
         // key, before following it) must be visible too.
         if let Some(m) = self.hidden(module, &full) {
             self.error(
@@ -520,7 +520,7 @@ impl TypeNames {
             if !visible_from(module, &def_module, vis) {
                 let msg = format!(
                     "type `{full}` is private to module `{}` and cannot be used from `{}` \
-                     (spec 5.6 - add `pub` to expose it)",
+                     (add `pub` to expose it)",
                     module_display(&def_module),
                     module_display(module)
                 );
@@ -554,7 +554,7 @@ impl TypeNames {
         };
         let exists = |k: &str| full_key(k).is_some();
         let keys = |leaf: &str| self.variant_leaf(leaf);
-        // A variant is as visible as its enum (spec 5.6.9).
+        // A variant is as visible as its enum.
         let visible = |k: &str| self.visible_type(&module_of(k), module);
         let set = NameSet {
             exists: &exists,
@@ -994,7 +994,7 @@ pub fn lower_with_uses(
 }
 
 /// Per-method facts for call sites: privacy module, visibility, and the
-/// implemented trait (operators need a trait impl, spec 0.4 / 6.4).
+/// implemented trait (operators need a trait impl).
 #[derive(Clone)]
 struct MethodInfo {
     module: String,
@@ -1019,7 +1019,7 @@ struct GenericMethod {
 /// An associated const `(NAME, type, value)`.
 type AssocConst = (String, Ty, Expr);
 
-/// One `impl` (spec 2.9), inherent or trait, concrete or generic (a bare
+/// One `impl`, inherent or trait, concrete or generic (a bare
 /// `T` target is a blanket impl).
 #[derive(Clone)]
 struct Impl {
@@ -1036,7 +1036,7 @@ struct Impl {
     /// A generic trait impl's (or structural inherent impl's) method
     /// templates by name, trait default bodies included.
     methods: HashMap<String, GenericMethod>,
-    /// Associated consts, trait defaults included (spec 2.8.3a).
+    /// Associated consts, trait defaults included.
     consts: Vec<AssocConst>,
     /// A concrete impl's resolved target, and the trait ref it provides
     /// (arguments with defaults filled, associated types as bindings).
@@ -1194,7 +1194,7 @@ struct TypeDefs<'a> {
     generic_unions: HashMap<String, &'a rokc_ast::UnionDef>,
     generic_enums: HashMap<String, &'a AstEnumDef>,
     /// Leaf names of templates whose parameters all have defaults: their
-    /// bare name is an instance (spec 2.10.5).
+    /// bare name is an instance.
     defaulted_leaves: std::collections::HashSet<String>,
 }
 
@@ -1400,11 +1400,11 @@ struct Tables<'a> {
     /// `fn_table` and `generic_fns` keys by last segment (both are
     /// complete before any body is lowered).
     fn_leaves: std::cell::OnceCell<Leaves>,
-    /// `extern` fns: one global C namespace callable by bare name (spec
-    /// 5.9); name → declaring module (where its signature resolves).
+    /// `extern` fns: one global C namespace callable by bare
+    /// name; name → declaring module (where its signature resolves).
     extern_fns: HashMap<String, String>,
     /// Concrete methods by `(type, name)`: several when traits share a
-    /// method name (`pick_method` chooses, spec 4.9.6).
+    /// method name (`pick_method` chooses).
     method_table: HashMap<(MethodTarget, String), Vec<FunctionId>>,
     /// `fn_table` key of every function id (method signatures).
     key_of: HashMap<FunctionId, String>,
@@ -1448,7 +1448,7 @@ struct Tables<'a> {
     /// C variadic `extern` declarations (`fn printf(fmt: str, ...)`):
     /// extra arguments take the C default argument promotions.
     c_variadic: std::collections::HashSet<FunctionId>,
-    /// `extern "C" fn` definitions (spec 5.9.10): with `extern_fn_ids`,
+    /// `extern "C" fn` definitions: with `extern_fn_ids`,
     /// the named functions an `extern "C" fn(..)` value can point to.
     c_defs: std::collections::HashSet<FunctionId>,
     /// `extern "system"` declarations and definitions where `"system"`
@@ -1461,7 +1461,7 @@ struct Tables<'a> {
     field_vis: HashMap<String, HashMap<String, Visibility>>,
     /// Every impl (bounds, dispatch, projections, associated consts).
     impls: Impls,
-    /// `unsafe fn`s and C functions (spec 4.15): calls need an unsafe scope.
+    /// `unsafe fn`s and C functions: calls need an unsafe scope.
     unsafe_fns: std::collections::HashSet<FunctionId>,
     /// `impl !Send for S {}` opt-outs: `(generic base of S, trait key)`.
     neg_auto: std::collections::HashSet<(String, String)>,
@@ -1475,21 +1475,21 @@ struct Tables<'a> {
     /// Module-level `static` items by name → declared type.
     statics: HashMap<String, HirTy>,
     static_leaves: std::cell::RefCell<(usize, Leaves)>,
-    /// Statics that may be assigned (`extern` `static mut`, spec 5.9.3).
+    /// Statics that may be assigned (`extern` `static mut`).
     mut_statics: std::collections::HashSet<String>,
-    /// Statics of `extern` blocks (spec 5.9.3), C globals.
+    /// Statics of `extern` blocks, C globals.
     extern_statics: std::collections::HashSet<String>,
-    /// `#[literal]` handlers of the built-in literal shapes (spec 6.5).
+    /// `#[literal]` handlers of the built-in literal shapes.
     literal_shapes: Vec<ShapeHandler>,
     names: TypeNames,
     /// Every non-generic function by `FunctionId` (the ids below
     /// `sink.next_id`'s start).
     decls: Vec<MethodOrFn<'a>>,
-    /// `#[non_exhaustive]` structs and enums (spec 6.2.10), by name.
+    /// `#[non_exhaustive]` structs and enums, by name.
     non_exhaustive: std::collections::HashSet<String>,
-    /// `#[sealed]` traits (spec 6.2.15), by name.
+    /// `#[sealed]` traits, by name.
     sealed: std::collections::HashSet<String>,
-    /// Marked functions and methods (spec 6.2.7, 6.2.14): the name a
+    /// Marked functions and methods: the name a
     /// warning shows (`P::new`), the marks.
     fn_marks: HashMap<FunctionId, (String, crate::marks::Mark)>,
     /// Marked fields (`m::P.x`), consts and statics, by key.
@@ -1916,7 +1916,7 @@ struct TraitInfo {
 enum MethodTarget {
     Struct(StructId),
     Enum(EnumId),
-    /// Impl targets that aren't one struct or enum (spec 2.9.1), keyed by
+    /// Impl targets that aren't one struct or enum, keyed by
     /// `ty_mangle` so impls on one shape share a target.
     Mangled(String),
 }
@@ -1957,7 +1957,7 @@ impl MethodOrFn<'_> {
     }
 }
 
-/// A function with `ref` parameters (spec 4.7), copy-in / copy-out: it
+/// A function with `ref` parameters, copy-in / copy-out: it
 /// returns `ret` packed with each `ref` parameter's final value
 /// (`ref_packed`), which the call site writes back.
 #[derive(Clone)]
@@ -1984,17 +1984,17 @@ struct FnSig {
     /// Resolved parameter types: the expected types of the arguments, so
     /// an untyped closure argument takes its parameter types from them.
     param_tys: Vec<HirTy>,
-    /// Parameter names, to place named arguments (spec 4.1).
+    /// Parameter names, to place named arguments.
     param_names: Vec<String>,
     /// Which parameters are `ref` (empty = none).
     param_refs: Vec<bool>,
     /// The last parameter is a variadic `...T` (a `Slice<T>` the call
-    /// builds from its trailing arguments, spec 4.2.5).
+    /// builds from its trailing arguments).
     variadic: bool,
 }
 
-/// The lock guard `ty` is, if any. Only `using` releases one (stdlib
-/// 2.16.3); the module defining guards hands them over raw.
+/// The lock guard `ty` is, if any. Only `using` releases one;
+/// the module defining guards hands them over raw.
 fn lock_guard(ctx: &LowerCtx<'_>, ty: &HirTy) -> Option<&'static str> {
     let HirTy::Struct(id) = ty else { return None };
     if ctx.current_module == "rok::core::sync" {
@@ -2014,7 +2014,7 @@ fn wrap_into_sum(slot_ty: &HirTy, value: HirExpr) -> HirExpr {
         return value;
     };
     let Some(idx) = sum_variant_index(variants, &value.ty) else {
-        // A nested optional (spec 2.6.4): a value of the inner type's
+        // A nested optional: a value of the inner type's
         // members goes in wrapped by the inner sum.
         return match variants.iter().find(|v| nested_fits(v, &value.ty)) {
             Some(inner) => wrap_into_sum(slot_ty, wrap_into_sum(inner, value)),
@@ -2140,7 +2140,7 @@ fn resum(ctx: &mut LowerCtx<'_>, value: HirExpr, to: &HirTy) -> HirExpr {
 }
 
 /// Does nested sum `member` take a `value_ty` by injection (`i32` or
-/// `none` into `(i32 | none)?`, spec 2.6.4)?
+/// `none` into `(i32 | none)?`)?
 fn nested_fits(member: &HirTy, value_ty: &HirTy) -> bool {
     match member {
         HirTy::Sum(ws) => {
@@ -2171,7 +2171,7 @@ fn ty_compatible(expected: &HirTy, actual: &HirTy) -> bool {
         (HirTy::Tuple(a), HirTy::Tuple(b)) | (HirTy::Sum(a), HirTy::Sum(b)) => all(a, b),
         (HirTy::Array(a, n), HirTy::Array(b, m)) => n == m && ty_compatible(a, b),
         (HirTy::GcBuf(a), HirTy::GcBuf(b)) => ty_compatible(a, b),
-        // No fn subtyping (spec 4.4.9), except `fn() + Send` into `fn()`.
+        // No fn subtyping, except `fn() + Send` into `fn()`.
         // A `fn() -> !` isn't a `fn() -> R` (different return ABI); only
         // `adapt_never_fn` makes one from a named fn.
         (HirTy::Fn(a1, r1, b1), HirTy::Fn(a2, r2, b2)) => {
@@ -2180,7 +2180,7 @@ fn ty_compatible(expected: &HirTy, actual: &HirTy) -> bool {
                 && (**r2 != HirTy::Never || **r1 == HirTy::Never)
                 && fn_bounds_fit(b1, b2)
         }
-        // Spec 4.4.2: a closure is a value of its `fn` type (`coerce`
+        // A closure is a value of its `fn` type (`coerce`
         // checks a bound against its captures).
         (
             HirTy::Fn(a1, r1, _),
@@ -2228,7 +2228,7 @@ fn coerce(
     if infer::unify_value(ctx, slot, &value) {
         return value;
     }
-    // A diverging block has type `!`: it fits any slot (spec 3.9).
+    // A diverging block has type `!`: it fits any slot.
     if hir_expr_diverges(&value) {
         return value;
     }
@@ -2238,7 +2238,7 @@ fn coerce(
     let value = box_into_any(ctx, slot, value);
     let value = drop_fn_bounds(slot, value);
     let value = expr::list_into_view(ctx, slot, value);
-    // Spec 2.6.4: a sum flows into any sum holding all its members; one
+    // A sum flows into any sum holding all its members; one
     // that is a layer of the slot goes into that layer.
     let value = match (&value.ty, slot) {
         (HirTy::Sum(vs), HirTy::Sum(ws))
@@ -2246,7 +2246,7 @@ fn coerce(
         {
             resum(ctx, value, slot)
         }
-        // Into a nested optional's inner sum (spec 2.6.4): a sub-sum of
+        // Into a nested optional's inner sum: a sub-sum of
         // it re-tagged, then wrapped by the outer layer.
         (HirTy::Sum(vs), HirTy::Sum(ws)) if !ws.contains(&value.ty) => {
             let inner = ws
@@ -2287,7 +2287,7 @@ fn coerce(
                     Code::THREAD_SAFETY,
                     format!(
                         "`[ref {name}]` can't be used in a closure that may run on another \
-                         thread: both threads could change `{name}` at once (spec 4.6.9)"
+                         thread: both threads could change `{name}` at once"
                     ),
                 );
                 if let Some(d) = ctx.env.sink.diagnostics.borrow_mut().last_mut() {
@@ -2397,7 +2397,7 @@ fn sig_text<'n>(callee: &str, params: impl IntoIterator<Item = (&'n str, String)
 fn mismatch_help(ctx: &LowerCtx<'_>, slot: &HirTy, v: &HirExpr) {
     let src = suggest::short_src(ctx, v.span);
     if suggest::some_part(&v.ty).as_ref() == Some(slot) {
-        // `try?` over an optional nests (spec 3.14.3).
+        // `try?` over an optional nests.
         if let Some(s) = src.filter(|s| {
             s.starts_with("try?") && matches!(slot, HirTy::Sum(ts) if ts.iter().any(HirTy::is_none))
         }) {
@@ -2554,24 +2554,24 @@ fn holds_ref_cell(ty: &HirTy) -> bool {
 fn fn_mismatch_hint(slot: &HirTy, ty: &HirTy) -> &'static str {
     if matches!(slot, HirTy::Fn(_, _, want) if !want.auto.is_empty()) && holds_ref_cell(ty) {
         " - the closure holds a `[ref ..]` capture, which the code that made it could change at \
-         the same time; share the value through a `Mutex` or an `Atomic` instead (spec 4.6.9)"
+         the same time; share the value through a `Mutex` or an `Atomic` instead"
     } else if matches!((slot, ty), (HirTy::Fn(_, _, want), HirTy::Closure { .. }) if *want != crate::FnBounds::default())
     {
         " - the closure's captures don't meet the `fn` type's bounds"
     } else if matches!((slot, ty), (HirTy::Fn(_, _, want), HirTy::Fn(_, _, have))
         if have.unsafe_fn && !want.unsafe_fn)
     {
-        " - an `unsafe fn` value only fits an `unsafe fn` type (spec 4.15)"
+        " - an `unsafe fn` value only fits an `unsafe fn` type"
     } else if matches!((slot, ty), (HirTy::Fn(_, _, want), HirTy::Fn(_, _, have))
         if want.c_abi != have.c_abi)
     {
         " - an `extern \"C\" fn` value is a bare C function pointer, not a rok `fn` value \
-         (spec 5.9.4)"
+        "
     } else if matches!((slot, ty), (HirTy::Fn(_, _, want), HirTy::Fn(_, _, have))
         if want.stdcall != have.stdcall)
     {
         " - `extern \"system\" fn` is `stdcall` on this target, not `extern \"C\" fn` \
-         (spec 5.9.4)"
+        "
     } else if matches!((slot, ty), (HirTy::Fn(_, _, want), HirTy::Fn(_, _, have))
         if !fn_bounds_fit(want, have))
     {
@@ -2581,13 +2581,13 @@ fn fn_mismatch_hint(slot: &HirTy, ty: &HirTy) -> &'static str {
         if matches!(**r, HirTy::Throws { .. }))
     {
         " - a function value fits a `fn` type that throws more only with the same \
-         parameters and result (spec 4.4.9)"
+         parameters and result"
     } else {
         ""
     }
 }
 
-/// Spec 5.9.4: a named C-ABI function fills an `extern "C" fn(..)` slot
+/// A named C-ABI function fills an `extern "C" fn(..)` slot
 /// (or sum member) as its own address; MIR takes the C entry. Where
 /// `"system"` is `stdcall`, it and `"C"` only fill their own kind.
 fn c_fn_value(ctx: &LowerCtx<'_>, slot: &HirTy, mut value: HirExpr) -> HirExpr {
@@ -2609,7 +2609,7 @@ fn c_fn_value(ctx: &LowerCtx<'_>, slot: &HirTy, mut value: HirExpr) -> HirExpr {
         ctx.emit_error(
             Code::FFI,
             "only an `extern \"C\"` function (an `extern` block declaration or an \
-             `extern \"C\" fn` definition) is an `extern \"C\" fn(..)` value (spec 5.9.4)"
+             `extern \"C\" fn` definition) is an `extern \"C\" fn(..)` value"
                 .to_owned(),
         );
     }
@@ -2624,7 +2624,7 @@ fn c_fn_value(ctx: &LowerCtx<'_>, slot: &HirTy, mut value: HirExpr) -> HirExpr {
             Code::FFI,
             format!(
                 "{is} function is no {slot} value: `\"system\"` is `stdcall` on this \
-                 target (spec 5.9.4)"
+                 target"
             ),
         );
     }
@@ -2713,14 +2713,14 @@ fn box_into_any(ctx: &LowerCtx<'_>, slot: &HirTy, value: HirExpr) -> HirExpr {
             ty: target.clone(),
             ..value
         },
-        // Spec 2.2.10: no implicit `any` → `any Tr` (it would hide a
+        // No implicit `any` → `any Tr` (it would hide a
         // runtime check); `any Tr` → `any` is the arm above.
         HirTy::AnyTrait(_) => ctx.error_expr(
             Code::MISMATCHED_TYPES,
             value.span,
             format!(
                 "cannot store an `{}` value in an `{}` slot without narrowing - test it with \
-                 `is` or a type pattern (`match v {{ x: T => ... }}`) first (spec 2.2.10)",
+                 `is` or a type pattern (`match v {{ x: T => ... }}`) first",
                 ctx.ty_name(&value.ty),
                 ctx.ty_name(target)
             ),
@@ -2759,7 +2759,7 @@ fn box_into_any(ctx: &LowerCtx<'_>, slot: &HirTy, value: HirExpr) -> HirExpr {
 }
 
 /// A default value (`x: T = e`, `f: T = e`) resolved where it is
-/// declared, not at the use that splices it in (spec 4.2.3).
+/// declared, not at the use that splices it in.
 fn in_module(module: &str, e: Expr) -> Expr {
     Expr {
         span: e.span,
@@ -2871,9 +2871,9 @@ enum EnumRes {
 enum ArgSrc<'e> {
     Ast(&'e Expr),
     Lowered(HirExpr),
-    /// `ref x` (spec 4.7.3).
+    /// `ref x`.
     Ref(&'e Expr),
-    /// A dict spread's read of this parameter (spec 4.2.6): the index of
+    /// A dict spread's read of this parameter: the index of
     /// its built expression.
     Dict(usize),
 }
@@ -2929,7 +2929,7 @@ impl InstanceWarns {
 #[derive(Clone)]
 struct ClosureSink {
     extras: std::cell::RefCell<Vec<HirFunction>>,
-    /// Functions with `ref` parameters (spec 4.7, `ref self` included).
+    /// Functions with `ref` parameters (`ref self` included).
     ref_out: std::cell::RefCell<HashMap<FunctionId, RefOut>>,
     next_id: std::cell::Cell<u32>,
     /// Cached monomorphizations: `(generic_fn_name, concrete_type_args)`
@@ -2975,7 +2975,7 @@ struct ClosureSink {
     const_lowering: std::cell::RefCell<std::collections::HashSet<FunctionId>>,
     /// Const items being lowered, innermost last (cycle check).
     const_stack: std::cell::RefCell<Vec<String>>,
-    /// Return types inferred from bodies (spec 4.1.3), by function;
+    /// Return types inferred from bodies, by function;
     /// `None` while the body is being inferred.
     inferred_ret: std::cell::RefCell<HashMap<FunctionId, Option<HirTy>>>,
     /// Declarations whose inference lowering was final, with the first
@@ -2989,7 +2989,7 @@ struct ClosureSink {
     /// waited for the full const evaluator.
     sig_pass: std::cell::Cell<Option<bool>>,
     /// Call sites of the implicit-generic instances being lowered
-    /// (spec 4.2.2: their body errors point at the call too).
+    /// (their body errors point at the call too).
     call_sites: std::cell::RefCell<Vec<(String, rokc_diagnostic::Span)>>,
     /// Calls met of functions whose return type is being inferred.
     recursive_ret: std::cell::RefCell<Vec<FunctionId>>,
@@ -3037,10 +3037,10 @@ struct LowerCtx<'a> {
     /// Closure without a declared / expected return type: the first
     /// `return v;` fixes `fn_ret_ty`.
     infer_ret: bool,
-    /// Inferring a function's return type (spec 4.1.3): the types of
+    /// Inferring a function's return type: the types of
     /// its `return` values and trailing value.
     ret_tys: Option<Vec<HirTy>>,
-    /// Lowering the implicit `main`, where `return` is banned (spec 4.16.4);
+    /// Lowering the implicit `main`, where `return` is banned;
     /// closures get a fresh context.
     implicit_main: bool,
     /// Lowering the test harness `main` (`RootMain::Harness`).
@@ -3055,7 +3055,7 @@ struct LowerCtx<'a> {
     /// (`mono::ref_unpack`) waits for the future, and that write-back.
     awaited: Option<rokc_diagnostic::Span>,
     await_write_back: Vec<HirStmt>,
-    /// Bindings some closure captures as `[ref x]` (spec 4.6.2), by name and
+    /// Bindings some closure captures as `[ref x]`, by name and
     /// span; they live in a one-element `GcBuf` cell.
     ref_captured: std::collections::HashSet<(String, rokc_diagnostic::Span)>,
     /// Pattern bindings (`declare_bound`) still to be moved into their
@@ -3065,7 +3065,7 @@ struct LowerCtx<'a> {
     /// `(binder, whole-scrutinee local)`, converted by `take_cells`.
     pending_resums: Vec<(LocalId, LocalId)>,
     /// In a closure: locals holding a value capture (assigning one is an
-    /// error, spec 4.6.4).
+    /// error).
     value_captured: std::collections::HashSet<LocalId>,
     /// Set by a path call whose first argument fills `self`: whether it was
     /// `ref`. Taken by that call's argument lowering.
@@ -3076,7 +3076,7 @@ struct LowerCtx<'a> {
     /// Spans of calls whose `ref self` receiver is no place to write
     /// back to (an element, a static, a const): the write is dropped.
     dropped_ref_recv: Vec<Span>,
-    /// Enclosing `unsafe fn` body / `unsafe { }` blocks (spec 4.15):
+    /// Enclosing `unsafe fn` body / `unsafe { }` blocks:
     /// unsafe calls are allowed when > 0.
     unsafe_depth: u32,
     /// Set by a call through a lang slot (`expr::lang_fn`): lowering
@@ -3101,16 +3101,15 @@ struct LowerCtx<'a> {
     /// Module path of the function being lowered (`""` at the root).
     current_module: String,
     /// While a name a meta template or the compiler wrote is resolved:
-    /// the module of its definition, whose scope and access it has
-    /// (spec 6.9.9).
+    /// the module of its definition, whose scope and access it has.
     access: std::cell::RefCell<Option<std::rc::Rc<str>>>,
     /// Block-scoped `use`s, one level per `push_scope`, searched before
     /// module uses.
     local_uses: Vec<Vec<crate::uses::UseEntry>>,
-    /// Per scope: nested fns (spec 4.10) by name → lifted fn key.
+    /// Per scope: nested fns by name → lifted fn key.
     nested_fns: Vec<HashMap<String, String>>,
     /// Or-pattern binders: name → preset local, so every alternative binds
-    /// `x` once with one type (spec 3.11.4).
+    /// `x` once with one type.
     or_pattern_binders: Vec<HashMap<String, LocalId>>,
     /// `f::<T, 3>(..)` arguments for the generic call being lowered,
     /// read by `monomorphize_on` (empty otherwise).
@@ -3142,24 +3141,24 @@ struct LowerCtx<'a> {
     /// escape it instead of reporting them.
     throws_probe: Option<Vec<HirTy>>,
     /// Lowering the body of `fn main() throws (E)`: an escaping error
-    /// ends the process (spec 4.16.3).
+    /// ends the process.
     uncaught_in_main: bool,
     /// Throwing calls lowered so far (a `try` covering none is
     /// pointless).
     throwing_calls: u32,
     /// Counter for synthesized labels and local names.
     next_synth: u32,
-    /// Narrowed rebinding (spec 2.2.6) → (original local, its type);
+    /// Narrowed rebinding → (original local, its type);
     /// assignments to the rebinding also store into the original.
     narrowed: HashMap<LocalId, (LocalId, HirTy)>,
     /// Narrowing of a `[ref]` cell → the read of its rebinding: each read
     /// tests the cell again, as a capture may have changed it.
     cell_views: HashMap<LocalId, HirExpr>,
-    /// Narrowings ended by assignment (spec 2.2.6): (name, rebinding, scope
+    /// Narrowings ended by assignment: (name, rebinding, scope
     /// index). Branches undo and rejoin them.
     unnarrowed: Vec<(String, LocalId, usize)>,
     /// Lock guards bound but not yet released by `using` (local, depth,
-    /// span, binder, type); an error when their scope ends (stdlib 2.16.3).
+    /// span, binder, type); an error when their scope ends.
     guard_lets: Vec<(LocalId, usize, Span, String, &'static str)>,
     /// Expressions (by address) where a guard may stay unreleased:
     /// initializers, assigned values, `return`, the body's value
@@ -3182,7 +3181,7 @@ struct LowerCtx<'a> {
     /// Lowering a coroutine body (`yield` / `await` are allowed).
     coro: Option<coro::CoroCtx>,
     /// Associated types of the enclosing trait / impl
-    /// (`ASSOC_TYPES_ATTR`): a bare `X` is `Self::X` (spec 2.8.3).
+    /// (`ASSOC_TYPES_ATTR`): a bare `X` is `Self::X`.
     assoc_names: Vec<String>,
     /// Lowering an unannotated `let`'s initializer or what follows for
     /// inference: open type parameters become inference variables
@@ -3375,7 +3374,7 @@ impl<'a> LowerCtx<'a> {
     }
 
     /// The module whose scope and access the name being resolved has:
-    /// its definition's for a name from a meta template (spec 6.9.9),
+    /// its definition's for a name from a meta template,
     /// else the current one.
     fn access_module(&self) -> AccessModule<'_> {
         match self.access.borrow().as_ref() {
@@ -3506,7 +3505,7 @@ impl<'a> LowerCtx<'a> {
         poison(span)
     }
 
-    /// An unknown name (spec 9.9.4 `resolve`), with an optional hint.
+    /// An unknown name, with an optional hint.
     fn unknown_name(
         &self,
         code: Code,
@@ -3519,7 +3518,7 @@ impl<'a> LowerCtx<'a> {
         let help = match self.access.borrow().as_deref() {
             Some(m) => Some(format!(
                 "the meta template that wrote this name looks it up in module `{}`; to look \
-                 it up where the meta block is used, write `@use_site(..)` around it (spec 6.9.9)",
+                 it up where the meta block is used, write `@use_site(..)` around it",
                 module_display(m)
             )),
             None => help,
@@ -3723,7 +3722,7 @@ impl<'a> LowerCtx<'a> {
     }
 
     /// A bare `name` that is only some enum's variant, with no expected
-    /// type to pick it (spec 5.7.1): the error and its help, naming the
+    /// type to pick it: the error and its help, naming the
     /// variant by its shortest path here.
     fn variant_not_in_scope(&self, name: &str) -> Option<(String, String)> {
         // Another language's spelling has its own help (`none`).
@@ -3969,7 +3968,7 @@ impl<'a> LowerCtx<'a> {
             .unwrap_or_else(|| full.to_owned())
     }
 
-    /// The item bound to lang slot `slot` (spec 6.4), `""` if unbound.
+    /// The item bound to lang slot `slot`, `""` if unbound.
     fn lang(&self, slot: &str) -> &'a str {
         self.env.names.lang_item(slot)
     }
@@ -4004,7 +4003,7 @@ impl<'a> LowerCtx<'a> {
                 if trait_key == DEFAULT_TRAIT {
                     return vs.iter().any(HirTy::is_none);
                 }
-                // No order across two value terms (spec 2.6.4).
+                // No order across two value terms.
                 if expr::is_order_trait(self, trait_key) && expr::sum_value_terms(ty) > 1 {
                     return false;
                 }
@@ -4080,8 +4079,7 @@ impl<'a> LowerCtx<'a> {
             HirTy::Tuple(ts) | HirTy::Sum(ts) => ts.iter().all(&mut rec),
             HirTy::Array(e, _) | HirTy::GcBuf(e) => rec(e),
             // A closure crossing threads shares its captures with the
-            // creator, so each must be `Sync` too; a `[ref x]` cell never is
-            // (spec 4.6.9).
+            // creator, so each must be `Sync` too; a `[ref x]` cell never is.
             HirTy::Closure { env, shares, .. } => {
                 let sync = self.lang("sync_trait");
                 !shares
@@ -4184,7 +4182,7 @@ impl<'a> LowerCtx<'a> {
                 }
                 if base == "rok::bare::gc::Weak" && key == self.lang("send_trait") {
                     return " (a hand-off cannot copy what a `Weak` names, so it stays with its \
-                            thread: send the `GcPtr`; stdlib 2.13.9)"
+                            thread: send the `GcPtr`)"
                         .to_owned();
                 }
                 if self.env.opts_out(base, key) {
@@ -4225,8 +4223,8 @@ impl<'a> LowerCtx<'a> {
             HirTy::Array(e, _) | HirTy::GcBuf(e) => step("an element".to_owned(), e),
             HirTy::AnyTrait(_) if key == self.lang("send_trait") => " (an `any` crosses \
                  threads only when its bound has both `Send` and `Sync`, since copies share \
-                 its box: give the trait `Sync` as a supertrait, or send the concrete type; \
-                 stdlib 2.13.9)"
+                 its box: give the trait `Sync` as a supertrait, or send the concrete \
+                 type)"
                 .to_owned(),
             _ => String::new(),
         }
@@ -4292,7 +4290,7 @@ impl<'a> LowerCtx<'a> {
         })
     }
 
-    /// Does an impl give `ty` trait `want` (spec 2.9): a concrete one, or a
+    /// Does an impl give `ty` trait `want`: a concrete one, or a
     /// covering generic one (`generic_impls`)? All impl questions go
     /// through here, `concrete_impls` and `generic_impls`.
     fn has_impl(&self, ty: &HirTy, want: &TraitRef, depth: u32) -> bool {
@@ -4578,7 +4576,7 @@ impl<'a> LowerCtx<'a> {
     }
 
     /// A `char` const parameter takes a `char` argument, any other an
-    /// integer or `bool` (spec 2.11.3).
+    /// integer or `bool`.
     fn check_const_args(&self, generics: &rokc_ast::Generics, args: &[HirTy]) -> Option<()> {
         for (gp, arg) in generics.params.iter().zip(args) {
             if let (rokc_ast::GenericParam::Const { name, ty }, Some(v)) = (gp, arg.as_const()) {
@@ -4695,7 +4693,7 @@ impl<'a> LowerCtx<'a> {
     }
 
     /// Resolve a function path across concrete and generic functions, so
-    /// the nearest declaration wins (spec 5.7: own items, `use`s, core).
+    /// the nearest declaration wins (own items, `use`s, core).
     fn resolve_any_fn(&self, segments: &[&str]) -> Option<String> {
         let env = self.env;
         // A hook lowering calls (`expr::lang_fn`): its slot's item, else
@@ -4734,7 +4732,7 @@ impl<'a> LowerCtx<'a> {
             &set,
         ) {
             Ok(r) => r,
-            // An item and its re-exports are one item (spec 5.8.4).
+            // An item and its re-exports are one item.
             Err(mut hits) => {
                 let item = |k: &String| {
                     (
@@ -4818,7 +4816,7 @@ impl<'a> LowerCtx<'a> {
                 Code::PRIVATE_ITEM,
                 format!(
                     "{what} `{full}` is `pub(pkg)`: visible only inside its package \
-                     `{}` (spec 5.6.4)",
+                     `{}`",
                     module_display(package_of(&def_module))
                 ),
             );
@@ -4843,7 +4841,7 @@ impl<'a> LowerCtx<'a> {
                 Code::PRIVATE_ITEM,
                 format!(
                     "{what} `{full}` is `pub(sub)`: visible only in module `{}` and its \
-                     descendants, not from `{}` (spec 5.6.5)",
+                     descendants, not from `{}`",
                     module_display(&def_module),
                     module_display(&from)
                 ),
@@ -4858,7 +4856,7 @@ impl<'a> LowerCtx<'a> {
             Code::PRIVATE_ITEM,
             format!(
                 "{what} `{full}` is private to module `{}` and cannot be used from `{}` \
-                 (spec 5.6 - add `pub` to expose it)",
+                 (add `pub` to expose it)",
                 module_display(&def_module),
                 module_display(&from)
             ),
@@ -4907,7 +4905,7 @@ impl<'a> LowerCtx<'a> {
             let fix = if getter {
                 format!("read it with `.{field}()`")
             } else {
-                "spec 5.6 - add `pub` to the field to expose it".to_owned()
+                "add `pub` to the field to expose it".to_owned()
             };
             self.emit_error(
                 Code::PRIVATE_ITEM,
@@ -4954,8 +4952,8 @@ impl<'a> LowerCtx<'a> {
         }
     }
 
-    /// A use at `at` of `name`, a `what` with marks `mark` (spec 6.2.7,
-    /// 6.2.14, 6.2.16): an error for an `internal` one, else a `deprecated`
+    /// A use at `at` of `name`, a `what` with marks `mark`: an
+    /// error for an `internal` one, else a `deprecated`
     /// warning, and outside `unsafe` a `deprecated_safe` one. Only the
     /// built package's own uses are checked.
     fn use_marked(&self, what: &str, name: &str, mark: &crate::marks::Mark, at: Span) {
@@ -4963,7 +4961,7 @@ impl<'a> LowerCtx<'a> {
             return;
         }
         // Code a toolchain template or the compiler wrote is checked
-        // where it is defined (spec 6.9.9).
+        // where it is defined.
         let name = &shown_mark_name(name);
         if let Some(note) = mark
             .internal
@@ -4981,7 +4979,7 @@ impl<'a> LowerCtx<'a> {
                 at,
                 format!(
                     "{what} `{name}` is internal to the Rok toolchain: only `rok::bare`, \
-                     `rok::core` and `rok::std` may use it (spec 6.2.16)"
+                     `rok::core` and `rok::std` may use it"
                 ),
             )
             .with_note(help);
@@ -5062,7 +5060,7 @@ impl<'a> LowerCtx<'a> {
         t
     }
 
-    /// Spec 2.11.4 / 2.11.5: a compile-time integer (literal, const
+    /// A compile-time integer (literal, const
     /// parameter, or const expression via `const_eval`).
     fn eval_const(&self, c: &rokc_ast::ConstExpr) -> Option<i128> {
         self.eval_const_msg(c).ok()
@@ -5073,7 +5071,7 @@ impl<'a> LowerCtx<'a> {
     }
 
     /// A const argument's value, tagged `char` when it is one (a `char`
-    /// const parameter takes only a `char`, spec 2.11.3).
+    /// const parameter takes only a `char`).
     fn eval_const_arg(&self, c: &rokc_ast::ConstExpr) -> Result<(i128, Option<PrimTy>), String> {
         let not_int = || "not an integer".to_owned();
         let e = match c {
@@ -5133,7 +5131,7 @@ impl<'a> LowerCtx<'a> {
             }
             return None;
         }
-        // Spec 2.11.5: `[T; N]`, `[T; M * N]`, `[T; f(N)]`.
+        // `[T; N]`, `[T; M * N]`, `[T; f(N)]`.
         let n = self
             .eval_const_msg(len)
             .and_then(|v| u32::try_from(v).map_err(|_| format!("length {v} is out of range")));
@@ -5153,7 +5151,7 @@ impl<'a> LowerCtx<'a> {
                 self.emit_error(
                     Code::CONST_EVAL,
                     format!(
-                        "array length must be a compile-time integer (spec 2.11.5): \
+                        "array length must be a compile-time integer: \
                              {why}"
                     ),
                 );
@@ -5163,8 +5161,8 @@ impl<'a> LowerCtx<'a> {
     }
 
     fn resolve_ty_inner(&self, ty: &rokc_ast::Ty) -> HirTy {
-        // A type path names what the module it comes from sees (spec
-        // 6.9.9); its arguments carry their own origins.
+        // A type path names what the module it comes from sees;
+        // its arguments carry their own origins.
         let origin = match &ty.kind {
             AstTyKind::Path(p) => p.origin.as_deref(),
             _ => None,
@@ -5241,7 +5239,7 @@ impl<'a> LowerCtx<'a> {
                             }
                         }
                         // A `const` item as a const generic argument
-                        // (`Grid<W, 3>`, spec 2.11.4).
+                        // (`Grid<W, 3>`).
                         if self.canon_type(&[seg.name.as_str()]).is_none()
                             && self.resolve_in(&[seg.name.as_str()], false).is_some()
                         {
@@ -5340,7 +5338,7 @@ impl<'a> LowerCtx<'a> {
                         Code::INVALID_CONST_ARGUMENT,
                         format!(
                             "a const generic argument must be a compile-time integer, \
-                                 `bool` or `char` (spec 2.11.4): {why}"
+                                 `bool` or `char`: {why}"
                         ),
                     );
                     HirTy::Unknown
@@ -5357,7 +5355,7 @@ impl<'a> LowerCtx<'a> {
         }
     }
 
-    /// `<T as Tr>::X` (spec 2.13.4): only `Tr`'s `X`.
+    /// `<T as Tr>::X`: only `Tr`'s `X`.
     fn qpath_ty(&self, q: &rokc_ast::QPath) -> HirTy {
         let base = self.resolve_ty_inner(&q.self_ty);
         let tp = &q.trait_path;
@@ -5387,7 +5385,7 @@ impl<'a> LowerCtx<'a> {
         self.project_or_report(&base, &q.item, Some(&[key]), &[want], true)
     }
 
-    /// `T::Item` / `List<i32>::IntoIter` (spec 2.1, 2.13), resolved once the
+    /// `T::Item` / `List<i32>::IntoIter`, resolved once the
     /// prefix is concrete; an unbound parameter prefix stays opaque
     /// (`J::Item`). `None`: not a projection.
     fn projection(&self, p: &AstPath) -> Option<HirTy> {
@@ -5561,7 +5559,7 @@ impl<'a> LowerCtx<'a> {
                 Code::AMBIGUOUS_ITEM,
                 format!(
                     "associated type `{}::{name}` is ambiguous: impls define it as {} - name \
-                     the trait (`<T as Tr>::{name}`, spec 2.13.4)",
+                     the trait (`<T as Tr>::{name}`)",
                     self.ty_name(base),
                     names.join(", ")
                 ),
@@ -5689,7 +5687,7 @@ impl<'a> LowerCtx<'a> {
                     Code::OR_PATTERN_BINDINGS,
                     format!(
                         "or-pattern binding `{name}` has inconsistent types across \
-                         alternatives (`{}` and `{}`, spec 3.11.4); to bind either as \
+                         alternatives (`{}` and `{}`); to bind either as \
                          their sum, write one type pattern: `{name}: {} | {}`",
                         self.ty_name(&existing),
                         self.ty_name(&ty),
@@ -5780,7 +5778,7 @@ impl<'a> LowerCtx<'a> {
     }
 
     /// `fn_table[key]`, with a return type inferred from the body when
-    /// the declaration omits it (spec 4.1.3).
+    /// the declaration omits it.
     fn sig_of_key(&self, key: &str) -> FnSig {
         let mut sig = self.env.sig(key).expect("a signature").clone();
         if self.env.infers_ret(sig.id) {
@@ -5812,7 +5810,7 @@ impl<'a> LowerCtx<'a> {
                 format!(
                     "`{binder}` holds a `{guard}` that is never released: only `using` \
                      releases a lock guard, so bind it with `using {binder} = .. {{ .. }}` \
-                     (stdlib 2.16.3)"
+                    "
                 ),
             );
         }
@@ -5991,7 +5989,7 @@ fn shown_mark_name(name: &str) -> String {
     }
 }
 
-/// Spec 2.11.5: a const argument's arithmetic has no comparisons and no
+/// A const argument's arithmetic has no comparisons and no
 /// conditionals.
 fn const_arg_shape(e: &Expr) -> Result<(), String> {
     match &e.kind {
@@ -6002,7 +6000,7 @@ fn const_arg_shape(e: &Expr) -> Result<(), String> {
             if !matches!(op.as_str(), "+" | "-" | "*" | "/" | "%") {
                 return Err(format!(
                     "`{op}` is not allowed: only `+`, `-`, `*`, `/`, `%` and unary `-` \
-                     (spec 2.11.5)"
+                    "
                 ));
             }
             const_arg_shape(lhs)?;
@@ -6010,16 +6008,13 @@ fn const_arg_shape(e: &Expr) -> Result<(), String> {
         }
         ExprKind::OpPrefix { op, operand } => {
             if op != "-" {
-                return Err(format!(
-                    "`{op}` is not allowed: only unary `-` (spec 2.11.5)"
-                ));
+                return Err(format!("`{op}` is not allowed: only unary `-`"));
             }
             const_arg_shape(operand)
         }
-        ExprKind::If { .. } | ExprKind::Match { .. } => Err(
-            "conditionals are not allowed (spec 2.11.5); compute the value in a `const fn`"
-                .to_owned(),
-        ),
+        ExprKind::If { .. } | ExprKind::Match { .. } => {
+            Err("conditionals are not allowed; compute the value in a `const fn`".to_owned())
+        }
         _ => Ok(()),
     }
 }

@@ -4,7 +4,7 @@
 // 404
 // 1
 
-// 3.14.4: `catch HttpError { code, msg } { .. }` - a struct pattern
+// `catch HttpError { code, msg } { .. }` - a struct pattern
 // when a second block follows; it covers the error type.
 #[derive(Debug)]
 struct HttpError { code: i32; msg: str; }
@@ -24,4 +24,3 @@ fn main() {
     let m = try get(false) catch e { e.code };
     println(f"{m}");
 }
-// spec: §3.14.4

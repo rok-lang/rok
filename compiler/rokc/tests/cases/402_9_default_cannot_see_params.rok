@@ -1,7 +1,6 @@
-// spec: §4.2.9
-// expect-error: 6:23: cannot find value `a` in this scope
+// expect-error: 5:23: cannot find value `a` in this scope
 
-// Spec 4.2.9: a default is evaluated without the parameters, so it
+// A default is evaluated without the parameters, so it
 // cannot name another parameter.
 fn f(a: i32, b: i32 = a + 1) -> i32 { a + b }
 

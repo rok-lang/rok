@@ -34,4 +34,3 @@ fn main() -> i32 {
     return s1.x + s1.y + s2.x + s2.y;
 }
 
-// spec: 002.06-sum-types

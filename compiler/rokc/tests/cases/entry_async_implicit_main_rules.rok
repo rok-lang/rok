@@ -4,7 +4,7 @@
 // expect-stdout:
 // 1
 
-// spec 4.16.4 / 4.16.5: an async implicit `main` is `async fn main()
+// An async implicit `main` is `async fn main()
 // throws` - a top-level `try await` error escapes the entry (exit 1).
 struct Bad { n: i32; }
 impl Display for Bad { fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"bad {self.n}") } }
@@ -21,4 +21,3 @@ println(f"{a}");
 let b = try await f(7);
 println(f"{b}");
 
-// spec: 004.16-entry-point

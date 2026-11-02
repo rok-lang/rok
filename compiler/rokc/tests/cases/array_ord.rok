@@ -1,4 +1,3 @@
-// spec: std §2.5.7
 // expect-exit: 0
 // expect-stdout:
 // lt: true false false true
@@ -8,7 +7,7 @@
 // max: 1 0
 
 // `PartialOrd` / `Ord` for `[T; N]`: lexicographic, like `List` and
-// tuples (stdlib 2.5.7).
+// tuples.
 fn name(o: Ordering) -> str {
     match o { Ordering::Less => "Less", Ordering::Equal => "Equal", Ordering::Greater => "Greater" }
 }

@@ -22,4 +22,3 @@ fn main() {
         println(f"{c.meta[1]}");
     }
 }
-// spec: std §2.9.12

@@ -1,5 +1,4 @@
-//! The built-in targets: spec 0.6.1's Tier 1, then 0.6.2's targets
-//! without a guarantee.
+//! The built-in targets: Tier 1, then the targets without a guarantee.
 
 use crate::{CAbi, Libc, Linker, ObjectFormat, StackProbes, TargetSpec};
 
@@ -27,7 +26,7 @@ pub const BUILTIN: &[&str] = &[
 ];
 
 /// rok's thread stack: 8 MiB, as Linux's default rlimit and macOS give
-/// the main thread (nested `await` runs on it, 7.8.10).
+/// the main thread (nested `await` runs on it).
 const STACK: u64 = 8 << 20;
 
 const X86_64_ELF: &str =
@@ -141,7 +140,7 @@ fn aarch64(t: TargetSpec) -> TargetSpec {
     })
 }
 
-/// i686: SSE2 (spec 0.6.4).
+/// i686: SSE2.
 fn i686(t: TargetSpec) -> TargetSpec {
     TargetSpec {
         arch: s("x86"),
@@ -205,7 +204,7 @@ fn wasm32(name: &str, rust_target: &str) -> TargetSpec {
         pointer_width: 32,
         c_abi: CAbi::Wasm32,
         data_layout: s(WASM32),
-        // SIMD128 (spec 0.6.4).
+        // SIMD128.
         features: s("+simd128"),
         object_format: ObjectFormat::Wasm,
         linker: Linker::WasmLd,
@@ -251,7 +250,7 @@ pub fn spec(name: &str) -> Option<TargetSpec> {
             pointer_width: 32,
             c_abi: CAbi::ArmHf,
             data_layout: s("e-m:e-p:32:32-Fi8-i64:64-v128:64:128-a:0:32-n32-S64"),
-            // NEON (spec 0.6.4); the thread pointer from TPIDRURO, not
+            // NEON; the thread pointer from TPIDRURO, not
             // glibc's `__aeabi_read_tp` (in ld.so).
             features: s("+vfp3,+d32,+neon,+read-tp-tpidruro"),
             ..linux_gnu(name, "arm", "armelf_linux_eabi", "/lib/ld-linux-armhf.so.3")
@@ -298,7 +297,7 @@ pub fn spec(name: &str) -> Option<TargetSpec> {
         },
         "i686-pc-windows-msvc" => {
             let mut t = i686(windows(name, "x86", "x86"));
-            // 4 GiB address space on 64-bit Windows (the heap, spec 0.6.3),
+            // 4 GiB address space on 64-bit Windows (the heap),
             // no SafeSEH: rok raises no SEH and the runtime's handler is
             // vectored.
             t.pre_link_args
@@ -349,7 +348,7 @@ pub fn spec(name: &str) -> Option<TargetSpec> {
             profile_runtime: s(""),
             ..wasm32(name, "wasm32-wasip1")
         },
-        // Spec 0.6.1: Tier 1.
+        // Tier 1.
         "riscv64gc-unknown-linux-gnu" => TargetSpec {
             llvm_target: s("riscv64-unknown-linux-gnu"),
             c_abi: CAbi::Riscv64,
@@ -364,7 +363,7 @@ pub fn spec(name: &str) -> Option<TargetSpec> {
                 "/lib/ld-linux-riscv64-lp64d.so.1",
             )
         },
-        // Spec 0.6.2: no guarantee.
+        // No guarantee.
         "powerpc64le-unknown-linux-gnu" => TargetSpec {
             data_layout: s("e-m:e-Fn32-i64:64-i128:128-n32:64-S128-v256:256:256-v512:512:512"),
             cpu: s("ppc64le"),

@@ -62,5 +62,3 @@ fn main() throws (IoError) {
     try fs::remove_file(q);
 }
 
-// spec: std 223-io
-// spec: std 223-io §2.23.6 §2.23.9

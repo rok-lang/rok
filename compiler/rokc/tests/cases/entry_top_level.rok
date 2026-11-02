@@ -5,7 +5,7 @@
 // 2
 // 30
 
-// spec 4.16.2: top-level statements form the implicit `main`, in
+// Top-level statements form the implicit `main`, in
 // source order; items are visible regardless of their position.
 let n = 3;
 for i in 0..n {
@@ -24,4 +24,3 @@ fn sum(k: i32) -> i32 {
     return k;
 }
 
-// spec: 004.16-entry-point

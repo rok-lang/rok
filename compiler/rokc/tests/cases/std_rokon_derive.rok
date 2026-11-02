@@ -168,5 +168,3 @@ Config {
     println(f"{pb == pd}");
 }
 
-// spec: std 309-rokon
-// spec: std 309-rokon §3.9.2 §3.9.5

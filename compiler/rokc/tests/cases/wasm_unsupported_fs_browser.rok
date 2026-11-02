@@ -1,4 +1,3 @@
-// spec: std 301
 // only-target: wasm32-unknown-unknown
 // expect-exit: 0
 // expect-stdout:
@@ -8,8 +7,8 @@
 // read_dir: Unsupported
 // exists: false
 
-// A browser has no file system (stdlib 300 README: `rok::std::fs` ✗ on
-// wasm32): every call reports `IoErrorKind::Unsupported` at run time.
+// A browser has no file system (`rok::std::fs` is
+// missing on wasm32): every call reports `IoErrorKind::Unsupported` at run time.
 use rok::std::fs;
 use rok::core::io::{IoError, IoErrorKind};
 
@@ -18,4 +17,3 @@ try fs::read_to_str("/data.txt") catch e: IoError { println(f"read: {e.kind():?}
 try fs::create_dir("/d") catch e: IoError { println(f"create_dir: {e.kind():?}"); };
 try fs::read_dir("/") catch e: IoError { println(f"read_dir: {e.kind():?}"); };
 println(f"exists: {fs::exists("/data.txt")}");
-// spec: std 301-fs §3.1.6

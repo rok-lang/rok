@@ -1,4 +1,3 @@
-// spec: 008.06-calling-convention §8.6.6
 // gc-stress: 3
 // expect-exit: 0
 // expect-stdout:
@@ -8,7 +7,7 @@
 // 107 1 0 122 101
 // 6 6 [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
-// 8.6.6: an aggregate over 64 bytes moves through memory (copies,
+// An aggregate over 64 bytes moves through memory (copies,
 // fields, arguments, results, GC objects, statics), never as one SSA
 // value: a struct holding a 4 KiB array, a 16 KiB static, a 128-byte
 // byte string local (one copy from constant data).

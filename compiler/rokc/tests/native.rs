@@ -122,7 +122,7 @@ extern "C" {
     fn cb_d4(f: fn(D4) -> f64) -> f64;
     fn cb_small(f: fn(Small) -> Small) -> Small;
     fn call_rok_mix() -> f64;
-    // C function pointers as values (spec 5.9.4).
+    // C function pointers as values.
     fn get_v3_scale() -> extern "C" fn(V3, f32) -> V3;
     fn get_rev() -> extern "C" fn(Big) -> Big;
     fn cb_big2(f: extern "C" fn(Big) -> Big) -> i64;
@@ -134,7 +134,7 @@ extern "C" {
     fn ult(a: u32, b: u32) -> i32;
 }
 
-// C calls these (spec 5.9.10): aggregates the C way both ways.
+// C calls these: aggregates the C way both ways.
 extern "C" fn scale_v3(v: V3, k: f32) -> V3 { V3 { x: v.x * k, y: v.y * k, z: v.z * k } }
 extern "C" fn rev_big(b: Big) -> Big { Big { a: b.c, b: b.b, c: b.a } }
 extern "C" fn sum_d4(d: D4) -> f64 { d.a + d.b + d.c + d.d }
@@ -228,7 +228,6 @@ fn main() {
 /// Runaway recursion on the main thread, a spawned thread and through
 /// nested `await`s: the runtime reports it (after flushing stdout) and
 /// aborts, instead of a bare SIGSEGV.
-// spec: §3.14.8
 #[test]
 fn stack_overflow_is_reported() {
     let Some(env) = setup() else { return };
@@ -384,10 +383,9 @@ fn main() {
 struct P { x: i32; y: f64; }
 ";
 
-/// `-g` (spec 9.9.6), both back ends: a subprogram named by the rok
+/// `-g`, both back ends: a subprogram named by the rok
 /// path with its parameters and locals, and a line table pointing into
 /// the `.rok`; `llvm-dwarfdump --verify` finds no error.
-// spec: §0.2.4 §9.2.11 §9.5.10
 #[test]
 fn debug_info_names_functions_lines_and_locals() {
     let Some(env) = setup() else { return };
@@ -417,10 +415,9 @@ fn debug_info_names_functions_lines_and_locals() {
     }
 }
 
-/// `-g`, both back ends: an item declared in a function body (spec
-/// 3.9.1) and its method and `static` read as written, not by their
+/// `-g`, both back ends: an item declared in a function body
+/// and its method and `static` read as written, not by their
 /// lifted names.
-// spec: §3.9.1
 #[test]
 fn debug_info_names_block_local_items() {
     let Some(env) = setup() else { return };
@@ -1088,7 +1085,6 @@ fn elf_debug_info_of_several_objects() {
 
 /// `-O0` puts each function in its own section, so unused prebuilt code
 /// is dropped at link time.
-// spec: §9.2.14
 #[test]
 fn unused_dependency_code_is_dropped() {
     if setup().is_none() {
@@ -1275,8 +1271,8 @@ fn c_fn_ptr_null_niche() {
     );
 }
 
-/// Ten arguments, `str`s past the last argument register. Runtime ABI
-/// (spec 8.5): a `str` is a by-value `(ptr, len)` struct, never split
+/// Ten arguments, `str`s past the last argument register. Runtime ABI:
+/// a `str` is a by-value `(ptr, len)` struct, never split
 /// between the last register and the stack. C ABI: a `char*`.
 const PAIRS_C: &str = r"
 #include <string.h>
@@ -1374,7 +1370,7 @@ fn ten_argument_calls_with_strs() {
     );
 }
 
-/// `#[repr(..)]` layouts against clang's (spec 6.2.2).
+/// `#[repr(..)]` layouts against clang's.
 const REPR_C: &str = r"
 #include <stddef.h>
 typedef struct { char a; int b; char c; } C1;
@@ -1499,7 +1495,6 @@ fn repr_layouts_match_clang() {
     }
 }
 
-// spec: §9.3.7
 #[test]
 fn c_abi_matches_clang() {
     let Some(env) = setup() else { return };
@@ -1634,7 +1629,7 @@ fn c_abi_matches_clang() {
     }
 }
 
-/// A by-address aggregate (spec 8.6.6) is copied with its alignment:
+/// A by-address aggregate is copied with its alignment:
 /// copies of unknown alignment become byte loads and stores where
 /// unaligned accesses are slow (RISC-V without fast misaligned access).
 #[test]
@@ -1674,8 +1669,7 @@ fn by_address_copies_keep_their_alignment() {
 }
 
 /// `#[link(..)]` on an `extern` block puts the library on the link
-/// line (spec 6.2.3); `LIBRARY_PATH` is the C driver's search path.
-// spec: §9.2.14
+/// line; `LIBRARY_PATH` is the C driver's search path.
 #[test]
 fn link_attribute_links_the_library() {
     let Some(env) = setup() else { return };
@@ -1737,7 +1731,6 @@ fn main() -> i32 {
 /// call attaches the thread, enough allocation to collect runs, and the
 /// threads leave the registry when they end (the second round collects
 /// with them gone).
-// spec: §8.3.8
 #[test]
 fn foreign_thread_callback_allocates() {
     let Some(env) = setup() else { return };
@@ -1901,7 +1894,6 @@ fn main() -> i32 {
 /// `-l` links a library the source does not name; `--native-runtime`
 /// copies a shared library beside the executable, which then loads it
 /// from its own directory (rpath `@loader_path` / `$ORIGIN`).
-// spec: §9.1.2 §9.2.14
 #[cfg(unix)]
 #[test]
 fn link_flags_and_runtime_files() {
@@ -2127,7 +2119,6 @@ fn pe_header(exe: &[u8]) -> (u16, u16, bool) {
 
 /// Windows executables from this host without an SDK; run under
 /// `ROK_TEST_WINE` where given.
-// spec: §9.2.14 §9.5.9
 #[test]
 fn windows_executables() {
     let Some(env) = setup() else { return };
@@ -2523,7 +2514,7 @@ fn main() -> i32 {{
 }
 
 /// `print` / `println` take any `Display` value and default the argument to
-/// the empty string, so `println()` writes a blank line (0.1.1, #1 / #2).
+/// the empty string, so `println()` writes a blank line.
 const PRINTING: &str = "fn main() {
     println(\"line\");
     println(42);

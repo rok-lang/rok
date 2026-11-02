@@ -89,5 +89,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 003.14-error-control-flow
-// spec: std §2.14.6

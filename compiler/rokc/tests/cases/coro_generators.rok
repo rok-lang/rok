@@ -1,4 +1,3 @@
-// spec: §4.11.1 §4.11.3
 // expect-exit: 0
 // expect-stdout:
 // sum 10
@@ -17,7 +16,7 @@
 // 7 14 
 // 0 10 20 
 
-// Generators (spec 4.11): `yield fn` in loops / if / match, early
+// Generators: `yield fn` in loops / if / match, early
 // `return`, infinite generators, methods, adapters, `yield { }` blocks
 // and `yield ||` closures.
 extern "C" {

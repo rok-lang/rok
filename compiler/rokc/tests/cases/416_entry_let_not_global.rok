@@ -1,7 +1,6 @@
-// spec: 004.16-entry-let-not-global
 // expect-error: cannot find value `limit`
 
-// spec 4.16.2: a top-level `let` is a local of the implicit `main`, not
+// A top-level `let` is a local of the implicit `main`, not
 // visible inside item bodies.
 let limit = 3;
 check();

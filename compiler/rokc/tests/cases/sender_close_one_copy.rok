@@ -3,7 +3,6 @@
 // 10 20
 // none
 
-// spec: std 217-channel §2.17.3
 
 // `close()` closes that sender only; the channel ends with the last one.
 

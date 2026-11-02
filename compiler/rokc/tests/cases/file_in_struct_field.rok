@@ -3,7 +3,6 @@
 // expect-stdout:
 // log: one two
 
-// spec: std 213-marker §2.13.4
 
 // A struct holding a `File` must be closed too; its own `close` closes
 // the field (a struct whose close can fail implements `io::Close`).

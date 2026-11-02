@@ -8,4 +8,3 @@ extern "C" fn f(x: i32) -> i32 { x }
 fn main() {
     println(f"{f(1)}");
 }
-// spec: §6.2.12

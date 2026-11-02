@@ -1,4 +1,3 @@
-// spec: std 209-collections §2.9.2
 // expect-exit: 0
 // expect-stdout:
 // true false
@@ -6,7 +5,7 @@
 // clone independent: [1, 2] [1, 2, 3]
 // [0, 1, 2, 3, 4]
 
-// spec 2.9.2 trait table: `PartialEq` element-wise, `Ord` lexicographic,
+// Trait table: `PartialEq` element-wise, `Ord` lexicographic,
 // `Clone` is a deep copy, `FromIterator` (`(0..5).collect::<List<i32>>()`).
 fn main() {
     let a: List<i32> = [1, 2, 3];

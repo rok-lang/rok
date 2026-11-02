@@ -1,4 +1,3 @@
-// spec: 004.14.6-try-marks-throwing-call
 // A call to a throwing function must sit under `try`; no unmarked propagation.
 // expect-error: must be marked with `try`
 

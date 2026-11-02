@@ -27,7 +27,7 @@ pub struct Sig {
     pub sym: SymId,
     pub params: Vec<MirTy>,
     pub ret: MirTy,
-    /// A C declaration: its C lowering (spec 8.6).
+    /// A C declaration: its C lowering.
     pub c: Option<FnAbi>,
     /// An `extern "C" fn` definition: its C ABI entry.
     pub c_entry: Option<SymId>,
@@ -297,7 +297,7 @@ impl<'c, 'a> FnLower<'c, 'a> {
         s
     }
 
-    /// Slot `slot` of this thread's TLS block `rok_tls` (803 §8.3.1):
+    /// Slot `slot` of this thread's TLS block `rok_tls`:
     /// the block's address is taken once, in the prologue.
     fn tls(&mut self, slot: tls_abi::Slot) -> Mem {
         let out = &mut self.out;
@@ -373,7 +373,7 @@ impl<'c, 'a> FnLower<'c, 'a> {
         });
     }
 
-    /// Safepoint poll (804 §8.4.1): `rok_runtime_yield` when this
+    /// Safepoint poll: `rok_runtime_yield` when this
     /// thread's yield flag is set.
     fn poll(&mut self) {
         let flag = self.tls(tls_abi::YIELD_FLAG);
@@ -395,7 +395,7 @@ impl<'c, 'a> FnLower<'c, 'a> {
         self.push(Inst::Label(run));
     }
 
-    /// Into (`enter`) or out of a C call (804 §8.4.10).
+    /// Into (`enter`) or out of a C call.
     fn native_edge(&mut self, enter: bool) {
         let (state, slow) = if enter {
             (2, "rok_enter_native")
@@ -892,8 +892,8 @@ impl<'c, 'a> FnLower<'c, 'a> {
     }
 
     /// Call a runtime function codegen uses itself: `call_sym`, with `str`
-    /// passed as a pointer to a copy on Windows x64 (8.6.3,
-    /// `abi::classify_rok`).
+    /// passed as a pointer to a copy on Windows x64
+    /// (`abi::classify_rok`).
     fn call_runtime(
         &mut self,
         sym: SymId,
@@ -943,7 +943,7 @@ impl<'c, 'a> FnLower<'c, 'a> {
         }
     }
 
-    /// Shapes of a rok signature (8.6.6): by-address arguments are pointer
+    /// Shapes of a rok signature: by-address arguments are pointer
     /// words; a by-address result comes through a leading pointer (`true`).
     fn rok_shapes(
         &self,
@@ -1367,7 +1367,7 @@ impl<'c, 'a> FnLower<'c, 'a> {
         obj
     }
 
-    /// Write barrier (704 §7.4.2) before storing a reference into `obj` at
+    /// Write barrier before storing a reference into `obj` at
     /// address `slot` (both word slots), `len` bytes.
     fn write_barrier(&mut self, obj: Slot, slot: Slot, len: u32) {
         let w = self.word();
@@ -1561,7 +1561,7 @@ impl<'c, 'a> FnLower<'c, 'a> {
         rokc_codegen_mlir::emit::body_safepoints(self.f, self.c.quiet, self.c.pkgs, self.c.t)
     }
 
-    /// The shadow-stack frame (704 §7.4.1), as `emit_gc_frame` decides it.
+    /// The shadow-stack frame, as `emit_gc_frame` decides it.
     fn gc_frame(&mut self) {
         if self.back_edges.is_empty() && !self.reaches_safepoint() {
             return;
@@ -1860,7 +1860,7 @@ impl<'c, 'a> FnLower<'c, 'a> {
                     return;
                 }
                 let dst = self.local_mem(*target);
-                // A callee may build a by-address result (8.6.6) as it
+                // A callee may build a by-address result as it
                 // goes: a local a pointer may read gets it once done.
                 if let Some(d) = dst.filter(|_| {
                     self.addressed.contains(target)

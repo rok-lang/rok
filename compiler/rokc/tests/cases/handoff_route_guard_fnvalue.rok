@@ -1,6 +1,5 @@
 // needs: threads
-// expect-error: 10:31: `g.get()` is a view of what the `Mutex` behind `g` protects, and `keep` keeps it past the call
-// spec: std 213-marker §2.13.9
+// expect-error: 9:31: `g.get()` is a view of what the `Mutex` behind `g` protects, and `keep` keeps it past the call
 // A guarded value given to a fn value that stores it in a captured list.
 use rok::std::thread;
 static M: Mutex<List<i32>> = Mutex::new([]);

@@ -1,7 +1,6 @@
-// spec: §2.13.5 §2.1.4
-// expect-error: 11:17: cannot find type `Nope` in this scope
-// expect-error: 12:17: cannot find type `Nope2` in this scope
-// expect-error: 13:14: cannot find type `Nope3` in this scope
+// expect-error: 10:17: cannot find type `Nope` in this scope
+// expect-error: 11:17: cannot find type `Nope2` in this scope
+// expect-error: 12:14: cannot find type `Nope3` in this scope
 
 // An unknown type in a turbofish or in generic arguments is named where
 // it is written, not as the outer generic type.

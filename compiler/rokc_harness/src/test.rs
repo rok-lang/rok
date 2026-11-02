@@ -1,4 +1,4 @@
-//! The `rok test` runner (spec 9.1).
+//! The `rok test` runner.
 //!
 //! Each `#[test]` runs in its own process so a panic or crash fails only
 //! that test; a thread pool runs them in parallel. The compiler-built

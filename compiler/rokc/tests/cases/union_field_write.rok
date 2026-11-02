@@ -3,7 +3,7 @@
 // 7
 // 1065353216
 
-// Spec 2.5.2: writing a union field is safe and rebuilds the union from
+// Writing a union field is safe and rebuilds the union from
 // that field; reading reinterprets the bits (in `unsafe`).
 union Bits { i: i32; f: f32; }
 
@@ -19,6 +19,4 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 002.05-union
 
-// spec: §2.5.1 §2.5.2 §2.5.3

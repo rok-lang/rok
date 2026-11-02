@@ -1,8 +1,6 @@
-// spec: refs-lang §2.4.4
-// spec: 005.06.9-variant-visibility
 // expect-error: is private to module
 
-// spec 5.6.9: a variant follows its enum's visibility - a private enum's
+// A variant follows its enum's visibility - a private enum's
 // variants can't be named outside its module, even through `use`.
 mod shapes {
     enum Shape { Dot(i32), Line }

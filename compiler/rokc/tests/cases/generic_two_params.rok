@@ -23,4 +23,3 @@ fn main() -> i32 {
     return p.sum() + 3;
 }
 
-// spec: 002.10-generics

@@ -1,4 +1,3 @@
-// spec: std §3.7.1
 // only-os: macos linux
 // expect-exit: 0
 // expect-stdout:
@@ -6,7 +5,7 @@
 // true
 // inherit out: ok
 
-// Std 3.7.1 / 3.7.2: `Command::new` takes a `Path`; `Child`'s pipes are
+// `Command::new` takes a `Path`; `Child`'s pipes are
 // `ChildStdin` (a `Writer`) and `ChildStdout` / `ChildStderr`
 // (`Reader`s); `output` pipes streams left inherited.
 use rok::core::marker::replace;

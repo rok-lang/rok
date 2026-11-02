@@ -5,7 +5,6 @@
 // now 1
 // got 4
 
-// spec: std 213-marker §2.13.9
 // Send every item, then report how many were sent and reuse the list.
 use rok::std::thread;
 fn main() {

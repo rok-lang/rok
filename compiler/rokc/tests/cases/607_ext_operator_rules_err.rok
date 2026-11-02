@@ -1,13 +1,12 @@
-// spec: 006.07-operator-magic
-// expect-error: 17:5: `⊛` is not a built-in operator token; for `#[infix]`, a new token needs `like = "<existing token>"`
-// expect-error: 19:5: `#[infix]` takes only an operator token, `like = ".."` and `swap`
-// expect-error: 22:5: operator aliases of `a5` must share one precedence level
-// expect-error: 24:5: `é` can't be a new operator token: every character must be a Unicode `Pattern_Syntax` code point
-// expect-error: 26:5: `∈` has a fixed precedence; `like` is only for new tokens
-// expect-error: 30:1: `#[infix]` can be attached only to a trait method signature
-// expect-error: 34:5: `#[postfix]` can be attached only to a trait method signature
+// expect-error: 16:5: `⊛` is not a built-in operator token; for `#[infix]`, a new token needs `like = "<existing token>"`
+// expect-error: 18:5: `#[infix]` takes only an operator token, `like = ".."` and `swap`
+// expect-error: 21:5: operator aliases of `a5` must share one precedence level
+// expect-error: 23:5: `é` can't be a new operator token: every character must be a Unicode `Pattern_Syntax` code point
+// expect-error: 25:5: `∈` has a fixed precedence; `like` is only for new tokens
+// expect-error: 29:1: `#[infix]` can be attached only to a trait method signature
+// expect-error: 33:5: `#[postfix]` can be attached only to a trait method signature
 
-// Spec 6.7.2 / 6.7.12 / 6.7.13 / 1.10.4: a new token needs `like`, a
+// A new token needs `like`, a
 // table token takes none, no precedence arguments, aliases share a
 // level, extension tokens are `Pattern_Syntax`, and the attributes go on
 // trait method signatures only.
@@ -36,4 +35,3 @@ impl V {
 }
 
 fn main() -> i32 { return 0; }
-// spec: refs-lang §1.10.4 §6.7.13

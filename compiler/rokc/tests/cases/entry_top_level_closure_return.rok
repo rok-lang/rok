@@ -1,10 +1,9 @@
 // expect-exit: 0
 // expect-stdout: 7
 
-// spec 4.16.4: `return` is banned at top level, but a closure built in
+// `return` is banned at top level, but a closure built in
 // the implicit `main` keeps its own `return`.
 let base = 4;
 let add = |x: i32| -> i32 { return x + base; };
 println(f"{add(3)}");
 
-// spec: 004.16-entry-point

@@ -21,4 +21,3 @@ fn main() -> i32 {
     return s + p;
 }
 
-// spec: 002.04-enum

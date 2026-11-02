@@ -1,5 +1,4 @@
-// spec: 005.06-visibility
-// Constructing a tuple struct needs every field visible (spec 5.6).
+// Constructing a tuple struct needs every field visible.
 // expect-error: field `0` of `a::S` is private to module `a`
 
 mod a {
@@ -7,4 +6,3 @@ mod a {
 }
 
 fn main() -> i32 { let s = a::S(1, 2); return s.1; }
-// spec: §5.6.8

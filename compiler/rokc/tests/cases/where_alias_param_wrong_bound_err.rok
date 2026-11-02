@@ -1,5 +1,4 @@
-// spec: §2.10.4
-// expect-error: where_alias_param_wrong_bound_err.rok:11:33: type `T` does not satisfy trait bound `Num` required by `W<T>`
+// expect-error: where_alias_param_wrong_bound_err.rok:10:33: type `T` does not satisfy trait bound `Num` required by `W<T>`
 // expect-error: help: add `T: Num` to `get`'s generics
 // A bound in scope that isn't the alias's (nor has it as a supertrait)
 // does not meet it.

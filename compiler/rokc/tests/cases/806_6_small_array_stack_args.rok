@@ -1,10 +1,9 @@
-// spec: §8.6.6
 // expect-exit: 0
 // expect-stdout:
 // HTTP 1 2 3 true
 // [72, 84] [9, 8, 7]
 
-// Spec 8.6.6: small arrays of 1- and 2-byte elements passed and returned
+// Small arrays of 1- and 2-byte elements passed and returned
 // between rok functions after the argument registers are used up (on
 // 32-bit Arm they go by address: LLVM's own lowering there disagrees
 // between caller and callee).

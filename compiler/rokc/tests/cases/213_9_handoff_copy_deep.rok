@@ -1,6 +1,5 @@
 // expect-exit: 0
 // needs: threads
-// spec: std 213-marker §2.13.9
 // expect-stdout:
 // 100000 4999950000
 

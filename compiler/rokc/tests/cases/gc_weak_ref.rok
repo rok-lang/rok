@@ -1,4 +1,3 @@
-// spec: refs-lang 802-scan-table §8.2.8 / std §1.6.9
 // gc-stress: 5
 // expect-exit: 0
 // expect-stdout:
@@ -9,7 +8,7 @@
 // cache 50 kept, hits 50 dropped 50
 // churn ok 1000
 
-// 8.2.8 `WEAK_REF`: a `Weak<T>` does not keep its `GcPtr<T>`'s object
+// `WEAK_REF`: a `Weak<T>` does not keep its `GcPtr<T>`'s object
 // alive. The collection that frees the object - minor (it was young),
 // full, or concurrent - clears every weak reference to it; one that
 // moves it (evacuation) updates them. The gc-stress runs collect, move

@@ -1,4 +1,3 @@
-// spec: std 304-thread §3.4.1
 // needs: threads
 // expect-exit: 0
 // expect-stdout:
@@ -7,7 +6,7 @@
 // main: none
 // unnamed: none
 
-// spec 3.4.1: `Builder::name` names the thread; `current().name()` in
+// `Builder::name` names the thread; `current().name()` in
 // that thread returns it, `none` elsewhere and for unnamed threads.
 use rok::std::thread;
 

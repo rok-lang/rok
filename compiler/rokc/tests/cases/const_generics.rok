@@ -7,7 +7,7 @@
 // 9
 // 3
 
-// Spec 2.11: const generic parameters - inferred from array arguments,
+// Const generic parameters - inferred from array arguments,
 // passed with `::<..>`, used as values and in array lengths (`M * N`),
 // and on structs.
 const W: usize = 2;
@@ -50,4 +50,3 @@ fn main() -> i32 {
 
 fn first_of<const N: usize>(a: [i32; N]) -> i32 { return a[0]; }
 
-// spec: 002.11-const-generics

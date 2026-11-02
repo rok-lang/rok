@@ -3,7 +3,7 @@
 // expect-stderr: thread 'main' panicked at tests/cases/static_init_recursive_panics.rok:11:28:
 // expect-stderr: static initializer reads its own static (recursive initialization)
 
-// Spec 5.3: an initializer that reads its own `static` panics rather
+// An initializer that reads its own `static` panics rather
 // than wait on itself forever.
 
 static LOOP: i32 = again();
@@ -15,4 +15,3 @@ fn main() {
     println(f"{LOOP}");
 }
 
-// spec: 005.03-static §4.14.13

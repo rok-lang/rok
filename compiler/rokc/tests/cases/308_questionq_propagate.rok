@@ -1,8 +1,7 @@
-// spec: 003.14-question-postfix
 // expect-exit: 9
 // expect-stdout:
 
-// spec 3.14: postfix `expr?` on `T | none` makes the caller return none on none.
+// Postfix `expr?` on `T | none` makes the caller return none on none.
 fn try_double(x: i32 | none) -> i32 | none {
     let v = x?;
     return v + v;
@@ -12,4 +11,3 @@ fn main() -> i32 {
     let r = try_double(3) ?? 0;
     return r + 3;       // 6 + 3 = 9
 }
-// spec: §3.14.10

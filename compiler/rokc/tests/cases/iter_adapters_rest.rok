@@ -13,7 +13,7 @@
 // reduce none
 // 4,1,9,
 
-// stdlib 2.7.1 adapters: step_by / rev (DoubleEndedIterator, 2.7.9) /
+// Adapters: step_by / rev (DoubleEndedIterator) /
 // flatten / flat_map / peekable (lazy), reduce / min_by_key / max_by_key.
 
 fn main() {
@@ -49,4 +49,3 @@ fn main() {
     println("");
 }
 
-// spec: std 207-iter

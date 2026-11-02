@@ -15,7 +15,7 @@
 // traits -> localhost|none|via traits
 // server saw 12 connections
 
-// Stdlib 3.2.5: TLS 1.3 client and server over loopback TCP: X25519 and
+// TLS 1.3 client and server over loopback TCP: X25519 and
 // the X25519MLKEM768 hybrid, each cipher suite, ALPN, SNI, KeyUpdate,
 // close_notify, multi-record transfers, and certificate validation
 // failures (name mismatch, unknown root).
@@ -213,4 +213,3 @@ fn main() throws (tls::TlsError) {
     try t.join() catch _ {};
 }
 
-// spec: std 302-net §3.2.5

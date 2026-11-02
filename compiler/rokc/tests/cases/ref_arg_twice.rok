@@ -1,4 +1,3 @@
-// spec: §4.7.10
 // expect-error: `x` is passed as `ref` twice in one call
 
 fn inc(ref n: i32) { n = n + 1; }

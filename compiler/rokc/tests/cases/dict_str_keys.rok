@@ -9,7 +9,7 @@
 // 2
 // 1
 
-// `str` keys and values in `Dict` / `Set` / `List` (stdlib 2.9.3; `str`
+// `str` keys and values in `Dict` / `Set` / `List` (`str`
 // implements `Hash`). Runtime-built strings stay alive inside the
 // collections across collections (their buffers are traced).
 extern "C" {
@@ -37,4 +37,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: std 209-collections

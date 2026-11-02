@@ -1,7 +1,6 @@
-// spec: std §2.11.3
 // expect-error: type `i32` does not satisfy trait bound `From<i64>`
 
-// Stdlib spec 2.11.3: `into` is lossless only - there is no
+// `into` is lossless only - there is no
 // `From<i64> for i32`; use `try_into`, `saturating_into` or `as`.
 fn main() {
     let big: i64 = 1000;

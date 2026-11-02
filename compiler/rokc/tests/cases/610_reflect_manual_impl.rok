@@ -1,7 +1,6 @@
-// spec: 006.10-reflect
 // expect-error: `Reflect` is implemented by the compiler for every type
 
-// 6.10.1: `Reflect` is automatic; there is nothing to write by hand.
+// `Reflect` is automatic; there is nothing to write by hand.
 struct P { a: i32; }
 impl reflect::Reflect for P {
     fn type_name() -> str { "P" }
@@ -10,4 +9,3 @@ impl reflect::Reflect for P {
     fn type_name_of_val(self) -> str { "P" }
     fn size_of_val(self) -> usize { 4 }
 }
-// spec: §6.10.1

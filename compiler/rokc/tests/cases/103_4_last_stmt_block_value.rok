@@ -1,10 +1,9 @@
-// spec: §1.3.4 §3.9.7
 // expect-exit: 0
 // expect-stdout:
 // unit 2 3
 // 2 4 7
 
-// spec 1.3.4: a block whose last statement omits its `;` has the value it
+// A block whose last statement omits its `;` has the value it
 // has with the `;`: unit. A last expression is still the block's value.
 struct P { x: i32; }
 

@@ -1,4 +1,3 @@
-// spec: std §3.9.4
 // expect-exit: 0
 // expect-stdout:
 // 1.7976931348623157e308 true
@@ -9,7 +8,7 @@
 // 1:1: float `1e999` is out of range (ROKON floats are f64, up to about 1.8e308)
 // 1:2: float `1e999` is out of range (ROKON floats are f64, up to about 1.8e308)
 
-// Std 3.9.4: ROKON floats are `f64`. Each one is written in the shortest
+// ROKON floats are `f64`. Each one is written in the shortest
 // form that reads back to the same value; a `float` past the `f64` range
 // has no ROKON form, and the reader rejects such a literal as the
 // toolchain's reader does.

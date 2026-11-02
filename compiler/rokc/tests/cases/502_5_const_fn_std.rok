@@ -1,8 +1,7 @@
-// spec: 005.02-const
 // expect-exit: 0
 // expect-stdout: 12 7 3 true 5 ab-cd 6 2 3
 
-// Spec 5.2.5: the standard library marks its pure functions `const fn`,
+// The standard library marks its pure functions `const fn`,
 // so a `const` can use them; `const unsafe fn` is a `const fn` too.
 const fn total(xs: List<i32>) -> i32 {
     let t = 0;

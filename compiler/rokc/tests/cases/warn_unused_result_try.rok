@@ -1,8 +1,7 @@
 // expect-exit: 0
-// spec: §6.2.11
-// expect-lint: 15:5 the `i32` result of `two` is never used
-// expect-lint: 16:5 `try?` result discarded: the error is silently ignored
-// expect-lint: 20:5 the `i32` result of `next` is never used
+// expect-lint: 14:5 the `i32` result of `two` is never used
+// expect-lint: 15:5 `try?` result discarded: the error is silently ignored
+// expect-lint: 19:5 the `i32` result of `next` is never used
 // expect-stdout:
 // ok
 

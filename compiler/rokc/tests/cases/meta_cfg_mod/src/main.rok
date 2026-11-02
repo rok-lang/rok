@@ -3,7 +3,7 @@
 // plain
 // 3
 
-// Spec 6.9.8: the `#[cfg]` of a file module holds for the meta blocks in
+// The `#[cfg]` of a file module holds for the meta blocks in
 // its file too - `off.rok` defines `plain_only` again, but is cfg'd off.
 #[impl_attribute(plain_only)]
 pub @attribute {
@@ -27,5 +27,3 @@ fn main() -> i32 {
     0
 }
 
-// spec: 006.08-meta-blocks
-// spec: §6.3.9

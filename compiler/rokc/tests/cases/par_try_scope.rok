@@ -8,7 +8,7 @@
 // child cancelled: true
 // nested in a task: bad 7
 
-// `par::try_scope` (2.19.3, "an exception cancels the children"): the
+// `par::try_scope` ("an exception cancels the children"): the
 // first error cancels the scope - tasks that have not started never run,
 // running ones finish - and the scope throws it once all are done.
 struct Bad { n: i32; }
@@ -73,5 +73,3 @@ fn main() {
     println(f"nested in a task: bad {r}");
 }
 
-// spec: std 219-par
-// spec: std §2.19.3

@@ -1,4 +1,3 @@
-// spec: §5.9.2
 // expect-error: `#[no_safepoint]` is for `extern "rok"` blocks
 
 // The runtime-only marker on a C block.

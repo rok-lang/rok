@@ -67,7 +67,7 @@ pub struct Compile<'a> {
     pub target: &'a Target,
     pub opt: OptLevel,
     pub emit: Emit,
-    /// `rok_tls` uses the initial-exec TLS model (spec 8.3.8);
+    /// `rok_tls` uses the initial-exec TLS model;
     /// off for JIT'd code.
     pub tls_initial_exec: bool,
     /// The MLIR pass pipeline ([`mlir_pipeline`]).

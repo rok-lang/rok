@@ -1,6 +1,4 @@
 // expect-exit: 0
-// spec: 006.09-meta-templates
-// spec: §6.9.9
 // expect-stdout: x
 
 // A `pub` meta block may name a type's associated function through

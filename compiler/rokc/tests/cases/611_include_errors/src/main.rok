@@ -1,7 +1,6 @@
-// spec: 006.11.1-include
-// expect-error: 9:13: `include_str!` cannot read "res/missing.txt": no such file
-// expect-error: 10:13: `include_str!` "res/latin1.txt" is not UTF-8 (invalid byte at offset 2); use `include_bytes!`
-// expect-error: 11:13: `include_bytes!` takes one string literal path
+// expect-error: 8:13: `include_str!` cannot read "res/missing.txt": no such file
+// expect-error: 9:13: `include_str!` "res/latin1.txt" is not UTF-8 (invalid byte at offset 2); use `include_bytes!`
+// expect-error: 10:13: `include_bytes!` takes one string literal path
 
 // A missing file, text that is not UTF-8, and a path that is not one
 // string literal.

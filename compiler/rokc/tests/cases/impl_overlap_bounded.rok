@@ -2,7 +2,7 @@
 // expect-error: 20:18: conflicting implementations of trait `Name`: `impl<..> Name for T` and `impl<..> Name for Wrap<U>` overlap on `Wrap<U>`
 // expect-error: 24:26: method `get` is defined more than once for `Wrap<T>`
 
-// Spec 2.9.5 coherence: bounds on a type left generic never make two
+// Coherence: bounds on a type left generic never make two
 // impls disjoint, even when no type meets both bounds yet (Rust-like).
 trait Shape {}
 trait Color {}
@@ -25,4 +25,3 @@ impl<T: Color> Wrap<T> { fn get(self) -> i32 { return 2; } }
 
 fn main() -> i32 { return 0; }
 
-// spec: 002.09-impl

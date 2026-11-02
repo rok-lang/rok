@@ -4,7 +4,6 @@
 // 2
 // got 3
 
-// spec: std 213-marker §2.13.9
 // Copy loop with clone, send the copy, keep using the source.
 use rok::std::thread;
 fn main() {

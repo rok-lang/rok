@@ -1,4 +1,3 @@
-// spec: §2.6.4
 // expect-exit: 0
 // expect-stdout:
 // custom: 1 none 3 (3)
@@ -6,7 +5,7 @@
 // maybe: stored none | missing | stored 4
 // plain: true
 
-// Spec 2.6.4: `Self::Item` (an associated type) and a generic alias's
+// `Self::Item` (an associated type) and a generic alias's
 // parameter are generic members, so `Self::Item | none` with
 // `Item = i32 | none` and `Maybe<i32 | none>` keep the outer `none`
 // apart. A non-generic alias is written source and flattens.

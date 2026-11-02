@@ -1,4 +1,3 @@
-// spec: refs-lang §2.8.3 §2.8.3a §2.10.3 §2.13.4 §3.1.3 §4.9.6
 // expect-exit: 0
 // expect-stdout:
 // V+i32 2 | 102 | V+i32 4 | V+i32 5 | 105 | 106

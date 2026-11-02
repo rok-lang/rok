@@ -1,14 +1,13 @@
-// spec: §3.9.5 §3.14.1
 // Small slips, each with the fix: a `;` that drops the return value,
 // `{}` for an empty dict, throwing a `str` or a type that is not an
 // `Error`.
-// expect-error: 16:5: function `add` returns `i32`, but the `;` after its last expression drops the value
+// expect-error: 15:5: function `add` returns `i32`, but the `;` after its last expression drops the value
 // expect-error: help: remove the `;` to return it: `a + b`
-// expect-error: 18:25: mismatched types: `let d` expects `Dict<str, i32>`, found `()`
+// expect-error: 17:25: mismatched types: `let d` expects `Dict<str, i32>`, found `()`
 // expect-error: help: `{}` is an empty block, not an empty `Dict`; write `Dict::new()`
-// expect-error: 20:16: `str` can't be thrown: it does not implement `Error`
+// expect-error: 19:16: `str` can't be thrown: it does not implement `Error`
 // expect-error: help: throw a `ValueError`: `throw ValueError::new("negative");`
-// expect-error: 24:24: `Oops` can't be thrown: it does not implement `Error`
+// expect-error: 23:24: `Oops` can't be thrown: it does not implement `Error`
 // expect-error: help: add `impl Error for Oops {}` (it needs `Display` and `Debug`), or throw a `ValueError`: `throw ValueError::new(..);`
 // forbid-error: is not covered by the enclosing function
 // forbid-error: can finish without returning

@@ -95,4 +95,3 @@ try! await c.close_async();
 let s2 = try! await net::tcp_connect_async(f"{addr}");
 println(f"wrong name: {await connect(s2, "example.com", ccfg)}");
 println(f"server saw: {await server}");
-// spec: std 302-net §3.2.0 §3.2.5

@@ -1,5 +1,4 @@
-// spec: §1.3.2 §4.16.1
-// expect-error: 6:1: this block-like statement leaves a value of type `i32` without `;`
+// expect-error: 5:1: this block-like statement leaves a value of type `i32` without `;`
 
 // Top-level statements follow the statement rules of a function body.
 let c = true;

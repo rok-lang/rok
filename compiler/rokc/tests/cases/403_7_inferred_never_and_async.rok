@@ -1,5 +1,3 @@
-// spec: 004.03.7-divergent-functions
-// spec: 004.01.3-omitting-the-return-type
 // Without `-> T`, a body whose every path diverges gets `!` (usable in
 // any slot), and an `async fn` takes its result type from the body.
 // expect-exit: 0

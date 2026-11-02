@@ -1,4 +1,3 @@
-// spec: §2.8.3 §2.13.3
 // expect-exit: 0
 // expect-stdout:
 // first 7
@@ -8,9 +7,9 @@
 // 2 b
 // 3
 
-// Associated-type projections `T::Assoc` (spec 2.1 / 2.8.3) in
+// Associated-type projections `T::Assoc` in
 // signatures, `let` annotations and type patterns, resolved per
-// instantiation; `Iterator::zip` (stdlib 2.7.1) is built on them.
+// instantiation; `Iterator::zip` is built on them.
 
 trait Shape {
     type Unit;

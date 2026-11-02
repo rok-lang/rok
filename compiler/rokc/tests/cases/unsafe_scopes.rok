@@ -2,7 +2,7 @@
 // expect-stdout:
 // 6 3
 
-// Spec 4.15: `unsafe fn` bodies and `unsafe { }` blocks may call unsafe
+// `unsafe fn` bodies and `unsafe { }` blocks may call unsafe
 // functions; C functions are implicitly unsafe.
 extern "C" {
     fn abs(x: i32) -> i32;
@@ -22,4 +22,3 @@ fn main() -> i32 {
     return a + b;
 }
 
-// spec: 004.15-unsafe

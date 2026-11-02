@@ -3,7 +3,6 @@
 // expect-stdout:
 // got 4
 
-// spec: std 213-marker §2.13.9
 // par::filter, then send what passed; the input is no longer used.
 use rok::std::thread;
 fn main() {

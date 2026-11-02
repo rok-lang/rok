@@ -1,4 +1,3 @@
-// spec: refs-lang 002.08-trait §2.8.3
 // expect-exit: 0
 // expect-stdout:
 // 32
@@ -8,7 +7,7 @@
 // 5
 // 11
 
-// Spec 2.8.3a: an associated const's value is the impl's - its names
+// An associated const's value is the impl's - its names
 // resolve in the impl's module and it may use the impl's type
 // parameters; `Box::<i32>::N` names one instance's const.
 trait Width {

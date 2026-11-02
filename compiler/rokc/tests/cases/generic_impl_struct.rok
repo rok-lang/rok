@@ -8,4 +8,3 @@ impl<T> Box<T> { fn get(self) -> T { return self.v; } }
 let b: Box<i32> = Box { v: 5 };
 println(f"{b.get()}");
 
-// spec: 002.10-generics

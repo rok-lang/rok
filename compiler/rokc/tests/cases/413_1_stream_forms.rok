@@ -1,4 +1,3 @@
-// spec: §4.13.1 §4.13.2 §4.13.3 §4.13.7 §4.13.8 §4.12.7
 // expect-exit: 0
 // expect-stdout:
 // fn 1 2
@@ -9,7 +8,7 @@
 // zip (1, 10) (2, 20)
 // merge 4
 
-// Spec 4.13: the three `async yield` forms give an `AsyncStream`, whose
+// The three `async yield` forms give an `AsyncStream`, whose
 // body mixes `await` and `yield`; the four modifier combinations give
 // `R`, `AsyncFuture<R>`, `GenIter<R>`, `AsyncStream<R>`; library
 // combinators merge and zip streams.

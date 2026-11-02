@@ -21,4 +21,3 @@ fn main() -> i32 {
     return total as i32;
 }
 
-// spec: std 201-numbers

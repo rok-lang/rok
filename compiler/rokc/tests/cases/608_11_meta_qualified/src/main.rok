@@ -9,7 +9,7 @@
 // a
 // alog
 
-// Spec 6.8.11: two packages may each define `log!`; a use names the
+// Two packages may each define `log!`; a use names the
 // package (`dep::name!`, `#[derive(dep::Name)]`, `#[dep::attr]`), or
 // a `use dep::name!;` says which one the bare name is.
 use alog::log!;
@@ -31,5 +31,3 @@ fn main() {
     println(traced_by());
 }
 
-// spec: 006.08-meta-blocks
-// spec: §6.8.11 §6.8.12

@@ -26,4 +26,3 @@ fn main() -> i32 {
     return last + 7;
 }
 
-// spec: 002.06-sum-types

@@ -1,4 +1,3 @@
-// spec: §2.3.1 §2.3.2 §2.3.3 §2.3.6 §2.3.8
 // expect-exit: 0
 // expect-stdout:
 // 1 2 3 7 true
@@ -29,22 +28,22 @@ struct Mixed { a: u8; b: i64; c: u16; }
 struct Holder { xs: List<i32>; }
 
 fn main() {
-    // 2.3.1 / 2.3.2: named, tuple and unit forms.
+    // Named, tuple and unit forms.
     let p = Point { x: 1.0, y: 2.0 };
     let q = Pair(3, 7);
     let w = Wrapper("w");
     let m = Marker;
     println(f"{p.x} {p.y} {q.0} {q.1} {w.0 == "w"}");
-    // 2.3.3: omitted fields take their `const` defaults.
+    // Omitted fields take their `const` defaults.
     let c = Config { verbose: false };
     let d = Config { retry: 5, ..c };
     println(f"{c.retry} {c.timeout} {c.verbose} {d.retry}");
-    // 2.3.6: declaration order with natural alignment (repr(C)): `b` at
+    // Declaration order with natural alignment (repr(C)): `b` at
     // i64's alignment (8; 4 on i686 Linux), `c` after it, the size a
     // multiple of it.
     let al = align_of::<i64>();
     println(f"{Point::size()} {Mixed::size() == (al + 8 + 2 + al - 1) / al * al} {Mixed::align() == al}");
-    // 2.3.8: a struct copies; a list element read copies.
+    // A struct copies; a list element read copies.
     let a = Point { x: 1.0, y: 2.0 };
     let b = a;
     b.x = 5.0;

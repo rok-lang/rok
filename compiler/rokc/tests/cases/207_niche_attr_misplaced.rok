@@ -1,10 +1,9 @@
-// spec: 002.07.5-niche-placement
 // expect-error: `#[niche]` goes on a single-field struct, not a struct with 2 fields
 // expect-error: not an enum
 // expect-error: `#[niche]` argument 2: expected an integer
 
-// `#[niche]` goes on a single-field struct (refs-lang 2.7.5) and takes
-// constants or ranges of them (2.7.4).
+// `#[niche]` goes on a single-field struct and takes
+// constants or ranges of them.
 #[niche(0)]
 struct Pair(i32, i32);
 

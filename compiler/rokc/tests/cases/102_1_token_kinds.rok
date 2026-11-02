@@ -1,4 +1,3 @@
-// spec: refs-lang §1.2.1
 // expect-exit: 0
 // expect-stdout:
 // 3 1.5 255 1000
@@ -6,7 +5,7 @@
 // A 65 true false true
 // 7 [2, 3]
 
-// 1.2.1: the token kinds - identifiers (`count`, `α`, `Δt`), keywords,
+// The token kinds - identifiers (`count`, `α`, `Δt`), keywords,
 // numeric literals, the string forms (plain, raw, format, byte), the
 // character forms, `true` / `false` / `none`, operators and punctuation.
 fn main() {

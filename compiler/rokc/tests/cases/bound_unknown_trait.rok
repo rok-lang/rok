@@ -1,5 +1,4 @@
-// spec: §2.10.3 §2.8.4
-// expect-error: bound_unknown_trait.rok:7:9: cannot find trait `Nope2` (named in a bound)
+// expect-error: bound_unknown_trait.rok:6:9: cannot find trait `Nope2` (named in a bound)
 // Every bound position must name an existing trait: generic params,
 // `where`, supertraits, `impl Tr for`.
 struct S { x: i32; }

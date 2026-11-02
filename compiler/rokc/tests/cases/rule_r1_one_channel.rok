@@ -1,5 +1,3 @@
-// spec: std 005-notation §0.5.9
-// spec: std 302-net §3.2.1 / std 308-path §3.8.1 / std 201-numbers §2.1.3
 // expect-error: this call can throw `IoError` and must be marked with `try`
 // expect-error: `try` is for calls that throw; `p.strip_prefix("a")` gives `Path | none`
 // expect-error: this call can throw `ParseError` and must be marked with `try`

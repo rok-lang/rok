@@ -1,11 +1,10 @@
-// spec: 007.02-allocation §7.2.9
 // expect-exit: 0
 // expect-stdout:
 // 200000 19999900000
 // 65536 true true
 // live drops after release: true
 
-// spec 7.2.9: objects at or over the LOS threshold are allocated
+// Objects at or over the LOS threshold are allocated
 // directly (not in the TLAB); they survive collection while reachable and
 // are reclaimed once unreachable.
 extern "C" {

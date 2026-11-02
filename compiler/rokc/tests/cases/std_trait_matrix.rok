@@ -1,4 +1,3 @@
-// spec: std 005-notation §0.5.13
 // only-os: macos linux
 // expect-exit: 0
 // expect-stdout:

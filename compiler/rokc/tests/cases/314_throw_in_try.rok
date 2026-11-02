@@ -1,9 +1,8 @@
-// spec: 003.14.1-throw-divergent
 // expect-exit: 0
 // expect-stdout:
 // after
 
-// spec 3.14.1: `throw` diverges, so a throw in the else branch does not
+// `throw` diverges, so a throw in the else branch does not
 // affect the type of the if expression.
 fn pick(b: i32) throws (i32) -> i32 {
     let v = if b == 1 { 7 } else { throw 99; };

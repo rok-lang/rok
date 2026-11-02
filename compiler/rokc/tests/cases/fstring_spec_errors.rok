@@ -14,4 +14,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 001.07-string-literals

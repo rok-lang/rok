@@ -1,8 +1,7 @@
-// spec: §3.13.3 std §2.9.2
 // Two accessors on one value with different length functions are
 // checked against their own lengths.
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at tests/cases/cg_versioned_loop_two_lengths.rok:30:34:
+// expect-stderr: thread 'main' panicked at tests/cases/cg_versioned_loop_two_lengths.rok:29:34:
 // expect-stderr: b out of bounds
 // expect-stdout:
 

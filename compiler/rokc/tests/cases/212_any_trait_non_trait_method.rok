@@ -1,4 +1,3 @@
-// spec: 002.02.10-any-trait
 // expect-error: no method `side` on `any Shape`
 
 // On an `any Tr` value only methods of `Tr` (and its supertraits) are callable;

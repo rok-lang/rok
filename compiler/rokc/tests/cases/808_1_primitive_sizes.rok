@@ -1,5 +1,4 @@
 // only-pointer-width: 64
-// spec: 008.08-lowering-types §8.8.1
 // expect-exit: 0
 // expect-stdout:
 // i8 1 i16 2 i32 4 i64 8
@@ -7,7 +6,7 @@
 // f32 4 f64 8 char 4 bool 1
 // usize 8 isize 8 str 16
 
-// spec 8.8.1: primitive integers / floats map to same-width machine
+// Primitive integers / floats map to same-width machine
 // types, `char` is a 32-bit code point, `str` a (pointer, usize) pair.
 use rok::bare::mem::size_of;
 

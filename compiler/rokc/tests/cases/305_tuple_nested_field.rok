@@ -1,4 +1,3 @@
-// spec: 003.05-tuple-field-nested
 // expect-exit: 0
 // expect-stdout:
 // 2

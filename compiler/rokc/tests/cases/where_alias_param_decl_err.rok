@@ -1,15 +1,14 @@
-// spec: §2.6.9 §2.10.4
-// expect-error: where_alias_param_decl_err.rok:21:18: type `T` does not satisfy trait bound `Num` required by `W<T>`
+// expect-error: where_alias_param_decl_err.rok:20:18: type `T` does not satisfy trait bound `Num` required by `W<T>`
 // expect-error: help: add `T: Num` to `F`'s generics
-// expect-error: where_alias_param_decl_err.rok:22:18: type `T` does not satisfy trait bound `Num` required by `W<T>`
+// expect-error: where_alias_param_decl_err.rok:21:18: type `T` does not satisfy trait bound `Num` required by `W<T>`
 // expect-error: help: add `T: Num` to `G`'s generics
-// expect-error: where_alias_param_decl_err.rok:23:15: type `T` does not satisfy trait bound `Num` required by `W<T>`
+// expect-error: where_alias_param_decl_err.rok:22:15: type `T` does not satisfy trait bound `Num` required by `W<T>`
 // expect-error: help: add `T: Num` to `E`'s generics
-// expect-error: where_alias_param_decl_err.rok:24:12: type `T` does not satisfy trait bound `Num` required by `W<T>`
+// expect-error: where_alias_param_decl_err.rok:23:12: type `T` does not satisfy trait bound `Num` required by `W<T>`
 // expect-error: help: add `T: Num` to the impl's generics
-// expect-error: where_alias_param_decl_err.rok:25:30: type `T` does not satisfy trait bound `Num` required by `W<T>`
+// expect-error: where_alias_param_decl_err.rok:24:30: type `T` does not satisfy trait bound `Num` required by `W<T>`
 // expect-error: help: add `T: Num` to `sig`'s generics
-// expect-error: where_alias_param_decl_err.rok:26:31: type `U` does not satisfy trait bound `Num` required by `W<U>`
+// expect-error: where_alias_param_decl_err.rok:25:31: type `U` does not satisfy trait bound `Num` required by `W<U>`
 // expect-error: help: add `U: Num` to `Tw`'s generics
 // A generic alias's `where` on a type parameter holds in declarations
 // too: field types, a trait impl's trait arguments, bodiless trait

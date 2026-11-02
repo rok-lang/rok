@@ -4,4 +4,3 @@ async fn f() throws (str) -> i32 { throw "no"; }
 async fn g() -> i32 { await f() }
 println(f"{await g()}");
 
-// spec: 004.12-async

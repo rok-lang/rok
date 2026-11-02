@@ -1,12 +1,11 @@
-// expect-error: error[E0106]: `ys` came out of the `Mutex` at line 27, and `g`'s `using` block released the lock
-// expect-error: handoff_guard_errors.rok:30:5: `ys` came out of the `Mutex` at line 27, and `g`'s `using` block released the lock
+// expect-error: error[E0106]: `ys` came out of the `Mutex` at line 26, and `g`'s `using` block released the lock
+// expect-error: handoff_guard_errors.rok:29:5: `ys` came out of the `Mutex` at line 26, and `g`'s `using` block released the lock
 // expect-error: help: the lock no longer protects `ys`; use it inside the `using` block, or keep a deep copy there with `g.get_clone()`
-// expect-error: handoff_guard_errors.rok:38:5: `zs` was given to the `Mutex` at line 36
-// expect-error: handoff_guard_errors.rok:46:5: `a` came out of the `RwLock` at line 44, and `g`'s `using` block released the lock
-// expect-error: handoff_guard_errors.rok:55:5: `got` came out of the `Mutex` at line 52, and `g`'s `using` block released the lock
-// expect-error: handoff_guard_errors.rok:67:5: `keep` shares the value the `Mutex` protects at line 65, and `g`'s `using` block released the lock
-// expect-error: handoff_guard_errors.rok:75:5: `mine` shares the value the `Mutex` protects (`g.update(|_| mine)`) at line 73, and `g`'s `using` block released the lock
-// spec: std 213-marker §2.13.9 / std 216-sync §2.16.3 / §2.16.4
+// expect-error: handoff_guard_errors.rok:37:5: `zs` was given to the `Mutex` at line 35
+// expect-error: handoff_guard_errors.rok:45:5: `a` came out of the `RwLock` at line 43, and `g`'s `using` block released the lock
+// expect-error: handoff_guard_errors.rok:54:5: `got` came out of the `Mutex` at line 51, and `g`'s `using` block released the lock
+// expect-error: handoff_guard_errors.rok:66:5: `keep` shares the value the `Mutex` protects at line 64, and `g`'s `using` block released the lock
+// expect-error: handoff_guard_errors.rok:74:5: `mine` shares the value the `Mutex` protects (`g.update(|_| mine)`) at line 72, and `g`'s `using` block released the lock
 
 // A handle taken out of a guard (`g.get()`), or handed to it
 // (`g.set(v)`, the captures of `g.update(f)`'s closure), is protected
@@ -76,7 +75,7 @@ fn update_gives(m: Mutex<List<i32>>) -> i64 {
 }
 
 // The `using` block's value is what `get` returned.
-// expect-error: handoff_guard_errors.rok:81:17: the value of `g`'s `using` block is what the `Mutex` protects, and the block releases the lock before it is used
+// expect-error: handoff_guard_errors.rok:80:17: the value of `g`'s `using` block is what the `Mutex` protects, and the block releases the lock before it is used
 fn block_value(m: Mutex<List<i32>>) -> i64 {
     let items = using g = m.lock() { g.get() };
     items.sort();
@@ -84,4 +83,4 @@ fn block_value(m: Mutex<List<i32>>) -> i64 {
 }
 
 // `return g.get()` inside the block hands the guarded value to the caller.
-// expect-error: handoff_guard_errors.rok:59:26: this returns a value out of the `Mutex`, and `g`'s `using` block releases the lock before the caller uses it
+// expect-error: handoff_guard_errors.rok:58:26: this returns a value out of the `Mutex`, and `g`'s `using` block releases the lock before the caller uses it

@@ -1,5 +1,4 @@
-// spec: §4.2.4
-// expect-error: 9:29: positional argument after a named argument
+// expect-error: 8:29: positional argument after a named argument
 // expect-error: help: write the positional arguments first, or name this one too
 
 // Positional arguments come first; one after a named argument is an

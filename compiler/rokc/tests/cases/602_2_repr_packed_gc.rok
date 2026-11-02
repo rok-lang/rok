@@ -1,6 +1,6 @@
 // expect-error: `#[repr(packed)]` struct `Named` holds a GC reference
 
-// Spec 6.2.2: `packed` is for C data. Its fields may sit unaligned,
+// `packed` is for C data. Its fields may sit unaligned,
 // where the collector could not read a reference.
 #[repr(packed)]
 struct Named { tag: u8; name: str; }
@@ -9,4 +9,3 @@ fn main() {
     let n = Named { tag: 1, name: "x" };
     println(f"{n.tag}");
 }
-// spec: §6.2.2

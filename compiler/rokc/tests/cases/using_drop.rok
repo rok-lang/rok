@@ -10,7 +10,7 @@
 // drop 8
 // caught
 
-// Spec 3.17: `using` drops its resources in reverse order on every way
+// `using` drops its resources in reverse order on every way
 // out of the block - normal end, `return`, and a propagating error.
 struct Res { id: i32; }
 
@@ -47,5 +47,3 @@ fn main() -> i32 {
     return r;
 }
 
-// spec: 003.17-using-expression
-// spec: §3.17.4 §3.17.5 §3.17.6

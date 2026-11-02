@@ -1,4 +1,3 @@
-// spec: std 223-io §2.23.7
 // needs: net threads
 // only-os: macos linux
 // expect-exit: 0

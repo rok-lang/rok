@@ -1,11 +1,10 @@
-// spec: 007.05-concurrent-collection §7.5.3
 // gc-stress: 100
 // expect-exit: 0
 // expect-stdout:
 // 0:x0-19 1:x1-19 2:x2-19
 // total 290
 
-// spec 7.5.3: while a concurrent mark runs (the gc-stress run marks
+// While a concurrent mark runs (the gc-stress run marks
 // every full collection concurrently), overwriting a reference must not
 // lose the object it now points to (SATB barrier + incremental update).
 fn main() -> i32 {
@@ -31,4 +30,3 @@ fn main() -> i32 {
     println(f"total {total}");
     return 0;
 }
-// spec: 007.05-concurrent-collection §7.5.1 §7.5.2 §7.5.4

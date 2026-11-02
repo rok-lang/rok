@@ -4,7 +4,7 @@
 // 3
 // 2
 
-// Spec 1.4: a flag (regional-indicator pair) may start a name;
+// A flag (regional-indicator pair) may start a name;
 // labels are NFC-normalized like identifiers; `union` is a contextual
 // keyword (an item only as `union Name`).
 union Bits { i: i32; f: f32; }
@@ -29,4 +29,3 @@ fn main() -> i32 {
     return mut_n;
 }
 
-// spec: §1.4.1 §1.4.2 §1.5.4

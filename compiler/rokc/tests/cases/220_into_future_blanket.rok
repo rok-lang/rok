@@ -1,9 +1,8 @@
-// spec: std 200-core/220-future §2.20.5
 // expect-exit: 0
 // expect-stdout:
 // 7 8
 
-// 2.20.5: `impl<F: Future> IntoFuture for F` - a generic `I: IntoFuture`
+// `impl<F: Future> IntoFuture for F` - a generic `I: IntoFuture`
 // accepts a plain future, and `into_future` returns it.
 async fn seven() -> i32 { 7 }
 

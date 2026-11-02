@@ -593,7 +593,7 @@ fn submodule_changes_and_closes_refresh_dependents() {
     assert!(!has_error(diagnostics.last().unwrap()));
 }
 
-/// A package with both root files (spec 0.3.1): a file the library
+/// A package with both root files: a file the library
 /// reaches is checked as the library's (its unsaved text included); the
 /// executable's own files see the library as the package's name, its
 /// `pub` items only.
@@ -702,7 +702,7 @@ println(f\"{f()}\");
 ";
 
 /// Hover and definition of an item declared in a function body
-/// (spec 3.9.1) go by the name as written.
+/// go by the name as written.
 #[test]
 fn block_local_items() {
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -935,7 +935,7 @@ fn internal_hidden_from_completion() {
 }
 
 // The server highlights macro calls and user-defined literal suffixes via
-// semantic tokens (spec 6.5 / 6.8.12), which the static grammar cannot.
+// semantic tokens, which the static grammar cannot.
 #[test]
 fn semantic_tokens_macros_and_literals() {
     let dir = rokc_core::tmp::test_dir("lsp-sem");
@@ -1016,7 +1016,7 @@ fn semantic_tokens_macros_and_literals() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-// Hovering a `name!(..)` call shows its expansion (spec 6.8.12 tooling).
+// Hovering a `name!(..)` call shows its expansion.
 #[test]
 fn hover_expands_macro_call() {
     let dir = rokc_core::tmp::test_dir("lsp-mhover");

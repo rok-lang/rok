@@ -1,4 +1,3 @@
-// spec: §6.2.16
 // expect-error: function `wake_io` is internal to the Rok toolchain: only `rok::bare`, `rok::core` and `rok::std` may use it
 // expect-error: = help: it is compiler-only: no public item replaces it, so remove the use
 // expect-error: function `hand_over` is internal to the Rok toolchain

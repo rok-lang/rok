@@ -108,7 +108,7 @@ pub fn lower(module: &HirModule, target: &Target) -> MirModule {
                 .collect();
         }
     }
-    // Coroutine bodies → resume functions + constructors (spec 708).
+    // Coroutine bodies → resume functions + constructors.
     for (i, hf) in lowered.iter().enumerate() {
         if !(hf.is_async || hf.is_generator) || hf.body.is_none() {
             continue;
@@ -227,7 +227,7 @@ fn debug_types(
     out
 }
 
-/// What lowering function values (spec 4.4: `{code, env}`) leaves to do
+/// What lowering function values (`{code, env}`) leaves to do
 /// once every body is lowered.
 struct FnValues {
     /// Named fn → its `(env, args..)` wrapper (the code of `f` as a value).
@@ -1334,7 +1334,7 @@ impl<'a> FnBuilder<'a> {
                 });
                 // `any Tr`: the payload is the value itself if it fits the
                 // word, else a heap copy; the tag's `ANY_BOXED` bit says
-                // which (the collector's `ANY_SLOT`, 802 §8.2.7).
+                // which (the collector's `ANY_SLOT`).
                 if let (HirTy::AnyTrait(_), Some(v)) = (sum_ty, value) {
                     let raw = self.lower_expr_to_operand(v);
                     let ty = self.ty(&v.ty);
@@ -1969,7 +1969,7 @@ impl<'a> FnBuilder<'a> {
 
     /// Or-pattern test. Chain: the first alt that matches lands in a
     /// per-alt success block, runs its own `bind_pattern`, then jumps to
-    /// the arm body. Spec 3.11.4 - each alt's bindings reach the arm body
+    /// the arm body. Each alt's bindings reach the arm body
     /// through the same shared locals (allocated in HIR lowering). No
     /// alts match nothing (a type test decided false per instance).
     fn lower_or_test(
@@ -2470,7 +2470,7 @@ impl<'a> FnBuilder<'a> {
             .map_or(MirTy::Unit, |t| self.ty(t))
     }
 
-    /// Spec 2.5.2: a union field write / read reinterprets bits (an
+    /// A union field write / read reinterprets bits (an
     /// `f32` written and read as `i32` is its IEEE bits, not `1`).
     fn union_bits(&mut self, source: Operand, from_ty: &MirTy, to_ty: &MirTy) -> Operand {
         self.payload_cast(source, from_ty, to_ty)

@@ -1,10 +1,9 @@
 // expect-error: malformed `#[doc]`: expected `#[doc = ".."]` or `#[doc(hidden)]`
 
-// Spec 6.2.8: `#[doc]` takes a string or the word `hidden`.
+// `#[doc]` takes a string or the word `hidden`.
 
 #[doc(secret)]
 pub fn f() {}
 
 fn main() { f(); }
 
-// spec: 006.02-built-in-attributes §6.2.8

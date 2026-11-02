@@ -1,4 +1,4 @@
-//! Compact binary encoding for the incremental caches (spec 9.2.16).
+//! Compact binary encoding for the incremental caches.
 //!
 //! LEB128 integers, length-prefixed strings and lists, `Codec` impls next
 //! to each type (mostly `codec_struct!` / `codec_enum!`). A failed decode

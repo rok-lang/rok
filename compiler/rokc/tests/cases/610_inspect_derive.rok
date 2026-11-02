@@ -1,4 +1,3 @@
-// spec: 006.10-inspect
 // expect-exit: 0
 // expect-stdout:
 // ["host", "port"]
@@ -7,7 +6,7 @@
 // 9090
 // false
 
-// 6.10.2: `#[derive(Inspect)]` - field names, dynamic get / set via `any`.
+// `#[derive(Inspect)]` - field names, dynamic get / set via `any`.
 #[derive(Inspect)]
 struct Config { host: str; port: i32; }
 
@@ -20,4 +19,3 @@ match c.get_field("port") {
 println(f"{c.set_field("port", 9090)}");
 println(f"{c.port}");
 println(f"{c.set_field("xxx", 1)}");
-// spec: §6.10.2

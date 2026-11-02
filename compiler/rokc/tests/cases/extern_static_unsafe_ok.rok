@@ -1,7 +1,6 @@
 // only-os: macos linux
 // (POSIX optind)
 // expect-exit: 0
-// spec: §5.9.3
 // expect-stdout: 7 7 true
 
 // Reading or writing an extern static inside `unsafe` (a block or an

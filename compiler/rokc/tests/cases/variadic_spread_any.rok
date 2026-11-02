@@ -1,12 +1,11 @@
-// spec: refs-lang §4.2.5 §4.2.6
 // expect-exit: 0
 // expect-stdout:
 // 6 10 0
 // 3: int hi other
 // 2: int int
 
-// Spec 4.2.6: a tuple spread fills a variadic `...T` slot (`sum(..t)`,
-// mixed with plain arguments). Spec 4.2.5: `...any` takes arguments of
+// A tuple spread fills a variadic `...T` slot (`sum(..t)`,
+// mixed with plain arguments). `...any` takes arguments of
 // different types (a `Slice<any>`).
 
 fn sum(xs: ...i32) -> i32 {

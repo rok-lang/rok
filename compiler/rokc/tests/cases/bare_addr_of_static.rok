@@ -1,13 +1,12 @@
 // expect-exit: 0
 // gc-stress: 50
-// spec: std 101-ptr §1.1.2
 // expect-stdout:
 // 30 40 true
 // 2 9
 // 3 b c
 // 6 6
 
-// `addr_of` of a `static` (stdlib 1.1.2): statics live in data sections,
+// `addr_of` of a `static`: statics live in data sections,
 // so the pointer is valid for the whole run; a lazy one is initialized
 // first. A static holding GC references is a root already. Writes
 // through a pointer to a non-`mut` static are undefined.

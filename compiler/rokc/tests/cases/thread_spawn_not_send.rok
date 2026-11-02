@@ -1,6 +1,6 @@
 // expect-error: the closure's captures don't meet the `fn` type's bounds
-// `thread::spawn` takes `fn() -> T + Send` (304, 2.13.9): a closure
-// capturing a `Cell` (neither Send nor Sync, 2.16.5) is rejected.
+// `thread::spawn` takes `fn() -> T + Send` (304): a closure
+// capturing a `Cell` (neither Send nor Sync) is rejected.
 use rok::std::thread;
 
 fn main() -> i32 {
@@ -9,4 +9,3 @@ fn main() -> i32 {
     return try! h.join();
 }
 
-// spec: std 304-thread

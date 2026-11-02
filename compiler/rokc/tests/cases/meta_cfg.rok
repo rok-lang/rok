@@ -6,7 +6,7 @@
 // plain
 // 3
 
-// Spec 6.9.8: `#[cfg]` runs before meta expansion - a meta block whose
+// `#[cfg]` runs before meta expansion - a meta block whose
 // own `#[cfg(..)]` is false is not registered, so two blocks may define
 // the same attribute under exclusive conditions.
 #[cfg(fancy)]
@@ -76,6 +76,3 @@ fn main() -> i32 {
     0
 }
 
-// spec: 006.08-meta-blocks
-// spec: §6.3.7
-// spec: §6.9.8

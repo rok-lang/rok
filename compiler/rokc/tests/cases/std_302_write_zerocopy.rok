@@ -1,11 +1,10 @@
-// spec: std 311-os §3.11.6
 // only-os: linux
 // needs: threads native-run
 // expect-exit: 0
 // expect-stdout:
 // sent 65536 got 65536 sum 8355840
 
-// Std 3.11.6: `TcpStreamExt::write_zerocopy` (MSG_ZEROCOPY): the bytes go
+// `TcpStreamExt::write_zerocopy` (MSG_ZEROCOPY): the bytes go
 // out unchanged and the call returns once the kernel is done with them.
 use rok::std::net::{TcpStream, tcp_listen};
 use rok::std::thread;

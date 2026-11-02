@@ -1,5 +1,5 @@
-// The JS host of a rok program built for wasm32-unknown-unknown (spec
-// 0.6.1): a browser or node gives it the few WASI preview 1 imports its
+// The JS host of a rok program built for wasm32-unknown-unknown:
+// a browser or node gives it the few WASI preview 1 imports its
 // runtime uses. stdout / stderr go to `write` (default: the console, a
 // line at a time), clocks to `Date.now` / `performance.now`, randomness
 // to `crypto.getRandomValues`; every other import fails with ENOSYS, so
@@ -217,7 +217,7 @@ export async function load(wasm, { args = ["main"], env = {}, write = consoleWri
       return exports.main();
     } catch (err) {
       if (err instanceof Exit) return err.code;
-      // The engine's call stack (spec 7, runtime error: stack overflow).
+      // The engine's call stack (runtime error: stack overflow).
       if (err instanceof RangeError) {
         return fail("\nthread 'main' has overflowed its stack\nfatal runtime error: stack overflow, aborting\n");
       }

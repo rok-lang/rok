@@ -1,11 +1,10 @@
-// spec: 003.07-range-open
 // expect-exit: 0
 // expect-stdout:
 // 0
 // 1
 // 2
 
-// spec 3.7: a plain range such as `0..3`.
+// A plain range such as `0..3`.
 fn main() -> i32 {
     for i in 0..3 {
         println(f"{i}");

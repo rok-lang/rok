@@ -1,4 +1,3 @@
-// spec: §4.4.1 §4.4.2 §4.4.3 §4.4.5 §4.4.7 §4.4.8 §4.4.10 §4.4.11
 // expect-exit: 0
 // expect-stdout:
 // 7 10 6
@@ -8,7 +7,7 @@
 // 5 any
 // ok 3
 
-// Spec 4.4: functions and closures share `fn(..) -> R` types; values go
+// Functions and closures share `fn(..) -> R` types; values go
 // in variables, collections and dicts; a generic function becomes a
 // value once its type is fixed; a diverging closure fits any return; a
 // call through a value is positional.

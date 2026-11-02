@@ -1,4 +1,3 @@
-// spec: §6.2.7 §6.2.14
 // expect-error: `#[deprecated_safe]` cannot be attached to a struct; it goes on a function, a method, an extern function or a static
 // expect-error: malformed `#[deprecated]`: expected no argument, a message string, or `(since = "0.1.6", note = "..")`
 

@@ -1,11 +1,10 @@
-// spec: 003.04-compound-assign-lhs-evaluated-once
 // expect-exit: 0
 // expect-stdout:
 // 99
 // 25
 // 60
 
-// spec 3.4.3: the left side of a compound assignment is evaluated once.
+// The left side of a compound assignment is evaluated once.
 // `idx()` prints 99 each time it runs; it must run exactly once.
 fn idx() -> usize {
     println(f"{99}");
@@ -21,4 +20,3 @@ fn main() -> i32 {
     println(f"{arr[2]}");
     return 0;
 }
-// spec: §3.4.3

@@ -1,4 +1,3 @@
-// spec: §3.9.1 §4.10
 // expect-exit: 0
 // expect-stdout:
 // P { x: 1 } P 3

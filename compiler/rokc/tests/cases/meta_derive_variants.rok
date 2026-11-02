@@ -7,7 +7,7 @@
 // unit tuple named
 // enum
 
-// Spec 6.9.4: `@for_variants`, `@variant.pattern` / `.name` /
+// `@for_variants`, `@variant.pattern` / `.name` /
 // `.is_unit` / `.is_tuple` / `.is_named`, `@for_variant_fields`,
 // `@if_enum` / `@if_struct`.
 fn fmt_show<T: Display>(v: T) -> str { f"{v}" }
@@ -98,5 +98,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 006.08-meta-blocks
-// spec: §6.9.4

@@ -1,8 +1,7 @@
-// spec: §3.13.3 std §2.9.2
 // A counted loop calling a closure, which may shrink the list, keeps its
 // bounds checks: the read after `x.clear()` panics.
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at tests/cases/cg_versioned_loop_closure_call.rok:13:14:
+// expect-stderr: thread 'main' panicked at tests/cases/cg_versioned_loop_closure_call.rok:12:14:
 // expect-stderr: index 0 out of bounds for length 0
 // expect-stdout:
 

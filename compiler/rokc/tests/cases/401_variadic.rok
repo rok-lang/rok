@@ -1,9 +1,8 @@
-// spec: 004.02.5-variadic
 // expect-exit: 0
 // expect-stdout:
 // 6
 
-// spec 4.2.5: `fn f(xs: ...T)` variadic - the call's trailing arguments
+// `fn f(xs: ...T)` variadic - the call's trailing arguments
 // are a stack array (`[T; N]`, implicit const N).
 fn sum(xs: ...i32) -> i32 {
     let total = 0;

@@ -1,6 +1,5 @@
-// spec: §3.6.1
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at tests/cases/306_array_field_in_place.rok:36:33:
+// expect-stderr: thread 'main' panicked at tests/cases/306_array_field_in_place.rok:35:33:
 // expect-stderr: index out of bounds
 // expect-stdout:
 // 106

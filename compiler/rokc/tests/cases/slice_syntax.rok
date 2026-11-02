@@ -57,5 +57,3 @@ fn main() {
     println(f"eq {xs[1:4] == z[:]}");
 }
 
-// spec: 003.06-indexing-and-slicing
-// spec: §3.6.2

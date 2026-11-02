@@ -1,10 +1,9 @@
-// spec: std 200-core/218-task §2.18.1 (spawn Send check)
 // expect-exit: 0
 // expect-stdout:
 // local 3
 // yielded 0 1 2
 
-// stdlib 2.18.1: a non-`Send` capture (`Cell`) is fine for `spawn_local`,
+// A non-`Send` capture (`Cell`) is fine for `spawn_local`,
 // which pins the task to the current worker; `yield_now` hands control
 // to other ready tasks and resumes.
 async fn main() {

@@ -1,4 +1,3 @@
-// spec: 008.08-lowering-types §8.8.4 / §8.8.5
 // expect-exit: 0
 // expect-stdout:
 // rgb 10 20 30
@@ -6,7 +5,7 @@
 // nested 1 2.5 true
 // swapped (b, 7)
 
-// spec 8.8.4 / 8.8.5: a tuple struct is a struct with fields `0`, `1`,
+// A tuple struct is a struct with fields `0`, `1`,
 // ..; a tuple is an anonymous struct of its element types.
 struct Rgb(u8, u8, u8);
 

@@ -30,9 +30,9 @@ pub fn shell(name: &str) -> MirFunction {
 }
 
 impl FnLower<'_, '_> {
-    /// The C ABI entry of an `extern "C" fn` definition (spec 8.6.3):
+    /// The C ABI entry of an `extern "C" fn` definition:
     /// takes the arguments as C passes them, runs the rok body as a
-    /// mutator again (`rok_native_reenter`, 804 §8.4.10), returns the C
+    /// mutator again (`rok_native_reenter`), returns the C
     /// way.
     pub fn c_entry(mut self, sig: &Sig, abi: &FnAbi) -> Func {
         let t = self.c.t;
@@ -161,7 +161,7 @@ impl FnLower<'_, '_> {
         self.out
     }
 
-    /// The C `main` (spec 905.9): runtime up, types registered, the user
+    /// The C `main`: runtime up, types registered, the user
     /// `main`, runtime down; its result as the exit code.
     pub fn main_wrapper(mut self, user: SymId, ret: &MirTy, register: SymId) -> Func {
         let init = self.c.sym("rok_runtime_init");

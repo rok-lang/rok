@@ -1,8 +1,7 @@
-// spec: 004.08.1-trailing-closure-paren-zero-arg
 // expect-exit: 99
 // expect-stdout:
 
-// spec 4.8.1: `f() { body }` is a zero-parameter trailing closure: a `{`
+// `f() { body }` is a zero-parameter trailing closure: a `{`
 // right after `()` attaches as the closure.
 fn run(f: fn() -> i32) -> i32 {
     return f();

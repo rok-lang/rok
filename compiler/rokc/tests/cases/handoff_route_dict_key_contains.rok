@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `d` still holds `a`, which was handed to another owner
-// spec: std 213-marker §2.13.9
 // A key handed over while the dict still holds it: `contains_key`
 // (allowed by name) compares keys, reading the list the other thread grows.
 use rok::std::thread;

@@ -1,4 +1,4 @@
-//! The AST as rok source (`--emit=source`, spec 9.9.10).
+//! The AST as rok source (`--emit=source`).
 //!
 //! Printed after meta expansion and desugaring, without comments or
 //! layout, non-atomic operands parenthesized. Parser markers print as the
@@ -21,7 +21,7 @@ use crate::{
 #[must_use]
 pub fn print_file(attrs: &[Attribute], items: &[Item], stmts: &[Stmt]) -> String {
     let mut p = Printer::default();
-    // Block-local items (spec 3.9.1) print from the copy their block
+    // Block-local items print from the copy their block
     // keeps, every name as written.
     let mut back = crate::rename::Renames::default();
     for n in items.iter().filter(|i| i.is_local()).filter_map(Item::name) {
@@ -184,7 +184,7 @@ impl Printer {
         self.s(&a.path.join("::"));
         match &a.body {
             // `#[literal(<pattern>, priority = N)]` keeps its pattern as
-            // one string (spec 6.5.3): written back bare.
+            // one string: written back bare.
             AttrBody::Args(args) if a.path == ["literal"] => {
                 if let [AttrArg::Lit(Literal::Str(pat)), rest @ ..] = args.as_slice() {
                     self.s("(");
@@ -706,7 +706,7 @@ impl Printer {
             TyKind::Path(p) => self.ty_path(p),
             TyKind::QPath(q) => self.qpath(q),
             TyKind::Sum(members) => {
-                // `T?` is `#nest<T> | none` (spec 2.6.5).
+                // `T?` is `#nest<T> | none`.
                 if let [inner, none] = members.as_slice() {
                     if let (Some(x), TyKind::None) = (inner.nest_inner(), &none.kind) {
                         self.ty_tight(x);
@@ -987,7 +987,7 @@ impl Printer {
                     }
                 }
             }
-            // A block's `use` copied into a lifted fn's body (spec 3.9.1).
+            // A block's `use` copied into a lifted fn's body.
             StmtKind::Item(Item::Use(u))
                 if u.attrs
                     .iter()
@@ -1368,7 +1368,7 @@ impl Printer {
             } => {
                 self.receiver(receiver);
                 self.s(".");
-                // `using`'s release call `x.#drop()` (spec 3.17).
+                // `using`'s release call `x.#drop()`.
                 self.s(method.strip_prefix('#').unwrap_or(method));
                 if !type_args.is_empty() {
                     self.s("::<");
@@ -1628,7 +1628,7 @@ impl Printer {
     }
 
     /// The receiver of `.f` / `(..)` / `[..]` / `?`: number literals and
-    /// `?.` chains (spec 3.8.8) are grouped.
+    /// `?.` chains are grouped.
     fn receiver(&mut self, e: &Expr) {
         if matches!(
             &e.kind,

@@ -1,7 +1,6 @@
-// spec: refs-lang §5.3.1
-// expect-error: 8:17: mismatched types: the return value expects `i32`, found `str`
-// expect-error: 9:16: integer literal `300` out of range for `u8`
-// expect-error: 10:18: mismatched types: the return value expects `bool`, found `i32`
+// expect-error: 7:17: mismatched types: the return value expects `i32`, found `str`
+// expect-error: 8:16: integer literal `300` out of range for `u8`
+// expect-error: 9:18: mismatched types: the return value expects `bool`, found `i32`
 
 // A literal initializer is checked against the declared type like any
 // other.

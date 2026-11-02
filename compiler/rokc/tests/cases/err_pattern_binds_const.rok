@@ -1,8 +1,7 @@
-// spec: 003.11.1-identifier-pattern
-// expect-error: 19:15: `LIMIT` here would be a new variable that matches every value, not the const `LIMIT`
-// expect-error: 20:15: `ORIGIN` here would be a new variable that matches every value, not the static `ORIGIN`
-// expect-error: 21:15: `limit` here would be a new variable that matches every value, not the const `limit`
-// expect-error: 22:57: `Gren` here would be a new variable that matches every value
+// expect-error: 18:15: `LIMIT` here would be a new variable that matches every value, not the const `LIMIT`
+// expect-error: 19:15: `ORIGIN` here would be a new variable that matches every value, not the static `ORIGIN`
+// expect-error: 20:15: `limit` here would be a new variable that matches every value, not the const `limit`
+// expect-error: 21:57: `Gren` here would be a new variable that matches every value
 // expect-error: help: to compare with the const, write `x if x == LIMIT`
 // expect-error: help: did you mean the variant `Color::Green`?
 

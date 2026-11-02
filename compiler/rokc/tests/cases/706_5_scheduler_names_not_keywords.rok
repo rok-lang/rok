@@ -1,10 +1,9 @@
-// spec: 007.06-scheduler §7.6.5
 // expect-exit: 0
 // expect-stdout:
 // spawn=1 race=2 join=3 sleep=4
 // task: 42
 
-// spec 7.6.5: scheduler operations are library functions, not keywords:
+// Scheduler operations are library functions, not keywords:
 // `spawn`, `race`, `join`, `sleep` stay usable as ordinary names.
 fn spawn() -> i32 { 1 }
 

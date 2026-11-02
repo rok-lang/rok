@@ -14,4 +14,3 @@ fn main() -> i32 {
     0
 }
 
-// spec: 003.14-error-control-flow

@@ -4,7 +4,7 @@
 // iter: none 3
 // cmp: true false true
 
-// In `T | none`, `none` sorts first (spec 2.6.4, stdlib 2.5.7).
+// In `T | none`, `none` sorts first.
 fn main() -> i32 {
     let xs: List<i32 | none> = [3, none, 1];
     xs.sort();
@@ -20,5 +20,3 @@ fn main() -> i32 {
     0
 }
 
-// spec: §2.6.4
-// spec: std §2.5.7

@@ -18,7 +18,7 @@
 // 0 = i32
 // 1 = str
 
-// Spec 6.10.2 / stdlib 2.12.3: `#[derive(Inspect)]` (the meta block in
+// `#[derive(Inspect)]` (the meta block in
 // `core/reflect.rok`) on named / tuple / generic structs and an enum:
 // `field_names`, `get_field` / `set_field` through `any` (an integer
 // converts when it fits the field), and `methods` (inherent only).
@@ -85,6 +85,3 @@ println(f"{p.set_field("0", 7)} {p.0}");
 println(f"{Color::field_names():?} {Color::methods().len()}");
 dump(p);
 
-// spec: 006.10-reflection
-// spec: std §2.12.3
-// spec: §6.10.2 §6.10.6

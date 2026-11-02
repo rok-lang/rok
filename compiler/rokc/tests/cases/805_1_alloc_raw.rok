@@ -1,4 +1,3 @@
-// spec: 008.05-extern-symbols §8.5.1 rok_alloc_raw rok_realloc_raw §8.5.4 rok_time_now_ns
 // expect-exit: 0
 // expect-stdout:
 // null for size 0: true, align 3: true
@@ -7,9 +6,9 @@
 // realloc kept: 11 22 33
 // clock monotonic: true
 
-// spec 8.5.1: `rok_alloc_raw` returns null (0) for size 0 or an align
+// `rok_alloc_raw` returns null (0) for size 0 or an align
 // that is not a power of two, zero-fills when asked, honours the
-// alignment; `rok_realloc_raw` keeps the old bytes. Spec 8.5.4:
+// alignment; `rok_realloc_raw` keeps the old bytes.
 // `rok_time_now_ns` is a monotonic clock.
 use rok::bare::mem::transmute_unchecked;
 use rok::bare::ptr::ManyPtr;

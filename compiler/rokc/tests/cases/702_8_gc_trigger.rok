@@ -1,11 +1,10 @@
-// spec: 007.02-allocation §7.2.8
 // expect-exit: 0
 // expect-stdout:
 // no explicit collect yet: true
 // triggered by allocation: true
 // kept 64 w63
 
-// spec 7.2.8: the allocation slow path triggers GC on its own when the
+// The allocation slow path triggers GC on its own when the
 // heap fills - no explicit `rok_gc_collect` call is needed - and live
 // data survives those cycles.
 extern "C" {

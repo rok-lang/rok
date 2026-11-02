@@ -1,11 +1,10 @@
-// spec: §5.3.1 §5.3.2 §5.3.4 §5.3.6 §5.3.7 §5.3.9
 // expect-exit: 0
 // expect-stdout:
 // 1.0.0 42 false rok
 // 10 11 12
 // 3 2
 
-// Spec 5.3: statics carry visibility like other items, initialize in
+// Statics carry visibility like other items, initialize in
 // declaration / dependency order, and mutate only through a wrapper.
 mod m {
     pub static VERSION: str = "1.0.0";

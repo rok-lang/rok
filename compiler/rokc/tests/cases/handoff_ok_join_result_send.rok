@@ -3,7 +3,6 @@
 // expect-stdout:
 // 2
 
-// spec: std 213-marker §2.13.9
 // A thread's result (via join) forwarded to another thread.
 use rok::std::thread;
 fn main() {

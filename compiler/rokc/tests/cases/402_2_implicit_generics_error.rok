@@ -1,7 +1,6 @@
-// spec: 004.02.2-omitting-the-type
 // No bound is synthesized: an instance whose type lacks the body's
 // operator is an error in the body, labelled at the call.
-// expect-error: 9:20: operator `+` cannot be applied to `MyType`
+// expect-error: 8:20: operator `+` cannot be applied to `MyType`
 // expect-error: ------- in this call of `compute`
 
 struct MyType {}

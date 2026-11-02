@@ -1,8 +1,7 @@
 // expect-exit: 0
-// expect-lint: 19:44 casting to the same type `f64`
-// expect-lint: 19:72 casting to the same type `i64`
-// expect-lint: 21:13 casting to the same type `f64`
-// spec: §6.2.9
+// expect-lint: 18:44 casting to the same type `f64`
+// expect-lint: 18:72 casting to the same type `i64`
+// expect-lint: 20:13 casting to the same type `f64`
 // expect-stdout:
 // 5 5 3
 // 5 5

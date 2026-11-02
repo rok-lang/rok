@@ -1,4 +1,3 @@
-// spec: §1.7.2 §1.7.4 §1.8.1 §1.9.1 §1.9.2
 // expect-exit: 0
 // expect-stdout:
 // raw\n 5
@@ -19,15 +18,15 @@ fn find(xs: List<i32>, x: i32) -> i32 | none {
 }
 
 fn main() {
-    // 1.7.2: no escapes in a raw string; `#`s change the delimiter.
+    // No escapes in a raw string; `#`s change the delimiter.
     let r = r"raw\n";
     println(f"{r} {r.len()}");
     println(r"C:\path\to\file");
     println(r#"a string may contain "double quotes""#);
     println(r##"even r#"this form"# works"##);
-    // 1.7.4: no implicit concatenation; an operator joins.
+    // No implicit concatenation; an operator joins.
     println("abc" + "def");
-    // 1.8.1: `'X'` is one code point, `c'X'` one byte.
+    // `'X'` is one code point, `c'X'` one byte.
     let a = 'A';
     let k = '세';
     let nl = '\n';
@@ -39,7 +38,7 @@ fn main() {
     let cd = c'\x7F';
     let cf = c'\u{FF}';
     println(f"{ca as i32} {cn as i32} {cd as i32} {cf as u8} {ca.type_name_of_val()}");
-    // 1.9: `true` / `false` are `bool`; `none` fills a sum's empty slot.
+    // `true` / `false` are `bool`; `none` fills a sum's empty slot.
     let t = true;
     println(f"{t} {!t} {t.type_name_of_val() == "bool"}");
     let miss = find([1, 2], 3);

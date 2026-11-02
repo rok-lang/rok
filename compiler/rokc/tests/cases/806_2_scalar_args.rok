@@ -1,4 +1,3 @@
-// spec: 008.06-calling-convention §8.6.1-8.6.2
 // expect-exit: 0
 // expect-stdout:
 // 1024
@@ -7,7 +6,7 @@
 // 9000000000
 // 3.5
 
-// spec 8.6.1/8.6.2: rok scalars cross `extern "C"` with the platform C
+// Rok scalars cross `extern "C"` with the platform C
 // ABI - f64 and i32 mixed in registers, i64 not truncated.
 extern "C" {
     fn pow(x: f64, y: f64) -> f64;

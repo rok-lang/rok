@@ -15,10 +15,10 @@ use rokc_diagnostic::Span;
 pub struct Program {
     pub attrs: Vec<Attribute>,
     pub items: Vec<Item>,
-    /// Top-level statements in source order (spec 4.16.1). Only the entry
+    /// Top-level statements in source order. Only the entry
     /// file `main.rok` may have them; they become the implicit `main`.
     pub stmts: Vec<Stmt>,
-    /// Source text of each meta expansion (spec 6.9.9, `--emit=expansions`).
+    /// Source text of each meta expansion (`--emit=expansions`).
     pub expanded: Vec<String>,
     /// Start of each top-level item / statement (first token, attributes
     /// included): (byte offset, is an item). The REPL splits programs by
@@ -26,7 +26,7 @@ pub struct Program {
     pub tops: Vec<(u32, bool)>,
 }
 
-/// Parsed attribute. Spec 6.1 grammar:
+/// Parsed attribute:
 /// `attr_body ::= path attr_args?`,
 /// `attr_args ::= "(" arg ("," arg)* ","? ")" | "=" literal`,
 /// `arg ::= literal | identifier | attr_body | identifier "=" literal`.
@@ -199,7 +199,7 @@ impl Item {
         }
     }
 
-    /// Lifted from a block (spec 3.9.1): see [`LOCAL_ITEM_ATTR`].
+    /// Lifted from a block: see [`LOCAL_ITEM_ATTR`].
     #[must_use]
     pub fn is_local(&self) -> bool {
         self.local_outer().is_some()

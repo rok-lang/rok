@@ -1,4 +1,4 @@
-//! The library of a package that also has `src/main.rok` (spec 0.3.1):
+//! The library of a package that also has `src/main.rok`:
 //! dependents and the executable use it as `app` (the `--name`).
 
 pub mod shapes;

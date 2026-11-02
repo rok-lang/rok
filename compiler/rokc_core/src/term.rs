@@ -1,4 +1,4 @@
-//! Terminal output for rok, rokc and rokls (spec 9.1.8): colour, status
+//! Terminal output for rok, rokc and rokls: colour, status
 //! lines, labels and lists. Colour is decided once per stream.
 
 use std::io::IsTerminal;

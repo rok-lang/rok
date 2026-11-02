@@ -105,4 +105,3 @@ println(f"client got {back.len()} bytes, intact {back == data(BIG)}");
 println(f"client updates: {await updates}");
 println(f"server: {await server}");
 try! c_own.close();
-// spec: std 302-net §3.2.5

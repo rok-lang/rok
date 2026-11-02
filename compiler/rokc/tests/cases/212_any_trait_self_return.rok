@@ -1,4 +1,3 @@
-// spec: 002.02.10-any-trait
 // expect-error: cannot call `dup` on `any Dup`: its signature mentions `Self`
 
 // A method returning `Self` has a different type per impl, so `any Tr` can't call it.

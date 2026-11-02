@@ -1,5 +1,5 @@
 // expect-error: cannot find function `helper`
-// Spec 5.7: names are not looked up in ancestor modules implicitly;
+// Names are not looked up in ancestor modules implicitly;
 // a parent's item needs `sup::helper()`.
 fn helper() -> i32 { 1 }
 
@@ -10,4 +10,3 @@ mod a {
 fn main() -> i32 {
     return a::f();
 }
-// spec: §5.7.1

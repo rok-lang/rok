@@ -1,5 +1,5 @@
 // expect-error: `#[literal("<<" expr ">>")]` is already registered by `wrap_a` with the same priority and return type
-// Spec 6.5.5: two handlers of one pattern with the same priority and the
+// Two handlers of one pattern with the same priority and the
 // same return type can never be told apart, so the second registration
 // is an error even before any use (another priority or return type is
 // fine: the slot type or `priority` picks).
@@ -19,4 +19,3 @@ fn wrap_c(x: i32) -> W { W { n: x + 2 } }
 fn wrap_v(x: i32) -> V { V { n: x } }
 
 fn main() -> i32 { 0 }
-// spec: §6.5.5

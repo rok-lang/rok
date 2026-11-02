@@ -1,5 +1,5 @@
 #!/bin/sh
-# Update a 0.1.x install to a staged release set (spec 9.10.6): the
+# Update a 0.1.x install to a staged release set: the
 # archives dist-native.sh / dist-linux-gnu.sh left in <dist>, served
 # over http in the GitHub releases' layout. Three updates, each on a
 # fresh ROK_HOME holding the 0.1.x release:

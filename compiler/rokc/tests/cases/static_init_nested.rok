@@ -16,5 +16,3 @@ fn main() {
     println(f"{A} {B} {C}");
 }
 
-// spec: 005.03-static
-// spec: §5.3.6 §5.3.9

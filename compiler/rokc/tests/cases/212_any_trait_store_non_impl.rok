@@ -1,4 +1,3 @@
-// spec: 002.02.10-any-trait
 // expect-error: `Circle` does not implement `Shape`, so it cannot be stored in an `any Shape` slot
 
 // A value stored in an `any Tr` slot must have a static type implementing `Tr`.

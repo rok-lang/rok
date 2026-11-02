@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `side` shares the value the `Mutex` protects
-// spec: std 213-marker §2.13.9
 // update's closure stores the guarded value into a captured list.
 use rok::std::thread;
 static M: Mutex<List<i32>> = Mutex::new([]);

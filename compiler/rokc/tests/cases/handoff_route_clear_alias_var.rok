@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `x` was sent through a channel
-// spec: std 213-marker §2.13.9
 // clear() through one name, then the old element read via an earlier read.
 use rok::std::thread;
 fn main() {

@@ -1,11 +1,10 @@
-// spec: 008.08-lowering-types §8.8.10
 // expect-exit: 0
 // expect-stdout:
 // a [1, 2, 3] b [9, 2, 3]
 // len 3 sum 6
 // grid 4
 
-// spec 8.8.10: `[T; N]` is an inline array of N elements - a value:
+// `[T; N]` is an inline array of N elements - a value:
 // assigning it copies the elements.
 fn sum(xs: [i32; 3]) -> i32 {
     let t = 0;

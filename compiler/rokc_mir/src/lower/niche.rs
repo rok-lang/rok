@@ -1,4 +1,4 @@
-//! Niche layout (spec 2.7): a sum of one member `T` and `none` takes
+//! Niche layout: a sum of one member `T` and `none` takes
 //! `T`'s own bits when some scalar inside `T` has a bit pattern no `T`
 //! value uses. `none` is all zero bits, so zeroed memory still reads as
 //! `none`; the member is stored with that scalar XOR the pattern, which
@@ -73,7 +73,7 @@ pub fn sum_repr(member: &HirTy, niche: &Niche, module: &HirModule, target: &Targ
         .map_or_else(|| lower_ty(member, module, target), MirTy::Prim)
 }
 
-/// The automatic niches (spec 2.7.2) and `#[niche(..)]` (2.7.4), carried
+/// The automatic niches and `#[niche(..)]`, carried
 /// up through struct and tuple fields.
 fn niche_of(ty: &HirTy, module: &HirModule, target: &Target) -> Option<Niche> {
     let leaf = |leaf: MirTy, bits: u64| {
@@ -86,7 +86,7 @@ fn niche_of(ty: &HirTy, module: &HirModule, target: &Target) -> Option<Niche> {
     match ty {
         HirTy::Fn(..) if ty.is_c_fn() => leaf(lower_ty(ty, module, target), 0),
         HirTy::Prim(PrimTy::Bool) => leaf(MirTy::Prim(PrimTy::Bool), 2),
-        // The first surrogate (stdlib 2.15).
+        // The first surrogate.
         HirTy::Prim(PrimTy::Char) => leaf(MirTy::Prim(PrimTy::Char), 0xD800),
         // The first unused discriminant. Not when the payload holds GC
         // references: the collector reads the tag to scan it.

@@ -1,9 +1,8 @@
-// expect-error: 7:5: unresolved import: `json::parse` does not exist
+// expect-error: 6:5: unresolved import: `json::parse` does not exist
 // expect-error: = help: run `rok add json
 // expect-error: 505_use_missing_dependency_script.rok`
 // A script gets packages from its own `//! ```rokon` block, which `rok
-// add json <file>` writes (spec 9.10.7).
-// spec: §9.10.7
+// add json <file>` writes.
 use json::parse;
 
 println("unreached");

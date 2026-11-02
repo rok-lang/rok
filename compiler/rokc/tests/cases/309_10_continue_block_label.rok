@@ -1,7 +1,6 @@
-// spec: §3.9.10
-// expect-error: 7:16: `continue` outside of a loop labelled `'b`
+// expect-error: 6:16: `continue` outside of a loop labelled `'b`
 
-// spec 3.9.10: `continue` names only loop labels; a block label is an error.
+// `continue` names only loop labels; a block label is an error.
 fn main() -> i32 {
     let v: i32 = 'b: {
         loop { continue 'b; }

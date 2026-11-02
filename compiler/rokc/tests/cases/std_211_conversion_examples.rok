@@ -1,4 +1,3 @@
-// spec: std 211-conversion §2.11.1-2.11.3 §2.11.5-2.11.7 §2.11.9 §2.11.10
 // expect-exit: 0
 // expect-stdout:
 // 42 42 42 42 7

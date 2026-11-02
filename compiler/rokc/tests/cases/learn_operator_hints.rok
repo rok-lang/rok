@@ -1,19 +1,18 @@
-// spec: std §2.11.10 §3.1.4
 // An operator on operands that don't fit says what to write, from the
 // operands as written: a conversion, an unwrap, an `await`, an f-string.
-// expect-error: 23:11: operator `/` cannot be applied to `i32` and `usize`
+// expect-error: 22:11: operator `/` cannot be applied to `i32` and `usize`
 // expect-error: help: rok never converts numbers implicitly; convert one side: `total / (xs.len() as i32)`
-// expect-error: 26:9: operator `+` cannot be applied to `i32 | none` and `i32`
+// expect-error: 25:9: operator `+` cannot be applied to `i32 | none` and `i32`
 // expect-error: help: `v` may be `none`; unwrap it first: `v ?? 0`, `if let n: i32 = v { .. }`, or `v?`
-// expect-error: 28:5: operator `+` cannot be applied to `i32 | none` and `i32`
+// expect-error: 27:5: operator `+` cannot be applied to `i32 | none` and `i32`
 // expect-error: help: `o` may be `none`; unwrap it first: `o ?? 0`, `if let n: i32 = o { .. }`, or `o?`
-// expect-error: 32:13: mismatched types: the right operand of `+` expects `int`, found `i32`
+// expect-error: 31:13: mismatched types: the right operand of `+` expects `int`, found `i32`
 // expect-error: help: rok never converts numbers implicitly; convert one side: `a + (b as int)`
-// expect-error: 34:23: mismatched types: the right operand of `+` expects `str`, found `i32`
+// expect-error: 33:23: mismatched types: the right operand of `+` expects `str`, found `i32`
 // expect-error: help: `+` joins two `str`s; put the value in an f-string: `f"count: {n}"`
-// expect-error: 35:12: operator `+` cannot be applied to `i32` and `str`
+// expect-error: 34:12: operator `+` cannot be applied to `i32` and `str`
 // expect-error: help: `+` joins two `str`s; put the value in an f-string: `f"{n} items"`
-// expect-error: 38:9: operator `+` cannot be applied to `AsyncFuture<i32>`
+// expect-error: 37:9: operator `+` cannot be applied to `AsyncFuture<i32>`
 // expect-error: help: `x` is a future, not its value; did you forget `await`? `await x`
 
 // Each fix compiles:

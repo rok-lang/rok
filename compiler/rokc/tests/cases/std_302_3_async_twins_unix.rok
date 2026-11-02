@@ -1,6 +1,5 @@
-// spec: std 302-net §3.2.3
 // only-os: macos linux
-// (Unix domain sockets are unix-only, std 3.2.3)
+// (Unix domain sockets are unix-only)
 // needs: net
 // needs: threads
 // expect-exit: 0

@@ -15,4 +15,3 @@ fn main() -> i32 {
     return total + (c2.last ?? 100);
 }
 
-// spec: 002.06-sum-types

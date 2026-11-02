@@ -1,19 +1,18 @@
-//! `#[lang("slot")]` (spec 6.4).
+//! `#[lang("slot")]`.
 //!
 //! Ties a stdlib item to a compiler-known slot used to desugar tokens
 //! (`+` → `add_trait::add`) and type literals (`none` → `none_type`).
 //! Slots are a closed set (`KNOWN_SLOTS`); an unknown one is an error
-//! (6.4.8).
+//!.
 
 use std::collections::HashMap;
 
 use rokc_ast::{AttrArg, AttrBody, Attribute, FnDef, Item, Literal, Program};
 use rokc_diagnostic::{Code, RokDiagnostic};
 
-/// Every slot name the compiler accepts (spec 6.4.8). Source of truth:
-/// stdlib spec `000-meta/004-lang-slot-table.md`; change that table first.
+/// Every slot name the compiler accepts.
 pub const KNOWN_SLOTS: &[&str] = &[
-    // 0.4.2 type slots
+    // type slots
     "i32_type",
     "i64_type",
     "f32_type",
@@ -28,7 +27,7 @@ pub const KNOWN_SLOTS: &[&str] = &[
     "float_type",
     "char_type",
     "range_type",
-    // 0.4.3 trait slots
+    // trait slots
     "iterator_trait",
     "into_iterator_trait",
     "try_iterator_trait",
@@ -38,7 +37,7 @@ pub const KNOWN_SLOTS: &[&str] = &[
     "display_trait",
     "debug_trait",
     "future_trait",
-    // operator / comparison trait slots (0.4.3; `library/core/src/ops.rok`, `marker.rok`)
+    // operator / comparison trait slots (`library/core/src/ops.rok`, `marker.rok`)
     "add_trait",
     "sub_trait",
     "mul_trait",
@@ -62,11 +61,11 @@ pub const KNOWN_SLOTS: &[&str] = &[
     "sync_trait",
     "logical_and_trait",
     "logical_or_trait",
-    // 0.4.4 fn slots
+    // fn slots
     "panic_fn",
     "oom_fn",
     "unreachable_fn",
-    // 0.4.4 fn slots of the hooks lowered code calls (`library/core/src/
+    // fn slots of the hooks lowered code calls (`library/core/src/
     // index.rok`, `fmt.rok`, `task.rok`, `collections/broadcast.rok`)
     "spread_len_fn",
     "spread_names_fn",
@@ -85,13 +84,13 @@ pub const KNOWN_SLOTS: &[&str] = &[
     "cleanup_running_fn",
     "cleanup_done_fn",
     "broadcast_len_fn",
-    // 0.4.5 method slots
+    // method slots
     "drop_method",
-    // 0.4.3 trait slot of a close that can fail (`library/std/src/io.rok`)
+    // trait slot of a close that can fail (`library/std/src/io.rok`)
     "close_trait",
 ];
 
-/// Spec 6.4.7: the method a trait slot's trait declares, as `(slot,
+/// The method a trait slot's trait declares, as `(slot,
 /// method, parameters with `self`)`.
 const TRAIT_FORMS: &[(&str, &str, usize)] = &[
     ("iterator_trait", "next", 1),
@@ -127,7 +126,7 @@ const TRAIT_FORMS: &[(&str, &str, usize)] = &[
     ("close_trait", "close", 1),
 ];
 
-/// What is wrong with `item` in `slot` (spec 6.4.7; stdlib 0.4.8: the
+/// What is wrong with `item` in `slot` (the
 /// suffix names the item kind), if anything.
 fn form_mismatch(slot: &str, item: &Item, method: Option<&FnDef>) -> Option<String> {
     let kind_ok = matches!(
@@ -208,15 +207,15 @@ impl LangTable {
         self.by_slot.values()
     }
 
-    /// Append a pre-validated entry; the caller checks duplicates (spec
-    /// 6.4.6). The driver merges per-module tables with it.
+    /// Append a pre-validated entry; the caller checks duplicates.
+    /// The driver merges per-module tables with it.
     pub fn insert_entry(&mut self, entry: LangEntry) {
         self.by_slot.insert(entry.slot.clone(), entry);
     }
 }
 
 /// Collect top-level `#[lang]` attributes; a slot used twice is an error
-/// (6.4.6).
+///.
 pub fn collect_lang_table(program: &Program) -> (LangTable, Vec<RokDiagnostic>) {
     collect_lang_table_onto(LangTable::default(), program)
 }
@@ -281,7 +280,7 @@ fn collect_attr(
         diags.push(RokDiagnostic::error(
             Code::INVALID_LANG_ITEM,
             attr.span,
-            "`#[lang(...)]` requires a single string-literal slot name (spec 6.4.2)".to_owned(),
+            "`#[lang(...)]` requires a single string-literal slot name".to_owned(),
         ));
         return;
     };
@@ -296,16 +295,16 @@ fn collect_attr(
         diags.push(RokDiagnostic::error(
             Code::INVALID_LANG_ITEM,
             attr.span,
-            "`#[lang(...)]` requires a single string-literal slot name (spec 6.4.2)".to_owned(),
+            "`#[lang(...)]` requires a single string-literal slot name".to_owned(),
         ));
         return;
     };
-    // Spec 6.4.8: unknown slot name → error.
+    // Unknown slot name → error.
     if !KNOWN_SLOTS.contains(&slot.as_str()) {
         diags.push(RokDiagnostic::error(
             Code::INVALID_LANG_ITEM,
             attr.span,
-            format!("unknown lang slot `{slot}` on `{item_name}` (spec 6.4.8)"),
+            format!("unknown lang slot `{slot}` on `{item_name}`"),
         ));
         return;
     }
@@ -313,20 +312,18 @@ fn collect_attr(
         diags.push(RokDiagnostic::error(
             Code::INVALID_LANG_ITEM,
             attr.span,
-            format!(
-                "`{item_name}` does not match the form of lang slot `{slot}`: it {why} (spec 6.4.7)"
-            ),
+            format!("`{item_name}` does not match the form of lang slot `{slot}`: it {why}"),
         ));
         return;
     }
-    // Spec 6.4.6: same slot on two items → error.
+    // Same slot on two items → error.
     if let Some(prev) = table.by_slot.get(&slot) {
         diags.push(RokDiagnostic::error(
             Code::DUPLICATE_REGISTRATION,
             item_span,
             format!(
                 "lang slot `{slot}` is already bound to `{}` - cannot also bind to \
-                     `{item_name}` (spec 6.4.6)",
+                     `{item_name}`",
                 prev.item_name
             ),
         ));

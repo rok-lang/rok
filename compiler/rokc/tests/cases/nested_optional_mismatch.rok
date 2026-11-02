@@ -1,11 +1,10 @@
 // expect-error: (i32 | none)?
 
-// A nested optional (generic `T | none` with `T = i32 | none`, spec
-// 2.6.4) does not flatten into `i32 | none`.
+// A nested optional (generic `T | none` with `T = i32 | none`)
+// does not flatten into `i32 | none`.
 fn main() -> i32 {
     let xs: List<i32 | none> = [1, none];
     let v: i32 | none = xs.get(0);
     0
 }
 
-// spec: §2.6.4

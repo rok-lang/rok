@@ -16,4 +16,3 @@ fn main() {
     println(f"{c as u32} {'z' as u8} {t}");
 }
 
-// spec: std 215-string

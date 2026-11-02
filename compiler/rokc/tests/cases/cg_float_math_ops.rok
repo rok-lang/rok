@@ -1,5 +1,4 @@
 // expect-exit: 0
-// spec: §8.7 std §2.1.4
 //
 // Rounding, `abs`, `copysign`, `min` / `max` and `mul_add` of values
 // only known at run time (MLIR `math` / `arith` ops, not runtime

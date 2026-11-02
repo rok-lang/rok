@@ -1,5 +1,5 @@
 // only-os: macos linux
-// (Unix domain sockets are unix-only, std 3.2.3)
+// (Unix domain sockets are unix-only)
 // needs: net
 // only-os: macos linux
 // expect-exit: 0
@@ -11,7 +11,7 @@
 // via passed fd
 // dgram
 
-// Stdlib 3.2.3: Unix domain sockets (`os::unix::net`) - socketpair, a bound listener and a
+// Unix domain sockets (`os::unix::net`) - socketpair, a bound listener and a
 // connecting client, SCM_RIGHTS fd passing, datagram pairs.
 use rok::std::os::unix::net::{UnixListener, UnixStream, UnixDatagram};
 use rok::std::os::unix::io::{AsRawFd, FromRawFd};
@@ -75,4 +75,3 @@ fn main() throws (IoError) {
     try fs::remove_file(path);
 }
 
-// spec: std 311-os §3.11.4

@@ -1,10 +1,9 @@
-// spec: refs-lang 007.06 §7.6.7
 // needs: threads
 // expect-exit: 0
 // expect-stdout:
 // 8 rounds, threads reused true
 
-// 706 §7.6.7: a thread whose worker was handed on waits as a spare and
+// A thread whose worker was handed on waits as a spare and
 // takes the next handoff, so rounds of blocking calls on every worker
 // do not start new threads each round.
 use rok::std::thread;

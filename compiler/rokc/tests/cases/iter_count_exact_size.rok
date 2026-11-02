@@ -1,4 +1,3 @@
-// spec: std §2.7.10
 // only-pointer-width: 64
 // expect-exit: 0
 // expect-stdout:
@@ -8,7 +7,7 @@
 // 3
 // 256
 
-// `count()` of an `ExactSizeIterator` is its `len()` (stdlib 2.7.10):
+// `count()` of an `ExactSizeIterator` is its `len()`:
 // O(1) for `List` / `Slice` / range iterators and for `Map` /
 // `Enumerate` / `Rev` over them, so `map`'s function is not called.
 // Other iterators are stepped.

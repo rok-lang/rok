@@ -1,4 +1,4 @@
-//! Coroutine lowering (spec 708 / 810): a compiler-generated state
+//! Coroutine lowering: a compiler-generated state
 //! machine over MIR, in place of `llvm.coro.*`.
 //!
 //! A coroutine body (HIR `is_async` / `is_generator`) is lowered like any
@@ -28,7 +28,7 @@ use crate::{BasicBlock, LocalDecl, MirFunction, MirTy, Operand, RValue, Statemen
 /// every resume) into its resume function, keeping `f.id`, and return its
 /// constructor `ctor`. `pinning(ty)`: the type a frame slot of a pinned
 /// local (`f.pins`) is allocated as, so its referent never moves while
-/// the frame holds it (ambiguous words pin, 703 §7.3.1).
+/// the frame holds it (ambiguous words pin).
 pub fn transform(
     f: &mut MirFunction,
     n_resume: usize,

@@ -49,7 +49,7 @@ pub(super) fn lower_match(
         Some(AstPatternKind::Binding { name, .. } | AstPatternKind::TypeCheck { binder: Some(name), .. })
             if name == "__letelse_v"
     );
-    // Spec 3.12.5 / 3.12.6: exhaustiveness and unreachable arms.
+    // Exhaustiveness and unreachable arms.
     if !is_let_else && !bad_pattern {
         // `if let` / `while let` desugar to `match { pat => .., _ => .. }`
         // with `_` at the `if` keyword; an irrefutable `pat` makes that
@@ -87,7 +87,7 @@ pub(super) fn lower_match(
                 ctx.emit_error(
                     Code::LET_ELSE_NOT_DIVERGING,
                     "the `else` block of `let ... else` must diverge (end in `return`, \
-                     `break`, `continue` or `throw`) (spec 3.15)"
+                     `break`, `continue` or `throw`)"
                         .to_owned(),
                 );
             } else if inferred
@@ -123,7 +123,7 @@ pub(super) fn lower_match(
     }
 }
 
-/// Spec 2.6.4 / 2.6.5: patterns act on a nested sum's outer layer; a
+/// Patterns act on a nested sum's outer layer; a
 /// catch-all after arms covering every outer member binds the inner one
 /// (`none => .., v => ..` on `(i32 | none)?` gives `v: i32 | none`).
 fn inner_layer_binding(
@@ -195,8 +195,8 @@ enum Ctor {
     /// The only constructor of a tuple / struct.
     Single,
     /// An integer / `char` literal or range as `lo..=hi`. Ranges never make a
-    /// match exhaustive (3.12.5) but subsume each other for unreachable arms
-    /// (3.12.6).
+    /// match exhaustive but subsume each other for unreachable arms
+    ///.
     Int(i128, i128),
     /// A literal of another open domain (strings, floats): only equal
     /// spellings are the same constructor.
@@ -557,7 +557,7 @@ fn ctor_text(ctx: &LowerCtx<'_>, ty: &HirTy, c: &Ctor, args: &[String]) -> Strin
     }
 }
 
-/// Spec 3.12.5 / 3.12.6: report an arm no value can reach (an error),
+/// Report an arm no value can reach (an error),
 /// then check that the unguarded arms cover the scrutinee's type.
 pub(super) fn check_match_arms(
     ctx: &LowerCtx<'_>,
@@ -589,7 +589,7 @@ pub(super) fn check_match_arms(
                 at,
                 format!(
                     "unreachable match arm {}: earlier arms already match every value it \
-                     matches (spec 3.12.6)",
+                     matches",
                     i + 1
                 ),
             );
@@ -606,7 +606,7 @@ pub(super) fn check_match_arms(
             Code::NON_EXHAUSTIVE,
             format!(
                 "match on `{name}` needs a `_` arm: it is `#[non_exhaustive]` in another \
-                 package (spec 6.2.10)"
+                 package"
             ),
         );
         return;
@@ -617,7 +617,7 @@ pub(super) fn check_match_arms(
     }
 }
 
-/// Spec 3.12.5: arms must cover the scrutinee. `bool` needs both literals,
+/// Arms must cover the scrutinee. `bool` needs both literals,
 /// enums / sums every variant (guarded arms cover nothing), others a
 /// catch-all.
 pub(super) fn check_match_exhaustiveness(
@@ -701,7 +701,7 @@ pub(super) fn check_match_exhaustiveness(
     ctx.emit_error(
         Code::NON_EXHAUSTIVE,
         format!(
-            "non-exhaustive match on `{}`: {} not covered (spec 3.12.5)",
+            "non-exhaustive match on `{}`: {} not covered",
             ctx.ty_name(scrut_ty),
             missing.join(", ")
         ),
@@ -815,7 +815,7 @@ fn in_instance(ctx: &LowerCtx<'_>) -> bool {
             .any(|t| super::bounds::has_param(ctx, t))
 }
 
-/// Spec 6.2.10: a struct pattern `pat` on `ty`, a `#[non_exhaustive]`
+/// A struct pattern `pat` on `ty`, a `#[non_exhaustive]`
 /// struct of another package, ends in `..` (its package may add fields).
 pub(super) fn struct_pattern_rest(ctx: &LowerCtx<'_>, pat: &AstPattern, ty: &HirTy) {
     let AstPatternKind::Struct {
@@ -890,7 +890,7 @@ pub(super) fn lower_pattern(
     p
 }
 
-/// Spec 3.11.1: against a sum or `any`, a bare type name (`f64 =>`) is a
+/// Against a sum or `any`, a bare type name (`f64 =>`) is a
 /// type pattern, not a binding; elsewhere it stays a binding.
 fn bare_type_patterns(
     ctx: &LowerCtx<'_>,
@@ -946,7 +946,7 @@ pub(super) fn lower_pattern_inner(
     pat: &AstPattern,
     scrut_ty: &HirTy,
 ) -> HirPattern {
-    // A path pattern resolves where it was written (spec 6.9.9); its
+    // A path pattern resolves where it was written; its
     // sub-patterns set their own.
     let origin = match &pat.kind {
         AstPatternKind::Struct { path, .. } | AstPatternKind::EnumVariant { path, .. } => {
@@ -1019,7 +1019,7 @@ fn lower_pattern_here(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy
             lower_pattern(ctx, &variant, scrut_ty)
         }
         // A bare name that is a variant of the scrutinee's enum is that
-        // variant (spec 3.11, 5.7.1).
+        // variant.
         AstPatternKind::Binding { name, sub: None }
             if variant_named(ctx, scrut_ty, name).is_some() =>
         {
@@ -1070,7 +1070,7 @@ fn lower_pattern_here(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy
             mismatch(ctx, "a `none` pattern".to_owned())
         }
         // A literal / range on a sum tests the one member it can match
-        // (spec 3.11.1: `'a'` on `char | none`).
+        // (`'a'` on `char | none`).
         AstPatternKind::Literal(_) | AstPatternKind::Range { .. }
             if matches!(scrut_ty, HirTy::Sum(_)) =>
         {
@@ -1257,7 +1257,7 @@ fn lower_pattern_here(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy
                     ty: scrut_ty.clone(),
                 };
             }
-            // Spec 2.10.9: every type supports `is`. A test on a type
+            // Every type supports `is`. A test on a type
             // parameter is opaque at the definition check and decided per
             // instance.
             if super::bounds::has_param(ctx, scrut_ty) || super::bounds::has_param(ctx, &target_ty)
@@ -1277,7 +1277,7 @@ fn lower_pattern_here(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy
             mismatch(ctx, format!("type pattern `{}`", ctx.ty_name(&target_ty)))
         }
         AstPatternKind::Or(alts) => {
-            // Spec 3.11.4: every alternative binds the same names. One
+            // Every alternative binds the same names. One
             // shared local per name, typed by the first alternative.
             let name_sets: Vec<std::collections::BTreeSet<String>> =
                 alts.iter().map(pattern_bound_names).collect();
@@ -1304,7 +1304,7 @@ fn lower_pattern_here(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy
                         alts[i].span,
                         format!(
                             "or-pattern alternatives bind different name sets \
-                             (alternative {i}:{detail}, spec 3.11.4)"
+                             (alternative {i}:{detail})"
                         ),
                     );
                 }
@@ -1433,7 +1433,7 @@ fn lower_pattern_here(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy
         AstPatternKind::Struct { path, fields, .. } => {
             let segs: Vec<&str> = path.segments.iter().map(|s| s.name.as_str()).collect();
             // `Enum::Variant { x, y }`: field names map to positions in
-            // the variant's tuple payload (spec 2.4).
+            // the variant's tuple payload.
             match resolve_enum_variant(ctx, &segs, Some(scrut_ty), None) {
                 EnumRes::Error => return HirPattern::Wildcard,
                 EnumRes::Found(enum_id, idx) => {
@@ -1617,7 +1617,7 @@ pub(super) fn pattern_bound_names(pat: &AstPattern) -> std::collections::BTreeSe
     }
     let mut n = Names(std::collections::BTreeSet::new());
     match &pat.kind {
-        // Spec 3.11.4: alternatives bind the same names; the first one
+        // Alternatives bind the same names; the first one
         // stands for the whole or-pattern.
         AstPatternKind::Or(alts) => {
             if let Some(first) = alts.first() {
@@ -1675,7 +1675,7 @@ pub(super) fn literal_to_const(
             PrimTy::Str,
         )),
         AstLit::RawStr(s) if *sp == PrimTy::Str => Some((ConstVal::Str(s.clone()), PrimTy::Str)),
-        // Matching is `==` (spec 3.11.1): `0.0` matches `-0.0`, nothing
+        // Matching is `==`: `0.0` matches `-0.0`, nothing
         // matches NaN. Bare literals take the scrutinee's type.
         AstLit::Float(text) if sp.is_float() => {
             let suffixed = text.ends_with("f32") || text.ends_with("f64");

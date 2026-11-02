@@ -1,10 +1,9 @@
-// spec: 004.02-parameters
 // expect-exit: 0
 // expect-stdout:
 // 0 1 39 3 123
 // 2 3 3
 
-// Spec 4.2.5 / 4.2.6: `xs: ...T` is a `Slice<T>`; plain arguments and
+// `xs: ...T` is a `Slice<T>`; plain arguments and
 // array / `List` / tuple spreads mix in the variadic position, a
 // variadic passes on with `..xs`, an array spread fills fixed
 // parameters, and `...any` takes mixed types.

@@ -1,8 +1,7 @@
-// spec: §5.5.1
-// expect-error: 11:12: cannot find type `ConstPtr` in this scope
+// expect-error: 10:12: cannot find type `ConstPtr` in this scope
 // expect-error: add `use rok::bare::ptr::ConstPtr;`
 
-// Spec 5.5.1: a type is in scope only once imported. The missing import
+// A type is in scope only once imported. The missing import
 // is the one error; nothing that follows from it is reported.
 use rok::bare::ptr::addr_of;
 

@@ -1,4 +1,3 @@
-// spec: std §2.11.7
 // expect-exit: 0
 // expect-stdout:
 // negative
@@ -9,7 +8,7 @@
 // static 8
 // mul 6
 
-// Spec 3.1.3 (choosing an impl) for any impl chosen by an argument's type: an
+// (choosing an impl) for any impl chosen by an argument's type: an
 // unsuffixed literal takes its default type's impl (`i32` / `f64`) if
 // there is one, else the unique impl whose parameter it fits.
 

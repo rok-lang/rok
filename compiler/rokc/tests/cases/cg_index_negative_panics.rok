@@ -1,10 +1,9 @@
-// spec: §3.6.1
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at tests/cases/cg_index_negative_panics.rok:11:14:
+// expect-stderr: thread 'main' panicked at tests/cases/cg_index_negative_panics.rok:10:14:
 // expect-stderr: index -4 out of bounds for length 3
 // expect-stdout:
 
-// A negative index counts from the end (spec 3.6); past the start panics.
+// A negative index counts from the end; past the start panics.
 fn main() -> i32 {
     let a: [i32; 3] = [1, 2, 3];
     let i: i32 = -4;

@@ -1,6 +1,5 @@
 // gc-stress: 5
 // expect-exit: 0
-// spec: std 213-marker §2.13.9 / std 209-collections §2.9.4 §2.9.5
 // expect-stdout:
 // set 3 true 2
 // odict {"a": [1, 2], "b": []} 1 [1]

@@ -1,4 +1,4 @@
-//! Coroutines (spec 4.11 generators, 4.12 async, 4.13 streams).
+//! Coroutines: generators, async and streams.
 //!
 //! A coroutine block (`yield { .. }`, `async { .. }`, `async yield { .. }`)
 //! is lifted like a closure into a body function (`is_generator` /
@@ -45,7 +45,7 @@ use crate::{
 /// (its params are then the function's own, assignable).
 pub const FN_BLOCK_LABEL: &str = "#coro_fn";
 /// Body label of an `async ||` / `yield ||` closure: its `[ref x]` cells
-/// pass into the coroutine, so every call's future shares them (4.6.2).
+/// pass into the coroutine, so every call's future shares them.
 const CLOSURE_BLOCK_LABEL: &str = "#coro_closure";
 const BODY_LABEL: &str = "#coro";
 const CTX: &str = "#ctx";
@@ -154,7 +154,7 @@ fn local_path(name: &str, span: rokc_diagnostic::Span) -> Expr {
 
 /// What a hand-off's poll (`#ctx.prime`) of a frame that has not started
 /// does, before parking: the frame takes copies of the collections and
-/// futures it captured, which the sender still holds (stdlib 2.13.9),
+/// futures it captured, which the sender still holds,
 /// `(a, b) = prime_frame((a, b), #ctx, cells)`, through the hand-off's
 /// memo; `cells`: a `[ref x]` capture, which no copy may have.
 fn prime_captures(
@@ -321,7 +321,7 @@ pub(super) fn coro_return(value: Option<HirExpr>) -> HirStmt {
     }
 }
 
-/// `yield e;` (spec 4.11.2).
+/// `yield e;`.
 pub(super) fn lower_yield(
     ctx: &mut LowerCtx<'_>,
     value: Option<&Expr>,
@@ -332,7 +332,7 @@ pub(super) fn lower_yield(
             Code::OUTSIDE_CONTEXT,
             span,
             "`yield` outside a generator: use it in a `yield fn` / `yield { .. }` / \
-             `async yield` body (spec 4.11)"
+             `async yield` body"
                 .to_owned(),
         );
     };
@@ -493,7 +493,7 @@ pub(super) fn frame_end(ctx: &mut LowerCtx<'_>, span: rokc_diagnostic::Span) -> 
 /// Name prefix of the local an `await` polls its future in.
 pub(super) const AWAITED: &str = "#await";
 
-/// `await e` (spec 4.12.2): poll `e` (or `e.into_future()`) until ready,
+/// `await e`: poll `e` (or `e.into_future()`) until ready,
 /// suspending with `Pending`. A throwing `poll` needs a `try` like any
 /// throwing call.
 pub(super) fn lower_await(
@@ -614,7 +614,7 @@ pub(super) fn poll_loop(
             Code::OUTSIDE_CONTEXT,
             span,
             "`await` outside an async body: use it in an `async fn` / `async { .. }` / \
-             `async ||` body (spec 4.12.10)"
+             `async ||` body"
                 .to_owned(),
         );
     }
@@ -767,7 +767,7 @@ pub(super) fn poll_loop(
     }
 }
 
-/// A cancellation point (stdlib 2.18.4): `if !#unwinding &&
+/// A cancellation point: `if !#unwinding &&
 /// task::<check>(#ctx) { #unwinding = true; leave like a return }`,
 /// running the cleanups passed; the result is a zero value the executor
 /// drops. `None` in the probe pass.
@@ -808,7 +808,7 @@ fn cancel_check(
     )))
 }
 
-/// `async || body` = `|| async { body }` (spec 4.11.5 / 4.12.5): the
+/// `async || body` = `|| async { body }`: the
 /// closure body to lift (the body itself for a plain closure).
 pub(super) fn closure_body(body: &Expr, is_async: bool, is_generator: bool) -> Expr {
     if !(is_async || is_generator) {
@@ -922,7 +922,7 @@ fn lower_coro_block<'a>(
         let (mut c, mut params, prelude, _) = closure_ctx(ctx, &[], &captures, None, span);
         if from_fn {
             c.value_captured.clear();
-            // 4.16.5: an async implicit `main`'s body keeps its rules.
+            // An async implicit `main`'s body keeps its rules.
             c.implicit_main = ctx.implicit_main;
         }
         if kind.is_async() {

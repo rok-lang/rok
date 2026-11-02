@@ -1,9 +1,8 @@
-// spec: refs-lang §8.6.10
 // expect-exit: 0
 // expect-stdout: 14
 
 // Passing an i32 to a fixed-arity C function. Not `printf`: C variadic
-// externs (spec 8.6.10) are unsupported, and calling a variadic through a
+// externs are unsupported, and calling a variadic through a
 // fixed-arity prototype is UB.
 extern "C" {
     fn abs(value: i32) -> i32;

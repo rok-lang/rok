@@ -1,9 +1,9 @@
-//! Package discovery (spec 902.2, 0.3, 4.16.8) and the source-tree walk.
+//! Package discovery and the source-tree walk.
 
 use std::path::{Path, PathBuf};
 
 /// A package: a directory with `src/main.rok`, `src/lib.rok` or both, or a
-/// lone file outside any `src/` (anonymous executable, 4.16.8).
+/// lone file outside any `src/` (anonymous executable).
 #[derive(Clone, Debug)]
 pub struct Package {
     /// `src/main.rok` when there, else `src/lib.rok`; or the anonymous
@@ -15,7 +15,7 @@ pub struct Package {
     pub lib: bool,
     pub anonymous: bool,
     /// `src/lib.rok` when `root` is `src/main.rok`: the executable uses
-    /// that library as dependency `name` (0.3.1).
+    /// that library as dependency `name`.
     pub library: Option<PathBuf>,
 }
 
@@ -47,7 +47,7 @@ impl Package {
         })
     }
 
-    /// `target/` (spec 902.15); `ROK_TARGET_DIR` overrides (901.7).
+    /// `target/`; `ROK_TARGET_DIR` overrides (901.7).
     #[must_use]
     pub fn target_dir(&self) -> PathBuf {
         std::env::var_os("ROK_TARGET_DIR").map_or_else(|| self.dir.join("target"), PathBuf::from)
@@ -70,7 +70,7 @@ pub fn code_name(name: &str) -> String {
 }
 
 /// The root file of the package at `dir`: `src/main.rok`, else
-/// `src/lib.rok` (spec 0.3.1).
+/// `src/lib.rok`.
 #[must_use]
 pub fn root_file(dir: &Path) -> Option<PathBuf> {
     ["src/main.rok", "src/lib.rok"]

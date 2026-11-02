@@ -1,4 +1,3 @@
-// spec: 008.10-lowering-coroutine-generic §8.10.6 / §8.10.8 / §8.10.10
 // expect-exit: 0
 // expect-stdout:
 // point(1, 2)
@@ -6,7 +5,7 @@
 // [point(1, 2)] [circle r=3]
 // default: thing
 
-// spec 8.10.6 / 8.10.8 / 8.10.10: a generic function is specialized per
+// A generic function is specialized per
 // concrete type and calls that type's trait method directly; a trait's
 // default method is copied into each implementing type.
 trait Describe {

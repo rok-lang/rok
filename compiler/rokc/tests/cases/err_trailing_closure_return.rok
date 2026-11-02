@@ -1,9 +1,8 @@
-// spec: 004.03.11-return-in-closures-and-nested-functions
 // expect-error: a bare `return` in a statement's trailing closure: it would leave only the closure, not the function
 // expect-error: help: write `return@each` to end this call of the closure; to leave the function, write a `for` loop instead of the call
 
-// A bare `return` in a statement's trailing closure is an error (spec
-// 4.3.11): `return@each` ends this call of the closure.
+// A bare `return` in a statement's trailing closure is an error:
+// `return@each` ends this call of the closure.
 fn each(xs: List<i32>, f: fn(i32) -> ()) { for x in xs { f(x); } }
 
 fn main() {

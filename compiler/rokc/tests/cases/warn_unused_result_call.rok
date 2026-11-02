@@ -1,9 +1,8 @@
 // expect-exit: 0
-// spec: §6.2.11
-// expect-lint: 19:5 the `i32` result of `one` is never used
-// expect-lint: 20:5 unused result of `trim`, which is `#[must_use]`
+// expect-lint: 18:5 the `i32` result of `one` is never used
+// expect-lint: 19:5 unused result of `trim`, which is `#[must_use]`
+// expect-lint: 20:5 this `i32` value is never used
 // expect-lint: 21:5 this `i32` value is never used
-// expect-lint: 22:5 this `i32` value is never used
 // expect-stdout:
 // ok
 

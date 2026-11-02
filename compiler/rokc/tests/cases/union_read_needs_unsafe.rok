@@ -9,6 +9,4 @@ fn main() -> i32 {
     return r.low;
 }
 
-// spec: 002.05-union
 
-// spec: §2.5.2

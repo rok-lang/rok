@@ -1,8 +1,7 @@
-// spec: 006.09-template-tokens
 // expect-exit: 0
 // expect-stdout: Cfg named retry=3 verbose=true
 
-// Spec 6.9.2 / 6.9.3: `@Self.name`, `@Self.is_named`, and
+// `@Self.name`, `@Self.is_named`, and
 // `@field.has_default` / `@field.default` (the field's `= expr`).
 trait Defaults {
     fn defaults() -> str;

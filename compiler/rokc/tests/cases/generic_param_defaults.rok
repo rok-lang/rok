@@ -1,4 +1,3 @@
-// spec: §2.10.5
 // expect-exit: 0
 // expect-stdout:
 // W
@@ -9,7 +8,7 @@
 // 4
 // 1099511627776
 
-// Generic parameter defaults (2.10.5): a type argument left out takes its
+// Generic parameter defaults: a type argument left out takes its
 // default, resolved under the arguments before it (`B = A`); a generic
 // type whose parameters all have defaults is an instance by its bare
 // name; a generic fn with no inference signal takes its default.

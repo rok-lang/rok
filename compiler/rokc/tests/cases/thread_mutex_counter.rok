@@ -6,7 +6,7 @@
 // 1
 // 6000
 
-// core::sync (2.16) across threads: a `Mutex` counter whose guard is
+// core::sync across threads: a `Mutex` counter whose guard is
 // released by `using`, a `Condvar` start gate, an `RwLock`, and `Once`.
 use rok::std::thread;
 
@@ -57,5 +57,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: std 304-thread
-// spec: std §2.16.4a §2.18.5

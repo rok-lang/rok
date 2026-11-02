@@ -17,4 +17,3 @@ fn main() {
     let b = Hex { neg: true };
     println(f"[{a:>7}] [{b:<6}] [{a:>4}]");
 }
-// spec: std §2.10.2

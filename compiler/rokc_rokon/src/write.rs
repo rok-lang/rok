@@ -39,7 +39,7 @@ fn quoted(s: &str, q: char) -> String {
             '\t' => out.push_str("\\t"),
             '\r' => out.push_str("\\r"),
             '\0' => out.push_str("\\0"),
-            // The bidi controls the lexer rejects too (refs-lang 1.1).
+            // The bidi controls the lexer rejects too.
             c if c.is_control()
                 || matches!(c, '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}') =>
             {
@@ -78,7 +78,7 @@ fn parts(v: &Value) -> Option<(String, &'static str, Vec<Entry<'_>>, &'static st
             "}",
         ),
         // Named values only: `E::V { a: 1 }` whether read as that or as
-        // `E::V(a: 1)` - std rokon's `Value` keeps no form (spec 3.9.5).
+        // `E::V(a: 1)` - std rokon's `Value` keeps no form.
         Kind::Variant {
             path,
             args,
@@ -123,7 +123,7 @@ fn scalar(v: &Value) -> String {
 }
 
 /// Shortest round-trip digits, always with a `.`: plain for 1e-5 up to
-/// 1e17, else `1.0e17` (spec 3.9.4). NaN / infinity have no ROKON form.
+/// 1e17, else `1.0e17`. NaN / infinity have no ROKON form.
 fn float(x: f64) -> String {
     assert!(x.is_finite(), "NaN/infinity has no ROKON form");
     let mag = x.abs();

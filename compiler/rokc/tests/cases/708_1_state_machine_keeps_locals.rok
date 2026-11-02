@@ -1,4 +1,3 @@
-// spec: 007.08-coroutine §7.8.1 / §7.8.3
 // gc-stress: 50
 // expect-exit: 0
 // expect-stdout:
@@ -7,7 +6,7 @@
 // a1a2a3 6
 // a1a2a3a4 10
 
-// spec 7.8.1 / 7.8.3: a generator is a state machine whose locals live
+// A generator is a state machine whose locals live
 // in its frame across suspension points, GC references included.
 yield fn running(n: i32) -> str {
     let text = "";

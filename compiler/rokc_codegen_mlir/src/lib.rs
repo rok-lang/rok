@@ -58,7 +58,7 @@ pub struct ReplCell {
 pub struct CodegenOptions {
     /// Panic on integer overflow (unless `-C overflow-checks=no`).
     pub overflow_checks: bool,
-    /// `-g`: DWARF debug info (spec 9.9.6).
+    /// `-g`: DWARF debug info.
     pub debug: bool,
     /// Above `-O0`: the debug info says so.
     pub optimized: bool,

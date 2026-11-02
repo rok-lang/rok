@@ -1,13 +1,12 @@
-// spec: 004.13-stream §4.13.4-4.13.6 / std 200-core/208-stream §2.8.5
 // expect-exit: 0
 // expect-stdout:
 // for-await 0 1 2 3
 // adapters 4 16 36
 // skip 2 3
 
-// spec 4.13: `async yield fn` makes an `AsyncStream`, consumed with
-// `for await`; each step may `await` before it yields (4.13.6). Stdlib
-// 2.8.5: `map` / `filter` / `take` / `skip` / `collect` adapters.
+// `async yield fn` makes an `AsyncStream`, consumed with
+// `for await`; each step may `await` before it yields. The
+// `map` / `filter` / `take` / `skip` / `collect` adapters.
 async yield fn nums(n: i32) -> i32 {
     let i = 0;
     while i < n {

@@ -1,4 +1,3 @@
-// spec: 008.04-safepoint §8.4.1 §8.4.2 §8.4.3 §8.4.4 §8.4.6 §8.4.7 §8.4.10 §8.4.11
 // needs: threads
 // expect-exit: 0
 // expect-stdout:

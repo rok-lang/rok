@@ -2,7 +2,7 @@
 // expect-stdout:
 // env ok
 
-// `target_env` (spec 6.3.2) comes from the target's spec: gnu or musl on
+// `target_env` comes from the target: gnu or musl on
 // Linux, msvc on Windows, absent on macOS and WebAssembly.
 #[cfg(any(
     all(target_os = "linux", any(target_env = "gnu", target_env = "musl")),
@@ -28,5 +28,3 @@ fn main() {
     println(env());
 }
 
-// spec: 006.03-cfg
-// spec: §6.3.2 §6.3.6

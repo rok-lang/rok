@@ -90,7 +90,7 @@ pub fn noreturn_call(b: &BasicBlock) -> Option<usize> {
 }
 
 /// A loop running at most this many times needs no back-edge poll when
-/// its body reaches no safepoint (804 §8.4.2): it ends in bounded time.
+/// its body reaches no safepoint: it ends in bounded time.
 pub const SHORT_TRIPS: i128 = 64;
 
 /// The loops of `f` that run at most `SHORT_TRIPS` times, by header,

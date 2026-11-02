@@ -338,7 +338,7 @@ impl Analysis {
         }
         let names = self.public_items();
         let mut out = Vec::new();
-        // The prelude is `pub use`s with full paths (stdlib 0.2), shipped
+        // The prelude is `pub use`s with full paths, shipped
         // with this toolchain.
         let (tokens, _) = rokc_lexer::Lexer::new(PRELUDE, "prelude.rok".to_owned()).lex_all();
         let (prelude, _) = rokc_parser::parse_program(&tokens, "prelude.rok");
@@ -473,7 +473,7 @@ fn ty_text(hir: &HirModule, ty: &HirTy, full: bool) -> String {
     // the REPL shows them (907.7).
     let generic = |name: &str, args: &[HirTy]| {
         let base = name.split("__").next().unwrap_or(name);
-        // An item in a block by its own name (spec 3.9.1).
+        // An item in a block by its own name.
         let base = if full {
             std::borrow::Cow::Borrowed(base)
         } else {

@@ -1,4 +1,4 @@
-//! `ffi::wit::import` / `export` (stdlib 1.8): modules holding them get
+//! `ffi::wit::import` / `export`: modules holding them get
 //! `rokc_wit`'s bindings, the link the component's world.
 
 use std::path::Path;
@@ -113,7 +113,7 @@ pub fn expand(
                 diags,
                 format!(
                     "`ffi::wit` builds a WebAssembly component: it needs `--target wasm32-wasip2` \
-                     (or another component target), not {} (stdlib 1.8)",
+                     (or another component target), not {}",
                     target.name
                 ),
             );

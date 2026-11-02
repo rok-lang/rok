@@ -1,4 +1,3 @@
-// spec: §2.10.6 §2.6.9
 // expect-exit: 0
 // expect-stdout: 1 1 2
 

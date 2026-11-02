@@ -1,4 +1,3 @@
-// spec: std 209-collections §2.9.3 §2.9.4 §2.9.5
 // expect-exit: 0
 // forbid-warning: warning
 // expect-stdout:

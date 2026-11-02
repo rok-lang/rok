@@ -5,7 +5,6 @@
 // expect-error: help: write `unsafe { optind = 6; }`
 // expect-error: help: write `unsafe { optind += 1; }`
 // expect-error: help: write `unsafe { optind }`
-// spec: §5.9.3
 
 // An extern static is a C global Rok cannot check: reading or writing it
 // needs `unsafe`. `unsafe` blocks, `unsafe fn` bodies and `addr_of` are

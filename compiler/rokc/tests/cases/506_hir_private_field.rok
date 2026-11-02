@@ -1,6 +1,4 @@
-// spec: refs-lang §2.3.5
-// spec: 005.06-visibility
-// Accessing a private field from outside is an error (spec 5.6: fields are private by default).
+// Accessing a private field from outside is an error (fields are private by default).
 // expect-error: field `x` of `a::S` is private to module `a`
 
 mod a {
@@ -9,4 +7,3 @@ mod a {
 }
 
 fn main() -> i32 { let s = a::mk(); return s.x; }
-// spec: §5.6.8

@@ -1,4 +1,3 @@
-// spec: std 201-numbers §2.1.2 int, §2.1.5 literal, §2.1.6, 213 Default
 // expect-exit: 0
 // expect-stdout:
 // 1000000000000000000
@@ -10,9 +9,9 @@
 // true false
 
 
-// Spec 2.1.2: `int` never wraps (the 10^42 example), `/` truncates
-// (`7 / 2 = 3`, `-7 / 2 = -3`), Eq / Ord / Hash; 2.1.5: `let big: int
-// = 9999999999;`; 2.1.6: `int + int = int`, `a + int::from_i32(b)`;
+// `int` never wraps (the 10^42 example), `/` truncates
+// (`7 / 2 = 3`, `-7 / 2 = -3`), Eq / Ord / Hash; `let big: int
+// = 9999999999;`; `int + int = int`, `a + int::from_i32(b)`;
 // 2.1.5 Zero / One drive `sum` / `product`; 2.13.10 default is 0.
 fn main() {
     let big: int = 1;

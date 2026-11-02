@@ -22,4 +22,3 @@ let e: any Fault = Wrap { c: 3, cause: Wrap { c: 2, cause: Leaf { c: 1 } } };
 println(f"{e.depth()}");
 println(f"{e.code()}");
 
-// spec: 002.02-any-slot

@@ -24,4 +24,3 @@ fn main() {
     println(f"{double(c)}");
 }
 
-// spec: 002.08-trait

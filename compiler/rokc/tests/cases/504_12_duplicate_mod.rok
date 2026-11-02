@@ -1,7 +1,6 @@
-// spec: §5.4.12
-// expect-error: 6:1: module `foo` is declared twice in the same module
+// expect-error: 5:1: module `foo` is declared twice in the same module
 
-// 5.4.12: one module name is declared once per parent.
+// One module name is declared once per parent.
 mod foo { pub fn a() -> i32 { 1 } }
 mod foo { pub fn b() -> i32 { 2 } }
 

@@ -25,4 +25,3 @@ println(f"{show(Sq { s: 1 })}");
 println(f"{show(3)}");
 println(f"{s.size() + 33}");
 
-// spec: 002.02-any-slot

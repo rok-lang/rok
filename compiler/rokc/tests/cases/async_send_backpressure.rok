@@ -82,4 +82,3 @@ try await ztx.send_async(9) catch e: channel::SendError<i32> {
     match e { channel::SendError::Closed(v) => println(f"closed: Closed({v})"), }
 };
 
-// spec: 004.12-async

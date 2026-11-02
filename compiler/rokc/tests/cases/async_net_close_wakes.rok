@@ -83,4 +83,3 @@ println(f"registrations left: {task::registrations()}");
 try! idle_own.close();
 try! listener.close();
 
-// spec: std 302-net §3.2.0

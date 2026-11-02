@@ -1,7 +1,6 @@
-// spec: §5.5.1 §5.7.4
-// expect-error: diag_missing_import.rok:10:14: cannot find function `fs::read_to_str`: module `fs` is not imported here
+// expect-error: diag_missing_import.rok:9:14: cannot find function `fs::read_to_str`: module `fs` is not imported here
 // expect-error: help: add `use rok::std::fs;` at the top of the file
-// expect-error: diag_missing_import.rok:11:9: cannot find function `thread::spawn`: module `thread` is not imported here
+// expect-error: diag_missing_import.rok:10:9: cannot find function `thread::spawn`: module `thread` is not imported here
 // expect-error: help: add `use rok::std::thread;` at the top of the file
 // forbid-error: covers no throwing call
 

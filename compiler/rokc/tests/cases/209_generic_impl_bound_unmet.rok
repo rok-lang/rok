@@ -1,7 +1,6 @@
-// spec: 002.09.4-generic-impl-bounds
 // expect-error: does not apply to `Pair<bool, i32>`: its bound needs `bool: Num`
 
-// spec 2.9.4: a generic impl applies only where its bounds hold -
+// A generic impl applies only where its bounds hold -
 // `bool` has no `Num`, so `Pair<bool, i32>` has no `Show`.
 trait Num { fn num(self) -> i32; }
 trait Show { fn show(self) -> i32; }

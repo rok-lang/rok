@@ -1,9 +1,8 @@
-// spec: refs-lang §1.10.4
 // expect-exit: 0
 // expect-stdout:
 // 6
 
-// Spec 1.10.4 / 6.9.8: a meta block's template may use an extension
+// A meta block's template may use an extension
 // operator token (`⊕`) registered anywhere in the build.
 trait XorAdd {
     #[infix("⊕", like = "+")]
@@ -38,4 +37,3 @@ fn main() -> i32 {
     0
 }
 
-// spec: 006.08-meta-blocks

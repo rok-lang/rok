@@ -1,4 +1,3 @@
-// spec: std §2.1.4
 // expect-exit: 0
 // expect-stdout:
 // -128 127 0 255
@@ -19,7 +18,7 @@
 // 3 3 9 none none
 // true false 8 16 none
 
-// Stdlib spec 2.1.4: the integer primitives' limits, bit operations,
+// The integer primitives' limits, bit operations,
 // byte order and overflow-explicit arithmetic.
 
 fn show<T: Display>(x: T | none) -> str {

@@ -1,7 +1,6 @@
-// spec: 002.09.3-impl-overlap
 // expect-error: conflicting implementations of trait
 
-// spec 2.9.3: trait arguments that unify keep a concrete impl and a
+// Trait arguments that unify keep a concrete impl and a
 // blanket impl overlapping.
 trait Num { fn num(self) -> i32; }
 trait Pick<R> { fn pick(self, r: R) -> i32; }

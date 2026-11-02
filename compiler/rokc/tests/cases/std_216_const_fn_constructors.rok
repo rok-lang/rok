@@ -1,10 +1,9 @@
-// spec: std 216-sync §2.16.1
 // expect-exit: 0
 // expect-stdout:
 // once
 // 6
 
-// `Atomic::new` / `Once::new` / `Condvar::new` are `const fn`s (2.16).
+// `Atomic::new` / `Once::new` / `Condvar::new` are `const fn`s.
 
 use rok::core::sync::{Atomic, Once, Condvar};
 

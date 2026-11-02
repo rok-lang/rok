@@ -1,7 +1,6 @@
-// spec: std §2.9.3
 // `d[k]` with an absent key names the key and points at `get`.
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at tests/cases/std_dict_missing_key_panic.rok:11:16:
+// expect-stderr: thread 'main' panicked at tests/cases/std_dict_missing_key_panic.rok:10:16:
 // expect-stderr: key "b" not found; use `d.get(k)` to get `i64 | none`
 // expect-stdout: 1
 

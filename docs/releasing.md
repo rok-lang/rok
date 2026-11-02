@@ -105,8 +105,7 @@ version.)
 ## Installer contract
 
 Every 0.1.x `rok toolchain update` and install script must be able to
-install a new release, so the archive keeps what they rely on (spec
-9.10.6):
+install a new release, so the archive keeps what they rely on:
 
 - the name `rok-<version>-<triple>.tar.gz` / `.tar.xz` (Windows `.zip`),
   holding one top directory `rok-<version>-<triple>/`;

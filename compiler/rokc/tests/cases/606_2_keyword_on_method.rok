@@ -1,7 +1,6 @@
-// spec: §6.6.2
-// expect-error: 8:5: `#[keyword("frob")]` must be on a free function - its handler
+// expect-error: 7:5: `#[keyword("frob")]` must be on a free function - its handler
 
-// 6.6.2: a keyword handler is a free function, never a method or a
+// A keyword handler is a free function, never a method or a
 // trait item.
 struct S {}
 impl S {

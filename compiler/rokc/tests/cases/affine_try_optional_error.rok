@@ -1,6 +1,5 @@
-// spec: std 213-marker §2.13.4
-// expect-error: affine_try_optional_error.rok:13:5: `try?` drops the `SendError<TcpStream>` it catches, which can hold a value that must be closed
-// expect-error: affine_try_optional_error.rok:17:13: `try?` drops the `SendError<TcpStream>` it catches
+// expect-error: affine_try_optional_error.rok:12:5: `try?` drops the `SendError<TcpStream>` it catches, which can hold a value that must be closed
+// expect-error: affine_try_optional_error.rok:16:13: `try?` drops the `SendError<TcpStream>` it catches
 // expect-error: help: catch it instead: `try .. catch e { .. }`, take the value out of the `SendError<TcpStream>` and close it
 // forbid-error: affine_try_optional_error.rok:21
 

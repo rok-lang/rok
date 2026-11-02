@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `b` may hold one object twice
-// spec: std 213-marker §2.13.9
 // A user generic container whose method stores one value twice.
 use rok::std::thread;
 struct Bag<T> { items: List<T>; }

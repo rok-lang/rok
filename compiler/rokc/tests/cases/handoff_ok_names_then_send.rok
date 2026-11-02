@@ -3,7 +3,6 @@
 // expect-stdout:
 // 2 3
 
-// spec: std 213-marker §2.13.9
 // Read a field of each record after sending them: fine for Sync fields?
 use rok::std::thread;
 struct Rec { name: str; tags: List<str>; }

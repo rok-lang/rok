@@ -1,7 +1,6 @@
-// spec: 005.06.9-variant-visibility
 // expect-error: enum variants take the enum's visibility
 
-// spec 5.6.9: a variant has no visibility of its own - it follows the
+// A variant has no visibility of its own - it follows the
 // enum. Writing a visibility keyword on a variant is a compile error.
 pub enum Bad {
     pub A,

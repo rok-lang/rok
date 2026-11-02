@@ -192,4 +192,3 @@ fn main() {
     for e in try! t2.join() { println(f"optional server: {e}"); }
 }
 
-// spec: std 302-net §3.2.5

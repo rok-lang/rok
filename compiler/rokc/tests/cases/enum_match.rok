@@ -28,4 +28,3 @@ fn main() -> i32 {
     return code(d);
 }
 
-// spec: 002.04-enum

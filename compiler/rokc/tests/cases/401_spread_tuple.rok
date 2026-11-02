@@ -1,9 +1,8 @@
-// spec: 004.02.6-spread-tuple
 // expect-exit: 0
 // expect-stdout:
 // 6
 
-// spec 4.1: `f(..args)` spreads a tuple into positional arguments.
+// `f(..args)` spreads a tuple into positional arguments.
 fn add3(a: i32, b: i32, c: i32) -> i32 {
     return a + b + c;
 }

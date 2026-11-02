@@ -1,5 +1,5 @@
 // expect-error: where_on_types_unmet.rok:8:13: type `Tok` does not satisfy trait bound `Display` required by `W<Tok>`
-// Spec 2.10.4: a struct's `where` bounds are checked at each
+// A struct's `where` bounds are checked at each
 // instantiation, like inline bounds.
 struct Tok { v: i32; }
 struct W<T> where T: Display { v: T; }
@@ -9,4 +9,3 @@ fn main() -> i32 {
     return w.v.v;
 }
 
-// spec: 002.10-generics

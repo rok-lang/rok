@@ -1,7 +1,5 @@
-// spec: 006.10-reflect
 // expect-error: cannot find function `typeof`
 
-// 6.10.4 / 2.12.2: no global `typeof` / `sizeof` - `x.type_name_of_val()`.
+// No global `typeof` / `sizeof` - `x.type_name_of_val()`.
 let x = 1;
 let t = typeof(x);
-// spec: §6.10.4

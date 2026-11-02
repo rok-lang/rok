@@ -1,11 +1,10 @@
-// spec: refs-lang 002.08-trait §2.8.3
 // expect-exit: 0
 // expect-stdout:
 // 3 7 31 311
 // 3 31
 // 5
 
-// Spec 2.8.3a: associated consts come from the one impl registry, a
+// Associated consts come from the one impl registry, a
 // concrete impl's (inherent or trait) by its target, a generic impl's
 // by matching it; a generic impl's value sees its type parameters.
 trait Size {

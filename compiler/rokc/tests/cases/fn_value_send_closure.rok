@@ -1,11 +1,10 @@
-// spec: refs-lang §4.4.6
 // expect-exit: 0
 // expect-stdout:
 // 42
 // 7
 
 // A capturing closure goes into a `fn() -> T + Send` slot when its
-// captures are `Send + Sync` (spec 4.4.6; a capture is shared with the
+// captures are `Send + Sync` (a capture is shared with the
 // creator); the fat `{code, env}` value carries them.
 fn spawn<T: Send>(f: fn() -> T + Send) -> T { return f(); }
 

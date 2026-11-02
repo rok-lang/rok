@@ -30,7 +30,7 @@
 //!   - `// needs: threads net process fs posix-fs native-run` - skipped
 //!     on a target without one of them: threads only on `wasm32-wasip1-threads`
 //!     among the wasm32 targets, sockets only on `wasm32-wasip2`, no
-//!     processes or signals on wasm32 (stdlib 0.1.4, 3.x availability;
+//!     processes or signals on wasm32 (3.x availability;
 //!     `process` also covers POSIX C calls), a browser no file system
 //!     (`fs`), WASI no `dup` / `flock` / `mmap` (`posix-fs`)
 //!   - `// only-target: wasm32-wasip2 ..` - run only on the listed
@@ -49,7 +49,6 @@
 //!   - `// timeout: N`          - each build and run of the case may take
 //!     N seconds (default: `ROK_TEST_CASE_TIMEOUT`, else 600 to build and
 //!     300 to run); past it the process is killed and the case fails
-//!   - `// spec: <section>`     - the spec section a case checks (a tag)
 //!   - `native-run` is skipped when the target runs under CPU emulation
 //!     (a foreign arch executed through qemu-user), where some syscalls
 //!     (zerocopy, process and signal details) are not faithfully emulated.
@@ -68,7 +67,7 @@
 //!     built for it), e.g. `x86_64-apple-darwin` run under Rosetta.
 //!     `wasm32-wasip2` and `wasm32-wasip1-threads` run each module with
 //!     `ROK_TEST_WASM_RUNNER` (a `wasmtime` that still has wasi-threads:
-//!     46.0.3, the last);
+//!     The last);
 //!     `wasm32-unknown-unknown` with `node` and the toolchain's `rok.mjs`
 //!     host (all need `targets/build.sh <triple>` for the C library).
 //!   - `ROK_TEST_RUNNER=<program> [args]` - run a native target's case

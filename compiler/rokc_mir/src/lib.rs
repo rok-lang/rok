@@ -136,7 +136,7 @@ pub struct DebugTypes {
 #[derive(Clone, Debug, Default)]
 pub struct Link {
     /// Package hash per item-path prefix (`rok::core`, ..., `""` for the
-    /// user package; spec 0.3.3), longest prefix first. Empty: one hash
+    /// user package), longest prefix first. Empty: one hash
     /// over the printed MIR.
     pub packages: Vec<(String, String)>,
     /// This module is package `lib`'s prebuilt library: only that
@@ -149,10 +149,10 @@ pub struct Link {
     /// Added to every GC type id: the ids below belong to the prebuilt
     /// dependencies.
     pub type_offset: u32,
-    /// `#[link(..)]` libraries of `extern` blocks (spec 6.2.3):
+    /// `#[link(..)]` libraries of `extern` blocks:
     /// `(name, static)`, in first-seen order.
     pub native_libs: Vec<(String, bool)>,
-    /// `ffi::wit` (stdlib 1.8): what the component's link needs.
+    /// `ffi::wit`: what the component's link needs.
     pub wit: Option<WitLink>,
 }
 
@@ -237,7 +237,7 @@ pub struct MirFunction {
     /// In a function where a `rok::bare::ptr` value can appear: its locals
     /// holding GC references. Each stays rooted (so in place) until its
     /// scope ends, not only until its last use, and a coroutine keeps it
-    /// in its frame as a pinning word (stdlib 2.15 `str::as_ptr`).
+    /// in its frame as a pinning word (`str::as_ptr`).
     pub pins: Vec<LocalId>,
 }
 
@@ -322,7 +322,7 @@ pub enum Statement {
         volatile: bool,
     },
     // Field `index` of the `ty` (a tuple) payload of the GC object
-    // `ptr` = `value`, in place (coroutine frames, spec 708).
+    // `ptr` = `value`, in place (coroutine frames).
     HeapStore {
         ptr: Operand,
         ty: MirTy,
@@ -474,7 +474,7 @@ pub enum RValue {
         ty: MirTy,
     },
     // A zeroed GC object with a `ty` payload (traced by `ty`'s
-    // ScanTable); yields its `GcRef`. A coroutine frame (spec 708).
+    // ScanTable); yields its `GcRef`. A coroutine frame.
     HeapAlloc {
         ty: MirTy,
     },
@@ -485,7 +485,7 @@ pub enum RValue {
         index: u32,
     },
     // Indirect call through a function-typed operand: a rok `fn`
-    // value's code, or an `extern "C" fn` pointer (spec 5.9.4).
+    // value's code, or an `extern "C" fn` pointer.
     CallIndirect {
         callee: Operand,
         args: Vec<Operand>,

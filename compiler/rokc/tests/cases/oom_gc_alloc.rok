@@ -1,11 +1,10 @@
-// spec: refs-lang §5.9.4
 // expect-exit: 101
 // expect-stderr: rok runtime: allocation too large
 // expect-stdout:
 
 // A failed GC allocation ends in the `oom_fn` path (Fatal, exit 101),
 // the same one `rok::core::panic::oom()` takes. The declaration repeats
-// the runtime's own (spec 5.9.4).
+// the runtime's own.
 extern "C" {
     fn rok_gc_alloc_slow(size: usize, align: usize, type_id: u32) -> GcBuf<u8>;
 }

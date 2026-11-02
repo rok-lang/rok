@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `h.items` and `h` share an object, and `H::go` hands over the one and keeps using the other
-// spec: std 213-marker §2.13.9
 // A method's self field and its argument are one object.
 use rok::std::thread;
 struct H { items: List<i32>; }

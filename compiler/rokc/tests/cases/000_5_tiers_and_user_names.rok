@@ -1,12 +1,11 @@
-// spec: refs-lang §0.5.1 §0.5.2 §0.5.4
 // expect-exit: 0
 // expect-stdout:
 // 1 7 8 9
 // [1, 2] 3 8 true
 
-// 0.5.1 / 0.5.4: the tiers live under `rok::`, which names no user item:
+// The tiers live under `rok::`, which names no user item:
 // a local `rok` and user modules `std` / `bare` / `core` do not collide
-// with them. 0.5.2: `rok::core` items need no `use`; `rok::std` and
+// with them. `rok::core` items need no `use`; `rok::std` and
 // `rok::bare` items are reached by their `rok::` paths.
 mod std { pub fn f() -> i32 { 7 } }
 mod bare { pub fn g() -> i32 { 8 } }

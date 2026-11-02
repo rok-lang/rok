@@ -1,6 +1,5 @@
-// spec: §2.11.3
-// expect-error: 8:19: const parameter `X` has type `f64`
-// expect-error: 9:19: const parameter `X` has type `str`
+// expect-error: 7:19: const parameter `X` has type `f64`
+// expect-error: 8:19: const parameter `X` has type `str`
 // expect-error: help: use an integer type, such as `usize`
 
 // A const parameter is an integer, `bool`, `char` or `c_char`: anything

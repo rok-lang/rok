@@ -1,8 +1,7 @@
 // expect-exit: 0
-// spec: §6.2.11
 // needs: threads
-// expect-lint: 16:1 this thread is never joined, so the program may end before it finishes
-// expect-lint: 17:5 `h` is never used: the thread is never joined, so the program may end before it finishes
+// expect-lint: 15:1 this thread is never joined, so the program may end before it finishes
+// expect-lint: 16:5 `h` is never used: the thread is never joined, so the program may end before it finishes
 // expect-stdout:
 // 1
 

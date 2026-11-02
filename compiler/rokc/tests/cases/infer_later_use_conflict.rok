@@ -1,6 +1,5 @@
-// spec: §2.10.2 §5.1.7
-// expect-error: 10:5: conflicting uses of `c`
-// expect-error: `str` here, but `i32` fixed at 9:5
+// expect-error: 9:5: conflicting uses of `c`
+// expect-error: `str` here, but `i32` fixed at 8:5
 
 // Two later uses that disagree: the error names both sites.
 

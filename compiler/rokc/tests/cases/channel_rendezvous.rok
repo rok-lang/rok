@@ -8,7 +8,7 @@
 // 199800
 // freed
 
-// channel (2.17): `channel_bounded(0)` is a rendezvous (a `send` returns
+// channel: `channel_bounded(0)` is a rendezvous (a `send` returns
 // once the receiver took the value; `try_send` is `Full` with nobody
 // waiting); `for v in rx` (IntoIterator); a received value is not kept
 // alive by the channel.
@@ -70,5 +70,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: std 217-channel
-// spec: std §2.17.5

@@ -13,5 +13,3 @@ fn main() -> i32 {
     return 42;
 }
 
-// spec: 005.09-extern-block
-// spec: §5.9.6

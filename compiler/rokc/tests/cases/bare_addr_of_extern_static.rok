@@ -1,10 +1,9 @@
 // only-os: macos linux
 // expect-exit: 0
-// spec: std 101-ptr §1.1.2
 // expect-stdout:
 // 1 5 5
 
-// `addr_of` of a C library's `static` (stdlib 1.1.2). The UCRT has no
+// `addr_of` of a C library's `static`. The UCRT has no
 // data export to use: Windows is skipped.
 use rok::bare::ptr::addr_of;
 

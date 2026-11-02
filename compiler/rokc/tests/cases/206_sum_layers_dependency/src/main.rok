@@ -1,4 +1,3 @@
-// spec: §2.6.4 §2.6.6
 // rokc-arg: --extern ldep=tests/cases/206_sum_layers_dependency/ldep
 // expect-exit: 0
 // expect-stdout:

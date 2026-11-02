@@ -1,4 +1,4 @@
-//! Affine resources (stdlib 2.13.4): a value whose type implements `Drop`
+//! Affine resources: a value whose type implements `Drop`
 //! (a `File`, a socket, a channel `Sender`, an `Allocation`, ..) has one
 //! owner. `let b = a`, storing it into a struct, a tuple, an enum or a
 //! container, capturing it in a closure or an `async` block and returning
@@ -47,7 +47,7 @@ pub(super) enum Kind {
     Close,
 }
 
-/// Lock guards: only `using` releases one (stdlib 2.16.3), checked apart.
+/// Lock guards: only `using` releases one, checked apart.
 const GUARDS: &[&str] = &[
     "rok::core::sync::MutexGuard",
     "rok::core::sync::RwLockReadGuard",
@@ -1043,7 +1043,7 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                     });
                 format!(
                     "help: a `{ty}` has one owner, and {who} gave it away; use the new \
-                     owner{copy} (stdlib 2.13.4)"
+                     owner{copy}"
                 )
             };
             let here = if released {
@@ -1181,7 +1181,7 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                 let msg = format!("`{name}` holds a `{ty}` that this arm never closes");
                 let help = format!(
                     "help: closing a `{ty}` can fail, so it is not closed for you: add \
-                     `try {name}.close();` at the end of this arm (stdlib 2.13.4)"
+                     `try {name}.close();` at the end of this arm"
                 );
                 self.error(Code::UNCLOSED_RESOURCE, root.at, msg, |d| {
                     d.with_secondary(arm, "it is still open when this arm ends")
@@ -1219,14 +1219,14 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
         let help = if root.named {
             format!(
                 "help: closing a `{ty}` can fail, so it is not closed for you: add `try {}.close();` \
-                 before it leaves its scope, or bind it with `using {} = .. {{ .. }}` (stdlib 2.13.4)",
+                 before it leaves its scope, or bind it with `using {} = .. {{ .. }}`",
                 self.place_text(r, &path),
                 root.name
             )
         } else {
             format!(
                 "help: closing a `{ty}` can fail, so it is not closed for you: bind it with \
-                 `let x = ..;` and add `try x.close();`, or use `using x = .. {{ .. }}` (stdlib 2.13.4)"
+                 `let x = ..;` and add `try x.close();`, or use `using x = .. {{ .. }}`"
             )
         };
         self.error(Code::UNCLOSED_RESOURCE, bound, msg, |d| {
@@ -1318,11 +1318,7 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                             Code::UNCLOSED_RESOURCE,
                             value.span,
                             format!("`{who}` still holds an open `{ty}` when this replaces it"),
-                            |d| {
-                                d.with_note(format!(
-                                    "help: close it first: `try {who}.close();` (stdlib 2.13.4)"
-                                ))
-                            },
+                            |d| d.with_note(format!("help: close it first: `try {who}.close();`")),
                         );
                         let root = &self.roots[r];
                         for i in 0..root.leaves.len() {
@@ -1356,7 +1352,7 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                                 d.with_note(format!(
                                     "help: closing a `{ty}` can fail, so it is not closed for \
                                      you: bind it and close it (`let x = ..; try x.close();`), or \
-                                     use `using` (stdlib 2.13.4)"
+                                     use `using`"
                                 ))
                             },
                         );

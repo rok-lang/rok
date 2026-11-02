@@ -1,4 +1,4 @@
-//! Toolchains (spec 9.10.6, 9.2.19): self-contained
+//! Toolchains: self-contained
 //! `$ROK_HOME/toolchains/<version>-<triple>/`. `$ROK_HOME/bin/{rok,rokc,
 //! rokls}` are proxies that run the active toolchain's tool of the same
 //! name, picked by `+<version>`, else `ROK_TOOLCHAIN`, else the nearest
@@ -35,7 +35,7 @@ fn matches(pin: &str, version: &str) -> bool {
 pub const PIN_FORMS: &str =
     "write a version (`0.1`), a requirement (`^0.1.5`) or a toolchain directory name";
 
-/// A toolchain pin (spec 9.10.6): a version or a prefix of one (`0.1`,
+/// A toolchain pin: a version or a prefix of one (`0.1`,
 /// `0.1.5`), a requirement (`^0.1.5`, `~0.1.5`, `=0.1.5`), or a toolchain
 /// directory name (`0.1.5-<triple>`), which `find` matches by name.
 #[derive(Clone, Debug)]
@@ -491,7 +491,7 @@ pub struct Handoff {
     pub rok: PathBuf,
 }
 
-/// One toolchain per run (spec 9.10.6): when `+<version>`,
+/// One toolchain per run: when `+<version>`,
 /// `ROK_TOOLCHAIN` or `pin` names an installed toolchain other than this
 /// rok's, that toolchain. Compared by directory, then by `rok --version`,
 /// never by the pin's text: a pin naming a directory matches no version.

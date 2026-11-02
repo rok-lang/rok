@@ -1,4 +1,4 @@
-//! Use after hand-off (stdlib 2.13.9) is an error. rok has no moves: after
+//! Use after hand-off is an error. rok has no moves: after
 //! `Mutex::new(xs)`, `tx.send(xs)` or `Handoff::new(xs)`, `xs` still names
 //! an object other threads now share, and a handle taken from a guard
 //! (`g.get()`, `g.set(v)`, `g.update(f)`) is unprotected once its `using`
@@ -25,7 +25,7 @@
 //! variant, carrier error) so `if`/`while`/`match`/`catch`/`try?`/`??`
 //! pass only the paths they let through; equal paths merge, and past
 //! `MAX_PATHS` or `MAX_SPLIT_PASSES` all do. Joins are unions; loops run to
-//! a fixpoint. Exempt: `Sync` types, `unsafe` (spec 4.15.2), a `match` on a
+//! a fixpoint. Exempt: `Sync` types, `unsafe`, a `match` on a
 //! variable (its bindings are the uses) and compiler-made locals.
 //!
 //! Calls go through per-function summaries: what happens to each parameter
@@ -2066,7 +2066,7 @@ fn walk(c: &Checker<'_>, f: &HirFunction) -> WalkOut {
                 )
                 .with_note(
                     "help: give `with` a plain closure, and `await` outside it on a copy \
-                     (`.clone()`) or on what you computed from the value (stdlib 3.4.4)",
+                     (`.clone()`) or on what you computed from the value",
                 ),
             );
         }
@@ -2331,7 +2331,7 @@ impl<'h> Walk<'_, 'h> {
                 .with_secondary(site, "the lock is released here")
                 .with_note(format!(
                     "help: bind a guard with `using` once, and use `{x}` itself inside its block \
-                     (stdlib 2.16.3)"
+                    "
                 ))
             } else {
                 RokDiagnostic::error(
@@ -2345,8 +2345,7 @@ impl<'h> Walk<'_, 'h> {
                 .with_secondary(site, "the lock is released here")
                 .with_note(format!(
                     "help: a guard is only good inside its `using` block; do the work there, or \
-                     keep a deep copy of what it protects (`{gname}.get_clone()`) (stdlib \
-                     2.13.9)"
+                     keep a deep copy of what it protects (`{gname}.get_clone()`)"
                 ))
             };
             self.diags.push(d);
@@ -2408,7 +2407,7 @@ impl<'h> Walk<'_, 'h> {
             );
             d.notes = vec![format!(
                 "help: store separate values (`.clone()` what you store), or hand over \
-                 `{given}.clone()` (stdlib 2.13.9)"
+                 `{given}.clone()`"
             )];
         } else if in_elems {
             let line = self.line(origin, at);
@@ -2424,7 +2423,7 @@ impl<'h> Walk<'_, 'h> {
             };
             d.notes = vec![format!(
                 "help: take it out of `{x}` first ({take}) and hand that over, or hand over \
-                 {copy} (stdlib 2.13.9)"
+                 {copy}"
             )];
         }
         self.diags.push(d);
@@ -2564,7 +2563,7 @@ impl<'h> Walk<'_, 'h> {
                     ))
                     .with_note(format!(
                         "help: hand over `{who}.clone()` so each pass hands over its own copy, or \
-                         make `{who}` inside the loop (stdlib 2.13.9)"
+                         make `{who}` inside the loop"
                     ));
                 }
                 // Another handle to what was handed over.
@@ -2604,13 +2603,12 @@ impl<'h> Walk<'_, 'h> {
                             ),
                         };
                         diag.with_note(format!(
-                            "help: it belongs to the `{ty}` now; {through}, or {keep} (stdlib \
-                             2.13.9)"
+                            "help: it belongs to the `{ty}` now; {through}, or {keep}"
                         ))
                     }
                     What::Channel => diag.with_note(format!(
                         "help: the receiver owns it now; {keep}, or give `{who}` a new value before \
-                         using it again (stdlib 2.13.9)"
+                         using it again"
                     )),
                     What::Task => {
                         let future = written.is_some_and(|e| match &e.ty {
@@ -2625,14 +2623,13 @@ impl<'h> Walk<'_, 'h> {
                             format!(
                                 "help: the task runs it now; call the async fn again for a \
                                  second future, or give `{who}` a new value before using it \
-                                 again (stdlib 2.18.1)"
+                                 again"
                             )
                         } else {
                             format!(
                                 "help: the task works on its own copy, so changes it makes \
                                  are not seen here: return them from the task (`await`), \
-                                 {keep}, or share read-only data through `Frozen` (stdlib \
-                                 2.18.1)"
+                                 {keep}, or share read-only data through `Frozen`"
                             )
                         })
                     }
@@ -2643,7 +2640,7 @@ impl<'h> Walk<'_, 'h> {
                         );
                         diag.with_note(format!(
                             "help: the `Handoff` owns it now; read it through {getter}, or {keep} \
-                             (stdlib 2.13.9)"
+                            "
                         ))
                     }
                 }
@@ -2682,7 +2679,7 @@ impl<'h> Walk<'_, 'h> {
                 .with_secondary(site, format!("{verb} here"))
                 .with_note(format!(
                     "help: {} now; pass a `.clone()` to keep a separate copy, or give `{who}` a new \
-                     value before using it again (stdlib 2.13.9)",
+                     value before using it again",
                     match why.what {
                         What::Channel => "the receiver owns it".to_owned(),
                         What::Handoff => "the `Handoff` owns it".to_owned(),
@@ -2712,7 +2709,7 @@ impl<'h> Walk<'_, 'h> {
                     .with_secondary(site, format!("`{who}` given to the lock here"))
                     .with_note(format!(
                         "help: `{who}` belongs to the `{ty}` now; use it through the lock \
-                             (`{gname}.get()` inside a `using` block), or {keep} (stdlib 2.13.9)"
+                             (`{gname}.get()` inside a `using` block), or {keep}"
                     ))
                 } else if self.returning {
                     let copy = tie.map_or_else(
@@ -2729,7 +2726,7 @@ impl<'h> Walk<'_, 'h> {
                     .with_secondary(site, "taken out of the lock here")
                     .with_note(format!(
                         "help: the lock no longer protects it; return {copy}, or do the work \
-                         inside the `using` block (stdlib 2.13.9)"
+                         inside the `using` block"
                     ))
                 } else if tie_kind == Tie::Shared {
                     let from = tie
@@ -2745,8 +2742,7 @@ impl<'h> Walk<'_, 'h> {
                     .with_secondary(site, "the lock's value, taken out here")
                     .with_note(format!(
                         "help: the lock no longer protects `{who}`; use it inside the `using` \
-                         block, or store a copy: `.clone()` what you take out of `{}` (stdlib \
-                         2.13.9)",
+                         block, or store a copy: `.clone()` what you take out of `{}`",
                         tie.unwrap_or_else(|| format!("{gname}.get()"))
                     ))
                 } else {
@@ -2758,7 +2754,7 @@ impl<'h> Walk<'_, 'h> {
                     .with_secondary(site, format!("`{who}` taken out of the lock here"))
                     .with_note(format!(
                         "help: the lock no longer protects `{who}`; use it inside the `using` \
-                         block, or {copy} (stdlib 2.13.9)"
+                         block, or {copy}"
                     ))
                 }
             }
@@ -4091,9 +4087,8 @@ impl<'h> Walk<'_, 'h> {
             )
         };
         self.diags.push(
-            RokDiagnostic::error(Code::SHARED_HANDOFF, call.span, head).with_note(
-                "help: pass separate values (`.clone()` one of them) (stdlib 2.13.9)".to_owned(),
-            ),
+            RokDiagnostic::error(Code::SHARED_HANDOFF, call.span, head)
+                .with_note("help: pass separate values (`.clone()` one of them)".to_owned()),
         );
     }
 
@@ -4578,7 +4573,7 @@ impl<'h> Walk<'_, 'h> {
                 )
                 .with_note(format!(
                     "help: hand over a separate copy (`{}.clone()`), or take the value out with \
-                     `replace` / `take` (stdlib 3.4.4)",
+                     `replace` / `take`",
                     self.c.src(arg.span).unwrap_or("value")
                 )),
             );
@@ -4599,7 +4594,7 @@ impl<'h> Walk<'_, 'h> {
             .with_secondary(site, "taken out of the lock here")
             .with_note(format!(
                 "help: hand over a deep copy (`{}`), or take it out of the lock first \
-                 (`{gname}.set(..)` a new value) (stdlib 2.13.9)",
+                 (`{gname}.set(..)` a new value)",
                 deep_copy(self.c.src(arg.span).unwrap_or("value"))
             )),
         );
@@ -4716,7 +4711,7 @@ impl<'h> Walk<'_, 'h> {
                 )
                 .with_note(format!(
                     "help: the value may not leave the closure; pass a copy (`{}`), or take it \
-                     out with `replace` / `take` (stdlib 3.4.4)",
+                     out with `replace` / `take`",
                     deep_copy(text.unwrap_or("value"))
                 ))
             } else {
@@ -4746,7 +4741,7 @@ impl<'h> Walk<'_, 'h> {
                 };
                 d.with_note(format!(
                     "help: `{gname}`'s `using` block releases the lock while {who} still holds \
-                     it; pass a deep copy, `{copy}` (stdlib 2.16.3)"
+                     it; pass a deep copy, `{copy}`"
                 ))
             };
             self.diags.push(d);
@@ -4767,7 +4762,7 @@ impl<'h> Walk<'_, 'h> {
             )
             .with_note(format!(
                 "help: keep a copy (`{name}.clone()`), or take the value out with `replace` / \
-                 `take` (stdlib 3.4.4)"
+                 `take`"
             )),
         );
     }
@@ -4810,7 +4805,7 @@ impl<'h> Walk<'_, 'h> {
             .with_secondary(site, "taken out of the lock here")
             .with_note(format!(
                 "help: use it inside the `using` block, or make the block's value {copy} \
-                 (stdlib 2.13.9)"
+                "
             )),
         );
     }
@@ -4947,7 +4942,7 @@ impl<'h> Walk<'_, 'h> {
             );
             self.diags.push(d.with_note(
                 "help: return a copy (`.clone()`) or what you computed from it, or take the \
-                 value out with `replace` / `take` (stdlib 3.4.4)",
+                 value out with `replace` / `take`",
             ));
             return;
         }
@@ -5005,7 +5000,7 @@ impl<'h> Walk<'_, 'h> {
                 .with_secondary(site, "taken out of the lock here")
                 .with_note(format!(
                     "help: the lock stops protecting it; build the error from {taken}, or \
-                     handle it inside the `using` block (stdlib 2.13.9)"
+                     handle it inside the `using` block"
                 )),
             );
             return;
@@ -5029,7 +5024,7 @@ impl<'h> Walk<'_, 'h> {
             .with_secondary(site, "taken out of the lock here")
             .with_note(format!(
                 "help: the lock stops protecting it; {} {copy}, or do the work inside the \
-                 `using` block (stdlib 2.13.9)",
+                 `using` block",
                 if yields { "yield" } else { "return" }
             )),
         );
@@ -5083,7 +5078,7 @@ impl<'h> Walk<'_, 'h> {
                 ),
             )
             .with_note(format!(
-                "help: hand over a separate copy: `{}.clone()` (stdlib 2.13.9)",
+                "help: hand over a separate copy: `{}.clone()`",
                 self.c.src(arg.span).unwrap_or("value")
             )),
         );

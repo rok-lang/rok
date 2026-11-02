@@ -1,4 +1,3 @@
-// spec: std 307-process §3.7.2
 // only-os: macos linux
 // (/bin/sh: the one program path every Unix has, NixOS too)
 // needs: process

@@ -1,7 +1,6 @@
-// spec: 001.07.5-byte-strings
-// expect-error: 8:13: a byte string holds ASCII only; write other bytes as `\xHH`
-// expect-error: 9:13: a byte string escape must be at most `\xFF`
-// expect-error: 10:13: unknown escape sequence `\q`
+// expect-error: 7:13: a byte string holds ASCII only; write other bytes as `\xHH`
+// expect-error: 8:13: a byte string escape must be at most `\xFF`
+// expect-error: 9:13: unknown escape sequence `\q`
 
 // Only ASCII is written directly; escapes stop at `\xFF`.
 fn main() {

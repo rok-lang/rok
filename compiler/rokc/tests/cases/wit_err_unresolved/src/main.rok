@@ -1,7 +1,6 @@
-// spec: std §1.8.2
 // expect-error: i.wit:4:5: package `x:y` not found
 
-// Stdlib 1.8: a `use` of a package that is neither named nor in a
+// A `use` of a package that is neither named nor in a
 // `deps/` directory.
 ffi::wit::import { "i.wit" }
 

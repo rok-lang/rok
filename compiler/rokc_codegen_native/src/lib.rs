@@ -30,7 +30,7 @@ use rokc_mir::MirModule;
 pub struct Options {
     /// Panic on integer overflow.
     pub overflow_checks: bool,
-    /// `-g`: DWARF debug info (spec 9.9.6).
+    /// `-g`: DWARF debug info.
     pub debug: bool,
     /// Generate a REPL cell instead of a program.
     pub repl: Option<rokc_codegen_mlir::ReplCell>,

@@ -1,9 +1,8 @@
-// spec: 003.08.2-optional-chain-multi
 // expect-exit: 0
 // expect-stdout:
 // got_inner
 
-// spec 3.8.2: multi-level optional chaining `x?.field?.field`.
+// Multi-level optional chaining `x?.field?.field`.
 struct Inner {
     n: i32;
 }

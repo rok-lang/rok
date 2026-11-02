@@ -14,7 +14,7 @@
 // 12
 // 21
 
-// The rest of stdlib 2.7.1's adapters: enumerate / chain / take / skip
+// The rest of the iterator adapters: enumerate / chain / take / skip
 // (lazy), sum / product (empty sum = 0) / any / all / find / position /
 // min / max / last / nth (eager), with capturing closures.
 
@@ -65,4 +65,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: std 207-iter

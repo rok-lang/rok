@@ -1,4 +1,3 @@
-// spec: refs-lang §4.2.5
 // expect-exit: 0
 // expect-stdout:
 // 9 0 15 6
@@ -9,7 +8,7 @@
 // 8 6
 // 7
 
-// Spec 4.2.5 / 4.2.6: a variadic `...T` body sees a `Slice<T>` (one
+// A variadic `...T` body sees a `Slice<T>` (one
 // instantiation for every argument count), so a `List` spread passes
 // a runtime number of arguments; spreads mix with plain arguments.
 

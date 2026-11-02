@@ -1,8 +1,7 @@
-// spec: 005.05.3-use-alias
 // expect-exit: 42
 // expect-stdout:
 
-// spec 5.5.3: `use foo::name as alias` renames the import.
+// `use foo::name as alias` renames the import.
 mod m {
     pub fn very_long_name() -> i32 { 42i32 }
 }

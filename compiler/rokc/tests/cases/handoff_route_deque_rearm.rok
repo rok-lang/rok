@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `q` still holds `l`, which was handed to another owner
-// spec: std 213-marker §2.13.9
 use rok::std::thread;
 fn main() {
     let (tx, rx) = channel::<List<i32>>();

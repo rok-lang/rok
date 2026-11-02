@@ -1,8 +1,7 @@
-// spec: §6.7.2 §6.7.10
-// expect-error: 7:5: `#[infix]` takes only an operator token, `like = ".."` and `swap`: precedence and associativity are fixed by the language
+// expect-error: 6:5: `#[infix]` takes only an operator token, `like = ".."` and `swap`: precedence and associativity are fixed by the language
 
-// Spec 6.7.2: there is no precedence or associativity argument; levels
-// come only from the 3.2.3 table.
+// There is no precedence or associativity argument; levels
+// come only from the fixed precedence table.
 trait T {
     #[infix("⊕", prec = 3)]
     fn f(self, rhs: Self) -> i32;

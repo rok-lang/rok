@@ -1,8 +1,7 @@
-// spec: §2.6.8 §3.11.1
 // Rust's `Some(x)` pattern on a `T | none`: one error at the pattern,
 // with the type-test form; the failed pattern does not make a later arm
 // "unreachable".
-// expect-error: 10:5: cannot find enum variant `Some`
+// expect-error: 9:5: cannot find enum variant `Some`
 // expect-error: help: rok has no `Some`: match on the type; write `x: i32 => ..` and `none => ..`
 // forbid-error: unreachable match arm
 let v: i32 | none = 5;

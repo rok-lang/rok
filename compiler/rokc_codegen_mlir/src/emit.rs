@@ -120,10 +120,9 @@ pub struct Emitter {
     /// `gc_type_base() + i`. A REPL cell starts with the earlier cells'.
     pub gc_types: Vec<Vec<u32>>,
     pkgs: crate::mangle::Pkgs,
-    /// Panic on integer `+ - *` / negation overflow; wrap otherwise
-    /// (stdlib spec 0.5).
+    /// Panic on integer `+ - *` / negation overflow; wrap otherwise.
     pub overflow_checks: bool,
-    /// `-g`: DWARF state (spec 9.9.6).
+    /// `-g`: DWARF state.
     pub debug: Option<crate::debug::DebugInfo>,
     /// Build a REPL cell instead of a program.
     pub repl: Option<crate::ReplCell>,
@@ -155,9 +154,9 @@ pub(crate) struct FnSig {
     name: String,
     params: Vec<MirTy>,
     ret: MirTy,
-    /// A C declaration: its C lowering (spec 8.6).
+    /// A C declaration: its C lowering.
     c: Option<FnAbi>,
-    /// An `extern "C" fn` with aggregates (spec 5.9.10, 8.6.3): symbol and
+    /// An `extern "C" fn` with aggregates: symbol and
     /// type of the C entry (`emit_c_entry`); `name` is the rok-ABI body.
     c_entry: Option<(String, String)>,
     /// Its C declaration or C entry is `stdcall` (`FnAbi::stdcall`).
@@ -247,8 +246,8 @@ fn runtime_decl(name: &str, target: &Target) -> Option<String> {
     ))
 }
 
-/// Parameter types codegen uses for runtime symbols whose spec 8.5 types
-/// (`Ptr<u8>`, `ConstPtr<u8>`) differ. A program's own declaration of one
+/// Parameter types codegen uses for runtime symbols whose declared
+/// types (`Ptr<u8>`, `ConstPtr<u8>`) differ. A program's own declaration of one
 /// is declared and called with these too.
 fn codegen_params(name: &str, pw: u32) -> Option<Vec<String>> {
     let p = || "!llvm.ptr".to_owned();
@@ -367,7 +366,7 @@ impl Emitter {
             .is_some_and(|r| r.define.iter().any(|d| d == name))
     }
 
-    /// A definition private to this object (spec 904): in a prebuilt library
+    /// A definition private to this object: in a prebuilt library
     /// everything but the package's own items; with prebuilt deps, the
     /// copies of their code compiled here; in a program, everything not
     /// exported by name (REPL cells stay visible; the program's dispatcher
@@ -469,7 +468,7 @@ impl Emitter {
         }
         let windows = self.target.os == "windows";
         self.pkgs.set_statics(&module.statics, windows);
-        // Content-based package hashes (spec 0.3.3) come from the driver;
+        // Content-based package hashes come from the driver;
         // a bare MIR module (tests) hashes its printed MIR.
         if self.pkgs.link.packages.is_empty() {
             self.pkgs.link.packages = vec![(
@@ -710,7 +709,7 @@ impl Emitter {
     ) {
         let unit = self.unit.clone();
         // An `extern "C"` declaration of a symbol defined here
-        // (`#[export_name]`, spec 9.5.8) is the same function.
+        // (`#[export_name]`) is the same function.
         let defined: HashSet<&str> = view
             .iter()
             .filter(|f| f.facts.linkage == Linkage::Defined)
@@ -833,7 +832,7 @@ impl Emitter {
     }
 
     /// The `ScanTable`s (802) and `rok.register_types`, which registers them
-    /// and the static roots right after `rok_runtime_init` (§8.2.12).
+    /// and the static roots right after `rok_runtime_init`.
     fn emit_gc_support(&mut self, module: &MirModule) {
         let mut calls = String::new();
         // Earlier REPL cells registered the first tables.
@@ -980,7 +979,7 @@ impl Emitter {
                 continue;
             }
             if s.is_extern {
-                // Defined elsewhere (spec 5.9.3): a declaration only.
+                // Defined elsewhere: a declaration only.
                 let _ = writeln!(
                     self.out,
                     "  llvm.mlir.global external {constness}@{sym}() {{addr_space = 0 : i32}} : {ty_str}"
@@ -1056,7 +1055,7 @@ impl Emitter {
     /// `@sym.init(at)`: run `init` once; `at` locates the panic of a
     /// recursive initialization. Exported by the prebuilt library owning
     /// the static. `by_addr`: `init` returns through a leading pointer
-    /// (8.6.6), the static itself.
+    ///, the static itself.
     fn emit_lazy_init(
         &mut self,
         name: &str,
@@ -1324,7 +1323,7 @@ impl Emitter {
         self.out.push('\n');
     }
 
-    /// A function another unit defines: its rok body (spec 8.6.6), and
+    /// A function another unit defines: its rok body, and
     /// its C entry, which a function value may take.
     fn declare_unit_function(&mut self, sig: &FnSig) {
         let (params, ret) = sig.rok_types(&self.target);
@@ -1350,7 +1349,7 @@ impl Emitter {
         }
     }
 
-    /// C entry of an `extern "C" fn` (spec 8.6.3): takes arguments the C way
+    /// C entry of an `extern "C" fn`: takes arguments the C way
     /// (coerced, by pointer, `sret`), calls the rok body and returns the C
     /// way. Exported under `#[export_name]`, else internal unless `shared`
     /// with another unit.
@@ -1404,7 +1403,7 @@ impl Emitter {
             );
         };
         let sret = usize::from(abi.ret == RetAbi::Sret);
-        // A by-address result (spec 8.6.6) goes straight to C's `sret`
+        // A by-address result goes straight to C's `sret`
         // or to a slot.
         let by_ref_ret = rok_by_ref(&sig.ret, &self.target);
         let rty = mlir_type(&sig.ret, &self.target);
@@ -1470,8 +1469,8 @@ impl Emitter {
             self.needs.insert("rok_init_once");
             b.push_str("    func.call @rok_init_once() : () -> ()\n");
         }
-        // Called from C that this thread entered from rok (`PARKED`, 804
-        // §8.4.10): run as a mutator again for the body.
+        // Called from C that this thread entered from rok (`PARKED`):
+        // run as a mutator again for the body.
         self.needs.insert("rok_native_reenter");
         self.needs.insert("rok_native_resume");
         let _ = writeln!(
@@ -1523,7 +1522,7 @@ impl Emitter {
         self.out.push_str(&b);
     }
 
-    /// An `extern "C"` declaration under the platform C ABI (spec 8.6):
+    /// An `extern "C"` declaration under the platform C ABI:
     /// aggregates per `abi::classify`, `str` as `char*`, small integers
     /// caller-extended, variadics as an `llvm.func` with `...`.
     /// `wasm_import`: its wasm32 core import `(module, name)`.
@@ -1583,7 +1582,7 @@ impl Emitter {
         self.target.reactor()
     }
 
-    /// The C `main` (spec 905.9): runtime init, type registration, the
+    /// The C `main`: runtime init, type registration, the
     /// user's `main`, shutdown; its result is the exit code. On wasm32 it is
     /// `__main_void` (what wasi-libc's `_start` calls), or the export `main`
     /// in a browser reactor.
@@ -1750,7 +1749,7 @@ struct FnEmit<'a> {
     /// Lent `Emitter::gc_syms`.
     gc_syms: BTreeSet<String>,
     /// Blocks whose terminator takes a loop back-edge: a safepoint poll
-    /// goes right before it (804 §8.4.8). Each maps to its loop headers.
+    /// goes right before it. Each maps to its loop headers.
     back_edges: HashMap<u32, HashSet<u32>>,
     /// Loop headers entered through `^rok_re<H>`: every edge but the fast
     /// back edge goes there, so the yield call sits in an outer loop and
@@ -1765,7 +1764,7 @@ struct FnEmit<'a> {
     /// The frame's root cell for a rooted local, besides its own slot (not
     /// arrays). Writes go to both; reads use the
     /// slot, which nothing else reaches, so loads survive calls (a root's
-    /// object never moves, 704 §7.4.1).
+    /// object never moves).
     root_cells: HashMap<u32, String>,
     /// Rooted locals whose own slot is the root (no root cell).
     root_slots: HashSet<u32>,
@@ -1889,8 +1888,8 @@ pub(crate) struct GcFrame {
     link: String,
 }
 
-/// Where a function links its frame (804 §8.4.7) and, if reentrant, polls
-/// (§8.4.2): before the first safepoint of each path, so paths reaching
+/// Where a function links its frame and, if reentrant, polls:
+/// before the first safepoint of each path, so paths reaching
 /// none pay for neither.
 #[derive(Default)]
 pub(crate) struct Links {
@@ -1993,7 +1992,7 @@ pub fn body_safepoints(
 
 /// Functions some call cycle may pass through.
 ///
-/// Every such cycle polls (804 §8.4.2). Members of a direct-call cycle,
+/// Every such cycle polls. Members of a direct-call cycle,
 /// callers of what this module can't see (indirect calls, C), functions
 /// called from C or through a pointer, and `any` dispatchers; the rest
 /// are only entered from callers that poll.
@@ -2373,7 +2372,7 @@ impl<'a> FnEmit<'a> {
 
     /// A `str` argument for a runtime function codegen calls itself, and its
     /// type: Windows x64 and wasm pass the two-word struct by reference
-    /// (8.6.3), so a pointer to a copy there.
+    ///, so a pointer to a copy there.
     fn runtime_str(&mut self, v: &str) -> (String, String) {
         let ty = mlir_prim(PrimTy::Str, self.target.pointer_width);
         if !self.target.c_abi.pair_by_ref() {
@@ -2426,7 +2425,7 @@ impl<'a> FnEmit<'a> {
         );
     }
 
-    /// Write barrier (704 §7.4.2, 809 §8.9.10) before storing a reference
+    /// Write barrier before storing a reference
     /// into `obj` at `slot` (`len` bytes): the fast path tests the header's
     /// `UNLOGGED | CARDED` bits (old objects only). `UNLOGGED` calls
     /// `rok_gc_wb_slow(obj)`; `CARDED` (large old objects) marks the cards
@@ -2516,7 +2515,7 @@ impl<'a> FnEmit<'a> {
         );
     }
 
-    /// Safepoint poll (804 §8.4.1, 809 §8.9.11): relaxed load of
+    /// Safepoint poll: relaxed load of
     /// `rok_tls_yield_flag`, `rok_runtime_yield` when set; continues in a
     /// fresh block. `back`: the back-edge poll ending that block.
     fn emit_poll(&mut self, back: Option<u32>) {
@@ -2602,7 +2601,7 @@ impl<'a> FnEmit<'a> {
         n
     }
 
-    /// Into (`enter`) or out of a C call (804 §8.4.10): the inline fast path
+    /// Into (`enter`) or out of a C call: the inline fast path
     /// of `rok_enter_native` / `rok_leave_native`. Store the state, then
     /// read the yield flag (both `seq_cst`, since a stopper raises the flag
     /// and then reads the state); a raised flag takes the slow path.
@@ -2651,7 +2650,7 @@ impl<'a> FnEmit<'a> {
         self.block_param_set.contains(&id.0)
     }
 
-    /// Locals built directly in a by-address result (`%arg0`, 8.6.6): the
+    /// Locals built directly in a by-address result (`%arg0`): the
     /// one every return returns, or a temporary only its block's return
     /// reads (`once`). Not parameters, rooted locals, address-taken ones or
     /// ones whose scope ends first: the caller's result is no root and only
@@ -2916,7 +2915,7 @@ impl<'a> FnEmit<'a> {
         }
     }
 
-    /// Shadow-stack frame (704 §7.4.1) for a function holding GC references
+    /// Shadow-stack frame for a function holding GC references
     /// that can reach a safepoint: `{prev, count, slots[count]}`, each slot
     /// the address of a word that may hold a reference
     /// (`Target::root_offsets`) in a local's or block param's slot. Slots
@@ -3346,7 +3345,7 @@ impl<'a> FnEmit<'a> {
     }
 
     /// Does `ty` live in memory and move by `memcpy`: an aggregate over 64
-    /// bytes (passed by address, 8.6.6)? As LLVM values those cost
+    /// bytes (passed by address)? As LLVM values those cost
     /// optimizer time quadratic in their size.
     fn in_memory(&self, ty: &MirTy) -> bool {
         rok_by_ref(ty, self.target)
@@ -3927,7 +3926,7 @@ impl<'a> FnEmit<'a> {
                 abi: Abi::C { variadic, system },
             } => {
                 // A call through an `extern "C"` / `extern "system"` fn
-                // pointer (spec 5.9.4).
+                // pointer.
                 let fn_ty = MirTy::Fn(arg_tys.clone(), Box::new(ret_ty.clone()));
                 let ptr = self.materialize_operand(callee, &fn_ty);
                 let what = "a call through an `extern \"C\" fn` pointer";
@@ -4066,7 +4065,7 @@ impl<'a> FnEmit<'a> {
     }
 
     /// A zeroed GC object of `ty`; returns the `GcRef`. Small objects bump
-    /// the TLAB inline (702 §7.2.2, 809 §8.9.9) and write the header
+    /// the TLAB inline and write the header
     /// (`gc_word` = size, which the block heap parses by); else
     /// `rok_gc_alloc_slow`.
     fn emit_gc_object(&mut self, ty: &MirTy) -> String {
@@ -4268,7 +4267,7 @@ impl<'a> FnEmit<'a> {
         p
     }
 
-    /// LLVM atomics on a buffer element (stdlib 2.16.2); `bool` through its
+    /// LLVM atomics on a buffer element; `bool` through its
     /// `i8` byte. `order`: the LLVM ordering (`cas`: success, failure).
     fn emit_buf_atomic(
         &mut self,
@@ -4647,7 +4646,7 @@ impl<'a> FnEmit<'a> {
                 }
             }
             (false, true, true, false) => {
-                // float → int saturates, NaN → 0 (spec 2.11.6); plain
+                // float → int saturates, NaN → 0; plain
                 // `fptosi` is poison out of range.
                 let mn = if tp.is_signed_int() {
                     "fptosi"
@@ -4733,7 +4732,7 @@ impl<'a> FnEmit<'a> {
             };
             let _ = writeln!(self.body, "    llvm.store {v}, {slot} : {from}, !llvm.ptr");
             // The tail a shorter payload leaves reads as zero, not stale
-            // stack: a root word copied out of the union is null (8.9.12).
+            // stack: a root word copied out of the union is null.
             let (fs, ss) = (
                 self.target.size_align(from_ty).0,
                 self.target.size_align(slot_ty).0,
@@ -4877,7 +4876,7 @@ impl<'a> FnEmit<'a> {
             return;
         }
         // A debug rokc brackets a `#[no_safepoint]` call, so the runtime
-        // can tell if one ever waits for a collection (804 §8.4.8).
+        // can tell if one ever waits for a collection.
         // A runtime function is quiet only by `#[no_safepoint]`.
         let check = cfg!(debug_assertions) && sig.runtime && self.quiet.contains(&callee);
         if check {
@@ -5195,8 +5194,8 @@ impl<'a> FnEmit<'a> {
         let lhs = res.as_ref().map(|r| format!("{r} = ")).unwrap_or_default();
         let rty = call_ret.clone().unwrap_or_else(|| "()".to_owned());
         let (list, tlist) = (ops.join(", "), op_tys.join(", "));
-        // A C call may block: the thread is `PARKED` meanwhile (804
-        // §8.4.10), its references rooted in the frame. Not for runtime
+        // A C call may block: the thread is `PARKED` meanwhile,
+        // its references rooted in the frame. Not for runtime
         // calls, nor `rok_*` symbols declared `extern "C"` (they may
         // allocate, which must not overlap another thread's collection).
         let parked = !abi.rok && !matches!(callee, Callee::Symbol(n) if n.starts_with("rok_"));
@@ -6192,7 +6191,7 @@ fn c_type(ty: &MirTy, target: &Target) -> String {
     mlir_type(ty, target)
 }
 
-/// MLIR parameter and result types of a rok function (8.6.6): a by-address
+/// MLIR parameter and result types of a rok function: a by-address
 /// argument is a pointer the callee copies from; a by-address result goes
 /// through a leading pointer and the function returns nothing.
 fn rok_fn_types(params: &[MirTy], ret: &MirTy, target: &Target) -> (Vec<String>, Option<String>) {
@@ -6315,7 +6314,7 @@ const fn is_slotted(ty: &MirTy) -> bool {
     !matches!(ty, MirTy::Unit | MirTy::Any)
 }
 
-/// `(total_size, align)` of a GC object with a `ty` payload (801 §8.1.7).
+/// `(total_size, align)` of a GC object with a `ty` payload.
 pub fn gc_object_size(ty: &MirTy, target: &Target) -> (u32, u32) {
     let (size, align) = target.size_align(ty);
     let align = align.max(8);

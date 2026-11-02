@@ -1,6 +1,5 @@
-// spec: 002.02.10-any-trait
-// expect-error: 15:13: cannot call `make` on `any Make`: its type parameter `T` can't be inferred from the arguments or the expected type; name it: `.make::<T>(..)`
-// expect-error: 16:13: type `Bare` does not satisfy trait bound `Display` required by `show`
+// expect-error: 14:13: cannot call `make` on `any Make`: its type parameter `T` can't be inferred from the arguments or the expected type; name it: `.make::<T>(..)`
+// expect-error: 15:13: type `Bare` does not satisfy trait bound `Display` required by `show`
 
 // A type parameter of the method that nothing at the call fixes is named
 // with `::<..>`; the bounds are checked at the call.

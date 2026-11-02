@@ -1,10 +1,9 @@
-// spec: §3.5.3 §2.10.2
 // expect-exit: 42
 // expect-stdout:
 // 41 1
 
 // A method path value bound by an un-annotated `let` takes its `fn` type
-// from the later calls (spec 3.5.3, 2.10.2).
+// from the later calls.
 
 struct Box<T> { v: T; }
 impl<T> Box<T> {

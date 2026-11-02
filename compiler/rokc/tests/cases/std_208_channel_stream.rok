@@ -1,10 +1,9 @@
-// spec: std 200-core/208-stream §2.8.7
 // expect-exit: 0
 // expect-stdout:
 // got 1 2 3
 // closed
 
-// stdlib 2.8.7: a channel `Receiver<T>` is a `Stream<Item = T>`, so
+// A channel `Receiver<T>` is a `Stream<Item = T>`, so
 // `for await` drains it; the loop ends once the sender side is closed
 // and the buffer is empty.
 async fn main() {

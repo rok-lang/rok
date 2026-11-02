@@ -1,9 +1,8 @@
-// spec: §6.2.10
 // rokc-arg: --extern ndep=tests/cases/non_exhaustive_struct_pattern_rest/ndep
 // expect-error: pattern on `ndep::Config` needs `..`: it is `#[non_exhaustive]` in another package, which may add fields; write `Config { port, verbose, .. }`
-// expect-error: src/main.rok:19:5
+// expect-error: src/main.rok:18:5
 // expect-error: write `Config { .. }`
-// expect-error: src/main.rok:21:9
+// expect-error: src/main.rok:20:9
 
 // A pattern on another package's `#[non_exhaustive]` struct ends in
 // `..`. Its literals and `..base` spreads are allowed.

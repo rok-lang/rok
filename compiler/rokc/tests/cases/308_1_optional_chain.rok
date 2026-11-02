@@ -1,10 +1,9 @@
-// spec: 003.08.1-optional-chain
 // expect-exit: 0
 // expect-stdout:
 // 7
 // none
 
-// spec 3.8.1: `x?.field` on `T | none`: none if `x` is none, else the field.
+// `x?.field` on `T | none`: none if `x` is none, else the field.
 struct P {
     n: i32;
 }
@@ -31,4 +30,3 @@ fn main() -> i32 {
     }
     return 0;
 }
-// spec: §3.5.5

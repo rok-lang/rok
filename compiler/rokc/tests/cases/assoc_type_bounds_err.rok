@@ -2,7 +2,7 @@
 // expect-error: 29:1: associated type `Label` = `T` does not implement `Display` for every `T` the impl allows, a bound of `Shape::Label`
 
 // An impl's associated type must meet the bounds the trait declares on
-// it (2.8.3), whether written or taken from the default; a generic
+// it, whether written or taken from the default; a generic
 // impl's only through its parameters' bounds.
 
 use rok::core::fmt::Display;
@@ -39,4 +39,3 @@ impl<T: Display> Shape for V<T> {
 }
 
 fn main() -> i32 { return 0; }
-// spec: refs-lang §2.8.3

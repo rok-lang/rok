@@ -1,11 +1,10 @@
-// spec: 007.07-io-and-timer §7.7.5-7.7.6
 // expect-exit: 0
 // expect-stdout:
 // 20ms sleep not early: true
 // deadline sleep not early: true
 // zero sleep returns: true
 
-// spec 7.7.6: a timer never fires before its deadline (it may fire later
+// A timer never fires before its deadline (it may fire later
 // by up to the timer resolution); a zero-length sleep just yields.
 async fn main() {
     let t0 = Instant::now();

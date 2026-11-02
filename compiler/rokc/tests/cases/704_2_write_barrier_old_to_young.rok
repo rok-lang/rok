@@ -1,10 +1,9 @@
-// spec: 007.04-barriers-and-roots §7.4.2 / 007.03-gc-algorithm §7.3.2
 // expect-exit: 0
 // expect-stdout:
 // 300 n0 n299
 // 300 v0 v299
 
-// spec 7.4.2 / 7.3.2: an object that survived a collection (old, sticky
+// An object that survived a collection (old, sticky
 // mark) that is later made to point at freshly allocated (young) objects
 // must keep them alive across the following collections - the write
 // barrier records the old -> young edge.

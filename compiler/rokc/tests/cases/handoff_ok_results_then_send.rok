@@ -3,7 +3,6 @@
 // expect-stdout:
 // sent; total 30; rows 5
 
-// spec: std 213-marker §2.13.9
 // Build a list of result rows, send the whole thing, keep a summary.
 use rok::std::thread;
 fn compute(i: i32) -> List<i32> { [i, i * i] }

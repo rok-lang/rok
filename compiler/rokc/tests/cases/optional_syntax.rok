@@ -6,7 +6,7 @@
 // generic: s s 7 none
 // is: true false
 
-// `T?` (spec 2.6.5) is the generic alias `Maybe<T>`: `i32?` is
+// `T?` is the generic alias `Maybe<T>`: `i32?` is
 // `i32 | none` and `(i32 | str)?` flattens, but `(i32 | none)?` and
 // `i32??` keep two layers. Postfix `?` binds tighter than `|`.
 type Opt = i32 | none;
@@ -58,6 +58,4 @@ fn main() {
     println(f"is: {k is i32?} {s is i32?}");
 }
 
-// spec: 003.08-optional-chaining-and-coalescing
 
-// spec: §2.6.4 §2.6.5

@@ -383,4 +383,3 @@ fn main() {
     println(f"total: {total} cases, {failed} failed");
 }
 
-// spec: std 221-crypto §2.21.1-2.21.4

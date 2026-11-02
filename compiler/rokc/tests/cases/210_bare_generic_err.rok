@@ -1,12 +1,11 @@
-// spec: §2.10.2 §2.10.5
-// expect-error: 210_bare_generic_err.rok:21:15: `S` needs generic arguments
+// expect-error: 210_bare_generic_err.rok:20:15: `S` needs generic arguments
 // expect-error: help: `S` is declared `S<T>`; write it with them, e.g. `S<i32>`
-// expect-error: 210_bare_generic_err.rok:22:9: `P` needs generic arguments
+// expect-error: 210_bare_generic_err.rok:21:9: `P` needs generic arguments
 // expect-error: help: `P` is declared `P<T, U = i32>`; write it with them, e.g. `P<i32>`
-// expect-error: 210_bare_generic_err.rok:23:11: `Al` needs generic arguments
+// expect-error: 210_bare_generic_err.rok:22:11: `Al` needs generic arguments
 // expect-error: help: `Al` is declared `Al<T>`; write it with them, e.g. `Al<i32>`
-// expect-error: 210_bare_generic_err.rok:24:9: `E` needs generic arguments
-// expect-error: 210_bare_generic_err.rok:25:9: `Q` needs generic arguments
+// expect-error: 210_bare_generic_err.rok:23:9: `E` needs generic arguments
+// expect-error: 210_bare_generic_err.rok:24:9: `Q` needs generic arguments
 // expect-error: help: `Q` is declared `Q<T>`; write it with them, e.g. `Q<i32>`
 
 mod m {

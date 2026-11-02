@@ -1,4 +1,3 @@
-// spec: 2.9.1
 // expect-exit: 0
 // A dict / set literal whose first item starts with `[` is not a block.
 // expect-stdout:

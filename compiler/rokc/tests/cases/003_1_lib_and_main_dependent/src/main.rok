@@ -1,4 +1,3 @@
-// spec: §0.3.1 §9.2.3
 // rokc-arg: --extern app=tests/cases/003_1_lib_and_main
 // expect-exit: 0
 // expect-stdout:

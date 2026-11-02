@@ -1,11 +1,10 @@
-// spec: std §2.9.12
 // expect-exit: 0
 // expect-stdout:
 // 0 7 9 true
 // 65 70000 true 1.5 x
 
-// Stdlib 2.9.12: `GcBuf::new` / `get` / `set` (the method forms of
-// `buf_new` / `buf_get` / `buf_set`). Stdlib 2.11 / 2.13: primitive
+// `GcBuf::new` / `get` / `set` (the method forms of
+// `buf_new` / `buf_get` / `buf_set`). Primitive
 // `From` / `Clone` are the `rok.cast.FROM.TO` / `rok.clone.copy`
 // intrinsics.
 use rok::bare::mem::{GcBuf, buf_get};

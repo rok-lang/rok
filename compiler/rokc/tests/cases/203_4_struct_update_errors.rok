@@ -1,9 +1,8 @@
-// spec: 002.03.4-field-spread
 // The base must be a value of the same struct type, and only a struct
 // takes `..base`.
-// expect-error: 13:25: mismatched types: the `..` base expects `S`, found `T`
-// expect-error: 14:13: `..base` needs a struct; `E::V` is an enum variant
-// expect-error: 15:13: struct `S` has no field `z`
+// expect-error: 12:25: mismatched types: the `..` base expects `S`, found `T`
+// expect-error: 13:13: `..base` needs a struct; `E::V` is an enum variant
+// expect-error: 14:13: struct `S` has no field `z`
 
 struct S { a: i32; b: i32; }
 struct T { a: i32; b: i32; }

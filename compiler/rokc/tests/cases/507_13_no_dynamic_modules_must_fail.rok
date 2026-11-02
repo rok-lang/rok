@@ -1,7 +1,6 @@
-// spec: refs-lang §5.7.13
 // expect-error: cannot find function `m::bar` in this scope
 
-// 5.7.13: the module part of a path is static - a variable holding a
+// The module part of a path is static - a variable holding a
 // module's name is not a module.
 mod foo { pub fn bar() {} }
 

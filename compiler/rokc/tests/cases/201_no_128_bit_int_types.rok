@@ -1,7 +1,6 @@
-// spec: std 201-numbers §2.1.4
-// expect-error: 11:12: cannot find type `u128` in this scope
-// expect-error: 14:12: cannot find type `i128` in this scope
-// expect-error: 15:13: cannot find value `i128::MAX` in this scope
+// expect-error: 10:12: cannot find type `u128` in this scope
+// expect-error: 13:12: cannot find type `i128` in this scope
+// expect-error: 14:13: cannot find value `i128::MAX` in this scope
 // expect-error: help: rok has no `u128`; use `int` for integers of any size, or `u64`
 // expect-error: help: rok has no `i128`; use `int` for integers of any size, or `i64`
 // forbid-error: did you mean

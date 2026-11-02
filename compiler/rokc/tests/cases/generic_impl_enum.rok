@@ -20,4 +20,3 @@ if half(4).is_ok() { println(f"{1}"); }
 // Path form, and a method returning the receiver's own instantiation.
 if Res::is_ok(half(8).map_ok_twice()) { println(f"{2}"); }
 
-// spec: 002.10-generics

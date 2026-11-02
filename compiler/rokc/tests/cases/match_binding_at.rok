@@ -92,4 +92,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 003.12-match-expression

@@ -12,4 +12,3 @@ fn main() -> i32 {
         "x");
     return r + q;
 }
-// spec: refs-lang §9.2.6

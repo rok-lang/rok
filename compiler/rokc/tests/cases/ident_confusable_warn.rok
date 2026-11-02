@@ -1,9 +1,8 @@
-// spec: refs-lang §1.4.2
 // expect-exit: 0
 // expect-stdout: 1 2 1 1
-// expect-lint: 9:9 identifier `σ2` looks like `σ²` (confusable spelling)
-// expect-lint: 11:9 identifier `pаy` mixes Cyrillic with Latin or Greek letters
-// Spec 1.4.2: distinct names with one confusable skeleton warn.
+// expect-lint: 8:9 identifier `σ2` looks like `σ²` (confusable spelling)
+// expect-lint: 10:9 identifier `pаy` mixes Cyrillic with Latin or Greek letters
+// Distinct names with one confusable skeleton warn.
 fn main() {
     let σ² = 1;
     let σ2 = 2;

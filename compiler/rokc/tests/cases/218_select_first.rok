@@ -1,10 +1,9 @@
-// spec: std 200-core/218-task §2.18.1
 // expect-exit: 0
 // expect-stdout:
 // first 1 b
 // tie 0 a
 
-// 2.18.1 `select`: the first future to finish, polled in list order
+// `select`: the first future to finish, polled in list order
 // inside the waiting task; on a tie the lower index wins.
 async fn after(steps: i32, s: str) -> str {
     let i = 0;

@@ -3,7 +3,6 @@
 // expect-stdout:
 // done 8 left 0
 
-// spec: std 213-marker §2.13.9
 // Work queue: jobs popped off a list and sent to workers; results back.
 use rok::core::marker::share;
 use rok::std::thread;

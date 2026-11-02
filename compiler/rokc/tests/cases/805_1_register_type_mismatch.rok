@@ -1,7 +1,6 @@
-// spec: refs-lang §8.5.1 §5.9.4
 // expect-error: extern function `rok_gc_register_type` is declared twice with different signatures: `fn(u32, usize) -> ()` here, `fn(u32, ConstPtr<u8>) -> ()` elsewhere; a `rok_*` symbol is the runtime's: declare it with the runtime's signature
 // `rok::core::rt` declares the runtime symbols codegen calls on its own:
-// a program's declaration of one must have the spec 8.5 signature.
+// a program's declaration of one must have the runtime's signature.
 extern "C" {
     fn rok_gc_register_type(type_id: u32, table: usize);
 }

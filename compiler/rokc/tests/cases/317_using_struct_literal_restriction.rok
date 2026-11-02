@@ -13,4 +13,3 @@ fn main() {
     using a = (R { n: 1 }) {}
     using b = R { n: 2 } {}
 }
-// spec: §3.17.1 §3.10.3

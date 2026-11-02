@@ -18,4 +18,3 @@ fn main() -> i32 {
     return first_double_over(1i32, 100i32);
 }
 
-// spec: 003.13-loop-expressions

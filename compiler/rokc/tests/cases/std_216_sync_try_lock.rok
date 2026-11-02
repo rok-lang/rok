@@ -1,4 +1,3 @@
-// spec: std 216-sync §2.16.3 / §2.16.4
 // expect-exit: 0
 // expect-stdout:
 // try_lock while held: none
@@ -8,10 +7,10 @@
 // try_read under write: none
 // write after readers: 2
 
-// spec 2.16.3: `try_lock` is non-blocking and returns none while locked;
-// 2.16.4: readers share, a writer is exclusive (`try_read` / `try_write`
+// `try_lock` is non-blocking and returns none while locked;
+// Readers share, a writer is exclusive (`try_read` / `try_write`
 // return none on conflict). Acquired guards are released with `using`
-// (no scope-exit drop, 2.13.4).
+// (no scope-exit drop).
 fn main() {
     let m = Mutex::new(5);
     using g = m.lock() {

@@ -1,5 +1,5 @@
 // expect-error: the closure's captures don't meet the `fn` type's bounds
-// `par::for_each` takes `fn(T) + Send + Sync` (2.19.1): a closure
+// `par::for_each` takes `fn(T) + Send + Sync`: a closure
 // capturing a `Cell` (not Sync) is rejected.
 fn main() -> i32 {
     let c = Cell::new(0);
@@ -8,4 +8,3 @@ fn main() -> i32 {
     return c.get();
 }
 
-// spec: std 219-par

@@ -1,10 +1,9 @@
 // expect-exit: 0
 // expect-stdout: 7 s 2
 
-// 3.15: an annotated element of a destructuring `let` is a typed slot.
+// An annotated element of a destructuring `let` is a typed slot.
 fn main() {
     let (a: i32, b: str) = (7, "s");
     let (_: i32, c) = (1, 2);
     println(f"{a} {b} {c}");
 }
-// spec: §3.15.6

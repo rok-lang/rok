@@ -1,9 +1,8 @@
-// spec: §3.11.1 §2.4.8
-// expect-error: variant_target_typed_match.rok:20:37: variant `Color::Custom` has a payload: match it as `Custom(..)`
+// expect-error: variant_target_typed_match.rok:19:37: variant `Color::Custom` has a payload: match it as `Custom(..)`
 // forbid-error: new variable
 // forbid-error: unreachable match arm
 
-// spec 2.4.8 / 3.11: a bare name in a pattern that is a variant of the
+// A bare name in a pattern that is a variant of the
 // scrutinee's enum is that variant, imported or not. A payload variant
 // still needs its payload pattern.
 

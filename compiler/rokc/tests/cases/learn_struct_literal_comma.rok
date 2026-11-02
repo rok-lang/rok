@@ -1,6 +1,5 @@
-// spec: §2.3.2
 // A struct literal field without the `,` before the next one.
-// expect-error: 6:22: expected `,` or `}`, found field `y`
+// expect-error: 5:22: expected `,` or `}`, found field `y`
 // expect-error: help: separate the fields with `,`: `x: 1 + 2, y: ..`
 struct P { x: i32; y: i32; }
 let p = P { x: 1 + 2 y: 3 };

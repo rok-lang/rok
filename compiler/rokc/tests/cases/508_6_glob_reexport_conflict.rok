@@ -1,7 +1,6 @@
-// spec: §5.8.6
-// expect-error: 9:9: glob re-export of `b::f` as `f` conflicts with `a::f`
+// expect-error: 8:9: glob re-export of `b::f` as `f` conflicts with `a::f`
 
-// 5.8.6: a name two glob re-exports both bring is an error at the
+// A name two glob re-exports both bring is an error at the
 // re-export.
 mod a { pub fn f() -> i32 { 1 } pub fn g() -> i32 { 2 } }
 mod b { pub fn f() -> i32 { 3 } }

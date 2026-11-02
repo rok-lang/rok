@@ -1,13 +1,11 @@
-// spec: 003.10-if-expression
 // expect-exit: 0
 // expect-stdout:
 // 7
 
-// spec 3.10: an if expression yields a value.
+// An if expression yields a value.
 fn main() -> i32 {
     let cond = true;
     let x = if cond { 7 } else { 99 };
     println(f"{x}");
     return 0;
 }
-// spec: §3.10.2

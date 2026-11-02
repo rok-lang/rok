@@ -1,6 +1,6 @@
 // expect-error: 6:5: expected an item in `mod inner`: module bodies are definitions-only
 
-// spec 4.16.6: an inline `mod { .. }` body holds items only.
+// An inline `mod { .. }` body holds items only.
 mod inner {
     pub fn f() -> i32 { 1 }
     let x = 3;
@@ -9,5 +9,3 @@ mod inner {
 fn main() -> i32 {
     return inner::f();
 }
-// spec: §5.4.7
-// spec: §4.16.6

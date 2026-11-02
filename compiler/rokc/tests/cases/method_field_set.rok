@@ -25,4 +25,3 @@ fn main() -> i32 {
     return c2.n + 5;
 }
 
-// spec: 004.09-method

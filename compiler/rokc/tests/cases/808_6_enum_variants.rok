@@ -1,4 +1,3 @@
-// spec: 008.08-lowering-types §8.8.6
 // expect-exit: 0
 // expect-stdout:
 // circle 2
@@ -6,7 +5,7 @@
 // empty
 // areas 12 12 0
 
-// spec 8.8.6: an enum is a tag plus the largest variant's payload;
+// An enum is a tag plus the largest variant's payload;
 // construction stores the tag and payload, matching reads the tag and
 // then the payload of that variant.
 enum Shape {

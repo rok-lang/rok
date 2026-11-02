@@ -1,8 +1,7 @@
-// spec: lang 402-parameters §4.2.6
 // A key naming a defaulted parameter the dict's value type does not fit
 // panics.
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at tests/cases/402_6_dict_spread_misfit_key_panics.rok:13:5:
+// expect-stderr: thread 'main' panicked at tests/cases/402_6_dict_spread_misfit_key_panics.rok:12:5:
 // expect-stderr: spread of key "epochs", whose value type `f64` does not fit parameter `epochs: i32`
 // expect-stdout:
 

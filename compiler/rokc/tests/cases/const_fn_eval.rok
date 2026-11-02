@@ -1,4 +1,4 @@
-// Spec 5.2.4 / 5.2.5: `const fn` calls run at compile time in const
+// `const fn` calls run at compile time in const
 // items, array lengths and const generic arguments; control flow,
 // recursion, structs, enums and sums all evaluate.
 // expect-exit: 0
@@ -105,5 +105,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 005.02-const
-// spec: §5.2.4 §5.2.5 §5.2.9

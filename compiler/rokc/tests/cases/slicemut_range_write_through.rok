@@ -8,7 +8,7 @@
 // [9, 3, 2, 2, 1, 8]
 // sub [3, 2]
 
-// Stdlib 2.9.7a: a view of a range writes through to the list; views of
+// A view of a range writes through to the list; views of
 // a view (`s[a:b]`, `split_at`) write the same list.
 fn main() {
     let xs: List<i32> = [5, 4, 3, 2, 1, 0];
@@ -34,4 +34,3 @@ fn main() {
     println(f"sub {sub:?}");
 }
 
-// spec: std 209-collections §2.9.7a / refs-lang 003.06-indexing-and-slicing

@@ -1,5 +1,5 @@
 //! Lexer driver. Lines are 1-based and end at LF, CRLF or a lone CR;
-//! columns count code points (spec 1.1.3, 1.1.5).
+//! columns count code points.
 
 use rokc_ast::escape::{EscapeMode, unescape};
 use rokc_diagnostic::{Code, RokDiagnostic, Span};
@@ -32,15 +32,15 @@ pub struct Lexer<'src> {
     /// `MAX + 1`.
     prev_minus: bool,
     /// First occurrence of each distinct (normalized) identifier, for
-    /// the confusable check (spec 1.4.2); `any_non_ascii` gates it.
+    /// the confusable check; `any_non_ascii` gates it.
     idents: Vec<(String, Span)>,
     seen: std::collections::HashSet<String>,
     any_non_ascii: bool,
-    /// Registered extension operator tokens (spec 1.10.4), longest first.
+    /// Registered extension operator tokens, longest first.
     ext_ops: Vec<String>,
     /// Doc comments seen since the last token.
     docs: Vec<DocLine>,
-    /// Open f-strings, innermost last (spec 1.7.3).
+    /// Open f-strings, innermost last.
     fstr: Vec<Frame>,
     /// Start of the outermost f-string a hole error (backslash,
     /// newline) was reported in: one per literal.
@@ -81,8 +81,8 @@ impl<'src> Lexer<'src> {
         }
     }
 
-    /// Also lex these registered extension operator tokens (spec 1.10.4,
-    /// gathered by the driver's `#[infix]` pre-pass), longest first.
+    /// Also lex these registered extension operator tokens
+    /// (gathered by the driver's `#[infix]` pre-pass), longest first.
     #[must_use]
     pub fn with_ext_ops(mut self, ops: Vec<String>) -> Self {
         self.ext_ops = ops;
@@ -90,7 +90,7 @@ impl<'src> Lexer<'src> {
     }
 
     pub fn lex_all(mut self) -> (Vec<Token>, Vec<RokDiagnostic>) {
-        // A leading BOM is ignored (spec 1.1.2).
+        // A leading BOM is ignored.
         if self.src.starts_with('\u{FEFF}') {
             self.pos = '\u{FEFF}'.len_utf8();
         }
@@ -158,7 +158,7 @@ impl<'src> Lexer<'src> {
         (tokens, self.diagnostics)
     }
 
-    /// Spec 1.1: bidirectional formatting controls are rejected
+    /// Bidirectional formatting controls are rejected
     /// anywhere - comments and strings included (`\u{..}` escapes only).
     fn check_bidi(&mut self) {
         if self.src.is_ascii() {
@@ -184,7 +184,7 @@ impl<'src> Lexer<'src> {
         }
     }
 
-    /// Spec 1.4.2: warn about distinct identifiers that share a
+    /// Warn about distinct identifiers that share a
     /// confusable skeleton (`σ²` / `σ2`, Latin `a` / Cyrillic `а`).
     fn check_confusables(&mut self) {
         if !self.any_non_ascii {
@@ -384,7 +384,7 @@ impl<'src> Lexer<'src> {
     }
 
     fn lex_percent(&mut self) -> TokenKind {
-        // `%%=` > `%%` > `%=` > `%` (longest match, spec 1.10.2).
+        // `%%=` > `%%` > `%=` > `%` (longest match).
         match (self.bytes.get(self.pos + 1), self.bytes.get(self.pos + 2)) {
             (Some(b'%'), Some(b'=')) => {
                 self.advance(3);
@@ -565,7 +565,7 @@ impl<'src> Lexer<'src> {
         }
     }
 
-    /// The longest registered token at `pos` (spec 1.10.2).
+    /// The longest registered token at `pos`.
     fn peek_ext_op(&self) -> Option<String> {
         let rest = &self.src[self.pos..];
         self.ext_ops
@@ -591,7 +591,7 @@ impl<'src> Lexer<'src> {
             .is_some_and(is_ident_start)
     }
 
-    /// `r#name` (spec 1.4.4): the identifier `name`, even when `name` is a
+    /// `r#name`: the identifier `name`, even when `name` is a
     /// keyword.
     fn lex_raw_ident(&mut self) -> Token {
         let start = self.pos;
@@ -625,7 +625,7 @@ impl<'src> Lexer<'src> {
         let (line, col) = (self.line, self.col);
         self.eat_ident_continue();
         let raw = &self.src[start..self.pos];
-        // Spec 1.4.2: identifiers compare after NFC + variation-selector
+        // Identifiers compare after NFC + variation-selector
         // removal.
         let name = normalize_ident(raw);
         if let Some(k) = keyword_kind(&name) {
@@ -668,7 +668,7 @@ impl<'src> Lexer<'src> {
         }
     }
 
-    /// Numeric literal per spec 1.6. Malformed input is reported but
+    /// Numeric literal. Malformed input is reported but
     /// still yields a token so the parser does not cascade.
     fn lex_number(&mut self) -> TokenKind {
         let start = self.pos;
@@ -748,7 +748,7 @@ impl<'src> Lexer<'src> {
                 );
             }
             // Any other suffix (`2i`) belongs to a `#[literal(number "i")]`
-            // handler (spec 1.6.2, 6.5); the parser resolves it.
+            // handler; the parser resolves it.
         }
         self.check_range(start, &self.src[start..body_end], radix, is_float, suffix);
         let int_suffix = suffix.is_empty() || INT_SUFFIXES.contains(&suffix);
@@ -809,7 +809,7 @@ impl<'src> Lexer<'src> {
     }
 
     /// Consume `digit ("_"? digit)*` in `radix`; report empty runs and
-    /// misplaced `_` (spec 1.6.1, 1.6.4).
+    /// misplaced `_`.
     fn eat_digit_seq(&mut self, radix: u32, lit_start: usize) {
         let start = self.pos;
         while self
@@ -1055,7 +1055,7 @@ impl<'src> Lexer<'src> {
         TokenKind::ByteStrLit(body)
     }
 
-    /// Inside a hole (spec 1.7.3): `}` / `:` at depth 0 end or split it;
+    /// Inside a hole: `}` / `:` at depth 0 end or split it;
     /// `None` lexes `b` as code.
     fn hole_punct(&mut self, b: u8, next: Option<u8>) -> Option<TokenKind> {
         let Some(Frame::Hole { triple, depth }) = self.fstr.last_mut() else {
@@ -1383,7 +1383,7 @@ impl<'src> Lexer<'src> {
     }
 }
 
-/// Text of a block doc comment (spec 1.2.3): drop a blank first and last
+/// Text of a block doc comment: drop a blank first and last
 /// line, a common `*` prefix, common indentation and the whitespace
 /// before `*/`; line breaks become LF.
 fn block_doc_text(body: &str) -> String {
@@ -1440,7 +1440,7 @@ pub const fn fixed_lead(b: u8) -> bool {
     )
 }
 
-/// Spec 1.10.3 Unicode math operators. `÷ ≡ ≠ ≤ ≥` are synonyms of
+/// Unicode math operators. `÷ ≡ ≠ ≤ ≥` are synonyms of
 /// `/ == != <= >=` and lex as those tokens.
 const fn math_op(c: char) -> Option<TokenKind> {
     Some(match c {

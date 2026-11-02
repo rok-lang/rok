@@ -152,4 +152,3 @@ try {
     s.close();
 } catch e: IoError { refused = true; };
 println(f"refused: {refused}");
-// spec: std 302-net §3.2.1

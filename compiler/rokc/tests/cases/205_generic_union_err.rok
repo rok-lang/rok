@@ -1,10 +1,9 @@
-// spec: §2.5.1 §2.10.3 §2.10.4
-// expect-error: 205_generic_union_err.rok:20:1: union `E` declares no fields
-// expect-error: 205_generic_union_err.rok:18:17: type `T` does not satisfy trait bound `Num` required by `N<T>`
+// expect-error: 205_generic_union_err.rok:19:1: union `E` declares no fields
+// expect-error: 205_generic_union_err.rok:17:17: type `T` does not satisfy trait bound `Num` required by `N<T>`
 // expect-error: help: add `T: Num` to `A`'s generics
-// expect-error: 205_generic_union_err.rok:25:13: type `bool` does not satisfy trait bound `Num` required by `B<bool>`
-// expect-error: 205_generic_union_err.rok:26:12: type `bool` does not satisfy trait bound `Num` required by `W<bool>`
-// expect-error: 205_generic_union_err.rok:27:25: reading field `a` of union `U<i32>` needs an `unsafe` block
+// expect-error: 205_generic_union_err.rok:24:13: type `bool` does not satisfy trait bound `Num` required by `B<bool>`
+// expect-error: 205_generic_union_err.rok:25:12: type `bool` does not satisfy trait bound `Num` required by `W<bool>`
+// expect-error: 205_generic_union_err.rok:26:25: reading field `a` of union `U<i32>` needs an `unsafe` block
 
 trait Num { fn zero() -> Self; }
 impl Num for i32 { fn zero() -> i32 { 0 } }

@@ -1,7 +1,6 @@
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at tests/cases/bare_addr_of_oob.rok:13:21:
+// expect-stderr: thread 'main' panicked at tests/cases/bare_addr_of_oob.rok:12:21:
 // expect-stderr: index out of bounds
-// spec: std 101-ptr §1.1.4
 // expect-stdout:
 
 // `addr_of(a[i])` checks `i` like a read of `a[i]`.

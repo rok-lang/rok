@@ -1,4 +1,3 @@
-// spec: §0.3.1 §5.4.4
 // expect-error: module `helper` body not found at
 // expect-error: helper.rok`
 

@@ -1,6 +1,6 @@
 // expect-exit: 0
 // expect-stdout: 2
-// Spec 6.8.11: a `pub` meta block in another module is found by the
+// A `pub` meta block in another module is found by the
 // pre-pass over every file; the derive is used here.
 mod derives;
 
@@ -15,5 +15,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 006.08-meta-blocks
-// spec: §6.8.6 §6.8.11

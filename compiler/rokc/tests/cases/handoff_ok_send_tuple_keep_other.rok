@@ -3,7 +3,6 @@
 // expect-stdout:
 // 4 2
 
-// spec: std 213-marker §2.13.9
 // A pair: send one half, keep the other.
 use rok::std::thread;
 fn split(xs: List<i32>) -> (List<i32>, List<i32>) {

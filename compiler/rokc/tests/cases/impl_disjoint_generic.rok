@@ -4,7 +4,7 @@
 // 3 4
 
 // Generic impls of one trait whose targets don't unify are disjoint; so
-// is a concrete impl whose type fails the generic one's bound (`bool: A`; spec 2.9.5).
+// is a concrete impl whose type fails the generic one's bound (`bool: A`).
 trait A {}
 trait B {}
 trait Show { fn show(self) -> i32; }
@@ -24,4 +24,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 002.09-impl

@@ -1,4 +1,3 @@
-// spec: std 223-io §2.23.1
 // needs: fs
 // expect-exit: 0
 // expect-stdout:
@@ -9,7 +8,7 @@
 // copied 8
 // copy: [abcdef\ng]
 
-// spec 3.5.1: `read_exact` fills the whole buffer or throws
+// `read_exact` fills the whole buffer or throws
 // `UnexpectedEof`; `stream_position` / `rewind`; `BufRead::read_line`
 // appends the line with its `\n` and returns 0 at the end;
 // `io::copy(ref r, ref w)` returns the bytes copied.
@@ -53,4 +52,3 @@ fn main() throws (IoError) {
     try fs::remove_file(p);
     try fs::remove_file(q);
 }
-// spec: std 223-io §2.23.0 §2.23.7

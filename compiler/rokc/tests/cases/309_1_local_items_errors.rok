@@ -1,15 +1,14 @@
-// spec: §3.9.1
-// expect-error: 22:40: this `impl` is declared inside `f` and can't use `x`, a local of `f`; pass it as a parameter instead
-// expect-error: 24:21: `S` is declared inside `f` and can't use `x`, a local of `f`; a `static` is made once, so its value can use only items
-// expect-error: 25:31: `B` is declared inside `f` and can't use `x`, a local of `f`; pass it as a field or a parameter instead
-// expect-error: 30:24: `Holder` is declared inside `g` and can't use `T`, a generic parameter of `g`; declare its own instead: `struct Holder<T>`
-// expect-error: 31:16: `Q` is declared inside `g` and can't use `T`, a generic parameter of `g`; declare its own instead: `enum Q<T>`
-// expect-error: 32:33: this `impl` is declared inside `g` and can't use `T`, a generic parameter of `g`; declare it on the impl instead: `impl<T>`
-// expect-error: 37:20: `K` is declared inside `h` and can't use `n`, a local of `h`; a `const` is computed at compile time, so it can use only items
-// expect-error: 42:22: `M` is declared inside `c` and can't use `N`, a generic parameter of `c`; it has one value, whatever `c` is called with
-// expect-error: 47:13: cannot find struct `P` in this scope
+// expect-error: 21:40: this `impl` is declared inside `f` and can't use `x`, a local of `f`; pass it as a parameter instead
+// expect-error: 23:21: `S` is declared inside `f` and can't use `x`, a local of `f`; a `static` is made once, so its value can use only items
+// expect-error: 24:31: `B` is declared inside `f` and can't use `x`, a local of `f`; pass it as a field or a parameter instead
+// expect-error: 29:24: `Holder` is declared inside `g` and can't use `T`, a generic parameter of `g`; declare its own instead: `struct Holder<T>`
+// expect-error: 30:16: `Q` is declared inside `g` and can't use `T`, a generic parameter of `g`; declare its own instead: `enum Q<T>`
+// expect-error: 31:33: this `impl` is declared inside `g` and can't use `T`, a generic parameter of `g`; declare it on the impl instead: `impl<T>`
+// expect-error: 36:20: `K` is declared inside `h` and can't use `n`, a local of `h`; a `const` is computed at compile time, so it can use only items
+// expect-error: 41:22: `M` is declared inside `c` and can't use `N`, a generic parameter of `c`; it has one value, whatever `c` is called with
+// expect-error: 46:13: cannot find struct `P` in this scope
 // expect-error: `P` is declared inside `f` and visible only in its block; move it to module level to use it here
-// expect-error: 48:12: cannot find type `Holder` in this scope
+// expect-error: 47:12: cannot find type `Holder` in this scope
 // expect-error: `Holder` is declared inside `g` and visible only in its block; move it to module level to use it here
 // forbid-error: cannot find value `x`
 // forbid-error: cannot find type `T`
@@ -48,4 +47,4 @@ fn main() {
     let q: Holder = Holder { v: 1 };
     println(f"{f(1)} {g(1)} {h(1)} {c::<1>()}");
 }
-// expect-error: 48:21: cannot find struct `Holder` in this scope
+// expect-error: 47:21: cannot find struct `Holder` in this scope

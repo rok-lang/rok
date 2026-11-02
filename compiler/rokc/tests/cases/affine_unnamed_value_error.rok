@@ -1,7 +1,6 @@
 // expect-error: element 1 of the value of `(open(a), open(a))` holds a `TcpStream` that is never closed
 // expect-error: help: closing a `TcpStream` can fail, so it is not closed for you: bind it with `let x = ..;` and add `try x.close();`
 // forbid-error: this value
-// spec: std 213-marker §2.13.4
 
 // A resource no variable holds is named by the expression it came from,
 // and the help says how to bind it to close it.

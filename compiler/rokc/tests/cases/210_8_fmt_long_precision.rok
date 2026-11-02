@@ -1,4 +1,3 @@
-// spec: std 210-fmt §2.10.8
 // gc-stress: 5
 // expect-exit: 0
 // expect-stdout:
@@ -6,7 +5,7 @@
 // 602 702 600 2+600+2
 // 0.10000000000000000555
 
-// Stdlib 2.10.5 / 2.10.8: integer `f` is fixed point, integer precision
+// Integer `f` is fixed point, integer precision
 // is otherwise ignored, and precision has no upper bound (floats, text
 // truncation and integer exponent form alike).
 fn main() -> i32 {
