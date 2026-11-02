@@ -641,9 +641,8 @@ impl Command {
 
     /// `output` that suspends the task.
     pub async fn output_async(self) throws (IoError) -> Output {
-        // The task waits for the call: one thread uses the command at a time.
-        let c = unsafe { Handoff::new(self) };
-        try await off(|| try c.get().output())
+        let c = self.own();
+        try await off([move c] || try c.output())
     }
 
     /// Run to completion with inherited streams.
@@ -654,8 +653,25 @@ impl Command {
 
     /// `status` that suspends the task.
     pub async fn status_async(self) throws (IoError) -> ExitStatus {
-        let c = unsafe { Handoff::new(self) };
-        try await off(|| try c.get().status())
+        let c = self.own();
+        try await off([move c] || try c.status())
+    }
+
+    /// A copy that shares no list with this command, for a blocking
+    /// thread to run while this one stays usable.
+    fn own(self) -> Command {
+        Command {
+            program: self.program,
+            args: self.args.clone(),
+            envs: self.envs.clone(),
+            env_clear: self.env_clear,
+            stdin: self.stdin,
+            stdout: self.stdout,
+            stderr: self.stderr,
+            cwd: self.cwd,
+            kill_on_drop: self.kill_on_drop,
+            process_group: self.process_group,
+        }
     }
 
     fn start(self) throws (IoError) -> Child {
@@ -836,10 +852,11 @@ impl Child {
     pub async fn wait_async(ref self) throws (IoError) -> ExitStatus {
         if let si: ChildStdin = self.take_stdin() { try si.close(); }
         let pid = self.pid;
-        // The reaping state is atomics-guarded: any thread may reap.
-        let st = unsafe { Handoff::new(self.state) };
-        _ = try await off(|| try reap_pid(pid, st.get(), true));
-        ExitStatus { raw: unsafe { st.get()[1] } }
+        // The reaping state is atomics-guarded (and `Sync`): any thread
+        // may reap.
+        let st = self.state;
+        _ = try await off(|| try reap_pid(pid, st, true));
+        ExitStatus { raw: unsafe { st[1] } }
     }
 
     /// The status if it has ended, without blocking.
