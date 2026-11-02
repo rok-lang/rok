@@ -1,0 +1,8 @@
+// spec: §1.10.3
+// expect-error: space between `try` and `?`
+// expect-error: help: write `try?` as one word
+
+// `try?` is written without a space.
+fn f() throws -> i32 { 1 }
+
+fn main() { let x = try ? f(); }

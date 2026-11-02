@@ -62,6 +62,26 @@ impl CatchFrame {
 
 /// Can an arm filtering `filter` (`None`: any) take `ety`? Unresolved
 /// filters are kept so lowering the arm reports them.
+/// Whether a catch arm of `pat` (filter `filter`) takes every error of
+/// type `ety`: `_`, a binding, or `e: T` with `T` covering `ety`.
+fn takes_all(pat: &AstPattern, filter: Option<&HirTy>, ety: &HirTy) -> bool {
+    match &pat.kind {
+        AstPatternKind::Wildcard | AstPatternKind::Binding { sub: None, .. } => true,
+        AstPatternKind::TypeCheck { .. } => {
+            let Some(f) = filter else {
+                return false;
+            };
+            let parts = |t: &HirTy| match t {
+                HirTy::Sum(vs) => vs.clone(),
+                t => vec![t.clone()],
+            };
+            let fs = parts(f);
+            !matches!(ety, HirTy::AnyTrait(_)) && parts(ety).iter().all(|p| fs.contains(p))
+        }
+        _ => false,
+    }
+}
+
 fn may_take(filter: Option<&HirTy>, ety: &HirTy) -> bool {
     let parts = |t: &HirTy| match t {
         HirTy::Sum(vs) => vs.clone(),
@@ -446,6 +466,20 @@ pub(super) fn raise(
                      throw a `ValueError`: `throw ValueError::new(..);`"
                 )));
             }
+        } else if ctx.ty_name(&decl).contains('#') {
+            // `rethrows`: the declared error is its parameters' (`#E0`).
+            ctx.emit_error(
+                Code::UNHANDLED_ERROR,
+                format!(
+                    "error `{}` is not covered: the enclosing function is `rethrows`, so it \
+                     throws only what its function parameters throw (spec 4.14.7)",
+                    ctx.ty_name(&ety)
+                ),
+            );
+            ctx.help_last(Some(format!(
+                "catch it here, or declare `throws ({})` instead of `rethrows`",
+                ctx.ty_name(&ety)
+            )));
         } else {
             ctx.emit_error(
                 Code::UNHANDLED_ERROR,
@@ -1788,11 +1822,29 @@ fn lower_catch_arms(
             "no error reaches this `catch`: its body can't throw".to_owned(),
         );
     }
-    for (arm, filter) in arms.iter().zip(&filters) {
-        if frame.errs.iter().any(|(t, _)| may_take(filter.as_ref(), t)) {
+    for (i, (arm, filter)) in arms.iter().zip(&filters).enumerate() {
+        // Spec 3.14.4: reached by an error no earlier arm takes whole.
+        let earlier = |t: &HirTy| {
+            arms[..i]
+                .iter()
+                .zip(&filters)
+                .any(|(a, f)| takes_all(&a.pat, f.as_ref(), t))
+        };
+        if frame
+            .errs
+            .iter()
+            .any(|(t, _)| may_take(filter.as_ref(), t) && !earlier(t))
+        {
             continue;
         }
-        if !frame.errs.is_empty() {
+        if frame.errs.iter().any(|(t, _)| may_take(filter.as_ref(), t)) {
+            ctx.emit_warning(
+                Code::UNNEEDED_TRY,
+                "this `catch` arm never runs: the arms before it take every error that \
+                 reaches it"
+                    .to_owned(),
+            );
+        } else if !frame.errs.is_empty() {
             ctx.emit_warning(
                 Code::UNNEEDED_TRY,
                 format!(

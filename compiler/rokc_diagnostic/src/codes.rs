@@ -239,8 +239,8 @@ codes! {
     23 INVALID_SIGNATURE Parse "invalid function signature"
     "The function's parameters or return type break a rule: a variadic `...` that is not \
      last, a `ref` parameter on a coroutine or a `fn` value, a `rethrows` without a throwing \
-     parameter, or a signature `main` or a test attribute does not allow. The message names \
-     the rule; change the signature to fit it.";
+     parameter, or a signature a test attribute does not allow. The message names the rule; \
+     change the signature to fit it.";
 
     24 INVALID_GENERIC_PARAMS Parse "invalid generic parameters"
     "The generic parameter list breaks a rule: a parameter without a default after one with \
@@ -278,7 +278,7 @@ codes! {
 
     32 IMPORT_CONFLICT Module "conflicting imports"
     "A name is imported twice with different targets, or is both imported and defined in \
-     the module. Rename one with `use .. as other;`, or drop one of them.";
+     the module or block. Rename one with `use .. as other;`, or drop one of them.";
 
     33 INVALID_REEXPORT Module "invalid re-export"
     "A `pub use` breaks a rule: it is wider than the item it re-exports, it re-exports a \
@@ -297,8 +297,9 @@ codes! {
 
     36 ENTRY_POINT Module "invalid program entry point"
     "A program starts either at the top-level statements of `main.rok` or at `fn main`, not \
-     both; other files hold definitions only. `fn main` takes no parameters and returns `()` \
-     or an integer.";
+     both; other files hold definitions only. `fn main` takes no parameters, is not generic \
+     or `unsafe`, and returns `()` or `i32`; it may be `async`, and a `throws` `main` returns \
+     `()`.";
 
     37 DEPENDENCY Module "invalid dependency"
     "A dependency given to the compiler (`--extern`, or a standard library tier) does not fit \
@@ -358,8 +359,10 @@ codes! {
      out.";
 
     49 NAMED_ARGUMENT Type "invalid named argument"
-    "A named argument (`f(x: 1)`) names no parameter of the function, or gives one parameter \
-     twice. Use the parameter names of the function's definition, each once.";
+    "A named argument (`f(x: 1)`) names no parameter of the function, gives one parameter \
+     twice, is passed to a `fn` value (whose type has no parameter names), or comes before a \
+     positional argument. Use the parameter names of the function's definition, each once, \
+     after the positional arguments.";
 
     50 REF_ARGUMENT Type "`ref` parameter and argument mismatch"
     "A `ref` parameter takes an argument written `ref x`, which names a variable or a field \
@@ -406,15 +409,16 @@ codes! {
     59 OUTSIDE_CONTEXT Type "keyword outside its context"
     "`break` and `continue` work only inside a loop, `yield` only in a generator, `await` \
      only in an async body, and `self` only inside a method; `return`, `break` and \
-     `continue` cannot leave a `finally` block. Move the code into such a body, or out of \
-     the `finally`.";
+     `continue` cannot leave a `finally` block; `break value` leaves only a `loop` or a \
+     labelled block, not `while` / `for`. Move the code into such a body, or out of the \
+     `finally`.";
 
     60 LET_ELSE_NOT_DIVERGING Type "`let .. else` that does not diverge"
     "The `else` block of `let .. else` runs when the pattern does not match, so it must leave \
      the scope: end it with `return`, `break`, `continue` or `throw`.";
 
     61 UNSAFE_REQUIRED Type "operation needs `unsafe`"
-    "The operation can break memory safety: calling an `unsafe` or C function, reading a \
+    "The operation can break memory safety: calling an `unsafe` or `extern` function, reading a \
      union field, or indexing a `GcBuf` without a check. Wrap it in `unsafe { .. }`, inside \
      an `unsafe fn` if it is a building block.";
 

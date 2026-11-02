@@ -1,0 +1,6 @@
+// spec: §4.5.3
+// expect-error: 6:37: a closure with `-> T` needs a block body
+// expect-error: help: wrap the body in braces
+
+// `-> T` on a closure only before a block body.
+fn main() { let f = |x: i32| -> i32 x * 2; }

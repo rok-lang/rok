@@ -139,6 +139,10 @@ struct TypeNames {
     /// First use of each generic type written without arguments (a
     /// leftover one is "needs generic arguments", not "cannot find").
     bare_generics: std::cell::RefCell<HashMap<String, rokc_diagnostic::Span>>,
+    /// A generic type left unresolved by an unknown argument (`List<Nope>`)
+    /// → that argument, which the report names instead; `""` when a bad
+    /// argument was reported already.
+    open_args: std::cell::RefCell<HashMap<String, String>>,
     /// `canon` results without local `use`s or diagnostics, by (path,
     /// module): its glob lookups scan every type name.
     canon_memo: std::cell::RefCell<HashMap<(String, String), Option<String>>>,
@@ -1861,6 +1865,7 @@ impl TypeNames {
             alias_uses: std::cell::RefCell::new(Vec::new()),
             unknown_spans: std::cell::RefCell::default(),
             bare_generics: std::cell::RefCell::default(),
+            open_args: std::cell::RefCell::default(),
             canon_memo: std::cell::RefCell::default(),
             leaves: std::cell::OnceCell::new(),
             variant_leaves: std::cell::OnceCell::new(),
@@ -2491,7 +2496,8 @@ fn convert_help(ctx: &LowerCtx<'_>, slot: &HirTy, v: &HirExpr, ann: Option<Span>
             if *to == PrimTy::Str
                 && *from != PrimTy::CChar
                 && !s.contains('"')
-                && !what.contains("operand of `+`") =>
+                && !what.contains("operand of `+`")
+                && !what.starts_with("the pattern") =>
         {
             let fix = format!("f\"{{{s}}}\"");
             ctx.help_last(Some(format!("to make text from it, write `{fix}`")));
@@ -3087,6 +3093,8 @@ struct LowerCtx<'a> {
     /// `breakables` index → the type its `break` values must have:
     /// the annotated slot (`true` = inferred from the first `break`).
     break_tys: HashMap<usize, (HirTy, bool)>,
+    /// `breakables` indices of `while` / `for` loops: their value is `()`.
+    unit_loops: std::collections::HashSet<usize>,
     /// Expected types. A sub-expression with its own slot pushes it (or
     /// `Unknown`), so leaves only see the slot they flow into.
     expected_ty_stack: Vec<HirTy>,
@@ -3312,6 +3320,7 @@ impl<'a> LowerCtx<'a> {
             dropped_ref_recv: Vec::new(),
             breakables: Vec::new(),
             break_tys: HashMap::new(),
+            unit_loops: std::collections::HashSet::new(),
             expected_ty_stack: Vec::new(),
             current_module: String::new(),
             access: std::cell::RefCell::new(None),
@@ -4829,6 +4838,22 @@ impl<'a> LowerCtx<'a> {
             self.help_last(Some(help));
             return false;
         }
+        if vis == Visibility::Sub {
+            self.emit_error(
+                Code::PRIVATE_ITEM,
+                format!(
+                    "{what} `{full}` is `pub(sub)`: visible only in module `{}` and its \
+                     descendants, not from `{}` (spec 5.6.5)",
+                    module_display(&def_module),
+                    module_display(&from)
+                ),
+            );
+            self.help_last(Some(format!(
+                "make `{}` `pub(pkg)` or `pub` to use it here",
+                leaf_name(full)
+            )));
+            return false;
+        }
         self.emit_error(
             Code::PRIVATE_ITEM,
             format!(
@@ -5063,13 +5088,13 @@ impl<'a> LowerCtx<'a> {
                     .ok_or_else(not_int);
             }
             rokc_ast::ConstExpr::Literal(rokc_ast::Literal::Bool(b)) => {
-                return Ok((i128::from(*b), None));
+                return Ok((i128::from(*b), Some(PrimTy::Bool)));
             }
             rokc_ast::ConstExpr::Literal(_) => return Err(not_int()),
             rokc_ast::ConstExpr::Path(p) => {
                 if let [seg] = p.segments.as_slice() {
                     if let Some((v, p)) = self.ty_subst.get(&seg.name).and_then(HirTy::as_const) {
-                        return Ok((v, p.filter(|p| *p == PrimTy::Char)));
+                        return Ok((v, p.filter(|p| matches!(p, PrimTy::Char | PrimTy::Bool))));
                     }
                 }
                 Expr {
@@ -5077,7 +5102,10 @@ impl<'a> LowerCtx<'a> {
                     span: p.span,
                 }
             }
-            rokc_ast::ConstExpr::Expr(e) => (**e).clone(),
+            rokc_ast::ConstExpr::Expr(e) => {
+                const_arg_shape(e)?;
+                (**e).clone()
+            }
         };
         const_eval::eval_scalar(self, &e)
     }
@@ -5252,6 +5280,7 @@ impl<'a> LowerCtx<'a> {
                             .for_each(|a| collect_unknown_paths(a, &mut leftover));
                         // An inference variable is an argument like any type.
                         leftover.retain(|p| p != "_");
+                        let mark = self.env.sink.diagnostics.borrow().len();
                         if leftover.is_empty() && self.env.defs.is_generic_struct(&full) {
                             if let Some(id) = self.instantiate_struct(&full, args, at) {
                                 return HirTy::Struct(id);
@@ -5263,7 +5292,22 @@ impl<'a> LowerCtx<'a> {
                         } else {
                             // Names an unbound type parameter: resolving it
                             // by name could hit a same-named type.
+                            self.env
+                                .names
+                                .open_args
+                                .borrow_mut()
+                                .entry(full.clone())
+                                .or_insert_with(|| leftover[0].clone());
                             return HirTy::Path(vec![full]);
+                        }
+                        // Reported (an out-of-range const argument): not
+                        // also an unknown type.
+                        if self.env.sink.diagnostics.borrow().len() > mark {
+                            self.env
+                                .names
+                                .open_args
+                                .borrow_mut()
+                                .insert(full, String::new());
                         }
                     }
                 }
@@ -5944,5 +5988,38 @@ fn shown_mark_name(name: &str) -> String {
         m.to_owned()
     } else {
         format!("{ty}::{m}")
+    }
+}
+
+/// Spec 2.11.5: a const argument's arithmetic has no comparisons and no
+/// conditionals.
+fn const_arg_shape(e: &Expr) -> Result<(), String> {
+    match &e.kind {
+        ExprKind::Block(b) if b.stmts.is_empty() => {
+            b.trailing.as_deref().map_or(Ok(()), const_arg_shape)
+        }
+        ExprKind::OpInfix { op, lhs, rhs } => {
+            if !matches!(op.as_str(), "+" | "-" | "*" | "/" | "%") {
+                return Err(format!(
+                    "`{op}` is not allowed: only `+`, `-`, `*`, `/`, `%` and unary `-` \
+                     (spec 2.11.5)"
+                ));
+            }
+            const_arg_shape(lhs)?;
+            const_arg_shape(rhs)
+        }
+        ExprKind::OpPrefix { op, operand } => {
+            if op != "-" {
+                return Err(format!(
+                    "`{op}` is not allowed: only unary `-` (spec 2.11.5)"
+                ));
+            }
+            const_arg_shape(operand)
+        }
+        ExprKind::If { .. } | ExprKind::Match { .. } => Err(
+            "conditionals are not allowed (spec 2.11.5); compute the value in a `const fn`"
+                .to_owned(),
+        ),
+        _ => Ok(()),
     }
 }

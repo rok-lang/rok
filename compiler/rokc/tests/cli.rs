@@ -1397,7 +1397,7 @@ fn incremental_checks_generic_bodies() {
         ok.replace(": Add<T, Output = T> + Copy", ""),
     )
     .unwrap();
-    let want = "operator `+` on `T` needs a `Add` bound on `T`";
+    let want = "operator `+` on `T` needs the bound `T: Add`";
     let (pass, err) = check();
     assert!(!pass && err.contains(want), "{err}");
     // Another body edited: still reported.

@@ -38,6 +38,9 @@ pub struct Parser<'a> {
     /// Whether `Path { .. }` is a struct literal here; off in `if` /
     /// `while` / `for` heads so the `{` opens the body.
     struct_expr_allowed: bool,
+    /// One struct literal allowed at the start of a block head, already
+    /// reported (E0013), so the rest of the head parses as written.
+    head_struct_lit: bool,
     /// `|` mid-type expands to sum-type alternation. Inside closure
     /// parameter lists the closing `|` must end the list instead.
     type_sum_allowed: bool,
@@ -297,6 +300,7 @@ impl<'a> Parser<'a> {
             file: file.into(),
             diagnostics: Vec::new(),
             struct_expr_allowed: true,
+            head_struct_lit: false,
             stmt_head: false,
             type_sum_allowed: true,
             pending: None,
@@ -539,6 +543,12 @@ impl<'a> Parser<'a> {
     /// From a path (`a::E`) at the cursor: is its `{ .. }` group followed
     /// by another `{`?
     fn braces_then_block(&self) -> bool {
+        self.braces_then(true)
+    }
+
+    /// `braces_then_block`; with `strict` off, a continued head
+    /// (`S { a: 1 }.ok() {`) counts too.
+    fn braces_then(&self, strict: bool) -> bool {
         let mut i = self.pos;
         let kind = |i: usize| self.tokens.get(i).map(|t| &t.kind);
         while matches!(kind(i), Some(TokenKind::Ident(_) | TokenKind::ColonColon)) {
@@ -554,7 +564,8 @@ impl<'a> Parser<'a> {
                 TokenKind::RBrace => {
                     depth -= 1;
                     if depth == 0 {
-                        return matches!(kind(i + 1), Some(TokenKind::LBrace));
+                        return matches!(kind(i + 1), Some(TokenKind::LBrace))
+                            || !strict && self.continued_head(i + 1);
                     }
                 }
                 _ => {}
@@ -564,10 +575,73 @@ impl<'a> Parser<'a> {
         false
     }
 
+    /// At token `i`: a member access or an operator, then (at bracket
+    /// depth 0) the `{` of the block.
+    fn continued_head(&self, i: usize) -> bool {
+        let kind = |i: usize| self.tokens.get(i).map(|t| &t.kind);
+        if !matches!(
+            kind(i),
+            Some(
+                TokenKind::Dot
+                    | TokenKind::Gt
+                    | TokenKind::Lt
+                    | TokenKind::GtEq
+                    | TokenKind::LtEq
+                    | TokenKind::EqEq
+                    | TokenKind::NotEq
+            )
+        ) {
+            return false;
+        }
+        let mut depth = 0i32;
+        for j in i.. {
+            match kind(j) {
+                Some(TokenKind::LParen | TokenKind::LBracket) => depth += 1,
+                Some(TokenKind::RParen | TokenKind::RBracket) => depth -= 1,
+                Some(TokenKind::LBrace) if depth == 0 => return true,
+                None | Some(TokenKind::Semi | TokenKind::LBrace | TokenKind::RBrace) => {
+                    return false;
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
+    /// A `fn(..)` type's parameter types through `)`. It names no
+    /// parameters (spec 4.4.11) and is never `rethrows` (4.14.7).
+    fn fn_type_params(&mut self) -> Option<Vec<Ty>> {
+        if matches!(self.peek(), TokenKind::Ident(_))
+            && matches!(self.peek_next(), Some(TokenKind::Colon))
+        {
+            let s = self.peek_span();
+            self.error_help(
+                Code::SYNTAX,
+                s,
+                "a function type has no parameter names (spec 4.4.11)",
+                "write the types only: `fn(i32, str) -> bool`",
+            );
+            return None;
+        }
+        let args = self.nested_type_list(TokenKind::RParen)?;
+        self.expect(&TokenKind::RParen, "`)`")?;
+        if self.at_kw("rethrows") {
+            let s = self.peek_span();
+            self.error_help(
+                Code::SYNTAX,
+                s,
+                "a function type cannot be `rethrows` (spec 4.14.7)",
+                "write the error it throws: `fn(i32) throws (E) -> i32`",
+            );
+            return None;
+        }
+        Some(args)
+    }
+
     /// `S { a: 1 } {` at the cursor: a struct literal at the top of a
     /// block head, where its `{` reads as the body (spec 3.10.3).
     fn struct_lit_head(&self) -> bool {
-        if !self.braces_then_block() {
+        if !self.braces_then(false) {
             return false;
         }
         let kind = |i: usize| self.tokens.get(i).map(|t| &t.kind);
@@ -589,7 +663,9 @@ impl<'a> Parser<'a> {
                 TokenKind::RBrace => {
                     depth -= 1;
                     if depth == 0 {
-                        return true;
+                        // `S { a: 1 } {` or `S { a: 1 }.ok() {`.
+                        return matches!(kind(i + 1), Some(TokenKind::LBrace))
+                            || self.continued_head(i + 1);
                     }
                 }
                 TokenKind::FatArrow if depth == 1 => return false,
@@ -605,6 +681,44 @@ impl<'a> Parser<'a> {
     fn parse_head(&mut self) -> Option<Expr> {
         if !self.struct_lit_head() {
             return self.with_struct_expr(false, Self::parse_expr);
+        }
+        // The literal's closing `}`.
+        let close = (self.pos..self.tokens.len())
+            .find(|&i| matches!(self.tokens[i].kind, TokenKind::LBrace))
+            .and_then(|open| {
+                let mut depth = 0u32;
+                (open..self.tokens.len()).find(|&i| {
+                    match self.tokens[i].kind {
+                        TokenKind::LBrace => depth += 1,
+                        TokenKind::RBrace => depth -= 1,
+                        _ => {}
+                    }
+                    depth == 0
+                })
+            });
+        if let Some(close) = close.filter(|&c| {
+            !matches!(
+                self.tokens.get(c + 1).map(|t| &t.kind),
+                Some(TokenKind::LBrace)
+            )
+        }) {
+            // `S { a: 1 }.ok() {`: the literal, then the rest of the head.
+            let lit_span = Span {
+                end: self.tokens[close].span.end,
+                ..self.peek_span()
+            };
+            self.head_struct_lit = true;
+            let head = self.with_struct_expr(false, Self::parse_expr);
+            self.head_struct_lit = false;
+            let text = self.text_in(lit_span);
+            self.error_help(
+                Code::STRUCT_LITERAL_IN_HEAD,
+                lit_span,
+                "a struct literal can't start a block's head: its `{` would open the body \
+                 (spec 3.10.3)",
+                format!("wrap the struct literal in parentheses: `({text})`"),
+            );
+            return head;
         }
         let lit = self.with_struct_expr(true, Self::parse_primary)?;
         let text = self.text_in(lit.span);
@@ -806,7 +920,31 @@ impl<'a> Parser<'a> {
                     other.describe()
                 );
                 let span = self.peek_span();
-                self.error(Code::SYNTAX, span, msg);
+                // `Buf<2 * 8>`: arithmetic in an argument needs braces.
+                let after_value = matches!(
+                    self.prev_kind(),
+                    Some(TokenKind::IntLit(_) | TokenKind::Ident(_) | TokenKind::RParen)
+                );
+                if after_value
+                    && matches!(
+                        other,
+                        TokenKind::Star
+                            | TokenKind::Plus
+                            | TokenKind::Minus
+                            | TokenKind::Slash
+                            | TokenKind::Percent
+                    )
+                {
+                    self.error_help(
+                        Code::SYNTAX,
+                        span,
+                        msg,
+                        "a const argument that is an expression goes in braces, as in \
+                         `<{ 2 * 8 }>` (spec 2.11.4)",
+                    );
+                } else {
+                    self.error(Code::SYNTAX, span, msg);
+                }
                 return false;
             }
         };
@@ -1228,10 +1366,8 @@ impl<'a> Parser<'a> {
                 self.diagnostics.push(d);
                 None
             }
-            StmtKind::Trailing(expr) => Some(Stmt {
-                kind: StmtKind::Expr(expr),
-                span: stmt.span,
-            }),
+            // Kept `Trailing`: a block-like statement must still be `()`
+            // (E0067), as in a function body.
             _ => Some(stmt),
         }
     }
@@ -2045,11 +2181,12 @@ impl<'a> Parser<'a> {
         // which doesn't come through here.
         if is_mut {
             let mut_span = self.peek_span();
-            self.error(
+            self.error_help(
                 Code::MISPLACED_ITEM,
                 mut_span,
-                "`static mut` is only allowed inside `extern \"C\" { ... }` (FFI). \
-                 General code should use `Atomic`/`Mutex`/`Cell` (spec 5.3)",
+                "`static mut` is only allowed inside `extern \"C\" { ... }` (FFI) (spec 5.3)",
+                "a static is shared by every thread: hold the value in an `Atomic` or a \
+                 `Mutex`, as in `static N: Atomic<i32> = Atomic::new(0);`",
             );
         }
         let name = if let TokenKind::Ident(n) = self.peek().clone() {
@@ -2297,6 +2434,24 @@ impl<'a> Parser<'a> {
         let outer_owner = std::mem::replace(&mut self.fn_owner, owner);
         let items = self.parse_impl_items();
         self.fn_owner = outer_owner;
+        if trait_path.is_some() {
+            for it in items.iter().flatten() {
+                let (vis, at) = match it {
+                    ImplItem::Method(m) => (m.vis, m.span),
+                    ImplItem::Const(c) => (c.vis, c.span),
+                    ImplItem::AssocType { .. } => continue,
+                };
+                if vis != Visibility::Private {
+                    self.error_help(
+                        Code::MISPLACED_VISIBILITY,
+                        at,
+                        "a trait impl's item has no visibility of its own: it is as visible \
+                         as the trait (spec 2.9.6)",
+                        "remove `pub`",
+                    );
+                }
+            }
+        }
         let mut attrs = attrs;
         attrs.append(&mut self.cfg_off);
         let items = items?;
@@ -2771,7 +2926,23 @@ impl<'a> Parser<'a> {
                 n
             } else {
                 let s = self.peek_span();
-                self.error(Code::SYNTAX, s, "expected an import path");
+                let help = match self.peek() {
+                    TokenKind::SelfLower => Some(
+                        "a `use` path has no `self`: name a child module directly \
+                         (`use c::x;`), a module itself as `use a::b;`, this package's root \
+                         as `pkg::` (spec 5.5)",
+                    ),
+                    TokenKind::ColonColon => Some(
+                        "a `use` path starts with a name: `pkg::` for this package's root, \
+                         a dependency's or `rok`'s name otherwise (spec 5.5)",
+                    ),
+                    _ => None,
+                };
+                let msg = format!("expected an import path, found {}", self.peek().describe());
+                match help {
+                    Some(h) => self.error_help(Code::SYNTAX, s, msg, h),
+                    None => self.error(Code::SYNTAX, s, msg),
+                }
                 return None;
             };
             segments.push(PathSegment {
@@ -2805,12 +2976,23 @@ impl<'a> Parser<'a> {
                 self.bump();
                 // `**` is two consecutive Stars - the second `*` follows
                 // immediately when there's no space.
-                if matches!(self.peek(), TokenKind::Star) {
+                let kind = if matches!(self.peek(), TokenKind::Star) {
                     self.bump();
                     rokc_ast::UseTreeKind::GlobRecursive
                 } else {
                     rokc_ast::UseTreeKind::Glob
+                };
+                if matches!(self.peek(), TokenKind::As) {
+                    let s = self.peek_span();
+                    self.error_help(
+                        Code::SYNTAX,
+                        s,
+                        "a glob import takes no alias (spec 5.5)",
+                        "import the module under another name instead: `use a as x;`",
+                    );
+                    return None;
                 }
+                kind
             }
             TokenKind::LBrace => {
                 self.bump();
@@ -2932,7 +3114,17 @@ impl<'a> Parser<'a> {
 
     /// A trait item and whether its cfg keeps it.
     fn parse_trait_item(&mut self) -> Option<(TraitItem, bool)> {
+        let at = self.peek_span();
         let (attrs, vis) = self.parse_attrs_vis();
+        if vis != Visibility::Private {
+            self.error_help(
+                Code::MISPLACED_VISIBILITY,
+                at,
+                "a trait item has no visibility of its own: it is as visible as the trait \
+                 (spec 2.8.8)",
+                "remove `pub`; write `pub trait` to export the trait with its items",
+            );
+        }
         let on = self.cfg_keeps(&attrs);
         self.parse_trait_member(attrs, vis).map(|i| (i, on))
     }
@@ -3469,6 +3661,31 @@ impl<'a> Parser<'a> {
     /// Spec 4.2.5: `xs: ...T` is `xs: Slice<T>` over the trailing
     /// arguments, so there is no instance per argument count. Last only.
     fn desugar_variadic(&mut self, params: &mut [Param]) {
+        // Spec 4.2.3: defaults are trailing. A variadic may follow them,
+        // and so may a last `fn` parameter, which a trailing closure
+        // fills (4.8.9).
+        if let Some(first) = params.iter().position(|p| p.default.is_some()) {
+            let last = params.len() - 1;
+            let late = params[first + 1..].iter().enumerate().find_map(|(k, p)| {
+                let closure_slot = first + 1 + k == last
+                    && p.ty
+                        .as_ref()
+                        .is_some_and(|t| matches!(t.kind, TyKind::Fn(..)));
+                (p.default.is_none() && !p.variadic && !closure_slot).then_some(p)
+            });
+            if let Some(p) = late {
+                let msg = format!(
+                    "parameter `{}` has no default but follows one that does; defaults are \
+                     trailing (spec 4.2.3)",
+                    p.name
+                );
+                let help = format!(
+                    "give `{}` a default, or move it before `{}`",
+                    p.name, params[first].name
+                );
+                self.error_help(Code::INVALID_SIGNATURE, p.span, msg, help);
+            }
+        }
         let last = params.len().saturating_sub(1);
         for (i, p) in params.iter_mut().enumerate() {
             if !p.variadic {
@@ -3506,6 +3723,18 @@ impl<'a> Parser<'a> {
                 self.bump();
                 self.expect(&TokenKind::Colon, "`:`");
                 if let Some(ty) = self.parse_type() {
+                    if !const_param_ty(&ty) {
+                        self.error_help(
+                            Code::INVALID_GENERIC_PARAMS,
+                            ty.span,
+                            format!(
+                                "const parameter `{name}` has type `{}`; only integers, `bool`, \
+                                 `char` and `c_char` may be const parameters (spec 2.11.3)",
+                                rokc_ast::print::print_ty(&ty)
+                            ),
+                            "use an integer type, such as `usize`",
+                        );
+                    }
                     params.push(rokc_ast::GenericParam::Const { name, ty });
                 }
                 // Spec 2.10: optional `= const_expr` default (not modelled).
@@ -3816,8 +4045,7 @@ impl<'a> Parser<'a> {
             TokenKind::Fn => {
                 self.bump();
                 self.expect(&TokenKind::LParen, "`(`")?;
-                let args = self.nested_type_list(TokenKind::RParen)?;
-                self.expect(&TokenKind::RParen, "`)`")?;
+                let args = self.fn_type_params()?;
                 let throws_span = self.peek_span();
                 let throws = self.parse_throws();
                 // `fn(..) -> R` binds tighter than `|` (spec 2.1.10):
@@ -4605,6 +4833,17 @@ impl<'a> Parser<'a> {
                 }
             }
         }
+        // Spec 3.9.1: an item and a `use` of its name in one block.
+        let nested: Vec<&str> = block
+            .stmts
+            .iter()
+            .filter_map(|s| match &s.kind {
+                StmtKind::Item(Item::Fn(f)) if rokc_ast::nested_marker_of(f).is_some() => {
+                    Some(f.name.as_str())
+                }
+                _ => None,
+            })
+            .collect();
         for s in &block.stmts {
             let StmtKind::Item(Item::Use(u)) = &s.kind else {
                 continue;
@@ -4612,11 +4851,12 @@ impl<'a> Parser<'a> {
             let mut used = Vec::new();
             rokc_ast::rename::use_names(&u.tree, &mut used);
             for n in used {
-                if r.types.contains_key(n) || r.values.contains_key(n) {
-                    self.error(
-                        Code::DUPLICATE_DEFINITION,
+                if r.types.contains_key(n) || r.values.contains_key(n) || nested.contains(&n) {
+                    self.error_help(
+                        Code::IMPORT_CONFLICT,
                         s.span,
-                        format!("`{n}` is defined twice in this block"),
+                        format!("`{n}` is imported here and also defined in this block"),
+                        format!("rename the import: `use ... as {n}2;`, or remove one of them"),
                     );
                 }
             }
@@ -6355,7 +6595,17 @@ impl<'a> Parser<'a> {
                 self.bump();
                 // `try!` is one word: `try !x` tries the negation.
                 let glued = self.peek_span().start == try_end;
-                let kind = if self.eat(&TokenKind::Question) {
+                let kind = if matches!(self.peek(), TokenKind::Question) {
+                    if !glued {
+                        let at = self.peek_span();
+                        self.error_help(
+                            Code::SYNTAX,
+                            at,
+                            "space between `try` and `?` (spec 1.10.3)",
+                            "write `try?` as one word",
+                        );
+                    }
+                    self.bump();
                     TryKind::Optional
                 } else if glued && self.eat(&TokenKind::Bang) {
                     TryKind::Force
@@ -6549,7 +6799,11 @@ impl<'a> Parser<'a> {
                         last.generics = generics;
                     }
                 }
-                if self.struct_expr_allowed && matches!(self.peek(), TokenKind::LBrace) {
+                if std::mem::take(&mut self.head_struct_lit)
+                    && matches!(self.peek(), TokenKind::LBrace)
+                {
+                    self.parse_struct_init_body(path)?
+                } else if self.struct_expr_allowed && matches!(self.peek(), TokenKind::LBrace) {
                     // `Path { .. }`: struct init or 0-arg trailing closure
                     // (spec 2.3 vs 4.8.1), by the body's first tokens:
                     //   `}`, `..rest`, `ident :|,|}`  → struct init
@@ -6644,16 +6898,9 @@ impl<'a> Parser<'a> {
                 self.bump();
                 ExprKind::SelfUpper
             }
-            // `[a, b]` array, or capture list `[ref x] || ..` (spec 4.6.2):
-            // `ref` inside decides.
-            TokenKind::LBracket
-                if matches!(
-                    self.tokens.get(self.pos + 1).map(|t| &t.kind),
-                    Some(TokenKind::Ref)
-                ) =>
-            {
-                self.parse_capture_closure()?
-            }
+            // `[a, b]` array, or capture list `[ref x] || ..` (spec 4.6.3):
+            // `ref` inside, or names then `]` and `|` / `||`, decide.
+            TokenKind::LBracket if self.at_capture_list() => self.parse_capture_closure()?,
             TokenKind::LBracket => {
                 self.bump();
                 let (mut items, trailing_comma) =
@@ -6742,11 +6989,31 @@ impl<'a> Parser<'a> {
                 ExprKind::Yield(value)
             }
             other => {
-                self.error(
-                    Code::SYNTAX,
-                    start,
-                    format!("expected expression, found {}", other.describe()),
-                );
+                let msg = format!("expected expression, found {}", other.describe());
+                let help = match other {
+                    TokenKind::HashBangLBracket => Some(
+                        "an inner attribute `#![..]` goes at the top of a file; put an outer \
+                         `#[..]` on the function instead (spec 6.1.2)",
+                    ),
+                    TokenKind::Pub => Some(
+                        "an item or `use` in a function body is visible only in its block; \
+                         remove `pub` (spec 3.9.1)",
+                    ),
+                    TokenKind::ColonColon => Some(
+                        "a path starts with a name: write `pkg::a` for an item of this \
+                         package's root, `sup::a` for the parent module's (spec 5.7)",
+                    ),
+                    TokenKind::At => Some(
+                        "`@` tokens belong to meta templates; the shape tokens (`@Self`, \
+                         `@field`, `@variant`) only to `@derive` / `@attribute` blocks \
+                         (spec 6.9)",
+                    ),
+                    _ => None,
+                };
+                match help {
+                    Some(h) => self.error_help(Code::SYNTAX, start, msg, h),
+                    None => self.error(Code::SYNTAX, start, msg),
+                }
                 return None;
             }
         };
@@ -6879,10 +7146,11 @@ impl<'a> Parser<'a> {
                                 origin,
                             },
                         };
-                    } else if let Some(closure) =
-                        self.paren_less_trailing_closure(Some(name.clone()))
+                    } else if let Some(closure) = self
+                        .paren_less_trailing_closure(Some(name.clone()))
+                        .or_else(|| self.paren_less_block_closure(Some(name.clone())))
                     {
-                        // `xs.map |x| { .. }` (spec 4.8.1).
+                        // `xs.map |x| { .. }`, `s.spawn { .. }` (spec 4.8.1).
                         expr = Expr {
                             span: expr.span,
                             kind: ExprKind::MethodCall {
@@ -6981,6 +7249,17 @@ impl<'a> Parser<'a> {
                             };
                             chain_open = true;
                             continue;
+                        }
+                        // Spec 3.8.8: no `x?.[i]`.
+                        TokenKind::LBracket => {
+                            let s = self.peek_span();
+                            self.error_help(
+                                Code::SYNTAX,
+                                s,
+                                "`?.` is not followed by `[`: there is no `x?.[i]`",
+                                "write `x?.get(i)`",
+                            );
+                            return None;
                         }
                         _ => {
                             let s = self.peek_span();
@@ -7239,6 +7518,34 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// At `[`: a capture list, `[ref x ..` or `[x, y] |..|` (spec 4.6.3).
+    fn at_capture_list(&self) -> bool {
+        let tok = |i: usize| self.tokens.get(self.pos + i).map(|t| &t.kind);
+        if matches!(tok(1), Some(TokenKind::Ref)) {
+            return true;
+        }
+        let mut i = 1;
+        loop {
+            if !matches!(tok(i), Some(TokenKind::Ident(_) | TokenKind::SelfLower)) {
+                return false;
+            }
+            i += 1;
+            match tok(i) {
+                Some(TokenKind::Comma) if matches!(tok(i + 1), Some(TokenKind::RBracket)) => {
+                    i += 1;
+                    break;
+                }
+                Some(TokenKind::Comma) => i += 1,
+                Some(TokenKind::RBracket) => break,
+                _ => return false,
+            }
+            if matches!(tok(i), Some(TokenKind::Ref)) {
+                return true;
+            }
+        }
+        matches!(tok(i + 1), Some(TokenKind::Pipe | TokenKind::PipePipe))
+    }
+
     /// `[ref x, y] |..| body` - a closure with a capture list (spec 4.6.2).
     fn parse_capture_closure(&mut self) -> Option<ExprKind> {
         self.bump(); // `[`
@@ -7322,8 +7629,18 @@ impl<'a> Parser<'a> {
     /// (`span`: the closure's).
     fn closure_expr(&mut self, label: Option<String>, span: Span) -> Option<ExprKind> {
         let (params, ret_ty) = self.parse_closure_head()?;
+        let body_at = self.peek_span();
         let (body, bare) = self.ret_frame(label, Self::parse_expr);
         let body = body?;
+        // Spec 4.5.3: `-> T` only before a block body.
+        if ret_ty.is_some() && !matches!(&body.kind, ExprKind::Block(b) if b.label.is_none()) {
+            self.error_help(
+                Code::SYNTAX,
+                body_at,
+                "a closure with `-> T` needs a block body",
+                "wrap the body in braces: `|x: i32| -> i32 { x * 2 }`",
+            );
+        }
         self.note_closure_returns(span, bare);
         Some(ExprKind::Closure {
             captures: Vec::new(),
@@ -7338,6 +7655,15 @@ impl<'a> Parser<'a> {
     /// Spec 4.8.1 without the `( )`: `xs.map |x| { .. }`. A `|` after a
     /// callee is a closure only when `|params| (-> R)? {` follows; `||`
     /// stays logical-or. Off in a control-flow head.
+    /// `s.spawn { body }` (spec 4.8.4): a `{` after a method name, outside
+    /// a condition head.
+    fn paren_less_block_closure(&mut self, label: Option<String>) -> Option<Box<Expr>> {
+        if !self.struct_expr_allowed || !matches!(self.peek(), TokenKind::LBrace) {
+            return None;
+        }
+        self.try_parse_trailing_closure(label).flatten()
+    }
+
     fn paren_less_trailing_closure(&mut self, label: Option<String>) -> Option<Box<Expr>> {
         if !self.struct_expr_allowed || !matches!(self.peek(), TokenKind::Pipe) {
             return None;
@@ -7962,7 +8288,48 @@ impl<'a> Parser<'a> {
                 break;
             }
         }
+        // Spec 4.2.4: positional arguments come first.
+        if let Some(first) = args.iter().position(|a| matches!(a, CallArg::Named { .. })) {
+            let late = args[first + 1..].iter().find_map(|a| match a {
+                CallArg::Positional(e) | CallArg::Ref(e) => Some(e),
+                _ => None,
+            });
+            if let Some(e) = late {
+                self.error_help(
+                    Code::NAMED_ARGUMENT,
+                    e.span,
+                    "positional argument after a named argument (spec 4.2.4)",
+                    "write the positional arguments first, or name this one too",
+                );
+            }
+        }
         Some(args)
+    }
+}
+
+/// Spec 2.11.3: the types a const parameter may have.
+fn const_param_ty(ty: &Ty) -> bool {
+    let TyKind::Path(p) = &ty.kind else {
+        return false;
+    };
+    match p.segments.as_slice() {
+        [s] if s.generics.is_empty() => matches!(
+            s.name.as_str(),
+            "i8" | "i16"
+                | "i32"
+                | "i64"
+                | "isize"
+                | "u8"
+                | "u16"
+                | "u32"
+                | "u64"
+                | "usize"
+                | "bool"
+                | "char"
+                | "c_char"
+        ),
+        // A path (`ffi::c_char`) or an alias is left to the type check.
+        [..] => p.segments.len() > 1,
     }
 }
 

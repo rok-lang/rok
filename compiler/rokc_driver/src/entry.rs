@@ -86,8 +86,9 @@ fn implicit_main(stmts: Vec<Stmt>) -> FnDef {
     }
 }
 
-/// Spec 4.16.3: no parameters or generics; `()` or `i32`, optionally
-/// `throws (E)` (an escaping error exits 1). `Result` isn't an entry form.
+/// Spec 4.16.3: no parameters, generics or `unsafe`; `()` or `i32`, or
+/// `()` with `throws (E)` (an escaping error exits 1). `Result` isn't an
+/// entry form.
 fn check_main_signature(f: &FnDef, diags: &mut Vec<RokDiagnostic>) {
     let mut bad = |msg: &str| {
         diags.push(RokDiagnostic::error(
@@ -104,6 +105,9 @@ fn check_main_signature(f: &FnDef, diags: &mut Vec<RokDiagnostic>) {
     }
     if f.is_generator {
         bad("cannot be a generator");
+    }
+    if f.is_unsafe {
+        bad("cannot be `unsafe`; put the unsafe operations in an `unsafe { }` block");
     }
     let ret_ok = match &f.ret_ty {
         None => true,
@@ -123,5 +127,15 @@ fn check_main_signature(f: &FnDef, diags: &mut Vec<RokDiagnostic>) {
         );
     } else if !ret_ok {
         bad("must return `()` or `i32`");
+    } else if f
+        .ret_ty
+        .as_ref()
+        .is_some_and(|t| matches!(&t.kind, TyKind::Path(_)))
+        && !matches!(&f.throws, ThrowsKind::None)
+    {
+        bad(
+            "cannot combine `throws` with `-> i32`; drop `-> i32` and call \
+             `rok::std::process::exit(code)` in a `catch` for an exit code",
+        );
     }
 }

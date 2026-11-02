@@ -10,7 +10,10 @@
 
 // `str` iterators (stdlib 2.15.3) and `parse::<T>()` / `FromStr`
 // (2.15.7).
-fn main() throws (ParseError) -> i32 {
+// No `main` combines `throws` with `-> i32` (spec 4.16.3).
+fn main() -> i32 { try! run() }
+
+fn run() throws (ParseError) -> i32 {
     let out = "";
     for c in "hé가!".chars() {
         if out.len() > 0 { out = out + "|"; }

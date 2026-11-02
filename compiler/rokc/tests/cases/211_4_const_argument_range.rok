@@ -1,0 +1,10 @@
+// spec: §2.11.4
+// expect-error: const argument `-1` out of range for `N: usize`
+// forbid-error: cannot find type
+
+// An out-of-range argument is reported once, not also as an unknown type.
+struct S<const N: usize> {}
+
+fn main() {
+    let b: S<-1> = S {};
+}

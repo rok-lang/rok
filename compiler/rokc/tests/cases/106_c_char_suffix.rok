@@ -1,0 +1,10 @@
+// spec: §1.6.4
+// expect-exit: 0
+// expect-stdout:
+// 65
+
+// `c_char` is an integer literal suffix like the others.
+fn main() {
+    let x = 65c_char;
+    println(x as i32);
+}

@@ -1,0 +1,6 @@
+// spec: §3.15
+// expect-error: mismatched types: the pattern `b` expects `str`, found `i32`
+// forbid-error: to make text from it
+
+// A tuple pattern's mismatch has no text-conversion help.
+fn main() { let (a: i32, b: str) = (1, 2); }

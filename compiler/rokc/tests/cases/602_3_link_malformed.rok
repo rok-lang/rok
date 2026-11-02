@@ -1,0 +1,8 @@
+// spec: §6.2.3
+// expect-error: malformed `#[link]`
+
+// `#[link]` takes a library name and the listed keys only.
+#[link(nme = "m", kind = "bogus")]
+extern "C" { fn sin(x: f64) -> f64; }
+
+fn main() {}

@@ -656,7 +656,7 @@ pub(super) fn resolve_ty_with_structs(
                 let written = segs.join("::");
                 sc.names.error_help(
                     Code::TRAIT_AS_TYPE,
-                    sc.at,
+                    if p.span.is_dummy() { sc.at } else { p.span },
                     format!("trait `{full}` cannot be used as a type directly"),
                     format!(
                         "use `any {written}` for a value of any type implementing it, or a \
@@ -690,8 +690,19 @@ pub(super) fn resolve_ty_with_structs(
             }
             if !generics.is_empty() || defs.bare_instance(&full) {
                 let args: Vec<HirTy> = generics.iter().map(rec).collect();
-                return instance(defs, &full, args, sc, ty.span)
-                    .unwrap_or_else(|| HirTy::Path(vec![full]));
+                let mut open = Vec::new();
+                args.iter()
+                    .for_each(|a| collect::collect_unknown_paths(a, &mut open));
+                return instance(defs, &full, args, sc, ty.span).unwrap_or_else(|| {
+                    if let Some(a) = open.into_iter().find(|a| a != "_") {
+                        sc.names
+                            .open_args
+                            .borrow_mut()
+                            .entry(full.clone())
+                            .or_insert(a);
+                    }
+                    HirTy::Path(vec![full])
+                });
             }
             if let Some(id) = defs.struct_id(&full) {
                 return HirTy::Struct(id);

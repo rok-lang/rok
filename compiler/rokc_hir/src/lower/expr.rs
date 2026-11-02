@@ -741,7 +741,22 @@ fn lower_stmt_inner(ctx: &mut LowerCtx<'_>, stmt: &Stmt) -> Option<HirStmt> {
         StmtKind::Break { label, value } => {
             check_jump_target(ctx, "break", label.as_deref(), false);
             let depth = jump_index(ctx, label.as_deref(), false);
-            let value = if let Some(e) = value {
+            let value = if let Some(e) = value.as_ref().filter(|_| ctx.unit_loops.contains(&depth))
+            {
+                let _ = lower_expected(ctx, e, HirTy::Unknown);
+                ctx.emit_error(
+                    Code::OUTSIDE_CONTEXT,
+                    "`break` with a value inside a `while` or `for` loop, whose value is always \
+                     `()` (spec 3.13.1)"
+                        .to_owned(),
+                );
+                ctx.help_last(Some(
+                    "write `loop { ... break value; ... }` to leave with a value, or drop the \
+                     value: `break;`"
+                        .to_owned(),
+                ));
+                None
+            } else if let Some(e) = value {
                 Some(lower_break_value(ctx, depth, e))
             } else {
                 match ctx.break_tys.get(&depth).cloned() {
@@ -1369,11 +1384,23 @@ pub(super) fn lower_assign(
             }
             // Only `let` declares. Declare it anyway so later uses don't
             // report again.
+            // Spec 5.1.2: a misspelt name is the likelier mistake.
+            let near = rokc_diagnostic::suggest(
+                name,
+                ctx.scopes.iter().flat_map(|s| s.keys().map(String::as_str)),
+            )
+            .map(str::to_owned);
             ctx.emit_error(
                 Code::INVALID_ASSIGNMENT,
                 format!("`{name}` is not declared; a variable is created only by `let`"),
             );
-            ctx.help_last(Some(format!("write `let {name} = {};`", snippet(value))));
+            ctx.help_last(Some(match near {
+                Some(n) => format!(
+                    "did you mean `{n}`? To declare a new variable, write `let {name} = {};`",
+                    snippet(value)
+                ),
+                None => format!("write `let {name} = {};`", snippet(value)),
+            }));
             let v = lower_expected(ctx, value, HirTy::Unknown);
             Some(ctx.declare_var(name, v.ty.clone(), v, span))
         }
@@ -1733,10 +1760,21 @@ pub(super) fn lower_assign(
             super::mono::assign_place(ctx, &root_place, acc)
         }
         _ => {
-            ctx.emit_error(
+            let help = if matches!(target.kind, ExprKind::Tuple(_)) {
+                format!(
+                    "a tuple is not a place; destructure into new variables: `let {} = {};`",
+                    snippet(target),
+                    snippet(value)
+                )
+            } else {
+                "assign to a variable, a field (`s.x = v`) or an element (`xs[i] = v`)".to_owned()
+            };
+            ctx.emit_error_at(
                 Code::INVALID_ASSIGNMENT,
-                format!("invalid assignment target (spec 3.4) at line {}", span.line),
+                target.span,
+                "invalid assignment target (spec 3.4)".to_owned(),
             );
+            ctx.help_last(Some(help));
             None
         }
     }
@@ -2051,11 +2089,25 @@ fn lower_cast(
                 format!("cannot cast to `{to_name}`: {h}"),
             );
         }
+        if let (HirTy::Enum(_), HirTy::Prim(p)) = (&from_ty, &to_ty) {
+            if p.is_int() {
+                return ctx.error_expr(
+                    Code::INVALID_CAST,
+                    span,
+                    format!(
+                        "cannot cast `{}` as `{to_name}`: only an enum whose variants carry no \
+                         payload casts to an integer (spec 2.14.2)",
+                        ctx.ty_name(&from_ty)
+                    ),
+                );
+            }
+        }
         return ctx.error_expr(
             Code::INVALID_CAST,
             span,
             format!(
-                "cannot cast `{}` as `{}` (only numeric / bool / char casts){}",
+                "cannot cast `{}` as `{}` (only numeric / bool / char casts, and a \
+                 payload-less enum to an integer){}",
                 ctx.ty_name(&from_ty),
                 ctx.ty_name(&to_ty),
                 optional_cast_hint(ty)
@@ -2253,11 +2305,11 @@ fn lower_expr_inner(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
         } => lower_if(ctx, cond, then_branch, else_branch.as_deref(), span),
         ExprKind::While { label, cond, body } => {
             let cond_h = lower_cond(ctx, cond);
-            ctx.breakables.push((label.clone(), true));
+            let idx = open_unit_loop(ctx, label.as_ref());
             ctx.push_expected(HirTy::Unit);
             let body_h = lower_narrowed_block(ctx, cond, body);
             ctx.pop_expected();
-            ctx.breakables.pop();
+            close_unit_loop(ctx, idx);
             HirExpr {
                 kind: HirExprKind::While {
                     label: label.clone(),
@@ -2559,6 +2611,21 @@ pub(super) fn lower_loop_body(ctx: &mut LowerCtx<'_>, body: &Block) -> HirBlock 
     };
     ctx.pop_expected();
     b
+}
+
+/// Enter a `while` / `for` body: a loop whose value is always `()`.
+pub(super) fn open_unit_loop(ctx: &mut LowerCtx<'_>, label: Option<&String>) -> usize {
+    let idx = ctx.breakables.len();
+    ctx.break_tys.remove(&idx);
+    ctx.unit_loops.insert(idx);
+    ctx.breakables.push((label.cloned(), true));
+    idx
+}
+
+pub(super) fn close_unit_loop(ctx: &mut LowerCtx<'_>, idx: usize) {
+    ctx.breakables.pop();
+    ctx.break_tys.remove(&idx);
+    ctx.unit_loops.remove(&idx);
 }
 
 /// Open a `loop` / labelled block at `breakables[idx]`; an annotated slot
@@ -3003,11 +3070,27 @@ pub(super) fn lower_struct_init(
         for (_, e) in fields {
             lower_expected(ctx, e, HirTy::Unknown);
         }
+        // Spec 4.8.4: `run { }` / `zero { n }` after a function's name is
+        // a struct literal; the closure needs the parentheses.
+        let written = segs.join("::");
+        if ctx.resolve_any_fn(&segs).is_some() {
+            return ctx.unknown_name(
+                Code::UNRESOLVED_TYPE,
+                span,
+                format!(
+                    "`{written} {{ .. }}` is a struct literal, but `{written}` is a function \
+                     (spec 4.8.4)"
+                ),
+                Some(format!(
+                    "write the closure in parentheses: `{written}(|| {{ .. }})`"
+                )),
+            );
+        }
         let help = ctx.type_help(&segs);
         return ctx.unknown_name(
             Code::UNRESOLVED_TYPE,
             span,
-            format!("cannot find struct `{}` in this scope", segs.join("::")),
+            format!("cannot find struct `{written}` in this scope"),
             help,
         );
     };
@@ -3075,6 +3158,11 @@ pub(super) fn lower_struct_init(
                             .and_then(HirTy::as_const)
                             .and_then(|v| super::mono::typed_const(ctx, name, ty, v));
                         let Some(c) = c else {
+                            // An annotation whose arguments were wrong,
+                            // reported there.
+                            if matches!(&hint, Some(HirTy::Path(p)) if *p == [full.clone()]) {
+                                return poison(span);
+                            }
                             ctx.emit_uninferred(format!(
                                 "cannot infer const parameter `{name}` of `{}` - \
                                  annotate the binding (`let v: {}<..> = ..`)",
@@ -3411,7 +3499,7 @@ pub(super) fn field_access(
                 Code::UNSAFE_REQUIRED,
                 format!(
                     "reading field `{name}` of union `{}` needs an `unsafe` block \
-                     (the bits may not be a valid `{name}`; spec 4.15.2)",
+                     (the bits may not be a valid value of the field's type; spec 4.15.2)",
                     ctx.ty_name(&HirTy::Struct(struct_id))
                 ),
             );
@@ -3548,7 +3636,7 @@ pub(super) fn decode_str_escapes(s: &str) -> String {
 
 pub(super) fn has_int_suffix(text: &str) -> bool {
     const SUFFIXES: &[&str] = &[
-        "isize", "usize", "i64", "u64", "i32", "u32", "i16", "u16", "i8", "u8",
+        "isize", "usize", "i64", "u64", "i32", "u32", "i16", "u16", "i8", "u8", "c_char",
     ];
     SUFFIXES.iter().any(|s| text.ends_with(s))
 }
@@ -3620,6 +3708,8 @@ pub(super) fn lower_if(
     let else_ty = else_h.ty.clone();
     let then_div = hir_block_diverges(&then_h);
     let else_div = hir_expr_diverges(&else_h);
+    // Branches already fitted to the slot are not coerced again.
+    let mut fitted = false;
     let result_ty = if expected == Some(HirTy::Unit) {
         // Statement position: branch values are discarded.
         HirTy::Unit
@@ -3649,6 +3739,7 @@ pub(super) fn lower_if(
                 }
             };
         }
+        fitted = true;
         t
     } else {
         // Branches of different types are an error, not an inferred
@@ -3666,7 +3757,7 @@ pub(super) fn lower_if(
         );
         HirTy::Unknown
     };
-    if matches!(result_ty, HirTy::Sum(_) | HirTy::AnyTrait(_)) {
+    if !fitted && matches!(result_ty, HirTy::Sum(_) | HirTy::AnyTrait(_)) {
         let what = || "the `if` branch".to_owned();
         if let Some(t) = then_h.trailing.take() {
             then_h.trailing = Some(coerce(ctx, &result_ty, t, &what));
@@ -4021,8 +4112,62 @@ pub(super) fn lower_args_for(
 
 /// `lower_args_for`, also returning each `ref` parameter's argument
 /// place (by parameter index) for the copy-out (spec 4.7).
-#[allow(clippy::cognitive_complexity)]
 pub(super) fn lower_args_ref(
+    ctx: &mut LowerCtx<'_>,
+    sig: &FnSig,
+    callee: &str,
+    receiver: Option<HirExpr>,
+    args: &[CallArg],
+    span: rokc_diagnostic::Span,
+) -> (Vec<HirExpr>, Vec<HirStmt>, Vec<Option<HirExpr>>) {
+    // Spec 4.8.3: a trailing closure fills the last parameter only; for
+    // a function parameter elsewhere, its mismatches say little.
+    let fn_like = |t: &HirTy| {
+        matches!(
+            t,
+            HirTy::Fn(..)
+                | HirTy::Closure { .. }
+                | HirTy::Unknown
+                | HirTy::Param(_)
+                | HirTy::Var(_)
+                | HirTy::Path(_)
+                | HirTy::AnyTrait(_)
+        )
+    };
+    let misplaced = !sig.variadic
+        && matches!(args.last(), Some(CallArg::Positional(e)) if is_trailing_closure(e))
+        && sig.param_tys.last().is_some_and(|t| !fn_like(t))
+        && sig
+            .param_tys
+            .iter()
+            .any(|t| matches!(t, HirTy::Fn(..) | HirTy::Closure { .. }));
+    let since = ctx.env.sink.diagnostics.borrow().len();
+    let out = lower_args_ref_inner(ctx, sig, callee, receiver, args, span);
+    if misplaced {
+        retain_since(ctx, since, |d| {
+            !matches!(
+                d.code,
+                Code::MISMATCHED_TYPES | Code::TYPE_ANNOTATIONS_NEEDED
+            )
+        });
+        let last = sig.param_names.last().cloned().unwrap_or_default();
+        ctx.emit_error_at(
+            Code::MISMATCHED_TYPES,
+            span,
+            format!(
+                "a trailing closure fills the last parameter, `{last}`, which is not a \
+                 function (spec 4.8.3)"
+            ),
+        );
+        ctx.help_last(Some(
+            "pass the closure inside the parentheses, in its parameter's position".to_owned(),
+        ));
+    }
+    out
+}
+
+#[allow(clippy::cognitive_complexity)]
+fn lower_args_ref_inner(
     ctx: &mut LowerCtx<'_>,
     sig: &FnSig,
     callee: &str,
@@ -4211,14 +4356,17 @@ pub(super) fn lower_args_ref(
                         dict_lits.push(e);
                         dicts.push((name, k, v));
                     }
-                    other => ctx.emit_error(
-                        Code::SPREAD_ARGUMENT,
-                        format!(
-                            "spread `f(..x)` needs a tuple, a `List`, a `Slice`, an array or a \
-                             `Dict<str, V>`, found `{}` (spec 4.2.6)",
-                            ctx.ty_name(&other)
-                        ),
-                    ),
+                    other => {
+                        ctx.emit_error(
+                            Code::SPREAD_ARGUMENT,
+                            format!(
+                                "spread `f(..x)` needs a tuple, a `List`, a `Slice`, an array or \
+                                 a `Dict<str, V>`, found `{}` (spec 4.2.6)",
+                                ctx.ty_name(&other)
+                            ),
+                        );
+                        spread_range_help(ctx, e, &other);
+                    }
                 }
             }
         }
@@ -4263,11 +4411,12 @@ pub(super) fn lower_args_ref(
                      is not `ref` (spec 4.7.3)"
                 ),
             ),
-            Some(ArgSrc::Ast(_)) if by_ref && !is_receiver => ctx.emit_error(
+            Some(ArgSrc::Ast(e)) if by_ref && !is_receiver => ctx.emit_error(
                 Code::REF_ARGUMENT,
                 format!(
-                    "parameter `{pname}` of `{callee}` is `ref` - pass `ref x` at the call \
-                     site (spec 4.7.3)"
+                    "parameter `{pname}` of `{callee}` is `ref` - pass `ref {}` at the call \
+                     site (spec 4.7.3)",
+                    snippet(e)
                 ),
             ),
             Some(ArgSrc::Ast(e)) => reads.extend(crate::walk::free_places(&[], e)),
@@ -5056,8 +5205,16 @@ fn check_path_receiver(
         Some(false) if by_ref => ctx.emit_error(
             Code::REF_ARGUMENT,
             format!(
-                "parameter `{pname}` of `{callee}` is `ref` - pass `ref x` at the call site \
-                 (spec 4.7.3)"
+                "parameter `{pname}` of `{callee}` is `ref` - pass `ref {}` at the call site \
+                 (spec 4.7.3)",
+                match &arg.kind {
+                    HirExprKind::Local(l) => ctx
+                        .locals
+                        .get(l.0 as usize)
+                        .and_then(|x| x.name.clone())
+                        .unwrap_or_else(|| "x".to_owned()),
+                    _ => "x".to_owned(),
+                }
             ),
         ),
         Some(true) if !by_ref => ctx.emit_error(
@@ -5452,7 +5609,7 @@ pub(super) fn bind_explicit(
     Ok(own
         .into_iter()
         .zip(targs)
-        .map(|(n, t)| (n.clone(), ctx.resolve_ast_ty(t)))
+        .map(|(n, t)| (n.clone(), turbofish_ty(ctx, t)))
         .collect())
 }
 
@@ -7073,6 +7230,19 @@ pub(super) fn method_call_on(
         retain_since(ctx, since, |d| {
             d.tag != rokc_diagnostic::Tag::ClosureParamInfer
         });
+        // `s[a:b:k]` desugars to `.slice(..).step(k)` (spec 3.6.2).
+        if method == "step" && recv_h.ty == HirTy::Prim(PrimTy::Str) {
+            let e = ctx.error_expr(
+                Code::INVALID_INDEX,
+                span,
+                "a `str` slice has no step: `s[a:b:k]` is for lists and arrays (spec 3.6.2)"
+                    .to_owned(),
+            );
+            ctx.help_last(Some(
+                "step over the characters: `s.chars().step_by(k)`".to_owned(),
+            ));
+            return e;
+        }
         let e = ctx.error_expr(
             Code::NO_METHOD,
             span,
@@ -8403,11 +8573,22 @@ pub(super) fn call_value(
             );
         }
     };
+    if args.iter().any(|a| matches!(a, CallArg::Named { .. })) {
+        let h = ctx.error_expr(
+            Code::NAMED_ARGUMENT,
+            span,
+            "a `fn` value takes no named arguments: its type has no parameter names \
+             (spec 4.4.11)"
+                .to_owned(),
+        );
+        ctx.help_last(Some("pass the arguments by position".to_owned()));
+        return h;
+    }
     if args.iter().any(|a| !matches!(a, CallArg::Positional(_))) {
         return ctx.error_expr(
             Code::SPREAD_ARGUMENT,
             span,
-            "named / spread arguments need a statically known callee (spec 4.2.4)".to_owned(),
+            "spread arguments need a statically known callee (spec 4.2.6)".to_owned(),
         );
     }
     let sig = FnSig {
@@ -8542,10 +8723,15 @@ fn check_unsafe_call(ctx: &LowerCtx<'_>, callee: &str) {
             Code::UNSAFE_REQUIRED,
             format!(
                 "call to unsafe function `{}` outside an `unsafe` block or `unsafe fn` \
-                 (spec 4.15; C functions are implicitly unsafe)",
+                 (spec 4.15)",
                 leaf_name(callee)
             ),
         );
+        ctx.help_last(Some(
+            "wrap the call in `unsafe { .. }`; every `extern` function, `extern \"rok\"` \
+             included, is unsafe to call"
+                .to_owned(),
+        ));
     }
 }
 
@@ -8712,6 +8898,7 @@ fn generic_positional_args(
                                 ctx.ty_name(other)
                             ),
                         );
+                        spread_range_help(ctx, e, other);
                         return None;
                     }
                 };
@@ -8901,9 +9088,10 @@ fn call_generic_positional(
                     )
                 } else {
                     format!(
-                        "parameter {} of `{callee}` is `ref` - pass `ref x` at the call site \
+                        "parameter {} of `{callee}` is `ref` - pass `ref {}` at the call site \
                          (spec 4.7.3)",
-                        i + 1
+                        i + 1,
+                        snippet(e)
                     )
                 },
             );
@@ -9235,10 +9423,42 @@ fn bind_explicit_generics(
     for (gp, t) in def.generics.params.iter().zip(explicit) {
         let (rokc_ast::GenericParam::Type { name, .. }
         | rokc_ast::GenericParam::Const { name, .. }) = gp;
-        bound.insert(name.clone(), ctx.resolve_ast_ty(t));
+        bound.insert(name.clone(), turbofish_ty(ctx, t));
     }
     ctx.explicit_generics = bound;
     true
+}
+
+/// `g(..5)` spreads `5`; a range argument needs parentheses.
+fn spread_range_help(ctx: &LowerCtx<'_>, e: &Expr, ty: &HirTy) {
+    if matches!(ty, HirTy::Prim(p) if p.is_int()) {
+        ctx.help_last(Some(format!(
+            "to pass the range `..{0}`, write it in parentheses: `(..{0})`",
+            snippet(e)
+        )));
+    }
+}
+
+/// A `::<T>` argument; a name that resolves to no type is E0028 here,
+/// since nothing later sees it (`size_of::<Nope>()`).
+pub(super) fn turbofish_ty(ctx: &LowerCtx<'_>, t: &Ty) -> HirTy {
+    let ty = ctx.resolve_ast_ty(t);
+    let mut open = Vec::new();
+    super::collect::collect_unknown_paths(&ty, &mut open);
+    let Some(name) = open.into_iter().find(|n| {
+        n != "_"
+            && !ctx.ty_subst.contains_key(n)
+            && ctx.env.names.unknown_spans.borrow().contains_key(n)
+    }) else {
+        return ty;
+    };
+    let at = ctx.env.names.unknown_spans.borrow()[&name];
+    ctx.emit_error_at(
+        Code::UNRESOLVED_TYPE,
+        at,
+        format!("cannot find type `{name}` in this scope"),
+    );
+    HirTy::Unknown
 }
 
 pub(super) fn lower_call(
@@ -9999,16 +10219,39 @@ fn qpath_call(
     }
     let call = call_impl_method(ctx, &t, method, Some(&key), recv, rest, &display, span);
     ctx.explicit_recv = None;
-    call.unwrap_or_else(|| {
-        ctx.error_expr(
+    call.unwrap_or_else(|| qualified_miss(ctx, &t, &key, method, span))
+}
+
+/// `<T as Tr>::m` that resolves to nothing: the trait lacks `m`, or `T`
+/// lacks the impl.
+fn qualified_miss(
+    ctx: &LowerCtx<'_>,
+    t: &HirTy,
+    key: &str,
+    method: &str,
+    span: rokc_diagnostic::Span,
+) -> HirExpr {
+    let tr = leaf_name(key);
+    let methods: Option<Vec<String>> = ctx.env.trait_of(key).map(|info| info.methods.clone());
+    match methods {
+        Some(ms) if !ms.iter().any(|m| m == method) => {
+            let h = ctx.error_expr(
+                Code::NO_METHOD,
+                span,
+                format!("trait `{tr}` has no method `{method}`"),
+            );
+            if !ms.is_empty() {
+                let list: Vec<String> = ms.iter().map(|m| format!("`{m}`")).collect();
+                ctx.help_last(Some(format!("its methods: {}", list.join(", "))));
+            }
+            h
+        }
+        _ => ctx.error_expr(
             Code::NO_METHOD,
             span,
-            format!(
-                "`{}` has no `{key}` impl providing `{method}`",
-                ctx.ty_name(&t)
-            ),
-        )
-    })
+            format!("`{}` does not implement `{tr}`", ctx.ty_name(t)),
+        ),
+    }
 }
 
 /// The concrete `method` of `t` from the impl of `key` with the arguments
@@ -10123,16 +10366,7 @@ fn path_call_via_impls(
         }
         let call = call_impl_method(ctx, &t, method, Some(&key), recv, rest, display, span);
         ctx.explicit_recv = None;
-        return Some(call.unwrap_or_else(|| {
-            ctx.error_expr(
-                Code::NO_METHOD,
-                span,
-                format!(
-                    "`{}` has no `{key}` impl providing `{method}`",
-                    ctx.ty_name(&t)
-                ),
-            )
-        }));
+        return Some(call.unwrap_or_else(|| qualified_miss(ctx, &t, &key, method, span)));
     }
     // Only paths the struct / enum lookup can't take: type parameters,
     // primitives, `Self`, associated types (2.8.3).
@@ -12146,7 +12380,7 @@ fn param_op(
             Code::INVALID_OPERATOR,
             span,
             format!(
-                "operator `{sym}` on `{t}` needs a `{}` bound on `{t}` (spec 2.10.9)",
+                "operator `{sym}` on `{t}` needs the bound `{t}: {}` (spec 2.10.9)",
                 leaf_name(op_trait)
             ),
         );
@@ -13220,6 +13454,7 @@ pub(super) fn parse_int_literal(text: &str) -> Option<(i128, PrimTy)> {
         ("u16", PrimTy::U16),
         ("i8", PrimTy::I8),
         ("u8", PrimTy::U8),
+        ("c_char", PrimTy::CChar),
     ];
 
     let (digits, ty) = SUFFIXES

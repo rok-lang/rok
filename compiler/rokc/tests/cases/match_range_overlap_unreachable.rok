@@ -1,5 +1,5 @@
-// expect-error: 8:12: unreachable match arm 3
-// expect-error: 16:12: unreachable match arm 2
+// expect-error: 11:19: unreachable match arm 3
+// expect-error: 18:22: unreachable match arm 2
 
 // spec 3.12.6: integer / char literals and ranges subsume each other -
 // an arm inside the union of earlier ranges is unreachable. The domain

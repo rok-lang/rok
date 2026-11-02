@@ -1,0 +1,16 @@
+// spec: §2.8.8 §2.9.6
+// expect-error: 10:9: a trait item has no visibility of its own
+// expect-error: 14:23: a trait impl's item has no visibility of its own
+// expect-error: help: remove `pub`
+
+// Trait items and a trait impl's items are as visible as the trait.
+mod m {
+    pub trait T {
+        fn f(self) -> i32 { 1 }
+        pub fn g(self) -> i32 { 2 }
+    }
+}
+struct S {}
+impl m::T for S { pub fn f(self) -> i32 { 3 } }
+
+fn main() {}

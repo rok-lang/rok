@@ -43,7 +43,10 @@ fn churn(n: i64) -> i64 {
     return t;
 }
 
-fn main() throws (rok::bare::alloc::LayoutError) -> i32 {
+// No `main` combines `throws` with `-> i32` (spec 4.16.3).
+fn main() -> i32 { try! run() }
+
+fn run() throws (rok::bare::alloc::LayoutError) -> i32 {
     let sleeper = thread::spawn(|| { unsafe { usleep(3000000u32) }; AWAKE.store(1); 0 });
     unsafe { usleep(100000u32) };
     unsafe { rok_gc_collect() };

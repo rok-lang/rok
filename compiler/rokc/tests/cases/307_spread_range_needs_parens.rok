@@ -1,0 +1,10 @@
+// spec: §3.7 §4.2.6
+// expect-error: spread `f(..x)` needs a tuple
+// expect-error: help: to pass the range `..5`, write it in parentheses: `(..5)`
+// expect-error: missing argument
+// expect-error-extra: allow
+
+// `g(..5)` spreads `5`; a range argument is written `g((..5))`.
+fn g(a: i32, r: i32) {}
+
+fn main() { g(..5); }

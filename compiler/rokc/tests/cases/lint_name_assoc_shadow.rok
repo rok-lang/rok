@@ -1,7 +1,7 @@
 // spec: §2.8.3 §6.2.9
 // expect-exit: 0
-// expect-lint: 18:1 associated type `Out` shadows the outer type `Out` inside the trait `Src`; there `Out` and `Self::Out` both mean the associated type
-// expect-lint: 30:1 associated type `Out` shadows the outer type `Out` inside the impl for `N`; there `Out` and `Self::Out` both mean the associated type
+// expect-lint: 18:1 associated type `Out` shadows the outer type `Out` inside the trait `Src`; there a bare `Out` is ambiguous
+// expect-lint: 30:1 associated type `Out` shadows the outer type `Out` inside the impl for `N`; there a bare `Out` is ambiguous
 // expect-stdout:
 // 7
 

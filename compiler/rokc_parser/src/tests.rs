@@ -295,15 +295,12 @@ fn visibility_qualifiers_are_contextual() {
     // `sub` is reserved only inside `pub(...)`; a method named `sub` and
     // a `pub(sub)` qualifier coexist on the same item.
     let p = parse(
-        r#"trait Sub<Rhs> {
-            #[infix("-")]
-            pub(sub) fn sub(self, rhs: Rhs) -> Self;
-        }"#,
+        "impl V {
+            pub(sub) fn sub(self, rhs: V) -> V { rhs }
+        }",
     );
-    let Item::Trait(t) = &p.items[0] else {
-        panic!()
-    };
-    let rokc_ast::TraitItem::Method(m) = &t.items[0] else {
+    let Item::Impl(i) = &p.items[0] else { panic!() };
+    let rokc_ast::ImplItem::Method(m) = &i.items[0] else {
         panic!()
     };
     assert_eq!(m.name, "sub");

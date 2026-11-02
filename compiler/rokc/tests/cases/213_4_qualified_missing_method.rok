@@ -1,0 +1,6 @@
+// spec: §2.13.4
+// expect-error: trait `Display` has no method `display`
+// expect-error: help: its methods: `fmt`
+
+// A qualified path names a method of the trait.
+fn main() { let s = <i32 as Display>::display(42i32); }

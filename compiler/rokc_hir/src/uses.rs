@@ -383,6 +383,18 @@ impl Missing<'_> {
         if self.packages.iter().any(|p| p == first) {
             return None;
         }
+        // Another language's roots (spec 5.7).
+        let other = match root {
+            "crate" => Some("this package's root is `pkg`: write `use pkg::..`"),
+            "super" => Some("the parent module is `sup`: write `use sup::..`"),
+            "std" | "core" => Some(
+                "the standard library is under `rok`: write `use rok::std::..` or `use rok::core::..`",
+            ),
+            _ => None,
+        };
+        if let Some(h) = other {
+            return Some((h.to_owned(), None));
+        }
         let Some(script) = self.script else {
             let help = format!(
                 "`{root}` is not a dependency of this package: add it to rok.rokon (`rok add \

@@ -919,13 +919,14 @@ impl<'src> Lexer<'src> {
         let mut rest = self.src[self.pos + 1..].chars();
         let c1 = rest.next().unwrap_or('\'');
         if is_ident_start(c1) && rest.next() != Some('\'') {
-            // Label unless the identifier run is closed by `'` (then it
-            // is an over-long char literal, reported as such).
+            // Label unless the identifier run is closed by `'` or goes on
+            // with an escape (`'e\u{301}'`): then it is an over-long char
+            // literal, reported as such.
             let save = (self.pos, self.line, self.col);
             self.advance(1);
             let start = self.pos;
             self.eat_ident_continue();
-            if self.bytes.get(self.pos) != Some(&b'\'') {
+            if !matches!(self.bytes.get(self.pos), Some(b'\'' | b'\\')) {
                 return TokenKind::Label(normalize_ident(&self.src[start..self.pos]));
             }
             (self.pos, self.line, self.col) = save;

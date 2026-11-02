@@ -1,0 +1,16 @@
+// spec: §4.8.4 §4.8.5
+// expect-exit: 0
+// expect-stdout:
+// 3
+
+// `s.spawn { body }`: a `{ }` after a method name is a trailing closure.
+struct Runner { n: i32; }
+impl Runner {
+    fn run(self, f: fn() -> i32) -> i32 { f() + self.n }
+}
+
+fn main() {
+    let r = Runner { n: 1 };
+    let v = r.run { 2 };
+    println(v);
+}

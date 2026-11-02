@@ -1,0 +1,8 @@
+// spec: §6.3
+// expect-error: E0121
+
+// A malformed `cfg` on an item is the same error as on a statement.
+#[cfg(foo = 1)]
+fn f() {}
+
+fn main() {}

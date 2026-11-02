@@ -1071,7 +1071,7 @@ fn with_ok(declared: HirTy, ok: HirTy) -> HirTy {
 }
 
 /// Lower the body with an open return type and join its `return` and tail
-/// types (spec 4.3.4: one path, its type; several, their sum). With
+/// types (spec 4.3.4: they must agree). With
 /// `keep`, a body whose paths agree (no `throws`, no `ref` parameter) is
 /// final as lowered; otherwise it is rolled back.
 #[allow(clippy::too_many_arguments)]
@@ -1156,12 +1156,24 @@ fn infer_ret_of(
         } else {
             fail("one path returns a value and another none")
         }
-    } else {
-        let mut parts = Vec::new();
-        for t in tys {
-            t.spread(&mut parts);
+    } else if let Some(other) = tys.iter().find(|t| **t != tys[0] && !has_unknown(t)) {
+        // Spec 4.3.4: no sum is invented for differing return paths.
+        if !tentative && !has_unknown(&tys[0]) {
+            let (a, b) = (probe.ty_name(&tys[0]), probe.ty_name(other));
+            probe.emit_error_at(
+                Code::BRANCH_TYPES,
+                fn_def.span,
+                format!(
+                    "the return paths of `{}` have different types `{a}` and `{b}` - rok \
+                     does not infer a sum type (spec 4.3.4)",
+                    leaf_name(&fn_def.name)
+                ),
+            );
+            probe.help_last(Some(format!("write the return type: `-> {a} | {b}`")));
         }
-        HirTy::sum(parts)
+        HirTy::Unknown
+    } else {
+        tys.swap_remove(0)
     };
     let ret = unit_ret(&probe, fn_def, ret, !tentative, !subst.is_empty());
     if tentative {
@@ -1350,6 +1362,22 @@ fn lower_fn_with(
 
     if let Some(b) = &fn_def.body {
         ctx.ref_captured = ref_captured_bindings(&fn_def.params, b);
+    }
+    // Spec 4.2.3: a default is a `const` expression, checked here once
+    // (an instance's defaults are its template's).
+    if subst.is_empty() {
+        for p in &fn_def.params {
+            let (Some(d), Some(t)) = (&p.default, &p.ty) else {
+                continue;
+            };
+            let mut cx = ctx.clone();
+            let ty = cx.resolve_ast_ty(t);
+            if has_unknown(&ty) {
+                continue;
+            }
+            let v = lower_expected(&mut cx, d, ty);
+            super::const_eval::constant(&cx, &format!("the default of parameter `{}`", p.name), v);
+        }
     }
     let mut params = Vec::with_capacity(fn_def.params.len());
     for p in &fn_def.params {
@@ -1648,8 +1676,15 @@ pub(super) fn typed_const(
         }
     };
     let is_char = tag == Some(PrimTy::Char);
-    if is_char != (p == PrimTy::Char) {
-        let found = if is_char { "a `char`" } else { "an integer" };
+    let is_bool = tag == Some(PrimTy::Bool);
+    if is_char != (p == PrimTy::Char) || is_bool != (p == PrimTy::Bool) {
+        let found = if is_char {
+            "a `char`"
+        } else if is_bool {
+            "a `bool`"
+        } else {
+            "an integer"
+        };
         ctx.emit_error(
             Code::INVALID_CONST_ARGUMENT,
             format!(

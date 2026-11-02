@@ -1,11 +1,11 @@
 // spec: §2.10.9
 // expect-error: no method `area` on type parameter `T`: it has no bounds
 // expect-error: no method `name` on type parameter `T`: its bounds (`Shape`) do not declare it
-// expect-error: operator `+` on `T` needs a `Add` bound on `T`
-// expect-error: operator `*` on `T` needs a `Mul` bound on `T`
-// expect-error: operator `-` on `T` needs a `Sub` bound on `T`
-// expect-error: operator `==` on `T` needs a `PartialEq` bound on `T`
-// expect-error: operator `-` on `T` needs a `Neg` bound on `T`
+// expect-error: operator `+` on `T` needs the bound `T: Add`
+// expect-error: operator `*` on `T` needs the bound `T: Mul`
+// expect-error: operator `-` on `T` needs the bound `T: Sub`
+// expect-error: operator `==` on `T` needs the bound `T: PartialEq`
+// expect-error: operator `-` on `T` needs the bound `T: Neg`
 // expect-error: no field `x` on type `T`
 // expect-error: cannot cast `T` as `i64`
 // expect-error: `T` cannot be formatted with `{}`: it does not implement `Display`

@@ -1,0 +1,11 @@
+// spec: §4.2.3
+// expect-error: 5:15: the default of parameter `n` cannot be evaluated at compile time: calls `side`, which is not a `const fn`
+
+// A parameter default is a `const` expression, checked at the declaration.
+fn f(n: i32 = side()) -> i32 { n }
+fn side() -> i32 { 1 }
+
+const fn two() -> i32 { 2 }
+fn g(n: i32 = two(), xs: List<i32> = []) -> i32 { n + xs.len() as i32 }
+
+fn main() {}

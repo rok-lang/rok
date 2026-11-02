@@ -16,7 +16,10 @@ use rok::bare::ptr::{CPtr, ConstPtr, ManyPtr, Ptr};
 
 struct Pair { a: i64; b: i32; }
 
-fn main() throws (LayoutError) -> i32 {
+// No `main` combines `throws` with `-> i32` (spec 4.16.3).
+fn main() -> i32 { try! run() }
+
+fn run() throws (LayoutError) -> i32 {
     if size_of::<i64>() != 8usize || size_of::<Pair>() != 16usize { return 1; }
     let witness: Ptr<i64> = Ptr::dangling();
     if witness.addr() != 8usize || !witness.is_aligned() { return 2; }

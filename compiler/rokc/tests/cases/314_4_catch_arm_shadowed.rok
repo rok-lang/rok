@@ -1,0 +1,21 @@
+// spec: §3.14.4
+// expect-exit: 0
+// expect-warning: this `catch` arm never runs: the arms before it take every error that reaches it
+// expect-stdout:
+// 0
+
+// A catch arm whose errors earlier arms all take warns.
+struct PE {}
+impl Display for PE { fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("PE") } }
+impl Debug for PE { fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("PE") } }
+impl Error for PE {}
+
+fn parse(s: str) throws (PE) -> i32 {
+    if s == "" { throw PE {}; }
+    1
+}
+
+fn main() {
+    let v = try parse("") catch e: PE { 0 } catch _ { 2 };
+    println(v);
+}

@@ -1,0 +1,7 @@
+// spec: §5.5
+// expect-error: a glob import takes no alias
+
+// A glob import takes no alias.
+use rok::std::env::* as e;
+
+fn main() {}

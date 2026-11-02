@@ -199,6 +199,9 @@ impl Cx<'_> {
                 // The rest are malformed or unknown.
                 let code = if msg.contains("` cannot be attached to ") {
                     Code::MISPLACED_ATTRIBUTE
+                } else if a.path == ["cfg"] || a.path == ["cfg_attr"] {
+                    // As on a statement and in `cfg!` (spec 6.3).
+                    Code::INVALID_CFG
                 } else {
                     Code::INVALID_ATTRIBUTE
                 };
@@ -243,7 +246,7 @@ impl Cx<'_> {
                 &[P::Fn, P::Method, P::Const, P::Static, P::Field],
                 message(a),
             ),
-            "link" => (&[P::Extern], None),
+            "link" => (&[P::Extern], link_args(a)),
             "link_name" => (
                 &[P::ExternFn],
                 (!matches!(&a.body, AttrBody::Value(Literal::Str(_))))
@@ -320,6 +323,31 @@ impl Cx<'_> {
 /// `None` when `a` has no arguments.
 fn empty(a: &Attribute) -> Option<&'static str> {
     (!matches!(a.body, AttrBody::Empty)).then_some("no arguments")
+}
+
+/// Spec 6.2.3: `#[link("m")]`, or `name = ".."` with an optional
+/// `kind = "static" | "dylib"` and `wasm_import_module = ".."`.
+fn link_args(a: &Attribute) -> Option<&'static str> {
+    let form = "`(\"lib\")`, or `(name = \"lib\")` with optional `kind = \"static\"` / \
+                `\"dylib\"` and `wasm_import_module = \"m\"`";
+    let AttrBody::Args(xs) = &a.body else {
+        return Some(form);
+    };
+    let (mut names, mut wasm) = (0, false);
+    for x in xs {
+        match x {
+            AttrArg::Lit(Literal::Str(_)) => names += 1,
+            AttrArg::KeyValue(k, Literal::Str(_)) if k == "name" => names += 1,
+            AttrArg::KeyValue(k, Literal::Str(v)) if k == "kind" => {
+                if v != "static" && v != "dylib" {
+                    return Some(form);
+                }
+            }
+            AttrArg::KeyValue(k, Literal::Str(_)) if k == "wasm_import_module" => wasm = true,
+            _ => return Some(form),
+        }
+    }
+    (names > 1 || names == 0 && !wasm).then_some(form)
 }
 
 /// `#[x]`, `#[x = "msg"]` or `#[x("msg")]`.

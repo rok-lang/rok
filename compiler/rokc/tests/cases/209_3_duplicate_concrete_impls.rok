@@ -1,0 +1,16 @@
+// spec: §2.9.3
+// expect-error: 12:1: `N` is implemented more than once for `P`
+// expect-error: 14:1: `M` is implemented more than once for `P`
+// expect-error: help: keep one of the two impls
+
+// Two concrete impls of one trait for one type conflict (E0075), with
+// or without methods.
+trait N {}
+trait M { fn f(self) -> i32; }
+struct P { x: i32; }
+impl N for P {}
+impl N for P {}
+impl M for P { fn f(self) -> i32 { 1 } }
+impl M for P { fn f(self) -> i32 { 2 } }
+
+fn main() {}

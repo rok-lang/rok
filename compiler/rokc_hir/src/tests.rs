@@ -71,12 +71,13 @@ fn generic_terms_layer_against_written_terms_only() {
     let is = HirTy::sum([I32, STR]);
     assert_eq!(
         HirTy::layered(vec![STR, HirTy::None], vec![is.clone()]),
-        HirTy::Sum(vec![STR, is, HirTy::None])
+        HirTy::Sum(vec![is, STR, HirTy::None])
     );
     // `T | U | none`, `T = i32 | none`, `U = i32`: only `T` overlaps a
-    // written term. The result is canonical.
+    // written term. The result is canonical: a layer's key `(..)` sorts
+    // before a primitive's name (spec 2.6.4).
     let tun = HirTy::layered(vec![HirTy::None], vec![inner.clone(), I32]);
-    assert_eq!(tun, HirTy::Sum(vec![I32, inner, HirTy::None]));
+    assert_eq!(tun, HirTy::Sum(vec![inner, I32, HirTy::None]));
     let mut again = tun.clone();
     again.canonicalize();
     assert_eq!(again, tun);

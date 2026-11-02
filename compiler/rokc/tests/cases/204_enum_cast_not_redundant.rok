@@ -1,0 +1,13 @@
+// spec: §2.4.2
+// expect-exit: 0
+// forbid-warning: redundant_cast
+// forbid-warning: casting to the same type
+// expect-stdout:
+// 404
+
+// An enum's cast to its tag type is not a redundant cast.
+enum Status { Ok = 200, NotFound = 404 }
+
+fn main() {
+    println(Status::NotFound as i32);
+}

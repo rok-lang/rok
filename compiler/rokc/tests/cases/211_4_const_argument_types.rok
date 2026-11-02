@@ -1,0 +1,14 @@
+// spec: §2.11.4 §2.11.5
+// expect-error: const argument for `X: usize` must be a `usize`, found a `bool`
+// expect-error: `<` is not allowed: only `+`, `-`, `*`, `/`, `%` and unary `-`
+// expect-error: conditionals are not allowed
+
+// A const argument has its parameter's type and is plain arithmetic: no
+// comparisons, no conditionals.
+struct C<const X: usize> {}
+
+fn main() {
+    let c: C<true> = C {};
+    let d: C<{ 1 < 2 }> = C {};
+    let e: C<{ if true { 1 } else { 2 } }> = C {};
+}

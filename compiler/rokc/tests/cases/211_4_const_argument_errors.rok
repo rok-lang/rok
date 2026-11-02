@@ -1,0 +1,10 @@
+// spec: §2.11.4
+// expect-error: 9:18: expected `>` to close generic arguments, found `*`
+// expect-error: help: a const argument that is an expression goes in braces, as in `<{ 2 * 8 }>`
+
+// Arithmetic in a const argument goes in braces.
+struct Buf<const N: usize> {}
+
+fn main() {
+    let b: Buf<2 * 8> = Buf {};
+}

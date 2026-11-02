@@ -22,7 +22,10 @@ extern "C" {
     fn utimes(path: str, times: Ptr<i64>) -> i32;
 }
 
-fn main() throws (IoError) -> i32 {
+// No `main` combines `throws` with `-> i32` (spec 4.16.3).
+fn main() -> i32 { try! run() }
+
+fn run() throws (IoError) -> i32 {
     // 2100-01-01T00:00:00Z.
     let t = SystemTime::from_unix(4102444800, 7);
     println(f"{t.unix_secs()} {t.duration_since(UNIX_EPOCH)}");

@@ -1353,7 +1353,8 @@ impl Repl {
         if let Some(text) = show {
             let _ = writeln!(src, "{SHOWN} = {text};");
         }
-        src.push_str("}\n");
+        // `;`: a cell ending in a value is a statement, not E0067.
+        src.push_str("};\n");
         src
     }
 
@@ -1911,7 +1912,7 @@ impl Repl {
         let at = if body.is_empty() {
             src.len()
         } else {
-            src.len() - body.len() - "\n}\n".len()
+            src.len() - body.len() - "\n};\n".len()
         };
         (src, at)
     }

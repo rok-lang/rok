@@ -1,0 +1,8 @@
+// spec: §4.8.4
+// expect-error: 8:32: `run { .. }` is a struct literal, but `run` is a function
+// expect-error: help: write the closure in parentheses: `run(|| { .. })`
+
+// After a bare path, a body shaped like a struct literal is one.
+fn run(f: fn() -> i32) -> i32 { f() }
+
+fn main() { let n = 1; let v = run { n }; }

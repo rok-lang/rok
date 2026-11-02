@@ -145,12 +145,6 @@ pub const LINTS: &[Lint] = &[
         since: "0.2.0",
     },
     Lint {
-        name: "builtin_attribute_name",
-        default: Level::Warn,
-        desc: "a meta block that takes the name of a built-in attribute",
-        since: "0.2.0",
-    },
-    Lint {
         name: "unused_result",
         default: Level::Warn,
         desc: "a statement drops a value other than `()` or `none`: use it, or write `_ = expr;`",
@@ -1530,8 +1524,14 @@ impl<'a> Cx<'a> {
                     return;
                 }
                 match &e.kind {
-                    HirExprKind::Cast { from_ty, to_ty, .. }
-                        if from_ty == to_ty && self.casts.contains(&key(e.span)) =>
+                    // An enum's cast reads its tag: `from_ty` is the tag's type.
+                    HirExprKind::Cast {
+                        from_ty,
+                        to_ty,
+                        operand,
+                    } if from_ty == to_ty
+                        && operand.ty == *to_ty
+                        && self.casts.contains(&key(e.span)) =>
                     {
                         hits.push((
                             "redundant_cast",
@@ -1568,7 +1568,13 @@ impl<'a> Cx<'a> {
             .map(|s| ((false, s.id.0), s.name.as_str()))
             .chain(hir.enums.iter().map(|e| ((true, e.id.0), e.name.as_str())))
             .filter_map(|(k, n)| {
-                let m = must_use_msg(&self.must_use_types, n.split("__").next().unwrap_or(n))?;
+                let base = n.split("__").next().unwrap_or(n);
+                let m = must_use_msg(&self.must_use_types, base)?;
+                // Spec 6.2.11: without a message the warning names the type.
+                if m.is_empty() {
+                    let leaf = base.rsplit("::").next().unwrap_or(base);
+                    return Some((k, format!("value of type `{leaf}` is never used")));
+                }
                 Some((k, m.clone()))
             })
             .collect();
@@ -1623,6 +1629,10 @@ impl<'a> Cx<'a> {
                     else {
                         continue;
                     };
+                    // A type without a message: the plain unused warning.
+                    if msg.starts_with("value of type `") {
+                        continue;
+                    }
                     let name = demangle(name);
                     let (head, fix) = split(&msg, name);
                     let at = name_span(self.texts, *at, name).unwrap_or(*at);

@@ -25,13 +25,13 @@ impl P {
     fn get(self) { self.v * 3 }
 }
 
-// Several paths: their sum.
-fn pick(b: bool) {
+// Paths of different types: no sum is inferred, the type is written.
+fn pick(b: bool) -> i32 | str {
     if b { return 1; }
     "no"
 }
 
-fn find(xs: List<i32>, want: i32) {
+fn find(xs: List<i32>, want: i32) -> i32 | none {
     for x in xs {
         if x == want { return x; }
     }
