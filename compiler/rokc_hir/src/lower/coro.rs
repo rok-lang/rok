@@ -609,6 +609,17 @@ pub(super) fn poll_loop(
     method: &str,
     span: rokc_diagnostic::Span,
 ) -> HirExpr {
+    poll_loop_on(ctx, hir_local(f, fty, span), method, span)
+}
+
+/// `poll_loop` polling the place `recv` (a local or a field chain on one),
+/// written back after each poll.
+pub(super) fn poll_loop_on(
+    ctx: &mut LowerCtx<'_>,
+    recv: HirExpr,
+    method: &str,
+    span: rokc_diagnostic::Span,
+) -> HirExpr {
     if !ctx.coro.as_ref().is_some_and(|c| c.kind.is_async()) {
         return ctx.error_expr(
             Code::OUTSIDE_CONTEXT,
@@ -629,7 +640,7 @@ pub(super) fn poll_loop(
         }),
         span,
     });
-    let polled = method_call_on(ctx, hir_local(f, fty, span), method, &[ctx_arg], span);
+    let polled = method_call_on(ctx, recv, method, &[ctx_arg], span);
     let HirTy::Enum(pid) = polled.ty else {
         if polled.ty == HirTy::Unknown {
             return polled;

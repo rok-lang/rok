@@ -1,0 +1,43 @@
+// expect-error: 31:20: `s` was moved at line 30, and is used here
+// expect-error: 39:20: `s` was moved at line 37, and is used here
+
+// A stream that holds a resource has one owner: `let t = s` moves it,
+// so the loop cannot walk a copy while the old name still owns it.
+use rok::core::task;
+use rok::core::future::{Context, Poll};
+use rok::core::stream::Stream;
+
+struct Res { id: i32; }
+
+impl Drop for Res {
+    fn drop(ref self) { println(f"closed {self.id}"); }
+}
+
+struct S { res: Res; n: i32; }
+
+impl Stream for S {
+    type Item = i32;
+    fn poll_next(ref self, ref ctx: Context) -> Poll<i32 | none> {
+        self.n += 1;
+        if self.n > 2 { return Poll::Ready(none); }
+        Poll::Ready(self.n)
+    }
+}
+
+// Walking the old name of a moved stream.
+async fn walk_old() {
+    let s = S { res: Res { id: 1 }, n: 0 };
+    let t = s;
+    for await k in s {}
+}
+
+// Walking the new owner, then the old name again.
+async fn walk_copy() {
+    let s = S { res: Res { id: 2 }, n: 0 };
+    let t = s;
+    for await k in t {}
+    for await k in s {}
+}
+
+task::block_on(walk_old());
+task::block_on(walk_copy());
