@@ -1,6 +1,5 @@
-// spec: §3.10.2
 // `c ? a : b` (C, JS): `if` is the expression.
-// expect-error: 6:15: rok has no `? :` operator
+// expect-error: 5:15: rok has no `? :` operator
 // expect-error: help: `if` is an expression: `if x > 2 { "big" } else { "small" }`
 let x = 3;
 let s = x > 2 ? "big" : "small";

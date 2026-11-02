@@ -1,7 +1,6 @@
-// spec: 003.12.5-exhaustiveness-int
 // expect-error: non-exhaustive match on `i32`
 
-// spec 3.12.5: integers have unbounded values, so a catch-all (`_` or binding) is required.
+// Integers have unbounded values, so a catch-all (`_` or binding) is required.
 fn main() -> i32 {
     let n = 5;
     let r = match n {

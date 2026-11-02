@@ -1,8 +1,7 @@
-// expect-error: 14:20: `p` points to a local of this coroutine and is used after a suspension point
-// expect-error: 21:14: `q` points to a local of this coroutine and is used after a suspension point
-// expect-error: 31:22: `r` points to a local of this coroutine and is used after a suspension point
-// expect-error: 42:18: `s` points to a local of this coroutine and is used after a suspension point
-// spec: std 101-ptr §1.1.2
+// expect-error: 13:20: `p` points to a local of this coroutine and is used after a suspension point
+// expect-error: 20:14: `q` points to a local of this coroutine and is used after a suspension point
+// expect-error: 30:22: `r` points to a local of this coroutine and is used after a suspension point
+// expect-error: 41:18: `s` points to a local of this coroutine and is used after a suspension point
 // In a coroutine body a pointer to a local is valid only until the next
 // suspension point: each resume reloads the frame into new slots.
 use rok::bare::ptr::{addr_of, many_addr_of};

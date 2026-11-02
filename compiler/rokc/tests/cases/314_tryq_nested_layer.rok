@@ -7,7 +7,7 @@
 // peel: 0 -1 3
 
 // `try?` on a call returning `T | none` gives the nested `(T | none)?`:
-// a thrown error and a returned `none` stay apart (spec 3.14.3, 2.6.4).
+// a thrown error and a returned `none` stay apart.
 fn find(x: i32) throws (i32) -> i32 | none {
     if x < 0 { throw x; }
     if x == 0 { return none; }
@@ -35,4 +35,3 @@ fn main() -> i32 {
     0
 }
 
-// spec: 003.14-error-control-flow

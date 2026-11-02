@@ -11,4 +11,3 @@ fn main() {
     let f: Fine = [1];
 }
 
-// spec: §2.6.9

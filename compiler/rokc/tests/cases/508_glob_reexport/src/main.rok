@@ -1,10 +1,9 @@
-// spec: §5.8.6
 // expect-exit: 0
 // expect-stdout:
 // 4 2 9 7 b 5 2
 // 11 11 12 12 7 5
 
-// 5.8.6: `pub use p::*` / `p::**` re-export what they reach, from a
+// `pub use p::*` / `p::**` re-export what they reach, from a
 // file module too; a re-export under `p` is reached as well.
 mod re;
 pub mod other;

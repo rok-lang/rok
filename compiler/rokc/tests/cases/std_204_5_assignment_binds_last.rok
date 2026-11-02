@@ -1,9 +1,8 @@
-// spec: std §2.4.5
 // expect-exit: 0
 // expect-stdout:
 // 7 8 6 3
 
-// Stdlib 2.4.5: compound assignment is the lowest level, below every
+// Compound assignment is the lowest level, below every
 // arithmetic operator and `..`: the whole right side is its operand.
 fn main() {
     let a = 1;

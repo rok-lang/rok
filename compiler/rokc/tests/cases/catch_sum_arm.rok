@@ -6,7 +6,7 @@
 // 4
 // 30
 
-// `catch e: A | B` (spec 3.14.4): an arm whose type pattern names a
+// `catch e: A | B`: an arm whose type pattern names a
 // (sub-)sum of the error takes each of its variants, bound as the sum.
 enum A { X }
 enum B { Y }
@@ -41,4 +41,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 003.14-error-control-flow

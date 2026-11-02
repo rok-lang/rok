@@ -3,7 +3,6 @@
 // expect-stdout:
 // 5 5 0 1
 
-// spec: std 213-marker §2.13.9
 // `ref` node: the callee's `n.payload = []` after the send reaches the
 // caller.
 // Recursive tree: every leaf's payload is sent; the tree is then reset.

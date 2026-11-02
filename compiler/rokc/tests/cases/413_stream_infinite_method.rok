@@ -1,11 +1,10 @@
-// spec: 004.13-stream §4.13.9 / §4.13.11
 // expect-exit: 0
 // expect-stdout:
 // break 1 2 4 8
 // take 3 6 9
 
-// 4.13.9: an infinite stream ends through `break` or `take(n)`;
-// 4.13.11: `async yield fn` as a method.
+// An infinite stream ends through `break` or `take(n)`;
+// `async yield fn` as a method.
 async yield fn doubling() -> i32 {
     let v = 1;
     loop {

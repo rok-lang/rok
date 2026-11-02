@@ -1,4 +1,3 @@
-// spec: §6.2.6
 // only-os: linux
 // expect-exit: 0
 // expect-stdout:

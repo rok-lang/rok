@@ -10,4 +10,3 @@ fn main() {
     println(f"{total}");
 }
 
-// spec: 003.13-loop-expressions

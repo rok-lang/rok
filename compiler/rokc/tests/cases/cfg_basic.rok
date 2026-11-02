@@ -31,5 +31,3 @@ fn main() -> i32 {
     return unix_only() + arch_check() + portable_unix();
 }
 
-// spec: 006.03-cfg
-// spec: §6.3.1 §6.3.2 §6.3.8

@@ -4,7 +4,7 @@
 // 2
 // 12
 
-// Spec 3.12.5: tuple / struct / nested variant patterns count toward
+// Tuple / struct / nested variant patterns count toward
 // exhaustiveness without a catch-all.
 struct P { a: bool; b: bool; }
 
@@ -41,4 +41,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 003.12-match-expression

@@ -1,4 +1,3 @@
-// spec: §4.1.1 §4.1.2 §4.1.4 §4.1.5 §4.1.6 §4.1.7 §4.1.8 §4.1.9 §4.1.11 §4.1.12
 // expect-exit: 0
 // expect-stdout:
 // hello
@@ -11,7 +10,7 @@
 // unsafe 3 3
 // a b c 6
 
-// Spec 4.1: declaration forms, inferred / unit bodies, generic and
+// Declaration forms, inferred / unit bodies, generic and
 // `any` parameters, modifiers in their fixed order, arguments left to
 // right before the body.
 fn greet() {

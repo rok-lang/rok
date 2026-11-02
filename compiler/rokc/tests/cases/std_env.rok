@@ -11,7 +11,7 @@
 // split: /a /b /c
 // pid: true
 
-// Spec 306: args (argv saved by the runtime), var / vars / set_var /
+// Args (argv saved by the runtime), var / vars / set_var /
 // remove_var, current_dir / set_current_dir, temp_dir, split_paths
 // (`;` between paths on Windows), the process id.
 
@@ -54,5 +54,3 @@ fn main() throws (IoError) {
     println(f"pid: {process::id() > 0u32}");
 }
 
-// spec: std 306-env
-// spec: std 306-env §3.6.2

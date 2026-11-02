@@ -137,4 +137,3 @@ fn main() {
     println(f"served: {served} and {try! t2.join()}; store: {store.len()} sessions");
 }
 
-// spec: std 302-net §3.2.5

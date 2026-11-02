@@ -1,18 +1,17 @@
-// spec: §5.5.12
 // A named import and an item of the module with its name, in one
 // namespace: the item would hide the import unseen. Its uses report
 // nothing more.
-// expect-error: 18:5: `area` is both imported from `geo::area` and defined in this module
+// expect-error: 17:5: `area` is both imported from `geo::area` and defined in this module
 // expect-error: imported here
 // expect-error: defined here, which would hide the import
 // expect-error: help: import it under another name, `use geo::area as geo_area;`, or remove this `use` if the module does not need it
-// expect-error: 19:11: `Point` is both imported from `geo::Point` and defined in this module
+// expect-error: 18:11: `Point` is both imported from `geo::Point` and defined in this module
 // expect-error: help: import it under another name, `use geo::Point as GeoPoint;`, or remove this `use` if the module does not need it
-// expect-error: 19:18: `MAX` is both imported from `geo::MAX` and defined in this module
+// expect-error: 18:18: `MAX` is both imported from `geo::MAX` and defined in this module
 // expect-error: help: import it under another name, `use geo::MAX as GEO_MAX;`, or remove this `use` if the module does not need it
-// expect-error: 20:11: `size` is both imported from `geo::len` and defined in this module
+// expect-error: 19:11: `size` is both imported from `geo::len` and defined in this module
 // expect-error: help: import it under another name, `use geo::len as geo_len;`, or remove this `use` if the module does not need it
-// expect-error: 22:11: `Up` is both imported from `Dir::Up` and defined in this module
+// expect-error: 21:11: `Up` is both imported from `Dir::Up` and defined in this module
 
 mod geo { pub struct Point { pub x: i32 } pub const MAX: i32 = 3; pub fn area(a: i32) -> i32 { a } pub fn len() -> i32 { 1 } }
 use geo::area;

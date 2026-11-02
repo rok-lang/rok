@@ -1,9 +1,8 @@
-// spec: refs-lang §2.3.3
 // expect-exit: 7
 // expect-stdout:
 // 7
 
-// spec 2.x: an omitted field takes its declared default expression.
+// An omitted field takes its declared default expression.
 struct S { count: i32 = 7; }
 
 fn main() -> i32 {
@@ -12,4 +11,3 @@ fn main() -> i32 {
     return s.count;
 }
 
-// spec: §2.3.3

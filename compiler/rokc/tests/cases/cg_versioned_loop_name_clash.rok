@@ -1,4 +1,3 @@
-// spec: §3.13.3 std §2.9.2
 // A user function named like an unchecked accessor copy stays the
 // user's.
 // expect-exit: 0

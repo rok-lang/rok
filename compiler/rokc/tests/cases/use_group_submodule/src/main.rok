@@ -1,6 +1,6 @@
 // expect-exit: 0
 // expect-stdout: 7 100 5 2 9 3 7 2 9 3
-// Spec 5.5.2: `use p::{a, b}` equals `use p::a; use p::b;` in any module,
+// `use p::{a, b}` equals `use p::a; use p::b;` in any module,
 // including when the prefix resolves to the package root (`pkg::{..}`,
 // `sup::{..}` from a top-level module). Types, fns, consts, traits,
 // renames, nested groups and globs inside groups.
@@ -20,5 +20,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 005.05-use
-// spec: §5.4.3

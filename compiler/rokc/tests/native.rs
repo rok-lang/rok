@@ -228,7 +228,6 @@ fn main() {
 /// Runaway recursion on the main thread, a spawned thread and through
 /// nested `await`s: the runtime reports it (after flushing stdout) and
 /// aborts, instead of a bare SIGSEGV.
-// spec: §3.14.8
 #[test]
 fn stack_overflow_is_reported() {
     let Some(env) = setup() else { return };
@@ -387,7 +386,6 @@ struct P { x: i32; y: f64; }
 /// `-g` (spec 9.9.6), both back ends: a subprogram named by the rok
 /// path with its parameters and locals, and a line table pointing into
 /// the `.rok`; `llvm-dwarfdump --verify` finds no error.
-// spec: §0.2.4 §9.2.11 §9.5.10
 #[test]
 fn debug_info_names_functions_lines_and_locals() {
     let Some(env) = setup() else { return };
@@ -420,7 +418,6 @@ fn debug_info_names_functions_lines_and_locals() {
 /// `-g`, both back ends: an item declared in a function body (spec
 /// 3.9.1) and its method and `static` read as written, not by their
 /// lifted names.
-// spec: §3.9.1
 #[test]
 fn debug_info_names_block_local_items() {
     let Some(env) = setup() else { return };
@@ -1088,7 +1085,6 @@ fn elf_debug_info_of_several_objects() {
 
 /// `-O0` puts each function in its own section, so unused prebuilt code
 /// is dropped at link time.
-// spec: §9.2.14
 #[test]
 fn unused_dependency_code_is_dropped() {
     if setup().is_none() {
@@ -1499,7 +1495,6 @@ fn repr_layouts_match_clang() {
     }
 }
 
-// spec: §9.3.7
 #[test]
 fn c_abi_matches_clang() {
     let Some(env) = setup() else { return };
@@ -1737,7 +1732,6 @@ fn main() -> i32 {
 /// call attaches the thread, enough allocation to collect runs, and the
 /// threads leave the registry when they end (the second round collects
 /// with them gone).
-// spec: §8.3.8
 #[test]
 fn foreign_thread_callback_allocates() {
     let Some(env) = setup() else { return };
@@ -1901,7 +1895,6 @@ fn main() -> i32 {
 /// `-l` links a library the source does not name; `--native-runtime`
 /// copies a shared library beside the executable, which then loads it
 /// from its own directory (rpath `@loader_path` / `$ORIGIN`).
-// spec: §9.1.2 §9.2.14
 #[cfg(unix)]
 #[test]
 fn link_flags_and_runtime_files() {
@@ -2127,7 +2120,6 @@ fn pe_header(exe: &[u8]) -> (u16, u16, bool) {
 
 /// Windows executables from this host without an SDK; run under
 /// `ROK_TEST_WINE` where given.
-// spec: §9.2.14 §9.5.9
 #[test]
 fn windows_executables() {
     let Some(env) = setup() else { return };

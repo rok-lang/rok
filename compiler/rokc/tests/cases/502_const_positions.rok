@@ -1,4 +1,3 @@
-// spec: §5.2.1 §5.2.2 §5.2.3 §5.2.5 §5.2.7 §5.2.8
 // expect-exit: 0
 // expect-stdout:
 // 3.14159 3 rok
@@ -7,7 +6,7 @@
 // 2 12 42 42
 // 7 8
 
-// Spec 5.2: a `const` has an explicit type and a compile-time value,
+// A `const` has an explicit type and a compile-time value,
 // may sit at module level or in an impl, is inlined
 // at each use, and is what `struct` field defaults are.
 const PI: f64 = 3.14159f64;

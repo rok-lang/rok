@@ -1,15 +1,13 @@
-// spec: 002.09.8-no-defining-the-same-method-twice
-// spec: 002.09.3-multiple-impl-blocks-for-one-type
 // A method name once per type, across its inherent impl blocks, per
 // trait impl, and per trait: there is no overloading.
-// expect-error: 17:5: method `m` is defined more than once for `S`
+// expect-error: 15:5: method `m` is defined more than once for `S`
 // expect-error: help: rename one of them, e.g. `m2`; there is no overloading
-// expect-error: 22:5: method `n` is defined more than once for `S`
-// expect-error: 26:16: method `g` is defined more than once for `G<T>`
-// expect-error: 28:5: method `g` is defined more than once for `G<T>`
-// expect-error: 32:5: method `run` is defined more than once in trait `Tr`
-// expect-error: 36:5: method `run` is defined more than once for `S`
-// expect-error: 39:5: method `later` is defined more than once for `S`
+// expect-error: 20:5: method `n` is defined more than once for `S`
+// expect-error: 24:16: method `g` is defined more than once for `G<T>`
+// expect-error: 26:5: method `g` is defined more than once for `G<T>`
+// expect-error: 30:5: method `run` is defined more than once in trait `Tr`
+// expect-error: 34:5: method `run` is defined more than once for `S`
+// expect-error: 37:5: method `later` is defined more than once for `S`
 
 struct S { x: i32 }
 impl S {

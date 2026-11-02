@@ -1,4 +1,3 @@
-// spec: 004.12-async §4.12.14
 // expect-exit: 0
 // expect-stdout:
 // ok 5
@@ -6,7 +5,7 @@
 // fallback 100
 // finally ran
 
-// spec 4.12.14: a throwing `async fn`'s error surfaces at the `await`,
+// A throwing `async fn`'s error surfaces at the `await`,
 // covered by `try await`; `catch` / `finally` work as in sync code.
 struct Bad { n: i32; }
 impl Display for Bad { fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"bad {self.n}") } }

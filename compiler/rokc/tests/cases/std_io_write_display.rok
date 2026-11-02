@@ -8,7 +8,7 @@
 // largest write under 4200: true
 // last: [row 1999: (1999, -1999)]
 
-// Spec 305.1a: `Write::write_display` writes a value through `Display`
+// `Write::write_display` writes a value through `Display`
 // into any writer (stdout, a file, a user writer in memory) in chunks
 // rather than one `str` of the whole text; several values go in an
 // f-string or one call each.
@@ -92,5 +92,3 @@ fn main() throws (IoError) {
     println("last: [" + tail[tail.rfind("row ") ?? 0:].trim_end() + "]");
 }
 
-// spec: std 223-io §2.23.3
-// spec: std 210-fmt §2.10.2

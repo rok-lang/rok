@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `q` may hold one object twice
-// spec: std 213-marker §2.13.9
 use rok::std::thread;
 fn add2(q: List<List<i32>>, a: List<i32>) { q.push(a); q.push(a); }
 fn add1(q: List<List<i32>>, a: List<i32>) { q.push(a); }

@@ -1,4 +1,3 @@
-// spec: 003.12.5-exhaustiveness
 // A sum-type match missing a variant is an error.
 // expect-error: non-exhaustive match on `bool | i32 | none`
 

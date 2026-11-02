@@ -1,6 +1,3 @@
-// spec: 004.10.1-form
-// spec: 004.10.5-definition-order
-// spec: 004.10.9-multi-level-nesting
 // expect-exit: 0
 // expect-stdout:
 // 11

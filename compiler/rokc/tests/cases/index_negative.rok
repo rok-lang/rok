@@ -23,7 +23,7 @@ struct Holder {
     arr: [i32; 2];
 }
 
-// Spec 3.6: a signed index counts from the end (`len + i` when < 0);
+// A signed index counts from the end (`len + i` when < 0);
 // an unsigned one is a plain position.
 fn main() {
     let xs: List<i32> = [1, 2, 3, 4, 5];
@@ -70,4 +70,3 @@ fn main() {
     println(f"once {last} {tail:?} {calls.get() - 1}");
 }
 
-// spec: 003.06-indexing-and-slicing

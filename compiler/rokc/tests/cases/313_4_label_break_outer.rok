@@ -1,9 +1,8 @@
-// spec: 003.13.4-label-break-outer
 // expect-exit: 0
 // expect-stdout:
 // done
 
-// spec 3.13.4: labels control nested loops; `break 'outer` exits the outer loop.
+// Labels control nested loops; `break 'outer` exits the outer loop.
 fn main() -> i32 {
     'outer: for i in 0..5 {
         for j in 0..5 {

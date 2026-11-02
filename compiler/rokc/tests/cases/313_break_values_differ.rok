@@ -1,4 +1,3 @@
-// spec: 003.13.1-loop-break-value
 // expect-error: `break` values have different types
 
 // A loop's `break` values share one type. Differing types are an

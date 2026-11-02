@@ -1,6 +1,5 @@
 // expect-exit: 0
 // gc-stress: 50
-// spec: std 101-ptr §1.1.2
 // expect-stdout:
 // dyn 49 250
 // 4 10
@@ -10,8 +9,7 @@
 
 // A local whose address is taken stays in its stack slot and a GC root
 // until its scope ends, even when only the pointer touches it after
-// `addr_of`; roots pin, so what it holds never moves under the pointer
-// (stdlib 1.6, refs-lang 7.4.1).
+// `addr_of`; roots pin, so what it holds never moves under the pointer.
 use rok::bare::mem::{MaybeUninit, drop_in_place};
 use rok::bare::ptr::addr_of;
 

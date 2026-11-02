@@ -1,9 +1,8 @@
-// spec: 002.05-union-kind
 // expect-exit: 0
 // expect-stdout:
 // done
 
-// spec 2.5: `union` (untagged, struct-kind bit reinterpretation).
+// `union` (untagged, struct-kind bit reinterpretation).
 union BitsAndFloat {
     bits: u32;
     f: f32;

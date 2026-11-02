@@ -1,4 +1,3 @@
-// spec: §4.6.9 std §2.13.9
 // expect-error: mismatched types: argument 1 of `thread::spawn` expects `fn() -> usize + Send`
 // expect-error: the closure's captures don't meet the `fn` type's bounds
 

@@ -45,4 +45,3 @@ fn mk<U>(x: U) -> W<U> {
 let six: i32 = 6;
 println(f"{or_else(mk(six).r, four)}");
 
-// spec: 002.10-generics

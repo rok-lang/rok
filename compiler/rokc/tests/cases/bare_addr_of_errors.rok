@@ -2,9 +2,8 @@
 // expect-error: `as_mut_ptr` needs a place
 // expect-error: call to unsafe function `from_exposed_provenance` outside an `unsafe` block
 // expect-error: cannot cast `Ptr<i32>` as `usize`
-// spec: std 101-ptr §1.1.2
 // A pointer comes from a place, not a temporary; a fresh provenance is
-// `unsafe`; `as` never converts a pointer (bare 1, strict provenance).
+// `unsafe`; `as` never converts a pointer (strict provenance).
 use rok::bare::mem::MaybeUninit;
 use rok::bare::ptr::{Ptr, addr_of, from_exposed_provenance};
 

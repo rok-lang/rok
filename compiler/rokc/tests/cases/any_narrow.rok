@@ -8,7 +8,7 @@
 // 10
 // 3
 
-// Spec 2.2.6 narrowing: every `x is T` conjunct of an `&&` chain narrows
+// Narrowing: every `x is T` conjunct of an `&&` chain narrows
 // the local `x` to `T` in the conjuncts after it, in the `if` then-block
 // and in a `while` body. Assigning to a narrowed `x` writes the original
 // slot (the value converted back to the slot's type).
@@ -33,4 +33,3 @@ let q: any = 1;
 if q is i32 { if q is i32 { q = 3; } }
 if q is i32 { println(f"{q}"); }
 
-// spec: 002.02-any-slot

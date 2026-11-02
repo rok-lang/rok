@@ -1,4 +1,3 @@
-// spec: std 213-marker §2.13.1-2.13.3 §2.13.9 §2.13.10
 // expect-exit: 0
 // expect-stdout:
 // [1, 2, 3] [1, 2, 3, 4] true
@@ -7,10 +6,10 @@
 // 0 0 false true 0 0 0 true | 0 0 none
 // send ok
 
-// Stdlib 2.13: `clone` is a deep, explicit copy while `let` shares a
-// collection handle (2.13.1-2); `Copy` only selects types in bounds
-// (2.13.3); user types opt into `Send` / `Sync` with `unsafe impl`
-// (2.13.9); `Default` values and `#[derive(Default)]` (2.13.10).
+// `clone` is a deep, explicit copy while `let` shares a
+// collection handle; `Copy` only selects types in bounds;
+// user types opt into `Send` / `Sync` with `unsafe impl`;
+// `Default` values and `#[derive(Default)]`.
 #[derive(Clone)]
 struct Config {
     name: str;

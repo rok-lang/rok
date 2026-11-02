@@ -1,4 +1,3 @@
-// spec: std §1.8.2
 // only-target: wasm32-wasip2
 // expect-exit: 0
 // expect-stdout:

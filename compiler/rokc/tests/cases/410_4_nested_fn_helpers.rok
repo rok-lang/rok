@@ -1,10 +1,9 @@
-// spec: §4.10.4 §4.10.6 §4.10.10
 // expect-exit: 0
 // expect-stdout:
 // 3 [1, 22, 333]
 // 12 15
 
-// Spec 4.10: a nested function is called like a module-level one, can be
+// A nested function is called like a module-level one, can be
 // passed by name, and serves as a stateless helper of its outer
 // function; a closure is the stateful choice.
 fn apply(f: fn(i32) -> i32, x: i32) -> i32 { f(x) }

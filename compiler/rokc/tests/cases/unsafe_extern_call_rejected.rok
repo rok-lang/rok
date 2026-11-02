@@ -4,5 +4,3 @@ extern "C" {
 }
 fn main() -> i32 { return abs(-1); }
 
-// spec: 004.15-unsafe
-// spec: §5.9.1 §5.9.6

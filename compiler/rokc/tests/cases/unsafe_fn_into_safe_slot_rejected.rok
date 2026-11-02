@@ -3,4 +3,3 @@ unsafe fn neg(x: i32) -> i32 { return 0 - x; }
 fn apply(f: fn(i32) -> i32, x: i32) -> i32 { return f(x); }
 fn main() -> i32 { return apply(neg, 1); }
 
-// spec: 004.15-unsafe

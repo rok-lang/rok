@@ -1,7 +1,6 @@
-// spec: §6.9.9 §9.1.5
 // rokc-arg: --extern tdep=tests/cases/lint_derive_template_dependency/tdep
 // expect-exit: 0
-// expect-lint: 30:4 function `unused` is never used
+// expect-lint: 29:4 function `unused` is never used
 // forbid-warning: `helper` is never used
 // forbid-warning: snake case
 // expect-stdout:

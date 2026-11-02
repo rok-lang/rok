@@ -8,7 +8,7 @@
 // 5
 // 1
 
-// `Ord::cmp` returns `Ordering` (stdlib 2.5.4-5) with the `min` / `max`
+// `Ord::cmp` returns `Ordering` with the `min` / `max`
 // / `clamp` defaults; `str` and the primitives implement it.
 
 #[derive(PartialEq, Eq)]
@@ -41,4 +41,3 @@ fn main() -> i32 {
     println(f"{if a.cmp(b) == Ordering::Greater { 1 } else { 0 }}");
     return 0;
 }
-// spec: std §2.5.4 §2.5.5

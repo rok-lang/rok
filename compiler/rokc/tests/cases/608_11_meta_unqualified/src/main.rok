@@ -5,7 +5,7 @@
 // expect-error: help: write `#[alog::traced]`, or add `use alog::traced;`
 // forbid-error: `#[derive(Named)]`
 
-// Spec 6.8.11: a bare meta name names this package's blocks, `use`d
+// A bare meta name names this package's blocks, `use`d
 // ones and the standard library's; another package's needs its name.
 // `use alog::Named;` imports the derive along with its trait.
 use alog::Named;
@@ -22,5 +22,3 @@ fn main() {
     f();
 }
 
-// spec: 006.08-meta-blocks
-// spec: §6.8.11

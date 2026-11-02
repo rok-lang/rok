@@ -48,7 +48,7 @@
 // decode: ok
 // value: at [1]: expected i32, found string
 
-// Spec 3.9.1 / 3.9.3: what ROKON leaves out, and typed-decoding errors,
+// What ROKON leaves out, and typed-decoding errors,
 // each with its `line:col`.
 
 use rok::std::rokon;
@@ -144,5 +144,3 @@ fn main() {
     let _ = try List::<i32>::from_rokon(v) catch e { println(f"value: {e}"); return; };
 }
 
-// spec: std 309-rokon
-// spec: std 309-rokon §3.9.1 §3.9.3

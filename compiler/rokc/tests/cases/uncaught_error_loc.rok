@@ -1,7 +1,6 @@
-// spec: §4.16.4
 // expect-exit: 1
 // expect-stderr: error: `main` returned an uncaught error: boom
-// expect-stderr: --> tests/cases/uncaught_error_loc.rok:14:13
+// expect-stderr: --> tests/cases/uncaught_error_loc.rok:13:13
 // expect-stdout:
 
 // An error escaping a throwing `main` reports where it left `main`.

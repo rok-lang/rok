@@ -1,4 +1,3 @@
-// spec: 004.11-generators §4.11.10
 // expect-exit: 0
 // expect-stdout:
 // 1 2 3
@@ -6,7 +5,7 @@
 // early 0 1
 // empty true
 
-// spec 4.11.10: when the body finishes the iterator ends and every later
+// When the body finishes the iterator ends and every later
 // `next()` returns `none`; `return;` ends it early. A body that never
 // yields is an empty iterator.
 yield fn finite() -> i32 {

@@ -1,6 +1,5 @@
-// spec: refs-lang §4.15.2
 // expect-error: call to unsafe function `read` outside an `unsafe` block
-// Dereferencing a raw pointer is `unsafe` (spec 4.15.2).
+// Dereferencing a raw pointer is `unsafe`.
 use rok::bare::ptr::Ptr;
 
 fn main() -> i32 {

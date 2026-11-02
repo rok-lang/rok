@@ -1,5 +1,5 @@
 // expect-error: the right operand of `+` expects `int`, found `i32`
-// Stdlib spec 2.1.6: `int + i32` is a type mismatch - no silent mixing
+// `int + i32` is a type mismatch - no silent mixing
 // of the two worlds; convert with `int::from(b)` or `a.try_into()`.
 fn main() {
     let a: int = 5;
@@ -7,4 +7,3 @@ fn main() {
     let c = a + b;
 }
 
-// spec: std 201-numbers

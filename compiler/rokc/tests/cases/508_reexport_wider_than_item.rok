@@ -1,7 +1,7 @@
 // expect-error: 10:9: `inner::private_fn` is private but re-exported as `pub`
 // expect-error: 11:9: `inner::Shared` is `pub(pkg)` but re-exported as `pub`
 
-// 5.8.4: a named re-export can't reach further than its item.
+// A named re-export can't reach further than its item.
 mod inner {
     fn private_fn() -> i32 { 1 }
     pub(pkg) struct Shared { pub v: i32; }
@@ -14,4 +14,3 @@ pub use inner::open;
 fn main() {
     println(f"{open()}");
 }
-// spec: §5.8.4

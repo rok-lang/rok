@@ -1,12 +1,11 @@
-// spec: §2.11.10
 // Text where a number is wanted: `parse` reads it; a literal under an
 // annotation may keep its own type without the annotation.
-// expect-error: 13:14: mismatched types: `let x` expects `i32`, found `str`
+// expect-error: 12:14: mismatched types: `let x` expects `i32`, found `str`
 // expect-error: help: to read a number from the text, write `try! "42".parse()`
 // expect-error: help: or, to keep the `str`, drop `: i32`
-// expect-error: 14:15: mismatched types: argument `n` of `twice` expects `i32`, found `str`
+// expect-error: 13:15: mismatched types: argument `n` of `twice` expects `i32`, found `str`
 // expect-error: help: to read a number from the text, write `try! s.parse()`
-// expect-error: 15:16: mismatched types: `let ok` expects `bool`, found `i32`
+// expect-error: 14:16: mismatched types: `let ok` expects `bool`, found `i32`
 // expect-error: help: to keep the `i32`, drop `: bool`
 fn twice(n: i32) -> i32 { n * 2 }
 let s = "7";

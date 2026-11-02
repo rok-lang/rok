@@ -1,6 +1,6 @@
 // expect-error: to propagate, write `(x as T)?`
 
-// `x as T?` casts to the optional type `T?` (spec 2.6.5); the `?` does
+// `x as T?` casts to the optional type `T?`; the `?` does
 // not propagate.
 fn main() -> i32 {
     let x: i64 = 3;
@@ -8,4 +8,3 @@ fn main() -> i32 {
     0
 }
 
-// spec: 003.08-optional-chaining-and-coalescing

@@ -1,5 +1,4 @@
 // needs: threads
-// spec: std 218-task §2.18.1 / std 213-marker §2.13.9
 // Futures a generator yields, collected and spawned: each task gets its
 // own copy of the list both captured.
 // expect-exit: 0

@@ -1,4 +1,4 @@
-// Spec 6.5.8: a `const fn` literal handler runs at compile time and its
+// A `const fn` literal handler runs at compile time and its
 // result is embedded as a constant; a handler argument known only at
 // run time leaves an ordinary call.
 // expect-exit: 0
@@ -76,4 +76,3 @@ fn main() -> i32 {
     println(f"{q.b}");
     return 0;
 }
-// spec: §6.5.8

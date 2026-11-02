@@ -1,12 +1,11 @@
-// spec: §6.2.7 §6.2.14
 // rokc-arg: --extern ddep=tests/cases/lint_deprecated_dependency/ddep
 // expect-exit: 0
-// expect-lint: 22:13 use of deprecated method `Cell::get`
-// expect-lint: 26:33 use of deprecated function `old`
-// expect-lint: 29:13 use of deprecated method `Conf::new`
-// expect-lint: 30:13 `from_raw` will need `unsafe` in a later release: wrap the call in `unsafe { .. }`
-// expect-lint: 33:16 use of deprecated field `Conf.lvl`
-// expect-lint: 33:32 use of deprecated constant `MAX`
+// expect-lint: 21:13 use of deprecated method `Cell::get`
+// expect-lint: 25:33 use of deprecated function `old`
+// expect-lint: 28:13 use of deprecated method `Conf::new`
+// expect-lint: 29:13 `from_raw` will need `unsafe` in a later release: wrap the call in `unsafe { .. }`
+// expect-lint: 32:16 use of deprecated field `Conf.lvl`
+// expect-lint: 32:32 use of deprecated constant `MAX`
 // expect-warning: = note: `x` must point at a live value
 // forbid-warning: lib.rok
 // expect-stdout: 1 3 4 9 7 2

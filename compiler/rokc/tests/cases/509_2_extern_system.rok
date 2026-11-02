@@ -1,10 +1,9 @@
-// spec: §5.9.2
 // only-pointer-width: 64
 // expect-exit: 0
 // expect-stdout:
 // 3
 
-// 5.9.2: `extern "system"` is the OS ABI - the C ABI on every 64-bit
+// `extern "system"` is the OS ABI - the C ABI on every 64-bit
 // target (32-bit x86 Windows: `509_2_extern_system_stdcall`).
 extern "system" { fn abs(x: i32) -> i32; }
 

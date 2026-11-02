@@ -1,8 +1,7 @@
-// spec: 006.07-operator-magic
 // expect-exit: 0
 // expect-stdout: 123 true -1 360 4320
 
-// Spec 6.7: extension tokens in all three positions, several aliases
+// Extension tokens in all three positions, several aliases
 // of one method on one level, and `swap` (`a ⋉ b` is `b.contains(a)`).
 struct V { x: i32; }
 

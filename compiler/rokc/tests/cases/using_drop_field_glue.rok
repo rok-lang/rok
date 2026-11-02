@@ -15,7 +15,7 @@
 // sum s
 // end
 
-// stdlib 2.13.4: after a value's own `drop`, `using` drops its `Drop`
+// After a value's own `drop`, `using` drops its `Drop`
 // fields in reverse declaration order - also for a struct without its
 // own `Drop`, tuple elements and the payload an enum / sum holds.
 struct R { name: str; }
@@ -45,5 +45,3 @@ fn main() {
     using s2 = s {}
     println("end");
 }
-// spec: std §2.13.4
-// spec: §3.17.7

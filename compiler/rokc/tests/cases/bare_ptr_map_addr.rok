@@ -1,11 +1,10 @@
-// spec: std §1.1.2
 // only-pointer-width: 64
 // expect-exit: 0
 // expect-stdout:
 // 24 0 3 2
 // true
 
-// stdlib 1.1.2: `map_addr` keeps provenance and rewrites the address;
+// `map_addr` keeps provenance and rewrites the address;
 // `align_offset` counts elements to the next `align` boundary.
 use rok::bare::ptr::Ptr;
 

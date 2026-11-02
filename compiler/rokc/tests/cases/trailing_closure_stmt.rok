@@ -6,7 +6,7 @@
 // 1 2 3
 // done
 
-// Spec 4.8.8: a trailing-closure call with a block body reads like a
+// A trailing-closure call with a block body reads like a
 // statement keyword - it ends the statement without `;`, like `if`.
 
 fn retry(n: i32, body: fn(i32) -> ()) {
@@ -28,4 +28,3 @@ fn main() -> i32 {
     0
 }
 
-// spec: 004.08-trailing-closure

@@ -3,7 +3,6 @@
 // expect-stdout:
 // left 0 got 20
 
-// spec: std 213-marker §2.13.9
 // Per-key buckets sent to a writer thread, removed as they go.
 use rok::std::thread;
 fn main() {

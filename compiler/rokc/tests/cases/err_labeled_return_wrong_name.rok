@@ -1,9 +1,8 @@
-// spec: 004.03.12-labeled-return
 // expect-error: `return@map`: no enclosing trailing closure of a call to `map`
 // expect-error: help: the innermost closure here is the trailing closure of `each`: write `return@each`
 
 // `return@name` names the innermost closure: the trailing closure of a
-// call to `name` (spec 4.3.12).
+// call to `name`.
 fn each(xs: List<i32>, f: fn(i32) -> ()) { for x in xs { f(x); } }
 
 fn main() {

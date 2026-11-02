@@ -1,11 +1,10 @@
-// spec: std §2.17.6
 // expect-exit: 0
 // gc-stress: 50
 // expect-stdout:
 // unbounded in order: true
 // bounded in order: true
 
-// 2.17.6: an unbounded channel queues in linked segments (here across
+// An unbounded channel queues in linked segments (here across
 // many segment boundaries, draining and refilling), a bounded one in a
 // fixed ring (wrapping around many times).
 fn main() -> i32 {
@@ -35,4 +34,3 @@ fn main() -> i32 {
     println(f"bounded in order: {good}");
     0
 }
-// spec: std §2.17.1

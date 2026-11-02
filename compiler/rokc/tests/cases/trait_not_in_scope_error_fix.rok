@@ -1,7 +1,6 @@
-// spec: 003.05-member-access-and-method-call
-// expect-error: 28:9: method `wave` comes from trait `b::Wave`, which is not in scope
+// expect-error: 27:9: method `wave` comes from trait `b::Wave`, which is not in scope
 // expect-error: help: add `use pkg::b::Wave;`
-// expect-error: 33:13: method `hi` comes from trait `a::Greet`, which is not in scope
+// expect-error: 32:13: method `hi` comes from trait `a::Greet`, which is not in scope
 // expect-error: help: add `use a::Greet;`
 
 // A method resolves only from a trait in scope: defined in the module,

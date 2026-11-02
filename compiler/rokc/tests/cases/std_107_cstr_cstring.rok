@@ -1,4 +1,3 @@
-// spec: std 107-ffi §1.7.2
 // gc-stress: 5
 // expect-exit: 0
 // expect-stdout:
@@ -10,7 +9,7 @@
 // interior: interior nul byte at 1
 // nul at 1
 
-// stdlib 1.7.2: `CString` owns a NUL-terminated copy (an interior NUL
+// `CString` owns a NUL-terminated copy (an interior NUL
 // is an error), `CStr` is a C string with its NUL: from a C pointer
 // (`none` when null) or from bytes ending in the only NUL.
 use rok::bare::ffi::{CStr, CString, FromBytesWithNulError, NulError};

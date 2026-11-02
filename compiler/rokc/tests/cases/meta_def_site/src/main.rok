@@ -7,7 +7,7 @@
 // <S>
 // user
 
-// Spec 6.9.9: what a template writes resolves and is access-checked in
+// What a template writes resolves and is access-checked in
 // the module of its meta block: a `pub(pkg)` or private helper there, a
 // bare meta name of that package, the traits in scope there. Names
 // passed in, and `@use_site(..)`, stay at the use site; the expansion's
@@ -31,5 +31,3 @@ fn main() {
     println(helper("x"));
 }
 
-// spec: 006.09-meta-templates
-// spec: §6.9.9 §6.8.11

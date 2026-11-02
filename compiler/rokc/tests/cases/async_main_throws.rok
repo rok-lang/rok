@@ -6,7 +6,7 @@
 // step 1
 // step 2
 
-// `async fn main() throws`: an error escaping it exits 1 (4.16.4/5).
+// `async fn main() throws`: an error escaping it exits 1.
 struct Oops {}
 impl Display for Oops { fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("oops") } }
 impl Debug for Oops { fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Oops") } }
@@ -27,4 +27,3 @@ async fn main() throws (Oops) {
     }
 }
 
-// spec: 004.12-async

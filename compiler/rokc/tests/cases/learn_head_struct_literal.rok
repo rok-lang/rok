@@ -1,10 +1,9 @@
-// spec: §3.10.3
-// Spec 3.10.3: a struct literal can't start the head of `using` / `if` /
+// A struct literal can't start the head of `using` / `if` /
 // `match` / `for` / `while`: its `{` would open the body. One error,
 // with the parenthesized form.
-// expect-error: 11:11: a struct literal can't start a block's head: its `{` would open the body
+// expect-error: 10:11: a struct literal can't start a block's head: its `{` would open the body
 // expect-error: help: wrap the struct literal in parentheses: `(Conn { n: 1 })`
-// expect-error: 14:7: a struct literal can't start a block's head: its `{` would open the body
+// expect-error: 13:7: a struct literal can't start a block's head: its `{` would open the body
 // expect-error: help: wrap the struct literal in parentheses: `(Conn { n: 2 })`
 struct Conn { n: i32; }
 impl Drop for Conn { fn drop(ref self) {} }

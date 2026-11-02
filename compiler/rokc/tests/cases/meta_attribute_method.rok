@@ -9,7 +9,7 @@
 // [enter] describe
 // R
 
-// Spec 6.9.5: `@accept(fn)` is "a function or a method" - a user
+// `@accept(fn)` is "a function or a method" - a user
 // attribute on an impl or trait method expands in place (to methods).
 #[impl_attribute(traced)]
 pub @attribute {
@@ -56,5 +56,3 @@ fn main() -> i32 {
     0
 }
 
-// spec: 006.08-meta-blocks
-// spec: §6.9.5

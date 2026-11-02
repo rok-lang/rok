@@ -6,7 +6,7 @@
 // true false
 // [[2], [1, 1]]
 
-// Stdlib 2.9.7a: `SliceMut<T>` is generic, like Rust's `&mut [T]`; a
+// `SliceMut<T>` is generic, like Rust's `&mut [T]`; a
 // generic function taking one infers `T` from a list argument.
 fn rev<T>(s: collections::SliceMut<T>) {
     s.reverse();
@@ -40,4 +40,3 @@ fn main() {
     println(f"{ls:?}");
 }
 
-// spec: std 209-collections §2.9.7a

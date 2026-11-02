@@ -1,7 +1,6 @@
-// expect-error: error[E0134]: `a` was moved at line 13, and is used here
-// expect-error: using_twice_error.rok:14:15: `a` was moved at line 13, and is used here
-// expect-error: using_twice_error.rok:20:5: `a` was moved at line 19, and is used here
-// spec: §3.17.6
+// expect-error: error[E0134]: `a` was moved at line 12, and is used here
+// expect-error: using_twice_error.rok:13:15: `a` was moved at line 12, and is used here
+// expect-error: using_twice_error.rok:19:5: `a` was moved at line 18, and is used here
 
 // A value is released once: a second `using` of it, or a use after its
 // `using` released it, is an error.

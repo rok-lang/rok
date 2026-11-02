@@ -3,7 +3,6 @@
 // expect-stdout:
 // 8 152
 
-// spec: std 213-marker §2.13.9
 // Fan out: each frontier node's neighbor list goes to a worker.
 use rok::std::thread;
 fn nbrs(n: i32) -> List<i32> { [n * 2, n * 2 + 1] }

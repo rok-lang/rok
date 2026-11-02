@@ -1,6 +1,5 @@
 // needs: threads
 // gc-stress: 5
-// spec: std 216-sync §2.16.4b
 // A `Frozen` value is read by every thread without a lock: each `get` is
 // the reader's own copy, and `Sync` parts stay shared.
 // expect-exit: 0

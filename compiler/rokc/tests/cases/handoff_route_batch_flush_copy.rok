@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `b.buf` shares what `b.add(tx, i)` sent through a channel
-// spec: std 213-marker §2.13.9
 // A by-value `self` is a copy: the callee's `self.buf = []` doesn't reach
 // the caller, which still holds the sent list.
 // Batch builder with a flush helper that returns the next empty batch.

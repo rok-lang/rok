@@ -1,9 +1,8 @@
-// spec: 005.07.1-path-start
-// expect-error: 9:5: unresolved import: `std::io` does not exist
-// expect-error: 10:5: unresolved import: `std::io::Stdin` does not exist
-// expect-error: 11:5: unresolved import: `inner::Hidden` does not exist
+// expect-error: 8:5: unresolved import: `std::io` does not exist
+// expect-error: 9:5: unresolved import: `std::io::Stdin` does not exist
+// expect-error: 10:5: unresolved import: `inner::Hidden` does not exist
 
-// A bare path root is a name the module sees (spec 5.7.1): a child, an
+// A bare path root is a name the module sees: a child, an
 // import, or one of `rok::core`'s. `std` without `rok::` is none of them,
 // and a sibling module's child is not visible without `sup::`.
 use std::io;

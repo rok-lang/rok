@@ -1,10 +1,9 @@
-// spec: 003.01.8-unicode-operator
 // expect-exit: 0
 // expect-stdout:
 // equal
 // less
 
-// spec 1.10.3 / 3.2.3: `≡ ≤` are fixed tokens, synonyms of `== <=`.
+// `≡ ≤` are fixed tokens, synonyms of `== <=`.
 fn main() -> i32 {
     let a = 5;
     let b = 5;
@@ -12,4 +11,3 @@ fn main() -> i32 {
     if a ≤ 10 { println("less"); }
     return 0;
 }
-// spec: §3.1.8

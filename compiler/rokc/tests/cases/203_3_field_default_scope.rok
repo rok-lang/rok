@@ -1,8 +1,7 @@
-// spec: 002.03-struct
 // expect-exit: 0
 // expect-stdout: 5 3 4
 
-// Spec 2.3.3: a field default's names resolve in the struct's module,
+// A field default's names resolve in the struct's module,
 // not at the literal (the local `BASE` / `step` here are not seen), and
 // a `const fn` default is folded like a const.
 mod cfg {

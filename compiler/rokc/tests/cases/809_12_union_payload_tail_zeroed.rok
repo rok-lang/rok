@@ -1,9 +1,8 @@
-// spec: 008.09-lowering-control §8.9.12
 // expect-exit: 0
 // expect-stdout:
 // 1 0 0 0
 
-// 8.9.12: root words hold zero, not stack garbage. A sum value's payload
+// Root words hold zero, not stack garbage. A sum value's payload
 // words past its variant's own (a word another variant may hold a
 // reference in) read as zero: `Small`'s tail, built after `Big` used the
 // same scratch, has none of `Big`'s bytes.

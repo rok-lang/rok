@@ -1,4 +1,3 @@
-// spec: refs-lang §2.4.5
 // only-pointer-width: 64
 // expect-exit: 0
 // gc-stress: 50
@@ -13,7 +12,7 @@
 // b c none
 // 0 16 4 2
 
-// Spec 6.2.2 `#[repr(..)]`: C layout, `packed` (no padding, align 1),
+// `#[repr(..)]`: C layout, `packed` (no padding, align 1),
 // `align(N)` (raises the alignment, rounds the size, pads its users),
 // `transparent`, and an integer tag for a fieldless enum. Values of
 // each go through locals, arrays, `List` buffers and closures.
@@ -80,4 +79,3 @@ fn main() {
     let wn = match w { Wide::X => 0, Wide::Y => 16 };
     println(f"{os[0].a.a} {wn} {os[39].a.a} {os[5].y}");
 }
-// spec: §6.2.2

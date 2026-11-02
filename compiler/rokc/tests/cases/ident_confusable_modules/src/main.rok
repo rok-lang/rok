@@ -1,8 +1,7 @@
-// spec: refs-lang §1.4.2
 // expect-exit: 0
 // expect-stdout: 2 1
 // expect-warning: identifier `σ2` looks like `σ²`
-// Spec 1.4.2: the confusable check covers the whole package - `σ²` here
+// The confusable check covers the whole package - `σ²` here
 // and `σ2` in `calc.rok` warn though no one file has both.
 mod calc;
 

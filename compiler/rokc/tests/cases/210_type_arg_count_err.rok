@@ -1,19 +1,18 @@
-// spec: §2.10.2 §2.10.5 §2.5.1 §2.8.5
-// expect-error: 210_type_arg_count_err.rok:27:13: `S` takes 1 generic argument but 2 were given
+// expect-error: 210_type_arg_count_err.rok:26:13: `S` takes 1 generic argument but 2 were given
 // expect-error: help: `S` is declared `S<T>`; remove the last argument
-// expect-error: 210_type_arg_count_err.rok:28:12: `S` takes 1 generic argument but 2 were given
-// expect-error: 210_type_arg_count_err.rok:29:12: `E` takes 1 generic argument but 2 were given
-// expect-error: 210_type_arg_count_err.rok:30:13: `E` takes 1 generic argument but 3 were given
+// expect-error: 210_type_arg_count_err.rok:27:12: `S` takes 1 generic argument but 2 were given
+// expect-error: 210_type_arg_count_err.rok:28:12: `E` takes 1 generic argument but 2 were given
+// expect-error: 210_type_arg_count_err.rok:29:13: `E` takes 1 generic argument but 3 were given
 // expect-error: help: `E` is declared `E<T>`; remove the last 2 arguments
-// expect-error: 210_type_arg_count_err.rok:31:12: `D` takes 1 to 2 generic arguments but 3 were given
+// expect-error: 210_type_arg_count_err.rok:30:12: `D` takes 1 to 2 generic arguments but 3 were given
 // expect-error: help: `D` is declared `D<T, U = i32>`; remove the last argument
-// expect-error: 210_type_arg_count_err.rok:32:13: `P` takes 2 generic arguments but 1 was given
+// expect-error: 210_type_arg_count_err.rok:31:13: `P` takes 2 generic arguments but 1 was given
 // expect-error: help: `P` is declared `P<T, U>`; add one for `U`
-// expect-error: 210_type_arg_count_err.rok:33:12: `P` takes 2 generic arguments but 1 was given
-// expect-error: 210_type_arg_count_err.rok:34:13: `Al` takes 1 generic argument but 2 were given
+// expect-error: 210_type_arg_count_err.rok:32:12: `P` takes 2 generic arguments but 1 was given
+// expect-error: 210_type_arg_count_err.rok:33:13: `Al` takes 1 generic argument but 2 were given
 // expect-error: help: `Al` is declared `Al<T>`; remove the last argument
-// expect-error: 210_type_arg_count_err.rok:35:12: `U` takes 1 generic argument but 2 were given
-// expect-error: 210_type_arg_count_err.rok:41:9: `Tr` takes at most 1 generic argument but 2 were given
+// expect-error: 210_type_arg_count_err.rok:34:12: `U` takes 1 generic argument but 2 were given
+// expect-error: 210_type_arg_count_err.rok:40:9: `Tr` takes at most 1 generic argument but 2 were given
 // expect-error: help: `Tr` is declared `Tr<R = i32>`; remove the last argument
 
 struct S<T> { a: T; }

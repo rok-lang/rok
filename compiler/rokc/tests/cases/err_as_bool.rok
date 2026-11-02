@@ -1,8 +1,7 @@
-// spec: 002.14-cast-and-conversion
+// expect-error: 12:13: cannot cast `f64` as `bool`
 // expect-error: 13:13: cannot cast `f64` as `bool`
-// expect-error: 14:13: cannot cast `f64` as `bool`
-// expect-error: 16:13: cannot cast `i32` as `bool`
-// expect-error: 17:13: cannot cast `u8` as `bool`
+// expect-error: 15:13: cannot cast `i32` as `bool`
+// expect-error: 16:13: cannot cast `u8` as `bool`
 // expect-error: help: compare instead: `x != 0.0`
 // expect-error: help: compare instead: `(x - 1.0) != 0.0`
 // expect-error: help: compare instead: `n != 0`

@@ -130,4 +130,3 @@ fn main() {
     println(f"rejected: forged {pk2.verify(HashAlgorithm::Sha256, "m", sig)}");
 }
 
-// spec: std 221-crypto §2.21.4

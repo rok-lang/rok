@@ -1,11 +1,10 @@
-// spec: 007.02-allocation §7.2.10 / 008.08-lowering-types §8.8.1
 // gc-stress: 50
 // expect-exit: 0
 // expect-stdout:
 // 11 3 5
 // llo w
 
-// spec 7.2.10 / 8.8.1: a `str` passed to C needs a NUL after its bytes;
+// A `str` passed to C needs a NUL after its bytes;
 // a slice has none, so it goes as a pinned copy that the collector does
 // not move while C reads it.
 extern "C" {

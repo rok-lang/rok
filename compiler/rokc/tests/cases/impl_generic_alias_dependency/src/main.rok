@@ -1,4 +1,3 @@
-// spec: §2.9.1 §2.9.5
 // rokc-arg: --extern adep=tests/cases/impl_generic_alias_dependency/adep
 // expect-exit: 0
 // expect-stdout:

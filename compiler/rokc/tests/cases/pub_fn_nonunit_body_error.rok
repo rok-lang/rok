@@ -1,7 +1,6 @@
-// spec: 004.01.3-omitting-the-return-type
-// expect-error: 9:5: `pub fn double` has no `->`, so it returns `()`, but its body gives `i32`
-// expect-error: 13:30: `pub fn name` has no `->`, so it returns `()`, but its body gives `str`
-// expect-error: 15:29: `pub(pkg) fn ready` has no `->`, so it returns `()`, but its body gives `bool`
+// expect-error: 8:5: `pub fn double` has no `->`, so it returns `()`, but its body gives `i32`
+// expect-error: 12:30: `pub fn name` has no `->`, so it returns `()`, but its body gives `str`
+// expect-error: 14:29: `pub(pkg) fn ready` has no `->`, so it returns `()`, but its body gives `bool`
 
 // A `pub` fn without `->` whose body gives a value: the error names the
 // `-> T` to write.

@@ -1,7 +1,6 @@
-// spec: 006.04.6-lang-duplicate-slot
 // expect-error: lang slot `oom_fn` is already bound
 
-// spec 6.4.6: binding two items to one slot is a compile error.
+// Binding two items to one slot is a compile error.
 #[lang("oom_fn")]
 fn a() -> i32 {
     return 1;

@@ -1,4 +1,3 @@
-// spec: §5.2.1 §5.2.3
 // expect-exit: 50
 // expect-stdout:
 // 42 4 8

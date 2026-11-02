@@ -1,4 +1,3 @@
-// spec: std §1.3.7 §1.4.4
 // only-pointer-width: 64
 // expect-exit: 0
 // expect-stdout:
@@ -7,8 +6,8 @@
 // 4
 // 99
 
-// `rok::bare` raw pointers (stdlib 1.1), casts (1.2), mem (1.3) over raw
-// allocation (1.4), with the spec's signatures: arithmetic is safe,
+// `rok::bare` raw pointers, casts, mem over raw
+// allocation, with the spec's signatures: arithmetic is safe,
 // `read` / `write` need `unsafe`.
 use rok::bare::alloc::{Layout, LayoutError, alloc, dealloc};
 use rok::bare::mem::{copy_nonoverlapping, size_of, swap, write_bytes};
@@ -16,7 +15,7 @@ use rok::bare::ptr::{CPtr, ConstPtr, ManyPtr, Ptr};
 
 struct Pair { a: i64; b: i32; }
 
-// No `main` combines `throws` with `-> i32` (spec 4.16.3).
+// No `main` combines `throws` with `-> i32`.
 fn main() -> i32 { try! run() }
 
 fn run() throws (LayoutError) -> i32 {
@@ -61,4 +60,3 @@ fn run() throws (LayoutError) -> i32 {
     unsafe { dealloc(bytes, layout) };
     return 0;
 }
-// spec: std 101-ptr §1.1.4, 103-mem §1.3.4 §1.3.6, 104-alloc §1.4.1, 105-volatile §1.5.2, 001-tier-model §0.1.1

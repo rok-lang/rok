@@ -1,10 +1,9 @@
-// expect-error: error[E0134]: `f` was moved at line 19, and is used here
-// expect-error: affine_fn_value_arm_error.rok:20:9: `f` was moved at line 19, and is used here
-// expect-error: affine_fn_value_arm_error.rok:27:9: `f` was moved at line 26, and is used here
+// expect-error: error[E0134]: `f` was moved at line 18, and is used here
+// expect-error: affine_fn_value_arm_error.rok:19:9: `f` was moved at line 18, and is used here
+// expect-error: affine_fn_value_arm_error.rok:26:9: `f` was moved at line 25, and is used here
 // expect-error: error[E0135]: `f` holds a `File` that this arm never closes
-// expect-error: affine_fn_value_arm_error.rok:32:33: `f` holds a `File` that this arm never closes
+// expect-error: affine_fn_value_arm_error.rok:31:33: `f` holds a `File` that this arm never closes
 // expect-error: help: closing a `File` can fail, so it is not closed for you: add `try f.close();` at the end of this arm
-// spec: std 213-marker §2.13.4
 
 // A function value takes what it is passed: the caller can no longer
 // use it, sync or async. An arm that sees a `File` still owes its close

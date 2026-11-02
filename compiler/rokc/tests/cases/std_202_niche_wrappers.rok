@@ -14,7 +14,7 @@
 // zero one
 // -4 -0 1.5
 
-// Stdlib 2.2: `NonZero<T>` / `NonNan<F>` / `Finite<F>` / `Positive<T>`
+// `NonZero<T>` / `NonNan<F>` / `Finite<F>` / `Positive<T>`
 // - sizes of `W | none`, construction, `get`, the arithmetic table,
 // comparison / hashing, `TryFrom` (`ZeroError`), `From` back, and the
 // wrappers as `Dict` keys / sorted.
@@ -75,7 +75,4 @@ fn main() {
     println(f"{ys[0]} {ys[1]} {ys[2]}");
 }
 
-// spec: std 202-non-zero
 
-// spec: refs-lang §2.7.6
-// spec: std §2.2.1-2.2.6

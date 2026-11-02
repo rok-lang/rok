@@ -1,10 +1,9 @@
-// spec: 004.11-generators §4.11.12 / §4.11.13
 // expect-exit: 0
 // expect-stdout:
 // evens 0 2 4
 // steps 5 8 11
 
-// 4.11.13: `yield fn` as a method; 4.11.12: parameters work as in
+// `yield fn` as a method; parameters work as in
 // ordinary functions and `-> T` is the yielded type.
 struct Range2 {
     lo: i32;

@@ -1,5 +1,3 @@
-// spec: std 205-cmp §2.5.5
-// spec: std 207-iter §2.7.1 §2.7.13
 // expect-exit: 0
 // expect-stdout:
 // 2 1

@@ -9,7 +9,7 @@
 // 1
 // 9
 
-// Spec 2.8.3a: an associated const comes from the impl covering the
+// An associated const comes from the impl covering the
 // concrete type - per instantiation (`Box<i32>` vs `Box<f64>`), from a
 // blanket impl, and through `<T as Tr>::N`.
 trait Width {
@@ -63,4 +63,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 002.08-trait

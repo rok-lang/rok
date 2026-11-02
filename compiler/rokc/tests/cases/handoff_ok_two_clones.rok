@@ -4,7 +4,6 @@
 // 2 1
 // got 1
 
-// spec: std 213-marker §2.13.9
 // Two clones of one list stored.
 use rok::std::thread;
 fn main() {

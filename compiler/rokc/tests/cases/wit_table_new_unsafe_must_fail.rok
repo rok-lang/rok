@@ -1,5 +1,4 @@
 // expect-error: call to unsafe function `new` outside an `unsafe` block
-// spec: std 108-wit
 // A resource table is not safe to share: only the bindings make one.
 use rok::bare::ffi::wit::Table;
 

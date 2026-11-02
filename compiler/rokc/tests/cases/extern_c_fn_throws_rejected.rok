@@ -6,5 +6,3 @@ extern "C" fn cb(x: i32) throws (E) -> i32 {
 }
 fn main() -> i32 { return 0; }
 
-// spec: 005.09-extern-block
-// spec: §5.9.10

@@ -8,7 +8,7 @@
 // 1
 
 // Bare variants: `Ok` / `Err` from the expected `Result` type
-// (stdlib 2.14 examples write them bare); user
+// (written bare); user
 // enum variants through `use E::*` / `use E::{A as B}`.
 
 struct HttpErr { code: i32; }
@@ -56,4 +56,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 002.04-enum

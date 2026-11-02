@@ -27,4 +27,3 @@ fn main() -> i32 {
     println(f"{total} {i}");
     return total + 5;
 }
-// spec: §3.13.4

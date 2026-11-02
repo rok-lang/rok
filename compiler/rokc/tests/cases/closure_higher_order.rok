@@ -17,4 +17,3 @@ fn main() -> i32 {
     return total;
 }
 
-// spec: 004.05-closure

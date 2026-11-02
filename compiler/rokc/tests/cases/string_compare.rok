@@ -25,4 +25,3 @@ fn main() -> i32 {
     return total;
 }
 
-// spec: std 215-string

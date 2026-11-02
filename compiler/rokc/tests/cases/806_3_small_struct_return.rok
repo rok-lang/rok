@@ -1,10 +1,9 @@
-// spec: 008.06-calling-convention §8.6.3
 // expect-exit: 0
 // expect-stdout:
 // 4000000001 7
 // -3 -1
 
-// spec 8.6.3: a small `struct` returned by C comes back in registers;
+// A small `struct` returned by C comes back in registers;
 // rok sees the same field layout (libc `lldiv` -> 16-byte `lldiv_t`).
 struct LLDivT { quot: i64; rem: i64; }
 

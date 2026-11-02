@@ -1,6 +1,5 @@
-// spec: std 308-path §3.8.3 §3.8.4 §3.8.5
 // only-os: macos linux
-// (RawPath::from_bytes is unix-only, std 3.8.5)
+// (RawPath::from_bytes is unix-only)
 // expect-exit: 0
 // expect-stdout:
 // /etc/nginx/nginx.conf
@@ -11,8 +10,8 @@
 // maximal a��b�
 // bytes 3
 
-// spec 3.8.3: `Div<str>` and `Div<Path>` on `Path` (and `/=`); 3.8.4 /
-// 3.8.5: `RawPath` (`from_bytes`, `as_bytes`, `to_path`,
+// `Div<str>` and `Div<Path>` on `Path` (and `/=`); 3.8.4 /
+// `RawPath` (`from_bytes`, `as_bytes`, `to_path`,
 // `to_path_lossy`), `Path::to_raw`, `Path::try_from(raw)` throwing
 // `Utf8Error`.
 use rok::std::path::{Path, RawPath};

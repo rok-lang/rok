@@ -1,11 +1,10 @@
-// spec: std §2.9.2
 // expect-exit: 0
 // expect-stdout:
 // 6 3 [1] 2 a 98
 // a 1 2
 // b 2 x 2 12 7
 
-// Stdlib 0.5.11 / 2.9.2 / 2.9.3 / 2.15.1: `iter()` returns `<Type>Iter`
+// `iter()` returns `<Type>Iter`
 // (`DictIter`, `SetIter`, `HeapIter`); any other iterator method returns
 // its own name in CamelCase, in the defining module (`slice::Windows`
 // beside the adapter `iter::Windows`).

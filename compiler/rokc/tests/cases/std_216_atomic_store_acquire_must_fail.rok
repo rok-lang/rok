@@ -1,4 +1,3 @@
-// spec: std 216-sync §2.16.2
 // expect-error: no variant `Acquire`
 
 // A store cannot acquire: `StoreOrdering` has no `Acquire`, so the

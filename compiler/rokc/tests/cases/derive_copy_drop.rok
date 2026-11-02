@@ -1,5 +1,5 @@
 // expect-error: cannot derive `Copy` for `File`: it implements `Drop`
-// Stdlib 2.13.3: a `Drop` type can't be `Copy`.
+// A `Drop` type can't be `Copy`.
 #[derive(Clone, Copy)]
 struct File { fd: i32; }
 
@@ -11,6 +11,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 006.02-built-in-attributes
-// spec: std §2.13.3
-// spec: §6.2.1

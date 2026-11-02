@@ -26,4 +26,3 @@ fn main() {
     println(f"{l2.side()} {r2.side()}");
 }
 
-// spec: 004.09-method

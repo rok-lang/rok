@@ -1,10 +1,8 @@
-// spec: §6.4.7
-// expect-error: 6:1: `twice` does not match the form of lang slot `iterator_trait`: it goes on a trait
+// expect-error: 5:1: `twice` does not match the form of lang slot `iterator_trait`: it goes on a trait
 
-// 6.4.7 / stdlib 0.4.8: a `_trait` slot goes on a trait declaration,
+// A `_trait` slot goes on a trait declaration,
 // a `_fn` slot on a function, and so on.
 #[lang("iterator_trait")]
 fn twice(x: i32) -> i32 { x * 2 }
 
 println("unreached");
-// spec: std §0.4.8

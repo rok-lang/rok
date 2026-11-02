@@ -4,4 +4,3 @@ async fn make() -> Cell<i32> { Cell::new(1) }
 let t = task::spawn(make());
 let l = task::spawn_local(make());
 
-// spec: 004.12-async

@@ -1,6 +1,6 @@
-// Spec 6.5.3 / 6.5.7: user `#[literal]` patterns - a bracket matrix
+// User `#[literal]` patterns - a bracket matrix
 // with nested `%` repetitions, the spec's `(x, y)@` coordinate, and a
-// user handler for the `[..]` shape picked by the slot's type (6.5.5).
+// user handler for the `[..]` shape picked by the slot's type.
 // expect-exit: 0
 // expect-stdout:
 // 2x2 1 2 3 4
@@ -90,4 +90,3 @@ fn main() -> i32 {
     println(f"{opt<4>}");
     return 0;
 }
-// spec: §6.5.2 §6.5.3 §6.5.4 §6.5.5 §6.5.7

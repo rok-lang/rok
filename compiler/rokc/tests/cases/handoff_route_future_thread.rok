@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `a` shares `f`, which was sent through a channel
-// spec: std 213-marker §2.13.9
 // A future capturing a list, run on another thread.
 use rok::std::thread;
 async fn grow(xs: List<i32>) -> usize {

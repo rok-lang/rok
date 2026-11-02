@@ -1,4 +1,4 @@
-// A sum with two value terms has no order (spec 2.6.4).
+// A sum with two value terms has no order.
 // expect-error: does not satisfy trait bound `Ord` required by `List::sort`
 // expect-error: `<` needs an order, and `i32 | str` has none
 // expect-error: `max` needs an order, and `i32 | str | none` has none
@@ -15,4 +15,3 @@ fn main() -> i32 {
     0
 }
 
-// spec: §2.6.4

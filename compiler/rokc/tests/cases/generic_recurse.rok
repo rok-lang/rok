@@ -17,4 +17,3 @@ fn main() -> i32 {
     return sum_down(5, 1);
 }
 
-// spec: 002.10-generics

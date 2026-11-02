@@ -7,7 +7,7 @@
 // [4, 8, 1, 9]
 // empty true []
 
-// Stdlib 2.9.7a: `s[i] = x` on a `SliceMut` writes the list it views;
+// `s[i] = x` on a `SliceMut` writes the list it views;
 // a negative index counts from the end, like `xs[i]`.
 fn main() {
     let xs: List<i32> = [1, 2, 3, 4];
@@ -32,4 +32,3 @@ fn main() {
     println(f"empty {e.is_empty()} {e:?}");
 }
 
-// spec: std 209-collections §2.9.7a

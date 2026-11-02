@@ -1,4 +1,3 @@
-// spec: std §2.3.9
 // expect-exit: 0
 // expect-stdout:
 // false true
@@ -7,8 +6,8 @@
 // false true true true
 // 2 A
 
-// Stdlib 2.3.9: `LogicalAnd` / `LogicalOr` are implemented for `bool`;
-// `&&` / `||` on two bools still short-circuit. Stdlib 2.5: `c_char`
+// `LogicalAnd` / `LogicalOr` are implemented for `bool`;
+// `&&` / `||` on two bools still short-circuit. `c_char`
 // is `Eq` / `Ord` / `Hash`.
 static CALLS: Atomic<i32> = Atomic::new(0);
 

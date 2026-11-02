@@ -1,4 +1,3 @@
-// spec: std 200-core/218-task §2.18.1
 // needs: threads
 // expect-exit: 0
 // expect-stdout:

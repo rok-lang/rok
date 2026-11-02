@@ -46,4 +46,3 @@ fn main() -> i32 {
     return sum + max - 4;
 }
 
-// spec: std 209-collections

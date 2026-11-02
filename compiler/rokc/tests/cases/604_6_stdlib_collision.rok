@@ -1,7 +1,6 @@
-// spec: 006.04.6-stdlib-lang-slot-collision
 // expect-error: lang slot `add_trait` is already bound
 
-// spec 6.4.6: stdlib (ops.rok) already binds Add to the add_trait slot, so a
+// Stdlib (ops.rok) already binds Add to the add_trait slot, so a
 // user binding collides; the lang table covers bootstrap and user code.
 #[lang("add_trait")]
 trait MyAdd {
@@ -11,4 +10,3 @@ trait MyAdd {
 fn main() -> i32 {
     return 0;
 }
-// spec: std 004-lang-slot-table §0.4.7

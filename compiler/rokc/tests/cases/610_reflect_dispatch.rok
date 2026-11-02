@@ -1,4 +1,3 @@
-// spec: 006.10-reflect
 // expect-exit: 0
 // expect-stdout:
 // int
@@ -7,7 +6,7 @@
 // integer
 // float
 
-// 6.10.5: `type_name_of_val` on an `any` slot; a type pattern on a sum.
+// `type_name_of_val` on an `any` slot; a type pattern on a sum.
 fn handle(x: any) -> str {
     if x.type_name_of_val() == "i32" { return "int"; }
     else if x.type_name_of_val() == "str" { return "str"; }
@@ -26,4 +25,3 @@ println(handle("s"));
 println(handle(true));
 println(classify(1));
 println(classify(1.0));
-// spec: §6.10.5

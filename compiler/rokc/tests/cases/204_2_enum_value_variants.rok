@@ -1,4 +1,3 @@
-// spec: 002.04.2-value-variant
 // expect-exit: 0
 // expect-stdout:
 // 404 500 2

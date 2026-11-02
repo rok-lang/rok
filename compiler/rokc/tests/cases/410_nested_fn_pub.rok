@@ -1,5 +1,4 @@
-// spec: 004.10.7-visibility-of-nested-functions
-// expect-error: 6:5: `pub` is meaningless on a nested function
+// expect-error: 5:5: `pub` is meaningless on a nested function
 
 fn main() {
     let a = 1;

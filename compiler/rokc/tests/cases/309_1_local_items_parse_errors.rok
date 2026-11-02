@@ -1,8 +1,7 @@
-// spec: §3.9.1
-// expect-error: 10:5: `pub` is meaningless on an item in a function body: it is visible only in its block
-// expect-error: 12:5: `D` is defined twice in this block
+// expect-error: 9:5: `pub` is meaningless on an item in a function body: it is visible only in its block
+// expect-error: 11:5: `D` is defined twice in this block
 // expect-error: help: rename one of them, e.g. `D2`
-// expect-error: 14:5: `K` is defined twice in this block
+// expect-error: 13:5: `K` is defined twice in this block
 
 // A block's item is visible only there, so `pub` says nothing; a block
 // declares a name once per namespace.

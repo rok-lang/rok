@@ -1,6 +1,3 @@
-// spec: 004.01.10-no-duplicate-definitions-in-the-same-module
-// spec: 002.09.3-multiple-impl-blocks-for-one-type
-// spec: 003.09.1-form
 // One name in different namespaces, types, traits, modules and blocks
 // is not a duplicate.
 // expect-exit: 63

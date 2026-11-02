@@ -1,10 +1,9 @@
-// spec: std 306-env §3.6.1
 // expect-exit: 0
 // expect-stdout:
 // missing var: NotPresent
 // home: true
 
-// spec 3.6.1: `var` throws (VarError) for an unset name; `home_dir`
+// `var` throws (VarError) for an unset name; `home_dir`
 // follows $HOME. (`var_os` / `current_exe` / `join_paths`:
 // std_306_env_missing_fns.)
 use rok::std::env;

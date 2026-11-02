@@ -3,7 +3,6 @@
 // expect-stdout:
 // 1
 
-// spec: std 213-marker §2.13.9
 // Take the list out of a Mutex (set a fresh one) and send it on.
 use rok::std::thread;
 static BUF: Mutex<List<i32>> = Mutex::new([]);

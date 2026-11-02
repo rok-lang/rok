@@ -1,9 +1,8 @@
-// spec: 002.03-struct
-// expect-error: 17:14: the default of field `a` cannot be evaluated at compile time: calls `f`, which is not a `const fn`
-// expect-error: 18:13: constant expression overflows `u8`: the result is 400
-// expect-error: 19:14: the default of field `c` cannot be evaluated at compile time: reads the static `S`
+// expect-error: 16:14: the default of field `a` cannot be evaluated at compile time: calls `f`, which is not a `const fn`
+// expect-error: 17:13: constant expression overflows `u8`: the result is 400
+// expect-error: 18:14: the default of field `c` cannot be evaluated at compile time: reads the static `S`
 
-// Spec 2.3.3 / 5.2.8: field defaults are constant expressions, checked
+// Field defaults are constant expressions, checked
 // at the declaration even when no literal omits the field, with names
 // resolved in the struct's module (a local `three` at the use does not
 // shadow the const fn).

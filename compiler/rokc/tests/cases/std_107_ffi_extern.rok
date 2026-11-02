@@ -1,4 +1,3 @@
-// spec: std 107-ffi §1.7.1 §1.7.3 §1.7.4
 // expect-exit: 0
 // expect-stdout:
 // strlen: 5 0
@@ -7,7 +6,7 @@
 // freed 4
 // cos: 1
 
-// stdlib 1.7: `extern "C"` declarations - a `str` argument goes as a
+// `extern "C"` declarations - a `str` argument goes as a
 // NUL-terminated `char*`, a nullable `char*` result is a `CPtr<c_char>`
 // - and a safe wrapper whose `Drop` releases the C resource at the end
 // of `using`.

@@ -1,6 +1,4 @@
 // needs: threads
-// spec: std 304-thread §3.4.4
-// spec: §6.2.9
 
 // `ThreadLocal::with` lends this thread's value to its closure: the value
 // can't be returned, stored past the call, sent, or kept by a callee, and
@@ -32,11 +30,11 @@ fn main() {
     TL.with(|l| { l.push(1); });
 }
 
-// expect-error: 18:25: this returns this thread's `ThreadLocal` value out of `with`'s closure: the value is only lent to it
+// expect-error: 16:25: this returns this thread's `ThreadLocal` value out of `with`'s closure: the value is only lent to it
 // expect-error: help: return a copy (`.clone()`) or what you computed from it, or take the value out with `replace` / `take`
-// expect-error: 20:13: this closure keeps `l`, this thread's `ThreadLocal` value, past `with`
-// expect-error: 22:13: this closure keeps `l`, this thread's `ThreadLocal` value, past `with`: the value is only lent to the closure
-// expect-error: 23:25: this returns this thread's `ThreadLocal` value out of `with`'s closure
-// expect-error: 25:25: `l` is this thread's `ThreadLocal` value, lent to `with`'s closure, and `keep` keeps it past the call
-// expect-error: 27:32: `l` can't be sent through a channel: it is this thread's `ThreadLocal` value, lent to `with`'s closure
-// expect-error: 28:21: an `async` closure can't be given to `with`: its future would keep this thread's `ThreadLocal` value past the call
+// expect-error: 18:13: this closure keeps `l`, this thread's `ThreadLocal` value, past `with`
+// expect-error: 20:13: this closure keeps `l`, this thread's `ThreadLocal` value, past `with`: the value is only lent to the closure
+// expect-error: 21:25: this returns this thread's `ThreadLocal` value out of `with`'s closure
+// expect-error: 23:25: `l` is this thread's `ThreadLocal` value, lent to `with`'s closure, and `keep` keeps it past the call
+// expect-error: 25:32: `l` can't be sent through a channel: it is this thread's `ThreadLocal` value, lent to `with`'s closure
+// expect-error: 26:21: an `async` closure can't be given to `with`: its future would keep this thread's `ThreadLocal` value past the call

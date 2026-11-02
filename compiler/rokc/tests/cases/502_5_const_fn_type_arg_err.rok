@@ -1,7 +1,6 @@
-// spec: 005.02-const
-// expect-error: 6:16: a `const fn` cannot take a type as an argument
+// expect-error: 5:16: a `const fn` cannot take a type as an argument
 
-// Spec 5.2.5: `const fn sizeof(T: type)` is an error; type
+// `const fn sizeof(T: type)` is an error; type
 // introspection belongs to meta blocks.
 const fn sz(T: type) -> usize { 0 }
 fn main() -> i32 { return 0; }

@@ -2,7 +2,7 @@
 // expect-error: a view that writes the list is a `SliceMut<i32>`: `let s: SliceMut<i32> = xs[1:3];`
 // expect-error: 11:5: no method `index_set` found for type `Slice<i32>`
 
-// Stdlib 2.9.7a: `Slice` stays read-only; writing through one names the
+// `Slice` stays read-only; writing through one names the
 // writable `SliceMut`.
 fn main() {
     let xs: List<i32> = [3, 1, 2];
@@ -11,4 +11,3 @@ fn main() {
     s[0] = 5;
 }
 
-// spec: std 209-collections §2.9.7a

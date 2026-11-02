@@ -1,10 +1,9 @@
-// spec: 002.04-enum-named-variant
 // expect-exit: 0
 // expect-stdout:
 // 5
 // 7
 
-// spec 2.4: enum named-variant `Move { x: i32; y: i32; }`.
+// Enum named-variant `Move { x: i32; y: i32; }`.
 enum Cmd {
     Stop,
     Move { x: i32; y: i32; },

@@ -1,4 +1,3 @@
-// spec: §2.8.6
 // expect-error: associated type `Item` = `NoClone` does not implement `Clone`
 
 trait Container {

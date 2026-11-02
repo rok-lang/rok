@@ -1,8 +1,7 @@
-// spec: refs-lang §2.9.3
 // expect-exit: 0
 // expect-stdout: 6 4
 
-// Spec 2.9.3: a concrete impl overlaps a generic one only when the trait
+// A concrete impl overlaps a generic one only when the trait
 // arguments unify too. Core's `impl<T: Mul<Output = T>> DotMul<List<T>>
 // for T` covers `M` once `M: Mul`, but `DotMul<List<M>>` is not
 // `DotMul<M>` (the default `Rhs = Self`).

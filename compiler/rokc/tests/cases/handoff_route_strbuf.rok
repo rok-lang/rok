@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `all` still holds `s`, which was handed to another owner
-// spec: std 213-marker §2.13.9
 use rok::std::thread;
 fn main() {
     let (tx, rx) = channel::<StrBuf>();

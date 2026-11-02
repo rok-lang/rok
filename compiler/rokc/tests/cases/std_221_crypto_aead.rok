@@ -172,4 +172,3 @@ fn main() {
     println(f"FAIL bad key {bad.algorithm():?}");
 }
 
-// spec: std 221-crypto §2.21.2

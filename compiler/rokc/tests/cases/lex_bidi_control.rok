@@ -1,7 +1,6 @@
 // expect-error: bidirectional control character U+202E
-// Spec 1.1: bidi controls are rejected even inside comments: ‮
+// Bidi controls are rejected even inside comments: ‮
 fn main() -> i32 {
     return 0;
 }
 
-// spec: §1.1.2

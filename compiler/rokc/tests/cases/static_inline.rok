@@ -9,4 +9,3 @@ fn main() {
     println(f"{GREET + EXTRA}");
 }
 
-// spec: 005.03-static

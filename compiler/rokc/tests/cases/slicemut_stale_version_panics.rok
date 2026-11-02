@@ -5,7 +5,7 @@
 // [10, 2, 3]
 // [10, 20, 3, 9] fresh
 
-// Stdlib 2.9.7a: a resize the compiler cannot see (inside another
+// A resize the compiler cannot see (inside another
 // function) bumps the list's version; a view made before it panics on
 // its next use.
 fn grow(xs: List<i32>) {
@@ -30,4 +30,3 @@ fn main() {
     println("not reached");
 }
 
-// spec: std 209-collections §2.9.7a

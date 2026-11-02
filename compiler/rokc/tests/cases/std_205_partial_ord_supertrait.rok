@@ -1,7 +1,6 @@
-// spec: std §2.5.4
 // expect-error: `Half` implements `PartialOrd` but not its supertrait `PartialEq`
 
-// Stdlib 2.5.4: `trait PartialOrd<Rhs = Self>: PartialEq<Rhs>`.
+// `trait PartialOrd<Rhs = Self>: PartialEq<Rhs>`.
 struct Half { v: f64; }
 
 impl PartialOrd for Half {

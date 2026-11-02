@@ -6,7 +6,7 @@
 // odd 1
 // odd 3
 
-// 3.7.8: `for i in a..` counts up until a `break`; `continue` still
+// `for i in a..` counts up until a `break`; `continue` still
 // advances.
 fn main() {
     for i in 5.. {
@@ -19,4 +19,3 @@ fn main() {
         println(f"odd {i}");
     }
 }
-// spec: §3.7.8 §3.13.3

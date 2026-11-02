@@ -10,4 +10,3 @@ fn main() -> i32 {
     return p.show();
 }
 
-// spec: 002.10-generics

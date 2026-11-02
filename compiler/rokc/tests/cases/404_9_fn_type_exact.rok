@@ -1,8 +1,7 @@
-// spec: §4.4.9
-// expect-error: 9:35: mismatched types: `let f` expects `fn(f64 | i32) -> i32`
-// expect-error: 10:34: mismatched types: `let h` expects `fn() -> i32 | str`
+// expect-error: 8:35: mismatched types: `let f` expects `fn(f64 | i32) -> i32`
+// expect-error: 9:34: mismatched types: `let h` expects `fn() -> i32 | str`
 
-// 4.4.9: no fn subtyping - a sum never widens inside a fn type.
+// No fn subtyping - a sum never widens inside a fn type.
 fn g() -> i32 { 3 }
 
 fn main() {

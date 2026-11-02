@@ -1,9 +1,8 @@
-// spec: §3.5.2
 // A misspelt method of a generic std type names the method its impl
 // has.
-// expect-error: 9:9: no method `lenght` found for type `List<i32>`
+// expect-error: 8:9: no method `lenght` found for type `List<i32>`
 // expect-error: help: did you mean `len`?
-// expect-error: 10:9: no method `frist` found for type `List<i32>`
+// expect-error: 9:9: no method `frist` found for type `List<i32>`
 // expect-error: help: did you mean `first`?
 let xs: List<i32> = [1, 2];
 let n = xs.lenght();

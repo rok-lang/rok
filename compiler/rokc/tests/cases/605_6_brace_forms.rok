@@ -1,11 +1,10 @@
-// spec: §6.5.1 §6.5.3 §6.5.4 §6.5.5 §6.5.6 §6.5.10 §6.5.11
 // expect-exit: 0
 // expect-stdout:
 // 1 7 1 9
 // 2 3 5
 // 2 3
 
-// Spec 6.5.6: `{e,}` is a one-element set, `{e}` always a block, a `:`
+// `{e,}` is a one-element set, `{e}` always a block, a `:`
 // makes a dict, statements make a block. Core's collection and range
 // literals are handlers (a trailing separator allowed); the slot type
 // picks the set's element type.

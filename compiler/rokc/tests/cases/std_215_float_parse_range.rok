@@ -1,4 +1,3 @@
-// spec: std §2.15.7
 // expect-exit: 0
 // expect-stdout:
 // "1e400": number out of range
@@ -7,8 +6,8 @@
 // "1e39": number out of range
 // inf -inf 1e-400=0 true
 
-// stdlib 2.15.7: digits past the type's range are a parse error, as an
-// out-of-range literal is (1.6.4); `inf` itself parses.
+// Digits past the type's range are a parse error, as an
+// out-of-range literal is; `inf` itself parses.
 fn f64_of(s: str) -> f64 {
     try s.parse::<f64>() catch e: ParseError {
         println(f"\"{s}\": {e.message()}");

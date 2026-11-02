@@ -1,4 +1,3 @@
-// spec: 007.07-io-and-timer §7.7.1 §7.7.2 §7.7.3 / 008.05 §8.5.5
 // only-os: macos linux
 // (POSIX pipe / read / write)
 // needs: process threads
@@ -8,8 +7,8 @@
 // other task ran while parked: true
 // read after readiness: 1 z
 
-// spec 7.7.2: a readiness wait (`rok_io_register`, 8.5.5) registers
-// the fd with the reactor (7.7.1) and parks the task; the worker runs
+// A readiness wait (`rok_io_register`) registers
+// the fd with the reactor and parks the task; the worker runs
 // other tasks meanwhile, and the readiness edge from another thread's
 // write wakes the task, which then reads. A pipe's write end is
 // writable at once.
@@ -43,7 +42,7 @@ impl Future for Ready {
     }
 }
 
-// No `main` combines `throws` with `-> i32` (spec 4.16.3).
+// No `main` combines `throws` with `-> i32`.
 fn main() -> i32 { try! run() }
 
 fn run() throws (rok::bare::alloc::LayoutError) -> i32 {

@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `g.get()` can't be sent through a channel: the `Mutex` behind `g` still holds it
-// spec: std 213-marker §2.13.9
 // Send the guarded value out while the Mutex still holds it.
 use rok::std::thread;
 static M: Mutex<List<i32>> = Mutex::new([]);

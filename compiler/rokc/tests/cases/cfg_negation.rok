@@ -13,4 +13,3 @@ fn main() {
     println(f"{excluded()}");
 }
 
-// spec: 006.03-cfg

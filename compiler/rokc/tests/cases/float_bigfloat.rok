@@ -17,8 +17,8 @@
 // true true 0.1
 
 // A finite `float` result past `f64`'s range is promoted (53-bit
-// significand, unbounded exponent) instead of becoming inf or 0
-// (std 2.1.3). Expected values come from an exact fractions model.
+// significand, unbounded exponent) instead of becoming inf or 0.
+// Expected values come from an exact fractions model.
 
 fn main() {
     let a: float = 0.1;
@@ -57,7 +57,7 @@ fn main() {
     let m: float = 2;
     println(f"{r % m} {-r % m} {r %% -m} {big % (h * h)} {(big + h * h * 3) % (h * h)}");
 
-    // Conversions (2.11.8): to_f64 rounds, try_into truncates.
+    // Conversions: to_f64 rounds, try_into truncates.
     let i: i32 = try! r.try_into();
     let j: i64 = try! (-r * 1e10).try_into();
     let x: f64 = big.to_f64();
@@ -72,4 +72,3 @@ fn main() {
     println(f"{ovf is none} {h.to_f32() is none} {(a.to_f32() ?? 0.0f32)}");
 }
 
-// spec: std 201-numbers

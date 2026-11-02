@@ -32,4 +32,3 @@ println(f"{y.id()}");
 let z: any Source<i32, Item = bool> = Box { v: true };
 println(f"{if z.get() { 1 } else { 0 }}");
 
-// spec: 002.10-generics

@@ -11,7 +11,7 @@
 // 12
 // 1
 
-// Generic trait impls (spec 2.9.4), monomorphized per receiver type:
+// Generic trait impls, monomorphized per receiver type:
 // `impl<T> Tr for Box<T>`, a bounded one, a blanket `impl<T: B> Tr for
 // T`, trait default bodies, and generic-impl types meeting bounds.
 
@@ -66,4 +66,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 002.10-generics

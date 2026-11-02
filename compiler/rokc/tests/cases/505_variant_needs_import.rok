@@ -1,7 +1,6 @@
-// spec: 005.05-variant-needs-import
 // expect-error: Blue
 
-// spec 5.5 / 2.4.8: a variant is a bare name when imported (`use
+// A variant is a bare name when imported (`use
 // Color::*`) or when the expected type is its enum; here there is none.
 enum Color { Red, Blue(i32) }
 
@@ -9,4 +8,3 @@ fn main() -> i32 {
     let c = Blue(3);
     return 0;
 }
-// spec: §5.5.7

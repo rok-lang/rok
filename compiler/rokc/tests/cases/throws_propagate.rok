@@ -50,4 +50,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 004.14-throws

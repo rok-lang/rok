@@ -1,12 +1,11 @@
-// expect-error: error[E0105]: `xs` was moved into the `Mutex` at line 21
-// expect-error: handoff_lock_errors.rok:22:5: `xs` was moved into the `Mutex` at line 21
+// expect-error: error[E0105]: `xs` was moved into the `Mutex` at line 20
+// expect-error: handoff_lock_errors.rok:21:5: `xs` was moved into the `Mutex` at line 20
 // expect-error: help: it belongs to the `Mutex` now; use it through the lock: `using g = m.lock() { g.get().push(3) }`, or hand over `xs.clone()` to keep a separate copy
-// expect-error: handoff_lock_errors.rok:28:5: `ys` was moved into the `RwLock` at line 27
-// expect-error: handoff_lock_errors.rok:36:5: `xs` was moved into the `Mutex` at line 34
-// expect-error: handoff_lock_errors.rok:43:29: `xs` was already moved into the `Mutex` by this call, on an earlier pass of the loop
-// expect-error: handoff_lock_errors.rok:52:19: `xs` was moved into the `Mutex` at line 51
-// expect-error: handoff_lock_errors.rok:60:5: `xs` was moved into the `Mutex` at line 59
-// spec: std 213-marker §2.13.9 / std 216-sync §2.16.3 / §2.16.4
+// expect-error: handoff_lock_errors.rok:27:5: `ys` was moved into the `RwLock` at line 26
+// expect-error: handoff_lock_errors.rok:35:5: `xs` was moved into the `Mutex` at line 33
+// expect-error: handoff_lock_errors.rok:42:29: `xs` was already moved into the `Mutex` by this call, on an earlier pass of the loop
+// expect-error: handoff_lock_errors.rok:51:19: `xs` was moved into the `Mutex` at line 50
+// expect-error: handoff_lock_errors.rok:59:5: `xs` was moved into the `Mutex` at line 58
 
 // Using a value after `Mutex::new` took it is an error on any path.
 

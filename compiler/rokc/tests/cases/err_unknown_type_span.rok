@@ -1,5 +1,4 @@
-// spec: §1.1.5 §2.1.3
-// expect-error: err_unknown_type_span.rok:8:22: cannot find type `pkg::Missing`
+// expect-error: err_unknown_type_span.rok:7:22: cannot find type `pkg::Missing`
 
 // An unknown type is reported at the user item that names it, not at
 // whatever library item HIR lowered last (the leaked "current span").

@@ -1,9 +1,8 @@
-// spec: std 209-collections §2.9.3
 // expect-exit: 0
 // expect-stdout:
 // a=2 b=1
 
-// spec 2.9.3: `fn entry(self, k: K) -> Entry<K, V>; // or_insert / and_modify`.
+// `fn entry(self, k: K) -> Entry<K, V>; // or_insert / and_modify`.
 fn main() {
     let d: Dict<str, i32> = Dict::new();
     for w in ["a", "b", "a"] {

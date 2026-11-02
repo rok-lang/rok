@@ -19,4 +19,3 @@ println(f"{sh.area() / 2}");
 println(f"{s.vol() * 2 / 2}");
 println(f"{name(s)}");
 
-// spec: 002.02-any-slot

@@ -1,9 +1,8 @@
-// spec: std 215-string §2.15.2
 // expect-exit: 0
 // expect-stdout:
 // ÉCOLE école
 
-// spec 2.15.2: `to_lowercase` / `to_uppercase` return a new str with
+// `to_lowercase` / `to_uppercase` return a new str with
 // Unicode case conversion.
 fn main() {
     println(f"{"école".to_uppercase()} {"ÉCOLE".to_lowercase()}");

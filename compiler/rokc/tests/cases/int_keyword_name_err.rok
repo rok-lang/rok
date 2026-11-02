@@ -1,8 +1,7 @@
 // expect-error: `int` is a keyword registered with `#[keyword("int")]` and can't be used as a name
-// Stdlib spec 2.1.2 / refs-lang 6.6.3: `int` is the standard library's
+// `int` is the standard library's
 // type keyword in every package, so it can't name a binding.
 fn main() {
     let int = 4;
 }
 
-// spec: std 201-numbers

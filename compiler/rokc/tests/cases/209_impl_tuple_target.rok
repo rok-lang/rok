@@ -1,8 +1,7 @@
-// spec: 002.09.1-impl-tuple-target
 // expect-exit: 7
 // expect-stdout:
 
-// spec 2.9.1: impl_block ::= "impl" generics? type_expr ("for" type_expr)? ...
+// Impl_block ::= "impl" generics? type_expr ("for" type_expr)? ...
 // type_expr is any type, so a trait impl on a tuple type is legal.
 trait Foo {
     fn foo(self) -> i32;

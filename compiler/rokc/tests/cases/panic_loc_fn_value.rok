@@ -1,6 +1,5 @@
-// spec: §6.2.12
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at tests/cases/panic_loc_fn_value.rok:13:13:
+// expect-stderr: thread 'main' panicked at tests/cases/panic_loc_fn_value.rok:12:13:
 // expect-stderr: assertion failed: positive
 // expect-stdout:
 

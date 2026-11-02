@@ -7,7 +7,7 @@
 // expect-error: package `blog` defines no derive `Named`, so `#[derive(blog::Named)]` names nothing
 // expect-error: help: write `#[derive(alog::Named)]`
 
-// Spec 6.8.11: a bare name reaches no other package's block; two
+// A bare name reaches no other package's block; two
 // packages that define it each need their name.
 use log!;
 
@@ -19,5 +19,3 @@ fn main() {
     alog::nope!(2);
 }
 
-// spec: 006.08-meta-blocks
-// spec: §6.8.11

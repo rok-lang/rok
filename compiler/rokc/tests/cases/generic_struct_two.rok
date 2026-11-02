@@ -17,4 +17,3 @@ fn main() -> i32 {
     return p.left + p.right;
 }
 
-// spec: 002.10-generics

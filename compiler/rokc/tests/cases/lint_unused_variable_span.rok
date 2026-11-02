@@ -1,7 +1,6 @@
 // expect-exit: 0
-// spec: §9.6
-// expect-lint: 9:9 unused variable `count`
-// expect-lint: 10:11 unused variable `total`
+// expect-lint: 8:9 unused variable `count`
+// expect-lint: 9:11 unused variable `total`
 // expect-stdout:
 
 // An unused variable is underlined at its name, not at `let`.

@@ -1,11 +1,10 @@
-// spec: std §2.14.4
 // expect-exit: 0
 // expect-stdout:
 // expected `i32`, found `str` TypeError { expected: "i32", actual: "str" }
 // stack overflow out of memory internal compiler error InternalError
 // disk gone
 
-// Stdlib 2.14.4: `TypeError`, the fatal error types, and std 3.5.0's
+// `TypeError`, the fatal error types, and the
 // public `IoError::message`.
 fn show<E: Error>(e: E) -> str { f"{e}" }
 

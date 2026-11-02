@@ -3,7 +3,7 @@
 // expect-stderr: slice step must not be zero
 // expect-stdout: [1, 2, 3, 4, 5]
 
-// Spec 3.6.2: bounds clamp, but a zero step panics (Python's ValueError).
+// Bounds clamp, but a zero step panics (Python's ValueError).
 fn main() {
     let xs: List<i32> = [1, 2, 3, 4, 5];
     println(f"{xs[-10:100]:?}");
@@ -11,4 +11,3 @@ fn main() {
     println(f"{xs[: :k]:?}");
 }
 
-// spec: 003.06-indexing-and-slicing

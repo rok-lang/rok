@@ -1,7 +1,6 @@
-// spec: refs-lang §1.2.3
-// expect-error: 8:5: doc comment documents nothing: it must come before an item; use `//` for a plain comment
-// expect-error: 10:1: expected outer doc comment: an inner doc comment (`//!`, `/*!`) documents the file, module or function body it starts
-// expect-error: 13:6: a doc comment cannot document a parameter; use `//` for a plain comment
+// expect-error: 7:5: doc comment documents nothing: it must come before an item; use `//` for a plain comment
+// expect-error: 9:1: expected outer doc comment: an inner doc comment (`//!`, `/*!`) documents the file, module or function body it starts
+// expect-error: 12:6: a doc comment cannot document a parameter; use `//` for a plain comment
 
 fn main() {
     println("x");

@@ -1,5 +1,4 @@
 // expect-exit: 0
-// spec: std 213-marker §2.13.9 / refs-lang §4.13
 // expect-stdout:
 // 1 2 1 2
 

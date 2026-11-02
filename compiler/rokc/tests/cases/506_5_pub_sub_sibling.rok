@@ -1,7 +1,6 @@
-// spec: §5.6.5 §5.6.6
-// expect-error: 10:25: function `parent::shared` is `pub(sub)`: visible only in module `parent` and its descendants, not from `sibling`
+// expect-error: 9:25: function `parent::shared` is `pub(sub)`: visible only in module `parent` and its descendants, not from `sibling`
 
-// Spec 5.6.5: `pub(sub)` reaches the defining module and its
+// `pub(sub)` reaches the defining module and its
 // descendants only, not a sibling.
 mod parent {
     pub(sub) fn shared() -> i32 { 1 }

@@ -1,12 +1,11 @@
-// spec: std 216-sync §2.16.3 / refs-lang 003.17 §3.17.7
-// expect-error: 20:5: `g` holds a `MutexGuard` that is never released
-// expect-error: 21:5: `w` holds a `RwLockWriteGuard` that is never released
-// expect-error: 23:9: `r` holds a `RwLockReadGuard` that is never released
-// expect-error: 25:5: this `MutexGuard` is discarded without being released
-// expect-error: 26:12: `t` holds a `MutexGuard` that is never released
-// expect-error: 27:26: `u` holds a `MutexGuard` that is never released
+// expect-error: 19:5: `g` holds a `MutexGuard` that is never released
+// expect-error: 20:5: `w` holds a `RwLockWriteGuard` that is never released
+// expect-error: 22:9: `r` holds a `RwLockReadGuard` that is never released
+// expect-error: 24:5: this `MutexGuard` is discarded without being released
+// expect-error: 25:12: `t` holds a `MutexGuard` that is never released
+// expect-error: 26:26: `u` holds a `MutexGuard` that is never released
 
-// Stdlib 2.16.3: a guard is released only by `using`; one bound with a
+// A guard is released only by `using`; one bound with a
 // plain `let`, bound by a pattern, or discarded would hold its lock
 // forever. Guards that pass through `using` (directly, from a `try_lock`
 // match arm or `if let`, or destructured by `using`) are fine.

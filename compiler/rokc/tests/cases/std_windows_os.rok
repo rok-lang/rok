@@ -1,6 +1,5 @@
 // only-os: windows
 // expect-exit: 0
-// spec: std 308-path §3.8.2 / §3.8.5
 //
 // Windows OS surface: `RawPath` UTF-16 forms, `RawStr` as UTF-16, `ExitStatus` codes,
 // argument quoting through `CreateProcessW`, user directories, `;` path

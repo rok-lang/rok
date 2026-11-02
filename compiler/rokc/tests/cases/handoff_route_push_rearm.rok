@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `items` still holds `it`, which was handed to another owner
-// spec: std 213-marker §2.13.9
 // After sending every element, a push must not make the old ones usable.
 use rok::std::thread;
 fn main() {

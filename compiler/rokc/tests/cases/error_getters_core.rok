@@ -1,5 +1,3 @@
-// spec: stdlib 0.5.10
-// spec: std 214-error §2.14.4
 // expect-exit: 0
 // expect-stdout:
 // parse: x7 1 invalid digit | cannot parse "x7": invalid digit | true

@@ -1,11 +1,10 @@
-// spec: 008.06-calling-convention §8.6.12
 // expect-exit: 0
 // expect-stdout:
 // 11 12 13
 // counter 3
 // composed 14
 
-// spec 8.6.12: a closure call passes the closure's environment with the
+// A closure call passes the closure's environment with the
 // arguments; a closure value works wherever a `fn` value of its type
 // does (stored, passed, returned).
 fn each(xs: List<i32>, f: fn(i32) -> i32) -> List<i32> {

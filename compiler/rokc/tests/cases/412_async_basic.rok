@@ -1,13 +1,12 @@
-// spec: 004.12-async-basic
 // expect-exit: 7
 // expect-stdout:
 
-// spec 4.12: async fn + await.
+// Async fn + await.
 async fn produce() -> i32 {
     return 7;
 }
 
-// `await` only inside an async body (4.12.10), so main is async (4.16.5).
+// `await` only inside an async body, so main is async.
 async fn main() -> i32 {
     let v = await produce();
     return v;

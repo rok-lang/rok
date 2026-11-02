@@ -14,7 +14,7 @@
 // err: outer 9 | inner err 1 | inner 5
 // flat: false
 
-// Swift-style nested optionals (spec 2.6.4): a generic `T | none` with
+// Swift-style nested optionals: a generic `T | none` with
 // `T = i32 | none` keeps its own outer `none`, so a stored `none` element
 // is not "nothing there". Written-out sums still flatten.
 type Opt = i32 | none;
@@ -110,4 +110,3 @@ fn main() -> i32 {
     0
 }
 
-// spec: §2.6.4 §2.6.5

@@ -1,5 +1,5 @@
 // expect-error: where_alias_unmet.rok:10:14: type `Tok` does not satisfy trait bound `Display` required by `Shown<Tok>`
-// Spec 2.10.4: a type alias's `where` holds at each use; the error
+// A type alias's `where` holds at each use; the error
 // points at the use.
 struct Tok { v: i32; }
 struct W<T> { v: T; }
@@ -11,4 +11,3 @@ fn main() -> i32 {
     return ok.v + bad.v.v;
 }
 
-// spec: 002.10-generics

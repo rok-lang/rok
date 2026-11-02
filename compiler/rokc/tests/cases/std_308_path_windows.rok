@@ -1,6 +1,5 @@
 // only-os: windows
 // expect-exit: 0
-// spec: std 308-path §3.8.2 / §3.8.5
 //
 // Windows paths: `\` and `/` separate, a prefix (`C:`, `\\srv\share`)
 // comes first, `join` writes `\`, and a rooted path without a drive

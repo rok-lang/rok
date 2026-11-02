@@ -6,7 +6,7 @@
 // len 4
 // [5, 6, 3]
 
-// Stdlib 2.9.7a: a `List<T>` passed where a `SliceMut<T>` is expected
+// A `List<T>` passed where a `SliceMut<T>` is expected
 // views the whole list; `xs[a:b]` there views that part.
 fn zero(s: collections::SliceMut<i32>) {
     s.fill(0);
@@ -46,4 +46,3 @@ fn main() {
     println(f"{ys:?}");
 }
 
-// spec: std 209-collections §2.9.7a / refs-lang 002.14

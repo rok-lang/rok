@@ -1,9 +1,8 @@
-// spec: 003.14.2-try-catch
 // expect-exit: 0
 // expect-stdout:
 // caught:7
 
-// spec 314.2: a throw in the try body enters catch with the error bound;
+// A throw in the try body enters catch with the error bound;
 // the catch expression's value is the handler block's value.
 fn main() -> i32 {
     let result = try {

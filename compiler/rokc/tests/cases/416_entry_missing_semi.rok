@@ -1,5 +1,4 @@
-// spec: 004.16-entry-missing-semi
 // expect-error: expected `;` after top-level expression
 
-// spec 4.16.1: no tail expression at top level.
+// No tail expression at top level.
 println(f"{1}")

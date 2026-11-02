@@ -5,7 +5,7 @@
 // (1, 2) 1
 // 100 198
 
-// Stdlib 1.2.5 / 1.2.6 / 1.4.2: Pod, reinterpret between equal-size Pod
+// Pod, reinterpret between equal-size Pod
 // types (a derived #[repr(C)] struct too), transmute_unchecked, and the
 // RAII Allocation<T>.
 use rok::bare::{reinterpret, transmute_unchecked};
@@ -35,5 +35,3 @@ fn main() {
     }
 }
 
-// spec: std 102-cast §1.2.5
-// spec: std 102-cast §1.2.5 §1.2.6, 103-mem §1.3.5, 104-alloc §1.4.2

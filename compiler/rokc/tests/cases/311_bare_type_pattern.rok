@@ -6,7 +6,7 @@
 // int or str
 // 7
 
-// 3.11.1: a bare type name against a sum is a type pattern binding
+// A bare type name against a sum is a type pattern binding
 // nothing (not a catch-all binding); against a plain value a name binds.
 fn kind(v: i32 | f64 | str) -> str {
     match v {
@@ -33,4 +33,3 @@ fn main() {
     };
     println(f"{n}");
 }
-// spec: §3.11.1

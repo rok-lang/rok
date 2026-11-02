@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `s` shares `e`, which was sent through a channel
-// spec: std 213-marker §2.13.9
 // A trait method behind `dyn` that stores twice.
 use rok::std::thread;
 trait Store { fn put(self, x: List<i32>); fn take(self) -> List<i32> | none; }

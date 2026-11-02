@@ -1,5 +1,3 @@
-// spec: 005.02-const
-// spec: §6.5.8
 // A panic or `throw` whose message is an f-string fails the evaluation
 // with that text; a malformed dynamic spec panics as at run time.
 // expect-error: const `A` cannot be evaluated at compile time: panicked: 3 is odd (want 4 or 6)

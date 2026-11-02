@@ -1,8 +1,7 @@
-// spec: §3.14.8 §4.16.4
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at tests/cases/try_force_shows_error.rok:31:13:
+// expect-stderr: thread 'main' panicked at tests/cases/try_force_shows_error.rok:30:13:
 // expect-stderr: try! failed: no such key `port`
-// expect-stderr:   raised at tests/cases/try_force_shows_error.rok:31:18
+// expect-stderr:   raised at tests/cases/try_force_shows_error.rok:30:18
 // expect-stdout: 8
 
 // A failed `try!` shows which error it got and where it was raised.

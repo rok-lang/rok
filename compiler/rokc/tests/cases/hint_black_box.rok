@@ -1,4 +1,3 @@
-// spec: 009.09.11-benchmarks
 // expect-exit: 0
 // expect-stdout:
 // 42

@@ -75,4 +75,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: std 219-par

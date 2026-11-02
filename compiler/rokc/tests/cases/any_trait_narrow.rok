@@ -69,4 +69,3 @@ let k: any Shape = Sq { s: 1 };
 k = Rect { w: 5, h: 5 };
 println(f"{k.area()}");
 
-// spec: 002.02-any-slot

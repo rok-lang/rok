@@ -1,6 +1,6 @@
 // expect-error: non-exhaustive match on `(bool, Shape)`: `(false, Shape::Dot)` not covered
 
-// spec 3.12.5: every top-level case appears, so the error names a nested
+// Every top-level case appears, so the error names a nested
 // value no arm matches.
 enum Shape { Dot, Line(i32) }
 
@@ -14,4 +14,3 @@ fn main() -> i32 {
     return f((true, Shape::Dot));
 }
 
-// spec: 003.12-match-expression

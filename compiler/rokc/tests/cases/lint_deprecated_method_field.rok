@@ -1,10 +1,9 @@
-// spec: §6.2.7
 // expect-exit: 0
-// expect-lint: 25:9 use of deprecated method `P::new`
-// expect-lint: 26:16 use of deprecated field `P.x`
-// expect-lint: 27:12 use of deprecated field `P.x`
-// expect-lint: 27:18 use of deprecated field `P.x`
-// expect-lint: 27:24 use of deprecated function `f`
+// expect-lint: 24:9 use of deprecated method `P::new`
+// expect-lint: 25:16 use of deprecated field `P.x`
+// expect-lint: 26:12 use of deprecated field `P.x`
+// expect-lint: 26:18 use of deprecated field `P.x`
+// expect-lint: 26:24 use of deprecated function `f`
 // expect-stdout: 0 1 1
 
 // `#[deprecated]` on a method and a field warns at each use: a call, a

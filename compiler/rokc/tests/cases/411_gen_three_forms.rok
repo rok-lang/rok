@@ -1,13 +1,12 @@
-// spec: 004.11-generators §4.11.3-4.11.5
 // expect-exit: 0
 // expect-stdout:
 // fn 0 1 2
 // block 1 2 3
 // closure 10 20 / 10 20
 
-// spec 4.11.3-5: the three generator forms (`yield fn`, `yield { }`,
+// The three generator forms (`yield fn`, `yield { }`,
 // `yield || { }`) all produce an iterator; each call of a `yield` closure
-// makes a fresh iterator (4.11.5).
+// makes a fresh iterator.
 yield fn count_up_to(n: i32) -> i32 {
     let i = 0;
     while i < n {
@@ -41,4 +40,3 @@ fn main() -> i32 {
     println(c);
     return 0;
 }
-// spec: §4.11.1 §4.11.6 §4.11.7

@@ -1,10 +1,9 @@
-// spec: 002.14-as-wrap-cast
 // expect-exit: 0
 // expect-stdout:
 // 1
 // -1
 
-// spec 2.14: `as i32` wraps (bit reinterpretation).
+// `as i32` wraps (bit reinterpretation).
 fn main() -> i32 {
     let big: i64 = 4294967297i64;       // 2^32 + 1
     let wrapped: i32 = big as i32;      // 2^32 + 1 wrap → 1
@@ -16,4 +15,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: §2.14.2

@@ -20,4 +20,3 @@ for i in 0..2000 {
 }
 println(f"2000 jobs on one thread {ids.len() == 1}");
 
-// spec: std 218-task

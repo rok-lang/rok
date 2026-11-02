@@ -43,7 +43,7 @@ fn churn(n: i64) -> i64 {
     return t;
 }
 
-// No `main` combines `throws` with `-> i32` (spec 4.16.3).
+// No `main` combines `throws` with `-> i32`.
 fn main() -> i32 { try! run() }
 
 fn run() throws (rok::bare::alloc::LayoutError) -> i32 {
@@ -85,4 +85,3 @@ fn run() throws (rok::bare::alloc::LayoutError) -> i32 {
     }
     return 0;
 }
-// spec: 008.04-safepoint §8.4.6 §8.4.10

@@ -1,9 +1,8 @@
-// spec: 003.13.1-loop-break-value
 // expect-exit: 0
 // expect-stdout:
 // 50
 
-// spec 3.13.1: `loop` yields a value through `break`.
+// `loop` yields a value through `break`.
 fn main() -> i32 {
     let n = 0;
     let result = loop {

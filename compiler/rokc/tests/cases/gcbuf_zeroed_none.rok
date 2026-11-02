@@ -1,4 +1,3 @@
-// spec: §8.8.8 std §2.9.12
 // A zeroed `T | none` slot is `none`: the `none` member is stored as tag
 // 0 whatever the canonical member order, so a fresh `GcBuf` reads back
 // as `none` (no explicit initialisation needed).

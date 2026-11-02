@@ -3,7 +3,6 @@
 // expect-stdout:
 // 2 2
 
-// spec: std 213-marker §2.13.9
 // A method given one of self's fields while it works on another field.
 use rok::std::thread;
 struct Conn { out: List<i32>; log: List<str>; }

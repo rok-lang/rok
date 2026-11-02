@@ -1,7 +1,6 @@
-// spec: §5.3.5
-// expect-error: 8:1: cannot assign to static `COUNTER`: statics are immutable
+// expect-error: 7:1: cannot assign to static `COUNTER`: statics are immutable
 
-// Spec 5.3.5: assigning to a `static` that is not an extern `static mut`
+// Assigning to a `static` that is not an extern `static mut`
 // is a compile error; mutation goes through a wrapper's methods.
 static COUNTER: i32 = 0;
 

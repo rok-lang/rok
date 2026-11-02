@@ -1,9 +1,8 @@
-// spec: 004.02-parameters
 // expect-exit: 0
-// expect-lint: 19:26 spread of 3 elements into 2 parameters; this call panics
-// expect-lint: 20:35 spread of key "c", which names no parameter left to fill; this call panics
-// expect-lint: 21:29 spread of 2 elements into 1 parameter; this call panics
-// expect-lint: 22:28 spread of 1 element into 2 parameters; this call panics
+// expect-lint: 18:26 spread of 3 elements into 2 parameters; this call panics
+// expect-lint: 19:35 spread of key "c", which names no parameter left to fill; this call panics
+// expect-lint: 20:29 spread of 2 elements into 1 parameter; this call panics
+// expect-lint: 21:28 spread of 1 element into 2 parameters; this call panics
 // expect-warning: help: spread a list of exactly 2 elements, or pass the arguments without `..`
 // expect-warning: help: use a key that names a parameter: `"a"`, `"b"`
 // expect-stdout: 3 7 3 3 7

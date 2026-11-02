@@ -1,8 +1,6 @@
-// spec: 003.14-try-q
 // `?` in a function returning a sum without none is an error.
 // expect-error: `?` propagates `none`, but the enclosing function returns `f64 | i32`
 
 fn g(x: i32) -> i32 | none { if x > 0 { return x; } return none; }
 fn h(x: i32) -> i32 | f64 { let v = g(x)?; return v + 1; }
 fn main() -> i32 { let r = h(0); return match r { a: i32 => a, b: f64 => 50 }; }
-// spec: §3.14.10

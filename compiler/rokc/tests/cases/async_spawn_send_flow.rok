@@ -72,7 +72,6 @@ let via_closure = Cell::new(7);
 let make = || async { via_closure.get() };
 let i = task::spawn(make());
 
-// spec: 004.12-async
 // expect-error: type `F::Output` does not satisfy trait bound `Send` required by `task::spawn`
 // expect-error-extra: allow
 // (`thread::spawn(|| task::block_on(g))` is reported twice: as the

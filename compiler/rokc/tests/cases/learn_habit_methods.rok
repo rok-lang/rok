@@ -1,14 +1,13 @@
-// spec: §1.7.3 std §2.15.2
 // Methods and calls other languages have: Python's `.format()` and
 // `print(a, b)`, JS's `.length`, indexing a string by position. Each
 // help is the rok form, from the code as written.
-// expect-error: 16:9: no method `format` found for type `str`
+// expect-error: 15:9: no method `format` found for type `str`
 // expect-error: help: use an f-string: `f"hello {name}, {n}"`
-// expect-error: 17:9: struct `List<i32>` has no field `length`
+// expect-error: 16:9: struct `List<i32>` has no field `length`
 // expect-error: help: the length is a method: `xs.len()`
-// expect-error: 18:15: cannot index into a value of type `str`
+// expect-error: 17:15: cannot index into a value of type `str`
 // expect-error: help: a `str` is UTF-8 text, not an array of characters; take one with `name.chars().nth(0)`
-// expect-error: 19:1: `println` takes 1 argument but 2 were supplied
+// expect-error: 18:1: `println` takes 1 argument but 2 were supplied
 // expect-error: help: `println` takes one string; put the values in an f-string: `println(f"x = {n}")`
 let name = "ada";
 let n = 3;

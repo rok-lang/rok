@@ -1,4 +1,3 @@
-// spec: std 218 §2.18.3
 // expect-exit: 0
 // expect-stdout:
 // block_on: 1

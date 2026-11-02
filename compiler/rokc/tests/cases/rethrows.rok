@@ -39,5 +39,3 @@ fn main() -> i32 {
     println(f"{twice(|x: i32| x * 2, 5)}");
     return 0;
 }
-// spec: std §2.14.6
-// spec: §4.14.7

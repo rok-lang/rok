@@ -1,9 +1,8 @@
 // needs: threads
-// spec: std 218-task §2.18.1 / std 213-marker §2.13.9
 // A started future reached through a list's elements is found by the
 // queued copy work; the panic still names the send.
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at tests/cases/218_send_started_future_in_list_panics.rok:31:10:
+// expect-stderr: thread 'main' panicked at tests/cases/218_send_started_future_in_list_panics.rok:30:10:
 // expect-stderr: a future that has started running cannot go to another task or thread: hand it over before anything polls it, or call the async fn again for a new one
 // expect-stdout:
 

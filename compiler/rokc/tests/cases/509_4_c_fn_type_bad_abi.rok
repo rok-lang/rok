@@ -1,7 +1,6 @@
-// spec: §5.9.4
 // expect-error: unsupported ABI `"fastcall"` (only "C" or "system")
 
-// 5.9.4: a C function pointer type is `extern "C" fn(..)` or
+// A C function pointer type is `extern "C" fn(..)` or
 // `extern "system" fn(..)`; any other ABI string is an error.
 fn call(f: extern "fastcall" fn(i32) -> i32, x: i32) -> i32 { f(x) }
 

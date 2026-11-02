@@ -1,8 +1,7 @@
-// spec: std 303-time §3.3.5
 // The `f64` forms overflow as the integer ops do: an out-of-range
 // result panics at the call with overflow checks on.
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at tests/cases/std_303_duration_f64_overflow.rok:13:13:
+// expect-stderr: thread 'main' panicked at tests/cases/std_303_duration_f64_overflow.rok:12:13:
 // expect-stderr: *overflow*
 // expect-stdout: 1.5s 3s
 

@@ -107,4 +107,3 @@ fn main() {
         println("nested ok");
     }
 }
-// spec: 008.02-scan-table §8.2.7 §8.2.9

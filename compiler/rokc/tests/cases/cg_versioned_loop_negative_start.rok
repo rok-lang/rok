@@ -1,9 +1,8 @@
-// spec: §3.13.3 std §2.9.2
 // A signed counter indexes through `as usize`: the unchecked copy of the
 // loop needs it to start at 0 or above. From -1 the checked loop runs,
 // and `-1 as usize` is out of bounds on the first iteration.
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at tests/cases/cg_versioned_loop_negative_start.rok:13:14:
+// expect-stderr: thread 'main' panicked at tests/cases/cg_versioned_loop_negative_start.rok:12:14:
 // expect-stderr: index * out of bounds for length 3
 // expect-stdout: 6
 

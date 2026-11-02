@@ -72,5 +72,3 @@ fn main() {
     if total == 532 && head.byte(4) == 111u8 { println("ok"); }
 }
 
-// spec: std 215-string
-// spec: std §2.15.3

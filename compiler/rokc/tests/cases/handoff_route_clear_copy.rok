@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `q2` still holds `x`, which was handed to another owner
-// spec: std 213-marker §2.13.9
 // clear() re-arms one list's elements; a copy made earlier still holds them.
 use rok::std::thread;
 fn main() {

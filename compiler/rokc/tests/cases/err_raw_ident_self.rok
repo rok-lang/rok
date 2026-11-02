@@ -1,7 +1,6 @@
-// spec: 001.04.4-collision-with-keywords
 // expect-error: `r#self` is not allowed: `self` can't be a raw identifier; write `self` or pick another name
 
-// `self` has no raw form (spec 1.5.5).
+// `self` has no raw form.
 fn main() {
     let r#self = 1;
 }

@@ -1,6 +1,5 @@
-// spec: refs-lang §5.9.4
 // expect-error: an `extern "C" fn` value is a bare C function pointer
-// A C function pointer does not flow into a rok `fn` slot (spec 5.9.4):
+// A C function pointer does not flow into a rok `fn` slot:
 // other ABI, no env.
 
 extern "C" fn add(a: i32, b: i32) -> i32 { a + b }

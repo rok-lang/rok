@@ -1,10 +1,9 @@
-// spec: 004.11-generators §4.11.8 / §4.11.9
 // expect-exit: 0
 // expect-stdout:
 // break 0 1 2 3
 // take 0 1 4 9
 
-// 4.11.8-9: a generator is an `Iterator`; an infinite one ends through
+// A generator is an `Iterator`; an infinite one ends through
 // `break` in `for` or `take(n)`.
 yield fn naturals() -> i32 {
     let i = 0;

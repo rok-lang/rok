@@ -1,7 +1,5 @@
-// expect-error: 26:9: this throws a value out of the `Mutex`, and `g`'s `using` block releases the lock before the catcher uses it
+// expect-error: 24:9: this throws a value out of the `Mutex`, and `g`'s `using` block releases the lock before the catcher uses it
 // expect-error: help: the lock stops protecting it; build the error from a deep copy, `g.get_clone()`, or handle it inside the `using` block
-// spec: std 216-sync §2.16.3
-// spec: §6.2.9
 
 // A `throw` inside `using` hands the error to a `catch` after the lock is
 // released: an error holding what the lock protects would let the catcher

@@ -1,9 +1,8 @@
-// spec: 001.04-unicode-identifier
 // expect-exit: 0
 // expect-stdout:
 // 25
 
-// spec 1.4: Unicode identifiers (UAX #31).
+// Unicode identifiers (UAX #31).
 fn main() -> i32 {
     let α: i32 = 5;
     let β: i32 = 5;
@@ -12,4 +11,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: §1.4.1

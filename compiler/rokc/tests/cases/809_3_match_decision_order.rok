@@ -1,4 +1,3 @@
-// spec: 008.09-lowering-control §8.9.3
 // expect-exit: 0
 // expect-stdout:
 // (0, 0) origin
@@ -8,7 +7,7 @@
 // (9, 9) far
 // guards evaluated: 6
 
-// spec 8.9.3: a match tests arms in order; a guard is evaluated only
+// A match tests arms in order; a guard is evaluated only
 // when its pattern matched, and the first arm whose pattern and guard
 // both hold wins.
 fn main() -> i32 {

@@ -1,6 +1,5 @@
-// spec: §3.13.3 §4.14.10
-// expect-error: 12:17: this call can throw `str` and must be marked with `try`
-// expect-error: 15:1: `next` of `TryGenIter<str, str>` can throw, so this loop must be `try for`
+// expect-error: 11:17: this call can throw `str` and must be marked with `try`
+// expect-error: 14:1: `next` of `TryGenIter<str, str>` can throw, so this loop must be `try for`
 
 // The loop's `try` does not cover the body; a plain `for` over a
 // `TryIterator` asks for `try for`.

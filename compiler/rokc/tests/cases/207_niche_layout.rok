@@ -1,5 +1,4 @@
 // only-pointer-width: 64
-// spec: 002.07-niche
 // expect-exit: 0
 // expect-stdout:
 // 1 4 4 16 16 8 8 4 4 8 4 4 8 24 24 24 8
@@ -106,4 +105,3 @@ fn main() {
     }
 }
 
-// spec: §2.7.1 §2.7.2 §2.7.3

@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `p.y` shares `p.x`, which was sent through a channel
-// spec: std 213-marker §2.13.9
 // One object in two fields of a struct in a list.
 use rok::std::thread;
 struct P { x: List<i32>; y: List<i32>; }

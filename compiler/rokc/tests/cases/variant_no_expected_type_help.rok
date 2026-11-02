@@ -1,8 +1,7 @@
-// spec: §2.4.8
-// expect-error: 13:13: `Less` is not in scope: it is the variant `Ordering::Less`
+// expect-error: 12:13: `Less` is not in scope: it is the variant `Ordering::Less`
 // expect-error: help: write `Ordering::Less`
-// expect-error: 14:13: `SeqCst` is not in scope: it is the variant `sync::LoadOrdering::SeqCst`
-// expect-error: 15:13: `Circle` is not in scope: it is the variant `Shape::Circle`
+// expect-error: 13:13: `SeqCst` is not in scope: it is the variant `sync::LoadOrdering::SeqCst`
+// expect-error: 14:13: `Circle` is not in scope: it is the variant `Shape::Circle`
 // expect-error: help: write `Shape::Circle`
 
 // With no expected type a bare variant names nothing; the error gives

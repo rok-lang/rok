@@ -45,4 +45,3 @@ let d: any Dup = A { v: 3 };
 if d is A { println(f"{d.dup().size()}"); }
 println(f"{d.size()}");
 
-// spec: 002.02-any-slot

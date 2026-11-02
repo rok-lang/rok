@@ -1,4 +1,3 @@
-// spec: 003.16-let-else
 // The else of a let-else must diverge.
 // expect-error: the `else` block of `let ... else` must diverge
 
@@ -10,4 +9,3 @@ fn main() -> i32 {
     };
     return n;
 }
-// spec: §3.16.3

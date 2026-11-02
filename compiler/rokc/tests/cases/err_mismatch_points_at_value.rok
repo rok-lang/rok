@@ -1,9 +1,8 @@
-// spec: §2.11.10 §3.1.3
 // A mismatch underlines the value, not `let`, and a number of another
 // type is converted with `as`.
-// expect-error: 10:14: mismatched types: `let n` expects `i32`, found `f64`
+// expect-error: 9:14: mismatched types: `let n` expects `i32`, found `f64`
 // expect-error: help: convert it with `as`: `f as i32`
-// expect-error: 11:14: mismatched types: `let m` expects `i32`, found `i64`
+// expect-error: 10:14: mismatched types: `let m` expects `i32`, found `i64`
 // expect-error: help: convert it with `as`: `(a + b) as i32`
 let f = 1.5;
 let a: i64 = 1; let b: i64 = 2;

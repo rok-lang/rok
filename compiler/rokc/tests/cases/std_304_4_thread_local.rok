@@ -1,4 +1,3 @@
-// spec: std 304-thread §3.4.4 / §3.4.2
 // needs: threads
 // expect-exit: 0
 // expect-stdout:
@@ -7,8 +6,8 @@
 // with 20
 // ids differ true
 
-// 3.4.4: `thread::local` gives each thread its own value (`init` on
-// first use per thread); 3.4.2: `ThreadLocal::with`, `Thread::id`.
+// `thread::local` gives each thread its own value (`init` on
+// first use per thread); `ThreadLocal::with`, `Thread::id`.
 use rok::std::thread;
 
 fn main() {

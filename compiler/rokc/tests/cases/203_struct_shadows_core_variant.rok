@@ -16,4 +16,3 @@ fn main() {
     println(f"{rok::core::crypto::HashAlgorithm::Sha384:?}");
 }
 
-// spec: 002.03-struct

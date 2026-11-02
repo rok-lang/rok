@@ -1,4 +1,3 @@
-// spec: std 306-env §3.6.3
 // expect-exit: 0
 // expect-stdout:
 // "": InvalidInput: invalid environment variable name ""

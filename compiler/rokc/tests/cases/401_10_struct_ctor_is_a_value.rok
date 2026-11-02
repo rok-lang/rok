@@ -1,13 +1,12 @@
-// spec: 004.01.10-no-duplicate-definitions-in-the-same-module
 // A tuple or unit struct's constructor is a value: a fn, const or
 // static of its name is a second definition. Its uses report nothing
 // more.
-// expect-error: 13:1: `Point` is defined more than once, as a tuple struct and as a function
+// expect-error: 12:1: `Point` is defined more than once, as a tuple struct and as a function
 // expect-error: first defined here
 // expect-error: help: rename one of them, e.g. `Point2`
-// expect-error: 16:1: `Unit` is defined more than once, as a unit struct and as a const
-// expect-error: 18:1: `Wrap` is defined more than once, as a tuple struct and as a static
-// expect-error: 20:1: `Pair` is defined more than once, as a tuple struct and as a function
+// expect-error: 15:1: `Unit` is defined more than once, as a unit struct and as a const
+// expect-error: 17:1: `Wrap` is defined more than once, as a tuple struct and as a static
+// expect-error: 19:1: `Pair` is defined more than once, as a tuple struct and as a function
 
 struct Point(i32, i32);
 fn Point(a: i32, b: i32) -> i32 { a + b }

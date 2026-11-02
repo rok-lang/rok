@@ -1,6 +1,5 @@
-// spec: §3.10.3
-// expect-error: 10:8: a struct literal can't start a block's head
-// expect-error: 11:11: a struct literal can't start a block's head
+// expect-error: 9:8: a struct literal can't start a block's head
+// expect-error: 10:11: a struct literal can't start a block's head
 // expect-error: help: wrap the struct literal in parentheses: `(S { a: 1 })`
 
 // A struct literal starting a head is reported even when the head goes on.

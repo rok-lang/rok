@@ -2,7 +2,7 @@
 // expect-error: 12:1: `Named` cannot be `Pod`: `name` has type `str`, which is not `Pod`
 // expect-error: 16:1: `Held` cannot be `Pod`: it implements `Drop`
 
-// Stdlib 1.3.3: `#[derive(Pod)]` needs a fixed layout, `Pod` fields and
+// `#[derive(Pod)]` needs a fixed layout, `Pod` fields and
 // no `Drop`.
 #[derive(Pod)]
 struct Loose { a: u32; }
@@ -21,4 +21,3 @@ impl Drop for Held {
 
 fn main() {}
 
-// spec: std 103-mem §1.3.3

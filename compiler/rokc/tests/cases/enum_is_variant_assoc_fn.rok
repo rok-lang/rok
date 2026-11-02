@@ -46,4 +46,3 @@ fn main() {
     println(out + " end");
 }
 
-// spec: 002.04-enum

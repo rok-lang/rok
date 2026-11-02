@@ -50,6 +50,3 @@ println(describe(v));
 println(describe(Sq { s: 1 }));
 println(f"{Own { n: 1 }.size()}");
 
-// spec: 006.10-reflection
-// spec: std §2.12.2
-// spec: §6.10.1

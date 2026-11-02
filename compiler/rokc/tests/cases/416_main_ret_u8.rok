@@ -1,5 +1,4 @@
-// spec: 004.16-entry-main-signature
 // expect-error: must return `()` or `i32`
 
-// spec 4.16.3: `fn main` returns `()` or `i32` (exit code) only.
+// `fn main` returns `()` or `i32` (exit code) only.
 fn main() -> u8 { return 200u8; }

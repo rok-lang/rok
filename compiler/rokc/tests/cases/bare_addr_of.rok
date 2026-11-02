@@ -1,5 +1,4 @@
 // expect-exit: 0
-// spec: std 101-ptr §1.1.4
 // expect-stdout:
 // 7
 // 33 40
@@ -68,7 +67,7 @@ fn main() -> i32 {
     let view = unsafe { m.slice(4) };
     println(f"{view[3]} {view.len()}");
 
-    // Spec 1.3.2: wait for the bytes, then take the value out.
+    // Wait for the bytes, then take the value out.
     let slot: MaybeUninit<i64> = MaybeUninit::uninit();
     unsafe { slot.as_mut_ptr().cast::<i32>().write(42); }
     println(f"{unsafe { slot.assume_init() }}");
@@ -97,4 +96,3 @@ fn main() -> i32 {
     if through("s") != "s" { return 3; }
     0
 }
-// spec: std 103-mem §1.3.2 §1.3.4

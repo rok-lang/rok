@@ -1,4 +1,3 @@
-// spec: §3.10.2
 // An `if` in a typed slot names the branch that does not fit it.
 // expect-error: mismatched types: the `else` branch of `if` expects `i64`, found `str`
 // expect-error: help: the slot is typed `i64`; give the `else` branch a value of type `i64`, or widen the slot's type to `i64 | str`

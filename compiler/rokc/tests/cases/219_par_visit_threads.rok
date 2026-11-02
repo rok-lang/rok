@@ -1,6 +1,5 @@
 // needs: threads
 // gc-stress: 5
-// spec: std 219-par §2.19.1
 // par calls on several threads at once, each over its own items: the
 // visit's tables live across collections (few and many objects an item).
 // expect-exit: 0

@@ -1,6 +1,5 @@
-// spec: §3.1.3 std §2.11.7
 // expect-error: `X::from`: the literal fits several `From` impls of `X` (`i64`, `u8`)
-// Spec 3.1.3: a literal that fits several impls, none of them its
+// A literal that fits several impls, none of them its
 // default type (`i32`), needs a suffix.
 struct X { v: i64; }
 impl From<i64> for X { fn from(x: i64) -> X { X { v: x } } }

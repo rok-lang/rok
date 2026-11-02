@@ -6,9 +6,9 @@
 // 1
 // 1
 
-// `Dict::keys` / `values` / `entries` are lazy iterators (2.9.3) that
+// `Dict::keys` / `values` / `entries` are lazy iterators that
 // chain into adapters; `{e,}` is a one-element set and `[..]` with no
-// slot type is a `List` (6.5.1 / 6.5.6).
+// slot type is a `List`.
 
 fn main() -> i32 {
     let d: Dict<i32, i32> = {1: 10, 2: 20, 3: 30};
@@ -27,4 +27,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: std 209-collections

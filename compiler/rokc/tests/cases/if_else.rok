@@ -12,4 +12,3 @@ fn main() -> i32 {
     return abs(-7i32);
 }
 
-// spec: 003.10-if-expression

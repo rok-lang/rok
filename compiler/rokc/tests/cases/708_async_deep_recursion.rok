@@ -1,9 +1,8 @@
-// spec: 007.08-coroutine §7.8.10
 // expect-exit: 0
 // expect-stdout:
 // depth 2000
 
-// spec 7.8.10: `async fn` recursion allocates a frame per call. The
+// `async fn` recursion allocates a frame per call. The
 // implementation note allows nested `await` to run on the native stack,
 // so this stays at a modest depth that any implementation must handle.
 async fn deep(n: i32) -> i32 {

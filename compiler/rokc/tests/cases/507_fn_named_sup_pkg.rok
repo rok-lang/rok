@@ -1,8 +1,7 @@
-// spec: §5.7.1
 // expect-exit: 0
 // expect-stdout: 1 2
 
-// 5.7: `sup` / `pkg` are path roots only before `::`; alone they are
+// `sup` / `pkg` are path roots only before `::`; alone they are
 // ordinary names.
 fn sup() -> i32 { 1 }
 fn pkg() -> i32 { 2 }

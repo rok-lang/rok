@@ -3,8 +3,8 @@
 // expect-error: 22:13: `a::hidden::S` is not visible from `<root>`
 // expect-error: 23:22: `a::hidden::C` is not visible from `<root>`
 
-// 5.6.2 / 5.6.13: every module on a path must be visible, not only the
-// item at its end; `pub use` of a `pub` item re-exports it (5.8.4).
+// Every module on a path must be visible, not only the
+// item at its end; `pub use` of a `pub` item re-exports it.
 mod a {
     mod hidden {
         pub fn f() -> i32 { 1 }
@@ -22,5 +22,4 @@ fn main() {
     let s = a::hidden::S { v: 2 };
     println(f"{s.v} {a::hidden::C} {g()}");
 }
-// spec: §5.6.13
 // expect-error: 23:37: `a::hidden::f` is not visible from `<root>`

@@ -1,9 +1,8 @@
-// spec: §2.4.5 §2.3.6
 // An enum / generic enum / sum that holds itself by value has no finite
 // size: reported at the user's declaration.
-// expect-error: 8:1: recursive type `L` has infinite size (an enum
-// expect-error: 13:12: recursive type `G<..>` has infinite size (an enum
-// expect-error: 10:1: recursive type `S` has infinite size (a struct
+// expect-error: 7:1: recursive type `L` has infinite size (an enum
+// expect-error: 12:12: recursive type `G<..>` has infinite size (an enum
+// expect-error: 9:1: recursive type `S` has infinite size (a struct
 
 enum L { Nil, Cons(i64, L) }
 enum G<T> { Nil, Cons(T, G<T>) }

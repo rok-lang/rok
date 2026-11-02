@@ -1,4 +1,3 @@
-// spec: std §2.13.6
 // expect-exit: 0
 // expect-stdout:
 // Rec { pos: (1, 2), grid: [3, 4, 5], tag: 7, name: none }
@@ -10,8 +9,8 @@
 // Cfg { n: 0, s: "", on: false }
 // Mode::Off
 
-// Derives on fields that are tuples, arrays, sums and collections
-// (stdlib 2.13.6 / 2.5.7 / 2.10.9); `#[derive(Default)]`.
+// Derives on fields that are tuples, arrays, sums and collections;
+// `#[derive(Default)]`.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
 struct Rec {
     pos: (i32, i32);
@@ -67,5 +66,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 006.02-built-in-attributes
-// spec: §6.2.1

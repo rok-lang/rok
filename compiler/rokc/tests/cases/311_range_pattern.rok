@@ -1,11 +1,10 @@
-// spec: 003.11-range-pattern
 // expect-exit: 0
 // expect-stdout:
 // digit
 // upper
 // other
 
-// spec 311: range pattern `1..=9` in a match arm.
+// Range pattern `1..=9` in a match arm.
 fn classify(n: i32) -> i32 {
     let r = match n {
         0..=9 => 1,
@@ -21,4 +20,3 @@ fn main() -> i32 {
     if classify(200) == 3 { println("other"); }
     return 0;
 }
-// spec: §3.11.1

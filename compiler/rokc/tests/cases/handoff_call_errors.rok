@@ -1,20 +1,19 @@
-// expect-error: error[E0105]: `xs` was moved into the `Mutex` at line 71
-// expect-error: handoff_call_errors.rok:72:5: `xs` was moved into the `Mutex` at line 71
+// expect-error: error[E0105]: `xs` was moved into the `Mutex` at line 70
+// expect-error: handoff_call_errors.rok:71:5: `xs` was moved into the `Mutex` at line 70
 // expect-error: help: it belongs to the `Mutex` now; use it through the lock: `using g = m.lock() { .. g.get() .. }`, or hand over `xs.clone()` to keep a separate copy
-// expect-error: handoff_call_errors.rok:79:5: `xs` shares the value the `Mutex` protects (`peek(g)`) at line 78, and `g`'s `using` block released the lock
-// expect-error: handoff_call_errors.rok:85:5: `xs` was sent through a channel by `post(tx, xs)` at line 84 (inside `post`, line 37)
-// expect-error: handoff_call_errors.rok:92:5: `xs` was moved into the `Mutex` at line 91
-// expect-error: handoff_call_errors.rok:99:5: `xs` was moved into a `Mutex` by `outer(xs)` at line 98 (inside `store`, line 39)
-// expect-error: handoff_call_errors.rok:105:5: `xs` was sent through a channel by `post_later(tx, xs)` at line 104 (inside `post_later`, line 46)
-// expect-error: handoff_call_errors.rok:111:5: `xs` was moved into a `Mutex` by `down(xs, 3)` at line 110 (inside `down`, line 48)
-// expect-error: handoff_call_errors.rok:117:5: `b.items` shares what `b.lock_up()` moved into a `Mutex` at line 116 (inside `Bag::lock_up`, line 29)
-// expect-error: handoff_call_errors.rok:125:5: `x` shares `all`, which was moved into the `Mutex` at line 124
-// expect-error: handoff_call_errors.rok:133:5: `xs` shares `b`, which was moved into the `Mutex` at line 132
-// expect-error: handoff_call_errors.rok:140:5: `f` shares `xs`, which was moved into the `Mutex` at line 139
-// expect-error: handoff_call_errors.rok:147:5: `ys` shares `b`, which was moved into the `Mutex` at line 146
-// expect-error: handoff_call_errors.rok:153:5: `xs` was sent through a channel by `run(|x| { try! tx.send(x); }, xs)` at line 152 (inside `through_value`, line 152)
+// expect-error: handoff_call_errors.rok:78:5: `xs` shares the value the `Mutex` protects (`peek(g)`) at line 77, and `g`'s `using` block released the lock
+// expect-error: handoff_call_errors.rok:84:5: `xs` was sent through a channel by `post(tx, xs)` at line 83 (inside `post`, line 36)
+// expect-error: handoff_call_errors.rok:91:5: `xs` was moved into the `Mutex` at line 90
+// expect-error: handoff_call_errors.rok:98:5: `xs` was moved into a `Mutex` by `outer(xs)` at line 97 (inside `store`, line 38)
+// expect-error: handoff_call_errors.rok:104:5: `xs` was sent through a channel by `post_later(tx, xs)` at line 103 (inside `post_later`, line 45)
+// expect-error: handoff_call_errors.rok:110:5: `xs` was moved into a `Mutex` by `down(xs, 3)` at line 109 (inside `down`, line 47)
+// expect-error: handoff_call_errors.rok:116:5: `b.items` shares what `b.lock_up()` moved into a `Mutex` at line 115 (inside `Bag::lock_up`, line 28)
+// expect-error: handoff_call_errors.rok:124:5: `x` shares `all`, which was moved into the `Mutex` at line 123
+// expect-error: handoff_call_errors.rok:132:5: `xs` shares `b`, which was moved into the `Mutex` at line 131
+// expect-error: handoff_call_errors.rok:139:5: `f` shares `xs`, which was moved into the `Mutex` at line 138
+// expect-error: handoff_call_errors.rok:146:5: `ys` shares `b`, which was moved into the `Mutex` at line 145
+// expect-error: handoff_call_errors.rok:152:5: `xs` was sent through a channel by `run(|x| { try! tx.send(x); }, xs)` at line 151 (inside `through_value`, line 151)
 // needs: threads
-// spec: std 213-marker §2.13.9
 
 // Hand-offs are followed through calls.
 use rok::std::thread;
@@ -245,11 +244,11 @@ async fn before_await(tx: Sender<List<i32>>) throws (Oops) -> i64 {
 }
 
 // The same callees, used where they did hand the value over.
-// expect-error: handoff_call_errors.rok:201:44: `xs` was sent through a channel by `post_first(tx, xs, true)` at line 201 (inside `post_first`, line 169)
-// expect-error: handoff_call_errors.rok:207:9: `xs` was sent through a channel by `post_ok(tx, xs, false)` at line 206 (inside `post_ok`, line 175)
-// expect-error: handoff_call_errors.rok:212:62: `xs` was sent through a channel by `post_ok(tx, xs, false)` at line 212
-// expect-error: handoff_call_errors.rok:219:9: `xs` was sent through a channel by `post_some(tx, xs, false)` at line 218
-// expect-error: handoff_call_errors.rok:224:32: `xs` was sent through a channel by `posted(tx, xs)` at line 224
-// expect-error: handoff_call_errors.rok:230:67: `xs` was sent through a channel by `post_or_none(tx, xs, false)` at line 230
-// expect-error: handoff_call_errors.rok:237:9: `xs` was sent through a channel by `post_maybe(tx, xs, false)` at line 236 (inside `post_maybe`, line 195)
-// expect-error: handoff_call_errors.rok:243:13: `xs` was sent through a channel by `post_maybe(tx, xs, true)` at line 242
+// expect-error: handoff_call_errors.rok:200:44: `xs` was sent through a channel by `post_first(tx, xs, true)` at line 200 (inside `post_first`, line 168)
+// expect-error: handoff_call_errors.rok:206:9: `xs` was sent through a channel by `post_ok(tx, xs, false)` at line 205 (inside `post_ok`, line 174)
+// expect-error: handoff_call_errors.rok:211:62: `xs` was sent through a channel by `post_ok(tx, xs, false)` at line 211
+// expect-error: handoff_call_errors.rok:218:9: `xs` was sent through a channel by `post_some(tx, xs, false)` at line 217
+// expect-error: handoff_call_errors.rok:223:32: `xs` was sent through a channel by `posted(tx, xs)` at line 223
+// expect-error: handoff_call_errors.rok:229:67: `xs` was sent through a channel by `post_or_none(tx, xs, false)` at line 229
+// expect-error: handoff_call_errors.rok:236:9: `xs` was sent through a channel by `post_maybe(tx, xs, false)` at line 235 (inside `post_maybe`, line 194)
+// expect-error: handoff_call_errors.rok:242:13: `xs` was sent through a channel by `post_maybe(tx, xs, true)` at line 241

@@ -1,7 +1,6 @@
-// spec: 003.11.4-or-pattern-binding-inconsistent
 // expect-error: bind different name sets
 
-// spec 311.4: an or-pattern that binds in one alternative but not the other
+// An or-pattern that binds in one alternative but not the other
 // (`v: i32 | _: i32`) is a compile error.
 fn main() -> i32 {
     let n = 5;

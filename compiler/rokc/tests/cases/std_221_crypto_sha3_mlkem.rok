@@ -155,5 +155,3 @@ fn main() {
     flag("ciphertext length check", r3.len() == 1);
 }
 
-// spec: std 221-crypto §2.21.1
-// spec: std 221-crypto §2.21.3

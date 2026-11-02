@@ -1,18 +1,16 @@
-// spec: 004.01.10-no-duplicate-definitions-in-the-same-module
-// spec: 004.02.3-default-values
 // One name, one function: no overloading by arity, async or generics;
 // a const, a static and a fn share the value namespace. The error
 // points at both and says what to write instead.
-// expect-error: 20:1: function `post_later` is defined more than once
+// expect-error: 18:1: function `post_later` is defined more than once
 // expect-error: first defined here
 // expect-error: help: rename one of them, e.g. `post_later2`; there is no overloading, so to take fewer arguments keep one and give its last parameters defaults, as in `b: i32 = 0`
-// expect-error: 25:1: function `add` is defined more than once
-// expect-error: 28:1: function `pick` is defined more than once
-// expect-error: 32:9: function `inner::f` is defined more than once
-// expect-error: 36:1: `K` is defined more than once, as a const and as a static
+// expect-error: 23:1: function `add` is defined more than once
+// expect-error: 26:1: function `pick` is defined more than once
+// expect-error: 30:9: function `inner::f` is defined more than once
+// expect-error: 34:1: `K` is defined more than once, as a const and as a static
 // expect-error: help: rename one of them, e.g. `K2`
-// expect-error: 38:1: `S` is defined more than once, as a static and as a function
-// expect-error: 40:1: `C` is defined more than once, as a const and as a function
+// expect-error: 36:1: `S` is defined more than once, as a static and as a function
+// expect-error: 38:1: `C` is defined more than once, as a const and as a function
 
 async fn post_later(a: i32) -> i32 {
     return a;

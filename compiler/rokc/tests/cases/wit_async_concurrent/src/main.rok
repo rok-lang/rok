@@ -1,4 +1,3 @@
-// spec: std §1.8.2
 // only-target: wasm32-wasip2
 // wasm-plug: plug/main.rok
 // expect-exit: 0
@@ -6,7 +5,7 @@
 // first 12 then 11
 // signal 7
 
-// Stdlib 1.8: async export calls run concurrently (WASI preview 3
+// Async export calls run concurrently (WASI preview 3
 // tasks). Two calls of `sleep-add` at once: the shorter one returns
 // first. `wait-signal` waits for what a later call (`signal`) sends: its
 // future finishes in the other call's turn and it returns in its own.

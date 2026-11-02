@@ -1,9 +1,8 @@
-// spec: 006.02-derive-eq
 // expect-exit: 0
 // expect-stdout:
 // equal
 
-// spec 6.2: `#[derive(PartialEq, Eq)]` - field-wise equality.
+// `#[derive(PartialEq, Eq)]` - field-wise equality.
 #[derive(PartialEq, Eq)]
 struct Pt { x: i32; y: i32; }
 
@@ -13,4 +12,3 @@ fn main() -> i32 {
     if a == b { println("equal"); }
     return 0;
 }
-// spec: §6.2.1

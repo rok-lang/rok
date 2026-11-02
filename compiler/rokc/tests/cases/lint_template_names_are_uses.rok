@@ -1,6 +1,5 @@
-// spec: §6.9.9 §9.1.5
 // expect-exit: 0
-// expect-lint: 23:13 function `really_dead` is never used
+// expect-lint: 22:13 function `really_dead` is never used
 // expect-stdout:
 
 // A function a meta template names is used, even where the template

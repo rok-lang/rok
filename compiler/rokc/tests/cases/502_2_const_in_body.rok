@@ -1,11 +1,10 @@
-// spec: 005.02-const
 // expect-exit: 0
 // expect-stdout:
 // 12 16 17 34 8
 // 7
 // 16 [1, 2]
 
-// Spec 5.2.2 / 3.9.1: a `const` inside a function body is an item of
+// A `const` inside a function body is an item of
 // its block: inlined at each use, hidden by an inner block's `const` of
 // its name, able to size an array, and read by a closure.
 const fn sq(x: i64) -> i64 { x * x }
@@ -30,7 +29,7 @@ fn main() -> i32 {
         const A: i64 = 7;
         println(f"{A}");
     }
-    // A heap result is checked now and built at each use (5.2.5).
+    // A heap result is checked now and built at each use.
     const L: List<i64> = [1, 2];
     let l = L;
     l.push(3);

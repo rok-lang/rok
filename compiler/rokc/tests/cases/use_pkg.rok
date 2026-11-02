@@ -14,4 +14,3 @@ fn main() {
     println(f"{nested::caller()}");
 }
 
-// spec: 005.05-use

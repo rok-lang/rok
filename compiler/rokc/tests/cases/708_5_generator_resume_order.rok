@@ -1,4 +1,3 @@
-// spec: 007.08-coroutine §7.8.5
 // expect-exit: 0
 // expect-stdout:
 // created
@@ -9,7 +8,7 @@
 // body end
 // exhausted
 
-// spec 7.8.5 (generator, returned-continuation): calling a `yield fn`
+// (generator, returned-continuation): calling a `yield fn`
 // only allocates the frame; each `next()` runs the body up to the next
 // `yield` and control returns to the caller in between.
 yield fn count() -> i32 {

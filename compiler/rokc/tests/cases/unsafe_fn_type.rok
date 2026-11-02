@@ -2,7 +2,7 @@
 // expect-stdout:
 // 3 2 4
 
-// `unsafe fn(..)` types (spec 4.15): a C function or `unsafe fn` taken
+// `unsafe fn(..)` types: a C function or `unsafe fn` taken
 // as a value keeps its unsafety; calling it needs `unsafe`. A safe fn
 // also fits an `unsafe fn` slot.
 extern "C" {
@@ -24,4 +24,3 @@ fn main() -> i32 {
     return a + b + c;
 }
 
-// spec: 004.15-unsafe

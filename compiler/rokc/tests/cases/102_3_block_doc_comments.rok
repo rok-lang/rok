@@ -1,9 +1,8 @@
 /*! A file documented with a block doc comment. */
-// spec: refs-lang §1.2.3
 // expect-exit: 0
-// expect-lint: 37:5 unused doc comment: a statement is not documented; use `//` for a plain comment
-// expect-lint: 38:13 unused doc comment: only items are documented; use `//` for a plain comment
-// expect-lint: 40:9 unused doc comment: a match arm is not documented; use `//` for a plain comment
+// expect-lint: 36:5 unused doc comment: a statement is not documented; use `//` for a plain comment
+// expect-lint: 37:13 unused doc comment: only items are documented; use `//` for a plain comment
+// expect-lint: 39:9 unused doc comment: a match arm is not documented; use `//` for a plain comment
 // expect-warning: unused doc comment: a statement is not documented
 // expect-stdout:
 // 3 7

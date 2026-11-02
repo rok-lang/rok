@@ -6,4 +6,3 @@ fn main() -> i32 {
     return s.get::<i32>();
 }
 
-// spec: 003.05-member-access-and-method-call

@@ -1,9 +1,8 @@
-// spec: 002.11-const-generic-value
 // expect-exit: 0
 // expect-stdout:
 // 3
 
-// spec 2.11: `<const N: usize>` const-generic value.
+// `<const N: usize>` const-generic value.
 fn first<const N: usize>(arr: [i32; N]) -> i32 {
     return arr[0];
 }

@@ -1,5 +1,5 @@
 // expect-error: unknown literal pattern word `bogus`
-// Spec 6.5.3: only `expr`, `number`, `string`, `ident` and quoted tokens.
+// Only `expr`, `number`, `string`, `ident` and quoted tokens.
 #[literal("<<" bogus ">>")]
 fn f(x: i32) -> i32 {
     return x;
@@ -8,4 +8,3 @@ fn f(x: i32) -> i32 {
 fn main() -> i32 {
     return 0;
 }
-// spec: §6.5.3

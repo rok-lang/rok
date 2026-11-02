@@ -1,10 +1,9 @@
-// spec: refs-lang §3.8.4
 // expect-exit: 0
 // expect-stdout:
 // 1 2 -1
 // 5
 
-// Spec 3.8.4: `a ?? b` with `b: T | none` is a fallback chain whose
+// `a ?? b` with `b: T | none` is a fallback chain whose
 // result is `T | none`.
 fn pick(a: i32 | none, b: i32 | none) -> i32 | none {
     a ?? b

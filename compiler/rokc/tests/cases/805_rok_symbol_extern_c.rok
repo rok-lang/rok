@@ -5,7 +5,7 @@
 // 4 x 200: ok
 
 // A `rok_*` symbol names the runtime (805) even in an `extern "C"`
-// block: the call keeps the C ABI but is not PARKED (804 §8.4.10), so
+// block: the call keeps the C ABI but is not PARKED, so
 // collections that four threads start through it never overlap each
 // other while they allocate.
 use rok::std::thread;
@@ -35,4 +35,3 @@ fn main() -> i32 {
     println(f"4 x 200: {if all { "ok" } else { "broken" }}");
     0
 }
-// spec: 008.04-safepoint §8.4.10 / 008.05-extern-symbols §8.5.1 / 007.04 §7.4.4 / 007.02 §7.2.1

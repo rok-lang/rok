@@ -1,9 +1,8 @@
-// spec: §3.12.5 §3.12.8 §3.11.3
-// expect-error: 9:5: non-exhaustive match on `bool`
-// expect-error: 15:5: non-exhaustive match on `u8`
-// expect-error: 20:5: non-exhaustive match on `any`
+// expect-error: 8:5: non-exhaustive match on `bool`
+// expect-error: 14:5: non-exhaustive match on `u8`
+// expect-error: 19:5: non-exhaustive match on `any`
 
-// spec 3.12.8: guarded arms never count as a catch-all. 3.12.5: ranges
+// Guarded arms never count as a catch-all. Ranges
 // are open sets even when they span the type; `any` needs a catch-all.
 fn f(x: bool) -> i32 {
     match x {

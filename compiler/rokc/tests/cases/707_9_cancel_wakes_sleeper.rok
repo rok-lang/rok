@@ -1,4 +1,3 @@
-// spec: 007.07-io-and-timer §7.7.9
 // expect-exit: 0
 // expect-stdout:
 // sleeping
@@ -6,7 +5,7 @@
 // cancelled promptly: true
 // result: cancelled
 
-// spec 7.7.9: a task waiting in `sleep` is woken when cancelled and
+// A task waiting in `sleep` is woken when cancelled and
 // leaves at that `await` as if by `return`; `finally` blocks it passes
 // through run, and the awaiting side sees `CancellationError`.
 async fn sleeper() -> i32 {

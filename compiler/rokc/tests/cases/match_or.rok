@@ -15,4 +15,3 @@ fn main() -> i32 {
     return classify(2i32) + classify(0i32) + classify(1i32);
 }
 
-// spec: 003.12-match-expression

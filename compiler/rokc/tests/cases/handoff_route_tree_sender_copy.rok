@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `root.payload` shares what `send_all(tx, root)` sent through a channel
-// spec: std 213-marker §2.13.9
 // A by-value `self` is a copy: the callee's `self.buf = []` doesn't reach
 // the caller, which still holds the sent list.
 // Recursive tree: every leaf's payload is sent; the tree is then reset.

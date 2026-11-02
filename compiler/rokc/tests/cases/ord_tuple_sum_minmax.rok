@@ -1,4 +1,3 @@
-// spec: std §2.5.7
 // expect-exit: 0
 // expect-stdout:
 // tuple: true false true true false true
@@ -10,7 +9,7 @@
 // sum: none 1 none 5
 // clamp: 2 2 4
 
-// Tuples are `PartialOrd` / `Ord` lexicographically (stdlib 2.5.7), with
+// Tuples are `PartialOrd` / `Ord` lexicographically, with
 // the operators (`<`, `==`, ..) and `Ord`'s `min` / `max` / `clamp`;
 // `T | none` (compiler-dispatched `Ord`, `none` first) gets `min` / `max` /
 // `clamp` too.

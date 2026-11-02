@@ -1,4 +1,3 @@
-// spec: refs-lang §4.6.2
 // expect-exit: 0
 // expect-stdout:
 // inner 11
@@ -12,7 +11,7 @@
 // 7
 // 101
 
-// `[ref x]` (spec 4.6.2) names one binding - the innermost `x` at the
+// `[ref x]` names one binding - the innermost `x` at the
 // closure - and only that binding lives in a cell: `let`, destructuring,
 // `for`, `match` and closure-parameter bindings.
 

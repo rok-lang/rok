@@ -1,8 +1,7 @@
-// spec: std 002-import §0.2.5
 // expect-error: cannot find function `println` in this scope
 // expect-error: cannot find function `Mutex::new` in this scope
 
-// stdlib 0.2.5: without the implicit import, core names are unknown.
+// Without the implicit import, core names are unknown.
 #![no_implicit_rok]
 
 println("x");

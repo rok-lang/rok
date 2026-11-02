@@ -1,11 +1,10 @@
-// spec: std 200-core/218-task §2.18.1
 // expect-exit: 0
 // expect-stdout:
 // race fast
 // timeout ok 7
 // timeout TimeoutError
 
-// stdlib 2.18.1: `race` yields the first finished task's result;
+// `race` yields the first finished task's result;
 // `timeout` returns the value when the task beats the deadline and
 // throws `TimeoutError` (via `try await`) when it doesn't. The margins
 // are seconds wide so scheduling noise can't flip the result.

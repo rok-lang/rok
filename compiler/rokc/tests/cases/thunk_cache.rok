@@ -1,12 +1,11 @@
-// spec: refs-lang §4.4.9
 // expect-exit: 0
 // expect-stdout:
 // 6 8
 // 3 3
 // -2
 
-// Adapter thunks (spec 4.4.9: a non-throwing fn into a throwing `fn`
-// slot; 4.4: a `-> !` fn into a `-> R` slot) are made once per
+// Adapter thunks (a non-throwing fn into a throwing `fn`
+// slot; a `-> !` fn into a `-> R` slot) are made once per
 // (callee, slot type) and shared by every use site.
 
 fn twice(x: i32) -> i32 { return x * 2; }

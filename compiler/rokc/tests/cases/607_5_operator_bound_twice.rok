@@ -1,7 +1,6 @@
-// spec: §6.7.5
 // expect-error: operator `+` is bound twice (`rok::core::ops::Add::add` and `MyAdd::add2`)
 
-// Spec 6.7.5: one (token, position) pair binds to one trait method; a
+// One (token, position) pair binds to one trait method; a
 // user trait cannot take core's binary `+`.
 struct V { x: i32; }
 
@@ -11,4 +10,3 @@ trait MyAdd {
 }
 
 println("unreached");
-// spec: §3.2.4 §3.1.7

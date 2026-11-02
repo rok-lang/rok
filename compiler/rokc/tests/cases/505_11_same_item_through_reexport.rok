@@ -1,9 +1,8 @@
-// spec: §5.5.11
 // expect-exit: 0
 // expect-stdout:
 // 3
 
-// Spec 5.5.11: one item imported by its path and through a re-export
+// One item imported by its path and through a re-export
 // (named or glob) is one import, not a conflict.
 mod a {
     pub fn f() -> i32 { 1 }

@@ -1,5 +1,5 @@
 // expect-error: a.rok:1:14: unresolved import: `Nope` does not exist
-// Spec 5.5.2: each group member must name something; a missing one is
+// Each group member must name something; a missing one is
 // reported at its own path, not later as an unknown name.
 mod a;
 
@@ -9,5 +9,3 @@ fn main() -> i32 {
     return a::get(P { x: 3 });
 }
 
-// spec: 005.05-use
-// spec: §5.5.2

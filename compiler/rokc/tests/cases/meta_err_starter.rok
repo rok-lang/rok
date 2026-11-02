@@ -1,5 +1,5 @@
 // expect-error: `#[impl_attribute(..)]` takes an `@attribute { .. }` body, not `@derive`
-// Spec 6.8.7: the body starter matches the meta block's kind.
+// The body starter matches the meta block's kind.
 #[impl_attribute(wrap)]
 pub @derive {
     @item
@@ -9,5 +9,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 006.08-meta-blocks
-// spec: §6.8.7

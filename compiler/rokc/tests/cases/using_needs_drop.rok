@@ -1,8 +1,6 @@
 // expect-error: `using` needs a resource whose type implements `Drop`; `i32` does not implement `Drop`
-// Spec 3.17.7: the bound value must implement `Drop`.
+// The bound value must implement `Drop`.
 fn main() -> i32 {
     using x = 42 { x }
 }
 
-// spec: 003.17-using-expression
-// spec: §3.17.7

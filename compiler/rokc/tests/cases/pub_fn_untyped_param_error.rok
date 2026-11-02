@@ -1,7 +1,6 @@
-// spec: 004.02.2-omitting-the-type
-// expect-error: 9:12: parameter `x` of `pub fn add` has no type
-// expect-error: 9:15: parameter `y` of `pub fn add` has no type
-// expect-error: 14:34: parameter `n` of `pub(pkg) fn scale` has no type
+// expect-error: 8:12: parameter `x` of `pub fn add` has no type
+// expect-error: 8:15: parameter `y` of `pub fn add` has no type
+// expect-error: 13:34: parameter `n` of `pub(pkg) fn scale` has no type
 
 // A `pub` / `pub(pkg)` fn writes every parameter type; private and
 // `pub(sub)` fns and trait impl methods do not need to.

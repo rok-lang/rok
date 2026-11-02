@@ -1,4 +1,3 @@
-// spec: 001.05.4-contextual-keywords
 // expect-error: `rok` cannot name a module
 
 // `pkg` / `sup` / `rok` are path roots: no module or type takes the name.

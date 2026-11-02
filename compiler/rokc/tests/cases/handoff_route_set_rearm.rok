@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `items` still holds `items[0]`, which was handed to another owner
-// spec: std 213-marker §2.13.9
 // Assigning one element re-arms the whole element place?
 use rok::std::thread;
 fn main() {

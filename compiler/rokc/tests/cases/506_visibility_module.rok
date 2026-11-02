@@ -1,7 +1,6 @@
-// spec: 005.06-visibility-module
 // expect-error: is private to module `inner`
 
-// spec 5.6: a module item without `pub` is not visible outside.
+// A module item without `pub` is not visible outside.
 mod inner {
     fn private_helper() -> i32 { return 1; }
 }
@@ -9,4 +8,3 @@ mod inner {
 fn main() -> i32 {
     return inner::private_helper();    // ERROR: private
 }
-// spec: §5.6.2

@@ -1,4 +1,3 @@
-// spec: 002.02-any-slot
 // expect-error: on an `any` value it dispatches only over primitive types
 
 // `any` dispatches operators dynamically only for primitive types.

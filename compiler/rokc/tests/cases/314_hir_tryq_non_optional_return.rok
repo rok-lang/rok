@@ -1,8 +1,6 @@
-// spec: 003.14-try-q
 // `?` needs none in the return type.
 // expect-error: `?` propagates `none`, but the enclosing function returns `i32`
 
 fn g(x: i32) -> i32 | none { if x > 0 { return x; } return none; }
 fn h(x: i32) -> i32 { let v = g(x)?; return v + 1; }
 fn main() -> i32 { return h(0); }
-// spec: §3.14.10

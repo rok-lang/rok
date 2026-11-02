@@ -1,4 +1,4 @@
-// Spec 9.9.6: `-g` describes an `any` inside a type stored in an `any`
+// `-g` describes an `any` inside a type stored in an `any`
 // (a struct field) as the same variant part, and a closure local with
 // its environment object.
 // rokc-arg: -g
@@ -23,4 +23,3 @@ fn main() {
     }
 }
 
-// spec: §9.9.6

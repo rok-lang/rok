@@ -1,5 +1,5 @@
 // expect-error: type `Tok` does not satisfy trait bound `Display` required by `TokBox`
-// Spec 2.10.4: a non-generic alias's `where` is checked too.
+// A non-generic alias's `where` is checked too.
 struct Tok { v: i32; }
 struct W<T> { v: T; }
 type IntBox where i32: Display = W<i32>;
@@ -10,4 +10,3 @@ fn main() -> i32 {
     return a.v;
 }
 
-// spec: 002.10-generics

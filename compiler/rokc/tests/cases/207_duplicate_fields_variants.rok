@@ -8,4 +8,3 @@ enum E { A, B, A }
 
 fn main() {}
 
-// spec: §2.3.7 §2.4.6

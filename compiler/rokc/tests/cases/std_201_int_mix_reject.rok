@@ -1,7 +1,6 @@
-// spec: std 201-numbers §2.1.6 int + i32 (mixed: rejected)
 // expect-error: expects `int`, found `i32`
 
-// Spec 2.1.6: `int + i32` is a compile error (no silent mixing).
+// `int + i32` is a compile error (no silent mixing).
 fn main() {
     let a: int = 5;
     let b: i32 = 3;

@@ -31,7 +31,7 @@ fn fact(n: i64) -> int {
 fn twice(x: int) -> int { x * 2 }
 
 fn main() {
-    // Spec 2.1.2 example: 10^42 with no wrap.
+    // Example: 10^42 with no wrap.
     let big: int = 1;
     big = big * 1000;
     big = big * 1000;
@@ -59,7 +59,7 @@ fn main() {
     let (q, r) = (a * b + c).div_rem(b);
     println(f"{q == a} {r == c} {(a * b + c) / b == a} {(a * b + c) % b == c}");
 
-    // Truncating `/` and `%`, floored `%%` (spec 2.1.2, 2.3).
+    // Truncating `/` and `%`, floored `%%`.
     let m7: int = -7;
     let p7: int = 7;
     let two: int = 2;
@@ -90,7 +90,7 @@ fn main() {
     let y: int = -987654321;
     println(f"{x & y} {x | y} {x ^ y} {~y} {y >> 3u32} {y << 100u32} {x >> 64u32}");
 
-    // Conversions (2.1.7, 2.11): into is lossless, try / saturating /
+    // Conversions: into is lossless, try / saturating /
     // wrapping (= `as`) spell the policy.
     let i: i32 = 5;
     let into: int = i.into();
@@ -120,4 +120,3 @@ fn main() {
     println(f"{z} {-z} {z.is_zero()} {int::zero()} {int::default()}");
 }
 
-// spec: std 201-numbers

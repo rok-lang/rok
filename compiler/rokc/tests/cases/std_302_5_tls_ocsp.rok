@@ -183,4 +183,3 @@ fn main() {
     try! t.join();
 }
 
-// spec: std 302-net §3.2.5

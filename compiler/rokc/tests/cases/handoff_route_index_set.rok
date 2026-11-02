@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `q` may hold one object twice
-// spec: std 213-marker §2.13.9
 // `q[i] = a` twice.
 use rok::std::thread;
 fn main() {

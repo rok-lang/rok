@@ -1,9 +1,8 @@
-// spec: 002.10-generic-struct
 // expect-exit: 0
 // expect-stdout:
 // 12
 
-// spec 2.10: generic struct with explicit instantiation.
+// Generic struct with explicit instantiation.
 struct Pair<A, B> {
     a: A;
     b: B;

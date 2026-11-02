@@ -1,6 +1,6 @@
 // expect-exit: 0
 // expect-stdout: 41 1
-// Spec 5.5: a `use` path may start with a name an earlier `use` of the
+// A `use` path may start with a name an earlier `use` of the
 // same module imported; group members extend their prefix as written.
 mod a {
     pub mod inner {
@@ -24,4 +24,3 @@ fn main() {
     println(f"{b::h()} {g()}");
 }
 
-// spec: 005.05-use

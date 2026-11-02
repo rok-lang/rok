@@ -1,4 +1,3 @@
-// spec: §4.2.8
 // expect-exit: 0
 // expect-stdout:
 // g
@@ -9,7 +8,7 @@
 // h
 // 3 4
 
-// 4.2.8: named arguments are evaluated in written order, not parameter
+// Named arguments are evaluated in written order, not parameter
 // order; a method's receiver still runs first.
 fn f() -> i32 { println("f"); 1 }
 fn g() -> i32 { println("g"); 2 }

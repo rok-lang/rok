@@ -13,10 +13,10 @@
 // 1
 // 4 3
 
-// Stdlib 2.7.9 / 2.7.10: ExactSizeIterator (List / Slice / Range iterators,
+// ExactSizeIterator (List / Slice / Range iterators,
 // Enumerate / Zip / Take / Skip / StepBy / Rev / Map), next_back on the
 // adapters that need the length, rfold / rfind (closure types from the
-// supertrait's Item), and Step for char (surrogates skipped, 2.7.3).
+// supertrait's Item), and Step for char (surrogates skipped).
 fn main() -> i32 {
     let xs: List<i32> = [1, 2, 3, 4, 5, 6, 7];
     println(f"{xs.iter().len()} {(0..10).len()} {(0..=10).len()} {(5..2).len()}");
@@ -49,4 +49,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: std 207-iter §2.7.10

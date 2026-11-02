@@ -104,7 +104,6 @@ fn main() {
 /// An item's `#[allow]` covers its variants even after a `#[derive]`
 /// (whose impls carry the attribute's span); an `_` between digits is
 /// still camel case (rustc's rule).
-// spec: §6.2.9
 #[test]
 fn lint_camel_case_allow_and_digit_underscores() {
     let src = "#[derive(Clone, PartialEq)]\n#[allow(non_camel_case_types)]\n\
@@ -125,7 +124,6 @@ fn lint_camel_case_allow_and_digit_underscores() {
 
 /// The types of an `extern` block's functions and statics are uses of
 /// their imports.
-// spec: §6.2.9
 #[test]
 fn lint_counts_extern_types_as_uses() {
     let sys = "use rok::bare::ptr::{CPtr, ConstPtr, Ptr};\n\
@@ -140,7 +138,6 @@ fn lint_counts_extern_types_as_uses() {
     assert_eq!(err.matches("unused import").count(), 1, "{err}");
 }
 
-// spec: §6.2.7 §6.2.9 §6.2.11 §9.1.2 §9.1.5
 #[test]
 fn lint_finds_each_kind_and_honors_levels() {
     let dir = package("lint", &[("main.rok", LINTED)]);
@@ -242,7 +239,6 @@ fn lint_finds_each_kind_and_honors_levels() {
     assert!(!err.contains("[E0132]"), "{err}");
 }
 
-// spec: §9.1.2
 #[test]
 fn doc_writes_html_with_links_and_search_index() {
     let dep = package(
@@ -348,7 +344,6 @@ fn doc_writes_html_with_links_and_search_index() {
 
 /// `rokc doc --std` (no package): the standard library tiers alone, into
 /// `./target/doc/`, one directory per tier.
-// spec: §9.1.2
 #[test]
 fn doc_std_documents_the_library() {
     let dir = scratch("doc-std");
@@ -369,7 +364,6 @@ fn doc_std_documents_the_library() {
     assert!(read("search-index.js").contains("rok::core::collections::list::List"));
 }
 
-// spec: §6.2.5 §9.1.2 §9.9.11
 #[test]
 fn bench_times_each_bench() {
     let Some(env) = setup() else { return };
@@ -457,7 +451,6 @@ fn bench_times_each_bench() {
     assert!(!err.contains("fib_10"), "{err}");
 }
 
-// spec: §0.3.5 §9.1.1 §9.1.2
 #[test]
 fn tests_and_benches_directories() {
     let Some(env) = setup() else { return };

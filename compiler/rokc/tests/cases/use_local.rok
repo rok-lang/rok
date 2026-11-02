@@ -12,4 +12,3 @@ fn main() {
     println(f"{x} {y}");
 }
 
-// spec: 005.05-use

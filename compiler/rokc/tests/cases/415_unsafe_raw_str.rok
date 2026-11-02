@@ -1,10 +1,9 @@
-// spec: 004.15-unsafe / 001.07-raw-string
 // expect-exit: 0
 // expect-stdout:
 // C:\path\n "q"
 // 5
 
-// `unsafe fn` / `unsafe { }` parse (spec 4.15; the unsafe-call check is
+// `unsafe fn` / `unsafe { }` parse (the unsafe-call check is
 // not implemented yet) and raw strings work in expression position.
 unsafe fn five() -> i32 {
     return 5;

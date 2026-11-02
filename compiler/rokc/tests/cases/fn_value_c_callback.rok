@@ -1,11 +1,10 @@
-// spec: refs-lang §5.9.10
 // needs: process
 // expect-exit: 0
 // expect-stdout:
 // 2
 
 // A named fn passed to an `extern "C"` function's `fn` parameter goes as
-// a plain C function pointer (spec 5.9.10); rok `fn` values are
+// a plain C function pointer; rok `fn` values are
 // `{code, env}` pairs everywhere else. `raise` runs the handler at once
 // on this thread.
 extern "C" {

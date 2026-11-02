@@ -79,4 +79,3 @@ println(f"after: {await d.exists_async("many")}");
 try! await d.close_async();
 try! await fs::remove_dir_all_async(base);
 
-// spec: std 301-fs

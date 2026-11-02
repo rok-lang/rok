@@ -1,5 +1,5 @@
 // expect-error: `#[only_fn]` cannot be applied to a struct
-// Spec 6.9.5: `@accept(..)` limits what an attribute may be put on.
+// `@accept(..)` limits what an attribute may be put on.
 #[impl_attribute(only_fn)]
 pub @attribute {
     @accept(fn)
@@ -13,5 +13,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 006.08-meta-blocks
-// spec: §6.9.5

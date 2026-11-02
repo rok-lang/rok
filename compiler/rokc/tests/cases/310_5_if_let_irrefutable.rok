@@ -1,11 +1,10 @@
-// spec: 3.10.5
 // expect-exit: 0
 // expect-stdout:
 // 3
 // 3
 // 4
 
-// `if let` takes an irrefutable pattern too (3.11): it always matches,
+// `if let` takes an irrefutable pattern too: it always matches,
 // and its `else` never runs.
 enum One { A(i32) }
 

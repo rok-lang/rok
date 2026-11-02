@@ -33,7 +33,7 @@
 // buf cd abcd
 // method [3, 4, 5] []
 
-// Python slice semantics (spec 3.6.2): bounds clamp to the length, a
+// Python slice semantics: bounds clamp to the length, a
 // negative step reads them from the end. Every expected line is
 // Python's `xs[a:b:k]` for the same `xs`.
 fn main() {
@@ -94,6 +94,3 @@ fn main() {
     println(f"method {xs.slice(2..50):?} {xs.slice(4..1):?}");
 }
 
-// spec: 003.06-indexing-and-slicing
-// spec: std §2.9.7
-// spec: §3.6.2

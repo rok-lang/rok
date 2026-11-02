@@ -1,4 +1,3 @@
-// spec: 002.12-trait-as-type
 // expect-error: cannot be used as a type directly
 // A trait name is not a type; use a closed sum or a generic parameter.
 
@@ -11,4 +10,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: §2.12.1 §2.12.6

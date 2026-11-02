@@ -1,10 +1,9 @@
-// spec: 003.04-compound-assign
 // expect-exit: 0
 // expect-stdout:
 // 15
 // 9
 
-// spec 3.4: `a += b` desugars to `a = a + b`, evaluating the left side once.
+// `a += b` desugars to `a = a + b`, evaluating the left side once.
 fn main() -> i32 {
     let x = 10;
     x += 5;
@@ -14,4 +13,3 @@ fn main() -> i32 {
     println(f"{x}");
     return 0;
 }
-// spec: §3.4.3

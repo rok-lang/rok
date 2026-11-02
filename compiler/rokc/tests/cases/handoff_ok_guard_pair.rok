@@ -1,4 +1,3 @@
-// spec: std 216-sync §2.16.3
 // Copies of two guards used inside both blocks (picked by a branch) are
 // fine; only a copy used after its own block is an error.
 // expect-exit: 0

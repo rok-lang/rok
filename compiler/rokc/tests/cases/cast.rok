@@ -11,4 +11,3 @@ fn main() -> i32 {
     return widened - 158i32;
 }
 
-// spec: 002.14-cast-and-conversion

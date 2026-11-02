@@ -2,7 +2,7 @@
 // expect-stdout:
 // 41
 
-// An `await` chain under implicit async main (spec 4.16.5).
+// An `await` chain under implicit async main.
 async fn add(a: i32, b: i32) -> i32 {
     return a + b;
 }
@@ -14,4 +14,3 @@ async fn twice(x: i32) -> i32 {
 let r = await twice(20);
 println(f"{r}");
 
-// spec: 004.12-async

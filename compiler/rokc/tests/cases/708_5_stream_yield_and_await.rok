@@ -1,11 +1,10 @@
-// spec: 007.08-coroutine §7.8.5 / §7.8.2
 // expect-exit: 0
 // expect-stdout:
 // 1 3 6 10
 // total 10
 
-// 7.8.5: in one stream frame `yield` produces values and `await`
-// suspends; 7.8.2: locals live across both kinds of suspend point.
+// In one stream frame `yield` produces values and `await`
+// suspends; locals live across both kinds of suspend point.
 async fn plus(a: i32, b: i32) -> i32 {
     await task::yield_now();
     a + b
@@ -31,4 +30,3 @@ async fn main() {
     println(s);
     println(f"total {last}");
 }
-// spec: 008.10 §8.10.4

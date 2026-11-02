@@ -1,10 +1,8 @@
-// spec: refs-lang §2.3.5
-// spec: 005.06-visibility
 // expect-exit: 0
 // expect-stdout:
 // 7 9 5 6 2 3
 
-// Spec 5.6: positional fields are private by default; the defining
+// Positional fields are private by default; the defining
 // module sees all of them, `pub` ones are visible everywhere, and `_`
 // in a pattern touches nothing.
 
@@ -31,4 +29,3 @@ fn main() {
         a::S(_, z) => { println(f"{a::first(s)} {s.1} {u} {v} {w} {z}"); }
     }
 }
-// spec: §5.6.8

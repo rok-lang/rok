@@ -6,7 +6,7 @@
 // 9223372036854775807 -9223372036854775808 18446744073709551615 0
 // -7 7 3
 
-// Spec 2.11.6: float → int truncates toward zero, saturates out of
+// Float → int truncates toward zero, saturates out of
 // range, NaN → 0, at every opt level. Values come through a `List` so
 // the optimizer cannot fold them.
 fn main() -> i32 {
@@ -30,4 +30,3 @@ fn main() -> i32 {
     println(f"{xs[3] as i32} {xs[4] as u32} {xs[5] as i64}");
     return 0;
 }
-// spec: std §2.11.6

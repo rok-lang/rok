@@ -1,5 +1,4 @@
-// spec: 004.06.7-capturing-structs
-// expect-error: 14:9: cannot assign to a field of `p`: it is value-captured, so the write would change the closure's copy, not the outer `p`
+// expect-error: 13:9: cannot assign to a field of `p`: it is value-captured, so the write would change the closure's copy, not the outer `p`
 // expect-error: help: add `[ref p]` to the closure's capture list
 
 // A field write on a value-captured struct would change the closure's

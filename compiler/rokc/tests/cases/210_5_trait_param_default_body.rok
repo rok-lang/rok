@@ -1,7 +1,6 @@
-// spec: 002.10.5
 // A trait default body sees the trait parameters bound by the impl, or
 // their defaults (`Self` = the impl target) when the impl omits them.
-// The body itself is checked once, its parameters opaque (2.10.9).
+// The body itself is checked once, its parameters opaque.
 // expect-exit: 0
 // expect-stdout: 5 5 1 true
 

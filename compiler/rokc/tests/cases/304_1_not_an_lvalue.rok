@@ -1,8 +1,7 @@
-// spec: §3.4.1
+// expect-error: 7:5: invalid assignment target
 // expect-error: 8:5: invalid assignment target
-// expect-error: 9:5: invalid assignment target
 
-// spec 3.4.1: a call result or an arithmetic result is not a place.
+// A call result or an arithmetic result is not a place.
 fn f() -> i32 { 1 }
 fn main() -> i32 {
     f() = 2;

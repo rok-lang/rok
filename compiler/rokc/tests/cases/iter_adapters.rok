@@ -8,7 +8,7 @@
 // 10
 // 4
 
-// Iterator adapters (stdlib 2.7.1) on the collections' iterators: lazy
+// Iterator adapters on the collections' iterators: lazy
 // `map` / `filter`, eager `sum` / `count` / `fold` / `collect`, and a
 // user iterator getting the same defaults through a concrete impl.
 
@@ -45,4 +45,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: std 207-iter

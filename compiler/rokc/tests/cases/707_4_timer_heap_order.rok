@@ -1,4 +1,3 @@
-// spec: 007.07-io-and-timer §7.7.4 §7.7.7
 // expect-exit: 0
 // expect-stdout:
 // woke in deadline order: 10 20 30 40

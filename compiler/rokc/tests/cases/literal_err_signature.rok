@@ -1,5 +1,5 @@
 // expect-error: handler `imaginary` must take 1 parameter(s): a value
-// Spec 6.5.4: the handler takes the captures as its arguments.
+// The handler takes the captures as its arguments.
 #[literal(number "i")]
 fn imaginary(re: f64, im: f64) -> f64 {
     return im;
@@ -8,4 +8,3 @@ fn imaginary(re: f64, im: f64) -> f64 {
 fn main() -> i32 {
     return 0;
 }
-// spec: §6.5.4

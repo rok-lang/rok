@@ -15,7 +15,7 @@
 // none
 // after
 
-// Spec 3.17.6: `break` / `continue` out of a `using` body drop its
+// `break` / `continue` out of a `using` body drop its
 // resources (reverse order), and so does `?` on `none`.
 struct Res { id: i32; }
 
@@ -61,5 +61,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 003.17-using-expression
-// spec: §3.17.6

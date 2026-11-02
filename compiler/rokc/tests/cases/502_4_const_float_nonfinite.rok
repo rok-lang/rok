@@ -1,9 +1,8 @@
-// spec: 005.02-const
 // expect-exit: 0
 // expect-stdout: inf NaN -inf inf true [1, 2]
 
-// Spec 5.2.4: float consts may be infinite or NaN, `f32` ones included,
-// and embed as such; a `List` const (5.2.5, heap) is checked now and
+// Float consts may be infinite or NaN, `f32` ones included,
+// and embed as such; a `List` const (heap) is checked now and
 // built at each use, so pushing to one copy leaves the next untouched.
 const INF: f32 = 1.0f32 / 0.0f32;
 const NAN: f32 = 0.0f32 / 0.0f32;

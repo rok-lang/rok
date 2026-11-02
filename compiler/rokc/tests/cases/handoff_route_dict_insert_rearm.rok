@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `d` still holds `d["a"]`, which was handed to another owner
-// spec: std 213-marker §2.13.9
 // A dict value sent, then another insert re-arms it.
 use rok::std::thread;
 fn main() {

@@ -1,12 +1,11 @@
-// spec: std 216-sync §2.16.3
-// expect-error: 22:10: this `MutexGuard` is never released: a guard received without `using` must be bound with `using
-// expect-error: 23:13: this `MutexGuard` is never released
-// expect-error: 24:25: this `MutexGuard` is never released
-// expect-error: 26:15: this `MutexGuard` is never released
-// expect-error: 27:19: this `MutexGuard` is never released
-// expect-error: 28:13: this `MutexGuard` is never released
-// expect-error: 30:5: `k` holds a `MutexGuard` that is never released
-// expect-error: 32:5: `s` holds a `MutexGuard` that is never released
+// expect-error: 21:10: this `MutexGuard` is never released: a guard received without `using` must be bound with `using
+// expect-error: 22:13: this `MutexGuard` is never released
+// expect-error: 23:25: this `MutexGuard` is never released
+// expect-error: 25:15: this `MutexGuard` is never released
+// expect-error: 26:19: this `MutexGuard` is never released
+// expect-error: 27:13: this `MutexGuard` is never released
+// expect-error: 29:5: `k` holds a `MutexGuard` that is never released
+// expect-error: 31:5: `s` holds a `MutexGuard` that is never released
 
 // A guard received without `using` must be bound with `using`: passing
 // it to a function, calling a method on it, storing it into a field or

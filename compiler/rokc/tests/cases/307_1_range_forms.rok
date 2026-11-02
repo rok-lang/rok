@@ -1,4 +1,3 @@
-// spec: §3.7.1 §3.7.2 §3.7.3 §3.7.7
 // expect-exit: 0
 // expect-stdout:
 // 10 11 45 55
@@ -7,10 +6,10 @@
 // 4 7 2 3
 // 5 6
 
-// spec 3.7.1 / 3.7.2: the six forms are distinct values of distinct
-// library types. 3.7.3: `+` and `??` bind tighter than `..`; in call
+// The six forms are distinct values of distinct
+// library types. `+` and `??` bind tighter than `..`; in call
 // arguments `..x` spreads, so a `RangeTo` argument is parenthesized while
-// `..=x` stays a range. 3.7.7: a start past the end iterates zero times.
+// `..=x` stays a range. A start past the end iterates zero times.
 fn width(r: range::RangeTo<i32>) -> i32 { r.end }
 fn width_inc(r: range::RangeToInclusive<i32>) -> i32 { r.end + 1 }
 fn sum3(a: i32, b: i32, c: i32) -> i32 { a + b + c }

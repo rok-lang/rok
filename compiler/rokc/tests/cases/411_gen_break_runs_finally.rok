@@ -1,4 +1,3 @@
-// spec: 004.11-generators §4.11.10
 // expect-exit: 0
 // expect-stdout:
 // generator finally
@@ -12,7 +11,7 @@
 // kept: 0 1
 // kept: 2 3
 
-// 4.11.10: a `for` that leaves a generator early (here by `break`)
+// A `for` that leaves a generator early (here by `break`)
 // runs the generator's `using` and `finally` cleanups; `continue` does
 // not, and a generator held in a variable is left open.
 static M: Mutex<i64> = Mutex::new(0);

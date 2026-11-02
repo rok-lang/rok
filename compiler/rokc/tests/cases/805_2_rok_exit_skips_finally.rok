@@ -1,10 +1,9 @@
-// spec: 008.05-extern-symbols §8.5.2 rok_exit / 004.16 §4.16.4
 // expect-exit: 3
 // expect-stdout:
 // before
 // inner
 
-// spec 8.5.2: `rok_exit` (behind `process::exit`) ends the process at once
+// `rok_exit` (behind `process::exit`) ends the process at once
 // with the code; `finally` and `Drop` do not run, but what was already
 // printed is not lost.
 use rok::std::process;

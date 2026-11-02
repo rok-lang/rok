@@ -1,4 +1,3 @@
-// spec: §6.2.16
 // rokc-arg: --extern idep=tests/cases/internal_mark_in_dependency_error/idep
 // expect-error: function `wake_io` is internal to the Rok toolchain: only `rok::bare`, `rok::core` and `rok::std` may use it
 // expect-error: lib.rok:4:5

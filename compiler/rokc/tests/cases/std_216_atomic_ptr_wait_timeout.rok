@@ -1,4 +1,3 @@
-// spec: std 216-sync §2.16.2
 // needs: threads
 // expect-exit: 0
 // forbid-warning: warning

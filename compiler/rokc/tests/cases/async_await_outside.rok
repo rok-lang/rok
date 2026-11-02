@@ -6,5 +6,3 @@ fn g() -> i32 {
 }
 println(f"{g()}");
 
-// spec: 004.12-async
-// spec: §4.12.2

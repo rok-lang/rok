@@ -1,9 +1,8 @@
 // expect-error: error[E0135]: `f` holds a `File` that is never closed
-// expect-error: fallible_close_missing_error.rok:16:13: `f` holds a `File` that is never closed
+// expect-error: fallible_close_missing_error.rok:15:13: `f` holds a `File` that is never closed
 // expect-error: help: closing a `File` can fail, so it is not closed for you: add `try f.close();` before it leaves its scope, or bind it with `using f = .. { .. }`
-// expect-error: fallible_close_missing_error.rok:21:13: `f` holds a `File` that is not closed on every path
-// expect-error: fallible_close_missing_error.rok:31:5: `f` still holds an open `File` when this replaces it
-// spec: std 213-marker §2.13.4
+// expect-error: fallible_close_missing_error.rok:20:13: `f` holds a `File` that is not closed on every path
+// expect-error: fallible_close_missing_error.rok:30:5: `f` still holds an open `File` when this replaces it
 
 // Closing a `File` can fail, so the compiler does not close one: leaving
 // its scope open on a path is an error. A path that leaves with an error

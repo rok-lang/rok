@@ -4,7 +4,7 @@
 // 6
 // 2
 
-// 3.6: a slice step may be any signed integer (it widens to `isize`).
+// A slice step may be any signed integer (it widens to `isize`).
 fn main() {
     let xs = [1, 2, 3, 4, 5, 6];
     let s: i32 = 2;
@@ -14,4 +14,3 @@ fn main() {
     println(f"{xs[::back].len()}");
     println(f"{xs[::k].len()}");
 }
-// spec: §3.6.2

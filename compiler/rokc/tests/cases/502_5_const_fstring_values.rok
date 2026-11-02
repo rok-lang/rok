@@ -1,11 +1,10 @@
-// spec: 005.02-const
 // expect-exit: 0
 // expect-stdout:
 //   $1234.56|$1234.56   |7|+7|(1, 'a')|[1, 2, 3]|AB|x|true|a+b|2
 //      $0.05|$0.05|none|-1|(1, 'a')|[1, 2, 3]|AB|x|true|a+b|2
 // true true
 
-// Spec 5.2.5: a `const` builds f-strings over a user `Display` that is a
+// A `const` builds f-strings over a user `Display` that is a
 // `const fn`, sum types, tuples, lists and standard `str` / `char`
 // methods, with static and dynamic (`${..}`) specs; the text equals the
 // run-time one.

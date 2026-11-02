@@ -1,6 +1,5 @@
-// spec: 003.14.5-finally
-// expect-error: 12:49: `return` cannot leave a `finally` block: it would drop the error in flight
-// expect-error: 16:45: `continue` cannot leave a `finally` block: it would drop the error in flight
+// expect-error: 11:49: `return` cannot leave a `finally` block: it would drop the error in flight
+// expect-error: 15:45: `continue` cannot leave a `finally` block: it would drop the error in flight
 // expect-error: help: move the `return` after the `try` expression; `finally` only cleans up
 
 // `return`, `break` or `continue` that leaves a `finally` block would

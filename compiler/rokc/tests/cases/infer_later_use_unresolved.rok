@@ -1,5 +1,4 @@
-// spec: §5.1.7
-// expect-error: 8:5: type annotations needed: cannot infer the type of `d`
+// expect-error: 7:5: type annotations needed: cannot infer the type of `d`
 
 // Nothing later fixes the key / value types: the error points at the `let`.
 

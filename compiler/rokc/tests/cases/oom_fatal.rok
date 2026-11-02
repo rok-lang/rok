@@ -1,6 +1,5 @@
-// spec: refs-lang §5.9.4
 // expect-error: extern function `rok_gc_alloc_slow` is declared twice with different signatures: `fn(usize, usize, u32) -> usize` here, `fn(usize, usize, u32) -> GcBuf<u8>` elsewhere
-// Spec 5.9.4 / 8.5: `rok_*` symbols are the runtime's, declared by the
+// `rok_*` symbols are the runtime's, declared by the
 // toolchain; one with other types is an error, not a second declaration
 // of one symbol in the module.
 extern "C" {

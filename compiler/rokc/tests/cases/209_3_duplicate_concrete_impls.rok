@@ -1,6 +1,5 @@
-// spec: §2.9.3
-// expect-error: 12:1: `N` is implemented more than once for `P`
-// expect-error: 14:1: `M` is implemented more than once for `P`
+// expect-error: 11:1: `N` is implemented more than once for `P`
+// expect-error: 13:1: `M` is implemented more than once for `P`
 // expect-error: help: keep one of the two impls
 
 // Two concrete impls of one trait for one type conflict (E0075), with

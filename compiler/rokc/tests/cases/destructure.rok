@@ -12,4 +12,3 @@ fn main() -> i32 {
     return q + r * 3i32;
 }
 
-// spec: 003.15-destructuring

@@ -1,4 +1,3 @@
-// spec: §3.14.8 std §2.9.12
 // expect-exit: 101
 // expect-stdout: before
 // expect-stderr: rok runtime: allocation too large

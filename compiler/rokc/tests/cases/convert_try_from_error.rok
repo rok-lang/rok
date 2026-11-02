@@ -1,5 +1,5 @@
 // only-os: macos linux
-// (RawPath::from_bytes is unix-only, std 3.8.5)
+// (RawPath::from_bytes is unix-only)
 // expect-exit: 0
 // expect-stdout:
 // default: negative
@@ -13,7 +13,7 @@
 // propagated OverflowError
 // char: try_from: value out of range for `char`
 
-// Stdlib spec 2.11.4: `TryFrom<U>` throws its associated `Error`, which
+// `TryFrom<U>` throws its associated `Error`, which
 // defaults to `ConversionError`; the numeric impls say `OverflowError`,
 // `Path` says `Utf8Error`. `try_into` throws the target's `Error`,
 // and a generic fn can name it as `T::Error`.
@@ -90,4 +90,3 @@ fn main() {
     };
     let _ = (e.v, b, p, h, i.v, j.v, c);
 }
-// spec: std §2.11.9

@@ -1,4 +1,3 @@
-// spec: 005.09-extern-block §5.9.4
 // expect-error: extern function `labs` is declared twice with different signatures: `fn(i32) -> i32` here, `fn(i64) -> i64` elsewhere
 // expect-error: declared as `fn(i64) -> i64` here
 // expect-error: help: a C symbol has one signature: declare `labs` as `fn(i64) -> i64` here too, or drop this declaration

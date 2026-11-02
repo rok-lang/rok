@@ -20,4 +20,3 @@ fn main() -> i32 {
     return evens * 3 + big * 2 + 0;
 }
 
-// spec: 004.05-closure

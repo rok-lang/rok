@@ -10,7 +10,7 @@
 // 3 4
 // 1 2 3
 
-// Spec 4.1: named and spread arguments work for generic functions too -
+// Named and spread arguments work for generic functions too -
 // named ones go to their parameter, a skipped parameter takes its
 // default, a tuple spread fills consecutive parameters (evaluated once).
 fn show<T: Display, U: Display>(a: T, b: U, sep: str = " ") {
@@ -44,4 +44,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 002.10-generics

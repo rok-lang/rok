@@ -1,4 +1,3 @@
-// spec: §9.5.7
 // expect-exit: 12
 // User items are mangled: no clash with C/runtime symbols or between
 // `a::b` and a root `a__b`.

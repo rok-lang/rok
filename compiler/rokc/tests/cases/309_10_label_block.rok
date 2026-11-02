@@ -1,8 +1,7 @@
-// spec: 003.09.10-label-block
 // expect-exit: 42
 // expect-stdout:
 
-// spec 3.9.10: labeled block `'label: { ... break 'label value; }`;
+// Labeled block `'label: { ... break 'label value; }`;
 // the break value is the block's result.
 fn main() -> i32 {
     let x = 'b: {

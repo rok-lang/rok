@@ -1,7 +1,6 @@
-// spec: §4.16.9
-// expect-error: 6:1: unknown attribute `#[main]`
+// expect-error: 5:1: unknown attribute `#[main]`
 
-// Spec 4.16.9: there is no entry point attribute; `main.rok` and the
+// There is no entry point attribute; `main.rok` and the
 // name `main` (or top-level statements) designate the entry.
 #[main]
 fn start() { println("start"); }

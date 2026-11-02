@@ -1,4 +1,3 @@
-// spec: 006.10-reflect
 // expect-exit: 0
 // expect-stdout:
 // i32
@@ -9,7 +8,7 @@
 // f64
 // str
 
-// 6.10.1 / 2.12.2: every type has `Reflect` with no derive - static
+// Every type has `Reflect` with no derive - static
 // `T::type_name()` / `size()` / `align()`, and `type_name_of_val()` that
 // looks at the variant an `any` / sum value holds.
 fn pick() -> i32 | f64 { return 2.5; }
@@ -25,4 +24,3 @@ let v: i32 | f64 = pick();
 println(v.type_name_of_val());
 let z: any = "hello";
 println(z.type_name_of_val());
-// spec: §6.10.1

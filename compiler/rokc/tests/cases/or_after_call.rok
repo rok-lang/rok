@@ -1,10 +1,9 @@
-// spec: §4.8.6
 // expect-exit: 0
 // expect-stdout:
 // true false true
 // 3
 
-// Spec 4.8.6: only `{ .. }` / `|params| { .. }` after a call start a
+// Only `{ .. }` / `|params| { .. }` after a call start a
 // trailing closure; `f() || x` is logical or (a 0-arg trailing closure
 // is spelled `{ .. }`).
 

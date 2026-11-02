@@ -1,12 +1,11 @@
-// spec: §3.15.6 §3.15.7 §3.15.12
 // expect-error: this pattern can't destructure a value of type `Sh` here - it must be irrefutable
-// expect-error: 13:18: mismatched types: `let v` expects `i32`, found `i32 | none`
+// expect-error: 12:18: mismatched types: `let v` expects `i32`, found `i32 | none`
 // expect-error: the pattern `b` expects `str`, found `i32`
-// expect-error: 15:5: invalid assignment target
+// expect-error: 14:5: invalid assignment target
 
-// spec 3.15.7: `let` takes only irrefutable patterns (no `enum` variant,
-// no type check on a sum). 3.15.6: an annotation is a slot type that
-// must match. 3.15.12: no destructuring reassignment without `let`.
+// `let` takes only irrefutable patterns (no `enum` variant,
+// no type check on a sum). An annotation is a slot type that
+// must match. No destructuring reassignment without `let`.
 enum Sh { C(f64), R(f64) }
 fn main() -> i32 {
     let x: i32 | none = 1;

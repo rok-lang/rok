@@ -5,7 +5,7 @@
 // 3
 // 4
 
-// spec 3.12: `return` / `break` / `continue` as match arm bodies.
+// `return` / `break` / `continue` as match arm bodies.
 fn f(x: i32 | none) -> i32 {
     let v = match x {
         n: i32 => n,
@@ -32,4 +32,3 @@ for k in 0..5 {
 }
 println(f"{s}");
 
-// spec: 003.12-match-expression

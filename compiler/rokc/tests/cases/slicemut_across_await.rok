@@ -4,7 +4,7 @@
 // 4 [1, 1, 1, 1]
 // [5, 5, 7, 0]
 
-// Stdlib 2.9.7a: a `SliceMut` may be an `async fn`'s argument and live
+// A `SliceMut` may be an `async fn`'s argument and live
 // across an `await`; a resize while it waits is caught by the run-time
 // check, not rejected.
 async fn fill_later(s: collections::SliceMut<u8>, b: u8) -> usize {
@@ -31,4 +31,3 @@ fn main() {
     println(f"{buf:?}");
 }
 
-// spec: std 209-collections §2.9.7a / std 218-task

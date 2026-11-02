@@ -1,6 +1,5 @@
-// spec: 004.16-entry-top-return
 // expect-error: top-level `return` is not allowed
 
-// spec 4.16.4: no `return` in the implicit `main`.
+// No `return` in the implicit `main`.
 println(f"{1}");
 return;

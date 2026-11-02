@@ -1,11 +1,10 @@
-// spec: 008.09-lowering-control §8.9.4 / §8.9.5
 // expect-exit: 0
 // expect-stdout:
 // pairs: 1,0 2,0
 // found at 3
 // while ran 4
 
-// spec 8.9.4 / 8.9.5: `break` / `continue` jump to the exit / header of
+// `break` / `continue` jump to the exit / header of
 // the loop they name (the innermost one unlabeled); `loop` yields the
 // value its `break` carries.
 fn main() -> i32 {

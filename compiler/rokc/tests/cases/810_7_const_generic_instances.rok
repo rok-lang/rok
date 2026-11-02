@@ -1,11 +1,10 @@
-// spec: 008.10-lowering-coroutine-generic §8.10.7
 // expect-exit: 0
 // expect-stdout:
 // dot3 32
 // dot2 11
 // len 3 2 5
 
-// spec 8.10.7: a `const` generic parameter is fixed per instance; each
+// A `const` generic parameter is fixed per instance; each
 // array length gets its own specialization with N as a constant.
 fn dot<const N: usize>(a: [i32; N], b: [i32; N]) -> i32 {
     let t = 0;
@@ -25,4 +24,3 @@ fn main() -> i32 {
     println(f"len {len([1u8, 2u8, 3u8])} {len([0u8; 2])} {len([7u8; 5])}");
     return 0;
 }
-// spec: 009.02-aot-pipeline §9.2.8

@@ -1,7 +1,6 @@
-// spec: 004.02-parameters
 // expect-error: cannot infer type parameter `T` of `count`
 
-// Spec 4.2.6: a variadic with an open generic `T` and no arguments
+// A variadic with an open generic `T` and no arguments
 // cannot determine `T`.
 fn count<T>(xs: ...T) -> usize { xs.len() }
 fn main() -> i32 {

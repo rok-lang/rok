@@ -1,4 +1,3 @@
-// spec: std 200-core/218-task §2.18.4
 // expect-exit: 0
 // expect-stdout:
 // finally
@@ -6,7 +5,7 @@
 // cancelled true
 // finished true
 
-// stdlib 2.18.4: `cancel()` requests cancellation; the task leaves at its
+// `cancel()` requests cancellation; the task leaves at its
 // next `await` like a `return`, running `finally` but never entering a
 // `catch` inside the task (cancellation is not a catchable error). The
 // awaiting side gets `CancellationError` from `try await t.join()`.

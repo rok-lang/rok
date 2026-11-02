@@ -86,4 +86,3 @@ fn halve(x: i32) -> Result<i32, E> {
 fn recover(e: E) -> i32 { 77 }
 fn to_f(e: E) -> F { F::Wrapped }
 fn retry(e: E) -> Result<i32, F> { Result::Ok(5) }
-// spec: std §2.14.2 §2.14.7

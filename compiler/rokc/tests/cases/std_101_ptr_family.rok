@@ -1,4 +1,3 @@
-// spec: std 101-ptr §1.1.1 §1.1.2 §1.1.3 §1.1.5 §1.1.6 / std 102-cast §1.2.4
 // expect-exit: 0
 // expect-stdout:
 // ptr is a word: true
@@ -11,7 +10,7 @@
 // many: 30 one: 11
 // from_addr: true
 
-// stdlib 1.1: the pointer kinds and the conversions between them.
+// The pointer kinds and the conversions between them.
 use rok::bare::mem::size_of;
 use rok::bare::ptr::{CPtr, ConstPtr, ManyPtr, Ptr, addr_of, expose_provenance, from_exposed_provenance};
 
@@ -23,7 +22,7 @@ extern "C" {
 fn main() {
     println(f"ptr is a word: {size_of::<Ptr<i32>>() == size_of::<usize>()}");
 
-    // 1.1.2: arithmetic over a local array.
+    // Arithmetic over a local array.
     let arr: [i32; 5] = [10, 20, 30, 40, 50];
     let p: Ptr<i32> = addr_of(arr[0]);
     let p3 = p.add(3);
@@ -33,14 +32,14 @@ fn main() {
     let r: Ptr<i32> = unsafe { from_exposed_provenance(exposed) };
     println(f"with_addr: {unsafe { q.read() }} exposed: {unsafe { r.read() }}");
 
-    // 1.1.3 / 1.2.4: adding const is safe, removing it is an explicit
+    // Adding const is safe, removing it is an explicit
     // named cast (a safe fn: only the write is unsafe).
     let c: ConstPtr<i32> = p.as_const();
     let m: Ptr<i32> = rok::bare::const_cast(c);
     unsafe { m.write(11); }
     println(f"const: 10 const_cast: {unsafe { c.read() }}");
 
-    // 1.1.5: CPtr is nullable itself.
+    // CPtr is nullable itself.
     let n: CPtr<u8> = CPtr::null();
     println(f"null: {n.is_null()} {n.addr()} {match n.as_ptr() { _: Ptr<u8> => "ptr", none => "none" }}");
     let buf: CPtr<u8> = unsafe { malloc(16) };
@@ -54,7 +53,7 @@ fn main() {
     unsafe { free(buf) };
     println(f"from_const: {CPtr::from_const(c).is_null()}");
 
-    // 1.1.6: Ptr ↔ ManyPtr, usize → CPtr.
+    // Ptr ↔ ManyPtr, usize → CPtr.
     let many: ManyPtr<i32> = p.as_many();
     let one: Ptr<i32> = many.as_one();
     println(f"many: {unsafe { many.read(2) }} one: {unsafe { one.read() }}");

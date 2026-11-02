@@ -1,13 +1,12 @@
-// spec: 007.08-coroutine §7.8.9 §7.8.6 / 008.10 §8.10.5
 // expect-exit: 0
 // expect-stdout:
 // depth 50000 via tasks
 // frames: 50001
 
-// spec 7.8.9: nested `await`s run on the native stack, so deep `async`
+// Nested `await`s run on the native stack, so deep `async`
 // recursion is split into tasks: awaiting a spawned task only parks the
 // awaiting frame, the stack never grows with the depth. Each level is
-// its own heap frame (7.8.6 / 8.10.5: one frame per coroutine call).
+// its own heap frame (one frame per coroutine call).
 use rok::core::sync::{LoadOrdering, UpdateOrdering};
 
 async fn deep(n: i32, frames: Atomic<i32>) -> i32 {

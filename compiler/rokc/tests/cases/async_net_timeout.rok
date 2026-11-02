@@ -7,10 +7,10 @@
 // read in time: 2
 // select: timed out
 
-// Timeouts on async socket calls (302 §3.2.0: `set_read_timeout` is for
+// Timeouts on async socket calls (`set_read_timeout` is for
 // the blocking calls; the async ones go through `task::timeout`, or
 // `task::select` with a `sleep`). After a timeout the read keeps going
-// until cancelled (707 §7.7.10).
+// until cancelled.
 use rok::core::marker::share;
 use rok::std::net::{TcpListener, TcpStream, SocketAddr};
 
@@ -42,5 +42,3 @@ try! client.close();
 try! server_own.close();
 try! listener.close();
 
-// spec: 004.12-async
-// spec: std 302-net §3.2.0

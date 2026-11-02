@@ -1,6 +1,6 @@
 // expect-error: method `side` on `C` is ambiguous: traits `Left`, `Right` all provide it - call it as `Trait::side(x)`
 
-// Spec 4.9.6: two traits of the current package giving `C` the same
+// Two traits of the current package giving `C` the same
 // method name leave `c.side()` ambiguous.
 
 trait Left { fn side(self) -> i32; }
@@ -16,6 +16,4 @@ fn main() {
     println(f"{c.side()}");
 }
 
-// spec: 004.09-method
 
-// spec: §2.9.7

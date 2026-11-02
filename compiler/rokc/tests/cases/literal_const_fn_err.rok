@@ -1,4 +1,4 @@
-// Spec 6.5.8: a `const fn` literal handler that panics or throws at
+// A `const fn` literal handler that panics or throws at
 // compile time is a compile error at the literal.
 // expect-error: literal cannot be evaluated at compile time: panicked: an `rgb` literal has 6 hex digits
 // expect-error: literal_const_fn_err.rok:52:15
@@ -53,4 +53,3 @@ fn main() -> i32 {
     let p = try! 70000port;
     return (ok.v + bad.v) as i32 + p.n as i32;
 }
-// spec: §6.5.8

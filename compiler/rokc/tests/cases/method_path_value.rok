@@ -57,6 +57,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 004.09-method
-// spec: std 003-intrinsics §0.3.4
-// spec: §3.5.3

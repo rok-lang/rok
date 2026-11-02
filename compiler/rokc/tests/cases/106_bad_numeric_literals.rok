@@ -1,7 +1,6 @@
-// spec: 001.06-numeric-literals
 // expect-error: consecutive `_` in numeric literal
 
-// spec 1.6.4 rejected forms, plus an out-of-range suffixed literal.
+// Rejected forms, plus an out-of-range suffixed literal.
 fn main() -> i32 {
     let a = 1__0;
     let b = 0x_FF;
@@ -12,11 +11,10 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: §1.6.5
-// expect-error: 7:13: `_` must sit between digits (not after a prefix or `.`)
-// expect-error: 8:13: exponent has no digits
-// expect-error: 9:13: invalid digit `2` in base-2 literal
-// expect-error: 10:13: literal `300` out of range for `i8` (max 127)
+// expect-error: 6:13: `_` must sit between digits (not after a prefix or `.`)
+// expect-error: 7:13: exponent has no digits
+// expect-error: 8:13: invalid digit `2` in base-2 literal
+// expect-error: 9:13: literal `300` out of range for `i8` (max 127)
 // expect-error: help: use a wider type: `300i16`
-// expect-error: 11:14: literal `-129` out of range for `i8` (min -128)
+// expect-error: 10:14: literal `-129` out of range for `i8` (min -128)
 // expect-error: help: use a wider type: `-129i16`

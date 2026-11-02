@@ -1,8 +1,7 @@
-// spec: §3.11.4
 // expect-error: or-pattern binding `n` has inconsistent types across alternatives (`i32` and `i64`
 // expect-error: write one type pattern: `n: i32 | i64`
 
-// 3.11.4: alternatives bind each name at one type; `(n: i32) | (n: i64)`
+// Alternatives bind each name at one type; `(n: i32) | (n: i64)`
 // does not.
 fn f(v: i32 | i64 | str) -> str {
     match v {

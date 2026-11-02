@@ -1,4 +1,3 @@
-// spec: §6.3.3 §6.3.7
 // expect-exit: 0
 // expect-stdout:
 // 1 2
@@ -6,7 +5,7 @@
 // 3
 // ok
 
-// 6.3.3: a cfg-false field or variant does not exist; 6.3.7: cfg runs
+// A cfg-false field or variant does not exist; cfg runs
 // before meta expansion, so a derive sees only the remaining members
 // and the derives of a cfg-false item are not expanded at all.
 #[derive(Clone, Debug)]

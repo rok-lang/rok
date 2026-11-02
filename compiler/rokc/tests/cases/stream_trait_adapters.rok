@@ -1,4 +1,3 @@
-// spec: std §2.8.10
 // expect-exit: 0
 // expect-stdout:
 // set 3 true
@@ -10,7 +9,7 @@
 use rok::core::stream::{Stream, Map, merge};
 use rok::core::future::{Context, Poll};
 
-// Stream adapters live on the `Stream` trait (stdlib 2.8.5): any stream,
+// Stream adapters live on the `Stream` trait: any stream,
 // not just `AsyncStream`, gets them; `collect` goes through `FromStream`.
 async yield fn nums(n: i32) -> i32 {
     let i = 0;
@@ -66,5 +65,3 @@ let total = 0;
 for await x in m { total += x; }
 println(f"custom {total}");
 
-// spec: std 208-stream
-// spec: std §2.8.1 §2.8.2 §2.8.5

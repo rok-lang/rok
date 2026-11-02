@@ -1,4 +1,3 @@
-// spec: 008.05-extern-symbols §8.5.0 §8.5.7 rok_panic / 004.14 §4.14.13
 // needs: threads
 // expect-exit: 101
 // expect-stderr: thread '<unnamed>' panicked:
@@ -6,10 +5,10 @@
 // expect-stdout:
 // worker started 1
 
-// spec 8.5.7: `rok_panic` is `thread-safe` (8.5.0): called on any thread
+// `rok_panic` is `thread-safe`: called on any thread
 // it prints the message (no location) and ends the whole process with
 // exit code 101 at once; `finally` does not run. An unnamed thread is
-// `<unnamed>` (4.14.13).
+// `<unnamed>`.
 use rok::std::thread;
 use rok::bare::ptr::ConstPtr;
 

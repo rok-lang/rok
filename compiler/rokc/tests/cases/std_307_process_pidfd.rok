@@ -1,7 +1,5 @@
 // only-os: linux
 // expect-exit: 0
-// spec: std 307-process §3.7.4
-// spec: std 311-os §3.11.5
 //
 // `ChildExt::pidfd` (Linux 5.3+, in the prelude there): the pidfd
 // tracking the running child.

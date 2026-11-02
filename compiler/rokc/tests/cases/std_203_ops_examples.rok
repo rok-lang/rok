@@ -1,4 +1,3 @@
-// spec: std 203-ops §2.3.1-2.3.3 §2.3.6 §2.3.7 §2.3.9
 // expect-exit: 0
 // expect-stdout:
 // 8 4 7 0.5 42 10
@@ -10,10 +9,10 @@
 // Vec3 { x: 1.5, y: 2.5, z: 3.5 } 6
 // lhs true
 
-// Stdlib 2.3: the examples of the arithmetic (2.3.1), unary (2.3.2) and
-// bitwise (2.3.3) traits on primitives, user `Mul` / `Add` impls
-// (2.3.1, 2.3.6) composed in one expression (2.3.7), and `bool`
-// `&&` / `||` short-circuiting (2.3.9).
+// The examples of the arithmetic, unary and
+// bitwise traits on primitives, user `Mul` / `Add` impls
+// composed in one expression, and `bool`
+// `&&` / `||` short-circuiting.
 struct Matrix2x2 { a: f64; b: f64; c: f64; d: f64; }
 
 impl ops::Mul<Matrix2x2> for Matrix2x2 {

@@ -1,4 +1,3 @@
-// spec: std 301-fs §3.1.2 / §3.1.0
 // needs: fs
 // expect-exit: 0
 // expect-stdout:
@@ -8,8 +7,8 @@
 // parent rejected
 // renamed true copied 4
 
-// 3.1.2: a `Dir` other than `root()` works beneath itself and rejects
-// absolute paths and `..`; 3.1.0: path arguments take `str` or `Path`.
+// A `Dir` other than `root()` works beneath itself and rejects
+// absolute paths and `..`; path arguments take `str` or `Path`.
 use rok::std::env;
 use rok::std::fs::Dir;
 use rok::std::path::Path;
@@ -33,4 +32,3 @@ fn main() {
     println(f"renamed {d.exists("sub/b.txt")} copied {n}");
     try! Dir::root().remove_dir_all(base);
 }
-// spec: std 308-path §3.8.7

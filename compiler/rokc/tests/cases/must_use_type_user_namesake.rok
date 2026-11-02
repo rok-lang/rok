@@ -1,7 +1,6 @@
 // expect-exit: 0
-// spec: §6.2.11
-// expect-lint: 13:5 unused variable `h`
-// expect-lint: 14:1 the `JoinHandle` result of `mk` is never used
+// expect-lint: 12:5 unused variable `h`
+// expect-lint: 13:1 the `JoinHandle` result of `mk` is never used
 // expect-stdout:
 // 1
 

@@ -1,6 +1,5 @@
 // needs: threads
 // expect-exit: 0
-// spec: std 304-thread §3.4.4
 // gc-stress: 20
 // expect-stdout:
 // old [1, 2] now [7]

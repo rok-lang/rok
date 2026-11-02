@@ -68,4 +68,3 @@ using g = m.lock() {
     println(f"counter {g.get()}");
 }
 
-// spec: 004.12-async

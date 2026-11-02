@@ -1,9 +1,8 @@
-// spec: 003.04-compound-assign-array-elem
 // expect-exit: 0
 // expect-stdout:
 // 25
 
-// spec 3.4: compound assignment to an array element, `arr[i] += v`.
+// Compound assignment to an array element, `arr[i] += v`.
 fn main() -> i32 {
     let arr: [i32; 3] = [10, 20, 30];
     arr[1] += 5;

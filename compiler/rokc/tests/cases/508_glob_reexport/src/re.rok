@@ -5,6 +5,6 @@ pub mod all {
     pub use pkg::deep::**;
 }
 
-// A named module re-export: paths through it resolve (5.8.8).
+// A named module re-export: paths through it resolve.
 pub use pkg::deep as d;
 pub use pkg::deep::LIMIT;

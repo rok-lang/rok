@@ -1,6 +1,5 @@
-// spec: §2.8.8 §2.9.6
-// expect-error: 10:9: a trait item has no visibility of its own
-// expect-error: 14:23: a trait impl's item has no visibility of its own
+// expect-error: 9:9: a trait item has no visibility of its own
+// expect-error: 13:23: a trait impl's item has no visibility of its own
 // expect-error: help: remove `pub`
 
 // Trait items and a trait impl's items are as visible as the trait.

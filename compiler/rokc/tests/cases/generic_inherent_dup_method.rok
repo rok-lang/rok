@@ -1,8 +1,8 @@
 // expect-error: duplicate method `first`
 
 // Two generic inherent impls on structural types that both cover
-// `[i32; 3]` and both define `first` are rejected at the declaration
-// (spec 2.9.3), not at a call.
+// `[i32; 3]` and both define `first` are rejected at the declaration,
+// not at a call.
 impl<T, const N: usize> [T; N] {
     fn first(self) -> T { return self[0]; }
 }
@@ -16,6 +16,4 @@ fn main() -> i32 {
     return a.total();
 }
 
-// spec: 002.10-generics
 
-// spec: §2.9.8

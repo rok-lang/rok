@@ -39,4 +39,3 @@ for round in 0..8 {
 println(f"cancelled {cancelled} of 512");
 using c = cleanups.lock() { println(f"cleanups {c.get()} of 512"); }
 
-// spec: 004.12-async

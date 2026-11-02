@@ -12,7 +12,7 @@
 // 7
 // 3
 
-// `List<T>` (stdlib 2.9.2): push / pop / get / insert / remove, `xs[i]`
+// `List<T>`: push / pop / get / insert / remove, `xs[i]`
 // through `Index`, `xs[i] = v` through `IndexSet`, `for x in xs`
 // through `IntoIterator` + `Iterator`, and `[..]` into a `List` slot.
 
@@ -63,4 +63,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: std 209-collections

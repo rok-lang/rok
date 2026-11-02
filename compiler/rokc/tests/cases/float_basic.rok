@@ -14,4 +14,3 @@ fn main() -> i32 {
     return n;
 }
 
-// spec: std 201-numbers

@@ -1,18 +1,17 @@
-// spec: §5.5.1 §5.6.2 §5.6.13
 // A name not in scope that an item elsewhere has: the help gives the
 // `use` that brings it in (`sup::` from below its module), or the `pub`
 // that is missing when the package's only such item is hidden.
-// expect-error: 31:6: cannot find type `Point` in this scope
+// expect-error: 30:6: cannot find type `Point` in this scope
 // expect-error: help: add `use geo::Point;`
-// expect-error: 34:13: cannot find function `area` in this scope
+// expect-error: 33:13: cannot find function `area` in this scope
 // expect-error: help: add `use geo::area;`
-// expect-error: 35:13: cannot find value `LIMIT` in this scope
+// expect-error: 34:13: cannot find value `LIMIT` in this scope
 // expect-error: help: add `use geo::LIMIT;`
-// expect-error: 36:13: cannot find function `secret` in this scope
+// expect-error: 35:13: cannot find function `secret` in this scope
 // expect-error: help: `geo::secret` has that name, but it is private to module `geo`: add `pub` to it; or add `use rok::std::random::secret;`
-// expect-error: 37:13: cannot find function `deep` in this scope
+// expect-error: 36:13: cannot find function `deep` in this scope
 // expect-error: help: `geo::inner::deep` has that name, but module `geo::inner` is private: add `pub` to its `mod`
-// expect-error: 25:43: cannot find function `sides` in this scope
+// expect-error: 24:43: cannot find function `sides` in this scope
 // expect-error: help: add `use sup::sides;`
 
 mod geo {

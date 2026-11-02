@@ -1,4 +1,3 @@
-// spec: 004.14.6-caller-obligation
 // An error must be caught or be in the enclosing fn's `throws`.
 // expect-error: error `ParseError` is not handled
 

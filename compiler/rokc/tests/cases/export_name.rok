@@ -1,6 +1,5 @@
-// spec: §9.5.8 §5.9.10
 // expect-exit: 5
-// `#[export_name("sym")]` (spec 905 / 509.10): the function's linker
+// `#[export_name("sym")]`: the function's linker
 // symbol is `sym`, and it is emitted even when nothing calls it.
 // expect-stdout:
 // 5

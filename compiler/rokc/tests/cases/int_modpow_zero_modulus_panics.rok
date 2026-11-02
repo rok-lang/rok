@@ -1,7 +1,6 @@
-// spec: std §2.1.2
-// stdlib spec 2.1.2: `modpow` with a zero modulus panics at the call.
+// `modpow` with a zero modulus panics at the call.
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at tests/cases/int_modpow_zero_modulus_panics.rok:10:16:
+// expect-stderr: thread 'main' panicked at tests/cases/int_modpow_zero_modulus_panics.rok:9:16:
 // expect-stderr: Int::modpow: the modulus is zero
 // expect-stdout:
 

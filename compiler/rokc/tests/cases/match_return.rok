@@ -16,4 +16,3 @@ fn main() -> i32 {
     return c + 2;
 }
 
-// spec: 003.12-match-expression

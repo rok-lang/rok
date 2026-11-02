@@ -1,4 +1,4 @@
-// Spec 5.2.4 / 5.2.5: a const value must evaluate at compile time.
+// A const value must evaluate at compile time.
 // Overflow, a call to a non-`const` fn, a const defined through
 // itself and runaway recursion / loops are compile errors, even for a
 // const nothing uses.
@@ -48,5 +48,3 @@ fn main() -> i32 {
     return xs[0];
 }
 
-// spec: 005.02-const
-// spec: §5.2.4 §5.2.5

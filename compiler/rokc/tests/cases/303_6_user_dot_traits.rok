@@ -1,14 +1,13 @@
-// spec: §3.3.2 §3.3.6 §3.3.5
 // expect-exit: 0
 // expect-stdout:
 // [7, 12] [52, 28]
 // [11, 22, 33] [11, 22, 33]
 // [false, false] calls=2
 
-// spec 3.3.6: a user type gets `.+` / `.*` by implementing the Dot
-// traits, separately from `*` (3.3.5: `m * n` and `m .* n` differ).
-// 3.3.2: `a .+ b .* c` is `a .+ (b .* c)`, `.+` groups from the left.
-// 3.3.1 note: `.&&` does not short-circuit; both operands run.
+// A user type gets `.+` / `.*` by implementing the Dot
+// traits, separately from `*` (`m * n` and `m .* n` differ).
+// `a .+ b .* c` is `a .+ (b .* c)`, `.+` groups from the left.
+// `.&&` does not short-circuit; both operands run.
 struct Vec2 { a: i32; b: i32; }
 
 impl ops::DotAdd for Vec2 {

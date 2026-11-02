@@ -1,9 +1,8 @@
-// spec: 002.08-supertrait
 // expect-exit: 0
 // expect-stdout:
 // 7
 
-// spec 2.8: supertrait `trait Ord: Eq`; implementing Ord requires Eq.
+// Supertrait `trait Ord: Eq`; implementing Ord requires Eq.
 trait Eq2 {
     fn eq2(self, other: i32) -> bool;
 }

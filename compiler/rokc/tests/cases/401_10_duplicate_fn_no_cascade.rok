@@ -1,15 +1,14 @@
-// spec: 004.01.10-no-duplicate-definitions-in-the-same-module
 // A call of a duplicated function or method reports nothing more: an
 // argument count or type error would read as if one definition was
 // picked. Errors inside the arguments themselves still show.
-// expect-error: 17:1: function `f` is defined more than once
-// expect-error: 20:1: function `g` is defined more than once
-// expect-error: 25:5: method `m` is defined more than once for `S`
-// expect-error: 28:5: method `m` is defined more than once for `S`
-// expect-error: 33:5: method `n` is defined more than once for `B<T>`
-// expect-error: 37:5: method `t` is defined more than once for `S`
-// expect-error: 45:22: cannot find value `nope` in this scope
-// expect-error: 50:5: nested function `h` is defined twice in this block
+// expect-error: 16:1: function `f` is defined more than once
+// expect-error: 19:1: function `g` is defined more than once
+// expect-error: 24:5: method `m` is defined more than once for `S`
+// expect-error: 27:5: method `m` is defined more than once for `S`
+// expect-error: 32:5: method `n` is defined more than once for `B<T>`
+// expect-error: 36:5: method `t` is defined more than once for `S`
+// expect-error: 44:22: cannot find value `nope` in this scope
+// expect-error: 49:5: nested function `h` is defined twice in this block
 
 trait Tr { fn t(self, a: i32) -> i32; }
 

@@ -1,8 +1,7 @@
-// spec: 004.06.2-capture-ref
 // expect-exit: 0
 // expect-stdout: 2
 
-// spec 4.6.2: a `[ref x]` capture list captures by reference; assignment
+// A `[ref x]` capture list captures by reference; assignment
 // in the closure body reaches the outer variable.
 fn main() -> i32 {
     let count = 0;

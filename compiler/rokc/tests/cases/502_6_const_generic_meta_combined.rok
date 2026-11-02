@@ -1,9 +1,8 @@
-// spec: refs-lang §5.2.6
 // expect-exit: 0
 // expect-stdout:
 // Grid { cells: [0, 0, 0, 0, 0, 0], area: 6 } 6 2
 
-// 5.2.6: generics, meta blocks (here `derive`) and `const fn` are
+// Generics, meta blocks (here `derive`) and `const fn` are
 // orthogonal: a `const fn` result is the field default of a derived
 // struct that a generic function takes.
 const fn area(w: i32, h: i32) -> i32 { w * h }

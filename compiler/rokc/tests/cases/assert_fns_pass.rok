@@ -1,4 +1,3 @@
-// spec: std §2.14.5
 // expect-exit: 0
 // expect-stdout: ok
 // `rok::core::panic::assert*`: silent when the check holds; the message

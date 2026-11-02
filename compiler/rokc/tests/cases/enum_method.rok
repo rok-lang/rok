@@ -24,4 +24,3 @@ fn main() -> i32 {
     return total + 1;
 }
 
-// spec: 002.04-enum

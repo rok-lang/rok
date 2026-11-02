@@ -1,10 +1,9 @@
-// spec: 006.04-lang-attribute-recognized
 // expect-exit: 0
 // expect-stdout:
 
-// spec 6.4: well-formed `#[lang("slot_name")]` on trait / struct / enum /
-// fn / const / static is accepted (slot names come from stdlib spec 0.4, 6.4.8).
-// A slot binds once per program (6.4.6), so this uses slots core leaves
+// Well-formed `#[lang("slot_name")]` on trait / struct / enum /
+// fn / const / static is accepted.
+// A slot binds once per program, so this uses slots core leaves
 // unbound (core binds `panic_fn` / `oom_fn` / `unreachable_fn`).
 #[lang("char_type")]
 struct C {
@@ -19,4 +18,3 @@ struct S {
 fn main() -> i32 {
     return 0;
 }
-// spec: §6.4.2 §6.4.3 §6.4.5

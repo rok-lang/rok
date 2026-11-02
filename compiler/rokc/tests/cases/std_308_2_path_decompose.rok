@@ -1,4 +1,3 @@
-// spec: std 308-path §3.8.2 / §3.8.3 / §3.8.6
 // only-os: macos linux
 // (the expected output spells unix separators)
 // expect-exit: 0
@@ -13,8 +12,8 @@
 // ancestors /a/b /a /
 // root parent none
 
-// 3.8.2: decomposition and manipulation return new paths; 3.8.3: `/`
-// and `/=`; 3.8.6: `normalize` is lexical.
+// Decomposition and manipulation return new paths; `/`
+// and `/=`; `normalize` is lexical.
 use rok::std::path::Path;
 
 fn main() {

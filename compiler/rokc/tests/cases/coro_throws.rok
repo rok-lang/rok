@@ -1,4 +1,3 @@
-// spec: refs-lang §4.14.10
 // expect-exit: 0
 // expect-stdout:
 // 30 -3
@@ -6,8 +5,8 @@
 // 9 -1007
 // 13
 
-// Throwing generators error at `next`, throwing async fns at `await`
-// (spec 4.14.10); a finished generator stays done.
+// Throwing generators error at `next`, throwing async fns at `await`;
+// a finished generator stays done.
 struct BadInput { at: i32; }
 impl Display for BadInput { fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"bad input at {self.at}") } }
 impl Debug for BadInput { fn fmt(self, ref f: Formatter) throws (FmtError) { try Display::fmt(self, ref f) } }

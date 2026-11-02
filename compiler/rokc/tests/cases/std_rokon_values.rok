@@ -55,7 +55,7 @@
 // empty: true true
 // { "k": 1, (1, true): none }
 
-// Spec 3.9.1: every ROKON value kind, read with `rokon::parse` and
+// Every ROKON value kind, read with `rokon::parse` and
 // written back in canonical form (`Value::to_str`).
 
 use rok::std::rokon;
@@ -146,5 +146,3 @@ fn main() {
     println(try! Value::Dict(d).to_str());
 }
 
-// spec: std 309-rokon
-// spec: std 309-rokon §3.9.1 §3.9.3

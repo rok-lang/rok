@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `s.buf` shares `xs`, which was sent through a channel
-// spec: std 213-marker §2.13.9
 // A slice view kept after the list is sent.
 use rok::std::thread;
 fn main() {

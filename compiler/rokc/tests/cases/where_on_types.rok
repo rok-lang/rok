@@ -5,7 +5,7 @@
 // 7
 // 9
 
-// Spec 2.10.4: `where` after a struct / enum / union / type alias header
+// `where` after a struct / enum / union / type alias header
 // (also after a tuple struct's fields, Rust style) bounds the parameters
 // like inline bounds.
 struct W<T> where T: Display { v: T; }
@@ -35,4 +35,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 002.10-generics

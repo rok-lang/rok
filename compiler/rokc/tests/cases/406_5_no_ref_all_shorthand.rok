@@ -1,7 +1,6 @@
-// spec: §4.6.5
-// expect-error: 7:9: expected expression, found keyword `ref`
+// expect-error: 6:9: expected expression, found keyword `ref`
 
-// Spec 4.6.5: there is no shorthand that `ref`-captures everything;
+// There is no shorthand that `ref`-captures everything;
 // only an explicit `[ref x]` list does.
 let a = 1;
 let f = ref || { a = 2; };

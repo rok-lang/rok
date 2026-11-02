@@ -1,5 +1,4 @@
-// spec: std 002-import §0.2.7
-// expect-error: 8:9: cannot find type `GcBuf` in this scope
+// expect-error: 7:9: cannot find type `GcBuf` in this scope
 // expect-error: help: add `use rok::bare::mem::GcBuf;`
 // expect-error: module `rok::core::collections::raw` is private
 

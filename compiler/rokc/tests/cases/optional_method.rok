@@ -28,4 +28,3 @@ fn main() -> i32 {
     return (r1 ?? 0) + (r2 ?? 14) + 0;
 }
 
-// spec: 003.08-optional-chaining-and-coalescing

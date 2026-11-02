@@ -1,6 +1,5 @@
-// spec: refs-lang §5.9.4
 // expect-error: only an `extern "C"` function
-// An `extern "C" fn(..)` value is a bare C code pointer (spec 5.9.4): a
+// An `extern "C" fn(..)` value is a bare C code pointer: a
 // rok-ABI function has no C entry to point at.
 
 fn twice(x: i32) -> i32 { x * 2 }

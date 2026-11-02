@@ -1,11 +1,10 @@
-// spec: §3.12.5
 // A non-exhaustive match names the arms to add: the missing variants
 // (with their payload shape), or `_` past three.
-// expect-error: 14:5: non-exhaustive match on `Color`: `Color::Blue` not covered
+// expect-error: 13:5: non-exhaustive match on `Color`: `Color::Blue` not covered
 // expect-error: help: add `Color::Blue => ..`
-// expect-error: 20:5: non-exhaustive match on `Shape`: `Shape::Circle`, `Shape::Rect` not covered
+// expect-error: 19:5: non-exhaustive match on `Shape`: `Shape::Circle`, `Shape::Rect` not covered
 // expect-error: help: add the arms `Shape::Circle(_) => ..`, `Shape::Rect { .. } => ..`
-// expect-error: 25:5: non-exhaustive match on `Digit`: `Digit::D1`, `Digit::D2`, `Digit::D3`, `Digit::D4` not covered
+// expect-error: 24:5: non-exhaustive match on `Digit`: `Digit::D1`, `Digit::D2`, `Digit::D3`, `Digit::D4` not covered
 // expect-error: help: add `_ => ..`
 enum Color { Red, Green, Blue }
 enum Shape { Dot, Circle(f64), Rect { w: f64; h: f64; } }

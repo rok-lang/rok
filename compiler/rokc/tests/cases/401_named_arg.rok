@@ -1,9 +1,8 @@
-// spec: 004.02.4-named-arg
 // expect-exit: 0
 // expect-stdout:
 // 5
 
-// spec 4.1: named argument call `f(name: 42)`.
+// Named argument call `f(name: 42)`.
 fn divmod(num: i32, den: i32) -> i32 {
     return num / den;
 }

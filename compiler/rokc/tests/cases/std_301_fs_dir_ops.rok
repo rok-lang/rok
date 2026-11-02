@@ -1,4 +1,3 @@
-// spec: std 301-fs §3.1.2 / §3.1.4
 // needs: posix-fs
 // expect-exit: 0
 // expect-stdout:
@@ -10,7 +9,7 @@
 // remove non-empty dir fails: true
 // remove_dir: false
 
-// spec 301: `Dir::create` (open + create + truncate), `File::set_len`
+// `Dir::create` (open + create + truncate), `File::set_len`
 // truncates, `try_clone` dups the fd (shared offset), `remove_file`,
 // `remove_dir` (fails on a non-empty dir), `exists`.
 use rok::std::fs;

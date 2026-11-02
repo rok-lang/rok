@@ -1,7 +1,6 @@
-// spec: 004.12-async §4.12.10
 // expect-error: `await` outside an async body
 
-// spec 4.12.10: `await` is an error in a (non-async) `yield` body.
+// `await` is an error in a (non-async) `yield` body.
 async fn one() -> i32 { 1 }
 
 yield fn bad() -> i32 {

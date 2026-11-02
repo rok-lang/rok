@@ -1,4 +1,3 @@
-// spec: std 207-iter §2.7.1
 // expect-exit: 0
 // expect-stdout:
 // try_fold 6 err -3 empty 10

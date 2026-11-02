@@ -24,4 +24,3 @@ fn main() -> i32 {
     return q.sum() + 5;
 }
 
-// spec: 002.10-generics

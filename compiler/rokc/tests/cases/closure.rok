@@ -13,4 +13,3 @@ fn main() -> i32 {
     return apply(inc, 5i32) + apply(double, 3i32);
 }
 
-// spec: 004.05-closure

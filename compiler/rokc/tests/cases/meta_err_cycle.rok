@@ -1,5 +1,5 @@
 // expect-error: cyclic meta expansion: ping → pong → ping
-// Spec 6.8.8: an expansion that re-applies itself is an error.
+// An expansion that re-applies itself is an error.
 #[impl_attribute(ping)]
 pub @attribute {
     #[pong]
@@ -19,5 +19,3 @@ fn main() -> i32 {
     return f();
 }
 
-// spec: 006.08-meta-blocks
-// spec: §6.8.8

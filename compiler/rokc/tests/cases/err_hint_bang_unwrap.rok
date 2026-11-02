@@ -1,6 +1,5 @@
-// spec: §2.6.4 §3.8.4
 // A postfix `!` (Swift, TypeScript) is not how rok unwraps.
-// expect-error: 7:10: expected `;`, found `!`
+// expect-error: 6:10: expected `;`, found `!`
 // expect-error: help: rok has no `!` to unwrap; for a value that may be none, write `v ?? default`, `if let x: T = v { .. }`, or `match v { x: T => .., none => .. }`
 let xs: List<i32> = [1, 2];
 let v = xs.pop();

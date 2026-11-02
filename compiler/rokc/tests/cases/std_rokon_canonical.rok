@@ -101,4 +101,3 @@ fn main() {
     try bad.to_str() catch e { println(f"to_str: {e}"); "" };
 }
 
-// spec: std 309-rokon

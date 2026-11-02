@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `items` still holds `e`, which was handed to another owner
-// spec: std 213-marker §2.13.9
 // par::map returning each item: the results share the items.
 use rok::std::thread;
 fn main() {

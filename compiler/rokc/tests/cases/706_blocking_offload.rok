@@ -1,4 +1,3 @@
-// spec: refs-lang 007.06 §7.6.7
 // needs: threads
 // expect-exit: 0
 // gc-stress: 50
@@ -6,7 +5,7 @@
 // received 5 per worker
 // slept on every worker, ticked true
 
-// 706 §7.6.7: a task blocked in a synchronous call does not hold its
+// A task blocked in a synchronous call does not hold its
 // worker. Every worker blocks in a sync `recv` whose sender is another
 // task (behind a timer); main blocks too, so only a worker handed on
 // to a new thread can run the sender and fire the timer.

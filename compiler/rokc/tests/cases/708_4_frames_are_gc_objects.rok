@@ -1,13 +1,12 @@
-// spec: 007.08-coroutine §7.8.4 / §7.8.11
 // expect-exit: 0
 // expect-stdout:
 // g0:a g1:a g2:a g3:a
 // g0:b g1:b g2:b g3:b
 // done 0
 
-// spec 7.8.4: a suspended coroutine frame is a GC object - its locals are
+// A suspended coroutine frame is a GC object - its locals are
 // traced while it sits suspended, many frames can be live at once, and
-// (7.8.11) one that is never resumed again is simply dropped.
+// one that is never resumed again is simply dropped.
 extern "C" {
     fn rok_gc_collect();
 }
@@ -41,4 +40,3 @@ fn main() -> i32 {
     println(f"done {left}");
     return 0;
 }
-// spec: 008.10 §8.10.5

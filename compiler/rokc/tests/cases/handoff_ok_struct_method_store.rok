@@ -3,7 +3,6 @@
 // expect-stdout:
 // 2 got 1
 
-// spec: std 213-marker §2.13.9
 // A method storing a fresh row per call; rows taken out and sent.
 use rok::std::thread;
 struct Table { rows: List<List<i32>>; }

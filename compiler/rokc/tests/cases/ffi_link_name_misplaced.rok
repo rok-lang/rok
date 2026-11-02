@@ -1,5 +1,4 @@
 // expect-error: `#[link_name]` cannot be attached to a function; it goes on an extern function
-// spec: 5.9.9
 
 // `#[link_name]` names the symbol of an extern declaration only.
 #[link_name = "abs"]

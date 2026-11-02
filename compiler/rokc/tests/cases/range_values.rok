@@ -10,9 +10,9 @@
 // 4
 // 2
 
-// Range values (stdlib 2.7.4): `a..b` / `a..=b` / `a..` are `Range` /
+// Range values: `a..b` / `a..=b` / `a..` are `Range` /
 // `RangeInclusive` / `RangeFrom` values - in `let`s, fields, arguments -
-// iterating through `Step` (2.7.3); `Range` / `RangeInclusive` are
+// iterating through `Step`; `Range` / `RangeInclusive` are
 // `DoubleEndedIterator`s. `RangeFrom` stops before the type maximum.
 
 struct Win { r: Range<i32>; }
@@ -47,6 +47,3 @@ fn main() {
     println(f"{mx.len()}");
 }
 
-// spec: 003.07-range-expressions
-// spec: std §2.7.3 §2.7.4 §2.7.9
-// spec: §3.7.4 §3.7.5 §3.7.6

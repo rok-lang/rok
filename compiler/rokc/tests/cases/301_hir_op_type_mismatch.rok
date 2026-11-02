@@ -1,4 +1,3 @@
-// spec: 003.01-operator-types
 // Mismatched operand types are an error.
 // expect-error: operator `+` cannot be applied to `f64` and `i32`
 
@@ -8,4 +7,3 @@ fn main() -> i32 {
     let b = a + n;
     return 3;
 }
-// spec: §3.1.4

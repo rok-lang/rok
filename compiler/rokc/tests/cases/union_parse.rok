@@ -13,4 +13,3 @@ fn main() {
     println(f"{size_of::<Repr>()}");
 }
 
-// spec: 002.05-union

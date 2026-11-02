@@ -21,4 +21,3 @@ println(f"{await task::spawn(Seven {})}");
 let c = await task::spawn_local(MakeCell {});
 println(f"{c.get()}");
 
-// spec: 004.12-async

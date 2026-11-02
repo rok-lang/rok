@@ -26,4 +26,3 @@ fn main() -> i32 {
     println(f"{a.doubled()} {b.doubled()} {c.flag_value()} {d.flag_value()}");
     return a.doubled() + b.doubled() + c.flag_value() + d.flag_value();
 }
-// spec: 009.02-aot-pipeline §9.2.8

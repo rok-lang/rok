@@ -1,12 +1,11 @@
-// spec: refs-lang §2.2.2 / std §2.1.8
 // only-pointer-width: 64
 // expect-exit: 0
 // expect-stdout:
 // any 16
 // niches 1 8 8
 
-// 2.2.2: an `any` slot is a tag and a payload (here two words). Stdlib
-// 2.1.8: `bool | none` is one byte and `Ptr<T> | none` one pointer
+// An `any` slot is a tag and a payload (here two words).
+// `bool | none` is one byte and `Ptr<T> | none` one pointer
 // (null is `none`); `i32 | none` gets no niche.
 use rok::bare::mem::size_of;
 use rok::bare::ptr::Ptr;

@@ -14,7 +14,7 @@
 // C sees 5 bytes
 // ok
 
-// stdlib 2.15 on the `(ptr, len)` str: `+` / `+=` concatenate into GC
+// On the `(ptr, len)` str: `+` / `+=` concatenate into GC
 // strings, `==` / `<` compare contents, `s[a:b]` slices on byte offsets
 // (UTF-8 boundaries checked), core methods, string literal patterns, and
 // C functions still get a NUL-terminated `char*`.
@@ -53,4 +53,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: std 215-string

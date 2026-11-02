@@ -4,7 +4,7 @@
 // expect-stderr: string offsets count bytes; to work by character, use `chars()` or `char_indices()`
 // expect-stdout: a세b
 
-// stdlib 2.15.3: `str` bounds are byte offsets clamped to the length;
+// `str` bounds are byte offsets clamped to the length;
 // a clamped bound inside a UTF-8 sequence still panics.
 fn main() {
     let s = "a세b";
@@ -12,4 +12,3 @@ fn main() {
     println(s[-3:]);
 }
 
-// spec: std 215-string

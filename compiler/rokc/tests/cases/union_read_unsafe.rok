@@ -3,7 +3,7 @@
 // 42
 
 // Writing a union field (its initialiser) is safe; reading one back
-// reinterprets bits and needs `unsafe` (spec 4.15.2).
+// reinterprets bits and needs `unsafe`.
 union Repr {
     bits: i64;
     low: i32;
@@ -16,6 +16,4 @@ fn main() -> i32 {
     return low;
 }
 
-// spec: 002.05-union
 
-// spec: §2.5.2

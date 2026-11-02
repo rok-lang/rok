@@ -1,9 +1,8 @@
-// spec: §5.9.4 §5.9.2
 // only-target: i686-pc-windows-msvc
 // expect-error: an `extern "system"` function is no `extern "C" fn(..)` value: `"system"` is `stdcall` on this target
 // expect-error: `extern "system" fn` is `stdcall` on this target, not `extern "C" fn`
 
-// 5.9.4: on 32-bit x86 Windows `extern "system" fn(..)` is a type of
+// On 32-bit x86 Windows `extern "system" fn(..)` is a type of
 // its own (stdcall): neither an `extern "system"` function nor such a
 // value fills an `extern "C" fn(..)` slot.
 extern "system" fn twice(x: i32) -> i32 { x * 2 }

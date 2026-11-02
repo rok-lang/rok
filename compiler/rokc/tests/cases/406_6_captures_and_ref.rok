@@ -1,5 +1,3 @@
-// spec: §4.6.3 §4.6.6 §4.6.7 §4.6.8 §4.6.10
-// spec: §4.7.1 §4.7.2 §4.7.3 §4.7.4 §4.7.5 §4.7.8 §4.7.9 §4.7.10
 // expect-exit: 0
 // expect-stdout:
 // 0 4
@@ -13,7 +11,7 @@
 // 0 10 1 0
 // 2 1
 
-// Spec 4.6 / 4.7: value captures copy (per loop iteration too), a
+// Value captures copy (per loop iteration too), a
 // captured handle shares its object, `[ref x]` shares the binding and
 // outlives its scope; `ref` parameters are copy-in / copy-out (written
 // back on a throw too), marked at the call, implicit for receivers.

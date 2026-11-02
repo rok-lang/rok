@@ -141,4 +141,3 @@ let peak_n = 0;
 using g = peak.lock() { peak_n = g.get(); }
 println(f"connections: {good} clients x {rounds / good} rounds ok, peak open >= 40: {peak_n >= 40}");
 try! l_own.close();
-// spec: std 302-net §3.2.2 §3.2.6

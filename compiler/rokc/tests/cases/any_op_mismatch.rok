@@ -4,11 +4,10 @@
 // expect-stdout:
 // 1
 
-// 808 §8.8.9: a runtime type without the operator traps (`rok_panic`).
+// A runtime type without the operator traps (`rok_panic`).
 let v: any = 42i32;
 let f: any = 1.5;
 println(f"{1}");
 let b = v < f;
 println(f"{2}");
 
-// spec: 002.02-any-slot

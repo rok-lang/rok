@@ -1,4 +1,3 @@
-// spec: std 207-iter §2.7.1
 // expect-exit: 0
 // expect-stdout:
 // map/filter: [0, 4, 16, 36, 64]
@@ -9,7 +8,7 @@
 // rev: [4, 3, 2, 1, 0]
 // peek 1 next 1 next 2
 
-// spec 2.7.1 iterator adapters: map / filter / enumerate / zip / chain /
+// Iterator adapters: map / filter / enumerate / zip / chain /
 // take / skip / step_by / rev / peekable.
 fn main() {
     println(f"map/filter: {(0..10).filter(|x: i32| x % 2 == 0).map(|x: i32| x * x).collect::<List<i32>>():?}");

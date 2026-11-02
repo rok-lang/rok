@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `items` still holds `items[0]`, which was handed to another owner
-// spec: std 213-marker §2.13.9
 // Sent element, then insert at 0 and the old element is items[1].
 use rok::std::thread;
 fn main() {

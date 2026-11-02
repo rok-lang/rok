@@ -1,9 +1,8 @@
-// spec: refs-lang §1.9.4
 // expect-error: cannot find value `null` in this scope
 // expect-error: cannot find value `nil` in this scope
 // expect-error: cannot find value `undefined` in this scope
 
-// 1.9.4: `null` / `nil` / `undefined` are no literals (emptiness is
+// `null` / `nil` / `undefined` are no literals (emptiness is
 // `none`), just unknown names; infinity and NaN are library constants
 // and `()` is an expression.
 fn main() {

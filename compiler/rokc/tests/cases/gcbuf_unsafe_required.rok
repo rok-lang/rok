@@ -1,4 +1,3 @@
-// spec: §4.15.3 std §2.9.12
 // expect-error: call to unsafe function `buf_new` outside an `unsafe` block
 // expect-error: call to unsafe function `buf_get` outside an `unsafe` block
 // expect-error: call to unsafe function `buf_set` outside an `unsafe` block

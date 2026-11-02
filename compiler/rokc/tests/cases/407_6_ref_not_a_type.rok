@@ -1,6 +1,5 @@
-// spec: §4.7.6
-// expect-error: 6:8: expected type, found keyword `ref`
+// expect-error: 5:8: expected type, found keyword `ref`
 
-// Spec 4.7.6: `ref` is a modifier, not a type.
+// `ref` is a modifier, not a type.
 let a = 1;
 let x: ref i32 = a;

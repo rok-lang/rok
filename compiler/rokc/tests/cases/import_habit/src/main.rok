@@ -1,8 +1,7 @@
-// expect-error: 6:8: expected `;` after top-level expression, found identifier `geom`
+// expect-error: 5:8: expected `;` after top-level expression, found identifier `geom`
 // expect-error: = help: to load geom.rok, write `mod geom;` then call `geom::f()` or `use geom::f;`
 // `import x` of another language, with x.rok beside the file: the help
-// is the `mod` that loads it (spec 5.4.4).
-// spec: §5.4.4
+// is the `mod` that loads it.
 import geom
 
 println(f"{geom::area()}");

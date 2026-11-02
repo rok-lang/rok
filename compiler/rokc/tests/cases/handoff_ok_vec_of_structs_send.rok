@@ -3,7 +3,6 @@
 // expect-stdout:
 // 2 3
 
-// spec: std 213-marker §2.13.9
 // Records with list fields, sent one by one with `for`.
 use rok::std::thread;
 struct Rec { name: str; tags: List<str>; }

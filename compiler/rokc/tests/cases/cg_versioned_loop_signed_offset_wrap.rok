@@ -1,10 +1,9 @@
-// spec: §3.13.3 std §2.9.2
 // A signed counter's `ctr + k` wraps negative past the type's top, and
 // as a `usize` that is far past the end: the test in front also needs
 // `bound <= MAX - k + 1`. At the top exactly the unchecked copy runs; one
 // past it the checked loop does, and panics at the wrapped index.
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at tests/cases/cg_versioned_loop_signed_offset_wrap.rok:32:14:
+// expect-stderr: thread 'main' panicked at tests/cases/cg_versioned_loop_signed_offset_wrap.rok:31:14:
 // expect-stderr: index * out of bounds for length 32800
 // expect-stdout:
 // 118 32758 300

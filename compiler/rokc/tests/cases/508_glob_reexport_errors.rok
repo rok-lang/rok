@@ -1,9 +1,8 @@
-// spec: §5.8.6 §5.8.12
-// expect-error: 13:13: glob re-export of `a::x` as `b::x` conflicts with `b::x`
-// expect-error: 17:29: cannot find function `c::hid` in this scope
+// expect-error: 12:13: glob re-export of `a::x` as `b::x` conflicts with `b::x`
+// expect-error: 16:29: cannot find function `c::hid` in this scope
 
-// 5.8.6: a glob re-export clashing with a name of the module is an
-// error; 5.8.12: an item the module can't see is not re-exported.
+// A glob re-export clashing with a name of the module is an
+// error; an item the module can't see is not re-exported.
 mod a {
     pub fn x() -> i32 { 1 }
 }

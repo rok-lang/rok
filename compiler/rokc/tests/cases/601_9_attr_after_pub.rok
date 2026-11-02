@@ -1,9 +1,8 @@
-// spec: §6.1.9
 // expect-exit: 0
 // expect-stdout:
 // 1 2 3
 
-// 6.1.9: attributes and visibility combine in any order.
+// Attributes and visibility combine in any order.
 pub #[inline] fn h() -> i32 { 1 }
 
 pub

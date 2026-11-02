@@ -1,8 +1,7 @@
-// spec: 006.07-operator-magic
-// expect-error: 24:5: operator `⊕` needs trait `ops::Combine`, which is not visible here
+// expect-error: 23:5: operator `⊕` needs trait `ops::Combine`, which is not visible here
 
-// Spec 6.7.8: an operator binding works only where its trait is
-// visible (spec 5.6): a private trait's operator works in its module
+// An operator binding works only where its trait is
+// visible: a private trait's operator works in its module
 // only; a `pub` one wherever it can be named (`607_op_trait_full_path`).
 pub struct V { pub x: i32; }
 

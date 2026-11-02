@@ -1,4 +1,3 @@
-// spec: std 306-env §3.6.1
 // needs: process
 // expect-exit: 0
 // expect-stdout:
@@ -6,7 +5,7 @@
 // current_exe absolute: true
 // join: true
 
-// spec 3.6.1: `var_os(name) -> RawStr | none`, `current_exe() throws
+// `var_os(name) -> RawStr | none`, `current_exe() throws
 // (IoError) -> Path`, `join_paths` joins with ":" (";" on Windows).
 use rok::std::env;
 use rok::std::path::Path;

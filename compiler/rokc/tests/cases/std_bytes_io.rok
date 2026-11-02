@@ -1,5 +1,5 @@
 // only-os: macos linux
-// (RawPath::from_bytes is unix-only, std 3.8.5)
+// (RawPath::from_bytes is unix-only)
 // needs: process
 // expect-exit: 0
 // expect-stderr: hi
@@ -122,5 +122,3 @@ fn main() throws (IoError) {
     try fs::remove_dir_all(dir);
 }
 
-// spec: std 223-io
-// spec: std 223-io §2.23.8 §2.23.7

@@ -1,4 +1,4 @@
-// Spec 6.5 / 1.6.2: a suffix the language doesn't define (`2i`) is the
+// A suffix the language doesn't define (`2i`) is the
 // call of its `#[literal(number "i")]` handler.
 // expect-exit: 0
 // expect-stdout:
@@ -36,4 +36,3 @@ fn main() -> i32 {
     println(f"{sq.re} {sq.im}");
     return 0;
 }
-// spec: §6.5.2 §6.5.7

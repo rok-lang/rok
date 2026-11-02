@@ -1,11 +1,10 @@
-// spec: 003.14.3-try-opt
 // expect-exit: 0
 // expect-stdout:
 // true false true
 // none ok
 // 1
 
-// `try? e` is `T | none` (spec 3.14.3), also for `T = ()`: a function
+// `try? e` is `T | none`, also for `T = ()`: a function
 // returning nothing that throws only sometimes gives `none` when it threw.
 // In statement position the error is just dropped.
 #[derive(Debug)]

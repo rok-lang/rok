@@ -1,9 +1,8 @@
-// spec: std 105-volatile §1.5.1 §1.5.2
 // expect-exit: 0
 // expect-stdout:
 // 9 9
 
-// stdlib 1.5: `rok::bare::volatile::{read, write}` - accesses kept
+// `rok::bare::volatile::{read, write}` - accesses kept
 // exactly as written (both writes happen); same as the `Ptr` methods.
 use rok::bare::ptr::{ConstPtr, Ptr, addr_of};
 

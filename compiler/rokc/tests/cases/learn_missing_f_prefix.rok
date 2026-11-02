@@ -1,9 +1,8 @@
-// spec: §1.7.3
 // A plain string holding `{name}` of a local in scope lacks its `f`
 // prefix; that counts as a use, so `name` is not also unused. A `{..}`
 // naming nothing in scope (a template, a route) is left alone, as is
 // a name bound only later.
-// expect-lint: 16:13 `{name}` is plain text here: the string has no `f` prefix
+// expect-lint: 15:13 `{name}` is plain text here: the string has no `f` prefix
 // expect-exit: 0
 // expect-stdout:
 // hello {name}

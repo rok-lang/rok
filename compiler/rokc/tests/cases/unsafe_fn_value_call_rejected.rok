@@ -7,4 +7,3 @@ fn main() -> i32 {
     return g(-3);
 }
 
-// spec: 004.15-unsafe

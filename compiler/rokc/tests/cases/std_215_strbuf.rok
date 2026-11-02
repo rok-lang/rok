@@ -1,10 +1,9 @@
-// spec: std 215-string §2.15.2 (StrBuf)
 // expect-exit: 0
 // expect-stdout:
 // ab세계! 9
 // cap ok true
 
-// spec 2.15.2 `StrBuf`: `push(char)` UTF-8-encodes, `push_str` appends,
+// `StrBuf`: `push(char)` UTF-8-encodes, `push_str` appends,
 // `to_str` yields the current contents as an immutable `str`.
 fn main() {
     let b = StrBuf::new();

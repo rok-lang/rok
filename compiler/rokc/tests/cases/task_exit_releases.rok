@@ -2,7 +2,6 @@
 // expect-stdout:
 // received 3
 
-// spec: std 213-marker §2.13.4 / std 218-task
 
 // A task owns what its `async` block captured, and releases it when it
 // ends: the sender it took closes the channel then.

@@ -1,12 +1,11 @@
-// spec: refs-lang §3.8.7 §3.14.10
 // expect-exit: 0
 // expect-stdout:
 // 3 none
 // 3 -1
 
-// 3.8.7: `?.` is one token (longest match), `? .` two: `p?.x` chains
+// `?.` is one token (longest match), `? .` two: `p?.x` chains
 // (`none` stays a value), while `p? .x` is `(p?).x`, whose `?` returns
-// `none` from the function (3.14.10).
+// `none` from the function.
 struct P { x: i32; }
 
 fn chained(p: P | none) -> i32 | none { p?.x }

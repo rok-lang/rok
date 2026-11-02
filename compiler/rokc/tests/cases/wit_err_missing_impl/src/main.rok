@@ -1,8 +1,7 @@
-// spec: std §1.8.2
 // only-target: wasm32-wasip2
 // expect-error: cannot find function `pkg::add`
 
-// Stdlib 1.8: an exported function needs the rok function of its name
+// An exported function needs the rok function of its name
 // (`add`) in the module holding `ffi::wit::export`.
 ffi::wit::export { "calc.wit" }
 

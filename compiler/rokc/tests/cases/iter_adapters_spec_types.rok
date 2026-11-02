@@ -42,4 +42,3 @@ fn main() {
     println(f"{fl.len()} {fl.iter().sum()}");
 }
 
-// spec: std 207-iter

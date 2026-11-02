@@ -8,4 +8,3 @@ fn main() -> i32 {
     return ok().unwrap_or(0);
 }
 
-// spec: 002.10-generics

@@ -1,5 +1,4 @@
-// spec: 005.03-static
-// expect-error: 12:5: cannot call `set` on `S`: it takes `ref self`, and a static is never written
+// expect-error: 11:5: cannot call `set` on `S`: it takes `ref self`, and a static is never written
 // expect-error: help: copy it into a variable and call `set` there: `let v = S; v.set(..);`
 
 // A `ref self` method on a static would write to a copy that is

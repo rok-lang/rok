@@ -1,4 +1,4 @@
-// refs-lang 7.7.8: `ROKR_DYNAMIC_WORKERS=1` parks idle workers and takes
+// `ROKR_DYNAMIC_WORKERS=1` parks idle workers and takes
 // them back as work arrives; tasks, timers and blocking calls behave as
 // with a fixed pool.
 // needs: threads
@@ -59,4 +59,3 @@ fn main() -> i32 {
     task::block_on(run())
 }
 
-// spec: 007.07-io-and-timer §7.7.8

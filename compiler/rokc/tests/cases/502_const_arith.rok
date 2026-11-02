@@ -1,9 +1,8 @@
-// spec: 005.02-const-arith
 // expect-exit: 0
 // expect-stdout:
 // 12
 
-// spec 5.2: const expressions accept arithmetic.
+// Const expressions accept arithmetic.
 const A: i32 = 3;
 const B: i32 = 4;
 const C: i32 = A + B + 5;
@@ -12,4 +11,3 @@ fn main() -> i32 {
     println(f"{C}");
     return 0;
 }
-// spec: §5.2.1 §5.2.4

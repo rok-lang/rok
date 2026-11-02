@@ -8,7 +8,7 @@
 // 305419896 305419896
 // [255, 255, 255, 255, 255, 255, 255, 127] 9223372036854775807
 
-// Stdlib 2.1.4: `BITS` / `MIN` / `MAX` are inherent consts; an inherent
+// `BITS` / `MIN` / `MAX` are inherent consts; an inherent
 // const shadows a user trait's const of the same name on the same type
 // (`i8::BITS`), and the trait's stays reachable through the trait.
 trait Bits {
@@ -35,4 +35,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: std 201-numbers §2.1.4

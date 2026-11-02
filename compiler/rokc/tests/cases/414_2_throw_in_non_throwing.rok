@@ -1,7 +1,6 @@
-// spec: §4.14.2
-// expect-error: 7:5: error `str` is not handled: catch it, or declare `throws (str)` on the enclosing function
+// expect-error: 6:5: error `str` is not handled: catch it, or declare `throws (str)` on the enclosing function
 
-// Spec 4.14.2: no error may leave a function without `throws`.
+// No error may leave a function without `throws`.
 fn bad(x: i32) -> i32 {
     if x > 0 { return x; }
     throw "nope";

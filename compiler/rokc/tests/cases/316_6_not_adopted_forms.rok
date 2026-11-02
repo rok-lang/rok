@@ -1,8 +1,7 @@
-// spec: §3.16.6 §3.15.8
-// expect-error: 9:20: expected `;`, found keyword `if`
-// expect-error: 10:15: expected `)`, found `=`
+// expect-error: 8:20: expected `;`, found keyword `if`
+// expect-error: 9:15: expected `)`, found `=`
 
-// spec 3.16.6: a `let-else` takes no guard. 3.15.8: destructuring has no
+// A `let-else` takes no guard. Destructuring has no
 // default values.
 fn main() -> i32 {
     let x: i32 | none = 1;

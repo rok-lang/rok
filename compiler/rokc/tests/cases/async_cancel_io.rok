@@ -86,4 +86,3 @@ try! server_own.close();
 try! idle_own.close();
 try! listener.close();
 
-// spec: 004.12-async

@@ -1,8 +1,7 @@
-// spec: §6.3.7
-// expect-error: 22:9: no method `only_plan9` found for type `P`
+// expect-error: 21:9: no method `only_plan9` found for type `P`
 // expect-error: note: `only_plan9` is only available on plan9 (`#[cfg(target_os = "plan9")]`)
 // expect-error: help: put the code that uses it under the same `#[cfg(target_os = "plan9")]`
-// expect-error: 23:9: no method `whole_impl` found for type `P`
+// expect-error: 22:9: no method `whole_impl` found for type `P`
 // expect-error: note: `whole_impl` is only available on plan9 (`#[cfg(target_os = "plan9")]`)
 
 // A method `#[cfg]` dropped, alone or with its impl, is named where its

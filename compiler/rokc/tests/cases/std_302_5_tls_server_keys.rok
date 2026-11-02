@@ -8,7 +8,7 @@
 // bad key: Certificate bad EC private key
 // no key block: Certificate no PRIVATE KEY, EC PRIVATE KEY or RSA PRIVATE KEY block
 
-// Stdlib 3.2.5: server keys other than Ed25519: ECDSA P-256 (PKCS #8),
+// Server keys other than Ed25519: ECDSA P-256 (PKCS #8),
 // P-384 (RFC 5915 `EC PRIVATE KEY`) and RSA (PKCS #1 `RSA PRIVATE KEY`,
 // signing RSA-PSS), each certificate issued by the test CA, and the
 // client checking the CertificateVerify against the leaf's key.
@@ -168,4 +168,3 @@ fn main() {
     println(f"no key block: {key_error(CA)}");
 }
 
-// spec: std 302-net §3.2.5

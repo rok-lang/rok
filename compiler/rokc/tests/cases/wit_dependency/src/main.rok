@@ -1,11 +1,10 @@
-// spec: std §1.8.2
 // only-target: wasm32-wasip2
 // rokc-arg: --extern wdep=tests/cases/wit_dependency/wdep
 // expect-exit: 0
 // expect-stdout: noise 8 via bindings 4
 // wasm-invoke: add(2, 3) => 5
 
-// Stdlib 1.8: `ffi::wit` in a dependency (prebuilt from source by
+// `ffi::wit` in a dependency (prebuilt from source by
 // `--extern`): its bindings are in the dependency's module
 // (`wdep::sys::wasi::..`), and its export (`add`, the dependency's
 // `#[wit::export]`) is the component's.

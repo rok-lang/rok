@@ -4,8 +4,8 @@
 // -1
 // 1
 
-// spec 4.14: untyped `throws` = `throws (any Error)`; a cause chain
-// through `Error::source` (stdlib 2.14.3).
+// Untyped `throws` = `throws (any Error)`; a cause chain
+// through `Error::source`.
 struct NotFound { id: i32; }
 impl Display for NotFound { fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("not found") } }
 impl Debug for NotFound { fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("NotFound") } }
@@ -38,5 +38,3 @@ let r = try load(40) catch e: any Error {
 };
 println(f"{r}");
 
-// spec: 004.14-throws
-// spec: std §2.14.6

@@ -1,9 +1,8 @@
-// spec: 002.07.4-niche-attr
 // expect-exit: 0
 // expect-stdout:
 // 5
 
-// spec 2.7.4: `#[niche(0)]` on a user newtype.
+// `#[niche(0)]` on a user newtype.
 #[niche(0)]
 struct NonZero(i32);
 

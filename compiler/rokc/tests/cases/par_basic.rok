@@ -1,4 +1,3 @@
-// spec: std §2.19.6
 // expect-exit: 0
 // expect-stdout:
 // 499500
@@ -12,7 +11,7 @@
 // 8
 // 3
 
-// par (2.19) on the thread pool: for_each / map (ordered) / fold
+// par on the thread pool: for_each / map (ordered) / fold
 // (chunk folds, then `init` + chunk results in order; empty -> init) /
 // filter (ordered) / join / scope (spawned tasks finish before it
 // returns; handles join early).
@@ -51,5 +50,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: std 219-par
-// spec: std §2.19.2-2.19.5

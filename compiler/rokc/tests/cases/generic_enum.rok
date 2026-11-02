@@ -21,4 +21,3 @@ fn main() -> i32 {
     return unbox(a, 0) + unbox(b, 10);
 }
 
-// spec: 002.10-generics

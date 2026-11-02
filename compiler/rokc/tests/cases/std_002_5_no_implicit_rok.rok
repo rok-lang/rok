@@ -1,9 +1,8 @@
-// spec: std 002-import §0.2.5
 // expect-exit: 0
 // expect-stdout:
 // 3
 
-// stdlib 0.2.5: `#![no_implicit_rok]` drops the implicit
+// `#![no_implicit_rok]` drops the implicit
 // prelude import from the file; what it uses is imported.
 #![no_implicit_rok]
 

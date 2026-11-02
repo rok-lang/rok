@@ -1,9 +1,8 @@
-// spec: std 216-sync §2.16.5
 // expect-exit: 0
 // expect-stdout:
 // take 7 then 0
 
-// spec 2.16.5: `fn take(ref self) -> T where T: Default` leaves the default.
+// `fn take(ref self) -> T where T: Default` leaves the default.
 fn main() {
     let c = Cell::new(7);
     let t = c.take();

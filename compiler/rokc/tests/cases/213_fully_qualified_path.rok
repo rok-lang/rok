@@ -1,8 +1,7 @@
-// spec: 002.13-fully-qualified-path
 // expect-exit: 7
 // expect-stdout:
 
-// spec 213: fully qualified path `<T as Trait>::method`.
+// Fully qualified path `<T as Trait>::method`.
 trait Make {
     fn make() -> i32;
 }
@@ -16,4 +15,3 @@ fn main() -> i32 {
     return <A as Make>::make();
 }
 
-// spec: §2.13.4

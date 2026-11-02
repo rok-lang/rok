@@ -4,7 +4,6 @@
 // 2
 // got 1
 
-// spec: std 213-marker §2.13.9
 // remove(i) then send, keep using the others.
 use rok::std::thread;
 fn main() {

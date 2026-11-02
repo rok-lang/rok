@@ -15,4 +15,3 @@ fn main() {
     println(f"{facade::deep()} {facade::renamed()}");
 }
 
-// spec: 005.05-use

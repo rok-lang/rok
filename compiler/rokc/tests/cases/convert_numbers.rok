@@ -9,7 +9,7 @@
 // 0 caught
 // none 1.5
 
-// Stdlib spec 2.11: lossless `from` / `into`, fallible `try_from` /
+// Lossless `from` / `into`, fallible `try_from` /
 // `try_into` (throwing `OverflowError`), `saturating_into`,
 // `wrapping_into`; `From` on a user type gives it `into`.
 
@@ -83,4 +83,3 @@ fn main() {
     let fine: f32 | none = try? f32::try_from(1.5);
     println(f"{show(narrow)} {show(fine)}");
 }
-// spec: std §2.11.2 §2.11.3 §2.11.5

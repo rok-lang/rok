@@ -1,9 +1,8 @@
-// spec: §6.6.13
 // expect-exit: 0
 // expect-stdout:
 // 2
 
-// 6.6.13: `#[cfg]` applies to keyword handlers; only the handler whose
+// `#[cfg]` applies to keyword handlers; only the handler whose
 // cfg holds (here or on its enclosing module) registers the keyword.
 #[cfg(target_os = "nonexistent")]
 #[keyword("frob")]

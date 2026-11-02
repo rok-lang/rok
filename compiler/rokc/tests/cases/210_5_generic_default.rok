@@ -1,9 +1,8 @@
-// spec: 002.10.5-generic-default
 // expect-exit: 0
 // expect-stdout:
 // 5
 
-// spec 210.5: generic parameter default `<T = i32>`, used when T is not given.
+// Generic parameter default `<T = i32>`, used when T is not given.
 fn id<T = i32>(x: T) -> T {
     return x;
 }

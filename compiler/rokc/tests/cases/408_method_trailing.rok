@@ -1,9 +1,8 @@
-// spec: 004.08-method-trailing-closure
 // expect-exit: 0
 // expect-stdout:
 // 12
 
-// spec 4.8: trailing closure after a method call (`xs.map |x| { x*2 }`).
+// Trailing closure after a method call (`xs.map |x| { x*2 }`).
 struct V { n: i32; }
 
 impl V {

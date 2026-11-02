@@ -1,6 +1,5 @@
 // needs: threads
 // gc-stress: 5
-// spec: std 213-marker §2.13.9
 // expect-exit: 0
 // expect-stdout:
 // sent 3 kept 1

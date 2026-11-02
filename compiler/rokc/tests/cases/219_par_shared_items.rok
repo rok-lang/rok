@@ -1,14 +1,13 @@
 // needs: threads
 // gc-stress: 5
-// spec: std 219-par §2.19.1 / std 213-marker §2.13.9
 // Items that reach one collection run one at a time; distinct items still
 // run in parallel and change their own collections in place.
 // expect-exit: 0
-// expect-stderr: warning: par::for_each at tests/cases/219_par_shared_items.rok:29:5: two items reach one collection or future, so they run one at a time on this thread; give each item its own copy, or share read-only data through `Frozen`
-// expect-stderr: warning: par::map at tests/cases/219_par_shared_items.rok:37:17: two items reach one collection or future, so they run one at a time on this thread; give each item its own copy, or share read-only data through `Frozen`
-// expect-stderr: warning: par::filter at tests/cases/219_par_shared_items.rok:53:16: two items reach one collection or future, so they run one at a time on this thread; give each item its own copy, or share read-only data through `Frozen`
-// expect-stderr: warning: par::for_each at tests/cases/219_par_shared_items.rok:69:5: two items reach one collection or future, so they run one at a time on this thread; give each item its own copy, or share read-only data through `Frozen`
-// expect-stderr: warning: par::map at tests/cases/219_par_shared_items.rok:82:13: two items reach one collection or future, so they run one at a time on this thread; give each item its own copy, or share read-only data through `Frozen`
+// expect-stderr: warning: par::for_each at tests/cases/219_par_shared_items.rok:28:5: two items reach one collection or future, so they run one at a time on this thread; give each item its own copy, or share read-only data through `Frozen`
+// expect-stderr: warning: par::map at tests/cases/219_par_shared_items.rok:36:17: two items reach one collection or future, so they run one at a time on this thread; give each item its own copy, or share read-only data through `Frozen`
+// expect-stderr: warning: par::filter at tests/cases/219_par_shared_items.rok:52:16: two items reach one collection or future, so they run one at a time on this thread; give each item its own copy, or share read-only data through `Frozen`
+// expect-stderr: warning: par::for_each at tests/cases/219_par_shared_items.rok:68:5: two items reach one collection or future, so they run one at a time on this thread; give each item its own copy, or share read-only data through `Frozen`
+// expect-stderr: warning: par::map at tests/cases/219_par_shared_items.rok:81:13: two items reach one collection or future, so they run one at a time on this thread; give each item its own copy, or share read-only data through `Frozen`
 // expect-stdout:
 // nested 40000
 // dup 2 4000

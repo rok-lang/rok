@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `a` can't be sent through a channel: other code reaches it through (a thread-local or a `Sync` object), so it would be used from two threads
-// spec: std 213-marker §2.13.9
 // A list stored into a thread-local, then sent.
 use rok::std::thread;
 static TL: thread::ThreadLocal<List<i32>> = thread::local(|| { let l: List<i32> = []; l });

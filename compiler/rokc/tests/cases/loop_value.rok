@@ -14,4 +14,3 @@ fn main() -> i32 {
     return result;
 }
 
-// spec: 003.13-loop-expressions

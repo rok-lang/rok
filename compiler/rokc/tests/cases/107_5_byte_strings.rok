@@ -1,4 +1,3 @@
-// spec: 001.07.5-byte-strings
 // expect-exit: 0
 // expect-stdout:
 // 9 104 0 255

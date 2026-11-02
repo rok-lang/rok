@@ -1,10 +1,9 @@
-// spec: std 200-core/218-task §2.18.1
 // expect-exit: 0
 // expect-stdout:
 // ran before await true
 // result 55
 
-// 2.18.1 `spawn_blocking`: `f` starts on the call, not at the first
+// `spawn_blocking`: `f` starts on the call, not at the first
 // poll, and the future completes with its result.
 fn sum_to(n: i32, started: Atomic<i32>) -> i32 {
     started.store(1);

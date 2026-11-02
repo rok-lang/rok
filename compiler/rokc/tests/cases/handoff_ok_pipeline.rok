@@ -3,7 +3,6 @@
 // expect-stdout:
 // 6
 
-// spec: std 213-marker §2.13.9
 // A pipeline stage: receive, transform, forward.
 use rok::std::thread;
 fn main() {

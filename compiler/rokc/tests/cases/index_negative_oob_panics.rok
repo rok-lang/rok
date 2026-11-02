@@ -3,7 +3,7 @@
 // expect-stderr: index -4 out of bounds for length 3
 // expect-stdout: 1
 
-// Spec 3.6: a negative index past the start panics after the
+// A negative index past the start panics after the
 // adjustment (`len + i` < 0).
 fn main() {
     let xs: List<i32> = [1, 2, 3];
@@ -12,4 +12,3 @@ fn main() {
     println(f"{xs[i - 1]}");
 }
 
-// spec: 003.06-indexing-and-slicing

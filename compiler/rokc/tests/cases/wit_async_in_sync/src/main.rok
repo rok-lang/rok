@@ -1,11 +1,10 @@
-// spec: std §1.8.2
 // only-target: wasm32-wasip2
 // expect-exit: 101
 // expect-stdout: zero wait done
 // expect-stderr: thread 'main' panicked at library/std/src/wit.rok:*:
 // expect-stderr: wit: an async import, stream or future blocked outside an async export (a synchronous task cannot wait); call it from an `async` export
 
-// Stdlib 1.8: a synchronous task (`main` of a preview 2 command) cannot
+// A synchronous task (`main` of a preview 2 command) cannot
 // wait for the component model (it would trap): an async import that
 // returns at once works, one that blocks is a panic naming the rule.
 ffi::wit::import { "wit" }

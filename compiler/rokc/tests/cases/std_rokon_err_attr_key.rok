@@ -1,5 +1,5 @@
 // expect-error: `#[rokon(..)]`: unknown key `deny_unknwn_fields`; write one of `deny_unknown_fields`
-// Std 3.9.5: a misspelled `#[rokon(..)]` key is an error, so it cannot
+// A misspelled `#[rokon(..)]` key is an error, so it cannot
 // turn strict reading off without a word.
 #[derive(Rokon)]
 #[rokon(deny_unknwn_fields)]
@@ -7,4 +7,3 @@ struct Conf { a: i32; }
 
 fn main() {}
 
-// spec: std 309-rokon §3.9.5

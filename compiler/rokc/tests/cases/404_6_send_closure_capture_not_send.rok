@@ -1,7 +1,6 @@
-// spec: 004.04.6-send-fn-closure
 // expect-error: captures don't meet
 
-// spec 4.4.6: a closure in a `fn() + Send` slot must capture only
+// A closure in a `fn() + Send` slot must capture only
 // `Send` values.
 struct Tok { v: i32; }
 impl !Send for Tok {}

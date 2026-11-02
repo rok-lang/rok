@@ -16,4 +16,3 @@ fn main() -> i32 {
     return p.first + p.second + 6;
 }
 
-// spec: 002.10-generics

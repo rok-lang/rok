@@ -1,9 +1,8 @@
 // needs: threads
-// spec: std 218-task §2.18.1 / refs-lang §4.6.9
 // A `[ref x]` cell reached through a future the spawned block captured
 // stays shared with the code that made it: the spawn stops.
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at tests/cases/218_spawn_ref_cell_inner_panics.rok:14:13:
+// expect-stderr: thread 'main' panicked at tests/cases/218_spawn_ref_cell_inner_panics.rok:13:13:
 // expect-stderr: a future with a `[ref x]` capture cannot go to another task or thread: the code that made it shares the cell; capture a value, or share it through a `Mutex`
 // expect-stdout:
 

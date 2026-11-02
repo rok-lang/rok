@@ -8,7 +8,7 @@
 // 4
 // root!
 
-// Spec 9.2.3: a second `--extern` name for the same package is an alias
+// A second `--extern` name for the same package is an alias
 // of the first. `left` calls `util` `helper`; both names are one package,
 // so a `helper::Point` is a `util::Point`.
 use util::shout!;
@@ -20,4 +20,3 @@ fn main() {
     shout!("root");
 }
 
-// spec: §9.2.3

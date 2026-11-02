@@ -1,12 +1,11 @@
-// spec: 008.06-calling-convention §8.6.11-8.6.12
 // expect-exit: 0
 // expect-stdout:
 // 12 12
 // 3.5
 // 17
 
-// spec 8.6.11: an indirect call through a `fn(...)` value gives the same
-// result as the direct call; 8.6.12: a closure call sees its captures.
+// An indirect call through a `fn(...)` value gives the same
+// result as the direct call; a closure call sees its captures.
 struct Op { f: fn(i32, i32) -> i32; }
 
 fn mul(a: i32, b: i32) -> i32 { return a * b; }

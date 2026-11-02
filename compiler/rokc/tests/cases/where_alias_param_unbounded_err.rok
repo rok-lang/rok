@@ -1,9 +1,8 @@
-// spec: §2.6.9 §2.10.4
-// expect-error: where_alias_param_unbounded_err.rok:14:14: type `T` does not satisfy trait bound `Num` required by `W<T>`
+// expect-error: where_alias_param_unbounded_err.rok:13:14: type `T` does not satisfy trait bound `Num` required by `W<T>`
 // expect-error: help: add `T: Num` to `get`'s generics
-// expect-error: where_alias_param_unbounded_err.rok:15:9: type `T` does not satisfy trait bound `Num` required by `W<T>`
+// expect-error: where_alias_param_unbounded_err.rok:14:9: type `T` does not satisfy trait bound `Num` required by `W<T>`
 // expect-error: help: add `T: Num` to the impl's generics
-// expect-error: where_alias_param_unbounded_err.rok:16:38: type `U` does not satisfy trait bound `Num` required by `W<U>`
+// expect-error: where_alias_param_unbounded_err.rok:15:38: type `U` does not satisfy trait bound `Num` required by `W<U>`
 // expect-error: help: add `U: Num` to `k`'s generics
 // A type parameter without the bound a generic alias's `where` needs
 // is rejected where the alias is used, never called or not.

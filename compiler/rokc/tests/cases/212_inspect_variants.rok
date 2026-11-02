@@ -1,4 +1,3 @@
-// spec: std §2.12.3
 // expect-exit: 0
 // expect-stdout:
 // ["Circle", "Rect", "Label", "Empty"] 0 []
@@ -13,7 +12,7 @@
 // Circle
 // Shape
 
-// Stdlib 2.12.3: on an enum, `variant_names()` lists the variants and a
+// On an enum, `variant_names()` lists the variants and a
 // value's `variant_name()` / `field_names_of_val()` / `get_field` look at the
 // variant it holds; `set_field` on an enum is `false`. Generic enums and
 // a sum holding an `Inspect` value.
@@ -72,4 +71,3 @@ match held {
 }
 println(held.type_name_of_val());
 
-// spec: §6.10.2

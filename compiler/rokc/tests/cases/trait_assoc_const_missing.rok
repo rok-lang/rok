@@ -1,5 +1,5 @@
 // expect-error: impl of `Shape` for `Dot` is missing associated const `SIDES`
-// Spec 2.8.3a: a const without a default must be given by every impl.
+// A const without a default must be given by every impl.
 trait Shape {
     const SIDES: u32;
 }
@@ -12,4 +12,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 002.08-trait

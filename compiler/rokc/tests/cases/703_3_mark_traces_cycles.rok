@@ -1,11 +1,10 @@
-// spec: 007.03-gc-algorithm §7.3.3
 // gc-stress: 50
 // expect-exit: 0
 // expect-stdout:
 // ring of 100: 0 -> 1 -> 2
 // back to start after 100 steps: true
 
-// spec 7.3.3: marking follows every reference of a reached object, so a
+// Marking follows every reference of a reached object, so a
 // cycle reached from a root is kept whole (no reference counting).
 extern "C" {
     fn rok_gc_collect();

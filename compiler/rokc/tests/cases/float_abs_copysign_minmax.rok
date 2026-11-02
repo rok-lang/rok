@@ -1,5 +1,4 @@
 // expect-exit: 0
-// spec: std 201-numbers §2.1.4
 //
 // `abs` / `copysign` / `min` / `max` of `f64` and `f32` (the runtime's
 // bit operations): signed zeros, and `min` / `max` skip a NaN operand

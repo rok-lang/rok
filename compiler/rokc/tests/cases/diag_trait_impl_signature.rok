@@ -1,5 +1,4 @@
-// spec: §2.9.1 §4.7.2
-// expect-error: diag_trait_impl_signature.rok:12:5: `fmt` does not match its declaration in trait `Display`: `f` must be `ref f`, and it returns `str` where the trait's returns nothing
+// expect-error: diag_trait_impl_signature.rok:11:5: `fmt` does not match its declaration in trait `Display`: `f` must be `ref f`, and it returns `str` where the trait's returns nothing
 // expect-error: help: write `fn fmt(self, ref f: Formatter) throws (FmtError)`
 // forbid-error: fmt.rok
 // forbid-error: covers no throwing call

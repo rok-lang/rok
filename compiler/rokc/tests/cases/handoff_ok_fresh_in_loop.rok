@@ -4,7 +4,6 @@
 // 2
 // got 1
 
-// spec: std 213-marker §2.13.9
 // A fresh list pushed per iteration, popped and sent, rest used.
 use rok::std::thread;
 fn main() {

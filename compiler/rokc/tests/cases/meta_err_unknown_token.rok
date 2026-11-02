@@ -1,5 +1,5 @@
 // expect-error: unknown template token `@fild`
-// Spec 6.9: a misspelt template token is reported at the template.
+// A misspelt template token is reported at the template.
 trait Bad { fn bad(self) -> i32; }
 
 #[impl_derive(Bad)]
@@ -19,5 +19,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 006.08-meta-blocks
-// spec: §6.9.1

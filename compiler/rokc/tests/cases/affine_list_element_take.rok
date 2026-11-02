@@ -2,7 +2,6 @@
 // expect-stdout:
 // took 1, left 2
 
-// spec: std 213-marker §2.13.4
 
 // A part moves out of a struct only through `replace` / `take`: the
 // place keeps a new value, the part has one owner.

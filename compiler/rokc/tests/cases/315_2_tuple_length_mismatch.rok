@@ -1,7 +1,6 @@
-// spec: 003.15.2-tuple-length-mismatch
 // expect-error: tuple destructure length mismatch
 
-// spec 3.15.2: a tuple destructure with the wrong length is a compile error.
+// A tuple destructure with the wrong length is a compile error.
 fn main() -> i32 {
     let (a, b) = (1, 2, 3);
     return a + b;

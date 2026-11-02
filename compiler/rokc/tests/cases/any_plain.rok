@@ -66,4 +66,3 @@ struct Cell { tag: i32; payload: any; }
 let c = Cell { tag: 0, payload: Sq { s: 77 } };
 println(f"{show(c.payload)}");
 
-// spec: 002.02-any-slot

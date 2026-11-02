@@ -1,12 +1,11 @@
-// spec: 004.11-generators §4.11.8-4.11.9
 // expect-exit: 0
 // expect-stdout:
 // squares 0 1 4 9 16
 // odd-squares 1 9 25
 // sum 35
 
-// spec 4.11.8: a generator is an `Iterator`, so it feeds other
-// generators and the library adapters; 4.11.9: an infinite generator is
+// A generator is an `Iterator`, so it feeds other
+// generators and the library adapters; an infinite generator is
 // cut off by `take(n)`.
 yield fn naturals() -> i32 {
     let i = 0;

@@ -1,7 +1,6 @@
-// spec: 002.09.3-impl-overlap
 // expect-error: conflicting implementations of trait `DotEq`
 
-// spec 2.9.3: the library's own impls are checked with the library, but
+// The library's own impls are checked with the library, but
 // a package impl is checked against them: core's blanket
 // `impl<T: PartialEq> DotEq<List<T>> for T` already covers `P`.
 #[derive(PartialEq)]

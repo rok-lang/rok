@@ -3,7 +3,6 @@
 // expect-stdout:
 // 10 10
 
-// spec: std 213-marker §2.13.9
 // Worker pool over a shared Mutex queue; each job is popped under the lock.
 use rok::std::thread;
 struct Job { id: i32; data: List<i32>; }

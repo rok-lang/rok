@@ -1,7 +1,6 @@
-// spec: §5.4.2
 // expect-error: module `foo` body not found at
 
-// Spec 5.4.2: a folder `foo/` without its body file `foo.rok` is an
+// A folder `foo/` without its body file `foo.rok` is an
 // error; the body file is mandatory.
 mod foo;
 

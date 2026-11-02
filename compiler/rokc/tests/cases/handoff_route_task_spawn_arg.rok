@@ -1,7 +1,6 @@
 // needs: threads
-// expect-error: handoff_route_task_spawn_arg.rok:14:26: `a` was spawned as a task at line 13
+// expect-error: handoff_route_task_spawn_arg.rok:13:26: `a` was spawned as a task at line 12
 // expect-error: help: the task works on its own copy
-// spec: std 213-marker §2.13.9 / std 218-task §2.18.1
 // An async fn's argument goes to a task on another worker: the task owns
 // its copy, so the spawner's later use of the list is an error.
 async fn grow(xs: List<i32>) -> usize {

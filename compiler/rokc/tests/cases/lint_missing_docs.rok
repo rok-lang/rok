@@ -1,11 +1,10 @@
 // expect-exit: 0
-// spec: §6.2.9
-// expect-lint: 19:5 `pub fn bare` has no doc comment
-// expect-lint: 20:11 `pub fn constant` has no doc comment
-// expect-lint: 22:5 `pub struct Point` has no doc comment
-// expect-lint: 30:9 `pub fn norm` has no doc comment
-// expect-lint: 33:5 `pub trait Shape` has no doc comment
-// expect-lint: 36:5 `pub fn area` has no doc comment
+// expect-lint: 18:5 `pub fn bare` has no doc comment
+// expect-lint: 19:11 `pub fn constant` has no doc comment
+// expect-lint: 21:5 `pub struct Point` has no doc comment
+// expect-lint: 29:9 `pub fn norm` has no doc comment
+// expect-lint: 32:5 `pub trait Shape` has no doc comment
+// expect-lint: 35:5 `pub fn area` has no doc comment
 // expect-stdout:
 // 5
 

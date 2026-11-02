@@ -30,4 +30,3 @@ fn main() -> i32 {
     return v1 + v2;
 }
 
-// spec: 002.06-sum-types

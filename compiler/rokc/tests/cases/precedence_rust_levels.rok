@@ -1,11 +1,10 @@
-// spec: 003.02.3-precedence-table
 // expect-exit: 0
 // expect-stdout:
 // 24 64 3 0 7 9
 // 5 true true 4
 // 24 64 3 2
 
-// The binary operators bind as in Rust (spec 3.2.3): `* / %`, then
+// The binary operators bind as in Rust: `* / %`, then
 // `+ -`, then `<< >>`, then `&`, then `^`, then `|`, then comparisons,
 // then `&&`, then `||`.
 const SHIFT: i32 = 1 + 2 << 3;

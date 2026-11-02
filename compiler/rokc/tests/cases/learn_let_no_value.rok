@@ -1,6 +1,5 @@
-// spec: §5.1.1
 // `let x: i32;` (C, Java, TypeScript): a `let` needs its value.
-// expect-error: 5:11: `let x` needs a value
+// expect-error: 4:11: `let x` needs a value
 // expect-error: help: give it one, `let x: i32 = ..;`, or start it empty: `let x: i32 | none = none;`
 let x: i32;
 x = 5;

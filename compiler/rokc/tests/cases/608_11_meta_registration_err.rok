@@ -1,8 +1,7 @@
-// spec: 006.08-meta-blocks
-// expect-error: 13:1: derive `A` is defined by two meta blocks
-// expect-error: 10:28: unknown template token `@where_for_fields`
+// expect-error: 12:1: derive `A` is defined by two meta blocks
+// expect-error: 9:28: unknown template token `@where_for_fields`
 
-// Spec 6.8.11: one meta block per derive name; spec 6.9.1:
+// One meta block per derive name:
 // `@where_for_fields` is reserved, so using it is an error.
 trait A { fn a() -> i32; }
 

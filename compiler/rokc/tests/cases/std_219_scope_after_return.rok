@@ -1,7 +1,6 @@
-// spec: std 219-par §2.19.3
 // needs: threads
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at tests/cases/std_219_scope_after_return.rok:13:13:
+// expect-stderr: thread 'main' panicked at tests/cases/std_219_scope_after_return.rok:12:13:
 // expect-stderr: Scope::spawn: the scope has ended; call `spawn` inside the closure passed to `par::scope`
 // expect-stdout:
 

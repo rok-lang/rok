@@ -1,4 +1,3 @@
-// spec: 008.09-lowering-control §8.9.6 / §8.9.7 / §8.9.8
 // expect-exit: 0
 // expect-stdout:
 // ok path: finally -> 10
@@ -8,7 +7,7 @@
 // early finally
 // return path: 1
 
-// spec 8.9.6-8.9.8: `throw` is a value-based return of the error;
+// `throw` is a value-based return of the error;
 // `catch` branches on it; `finally` runs on every exit of its block
 // (value, caught error, propagated error, `return`).
 #[derive(Debug)]

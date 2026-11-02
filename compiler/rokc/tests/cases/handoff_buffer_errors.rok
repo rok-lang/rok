@@ -1,5 +1,4 @@
 // needs: threads
-// spec: std 213-marker §2.13.9
 // A collection's elements share what was stored into it and what is read
 // out of it: handing over either side leaves the other unusable.
 
@@ -87,11 +86,11 @@ fn literal_twice(tx: Sender<List<i32>>) {
     q[0].push(9);
 }
 
-// expect-error: handoff_buffer_errors.rok:26:5: `inner` shares `outer`, which was sent through a channel at line 25
-// expect-error: handoff_buffer_errors.rok:32:5: `outer` still holds `outer[0]`, which was handed to another owner at line 31 (as an element, or a value one shares)
-// expect-error: handoff_buffer_errors.rok:40:5: `all` still holds `xs`, which was handed to another owner at line 39 (as an element, or a value one shares)
-// expect-error: handoff_buffer_errors.rok:48:5: `outer` still holds `l`, which was handed to another owner at line 46 (as an element, or a value one shares)
-// expect-error: handoff_buffer_errors.rok:59:5: `q` may hold one object twice (stored at lines 54 and 55), and one of them was handed to another owner at line 57
-// expect-error: handoff_buffer_errors.rok:68:5: `v` shares `d`, which was sent through a channel at line 67
-// expect-error: handoff_buffer_errors.rok:77:9: `ys` shares `xs`, which was sent through a channel at line 75
-// expect-error: handoff_buffer_errors.rok:87:5: `q` may hold one object twice, and one of them was handed to another owner at line 85
+// expect-error: handoff_buffer_errors.rok:25:5: `inner` shares `outer`, which was sent through a channel at line 24
+// expect-error: handoff_buffer_errors.rok:31:5: `outer` still holds `outer[0]`, which was handed to another owner at line 30 (as an element, or a value one shares)
+// expect-error: handoff_buffer_errors.rok:39:5: `all` still holds `xs`, which was handed to another owner at line 38 (as an element, or a value one shares)
+// expect-error: handoff_buffer_errors.rok:47:5: `outer` still holds `l`, which was handed to another owner at line 45 (as an element, or a value one shares)
+// expect-error: handoff_buffer_errors.rok:58:5: `q` may hold one object twice (stored at lines 53 and 54), and one of them was handed to another owner at line 56
+// expect-error: handoff_buffer_errors.rok:67:5: `v` shares `d`, which was sent through a channel at line 66
+// expect-error: handoff_buffer_errors.rok:76:9: `ys` shares `xs`, which was sent through a channel at line 74
+// expect-error: handoff_buffer_errors.rok:86:5: `q` may hold one object twice, and one of them was handed to another owner at line 84

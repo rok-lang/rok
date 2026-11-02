@@ -8,8 +8,8 @@
 // [  -2.50] [ab   ] [abc] [  "q"] [P(1)      ] [p<1>]
 // [1010] [ff] ["a"] [$$a] [hello]
 
-// Typed f-strings (refs-lang 1.7.3, stdlib 2.10): no align = numbers right,
-// the rest left (2.10.8), precision on floats (any width), `b o x X` in the
+// Typed f-strings: no align = numbers right,
+// the rest left, precision on floats (any width), `b o x X` in the
 // integer's own width, `e` / `E`, dynamic `${..}` width / precision / spec.
 struct P { v: i32; }
 impl Display for P { fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"P({self.v})") } }
@@ -45,4 +45,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 001.07-string-literals

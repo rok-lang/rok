@@ -26,4 +26,3 @@ fn main() -> i32 {
     println(f"{classify(1)} {classify(2)} {classify(99)} {classify(3)}");
     return classify(1) + classify(2) + classify(99) - 98;
 }
-// spec: 008.09-lowering-control §8.9.2

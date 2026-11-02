@@ -1,11 +1,10 @@
-// spec: §3.13.6 std §2.9.2
 // A loop indexing with an invariant index after a store: optimized, the
 // loop is versioned on the bounds check (unswitched). Both versions run:
 // in bounds the sums are right, out of bounds the first iteration
 // panics after its store.
 // expect-exit: 101
 // expect-stdout: 27 9
-// expect-stderr: thread 'main' panicked at tests/cases/cg_invariant_index_in_loop.rok:15:14:
+// expect-stderr: thread 'main' panicked at tests/cases/cg_invariant_index_in_loop.rok:14:14:
 // expect-stderr: index 2 out of bounds for length 2
 
 fn step(xs: List<i64>, ys: List<i64>, i: usize) -> i64 {

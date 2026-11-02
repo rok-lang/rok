@@ -1,6 +1,5 @@
-// spec: §5.1.1
 // `let mut` (Rust): a rok binding is mutable already.
-// expect-error: 5:5: rok has no `let mut`: variables are mutable by default
+// expect-error: 4:5: rok has no `let mut`: variables are mutable by default
 // expect-error: help: drop `mut`: `let x = ..;`
 let mut x = 1;
 x += 1;

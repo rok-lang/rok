@@ -1,7 +1,6 @@
-// spec: §6.7.12
-// expect-error: 8:5: operator aliases of `before` must share one precedence level
+// expect-error: 7:5: operator aliases of `before` must share one precedence level
 
-// Spec 6.7.12: aliases of one method are tokens of one level (`<` is a
+// Aliases of one method are tokens of one level (`<` is a
 // comparison, `+` an additive level).
 trait Order {
     #[infix("⊲", like = "<")]

@@ -23,5 +23,3 @@ fn main() throws (IoError) {
     try fs::remove_file(p);
 }
 
-// spec: 003.06-indexing-and-slicing
-// spec: std §2.9.7

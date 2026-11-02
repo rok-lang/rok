@@ -1,7 +1,6 @@
-// spec: 002.02-any-slot
 // expect-error: cannot store an `any` value in an `any Show` slot without narrowing
 
-// 2.2.10: no implicit bare `any` -> `any Tr` conversion; narrow with `is` / a type pattern first.
+// No implicit bare `any` -> `any Tr` conversion; narrow with `is` / a type pattern first.
 trait Show { fn show(self); }
 impl Show for i32 { fn show(self) { println(f"{self}"); } }
 

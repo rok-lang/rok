@@ -1,10 +1,9 @@
-// spec: 004.02.7-discard
 // expect-exit: 0
 // expect-stdout:
 // side 1
 // side 2
 
-// spec 4.2.7: `_ = e;` evaluates `e` and binds nothing; `let _` may
+// `_ = e;` evaluates `e` and binds nothing; `let _` may
 // repeat in one scope (`_` is not a name).
 fn side(n: i32) -> i32 {
     println(f"side {n}");

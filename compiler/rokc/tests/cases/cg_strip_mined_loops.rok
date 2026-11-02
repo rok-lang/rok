@@ -1,4 +1,3 @@
-// spec: §3.13.3
 // Counted loops whose body reaches no safepoint run in strips of at
 // most 64 iterations (the inner loop polls nowhere, the strip loop
 // once a strip). Every trip count, counter type and range, up to the

@@ -1,4 +1,3 @@
-// spec: std §3.2.5
 // needs: threads net
 // expect-exit: 0
 // expect-stdout:

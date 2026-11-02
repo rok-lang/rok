@@ -1,9 +1,8 @@
-// spec: 006.08-meta-block
 // expect-exit: 0
 // expect-stdout:
 // 7
 
-// spec 6.8.2: the spec's own `#[impl_derive(MyHash)]` example -
+// The spec's own `#[impl_derive(MyHash)]` example -
 // `@Self`, `@for_fields`, `self.@field` over a struct.
 trait MyHash {
     fn my_hash(self) -> u64;
@@ -38,4 +37,3 @@ fn main() -> i32 {
     println(f"{p.my_hash()}");
     return 0;
 }
-// spec: §6.8.1 §6.8.2 §6.8.5

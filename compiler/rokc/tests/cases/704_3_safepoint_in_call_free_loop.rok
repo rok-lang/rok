@@ -1,11 +1,10 @@
-// spec: 007.04-barriers-and-roots §7.4.3 / 008.04-safepoint §8.4.8
 // needs: threads
 // expect-exit: 0
 // expect-stdout:
 // collected while spinning: true
 // spin result: true
 
-// spec 7.4.3 / 8.4.8: a loop back edge polls the yield flag, so a thread
+// A loop back edge polls the yield flag, so a thread
 // spinning in a loop without calls still reaches a safepoint and a
 // stop-the-world collection on another thread completes.
 use rok::core::sync::{LoadOrdering, StoreOrdering};

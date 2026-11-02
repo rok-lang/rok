@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `d` may hold one object twice
-// spec: std 213-marker §2.13.9
 // One list under two keys.
 use rok::std::thread;
 fn main() {

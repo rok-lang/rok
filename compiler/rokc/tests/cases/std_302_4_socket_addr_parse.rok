@@ -1,4 +1,3 @@
-// spec: std 302-net §3.2.4
 // expect-exit: 0
 // expect-stdout:
 // 127.0.0.1:8080 port 8080 v4 true
@@ -12,7 +11,7 @@
 // v6 loopback true
 // bad rejected
 
-// 3.2.4: `SocketAddr` / `IpAddr` / `Ipv4Addr` / `Ipv6Addr` parse
+// `SocketAddr` / `IpAddr` / `Ipv4Addr` / `Ipv6Addr` parse
 // (`FromStr`), print (`Display`) and expose their parts through getters
 // and setters; `==` compares the parts; no lookup for a literal.
 use rok::std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};

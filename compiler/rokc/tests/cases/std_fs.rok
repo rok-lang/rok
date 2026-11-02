@@ -24,7 +24,7 @@
 // lock: true
 // exists after remove: false
 
-// Spec 301: files (`File`'s open functions, seek, `using` closes), the
+// Files (`File`'s open functions, seek, `using` closes), the
 // convenience functions over `Dir::root()` (write / write_atomic /
 // copy / rename / walk / remove_dir_all), and a confined `Dir`.
 
@@ -116,6 +116,4 @@ fn main() throws (IoError) {
     println(f"exists after remove: {fs::exists(base)}");
 }
 
-// spec: std 301-fs
 // only-os: macos linux
-// spec: std 301-fs §3.1.1 §3.1.5

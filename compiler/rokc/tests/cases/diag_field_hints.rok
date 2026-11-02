@@ -1,12 +1,11 @@
-// spec: §3.5.1 §4.12.2
-// expect-error: diag_field_hints.rok:22:13: `await` goes before the expression, not after it
+// expect-error: diag_field_hints.rok:21:13: `await` goes before the expression, not after it
 // expect-error: help: write `await get()`
-// expect-error: diag_field_hints.rok:24:13: struct `List<i32>` has no field `length`
+// expect-error: diag_field_hints.rok:23:13: struct `List<i32>` has no field `length`
 // expect-error: help: the length is a method: `xs.len()`
-// expect-error: diag_field_hints.rok:25:13: struct `List<i32>` has no field `items`
-// expect-error: diag_field_hints.rok:28:20: `u.nick` is a `str | none`, and only a `str` has the method `len`
+// expect-error: diag_field_hints.rok:24:13: struct `List<i32>` has no field `items`
+// expect-error: diag_field_hints.rok:27:20: `u.nick` is a `str | none`, and only a `str` has the method `len`
 // expect-error: help: `is` narrows local variables only, not fields; bind the field first: `if let nick: str = u.nick { nick.len() }`
-// expect-error: diag_field_hints.rok:31:13: `v` is an `i32 | str`, and only a `str` has the method `len`
+// expect-error: diag_field_hints.rok:30:13: `v` is an `i32 | str`, and only a `str` has the method `len`
 // expect-error: help: check which case it holds first: `if let s: str = v { s.len() }`
 // forbid-error: available fields
 // forbid-error: impl str | none

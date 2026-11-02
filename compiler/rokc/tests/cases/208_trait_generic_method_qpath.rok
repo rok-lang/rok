@@ -1,6 +1,3 @@
-// spec: 002.08.3-associated-types
-// spec: 002.13.4-fully-qualified-path
-// spec: 002.08.2-method-signatures
 // expect-exit: 0
 // expect-stdout:
 // 5 4 shape

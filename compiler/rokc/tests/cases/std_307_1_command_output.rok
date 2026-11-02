@@ -1,4 +1,3 @@
-// spec: std 307-process §3.7.1
 // only-os: macos linux
 // (/bin/sh: the one program path every Unix has, NixOS too)
 // needs: process
@@ -10,7 +9,7 @@
 // err: [e] code 3
 // null ok true
 
-// 3.7.1: the `Command` builder (`arg` / `args` / `env` / `env_clear` /
+// The `Command` builder (`arg` / `args` / `env` / `env_clear` /
 // `current_dir` / `stdout`), and `output` collecting status and pipes.
 use rok::std::path::Path;
 use rok::std::process::{Command, Stdio};

@@ -33,4 +33,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 002.02-any-slot

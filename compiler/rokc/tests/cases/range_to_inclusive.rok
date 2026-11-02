@@ -15,5 +15,3 @@ fn main() {
     println(f"{upto((..5), 4)}");
 }
 
-// spec: 003.07-range-expressions
-// spec: std §2.7.4

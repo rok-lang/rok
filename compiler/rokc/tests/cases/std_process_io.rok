@@ -18,7 +18,7 @@
 // try_wait ok, then: exit status: 0
 // id ok: true
 
-// Spec 305 / 307 / 306: the program re-runs itself as a child with
+// The program re-runs itself as a child with
 // piped stdio (`Command`, `env::args`, `io::read_line`, stdin `lines`,
 // stdout / stderr writers), then drives `sh` / `tr` / `env` through
 // `output` / `spawn` / `status` with env, cwd, signals.
@@ -96,7 +96,5 @@ fn main() throws (IoError) {
     println(f"id ok: {process::id() > 0u32}");
 }
 
-// spec: std 307-process
 // only-os: macos linux
 // needs: native-run
-// spec: std 223-io §2.23.8 §2.23.9, 307-process §3.7.3

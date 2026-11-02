@@ -1,6 +1,5 @@
 // needs: threads
 // expect-error: `q0` may hold one object twice
-// spec: std 213-marker §2.13.9
 // List<any> holding one list twice, cast back.
 use rok::std::thread;
 

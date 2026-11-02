@@ -1,5 +1,3 @@
-// spec: 008.08-lowering-types §8.8.3 §8.8.7 §8.8.13 §8.8.14
-// spec: 008.09-lowering-control §8.9.1 §8.9.9 §8.9.10 §8.9.12
 // gc-stress: 30
 // only-pointer-width: 64
 // expect-exit: 0

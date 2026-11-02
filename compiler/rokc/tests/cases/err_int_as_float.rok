@@ -1,7 +1,6 @@
-// spec: std 211-conversion
 // `as` from `int` / `float` keeps the low bits; a float target rounds
 // instead, so the cast names the method that does.
-// expect-error: 8:13: cannot cast `int` as `f64`: `as` keeps the low bits, and a float has none
+// expect-error: 7:13: cannot cast `int` as `f64`: `as` keeps the low bits, and a float has none
 // expect-error: help: use `x.to_f64()` (rounds), or `try f64::try_from(x)` to throw past the range
 fn main() {
     let n: int = 3;

@@ -1,7 +1,6 @@
-// spec: §4.4.11
 // expect-error: a `fn` value takes no named arguments: its type has no parameter names
 
-// Spec 4.4.11: a function type has no parameter names, so a call through
+// A function type has no parameter names, so a call through
 // a value takes positional arguments only.
 fn make_user(name: str, age: i32) -> i32 { age }
 

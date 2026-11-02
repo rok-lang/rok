@@ -1,4 +1,3 @@
-// spec: std 222-encoding §2.22.1 §2.22.2
 // expect-exit: 0
 // expect-stdout:
 // hex [] [66] [666f] [666f6f] [666f6f62] [666f6f6261] [666f6f626172]

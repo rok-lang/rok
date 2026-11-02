@@ -1,4 +1,3 @@
-// spec: std 306-env §3.6.1
 // expect-exit: 0
 // expect-stdout:
 // vars_os: true
@@ -7,9 +6,9 @@
 // data: true
 // no home: true
 
-// spec 3.6.1: `vars_os() -> VarsOs` (`(RawStr, RawStr)` pairs) and
+// `vars_os() -> VarsOs` (`(RawStr, RawStr)` pairs) and
 // `config_dir` / `cache_dir` / `data_dir` (`Path | none`; XDG on Linux,
-// `~/Library/..` on macOS - 3.6.6; an absolute XDG variable wins).
+// `~/Library/..` on macOS; an absolute XDG variable wins).
 use rok::std::env;
 use rok::std::path::Path;
 

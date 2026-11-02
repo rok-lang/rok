@@ -1,6 +1,4 @@
 // needs: threads
-// spec: std 216-sync §2.16.3
-// spec: std 213-marker §2.13.9
 
 // A guard's view is neither `Send` nor `Sync`: it can't be sent through a
 // channel, captured by a spawned task or thread, or kept in a
@@ -25,7 +23,7 @@ fn main() {
     let _ = rx.recv();
 }
 
-// expect-error: 17:39: `g.get()` can't be sent through a channel: the `Mutex` behind `g` still holds it
+// expect-error: 15:39: `g.get()` can't be sent through a channel: the `Mutex` behind `g` still holds it
 // expect-error: help: hand over a deep copy (`g.get_clone()`)
-// expect-error: 20:29: `async { v.len() }` can't be spawned as a task: the `Mutex` behind `g` still holds it
-// expect-error: 23:35: `g.get()` is a view of what the `Mutex` behind `g` protects, and `remember` keeps it past the call
+// expect-error: 18:29: `async { v.len() }` can't be spawned as a task: the `Mutex` behind `g` still holds it
+// expect-error: 21:35: `g.get()` is a view of what the `Mutex` behind `g` protects, and `remember` keeps it past the call

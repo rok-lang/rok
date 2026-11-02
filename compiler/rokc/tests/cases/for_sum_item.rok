@@ -35,4 +35,3 @@ fn main() {
     println(f"{c}");
 }
 
-// spec: 003.13-loop-expressions

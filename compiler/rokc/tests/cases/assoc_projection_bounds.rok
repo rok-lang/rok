@@ -1,4 +1,3 @@
-// spec: §2.13.3 §2.13.4
 // expect-exit: 0
 // expect-stdout:
 // 3 x
@@ -6,9 +5,9 @@
 // 5 ok
 // left right
 
-// Spec 2.13: `T::Out` resolves through `T`'s bound (`T: Num` picks
+// `T::Out` resolves through `T`'s bound (`T: Num` picks
 // `Num::Out` although `Text` has an `Out` too); `<T as Tr>::X` and
-// `<T as Tr>::m(x)` name the trait explicitly (2.13.4).
+// `<T as Tr>::m(x)` name the trait explicitly.
 
 trait Num { type Out; fn num(self) -> Out; }
 trait Text { type Out; fn text(self) -> Out; }

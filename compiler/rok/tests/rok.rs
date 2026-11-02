@@ -220,7 +220,6 @@ const APP0: &str = "// my app\nPackage {\n    name: \"app\", // keep\n    deps: 
 /// `package` renames a dependency for code, one name per dependent; a
 /// dependency with another `target` stays out of the build; two
 /// packages may not link one native library.
-// spec: §9.10.2
 #[test]
 fn renamed_target_and_links_dependencies() {
     let root = scratch("rename-target");
@@ -275,7 +274,6 @@ fn renamed_target_and_links_dependencies() {
 /// Dependents may call one package by different names: each name is
 /// one package, built once, so its types are the same under both. A
 /// name may not stand for two packages.
-// spec: §9.10.2 §9.2.3
 #[test]
 fn per_dependent_renames() {
     let root = scratch("rename-per-dependent");
@@ -325,7 +323,6 @@ fn per_dependent_renames() {
     );
 }
 
-// spec: §9.10.1 §9.10.3 §9.10.4
 #[test]
 fn add_lock_update_offline_remove() {
     let root = scratch("lock");
@@ -491,7 +488,6 @@ fn add_lock_update_offline_remove() {
     );
 }
 
-// spec: §9.10.3 §9.10.4
 #[test]
 fn transitive_dependencies_and_conflicts() {
     let root = scratch("transitive");
@@ -567,7 +563,6 @@ fn transitive_dependencies_and_conflicts() {
 
 /// `rok deps --format json`: a versioned record per package in build
 /// order, then a summary, also with no dependencies.
-// spec: §9.10.4
 #[test]
 fn deps_format_json() {
     use rokc_diagnostic::Json;
@@ -635,7 +630,6 @@ fn deps_format_json() {
     );
 }
 
-// spec: §0.3.4 §9.10.3
 #[test]
 fn manifest_errors_and_reserved_forms() {
     let root = scratch("manifest");
@@ -685,7 +679,6 @@ fn manifest_errors_and_reserved_forms() {
     );
 }
 
-// spec: §9.10.3
 #[test]
 fn manifest_errors_say_what_to_write() {
     let root = scratch("manifest-help");
@@ -752,7 +745,6 @@ fn manifest_errors_say_what_to_write() {
     );
 }
 
-// spec: §9.10.2
 #[test]
 fn new_and_init_write_a_manifest() {
     let root = scratch("new");
@@ -850,7 +842,6 @@ fn listed_commands(home: &Path, cwd: &Path) -> Vec<String> {
 
 /// `rok help <cmd>` is that command's text alone: its usage, examples
 /// and options, written as `rok`.
-// spec: §9.10.1
 #[test]
 fn every_command_help_is_its_own() {
     let root = scratch("help-own");
@@ -881,7 +872,6 @@ fn every_command_help_is_its_own() {
     }
 }
 
-// spec: §9.10.1
 #[test]
 fn rok_help_is_short() {
     let root = scratch("help-short");
@@ -893,7 +883,6 @@ fn rok_help_is_short() {
 }
 
 /// rok's global options go anywhere before `--`, after the command too.
-// spec: §9.10.1
 #[test]
 fn global_options_after_command() {
     let root = scratch("global-after");
@@ -915,7 +904,6 @@ fn global_options_after_command() {
 
 /// An unknown command or option names the closest one and the help to
 /// read.
-// spec: §9.10.1 §9.1.6
 #[test]
 fn unknown_command_suggests() {
     let root = scratch("unknown-cmd");
@@ -950,7 +938,6 @@ fn unknown_command_suggests() {
 }
 
 /// rokc's usage errors under rok speak of rok.
-// spec: §9.10.1 §9.1.6 §9.1.7
 #[test]
 fn rokc_option_reported_as_rok() {
     let root = scratch("rokc-as-rok");
@@ -984,7 +971,6 @@ fn stderr_with(home: &Path, cwd: &Path, vars: &[(&str, &str)], args: &[&str]) ->
     text(&out.stderr)
 }
 
-// spec: §9.1.8 §9.10.1
 #[test]
 fn status_lines_coloured_when_forced() {
     let root = scratch("colour-forced");
@@ -1016,7 +1002,6 @@ fn status_lines_coloured_when_forced() {
 /// `doc --std` without a path documents the standard library alone, as
 /// rokc does: outside a package too, into ./target/doc/, and the status
 /// line names the library, not a temporary package.
-// spec: §9.1.2
 #[test]
 fn doc_std_without_a_package() {
     let root = scratch("doc-std");
@@ -1036,7 +1021,6 @@ fn doc_std_without_a_package() {
     fails(&rok(&home, &dir, &["doc"]), "not inside a package");
 }
 
-// spec: §9.1.8 §9.10.1
 #[test]
 fn no_colour_when_piped_or_no_color() {
     let root = scratch("colour-off");
@@ -1078,7 +1062,6 @@ fn no_colour_when_piped_or_no_color() {
     );
 }
 
-// spec: §9.1.5 §9.10.1
 #[test]
 fn rok_passes_color_to_rokc() {
     let root = scratch("colour-rokc");
@@ -1108,7 +1091,6 @@ fn rok_passes_color_to_rokc() {
     );
 }
 
-// spec: §9.10.4 / std §3.9.4
 #[test]
 fn rok_add_writes_canonical_rokon() {
     let root = scratch("canon");
@@ -1180,7 +1162,6 @@ fn rok_add_writes_canonical_rokon() {
     }
 }
 
-// spec: §9.10.1
 #[test]
 fn lint_and_doc_with_dependencies() {
     let root = scratch("lintdoc");
@@ -1225,7 +1206,6 @@ fn lint_and_doc_with_dependencies() {
 
 /// Overflow checks are on in both profiles; `profile` in rok.rokon turns
 /// them off for one, and `-C overflow-checks` beats it.
-// spec: §9.1.2 §9.10.3
 #[test]
 fn manifest_profile_overflow_checks() {
     if !llvm() {
@@ -1263,7 +1243,6 @@ fn manifest_profile_overflow_checks() {
 
 /// `rok build` lints against the prebuilt std, whose `using` cleanup is
 /// `File.drop__by_Drop`: that is a close, not a use that leaks.
-// spec: §6.2.9
 #[test]
 fn build_lints_using_through_prebuilt_std() {
     if !llvm() {
@@ -1292,7 +1271,6 @@ fn build_lints_using_through_prebuilt_std() {
     assert!(!err.contains("`h` holds"), "{err}");
 }
 
-// spec: §6.2.9 §9.10.1 §9.10.3
 #[test]
 fn lints_from_and_files_in_a_package() {
     let root = scratch("lintsfrom");
@@ -1373,7 +1351,6 @@ fn lints_from_and_files_in_a_package() {
     fails(&rok(&home, &app, &["lint"]), "no rok.rokon in");
 }
 
-// spec: §9.8.3 §9.10.5
 #[test]
 fn named_environments() {
     let root = scratch("envs");
@@ -1510,7 +1487,6 @@ fn named_environments() {
 /// Every source of an environment name is checked: never a path, never
 /// a device or the choice file, one environment per spelling whatever
 /// the case.
-// spec: §9.10.5
 #[test]
 fn environment_names_are_checked() {
     let root = scratch("env-names");
@@ -1597,7 +1573,6 @@ fn rok_within(home: &Path, cwd: &Path, args: &[&str]) -> Output {
 
 /// Outside a package `rok update` is an error that says what to write,
 /// unless the ambient environment has libraries to update.
-// spec: §9.10.4 §9.10.5
 #[test]
 fn update_outside_package() {
     let root = scratch("update-outside");
@@ -1642,7 +1617,6 @@ fn update_outside_package() {
 }
 
 /// `rok update` in a package says when there is nothing to do.
-// spec: §9.10.4
 #[test]
 fn update_nothing_to_do() {
     let root = scratch("update-nothing");
@@ -1660,7 +1634,6 @@ fn update_nothing_to_do() {
     );
 }
 
-// spec: §9.10.5
 #[test]
 fn env_list_empty() {
     let root = scratch("env-list-empty");
@@ -1677,7 +1650,6 @@ fn env_list_empty() {
 
 /// A script that is not there is named, not taken for a missing
 /// package.
-// spec: §9.10.1
 #[test]
 fn run_missing_script_says_so() {
     let root = scratch("missing-script");
@@ -1706,7 +1678,6 @@ fn run_missing_script_says_so() {
 }
 
 /// Bare `rok jupyter` points to `rok jupyter install`.
-// spec: §9.8.3
 #[test]
 fn bare_jupyter_points_to_install() {
     let root = scratch("bare-jupyter");
@@ -1725,7 +1696,6 @@ fn bare_jupyter_points_to_install() {
 /// `rok --version -v` names the binary, the toolchain it resolves and
 /// why, its `rokc` and the host, as `key: value` lines like `rokc
 /// --version -v`; `--format json` gives one object.
-// spec: §9.10.6
 #[test]
 fn version_verbose_key_value() {
     let root = scratch("version-verbose");
@@ -1777,7 +1747,6 @@ fn version_verbose_key_value() {
 
 /// After `rok toolchain default`, a `rok` earlier on PATH than the
 /// proxies gets a warning naming it and its version.
-// spec: §9.10.6
 #[cfg(unix)]
 #[test]
 fn toolchain_warns_about_path_shadow() {
@@ -1863,7 +1832,6 @@ fn fake_toolchain(dir: &Path, version: &str) {
     write(&dir.join("lib/rok/core/src/lib.rok"), "");
 }
 
-// spec: §9.2.19 §9.10.6
 #[cfg(unix)]
 #[test]
 fn pinned_toolchains() {
@@ -2050,7 +2018,6 @@ fn fake_toolchain_rok(dir: &Path, version: &str) {
 /// A rok run directly (a dev build, nix, a toolchain's `bin/rok`) in a
 /// project pinned to another toolchain runs that toolchain's own `rok`
 /// with the same arguments, from the same directory.
-// spec: §9.10.6
 #[cfg(unix)]
 #[test]
 fn direct_rok_execs_pinned_toolchain() {
@@ -2116,7 +2083,6 @@ fn direct_rok_execs_pinned_toolchain() {
 /// The handoff compares toolchain directories, never the pin's text: a
 /// pin naming a directory runs that toolchain's rok once, and a rok that
 /// hands the command back is an error, not a loop.
-// spec: §9.10.6
 #[cfg(unix)]
 #[test]
 fn reexec_guard_no_loop() {
@@ -2204,7 +2170,6 @@ fn proxies_are(home: &Path, version: &str) {
 
 /// The proxies are the newest toolchain's rok: making an older one the
 /// default keeps them.
-// spec: §9.10.6
 #[cfg(unix)]
 #[test]
 fn default_to_older_keeps_newest_proxies() {
@@ -2230,7 +2195,6 @@ fn default_to_older_keeps_newest_proxies() {
 }
 
 /// Removing the newest toolchain makes the proxies the next newest's.
-// spec: §9.10.6
 #[cfg(unix)]
 #[test]
 fn remove_newest_rewrites_proxies() {
@@ -2242,7 +2206,6 @@ fn remove_newest_rewrites_proxies() {
 
 /// Files every toolchain in `ROK_HOME` shares skip what a newer rok
 /// wrote, keep it when written, and name it under `-v`.
-// spec: §9.10.6
 #[test]
 fn config_with_unknown_field_still_works() {
     let root = scratch("config-newer");
@@ -2261,7 +2224,6 @@ fn config_with_unknown_field_still_works() {
     assert!(!text(&rok(&home, &root, &["toolchain", "default"]).stderr).contains("skipped"));
 }
 
-// spec: §9.10.6
 #[test]
 fn installs_skip_unknown() {
     let root = scratch("installs-newer");
@@ -2286,7 +2248,6 @@ fn installs_skip_unknown() {
 
 /// A lock from a newer rok names the toolchain to use, and is never to be
 /// deleted.
-// spec: §9.10.3
 #[test]
 fn newer_lock_version_says_which_toolchain() {
     let root = scratch("lock-newer");
@@ -2312,7 +2273,6 @@ fn newer_lock_version_says_which_toolchain() {
 /// `rok toolchain default` rewrites the completion scripts the
 /// installers wrote from the new default, never makes one, and says
 /// which under `-v`; a toolchain without `completions` leaves them.
-// spec: §9.10.6
 #[cfg(unix)]
 #[test]
 fn toolchain_default_refreshes_completions() {
@@ -2410,7 +2370,6 @@ fn toolchain_default_refreshes_completions() {
     }
 }
 
-// spec: §9.10.7
 #[test]
 fn script_dependencies() {
     let root = scratch("script");
@@ -2471,7 +2430,6 @@ fn ran(out: &Output) -> (String, bool) {
     )
 }
 
-// spec: §1.2.3 §9.10.1 §9.10.7
 #[test]
 fn scripts_run_directly() {
     if !llvm() {
@@ -2531,7 +2489,6 @@ fn scripts_run_directly() {
 }
 
 // A script's arguments may be any bytes; rok's own must be UTF-8.
-// spec: §9.1.1 §9.10.1
 #[cfg(unix)]
 #[test]
 fn scripts_take_non_utf8_args() {
@@ -2567,7 +2524,6 @@ fn scripts_take_non_utf8_args() {
     );
 }
 
-// spec: §9.10.7
 #[test]
 fn script_executables_are_cached_by_content() {
     if !llvm() {
@@ -2617,7 +2573,6 @@ fn script_executables_are_cached_by_content() {
     assert!(!entry.exists());
 }
 
-// spec: §9.10.7
 #[test]
 fn concurrent_script_runs_share_one_entry() {
     if !llvm() {
@@ -2667,7 +2622,6 @@ fn concurrent_script_runs_share_one_entry() {
     assert_eq!(left, want);
 }
 
-// spec: §9.10.1
 #[test]
 fn build_run_and_repl_with_dependencies() {
     if !llvm() {
@@ -2739,7 +2693,6 @@ fn build_run_and_repl_with_dependencies() {
 /// (`lib<name>.a` + `<name>.rokhir`), reuses it while nothing it depends
 /// on changes, and rebuilds it (and the ones after it) when its source
 /// does. A dependency of a dependency is built first.
-// spec: §9.2.15
 #[test]
 fn prebuilt_dependencies_are_reused_and_rebuilt() {
     if !llvm() {
@@ -2810,7 +2763,6 @@ fn prebuilt_dependencies_are_reused_and_rebuilt() {
     assert!(app.join("target/release/deps/mid.rokhir").is_file());
 }
 
-// spec: §9.9.13 §9.10.1
 #[test]
 fn rokls_is_rok_lsp() {
     let root = scratch("lsp");
@@ -3058,7 +3010,6 @@ fn publish_stones(root: &Path, home: &Path, index: &Path) -> String {
 /// Package metadata (`authors`, `homepage`, `documentation`, `readme`,
 /// `keywords`, `publish`) is checked at publish; index entries from a
 /// newer rok, with fields this one does not know, still resolve.
-// spec: §9.10.3 §9.10.4a
 #[test]
 fn publish_writes_toolchain() {
     let root = scratch("pkg_meta");
@@ -3153,7 +3104,6 @@ fn publish_writes_toolchain() {
 
 /// A dependency on the package itself (here a test-only one) is an
 /// error: `pkg::` is how a package names its own items.
-// spec: §5.7.14
 #[test]
 fn self_dependency_is_rejected() {
     let root = scratch("self_dep");
@@ -3413,7 +3363,6 @@ fn login_publish_yank_api() {
 
 /// A token from `rok login --registry <url>` goes only to that index;
 /// `logout --registry` and `--all` remove it.
-// spec: §9.10.4a
 #[test]
 fn token_goes_only_to_its_index() {
     let root = scratch("api-index");
@@ -3483,7 +3432,6 @@ fn token_goes_only_to_its_index() {
 /// 0.1's index settings: `ROK_REGISTRY` and `registry` in config.rokon
 /// no longer pick the index of a bare requirement and warn, naming what
 /// to write in sources.rokon; credentials.rokon's token is not read.
-// spec: §9.10.4a §9.10.6
 #[test]
 fn old_registry_settings_warn() {
     let root = scratch("old-registry");
@@ -3537,7 +3485,6 @@ fn old_registry_settings_warn() {
 /// An index entry whose `toolchain` this rok does not meet is skipped,
 /// with a note when that hides the newest match; a lone match is an
 /// error that says which toolchain it needs.
-// spec: §9.10.4a
 #[test]
 fn resolver_skips_other_series() {
     let root = scratch("stones-series");
@@ -3817,7 +3764,6 @@ fn have(shell: &str) -> bool {
 /// `rok completions <shell>`: a script with rok's commands, its own and
 /// those it passes to rokc, that the shell parses; toolchain and
 /// environment names come from `rok __complete`.
-// spec: §9.10.1
 #[test]
 fn completions_for_each_shell() {
     let root = scratch("completions");
@@ -3964,7 +3910,6 @@ const PROFILE_LINE: &str = "[ -f \"$HOME/.rok/env\" ] && . \"$HOME/.rok/env\"";
 /// install.sh writes `$ROK_HOME/env`, sources it (guarded) from the
 /// startup files that exist and the login shell's, once, and installs
 /// the completions; a second run changes nothing.
-// spec: §9.10.6
 #[cfg(unix)]
 #[test]
 fn install_sh_sets_up_path() {
@@ -4043,7 +3988,6 @@ fn install_sh_sets_up_path() {
 
 /// A bash user with no startup files gets `~/.bashrc` and `~/.profile`
 /// (never a new `~/.bash_profile`, which would hide `~/.profile`).
-// spec: §9.10.6
 #[cfg(unix)]
 #[test]
 fn install_sh_bash_files() {
@@ -4067,7 +4011,6 @@ fn install_sh_bash_files() {
 
 /// fish: `conf.d/rok.fish` (under `$XDG_CONFIG_HOME`) sources `env.fish`,
 /// and the fish completions go beside it.
-// spec: §9.10.6
 #[cfg(unix)]
 #[test]
 fn install_sh_fish_conf_d() {
@@ -4123,7 +4066,6 @@ fn install_sh_fish_conf_d() {
 
 /// `--no-modify-path` and `ROK_NO_MODIFY_PATH=1` write no shell files and
 /// print what to add to PATH instead.
-// spec: §9.10.6
 #[cfg(unix)]
 #[test]
 fn install_sh_no_modify_path() {
@@ -4155,7 +4097,6 @@ fn install_sh_no_modify_path() {
 /// Without `$SHELL` (containers, some CI) install.sh does not fail.
 /// Some `sh`s refill it from the user database, so only the run and
 /// `$ROK_HOME/env` are checked.
-// spec: §9.10.6
 #[cfg(unix)]
 #[test]
 fn install_sh_without_shell() {
@@ -4171,7 +4112,6 @@ fn install_sh_without_shell() {
 
 /// `install.sh --archive` checks the archive against the `.sha256`
 /// beside it before unpacking.
-// spec: §9.10.6
 #[cfg(unix)]
 #[test]
 fn install_sh_checks_sums() {
@@ -4247,7 +4187,6 @@ fn stderr_on_tty(mut c: Command) -> String {
 /// install.sh colours its status lines as rok does: on a terminal (its
 /// stderr, so `curl .. | sh` too) or with `CLICOLOR_FORCE`, never with
 /// `NO_COLOR` or `TERM=dumb` or when piped.
-// spec: §9.1.8 §9.10.6
 #[cfg(unix)]
 #[test]
 fn install_sh_colours() {
@@ -4321,7 +4260,6 @@ fn install_sh_colours() {
 
 /// `install.sh --archive` takes a release's `.tar.xz` as well; `-q`
 /// prints nothing.
-// spec: §9.10.6
 #[cfg(unix)]
 #[test]
 fn install_sh_reads_tar_xz() {
@@ -4352,7 +4290,6 @@ fn install_sh_reads_tar_xz() {
 /// release (`latest/download/rok-version`) or a given one, checked
 /// against its `.sha256`, becomes the default with new proxies; a
 /// toolchain whose proxies do not run is rolled back.
-// spec: §9.10.6
 #[cfg(unix)]
 #[test]
 fn update_toolchain() {
@@ -4559,7 +4496,6 @@ fn fake_dist(root: &Path, versions: &[&str]) -> String {
 /// A bare update installs the newest release, also from another series,
 /// and says how to stay on the old one. An argument is an exact version;
 /// a series or a requirement is an error that says to write one.
-// spec: §9.10.6
 #[cfg(unix)]
 #[test]
 fn update_newest_and_exact() {
@@ -4635,7 +4571,6 @@ fn update_newest_and_exact() {
 
 /// `rok toolchain install <version>` without `--from` downloads a
 /// release by exact version and keeps the default.
-// spec: §9.10.6
 #[cfg(unix)]
 #[test]
 fn install_by_version_without_from() {
@@ -4681,7 +4616,6 @@ fn install_by_version_without_from() {
 /// A pin is a version prefix, a requirement (`^`, `~`, `=`) or a
 /// directory name; the newest installed match wins. A pin that is none
 /// of them warns, and says what to write.
-// spec: §9.10.6 §9.10.3
 #[cfg(unix)]
 #[test]
 fn pin_requirement_caret() {
@@ -4728,7 +4662,6 @@ fn pin_requirement_caret() {
     );
 }
 
-// spec: §9.10.3
 #[test]
 fn bad_pin_warns() {
     let root = scratch("bad-pin");
@@ -4763,7 +4696,6 @@ fn bad_pin_warns() {
 /// A script's `//! ```rokon` block may pin a toolchain: the proxy and a
 /// rok run directly both run the pinned toolchain's rok. Only the script
 /// that is run pins; a module's block may not.
-// spec: §9.10.6 §9.10.7
 #[cfg(unix)]
 #[test]
 fn script_block_pins_toolchain() {
@@ -5483,7 +5415,6 @@ fn stone_features_round_trip() {
 /// SIGPIPE (Windows: its own status, std dropping the writes), not an
 /// internal error (101).
 #[test]
-// spec: §9.10.1
 fn closed_output_ends_rok_quietly() {
     // A pipe whose reader has exited: `rok version` never reads stdin.
     let mut reader = Command::new(ROK)
@@ -5525,7 +5456,6 @@ fn script_out(home: &Path, cwd: &Path, args: &[&str]) -> String {
 /// `rok install`: a library goes into the active environment, for the
 /// REPL; neither scripts nor packages see it. An executable package or a
 /// script file is built into `$ROK_HOME/bin`; `uninstall` undoes either.
-// spec: §9.10.5 §9.10.7
 #[test]
 fn install_libraries_and_executables() {
     if !llvm() {
@@ -5732,7 +5662,6 @@ fn block(deps: &str, body: &str) -> String {
 /// own and those its `mod`s load, each path relative to its file),
 /// merged; never the environment's libraries. `rok init --script` makes
 /// it a package.
-// spec: §4.16.8 §9.10.2 §9.10.5 §9.10.7
 #[test]
 fn scripts_use_their_blocks() {
     if !llvm() {
@@ -5845,7 +5774,6 @@ fn scripts_use_their_blocks() {
 /// `rok add` / `remove` with a script edit its `//! rokon` block: made
 /// after the shebang and doc lines when missing, removed when empty, a
 /// path relative to the script. `import x` says what to write.
-// spec: §9.10.4 §9.10.7
 #[test]
 fn script_add_and_remove() {
     let root = scratch("script-add");
@@ -5953,7 +5881,6 @@ fn script_add_and_remove() {
 
 /// `rok install <stone>` from a local index: into the environment, pinned
 /// in its lock (a stone is a library).
-// spec: §9.10.4a §9.10.5
 #[test]
 fn install_stones() {
     if !llvm() {
@@ -6001,7 +5928,6 @@ fn install_stones() {
 
 /// Names code can't spell as a path are refused: `use pkg::add;` in an
 /// executable is its own root, never a library called `pkg`.
-// spec: §9.10.3 §5.5.7
 #[test]
 fn new_rejects_names_code_cannot_spell() {
     let root = scratch("new-names");
@@ -6048,7 +5974,6 @@ fn new_rejects_names_code_cannot_spell() {
 /// An existing manifest with a name some OS can't store or a version
 /// that is not semver still builds; each problem is a warning with its
 /// place. `rok init` in such a directory picks a name that works.
-// spec: §9.10.2 §9.10.3
 #[test]
 fn existing_manifest_bad_version_warns() {
     let root = scratch("bad-version");
@@ -6086,7 +6011,6 @@ fn existing_manifest_bad_version_warns() {
 }
 
 /// Every `rok new` template builds, runs and tests as written.
-// spec: §0.3.1 §9.10.2
 #[test]
 fn new_templates_build_run_and_test() {
     if !llvm() {
@@ -6136,7 +6060,6 @@ fn new_templates_build_run_and_test() {
 /// installs its executable (`--lib`: its library), and `rok publish`
 /// takes it, as it takes an executable-only package; a stone without a
 /// library is not a dependency.
-// spec: §0.3.1 §9.10.2 §9.10.4a §9.10.5
 #[test]
 fn lib_and_main_packages() {
     if !llvm() {
@@ -6390,7 +6313,6 @@ fn rok_leaves_no_temporaries() {
 
 /// `rok new` / `init` end with what to run next; `rok add` names the
 /// version it added.
-// spec: §9.10.2 §9.10.4
 #[test]
 fn new_and_add_say_what_happened() {
     let root = scratch("new-next");
@@ -6444,7 +6366,6 @@ fn new_and_add_say_what_happened() {
 
 /// A dependency rok fetched builds as `<name> v<version>`, not as its
 /// directory in the cache; a local one shows its directory.
-// spec: §9.1.8 §9.10.4
 #[test]
 fn fetched_dependency_builds_by_version() {
     if !llvm() {
@@ -6487,7 +6408,6 @@ fn fetched_dependency_builds_by_version() {
 /// `rok bench` prints the human line whatever stdout is; `--format
 /// rokbench` the machine one. A bench that never calls `b.iter` is named,
 /// not counted as run.
-// spec: §9.1.2 §9.9.11
 #[test]
 fn bench_output_is_human_when_piped() {
     if !llvm() {

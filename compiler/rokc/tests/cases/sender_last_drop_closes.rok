@@ -3,7 +3,6 @@
 // expect-stdout:
 // got 6
 
-// spec: std 217-channel §2.17.3
 
 // The channel closes when its last sender leaves scope: no `close()`,
 // and the receiving loop still ends.

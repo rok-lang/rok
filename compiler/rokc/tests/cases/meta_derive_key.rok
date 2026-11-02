@@ -3,7 +3,7 @@
 // strict
 // loose
 
-// Spec 6.9.6: `#[impl_derive_attribute(Trait, attr(k, ..))]` declares
+// `#[impl_derive_attribute(Trait, attr(k, ..))]` declares
 // the keys `#[attr(..)]` takes; `@Self.has_derive_key(k)` reads one off
 // the type.
 trait Mode {
@@ -31,5 +31,3 @@ fn main() {
     println(B::mode());
 }
 
-// spec: 006.08-meta-blocks
-// spec: §6.9.6

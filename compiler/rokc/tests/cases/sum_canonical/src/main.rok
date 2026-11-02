@@ -56,6 +56,4 @@ fn main() -> i32 {
     0
 }
 
-// spec: 002.06-sum-types
 
-// spec: §2.6.4

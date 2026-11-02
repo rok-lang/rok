@@ -1,12 +1,11 @@
-// spec: 001.07-string-escapes / 001.06-numeric-literals
 // expect-exit: 0
 // expect-stdout:
 // 가A😀 세계
 // one two
 // 1
 
-// spec 1.7.1: `\u{...}` (with `_`), `\xHH`, line continuation; non-ASCII
-// text passes through unchanged. spec 1.6.1: `0.5` and `1f32` literals (`.5` is a tuple index).
+// `\u{...}` (with `_`), `\xHH`, line continuation; non-ASCII
+// text passes through unchanged. `0.5` and `1f32` literals (`.5` is a tuple index).
 fn main() -> i32 {
     println("\u{AC00}\x41\u{1_F600} 세계");
     println("one \
@@ -19,4 +18,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: §1.7.1

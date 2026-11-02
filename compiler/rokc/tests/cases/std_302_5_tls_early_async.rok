@@ -81,4 +81,3 @@ for i in 0..3 {
     try! c.close();
 }
 for line in await server { println(f"server: {line}"); }
-// spec: std 302-net §3.2.0 §3.2.5

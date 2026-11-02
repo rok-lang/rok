@@ -63,5 +63,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 005.03-static
-// spec: §5.3.4 §5.3.9 §5.3.11

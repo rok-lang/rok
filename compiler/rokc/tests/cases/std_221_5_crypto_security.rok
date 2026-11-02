@@ -1,4 +1,3 @@
-// spec: std §2.21.5
 // expect-exit: 0
 // expect-stdout:
 // ok mlkem keys from the seeds

@@ -1,6 +1,5 @@
 // gc-stress: 5
 // expect-exit: 0
-// spec: std 213-marker §2.13.9 / std 217-channel §2.17.1 / std 216-sync §2.16.3
 // expect-stdout:
 // list [1, 2, 3] [1, 2, 3, 4]
 // pair [7, 8] [7, 8] [7]
@@ -27,7 +26,7 @@
 
 // A hand-off gives the new owner a copy of every collection the value
 // reaches, made once per collection; what the sender kept is left alone.
-// The uses after the hand-off are `unsafe` (spec 4.15.2): the static
+// The uses after the hand-off are `unsafe`: the static
 // check rejects them, and this is what runs when it is out of the way.
 use rok::bare::gc::GcPtr;
 

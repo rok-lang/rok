@@ -25,4 +25,3 @@ fn main() {
     println(f"[{"\u{3000} trim\u{2003}".trim()}] [{"x y\u{85}".trim_end()}] [{"\u{a0}tail ".trim_start()}]");
 }
 
-// spec: std 215-string

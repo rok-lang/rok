@@ -1,6 +1,5 @@
-// spec: refs-lang §1.6.2
 // expect-error: unknown numeric literal suffix `q`
-// Spec 1.6.2: a suffix needs a `#[literal(number "q")]` handler.
+// A suffix needs a `#[literal(number "q")]` handler.
 fn main() -> i32 {
     let x = 2q;
     return 0;

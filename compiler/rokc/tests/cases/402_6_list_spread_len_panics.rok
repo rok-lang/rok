@@ -1,7 +1,6 @@
-// spec: 004.02.6-spread-args
 // A list spread into fixed parameters checks its length at run time.
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at tests/cases/402_6_list_spread_len_panics.rok:12:5:
+// expect-stderr: thread 'main' panicked at tests/cases/402_6_list_spread_len_panics.rok:11:5:
 // expect-stderr: spread of 2 elements into 3 parameters
 // expect-stdout:
 

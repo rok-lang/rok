@@ -1,5 +1,3 @@
-// spec: 006.09-meta-templates
-// spec: §6.9.9
 // expect-exit: 0
 // expect-stdout:
 // P { a: 1 }

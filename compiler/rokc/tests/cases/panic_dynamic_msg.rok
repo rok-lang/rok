@@ -1,6 +1,5 @@
-// spec: std §2.14.5
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at tests/cases/panic_dynamic_msg.rok:8:28:
+// expect-stderr: thread 'main' panicked at tests/cases/panic_dynamic_msg.rok:7:28:
 // expect-stderr: bad input
 // expect-stdout:
 

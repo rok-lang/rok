@@ -1,7 +1,6 @@
-// spec: 002.09.3-generic-impl-overlap
 // expect-error: overlap on `T` - bounds don't make impls disjoint
 
-// spec 2.9.3: one impl of a trait per type. Two blanket impls whose
+// One impl of a trait per type. Two blanket impls whose
 // bounds a single type (`i32`: `A` and `B`) meets conflict, even if no
 // call reaches them.
 trait A { fn a(self) -> i32; }

@@ -4,7 +4,7 @@
 // expect-error: 27:5: type annotations needed: cannot infer the type of `d` (`fn(_) -> _
 // expect-error: 28:5: type annotations needed: cannot infer the type of `e`
 
-// Spec 3.5.3 / 3.5.4 / 4.7.6: a method with a `ref` parameter or `ref
+// A method with a `ref` parameter or `ref
 // self` is no `fn` value, `x.method` without a call is no value, and a
 // trait / generic-type method path needs its `fn` type from context or
 // from later calls (none here).
@@ -29,5 +29,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 004.09-method
-// spec: §3.5.3 §3.5.4

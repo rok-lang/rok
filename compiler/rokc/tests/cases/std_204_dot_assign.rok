@@ -1,10 +1,9 @@
-// spec: std §2.4.10
 // expect-exit: 0
 // expect-stdout:
 // [11, 22, 33] [10, 40, 90] [0, 2, 0]
 // [5, 2, 9] [2, 4]
 
-// Stdlib 2.4.10: broadcast in place through `dot_*_assign` methods
+// Broadcast in place through `dot_*_assign` methods
 // (there is no `.+=` token).
 fn main() {
     let xs: List<i32> = [1, 2, 3];

@@ -2,8 +2,8 @@
 // expect-stdout:
 // 1 2 3 4 5
 
-// spec 3.11 range patterns over `char` (`'a'..='z'`); overlapping
-// ranges that still leave values for later arms are reachable (3.12.6).
+// Range patterns over `char` (`'a'..='z'`); overlapping
+// ranges that still leave values for later arms are reachable.
 fn class(c: char) -> i32 {
     return match c {
         'a'..='f' => 1,
@@ -15,5 +15,3 @@ fn class(c: char) -> i32 {
 }
 println(f"{class('b')} {class('x')} {class('3')} {class('7')} {class('!')}");
 
-// spec: 003.12-match-expression
-// spec: §3.11.1

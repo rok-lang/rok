@@ -18,4 +18,3 @@ fn main() -> i32 {
     return first(p1) + first(p2) + 4;
 }
 
-// spec: 002.10-generics

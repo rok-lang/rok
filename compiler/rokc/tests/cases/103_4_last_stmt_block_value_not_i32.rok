@@ -1,9 +1,8 @@
-// spec: §1.3.4 §3.9.7
-// expect-error: 9:18: mismatched types: `let a` expects `i32`, found `()`
-// expect-error: 10:18: mismatched types: `let b` expects `i32`, found `()`
-// expect-error: 11:18: mismatched types: `let c` expects `i32`, found `()`
+// expect-error: 8:18: mismatched types: `let a` expects `i32`, found `()`
+// expect-error: 9:18: mismatched types: `let b` expects `i32`, found `()`
+// expect-error: 10:18: mismatched types: `let c` expects `i32`, found `()`
 
-// spec 1.3.4: a last statement without `;` gives the block no value.
+// A last statement without `;` gives the block no value.
 fn main() -> i32 {
     let x = 0;
     let a: i32 = { x = 1 };

@@ -1,6 +1,5 @@
-// spec: §2.10.9 §3.12.5
-// expect-error: 10:5: non-exhaustive match on `T`: values of `T` (add a `_` arm) not covered
-// expect-error: 16:37: type pattern `i32` can't match a value of type `str`
+// expect-error: 9:5: non-exhaustive match on `T`: values of `T` (add a `_` arm) not covered
+// expect-error: 15:37: type pattern `i32` can't match a value of type `str`
 
 // A type pattern on a type parameter is refutable at the definition
 // check (each arm is reachable for some `T`, so the match needs a `_`);

@@ -40,4 +40,3 @@ fn main() {
     }
 }
 
-// spec: std 221-crypto §2.21.4

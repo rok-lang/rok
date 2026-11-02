@@ -3,7 +3,6 @@
 // expect-stdout:
 // of 3 sent 2
 
-// spec: std 213-marker §2.13.9
 // Pick some rows into a new list and send it; the source list is then dropped.
 use rok::std::thread;
 fn main() {

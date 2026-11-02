@@ -1,8 +1,7 @@
-// spec: §3.13.3 std §2.9.2
 // A user accessor shaped like `List`'s (`if i >= len { panic }`, then a
 // load) keeps its check: another call in the loop shrinks its length.
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at tests/cases/cg_versioned_loop_user_accessor.rok:23:20:
+// expect-stderr: thread 'main' panicked at tests/cases/cg_versioned_loop_user_accessor.rok:22:20:
 // expect-stderr: Vec2 index out of bounds
 // expect-stdout:
 

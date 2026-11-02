@@ -7,7 +7,7 @@
 // io: 5 bytes
 // registrations left: 0
 
-// The runtime ABI (805 §8.5.5, 708 §7.8.8) from hand-written futures:
+// The runtime ABI from hand-written futures:
 // `rok_timer_register` wakes at a deadline, `rok_coro_park` /
 // `rok_coro_unpark` park on a frame address, `rok_io_register` wakes on
 // fd readiness (the runtime's fd: the descriptor, or on Windows the
@@ -112,5 +112,3 @@ try! server_own.close();
 try! listener.close();
 println(f"registrations left: {task::registrations()}");
 
-// spec: 004.12-async
-// spec: 007.08-coroutine §7.8.8 / 008.05-extern-symbols §8.5.3 §8.5.5

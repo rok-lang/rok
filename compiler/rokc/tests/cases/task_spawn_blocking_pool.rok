@@ -80,4 +80,3 @@ while !seen && Instant::now() < deadline {
 }
 println(f"cancelled job finished {seen}");
 
-// spec: std 218-task

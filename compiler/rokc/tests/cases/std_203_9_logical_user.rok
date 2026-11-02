@@ -1,4 +1,3 @@
-// spec: std 203-ops §2.3.9
 // expect-exit: 0
 // expect-stdout:
 // rhs
@@ -9,7 +8,7 @@
 // true
 // short false
 
-// stdlib 2.3.9: `&&` / `||` on a user type with `LogicalAnd` /
+// `&&` / `||` on a user type with `LogicalAnd` /
 // `LogicalOr` is a plain method call: both operands are evaluated. On
 // `bool` they still short-circuit.
 struct B { v: bool; }

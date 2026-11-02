@@ -35,4 +35,3 @@ println(f"distinct: {seen.len()}");
 par::for_each(0..64, |x: i32| { });
 println(f"nested par keeps the outer id: {task::id() == main_id}");
 
-// spec: 004.12-async

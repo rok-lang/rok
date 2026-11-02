@@ -1,7 +1,6 @@
-// spec: 006.05-literal-magic
-// expect-error: 10:15: mismatched types: variadic argument expects `[i64; 2]`, found `[i64; 1]`
+// expect-error: 9:15: mismatched types: variadic argument expects `[i64; 2]`, found `[i64; 1]`
 
-// Spec 6.5.4: rows of a `...[T; C]` matrix literal share one length.
+// Rows of a `...[T; C]` matrix literal share one length.
 #[literal("w" "[" {{expr} % "," +} % ";" + "]")]
 fn w_literal<const C: usize>(rows: ...[i64; C]) -> usize { C }
 

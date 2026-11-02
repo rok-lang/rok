@@ -1,10 +1,9 @@
-// spec: std 200-core/218-task §2.18.4 / refs-lang 003.11 §3.11.4
 // expect-exit: 0
 // expect-stdout:
 // fallback -1
 
-// stdlib 2.18.4 writes `try await t.join() catch _: CancellationError { .. }`:
-// a type-check pattern whose binding is the wildcard (3.11.4 also shows
+// Writes `try await t.join() catch _: CancellationError { .. }`:
+// a type-check pattern whose binding is the wildcard (like
 // `_: i32` as a pattern).
 async fn main() {
     let t = task::spawn(async {

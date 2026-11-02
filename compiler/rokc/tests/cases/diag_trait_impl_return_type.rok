@@ -1,9 +1,8 @@
-// spec: §2.9.1
-// expect-error: diag_trait_impl_return_type.rok:23:5: `f` does not match its declaration in trait `T`: it returns `str` where the trait's returns `i32`
+// expect-error: diag_trait_impl_return_type.rok:22:5: `f` does not match its declaration in trait `T`: it returns `str` where the trait's returns `i32`
 // expect-error: help: write `-> i32`, the trait's `fn f(self) -> i32`
-// expect-error: diag_trait_impl_return_type.rok:26:5: `k` does not match its declaration in trait `G`: it returns `i32` where the trait's returns `i64`
+// expect-error: diag_trait_impl_return_type.rok:25:5: `k` does not match its declaration in trait `G`: it returns `i32` where the trait's returns `i64`
 // expect-error: help: write `-> i64`, the trait's `fn k(self) -> X`
-// expect-error: diag_trait_impl_return_type.rok:30:5: `m` does not match its declaration in trait `A`: it returns `str` where the trait's returns `i64`
+// expect-error: diag_trait_impl_return_type.rok:29:5: `m` does not match its declaration in trait `A`: it returns `str` where the trait's returns `i64`
 // expect-error: help: write `-> i64`, the trait's `fn m(self) -> Self::Out`
 
 // An impl method returns the type its trait declares, with the trait's

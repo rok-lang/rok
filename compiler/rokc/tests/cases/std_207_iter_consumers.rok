@@ -1,4 +1,3 @@
-// spec: std 207-iter §2.7.1
 // expect-exit: 0
 // expect-stdout:
 // count 5 sum 10 product 24
@@ -9,7 +8,7 @@
 // min 1 max 9 min-empty none
 // last 4 nth 2
 
-// spec 2.7.1 consumers: count / sum (empty -> 0) / product (empty -> 1) /
+// Consumers: count / sum (empty -> 0) / product (empty -> 1) /
 // fold / reduce / any / all / find / position / min / max / last / nth.
 fn show(v: i32 | none) -> str {
     match v { x: i32 => f"{x}", none => "none" }

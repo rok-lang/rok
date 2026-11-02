@@ -1,7 +1,6 @@
-// spec: §2.3.1
 // `x: i32, y: i32` (Rust, Go) in a struct declaration: fields end with
 // `;`. One error for the declaration, however many commas.
-// expect-error: 7:18: expected `;` after a struct field, found `,`
+// expect-error: 6:18: expected `;` after a struct field, found `,`
 // expect-error: help: struct fields end with `;`: `x: i32;`
-// forbid-error: 7:26:
+// forbid-error: 6:26:
 struct P { x: i32, y: i32, z: i32 }

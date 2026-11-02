@@ -1,7 +1,6 @@
-// spec: refs-lang §8.3.1 §8.3.3 §8.3.6 / §7.4.5
 // Each thread allocates from its own TLAB, links its own shadow-stack
 // frames and polls its own yield flag, all slots of its own TLS block
-// `rok_tls` (803 §8.3.1), while collections stop every thread.
+// `rok_tls`, while collections stop every thread.
 // needs: threads
 // expect-exit: 0
 // expect-stdout: 1600000

@@ -20,4 +20,3 @@ fn main() -> i32 {
     return idx + 7;
 }
 
-// spec: 002.10-generics

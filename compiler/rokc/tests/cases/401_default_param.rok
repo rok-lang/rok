@@ -1,10 +1,9 @@
-// spec: 004.02.3-default-parameter
 // expect-exit: 0
 // expect-stdout:
 // 5
 // 12
 
-// spec 4.1: default parameter `fn f(x: i32 = 0)`.
+// Default parameter `fn f(x: i32 = 0)`.
 fn add(a: i32, b: i32 = 5) -> i32 {
     return a + b;
 }

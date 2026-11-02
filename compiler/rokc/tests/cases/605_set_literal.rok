@@ -1,12 +1,10 @@
-// spec: 006.05-set-literal
 // expect-exit: 0
 // expect-stdout:
 // 3
 
-// spec 6.5 / 6.5.6: `{1, 2, 3}` is a set literal - a stdlib `Set`.
+// `{1, 2, 3}` is a set literal - a stdlib `Set`.
 fn main() -> i32 {
     let s = {1, 2, 3};
     println(f"{s.len() as i32}");
     return 0;
 }
-// spec: §6.5.6

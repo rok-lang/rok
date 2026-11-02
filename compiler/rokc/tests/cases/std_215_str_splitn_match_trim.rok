@@ -1,4 +1,3 @@
-// spec: std 215-string §2.15.2
 // expect-exit: 0
 // expect-stdout:
 // splitn 0:
@@ -20,7 +19,7 @@
 // trim utf8 [가] [가나나] [나나가]
 // shared true
 
-// spec 2.15.2: `splitn` / `rsplitn` cap the piece count and leave the
+// `splitn` / `rsplitn` cap the piece count and leave the
 // rest unsplit, `rsplit` walks from the end, `match_indices` yields
 // non-overlapping byte offsets, `trim*_matches` strip repeats of a str.
 fn show<I: Iterator<Item = str>>(it: I) -> str {

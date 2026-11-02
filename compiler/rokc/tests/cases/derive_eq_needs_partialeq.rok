@@ -1,5 +1,5 @@
 // expect-error: `#[derive(Eq)]` on `P` needs `PartialEq` too - derive both
-// Spec 2.5.1: `Eq: PartialEq` (and `Ord: PartialOrd + Eq`).
+// `Eq: PartialEq` (and `Ord: PartialOrd + Eq`).
 #[derive(Eq)]
 struct P { x: i32; }
 
@@ -7,5 +7,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: 006.02-built-in-attributes
-// spec: §6.2.1

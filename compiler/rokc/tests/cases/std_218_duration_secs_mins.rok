@@ -1,4 +1,3 @@
-// spec: std 218-task §2.18.6 / refs-lang §6.2.7
 // expect-exit: 0
 // expect-stdout:
 // 2s 180s 2s true

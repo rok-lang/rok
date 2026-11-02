@@ -1,8 +1,7 @@
-// spec: 004.05.1-closure-block-body
 // expect-exit: 7
 // expect-stdout:
 
-// spec 4.5.1: block-body closure with an explicit `->` return type.
+// Block-body closure with an explicit `->` return type.
 fn main() -> i32 {
     let f = |x: i32| -> i32 {
         let y = x * 2;

@@ -46,4 +46,3 @@ await task::join(busy);
 println(f"fan-out 1000 x 20 yields: {hops.load()}");
 println(f"no slowdown: {fastest[1] < 10 * fastest[0] + 1000000}");
 
-// spec: 004.12-async

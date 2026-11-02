@@ -1,5 +1,4 @@
-// spec: §4.2.3
-// expect-error: 6:18: parameter `y` has no default but follows one that does; defaults are trailing
+// expect-error: 5:18: parameter `y` has no default but follows one that does; defaults are trailing
 // expect-error: help: give `y` a default, or move it before `x`
 
 // Defaults are trailing, checked at the declaration.

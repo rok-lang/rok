@@ -1,5 +1,4 @@
-// spec: §3.9.1
-// expect-error: 10:5: `g` is imported here and also defined in this block
+// expect-error: 9:5: `g` is imported here and also defined in this block
 
 // An item and a `use` of its name in one block conflict (E0032), as at
 // module level.

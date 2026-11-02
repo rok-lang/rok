@@ -5,7 +5,7 @@
 // 7
 // 1
 
-// Spec 1.4: identifiers are UAX31 XID plus the math notation
+// Identifiers are UAX31 XID plus the math notation
 // profile (∂ ∇ ∞, sub/superscripts), primes, `∑ ∏ ∫` and emoji. `x²` is a
 // name, not a square. Identifiers compare after NFC.
 fn ∑(a: i32, b: i32) -> i32 { return a + b; }
@@ -26,4 +26,3 @@ fn main() -> i32 {
     return 0;
 }
 
-// spec: §1.4.1 §1.4.2

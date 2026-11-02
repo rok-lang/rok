@@ -1,11 +1,10 @@
-// spec: 004.12-async §4.12.8 / §4.12.11
 // expect-exit: 0
 // expect-stdout:
 // other 5
 // sum 30
 
-// 4.12.11: an async call returns a future at once; it is awaited when
-// the result is needed. 4.12.8: each `await` binds the result and the
+// An async call returns a future at once; it is awaited when
+// the result is needed. Each `await` binds the result and the
 // body goes on.
 async fn op(x: i32) -> i32 {
     await task::yield_now();

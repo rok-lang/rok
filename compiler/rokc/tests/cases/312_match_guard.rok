@@ -1,11 +1,10 @@
-// spec: 003.12-match-guard
 // expect-exit: 0
 // expect-stdout:
 // big
 // small
 // big
 
-// spec 312: match arm guard `if cond`.
+// Match arm guard `if cond`.
 fn classify(n: i32) -> i32 {
     let r = match n {
         x if x > 100 => 1,
@@ -20,4 +19,3 @@ fn main() -> i32 {
     if classify(101) == 1 { println("big"); }
     return 0;
 }
-// spec: §3.12.8 §3.11.2

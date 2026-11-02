@@ -1,11 +1,10 @@
-// expect-error: error[E0105]: `xs` was sent through a channel at line 27
-// expect-error: handoff_send_errors.rok:28:5: `xs` was sent through a channel at line 27
+// expect-error: error[E0105]: `xs` was sent through a channel at line 26
+// expect-error: handoff_send_errors.rok:27:5: `xs` was sent through a channel at line 26
 // expect-error: help: the receiver owns it now; hand over `xs.clone()` to keep a separate copy, or give `xs` a new value before using it again
-// expect-error: handoff_send_errors.rok:34:5: `ys` was sent through a channel at line 33
-// expect-error: handoff_send_errors.rok:47:13: `xs` was handed to a `Handoff` at line 45
-// expect-error: handoff_send_errors.rok:40:5: `zs` was sent through a channel at line 39
+// expect-error: handoff_send_errors.rok:33:5: `ys` was sent through a channel at line 32
+// expect-error: handoff_send_errors.rok:46:13: `xs` was handed to a `Handoff` at line 44
+// expect-error: handoff_send_errors.rok:39:5: `zs` was sent through a channel at line 38
 // needs: threads
-// spec: std 213-marker §2.13.9 / std 217-channel §2.17.2
 
 // A value sent through a channel, or wrapped in `Handoff` for another
 // thread, is shared with the receiver: using the sender's handle
@@ -88,6 +87,6 @@ fn next_pass(tx: Sender<List<i32>>) -> i64 {
     n
 }
 
-// expect-error: handoff_send_errors.rok:64:22: `xs` was sent through a channel at line 61
-// expect-error: handoff_send_errors.rok:76:23: `xs` was sent through a channel at line 72
-// expect-error: handoff_send_errors.rok:85:34: `xs` was already sent through a channel by this call, on an earlier pass of the loop
+// expect-error: handoff_send_errors.rok:63:22: `xs` was sent through a channel at line 60
+// expect-error: handoff_send_errors.rok:75:23: `xs` was sent through a channel at line 71
+// expect-error: handoff_send_errors.rok:84:34: `xs` was already sent through a channel by this call, on an earlier pass of the loop

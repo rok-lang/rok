@@ -13,4 +13,3 @@ fn main() -> i32 {
     return s + t;
 }
 
-// spec: 002.10-generics

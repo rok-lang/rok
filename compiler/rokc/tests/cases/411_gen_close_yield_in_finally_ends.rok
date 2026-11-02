@@ -1,4 +1,3 @@
-// spec: 004.11-generators §4.11.10
 // expect-exit: 0
 // expect-stdout:
 // got 0
@@ -7,7 +6,7 @@
 // after: 0
 // drained: 0 1 99 100
 
-// 4.11.10: a `yield` reached while a generator is being closed ends it:
+// A `yield` reached while a generator is being closed ends it:
 // the cleanups around that `yield` still run, the yielded value goes
 // nowhere and nothing after it runs. A generator left normally yields
 // from its `finally` as usual.

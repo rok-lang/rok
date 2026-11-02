@@ -1,4 +1,3 @@
-// spec: std 303-time §3.3.2
 // expect-exit: 0
 // expect-stdout:
 // elapsed >= 2ms: true
@@ -6,7 +5,7 @@
 // checked: 5ms true
 // never backward: true
 
-// stdlib 3.3.2: `Instant` is monotonic; `duration_since` of a later
+// `Instant` is monotonic; `duration_since` of a later
 // instant is negative; `checked_add` / `checked_sub` give `none` on
 // overflow.
 use rok::std::thread;

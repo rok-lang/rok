@@ -1,7 +1,6 @@
-// spec: std §2.7.2
 // expect-error: associated type `IntoIter` = `str` does not implement `Iterator`
 
-// Stdlib 2.7.2: `type IntoIter: Iterator<Item = Item>` - an impl whose
+// `type IntoIter: Iterator<Item = Item>` - an impl whose
 // `IntoIter` is no iterator of its `Item` is an error.
 struct Bag;
 

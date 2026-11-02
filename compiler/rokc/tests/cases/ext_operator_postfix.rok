@@ -5,7 +5,7 @@
 // -90
 // 270
 
-// Spec 6.7.1: a postfix extension token `like = "?"` sits at the postfix
+// A postfix extension token `like = "?"` sits at the postfix
 // level (13), tighter than prefix `-` and every infix operator.
 trait Degrees {
     #[postfix("°", like = "?")]
@@ -39,4 +39,3 @@ fn main() -> i32 {
     println(f"{(90° + a).d}");
     return 0;
 }
-// spec: §6.7.1
