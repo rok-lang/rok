@@ -15,9 +15,9 @@ fn find(x: i32) throws -> i32 {
     x
 }
 
-fn main() throws -> i32 {
+fn main() throws {
     println("before");
     let v = try find(3) + try find(40);
-    return v;
+    println(v);
 }
 // spec: refs-lang §4.16.4

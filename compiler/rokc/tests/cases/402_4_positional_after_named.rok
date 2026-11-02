@@ -1,0 +1,9 @@
+// spec: §4.2.4
+// expect-error: 9:29: positional argument after a named argument
+// expect-error: help: write the positional arguments first, or name this one too
+
+// Positional arguments come first; one after a named argument is an
+// error instead of being dropped.
+fn f(a: i32, b: i32 = 0) -> i32 { a * 10 + b }
+
+fn main() { let x = f(a: 1, 2); }

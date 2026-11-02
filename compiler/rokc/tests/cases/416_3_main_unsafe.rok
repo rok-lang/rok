@@ -1,0 +1,5 @@
+// spec: §4.16.3
+// expect-error: `fn main`: cannot be `unsafe`
+
+// `unsafe` does not apply to `main`.
+unsafe fn main() {}

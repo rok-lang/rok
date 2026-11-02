@@ -1,0 +1,7 @@
+// spec: §1.8.3
+// expect-error: char literal must contain exactly one code point
+
+// A letter and a combining mark are two code points, as an escape too.
+fn main() {
+    let c = 'e\u{0301}';
+}

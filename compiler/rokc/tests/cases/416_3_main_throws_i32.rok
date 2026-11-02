@@ -1,0 +1,5 @@
+// spec: §4.16.3
+// expect-error: `fn main`: cannot combine `throws` with `-> i32`
+
+// No `main` combines `throws` with `-> i32`.
+fn main() throws -> i32 { 3 }

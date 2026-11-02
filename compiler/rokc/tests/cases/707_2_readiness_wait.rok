@@ -43,7 +43,10 @@ impl Future for Ready {
     }
 }
 
-fn main() throws (rok::bare::alloc::LayoutError) -> i32 {
+// No `main` combines `throws` with `-> i32` (spec 4.16.3).
+fn main() -> i32 { try! run() }
+
+fn run() throws (rok::bare::alloc::LayoutError) -> i32 {
     let raw: CPtr<u8> = unsafe { alloc(try Layout::array::<i32>(4usize)) };
     let mem: Ptr<u8> = raw.as_ptr() ?? panic("alloc failed");
     let fds = rok::bare::ptr_cast::<i32>(mem);

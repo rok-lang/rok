@@ -1,0 +1,9 @@
+// spec: §6.1.2
+// expect-error: expected expression, found `#![`
+// expect-error: help: an inner attribute `#![..]` goes at the top of a file
+
+// An inner attribute goes at the top of a file, not in a body.
+fn main() {
+    #![allow(unused)]
+    let x = 1;
+}

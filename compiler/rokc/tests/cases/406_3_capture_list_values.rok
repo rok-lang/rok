@@ -1,0 +1,14 @@
+// spec: §4.6.1 §4.6.3
+// expect-exit: 0
+// expect-stdout:
+// 11 7
+
+// A capture list may name value captures without `ref`.
+fn main() {
+    let a = 5;
+    let b = 6;
+    let n = 1;
+    let h = [a, b] || { a + b };
+    let k = [a, ref n] || { n += 1; a + n };
+    println(f"{h()} {k()}");
+}

@@ -1,0 +1,9 @@
+// spec: §3.8.8
+// expect-error: `?.` is not followed by `[`: there is no `x?.[i]`
+// expect-error: help: write `x?.get(i)`
+
+// There is no `x?.[i]`.
+fn main() {
+    let xs: List<i32> | none = [1];
+    let y = xs?.[0];
+}
