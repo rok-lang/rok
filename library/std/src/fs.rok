@@ -809,22 +809,19 @@ impl TryStream for ReadDirStream {
 }
 
 /// Read the next batch of `rd` on the blocking lane; `rd` moves there
-/// and comes back with the batch. Not `[move rd]`: `poll_next` would then
-/// hand over part of `self`, which a `for await` context may reach (E0107).
+/// and comes back with the batch.
 fn refill(rd: ReadDir) -> Task<(ReadDir, List<Result<DirEntry, IoError>>)> {
-    let moved = unsafe { Handoff::new(rd) };
-    task::spawn_blocking(|| {
-        let dir = moved.get();
+    task::spawn_blocking([move rd] || {
         let out: List<Result<DirEntry, IoError>> = List::new();
         while out.len() < DIR_BATCH {
             // The batch ends at an error.
-            let e = try dir.next() catch x { out.push(Result::Err(x)); break; };
+            let e = try rd.next() catch x { out.push(Result::Err(x)); break; };
             match e {
                 d: DirEntry => out.push(Result::Ok(d)),
                 none => break,
             }
         }
-        (dir, out)
+        (rd, out)
     })
 }
 
