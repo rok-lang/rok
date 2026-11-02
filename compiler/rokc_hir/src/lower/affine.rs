@@ -1055,11 +1055,10 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                      a new one"
                 )
             } else if ty == "Stdio" {
-                format!(
-                    "help: a `Stdio::File` belongs to the command it is given to, which closes \
-                     it when it runs; give each command its own file \
-                     (`Stdio::File(try f.try_clone())`)"
-                )
+                "help: a `Stdio::File` belongs to the command it is given to, which closes it \
+                 when it runs; give each command its own file \
+                 (`Stdio::File(try f.try_clone())`)"
+                    .to_owned()
             } else {
                 let copy = self
                     .copy_method(&self.roots[r].ty)
@@ -2081,10 +2080,10 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             let keeps = !iter && sum.as_ref().is_some_and(|s| s.keeps.contains(&i));
             let affine = self.c.shape(&a.ty).is_some();
             if !affine || by_ref || !(closer || into || keeps) {
-                let (s, v) = self.expr(a, st, Mode::Use);
-                st = s;
+                let (next, val) = self.expr(a, st, Mode::Use);
+                st = next;
                 // `await` polls the future it runs to the end.
-                if v == Val::Owned && self.place(a).is_none() && method != "poll" {
+                if val == Val::Owned && self.place(a).is_none() && method != "poll" {
                     self.temp_left_open(a);
                 }
                 continue;

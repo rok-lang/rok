@@ -2577,23 +2577,8 @@ impl<'h> Walk<'_, 'h> {
                 "help: store separate values (`.clone()` what you store), or hand over \
                  `{given}.clone()`"
             )];
-        } else if in_elems
-            && matches!(g, Gone::To(site, What::Task)
-                if self.c.fn_owners.borrow().contains(&(site.file, site.start)))
-        {
-            // A closure that owns moved values, spawned out of a
-            // collection: the element moves once.
-            let line = self.line(origin, at);
-            d.code = Code::USE_AFTER_MOVE;
-            d.message = format!(
-                "{handed} was spawned as a task at {line}: it may own values moved into it \
-                 (`[move ..]`), so it can be handed over only once"
-            );
-            let take = self.take_out(p, &x);
-            d.notes = vec![format!(
-                "help: take it out of `{x}` ({take}) and hand that over once, or make another \
-                 closure for the second use (moving in a `.clone()` of what it needs)"
-            )];
+        } else if in_elems && self.spawned_fn(g) {
+            self.elem_spawned_twice(&mut d, p, &x, &handed, origin, at);
         } else if in_elems {
             let line = self.line(origin, at);
             d.message = format!(
@@ -2612,6 +2597,36 @@ impl<'h> Walk<'_, 'h> {
             )];
         }
         self.diags.push(d);
+    }
+
+    /// `g` is a spawn of a `fn` value that may own moved values.
+    fn spawned_fn(&self, g: Gone) -> bool {
+        matches!(g, Gone::To(site, What::Task)
+            if self.c.fn_owners.borrow().contains(&(site.file, site.start)))
+    }
+
+    /// A closure that owns moved values, spawned out of a collection: the
+    /// element moves once.
+    fn elem_spawned_twice(
+        &self,
+        d: &mut RokDiagnostic,
+        p: &Place,
+        x: &str,
+        handed: &str,
+        origin: Span,
+        at: Span,
+    ) {
+        let line = self.line(origin, at);
+        d.code = Code::USE_AFTER_MOVE;
+        d.message = format!(
+            "{handed} was spawned as a task at {line}: it may own values moved into it \
+             (`[move ..]`), so it can be handed over only once"
+        );
+        let take = self.take_out(p, x);
+        d.notes = vec![format!(
+            "help: take it out of `{x}` ({take}) and hand that over once, or make another \
+             closure for the second use (moving in a `.clone()` of what it needs)"
+        )];
     }
 
     /// The innermost call is a collection method that neither reads nor
@@ -3396,6 +3411,18 @@ impl<'h> Walk<'_, 'h> {
                 }
             }
         }
+    }
+
+    /// An `async` closure's future runs on what the closure moved in: the
+    /// two are one owner. Handing either over takes the other along.
+    fn closure_future(&mut self, closure: &HirExpr, e: &HirExpr) {
+        if !self.is_coroutine(&e.ty) || !self.moves_own(closure) {
+            return;
+        }
+        let mut fl = Vec::new();
+        self.flows_any(closure, &mut fl);
+        let v = self.results.entry(addr(e)).or_default();
+        v.extend(fl.into_iter().map(|(_, q)| (Fk::Both, q)));
     }
 
     /// What `e`'s value carries, of the places this walk knows.
@@ -4304,15 +4331,7 @@ impl<'h> Walk<'_, 'h> {
                     self.kept_views(&s, &all, e, Some(closure));
                     self.apply(&s, &all, e, true, false);
                 }
-                // An `async` closure's future runs on what the closure
-                // moved in: the two are one owner. Handing either over
-                // takes the other along.
-                if self.is_coroutine(&e.ty) && self.moves_own(closure) {
-                    let mut fl = Vec::new();
-                    self.flows_any(closure, &mut fl);
-                    let v = self.results.entry(addr(e)).or_default();
-                    v.extend(fl.into_iter().map(|(_, q)| (Fk::Both, q)));
-                }
+                self.closure_future(closure, e);
             }
             HirExprKind::CoroNew { body_fn, args } => {
                 let args: Vec<&HirExpr> = args.iter().collect();
