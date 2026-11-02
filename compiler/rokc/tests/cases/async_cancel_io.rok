@@ -17,8 +17,8 @@ let any: SocketAddr = try! "127.0.0.1:0".parse::<SocketAddr>();
 let listener = try! TcpListener::bind(any);
 let client = try! TcpStream::connect(try! listener.local_addr());
 let (server, _) = try! listener.accept();
-// The reader task owns a second descriptor; `server` stays here.
-let reading = try! server.try_clone();
+// The reader task owns `server` and its `finally` hands it back.
+let (back_tx, back_rx) = channel::<TcpStream>();
 let idle = try! TcpListener::bind(any);
 let m = Mutex::new(0);
 let (tx, rx) = channel::<i32>();
@@ -28,11 +28,11 @@ let finally_ran = Mutex::new(false);
 using held = m.lock() {
     let reader = task::spawn(async {
         let _ = {
-            try await reading.read_async(List::filled(16, 0u8)) catch _ { 0 }
+            try await server.read_async(List::filled(16, 0u8)) catch _ { 0 }
         } finally {
             using f = finally_ran.lock() { f.set(true); }
+            try! back_tx.send(server);
         };
-        try reading.close() catch _ {};
         1
     });
     let acceptor = task::spawn(async {
@@ -78,11 +78,12 @@ using held = m.lock() {
 println(f"registrations left: {task::registrations()}");
 
 // The socket is still usable by a later task.
+let back: TcpStream = match back_rx.recv() { s: TcpStream => s, none => panic("no socket back") };
 try! client.write_all("hi");
 let got = await task::spawn(async {
     let buf = List::filled(16, 0u8);
-    let n = try! await server.read_async(buf);
-    try! server.close();
+    let n = try! await back.read_async(buf);
+    try! back.close();
     try! str::from_utf8(buf[0:n])
 });
 println(f"still works: {got}");

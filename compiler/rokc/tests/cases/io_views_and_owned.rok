@@ -21,10 +21,8 @@
 // `into_inner`. `chain` owns both streams.
 use rok::std::fs;
 use rok::std::env;
-use rok::std::process;
 use rok::std::path::Path;
 use rok::std::net;
-use rok::std::thread;
 use rok::core::io::{BufRead, BufReader, Read, Lines, Owned, IoError, AsyncBufRead};
 
 fn count<R: BufRead>(ref r: R) throws (IoError) -> usize {
@@ -39,7 +37,7 @@ fn lines_of(p: Path) throws (IoError) -> Owned<Lines<BufReader<fs::File>>, BufRe
 }
 
 async fn main() throws (IoError) {
-    let p = env::temp_dir() / f"rok_io_views_{process::id()}.txt";
+    let p = env::temp_dir() / "rok_io_views.txt";
     try fs::write(p, "one\ntwo\nthree\n");
 
     using r = BufReader::new(try fs::open(p)) {
@@ -103,27 +101,22 @@ async fn main() throws (IoError) {
     try await s.close_async();
     println(f"async owned: {k}");
 
+    // The listen backlog completes a connect before the accept: no
+    // client thread needed (none on wasm32-wasip2).
     let l = try net::tcp_listen("127.0.0.1:0");
     let at = try l.local_addr();
-    let th = thread::spawn(|| {
-        let c = try! net::tcp_connect(f"{at}");
-        try! c.write_all("ping");
-        try! c.close();
-        0
-    });
+    let c1 = try net::tcp_connect(f"{at}");
+    try c1.write_all("ping");
+    try c1.close();
     try for s in l.incoming() {
         println(f"incoming: {try s.read_to_str()}");
         try s.close();
         break;
     }
-    _ = try! th.join();
     let owned = l.into_incoming();
-    let th2 = thread::spawn(|| {
-        let c = try! net::tcp_connect(f"{at}");
-        try! c.write_all("pong");
-        try! c.close();
-        0
-    });
+    let c2 = try net::tcp_connect(f"{at}");
+    try c2.write_all("pong");
+    try c2.close();
     let server = task::spawn(async {
         let got = "";
         try! for s in owned {
@@ -135,6 +128,5 @@ async fn main() throws (IoError) {
         got
     });
     println(f"owned incoming: {await server}");
-    _ = try! th2.join();
     try fs::remove_file(p);
 }

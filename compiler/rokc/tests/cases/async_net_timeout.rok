@@ -18,11 +18,18 @@ let listener = try! TcpListener::bind(any);
 let client = try! TcpStream::connect(try! listener.local_addr());
 let (server, _) = try! listener.accept();
 
-// Each reader owns a descriptor of its own (`try_clone`).
-let s1 = try! server.try_clone();
+// Each reader owns the socket; its `finally` hands it back, cancelled or
+// not.
+let (back_tx, back_rx) = channel::<TcpStream>();
+fn back(rx: Receiver<TcpStream>) -> TcpStream {
+    match rx.recv() { s: TcpStream => s, none => panic("no socket back") }
+}
+
+let tx1 = back_tx.clone();
 let read = task::spawn(async {
-    let n = try await s1.read_async(List::filled(16, 0u8)) catch _ { 0 };
-    try s1.close() catch _ {};
+    let n = { try await server.read_async(List::filled(16, 0u8)) catch _ { 0 } } finally {
+        try! tx1.send(server);
+    };
     n
 });
 let r = try await task::timeout(Duration::ms(20), read) catch _: task::TimeoutError { 999 };
@@ -32,27 +39,29 @@ let gone = try await read.join() catch _: task::CancellationError { 999 };
 println(f"cancelled: {gone == 999}");
 println(f"registrations left: {task::registrations()}");
 
-let s2 = try! server.try_clone();
+let s2 = back(back_rx);
+let tx2 = back_tx.clone();
 let read2 = task::spawn(async {
-    let n = try await s2.read_async(List::filled(16, 0u8)) catch _ { 0 };
-    try s2.close() catch _ {};
+    let n = { try await s2.read_async(List::filled(16, 0u8)) catch _ { 0 } } finally {
+        try! tx2.send(s2);
+    };
     n
 });
 try! client.write_all("hi");
 let n = try await task::timeout(Duration::secs(10), read2) catch _: task::TimeoutError { 999 };
 println(f"read in time: {n}");
 
-let s3 = try! server.try_clone();
+let s3 = back(back_rx);
 let (which, _) = await task::select([
     async {
-        let n = try await s3.read_async(List::filled(16, 0u8)) catch _ { 0 };
-        try s3.close() catch _ {};
+        let n = { try await s3.read_async(List::filled(16, 0u8)) catch _ { 0 } } finally {
+            try! back_tx.send(s3);
+        };
         n
     },
     async { await task::sleep(Duration::ms(20)); 0 },
 ]);
 println(f"select: {if which == 1 { "timed out" } else { "data" }}");
 try! client.close();
-try! server.close();
+try! back(back_rx).close();
 try! listener.close();
-

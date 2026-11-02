@@ -45,7 +45,7 @@ fn main() {
     println(f"owned {add()}");
 
     // A file moved in is the closure's to close.
-    let path = rok::std::env::temp_dir() / f"rok_move_capture_{rok::std::process::id()}.txt";
+    let path = rok::std::env::temp_dir() / "rok_move_capture.txt";
     let f = try! File::create(path);
     let fh = thread::spawn([move f] || {
         try! f.write_all("hi".as_bytes());

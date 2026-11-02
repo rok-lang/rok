@@ -1,3 +1,4 @@
+// needs: fs
 // expect-exit: 0
 // expect-stdout:
 // read buffers untouched after cancel: true
@@ -8,21 +9,21 @@
 // buffer again at once, so the lane must not write into it (read) or
 // read the caller's later bytes (write).
 use rok::std::fs;
+use rok::std::fs::{File, Access};
 use rok::std::env;
-use rok::std::process;
 use rok::core::io::IoError;
 
 async fn main() throws (IoError) {
     let n = 1usize << 16;
-    let src = env::temp_dir() / f"rok_cancel_buf_src_{process::id()}.bin";
-    let dst = env::temp_dir() / f"rok_cancel_buf_dst_{process::id()}.bin";
+    let src = env::temp_dir() / "rok_cancel_buf_src.bin";
+    let dst = env::temp_dir() / "rok_cancel_buf_dst.bin";
     try fs::write(src, List::filled(n, 0u8));
 
+    // A fresh handle per call: the task owns it (WASI has no `dup`).
     let clean = true;
-    let f = try fs::open(src);
     for _ in 0..200 {
         let buf = List::filled(n, 7u8);
-        let g = try f.try_clone();
+        let g = try fs::open(src);
         let back = Atomic::new(0);
         let t = task::spawn_local(async {
             let k = try await g.read_async(buf) catch _ { 0 };
@@ -39,15 +40,13 @@ async fn main() throws (IoError) {
             await task::sleep(Duration::us(200));
             for b in buf { if b != 7u8 { clean = false; } }
         }
-        _ = try f.seek(io::SeekFrom::Start(0u64));
     }
-    try f.close();
     println(f"read buffers untouched after cancel: {clean}");
 
-    let w = try fs::create(dst);
+    try fs::write(dst, "");
     for _ in 0..200 {
         let data = List::filled(n, 97u8);
-        let v = try w.try_clone();
+        let v = try File::open(dst, Access::WriteOnly);
         let t = task::spawn_local(async {
             try await v.write_all_async(data) catch _ {};
             try v.close() catch _ {};
@@ -58,7 +57,6 @@ async fn main() throws (IoError) {
         for i in 0..n { data[i] = 98u8; }
     }
     await task::sleep(Duration::ms(50));
-    try w.close();
     let ok = true;
     for b in try fs::read(dst) { if b == 98u8 { ok = false; } }
     println(f"written bytes never the caller's later ones: {ok}");
