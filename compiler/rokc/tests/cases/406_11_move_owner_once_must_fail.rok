@@ -4,7 +4,7 @@
 // expect-error: 406_11_move_owner_once_must_fail.rok:26:27: `g` was spawned as a task at line 25
 // expect-error: 406_11_move_owner_once_must_fail.rok:34:27: `j.run` was spawned as a task at line 33
 // expect-error: 406_11_move_owner_once_must_fail.rok:40:34: `h` was spawned as a task at line 39
-// expect-error: 406_11_move_owner_once_must_fail.rok:47:18: `k` was spawned as a task by `via(k)` at line 47
+// expect-error: 406_11_move_owner_once_must_fail.rok:47:18: `k` was spawned as a task at line 47
 
 // A closure that owns values moved into it is handed over once, however
 // it travels: a variable, a `fn` parameter, a struct field.
@@ -42,7 +42,7 @@ fn spawn_it(h: fn() -> usize + Send) -> usize {
 }
 
 
-// Through a parameter that hands it over.
+// Through a parameter typed `fn() + Send`, which may run it elsewhere.
 fn pass_on(k: fn() -> usize + Send) -> usize {
     via(k) + via(k)
 }
