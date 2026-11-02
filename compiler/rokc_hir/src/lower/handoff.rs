@@ -1,5 +1,5 @@
-//! Use after hand-off is an error. rok has no moves: after
-//! `Mutex::new(xs)`, `tx.send(xs)` or `Handoff::new(xs)`, `xs` still names
+//! Use after hand-off is an error. A plain value is a shared handle:
+//! after `Mutex::new(xs)` or `tx.send(xs)`, `xs` still names
 //! an object other threads now share, and a handle taken from a guard
 //! (`g.get()`, `g.set(v)`, `g.update(f)`) is unprotected once its `using`
 //! block ends. Such a handle is a scoped view: it may not be returned,

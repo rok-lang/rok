@@ -6892,8 +6892,8 @@ impl<'a> Parser<'a> {
                 self.bump();
                 ExprKind::SelfUpper
             }
-            // `[a, b]` array, or capture list `[ref x] || ..`:
-            // `ref` inside, or names then `]` and `|` / `||`, decide.
+            // `[a, b]` array, or capture list `[ref x] || ..`: `ref` or
+            // `move` inside, or names then `]` and `|` / `||`, decide.
             TokenKind::LBracket if self.at_capture_list() => self.parse_capture_closure()?,
             TokenKind::LBracket => {
                 self.bump();

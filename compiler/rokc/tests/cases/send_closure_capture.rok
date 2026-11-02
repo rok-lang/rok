@@ -1,5 +1,5 @@
 // expect-error: type `closure(i32) -> i32` does not satisfy trait bound `Send`
-// A closure is `Send` iff its captures are.
+// A closure is `Send` iff its plain captures are `Send + Sync`.
 struct Tok { v: i32; }
 impl !Send for Tok {}
 fn need_send<T: Send>(x: T) -> i32 { return 1; }
