@@ -1,0 +1,20 @@
+// expect-exit: 0
+// expect-stdout:
+// 2 s
+// ("b", 1) [("b", 1), ("a", 2)] {"a": 2, "b": 1}
+
+// A trait's default method is not written in the impl: its generic
+// parameter named like the impl's (`K` of `pick`, of `min_by_key` on a
+// `DictIter<K, V, S>`) shadows the impl's.
+struct W<K> { k: K; }
+
+trait Pick {
+    fn pick<K>(self, f: fn(i32) -> K) -> K { f(1) }
+}
+
+impl<K> Pick for W<K> {}
+
+let w = W { k: "s" };
+println(w.pick(|x| x + 1), w.k);
+let d: Dict<str, i32> = {"a": 2, "b": 1};
+println(f"{d.iter().min_by_key(|p| p.1):?} {d.sorted_by_key(|p| p.1):?} {d.to_dict():?}");

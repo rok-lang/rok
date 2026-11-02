@@ -423,8 +423,8 @@ pub trait Iterator {
 
     /// The `(key, value)` items in a new `Dict`; a later key's value
     /// replaces an earlier one's.
-    const fn to_dict<Key: Hash, Value>(self) -> Dict<Key, Value> where Self: Iterator<Item = (Key, Value)> {
-        let out: Dict<Key, Value> = Dict::new();
+    const fn to_dict<K: Hash, V>(self) -> Dict<K, V> where Self: Iterator<Item = (K, V)> {
+        let out: Dict<K, V> = Dict::new();
         for (k, v) in self {
             out[k] = v;
         }
@@ -446,7 +446,7 @@ pub trait Iterator {
     /// The items in a new `List` sorted by `key`, largest key first when
     /// `reverse`; equal keys keep their order. Python:
     /// `sorted(xs, key=f, reverse=...)`.
-    const fn sorted_by_key<Key: Ord>(self, key: fn(Item) -> Key, reverse: bool = false) -> List<Item> {
+    const fn sorted_by_key<K: Ord>(self, key: fn(Item) -> K, reverse: bool = false) -> List<Item> {
         let out = self.to_list();
         if reverse {
             out.sort_by(|a: Item, b: Item| key(b).cmp(key(a)));
@@ -478,8 +478,8 @@ pub trait Iterator {
     /// The items grouped by `key`: each key, in first-seen order, with
     /// its items in order. Unlike Python's `itertools.groupby`, equal
     /// keys need not be adjacent.
-    const fn group_by<Key: Hash>(self, key: fn(Item) -> Key) -> Dict<Key, List<Item>> {
-        let out: Dict<Key, List<Item>> = Dict::new();
+    const fn group_by<K: Hash>(self, key: fn(Item) -> K) -> Dict<K, List<Item>> {
+        let out: Dict<K, List<Item>> = Dict::new();
         for x in self {
             let k = key(x);
             if let g: List<Item> = out.get(k) {

@@ -1895,7 +1895,10 @@ fn collect<'a>(
             {
                 // Impl generics first, then the method's own; `self` and
                 // `Self` take the impl target type at instantiation.
+                let clash = outer_generic_clash(m, &impl_def.generics);
                 let mut def = m.clone();
+                shadow_outer_generics(&mut def, &impl_def.generics, clash.is_some());
+                pre_diags.extend(clash);
                 let base_leaf = leaf_name(base);
                 // `Box__get` is both the mono cache key and the name
                 // diagnostics print.
@@ -1904,12 +1907,12 @@ fn collect<'a>(
                 } else {
                     format!("{module}::{base_leaf}__{leaf}")
                 };
-                def.generics.params = [&impl_def.generics.params, &m.generics.params]
+                def.generics.params = [&impl_def.generics.params, &def.generics.params]
                     .into_iter()
                     .flatten()
                     .cloned()
                     .collect();
-                def.where_clause = [&impl_def.where_clause, &m.where_clause]
+                def.where_clause = [&impl_def.where_clause, &def.where_clause]
                     .into_iter()
                     .flatten()
                     .cloned()
@@ -4733,6 +4736,75 @@ fn sig_mismatch(
     true
 }
 
+/// A method written in the impl may not reuse a name of the impl's
+/// generic parameters.
+fn outer_generic_clash(
+    m: &FnDef,
+    outer: &rokc_ast::Generics,
+) -> Option<rokc_diagnostic::RokDiagnostic> {
+    let name = |p: &rokc_ast::GenericParam| match p {
+        rokc_ast::GenericParam::Type { name, .. } | rokc_ast::GenericParam::Const { name, .. } => {
+            name.clone()
+        }
+    };
+    let taken: Vec<String> = outer.params.iter().map(name).collect();
+    let n = m
+        .generics
+        .params
+        .iter()
+        .map(name)
+        .find(|n| taken.contains(n))?;
+    let leaf = leaf_name(&m.name);
+    Some(
+        rokc_diagnostic::RokDiagnostic::error(
+            Code::GENERIC_PARAM_SHADOWS,
+            m.span,
+            format!("generic parameter `{n}` of `{leaf}` is already a parameter of its `impl`"),
+        )
+        .with_help(format!(
+            "rename the method's (`fn {leaf}<{n}2>`), or drop it to use the impl's `{n}`"
+        )),
+    )
+}
+
+/// A trait default method's generic parameter named like one of its
+/// impl's shadows it: the method's is renamed, with its uses, to a name no
+/// source writes (`K'`) before the two lists are joined. After the
+/// `clashed` error of a method written in the impl, its parameter is
+/// dropped instead, so its uses mean the impl's and say nothing more.
+fn shadow_outer_generics(def: &mut FnDef, outer: &rokc_ast::Generics, clashed: bool) {
+    let name = |p: &rokc_ast::GenericParam| match p {
+        rokc_ast::GenericParam::Type { name, .. } | rokc_ast::GenericParam::Const { name, .. } => {
+            name.clone()
+        }
+    };
+    let taken: std::collections::HashSet<String> = outer.params.iter().map(name).collect();
+    if clashed {
+        def.generics.params.retain(|p| !taken.contains(&name(p)));
+        return;
+    }
+    let mut r = rokc_ast::rename::Renames::default();
+    for p in &def.generics.params {
+        let n = name(p);
+        if !taken.contains(&n) {
+            continue;
+        }
+        let to = format!("{n}'");
+        match p {
+            rokc_ast::GenericParam::Type { .. } => r.types.insert(n, to),
+            rokc_ast::GenericParam::Const { .. } => r.values.insert(n, to),
+        };
+    }
+    if r.is_empty() {
+        return;
+    }
+    let mut item = Item::Fn(def.clone());
+    r.item(&mut item);
+    if let Item::Fn(f) = item {
+        *def = f;
+    }
+}
+
 /// Impl method `m` without `throws` takes its trait method's, the error
 /// types resolving in the trait's module; `None` when nothing changes.
 fn inherit_throws(m: &FnDef, td: &rokc_ast::TraitDef) -> Option<FnDef> {
@@ -4805,8 +4877,10 @@ fn generic_trait_impl(
     };
     let target_display = impl_def_display(&impl_def.self_ty);
     let assoc = impl_assoc_types(impl_def);
-    let template = |m: &FnDef, def_module: &str| {
+    let template = |m: &FnDef, def_module: &str, clashed: bool| {
         let mut def = m.clone();
+        // Before the impl's associated types bring its names in.
+        shadow_outer_generics(&mut def, &impl_def.generics, clashed);
         subst_assoc_sig(&mut def, &assoc);
         let leaf = leaf_name(&m.name);
         // `__impl1f2e3d4c_show` is both the mono cache key and the name
@@ -4876,11 +4950,11 @@ fn generic_trait_impl(
             ));
             continue;
         }
+        let clash = outer_generic_clash(m, &impl_def.generics);
         let inherited = trait_def.and_then(|td| inherit_throws(m, td));
-        methods.insert(
-            leaf.clone(),
-            template(inherited.as_ref().unwrap_or(m), module),
-        );
+        let def = template(inherited.as_ref().unwrap_or(m), module, clash.is_some());
+        diags.extend(clash);
+        methods.insert(leaf.clone(), def);
     }
     if let Some(td) = trait_def {
         let trait_module = module_of(&td.name);
@@ -4908,7 +4982,7 @@ fn generic_trait_impl(
             let mut args = trait_param_args(td, impl_def);
             supertrait_projections(&tm, td, impl_def, &mut args);
             subst_assoc_sig(&mut tm, &args);
-            methods.insert(tm.name.clone(), template(&tm, &trait_module));
+            methods.insert(tm.name.clone(), template(&tm, &trait_module, false));
         }
     }
     Impl {

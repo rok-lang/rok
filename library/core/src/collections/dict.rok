@@ -407,7 +407,7 @@ impl<K: Hash, S: BuildHasher> Dict<K, usize, S> {
     /// Python: `Counter.most_common(n)`; build the counts with
     /// `xs.counts()`.
     pub const fn most_common(self, n: usize | none = none) -> List<(K, usize)> {
-        let out = self.iter().sorted_by(|a: (K, usize), b: (K, usize)| b.1.cmp(a.1));
+        let out = self.iter().sorted_by_key(|p: (K, usize)| p.1, reverse: true);
         if let k: usize = n {
             out.truncate(k);
         }
