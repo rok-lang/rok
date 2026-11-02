@@ -1,0 +1,33 @@
+// expect-exit: 0
+// expect-stdout:
+// 15021278609987233951 5881210131331364753
+// 0.9838941681774888 4 6 false
+// -0.4087085854552936 1.2077171716233215
+// [2, 1, 5, 3, 4] 4 [4, 1]
+// true
+// 5987356902031041503
+// true 3
+// 0
+
+// Seeded generators: Xoshiro256PlusPlus::seed(n) gives the same stream on
+// every target (SplitMix64 seeding); Rng's derived values, split, the
+// OsRng one-call forms.
+use rok::std::random;
+use rok::std::random::{Rng, Xoshiro256PlusPlus};
+
+let r = Xoshiro256PlusPlus::seed(42);
+println(r.next_u64(), r.next_u64());
+println(r.f64(), r.range(0..10), r.range_inclusive(1..=6), r.bool());
+println(r.normal(), r.uniform(1.0, 2.0));
+let xs = [1, 2, 3, 4, 5];
+r.shuffle(xs);
+println(f"{xs:?} {r.choice(xs):?} {r.sample(xs, 2):?}");
+let a = Xoshiro256PlusPlus::seed(7);
+let b = a.split();
+println(a.next_u64() != b.next_u64());
+let z = Xoshiro256PlusPlus::seed(0);
+println(z.next_u64());
+let f = random::f64();
+println(f >= 0.0 && f < 1.0, random::range(3..4));
+let o = random::rng();
+println(o.below(1));
