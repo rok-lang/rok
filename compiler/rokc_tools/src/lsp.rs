@@ -662,7 +662,15 @@ pub(crate) fn hover(a: &Analysis, key: &str, text: &str, off: usize) -> Option<S
     let fenced = |code: String| format!("```rok\n{code}\n```");
     let with_doc = |f: &rokc_hir::HirFunction| {
         let doc = a.fn_doc(f.span);
-        let code = fenced(signature(hir, f));
+        let mut sig = signature(hir, f);
+        // `-> some Tr`: the body's type stays hidden.
+        if let Some(some) = a.opaque_ret(f.span) {
+            if let Some(i) = sig.rfind(" -> ") {
+                sig.truncate(i);
+                sig = format!("{sig} -> {some}");
+            }
+        }
+        let code = fenced(sig);
         if doc.is_empty() {
             code
         } else {
@@ -711,7 +719,7 @@ pub(crate) fn hover(a: &Analysis, key: &str, text: &str, off: usize) -> Option<S
                 return Some(with_doc(f));
             }
         }
-        let ty = ty_name(hir, &e.ty);
+        let ty = a.shown_ty(hir, &e.ty);
         let src = text.get(e.span.start as usize..e.span.end as usize);
         return Some(fenced(match ident {
             Some(name) if src == Some(name) => format!("{name}: {ty}"),
@@ -736,7 +744,7 @@ pub(crate) fn hover(a: &Analysis, key: &str, text: &str, off: usize) -> Option<S
             return Some(with_doc(f));
         }
         if let Some(l) = f.locals.iter().find(|l| l.name.as_deref() == Some(name)) {
-            return Some(fenced(format!("{name}: {}", ty_name(hir, &l.ty))));
+            return Some(fenced(format!("{name}: {}", a.shown_ty(hir, &l.ty))));
         }
     }
     None

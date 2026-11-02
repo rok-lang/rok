@@ -34,6 +34,7 @@ fn lazy_init_fn_name(static_name: &str) -> String {
 /// ones an ROKHIR interface cuts to `;`).
 fn in_archive(f: &FnDef) -> bool {
     f.generics.params.is_empty()
+        && mono::opaque_bounds(f).is_none()
         && !f.is_async
         && !f.is_generator
         && !rokc_ast::inline_wanted(&f.attrs)
@@ -4673,7 +4674,9 @@ fn ast_ty_needs(ty: &rokc_ast::Ty, params: &[&str], assoc: &[&str], out: &mut Ve
             .iter()
             .flat_map(|b| b.segments.iter().flat_map(|s| &s.generics))
             .collect(),
-        AstTyKind::Sum(parts) | AstTyKind::Tuple(parts) => parts.iter().collect(),
+        AstTyKind::Sum(parts) | AstTyKind::Tuple(parts) | AstTyKind::Some(parts) => {
+            parts.iter().collect()
+        }
         AstTyKind::Fn(args, ret, _) => args.iter().chain(std::iter::once(&**ret)).collect(),
         AstTyKind::Throws { ok, err } => vec![&**ok, &**err],
         AstTyKind::Array(elem, _) | AstTyKind::Nest(elem) | AstTyKind::Binding(_, elem) => {
@@ -8303,7 +8306,7 @@ fn may_diverge(
     let open: Vec<&FnDef> = fns
         .into_iter()
         .filter(|f| {
-            f.ret_ty.is_none()
+            (f.ret_ty.is_none() || mono::opaque_bounds(f).is_some())
                 && f.body.is_some()
                 && !f.attrs.iter().any(|a| a.path == [rokc_ast::UNIT_RET_ATTR])
         })

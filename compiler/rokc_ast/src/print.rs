@@ -781,6 +781,16 @@ impl Printer {
                     self.s(")");
                 }
             }
+            TyKind::Some(bounds) => {
+                self.s("some ");
+                if let [b] = bounds.as_slice() {
+                    self.ty(b);
+                } else {
+                    self.s("(");
+                    self.list(bounds, " + ", Self::ty);
+                    self.s(")");
+                }
+            }
             TyKind::None => self.s("none"),
             TyKind::SelfUpper => self.s("Self"),
             TyKind::Never => self.s("!"),
@@ -805,7 +815,7 @@ impl Printer {
     fn ty_tight(&mut self, t: &Ty) {
         let group = match &t.kind {
             TyKind::Sum(m) => !(m.len() == 2 && m[0].nest_inner().is_some()),
-            TyKind::Fn(..) | TyKind::AnyTrait(_) => true,
+            TyKind::Fn(..) | TyKind::AnyTrait(_) | TyKind::Some(_) => true,
             _ => false,
         };
         if group {

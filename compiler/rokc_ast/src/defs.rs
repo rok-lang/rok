@@ -695,6 +695,10 @@ pub enum TyKind {
     Any,
     /// `any Tr` / `any (A + B)` - a dynamic slot bounded by traits.
     AnyTrait(Vec<Path>),
+    /// `some Tr` / `some (A + B)` / `some fn(A) -> R`: a function's
+    /// return type, one concrete type that callers see only through the
+    /// bounds.
+    Some(Vec<Ty>),
     /// `none` (used inside sum types).
     None,
     /// Self type.

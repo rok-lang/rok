@@ -3981,11 +3981,7 @@ impl<'a> Parser<'a> {
                 t => t,
             }
         };
-        let ret_ty = if self.eat(&TokenKind::Arrow) {
-            Some(self.parse_type()?)
-        } else {
-            None
-        };
+        let ret_ty = self.parse_fn_ret()?;
         let throws = self.throws_after_ret(throws, ret_ty.as_ref(), start, rparen);
         let where_clause = self.parse_where_clause();
 
@@ -4192,6 +4188,69 @@ impl<'a> Parser<'a> {
         }
         self.expect_closing_gt();
         Generics { params }
+    }
+
+    /// A declaration's `-> T` (`-> some Tr` too); `Some(None)` without one.
+    #[allow(clippy::option_option)] // a parse error, or no `->`
+    fn parse_fn_ret(&mut self) -> Option<Option<Ty>> {
+        if !self.eat(&TokenKind::Arrow) {
+            return Some(None);
+        }
+        Some(Some(if self.at_some_type() {
+            self.parse_some_type()?
+        } else {
+            self.parse_type()?
+        }))
+    }
+
+    /// At `some Tr`, `some (A + B)` or `some fn(..)`?
+    fn at_some_type(&self) -> bool {
+        self.at_kw("some")
+            && matches!(
+                self.peek_next(),
+                Some(TokenKind::Ident(_) | TokenKind::LParen | TokenKind::Fn)
+            )
+    }
+
+    /// `some Tr` / `some (A + B)` / `some fn(A) -> R`. The bound binds
+    /// tighter than `|`, as `any`'s does.
+    fn parse_some_type(&mut self) -> Option<Ty> {
+        let start = self.peek_span();
+        self.bump();
+        let one = |p: &mut Self| -> Option<Ty> {
+            let at = p.peek_span();
+            match p.peek() {
+                TokenKind::Fn => p.parse_type_atom_inner(),
+                TokenKind::Ident(n) if n == "Fn" || n == "FnMut" || n == "FnOnce" => {
+                    p.error_help(
+                        Code::SYNTAX,
+                        at,
+                        format!("rok has no `{n}` trait"),
+                        "a function type is written `fn(A) -> R`: `some fn(i32) -> i32`",
+                    );
+                    p.bump();
+                    p.parse_type_atom_inner()
+                }
+                _ => Some(Ty {
+                    kind: TyKind::Path(p.parse_type_path()?),
+                    span: at,
+                }),
+            }
+        };
+        let bounds = if self.eat(&TokenKind::LParen) {
+            let mut bounds = vec![one(self)?];
+            while self.eat(&TokenKind::Plus) {
+                bounds.push(one(self)?);
+            }
+            self.expect(&TokenKind::RParen, "`)`")?;
+            bounds
+        } else {
+            vec![one(self)?]
+        };
+        Some(Ty {
+            kind: TyKind::Some(bounds),
+            span: start,
+        })
     }
 
     /// `Bound (+ Bound)*`.
@@ -4416,6 +4475,16 @@ impl<'a> Parser<'a> {
             return ty;
         }
         let start = self.peek_span();
+        if self.at_some_type() {
+            self.error_help(
+                Code::SYNTAX,
+                start,
+                "`some Trait` is only a function's return type",
+                "for a parameter, declare `<T: Trait>` and write `T`; for a variable, leave \
+                 the type out (`let x = ..`); for a value of several types, write `any Trait`",
+            );
+            return self.parse_some_type();
+        }
         let kind = match self.peek().clone() {
             // `any` | `any Tr` | `any (A + B)`. The bound binds
             // tighter than `|`: `any Error | none` is `(any Error) | none`.
@@ -9127,7 +9196,7 @@ fn desugar_rethrows(params: &mut [Param], generics: &mut Generics) -> Vec<Ty> {
                 }
             }
             TyKind::QPath(q) => walk(&mut q.self_ty, generics, errs),
-            TyKind::Sum(ts) | TyKind::Tuple(ts) => {
+            TyKind::Sum(ts) | TyKind::Tuple(ts) | TyKind::Some(ts) => {
                 for t in ts {
                     walk(t, generics, errs);
                 }

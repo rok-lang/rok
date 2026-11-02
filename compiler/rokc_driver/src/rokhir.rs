@@ -259,10 +259,15 @@ impl Rokhir {
 }
 
 /// Whether `f`'s body goes into the `.a` only (cut from the interface):
-/// a concrete, non-coroutine, non-`#[inline]` rok function.
+/// a concrete, non-coroutine, non-`#[inline]` rok function. A `-> some`
+/// fn keeps it: its users take the return type from the body.
 fn cut(f: &FnDef) -> bool {
     f.body.is_some()
         && f.generics.params.is_empty()
+        && !matches!(
+            f.ret_ty.as_ref().map(|t| &t.kind),
+            Some(rokc_ast::TyKind::Some(_))
+        )
         && !f.is_async
         && !f.is_generator
         && !rokc_ast::inline_wanted(&f.attrs)

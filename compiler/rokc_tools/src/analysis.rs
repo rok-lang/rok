@@ -275,6 +275,42 @@ impl Analysis {
             .unwrap_or_default()
     }
 
+    /// The `some ..` a function defined at `span` writes as its return
+    /// type.
+    pub fn opaque_ret(&self, span: Span) -> Option<String> {
+        fn find(items: &[Item], span: Span) -> Option<&rokc_ast::FnDef> {
+            items.iter().find_map(|item| match item {
+                Item::Fn(f) if f.span == span => Some(f),
+                Item::Impl(i) => i.items.iter().find_map(|ii| match ii {
+                    ImplItem::Method(m) if m.span == span => Some(m),
+                    _ => None,
+                }),
+                Item::Mod(m) => find(m.items.as_deref().unwrap_or_default(), span),
+                _ => None,
+            })
+        }
+        let f = self
+            .items_of(span.file)
+            .find_map(|items| find(items, span))?;
+        let t = f.ret_ty.as_ref()?;
+        matches!(t.kind, rokc_ast::TyKind::Some(_)).then(|| rokc_ast::print::print_ty(t))
+    }
+
+    /// `t` as the user knows it: the `some ..` of a function returning
+    /// that concrete type, else its name.
+    pub fn shown_ty(&self, hir: &HirModule, t: &HirTy) -> String {
+        let name = ty_name(hir, t);
+        let ok = |r: &HirTy| match r {
+            HirTy::Throws { ok, .. } => ty_name(hir, ok),
+            r => ty_name(hir, r),
+        };
+        hir.functions
+            .iter()
+            .filter(|f| ok(&f.ret_ty) == name)
+            .find_map(|f| self.opaque_ret(f.span))
+            .unwrap_or(name)
+    }
+
     /// The doc comment of field `name` of the struct defined at `span`.
     pub fn field_doc(&self, span: Span, name: &str) -> String {
         fn find<'a>(

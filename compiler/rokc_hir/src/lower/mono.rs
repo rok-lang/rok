@@ -993,7 +993,25 @@ pub(super) fn lower_fn_inner(
     } else {
         None
     };
-    lower_fn_with(env, fn_def, id, name, self_ty, module, subst, ret, None)
+    let outer = env.sink.opaque_called.replace(false);
+    let from = env.sink.diagnostics.borrow().len();
+    let f = lower_fn_with(
+        env,
+        fn_def,
+        id,
+        name.clone(),
+        self_ty.clone(),
+        module.clone(),
+        subst,
+        ret.clone(),
+        None,
+    );
+    let called = env.sink.opaque_called.replace(outer);
+    if called && !env.sink.opaque_check.get() {
+        let to = env.sink.diagnostics.borrow().len();
+        check_opaque_uses(env, fn_def, id, name, self_ty, module, subst, ret, from..to);
+    }
+    f
 }
 
 /// Without `-> T`, the return type comes from the body when it
@@ -1002,10 +1020,158 @@ pub(super) fn infers_ret(f: &FnDef, may_diverge: impl Fn(rokc_diagnostic::Span) 
     let Some(body) = &f.body else {
         return false;
     };
+    if opaque_bounds(f).is_some() {
+        return true;
+    }
     if f.ret_ty.is_some() || f.is_async || f.is_generator || f.name == "main" {
         return false;
     }
     gives_value(body) || may_diverge(f.span)
+}
+
+/// The bounds of a `-> some ..` return type.
+pub(super) fn opaque_bounds(f: &FnDef) -> Option<&[Ty]> {
+    match &f.ret_ty.as_ref()?.kind {
+        AstTyKind::Some(bounds) => Some(bounds),
+        _ => None,
+    }
+}
+
+/// A call of `-> some Tr` fn `id` while a body is checked for what it
+/// takes from it: an opaque parameter that has only `Tr`. Otherwise
+/// `None` (the concrete type), noting the call.
+pub(super) fn opaque_ret(ctx: &LowerCtx<'_>, id: FunctionId) -> Option<HirTy> {
+    let env = ctx.env;
+    let decl = env.decl(id)?;
+    let f = decl.def();
+    let bounds = opaque_bounds(f)?;
+    // Generic ones (the bound may name a parameter) and function types
+    // (only callable anyway) stay transparent.
+    let plain = f.generics.params.is_empty()
+        && matches!(decl, MethodOrFn::Fn(_))
+        && bounds.iter().all(|b| matches!(b.kind, AstTyKind::Path(_)));
+    if !plain {
+        return None;
+    }
+    if !env.sink.opaque_check.get() {
+        env.sink.opaque_called.set(true);
+        return None;
+    }
+    if let Some(p) = env.sink.opaque_params.borrow().get(&id) {
+        return Some(p.clone());
+    }
+    let module = fn_module(env, f);
+    let none = HashMap::new();
+    let mut rcx = LowerCtx::new(env, &none, None, f.span);
+    rcx.current_module.clone_from(&module);
+    let shown: Vec<String> = bounds.iter().map(rokc_ast::print::print_ty).collect();
+    let refs: Vec<TraitRef> = bounds
+        .iter()
+        .filter_map(|b| rcx.bound_ref(b, &module, |t| rcx.resolve_ast_ty(t)))
+        .filter(|r| env.names.is_trait(&r.path))
+        .collect();
+    let name = match shown.as_slice() {
+        [one] => format!("some {one}"),
+        _ => format!("some ({})", shown.join(" + ")),
+    };
+    let p = super::bounds::opaque_param(env, name, refs);
+    env.sink.opaque_params.borrow_mut().insert(id, p.clone());
+    Some(p)
+}
+
+/// Lower `fn_def`'s body again with every `-> some Tr` call's result
+/// seen only as `Tr`: what it takes beyond the bounds is reported, the
+/// rest (said by the real lowering already) dropped.
+#[allow(clippy::too_many_arguments)]
+fn check_opaque_uses(
+    env: &Env<'_>,
+    fn_def: &FnDef,
+    id: FunctionId,
+    name: String,
+    self_ty: Option<HirTy>,
+    module: String,
+    subst: &HashMap<String, HirTy>,
+    ret: Option<HirTy>,
+    real: std::ops::Range<usize>,
+) {
+    let seen: Vec<(Code, String)> = env.sink.diagnostics.borrow()[real]
+        .iter()
+        .map(|d| (d.code, d.message.clone()))
+        .collect();
+    let mut probe = LowerCtx::new(env, subst, None, fn_def.span);
+    let mark = probe.probe_mark();
+    let from = env.sink.diagnostics.borrow().len();
+    env.sink.opaque_check.set(true);
+    let _ = lower_fn_with(env, fn_def, id, name, self_ty, module, subst, ret, None);
+    env.sink.opaque_check.set(false);
+    let new: Vec<rokc_diagnostic::RokDiagnostic> = env.sink.diagnostics.borrow()[from..]
+        .iter()
+        .filter(|d| d.is_error() && !seen.contains(&(d.code, d.message.clone())))
+        .cloned()
+        .collect();
+    probe.rollback(&mark);
+    env.sink.diagnostics.borrow_mut().extend(new);
+}
+
+/// A `-> some ..` fn's body type must have every bound.
+#[allow(clippy::too_many_arguments)]
+fn check_opaque(
+    env: &Env<'_>,
+    fn_def: &FnDef,
+    module: &str,
+    self_ty: Option<HirTy>,
+    subst: &HashMap<String, HirTy>,
+    ret: &HirTy,
+) {
+    let Some(bounds) = opaque_bounds(fn_def) else {
+        return;
+    };
+    if matches!(ret, HirTy::Unknown) {
+        return;
+    }
+    let mut rcx = LowerCtx::new(env, subst, self_ty, fn_def.span);
+    module.clone_into(&mut rcx.current_module);
+    rcx.set_bounds(&fn_def.generics, &fn_def.where_clause);
+    let leaf = leaf_name(&fn_def.name).to_owned();
+    for b in bounds {
+        let shown = rokc_ast::print::print_ty(b);
+        let ok = match &b.kind {
+            AstTyKind::Fn(..) => {
+                let want = rcx.resolve_ast_ty(b);
+                coercible(&rcx, &want, ret)
+            }
+            _ => match rcx.bound_ref(b, module, |t| rcx.resolve_ast_ty(t)) {
+                Some(want) if env.names.is_trait(&want.path) => rcx.implements_trait(ret, &want, 0),
+                _ => {
+                    if env.sink.unit_ret_errs.borrow_mut().insert(b.span) {
+                        rcx.emit_error_at(
+                            Code::NOT_A_TRAIT,
+                            b.span,
+                            format!("`{shown}` in `some {shown}` is not a trait"),
+                        );
+                        rcx.help_last(Some(
+                            "a `some` bound names a trait (`some Iterator<Item = i32>`) or a \
+                             function type (`some fn(i32) -> i32`)"
+                                .to_owned(),
+                        ));
+                    }
+                    continue;
+                }
+            },
+        };
+        if !ok && env.sink.unit_ret_errs.borrow_mut().insert(b.span) {
+            let have = rcx.ty_name(ret);
+            rcx.emit_error_at(
+                Code::UNSATISFIED_BOUND,
+                b.span,
+                format!("`{leaf}` returns `{have}`, which is not `{shown}`"),
+            );
+            rcx.help_last(Some(format!(
+                "the body's value is the one concrete type behind `some {shown}`: return a \
+                 value that is `{shown}`, or write the type it has: `-> {have}`"
+            )));
+        }
+    }
 }
 
 /// Body `b` ends in a value or has a `return v` of its own.
@@ -1140,15 +1306,25 @@ fn infer_ret_of(
     let mut probe = LowerCtx::new(env, subst, None, fn_def.span);
     let mark = probe.probe_mark();
     let mut tys = Vec::new();
+    // `-> some fn(A) -> R`: the body's closure takes its parameter types.
+    let hint = opaque_bounds(fn_def)
+        .and_then(|bs| bs.iter().find(|b| matches!(b.kind, AstTyKind::Fn(..))))
+        .map_or(HirTy::Unknown, |b| {
+            let mut rcx = LowerCtx::new(env, subst, self_ty.clone(), fn_def.span);
+            module.clone_into(&mut rcx.current_module);
+            rcx.set_bounds(&fn_def.generics, &fn_def.where_clause);
+            rcx.resolve_ast_ty(b)
+        });
+    let hinted = hint != HirTy::Unknown;
     let mut f = lower_fn_with(
         env,
         fn_def,
         id,
         name.to_owned(),
-        self_ty,
+        self_ty.clone(),
         module.to_owned(),
         subst,
-        Some(HirTy::Unknown),
+        Some(hint),
         Some(&mut tys),
     );
     // A call of itself leaves its type open (`Unknown`); one of a fn
@@ -1173,7 +1349,7 @@ fn infer_ret_of(
         rokc_ast::ThrowsKind::Untyped => false,
     } && !fn_def.params.iter().any(|p| p.by_ref);
     let agreed = tys.windows(2).all(|w| w[0] == w[1]);
-    let final_as_is = keep && plain && agreed && !self_hit && !tentative;
+    let final_as_is = keep && plain && agreed && !self_hit && !tentative && !hinted;
     if !final_as_is {
         probe.rollback(&mark);
     }
@@ -1214,13 +1390,28 @@ fn infer_ret_of(
                     leaf_name(&fn_def.name)
                 ),
             );
-            probe.help_last(Some(format!("write the return type: `-> {a} | {b}`")));
+            if let Some(bounds) = opaque_bounds(fn_def) {
+                let shown: Vec<String> = bounds.iter().map(rokc_ast::print::print_ty).collect();
+                let shown = match shown.as_slice() {
+                    [one] => one.clone(),
+                    _ => format!("({})", shown.join(" + ")),
+                };
+                probe.help_last(Some(format!(
+                    "`some {shown}` is one concrete type; to return several types, write \
+                     `-> any {shown}`"
+                )));
+            } else {
+                probe.help_last(Some(format!("write the return type: `-> {a} | {b}`")));
+            }
         }
         HirTy::Unknown
     } else {
         tys.swap_remove(0)
     };
     let ret = unit_ret(&probe, fn_def, ret, !tentative, !subst.is_empty());
+    if !tentative {
+        check_opaque(env, fn_def, module, self_ty, subst, &ret);
+    }
     if tentative {
         env.sink
             .inferred_ret

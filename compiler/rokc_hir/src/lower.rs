@@ -1780,6 +1780,9 @@ impl ClosureSink {
             params: std::cell::RefCell::default(),
             failed: std::cell::RefCell::default(),
             unit_ret_errs: std::cell::RefCell::default(),
+            opaque_called: std::cell::Cell::default(),
+            opaque_check: std::cell::Cell::default(),
+            opaque_params: std::cell::RefCell::default(),
             bodies: std::cell::RefCell::default(),
             assumed: std::cell::RefCell::default(),
             const_names: std::cell::RefCell::default(),
@@ -3021,6 +3024,12 @@ struct ClosureSink {
     /// `pub` fns whose body gave a value without `->`, by span: one
     /// error for all their instances.
     unit_ret_errs: std::cell::RefCell<std::collections::HashSet<Span>>,
+    /// A body called a `-> some ..` fn (`mono::check_opaque_uses`).
+    opaque_called: std::cell::Cell<bool>,
+    /// Checking a body with each `-> some Tr` call's result an opaque
+    /// type parameter bounded by `Tr`.
+    opaque_check: std::cell::Cell<bool>,
+    opaque_params: std::cell::RefCell<HashMap<FunctionId, HirTy>>,
     /// The declarations whose bodies are being lowered, innermost last.
     bodies: std::cell::RefCell<Vec<Span>>,
     /// The `where` clauses on other types than a parameter of the body
@@ -5850,7 +5859,10 @@ impl<'a> LowerCtx<'a> {
     fn sig_of_key(&self, key: &str) -> FnSig {
         let mut sig = self.env.sig(key).expect("a signature").clone();
         if self.env.infers_ret(sig.id) {
-            sig.ret_ty = mono::decl_ret(self, sig.id, sig.ret_ty);
+            sig.ret_ty = match mono::opaque_ret(self, sig.id) {
+                Some(p) => mono::with_ok(sig.ret_ty, p),
+                None => mono::decl_ret(self, sig.id, sig.ret_ty),
+            };
         }
         sig
     }

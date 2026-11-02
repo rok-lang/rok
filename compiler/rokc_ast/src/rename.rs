@@ -737,6 +737,7 @@ impl Renames {
                 self.const_expr(n);
             }
             TyKind::AnyTrait(ps) => ps.iter_mut().for_each(|p| self.ty_path(p)),
+            TyKind::Some(ts) => ts.iter_mut().for_each(|t| self.ty_(t)),
             TyKind::Const(c) => self.const_expr(c),
             TyKind::Any | TyKind::None | TyKind::SelfUpper | TyKind::Never => {}
         }

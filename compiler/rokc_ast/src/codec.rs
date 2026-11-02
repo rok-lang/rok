@@ -327,6 +327,7 @@ codec_enum!(TyKind {
     SelfUpper,
     Never,
     Const(x0),
+    Some(x0),
 });
 codec_enum!(ConstExpr {
     Literal(x0),
