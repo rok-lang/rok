@@ -1,0 +1,38 @@
+// expect-exit: 0
+// expect-stdout:
+// Cfg { host: "localhost", port: 8080, tags: ["a"], retries: 0, name: "" }
+// Cfg { host: "localhost", port: 8080, tags: ["a"], retries: 0, name: "" }
+// Only { level: 3 }
+// Pair { a: 0, b: 0 }
+
+// `#[derive(Default)]` takes each field's declared default, and the
+// field type's `default()` for a field without one, as a literal does.
+// A field with a declared default needs no `Default` type.
+
+#[derive(Default, Debug)]
+struct Cfg {
+    host: str = "localhost";
+    port: i32 = 8080;
+    tags: List<str> = ["a"];
+    retries: i32;
+    name: str;
+}
+
+struct NoDefault { v: i32; }
+
+#[derive(Default)]
+struct Only {
+    level: i32 = 3;
+    hook: NoDefault = NoDefault { v: 1 };
+}
+
+#[derive(Default, Debug)]
+struct Pair { a: i32; b: i64; }
+
+println(f"{Cfg::default():?}");
+let lit = Cfg { retries: 0, name: "" };
+println(f"{lit:?}");
+let o = Only::default();
+println(f"Only {{ level: {o.level} }}");
+_ = o.hook.v;
+println(f"{Pair::default():?}");
