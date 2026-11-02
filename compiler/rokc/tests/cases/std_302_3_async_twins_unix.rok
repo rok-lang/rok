@@ -20,7 +20,6 @@ use rok::std::net::Shutdown;
 use rok::std::fs;
 use rok::std::env;
 use rok::std::path::Path;
-use rok::core::marker::share;
 use rok::core::io::{IoError, AsyncClose};
 
 async fn main() throws (IoError) {
@@ -50,21 +49,21 @@ async fn main() throws (IoError) {
     let path = env::temp_dir().join(Path::new("rok-ux-async.sock"));
     try fs::remove_file(path) catch _ {};
     let l = try UnixListener::bind(path);
-    let lv = unsafe { share(l) };
+    // The server task owns the listener.
     let server = task::spawn(async {
         let r: str = try {
-            let (s, _) = try await lv.accept_async();
+            let (s, _) = try await l.accept_async();
             try await s.write_all_async("hi");
             try await s.close_async();
             "ok"
         } catch e: IoError { f"{e}" };
+        try await l.close_async() catch _ {};
         r
     });
     let s = try await UnixStream::connect_async(path);
     _ = await server;
     println(f"connect_async: [{try await s.read_to_str_async()}]");
     try await s.close_async();
-    try await l.close_async();
     try fs::remove_file(path);
 
     let (x, y) = try UnixDatagram::pair();

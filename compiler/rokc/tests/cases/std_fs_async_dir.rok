@@ -11,7 +11,6 @@
 // `Dir`'s `*_async` methods and the `Dir::read_dir_async` stream: the
 // entries are read in batches on a blocking thread (more than one batch
 // here) while the task suspends between them.
-use rok::core::marker::share;
 use rok::std::fs;
 use rok::std::fs::Dir;
 use rok::core::io::IoError;
@@ -43,10 +42,9 @@ println(f"streamed {count} entries, {seen.len()} distinct, bytes {sum}");
 let sub = try! await d.open_dir_async("sub");
 try! await sub.rename_async("inner", "gone");
 try! await sub.remove_dir_async("gone");
-let a_own = try! await sub.create_async("a.txt");
-let a = unsafe { share(a_own) };
+let a = try! await sub.create_async("a.txt");
 try! await a.write_all_async("abc");
-try! a_own.close();
+try! a.close();
 try! await sub.copy_async("a.txt", "b.txt");
 let names: List<str> = List::new();
 try! for await e in try! await sub.read_dir_async() {
@@ -59,7 +57,6 @@ println(f"sub: {first}={meta.len()} {second}");
 
 try (try await sub.open_async("../many/1.txt")).close() catch e: IoError {
     println(f"escape: {e.kind():?}");
-    a
 };
 
 // Stop early inside `using`: the stream closes.

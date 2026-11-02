@@ -13,7 +13,6 @@
 // std::net (302): a TCP echo server and its clients in one program,
 // with the blocking API (an OS thread serves) and the async one (tasks
 // on the pool suspend in accept / read / write).
-use rok::core::marker::share;
 use rok::std::net::{TcpListener, TcpStream, SocketAddr, Ipv4Addr, Ipv6Addr, Shutdown};
 use rok::std::net;
 use rok::core::io::IoError;
@@ -29,9 +28,8 @@ let ip: Ipv4Addr = try! "10.1.2.3".parse::<Ipv4Addr>();
 let ip6: Ipv6Addr = try! "2001:db8:0:0:0:0:0:1".parse::<Ipv6Addr>();
 println(f"addr {any} {v6} {ip} {ip6}");
 
-// Blocking: a thread echoes one connection.
-let listener_own = try! TcpListener::bind(any);
-let listener = unsafe { share(listener_own) };
+// Blocking: a thread echoes one connection; it owns the listener.
+let listener = try! TcpListener::bind(any);
 let addr = try! listener.local_addr();
 let server = thread::spawn(|| {
     let (conn, peer) = try! listener.accept();
@@ -45,6 +43,7 @@ let server = thread::spawn(|| {
         try! conn.write_all(part);
     }
     try! conn.close();
+    try! listener.close();
     peer.port() as i32
 });
 let c = try! TcpStream::connect(addr);
@@ -55,12 +54,11 @@ println(f"blocking echo: {text(back, back.len())}");
 let peer_port = try! server.join();
 println(f"peer is local: {(try! c.local_addr()).port() as i32 == peer_port}");
 try! c.close();
-try! listener_own.close();
 
 // Async: the server task accepts, a task per connection echoes.
-let l2_own = try! TcpListener::bind(any);
-let l2 = unsafe { share(l2_own) };
+let l2 = try! TcpListener::bind(any);
 let a2 = try! l2.local_addr();
+// The server task owns the listener.
 let srv = task::spawn(async {
     let served = 0;
     while served < 4 {
@@ -80,6 +78,7 @@ let srv = task::spawn(async {
         });
         served = served + 1;
     }
+    try! l2.close();
     served
 });
 let clients: List<Task<bool>> = [];
@@ -103,27 +102,26 @@ println(f"async echo: {oks} clients ok");
 
 // A large payload: write and read concurrently (the socket buffers fill).
 let big = task::spawn(async {
-    let s_own = try! await net::tcp_connect_async(a2);
-    let s = unsafe { share(s_own) };
-    // The writer task owns its buffer: a list cannot be shared with it.
+    let s = try! await net::tcp_connect_async(a2);
+    // The writer task owns a second descriptor, and its buffer.
+    let ws = try! s.try_clone();
     let w = task::spawn(async {
         let data = List::filled(100000, 0u8);
-        try! await s.write_all_async(data);
-        try! s.shutdown(Shutdown::Write);
+        try! await ws.write_all_async(data);
+        try! ws.shutdown(Shutdown::Write);
+        try! ws.close();
         0
     });
     let got = try! await s.read_to_end_async();
     await w;
-    try! s_own.close();
+    try! s.close();
     got.len()
 });
 println(f"async read_to_end: {await big} bytes");
 await srv;
-try! l2_own.close();
 
 // `incoming()` over a blocking listener.
-let l3_own = try! net::tcp_listen("127.0.0.1:0");
-let l3 = unsafe { share(l3_own) };
+let l3 = try! net::tcp_listen("127.0.0.1:0");
 let a3 = try! l3.local_addr();
 let t3 = thread::spawn(|| {
     let c = try! net::tcp_connect(f"{a3}");
@@ -140,7 +138,7 @@ try for s in l3.incoming() {
     println(f"incoming: {e}");
 }
 try! t3.join();
-try! l3_own.close();
+try! l3.close();
 
 let found = (try! net::resolve("localhost:80"))[0];
 println(f"resolve localhost: {found.port() == 80u16}");

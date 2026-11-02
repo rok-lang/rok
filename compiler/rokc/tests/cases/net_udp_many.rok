@@ -11,7 +11,6 @@
 // std::net (302): UDP round trips (blocking, async, connected), the
 // non-blocking / timeout modes, and many concurrent TCP connections
 // served by tasks on the pool.
-use rok::core::marker::share;
 use rok::std::net::{TcpListener, TcpStream, UdpSocket, SocketAddr};
 use rok::std::net;
 use rok::core::io::{IoError, IoErrorKind};
@@ -23,8 +22,7 @@ fn text(buf: List<u8>, n: usize) -> str {
 let any: SocketAddr = try! "127.0.0.1:0".parse::<SocketAddr>();
 
 // UDP, blocking.
-let a_own = try! UdpSocket::bind(any);
-let a = unsafe { share(a_own) };
+let a = try! UdpSocket::bind(any);
 let b = try! net::udp_bind("127.0.0.1:0");
 let a_addr = try! a.local_addr();
 try! b.send_to("ping".as_bytes(), a_addr);
@@ -36,7 +34,8 @@ let (m, _) = try! b.recv_from(buf);
 let local = if from == (try! b.local_addr()) { "b" } else { "?" };
 println(f"udp blocking: {ping} from {local} -> {text(buf, m)}");
 
-// UDP, async: the receiver task suspends between datagrams.
+// UDP, async: the receiver task suspends between datagrams. It owns
+// `a` and gives it back.
 let rx = task::spawn(async {
     let sum: i32 = 0;
     let count: i32 = 0;
@@ -46,8 +45,7 @@ let rx = task::spawn(async {
         sum = sum + (rbuf[0] as i32);
         count = count + k as i32;
     }
-    let r: (i32, i32) = (count, sum);
-    r
+    (count, sum, a)
 });
 await task::sleep(Duration::ms(5));
 let i: u8 = 0u8;
@@ -56,7 +54,7 @@ while i < 10u8 {
     await task::sleep(Duration::ms(1));
     i = i + 1u8;
 }
-let (count, sum) = await rx;
+let (count, sum, a) = await rx;
 println(f"udp async: {count} datagrams, sum {sum}");
 
 // UDP, connected.
@@ -75,12 +73,11 @@ a.set_read_timeout(Duration::ms(20));
 let to = false;
 try a.recv(buf) catch e: IoError { to = e.kind() == IoErrorKind::TimedOut; };
 println(f"timed out: {to}");
-try! a_own.close();
+try! a.close();
 try! b.close();
 
 // Many concurrent TCP connections on the pool.
-let l_own = try! TcpListener::bind(any);
-let l = unsafe { share(l_own) };
+let l = try! TcpListener::bind(any);
 let addr = try! l.local_addr();
 let open = Atomic::new(0);
 let peak = Mutex::new(0);
@@ -108,6 +105,8 @@ let server = task::spawn(async {
             rounds
         }));
     }
+    // The server task owns the listener.
+    try! l.close();
     let total = 0;
     for r in await task::join(conns) { total = total + r; }
     total
@@ -140,4 +139,3 @@ let rounds = await server;
 let peak_n = 0;
 using g = peak.lock() { peak_n = g.get(); }
 println(f"connections: {good} clients x {rounds / good} rounds ok, peak open >= 40: {peak_n >= 40}");
-try! l_own.close();

@@ -16,7 +16,6 @@
 // (`read_line` / `lines` / `bytes` across chunk edges that split a
 // UTF-8 char), `LineWriter`.
 
-use rok::core::marker::share;
 use rok::core::io::{IoError, BufReader, BufWriter, LineWriter};
 use rok::std::fs;
 use rok::std::env;
@@ -47,11 +46,9 @@ fn main() throws (IoError) {
     }
 
     let q = env::temp_dir() / "rok_std_io_buf2.txt";
-    let out = try fs::create(q);
-    using w = BufWriter::new(unsafe { share(out) }) {
+    using w = BufWriter::new(try fs::create(q)) {
         try w.write_all("kept by drop");
     }
-    try out.close();
     println("dropped: [" + (try fs::read_to_str(q)) + "]");
 
     let lw = LineWriter::new(io::stdout());
