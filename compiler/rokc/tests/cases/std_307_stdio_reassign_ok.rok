@@ -1,0 +1,32 @@
+// only-os: macos linux
+// needs: process
+// expect-exit: 0
+// expect-stdout: true true true
+
+// A `Stdio` that starts with no file (`Inherit`) and is given one later,
+// in an `if`, in the same scope or past a `try` that may throw: the
+// command it is handed to closes it.
+use rok::core::io::IoError;
+use rok::std::fs;
+use rok::std::fs::File;
+use rok::std::process::{Command, Stdio};
+
+fn quiet() -> bool { true }
+
+fn main() throws (IoError) {
+    let base = rok::std::env::temp_dir() / f"rok_stdio_reassign_{rok::std::process::id()}";
+    let a = Stdio::Inherit;
+    if quiet() {
+        a = Stdio::File(try File::create(f"{base}_a"));
+    }
+    let x = try Command::new("true").stdout(a).status();
+    let b = Stdio::Inherit;
+    b = Stdio::File(try File::create(f"{base}_b"));
+    let y = try Command::new("true").stdout(b).status();
+    let c = Stdio::Null;
+    let f = try File::create(f"{base}_c");
+    c = Stdio::File(f);
+    let z = try Command::new("true").stdout(c).status();
+    println(f"{x.success()} {y.success()} {z.success()}");
+    for s in ["a", "b", "c"] { try fs::remove_file(f"{base}_{s}"); }
+}

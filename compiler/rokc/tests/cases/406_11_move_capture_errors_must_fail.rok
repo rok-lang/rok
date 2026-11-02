@@ -15,8 +15,8 @@
 // expect-error: `[move nope]` names no variable in scope
 // expect-error: error[E0105]: `ys` was moved into a closure at line 34
 // expect-error: help: the closure owns it now; use it inside the closure
-// expect-error: error[E0134]: `g` was spawned as a task at line 40
-// expect-error: help: the task owns the closure and what it moved in
+// expect-error: error[E0134]: `g` was given to a thread at line 40
+// expect-error: help: the thread owns the closure and what it moved in
 
 // A plain capture stays shared with the code that made the closure, so a
 // closure that crosses threads needs it `Sync`; `[move x]` gives `x` to

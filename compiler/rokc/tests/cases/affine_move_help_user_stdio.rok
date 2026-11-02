@@ -1,0 +1,18 @@
+// expect-error: `s` was moved at line 16, and is used here
+// expect-error: help: a `Stdio` has one owner, and `s` gave it away; use the new owner
+// forbid-error: belongs to the command
+
+// A user type named `Stdio` is not the process one: its move help is the
+// plain one.
+use rok::core::io::IoError;
+use rok::std::fs::File;
+
+struct Stdio { f: File; }
+
+fn take(s: Stdio) throws (IoError) { try s.f.close(); }
+
+fn main() throws (IoError) {
+    let s = Stdio { f: try File::open("x") };
+    try take(s);
+    try take(s);
+}

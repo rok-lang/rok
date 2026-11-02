@@ -1,0 +1,34 @@
+// expect-error: `rd` is used after `count_some(rd, 3)` at line 28, which gave what `rd` holds to another owner
+// expect-error: help: a call that takes `rd` by value works on its own copy, so `rd` here is left as it was; do the work with `rd` in one function, or return it from the function you pass it to and use what it returns
+
+// forbid-error: refill
+// forbid-error: fs.rok
+// forbid-error: .clone()
+// forbid-error: `rd.rd`
+
+// A `ReadDirStream` passed by value to an awaited `async fn` that walks
+// it: the callee walks its own copy, so the caller's is left behind and
+// can not be walked again. The error names only the caller's variable.
+use rok::core::task;
+use rok::core::io::IoError;
+use rok::std::fs;
+use rok::std::fs::ReadDirStream;
+
+async fn count_some(rd: ReadDirStream, k: usize) throws (IoError) -> usize {
+    let n = 0usize;
+    try for await e in rd {
+        n += 1;
+        if n == k { break; }
+    }
+    n
+}
+
+async fn go() throws (IoError) {
+    let rd = try await fs::read_dir_async(".");
+    let mid = try await count_some(rd, 3);
+    let rest = 0usize;
+    try for await e in rd { rest += 1; }
+    println(f"{mid} {rest}");
+}
+
+fn main() throws (IoError) { try task::try_block_on(go()); }

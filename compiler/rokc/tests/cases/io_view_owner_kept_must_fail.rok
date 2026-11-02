@@ -1,0 +1,18 @@
+// expect-error: `ls` is a view of `r` (made at line 13), used after `r` was moved at line 15
+// expect-error: `r` was moved at line 15, and is used here
+
+// A call that keeps a stream (here closes it) takes it: its views end
+// there, and the old name can not be closed again.
+use rok::core::io::{BufRead, BufReader, IoError};
+use rok::std::fs;
+
+fn finish(r: BufReader<fs::File>) throws (IoError) { try r.close(); }
+
+fn main() throws (IoError) {
+    let r = BufReader::new(try fs::open("x"));
+    let ls = r.lines();
+    let a = try ls.next();
+    try finish(r);
+    let b = try ls.next();
+    try r.close();
+}

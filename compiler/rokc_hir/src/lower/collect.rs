@@ -2694,9 +2694,22 @@ fn finish<'a>(
     });
     super::frame_ptr::check(&env, &functions);
     super::views::check(&env, &functions);
+    // What each call keeps of its arguments, which both checks follow.
+    let keeps = rokc_diagnostic::time("hir affine summaries", || {
+        *env.auto_memo.borrow_mut() = Some(HashMap::new());
+        let k = super::affine::summaries(&env, &functions, &input.summaries);
+        *env.auto_memo.borrow_mut() = None;
+        k
+    });
     let summaries = rokc_diagnostic::time("hir handoff check", || {
         *env.auto_memo.borrow_mut() = Some(HashMap::new());
-        let s = super::handoff::check(&env, &functions, &input.summaries, lib_pkg.is_some());
+        let s = super::handoff::check(
+            &env,
+            &functions,
+            &input.summaries,
+            &keeps,
+            lib_pkg.is_some(),
+        );
         *env.auto_memo.borrow_mut() = None;
         s
     });
@@ -2706,7 +2719,7 @@ fn finish<'a>(
         summaries.extend(super::affine::check(
             &env,
             &mut functions,
-            &input.summaries,
+            keeps,
             lib_pkg.is_some(),
         ));
         *env.auto_memo.borrow_mut() = None;

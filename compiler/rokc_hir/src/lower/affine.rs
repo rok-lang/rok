@@ -182,6 +182,33 @@ fn arm_back(value: &HirExpr) -> bool {
     matches!(&v.kind, HirExprKind::Block(b) if b.label.as_deref() == Some(super::desugar::ARM_BACK))
 }
 
+/// The temporary an f-string binds a hole's value to: a view of a place.
+pub(super) fn is_hole_temp(name: &str) -> bool {
+    name.strip_prefix("#f")
+        .is_some_and(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// `rok::std::process::Stdio`, whose moves the command takes over.
+fn is_stdio(ctx: &LowerCtx<'_>, ty: &HirTy) -> bool {
+    matches!(ty, HirTy::Enum(e)
+        if ctx.enum_def(*e).name.split("__").next() == Some("rok::std::process::Stdio"))
+}
+
+/// `ty` (a shown type name) with its article: "a `File`", "an `S`".
+pub(super) fn article(ty: &str) -> String {
+    let word: Vec<char> = ty
+        .chars()
+        .take_while(|c| c.is_alphanumeric() || *c == '_')
+        .collect();
+    let an = match word.as_slice() {
+        // A one-letter name (`S`, `S | none`) is read as the letter.
+        [c] => "AEFHILMNORSX".contains(c.to_ascii_uppercase()),
+        [c, ..] => "AEIOU".contains(c.to_ascii_uppercase()),
+        [] => false,
+    };
+    format!("{} `{ty}`", if an { "an" } else { "a" })
+}
+
 /// The finally block releasing local `n` when its flag is set.
 fn release_block(n: u32, span: Span) -> Block {
     let call = Expr {
@@ -670,6 +697,10 @@ struct Walk<'c, 'a, 'e> {
     slots: usize,
     /// Slot -> where it last moved, and whether that released it.
     why: HashMap<usize, (Span, bool)>,
+    /// Slot -> the place that moved it (`p` for `p.f` when `p` moved).
+    gave: HashMap<usize, Vec<u32>>,
+    /// Captures moved into a closure without a capture list.
+    captured: HashSet<Span>,
     /// Slot -> the match arm that left it open: its binding, the
     /// binding's type and the arm's body.
     arm_open: HashMap<usize, (LocalId, HirTy, Span)>,
@@ -744,6 +775,8 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             alias_of: HashMap::new(),
             slots: 0,
             why: HashMap::new(),
+            gave: HashMap::new(),
+            captured: HashSet::new(),
             arm_open: HashMap::new(),
             scopes: vec![Vec::new()],
             hidden: HashMap::new(),
@@ -1014,6 +1047,48 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
         }
     }
 
+    /// `path` cut before the first field of a standard library type.
+    fn user_path(&self, r: usize, path: &[u32]) -> Vec<u32> {
+        let mut t = self.roots[r].ty.clone();
+        let mut out = Vec::new();
+        for &i in path {
+            t = match &t {
+                HirTy::Struct(sid) => {
+                    let def = self.c.ctx.struct_def(*sid);
+                    if def.name.starts_with("rok::") {
+                        break;
+                    }
+                    def.fields
+                        .get(i as usize)
+                        .map_or(HirTy::Unknown, |f| f.ty.clone())
+                }
+                HirTy::Tuple(ts) => ts.get(i as usize).cloned().unwrap_or(HirTy::Unknown),
+                _ => break,
+            };
+            out.push(i);
+        }
+        out
+    }
+
+    /// The type of the place `(r, path)`.
+    fn ty_at(&self, r: usize, path: &[u32]) -> HirTy {
+        let mut t = self.roots[r].ty.clone();
+        for &i in path {
+            t = match &t {
+                HirTy::Struct(sid) => self
+                    .c
+                    .ctx
+                    .struct_def(*sid)
+                    .fields
+                    .get(i as usize)
+                    .map_or(HirTy::Unknown, |f| f.ty.clone()),
+                HirTy::Tuple(ts) => ts.get(i as usize).cloned().unwrap_or(HirTy::Unknown),
+                _ => t,
+            };
+        }
+        t
+    }
+
     fn place_text(&self, r: usize, path: &[u32]) -> String {
         let root = &self.roots[r];
         let mut s = if root.named {
@@ -1068,26 +1143,40 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             } else {
                 format!("{head}, and is used here")
             };
-            let ty = self.c.ty_name(&self.roots[r].ty);
+            // The type of what moved: the used part when it is itself a
+            // resource, else the place that gave it away.
+            let gave_path = self.gave.get(&s).cloned().unwrap_or_else(|| path.to_vec());
+            let ty_at = Some(self.ty_at(r, path))
+                .filter(|t| self.c.shape(t).is_some())
+                .unwrap_or_else(|| self.ty_at(r, &gave_path));
+            let ty = self.c.ty_name(&ty_at);
+            let a_ty = article(&ty);
             let help = if released {
                 format!(
-                    "help: a `{ty}` is released once; do the work before it is closed, or open \
+                    "help: {a_ty} is released once; do the work before it is closed, or open \
                      a new one"
                 )
-            } else if ty == "Stdio" {
+            } else if is_stdio(self.c.ctx, &ty_at) {
                 "help: a `Stdio::File` belongs to the command it is given to, which closes it \
                  when it runs; give each command its own file \
                  (`Stdio::File(try f.try_clone())`)"
                     .to_owned()
             } else {
-                let copy = self
-                    .copy_method(&self.roots[r].ty)
-                    .map_or_else(String::new, |m| {
-                        format!(", or keep a copy with `.{m}` before it moves")
-                    });
+                let gave = self.shown(r, &gave_path);
+                let copy = self.copy_method(&ty_at).map_or_else(String::new, |m| {
+                    format!(", or keep a copy with `.{m}` before it moves")
+                });
+                let borrow = if self.captured.contains(&site) && self.roots[r].named {
+                    format!(
+                        "; to only borrow it, capture it with `[ref {}]`",
+                        self.roots[r].name
+                    )
+                } else {
+                    String::new()
+                };
                 format!(
-                    "help: a `{ty}` has one owner, and {who} gave it away; use the new \
-                     owner{copy}"
+                    "help: {a_ty} has one owner, and {gave} gave it away; use the new \
+                     owner{copy}{borrow}"
                 )
             };
             let here = if released {
@@ -1132,6 +1221,7 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
         for &s in &slots {
             set(st, s, if release { RELEASED } else { MOVED });
             self.why.insert(s, (at, release));
+            self.gave.insert(s, path.to_vec());
         }
         let root = &self.roots[r];
         if !root.owned {
@@ -1225,9 +1315,10 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
         if let Some((l, ty, arm)) = self.arm_open.get(&(root.base + first)).cloned() {
             if let Some(name) = self.local_name(l) {
                 let ty = self.c.ty_name(&ty);
-                let msg = format!("`{name}` holds a `{ty}` that this arm never closes");
+                let aty = article(&ty);
+                let msg = format!("`{name}` holds {aty} that this arm never closes");
                 let help = format!(
-                    "help: closing a `{ty}` can fail, so it is not closed for you: add \
+                    "help: closing {aty} can fail, so it is not closed for you: add \
                      `try {name}.close();` at the end of this arm"
                 );
                 self.error(Code::UNCLOSED_RESOURCE, root.at, msg, |d| {
@@ -1237,31 +1328,28 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                 return;
             }
         }
-        let path = root.leaves[first].clone();
-        let who = self.shown(r, &path);
-        let somewhere = get(st, root.base + first) & (MOVED | RELEASED) != 0;
-        let ty = {
-            let mut t = root.ty.clone();
-            for &i in &path {
-                t = match &t {
-                    HirTy::Struct(sid) => self
-                        .c
-                        .ctx
-                        .struct_def(*sid)
-                        .fields
-                        .get(i as usize)
-                        .map_or(HirTy::Unknown, |f| f.ty.clone()),
-                    HirTy::Tuple(ts) => ts.get(i as usize).cloned().unwrap_or(HirTy::Unknown),
-                    _ => t,
-                };
-            }
-            self.c.ty_name(&t)
+        let leaf = root.leaves[first].clone();
+        let named = root.named;
+        // The standard library's fields are private: name what holds them.
+        let path = self.user_path(r, &leaf);
+        let for_temp = self
+            .root_local(r)
+            .and_then(|l| self.local_name_raw(l))
+            .is_some_and(|n| n.starts_with("#for"));
+        let who = if !named && for_temp {
+            "the value this loop walks".to_owned()
+        } else {
+            self.shown(r, &path)
         };
+        let somewhere = get(st, self.roots[r].base + first) & (MOVED | RELEASED) != 0;
+        let ty = self.c.ty_name(&self.ty_at(r, &leaf));
+        let aty = article(&ty);
+        let root = &self.roots[r];
         let bound = root.at;
         let msg = if somewhere {
-            format!("{who} holds a `{ty}` that is not closed on every path")
+            format!("{who} holds {aty} that is not closed on every path")
         } else {
-            format!("{who} holds a `{ty}` that is never closed")
+            format!("{who} holds {aty} that is never closed")
         };
         let hidden = self.hidden.get(&r).copied();
         let help = if let Some(h) = hidden {
@@ -1273,16 +1361,21 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                 h.line,
                 name = root.name
             )
+        } else if for_temp {
+            format!(
+                "help: closing {aty} can fail, so it is not closed for you: bind it before the \
+                 loop and close it after: `let it = ..; try for x in it {{ .. }} try it.close();`"
+            )
         } else if root.named {
             format!(
-                "help: closing a `{ty}` can fail, so it is not closed for you: add `try {}.close();` \
+                "help: closing {aty} can fail, so it is not closed for you: add `try {}.close();` \
                  before it leaves its scope, or bind it with `using {} = .. {{ .. }}`",
                 self.place_text(r, &path),
                 root.name
             )
         } else {
             format!(
-                "help: closing a `{ty}` can fail, so it is not closed for you: bind it with \
+                "help: closing {aty} can fail, so it is not closed for you: bind it with \
                  `let x = ..;` and add `try x.close();`, or use `using x = .. {{ .. }}`"
             )
         };
@@ -1407,13 +1500,14 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                 if v == Val::Owned && e.ty != HirTy::Never {
                     if let Some((Kind::Close, _)) = self.c.shape(&e.ty) {
                         let ty = self.c.ty_name(&e.ty);
+                        let aty = article(&ty);
                         self.error(
                             Code::UNCLOSED_RESOURCE,
                             e.span,
                             format!("the `{ty}` made here is never closed"),
                             |d| {
                                 d.with_note(format!(
-                                    "help: closing a `{ty}` can fail, so it is not closed for \
+                                    "help: closing {aty} can fail, so it is not closed for \
                                      you: bind it and close it (`let x = ..; try x.close();`), or \
                                      use `using`"
                                 ))
@@ -1610,7 +1704,8 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             }
         }
         // A temporary the lowering binds to a place (a `for` loop's
-        // iterator), and the parts a `using` pattern binds, are views.
+        // iterator, an f-string hole), and the parts a `using` pattern
+        // binds, are views.
         let view = self.place(value).is_some_and(|(r, _)| {
             let l = self.root_local(r);
             let temp = self
@@ -1619,7 +1714,7 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                 .iter()
                 .find(|x| x.id == local)
                 .and_then(|x| x.name.as_deref())
-                .is_some_and(|n| n.starts_with("#for"));
+                .is_some_and(|n| n.starts_with("#for") || is_hole_temp(n));
             temp || l
                 .and_then(|l| self.f.locals.iter().find(|x| x.id == l))
                 .and_then(|x| x.name.as_deref())
@@ -1645,6 +1740,15 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
         } else {
             self.unbind(local, &mut st);
             if val == Val::Plain {
+                // Followed from its `let` on, so a later assignment of a
+                // resource leaves with the scope that declared it.
+                if !self.root_of.contains_key(&local)
+                    && !self.assigning
+                    && self.local_name(local).is_some()
+                    && self.place(value).is_none()
+                {
+                    self.bind(local, &ty, true, None, value.span, &mut st);
+                }
                 if let Some(&r) = self.root_of.get(&local) {
                     let root = &self.roots[r];
                     for i in 0..root.leaves.len() {
@@ -2052,6 +2156,15 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             } else {
                 Mode::Use
             };
+            if mode == Mode::Move
+                && !self
+                    .c
+                    .ctx
+                    .src(x.span)
+                    .is_some_and(|t| t.trim_start().starts_with('['))
+            {
+                self.captured.insert(x.span);
+            }
             let (s, v) = self.expr(x, st, mode);
             st = s;
             if self.report
@@ -2157,13 +2270,14 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             return;
         }
         let ty = self.c.ty_name(&a.ty);
+        let aty = article(&ty);
         self.error(
             Code::UNCLOSED_RESOURCE,
             a.span,
             format!("the `{ty}` made here is never closed: this call only borrows it"),
             |d| {
                 d.with_note(format!(
-                    "help: closing a `{ty}` can fail, so it is not closed for you: bind it with \
+                    "help: closing {aty} can fail, so it is not closed for you: bind it with \
                      `using` (`using x = .. {{ .. }}`), or bind it and close it (`let x = ..; \
                      .. try x.close();`)"
                 ))
@@ -2476,14 +2590,97 @@ fn parents(all: &[&HirFunction]) -> HashMap<FunctionId, FunctionId> {
     out
 }
 
+/// What each function does with its parameters (`Sums::keeps`), for
+/// `check` and the hand-off check.
+#[derive(Default)]
+pub(super) struct Sums(HashMap<FunctionId, Summary>);
+
+impl Sums {
+    /// Does a call of `f` keep (move, close or store) argument `i`?
+    pub(super) fn keeps(&self, f: FunctionId, i: u32) -> bool {
+        self.0.get(&f).is_some_and(|s| s.keeps.contains(&i))
+    }
+}
+
+/// The bodies holding an affine value.
+fn walked<'h>(c: &Checker<'_, '_>, all: &[&'h HirFunction]) -> Vec<&'h HirFunction> {
+    all.iter()
+        .copied()
+        .filter(|f| {
+            f.body.is_some()
+                && (f.params.iter().any(|p| c.shape(&p.ty).is_some())
+                    || f.locals.iter().any(|l| c.shape(&l.ty).is_some())
+                    || c.shape(&f.ret_ty).is_some())
+        })
+        .collect()
+}
+
+/// Every function's summary: those of prebuilt libraries (`stored`), and
+/// this build's to a fixpoint.
+pub(super) fn summaries(
+    env: &Env<'_>,
+    functions: &[HirFunction],
+    stored: &[(String, String)],
+) -> Sums {
+    if env.names.lang_item("drop_method").is_empty() {
+        return Sums::default();
+    }
+    let no_subst = HashMap::new();
+    let ctx = LowerCtx::new(env, &no_subst, None, Span::DUMMY);
+    let extras = env.sink.extras.borrow();
+    let all: Vec<&HirFunction> = functions.iter().chain(extras.iter()).collect();
+    let by_name: HashMap<&str, &str> = stored
+        .iter()
+        .filter_map(|(n, s)| Some((n.strip_prefix(KEY)?, s.as_str())))
+        .collect();
+    let mut sums = HashMap::new();
+    for f in all.iter().filter(|f| f.body.is_none()) {
+        if let Some(s) = by_name
+            .get(f.name.as_str())
+            .and_then(|t| Summary::decode(t))
+        {
+            sums.insert(f.id, s);
+        }
+    }
+    let c = Checker {
+        env,
+        ctx: &ctx,
+        fns: all.iter().map(|f| (f.id, *f)).collect(),
+        sums: RefCell::new(sums),
+        owned_slots: RefCell::default(),
+        memo: RefCell::default(),
+    };
+    let walked = walked(&c, &all);
+    // Every parameter starts borrowed.
+    for _ in 0..12 {
+        let mut changed = false;
+        for f in &walked {
+            let mut w = Walk::new(&c, f, false);
+            run(&mut w);
+            let mut s = w.out;
+            if let Some(old) = c.summary(f.id) {
+                s.keeps.extend(old.keeps);
+                s.alias |= old.alias;
+            }
+            if c.summary(f.id).as_ref() != Some(&s) {
+                c.sums.borrow_mut().insert(f.id, s);
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    Sums(c.sums.into_inner())
+}
+
 /// Check every body; report each use after a move and each value whose
-/// close can fail left open, and fix up the release flags. `stored`: the
-/// summaries of prebuilt libraries; returned: this build's, when
-/// `export`.
+/// close can fail left open, and fix up the release flags. `sums`: from
+/// `summaries`; returned: this build's, when `export`.
 pub(super) fn check(
     env: &Env<'_>,
     functions: &mut [HirFunction],
-    stored: &[(String, String)],
+    sums: Sums,
     export: bool,
 ) -> Vec<(String, String)> {
     if env.names.lang_item("drop_method").is_empty() {
@@ -2494,58 +2691,15 @@ pub(super) fn check(
     let (out, edits) = {
         let extras = env.sink.extras.borrow();
         let all: Vec<&HirFunction> = functions.iter().chain(extras.iter()).collect();
-        let by_name: HashMap<&str, &str> = stored
-            .iter()
-            .filter_map(|(n, s)| Some((n.strip_prefix(KEY)?, s.as_str())))
-            .collect();
-        let mut sums = HashMap::new();
-        for f in all.iter().filter(|f| f.body.is_none()) {
-            if let Some(s) = by_name
-                .get(f.name.as_str())
-                .and_then(|t| Summary::decode(t))
-            {
-                sums.insert(f.id, s);
-            }
-        }
         let c = Checker {
             env,
             ctx: &ctx,
             fns: all.iter().map(|f| (f.id, *f)).collect(),
-            sums: RefCell::new(sums),
+            sums: RefCell::new(sums.0),
             owned_slots: RefCell::default(),
             memo: RefCell::default(),
         };
-        // The bodies holding an affine value.
-        let walked: Vec<&HirFunction> = all
-            .iter()
-            .copied()
-            .filter(|f| {
-                f.body.is_some()
-                    && (f.params.iter().any(|p| c.shape(&p.ty).is_some())
-                        || f.locals.iter().any(|l| c.shape(&l.ty).is_some())
-                        || c.shape(&f.ret_ty).is_some())
-            })
-            .collect();
-        // Summaries to a fixpoint: every parameter borrowed.
-        for _ in 0..12 {
-            let mut changed = false;
-            for f in &walked {
-                let mut w = Walk::new(&c, f, false);
-                run(&mut w);
-                let mut s = w.out;
-                if let Some(old) = c.summary(f.id) {
-                    s.keeps.extend(old.keeps);
-                    s.alias |= old.alias;
-                }
-                if c.summary(f.id).as_ref() != Some(&s) {
-                    c.sums.borrow_mut().insert(f.id, s);
-                    changed = true;
-                }
-            }
-            if !changed {
-                break;
-            }
-        }
+        let walked = walked(&c, &all);
         // The final walk, creators before the bodies they make.
         let parent = parents(&all);
         let depth = |mut id: FunctionId| {

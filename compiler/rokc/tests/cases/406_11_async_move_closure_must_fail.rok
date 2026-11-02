@@ -1,6 +1,6 @@
 // needs: threads
 // expect-error: 406_11_async_move_closure_must_fail.rok:19:25: `q` shares `p`, which was spawned as a task at line 18
-// expect-error: 406_11_async_move_closure_must_fail.rok:27:19: `f` was spawned as a task at line 26
+// expect-error: 406_11_async_move_closure_must_fail.rok:27:19: a future of `f` was spawned as a task at line 26
 // expect-error: 406_11_async_move_closure_must_fail.rok:36:22: `p` shares `f`, which was moved into a closure at line 35
 // expect-error: help: the futures of one `async [move ..]` closure share what it moved in
 

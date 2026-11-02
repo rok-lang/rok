@@ -1,0 +1,26 @@
+// expect-error: `out` holds a `Stdio` that is never closed
+
+// A `Stdio` that is given a file after starting with none must still
+// reach a command, or be closed.
+use rok::core::io::IoError;
+use rok::std::fs::File;
+use rok::std::process::Stdio;
+
+fn quiet() -> bool { true }
+
+fn never_given() throws (IoError) {
+    let out = Stdio::Inherit;
+    out = Stdio::File(try File::create("x"));
+}
+
+fn given_on_one_path() throws (IoError) {
+    let out = Stdio::Inherit;
+    if quiet() {
+        out = Stdio::File(try File::create("y"));
+    }
+}
+
+fn main() throws (IoError) {
+    try never_given();
+    try given_on_one_path();
+}

@@ -1,0 +1,60 @@
+// expect-error: `p.f` was moved at line 29, and is used here
+// expect-error: `h.s` was moved at line 36, and is used here
+// expect-error: `f` was moved at line 44, and is used here
+// expect-error: `f` holds a `File` that is never closed
+// expect-error: help: a `File` has one owner, and `p` gave it away; use the new owner, or keep a copy with `.try_clone()` before it moves
+// expect-error: help: an `S` has one owner, and `h` gave it away; use the new owner
+// expect-error: to only borrow it, capture it with `[ref f]`
+// expect-error: the value this loop walks holds a `File` that is never closed
+// expect-error: help: closing a `File` can fail, so it is not closed for you: bind it before the loop and close it after: `let it = ..; try for x in it { .. } try it.close();`
+// forbid-error: `r.inner`
+// forbid-error: a `S`
+
+// The use-after-move help names the place that gave the value away and
+// the type of the used part, with its article; a closure that took a
+// value without a capture list is told about `[ref x]`; a loop over a
+// temporary that must be closed names no private field.
+use rok::core::io;
+use rok::core::io::{BufRead, IoError};
+use rok::std::fs::File;
+
+struct P { f: File; n: i32; }
+
+struct S { f: File; }
+
+struct H { s: S; }
+
+fn whole_moved() throws (IoError) {
+    let p = P { f: try File::open("x"), n: 1 };
+    let q = p;
+    try q.f.close();
+    try p.f.close();
+}
+
+fn one_letter() throws (IoError) {
+    let h = H { s: S { f: try File::open("x") } };
+    let g = h;
+    try g.s.f.close();
+    let t = h.s;
+    try t.f.close();
+}
+
+fn captured() throws (IoError) {
+    let f = try File::open("x");
+    let c = || try! f.read_to_str();
+    try f.close();
+    println(c().len());
+}
+
+fn loop_temp(p: str) throws (IoError) -> usize {
+    let n = 0usize;
+    try for l in io::BufReader::new(try File::open(p)).into_lines() { n += 1; }
+    n
+}
+
+fn main() throws (IoError) {
+    try whole_moved();
+    try one_letter();
+    try captured();
+    println(try loop_temp("x"));
+}

@@ -1,0 +1,34 @@
+// expect-exit: 0
+// expect-stdout: 2 1 2
+
+// A guard's value in a tuple or a struct is fine inside its `using`
+// block, and a deep copy leaves it.
+static M: Mutex<List<i32>> = Mutex::new([7]);
+
+struct Hold { xs: List<i32>; n: i32; }
+
+fn inside() -> usize {
+    using g = M.lock() {
+        let (a, b) = (g.get(), 1);
+        a.push(b);
+        a.len()
+    }
+}
+
+fn copied() -> List<i32> {
+    let h = (0, [1]);
+    using g = M.lock() { h.1 = g.get_clone(); }
+    h.1.pop();
+    h.1
+}
+
+fn built() -> usize {
+    using g = M.lock() {
+        let h = Hold { xs: g.get(), n: 1 };
+        h.xs.len()
+    }
+}
+
+fn main() {
+    println(f"{inside()} {copied().len()} {built()}");
+}

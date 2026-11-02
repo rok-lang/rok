@@ -1,11 +1,11 @@
 // needs: threads
-// expect-error: handoff_once_flows_must_fail.rok:29:31: `f` was spawned as a task at line 29
+// expect-error: handoff_once_flows_must_fail.rok:29:31: `f` was given to a `par` job at line 29
 // expect-error: handoff_once_flows_must_fail.rok:36:11: `f` was spawned as a task at line 36
-// expect-error: handoff_once_flows_must_fail.rok:43:27: `f` was spawned as a task at line 42
-// expect-error: handoff_once_flows_must_fail.rok:52:27: `fs[0]` was spawned as a task at line 51
-// expect-error: handoff_once_flows_must_fail.rok:60:27: `f` was spawned as a task at line 59
-// expect-error: handoff_once_flows_must_fail.rok:68:27: `f` was spawned as a task at line 67
-// expect-error: handoff_once_flows_must_fail.rok:77:27: `f` was spawned as a task at line 76
+// expect-error: handoff_once_flows_must_fail.rok:43:27: `f` was given to a thread at line 42
+// expect-error: handoff_once_flows_must_fail.rok:52:27: `fs[0]` was given to a thread at line 51
+// expect-error: handoff_once_flows_must_fail.rok:60:27: `f` was given to a thread at line 59
+// expect-error: handoff_once_flows_must_fail.rok:68:27: `f` was given to a thread at line 67
+// expect-error: handoff_once_flows_must_fail.rok:77:27: `f` was given to a thread at line 76
 // expect-error: make another closure
 
 // A closure that owns values moved into it is handed over once, whatever
