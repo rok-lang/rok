@@ -1,0 +1,32 @@
+// expect-exit: 0
+// expect-stdout:
+// 9 9 none
+// 3 3
+
+// `??` ends the operand of `try?` / `try!`: `try? f() ?? d` is
+// `(try? f()) ?? d`, `d` on an error. `try` still covers `??`.
+#[derive(Debug)]
+struct E {}
+impl Display for E { fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("E") } }
+impl Error for E {}
+
+fn find(n: i32) throws (E) -> i32 {
+    if n < 0 { throw E {}; }
+    n
+}
+
+fn maybe(n: i32) throws (E) -> i32? {
+    if n < 0 { throw E {}; }
+    if n == 0 { return none; }
+    n
+}
+
+fn main() throws {
+    let a = try? find(-1) ?? 9;
+    let b = (try? find(-1)) ?? 9;
+    let c = try? (maybe(-1) ?? 9);
+    println(f"{a} {b} {c:?}");
+    let e = try! maybe(3) ?? 0;
+    let f = try maybe(3) ?? 0;
+    println(f"{e} {f}");
+}

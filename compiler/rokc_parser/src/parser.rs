@@ -5901,72 +5901,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// `try? f() ?? d` (operand from token `from`) is an error: it would
-    /// be `try? (f() ?? d)`, where an error gives `none`, not `d`.
-    fn try_coalesce(&mut self, at: Span, from: usize, operand: &Expr) {
-        if !matches!(operand.kind, ExprKind::NullishCoalesce(..)) || self.pending.is_some() {
-            return;
-        }
-        let toks = &self.tokens[from..self.pos];
-        let mut depth = 0i32;
-        let mut split = None;
-        let mut closed = None;
-        for (i, t) in toks.iter().enumerate() {
-            match t.kind {
-                TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace => depth += 1,
-                TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace => {
-                    depth -= 1;
-                    if depth == 0 && closed.is_none() {
-                        closed = Some(i);
-                    }
-                }
-                TokenKind::QuestionQuestion if depth == 0 && split.is_none() => split = Some(i),
-                _ => {}
-            }
-        }
-        // `try? (f() ?? d)`: already grouped.
-        if toks.first().is_some_and(|t| t.kind == TokenKind::LParen)
-            && closed == Some(toks.len() - 1)
-        {
-            return;
-        }
-        let Some(split) = split else { return };
-        let Some(last) = toks.last() else { return };
-        let (l, r) = (tokens_text(&toks[..split]), tokens_text(&toks[split + 1..]));
-        let whole = Span {
-            end: last.span.end,
-            ..at
-        };
-        // Long operands read better as placeholders.
-        let (sl, sr) = if l.len() + r.len() > 60 {
-            ("x", "d")
-        } else {
-            (l.as_str(), r.as_str())
-        };
-        self.diagnostics.push(
-            RokDiagnostic::error(
-                Code::NEEDS_PARENTHESES,
-                at,
-                format!("`try? {sl} ?? {sr}` needs parentheses"),
-            )
-            .with_file(self.file.clone())
-            .with_help(format!(
-                "write `(try? {sl}) ?? {sr}` to get `{sr}` on an error, or \
-                 `try? ({sl} ?? {sr})` to get `none` on an error"
-            ))
-            .with_fix(
-                whole,
-                format!("(try? {l}) ?? {r}"),
-                format!("write `(try? {sl}) ?? {sr}`"),
-            )
-            .with_fix(
-                whole,
-                format!("try? ({l} ?? {r})"),
-                format!("write `try? ({sl} ?? {sr})`"),
-            ),
-        );
-    }
-
     /// `f` parsing a closure or fn body whose `return@name` may name
     /// `label`; with the bare `return;`s directly in it.
     fn ret_frame<T>(
@@ -6821,16 +6755,18 @@ impl<'a> Parser<'a> {
                 } else {
                     TryKind::Plain
                 };
-                let from = self.pos;
                 // `try for x in g { .. } (a, b)`: the loop ends there, the
                 // `(` starts the next expression.
                 if matches!(self.peek(), TokenKind::For) {
                     self.stmt_head = true;
                 }
-                let operand = self.parse_expr_bp(0)?;
-                if kind == TryKind::Optional {
-                    self.try_coalesce(try_span, from, &operand);
-                }
+                // `??` ends the operand of `try?` / `try!`: `try? f() ?? d`
+                // is `(try? f()) ?? d`, `d` on an error.
+                let operand = if kind == TryKind::Plain {
+                    self.parse_expr_bp(0)?
+                } else {
+                    self.parse_expr_bp(COALESCE_PREC + 1)?
+                };
                 ExprKind::Try {
                     kind,
                     operand: Box::new(operand),
@@ -8653,19 +8589,6 @@ fn effect_free(e: &Expr) -> bool {
         ExprKind::OpPrefix { operand, .. } | ExprKind::Cast(operand, _) => effect_free(operand),
         _ => is_plain_operand(e),
     }
-}
-
-fn tokens_text(toks: &[Token]) -> String {
-    let mut out = String::new();
-    let mut end = None;
-    for t in toks {
-        if end.is_some_and(|e| e != t.span.start) {
-            out.push(' ');
-        }
-        out.push_str(&t.kind.text());
-        end = Some(t.span.end);
-    }
-    out
 }
 
 const fn is_block_like(e: &Expr) -> bool {
