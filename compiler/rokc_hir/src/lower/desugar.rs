@@ -1059,6 +1059,12 @@ pub(super) fn lower_for_iter(
         return it_h;
     }
     let it_ty = it_h.ty.clone();
+    // An iterator in a variable (or a field of one) stepped directly is
+    // stepped in place, as a stream is polled.
+    if !has_into_iter && !owned && super::mono::writable_place(ctx, &it_h) {
+        let next = method_call_on(ctx, it_h, "next", &[], span);
+        return for_next_loop(ctx, label, pat, next, body, span);
+    }
     let close = owned && is_generator(ctx, &it_ty);
     let name = close.then(|| format!("#for_gen{}", ctx.locals.len()));
     // `#for`: the iterator a loop steps (a view of a resource it is given).
@@ -1170,8 +1176,14 @@ fn lower_for_stream(
     } else {
         method_call_on(ctx, s, "into_stream", &[], span)
     };
+    // A stream in a variable (or a field of one) is polled in place: a
+    // copy would leave the variable's owner with the state before the loop.
+    if is_stream && super::mono::writable_place(ctx, &s) {
+        let next = super::coro::poll_loop_on(ctx, s, "poll_next", span);
+        return for_next_loop(ctx, label, pat, next, body, span);
+    }
     let ty = s.ty.clone();
-    // `#for`: a view of a stream variable, the owner of a temporary one.
+    // `#for`: the owner of a temporary stream.
     let st = ctx.declare(Some(format!("#for{}", ctx.locals.len())), ty.clone());
     out.push(HirStmt::Let { local: st, init: s });
     let next = super::coro::poll_loop(ctx, st, &ty, "poll_next", span);

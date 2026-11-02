@@ -1,5 +1,5 @@
 // needs: threads
-// expect-error: `q` may hold one object twice, and one of them was handed to another owner
+// expect-error: `q` may hold one object twice (stored at lines 10 and 11), and one of them was handed to another owner at line 13
 // Extending one list from another twice.
 use rok::std::thread;
 fn main() {

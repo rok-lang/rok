@@ -199,6 +199,14 @@ const VIEW: LocalId = LocalId(0x7fff_fffc);
 const WITH: &str = "rok::std::thread::ThreadLocal__with";
 /// A path step: the elements of the buffer the place holds.
 const ELEM: u32 = 0x3fff_fffe;
+/// A path step: argument `i` of an enum value's variant `v`
+/// (`payload(v, i)`).
+const PAYLOAD: u32 = 0x2000_0000;
+
+/// The path step of argument `i` of variant `v`.
+const fn payload(v: u32, i: u32) -> u32 {
+    PAYLOAD | (v << 12) | (i & 0xfff)
+}
 
 /// Functions whose value is an element taken out of argument 0's buffer:
 /// the buffer no longer holds it, unless it may hold it twice.
@@ -711,10 +719,27 @@ fn mark_gone(s: &mut St, p: Place, why: Gone) {
                 }
             }
         }
-        work.extend(
-            next.into_iter()
-                .filter(|(x, bl)| !bl.iter().any(|b| overlap(x, b))),
-        );
+        for (x, bl) in next {
+            if !bl.iter().any(|b| overlap(&x, b)) {
+                work.push((x, bl));
+                continue;
+            }
+            // A part of the buffer's elements: a value taken out of it
+            // holds the same part.
+            let Some(h) = bl.iter().find(|b| within(&x, b)) else {
+                continue;
+            };
+            let rest = &x.1[h.1.len()..];
+            for es in s.edges.0.values() {
+                for e in es {
+                    if let Edge::Taken(t, b) = e {
+                        if elem_aliases(s, b).contains(h) {
+                            work.push((extend(t, rest), bl.clone()));
+                        }
+                    }
+                }
+            }
+        }
         s.gone.retain(|g, _| !within(g, &q));
         s.gone.insert(q, why);
     }
@@ -1336,16 +1361,31 @@ impl Summary {
 }
 
 /// The name prefix of a ROKHIR entry for the functions used as values
-/// with these parameter types (`e`: a closure, its environment first).
+/// with these parameter types (`e`: a closure, its environment first),
+/// then `RET_KEY` and the return type when it is one `ret_key` keeps.
 const FN_VALUE: &str = "#fn";
+const RET_KEY: char = '\u{1e}';
 
 /// A function used as a value: a call through a function value of its
-/// parameter types may reach it.
+/// parameter and return types may reach it.
 struct Cand {
     /// A closure: parameter 0 is its environment.
     env: bool,
     keys: Vec<String>,
+    /// `None`: any call of these parameter types may reach it.
+    ret: Option<String>,
     from: CandFrom,
+}
+
+/// The key a call through a function value matches on its return type.
+/// `None` for a type a function's own return type may differ from in
+/// form: unknown or generic, a sum, a function or closure type.
+fn ret_key(ctx: &LowerCtx<'_>, t: &HirTy) -> Option<String> {
+    let loose = matches!(
+        t,
+        HirTy::Unknown | HirTy::Any | HirTy::Sum(_) | HirTy::Fn(..) | HirTy::Closure { .. }
+    ) || super::bounds::has_param(ctx, t);
+    (!loose).then(|| t.stable_key())
 }
 
 enum CandFrom {
@@ -1365,6 +1405,69 @@ enum Fk {
 }
 
 type Flow = (Fk, Place);
+
+/// The flows of the part at `path` of a value with flows `fl`.
+fn project(fl: Vec<Flow>, path: &[u32]) -> Vec<Flow> {
+    let mut fl = fl;
+    for &i in path {
+        let mut out = Vec::new();
+        for (k, q) in fl {
+            match k {
+                Fk::Is(s) if s.is_empty() => out.push((Fk::Is(s), extend(&q, &[i]))),
+                Fk::Is(s) if s[0] == i => out.push((Fk::Is(s[1..].to_vec()), q)),
+                Fk::Is(_) => {}
+                k => out.push((k, q)),
+            }
+        }
+        fl = out;
+    }
+    fl
+}
+
+/// Each local `p` binds with its path inside the matched value (`None`:
+/// somewhere in it). A sum's member is the sum's place.
+fn binding_paths(p: &HirPattern, at: Option<&[u32]>, out: &mut Vec<(LocalId, Option<Vec<u32>>)>) {
+    let below = |k: u32| at.map(|a| [a, &[k]].concat());
+    match p {
+        HirPattern::Binding { local, .. }
+        | HirPattern::SumVariant {
+            binder: Some(local),
+            ..
+        } => out.push((*local, at.map(<[u32]>::to_vec))),
+        HirPattern::At { local, sub, .. } => {
+            out.push((*local, at.map(<[u32]>::to_vec)));
+            binding_paths(sub, at, out);
+        }
+        HirPattern::SumMember { sub, .. } => binding_paths(sub, at, out),
+        HirPattern::Tuple(ps) => {
+            for (i, x) in ps.iter().enumerate() {
+                #[allow(clippy::cast_possible_truncation)]
+                binding_paths(x, below(i as u32 | TUPLE).as_deref(), out);
+            }
+        }
+        HirPattern::Struct { fields, .. } => {
+            for (i, x) in fields {
+                binding_paths(x, below(*i).as_deref(), out);
+            }
+        }
+        HirPattern::EnumVariant {
+            variant_index,
+            args,
+            ..
+        } => {
+            for (i, x) in args.iter().enumerate() {
+                #[allow(clippy::cast_possible_truncation)]
+                binding_paths(x, below(payload(*variant_index, i as u32)).as_deref(), out);
+            }
+        }
+        HirPattern::Or(alts) => {
+            for x in alts {
+                binding_paths(x, None, out);
+            }
+        }
+        _ => p.each_binding(&mut |l| out.push((l, None))),
+    }
+}
 
 /// The place `e` reads as is (`x`, `x.f.0`, `x` wrapped into a sum
 /// slot or cast).
@@ -1895,7 +1998,12 @@ pub(super) fn check(
             let Some(s) = sums.get(id).filter(|s| !s.is_empty()) else {
                 continue;
             };
-            let name = std::iter::once(format!("{FN_VALUE}{}", if k.env { "e" } else { "" }))
+            let ret = k
+                .ret
+                .as_ref()
+                .map_or_else(String::new, |r| format!("{RET_KEY}{r}"));
+            let head = format!("{FN_VALUE}{}{ret}", if k.env { "e" } else { "" });
+            let name = std::iter::once(head)
                 .chain(k.keys.iter().cloned())
                 .collect::<Vec<_>>()
                 .join("\u{1f}");
@@ -1941,6 +2049,7 @@ fn candidates(
         out.entry(keys.len()).or_default().push(Cand {
             env,
             keys,
+            ret: ret_key(c.ctx, &f.ret_ty),
             from: CandFrom::Fn(id),
         });
     }
@@ -1952,10 +2061,15 @@ fn candidates(
         let Some(s) = Summary::decode(text) else {
             continue;
         };
+        let (env, ret) = match head.split_once(RET_KEY) {
+            Some((env, ret)) => (env, Some(ret.to_owned())),
+            None => (head, None),
+        };
         let keys: Vec<String> = parts.map(str::to_owned).collect();
         out.entry(keys.len()).or_default().push(Cand {
-            env: head == "e",
+            env: env == "e",
             keys,
+            ret,
             from: CandFrom::Stored(Rc::new(s)),
         });
     }
@@ -2391,6 +2505,28 @@ impl<'h> Walk<'_, 'h> {
                 .enumerate()
                 .map(|(i, t)| (i as u32 | TUPLE, t.clone()))
                 .collect(),
+            HirTy::Enum(id) => {
+                let enums = self.c.env.defs.enums.borrow();
+                let e = enums.get(id.0 as usize)?;
+                let mut out = Vec::new();
+                for (v, var) in e.variants.iter().enumerate() {
+                    #[allow(clippy::cast_possible_truncation)]
+                    let v = v as u32;
+                    match (&var.payload_ty, var.arity) {
+                        (Some(t), 1) => out.push((payload(v, 0), t.clone())),
+                        (Some(HirTy::Tuple(ts)), _) => {
+                            #[allow(clippy::cast_possible_truncation)]
+                            out.extend(
+                                ts.iter()
+                                    .enumerate()
+                                    .map(|(i, t)| (payload(v, i as u32), t.clone())),
+                            );
+                        }
+                        _ => {}
+                    }
+                }
+                out
+            }
             _ => return None,
         };
         Some(all.into_iter().filter(|(_, t)| self.c.tracked(t)).collect())
@@ -3502,14 +3638,7 @@ impl<'h> Walk<'_, 'h> {
                 };
                 let mut v = Vec::new();
                 self.flows_any(target, &mut v);
-                for (k, q) in v {
-                    match k {
-                        Fk::Is(s) if s.is_empty() => out.push((Fk::Is(s), extend(&q, &[i]))),
-                        Fk::Is(s) if s[0] == i => out.push((Fk::Is(s[1..].to_vec()), q)),
-                        Fk::Is(_) => {}
-                        k => out.push((k, q)),
-                    }
-                }
+                out.extend(project(v, &[i]));
             }
             HirExprKind::SumWrap { value: Some(x), .. } | HirExprKind::Cast { operand: x, .. } => {
                 self.flows(x, out);
@@ -3520,9 +3649,18 @@ impl<'h> Walk<'_, 'h> {
             HirExprKind::ArrayIndex { array: x, .. } => {
                 as_kind(self, x, &Fk::Both, out);
             }
-            HirExprKind::ArrayInit { elements: xs, .. }
-            | HirExprKind::EnumVariantInit { args: xs, .. } => {
+            HirExprKind::ArrayInit { elements: xs, .. } => {
                 xs.iter().for_each(|x| as_kind(self, x, &Fk::Both, out));
+            }
+            HirExprKind::EnumVariantInit {
+                variant_index: v,
+                args: xs,
+                ..
+            } => {
+                for (i, x) in xs.iter().enumerate() {
+                    #[allow(clippy::cast_possible_truncation)]
+                    sub(self, payload(*v, i as u32), x, out);
+                }
             }
             HirExprKind::Block(_)
             | HirExprKind::If { .. }
@@ -3597,11 +3735,19 @@ impl<'h> Walk<'_, 'h> {
         }
         let mut fl = Vec::new();
         self.flows(e, &mut fl);
+        self.store_flows(p, &fl, part);
+        if let Some((g, at)) = self.got_from(e) {
+            self.tie(g, p.clone(), at, Tie::Taken);
+        }
+    }
+
+    /// `p` now holds a value with flows `fl` (`part`: a part of it).
+    fn store_flows(&mut self, p: &Place, fl: &[Flow], part: bool) {
         for s in self.cur.states() {
             // What is gone of the value stays gone in `p` (a call's result
             // that its callee handed over).
             let mut inherit = Vec::new();
-            for (k, q) in &fl {
+            for (k, q) in fl {
                 for (g, why) in s.gone.iter().filter(|(g, _)| overlap(g, q)) {
                     match k {
                         Fk::Is(sub) if !part => {
@@ -3613,7 +3759,7 @@ impl<'h> Walk<'_, 'h> {
                     }
                 }
             }
-            for (k, q) in &fl {
+            for (k, q) in fl {
                 let edge = match k {
                     Fk::Is(sub) if !part => Edge::Same(extend(p, sub), q.clone()),
                     Fk::Is(_) | Fk::Both => Edge::In(p.clone(), q.clone()),
@@ -3626,9 +3772,6 @@ impl<'h> Walk<'_, 'h> {
             for (q, why) in inherit {
                 mark_gone(s, q, why);
             }
-        }
-        if let Some((g, at)) = self.got_from(e) {
-            self.tie(g, p.clone(), at, Tie::Taken);
         }
     }
 
@@ -3977,9 +4120,23 @@ impl<'h> Walk<'_, 'h> {
                 cur.untag(ks);
             }
             self.cur = cur;
-            a.pat.each_binding(&mut |l| {
-                self.store(&(l, Vec::new()), scrutinee, true);
-            });
+            let mut binds = Vec::new();
+            binding_paths(&a.pat, Some(&[]), &mut binds);
+            for (l, path) in binds {
+                let at = (l, Vec::new());
+                match path {
+                    Some(path) => {
+                        self.assign(&at);
+                        let mut fl = Vec::new();
+                        self.flows(scrutinee, &mut fl);
+                        self.store_flows(&at, &project(fl, &path), false);
+                        if let Some((g, span)) = self.got_from(scrutinee) {
+                            self.tie(g, at, span, Tie::Taken);
+                        }
+                    }
+                    None => self.store(&at, scrutinee, true),
+                }
+            }
             if let Some(g) = &a.guard {
                 self.expr(g);
             }
@@ -4313,7 +4470,7 @@ impl<'h> Walk<'_, 'h> {
                     HirExprKind::FnRef(id) => {
                         self.callee(*id).map(|s| Rc::new(s.remap(&|i| Some(i + 1))))
                     }
-                    _ => self.indirect(args),
+                    _ => self.indirect(args, &e.ty),
                 };
                 if let Some(s) = s {
                     self.kept_views(&s, &all, e, Some(callee));
@@ -4325,7 +4482,7 @@ impl<'h> Walk<'_, 'h> {
                 all.extend(args.iter());
                 let s = match &closure.kind {
                     HirExprKind::ClosureValue { fn_id, .. } => self.callee(*fn_id),
-                    _ => self.indirect(args),
+                    _ => self.indirect(args, &e.ty),
                 };
                 if let Some(s) = s {
                     self.kept_views(&s, &all, e, Some(closure));
@@ -4802,17 +4959,17 @@ impl<'h> Walk<'_, 'h> {
         self.c.summary(id).filter(|s| !s.is_empty())
     }
 
-    /// A call through a function value with these arguments: every
-    /// function used as a value with their types (argument 0 is the
-    /// function value).
-    fn indirect(&mut self, args: &[HirExpr]) -> Option<Rc<Summary>> {
+    /// A call through a function value with these arguments, of type
+    /// `ret`: every function used as a value with their types.
+    fn indirect(&mut self, args: &[HirExpr], ret: &HirTy) -> Option<Rc<Summary>> {
         let c = self.c;
         let cands = c.cands.get(&args.len())?;
+        let ret = ret_key(c.ctx, ret);
         let mut out = Summary::default();
         for k in cands {
             let fits = k.keys.iter().zip(args).all(|(key, a)| {
                 matches!(a.ty, HirTy::Unknown | HirTy::Any) || *key == a.ty.stable_key()
-            });
+            }) && (k.ret.is_none() || ret.is_none() || k.ret == ret);
             if !fits {
                 continue;
             }
@@ -4958,8 +5115,9 @@ impl<'h> Walk<'_, 'h> {
                 for e in &s.edges {
                     let SEdge::Same(x, y) = e else { continue };
                     for (r, q) in [(x, y), (y, x)] {
-                        if r.0 == RET_ROOT && q.0 == *i && q.1.is_empty() {
-                            ps.push(extend(ret, &[&r.1[..], &sub[..]].concat()));
+                        if r.0 == RET_ROOT && q.0 == *i && sub.starts_with(&q.1) {
+                            let rest = &sub[q.1.len()..];
+                            ps.push(extend(ret, &[&r.1[..], rest].concat()));
                         }
                     }
                 }

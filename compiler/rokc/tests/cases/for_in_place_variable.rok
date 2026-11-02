@@ -1,0 +1,58 @@
+// expect-exit: 0
+// expect-stdout:
+// stream 3, field 12, copy 0
+// steps 2 then 4
+
+// `for await` over a stream in a variable, or in a field of one, polls
+// it in place, and `try for` steps a `TryIterator` in place: a loop that
+// stops early leaves the variable where the loop left it.
+use rok::core::task;
+use rok::core::future::{Context, Poll};
+use rok::core::stream::Stream;
+use rok::core::io::IoError;
+
+struct Count { n: i32; }
+
+impl Stream for Count {
+    type Item = i32;
+    fn poll_next(ref self, ref ctx: Context) -> Poll<i32 | none> {
+        self.n += 1;
+        Poll::Ready(self.n)
+    }
+}
+
+struct Holder { c: Count; }
+
+struct Steps { n: i32; }
+
+impl TryIterator for Steps {
+    type Item = i32;
+    type Error = IoError;
+    fn next(ref self) throws (IoError) -> i32 | none {
+        self.n += 1;
+        if self.n > 3 { return none; }
+        self.n
+    }
+}
+
+async fn go() {
+    let s = Count { n: 0 };
+    let copy = s;
+    for await k in s {
+        if k == 3 { break; }
+    }
+    let h = Holder { c: Count { n: 10 } };
+    for await k in h.c {
+        if k == 12 { break; }
+    }
+    println(f"stream {s.n}, field {h.c.n}, copy {copy.n}");
+}
+task::block_on(go());
+
+let it = Steps { n: 0 };
+try! for x in it {
+    if x == 2 { break; }
+}
+let first = it.n;
+try! for _ in it {}
+println(f"steps {first} then {it.n}");

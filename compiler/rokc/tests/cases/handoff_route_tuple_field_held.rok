@@ -1,0 +1,19 @@
+// needs: threads
+// expect-error: `p.0` and `l` share an object, and `go` hands over the one and keeps using the other
+// A list held in a tuple's sum field is still that field's.
+use rok::std::thread;
+enum Wrap { One(List<i32>), Zero }
+fn go(tx: Sender<Wrap>, w: Wrap, l: List<i32>) -> usize {
+    try! tx.send(w);
+    for i in 0..200000 { l.push(i); }
+    l.len()
+}
+fn main() {
+    let (tx, rx) = channel::<Wrap>();
+    let t = thread::spawn(|| { if let w: Wrap = rx.recv() { if let Wrap::One(l) = w { for i in 0..200000 { l.push(i); } } } 0 });
+    let l: List<i32> = [];
+    let p = (Wrap::One(l), 0);
+    let n = go(tx, p.0, l);
+    let _ = try! t.join();
+    println(f"len {n}");
+}

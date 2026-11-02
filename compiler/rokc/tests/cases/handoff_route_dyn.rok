@@ -1,5 +1,5 @@
 // needs: threads
-// expect-error: `s` shares `e`, which was sent through a channel
+// expect-error: `s` may hold one object twice (stored at line 16), and one of them was handed to another owner at line 17
 // A trait method behind `dyn` that stores twice.
 use rok::std::thread;
 trait Store { fn put(self, x: List<i32>); fn take(self) -> List<i32> | none; }

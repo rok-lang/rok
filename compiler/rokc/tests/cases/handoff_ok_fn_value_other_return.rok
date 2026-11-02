@@ -1,0 +1,26 @@
+// needs: threads
+// expect-exit: 0
+// expect-stdout:
+// len 1 then 2
+// sent 1
+
+// A call through a `fn(List<i32>) -> i32` reaches only functions of that
+// type: the closure that sends its argument returns `bool`, so `items`
+// is still this code's after the call.
+use rok::std::thread;
+
+fn pick(f: fn(List<i32>) -> i32) -> fn(List<i32>) -> i32 { f }
+
+fn main() {
+    let (tx, rx) = channel::<List<i32>>();
+    let count: fn(List<i32>) -> i32 = |x| x.len() as i32;
+    let send: fn(List<i32>) -> bool = |x| { try! tx.send(x); true };
+    let g = pick(count);
+    let items: List<i32> = [1];
+    let n = g(items);
+    items.push(2);
+    println(f"len {n} then {items.len()}");
+    let t = thread::spawn(|| { if let l: List<i32> = rx.recv() { l.len() } else { 0usize } });
+    let _ = send([7]);
+    println(f"sent {try! t.join()}");
+}
