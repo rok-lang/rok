@@ -207,7 +207,7 @@ impl Walk<'_> {
             .with_note(format!(
                 "help: a resize may move the list's elements, so a view made before it cannot \
                  be used after it: make {again} again after the resize (`{list}[a:b]` where a \
-                 `SliceMut` is expected), or resize before making the view (stdlib 2.9.7a)"
+                 `SliceMut` is expected), or resize before making the view"
             ));
         self.diags.push(d);
     }

@@ -75,6 +75,6 @@ for a in "$@"; do
   fi
 done
 [ "$bad" -eq 0 ] || {
-  echo "check-archive.sh: $bad archive(s) break the installer contract (spec 9.10.6)" >&2
+  echo "check-archive.sh: $bad archive(s) break the installer contract" >&2
   exit 1
 }

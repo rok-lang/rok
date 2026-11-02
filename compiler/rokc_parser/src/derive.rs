@@ -101,7 +101,7 @@ pub(crate) fn derive_items(item: &Item, file: &str) -> (Vec<Item>, Vec<RokDiagno
                 at,
                 format!(
                     "`#[derive({tr})]` on `{name}` needs `{missing}` too - derive both \
-                         (`#[derive({missing}, {tr})]`; spec 2.5.1)"
+                         (`#[derive({missing}, {tr})]`)"
                 ),
             ));
             continue;
@@ -109,8 +109,8 @@ pub(crate) fn derive_items(item: &Item, file: &str) -> (Vec<Item>, Vec<RokDiagno
         let Some(path) = derivable(&tr) else {
             let why = if tr == "Display" {
                 "`Display` is written by hand - its format is the type's own choice \
-                 (stdlib 2.10.10)"
-                    .to_owned()
+                "
+                .to_owned()
             } else {
                 format!(
                     "`{tr}` is not a derivable trait (derivable: {})",
@@ -124,7 +124,7 @@ pub(crate) fn derive_items(item: &Item, file: &str) -> (Vec<Item>, Vec<RokDiagno
             diags.push(RokDiagnostic::error(
                 Code::CANNOT_DERIVE,
                 at,
-                format!("cannot derive `{tr}` for `{name}`: {why} (spec 6.2.1)"),
+                format!("cannot derive `{tr}` for `{name}`: {why}"),
             ));
             continue;
         };

@@ -119,7 +119,7 @@ fn parse_rules(body: &[Token], span: Span) -> Result<Vec<Rule>, RokDiagnostic> {
             return Err(err(
                 Code::INVALID_MACRO,
                 body[i].span,
-                "a macro rule starts with `( matcher )` (spec 6.8.12)",
+                "a macro rule starts with `( matcher )`",
             ));
         }
         let mp = close_of(body, i).ok_or_else(|| {
@@ -239,7 +239,7 @@ fn parse_matcher(toks: &[Token]) -> Result<Vec<MatchItem>, RokDiagnostic> {
                     err(
                         Code::INVALID_MACRO,
                         toks[i + 3].span,
-                        format!("unknown fragment `{fname}` (spec 6.9.8)"),
+                        format!("unknown fragment `{fname}`"),
                     )
                 })?;
                 items.push(MatchItem::Var {
@@ -446,10 +446,7 @@ pub(super) fn expand_macro(
         vec![err(
             Code::NO_MACRO_RULE,
             at,
-            format!(
-                "no rule of macro `{}!` matches this call (spec 6.8.12)",
-                def.name
-            ),
+            format!("no rule of macro `{}!` matches this call", def.name),
         )],
     )
 }
@@ -605,7 +602,7 @@ fn emit(
                     at,
                     format!(
                         "`@{head}` is not valid in a macro template; use a metavariable, \
-                         `@for`, `@concat` or `@use_site` (spec 6.8.12)"
+                         `@for`, `@concat` or `@use_site`"
                     ),
                 ));
                 k += 2;
@@ -644,7 +641,7 @@ fn emit_use_site(
         errs.push(err(
             Code::INVALID_TEMPLATE,
             site.at,
-            "`@use_site(..)` takes a path, e.g. `@use_site(validate)` (spec 6.9.9)",
+            "`@use_site(..)` takes a path, e.g. `@use_site(validate)`",
         ));
         return lp;
     };

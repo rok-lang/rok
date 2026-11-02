@@ -264,7 +264,7 @@ impl MetaTable {
             return Some(
                 clash(
                     Code::DUPLICATE_DEFINITION,
-                    format!("{what} is defined by two meta blocks (spec 6.8.11)"),
+                    format!("{what} is defined by two meta blocks"),
                 )
                 .with_secondary(old.span, "first defined here"),
             );
@@ -273,7 +273,7 @@ impl MetaTable {
             return Some(clash(
                 Code::INVALID_META_BLOCK,
                 format!(
-                    "`{}` is a built-in derive; a meta block cannot redefine it (spec 6.2.1)",
+                    "`{}` is a built-in derive; a meta block cannot redefine it",
                     def.name
                 ),
             ));
@@ -283,7 +283,7 @@ impl MetaTable {
                 clash(
                     Code::INVALID_META_BLOCK,
                     format!(
-                        "`#[{}]` is a built-in attribute; a meta block cannot redefine it (spec 6.2)",
+                        "`#[{}]` is a built-in attribute; a meta block cannot redefine it",
                         def.name
                     ),
                 )
@@ -297,7 +297,7 @@ impl MetaTable {
             return Some(clash(
                 Code::INVALID_META_BLOCK,
                 format!(
-                    "`{}!` is a built-in form; a macro cannot take its name (spec 6.8.12)",
+                    "`{}!` is a built-in form; a macro cannot take its name",
                     def.name
                 ),
             ));
@@ -928,20 +928,17 @@ impl Expander<'_> {
                 self.err(
                     k,
                     "`@for` belongs to `@macro` templates only; a derive or attribute \
-                     repeats with `@for_fields { .. }` / `@for_variants { .. }` (spec 6.9.8)",
+                     repeats with `@for_fields { .. }` / `@for_variants { .. }`",
                 );
                 return k + 2;
             }
             _ => {
-                self.err(k, "expected a template token name after `@` (spec 6.9.1)");
+                self.err(k, "expected a template token name after `@`");
                 return k + 1;
             }
         };
         if head == "concat" {
-            self.err(
-                k,
-                "`@concat` belongs to `@macro` templates only (spec 6.9.8)",
-            );
+            self.err(k, "`@concat` belongs to `@macro` templates only");
             return k + 2;
         }
         let mut j = k + 2;
@@ -999,7 +996,7 @@ impl Expander<'_> {
                     j = end + 1;
                 }
                 _ => {
-                    self.err(k, format!("`@{full}` needs `(..)` arguments (spec 6.9)"));
+                    self.err(k, format!("`@{full}` needs `(..)` arguments"));
                     return j;
                 }
             }
@@ -1012,7 +1009,7 @@ impl Expander<'_> {
                     j = end + 1;
                 }
                 _ => {
-                    self.err(k, format!("`@{full}` needs a `{{ .. }}` block (spec 6.9)"));
+                    self.err(k, format!("`@{full}` needs a `{{ .. }}` block"));
                     return j;
                 }
             }
@@ -1039,7 +1036,7 @@ impl Expander<'_> {
         if attr_only && self.def.kind != MetaKind::Attribute {
             self.err(
                 k,
-                format!("`@{full}` is only meaningful in an `@attribute` block (spec 6.8.7)"),
+                format!("`@{full}` is only meaningful in an `@attribute` block"),
             );
             return j;
         }
@@ -1050,7 +1047,7 @@ impl Expander<'_> {
         {
             self.err(
                 k,
-                format!("`@{full}` needs `#[impl_derive_attribute(Trait, attr)]` (spec 6.9.6)"),
+                format!("`@{full}` needs `#[impl_derive_attribute(Trait, attr)]`"),
             );
             return j;
         }
@@ -1140,8 +1137,8 @@ impl Expander<'_> {
                     self.err(
                         k,
                         format!(
-                            "`#[{}]` cannot be applied to a {} (`@accept` at the template; \
-                             spec 6.9.5)",
+                            "`#[{}]` cannot be applied to a {} (`@accept` at the \
+                             template)",
                             self.def.name, self.t.kind
                         ),
                     );
@@ -1276,7 +1273,7 @@ impl Expander<'_> {
             }
             "attribute" => self.t.attr_args.clone(),
             _ => {
-                self.err(k, format!("unknown template token `@{full}` (spec 6.9)"));
+                self.err(k, format!("unknown template token `@{full}`"));
                 return j;
             }
         };
@@ -1621,7 +1618,7 @@ impl Parser<'_> {
             }
             None if kind == MetaKind::Macro => format!(
                 "no package defines `{name}!`; a package defines one with \
-                 `#[impl_macro({name})] pub @macro {{ .. }}` (spec 6.8.12)"
+                 `#[impl_macro({name})] pub @macro {{ .. }}`"
             ),
             None if crate::derive::derivable(name).is_some() => {
                 format!("write `#[derive({name})]`: it is built in")
@@ -1661,7 +1658,7 @@ impl Parser<'_> {
             Code::META_NAME,
             at,
             format!(
-                "{} is defined by several packages, so the bare name is ambiguous (spec 6.8.11)",
+                "{} is defined by several packages, so the bare name is ambiguous",
                 meta_use(kind, "", name)
             ),
         )
@@ -1710,7 +1707,7 @@ impl Parser<'_> {
             at,
             format!(
                 "{} is {owner}, which a bare name does not reach: it names this package's \
-                 blocks, `use`d ones and the standard library's (spec 6.8.11)",
+                 blocks, `use`d ones and the standard library's",
                 meta_use(kind, "", name)
             ),
         )
@@ -1918,7 +1915,7 @@ impl Parser<'_> {
                 Code::INVALID_META_BLOCK,
                 ma.span,
                 format!(
-                    "`#[{}(..)]` needs a `{}@{want} {{ .. }}` body (spec 6.8)",
+                    "`#[{}(..)]` needs a `{}@{want} {{ .. }}` body",
                     ma.name(),
                     if vis == Visibility::Private {
                         ""
@@ -1936,7 +1933,7 @@ impl Parser<'_> {
                 Code::INVALID_META_BLOCK,
                 ma.span,
                 format!(
-                    "`#[{}(..)]` takes an `@{want} {{ .. }}` body, not `@{starter}` (spec 6.8.7)",
+                    "`#[{}(..)]` takes an `@{want} {{ .. }}` body, not `@{starter}`",
                     ma.name()
                 ),
             ));
@@ -1959,10 +1956,7 @@ impl Parser<'_> {
             self.diagnostics.push(meta_err(
                 Code::INVALID_META_BLOCK,
                 ma.span,
-                format!(
-                    "`#[{}]` takes {arity} name argument(s) (spec 6.8.1)",
-                    ma.name()
-                ),
+                format!("`#[{}]` takes {arity} name argument(s)", ma.name()),
             ));
             return Some(None);
         }
@@ -1997,7 +1991,7 @@ impl Parser<'_> {
                 Code::PRIVATE_ITEM,
                 at,
                 format!(
-                    "meta block `{}` is private to `{}` (mark it `pub @..`; spec 6.8.6)",
+                    "meta block `{}` is private to `{}` (mark it `pub @..`)",
                     def.name, def.file
                 ),
             )
@@ -2325,7 +2319,7 @@ impl Parser<'_> {
                     Code::EXPANSION_LIMIT,
                     target.at,
                     format!(
-                        "cyclic meta expansion: {} → {} (spec 6.8.8)",
+                        "cyclic meta expansion: {} → {}",
                         chain.join(" → "),
                         def.name
                     ),

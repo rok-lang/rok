@@ -332,7 +332,7 @@ pub(super) fn lower_yield(
             Code::OUTSIDE_CONTEXT,
             span,
             "`yield` outside a generator: use it in a `yield fn` / `yield { .. }` / \
-             `async yield` body (spec 4.11)"
+             `async yield` body"
                 .to_owned(),
         );
     };
@@ -614,7 +614,7 @@ pub(super) fn poll_loop(
             Code::OUTSIDE_CONTEXT,
             span,
             "`await` outside an async body: use it in an `async fn` / `async { .. }` / \
-             `async ||` body (spec 4.12.10)"
+             `async ||` body"
                 .to_owned(),
         );
     }

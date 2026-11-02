@@ -281,7 +281,7 @@ fn collect_attr(
         diags.push(RokDiagnostic::error(
             Code::INVALID_LANG_ITEM,
             attr.span,
-            "`#[lang(...)]` requires a single string-literal slot name (spec 6.4.2)".to_owned(),
+            "`#[lang(...)]` requires a single string-literal slot name".to_owned(),
         ));
         return;
     };
@@ -296,7 +296,7 @@ fn collect_attr(
         diags.push(RokDiagnostic::error(
             Code::INVALID_LANG_ITEM,
             attr.span,
-            "`#[lang(...)]` requires a single string-literal slot name (spec 6.4.2)".to_owned(),
+            "`#[lang(...)]` requires a single string-literal slot name".to_owned(),
         ));
         return;
     };
@@ -305,7 +305,7 @@ fn collect_attr(
         diags.push(RokDiagnostic::error(
             Code::INVALID_LANG_ITEM,
             attr.span,
-            format!("unknown lang slot `{slot}` on `{item_name}` (spec 6.4.8)"),
+            format!("unknown lang slot `{slot}` on `{item_name}`"),
         ));
         return;
     }
@@ -313,9 +313,7 @@ fn collect_attr(
         diags.push(RokDiagnostic::error(
             Code::INVALID_LANG_ITEM,
             attr.span,
-            format!(
-                "`{item_name}` does not match the form of lang slot `{slot}`: it {why} (spec 6.4.7)"
-            ),
+            format!("`{item_name}` does not match the form of lang slot `{slot}`: it {why}"),
         ));
         return;
     }
@@ -326,7 +324,7 @@ fn collect_attr(
             item_span,
             format!(
                 "lang slot `{slot}` is already bound to `{}` - cannot also bind to \
-                     `{item_name}` (spec 6.4.6)",
+                     `{item_name}`",
                 prev.item_name
             ),
         ));

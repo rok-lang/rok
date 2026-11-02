@@ -267,10 +267,7 @@ fn collect_items(
                 if matches!(p.as_str(), "infix" | "prefix" | "postfix") {
                     diags.push(meta_err(
                         attr,
-                        format!(
-                            "`#[{p}]` can be attached only to a trait method signature (spec \
-                             6.7.13)"
-                        ),
+                        format!("`#[{p}]` can be attached only to a trait method signature"),
                     ));
                 }
             }
@@ -293,7 +290,7 @@ fn collect_items(
                     diags.push(meta_err(
                         attr,
                         format!(
-                            "operator aliases of `{}` must share one precedence level (spec 6.7.12)",
+                            "operator aliases of `{}` must share one precedence level",
                             m.name
                         ),
                     ));
@@ -385,7 +382,7 @@ fn collect_attr(
                     attr,
                     format!(
                         "`#[{name}]` takes only an operator token, `like = \"..\"` and `swap`: \
-                         precedence and associativity are fixed by the language (spec 3.2.3)"
+                         precedence and associativity are fixed by the language"
                     ),
                 ));
                 return None;
@@ -421,9 +418,7 @@ fn collect_attr(
         (Some(_), Some(_)) => {
             diags.push(meta_err(
                 attr,
-                format!(
-                    "`{symbol}` has a fixed precedence (spec 3.2.3); `like` is only for new tokens"
-                ),
+                format!("`{symbol}` has a fixed precedence; `like` is only for new tokens"),
             ));
             return None;
         }
@@ -431,7 +426,7 @@ fn collect_attr(
             if let Some(why) = bad_new_token(&symbol) {
                 diags.push(meta_err(
                     attr,
-                    format!("`{symbol}` can't be a new operator token: {why} (spec 1.10.4)"),
+                    format!("`{symbol}` can't be a new operator token: {why}"),
                 ));
                 return None;
             }

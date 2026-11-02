@@ -1378,11 +1378,11 @@ pub(super) fn check_const_fns(env: &Env<'_>, fns: &[&HirFunction]) {
     for f in fns {
         let Some(body) = &f.body else { continue };
         if let Some((at, why)) = impure(&mut bodies, body, &mut memo) {
-            let why = why.trim_end_matches(" (spec 5.2.5)");
+            let why = why.trim_end_matches("");
             let d = rokc_diagnostic::RokDiagnostic::error(
                 Code::CONST_EVAL,
                 at,
-                format!("`const fn {}` {why} (spec 5.2.5)", leaf_name(&f.name)),
+                format!("`const fn {}` {why}", leaf_name(&f.name)),
             );
             env.sink.diagnostics.borrow_mut().push(d);
         }
@@ -1835,7 +1835,7 @@ impl Bodies for CtxBodies<'_, '_> {
 }
 
 fn not_const(name: &str) -> String {
-    format!("calls `{name}`, which is not a `const fn` (spec 5.2.5)")
+    format!("calls `{name}`, which is not a `const fn`")
 }
 
 /// Evaluate a lowered expression in `ctx`.

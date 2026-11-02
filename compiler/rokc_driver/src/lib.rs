@@ -449,7 +449,7 @@ fn check_dependency_names(
                 rokc_diagnostic::Span::DUMMY,
                 format!(
                     "module `{dep}` has the name of the dependency `{dep}` - dependency names \
-                     are top-level paths (spec 902.3); rename the module"
+                     are top-level paths; rename the module"
                 ),
             ));
         }
@@ -1655,7 +1655,7 @@ fn mod_file(
             _ => Err(()),
         }
         .map_err(|()| {
-            err("`#[path]` takes one file path: `#[path(\"file.rok\")]` (spec 5.4.6)".to_owned())
+            err("`#[path]` takes one file path: `#[path(\"file.rok\")]`".to_owned())
                 .with_span(a.span, "")
         })
     });
@@ -1678,7 +1678,7 @@ fn mod_file(
     if body.file_name().is_some_and(|n| n == "mod.rok") {
         return Err(err(format!(
             "rok has no `mod.rok`: name a module's file after the module \
-             (`{name}.rok`), with a `{name}/` folder beside it for its submodules (spec 5.4.4)"
+             (`{name}.rok`), with a `{name}/` folder beside it for its submodules"
         )));
     }
     if !source_exists(&body) {
@@ -1693,7 +1693,7 @@ fn mod_file(
         let missing = body.parent().filter(|d| !source_dir_exists(d));
         let msg = match missing {
             Some(d) => format!(
-                "module `{name}` body not found at `{}`: there is no `{}/` folder (spec 5.4.4)",
+                "module `{name}` body not found at `{}`: there is no `{}/` folder",
                 body.display(),
                 d.display()
             ),
@@ -2475,7 +2475,7 @@ fn keyword_tables(
                 RokDiagnostic::error(
                     Code::DUPLICATE_REGISTRATION,
                     d.span,
-                    format!("keyword `{}` is registered twice (spec 6.6.4)", d.name),
+                    format!("keyword `{}` is registered twice", d.name),
                 )
                 .with_secondary(old.span, "first registered here"),
             );
@@ -2496,7 +2496,7 @@ fn keyword_tables(
                 Code::INVALID_KEYWORD_DECL,
                 d.span,
                 format!(
-                    "`#[keyword(\"{}\")]` must be on a function - its handler (spec 6.6.2); \
+                    "`#[keyword(\"{}\")]` must be on a function - its handler; \
                          only the standard library names a type with it",
                     d.name
                 ),
@@ -2581,7 +2581,7 @@ fn literal_tables(
             diags.push(RokDiagnostic::error(
                 Code::INVALID_LITERAL_HANDLER,
                 d.span,
-                "`#[literal(..)]` must be on a function - its handler (spec 6.5.2)",
+                "`#[literal(..)]` must be on a function - its handler",
             ));
             continue;
         }
@@ -2757,7 +2757,7 @@ fn flatten_module_items(
                 let err = |msg: String| RokDiagnostic::error(Code::MODULE_FILE, m.span, msg);
                 if mods.contains(&m.name) {
                     diags.push(err(format!(
-                        "module `{}` is declared twice in the same module (spec 5.4.12)",
+                        "module `{}` is declared twice in the same module",
                         m.name
                     )));
                     continue;
@@ -2776,7 +2776,7 @@ fn flatten_module_items(
                     }) {
                         diags.push(err(format!(
                             "inline module `{}` conflicts with `{}`: a module is either \
-                             inline or a file (spec 5.4.5)",
+                             inline or a file",
                             m.name,
                             p.file_name().unwrap_or_default().to_string_lossy()
                         )));

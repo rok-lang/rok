@@ -155,6 +155,6 @@ pub fn expand_cfg_attr(env: &CfgEnv, a: Attribute, out: &mut Vec<Attribute>) {
 pub fn attr_problem(a: &Attribute) -> Option<String> {
     match &a.body {
         AttrBody::Args(xs) if xs.len() == 1 => check_pred(&xs[0]),
-        _ => Some("`#[cfg]` takes exactly one predicate (spec 6.3)".to_owned()),
+        _ => Some("`#[cfg]` takes exactly one predicate".to_owned()),
     }
 }

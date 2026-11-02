@@ -239,7 +239,7 @@ fn item_bound(
                 Code::AMBIGUOUS_ITEM,
                 format!(
                     "`{t}::{name}` is ambiguous: the bounds `{}` and `{}` of `{t}` both give it \
-                     - name the bound (`<{t} as {}>::{name}`) (spec 2.13.4)",
+                     - name the bound (`<{t} as {}>::{name}`)",
                     show(a),
                     show(b),
                     show(a)
@@ -429,7 +429,7 @@ pub(super) fn pick_bound(
                 })
                 .collect();
             Err(format!(
-                "`{method}` on `{t}` needs a bound `{}<{}>`, but `{t}` has {} (spec 3.1.3)",
+                "`{method}` on `{t}` needs a bound `{}<{}>`, but `{t}` has {}",
                 leaf_name(key),
                 asked.join(", "),
                 all.join(" and ")
@@ -437,7 +437,7 @@ pub(super) fn pick_bound(
         }
         _ => Err(format!(
             "`{method}` on `{t}` is ambiguous: the arguments do not choose between its \
-             bounds {} - name one (`<{t} as {}>::{method}(..)`) (spec 4.9.6)",
+             bounds {} - name one (`<{t} as {}>::{method}(..)`)",
             all.join(" and "),
             cands[0].render(leaf_name(key), |t| ctx.ty_name(t))
         )),
@@ -1174,7 +1174,7 @@ pub(super) fn no_method(ctx: &LowerCtx<'_>, p: u32, method: &str, span: Span) ->
     let e = ctx.error_expr(
         Code::NO_METHOD,
         span,
-        format!("no method `{method}` on type parameter `{t}`: {have} (spec 2.10.9)"),
+        format!("no method `{method}` on type parameter `{t}`: {have}"),
     );
     ctx.help_last(Some(format!(
         "add a bound on `{t}` whose trait declares `{method}`"

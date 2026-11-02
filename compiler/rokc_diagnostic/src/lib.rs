@@ -1,6 +1,5 @@
 //! Diagnostics shared across compiler stages.
 
-mod cite;
 mod codes;
 mod json;
 
@@ -486,35 +485,6 @@ impl RokDiagnostic {
 }
 
 impl RokDiagnostic {
-    /// The diagnostic as people read it: no spec citations in its
-    /// message, labels or notes.
-    #[must_use]
-    pub fn without_cites(&self) -> Self {
-        let mut d = self.clone();
-        d.message = cite::strip(&d.message);
-        for n in &mut d.notes {
-            *n = cite::strip(n);
-        }
-        for l in d
-            .primary
-            .iter_mut()
-            .map(|l| &mut **l)
-            .chain(&mut d.secondary)
-        {
-            l.message = cite::strip(&l.message);
-        }
-        d
-    }
-
-    /// The spec sections the message and notes cite (`spec 3.12.5`).
-    #[must_use]
-    pub fn cites(&self) -> Vec<String> {
-        std::iter::once(&self.message)
-            .chain(&self.notes)
-            .flat_map(|t| cite::refs(t))
-            .collect()
-    }
-
     /// A `help:` note, printed as `= help: ..`.
     #[must_use]
     pub fn with_help(self, help: impl Into<String>) -> Self {
@@ -549,7 +519,7 @@ pub fn duplicate(
     d.with_help(if callable {
         format!(
             "{rename}; there is no overloading, so to take fewer arguments keep one and give \
-             its last parameters defaults, as in `b: i32 = 0` (spec 4.2.3)"
+             its last parameters defaults, as in `b: i32 = 0`"
         )
     } else {
         rename
@@ -560,7 +530,6 @@ impl SourceMap {
     /// `diag` on one line: `error[E0040]: path:line:col: message`.
     #[must_use]
     pub fn line(&self, diag: &RokDiagnostic) -> String {
-        let diag = &diag.without_cites();
         let mut out = format!("{}[{}]: ", diag.severity, diag.code);
         if let Some(file) = self.diag_path(diag) {
             match diag.primary.as_ref().map(|l| l.span) {
@@ -704,10 +673,6 @@ impl SourceMap {
                 Json::Arr(notes.into_iter().map(Json::str).collect()),
             ),
             ("fixes", Json::Arr(fixes.collect())),
-            (
-                "spec",
-                Json::Arr(diag.cites().iter().map(Json::str).collect()),
-            ),
             ("help", Json::Arr(help.map(Json::str).collect())),
             ("lint", diag.lint.as_deref().map_or(Json::Null, Json::str)),
             ("schema", Json::num(JSON_SCHEMA)),
@@ -834,7 +799,6 @@ impl SourceMap {
         if style == STYLE_JSON {
             return format!("{}\n", self.json(diag));
         }
-        let diag = &diag.without_cites();
         let depth = Depth::from_code(style & !STYLE_COLOR);
         let paint = |r: Role, text: &str| rokc_core::term::paint_in(depth, r, text);
         let color = match diag.severity {
@@ -980,7 +944,7 @@ mod tests {
             .with_note("n");
         assert_eq!(
             SourceMap::new().json(&d),
-            r#"{"type":"error","code":"E0040","kind":"type","message":"bad \"x\"\n","spans":[{"file_name":"a.rok","is_primary":true}],"notes":["n"],"fixes":[],"spec":[],"help":[],"lint":null,"schema":2}"#
+            r#"{"type":"error","code":"E0040","kind":"type","message":"bad \"x\"\n","spans":[{"file_name":"a.rok","is_primary":true}],"notes":["n"],"fixes":[],"help":[],"lint":null,"schema":2}"#
         );
     }
 
@@ -1047,7 +1011,7 @@ mod tests {
         let json = map.json(&d);
         assert!(
             json.ends_with(
-                r#""fixes":[{"file_name":"a.rok","line_start":1,"col_start":10,"byte_start":9,"byte_end":9,"text":";","title":"insert `;`","line_end":1,"col_end":10}],"spec":[],"help":[],"lint":null,"schema":2}"#
+                r#""fixes":[{"file_name":"a.rok","line_start":1,"col_start":10,"byte_start":9,"byte_end":9,"text":";","title":"insert `;`","line_end":1,"col_end":10}],"help":[],"lint":null,"schema":2}"#
             ),
             "{json}"
         );

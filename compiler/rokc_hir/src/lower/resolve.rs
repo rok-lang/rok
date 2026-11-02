@@ -464,7 +464,7 @@ pub fn hidden_module(
 pub fn hidden_module_msg(full: &str, module: &str, cur: &str) -> String {
     format!(
         "`{full}` is not visible from `{}`: module `{module}` is private to `{}` \
-         (spec 5.6.13 - add `pub` to the `mod` to expose it)",
+         (add `pub` to the `mod` to expose it)",
         module_display(cur),
         module_display(&module_of(module))
     )
@@ -731,9 +731,12 @@ pub(super) fn resolve_ty_with_structs(
             let Ok(n) = u32::try_from(n) else {
                 // Located at the type: field types resolve outside any item pass.
                 let at = if ty.span.is_dummy() { sc.at } else { ty.span };
-                sc.names.error(Code::CONST_EVAL,
+                sc.names.error(
+                    Code::CONST_EVAL,
                     at,
-                    format!("array length must be a compile-time integer (spec 2.11.5): length {n} is out of range"),
+                    format!(
+                        "array length must be a compile-time integer: length {n} is out of range"
+                    ),
                 );
                 return HirTy::Any;
             };

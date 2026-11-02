@@ -53,7 +53,7 @@ pub(super) fn check(env: &Env<'_>, functions: &[HirFunction]) {
                 format!(
                     "`{name}` points to a local of this coroutine and is used after a \
                      suspension point: such a pointer is valid only until the next `await` / \
-                     `yield` (stdlib bare 1.1.2)"
+                     `yield`"
                 ),
             );
         }

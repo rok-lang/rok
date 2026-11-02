@@ -325,7 +325,7 @@ fn read_only_view_help(
         .unwrap_or("xs[a:b]");
     Some(format!(
         "`{}` is a read-only view; a view that writes the list is a `SliceMut<{elem}>`: \
-         `let s: SliceMut<{elem}> = {src};` (stdlib 2.9.7a)",
+         `let s: SliceMut<{elem}> = {src};`",
         ctx.ty_name(ty)
     ))
 }

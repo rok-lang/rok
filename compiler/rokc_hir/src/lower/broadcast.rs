@@ -220,8 +220,7 @@ pub(super) fn lower(ctx: &mut LowerCtx<'_>, e: &Expr) -> HirExpr {
             _ => ctx.error_expr(
                 Code::BROADCAST,
                 span,
-                "a broadcast `f.(..)` needs a `List`, `Slice` or array argument (spec 3.3.3)"
-                    .to_owned(),
+                "a broadcast `f.(..)` needs a `List`, `Slice` or array argument".to_owned(),
             ),
         };
     }
@@ -237,10 +236,7 @@ pub(super) fn lower(ctx: &mut LowerCtx<'_>, e: &Expr) -> HirExpr {
         return ctx.error_expr(
             Code::BROADCAST,
             span,
-            format!(
-                "broadcast over arrays of lengths {} and {n} (stdlib 2.6.4)",
-                fixed[0]
-            ),
+            format!("broadcast over arrays of lengths {} and {n}", fixed[0]),
         );
     }
     // Leaves into temps, in order; the element expression reads them.

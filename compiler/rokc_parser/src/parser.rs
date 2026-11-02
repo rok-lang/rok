@@ -618,7 +618,7 @@ impl<'a> Parser<'a> {
             self.error_help(
                 Code::SYNTAX,
                 s,
-                "a function type has no parameter names (spec 4.4.11)",
+                "a function type has no parameter names",
                 "write the types only: `fn(i32, str) -> bool`",
             );
             return None;
@@ -630,7 +630,7 @@ impl<'a> Parser<'a> {
             self.error_help(
                 Code::SYNTAX,
                 s,
-                "a function type cannot be `rethrows` (spec 4.14.7)",
+                "a function type cannot be `rethrows`",
                 "write the error it throws: `fn(i32) throws (E) -> i32`",
             );
             return None;
@@ -715,7 +715,7 @@ impl<'a> Parser<'a> {
                 Code::STRUCT_LITERAL_IN_HEAD,
                 lit_span,
                 "a struct literal can't start a block's head: its `{` would open the body \
-                 (spec 3.10.3)",
+                ",
                 format!("wrap the struct literal in parentheses: `({text})`"),
             );
             return head;
@@ -726,7 +726,7 @@ impl<'a> Parser<'a> {
             Code::STRUCT_LITERAL_IN_HEAD,
             lit.span,
             "a struct literal can't start a block's head: its `{` would open the body \
-             (spec 3.10.3)",
+            ",
             format!("wrap the struct literal in parentheses: `({text})`"),
         );
         Some(lit)
@@ -940,7 +940,7 @@ impl<'a> Parser<'a> {
                         span,
                         msg,
                         "a const argument that is an expression goes in braces, as in \
-                         `<{ 2 * 8 }>` (spec 2.11.4)",
+                         `<{ 2 * 8 }>`",
                     );
                 } else {
                     self.error(Code::SYNTAX, span, msg);
@@ -1356,7 +1356,7 @@ impl<'a> Parser<'a> {
                 self.error(
                     Code::TOP_LEVEL_RETURN,
                     span,
-                    "top-level `return` is not allowed (spec 4.16.4); use `process::exit(code)` \
+                    "top-level `return` is not allowed; use `process::exit(code)` \
                      or an explicit `fn main() -> i32`",
                 );
                 None
@@ -1459,7 +1459,7 @@ impl<'a> Parser<'a> {
                 _ => Some((
                     Code::MISPLACED_ATTRIBUTE,
                     format!(
-                        "`#[{}]` cannot be attached to {what}; only `#[cfg]` can (spec 6.1.3)",
+                        "`#[{}]` cannot be attached to {what}; only `#[cfg]` can",
                         a.path.join("::")
                     ),
                 )),
@@ -2184,7 +2184,7 @@ impl<'a> Parser<'a> {
             self.error_help(
                 Code::MISPLACED_ITEM,
                 mut_span,
-                "`static mut` is only allowed inside `extern \"C\" { ... }` (FFI) (spec 5.3)",
+                "`static mut` is only allowed inside `extern \"C\" { ... }` (FFI)",
                 "a static is shared by every thread: hold the value in an `Atomic` or a \
                  `Mutex`, as in `static N: Atomic<i32> = Atomic::new(0);`",
             );
@@ -2446,7 +2446,7 @@ impl<'a> Parser<'a> {
                         Code::MISPLACED_VISIBILITY,
                         at,
                         "a trait impl's item has no visibility of its own: it is as visible \
-                         as the trait (spec 2.9.6)",
+                         as the trait",
                         "remove `pub`",
                     );
                 }
@@ -2540,7 +2540,7 @@ impl<'a> Parser<'a> {
                         (
                             Code::MISPLACED_ITEM,
                             "a `static` is declared only at module level, not in an `impl`; \
-                             an associated `const` goes there (spec 5.3.8)"
+                             an associated `const` goes there"
                                 .to_owned(),
                         )
                     } else {
@@ -2581,7 +2581,7 @@ impl<'a> Parser<'a> {
                 _ => self.error(
                     Code::INVALID_META_BLOCK,
                     span,
-                    "an attribute on a method must expand to methods only (spec 6.9.5)",
+                    "an attribute on a method must expand to methods only",
                 ),
             }
         }
@@ -2622,7 +2622,7 @@ impl<'a> Parser<'a> {
                     Code::MISPLACED_VISIBILITY,
                     s,
                     "enum variants take the enum's visibility; remove the visibility \
-                     keyword (spec 5.6.9)",
+                     keyword",
                 );
                 self.parse_visibility();
             }
@@ -2703,7 +2703,7 @@ impl<'a> Parser<'a> {
             self.error(
                 Code::INVALID_ABI,
                 start,
-                "an `extern` block names its ABI: `extern \"C\" { .. }` (spec 5.9.2)",
+                "an `extern` block names its ABI: `extern \"C\" { .. }`",
             );
             "C".to_owned()
         };
@@ -2869,7 +2869,7 @@ impl<'a> Parser<'a> {
                         span,
                         format!(
                             "expected an item in `mod {name}`: module bodies are \
-                             definitions-only; statements belong in `main.rok` (spec 4.16.6)"
+                             definitions-only; statements belong in `main.rok`"
                         ),
                     );
                     self.recover(from, Recover::NestedItem);
@@ -2930,11 +2930,11 @@ impl<'a> Parser<'a> {
                     TokenKind::SelfLower => Some(
                         "a `use` path has no `self`: name a child module directly \
                          (`use c::x;`), a module itself as `use a::b;`, this package's root \
-                         as `pkg::` (spec 5.5)",
+                         as `pkg::`",
                     ),
                     TokenKind::ColonColon => Some(
                         "a `use` path starts with a name: `pkg::` for this package's root, \
-                         a dependency's or `rok`'s name otherwise (spec 5.5)",
+                         a dependency's or `rok`'s name otherwise",
                     ),
                     _ => None,
                 };
@@ -2987,7 +2987,7 @@ impl<'a> Parser<'a> {
                     self.error_help(
                         Code::SYNTAX,
                         s,
-                        "a glob import takes no alias (spec 5.5)",
+                        "a glob import takes no alias",
                         "import the module under another name instead: `use a as x;`",
                     );
                     return None;
@@ -3121,7 +3121,7 @@ impl<'a> Parser<'a> {
                 Code::MISPLACED_VISIBILITY,
                 at,
                 "a trait item has no visibility of its own: it is as visible as the trait \
-                 (spec 2.8.8)",
+                ",
                 "remove `pub`; write `pub trait` to export the trait with its items",
             );
         }
@@ -3251,7 +3251,7 @@ impl<'a> Parser<'a> {
                     self.error(
                         Code::REST_PATTERN,
                         s,
-                        "tuple destructure: only one `..` rest pattern allowed (spec 3.15.3)",
+                        "tuple destructure: only one `..` rest pattern allowed",
                     );
                     return None;
                 }
@@ -3489,7 +3489,7 @@ impl<'a> Parser<'a> {
                     self.error(
                         Code::INVALID_SIGNATURE,
                         *span,
-                        "a `const fn` cannot take a type as an argument (spec 5.2.5): use a \
+                        "a `const fn` cannot take a type as an argument: use a \
                          generic parameter, or a meta block for type introspection",
                     );
                 }
@@ -3521,11 +3521,11 @@ impl<'a> Parser<'a> {
             ranks.dedup();
             let fixed: Vec<&str> = ranks.iter().map(|r| MODS[*r]).collect();
             let msg = if w[1].0 == w[0].0 {
-                format!("fn modifier `{this}` written twice (spec 4.1.11)")
+                format!("fn modifier `{this}` written twice")
             } else {
                 format!(
                     "fn modifier `{this}` after `{prev}`: modifiers go in the order `unsafe \
-                     async yield` (spec 4.1.11)"
+                     async yield`"
                 )
             };
             self.error_help(
@@ -3579,7 +3579,7 @@ impl<'a> Parser<'a> {
                     Code::INVALID_SIGNATURE,
                     span,
                     "`rethrows` needs a parameter of throwing function type \
-                     (`f: fn(T) throws -> U`) (spec 4.14)",
+                     (`f: fn(T) throws -> U`)",
                 );
             }
             ThrowsKind::Typed(errs)
@@ -3652,7 +3652,7 @@ impl<'a> Parser<'a> {
             self.error(
                 Code::INVALID_SIGNATURE,
                 span,
-                "`...` must be the last parameter (spec 8.6.10)",
+                "`...` must be the last parameter",
             );
         }
         true
@@ -3676,7 +3676,7 @@ impl<'a> Parser<'a> {
             if let Some(p) = late {
                 let msg = format!(
                     "parameter `{}` has no default but follows one that does; defaults are \
-                     trailing (spec 4.2.3)",
+                     trailing",
                     p.name
                 );
                 let help = format!(
@@ -3695,7 +3695,7 @@ impl<'a> Parser<'a> {
                 self.error(
                     Code::INVALID_SIGNATURE,
                     p.span,
-                    "only the last parameter can be variadic `...T` (spec 4.2.5)",
+                    "only the last parameter can be variadic `...T`",
                 );
                 continue;
             }
@@ -3729,7 +3729,7 @@ impl<'a> Parser<'a> {
                             ty.span,
                             format!(
                                 "const parameter `{name}` has type `{}`; only integers, `bool`, \
-                                 `char` and `c_char` may be const parameters (spec 2.11.3)",
+                                 `char` and `c_char` may be const parameters",
                                 rokc_ast::print::print_ty(&ty)
                             ),
                             "use an integer type, such as `usize`",
@@ -3783,7 +3783,7 @@ impl<'a> Parser<'a> {
                 ) if defaulted => {
                     let msg = format!(
                         "generic parameter `{name}` has no default but follows one that does; \
-                         defaults must be trailing (spec 2.10.5)"
+                         defaults must be trailing"
                     );
                     self.error(Code::INVALID_GENERIC_PARAMS, start, msg);
                 }
@@ -4659,7 +4659,7 @@ impl<'a> Parser<'a> {
                 Code::MISPLACED_VISIBILITY,
                 start,
                 "`pub` is meaningless on a nested function: it is visible only in its block \
-                 (spec 4.10.7)",
+                ",
             );
         }
         let mut def = self.parse_fn(Visibility::Private, Vec::new())?;
@@ -4755,7 +4755,7 @@ impl<'a> Parser<'a> {
                         span,
                         "a meta expansion in a function body gives only `struct`, `enum`, \
                          `union`, `trait`, `impl`, `type`, `static`, `fn` and `const` items \
-                         (spec 3.9.1)",
+                        ",
                     );
                     continue;
                 }
@@ -4765,7 +4765,7 @@ impl<'a> Parser<'a> {
                     Code::MISPLACED_VISIBILITY,
                     start,
                     "`pub` is meaningless on an item in a function body: it is visible only \
-                     in its block (spec 3.9.1)",
+                     in its block",
                 );
             }
             if let Some(name) = name {
@@ -5042,10 +5042,8 @@ impl<'a> Parser<'a> {
         }
         // Spec 5.4.10 / 5.9.8: module-level only (other items: 3.9.1).
         let module_only = match self.peek() {
-            TokenKind::Mod => Some("a `mod` (spec 5.4.10)"),
-            _ if self.at_kw("extern") && self.at_ctx_item() => {
-                Some("an `extern` block (spec 5.9.8)")
-            }
+            TokenKind::Mod => Some("a `mod`"),
+            _ if self.at_kw("extern") && self.at_ctx_item() => Some("an `extern` block"),
             _ => None,
         };
         if let Some(what) = module_only {
@@ -5547,7 +5545,7 @@ impl<'a> Parser<'a> {
             self.error(
                 Code::NEEDS_PARENTHESES,
                 s,
-                "range operators cannot be chained (spec 3.7.3)",
+                "range operators cannot be chained",
             );
             // Skip the rest of the chain, so it is not a second error.
             while matches!(self.peek(), TokenKind::DotDot | TokenKind::DotDotEq) {
@@ -6168,17 +6166,15 @@ impl<'a> Parser<'a> {
             self.error(
                 Code::EXPANSION_LIMIT,
                 start,
-                format!("`{name}!` expands too deeply or cyclically (spec 6.8.12)"),
+                format!("`{name}!` expands too deeply or cyclically"),
             );
             return None;
         }
         let (out, diags) = macros::expand_macro(def, call, start);
         self.diagnostics.extend(diags);
         let out = out?;
-        self.expanded.push(format!(
-            "// expanded from {name}! (spec 6.8.12)\n{}",
-            meta::render(&out)
-        ));
+        self.expanded
+            .push(format!("// expanded from {name}!\n{}", meta::render(&out)));
         let toks = if braced {
             let mut toks = vec![Token::new(TokenKind::LBrace, start)];
             toks.extend(out);
@@ -6601,7 +6597,7 @@ impl<'a> Parser<'a> {
                         self.error_help(
                             Code::SYNTAX,
                             at,
-                            "space between `try` and `?` (spec 1.10.3)",
+                            "space between `try` and `?`",
                             "write `try?` as one word",
                         );
                     }
@@ -6993,20 +6989,20 @@ impl<'a> Parser<'a> {
                 let help = match other {
                     TokenKind::HashBangLBracket => Some(
                         "an inner attribute `#![..]` goes at the top of a file; put an outer \
-                         `#[..]` on the function instead (spec 6.1.2)",
+                         `#[..]` on the function instead",
                     ),
                     TokenKind::Pub => Some(
                         "an item or `use` in a function body is visible only in its block; \
-                         remove `pub` (spec 3.9.1)",
+                         remove `pub`",
                     ),
                     TokenKind::ColonColon => Some(
                         "a path starts with a name: write `pkg::a` for an item of this \
-                         package's root, `sup::a` for the parent module's (spec 5.7)",
+                         package's root, `sup::a` for the parent module's",
                     ),
                     TokenKind::At => Some(
                         "`@` tokens belong to meta templates; the shape tokens (`@Self`, \
                          `@field`, `@variant`) only to `@derive` / `@attribute` blocks \
-                         (spec 6.9)",
+                        ",
                     ),
                     _ => None,
                 };
@@ -7454,7 +7450,7 @@ impl<'a> Parser<'a> {
         self.error(
             Code::NEEDS_PARENTHESES,
             s,
-            "one `[..]` cannot both index with `,` and slice with `:` (spec 3.6.3); \
+            "one `[..]` cannot both index with `,` and slice with `:`; \
              slice and index in separate brackets (`m[a:b][c]`)",
         );
     }
@@ -8071,7 +8067,7 @@ impl<'a> Parser<'a> {
                     span,
                     format!(
                         "a `{sfx}` suffix literal is a `#[literal]` handler call and can't be a \
-                         pattern (spec 6.5)"
+                         pattern"
                     ),
                 );
                 return None;
@@ -8298,7 +8294,7 @@ impl<'a> Parser<'a> {
                 self.error_help(
                     Code::NAMED_ARGUMENT,
                     e.span,
-                    "positional argument after a named argument (spec 4.2.4)",
+                    "positional argument after a named argument",
                     "write the positional arguments first, or name this one too",
                 );
             }

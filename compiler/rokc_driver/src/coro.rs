@@ -115,7 +115,7 @@ fn rewrite_fn(f: &mut FnDef, root: bool, diags: &mut Vec<RokDiagnostic>) {
                 Code::INVALID_SIGNATURE,
                 f.span,
                 format!(
-                    "`yield fn {}` needs its item type: `yield fn {}(..) -> T` (spec 4.11.12)",
+                    "`yield fn {}` needs its item type: `yield fn {}(..) -> T`",
                     f.name, f.name
                 ),
             ));

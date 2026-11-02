@@ -89,10 +89,7 @@ fn pub_signatures(program: &mut Program, diags: &mut Vec<rokc_diagnostic::RokDia
                 rokc_diagnostic::RokDiagnostic::error(
                     Code::PUB_SIGNATURE,
                     p.span,
-                    format!(
-                        "parameter `{}` of `{vis} fn {leaf}` has no type (spec 4.2.2)",
-                        p.name
-                    ),
+                    format!("parameter `{}` of `{vis} fn {leaf}` has no type", p.name),
                 )
                 .with_help(format!(
                     "write the type it takes, as in `{0}: i32`, or declare `<T>` and write \
@@ -660,7 +657,7 @@ fn collect<'a>(
                     Code::CANNOT_DERIVE,
                     &mut pre_diags,
                     *at,
-                    format!("cannot derive traits for union `{}` (spec 6.2.1)", u.name),
+                    format!("cannot derive traits for union `{}`", u.name),
                 );
             }
         }
@@ -1392,8 +1389,8 @@ fn collect<'a>(
                             fn_def.span,
                             format!(
                                 "`{}`: a `rok_*` symbol is the runtime's, whose `str` is \
-                                 `(ptr, len)`; an `extern \"C\"` `str` is a `char*` (spec 5.9.4, \
-                                 8.5) - give the C function another name",
+                                 `(ptr, len)`; an `extern \"C\"` `str` is a `char*` \
+                                 - give the C function another name",
                                 fn_def.name
                             ),
                         );
@@ -1629,7 +1626,7 @@ fn collect<'a>(
                     here,
                     format!(
                         "an inherent `impl` attaches methods to a type, and `{target}` is a \
-                         type parameter of this `impl` (spec 2.9.1); methods for every type \
+                         type parameter of this `impl`; methods for every type \
                          belong to a trait: `impl<{target}> Tr for {target} {{ .. }}`"
                     ),
                 );
@@ -1964,7 +1961,7 @@ fn collect<'a>(
                             here,
                             format!(
                                 "`{leaf}` throws but `{}::{leaf}` is declared without \
-                                 `throws`, so an impl can't add one (spec 4.14.11){}",
+                                 `throws`, so an impl can't add one{}",
                                 td.name,
                                 if td.attrs.iter().any(|a| a.path == ["lang"]) {
                                     " - operators don't throw; return a `Result` or use \
@@ -2235,7 +2232,7 @@ fn collect<'a>(
                 here,
                 format!(
                     "`{}`: a C variadic `...` parameter is only allowed on a declaration in an \
-                     `extern \"C\" {{ .. }}` block (spec 8.6.10)",
+                     `extern \"C\" {{ .. }}` block",
                     f.name
                 ),
             );
@@ -2270,7 +2267,7 @@ fn collect<'a>(
                     here,
                     format!(
                         "`#[deprecated_safe]` on `{}`: it marks a library function that a later \
-                         release makes `unsafe` (spec 6.2.14); in a program, write `unsafe fn` \
+                         release makes `unsafe`; in a program, write `unsafe fn` \
                          instead",
                         leaf_name(&f.name)
                     ),
@@ -2449,7 +2446,7 @@ fn collect<'a>(
                 at,
                 format!(
                     "extern function `{}` is declared twice with different signatures: `{here}` \
-                     here, `{other}` elsewhere{} (spec 5.9.4)",
+                     here, `{other}` elsewhere{}",
                     f.name,
                     if f.name.starts_with("rok_") {
                         "; a `rok_*` symbol is the runtime's: declare it with the runtime's signature"
@@ -2951,7 +2948,7 @@ fn show_local_names(program: &Program, diags: &mut [rokc_diagnostic::RokDiagnost
             let outer = qualified(rokc_core::local::outer(l));
             d.notes.push(format!(
                 "`{}` is declared inside `{outer}` and visible only in its block; move it to \
-                 module level to use it here (spec 3.9.1)",
+                 module level to use it here",
                 leaf(l)
             ));
         }
@@ -2988,10 +2985,7 @@ fn check_tiers(
                 self.out.push(rokc_diagnostic::RokDiagnostic::error(
                     Code::DEPENDENCY,
                     p.span,
-                    format!(
-                        "`{}` must not depend on `rok::{}` (stdlib spec 0.1.2)",
-                        self.tier, t.name
-                    ),
+                    format!("`{}` must not depend on `rok::{}`", self.tier, t.name),
                 ));
             }
         }
@@ -3958,7 +3952,7 @@ fn check_packed(module: &mut HirModule) {
                 span,
                 format!(
                     "`#[repr(packed)]` struct `{}` holds a GC reference (`str`, a collection, \
-                     a closure ..); a packed struct is for C data (spec 6.2.2)",
+                     a closure ..); a packed struct is for C data",
                     leaf_name(&name)
                 ),
             ));
@@ -4457,9 +4451,7 @@ fn check_niche_attrs(program: &rokc_ast::Program, diags: &mut Vec<rokc_diagnosti
         };
         let msg = match misplaced {
             None => niche_args(attrs).err(),
-            Some(w) => Some(format!(
-                "`#[niche]` goes on a single-field struct, not {w} (spec 2.7.5)"
-            )),
+            Some(w) => Some(format!("`#[niche]` goes on a single-field struct, not {w}")),
         };
         if let Some(msg) = msg {
             diags.push(rokc_diagnostic::RokDiagnostic::error(
@@ -4995,7 +4987,7 @@ fn impl_heads(
                             Code::CONFLICTING_IMPLS,
                             p.def.span,
                             format!(
-                                "`{shown}` is implemented more than once for `{}` (spec 2.9.3)",
+                                "`{shown}` is implemented more than once for `{}`",
                                 impl_def_display(&p.def.self_ty)
                             ),
                         )
@@ -5127,7 +5119,7 @@ fn impl_consts(
                     i.span,
                     format!(
                         "impl of `{}` for `{}` is missing associated const `{name}` \
-                         (spec 2.8.3a)",
+                        ",
                         leaf_name(&t.name),
                         impl_def_display(&i.self_ty)
                     ),
@@ -5421,7 +5413,7 @@ fn check_derives(env: &Env<'_>, program: &Program) -> Vec<rokc_diagnostic::Span>
                         Code::CANNOT_DERIVE,
                         format!(
                             "cannot derive `{tr}` for `{}`: `{field}` has type `{}`, which does \
-                             not implement `{tr}` (spec 6.2.1)",
+                             not implement `{tr}`",
                             leaf_name(name),
                             ctx.ty_name(ty)
                         ),
@@ -5436,7 +5428,7 @@ fn check_derives(env: &Env<'_>, program: &Program) -> Vec<rokc_diagnostic::Span>
                 ctx.emit_error(
                     Code::CANNOT_DERIVE,
                     format!(
-                        "cannot derive `Copy` for `{}`: it implements `Drop` (stdlib 2.13.3)",
+                        "cannot derive `Copy` for `{}`: it implements `Drop`",
                         leaf_name(name)
                     ),
                 );
@@ -5462,10 +5454,7 @@ fn check_pod(
     let fail = |why: String| {
         ctx.emit_error(
             Code::CANNOT_DERIVE,
-            format!(
-                "`{}` cannot be `Pod`: {why} (stdlib 1.3.3)",
-                leaf_name(name)
-            ),
+            format!("`{}` cannot be `Pod`: {why}", leaf_name(name)),
         );
     };
     if !matches!(ty, HirTy::Struct(_)) {
@@ -5545,7 +5534,7 @@ fn check_templates(env: &Env<'_>, templates: &[crate::TemplateRefs]) {
                     Code::UNRESOLVED_NAME,
                     *at,
                     format!(
-                        "this meta template names `{}`, which does not exist (spec 6.9.9)",
+                        "this meta template names `{}`, which does not exist",
                         shown()
                     ),
                 ),
@@ -5555,7 +5544,7 @@ fn check_templates(env: &Env<'_>, templates: &[crate::TemplateRefs]) {
                         *at,
                         format!(
                             "this meta template names `{}`, which its module `{}` cannot see \
-                             (spec 6.9.9)",
+                            ",
                             shown(),
                             module_display(&t.module)
                         ),
@@ -5930,7 +5919,7 @@ fn unmet_bounds(
                 span,
                 format!(
                     "type `{name}` does not satisfy trait bound `{}` required by `{shown}` \
-                     (spec 2.10.4)",
+                    ",
                     rcx.trait_name(&want),
                 ),
             );
@@ -6026,7 +6015,7 @@ fn check_statics_sync(env: &Env<'_>, programs: &[&Program]) {
             s.span,
             format!(
                 "a `static` is shared by every thread, so it can't be a `{}`: two threads could \
-                 change it at once (spec 5.3)",
+                 change it at once",
                 ctx.ty_name(ty)
             ),
         );
@@ -6087,7 +6076,7 @@ fn check_internal_marks(env: &Env<'_>, checked: &[&Program], own: &dyn Fn(&str) 
             span,
             format!(
                 "`#[internal]` on `{name}`: it marks items the Rok toolchain's own packages \
-                 share (spec 6.2.16); to keep an item inside this package, write `pub(pkg)` \
+                 share; to keep an item inside this package, write `pub(pkg)` \
                  instead"
             ),
         ));
@@ -6139,7 +6128,7 @@ fn check_impl_rules(
                     i.span,
                     format!(
                         "`impl {} for {}`: neither the trait nor the type is defined in this \
-                         package (orphan rule, spec 2.9.5)",
+                         package (orphan rule)",
                         leaf_name(&key),
                         impl_def_display(&i.self_ty)
                     ),
@@ -6153,7 +6142,7 @@ fn check_impl_rules(
                     i.span,
                     format!(
                         "`impl {} for {}`: trait `{}` is sealed, so only `{}` implements it \
-                             (spec 6.2.15)",
+                            ",
                         leaf_name(&key),
                         impl_def_display(&i.self_ty),
                         leaf_name(&key),
@@ -6195,7 +6184,7 @@ fn check_impl_rules(
             ctx.emit_error(
                 Code::MISSING_SUPERTRAIT,
                 format!(
-                    "`{}` implements `{}` but not its supertrait `{}` (spec 2.8.4)",
+                    "`{}` implements `{}` but not its supertrait `{}`",
                     ctx.ty_name(&target),
                     leaf_name(&key),
                     leaf_name(sup)
@@ -6386,7 +6375,7 @@ fn assoc_bound_error(ctx: &LowerCtx<'_>, td: &str, name: &str, ty: &str, bound: 
         Code::UNSATISFIED_BOUND,
         format!(
             "associated type `{name}` = `{ty}` does not implement `{}`{every}, a bound of \
-             `{}::{name}` (spec 2.8.3)",
+             `{}::{name}`",
             leaf_name(bound),
             leaf_name(td)
         ),
@@ -6471,7 +6460,7 @@ fn check_generic_supers(
             Code::MISSING_SUPERTRAIT,
             format!(
                 "`{}` implements `{}` but not its supertrait `{}` for every `{params}` the \
-                 impl allows (spec 2.8.4)",
+                 impl allows",
                 target.to_string().replace("#r.", ""),
                 leaf_name(key),
                 leaf_name(sup),
@@ -6643,7 +6632,7 @@ fn check_impl_overlap(env: &Env<'_>, own: &dyn Fn(&str) -> bool) {
                     gi.self_ty.span,
                     format!(
                         "conflicting implementations of trait `{}` for `{}`: the concrete \
-                         impl overlaps `impl<..> {} for {}` (spec 2.9.3 - one impl per \
+                         impl overlaps `impl<..> {} for {}` (one impl per \
                          trait and type; no specialization)",
                         ctx.display_path(&gi.trait_key),
                         ctx.ty_name(ty),
@@ -6713,7 +6702,7 @@ fn check_impl_overlap(env: &Env<'_>, own: &dyn Fn(&str) -> bool) {
                     format!(
                         "conflicting implementations of trait `{}`: `impl<..> {} for {}` and \
                          `impl<..> {} for {}` overlap on `{t}` - bounds don't make impls \
-                         disjoint (no specialization; spec 2.9.5)",
+                         disjoint (no specialization)",
                         ctx.display_path(&a.trait_key),
                         ctx.display_path(&a.trait_key),
                         impl_def_display(&a.self_ty),
@@ -7215,7 +7204,7 @@ fn check_auto_impl(
             diags,
             format!(
                 "`Reflect` is implemented by the compiler for every type; remove `impl {tr} for \
-                 {target}` (spec 6.10.1)"
+                 {target}`"
             ),
         );
         return false;
@@ -7301,10 +7290,7 @@ fn check_extern_fn(f: &FnDef, abi: &str, diags: &mut Vec<rokc_diagnostic::RokDia
         diags.push(rokc_diagnostic::RokDiagnostic::error(
             Code::FFI,
             f.span,
-            format!(
-                "`extern {abi:?} fn {}`: {msg} (spec 5.9.10)",
-                leaf_name(&f.name)
-            ),
+            format!("`extern {abi:?} fn {}`: {msg}", leaf_name(&f.name)),
         ));
     };
     if abi != "C" && abi != "system" {
@@ -7401,7 +7387,7 @@ fn check_extern_ffi(env: &Env<'_>, programs: &[&Program]) {
             )
             .with_note(
                 "help: use a primitive, a `CPtr<T>` (`rok::bare::ptr`) and a length, or a \
-                 `#[repr(C)]` struct of those (spec 5.9.4)"
+                 `#[repr(C)]` struct of those"
                     .to_owned(),
             ),
         );
@@ -7655,7 +7641,7 @@ pub(super) fn intrinsic_of(
     if !module.starts_with("rok::") {
         return err(format!(
             "`#[intrinsic]` on `{}`: the intrinsic attribute is for the standard library only \
-             (stdlib spec 0.3.5)",
+            ",
             m.name
         ));
     }
@@ -7669,7 +7655,7 @@ pub(super) fn intrinsic_of(
     let Some(intrinsic) = name.as_deref().and_then(Intrinsic::parse) else {
         return err(format!(
             "`#[intrinsic({})]` on `{}`: unknown intrinsic - expected `rok.OP.TYPE` \
-             (stdlib spec 0.3.3)",
+            ",
             name.map_or_else(String::new, |n| format!("\"{n}\"")),
             m.name
         ));
@@ -8335,7 +8321,7 @@ fn check_assoc_shadowing(
                         *at,
                         format!(
                             "`{a}` is ambiguous here: the associated type `{a}` shadows the \
-                             outer type `{a}` inside the {owner} (spec 2.8.3)"
+                             outer type `{a}` inside the {owner}"
                         ),
                     )
                     .with_help(format!(
@@ -8349,7 +8335,7 @@ fn check_assoc_shadowing(
                     it.span(),
                     format!(
                         "associated type `{a}` shadows the outer type `{a}` inside the {owner}; \
-                         there a bare `{a}` is ambiguous (spec 2.8.3)"
+                         there a bare `{a}` is ambiguous"
                     ),
                 )
                 .with_help(format!(
@@ -8605,7 +8591,7 @@ fn literal_handlers(
                     attr.span,
                     format!(
                         "`#[literal({text})]` handler `{}` must take {} parameter(s): {} \
-                         (spec 6.5.4)",
+                        ",
                         f.name,
                         want.len(),
                         if shape.is_empty() {
@@ -8632,7 +8618,7 @@ fn literal_handlers(
                     format!(
                         "`#[literal({text})]` is already registered by `{first}` with the same \
                          priority and return type: every use would be ambiguous - drop one, or \
-                         give one a `priority = N` (spec 6.5.5)"
+                         give one a `priority = N`"
                     ),
                 )
                 .with_secondary(*first_span, "first registered here"),

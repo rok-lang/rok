@@ -336,7 +336,7 @@ pub fn glob_reexports(
                                 *span,
                                 format!(
                                     "glob re-export of `{target}` as `{alias}` conflicts with \
-                                     `{other}` (spec 5.8.6)"
+                                     `{other}`"
                                 ),
                             ));
                         }
@@ -548,7 +548,7 @@ pub fn check_use_targets(
                         diags.push(RokDiagnostic::error(
                             Code::INVALID_REEXPORT,
                             span,
-                            format!("circular re-export: {} (spec 5.8.10)", {
+                            format!("circular re-export: {}", {
                                 let ring: Vec<String> =
                                     chain.iter().map(|c| format!("`{c}`")).collect();
                                 ring.join(" -> ")
@@ -575,7 +575,7 @@ pub fn check_use_targets(
                             span,
                             format!(
                                 "`{full}` is {} but re-exported as {} - a re-export can't \
-                                 be wider than its item (spec 5.8.4)",
+                                 be wider than its item",
                                 vis_word(vis),
                                 vis_word(*use_vis)
                             ),

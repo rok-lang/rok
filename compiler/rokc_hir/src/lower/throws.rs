@@ -276,7 +276,7 @@ pub(super) fn unpack_call(ctx: &mut LowerCtx<'_>, call: HirExpr) -> HirExpr {
             ctx.here(),
             format!(
                 "this call can throw `{}` and must be marked with `try` (`try f()`; \
-                 `try? f()` / `try! f()` to drop / panic on the error) (spec 4.14)",
+                 `try? f()` / `try! f()` to drop / panic on the error)",
                 ctx.ty_name(&err)
             ),
         );
@@ -457,7 +457,7 @@ pub(super) fn raise(
             let name = ctx.ty_name(&ety);
             ctx.emit_error(
                 Code::NOT_AN_ERROR,
-                format!("`{name}` can't be thrown: it does not implement `Error` (spec 4.14)"),
+                format!("`{name}` can't be thrown: it does not implement `Error`"),
             );
             // A `str`'s help quotes it (`lower_throw`).
             if ety != HirTy::Prim(PrimTy::Str) {
@@ -472,7 +472,7 @@ pub(super) fn raise(
                 Code::UNHANDLED_ERROR,
                 format!(
                     "error `{}` is not covered: the enclosing function is `rethrows`, so it \
-                     throws only what its function parameters throw (spec 4.14.7)",
+                     throws only what its function parameters throw",
                     ctx.ty_name(&ety)
                 ),
             );
@@ -485,7 +485,7 @@ pub(super) fn raise(
                 Code::UNHANDLED_ERROR,
                 format!(
                     "error `{}` is not covered by the enclosing function's `throws ({})` - \
-                     catch it or add it to the `throws` list (spec 4.14)",
+                     catch it or add it to the `throws` list",
                     ctx.ty_name(&ety),
                     ctx.ty_name(&decl)
                 ),
@@ -496,7 +496,7 @@ pub(super) fn raise(
             Code::UNHANDLED_ERROR,
             format!(
                 "error `{}` is not handled: catch it, or declare `throws ({0})` on the \
-                 enclosing function (spec 4.14)",
+                 enclosing function",
                 ctx.ty_name(&ety)
             ),
         );
@@ -1217,7 +1217,7 @@ pub(super) fn lower_try(
         if ctx.throwing_calls == calls && !failed && e.ty != HirTy::Unknown {
             ctx.emit_warning(
                 Code::UNNEEDED_TRY,
-                "this `try` covers no throwing call (spec 3.14.2)".to_owned(),
+                "this `try` covers no throwing call".to_owned(),
             );
         }
     };
@@ -1328,7 +1328,7 @@ fn dropped_resources(ctx: &LowerCtx<'_>, frame: &CatchFrame, span: rokc_diagnost
                 span,
                 format!(
                     "`try?` drops the `{t}` it catches, which can hold a value that must be \
-                     closed (stdlib 2.13.4)"
+                     closed"
                 ),
             )
             .with_help(format!(

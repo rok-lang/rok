@@ -175,7 +175,7 @@ fn declare_nested_fns(ctx: &mut LowerCtx<'_>, block: &Block) {
                     s.span,
                     format!(
                         "`{n}` names both a variable and a nested function in this block \
-                         (spec 4.10.8)"
+                        "
                     ),
                 );
             }
@@ -248,7 +248,7 @@ fn check_local_item(ctx: &LowerCtx<'_>, item: &Item) {
             *span,
             format!(
                 "{what} is declared inside `{outer}` and can't use `{name}`, a local of \
-                 `{outer}`; {fix} (spec 3.9.1)"
+                 `{outer}`; {fix}"
             ),
         );
     }
@@ -282,7 +282,7 @@ fn check_local_item(ctx: &LowerCtx<'_>, item: &Item) {
             *span,
             format!(
                 "{what} is declared inside `{outer}` and can't use `{name}`, a generic \
-                 parameter of `{outer}`; {fix} (spec 3.9.1)"
+                 parameter of `{outer}`; {fix}"
             ),
         );
     }
@@ -449,7 +449,7 @@ pub(super) fn lower_let_tuple(
             Code::PATTERN_ARITY,
             format!(
                 "tuple destructure length mismatch: pattern has {needed} element{}, value \
-                 has {have} (spec 3.15.2)",
+                 has {have}",
                 if needed == 1 { "" } else { "s" }
             ),
         );
@@ -458,7 +458,7 @@ pub(super) fn lower_let_tuple(
             Code::PATTERN_ARITY,
             format!(
                 "tuple destructure too short: pattern needs at least {needed} non-rest \
-                 element{}, value has {have} (spec 3.15.3)",
+                 element{}, value has {have}",
                 if needed == 1 { "" } else { "s" }
             ),
         );
@@ -618,7 +618,7 @@ fn lower_stmt_inner(ctx: &mut LowerCtx<'_>, stmt: &Stmt) -> Option<HirStmt> {
         StmtKind::Return(_) if ctx.implicit_main => {
             ctx.emit_error(
                 Code::TOP_LEVEL_RETURN,
-                "`return` is not allowed in top-level statements (spec 4.16.4); use \
+                "`return` is not allowed in top-level statements; use \
                  `process::exit(code)` or an explicit `fn main() -> i32`"
                     .to_owned(),
             );
@@ -672,7 +672,7 @@ fn lower_stmt_inner(ctx: &mut LowerCtx<'_>, stmt: &Stmt) -> Option<HirStmt> {
                     stmt.span,
                     format!(
                         "this `{g}` is discarded without being released: only `using` \
-                         releases a lock guard (`using g = .. {{ .. }}`, stdlib 2.16.3)"
+                         releases a lock guard (`using g = .. {{ .. }}`)"
                     ),
                 );
             }
@@ -747,7 +747,7 @@ fn lower_stmt_inner(ctx: &mut LowerCtx<'_>, stmt: &Stmt) -> Option<HirStmt> {
                 ctx.emit_error(
                     Code::OUTSIDE_CONTEXT,
                     "`break` with a value inside a `while` or `for` loop, whose value is always \
-                     `()` (spec 3.13.1)"
+                     `()`"
                         .to_owned(),
                 );
                 ctx.help_last(Some(
@@ -769,7 +769,7 @@ fn lower_stmt_inner(ctx: &mut LowerCtx<'_>, stmt: &Stmt) -> Option<HirStmt> {
                             Code::BRANCH_TYPES,
                             format!(
                                 "`break` without a value, but this loop's `break` values are \
-                                 `{t}` (spec 3.13.1)"
+                                 `{t}`"
                             ),
                         );
                         ctx.help_last(Some(format!("write `break <value>;` with a `{t}` value")));
@@ -1348,7 +1348,7 @@ pub(super) fn lower_assign(
                         Code::INVALID_ASSIGNMENT,
                         format!(
                             "`{name}` is value-captured; to mutate the outer variable, add \
-                             `[ref {name}]` to the closure's capture list (spec 4.6.4)"
+                             `[ref {name}]` to the closure's capture list"
                         ),
                     );
                 }
@@ -1365,7 +1365,7 @@ pub(super) fn lower_assign(
                         Code::INVALID_ASSIGNMENT,
                         format!(
                             "cannot assign to static `{name}`: statics are immutable \
-                             (spec 5.3); only an `extern` `static mut` can be written"
+                            ; only an `extern` `static mut` can be written"
                         ),
                     );
                 }
@@ -1378,7 +1378,7 @@ pub(super) fn lower_assign(
             if ctx.resolve_in(&segs, false).is_some() {
                 ctx.emit_error(
                     Code::INVALID_ASSIGNMENT,
-                    format!("cannot assign to const `{name}` (spec 5.2)"),
+                    format!("cannot assign to const `{name}`"),
                 );
                 return None;
             }
@@ -1772,7 +1772,7 @@ pub(super) fn lower_assign(
             ctx.emit_error_at(
                 Code::INVALID_ASSIGNMENT,
                 target.span,
-                "invalid assignment target (spec 3.4)".to_owned(),
+                "invalid assignment target".to_owned(),
             );
             ctx.help_last(Some(help));
             None
@@ -1987,7 +1987,7 @@ fn guard_flow(ctx: &mut LowerCtx<'_>, expr: &Expr, e: &HirExpr) {
             expr.span,
             format!(
                 "this `{g}` is never released: a guard received without `using` must be \
-                 bound with `using g = .. {{ .. }}` (stdlib 2.16.3)"
+                 bound with `using g = .. {{ .. }}`"
             ),
         ),
         _ => {}
@@ -2096,7 +2096,7 @@ fn lower_cast(
                     span,
                     format!(
                         "cannot cast `{}` as `{to_name}`: only an enum whose variants carry no \
-                         payload casts to an integer (spec 2.14.2)",
+                         payload casts to an integer",
                         ctx.ty_name(&from_ty)
                     ),
                 );
@@ -2666,7 +2666,7 @@ pub(super) fn lower_break_value(ctx: &mut LowerCtx<'_>, depth: usize, e: &Expr) 
                 v.span,
                 format!(
                     "`break` with a `{t}` value, but an earlier `break` of this loop has no \
-                     value (spec 3.13.1)"
+                     value"
                 ),
             );
             ctx.help_last(Some(format!(
@@ -2999,7 +2999,7 @@ pub(super) fn lower_struct_init(
                 Code::WRONG_ITEM_FORM,
                 span,
                 format!(
-                    "`..base` needs a struct; `{}` is an enum variant (spec 2.3.4)",
+                    "`..base` needs a struct; `{}` is an enum variant",
                     segs.join("::")
                 ),
             );
@@ -3025,10 +3025,7 @@ pub(super) fn lower_struct_init(
                     None => {
                         ctx.emit_error(
                             Code::NO_FIELD,
-                            format!(
-                                "enum variant `{}` has no field `{n}` (spec 2.4)",
-                                segs.join("::")
-                            ),
+                            format!("enum variant `{}` has no field `{n}`", segs.join("::")),
                         );
                     }
                 }
@@ -3041,7 +3038,7 @@ pub(super) fn lower_struct_init(
                     ctx.emit_error(
                         Code::MISSING_FIELD,
                         format!(
-                            "enum variant `{}` is missing field `{}` (spec 2.4)",
+                            "enum variant `{}` is missing field `{}`",
                             segs.join("::"),
                             variant.named_fields[i]
                         ),
@@ -3079,7 +3076,7 @@ pub(super) fn lower_struct_init(
                 span,
                 format!(
                     "`{written} {{ .. }}` is a struct literal, but `{written}` is a function \
-                     (spec 4.8.4)"
+                    "
                 ),
                 Some(format!(
                     "write the closure in parentheses: `{written}(|| {{ .. }})`"
@@ -3445,7 +3442,7 @@ pub(super) fn lower_field(
             span,
             format!(
                 "`{recv}.{name}` names a method without calling it; `.method` is not a \
-                 function value (spec 3.5.4)"
+                 function value"
             ),
         );
         ctx.help_last(Some(format!(
@@ -3499,7 +3496,7 @@ pub(super) fn field_access(
                 Code::UNSAFE_REQUIRED,
                 format!(
                     "reading field `{name}` of union `{}` needs an `unsafe` block \
-                     (the bits may not be a valid value of the field's type; spec 4.15.2)",
+                     (the bits may not be a valid value of the field's type)",
                     ctx.ty_name(&HirTy::Struct(struct_id))
                 ),
             );
@@ -4156,7 +4153,7 @@ pub(super) fn lower_args_ref(
             span,
             format!(
                 "a trailing closure fills the last parameter, `{last}`, which is not a \
-                 function (spec 4.8.3)"
+                 function"
             ),
         );
         ctx.help_last(Some(
@@ -4241,13 +4238,13 @@ fn lower_args_ref_inner(
                         let p = sig.param_names.get(i).map_or(name.as_str(), String::as_str);
                         ctx.emit_error(
                             Code::NAMED_ARGUMENT,
-                            format!("argument `{p}` provided more than once (spec 4.2.4)"),
+                            format!("argument `{p}` provided more than once"),
                         );
                         ctx.help_last(Some(twice_help(p)));
                     }
                     None => ctx.emit_error(
                         Code::NAMED_ARGUMENT,
-                        format!("`{callee}` has no parameter named `{name}` (spec 4.2.4)"),
+                        format!("`{callee}` has no parameter named `{name}`"),
                     ),
                 }
             }
@@ -4361,7 +4358,7 @@ fn lower_args_ref_inner(
                             Code::SPREAD_ARGUMENT,
                             format!(
                                 "spread `f(..x)` needs a tuple, a `List`, a `Slice`, an array or \
-                                 a `Dict<str, V>`, found `{}` (spec 4.2.6)",
+                                 a `Dict<str, V>`, found `{}`",
                                 ctx.ty_name(&other)
                             ),
                         );
@@ -4408,14 +4405,14 @@ fn lower_args_ref_inner(
                 Code::REF_ARGUMENT,
                 format!(
                     "argument `{pname}` of `{callee}` is passed with `ref`, but the parameter \
-                     is not `ref` (spec 4.7.3)"
+                     is not `ref`"
                 ),
             ),
             Some(ArgSrc::Ast(e)) if by_ref && !is_receiver => ctx.emit_error(
                 Code::REF_ARGUMENT,
                 format!(
                     "parameter `{pname}` of `{callee}` is `ref` - pass `ref {}` at the call \
-                     site (spec 4.7.3)",
+                     site",
                     snippet(e)
                 ),
             ),
@@ -4434,7 +4431,7 @@ fn lower_args_ref_inner(
                         Code::REF_ARGUMENT,
                         format!(
                             "`ref` argument `{pname}` of `{callee}` must name a variable or \
-                             a field of one (spec 4.7)"
+                             a field of one"
                         ),
                     );
                 }
@@ -4971,7 +4968,7 @@ pub(super) fn lower_variadic(
                         Code::SPREAD_ARGUMENT,
                         format!(
                             "spread into a variadic `...T` needs a tuple, a `List`, a `Slice` or \
-                             an array, found `{}` (spec 4.2.6)",
+                             an array, found `{}`",
                             ctx.ty_name(&other)
                         ),
                     ),
@@ -5171,7 +5168,7 @@ fn c_vararg_promote(ctx: &LowerCtx<'_>, callee: &str, a: HirExpr) -> HirExpr {
                 Code::FFI,
                 format!(
                     "`{callee}`: a `{name}` cannot be passed as a C variadic `...` argument \
-                     (only numbers, `bool`, `char`, `str` and C function pointers; spec 8.6.10)"
+                     (only numbers, `bool`, `char`, `str` and C function pointers)"
                 ),
             );
             return a;
@@ -5206,7 +5203,7 @@ fn check_path_receiver(
             Code::REF_ARGUMENT,
             format!(
                 "parameter `{pname}` of `{callee}` is `ref` - pass `ref {}` at the call site \
-                 (spec 4.7.3)",
+                ",
                 match &arg.kind {
                     HirExprKind::Local(l) => ctx
                         .locals
@@ -5221,7 +5218,7 @@ fn check_path_receiver(
             Code::REF_ARGUMENT,
             format!(
                 "argument `{pname}` of `{callee}` is passed with `ref`, but the parameter is \
-                 not `ref` (spec 4.7.3)"
+                 not `ref`"
             ),
         ),
         Some(true) if super::mono::place_root(arg).is_none() && arg.ty != HirTy::Unknown => ctx
@@ -5229,7 +5226,7 @@ fn check_path_receiver(
                 Code::REF_ARGUMENT,
                 format!(
                     "`ref` argument `{pname}` of `{callee}` must name a variable or a field of \
-                     one (spec 4.7)"
+                     one"
                 ),
             ),
         _ => {}
@@ -5303,7 +5300,7 @@ fn check_ref_exclusive(
             };
             ctx.emit_error(
                 Code::REF_ARGUMENT,
-                format!("{what} in one call to `{callee}` (spec 4.7.2)"),
+                format!("{what} in one call to `{callee}`"),
             );
             return;
         }
@@ -5328,7 +5325,7 @@ fn check_ref_exclusive(
                 Code::REF_ARGUMENT,
                 format!(
                     "`{}` is passed as `ref` to `{callee}` and also read by another argument \
-                     of the same call (spec 4.7.2)",
+                     of the same call",
                     shown(*root, path)
                 ),
             );
@@ -5397,7 +5394,7 @@ pub(super) fn call_sig(
                     Code::FFI,
                     format!(
                         "`{callee}` is a C function: a `fn` argument must name a function \
-                         (a C callback has no room for a closure's captures, spec 5.9)"
+                         (a C callback has no room for a closure's captures)"
                     ),
                 );
             }
@@ -5674,7 +5671,7 @@ fn drop_method<'m>(
                     span,
                     format!(
                         "`using` needs a resource whose type implements `Drop`; `{}` does not \
-                         implement `Drop` nor hold a `Drop` field (spec 3.17.7)",
+                         implement `Drop` nor hold a `Drop` field",
                         ctx.ty_name(recv_ty)
                     ),
                 ));
@@ -6412,7 +6409,7 @@ fn direct_drop_error(ctx: &LowerCtx<'_>, span: rokc_diagnostic::Span) -> Option<
             Code::EXPLICIT_DROP,
             span,
             "`Drop::drop` cannot be called directly; it runs when a `using` block exits \
-         (spec 2.13.4) - expose a method such as `close()` to release early"
+         - expose a method such as `close()` to release early"
                 .to_owned(),
         ),
     )
@@ -6973,7 +6970,7 @@ fn try_q_errors(ctx: &LowerCtx<'_>, text: &str, at: rokc_diagnostic::Span, since
         let d = rokc_diagnostic::RokDiagnostic::error(
             Code::OPTIONAL_OPERATOR,
             at,
-            "`?` only works on `T | none`; it does not pass errors on (spec 3.14 / 4.14)",
+            "`?` only works on `T | none`; it does not pass errors on",
         )
         .with_help(format!("in a `throws` function, write `try {text}`"));
         diags.insert(since, d);
@@ -7235,8 +7232,7 @@ pub(super) fn method_call_on(
             let e = ctx.error_expr(
                 Code::INVALID_INDEX,
                 span,
-                "a `str` slice has no step: `s[a:b:k]` is for lists and arrays (spec 3.6.2)"
-                    .to_owned(),
+                "a `str` slice has no step: `s[a:b:k]` is for lists and arrays".to_owned(),
             );
             ctx.help_last(Some(
                 "step over the characters: `s.chars().step_by(k)`".to_owned(),
@@ -7813,9 +7809,7 @@ fn any_method_generics(
             CallArg::Named { name, value } => {
                 let Some(i) = params.iter().position(|p| p.name == *name) else {
                     ctx.rollback(&mark);
-                    return Err(Some(format!(
-                        "`{method}` has no parameter named `{name}` (spec 4.2.4)"
-                    )));
+                    return Err(Some(format!("`{method}` has no parameter named `{name}`")));
                 };
                 (Some(i), value)
             }
@@ -8398,7 +8392,7 @@ fn pick_method_in<'e>(
         let leaf = |t: &str| leaf_name(t).to_owned();
         return Err(format!(
             "method `{method}` on `{}` is ambiguous: traits {} all provide it - call it as \
-             `Trait::{method}(x)` (e.g. `{}::{method}(x)`) (spec 4.9.6)",
+             `Trait::{method}(x)` (e.g. `{}::{method}(x)`)",
             ctx.ty_name(ty),
             traits.join(", "),
             leaf(cands[0].0.unwrap_or_default())
@@ -8490,7 +8484,7 @@ fn trait_out_of_scope(ctx: &LowerCtx<'_>, ty: &HirTy, method: &str, at: Span) ->
     ctx.emit_error_at(
         Code::TRAIT_NOT_IN_SCOPE,
         at,
-        format!("method `{method}` comes from trait `{key}`, which is not in scope (spec 3.5.2)"),
+        format!("method `{method}` comes from trait `{key}`, which is not in scope"),
     );
     // From a submodule, the package's own items need `pkg::`.
     let own = super::resolve::package_of(&key).is_empty();
@@ -8538,7 +8532,7 @@ pub(super) fn check_method_info_visible(ctx: &LowerCtx<'_>, info: &MethodInfo, m
             Code::PRIVATE_ITEM,
             format!(
                 "method `{method}` is private to module `{}` and cannot be called from `{}` \
-                 (spec 5.6 - add `pub` to expose it)",
+                 (add `pub` to expose it)",
                 module_display(&info.module),
                 module_display(&ctx.current_module)
             ),
@@ -8578,8 +8572,8 @@ pub(super) fn call_value(
             Code::NAMED_ARGUMENT,
             span,
             "a `fn` value takes no named arguments: its type has no parameter names \
-             (spec 4.4.11)"
-                .to_owned(),
+            "
+            .to_owned(),
         );
         ctx.help_last(Some("pass the arguments by position".to_owned()));
         return h;
@@ -8588,7 +8582,7 @@ pub(super) fn call_value(
         return ctx.error_expr(
             Code::SPREAD_ARGUMENT,
             span,
-            "spread arguments need a statically known callee (spec 4.2.6)".to_owned(),
+            "spread arguments need a statically known callee".to_owned(),
         );
     }
     let sig = FnSig {
@@ -8705,7 +8699,7 @@ fn extern_static_use(ctx: &LowerCtx<'_>, full: &str, write: bool, at: rokc_diagn
         at,
         format!("this {what} extern static `{name}` outside `unsafe`: Rok cannot check a C global"),
     );
-    ctx.help_last(Some(format!("write {fix} (spec 5.9.3)")));
+    ctx.help_last(Some(format!("write {fix}")));
     if !write && ctx.src(at) == Some(name) {
         ctx.fix_last(
             at,
@@ -8723,7 +8717,7 @@ fn check_unsafe_call(ctx: &LowerCtx<'_>, callee: &str) {
             Code::UNSAFE_REQUIRED,
             format!(
                 "call to unsafe function `{}` outside an `unsafe` block or `unsafe fn` \
-                 (spec 4.15)",
+                ",
                 leaf_name(callee)
             ),
         );
@@ -8837,7 +8831,7 @@ fn generic_positional_args(
                     ok = false;
                     ctx.emit_error(
                         Code::NAMED_ARGUMENT,
-                        format!("argument `{name}` provided more than once (spec 4.2.4)"),
+                        format!("argument `{name}` provided more than once"),
                     );
                     ctx.help_last(Some(twice_help(name)));
                 }
@@ -8845,7 +8839,7 @@ fn generic_positional_args(
                     ok = false;
                     ctx.emit_error(
                         Code::NAMED_ARGUMENT,
-                        format!("`{callee}` has no parameter named `{name}` (spec 4.2.4)"),
+                        format!("`{callee}` has no parameter named `{name}`"),
                     );
                 }
             },
@@ -8894,7 +8888,7 @@ fn generic_positional_args(
                             Code::SPREAD_ARGUMENT,
                             format!(
                                 "spread `f(..x)` needs a tuple, a `List`, a `Slice`, an array \
-                                 or a `Dict<str, V>`, found `{}` (spec 4.2.6)",
+                                 or a `Dict<str, V>`, found `{}`",
                                 ctx.ty_name(other)
                             ),
                         );
@@ -9083,13 +9077,13 @@ fn call_generic_positional(
                 if is_ref {
                     format!(
                         "argument {} of `{callee}` is passed with `ref`, but the parameter is \
-                         not `ref` (spec 4.7.3)",
+                         not `ref`",
                         i + 1
                     )
                 } else {
                     format!(
                         "parameter {} of `{callee}` is `ref` - pass `ref {}` at the call site \
-                         (spec 4.7.3)",
+                        ",
                         i + 1,
                         snippet(e)
                     )
@@ -9114,7 +9108,7 @@ fn call_generic_positional(
                             span,
                             format!(
                                 "`{callee}` on `{}`: the literal fits several of its bounds \
-                                 ({fits}); add a suffix or `as` (spec 3.1.3)",
+                                 ({fits}); add a suffix or `as`",
                                 ctx.ty_name(&HirTy::Param(*p))
                             ),
                         );
@@ -9167,7 +9161,7 @@ fn call_generic_positional(
                 Code::REF_ARGUMENT,
                 format!(
                     "`ref` argument {} of `{callee}` must name a variable or a field of one \
-                     (spec 4.7)",
+                    ",
                     i + 1
                 ),
             );
@@ -10819,8 +10813,7 @@ fn lower_array_repeat(
         return ctx.error_expr(
             Code::CONST_EVAL,
             span,
-            "the length of `[v; N]` must be a non-negative compile-time integer (spec 2.11)"
-                .to_owned(),
+            "the length of `[v; N]` must be a non-negative compile-time integer".to_owned(),
         );
     };
     let elem_ty = v.ty.clone();
@@ -11556,8 +11549,8 @@ fn buf_access(
         ctx.emit_error(
             Code::UNSAFE_REQUIRED,
             "indexing a `GcBuf` is unchecked and needs an `unsafe` block or `unsafe fn` \
-             (spec 4.15)"
-                .to_owned(),
+            "
+            .to_owned(),
         );
     }
     let usize_ty = HirTy::Prim(PrimTy::Usize);
@@ -12230,10 +12223,7 @@ pub(super) fn dispatch_user_op_lit(
         return ctx.error_expr(
             Code::INVALID_OPERATOR,
             span,
-            format!(
-                "operator `{sym}` needs trait `{op_trait}`, which is not visible here (spec \
-                 6.7.8)"
-            ),
+            format!("operator `{sym}` needs trait `{op_trait}`, which is not visible here"),
         );
     }
     // The impl must be of the trait that registered the operator (by its
@@ -12380,7 +12370,7 @@ fn param_op(
             Code::INVALID_OPERATOR,
             span,
             format!(
-                "operator `{sym}` on `{t}` needs the bound `{t}: {}` (spec 2.10.9)",
+                "operator `{sym}` on `{t}` needs the bound `{t}: {}`",
                 leaf_name(op_trait)
             ),
         );
@@ -12407,7 +12397,7 @@ fn param_op(
                         span,
                         format!(
                             "operator `{sym}` on `{t}`: the literal fits several `{}` bounds \
-                             ({fits}); add a suffix or `as` (spec 3.1.3)",
+                             ({fits}); add a suffix or `as`",
                             leaf_name(op_trait)
                         ),
                     );
@@ -12422,7 +12412,7 @@ fn param_op(
                         span,
                         format!(
                             "operator `{sym}` on `{t}` needs a bound `{}<{}>`, but `{t}` has {} \
-                             (spec 3.1.3)",
+                            ",
                             leaf_name(op_trait),
                             ctx.ty_name(&r.ty),
                             all.join(" and ")
@@ -12622,7 +12612,7 @@ fn alias_path(ctx: &LowerCtx<'_>, p: &AstPath) -> Result<Option<AstPath>, String
                     let path = segs.join("::");
                     return Err(format!(
                         "`{path}::{}` can't infer `{}`'s arguments: its aliased type's arguments \
-                         are not its distinct parameters (spec 2.6.9) - write `{path}::<..>::{}`",
+                         are not its distinct parameters - write `{path}::<..>::{}`",
                         last.name,
                         leaf_name(&full),
                         last.name
@@ -12738,7 +12728,7 @@ fn lower_assoc_const(
             ctx.here(),
             format!(
                 "associated const `{name}` of `{}` is ambiguous: {} define it - name the \
-                 trait (`<T as Tr>::{name}`) (spec 2.8.3a)",
+                 trait (`<T as Tr>::{name}`)",
                 ctx.ty_name(ty),
                 from.join(" and ")
             ),
@@ -13031,7 +13021,7 @@ pub(super) fn lower_path(
                 span,
                 format!(
                     "`{full}` has `ref` parameters and cannot be used as a `fn` value (a `fn` \
-                     type has no `ref` parameters, spec 4.7.6)"
+                     type has no `ref` parameters)"
                 ),
             );
         }
@@ -13110,7 +13100,7 @@ pub(super) fn lower_path(
             span,
             format!(
                 "generic function `{}` as a value: its type arguments are not determined \
-                 - write `{}::<..>` or give the slot a `fn(..)` type (spec 4.4.7)",
+                 - write `{}::<..>` or give the slot a `fn(..)` type",
                 segs.join("::"),
                 segs.join("::")
             ),
@@ -13543,7 +13533,7 @@ fn lower_shape(
         return ctx.error_expr(
             Code::INVALID_LITERAL_HANDLER,
             span,
-            format!("no `#[literal]` handler is registered for {what} literals (spec 6.5)"),
+            format!("no `#[literal]` handler is registered for {what} literals"),
         );
     }
     let empty = args
@@ -13616,7 +13606,7 @@ fn lower_magic(
             Code::AMBIGUOUS_LITERAL,
             span,
             format!(
-                "ambiguous literal: handlers {} all match (spec 6.5.5) - give the slot a type \
+                "ambiguous literal: handlers {} all match - give the slot a type \
                  or a handler `priority = N`",
                 names.join(", ")
             ),

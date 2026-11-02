@@ -544,7 +544,7 @@ pub(super) fn monomorphize_on(
                     ctx.emit_uninferred(format!(
                         "cannot infer const parameter `{name}` of `{}` from the call \
                          arguments or the expected type - pass it explicitly (`::<..>`) \
-                         (spec 2.11.6)",
+                        ",
                         ctx.display_path(&fn_def.name)
                     ));
                     return None;
@@ -806,7 +806,7 @@ pub(super) fn check_call_bounds(
                 {
                     ctx.help_last(Some(
                         "use the value inside `with`: `tl.with(|v| ..)`, or take it out with \
-                         `tl.replace(v)` / `tl.take()` (stdlib 3.4.4)"
+                         `tl.replace(v)` / `tl.take()`"
                             .to_owned(),
                     ));
                 }
@@ -1139,7 +1139,7 @@ fn infer_ret_of(
             Code::TYPE_ANNOTATIONS_NEEDED,
             fn_def.span,
             format!(
-                "cannot infer the return type of `{}`: {why} - write `-> T` (spec 4.1.3)",
+                "cannot infer the return type of `{}`: {why} - write `-> T`",
                 leaf_name(&fn_def.name)
             ),
         );
@@ -1165,7 +1165,7 @@ fn infer_ret_of(
                 fn_def.span,
                 format!(
                     "the return paths of `{}` have different types `{a}` and `{b}` - rok \
-                     does not infer a sum type (spec 4.3.4)",
+                     does not infer a sum type",
                     leaf_name(&fn_def.name)
                 ),
             );
@@ -1266,7 +1266,7 @@ fn unit_ret(ctx: &LowerCtx<'_>, f: &FnDef, ret: HirTy, report: bool, instance: b
         at,
         format!(
             "`{vis} fn {leaf}` has no `->`, so it returns `()`, but its body gives `{ty}` \
-             (spec 4.1.3)"
+            "
         ),
     );
     if !instance && f.generics.params.is_empty() && f.where_clause.is_empty() {
@@ -1395,7 +1395,7 @@ fn lower_fn_with(
                 ctx.emit_error_at(
                     Code::INVALID_CAPTURE,
                     ap.span,
-                    "`[ref self]` needs a `ref self` method (spec 4.7.4)".to_owned(),
+                    "`[ref self]` needs a `ref self` method".to_owned(),
                 );
                 ctx.help_last(Some(
                     "write `ref self` in the method's parameters, or capture `self` by value \
@@ -1668,7 +1668,7 @@ pub(super) fn typed_const(
                 Code::INVALID_GENERIC_PARAMS,
                 format!(
                     "const parameter `{name}` has type `{}`; only integers, `bool`, `char` \
-                     and `c_char` may be const parameters (spec 2.11.3)",
+                     and `c_char` may be const parameters",
                     ctx.ty_name(&other)
                 ),
             );

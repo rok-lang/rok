@@ -222,7 +222,7 @@ impl Cx<'_> {
         let anywhere: &[Pos] = &[];
         let (places, args): (&[Pos], Option<&str>) = match name.as_str() {
             "derive" if pos == P::Union => {
-                return Some("`#[derive]` on a union is a compile error (spec 6.2.1)".to_owned());
+                return Some("`#[derive]` on a union is a compile error".to_owned());
             }
             "derive" => (&[P::Struct, P::Enum], words(a, false)),
             "repr" => (&[P::Struct, P::Enum, P::Union], None),
@@ -283,7 +283,7 @@ impl Cx<'_> {
             "cfg_attr" => {
                 return Some(
                     "`#[cfg_attr]` takes a predicate and at least one attribute: \
-                     `#[cfg_attr(pred, attr, ..)]` (spec 6.3.4)"
+                     `#[cfg_attr(pred, attr, ..)]`"
                         .to_owned(),
                 );
             }
@@ -300,7 +300,7 @@ impl Cx<'_> {
             n => {
                 return Some(format!(
                     "unknown attribute `#[{n}]`: not built in and no meta block defines it \
-                     (spec 6.1.6)"
+                    "
                 ));
             }
         };

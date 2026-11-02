@@ -1206,7 +1206,6 @@ fn renamable(doc: &Doc, key: &str, off: usize) -> Result<Option<Vec<(usize, usiz
 
 /// LSP `Diagnostic` of `d`, whose span is in `text`.
 fn diag_json(d: &RokDiagnostic, uri: &str, text: &str) -> Json {
-    let d = &d.without_cites();
     let span = d.primary.as_ref().map(|l| l.span).unwrap_or_default();
     let mut message = d.message.clone();
     for n in &d.notes {

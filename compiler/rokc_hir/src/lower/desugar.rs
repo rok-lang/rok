@@ -37,13 +37,11 @@ pub(super) fn lower_closure_expr(
             Some(l) if ctx.is_boxed(l) => {}
             Some(_) => ctx.emit_error(
                 Code::INVALID_CAPTURE,
-                format!(
-                    "`[ref {n}]` needs `{n}` to be a `let` variable or a parameter (spec 4.6.2)"
-                ),
+                format!("`[ref {n}]` needs `{n}` to be a `let` variable or a parameter"),
             ),
             None => ctx.emit_error(
                 Code::INVALID_CAPTURE,
-                format!("`[ref {n}]` names no variable in scope (spec 4.6.2)"),
+                format!("`[ref {n}]` names no variable in scope"),
             ),
         }
     }
@@ -68,7 +66,7 @@ pub(super) fn lower_closure_expr(
             Code::INVALID_SIGNATURE,
             format!(
                 "closure parameter `{}` cannot be `ref` - a `fn` type has no `ref` \
-                 parameters (spec 4.7.6)",
+                 parameters",
                 p.name
             ),
         );
@@ -619,7 +617,7 @@ pub(super) fn desugar_try_q(
             span,
             format!(
                 "`?` only works on `T | none`, found `{}` - to propagate errors use `throws` \
-                 and `try` (spec 3.14 / 4.14)",
+                 and `try`",
                 ctx.ty_name(&inner.ty)
             ),
         );
@@ -974,7 +972,7 @@ pub(super) fn lower_for_iter(
             format!(
                 "cannot iterate over a value of type `{}` - `for` needs an integer range, \
                  an array, an `IntoIterator` / `Iterator` impl, or a `TryIterator` \
-                 (`try for`) (stdlib 2.7.2)",
+                 (`try for`)",
                 ctx.ty_name(&iter_h.ty)
             ),
         );
@@ -984,7 +982,7 @@ pub(super) fn lower_for_iter(
         let mut d = rokc_diagnostic::RokDiagnostic::error(
             Code::UNHANDLED_ERROR,
             span,
-            format!("`next` of `{t}` can throw, so this loop must be `try for` (spec 3.13.3)"),
+            format!("`next` of `{t}` can throw, so this loop must be `try for`"),
         )
         .with_help(
             "write `try for x in ..` (`try!` / `try?` to panic / stop on an error), \

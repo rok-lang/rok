@@ -142,7 +142,7 @@ impl Pattern {
         {
             if INT_SUFFIXES.contains(&s.as_str()) || FLOAT_SUFFIXES.contains(&s.as_str()) {
                 return Err(format!(
-                    "`{s}` is a built-in numeric suffix and can't be registered (spec 1.6.2)"
+                    "`{s}` is a built-in numeric suffix and can't be registered"
                 ));
             }
             return Ok(PatKind::Suffix(s.clone()));
@@ -239,7 +239,7 @@ pub fn parse_pattern(tokens: &[Token], ext: &[String]) -> Result<Pattern, (Span,
             _ => {
                 return Err((
                     p.span(),
-                    "expected `priority = N` after the pattern (spec 6.5.5)".to_owned(),
+                    "expected `priority = N` after the pattern".to_owned(),
                 ));
             }
         }
@@ -308,7 +308,7 @@ impl PatParser<'_> {
                     span,
                     format!(
                         "unknown literal pattern word `{w}` (expected `expr`, `number`, \
-                         `string`, `ident` or a quoted token, spec 6.5.3)"
+                         `string`, `ident` or a quoted token)"
                     ),
                 )),
             },
@@ -601,7 +601,7 @@ impl Parser<'_> {
                 span,
                 format!(
                     "unknown numeric literal suffix `{suffix}` - no `#[literal(number \
-                     \"{suffix}\")]` handler is registered (spec 1.6.2, 6.5)"
+                     \"{suffix}\")]` handler is registered"
                 ),
             );
             return Some(arg);

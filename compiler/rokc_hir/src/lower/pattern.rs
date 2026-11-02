@@ -87,7 +87,7 @@ pub(super) fn lower_match(
                 ctx.emit_error(
                     Code::LET_ELSE_NOT_DIVERGING,
                     "the `else` block of `let ... else` must diverge (end in `return`, \
-                     `break`, `continue` or `throw`) (spec 3.15)"
+                     `break`, `continue` or `throw`)"
                         .to_owned(),
                 );
             } else if inferred
@@ -589,7 +589,7 @@ pub(super) fn check_match_arms(
                 at,
                 format!(
                     "unreachable match arm {}: earlier arms already match every value it \
-                     matches (spec 3.12.6)",
+                     matches",
                     i + 1
                 ),
             );
@@ -606,7 +606,7 @@ pub(super) fn check_match_arms(
             Code::NON_EXHAUSTIVE,
             format!(
                 "match on `{name}` needs a `_` arm: it is `#[non_exhaustive]` in another \
-                 package (spec 6.2.10)"
+                 package"
             ),
         );
         return;
@@ -701,7 +701,7 @@ pub(super) fn check_match_exhaustiveness(
     ctx.emit_error(
         Code::NON_EXHAUSTIVE,
         format!(
-            "non-exhaustive match on `{}`: {} not covered (spec 3.12.5)",
+            "non-exhaustive match on `{}`: {} not covered",
             ctx.ty_name(scrut_ty),
             missing.join(", ")
         ),
@@ -1304,7 +1304,7 @@ fn lower_pattern_here(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy
                         alts[i].span,
                         format!(
                             "or-pattern alternatives bind different name sets \
-                             (alternative {i}:{detail}, spec 3.11.4)"
+                             (alternative {i}:{detail})"
                         ),
                     );
                 }

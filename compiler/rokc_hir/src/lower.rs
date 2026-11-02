@@ -520,7 +520,7 @@ impl TypeNames {
             if !visible_from(module, &def_module, vis) {
                 let msg = format!(
                     "type `{full}` is private to module `{}` and cannot be used from `{}` \
-                     (spec 5.6 - add `pub` to expose it)",
+                     (add `pub` to expose it)",
                     module_display(&def_module),
                     module_display(module)
                 );
@@ -2287,7 +2287,7 @@ fn coerce(
                     Code::THREAD_SAFETY,
                     format!(
                         "`[ref {name}]` can't be used in a closure that may run on another \
-                         thread: both threads could change `{name}` at once (spec 4.6.9)"
+                         thread: both threads could change `{name}` at once"
                     ),
                 );
                 if let Some(d) = ctx.env.sink.diagnostics.borrow_mut().last_mut() {
@@ -2554,24 +2554,24 @@ fn holds_ref_cell(ty: &HirTy) -> bool {
 fn fn_mismatch_hint(slot: &HirTy, ty: &HirTy) -> &'static str {
     if matches!(slot, HirTy::Fn(_, _, want) if !want.auto.is_empty()) && holds_ref_cell(ty) {
         " - the closure holds a `[ref ..]` capture, which the code that made it could change at \
-         the same time; share the value through a `Mutex` or an `Atomic` instead (spec 4.6.9)"
+         the same time; share the value through a `Mutex` or an `Atomic` instead"
     } else if matches!((slot, ty), (HirTy::Fn(_, _, want), HirTy::Closure { .. }) if *want != crate::FnBounds::default())
     {
         " - the closure's captures don't meet the `fn` type's bounds"
     } else if matches!((slot, ty), (HirTy::Fn(_, _, want), HirTy::Fn(_, _, have))
         if have.unsafe_fn && !want.unsafe_fn)
     {
-        " - an `unsafe fn` value only fits an `unsafe fn` type (spec 4.15)"
+        " - an `unsafe fn` value only fits an `unsafe fn` type"
     } else if matches!((slot, ty), (HirTy::Fn(_, _, want), HirTy::Fn(_, _, have))
         if want.c_abi != have.c_abi)
     {
         " - an `extern \"C\" fn` value is a bare C function pointer, not a rok `fn` value \
-         (spec 5.9.4)"
+        "
     } else if matches!((slot, ty), (HirTy::Fn(_, _, want), HirTy::Fn(_, _, have))
         if want.stdcall != have.stdcall)
     {
         " - `extern \"system\" fn` is `stdcall` on this target, not `extern \"C\" fn` \
-         (spec 5.9.4)"
+        "
     } else if matches!((slot, ty), (HirTy::Fn(_, _, want), HirTy::Fn(_, _, have))
         if !fn_bounds_fit(want, have))
     {
@@ -2581,7 +2581,7 @@ fn fn_mismatch_hint(slot: &HirTy, ty: &HirTy) -> &'static str {
         if matches!(**r, HirTy::Throws { .. }))
     {
         " - a function value fits a `fn` type that throws more only with the same \
-         parameters and result (spec 4.4.9)"
+         parameters and result"
     } else {
         ""
     }
@@ -2609,7 +2609,7 @@ fn c_fn_value(ctx: &LowerCtx<'_>, slot: &HirTy, mut value: HirExpr) -> HirExpr {
         ctx.emit_error(
             Code::FFI,
             "only an `extern \"C\"` function (an `extern` block declaration or an \
-             `extern \"C\" fn` definition) is an `extern \"C\" fn(..)` value (spec 5.9.4)"
+             `extern \"C\" fn` definition) is an `extern \"C\" fn(..)` value"
                 .to_owned(),
         );
     }
@@ -2624,7 +2624,7 @@ fn c_fn_value(ctx: &LowerCtx<'_>, slot: &HirTy, mut value: HirExpr) -> HirExpr {
             Code::FFI,
             format!(
                 "{is} function is no {slot} value: `\"system\"` is `stdcall` on this \
-                 target (spec 5.9.4)"
+                 target"
             ),
         );
     }
@@ -2720,7 +2720,7 @@ fn box_into_any(ctx: &LowerCtx<'_>, slot: &HirTy, value: HirExpr) -> HirExpr {
             value.span,
             format!(
                 "cannot store an `{}` value in an `{}` slot without narrowing - test it with \
-                 `is` or a type pattern (`match v {{ x: T => ... }}`) first (spec 2.2.10)",
+                 `is` or a type pattern (`match v {{ x: T => ... }}`) first",
                 ctx.ty_name(&value.ty),
                 ctx.ty_name(target)
             ),
@@ -3519,7 +3519,7 @@ impl<'a> LowerCtx<'a> {
         let help = match self.access.borrow().as_deref() {
             Some(m) => Some(format!(
                 "the meta template that wrote this name looks it up in module `{}`; to look \
-                 it up where the meta block is used, write `@use_site(..)` around it (spec 6.9.9)",
+                 it up where the meta block is used, write `@use_site(..)` around it",
                 module_display(m)
             )),
             None => help,
@@ -4184,7 +4184,7 @@ impl<'a> LowerCtx<'a> {
                 }
                 if base == "rok::bare::gc::Weak" && key == self.lang("send_trait") {
                     return " (a hand-off cannot copy what a `Weak` names, so it stays with its \
-                            thread: send the `GcPtr`; stdlib 2.13.9)"
+                            thread: send the `GcPtr`)"
                         .to_owned();
                 }
                 if self.env.opts_out(base, key) {
@@ -4225,8 +4225,8 @@ impl<'a> LowerCtx<'a> {
             HirTy::Array(e, _) | HirTy::GcBuf(e) => step("an element".to_owned(), e),
             HirTy::AnyTrait(_) if key == self.lang("send_trait") => " (an `any` crosses \
                  threads only when its bound has both `Send` and `Sync`, since copies share \
-                 its box: give the trait `Sync` as a supertrait, or send the concrete type; \
-                 stdlib 2.13.9)"
+                 its box: give the trait `Sync` as a supertrait, or send the concrete \
+                 type)"
                 .to_owned(),
             _ => String::new(),
         }
@@ -4818,7 +4818,7 @@ impl<'a> LowerCtx<'a> {
                 Code::PRIVATE_ITEM,
                 format!(
                     "{what} `{full}` is `pub(pkg)`: visible only inside its package \
-                     `{}` (spec 5.6.4)",
+                     `{}`",
                     module_display(package_of(&def_module))
                 ),
             );
@@ -4843,7 +4843,7 @@ impl<'a> LowerCtx<'a> {
                 Code::PRIVATE_ITEM,
                 format!(
                     "{what} `{full}` is `pub(sub)`: visible only in module `{}` and its \
-                     descendants, not from `{}` (spec 5.6.5)",
+                     descendants, not from `{}`",
                     module_display(&def_module),
                     module_display(&from)
                 ),
@@ -4858,7 +4858,7 @@ impl<'a> LowerCtx<'a> {
             Code::PRIVATE_ITEM,
             format!(
                 "{what} `{full}` is private to module `{}` and cannot be used from `{}` \
-                 (spec 5.6 - add `pub` to expose it)",
+                 (add `pub` to expose it)",
                 module_display(&def_module),
                 module_display(&from)
             ),
@@ -4907,7 +4907,7 @@ impl<'a> LowerCtx<'a> {
             let fix = if getter {
                 format!("read it with `.{field}()`")
             } else {
-                "spec 5.6 - add `pub` to the field to expose it".to_owned()
+                "add `pub` to the field to expose it".to_owned()
             };
             self.emit_error(
                 Code::PRIVATE_ITEM,
@@ -4981,7 +4981,7 @@ impl<'a> LowerCtx<'a> {
                 at,
                 format!(
                     "{what} `{name}` is internal to the Rok toolchain: only `rok::bare`, \
-                     `rok::core` and `rok::std` may use it (spec 6.2.16)"
+                     `rok::core` and `rok::std` may use it"
                 ),
             )
             .with_note(help);
@@ -5153,7 +5153,7 @@ impl<'a> LowerCtx<'a> {
                 self.emit_error(
                     Code::CONST_EVAL,
                     format!(
-                        "array length must be a compile-time integer (spec 2.11.5): \
+                        "array length must be a compile-time integer: \
                              {why}"
                     ),
                 );
@@ -5340,7 +5340,7 @@ impl<'a> LowerCtx<'a> {
                         Code::INVALID_CONST_ARGUMENT,
                         format!(
                             "a const generic argument must be a compile-time integer, \
-                                 `bool` or `char` (spec 2.11.4): {why}"
+                                 `bool` or `char`: {why}"
                         ),
                     );
                     HirTy::Unknown
@@ -5561,7 +5561,7 @@ impl<'a> LowerCtx<'a> {
                 Code::AMBIGUOUS_ITEM,
                 format!(
                     "associated type `{}::{name}` is ambiguous: impls define it as {} - name \
-                     the trait (`<T as Tr>::{name}`, spec 2.13.4)",
+                     the trait (`<T as Tr>::{name}`)",
                     self.ty_name(base),
                     names.join(", ")
                 ),
@@ -5689,7 +5689,7 @@ impl<'a> LowerCtx<'a> {
                     Code::OR_PATTERN_BINDINGS,
                     format!(
                         "or-pattern binding `{name}` has inconsistent types across \
-                         alternatives (`{}` and `{}`, spec 3.11.4); to bind either as \
+                         alternatives (`{}` and `{}`); to bind either as \
                          their sum, write one type pattern: `{name}: {} | {}`",
                         self.ty_name(&existing),
                         self.ty_name(&ty),
@@ -5812,7 +5812,7 @@ impl<'a> LowerCtx<'a> {
                 format!(
                     "`{binder}` holds a `{guard}` that is never released: only `using` \
                      releases a lock guard, so bind it with `using {binder} = .. {{ .. }}` \
-                     (stdlib 2.16.3)"
+                    "
                 ),
             );
         }
@@ -6002,7 +6002,7 @@ fn const_arg_shape(e: &Expr) -> Result<(), String> {
             if !matches!(op.as_str(), "+" | "-" | "*" | "/" | "%") {
                 return Err(format!(
                     "`{op}` is not allowed: only `+`, `-`, `*`, `/`, `%` and unary `-` \
-                     (spec 2.11.5)"
+                    "
                 ));
             }
             const_arg_shape(lhs)?;
@@ -6010,16 +6010,13 @@ fn const_arg_shape(e: &Expr) -> Result<(), String> {
         }
         ExprKind::OpPrefix { op, operand } => {
             if op != "-" {
-                return Err(format!(
-                    "`{op}` is not allowed: only unary `-` (spec 2.11.5)"
-                ));
+                return Err(format!("`{op}` is not allowed: only unary `-`"));
             }
             const_arg_shape(operand)
         }
-        ExprKind::If { .. } | ExprKind::Match { .. } => Err(
-            "conditionals are not allowed (spec 2.11.5); compute the value in a `const fn`"
-                .to_owned(),
-        ),
+        ExprKind::If { .. } | ExprKind::Match { .. } => {
+            Err("conditionals are not allowed; compute the value in a `const fn`".to_owned())
+        }
         _ => Ok(()),
     }
 }

@@ -187,9 +187,7 @@ pub fn check_keyword(def: &KeywordDef) -> Option<RokDiagnostic> {
     };
     let n = def.name.as_str();
     if RESERVED.contains(&n) || keyword_kind(n).is_some() || CONTEXTUAL.contains(&n) {
-        return err(format!(
-            "`#[keyword(\"{n}\")]`: `{n}` is already a keyword (spec 6.6.4)"
-        ));
+        return err(format!("`#[keyword(\"{n}\")]`: `{n}` is already a keyword"));
     }
     let ident = n
         .chars()
@@ -198,12 +196,12 @@ pub fn check_keyword(def: &KeywordDef) -> Option<RokDiagnostic> {
         && n.chars().all(|c| c.is_alphanumeric() || c == '_');
     if !ident {
         return err(format!(
-            "`#[keyword(\"{n}\")]`: a keyword must be an identifier (spec 6.6.2)"
+            "`#[keyword(\"{n}\")]`: a keyword must be an identifier"
         ));
     }
     if def.handler.is_empty() {
         return err(format!(
-            "`#[keyword(\"{n}\")]` must be on a free function - its handler (spec 6.6.2)"
+            "`#[keyword(\"{n}\")]` must be on a free function - its handler"
         ));
     }
     None
@@ -252,7 +250,7 @@ pub fn apply_keywords(tokens: &mut Vec<Token>, kws: &KeywordTable, diags: &mut V
                     Code::RESERVED_NAME,
                     t.span,
                     format!(
-                        "`{n}` is a keyword registered with `#[keyword(\"{n}\")]` and can't be used as a name (spec 6.6.3)"
+                        "`{n}` is a keyword registered with `#[keyword(\"{n}\")]` and can't be used as a name"
                     ),
                 ),
             );

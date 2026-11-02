@@ -177,18 +177,18 @@ pub(super) fn check(env: &Env<'_>, functions: &[HirFunction]) {
             Code::THREAD_SAFETY,
             span,
             if guard {
-                format!("`task::spawn` cannot take a guard: {why} (stdlib 2.16.3)")
+                format!("`task::spawn` cannot take a guard: {why}")
             } else if spawn {
                 format!(
                     "`task::spawn` needs a `Send` future: {why}, and the task may resume on \
-                     another worker (spec 2.18.1); use `task::spawn_local`"
+                     another worker; use `task::spawn_local`"
                 )
             } else {
                 let short = sink
                     .trim_start_matches("rok::core::")
                     .trim_start_matches("rok::std::")
                     .replace("__", "::");
-                format!("`{short}` would move a future to another thread: {why} (spec 2.18.1)")
+                format!("`{short}` would move a future to another thread: {why}")
             },
         );
     }
@@ -278,7 +278,7 @@ fn frame(ctx: &LowerCtx<'_>, send: &str, sync: Option<&str>, f: &HirFunction) ->
     let cell_why = |l: LocalId| {
         format!(
             "it has a `[ref {}]` capture, which the code that made it could change at the same \
-             time (spec 4.6.9)",
+             time",
             name(l)
         )
     };
@@ -300,8 +300,8 @@ fn frame(ctx: &LowerCtx<'_>, send: &str, sync: Option<&str>, f: &HirFunction) ->
             return cell_why(l);
         }
         format!(
-            "it captures `{}: {}`, which is not `Sync`{} (the spawner keeps its copy, spec \
-             4.6.9)",
+            "it captures `{}: {}`, which is not `Sync`{} (the spawner keeps its \
+             copy)",
             name(l),
             ty_of(l).map(|t| ctx.ty_name(t)).unwrap_or_default(),
             sync.map(|k| cause(ty_of(l), k)).unwrap_or_default()

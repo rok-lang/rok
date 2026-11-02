@@ -179,7 +179,7 @@ fi
 v=$("$stage/bin/rokc$exe" --version --verbose)
 printf '%s\n' "$v" | head -n 1 | grep -Eq "^rokc $version( |\$)" &&
   printf '%s\n' "$v" | grep -qx "host: $triple" || {
-  printf 'dist-native.sh: rokc --version --verbose breaks the installer contract (spec 9.10.6):\n%s\n' "$v" >&2
+  printf 'dist-native.sh: rokc --version --verbose breaks the installer contract:\n%s\n' "$v" >&2
   exit 1
 }
 cp install.sh install.ps1 README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE \

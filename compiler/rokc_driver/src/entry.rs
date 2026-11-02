@@ -13,7 +13,7 @@ pub fn stmts_outside_entry(file: &Path) -> RokDiagnostic {
         Span::DUMMY,
         format!(
             "{}: top-level statements are only allowed in the entry file `main.rok`; \
-             modules are definitions-only (spec 4.16.6)",
+             modules are definitions-only",
             file.display()
         ),
     )
@@ -37,7 +37,7 @@ pub fn resolve_entry(
                     Code::ENTRY_POINT,
                     Span::DUMMY,
                     "`main.rok` has both top-level statements and `fn main`; use exactly one \
-                 entry point (spec 4.16.1)",
+                 entry point",
                 )
                 .with_span(stmts[0].span, "a top-level statement")
                 .with_secondary(f.span, "`fn main` here"),
@@ -94,7 +94,7 @@ fn check_main_signature(f: &FnDef, diags: &mut Vec<RokDiagnostic>) {
         diags.push(RokDiagnostic::error(
             Code::ENTRY_POINT,
             f.span,
-            format!("`fn main`: {msg} (spec 4.16.3)"),
+            format!("`fn main`: {msg}"),
         ));
     };
     if !f.params.is_empty() {
