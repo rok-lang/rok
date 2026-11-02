@@ -21,7 +21,6 @@ use rok::std::fs::{CreateFlags, Dir, File, OpenFlags, Permissions};
 use rok::std::os::unix::fs::{DirExt, OsCreateFlags, PermissionsExt, O_CREAT, O_TRUNC, O_WRONLY};
 use rok::core::io::IoError;
 use rok::std::env;
-use rok::std::process;
 
 fn mode_of(p: str) throws (IoError) -> u32 {
     (try fs::metadata(p)).permissions().mode() & 0o777u32
@@ -35,7 +34,7 @@ fn main() throws (IoError) {
     w.set_readonly(false);
     println(f"{p.mode():o} {p.readonly()} {w.mode() & 0o777u32:o} {q.mode():o}");
 
-    let dir = env::temp_dir() / f"rok_unix_fs_ext_{process::id()}";
+    let dir = env::temp_dir() / "rok_unix_fs_ext";
     try fs::remove_dir_all(dir) catch _ {};
     try fs::create_dir(dir);
     let a = dir / "a";

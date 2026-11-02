@@ -19,7 +19,7 @@ async fn finish(w: BufWriter<File>) throws (IoError) {
 }
 
 async fn main() throws (IoError) {
-    let p = env::temp_dir().join(Path::new(f"rok-affine-async-{rok::std::process::id()}.txt"));
+    let p = env::temp_dir().join(Path::new("rok-affine-close-into-async.txt"));
     let w = BufWriter::new(try fs::create(p));
     try await w.write_all_async("a");
     try await w.flush_async();

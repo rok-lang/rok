@@ -26,7 +26,6 @@ use rok::core::io::{IoError, IoErrorKind};
 use rok::std::fs;
 use rok::std::env;
 use rok::std::path::{Path, RawPath};
-use rok::std::process;
 
 /// Hands out at most `step` bytes per `read`.
 struct Trickle {
@@ -59,10 +58,10 @@ fn main() throws (IoError) {
     println(f"exact: [{text(a)}] [{text(b)}] eof: {kind}");
 
     // Its own directory: other processes come and go in the temp dir.
-    let dir = env::temp_dir() / f"rok_bytes_io_{process::id()}";
+    let dir = env::temp_dir() / "rok_bytes_io";
     try fs::create_dir_all(dir);
-    let src = dir / f"rok_bytes_io_{process::id()}.bin";
-    let dst = dir / f"rok_bytes_io_{process::id()}.out";
+    let src = dir / "rok_bytes_io.bin";
+    let dst = dir / "rok_bytes_io.out";
     let big: List<u8> = List::new();
     for i in 0..20000 { big.push((i % 251) as u8); }
     try fs::write(src, big);
@@ -116,7 +115,7 @@ fn main() throws (IoError) {
     using rd = try fs::read_dir(dir) {
         try for entry in rd {
             let name = entry.file_name();
-            if name.starts_with(f"rok_bytes_io_{process::id()}") { names += 1; }
+            if name.starts_with("rok_bytes_io") { names += 1; }
         }
     }
     println(f"read_dir names: {names}");

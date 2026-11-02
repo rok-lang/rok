@@ -20,7 +20,10 @@ let p = env::temp_dir() / "rok_wasm_unsupported_fs_ext.txt";
 try! fs::write(p, "abc");
 println(f"wrote: {try! fs::read_to_str(p)}");
 let f = try! File::open(p);
-try f.try_clone() catch e: IoError { println(f"try_clone: {e.kind():?}"); };
+try {
+    let g = try f.try_clone();
+    try g.close();
+} catch e: IoError { println(f"try_clone: {e.kind():?}"); };
 try f.lock_exclusive() catch e: IoError { println(f"lock_exclusive: {e.kind():?}"); };
 try f.lock_shared() catch e: IoError { println(f"lock_shared: {e.kind():?}"); };
 try unsafe { f.mmap(0u64, 3usize) } catch e: IoError { println(f"mmap: {e.kind():?}"); };

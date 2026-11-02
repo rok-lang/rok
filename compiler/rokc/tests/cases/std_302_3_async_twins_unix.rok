@@ -48,7 +48,7 @@ async fn main() throws (IoError) {
     try await a.close_async();
     try await b.close_async();
 
-    let path = env::temp_dir().join(Path::new(f"rok-ux-async-{rok::std::process::id()}.sock"));
+    let path = env::temp_dir().join(Path::new("rok-ux-async.sock"));
     try fs::remove_file(path) catch _ {};
     let l = try UnixListener::bind(path);
     let lv = unsafe { share(l) };

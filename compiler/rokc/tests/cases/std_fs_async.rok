@@ -23,13 +23,12 @@ use rok::std::fs::File;
 use rok::core::io::IoError;
 use rok::std::env;
 use rok::std::thread;
-use rok::std::process;
 
 fn text(buf: List<u8>, n: usize) -> str {
     try! str::from_utf8(buf[0:n])
 }
 
-let base = env::temp_dir() / f"rok_std_fs_async_{process::id()}";
+let base = env::temp_dir() / "rok_std_fs_async";
 try! await fs::create_dir_all_async(base / "d");
 let f = base / "d" / "x.txt";
 try! await fs::write_async(f, "hello async");

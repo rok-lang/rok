@@ -13,10 +13,9 @@
 use rok::std::env;
 use rok::std::fs::Dir;
 use rok::std::path::Path;
-use rok::std::process;
 
 fn main() {
-    let base = env::temp_dir() / Path::new(f"rok_dircap_{process::id()}");
+    let base = env::temp_dir() / Path::new("rok_dircap");
     try? Dir::root().remove_dir_all(base);
     try! Dir::root().create_dir_all(base / "sub");
     let d = try! Dir::root().open_dir(base);

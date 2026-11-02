@@ -9,11 +9,10 @@
 // raise: Unsupported
 // signal: Unsupported
 // current_exe: Unsupported
-// pid: 0
 
 // wasm32 has no processes or signals (stdlib 307 / 306 per-platform
-// tables): each call reports `IoErrorKind::Unsupported` at run time, and
-// the process id is 0 (WASI has no such concept).
+// tables): each call reports `IoErrorKind::Unsupported` at run time.
+// `process::id` panics there: WASI has no process ids.
 use rok::std::process;
 use rok::std::process::{Command, Signal, SignalError};
 use rok::core::io::{IoError, IoErrorKind};
@@ -24,8 +23,11 @@ try Command::new("ls").arg("-l").output() catch e: IoError { println(f"output: {
 try process::send_signal(1u32, Signal::Terminate) catch e: IoError { println(f"kill: {e.kind():?}"); };
 try process::raise(Signal::Terminate) catch e: IoError { println(f"raise: {e.kind():?}"); };
 try process::on_signal(Signal::Terminate, || {}) catch e: SignalError {
-    println(f"signal: {IoError::from_os_code(e.code, "signal").kind():?}");
+    let kind = match e.os_code() {
+        c: i32 => f"{IoError::from_os_code(c, "signal").kind():?}",
+        none => "none",
+    };
+    println(f"signal: {kind}");
 };
 try env::current_exe() catch e: IoError { println(f"current_exe: {e.kind():?}"); };
-println(f"pid: {process::id()}");
 // spec: std 307-process §3.7.6, 306-env §3.6.4

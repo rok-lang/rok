@@ -8,15 +8,15 @@
 // close that got the same fd number.
 
 use rok::core::marker::share;
-use rok::std::{env, fs, process, thread};
+use rok::std::{env, fs, thread};
 use rok::std::fs::File;
 use rok::core::io::SeekFrom;
 use rok::std::path::Path;
 
 fn main() throws (io::IoError | thread::JoinError) {
     let dir = env::temp_dir();
-    let a = dir.join(Path::new(f"rok_close_while_reading_a_{process::id()}"));
-    let b = dir.join(Path::new(f"rok_close_while_reading_b_{process::id()}"));
+    let a = dir.join(Path::new("rok_close_while_reading_a"));
+    let b = dir.join(Path::new("rok_close_while_reading_b"));
     try fs::write(a, "AAAAAAAAAAAAAAAA");
     try fs::write(b, "BBBBBBBBBBBBBBBB");
     let foreign = 0;

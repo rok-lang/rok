@@ -20,10 +20,9 @@ use rok::core::marker::share;
 use rok::core::io::{IoError, BufReader, BufWriter, LineWriter};
 use rok::std::fs;
 use rok::std::env;
-use rok::std::process;
 
 fn main() throws (IoError) {
-    let p = env::temp_dir() / f"rok_std_io_buf_{process::id()}.txt";
+    let p = env::temp_dir() / "rok_std_io_buf.txt";
     using w = BufWriter::with_capacity(16, try fs::create(p)) {
         let i = 0;
         while i < 5 {
@@ -47,7 +46,7 @@ fn main() throws (IoError) {
         println(f"bytes: {n}");
     }
 
-    let q = env::temp_dir() / f"rok_std_io_buf2_{process::id()}.txt";
+    let q = env::temp_dir() / "rok_std_io_buf2.txt";
     let out = try fs::create(q);
     using w = BufWriter::new(unsafe { share(out) }) {
         try w.write_all("kept by drop");

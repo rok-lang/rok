@@ -15,10 +15,9 @@ use rok::std::fs;
 use rok::std::fs::{File, FileType};
 use rok::core::io::{IoError, IoErrorKind};
 use rok::std::env;
-use rok::std::process;
 
 fn main() throws (IoError) {
-    let dir = env::temp_dir() / f"rok_fs_file_type_{process::id()}";
+    let dir = env::temp_dir() / "rok_fs_file_type";
     try fs::remove_dir_all(dir) catch _ {};
     try fs::create_dir(dir);
     let path = dir / "f.txt";

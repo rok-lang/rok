@@ -49,7 +49,7 @@ fn sender(n: usize, k: usize) throws (IoError) -> (SocketAddr, thread::JoinHandl
 }
 
 fn main() throws (IoError) {
-    let dir = env::temp_dir() / f"rok_io_copy_{rok::std::process::id()}";
+    let dir = env::temp_dir() / "rok_io_copy";
     try fs::create_dir_all(dir);
     let big = pattern(100000, 7);
     let src = dir / "src.bin";

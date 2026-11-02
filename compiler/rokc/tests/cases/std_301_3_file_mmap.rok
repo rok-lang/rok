@@ -17,7 +17,7 @@ use rok::std::env;
 use rok::core::io::IoError;
 
 fn run() throws (IoError | str::Utf8Error) {
-    let path = f"{env::temp_dir()}/rok_mmap_case_{rok::std::process::id()}.txt";
+    let path = f"{env::temp_dir()}/rok_mmap_case.txt";
     try fs::write(path, "hello world");
     let f = try File::open(path);
     let m_own = try unsafe { f.mmap(0, 11) };

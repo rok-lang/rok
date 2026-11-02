@@ -9,10 +9,9 @@
 use rok::std::fs;
 use rok::core::io::IoError;
 use rok::std::env;
-use rok::std::process;
 
 fn main() throws (IoError) {
-    let p = env::temp_dir() / f"rok_probe_301w_{process::id()}.txt";
+    let p = env::temp_dir() / "rok_probe_301w.txt";
     let f = try fs::create(p);
     let n = try f.write("hi");
     try f.write_all("!");

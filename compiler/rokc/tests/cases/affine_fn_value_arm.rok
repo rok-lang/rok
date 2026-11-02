@@ -1,4 +1,5 @@
 // spec: std 213-marker §2.13.4
+// needs: fs
 // expect-exit: 0
 // expect-stdout:
 // sent 1
@@ -59,7 +60,7 @@ async fn main() throws (IoError) {
     // the `Sender` it got when it returns.
     either(tx.clone());
     println(f"sent {rx.recv() ?? 0}");
-    let p = env::temp_dir().join(Path::new(f"rok-affine-fn-value-{rok::std::process::id()}.txt"));
+    let p = env::temp_dir().join(Path::new("rok-affine-fn-value.txt"));
     owned(p, tx.clone(), false);
     println(f"owned {rx.recv() ?? 0}");
     tx.close();

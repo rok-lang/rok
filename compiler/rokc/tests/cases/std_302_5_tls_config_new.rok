@@ -11,7 +11,6 @@
 use rok::std::env;
 use rok::std::fs;
 use rok::std::path::Path;
-use rok::std::process;
 use rok::std::net::tls::ClientConfig;
 
 const CA: str = "-----BEGIN CERTIFICATE-----
@@ -38,9 +37,8 @@ fn check(label: str, path: Path) {
 
 fn main() {
     let dir = env::temp_dir();
-    let pid = process::id();
-    check("unreadable", dir.join(Path::new(f"rok-tls-config-new-missing-{pid}.pem")));
-    let bundle = dir.join(Path::new(f"rok-tls-config-new-{pid}.pem"));
+    check("unreadable", dir.join(Path::new("rok-tls-config-new-missing.pem")));
+    let bundle = dir.join(Path::new("rok-tls-config-new.pem"));
     try! fs::write(bundle, CA);
     check("bundle", bundle);
     try! fs::remove_file(bundle);

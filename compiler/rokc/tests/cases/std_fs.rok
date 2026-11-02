@@ -37,10 +37,9 @@ use rok::std::os::unix::io::AsRawFd;
 use rok::core::io::{IoError, IoErrorKind};
 use rok::std::path::Path;
 use rok::std::env;
-use rok::std::process;
 
 fn main() throws (IoError) {
-    let base = env::temp_dir() / f"rok_std_fs_{process::id()}";
+    let base = env::temp_dir() / "rok_std_fs";
     try fs::create_dir_all(base / "a" / "b");
     try fs::create_dir_all(base / "a"); // already there: fine
     let f = base / "a" / "hello.txt";

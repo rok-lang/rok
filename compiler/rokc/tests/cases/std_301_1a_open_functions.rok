@@ -23,7 +23,6 @@ use rok::std::fs;
 use rok::std::fs::{Access, CreateFlags, Dir, File, Permissions};
 use rok::core::io::{IoError, SeekFrom};
 use rok::std::env;
-use rok::std::process;
 
 /// What opening throws, as `Kind message` (`p` cut from the message).
 fn refused(f: fn() throws (IoError) -> File, p: str) -> str {
@@ -40,7 +39,7 @@ async fn twins(d: Dir, base: str) throws (IoError) -> str {
 }
 
 fn main() throws (IoError) {
-    let base = env::temp_dir() / f"rok_open_fns_{process::id()}";
+    let base = env::temp_dir() / "rok_open_fns";
     try fs::remove_dir_all(base) catch _ {};
     try fs::create_dir(base);
     let d = try Dir::root().open_dir(base);

@@ -16,9 +16,8 @@ use rok::std::fs;
 use rok::std::fs::Dir;
 use rok::core::io::IoError;
 use rok::std::env;
-use rok::std::process;
 
-let base = env::temp_dir() / f"rok_std_fs_async_dir_{process::id()}";
+let base = env::temp_dir() / "rok_std_fs_async_dir";
 try! await fs::create_dir_all_async(base);
 let d = try! await Dir::root().open_dir_async(base);
 try! await d.create_dir_async("many");

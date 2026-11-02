@@ -8,7 +8,7 @@
     all(target_os = "linux", any(target_env = "gnu", target_env = "musl")),
     all(target_os = "windows", target_env = "msvc"),
     all(
-        any(target_os = "macos", target_os = "wasi", target_os = "none"),
+        any(target_os = "macos", target_os = "wasi", target_os = "unknown"),
         not(any(target_env = "gnu", target_env = "musl", target_env = "msvc"))
     )
 ))]
@@ -18,7 +18,7 @@ fn env() -> str { "env ok" }
     all(target_os = "linux", any(target_env = "gnu", target_env = "musl")),
     all(target_os = "windows", target_env = "msvc"),
     all(
-        any(target_os = "macos", target_os = "wasi", target_os = "none"),
+        any(target_os = "macos", target_os = "wasi", target_os = "unknown"),
         not(any(target_env = "gnu", target_env = "musl", target_env = "msvc"))
     )
 )))]
