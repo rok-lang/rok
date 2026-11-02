@@ -698,6 +698,11 @@ fn lower_stmt_inner(ctx: &mut LowerCtx<'_>, stmt: &Stmt) -> Option<HirStmt> {
         }
         // The parser keeps no other item in a block.
         StmtKind::Item(_) => unreachable!("a block item other than `fn` / `const` / `use`"),
+        StmtKind::Assign(target, _) | StmtKind::CompoundAssign { target, .. }
+            if default_index_of(target).is_some() =>
+        {
+            Some(index_default_store(ctx, stmt, target))
+        }
         StmtKind::Assign(target, value) => {
             if !is_place(ctx, target, "=", value) {
                 return None;
@@ -1231,6 +1236,17 @@ fn lower_method_call(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
         unreachable!("a method call")
     };
     let span = expr.span;
+    // `d[k, default: v].push(x)`: the receiver is the stored value,
+    // `v` inserted first when `k` is absent.
+    if let ExprKind::Index(d, idx) = &receiver.kind {
+        if rokc_ast::as_index_default(idx).is_some() {
+            let mut call = expr.clone();
+            if let ExprKind::MethodCall { receiver, .. } = &mut call.kind {
+                **receiver = index_default_call(d, idx, "get_or_insert");
+            }
+            return lower_method_call(ctx, &call);
+        }
+    }
     let all_args = with_trailing_closure(args, trailing_closure.as_deref());
     let elem = element_receiver(receiver).map(|_| (ctx.probe_mark(), ctx.throwing_calls));
     let recv_h = literal_conv_receiver(ctx, receiver, method)
@@ -1993,6 +2009,114 @@ fn rewrite_index_store(
     HirStmt::Expr(lower_expr(ctx, &block))
 }
 
+/// `d.<method>(k, v)` for `d[k, default: v]`.
+fn index_default_call(d: &Expr, idx: &Expr, method: &str) -> Expr {
+    let (k, v) = rokc_ast::as_index_default(idx).expect("a default index");
+    Expr {
+        span: idx.span,
+        kind: ExprKind::MethodCall {
+            receiver: Box::new(d.clone()),
+            method: method.to_owned(),
+            type_args: Vec::new(),
+            args: vec![
+                CallArg::Positional(k.clone()),
+                CallArg::Positional(v.clone()),
+            ],
+            trailing_closure: None,
+            origin: None,
+        },
+    }
+}
+
+/// The `d[k, default: v]` an assignment target starts from (`t`
+/// itself, or the base of its fields / indexes).
+fn default_index_of(t: &Expr) -> Option<&Expr> {
+    match &t.kind {
+        ExprKind::Index(_, idx) if rokc_ast::as_index_default(idx).is_some() => Some(t),
+        ExprKind::Index(b, _) | ExprKind::Field(b, _) | ExprKind::TupleField(b, _) => {
+            default_index_of(b)
+        }
+        _ => None,
+    }
+}
+
+/// `t` with its `d[k, default: v]` replaced by `d2[k2]`.
+fn replace_default_index(t: &Expr, d2: &Expr, k2: &Expr) -> Expr {
+    let kind = match &t.kind {
+        ExprKind::Index(_, idx) if rokc_ast::as_index_default(idx).is_some() => {
+            ExprKind::Index(Box::new(d2.clone()), Box::new(k2.clone()))
+        }
+        ExprKind::Index(b, i) => {
+            ExprKind::Index(Box::new(replace_default_index(b, d2, k2)), i.clone())
+        }
+        ExprKind::Field(b, f) => {
+            ExprKind::Field(Box::new(replace_default_index(b, d2, k2)), f.clone())
+        }
+        ExprKind::TupleField(b, n) => {
+            ExprKind::TupleField(Box::new(replace_default_index(b, d2, k2)), *n)
+        }
+        k => k.clone(),
+    };
+    Expr { kind, span: t.span }
+}
+
+/// An assignment whose target starts from `d[k, default: v]`: `d` and
+/// `k` once into temps, `v` stored when `k` is absent, then the
+/// assignment through `d[k]`.
+fn index_default_store(ctx: &mut LowerCtx<'_>, stmt: &Stmt, target: &Expr) -> HirStmt {
+    let span = stmt.span;
+    let at = default_index_of(target).expect("a default index");
+    let ExprKind::Index(d, idx) = &at.kind else {
+        unreachable!("a default index")
+    };
+    let (k, v) = rokc_ast::as_index_default(idx).expect("a default index");
+    let d2 = tmp_path(ctx, "dict", span);
+    let k2 = tmp_path(ctx, "key", span);
+    let insert = Expr {
+        span,
+        kind: ExprKind::MethodCall {
+            receiver: Box::new(d2.clone()),
+            method: "get_or_insert".to_owned(),
+            type_args: Vec::new(),
+            args: vec![
+                CallArg::Positional(k2.clone()),
+                CallArg::Positional(v.clone()),
+            ],
+            trailing_closure: None,
+            origin: None,
+        },
+    };
+    let new_target = replace_default_index(target, &d2, &k2);
+    let kind = match &stmt.kind {
+        StmtKind::Assign(_, value) => StmtKind::Assign(new_target, value.clone()),
+        StmtKind::CompoundAssign { op, value, .. } => StmtKind::CompoundAssign {
+            target: new_target,
+            op: op.clone(),
+            value: value.clone(),
+        },
+        _ => unreachable!("an assignment"),
+    };
+    let stmts = vec![
+        let_stmt(&d2, (**d).clone()),
+        let_stmt(&k2, k.clone()),
+        Stmt {
+            span,
+            kind: StmtKind::Expr(insert),
+        },
+        Stmt { span, kind },
+    ];
+    let block = Expr {
+        kind: ExprKind::Block(Block {
+            stmts,
+            trailing: None,
+            span,
+            label: None,
+        }),
+        span,
+    };
+    HirStmt::Expr(lower_expr(ctx, &block))
+}
+
 /// `break` / `continue` must have an enclosing target (a labelled block for
 /// a labelled `break`); MIR would emit `unreachable` otherwise.
 pub(super) fn check_jump_target(
@@ -2539,6 +2663,10 @@ fn lower_expr_inner(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
         }
         ExprKind::List(items) => lower_list_lit(ctx, items, span),
         ExprKind::ArrayRepeat { value, len } => lower_array_repeat(ctx, value, len, span),
+        // `d[k, default: v]` read: `d.get_or(k, v)`, the dict unchanged.
+        ExprKind::Index(d, idx) if rokc_ast::as_index_default(idx).is_some() => {
+            lower_expr(ctx, &index_default_call(d, idx, "get_or"))
+        }
         // `xs[a..b]` / `xs[..]` (range spelling) is `xs[a:b]` / `xs[:]`.
         ExprKind::Index(arr, idx)
             if matches!(

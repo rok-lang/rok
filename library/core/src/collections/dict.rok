@@ -292,6 +292,23 @@ impl<K: Hash, V, S: BuildHasher> Dict<K, V, S> {
         }
     }
 
+    /// The value under `k`; `default` when `k` is absent. The dict is
+    /// not changed. Python: `d.get(k, default)`.
+    pub const fn get_or(self, k: K, default: V) -> V {
+        self.get(k) ?? default
+    }
+
+    /// The value under `k`, first inserting `default` when `k` is
+    /// absent. `d[k, default: v]` as an assignment target uses it.
+    #[discardable]
+    pub const fn get_or_insert(self, k: K, default: V) -> V {
+        if let v: V = self.get(k) {
+            return v;
+        }
+        self.insert(k, default);
+        default
+    }
+
     /// `true` when `k` has an entry.
     pub const fn contains_key(self, k: K) -> bool {
         self.find(k, self.hash_of(k)) != ABSENT

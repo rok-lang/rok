@@ -265,7 +265,7 @@ impl Printer {
             }
             // Its impls follow the item: as an attribute it would derive
             // them again.
-            if a.path == ["derive"] {
+            if a.path == ["derive"] || a.path == ["display"] {
                 self.s("// ");
             }
             self.attr(a);
@@ -1399,7 +1399,13 @@ impl Printer {
             ExprKind::Index(x, i) => {
                 self.receiver(x);
                 self.s("[");
-                self.expr(i);
+                if let Some((k, d)) = crate::as_index_default(i) {
+                    self.expr(k);
+                    self.s(", default: ");
+                    self.expr(d);
+                } else {
+                    self.expr(i);
+                }
                 self.s("]");
             }
             ExprKind::Slice {

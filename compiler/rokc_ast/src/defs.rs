@@ -948,3 +948,47 @@ pub fn nested_marker_of(f: &FnDef) -> Option<(&str, bool)> {
     };
     Some((name.as_str(), args.len() > 1))
 }
+
+/// The callee marking `d[k, default: v]`'s index: `Index(d, #index_default(k, v))`
+/// (no source spells `#`).
+pub const INDEX_DEFAULT: &str = "#index_default";
+
+/// The index of `d[k, default: v]`.
+#[must_use]
+pub fn index_default(key: Expr, default: Expr) -> Expr {
+    let span = key.span;
+    Expr {
+        span,
+        kind: ExprKind::Call {
+            callee: Box::new(Expr {
+                span,
+                kind: ExprKind::Path(Path::new(
+                    vec![PathSegment {
+                        name: INDEX_DEFAULT.to_owned(),
+                        generics: Vec::new(),
+                    }],
+                    span,
+                )),
+            }),
+            args: vec![CallArg::Positional(key), CallArg::Positional(default)],
+            trailing_closure: None,
+        },
+    }
+}
+
+/// The key and default of `d[k, default: v]`'s index.
+#[must_use]
+pub fn as_index_default(idx: &Expr) -> Option<(&Expr, &Expr)> {
+    let ExprKind::Call { callee, args, .. } = &idx.kind else {
+        return None;
+    };
+    let ExprKind::Path(p) = &callee.kind else {
+        return None;
+    };
+    match (p.segments.as_slice(), args.as_slice()) {
+        ([s], [CallArg::Positional(k), CallArg::Positional(d)]) if s.name == INDEX_DEFAULT => {
+            Some((k, d))
+        }
+        _ => None,
+    }
+}

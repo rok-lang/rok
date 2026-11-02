@@ -1,0 +1,25 @@
+// expect-exit: 0
+// expect-stdout:
+// {1, 2, 3, 4} {2, 3} {1} {1, 4}
+// {1, 2, 3} {2, 3, 4}
+// [1, 2, 3, 4] [1, 2] [3]
+// [0, 1, 4, 9] [0.5, 0.5, 0.5]
+// 1 0 1
+// 7 7 {"a": 1, "b": 7}
+
+// Set operators | & - ^ (new sets), List + (a new list), List::from_fn,
+// Dict::get_or (no insert) and get_or_insert.
+let a: Set<i32> = {1, 2, 3};
+let b: Set<i32> = {2, 3, 4};
+println(f"{a | b:?} {a & b:?} {a - b:?} {a ^ b:?}");
+println(f"{a:?} {b:?}");
+let xs = [1, 2];
+let ys = [3];
+let zs = xs + ys;
+zs.push(4);
+println(f"{zs:?} {xs:?} {ys:?}");
+println(f"{List::from_fn(4, |i| i * i):?} {List::filled(3, 0.5):?}");
+let d: Dict<str, i32> = Dict::new();
+d["a"] = 1;
+println(f"{d.get_or("a", 0)} {d.get_or("b", 0)} {d.len()}");
+println(f"{d.get_or_insert("b", 7)} {d.get_or_insert("b", 9)} {d:?}");

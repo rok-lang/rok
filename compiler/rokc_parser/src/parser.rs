@@ -438,7 +438,14 @@ impl<'a> Parser<'a> {
             }
             ExprKind::Index(base, idx) => {
                 let base = self.hoist_place(*base, temps);
-                let idx = self.hoist_place(*idx, temps);
+                // `d[k, default: v]`: the key once, as a plain index.
+                let idx = match rokc_ast::as_index_default(&idx) {
+                    Some((k, v)) => {
+                        let v = v.clone();
+                        rokc_ast::index_default(self.hoist_place(k.clone(), temps), v)
+                    }
+                    None => self.hoist_place(*idx, temps),
+                };
                 ExprKind::Index(Box::new(base), Box::new(idx))
             }
             other => {
@@ -7188,8 +7195,22 @@ impl<'a> Parser<'a> {
                         expr = slice?;
                         continue;
                     }
-                    let (indices, _) =
+                    let (mut indices, _) =
                         self.with_struct_expr(true, |p| p.expr_list(&TokenKind::RBracket))?;
+                    // `d[k, default: v]`: `k`'s value, `v` when absent.
+                    let default = if indices.len() >= 2
+                        && matches!(self.peek(), TokenKind::Colon)
+                        && matches!(&indices.last().map(|e| &e.kind),
+                            Some(ExprKind::Path(p)) if p.segments.len() == 1
+                                && p.segments[0].name == "default"
+                                && p.segments[0].generics.is_empty())
+                    {
+                        self.bump();
+                        indices.pop();
+                        Some(self.with_struct_expr(true, Self::parse_expr)?)
+                    } else {
+                        None
+                    };
                     if matches!(self.peek(), TokenKind::Colon | TokenKind::ColonColon) {
                         self.mixed_index_error();
                         return None;
@@ -7209,6 +7230,10 @@ impl<'a> Parser<'a> {
                             span: at,
                             kind: ExprKind::Tuple(indices),
                         }
+                    };
+                    let idx = match default {
+                        Some(d) => rokc_ast::index_default(idx, d),
+                        None => idx,
                     };
                     expr = Expr {
                         span,
