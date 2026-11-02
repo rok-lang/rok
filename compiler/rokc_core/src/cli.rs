@@ -118,8 +118,7 @@ build options:
   --cfg <flag | key=value>     #[cfg] flag (repeatable)
   --print cfg                  print the active cfg (target keys, --cfg,
                                debug_assertions below -O1) and exit
-  --print target-list          print the built-in targets and exit (an old
-                               name: `<name> (deprecated: use <new>)`)
+  --print target-list          print the built-in targets and exit
   --print target-spec          print the --target's spec as ROKON and exit
   --print lldbinit             print the lldb command that loads Rok's
                                formatters (sums, any) and exit
@@ -170,7 +169,7 @@ harness:        --emit-harness <file> (write the built harness and its cases
 doc options:    --std (document the standard library too; without a path,
                 only it, into ./target/doc/),
                 --open (open the index in $BROWSER or the system's browser)
-lint options:   --list
+lint options:   --list, --check-library (as for check)
 fmt options:    --check (exit 1 if a file would change), --diff
 
 The sysroot is the directory above rokc's own bin/ (a toolchain:
@@ -429,7 +428,7 @@ build. `-` reads the source from standard input.",
                 "the package that holds this file",
             ),
         ],
-        sections: &["check options"],
+        sections: &["build options", "check options"],
         ..CmdHelp::EMPTY
     },
     CmdHelp {
@@ -494,7 +493,8 @@ The Jupyter kernel. Jupyter starts it with the connection file it wrote;
         usage: &["fmt [path] [options]"],
         about: "\
 Format .rok and .rokon files in place: <path> is one file, or a directory
-whose files are all formatted (default: the current one).",
+whose files are all formatted (default: the package the current directory
+is in).",
         examples: &[
             ("{tool} fmt", "format everything here"),
             ("{tool} fmt --check", "exit 1 if a file would change (CI)"),

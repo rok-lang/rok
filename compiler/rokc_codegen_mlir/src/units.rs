@@ -469,7 +469,8 @@ fn each_ref<'a>(f: &'a MirFunction, out: &mut dyn FnMut(Ref<'a>)) {
     }
 }
 
-/// The `ScanTable`s `f`'s allocations register (`gc_type_id`'s uses).
+/// The `ScanTable`s of `f`'s allocations (`HeapBox`, `HeapAlloc`,
+/// `BufAlloc`).
 pub fn tables(f: &MirFunction, t: &rokc_mir::Target) -> Vec<Vec<u32>> {
     let mut out = Vec::new();
     for s in f.blocks.iter().flat_map(|b| &b.stmts) {

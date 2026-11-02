@@ -129,7 +129,7 @@ impl Drop for TempEntry {
     }
 }
 
-/// Marks a directory kept on request (`--keep-temps`): never swept.
+/// Marks a directory kept on request (`--keep`): never swept.
 const KEEP: &str = ".rok-keep";
 
 fn remove(p: &Path) {

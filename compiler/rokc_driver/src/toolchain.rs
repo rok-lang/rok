@@ -79,7 +79,7 @@ pub struct BuildOptions {
     pub keep_temps: bool,
     /// `-g`: DWARF debug info (spec 9.9.6).
     pub debug: bool,
-    /// Codegen a REPL cell (`cell_ir`).
+    /// Codegen a REPL cell (`cell_object`).
     pub repl: Option<rokc_codegen_mlir::ReplCell>,
     /// Integer overflow panics (`-C overflow-checks`, the manifest's
     /// profile `overflow_checks`); on unless turned off.

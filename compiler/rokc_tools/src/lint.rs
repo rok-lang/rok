@@ -4,8 +4,9 @@
 //! Most lints walk the parsed AST; `redundant_cast` / `redundant_clone`
 //! read HIR types. Lowering reports uses of marked functions, fields,
 //! consts and statics (`deprecated`, `deprecated_safe`) as warnings that
-//! carry the lint; deprecated types are matched by path here. Levels: each lint's default, then `-A/-W/-D name`
-//! (later wins; `rok` prepends `rok.rokon` `lints`), then
+//! carry the lint; deprecated types are matched by path here. Levels:
+//! each lint's default, then `-A/-W/-D name` (later wins; `rok` prepends
+//! `rok.rokon` `lints`), then
 //! `#[allow/warn/deny]` on an enclosing item, `mod` or `#![..]`
 //! (innermost wins).
 //!
@@ -187,8 +188,9 @@ pub const REMOVED_LINTS: &[&str] = &[
     "implicit_core_fn",
     "discarded_ref_write",
     "fstring_g_precision",
-    // Errors now: scoped guard and thread-local views.
+    // Errors now: scoped guards.
     "guard_escape",
+    // Retired: the `with(|v| ..)` shape prevents the case.
     "thread_local_across_await",
     // Errors now: trait scope and meta names (spec 3.5.2, 6.9.9).
     "trait_not_in_scope",

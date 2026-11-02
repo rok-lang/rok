@@ -4,8 +4,8 @@
 // expect-error: help: write one of `alog::log!`, `blog::log!`
 // expect-error: package `alog` defines no macro `nope`, so `alog::nope!` names nothing
 // expect-error: `use log!;` does not name the package of `log!`
-// expect-warning: package `blog` defines no derive `Named`, so `#[derive(blog::Named)]` names nothing and does nothing
-// expect-warning: help: write `#[derive(alog::Named)]`
+// expect-error: package `blog` defines no derive `Named`, so `#[derive(blog::Named)]` names nothing
+// expect-error: help: write `#[derive(alog::Named)]`
 
 // Spec 6.8.11: a bare name reaches no other package's block; two
 // packages that define it each need their name.

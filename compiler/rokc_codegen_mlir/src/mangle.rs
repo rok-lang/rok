@@ -98,7 +98,7 @@ pub fn mangled(f: &MirFunction, pkgs: &Pkgs) -> String {
 }
 
 /// Mangle a `::`-qualified item path. The package is the hash, so a
-/// library's `rok::` root is dropped (`rok::std::vec` → `std_vec`, 905.3).
+/// library's `rok::` root is dropped (`rok::std::fs` → `std_fs`, 905.3).
 pub fn item(pkg: &str, qualified: &str, typehash: &str) -> String {
     let qualified = qualified.strip_prefix("rok::").unwrap_or(qualified);
     let mut segs: Vec<&str> = qualified.split("::").collect();
@@ -130,7 +130,7 @@ pub struct Demangled {
 }
 
 impl Demangled {
-    /// `rok::std::vec::push` style; a path starting with a library tier gets
+    /// `rok::std::fs` style; a path starting with a library tier gets
     /// `rok::` back (the mangled form drops the root).
     #[must_use]
     pub fn qualified_path(&self) -> String {
@@ -146,7 +146,7 @@ impl Demangled {
         segs.join("::")
     }
 
-    /// `rok::std::vec::push` (path + name).
+    /// `rok::std::fs::read` (path + name).
     #[must_use]
     pub fn qualified_name(&self) -> String {
         let path = self.qualified_path();

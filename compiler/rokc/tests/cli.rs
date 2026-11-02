@@ -1913,6 +1913,15 @@ fn test_format_json() {
         "{}",
         text(&out.stderr)
     );
+    // `rokbench` is bench's alone.
+    let out = rokc(Some(&env), &lib, &["test", "--format=rokbench"]);
+    assert_exit(&out, 2);
+    assert!(
+        text(&out.stderr)
+            .contains("`--format` for test takes human or json; `rokbench` is for bench"),
+        "{}",
+        text(&out.stderr)
+    );
 }
 
 /// `bench --format json`: the `#rokbench` line becomes a record; what the
@@ -3786,6 +3795,12 @@ fn prebuilt_dependency_is_linked_and_instantiated() {
     ] {
         assert!(info.contains(want), "{want:?} in\n{info}");
     }
+    // The producer's version and id, without the tool name again.
+    let line = info.lines().find(|l| l.starts_with("rokc version: "));
+    assert!(
+        line.is_some_and(|l| l[14..].starts_with(|c: char| c.is_ascii_digit())),
+        "{info}"
+    );
 }
 
 /// A prebuilt library's interface carries its `include_str!` /

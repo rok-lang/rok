@@ -58,7 +58,7 @@ const HELP: &str = "  <expr>         evaluate and print its value (`Display`, el
   :edit          write cells in `$EDITOR`, then run them
   :save <file>   write the session as a script
   :opt [<level>] print or set the optimization level of later cells
-                 (0, 1, 2, 3, s, z)
+                 (0, 1, 2, 3, s)
   :add <name>[@<req>] | <name> --path <dir> | <name> --git <url>
                  [--rev|--tag|--branch <r>]
                  add a dependency: `rok install` into the environment, or
@@ -854,13 +854,13 @@ impl Repl {
             ":save" => self.save(arg),
             ":opt" => match arg {
                 "" => println!("-O{}", self.opts.opt_level),
-                "0" | "1" | "2" | "3" | "s" | "z" => {
+                "0" | "1" | "2" | "3" | "s" => {
                     arg.clone_into(&mut self.opts.opt_level);
                     // Code built at the old level is built again.
                     self.known.clear();
                 }
                 _ => eprintln!(
-                    "error: `:opt` takes 0, 1, 2, 3, s or z (as `-O`), not `{arg}`: `:opt 2`"
+                    "error: `:opt` takes 0, 1, 2, 3 or s (as `-O`), not `{arg}`: `:opt 2`"
                 ),
             },
             _ => eprintln!("unknown command `{cmd}` (:help lists them)"),

@@ -1452,28 +1452,9 @@ fn named_environments() {
     assert_eq!(ok(&out).split('=').next(), Some("d"));
     let list = ok(&rok(&home, &root, &["env", "list"]));
     assert_eq!(list, "  default\n* work (active)\n");
-    // The choice is in `.current`, and in `CURRENT` for older rok.
+    // The choice is in `.current`, and nothing else.
     assert_eq!(read(&home.join("envs/.current")), "work\n");
-    assert_eq!(read(&home.join("envs/CURRENT")), "work\n");
-    // An older rok's `env use default` writes `CURRENT` only: newer wins.
-    let set_time = |f: &str, secs: u64| {
-        fs::File::options()
-            .write(true)
-            .open(home.join("envs").join(f))
-            .unwrap()
-            .set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(secs))
-            .unwrap();
-    };
-    write(&home.join("envs/CURRENT"), "default\n");
-    set_time(".current", 1_000_000);
-    set_time("CURRENT", 2_000_000);
-    assert_eq!(deps(&home, &elsewhere, &[])[0].0, "d");
-    set_time("CURRENT", 500_000);
-    assert_eq!(deps(&home, &elsewhere, &[])[0].0, "greet");
-    // An older rok's `env remove` drops `CURRENT`: no choice.
-    fs::remove_file(home.join("envs/CURRENT")).unwrap();
-    assert_eq!(deps(&home, &elsewhere, &[])[0].0, "d");
-    ok(&rok(&home, &root, &["env", "use", "work"]));
+    assert!(!home.join("envs/CURRENT").exists());
 
     // Export, import elsewhere.
     let export = root.join("export");
@@ -1539,11 +1520,6 @@ fn environment_names_are_checked() {
     let jupyter = root.join("jupyter");
     ok(&rok(&home, &root, &["env", "create", "work"]));
     for (name, why) in [
-        (
-            "current",
-            "`current` is reserved for `rok env use`'s choice",
-        ),
-        ("CURRENT", "`CURRENT` is reserved"),
         (".current", "starts with `.`"),
         ("CON", "`CON` is a device name on Windows"),
         ("nul.txt", "starts with a Windows device name (`nul`)"),
@@ -1555,7 +1531,6 @@ fn environment_names_are_checked() {
     ] {
         fails(&rok(&home, &root, &["env", "create", name]), why);
     }
-    assert!(!home.join("envs/current").is_dir());
     for (var, flag) in [("../../p1", false), ("../../p1", true), ("..", true)] {
         let out = if flag {
             rok(&home, &elsewhere, &["--env", var, "deps"])
@@ -1567,13 +1542,12 @@ fn environment_names_are_checked() {
         };
         fails(&out, &format!("`{var}` is a path, not an environment name"));
     }
-    write(&home.join("envs/CURRENT"), "../../p1\n");
     write(&home.join("envs/.current"), "../../p1\n");
     fails(
         &rok(&home, &elsewhere, &["deps"]),
         "`../../p1` is a path, not an environment name",
     );
-    // One an older rok made still works, with a warning.
+    // One made by hand still works, with a warning.
     fs::create_dir_all(home.join("envs/a b")).unwrap();
     let out = rok(&home, &elsewhere, &["--env", "a b", "deps"]);
     ok(&out);
@@ -1914,7 +1888,7 @@ fn pinned_toolchains() {
     let mut c = rok_cmd(&home, &root, &["toolchain", "install", "9.9"]);
     fails(
         &c.env("ROK_DIST", &empty).output().unwrap(),
-        "no release is published at",
+        "rok toolchain install: `9.9` is not a full version; write one like `0.1.6`",
     );
     assert_eq!(
         tc(&["install", "9.9.1", "--frm", "x"]).status.code(),
@@ -4502,7 +4476,7 @@ fn update_toolchain() {
     assert_eq!(text(&out.stderr), "rok 9.10.0 is up to date\n");
     fails(
         &update(&["greet"]),
-        "rok toolchain update: `greet` is not a version",
+        "rok toolchain update: `greet` is not a full version",
     );
     fs::remove_dir_all(dist.join("download/v9.9.1")).unwrap();
     let out = update(&["9.9.1", "-v"]);
@@ -4583,14 +4557,13 @@ fn fake_dist(root: &Path, versions: &[&str]) -> String {
 }
 
 /// A bare update installs the newest release, also from another series,
-/// and says how to stay on the old one. `update <series>` is the newest
-/// of that series: its channel file, or before it exists `rok-version`
-/// when that names a release of the series.
+/// and says how to stay on the old one. An argument is an exact version;
+/// a series or a requirement is an error that says to write one.
 // spec: §9.10.6
 #[cfg(unix)]
 #[test]
-fn update_series_and_exact() {
-    let root = scratch("update-series");
+fn update_newest_and_exact() {
+    let root = scratch("update-exact");
     let home = root.join("home");
     let host = env!("ROK_HOST");
     let url = fake_dist(&root, &["0.90.1", "0.90.2", "0.91.0"]);
@@ -4606,26 +4579,12 @@ fn update_series_and_exact() {
             .find_map(|l| l.strip_prefix("* ")?.strip_suffix(" (default)"))
             .map(str::to_owned)
     };
-    let latest = dist.join("latest/download/rok-version");
-    let channel = |s: &str| dist.join(format!("download/channels/rok-version-{s}"));
+    write(&dist.join("latest/download/rok-version"), "0.91.0\n");
 
-    // No channel file yet: `rok-version`, when in the series.
-    write(&latest, "0.90.1\n");
-    ok(&tc(&["update", "0.90"]));
+    // An exact version.
+    ok(&tc(&["update", "0.90.1"]));
     assert_eq!(default(), Some(format!("0.90.1-{host}")));
-    write(&latest, "0.91.0\n");
-    fails(
-        &tc(&["update", "0.90"]),
-        &format!(
-            "cannot tell the newest 0.90 release: {url}/download/channels/rok-version-0.90 does \
-             not exist and {url}/latest/download/rok-version names 0.91.0; name a 0.90 version \
-             (`rok toolchain update <version>`) or move to 0.91.0 (`rok toolchain update 0.91`)"
-        ),
-    );
-    assert_eq!(default(), Some(format!("0.90.1-{host}")));
-    // The channel file.
-    write(&channel("0.90"), "0.90.2\n");
-    let err = text(&tc(&["update", "0.90"]).stderr);
+    let err = text(&tc(&["update", "0.90.2"]).stderr);
     assert!(err.contains("Updated rok 0.90.1 -> 0.90.2\n"), "{err}");
     assert!(
         err.ends_with(&format!(
@@ -4633,6 +4592,18 @@ fn update_series_and_exact() {
         )),
         "{err}"
     );
+    assert_eq!(default(), Some(format!("0.90.2-{host}")));
+
+    // A series, a requirement or a short version is not a release.
+    for bad in ["0.90", "^0.90.2", "0", "latest"] {
+        fails(
+            &tc(&["update", bad]),
+            &format!(
+                "rok toolchain update: `{bad}` is not a full version; write one like `0.1.6`, \
+                 or nothing for the newest release"
+            ),
+        );
+    }
     assert_eq!(default(), Some(format!("0.90.2-{host}")));
 
     // A bare update crosses into the newest series, keeping the old one.
@@ -4660,31 +4631,10 @@ fn update_series_and_exact() {
         .env_remove("ROK_TOOLCHAIN")
         .arg("x");
     assert_eq!(ok(&c.output().unwrap()), "rokc 0.90.2: x\n");
-
-    // An exact version, a requirement.
-    ok(&tc(&["update", "0.90.1"]));
-    assert_eq!(default(), Some(format!("0.90.1-{host}")));
-    ok(&tc(&["update", "^0.90.2"]));
-    assert_eq!(default(), Some(format!("0.90.2-{host}")));
-    fails(
-        &tc(&["update", "^0.90.3"]),
-        "the newest rok 0.90 release is 0.90.2, which `^0.90.3` does not accept; name a version \
-         it does (`rok toolchain update <version>`)",
-    );
-    fails(
-        &tc(&["update", "0"]),
-        "rok toolchain update: `0` is not a version; write a series (`0.1`), a version \
-         (`0.1.6`) or a requirement (`^0.1.5`)",
-    );
-    write(&channel("0.90"), "0.91.0\n");
-    fails(
-        &tc(&["update", "0.90"]),
-        "rok-version-0.90 names 0.91.0, which is not a 0.90 release",
-    );
 }
 
 /// `rok toolchain install <version>` without `--from` downloads a
-/// release, as `update` finds it, and keeps the default.
+/// release by exact version and keeps the default.
 // spec: §9.10.6
 #[cfg(unix)]
 #[test]
@@ -4693,10 +4643,6 @@ fn install_by_version_without_from() {
     let home = root.join("home");
     let host = env!("ROK_HOST");
     let url = fake_dist(&root, &["0.90.1", "0.90.2"]);
-    write(
-        &root.join("dist/download/channels/rok-version-0.90"),
-        "0.90.2\n",
-    );
     let tc = |args: &[&str]| {
         let mut c = rok_cmd(&home, &root, &[&["toolchain"][..], args].concat());
         c.env("ROK_DIST", &url);
@@ -4709,14 +4655,14 @@ fn install_by_version_without_from() {
         "{}",
         text(&out.stderr)
     );
-    // The first one became the default; a series adds its newest.
-    ok(&tc(&["install", "0.90"]));
+    // The first one became the default.
+    ok(&tc(&["install", "0.90.2"]));
     assert_eq!(
         ok(&tc(&["list"])),
         format!("* 0.90.1-{host} (default)\n  0.90.2-{host}\n")
     );
     assert_eq!(
-        text(&tc(&["install", "^0.90.1"]).stderr),
+        text(&tc(&["install", "0.90.2"]).stderr),
         format!("toolchain 0.90.2-{host} is already installed\n")
     );
     // The proxies are the newest's; the default still runs.
@@ -4726,7 +4672,10 @@ fn install_by_version_without_from() {
         .env_remove("ROK_TOOLCHAIN")
         .arg("x");
     assert_eq!(ok(&c.output().unwrap()), "rokc 0.90.1: x\n");
-    fails(&tc(&["install", "0.92"]), "no release is published at");
+    fails(
+        &tc(&["install", "0.92"]),
+        "rok toolchain install: `0.92` is not a full version; write one like `0.1.6`",
+    );
 }
 
 /// A pin is a version prefix, a requirement (`^`, `~`, `=`) or a
@@ -4775,7 +4724,7 @@ fn pin_requirement_caret() {
     fails(&rokc("^9.11"), "toolchain ^9.11 (pinned by ");
     fails(
         &rokc("^9.11"),
-        "install it with `rok toolchain install ^9.11`",
+        "install a release it accepts by its full version, `rok toolchain install <version>` (or `rok toolchain install ^9.11 --from",
     );
 }
 

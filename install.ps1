@@ -6,7 +6,7 @@
 #   powershell -ExecutionPolicy Bypass -c "irm https://rok-lang.org/install.ps1 | iex"
 #   powershell -ExecutionPolicy Bypass -File install.ps1 -Archive rok-<version>-<triple>.zip
 #   rok-<version>-<triple>\install.ps1          (from an unpacked archive)
-#   powershell -ExecutionPolicy Bypass -File install.ps1 -Version 0.1   (the newest 0.1.x)
+#   powershell -ExecutionPolicy Bypass -File install.ps1 -Version 0.1.6   (that release)
 #
 # Environment: ROK_HOME, ROK_VERSION (default below), ROK_DIST (where
 # releases are downloaded from), ROK_NO_MODIFY_PATH, NO_COLOR,
@@ -81,32 +81,6 @@ function Download([string]$Uri, [string]$OutFile) {
     }
 }
 
-# The series of version $V: 0.MINOR, or MAJOR from 1.0 on.
-function SeriesOf([string]$V) {
-    $p = $V.Split('.')
-    if ($p[0] -eq '0') { "0.$($p[1])" } else { $p[0] }
-}
-
-# The newest release of series $S: its channel file, or before that
-# exists rok-version when it names a release of the series.
-function LatestIn([string]$S, [string]$Tmp) {
-    $channel = "$dist/download/channels/rok-version-$S"
-    $legacy = "$dist/latest/download/rok-version"
-    $file = Join-Path $Tmp 'rok-version'
-    if (Download $channel $file) {
-        $v = (Get-Content -Raw $file).Trim()
-    } elseif (Download $legacy $file) {
-        $v = (Get-Content -Raw $file).Trim()
-        if ((SeriesOf $v) -ne $S) {
-            throw "cannot tell the newest rok $S release: $channel does not exist and $legacy names $v; give a full version (-Version <version>)"
-        }
-    } else {
-        throw "no rok release is published at $channel or $legacy; give a full version (-Version <version>)"
-    }
-    if ($v -notmatch '^\d+\.\d+\.\d+') { throw "$channel does not name a version" }
-    $v
-}
-
 try {
     $tmp = Join-Path ([IO.Path]::GetTempPath()) "rok-install-$([Guid]::NewGuid())"
     New-Item -ItemType Directory $tmp | Out-Null
@@ -118,11 +92,8 @@ try {
         } else {
             if (-not $Archive) {
                 $triple = HostTriple
-                # A series (-Version 0.1) is its newest release.
-                if ($Version -match '^\d+(\.\d+)?$') {
-                    $Version = LatestIn $Version $tmp
-                } elseif ($Version -notmatch '^\d+\.\d+\.\d+') {
-                    throw "-Version takes a version (0.1.6) or a series (0.1), not $Version"
+                if ($Version -notmatch '^\d+\.\d+\.\d+') {
+                    throw "-Version takes a full version like 0.1.6, not $Version"
                 }
                 $url ="$dist/download/v$Version/rok-$Version-$triple.zip"
                 Status 'Downloading' "rok $Version ($triple)"

@@ -232,9 +232,9 @@ fn list_members(a: &Analysis, ty: &HirTy, push: &mut impl FnMut(&str, u32, Strin
     }
 }
 
-/// Which HIR items a path completion offers: not `#[doc(hidden)]`; of
-/// the library or another package, only what is public (an item, or a
-/// shown member for `Type__method`). Items with no source are kept.
+/// Which HIR items a path completion offers: not `#[doc(hidden)]` or
+/// `#[internal]`; of the library or another package, only what is public
+/// (an item, or a shown member for `Type__method`). Items with no source are kept.
 fn visible(a: &Analysis) -> impl Fn(&str, Span) -> bool + '_ {
     let hidden = a.hidden_spans();
     let mut own = HashSet::new();

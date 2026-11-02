@@ -693,8 +693,8 @@ fn real_main() {
     }
 }
 
-/// Find `rok/core` (the implicit prelude, spec 0.0.5) and
-/// `librokr.a` without flags.
+/// Find the library roots (`rok/core`, spec 0.5) and `librokr.a`
+/// without flags.
 fn with_defaults(mut a: Args) -> Args {
     let sys = rokc_interface::sysroot();
     if a.bootstrap.is_empty() {
@@ -1635,9 +1635,12 @@ fn path_and_filter(a: &Args) -> (&str, Option<&str>) {
 }
 
 /// `rokc test` / `rokc bench [path] [filter]` (`-O2` unless given): build
-/// the harness and emit the manifest `rok` runs (spec 9.1). `rokc` no
-/// longer runs the cases; `--emit-harness` names the manifest file.
+/// the harness and emit the manifest `rok` runs (spec 9.1). `rok` runs
+/// the cases; `--emit-harness` names the manifest file.
 fn cmd_harness(mut a: Args, mode: Mode) {
+    if mode != Mode::Bench && a.rokbench {
+        usage_error("`--format` for test takes human or json; `rokbench` is for bench");
+    }
     if mode == Mode::Bench && !a.opt_set {
         "2".clone_into(&mut a.opts.opt_level);
         set_overflow_checks(&mut a);
@@ -2109,7 +2112,7 @@ fn cmd_profdata(a: &Args) {
     }
 }
 
-/// `rokc bindgen <header>` (std 1.7.6): spec 905.4 output, one block per
+/// `rokc bindgen <header>` (std 1.7.6, spec 9.1.3): one block per
 /// symbol.
 fn cmd_bindgen(a: &Args) {
     let [header] = a.positional.as_slice() else {

@@ -1619,15 +1619,6 @@ impl Parser<'_> {
             kind_word(kind),
             meta_use(kind, &qual.join("::"), name)
         );
-        if kind == MetaKind::Derive {
-            // Ignored before 0.1.6, so only a warning.
-            self.diagnostics.push(
-                RokDiagnostic::warning(Code::META_NAME, at, format!("{msg} and does nothing"))
-                    .with_file(self.file.clone())
-                    .with_help(help),
-            );
-            return None;
-        }
         self.diagnostics.push(
             meta_err(Code::META_NAME, at, msg)
                 .with_file(self.file.clone())

@@ -79,39 +79,28 @@ A manual `workflow_dispatch` run skips `ci-green`, then runs `plan`,
 no attestation, no release, nothing uploaded. Use it to check the pipeline
 on a commit before tagging it.
 
-## Series and update pointers
+## Update pointer
 
 A series is the releases one breaking slot covers: `0.MINOR` while the
-major version is 0 (`0.1` is 0.1.0, 0.1.1, ...), then `MAJOR`. Clients find
-the newest release in two ways:
+major version is 0 (`0.1` is 0.1.0, 0.1.1, ...), then `MAJOR`.
 
-- `latest/download/rok-version`: one line naming the newest release, of
-  any series. A bare `rok toolchain update` installs what it names and
-  makes it the default, as rustup does, also when that moves to a new
-  series. The previous toolchain stays installed, and when the series
-  changed `rok` says so once, with how to stay on the old one: pin it
-  (`toolchain: "0.1"` in `rok.rokon`, or in a script's `//! rokon`
-  block) or run `rok +0.1 ..`. `rok new` writes that pin from 0.1.6 on.
-- `download/channels/rok-version-<series>`, a channel file per series
-  naming the newest release of that series. Clients look for it, but none
-  is published (below).
+`latest/download/rok-version` is one line naming the newest release, of
+any series; each release uploads it. A bare `rok toolchain update`
+installs what it names and makes it the default, as rustup does, also
+when that moves to a new series. The previous toolchain
+stays installed, and when the series changed `rok` says so once, with how
+to stay on the old one: pin it (`toolchain: "0.1"` in `rok.rokon`, or in
+a script's `//! rokon` block) or run `rok +0.1 ..`. Every 0.1.x client
+reads this file the same way, so it must keep its name and format.
 
-rok 0.1.6 and later read the channel files for a series:
-
-- `rok toolchain update <series>` and `rok toolchain install <series>`
-  (or a requirement such as `^0.1.5`) read the series' channel file;
-  a full version (`0.1.6`) is fetched directly and needs no pointer.
-- `install.sh --version 0.1` and `install.ps1 -Version 0.1` read the same
-  channel file.
-
-When a channel file is missing (HTTP 404), these clients fall back to
-`rok-version` and use it only if it names a release of the series they
-want; otherwise they stop and ask for a full version. So 0.1.6 works
-before any channel file is published, for the series `rok-version` is in.
-
-No channel files are published: `release.sh` and `release.yml` upload
-only `rok-version` with each release, and clients rely on the fallback
-above. A series other than the newest one is installed by full version.
+Any other release is installed by its full version:
+`rok toolchain update 0.1.6`, `rok toolchain install 0.1.6`,
+`install.sh --version 0.1.6`, `install.ps1 -Version 0.1.6`. There is no
+series lookup and no channel file: an argument that is not a full version
+is an error. (rok 0.1.6 still looks for
+`download/channels/rok-version-<series>` when given a series; none is
+published, so it falls back to `rok-version` and otherwise asks for a full
+version.)
 
 ## Installer contract
 

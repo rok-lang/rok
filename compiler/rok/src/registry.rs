@@ -841,7 +841,7 @@ pub fn taken(
     }
 }
 
-/// Set `yanked` on `name` `vers` in the index checkout, as a commit.
+/// Set `yanked` on `name` `version` in the index checkout, as a commit.
 pub fn yank(
     index: &Path,
     name: &str,

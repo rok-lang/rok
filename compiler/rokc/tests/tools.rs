@@ -1686,7 +1686,7 @@ fn add(a: i32, b: i32) -> i32
     for e in [
         "[repl] front end: ",
         "[repl] total: ",
-        "`:opt` takes 0, 1, 2, 3, s or z",
+        "`:opt` takes 0, 1, 2, 3 or s",
         "`:doc` takes a name: `:doc xs.len`",
         "`:load` takes a file: `:load prog.rok`",
         "`:load` takes a `.rok` file; for a package directory start `rok repl",
