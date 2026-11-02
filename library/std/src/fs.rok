@@ -743,15 +743,15 @@ const DIR_BATCH: usize = 64;
 /// `read_dir_async`: a `ReadDir` as a `TryStream`. Each refill reads up
 /// to `DIR_BATCH` entries on a blocking thread while the task suspends.
 /// Closed at its end or where its owner leaves scope; a cancelled task's
-/// refill finishes in the background first.
+/// refill finishes first.
 #[must_use("stream is lazy and does nothing unless polled: walk it with `try for await`, or call `try await {}.collect()`")]
 pub struct ReadDirStream {
-    rd: ReadDir;
-    /// Held by a refill while it reads, and by `drop` to close.
-    lock: Mutex<i32>;
+    /// `none` while a refill owns it.
+    rd: ReadDir | none;
     batch: List<Result<DirEntry, IoError>>;
     pos: usize;
-    pending: Task<List<Result<DirEntry, IoError>>> | none;
+    /// The refill: it gives `rd` back with the batch.
+    pending: Task<(ReadDir, List<Result<DirEntry, IoError>>)> | none;
 }
 
 impl Debug for ReadDirStream {
@@ -759,7 +759,7 @@ impl Debug for ReadDirStream {
 }
 
 const fn stream_of(rd: ReadDir) -> ReadDirStream {
-    ReadDirStream { rd: rd, lock: Mutex::new(0), batch: List::new(), pos: 0, pending: none }
+    ReadDirStream { rd: rd, batch: List::new(), pos: 0, pending: none }
 }
 
 impl TryStream for ReadDirStream {
@@ -773,33 +773,21 @@ impl TryStream for ReadDirStream {
                     return Poll::Ready(try self.batch[self.pos - 1].get());
                 }
                 let job = match self.pending {
-                    b: Task<List<Result<DirEntry, IoError>>> => b,
+                    b: Task<(ReadDir, List<Result<DirEntry, IoError>>)> => b,
                     none => {
-                        if self.rd.d[0] == 0 { return Poll::Ready(none); }
-                        // Only the refill holding `lock` touches `rd`.
-                        let shared = Handoff::new(self.rd);
-                        let lock = self.lock;
-                        task::spawn_blocking(|| {
-                            // The stream still owns `rd`: this is a second handle.
-                            let rd = rok::core::marker::share(shared.get());
-                            let out: List<Result<DirEntry, IoError>> = List::new();
-                            using g = lock.lock() {
-                                while out.len() < DIR_BATCH {
-                                    // The batch ends at an error.
-                                    let e = try rd.next() catch x { out.push(Result::Err(x)); break; };
-                                    match e {
-                                        d: DirEntry => out.push(Result::Ok(d)),
-                                        none => break,
-                                    }
-                                }
-                            }
-                            out
-                        })
+                        if let r: ReadDir = self.rd {
+                            if r.d[0] == 0 { return Poll::Ready(none); }
+                        }
+                        match replace(ref self.rd, none) {
+                            rd: ReadDir => refill(rd),
+                            none => return Poll::Ready(none),
+                        }
                     }
                 };
                 match job.poll(ref ctx) {
-                    Poll::Ready(b) => {
+                    Poll::Ready((rd, b)) => {
                         self.pending = none;
+                        self.rd = rd;
                         self.batch = b;
                         self.pos = 0;
                     }
@@ -813,10 +801,34 @@ impl TryStream for ReadDirStream {
     }
 }
 
+/// Read the next batch of `rd` on the blocking lane; `rd` moves there
+/// and comes back with the batch.
+fn refill(rd: ReadDir) -> Task<(ReadDir, List<Result<DirEntry, IoError>>)> {
+    let moved = unsafe { Handoff::new(rd) };
+    task::spawn_blocking(|| {
+        let dir = moved.get();
+        let out: List<Result<DirEntry, IoError>> = List::new();
+        while out.len() < DIR_BATCH {
+            // The batch ends at an error.
+            let e = try dir.next() catch x { out.push(Result::Err(x)); break; };
+            match e {
+                d: DirEntry => out.push(Result::Ok(d)),
+                none => break,
+            }
+        }
+        (dir, out)
+    })
+}
+
 impl Drop for ReadDirStream {
     fn drop(ref self) {
-        using g = self.lock.lock() {
-            close_dir(self.rd.d);
+        // A refill in flight owns `rd`: wait for it to give it back.
+        if let job: Task<(ReadDir, List<Result<DirEntry, IoError>>)> = replace(ref self.pending, none) {
+            let (rd, _) = task::block_on(job);
+            close_dir(rd.d);
+        }
+        if let rd: ReadDir = replace(ref self.rd, none) {
+            close_dir(rd.d);
         }
     }
 }
@@ -900,11 +912,19 @@ impl Seek for File {
 
 // The async twins run the call on a blocking thread; the task suspends.
 // Not cancel-safe: a cancelled call still runs, and its result is lost.
+// The lane works on its own copy of the bytes, never on the caller's
+// buffer, which a cancelled caller owns again.
 impl AsyncRead for File {
     async fn read_async(ref self, buf: SliceMut<u8>) throws (IoError) -> usize {
-        // The caller awaits the read: one thread uses `buf` at a time.
-        let b = unsafe { Handoff::new(buf) };
-        try await off(|| try self.read(b.get()))
+        let n = buf.len();
+        let got = try await off(|| {
+            let own: List<u8> = List::filled(n, 0u8);
+            let k = try self.read(own);
+            own.truncate(k);
+            own
+        });
+        buf[0:got.len()].copy_from_slice(got[0:got.len()]);
+        got.len()
     }
 
     async fn read_to_end_async(ref self) throws (IoError) -> List<u8> {
@@ -914,14 +934,15 @@ impl AsyncRead for File {
 
 impl AsyncWrite for File {
     async fn write_async<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize {
-        let s = unsafe { Handoff::new(buf.byte_slice()) };
+        // A fresh copy: nothing else reaches it.
+        let s = unsafe { Handoff::new(buf.byte_slice().to_list()) };
         try await off(|| try self.write(s.get()))
     }
 
     async fn flush_async(ref self) throws (IoError) {}
 
     async fn write_all_async<B: AsBytes>(ref self, buf: B) throws (IoError) {
-        let s = unsafe { Handoff::new(buf.byte_slice()) };
+        let s = unsafe { Handoff::new(buf.byte_slice().to_list()) };
         try await off(|| try self.write_all(s.get()));
     }
 }
@@ -1608,13 +1629,14 @@ pub async fn read_to_str_async<P: AsPath>(path: P) throws (IoError) -> str {
 /// `fs::write` on the blocking lane: the task waits, its thread does not.
 pub async fn write_async<P: AsPath, D: AsBytes>(path: P, data: D) throws (IoError) {
     let p = path.as_path();
-    let s = unsafe { Handoff::new(data.byte_slice()) };
+    // A fresh copy for the lane: a cancelled caller owns `data` again.
+    let s = unsafe { Handoff::new(data.byte_slice().to_list()) };
     try await off(|| try write(p, s.get()));
 }
 /// `fs::write_atomic` on the blocking lane: the task waits, its thread does not.
 pub async fn write_atomic_async<P: AsPath, D: AsBytes>(path: P, data: D) throws (IoError) {
     let p = path.as_path();
-    let s = unsafe { Handoff::new(data.byte_slice()) };
+    let s = unsafe { Handoff::new(data.byte_slice().to_list()) };
     try await off(|| try write_atomic(p, s.get()));
 }
 /// `fs::metadata` on the blocking lane: the task waits, its thread does not.

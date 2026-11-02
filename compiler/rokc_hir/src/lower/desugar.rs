@@ -1120,7 +1120,8 @@ fn lower_for_stream(
         method_call_on(ctx, s, "into_stream", &[], span)
     };
     let ty = s.ty.clone();
-    let st = ctx.declare(None, ty.clone());
+    // `#for`: a view of a stream variable, the owner of a temporary one.
+    let st = ctx.declare(Some(format!("#for{}", ctx.locals.len())), ty.clone());
     out.push(HirStmt::Let { local: st, init: s });
     let next = super::coro::poll_loop(ctx, st, &ty, "poll_next", span);
     for_next_loop(ctx, label, pat, next, body, span)

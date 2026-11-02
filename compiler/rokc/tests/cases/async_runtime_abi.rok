@@ -14,7 +14,6 @@
 // one it makes of the SOCKET). A waker crosses as a one-element
 // `GcBuf<Waker>`.
 use rok::bare::mem::{GcBuf, buf_new};
-use rok::core::marker::share;
 use rok::std::net::{TcpListener, TcpStream, SocketAddr};
 #[cfg(target_family = "unix")]
 use rok::std::os::unix::io::AsRawFd;
@@ -93,22 +92,24 @@ println(f"coro: {await waiter}");
 let any: SocketAddr = try! "127.0.0.1:0".parse::<SocketAddr>();
 let listener = try! TcpListener::bind(any);
 let client = try! TcpStream::connect(try! listener.local_addr());
-let (server_own, _) = try! listener.accept();
-let server = unsafe { share(server_own) };
+let (server, _) = try! listener.accept();
 server.set_nonblocking(true);
+// The task owns the stream and closes it.
 let reader = task::spawn(async {
     let buf = List::filled(16, 0u8);
     loop {
         await Readable { fd: io_fd(server), armed: false };
         let n = try server.read(buf) catch _ { 0 };
-        if n > 0 { return n; }
+        if n > 0 {
+            try! server.close();
+            return n;
+        }
     }
 });
 await task::sleep(Duration::ms(10));
 try! client.write_all("hello");
 println(f"io: {await reader} bytes");
 try! client.close();
-try! server_own.close();
 try! listener.close();
 println(f"registrations left: {task::registrations()}");
 

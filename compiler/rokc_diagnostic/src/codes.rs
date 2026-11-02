@@ -771,6 +771,14 @@ codes! {
      type parameter, `fn f<T>(x: T)`, for any type). Without `->` it returns `()`; when \
      the body gives a value, write its type, `-> i32`, as the fix-it shows. Trait impl \
      methods take the trait's types and private functions keep inference.";
+
+    140 STREAM_VIEW_ESCAPE Handoff "stream view used past its stream"
+    "`r.lines()`, `bytes`, `split`, `take`, their async streams and `incoming` read \
+     through `r` and stay in the scope of `r`'s owner: one is returned, stored past that \
+     scope, kept by a callee, or used after `r` was closed. Use it inside the scope and \
+     collect what you need (`try r.lines().collect()`), or take the owning form \
+     (`r.into_lines()`), which owns `r`, closes it with itself and can be returned or \
+     moved into a task.";
 }
 
 #[cfg(test)]

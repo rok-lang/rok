@@ -178,6 +178,8 @@ pub(super) fn check(env: &Env<'_>, functions: &[HirFunction]) {
             span,
             if guard {
                 format!("`task::spawn` cannot take a guard: {why}")
+            } else if why.contains(VIEW_WHY) {
+                format!("a task cannot take a view of a stream: {why}")
             } else if spawn {
                 format!(
                     "`task::spawn` needs a `Send` future: {why}, and the task may resume on \
@@ -256,7 +258,19 @@ fn frame(ctx: &LowerCtx<'_>, send: &str, sync: Option<&str>, f: &HirFunction) ->
         t.map(|t| ctx.auto_trait_cause(t, key, 0))
             .unwrap_or_default()
     };
+    let view = |l: LocalId| {
+        ty_of(l).filter(|t| is_stream_view(ctx, t)).map(|t| {
+            format!(
+                "it captures `{}: {}`, {VIEW_WHY}; move the stream itself into the task and \
+                 make the view there, or capture the owning form (`into_lines()`, \
+                 `into_incoming()`, ..)",
+                name(l),
+                ctx.ty_name(t)
+            )
+        })
+    };
     let why = w.found.map(|found| match found {
+        Found::Capture(l) if view(l).is_some() => view(l).unwrap_or_default(),
         Found::Capture(l) => format!(
             "it captures `{}: {}`, which is not `Send`{}",
             name(l),
@@ -308,6 +322,17 @@ fn frame(ctx: &LowerCtx<'_>, send: &str, sync: Option<&str>, f: &HirFunction) ->
         )
     });
     (why, why_shared, why_cell, held)
+}
+
+const VIEW_WHY: &str = "which reads through its stream and stays in the stream owner's scope";
+
+/// A scoped view of a stream (`r.lines()`).
+fn is_stream_view(ctx: &LowerCtx<'_>, ty: &HirTy) -> bool {
+    let HirTy::Struct(id) = ty else { return false };
+    let name = ctx.struct_def(*id).name;
+    let base = name.split("__").next().unwrap_or(&name);
+    let base = base.split('<').next().unwrap_or(base);
+    super::affine::STREAM_VIEWS.contains(&base)
 }
 
 /// A lock guard (good only inside its `using` block).

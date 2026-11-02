@@ -1632,9 +1632,19 @@ impl TcpListener {
     pub const fn set_nonblocking(self, nb: bool) { self.sock.set_nonblocking(nb); }
 
     /// `try for s in l.incoming() { .. }`: connections forever; a failed
-    /// `accept` ends the loop with its error. The listener stays its
-    /// owner's to close.
-    pub const fn incoming(self) -> Incoming { Incoming { sock: self.sock } }
+    /// `accept` ends the loop with its error. A view of the listener: it
+    /// stays in the listener's scope, and its owner still closes it.
+    pub const fn incoming(ref self) -> Incoming {
+        let l = rok::core::marker::view(self);
+        Incoming { l: l }
+    }
+
+    /// `incoming` owning the listener: it may leave the scope or move to
+    /// a task, and closes the listener with itself.
+    pub const fn into_incoming(self) -> io::Owned<Incoming, TcpListener> {
+        let v = self.incoming();
+        io::Owned::of(v, self)
+    }
 
     /// Close now, throwing the OS's error.
     pub fn close(self) throws (IoError) { try self.sock.close(); }
@@ -1675,8 +1685,11 @@ impl Drop for TcpListener {
 /// `TcpListener::incoming`: a view of the listener.
 #[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct Incoming {
-    sock: Sock;
+    l: TcpListener;
 }
+
+impl !Send for Incoming {}
+impl !Sync for Incoming {}
 
 impl Debug for Incoming {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Incoming") }
@@ -1686,8 +1699,8 @@ impl TryIterator for Incoming {
     type Item = TcpStream;
     type Error = IoError;
     fn next(ref self) throws (IoError) -> TcpStream | none {
-        let (s, _) = try self.sock.accept();
-        TcpStream { sock: s }
+        let (s, _) = try self.l.accept();
+        s
     }
 }
 

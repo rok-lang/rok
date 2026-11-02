@@ -20,16 +20,17 @@ async fn main() throws (IoError) {
     let any = try! "127.0.0.1:0".parse::<SocketAddr>();
     let l = try TcpListener::bind(any);
     let at = try l.local_addr();
-    let lv = unsafe { share(l) };
+    // The server task owns the listener.
     let server = task::spawn(async {
         let r: str = try {
-            let (s, _) = try await lv.accept_async();
+            let (s, _) = try await l.accept_async();
             let got = try await s.read_to_str_async();
             try await s.write_all_async("bye");
             try await s.flush_async();
             try await s.close_async();
             got
         } catch e: IoError { f"{e}" };
+        try await l.close_async() catch _ {};
         r
     });
     let c = try await TcpStream::connect_async(at);
@@ -45,7 +46,6 @@ async fn main() throws (IoError) {
         "open"
     } catch e: IoError { f"{e.kind():?}" };
     println(f"closed: {r}");
-    try await l.close_async();
     println("listener closed");
 
     let a = try UdpSocket::bind(any);

@@ -4,7 +4,6 @@
 // done 8 left 0
 
 // Work queue: jobs popped off a list and sent to workers; results back.
-use rok::core::marker::share;
 use rok::std::thread;
 struct Job { id: i32; data: List<i32>; }
 fn main() {
@@ -12,9 +11,10 @@ fn main() {
     for i in 0..8 { jobs.push(Job { id: i, data: [i, i * 2] }); }
     let (tx, rx) = channel::<Job>();
     let (rt_own, rr) = channel::<i32>();
-    let rt = unsafe { share(rt_own) };
     let workers: List<thread::JoinHandle<i32>> = [];
     for _ in 0..2 {
+        // Each worker owns a sender of its own.
+        let rt = rt_own.clone();
         workers.push(thread::spawn(|| {
             let n = 0;
             while let j: Job = rx.recv() { j.data.push(1); try! rt.send(j.id); n += 1; }

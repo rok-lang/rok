@@ -1,0 +1,41 @@
+// expect-error: 18:9: this returns a view of `f` out of `f`'s scope
+// expect-error: help: `f.lines()` reads through `f` and stays in its scope; use it there (`try f.lines().collect()`), or take the owning form `f.into_lines()`, which owns `f` and closes it with itself
+// expect-error: 30:17: `ls` is a view of `f` (made at line 28), used after `f` was closed
+// expect-error: 34:13: `g.lines()` is a view of `g`, and `keep` keeps it past the call, out of `g`'s scope
+// expect-error: 39:13: a task cannot take a view of a stream: it captures `inc: Incoming`
+
+// `r.lines()` and the other stream adapters are views of `r`: they stay
+// in the scope of `r`'s owner. Returning one, using it after `r` closed,
+// letting a callee keep it or sending it to a task is an error; the
+// owning form (`into_lines()`) is the way out.
+use rok::std::fs;
+use rok::std::net;
+use rok::std::net::TcpListener;
+use rok::core::io::{BufRead, BufReader, Lines, IoError};
+
+fn lines_of(p: str) throws (IoError) -> Lines<BufReader<fs::File>> {
+    using f = BufReader::new(try fs::open(p)) {
+        return f.lines();
+    }
+}
+
+struct Keep { l: Lines<BufReader<fs::File>> }
+
+fn keep(k: Cell<Keep | none>, l: Lines<BufReader<fs::File>>) { k.set(Keep { l: l }); }
+
+fn main() throws (IoError) {
+    let f = BufReader::new(try fs::open("/dev/null"));
+    let ls = f.lines();
+    try f.close();
+    let _ = try ls.next();
+
+    let g = BufReader::new(try fs::open("/dev/null"));
+    let k: Cell<Keep | none> = Cell::new(none);
+    keep(k, g.lines());
+    try g.close();
+
+    let l = try TcpListener::bind("127.0.0.1:0");
+    let inc = l.incoming();
+    let t = task::spawn(async { if let s: net::TcpStream = try! inc.next() { try! s.close(); } });
+    try l.close();
+}

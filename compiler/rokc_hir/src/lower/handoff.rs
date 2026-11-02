@@ -129,6 +129,10 @@ fn is_fn(name: &str, path: &str) -> bool {
         .is_some_and(|rest| rest.is_empty() || rest.starts_with("__"))
 }
 
+/// What `r.lines()` and the other stream adapters wrap their receiver in:
+/// a view tied to the receiver like a guard's `get()`, released with it.
+const VIEW_FN: &str = "rok::core::marker::view";
+
 #[derive(Clone, Copy, PartialEq)]
 enum Op {
     Handoff(usize, What),
@@ -144,6 +148,9 @@ enum Op {
 fn op_of(name: &str, guard: bool) -> Option<Op> {
     if let Some(&(_, i, what)) = HANDOFFS.iter().find(|(p, ..)| is_fn(name, p)) {
         return Some(Op::Handoff(i, what));
+    }
+    if is_fn(name, VIEW_FN) {
+        return Some(Op::Get);
     }
     if !guard {
         return None;
@@ -1918,6 +1925,33 @@ fn keeps_param(
 }
 
 /// `t` (`g.get()`, `xs`) as a deep copy: `g.get_clone()`, `xs.clone()`.
+/// What a coroutine call returns: its frame holds the arguments.
+const CORO_TYPES: &[&str] = &[
+    "rok::core::future::AsyncFuture",
+    "rok::core::future::TryAsyncFuture",
+    "rok::core::iter::GenIter",
+    "rok::core::iter::TryGenIter",
+    "rok::core::stream::AsyncStream",
+    "rok::core::stream::TryAsyncStream",
+];
+
+/// The stream adapters that make views, longest first.
+const VIEW_METHODS: &[&str] = &[
+    ".lines_async(",
+    ".bytes_async(",
+    ".incoming(",
+    ".lines(",
+    ".bytes(",
+    ".split(",
+    ".take(",
+];
+
+/// `f.lines()` as its owning form, `f.into_lines()`.
+fn owning_form(made: &str) -> Option<String> {
+    let i = VIEW_METHODS.iter().filter_map(|m| made.rfind(m)).max()?;
+    Some(format!("{}.into_{}", &made[..i], &made[i + 1..]))
+}
+
 fn deep_copy(t: &str) -> String {
     t.strip_suffix(".get()")
         .map_or_else(|| format!("{t}.clone()"), |g| format!("{g}.get_clone()"))
@@ -2461,6 +2495,14 @@ impl<'h> Walk<'_, 'h> {
             .is_some_and(|f| SAFE.iter().any(|n| is_fn(&f.name, n)))
     }
 
+    fn local_name(&self, l: LocalId) -> Option<&str> {
+        self.f
+            .locals
+            .iter()
+            .find(|x| x.id == l)
+            .and_then(|x| x.name.as_deref())
+    }
+
     fn hidden(&self, l: LocalId) -> bool {
         self.f
             .locals
@@ -2687,6 +2729,20 @@ impl<'h> Walk<'_, 'h> {
                         What::Mutex | What::RwLock => format!("it belongs to {}", why.what.noun()),
                     }
                 ))
+            }
+            Gone::Guard(site, guard, _) if self.stream_view(guard) => {
+                let gname = self.name(guard);
+                let who = who.split('.').next().unwrap_or(who);
+                let line = self.line(site, at);
+                self.view_error(
+                    at,
+                    guard,
+                    site,
+                    format!(
+                        "`{who}` is a view of `{gname}` (made at {line}), used after `{gname}` \
+                         was closed"
+                    ),
+                )
             }
             Gone::Guard(site, guard, tie_kind) => {
                 let gname = self.name(guard);
@@ -3640,6 +3696,15 @@ impl<'h> Walk<'_, 'h> {
         }) {
             return self.use_place(&p, &e.ty, Some(e), e.span);
         }
+        // The release the lowering adds for an affine value (`if #own
+        // { drop }`) runs only while it still owns the value.
+        if let HirExprKind::If { cond, .. } = &e.kind {
+            if let HirExprKind::Local(l) = cond.kind {
+                if self.local_name(l).is_some_and(|n| n.starts_with("#own")) {
+                    return;
+                }
+            }
+        }
         let returning = std::mem::take(&mut self.returning);
         match &e.kind {
             HirExprKind::Block(b) => {
@@ -3713,6 +3778,7 @@ impl<'h> Walk<'_, 'h> {
                 if let Some(op) = self.c.ops.get(callee).copied() {
                     return self.op(op, args, e.span);
                 }
+                self.stream_released(*callee, args);
                 let args: Vec<&HirExpr> = args.iter().collect();
                 if self.c.passes.contains(callee) {
                     let mut fl = Vec::new();
@@ -4544,6 +4610,98 @@ impl<'h> Walk<'_, 'h> {
         }
     }
 
+    /// A stream closed, dropped or unwrapped: the views made of it
+    /// (`r.lines()`) end with it.
+    fn stream_released(&mut self, callee: FunctionId, args: &[HirExpr]) {
+        let Some(f) = self.c.fns.get(&callee) else {
+            return;
+        };
+        let path = f.name.split(rokc_ir_common::MONO_MARK).next().unwrap_or("");
+        if !["_drop", "_close", "_close_async", "__into_inner"]
+            .iter()
+            .any(|m| path.ends_with(m))
+        {
+            return;
+        }
+        let Some(g) = args
+            .first()
+            .and_then(place)
+            .filter(|p| p.1.is_empty())
+            .map(|p| p.0)
+        else {
+            return;
+        };
+        if self.is_guard(g) {
+            return;
+        }
+        for s in self.cur.states() {
+            let Some(tied) = s.tied.remove(&g) else {
+                continue;
+            };
+            let at_tie = tied.values().next().map(|(sp, _)| *sp);
+            let before: BTreeSet<Place> = s.gone.keys().cloned().collect();
+            for (q, (span, tie)) in tied {
+                mark_gone(s, q, Gone::Guard(span, g, tie));
+            }
+            if let Some(span) = at_tie {
+                holders_go(s, &before, Gone::Guard(span, g, Tie::Shared));
+            }
+        }
+    }
+
+    /// `ty` is the future, generator or stream a coroutine call returns.
+    fn is_coroutine(&self, ty: &HirTy) -> bool {
+        let HirTy::Struct(id) = ty else { return false };
+        let structs = self.c.env.defs.structs.borrow();
+        structs.get(id.0 as usize).is_some_and(|s| {
+            let base = s.name.split("__").next().unwrap_or_default();
+            let base = base.split('<').next().unwrap_or_default();
+            CORO_TYPES.contains(&base)
+        })
+    }
+
+    /// A tie to `g` is a view of a stream, not of what a lock protects.
+    fn stream_view(&self, g: LocalId) -> bool {
+        g != VIEW && !self.is_guard(g)
+    }
+
+    /// The help of a stream view's error: the view made at `site` of `g`.
+    fn view_help(&self, g: LocalId, site: Span) -> String {
+        let gname = self.name(g);
+        let made = self
+            .c
+            .src(site)
+            .map(|t| t.trim_start_matches("return").trim().trim_end_matches(';'))
+            .filter(|t| t.len() <= 40 && !t.contains('\n') && owning_form(t).is_some())
+            .map_or_else(|| format!("{gname}.lines()"), str::to_owned);
+        let own = owning_form(&made).unwrap_or_else(|| format!("{gname}.into_lines()"));
+        let read = if made.contains(".take(") {
+            format!("`try {made}.read_to_end()`")
+        } else if made.contains("_async(") {
+            format!("`try await {made}.collect()`")
+        } else if made.contains(".incoming(") {
+            "accept the connections there".to_owned()
+        } else {
+            format!("`try {made}.collect()`")
+        };
+        format!(
+            "help: `{made}` reads through `{gname}` and stays in its scope; use it there \
+             ({read}), or take the owning form `{own}`, which owns `{gname}` and closes it \
+             with itself"
+        )
+    }
+
+    /// The error of a stream view of `g` (made at `site`) at `at`.
+    fn view_error(&self, at: Span, g: LocalId, site: Span, msg: String) -> RokDiagnostic {
+        let d = RokDiagnostic::error(Code::STREAM_VIEW_ESCAPE, at, msg);
+        let d = if site == at {
+            d
+        } else {
+            d.with_secondary(site, format!("a view of `{}` made here", self.name(g)))
+        };
+        d.with_note(self.view_help(g, site))
+    }
+
     /// Handing over what a lock still guards (`tx.send(g.get())` inside
     /// `using`) shares it with the lock's other users.
     fn guarded_handoff(&mut self, qs: &[Place], arg: Option<&HirExpr>, what: What) {
@@ -4580,6 +4738,16 @@ impl<'h> Walk<'_, 'h> {
             return;
         }
         let gname = self.name(g);
+        if self.stream_view(g) {
+            let d = self.view_error(
+                arg.span,
+                g,
+                site,
+                format!("{text} can't be {to}: it is a view of `{gname}`"),
+            );
+            self.diags.push(d);
+            return;
+        }
         let ty = if self.guard_what(g) == What::RwLock {
             "RwLock"
         } else {
@@ -4645,6 +4813,14 @@ impl<'h> Walk<'_, 'h> {
                 .is_some_and(|f| TRUSTED.iter().any(|m| f.name.starts_with(m))),
             _ => false,
         };
+        let coroutine = match &call.kind {
+            HirExprKind::Call { callee, .. } => self
+                .c
+                .fns
+                .get(callee)
+                .is_some_and(|f| self.is_coroutine(&f.ret_ty)),
+            _ => false,
+        };
         let params: HashSet<LocalId> = self.f.params.iter().map(|p| p.local).collect();
         for &i in &s.keeps {
             let Some(arg) = args.get(i as usize).copied() else {
@@ -4672,6 +4848,11 @@ impl<'h> Walk<'_, 'h> {
             let Some((g, site)) = self.view_of(&qs, arg) else {
                 continue;
             };
+            // A coroutine keeps its arguments in the frame it returns,
+            // which stays tied to the stream.
+            if coroutine && self.stream_view(g) {
+                continue;
+            }
             {
                 let mut k = self.c.kept_at.borrow_mut();
                 for sp in [site, call.span, arg.span] {
@@ -4714,6 +4895,17 @@ impl<'h> Walk<'_, 'h> {
                      out with `replace` / `take`",
                     deep_copy(text.unwrap_or("value"))
                 ))
+            } else if self.stream_view(g) {
+                let gname = self.name(g);
+                self.view_error(
+                    arg.span,
+                    g,
+                    site,
+                    format!(
+                        "{shown} is a view of `{gname}`, and {who} keeps it past the call, out \
+                         of `{gname}`'s scope"
+                    ),
+                )
             } else {
                 let gname = self.name(g);
                 let ty = if self.guard_what(g) == What::RwLock {
@@ -4780,6 +4972,16 @@ impl<'h> Walk<'_, 'h> {
             return;
         }
         let gname = self.name(guard);
+        if self.stream_view(guard) {
+            let d = self.view_error(
+                at,
+                guard,
+                site,
+                format!("this is a view of `{gname}`, used after `{gname}`'s scope closed it"),
+            );
+            self.diags.push(d);
+            return;
+        }
         let ty = if self.guard_what(guard) == What::RwLock {
             "RwLock"
         } else {
@@ -4947,6 +5149,21 @@ impl<'h> Walk<'_, 'h> {
             return;
         }
         let gname = self.name(g);
+        if self.stream_view(g) {
+            let how = match exit {
+                Exit::Return => "returns",
+                Exit::Yield => "yields",
+                Exit::Throw => "throws",
+            };
+            let d = self.view_error(
+                at,
+                g,
+                site,
+                format!("this {how} a view of `{gname}` out of `{gname}`'s scope"),
+            );
+            self.diags.push(d);
+            return;
+        }
         let ty = if self.guard_what(g) == What::RwLock {
             "RwLock"
         } else {
@@ -5240,6 +5457,11 @@ impl<'h> Walk<'_, 'h> {
             let Some(i) = self.f.params.iter().position(|p| p.local == *g) else {
                 continue;
             };
+            // A stream taken by value is this function's own: an owning
+            // adapter holds it beside its view.
+            if !self.f.params[i].by_ref && self.stream_view(*g) {
+                continue;
+            }
             let mut probe = St {
                 gone: BTreeMap::new(),
                 tied: BTreeMap::new(),

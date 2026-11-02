@@ -7,8 +7,9 @@
 // anything `AsBytes`. Bytes cross to the runtime as `GcBuf<u8>` regions
 // `(buf, off, len)`, and become a `str` only through the UTF-8 check.
 //
-// Async methods take `ref self`. A buffer or `Cursor` copy shares the
-// stream and its position: they keep their state in shared lists.
+// Async methods take `ref self`. A buffer owns its inner stream; over a
+// stream that is not affine, and for a `Cursor`, copies share the state
+// (it lives in lists).
 
 // The runtime's numbering of the kinds (`rok_os_errno_kind`).
 const KIND_OTHER: i32 = 0;
@@ -395,22 +396,40 @@ pub trait Read {
         try text_of(try self.read_to_end())
     }
 
-    // The adapters share the stream: its owner still closes it.
+    // `bytes`, `take`, `lines` and `split` return scoped views: they
+    // read through the stream and stay in its owner's scope. The `into_`
+    // forms own the stream instead.
 
     /// The remaining bytes one at a time. Each is one `read`: wrap an
     /// unbuffered stream in `BufReader` first.
     const fn bytes(ref self) -> Bytes<Self> {
-        Bytes { r: unsafe { share(self) }, one: zeroed(1) }
+        let r = view(self);
+        Bytes { r: r, one: zeroed(1) }
     }
 
     /// At most `limit` more bytes, then the end.
     const fn take(ref self, limit: u64) -> Take<Self> {
-        Take { r: unsafe { share(self) }, left: [limit] }
+        let r = view(self);
+        Take { r: r, left: [limit] }
     }
 
-    /// This stream to its end, then `next`.
-    const fn chain<R: Read>(ref self, next: R) -> Chain<Self, R> {
-        Chain { a: unsafe { share(self) }, b: unsafe { share(next) }, first: [true] }
+    /// `bytes` owning the stream: it may leave the scope or move to a
+    /// task, closes the stream with itself, and `into_inner` gives it back.
+    const fn into_bytes(self) -> Owned<Bytes<Self>, Self> {
+        let v = self.bytes();
+        Owned { v: v, r: self }
+    }
+
+    /// `take` owning the stream.
+    const fn into_take(self, limit: u64) -> Owned<Take<Self>, Self> {
+        let v = self.take(limit);
+        Owned { v: v, r: self }
+    }
+
+    /// This stream to its end, then `next`. The chain owns both and
+    /// closes both.
+    const fn chain<R: Read>(self, next: R) -> Chain<Self, R> {
+        Chain { a: self, b: next, first: [true] }
     }
 }
 
@@ -463,15 +482,28 @@ pub trait BufRead: Read {
         }
     }
 
-    /// The remaining lines, without `\n` / `\r\n`. The iterator shares
-    /// the stream.
+    /// The remaining lines, without `\n` / `\r\n`.
     const fn lines(ref self) -> Lines<Self> {
-        Lines { r: unsafe { share(self) } }
+        let r = view(self);
+        Lines { r: r }
     }
 
     /// The pieces between `delim` bytes, `delim` removed.
     const fn split(ref self, delim: u8) -> Split<Self> {
-        Split { r: unsafe { share(self) }, delim: delim }
+        let r = view(self);
+        Split { r: r, delim: delim }
+    }
+
+    /// `lines` owning the stream (`Read::into_bytes`).
+    const fn into_lines(self) -> Owned<Lines<Self>, Self> {
+        let v = self.lines();
+        Owned { v: v, r: self }
+    }
+
+    /// `split` owning the stream.
+    const fn into_split(self, delim: u8) -> Owned<Split<Self>, Self> {
+        let v = self.split(delim);
+        Owned { v: v, r: self }
     }
 }
 
@@ -617,7 +649,14 @@ pub trait AsyncRead {
 
     /// The remaining bytes as a stream, one `read_async` each.
     const fn bytes_async(ref self) -> BytesStream {
-        BytesStream { s: bytes_of(unsafe { share(self) }) }
+        let r = view(self);
+        BytesStream { s: bytes_of(r) }
+    }
+
+    /// `bytes_async` owning the stream (`Read::into_bytes`).
+    const fn into_bytes_async(self) -> Owned<BytesStream, Self> {
+        let v = self.bytes_async();
+        Owned { v: v, r: self }
     }
 }
 
@@ -653,7 +692,14 @@ pub trait AsyncBufRead: AsyncRead {
 
     /// The remaining lines as a stream, without `\n` / `\r\n`.
     const fn lines_async(ref self) -> LinesStream {
-        LinesStream { s: lines_of(unsafe { share(self) }) }
+        let r = view(self);
+        LinesStream { s: lines_of(r) }
+    }
+
+    /// `lines_async` owning the stream (`Read::into_bytes`).
+    const fn into_lines_async(self) -> Owned<LinesStream, Self> {
+        let v = self.lines_async();
+        Owned { v: v, r: self }
     }
 }
 
@@ -697,7 +743,6 @@ pub trait AsyncClose {
 }
 
 async yield fn bytes_of<R: AsyncRead>(r: R) throws (IoError) -> u8 {
-    let r = unsafe { share(r) };
     let one = zeroed(1);
     while (try await r.read_async(one)) > 0 {
         yield one[0];
@@ -705,7 +750,6 @@ async yield fn bytes_of<R: AsyncRead>(r: R) throws (IoError) -> u8 {
 }
 
 async yield fn lines_of<R: AsyncBufRead>(r: R) throws (IoError) -> str {
-    let r = unsafe { share(r) };
     loop {
         let out = StrBuf::new();
         if (try await r.read_line_async(out)) == 0 { break; }
@@ -713,11 +757,14 @@ async yield fn lines_of<R: AsyncBufRead>(r: R) throws (IoError) -> str {
     }
 }
 
-/// `bytes_async()`: a `TryStream` of the bytes.
+/// `bytes_async()`: a `TryStream` of the bytes, a view of the stream.
 #[must_use("stream is lazy and does nothing unless polled: walk it with `try for await`, or call `try await {}.collect()`")]
 pub struct BytesStream {
     s: TryAsyncStream<u8, IoError>;
 }
+
+impl !Send for BytesStream {}
+impl !Sync for BytesStream {}
 
 impl Debug for BytesStream {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("BytesStream") }
@@ -731,11 +778,14 @@ impl TryStream for BytesStream {
     }
 }
 
-/// `lines_async()`: a `TryStream` of the lines.
+/// `lines_async()`: a `TryStream` of the lines, a view of the stream.
 #[must_use("stream is lazy and does nothing unless polled: walk it with `try for await`, or call `try await {}.collect()`")]
 pub struct LinesStream {
     s: TryAsyncStream<str, IoError>;
 }
+
+impl !Send for LinesStream {}
+impl !Sync for LinesStream {}
 
 impl Debug for LinesStream {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("LinesStream") }
@@ -752,10 +802,14 @@ impl TryStream for LinesStream {
 // iterators and adapters
 
 /// `r.lines()`: each line without `\n` / `\r\n`; a failed read throws.
+/// A view of `r`: it stays in the scope of `r`'s owner.
 #[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct Lines<R> {
     r: R;
 }
+
+impl<R> !Send for Lines<R> {}
+impl<R> !Sync for Lines<R> {}
 
 impl<R> Debug for Lines<R> {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Lines") }
@@ -771,12 +825,15 @@ impl<R: BufRead> TryIterator for Lines<R> {
     }
 }
 
-/// `r.split(delim)`: the pieces between `delim` bytes.
+/// `r.split(delim)`: the pieces between `delim` bytes; a view of `r`.
 #[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct Split<R> {
     r: R;
     delim: u8;
 }
+
+impl<R> !Send for Split<R> {}
+impl<R> !Sync for Split<R> {}
 
 impl<R> Debug for Split<R> {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Split") }
@@ -794,12 +851,15 @@ impl<R: BufRead> TryIterator for Split<R> {
 }
 
 /// `r.bytes()`: the bytes one at a time; a failed read throws, and the
-/// next `next` reads on.
+/// next `next` reads on. A view of `r`.
 #[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct Bytes<R> {
     r: R;
     one: List<u8>;
 }
+
+impl<R> !Send for Bytes<R> {}
+impl<R> !Sync for Bytes<R> {}
 
 impl<R> Debug for Bytes<R> {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Bytes") }
@@ -814,11 +874,14 @@ impl<R: Read> TryIterator for Bytes<R> {
     }
 }
 
-/// `r.take(limit)`: at most `limit` bytes of `r`.
+/// `r.take(limit)`: at most `limit` bytes of `r`; a view of `r`.
 pub struct Take<R> {
     r: R;
     left: List<u64>;
 }
+
+impl<R> !Send for Take<R> {}
+impl<R> !Sync for Take<R> {}
 
 impl<R> Debug for Take<R> {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Take") }
@@ -829,8 +892,6 @@ impl<R> Take<R> {
     pub const fn limit(self) -> u64 { self.left[0] }
     /// Allow `limit` more bytes.
     pub const fn set_limit(self, limit: u64) { self.left[0] = limit; }
-    /// The reader, giving up the limit.
-    pub const fn into_inner(self) -> R { self.r }
 }
 
 impl<R: Read> Read for Take<R> {
@@ -845,7 +906,59 @@ impl<R: Read> Read for Take<R> {
     }
 }
 
-/// `a.chain(b)`: `a` to its end, then `b`.
+/// A view `V` of the stream `R` together with the stream: what the
+/// `into_` adapters return (`r.into_lines()`). It iterates, reads or
+/// streams as `V` does, closes `R` with itself and gives it back with
+/// `into_inner`.
+pub struct Owned<V, R> {
+    v: V;
+    r: R;
+}
+
+// The view reaches only `r`, which moves with it.
+unsafe impl<V, R: Send> Send for Owned<V, R> {}
+
+impl<V, R> Debug for Owned<V, R> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Owned") }
+}
+
+impl<V, R> Owned<V, R> {
+    /// `v`, a view of `r`, with `r`.
+    #[internal]
+    pub const fn of(v: V, r: R) -> Owned<V, R> { Owned { v: v, r: r } }
+
+    /// The stream, giving up the adapter.
+    pub const fn into_inner(self) -> R { self.r }
+}
+
+impl<V, R: Close> Close for Owned<V, R> {
+    fn close(self) throws (IoError) { try self.into_inner().close(); }
+}
+
+impl<V, R: AsyncClose> AsyncClose for Owned<V, R> {
+    async fn close_async(self) throws (IoError) { try await self.into_inner().close_async(); }
+}
+
+impl<V: TryIterator, R> TryIterator for Owned<V, R> {
+    type Item = V::Item;
+    type Error = V::Error;
+    fn next(ref self) throws (V::Error) -> V::Item | none { try self.v.next() }
+}
+
+impl<V: TryStream, R> TryStream for Owned<V, R> {
+    type Item = V::Item;
+    type Error = V::Error;
+    fn poll_next(ref self, ref ctx: Context) throws (V::Error) -> Poll<V::Item | none> {
+        try self.v.poll_next(ref ctx)
+    }
+}
+
+impl<V: Read, R> Read for Owned<V, R> {
+    fn read(ref self, buf: SliceMut<u8>) throws (IoError) -> usize { try self.v.read(buf) }
+}
+
+/// `a.chain(b)`: `a` to its end, then `b`. It owns both: closing it
+/// closes both, `into_inner` gives them back.
 pub struct Chain<A, B> {
     a: A;
     b: B;
@@ -859,6 +972,30 @@ impl<A, B> Debug for Chain<A, B> {
 impl<A, B> Chain<A, B> {
     /// The two readers, giving up the chain.
     pub const fn into_inner(self) -> (A, B) { (self.a, self.b) }
+}
+
+impl<A: Close, B: Close> Close for Chain<A, B> {
+    /// Close both; the first error wins, and `b` is closed anyway.
+    fn close(self) throws (IoError) {
+        let (a, b) = self.into_inner();
+        try a.close() catch e {
+            try b.close() catch _ {};
+            throw e;
+        };
+        try b.close();
+    }
+}
+
+impl<A: AsyncClose, B: AsyncClose> AsyncClose for Chain<A, B> {
+    /// As `close`.
+    async fn close_async(self) throws (IoError) {
+        let (a, b) = self.into_inner();
+        try await a.close_async() catch e {
+            try await b.close_async() catch _ {};
+            throw e;
+        };
+        try await b.close_async();
+    }
 }
 
 impl<A: Read, B: Read> Read for Chain<A, B> {
@@ -875,7 +1012,7 @@ impl<A: Read, B: Read> Read for Chain<A, B> {
 // buffers
 
 /// Reads `inner` in chunks, so small reads (`read_line`, `bytes`) do not
-/// each cost a system call. A handle: copies share the buffer.
+/// each cost a system call. It owns `inner`.
 pub struct BufReader<R> {
     inner: R;
     /// Bytes read but not yet handed out: `chunk[at[0]..at[1]]`.
@@ -988,8 +1125,7 @@ impl<R: AsyncRead> AsyncBufRead for BufReader<R> {
 }
 
 /// Collects writes and passes them to `inner` in batches of `cap` bytes.
-/// `close()` (or `into_inner()`) writes out the rest. A handle: copies
-/// share the buffer.
+/// `close()` (or `into_inner()`) writes out the rest. It owns `inner`.
 pub struct BufWriter<W> {
     inner: W;
     cap: usize;
@@ -1349,11 +1485,10 @@ pub fn copy<R: Read, W: Write>(ref r: R, ref w: W) throws (IoError) -> u64 {
     }
 }
 
-/// `copy` that suspends the task.
+/// `copy` that suspends the task. Awaited at once, the call gives `r`
+/// and `w` back to the caller.
 #[discardable]
 pub async fn copy_async<R: AsyncRead, W: AsyncWrite>(r: R, w: W) throws (IoError) -> u64 {
-    let r = unsafe { share(r) };
-    let w = unsafe { share(w) };
     let total = 0u64;
     let chunk = zeroed(CHUNK);
     loop {

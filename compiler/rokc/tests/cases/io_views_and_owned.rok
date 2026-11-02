@@ -1,0 +1,140 @@
+// needs: net
+// expect-exit: 0
+// expect-stdout:
+// view: one two three
+// helper view: 3
+// take: on
+// split: 3 pieces
+// owned lines from a function: 3
+// owned in a task: 3
+// into_inner: two
+// chain: onetwo
+// chain of files: 28 bytes, closed
+// async view: 3
+// async owned: 3
+// incoming: ping
+// owned incoming: pong
+
+// Stream adapters: `lines()` and the others are scoped views of the
+// stream; the `into_` forms own it, so they can be returned or moved
+// into a task, close it with themselves and give it back with
+// `into_inner`. `chain` owns both streams.
+use rok::std::fs;
+use rok::std::env;
+use rok::std::process;
+use rok::std::path::Path;
+use rok::std::net;
+use rok::std::thread;
+use rok::core::io::{BufRead, BufReader, Read, Lines, Owned, IoError, AsyncBufRead};
+
+fn count<R: BufRead>(ref r: R) throws (IoError) -> usize {
+    let ls: Lines<R> = r.lines();
+    let n = 0usize;
+    try for _ in ls { n += 1; }
+    n
+}
+
+fn lines_of(p: Path) throws (IoError) -> Owned<Lines<BufReader<fs::File>>, BufReader<fs::File>> {
+    BufReader::new(try fs::open(p)).into_lines()
+}
+
+async fn main() throws (IoError) {
+    let p = env::temp_dir() / f"rok_io_views_{process::id()}.txt";
+    try fs::write(p, "one\ntwo\nthree\n");
+
+    using r = BufReader::new(try fs::open(p)) {
+        let words: List<str> = try r.lines().collect();
+        println(f"view: {words.join(" ")}");
+    }
+    using r = BufReader::new(try fs::open(p)) {
+        println(f"helper view: {try count(ref r)}");
+    }
+    using f = try fs::open(p) {
+        let head = f.take(2);
+        println(f"take: {try head.read_to_str()}");
+    }
+    using r = BufReader::new(try fs::open(p)) {
+        let n = 0;
+        try for _ in r.split(10u8) { n += 1; }
+        println(f"split: {n} pieces");
+    }
+
+    let ls = try lines_of(p);
+    let n = 0;
+    try for _ in ls { n += 1; }
+    try ls.close();
+    println(f"owned lines from a function: {n}");
+
+    let moved = try lines_of(p);
+    let t = task::spawn(async {
+        let k = try! moved.count();
+        try! moved.close();
+        k
+    });
+    println(f"owned in a task: {await t}");
+
+    let part = try lines_of(p);
+    _ = try part.next();
+    let rest = part.into_inner();
+    let line = StrBuf::new();
+    _ = try rest.read_line(line);
+    println(f"into_inner: {line.to_str().trim()}");
+    try rest.close();
+
+    let c = io::Cursor::new("one").chain(io::Cursor::new("two"));
+    println(f"chain: {try c.read_to_str()}");
+    let ab = (try fs::open(p)).chain(try fs::open(p));
+    let all = try ab.read_to_str();
+    try ab.close();
+    println(f"chain of files: {all.len()} bytes, closed");
+    let cd = (try fs::open(p)).chain(try fs::open(p));
+    let (x, y) = cd.into_inner();
+    try x.close();
+    try y.close();
+
+    using r = BufReader::new(try await fs::File::open_async(p)) {
+        let k = 0;
+        try for await _ in r.lines_async() { k += 1; }
+        println(f"async view: {k}");
+    }
+    let s = BufReader::new(try await fs::File::open_async(p)).into_lines_async();
+    let k = 0;
+    try for await _ in s { k += 1; }
+    try await s.close_async();
+    println(f"async owned: {k}");
+
+    let l = try net::tcp_listen("127.0.0.1:0");
+    let at = try l.local_addr();
+    let th = thread::spawn(|| {
+        let c = try! net::tcp_connect(f"{at}");
+        try! c.write_all("ping");
+        try! c.close();
+        0
+    });
+    try for s in l.incoming() {
+        println(f"incoming: {try s.read_to_str()}");
+        try s.close();
+        break;
+    }
+    _ = try! th.join();
+    let owned = l.into_incoming();
+    let th2 = thread::spawn(|| {
+        let c = try! net::tcp_connect(f"{at}");
+        try! c.write_all("pong");
+        try! c.close();
+        0
+    });
+    let server = task::spawn(async {
+        let got = "";
+        try! for s in owned {
+            got = try! s.read_to_str();
+            try! s.close();
+            break;
+        }
+        try! owned.close();
+        got
+    });
+    println(f"owned incoming: {await server}");
+    _ = try! th2.join();
+    try fs::remove_file(p);
+}

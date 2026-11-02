@@ -11,16 +11,15 @@
 // still works: hi
 
 // Cancelling a task in async I/O runs `finally` and drops its registrations.
-use rok::core::marker::share;
 use rok::std::net::{TcpListener, TcpStream, SocketAddr};
 
 let any: SocketAddr = try! "127.0.0.1:0".parse::<SocketAddr>();
 let listener = try! TcpListener::bind(any);
 let client = try! TcpStream::connect(try! listener.local_addr());
-let (server_own, _) = try! listener.accept();
-let server = unsafe { share(server_own) };
-let idle_own = try! TcpListener::bind(any);
-let idle = unsafe { share(idle_own) };
+let (server, _) = try! listener.accept();
+// The reader task owns a second descriptor; `server` stays here.
+let reading = try! server.try_clone();
+let idle = try! TcpListener::bind(any);
 let m = Mutex::new(0);
 let (tx, rx) = channel::<i32>();
 let finally_ran = Mutex::new(false);
@@ -29,15 +28,20 @@ let finally_ran = Mutex::new(false);
 using held = m.lock() {
     let reader = task::spawn(async {
         let _ = {
-            try await server.read_async(List::filled(16, 0u8)) catch _ { 0 }
+            try await reading.read_async(List::filled(16, 0u8)) catch _ { 0 }
         } finally {
             using f = finally_ran.lock() { f.set(true); }
         };
+        try reading.close() catch _ {};
         1
     });
     let acceptor = task::spawn(async {
-        let (s, _) = try await idle.accept_async() catch _ { return 0; };
+        let (s, _) = try await idle.accept_async() catch _ {
+            try idle.close() catch _ {};
+            return 0;
+        };
         try! s.close();
+        try! idle.close();
         1
     });
     let sleeper = task::spawn(async {
@@ -78,11 +82,10 @@ try! client.write_all("hi");
 let got = await task::spawn(async {
     let buf = List::filled(16, 0u8);
     let n = try! await server.read_async(buf);
+    try! server.close();
     try! str::from_utf8(buf[0:n])
 });
 println(f"still works: {got}");
 try! client.close();
-try! server_own.close();
-try! idle_own.close();
 try! listener.close();
 
