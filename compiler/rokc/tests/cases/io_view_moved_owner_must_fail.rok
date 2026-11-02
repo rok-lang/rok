@@ -1,0 +1,55 @@
+// needs: threads
+// expect-error: io_view_moved_owner_must_fail.rok:23:17: `ls` is a view of `f` (made at line 21), used after `f` was moved at line 22
+// expect-error: io_view_moved_owner_must_fail.rok:32:17: `ls` is a view of `f` (made at line 29), used after `f` was moved at line 30
+// expect-error: io_view_moved_owner_must_fail.rok:39:17: `ls` is a view of `f` (made at line 37), used after `f` was moved at line 38
+// expect-error: io_view_moved_owner_must_fail.rok:46:17: `ls` is a view of `f` (made at line 44), used after `f` was moved at line 45
+// expect-error: help: `ls` reads through `f`, so it ends where `f` moves; finish with `ls` before moving `f`, or take the owning form `f.into_lines()` and move that instead
+
+// A view of a stream ends where the stream moves: into a thread's
+// closure, to another variable, into a function that closes it, into a
+// struct. Using the view after that is an error, as after a close.
+use rok::std::fs;
+use rok::std::thread;
+use rok::core::io::{BufRead, BufReader, IoError};
+
+struct Holder { r: BufReader<fs::File> }
+
+fn shut(f: BufReader<fs::File>) throws (IoError) { try f.close(); }
+
+fn to_thread(p: str) throws (IoError) {
+    let f = BufReader::new(try fs::open(p));
+    let ls = f.lines();
+    let t = thread::spawn([move f] || { try! f.close(); });
+    let _ = try ls.next();
+    let _ = try? t.join();
+}
+
+fn to_variable(p: str) throws (IoError) {
+    let f = BufReader::new(try fs::open(p));
+    let ls = f.lines();
+    let h = f;
+    try h.close();
+    let _ = try ls.next();
+}
+
+fn to_function(p: str) throws (IoError) {
+    let f = BufReader::new(try fs::open(p));
+    let ls = f.lines();
+    try shut(f);
+    let _ = try ls.next();
+}
+
+fn to_struct(p: str) throws (IoError) {
+    let f = BufReader::new(try fs::open(p));
+    let ls = f.lines();
+    let h = Holder { r: f };
+    let _ = try ls.next();
+    try h.r.close();
+}
+
+fn main() throws (IoError) {
+    try to_thread("/dev/null");
+    try to_variable("/dev/null");
+    try to_function("/dev/null");
+    try to_struct("/dev/null");
+}

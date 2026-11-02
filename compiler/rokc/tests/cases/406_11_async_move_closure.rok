@@ -1,0 +1,17 @@
+// needs: threads
+// expect-exit: 0
+// expect-stdout: 1 2 3 4
+
+// An `async [move ..]` closure may be called any number of times while
+// its futures run here, one after another; one of them (or the closure)
+// may then go to a task.
+async fn main() {
+    let xs: List<i32> = [];
+    let f = async [move xs] || { xs.push(1); xs.len() };
+    let a = await f();
+    let b = await f();
+    let p = f();
+    let c = await p;
+    let t = task::spawn(f());
+    println(f"{a} {b} {c} {try! await t.join()}");
+}

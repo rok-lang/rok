@@ -67,9 +67,10 @@ const WIPED: &[&str] = &[
     "rok::core::crypto::mlkem::DecapsulationKey768",
 ];
 
-/// Configurations that name a handle without owning it (a child's
-/// `Stdio::File` is the caller's file).
-const VIEWS: &[&str] = &["rok::std::process::Stdio", "rok::std::process::Command"];
+/// A command is a configuration copied freely and run again: it is not
+/// followed. The `Stdio` given to it moves into it (a `Stdio::File` owns
+/// its file, which the run closes).
+const VIEWS: &[&str] = &["rok::std::process::Command"];
 
 /// The scoped views of a stream (`r.lines()`): they do not own it, and
 /// the hand-off check keeps them in its owner's scope.
@@ -421,6 +422,9 @@ pub(super) fn reassign(ctx: &mut LowerCtx<'_>, stmt: HirStmt, span: Span) -> Hir
 const LIVE: u8 = 1;
 const MOVED: u8 = 2;
 const RELEASED: u8 = 4;
+/// Holds nothing to release (a variant with no resource in it): moving
+/// it moves nothing.
+const EMPTY: u8 = 8;
 
 /// Pseudo parameter index of capture `k` of a closure or coroutine body.
 const SLOT: u32 = 1 << 16;
@@ -1050,6 +1054,11 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                     "help: a `{ty}` is released once; do the work before it is closed, or open \
                      a new one"
                 )
+            } else if ty == "Stdio" {
+                "help: a `Stdio::File` belongs to the command it is given to, which closes it \
+                 when it runs; give each command its own file \
+                 (`Stdio::File(try f.try_clone())`)"
+                    .to_owned()
             } else {
                 let copy = self
                     .copy_method(&self.roots[r].ty)
@@ -1097,6 +1106,9 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
         let at = e.span;
         self.use_at(r, path, at, st, false);
         let slots = self.slots_at(r, path);
+        if !slots.is_empty() && slots.iter().all(|&s| get(st, s) == EMPTY) {
+            return;
+        }
         for &s in &slots {
             set(st, s, if release { RELEASED } else { MOVED });
             self.why.insert(s, (at, release));
@@ -1596,6 +1608,14 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             self.bind(local, &ty, true, None, value.span, &mut st);
         } else {
             self.unbind(local, &mut st);
+            if val == Val::Plain {
+                if let Some(&r) = self.root_of.get(&local) {
+                    let root = &self.roots[r];
+                    for i in 0..root.leaves.len() {
+                        set(&mut st, root.base + i, EMPTY);
+                    }
+                }
+            }
         }
         self.bound.insert(local, val == Val::Owned);
         st
@@ -1722,8 +1742,20 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                 (st, if affine { v } else { Val::Plain })
             }
             HirExprKind::EnumVariantInit { args, .. } => {
+                // A variant with no resource in it holds nothing to follow
+                // (`Stdio::Piped`), unless the enum's own `drop` runs.
+                let holds = args.iter().any(|a| self.c.shape(&a.ty).is_some());
+                let ctx = self.c.ctx;
+                let own = ctx.has_trait(&e.ty, ctx.lang("drop_method"));
                 let (st, v) = self.exprs(args, st);
-                (st, if affine { v } else { Val::Plain })
+                (
+                    st,
+                    if affine && (holds || own) {
+                        v
+                    } else {
+                        Val::Plain
+                    },
+                )
             }
             HirExprKind::ArrayInit { elements, .. } => {
                 let (st, v) = self.exprs(elements, st);
@@ -2048,7 +2080,12 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             let keeps = !iter && sum.as_ref().is_some_and(|s| s.keeps.contains(&i));
             let affine = self.c.shape(&a.ty).is_some();
             if !affine || by_ref || !(closer || into || keeps) {
-                st = self.expr(a, st, Mode::Use).0;
+                let (next, val) = self.expr(a, st, Mode::Use);
+                st = next;
+                // `await` polls the future it runs to the end.
+                if val == Val::Owned && self.place(a).is_none() && method != "poll" {
+                    self.temp_left_open(a);
+                }
                 continue;
             }
             if closer {
@@ -2075,6 +2112,27 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             return (st, Val::Alias);
         }
         (st, v)
+    }
+
+    /// A value that must be closed, made for a call that only borrows it
+    /// (`File::open(p).read_to_str()`): nothing closes it.
+    fn temp_left_open(&mut self, a: &HirExpr) {
+        if a.ty == HirTy::Never || !matches!(self.c.shape(&a.ty), Some((Kind::Close, _))) {
+            return;
+        }
+        let ty = self.c.ty_name(&a.ty);
+        self.error(
+            Code::UNCLOSED_RESOURCE,
+            a.span,
+            format!("the `{ty}` made here is never closed: this call only borrows it"),
+            |d| {
+                d.with_note(format!(
+                    "help: closing a `{ty}` can fail, so it is not closed for you: bind it with \
+                     `using` (`using x = .. {{ .. }}`), or bind it and close it (`let x = ..; \
+                     .. try x.close();`)"
+                ))
+            },
+        );
     }
 
     fn matched(

@@ -1,0 +1,107 @@
+// expect-error: view_escape_value_forms_must_fail.rok:31:26: this returns a value out of the `Mutex`
+// expect-error: view_escape_value_forms_must_fail.rok:35:26: this returns a value out of the `Mutex`
+// expect-error: view_escape_value_forms_must_fail.rok:39:26: this returns a value out of the `Mutex`
+// expect-error: view_escape_value_forms_must_fail.rok:43:26: this returns a value out of the `Mutex`
+// expect-error: view_escape_value_forms_must_fail.rok:47:26: this returns a value out of the `Mutex`
+// expect-error: view_escape_value_forms_must_fail.rok:51:26: this returns a value out of the `Mutex`
+// expect-error: view_escape_value_forms_must_fail.rok:57:9: this returns a value out of the `Mutex`
+// expect-error: view_escape_value_forms_must_fail.rok:62:32: this yields a value out of the `Mutex`
+// expect-error: view_escape_value_forms_must_fail.rok:66:26: the value of `g`'s `using` block is what the `Mutex` protects
+// expect-error: view_escape_value_forms_must_fail.rok:72:9: this returns a value out of the `Mutex`
+// expect-error: view_escape_value_forms_must_fail.rok:79:9: this returns a value out of the `Mutex`
+// expect-error: view_escape_value_forms_must_fail.rok:84:49: this returns a view of `f` out of `f`'s scope
+// expect-error: view_escape_value_forms_must_fail.rok:89:9: this returns a view of `f` out of `f`'s scope
+// expect-error: taken out of the lock here
+
+// What a lock guards, and a view of a stream, stay in their scope through
+// every form that yields a value: a loop's `break`, a labelled block, an
+// `if` / `match` arm, a `catch`, a variable, a `yield`, an `async` body,
+// a closure's result.
+use rok::std::fs;
+use rok::core::io::{BufRead, BufReader, Lines, IoError};
+
+static M: Mutex<List<i32>> = Mutex::new([]);
+
+struct Oops { v: i32 }
+
+fn c() -> bool { true }
+fn may() throws (Oops) -> List<i32> { [] }
+
+fn by_loop() -> List<i32> {
+    using g = M.lock() { return loop { break g.get(); }; }
+}
+
+fn by_label() -> List<i32> {
+    using g = M.lock() { return 'b: { if c() { break 'b g.get(); } [] }; }
+}
+
+fn by_outer() -> List<i32> {
+    using g = M.lock() { return 'o: loop { loop { break 'o g.get(); } }; }
+}
+
+fn by_if() -> List<i32> {
+    using g = M.lock() { return if c() { g.get() } else { [] }; }
+}
+
+fn by_match(n: i32) -> List<i32> {
+    using g = M.lock() { return match n { 0 => g.get(), _ => [] }; }
+}
+
+fn by_catch() -> List<i32> {
+    using g = M.lock() { return try may() catch _ { g.get() }; }
+}
+
+fn by_local() -> List<i32> {
+    using g = M.lock() {
+        let x = loop { break g.get(); };
+        return x;
+    }
+}
+
+yield fn by_yield() -> List<i32> {
+    using g = M.lock() { yield loop { break g.get(); }; }
+}
+
+async fn by_async() -> List<i32> {
+    using g = M.lock() { return loop { break g.get(); }; }
+}
+
+fn by_closure() -> List<i32> {
+    using g = M.lock() {
+        let f = || g.get();
+        return f();
+    }
+}
+
+fn by_closure_loop() -> List<i32> {
+    using g = M.lock() {
+        let f = || loop { break g.get(); };
+        return f();
+    }
+}
+
+fn lines_loop(p: str) throws (IoError) -> Lines<BufReader<fs::File>> {
+    using f = BufReader::new(try fs::open(p)) { return loop { break f.lines(); }; }
+}
+
+fn lines_match(p: str, n: i32) throws (IoError) -> Lines<BufReader<fs::File>> {
+    using f = BufReader::new(try fs::open(p)) {
+        return match n { _ => 'b: { break 'b f.lines(); } };
+    }
+}
+
+fn main() throws (IoError) {
+    by_loop().push(1);
+    by_label().push(1);
+    by_outer().push(1);
+    by_if().push(1);
+    by_match(0).push(1);
+    by_catch().push(1);
+    by_local().push(1);
+    for r in by_yield() { r.push(1); }
+    task::block_on(by_async()).push(1);
+    by_closure().push(1);
+    by_closure_loop().push(1);
+    let _ = try (try lines_loop("/etc/hosts")).next();
+    let _ = try (try lines_match("/etc/hosts", 0)).next();
+}

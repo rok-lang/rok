@@ -1,0 +1,40 @@
+// expect-error: std_307_stdio_once_must_fail.rok:20:37: `s` was moved at line 19, and is used here
+// expect-error: std_307_stdio_once_must_fail.rok:26:50: `s` was moved at line 26, and is used here
+// expect-error: std_307_stdio_once_must_fail.rok:32:44: `s` may have been moved at line 32, and is used here
+// expect-error: std_307_stdio_once_must_fail.rok:30:13: `s` holds a `Stdio` that is not closed on every path
+// expect-error: help: a `Stdio::File` belongs to the command it is given to, which closes it when it runs; give each command its own file (`Stdio::File(try f.try_clone())`)
+// only-os: macos linux
+
+// A `Stdio::File` owns its file, and the command it is given to closes
+// it: one value goes to one command, once.
+use rok::core::io::IoError;
+use rok::std::fs::File;
+use rok::std::path::Path;
+use rok::std::process::{Command, Stdio};
+
+fn sh(script: str) -> Command { Command::new(Path::new("/bin/sh")).args(["-c", script]) }
+
+fn two_commands(f: File) throws (IoError) {
+    let s = Stdio::File(f);
+    let a = try sh("echo a").stdout(s).status();
+    let b = try sh("echo b").stdout(s).status();
+    println(f"{a} {b}");
+}
+
+fn two_streams(f: File) throws (IoError) {
+    let s = Stdio::File(f);
+    println(f"{try sh("echo a").stdout(s).stderr(s).status()}");
+}
+
+fn in_a_loop(f: File) throws (IoError) {
+    let s = Stdio::File(f);
+    for i in 0..2 {
+        println(f"{try sh("echo a").stdout(s).status()}");
+    }
+}
+
+fn main() throws (IoError) {
+    try two_commands(try File::create("/dev/null"));
+    try two_streams(try File::create("/dev/null"));
+    try in_a_loop(try File::create("/dev/null"));
+}

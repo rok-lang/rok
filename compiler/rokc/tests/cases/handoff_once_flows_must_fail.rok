@@ -1,0 +1,89 @@
+// needs: threads
+// expect-error: handoff_once_flows_must_fail.rok:29:31: `f` was spawned as a task at line 29
+// expect-error: handoff_once_flows_must_fail.rok:36:11: `f` was spawned as a task at line 36
+// expect-error: handoff_once_flows_must_fail.rok:43:27: `f` was spawned as a task at line 42
+// expect-error: handoff_once_flows_must_fail.rok:52:27: `fs[0]` was spawned as a task at line 51
+// expect-error: handoff_once_flows_must_fail.rok:60:27: `f` was spawned as a task at line 59
+// expect-error: handoff_once_flows_must_fail.rok:68:27: `f` was spawned as a task at line 67
+// expect-error: handoff_once_flows_must_fail.rok:77:27: `f` was spawned as a task at line 76
+// expect-error: make another closure
+
+// A closure that owns values moved into it is handed over once, whatever
+// way it travels: twice in one call, through a function returning its
+// argument, out of a list, through an `if` arm, after one branch handed it
+// over, through a tuple field.
+use rok::std::thread;
+
+fn id<T>(x: T) -> T { x }
+fn c() -> bool { true }
+
+fn sp(f: fn() -> usize + Send, g: fn() -> usize + Send) -> usize {
+    let a = thread::spawn(f);
+    let b = thread::spawn(g);
+    (try! a.join()) + (try! b.join())
+}
+
+fn joined() {
+    let xs: List<i32> = [];
+    let f = [move xs] || { xs.push(1); xs.len() };
+    let (p, q) = par::join(f, f);
+    println(f"{p} {q}");
+}
+
+fn two_params() -> usize {
+    let xs: List<i32> = [1];
+    let f = [move xs] || xs.len();
+    sp(f, f)
+}
+
+fn through_id() {
+    let xs: List<i32> = [];
+    let f = [move xs] || { xs.push(1); xs.len() };
+    let a = thread::spawn(id(f));
+    let b = thread::spawn(f);
+    println(f"{try! a.join()} {try! b.join()}");
+}
+
+fn from_list() {
+    let xs: List<i32> = [];
+    let f = [move xs] || { xs.push(1); xs.len() };
+    let fs = [f];
+    let a = thread::spawn(fs[0]);
+    let b = thread::spawn(fs[0]);
+    println(f"{try! a.join()} {try! b.join()}");
+}
+
+fn through_arm() {
+    let xs: List<i32> = [1];
+    let f = [move xs] || xs.len();
+    let a = thread::spawn(if c() { f } else { f });
+    let b = thread::spawn(f);
+    println(f"{try! a.join()} {try! b.join()}");
+}
+
+fn one_branch() {
+    let xs: List<i32> = [1];
+    let f = [move xs] || xs.len();
+    if c() { let _ = thread::spawn(f); }
+    let b = thread::spawn(f);
+    println(f"{try! b.join()}");
+}
+
+fn tuple_field() {
+    let xs: List<i32> = [1];
+    let f = [move xs] || xs.len();
+    let p = (f, 1);
+    let a = thread::spawn(p.0);
+    let b = thread::spawn(f);
+    println(f"{try! a.join()} {try! b.join()}");
+}
+
+fn main() {
+    joined();
+    println(f"{two_params()}");
+    through_id();
+    from_list();
+    through_arm();
+    one_branch();
+    tuple_field();
+}

@@ -1,0 +1,33 @@
+// expect-error: affine_temp_unclosed_must_fail.rok:14:14: the `File` made here is never closed: this call only borrows it
+// expect-error: affine_temp_unclosed_must_fail.rok:19:18: the `BufReader<File>` made here is never closed: this call only borrows it
+// expect-error: affine_temp_unclosed_must_fail.rok:24:14: the `BufReader<File>` made here is never closed: this call only borrows it
+// expect-error: help: closing a `File` can fail, so it is not closed for you: bind it with `using`
+
+// A value that must be closed, made only to be borrowed by a call, is
+// never closed: nothing owns it after the call. Bind it with `using`
+// (or bind it and close it).
+use rok::std::fs::File;
+use rok::core::io;
+use rok::core::io::{BufRead, IoError};
+
+fn whole(p: str) throws (IoError) -> str {
+    try (try File::open(p)).read_to_str()
+}
+
+fn count(p: str) throws (IoError) -> usize {
+    let n = 0usize;
+    try for l in io::BufReader::new(try File::open(p)).lines() { n += 1; }
+    n
+}
+
+fn later(p: str) throws (IoError) -> usize {
+    let ls = io::BufReader::new(try File::open(p)).lines();
+    let n = 0usize;
+    try for l in ls { n += 1; }
+    n
+}
+
+fn main() throws (IoError) {
+    println(try whole("/dev/null"));
+    println(f"{try count("/dev/null")} {try later("/dev/null")}");
+}

@@ -1,0 +1,43 @@
+// needs: threads
+// expect-error: 406_11_async_move_closure_must_fail.rok:19:25: `q` shares `p`, which was spawned as a task at line 18
+// expect-error: 406_11_async_move_closure_must_fail.rok:27:19: `f` was spawned as a task at line 26
+// expect-error: 406_11_async_move_closure_must_fail.rok:36:22: `p` shares `f`, which was moved into a closure at line 35
+// expect-error: help: the futures of one `async [move ..]` closure share what it moved in
+
+// Calling an `async [move ..]` closure makes a future that runs on what
+// the closure moved in: the closure and its futures are one owner.
+// Handing one of them to a task (or into another closure) takes the
+// others along.
+use rok::std::thread;
+
+async fn two_futures() {
+    let xs: List<i32> = [];
+    let f = async [move xs] || { xs.push(1); xs.len() };
+    let p = f();
+    let q = f();
+    let a = task::spawn(p);
+    let b = task::spawn(q);
+    println(f"{try! await a.join()} {try! await b.join()}");
+}
+
+async fn spawn_then_call() {
+    let xs: List<i32> = [];
+    let f = async [move xs] || { xs.push(1); xs.len() };
+    let a = task::spawn(f());
+    let n = await f();
+    println(f"{try! await a.join()} {n}");
+}
+
+async fn closure_then_future() {
+    let xs: List<i32> = [];
+    let f = async [move xs] || { xs.push(1); xs.len() };
+    let p = f();
+    let t = thread::spawn([move f] || task::block_on(f()));
+    println(f"{await p} {try! t.join()}");
+}
+
+async fn main() {
+    await two_futures();
+    await spawn_then_call();
+    await closure_then_future();
+}

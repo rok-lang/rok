@@ -1,0 +1,51 @@
+// expect-exit: 0
+// expect-stdout: 3 3 2 1 3
+
+// A copy of what a lock guards may leave its `using` block through any
+// value form; a view used up inside its scope is fine there.
+use rok::std::fs;
+use rok::core::io::{BufRead, BufReader, IoError};
+
+static M: Mutex<List<i32>> = Mutex::new([1, 2, 3]);
+
+fn c() -> bool { true }
+
+fn copied() -> List<i32> {
+    using g = M.lock() { return loop { break g.get().clone(); }; }
+}
+
+fn arm() -> List<i32> {
+    using g = M.lock() { return if c() { g.get().clone() } else { [] }; }
+}
+
+fn counted() -> usize {
+    using g = M.lock() {
+        let xs = 'b: { if c() { break 'b g.get(); } g.get() };
+        return xs.len() - 1;
+    }
+}
+
+fn used<P: rok::std::path::AsPath>(p: P) throws (IoError) -> usize {
+    using f = BufReader::new(try fs::open(p)) {
+        let ls = loop { break f.lines(); };
+        let n = 0usize;
+        try for l in ls { n += 1; }
+        return if n > 0 { 1 } else { 0 };
+    }
+}
+
+fn closure_inside() -> usize {
+    using g = M.lock() {
+        let f = || g.get();
+        return f().len();
+    }
+}
+
+fn main() throws (IoError) {
+    let a = copied();
+    a.push(9);
+    let path = rok::std::env::temp_dir() / f"rok_view_forms_{rok::std::process::id()}.txt";
+    try fs::write(path, "a\nb\n");
+    println(f"{copied().len()} {arm().len()} {counted()} {try used(path)} {closure_inside()}");
+    try fs::remove_file(path);
+}
