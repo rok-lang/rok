@@ -1833,6 +1833,10 @@ impl<'a> Parser<'a> {
                 self.bump();
                 Literal::CChar(s)
             }
+            TokenKind::ByteCharLit(s) => {
+                self.bump();
+                byte_lit(&s)
+            }
             TokenKind::True => {
                 self.bump();
                 Literal::Bool(true)
@@ -6598,6 +6602,10 @@ impl<'a> Parser<'a> {
                 self.bump();
                 ExprKind::Literal(Literal::CChar(s))
             }
+            TokenKind::ByteCharLit(s) => {
+                self.bump();
+                ExprKind::Literal(byte_lit(&s))
+            }
             TokenKind::LParen => {
                 self.bump();
                 // `()` unit, `(e)` grouping, `(e,)` / `(a, b)` tuple.
@@ -8077,6 +8085,10 @@ impl<'a> Parser<'a> {
                 self.bump();
                 Some(Literal::CChar(s))
             }
+            TokenKind::ByteCharLit(s) => {
+                self.bump();
+                Some(byte_lit(&s))
+            }
             TokenKind::Minus => {
                 self.bump();
                 match self.peek().clone() {
@@ -8283,6 +8295,10 @@ impl<'a> Parser<'a> {
             TokenKind::CCharLit(s) => {
                 self.bump();
                 return Some(self.maybe_extend_range(span, Literal::CChar(s)));
+            }
+            TokenKind::ByteCharLit(s) => {
+                self.bump();
+                return Some(self.maybe_extend_range(span, byte_lit(&s)));
             }
             TokenKind::True => {
                 self.bump();

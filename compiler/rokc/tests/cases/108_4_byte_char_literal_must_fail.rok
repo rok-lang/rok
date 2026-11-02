@@ -1,0 +1,8 @@
+// expect-error: 6:13: `b'é'` must be one byte; write non-ASCII bytes as `\xHH`
+// expect-error: 7:13: char literal must contain exactly one code point
+
+fn main() {
+    // A byte literal holds one byte.
+    let a = b'é';
+    let b = b'ab';
+}
