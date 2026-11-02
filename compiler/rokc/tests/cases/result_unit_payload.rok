@@ -44,7 +44,7 @@ fn noisy() throws (str) { throw "boom"; }
 // The `std::fs` async shape: a unit call kept as a `Result` across a
 // blocking-thread hop, then `get` back into the error flow.
 async fn off(f: fn() throws (E) + Send) throws (E) {
-    let r = await task::spawn_blocking(|| Result::catching(f));
+    let r = await task::spawn_blocking([move f] || Result::catching(f));
     try r.get();
 }
 
