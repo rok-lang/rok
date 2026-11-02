@@ -46,6 +46,15 @@ pub fn resolve_entry(
         }
         (Some(f), true) => {
             check_main_signature(f, diags);
+            // `fn main()` throws like the top-level statements: an
+            // escaping error is printed and exits 1.
+            if let Some(Item::Fn(f)) = items.iter_mut().find_map(|(m, i)| {
+                (m.is_empty() && matches!(i, Item::Fn(f) if f.name == "main")).then_some(i)
+            }) {
+                if f.ret_ty.is_none() && matches!(f.throws, ThrowsKind::None) {
+                    f.throws = ThrowsKind::Typed(vec![rokc_ast::untyped_throws_ty(f.span)]);
+                }
+            }
             false
         }
         // Items only: form 2 with no statements, an empty implicit `main`.

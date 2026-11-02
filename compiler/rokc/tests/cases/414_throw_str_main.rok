@@ -1,0 +1,27 @@
+// expect-exit: 1
+// expect-stderr: error: `main` returned an uncaught error: age -2 is negative
+// expect-stderr: --> *414_throw_str_main.rok:25:*
+// expect-stdout:
+// caught: age -1 is negative
+// ValueError("bad")
+// 5
+
+// `throw "msg"` throws `ValueError::new("msg")`; a `fn main()` without
+// `throws` may still throw: the error is printed and the exit code is 1.
+fn check(age: i32) throws (ValueError) -> i32 {
+    if age < 0 { throw f"age {age} is negative"; }
+    age
+}
+
+fn any(s: str) throws {
+    let msg = s;
+    throw msg;
+}
+
+fn main() {
+    try check(-1) catch e { println(f"caught: {e}"); };
+    try any("bad") catch e: ValueError { println(f"{e:?}"); };
+    println(try check(5));
+    _ = try check(-2);
+    println("not reached");
+}

@@ -451,21 +451,17 @@ pub(super) fn raise(
             out.push(HirStmt::Return(Some(c)));
             return out;
         }
-        // An untyped `throws` takes any `Error`; `throw "msg"` (Python,
-        // JS) throws a `str`, which is none.
+        // An untyped `throws` takes any `Error`.
         if any_error(&decl) {
             let name = ctx.ty_name(&ety);
             ctx.emit_error(
                 Code::NOT_AN_ERROR,
                 format!("`{name}` can't be thrown: it does not implement `Error`"),
             );
-            // A `str`'s help quotes it (`lower_throw`).
-            if ety != HirTy::Prim(PrimTy::Str) {
-                ctx.help_last(Some(format!(
-                    "add `impl Error for {name} {{}}` (it needs `Display` and `Debug`), or \
-                     throw a `ValueError`: `throw ValueError::new(..);`"
-                )));
-            }
+            ctx.help_last(Some(format!(
+                "add `impl Error for {name} {{}}` (it needs `Display` and `Debug`), or \
+                 throw a `ValueError`: `throw ValueError::new(..);`"
+            )));
         } else if ctx.ty_name(&decl).contains('#') {
             // `rethrows`: the declared error is its parameters' (`#E0`).
             ctx.emit_error(
@@ -1080,17 +1076,52 @@ pub(super) fn lower_throw(
         ctx.fn_throws.clone().unwrap_or(HirTy::Unknown)
     };
     let v = lower_expected(ctx, value, expected);
+    // `throw "msg"` throws `ValueError::new("msg")`, unless a catch or the
+    // declared `throws` takes a `str` itself.
+    let str_ty = HirTy::Prim(PrimTy::Str);
+    let str_taken = v.ty == str_ty
+        && (ctx.err_frames.iter().any(|f| {
+            matches!(f, ErrFrame::Catch(CatchFrame { arms: Some((filters, _)), .. })
+                if filters.iter().flatten().any(|t| err_fits(ctx, &str_ty, t)))
+        }) || ctx
+            .fn_throws
+            .as_ref()
+            .is_some_and(|d| err_fits(ctx, &str_ty, d)));
+    let value_error = ctx
+        .lookup_struct(VALUE_ERROR)
+        .filter(|sid| v.ty == str_ty && !str_taken && ctx.struct_def(*sid).fields.len() == 1);
+    let wrapped = value_error.is_some();
+    let v = match value_error {
+        Some(sid) => HirExpr {
+            kind: HirExprKind::StructInit {
+                struct_id: sid,
+                fields: vec![v],
+            },
+            ty: HirTy::Struct(sid),
+            span: value.span,
+        },
+        None => v,
+    };
     let since = ctx.env.sink.diagnostics.borrow().len();
-    let is_str = v.ty == HirTy::Prim(PrimTy::Str) && ctx.fn_throws.as_ref().is_some_and(any_error);
     let stmts = raise(ctx, v, span);
-    if let (true, Some(msg)) = (is_str, ctx.src(value.span)) {
-        ctx.help_since(
-            since,
-            format!("throw a `ValueError`: `throw ValueError::new({msg});`"),
-        );
+    if wrapped {
+        let decl = ctx.fn_throws.as_ref().map(|t| ctx.ty_name(t));
+        let help = match decl {
+            Some(d) => format!(
+                "`throw \"..\"` throws a `ValueError`: add it to the list \
+                 (`throws ({d} | ValueError)`), or throw one of the listed errors"
+            ),
+            None => "`throw \"..\"` throws a `ValueError`: declare `throws` on the function, \
+                     or catch it here"
+                .to_owned(),
+        };
+        ctx.help_since(since, help);
     }
     HirStmt::Expr(block_expr(stmts, span))
 }
+
+/// What `throw "msg"` throws.
+const VALUE_ERROR: &str = "rok::core::error::ValueError";
 
 /// Push a frame that takes every error (`try?` / `try!` / throwing
 /// `main`).
