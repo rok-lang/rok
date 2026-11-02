@@ -1,0 +1,42 @@
+// only-os: windows
+// needs: process
+// needs: threads
+// expect-exit: 0
+// expect-stdout:
+// output: [hi] code 0
+// status: code 4 again 4
+// piped: [abc]
+// wait: code 0 reaped true
+
+// `Command::output_async` / `status_async` and `Child::wait_async` on
+// Windows: the task suspends while a blocking thread waits on the
+// child; the child's pipes have the io traits' twins.
+use rok::std::process::{Command, Stdio, ChildStdin, ChildStdout, ExitStatus};
+use rok::core::io::{IoError, AsyncClose};
+
+fn cmd(script: str) -> Command {
+    Command::new("cmd").args(["/c", script])
+}
+
+async fn main() throws (IoError) {
+    let o = try await cmd("echo hi").output_async();
+    println(f"output: [{(try! str::from_utf8(o.stdout)).trim()}] code {o.status.code() ?? -1}");
+    let c = cmd("exit 4");
+    let st = try await c.status_async();
+    // The blocking thread runs its own copy: `c` stays usable.
+    let st2 = try await c.status_async();
+    println(f"status: code {st.code() ?? -1} again {st2.code() ?? -1}");
+
+    let child = try Command::new("findstr").arg("^").stdin(Stdio::Piped).stdout(Stdio::Piped).spawn();
+    if let si: ChildStdin = child.take_stdin() {
+        try await si.write_all_async("abc\n");
+        try await si.close_async();
+    }
+    if let so: ChildStdout = child.take_stdout() {
+        println(f"piped: [{(try await so.read_to_str_async()).trim()}]");
+        try await so.close_async();
+    }
+    let w = try await child.wait_async();
+    // The wait reaped through a copy of the handle: this one sees it.
+    println(f"wait: code {w.code() ?? -1} reaped {(try child.try_wait()) is ExitStatus}");
+}

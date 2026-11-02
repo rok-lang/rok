@@ -1,0 +1,74 @@
+// needs: process threads
+// only-os: windows
+// expect-exit: 0
+// expect-stdout:
+// 50 rounds: no kill error
+// killed while waited on: true
+// handle id: true
+// ended, not reaped: kill ok
+// after the end: ok
+
+// `Child::handle` on Windows: another thread kills the child while the
+// owner waits on it. A kill after the child has ended, reaped or not,
+// is a no-op, not an error.
+use rok::std::process::{Child, ChildHandle, Command, Signal, Stdio};
+use rok::std::thread;
+use rok::core::io::IoError;
+use rok::core::time::Duration;
+
+fn pester(h: ChildHandle) -> i32 {
+    let errors = 0;
+    for _ in 0..200 {
+        try h.kill() catch _ { errors += 1; };
+        try h.send_signal(Signal::Kill) catch _ { errors += 1; };
+    }
+    errors
+}
+
+fn kill_later(h: ChildHandle) -> i32 {
+    thread::sleep(Duration::ms(50));
+    try h.kill() catch _ { return 1; };
+    0
+}
+
+fn quick() -> Command {
+    Command::new("cmd").args(["/c", "exit 0"])
+}
+
+fn main() throws (IoError | thread::JoinError) {
+    let bad = 0;
+    for _ in 0..50 {
+        let c: Child = try quick().spawn();
+        let h = c.handle();
+        let t = thread::spawn(|| pester(h));
+        _ = try c.wait();
+        bad += try t.join();
+    }
+    println(f"50 rounds: {if bad == 0 { "no kill error" } else { f"{bad} bad" }}");
+
+    let c = try Command::new("ping").args(["-n", "11", "127.0.0.1"]).stdout(Stdio::Null).spawn();
+    let h = c.handle();
+    let t = thread::spawn(|| kill_later(h));
+    let st = try c.wait();
+    _ = try t.join();
+    println(f"killed while waited on: {st.code() == 1}");
+    println(f"handle id: {h.id() == c.id()}");
+
+    // Exit code 0: the child ended on its own before the kills.
+    let ended = false;
+    let errors = 0;
+    let pause = 100i64;
+    while !ended && pause < 10000 {
+        let c = try quick().spawn();
+        thread::sleep(Duration::ms(pause));
+        try c.kill() catch _ { errors += 1; };
+        try c.handle().kill() catch _ { errors += 1; };
+        ended = (try c.wait()).code() == 0;
+        pause *= 2;
+    }
+    println(f"ended, not reaped: {if ended && errors == 0 { "kill ok" } else { f"ended {ended}, {errors} errors" }}");
+
+    try h.kill();
+    try h.send_signal(Signal::Kill);
+    println("after the end: ok");
+}
