@@ -2834,6 +2834,11 @@ impl<'h> Walk<'_, 'h> {
                              or, for a `fn` value that moves nothing in, write `+ Send + Sync` \
                              on its type"
                                 .to_owned()
+                        } else if future && written.is_some_and(|e| self.reaches_moved_closure(e)) {
+                            "help: the futures of one `async [move ..]` closure share what it \
+                             moved in; await them here one after another, or make another \
+                             closure for the other task (moving in a `.clone()` of what it needs)"
+                                .to_owned()
                         } else if future {
                             format!(
                                 "help: the task runs it now; call the async fn again for a \
@@ -3284,6 +3289,11 @@ impl<'h> Walk<'_, 'h> {
         if !matches!(e.ty, HirTy::Fn(..) | HirTy::Closure { .. }) {
             return false;
         }
+        self.reaches_moved_closure(e)
+    }
+
+    /// `e` is (or shares) a closure that owns moved values.
+    fn reaches_moved_closure(&self, e: &HirExpr) -> bool {
         let mut fl = Vec::new();
         self.flows_any(e, &mut fl);
         let owner = |q: &Place| {
@@ -4293,6 +4303,15 @@ impl<'h> Walk<'_, 'h> {
                 if let Some(s) = s {
                     self.kept_views(&s, &all, e, Some(closure));
                     self.apply(&s, &all, e, true, false);
+                }
+                // An `async` closure's future runs on what the closure
+                // moved in: the two are one owner. Handing either over
+                // takes the other along.
+                if self.is_coroutine(&e.ty) && self.moves_own(closure) {
+                    let mut fl = Vec::new();
+                    self.flows_any(closure, &mut fl);
+                    let v = self.results.entry(addr(e)).or_default();
+                    v.extend(fl.into_iter().map(|(_, q)| (Fk::Both, q)));
                 }
             }
             HirExprKind::CoroNew { body_fn, args } => {
