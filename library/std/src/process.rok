@@ -294,11 +294,11 @@ impl Debug for SignalError {
 }
 impl Error for SignalError {}
 
-static SIGNAL_HANDLERS: Mutex<Dict<i32, fn() + Send>> = unsafe { Mutex::new_unshared(Dict::new()) };
+static SIGNAL_HANDLERS: Mutex<Dict<i32, fn() + Send + Sync>> = unsafe { Mutex::new_unshared(Dict::new()) };
 
 /// Call `handler` (on the `rok-signal` thread) each time the process
 /// receives `sig`; a later `on_signal` for the same `sig` replaces it.
-pub fn on_signal(sig: Signal, handler: fn() + Send) throws (SignalError) {
+pub fn on_signal(sig: Signal, handler: fn() + Send + Sync) throws (SignalError) {
     // ERROR_NOT_SUPPORTED.
     if WINDOWS && !sig.on_windows(true) { throw SignalError { signal: sig, os_code: 50 }; }
     try install_handler(sig.number(), handler) catch e { throw SignalError { signal: sig, os_code: e.os_code() }; };
@@ -306,7 +306,7 @@ pub fn on_signal(sig: Signal, handler: fn() + Send) throws (SignalError) {
 
 /// Route OS signal number `sig` to `handler` (`os::windows` routes
 /// Ctrl-Break through here too).
-pub(pkg) fn install_handler(sig: i32, handler: fn() + Send) throws (IoError) {
+pub(pkg) fn install_handler(sig: i32, handler: fn() + Send + Sync) throws (IoError) {
     unsafe {
         using g = SIGNAL_HANDLERS.lock() { g.get().insert(sig, handler); }
         let fd: GcBuf<i32> = buf_new(1);
@@ -332,9 +332,9 @@ fn dispatch_signals(pipe: File) {
         let n = try pipe.read(buf) catch _ { return; };
         if n == 0usize { return; }
         for i in 0..n {
-            let h: (fn() + Send) | none = none;
+            let h: (fn() + Send + Sync) | none = none;
             using g = SIGNAL_HANDLERS.lock() { h = g.get().get(buf[i] as i32); }
-            if let f: fn() + Send = h { f(); }
+            if let f: fn() + Send + Sync = h { f(); }
         }
     }
 }

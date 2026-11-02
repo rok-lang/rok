@@ -1453,13 +1453,6 @@ impl Checker<'_> {
         ) {
             return false;
         }
-        // A `+ Send` fn value shares only `Sync` captures; what it owns
-        // through `[move x]` is followed from the closure that made it.
-        if let HirTy::Fn(_, _, b) = t {
-            if b.auto.iter().any(|k| *k == self.ctx.lang("send_trait")) {
-                return false;
-            }
-        }
         if let Some(&v) = self.tracked_memo.borrow().get(t) {
             return v;
         }
@@ -2642,8 +2635,22 @@ impl<'h> Walk<'_, 'h> {
                     None => (format!("`{who}` was {moved}"), who.to_owned()),
                 };
                 let keep = format!("hand over `{given}.clone()` to keep a separate copy");
-                let diag = err(Code::USE_AFTER_HANDOFF, format!("{head} at {line}"))
-                    .with_secondary(site, format!("`{given}` {here}"));
+                // A closure (or `fn` value) owning moved values moves once.
+                let fn_owner = what == What::Task
+                    && written
+                        .is_some_and(|e| matches!(e.ty, HirTy::Fn(..) | HirTy::Closure { .. }));
+                let diag = if fn_owner {
+                    err(
+                        Code::USE_AFTER_MOVE,
+                        format!(
+                            "{head} at {line}: it may own values moved into it (`[move ..]`), so \
+                             it can be handed over only once"
+                        ),
+                    )
+                } else {
+                    err(Code::USE_AFTER_HANDOFF, format!("{head} at {line}"))
+                }
+                .with_secondary(site, format!("`{given}` {here}"));
                 match what {
                     What::Mutex | What::RwLock => {
                         let (ty, lock) = if what == What::Mutex {
@@ -2686,11 +2693,11 @@ impl<'h> Walk<'_, 'h> {
                             }
                             _ => false,
                         });
-                        let closure = written
-                            .is_some_and(|e| matches!(e.ty, HirTy::Fn(..) | HirTy::Closure { .. }));
-                        diag.with_note(if closure {
+                        diag.with_note(if fn_owner {
                             "help: the task owns the closure and what it moved in; make \
-                             another closure here (moving in a `.clone()` of what it needs)"
+                             another closure here (moving in a `.clone()` of what it needs), \
+                             or, for a `fn` value that moves nothing in, write `+ Send + Sync` \
+                             on its type"
                                 .to_owned()
                         } else if future {
                             format!(
@@ -2751,6 +2758,27 @@ impl<'h> Walk<'_, 'h> {
                 } else {
                     format!("`{who}` shares what {call} {verb}")
                 };
+                let fn_owner = why.what == What::Task
+                    && written
+                        .is_some_and(|e| matches!(e.ty, HirTy::Fn(..) | HirTy::Closure { .. }));
+                if fn_owner {
+                    return err(
+                        Code::USE_AFTER_MOVE,
+                        format!(
+                            "{head} at {} (inside `{}`, {inner}): it may own values moved into it \
+                             (`[move ..]`), so it can be handed over only once",
+                            self.line(site, at),
+                            why.func
+                        ),
+                    )
+                    .with_secondary(site, format!("{verb} here"))
+                    .with_note(
+                        "help: make another closure for the second use (moving in a `.clone()` \
+                         of what it needs), or, for a `fn` value that moves nothing in, write \
+                         `+ Send + Sync` on its type"
+                            .to_owned(),
+                    );
+                }
                 err(Code::USE_AFTER_HANDOFF, format!(
                     "{head} at {} (inside `{}`, {inner})",
                     self.line(site, at),
@@ -3062,14 +3090,23 @@ impl<'h> Walk<'_, 'h> {
         s
     }
 
-    /// `e` names a closure that owns a `[move x]` capture (its local keeps
-    /// the closure type when a `fn` slot took it).
+    /// `e` may own a `[move x]` capture that is not `Sync`: a closure that
+    /// moved one in (its local keeps the closure type when a `fn` slot took
+    /// it), or a `fn` value whose type does not say `Sync`. Such a value
+    /// is handed over once.
     fn owns_moved(&self, e: &HirExpr) -> bool {
-        let HirExprKind::Local(l) = e.kind else {
-            return false;
+        let ty = match &e.kind {
+            // A closure made here: its captures were moved when it was made.
+            HirExprKind::ClosureValue { .. } => return false,
+            HirExprKind::Local(l) => self.local_ty(*l).unwrap_or_else(|| e.ty.clone()),
+            _ => e.ty.clone(),
         };
-        self.local_ty(l)
-            .is_some_and(|t| matches!(t, HirTy::Closure { moved, .. } if moved != 0))
+        // A `fn` value that is not `Sync` may own one.
+        match &ty {
+            HirTy::Closure { moved, .. } => *moved != 0 && self.c.tracked(&ty),
+            HirTy::Fn(..) => self.c.tracked(&ty),
+            _ => false,
+        }
     }
 
     /// What `e`'s value carries, of the places this walk knows.
@@ -4469,6 +4506,16 @@ impl<'h> Walk<'_, 'h> {
             .gives
             .iter()
             .filter_map(|(r, why)| {
+                // A spawned closure goes along only when it may own moved
+                // values (as for a direct spawn).
+                let arg = args.get(r.0 as usize).filter(|_| r.1.is_empty());
+                if why.what == What::Task
+                    && arg.is_some_and(|a| {
+                        matches!(a.ty, HirTy::Fn(..) | HirTy::Closure { .. }) && !self.owns_moved(a)
+                    })
+                {
+                    return None;
+                }
                 let id = self.c.why_id(why.clone());
                 Some((r, map(r)?, Gone::Via(e.span, id)))
             })
@@ -4592,13 +4639,18 @@ impl<'h> Walk<'_, 'h> {
                 {
                     return;
                 }
-                // A `fn` value moved into a closure: what it owns was
-                // followed from the closure that made it.
-                if what == What::Closure
-                    && args
-                        .get(i)
-                        .is_some_and(|a| matches!(a.ty, HirTy::Fn(..)) && !self.owns_moved(a))
+                // A `fn` value moved into a closure: only that place goes;
+                // what it owns was followed from the closure that made it.
+                if let Some(a) = args
+                    .get(i)
+                    .filter(|a| what == What::Closure && matches!(a.ty, HirTy::Fn(..)))
                 {
+                    if let Some(p) = place(a).filter(|_| self.owns_moved(a)) {
+                        for s in self.cur.states() {
+                            s.gone.retain(|g, _| !within(g, &p));
+                            s.gone.insert(p.clone(), Gone::To(at, what));
+                        }
+                    }
                     return;
                 }
                 self.sends |= what != What::Handoff;
