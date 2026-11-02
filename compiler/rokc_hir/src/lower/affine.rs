@@ -2048,7 +2048,12 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             let keeps = !iter && sum.as_ref().is_some_and(|s| s.keeps.contains(&i));
             let affine = self.c.shape(&a.ty).is_some();
             if !affine || by_ref || !(closer || into || keeps) {
-                st = self.expr(a, st, Mode::Use).0;
+                let (s, v) = self.expr(a, st, Mode::Use);
+                st = s;
+                // `await` polls the future it runs to the end.
+                if v == Val::Owned && self.place(a).is_none() && method != "poll" {
+                    self.temp_left_open(a);
+                }
                 continue;
             }
             if closer {
@@ -2075,6 +2080,27 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             return (st, Val::Alias);
         }
         (st, v)
+    }
+
+    /// A value that must be closed, made for a call that only borrows it
+    /// (`File::open(p).read_to_str()`): nothing closes it.
+    fn temp_left_open(&mut self, a: &HirExpr) {
+        if a.ty == HirTy::Never || !matches!(self.c.shape(&a.ty), Some((Kind::Close, _))) {
+            return;
+        }
+        let ty = self.c.ty_name(&a.ty);
+        self.error(
+            Code::UNCLOSED_RESOURCE,
+            a.span,
+            format!("the `{ty}` made here is never closed: this call only borrows it"),
+            |d| {
+                d.with_note(format!(
+                    "help: closing a `{ty}` can fail, so it is not closed for you: bind it with \
+                     `using` (`using x = .. {{ .. }}`), or bind it and close it (`let x = ..; \
+                     .. try x.close();`)"
+                ))
+            },
+        );
     }
 
     fn matched(

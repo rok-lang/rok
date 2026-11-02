@@ -1,0 +1,26 @@
+// expect-exit: 0
+// expect-stdout: 4 2 2
+
+// A value that must be closed and is bound (`using`, or closed by hand),
+// or closed straight away, is fine; so is the owning form of a view.
+use rok::std::fs;
+use rok::std::fs::File;
+use rok::core::io;
+use rok::core::io::{BufRead, IoError};
+
+fn main() throws (IoError) {
+    let path = rok::std::env::temp_dir() / f"rok_temp_closed_{rok::std::process::id()}.txt";
+    try fs::write(path, "a\nb\n");
+    let s = using f = try File::open(path) { try f.read_to_str() };
+    try (try File::open(path)).close();
+    let n = 0usize;
+    using r = io::BufReader::new(try File::open(path)) {
+        try for l in r.lines() { n += 1; }
+    }
+    let own = io::BufReader::new(try File::open(path)).into_lines();
+    let m = 0usize;
+    try for l in own { m += 1; }
+    try own.close();
+    println(f"{s.len()} {n} {m}");
+    try fs::remove_file(path);
+}
