@@ -172,6 +172,16 @@ fn affine_walk(ctx: &LowerCtx<'_>, ty: &HirTy, depth: u32) -> Option<Kind> {
     }
 }
 
+/// A loop's write-back of a `match` arm's binding into the matched place
+/// (`desugar::ARM_BACK`): the two are one value, nothing moves.
+fn arm_back(value: &HirExpr) -> bool {
+    let mut v = value;
+    while let HirExprKind::WithField { value: x, .. } = &v.kind {
+        v = x;
+    }
+    matches!(&v.kind, HirExprKind::Block(b) if b.label.as_deref() == Some(super::desugar::ARM_BACK))
+}
+
 /// The finally block releasing local `n` when its flag is set.
 fn release_block(n: u32, span: Span) -> Block {
     let call = Expr {
@@ -1341,7 +1351,7 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                     self.flag_init(*local, value);
                     return st;
                 }
-                if self.primed_back(value) {
+                if self.primed_back(value) || arm_back(value) {
                     return st;
                 }
                 if self.write_back(*local, value) {

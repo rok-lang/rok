@@ -1,0 +1,38 @@
+// expect-error: `s` was moved at line 31, and is used here
+// expect-error: help: an `S | none` has one owner, and `s` gave it away; use the new owner
+
+// A `match` arm's binding of a stream that owns a resource has one owner:
+// moving it in the arm leaves nothing to walk under the old name.
+use rok::core::task;
+use rok::core::future::{Context, Poll};
+use rok::core::stream::Stream;
+
+struct Res { id: i32; }
+
+impl Drop for Res {
+    fn drop(ref self) {}
+}
+
+struct S { res: Res; n: i32; }
+
+impl Stream for S {
+    type Item = i32;
+    fn poll_next(ref self, ref ctx: Context) -> Poll<i32 | none> {
+        self.n += 1;
+        if self.n > 2 { return Poll::Ready(none); }
+        Poll::Ready(self.n)
+    }
+}
+
+async fn go() {
+    let s: S | none = S { res: Res { id: 1 }, n: 0 };
+    match s {
+        x: S => {
+            let t = x;
+            for await k in x {}
+        }
+        none => {}
+    }
+}
+
+task::block_on(go());

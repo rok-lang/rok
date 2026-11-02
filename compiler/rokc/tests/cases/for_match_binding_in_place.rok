@@ -1,0 +1,92 @@
+// expect-exit: 0
+// expect-stdout:
+// arm 1 2, rest 3
+// closed 1
+// field 1, rest 2 3
+// closed 2
+// steps 1 2, then 3 4
+
+// A `match` arm's binding names the matched variable (or field), so a
+// loop that walks the binding in place leaves the variable where the
+// loop stopped: the next walk goes on from there.
+use rok::core::task;
+use rok::core::future::{Context, Poll};
+use rok::core::stream::Stream;
+use rok::core::io::IoError;
+
+struct Res { id: i32; }
+
+impl Drop for Res {
+    fn drop(ref self) { println(f"closed {self.id}"); }
+}
+
+struct S { res: Res; n: i32; }
+
+impl Stream for S {
+    type Item = i32;
+    fn poll_next(ref self, ref ctx: Context) -> Poll<i32 | none> {
+        self.n += 1;
+        if self.n > 3 { return Poll::Ready(none); }
+        Poll::Ready(self.n)
+    }
+}
+
+struct H { s: S | none; }
+
+struct Up { n: i32; }
+
+impl TryIterator for Up {
+    type Item = i32;
+    type Error = IoError;
+    fn next(ref self) throws (IoError) -> i32 | none {
+        self.n += 1;
+        if self.n > 4 { return none; }
+        self.n
+    }
+}
+
+async fn arm() {
+    let s: S | none = S { res: Res { id: 1 }, n: 0 };
+    let seen = "";
+    match s {
+        x: S => {
+            for await k in x {
+                seen = f"{seen} {k}";
+                if k == 2 { break; }
+            }
+        }
+        none => {}
+    }
+    let rest = "";
+    if let y: S = s { for await k in y { rest = f"{rest} {k}"; } }
+    println(f"arm{seen}, rest{rest}");
+}
+
+async fn field() {
+    let h = H { s: S { res: Res { id: 2 }, n: 0 } };
+    let first = 0;
+    if let x: S = h.s {
+        for await k in x { first = k; break; }
+    }
+    let rest = "";
+    if let y: S = h.s { for await k in y { rest = f"{rest} {k}"; } }
+    println(f"field {first}, rest{rest}");
+}
+
+fn steps() throws (IoError) {
+    let u: Up | none = Up { n: 0 };
+    let a = "";
+    if let x: Up = u {
+        try for k in x {
+            a = f"{a} {k}";
+            if k == 2 { break; }
+        }
+    }
+    let b = "";
+    if let y: Up = u { try for k in y { b = f"{b} {k}"; } }
+    println(f"steps{a}, then{b}");
+}
+
+task::block_on(arm());
+task::block_on(field());
+try! steps();
