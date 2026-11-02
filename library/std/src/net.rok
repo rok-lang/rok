@@ -21,7 +21,7 @@
 use rok::core::convert::AsBytes;
 use rok::core::io::{Close, IoError, IoErrorKind, Read, Write, AsyncRead, AsyncWrite, AsyncClose};
 use rok::std::fs::off;
-use rok::std::sys::{check, would_block, region, mut_region, take_handle, use_begin, use_end, use_close, word_at, clear_bits};
+use rok::std::sys::{check, would_block, region, mut_region, take_handle, use_begin, use_end, use_close, word_at, clear_bits, set_bits};
 use rok::core::time::Duration;
 use rok::bare::mem::{GcBuf, buf_new, buf_same};
 #[cfg(target_family = "unix")]
@@ -1588,6 +1588,8 @@ impl Drop for TcpStream {
 
 const HALF_READ: i32 = 1;
 const HALF_WRITE: i32 = 2;
+/// Writing was shut down (`shutdown(Write | Both)`).
+const WRITES_SHUT: i32 = 4;
 
 /// What both halves of a split connection name: the socket, the TLS
 /// state of a TLS connection, and which halves are open.
@@ -1665,18 +1667,41 @@ impl Duplex {
     }
 
     /// Whether neither half is closed yet.
-    fn both_open(self) -> bool { word_at(self.open, 0) == (HALF_READ | HALF_WRITE) }
+    fn both_open(self) -> bool { (word_at(self.open, 0) & (HALF_READ | HALF_WRITE)) == (HALF_READ | HALF_WRITE) }
 
     /// The peer reads end of stream (TLS: close_notify first); reading
     /// goes on.
     fn end_writes(self) throws (IoError) {
-        if let s: tls::Shared = self.tls { try s.close_notify(); }
-        try self.sock.shutdown(Shutdown::Write);
+        if (word_at(self.open, 0) & WRITES_SHUT) != 0 { return; }
+        try self.shutdown(Shutdown::Write);
     }
 
     async fn end_writes_async(self) throws (IoError) {
-        if let s: tls::Shared = self.tls { try await s.close_notify_async(); }
-        try self.sock.shutdown(Shutdown::Write);
+        if (word_at(self.open, 0) & WRITES_SHUT) != 0 { return; }
+        try await self.shutdown_async(Shutdown::Write);
+    }
+
+    /// `shutdown(2)` of the socket both halves name; a task or thread
+    /// blocked in the shut direction wakes. Writing shut down sends
+    /// close_notify first on TLS.
+    fn shutdown(self, how: Shutdown) throws (IoError) {
+        let first: IoError | none = none;
+        if how != Shutdown::Read {
+            if let s: tls::Shared = self.tls { try s.close_notify() catch e { first = e; }; }
+            _ = set_bits(self.open, 0, WRITES_SHUT);
+        }
+        try self.sock.shutdown(how) catch e { first = first ?? e; };
+        if let e: IoError = first { throw e; }
+    }
+
+    async fn shutdown_async(self, how: Shutdown) throws (IoError) {
+        let first: IoError | none = none;
+        if how != Shutdown::Read {
+            if let s: tls::Shared = self.tls { try await s.close_notify_async() catch e { first = e; }; }
+            _ = set_bits(self.open, 0, WRITES_SHUT);
+        }
+        try self.sock.shutdown(how) catch e { first = first ?? e; };
+        if let e: IoError = first { throw e; }
     }
 
     fn close_all(self) throws (IoError) {
@@ -1766,12 +1791,28 @@ impl<T> ReadHalf<T> {
     /// Close the read half; the socket closes once the write half is
     /// closed too. Throws the OS's error of that close.
     pub fn close(self) throws (IoError) { try self.d.close_half(HALF_READ); }
+
+    /// Shut down reading, writing or both of the socket the halves
+    /// share (TLS: close_notify first for writing). `Both` wakes a
+    /// write blocked on the other half too.
+    pub fn shutdown(self, how: Shutdown) throws (IoError) { try self.d.shutdown(how); }
+
+    /// `shutdown`, awaiting close_notify on TLS instead of blocking.
+    pub async fn shutdown_async(ref self, how: Shutdown) throws (IoError) { try await self.d.shutdown_async(how); }
 }
 
 impl<T> WriteHalf<T> {
     /// End the stream for the peer, or close the socket when the read
     /// half is closed already. Throws the OS's error.
     pub fn close(self) throws (IoError) { try self.d.close_half(HALF_WRITE); }
+
+    /// Shut down reading, writing or both of the socket the halves
+    /// share (TLS: close_notify first for writing). `Both` wakes a read
+    /// blocked on the other half, as `shutdown(SHUT_RDWR)` does.
+    pub fn shutdown(self, how: Shutdown) throws (IoError) { try self.d.shutdown(how); }
+
+    /// `shutdown`, awaiting close_notify on TLS instead of blocking.
+    pub async fn shutdown_async(ref self, how: Shutdown) throws (IoError) { try await self.d.shutdown_async(how); }
 }
 
 impl<T> Read for ReadHalf<T> {

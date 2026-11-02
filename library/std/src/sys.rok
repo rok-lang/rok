@@ -91,6 +91,11 @@ pub(pkg) fn clear_bits(cell: GcBuf<i32>, i: usize, bits: i32) -> i32 {
     }
 }
 
+/// Set `bits` in `cell[i]`; the word before.
+pub(pkg) fn set_bits(cell: GcBuf<i32>, i: usize, bits: i32) -> i32 {
+    unsafe { atomic_or(cell, i, bits, SeqCst) }
+}
+
 /// `cell[i]`, read atomically (a word another thread may change).
 pub(pkg) fn word_at(cell: GcBuf<i32>, i: usize) -> i32 {
     unsafe { atomic_load(cell, i, SeqCst) }
