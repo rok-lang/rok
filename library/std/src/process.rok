@@ -651,13 +651,19 @@ impl Command {
     }
 
     /// Run to completion, collecting stdout and stderr (an inherited
-    /// stdin reads null instead).
+    /// stdin reads null instead; a piped one is closed at once, so the
+    /// child sees end of input).
     pub fn output(self) throws (IoError) -> Output {
         let c = self;
         if c.stdin is Stdio::Inherit { c.stdin = Stdio::Null; }
         if c.stdout is Stdio::Inherit { c.stdout = Stdio::Piped; }
         if c.stderr is Stdio::Inherit { c.stderr = Stdio::Piped; }
         let child = try c.start();
+        // Nothing can write to a piped stdin here; a child reading to end
+        // of input would wait forever with it open.
+        if let si: ChildStdin = child.take_stdin() {
+            try si.close() catch e { child.abandon(); throw e; };
+        }
         // Both pipes drain together (poll), so neither can fill and stall.
         let so = child.take_stdout();
         let se = child.take_stderr();
@@ -665,14 +671,19 @@ impl Command {
         let errs: List<u8> = List::new();
         let fd_out = if so is ChildStdout { so.file.fd() } else { -1 };
         let fd_err = if se is ChildStderr { se.file.fd() } else { -1 };
-        try drain(fd_out, out, fd_err, errs, self.program.as_str()) catch e {
+        let failed: IoError | none = none;
+        try drain(fd_out, out, fd_err, errs, self.program.as_str()) catch e { failed = e; };
+        if let e: IoError = failed {
             if so is ChildStdout { try so.close() catch _ {}; }
             if se is ChildStderr { try se.close() catch _ {}; }
+            child.abandon();
             throw e;
-        };
-        if so is ChildStdout { try so.close(); }
-        if se is ChildStderr { try se.close(); }
+        }
+        // A close error still waits: the child is reaped either way.
+        if so is ChildStdout { try so.close() catch e { failed = e; }; }
+        if se is ChildStderr { try se.close() catch e { failed = failed ?? e; }; }
         let status = try child.wait();
+        if let e: IoError = failed { throw e; }
         Output { status: status, stdout: out, stderr: errs }
     }
 
@@ -756,9 +767,7 @@ impl Command {
             // The child has its own copies now. If ours fail to close, the
             // spawn fails and takes the child down with it.
             if let e: IoError = self.release_stdio(none) {
-                try child.raw_signal(9) catch _ {};
-                child.close_pipes();
-                try child.reap(true) catch _ { false };
+                child.abandon();
                 throw e;
             }
             child
@@ -849,6 +858,14 @@ impl Child {
         if let si: ChildStdin = self.take_stdin() { try si.close() catch _ {}; }
         if let so: ChildStdout = self.take_stdout() { try so.close() catch _ {}; }
         if let se: ChildStderr = self.take_stderr() { try se.close() catch _ {}; }
+    }
+
+    /// Kill the child, close its pipes and reap it, for an error path;
+    /// nothing here can report.
+    fn abandon(ref self) {
+        try self.raw_signal(9) catch _ {};
+        self.close_pipes();
+        try self.reap(true) catch _ { false };
     }
 
     /// A handle that signals the child while this `Child` is owned (and
