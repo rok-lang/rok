@@ -1609,6 +1609,181 @@ pub fn set_permissions<P: AsPath>(path: P, perm: Permissions) throws (IoError) {
     try Dir::root().set_permissions(path, perm);
 }
 
+/// The lines of the file at `path` without their `\n` / `\r\n`, read as
+/// they are asked for: `try for line in fs::lines(p) { .. }`. The file
+/// is opened by the first `next` and closed after the last line, when
+/// an error is thrown, or when the loop leaves early.
+pub yield fn lines<P: AsPath>(path: P) throws (IoError) -> str {
+    let p = path.as_path();
+    using f = rok::core::io::BufReader::new(try open(p)) {
+        try for line in f.lines() {
+            yield line;
+        }
+    }
+}
+
+/// The paths matching `pattern`, sorted. In each `/`-separated
+/// component `*` matches any run of characters, `?` one character and
+/// `[abc]` / `[a-z]` / `[!a]` one of a set; a `**` component matches
+/// any number of directories. Wildcards do not match a leading `.`
+/// unless the component starts with one. A relative pattern gives
+/// relative paths. Unreadable directories throw. Python:
+/// `glob.glob(pattern, recursive=True)`.
+pub fn glob(pattern: str) throws (IoError) -> List<Path> {
+    let comps: List<str> = List::new();
+    for c in pattern.split("/") {
+        if !c.is_empty() {
+            comps.push(c);
+        }
+    }
+    let base = if pattern.starts_with("/") { "/" } else { "" };
+    let out: List<str> = List::new();
+    try glob_from(base, comps, 0, out);
+    out.sort();
+    out.dedup();
+    let paths: List<Path> = List::with_capacity(out.len());
+    for p in out {
+        paths.push(Path::new(p));
+    }
+    paths
+}
+
+fn glob_join(base: str, name: str) -> str {
+    if base.is_empty() { name } else if base.ends_with("/") { base + name } else { base + "/" + name }
+}
+
+fn glob_from(base: str, comps: List<str>, i: usize, out: List<str>) throws (IoError) {
+    if i == comps.len() {
+        if !base.is_empty() {
+            out.push(base);
+        }
+        return;
+    }
+    let c = comps[i];
+    let dir = if base.is_empty() { "." } else { base };
+    if c == "**" {
+        try glob_from(base, comps, i + 1, out);
+        for (name, is_dir) in try glob_list(dir) {
+            if is_dir && !name.starts_with(".") {
+                try glob_from(glob_join(base, name), comps, i, out);
+            }
+        }
+        return;
+    }
+    if !glob_magic(c) {
+        let p = glob_join(base, c);
+        if i + 1 == comps.len() {
+            if exists(p) {
+                out.push(p);
+            }
+        } else if exists(p) && (try metadata(p)).is_dir() {
+            try glob_from(p, comps, i + 1, out);
+        }
+        return;
+    }
+    let last = i + 1 == comps.len();
+    for (name, is_dir) in try glob_list(dir) {
+        if (last || is_dir) && glob_match(c, name) {
+            try glob_from(glob_join(base, name), comps, i + 1, out);
+        }
+    }
+}
+
+/// `dir`'s entries by name, with whether each is a directory (a symlink
+/// to one counts); none when `dir` is not a directory.
+fn glob_list(dir: str) throws (IoError) -> List<(str, bool)> {
+    let out: List<(str, bool)> = List::new();
+    if !exists(dir) || !(try metadata(dir)).is_dir() {
+        return out;
+    }
+    try for e in try read_dir(dir) {
+        let d = e.is_dir() || (e.is_symlink() && (try metadata(e.path())).is_dir());
+        out.push((e.file_name(), d));
+    }
+    out.sort_by(|a: (str, bool), b: (str, bool)| a.0.cmp(b.0));
+    out
+}
+
+fn glob_magic(c: str) -> bool {
+    c.contains("*") || c.contains("?") || c.contains("[")
+}
+
+/// Does `name` match the component pattern `pat`?
+fn glob_match(pat: str, name: str) -> bool {
+    if name.starts_with(".") && !pat.starts_with(".") {
+        return false;
+    }
+    let p: List<char> = pat.chars().to_list();
+    let n: List<char> = name.chars().to_list();
+    // Backtracking over the last `*`.
+    let (pi, ni) = (0usize, 0usize);
+    let (star, mark): (usize | none, usize) = (none, 0usize);
+    while ni < n.len() {
+        if pi < p.len() && p[pi] == '*' {
+            star = pi;
+            mark = ni;
+            pi += 1;
+            continue;
+        }
+        if pi < p.len() {
+            if let k: usize = glob_one(p, pi, n[ni]) {
+                pi = k;
+                ni += 1;
+                continue;
+            }
+        }
+        if let s: usize = star {
+            pi = s + 1;
+            mark += 1;
+            ni = mark;
+            continue;
+        }
+        return false;
+    }
+    while pi < p.len() && p[pi] == '*' {
+        pi += 1;
+    }
+    pi == p.len()
+}
+
+/// The pattern position after matching `c` at `pi` (`?`, a set or a
+/// literal), or `none`.
+fn glob_one(p: List<char>, pi: usize, c: char) -> usize | none {
+    let x = p[pi];
+    if x == '?' {
+        return pi + 1;
+    }
+    if x == '[' {
+        let j = pi + 1;
+        let neg = j < p.len() && (p[j] == '!' || p[j] == '^');
+        if neg {
+            j += 1;
+        }
+        let hit = false;
+        let first = true;
+        while j < p.len() && (first || p[j] != ']') {
+            first = false;
+            if j + 2 < p.len() && p[j + 1] == '-' && p[j + 2] != ']' {
+                if p[j] <= c && c <= p[j + 2] {
+                    hit = true;
+                }
+                j += 3;
+            } else {
+                if p[j] == c {
+                    hit = true;
+                }
+                j += 1;
+            }
+        }
+        if j >= p.len() {
+            // No closing `]`: a literal `[`.
+            return if c == '[' { pi + 1 } else { none };
+        }
+        return if hit != neg { j + 1 } else { none };
+    }
+    if x == c { pi + 1 } else { none }
+}
+
 /// Everything under `root`, `root` included (see `Walk`).
 pub fn walk<P: AsPath>(root: P) -> Walk {
     let p = root.as_path();

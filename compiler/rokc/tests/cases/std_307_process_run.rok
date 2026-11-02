@@ -1,0 +1,20 @@
+// only-os: macos linux
+// needs: process
+// expect-exit: 0
+// expect-stdout:
+// "hi there\n"
+// failed: the program failed (exit status: 3): bad
+// code 3 stderr "bad\n"
+
+// process::run: stdout as text; a failing program throws ExitStatusError
+// with its status and stderr.
+use rok::std::process;
+
+fn main() throws {
+    let out = try process::run("/bin/sh", ["-c", "echo hi there"]);
+    println(f"{out:?}");
+    try process::run("/bin/sh", ["-c", "echo bad >&2; exit 3"]) catch e: process::ExitStatusError {
+        println(f"failed: {e}");
+        println(f"code {e.status().code():?} stderr {e.stderr():?}");
+    };
+}

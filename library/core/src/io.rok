@@ -507,6 +507,16 @@ pub trait BufRead: Read {
     }
 }
 
+/// `prompt` written to stdout (flushed), then the next line of standard
+/// input without its `\n` / `\r\n`; `none` at the end. Python:
+/// `input(prompt)`, which raises at the end instead.
+pub fn input(prompt: str = "") throws (IoError) -> str | none {
+    let out = stdout();
+    try out.write_all(prompt);
+    try out.flush();
+    try read_line()
+}
+
 /// The next line of standard input without its `\n` / `\r\n`; `none` at
 /// the end.
 pub fn read_line() throws (IoError) -> str | none {
