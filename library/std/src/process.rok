@@ -792,13 +792,10 @@ impl Child {
     pub fn take_stderr(ref self) -> ChildStderr | none { replace(ref self.stderr, none) }
 
     /// Close the pipes not taken; closing cannot report to anyone here.
-    fn close_pipes(self) {
-        let si = unsafe { rok::core::marker::share(self.stdin) };
-        if si is ChildStdin { try si.close() catch _ {}; }
-        let so = unsafe { rok::core::marker::share(self.stdout) };
-        if so is ChildStdout { try so.close() catch _ {}; }
-        let se = unsafe { rok::core::marker::share(self.stderr) };
-        if se is ChildStderr { try se.close() catch _ {}; }
+    fn close_pipes(ref self) {
+        if let si: ChildStdin = self.take_stdin() { try si.close() catch _ {}; }
+        if let so: ChildStdout = self.take_stdout() { try so.close() catch _ {}; }
+        if let se: ChildStderr = self.take_stderr() { try se.close() catch _ {}; }
     }
 
     /// `SIGKILL`.
@@ -824,55 +821,25 @@ impl Child {
     /// `false` if `!block` and it is still running. Of copies reaping at
     /// once, the first to see it ended reaps it, after the calls in
     /// flight; the rest wait for that.
-    fn reap(self, block: bool) throws (IoError) -> bool {
-        unsafe {
-            if word_at(self.state, 0) == 0 && use_begin(self.state, 3) {
-                let out: GcBuf<i32> = buf_new(1);
-                let r = rok_os_waitpid(self.pid, if block { 2 } else { 3 }, out);
-                _ = use_end(self.state, 3);
-                if r == 0 { return false; }
-                try check(r as i64, "waitpid");
-                // The first to close reaps.
-                if (use_close(self.state, 3) & 1) == 0 {
-                    while word_at(self.state, 3) != 1 { rok_thread_yield_now(); }
-                    let k = rok_os_waitpid(self.pid, 1, out);
-                    if k < 0 {
-                        take_handle(self.state, 0, k);
-                    } else {
-                        self.reaped(out[0]);
-                    }
-                }
-            }
-            while word_at(self.state, 0) == 0 { rok_thread_yield_now(); }
-            let st = word_at(self.state, 0);
-            if st < 0 { try check(st as i64, "waitpid"); }
-            true
-        }
-    }
-
-    /// Record a reaped status; the pidfd goes with the process.
-    unsafe fn reaped(self, raw: i32) {
-        self.state[1] = raw;
-        let fd = take_handle(self.state, 2, -9);
-        if fd >= 0 {
-            _ = rok_os_close(fd);
-        }
-        take_handle(self.state, 0, 1);
-    }
+    fn reap(self, block: bool) throws (IoError) -> bool { try reap_pid(self.pid, self.state, block) }
 
     /// Wait for the child to end. Closes our end of its stdin first, so
     /// a child reading to EOF can finish.
-    pub fn wait(self) throws (IoError) -> ExitStatus {
-        let si = unsafe { rok::core::marker::share(self.stdin) };
-        if si is ChildStdin { try si.close(); }
+    pub fn wait(ref self) throws (IoError) -> ExitStatus {
+        if let si: ChildStdin = self.take_stdin() { try si.close(); }
         _ = try self.reap(true);
         ExitStatus { raw: unsafe { self.state[1] } }
     }
 
-    /// `wait` that suspends the task.
+    /// `wait` that suspends the task. Closes stdin here; the blocking
+    /// thread only reaps.
     pub async fn wait_async(ref self) throws (IoError) -> ExitStatus {
-        let c = unsafe { Handoff::new(rok::core::marker::share(self)) };
-        try await off(|| try c.get().wait())
+        if let si: ChildStdin = self.take_stdin() { try si.close(); }
+        let pid = self.pid;
+        // The reaping state is atomics-guarded: any thread may reap.
+        let st = unsafe { Handoff::new(self.state) };
+        _ = try await off(|| try reap_pid(pid, st.get(), true));
+        ExitStatus { raw: unsafe { st.get()[1] } }
     }
 
     /// The status if it has ended, without blocking.
@@ -880,6 +847,46 @@ impl Child {
         if !(try self.reap(false)) { return none; }
         ExitStatus { raw: unsafe { self.state[1] } }
     }
+}
+
+/// Reap `pid` once it has ended (`block`: wait for that): `false` if
+/// `!block` and it is still running. Of copies of `state` reaping at
+/// once, the first to see it ended reaps it, after the calls in flight;
+/// the rest wait for that.
+fn reap_pid(pid: i32, state: GcBuf<i32>, block: bool) throws (IoError) -> bool {
+    unsafe {
+        if word_at(state, 0) == 0 && use_begin(state, 3) {
+            let out: GcBuf<i32> = buf_new(1);
+            let r = rok_os_waitpid(pid, if block { 2 } else { 3 }, out);
+            _ = use_end(state, 3);
+            if r == 0 { return false; }
+            try check(r as i64, "waitpid");
+            // The first to close reaps.
+            if (use_close(state, 3) & 1) == 0 {
+                while word_at(state, 3) != 1 { rok_thread_yield_now(); }
+                let k = rok_os_waitpid(pid, 1, out);
+                if k < 0 {
+                    take_handle(state, 0, k);
+                } else {
+                    reaped(state, out[0]);
+                }
+            }
+        }
+        while word_at(state, 0) == 0 { rok_thread_yield_now(); }
+        let st = word_at(state, 0);
+        if st < 0 { try check(st as i64, "waitpid"); }
+        true
+    }
+}
+
+/// Record a reaped status; the pidfd goes with the process.
+unsafe fn reaped(state: GcBuf<i32>, raw: i32) {
+    state[1] = raw;
+    let fd = take_handle(state, 2, -9);
+    if fd >= 0 {
+        _ = rok_os_close(fd);
+    }
+    take_handle(state, 0, 1);
 }
 
 /// Closes the pipes not taken; with `kill_on_drop`, also kills and
