@@ -45,7 +45,7 @@ fn bump_then_fail(ref n: i32) throws (str) {
 fn by_value(x: i32) { x = 10i32; }
 fn by_ref(ref x: i32) { x = 10i32; }
 
-fn set_x(p: Point) { p.x = 10.0; }
+fn set_x(p: Point) -> f64 { p.x = 10.0; p.x }
 fn set_x_ref(ref p: Point) { p.x = 10.0; }
 fn fill(xs: List<i32>) { xs.push(1); }
 fn reset(ref xs: List<i32>) { xs = []; }
@@ -98,7 +98,7 @@ by_ref(ref w);
 println(f"{v} {w}");
 
 let q = Point { x: 0.0, y: 0.0 };
-set_x(q);
+_ = set_x(q);
 let q0 = q.x;
 set_x_ref(ref q);
 let zs: List<i32> = [];

@@ -1,5 +1,6 @@
 // needs: threads
 // expect-error: `root.payload` shares what `send_all(tx, root)` sent through a channel
+// expect-error: 13:5: `n.payload` is set on a copy of the argument, so the change is lost when `send_all` returns
 // A by-value `self` is a copy: the callee's `self.buf = []` doesn't reach
 // the caller, which still holds the sent list.
 // Recursive tree: every leaf's payload is sent; the tree is then reset.

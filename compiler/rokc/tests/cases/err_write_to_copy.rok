@@ -1,0 +1,33 @@
+// expect-error: 16:31: `self.n` is set on a copy of the receiver, so the change is lost when `inc` returns
+// expect-error: help: take `ref self` to change the caller's value: `fn inc(ref self)`; to change a local copy, write `let c = self;` and change `c`
+// expect-error: 19:17: `p.x` is set on a copy of the argument, so the change is lost when `lost` returns
+// expect-error: help: take `ref p` to change the caller's value: `fn lost(ref p: P)`, and call it with `ref` before the argument; or return `p`
+// expect-error: 20:33: `p.x` is set on a copy of the argument, so the change is lost when `spin` returns
+// expect-error: 22:34: `p.y` is set on a copy of the argument, so the change is lost when `feeds` returns
+// expect-error: 26:15: `p.x` is set on a copy of the element, so `ps` does not change
+// expect-error: help: bind each element as a place with `for ref`: `for ref p in ps { p.x *= 10; }`
+// expect-error: 27:22: `p.x` is set on a copy of the element, so `ps` does not change
+// expect-error: help: bind each element as a place with `for ref`: `for ref p in ps { p.x = 1; }`
+// expect-error: 29:1: `first.x` is set on a copy of `ps[1]`, so `ps[1]` does not change
+// expect-error: help: write it back afterwards: `ps[1] = first;`
+
+struct P { x: i32; y: i32; }
+struct Counter { n: i32; }
+impl Counter { fn inc(self) { self.n += 1; } }
+
+fn twice(p: P) -> i32 { p.x * 2 }
+fn lost(p: P) { p.x += 1; }
+fn spin(p: P) { for i in 0..3 { p.x += i; } }
+// `p.x = 1` is read by `twice(p)`; the write to `p.y` is not.
+fn feeds(p: P) -> i32 { p.x = 1; p.y = twice(p); 0 }
+
+let ps = [P { x: 1, y: 0 }, P { x: 2, y: 0 }];
+_ = feeds(ps[0]);
+for p in ps { p.x *= 10; }
+for p in ps.iter() { p.x = 1; }
+let first = ps[1];
+first.x = 99;
+let c = Counter { n: 0 };
+c.inc();
+lost(ps[0]);
+spin(ps[0]);

@@ -1,0 +1,18 @@
+// expect-error: 14:27: a closure cannot capture `p`: it names an element of a `for ref` loop
+// expect-error: help: copy the element first and capture the copy: `let v = p;`
+// expect-error: 16:14: `for ref` needs a `List`, an array or a `SliceMut`, whose elements are places; found `Dict<str, i32>`
+// expect-error: help: to read the items, write `for v in ..`
+// expect-error: 17:14: `for ref` writes an array where it is kept, and a temporary array is kept nowhere
+// expect-error: help: keep the array in a variable first: `let xs = make(); for ref p in xs { .. }`
+// expect-error: `for ref` binds each element to one name
+// expect-error: help: bind the element, then destructure it in the body: `for ref x in xs { let (a, b) = x; .. }`
+// forbid-error: cannot find value `p`
+
+struct P { x: i32; y: i32; }
+fn make() -> [P; 2] { [P { x: 1, y: 0 }, P { x: 2, y: 0 }] }
+let ps: List<P> = [P { x: 1, y: 0 }];
+for ref p in ps { let f = || p.x; println(f"{f()}"); }
+let d = {"a": 1};
+for ref v in d { println(f"{v:?}"); }
+for ref p in make() { p.x = 1; }
+for ref (a, b) in [(1, 2)] { println(f"{a}{b}"); }

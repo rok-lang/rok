@@ -304,6 +304,7 @@ pub(super) fn lower(ctx: &mut LowerCtx<'_>, e: &Expr) -> HirExpr {
                 label: None,
             },
             is_await: false,
+            by_ref: false,
         })
     };
     let out = format!("#bo{tag}");

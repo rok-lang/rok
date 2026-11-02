@@ -4,6 +4,18 @@
 use super::*;
 use rokc_diagnostic::Code;
 
+/// A closure or coroutine names a `for ref` binding: it has no value of
+/// its own to capture.
+pub(super) fn place_capture(ctx: &LowerCtx<'_>, name: &str) {
+    ctx.emit_error(
+        Code::INVALID_CAPTURE,
+        format!("a closure cannot capture `{name}`: it names an element of a `for ref` loop"),
+    );
+    ctx.help_last(Some(format!(
+        "copy the element first and capture the copy: `let v = {name};`"
+    )));
+}
+
 /// Lift a closure into an anonymous function and return its value.
 /// Captures copy at creation; `[ref x]` shares `x`'s cell. A
 /// non-capturing closure is a plain function pointer.
@@ -72,6 +84,9 @@ pub(super) fn lower_closure_expr(
         .into_iter()
         .filter_map(|name| {
             let mut local = ctx.lookup(&name)?;
+            if ctx.places.contains_key(&local) {
+                place_capture(ctx, &name);
+            }
             let by_ref = by_ref.contains(&name.as_str()) && ctx.is_boxed(cell_of(local));
             if by_ref {
                 local = cell_of(local);
@@ -905,7 +920,7 @@ pub(super) fn lower_for(
     pat: &AstPattern,
     iter: &Expr,
     body: &Block,
-    is_await: bool,
+    (is_await, by_ref): (bool, bool),
     span: rokc_diagnostic::Span,
 ) -> HirExpr {
     let mut out: Vec<HirStmt> = Vec::new();
@@ -916,6 +931,7 @@ pub(super) fn lower_for(
     ctx.push_scope();
     let loop_idx = super::expr::open_unit_loop(ctx, label);
     let while_expr = match &iter.kind {
+        _ if by_ref => lower_for_ref(ctx, label, pat, iter, body, is_await, span, &mut out),
         _ if is_await => {
             let s = lower_expected(ctx, iter, HirTy::Unknown);
             Some(lower_for_stream(ctx, label, pat, s, body, span, &mut out))
@@ -990,6 +1006,153 @@ pub(super) fn lower_for(
         ty: HirTy::Unit,
         span,
     }
+}
+
+/// `for ref x in xs`: `x` names the place `xs[i]` for each `i` in
+/// `0..xs.len()`, so reads and writes of `x` reach the element. A list is
+/// walked through a `SliceMut` view of it: resizing the list in the body is
+/// an error where the body shows it and a panic where it does not. An
+/// array is indexed where it lives, so it must be a variable or a field.
+#[allow(clippy::too_many_arguments)]
+fn lower_for_ref(
+    ctx: &mut LowerCtx<'_>,
+    label: Option<&String>,
+    pat: &AstPattern,
+    iter: &Expr,
+    body: &Block,
+    is_await: bool,
+    span: rokc_diagnostic::Span,
+    out: &mut Vec<HirStmt>,
+) -> Option<HirExpr> {
+    let fail = |ctx: &LowerCtx<'_>, code, at, msg: String, help: String| {
+        ctx.emit_error_help(code, at, msg, help);
+        Some(poison(span))
+    };
+    let AstPatternKind::Binding { name, sub: None } = &pat.kind else {
+        return fail(
+            ctx,
+            Code::PATTERN_TYPE,
+            pat.span,
+            "`for ref` binds each element to one name".to_owned(),
+            "bind the element, then destructure it in the body: \
+             `for ref x in xs { let (a, b) = x; .. }`"
+                .to_owned(),
+        );
+    };
+    if is_await {
+        return fail(
+            ctx,
+            Code::NOT_ITERABLE,
+            pat.span,
+            "a stream has no element places, so `for await` cannot be `for ref`".to_owned(),
+            format!("write `for await {name} in ..`"),
+        );
+    }
+    let iter_h = lower_expected(ctx, iter, HirTy::Unknown);
+    let index = format!("#ri{}", ctx.locals.len());
+    let (elem_ty, list, len) = match iter_h.ty.clone() {
+        HirTy::Unknown => return None,
+        HirTy::Array(elem, n) => {
+            if !super::mono::writable_place(ctx, &iter_h) {
+                return fail(
+                    ctx,
+                    Code::INVALID_ASSIGNMENT,
+                    iter.span,
+                    "`for ref` writes an array where it is kept, and a temporary array is kept \
+                     nowhere"
+                        .to_owned(),
+                    format!(
+                        "keep the array in a variable first: `let xs = {}; for ref {name} in xs \
+                         {{ .. }}`",
+                        rokc_ast::print::print_expr(iter)
+                    ),
+                );
+            }
+            let len = super::expr::hir_int(i128::from(n), PrimTy::Usize, span);
+            (*elem, iter.clone(), len)
+        }
+        ty if super::expr::is_list(ctx, &ty) || super::expr::is_slice_mut(ctx, &ty) => {
+            let view = if super::expr::is_list(ctx, &ty) {
+                let xs = super::expr::splice(ctx, iter_h);
+                let none = Expr {
+                    kind: ExprKind::Literal(AstLit::None),
+                    span,
+                };
+                let f = super::expr::index_fn("slice_mut", vec![xs, none], span);
+                lower_expected(ctx, &f, HirTy::Unknown)
+            } else {
+                iter_h
+            };
+            let HirTy::Struct(sid) = view.ty else {
+                return None;
+            };
+            let elem = ctx.struct_def(sid).generic_args.first().cloned()?;
+            // `#for ref x`: what a resize error names.
+            let v = format!("#for ref {name}");
+            let local = ctx.declare(Some(v.clone()), view.ty.clone());
+            let len = method_call_on(ctx, hir_local(local, &view.ty, span), "len", &[], span);
+            out.push(HirStmt::Let { local, init: view });
+            (elem, super::throws::path_expr(&v, span), len)
+        }
+        ty => {
+            return fail(
+                ctx,
+                Code::NOT_ITERABLE,
+                iter.span,
+                format!(
+                    "`for ref` needs a `List`, an array or a `SliceMut`, whose elements are \
+                     places; found `{}`",
+                    ctx.ty_name(&ty)
+                ),
+                format!("to read the items, write `for {name} in ..`"),
+            );
+        }
+    };
+    let x = ctx.declare(Some(name.clone()), elem_ty);
+    ctx.places.insert(
+        x,
+        Expr {
+            kind: ExprKind::Index(
+                Box::new(list),
+                Box::new(super::throws::path_expr(&index, span)),
+            ),
+            span,
+        },
+    );
+    let index_pat = AstPattern {
+        kind: AstPatternKind::Binding {
+            name: index,
+            sub: None,
+        },
+        span,
+    };
+    let zero = Expr {
+        kind: ExprKind::Literal(AstLit::Int("0".to_owned())),
+        span,
+    };
+    let end = super::expr::splice(ctx, len);
+    let range = Expr {
+        kind: ExprKind::Range {
+            start: Some(Box::new(zero.clone())),
+            end: Some(Box::new(end.clone())),
+            inclusive: false,
+        },
+        span,
+    };
+    let w = lower_for_range(
+        ctx,
+        label,
+        &index_pat,
+        &range,
+        &zero,
+        Some(&end),
+        false,
+        body,
+        span,
+        out,
+    );
+    ctx.places.remove(&x);
+    w
 }
 
 /// `for pat in xs` otherwise: `let it = xs.into_iter();

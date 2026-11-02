@@ -1,0 +1,58 @@
+// expect-exit: 0
+// expect-stdout:
+// 1 0
+// 5
+// 30 2
+// 9
+// 2 3
+// 1 1
+// 7 70
+
+// A field write on a copy is kept when a later read, loop iteration,
+// return or call sees it; only a write nothing can see is an error.
+
+struct P { x: i32; y: i32; }
+struct Counter { n: i32; }
+
+impl Counter {
+    fn with_n(self, n: i32) -> Counter { self.n = n; self }
+    fn bump(ref self) { self.n += 1; }
+    fn local(self) -> i32 {
+        let c = self;
+        c.n += 6;
+        c.n
+    }
+}
+
+fn kept(ref p: P) { p.x += 1; }
+fn moved(p: P) -> P { p.x += 1; p }
+fn shown(p: P) { p.x = 5; println(f"{p.x}"); }
+fn branch(p: P, c: bool) -> i32 { if c { p.x = 1; } p.x }
+fn again(p: P) -> i32 {
+    let n = 0;
+    while n < 4 {
+        if p.x > 0 { n += 1; }
+        p.x = 1;
+        n += 1;
+    }
+    n
+}
+
+let c = Counter { n: 0 };
+c.bump();
+println(f"{c.n} {c.with_n(5).n - 5}");
+let a = P { x: 1, y: 0 };
+kept(ref a);
+shown(a);
+let ps = [P { x: 1, y: 0 }, P { x: 2, y: 0 }];
+let total = 0;
+for p in ps { p.x *= 10; total += p.x; }
+println(f"{total} {ps[1].x}");
+let q = ps[0];
+q.x = 9;
+ps[0] = q;
+println(f"{ps[0].x}");
+println(f"{branch(a, true) + 1} {again(a) - 1}");
+for i in 0..ps.len() { ps[i].x = i as i32 + 1; }
+println(f"{ps[0].x} {ps[0].y + 1}");
+println(f"{c.local()} {moved(P { x: 69, y: 0 }).x}");

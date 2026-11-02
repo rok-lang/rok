@@ -913,6 +913,9 @@ fn lower_coro_block<'a>(
             .into_iter()
             .filter_map(|name| {
                 let local = ctx.lookup(&name)?;
+                if ctx.places.contains_key(&local) {
+                    super::desugar::place_capture(ctx, &name);
+                }
                 // An `async` method's `ref self` cell: the call hands it
                 // back, read once the future completes.
                 let ref_cell =

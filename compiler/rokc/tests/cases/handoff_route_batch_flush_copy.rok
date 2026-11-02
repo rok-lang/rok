@@ -1,5 +1,6 @@
 // needs: threads
 // expect-error: `b.buf` shares what `b.add(tx, i)` sent through a channel
+// expect-error: 17:9: `self.buf` is set on a copy of the receiver, so the change is lost when `flush` returns
 // A by-value `self` is a copy: the callee's `self.buf = []` doesn't reach
 // the caller, which still holds the sent list.
 // Batch builder with a flush helper that returns the next empty batch.

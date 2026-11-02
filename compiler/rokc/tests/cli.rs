@@ -726,6 +726,7 @@ fn semantic_warnings_are_in_warnings() {
         "fstring_g_precision",
         "trait_not_in_scope",
         "unqualified_meta",
+        "write_to_copy",
     ] {
         assert!(!list.contains(name), "{list}");
     }

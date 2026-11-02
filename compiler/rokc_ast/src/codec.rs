@@ -178,7 +178,8 @@ codec_enum!(ExprKind {
         pat,
         iter,
         body,
-        is_await
+        is_await,
+        by_ref
     },
     Try { kind, operand },
     Catch {

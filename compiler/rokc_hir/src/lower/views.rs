@@ -192,6 +192,21 @@ impl Walk<'_> {
         } else {
             format!("{}:{}", (self.names)(r.at.file), r.at.line)
         };
+        // The view a `for ref x` loop walks (`#for ref x`).
+        if let Some(x) = self.local(l).and_then(|(n, _)| n.strip_prefix("#for ref ")) {
+            let d = RokDiagnostic::error(
+                Code::VIEW_AFTER_RESIZE,
+                at,
+                format!("`{x}` is an element of `{list}`, which {call} resized at {line}"),
+            )
+            .with_secondary(r.at, format!("`{list}` is resized here"))
+            .with_note(format!(
+                "help: a `for ref` loop cannot resize the list it walks: collect the elements \
+                 to add or remove, and change `{list}` after the loop"
+            ));
+            self.diags.push(d);
+            return;
+        }
         let (msg, again) = match self.shown(l) {
             Some(v) => (
                 format!("`{v}` views `{list}`, which {call} resized at {line}"),

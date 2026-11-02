@@ -1,0 +1,17 @@
+// expect-error: 12:27: `p` is an element of `ps`, which `ps.push(..)` resized at line 14
+// expect-error: help: a `for ref` loop cannot resize the list it walks: collect the elements to add or remove, and change `ps` after the loop
+
+// `for ref` walks a list through a `SliceMut` view: a resize in the
+// body, then a use of the element (here on the next pass), is an error.
+struct P { x: i32; }
+
+fn main() {
+    let ps: List<P> = [P { x: 1 }, P { x: 2 }];
+    let extra: List<P> = [];
+    for ref p in ps {
+        extra.push(P { x: p.x });
+        p.x += 1;
+        ps.push(P { x: 0 });
+    }
+    println(f"{ps.len()} {extra.len()}");
+}

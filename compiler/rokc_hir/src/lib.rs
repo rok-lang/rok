@@ -3,6 +3,7 @@
 
 mod cfg_off;
 mod codec;
+mod copy_write;
 #[path = "../../../runtime/rokr/src/fmt_spec.rs"]
 mod fmt_spec;
 #[path = "../../../runtime/rokr/src/fmt_text.rs"]

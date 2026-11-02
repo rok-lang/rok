@@ -706,6 +706,8 @@ fn lower_stmt_inner(ctx: &mut LowerCtx<'_>, stmt: &Stmt) -> Option<HirStmt> {
             write_through(ctx, a, stmt.span)
         }
         StmtKind::CompoundAssign { target, op, value } => {
+            let placed = unplace(ctx, target);
+            let target = placed.as_ref().unwrap_or(target);
             lower_compound_assign(ctx, target, op, value, stmt.span)
         }
         StmtKind::LetTuple { .. } | StmtKind::LetStruct { .. } | StmtKind::LetPattern { .. } => {
@@ -1230,6 +1232,14 @@ fn lower_method_call(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
     else {
         unreachable!("a method call")
     };
+    // A `ref self` method on a `for ref` element writes the element back.
+    if let Some(place) = unplace(ctx, receiver) {
+        let mut on_place = expr.clone();
+        if let ExprKind::MethodCall { receiver, .. } = &mut on_place.kind {
+            **receiver = place;
+        }
+        return lower_method_call(ctx, &on_place);
+    }
     let span = expr.span;
     let all_args = with_trailing_closure(args, trailing_closure.as_deref());
     let elem = element_receiver(receiver).map(|_| (ctx.probe_mark(), ctx.throwing_calls));
@@ -1447,6 +1457,9 @@ pub(super) fn lower_assign(
     value: &Expr,
     span: rokc_diagnostic::Span,
 ) -> Option<HirStmt> {
+    if let Some(place) = unplace(ctx, target) {
+        return lower_assign(ctx, &place, value, span);
+    }
     match &target.kind {
         // Bare-name assignment (local, else `static`).
         // `_ = e;` evaluates `e` and discards it.
@@ -2441,7 +2454,16 @@ fn lower_expr_inner(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
             iter,
             body,
             is_await,
-        } => lower_for(ctx, label.as_ref(), pat, iter, body, *is_await, span),
+            by_ref,
+        } => lower_for(
+            ctx,
+            label.as_ref(),
+            pat,
+            iter,
+            body,
+            (*is_await, *by_ref),
+            span,
+        ),
         ExprKind::Match { scrutinee, arms } => {
             guard_sink(ctx, scrutinee);
             lower_match(ctx, scrutinee, arms, span)
@@ -4064,7 +4086,8 @@ fn narrowings(ctx: &LowerCtx<'_>, cond: &Expr) -> Vec<(String, rokc_ast::Ty)> {
 fn bind_narrowed(ctx: &mut LowerCtx<'_>, cond: &Expr) -> Vec<HirStmt> {
     let mut lets = Vec::new();
     for (name, ty) in narrowings(ctx, cond) {
-        let Some(orig) = ctx.lookup(&name) else {
+        // A `for ref` element is read afresh at each use: not narrowed.
+        let Some(orig) = ctx.lookup(&name).filter(|l| !ctx.places.contains_key(l)) else {
             continue;
         };
         let orig_ty = ctx.var_ty(orig);
@@ -4867,7 +4890,7 @@ pub(super) fn is_slice_mut(ctx: &LowerCtx<'_>, ty: &HirTy) -> bool {
 }
 
 /// `ty` is `List<T>`.
-fn is_list(ctx: &LowerCtx<'_>, ty: &HirTy) -> bool {
+pub(super) fn is_list(ctx: &LowerCtx<'_>, ty: &HirTy) -> bool {
     matches!(ty, HirTy::Struct(id) if enum_base_name(&ctx.struct_def(*id).name) == LIST)
 }
 
@@ -5256,6 +5279,7 @@ pub(super) fn lower_variadic(
                         label: None,
                     },
                     is_await: false,
+                    by_ref: false,
                 })
             } else {
                 push(path(name))
@@ -9669,7 +9693,7 @@ pub(super) fn lower_call(
     // A local of `fn(...)` / closure type shadows items.
     if let [s] = p.segments.as_slice() {
         if let Some(local) = ctx.lookup(&s.name) {
-            let callee_h = ctx.read_local(local, callee.span);
+            let callee_h = read_var(ctx, local, callee.span);
             return call_value(ctx, callee_h, args, span);
         }
     }
@@ -13104,6 +13128,42 @@ fn assoc_const_path(ctx: &mut LowerCtx<'_>, path: &AstPath) -> Option<HirExpr> {
     None
 }
 
+/// A read of variable `local`; of the element a `for ref` binding names.
+fn read_var(ctx: &mut LowerCtx<'_>, local: LocalId, span: rokc_diagnostic::Span) -> HirExpr {
+    match ctx.places.get(&local) {
+        Some(place) => {
+            let place = respan(place, span);
+            lower_expected(ctx, &place, HirTy::Unknown)
+        }
+        None => ctx.read_local(local, span),
+    }
+}
+
+/// `place` (an element place of `for ref`) placed at `span`.
+fn respan(place: &Expr, span: rokc_diagnostic::Span) -> Expr {
+    let kind = match &place.kind {
+        ExprKind::Index(xs, i) => ExprKind::Index(Box::new(respan(xs, span)), i.clone()),
+        k => k.clone(),
+    };
+    Expr { kind, span }
+}
+
+/// `e` with a `for ref` binding at its root (under fields and indexes)
+/// replaced by the element place it names.
+pub(super) fn unplace(ctx: &LowerCtx<'_>, e: &Expr) -> Option<Expr> {
+    let kind = match &e.kind {
+        ExprKind::Path(p) if p.segments.len() == 1 => {
+            let l = ctx.lookup(&p.segments[0].name)?;
+            return ctx.places.get(&l).map(|place| respan(place, e.span));
+        }
+        ExprKind::Field(x, f) => ExprKind::Field(Box::new(unplace(ctx, x)?), f.clone()),
+        ExprKind::TupleField(x, i) => ExprKind::TupleField(Box::new(unplace(ctx, x)?), *i),
+        ExprKind::Index(x, i) => ExprKind::Index(Box::new(unplace(ctx, x)?), i.clone()),
+        _ => return None,
+    };
+    Some(Expr { kind, span: e.span })
+}
+
 pub(super) fn lower_path(
     ctx: &mut LowerCtx<'_>,
     path: &AstPath,
@@ -13121,7 +13181,7 @@ pub(super) fn lower_path(
             return h.clone();
         }
         if let Some(local) = ctx.lookup(name) {
-            return ctx.read_local(local, span);
+            return read_var(ctx, local, span);
         }
     }
     // A const generic parameter is a value.
@@ -13964,7 +14024,7 @@ pub(super) fn lang_fn_in(
 }
 
 /// `rok::core::index::<name>(args..)`, through its lang slot.
-fn index_fn(name: &str, args: Vec<Expr>, span: rokc_diagnostic::Span) -> Expr {
+pub(super) fn index_fn(name: &str, args: Vec<Expr>, span: rokc_diagnostic::Span) -> Expr {
     let path = lang_fn("index", name, span);
     Expr {
         kind: ExprKind::Call {

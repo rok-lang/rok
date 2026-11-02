@@ -424,6 +424,9 @@ pub fn lower_full(
         );
     }
     let mut module = finish(c, [lib, user], raw_uses, &at);
+    module
+        .diagnostics
+        .extend(crate::copy_write::check(&user.items));
     crate::cfg_off::note_dropped(&mut module.diagnostics, &dropped);
     module
 }
