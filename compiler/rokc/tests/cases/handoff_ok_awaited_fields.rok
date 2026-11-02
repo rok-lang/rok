@@ -1,0 +1,72 @@
+// expect-exit: 0
+// expect-stdout:
+// 0
+// 1
+// 2
+// 3
+// left 0, pending none
+
+// A value bound out of `Poll::Ready(v)` (here by `await`) is the payload:
+// handing over one field of it leaves its other fields with their owner.
+use rok::core::task;
+use rok::core::task::Task;
+use rok::core::future::{Context, Poll};
+use rok::core::stream::Stream;
+use rok::core::marker::replace;
+
+struct Src { n: List<i32>; }
+
+struct S {
+    src: Src | none;
+    batch: List<i32>;
+    pending: Task<(Src, List<i32>)> | none;
+}
+
+fn refill(s: Src) -> Task<(Src, List<i32>)> {
+    task::spawn_blocking([move s] || {
+        let k = s.n.len() as i32;
+        s.n.push(k);
+        (s, [k])
+    })
+}
+
+impl Stream for S {
+    type Item = i32;
+    fn poll_next(ref self, ref ctx: Context) -> Poll<i32 | none> {
+        loop {
+            if let k: i32 = self.batch.pop() { return Poll::Ready(k); }
+            let job = match self.pending {
+                j: Task<(Src, List<i32>)> => j,
+                none => match replace(ref self.src, none) {
+                    s: Src => refill(s),
+                    none => return Poll::Ready(none),
+                },
+            };
+            match job.poll(ref ctx) {
+                Poll::Ready((s, b)) => {
+                    self.pending = none;
+                    if b[0] < 3 { self.src = s; }
+                    self.batch = b;
+                }
+                Poll::Pending => {
+                    self.pending = job;
+                    return Poll::Pending;
+                }
+            }
+        }
+    }
+}
+
+async fn make() -> S {
+    S { src: Src { n: List::new() }, batch: List::new(), pending: none }
+}
+
+async fn go() {
+    let s = await make();
+    for await k in s {
+        println(f"{k}");
+    }
+    let p = if s.pending is none { "none" } else { "some" };
+    println(f"left {s.batch.len()}, pending {p}");
+}
+task::block_on(go());

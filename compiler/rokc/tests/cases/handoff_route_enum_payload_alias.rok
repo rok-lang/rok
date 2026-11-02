@@ -1,0 +1,21 @@
+// needs: threads
+// expect-error: `b` shares `a`, which was sent through a channel
+// The two arguments of an enum variant built from one list are one
+// object: sending the one leaves the other shared.
+use rok::std::thread;
+enum Pair { Two(List<i32>, List<i32>), Empty }
+fn main() {
+    let (tx, rx) = channel::<List<i32>>();
+    let t = thread::spawn(|| { if let l: List<i32> = rx.recv() { for i in 0..200000 { l.push(i); } } 0 });
+    let l: List<i32> = [];
+    let w = Pair::Two(l, l);
+    match w {
+        Pair::Two(a, b) => {
+            try! tx.send(a);
+            for i in 0..200000 { b.push(i); }
+            let _ = try! t.join();
+            println(f"len {b.len()}");
+        }
+        Pair::Empty => {}
+    }
+}
