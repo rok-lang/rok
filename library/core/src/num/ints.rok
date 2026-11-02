@@ -1606,22 +1606,22 @@ impl isize {
 
     /// The bytes, least significant first.
     #[must_use]
-    pub fn to_le_bytes(self) -> [u8; 4] { (self as i32).to_le_bytes() }
+    pub const fn to_le_bytes(self) -> [u8; 4] { (self as i32).to_le_bytes() }
     /// The bytes, most significant first.
     #[must_use]
-    pub fn to_be_bytes(self) -> [u8; 4] { (self as i32).to_be_bytes() }
+    pub const fn to_be_bytes(self) -> [u8; 4] { (self as i32).to_be_bytes() }
     /// The bytes in the target's byte order.
     #[must_use]
-    pub fn to_ne_bytes(self) -> [u8; 4] { (self as i32).to_ne_bytes() }
+    pub const fn to_ne_bytes(self) -> [u8; 4] { (self as i32).to_ne_bytes() }
     /// The number of `bytes`, least significant first.
     #[must_use]
-    pub fn from_le_bytes(bytes: [u8; 4]) -> isize { i32::from_le_bytes(bytes) as isize }
+    pub const fn from_le_bytes(bytes: [u8; 4]) -> isize { i32::from_le_bytes(bytes) as isize }
     /// The number of `bytes`, most significant first.
     #[must_use]
-    pub fn from_be_bytes(bytes: [u8; 4]) -> isize { i32::from_be_bytes(bytes) as isize }
+    pub const fn from_be_bytes(bytes: [u8; 4]) -> isize { i32::from_be_bytes(bytes) as isize }
     /// The number of `bytes`, in the target's byte order.
     #[must_use]
-    pub fn from_ne_bytes(bytes: [u8; 4]) -> isize { i32::from_ne_bytes(bytes) as isize }
+    pub const fn from_ne_bytes(bytes: [u8; 4]) -> isize { i32::from_ne_bytes(bytes) as isize }
 }
 
 #[cfg(target_pointer_width = "32")]
@@ -1635,22 +1635,22 @@ impl usize {
 
     /// The bytes, least significant first.
     #[must_use]
-    pub fn to_le_bytes(self) -> [u8; 4] { (self as u32).to_le_bytes() }
+    pub const fn to_le_bytes(self) -> [u8; 4] { (self as u32).to_le_bytes() }
     /// The bytes, most significant first.
     #[must_use]
-    pub fn to_be_bytes(self) -> [u8; 4] { (self as u32).to_be_bytes() }
+    pub const fn to_be_bytes(self) -> [u8; 4] { (self as u32).to_be_bytes() }
     /// The bytes in the target's byte order.
     #[must_use]
-    pub fn to_ne_bytes(self) -> [u8; 4] { (self as u32).to_ne_bytes() }
+    pub const fn to_ne_bytes(self) -> [u8; 4] { (self as u32).to_ne_bytes() }
     /// The number of `bytes`, least significant first.
     #[must_use]
-    pub fn from_le_bytes(bytes: [u8; 4]) -> usize { u32::from_le_bytes(bytes) as usize }
+    pub const fn from_le_bytes(bytes: [u8; 4]) -> usize { u32::from_le_bytes(bytes) as usize }
     /// The number of `bytes`, most significant first.
     #[must_use]
-    pub fn from_be_bytes(bytes: [u8; 4]) -> usize { u32::from_be_bytes(bytes) as usize }
+    pub const fn from_be_bytes(bytes: [u8; 4]) -> usize { u32::from_be_bytes(bytes) as usize }
     /// The number of `bytes`, in the target's byte order.
     #[must_use]
-    pub fn from_ne_bytes(bytes: [u8; 4]) -> usize { u32::from_ne_bytes(bytes) as usize }
+    pub const fn from_ne_bytes(bytes: [u8; 4]) -> usize { u32::from_ne_bytes(bytes) as usize }
 }
 
 impl isize {

@@ -9,6 +9,7 @@
 #[lang("add_trait")]
 pub trait Add<Rhs = Self> {
     type Output;
+    /// `self + rhs`.
     #[infix("+")]
     fn add(self, rhs: Rhs) -> Output;
 }
@@ -17,6 +18,7 @@ pub trait Add<Rhs = Self> {
 /// a positive divisor gives `[0, rhs)` (Python's `%`). No lang slot.
 pub trait Modulo<Rhs = Self> {
     type Output;
+    /// `self %% rhs`.
     #[infix("%%")]
     fn modulo(self, rhs: Rhs) -> Output;
 }
@@ -25,6 +27,7 @@ pub trait Modulo<Rhs = Self> {
 #[lang("sub_trait")]
 pub trait Sub<Rhs = Self> {
     type Output;
+    /// `self - rhs`.
     #[infix("-")]
     fn sub(self, rhs: Rhs) -> Output;
 }
@@ -33,6 +36,7 @@ pub trait Sub<Rhs = Self> {
 #[lang("mul_trait")]
 pub trait Mul<Rhs = Self> {
     type Output;
+    /// `self * rhs`.
     #[infix("*")]
     fn mul(self, rhs: Rhs) -> Output;
 }
@@ -41,6 +45,7 @@ pub trait Mul<Rhs = Self> {
 #[lang("div_trait")]
 pub trait Div<Rhs = Self> {
     type Output;
+    /// `self / rhs`.
     #[infix("/")]
     fn div(self, rhs: Rhs) -> Output;
 }
@@ -49,6 +54,7 @@ pub trait Div<Rhs = Self> {
 #[lang("rem_trait")]
 pub trait Rem<Rhs = Self> {
     type Output;
+    /// `self % rhs`.
     #[infix("%")]
     fn rem(self, rhs: Rhs) -> Output;
 }
@@ -57,6 +63,7 @@ pub trait Rem<Rhs = Self> {
 #[lang("neg_trait")]
 pub trait Neg {
     type Output;
+    /// `-self`.
     #[prefix("-")]
     fn neg(self) -> Output;
 }
@@ -65,6 +72,7 @@ pub trait Neg {
 #[lang("not_trait")]
 pub trait Not {
     type Output;
+    /// `!self`.
     #[prefix("!")]
     fn not(self) -> Output;
 }
@@ -73,6 +81,7 @@ pub trait Not {
 #[lang("bitnot_trait")]
 pub trait BitNot {
     type Output;
+    /// `~self`.
     #[prefix("~")]
     fn bitnot(self) -> Output;
 }
@@ -81,6 +90,7 @@ pub trait BitNot {
 #[lang("bitand_trait")]
 pub trait BitAnd<Rhs = Self> {
     type Output;
+    /// `self & rhs`.
     #[infix("&")]
     fn bitand(self, rhs: Rhs) -> Output;
 }
@@ -89,6 +99,7 @@ pub trait BitAnd<Rhs = Self> {
 #[lang("bitor_trait")]
 pub trait BitOr<Rhs = Self> {
     type Output;
+    /// `self | rhs`.
     #[infix("|")]
     fn bitor(self, rhs: Rhs) -> Output;
 }
@@ -97,6 +108,7 @@ pub trait BitOr<Rhs = Self> {
 #[lang("bitxor_trait")]
 pub trait BitXor<Rhs = Self> {
     type Output;
+    /// `self ^ rhs`.
     #[infix("^")]
     fn bitxor(self, rhs: Rhs) -> Output;
 }
@@ -105,6 +117,7 @@ pub trait BitXor<Rhs = Self> {
 #[lang("shl_trait")]
 pub trait Shl<Rhs = Self> {
     type Output;
+    /// `self << rhs`.
     #[infix("<<")]
     fn shl(self, rhs: Rhs) -> Output;
 }
@@ -113,6 +126,7 @@ pub trait Shl<Rhs = Self> {
 #[lang("shr_trait")]
 pub trait Shr<Rhs = Self> {
     type Output;
+    /// `self >> rhs`.
     #[infix(">>")]
     fn shr(self, rhs: Rhs) -> Output;
 }
@@ -260,6 +274,7 @@ pub trait ShrAssign<Rhs = Self> {
 /// `.+`: element-wise addition.
 pub trait DotAdd<Rhs = Self> {
     type Output;
+    /// `self .+ rhs`.
     #[infix(".+")]
     fn dot_add(self, rhs: Rhs) -> Output;
 }
@@ -267,6 +282,7 @@ pub trait DotAdd<Rhs = Self> {
 /// `.-`: element-wise subtraction.
 pub trait DotSub<Rhs = Self> {
     type Output;
+    /// `self .- rhs`.
     #[infix(".-")]
     fn dot_sub(self, rhs: Rhs) -> Output;
 }
@@ -274,6 +290,7 @@ pub trait DotSub<Rhs = Self> {
 /// `.*`: element-wise multiplication.
 pub trait DotMul<Rhs = Self> {
     type Output;
+    /// `self .* rhs`.
     #[infix(".*")]
     fn dot_mul(self, rhs: Rhs) -> Output;
 }
@@ -281,6 +298,7 @@ pub trait DotMul<Rhs = Self> {
 /// `./`: element-wise division.
 pub trait DotDiv<Rhs = Self> {
     type Output;
+    /// `self ./ rhs`.
     #[infix("./")]
     fn dot_div(self, rhs: Rhs) -> Output;
 }
@@ -288,6 +306,7 @@ pub trait DotDiv<Rhs = Self> {
 /// `.%`: element-wise truncated remainder.
 pub trait DotRem<Rhs = Self> {
     type Output;
+    /// `self .% rhs`.
     #[infix(".%")]
     fn dot_rem(self, rhs: Rhs) -> Output;
 }
@@ -295,6 +314,7 @@ pub trait DotRem<Rhs = Self> {
 /// `.%%`: element-wise floored modulo.
 pub trait DotModulo<Rhs = Self> {
     type Output;
+    /// `self .%% rhs`.
     #[infix(".%%")]
     fn dot_modulo(self, rhs: Rhs) -> Output;
 }
@@ -302,6 +322,7 @@ pub trait DotModulo<Rhs = Self> {
 /// `.==`: element-wise equality.
 pub trait DotEq<Rhs = Self> {
     type Output;
+    /// `self .== rhs`.
     #[infix(".==")]
     fn dot_eq(self, rhs: Rhs) -> Output;
 }
@@ -309,6 +330,7 @@ pub trait DotEq<Rhs = Self> {
 /// `.!=`: element-wise inequality.
 pub trait DotNe<Rhs = Self> {
     type Output;
+    /// `self .!= rhs`.
     #[infix(".!=")]
     fn dot_ne(self, rhs: Rhs) -> Output;
 }
@@ -316,6 +338,7 @@ pub trait DotNe<Rhs = Self> {
 /// `.<`: element-wise less-than.
 pub trait DotLt<Rhs = Self> {
     type Output;
+    /// `self .< rhs`.
     #[infix(".<")]
     fn dot_lt(self, rhs: Rhs) -> Output;
 }
@@ -323,6 +346,7 @@ pub trait DotLt<Rhs = Self> {
 /// `.>`: element-wise greater-than.
 pub trait DotGt<Rhs = Self> {
     type Output;
+    /// `self .> rhs`.
     #[infix(".>")]
     fn dot_gt(self, rhs: Rhs) -> Output;
 }
@@ -330,6 +354,7 @@ pub trait DotGt<Rhs = Self> {
 /// `.<=`: element-wise less-or-equal.
 pub trait DotLe<Rhs = Self> {
     type Output;
+    /// `self .<= rhs`.
     #[infix(".<=")]
     fn dot_le(self, rhs: Rhs) -> Output;
 }
@@ -337,6 +362,7 @@ pub trait DotLe<Rhs = Self> {
 /// `.>=`: element-wise greater-or-equal.
 pub trait DotGe<Rhs = Self> {
     type Output;
+    /// `self .>= rhs`.
     #[infix(".>=")]
     fn dot_ge(self, rhs: Rhs) -> Output;
 }
@@ -344,6 +370,7 @@ pub trait DotGe<Rhs = Self> {
 /// `.&&` / `.||`: element-wise, both sides always evaluated (2.6).
 pub trait DotLogicalAnd<Rhs = Self> {
     type Output;
+    /// `self .&& rhs`.
     #[infix(".&&")]
     fn dot_logical_and(self, rhs: Rhs) -> Output;
 }
@@ -351,6 +378,7 @@ pub trait DotLogicalAnd<Rhs = Self> {
 /// `.||`: element-wise or, both sides always evaluated.
 pub trait DotLogicalOr<Rhs = Self> {
     type Output;
+    /// `self .|| rhs`.
     #[infix(".||")]
     fn dot_logical_or(self, rhs: Rhs) -> Output;
 }
@@ -358,6 +386,7 @@ pub trait DotLogicalOr<Rhs = Self> {
 /// `.&`: element-wise bitwise and.
 pub trait DotBitAnd<Rhs = Self> {
     type Output;
+    /// `self .& rhs`.
     #[infix(".&")]
     fn dot_bitand(self, rhs: Rhs) -> Output;
 }
@@ -365,6 +394,7 @@ pub trait DotBitAnd<Rhs = Self> {
 /// `.|`: element-wise bitwise or.
 pub trait DotBitOr<Rhs = Self> {
     type Output;
+    /// `self .| rhs`.
     #[infix(".|")]
     fn dot_bitor(self, rhs: Rhs) -> Output;
 }
@@ -372,6 +402,7 @@ pub trait DotBitOr<Rhs = Self> {
 /// `.^`: element-wise bitwise xor.
 pub trait DotBitXor<Rhs = Self> {
     type Output;
+    /// `self .^ rhs`.
     #[infix(".^")]
     fn dot_bitxor(self, rhs: Rhs) -> Output;
 }
@@ -379,6 +410,7 @@ pub trait DotBitXor<Rhs = Self> {
 /// `.<<`: element-wise shift left.
 pub trait DotShl<Rhs = Self> {
     type Output;
+    /// `self .<< rhs`.
     #[infix(".<<")]
     fn dot_shl(self, rhs: Rhs) -> Output;
 }
@@ -386,6 +418,7 @@ pub trait DotShl<Rhs = Self> {
 /// `.>>`: element-wise shift right.
 pub trait DotShr<Rhs = Self> {
     type Output;
+    /// `self .>> rhs`.
     #[infix(".>>")]
     fn dot_shr(self, rhs: Rhs) -> Output;
 }
@@ -397,6 +430,7 @@ pub trait DotShr<Rhs = Self> {
 /// `×`: cross product.
 pub trait Cross<Rhs = Self> {
     type Output;
+    /// `self × rhs`.
     #[infix("×")]
     fn cross(self, rhs: Rhs) -> Output;
 }
@@ -404,6 +438,7 @@ pub trait Cross<Rhs = Self> {
 /// `⋅`: dot product.
 pub trait Dot<Rhs = Self> {
     type Output;
+    /// `self ⋅ rhs`.
     #[infix("⋅")]
     fn dot(self, rhs: Rhs) -> Output;
 }
@@ -411,6 +446,7 @@ pub trait Dot<Rhs = Self> {
 /// `∘`: function composition.
 pub trait Compose<Rhs> {
     type Output;
+    /// `self ∘ rhs`.
     #[infix("∘")]
     fn compose(self, rhs: Rhs) -> Output;
 }
@@ -418,6 +454,7 @@ pub trait Compose<Rhs> {
 /// Prefix `√`: square root.
 pub trait Sqrt {
     type Output;
+    /// `√self`.
     #[prefix("√")]
     fn sqrt(self) -> Output;
 }
@@ -445,6 +482,7 @@ pub trait Subset<Rhs = Self> {
 /// `∪`: union.
 pub trait Union<Rhs = Self> {
     type Output;
+    /// `self ∪ rhs`.
     #[infix("∪")]
     #[must_use]
     fn union(self, rhs: Rhs) -> Output;
@@ -453,6 +491,7 @@ pub trait Union<Rhs = Self> {
 /// `∩`: intersection.
 pub trait Intersect<Rhs = Self> {
     type Output;
+    /// `self ∩ rhs`.
     #[infix("∩")]
     #[must_use]
     fn intersection(self, rhs: Rhs) -> Output;

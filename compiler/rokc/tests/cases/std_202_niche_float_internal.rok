@@ -1,0 +1,10 @@
+// spec: std 202-non-zero §2.2.3
+// expect-error: is internal to the Rok toolchain
+
+// `NicheFloat`'s helper methods serve `NonNan` / `Finite` only.
+use rok::core::num::niche::NicheFloat;
+
+fn main() {
+    let k = 1.5f64.key();
+    println(f"{k}");
+}

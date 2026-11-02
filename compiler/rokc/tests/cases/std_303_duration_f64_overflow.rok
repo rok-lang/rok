@@ -1,0 +1,15 @@
+// spec: std 303-time §3.3.5
+// The `f64` forms overflow as the integer ops do: an out-of-range
+// result panics at the call with overflow checks on.
+// expect-exit: 101
+// expect-stderr: thread 'main' panicked at tests/cases/std_303_duration_f64_overflow.rok:13:13:
+// expect-stderr: *overflow*
+// expect-stdout: 1.5s 3s
+
+fn main() {
+    let d = Duration::secs(1);
+    println(f"{Duration::secs_f64(1.5)} {3.0 * d}");
+    let big: f64 = 1.0e300;
+    let e = Duration::secs_f64(big);
+    println(f"{e}");
+}

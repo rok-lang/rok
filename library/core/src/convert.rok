@@ -32,6 +32,7 @@ impl<S> Into for S {
 /// say `OverflowError`).
 pub trait TryFrom<U> {
     type Error = ConversionError;
+    /// `value` converted; throws when it cannot be.
     fn try_from(value: U) throws (Self::Error) -> Self;
 }
 
@@ -987,56 +988,56 @@ impl TryFrom<f64> for f32 {
 }
 
 // TryFrom<str> (2.11.9): `FromStr`'s parse; any failure (empty, a bad
-// digit, out of range) throws `OverflowError`.
+// digit, out of range) throws its `ParseError`.
 
 impl TryFrom<str> for i8 {
-    type Error = OverflowError;
-    const fn try_from(s: str) throws (OverflowError) -> i8 { try i8::from_str(s) catch _ { throw overflow("i8"); } }
+    type Error = ParseError;
+    const fn try_from(s: str) throws (ParseError) -> i8 { try i8::from_str(s) }
 }
 
 impl TryFrom<str> for i16 {
-    type Error = OverflowError;
-    const fn try_from(s: str) throws (OverflowError) -> i16 { try i16::from_str(s) catch _ { throw overflow("i16"); } }
+    type Error = ParseError;
+    const fn try_from(s: str) throws (ParseError) -> i16 { try i16::from_str(s) }
 }
 
 impl TryFrom<str> for i32 {
-    type Error = OverflowError;
-    const fn try_from(s: str) throws (OverflowError) -> i32 { try i32::from_str(s) catch _ { throw overflow("i32"); } }
+    type Error = ParseError;
+    const fn try_from(s: str) throws (ParseError) -> i32 { try i32::from_str(s) }
 }
 
 impl TryFrom<str> for i64 {
-    type Error = OverflowError;
-    const fn try_from(s: str) throws (OverflowError) -> i64 { try i64::from_str(s) catch _ { throw overflow("i64"); } }
+    type Error = ParseError;
+    const fn try_from(s: str) throws (ParseError) -> i64 { try i64::from_str(s) }
 }
 
 impl TryFrom<str> for isize {
-    type Error = OverflowError;
-    const fn try_from(s: str) throws (OverflowError) -> isize { try isize::from_str(s) catch _ { throw overflow("isize"); } }
+    type Error = ParseError;
+    const fn try_from(s: str) throws (ParseError) -> isize { try isize::from_str(s) }
 }
 
 impl TryFrom<str> for u8 {
-    type Error = OverflowError;
-    const fn try_from(s: str) throws (OverflowError) -> u8 { try u8::from_str(s) catch _ { throw overflow("u8"); } }
+    type Error = ParseError;
+    const fn try_from(s: str) throws (ParseError) -> u8 { try u8::from_str(s) }
 }
 
 impl TryFrom<str> for u16 {
-    type Error = OverflowError;
-    const fn try_from(s: str) throws (OverflowError) -> u16 { try u16::from_str(s) catch _ { throw overflow("u16"); } }
+    type Error = ParseError;
+    const fn try_from(s: str) throws (ParseError) -> u16 { try u16::from_str(s) }
 }
 
 impl TryFrom<str> for u32 {
-    type Error = OverflowError;
-    const fn try_from(s: str) throws (OverflowError) -> u32 { try u32::from_str(s) catch _ { throw overflow("u32"); } }
+    type Error = ParseError;
+    const fn try_from(s: str) throws (ParseError) -> u32 { try u32::from_str(s) }
 }
 
 impl TryFrom<str> for u64 {
-    type Error = OverflowError;
-    const fn try_from(s: str) throws (OverflowError) -> u64 { try u64::from_str(s) catch _ { throw overflow("u64"); } }
+    type Error = ParseError;
+    const fn try_from(s: str) throws (ParseError) -> u64 { try u64::from_str(s) }
 }
 
 impl TryFrom<str> for usize {
-    type Error = OverflowError;
-    const fn try_from(s: str) throws (OverflowError) -> usize { try usize::from_str(s) catch _ { throw overflow("usize"); } }
+    type Error = ParseError;
+    const fn try_from(s: str) throws (ParseError) -> usize { try usize::from_str(s) }
 }
 
 // SaturatingFrom

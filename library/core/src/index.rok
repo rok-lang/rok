@@ -11,6 +11,7 @@
 #[lang("index_trait")]
 pub trait Index<I> {
     type Output;
+    /// `self[idx]`.
     fn index(self, idx: I) -> Output;
 }
 
@@ -18,6 +19,7 @@ pub trait Index<I> {
 #[lang("index_set_trait")]
 pub trait IndexSet<I> {
     type Value;
+    /// `self[idx] = value`.
     fn index_set(self, idx: I, value: Value);
 }
 
@@ -26,6 +28,7 @@ pub trait IndexSet<I> {
 #[lang("slice_trait")]
 pub trait Sliceable<R> {
     type Output;
+    /// `self[range]`.
     fn slice(self, range: R) -> Output;
 }
 

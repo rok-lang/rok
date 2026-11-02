@@ -13,6 +13,7 @@
 #[lang("iterator_trait")]
 pub trait Iterator {
     type Item;
+    /// The next item, or `none` once the iterator is done.
     fn next(ref self) -> Item | none;
 
     /// Apply `f` to each item.
@@ -162,6 +163,7 @@ pub trait Iterator {
         acc
     }
 
+    /// Every item folded into `init` by `f`, in order.
     const fn fold<B>(self, init: B, f: fn(B, Item) -> B) -> B {
         let acc = init;
         for x in self {
@@ -214,6 +216,7 @@ pub trait Iterator {
     }
 
     /// The items combined left to right with `f`; `none` for none.
+    #[must_use]
     const fn reduce(self, f: fn(Item, Item) -> Item) -> Item | none {
         let acc: Item | none = none;
         for x in self {
@@ -222,6 +225,7 @@ pub trait Iterator {
         acc
     }
 
+    /// Whether `pred` accepts some item; stops at the first.
     const fn any(self, pred: fn(Item) -> bool) -> bool {
         for x in self {
             if pred(x) {
@@ -231,6 +235,7 @@ pub trait Iterator {
         false
     }
 
+    /// Whether `pred` accepts every item; stops at the first refusal.
     const fn all(self, pred: fn(Item) -> bool) -> bool {
         for x in self {
             if !pred(x) {
@@ -240,6 +245,7 @@ pub trait Iterator {
         true
     }
 
+    /// The first item `pred` accepts.
     #[must_use]
     const fn find(self, pred: fn(Item) -> bool) -> Item | none {
         for x in self {
@@ -250,6 +256,8 @@ pub trait Iterator {
         none
     }
 
+    /// The index of the first item `pred` accepts.
+    #[must_use]
     const fn position(self, pred: fn(Item) -> bool) -> usize | none {
         let i: usize = 0;
         for x in self {
@@ -300,6 +308,7 @@ pub trait Iterator {
     }
 
     /// The item with the smallest `key` (the first of equals).
+    #[must_use]
     const fn min_by_key<K: Ord>(self, key: fn(Item) -> K) -> Item | none {
         let best: Item | none = none;
         let best_key: K | none = none;
@@ -322,6 +331,7 @@ pub trait Iterator {
     }
 
     /// The item with the largest `key` (the last of equals).
+    #[must_use]
     const fn max_by_key<K: Ord>(self, key: fn(Item) -> K) -> Item | none {
         let best: Item | none = none;
         let best_key: K | none = none;
@@ -343,6 +353,8 @@ pub trait Iterator {
         best
     }
 
+    /// The last item.
+    #[must_use]
     const fn last(self) -> Item | none {
         let last: Item | none = none;
         for x in self {
@@ -359,6 +371,7 @@ pub trait Iterator {
         self.next()
     }
 
+    /// Calls `f` on every item, in order.
     const fn for_each(self, f: fn(Item)) {
         for x in self {
             f(x);
@@ -401,6 +414,7 @@ pub trait ExactSizeIterator: Iterator {
 pub trait IntoIterator {
     type IntoIter: Iterator<Item = Item>;
     type Item;
+    /// An iterator over the value.
     fn into_iter(self) -> IntoIter;
 }
 
@@ -1206,6 +1220,7 @@ impl<T, E> TryGenIter<T, E> {
 pub trait TryIterator {
     type Item;
     type Error;
+    /// The next item, or `none` once the iterator is done.
     fn next(ref self) throws (Error) -> Item | none;
 
     /// Apply `f` to each item.
@@ -1316,6 +1331,7 @@ pub trait TryIterator {
         c
     }
 
+    /// The number of items left, consuming them.
     const fn count(self) throws (Error) -> usize {
         let n: usize = 0;
         try for _ in self {
@@ -1324,6 +1340,8 @@ pub trait TryIterator {
         n
     }
 
+    /// The last item.
+    #[must_use]
     const fn last(self) throws (Error) -> Item | none {
         let last: Item | none = none;
         try for x in self {
@@ -1342,6 +1360,7 @@ pub trait TryIterator {
         try self.next()
     }
 
+    /// Every item folded into `init` by `f`, in order.
     const fn fold<B>(self, init: B, f: fn(B, Item) throws (Error) -> B) throws (Error) -> B {
         let acc = init;
         try for x in self {
@@ -1350,6 +1369,7 @@ pub trait TryIterator {
         acc
     }
 
+    /// Calls `f` on every item, in order.
     const fn for_each(self, f: fn(Item) throws (Error)) throws (Error) {
         try for x in self {
             try f(x);
@@ -1357,6 +1377,7 @@ pub trait TryIterator {
     }
 
     /// The items combined left to right with `f`; `none` for none.
+    #[must_use]
     const fn reduce(self, f: fn(Item, Item) throws (Error) -> Item) throws (Error) -> Item | none {
         let acc: Item | none = none;
         try for x in self {
@@ -1365,6 +1386,7 @@ pub trait TryIterator {
         acc
     }
 
+    /// Whether `pred` accepts some item; stops at the first.
     const fn any(self, pred: fn(Item) throws (Error) -> bool) throws (Error) -> bool {
         try for x in self {
             if try pred(x) {
@@ -1374,6 +1396,7 @@ pub trait TryIterator {
         false
     }
 
+    /// Whether `pred` accepts every item; stops at the first refusal.
     const fn all(self, pred: fn(Item) throws (Error) -> bool) throws (Error) -> bool {
         try for x in self {
             if !(try pred(x)) {
@@ -1383,6 +1406,8 @@ pub trait TryIterator {
         true
     }
 
+    /// The first item `pred` accepts.
+    #[must_use]
     const fn find(self, pred: fn(Item) throws (Error) -> bool) throws (Error) -> Item | none {
         try for x in self {
             if try pred(x) {
@@ -1392,6 +1417,8 @@ pub trait TryIterator {
         none
     }
 
+    /// The index of the first item `pred` accepts.
+    #[must_use]
     const fn position(self, pred: fn(Item) throws (Error) -> bool) throws (Error) -> usize | none {
         let i: usize = 0;
         try for x in self {
@@ -1436,6 +1463,7 @@ pub trait TryIterator {
     }
 
     /// The smallest item (the first of equals).
+    #[must_use]
     const fn min(self) throws (Error) -> Item | none where Item: Ord {
         let best: Item | none = none;
         try for x in self {
@@ -1451,6 +1479,7 @@ pub trait TryIterator {
     }
 
     /// The largest item (the last of equals).
+    #[must_use]
     const fn max(self) throws (Error) -> Item | none where Item: Ord {
         let best: Item | none = none;
         try for x in self {
@@ -1466,6 +1495,7 @@ pub trait TryIterator {
     }
 
     /// The item with the smallest `key` (the first of equals).
+    #[must_use]
     const fn min_by_key<K: Ord>(self, key: fn(Item) throws (Error) -> K) throws (Error) -> Item | none {
         let best: Item | none = none;
         let best_key: K | none = none;
@@ -1485,6 +1515,7 @@ pub trait TryIterator {
     }
 
     /// The item with the largest `key` (the last of equals).
+    #[must_use]
     const fn max_by_key<K: Ord>(self, key: fn(Item) throws (Error) -> K) throws (Error) -> Item | none {
         let best: Item | none = none;
         let best_key: K | none = none;

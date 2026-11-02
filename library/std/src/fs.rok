@@ -1420,10 +1420,11 @@ fn close_dir(cell: GcBuf<isize>) {
 
 /// Recursive walk, depth first in pre-order (a directory before its
 /// entries), the root first and each directory's entries sorted by name
-/// (Go `filepath.WalkDir`). Symlinks are listed, not followed. Each directory is read whole when reached, so a `Walk`
-/// never holds a stream open (stopping early leaks nothing). An
-/// unreadable directory throws its error from `next`; calling `next`
-/// again goes on with the rest.
+/// (Go `filepath.WalkDir`). Symlinks are listed, not followed. Each
+/// directory is read whole when reached, so a `Walk` never holds a
+/// stream open (stopping early leaks nothing). An unreadable directory
+/// throws its error from `next`; calling `next` again goes on with the
+/// rest.
 #[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct Walk {
     stack: List<DirEntry>;

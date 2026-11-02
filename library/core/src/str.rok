@@ -9,9 +9,11 @@ use rok::core::marker::{Memo, Transfer, buf_is_null};
 
 impl str {
     /// The empty string.
+    #[must_use]
     pub const fn new() -> str { "" }
 
     /// `bytes` as a `str`; throws if they are not UTF-8 (2.15.6).
+    #[must_use]
     pub const fn from_utf8<B: AsBytes>(bytes: B) throws (Utf8Error) -> str {
         let view = bytes.byte_slice();
         let (buf, at, n) = unsafe { view.raw_parts() };
@@ -23,6 +25,7 @@ impl str {
     /// `bytes` as a `str` with each ill-formed run replaced by U+FFFD,
     /// one per maximal subpart (Unicode 3.9 "U+FFFD Substitution of
     /// Maximal Subparts", as WHATWG UTF-8 decode does).
+    #[must_use]
     pub const fn from_utf8_lossy<B: AsBytes>(bytes: B) -> str {
         let view = bytes.byte_slice();
         let (buf, at, n) = unsafe { view.raw_parts() };
@@ -60,6 +63,7 @@ impl str {
     /// promised; an empty `str` gives a dangling pointer). Valid while a
     /// variable holding the string is in scope in a function where a
     /// pointer type appears (2.15.2); pin it to keep it longer.
+    #[must_use]
     pub fn as_ptr(self) -> rok::bare::ptr::ConstPtr<u8> {
         let p = rok::bare::ptr::ConstPtr::<u8>::dangling();
         if self.is_empty() { p } else { p.with_addr(unsafe { rok_str_addr(self) }) }

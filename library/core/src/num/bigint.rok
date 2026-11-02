@@ -996,18 +996,22 @@ impl Int {
 
     /// The magnitude, least significant first, with no sign bit (`255`
     /// is `[255]`); zero is `[0]`. Panics on a negative number.
+    #[must_use]
     #[track_caller]
     pub fn to_le_bytes_unsigned(self) -> List<u8> { self.bytes(false, false, "to_le_bytes_unsigned") }
 
     /// As `to_le_bytes_unsigned`, most significant first.
+    #[must_use]
     #[track_caller]
     pub fn to_be_bytes_unsigned(self) -> List<u8> { self.bytes(false, true, "to_be_bytes_unsigned") }
 
     /// The length of `to_le_bytes()`.
+    #[must_use]
     pub fn byte_len(self) -> usize { self.byte_count(true, "byte_len") }
 
     /// The length of `to_le_bytes_unsigned()`; panics on a negative
     /// number.
+    #[must_use]
     #[track_caller]
     pub fn byte_len_unsigned(self) -> usize { self.byte_count(false, "byte_len_unsigned") }
 

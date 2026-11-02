@@ -31,6 +31,17 @@ const fn ns_mul(a: i64, b: i64) -> i64 {
     if (a < 0) != (b < 0) { -9223372036854775807 - 1 } else { 9223372036854775807 }
 }
 
+/// `x` nanoseconds truncated to `i64`; a non-finite or out-of-range `x`
+/// overflows as the integer ops do (NaN saturates to 0).
+#[track_caller]
+const fn ns_f64(x: f64) -> i64 {
+    if x >= -9223372036854775808.0 && x < 9223372036854775808.0 { return x as i64; }
+    if x > 0.0 { return ns_add(9223372036854775807, 1); }
+    if x < 0.0 { return ns_add(-9223372036854775807 - 1, -1); }
+    let _ = ns_add(9223372036854775807, 1);
+    0
+}
+
 /// A span of time: `i64` nanoseconds (about ±292 years, 3.3.1).
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Duration {
@@ -72,9 +83,12 @@ impl Duration {
     /// The longest duration.
     pub const MAX: Duration = Duration { ns: 9223372036854775807 };
 
-    /// `s` seconds, truncated to whole nanoseconds (saturating at the
-    /// `i64` range, NaN → 0 - the `as` rules).
-    pub const fn secs_f64(s: f64) -> Duration { Duration { ns: (s * 1000000000.0) as i64 } }
+    /// `s` seconds, truncated to whole nanoseconds. A non-finite or
+    /// out-of-range result panics; with overflow checks off it saturates
+    /// (NaN to zero).
+    #[must_use]
+    #[track_caller]
+    pub const fn secs_f64(s: f64) -> Duration { Duration { ns: ns_f64(s * 1000000000.0) } }
 
     /// Whole nanoseconds.
     #[must_use]
@@ -150,9 +164,11 @@ impl Div<i64> for Duration {
     }
 }
 
+/// Overflow as `Duration::secs_f64`.
 impl Mul<Duration> for f64 {
     type Output = Duration;
-    const fn mul(self, rhs: Duration) -> Duration { Duration { ns: (self * rhs.ns as f64) as i64 } }
+    #[track_caller]
+    const fn mul(self, rhs: Duration) -> Duration { Duration { ns: ns_f64(self * rhs.ns as f64) } }
 }
 
 /// `Duration::ZERO`.

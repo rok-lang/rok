@@ -19,6 +19,8 @@ use rok::core::time::Duration;
 /// `Ready(none)` at the end, or `Pending`. The adapters are lazy.
 pub trait Stream {
     type Item;
+    /// The next item: `Ready(x)`, `Ready(none)` once done, or `Pending`
+    /// (the waker in `ctx` is woken when it may be ready).
     fn poll_next(ref self, ref ctx: Context) -> Poll<Item | none>;
 
     /// `f` of each item.
@@ -73,6 +75,7 @@ pub trait Stream {
 pub trait IntoStream {
     type Item;
     type IntoStream: Stream<Item = Item>;
+    /// A stream over the value.
     fn into_stream(self) -> IntoStream;
 }
 
@@ -563,6 +566,7 @@ pub trait TryStream {
         }
     }
 
+    /// Every item folded into `init` by `f`, in order.
     async fn fold<B>(self, init: B, f: fn(B, Item) throws (Error) -> B) throws (Error) -> B {
         let acc = init;
         try for await x in self {

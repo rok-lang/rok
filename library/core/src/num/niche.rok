@@ -24,10 +24,13 @@ impl NicheInt for usize {}
 #[sealed]
 pub trait NicheFloat: Copy + PartialOrd + Display + Debug + Add<Output = Self> + Sub<Output = Self> + Mul<Output = Self> + Div<Output = Self> {
     /// Whether `self` is NaN.
+    #[internal]
     fn niche_nan(self) -> bool;
     /// Whether `self` is finite (not NaN or infinite).
+    #[internal]
     fn niche_finite(self) -> bool;
     /// The bits, widened, with `-0.0` as `0.0` (`Hash`).
+    #[internal]
     fn key(self) -> u64;
 }
 

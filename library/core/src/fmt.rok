@@ -303,7 +303,7 @@ impl Formatter {
     pub const fn precision(self) -> usize | none { count_of(self.counts >> 32u64) }
 
     /// The spec's type letter (`'\0'` for none or `s d`).
-    pub(pkg) const fn ty(self) -> char { self.byte(48u64) }
+    pub const fn ty(self) -> char { self.byte(48u64) }
 
     /// One entry of a Debug group (`Name { .. }`, `Name(..)`, `[..]`,
     /// `{..}`): `label` (`"x: "` or `""`) and `v`. The group writes its
