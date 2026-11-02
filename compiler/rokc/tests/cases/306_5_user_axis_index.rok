@@ -1,0 +1,39 @@
+// expect-exit: 0
+// expect-stdout:
+// rows 1..3 col 0
+// rows 0..2 col -1
+// SliceArg { start: none, stop: 2, step: none } 4
+
+// Any type takes axis arguments by implementing `Index` over them;
+// `AxisIndexed` makes every integer part an `isize`, so one impl serves
+// literals, `usize` and `i32` positions alike.
+use rok::core::index::{AxisIndexed, SliceArg};
+
+struct Grid { rows: usize; }
+
+impl AxisIndexed for Grid {}
+
+impl index::Index<(SliceArg, isize)> for Grid {
+    type Output = str;
+    fn index(self, at: (SliceArg, isize)) -> str {
+        let (first, count, _) = at.0.indices(self.rows);
+        f"rows {first}..{first + count} col {at.1}"
+    }
+}
+
+// Without `AxisIndexed` the parts keep their own types.
+struct Raw {}
+
+impl index::Index<(SliceArg, i32)> for Raw {
+    type Output = str;
+    fn index(self, at: (SliceArg, i32)) -> str { f"{at.0:?} {at.1}" }
+}
+
+fn main() {
+    let g = Grid { rows: 5 };
+    let j: usize = 0;
+    println(g[1:3, j]);
+    println(g[:2, -1]);
+    let r = Raw {};
+    println(r[:2, 4]);
+}

@@ -920,8 +920,9 @@ fn is_place(ctx: &mut LowerCtx<'_>, target: &Expr, op: &str, value: &Expr) -> bo
                 break "a temporary";
             }
             ExprKind::Path(_) | ExprKind::SelfLower => return true,
-            // A tuple target keeps the destructuring help.
-            ExprKind::Tuple(_) if op == "=" => return true,
+            // A tuple target keeps the destructuring help; `a[1:3] = v`
+            // stores through the slice (`lower_assign`).
+            ExprKind::Tuple(_) | ExprKind::Slice { .. } if op == "=" => return true,
             ExprKind::Call { .. } | ExprKind::MethodCall { .. } => break "a call result",
             ExprKind::Tuple(_) => break "a tuple",
             ExprKind::Literal(_) => break "a literal",
@@ -1644,6 +1645,22 @@ pub(super) fn lower_assign(
                 let set = buf_access(ctx, arr_h, *elem, idx_expr, Some(value), target.span);
                 return Some(HirStmt::Expr(set));
             }
+            if axis_indexed(ctx, &arr_h.ty) {
+                let idx = axis_parts(ctx, idx_expr);
+                let rest = [CallArg::Positional(value.clone())];
+                let span = target.span;
+                return Some(HirStmt::Expr(index_call(
+                    ctx,
+                    arr_h,
+                    "index_set",
+                    &idx,
+                    &rest,
+                    span,
+                )));
+            }
+            if one_axis_misuse(ctx, &arr_h.ty, idx_expr, target.span) {
+                return None;
+            }
             if matches!(arr_h.ty, HirTy::Struct(_) | HirTy::Enum(_)) {
                 let rest = [CallArg::Positional(value.clone())];
                 let span = target.span;
@@ -1977,6 +1994,94 @@ pub(super) fn lower_assign(
                 };
             }
             super::mono::assign_place(ctx, &root_place, acc)
+        }
+        // `a[1:3] = v`: through `IndexSet<SliceArg, _>` on an axis-indexed
+        // type, a same-length copy into a list.
+        ExprKind::Slice {
+            target: arr,
+            start,
+            end,
+            step,
+        } => {
+            let span = target.span;
+            let arr_h = lower_expected(ctx, arr, HirTy::Unknown);
+            if axis_indexed(ctx, &arr_h.ty) {
+                let sel = slice_arg(ctx, start.as_deref(), end.as_deref(), step.as_deref(), span);
+                let rest = [CallArg::Positional(value.clone())];
+                return Some(HirStmt::Expr(index_call(
+                    ctx,
+                    arr_h,
+                    "index_set",
+                    &sel,
+                    &rest,
+                    span,
+                )));
+            }
+            if !is_list(ctx, &arr_h.ty) {
+                if arr_h.ty != HirTy::Unknown {
+                    ctx.emit_error_at(
+                        Code::INVALID_ASSIGNMENT,
+                        span,
+                        format!("cannot assign to a slice of `{}`", ctx.ty_name(&arr_h.ty)),
+                    );
+                    ctx.help_last(Some(
+                        "assign the elements one at a time (`xs[i] = v`)".to_owned(),
+                    ));
+                }
+                return None;
+            }
+            if step.is_some() {
+                ctx.emit_error_at(
+                    Code::INVALID_ASSIGNMENT,
+                    span,
+                    "a stepped slice of a list cannot be assigned".to_owned(),
+                );
+                ctx.help_last(Some(
+                    "drop the step, or store the elements one at a time; an `Array` takes \
+                     `a[::2] = v`"
+                        .to_owned(),
+                ));
+                return None;
+            }
+            // `{ let #t = xs; slice_mut(#t, a..b).copy_from_slice(v[:]) }`.
+            let t = tmp_path(ctx, "t", span);
+            let recv = splice(ctx, arr_h);
+            ctx.want_view = true;
+            let view = Expr {
+                kind: ExprKind::Slice {
+                    target: Box::new(t.clone()),
+                    start: start.clone(),
+                    end: end.clone(),
+                    step: None,
+                },
+                span,
+            };
+            let src = Expr {
+                kind: ExprKind::Slice {
+                    target: Box::new(value.clone()),
+                    start: None,
+                    end: None,
+                    step: None,
+                },
+                span: value.span,
+            };
+            let copy = Expr {
+                kind: ExprKind::MethodCall {
+                    receiver: Box::new(view),
+                    method: "copy_from_slice".to_owned(),
+                    type_args: Vec::new(),
+                    args: vec![CallArg::Positional(src)],
+                    trailing_closure: None,
+                    origin: None,
+                },
+                span,
+            };
+            let e = lower_expected(
+                ctx,
+                &block_of(vec![let_stmt(&t, recv)], copy, span),
+                HirTy::Unit,
+            );
+            Some(HirStmt::Expr(e))
         }
         _ => {
             let help =
@@ -2808,7 +2913,10 @@ fn lower_expr_inner(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
             lower_slice(ctx, arr, start.as_deref(), end.as_deref(), None, span)
         }
         ExprKind::Index(arr, idx) => {
-            let arr_h = lower_expected(ctx, arr, HirTy::Unknown);
+            let arr_h = match axis_index_read(ctx, arr, idx, span) {
+                Ok(e) => return e,
+                Err(arr_h) => arr_h,
+            };
             // A struct / enum indexes through `Index::index`.
             if matches!(arr_h.ty, HirTy::Struct(_) | HirTy::Enum(_)) {
                 return index_call(ctx, arr_h, "index", idx, &[], span);
@@ -2926,19 +3034,9 @@ fn lower_expr_inner(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
         }
         ExprKind::MagicLiteral(cands) => lower_magic(ctx, cands, span),
         ExprKind::Is(operand, pat) => lower_is(ctx, operand, pat, span),
-        ExprKind::Slice {
-            target,
-            start,
-            end,
-            step,
-        } => lower_slice(
-            ctx,
-            target,
-            start.as_deref(),
-            end.as_deref(),
-            step.as_deref(),
-            span,
-        ),
+        ExprKind::Slice { .. } | ExprKind::AxisSlice { .. } => {
+            lower_slice_form(ctx, &expr.kind, span)
+        }
         ExprKind::AsyncBlock(_) | ExprKind::YieldBlock(_) | ExprKind::AsyncYieldBlock(_) => {
             super::coro::lower_coro_expr(ctx, &expr.kind, span)
         }
@@ -8054,77 +8152,92 @@ fn assign_trait_call(
 }
 
 /// A trait implemented with several arguments (`Index<usize>` and
-/// `Index<(usize, usize)>`): the one impl whose first parameter takes the
-/// first argument (tried in rolled-back probes), or with no argument the
-/// one returning the expected type.
+/// `Index<(usize, usize)>`, `IndexSet<I, T>` and `IndexSet<I, Array<T, 1>>`):
+/// the one impl whose parameters take the arguments (tried in
+/// rolled-back probes), or with no argument the one returning the
+/// expected type.
 fn pick_by_args<'e>(
     ctx: &mut LowerCtx<'e>,
     ty: &HirTy,
     method: &str,
     args: &[CallArg],
 ) -> Option<MethodPick<'e>> {
-    let arg = match args.first() {
-        Some(CallArg::Positional(arg)) => Some(arg),
-        None => None,
-        Some(_) => return None,
-    };
+    let mut pos: Vec<&Expr> = Vec::new();
+    for a in args {
+        match a {
+            CallArg::Positional(e) => pos.push(e),
+            _ => return None,
+        }
+    }
     let expected = ctx.current_expected().cloned();
-    if arg.is_none() && expected.as_ref().is_none_or(|t| *t == HirTy::Unknown) {
+    if pos.is_empty() && expected.as_ref().is_none_or(|t| *t == HirTy::Unknown) {
         return None;
     }
     let env = ctx.env;
-    // (trait, slot: the first parameter's type, else the return type).
-    let mut cands: Vec<(String, HirTy, MethodPick<'e>)> = Vec::new();
+    // (trait, slots: the parameters' types after `self`, else the return
+    // type).
+    let mut cands: Vec<(String, Vec<HirTy>, MethodPick<'e>)> = Vec::new();
     let ids = env.methods_on(ty, method);
     for id in ids.into_iter().flatten() {
         let tr = env.method_info(*id).and_then(|i| i.trait_name.clone())?;
         let sig = ctx.sig_by_id(*id);
-        let slot = match arg {
-            Some(_) => sig.param_tys.get(1).cloned(),
-            None => Some(sig.ret_ty.clone()),
+        let slots: Option<Vec<HirTy>> = if pos.is_empty() {
+            Some(vec![sig.ret_ty.clone()])
+        } else {
+            (1..=pos.len())
+                .map(|i| sig.param_tys.get(i).cloned())
+                .collect()
         };
-        if let Some(slot) = slot {
-            cands.push((tr, slot, MethodPick::Concrete(*id)));
+        if let Some(slots) = slots {
+            cands.push((tr, slots, MethodPick::Concrete(*id)));
         }
     }
     let gis: Vec<_> = ctx
         .generic_impls(ty, super::Pick::Method(method), 0)
         .collect();
-    for (gi, subst) in gis {
+    'impls: for (gi, subst) in gis {
         let gm = &gi.methods[method];
-        let slot = match arg {
-            Some(_) => gm.def.params.get(1).and_then(|p| p.ty.clone()),
-            None => Some(super::throws::sig_ret_ast(&gm.def)),
+        let asts: Vec<Option<Ty>> = if pos.is_empty() {
+            vec![Some(super::throws::sig_ret_ast(&gm.def))]
+        } else {
+            (1..=pos.len())
+                .map(|i| gm.def.params.get(i).and_then(|p| p.ty.clone()))
+                .collect()
         };
-        let Some(p) = slot else {
-            continue;
-        };
-        // A slot naming a parameter the receiver leaves open (`[T; N]`
-        // of `impl<T, const N: usize> Tr<[T; N]> for T`) is no candidate.
-        let mark = ctx.probe_mark();
-        let mut rcx = LowerCtx::new(env, &subst, None, ctx.here());
-        rcx.current_module.clone_from(&gi.module);
-        let slot = rcx.resolve_ast_ty(&p);
-        if !ctx.probe_clean(&mark) {
-            ctx.rollback(&mark);
-            continue;
+        let mut slots = Vec::with_capacity(asts.len());
+        for p in asts {
+            let Some(p) = p else {
+                continue 'impls;
+            };
+            // A slot naming a parameter the receiver leaves open (`[T; N]`
+            // of `impl<T, const N: usize> Tr<[T; N]> for T`) is no candidate.
+            let mark = ctx.probe_mark();
+            let mut rcx = LowerCtx::new(env, &subst, None, ctx.here());
+            rcx.current_module.clone_from(&gi.module);
+            let slot = rcx.resolve_ast_ty(&p);
+            if !ctx.probe_clean(&mark) {
+                ctx.rollback(&mark);
+                continue 'impls;
+            }
+            slots.push(slot);
         }
-        cands.push((gi.trait_key.clone(), slot, MethodPick::Generic(gm)));
+        cands.push((gi.trait_key.clone(), slots, MethodPick::Generic(gm)));
     }
     if cands.len() < 2 || cands.iter().any(|c| c.0 != cands[0].0) {
         return None;
     }
     let mut hits = Vec::new();
-    for (_, slot, pick) in cands {
-        let ok = match arg {
-            Some(arg) => {
+    for (_, slots, pick) in cands {
+        let ok = if pos.is_empty() {
+            expected.as_ref() == slots.first()
+        } else {
+            pos.iter().zip(&slots).all(|(arg, slot)| {
                 let mark = ctx.probe_mark();
                 let h = lower_expected(ctx, arg, slot.clone());
-                let ok = ctx.probe_clean(&mark) && coercible(ctx, &slot, &h.ty);
+                let ok = ctx.probe_clean(&mark) && coercible(ctx, slot, &h.ty);
                 ctx.rollback(&mark);
                 ok
-            }
-            None => expected.as_ref() == Some(&slot),
+            })
         };
         if ok {
             hits.push(pick);
@@ -11677,6 +11790,12 @@ fn literal_conv_receiver(ctx: &mut LowerCtx<'_>, receiver: &Expr, method: &str) 
 /// `[a, b]` is a `List`; a fixed array only in a slot
 /// typed `[T; N]`.
 fn lower_list_lit(ctx: &mut LowerCtx<'_>, items: &[Expr], span: rokc_diagnostic::Span) -> HirExpr {
+    if let Some(HirTy::Struct(id)) = ctx.current_expected().cloned() {
+        let nd = ctx.lang("ndarray_type");
+        if !nd.is_empty() && enum_base_name(&ctx.struct_def(id).name) == nd {
+            return lower_nd_literal(ctx, items, id, span);
+        }
+    }
     let Some(HirTy::Array(e, _)) = ctx.current_expected().cloned() else {
         let args = vec![rokc_ast::LitArg::Many(items.to_vec())];
         return lower_shape(ctx, rokc_parser::Shape::List, args, "`List`", span);
@@ -11701,6 +11820,147 @@ fn lower_list_lit(ctx: &mut LowerCtx<'_>, items: &[Expr], span: rokc_diagnostic:
             elements: lowered,
         },
     }
+}
+
+/// A nested list literal in an `Array<T, N>` slot: the nesting gives the
+/// shape (checked here, so a ragged literal is a compile error), the
+/// leaves are the elements in row-major order:
+/// `array_literal([rows, cols], e00, e01, ..)`.
+fn lower_nd_literal(
+    ctx: &mut LowerCtx<'_>,
+    items: &[Expr],
+    id: StructId,
+    span: rokc_diagnostic::Span,
+) -> HirExpr {
+    let rank = ctx
+        .struct_def(id)
+        .fields
+        .iter()
+        .find(|f| f.name == "shape")
+        .and_then(|f| match &f.ty {
+            HirTy::Array(_, n) => Some(*n as usize),
+            _ => None,
+        })
+        .unwrap_or(1);
+    let mut shape: Vec<Option<usize>> = vec![None; rank];
+    let mut flat: Vec<Expr> = Vec::new();
+    // (span of the row, what is wrong, what to write).
+    let mut bad: Option<(rokc_diagnostic::Span, String, String)> = None;
+    let mut stack: Vec<(&[Expr], usize, rokc_diagnostic::Span)> = vec![(items, 0, span)];
+    while let Some((row, depth, at)) = stack.pop() {
+        match shape.get(depth).copied().flatten() {
+            Some(n) if n != row.len() => {
+                bad = Some((
+                    at,
+                    format!(
+                        "this row has {} elements, the first row at its depth has {n}",
+                        row.len()
+                    ),
+                    "give every row the same length, or keep ragged rows in a \
+                     `List<List<T>>`"
+                        .to_owned(),
+                ));
+                break;
+            }
+            _ => {
+                if let Some(s) = shape.get_mut(depth) {
+                    *s = Some(row.len());
+                }
+            }
+        }
+        if depth + 1 == rank {
+            flat.extend(row.iter().cloned());
+            continue;
+        }
+        // Children pushed in reverse so they come off in order.
+        for e in row.iter().rev() {
+            if let ExprKind::List(inner) = &e.kind {
+                stack.push((inner, depth + 1, e.span));
+            } else {
+                bad = Some((
+                    e.span,
+                    format!(
+                        "an `Array` of rank {rank} is written with {rank} levels of `[..]`, and this element is not a list"
+                    ),
+                    "write the row as a `[..]` literal, or build the array with \
+                         `Array::from_list(xs, shape)`"
+                        .to_owned(),
+                ));
+                break;
+            }
+        }
+        if bad.is_some() {
+            break;
+        }
+    }
+    if let Some((at, msg, help)) = bad {
+        ctx.emit_error_help(Code::RAGGED_ARRAY_LITERAL, at, msg, help);
+        for e in items {
+            let _ = lower_expected(ctx, e, HirTy::Unknown);
+        }
+        return poison(span);
+    }
+    let usize_lit = |n: usize| Expr {
+        kind: ExprKind::Literal(AstLit::Int(format!("{n}usize"))),
+        span,
+    };
+    let dims: Vec<Expr> = shape.iter().map(|n| usize_lit(n.unwrap_or(0))).collect();
+    let mut args = vec![CallArg::Positional(Expr {
+        kind: ExprKind::List(dims),
+        span,
+    })];
+    // Each element typed by the slot's `T`, so `[[1, 2]]` in an
+    // `Array<i64, 2>` slot is `i64`s.
+    let elem = ctx
+        .struct_def(id)
+        .fields
+        .iter()
+        .find(|f| f.name == "buf")
+        .and_then(|f| match &f.ty {
+            HirTy::GcBuf(t) => Some((**t).clone()),
+            _ => None,
+        })
+        .unwrap_or(HirTy::Unknown);
+    for (i, e) in flat.iter().enumerate() {
+        let h = lower_expected(ctx, e, elem.clone());
+        let h = if elem == HirTy::Unknown {
+            h
+        } else {
+            coerce(ctx, &elem, h, &|| format!("array element {i}"))
+        };
+        args.push(CallArg::Positional(splice(ctx, h)));
+    }
+    let call = Expr {
+        kind: ExprKind::Call {
+            callee: Box::new(Expr {
+                kind: ExprKind::Path(lang_fn("array", "array_literal", span)),
+                span,
+            }),
+            args,
+            trailing_closure: None,
+        },
+        span,
+    };
+    // The slot fixes `T` and `N`, also for an empty literal.
+    let expected = HirTy::Struct(id);
+    let name = ctx.lang("array_literal_fn").to_owned();
+    if let Some(def) = ctx.env.generic_fn(&name) {
+        if let Some(ret) = def.ret_ty.as_ref() {
+            let names: std::collections::HashSet<String> = def
+                .generics
+                .params
+                .iter()
+                .map(|gp| match gp {
+                    rokc_ast::GenericParam::Type { name, .. }
+                    | rokc_ast::GenericParam::Const { name, .. } => name.clone(),
+                })
+                .collect();
+            let mut subst = HashMap::new();
+            super::mono::unify_param_ty_with(ret, &expected, &names, &mut subst, ctx);
+            ctx.explicit_generics = subst;
+        }
+    }
+    lower_expected(ctx, &call, expected)
 }
 
 /// `[v; N]`: `v` evaluated once, then copied into each element (one
@@ -12595,11 +12855,14 @@ pub(super) fn lower_infix(
     }
     // Arithmetic operands share the result's type (so `let x: i64 = 1 + 2`
     // types both literals as i64); comparison operands don't.
-    let lhs_expected = if is_arith_op(op) {
+    let lhs_expected = if is_arith_op(op) || op == "**" {
         ctx.current_expected().cloned().unwrap_or(HirTy::Unknown)
     } else {
         HirTy::Unknown
     };
+    if op == "**" {
+        return lower_pow(ctx, lhs, rhs, lhs_expected, span);
+    }
     let (mut lhs_h, mut rhs_h) = lower_sibling_pair(ctx, lhs, rhs, lhs_expected);
     if lhs_h.ty == HirTy::Unknown || rhs_h.ty == HirTy::Unknown {
         return poison(span);
@@ -12634,6 +12897,56 @@ pub(super) fn lower_infix(
         }
     }
     e
+}
+
+/// `lhs ** rhs`: the exponent is not the base's sibling. On an integer
+/// base it is a `u32` (a literal is one; a negative literal is an
+/// error), on a float base a literal takes the base's type.
+fn lower_pow(
+    ctx: &mut LowerCtx<'_>,
+    lhs: &Expr,
+    rhs: &Expr,
+    lhs_expected: HirTy,
+    span: rokc_diagnostic::Span,
+) -> HirExpr {
+    let lhs_h = lower_expected(ctx, lhs, lhs_expected);
+    let lit = is_untyped_literal(rhs);
+    let rhs_want = match &lhs_h.ty {
+        HirTy::Prim(p) if p.is_int() && !matches!(p, PrimTy::Char | PrimTy::CChar) => {
+            if lit && matches!(&rhs.kind, ExprKind::OpPrefix { op, .. } if op == "-") {
+                ctx.emit_error_help(
+                    Code::NEGATIVE_INT_POWER,
+                    rhs.span,
+                    format!(
+                        "`{}` to a negative power is a fraction, not an integer",
+                        ctx.ty_name(&lhs_h.ty)
+                    ),
+                    if is_untyped_literal(lhs) {
+                        format!(
+                            "raise a float instead: `{}.0 ** {}.0`",
+                            snippet(lhs),
+                            snippet(rhs)
+                        )
+                    } else {
+                        format!(
+                            "raise a float instead: `({} as f64) ** {}.0`",
+                            snippet(lhs),
+                            snippet(rhs)
+                        )
+                    },
+                );
+                return poison(span);
+            }
+            HirTy::Prim(PrimTy::U32)
+        }
+        HirTy::Prim(p) if p.is_float() && lit => lhs_h.ty.clone(),
+        _ => HirTy::Unknown,
+    };
+    let rhs_h = lower_expected(ctx, rhs, rhs_want);
+    if lhs_h.ty == HirTy::Unknown || rhs_h.ty == HirTy::Unknown {
+        return poison(span);
+    }
+    lower_infix_typed(ctx, "**", lhs_h, rhs_h, rhs, span)
 }
 
 /// A fix for `lhs op rhs` whose operand types don't fit: convert, unwrap,
@@ -15060,6 +15373,205 @@ fn index_call(
     lower_expr(ctx, &block_of(vec![let_stmt(&t, recv)], call, span))
 }
 
+/// `a[i:j:k]`, or a slice part of a multi-part index on a type that is
+/// not axis-indexed: a `SliceArg` value for its `Index` impl.
+fn lower_slice_form(
+    ctx: &mut LowerCtx<'_>,
+    kind: &ExprKind,
+    span: rokc_diagnostic::Span,
+) -> HirExpr {
+    match kind {
+        ExprKind::Slice {
+            target,
+            start,
+            end,
+            step,
+        } => lower_slice(
+            ctx,
+            target,
+            start.as_deref(),
+            end.as_deref(),
+            step.as_deref(),
+            span,
+        ),
+        ExprKind::AxisSlice { start, end, step } => {
+            let e = slice_arg(ctx, start.as_deref(), end.as_deref(), step.as_deref(), span);
+            lower_expr(ctx, &e)
+        }
+        _ => unreachable!("a slice form"),
+    }
+}
+
+/// `arr[idx]` on an axis-indexed type, or the misuse error on a one-axis
+/// one; else the lowered `arr` back for the other forms.
+fn axis_index_read(
+    ctx: &mut LowerCtx<'_>,
+    arr: &Expr,
+    idx: &Expr,
+    span: rokc_diagnostic::Span,
+) -> Result<HirExpr, HirExpr> {
+    let arr_h = lower_expected(ctx, arr, HirTy::Unknown);
+    if axis_indexed(ctx, &arr_h.ty) {
+        let idx = axis_parts(ctx, idx);
+        return Ok(index_call(ctx, arr_h, "index", &idx, &[], span));
+    }
+    if one_axis_misuse(ctx, &arr_h.ty, idx, span) {
+        return Ok(poison(span));
+    }
+    Err(arr_h)
+}
+
+/// `ty` implements `AxisIndexed`: its index parts are axis arguments.
+fn axis_indexed(ctx: &LowerCtx<'_>, ty: &HirTy) -> bool {
+    let key = ctx.lang("axis_indexed_trait");
+    !key.is_empty() && matches!(ty, HirTy::Struct(_) | HirTy::Enum(_)) && ctx.has_trait(ty, key)
+}
+
+/// The item `leaf` beside the one in lang slot `slot` (`SliceArg` is in
+/// `rok::core::index`), as a path written by the compiler.
+fn lang_item_path(
+    ctx: &LowerCtx<'_>,
+    slot: &str,
+    leaf: Option<&str>,
+    span: rokc_diagnostic::Span,
+) -> Expr {
+    let full = ctx.lang(slot).to_owned();
+    if let Some(leaf) = leaf {
+        return super::bignum::path_expr(&full, leaf, span);
+    }
+    let (module, name) = full.rsplit_once("::").unwrap_or(("", &full));
+    super::bignum::path_expr(module, name, span)
+}
+
+/// An integer axis position or slice bound as an `isize` (a literal is
+/// one; a wider or unsigned value is checked on the way).
+fn axis_int(ctx: &mut LowerCtx<'_>, e: &Expr) -> Expr {
+    let span = e.span;
+    let h = lower_expected(ctx, e, HirTy::Prim(PrimTy::Isize));
+    let HirTy::Prim(p) = h.ty else {
+        return splice(ctx, h);
+    };
+    let cast = |e: Expr, to: &str| Expr {
+        kind: ExprKind::Cast(
+            Box::new(e),
+            Ty {
+                kind: AstTyKind::Path(rokc_ast::Path {
+                    segments: vec![rokc_ast::PathSegment {
+                        name: to.to_owned(),
+                        generics: Vec::new(),
+                    }],
+                    span,
+                    origin: None,
+                }),
+                span,
+            },
+        ),
+        span,
+    };
+    let v = splice(ctx, h);
+    match p {
+        PrimTy::Isize => v,
+        PrimTy::I8 | PrimTy::I16 | PrimTy::I32 | PrimTy::U8 | PrimTy::U16 => as_isize(v, span),
+        _ if p.is_signed_int() => index_fn("axis_from_i64", vec![cast(v, "i64")], span),
+        _ if p.is_unsigned_int() => index_fn("axis_from_u64", vec![cast(v, "u64")], span),
+        _ => v,
+    }
+}
+
+/// `SliceArg::new(a, b, k)` for `a:b:k`, a missing part `none`.
+fn slice_arg(
+    ctx: &mut LowerCtx<'_>,
+    start: Option<&Expr>,
+    end: Option<&Expr>,
+    step: Option<&Expr>,
+    span: rokc_diagnostic::Span,
+) -> Expr {
+    let mut part = |x: Option<&Expr>| match x {
+        Some(e) => axis_int(ctx, e),
+        None => Expr {
+            kind: ExprKind::Literal(AstLit::None),
+            span,
+        },
+    };
+    let args = vec![part(start), part(end), part(step)];
+    Expr {
+        kind: ExprKind::Call {
+            callee: Box::new(lang_item_path(ctx, "slice_arg_type", Some("new"), span)),
+            args: args.into_iter().map(CallArg::Positional).collect(),
+            trailing_closure: None,
+        },
+        span,
+    }
+}
+
+/// The index of an `AxisIndexed` value as axis arguments: integers as
+/// `isize`, `a:b:k` as `SliceArg`, `none` as `NewAxis`, `..` beside
+/// other parts as `Rest`; anything else (a mask) as written.
+fn axis_parts(ctx: &mut LowerCtx<'_>, idx: &Expr) -> Expr {
+    let one = |ctx: &mut LowerCtx<'_>, p: &Expr, many: bool| -> Expr {
+        let span = p.span;
+        match &p.kind {
+            ExprKind::AxisSlice { start, end, step } => {
+                slice_arg(ctx, start.as_deref(), end.as_deref(), step.as_deref(), span)
+            }
+            ExprKind::Literal(AstLit::None) => lang_item_path(ctx, "new_axis_type", None, span),
+            ExprKind::Range {
+                start: None,
+                end: None,
+                inclusive: false,
+            } if many => lang_item_path(ctx, "rest_axis_type", None, span),
+            _ => axis_int(ctx, p),
+        }
+    };
+    match &idx.kind {
+        ExprKind::Tuple(parts) if parts.len() >= 2 => Expr {
+            kind: ExprKind::Tuple(parts.iter().map(|p| one(ctx, p, true)).collect()),
+            span: idx.span,
+        },
+        _ => one(ctx, idx, false),
+    }
+}
+
+/// Parts of a multi-part index that only an axis-indexed type takes,
+/// on a type indexed along one axis: an error that says what to write.
+fn one_axis_misuse(
+    ctx: &LowerCtx<'_>,
+    ty: &HirTy,
+    idx: &Expr,
+    span: rokc_diagnostic::Span,
+) -> bool {
+    let ExprKind::Tuple(parts) = &idx.kind else {
+        return false;
+    };
+    if !parts
+        .iter()
+        .any(|p| matches!(p.kind, ExprKind::AxisSlice { .. }))
+    {
+        return false;
+    }
+    let one_axis = matches!(ty, HirTy::Array(..) | HirTy::Prim(_))
+        || takes_position(ctx, ty, "index")
+        || is_list(ctx, ty);
+    if !one_axis {
+        return false;
+    }
+    ctx.emit_error_at(
+        Code::ONE_AXIS_INDEX,
+        span,
+        format!(
+            "`{}` is indexed along one axis, but this index has {} parts with a slice among them",
+            ctx.ty_name(ty),
+            parts.len()
+        ),
+    );
+    ctx.help_last(Some(
+        "slice and index in separate brackets (`m[a:b][c]`), or keep the data in an \
+         `Array` (`rok::core::array::Array`), which takes `m[a:b, c]`"
+            .to_owned(),
+    ));
+    true
+}
+
 pub(super) fn block_of(stmts: Vec<Stmt>, tail: Expr, span: rokc_diagnostic::Span) -> Expr {
     Expr {
         kind: ExprKind::Block(Block {
@@ -15091,6 +15603,11 @@ fn lower_slice(
     let want_mut = std::mem::take(&mut ctx.want_view)
         || ctx.current_expected().is_some_and(|t| is_slice_mut(ctx, t));
     let t_h = lower_expected(ctx, target, HirTy::Unknown);
+    // `a[1:3]` / `a[..]` on an axis-indexed type: `Index<SliceArg>`.
+    if axis_indexed(ctx, &t_h.ty) {
+        let sel = slice_arg(ctx, start, end, step, span);
+        return index_call(ctx, t_h, "index", &sel, &[], span);
+    }
     if !takes_position(ctx, &t_h.ty, "slice") {
         let t = splice(ctx, t_h);
         return lower_expr(ctx, &slice_desugar(&t, start, end, step, false, span));

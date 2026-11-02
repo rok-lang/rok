@@ -1,0 +1,304 @@
+// The dot operators on `Array`: array with array of the same rank
+// (stretched to one shape by the broadcast rule, `broadcast_shape`),
+// array with scalar and scalar with array. Arithmetic gives an array
+// of the element type, comparisons an `Array<bool, N>`.
+
+impl<T: Add<Output = T>, const N: usize> DotAdd<Array<T, N>> for Array<T, N> {
+    type Output = Array<T, N>;
+    #[track_caller]
+    fn dot_add(self, rhs: Array<T, N>) -> Array<T, N> { zip_with(self, rhs, |a: T, b: T| -> T { a + b }) }
+}
+
+impl<T: Add<Output = T>, const N: usize> DotAdd<T> for Array<T, N> {
+    type Output = Array<T, N>;
+    fn dot_add(self, rhs: T) -> Array<T, N> { map_right(self, rhs, |a: T, b: T| -> T { a + b }) }
+}
+
+impl<T: Add<Output = T>, const N: usize> DotAdd<Array<T, N>> for T {
+    type Output = Array<T, N>;
+    fn dot_add(self, rhs: Array<T, N>) -> Array<T, N> { map_left(self, rhs, |a: T, b: T| -> T { a + b }) }
+}
+
+impl<T: Sub<Output = T>, const N: usize> DotSub<Array<T, N>> for Array<T, N> {
+    type Output = Array<T, N>;
+    #[track_caller]
+    fn dot_sub(self, rhs: Array<T, N>) -> Array<T, N> { zip_with(self, rhs, |a: T, b: T| -> T { a - b }) }
+}
+
+impl<T: Sub<Output = T>, const N: usize> DotSub<T> for Array<T, N> {
+    type Output = Array<T, N>;
+    fn dot_sub(self, rhs: T) -> Array<T, N> { map_right(self, rhs, |a: T, b: T| -> T { a - b }) }
+}
+
+impl<T: Sub<Output = T>, const N: usize> DotSub<Array<T, N>> for T {
+    type Output = Array<T, N>;
+    fn dot_sub(self, rhs: Array<T, N>) -> Array<T, N> { map_left(self, rhs, |a: T, b: T| -> T { a - b }) }
+}
+
+impl<T: Mul<Output = T>, const N: usize> DotMul<Array<T, N>> for Array<T, N> {
+    type Output = Array<T, N>;
+    #[track_caller]
+    fn dot_mul(self, rhs: Array<T, N>) -> Array<T, N> { zip_with(self, rhs, |a: T, b: T| -> T { a * b }) }
+}
+
+impl<T: Mul<Output = T>, const N: usize> DotMul<T> for Array<T, N> {
+    type Output = Array<T, N>;
+    fn dot_mul(self, rhs: T) -> Array<T, N> { map_right(self, rhs, |a: T, b: T| -> T { a * b }) }
+}
+
+impl<T: Mul<Output = T>, const N: usize> DotMul<Array<T, N>> for T {
+    type Output = Array<T, N>;
+    fn dot_mul(self, rhs: Array<T, N>) -> Array<T, N> { map_left(self, rhs, |a: T, b: T| -> T { a * b }) }
+}
+
+impl<T: Div<Output = T>, const N: usize> DotDiv<Array<T, N>> for Array<T, N> {
+    type Output = Array<T, N>;
+    #[track_caller]
+    fn dot_div(self, rhs: Array<T, N>) -> Array<T, N> { zip_with(self, rhs, |a: T, b: T| -> T { a / b }) }
+}
+
+impl<T: Div<Output = T>, const N: usize> DotDiv<T> for Array<T, N> {
+    type Output = Array<T, N>;
+    fn dot_div(self, rhs: T) -> Array<T, N> { map_right(self, rhs, |a: T, b: T| -> T { a / b }) }
+}
+
+impl<T: Div<Output = T>, const N: usize> DotDiv<Array<T, N>> for T {
+    type Output = Array<T, N>;
+    fn dot_div(self, rhs: Array<T, N>) -> Array<T, N> { map_left(self, rhs, |a: T, b: T| -> T { a / b }) }
+}
+
+impl<T: Rem<Output = T>, const N: usize> DotRem<Array<T, N>> for Array<T, N> {
+    type Output = Array<T, N>;
+    #[track_caller]
+    fn dot_rem(self, rhs: Array<T, N>) -> Array<T, N> { zip_with(self, rhs, |a: T, b: T| -> T { a % b }) }
+}
+
+impl<T: Rem<Output = T>, const N: usize> DotRem<T> for Array<T, N> {
+    type Output = Array<T, N>;
+    fn dot_rem(self, rhs: T) -> Array<T, N> { map_right(self, rhs, |a: T, b: T| -> T { a % b }) }
+}
+
+impl<T: Rem<Output = T>, const N: usize> DotRem<Array<T, N>> for T {
+    type Output = Array<T, N>;
+    fn dot_rem(self, rhs: Array<T, N>) -> Array<T, N> { map_left(self, rhs, |a: T, b: T| -> T { a % b }) }
+}
+
+impl<T: Modulo<Output = T>, const N: usize> DotModulo<Array<T, N>> for Array<T, N> {
+    type Output = Array<T, N>;
+    #[track_caller]
+    fn dot_modulo(self, rhs: Array<T, N>) -> Array<T, N> { zip_with(self, rhs, |a: T, b: T| -> T { a %% b }) }
+}
+
+impl<T: Modulo<Output = T>, const N: usize> DotModulo<T> for Array<T, N> {
+    type Output = Array<T, N>;
+    fn dot_modulo(self, rhs: T) -> Array<T, N> { map_right(self, rhs, |a: T, b: T| -> T { a %% b }) }
+}
+
+impl<T: Modulo<Output = T>, const N: usize> DotModulo<Array<T, N>> for T {
+    type Output = Array<T, N>;
+    fn dot_modulo(self, rhs: Array<T, N>) -> Array<T, N> { map_left(self, rhs, |a: T, b: T| -> T { a %% b }) }
+}
+
+impl<T: Pow<Output = T>, const N: usize> DotPow<Array<T, N>> for Array<T, N> {
+    type Output = Array<T, N>;
+    #[track_caller]
+    fn dot_pow(self, rhs: Array<T, N>) -> Array<T, N> { zip_with(self, rhs, |a: T, b: T| -> T { a ** b }) }
+}
+
+impl<T: Pow<Output = T>, const N: usize> DotPow<T> for Array<T, N> {
+    type Output = Array<T, N>;
+    fn dot_pow(self, rhs: T) -> Array<T, N> { map_right(self, rhs, |a: T, b: T| -> T { a ** b }) }
+}
+
+impl<T: Pow<Output = T>, const N: usize> DotPow<Array<T, N>> for T {
+    type Output = Array<T, N>;
+    fn dot_pow(self, rhs: Array<T, N>) -> Array<T, N> { map_left(self, rhs, |a: T, b: T| -> T { a ** b }) }
+}
+
+impl<T: BitAnd<Output = T>, const N: usize> DotBitAnd<Array<T, N>> for Array<T, N> {
+    type Output = Array<T, N>;
+    #[track_caller]
+    fn dot_bitand(self, rhs: Array<T, N>) -> Array<T, N> { zip_with(self, rhs, |a: T, b: T| -> T { a & b }) }
+}
+
+impl<T: BitAnd<Output = T>, const N: usize> DotBitAnd<T> for Array<T, N> {
+    type Output = Array<T, N>;
+    fn dot_bitand(self, rhs: T) -> Array<T, N> { map_right(self, rhs, |a: T, b: T| -> T { a & b }) }
+}
+
+impl<T: BitAnd<Output = T>, const N: usize> DotBitAnd<Array<T, N>> for T {
+    type Output = Array<T, N>;
+    fn dot_bitand(self, rhs: Array<T, N>) -> Array<T, N> { map_left(self, rhs, |a: T, b: T| -> T { a & b }) }
+}
+
+impl<T: BitOr<Output = T>, const N: usize> DotBitOr<Array<T, N>> for Array<T, N> {
+    type Output = Array<T, N>;
+    #[track_caller]
+    fn dot_bitor(self, rhs: Array<T, N>) -> Array<T, N> { zip_with(self, rhs, |a: T, b: T| -> T { a | b }) }
+}
+
+impl<T: BitOr<Output = T>, const N: usize> DotBitOr<T> for Array<T, N> {
+    type Output = Array<T, N>;
+    fn dot_bitor(self, rhs: T) -> Array<T, N> { map_right(self, rhs, |a: T, b: T| -> T { a | b }) }
+}
+
+impl<T: BitOr<Output = T>, const N: usize> DotBitOr<Array<T, N>> for T {
+    type Output = Array<T, N>;
+    fn dot_bitor(self, rhs: Array<T, N>) -> Array<T, N> { map_left(self, rhs, |a: T, b: T| -> T { a | b }) }
+}
+
+impl<T: BitXor<Output = T>, const N: usize> DotBitXor<Array<T, N>> for Array<T, N> {
+    type Output = Array<T, N>;
+    #[track_caller]
+    fn dot_bitxor(self, rhs: Array<T, N>) -> Array<T, N> { zip_with(self, rhs, |a: T, b: T| -> T { a ^ b }) }
+}
+
+impl<T: BitXor<Output = T>, const N: usize> DotBitXor<T> for Array<T, N> {
+    type Output = Array<T, N>;
+    fn dot_bitxor(self, rhs: T) -> Array<T, N> { map_right(self, rhs, |a: T, b: T| -> T { a ^ b }) }
+}
+
+impl<T: BitXor<Output = T>, const N: usize> DotBitXor<Array<T, N>> for T {
+    type Output = Array<T, N>;
+    fn dot_bitxor(self, rhs: Array<T, N>) -> Array<T, N> { map_left(self, rhs, |a: T, b: T| -> T { a ^ b }) }
+}
+
+impl<T: Shl<Output = T>, const N: usize> DotShl<Array<T, N>> for Array<T, N> {
+    type Output = Array<T, N>;
+    #[track_caller]
+    fn dot_shl(self, rhs: Array<T, N>) -> Array<T, N> { zip_with(self, rhs, |a: T, b: T| -> T { a << b }) }
+}
+
+impl<T: Shl<Output = T>, const N: usize> DotShl<T> for Array<T, N> {
+    type Output = Array<T, N>;
+    fn dot_shl(self, rhs: T) -> Array<T, N> { map_right(self, rhs, |a: T, b: T| -> T { a << b }) }
+}
+
+impl<T: Shl<Output = T>, const N: usize> DotShl<Array<T, N>> for T {
+    type Output = Array<T, N>;
+    fn dot_shl(self, rhs: Array<T, N>) -> Array<T, N> { map_left(self, rhs, |a: T, b: T| -> T { a << b }) }
+}
+
+impl<T: Shr<Output = T>, const N: usize> DotShr<Array<T, N>> for Array<T, N> {
+    type Output = Array<T, N>;
+    #[track_caller]
+    fn dot_shr(self, rhs: Array<T, N>) -> Array<T, N> { zip_with(self, rhs, |a: T, b: T| -> T { a >> b }) }
+}
+
+impl<T: Shr<Output = T>, const N: usize> DotShr<T> for Array<T, N> {
+    type Output = Array<T, N>;
+    fn dot_shr(self, rhs: T) -> Array<T, N> { map_right(self, rhs, |a: T, b: T| -> T { a >> b }) }
+}
+
+impl<T: Shr<Output = T>, const N: usize> DotShr<Array<T, N>> for T {
+    type Output = Array<T, N>;
+    fn dot_shr(self, rhs: Array<T, N>) -> Array<T, N> { map_left(self, rhs, |a: T, b: T| -> T { a >> b }) }
+}
+
+impl<T: PartialEq, const N: usize> DotEq<Array<T, N>> for Array<T, N> {
+    type Output = Array<bool, N>;
+    #[track_caller]
+    fn dot_eq(self, rhs: Array<T, N>) -> Array<bool, N> { zip_with(self, rhs, |a: T, b: T| -> bool { a == b }) }
+}
+
+impl<T: PartialEq, const N: usize> DotEq<T> for Array<T, N> {
+    type Output = Array<bool, N>;
+    fn dot_eq(self, rhs: T) -> Array<bool, N> { map_right(self, rhs, |a: T, b: T| -> bool { a == b }) }
+}
+
+impl<T: PartialEq, const N: usize> DotEq<Array<T, N>> for T {
+    type Output = Array<bool, N>;
+    fn dot_eq(self, rhs: Array<T, N>) -> Array<bool, N> { map_left(self, rhs, |a: T, b: T| -> bool { a == b }) }
+}
+
+impl<T: PartialEq, const N: usize> DotNe<Array<T, N>> for Array<T, N> {
+    type Output = Array<bool, N>;
+    #[track_caller]
+    fn dot_ne(self, rhs: Array<T, N>) -> Array<bool, N> { zip_with(self, rhs, |a: T, b: T| -> bool { a != b }) }
+}
+
+impl<T: PartialEq, const N: usize> DotNe<T> for Array<T, N> {
+    type Output = Array<bool, N>;
+    fn dot_ne(self, rhs: T) -> Array<bool, N> { map_right(self, rhs, |a: T, b: T| -> bool { a != b }) }
+}
+
+impl<T: PartialEq, const N: usize> DotNe<Array<T, N>> for T {
+    type Output = Array<bool, N>;
+    fn dot_ne(self, rhs: Array<T, N>) -> Array<bool, N> { map_left(self, rhs, |a: T, b: T| -> bool { a != b }) }
+}
+
+impl<T: PartialOrd, const N: usize> DotLt<Array<T, N>> for Array<T, N> {
+    type Output = Array<bool, N>;
+    #[track_caller]
+    fn dot_lt(self, rhs: Array<T, N>) -> Array<bool, N> { zip_with(self, rhs, |a: T, b: T| -> bool { a < b }) }
+}
+
+impl<T: PartialOrd, const N: usize> DotLt<T> for Array<T, N> {
+    type Output = Array<bool, N>;
+    fn dot_lt(self, rhs: T) -> Array<bool, N> { map_right(self, rhs, |a: T, b: T| -> bool { a < b }) }
+}
+
+impl<T: PartialOrd, const N: usize> DotLt<Array<T, N>> for T {
+    type Output = Array<bool, N>;
+    fn dot_lt(self, rhs: Array<T, N>) -> Array<bool, N> { map_left(self, rhs, |a: T, b: T| -> bool { a < b }) }
+}
+
+impl<T: PartialOrd, const N: usize> DotGt<Array<T, N>> for Array<T, N> {
+    type Output = Array<bool, N>;
+    #[track_caller]
+    fn dot_gt(self, rhs: Array<T, N>) -> Array<bool, N> { zip_with(self, rhs, |a: T, b: T| -> bool { a > b }) }
+}
+
+impl<T: PartialOrd, const N: usize> DotGt<T> for Array<T, N> {
+    type Output = Array<bool, N>;
+    fn dot_gt(self, rhs: T) -> Array<bool, N> { map_right(self, rhs, |a: T, b: T| -> bool { a > b }) }
+}
+
+impl<T: PartialOrd, const N: usize> DotGt<Array<T, N>> for T {
+    type Output = Array<bool, N>;
+    fn dot_gt(self, rhs: Array<T, N>) -> Array<bool, N> { map_left(self, rhs, |a: T, b: T| -> bool { a > b }) }
+}
+
+impl<T: PartialOrd, const N: usize> DotLe<Array<T, N>> for Array<T, N> {
+    type Output = Array<bool, N>;
+    #[track_caller]
+    fn dot_le(self, rhs: Array<T, N>) -> Array<bool, N> { zip_with(self, rhs, |a: T, b: T| -> bool { a <= b }) }
+}
+
+impl<T: PartialOrd, const N: usize> DotLe<T> for Array<T, N> {
+    type Output = Array<bool, N>;
+    fn dot_le(self, rhs: T) -> Array<bool, N> { map_right(self, rhs, |a: T, b: T| -> bool { a <= b }) }
+}
+
+impl<T: PartialOrd, const N: usize> DotLe<Array<T, N>> for T {
+    type Output = Array<bool, N>;
+    fn dot_le(self, rhs: Array<T, N>) -> Array<bool, N> { map_left(self, rhs, |a: T, b: T| -> bool { a <= b }) }
+}
+
+impl<T: PartialOrd, const N: usize> DotGe<Array<T, N>> for Array<T, N> {
+    type Output = Array<bool, N>;
+    #[track_caller]
+    fn dot_ge(self, rhs: Array<T, N>) -> Array<bool, N> { zip_with(self, rhs, |a: T, b: T| -> bool { a >= b }) }
+}
+
+impl<T: PartialOrd, const N: usize> DotGe<T> for Array<T, N> {
+    type Output = Array<bool, N>;
+    fn dot_ge(self, rhs: T) -> Array<bool, N> { map_right(self, rhs, |a: T, b: T| -> bool { a >= b }) }
+}
+
+impl<T: PartialOrd, const N: usize> DotGe<Array<T, N>> for T {
+    type Output = Array<bool, N>;
+    fn dot_ge(self, rhs: Array<T, N>) -> Array<bool, N> { map_left(self, rhs, |a: T, b: T| -> bool { a >= b }) }
+}
+
+impl<const N: usize> DotLogicalAnd<Array<bool, N>> for Array<bool, N> {
+    type Output = Array<bool, N>;
+    #[track_caller]
+    fn dot_logical_and(self, rhs: Array<bool, N>) -> Array<bool, N> { zip_with(self, rhs, |a: bool, b: bool| -> bool { a && b }) }
+}
+
+impl<const N: usize> DotLogicalOr<Array<bool, N>> for Array<bool, N> {
+    type Output = Array<bool, N>;
+    #[track_caller]
+    fn dot_logical_or(self, rhs: Array<bool, N>) -> Array<bool, N> { zip_with(self, rhs, |a: bool, b: bool| -> bool { a || b }) }
+}

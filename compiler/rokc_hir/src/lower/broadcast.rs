@@ -23,6 +23,7 @@ pub(super) fn scalar_op(op: &str) -> Option<&str> {
             | "/"
             | "%"
             | "%%"
+            | "**"
             | "=="
             | "!="
             | "<"

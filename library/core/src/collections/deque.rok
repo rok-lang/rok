@@ -282,8 +282,7 @@ impl<T> Index<usize> for Deque<T> {
 }
 
 /// `d[i] = v`; panics out of bounds.
-impl<T> IndexSet<usize> for Deque<T> {
-    type Value = T;
+impl<T> IndexSet<usize, T> for Deque<T> {
     #[track_caller]
     fn index_set(self, i: usize, value: T) {
         unsafe {

@@ -27,6 +27,12 @@ pub const KNOWN_SLOTS: &[&str] = &[
     "float_type",
     "char_type",
     "range_type",
+    // axis arguments and the n-d array (`library/core/src/index.rok`,
+    // `array.rok`)
+    "slice_arg_type",
+    "rest_axis_type",
+    "new_axis_type",
+    "ndarray_type",
     // trait slots
     "iterator_trait",
     "into_iterator_trait",
@@ -37,6 +43,7 @@ pub const KNOWN_SLOTS: &[&str] = &[
     "display_trait",
     "debug_trait",
     "future_trait",
+    "axis_indexed_trait",
     // operator / comparison trait slots (`library/core/src/ops.rok`, `marker.rok`)
     "add_trait",
     "sub_trait",
@@ -84,6 +91,9 @@ pub const KNOWN_SLOTS: &[&str] = &[
     "cleanup_running_fn",
     "cleanup_done_fn",
     "broadcast_len_fn",
+    "axis_from_u64_fn",
+    "axis_from_i64_fn",
+    "array_literal_fn",
     // method slots
     "drop_method",
     // trait slot of a close that can fail (`library/std/src/io.rok`)

@@ -1,0 +1,1038 @@
+// The `Index` / `IndexSet` impls of `Array` over axis arguments: every
+// tuple of `isize` (a position), `SliceArg` (`a:b:k`), `NewAxis`
+// (`none`) and `Rest` (`..`) of up to two parts, and of three parts
+// without `none`; four positions on a rank-4 array. A position drops
+// its axis, `none` adds one. A bracket that keeps an axis gives a view;
+// storing into it writes the array (`a[:, 0] = 0.0`, `a[1:3] = b`).
+
+/// `a[a:b]`.
+impl<T, const N: usize> Index<SliceArg> for Array<T, N> {
+    type Output = Array<T, N>;
+    #[track_caller]
+    fn index(self, i: SliceArg) -> Array<T, N> { self.select([Ax::Span(i)]) }
+}
+
+impl<T, const N: usize> IndexSet<SliceArg, T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: SliceArg, v: T) {
+        let view: Array<T, N> = self.select([Ax::Span(i)]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<SliceArg, Array<T, N>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: SliceArg, v: Array<T, N>) {
+        let view: Array<T, N> = self.select([Ax::Span(i)]);
+        view.assign(v);
+    }
+}
+
+/// `a[none]`.
+impl<T, const N: usize> Index<NewAxis> for Array<T, N> {
+    type Output = Array<T, { N + 1 }>;
+    #[track_caller]
+    fn index(self, i: NewAxis) -> Array<T, { N + 1 }> { self.select([Ax::Insert]) }
+}
+
+impl<T, const N: usize> IndexSet<NewAxis, T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: NewAxis, v: T) {
+        let view: Array<T, { N + 1 }> = self.select([Ax::Insert]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<NewAxis, Array<T, { N + 1 }>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: NewAxis, v: Array<T, { N + 1 }>) {
+        let view: Array<T, { N + 1 }> = self.select([Ax::Insert]);
+        view.assign(v);
+    }
+}
+
+/// `a[..]`.
+impl<T, const N: usize> Index<Rest> for Array<T, N> {
+    type Output = Array<T, N>;
+    #[track_caller]
+    fn index(self, i: Rest) -> Array<T, N> { self.select([Ax::Others]) }
+}
+
+impl<T, const N: usize> IndexSet<Rest, T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: Rest, v: T) {
+        let view: Array<T, N> = self.select([Ax::Others]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<Rest, Array<T, N>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: Rest, v: Array<T, N>) {
+        let view: Array<T, N> = self.select([Ax::Others]);
+        view.assign(v);
+    }
+}
+
+/// `a[i, a:b]`.
+impl<T, const N: usize> Index<(isize, SliceArg)> for Array<T, N> {
+    type Output = Array<T, { N - 1 }>;
+    #[track_caller]
+    fn index(self, i: (isize, SliceArg)) -> Array<T, { N - 1 }> { self.select([Ax::At(i.0), Ax::Span(i.1)]) }
+}
+
+impl<T, const N: usize> IndexSet<(isize, SliceArg), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (isize, SliceArg), v: T) {
+        let view: Array<T, { N - 1 }> = self.select([Ax::At(i.0), Ax::Span(i.1)]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(isize, SliceArg), Array<T, { N - 1 }>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (isize, SliceArg), v: Array<T, { N - 1 }>) {
+        let view: Array<T, { N - 1 }> = self.select([Ax::At(i.0), Ax::Span(i.1)]);
+        view.assign(v);
+    }
+}
+
+/// `a[i, none]`.
+impl<T, const N: usize> Index<(isize, NewAxis)> for Array<T, N> {
+    type Output = Array<T, N>;
+    #[track_caller]
+    fn index(self, i: (isize, NewAxis)) -> Array<T, N> { self.select([Ax::At(i.0), Ax::Insert]) }
+}
+
+impl<T, const N: usize> IndexSet<(isize, NewAxis), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (isize, NewAxis), v: T) {
+        let view: Array<T, N> = self.select([Ax::At(i.0), Ax::Insert]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(isize, NewAxis), Array<T, N>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (isize, NewAxis), v: Array<T, N>) {
+        let view: Array<T, N> = self.select([Ax::At(i.0), Ax::Insert]);
+        view.assign(v);
+    }
+}
+
+/// `a[i, ..]`.
+impl<T, const N: usize> Index<(isize, Rest)> for Array<T, N> {
+    type Output = Array<T, { N - 1 }>;
+    #[track_caller]
+    fn index(self, i: (isize, Rest)) -> Array<T, { N - 1 }> { self.select([Ax::At(i.0), Ax::Others]) }
+}
+
+impl<T, const N: usize> IndexSet<(isize, Rest), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (isize, Rest), v: T) {
+        let view: Array<T, { N - 1 }> = self.select([Ax::At(i.0), Ax::Others]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(isize, Rest), Array<T, { N - 1 }>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (isize, Rest), v: Array<T, { N - 1 }>) {
+        let view: Array<T, { N - 1 }> = self.select([Ax::At(i.0), Ax::Others]);
+        view.assign(v);
+    }
+}
+
+/// `a[a:b, i]`.
+impl<T, const N: usize> Index<(SliceArg, isize)> for Array<T, N> {
+    type Output = Array<T, { N - 1 }>;
+    #[track_caller]
+    fn index(self, i: (SliceArg, isize)) -> Array<T, { N - 1 }> { self.select([Ax::Span(i.0), Ax::At(i.1)]) }
+}
+
+impl<T, const N: usize> IndexSet<(SliceArg, isize), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (SliceArg, isize), v: T) {
+        let view: Array<T, { N - 1 }> = self.select([Ax::Span(i.0), Ax::At(i.1)]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(SliceArg, isize), Array<T, { N - 1 }>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (SliceArg, isize), v: Array<T, { N - 1 }>) {
+        let view: Array<T, { N - 1 }> = self.select([Ax::Span(i.0), Ax::At(i.1)]);
+        view.assign(v);
+    }
+}
+
+/// `a[a:b, a:b]`.
+impl<T, const N: usize> Index<(SliceArg, SliceArg)> for Array<T, N> {
+    type Output = Array<T, N>;
+    #[track_caller]
+    fn index(self, i: (SliceArg, SliceArg)) -> Array<T, N> { self.select([Ax::Span(i.0), Ax::Span(i.1)]) }
+}
+
+impl<T, const N: usize> IndexSet<(SliceArg, SliceArg), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (SliceArg, SliceArg), v: T) {
+        let view: Array<T, N> = self.select([Ax::Span(i.0), Ax::Span(i.1)]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(SliceArg, SliceArg), Array<T, N>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (SliceArg, SliceArg), v: Array<T, N>) {
+        let view: Array<T, N> = self.select([Ax::Span(i.0), Ax::Span(i.1)]);
+        view.assign(v);
+    }
+}
+
+/// `a[a:b, none]`.
+impl<T, const N: usize> Index<(SliceArg, NewAxis)> for Array<T, N> {
+    type Output = Array<T, { N + 1 }>;
+    #[track_caller]
+    fn index(self, i: (SliceArg, NewAxis)) -> Array<T, { N + 1 }> { self.select([Ax::Span(i.0), Ax::Insert]) }
+}
+
+impl<T, const N: usize> IndexSet<(SliceArg, NewAxis), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (SliceArg, NewAxis), v: T) {
+        let view: Array<T, { N + 1 }> = self.select([Ax::Span(i.0), Ax::Insert]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(SliceArg, NewAxis), Array<T, { N + 1 }>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (SliceArg, NewAxis), v: Array<T, { N + 1 }>) {
+        let view: Array<T, { N + 1 }> = self.select([Ax::Span(i.0), Ax::Insert]);
+        view.assign(v);
+    }
+}
+
+/// `a[a:b, ..]`.
+impl<T, const N: usize> Index<(SliceArg, Rest)> for Array<T, N> {
+    type Output = Array<T, N>;
+    #[track_caller]
+    fn index(self, i: (SliceArg, Rest)) -> Array<T, N> { self.select([Ax::Span(i.0), Ax::Others]) }
+}
+
+impl<T, const N: usize> IndexSet<(SliceArg, Rest), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (SliceArg, Rest), v: T) {
+        let view: Array<T, N> = self.select([Ax::Span(i.0), Ax::Others]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(SliceArg, Rest), Array<T, N>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (SliceArg, Rest), v: Array<T, N>) {
+        let view: Array<T, N> = self.select([Ax::Span(i.0), Ax::Others]);
+        view.assign(v);
+    }
+}
+
+/// `a[none, i]`.
+impl<T, const N: usize> Index<(NewAxis, isize)> for Array<T, N> {
+    type Output = Array<T, N>;
+    #[track_caller]
+    fn index(self, i: (NewAxis, isize)) -> Array<T, N> { self.select([Ax::Insert, Ax::At(i.1)]) }
+}
+
+impl<T, const N: usize> IndexSet<(NewAxis, isize), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (NewAxis, isize), v: T) {
+        let view: Array<T, N> = self.select([Ax::Insert, Ax::At(i.1)]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(NewAxis, isize), Array<T, N>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (NewAxis, isize), v: Array<T, N>) {
+        let view: Array<T, N> = self.select([Ax::Insert, Ax::At(i.1)]);
+        view.assign(v);
+    }
+}
+
+/// `a[none, a:b]`.
+impl<T, const N: usize> Index<(NewAxis, SliceArg)> for Array<T, N> {
+    type Output = Array<T, { N + 1 }>;
+    #[track_caller]
+    fn index(self, i: (NewAxis, SliceArg)) -> Array<T, { N + 1 }> { self.select([Ax::Insert, Ax::Span(i.1)]) }
+}
+
+impl<T, const N: usize> IndexSet<(NewAxis, SliceArg), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (NewAxis, SliceArg), v: T) {
+        let view: Array<T, { N + 1 }> = self.select([Ax::Insert, Ax::Span(i.1)]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(NewAxis, SliceArg), Array<T, { N + 1 }>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (NewAxis, SliceArg), v: Array<T, { N + 1 }>) {
+        let view: Array<T, { N + 1 }> = self.select([Ax::Insert, Ax::Span(i.1)]);
+        view.assign(v);
+    }
+}
+
+/// `a[none, none]`.
+impl<T, const N: usize> Index<(NewAxis, NewAxis)> for Array<T, N> {
+    type Output = Array<T, { N + 2 }>;
+    #[track_caller]
+    fn index(self, i: (NewAxis, NewAxis)) -> Array<T, { N + 2 }> { self.select([Ax::Insert, Ax::Insert]) }
+}
+
+impl<T, const N: usize> IndexSet<(NewAxis, NewAxis), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (NewAxis, NewAxis), v: T) {
+        let view: Array<T, { N + 2 }> = self.select([Ax::Insert, Ax::Insert]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(NewAxis, NewAxis), Array<T, { N + 2 }>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (NewAxis, NewAxis), v: Array<T, { N + 2 }>) {
+        let view: Array<T, { N + 2 }> = self.select([Ax::Insert, Ax::Insert]);
+        view.assign(v);
+    }
+}
+
+/// `a[none, ..]`.
+impl<T, const N: usize> Index<(NewAxis, Rest)> for Array<T, N> {
+    type Output = Array<T, { N + 1 }>;
+    #[track_caller]
+    fn index(self, i: (NewAxis, Rest)) -> Array<T, { N + 1 }> { self.select([Ax::Insert, Ax::Others]) }
+}
+
+impl<T, const N: usize> IndexSet<(NewAxis, Rest), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (NewAxis, Rest), v: T) {
+        let view: Array<T, { N + 1 }> = self.select([Ax::Insert, Ax::Others]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(NewAxis, Rest), Array<T, { N + 1 }>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (NewAxis, Rest), v: Array<T, { N + 1 }>) {
+        let view: Array<T, { N + 1 }> = self.select([Ax::Insert, Ax::Others]);
+        view.assign(v);
+    }
+}
+
+/// `a[.., i]`.
+impl<T, const N: usize> Index<(Rest, isize)> for Array<T, N> {
+    type Output = Array<T, { N - 1 }>;
+    #[track_caller]
+    fn index(self, i: (Rest, isize)) -> Array<T, { N - 1 }> { self.select([Ax::Others, Ax::At(i.1)]) }
+}
+
+impl<T, const N: usize> IndexSet<(Rest, isize), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (Rest, isize), v: T) {
+        let view: Array<T, { N - 1 }> = self.select([Ax::Others, Ax::At(i.1)]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(Rest, isize), Array<T, { N - 1 }>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (Rest, isize), v: Array<T, { N - 1 }>) {
+        let view: Array<T, { N - 1 }> = self.select([Ax::Others, Ax::At(i.1)]);
+        view.assign(v);
+    }
+}
+
+/// `a[.., a:b]`.
+impl<T, const N: usize> Index<(Rest, SliceArg)> for Array<T, N> {
+    type Output = Array<T, N>;
+    #[track_caller]
+    fn index(self, i: (Rest, SliceArg)) -> Array<T, N> { self.select([Ax::Others, Ax::Span(i.1)]) }
+}
+
+impl<T, const N: usize> IndexSet<(Rest, SliceArg), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (Rest, SliceArg), v: T) {
+        let view: Array<T, N> = self.select([Ax::Others, Ax::Span(i.1)]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(Rest, SliceArg), Array<T, N>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (Rest, SliceArg), v: Array<T, N>) {
+        let view: Array<T, N> = self.select([Ax::Others, Ax::Span(i.1)]);
+        view.assign(v);
+    }
+}
+
+/// `a[.., none]`.
+impl<T, const N: usize> Index<(Rest, NewAxis)> for Array<T, N> {
+    type Output = Array<T, { N + 1 }>;
+    #[track_caller]
+    fn index(self, i: (Rest, NewAxis)) -> Array<T, { N + 1 }> { self.select([Ax::Others, Ax::Insert]) }
+}
+
+impl<T, const N: usize> IndexSet<(Rest, NewAxis), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (Rest, NewAxis), v: T) {
+        let view: Array<T, { N + 1 }> = self.select([Ax::Others, Ax::Insert]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(Rest, NewAxis), Array<T, { N + 1 }>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (Rest, NewAxis), v: Array<T, { N + 1 }>) {
+        let view: Array<T, { N + 1 }> = self.select([Ax::Others, Ax::Insert]);
+        view.assign(v);
+    }
+}
+
+/// `a[i, i, a:b]`.
+impl<T, const N: usize> Index<(isize, isize, SliceArg)> for Array<T, N> {
+    type Output = Array<T, { N - 2 }>;
+    #[track_caller]
+    fn index(self, i: (isize, isize, SliceArg)) -> Array<T, { N - 2 }> { self.select([Ax::At(i.0), Ax::At(i.1), Ax::Span(i.2)]) }
+}
+
+impl<T, const N: usize> IndexSet<(isize, isize, SliceArg), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (isize, isize, SliceArg), v: T) {
+        let view: Array<T, { N - 2 }> = self.select([Ax::At(i.0), Ax::At(i.1), Ax::Span(i.2)]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(isize, isize, SliceArg), Array<T, { N - 2 }>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (isize, isize, SliceArg), v: Array<T, { N - 2 }>) {
+        let view: Array<T, { N - 2 }> = self.select([Ax::At(i.0), Ax::At(i.1), Ax::Span(i.2)]);
+        view.assign(v);
+    }
+}
+
+/// `a[i, i, ..]`.
+impl<T, const N: usize> Index<(isize, isize, Rest)> for Array<T, N> {
+    type Output = Array<T, { N - 2 }>;
+    #[track_caller]
+    fn index(self, i: (isize, isize, Rest)) -> Array<T, { N - 2 }> { self.select([Ax::At(i.0), Ax::At(i.1), Ax::Others]) }
+}
+
+impl<T, const N: usize> IndexSet<(isize, isize, Rest), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (isize, isize, Rest), v: T) {
+        let view: Array<T, { N - 2 }> = self.select([Ax::At(i.0), Ax::At(i.1), Ax::Others]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(isize, isize, Rest), Array<T, { N - 2 }>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (isize, isize, Rest), v: Array<T, { N - 2 }>) {
+        let view: Array<T, { N - 2 }> = self.select([Ax::At(i.0), Ax::At(i.1), Ax::Others]);
+        view.assign(v);
+    }
+}
+
+/// `a[i, a:b, i]`.
+impl<T, const N: usize> Index<(isize, SliceArg, isize)> for Array<T, N> {
+    type Output = Array<T, { N - 2 }>;
+    #[track_caller]
+    fn index(self, i: (isize, SliceArg, isize)) -> Array<T, { N - 2 }> { self.select([Ax::At(i.0), Ax::Span(i.1), Ax::At(i.2)]) }
+}
+
+impl<T, const N: usize> IndexSet<(isize, SliceArg, isize), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (isize, SliceArg, isize), v: T) {
+        let view: Array<T, { N - 2 }> = self.select([Ax::At(i.0), Ax::Span(i.1), Ax::At(i.2)]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(isize, SliceArg, isize), Array<T, { N - 2 }>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (isize, SliceArg, isize), v: Array<T, { N - 2 }>) {
+        let view: Array<T, { N - 2 }> = self.select([Ax::At(i.0), Ax::Span(i.1), Ax::At(i.2)]);
+        view.assign(v);
+    }
+}
+
+/// `a[i, a:b, a:b]`.
+impl<T, const N: usize> Index<(isize, SliceArg, SliceArg)> for Array<T, N> {
+    type Output = Array<T, { N - 1 }>;
+    #[track_caller]
+    fn index(self, i: (isize, SliceArg, SliceArg)) -> Array<T, { N - 1 }> { self.select([Ax::At(i.0), Ax::Span(i.1), Ax::Span(i.2)]) }
+}
+
+impl<T, const N: usize> IndexSet<(isize, SliceArg, SliceArg), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (isize, SliceArg, SliceArg), v: T) {
+        let view: Array<T, { N - 1 }> = self.select([Ax::At(i.0), Ax::Span(i.1), Ax::Span(i.2)]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(isize, SliceArg, SliceArg), Array<T, { N - 1 }>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (isize, SliceArg, SliceArg), v: Array<T, { N - 1 }>) {
+        let view: Array<T, { N - 1 }> = self.select([Ax::At(i.0), Ax::Span(i.1), Ax::Span(i.2)]);
+        view.assign(v);
+    }
+}
+
+/// `a[i, a:b, ..]`.
+impl<T, const N: usize> Index<(isize, SliceArg, Rest)> for Array<T, N> {
+    type Output = Array<T, { N - 1 }>;
+    #[track_caller]
+    fn index(self, i: (isize, SliceArg, Rest)) -> Array<T, { N - 1 }> { self.select([Ax::At(i.0), Ax::Span(i.1), Ax::Others]) }
+}
+
+impl<T, const N: usize> IndexSet<(isize, SliceArg, Rest), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (isize, SliceArg, Rest), v: T) {
+        let view: Array<T, { N - 1 }> = self.select([Ax::At(i.0), Ax::Span(i.1), Ax::Others]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(isize, SliceArg, Rest), Array<T, { N - 1 }>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (isize, SliceArg, Rest), v: Array<T, { N - 1 }>) {
+        let view: Array<T, { N - 1 }> = self.select([Ax::At(i.0), Ax::Span(i.1), Ax::Others]);
+        view.assign(v);
+    }
+}
+
+/// `a[i, .., i]`.
+impl<T, const N: usize> Index<(isize, Rest, isize)> for Array<T, N> {
+    type Output = Array<T, { N - 2 }>;
+    #[track_caller]
+    fn index(self, i: (isize, Rest, isize)) -> Array<T, { N - 2 }> { self.select([Ax::At(i.0), Ax::Others, Ax::At(i.2)]) }
+}
+
+impl<T, const N: usize> IndexSet<(isize, Rest, isize), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (isize, Rest, isize), v: T) {
+        let view: Array<T, { N - 2 }> = self.select([Ax::At(i.0), Ax::Others, Ax::At(i.2)]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(isize, Rest, isize), Array<T, { N - 2 }>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (isize, Rest, isize), v: Array<T, { N - 2 }>) {
+        let view: Array<T, { N - 2 }> = self.select([Ax::At(i.0), Ax::Others, Ax::At(i.2)]);
+        view.assign(v);
+    }
+}
+
+/// `a[i, .., a:b]`.
+impl<T, const N: usize> Index<(isize, Rest, SliceArg)> for Array<T, N> {
+    type Output = Array<T, { N - 1 }>;
+    #[track_caller]
+    fn index(self, i: (isize, Rest, SliceArg)) -> Array<T, { N - 1 }> { self.select([Ax::At(i.0), Ax::Others, Ax::Span(i.2)]) }
+}
+
+impl<T, const N: usize> IndexSet<(isize, Rest, SliceArg), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (isize, Rest, SliceArg), v: T) {
+        let view: Array<T, { N - 1 }> = self.select([Ax::At(i.0), Ax::Others, Ax::Span(i.2)]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(isize, Rest, SliceArg), Array<T, { N - 1 }>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (isize, Rest, SliceArg), v: Array<T, { N - 1 }>) {
+        let view: Array<T, { N - 1 }> = self.select([Ax::At(i.0), Ax::Others, Ax::Span(i.2)]);
+        view.assign(v);
+    }
+}
+
+/// `a[a:b, i, i]`.
+impl<T, const N: usize> Index<(SliceArg, isize, isize)> for Array<T, N> {
+    type Output = Array<T, { N - 2 }>;
+    #[track_caller]
+    fn index(self, i: (SliceArg, isize, isize)) -> Array<T, { N - 2 }> { self.select([Ax::Span(i.0), Ax::At(i.1), Ax::At(i.2)]) }
+}
+
+impl<T, const N: usize> IndexSet<(SliceArg, isize, isize), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (SliceArg, isize, isize), v: T) {
+        let view: Array<T, { N - 2 }> = self.select([Ax::Span(i.0), Ax::At(i.1), Ax::At(i.2)]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(SliceArg, isize, isize), Array<T, { N - 2 }>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (SliceArg, isize, isize), v: Array<T, { N - 2 }>) {
+        let view: Array<T, { N - 2 }> = self.select([Ax::Span(i.0), Ax::At(i.1), Ax::At(i.2)]);
+        view.assign(v);
+    }
+}
+
+/// `a[a:b, i, a:b]`.
+impl<T, const N: usize> Index<(SliceArg, isize, SliceArg)> for Array<T, N> {
+    type Output = Array<T, { N - 1 }>;
+    #[track_caller]
+    fn index(self, i: (SliceArg, isize, SliceArg)) -> Array<T, { N - 1 }> { self.select([Ax::Span(i.0), Ax::At(i.1), Ax::Span(i.2)]) }
+}
+
+impl<T, const N: usize> IndexSet<(SliceArg, isize, SliceArg), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (SliceArg, isize, SliceArg), v: T) {
+        let view: Array<T, { N - 1 }> = self.select([Ax::Span(i.0), Ax::At(i.1), Ax::Span(i.2)]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(SliceArg, isize, SliceArg), Array<T, { N - 1 }>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (SliceArg, isize, SliceArg), v: Array<T, { N - 1 }>) {
+        let view: Array<T, { N - 1 }> = self.select([Ax::Span(i.0), Ax::At(i.1), Ax::Span(i.2)]);
+        view.assign(v);
+    }
+}
+
+/// `a[a:b, i, ..]`.
+impl<T, const N: usize> Index<(SliceArg, isize, Rest)> for Array<T, N> {
+    type Output = Array<T, { N - 1 }>;
+    #[track_caller]
+    fn index(self, i: (SliceArg, isize, Rest)) -> Array<T, { N - 1 }> { self.select([Ax::Span(i.0), Ax::At(i.1), Ax::Others]) }
+}
+
+impl<T, const N: usize> IndexSet<(SliceArg, isize, Rest), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (SliceArg, isize, Rest), v: T) {
+        let view: Array<T, { N - 1 }> = self.select([Ax::Span(i.0), Ax::At(i.1), Ax::Others]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(SliceArg, isize, Rest), Array<T, { N - 1 }>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (SliceArg, isize, Rest), v: Array<T, { N - 1 }>) {
+        let view: Array<T, { N - 1 }> = self.select([Ax::Span(i.0), Ax::At(i.1), Ax::Others]);
+        view.assign(v);
+    }
+}
+
+/// `a[a:b, a:b, i]`.
+impl<T, const N: usize> Index<(SliceArg, SliceArg, isize)> for Array<T, N> {
+    type Output = Array<T, { N - 1 }>;
+    #[track_caller]
+    fn index(self, i: (SliceArg, SliceArg, isize)) -> Array<T, { N - 1 }> { self.select([Ax::Span(i.0), Ax::Span(i.1), Ax::At(i.2)]) }
+}
+
+impl<T, const N: usize> IndexSet<(SliceArg, SliceArg, isize), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (SliceArg, SliceArg, isize), v: T) {
+        let view: Array<T, { N - 1 }> = self.select([Ax::Span(i.0), Ax::Span(i.1), Ax::At(i.2)]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(SliceArg, SliceArg, isize), Array<T, { N - 1 }>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (SliceArg, SliceArg, isize), v: Array<T, { N - 1 }>) {
+        let view: Array<T, { N - 1 }> = self.select([Ax::Span(i.0), Ax::Span(i.1), Ax::At(i.2)]);
+        view.assign(v);
+    }
+}
+
+/// `a[a:b, a:b, a:b]`.
+impl<T, const N: usize> Index<(SliceArg, SliceArg, SliceArg)> for Array<T, N> {
+    type Output = Array<T, N>;
+    #[track_caller]
+    fn index(self, i: (SliceArg, SliceArg, SliceArg)) -> Array<T, N> { self.select([Ax::Span(i.0), Ax::Span(i.1), Ax::Span(i.2)]) }
+}
+
+impl<T, const N: usize> IndexSet<(SliceArg, SliceArg, SliceArg), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (SliceArg, SliceArg, SliceArg), v: T) {
+        let view: Array<T, N> = self.select([Ax::Span(i.0), Ax::Span(i.1), Ax::Span(i.2)]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(SliceArg, SliceArg, SliceArg), Array<T, N>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (SliceArg, SliceArg, SliceArg), v: Array<T, N>) {
+        let view: Array<T, N> = self.select([Ax::Span(i.0), Ax::Span(i.1), Ax::Span(i.2)]);
+        view.assign(v);
+    }
+}
+
+/// `a[a:b, a:b, ..]`.
+impl<T, const N: usize> Index<(SliceArg, SliceArg, Rest)> for Array<T, N> {
+    type Output = Array<T, N>;
+    #[track_caller]
+    fn index(self, i: (SliceArg, SliceArg, Rest)) -> Array<T, N> { self.select([Ax::Span(i.0), Ax::Span(i.1), Ax::Others]) }
+}
+
+impl<T, const N: usize> IndexSet<(SliceArg, SliceArg, Rest), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (SliceArg, SliceArg, Rest), v: T) {
+        let view: Array<T, N> = self.select([Ax::Span(i.0), Ax::Span(i.1), Ax::Others]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(SliceArg, SliceArg, Rest), Array<T, N>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (SliceArg, SliceArg, Rest), v: Array<T, N>) {
+        let view: Array<T, N> = self.select([Ax::Span(i.0), Ax::Span(i.1), Ax::Others]);
+        view.assign(v);
+    }
+}
+
+/// `a[a:b, .., i]`.
+impl<T, const N: usize> Index<(SliceArg, Rest, isize)> for Array<T, N> {
+    type Output = Array<T, { N - 1 }>;
+    #[track_caller]
+    fn index(self, i: (SliceArg, Rest, isize)) -> Array<T, { N - 1 }> { self.select([Ax::Span(i.0), Ax::Others, Ax::At(i.2)]) }
+}
+
+impl<T, const N: usize> IndexSet<(SliceArg, Rest, isize), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (SliceArg, Rest, isize), v: T) {
+        let view: Array<T, { N - 1 }> = self.select([Ax::Span(i.0), Ax::Others, Ax::At(i.2)]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(SliceArg, Rest, isize), Array<T, { N - 1 }>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (SliceArg, Rest, isize), v: Array<T, { N - 1 }>) {
+        let view: Array<T, { N - 1 }> = self.select([Ax::Span(i.0), Ax::Others, Ax::At(i.2)]);
+        view.assign(v);
+    }
+}
+
+/// `a[a:b, .., a:b]`.
+impl<T, const N: usize> Index<(SliceArg, Rest, SliceArg)> for Array<T, N> {
+    type Output = Array<T, N>;
+    #[track_caller]
+    fn index(self, i: (SliceArg, Rest, SliceArg)) -> Array<T, N> { self.select([Ax::Span(i.0), Ax::Others, Ax::Span(i.2)]) }
+}
+
+impl<T, const N: usize> IndexSet<(SliceArg, Rest, SliceArg), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (SliceArg, Rest, SliceArg), v: T) {
+        let view: Array<T, N> = self.select([Ax::Span(i.0), Ax::Others, Ax::Span(i.2)]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(SliceArg, Rest, SliceArg), Array<T, N>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (SliceArg, Rest, SliceArg), v: Array<T, N>) {
+        let view: Array<T, N> = self.select([Ax::Span(i.0), Ax::Others, Ax::Span(i.2)]);
+        view.assign(v);
+    }
+}
+
+/// `a[.., i, i]`.
+impl<T, const N: usize> Index<(Rest, isize, isize)> for Array<T, N> {
+    type Output = Array<T, { N - 2 }>;
+    #[track_caller]
+    fn index(self, i: (Rest, isize, isize)) -> Array<T, { N - 2 }> { self.select([Ax::Others, Ax::At(i.1), Ax::At(i.2)]) }
+}
+
+impl<T, const N: usize> IndexSet<(Rest, isize, isize), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (Rest, isize, isize), v: T) {
+        let view: Array<T, { N - 2 }> = self.select([Ax::Others, Ax::At(i.1), Ax::At(i.2)]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(Rest, isize, isize), Array<T, { N - 2 }>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (Rest, isize, isize), v: Array<T, { N - 2 }>) {
+        let view: Array<T, { N - 2 }> = self.select([Ax::Others, Ax::At(i.1), Ax::At(i.2)]);
+        view.assign(v);
+    }
+}
+
+/// `a[.., i, a:b]`.
+impl<T, const N: usize> Index<(Rest, isize, SliceArg)> for Array<T, N> {
+    type Output = Array<T, { N - 1 }>;
+    #[track_caller]
+    fn index(self, i: (Rest, isize, SliceArg)) -> Array<T, { N - 1 }> { self.select([Ax::Others, Ax::At(i.1), Ax::Span(i.2)]) }
+}
+
+impl<T, const N: usize> IndexSet<(Rest, isize, SliceArg), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (Rest, isize, SliceArg), v: T) {
+        let view: Array<T, { N - 1 }> = self.select([Ax::Others, Ax::At(i.1), Ax::Span(i.2)]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(Rest, isize, SliceArg), Array<T, { N - 1 }>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (Rest, isize, SliceArg), v: Array<T, { N - 1 }>) {
+        let view: Array<T, { N - 1 }> = self.select([Ax::Others, Ax::At(i.1), Ax::Span(i.2)]);
+        view.assign(v);
+    }
+}
+
+/// `a[.., a:b, i]`.
+impl<T, const N: usize> Index<(Rest, SliceArg, isize)> for Array<T, N> {
+    type Output = Array<T, { N - 1 }>;
+    #[track_caller]
+    fn index(self, i: (Rest, SliceArg, isize)) -> Array<T, { N - 1 }> { self.select([Ax::Others, Ax::Span(i.1), Ax::At(i.2)]) }
+}
+
+impl<T, const N: usize> IndexSet<(Rest, SliceArg, isize), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (Rest, SliceArg, isize), v: T) {
+        let view: Array<T, { N - 1 }> = self.select([Ax::Others, Ax::Span(i.1), Ax::At(i.2)]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(Rest, SliceArg, isize), Array<T, { N - 1 }>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (Rest, SliceArg, isize), v: Array<T, { N - 1 }>) {
+        let view: Array<T, { N - 1 }> = self.select([Ax::Others, Ax::Span(i.1), Ax::At(i.2)]);
+        view.assign(v);
+    }
+}
+
+/// `a[.., a:b, a:b]`.
+impl<T, const N: usize> Index<(Rest, SliceArg, SliceArg)> for Array<T, N> {
+    type Output = Array<T, N>;
+    #[track_caller]
+    fn index(self, i: (Rest, SliceArg, SliceArg)) -> Array<T, N> { self.select([Ax::Others, Ax::Span(i.1), Ax::Span(i.2)]) }
+}
+
+impl<T, const N: usize> IndexSet<(Rest, SliceArg, SliceArg), T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (Rest, SliceArg, SliceArg), v: T) {
+        let view: Array<T, N> = self.select([Ax::Others, Ax::Span(i.1), Ax::Span(i.2)]);
+        view.fill(v);
+    }
+}
+
+impl<T, const N: usize> IndexSet<(Rest, SliceArg, SliceArg), Array<T, N>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, i: (Rest, SliceArg, SliceArg), v: Array<T, N>) {
+        let view: Array<T, N> = self.select([Ax::Others, Ax::Span(i.1), Ax::Span(i.2)]);
+        view.assign(v);
+    }
+}
+
+/// `a[i]`: the element.
+impl<T> Index<isize> for Array<T, 1> {
+    type Output = T;
+    #[track_caller]
+    fn index(self, i: isize) -> T { self.elem_at([i]) }
+}
+
+impl<T> IndexSet<isize, T> for Array<T, 1> {
+    #[track_caller]
+    fn index_set(self, i: isize, v: T) { self.elem_set([i], v); }
+}
+
+/// `a[i]` on rank 2: a view of rank 1.
+impl<T> Index<isize> for Array<T, 2> {
+    type Output = Array<T, 1>;
+    #[track_caller]
+    fn index(self, i: isize) -> Array<T, 1> { self.select([Ax::At(i)]) }
+}
+
+impl<T> IndexSet<isize, T> for Array<T, 2> {
+    #[track_caller]
+    fn index_set(self, i: isize, v: T) {
+        let view: Array<T, 1> = self.select([Ax::At(i)]);
+        view.fill(v);
+    }
+}
+
+impl<T> IndexSet<isize, Array<T, 1>> for Array<T, 2> {
+    #[track_caller]
+    fn index_set(self, i: isize, v: Array<T, 1>) {
+        let view: Array<T, 1> = self.select([Ax::At(i)]);
+        view.assign(v);
+    }
+}
+
+/// `a[i]` on rank 3: a view of rank 2.
+impl<T> Index<isize> for Array<T, 3> {
+    type Output = Array<T, 2>;
+    #[track_caller]
+    fn index(self, i: isize) -> Array<T, 2> { self.select([Ax::At(i)]) }
+}
+
+impl<T> IndexSet<isize, T> for Array<T, 3> {
+    #[track_caller]
+    fn index_set(self, i: isize, v: T) {
+        let view: Array<T, 2> = self.select([Ax::At(i)]);
+        view.fill(v);
+    }
+}
+
+impl<T> IndexSet<isize, Array<T, 2>> for Array<T, 3> {
+    #[track_caller]
+    fn index_set(self, i: isize, v: Array<T, 2>) {
+        let view: Array<T, 2> = self.select([Ax::At(i)]);
+        view.assign(v);
+    }
+}
+
+/// `a[i]` on rank 4: a view of rank 3.
+impl<T> Index<isize> for Array<T, 4> {
+    type Output = Array<T, 3>;
+    #[track_caller]
+    fn index(self, i: isize) -> Array<T, 3> { self.select([Ax::At(i)]) }
+}
+
+impl<T> IndexSet<isize, T> for Array<T, 4> {
+    #[track_caller]
+    fn index_set(self, i: isize, v: T) {
+        let view: Array<T, 3> = self.select([Ax::At(i)]);
+        view.fill(v);
+    }
+}
+
+impl<T> IndexSet<isize, Array<T, 3>> for Array<T, 4> {
+    #[track_caller]
+    fn index_set(self, i: isize, v: Array<T, 3>) {
+        let view: Array<T, 3> = self.select([Ax::At(i)]);
+        view.assign(v);
+    }
+}
+
+/// `a[i, i]`: the element.
+impl<T> Index<(isize, isize)> for Array<T, 2> {
+    type Output = T;
+    #[track_caller]
+    fn index(self, i: (isize, isize)) -> T { self.elem_at([i.0, i.1]) }
+}
+
+impl<T> IndexSet<(isize, isize), T> for Array<T, 2> {
+    #[track_caller]
+    fn index_set(self, i: (isize, isize), v: T) { self.elem_set([i.0, i.1], v); }
+}
+
+/// `a[i, i]` on rank 3: a view of rank 1.
+impl<T> Index<(isize, isize)> for Array<T, 3> {
+    type Output = Array<T, 1>;
+    #[track_caller]
+    fn index(self, i: (isize, isize)) -> Array<T, 1> { self.select([Ax::At(i.0), Ax::At(i.1)]) }
+}
+
+impl<T> IndexSet<(isize, isize), T> for Array<T, 3> {
+    #[track_caller]
+    fn index_set(self, i: (isize, isize), v: T) {
+        let view: Array<T, 1> = self.select([Ax::At(i.0), Ax::At(i.1)]);
+        view.fill(v);
+    }
+}
+
+impl<T> IndexSet<(isize, isize), Array<T, 1>> for Array<T, 3> {
+    #[track_caller]
+    fn index_set(self, i: (isize, isize), v: Array<T, 1>) {
+        let view: Array<T, 1> = self.select([Ax::At(i.0), Ax::At(i.1)]);
+        view.assign(v);
+    }
+}
+
+/// `a[i, i]` on rank 4: a view of rank 2.
+impl<T> Index<(isize, isize)> for Array<T, 4> {
+    type Output = Array<T, 2>;
+    #[track_caller]
+    fn index(self, i: (isize, isize)) -> Array<T, 2> { self.select([Ax::At(i.0), Ax::At(i.1)]) }
+}
+
+impl<T> IndexSet<(isize, isize), T> for Array<T, 4> {
+    #[track_caller]
+    fn index_set(self, i: (isize, isize), v: T) {
+        let view: Array<T, 2> = self.select([Ax::At(i.0), Ax::At(i.1)]);
+        view.fill(v);
+    }
+}
+
+impl<T> IndexSet<(isize, isize), Array<T, 2>> for Array<T, 4> {
+    #[track_caller]
+    fn index_set(self, i: (isize, isize), v: Array<T, 2>) {
+        let view: Array<T, 2> = self.select([Ax::At(i.0), Ax::At(i.1)]);
+        view.assign(v);
+    }
+}
+
+/// `a[i, i, i]`: the element.
+impl<T> Index<(isize, isize, isize)> for Array<T, 3> {
+    type Output = T;
+    #[track_caller]
+    fn index(self, i: (isize, isize, isize)) -> T { self.elem_at([i.0, i.1, i.2]) }
+}
+
+impl<T> IndexSet<(isize, isize, isize), T> for Array<T, 3> {
+    #[track_caller]
+    fn index_set(self, i: (isize, isize, isize), v: T) { self.elem_set([i.0, i.1, i.2], v); }
+}
+
+/// `a[i, i, i]` on rank 4: a view of rank 1.
+impl<T> Index<(isize, isize, isize)> for Array<T, 4> {
+    type Output = Array<T, 1>;
+    #[track_caller]
+    fn index(self, i: (isize, isize, isize)) -> Array<T, 1> { self.select([Ax::At(i.0), Ax::At(i.1), Ax::At(i.2)]) }
+}
+
+impl<T> IndexSet<(isize, isize, isize), T> for Array<T, 4> {
+    #[track_caller]
+    fn index_set(self, i: (isize, isize, isize), v: T) {
+        let view: Array<T, 1> = self.select([Ax::At(i.0), Ax::At(i.1), Ax::At(i.2)]);
+        view.fill(v);
+    }
+}
+
+impl<T> IndexSet<(isize, isize, isize), Array<T, 1>> for Array<T, 4> {
+    #[track_caller]
+    fn index_set(self, i: (isize, isize, isize), v: Array<T, 1>) {
+        let view: Array<T, 1> = self.select([Ax::At(i.0), Ax::At(i.1), Ax::At(i.2)]);
+        view.assign(v);
+    }
+}
+
+/// `a[i, i, i, i]`: the element.
+impl<T> Index<(isize, isize, isize, isize)> for Array<T, 4> {
+    type Output = T;
+    #[track_caller]
+    fn index(self, i: (isize, isize, isize, isize)) -> T { self.elem_at([i.0, i.1, i.2, i.3]) }
+}
+
+impl<T> IndexSet<(isize, isize, isize, isize), T> for Array<T, 4> {
+    #[track_caller]
+    fn index_set(self, i: (isize, isize, isize, isize), v: T) { self.elem_set([i.0, i.1, i.2, i.3], v); }
+}
+
+/// `a[mask]`: the elements where the same-shape `mask` is `true`, a
+/// rank-1 copy.
+impl<T, const N: usize> Index<Array<bool, N>> for Array<T, N> {
+    type Output = Array<T, 1>;
+    #[track_caller]
+    fn index(self, mask: Array<bool, N>) -> Array<T, 1> { self.masked(mask) }
+}
+
+impl<T, const N: usize> IndexSet<Array<bool, N>, T> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, mask: Array<bool, N>, v: T) { self.fill_masked(mask, v); }
+}
+
+impl<T, const N: usize> IndexSet<Array<bool, N>, Array<T, 1>> for Array<T, N> {
+    #[track_caller]
+    fn index_set(self, mask: Array<bool, N>, v: Array<T, 1>) { self.assign_masked(mask, v); }
+}

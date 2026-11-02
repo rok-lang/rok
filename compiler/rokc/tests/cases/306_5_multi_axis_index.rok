@@ -1,0 +1,27 @@
+// expect-exit: 0
+// expect-stdout:
+// [10, 11, 12, 13] [10, 11, 12, 13] 23
+// 21 [2, 12, 22]
+// [[21, 23], [11, 13], [1, 3]]
+// [0, 10, 20] [3, 1, 4] [1, 3, 4] [3, 4, 1]
+// [12, 13] [[11, 12], [21, 22]]
+// [11, 21] 13
+
+// Each comma-separated part of a bracket is one axis argument: a
+// position (negative from the end, any integer type), a slice `a:b:k`,
+// `..` for the axes the others leave, `none` for a new axis of length 1.
+use rok::core::array::Array;
+
+fn main() {
+    let a: Array<i64, 2> = Array::from_fn([3, 4], |i: [usize; 2]| -> i64 { (i[0] * 10 + i[1]) as i64 });
+    println(f"{a[1, :]:?} {a[1]:?} {a[-1, -1]}");
+    let u: usize = 2;
+    let k: i32 = 1;
+    println(f"{a[u, k]} {a[:, u]:?}");
+    println(f"{a[::-1, 1::2]:?}");
+    println(f"{a[.., 0]:?} {a[:, none].shape():?} {a[none].shape():?} {a[.., none].shape():?}");
+    println(f"{a[1, 2:]:?} {a[1:, 1:3]:?}");
+    // A view of a view.
+    let v = a[1:, 1:];
+    println(f"{v[:, 0]:?} {v[0, -1]}");
+}

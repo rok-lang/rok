@@ -805,6 +805,25 @@ codes! {
      either. Rename the method's parameter (`fn f<K2>`), or drop it and use the impl's. A \
      trait's default method is not written in the impl, so its parameters shadow the \
      impl's without an error.";
+
+    143 RAGGED_ARRAY_LITERAL Type "rows of an array literal differ in length"
+    "A nested list literal in an `Array<T, N>` slot builds an array of rank `N`: every \
+     row at one depth must have the same length, since the result is a rectangle \
+     (`[[1, 2], [3, 4]]` is 2 x 2). Make the rows the same length, keep a ragged \
+     structure as a `List<List<T>>`, or give the slot the rank the nesting has.";
+
+    144 ONE_AXIS_INDEX Type "multi-axis index on a type indexed along one axis"
+    "An index with several parts and a slice among them (`m[1:, 0]`) gives one argument \
+     per axis. `List`, `Slice`, fixed arrays and `str` have one axis, so they take one \
+     part. Slice and index in separate brackets (`m[1:][0]`), or keep the data in an \
+     `Array<T, N>` (`rok::core::array::Array`), which takes axis arguments. A type of \
+     your own takes them by implementing `Index` over a tuple of `isize` and \
+     `rok::core::index::SliceArg`.";
+
+    145 NEGATIVE_INT_POWER Type "integer raised to a negative power"
+    "`b ** e` on an integer base gives an integer, so the exponent is a `u32`: `2 ** -1` \
+     would be `0.5`, which no integer holds. Raise a float (`2.0 ** -1.0`, or \
+     `x as f64 ** -1.0`), or keep the exponent non-negative.";
 }
 
 #[cfg(test)]

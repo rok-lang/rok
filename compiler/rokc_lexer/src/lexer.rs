@@ -276,7 +276,7 @@ impl<'src> Lexer<'src> {
             b'~' => self.single(TokenKind::Tilde),
             b'+' => self.lex_op2(b'=', TokenKind::PlusEq, TokenKind::Plus),
             b'-' => self.lex_minus(),
-            b'*' => self.lex_op2(b'=', TokenKind::StarEq, TokenKind::Star),
+            b'*' => self.lex_star(),
             b'/' => self.lex_op2(b'=', TokenKind::SlashEq, TokenKind::Slash),
             b'%' => self.lex_percent(),
             b'^' => self.lex_op2(b'=', TokenKind::CaretEq, TokenKind::Caret),
@@ -426,6 +426,25 @@ impl<'src> Lexer<'src> {
         }
     }
 
+    fn lex_star(&mut self) -> TokenKind {
+        // `**=` > `**` > `*=` > `*` (longest match).
+        match (self.bytes.get(self.pos + 1), self.bytes.get(self.pos + 2)) {
+            (Some(b'*'), Some(b'=')) => {
+                self.advance(3);
+                TokenKind::StarStarEq
+            }
+            (Some(b'*'), _) => {
+                self.advance(2);
+                TokenKind::StarStar
+            }
+            (Some(b'='), _) => {
+                self.advance(2);
+                TokenKind::StarEq
+            }
+            _ => self.single(TokenKind::Star),
+        }
+    }
+
     fn lex_percent(&mut self) -> TokenKind {
         // `%%=` > `%%` > `%=` > `%` (longest match).
         match (self.bytes.get(self.pos + 1), self.bytes.get(self.pos + 2)) {
@@ -567,6 +586,7 @@ impl<'src> Lexer<'src> {
             (b'|', Some(b'|')) => (3, TokenKind::DotPipePipe),
             (b'+', _) => (2, TokenKind::DotPlus),
             (b'-', _) => (2, TokenKind::DotMinus),
+            (b'*', Some(b'*')) => (3, TokenKind::DotStarStar),
             (b'*', _) => (2, TokenKind::DotStar),
             (b'/', _) => (2, TokenKind::DotSlash),
             (b'%', _) => (2, TokenKind::DotPercent),
@@ -1884,7 +1904,7 @@ mod tests {
         let x = || T::Ident("x".into());
         let op = |s: &str| T::ExtOp(s.into());
         assert_eq!(ops("x<-x", &["<-"]), [x(), op("<-"), x(), T::Eof]);
-        assert_eq!(ops("x**x", &["**"]), [x(), op("**"), x(), T::Eof]);
+        assert_eq!(ops("x*^x", &["*^"]), [x(), op("*^"), x(), T::Eof]);
         // The fixed token is as long or longer: it stays.
         assert_eq!(ops("x<=x", &["<"]), [x(), T::LtEq, x(), T::Eof]);
         assert_eq!(ops("x<<=x", &["<<"]), [x(), T::ShlEq, x(), T::Eof]);

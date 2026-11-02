@@ -1,0 +1,35 @@
+// expect-exit: 0
+// expect-stdout:
+// [[0.5, 7.0, 8.0, 3.0], [0.5, 11.0, 12.0, 13.0], [0.5, 21.0, 22.0, 23.0]]
+// [[0.5, 7.0, 8.0, 3.0], [0.5, 11.0, 12.0, 13.0], [0.5, -1.0, -1.0, -1.0]]
+// [1, 0, 0, 4, 5] [9, 0, 9, 4, 9]
+// [1, 9, 8, 4, 5] [1, 9, 8, 4, 5]
+// [[1, 2], [1, 2]]
+
+// `a[sel] = v` stores through the selection: a scalar fills it, an array
+// of its shape (or one that stretches to it) copies in. On a `List`,
+// `xs[a:b] = ys` copies a run of the same length.
+use rok::core::array::Array;
+
+fn main() {
+    let a: Array<f64, 2> = Array::from_fn([3, 4], |i: [usize; 2]| -> f64 { (i[0] * 10 + i[1]) as f64 });
+    a[:, 0] = 0.5;
+    a[0, 1:3] = Array::from_list([7.0, 8.0], [2]);
+    println(f"{a:?}");
+    a[a .> 20.0] = -1.0;
+    println(f"{a:?}");
+    let v: Array<i64, 1> = [1, 2, 3, 4, 5];
+    let w = v.copy();
+    v[1:3] = 0;
+    w[::2] = 9;
+    w[1] = 0;
+    println(f"{v:?} {w:?}");
+    let xs = [1, 2, 3, 4, 5];
+    let ys = xs;
+    xs[1:3] = [9, 8];
+    println(f"{xs:?} {ys:?}");
+    let m: Array<i64, 2> = Array::zeros([2, 2]);
+    let row: Array<i64, 2> = [[1, 2]];
+    m[:, :] = row;
+    println(f"{m:?}");
+}

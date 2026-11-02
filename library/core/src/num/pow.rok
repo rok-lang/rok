@@ -1,0 +1,150 @@
+// rok::core::num::pow - `**` and `**=` on the primitives. An integer
+// base takes a `u32` exponent (exact, overflow checked like `*`); a
+// float base takes its own float type (`pow`) or an `i32` (`powi`,
+// repeated multiplication).
+
+impl Pow<u32> for i8 {
+    type Output = i8;
+    #[track_caller]
+    const fn pow(self, rhs: u32) -> i8 { self.pow(rhs) }
+}
+
+impl PowAssign<u32> for i8 {
+    #[track_caller]
+    const fn pow_assign(ref self, rhs: u32) { self = self.pow(rhs); }
+}
+
+impl Pow<u32> for i16 {
+    type Output = i16;
+    #[track_caller]
+    const fn pow(self, rhs: u32) -> i16 { self.pow(rhs) }
+}
+
+impl PowAssign<u32> for i16 {
+    #[track_caller]
+    const fn pow_assign(ref self, rhs: u32) { self = self.pow(rhs); }
+}
+
+impl Pow<u32> for i32 {
+    type Output = i32;
+    #[track_caller]
+    const fn pow(self, rhs: u32) -> i32 { self.pow(rhs) }
+}
+
+impl PowAssign<u32> for i32 {
+    #[track_caller]
+    const fn pow_assign(ref self, rhs: u32) { self = self.pow(rhs); }
+}
+
+impl Pow<u32> for i64 {
+    type Output = i64;
+    #[track_caller]
+    const fn pow(self, rhs: u32) -> i64 { self.pow(rhs) }
+}
+
+impl PowAssign<u32> for i64 {
+    #[track_caller]
+    const fn pow_assign(ref self, rhs: u32) { self = self.pow(rhs); }
+}
+
+impl Pow<u32> for isize {
+    type Output = isize;
+    #[track_caller]
+    const fn pow(self, rhs: u32) -> isize { self.pow(rhs) }
+}
+
+impl PowAssign<u32> for isize {
+    #[track_caller]
+    const fn pow_assign(ref self, rhs: u32) { self = self.pow(rhs); }
+}
+
+impl Pow<u32> for u8 {
+    type Output = u8;
+    #[track_caller]
+    const fn pow(self, rhs: u32) -> u8 { self.pow(rhs) }
+}
+
+impl PowAssign<u32> for u8 {
+    #[track_caller]
+    const fn pow_assign(ref self, rhs: u32) { self = self.pow(rhs); }
+}
+
+impl Pow<u32> for u16 {
+    type Output = u16;
+    #[track_caller]
+    const fn pow(self, rhs: u32) -> u16 { self.pow(rhs) }
+}
+
+impl PowAssign<u32> for u16 {
+    #[track_caller]
+    const fn pow_assign(ref self, rhs: u32) { self = self.pow(rhs); }
+}
+
+impl Pow<u32> for u32 {
+    type Output = u32;
+    #[track_caller]
+    const fn pow(self, rhs: u32) -> u32 { self.pow(rhs) }
+}
+
+impl PowAssign<u32> for u32 {
+    #[track_caller]
+    const fn pow_assign(ref self, rhs: u32) { self = self.pow(rhs); }
+}
+
+impl Pow<u32> for u64 {
+    type Output = u64;
+    #[track_caller]
+    const fn pow(self, rhs: u32) -> u64 { self.pow(rhs) }
+}
+
+impl PowAssign<u32> for u64 {
+    #[track_caller]
+    const fn pow_assign(ref self, rhs: u32) { self = self.pow(rhs); }
+}
+
+impl Pow<u32> for usize {
+    type Output = usize;
+    #[track_caller]
+    const fn pow(self, rhs: u32) -> usize { self.pow(rhs) }
+}
+
+impl PowAssign<u32> for usize {
+    #[track_caller]
+    const fn pow_assign(ref self, rhs: u32) { self = self.pow(rhs); }
+}
+
+impl Pow for f32 {
+    type Output = f32;
+    fn pow(self, rhs: f32) -> f32 { self.pow(rhs) }
+}
+
+impl Pow<i32> for f32 {
+    type Output = f32;
+    fn pow(self, rhs: i32) -> f32 { self.powi(rhs) }
+}
+
+impl PowAssign for f32 {
+    fn pow_assign(ref self, rhs: f32) { self = self.pow(rhs); }
+}
+
+impl PowAssign<i32> for f32 {
+    fn pow_assign(ref self, rhs: i32) { self = self.powi(rhs); }
+}
+
+impl Pow for f64 {
+    type Output = f64;
+    fn pow(self, rhs: f64) -> f64 { self.pow(rhs) }
+}
+
+impl Pow<i32> for f64 {
+    type Output = f64;
+    fn pow(self, rhs: i32) -> f64 { self.powi(rhs) }
+}
+
+impl PowAssign for f64 {
+    fn pow_assign(ref self, rhs: f64) { self = self.pow(rhs); }
+}
+
+impl PowAssign<i32> for f64 {
+    fn pow_assign(ref self, rhs: i32) { self = self.powi(rhs); }
+}

@@ -1,0 +1,12 @@
+// expect-exit: 101
+// expect-stderr: thread 'main' panicked at tests/cases/std_209_14_array_index_panics.rok:11:16:
+// expect-stderr: index 3 out of bounds for axis 1 of length 3
+// expect-stdout: 6
+
+use rok::core::array::Array;
+
+fn main() {
+    let a: Array<i64, 2> = [[1, 2, 3], [4, 5, 6]];
+    println(f"{a[-1, -1]}");
+    println(f"{a[0, 3]}");
+}

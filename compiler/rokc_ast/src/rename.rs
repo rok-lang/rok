@@ -599,6 +599,11 @@ impl Renames {
                     self.expr(x);
                 }
             }
+            ExprKind::AxisSlice { start, end, step } => {
+                for x in [start, end, step].into_iter().flatten() {
+                    self.expr(x);
+                }
+            }
             ExprKind::Range { start, end, .. } => {
                 for x in [start, end].into_iter().flatten() {
                     self.expr(x);

@@ -470,6 +470,29 @@ impl<'a> Parser<'a> {
                 };
                 ExprKind::Index(Box::new(base), Box::new(idx))
             }
+            // The parts of `m[a:b, i]`, each once; the tuple and slice
+            // shapes stay so the index keeps its axis arguments.
+            ExprKind::Tuple(parts) => ExprKind::Tuple(
+                parts
+                    .into_iter()
+                    .map(|p| self.hoist_place(p, temps))
+                    .collect(),
+            ),
+            ExprKind::AxisSlice { start, end, step } => {
+                let mut once =
+                    |x: Option<Box<Expr>>| x.map(|x| Box::new(self.hoist_place(*x, temps)));
+                let (start, end, step) = (once(start), once(end), once(step));
+                ExprKind::AxisSlice { start, end, step }
+            }
+            ExprKind::Range {
+                start: None,
+                end: None,
+                inclusive,
+            } => ExprKind::Range {
+                start: None,
+                end: None,
+                inclusive,
+            },
             other => {
                 let name = self.fresh_destructure_temp();
                 temps.push(Stmt {
@@ -3347,9 +3370,14 @@ impl<'a> Parser<'a> {
             // is the caller's.
             let after_colons = self.peek_next();
             match after_colons {
-                Some(TokenKind::Star | TokenKind::LBrace | TokenKind::Ident(_)) => {
+                Some(
+                    TokenKind::Star | TokenKind::StarStar | TokenKind::LBrace | TokenKind::Ident(_),
+                ) => {
                     self.bump(); // consume `::`
-                    if matches!(self.peek(), TokenKind::Star | TokenKind::LBrace) {
+                    if matches!(
+                        self.peek(),
+                        TokenKind::Star | TokenKind::StarStar | TokenKind::LBrace
+                    ) {
                         break;
                     }
                 }
@@ -3363,16 +3391,13 @@ impl<'a> Parser<'a> {
         };
         // Disambiguate the trailing form.
         let kind = match self.peek().clone() {
-            TokenKind::Star => {
-                self.bump();
-                // `**` is two consecutive Stars - the second `*` follows
-                // immediately when there's no space.
-                let kind = if matches!(self.peek(), TokenKind::Star) {
-                    self.bump();
+            TokenKind::Star | TokenKind::StarStar => {
+                let kind = if matches!(self.peek(), TokenKind::StarStar) {
                     rokc_ast::UseTreeKind::GlobRecursive
                 } else {
                     rokc_ast::UseTreeKind::Glob
                 };
+                self.bump();
                 if matches!(self.peek(), TokenKind::As) {
                     let s = self.peek_span();
                     self.error_help(
@@ -6624,6 +6649,8 @@ impl<'a> Parser<'a> {
             (TokenKind::Plus, Fixity::Infix) => "+".into(),
             (TokenKind::Minus, Fixity::Infix | Fixity::Prefix) => "-".into(),
             (TokenKind::Star, Fixity::Infix) => "*".into(),
+            (TokenKind::StarStar, Fixity::Infix) => "**".into(),
+            (TokenKind::DotStarStar, Fixity::Infix) => ".**".into(),
             (TokenKind::Slash, Fixity::Infix) => "/".into(),
             (TokenKind::Percent, Fixity::Infix) => "%".into(),
             (TokenKind::PercentPercent, Fixity::Infix) => "%%".into(),
@@ -7799,36 +7826,35 @@ impl<'a> Parser<'a> {
                 }
                 TokenKind::LBracket => {
                     self.bump();
-                    // Slicing: `a[start? : end? (: step?)?]`.
-                    if let Some(slice) = self.with_struct_expr(true, |p| p.parse_slice(&expr)) {
-                        expr = slice?;
-                        continue;
-                    }
-                    let (mut indices, _) =
-                        self.with_struct_expr(true, |p| p.expr_list(&TokenKind::RBracket))?;
-                    // `d[k, default: v]`: `k`'s value, `v` when absent.
-                    let default = if indices.len() >= 2
-                        && matches!(self.peek(), TokenKind::Colon)
-                        && matches!(&indices.last().map(|e| &e.kind),
-                            Some(ExprKind::Path(p)) if p.segments.len() == 1
-                                && p.segments[0].name == "default"
-                                && p.segments[0].generics.is_empty())
-                    {
-                        self.bump();
-                        indices.pop();
-                        Some(self.with_struct_expr(true, Self::parse_expr)?)
-                    } else {
-                        None
-                    };
-                    if matches!(self.peek(), TokenKind::Colon | TokenKind::ColonColon) {
-                        self.mixed_index_error();
-                        return None;
-                    }
+                    let (mut indices, default) =
+                        self.with_struct_expr(true, Self::parse_index_parts)?;
                     if indices.is_empty() {
                         let s = self.peek_span();
                         self.error(Code::SYNTAX, s, "expected index expression");
                     }
                     self.expect(&TokenKind::RBracket, "`]`")?;
+                    // A lone slice `a[start? : end? (: step?)?]`.
+                    if indices.len() == 1 && default.is_none() {
+                        if let ExprKind::AxisSlice { .. } = indices[0].kind {
+                            let Some(Expr {
+                                kind: ExprKind::AxisSlice { start, end, step },
+                                ..
+                            }) = indices.pop()
+                            else {
+                                unreachable!()
+                            };
+                            expr = Expr {
+                                span: expr.span,
+                                kind: ExprKind::Slice {
+                                    target: Box::new(expr),
+                                    start,
+                                    end,
+                                    step,
+                                },
+                            };
+                            continue;
+                        }
+                    }
                     // `m[i, j]` is `m[(i, j)]` (`Index<(I, J)>`).
                     let span = expr.span;
                     let idx = if indices.len() == 1 {
@@ -8032,27 +8058,53 @@ impl<'a> Parser<'a> {
         Some(kind)
     }
 
-    /// After `[`: a slice `start? : end? (: step?)? ]` on `target`, or
-    /// `None` (nothing consumed) when the brackets hold a plain index.
-    #[allow(clippy::option_option)] // outer: is a slice; inner: parsed ok
-    fn parse_slice(&mut self, target: &Expr) -> Option<Option<Expr>> {
-        let save = self.pos;
+    /// After `[`, up to (not consuming) `]`: the comma-separated parts of
+    /// an index, each an expression or a slice `start? : end? (: step?)?`
+    /// (`AxisSlice`), and the `v` of a last part `default: v`.
+    fn parse_index_parts(&mut self) -> Option<(Vec<Expr>, Option<Expr>)> {
+        let mut parts = Vec::new();
+        while !matches!(self.peek(), TokenKind::RBracket | TokenKind::Eof) {
+            let part = self.parse_axis_part()?;
+            // `d[k, default: v]`: `k`'s value, `v` when absent.
+            if let ExprKind::AxisSlice {
+                start: Some(s),
+                end: Some(v),
+                step: None,
+            } = &part.kind
+            {
+                let named_default = matches!(&s.kind, ExprKind::Path(p) if p.segments.len() == 1
+                    && p.segments[0].name == "default"
+                    && p.segments[0].generics.is_empty());
+                if named_default && !parts.is_empty() {
+                    return Some((parts, Some((**v).clone())));
+                }
+            }
+            parts.push(part);
+            if !self.eat(&TokenKind::Comma) {
+                break;
+            }
+        }
+        Some((parts, None))
+    }
+
+    /// One part of an index: an expression, or `start? : end? (: step?)?`.
+    fn parse_axis_part(&mut self) -> Option<Expr> {
+        let span = self.peek_span();
         let colon = |p: &Self| matches!(p.peek(), TokenKind::Colon | TokenKind::ColonColon);
         let start = if colon(self) {
             None
         } else {
-            let (saved_diags, n_lifted) = (self.diagnostics.len(), self.lifted.len());
-            let e = self.parse_expr();
-            if e.is_none() || !colon(self) {
-                self.pos = save;
-                self.diagnostics.truncate(saved_diags);
-                self.lifted.truncate(n_lifted);
-                return None;
+            let e = self.parse_expr()?;
+            if !colon(self) {
+                return Some(e);
             }
-            e.map(Box::new)
+            Some(Box::new(e))
         };
         let opt = |p: &mut Self| {
-            if matches!(p.peek(), TokenKind::Colon | TokenKind::RBracket) {
+            if matches!(
+                p.peek(),
+                TokenKind::Colon | TokenKind::RBracket | TokenKind::Comma
+            ) {
                 Some(None)
             } else {
                 p.parse_expr().map(|e| Some(Box::new(e)))
@@ -8063,46 +8115,14 @@ impl<'a> Parser<'a> {
             (None, true)
         } else {
             self.bump(); // `:`
-            let Some(end) = opt(self) else {
-                return Some(None);
-            };
+            let end = opt(self)?;
             (end, self.eat(&TokenKind::Colon))
         };
-        let step = if has_step {
-            let Some(step) = opt(self) else {
-                return Some(None);
-            };
-            step
-        } else {
-            None
-        };
-        if matches!(self.peek(), TokenKind::Comma) {
-            self.mixed_index_error();
-            return Some(None);
-        }
-        if self.expect(&TokenKind::RBracket, "`]`").is_none() {
-            return Some(None);
-        }
-        Some(Some(Expr {
-            span: target.span,
-            kind: ExprKind::Slice {
-                target: Box::new(target.clone()),
-                start,
-                end,
-                step,
-            },
-        }))
-    }
-
-    /// One bracket either indexes (`,`) or slices (`:`).
-    fn mixed_index_error(&mut self) {
-        let s = self.peek_span();
-        self.error(
-            Code::NEEDS_PARENTHESES,
-            s,
-            "one `[..]` cannot both index with `,` and slice with `:`; \
-             slice and index in separate brackets (`m[a:b][c]`)",
-        );
+        let step = if has_step { opt(self)? } else { None };
+        Some(Expr {
+            span: self.to_prev(span),
+            kind: ExprKind::AxisSlice { start, end, step },
+        })
     }
 
     /// `e, e, ...` up to (not consuming) `close`. Returns the items and
@@ -9270,6 +9290,7 @@ const fn compound_assign_op(tok: &rokc_lexer::TokenKind) -> Option<&'static str>
         T::PlusEq => "+",
         T::MinusEq => "-",
         T::StarEq => "*",
+        T::StarStarEq => "**",
         T::SlashEq => "/",
         T::PercentEq => "%",
         T::PercentPercentEq => "%%",

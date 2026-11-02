@@ -1425,6 +1425,9 @@ impl Printer {
                     self.expr(k);
                     self.s(", default: ");
                     self.expr(d);
+                } else if let Some(xs) = axis_parts(i) {
+                    // `m[1:, 0]`: the parts, not a tuple.
+                    self.list(xs, ", ", Self::expr);
                 } else {
                     self.expr(i);
                 }
@@ -1450,6 +1453,19 @@ impl Printer {
                     self.expr(st);
                 }
                 self.s("]");
+            }
+            ExprKind::AxisSlice { start, end, step } => {
+                if let Some(s) = start {
+                    self.expr(s);
+                }
+                self.s(":");
+                if let Some(e) = end {
+                    self.expr(e);
+                }
+                if let Some(st) = step {
+                    self.s(":");
+                    self.expr(st);
+                }
             }
             ExprKind::Range {
                 start,
@@ -1850,4 +1866,18 @@ const fn atomic(e: &Expr) -> bool {
             | ExprKind::StructInit { .. }
             | ExprKind::FString(_)
     )
+}
+
+/// The parts of a multi-part index with a slice among them (`m[1:, 0]`).
+fn axis_parts(i: &Expr) -> Option<&[Expr]> {
+    match &i.kind {
+        ExprKind::Tuple(xs)
+            if xs
+                .iter()
+                .any(|x| matches!(x.kind, ExprKind::AxisSlice { .. })) =>
+        {
+            Some(xs)
+        }
+        _ => None,
+    }
 }

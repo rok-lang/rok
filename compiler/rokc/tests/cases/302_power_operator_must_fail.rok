@@ -1,0 +1,9 @@
+// expect-error: `i32` to a negative power is a fraction, not an integer
+// expect-error: raise a float instead: `2.0 ** -1.0`
+// expect-error: the right operand of `**` expects `u32`, found `i64`
+
+fn main() {
+    let a = 2 ** -1;
+    let e: i64 = 3;
+    let b = 2 ** e;
+}

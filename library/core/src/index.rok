@@ -15,12 +15,13 @@ pub trait Index<I> {
     fn index(self, idx: I) -> Output;
 }
 
-/// `a[i] = v`: `index_set(i, v)`.
+/// `a[i] = v`: `index_set(i, v)`. `V` is a parameter, so one index
+/// may take several kinds of value (`a[:, 0] = 0.0` stores a scalar,
+/// `a[:, 0] = col` a column); the value's type picks the impl.
 #[lang("index_set_trait")]
-pub trait IndexSet<I> {
-    type Value;
+pub trait IndexSet<I, V> {
     /// `self[idx] = value`.
-    fn index_set(self, idx: I, value: Value);
+    fn index_set(self, idx: I, value: V);
 }
 
 /// `a[i:j]` (not `Slice`: that is the view type, and one glob-imported
@@ -165,4 +166,85 @@ pub(pkg) const fn slice_mut<T>(xs: List<T>, r: Range<usize> | none) -> SliceMut<
 const fn py_bound(i: isize, n: isize, lo: isize, hi: isize) -> isize {
     let x = if i < 0 { i + n } else { i };
     if x < lo { lo } else if x > hi { hi } else { x }
+}
+
+/// `a:b:k` as an axis argument of a multi-axis index: `a[1:, ::2]` is
+/// `a[(SliceArg::new(1, none, none), SliceArg::new(none, none, 2))]`.
+/// A part left out is `none`. `indices` applies the rules of a 1-D
+/// slice: negative bounds count from the end, bounds clamp, a negative
+/// step walks backwards, a zero step panics.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[lang("slice_arg_type")]
+pub struct SliceArg {
+    pub start: isize | none;
+    pub stop: isize | none;
+    pub step: isize | none;
+}
+
+impl SliceArg {
+    /// `:`, the whole axis.
+    pub const FULL: SliceArg = SliceArg { start: none, stop: none, step: none };
+
+    /// `start:stop:step`; a part left out is `none`.
+    pub const fn new(start: isize | none, stop: isize | none, step: isize | none) -> SliceArg {
+        SliceArg { start, stop, step }
+    }
+
+    /// `(first, count, step)`: the positions `first`, `first + step`, ..
+    /// (`count` of them) this slice picks from an axis of length `len`.
+    #[track_caller]
+    pub const fn indices(self, len: usize) -> (usize, usize, isize) {
+        let k = self.step ?? 1;
+        let r = slice_range(self.start, self.stop, k, len);
+        let n = r.end - r.start;
+        if n == 0 {
+            return (r.start, 0, k);
+        }
+        // `|k|` without overflow at `isize::MIN`.
+        let by = if k > 0 { k as usize } else { (-(k + 1)) as usize + 1 };
+        let count = (n - 1) / by + 1;
+        if k > 0 {
+            return (r.start, count, k);
+        }
+        (r.end - 1, count, k)
+    }
+}
+
+/// `..` among other axis arguments (`a[.., 0]`): every axis the others
+/// leave, taken whole. At most one per index.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[lang("rest_axis_type")]
+pub struct Rest;
+
+/// `none` as an axis argument (`a[:, none]`): a new axis of length 1.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[lang("new_axis_type")]
+pub struct NewAxis;
+
+/// A type indexed by axes. In `x[..]` on such a type every integer part
+/// is an `isize` position (other integer types convert, a literal is
+/// one), `none` is `NewAxis` and `..` beside other parts is `Rest`, so
+/// one set of `Index` / `IndexSet` impls over `isize` serves every call.
+#[lang("axis_indexed_trait")]
+pub trait AxisIndexed {}
+
+/// An unsigned axis position as `isize`; past `isize::MAX` no axis is
+/// that long, so it is out of bounds.
+#[track_caller]
+#[lang("axis_from_u64_fn")]
+pub(pkg) const fn axis_from_u64(i: u64) -> isize {
+    if i > isize::MAX as u64 {
+        panic(f"index {i} out of bounds");
+    }
+    i as isize
+}
+
+/// A signed axis position as `isize` (narrower on 32-bit targets).
+#[track_caller]
+#[lang("axis_from_i64_fn")]
+pub(pkg) const fn axis_from_i64(i: i64) -> isize {
+    if i > isize::MAX as i64 || i < isize::MIN as i64 {
+        panic(f"index {i} out of bounds");
+    }
+    i as isize
 }

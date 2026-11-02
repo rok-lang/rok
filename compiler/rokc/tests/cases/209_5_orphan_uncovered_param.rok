@@ -1,0 +1,19 @@
+// expect-error: `impl Mul for T`: neither the trait nor the type is defined in this package (orphan rule)
+// expect-error: `impl Add for i32`: neither the trait nor the type is defined in this package (orphan rule)
+
+// A local trait argument counts only when no bare type parameter comes
+// before it: `impl<T> Mul<L> for T` could clash with another package's
+// impl for its own `T`.
+struct L {}
+
+impl<T> ops::Mul<L> for T {
+    type Output = L;
+    fn mul(self, l: L) -> L { l }
+}
+
+impl ops::Add<List<L>> for i32 {
+    type Output = i32;
+    fn add(self, l: List<L>) -> i32 { self }
+}
+
+fn main() {}
