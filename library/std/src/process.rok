@@ -376,6 +376,13 @@ fn close_stdio(s: Stdio, first: IoError | none) -> IoError | none {
     first
 }
 
+/// A `Stdio` not given to a command closes the file it owns.
+impl Close for Stdio {
+    fn close(self) throws (IoError) {
+        if let f: File = file_in(self) { try f.close(); }
+    }
+}
+
 const fn file_in(s: Stdio) -> File | none {
     match s {
         Stdio::File(f) => f,

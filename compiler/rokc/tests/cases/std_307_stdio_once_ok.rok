@@ -1,0 +1,38 @@
+// only-os: macos linux
+// needs: process
+// expect-exit: 0
+// expect-stdout:
+// true true
+// true true true
+// [a]
+
+// A `Stdio` holding no file may go to any number of commands; a command
+// runs again; each command gets its own file; a `Stdio::File` never
+// given to a command is closed.
+use rok::core::io::IoError;
+use rok::std::env;
+use rok::std::fs;
+use rok::std::fs::File;
+use rok::std::path::Path;
+use rok::std::process::{Command, Stdio};
+
+fn sh(script: str) -> Command { Command::new(Path::new("/bin/sh")).args(["-c", script]) }
+
+fn main() throws (IoError) {
+    let s = Stdio::Null;
+    let a = try sh("echo a").stdout(s).status();
+    let b = try sh("echo b").stdout(s).status();
+    println(f"{a.success()} {b.success()}");
+    let c = sh("true");
+    let out = env::temp_dir() / f"rok_stdio_once_{rok::std::process::id()}.txt";
+    let f = try File::create(out);
+    let g = try f.try_clone();
+    let x = try c.status();
+    let y = try sh("echo a").stdout(Stdio::File(f)).status();
+    let z = try c.stdout(Stdio::File(g)).status();
+    println(f"{x.success()} {y.success()} {z.success()}");
+    let unused = Stdio::File(try File::open(out));
+    try unused.close();
+    println(f"[{(try fs::read_to_str(out)).trim()}]");
+    try fs::remove_file(out);
+}
