@@ -1,0 +1,36 @@
+// expect-error: `h` shares the value the `Mutex` protects (`g.get()`) at line 14, and `g`'s `using` block released the lock
+// expect-error: `hs` still holds a value, which was handed to another owner at line 21
+// expect-error: `ks` still holds a value, which was handed to another owner at line 29
+
+// A guard's value carried out of its `using` block by a destructuring
+// assignment or through a `for ref` element.
+static M: Mutex<List<i32>> = Mutex::new([]);
+
+struct K { xs: List<i32>; }
+
+fn tuple_assign() -> List<i32> {
+    let h: List<i32> = [];
+    let n = 0;
+    using g = M.lock() { (h, n) = (g.get(), 1); }
+    h
+}
+
+fn for_ref() -> List<List<i32>> {
+    let hs: List<List<i32>> = [[], []];
+    using g = M.lock() {
+        for ref e in hs { e = g.get(); }
+    }
+    hs
+}
+
+fn for_ref_field() -> List<K> {
+    let ks: List<K> = [K { xs: [] }];
+    using g = M.lock() {
+        for ref k in ks { k.xs = g.get(); }
+    }
+    ks
+}
+
+fn main() {
+    println(f"{tuple_assign().len()} {for_ref().len()} {for_ref_field().len()}");
+}

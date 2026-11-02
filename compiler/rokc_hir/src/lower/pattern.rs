@@ -31,6 +31,17 @@ pub(super) fn lower_match(
         let since = ctx.env.sink.diagnostics.borrow().len();
         let pat = inner_layer_binding(ctx, &arm.pat, &scrut_ty, &arm_h)
             .unwrap_or_else(|| lower_pattern(ctx, &arm.pat, &scrut_ty));
+        if super::mono::writable_place(ctx, &scrut_h) {
+            if let HirPattern::Binding { local, .. }
+            | HirPattern::At { local, .. }
+            | HirPattern::SumVariant {
+                binder: Some(local),
+                ..
+            } = &pat
+            {
+                ctx.arm_bound.insert(*local, scrut_h.clone());
+            }
+        }
         bad_pattern |= ctx.env.sink.diagnostics.borrow()[since..]
             .iter()
             .any(rokc_diagnostic::RokDiagnostic::is_error);

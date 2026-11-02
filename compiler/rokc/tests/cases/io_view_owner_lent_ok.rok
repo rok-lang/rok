@@ -1,0 +1,27 @@
+// needs: fs
+// expect-exit: 0
+// expect-stdout: 3 true true true BufReader
+
+// A call that only reads a stream (a by-value parameter it does not keep,
+// a by-value `self` method, an f-string hole) lends it: its views go on,
+// and the owner still closes it.
+use rok::core::io::{BufRead, BufReader, IoError};
+use rok::std::fs;
+
+fn cap_of(r: BufReader<fs::File>) -> usize { r.capacity() }
+
+fn main() throws (IoError) {
+    let path = rok::std::env::temp_dir() / f"rok_view_lent_{rok::std::process::id()}.txt";
+    try fs::write(path, "a\nb\nc\n");
+    let r = BufReader::new(try fs::open(path));
+    let ls = r.lines();
+    let a = try ls.next();
+    let c1 = cap_of(r);
+    let b = try ls.next();
+    let c2 = r.capacity();
+    let shown = f"{r:?}";
+    let c = try ls.next();
+    try r.close();
+    println(f"{(a ?? "").len() + (b ?? "").len() + (c ?? "").len()} {c1 == c2} {a is str} {c is str} {shown}");
+    try fs::remove_file(path);
+}

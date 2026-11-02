@@ -1,0 +1,21 @@
+// expect-error: no method `try_next` found for type `ReadDirStream`
+// expect-error: no method `collect` found for type `TryAsyncFuture<ReadDirStream, IoError>`
+// forbid-error: `drop`
+// forbid-error: transfer_copy
+// forbid-error: transfer_keep
+
+// A missing method's help lists only methods the caller can call: not
+// `drop` (the compiler calls it), nor a method of a trait the caller can
+// not name.
+use rok::core::task;
+use rok::core::io::IoError;
+use rok::std::fs;
+
+async fn go() throws (IoError) {
+    let rd = try await fs::read_dir_async(".");
+    let x = try await rd.try_next();
+    let f = fs::read_dir_async(".");
+    let y = f.collect();
+}
+
+fn main() throws (IoError) { try task::try_block_on(go()); }

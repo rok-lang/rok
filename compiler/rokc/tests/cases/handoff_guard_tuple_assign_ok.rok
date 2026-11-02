@@ -1,0 +1,14 @@
+// expect-exit: 0
+// expect-stdout: 3 1
+
+// A destructuring assignment inside a `using` block that keeps only
+// copies of what the guard protects.
+static M: Mutex<List<i32>> = Mutex::new([1, 2, 3]);
+
+fn main() {
+    let a = 0usize;
+    let n = 0;
+    let c: List<i32> = [];
+    using g = M.lock() { (a, n, c) = (g.get().len(), 1, g.get().clone()); }
+    println(f"{c.len()} {n}");
+}

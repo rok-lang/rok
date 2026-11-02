@@ -48,12 +48,24 @@ const ITER_METHODS: &[&str] = &[
 /// `#[doc(hidden)]` or `#[internal]` (left out of completion and docs).
 pub(super) fn method_names(ctx: &LowerCtx<'_>, ty: &HirTy) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
+    let drop_trait = ctx.lang("drop_method");
     let user = |name: &str, info: Option<&MethodInfo>, def: Option<&FnDef>| {
-        let hidden_decl = info
-            .and_then(|i| i.trait_name.as_deref())
+        let tr = info.and_then(|i| i.trait_name.as_deref());
+        let hidden_decl = tr
             .and_then(|t| ctx.env.trait_of(t)?.decls.get(name))
             .is_some_and(|d| rokc_ast::doc_hidden(&d.attrs));
+        // A method of a trait the caller cannot name, or `drop` (only the
+        // compiler calls it), is not one to suggest.
+        let callable = tr.is_none_or(|t| {
+            t != drop_trait
+                && ctx
+                    .env
+                    .names
+                    .type_vis(t)
+                    .is_none_or(|v| ctx.is_visible(&module_of(t), v))
+        });
         info.is_none_or(|i| ctx.is_visible(&i.module, i.vis))
+            && callable
             && !hidden_decl
             && def.is_none_or(|d| {
                 !rokc_ast::doc_hidden(&d.attrs)

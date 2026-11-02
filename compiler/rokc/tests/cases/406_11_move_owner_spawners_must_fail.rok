@@ -1,7 +1,7 @@
 // needs: threads
-// expect-error: `a` was spawned as a task at line 27
-// expect-error: `b` was spawned as a task at line 36
-// expect-error: `c` was spawned as a task at line 47
+// expect-error: `a` was given to a `par` job at line 27
+// expect-error: `b` was given to a `par` job at line 36
+// expect-error: `c` was given to a `par` job at line 47
 // expect-error: `d` was spawned as a task at line 56
 // expect-error: `e` was spawned as a task at line 63
 

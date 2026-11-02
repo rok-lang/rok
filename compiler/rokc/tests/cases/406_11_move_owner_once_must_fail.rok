@@ -1,8 +1,8 @@
 // needs: threads
-// expect-error: error[E0134]: `f` was spawned as a task at line 18: it may own values moved into it (`[move ..]`), so it can be handed over only once
-// expect-error: help: the task owns the closure and what it moved in
-// expect-error: 406_11_move_owner_once_must_fail.rok:26:27: `g` was spawned as a task at line 25
-// expect-error: 406_11_move_owner_once_must_fail.rok:34:27: `j.run` was spawned as a task at line 33
+// expect-error: error[E0134]: `f` was given to a thread at line 18: it may own values moved into it (`[move ..]`), so it can be handed over only once
+// expect-error: help: the thread owns the closure and what it moved in
+// expect-error: 406_11_move_owner_once_must_fail.rok:26:27: `g` was given to a thread at line 25
+// expect-error: 406_11_move_owner_once_must_fail.rok:34:27: `j.run` was given to a thread at line 33
 // expect-error: 406_11_move_owner_once_must_fail.rok:40:34: `h` was spawned as a task at line 39
 // expect-error: 406_11_move_owner_once_must_fail.rok:47:18: `k` was spawned as a task at line 47
 

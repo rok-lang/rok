@@ -1157,6 +1157,8 @@ fn lower_for_ref(
 
 /// `for pat in xs` otherwise: `let it = xs.into_iter();
 /// loop { match it.next() { v: T => { let pat = v; body } none => break } }`.
+/// A `TryIterator` in a variable or a field of one has no `into_iter`: it
+/// is stepped in place (`xs.next()`), so the variable keeps its progress.
 /// A generator the loop owns (`owned`) is closed after the loop and on
 /// every exit leaving it: a `finally { it.close() }` that
 /// `continue` and `break` of this loop skip.
@@ -1225,7 +1227,9 @@ pub(super) fn lower_for_iter(
     // An iterator in a variable (or a field of one) stepped directly is
     // stepped in place, as a stream is polled.
     if !has_into_iter && !owned && super::mono::writable_place(ctx, &it_h) {
+        let root = super::mono::place_root(&it_h);
         let next = method_call_on(ctx, it_h, "next", &[], span);
+        let next = write_back_arm(ctx, root, next, span);
         return for_next_loop(ctx, label, pat, next, body, span);
     }
     let close = owned && is_generator(ctx, &it_ty);
@@ -1342,7 +1346,9 @@ fn lower_for_stream(
     // A stream in a variable (or a field of one) is polled in place: a
     // copy would leave the variable's owner with the state before the loop.
     if is_stream && super::mono::writable_place(ctx, &s) {
+        let root = super::mono::place_root(&s);
         let next = super::coro::poll_loop_on(ctx, s, "poll_next", span);
+        let next = write_back_arm(ctx, root, next, span);
         return for_next_loop(ctx, label, pat, next, body, span);
     }
     let ty = s.ty.clone();
@@ -1351,6 +1357,68 @@ fn lower_for_stream(
     out.push(HirStmt::Let { local: st, init: s });
     let next = super::coro::poll_loop(ctx, st, &ty, "poll_next", span);
     for_next_loop(ctx, label, pat, next, body, span)
+}
+
+/// The label of a loop's write-back of a `match` arm's binding.
+pub(super) const ARM_BACK: &str = "#arm_back";
+
+/// `next`, then, when the stepped variable `root` is a `match` arm's
+/// binding of a place, that place takes its new state: the binding names
+/// the place, not a copy of it.
+fn write_back_arm(
+    ctx: &mut LowerCtx<'_>,
+    root: Option<LocalId>,
+    next: HirExpr,
+    span: rokc_diagnostic::Span,
+) -> HirExpr {
+    let mut stmts = Vec::new();
+    let mut cur = root;
+    for _ in 0..8 {
+        let Some((l, place)) = cur.and_then(|l| Some((l, ctx.arm_bound.get(&l)?.clone()))) else {
+            break;
+        };
+        let ty = ctx.local_ty(l);
+        let back = coerce(ctx, &place.ty, hir_local(l, &ty, span), &|| {
+            "the matched place".to_owned()
+        });
+        // Marked for the checks: the place and its binding are one value,
+        // so nothing moves here.
+        let back = HirExpr {
+            ty: back.ty.clone(),
+            span,
+            kind: HirExprKind::Block(Box::new(HirBlock {
+                stmts: Vec::new(),
+                trailing: Some(back),
+                label: Some(ARM_BACK.to_owned()),
+            })),
+        };
+        let Some(st) = super::mono::assign_place(ctx, &place, back) else {
+            break;
+        };
+        stmts.push(st);
+        cur = super::mono::place_root(&place);
+    }
+    if stmts.is_empty() || next.ty == HirTy::Unknown {
+        return next;
+    }
+    let ty = next.ty.clone();
+    let v = ctx.declare(None, ty.clone());
+    stmts.insert(
+        0,
+        HirStmt::Let {
+            local: v,
+            init: next,
+        },
+    );
+    HirExpr {
+        kind: HirExprKind::Block(Box::new(HirBlock {
+            stmts,
+            trailing: Some(hir_local(v, &ty, span)),
+            label: None,
+        })),
+        ty,
+        span,
+    }
 }
 
 /// `loop { match <next> { v: T => { let pat = v; body } none => break } }`

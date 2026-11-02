@@ -3169,6 +3169,9 @@ struct LowerCtx<'a> {
     /// Narrowed rebinding → (original local, its type);
     /// assignments to the rebinding also store into the original.
     narrowed: HashMap<LocalId, (LocalId, HirTy)>,
+    /// A `match` arm's binding of the whole matched place -> that place:
+    /// a loop stepping the binding in place writes it back there.
+    arm_bound: HashMap<LocalId, HirExpr>,
     /// Narrowing of a `[ref]` cell → the read of its rebinding: each read
     /// tests the cell again, as a capture may have changed it.
     cell_views: HashMap<LocalId, HirExpr>,
@@ -3263,6 +3266,7 @@ impl<'a> LowerCtx<'a> {
         }
         self.value_captured.retain(kept);
         self.narrowed.retain(|l, _| kept(l));
+        self.arm_bound.retain(|l, _| kept(l));
         self.cell_views.retain(|l, _| kept(l));
         self.places.retain(|l, _| kept(l));
         self.guard_lets.retain(|g| kept(&g.0));
@@ -3368,6 +3372,7 @@ impl<'a> LowerCtx<'a> {
             throwing_calls: 0,
             next_synth: 0,
             narrowed: HashMap::new(),
+            arm_bound: HashMap::new(),
             cell_views: HashMap::new(),
             places: HashMap::new(),
             unnarrowed: Vec::new(),

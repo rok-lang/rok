@@ -1,0 +1,32 @@
+// needs: threads
+// expect-error: `b.f` was given to a thread at line 20
+// expect-error: help: the thread owns the closure and what it moved in
+// expect-error: `f` was given to a `par` job at line 25
+// expect-error: help: the `par` job owns the closure and what it moved in
+// expect-error: a future of `h` was spawned as a task at line 29
+// expect-error: help: the futures of one `async [move ..]` closure share what it moved in
+
+// A `[move]` closure handed over twice: the error names what took it (a
+// thread, a `par` job, a task), and a second future of an `async [move]`
+// closure gets the futures help.
+use rok::core::task;
+use rok::std::thread;
+
+struct Box2 { f: fn() -> usize + Send; }
+
+fn main() {
+    let xs: List<i32> = [1, 2];
+    let b = Box2 { f: [move xs] || xs.len() };
+    let t1 = thread::spawn(b.f);
+    let t2 = thread::spawn(b.f);
+
+    let ys: List<i32> = [1];
+    let f = [move ys] || { ys.push(1); ys.len() };
+    let (a, c) = par::join(f, f);
+
+    let zs: List<i32> = [1];
+    let h = async [move zs] || { zs.push(1); zs.len() };
+    let u1 = task::spawn(h());
+    let u2 = task::spawn(h());
+    println(f"{try! t1.join()} {try! t2.join()} {a} {c} {task::block_on(u1)} {task::block_on(u2)}");
+}

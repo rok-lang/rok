@@ -1,0 +1,32 @@
+// expect-error: this returns a value out of the `Mutex`, and `g`'s `using` block releases the lock before the caller uses it
+// expect-error: `h.1` came out of the `Mutex` at line 20, and `g`'s `using` block released the lock
+// expect-error: `h.xs` came out of the `Mutex` at line 26, and `g`'s `using` block released the lock
+
+// A guard's value carried out of its `using` block inside a tuple or a
+// struct: destructured, stored into a tuple field, or built into a struct.
+static M: Mutex<List<i32>> = Mutex::new([]);
+
+struct Hold { xs: List<i32>; n: i32; }
+
+fn destructure() -> List<i32> {
+    using g = M.lock() {
+        let (a, b) = (g.get(), 1);
+        return a;
+    }
+}
+
+fn field_assign() -> List<i32> {
+    let h = (0, [1]);
+    using g = M.lock() { h.1 = g.get(); }
+    h.1
+}
+
+fn struct_lit() -> List<i32> {
+    let h = Hold { xs: [], n: 0 };
+    using g = M.lock() { h = Hold { xs: g.get(), n: 1 }; }
+    h.xs
+}
+
+fn main() {
+    println(f"{destructure().len()} {field_assign().len()} {struct_lit().len()}");
+}

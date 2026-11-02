@@ -1,10 +1,10 @@
-//! Use after hand-off is an error. A plain value is a shared handle:
-//! after `Mutex::new(xs)` or `tx.send(xs)`, `xs` still names
-//! an object other threads now share, and a handle taken from a guard
-//! (`g.get()`, `g.set(v)`, `g.update(f)`) is unprotected once its `using`
-//! block ends. Such a handle is a scoped view: it may not be returned,
-//! thrown, yielded or sent out of the block, nor passed to a callee that
-//! keeps it. A `ThreadLocal::with` closure's value is one too, for the
+//! Use after hand-off is an error. A hand-off copies the value at run time:
+//! after `Mutex::new(xs)` or `tx.send(xs)`, `xs` names an object no other
+//! thread uses, so a write through it never reaches the new owner. A handle
+//! taken from a guard (`g.get()`, `g.set(v)`, `g.update(f)`) is unprotected
+//! once its `using` block ends. Such a handle is a scoped view: it may not be
+//! returned, thrown, yielded or sent out of the block, nor passed to a callee
+//! that keeps it. A `ThreadLocal::with` closure's value is one too, for the
 //! closure's body (`VIEW`).
 //!
 //! A forward flow over structured HIR. A place is a local plus a field path
@@ -34,8 +34,9 @@
 //! the result (error, `none`, `false`). An `async` future carries its
 //! body's final tag. Summaries are a call-graph fixpoint and ship in ROKHIR.
 //! A call through a function value may reach any function used as a value
-//! with those parameter types (closed world, as for `any`); `extern` and
-//! intrinsics keep nothing; a `Handoff::new` never leaves its function.
+//! with those parameter types and return type (unless loose; closed world,
+//! as for `any`); `extern` and intrinsics keep nothing; a `Handoff::new`
+//! never leaves its function.
 //! Elements are not told apart by index: copying elements from one buffer
 //! into another takes them to be distinct objects unless the source may hold
 //! one twice.
@@ -104,6 +105,25 @@ impl What {
         ]
         .into_iter()
         .find(|w| w.tag() == s)
+    }
+}
+
+/// What runs a `fn` value handed over as `What::Task`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Runner {
+    Task,
+    Thread,
+    Par,
+}
+
+impl Runner {
+    /// How it took the value, and who owns it now.
+    const fn took(self) -> (&'static str, &'static str) {
+        match self {
+            Self::Task => ("spawned as a task", "the task"),
+            Self::Thread => ("given to a thread", "the thread"),
+            Self::Par => ("given to a `par` job", "the `par` job"),
+        }
     }
 }
 
@@ -297,6 +317,8 @@ struct Why {
     func: String,
     file: String,
     line: u32,
+    /// Inside the standard library: its names are not the user's to see.
+    lib: bool,
 }
 
 /// Why a place is gone.
@@ -1246,12 +1268,13 @@ impl Summary {
         let mut out = String::new();
         for (r, w) in &self.gives {
             out.push_str(&format!(
-                "g\t{}\t{}\t{}\t{}\t{}\n",
+                "g\t{}\t{}\t{}\t{}\t{}\t{}\n",
                 root(r),
                 w.what.tag(),
                 w.line,
                 w.func,
-                w.file
+                w.file,
+                u8::from(w.lib)
             ));
         }
         for e in &self.edges {
@@ -1314,7 +1337,7 @@ impl Summary {
         for line in text.lines() {
             let f: Vec<&str> = line.split('\t').collect();
             match f[..] {
-                ["g", r, what, l, func, file] => {
+                ["g", r, what, l, func, file, lib] => {
                     s.gives.insert(
                         root(r)?,
                         Why {
@@ -1322,6 +1345,7 @@ impl Summary {
                             func: func.to_owned(),
                             file: file.to_owned(),
                             line: l.parse().ok()?,
+                            lib: lib == "1",
                         },
                     );
                 }
@@ -1660,6 +1684,11 @@ struct Checker<'a> {
     /// call: dropped when an error inside the call (a closure's) is the
     /// cause.
     via_at: RefCell<HashMap<(u32, u32), Span>>,
+    /// A call (its span start) that runs `fn` values it is given on a
+    /// thread or as a `par` job, not as a task.
+    runners: RefCell<HashMap<(u32, u32), Runner>>,
+    /// What each call keeps of its arguments, as the affine check sees it.
+    keeps: &'a super::affine::Sums,
 }
 
 impl Checker<'_> {
@@ -1795,6 +1824,15 @@ fn shown_fn(c: &Checker<'_>, f: &HirFunction) -> String {
     leaf.replace('.', "::").replace("__", "::")
 }
 
+/// `f` (or the function it is a closure of) is the standard library's.
+fn in_lib(c: &Checker<'_>, f: &HirFunction) -> bool {
+    let mut f = f;
+    while let Some(p) = c.parent.get(&f.id).and_then(|p| c.fns.get(p)) {
+        f = p;
+    }
+    f.facts.path(&f.name).starts_with("rok::")
+}
+
 /// Check every body; report each use after hand-off. `stored`: the
 /// summaries of prebuilt libraries (ROKHIR); returned: those of this
 /// build's bodies, for its ROKHIR when `export`.
@@ -1802,6 +1840,7 @@ pub(super) fn check(
     env: &Env<'_>,
     functions: &[HirFunction],
     stored: &[(String, String)],
+    keeps: &super::affine::Sums,
     export: bool,
 ) -> Vec<(String, String)> {
     let sync = env.names.lang_item("sync_trait");
@@ -1906,6 +1945,8 @@ pub(super) fn check(
         handed: RefCell::default(),
         fn_owners: RefCell::default(),
         via_at: RefCell::default(),
+        runners: RefCell::default(),
+        keeps,
     };
     let mut c = c;
     c.cands = candidates(&c, &all, stored);
@@ -2289,6 +2330,7 @@ fn walk(c: &Checker<'_>, f: &HirFunction) -> WalkOut {
         calls: Vec::new(),
         scopes: Vec::new(),
         returning: false,
+        thrown: None,
         sends: false,
         uses: BTreeSet::new(),
         sent_from: BTreeSet::new(),
@@ -2413,6 +2455,9 @@ struct Walk<'c, 'h> {
     scopes: Vec<usize>,
     /// Walking a `return`'s value.
     returning: bool,
+    /// The error a `return` being walked throws, when it is a local:
+    /// `throw_escapes` reports it.
+    thrown: Option<LocalId>,
     /// This body may hand something over.
     sends: bool,
     /// Summary facts gathered on the way (`Summary::uses` / `sent_from`),
@@ -2597,7 +2642,10 @@ impl<'h> Walk<'_, 'h> {
         if self.hidden(p.0) {
             // A `return`'s value: `escapes_guard` reports it.
             if let Gone::Guard(site, guard, tie) = g {
-                if matches!(tie, Tie::Taken | Tie::Shared) && !self.returning {
+                if matches!(tie, Tie::Taken | Tie::Shared)
+                    && !self.returning
+                    && self.thrown != Some(p.0)
+                {
                     self.block_value_escapes(site, guard, at);
                 }
             }
@@ -2745,6 +2793,122 @@ impl<'h> Walk<'_, 'h> {
         self.diags.push(d);
     }
 
+    /// A call of `thread::*` or `par::*`: what runs the `fn` values it is
+    /// given, for the errors that name it.
+    fn note_runner(&self, e: &HirExpr) {
+        let HirExprKind::Call { callee, .. } = &e.kind else {
+            return;
+        };
+        let Some(f) = self.c.fns.get(callee) else {
+            return;
+        };
+        let path = f.facts.path(&f.name);
+        let runner = if path.starts_with("rok::std::thread::") {
+            Runner::Thread
+        } else if path.starts_with("rok::core::par::") {
+            Runner::Par
+        } else {
+            return;
+        };
+        self.c
+            .runners
+            .borrow_mut()
+            .insert((e.span.file, e.span.start), runner);
+    }
+
+    /// The help for `who`, handed to a task (or a thread, a `par` job) as
+    /// `written`; `fn_owner`: a `fn` value that may own moved values.
+    fn task_help(
+        &self,
+        what: What,
+        runner: Runner,
+        fn_owner: bool,
+        written: Option<&HirExpr>,
+        who: &str,
+        keep: &str,
+    ) -> String {
+        let future = what == What::Task
+            && written.is_some_and(|e| match &e.ty {
+                HirTy::Struct(id) => {
+                    let name = self.c.ctx.struct_def(*id).name;
+                    name.starts_with("rok::core::future::AsyncFuture")
+                        || name.starts_with("rok::core::future::TryAsyncFuture")
+                }
+                _ => false,
+            });
+        let async_fn = written.is_some_and(|e| self.async_closure(e));
+        if (fn_owner && async_fn)
+            || (future && written.is_some_and(|e| self.reaches_moved_closure(e)))
+        {
+            "help: the futures of one `async [move ..]` closure share what it moved in; await \
+             them here one after another, or make another closure for the other task (moving \
+             in a `.clone()` of what it needs)"
+                .to_owned()
+        } else if fn_owner {
+            format!(
+                "help: {} owns the closure and what it moved in; make another closure here \
+                 (moving in a `.clone()` of what it needs), or, for a `fn` value that moves \
+                 nothing in, write `+ Send + Sync` on its type",
+                runner.took().1
+            )
+        } else if future {
+            format!(
+                "help: the task runs it now; call the async fn again for a second future, or \
+                 give `{who}` a new value before using it again"
+            )
+        } else {
+            format!(
+                "help: the task works on its own copy, so changes it makes are not seen here: \
+                 return them from the task (`await`), {keep}, or share read-only data through \
+                 `Frozen`"
+            )
+        }
+    }
+
+    /// `who` used after `call` (at `site`) handed what it holds over inside
+    /// the standard library, whose names are not the user's to see.
+    fn lib_handoff(&self, who: &str, call: &str, site: Span, at: Span) -> RokDiagnostic {
+        RokDiagnostic::error(
+            Code::USE_AFTER_HANDOFF,
+            at,
+            format!(
+                "`{who}` is used after {call} at {}, which gave what `{who}` holds to another \
+                 owner",
+                self.line(site, at)
+            ),
+        )
+        .with_secondary(site, format!("`{who}` used up here"))
+        .with_note(format!(
+            "help: a call that takes `{who}` by value works on its own copy, so `{who}` here is \
+             left as it was; do the work with `{who}` in one function, or return it from the \
+             function you pass it to and use what it returns"
+        ))
+    }
+
+    /// What runs the `fn` values the call at `site` is given.
+    fn runner(&self, site: Span) -> Runner {
+        self.c
+            .runners
+            .borrow()
+            .get(&(site.file, site.start))
+            .copied()
+            .unwrap_or(Runner::Task)
+    }
+
+    /// `e` is an `async` closure: each call makes a future of its body.
+    fn async_closure(&self, e: &HirExpr) -> bool {
+        let ret = match &e.ty {
+            HirTy::Fn(_, r, _) => &**r,
+            HirTy::Closure { ret, .. } => &**ret,
+            _ => return false,
+        };
+        matches!(ret, HirTy::Struct(id) if {
+            let name = self.c.ctx.struct_def(*id).name;
+            name.starts_with("rok::core::future::AsyncFuture")
+                || name.starts_with("rok::core::future::TryAsyncFuture")
+        })
+    }
+
     /// `g` is a spawn of a `fn` value that may own moved values.
     fn spawned_fn(&self, g: Gone) -> bool {
         matches!(g, Gone::To(site, What::Task)
@@ -2763,9 +2927,10 @@ impl<'h> Walk<'_, 'h> {
         at: Span,
     ) {
         let line = self.line(origin, at);
+        let (took, _) = self.runner(origin).took();
         d.code = Code::USE_AFTER_MOVE;
         d.message = format!(
-            "{handed} was spawned as a task at {line}: it may own values moved into it \
+            "{handed} was {took} at {line}: it may own values moved into it \
              (`[move ..]`), so it can be handed over only once"
         );
         let take = self.take_out(p, x);
@@ -2903,12 +3068,17 @@ impl<'h> Walk<'_, 'h> {
                     .cloned()
                     .unzip();
                 let line = self.line(site, at);
+                let runner = self.runner(site);
                 let (moved, here) = match what {
                     What::Mutex => ("moved into the `Mutex`", "moved into the `Mutex` here"),
                     What::RwLock => ("moved into the `RwLock`", "moved into the `RwLock` here"),
                     What::Channel => ("sent through a channel", "sent here"),
                     What::Handoff => ("handed to a `Handoff`", "handed over here"),
-                    What::Task => ("spawned as a task", "spawned here"),
+                    What::Task => match runner {
+                        Runner::Task => ("spawned as a task", "spawned here"),
+                        Runner::Thread => ("given to a thread", "given to the thread here"),
+                        Runner::Par => ("given to a `par` job", "given to the `par` job here"),
+                    },
                     What::TaskArg => ("handed to a task", "handed to the task here"),
                     What::Closure => ("moved into a closure", "moved into the closure here"),
                 };
@@ -2935,7 +3105,15 @@ impl<'h> Walk<'_, 'h> {
                 let fn_owner = what == What::Task
                     && written
                         .is_some_and(|e| matches!(e.ty, HirTy::Fn(..) | HirTy::Closure { .. }));
-                let diag = if fn_owner {
+                let diag = if fn_owner && written.is_some_and(|e| self.async_closure(e)) {
+                    err(
+                        Code::USE_AFTER_MOVE,
+                        format!(
+                            "a future of `{given}` was spawned as a task at {line}, and every \
+                             future of an `async [move ..]` closure shares what it moved in"
+                        ),
+                    )
+                } else if fn_owner {
                     err(
                         Code::USE_AFTER_MOVE,
                         format!(
@@ -2981,38 +3159,7 @@ impl<'h> Walk<'_, 'h> {
                          using it again"
                     )),
                     What::Task | What::TaskArg => {
-                        let future = what == What::Task && written.is_some_and(|e| match &e.ty {
-                            HirTy::Struct(id) => {
-                                let name = chk.ctx.struct_def(*id).name;
-                                name.starts_with("rok::core::future::AsyncFuture")
-                                    || name.starts_with("rok::core::future::TryAsyncFuture")
-                            }
-                            _ => false,
-                        });
-                        diag.with_note(if fn_owner {
-                            "help: the task owns the closure and what it moved in; make \
-                             another closure here (moving in a `.clone()` of what it needs), \
-                             or, for a `fn` value that moves nothing in, write `+ Send + Sync` \
-                             on its type"
-                                .to_owned()
-                        } else if future && written.is_some_and(|e| self.reaches_moved_closure(e)) {
-                            "help: the futures of one `async [move ..]` closure share what it \
-                             moved in; await them here one after another, or make another \
-                             closure for the other task (moving in a `.clone()` of what it needs)"
-                                .to_owned()
-                        } else if future {
-                            format!(
-                                "help: the task runs it now; call the async fn again for a \
-                                 second future, or give `{who}` a new value before using it \
-                                 again"
-                            )
-                        } else {
-                            format!(
-                                "help: the task works on its own copy, so changes it makes \
-                                 are not seen here: return them from the task (`await`), \
-                                 {keep}, or share read-only data through `Frozen`"
-                            )
-                        })
+                        diag.with_note(self.task_help(what, runner, fn_owner, written, who, &keep))
                     }
                     What::Closure => diag.with_note(format!(
                         "help: the closure owns it now; use it inside the closure, capture it \
@@ -3048,6 +3195,9 @@ impl<'h> Walk<'_, 'h> {
                     What::TaskArg => "handed to a task".to_owned(),
                     What::Closure => "moved into a closure".to_owned(),
                 };
+                if why.lib {
+                    return self.lib_handoff(who, &call, site, at);
+                }
                 let file = why.file.rsplit(['/', '\\']).next().unwrap_or(&why.file);
                 let inner = if chk.file_name(site.file) == why.file {
                     format!("line {}", why.line)
@@ -3746,8 +3896,56 @@ impl<'h> Walk<'_, 'h> {
         let mut fl = Vec::new();
         self.flows(e, &mut fl);
         self.store_flows(p, &fl, part);
+        let mut got = Vec::new();
+        self.got_parts(e, &mut Vec::new(), &mut got);
+        for (path, g, at) in got {
+            self.tie(g, extend(p, &path), at, Tie::Taken);
+        }
+    }
+
+    /// The parts of `e` (paths into it) that hold a guard's `get()` value:
+    /// `e` itself, or fields of the tuple and struct literals it builds.
+    fn got_parts(
+        &self,
+        e: &HirExpr,
+        path: &mut Vec<u32>,
+        out: &mut Vec<(Vec<u32>, LocalId, Span)>,
+    ) {
+        if path.len() > 8 {
+            return;
+        }
         if let Some((g, at)) = self.got_from(e) {
-            self.tie(g, p.clone(), at, Tie::Taken);
+            out.push((path.clone(), g, at));
+            return;
+        }
+        let mut sub = |s: &Self, i: u32, x: &HirExpr, out: &mut Vec<_>| {
+            path.push(i);
+            s.got_parts(x, path, out);
+            path.pop();
+        };
+        match &e.kind {
+            HirExprKind::Tuple { fields } => {
+                for (i, x) in fields.iter().enumerate() {
+                    #[allow(clippy::cast_possible_truncation)]
+                    sub(self, i as u32 | TUPLE, x, out);
+                }
+            }
+            HirExprKind::StructInit { fields, .. } => {
+                for (i, x) in fields.iter().enumerate() {
+                    #[allow(clippy::cast_possible_truncation)]
+                    sub(self, i as u32, x, out);
+                }
+            }
+            HirExprKind::WithField {
+                field_index, value, ..
+            } => sub(self, *field_index, value, out),
+            HirExprKind::SumWrap { value: Some(x), .. } => self.got_parts(x, path, out),
+            HirExprKind::Block(b) if b.stmts.is_empty() => {
+                if let Some(t) = &b.trailing {
+                    self.got_parts(t, path, out);
+                }
+            }
+            _ => {}
         }
     }
 
@@ -3802,7 +4000,10 @@ impl<'h> Walk<'_, 'h> {
         let k = self.key(e);
         self.expr_to(e, &k);
         self.note_guard(&p, e);
-        if place(e).is_none_or(|q| q.0 != p.0) {
+        let hole = self
+            .local_name(p.0)
+            .is_some_and(super::affine::is_hole_temp);
+        if place(e).is_none_or(|q| q.0 != p.0) && !hole {
             self.stream_moved(e, e.span);
         }
         self.store(&p, e, false);
@@ -4202,12 +4403,14 @@ impl<'h> Walk<'_, 'h> {
             HirStmt::Return(e) => {
                 if let Some(e) = e {
                     self.returning = place(e).is_some();
+                    self.thrown = thrown(e).and_then(place).map(|p| p.0);
                     self.expr_to(e, &RET_TAG);
                     self.returning = false;
+                    self.thrown = None;
                     self.store(&(RET, Vec::new()), e, false);
-                    self.escapes_guard(e, Exit::Return);
-                    if let Some(err) = thrown(e) {
-                        self.throw_escapes(err);
+                    match thrown(e) {
+                        Some(err) => self.throw_escapes(err),
+                        None => self.escapes_guard(e, Exit::Return),
                     }
                 }
                 self.note_renews();
@@ -4406,6 +4609,7 @@ impl<'h> Walk<'_, 'h> {
         | HirExprKind::CallIndirect { args, .. }
         | HirExprKind::CallClosure { args, .. } = &e.kind
         {
+            self.note_runner(e);
             self.send_fn_args(args, e.span);
         }
         match &e.kind {
@@ -4647,7 +4851,12 @@ impl<'h> Walk<'_, 'h> {
             }
             let HirTy::Struct(id) = t else { return None };
             let structs = self.c.env.defs.structs.borrow();
-            let f = structs.get(id.0 as usize)?.fields.get(k as usize)?;
+            let def = structs.get(id.0 as usize)?;
+            // The standard library's fields are private: name what holds them.
+            if def.name.starts_with("rok::") {
+                break;
+            }
+            let f = def.fields.get(k as usize)?;
             out.push_str(&format!(".{}", f.name));
             t = f.ty.clone();
         }
@@ -5366,14 +5575,15 @@ impl<'h> Walk<'_, 'h> {
         }
     }
 
-    /// The by-value arguments of a direct call move what they carry.
+    /// The arguments a direct call keeps move what they carry; one it only
+    /// reads (`r.capacity()`) is lent and comes back.
     fn args_moved(&mut self, callee: FunctionId, args: &[HirExpr]) {
         let Some(f) = self.c.fns.get(&callee) else {
             return;
         };
-        let by_val: Vec<bool> = f.params.iter().map(|p| !p.by_ref).collect();
-        for (a, v) in args.iter().zip(by_val) {
-            if v {
+        for (i, (a, p)) in args.iter().zip(&f.params).enumerate() {
+            let i = u32::try_from(i).unwrap_or(u32::MAX);
+            if !p.by_ref && self.c.keeps.keeps(callee, i) {
                 self.stream_moved(a, a.span);
             }
         }
@@ -6048,6 +6258,7 @@ impl<'h> Walk<'_, 'h> {
             }
         };
         let me = shown_fn(self.c, self.f);
+        let lib = in_lib(self.c, self.f);
         for (q, g) in &exit.gone {
             let Some(r) = root_of(q.0).filter(|&r| r != RET_ROOT) else {
                 continue;
@@ -6063,6 +6274,7 @@ impl<'h> Walk<'_, 'h> {
                     func: me.clone(),
                     file: self.c.file_name(at.file),
                     line: at.line,
+                    lib,
                 },
                 Gone::Via(_, id) => self.c.whys.borrow().0[id as usize].clone(),
                 Gone::Guard(at, guard, _) => Why {
@@ -6070,6 +6282,7 @@ impl<'h> Walk<'_, 'h> {
                     func: me.clone(),
                     file: self.c.file_name(at.file),
                     line: at.line,
+                    lib,
                 },
             };
             out.insert((r, q.1.clone()), why);

@@ -1,0 +1,37 @@
+// needs: fs
+// expect-exit: 0
+// expect-stdout:
+// collected 70, distinct 70
+// helper 3, rest 67
+
+// `collect` on a `ReadDirStream` (a standard type's `TryStream` impl,
+// whose `Item` is named in its own module), and a stream walked part way
+// in a helper that returns it.
+use rok::std::fs;
+use rok::std::fs::ReadDirStream;
+use rok::core::io::IoError;
+use rok::std::env;
+
+async fn first(rd: ReadDirStream, k: usize) throws (IoError) -> (ReadDirStream, usize) {
+    let n = 0usize;
+    try for await e in rd {
+        n += 1;
+        if n == k { break; }
+    }
+    (rd, n)
+}
+
+let base = env::temp_dir() / f"rok_read_dir_collect_{rok::std::process::id()}";
+try! fs::create_dir_all(base);
+for i in 0..70 {
+    try! fs::write(base / f"{i}.txt", "x");
+}
+let all = try! await (try! await fs::read_dir_async(base)).collect();
+let names = Set::<str>::new();
+for e in all { names.insert(e.file_name()); }
+println(f"collected {all.len()}, distinct {names.len()}");
+let (rd, n) = try! await first(try! await fs::read_dir_async(base), 3);
+let rest = 0;
+try! for await e in rd { rest += 1; }
+println(f"helper {n}, rest {rest}");
+try! fs::remove_dir_all(base);
