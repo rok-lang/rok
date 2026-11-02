@@ -1,0 +1,12 @@
+// spec: §6.2.11
+// expect-exit: 0
+// expect-warning: this value of type `T` is never used
+// expect-stdout:
+
+// A `#[must_use]` type without a message names the type.
+#[must_use]
+struct T { a: i32; }
+
+fn mk() -> T { T { a: 1 } }
+
+fn main() { mk(); }
