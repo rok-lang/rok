@@ -135,6 +135,10 @@ struct RetFrame {
 
 /// Nesting limit for expressions, types, patterns and blocks.
 const MAX_DEPTH: u32 = 256;
+/// `in` / `!in`: the operator, its token count and a misspelling's
+/// error (where, what).
+type MemberOp = (&'static str, usize, Option<(Span, &'static str)>);
+
 /// Links in one left-nested operator / postfix chain.
 const MAX_CHAIN: u32 = 4096;
 /// The path of the type a variadic `xs: ...T` parameter has in the body
@@ -5633,6 +5637,8 @@ impl<'a> Parser<'a> {
             | TokenKind::Comma
             | TokenKind::Semi
             | TokenKind::FatArrow
+            | TokenKind::HoleEnd
+            | TokenKind::HoleSpec
             | TokenKind::Eq
             | TokenKind::Eof => false,
             TokenKind::LBrace => self.struct_expr_allowed,
@@ -5703,7 +5709,11 @@ impl<'a> Parser<'a> {
             if self.incr_decr(&lhs) {
                 break;
             }
-            let Some((sym, _)) = self.peek_op_symbol(Fixity::Infix) else {
+            let member = self.peek_member_op();
+            let Some((sym, _)) = member
+                .map(|(s, _, _)| (s.to_owned(), lhs.span))
+                .or_else(|| self.peek_op_symbol(Fixity::Infix))
+            else {
                 break;
             };
             // `??` is a language-level desugar, level 1,
@@ -5744,8 +5754,17 @@ impl<'a> Parser<'a> {
                     ),
                 );
             }
-            self.bump();
-            let rhs = self.parse_expr_bp(right_bp)?;
+            if let Some((_, _, Some((at, msg)))) = member {
+                self.error_help(Code::SYNTAX, at, msg, "write `x !in xs` (or `x ∉ xs`)");
+            }
+            for _ in 0..member.map_or(1, |(_, n, _)| n) {
+                self.bump();
+            }
+            let rhs = if matches!(sym.as_str(), "∈" | "∉") {
+                self.parse_member_rhs(right_bp)?
+            } else {
+                self.parse_expr_bp(right_bp)?
+            };
             let span = self.to_prev(lhs.span);
             lhs = Expr {
                 kind: ExprKind::OpInfix {
@@ -5953,6 +5972,65 @@ impl<'a> Parser<'a> {
     /// after it starts a new statement (`run { .. }` then `-x;`).
     fn closure_stmt_ends(&self, lhs: &Expr) -> bool {
         self.stmt_at == Some(lhs.span.start) && !is_block_like(lhs) && ends_stmt(lhs)
+    }
+
+    /// `in` / `!in` (the ASCII `∈` / `∉`) at the cursor: the operator,
+    /// its token count and, for a misspelling (`! in`, Python's
+    /// `not in`), the error to give when it is taken.
+    fn peek_member_op(&self) -> Option<MemberOp> {
+        if self.pending.is_some() {
+            return None;
+        }
+        let tok = |k: usize| self.tokens.get(self.pos + k);
+        let is_in = |t: Option<&Token>| {
+            t.is_some_and(|t| !t.raw && matches!(&t.kind, TokenKind::Ident(w) if w == "in"))
+        };
+        if is_in(tok(0)) {
+            return Some(("∈", 1, None));
+        }
+        let (Some(first), true) = (tok(0), is_in(tok(1))) else {
+            return None;
+        };
+        let glued = tok(1).is_some_and(|t| t.span.start == first.span.end);
+        let bad = match &first.kind {
+            TokenKind::Bang if glued => None,
+            TokenKind::Bang => Some("space between `!` and `in`"),
+            TokenKind::Ident(w) if w == "not" && !first.raw => {
+                Some("`not in` is not an operator")
+            }
+            _ => return None,
+        };
+        Some(("∉", 2, bad.map(|m| (first.span, m))))
+    }
+
+    /// The right side of `∈` / `∉`: a range needs no parentheses
+    /// (`i in 0..n`), its end binding like the left side's operand.
+    fn parse_member_rhs(&mut self, right_bp: u32) -> Option<Expr> {
+        let span = self.peek_span();
+        let start = if matches!(self.peek(), TokenKind::DotDot | TokenKind::DotDotEq) {
+            None
+        } else {
+            let e = self.parse_expr_bp(right_bp)?;
+            if !matches!(self.peek(), TokenKind::DotDot | TokenKind::DotDotEq) {
+                return Some(e);
+            }
+            Some(Box::new(e))
+        };
+        let inclusive = matches!(self.peek(), TokenKind::DotDotEq);
+        self.bump();
+        let end = if !inclusive && !self.can_start_range_end() {
+            None
+        } else {
+            Some(Box::new(self.parse_expr_bp(right_bp)?))
+        };
+        Some(Expr {
+            span: self.to_prev(span),
+            kind: ExprKind::Range {
+                start,
+                end,
+                inclusive,
+            },
+        })
     }
 
     /// The current token as a `fixity` operator; tokens that are also

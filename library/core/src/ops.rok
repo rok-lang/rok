@@ -524,6 +524,31 @@ impl<T: PartialOrd> Contains<T> for Range<T> {
     const fn contains(self, item: T) -> bool { self.start <= item && item < self.end }
 }
 
+/// `start <= item <= end`.
+impl<T: PartialOrd> Contains<T> for RangeInclusive<T> {
+    const fn contains(self, item: T) -> bool { self.start <= item && item <= self.end }
+}
+
+/// `start <= item`.
+impl<T: PartialOrd> Contains<T> for RangeFrom<T> {
+    const fn contains(self, item: T) -> bool { self.start <= item }
+}
+
+/// `item < end`.
+impl<T: PartialOrd> Contains<T> for RangeTo<T> {
+    const fn contains(self, item: T) -> bool { item < self.end }
+}
+
+/// `item <= end`.
+impl<T: PartialOrd> Contains<T> for RangeToInclusive<T> {
+    const fn contains(self, item: T) -> bool { item <= self.end }
+}
+
+/// Every item.
+impl<T> Contains<T> for RangeFull {
+    const fn contains(self, _item: T) -> bool { true }
+}
+
 impl<T: Hash> Subset for Set<T> {
     const fn is_proper_subset(self, rhs: Set<T>) -> bool { self.len() < rhs.len() && Set::is_subset(self, rhs) }
     const fn is_subset(self, rhs: Set<T>) -> bool { Set::is_subset(self, rhs) }
