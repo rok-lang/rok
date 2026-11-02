@@ -1,13 +1,11 @@
-// expect-error: diag_let_rules.rok:11:1: `total` is not declared; a variable is created only by `let`
+// expect-error: diag_let_rules.rok:9:1: `total` is not declared; a variable is created only by `let`
 // expect-error: help: write `let total = 0;`
-// expect-error: diag_let_rules.rok:14:1: `x` is already declared in this scope, and rok does not let a second `let` hide it
-// expect-error: help: to change its value write `x = try! x.parse();`, or give the new value its own name: `let x2: i32 = try! x.parse();`
 // forbid-error: cannot find value
 // forbid-error: spec variant
 
-// Only `let` declares, and not twice in one scope. The fix
-// uses the program's names; a name assigned undeclared is not reported
-// again where it is read.
+// Only `let` declares; a second `let` of a name is a new binding. The
+// fix uses the program's names; a name assigned undeclared is not
+// reported again where it is read.
 total = 0;
 println(f"{total}");
 let x = "5";

@@ -1722,6 +1722,59 @@ fn prepare_rename_local_ok_library_refused() {
     assert_eq!(error(3), "`let` is a keyword");
 }
 
+/// A redeclared name is two bindings: hover, definition, references
+/// and rename keep them apart.
+#[test]
+fn redeclared_local_is_its_own_binding() {
+    let src = "let n = \"12\";\nlet n: i32 = try! n.parse();\nprintln(f\"{n}\");\n";
+    let msgs = std_session("lsp-redeclared", src, |uri| {
+        let mut rename = at(uri, 1, 4);
+        if let Json::Obj(fields) = &mut rename {
+            fields.push(("newName".to_owned(), Json::str("m")));
+        }
+        vec![
+            request(1, "textDocument/hover", at(uri, 0, 4)),
+            request(2, "textDocument/hover", at(uri, 1, 4)),
+            request(3, "textDocument/hover", at(uri, 1, 18)),
+            request(4, "textDocument/definition", at(uri, 1, 18)),
+            request(5, "textDocument/definition", at(uri, 2, 11)),
+            request(6, "textDocument/references", at(uri, 0, 4)),
+            request(7, "textDocument/rename", rename),
+        ]
+    });
+    let hover = |id| {
+        reply(&msgs, id)
+            .get("contents")
+            .get("value")
+            .as_str()
+            .unwrap_or("")
+            .to_owned()
+    };
+    assert!(hover(1).contains("n: str"), "{}", hover(1));
+    assert!(hover(2).contains("n: i32"), "{}", hover(2));
+    assert!(hover(3).contains("n: str"), "{}", hover(3));
+    let start = |r: &Json| {
+        let s = r.get("range").get("start");
+        (s.get("line").clone(), s.get("character").clone())
+    };
+    let pos = |l: u32, c: u32| (Json::num(l), Json::num(c));
+    assert_eq!(start(&reply(&msgs, 4)), pos(0, 4));
+    assert_eq!(start(&reply(&msgs, 5)), pos(1, 4));
+    let Json::Arr(refs) = reply(&msgs, 6) else {
+        panic!("references: {}", reply(&msgs, 6))
+    };
+    let refs: Vec<_> = refs.iter().map(start).collect();
+    assert_eq!(refs, [pos(0, 4), pos(1, 18)]);
+    let Json::Obj(changes) = reply(&msgs, 7).get("changes").clone() else {
+        panic!("rename: {}", reply(&msgs, 7))
+    };
+    let Json::Arr(edits) = changes[0].1.clone() else {
+        panic!("rename: {}", reply(&msgs, 7))
+    };
+    let edits: Vec<_> = edits.iter().map(start).collect();
+    assert_eq!(edits, [pos(1, 4), pos(2, 11)]);
+}
+
 #[test]
 fn initialize_advertises_new_capabilities() {
     let msgs = std_session("lsp-caps", "", |_| Vec::new());

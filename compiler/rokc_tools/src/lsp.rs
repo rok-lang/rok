@@ -719,8 +719,14 @@ pub(crate) fn hover(a: &Analysis, key: &str, text: &str, off: usize) -> Option<S
         }));
     }
     // A binding site (`let x`, a parameter) has no expression: the
-    // buffer's locals and items of that name.
+    // `let` it starts, else the buffer's locals and items of that name.
     let name = ident?;
+    if let Some(ty) = fresh
+        .then(|| let_site_ty(a, key, text, name, off))
+        .flatten()
+    {
+        return Some(fenced(format!("{name}: {}", ty_name(hir, &ty))));
+    }
     let doc_fns = hir
         .functions
         .iter()
@@ -734,6 +740,45 @@ pub(crate) fn hover(a: &Analysis, key: &str, text: &str, off: usize) -> Option<S
         }
     }
     None
+}
+
+/// The type of the local a `let` at `off` declares: the nearest `let
+/// name` whose initializer follows in the same statement (a redeclared
+/// name is another local).
+fn let_site_ty(a: &Analysis, key: &str, text: &str, name: &str, off: usize) -> Option<HirTy> {
+    let mut best: Option<(u32, HirTy)> = None;
+    for f in &a.hir.as_ref()?.functions {
+        let Some(body) = &f.body else { continue };
+        let mut scan = |b: &rokc_hir::HirBlock| {
+            for s in &b.stmts {
+                let rokc_hir::HirStmt::Let { local, init } = s else {
+                    continue;
+                };
+                let start = init.span.start;
+                let Some(l) = f.locals.iter().find(|l| l.id == *local) else {
+                    continue;
+                };
+                let between = text.get(off..start as usize).unwrap_or(";");
+                if l.name.as_deref() == Some(name)
+                    && start as usize > off
+                    && !between.contains(';')
+                    && a.in_file(init.span, key)
+                    && best.as_ref().is_none_or(|(s, _)| start < *s)
+                {
+                    best = Some((start, l.ty.clone()));
+                }
+            }
+        };
+        scan(body);
+        rokc_hir::each_block(body, &mut |e| match &e.kind {
+            HirExprKind::Block(b)
+            | HirExprKind::While { body: b, .. }
+            | HirExprKind::Loop { body: b, .. }
+            | HirExprKind::If { then_block: b, .. } => scan(b),
+            _ => {}
+        });
+    }
+    best.map(|(_, t)| t)
 }
 
 /// Where the item under the cursor is defined (functions, types).

@@ -1,9 +1,0 @@
-// expect-error: is already declared in this scope
-
-// Redeclaring a name in the same scope (`let x = 1; let x: i32 = 5;`) is a
-// compile error.
-fn main() -> i32 {
-    let x = 1;
-    let x: i32 = 5;    // ERROR: redeclaration in same scope
-    return x;
-}

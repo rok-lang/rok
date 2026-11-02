@@ -1,0 +1,78 @@
+// gc-stress
+// expect-exit: 0
+// expect-stdout:
+// 3
+// 42
+// 7
+// [ab] [cd]
+// 2 old new
+// 2 1 4
+// 10 x
+// 15
+// k 1 2
+
+// `let` may redeclare a name in the same scope. The initializer reads the
+// old binding, the new one may have another type, and each binding keeps
+// its own slot: a closure made from the old one still sees it.
+struct Pair { a: i32; b: i32; }
+
+fn parse(s: str) throws (ParseError) -> i32 {
+    let n = s.trim();
+    let n = try n.parse::<i32>();
+    n
+}
+
+fn main() {
+    let x = "abc";
+    let x = x.len();
+    println(f"{x}");
+
+    let line = "  42  ";
+    let line = line.trim();
+    let line: i32 = try! line.parse();
+    println(f"{line}");
+
+    let n = try! parse(" 7 ");
+    println(f"{n}");
+
+    let words = List::new();
+    for w in ["  ab ", " cd"] {
+        let w = w.trim();
+        let w = f"[{w}]";
+        words.push(w);
+    }
+    println(words.join(" "));
+
+    let s = f"o{"ld"}";
+    let get = || s;
+    let n = 1;
+    let s = f"n{"ew"}";
+    let n = n + 1;
+    println(f"{n} {get()} {s}");
+
+    let (a, b) = (1, 2);
+    let (a, b) = (b, a);
+    let Pair { a: c, .. } = Pair { a: a * 2, b };
+    let c = c;
+    println(f"{a} {b} {c}");
+
+    let v = List::new();
+    v.push(10);
+    let v = (v[0], "x");
+    println(f"{v.0} {v.1}");
+
+    let t = 0;
+    for i in 1..6 {
+        let t2 = t + i;
+        t = t2;
+    }
+    let t = t;
+    println(f"{t}");
+
+    let k = 0;
+    let bump = [ref k] || { k += 1; return k; };
+    let k = "k";
+    let b1 = bump();
+    let b2 = bump();
+    println(f"{k} {b1} {b2}");
+}

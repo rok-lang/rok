@@ -1,0 +1,13 @@
+// expect-error: 501_4_let_shadow_open_must_fail.rok:10:17: `f` holds a `File` that is never closed
+// expect-error: help: a new `let` does not close the old `f`; close or move it before redeclaring it: add `try f.close();` before line 11
+
+// Redeclaring a name neither closes nor drops the old value: an open
+// `File` left behind is never closed.
+use rok::std::fs;
+use rok::core::io::IoError;
+
+fn main() throws (IoError) {
+    let f = try fs::File::open("/dev/null");
+    let f = 1;
+    println(f"{f}");
+}
