@@ -398,6 +398,12 @@ pub(pkg) fn transfer_flat<T>() -> bool;
 /// value is the caller's to rule out.
 pub unsafe fn share<T>(x: T) -> T { x }
 
+/// `x` inside an adapter a `ref self` method returns (`r.lines()`): a
+/// scoped view of `x`, tied to its owner's scope like a lock guard's
+/// value. It neither moves nor releases `x`.
+#[internal]
+pub fn view<T>(x: T) -> T { x }
+
 /// Put `value` into `dest` and return what it held: the way to move a
 /// part out of a struct (`replace(ref child.stdout, none)`).
 #[discardable]

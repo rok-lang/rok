@@ -71,6 +71,18 @@ const WIPED: &[&str] = &[
 /// `Stdio::File` is the caller's file).
 const VIEWS: &[&str] = &["rok::std::process::Stdio", "rok::std::process::Command"];
 
+/// The scoped views of a stream (`r.lines()`): they do not own it, and
+/// the hand-off check keeps them in its owner's scope.
+pub(super) const STREAM_VIEWS: &[&str] = &[
+    "rok::core::io::Lines",
+    "rok::core::io::Split",
+    "rok::core::io::Bytes",
+    "rok::core::io::Take",
+    "rok::core::io::BytesStream",
+    "rok::core::io::LinesStream",
+    "rok::std::net::Incoming",
+];
+
 /// Name prefix of a release flag (`#own<local>`) and of the binding it
 /// guards (`#rel<local>`).
 const OWN: &str = "#own";
@@ -120,8 +132,10 @@ fn affine_walk(ctx: &LowerCtx<'_>, ty: &HirTy, depth: u32) -> Option<Kind> {
         HirTy::Struct(sid) => {
             let def = ctx.struct_def(*sid);
             let base = def.name.split("__").next().unwrap_or(&def.name);
+            let base = base.split('<').next().unwrap_or(base);
             if GUARDS.contains(&base)
                 || VIEWS.contains(&base)
+                || STREAM_VIEWS.contains(&base)
                 || WIPED.iter().any(|w| {
                     base.ends_with(w.rsplit("::").next().unwrap_or(w))
                         && base.starts_with("rok::core::crypto::")
@@ -451,8 +465,9 @@ impl Summary {
     }
 }
 
-/// `rok::core::marker::share`: a handle that is not followed.
-const SHARE: &str = "rok::core::marker::share";
+/// `rok::core::marker::share`: a handle that is not followed; `view`:
+/// one the hand-off check ties to its owner's scope instead.
+const SHARES: &[&str] = &["rok::core::marker::share", "rok::core::marker::view"];
 /// `marker::replace(ref place, v)` / `marker::take(ref place)`: the part
 /// moves out, the place keeps a new value.
 const SWAPS: &[&str] = &["rok::core::marker::replace", "rok::core::marker::take"];
@@ -1995,7 +2010,7 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                 && args.first().is_some_and(|a| a.ty == f.params[0].ty)
         });
         // `marker::share(x)`: a second handle nobody follows.
-        if f.is_some_and(|f| f.name.split("__mono__").next() == Some(SHARE)) {
+        if f.is_some_and(|f| SHARES.contains(&f.name.split("__mono__").next().unwrap_or(""))) {
             for a in args {
                 st = self.expr(a, st, Mode::Use).0;
             }
