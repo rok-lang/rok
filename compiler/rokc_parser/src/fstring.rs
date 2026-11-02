@@ -91,7 +91,21 @@ impl Parser<'_> {
         if self.eat(&TokenKind::HoleEnd) {
             return Some((expr?, spec, echo));
         }
-        if expr.is_some() {
+        if let (Some(e), Some(conv)) = (&expr, self.python_conversion()) {
+            let at = self.peek_span();
+            let x = self.text_in(e.span);
+            let help = if conv == "s" {
+                format!("write `{{{x}}}`: a hole already formats with `Display`")
+            } else {
+                format!("write `{{{x}:?}}`: `:?` formats with `Debug`, as `repr` does")
+            };
+            self.error_help(
+                Code::FSTRING_SYNTAX,
+                at,
+                format!("Rok has no `!{conv}` conversion"),
+                help,
+            );
+        } else if expr.is_some() {
             let at = self.peek_span();
             let d = RokDiagnostic::error(
                 Code::FSTRING_SYNTAX,

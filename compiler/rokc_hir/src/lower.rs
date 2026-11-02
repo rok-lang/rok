@@ -3710,6 +3710,11 @@ impl<'a> LowerCtx<'a> {
         } {
             return Some(format!("use `{k}`"));
         }
+        if name == "pass" {
+            return Some(
+                "Rok needs no `pass`: an empty block `{}` is complete; delete it".to_owned(),
+            );
+        }
         let module = self.current_module.as_str();
         let in_module = |k: &'a String| {
             let (m, n) = k.rsplit_once("::").unwrap_or(("", k.as_str()));

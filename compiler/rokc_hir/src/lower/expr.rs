@@ -2464,6 +2464,21 @@ fn optional_cast_hint(ty: &Ty) -> &'static str {
     }
 }
 
+/// `self` in a function without it: Python's method that forgot `self`.
+fn self_outside_method(ctx: &LowerCtx<'_>, span: rokc_diagnostic::Span) -> HirExpr {
+    let e = ctx.error_expr(
+        Code::OUTSIDE_CONTEXT,
+        span,
+        "`self` is only available inside methods".to_owned(),
+    );
+    ctx.help_last(Some(
+        "a method takes `self` first: `fn f(self, ..)` in an `impl` (`ref self` to change \
+         its fields)"
+            .to_owned(),
+    ));
+    e
+}
+
 fn lower_expr_inner(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
     let span = expr.span;
     match &expr.kind {
@@ -2474,11 +2489,7 @@ fn lower_expr_inner(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
         ExprKind::QPath(q) => lower_qpath_value(ctx, expr, q, span),
         ExprKind::SelfLower => match ctx.lookup("self") {
             Some(local) => ctx.read_local(local, span),
-            None => ctx.error_expr(
-                Code::OUTSIDE_CONTEXT,
-                span,
-                "`self` is only available inside methods".to_owned(),
-            ),
+            None => self_outside_method(ctx, span),
         },
         ExprKind::SelfUpper => ctx.error_expr(
             Code::WRONG_ITEM_FORM,
@@ -2853,9 +2864,17 @@ fn lower_expr_inner(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
 /// `if` / `while` conditions are `bool`.
 pub(super) fn lower_cond(ctx: &mut LowerCtx<'_>, cond: &Expr) -> HirExpr {
     let c = lower_expected(ctx, cond, HirTy::Prim(PrimTy::Bool));
-    coerce(ctx, &HirTy::Prim(PrimTy::Bool), c, &|| {
+    let help = (c.ty != HirTy::Prim(PrimTy::Bool))
+        .then(|| super::suggest::truthy_help(ctx, &c))
+        .flatten();
+    let since = ctx.env.sink.diagnostics.borrow().len();
+    let c = coerce(ctx, &HirTy::Prim(PrimTy::Bool), c, &|| {
         "the condition".to_owned()
-    })
+    });
+    if ctx.env.sink.diagnostics.borrow().len() > since {
+        ctx.help_last(help);
+    }
+    c
 }
 
 /// Loop bodies yield no value (expected `()`).
@@ -7455,7 +7474,7 @@ pub(super) fn method_call_on(
             check_method_info_visible(ctx, &gm.info, method);
             if gm.def.params.first().map(|p| p.name.as_str()) != Some("self") {
                 lower_args_only(ctx);
-                return ctx.error_expr(
+                let e = ctx.error_expr(
                     Code::WRONG_ITEM_FORM,
                     span,
                     format!(
@@ -7464,6 +7483,8 @@ pub(super) fn method_call_on(
                         ctx.ty_name(&recv_h.ty)
                     ),
                 );
+                ctx.help_last(not_a_method_help(ctx, &recv_h.ty, method));
+                return e;
             }
             if is_addr_intrinsic(&gm.def, &gm.info.module) {
                 // `MaybeUninit<T>::as_mut_ptr`: the receiver's place, as
@@ -7561,7 +7582,10 @@ pub(super) fn method_call_on(
         );
         let format = (method == "format" && recv_h.ty == HirTy::Prim(PrimTy::Str))
             .then(|| format_help(ctx, args, span));
+        let join = (method == "join" && recv_h.ty == HirTy::Prim(PrimTy::Str))
+            .then(|| super::suggest::join_help(ctx, &recv_h, args));
         let help = format
+            .or(join)
             .or_else(|| super::reflect::inspect_help(ctx, &recv_h.ty, method))
             .unwrap_or_else(|| super::suggest::no_method_help(ctx, &recv_h, method, span));
         ctx.help_last(Some(help));
@@ -7579,7 +7603,7 @@ pub(super) fn method_call_on(
     let sig = ctx.sig_by_id(fn_id);
     if sig.param_names.first().map(String::as_str) != Some("self") {
         lower_args_only(ctx);
-        return ctx.error_expr(
+        let e = ctx.error_expr(
             Code::WRONG_ITEM_FORM,
             span,
             format!(
@@ -7588,6 +7612,8 @@ pub(super) fn method_call_on(
                 ctx.ty_name(&recv_h.ty)
             ),
         );
+        ctx.help_last(not_a_method_help(ctx, &recv_h.ty, method));
+        return e;
     }
     call_sig(ctx, &sig, method, Some(recv_h), args, span)
 }
@@ -10088,11 +10114,8 @@ fn lower_path_call(
                 .enumerate()
                 .all(|(i, f)| f.name == i.to_string());
         if !is_tuple_form {
-            return ctx.error_expr(
-                Code::WRONG_ITEM_FORM,
-                span,
-                format!("`{display}` is not a tuple struct - use `{display} {{ field: ... }}`"),
-            );
+            let fields: Vec<String> = def.fields.iter().map(|f| f.name.clone()).collect();
+            return not_tuple_struct(ctx, p, &display, &fields, args, span);
         }
         // Constructing needs every field visible here.
         def.fields
@@ -10363,6 +10386,84 @@ fn call_item_value(
     )
 }
 
+/// `Name(args)` on a struct with named fields.
+fn not_tuple_struct(
+    ctx: &LowerCtx<'_>,
+    p: &AstPath,
+    display: &str,
+    fields: &[String],
+    args: &[CallArg],
+    span: rokc_diagnostic::Span,
+) -> HirExpr {
+    let written = ctx.src(p.span).map_or_else(
+        || {
+            p.segments
+                .last()
+                .map(|s| s.name.clone())
+                .unwrap_or_default()
+        },
+        str::to_owned,
+    );
+    let msg = match written.as_str() {
+        "int" | "float" => format!("`{written}` is a type, not a conversion function"),
+        _ => format!("`{display}` is not a tuple struct - use `{display} {{ field: ... }}`"),
+    };
+    let e = ctx.error_expr(Code::WRONG_ITEM_FORM, span, msg);
+    ctx.help_last(class_call_help(ctx, &written, fields, args));
+    e
+}
+
+/// Help for `Name(args)` on a struct with named fields: Python's class
+/// call, or `int(s)` / `float(s)` meaning a parse.
+fn class_call_help(
+    ctx: &LowerCtx<'_>,
+    written: &str,
+    fields: &[String],
+    args: &[CallArg],
+) -> Option<String> {
+    let texts: Vec<&str> = args
+        .iter()
+        .filter_map(|a| match a {
+            CallArg::Positional(e) => ctx.src(e.span),
+            _ => None,
+        })
+        .collect();
+    let arg = texts.first().copied().unwrap_or("s");
+    match written {
+        "int" => {
+            return Some(format!(
+                "parse text with `try {arg}.parse::<int>()`; a number converts with `x as i64`"
+            ));
+        }
+        "float" => {
+            return Some(format!(
+                "parse text with `try {arg}.parse::<f64>()`; a number converts with `x as f64`"
+            ));
+        }
+        _ => {}
+    }
+    if fields.is_empty() || texts.len() != args.len() || texts.len() != fields.len() {
+        return None;
+    }
+    let inits: Vec<String> = fields
+        .iter()
+        .zip(&texts)
+        .map(|(f, v)| format!("{f}: {v}"))
+        .collect();
+    Some(format!("write `{written} {{ {} }}`", inits.join(", ")))
+}
+
+/// `x.f()` on an associated function `f` of a user type: Python's method
+/// without `self`.
+fn not_a_method_help(ctx: &LowerCtx<'_>, ty: &HirTy, method: &str) -> Option<String> {
+    let user = match ty {
+        HirTy::Struct(id) => !ctx.struct_def(*id).name.starts_with("rok::"),
+        HirTy::Enum(id) => !ctx.enum_def(*id).name.starts_with("rok::"),
+        _ => false,
+    };
+    user.then(|| format!("or, to call it on a value, take `self` first: `fn {method}(self, ..)`"))
+}
+
 /// What rok writes for a call another language has: `Some(x)`,
 /// `range(n)`.
 fn habit_call_help(ctx: &LowerCtx<'_>, segs: &[&str], args: &[CallArg]) -> Option<String> {
@@ -10379,6 +10480,9 @@ fn habit_call_help(ctx: &LowerCtx<'_>, segs: &[&str], args: &[CallArg]) -> Optio
         )),
         (["range"], [n]) => Some(format!("use a range: `0..{n}`")),
         (["range"], [a, b]) => Some(format!("use a range: `{a}..{b}`")),
+        ([name], _) if texts.len() == args.len() => {
+            super::suggest::python_builtin_help(name, &texts)
+        }
         _ => None,
     }
 }
@@ -12516,14 +12620,16 @@ pub(super) fn lower_prefix(
             };
         }
     }
-    ctx.error_expr(
+    let e = ctx.error_expr(
         Code::INVALID_OPERATOR,
         span,
         format!(
             "operator `{op}` cannot be applied to `{}`",
             ctx.ty_name(&operand_h.ty)
         ),
-    )
+    );
+    ctx.help_last(super::suggest::op_habit_help(ctx, op, &operand_h, None));
+    e
 }
 
 /// An operator on a user type calls its trait method (`a + b` ≡
@@ -12658,7 +12764,7 @@ pub(super) fn dispatch_user_op_lit(
                 };
             }
         }
-        return ctx.error_expr(
+        let e = ctx.error_expr(
             Code::INVALID_OPERATOR,
             span,
             format!(
@@ -12667,6 +12773,8 @@ pub(super) fn dispatch_user_op_lit(
                  inherent `fn {method}` is not enough)"
             ),
         );
+        ctx.help_last(super::suggest::op_habit_help(ctx, sym, &lhs, rhs.as_ref()));
+        return e;
     };
     let sig = ctx.sig_by_id(fn_id);
     let expected_arity = if rhs.is_some() { 2 } else { 1 };

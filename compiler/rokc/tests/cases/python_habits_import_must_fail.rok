@@ -1,0 +1,7 @@
+// expect-error: 5:8: expected `;` after top-level expression, found identifier `math`
+// expect-error: help: math needs no import in Rok: it is methods on numbers (`x.sqrt()`, `x.sin()`, `x.floor()`) and constants such as `f64::PI`
+
+// Python's `import math`: no module to import.
+import math
+
+fn main() {}
