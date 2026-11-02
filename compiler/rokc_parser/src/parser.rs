@@ -116,6 +116,9 @@ pub struct Parser<'a> {
     /// Start of the expression statement being parsed: a trailing-closure
     /// call starting it ends it at its `}`.
     stmt_at: Option<u32>,
+    /// The bindings of each `using x = e;` statement, by its marker's
+    /// span start, until its block is done.
+    using_stmts: std::collections::HashMap<(u32, u32), Vec<UsingBinding>>,
     /// Mount path of the package being parsed (`""`: the one being
     /// built); `pkg::name!` names its meta blocks.
     package: String,
@@ -135,6 +138,10 @@ struct RetFrame {
 
 /// Nesting limit for expressions, types, patterns and blocks.
 const MAX_DEPTH: u32 = 256;
+/// One `using` binding: its name (a temporary for a pattern), where it
+/// starts, the value and the pattern.
+type UsingBinding = (String, Span, Expr, Option<Pattern>);
+
 /// `in` / `!in`: the operator, its token count and a misspelling's
 /// error (where, what).
 type MemberOp = (&'static str, usize, Option<(Span, &'static str)>);
@@ -333,6 +340,7 @@ impl<'a> Parser<'a> {
             unparsed: Vec::new(),
             name_pos: false,
             stmt_at: None,
+            using_stmts: std::collections::HashMap::new(),
             ret_frames: Vec::new(),
             closure_returns: std::collections::HashMap::new(),
             package: String::new(),
@@ -516,6 +524,138 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// `using a = e, b = f { body }` is
+    /// `{ let a = e; { let b = f; { body } finally { b.drop(); } }
+    /// finally { a.drop(); } }`: reverse order, every exit.
+    fn build_using(&mut self, bindings: Vec<UsingBinding>, mut body: Block, start: Span) -> Expr {
+        // The patterns bind in source order, before the body.
+        let lets: Vec<Stmt> = bindings
+            .iter()
+            .filter_map(|(name, span, _, pat)| {
+                Some(Stmt {
+                    kind: StmtKind::LetPattern {
+                        pat: pat.clone()?,
+                        ty: None,
+                        init: Expr {
+                            span: *span,
+                            kind: ExprKind::Path(Path {
+                                segments: vec![PathSegment {
+                                    name: name.clone(),
+                                    generics: Vec::new(),
+                                }],
+                                span: *span,
+                                origin: None,
+                            }),
+                        },
+                    },
+                    span: *span,
+                })
+            })
+            .collect();
+        body.stmts.splice(0..0, lets);
+        let mut inner = Expr {
+            span: start,
+            kind: ExprKind::Block(body),
+        };
+        for (name, span, init, _) in bindings.into_iter().rev() {
+            let path = |name: &str| Expr {
+                span,
+                kind: ExprKind::Path(Path {
+                    segments: vec![PathSegment {
+                        name: name.to_owned(),
+                        generics: Vec::new(),
+                    }],
+                    span,
+                    origin: None,
+                }),
+            };
+            let drop_call = Stmt {
+                kind: StmtKind::Expr(Expr {
+                    span,
+                    kind: ExprKind::MethodCall {
+                        receiver: Box::new(path(&name)),
+                        method: rokc_ast::USING_DROP_METHOD.to_owned(),
+                        type_args: Vec::new(),
+                        args: Vec::new(),
+                        trailing_closure: None,
+                        origin: None,
+                    },
+                }),
+                span,
+            };
+            let guarded = Expr {
+                span: start,
+                kind: ExprKind::Catch {
+                    body: Box::new(inner),
+                    catches: Vec::new(),
+                    finally: Some(Block {
+                        stmts: vec![drop_call],
+                        trailing: None,
+                        span,
+                        label: None,
+                    }),
+                },
+            };
+            inner = Expr {
+                span: start,
+                kind: ExprKind::Block(Block {
+                    stmts: vec![Stmt {
+                        kind: StmtKind::Let {
+                            name,
+                            ty: None,
+                            init,
+                        },
+                        span,
+                    }],
+                    trailing: Some(Box::new(guarded)),
+                    span: start,
+                    label: None,
+                }),
+            };
+        }
+        inner
+    }
+
+    /// Each `using x = e;` marker in `stmts` (and `trailing`) takes the
+    /// statements after it as its body, innermost first.
+    fn fold_using_stmts(&mut self, stmts: &mut Vec<Stmt>, trailing: &mut Option<Box<Expr>>) {
+        if self.using_stmts.is_empty() {
+            return;
+        }
+        let mut i = stmts.len();
+        while i > 0 {
+            i -= 1;
+            let key = match &stmts[i].kind {
+                StmtKind::Expr(e) if matches!(&e.kind, ExprKind::Tuple(v) if v.is_empty()) => {
+                    (e.span.file, e.span.start)
+                }
+                _ => continue,
+            };
+            let Some(bindings) = self.using_stmts.remove(&key) else {
+                continue;
+            };
+            let start = stmts[i].span;
+            let rest: Vec<Stmt> = stmts.drain(i + 1..).collect();
+            stmts.pop();
+            let span = Span {
+                end: trailing
+                    .as_ref()
+                    .map(|t| t.span.end)
+                    .or_else(|| rest.last().map(|s| s.span.end))
+                    .unwrap_or(start.end),
+                ..start
+            };
+            let body = Block {
+                stmts: rest,
+                trailing: trailing.take(),
+                span,
+                label: None,
+            };
+            let e = self.build_using(bindings, body, start);
+            *trailing = Some(Box::new(e));
+        }
+    }
+
     /// Recover from a failed item / statement that began at `from`: one
     /// diagnostic per mistake. Close braces opened since `from` (not
     /// parens / brackets: an unclosed one is often the error), then stop
@@ -614,6 +754,43 @@ impl<'a> Parser<'a> {
     /// by another `{`?
     fn braces_then_block(&self) -> bool {
         self.braces_then(true)
+    }
+
+    /// `Path { .. };` / `Path { .. },` at the cursor: a struct literal
+    /// ending a `using` statement's binding.
+    fn braces_then_semi(&self) -> bool {
+        let mut i = self.pos;
+        let kind = |i: usize| self.tokens.get(i).map(|t| &t.kind);
+        while matches!(kind(i), Some(TokenKind::Ident(_) | TokenKind::ColonColon)) {
+            i += 1;
+        }
+        if i == self.pos || !matches!(kind(i), Some(TokenKind::LBrace)) {
+            return false;
+        }
+        // Fields (`{ a: 1 }`), or `{}` ending the statement: not a body.
+        let fields = matches!(
+            (kind(i + 1), kind(i + 2)),
+            (Some(TokenKind::Ident(_)), Some(TokenKind::Colon))
+                | (Some(TokenKind::RBrace), Some(TokenKind::Semi))
+        );
+        if !fields {
+            return false;
+        }
+        let mut depth = 0u32;
+        while let Some(k) = kind(i) {
+            match k {
+                TokenKind::LBrace => depth += 1,
+                TokenKind::RBrace => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return matches!(kind(i + 1), Some(TokenKind::Semi | TokenKind::Comma));
+                    }
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+        false
     }
 
     /// `braces_then_block`; with `strict` off, a continued head
@@ -1345,6 +1522,14 @@ impl<'a> Parser<'a> {
                 self.pending_stmts.clear();
                 self.recover(from, Recover::Stmt);
             }
+        }
+        let mut tail = None;
+        self.fold_using_stmts(&mut stmts, &mut tail);
+        if let Some(e) = tail {
+            stmts.push(Stmt {
+                span: e.span,
+                kind: StmtKind::Expr(*e),
+            });
         }
         self.statement_closure_returns(&stmts, None);
         // Untyped `throws` in fn types that no `rethrows` claimed keep the
@@ -5089,6 +5274,7 @@ impl<'a> Parser<'a> {
             }
         }
         self.expect(&TokenKind::RBrace, "`}`")?;
+        self.fold_using_stmts(&mut stmts, &mut trailing);
         Some(Block {
             stmts,
             trailing,
@@ -6528,14 +6714,11 @@ impl<'a> Parser<'a> {
                 }
                 ExprKind::Unsafe(self.parse_block()?)
             }
-            // `using a = e, b = f { body }` is
-            // `{ let a = e; { let b = f; { body } finally { b.drop(); } }
-            // finally { a.drop(); } }`: reverse order, every exit.
             TokenKind::Using => {
                 self.bump();
                 // `using_binding ::= pattern "=" expr`: a name,
                 // or any irrefutable pattern over a temp that is dropped.
-                let mut bindings: Vec<(String, Span, Expr, Option<Pattern>)> = Vec::new();
+                let mut bindings: Vec<UsingBinding> = Vec::new();
                 loop {
                     let span = self.peek_span();
                     let (name, pat) = match self.peek().clone() {
@@ -6549,99 +6732,38 @@ impl<'a> Parser<'a> {
                         }
                     };
                     self.expect(&TokenKind::Eq, "`=`")?;
-                    let init = self.parse_head()?;
+                    // `using r = R { .. };`: no body follows the literal.
+                    let init = if self.braces_then_semi() {
+                        self.with_struct_expr(true, Self::parse_expr)?
+                    } else {
+                        self.parse_head()?
+                    };
                     bindings.push((name, span, init, pat));
                     if !self.eat(&TokenKind::Comma) {
                         break;
                     }
                 }
-                let mut body = self.parse_block()?;
-                // The patterns bind in source order, before the body.
-                let lets: Vec<Stmt> = bindings
-                    .iter()
-                    .filter_map(|(name, span, _, pat)| {
-                        Some(Stmt {
-                            kind: StmtKind::LetPattern {
-                                pat: pat.clone()?,
-                                ty: None,
-                                init: Expr {
-                                    span: *span,
-                                    kind: ExprKind::Path(Path {
-                                        segments: vec![PathSegment {
-                                            name: name.clone(),
-                                            generics: Vec::new(),
-                                        }],
-                                        span: *span,
-                                        origin: None,
-                                    }),
-                                },
-                            },
-                            span: *span,
-                        })
-                    })
-                    .collect();
-                body.stmts.splice(0..0, lets);
-                let mut inner = Expr {
-                    span: start,
-                    kind: ExprKind::Block(body),
-                };
-                for (name, span, init, _) in bindings.into_iter().rev() {
-                    let path = |name: &str| Expr {
-                        span,
-                        kind: ExprKind::Path(Path {
-                            segments: vec![PathSegment {
-                                name: name.to_owned(),
-                                generics: Vec::new(),
-                            }],
-                            span,
-                            origin: None,
-                        }),
-                    };
-                    let drop_call = Stmt {
-                        kind: StmtKind::Expr(Expr {
-                            span,
-                            kind: ExprKind::MethodCall {
-                                receiver: Box::new(path(&name)),
-                                method: rokc_ast::USING_DROP_METHOD.to_owned(),
-                                type_args: Vec::new(),
-                                args: Vec::new(),
-                                trailing_closure: None,
-                                origin: None,
-                            },
-                        }),
-                        span,
-                    };
-                    let guarded = Expr {
-                        span: start,
-                        kind: ExprKind::Catch {
-                            body: Box::new(inner),
-                            catches: Vec::new(),
-                            finally: Some(Block {
-                                stmts: vec![drop_call],
-                                trailing: None,
-                                span,
-                                label: None,
-                            }),
-                        },
-                    };
-                    inner = Expr {
-                        span: start,
-                        kind: ExprKind::Block(Block {
-                            stmts: vec![Stmt {
-                                kind: StmtKind::Let {
-                                    name,
-                                    ty: None,
-                                    init,
-                                },
-                                span,
-                            }],
-                            trailing: Some(Box::new(guarded)),
+                // `using x = e;`: scoped to the rest of the block, which
+                // `fold_using_stmts` makes its body.
+                if matches!(self.peek(), TokenKind::Semi) {
+                    if self.stmt_at == Some(start.start) {
+                        self.using_stmts.insert((start.file, start.start), bindings);
+                        return Some(Expr {
                             span: start,
-                            label: None,
-                        }),
-                    };
+                            kind: ExprKind::Tuple(Vec::new()),
+                        });
+                    }
+                    self.error_help(
+                        Code::SYNTAX,
+                        start,
+                        "`using x = e;` is a statement: it covers the rest of its block",
+                        "start a statement with it, or write the block form \
+                         `using x = e { .. }` here",
+                    );
+                    return None;
                 }
-                inner.kind
+                let body = self.parse_block()?;
+                self.build_using(bindings, body, start).kind
             }
             TokenKind::True => {
                 self.bump();

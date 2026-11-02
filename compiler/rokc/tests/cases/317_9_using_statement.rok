@@ -1,0 +1,72 @@
+// expect-exit: 0
+// expect-stdout:
+// use a
+// use b c
+// drop c
+// drop b
+// drop a
+// in loop 0
+// drop l
+// in loop 1
+// drop l
+// early
+// drop e
+// drop v
+// 7
+// drop t
+// caught
+// top a
+// top end
+// drop top
+
+// `using x = e;` binds `x` to the end of the enclosing block; the
+// values are released in reverse order on every way out: falling off
+// the end, `break` / `continue` / `return`, and a thrown error.
+struct R { name: str; }
+impl Drop for R {
+    fn drop(ref self) { println(f"drop {self.name}"); }
+}
+
+fn early(stop: bool) -> i32 {
+    using r = R { name: "e" };
+    if stop {
+        println("early");
+        return 1;
+    }
+    2
+}
+
+fn value() -> i32 {
+    using v = R { name: "v" };
+    let n = 7;
+    n
+}
+
+fn throws_after() throws {
+    using t = R { name: "t" };
+    throw ValueError::new("x");
+}
+
+fn main() throws {
+    {
+        using a = R { name: "a" };
+        println("use a");
+        using b = R { name: "b" }, c = R { name: "c" };
+        println(f"use {b.name} {c.name}");
+    }
+    for i in 0..2 {
+        using l = R { name: "l" };
+        println(f"in loop {i}");
+        if i == 0 { continue; }
+    }
+    _ = early(true);
+    println(value());
+    try throws_after() catch _ { println("caught"); }
+    top();
+}
+
+fn top() {
+    using r = R { name: "top" };
+    println("top a");
+    println("top end");
+}

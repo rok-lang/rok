@@ -1,0 +1,25 @@
+// expect-exit: 0
+// expect-stdout:
+// > one
+// > two
+// 2 lines
+
+// `using x = e;` in a script's top-level statements covers the rest of
+// the script; the file closes at its end.
+use rok::std::fs;
+use rok::std::env;
+use rok::core::io::{BufRead, BufReader};
+
+let p = env::temp_dir() / "rok_using_statement_script.txt";
+try fs::write(p, "one\ntwo\n");
+let n = 0;
+{
+    using r = BufReader::new(try fs::open(p));
+    try for line in r.lines() {
+        println(f"> {line}");
+        n += 1;
+    }
+}
+using f = try fs::open(p);
+println(f"{n} lines");
+try fs::remove_file(p);
