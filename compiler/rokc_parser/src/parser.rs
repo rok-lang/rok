@@ -119,6 +119,9 @@ pub struct Parser<'a> {
     /// The bindings of each `using x = e;` statement, by its marker's
     /// span start, until its block is done.
     using_stmts: std::collections::HashMap<(u32, u32), Vec<UsingBinding>>,
+    /// Parameter patterns parsed so far, each with the temporary that
+    /// stands for its parameter; a fn or closure takes its own.
+    param_pats: Vec<(String, Pattern)>,
     /// Mount path of the package being parsed (`""`: the one being
     /// built); `pkg::name!` names its meta blocks.
     package: String,
@@ -341,6 +344,7 @@ impl<'a> Parser<'a> {
             name_pos: false,
             stmt_at: None,
             using_stmts: std::collections::HashMap::new(),
+            param_pats: Vec::new(),
             ret_frames: Vec::new(),
             closure_returns: std::collections::HashMap::new(),
             package: String::new(),
@@ -371,17 +375,19 @@ impl<'a> Parser<'a> {
     }
 
     fn backtracks<T>(&mut self, f: impl FnOnce(&mut Self) -> Option<T>) -> bool {
-        let (pos, n_diags, n_pending, n_lifted) = (
+        let (pos, n_diags, n_pending, n_lifted, n_pats) = (
             self.pos,
             self.diagnostics.len(),
             self.pending_stmts.len(),
             self.lifted.len(),
+            self.param_pats.len(),
         );
         let failed = f(self).is_none();
         self.pos = pos;
         self.diagnostics.truncate(n_diags);
         self.pending_stmts.truncate(n_pending);
         self.lifted.truncate(n_lifted);
+        self.param_pats.truncate(n_pats);
         failed
     }
 
@@ -527,7 +533,7 @@ impl<'a> Parser<'a> {
     /// `using a = e, b = f { body }` is
     /// `{ let a = e; { let b = f; { body } finally { b.drop(); } }
     /// finally { a.drop(); } }`: reverse order, every exit.
-    fn build_using(&mut self, bindings: Vec<UsingBinding>, mut body: Block, start: Span) -> Expr {
+    fn build_using(bindings: Vec<UsingBinding>, mut body: Block, start: Span) -> Expr {
         // The patterns bind in source order, before the body.
         let lets: Vec<Stmt> = bindings
             .iter()
@@ -651,8 +657,112 @@ impl<'a> Parser<'a> {
                 span,
                 label: None,
             };
-            let e = self.build_using(bindings, body, start);
+            let e = Self::build_using(bindings, body, start);
             *trailing = Some(Box::new(e));
+        }
+    }
+
+    /// `let pat = temp;` for each pattern parameter. A tuple of names,
+    /// `_` and tuples is a chain of `let (a, b) = ..` (checked for its
+    /// length), as a `let` statement parses.
+    fn param_lets(&mut self, pats: Vec<(String, Pattern)>) -> Vec<Stmt> {
+        let mut out = Vec::new();
+        for (name, pat) in pats {
+            self.param_let(name, pat, &mut out);
+        }
+        out
+    }
+
+    fn param_let(&mut self, name: String, pat: Pattern, out: &mut Vec<Stmt>) {
+        let span = pat.span;
+        let init = Expr {
+            span,
+            kind: ExprKind::Path(Path::new(
+                vec![PathSegment {
+                    name,
+                    generics: Vec::new(),
+                }],
+                span,
+            )),
+        };
+        let flat = matches!(&pat.kind, PatternKind::Tuple(ps) if ps.iter().all(|p| matches!(
+            p.kind,
+            PatternKind::Binding { sub: None, .. } | PatternKind::Wildcard | PatternKind::Tuple(_)
+        )));
+        let PatternKind::Tuple(ps) = pat.kind else {
+            out.push(Stmt {
+                kind: StmtKind::LetPattern {
+                    pat,
+                    ty: None,
+                    init,
+                },
+                span,
+            });
+            return;
+        };
+        if !flat {
+            out.push(Stmt {
+                kind: StmtKind::LetPattern {
+                    pat: Pattern {
+                        kind: PatternKind::Tuple(ps),
+                        span,
+                    },
+                    ty: None,
+                    init,
+                },
+                span,
+            });
+            return;
+        }
+        let mut names = Vec::new();
+        let mut nested = Vec::new();
+        for p in ps {
+            match p.kind {
+                PatternKind::Binding { name, .. } => names.push(name),
+                PatternKind::Wildcard => names.push("_".to_owned()),
+                _ => {
+                    let t = self.fresh_destructure_temp();
+                    names.push(t.clone());
+                    nested.push((t, p));
+                }
+            }
+        }
+        out.push(Stmt {
+            kind: StmtKind::LetTuple {
+                names,
+                rest: None,
+                ty: None,
+                init,
+            },
+            span,
+        });
+        for (t, p) in nested {
+            self.param_let(t, p, out);
+        }
+    }
+
+    /// A closure body with its pattern parameters destructured first.
+    fn with_param_lets(&mut self, body: Expr, pats: Vec<(String, Pattern)>) -> Expr {
+        if pats.is_empty() {
+            return body;
+        }
+        let span = body.span;
+        let stmts = self.param_lets(pats);
+        let block = match body.kind {
+            ExprKind::Block(mut b) if b.label.is_none() => {
+                b.stmts.splice(0..0, stmts);
+                b
+            }
+            kind => Block {
+                stmts,
+                trailing: Some(Box::new(Expr { kind, span })),
+                span,
+                label: None,
+            },
+        };
+        Expr {
+            span,
+            kind: ExprKind::Block(block),
         }
     }
 
@@ -3798,6 +3908,7 @@ impl<'a> Parser<'a> {
         };
         self.expect(&TokenKind::LParen, "`(`")?;
         let untyped_mark = self.untyped_throws.len();
+        let pats_mark = self.param_pats.len();
         let mut params = Vec::new();
         let mut attrs = attrs;
         while !matches!(self.peek(), TokenKind::RParen | TokenKind::Eof) {
@@ -3816,6 +3927,7 @@ impl<'a> Parser<'a> {
         }
         self.expect(&TokenKind::RParen, "`)`")?;
         let rparen = self.prev_span();
+        let pats: Vec<(String, Pattern)> = self.param_pats.drain(pats_mark..).collect();
 
         let mut generics = generics;
         self.desugar_variadic(&mut params);
@@ -3857,7 +3969,9 @@ impl<'a> Parser<'a> {
             self.doc_attrs_at(self.pos + 1, true, &mut attrs);
             let (b, _) = self.ret_frame(None, Self::parse_block);
             self.fn_names.pop();
-            Some(b?)
+            let mut b = b?;
+            b.stmts.splice(0..0, self.param_lets(pats));
+            Some(b)
         } else {
             self.expect(&TokenKind::Semi, "`;` or function body")?;
             None
@@ -4135,7 +4249,28 @@ impl<'a> Parser<'a> {
             });
         }
 
-        let name = if let TokenKind::Ident(n) = self.peek().clone() {
+        // `(a, b): (i32, i32)` / `P { x, y }: P`: a temporary parameter,
+        // destructured at the start of the body (`param_pats`).
+        let pattern_start = matches!(self.peek(), TokenKind::LParen)
+            || matches!(self.peek(), TokenKind::Ident(_))
+                && matches!(
+                    self.peek_next(),
+                    Some(TokenKind::LBrace | TokenKind::ColonColon)
+                );
+        let name = if pattern_start {
+            let pat = self.with_struct_expr(true, Self::parse_pattern_atom)?;
+            if by_ref {
+                self.error_help(
+                    Code::SYNTAX,
+                    start,
+                    "a `ref` parameter is a name, not a pattern",
+                    "write `ref p: T` and destructure `p` in the body",
+                );
+            }
+            let name = self.fresh_destructure_temp();
+            self.param_pats.push((name.clone(), pat));
+            name
+        } else if let TokenKind::Ident(n) = self.peek().clone() {
             self.bump();
             n
         } else {
@@ -4143,7 +4278,10 @@ impl<'a> Parser<'a> {
             self.error(
                 Code::SYNTAX,
                 s,
-                format!("expected parameter name, found {}", self.peek().describe()),
+                format!(
+                    "expected parameter name or pattern, found {}",
+                    self.peek().describe()
+                ),
             );
             return None;
         };
@@ -6299,9 +6437,7 @@ impl<'a> Parser<'a> {
         let bad = match &first.kind {
             TokenKind::Bang if glued => None,
             TokenKind::Bang => Some("space between `!` and `in`"),
-            TokenKind::Ident(w) if w == "not" && !first.raw => {
-                Some("`not in` is not an operator")
-            }
+            TokenKind::Ident(w) if w == "not" && !first.raw => Some("`not in` is not an operator"),
             _ => return None,
         };
         Some(("∉", 2, bad.map(|m| (first.span, m))))
@@ -6763,7 +6899,7 @@ impl<'a> Parser<'a> {
                     return None;
                 }
                 let body = self.parse_block()?;
-                self.build_using(bindings, body, start).kind
+                Self::build_using(bindings, body, start).kind
             }
             TokenKind::True => {
                 self.bump();
@@ -7974,10 +8110,12 @@ impl<'a> Parser<'a> {
     /// `parse_closure_expr` for a trailing closure of a call to `label`
     /// (`span`: the closure's).
     fn closure_expr(&mut self, label: Option<String>, span: Span) -> Option<ExprKind> {
+        let mark = self.param_pats.len();
         let (params, ret_ty) = self.parse_closure_head()?;
+        let pats: Vec<(String, Pattern)> = self.param_pats.drain(mark..).collect();
         let body_at = self.peek_span();
         let (body, bare) = self.ret_frame(label, Self::parse_expr);
-        let body = body?;
+        let body = self.with_param_lets(body?, pats);
         // `-> T` only before a block body.
         if ret_ty.is_some() && !matches!(&body.kind, ExprKind::Block(b) if b.label.is_none()) {
             self.error_help(
@@ -8022,10 +8160,13 @@ impl<'a> Parser<'a> {
             return None;
         }
         let span = self.peek_span();
+        let mark = self.param_pats.len();
         let (params, ret_ty) = self.parse_closure_head()?;
+        let pats: Vec<(String, Pattern)> = self.param_pats.drain(mark..).collect();
         let body_span = self.peek_span();
         let (block, bare) = self.ret_frame(label, Self::parse_block);
-        let block = block?;
+        let mut block = block?;
+        block.stmts.splice(0..0, self.param_lets(pats));
         self.note_closure_returns(span, bare);
         Some(Box::new(Expr {
             span,
