@@ -69,8 +69,9 @@ let server = task::spawn_local(async {
     try! l.close();
     log
 });
-let ccfg = try! ClientConfig::new();
-ccfg.root_certs = try! Certificate::from_pem(CA);
+// Only the test CA: the host's trust store (`SSL_CERT_FILE` from cargo)
+// may be out of a wasm sandbox's reach.
+let ccfg = ClientConfig { root_certs: try! Certificate::from_pem(CA) };
 ccfg.early_data = "GET /async".as_bytes().to_list();
 for i in 0..3 {
     let s = try! await net::tcp_connect_async(f"{addr}");
