@@ -1,0 +1,22 @@
+// expect-exit: 101
+// expect-stderr: thread 'main' panicked at tests/cases/for_ref_resize_in_callee_panics.rok:18:9:
+// expect-stderr: SliceMut used after its list was resized (push, insert, clear, ...): make the view again after the resize
+// expect-stdout:
+// 1
+
+// A resize the compiler cannot see (inside a called function) makes the
+// next use of the `for ref` element panic.
+struct P { x: i32; }
+
+fn grow(ps: List<P>) {
+    ps.push(P { x: 0 });
+}
+
+fn main() {
+    let ps: List<P> = [P { x: 1 }, P { x: 2 }];
+    for ref p in ps {
+        p.x += 1;
+        println(f"{ps.len() - 1}");
+        grow(ps);
+    }
+}

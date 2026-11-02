@@ -1257,11 +1257,15 @@ impl Printer {
                 iter,
                 body,
                 is_await,
+                by_ref,
             } => {
                 if let Some(l) = label {
                     let _ = write!(self.out, "'{l}: ");
                 }
                 self.s(if *is_await { "for await " } else { "for " });
+                if *by_ref {
+                    self.s("ref ");
+                }
                 self.pat(pat);
                 self.s(" in ");
                 self.head(iter);

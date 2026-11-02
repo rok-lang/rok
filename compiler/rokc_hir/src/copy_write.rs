@@ -1,6 +1,6 @@
-//! `write_to_copy`: a field write on a copy nothing reads
-//! afterwards. Structs are values, so by-value parameters,
-//! `for` bindings and `let x = xs[i]` hold copies.
+//! A field write on a copy nothing reads afterwards is an error: the
+//! change is lost. Structs are values, so by-value parameters, `for`
+//! bindings and `let x = xs[i]` hold copies.
 //!
 //! Reported when no read of the variable can follow: none later, and none
 //! in a loop around the write that the variable outlives. A read feeding
@@ -9,15 +9,18 @@
 
 use std::collections::{HashMap, HashSet};
 
-use rokc_ast::{Expr, ExprKind, FnDef, PatternKind, Stmt, StmtKind};
-use rokc_diagnostic::Span;
-use rokc_hir::walk::{AstVisitor, walk_fn, walk_stmt};
+use rokc_ast::{Expr, ExprKind, FnDef, ImplItem, Item, PatternKind, Stmt, StmtKind, TraitItem};
+use rokc_diagnostic::{Code, RokDiagnostic, Span};
 
-/// A lost write: where, the headline, the fix.
-pub struct Lost {
-    pub span: Span,
-    pub msg: String,
-    pub help: String,
+use crate::walk::{AstVisitor, walk_fn};
+
+/// A lost write: where, the headline, the help and an edit.
+struct Lost {
+    span: Span,
+    msg: String,
+    help: String,
+    /// Insert `.1` at `.0`, titled `.2`.
+    fix: Option<(Span, String, String)>,
 }
 
 enum Kind {
@@ -25,8 +28,8 @@ enum Kind {
     Receiver(usize),
     /// The parameter of that index.
     Param(usize),
-    /// A `for` binding over `iter` (as written).
-    Loop(String),
+    /// A `for` binding (at that span) over `iter` (as written).
+    Loop(String, Span),
     /// A `let` of an element read (`xs[i]`, as written).
     Element(String),
 }
@@ -59,7 +62,7 @@ struct V {
     fn_name: String,
     sig: Option<FnDef>,
     params: HashMap<(u32, u32), Kind>,
-    loop_binds: HashMap<(u32, u32), String>,
+    loop_binds: HashMap<(u32, u32), (String, Span)>,
     element_lets: HashMap<(u32, u32), String>,
     /// Roots of write targets: not reads.
     skip: HashSet<(u32, u32)>,
@@ -74,8 +77,47 @@ const fn key(s: Span) -> (u32, u32) {
     (s.file, s.start)
 }
 
+/// The lost writes in the bodies of `items`, as errors.
+pub fn check(items: &[Item]) -> Vec<RokDiagnostic> {
+    let mut seen = HashSet::new();
+    let mut out = Vec::new();
+    let mut each = |f: &FnDef| {
+        for l in check_fn(f) {
+            if !l.span.is_dummy() && seen.insert(key(l.span)) {
+                let mut d =
+                    RokDiagnostic::error(Code::INVALID_ASSIGNMENT, l.span, l.msg).with_help(l.help);
+                if let Some((at, text, title)) = l.fix {
+                    d = d.with_fix(at, text, title);
+                }
+                out.push(d);
+            }
+        }
+    };
+    for item in items {
+        match item {
+            Item::Fn(f) => each(f),
+            Item::Impl(d) => {
+                for i in &d.items {
+                    if let ImplItem::Method(f) = i {
+                        each(f);
+                    }
+                }
+            }
+            Item::Trait(t) => {
+                for i in &t.items {
+                    if let TraitItem::Method(f) = i {
+                        each(f);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
 /// The lost writes of `f`'s body.
-pub fn check_fn(f: &FnDef) -> Vec<Lost> {
+fn check_fn(f: &FnDef) -> Vec<Lost> {
     if f.body.is_none() {
         return Vec::new();
     }
@@ -113,17 +155,6 @@ impl V {
     }
 }
 
-/// The lost writes of top-level statements.
-pub fn check_stmts(stmts: &[Stmt]) -> Vec<Lost> {
-    let mut v = V::default();
-    v.push_scope();
-    for s in stmts {
-        walk_stmt(&mut v, s);
-    }
-    v.pop_scope();
-    v.out
-}
-
 /// The variable `p.f.g` writes, and the root's span.
 fn target_root(e: &Expr) -> Option<(&str, Span)> {
     let (ExprKind::Field(base, _) | ExprKind::TupleField(base, _)) = &e.kind else {
@@ -151,25 +182,6 @@ fn pure(e: &Expr) -> bool {
         ExprKind::OpInfix { lhs, rhs, .. } => pure(lhs) && pure(rhs),
         _ => false,
     }
-}
-
-/// `text` with the variable `name` (followed by `.`) replaced by `with`.
-fn rename(text: &str, name: &str, with: &str) -> String {
-    let pat = format!("{name}.");
-    let mut out = String::new();
-    let mut rest = text;
-    while let Some(i) = rest.find(&pat) {
-        let starts_word = rest[..i]
-            .chars()
-            .next_back()
-            .is_none_or(|c| !(c.is_alphanumeric() || c == '_' || c == '.'));
-        out.push_str(&rest[..i]);
-        out.push_str(if starts_word { with } else { name });
-        out.push('.');
-        rest = &rest[i + pat.len()..];
-    }
-    out.push_str(rest);
-    out
 }
 
 impl V {
@@ -237,16 +249,25 @@ impl V {
             return;
         };
         let (name, f, target) = (&v.name, &self.fn_name, &w.target);
-        let (msg, help) = match kind {
+        let at_start = |s: Span| Span { end: s.start, ..s };
+        let (msg, help, fix) = match kind {
             Kind::Receiver(param) => (
                 format!(
                     "`{target}` is set on a copy of the receiver, so the change is lost when \
                      `{f}` returns"
                 ),
                 format!(
-                    "take `ref self` to change the caller's value: `{}`",
+                    "take `ref self` to change the caller's value: `{}`; to change a local \
+                     copy, write `let c = self;` and change `c`",
                     self.by_ref(*param)
                 ),
+                self.sig.as_ref().map(|s| {
+                    (
+                        at_start(s.params[*param].span),
+                        "ref ".to_owned(),
+                        "write `ref self`".to_owned(),
+                    )
+                }),
             ),
             Kind::Param(param) => (
                 format!(
@@ -258,33 +279,39 @@ impl V {
                      with `ref` before the argument; or return `{name}`",
                     self.by_ref(*param)
                 ),
+                None,
             ),
-            Kind::Loop(iter) => {
-                let simple = !iter.contains(['(', '.', '[', ' ']);
-                let (list, each) = if simple {
-                    (iter.as_str(), rename(&w.text, name, &format!("{iter}[i]")))
-                } else {
-                    ("xs", rename(&w.text, name, "xs[i]"))
-                };
+            Kind::Loop(iter, pat) => {
+                let list = iter.strip_suffix(".iter()").unwrap_or(iter);
                 (
                     format!(
-                        "`{target}` is set on a copy of the element, so `{iter}` does not change"
+                        "`{target}` is set on a copy of the element, so `{list}` does not change"
                     ),
                     format!(
-                        "loop over the indexes to change the elements: \
-                         `for i in 0..{list}.len() {{ {each}; }}`"
+                        "bind each element as a place with `for ref`: \
+                         `for ref {name} in {list} {{ {}; }}`",
+                        w.text
                     ),
+                    (list == iter).then(|| {
+                        (
+                            at_start(*pat),
+                            "ref ".to_owned(),
+                            format!("write `for ref {name}`"),
+                        )
+                    }),
                 )
             }
             Kind::Element(from) => (
                 format!("`{target}` is set on a copy of `{from}`, so `{from}` does not change"),
                 format!("write it back afterwards: `{from} = {name};`"),
+                None,
             ),
         };
         self.out.push(Lost {
             span: w.span,
             msg,
             help,
+            fix,
         });
     }
 }
@@ -297,11 +324,13 @@ impl AstVisitor for V {
                 self.read(&n, e.span);
             }
             ExprKind::SelfLower => self.read("self", e.span),
-            ExprKind::For { pat, iter, .. } => {
+            ExprKind::For {
+                pat, iter, by_ref, ..
+            } => {
                 self.loops.push((e.span.start, e.span.end));
-                if let PatternKind::Binding { sub: None, .. } = &pat.kind {
-                    self.loop_binds
-                        .insert(key(pat.span), rokc_ast::print::print_expr(iter));
+                if let (PatternKind::Binding { sub: None, .. }, false) = (&pat.kind, by_ref) {
+                    let iter = rokc_ast::print::print_expr(iter);
+                    self.loop_binds.insert(key(pat.span), (iter, pat.span));
                 }
             }
             ExprKind::While { .. } | ExprKind::Loop { .. } => {
@@ -355,7 +384,7 @@ impl AstVisitor for V {
         let kind = self
             .params
             .remove(&k)
-            .or_else(|| self.loop_binds.remove(&k).map(Kind::Loop))
+            .or_else(|| self.loop_binds.remove(&k).map(|(i, s)| Kind::Loop(i, s)))
             .or_else(|| self.element_lets.remove(&k).map(Kind::Element));
         self.vars.push(Var {
             name: name.to_owned(),

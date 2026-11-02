@@ -6527,6 +6527,7 @@ impl<'a> Parser<'a> {
                     TokenKind::For => {
                         self.bump();
                         let is_await = self.eat(&TokenKind::Await);
+                        let by_ref = self.eat(&TokenKind::Ref);
                         let pat = self.parse_pattern()?;
                         self.expect_kw("in")?;
                         let iter = self.parse_head()?;
@@ -6537,6 +6538,7 @@ impl<'a> Parser<'a> {
                             iter: Box::new(iter),
                             body,
                             is_await,
+                            by_ref,
                         }
                     }
                     TokenKind::LBrace => {
@@ -6564,6 +6566,8 @@ impl<'a> Parser<'a> {
                 self.bump();
                 // `for await pat in stream`.
                 let is_await = self.eat(&TokenKind::Await);
+                // `for ref x in xs`: each element as a place.
+                let by_ref = self.eat(&TokenKind::Ref);
                 let pat = self.parse_pattern()?;
                 self.expect_kw("in")?;
                 let iter = self.parse_head()?;
@@ -6574,6 +6578,7 @@ impl<'a> Parser<'a> {
                     iter: Box::new(iter),
                     body,
                     is_await,
+                    by_ref,
                 }
             }
             TokenKind::Match => {

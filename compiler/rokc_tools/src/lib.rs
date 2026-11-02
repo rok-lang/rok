@@ -5,7 +5,6 @@
 pub mod analysis;
 pub mod bindgen;
 mod complete;
-mod copy_write;
 pub mod doc;
 pub mod jupyter;
 mod line_edit;

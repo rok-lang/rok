@@ -381,6 +381,8 @@ pub enum ExprKind {
         body: Block,
         /// `for await` over a `Stream`.
         is_await: bool,
+        /// `for ref x in xs`: `x` is each element as a place.
+        by_ref: bool,
     },
     /// Prefix `try e` / `try? e` / `try! e`: marks the throwing calls in
     /// `e` (everything to its right).

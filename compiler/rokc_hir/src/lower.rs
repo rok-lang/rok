@@ -3172,6 +3172,9 @@ struct LowerCtx<'a> {
     /// Narrowing of a `[ref]` cell → the read of its rebinding: each read
     /// tests the cell again, as a capture may have changed it.
     cell_views: HashMap<LocalId, HirExpr>,
+    /// A `for ref` binding → the element place it names (`xs[i]`). Reads
+    /// and writes of the binding lower that place instead.
+    places: HashMap<LocalId, Expr>,
     /// Narrowings ended by assignment: (name, rebinding, scope
     /// index). Branches undo and rejoin them.
     unnarrowed: Vec<(String, LocalId, usize)>,
@@ -3261,6 +3264,7 @@ impl<'a> LowerCtx<'a> {
         self.value_captured.retain(kept);
         self.narrowed.retain(|l, _| kept(l));
         self.cell_views.retain(|l, _| kept(l));
+        self.places.retain(|l, _| kept(l));
         self.guard_lets.retain(|g| kept(&g.0));
         self.lit_lets.retain(|l, _| kept(l));
         self.unnarrowed.retain(|u| kept(&u.1));
@@ -3365,6 +3369,7 @@ impl<'a> LowerCtx<'a> {
             next_synth: 0,
             narrowed: HashMap::new(),
             cell_views: HashMap::new(),
+            places: HashMap::new(),
             unnarrowed: Vec::new(),
             guard_lets: Vec::new(),
             lit_lets: HashMap::new(),

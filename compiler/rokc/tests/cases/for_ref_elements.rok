@@ -1,0 +1,71 @@
+// expect-exit: 0
+// expect-stdout:
+// 7 7
+// 8 107
+// 10 30
+// 26
+// [2, 4, 6]
+// [2, 0, 0]
+// 10
+// 3 4
+// 6 6
+// 0 1
+
+// `for ref x in xs` binds each element as a place: reads see the
+// element, writes (whole, field, compound, `ref self` method) reach it.
+// Lists, `SliceMut` views and arrays; a field or a `ref` parameter too.
+
+struct P { x: i32; y: i32; }
+impl P { fn bump(ref self) { self.y += 100; } }
+
+struct Grid { cells: [P; 2]; rows: List<P>; }
+
+impl Grid {
+    fn shift(ref self) {
+        for ref c in self.cells { c.x += 1; }
+        for ref r in self.rows { r.y += 1; }
+    }
+}
+
+fn reset(ref ps: List<P>) {
+    for ref p in ps { p = P { x: 0, y: 1 }; }
+}
+
+let ps = [P { x: 1, y: 0 }, P { x: 2, y: 0 }];
+for ref p in ps { p.x = 7; p.y += p.x; }
+println(f"{ps[0].x} {ps[1].y}");
+for ref p in ps { p.bump(); p = P { x: p.x + 1, y: p.y }; }
+println(f"{ps[0].x} {ps[1].y}");
+
+let arr = [P { x: 1, y: 1 }, P { x: 2, y: 2 }, P { x: 3, y: 3 }];
+for ref q in arr { q.x *= 10; }
+println(f"{arr[0].x} {arr[2].x}");
+
+// A shadowing `let` inside the body is a new variable.
+let total = 0;
+for ref p in ps { total += p.x; if p.x > 0 { let p = 5; total += p; } }
+println(f"{total}");
+
+let xs: List<i32> = [1, 2, 3];
+for ref x in xs { x *= 2; }
+println(f"{xs:?}");
+let s: collections::SliceMut<i32> = xs[1:];
+for ref x in s { x = 0; }
+println(f"{xs:?}");
+
+'outer: for ref p in ps {
+    for ref q in arr {
+        if q.x > 10 { continue 'outer; }
+        p.y = q.x;
+    }
+}
+println(f"{ps[0].y}");
+
+let g = Grid { cells: [P { x: 2, y: 0 }, P { x: 3, y: 0 }], rows: [P { x: 0, y: 3 }] };
+g.shift();
+println(f"{g.cells[0].x} {g.cells[1].x}");
+g.shift();
+g.shift();
+println(f"{g.cells[1].x} {g.rows[0].y}");
+reset(ref ps);
+println(f"{ps[1].x} {ps[1].y}");

@@ -399,7 +399,9 @@ codes! {
     "The left side of `=` cannot be assigned: a const, a static, a variable not declared \
      with `let`, or a value captured by a closure without `[ref name]`. Assign to a `let` \
      variable, a field of one, or an element of one. A left side that is a value, such as \
-     a call result, is E0141.";
+     a call result, is E0141. A field set on a copy that nothing reads afterwards (a \
+     by-value `self` or parameter, a `for` binding, a `let` of `xs[i]`) is lost: take \
+     `ref self` or a `ref` parameter, write `for ref x in xs`, or write the element back.";
 
     58 INVALID_CAPTURE Type "invalid closure capture"
     "A closure's capture list (`[ref x]`) names something it cannot capture: no variable of \

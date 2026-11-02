@@ -111,10 +111,6 @@ pub const LINTS: &[Lint] = &[
         "use of a `#[deprecated]` function, method, field, type, constant or static",
     ),
     warn(
-        "write_to_copy",
-        "a field set on a copy (a by-value parameter or `self`, a `for` binding, a `let` of `xs[i]`) that nothing reads afterwards",
-    ),
-    warn(
         "unused_doc_comments",
         "a doc comment on what is not documented (a statement, an expression, a match arm)",
     ),
@@ -187,6 +183,8 @@ pub const REMOVED_LINTS: &[&str] = &[
     "unqualified_meta",
     // Retired: `let` may redeclare a name.
     "shadowed_loop_var",
+    // Error now: a field write on a copy nothing reads.
+    "write_to_copy",
 ];
 
 /// A lint added in 0.1.6 (tests build a later-release table with it).
@@ -1225,7 +1223,6 @@ impl<'a> Cx<'a> {
                 walk_stmt(self, s);
             }
             self.pop_scope();
-            self.lost_writes(crate::copy_write::check_stmts(&f.stmts));
         }
         self.unused_imports(&f.items);
         let names = std::mem::take(&mut self.file_names);
@@ -1363,22 +1360,8 @@ impl<'a> Cx<'a> {
         self.ref_params
             .extend(f.params.iter().filter(|p| p.by_ref).map(|p| key(p.span)));
         walk_fn(self, f);
-        self.lost_writes(crate::copy_write::check_fn(f));
         if let Some(b) = &f.body {
             self.unreachable(&b.stmts, b.trailing.as_deref());
-        }
-    }
-
-    fn lost_writes(&mut self, lost: Vec<crate::copy_write::Lost>) {
-        for l in lost {
-            self.findings.push(Finding {
-                lint: "write_to_copy",
-                span: l.span,
-                msg: l.msg,
-                notes: vec![format!("help: {}", l.help)],
-                secondary: None,
-                base: None,
-            });
         }
     }
 
@@ -2146,7 +2129,13 @@ impl AstVisitor for Cx<'_> {
                 }
                 self.block(body);
             }
-            ExprKind::For { pat, body, .. } => {
+            ExprKind::For {
+                pat, body, by_ref, ..
+            } => {
+                // A `for ref` binding writes through: a write is a use.
+                if *by_ref {
+                    self.ref_params.insert(key(pat.span));
+                }
                 pat_names(pat, &mut self.file_names);
                 self.block(body);
             }

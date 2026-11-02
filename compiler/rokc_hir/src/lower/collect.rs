@@ -424,6 +424,9 @@ pub fn lower_full(
         );
     }
     let mut module = finish(c, [lib, user], raw_uses, &at);
+    module
+        .diagnostics
+        .extend(crate::copy_write::check(&user.items));
     crate::cfg_off::note_dropped(&mut module.diagnostics, &dropped);
     module
 }
@@ -5534,8 +5537,15 @@ fn check_derives(env: &Env<'_>, program: &Program) -> Vec<rokc_diagnostic::Span>
                 continue;
             };
             ctx.at.set(at);
+            // `Default` takes a field's declared default instead.
+            let defaulted = |field: &str| {
+                tr == "Default"
+                    && matches!(item, Item::Struct(s) if matches!(&s.kind,
+                        rokc_ast::StructKind::Named(fs)
+                            if fs.iter().any(|f| f.name == field && f.default.is_some())))
+            };
             for (field, ty) in &fields {
-                if !ctx.has_trait(ty, key) {
+                if !defaulted(field) && !ctx.has_trait(ty, key) {
                     failed.push(at);
                     ctx.emit_error(
                         Code::CANNOT_DERIVE,

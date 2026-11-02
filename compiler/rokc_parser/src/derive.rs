@@ -438,11 +438,21 @@ fn struct_body(tr: &str, s: &StructDef) -> String {
             "    fn clone(self) -> Self {{ return {}; }}\n",
             struct_value(s, &fields, &|f| format!("self.{f}.clone()"))
         ),
-        "Default" => format!(
-            "    fn default() -> Self {{ return {}; }}\n",
-            struct_value(s, &fields, &|_| "rok::core::marker::default_of()"
-                .to_owned())
-        ),
+        // A field with a declared default is left out: the literal fills it.
+        "Default" => {
+            let open: Vec<String> = match &s.kind {
+                StructKind::Named(fs) => fs
+                    .iter()
+                    .filter(|f| f.default.is_none())
+                    .map(|f| f.name.clone())
+                    .collect(),
+                _ => fields,
+            };
+            format!(
+                "    fn default() -> Self {{ return {}; }}\n",
+                struct_value(s, &open, &|_| "rok::core::marker::default_of()".to_owned())
+            )
+        }
         "Debug" => {
             let named = matches!(s.kind, StructKind::Named(_));
             let shown: Vec<(Option<&str>, String)> = fields
