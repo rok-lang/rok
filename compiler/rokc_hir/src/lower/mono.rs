@@ -1105,7 +1105,7 @@ pub(super) fn has_unknown(t: &HirTy) -> bool {
     }
 }
 
-fn with_ok(declared: HirTy, ok: HirTy) -> HirTy {
+pub(super) fn with_ok(declared: HirTy, ok: HirTy) -> HirTy {
     match declared {
         HirTy::Throws { err, .. } => HirTy::Throws {
             ok: Box::new(ok),

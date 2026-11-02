@@ -3216,6 +3216,9 @@ struct LowerCtx<'a> {
     /// inference: open type parameters become inference variables
     /// (`infer`), not errors.
     infer_vars: bool,
+    /// Unsuffixed number literals of the `let` initializer being inferred
+    /// that stay open (`infer::open_literals`).
+    open_lits: Vec<Span>,
     /// Already lowered expressions an AST desugar refers to by a `#sN`
     /// path (`expr::splice`).
     splices: HashMap<String, HirExpr>,
@@ -3387,6 +3390,7 @@ impl<'a> LowerCtx<'a> {
             coro: None,
             assoc_names: Vec::new(),
             infer_vars: false,
+            open_lits: Vec::new(),
             splices: HashMap::new(),
             at: std::cell::Cell::new(at),
             temps: std::cell::Cell::new(0),
@@ -4505,6 +4509,11 @@ impl<'a> LowerCtx<'a> {
             goals.push((rcx.resolve_ast_ty(&w.ty), &w.bounds));
         }
         for (bty, bounds) in goals {
+            // An open variable is checked once solved.
+            let bty = infer::zonk(self, &bty);
+            if infer::has_var(self, &bty) {
+                continue;
+            }
             for b in bounds {
                 let Some(want) = self.bound_ref(b, &gi.module, |t| rcx.resolve_ast_ty(t)) else {
                     continue;

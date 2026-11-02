@@ -1,0 +1,22 @@
+// expect-error: 17:16: conflicting uses of `c`: `i64` here, but `i32` fixed at 16:16
+// expect-error: help: rok never converts numbers implicitly; say the type at the declaration (`let c: i32 = ..`) and convert the other use with `as`
+// expect-error: 19:15: `t` is used as `f64` here, but it holds an integer
+// expect-error: help: rok never converts numbers implicitly; make it a float at the declaration: `let t = 0.0;` (or `let t: f64 = 0;`)
+// expect-error: 21:8: mismatched types: the condition expects `bool`
+
+// A literal-bound `let` gets one type from its uses: no conversion is
+// added, and the fix goes on the declaration.
+
+fn take32(x: i32) -> i32 { x }
+fn take64(x: i64) -> i64 { x }
+fn takef(x: f64) -> f64 { x }
+
+fn main() {
+    let c = 0;
+    _ = take32(c);
+    _ = take64(c);
+    let t = 0;
+    _ = takef(t);
+    let b = 1;
+    if b { }
+}

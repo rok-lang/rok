@@ -1,0 +1,84 @@
+// expect-exit: 0
+// expect-stdout:
+// 4
+// 60
+// 9
+// 3
+// 7
+// 2
+// 1 9
+// 1
+// 6
+// 3
+// 2
+// 2
+// 5
+
+// An unsuffixed literal bound by `let`, and the type arguments of an empty
+// constructor, take their type from the uses that follow in the body;
+// the default applies only when nothing fixes them.
+
+fn count(xs: List<i64>) -> i64 {
+    let c = 0;
+    for x in xs { if x > 1 { c += 1; } }
+    c
+}
+
+fn total(xs: List<i64>) -> i64 {
+    let t = 0;
+    for x in xs { t += x; }
+    return t;
+}
+
+fn take_u8(n: u8) -> u8 { n }
+fn take_i64(n: i64) -> i64 { n }
+
+fn main() {
+    println(count([1, 2, 3, 4, 5]));
+    println(total([10, 20, 30]));
+    // A comparison fixes it too.
+    let lim: u8 = 9;
+    let i = 0;
+    while i < lim { i += 1; }
+    println(take_u8(i));
+    // Literal arithmetic stays open as a whole.
+    let n = 1 + 2;
+    println(take_i64(n));
+    // An open literal argument of a generic constructor.
+    let hits = Atomic::new(0);
+    let step: i64 = 7;
+    hits.fetch_add(step);
+    println(hits.load());
+    // Empty constructors: element types from later uses.
+    let d = Dict::new();
+    d["a"] = 1;
+    d["b"] = 2;
+    println(d.len());
+    let s = Set::new();
+    s.insert("x");
+    let (tx, rx) = channel();
+    try! tx.send(lim);
+    println(f"{s.len()} {rx.recv() ?? 0}");
+    let m = Mutex::new([]);
+    using g = m.lock() { g.get().push(step); }
+    using g = m.lock() { println(g.get().len()); }
+    // Elements of a list literal follow the slot they reach.
+    let xs = [1, 2, 3];
+    let wide: List<u64> = xs;
+    let sum: u64 = 0;
+    for x in wide { sum += x; }
+    println(sum);
+    // A float literal takes `f32` from its use.
+    let half = 1.5;
+    let two: f32 = 2.0;
+    println(half * two);
+    // A negative literal used as an index counts from the end.
+    let last = -1;
+    println(xs[last] - 1);
+    // A tuple of literals.
+    let (a, b) = (1, 1);
+    println(take_u8(a) + take_u8(b));
+    // Unconstrained: the default.
+    let k = 5;
+    println(k);
+}

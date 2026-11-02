@@ -47,19 +47,32 @@ pub(super) fn lower_block(ctx: &mut LowerCtx<'_>, block: &Block) -> HirBlock {
             }),
             StmtKind::LetTuple {
                 names,
+                rest: tuple_rest,
+                ty: None,
+                init,
+            } => {
+                let rest = &block.stmts[i + 1..];
+                ctx.at_span(s.span, |ctx| {
+                    super::infer::lower_let_tuple(
+                        ctx,
+                        names,
+                        tuple_rest.as_ref(),
+                        init,
+                        s.span,
+                        rest,
+                        block,
+                        &mut stmts,
+                    );
+                });
+            }
+            StmtKind::LetTuple {
+                names,
                 rest,
                 ty,
                 init,
             } => ctx.at_span(s.span, |ctx| {
-                lower_let_tuple(
-                    ctx,
-                    names,
-                    rest.as_ref(),
-                    ty.as_ref(),
-                    init,
-                    s.span,
-                    &mut stmts,
-                );
+                let ty = ty.as_ref().map(|t| ctx.resolve_ast_ty(t));
+                lower_let_tuple(ctx, names, rest.as_ref(), ty, init, s.span, &mut stmts);
             }),
             StmtKind::Let {
                 name,
@@ -415,12 +428,11 @@ pub(super) fn lower_let_tuple(
     ctx: &mut LowerCtx<'_>,
     names: &[String],
     rest: Option<&(usize, Option<String>)>,
-    ty: Option<&Ty>,
+    pre_ty: Option<HirTy>,
     init: &Expr,
     span: rokc_diagnostic::Span,
     stmts: &mut Vec<HirStmt>,
 ) {
-    let pre_ty = ty.map(|t| ctx.resolve_ast_ty(t));
     let init_h = lower_expected(ctx, init, pre_ty.clone().unwrap_or(HirTy::Unknown));
     let init_h = match &pre_ty {
         Some(t) => coerce(ctx, t, init_h, &|| "the destructured value".to_owned()),
@@ -2596,15 +2608,17 @@ fn lower_expr_inner(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
             body,
             is_await,
             by_ref,
-        } => lower_for(
-            ctx,
-            label.as_ref(),
-            pat,
-            iter,
-            body,
-            (*is_await, *by_ref),
-            span,
-        ),
+        } => literal_for(ctx, expr).unwrap_or_else(|| {
+            lower_for(
+                ctx,
+                label.as_ref(),
+                pat,
+                iter,
+                body,
+                (*is_await, *by_ref),
+                span,
+            )
+        }),
         ExprKind::Match { scrutinee, arms } => {
             guard_sink(ctx, scrutinee);
             lower_match(ctx, scrutinee, arms, span)
@@ -3831,7 +3845,7 @@ pub(super) fn field_access(
 }
 
 /// An untyped literal built from integers only (`1`, `-1`, `1 + 1`).
-fn is_untyped_int(e: &Expr) -> bool {
+pub(super) fn is_untyped_int(e: &Expr) -> bool {
     fn no_float(e: &Expr) -> bool {
         match &e.kind {
             ExprKind::Literal(l) => !matches!(l, AstLit::Float(_)),
@@ -4086,7 +4100,7 @@ pub(super) fn lower_if(
         HirTy::Unit
     } else if then_div {
         else_ty
-    } else if else_div || then_ty == else_ty {
+    } else if else_div || then_ty == else_ty || super::infer::join(ctx, &then_ty, &else_ty) {
         then_ty
     } else if then_ty == HirTy::Unknown || else_ty == HirTy::Unknown {
         HirTy::Unknown
@@ -12060,6 +12074,75 @@ pub(super) fn is_arith_op(op: &str) -> bool {
     )
 }
 
+/// `for` over literals whose type the loop body picks:
+/// `for i in 0..10 { f_i32(i) }` is `{ let #fr = 0; for i in #fr..10 { .. } }`,
+/// `for x in [1, 2] { .. }` is `{ let #fl = [1, 2]; for x in #fl { .. } }`.
+fn literal_for(ctx: &mut LowerCtx<'_>, expr: &Expr) -> Option<HirExpr> {
+    let span = expr.span;
+    let ExprKind::For {
+        label,
+        pat,
+        iter,
+        body,
+        is_await: false,
+        by_ref,
+    } = &expr.kind
+    else {
+        return None;
+    };
+    let lit = |e: &Expr| super::infer::literal_tree(e).is_some();
+    let (t, init, iter) = match &iter.kind {
+        ExprKind::Range {
+            start: Some(start),
+            end: Some(end),
+            inclusive,
+        } if lit(start) && lit(end) => {
+            let t = tmp_path(ctx, "fr", start.span);
+            let range = Expr {
+                kind: ExprKind::Range {
+                    start: Some(Box::new(t.clone())),
+                    end: Some(end.clone()),
+                    inclusive: *inclusive,
+                },
+                span: iter.span,
+            };
+            (t, (**start).clone(), range)
+        }
+        ExprKind::List(es) if !es.is_empty() && es.iter().all(lit) => {
+            let t = tmp_path(ctx, "fl", iter.span);
+            (t.clone(), (**iter).clone(), t)
+        }
+        _ => return None,
+    };
+    let for_expr = Expr {
+        kind: ExprKind::For {
+            label: label.clone(),
+            pat: pat.clone(),
+            iter: Box::new(iter),
+            body: body.clone(),
+            is_await: false,
+            by_ref: *by_ref,
+        },
+        span,
+    };
+    let block = Expr {
+        kind: ExprKind::Block(Block {
+            stmts: vec![
+                let_stmt(&t, init),
+                Stmt {
+                    kind: StmtKind::Expr(for_expr),
+                    span,
+                },
+            ],
+            trailing: None,
+            span,
+            label: None,
+        }),
+        span,
+    };
+    Some(lower_expr(ctx, &block))
+}
+
 pub(super) fn lower_infix(
     ctx: &mut LowerCtx<'_>,
     op: &str,
@@ -12079,13 +12162,18 @@ pub(super) fn lower_infix(
     } else {
         HirTy::Unknown
     };
-    let (lhs_h, rhs_h) = lower_sibling_pair(ctx, lhs, rhs, lhs_expected);
+    let (mut lhs_h, mut rhs_h) = lower_sibling_pair(ctx, lhs, rhs, lhs_expected);
     if lhs_h.ty == HirTy::Unknown || rhs_h.ty == HirTy::Unknown {
         return poison(span);
     }
+    let open = super::infer::meet(ctx, &mut lhs_h, &mut rhs_h);
     let since = ctx.env.sink.diagnostics.borrow().len();
     let tys = (lhs_h.ty.clone(), rhs_h.ty.clone());
-    let e = lower_infix_typed(ctx, op, lhs_h, rhs_h, rhs, span);
+    let mut e = lower_infix_typed(ctx, op, lhs_h, rhs_h, rhs, span);
+    // An open operand's arithmetic stays open.
+    if let Some(open) = open.filter(|_| is_arith_op(op) && e.ty == tys.0) {
+        e.ty = open;
+    }
     if ctx.env.sink.diagnostics.borrow().len() > since
         && !lit_operand_help(ctx, (lhs, &tys.0), (rhs, &tys.1))
     {
@@ -13699,7 +13787,7 @@ pub(super) fn lower_path(
 
 /// Integer type an unsuffixed literal takes from its expected slot.
 pub(super) fn expected_prim(ctx: &LowerCtx<'_>, want: fn(PrimTy) -> bool) -> Option<PrimTy> {
-    match ctx.current_expected()? {
+    match &super::infer::zonk(ctx, ctx.current_expected()?) {
         HirTy::Prim(p) if want(*p) => Some(*p),
         // `let x: i64 | none = 5` - the sum's single matching variant.
         HirTy::Sum(vs) => {
@@ -13854,7 +13942,11 @@ pub(super) fn lower_literal(
                     format!("integer literal `{shown}` out of range for `{}`", ty.name()),
                 );
             }
-            konst(ConstVal::Int { value, ty }, HirTy::Prim(ty))
+            let open = !has_int_suffix(text) && expected_prim(ctx, int_slot).is_none();
+            konst(
+                ConstVal::Int { value, ty },
+                super::infer::literal_ty(ctx, span, ty, open, negate),
+            )
         }
         AstLit::Float(text) => {
             let suffixed = text.ends_with("f32") || text.ends_with("f64");
@@ -13886,7 +13978,11 @@ pub(super) fn lower_literal(
             } else {
                 v.to_bits()
             };
-            konst(ConstVal::Float { bits, ty }, HirTy::Prim(ty))
+            let open = !suffixed && expected_prim(ctx, PrimTy::is_float).is_none();
+            konst(
+                ConstVal::Float { bits, ty },
+                super::infer::literal_ty(ctx, span, ty, open, negate),
+            )
         }
         AstLit::Bool(b) => konst(ConstVal::Bool(*b), HirTy::Prim(PrimTy::Bool)),
         AstLit::Str(s) => konst(

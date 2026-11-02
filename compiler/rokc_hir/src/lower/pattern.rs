@@ -103,6 +103,7 @@ pub(super) fn lower_match(
                 );
             } else if inferred
                 && a.body.ty != HirTy::Unknown
+                && !super::infer::join(ctx, &result_ty, &a.body.ty)
                 && !coercible(ctx, &result_ty, &a.body.ty)
             {
                 // No sum type is inferred from differing arms.
