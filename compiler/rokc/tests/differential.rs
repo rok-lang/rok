@@ -97,7 +97,7 @@ impl Suite {
     }
 }
 
-const PY_HEAD: &str = r#"import math, struct
+const PY_HEAD: &str = r#"import decimal, math, struct
 def W(v, bits, signed):
     v &= (1 << bits) - 1
     if signed and v >> (bits - 1):
@@ -127,6 +127,14 @@ def ROUNDED(f, x):
     return math.copysign(r, x) if r == 0 else r
 def FMOD(a, b):
     return math.fmod(a, b)
+def ROUND(x):
+    if abs(x) >= 2.0**52:
+        return x
+    return ROUNDED(lambda y: decimal.Decimal(y).quantize(1, decimal.ROUND_HALF_UP), x)
+def FMIN(a, b):
+    return b if a != a else a if b != b else min(a, b)
+def FMAX(a, b):
+    return b if a != a else a if b != b else max(a, b)
 def E(s):
     return s.replace('\\', '\\\\').replace('\n', '\\n').replace('\r', '\\r')
 def BAR(ps):
@@ -540,7 +548,7 @@ fn float_suite(rng: &mut Rng) -> Suite {
         let wb = w.to_bits();
         let fv = format!("f64::from_bits({bits}u64)");
         let fw = format!("f64::from_bits({wb}u64)");
-        match rng.below(8) {
+        match rng.below(9) {
             0 | 1 => s.hole("display", &fv, &format!("repr(FB({bits}))"), Cmp::Float),
             2 if v.is_finite() => s.hole(
                 "literal",
@@ -615,6 +623,7 @@ fn float_suite(rng: &mut Rng) -> Suite {
                     ("floor", "ROUNDED(math.floor, FB({a}))"),
                     ("ceil", "ROUNDED(math.ceil, FB({a}))"),
                     ("trunc", "ROUNDED(math.trunc, FB({a}))"),
+                    ("round", "ROUND(FB({a}))"),
                     ("abs", "abs(FB({a}))"),
                     (
                         "sqrt",
@@ -625,6 +634,24 @@ fn float_suite(rng: &mut Rng) -> Suite {
                     "math",
                     &format!("fb({fv}.{op}())"),
                     &format!("BF({})", py.replace("{a}", &bits.to_string())),
+                    Cmp::Exact,
+                );
+            }
+            // Equal operands (`0.0` / `-0.0`) may give either.
+            8 if v.partial_cmp(&w) != Some(std::cmp::Ordering::Equal) => {
+                let (op, py) = *rng.pick(&[
+                    ("min", "FMIN(FB({a}), FB({b}))"),
+                    ("max", "FMAX(FB({a}), FB({b}))"),
+                    ("copysign", "math.copysign(FB({a}), FB({b}))"),
+                ]);
+                s.hole(
+                    "math2",
+                    &format!("fb({fv}.{op}({fw}))"),
+                    &format!(
+                        "BF({})",
+                        py.replace("{a}", &bits.to_string())
+                            .replace("{b}", &wb.to_string())
+                    ),
                     Cmp::Exact,
                 );
             }

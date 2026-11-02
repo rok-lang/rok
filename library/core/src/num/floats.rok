@@ -1,7 +1,9 @@
 // rok::core::num::floats - `f32` / `f64` inherent methods and constants
 // (stdlib spec 2.1.4). The math functions are libm's (`floor`, `sin`,
 // `pow`, ..) behind the runtime's `rok_f64_*` / `rok_f32_*` symbols
-// (`runtime/rokr/src/math.rs`); `to_bits` / `from_bits` reinterpret
+// (`runtime/rokr/src/math.rs`); the LLVM backend compiles the exact
+// ones (rounding, `abs`, `copysign`, `min` / `max`, `mul_add`) to
+// `math` ops instead (spec 8.7.3). `to_bits` / `from_bits` reinterpret
 // through a union. `sqrt` is the `Sqrt` trait's (num.rok).
 
 // f64
