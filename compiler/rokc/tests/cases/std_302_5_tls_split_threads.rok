@@ -1,0 +1,99 @@
+// needs: net threads
+// expect-exit: 0
+// expect-stdout:
+// client: read 3000000 bytes intact true, server read 3000000 intact true
+
+// A split TLS connection used from two threads on each side: both sides
+// write more than the sockets hold before they read, so each reader
+// must keep reading (and answering KeyUpdates) while its writer waits
+// on a full socket.
+use rok::std::net::{TcpListener, TcpStream, WriteHalf};
+use rok::std::net::tls::{Client, Server, ClientConfig, ServerConfig, Certificate, PrivateKey};
+use rok::std::thread;
+use rok::core::io::IoError;
+
+const CA: str = "-----BEGIN CERTIFICATE-----
+MIIBUzCCAQWgAwIBAgIUHuDQmdyLUvVYGHs5rDw1vYU8bIIwBQYDK2VwMBYxFDAS
+BgNVBAMMC3JvayB0ZXN0IENBMCAXDTI2MTAxNTA3MzYwN1oYDzIxMjYwOTIxMDcz
+NjA3WjAWMRQwEgYDVQQDDAtyb2sgdGVzdCBDQTAqMAUGAytlcAMhAPEMYwkJArdk
+aV3E4nOSir4hNCOt5rCjhq6U1sYe6lTWo2MwYTAdBgNVHQ4EFgQUqTSORZgmA5IP
+oVjCUMKRtKdC4BkwHwYDVR0jBBgwFoAUqTSORZgmA5IPoVjCUMKRtKdC4BkwDwYD
+VR0TAQH/BAUwAwEB/zAOBgNVHQ8BAf8EBAMCAgQwBQYDK2VwA0EAp7tJ5xbNuoRw
+zTq/y0kOz917MctSi+O2E5DLqAoAjtPGehC8163+j0KTLVeOwoTW1dtCRoWHyyYj
+gDBrha3fDQ==
+-----END CERTIFICATE-----
+";
+
+const CERT: str = "-----BEGIN CERTIFICATE-----
+MIIBuTCCAWugAwIBAgIUceOw315SUu5KnTBYX6EEY5MLRJUwBQYDK2VwMBYxFDAS
+BgNVBAMMC3JvayB0ZXN0IENBMCAXDTI2MTAxNTA3MzYwN1oYDzIxMjYwOTIxMDcz
+NjA3WjAUMRIwEAYDVQQDDAlsb2NhbGhvc3QwWTATBgcqhkjOPQIBBggqhkjOPQMB
+BwNCAASlRTaxGpC5fl2aWOE4A94IQYOlLaZEFaEpq/6UIdEL3wPK3Oj3v+97CWRf
+3SsIe8X0/ZpoW+ppyMMO58QOQHyVo4GbMIGYMCYGA1UdEQQfMB2CCWxvY2FsaG9z
+dIIKKi5yb2sudGVzdIcEfwAAATATBgNVHSUEDDAKBggrBgEFBQcDATAOBgNVHQ8B
+Af8EBAMCB4AwCQYDVR0TBAIwADAdBgNVHQ4EFgQU+2+6RW+JViHg6KgvFa5XUjSQ
+rA8wHwYDVR0jBBgwFoAUqTSORZgmA5IPoVjCUMKRtKdC4BkwBQYDK2VwA0EAukE7
+pzRC2g3t6ouc4acMO0OmyO0MjbYSFNJm/1YtvDDcyD0wdOLGa2h0yIV88yXy0+08
+tk985FEEIDyk5wcNDg==
+-----END CERTIFICATE-----
+";
+
+const KEY: str = "-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgcgH7+8UZOnSmYIn9
+1ftUi+QOk+yiBJQf//N6N0MgirqhRANCAASlRTaxGpC5fl2aWOE4A94IQYOlLaZE
+FaEpq/6UIdEL3wPK3Oj3v+97CWRf3SsIe8X0/ZpoW+ppyMMO58QOQHyV
+-----END PRIVATE KEY-----
+";
+
+const BIG: usize = 3000000;
+
+fn data(n: usize, salt: usize) -> List<u8> {
+    let d: List<u8> = [];
+    for i in 0..n { d.push(((i + salt) % 251) as u8); }
+    d
+}
+
+/// In chunks, each followed by a KeyUpdate the peer's reader answers.
+fn send_client(w: WriteHalf<Client>) -> i32 {
+    let d = data(BIG, 1);
+    let at = 0usize;
+    while at < BIG {
+        try! w.write_all(d[at:at + 100000]);
+        try! w.key_update();
+        at += 100000;
+    }
+    try! w.close();
+    0
+}
+
+fn send_server(w: WriteHalf<Server>) -> i32 {
+    try! w.write_all(data(BIG, 2));
+    try! w.close();
+    0
+}
+
+fn serve(l: TcpListener) -> bool {
+    let (s, _) = try! l.accept();
+    try! l.close();
+    let cfg = try! ServerConfig::new(try! Certificate::from_pem(CERT), try! PrivateKey::from_pem(KEY));
+    let (r, w) = (try! Server::new(s, cfg)).split();
+    let t = thread::spawn(|| send_server(w));
+    let got = try! r.read_to_end();
+    try! r.close();
+    _ = try! t.join();
+    got == data(BIG, 1)
+}
+
+fn main() throws (IoError | thread::JoinError) {
+    let l = try TcpListener::bind("127.0.0.1:0");
+    let addr = try l.local_addr();
+    let peer = thread::spawn(|| serve(l));
+    let ccfg = ClientConfig { root_certs: try! Certificate::from_pem(CA) };
+    let c = try! Client::with_config(try TcpStream::connect(addr), "localhost", ccfg);
+    let (r, w) = c.split();
+    let t = thread::spawn(|| send_client(w));
+    let got = try r.read_to_end();
+    try r.close();
+    _ = try t.join();
+    println(f"client: read {got.len()} bytes intact {got == data(BIG, 2)}, server read {BIG} intact {try peer.join()}");
+}

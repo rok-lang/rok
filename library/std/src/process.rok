@@ -28,13 +28,13 @@
 
 use rok::std::fs::{File, file_of, off};
 #[cfg(target_family = "unix")]
-use rok::std::os::unix::io::{AsRawFd, RawFd};
+use rok::std::os::unix::io::{AsRawFd, IntoRawFd, RawFd};
 #[cfg(target_family = "unix")]
 use rok::std::os::unix::process::{CommandExt, ExitStatusExt};
 #[cfg(target_os = "linux")]
 use rok::std::os::linux::process::ChildExt;
 #[cfg(target_os = "windows")]
-use rok::std::os::windows::io::{AsRawHandle, RawHandle, raw_handle};
+use rok::std::os::windows::io::{AsRawHandle, IntoRawHandle, RawHandle, raw_handle};
 use rok::core::io::{Close, IoError, IoErrorKind, Read, Write, AsyncRead, AsyncWrite, AsyncClose};
 use rok::std::sys::{check, byte_buf, read_more, take_handle, use_begin, use_end, use_close, word_at};
 use rok::std::path::Path;
@@ -427,6 +427,16 @@ impl AsRawHandle for ChildStdin {
     fn as_raw_handle(self) -> RawHandle { raw_handle(self.file.fd()) }
 }
 
+#[cfg(target_family = "unix")]
+impl IntoRawFd for ChildStdin {
+    fn into_raw_fd(self) -> RawFd { self.file.give_up() }
+}
+
+#[cfg(target_os = "windows")]
+impl IntoRawHandle for ChildStdin {
+    fn into_raw_handle(self) -> RawHandle { raw_handle(self.file.give_up()) }
+}
+
 /// A child's stdout: the read end of its pipe.
 pub struct ChildStdout {
     file: File;
@@ -469,6 +479,16 @@ impl AsRawHandle for ChildStdout {
     fn as_raw_handle(self) -> RawHandle { raw_handle(self.file.fd()) }
 }
 
+#[cfg(target_family = "unix")]
+impl IntoRawFd for ChildStdout {
+    fn into_raw_fd(self) -> RawFd { self.file.give_up() }
+}
+
+#[cfg(target_os = "windows")]
+impl IntoRawHandle for ChildStdout {
+    fn into_raw_handle(self) -> RawHandle { raw_handle(self.file.give_up()) }
+}
+
 /// A child's stderr: the read end of its pipe.
 pub struct ChildStderr {
     file: File;
@@ -509,6 +529,16 @@ impl AsRawFd for ChildStderr {
 #[cfg(target_os = "windows")]
 impl AsRawHandle for ChildStderr {
     fn as_raw_handle(self) -> RawHandle { raw_handle(self.file.fd()) }
+}
+
+#[cfg(target_family = "unix")]
+impl IntoRawFd for ChildStderr {
+    fn into_raw_fd(self) -> RawFd { self.file.give_up() }
+}
+
+#[cfg(target_os = "windows")]
+impl IntoRawHandle for ChildStderr {
+    fn into_raw_handle(self) -> RawHandle { raw_handle(self.file.give_up()) }
 }
 
 /// A process to run. Builder methods return the updated command
@@ -798,6 +828,10 @@ impl Child {
         if let se: ChildStderr = self.take_stderr() { try se.close() catch _ {}; }
     }
 
+    /// A handle that signals the child while this `Child` is owned (and
+    /// waited on) elsewhere: another thread or task can kill it.
+    pub fn handle(self) -> ChildHandle { ChildHandle { pid: self.pid, state: self.state } }
+
     /// `SIGKILL`.
     pub fn kill(self) throws (IoError) { try self.raw_signal(9); }
 
@@ -807,15 +841,7 @@ impl Child {
         try self.raw_signal(sig.number());
     }
 
-    fn raw_signal(self, sig: i32) throws (IoError) {
-        if !use_begin(self.state, 3) { return; }
-        let r = unsafe {
-            let fd = self.state[2];
-            if fd >= 0 { rok_os_pidfd_signal(fd, sig) } else { rok_os_kill(self.pid, sig) }
-        };
-        _ = use_end(self.state, 3);
-        try check(r as i64, "kill");
-    }
+    fn raw_signal(self, sig: i32) throws (IoError) { try signal_child(self.pid, self.state, sig); }
 
     /// Reap the child once it has ended (`block`: wait for that):
     /// `false` if `!block` and it is still running. Of copies reaping at
@@ -887,6 +913,46 @@ unsafe fn reaped(state: GcBuf<i32>, raw: i32) {
         _ = rok_os_close(fd);
     }
     take_handle(state, 0, 1);
+}
+
+/// Signal number `sig` to the child `pid`, unless reaping has begun:
+/// the call holds the pid (`use_begin`), so it never reaches a reused
+/// pid or pidfd.
+fn signal_child(pid: i32, state: GcBuf<i32>, sig: i32) throws (IoError) {
+    if !use_begin(state, 3) { return; }
+    let r = unsafe {
+        let fd = state[2];
+        if fd >= 0 { rok_os_pidfd_signal(fd, sig) } else { rok_os_kill(pid, sig) }
+    };
+    _ = use_end(state, 3);
+    try check(r as i64, "kill");
+}
+
+/// Signals a child that a `Child` owns (`Child::handle`). It owns
+/// nothing: no pipes, no wait. Copies are free and may go to any
+/// thread; once the child has ended and is being reaped, a signal is a
+/// no-op, never one for a reused pid.
+pub struct ChildHandle {
+    pid: i32;
+    state: GcBuf<i32>;
+}
+
+impl Debug for ChildHandle {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"ChildHandle {{ pid: {self.pid} }}") }
+}
+
+impl ChildHandle {
+    /// The child's process id.
+    pub const fn id(self) -> u32 { self.pid as u32 }
+
+    /// `SIGKILL` (Windows: `TerminateProcess`).
+    pub fn kill(self) throws (IoError) { try signal_child(self.pid, self.state, 9); }
+
+    /// Send `sig`, as `Child::send_signal`.
+    pub fn send_signal(self, sig: Signal) throws (IoError) {
+        try unsent(sig);
+        try signal_child(self.pid, self.state, sig.number());
+    }
 }
 
 /// Closes the pipes not taken; with `kill_on_drop`, also kills and

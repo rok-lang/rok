@@ -81,6 +81,21 @@ pub(pkg) fn use_close(cell: GcBuf<i32>, u: usize) -> i32 {
     unsafe { atomic_or(cell, u, 1, SeqCst) }
 }
 
+/// Clear `bits` in `cell[i]`; the word before.
+pub(pkg) fn clear_bits(cell: GcBuf<i32>, i: usize, bits: i32) -> i32 {
+    let n = unsafe { cell[i] };
+    loop {
+        let seen = unsafe { atomic_cas(cell, i, n, n & (0 - 1 - bits), SeqCst, SeqCst) };
+        if seen == n { return n; }
+        n = seen;
+    }
+}
+
+/// Set `bits` in `cell[i]`; the word before.
+pub(pkg) fn set_bits(cell: GcBuf<i32>, i: usize, bits: i32) -> i32 {
+    unsafe { atomic_or(cell, i, bits, SeqCst) }
+}
+
 /// `cell[i]`, read atomically (a word another thread may change).
 pub(pkg) fn word_at(cell: GcBuf<i32>, i: usize) -> i32 {
     unsafe { atomic_load(cell, i, SeqCst) }

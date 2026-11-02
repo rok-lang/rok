@@ -1,0 +1,55 @@
+// needs: net threads
+// expect-exit: 0
+// expect-stdout:
+// thread woken: read 0 bytes
+// task woken: read 0 bytes
+// closed: ok
+
+// `shutdown(Both)` on one half shuts the socket the halves share: a
+// read blocked on the other half wakes and sees the end of the stream,
+// as with `shutdown(SHUT_RDWR)`, though the peer sends nothing.
+use rok::std::net::{TcpListener, TcpStream, ReadHalf, Shutdown};
+use rok::std::thread;
+use rok::core::io::IoError;
+use rok::core::time::Duration;
+
+fn read_all(r: ReadHalf<TcpStream>) -> usize {
+    let got = try! r.read_to_end();
+    try! r.close();
+    got.len()
+}
+
+async fn read_all_async(r: ReadHalf<TcpStream>) -> usize {
+    let got = try! await r.read_to_end_async();
+    try! await r.close_async();
+    got.len()
+}
+
+fn main() throws (IoError | thread::JoinError) {
+    using l = try TcpListener::bind("127.0.0.1:0") {
+        let (r, w) = (try TcpStream::connect(try l.local_addr())).split();
+        let (peer, _) = try l.accept();
+        let t = thread::spawn(|| read_all(r));
+        thread::sleep(Duration::ms(100));
+        try w.shutdown(Shutdown::Both);
+        println(f"thread woken: read {try t.join()} bytes");
+        try w.close();
+        try peer.close();
+    }
+
+    let n = task::block_on(async {
+        let l = try! TcpListener::bind("127.0.0.1:0");
+        let (r, w) = (try! await TcpStream::connect_async(try! l.local_addr())).split();
+        let (peer, _) = try! await l.accept_async();
+        try! l.close();
+        let t = task::spawn(read_all_async(r));
+        await task::sleep(Duration::ms(100));
+        try! await w.shutdown_async(Shutdown::Both);
+        let n = await t;
+        try! await w.close_async();
+        try! peer.close();
+        n
+    });
+    println(f"task woken: read {n} bytes");
+    println("closed: ok");
+}

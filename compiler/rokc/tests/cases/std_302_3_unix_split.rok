@@ -1,0 +1,46 @@
+// needs: net threads
+// only-os: macos linux
+// expect-exit: 0
+// expect-stdout:
+// unix: read 300000 bytes, peer got 300000
+// unsplit: pong
+
+// `UnixStream::split`, as `TcpStream::split`: the write half on another
+// thread while the read half reads, then `unsplit`.
+use rok::std::net::WriteHalf;
+use rok::std::os::unix::net::UnixStream;
+use rok::std::thread;
+use rok::core::io::IoError;
+
+fn send(w: WriteHalf<UnixStream>) -> i32 {
+    try! w.write_all(List::filled(300000, 3u8));
+    try! w.close();
+    0
+}
+
+fn duplex(s: UnixStream) -> usize {
+    let (r, w) = s.split();
+    let t = thread::spawn(|| send(w));
+    let got = try! r.read_to_end();
+    try! r.close();
+    _ = try! t.join();
+    got.len()
+}
+
+fn main() throws (IoError | thread::JoinError) {
+    let (a, b) = try UnixStream::pair();
+    let peer = thread::spawn(|| duplex(b));
+    println(f"unix: read {duplex(a)} bytes, peer got {try peer.join()}");
+
+    let (c, d) = try UnixStream::pair();
+    let (r, w) = c.split();
+    try w.write_all("ping");
+    let back = r.unsplit(w);
+    let buf = List::filled(4, 0u8);
+    try d.read_exact(buf);
+    try d.write_all("pong");
+    try back.read_exact(buf);
+    println(f"unsplit: {try str::from_utf8(buf)}");
+    try back.close();
+    try d.close();
+}

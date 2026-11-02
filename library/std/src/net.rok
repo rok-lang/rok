@@ -21,17 +21,17 @@
 use rok::core::convert::AsBytes;
 use rok::core::io::{Close, IoError, IoErrorKind, Read, Write, AsyncRead, AsyncWrite, AsyncClose};
 use rok::std::fs::off;
-use rok::std::sys::{check, would_block, region, mut_region, take_handle, use_begin, use_end, use_close};
+use rok::std::sys::{check, would_block, region, mut_region, take_handle, use_begin, use_end, use_close, word_at, clear_bits, set_bits};
 use rok::core::time::Duration;
-use rok::bare::mem::{GcBuf, buf_new};
+use rok::bare::mem::{GcBuf, buf_new, buf_same};
 #[cfg(target_family = "unix")]
-use rok::std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
+use rok::std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 #[cfg(target_os = "linux")]
 use rok::std::os::linux::net::TcpStreamExt;
 #[cfg(target_os = "linux")]
 use rok::std::fs::File;
 #[cfg(target_os = "windows")]
-use rok::std::os::windows::io::{AsRawSocket, FromRawSocket, RawSocket, raw_socket, socket_fd};
+use rok::std::os::windows::io::{AsRawSocket, FromRawSocket, IntoRawSocket, RawSocket, raw_socket, socket_fd};
 
 pub mod tls;
 
@@ -896,6 +896,13 @@ impl Sock {
         }
     }
 
+    /// The fd, given up: the cell keeps -1, so nothing closes it (`-1`
+    /// once closed).
+    pub(pkg) fn give_up(self) -> i32 {
+        if (word_at(self.fd, 1) & 1) != 0 { return -1; }
+        take_handle(self.fd, 0, -1)
+    }
+
     /// The handle in a new cell: `self` and its copies see it closed.
     pub(pkg) const fn moved(self) -> Sock {
         unsafe {
@@ -1496,9 +1503,22 @@ impl TcpStream {
         TcpStream { sock: try self.sock.try_clone() }
     }
 
+    /// Split into a read half and a write half that two tasks or
+    /// threads can use at once. Each half owns its direction and must
+    /// be closed; `ReadHalf::unsplit` joins them again.
+    pub fn split(self) -> (ReadHalf<TcpStream>, WriteHalf<TcpStream>) {
+        let d = Duplex::of(self.sock.moved(), none);
+        // Already moved: closes nothing, and marks `self` taken.
+        try self.close() catch _ {};
+        (ReadHalf { d }, WriteHalf { d })
+    }
+
     /// Close now, throwing the OS's error; later calls fail with
     /// `InvalidInput`.
     pub fn close(self) throws (IoError) { try self.sock.close(); }
+
+    /// The socket under a TLS connection, for its halves.
+    pub(pkg) const fn raw_sock(self) -> Sock { self.sock }
 }
 
 impl From<Socket> for TcpStream {
@@ -1562,6 +1582,312 @@ impl AsyncClose for TcpStream {
 
 impl Drop for TcpStream {
     fn drop(ref self) { self.sock.discard(); }
+}
+
+// split halves
+
+const HALF_READ: i32 = 1;
+const HALF_WRITE: i32 = 2;
+/// Writing was shut down (`shutdown(Write | Both)`).
+const WRITES_SHUT: i32 = 4;
+
+/// What both halves of a split connection name: the socket, the TLS
+/// state of a TLS connection, and which halves are open.
+pub(pkg) struct Duplex {
+    sock: Sock;
+    tls: tls::Shared | none;
+    /// `HALF_READ | HALF_WRITE` while both are open.
+    open: GcBuf<i32>;
+}
+
+// The socket cell and `open` change only atomically, and the TLS state
+// only under its locks; a frame never hides in one.
+unsafe impl Send for Duplex {}
+unsafe impl Sync for Duplex {}
+
+impl Duplex {
+    pub(pkg) const fn of(sock: Sock, tls: tls::Shared | none) -> Duplex {
+        unsafe {
+            let open: GcBuf<i32> = buf_new(1);
+            open[0] = HALF_READ | HALF_WRITE;
+            Duplex { sock, tls, open }
+        }
+    }
+
+    fn read(self, buf: SliceMut<u8>) throws (IoError) -> usize {
+        if let s: tls::Shared = self.tls { return try s.read(buf); }
+        try self.sock.read(buf)
+    }
+
+    async fn read_async(self, buf: SliceMut<u8>) throws (IoError) -> usize {
+        if let s: tls::Shared = self.tls { return try await s.read_async(buf); }
+        try await self.sock.read_async(buf)
+    }
+
+    fn read_to_end(self) throws (IoError) -> List<u8> {
+        if let s: tls::Shared = self.tls { return try s.read_to_end(); }
+        try self.sock.read_to_end()
+    }
+
+    async fn read_to_end_async(self) throws (IoError) -> List<u8> {
+        if let s: tls::Shared = self.tls { return try await s.read_to_end_async(); }
+        try await self.sock.read_to_end_async()
+    }
+
+    fn write(self, data: Slice<u8>) throws (IoError) -> usize {
+        if let s: tls::Shared = self.tls {
+            try s.write(data);
+            return data.len();
+        }
+        try self.sock.write(data)
+    }
+
+    async fn write_async(self, data: Slice<u8>) throws (IoError) -> usize {
+        if let s: tls::Shared = self.tls {
+            try await s.write_async(data);
+            return data.len();
+        }
+        try await self.sock.write_async(data)
+    }
+
+    fn write_all(self, data: Slice<u8>) throws (IoError) {
+        if let s: tls::Shared = self.tls {
+            try s.write(data);
+            return;
+        }
+        try self.sock.write_all(data);
+    }
+
+    async fn write_all_async(self, data: Slice<u8>) throws (IoError) {
+        if let s: tls::Shared = self.tls {
+            try await s.write_async(data);
+            return;
+        }
+        try await self.sock.write_all_async(data);
+    }
+
+    /// Whether neither half is closed yet.
+    fn both_open(self) -> bool { (word_at(self.open, 0) & (HALF_READ | HALF_WRITE)) == (HALF_READ | HALF_WRITE) }
+
+    /// The peer reads end of stream (TLS: close_notify first); reading
+    /// goes on.
+    fn end_writes(self) throws (IoError) {
+        if (word_at(self.open, 0) & WRITES_SHUT) != 0 { return; }
+        try self.shutdown(Shutdown::Write);
+    }
+
+    async fn end_writes_async(self) throws (IoError) {
+        if (word_at(self.open, 0) & WRITES_SHUT) != 0 { return; }
+        try await self.shutdown_async(Shutdown::Write);
+    }
+
+    /// `shutdown(2)` of the socket both halves name; a task or thread
+    /// blocked in the shut direction wakes. Writing shut down sends
+    /// close_notify first on TLS.
+    fn shutdown(self, how: Shutdown) throws (IoError) {
+        let first: IoError | none = none;
+        if how != Shutdown::Read {
+            if let s: tls::Shared = self.tls { try s.close_notify() catch e { first = e; }; }
+            _ = set_bits(self.open, 0, WRITES_SHUT);
+        }
+        try self.sock.shutdown(how) catch e { first = first ?? e; };
+        if let e: IoError = first { throw e; }
+    }
+
+    async fn shutdown_async(self, how: Shutdown) throws (IoError) {
+        let first: IoError | none = none;
+        if how != Shutdown::Read {
+            if let s: tls::Shared = self.tls { try await s.close_notify_async() catch e { first = e; }; }
+            _ = set_bits(self.open, 0, WRITES_SHUT);
+        }
+        try self.sock.shutdown(how) catch e { first = first ?? e; };
+        if let e: IoError = first { throw e; }
+    }
+
+    fn close_all(self) throws (IoError) {
+        if let s: tls::Shared = self.tls {
+            try s.close();
+            return;
+        }
+        try self.sock.close();
+    }
+
+    async fn close_all_async(self) throws (IoError) {
+        if let s: tls::Shared = self.tls {
+            try await s.close_async();
+            return;
+        }
+        try await self.sock.close_async();
+    }
+
+    /// Mark half `bit` closed: `true` when it was the last open one,
+    /// and the caller closes the connection. Each half finishes its own
+    /// work before this, so the last one closes after both are done.
+    fn leave(self, bit: i32) -> bool {
+        let was = clear_bits(self.open, 0, bit);
+        (was & bit) != 0 && (was & ((HALF_READ | HALF_WRITE) - bit)) == 0
+    }
+
+    /// Close half `bit`. The write half ends the stream for the peer
+    /// (`shutdown(Write)`) when the read half is still open; the read
+    /// half alone sends nothing. The last to close closes the socket.
+    fn close_half(self, bit: i32) throws (IoError) {
+        if (word_at(self.open, 0) & bit) == 0 { return; }
+        let first: IoError | none = none;
+        if bit == HALF_WRITE && self.both_open() {
+            try self.end_writes() catch e { first = e; };
+        }
+        if self.leave(bit) {
+            try self.close_all() catch e { first = first ?? e; };
+        }
+        if let e: IoError = first { throw e; }
+    }
+
+    async fn close_half_async(self, bit: i32) throws (IoError) {
+        if (word_at(self.open, 0) & bit) == 0 { return; }
+        let first: IoError | none = none;
+        if bit == HALF_WRITE && self.both_open() {
+            try await self.end_writes_async() catch e { first = e; };
+        }
+        if self.leave(bit) {
+            try await self.close_all_async() catch e { first = first ?? e; };
+        }
+        if let e: IoError = first { throw e; }
+    }
+
+    pub(pkg) const fn sock(self) -> Sock { self.sock }
+    pub(pkg) const fn shared(self) -> tls::Shared | none { self.tls }
+}
+
+/// The read half of a split connection (`TcpStream::split`,
+/// `UnixStream::split`, `tls::Client::split`, `tls::Server::split`):
+/// it owns the reading direction. Send it to another task or thread
+/// while the `WriteHalf` writes; close it, or rejoin the two with
+/// `unsplit`. The socket closes when both halves are closed.
+pub struct ReadHalf<T> {
+    pub(pkg) d: Duplex;
+}
+
+/// The write half of a split connection: it owns the writing
+/// direction. Closing it ends the stream for the peer (`shutdown(Write)`,
+/// after close_notify on TLS) while the read half reads on.
+pub struct WriteHalf<T> {
+    pub(pkg) d: Duplex;
+}
+
+// Each half owns its direction alone; what they share is `Duplex`.
+unsafe impl<T> Send for ReadHalf<T> {}
+unsafe impl<T> Send for WriteHalf<T> {}
+
+impl<T> Debug for ReadHalf<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("ReadHalf") }
+}
+
+impl<T> Debug for WriteHalf<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("WriteHalf") }
+}
+
+impl<T> ReadHalf<T> {
+    /// Close the read half; the socket closes once the write half is
+    /// closed too. Throws the OS's error of that close.
+    pub fn close(self) throws (IoError) { try self.d.close_half(HALF_READ); }
+
+    /// Shut down reading, writing or both of the socket the halves
+    /// share (TLS: close_notify first for writing). `Both` wakes a
+    /// write blocked on the other half too.
+    pub fn shutdown(self, how: Shutdown) throws (IoError) { try self.d.shutdown(how); }
+
+    /// `shutdown`, awaiting close_notify on TLS instead of blocking.
+    pub async fn shutdown_async(ref self, how: Shutdown) throws (IoError) { try await self.d.shutdown_async(how); }
+}
+
+impl<T> WriteHalf<T> {
+    /// End the stream for the peer, or close the socket when the read
+    /// half is closed already. Throws the OS's error.
+    pub fn close(self) throws (IoError) { try self.d.close_half(HALF_WRITE); }
+
+    /// Shut down reading, writing or both of the socket the halves
+    /// share (TLS: close_notify first for writing). `Both` wakes a read
+    /// blocked on the other half, as `shutdown(SHUT_RDWR)` does.
+    pub fn shutdown(self, how: Shutdown) throws (IoError) { try self.d.shutdown(how); }
+
+    /// `shutdown`, awaiting close_notify on TLS instead of blocking.
+    pub async fn shutdown_async(ref self, how: Shutdown) throws (IoError) { try await self.d.shutdown_async(how); }
+}
+
+impl<T> Read for ReadHalf<T> {
+    fn read(ref self, buf: SliceMut<u8>) throws (IoError) -> usize { try self.d.read(buf) }
+    fn read_to_end(ref self) throws (IoError) -> List<u8> { try self.d.read_to_end() }
+}
+
+impl<T> AsyncRead for ReadHalf<T> {
+    async fn read_async(ref self, buf: SliceMut<u8>) throws (IoError) -> usize { try await self.d.read_async(buf) }
+    async fn read_to_end_async(ref self) throws (IoError) -> List<u8> { try await self.d.read_to_end_async() }
+}
+
+impl<T> Write for WriteHalf<T> {
+    fn write<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize { try self.d.write(buf.byte_slice()) }
+    /// Nothing to flush: writes go straight to the socket.
+    const fn flush(ref self) throws (IoError) {}
+    fn write_all<B: AsBytes>(ref self, buf: B) throws (IoError) { try self.d.write_all(buf.byte_slice()); }
+}
+
+impl<T> AsyncWrite for WriteHalf<T> {
+    async fn write_async<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize {
+        try await self.d.write_async(buf.byte_slice())
+    }
+    async fn flush_async(ref self) throws (IoError) {}
+    async fn write_all_async<B: AsBytes>(ref self, buf: B) throws (IoError) {
+        try await self.d.write_all_async(buf.byte_slice());
+    }
+}
+
+impl<T> Close for ReadHalf<T> {
+    fn close(self) throws (IoError) { try self.d.close_half(HALF_READ); }
+}
+
+impl<T> Close for WriteHalf<T> {
+    fn close(self) throws (IoError) { try self.d.close_half(HALF_WRITE); }
+}
+
+impl<T> AsyncClose for ReadHalf<T> {
+    async fn close_async(self) throws (IoError) { try await self.d.close_half_async(HALF_READ); }
+}
+
+impl<T> AsyncClose for WriteHalf<T> {
+    async fn close_async(self) throws (IoError) { try await self.d.close_half_async(HALF_WRITE); }
+}
+
+impl<T> Drop for ReadHalf<T> {
+    fn drop(ref self) { try self.d.close_half(HALF_READ) catch _ {}; }
+}
+
+impl<T> Drop for WriteHalf<T> {
+    fn drop(ref self) { try self.d.close_half(HALF_WRITE) catch _ {}; }
+}
+
+/// The parts of two halves of one connection, given back unclosed; the
+/// halves are spent.
+#[track_caller]
+pub(pkg) fn rejoin<T>(r: ReadHalf<T>, w: WriteHalf<T>) -> Duplex {
+    if !buf_same(r.d.open, w.d.open) {
+        panic("unsplit: this WriteHalf is from another connection; pass the WriteHalf that `split` gave with this ReadHalf");
+    }
+    take_handle(r.d.open, 0, 0);
+    // Rejoined: these close nothing, and mark the halves taken.
+    try r.close() catch _ {};
+    try w.close() catch _ {};
+    r.d
+}
+
+impl ReadHalf<TcpStream> {
+    /// The connection again, from this half and the `WriteHalf` that
+    /// `split` gave with it. Panics on a write half of another
+    /// connection.
+    #[track_caller]
+    pub fn unsplit(self, w: WriteHalf<TcpStream>) -> TcpStream {
+        TcpStream { sock: rejoin(self, w).sock }
+    }
 }
 
 /// A listening TCP socket on `addr`: `SO_REUSEADDR` (not on Windows,
@@ -1957,6 +2283,46 @@ impl AsRawSocket for Socket {
 #[cfg(target_os = "windows")]
 impl FromRawSocket for Socket {
     unsafe fn from_raw_socket(s: RawSocket) -> Socket { Socket { sock: sock_of(socket_fd(s)) } }
+}
+
+#[cfg(target_family = "unix")]
+impl IntoRawFd for TcpStream {
+    fn into_raw_fd(self) -> RawFd { self.sock.give_up() }
+}
+
+#[cfg(target_os = "windows")]
+impl IntoRawSocket for TcpStream {
+    fn into_raw_socket(self) -> RawSocket { raw_socket(self.sock.give_up()) }
+}
+
+#[cfg(target_family = "unix")]
+impl IntoRawFd for TcpListener {
+    fn into_raw_fd(self) -> RawFd { self.sock.give_up() }
+}
+
+#[cfg(target_os = "windows")]
+impl IntoRawSocket for TcpListener {
+    fn into_raw_socket(self) -> RawSocket { raw_socket(self.sock.give_up()) }
+}
+
+#[cfg(target_family = "unix")]
+impl IntoRawFd for UdpSocket {
+    fn into_raw_fd(self) -> RawFd { self.sock.give_up() }
+}
+
+#[cfg(target_os = "windows")]
+impl IntoRawSocket for UdpSocket {
+    fn into_raw_socket(self) -> RawSocket { raw_socket(self.sock.give_up()) }
+}
+
+#[cfg(target_family = "unix")]
+impl IntoRawFd for Socket {
+    fn into_raw_fd(self) -> RawFd { self.sock.give_up() }
+}
+
+#[cfg(target_os = "windows")]
+impl IntoRawSocket for Socket {
+    fn into_raw_socket(self) -> RawSocket { raw_socket(self.sock.give_up()) }
 }
 
 // zero-copy hooks (Linux)

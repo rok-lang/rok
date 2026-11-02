@@ -102,19 +102,17 @@ println(f"async echo: {oks} clients ok");
 
 // A large payload: write and read concurrently (the socket buffers fill).
 let big = task::spawn(async {
-    let s = try! await net::tcp_connect_async(a2);
-    // The writer task owns a second descriptor, and its buffer.
-    let ws = try! s.try_clone();
-    let w = task::spawn(async {
+    let (r, w) = (try! await net::tcp_connect_async(a2)).split();
+    // The writer task owns its buffer: a list cannot be shared with it.
+    let wt = task::spawn(async {
         let data = List::filled(100000, 0u8);
-        try! await ws.write_all_async(data);
-        try! ws.shutdown(Shutdown::Write);
-        try! ws.close();
+        try! await w.write_all_async(data);
+        try! await w.close_async();
         0
     });
-    let got = try! await s.read_to_end_async();
-    await w;
-    try! s.close();
+    let got = try! await r.read_to_end_async();
+    await wt;
+    try! r.close();
     got.len()
 });
 println(f"async read_to_end: {await big} bytes");

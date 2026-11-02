@@ -1,6 +1,7 @@
 // rok::std::os::windows::io: raw handles and sockets.
 // `File`, the child pipes and the standard streams implement
-// `AsRawHandle`; the TCP and UDP sockets `AsRawSocket`. The values are
+// `AsRawHandle`; the TCP and UDP sockets `AsRawSocket`. `FromRaw*`
+// takes ownership of a value and `IntoRaw*` gives it up. The values are
 // the full pointer-sized HANDLE and the SOCKET as Win32 gives them.
 
 use rok::core::io::{Stdin, Stdout, Stderr};
@@ -26,6 +27,14 @@ pub trait FromRawHandle {
     unsafe fn from_raw_handle(h: RawHandle) -> Self;
 }
 
+/// A handle that gives up its HANDLE: the handle is consumed and
+/// nothing closes the HANDLE; the caller owns it.
+pub trait IntoRawHandle {
+    /// The HANDLE, now the caller's to close (`INVALID_HANDLE_VALUE` if
+    /// `self` was closed).
+    fn into_raw_handle(self) -> RawHandle;
+}
+
 /// The SOCKET behind a socket, still owned by it (`INVALID_SOCKET`
 /// once it is closed).
 pub trait AsRawSocket {
@@ -38,6 +47,14 @@ pub trait FromRawSocket {
     /// Safety: `s` must be an open socket of the right kind, and
     /// nothing else may close it.
     unsafe fn from_raw_socket(s: RawSocket) -> Self;
+}
+
+/// A socket that gives up its SOCKET: the socket is consumed and
+/// nothing closes the SOCKET; the caller owns it.
+pub trait IntoRawSocket {
+    /// The SOCKET, now the caller's to close (`INVALID_SOCKET` if
+    /// `self` was closed).
+    fn into_raw_socket(self) -> RawSocket;
 }
 
 impl AsRawHandle for Stdin {
