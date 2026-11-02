@@ -1,4 +1,4 @@
-//! Lock-free Chase-Lev work-stealing deque (706 §7.6.2) of GC
+//! Lock-free Chase-Lev work-stealing deque of GC
 //! references, for `rok::core::task`'s workers. The C11 formulation of
 //! Lê, Pop, Cohen, Zappa Nardelli (`PPoPP` 2013); `t` / `b` / `r` name
 //! top, bottom and ring as in the paper.

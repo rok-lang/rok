@@ -1,5 +1,5 @@
-// rok::core::prelude - the names every file outside `rok::` sees bare
-// (stdlib spec 0.2): user code gets an implicit `use rok::core::prelude::*;`
+// rok::core::prelude - the names every file outside `rok::` sees bare:
+// user code gets an implicit `use rok::core::prelude::*;`
 // unless the file says `#![no_implicit_rok]`. Each name appears once.
 // Variants are not here: a bare variant resolves from the expected type.
 

@@ -1,13 +1,13 @@
-// rok::core::cmp - total equality, ordering and hashing (stdlib spec
-// 2.5). `PartialEq` / `PartialOrd` carry the comparison operators and
+// rok::core::cmp - total equality, ordering and hashing.
+// `PartialEq` / `PartialOrd` carry the comparison operators and
 // stay with the other operator traits in `ops.rok`. `Eq` is a pure
 // marker with no methods, so it has no slot.
 
 /// Total equality: `==` is reflexive, symmetric and transitive (no NaN).
-/// A marker over `PartialEq` with no methods (2.5.3).
+/// A marker over `PartialEq` with no methods.
 pub trait Eq: PartialEq {}
 
-/// The result of a three-way comparison (2.5.4).
+/// The result of a three-way comparison.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Ordering {
     Less,
@@ -42,7 +42,7 @@ impl Debug for Ordering {
     }
 }
 
-/// A total order (2.5.5).
+/// A total order.
 #[lang("ord_trait")]
 pub trait Ord: PartialOrd + Eq {
     /// Compares `self` with `rhs`: `Less`, `Equal` or `Greater`.
@@ -74,7 +74,7 @@ pub trait Ord: PartialOrd + Eq {
     }
 }
 
-/// Feeds a value to a `Hasher` (2.5.6): equal values make the same
+/// Feeds a value to a `Hasher`: equal values make the same
 /// writes, so `a == b` hashes alike - what `Dict` / `Set` rely on.
 #[lang("hash_trait")]
 pub trait Hash: Eq {

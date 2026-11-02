@@ -1,4 +1,4 @@
-// rok::std::os::windows::io: raw handles and sockets (stdlib 3.11.3).
+// rok::std::os::windows::io: raw handles and sockets.
 // `File`, the child pipes and the standard streams implement
 // `AsRawHandle`; the TCP and UDP sockets `AsRawSocket`. The values are
 // the full pointer-sized HANDLE and the SOCKET as Win32 gives them.

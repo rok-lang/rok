@@ -1,5 +1,5 @@
 // rok::std::rokon::read - lexer and recursive-descent reader for the
-// ROKON subset of rok literal syntax (spec 3.9.1).
+// ROKON subset of rok literal syntax.
 
 use rok::std::rokon::{Value, RokonError};
 use rok::std::rokon::write;
@@ -239,7 +239,7 @@ fn char_lit(cs: List<char>, start: usize, toks: List<Tok>) throws (RokonError) -
 }
 
 /// The escape at `cs[i]` (a `\`) into `b`; the index after it. rok's
-/// escapes (spec 1.7.1): `\n \r \t \\ \0 \' \"`, `\xHH` (ASCII),
+/// escapes: `\n \r \t \\ \0 \' \"`, `\xHH` (ASCII),
 /// `\u{H..}`, and in strings `\` + newline (skips the line break and the
 /// next line's leading whitespace).
 fn escape(cs: List<char>, i: usize, b: StrBuf, in_str: bool) throws (RokonError) -> usize {

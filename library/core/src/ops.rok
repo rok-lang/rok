@@ -2,7 +2,7 @@
 //
 // `rokc` binds each token to the trait method carrying its `#[infix]` /
 // `#[prefix]` / `#[postfix]`; precedence and associativity are fixed by
-// the language (3.2.3). `#[lang(...)]` (6.4) binds each trait to a
+// the language. `#[lang(...)]` binds each trait to a
 // compiler slot.
 
 /// `+`: addition.
@@ -14,7 +14,7 @@ pub trait Add<Rhs = Self> {
     fn add(self, rhs: Rhs) -> Output;
 }
 
-/// `%%`: floored modulo (2.3) - the result takes the divisor's sign, so
+/// `%%`: floored modulo - the result takes the divisor's sign, so
 /// a positive divisor gives `[0, rhs)` (Python's `%`). No lang slot.
 pub trait Modulo<Rhs = Self> {
     type Output;
@@ -187,7 +187,7 @@ pub trait LogicalOr<Rhs = Self> {
     fn logical_or(self, rhs: Rhs) -> bool;
 }
 
-// Compound assignment (stdlib 2.4): `a op= b` calls `op_assign(ref a, b)`
+// Compound assignment: `a op= b` calls `op_assign(ref a, b)`
 // when the type implements the trait (an in-place update), else it is
 // `a = a op b`.
 
@@ -367,7 +367,7 @@ pub trait DotGe<Rhs = Self> {
     fn dot_ge(self, rhs: Rhs) -> Output;
 }
 
-/// `.&&` / `.||`: element-wise, both sides always evaluated (2.6).
+/// `.&&` / `.||`: element-wise, both sides always evaluated.
 pub trait DotLogicalAnd<Rhs = Self> {
     type Output;
     /// `self .&& rhs`.
@@ -423,7 +423,7 @@ pub trait DotShr<Rhs = Self> {
     fn dot_shr(self, rhs: Rhs) -> Output;
 }
 
-// Unicode math operators (stdlib spec 2.3.10). Each method has an ASCII
+// Unicode math operators. Each method has an ASCII
 // name, so it can be called by name too. `÷` is `Div`, and `≡ ≠ ≤ ≥`
 // are the comparison traits (the lexer reads them as `== != <= >=`).
 
@@ -459,7 +459,7 @@ pub trait Sqrt {
     fn sqrt(self) -> Output;
 }
 
-/// `∈` / `∉`: `a ∈ s` is `s.contains(a)` (`swap`, refs-lang 6.7.2).
+/// `∈` / `∉`: `a ∈ s` is `s.contains(a)` (`swap`).
 pub trait Contains<Item> {
     /// Whether `self` holds `item`.
     #[infix("∈", swap)]
@@ -497,7 +497,7 @@ pub trait Intersect<Rhs = Self> {
     fn intersection(self, rhs: Rhs) -> Output;
 }
 
-// The 2.3.10 table's standard implementations. Set's methods of the
+// The Unicode operators' standard implementations. Set's methods of the
 // same names are inherent (`Set::union`), so these spell out the
 // bodies over them.
 

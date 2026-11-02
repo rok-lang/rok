@@ -1,5 +1,4 @@
-//! 16-byte object header carried by every GC-managed allocation
-//! (spec 008-abi/801, 007-runtime/702 §7.2.4).
+//! 16-byte object header carried by every GC-managed allocation.
 //!
 //! Layout (offsets in bytes):
 //!   0  : `type_id`   u32
@@ -18,7 +17,7 @@ use core::mem::{align_of, offset_of, size_of};
 use core::sync::atomic::AtomicU32;
 
 /// `gc_flags` is atomic because MARK / FORWARDED are set during
-/// concurrent mark / evacuate (801 §8.1.3).
+/// concurrent mark / evacuate.
 #[repr(C, align(8))]
 pub struct ObjectHeader {
     pub type_id: u32,
@@ -33,7 +32,7 @@ pub const FLAG_FORWARDED: u32 = 1 << 3;
 pub const FLAG_LARGE: u32 = 1 << 4;
 /// An old (`STICKY`) object not yet in the remembered set.
 ///
-/// Implementation bit (801 §8.1.3 bits 6..). The write barrier's fast path tests
+/// Implementation bit (bits 6 and up). The write barrier's fast path tests
 /// only this bit; the slow path (`rok_gc_wb_slow`) clears it and logs
 /// the object.
 pub const FLAG_UNLOGGED: u32 = crate::gc_abi::FLAG_UNLOGGED;
@@ -43,7 +42,7 @@ pub const FLAG_UNLOGGED: u32 = crate::gc_abi::FLAG_UNLOGGED;
 /// `rokr_gc::CARD_SIZE` bytes of the object (from the header).
 /// Implementation bit; the barrier tests it together with `UNLOGGED`.
 pub const FLAG_CARDED: u32 = crate::gc_abi::FLAG_CARDED;
-/// The object's address was taken as a number (a parking key, 805
+/// The object's address was taken as a number (a parking key,
 /// `rok_task_key_*`): the collector never moves it. Implementation bit;
 /// permanent, unlike `PINNED` it does not keep the object alive.
 pub const FLAG_NOMOVE: u32 = 1 << 8;
@@ -61,7 +60,7 @@ pub const FLAG_SCANNED: u32 = 1 << 11;
 /// frees it zeroes its payload first. Implementation bit; permanent.
 pub const FLAG_WIPE: u32 = 1 << 12;
 
-/// A `par` visit's (rokr `xfer`, stdlib 2.19.1): the epoch of the last
+/// A `par` visit's (rokr `xfer`): the epoch of the last
 /// visit that reached the object. The collector keeps these bits.
 pub const VISIT_STAMP_SHIFT: u32 = 13;
 pub const VISIT_STAMP: u32 = 0xffff << VISIT_STAMP_SHIFT;
@@ -84,7 +83,7 @@ const _: () = {
 };
 
 impl ObjectHeader {
-    /// Write a fresh header (702 §7.2.4): `type_id`, `gc_flags = 0`,
+    /// Write a fresh header: `type_id`, `gc_flags = 0`,
     /// `gc_word = 0`; the allocator then stores the size in `gc_word`.
     ///
     /// # Safety

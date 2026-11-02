@@ -1,7 +1,7 @@
-//! Sockets behind `rok::std::net` (stdlib 3.2) and the readiness poller
-//! of the I/O driver (707): kqueue on BSD / macOS, epoll on Linux, `poll`
-//! (`poll_oneoff` / `wasi:io/poll`) on WASI. No ABI stability (805
-//! §8.5.12 appendix). Conventions as in `os`: results are `>= 0` or
+//! Sockets behind `rok::std::net` and the readiness poller
+//! of the I/O driver: kqueue on BSD / macOS, epoll on Linux, `poll`
+//! (`poll_oneoff` / `wasi:io/poll`) on WASI. No ABI
+//! stability. Conventions as in `os`: results are `>= 0` or
 //! `-errno`; byte data is a `GcBuf<u8>` region.
 //!
 //! WASI preview 2 has the BSD API through wasi-libc. Preview 1
@@ -808,7 +808,7 @@ pub extern "C" fn rok_net_resolve(host: RokStr, port: u16, out: *mut u8, max: us
     n as i32
 }
 
-// Unix domain sockets (stdlib 3.11.4)
+// Unix domain sockets
 
 /// `path` as a `sockaddr_un` and its length; `None` when it does not fit
 /// `sun_path` (with its NUL).
@@ -1234,7 +1234,7 @@ pub extern "C" fn rok_net_splice(sock: i32, file: i32, count: usize) -> isize {
     }
 }
 
-// The I/O driver's poller (707 §7.7.1)
+// The I/O driver's poller
 
 #[cfg(not(target_os = "wasi"))]
 static POLLER: AtomicI32 = AtomicI32::new(-1);

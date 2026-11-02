@@ -1,14 +1,13 @@
-// rok::core::num::bigint: `int`, the arbitrary-precision integer
-// (stdlib 2.1.2, 2.1.6, 2.1.7). `#[keyword("int")]` routes the type name
+// rok::core::num::bigint: `int`, the arbitrary-precision integer.
+// `#[keyword("int")]` routes the type name
 // here; an unsuffixed literal in an `int` slot is built by
-// `Int::from_i64` / `Int::from_literal` (refs-lang 1.6.3).
+// `Int::from_i64` / `Int::from_literal`.
 //
 // A value that fits `i64` lives in `small`, anything larger is sign +
 // magnitude (`IntMag`, base-2^32 limbs). Results that fit `i64` always
-// drop back to `small`, so `==` / `hash` stay a field compare (spec
-// 2.1.2 keeps promoted values big; the difference is not observable).
+// drop back to `small`, so `==` / `hash` stay a field compare.
 // Limb buffers are never written once in an `Int`, so copies share them
-// (`int` is `Copy`, 2.13.3).
+// (`int` is `Copy`).
 //
 // add / sub / shifts / products / Knuth D / gcd are runtime kernels
 // (`rokr/src/bignum.rs`). Here: Burnikel-Ziegler division above `BZ`
@@ -700,7 +699,7 @@ fn parse_digits(bs: Slice<u8>, lo: usize, hi: usize, radix: u32, per: u32, pw: L
     top.times(pw[j]).plus(parse_digits(bs, hi - l, hi, radix, per, pw))
 }
 
-/// An arbitrary-precision integer (spec 2.1.2). Write it `int`.
+/// An arbitrary-precision integer. Write it `int`.
 #[lang("int_type")]
 #[keyword("int")]
 pub struct Int {
@@ -1412,7 +1411,7 @@ impl Mul for Int {
     }
 }
 
-/// Truncating division (spec 2.1.2: `-7 / 2 == -3`); panics on zero.
+/// Truncating division (`-7 / 2 == -3`); panics on zero.
 impl Div for Int {
     type Output = Int;
     #[track_caller]
@@ -1570,7 +1569,7 @@ impl One for Int {
 }
 
 /// `b o x X` show the sign and magnitude: `int` has no width for a
-/// two's complement form (`{-255:x}` is `-ff`, stdlib 2.10.5).
+/// two's complement form (`{-255:x}` is `-ff`).
 impl Display for Int {
     fn fmt(self, ref f: Formatter) throws (FmtError) {
         if self.big is none {
@@ -1595,7 +1594,7 @@ impl FromStr for Int {
     }
 }
 
-// conversions (stdlib 2.11.8, 2.1.7)
+// conversions
 
 const fn overflow(ty: str) -> OverflowError { OverflowError::new("try_from", ty) }
 

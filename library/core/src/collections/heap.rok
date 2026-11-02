@@ -9,7 +9,7 @@ pub struct BinaryHeap<T> {
     cmp: fn(T, T) -> rok::core::cmp::Ordering + Send;
 }
 
-// Shares its buffer like `List` (stdlib 2.13.9). The comparator is
+// Shares its buffer like `List`. The comparator is
 // `Send`, so a heap is `Send` when `T` is.
 impl<T> !Sync for BinaryHeap<T> {}
 
@@ -168,7 +168,7 @@ impl<T> ExactSizeIterator for HeapIter<T> {
     }
 }
 
-/// `for x in h`, in no particular order (2.9.9).
+/// `for x in h`, in no particular order.
 impl<T> IntoIterator for BinaryHeap<T> {
     type IntoIter = HeapIter<T>;
     type Item = T;

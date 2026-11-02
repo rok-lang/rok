@@ -1,8 +1,8 @@
-//! Mutator TLS (spec 008-abi/803).
+//! Mutator TLS.
 //!
-//! The slots of 803 §8.3.1 are one exported `thread_local` block,
+//! The ABI slots are one exported `thread_local` block,
 //! `rok_tls`, at the offsets of `tls_abi`. A rok function gets the
-//! block's address from its caller as a hidden last argument (8.3.8);
+//! block's address from its caller as a hidden last argument;
 //! code entered from outside rok reads it once. Defined in assembly
 //! because stable `no_std` Rust cannot export TLS symbols. The runtime
 //! reaches its own block through the hidden `rok_tls_addr`, another
@@ -291,7 +291,7 @@ pub fn attached() -> *mut u8 {
     at(tls_abi::ATTACHED)
 }
 
-/// `rok_thread_init` slot values (803 §8.3.6). The TLAB starts empty
+/// `rok_thread_init` slot values. The TLAB starts empty
 /// (the first allocation refills it); the write barrier logs into its
 /// own remembered-set chunk, allocated by the first logged store.
 #[allow(clippy::cast_ptr_alignment)] // pointer-aligned slots

@@ -1,5 +1,5 @@
-// rok::core::collections::set - `Set<T, S>`, a hash set (stdlib spec
-// 2.9.4) over `Dict<T, bool, S>`, so it iterates in insertion order.
+// rok::core::collections::set - `Set<T, S>`, a hash set
+// over `Dict<T, bool, S>`, so it iterates in insertion order.
 
 use rok::core::hash::{BuildHasher, RandomState};
 
@@ -8,7 +8,7 @@ pub struct Set<T, S = RandomState> {
     d: Dict<T, bool, S>;
 }
 
-// Shares its buffer like `List` (stdlib 2.13.9).
+// Shares its buffer like `List`.
 impl<T, S> !Sync for Set<T, S> {}
 
 impl<T: Hash> Set<T> {
@@ -175,7 +175,7 @@ impl<T: Hash, S: BuildHasher + Default> Default for Set<T, S> {
     fn default() -> Set<T, S> { Set::with_hasher(S::default()) }
 }
 
-/// A new set with every element cloned (stdlib 2.13.2).
+/// A new set with every element cloned.
 impl<T: Hash + Clone, S: BuildHasher> Clone for Set<T, S> {
     const fn clone(self) -> Set<T, S> {
         let r: Set<T, S> = Set::with_hasher(self.hasher());
@@ -186,7 +186,7 @@ impl<T: Hash + Clone, S: BuildHasher> Clone for Set<T, S> {
     }
 }
 
-/// `for x in s` (2.9.9).
+/// `for x in s`.
 impl<T: Hash, S: BuildHasher> IntoIterator for Set<T, S> {
     type IntoIter = SetIter<T, S>;
     type Item = T;
@@ -195,7 +195,7 @@ impl<T: Hash, S: BuildHasher> IntoIterator for Set<T, S> {
     }
 }
 
-/// `it.collect()` into a set (2.9.9).
+/// `it.collect()` into a set.
 impl<T: Hash, S: BuildHasher + Default> FromIterator<T> for Set<T, S> {
     const fn from_iter<I: IntoIterator<Item = T>>(it: I) -> Set<T, S> {
         let out: Set<T, S> = Set::with_hasher(S::default());
@@ -217,7 +217,7 @@ impl<T: Hash, S: BuildHasher + Default> From<List<T>> for Set<T, S> {
     }
 }
 
-/// `s += x`: insert `x` (stdlib 2.4.6).
+/// `s += x`: insert `x`.
 impl<T: Hash, S: BuildHasher> AddAssign<T> for Set<T, S> {
     const fn add_assign(ref self, rhs: T) {
         self.insert(rhs);
@@ -268,7 +268,7 @@ impl<T: Hash + Debug, S: BuildHasher> Debug for Set<T, S> {
     }
 }
 
-/// `{a, b}` / `{a,}` (refs-lang 6.5.1, 6.5.6; `{ a }` is a block).
+/// `{a, b}` / `{a,}` (`{ a }` is a block).
 #[literal("{" {expr} % "," + "}")]
 pub(pkg) const fn set_literal<T: Hash>(items: ...T) -> Set<T> {
     let s: Set<T> = Set::new();

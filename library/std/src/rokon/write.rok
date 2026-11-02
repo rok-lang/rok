@@ -1,4 +1,4 @@
-// rok::std::rokon::write - the canonical text of a `Value` (spec 3.9.4).
+// rok::std::rokon::write - the canonical text of a `Value`.
 
 use rok::std::rokon::Value;
 

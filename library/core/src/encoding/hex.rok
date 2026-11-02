@@ -62,7 +62,7 @@ pub fn decode_into<B: AsBytes>(text: B, out: SliceMut<u8>) throws (DecodeError) 
     if out.len() < n / 2 {
         panic(f"hex::decode_into: `out` holds {out.len()} bytes but the text spells {n / 2}; size `out` as `text.len() / 2`");
     }
-    // A bad digit is reported before an odd length (2.22.3).
+    // A bad digit is reported before an odd length.
     let i = 0usize;
     while i + 1 < n {
         let hi = digit(t[i]);

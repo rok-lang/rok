@@ -1,4 +1,4 @@
-//! f-string support (refs-lang 1.7.3, stdlib 2.10): the GC text a
+//! f-string support: the GC text a
 //! `Formatter` writes, over the renderings in `fmt_text`. Per-type
 //! dispatch lives in `core::fmt`.
 

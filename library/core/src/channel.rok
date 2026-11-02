@@ -1,5 +1,5 @@
-// rok::core::channel - message passing between threads (stdlib spec
-// 2.17). Multi-producer, multi-consumer (2.17.4): a `Receiver` copy
+// rok::core::channel - message passing between threads.
+// Multi-producer, multi-consumer: a `Receiver` copy
 // shares the queue, and each value goes to one receiver. `recv` / `send`
 // block the OS thread, `recv_async` / `for await` / `send_async` suspend
 // the task (`task::park`: receivers on the `meta` address, senders one
@@ -42,7 +42,7 @@ impl<T> TrySendError<T> {
     }
 }
 
-// Errors (2.14.3) whatever `T` is: the value they carry is not shown.
+// Errors whatever `T` is: the value they carry is not shown.
 impl<T> Display for SendError<T> {
     const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(self.message()) }
 }
@@ -425,7 +425,7 @@ pub const fn channel_bounded<T: Send>(cap: usize) -> (Sender<T>, Receiver<T>) {
 }
 
 /// The sending end. Each clone is its own sender and is closed on its
-/// own; the channel closes when every sender has closed (2.17.3).
+/// own; the channel closes when every sender has closed.
 pub struct Sender<T> {
     ch: Chan<T>;
     open: GcBuf<bool>;
@@ -587,7 +587,7 @@ impl<T> Receiver<T> {
     }
 }
 
-/// `for v in rx` (2.17.5).
+/// `for v in rx`.
 impl<T> IntoIterator for Receiver<T> {
     type IntoIter = ReceiverIter<T>;
     type Item = T;
@@ -632,7 +632,7 @@ impl<T> rok::core::future::Future for RecvFuture<T> {
     }
 }
 
-/// `for await v in rx` (2.17.5): values until every sender has closed.
+/// `for await v in rx`: values until every sender has closed.
 impl<T> rok::core::stream::Stream for Receiver<T> {
     type Item = T;
     fn poll_next(ref self, ref ctx: rok::core::future::Context) -> rok::core::future::Poll<T | none> {

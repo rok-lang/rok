@@ -1,4 +1,4 @@
-// rok::std::path (stdlib 3.8): `Path`, a UTF-8 path value with
+// rok::std::path: `Path`, a UTF-8 path value with
 // Python-style `/` joining. Separators follow the target: `/` on Unix;
 // `\` or `/` on Windows, where a path may start with a prefix (`C:`,
 // `\\server\share`, `\\?\..`, `\\.\..`), is absolute only with a prefix
@@ -387,7 +387,7 @@ impl Div<Path> for Path {
     const fn div(self, rhs: Path) -> Path { self.join(rhs) }
 }
 
-/// OS path bytes that need not be UTF-8 (3.8.5): Unix bytes.
+/// OS path bytes that need not be UTF-8: Unix bytes.
 #[cfg(not(target_os = "windows"))]
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct RawPath {
@@ -413,7 +413,7 @@ impl RawPath {
     pub const fn to_path_lossy(self) -> Path { Path { s: str::from_utf8_lossy(self.raw) } }
 }
 
-/// An OS path that need not be valid UTF-16 (3.8.5): Windows WTF-16
+/// An OS path that need not be valid UTF-16: Windows WTF-16
 /// units (lone surrogates allowed).
 #[cfg(target_os = "windows")]
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -507,8 +507,7 @@ impl From<str> for Path {
     const fn from(s: str) -> Path { Path { s: s } }
 }
 
-/// `Path::try_from(raw)`: `raw` as a path; throws if it is not UTF-8
-/// (3.8.4).
+/// `Path::try_from(raw)`: `raw` as a path; throws if it is not UTF-8.
 impl TryFrom<RawPath> for Path {
     type Error = Utf8Error;
     const fn try_from(raw: RawPath) throws (Utf8Error) -> Path { try raw.to_path() }

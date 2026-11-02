@@ -1,7 +1,7 @@
 // rok::std::wit - the component model's async ABI (WASI preview 3)
-// for the bindings `ffi::wit::import` / `ffi::wit::export` generate
-// (stdlib spec 1.8): it runs on the executor, so it lives above
-// `rok::bare::ffi::wit` (stdlib 0.1.2).
+// for the bindings `ffi::wit::import` / `ffi::wit::export` generate:
+// it runs on the executor, so it lives above
+// `rok::bare::ffi::wit`.
 
 use rok::bare::ffi::wit::{BLOCKED, Blocks, DROPPED, load_i32};
 use rok::core::channel::{Receiver, channel};

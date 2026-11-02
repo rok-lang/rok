@@ -1,6 +1,6 @@
 // rok::core::array - Clone / Copy / Default / Debug / PartialEq / Eq /
 // Hash for fixed arrays `[T; N]`, element-wise, and PartialOrd / Ord,
-// lexicographic (stdlib 2.5.7, 2.13.6, 2.10.9).
+// lexicographic.
 
 impl<T: Clone, const N: usize> Clone for [T; N] {
     const fn clone(self) -> [T; N] {
@@ -43,7 +43,7 @@ impl<T: PartialEq, const N: usize> PartialEq for [T; N] {
 
 impl<T: Eq, const N: usize> Eq for [T; N] {}
 
-// Lexicographic, like `List` and tuples (2.5.7).
+// Lexicographic, like `List` and tuples.
 impl<T: PartialEq + PartialOrd, const N: usize> PartialOrd for [T; N] {
     const fn lt(self, rhs: [T; N]) -> bool {
         for i in 0..N {

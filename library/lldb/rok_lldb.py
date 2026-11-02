@@ -1,4 +1,4 @@
-"""lldb formatters for rok programs built with `-g` (spec 9.9.6).
+"""lldb formatters for rok programs built with `-g`.
 
 lldb reads a DWARF variant part (a sum, an enum, an `any`) as a union of
 every variant, `$variants$`, each `$variant$<discriminant>` holding the

@@ -1,4 +1,4 @@
-//! Hand-off copies (stdlib 2.13.9): `rok::core::marker::transfer` copies
+//! Hand-off copies: `rok::core::marker::transfer` copies
 //! every collection a handed value reaches, once each. The memo maps an
 //! original to its copy so a collection reached twice is copied once and
 //! a cycle ends.
@@ -139,7 +139,7 @@ pub extern "C" fn rok_xfer_memo_for(n: usize) -> *mut u8 {
     m
 }
 
-// A visit (`marker::distinct`, stdlib 2.19.1) asks whether two `par`
+// A visit (`marker::distinct`) asks whether two `par`
 // items reach one collection. Each item reaches each object one of two
 // ways: whole, or through slices. Slices only read, so items may share a
 // buffer through them, as long as none reaches it whole; the elements

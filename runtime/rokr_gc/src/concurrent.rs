@@ -1,4 +1,4 @@
-//! Concurrent marking of full collections (705): snapshot at the
+//! Concurrent marking of full collections: snapshot at the
 //! beginning (SATB, Yuasa), one marker thread.
 //!
 //! - Start ([`start`], a pause): a minor collection first, so every

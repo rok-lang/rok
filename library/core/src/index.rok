@@ -1,6 +1,6 @@
 // Indexing + slicing traits.
 //
-// Spec 3.6: `arr[i]`, `arr[i,j]`, `arr[1:3]` all desugar through these
+// `arr[i]`, `arr[i,j]`, `arr[1:3]` all desugar through these
 // traits. `xs[i]` / `xs[i] = v` on a struct or enum call `index` /
 // `index_set`; fixed arrays and `GcBuf<T>` index directly (no call).
 // `a[i:j:k]` calls `a.slice(i..j)` (then `.step(k)`), see
@@ -23,8 +23,8 @@ pub trait IndexSet<I> {
     fn index_set(self, idx: I, value: Value);
 }
 
-/// `a[i:j]` (spec 2.3.4 names it `Slice`, which is also the view type
-/// of 2.9.7; one glob-imported name cannot be both).
+/// `a[i:j]` (not `Slice`: that is the view type, and one glob-imported
+/// name cannot be both).
 #[lang("slice_trait")]
 pub trait Sliceable<R> {
     type Output;
@@ -32,7 +32,7 @@ pub trait Sliceable<R> {
     fn slice(self, range: R) -> Output;
 }
 
-/// Spec 4.2.6: a `List` / `Slice` spread `f(..xs)` into fixed
+/// A `List` / `Slice` spread `f(..xs)` into fixed
 /// parameters needs exactly as many elements as it fills.
 #[track_caller]
 #[lang("spread_len_fn")]
@@ -42,7 +42,7 @@ pub(pkg) const fn spread_len(len: usize, want: usize) {
     }
 }
 
-/// Spec 4.2.6: a `Dict` spread `f(..d)` is named arguments, so every
+/// A `Dict` spread `f(..d)` is named arguments, so every
 /// key must name a parameter the spread may fill.
 #[track_caller]
 #[lang("spread_names_fn")]
@@ -54,7 +54,7 @@ pub(pkg) const fn spread_names<V>(d: rok::core::collections::dict::Dict<str, V>,
     }
 }
 
-/// Spec 4.2.6: a defaulted parameter the dict's value type does not fit
+/// A defaulted parameter the dict's value type does not fit
 /// takes its default; a key naming it is an error.
 #[track_caller]
 #[lang("spread_misfit_fn")]
@@ -64,7 +64,7 @@ pub(pkg) const fn spread_misfit<V>(d: rok::core::collections::dict::Dict<str, V>
     }
 }
 
-/// Spec 3.6: the position of a signed index `i` in a length `len` -
+/// The position of a signed index `i` in a length `len` -
 /// `i` itself, or `len + i` when negative (`xs[-1]` is the last). The
 /// compiler routes every signed position (`xs[i]` / `a[i]` on a `List`,
 /// `Slice`, fixed array; slice bounds of those and of `str` / `StrBuf`)
@@ -153,7 +153,7 @@ pub(pkg) const fn slice_range(start: isize | none, stop: isize | none, step: isi
 }
 
 /// `xs[a:b]` (or `xs` alone, `r` = `none`) where a `SliceMut<T>` is
-/// expected: a writable view of the list (stdlib 2.9.7).
+/// expected: a writable view of the list.
 #[track_caller]
 #[lang("slice_mut_fn")]
 pub(pkg) const fn slice_mut<T>(xs: List<T>, r: Range<usize> | none) -> SliceMut<T> {

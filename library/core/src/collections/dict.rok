@@ -1,12 +1,12 @@
-// rok::core::collections::dict - `Dict<K, V, S>`, a hash map (stdlib
-// spec 2.9.3) hashing with `S` (the process-keyed `RandomState` by
+// rok::core::collections::dict - `Dict<K, V, S>`, a hash map
+// hashing with `S` (the process-keyed `RandomState` by
 // default), compact: entries are appended to dense key / value / hash
 // arrays, and a power-of-two index of linear-probed slots maps a hash to
 // its entry. A table of at most `SMALL` entries has no index: lookup
 // scans the hashes. `remove` leaves a hole; holes are squeezed out when
 // the entries are full. One object holds the counts and the current
 // arrays, swapped on growth. Iteration follows the entries, so it is in
-// insertion order, as the spec guarantees: a present key re-inserted
+// insertion order: a present key re-inserted
 // keeps its place, a removed one re-inserted goes last.
 
 use rok::core::hash::{BuildHasher, RandomState};
@@ -93,7 +93,7 @@ pub struct Dict<K, V, S = RandomState> {
     h: GcBuf<DictHead<K, V, S>>;
 }
 
-// Shares its buffer like `List` (stdlib 2.13.9).
+// Shares its buffer like `List`.
 impl<K, V, S> !Sync for Dict<K, V, S> {}
 
 /// `pairs.collect::<Dict<K, V>>()`; a later pair's value wins.
@@ -363,7 +363,7 @@ impl<K: Hash, V, S: BuildHasher> Dict<K, V, S> {
         }
     }
 
-    /// The keys, lazily (2.9.3; insertion order).
+    /// The keys, lazily, in insertion order.
     pub const fn keys(self) -> Keys<K, V, S> {
         Keys { d: self, at: 0 }
     }
@@ -378,7 +378,7 @@ impl<K: Hash, V, S: BuildHasher> Dict<K, V, S> {
         DictIter { d: self, at: 0 }
     }
 
-    /// `k`'s place in the dict, present or not (2.9.3).
+    /// `k`'s place in the dict, present or not.
     pub const fn entry(self, k: K) -> Entry<K, V, S> {
         Entry { d: self, key: k }
     }
@@ -525,7 +525,7 @@ impl<K: Hash, V, S: BuildHasher + Default> Default for Dict<K, V, S> {
     fn default() -> Dict<K, V, S> { Dict::with_hasher(S::default()) }
 }
 
-/// A new dict with every key and value cloned (stdlib 2.13.2).
+/// A new dict with every key and value cloned.
 impl<K: Hash + Clone, V: Clone, S: BuildHasher> Clone for Dict<K, V, S> {
     const fn clone(self) -> Dict<K, V, S> {
         let r: Dict<K, V, S> = Dict::with_hasher(self.hasher());
@@ -547,7 +547,7 @@ impl<K: Hash, V, S: BuildHasher + Default> From<List<(K, V)>> for Dict<K, V, S> 
     }
 }
 
-/// `d += e`: merge `e` in place; its values win (stdlib 2.4.6).
+/// `d += e`: merge `e` in place; its values win.
 impl<K: Hash, V, S: BuildHasher> AddAssign<Dict<K, V, S>> for Dict<K, V, S> {
     const fn add_assign(ref self, rhs: Dict<K, V, S>) {
         for (k, v) in rhs {
@@ -556,7 +556,7 @@ impl<K: Hash, V, S: BuildHasher> AddAssign<Dict<K, V, S>> for Dict<K, V, S> {
     }
 }
 
-/// `for (k, v) in d` (2.9.9).
+/// `for (k, v) in d`.
 impl<K: Hash, V, S: BuildHasher> IntoIterator for Dict<K, V, S> {
     type IntoIter = DictIter<K, V, S>;
     type Item = (K, V);
@@ -642,7 +642,7 @@ impl<K: Hash + Debug, V: Debug, S: BuildHasher> Debug for Dict<K, V, S> {
     }
 }
 
-/// `{k: v, ..}` (refs-lang 6.5.1, 6.5.6).
+/// `{k: v, ..}`.
 #[literal("{" {expr ":" expr} % "," * "}")]
 pub(pkg) const fn dict_literal<K: Hash, V>(pairs: ...(K, V)) -> Dict<K, V> {
     let d: Dict<K, V> = Dict::new();
@@ -652,7 +652,7 @@ pub(pkg) const fn dict_literal<K: Hash, V>(pairs: ...(K, V)) -> Dict<K, V> {
     return d;
 }
 
-/// A hand-off's copy (stdlib 2.13.9): the same table; keys and values go
+/// A hand-off's copy: the same table; keys and values go
 /// through `transfer` from the memo's queue (holes stay zero).
 impl<K, V, S> Transfer for Dict<K, V, S> {
     const fn transfer_copy(self, m: Memo) -> Dict<K, V, S> {

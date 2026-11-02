@@ -1,5 +1,5 @@
 // rok::core::rt - the runtime ABI (`librokr`, `extern "rok"`), declared once. Extern
-// functions share one global namespace (refs-lang 5.9.4), so `core` and
+// functions share one global namespace, so `core` and
 // `std` call them by name without an import; `bare`, below `core`,
 // declares its own few. The compiler intrinsics are `pub(pkg)`: `core`
 // only.
@@ -87,9 +87,9 @@ extern "rok" {
     #[track_caller]
     fn rok_par_sequential(what: str);
     fn rok_oom() -> !;
-    // The allocator's slow path codegen calls (8.5.1): a GC object.
+    // The allocator's slow path codegen calls: a GC object.
     fn rok_gc_alloc_slow(size: usize, align: usize, type_id: u32) -> GcBuf<u8>;
-    // Only codegen calls these (8.5.1, 8.5.12): declared so that a
+    // Only codegen calls these: declared so that a
     // program's own declaration must match what codegen calls.
     fn rok_gc_wb_slow(obj: Ptr<u8>);
     fn rok_gc_register_type(type_id: u32, scan_table: ConstPtr<u8>);
@@ -98,7 +98,7 @@ extern "rok" {
     fn rok_static_init_end(state: Ptr<u8>);
     // A secret buffer of that many zeroed bytes (`crypto::Secret`).
     fn rok_gc_secret_new(len: usize) -> GcBuf<u32>;
-    // An error out of a throwing `main` (spec 4.16.4): its description
+    // An error out of a throwing `main`: its description
     // and the position it escaped at, exit 1. Lowering calls it.
     fn rok_uncaught_error_at(what: str, at: str) -> !;
 
@@ -192,7 +192,7 @@ extern "rok" {
     fn rok_net_sendfile(sock: i32, file: i32, offset: i64, count: usize) -> isize;
     fn rok_net_splice(sock: i32, file: i32, count: usize) -> isize;
     fn rok_net_send_zerocopy(fd: i32, buf: GcBuf<u8>, off: usize, len: usize) -> isize;
-    // `int` kernels that may run long: they run parked (804 §8.4.10) on
+    // `int` kernels that may run long: they run parked on
     // the buffers this frame keeps alive.
     fn rok_nat_mul(r: GcBuf<u32>, a: GcBuf<u32>, an: usize, b: GcBuf<u32>, bn: usize, t: GcBuf<u32>);
     fn rok_nat_mulmod(r: GcBuf<u32>, a: GcBuf<u32>, an: usize, b: GcBuf<u32>, bn: usize, m: usize, t: GcBuf<u32>);
@@ -203,11 +203,11 @@ extern "rok" {
     fn rok_nat_gcd(r: GcBuf<u32>, a: GcBuf<u32>, an: usize, b: GcBuf<u32>, bn: usize, t: GcBuf<u32>) -> usize;
 }
 
-// Neither allocates nor blocks: a call is no safepoint (804). The
+// Neither allocates nor blocks: a call is no safepoint. The
 // compiler takes this block as the list. None may ever stop its thread
 // for a collection (no allocation, lock wait, poll or blocking call): a
 // back-edge poll's yield path is the only place the locals only polls
-// see are rooted (8.4.8). A debug rokc brackets each call so the runtime
+// see are rooted. A debug rokc brackets each call so the runtime
 // checks this (`world::may_stop`).
 #[no_safepoint]
 extern "rok" {

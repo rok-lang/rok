@@ -1,8 +1,8 @@
-// rok::bare::ffi - NUL-terminated C strings (stdlib 1.7.2); `wit` is
-// what the WIT bindings run on (1.8).
+// rok::bare::ffi - NUL-terminated C strings; `wit` is
+// what the WIT bindings run on.
 //
 // `CStr` and `CString` keep their bytes, NUL included, in one `str`
-// object, so `as_ptr` holds as `str::as_ptr` does (2.15.2).
+// object, so `as_ptr` holds as `str::as_ptr` does.
 // `CStr::from_ptr` copies.
 
 pub mod wit;
@@ -152,7 +152,7 @@ const fn nul_in(bytes: Slice<u8>) -> usize | none {
     none
 }
 
-/// A NUL-terminated string (1.7.2).
+/// A NUL-terminated string.
 pub struct CStr {
     /// The bytes and the NUL.
     s: str;
@@ -241,7 +241,7 @@ impl CStr {
     pub const fn len(self) -> usize { self.s.len() - 1 }
 }
 
-/// An owned NUL-terminated string (1.7.2).
+/// An owned NUL-terminated string.
 pub struct CString {
     c: CStr;
 }

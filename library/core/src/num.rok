@@ -1,9 +1,9 @@
 // rok::core::num - the primitive types' operator / comparison trait
-// impls (stdlib spec 2.1, 2.3.5, 2.5). They make `T: Add` / `T: Ord`
-// bounds accept primitives. Each method is `#[intrinsic("rok.OP.TYPE")]`
-// (stdlib spec 0.3): a primitive `a + b` and a by-name call (`x.add(y)`,
+// impls. They make `T: Add` / `T: Ord`
+// bounds accept primitives. Each method is `#[intrinsic("rok.OP.TYPE")]`:
+// a primitive `a + b` and a by-name call (`x.add(y)`,
 // `T::add(a, b)`) both lower to the machine op. The body is the
-// fallback (0.3.4) and what a `fn` value of the method runs.
+// fallback and what a `fn` value of the method runs.
 // One block per (type, trait); keep it regular. The inherent methods
 // (`checked_add`, `count_ones`, `floor`, ..) live in `ints` / `floats`.
 
@@ -27,7 +27,7 @@ pub trait One {
     fn one() -> Self;
 }
 
-// Integer operator impls, one block per type (spec 6.8.12). The bodies
+// Integer operator impls, one block per type. The bodies
 // are the primitive `rok.OP.<type>` intrinsics; signed types add Neg.
 #[impl_macro(signed_int_ops)] @macro {
     (@rep[sep = ","] { @t: ty }) => {
@@ -253,7 +253,7 @@ signed_int_ops!(i8, i16, i32, i64, isize);
 }
 unsigned_int_ops!(u8, u16, u32, u64, usize);
 
-// `Hash`: each integer writes itself at its own width (2.5.6).
+// `Hash`: each integer writes itself at its own width.
 impl Hash for i8 {
     const fn hash<H: Hasher>(self, ref h: H) { h.write_i8(self) }
 }
@@ -422,7 +422,7 @@ impl PartialOrd for f64 {
     const fn ge(self, rhs: f64) -> bool { self >= rhs }
 }
 
-// `!x` on an integer is its bitwise complement, as `~x` (2.3.2).
+// `!x` on an integer is its bitwise complement, as `~x`.
 impl Not for i8 {
     type Output = i8;
     #[intrinsic("rok.not.i8")]
@@ -543,7 +543,7 @@ impl Hash for char {
     const fn hash<H: Hasher>(self, ref h: H) { h.write_u32(self as u32) }
 }
 
-// c_char (stdlib 2.5): compared and hashed as its byte.
+// c_char: compared and hashed as its byte.
 
 impl PartialEq for c_char {
     #[intrinsic("rok.eq.c_char")]
@@ -578,7 +578,7 @@ impl Debug for c_char {
     const fn fmt(self, ref f: Formatter) throws (FmtError) { try Debug::fmt(self as u8, ref f) }
 }
 
-// `&&` / `||` (stdlib 2.3.9): on two `bool`s the compiler short-circuits
+// `&&` / `||`: on two `bool`s the compiler short-circuits
 // without calling these.
 
 impl LogicalAnd for bool {
@@ -589,7 +589,7 @@ impl LogicalOr for bool {
     const fn logical_or(self, rhs: bool) -> bool { self || rhs }
 }
 
-// √ (stdlib spec 2.3.10): `llvm.intr.sqrt`. The body's `self.sqrt()`
+// √: `llvm.intr.sqrt`. The body's `self.sqrt()`
 // is itself the intrinsic (a call of an intrinsic method is the op).
 
 impl Sqrt for f64 {
@@ -604,7 +604,7 @@ impl Sqrt for f32 {
     const fn sqrt(self) -> f32 { self.sqrt() }
 }
 
-// `%%` (2.3 `Modulo`): floored - the result takes the divisor's sign;
+// `%%` (`Modulo`): floored - the result takes the divisor's sign;
 // unsigned it is `%`.
 
 impl Modulo for i8 {

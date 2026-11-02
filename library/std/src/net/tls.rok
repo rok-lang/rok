@@ -1,4 +1,4 @@
-// rok::std::net::tls - TLS 1.3 (stdlib spec 3.2.5), implemented here in
+// rok::std::net::tls - TLS 1.3, implemented here in
 // rok on `rok::core::crypto`: no OS or external TLS library.
 //
 // `Client` / `Server` wrap a `TcpStream`; after the handshake they read

@@ -1,8 +1,8 @@
-// rok::bare::ffi::wit - what the generated WIT bindings run on (stdlib
-// 1.8): linear-memory access at canonical ABI addresses (`i32`), the
+// rok::bare::ffi::wit - what the generated WIT bindings run on:
+// linear-memory access at canonical ABI addresses (`i32`), the
 // blocks strings and lists lower into, resource handles and
 // `error-context`. The async ABI is `rok::std::wit` (bare does not depend
-// on core, 0.1.2). Blocks come from the C allocator, including the ones
+// on core). Blocks come from the C allocator, including the ones
 // the host fills through `cabi_realloc`; a lifted string or list frees
 // its block once copied into GC memory.
 

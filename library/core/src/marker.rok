@@ -1,11 +1,11 @@
-// Marker traits used by #[derive(...)] (spec 6.2/6.4) and other
-// compiler-driven semantics. Slots follow stdlib spec 0.4 (6.4.8).
+// Marker traits used by #[derive(...)] and other compiler-driven
+// semantics.
 // The comparison / hashing traits live in `cmp.rok`.
 
 use rok::bare::gc::{GcPtr, Pinnable};
 use rok::core::collections::raw::{buf_cast, buf_erase};
 
-/// The type of the `none` literal (stdlib 2.13.8): the compiler's
+/// The type of the `none` literal: the compiler's
 /// built-in `none`, here under its library name.
 pub type NoneSentinel = none;
 
@@ -30,7 +30,7 @@ pub(pkg) const fn default_of<T: Default>() -> T {
     T::default()
 }
 
-// One `Default` per primitive, with its zero value (spec 6.8.12).
+// One `Default` per primitive, with its zero value.
 #[impl_macro(default_impls)] @macro {
     (@rep[sep = ","] { (@t: ty, @v: expr) }) => {
         @for @t { impl Default for @t { const fn default() -> @t { @v } } }
@@ -42,13 +42,13 @@ default_impls!(
     (f32, 0.0), (f64, 0.0), (bool, false), (char, '\0'), (str, "")
 );
 
-/// Bitwise copy is a correct duplicate (stdlib 2.13.3). A marker: every
+/// Bitwise copy is a correct duplicate. A marker: every
 /// value already copies on `let y = x;`; `#[derive(Copy)]` checks that
 /// every field is `Copy` and the type is not `Drop`.
 pub trait Copy: Clone {}
 
-// Primitives (and the immutable `(ptr, len)` `str`, 2.13.6) clone by
-// copying, and are `Copy`. One pair of impls per type (spec 6.8.12).
+// Primitives (and the immutable `(ptr, len)` `str`) clone by
+// copying, and are `Copy`. One pair of impls per type.
 #[impl_macro(copy_types)] @macro {
     (@rep[sep = ","] { @t: ty }) => {
         @for @t {
@@ -64,10 +64,10 @@ copy_types!(
     i8, i16, i32, i64, isize, u8, u16, u32, u64, usize, f32, f64, bool, char, c_char, str
 );
 
-/// Cleanup on release (2.13.4). A `Drop` value has one owner: `let b = a`
+/// Cleanup on release. A `Drop` value has one owner: `let b = a`
 /// moves it, and the compiler calls `drop` where its owner leaves scope (on
-/// every exit, and when a task ends) or where a `using` block (refs-lang
-/// 3.17) ends.
+/// every exit, and when a task ends) or where a `using` block
+/// ends.
 pub trait Drop {
     /// Releases what `self` holds; called once, where the value is
     /// released.
@@ -122,7 +122,7 @@ unsafe impl<T: Send> Sync for Handoff<T> {}
 
 // A hand-off (`Mutex::new`, `RwLock::new`, a guard's `set` / `update`, a
 // channel send, a task's or thread's result) gives the new owner a copy
-// of every collection the value reaches (stdlib 2.13.9): a handle the
+// of every collection the value reaches: a handle the
 // sender kept, however it got it, then names an object no other thread
 // uses. `Sync` parts and types with `unsafe impl Send` stay shared.
 //
@@ -297,7 +297,7 @@ fn visit_slots<T>(b: GcBuf<u8>, n: usize, m: Memo) {
     }
 }
 
-/// Whether no collection is reached from two of `items` (2.19.1): `par`
+/// Whether no collection is reached from two of `items`: `par`
 /// gives each item to a worker. Each collection an item reaches is
 /// stamped for that item (rokr `xfer`), elements followed only where they
 /// hold collections. Slices only read: items may share a list through
@@ -393,7 +393,7 @@ pub(pkg) fn transfer_plain<T>() -> bool;
 pub(pkg) fn transfer_flat<T>() -> bool;
 
 /// A second handle to `x`, which the compiler does not follow: it is
-/// neither moved nor released through it (stdlib 2.13.4). The owner's
+/// neither moved nor released through it. The owner's
 /// rules still hold; using the handle after the owner released the
 /// value is the caller's to rule out.
 pub unsafe fn share<T>(x: T) -> T { x }

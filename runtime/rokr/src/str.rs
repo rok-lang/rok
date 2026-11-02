@@ -1,4 +1,4 @@
-//! Runtime side of `str` (stdlib 2.15, ABI 808): a `(ptr, len)` value.
+//! Runtime side of `str`: a `(ptr, len)` value.
 //!
 //! Literals point at static NUL-terminated bytes. Every string built at
 //! run time is a GC object (type id [`STR_TYPE_ID`], no traced children)
@@ -20,7 +20,7 @@ use rokr_common::object_header::{HEADER_ALIGN, HEADER_SIZE};
 
 use crate::{str_ops, unicode};
 
-/// Standard-library type id of runtime strings (801 §8.1.2 reserved
+/// Standard-library type id of runtime strings (in the reserved
 /// range); never registered, so the collector traces nothing inside.
 const STR_TYPE_ID: u32 = rokr_common::gc_abi::PLAIN_TYPE_ID;
 
@@ -97,8 +97,8 @@ pub extern "C" fn rok_str_eq(a: RokStr, b: RokStr) -> i32 {
 }
 
 /// `s[start:end]` (byte offsets): shares `s`'s bytes, O(1). Panics
-/// outside `0..=len`, on a reversed range, or off a UTF-8 char boundary
-/// (stdlib 2.15.3), reporting `at` (the caller's `path:line:col`).
+/// outside `0..=len`, on a reversed range, or off a UTF-8 char boundary,
+/// reporting `at` (the caller's `path:line:col`).
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_str_slice(s: RokStr, start: usize, end: usize, at: RokStr) -> RokStr {
     let b = s.bytes();
@@ -211,7 +211,7 @@ pub extern "C" fn rok_str_from_char(c: u32) -> RokStr {
     build(&[utf8(c, &mut buf)])
 }
 
-/// Byte `i` of `s` (stdlib 2.15 `bytes()`); the caller checks `i < len`.
+/// Byte `i` of `s` (`bytes()`); the caller checks `i < len`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_str_byte(s: RokStr, i: usize) -> u8 {
     s.bytes().get(i).copied().unwrap_or(0)
@@ -266,13 +266,13 @@ pub unsafe extern "C" fn rok_str_parse_float(s: RokStr, out: *mut u8) -> i32 {
 
 // Byte buffers (`GcBuf<u8>` regions: `StrBuf`, byte lists, I/O)
 
-/// Address of `s`'s first byte (stdlib 2.15 `str::as_ptr`).
+/// Address of `s`'s first byte (`str::as_ptr`).
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_str_addr(s: RokStr) -> usize {
     s.ptr as usize
 }
 
-/// Byte length of `s` (stdlib 2.15 `str::len`).
+/// Byte length of `s` (`str::len`).
 #[unsafe(no_mangle)]
 pub const extern "C" fn rok_str_len(s: RokStr) -> usize {
     s.len

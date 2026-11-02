@@ -59,7 +59,7 @@ const _: () = assert!(KARA >= 18 && KARA_SQR >= KARA && TOOM3 >= KARA && TOOM3_S
 const PARK: usize = 2048;
 
 /// `f()`, parked when `work` reaches `PARK` limbs: like a blocking
-/// runtime call (804 §8.4.10), so a collection on another thread does
+/// runtime call, so a collection on another thread does
 /// not wait for it. A kernel touches no GC object but the buffers it
 /// was passed: the caller's frame keeps them alive (these calls are
 /// safepoints) and a collection never moves what a root reaches.

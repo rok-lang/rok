@@ -1,11 +1,11 @@
-// Iterator + IntoIterator + FromIterator (stdlib spec 2.7).
+// Iterator + IntoIterator + FromIterator.
 //
 // `for pat in xs` desugars to
 //   let it = xs.into_iter();
 //   loop { match it.next() { v: T => { let pat = v; body } none => break } }
 // (integer ranges and arrays keep a direct counting loop).
 //
-// `next` takes `ref self` (2.7.1): an iterator's state lives in its
+// `next` takes `ref self`: an iterator's state lives in its
 // fields, written back into the caller's binding after each call.
 
 /// A source of items, one per `next` call; `none` ends it. The adapters
@@ -61,7 +61,7 @@ pub trait Iterator {
         StepBy { it: self, step: step, first: true }
     }
 
-    /// The items back to front (`DoubleEndedIterator` only, 2.7.9).
+    /// The items back to front (`DoubleEndedIterator` only).
     const fn rev(self) -> Rev<Self> {
         Rev { it: self }
     }
@@ -385,7 +385,7 @@ pub trait Iterator {
     }
 }
 
-/// An iterator that can also step from the back (2.7.9).
+/// An iterator that can also step from the back.
 pub trait DoubleEndedIterator: Iterator {
     /// The next item from the back, or `none` when the two ends meet.
     fn next_back(ref self) -> Item | none;
@@ -402,13 +402,13 @@ pub trait DoubleEndedIterator: Iterator {
     }
 }
 
-/// An iterator that knows how many items remain (2.7.10).
+/// An iterator that knows how many items remain.
 pub trait ExactSizeIterator: Iterator {
     /// The number of items left.
     fn len(self) -> usize;
 }
 
-/// A value `for` can walk (2.7.2): `into_iter` turns it into an
+/// A value `for` can walk: `into_iter` turns it into an
 /// iterator.
 #[lang("into_iterator_trait")]
 pub trait IntoIterator {
@@ -418,7 +418,7 @@ pub trait IntoIterator {
     fn into_iter(self) -> IntoIter;
 }
 
-/// Every iterator is iterable as itself (2.7.2).
+/// Every iterator is iterable as itself.
 impl<I: Iterator> IntoIterator for I {
     type IntoIter = I;
     type Item = I::Item;
@@ -427,7 +427,7 @@ impl<I: Iterator> IntoIterator for I {
     }
 }
 
-/// A collection buildable from an iterator (`collect`, 2.9.9).
+/// A collection buildable from an iterator (`collect`).
 pub trait FromIterator<A> {
     /// A collection holding the items of `it`, in iteration order.
     fn from_iter<I: IntoIterator<Item = A>>(it: I) -> Self;
@@ -452,7 +452,7 @@ impl<I: Iterator, U> Iterator for Map<I, U> {
 
     const fn exact_len(self) -> usize | none { self.it.exact_len() }
 
-    /// As many as the inner iterator: O(1) over an `ExactSizeIterator` (2.7.10).
+    /// As many as the inner iterator: O(1) over an `ExactSizeIterator`.
     const fn count(self) -> usize { self.it.count() }
 }
 
@@ -522,7 +522,7 @@ impl<I: Iterator> Iterator for Enumerate<I> {
 
     const fn exact_len(self) -> usize | none { self.it.exact_len() }
 
-    /// As many as the inner iterator: O(1) over an `ExactSizeIterator` (2.7.10).
+    /// As many as the inner iterator: O(1) over an `ExactSizeIterator`.
     const fn count(self) -> usize { self.it.count() }
 }
 
@@ -692,7 +692,7 @@ impl<I: DoubleEndedIterator> Iterator for Rev<I> {
 
     const fn exact_len(self) -> usize | none { self.it.exact_len() }
 
-    /// As many as the inner iterator: O(1) over an `ExactSizeIterator` (2.7.10).
+    /// As many as the inner iterator: O(1) over an `ExactSizeIterator`.
     const fn count(self) -> usize { self.it.count() }
 }
 
@@ -971,7 +971,7 @@ impl<I: Iterator, S> Iterator for Scan<I, S> {
 
     const fn exact_len(self) -> usize | none { self.it.exact_len() }
 
-    /// As many as the inner iterator: O(1) over an `ExactSizeIterator` (2.7.10).
+    /// As many as the inner iterator: O(1) over an `ExactSizeIterator`.
     const fn count(self) -> usize { self.it.count() }
 }
 
@@ -1143,7 +1143,7 @@ impl<I: Iterator> Iterator for Windows<I> {
     }
 }
 
-// generators (refs-lang 4.11)
+// generators
 
 /// The value of a `yield fn` call / `yield { .. }` block: an iterator
 /// over what the body yields. `resume` runs the body to its next `yield`
@@ -1152,7 +1152,7 @@ impl<I: Iterator> Iterator for Windows<I> {
 /// leaves the body at that `yield` through its `using` / `finally`
 /// cleanups instead.
 // One library type per coroutine kind, not a fresh anonymous type per
-// coroutine (spec 4.1.11); it only shows in type names and identity.
+// coroutine; it only shows in type names and identity.
 #[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct GenIter<T> {
     resume: fn(bool) -> (T | none);
@@ -1178,8 +1178,8 @@ impl<T> GenIter<T> {
 }
 
 /// A throwing generator (`yield fn f() throws (E) -> T`): a
-/// `TryIterator` whose `next` throws what the body throws (refs-lang
-/// 4.14.10), stepped with `try for x in g { .. }`.
+/// `TryIterator` whose `next` throws what the body throws,
+/// stepped with `try for x in g { .. }`.
 #[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryGenIter<T, E> {
     resume: fn(bool) throws (E) -> (T | none);
@@ -1207,7 +1207,7 @@ impl<T, E> TryGenIter<T, E> {
     }
 }
 
-// fallible iteration (stdlib 2.7.13)
+// fallible iteration
 
 /// An iterator whose `next` can fail: an item, `none` at the end, or a
 /// thrown `Error`. What a `next` after a throw does is the type's

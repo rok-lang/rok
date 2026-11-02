@@ -1,6 +1,6 @@
 // rok::core::tuple - Clone / Copy / Default / Debug / PartialEq / Eq /
 // Hash for tuples of 1 to 12 elements, component-wise, and PartialOrd /
-// Ord, lexicographic (stdlib 2.5.7, 2.10.9, 2.13.6). One block per
+// Ord, lexicographic. One block per
 // (arity, trait), all the same shape; keep every arity in step.
 
 // 1-tuples
@@ -448,7 +448,7 @@ impl<A: Hash, B: Hash, C: Hash, D: Hash, E: Hash, F: Hash, G: Hash, H: Hash, I: 
     }
 }
 
-// PartialOrd / Ord: lexicographic, component by component (2.5.7).
+// PartialOrd / Ord: lexicographic, component by component.
 impl<A: PartialEq + PartialOrd> PartialOrd for (A,) {
     fn lt(self, rhs: (A,)) -> bool { self.0 < rhs.0 }
     fn gt(self, rhs: (A,)) -> bool { self.0 > rhs.0 }

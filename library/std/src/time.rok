@@ -1,8 +1,8 @@
-// rok::std::time (stdlib 3.3): the wall clock (`SystemTime`) and
+// rok::std::time: the wall clock (`SystemTime`) and
 // the boot clock (`BootTime`). `Duration` / `Instant` are
 // `rok::core::time`. Every span is an exact signed `Duration`; the
 // arithmetic goes through `Duration`'s, which panics on overflow and
-// saturates only with overflow checks off (3.3.5).
+// saturates only with overflow checks off.
 
 use rok::core::time::Duration;
 
@@ -117,7 +117,7 @@ impl Debug for SystemTime {
     const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"SystemTime {{ ns: {self.ns} }}") }
 }
 
-/// Time since boot, counting suspend (3.3.4): `CLOCK_BOOTTIME` on Linux;
+/// Time since boot, counting suspend: `CLOCK_BOOTTIME` on Linux;
 /// on macOS `CLOCK_MONOTONIC`, which counts sleep there.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct BootTime {

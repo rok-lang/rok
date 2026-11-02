@@ -1,5 +1,5 @@
 // rok::core::error - `Result<T, E>`, an error kept as a value.
-// Errors travel through `throws` / `try` (spec 4.14); `Result` is for
+// Errors travel through `throws` / `try`; `Result` is for
 // holding one (collected results, callbacks, caches): "throw it →
 // `throws`; keep it → `Result`". `?` does not apply to it (`T | none`
 // only).
@@ -7,7 +7,7 @@
 // `Ok` / `Err` are bare names where a `Result` is expected (the
 // expected type picks the variant).
 
-/// A value or an error, kept as a value (2.14.2): `Ok(T)` or `Err(E)`.
+/// A value or an error, kept as a value: `Ok(T)` or `Err(E)`.
 #[must_use("`Result` may hold an error that is never looked at: match on it, or write `_ = {};` to drop it")]
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Result<T, E> {
@@ -119,8 +119,8 @@ impl<T, E> Result<T, E> {
     }
 }
 
-/// A `str` that is not a valid value of the requested type (stdlib
-/// spec 2.14.4; thrown by `str::parse` / `FromStr`).
+/// A `str` that is not a valid value of the requested type
+/// (thrown by `str::parse` / `FromStr`).
 #[derive(Clone, PartialEq, Eq)]
 pub struct ParseError {
     input: str;
@@ -152,7 +152,7 @@ impl Debug for ParseError {
 
 impl Error for ParseError {}
 
-/// An invalid argument value (stdlib spec 2.14.4; `FormatSpec::parse`,
+/// An invalid argument value (`FormatSpec::parse`,
 /// `hkdf::expand`, ...).
 #[derive(Clone, PartialEq, Eq)]
 pub struct ValueError {
@@ -178,7 +178,7 @@ impl Debug for ValueError {
 impl Error for ValueError {}
 
 /// A value out of a fixed-width type's range in a checked conversion
-/// (stdlib spec 2.14.4; thrown by `try_from` / `try_into`).
+/// (thrown by `try_from` / `try_into`).
 #[derive(Clone, PartialEq, Eq)]
 pub struct OverflowError {
     operation: str;
@@ -210,8 +210,8 @@ impl Debug for OverflowError {
 
 impl Error for OverflowError {}
 
-/// A failed `TryFrom` conversion: the trait's default `Error` (stdlib
-/// spec 2.11.4) for impls that name no more specific one.
+/// A failed `TryFrom` conversion: the trait's default `Error`
+/// for impls that name no more specific one.
 #[derive(Clone, PartialEq, Eq)]
 pub struct ConversionError {
     message: str;
@@ -235,7 +235,7 @@ impl Debug for ConversionError {
 
 impl Error for ConversionError {}
 
-/// A value of the wrong type (stdlib spec 2.14.4).
+/// A value of the wrong type.
 #[derive(Clone, PartialEq, Eq)]
 pub struct TypeError {
     expected: str;
@@ -266,7 +266,7 @@ impl Debug for TypeError {
 
 impl Error for TypeError {}
 
-// Fatal errors (stdlib spec 2.14.4): never thrown; the runtime reports
+// Fatal errors: never thrown; the runtime reports
 // these conditions and exits with 101.
 
 /// Fatal: the stack ran out. Never thrown; the runtime reports it and
@@ -329,7 +329,7 @@ impl Debug for InternalError {
 
 impl Error for InternalError {}
 
-/// Every error type's surface (stdlib spec 2.14.3). Untyped `throws`
+/// Every error type's surface. Untyped `throws`
 /// means `throws (any Error)`.
 pub trait Error: Display + Debug {
     /// The error that caused this one, if any.

@@ -1,9 +1,9 @@
-//! f-string rendering (refs-lang 1.7.3, stdlib 2.10): numbers under a
+//! f-string rendering: numbers under a
 //! spec, padding, escapes.
 //!
 //! The one implementation: the runtime's `rok_fmt_*` write GC text with
 //! it, and the compiler (`rokc_hir`, through `#[path]`) evaluates
-//! f-strings in constants with it (5.2.5: a constant equals the run-time
+//! f-strings in constants with it (a constant equals the run-time
 //! result). Uses `core` only, so both crates can build it.
 
 use core::fmt::Write;
@@ -246,7 +246,7 @@ fn cut(w: &mut impl Text, spec: &FmtSpec, start: usize) {
     }
 }
 
-/// Pad what was written since `start` to `width` (2.10.8). `numeric`
+/// Pad what was written since `start` to `width`. `numeric`
 /// aligns right by default and lets `0` / `=` fill at `mid`, after the
 /// sign and prefix.
 fn pad(w: &mut impl Text, spec: &FmtSpec, start: usize, mid: usize, numeric: bool) {
@@ -446,7 +446,7 @@ pub fn pad_span(w: &mut impl Text, spec: &FmtSpec, start: usize, mid: usize, num
 
 /// `src` as a rok literal between `quote`s (`"` for `str`, `'` for
 /// `char`), escaped so the lexer reads it back (`Debug`). Control chars
-/// and the bidi controls the lexer rejects (refs-lang 1.1) go out as
+/// and the bidi controls the lexer rejects go out as
 /// `\u{..}`.
 pub fn escape(w: &mut impl Text, src: &str, quote: u32) {
     let delim = [quote as u8];

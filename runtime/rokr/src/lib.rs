@@ -2,11 +2,11 @@
 //! inlining (TLAB bump, safepoint polls, write barriers) survives the
 //! codegen boundary.
 //!
-//! ABI symbols follow 805; those at the bottom are the 805 §8.5.12
-//! appendix (no ABI stability). The executor is rok code
+//! ABI symbols follow the runtime ABI; those at the bottom are
+//! conveniences with no ABI stability. The executor is rok code
 //! (`rok::core::task`) over OS threads. The GC (`rokr_gc`) is an
-//! Immix-style mark-region (703) with opportunistic evacuation, sticky
-//! mark-bit generations (703) and optional concurrent marking (705).
+//! Immix-style mark-region with opportunistic evacuation, sticky
+//! mark-bit generations and optional concurrent marking.
 //! Objects a root reaches never move, so a GC pointer a runtime function
 //! got as an argument stays valid across its allocations.
 
@@ -160,9 +160,9 @@ core::arch::global_asm!(
     "bx lr",
 );
 
-// 8.5.1 GC
+// GC
 
-/// GC allocation (702 §7.2.3, 805 §8.5.1).
+/// GC allocation.
 ///
 /// `size` includes the 16-byte
 /// header. Returns a pointer to the initialized header with a zeroed
@@ -174,7 +174,7 @@ pub extern "C" fn rok_gc_alloc_slow(size: usize, align: usize, type_id: u32) -> 
     rokr_gc::alloc(size, align, type_id)
 }
 
-/// Write barrier slow path (704 §7.4.2, 809 §8.9.10): compiled code
+/// Write barrier slow path: compiled code
 /// calls it before storing a GC reference into the old object `obj`
 /// (its `UNLOGGED` header bit set); `obj` joins the remembered set.
 ///
@@ -190,7 +190,7 @@ pub unsafe extern "C" fn rok_gc_wb_slow(obj: *mut u8) {
 }
 
 /// # Safety
-/// `scan_table` must be a valid 802 `ScanTable` that lives for the rest
+/// `scan_table` must be a valid `ScanTable` that lives for the rest
 /// of the process.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rok_gc_register_type(type_id: u32, scan_table: *const u8) {
@@ -234,7 +234,7 @@ pub unsafe extern "C" fn rok_gc_secret_wipe(obj: *mut u8) {
     unsafe { rokr_gc::wipe(obj) };
 }
 
-/// A weak reference cell to `obj` (802 §8.2.8; `rok::bare::gc::Weak`).
+/// A weak reference cell to `obj` (`rok::bare::gc::Weak`).
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_gc_weak_new(obj: *mut u8) -> *mut u8 {
     rokr_gc::weak_new(obj)
@@ -288,7 +288,7 @@ pub extern "C" fn rok_gc_stats_moved_bytes() -> u64 {
     rokr_gc::moved_bytes()
 }
 
-// 8.5.2 Runtime
+// Runtime
 
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_runtime_init() {
@@ -312,7 +312,7 @@ pub const extern "C" fn rok_runtime_shutdown() {}
 
 /// Into an `extern "C"` call: the thread counts as `PARKED`.
 ///
-/// 804 §8.4.10: a C call that blocks does not hold up a collection; the
+/// A C call that blocks does not hold up a collection; the
 /// caller's GC references are in its shadow-stack frame. Compiled code
 /// inlines the fast path (store the state, read the yield flag) and
 /// calls this, or [`rok_leave_native`], only when the flag is up.
@@ -371,14 +371,14 @@ pub extern "C" fn rok_nosp_leave() {
     rokr_gc::world::no_safepoint(-1);
 }
 
-/// Safepoint slow path (804 §8.4.3): park while another thread stops
+/// Safepoint slow path: park while another thread stops
 /// the world.
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_runtime_yield() {
     rokr_gc::world::safepoint();
 }
 
-/// Initialize this thread's TLS slots (803 §8.3.6) and register it as a
+/// Initialize this thread's TLS slots and register it as a
 /// mutator (its shadow stack becomes a GC root set).
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_thread_init() {
@@ -400,9 +400,9 @@ pub extern "C" fn rok_thread_shutdown() {
     thread::thread_exit();
 }
 
-// 8.5.3 Coroutine
+// Coroutine
 
-/// "Almost identical to `rok_gc_alloc_slow`" (805 §8.5.3).
+/// "Almost identical to `rok_gc_alloc_slow`".
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_coro_frame_alloc(size: usize, type_id: u32) -> *mut u8 {
     rok_gc_alloc_slow(size, HEADER_ALIGN, type_id)
@@ -429,7 +429,7 @@ pub unsafe extern "C" fn rok_coro_unpark(frame: *mut u8) {
     unsafe { (hooks().unpark)(frame) };
 }
 
-// 8.5.4 Scheduler
+// Scheduler
 
 /// A GC object's address as a parking key: from now on the collector
 /// never moves it, so the key stays its own. Only for keys that outlive
@@ -446,7 +446,7 @@ pub unsafe extern "C" fn rok_task_key(obj: *mut u8) -> usize {
 
 /// The process's 128-bit hash key into `out[0..2]`, a `GcBuf<u64>`.
 ///
-/// `RandomState`'s key (stdlib 2.5.11: hash values change between runs):
+/// `RandomState`'s key (hash values change between runs):
 /// OS randomness read once, else the clock and an address. Neither word
 /// is 0, so a key is never all zero, the reserved key of a state built
 /// at compile time.
@@ -499,7 +499,7 @@ pub unsafe extern "C" fn rok_hash_keys(out: *mut u8) {
 }
 
 /// Monotonic clock in nanoseconds, stopped during suspend (`Instant`,
-/// 707 timers; 3.3.7: `CLOCK_UPTIME_RAW` on macOS, whose
+/// timers; `CLOCK_UPTIME_RAW` on macOS, whose
 /// `CLOCK_MONOTONIC` counts sleep; `QueryPerformanceCounter` on Windows).
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_time_now_ns() -> i64 {
@@ -507,30 +507,30 @@ pub extern "C" fn rok_time_now_ns() -> i64 {
 }
 
 /// Total GC collections so far. A benchmark classifies a sample during
-/// which one ran as an outlier (spec 9.9.11).
+/// which one ran as an outlier.
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_gc_collections() -> i64 {
     rokr_gc::collections() as i64
 }
 
-/// Wall clock, nanoseconds since the Unix epoch (`SystemTime`, 3.3.3).
+/// Wall clock, nanoseconds since the Unix epoch (`SystemTime`).
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_time_realtime_ns() -> i64 {
     rokr_common::sys::realtime_ns()
 }
 
-/// Time since boot, counting suspend (`BootTime`, 3.3.4).
+/// Time since boot, counting suspend (`BootTime`).
 ///
 /// `CLOCK_BOOTTIME` on Linux, `CLOCK_MONOTONIC` (which counts sleep) on
-/// macOS, the `Instant` clock on Windows (3.3.7).
+/// macOS, the `Instant` clock on Windows.
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_time_boot_ns() -> i64 {
     rokr_common::sys::boot_ns()
 }
 
-// 8.5.5 I/O / timer
+// I/O / timer
 
-// `rok_io_register` / `rok_timer_register` and 8.5.3's `rok_coro_park` /
+// `rok_io_register` / `rok_timer_register` and the coroutine `rok_coro_park` /
 // `rok_coro_unpark` act on `rok::core::task`'s parking table and timers,
 // so they call into it through hooks the executor installs when it
 // starts. Defining them in rok (`#[export_name]`) would compile the
@@ -626,12 +626,12 @@ pub unsafe extern "C" fn rok_timer_register(deadline: u64, waker: *mut u8) {
     unsafe { (hooks().timer)(deadline, waker) };
 }
 
-// 8.5.6 Errors
+// Errors
 // `throw` / `try` / `catch` are value-based (a throwing function returns
 // an `is_err` flag with its payload) and need no runtime support. Only
 // an error escaping a throwing `main` reaches the runtime.
 
-/// Uncaught error out of `fn main() throws (..)` (spec 4.16.4): a fixed
+/// Uncaught error out of `fn main() throws (..)`: a fixed
 /// prefix, the error's description, `\n` to stderr, then exit status 1.
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_uncaught_error(what: RokStr) -> ! {
@@ -652,7 +652,7 @@ fn uncaught(parts: &[&[u8]]) -> ! {
     exit(1)
 }
 
-// 8.5.7 Diagnostics
+// Diagnostics
 
 /// Unrecoverable panic: `thread '<name>' panicked:`, `msg` and `\n` to
 /// stderr, then exit 101.
@@ -709,8 +709,8 @@ pub extern "C" fn rok_panic_at(msg: RokStr, at: RokStr) -> ! {
     panic_at(msg.bytes(), Some(at.bytes()))
 }
 
-/// `par` ran a call's items one at a time because two reach one collection
-/// (stdlib 2.19.1): a warning, once per call site (`at` is a static string,
+/// `par` ran a call's items one at a time because two reach one collection:
+/// a warning, once per call site (`at` is a static string,
 /// told apart by address; past 64 sites every one warns).
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_par_sequential(what: RokStr, at: RokStr) {
@@ -737,7 +737,7 @@ pub extern "C" fn rok_par_sequential(what: RokStr, at: RokStr) {
     );
 }
 
-/// `rok::core::panic::oom()` (stdlib 2.14.5 `oom_fn`): out of memory,
+/// `rok::core::panic::oom()`: out of memory,
 /// exit 101. Runtime allocation failures take the same path.
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_oom() -> ! {
@@ -750,9 +750,9 @@ pub extern "C" fn rok_panic_str(msg: RokStr) -> ! {
     panic_at(msg.bytes(), None)
 }
 
-// 8.5.12 appendix: convenience symbols (no ABI stability)
+// Convenience symbols (no ABI stability)
 
-/// `rok::std::process::exit(code)` (spec 4.16.4): exit now with `code`.
+/// `rok::std::process::exit(code)`: exit now with `code`.
 /// `finally` and `Drop` do not run; `exit` flushes buffered stdout.
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_exit(code: i32) -> ! {
@@ -795,7 +795,7 @@ fn exit(code: i32) -> ! {
     unsafe { libc::exit(code) }
 }
 
-/// `rok::bare::alloc::alloc` (stdlib 1.4): null on failure (`size == 0`,
+/// `rok::bare::alloc::alloc`: null on failure (`size == 0`,
 /// bad `align`, overflow, OOM) instead of aborting. `zeroed != 0` zero-fills. Freed with `rok_free`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_alloc_raw(size: usize, align: usize, zeroed: i32) -> *mut u8 {
@@ -861,7 +861,7 @@ mod tests {
         // SAFETY: fresh 24-byte allocation with an initialized header.
         let h = unsafe { &*p.cast::<ObjectHeader>() };
         assert_eq!(h.type_id, 12345);
-        // Over-aligned: a LOS object; `gc_word` is the size (801 §8.1.4).
+        // Over-aligned: a LOS object; `gc_word` is the size.
         assert_eq!(
             h.gc_flags.load(Ordering::Relaxed),
             rokr_common::object_header::FLAG_LARGE
@@ -879,8 +879,8 @@ mod tests {
         fuzz_tests::allocating();
     }
 
-    /// `[[fill]align][sign]['#']['0'][width]['.' precision][type]`
-    /// (stdlib 2.10.7), and `pack` / `unpack` round trips.
+    /// `[[fill]align][sign]['#']['0'][width]['.' precision][type]`,
+    /// and `pack` / `unpack` round trips.
     #[test]
     fn fmt_spec_grammar() {
         use fmt_spec::{FmtSpec, pack, parse, unpack};

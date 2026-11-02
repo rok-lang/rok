@@ -1,4 +1,4 @@
-// rok::std::net (stdlib 3.2): TCP / UDP sockets, addresses, DNS. Unix
+// rok::std::net: TCP / UDP sockets, addresses, DNS. Unix
 // sockets are `os::unix::net`, the Linux kernel copies
 // `os::linux::net::TcpStreamExt`.
 //
@@ -10,13 +10,13 @@
 // Sockets are non-blocking underneath. Blocking calls wait in `poll`, so
 // `set_*_timeout` bounds that wait (async uses `task::timeout`), and
 // `set_nonblocking(true)` makes them throw `WouldBlock`. `*_async` calls
-// suspend until the I/O driver sees the fd ready (refs-lang 7.7).
+// suspend until the I/O driver sees the fd ready.
 //
-// A plain call never suspends (3.2.0): inside a task it blocks the
+// A plain call never suspends: inside a task it blocks the
 // worker, because a sync fn cannot suspend a stackless coroutine.
 //
 // `read(buf)` fills `buf[0..n]` of a `SliceMut<u8>`; writes take
-// any `AsBytes`. No IPv6 multicast. TLS 1.3 is `tls` (3.2.5).
+// any `AsBytes`. No IPv6 multicast. TLS 1.3 is `tls`.
 
 use rok::core::convert::AsBytes;
 use rok::core::io::{Close, IoError, IoErrorKind, Read, Write, AsyncRead, AsyncWrite, AsyncClose};
@@ -35,7 +35,7 @@ use rok::std::os::windows::io::{AsRawSocket, FromRawSocket, RawSocket, raw_socke
 
 pub mod tls;
 
-// addresses (3.2.4)
+// addresses
 
 /// An IPv4 address.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -511,7 +511,7 @@ const fn addr_at(w: GcBuf<i64>, at: usize) -> SocketAddr {
     }
 }
 
-// DNS (3.2.4)
+// DNS
 
 const MAX_ADDRS: usize = 32;
 
@@ -1030,7 +1030,7 @@ impl Sock {
     }
 }
 
-// sockets (3.2.9)
+// sockets
 
 /// An address family.
 #[non_exhaustive]
@@ -1349,7 +1349,7 @@ impl Drop for Socket {
     fn drop(ref self) { self.sock.discard(); }
 }
 
-// TCP (3.2.1)
+// TCP
 
 /// Which half of a connection `shutdown` closes.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -1691,7 +1691,7 @@ impl TryIterator for Incoming {
     }
 }
 
-// UDP (3.2.2)
+// UDP
 
 /// A UDP socket. It has one owner: `let b = a` moves it.
 pub struct UdpSocket {
@@ -1864,7 +1864,7 @@ impl Drop for UdpSocket {
     fn drop(ref self) { self.sock.discard(); }
 }
 
-// raw sockets (3.11.2, 3.11.3)
+// raw sockets
 
 #[cfg(target_family = "unix")]
 impl AsRawFd for TcpStream {
@@ -1946,7 +1946,7 @@ impl FromRawSocket for Socket {
     unsafe fn from_raw_socket(s: RawSocket) -> Socket { Socket { sock: sock_of(socket_fd(s)) } }
 }
 
-// zero-copy hooks (3.11.6, Linux)
+// zero-copy hooks (Linux)
 
 #[cfg(target_os = "linux")]
 impl TcpStreamExt for TcpStream {
@@ -1995,7 +1995,7 @@ impl TcpStreamExt for TcpStream {
     }
 }
 
-// conveniences (3.2.6)
+// conveniences
 
 /// `TcpStream::connect(addr)`.
 pub fn tcp_connect<A: ToSocketAddrs>(addr: A) throws (IoError) -> TcpStream {

@@ -200,7 +200,7 @@ fn clock_ns(clock: libc::clockid_t) -> i64 {
     ts.tv_sec as i64 * 1_000_000_000 + ts.tv_nsec as i64
 }
 
-/// Monotonic nanoseconds, stopped during suspend (spec 3.3.7: macOS
+/// Monotonic nanoseconds, stopped during suspend (macOS
 /// `CLOCK_UPTIME_RAW`, whose `CLOCK_MONOTONIC` counts sleep).
 pub fn monotonic_ns() -> i64 {
     #[cfg(target_vendor = "apple")]
@@ -216,7 +216,7 @@ pub fn realtime_ns() -> i64 {
 }
 
 /// Nanoseconds since boot, counting suspend: Linux `CLOCK_BOOTTIME`,
-/// macOS `CLOCK_MONOTONIC` (3.3.7).
+/// macOS `CLOCK_MONOTONIC`.
 pub fn boot_ns() -> i64 {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     let clock = libc::CLOCK_BOOTTIME;

@@ -1,4 +1,4 @@
-//! Unicode `char` properties and case mapping (stdlib 2.15.2 / 2.15.4)
+//! Unicode `char` properties and case mapping
 //! over the tables `gen_unicode.py` generates from the UCD.
 //!
 //! The one implementation: the runtime's `rok_char_*` / `rok_str_case` /

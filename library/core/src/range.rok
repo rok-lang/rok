@@ -1,12 +1,12 @@
 // Range / RangeInclusive / RangeFrom / RangeTo / RangeToInclusive /
-// RangeFull (stdlib 2.7.4, refs-lang 3.7).
+// RangeFull.
 //
 // A range expression is a value of these types (`let r = 0..5;`),
 // built by the `#[literal]` handlers at the end of this file. `for i in
 // a..b` with the range written in the loop header keeps a direct
 // counting loop.
 
-/// One step forward / back (2.7.3). Integers implement it; floats don't,
+/// One step forward / back. Integers implement it; floats don't,
 /// so `Range<f64>` is no iterator.
 pub trait Step: PartialOrd + Clone {
     /// `self` moved `count` steps forward, or `none` past the type's end.
@@ -56,7 +56,7 @@ pub struct RangeToInclusive<T> {
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RangeFull;
 
-// Clone / Copy / PartialEq / Eq from the bounds (stdlib 2.13, 2.5.7).
+// Clone / Copy / PartialEq / Eq from the bounds.
 impl<T: Clone> Clone for Range<T> {
     const fn clone(self) -> Range<T> { Range { start: self.start.clone(), end: self.end.clone() } }
 }
@@ -130,7 +130,7 @@ impl<T: Step> Iterator for Range<T> {
         none
     }
 
-    /// One `forward_checked(n)`: O(1) (2.7.3).
+    /// One `forward_checked(n)`: O(1).
     const fn nth(ref self, n: usize) -> T | none {
         if let p: T = self.start.forward_checked(n) {
             if p < self.end {
@@ -149,7 +149,7 @@ impl<T: Step> Iterator for Range<T> {
         T::steps_between(self.start, self.end)
     }
 
-    /// `ExactSizeIterator`: O(1) (2.7.10).
+    /// `ExactSizeIterator`: O(1).
     const fn count(self) -> usize { self.len() }
 }
 
@@ -192,7 +192,7 @@ impl<T: Step> Iterator for RangeInclusive<T> {
         cur
     }
 
-    /// One `forward_checked(n)`: O(1) (2.7.3).
+    /// One `forward_checked(n)`: O(1).
     const fn nth(ref self, n: usize) -> T | none {
         if self.exhausted || self.start > self.end {
             return none;
@@ -220,7 +220,7 @@ impl<T: Step> Iterator for RangeInclusive<T> {
         T::steps_between(self.start, self.end)?.checked_add(1)
     }
 
-    /// `ExactSizeIterator`: O(1) (2.7.10).
+    /// `ExactSizeIterator`: O(1).
     const fn count(self) -> usize { self.len() }
 }
 
@@ -255,14 +255,14 @@ impl<T: Step> ExactSizeIterator for RangeInclusive<T> {
 
 impl<T: Step> Iterator for RangeFrom<T> {
     type Item = T;
-    /// Stops (without yielding it) at the type's maximum (2.7.4).
+    /// Stops (without yielding it) at the type's maximum.
     const fn next(ref self) -> T | none {
         let cur = self.start;
         self.start = self.start.forward_checked(1)?;
         cur
     }
 
-    /// One `forward_checked(n)`: O(1) (2.7.3); past the maximum it parks
+    /// One `forward_checked(n)`: O(1); past the maximum it parks
     /// there as `next` does (a binary search, O(log n)).
     const fn nth(ref self, n: usize) -> T | none {
         if let p: T = self.start.forward_checked(n) {
@@ -593,7 +593,7 @@ impl Step for usize {
     }
 }
 
-/// By scalar value, skipping the surrogates `0xD800..=0xDFFF` (2.7.3).
+/// By scalar value, skipping the surrogates `0xD800..=0xDFFF`.
 impl Step for char {
     const fn forward_checked(self, count: usize) -> char | none {
         let n = self as u32 as usize;
@@ -620,7 +620,7 @@ impl Step for char {
     }
 }
 
-// Range literals (refs-lang 6.5.1).
+// Range literals.
 
 /// `a..b`: the half-open range from `start` up to `end`.
 #[literal(expr ".." expr)]

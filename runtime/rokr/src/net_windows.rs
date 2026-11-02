@@ -1,9 +1,9 @@
-//! Winsock sockets behind `rok::std::net` (stdlib 3.2) and the I/O
-//! driver's poller (707) on Windows. Same `rok_net_*` / `rok_io_*`
+//! Winsock sockets behind `rok::std::net` and the I/O
+//! driver's poller on Windows. Same `rok_net_*` / `rok_io_*`
 //! symbols and conventions as the POSIX `net`; error codes are Winsock
 //! codes. A socket's fd is its handle with bit 0 set (`os::fd_of`).
 //!
-//! The driver is readiness on a completion port (707 §7.7.1): each
+//! The driver is readiness on a completion port: each
 //! watched socket has at most one `IOCTL_AFD_POLL` request in flight on
 //! a shared `\Device\Afd` handle bound to the port. The request
 //! completes (on the port) once any of the socket's armed directions is
@@ -750,7 +750,7 @@ pub fn close_socket(s: SOCKET) -> i32 {
     ok(unsafe { closesocket(s) })
 }
 
-// The I/O driver's poller (707 §7.7.1): AFD polls on a completion port
+// The I/O driver's poller: AFD polls on a completion port
 
 const IOCTL_AFD_POLL: u32 = 0x0001_2024;
 const AFD_POLL_RECEIVE: u32 = 0x1;

@@ -1,4 +1,4 @@
-// rok::core::reflect - `Reflect` / `Inspect` (refs-lang 6.10, stdlib 2.12).
+// rok::core::reflect - `Reflect` / `Inspect`.
 //
 // `Reflect` is implemented by the compiler for every type (no impl in
 // source; a manual one is an error): `T::type_name()`, `T::size()`,
@@ -7,11 +7,11 @@
 // sum value holds at run time. A type's own method of the same name wins.
 //
 // `Inspect` is opt-in through `#[derive(Inspect)]`, written below as a
-// meta block (6.10.2): field names and types, enum variant names, dynamic
+// meta block: field names and types, enum variant names, dynamic
 // field get / set through `any`, and the type's inherent methods. Private
 // fields are listed too: deriving it is the type's consent.
 
-/// Type facts every type has; the compiler implements it (6.10.1).
+/// Type facts every type has; the compiler implements it.
 pub trait Reflect {
     /// The type's name.
     fn type_name() -> str;
@@ -25,8 +25,7 @@ pub trait Reflect {
     fn size_of_val(self) -> usize;
 }
 
-/// Field and method listing, opt-in through `#[derive(Inspect)]`
-/// (6.10.2).
+/// Field and method listing, opt-in through `#[derive(Inspect)]`.
 pub trait Inspect: Reflect {
     /// The field names, in declaration order.
     fn field_names() -> List<str>;
@@ -78,8 +77,8 @@ pub struct FieldInfo {
     pub is_pub: bool;
 }
 
-/// One inherent method of an `Inspect` type. 6.10 names `name` / `arity` /
-/// `is_static`, 2.12 `name` / `arg_types` / `return_type`: both are here.
+/// One inherent method of an `Inspect` type. It has `name` / `arity` /
+/// `is_static` and `arg_types` / `return_type`.
 /// `arity` and `arg_types` leave out `self`.
 #[non_exhaustive]
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]

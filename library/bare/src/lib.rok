@@ -9,6 +9,6 @@ pub mod mem;
 pub mod ptr;
 pub mod volatile;
 
-// Spec 1.2: the named casts live at the tier root.
+// The named casts live at the tier root.
 pub use ptr::{align_cast, align_cast_unchecked, const_cast, ptr_cast};
 pub use mem::{Pod, reinterpret, transmute_unchecked};

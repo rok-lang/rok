@@ -1,4 +1,4 @@
-// rok::std::process (stdlib 3.7): child processes.
+// rok::std::process: child processes.
 //
 // Spawning is `posix_spawnp`; the program is looked up in this
 // process's `PATH` (not the child's `env`) unless it contains `/`. Every
@@ -46,7 +46,7 @@ use rok::bare::mem::{GcBuf, buf_new};
 /// Abnormal termination (`SIGABRT`); nothing is cleaned up.
 pub const fn abort() -> ! { unsafe { rok_os_abort() }; }
 
-/// Exit the process now with `code` (refs-lang 4.16.4); `finally` and
+/// Exit the process now with `code`; `finally` and
 /// `Drop` do not run.
 pub const fn exit(code: i32) -> ! {
     unsafe { rok_exit(code) };
@@ -357,7 +357,7 @@ const fn stdio_mode(s: Stdio) -> i32 {
     }
 }
 
-/// A child's stdin: the write end of its pipe (3.7.2).
+/// A child's stdin: the write end of its pipe.
 pub struct ChildStdin {
     file: File;
 }
@@ -485,7 +485,7 @@ impl AsRawHandle for ChildStderr {
     fn as_raw_handle(self) -> RawHandle { raw_handle(self.file.fd()) }
 }
 
-/// A process to run (3.7.1). Builder methods return the updated command
+/// A process to run. Builder methods return the updated command
 /// and leave the one they were called on as it was, so copies are
 /// independent. The streams start as `Inherit`; `output` pipes an
 /// inherited stdout / stderr and reads stdin from null.
@@ -705,7 +705,7 @@ fn fill(fd: i32, out: List<u8>, context: str) throws (IoError) -> usize {
 
 const WINDOWS: bool = cfg!(target_os = "windows");
 
-/// A running (or finished) child (3.7.2).
+/// A running (or finished) child.
 pub struct Child {
     pid: i32;
     pub stdin: ChildStdin | none;

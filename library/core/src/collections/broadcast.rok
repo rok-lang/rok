@@ -1,10 +1,10 @@
 // rok::core::collections::broadcast - the element-wise dot operators
-// on `List<T>` (stdlib spec 2.6.7): `List op List` (same length, else a
+// on `List<T>`: `List op List` (same length, else a
 // panic), `List op T` and `T op List` (the scalar applies to every
 // element). Arithmetic / bitwise ones give `List<T>`, comparisons
 // `List<bool>`; `.&&` / `.||` combine `List<bool>`s without
 // short-circuit. An operator on core collections in source is fused
-// into one loop by the compiler (2.6.6); these impls serve trait
+// into one loop by the compiler; these impls serve trait
 // bounds, method calls and `fn` values.
 
 /// Lengths of two broadcast operands agree (each collection is checked
@@ -324,7 +324,7 @@ impl<T: PartialOrd> DotGe<List<T>> for T {
     fn dot_ge(self, rhs: List<T>) -> List<bool> { map_left(self, rhs, |a: T, b: T| -> bool { a >= b }) }
 }
 
-/// No short-circuit: both lists are evaluated (2.6.2).
+/// No short-circuit: both lists are evaluated.
 impl DotLogicalAnd for List<bool> {
     type Output = List<bool>;
     #[track_caller]
@@ -333,7 +333,7 @@ impl DotLogicalAnd for List<bool> {
     }
 }
 
-/// No short-circuit: both lists are evaluated (2.6.2).
+/// No short-circuit: both lists are evaluated.
 impl DotLogicalOr for List<bool> {
     type Output = List<bool>;
     #[track_caller]
@@ -342,7 +342,7 @@ impl DotLogicalOr for List<bool> {
     }
 }
 
-// `Slice<T>`: element-wise into a `List` (2.6.7).
+// `Slice<T>`: element-wise into a `List`.
 
 impl<T: Add<Output = T>> DotAdd<Slice<T>> for Slice<T> {
     type Output = List<T>;
@@ -616,7 +616,7 @@ impl<T: PartialOrd> DotGe<Slice<T>> for T {
     fn dot_ge(self, rhs: Slice<T>) -> List<bool> { map_left(self, rhs.to_list(), |a: T, b: T| -> bool { a >= b }) }
 }
 
-/// No short-circuit: both slices are evaluated (2.6.2).
+/// No short-circuit: both slices are evaluated.
 impl DotLogicalAnd for Slice<bool> {
     type Output = List<bool>;
     #[track_caller]
@@ -625,7 +625,7 @@ impl DotLogicalAnd for Slice<bool> {
     }
 }
 
-/// No short-circuit: both slices are evaluated (2.6.2).
+/// No short-circuit: both slices are evaluated.
 impl DotLogicalOr for Slice<bool> {
     type Output = List<bool>;
     #[track_caller]
@@ -634,7 +634,7 @@ impl DotLogicalOr for Slice<bool> {
     }
 }
 
-// `[T; N]`: element-wise into an array of the same length (2.6.7).
+// `[T; N]`: element-wise into an array of the same length.
 // No `T op [T; N]` impls: a blanket `for T` impl whose argument holds
 // a const parameter the receiver leaves open cannot be matched (the
 // operator form is fused by the compiler instead).
@@ -826,7 +826,7 @@ impl<T: PartialOrd, const N: usize> DotGe<T> for [T; N] {
     fn dot_ge(self, rhs: T) -> [bool; N] { array_right([false; N], self, rhs, |a: T, b: T| -> bool { a >= b }) }
 }
 
-/// No short-circuit: both arrays are evaluated (2.6.2).
+/// No short-circuit: both arrays are evaluated.
 impl<const N: usize> DotLogicalAnd for [bool; N] {
     type Output = [bool; N];
     const fn dot_logical_and(self, rhs: [bool; N]) -> [bool; N] {
@@ -834,7 +834,7 @@ impl<const N: usize> DotLogicalAnd for [bool; N] {
     }
 }
 
-/// No short-circuit: both arrays are evaluated (2.6.2).
+/// No short-circuit: both arrays are evaluated.
 impl<const N: usize> DotLogicalOr for [bool; N] {
     type Output = [bool; N];
     const fn dot_logical_or(self, rhs: [bool; N]) -> [bool; N] {
@@ -842,7 +842,7 @@ impl<const N: usize> DotLogicalOr for [bool; N] {
     }
 }
 
-// In place (stdlib 2.4.10): `xs.dot_add_assign(ys)` sets `xs[i] = xs[i] + ys[i]`
+// In place: `xs.dot_add_assign(ys)` sets `xs[i] = xs[i] + ys[i]`
 // (no `.+=` token); the lengths must agree.
 impl<T> List<T> {
     /// `self[i] = self[i] + rhs[i]` for each `i`. Panics if the lengths
