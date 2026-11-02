@@ -1,0 +1,23 @@
+// expect-error: 23:1: type annotations needed: cannot infer the type of `v`
+
+// `U` comes from no argument, so the impl of `Add` (and `V`) is never
+// picked: no guess between `M`'s two impls.
+use rok::core::ops::Add;
+
+struct M { n: i32; }
+
+impl Add<i32> for M {
+    type Output = i32;
+    fn add(self, rhs: i32) -> i32 { self.n + rhs }
+}
+
+impl Add<str> for M {
+    type Output = str;
+    fn add(self, rhs: str) -> str { f"{self.n}{rhs}" }
+}
+
+fn half<T, U, V>(a: T) -> V where T: Add<U, Output = V> {
+    panic("never")
+}
+
+let v = half(M { n: 1 });
