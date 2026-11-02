@@ -5671,8 +5671,11 @@ impl<'a> Parser<'a> {
             self.parse_primary()?
         };
 
-        // Precedence of the last non-associative op, to reject `a < b < c`.
-        let mut last_none_prec: Option<u32> = None;
+        // The last non-associative op and its level: `a < b < c` chains,
+        // `a < b > c` is an error.
+        let mut last_none: Option<(u32, String)> = None;
+        // A comparison chain so far: its operands and operators.
+        let mut cmp_chain: Option<(Vec<Expr>, Vec<String>)> = None;
 
         loop {
             self.chain_link()?;
@@ -5741,25 +5744,32 @@ impl<'a> Parser<'a> {
             if left_bp < min_bp || self.closure_stmt_ends(&lhs) {
                 break;
             }
-            // Non-associative ops don't chain. Without this
-            // the loop would build `(a < b) < c`.
-            if last_none_prec == Some(prec) {
-                let span = self.peek_span();
-                self.error(
-                    Code::NEEDS_PARENTHESES,
-                    span,
-                    format!(
-                        "non-associative operator `{sym}` cannot be chained \
-                         (parenthesise to disambiguate)"
-                    ),
-                );
+            // Comparisons of one direction chain (`a < b <= c` is
+            // `a < b && b <= c`); other non-associative ops don't.
+            if let Some((_, prev)) = last_none.as_ref().filter(|(p, _)| *p == prec) {
+                let prev = prev.clone();
+                let at = self.peek_span();
+                if cmp_dir(&prev).is_some() && cmp_dir(&prev) == cmp_dir(&sym) {
+                    let (mut operands, mut ops) = match (cmp_chain.take(), lhs.kind) {
+                        (Some(c), _) => c,
+                        (None, ExprKind::OpInfix { op, lhs: a, rhs: b }) => {
+                            (vec![*a, *b], vec![op])
+                        }
+                        (None, kind) => unreachable!("a comparison before `{sym}`: {kind:?}"),
+                    };
+                    self.bump();
+                    let rhs = self.parse_expr_bp(right_bp)?;
+                    operands.push(rhs);
+                    ops.push(sym.clone());
+                    let span = self.to_prev(operands[0].span);
+                    lhs = self.fold_cmp_chain(&operands, &ops, span);
+                    cmp_chain = Some((operands, ops));
+                    last_none = Some((prec, sym));
+                    continue;
+                }
+                self.unchained(&prev, &sym, at);
             }
-            if let Some((_, _, Some((at, msg)))) = member {
-                self.error_help(Code::SYNTAX, at, msg, "write `x !in xs` (or `x ∉ xs`)");
-            }
-            for _ in 0..member.map_or(1, |(_, n, _)| n) {
-                self.bump();
-            }
+            self.bump_infix(member);
             let rhs = if matches!(sym.as_str(), "∈" | "∉") {
                 self.parse_member_rhs(right_bp)?
             } else {
@@ -5774,12 +5784,121 @@ impl<'a> Parser<'a> {
                 },
                 span,
             };
-            last_none_prec = matches!(assoc, Assoc::None).then_some(prec);
+            last_none = matches!(assoc, Assoc::None).then(|| (prec, op_of(&lhs)));
+            cmp_chain = None;
         }
         if min_bp == 0 && self.ternary_ahead() {
             return self.ternary(lhs);
         }
         Some(lhs)
+    }
+
+    /// `prev` then `sym` without parentheses, where they do not chain.
+    fn unchained(&mut self, prev: &str, sym: &str, at: Span) {
+        let help = if cmp_dir(prev).is_some() && cmp_dir(sym).is_some() {
+            format!(
+                "a chain compares in one direction (`a < b <= c`, `a > b >= c`, \
+                 `a == b == c`); write `a {prev} b && b {sym} c`"
+            )
+        } else {
+            format!("write `a {prev} b && b {sym} c`, or parenthesise one side")
+        };
+        self.error_help(
+            Code::NEEDS_PARENTHESES,
+            at,
+            format!("`{prev}` and `{sym}` cannot be chained"),
+            help,
+        );
+    }
+
+    /// Past an infix operator: one token, or `!in` / a misspelt one.
+    fn bump_infix(&mut self, member: Option<MemberOp>) {
+        if let Some((_, _, Some((at, msg)))) = member {
+            self.error_help(Code::SYNTAX, at, msg, "write `x !in xs` (or `x ∉ xs`)");
+        }
+        for _ in 0..member.map_or(1, |(_, n, _)| n) {
+            self.bump();
+        }
+    }
+
+    /// `e0 o1 e1 o2 e2 ..` as `e0 o1 e1 && e1 o2 e2 && ..`, each operand
+    /// evaluated once and in order, the rest skipped once one is false.
+    /// A middle operand other than a name, field or literal goes in a
+    /// temporary (and then so does a left operand that may have effects).
+    fn fold_cmp_chain(&mut self, operands: &[Expr], ops: &[String], span: Span) -> Expr {
+        let [first, mid, rest @ ..] = operands else {
+            unreachable!("a chain has two operands or more")
+        };
+        let infix = |op: &str, a: Expr, b: Expr| Expr {
+            span: Span {
+                end: b.span.end,
+                ..a.span
+            },
+            kind: ExprKind::OpInfix {
+                op: op.to_owned(),
+                lhs: Box::new(a),
+                rhs: Box::new(b),
+            },
+        };
+        if rest.is_empty() {
+            return infix(&ops[0], first.clone(), mid.clone());
+        }
+        let mut lets = Vec::new();
+        let mut temp = |p: &mut Self, e: &Expr| {
+            let name = p.fresh_destructure_temp();
+            lets.push(Stmt {
+                kind: StmtKind::Let {
+                    name: name.clone(),
+                    ty: None,
+                    init: e.clone(),
+                },
+                span: e.span,
+            });
+            Expr {
+                span: e.span,
+                kind: ExprKind::Path(Path::new(
+                    vec![PathSegment {
+                        name,
+                        generics: Vec::new(),
+                    }],
+                    e.span,
+                )),
+            }
+        };
+        let (first, mid) = if is_plain_operand(mid) {
+            (first.clone(), mid.clone())
+        } else if effect_free(first) {
+            (first.clone(), temp(self, mid))
+        } else {
+            let f = temp(self, first);
+            (f, temp(self, mid))
+        };
+        let mut tail = vec![mid.clone()];
+        tail.extend(rest.iter().cloned());
+        let tail_span = Span {
+            start: mid.span.start,
+            ..span
+        };
+        let and = Expr {
+            span,
+            kind: ExprKind::OpInfix {
+                op: "&&".to_owned(),
+                lhs: Box::new(infix(&ops[0], first, mid)),
+                rhs: Box::new(self.fold_cmp_chain(&tail, &ops[1..], tail_span)),
+            },
+        };
+        if lets.is_empty() {
+            return and;
+        }
+        Expr {
+            span,
+            kind: ExprKind::Block(Block {
+                stmts: lets,
+                trailing: Some(Box::new(and)),
+                span,
+                label: None,
+            }),
+        }
     }
 
     /// `try? f() ?? d` (operand from token `from`) is an error: it would
@@ -8498,6 +8617,44 @@ fn path_name(e: &Expr) -> Option<String> {
 }
 
 /// Tokens as source, one space where the source had any.
+/// The direction a comparison chains in: `<` / `<=`, `>` / `>=`, `==`.
+fn cmp_dir(op: &str) -> Option<u8> {
+    match op {
+        "<" | "<=" => Some(0),
+        ">" | ">=" => Some(1),
+        "==" => Some(2),
+        _ => None,
+    }
+}
+
+/// The operator of an infix `e` (empty for anything else).
+fn op_of(e: &Expr) -> String {
+    match &e.kind {
+        ExprKind::OpInfix { op, .. } => op.clone(),
+        _ => String::new(),
+    }
+}
+
+/// A name, a field of one or a literal: read again rather than kept in a
+/// temporary, so a literal still takes its type from the other side.
+fn is_plain_operand(e: &Expr) -> bool {
+    match &e.kind {
+        ExprKind::Path(_) | ExprKind::SelfLower | ExprKind::Literal(_) => true,
+        ExprKind::Field(b, _) | ExprKind::TupleField(b, _) => is_plain_operand(b),
+        ExprKind::OpPrefix { op, operand } => op == "-" && is_plain_operand(operand),
+        _ => false,
+    }
+}
+
+/// No call, index, block or other code that may have an effect.
+fn effect_free(e: &Expr) -> bool {
+    match &e.kind {
+        ExprKind::OpInfix { lhs, rhs, .. } => effect_free(lhs) && effect_free(rhs),
+        ExprKind::OpPrefix { operand, .. } | ExprKind::Cast(operand, _) => effect_free(operand),
+        _ => is_plain_operand(e),
+    }
+}
+
 fn tokens_text(toks: &[Token]) -> String {
     let mut out = String::new();
     let mut end = None;

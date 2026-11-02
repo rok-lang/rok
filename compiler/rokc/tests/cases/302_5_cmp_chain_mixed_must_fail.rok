@@ -1,0 +1,15 @@
+// expect-error: 12:19: `<` and `>` cannot be chained
+// expect-error: help: a chain compares in one direction (`a < b <= c`, `a > b >= c`, `a == b == c`); write `a < b && b > c`
+// expect-error: 13:20: `!=` and `!=` cannot be chained
+// expect-error: help: write `a != b && b != c`, or parenthesise one side
+// expect-error: 14:20: `==` and `<` cannot be chained
+
+// Only comparisons of one direction chain.
+fn main() {
+    let a = 1;
+    let b = 2;
+    let c = 3;
+    let x = a < b > c;
+    let y = a != b != c;
+    let z = a == b < c;
+}

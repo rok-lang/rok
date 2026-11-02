@@ -1,11 +1,44 @@
-// expect-error: error[E0019]
-// expect-error: cannot be chained
+// expect-exit: 0
+// expect-stdout:
+// true false true true
+// true false
+// mid 5
+// hi 20
+// true
+// lo 0
+// mid 5
+// false
+// lo 0
+// mid 5
+// false
+// 4
+// true true
 
-// Chained comparisons (`a < b < c`) are a compile error.
-fn main() -> i32 {
-    let a = 1;
-    let b = 2;
-    let c = 3;
-    let x = a < b < c;
-    return 0;
+// Comparisons of one direction chain: `a < b < c` is `a < b && b < c`,
+// each operand evaluated once and in order, the rest skipped once one
+// is false.
+fn mid(x: i32) -> i32 { println(f"mid {x}"); x }
+fn hi(x: i32) -> i32 { println(f"hi {x}"); x }
+fn lo(x: i32) -> i32 { println(f"lo {x}"); x }
+
+struct P { x: u8; }
+
+fn main() {
+    let (a, b, c) = (1, 2, 3);
+    let x: u8 = 7;
+    println(f"{a < b < c} {a < c < b} {0 <= x < 10} {c >= b > a}");
+    let p = P { x: 3 };
+    println(f"{a == 1 == a} {0 < p.x <= 2}");
+    println(0 < mid(5) < hi(20) < 30);
+    println(lo(0) < mid(5) < 1 < hi(20));
+    println(lo(0) < mid(5) < 1);
+    let n = 0;
+    for i in 0..10 {
+        if 2 < i <= 6 {
+            n += 1;
+        }
+    }
+    println(n);
+    let v = [1, 5, 9];
+    println(f"{v[0] < v[1] < v[2]} {v.len() >= 3 >= 1}");
 }

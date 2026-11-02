@@ -218,9 +218,10 @@ codes! {
      return from it.";
 
     19 NEEDS_PARENTHESES Parse "operators that need parentheses"
-    "Some operators do not chain: `a == b == c`, `a..b..c`, `try? x ?? y`, and one `[..]` \
-     that both indexes with `,` and slices with `:`. Add parentheses or separate brackets to \
-     say which you mean.";
+    "Some operators do not chain: comparisons in two directions (`a < b > c`), `a != b != c`, \
+     `x ∈ s == y`, `a..b..c`, `try? x ?? y`, and one `[..]` that both indexes with `,` and \
+     slices with `:`. Comparisons in one direction do chain (`0 <= i < n`). Join the parts \
+     with `&&`, or add parentheses or separate brackets to say which you mean.";
 
     20 TRAILING_CLOSURE_RETURN Parse "`return` in a trailing closure"
     "A bare `return` in a statement's trailing closure would leave only the closure, not the \
