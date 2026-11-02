@@ -116,8 +116,7 @@ install a new release, so the archive keeps what they rely on:
 
 `dist-native.sh` checks the `rokc --version --verbose` output of what it
 builds; `scripts/check-archive.sh`, run by `dist-native.sh` and by
-`release.sh` on every toolchain archive, checks the name and layout. The
-`rok-mlir-dev` bundle is not part of the contract. The nightly `dist`
+`release.sh` on every toolchain archive, checks the name and layout. The nightly `dist`
 job (linux-x64 and windows-x64, docs/ci.md) installs the last 0.1.x
 release and updates it to the archive it built, with `rok toolchain
 update`, the old install script and the new one (`scripts/test-update.sh`,

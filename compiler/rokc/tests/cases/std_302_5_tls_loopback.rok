@@ -111,7 +111,7 @@ fn ask(c: Client, req: str) -> str {
     try str::from_utf8(buf[0:k]) catch _ { "?" }
 }
 
-/// A request and its reply through `Writer` / `Reader`.
+/// A request and its reply through `Write` / `Read`.
 fn via_traits<T: Read + Write>(c: T) -> str {
     try c.write_all("via traits") catch e { return f"write: {e}"; };
     let buf: List<u8> = [];
@@ -120,7 +120,7 @@ fn via_traits<T: Read + Write>(c: T) -> str {
     try str::from_utf8(buf[0:k]) catch _ { "?" }
 }
 
-/// `msg` through `Writer`.
+/// `msg` through `Write`.
 fn reply<W: Write>(w: W, msg: str) throws (IoError) { try w.write_all(msg.as_bytes().to_list()); }
 
 fn connect(port: u16, name: str, cfg: ClientConfig) throws (tls::TlsError) -> Client {

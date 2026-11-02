@@ -430,14 +430,7 @@ const EMPTY: u8 = 8;
 const SLOT: u32 = 1 << 16;
 
 /// Methods that close or release what they are called on.
-const CLOSERS: &[&str] = &[
-    "close",
-    "close_async",
-    "try_close",
-    "unmap",
-    "wipe",
-    "wait_with_output",
-];
+const CLOSERS: &[&str] = &["close", "close_async", "unmap", "wipe", "wait_with_output"];
 
 /// What a function does with its parameters, as callers see it.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

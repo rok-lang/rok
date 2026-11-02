@@ -49,24 +49,16 @@ release_set() {
     for f in $files lib/rok/core/src/lib.rok; do
       [ "$f" = "${2-}" ] || : > "$s/$f"
     done
-    m=$tmp/stage/rok-mlir-dev-$v-$t
-    mkdir -p "$m/include"
     case $kind in
       win)
-        (cd "$tmp/stage" && python3 -m zipfile -c "$d/$n.zip" "$n" &&
-          python3 -m zipfile -c "$d/rok-mlir-dev-$v-$t.zip" "rok-mlir-dev-$v-$t")
+        (cd "$tmp/stage" && python3 -m zipfile -c "$d/$n.zip" "$n")
         sum "$d" "$n.zip"
-        sum "$d" "rok-mlir-dev-$v-$t.zip"
         ;;
       *)
         tar -C "$tmp/stage" -czf "$d/$n.tar.gz" "$n"
         tar -C "$tmp/stage" -cJf "$d/$n.tar.xz" "$n"
         sum "$d" "$n.tar.gz"
         sum "$d" "$n.tar.xz"
-        [ "$kind" = musl ] || {
-          tar -C "$tmp/stage" -czf "$d/rok-mlir-dev-$v-$t.tar.gz" "rok-mlir-dev-$v-$t"
-          sum "$d" "rok-mlir-dev-$v-$t.tar.gz"
-        }
         ;;
     esac
   done

@@ -385,7 +385,7 @@ codes! {
 
     54 INVALID_OPERATOR Type "operator cannot be applied"
     "An operator is used on types that do not support it. For your own types, implement the \
-     operator's trait (`impl Add for Point`); for a type parameter, add that trait as a \
+     operator's trait (`impl ops::Add for Point`); for a type parameter, add that trait as a \
      bound.";
 
     55 AMBIGUOUS_LITERAL Type "literal fits several types"

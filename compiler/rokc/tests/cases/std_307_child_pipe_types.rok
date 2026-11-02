@@ -6,8 +6,8 @@
 // inherit out: ok
 
 // `Command::new` takes a `Path`; `Child`'s pipes are
-// `ChildStdin` (a `Writer`) and `ChildStdout` / `ChildStderr`
-// (`Reader`s); `output` pipes streams left inherited.
+// `ChildStdin` (an `io::Write`) and `ChildStdout` / `ChildStderr`
+// (`io::Read`s); `output` pipes streams left inherited.
 use rok::std::process::{Command, Stdio, ChildStdin, ChildStdout};
 use rok::std::path::Path;
 
