@@ -136,6 +136,17 @@ const LOST: i32 = -1;
 const TAKEN: i32 = -2;
 
 impl JoinError {
+    /// An error of `kind`.
+    pub const fn new(kind: JoinErrorKind) -> JoinError { JoinError { code: code_of(kind) } }
+
+    /// The OS's error number of an `Os` kind, else `none`.
+    pub const fn os_code(self) -> i32 | none {
+        match self.kind() {
+            JoinErrorKind::Os(n) => n,
+            _ => none,
+        }
+    }
+
     /// Why the join failed.
     pub const fn kind(self) -> JoinErrorKind {
         if self.code == LOST { return JoinErrorKind::Lost; }

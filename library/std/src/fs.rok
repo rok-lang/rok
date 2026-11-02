@@ -601,17 +601,17 @@ impl File {
     }
 
     /// `sync_all` on the blocking lane: the task waits, its thread does not.
-    pub async fn sync_all_async(self) throws (IoError) { try await off(|| try self.sync_all()); }
+    pub async fn sync_all_async(ref self) throws (IoError) { try await off(|| try self.sync_all()); }
     /// `sync_data` on the blocking lane: the task waits, its thread does not.
-    pub async fn sync_data_async(self) throws (IoError) { try await off(|| try self.sync_data()); }
+    pub async fn sync_data_async(ref self) throws (IoError) { try await off(|| try self.sync_data()); }
     /// `set_len` on the blocking lane: the task waits, its thread does not.
-    pub async fn set_len_async(self, size: u64) throws (IoError) { try await off(|| try self.set_len(size)); }
+    pub async fn set_len_async(ref self, size: u64) throws (IoError) { try await off(|| try self.set_len(size)); }
     /// `metadata` on the blocking lane: the task waits, its thread does not.
-    pub async fn metadata_async(self) throws (IoError) -> Metadata { try await off(|| try self.metadata()) }
+    pub async fn metadata_async(ref self) throws (IoError) -> Metadata { try await off(|| try self.metadata()) }
     /// `lock_exclusive` on the blocking lane: the task waits, its thread does not.
-    pub async fn lock_exclusive_async(self) throws (IoError) { try await off(|| try self.lock_exclusive()); }
+    pub async fn lock_exclusive_async(ref self) throws (IoError) { try await off(|| try self.lock_exclusive()); }
     /// `lock_shared` on the blocking lane: the task waits, its thread does not.
-    pub async fn lock_shared_async(self) throws (IoError) { try await off(|| try self.lock_shared()); }
+    pub async fn lock_shared_async(ref self) throws (IoError) { try await off(|| try self.lock_shared()); }
 }
 
 impl Dir {
@@ -624,111 +624,111 @@ impl Dir {
     pub async fn temp_async() throws (IoError) -> Dir { try await off(|| try Dir::temp()) }
 
     /// `open` on the blocking lane: the task waits, its thread does not.
-    pub async fn open_async<P: AsPath>(self, path: P, access: Access = Access::ReadOnly, flags: OpenFlags = OpenFlags {}) throws (IoError) -> File {
+    pub async fn open_async<P: AsPath>(ref self, path: P, access: Access = Access::ReadOnly, flags: OpenFlags = OpenFlags {}) throws (IoError) -> File {
         let p = path.as_path();
         try await off(|| try self.open(p, access, flags))
     }
     /// `create` on the blocking lane: the task waits, its thread does not.
-    pub async fn create_async<P: AsPath>(self, path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
+    pub async fn create_async<P: AsPath>(ref self, path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
         let p = path.as_path();
         try await off(|| try self.create(p, flags))
     }
     /// `create_new` on the blocking lane: the task waits, its thread
     /// does not.
-    pub async fn create_new_async<P: AsPath>(self, path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
+    pub async fn create_new_async<P: AsPath>(ref self, path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
         let p = path.as_path();
         try await off(|| try self.create_new(p, flags))
     }
     /// `open_or_create` on the blocking lane: the task waits, its
     /// thread does not.
-    pub async fn open_or_create_async<P: AsPath>(self, path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
+    pub async fn open_or_create_async<P: AsPath>(ref self, path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
         let p = path.as_path();
         try await off(|| try self.open_or_create(p, flags))
     }
     /// `append` on the blocking lane: the task waits, its thread does
     /// not.
-    pub async fn append_async<P: AsPath>(self, path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
+    pub async fn append_async<P: AsPath>(ref self, path: P, flags: CreateFlags = CreateFlags {}) throws (IoError) -> File {
         let p = path.as_path();
         try await off(|| try self.append(p, flags))
     }
     /// `open_dir` on the blocking lane: the task waits, its thread does not.
-    pub async fn open_dir_async<P: AsPath>(self, path: P) throws (IoError) -> Dir {
+    pub async fn open_dir_async<P: AsPath>(ref self, path: P) throws (IoError) -> Dir {
         let p = path.as_path();
         try await off(|| try self.open_dir(p))
     }
     /// This directory's entries as a `TryStream` (`try for await e in
     /// try await d.read_dir_async() { .. }`), read in batches on a
     /// blocking thread.
-    pub async fn read_dir_async(self) throws (IoError) -> ReadDirStream {
+    pub async fn read_dir_async(ref self) throws (IoError) -> ReadDirStream {
         let rd = try await off(|| try self.read_dir());
         stream_of(rd)
     }
     /// `set_permissions` on the blocking lane: the task waits, its
     /// thread does not.
-    pub async fn set_permissions_async<P: AsPath>(self, path: P, perm: Permissions) throws (IoError) {
+    pub async fn set_permissions_async<P: AsPath>(ref self, path: P, perm: Permissions) throws (IoError) {
         let p = path.as_path();
         try await off(|| try self.set_permissions(p, perm));
     }
     /// `metadata` on the blocking lane: the task waits, its thread does not.
-    pub async fn metadata_async<P: AsPath>(self, path: P) throws (IoError) -> Metadata {
+    pub async fn metadata_async<P: AsPath>(ref self, path: P) throws (IoError) -> Metadata {
         let p = path.as_path();
         try await off(|| try self.metadata(p))
     }
     /// `symlink_metadata` on the blocking lane: the task waits, its thread does not.
-    pub async fn symlink_metadata_async<P: AsPath>(self, path: P) throws (IoError) -> Metadata {
+    pub async fn symlink_metadata_async<P: AsPath>(ref self, path: P) throws (IoError) -> Metadata {
         let p = path.as_path();
         try await off(|| try self.symlink_metadata(p))
     }
     /// `exists` on the blocking lane: the task waits, its thread does not.
-    pub async fn exists_async<P: AsPath>(self, path: P) -> bool {
+    pub async fn exists_async<P: AsPath>(ref self, path: P) -> bool {
         let p = path.as_path();
         await task::spawn_blocking(|| self.exists(p))
     }
     /// `create_dir` on the blocking lane: the task waits, its thread does not.
-    pub async fn create_dir_async<P: AsPath>(self, path: P) throws (IoError) {
+    pub async fn create_dir_async<P: AsPath>(ref self, path: P) throws (IoError) {
         let p = path.as_path();
         try await off(|| try self.create_dir(p));
     }
     /// `create_dir_all` on the blocking lane: the task waits, its thread does not.
-    pub async fn create_dir_all_async<P: AsPath>(self, path: P) throws (IoError) {
+    pub async fn create_dir_all_async<P: AsPath>(ref self, path: P) throws (IoError) {
         let p = path.as_path();
         try await off(|| try self.create_dir_all(p));
     }
     /// `remove_file` on the blocking lane: the task waits, its thread does not.
-    pub async fn remove_file_async<P: AsPath>(self, path: P) throws (IoError) {
+    pub async fn remove_file_async<P: AsPath>(ref self, path: P) throws (IoError) {
         let p = path.as_path();
         try await off(|| try self.remove_file(p));
     }
     /// `remove_dir` on the blocking lane: the task waits, its thread does not.
-    pub async fn remove_dir_async<P: AsPath>(self, path: P) throws (IoError) {
+    pub async fn remove_dir_async<P: AsPath>(ref self, path: P) throws (IoError) {
         let p = path.as_path();
         try await off(|| try self.remove_dir(p));
     }
     /// `remove_dir_all` on the blocking lane: the task waits, its thread does not.
-    pub async fn remove_dir_all_async<P: AsPath>(self, path: P) throws (IoError) {
+    pub async fn remove_dir_all_async<P: AsPath>(ref self, path: P) throws (IoError) {
         let p = path.as_path();
         try await off(|| try self.remove_dir_all(p));
     }
     /// `rename` on the blocking lane: the task waits, its thread does not.
-    pub async fn rename_async<P: AsPath, Q: AsPath>(self, from: P, to: Q) throws (IoError) {
+    pub async fn rename_async<P: AsPath, Q: AsPath>(ref self, from: P, to: Q) throws (IoError) {
         let a = from.as_path();
         let b = to.as_path();
         try await off(|| try self.rename(a, b));
     }
     /// `copy` on the blocking lane: the task waits, its thread does not.
-    pub async fn copy_async<P: AsPath, Q: AsPath>(self, from: P, to: Q) throws (IoError) -> u64 {
+    pub async fn copy_async<P: AsPath, Q: AsPath>(ref self, from: P, to: Q) throws (IoError) -> u64 {
         let a = from.as_path();
         let b = to.as_path();
         try await off(|| try self.copy(a, b))
     }
     /// `symlink` on the blocking lane: the task waits, its thread does not.
-    pub async fn symlink_async<P: AsPath, Q: AsPath>(self, target: P, link: Q) throws (IoError) {
+    pub async fn symlink_async<P: AsPath, Q: AsPath>(ref self, target: P, link: Q) throws (IoError) {
         let a = target.as_path();
         let b = link.as_path();
         try await off(|| try self.symlink(a, b));
     }
     /// `hardlink` on the blocking lane: the task waits, its thread does not.
-    pub async fn hardlink_async<P: AsPath, Q: AsPath>(self, target: P, link: Q) throws (IoError) {
+    pub async fn hardlink_async<P: AsPath, Q: AsPath>(ref self, target: P, link: Q) throws (IoError) {
         let a = target.as_path();
         let b = link.as_path();
         try await off(|| try self.hardlink(a, b));

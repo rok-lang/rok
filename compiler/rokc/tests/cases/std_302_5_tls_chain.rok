@@ -140,7 +140,7 @@ fn attempt(label: str, chain: str, name: str) {
         try srv.write_all("x") catch _ {};
         try! srv.close();
     });
-    let cfg = ClientConfig { root_certs: certs([CA]), cipher_suites: CipherSuite::all(), alpn_protocols: [], enable_pq: false, client_cert_chain: [], client_key: none, session_cache: none, early_data: [] };
+    let cfg = ClientConfig { root_certs: certs([CA]), cipher_suites: CipherSuite::all(), alpn_protocols: [], enable_post_quantum: false, client_cert_chain: [], client_key: none, session_cache: none, early_data: [] };
     let s = try! tcp_connect(f"127.0.0.1:{port}");
     let c = try Client::with_config(s, name, cfg) catch e {
         println(f"{label}: {e.message()}");

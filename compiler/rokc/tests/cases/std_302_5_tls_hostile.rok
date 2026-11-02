@@ -488,13 +488,13 @@ const CASES: [str; 17] = [
 ];
 
 fn client_cfg(roots: List<Certificate>) -> ClientConfig {
-    ClientConfig { root_certs: roots, cipher_suites: [CipherSuite::Aes128GcmSha256], alpn_protocols: ["h2".as_bytes().to_list()], enable_pq: false, client_cert_chain: [], client_key: none, session_cache: none, early_data: [] }
+    ClientConfig { root_certs: roots, cipher_suites: [CipherSuite::Aes128GcmSha256], alpn_protocols: ["h2".as_bytes().to_list()], enable_post_quantum: false, client_cert_chain: [], client_key: none, session_cache: none, early_data: [] }
 }
 
 /// A client connection: the reply to "ping", or how it failed.
 fn ask(port: u16, roots: List<Certificate>) -> str {
     let s = try! tcp_connect(f"127.0.0.1:{port}");
-    try! s.set_read_timeout(Duration::secs(10));
+    s.set_read_timeout(Duration::secs(10));
     let c = try Client::with_config(s, "localhost", client_cfg(roots)) catch e { return f"{e.kind():?} alert {e.alert()}: {e.message()}"; };
     try c.write_all("ping") catch e { try! c.close(); return f"write: {e}"; };
     let buf = zeros(64);
@@ -510,7 +510,7 @@ fn targeted() {
         let r = Rng { s: 7u64 };
         for i in 0..CASES.len() {
             let (s, _) = try! l.accept();
-            try! s.set_read_timeout(Duration::secs(10));
+            s.set_read_timeout(Duration::secs(10));
             evil_serve(s, ref r, evil_case(i));
             try! s.close();
         }
@@ -532,7 +532,7 @@ fn fuzz_evil_server(n: usize) {
         let r = Rng { s: 11u64 };
         for i in 0..n {
             let (s, _) = try! l.accept();
-            try! s.set_read_timeout(Duration::secs(10));
+            s.set_read_timeout(Duration::secs(10));
             let e = evil(pem_der(GOOD));
             e.what = i % 8;
             e.post = msg(24u8, [0u8]);
@@ -676,7 +676,7 @@ fn fuzz_evil_client(n: usize) {
         let slow = 0i64;
         for i in 0..n {
             let (s, _) = try! l.accept();
-            try! s.set_read_timeout(Duration::secs(10));
+            s.set_read_timeout(Duration::secs(10));
             let t0 = Instant::now();
             let srv = try? Server::new(s, cfg);
             if let v: Server = srv {
@@ -693,7 +693,7 @@ fn fuzz_evil_client(n: usize) {
     let r = Rng { s: 13u64 };
     for i in 0..n {
         let s = try! tcp_connect(f"127.0.0.1:{port}");
-        try! s.set_read_timeout(Duration::secs(10));
+        s.set_read_timeout(Duration::secs(10));
         evil_client(s, ref r, i % 8);
         try! s.close();
     }
@@ -708,14 +708,14 @@ fn capture() -> (List<u8>, List<u8>) {
     let port = (try! l.local_addr()).port();
     let t = thread::spawn(|| {
         let s = try! tcp_connect(f"127.0.0.1:{port}");
-        try! s.set_read_timeout(Duration::ms(300));
+        s.set_read_timeout(Duration::ms(300));
         let cfg = client_cfg(try! Certificate::from_pem(CA));
-        cfg.enable_pq = true;
+        cfg.enable_post_quantum = true;
         cfg.cipher_suites = CipherSuite::all();
         if let c: Client = try? Client::with_config(s, "localhost", cfg) { try c.close() catch _ {}; }
     });
     let (s, _) = try! l.accept();
-    try! s.set_read_timeout(Duration::ms(300));
+    s.set_read_timeout(Duration::ms(300));
     let (hello, _) = drain(s);
     try! s.close();
     try! t.join();
@@ -724,13 +724,13 @@ fn capture() -> (List<u8>, List<u8>) {
     let port2 = (try! l2.local_addr()).port();
     let t2 = thread::spawn(|| {
         let (s, _) = try! l2.accept();
-        try! s.set_read_timeout(Duration::ms(300));
+        s.set_read_timeout(Duration::ms(300));
         try! l2.close();
         if let v: Server = try? Server::new(s, server_cfg()) { try v.close() catch _ {}; }
     });
     let s2 = try! tcp_connect(f"127.0.0.1:{port2}");
     try! s2.write_all(hello);
-    try! s2.set_read_timeout(Duration::ms(300));
+    s2.set_read_timeout(Duration::ms(300));
     let (flight, _) = drain(s2);
     try! s2.close();
     try! t2.join();
@@ -746,7 +746,7 @@ fn fuzz_hellos(hello: List<u8>, n: usize) {
         let cfg = server_cfg();
         for _ in 0..n {
             let (s, _) = try! l.accept();
-            try! s.set_read_timeout(Duration::secs(10));
+            s.set_read_timeout(Duration::secs(10));
             if let v: Server = try? Server::new(s, cfg) { try v.close() catch _ {}; }
         }
         try! l.close();
@@ -756,7 +756,7 @@ fn fuzz_hellos(hello: List<u8>, n: usize) {
     for _ in 0..n {
         let t0 = Instant::now();
         let s = try! tcp_connect(f"127.0.0.1:{port}");
-        try! s.set_read_timeout(Duration::secs(10));
+        s.set_read_timeout(Duration::secs(10));
         try s.write_all(mutate(ref r, hello)) catch _ {};
         try s.shutdown(Shutdown::Write) catch _ {};
         let _ = drain(s);
@@ -779,9 +779,9 @@ fn fuzz_flights(flight: List<u8>, n: usize) {
         for _ in 0..n {
             let t0 = Instant::now();
             let s = try! tcp_connect(f"127.0.0.1:{port}");
-            try! s.set_read_timeout(Duration::secs(10));
+            s.set_read_timeout(Duration::secs(10));
             let cfg = client_cfg(roots);
-            cfg.enable_pq = true;
+            cfg.enable_post_quantum = true;
             cfg.cipher_suites = CipherSuite::all();
             if let c: Client = try? Client::with_config(s, "localhost", cfg) { try c.close() catch _ {}; }
             let ms = t0.elapsed().as_ms();
@@ -792,7 +792,7 @@ fn fuzz_flights(flight: List<u8>, n: usize) {
     let r = Rng { s: 19u64 };
     for i in 0..n {
         let (s, _) = try! l.accept();
-        try! s.set_read_timeout(Duration::secs(10));
+        s.set_read_timeout(Duration::secs(10));
         let _ = read_some(s);
         let m = mutate(ref r, flight);
         if i % 5 == 0 && m.len() > 19 {
@@ -848,7 +848,7 @@ fn closes_after_alert() {
         if let v: Server = try? Server::new(s, server_cfg()) { try v.close() catch _ {}; }
     });
     let s = try! tcp_connect(f"127.0.0.1:{port}");
-    try! s.set_read_timeout(Duration::secs(5));
+    s.set_read_timeout(Duration::secs(5));
     try! s.write_all([22u8, 3u8, 1u8, 0u8, 4u8, 1u8, 0u8, 0u8, 0u8]);
     let (got, closed) = drain(s);
     try! s.close();

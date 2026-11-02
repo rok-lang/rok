@@ -7,9 +7,9 @@
 // are validated against `ClientConfig::root_certs` (by default the OS
 // trust store: the macOS keychain anchors, the Windows ROOT store, the
 // Linux CA bundle files; none on wasm). Key exchange is X25519, or the
-// X25519MLKEM768 hybrid when `enable_pq` is on. Either side signs with
-// Ed25519, ECDSA P-256 / P-384 or RSA-PSS; the server may ask for a
-// client certificate. Sessions resume from single-use tickets
+// X25519MLKEM768 hybrid when `enable_post_quantum` is on. Either side
+// signs with Ed25519, ECDSA P-256 / P-384 or RSA-PSS; the server may ask
+// for a client certificate. Sessions resume from single-use tickets
 // (psk_dhe_ke), optionally with 0-RTT data. A connection is used by one
 // thread, and one operation, at a time.
 
@@ -60,6 +60,12 @@ pub struct TlsError {
 }
 
 impl TlsError {
+    /// An error of `kind` with `message`; `alert` is the TLS alert that
+    /// goes with it.
+    pub const fn new(kind: TlsErrorKind, message: str, alert: u8) -> TlsError {
+        TlsError { kind, msg: message, alert }
+    }
+
     pub(pkg) const fn certificate(msg: str) -> TlsError {
         TlsError { kind: TlsErrorKind::Certificate, msg, alert: 42u8 }
     }
@@ -298,7 +304,7 @@ pub struct ClientConfig {
     /// ALPN protocols offered, in preference order (`"h2"`, ...).
     pub alpn_protocols: List<List<u8>> = [];
     /// Offer the X25519MLKEM768 hybrid key exchange first.
-    pub enable_pq: bool = true;
+    pub enable_post_quantum: bool = true;
     /// Sent when the server asks for a certificate: leaf first (empty:
     /// none), with the leaf's key.
     pub client_cert_chain: List<Certificate> = [];
@@ -857,7 +863,7 @@ fn linger_close(s: TcpStream) {
     loop {
         let left = LINGER.as_ns() - start.elapsed().as_ns();
         if left <= 0 { break; }
-        try s.set_read_timeout(Duration::ns(left)) catch _ { break; };
+        s.set_read_timeout(Duration::ns(left));
         let n = try s.read(buf) catch _ { break; };
         if n == 0 { break; }
     }

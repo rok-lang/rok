@@ -817,7 +817,7 @@ impl Conn {
         x.early_data = cfg.early_data;
         x.random32 = random::bytes(32);
         x.session_id = random::bytes(32);
-        x.groups = if cfg.enable_pq { [HYBRID_GROUP, X25519_GROUP] } else { [X25519_GROUP] };
+        x.groups = if cfg.enable_post_quantum { [HYBRID_GROUP, X25519_GROUP] } else { [X25519_GROUP] };
         // Key shares: the first group's (and X25519's, so a server
         // without the hybrid needs no HelloRetryRequest).
         x.shares = Shares::new(x.groups);

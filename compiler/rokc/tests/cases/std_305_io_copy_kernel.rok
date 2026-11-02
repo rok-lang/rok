@@ -91,7 +91,7 @@ fn main() throws (IoError) {
     for timed in [false, true] {
         let (a, h) = try sender(70000, 13);
         let c = try TcpStream::connect(a);
-        if timed { try c.set_read_timeout(Duration::secs(30)); }
+        if timed { c.set_read_timeout(Duration::secs(30)); }
         using w = try fs::create(dst) {
             let n = try io::copy(ref c, ref w);
             let label = if timed { "timed socket to file" } else { "socket to file" };

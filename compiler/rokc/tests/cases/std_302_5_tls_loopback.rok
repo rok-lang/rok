@@ -163,12 +163,12 @@ fn main() throws (tls::TlsError) {
     try c.close_notify() catch _ {};
     try! c.close();
 
-    let plain = ClientConfig { root_certs: roots, cipher_suites: [CipherSuite::ChaCha20Poly1305Sha256], enable_pq: false, session_cache: none };
+    let plain = ClientConfig { root_certs: roots, cipher_suites: [CipherSuite::ChaCha20Poly1305Sha256], enable_post_quantum: false, session_cache: none };
     let c2 = try connect(port, "localhost", plain);
     println(f"chacha x25519: alpn {text(c2.negotiated_alpn())} -> {ask(c2, "hi")}");
     try! c2.close();
 
-    let a256 = ClientConfig { cipher_suites: [CipherSuite::Aes256GcmSha384], enable_pq: true, ..plain };
+    let a256 = ClientConfig { cipher_suites: [CipherSuite::Aes256GcmSha384], enable_post_quantum: true, ..plain };
     let c3 = try connect(port, "localhost", a256);
     println(f"aes256: -> {ask(c3, "hi")}");
     try! c3.close();

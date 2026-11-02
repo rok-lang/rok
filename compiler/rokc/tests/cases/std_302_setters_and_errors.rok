@@ -1,0 +1,40 @@
+// spec: std 302-net §3.2.2 §3.2.4 §3.2.5
+// spec: std 304-thread §3.4.2
+// needs: net
+// expect-exit: 0
+// expect-stdout:
+// 10.0.0.1 167772161
+// none 20ms none
+// Certificate 42 tls: bad cert
+// Os(11) 11 none Lost
+// Access::ReadWrite true
+
+// Socket setters do not throw on any layer and every timeout has a
+// getter; errors are built by constructors.
+use rok::std::net::{Ipv4Addr, UdpSocket, udp_bind};
+use rok::std::net::tls::{TlsError, TlsErrorKind};
+use rok::std::thread::{JoinError, JoinErrorKind};
+use rok::std::fs::Access;
+
+fn show(d: Duration | none) -> str {
+    match d { v: Duration => f"{v}", none => "none" }
+}
+
+fn main() throws (IoError) {
+    let a: Ipv4Addr = Ipv4Addr::from(167772161u32);
+    println(f"{a} {a.to_bits()}");
+    let s: UdpSocket = try udp_bind("127.0.0.1:0");
+    s.set_nonblocking(false);
+    let before = s.read_timeout();
+    s.set_read_timeout(Duration::ms(20));
+    println(f"{show(before)} {show(s.read_timeout())} {show(s.write_timeout())}");
+    try s.close();
+    let e = TlsError::new(TlsErrorKind::Certificate, "bad cert", 42u8);
+    println(f"{e.kind():?} {e.alert()} {e}");
+    let j = JoinError::new(JoinErrorKind::Os(11));
+    let l = JoinError::new(JoinErrorKind::Lost);
+    println(f"{j.kind():?} {j.os_code() ?? 0} {if l.os_code() is none { "none" } else { "some" }} {l.kind():?}");
+    let x = Access::ReadWrite;
+    let y = x;
+    println(f"Access::{x:?} {x == y}");
+}

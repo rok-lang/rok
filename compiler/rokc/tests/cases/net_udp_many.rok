@@ -66,12 +66,12 @@ let got = try! a.recv(buf);
 println(f"udp connected: {text(buf, got)}");
 
 // Modes.
-try! a.set_nonblocking(true);
+a.set_nonblocking(true);
 let wb = false;
 try a.recv(buf) catch e: IoError { wb = e.kind() == IoErrorKind::WouldBlock; };
 println(f"would block: {wb}");
-try! a.set_nonblocking(false);
-try! a.set_read_timeout(Duration::ms(20));
+a.set_nonblocking(false);
+a.set_read_timeout(Duration::ms(20));
 let to = false;
 try a.recv(buf) catch e: IoError { to = e.kind() == IoErrorKind::TimedOut; };
 println(f"timed out: {to}");

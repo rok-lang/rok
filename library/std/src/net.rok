@@ -101,6 +101,13 @@ impl Ipv6Addr {
     }
 }
 
+/// The address a big-endian number spells.
+impl From<u32> for Ipv4Addr {
+    const fn from(bits: u32) -> Ipv4Addr {
+        Ipv4Addr::new((bits >> 24) as u8, (bits >> 16) as u8, (bits >> 8) as u8, bits as u8)
+    }
+}
+
 impl Display for Ipv4Addr {
     const fn fmt(self, ref f: Formatter) throws (FmtError) {
         try f.write_str(f"{self.octets[0]}.{self.octets[1]}.{self.octets[2]}.{self.octets[3]}")
@@ -1472,16 +1479,16 @@ impl TcpStream {
     pub fn ttl(self) throws (IoError) -> u32 { (try self.sock.getopt(11)) as u32 }
 
     /// Make a blocking read throw `TimedOut` after `dur`; `none` waits forever.
-    pub const fn set_read_timeout(self, dur: Duration | none) throws (IoError) { self.sock.set_timeout(0, dur); }
+    pub const fn set_read_timeout(self, dur: Duration | none) { self.sock.set_timeout(0, dur); }
     /// Make a blocking write throw `TimedOut` after `dur`; `none` waits forever.
-    pub const fn set_write_timeout(self, dur: Duration | none) throws (IoError) { self.sock.set_timeout(1, dur); }
+    pub const fn set_write_timeout(self, dur: Duration | none) { self.sock.set_timeout(1, dur); }
     /// The read timeout; `none` when reads wait forever.
     pub const fn read_timeout(self) -> Duration | none { self.sock.timeout(0) }
     /// The write timeout; `none` when writes wait forever.
     pub const fn write_timeout(self) -> Duration | none { self.sock.timeout(1) }
 
     /// Make the blocking calls throw `WouldBlock` instead of waiting.
-    pub const fn set_nonblocking(self, nb: bool) throws (IoError) { self.sock.set_nonblocking(nb); }
+    pub const fn set_nonblocking(self, nb: bool) { self.sock.set_nonblocking(nb); }
 
     /// A second descriptor on the same socket (`dup`), with this one's
     /// timeouts and blocking mode.
@@ -1622,7 +1629,7 @@ impl TcpListener {
     }
 
     /// Make the blocking calls throw `WouldBlock` instead of waiting.
-    pub const fn set_nonblocking(self, nb: bool) throws (IoError) { self.sock.set_nonblocking(nb); }
+    pub const fn set_nonblocking(self, nb: bool) { self.sock.set_nonblocking(nb); }
 
     /// `try for s in l.incoming() { .. }`: connections forever; a failed
     /// `accept` ends the loop with its error. The listener stays its
@@ -1775,19 +1782,19 @@ impl UdpSocket {
     /// `IP_TTL`.
     pub fn ttl(self) throws (IoError) -> u32 { (try self.sock.getopt(11)) as u32 }
 
-    /// Join the multicast group `addr` on the interface `iface`
-    /// (`0.0.0.0`: the default).
-    pub fn join_multicast_v4(self, addr: Ipv4Addr, iface: Ipv4Addr) throws (IoError) {
+    /// Join the multicast group `addr` on the interface whose address is
+    /// `interface` (`0.0.0.0`: the default).
+    pub fn join_multicast_v4(self, addr: Ipv4Addr, interface: Ipv4Addr) throws (IoError) {
         let fd = try self.sock.enter();
-        let r = unsafe { rok_net_multicast_v4(fd, addr.to_bits(), iface.to_bits(), 1) };
+        let r = unsafe { rok_net_multicast_v4(fd, addr.to_bits(), interface.to_bits(), 1) };
         self.sock.done();
         try check(r as i64, "join_multicast_v4");
     }
 
-    /// Leave the multicast group `addr` on `iface`.
-    pub fn leave_multicast_v4(self, addr: Ipv4Addr, iface: Ipv4Addr) throws (IoError) {
+    /// Leave the multicast group `addr` on `interface`.
+    pub fn leave_multicast_v4(self, addr: Ipv4Addr, interface: Ipv4Addr) throws (IoError) {
         let fd = try self.sock.enter();
-        let r = unsafe { rok_net_multicast_v4(fd, addr.to_bits(), iface.to_bits(), 0) };
+        let r = unsafe { rok_net_multicast_v4(fd, addr.to_bits(), interface.to_bits(), 0) };
         self.sock.done();
         try check(r as i64, "leave_multicast_v4");
     }
@@ -1806,12 +1813,16 @@ impl UdpSocket {
     }
 
     /// Make a blocking read throw `TimedOut` after `dur`; `none` waits forever.
-    pub const fn set_read_timeout(self, dur: Duration | none) throws (IoError) { self.sock.set_timeout(0, dur); }
+    pub const fn set_read_timeout(self, dur: Duration | none) { self.sock.set_timeout(0, dur); }
     /// Make a blocking write throw `TimedOut` after `dur`; `none` waits forever.
-    pub const fn set_write_timeout(self, dur: Duration | none) throws (IoError) { self.sock.set_timeout(1, dur); }
+    pub const fn set_write_timeout(self, dur: Duration | none) { self.sock.set_timeout(1, dur); }
+    /// The read timeout; `none` waits forever.
+    pub const fn read_timeout(self) -> Duration | none { self.sock.timeout(0) }
+    /// The write timeout; `none` waits forever.
+    pub const fn write_timeout(self) -> Duration | none { self.sock.timeout(1) }
 
     /// Make the blocking calls throw `WouldBlock` instead of waiting.
-    pub const fn set_nonblocking(self, nb: bool) throws (IoError) { self.sock.set_nonblocking(nb); }
+    pub const fn set_nonblocking(self, nb: bool) { self.sock.set_nonblocking(nb); }
 
     /// A second descriptor on the same socket (`dup`).
     pub fn try_clone(self) throws (IoError) -> UdpSocket {

@@ -180,7 +180,7 @@ impl UnixListener {
     pub fn local_addr(self) throws (IoError) -> Path | none { try unix_path(self.sock, 0) }
 
     /// Make `accept` throw `WouldBlock` instead of waiting.
-    pub const fn set_nonblocking(self, nb: bool) throws (IoError) {
+    pub const fn set_nonblocking(self, nb: bool) {
         unsafe { self.sock.opts[0] = if nb { 1i64 } else { 0i64 }; }
     }
 
@@ -256,14 +256,14 @@ impl UnixStream {
 
     /// Limit blocking reads to `dur`, then `TimedOut`; `none` waits
     /// forever.
-    pub const fn set_read_timeout(self, dur: Duration | none) throws (IoError) { self.sock.set_timeout(0, dur); }
+    pub const fn set_read_timeout(self, dur: Duration | none) { self.sock.set_timeout(0, dur); }
 
     /// Limit blocking writes to `dur`, then `TimedOut`; `none` waits
     /// forever.
-    pub const fn set_write_timeout(self, dur: Duration | none) throws (IoError) { self.sock.set_timeout(1, dur); }
+    pub const fn set_write_timeout(self, dur: Duration | none) { self.sock.set_timeout(1, dur); }
 
     /// Make blocking calls throw `WouldBlock` instead of waiting.
-    pub const fn set_nonblocking(self, nb: bool) throws (IoError) {
+    pub const fn set_nonblocking(self, nb: bool) {
         unsafe { self.sock.opts[0] = if nb { 1i64 } else { 0i64 }; }
     }
 
@@ -380,14 +380,14 @@ impl UnixDatagram {
 
     /// Limit blocking reads to `dur`, then `TimedOut`; `none` waits
     /// forever.
-    pub const fn set_read_timeout(self, dur: Duration | none) throws (IoError) { self.sock.set_timeout(0, dur); }
+    pub const fn set_read_timeout(self, dur: Duration | none) { self.sock.set_timeout(0, dur); }
 
     /// Limit blocking writes to `dur`, then `TimedOut`; `none` waits
     /// forever.
-    pub const fn set_write_timeout(self, dur: Duration | none) throws (IoError) { self.sock.set_timeout(1, dur); }
+    pub const fn set_write_timeout(self, dur: Duration | none) { self.sock.set_timeout(1, dur); }
 
     /// Make blocking calls throw `WouldBlock` instead of waiting.
-    pub const fn set_nonblocking(self, nb: bool) throws (IoError) {
+    pub const fn set_nonblocking(self, nb: bool) {
         unsafe { self.sock.opts[0] = if nb { 1i64 } else { 0i64 }; }
     }
 

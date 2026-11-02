@@ -53,7 +53,13 @@ pub const fn exit(code: i32) -> ! {
 }
 
 /// This process's id.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn id() -> u32 { unsafe { rok_os_getpid() } }
+
+/// Panics: wasm32 has no process ids.
+#[cfg(target_arch = "wasm32")]
+#[track_caller]
+pub fn id() -> u32 { panic("process::id: wasm32 has no process ids") }
 
 /// A signal to send or handle. Windows: only `Kill` can be sent
 /// (`TerminateProcess`), and only `Interrupt` (Ctrl-C) and `Hangup`
