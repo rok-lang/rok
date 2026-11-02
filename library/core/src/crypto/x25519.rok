@@ -4,8 +4,8 @@ use sup::Secret;
 use sup::curve25519::{Fe25519, f25519_zero, f25519_one, f25519_small, f25519_add, f25519_sub, f25519_mul, f25519_sq, f25519_invert, f25519_cswap, f25519_to_bytes, f25519_from_bytes};
 
 /// A private key: 32 bytes in secret storage (clamped when used, as
-/// RFC 7748 says). Copies share the storage; `wipe` and `using`
-/// release clear it.
+/// RFC 7748 says). It has one owner (`let b = a` moves it); `wipe` and
+/// its release clear it.
 pub struct PrivateKey {
     k: Secret;
 }
@@ -99,14 +99,14 @@ impl PrivateKey {
     pub fn wipe(self) { self.k.wipe(); }
 }
 
-/// `using` release wipes.
+/// Wiped where it is released.
 impl Drop for PrivateKey {
     fn drop(ref self) { self.wipe(); }
 }
 
 /// Nothing of the key.
 impl Debug for PrivateKey {
-    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("PrivateKey(..)") }
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("PrivateKey { .. }") }
 }
 
 impl PublicKey {

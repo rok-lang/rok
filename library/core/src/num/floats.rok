@@ -160,8 +160,7 @@ impl f64 {
     /// `self - self.trunc()`.
     #[must_use]
     pub const fn fract(self) -> f64 { self - self.trunc() }
-    /// `-1.0` / `1.0` by sign; zeros and NaN are returned as they are
-    /// (spec 2.1.4: `-1.0, 0.0, or 1.0`).
+    /// `-1.0` / `1.0` by sign; zeros and NaN are returned as they are.
     #[must_use]
     pub const fn signum(self) -> f64 {
         if self > 0.0 { return 1.0; }
@@ -420,8 +419,7 @@ impl f32 {
     /// `self - self.trunc()`.
     #[must_use]
     pub const fn fract(self) -> f32 { self - self.trunc() }
-    /// `-1.0` / `1.0` by sign; zeros and NaN are returned as they are
-    /// (spec 2.1.4: `-1.0, 0.0, or 1.0`).
+    /// `-1.0` / `1.0` by sign; zeros and NaN are returned as they are.
     #[must_use]
     pub const fn signum(self) -> f32 {
         if self > 0.0 { return 1.0; }

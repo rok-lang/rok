@@ -3,7 +3,6 @@
 // random (the OS random source),
 // rokon (the ROKON data format), wit (the component model's async ABI
 // under WIT bindings).
-// Modules are pub(shy) so glob imports do not pull them in implicitly.
 
 pub mod env;
 pub mod fs;

@@ -7,8 +7,9 @@
 // `Ok` / `Err` are bare names where a `Result` is expected (the
 // expected type picks the variant).
 
-/// A value or an error, kept as a value (2.14.6): `Ok(T)` or `Err(E)`.
+/// A value or an error, kept as a value (2.14.2): `Ok(T)` or `Err(E)`.
 #[must_use("`Result` may hold an error that is never looked at: match on it, or write `_ = {};` to drop it")]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Result<T, E> {
     Ok(T),
     Err(E),
@@ -60,10 +61,13 @@ impl<T, E> Result<T, E> {
         }
     }
 
-    /// The value; panics on `Err`.
+    /// The value; panics on `Err`, showing the error.
     #[track_caller]
     pub const fn unwrap(self) -> T {
-        try! self.get()
+        match self {
+            Result::Ok(v) => v,
+            Result::Err(e) => panic(f"Result::unwrap: called on `Err({rok::core::fmt::shown::<E>(e)})`; use `try r.get()` to throw it instead"),
+        }
     }
 
     /// The value, or `default` on `Err`.
@@ -148,8 +152,8 @@ impl Debug for ParseError {
 
 impl Error for ParseError {}
 
-/// An invalid argument value (stdlib spec 2.14.4; `encoding::hex_decode`,
-/// ...).
+/// An invalid argument value (stdlib spec 2.14.4; `FormatSpec::parse`,
+/// `hkdf::expand`, ...).
 #[derive(Clone, PartialEq, Eq)]
 pub struct ValueError {
     message: str;

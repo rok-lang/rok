@@ -46,8 +46,7 @@ pub struct RangeTo<T> {
     pub end: T;
 }
 
-/// `..=b`: up to and including `end` (the spec's range grammar has no
-/// `..=b` form; this mirrors `RangeTo`).
+/// `..=b`: up to and including `end`.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct RangeToInclusive<T> {
     pub end: T;
@@ -131,6 +130,18 @@ impl<T: Step> Iterator for Range<T> {
         none
     }
 
+    /// One `forward_checked(n)`: O(1) (2.7.3).
+    const fn nth(ref self, n: usize) -> T | none {
+        if let p: T = self.start.forward_checked(n) {
+            if p < self.end {
+                self.start = p.forward_checked(1) ?? self.end;
+                return p;
+            }
+        }
+        self.start = self.end;
+        none
+    }
+
     const fn exact_len(self) -> usize | none {
         if !(self.start < self.end) {
             return 0;
@@ -181,6 +192,27 @@ impl<T: Step> Iterator for RangeInclusive<T> {
         cur
     }
 
+    /// One `forward_checked(n)`: O(1) (2.7.3).
+    const fn nth(ref self, n: usize) -> T | none {
+        if self.exhausted || self.start > self.end {
+            return none;
+        }
+        if let p: T = self.start.forward_checked(n) {
+            if p < self.end {
+                self.start = p.forward_checked(1) ?? self.end;
+                return p;
+            }
+            if p == self.end {
+                self.start = p;
+                self.exhausted = true;
+                return p;
+            }
+        }
+        self.start = self.end;
+        self.exhausted = true;
+        none
+    }
+
     const fn exact_len(self) -> usize | none {
         if self.exhausted || self.start > self.end {
             return 0;
@@ -228,6 +260,27 @@ impl<T: Step> Iterator for RangeFrom<T> {
         let cur = self.start;
         self.start = self.start.forward_checked(1)?;
         cur
+    }
+
+    /// One `forward_checked(n)`: O(1) (2.7.3); past the maximum it parks
+    /// there as `next` does (a binary search, O(log n)).
+    const fn nth(ref self, n: usize) -> T | none {
+        if let p: T = self.start.forward_checked(n) {
+            if let q: T = p.forward_checked(1) {
+                self.start = q;
+                return p;
+            }
+            self.start = p;
+            return none;
+        }
+        let lo = 0usize;
+        let hi = n;
+        while hi - lo > 1 {
+            let mid = lo + (hi - lo) / 2;
+            if self.start.forward_checked(mid) is none { hi = mid; } else { lo = mid; }
+        }
+        self.start = self.start.forward_checked(lo) ?? self.start;
+        none
     }
 }
 

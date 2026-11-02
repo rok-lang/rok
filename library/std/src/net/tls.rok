@@ -7,9 +7,9 @@
 // are validated against `ClientConfig::root_certs` (by default the OS
 // trust store: the macOS keychain anchors, the Windows ROOT store, the
 // Linux CA bundle files; none on wasm). Key exchange is X25519, or the
-// X25519MLKEM768 hybrid when `enable_pq` is on. Either side signs with
-// Ed25519, ECDSA P-256 / P-384 or RSA-PSS; the server may ask for a
-// client certificate. Sessions resume from single-use tickets
+// X25519MLKEM768 hybrid when `enable_post_quantum` is on. Either side
+// signs with Ed25519, ECDSA P-256 / P-384 or RSA-PSS; the server may ask
+// for a client certificate. Sessions resume from single-use tickets
 // (psk_dhe_ke), optionally with 0-RTT data. A connection is used by one
 // thread, and one operation, at a time.
 
@@ -60,6 +60,12 @@ pub struct TlsError {
 }
 
 impl TlsError {
+    /// An error of `kind` with `message`; `alert` is the TLS alert that
+    /// goes with it.
+    pub const fn new(kind: TlsErrorKind, message: str, alert: u8) -> TlsError {
+        TlsError { kind, msg: message, alert }
+    }
+
     pub(pkg) const fn certificate(msg: str) -> TlsError {
         TlsError { kind: TlsErrorKind::Certificate, msg, alert: 42u8 }
     }
@@ -150,9 +156,9 @@ impl Certificate {
     /// The subjectAltName DNS names.
     pub const fn dns_names(self) -> List<str> { self.info.dns_names.clone() }
 
-    /// The validity period.
+    /// Start of the validity period.
     pub const fn not_before(self) -> SystemTime { SystemTime::from_unix(self.info.not_before, 0u32) }
-    /// End of the validity period, Unix seconds.
+    /// End of the validity period.
     pub const fn not_after(self) -> SystemTime { SystemTime::from_unix(self.info.not_after, 0u32) }
 }
 
@@ -298,10 +304,11 @@ pub struct ClientConfig {
     /// ALPN protocols offered, in preference order (`"h2"`, ...).
     pub alpn_protocols: List<List<u8>> = [];
     /// Offer the X25519MLKEM768 hybrid key exchange first.
-    pub enable_pq: bool = true;
+    pub enable_post_quantum: bool = true;
     /// Sent when the server asks for a certificate: leaf first (empty:
     /// none), with the leaf's key.
     pub client_cert_chain: List<Certificate> = [];
+    /// The key of `client_cert_chain[0]` (none: no client certificate).
     pub client_key: PrivateKey | none = none;
     /// Tickets from earlier connections, to resume from (none: never
     /// resume).
@@ -330,8 +337,11 @@ impl ClientConfig {
 pub struct ServerConfig {
     /// The server's certificate first, then intermediates.
     pub cert_chain: List<Certificate>;
+    /// The key of `cert_chain[0]`.
     pub private_key: PrivateKey;
+    /// Suites accepted, in preference order.
     pub cipher_suites: List<CipherSuite> = CipherSuite::all();
+    /// ALPN protocols accepted, in preference order (`"h2"`, ...).
     pub alpn_protocols: List<List<u8>> = [];
     /// Non-empty: ask for a client certificate and validate it against
     /// these roots (clientAuth).
@@ -840,7 +850,6 @@ const fn no_buf() -> SliceMut<u8> {
     e
 }
 
-/// A configured client key must belong to the client certificate.
 /// How long a failed handshake waits for the peer's remaining input.
 const LINGER: Duration = Duration::secs(1);
 
@@ -854,7 +863,7 @@ fn linger_close(s: TcpStream) {
     loop {
         let left = LINGER.as_ns() - start.elapsed().as_ns();
         if left <= 0 { break; }
-        try s.set_read_timeout(Duration::ns(left)) catch _ { break; };
+        s.set_read_timeout(Duration::ns(left));
         let n = try s.read(buf) catch _ { break; };
         if n == 0 { break; }
     }
@@ -876,6 +885,7 @@ async fn linger_close_async(s: TcpStream) {
     try s.close() catch _ {};
 }
 
+/// A configured client key must belong to the client certificate.
 fn check_client_key(cfg: ClientConfig) throws (TlsError) {
     if let k: PrivateKey = cfg.client_key {
         if cfg.client_cert_chain.len() == 0 || !k.matches(cfg.client_cert_chain[0]) {
@@ -890,7 +900,8 @@ const fn nothing() -> Slice<u8> {
     e[0:0]
 }
 
-/// A TLS client connection. Copies share the connection.
+/// A TLS client connection. It has one owner (`let b = a` moves it);
+/// close it with `try c.close()` or `using`.
 pub struct Client {
     s: Shared;
 }
@@ -1046,7 +1057,8 @@ impl Drop for Client {
     fn drop(ref self) { try self.s.close() catch _ {}; }
 }
 
-/// A TLS server connection. Copies share the connection.
+/// A TLS server connection. It has one owner (`let b = a` moves it);
+/// close it with `try s.close()` or `using`.
 pub struct Server {
     s: Shared;
 }

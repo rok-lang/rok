@@ -1,8 +1,8 @@
-// rok::std::time (stdlib spec 303): the wall clock (`SystemTime`) and
+// rok::std::time (stdlib 3.3): the wall clock (`SystemTime`) and
 // the boot clock (`BootTime`). `Duration` / `Instant` are
 // `rok::core::time`. Every span is an exact signed `Duration`; the
-// arithmetic goes through `Duration`'s, which panics on overflow in
-// debug builds and saturates in release (3.3.5).
+// arithmetic goes through `Duration`'s, which panics on overflow and
+// saturates only with overflow checks off (3.3.5).
 
 use rok::core::time::Duration;
 

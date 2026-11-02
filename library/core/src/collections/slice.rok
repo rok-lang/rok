@@ -104,7 +104,7 @@ impl<T> Slice<T> {
     #[track_caller]
     pub const fn windows(self, size: usize) -> Windows<T> {
         if size == 0 {
-            panic("Slice::windows: size must be positive, e.g. `windows(2)`");
+            panic("Slice::windows: size is 0; pass a positive size, e.g. `windows(2)`");
         }
         Windows { s: self, size: size, i: 0 }
     }
@@ -114,7 +114,7 @@ impl<T> Slice<T> {
     #[track_caller]
     pub const fn chunks(self, size: usize) -> Chunks<T> {
         if size == 0 {
-            panic("Slice::chunks: size must be positive, e.g. `chunks(2)`");
+            panic("Slice::chunks: size is 0; pass a positive size, e.g. `chunks(2)`");
         }
         Chunks { s: self, size: size, i: 0 }
     }
@@ -713,6 +713,10 @@ pub struct SliceMutIter<T> {
     i: usize;
     /// Items taken from the back (`next_back`).
     back: usize = 0;
+}
+
+impl<T> Debug for SliceMutIter<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("SliceMutIter") }
 }
 
 impl<T> Iterator for SliceMutIter<T> {

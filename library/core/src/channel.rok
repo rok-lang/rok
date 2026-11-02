@@ -5,7 +5,7 @@
 // the task (`task::park`: receivers on the `meta` address, senders one
 // past it).
 //
-// The queue (2.17.6): a bounded channel's is a lock-free ring (Vyukov's
+// The queue: a bounded channel's is a lock-free ring (Vyukov's
 // MPMC: per-slot stamps, CAS on head / tail), an unbounded one's a list
 // of fixed segments behind its own lock (it grows without copying, and
 // drained segments are dropped). Waiting needs no lock: a waiter counts
@@ -21,7 +21,7 @@ pub enum SendError<T> {
 }
 
 /// What `try_send` hands back when the value was not sent: the channel
-/// was full, or every receiver is gone.
+/// was full, or this sender was closed.
 pub enum TrySendError<T> {
     Full(T),
     Closed(T),
@@ -76,13 +76,19 @@ pub struct Closed;
 
 // By hand: a derive's `Closed` would also name the send errors'
 // variant.
+impl Clone for Empty { const fn clone(self) -> Empty { self } }
+impl Copy for Empty {}
 impl PartialEq for Empty { const fn eq(self, rhs: Empty) -> bool { true } }
 impl Eq for Empty {}
+impl Hash for Empty { const fn hash<H: Hasher>(self, ref h: H) {} }
 impl Debug for Empty {
     const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Empty") }
 }
+impl Clone for Closed { const fn clone(self) -> Closed { self } }
+impl Copy for Closed {}
 impl PartialEq for Closed { const fn eq(self, rhs: Closed) -> bool { true } }
 impl Eq for Closed {}
+impl Hash for Closed { const fn hash<H: Hasher>(self, ref h: H) {} }
 impl Debug for Closed {
     const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Closed") }
 }
@@ -682,7 +688,7 @@ impl<T> SendFuture<T> {
 
     /// One step of an async send: `Ready(())` once the value is queued,
     /// `Pending` while the channel is full. Throws `SendError::Closed` with
-    /// the value when every receiver is gone.
+    /// the value when this sender was closed.
     pub fn poll(ref self, ref ctx: rok::core::future::Context) throws (SendError<T>) -> rok::core::future::Poll<()> {
         let ch = self.ch;
         // A cancelled task does not send.

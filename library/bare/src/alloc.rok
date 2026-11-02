@@ -2,7 +2,7 @@
 // Over the runtime's `rok_alloc_raw` / `rok_realloc_raw` / `rok_free`
 // (system malloc); failure is a null `CPtr`, never an abort.
 //
-// `Allocation<T>` frees its block when its `using` block ends.
+// `Allocation<T>` frees its block where its owner leaves scope.
 
 use rok::bare::mem::{align_of, size_of};
 use rok::bare::ptr::{CPtr, ManyPtr, Ptr};
@@ -107,12 +107,13 @@ impl Layout {
 }
 
 /// A block for `layout` outside the GC, uninitialized; null when out of
-/// memory. Free it with `dealloc` and the same layout.
+/// memory or when the size is 0. Free it with `dealloc` and the same layout.
 pub unsafe fn alloc(layout: Layout) -> CPtr<u8> {
     CPtr::from_addr(rok_alloc_raw(layout.size, layout.align, 0))
 }
 
-/// Like `alloc`, with every byte zero.
+/// Like `alloc`, with every byte zero; null when out of memory or when
+/// the size is 0.
 pub unsafe fn alloc_zeroed(layout: Layout) -> CPtr<u8> {
     CPtr::from_addr(rok_alloc_raw(layout.size, layout.align, 1))
 }
@@ -130,16 +131,21 @@ pub unsafe fn realloc(ptr: Ptr<u8>, old_layout: Layout, new_size: usize) -> CPtr
     )
 }
 
-/// An uninitialized block for one `T`; null when out of memory. Free it
-/// with `dealloc_one`.
+/// An uninitialized block for one `T`; null when out of memory or when
+/// `T` has size 0. Free it with `dealloc_one`.
 pub unsafe fn alloc_one<T>() -> CPtr<T> {
     CPtr::from_addr(rok_alloc_raw(size_of::<T>(), align_of::<T>(), 0))
 }
 
-/// An uninitialized block for `n` `T`s; null when out of memory. Free it
-/// with `dealloc_array`.
+/// An uninitialized block for `n` `T`s; null when out of memory, when
+/// the size is 0 or when `n * size_of::<T>()` overflows. Free it with
+/// `dealloc_array`.
 pub unsafe fn alloc_array<T>(n: usize) -> CPtr<T> {
-    CPtr::from_addr(rok_alloc_raw(size_of::<T>() * n, align_of::<T>(), 0))
+    let elem = size_of::<T>();
+    if elem != 0 && n > usize::MAX / elem {
+        return CPtr::null();
+    }
+    CPtr::from_addr(rok_alloc_raw(elem * n, align_of::<T>(), 0))
 }
 
 /// Free a block from `alloc_one`. UB unless `ptr` came from it and is not
@@ -150,8 +156,8 @@ pub unsafe fn dealloc_one<T>(ptr: Ptr<T>) { rok_free(ptr.addr()); }
 /// from it and is not freed yet; the elements are not dropped.
 pub unsafe fn dealloc_array<T>(ptr: Ptr<T>, n: usize) { rok_free(ptr.addr()); }
 
-/// `n` `T`s outside the GC, freed when the `using` block holding it ends
-/// (spec 1.4.2). Copies share the block; use it only inside that block.
+/// `n` `T`s outside the GC (spec 1.4.2). It has one owner (`let b = a`
+/// moves it), and the block is freed where that owner leaves scope.
 pub struct Allocation<T> {
     ptr: Ptr<T>;
     len: usize;

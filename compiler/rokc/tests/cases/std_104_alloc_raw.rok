@@ -6,6 +6,7 @@
 // one: 12 many: 30
 // raii: 6
 // layout error: true
+// array overflow: true
 
 // stdlib 1.4: memory outside the GC - `alloc` / `alloc_zeroed` /
 // `realloc` / `dealloc`, the typed helpers, the RAII `Allocation`, and
@@ -65,4 +66,6 @@ fn main() throws (LayoutError) {
 
     let huge = try Layout::array::<u64>(usize::MAX / 4) catch _: LayoutError { Layout::new::<u8>() };
     println(f"layout error: {huge.size() == 1}");
+    let over: CPtr<u64> = unsafe { alloc_array::<u64>(usize::MAX / 4) };
+    println(f"array overflow: {over.as_ptr() is none}");
 }

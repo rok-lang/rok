@@ -180,7 +180,7 @@ impl Aead {
     }
 }
 
-/// `using` release wipes.
+/// Wiped where it is released.
 impl Drop for Aead {
     fn drop(ref self) { self.wipe(); }
 }

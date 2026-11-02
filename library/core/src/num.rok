@@ -422,7 +422,7 @@ impl PartialOrd for f64 {
     const fn ge(self, rhs: f64) -> bool { self >= rhs }
 }
 
-// `!x` on an integer is its bitwise complement, as `~x` (2.3.4).
+// `!x` on an integer is its bitwise complement, as `~x` (2.3.2).
 impl Not for i8 {
     type Output = i8;
     #[intrinsic("rok.not.i8")]
@@ -546,16 +546,22 @@ impl Hash for char {
 // c_char (stdlib 2.5): compared and hashed as its byte.
 
 impl PartialEq for c_char {
+    #[intrinsic("rok.eq.c_char")]
     const fn eq(self, rhs: c_char) -> bool { (self as u8) == (rhs as u8) }
+    #[intrinsic("rok.ne.c_char")]
     const fn ne(self, rhs: c_char) -> bool { (self as u8) != (rhs as u8) }
 }
 
 impl Eq for c_char {}
 
 impl PartialOrd for c_char {
+    #[intrinsic("rok.lt.c_char")]
     const fn lt(self, rhs: c_char) -> bool { (self as u8) < (rhs as u8) }
+    #[intrinsic("rok.gt.c_char")]
     const fn gt(self, rhs: c_char) -> bool { (self as u8) > (rhs as u8) }
+    #[intrinsic("rok.le.c_char")]
     const fn le(self, rhs: c_char) -> bool { (self as u8) <= (rhs as u8) }
+    #[intrinsic("rok.ge.c_char")]
     const fn ge(self, rhs: c_char) -> bool { (self as u8) >= (rhs as u8) }
 }
 
@@ -565,6 +571,11 @@ impl Ord for c_char {
 
 impl Hash for c_char {
     const fn hash<H: Hasher>(self, ref h: H) { h.write_u8(self as u8) }
+}
+
+/// The byte as a number (`65`).
+impl Debug for c_char {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try Debug::fmt(self as u8, ref f) }
 }
 
 // `&&` / `||` (stdlib 2.3.9): on two `bool`s the compiler short-circuits

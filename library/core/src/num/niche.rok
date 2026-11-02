@@ -24,10 +24,13 @@ impl NicheInt for usize {}
 #[sealed]
 pub trait NicheFloat: Copy + PartialOrd + Display + Debug + Add<Output = Self> + Sub<Output = Self> + Mul<Output = Self> + Div<Output = Self> {
     /// Whether `self` is NaN.
+    #[internal]
     fn niche_nan(self) -> bool;
     /// Whether `self` is finite (not NaN or infinite).
+    #[internal]
     fn niche_finite(self) -> bool;
     /// The bits, widened, with `-0.0` as `0.0` (`Hash`).
+    #[internal]
     fn key(self) -> u64;
 }
 
@@ -120,8 +123,9 @@ impl<T: NicheInt> Debug for NonZero<T> {
 /// Never 0: a wrapped (unchecked) product that lands on 0 panics.
 impl<T: NicheInt> Mul for NonZero<T> {
     type Output = NonZero<T>;
+    #[track_caller]
     const fn mul(self, rhs: NonZero<T>) -> NonZero<T> {
-        NonZero::new(self.0 * rhs.0) ?? panic("NonZero multiplication overflowed to zero")
+        NonZero::new(self.0 * rhs.0) ?? panic("NonZero::mul: the product wrapped to zero; use `checked_mul` on the values")
     }
 }
 
@@ -186,6 +190,29 @@ impl<T: NicheInt> Positive<T> {
     /// The value.
     pub const fn get(self) -> T { self.0 }
 }
+
+impl<T: NicheInt> TryFrom<T> for Positive<T> {
+    type Error = ConversionError;
+    const fn try_from(value: T) throws (ConversionError) -> Positive<T> {
+        let p: Positive<T> = Positive::new(value) else {
+            throw ConversionError::new("a negative value is not a valid `Positive` value");
+        };
+        p
+    }
+}
+
+// `T::from(p)`, one impl per integer type.
+#[impl_macro(positive_from)] @macro {
+    (@rep[sep = ","] { @t: ty }) => {
+        @for @t {
+            impl From<Positive<@t>> for @t {
+                const fn from(value: Positive<@t>) -> @t { value.0 }
+            }
+        }
+    }
+}
+
+positive_from!(i8, i16, i32, i64, isize, u8, u16, u32, u64, usize);
 
 impl<T: NicheInt> Clone for Positive<T> {
     fn clone(self) -> Positive<T> { self }

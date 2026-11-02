@@ -160,6 +160,10 @@ pub struct SetIter<T, S = RandomState> {
     it: Keys<T, bool, S>;
 }
 
+impl<T, S> Debug for SetIter<T, S> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("SetIter") }
+}
+
 impl<T: Hash, S: BuildHasher> Iterator for SetIter<T, S> {
     type Item = T;
     const fn next(ref self) -> T | none {

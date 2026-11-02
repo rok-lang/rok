@@ -28,7 +28,7 @@ pub fn encode_into<B: AsBytes>(data: B, out: SliceMut<u8>, case: Case = Case::Lo
     let b = data.byte_slice();
     let need = 2 * b.len();
     if out.len() < need {
-        panic(f"hex::encode_into: `out` holds {out.len()} bytes but the text needs {need}, two per byte");
+        panic(f"hex::encode_into: `out` holds {out.len()} bytes but the text needs {need}, two per byte; size `out` as `2 * data.len()`");
     }
     let digits = match case {
         Case::Lower => DIGITS_LOWER,
@@ -59,20 +59,22 @@ pub fn decode<B: AsBytes>(text: B) throws (DecodeError) -> List<u8> {
 pub fn decode_into<B: AsBytes>(text: B, out: SliceMut<u8>) throws (DecodeError) -> usize {
     let t = text.byte_slice();
     let n = t.len();
-    if n % 2 != 0 {
-        throw DecodeError::new(DecodeErrorKind::InvalidLength, n - 1, f"hex: odd length {n}; every byte takes two digits, so write \"0f\" rather than \"f\"");
-    }
     if out.len() < n / 2 {
-        panic(f"hex::decode_into: `out` holds {out.len()} bytes but the text spells {n / 2}");
+        panic(f"hex::decode_into: `out` holds {out.len()} bytes but the text spells {n / 2}; size `out` as `text.len() / 2`");
     }
+    // A bad digit is reported before an odd length (2.22.3).
     let i = 0usize;
-    while i < n {
+    while i + 1 < n {
         let hi = digit(t[i]);
         if hi < 0 { throw bad_digit(t[i], i); }
         let lo = digit(t[i + 1]);
         if lo < 0 { throw bad_digit(t[i + 1], i + 1); }
         out[i / 2] = ((hi << 4) | lo) as u8;
         i += 2;
+    }
+    if n % 2 != 0 {
+        if digit(t[n - 1]) < 0 { throw bad_digit(t[n - 1], n - 1); }
+        throw DecodeError::new(DecodeErrorKind::InvalidLength, n - 1, f"hex: odd length {n}; every byte takes two digits, so write \"0f\" rather than \"f\"");
     }
     n / 2
 }

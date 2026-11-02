@@ -5,9 +5,6 @@
 // runtime's address-keyed wait queue (`rok_sync_wait` / `rok_sync_wake`,
 // futex semantics; `Atomic<i32>::wait` / `wake` expose it); a blocked
 // thread counts as stopped for the GC.
-//
-// Not in 2.16 but provided because the blocking APIs need them: `Once`,
-// `Condvar` (Rust-shaped).
 
 use rok::core::marker::{hand_over, hand_over_into};
 use rok::core::rt::{atomic_add, atomic_and, atomic_cas, atomic_load, atomic_or, atomic_store, atomic_sub, atomic_xchg, atomic_xor, key};
@@ -105,11 +102,6 @@ pub trait AtomicPrimitive {}
 atomic_prims!(i8, i16, i32, i64, isize, u8, u16, u32, u64, usize, bool);
 /// One address word: load / store / swap / compare_exchange.
 impl<T> AtomicPrimitive for rok::bare::ptr::Ptr<T> {}
-
-/// Pointers compare by address.
-impl<T> PartialEq for rok::bare::ptr::Ptr<T> {
-    const fn eq(self, rhs: rok::bare::ptr::Ptr<T>) -> bool { self.addr() == rhs.addr() }
-}
 
 /// A lock-free cell (2.16.2). Send + Sync.
 pub struct Atomic<T> {

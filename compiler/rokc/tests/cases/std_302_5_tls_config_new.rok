@@ -33,7 +33,7 @@ fn check(label: str, path: Path) {
         return;
     };
     let h2 = ClientConfig { alpn_protocols: ["h2".as_bytes().to_list()], ..c };
-    println(f"{label}: {h2.root_certs.len()} roots, alpn {h2.alpn_protocols.len()}, pq {h2.enable_pq}");
+    println(f"{label}: {h2.root_certs.len()} roots, alpn {h2.alpn_protocols.len()}, pq {h2.enable_post_quantum}");
 }
 
 fn main() {

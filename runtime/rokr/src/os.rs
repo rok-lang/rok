@@ -1,4 +1,5 @@
-//! POSIX helpers behind `rok::std` (stdlib 300: fs, io, env, process).
+//! POSIX helpers behind `rok::std` (stdlib 3: fs, env, process)
+//! and `rok::core::io` (stdlib 2.23).
 //! No ABI stability (805 §8.5.12 appendix). WASI through wasi-libc:
 //! what preview 1 lacks (processes, signals, `mmap`, locks, `dup`)
 //! fails with `-ENOSYS`.
@@ -133,7 +134,7 @@ const EAI_NONAME: i32 = libc::EAI_NONAME;
 #[cfg(not(unix))]
 const EAI_NONAME: i32 = -2;
 
-/// `IoErrorKind` discriminants (library/std/src/io.rok declares the same).
+/// `IoErrorKind` discriminants (library/core/src/io.rok declares the same).
 mod kind {
     pub const OTHER: i32 = 0;
     pub const NOT_FOUND: i32 = 1;
@@ -1329,11 +1330,11 @@ pub extern "C" fn rok_os_getenv(name: RokStr, buf: *mut u8, off: usize, len: usi
     )
 }
 
-/// `setenv` (`value` given) / `unsetenv`. 0 or `-errno`.
+/// `unset == 0`: `setenv`, else `unsetenv`. 0 or `-errno`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_os_setenv(name: RokStr, value: RokStr, unset: i32) -> i32 {
     // SAFETY: C strings. std's env lock serializes Rok's own callers
-    // (spec 306.3).
+    // (stdlib 3.6.3).
     let r = unsafe {
         if unset != 0 {
             libc::unsetenv(cs(name).p())

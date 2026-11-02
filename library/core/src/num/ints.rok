@@ -1,13 +1,10 @@
 // rok::core::num::ints: the integer primitives' methods and limits
 // (stdlib 2.1.4): bit operations, byte order, and the `checked_` /
 // `wrapping_` / `saturating_` / `overflowing_` families that spell out
-// what plain `+ - *` do only with overflow checks off (2.3).
+// overflow handling explicitly (2.3).
 //
 // `wrapping_add` / `_sub` / `_mul` and the bit counts are intrinsics;
 // the rest is built on them. One regular block per type.
-//
-// The limits are `MIN` / `MAX` consts rather than 2.1.4's `fn min()` /
-// `fn max()`, which would shadow `Ord::min(self, rhs)`.
 
 #[cfg(target_endian = "little")]
 const BIG_ENDIAN: bool = false;
@@ -284,7 +281,7 @@ impl i8 {
         }
         acc * base
     }
-    /// The absolute value; `MIN.abs()` overflows (panic in debug, wrap in release).
+    /// The absolute value; `MIN.abs()` overflows (panics; wraps with overflow checks off).
     #[must_use]
     pub const fn abs(self) -> i8 { if self < 0 { -self } else { self } }
     /// The absolute value, or `none` for `MIN`.
@@ -667,7 +664,7 @@ impl i16 {
         }
         acc * base
     }
-    /// The absolute value; `MIN.abs()` overflows (panic in debug, wrap in release).
+    /// The absolute value; `MIN.abs()` overflows (panics; wraps with overflow checks off).
     #[must_use]
     pub const fn abs(self) -> i16 { if self < 0 { -self } else { self } }
     /// The absolute value, or `none` for `MIN`.
@@ -1050,7 +1047,7 @@ impl i32 {
         }
         acc * base
     }
-    /// The absolute value; `MIN.abs()` overflows (panic in debug, wrap in release).
+    /// The absolute value; `MIN.abs()` overflows (panics; wraps with overflow checks off).
     #[must_use]
     pub const fn abs(self) -> i32 { if self < 0 { -self } else { self } }
     /// The absolute value, or `none` for `MIN`.
@@ -1433,7 +1430,7 @@ impl i64 {
         }
         acc * base
     }
-    /// The absolute value; `MIN.abs()` overflows (panic in debug, wrap in release).
+    /// The absolute value; `MIN.abs()` overflows (panics; wraps with overflow checks off).
     #[must_use]
     pub const fn abs(self) -> i64 { if self < 0 { -self } else { self } }
     /// The absolute value, or `none` for `MIN`.
@@ -1609,22 +1606,22 @@ impl isize {
 
     /// The bytes, least significant first.
     #[must_use]
-    pub fn to_le_bytes(self) -> [u8; 4] { (self as i32).to_le_bytes() }
+    pub const fn to_le_bytes(self) -> [u8; 4] { (self as i32).to_le_bytes() }
     /// The bytes, most significant first.
     #[must_use]
-    pub fn to_be_bytes(self) -> [u8; 4] { (self as i32).to_be_bytes() }
+    pub const fn to_be_bytes(self) -> [u8; 4] { (self as i32).to_be_bytes() }
     /// The bytes in the target's byte order.
     #[must_use]
-    pub fn to_ne_bytes(self) -> [u8; 4] { (self as i32).to_ne_bytes() }
+    pub const fn to_ne_bytes(self) -> [u8; 4] { (self as i32).to_ne_bytes() }
     /// The number of `bytes`, least significant first.
     #[must_use]
-    pub fn from_le_bytes(bytes: [u8; 4]) -> isize { i32::from_le_bytes(bytes) as isize }
+    pub const fn from_le_bytes(bytes: [u8; 4]) -> isize { i32::from_le_bytes(bytes) as isize }
     /// The number of `bytes`, most significant first.
     #[must_use]
-    pub fn from_be_bytes(bytes: [u8; 4]) -> isize { i32::from_be_bytes(bytes) as isize }
+    pub const fn from_be_bytes(bytes: [u8; 4]) -> isize { i32::from_be_bytes(bytes) as isize }
     /// The number of `bytes`, in the target's byte order.
     #[must_use]
-    pub fn from_ne_bytes(bytes: [u8; 4]) -> isize { i32::from_ne_bytes(bytes) as isize }
+    pub const fn from_ne_bytes(bytes: [u8; 4]) -> isize { i32::from_ne_bytes(bytes) as isize }
 }
 
 #[cfg(target_pointer_width = "32")]
@@ -1638,22 +1635,22 @@ impl usize {
 
     /// The bytes, least significant first.
     #[must_use]
-    pub fn to_le_bytes(self) -> [u8; 4] { (self as u32).to_le_bytes() }
+    pub const fn to_le_bytes(self) -> [u8; 4] { (self as u32).to_le_bytes() }
     /// The bytes, most significant first.
     #[must_use]
-    pub fn to_be_bytes(self) -> [u8; 4] { (self as u32).to_be_bytes() }
+    pub const fn to_be_bytes(self) -> [u8; 4] { (self as u32).to_be_bytes() }
     /// The bytes in the target's byte order.
     #[must_use]
-    pub fn to_ne_bytes(self) -> [u8; 4] { (self as u32).to_ne_bytes() }
+    pub const fn to_ne_bytes(self) -> [u8; 4] { (self as u32).to_ne_bytes() }
     /// The number of `bytes`, least significant first.
     #[must_use]
-    pub fn from_le_bytes(bytes: [u8; 4]) -> usize { u32::from_le_bytes(bytes) as usize }
+    pub const fn from_le_bytes(bytes: [u8; 4]) -> usize { u32::from_le_bytes(bytes) as usize }
     /// The number of `bytes`, most significant first.
     #[must_use]
-    pub fn from_be_bytes(bytes: [u8; 4]) -> usize { u32::from_be_bytes(bytes) as usize }
+    pub const fn from_be_bytes(bytes: [u8; 4]) -> usize { u32::from_be_bytes(bytes) as usize }
     /// The number of `bytes`, in the target's byte order.
     #[must_use]
-    pub fn from_ne_bytes(bytes: [u8; 4]) -> usize { u32::from_ne_bytes(bytes) as usize }
+    pub const fn from_ne_bytes(bytes: [u8; 4]) -> usize { u32::from_ne_bytes(bytes) as usize }
 }
 
 impl isize {
@@ -1899,7 +1896,7 @@ impl isize {
         }
         acc * base
     }
-    /// The absolute value; `MIN.abs()` overflows (panic in debug, wrap in release).
+    /// The absolute value; `MIN.abs()` overflows (panics; wraps with overflow checks off).
     #[must_use]
     pub const fn abs(self) -> isize { if self < 0 { -self } else { self } }
     /// The absolute value, or `none` for `MIN`.

@@ -2,7 +2,7 @@
 // Lists of different lengths: a run-time panic.
 // expect-exit: 101
 // expect-stderr: thread 'main' panicked at tests/cases/303_broadcast_len_panics.rok:11:13:
-// expect-stderr: broadcast over lengths 3 and 2
+// expect-stderr: broadcast: lengths 3 and 2 differ; make both sides the same length
 // expect-stdout:
 
 fn main() -> i32 {

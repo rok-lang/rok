@@ -2,6 +2,9 @@
 // expect-exit: 0
 // expect-stdout:
 // InvalidLength 2: hex: odd length 3; every byte takes two digits, so write "0f" rather than "f"
+// InvalidByte 0: hex: 'g' at byte 0 is not a hex digit; use 0-9, a-f or A-F
+// InvalidByte 1: hex: 'g' at byte 1 is not a hex digit; use 0-9, a-f or A-F
+// InvalidByte 2: hex: 'g' at byte 2 is not a hex digit; use 0-9, a-f or A-F
 // InvalidByte 1: hex: 'g' at byte 1 is not a hex digit; use 0-9, a-f or A-F
 // InvalidByte 2: hex: byte 0x20 at byte 2 is not a hex digit; use 0-9, a-f or A-F
 // InvalidByte 0: hex: byte 0xed at byte 0 is not a hex digit; use 0-9, a-f or A-F
@@ -22,7 +25,8 @@
 // ok [] [] [102]
 
 // Every decode error has a kind, names the offending byte offset and
-// says what to write instead.
+// says what to write instead. A bad digit is reported before an odd
+// length.
 use rok::core::encoding::{base64, hex, DecodeError};
 use rok::core::encoding::base64::{Codec, Alphabet, Padding};
 
@@ -40,6 +44,9 @@ fn main() {
     let std = base64::STANDARD;
     let url = base64::URL_SAFE;
     hx("abc");
+    hx("g");
+    hx("0g1");
+    hx("00g");
     hx("0g");
     hx("00 1");
     hx("한국");

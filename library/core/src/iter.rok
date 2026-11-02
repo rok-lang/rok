@@ -13,6 +13,7 @@
 #[lang("iterator_trait")]
 pub trait Iterator {
     type Item;
+    /// The next item, or `none` once the iterator is done.
     fn next(ref self) -> Item | none;
 
     /// Apply `f` to each item.
@@ -50,10 +51,12 @@ pub trait Iterator {
         Skip { it: self, n: n }
     }
 
-    /// Every `step`th item, starting with the first (`step` > 0).
+    /// Every `step`th item, starting with the first. Panics when `step`
+    /// is 0.
+    #[track_caller]
     const fn step_by(self, step: usize) -> StepBy<Self> {
         if step == 0 {
-            panic("Iterator::step_by: step must be positive");
+            panic("Iterator::step_by: step is 0; pass a positive step, e.g. `step_by(2)`");
         }
         StepBy { it: self, step: step, first: true }
     }
@@ -111,7 +114,7 @@ pub trait Iterator {
     #[track_caller]
     const fn chunks(self, size: usize) -> Chunks<Self> {
         if size == 0 {
-            panic("Iterator::chunks: size must be positive, e.g. `chunks(2)`");
+            panic("Iterator::chunks: size is 0; pass a positive size, e.g. `chunks(2)`");
         }
         Chunks { it: self, size: size }
     }
@@ -121,7 +124,7 @@ pub trait Iterator {
     #[track_caller]
     const fn windows(self, size: usize) -> Windows<Self> {
         if size == 0 {
-            panic("Iterator::windows: size must be positive, e.g. `windows(2)`");
+            panic("Iterator::windows: size is 0; pass a positive size, e.g. `windows(2)`");
         }
         Windows { it: self, size: size, win: List::new(), started: false }
     }
@@ -160,6 +163,7 @@ pub trait Iterator {
         acc
     }
 
+    /// Every item folded into `init` by `f`, in order.
     const fn fold<B>(self, init: B, f: fn(B, Item) -> B) -> B {
         let acc = init;
         for x in self {
@@ -212,6 +216,7 @@ pub trait Iterator {
     }
 
     /// The items combined left to right with `f`; `none` for none.
+    #[must_use]
     const fn reduce(self, f: fn(Item, Item) -> Item) -> Item | none {
         let acc: Item | none = none;
         for x in self {
@@ -220,6 +225,7 @@ pub trait Iterator {
         acc
     }
 
+    /// Whether `pred` accepts some item; stops at the first.
     const fn any(self, pred: fn(Item) -> bool) -> bool {
         for x in self {
             if pred(x) {
@@ -229,6 +235,7 @@ pub trait Iterator {
         false
     }
 
+    /// Whether `pred` accepts every item; stops at the first refusal.
     const fn all(self, pred: fn(Item) -> bool) -> bool {
         for x in self {
             if !pred(x) {
@@ -238,6 +245,7 @@ pub trait Iterator {
         true
     }
 
+    /// The first item `pred` accepts.
     #[must_use]
     const fn find(self, pred: fn(Item) -> bool) -> Item | none {
         for x in self {
@@ -248,6 +256,8 @@ pub trait Iterator {
         none
     }
 
+    /// The index of the first item `pred` accepts.
+    #[must_use]
     const fn position(self, pred: fn(Item) -> bool) -> usize | none {
         let i: usize = 0;
         for x in self {
@@ -298,6 +308,7 @@ pub trait Iterator {
     }
 
     /// The item with the smallest `key` (the first of equals).
+    #[must_use]
     const fn min_by_key<K: Ord>(self, key: fn(Item) -> K) -> Item | none {
         let best: Item | none = none;
         let best_key: K | none = none;
@@ -320,6 +331,7 @@ pub trait Iterator {
     }
 
     /// The item with the largest `key` (the last of equals).
+    #[must_use]
     const fn max_by_key<K: Ord>(self, key: fn(Item) -> K) -> Item | none {
         let best: Item | none = none;
         let best_key: K | none = none;
@@ -341,6 +353,8 @@ pub trait Iterator {
         best
     }
 
+    /// The last item.
+    #[must_use]
     const fn last(self) -> Item | none {
         let last: Item | none = none;
         for x in self {
@@ -357,6 +371,7 @@ pub trait Iterator {
         self.next()
     }
 
+    /// Calls `f` on every item, in order.
     const fn for_each(self, f: fn(Item)) {
         for x in self {
             f(x);
@@ -399,6 +414,7 @@ pub trait ExactSizeIterator: Iterator {
 pub trait IntoIterator {
     type IntoIter: Iterator<Item = Item>;
     type Item;
+    /// An iterator over the value.
     fn into_iter(self) -> IntoIter;
 }
 
@@ -1164,7 +1180,7 @@ impl<T> GenIter<T> {
 /// A throwing generator (`yield fn f() throws (E) -> T`): a
 /// `TryIterator` whose `next` throws what the body throws (refs-lang
 /// 4.14.10), stepped with `try for x in g { .. }`.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryGenIter<T, E> {
     resume: fn(bool) throws (E) -> (T | none);
 }
@@ -1204,6 +1220,7 @@ impl<T, E> TryGenIter<T, E> {
 pub trait TryIterator {
     type Item;
     type Error;
+    /// The next item, or `none` once the iterator is done.
     fn next(ref self) throws (Error) -> Item | none;
 
     /// Apply `f` to each item.
@@ -1252,7 +1269,7 @@ pub trait TryIterator {
     #[track_caller]
     const fn step_by(self, step: usize) -> TryStepBy<Self> {
         if step == 0 {
-            panic("TryIterator::step_by: step must be positive");
+            panic("TryIterator::step_by: step is 0; pass a positive step, e.g. `step_by(2)`");
         }
         TryStepBy { it: self, step: step, first: true }
     }
@@ -1291,7 +1308,7 @@ pub trait TryIterator {
     #[track_caller]
     const fn chunks(self, size: usize) -> TryChunks<Self> {
         if size == 0 {
-            panic("TryIterator::chunks: size must be positive, e.g. `chunks(2)`");
+            panic("TryIterator::chunks: size is 0; pass a positive size, e.g. `chunks(2)`");
         }
         TryChunks { it: self, size: size }
     }
@@ -1314,6 +1331,7 @@ pub trait TryIterator {
         c
     }
 
+    /// The number of items left, consuming them.
     const fn count(self) throws (Error) -> usize {
         let n: usize = 0;
         try for _ in self {
@@ -1322,6 +1340,8 @@ pub trait TryIterator {
         n
     }
 
+    /// The last item.
+    #[must_use]
     const fn last(self) throws (Error) -> Item | none {
         let last: Item | none = none;
         try for x in self {
@@ -1340,6 +1360,7 @@ pub trait TryIterator {
         try self.next()
     }
 
+    /// Every item folded into `init` by `f`, in order.
     const fn fold<B>(self, init: B, f: fn(B, Item) throws (Error) -> B) throws (Error) -> B {
         let acc = init;
         try for x in self {
@@ -1348,6 +1369,7 @@ pub trait TryIterator {
         acc
     }
 
+    /// Calls `f` on every item, in order.
     const fn for_each(self, f: fn(Item) throws (Error)) throws (Error) {
         try for x in self {
             try f(x);
@@ -1355,6 +1377,7 @@ pub trait TryIterator {
     }
 
     /// The items combined left to right with `f`; `none` for none.
+    #[must_use]
     const fn reduce(self, f: fn(Item, Item) throws (Error) -> Item) throws (Error) -> Item | none {
         let acc: Item | none = none;
         try for x in self {
@@ -1363,6 +1386,7 @@ pub trait TryIterator {
         acc
     }
 
+    /// Whether `pred` accepts some item; stops at the first.
     const fn any(self, pred: fn(Item) throws (Error) -> bool) throws (Error) -> bool {
         try for x in self {
             if try pred(x) {
@@ -1372,6 +1396,7 @@ pub trait TryIterator {
         false
     }
 
+    /// Whether `pred` accepts every item; stops at the first refusal.
     const fn all(self, pred: fn(Item) throws (Error) -> bool) throws (Error) -> bool {
         try for x in self {
             if !(try pred(x)) {
@@ -1381,6 +1406,8 @@ pub trait TryIterator {
         true
     }
 
+    /// The first item `pred` accepts.
+    #[must_use]
     const fn find(self, pred: fn(Item) throws (Error) -> bool) throws (Error) -> Item | none {
         try for x in self {
             if try pred(x) {
@@ -1390,6 +1417,8 @@ pub trait TryIterator {
         none
     }
 
+    /// The index of the first item `pred` accepts.
+    #[must_use]
     const fn position(self, pred: fn(Item) throws (Error) -> bool) throws (Error) -> usize | none {
         let i: usize = 0;
         try for x in self {
@@ -1433,6 +1462,8 @@ pub trait TryIterator {
         acc
     }
 
+    /// The smallest item (the first of equals).
+    #[must_use]
     const fn min(self) throws (Error) -> Item | none where Item: Ord {
         let best: Item | none = none;
         try for x in self {
@@ -1447,11 +1478,13 @@ pub trait TryIterator {
         best
     }
 
+    /// The largest item (the last of equals).
+    #[must_use]
     const fn max(self) throws (Error) -> Item | none where Item: Ord {
         let best: Item | none = none;
         try for x in self {
             if let b: Item = best {
-                if x.cmp(b).is_gt() {
+                if !x.cmp(b).is_lt() {
                     best = x;
                 }
             } else {
@@ -1462,6 +1495,7 @@ pub trait TryIterator {
     }
 
     /// The item with the smallest `key` (the first of equals).
+    #[must_use]
     const fn min_by_key<K: Ord>(self, key: fn(Item) throws (Error) -> K) throws (Error) -> Item | none {
         let best: Item | none = none;
         let best_key: K | none = none;
@@ -1481,6 +1515,7 @@ pub trait TryIterator {
     }
 
     /// The item with the largest `key` (the last of equals).
+    #[must_use]
     const fn max_by_key<K: Ord>(self, key: fn(Item) throws (Error) -> K) throws (Error) -> Item | none {
         let best: Item | none = none;
         let best_key: K | none = none;
@@ -1517,11 +1552,15 @@ pub const fn try_from_fn<T, E>(f: fn() throws (E) -> (T | none)) -> TryFromFn<T,
     TryFromFn { f: f }
 }
 
-/// The iterator `try_map` returns: `f` of each item.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+/// The iterator `TryIterator::map` returns: `f` of each item.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryMap<I, U> {
     it: I;
     f: fn(I::Item) throws (I::Error) -> U;
+}
+
+impl<I: TryIterator, U> Debug for TryMap<I, U> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TryMap") }
 }
 
 impl<I: TryIterator, U> TryIterator for TryMap<I, U> {
@@ -1535,11 +1574,15 @@ impl<I: TryIterator, U> TryIterator for TryMap<I, U> {
     }
 }
 
-/// The iterator `try_filter` returns: the items `pred` accepts.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+/// The iterator `TryIterator::filter` returns: the items `pred` accepts.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryFilter<I> {
     it: I;
     pred: fn(I::Item) throws (I::Error) -> bool;
+}
+
+impl<I: TryIterator> Debug for TryFilter<I> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TryFilter") }
 }
 
 impl<I: TryIterator> TryIterator for TryFilter<I> {
@@ -1556,10 +1599,14 @@ impl<I: TryIterator> TryIterator for TryFilter<I> {
 }
 
 /// The iterator `map_err` returns: each error passed through `f`.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct MapErr<I, E2> {
     it: I;
     f: fn(I::Error) -> E2;
+}
+
+impl<I: TryIterator, E2> Debug for MapErr<I, E2> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("MapErr") }
 }
 
 impl<I: TryIterator, E2> TryIterator for MapErr<I, E2> {
@@ -1572,11 +1619,15 @@ impl<I: TryIterator, E2> TryIterator for MapErr<I, E2> {
     }
 }
 
-/// The iterator `try_enumerate` returns: `(index, item)` pairs from 0.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+/// The iterator `TryIterator::enumerate` returns: `(index, item)` pairs from 0.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryEnumerate<I> {
     it: I;
     i: usize;
+}
+
+impl<I: TryIterator> Debug for TryEnumerate<I> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TryEnumerate") }
 }
 
 impl<I: TryIterator> TryIterator for TryEnumerate<I> {
@@ -1592,12 +1643,16 @@ impl<I: TryIterator> TryIterator for TryEnumerate<I> {
     }
 }
 
-/// The iterator `try_zip` returns: pairs of items; ends with the
+/// The iterator `TryIterator::zip` returns: pairs of items; ends with the
 /// shorter side.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryZip<I, J> {
     a: I;
     b: J;
+}
+
+impl<I: TryIterator, J: Iterator> Debug for TryZip<I, J> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TryZip") }
 }
 
 impl<I: TryIterator, J: Iterator> TryIterator for TryZip<I, J> {
@@ -1613,13 +1668,17 @@ impl<I: TryIterator, J: Iterator> TryIterator for TryZip<I, J> {
     }
 }
 
-/// The iterator `try_chain` returns: every item of the first, then of
+/// The iterator `TryIterator::chain` returns: every item of the first, then of
 /// the second.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryChain<I, J> {
     a: I;
     b: J;
     first: bool;
+}
+
+impl<I: TryIterator, J: TryIterator<Item = I::Item, Error = I::Error>> Debug for TryChain<I, J> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TryChain") }
 }
 
 impl<I: TryIterator, J: TryIterator<Item = I::Item, Error = I::Error>> TryIterator for TryChain<I, J> {
@@ -1636,11 +1695,15 @@ impl<I: TryIterator, J: TryIterator<Item = I::Item, Error = I::Error>> TryIterat
     }
 }
 
-/// The iterator `try_take` returns: at most the first `n` items.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+/// The iterator `TryIterator::take` returns: at most the first `n` items.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryTake<I> {
     it: I;
     left: usize;
+}
+
+impl<I: TryIterator> Debug for TryTake<I> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TryTake") }
 }
 
 impl<I: TryIterator> TryIterator for TryTake<I> {
@@ -1655,11 +1718,15 @@ impl<I: TryIterator> TryIterator for TryTake<I> {
     }
 }
 
-/// The iterator `try_skip` returns: all but the first `n` items.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+/// The iterator `TryIterator::skip` returns: all but the first `n` items.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TrySkip<I> {
     it: I;
     n: usize;
+}
+
+impl<I: TryIterator> Debug for TrySkip<I> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TrySkip") }
 }
 
 impl<I: TryIterator> TryIterator for TrySkip<I> {
@@ -1676,13 +1743,17 @@ impl<I: TryIterator> TryIterator for TrySkip<I> {
     }
 }
 
-/// The iterator `try_step_by` returns: the first item, then every
+/// The iterator `TryIterator::step_by` returns: the first item, then every
 /// `step`th.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryStepBy<I> {
     it: I;
     step: usize;
     first: bool;
+}
+
+impl<I: TryIterator> Debug for TryStepBy<I> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TryStepBy") }
 }
 
 impl<I: TryIterator> TryIterator for TryStepBy<I> {
@@ -1697,14 +1768,18 @@ impl<I: TryIterator> TryIterator for TryStepBy<I> {
     }
 }
 
-/// The iterator `try_take_while` returns: items while `pred` accepts
+/// The iterator `TryIterator::take_while` returns: items while `pred` accepts
 /// them.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryTakeWhile<I> {
     it: I;
     pred: fn(I::Item) throws (I::Error) -> bool;
     /// `pred` rejected an item: no more are taken.
     done: bool;
+}
+
+impl<I: TryIterator> Debug for TryTakeWhile<I> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TryTakeWhile") }
 }
 
 impl<I: TryIterator> TryIterator for TryTakeWhile<I> {
@@ -1724,14 +1799,18 @@ impl<I: TryIterator> TryIterator for TryTakeWhile<I> {
     }
 }
 
-/// The iterator `try_skip_while` returns: items from the first `pred`
+/// The iterator `TryIterator::skip_while` returns: items from the first `pred`
 /// rejects.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TrySkipWhile<I> {
     it: I;
     pred: fn(I::Item) throws (I::Error) -> bool;
     /// An item passed `pred`'s test: the rest go through unchecked.
     done: bool;
+}
+
+impl<I: TryIterator> Debug for TrySkipWhile<I> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TrySkipWhile") }
 }
 
 impl<I: TryIterator> TryIterator for TrySkipWhile<I> {
@@ -1752,11 +1831,15 @@ impl<I: TryIterator> TryIterator for TrySkipWhile<I> {
 }
 
 /// `flat_map`: `cur` is the inner iterator being drained.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryFlatMap<I, U> {
     it: I;
     f: fn(I::Item) throws (I::Error) -> U;
     cur: <U as IntoIterator>::IntoIter | none;
+}
+
+impl<I: TryIterator, U: IntoIterator> Debug for TryFlatMap<I, U> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TryFlatMap") }
 }
 
 impl<I: TryIterator, U: IntoIterator> TryIterator for TryFlatMap<I, U> {
@@ -1780,13 +1863,17 @@ impl<I: TryIterator, U: IntoIterator> TryIterator for TryFlatMap<I, U> {
     }
 }
 
-/// The iterator `try_scan` returns: `f` of a running state and each
+/// The iterator `TryIterator::scan` returns: `f` of a running state and each
 /// item.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryScan<I, S> {
     it: I;
     state: S;
     f: fn(S, I::Item) throws (I::Error) -> S;
+}
+
+impl<I: TryIterator, S> Debug for TryScan<I, S> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TryScan") }
 }
 
 impl<I: TryIterator, S> TryIterator for TryScan<I, S> {
@@ -1802,12 +1889,16 @@ impl<I: TryIterator, S> TryIterator for TryScan<I, S> {
     }
 }
 
-/// The iterator `try_inspect` returns: the items, each shown to `f`
+/// The iterator `TryIterator::inspect` returns: the items, each shown to `f`
 /// first.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryInspect<I> {
     it: I;
     f: fn(I::Item) throws (I::Error);
+}
+
+impl<I: TryIterator> Debug for TryInspect<I> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TryInspect") }
 }
 
 impl<I: TryIterator> TryIterator for TryInspect<I> {
@@ -1822,13 +1913,17 @@ impl<I: TryIterator> TryIterator for TryInspect<I> {
     }
 }
 
-/// The iterator `try_peekable` returns: the items, with a look at the
+/// The iterator `TryIterator::peekable` returns: the items, with a look at the
 /// next.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryPeekable<I> {
     it: I;
     peeked: I::Item | none;
     has: bool;
+}
+
+impl<I: TryIterator> Debug for TryPeekable<I> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TryPeekable") }
 }
 
 impl<I: TryIterator> TryPeekable<I> {
@@ -1856,10 +1951,14 @@ impl<I: TryIterator> TryIterator for TryPeekable<I> {
 }
 
 /// A throw drops the chunk being built.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryChunks<I> {
     it: I;
     size: usize;
+}
+
+impl<I: TryIterator> Debug for TryChunks<I> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TryChunks") }
 }
 
 impl<I: TryIterator> TryIterator for TryChunks<I> {
@@ -1887,6 +1986,10 @@ pub struct Results<I> {
     it: I;
 }
 
+impl<I: TryIterator> Debug for Results<I> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Results") }
+}
+
 impl<I: TryIterator> Iterator for Results<I> {
     type Item = Result<I::Item, I::Error>;
     const fn next(ref self) -> Result<I::Item, I::Error> | none {
@@ -1902,9 +2005,13 @@ impl<I: TryIterator> Iterator for Results<I> {
 
 /// The `TryIterator` `iter::from_results` returns: an `Err` item is
 /// thrown.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct FromResults<I, T, E> {
     it: I;
+}
+
+impl<I: Iterator<Item = Result<T, E>>, T, E> Debug for FromResults<I, T, E> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("FromResults") }
 }
 
 impl<I: Iterator<Item = Result<T, E>>, T, E> TryIterator for FromResults<I, T, E> {
@@ -1920,11 +2027,15 @@ impl<I: Iterator<Item = Result<T, E>>, T, E> TryIterator for FromResults<I, T, E
 
 /// The `TryIterator` `iter::infallible` returns: the items, never an
 /// error.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct Infallible<I, E> {
     it: I;
     /// Never set: it only carries `E`.
     err: E | none;
+}
+
+impl<I: Iterator, E> Debug for Infallible<I, E> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Infallible") }
 }
 
 impl<I: Iterator, E> TryIterator for Infallible<I, E> {
@@ -1939,9 +2050,13 @@ impl<I: Iterator, E> TryIterator for Infallible<I, E> {
 }
 
 /// The `TryIterator` `iter::try_from_fn` returns: each item is `f()`.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct TryFromFn<T, E> {
     f: fn() throws (E) -> (T | none);
+}
+
+impl<T, E> Debug for TryFromFn<T, E> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TryFromFn") }
 }
 
 impl<T, E> TryIterator for TryFromFn<T, E> {

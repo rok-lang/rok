@@ -1,4 +1,5 @@
-//! Win32 helpers behind `rok::std` (stdlib 300: fs, io, env, process).
+//! Win32 helpers behind `rok::std` (stdlib 3: fs, env, process)
+//! and `rok::core::io` (stdlib 2.23).
 //! No ABI stability (805 §8.5.12 appendix). The same `rok_os_*` symbols
 //! and conventions as the POSIX `os`, with these differences:
 //!
@@ -241,7 +242,7 @@ pub extern "C" fn rok_os_socket_fd(s: u64) -> i32 {
 
 // Errors
 
-/// `IoErrorKind` discriminants (library/std/src/io.rok declares the same).
+/// `IoErrorKind` discriminants (library/core/src/io.rok declares the same).
 mod kind {
     pub const OTHER: i32 = 0;
     pub const NOT_FOUND: i32 = 1;
@@ -1539,8 +1540,8 @@ pub extern "C" fn rok_os_getenv(name: RokStr, buf: *mut u8, off: usize, len: usi
     }
 }
 
-/// Set (`value` given) or remove a variable. 0 or `-error`; removing an
-/// absent one is 0, as `unsetenv`.
+/// `unset == 0`: set the variable, else remove it. 0 or `-error`;
+/// removing an absent one is 0, as `unsetenv`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_os_setenv(name: RokStr, value: RokStr, unset: i32) -> i32 {
     let mut n = wide(name.bytes());

@@ -1,4 +1,4 @@
-// rok::std::os::unix::io: raw file descriptors (stdlib 305.9). `File`,
+// rok::std::os::unix::io: raw file descriptors (stdlib 3.11.2). `File`,
 // the sockets, the child pipes and the standard streams implement
 // `AsRawFd`; `FromRawFd` takes ownership of a descriptor.
 

@@ -65,15 +65,16 @@ pub fn f64_from(x: i64) -> f64 { reinterpret(x) }
 
 /// The `char` of the flat slot `x`; panics when `x` is not a Unicode
 /// scalar value.
+#[track_caller]
 pub const fn char_from(x: i32) -> char {
     match char::from_u32(x as u32) {
         c: char => c,
-        none => panic("wit: not a char"),
+        none => panic("wit::char_from: not a Unicode scalar value"),
     }
 }
 
 /// A discriminant out of range.
-pub const fn bad_case() -> ! { panic("wit: invalid variant case") }
+pub const fn bad_case() -> ! { panic("wit::bad_case: invalid variant case") }
 
 /// A copy or call that did not finish at once.
 pub const BLOCKED: i32 = -1;
@@ -83,7 +84,8 @@ pub const DROPPED: i32 = 1;
 /// A block freed by `free`.
 pub unsafe fn free(a: i32) { rok_free(a as u32 as usize); }
 
-/// The `n` UTF-8 bytes at `p` as a `str`; frees the block.
+/// The `n` UTF-8 bytes at `p` as a `str`; frees the block. Panics when
+/// the bytes are not UTF-8 (the block is not freed).
 pub unsafe fn str_take(p: i32, n: i32) -> str {
     if n == 0 {
         return "";
@@ -110,6 +112,10 @@ pub struct Blocks {
     list: List<i32>;
 }
 
+impl Debug for Blocks {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Blocks") }
+}
+
 impl Blocks {
     /// No blocks yet.
     pub const fn new() -> Blocks { Blocks { list: List::new() } }
@@ -122,7 +128,7 @@ impl Blocks {
         }
         let a = unsafe { rok_alloc_raw(size as u32 as usize, align as u32 as usize, 0) };
         if a == 0 {
-            panic("wit: out of memory");
+            panic("Blocks::alloc: out of memory");
         }
         self.list.push(a as i32);
         a as i32
@@ -164,6 +170,10 @@ pub struct Handle {
     owned: bool;
 }
 
+impl Debug for Handle {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Handle") }
+}
+
 impl Handle {
     /// An owned handle `h`: it can be passed on as `own`.
     pub const fn own(h: i32) -> Handle { Handle { cell: [h], owned: true } }
@@ -171,18 +181,20 @@ impl Handle {
     pub const fn borrowed(h: i32) -> Handle { Handle { cell: [h], owned: false } }
 
     /// The handle; panics once it was dropped or passed on.
+    #[track_caller]
     pub const fn get(self) -> i32 {
         let h = self.cell[0];
         if h < 0 {
-            panic("wit: resource used after it was dropped or passed on");
+            panic("Handle::get: resource used after it was dropped or passed on");
         }
         h
     }
 
     /// The handle, given away (an `own` parameter).
+    #[track_caller]
     pub const fn take(self) -> i32 {
         if !self.owned {
-            panic("wit: a borrowed resource cannot be passed as `own`");
+            panic("Handle::take: a borrowed resource cannot be passed as `own`");
         }
         let h = self.get();
         self.cell[0] = -1;
@@ -208,6 +220,10 @@ pub struct Table<T> {
     free: List<i32>;
 }
 
+impl<T> Debug for Table<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Table") }
+}
+
 // A component instance runs on one thread at a time.
 unsafe impl<T> Sync for Table<T> {}
 
@@ -231,10 +247,11 @@ impl<T> Table<T> {
     }
 
     /// The value of `rep`. Panics if it was taken already.
+    #[track_caller]
     pub fn get(self, rep: i32) -> T {
         match self.slots[rep as u32 as usize] {
             v: T => v,
-            none => panic("wit: resource used after it was dropped"),
+            none => panic("Table::get: resource used after it was dropped"),
         }
     }
 
@@ -265,6 +282,10 @@ extern "C" {
 /// passed between components.
 pub struct ErrorContext {
     handle: i32;
+}
+
+impl Debug for ErrorContext {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"ErrorContext {{ handle: {self.handle} }}") }
 }
 
 #[cfg(target_os = "wasi")]

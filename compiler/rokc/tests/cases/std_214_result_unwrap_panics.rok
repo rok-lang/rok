@@ -1,0 +1,16 @@
+// spec: std 214-error §2.14.2
+// `unwrap` on an `Err` panics naming itself and the error, and says how
+// to throw it instead. `Result` compares and clones when its parts do.
+// expect-exit: 101
+// expect-stderr: thread 'main' panicked at tests/cases/std_214_result_unwrap_panics.rok:15:16:
+// expect-stderr: Result::unwrap: called on `Err("bad")`; use `try r.get()` to throw it instead
+// expect-stdout: true false true
+
+fn main() {
+    let a: Result<i32, str> = Result::Ok(1);
+    let b: Result<i32, str> = Result::Err("bad");
+    let c = a.clone();
+    println(f"{a == c} {a == b} {b.clone() == b}");
+    let r: Result<i32, str> = b;
+    println(f"{r.unwrap()}");
+}

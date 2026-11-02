@@ -18,6 +18,25 @@ impl Debug for PublicKey {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"PublicKey {{ bits: {self.bits} }}") }
 }
 
+/// Immutable: a copy is the same key.
+impl Clone for PublicKey {
+    const fn clone(self) -> PublicKey { self }
+}
+
+/// Equal when `n` and `e` are.
+impl PartialEq for PublicKey {
+    fn eq(self, rhs: PublicKey) -> bool { self.e == rhs.e && self.modulus() == rhs.modulus() }
+}
+
+impl Eq for PublicKey {}
+
+impl Hash for PublicKey {
+    fn hash<H: Hasher>(self, ref h: H) {
+        self.modulus().hash(ref h);
+        self.e.hash(ref h);
+    }
+}
+
 /// `b` without its leading zero bytes.
 const fn strip(b: Slice<u8>) -> Slice<u8> {
     let i = 0usize;
@@ -382,12 +401,12 @@ impl PrivateKey {
     }
 }
 
-/// `using` release wipes.
+/// Wiped where it is released.
 impl Drop for PrivateKey {
     fn drop(ref self) { self.wipe(); }
 }
 
 /// The public key only.
 impl Debug for PrivateKey {
-    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"PrivateKey({self.public.bits} bits)") }
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"PrivateKey {{ bits: {self.public.bits}, .. }}") }
 }

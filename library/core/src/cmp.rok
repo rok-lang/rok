@@ -54,15 +54,20 @@ pub trait Ord: PartialOrd + Eq {
         if self.le(rhs) { self } else { rhs }
     }
 
-    /// The larger of `self` and `rhs`; `self` when they are equal.
+    /// The larger of `self` and `rhs`; `rhs` when they are equal.
     #[must_use]
     const fn max(self, rhs: Self) -> Self {
-        if self.ge(rhs) { self } else { rhs }
+        if rhs.ge(self) { rhs } else { self }
     }
 
     /// `low` when `self` is below it, `high` when above it, else `self`.
+    /// Panics when `low > high`.
     #[must_use]
+    #[track_caller]
     const fn clamp(self, low: Self, high: Self) -> Self {
+        if low.gt(high) {
+            panic("Ord::clamp: low > high; pass the bounds in order, `x.clamp(low, high)`");
+        }
         if self.lt(low) { return low; }
         if self.gt(high) { return high; }
         self

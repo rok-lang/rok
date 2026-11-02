@@ -64,12 +64,13 @@ copy_types!(
     i8, i16, i32, i64, isize, u8, u16, u32, u64, usize, f32, f64, bool, char, c_char, str
 );
 
-/// Cleanup on release (2.13.4). `using` (refs-lang 3.17) calls `drop` on
-/// every way out of its block. Plain `let`s get no implicit scope-exit
-/// drop (2.13.4 RAII); `using` is the deterministic path.
+/// Cleanup on release (2.13.4). A `Drop` value has one owner: `let b = a`
+/// moves it, and the compiler calls `drop` where its owner leaves scope (on
+/// every exit, and when a task ends) or where a `using` block (refs-lang
+/// 3.17) ends.
 pub trait Drop {
-    /// Releases what `self` holds; `using` calls it once on every way out of
-    /// its block.
+    /// Releases what `self` holds; called once, where the value is
+    /// released.
     #[lang("drop_method")]
     fn drop(ref self);
 }
@@ -110,6 +111,10 @@ impl<T> Handoff<T> {
     pub const fn get(self) -> T {
         self.value
     }
+}
+
+impl<T> Debug for Handoff<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Handoff") }
 }
 
 unsafe impl<T: Send> Send for Handoff<T> {}
@@ -395,6 +400,7 @@ pub unsafe fn share<T>(x: T) -> T { x }
 
 /// Put `value` into `dest` and return what it held: the way to move a
 /// part out of a struct (`replace(ref child.stdout, none)`).
+#[discardable]
 pub fn replace<T>(ref dest: T, value: T) -> T {
     let old = dest;
     dest = value;
@@ -402,6 +408,7 @@ pub fn replace<T>(ref dest: T, value: T) -> T {
 }
 
 /// `replace(ref dest, T::default())`.
+#[discardable]
 pub fn take<T: Default>(ref dest: T) -> T {
     let old = dest;
     dest = T::default();

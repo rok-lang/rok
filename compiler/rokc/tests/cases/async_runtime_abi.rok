@@ -95,7 +95,7 @@ let listener = try! TcpListener::bind(any);
 let client = try! TcpStream::connect(try! listener.local_addr());
 let (server_own, _) = try! listener.accept();
 let server = unsafe { share(server_own) };
-try! server.set_nonblocking(true);
+server.set_nonblocking(true);
 let reader = task::spawn(async {
     let buf = List::filled(16, 0u8);
     loop {

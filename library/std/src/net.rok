@@ -1,4 +1,4 @@
-// rok::std::net (stdlib 302): TCP / UDP sockets, addresses, DNS. Unix
+// rok::std::net (stdlib 3.2): TCP / UDP sockets, addresses, DNS. Unix
 // sockets are `os::unix::net`, the Linux kernel copies
 // `os::linux::net::TcpStreamExt`.
 //
@@ -12,11 +12,11 @@
 // `set_nonblocking(true)` makes them throw `WouldBlock`. `*_async` calls
 // suspend until the I/O driver sees the fd ready (refs-lang 7.7).
 //
-// Spec 302 lets the plain calls suspend inside a task; here they block
-// the worker, because a sync fn cannot suspend a stackless coroutine.
+// A plain call never suspends (3.2.0): inside a task it blocks the
+// worker, because a sync fn cannot suspend a stackless coroutine.
 //
-// `read(buf)` fills `buf[0..n]` of a pre-sized `List<u8>`; writes take
-// any `AsBytes`. No IPv6 multicast. TLS 1.3 is `tls` (302.5).
+// `read(buf)` fills `buf[0..n]` of a `SliceMut<u8>`; writes take
+// any `AsBytes`. No IPv6 multicast. TLS 1.3 is `tls` (3.2.5).
 
 use rok::core::convert::AsBytes;
 use rok::core::io::{Close, IoError, IoErrorKind, Read, Write, AsyncRead, AsyncWrite, AsyncClose};
@@ -35,7 +35,7 @@ use rok::std::os::windows::io::{AsRawSocket, FromRawSocket, RawSocket, raw_socke
 
 pub mod tls;
 
-// addresses (302.4)
+// addresses (3.2.4)
 
 /// An IPv4 address.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -98,6 +98,13 @@ impl Ipv6Addr {
             if self.segments[i] != 0u16 { return false; }
         }
         self.segments[7] == 1u16
+    }
+}
+
+/// The address a big-endian number spells.
+impl From<u32> for Ipv4Addr {
+    const fn from(bits: u32) -> Ipv4Addr {
+        Ipv4Addr::new((bits >> 24) as u8, (bits >> 16) as u8, (bits >> 8) as u8, bits as u8)
     }
 }
 
@@ -504,7 +511,7 @@ const fn addr_at(w: GcBuf<i64>, at: usize) -> SocketAddr {
     }
 }
 
-// DNS (302.4)
+// DNS (3.2.4)
 
 const MAX_ADDRS: usize = 32;
 
@@ -1023,11 +1030,11 @@ impl Sock {
     }
 }
 
-// sockets (302.0)
+// sockets (3.2.9)
 
 /// An address family.
 #[non_exhaustive]
-#[derive(PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Domain {
     /// `AF_INET`.
     Ipv4,
@@ -1051,7 +1058,7 @@ impl Domain {
 
 /// A socket type.
 #[non_exhaustive]
-#[derive(PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum SocketType {
     /// `SOCK_STREAM`: TCP over IP.
     Stream,
@@ -1072,7 +1079,7 @@ impl SocketType {
 }
 
 /// An IP protocol number (the IANA registry).
-#[derive(PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Protocol {
     number: i32;
 }
@@ -1097,9 +1104,14 @@ impl Protocol {
 /// options, and each call one system call (`bind` does not set
 /// `SO_REUSEADDR`, `connect` does not resolve). `TcpStream::from(s)`,
 /// `TcpListener::from(s)` and `UdpSocket::from(s)` take it over once it
-/// is set up, and `Socket::from` goes back. Copies share the socket.
+/// is set up, and `Socket::from` goes back. It has one owner: `let b = a`
+/// moves it.
 pub struct Socket {
     sock: Sock;
+}
+
+impl Debug for Socket {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Socket") }
 }
 
 impl Socket {
@@ -1337,7 +1349,7 @@ impl Drop for Socket {
     fn drop(ref self) { self.sock.discard(); }
 }
 
-// TCP (302.1)
+// TCP (3.2.1)
 
 /// Which half of a connection `shutdown` closes.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -1347,8 +1359,8 @@ pub enum Shutdown {
     Both,
 }
 
-/// A TCP connection. Copies share the socket; `try s.close()` (or
-/// leaving a `using` block) closes it for all.
+/// A TCP connection. It has one owner (`let b = a` moves it); close it
+/// with `try s.close()` or `using`.
 pub struct TcpStream {
     sock: Sock;
 }
@@ -1467,16 +1479,16 @@ impl TcpStream {
     pub fn ttl(self) throws (IoError) -> u32 { (try self.sock.getopt(11)) as u32 }
 
     /// Make a blocking read throw `TimedOut` after `dur`; `none` waits forever.
-    pub const fn set_read_timeout(self, dur: Duration | none) throws (IoError) { self.sock.set_timeout(0, dur); }
+    pub const fn set_read_timeout(self, dur: Duration | none) { self.sock.set_timeout(0, dur); }
     /// Make a blocking write throw `TimedOut` after `dur`; `none` waits forever.
-    pub const fn set_write_timeout(self, dur: Duration | none) throws (IoError) { self.sock.set_timeout(1, dur); }
+    pub const fn set_write_timeout(self, dur: Duration | none) { self.sock.set_timeout(1, dur); }
     /// The read timeout; `none` when reads wait forever.
     pub const fn read_timeout(self) -> Duration | none { self.sock.timeout(0) }
     /// The write timeout; `none` when writes wait forever.
     pub const fn write_timeout(self) -> Duration | none { self.sock.timeout(1) }
 
     /// Make the blocking calls throw `WouldBlock` instead of waiting.
-    pub const fn set_nonblocking(self, nb: bool) throws (IoError) { self.sock.set_nonblocking(nb); }
+    pub const fn set_nonblocking(self, nb: bool) { self.sock.set_nonblocking(nb); }
 
     /// A second descriptor on the same socket (`dup`), with this one's
     /// timeouts and blocking mode.
@@ -1617,7 +1629,7 @@ impl TcpListener {
     }
 
     /// Make the blocking calls throw `WouldBlock` instead of waiting.
-    pub const fn set_nonblocking(self, nb: bool) throws (IoError) { self.sock.set_nonblocking(nb); }
+    pub const fn set_nonblocking(self, nb: bool) { self.sock.set_nonblocking(nb); }
 
     /// `try for s in l.incoming() { .. }`: connections forever; a failed
     /// `accept` ends the loop with its error. The listener stays its
@@ -1661,7 +1673,7 @@ impl Drop for TcpListener {
 }
 
 /// `TcpListener::incoming`: a view of the listener.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct Incoming {
     sock: Sock;
 }
@@ -1679,9 +1691,9 @@ impl TryIterator for Incoming {
     }
 }
 
-// UDP (302.2)
+// UDP (3.2.2)
 
-/// A UDP socket. Copies share the socket.
+/// A UDP socket. It has one owner: `let b = a` moves it.
 pub struct UdpSocket {
     sock: Sock;
 }
@@ -1770,19 +1782,19 @@ impl UdpSocket {
     /// `IP_TTL`.
     pub fn ttl(self) throws (IoError) -> u32 { (try self.sock.getopt(11)) as u32 }
 
-    /// Join the multicast group `addr` on the interface `iface`
-    /// (`0.0.0.0`: the default).
-    pub fn join_multicast_v4(self, addr: Ipv4Addr, iface: Ipv4Addr) throws (IoError) {
+    /// Join the multicast group `addr` on the interface whose address is
+    /// `interface` (`0.0.0.0`: the default).
+    pub fn join_multicast_v4(self, addr: Ipv4Addr, interface: Ipv4Addr) throws (IoError) {
         let fd = try self.sock.enter();
-        let r = unsafe { rok_net_multicast_v4(fd, addr.to_bits(), iface.to_bits(), 1) };
+        let r = unsafe { rok_net_multicast_v4(fd, addr.to_bits(), interface.to_bits(), 1) };
         self.sock.done();
         try check(r as i64, "join_multicast_v4");
     }
 
-    /// Leave the multicast group `addr` on `iface`.
-    pub fn leave_multicast_v4(self, addr: Ipv4Addr, iface: Ipv4Addr) throws (IoError) {
+    /// Leave the multicast group `addr` on `interface`.
+    pub fn leave_multicast_v4(self, addr: Ipv4Addr, interface: Ipv4Addr) throws (IoError) {
         let fd = try self.sock.enter();
-        let r = unsafe { rok_net_multicast_v4(fd, addr.to_bits(), iface.to_bits(), 0) };
+        let r = unsafe { rok_net_multicast_v4(fd, addr.to_bits(), interface.to_bits(), 0) };
         self.sock.done();
         try check(r as i64, "leave_multicast_v4");
     }
@@ -1801,12 +1813,16 @@ impl UdpSocket {
     }
 
     /// Make a blocking read throw `TimedOut` after `dur`; `none` waits forever.
-    pub const fn set_read_timeout(self, dur: Duration | none) throws (IoError) { self.sock.set_timeout(0, dur); }
+    pub const fn set_read_timeout(self, dur: Duration | none) { self.sock.set_timeout(0, dur); }
     /// Make a blocking write throw `TimedOut` after `dur`; `none` waits forever.
-    pub const fn set_write_timeout(self, dur: Duration | none) throws (IoError) { self.sock.set_timeout(1, dur); }
+    pub const fn set_write_timeout(self, dur: Duration | none) { self.sock.set_timeout(1, dur); }
+    /// The read timeout; `none` waits forever.
+    pub const fn read_timeout(self) -> Duration | none { self.sock.timeout(0) }
+    /// The write timeout; `none` waits forever.
+    pub const fn write_timeout(self) -> Duration | none { self.sock.timeout(1) }
 
     /// Make the blocking calls throw `WouldBlock` instead of waiting.
-    pub const fn set_nonblocking(self, nb: bool) throws (IoError) { self.sock.set_nonblocking(nb); }
+    pub const fn set_nonblocking(self, nb: bool) { self.sock.set_nonblocking(nb); }
 
     /// A second descriptor on the same socket (`dup`).
     pub fn try_clone(self) throws (IoError) -> UdpSocket {
@@ -1848,7 +1864,7 @@ impl Drop for UdpSocket {
     fn drop(ref self) { self.sock.discard(); }
 }
 
-// raw sockets (305.9)
+// raw sockets (3.11.2, 3.11.3)
 
 #[cfg(target_family = "unix")]
 impl AsRawFd for TcpStream {
@@ -1930,7 +1946,7 @@ impl FromRawSocket for Socket {
     unsafe fn from_raw_socket(s: RawSocket) -> Socket { Socket { sock: sock_of(socket_fd(s)) } }
 }
 
-// zero-copy hooks (302.7, Linux)
+// zero-copy hooks (3.11.6, Linux)
 
 #[cfg(target_os = "linux")]
 impl TcpStreamExt for TcpStream {
@@ -1979,7 +1995,7 @@ impl TcpStreamExt for TcpStream {
     }
 }
 
-// conveniences (302.6)
+// conveniences (3.2.6)
 
 /// `TcpStream::connect(addr)`.
 pub fn tcp_connect<A: ToSocketAddrs>(addr: A) throws (IoError) -> TcpStream {

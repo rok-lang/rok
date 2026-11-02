@@ -73,8 +73,9 @@ impl Debug for Value {
 }
 
 /// Structural. Dict entries and fields compare as `Dict` does
-/// (order ignored); `{}` as a struct equals `{}` as a dict. Floats compare by identity (NaN equals NaN, -0.0
-/// differs from 0.0) so `==` stays reflexive for keys.
+/// (order ignored); `{}` as a struct equals `{}` as a dict. Floats
+/// compare by identity (NaN equals NaN, -0.0 differs from 0.0) so `==`
+/// stays reflexive for keys.
 impl PartialEq for Value {
     const fn eq(self, rhs: Value) -> bool {
         match (norm(self), norm(rhs)) {

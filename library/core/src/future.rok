@@ -46,11 +46,11 @@ impl Waker {
     pub fn wake(self) {
         rok::core::task::wake_task(self.task);
     }
+}
 
-    /// Another handle to the same task.
-    pub const fn clone(self) -> Waker {
-        self
-    }
+/// A copy wakes the same task.
+impl Clone for Waker {
+    const fn clone(self) -> Waker { self }
 }
 
 /// What a `poll` gets from the executor (2.20.2).
@@ -200,6 +200,8 @@ const fn visit_frame<S>(resume: S, m: Memo) {
 #[lang("future_trait")]
 pub trait Future {
     type Output;
+    /// `Ready(output)` once done, else `Pending`; the waker in `ctx` is
+    /// woken when it may progress.
     fn poll(ref self, ref ctx: Context) -> Poll<Output>;
 }
 
@@ -207,6 +209,7 @@ pub trait Future {
 pub trait IntoFuture {
     type Output;
     type IntoFuture: Future<Output = Output>;
+    /// A future for the value.
     fn into_future(self) -> IntoFuture;
 }
 

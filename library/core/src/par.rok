@@ -299,12 +299,13 @@ impl Debug for Scope {
 
 impl Scope {
     /// Run `f` on the parallel pool and return a handle to join its result.
-    /// The task is cancelled with the scope; every task is joined before
-    /// `par::scope` returns. Panics if called after the scope ended.
+    /// Under `try_scope` the task is cancelled when the scope is; every task
+    /// is joined before the scope returns. Panics if called after the scope
+    /// ended.
     #[track_caller]
     pub fn spawn<T: Send>(self, f: fn() -> T + Send) -> ScopeHandle<T> {
         if self.closed.load() {
-            panic("par::Scope::spawn after its `par::scope` returned: call `spawn` inside the closure passed to `par::scope`");
+            panic("Scope::spawn: the scope has ended; call `spawn` inside the closure passed to `par::scope`");
         }
         unsafe {
             let result: GcBuf<T> = buf_new(1);
@@ -352,8 +353,7 @@ impl<T> ScopeHandle<T> {
 /// the children"). The first error cancels the scope: tasks that have
 /// not started never run (a running one finishes: a sync closure has no
 /// cancellation point), `try_scope` waits for the rest and throws that
-/// error. Not in spec 2.19, whose `scope` takes a non-throwing
-/// `fn(Scope)`.
+/// error.
 pub fn try_scope<E: Send>(f: fn(TryScope<E>) throws (E)) throws (E) {
     unsafe {
         let err: GcBuf<E> = buf_new(1);

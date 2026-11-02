@@ -7,6 +7,7 @@
 //!                          4=LARGE, 5=IMMORTAL (unused); 6=UNLOGGED, 7=CARDED
 //!                          are this runtime's write-barrier bits,
 //!                          8=NOMOVE, 9=NOEVAC its evacuation bits,
+//!                          10=SATB, 11=SCANNED a concurrent mark's,
 //!                          12=WIPE: zeroed when freed; 13..=31 a `par`
 //!                          visit's, `VISIT_*`)
 //!   8  : `gc_word`   u64 (forwarding pointer or LOS payload size)

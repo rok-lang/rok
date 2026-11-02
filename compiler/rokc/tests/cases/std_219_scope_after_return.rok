@@ -2,7 +2,7 @@
 // needs: threads
 // expect-exit: 101
 // expect-stderr: thread 'main' panicked at tests/cases/std_219_scope_after_return.rok:13:13:
-// expect-stderr: par::Scope::spawn after its `par::scope` returned: call `spawn` inside the closure passed to `par::scope`
+// expect-stderr: Scope::spawn: the scope has ended; call `spawn` inside the closure passed to `par::scope`
 // expect-stdout:
 
 // A `Scope` kept past its `par::scope` cannot spawn: the panic names the

@@ -1,7 +1,7 @@
 // rok::bare::gc - keeping GC objects in place for raw pointers (stdlib
 // spec 1.6). A `Pinned<T>` from `pin` keeps the object holding `T`'s
-// data where it is (`rok_gc_pin`, counted) until it is dropped, at the
-// end of its `using` block. `GcPtr<T>` is a managed reference to one `T`
+// data where it is (`rok_gc_pin`, counted) until it is released, where
+// its owner leaves scope. `GcPtr<T>` is a managed reference to one `T`
 // on the GC heap (1.6.3); `Weak<T>` refers to a `GcPtr<T>`'s object
 // without keeping it alive (a `WEAK_REF` word, refs-lang 8.2.8).
 
@@ -139,8 +139,8 @@ impl<T> Debug for Pinned<T> {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Pinned") }
 }
 
-/// Pin `obj`'s data until the returned guard is dropped; bind it with
-/// `using` (a `Pinned` dropped by nothing stays pinned).
+/// Pin `obj`'s data until the returned guard is released, where its
+/// owner leaves scope.
 pub fn pin<T: Pinnable>(obj: T) -> Pinned<T> {
     let held = obj.gc_object();
     if let b: GcBuf<u8> = held {

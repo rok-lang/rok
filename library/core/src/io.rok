@@ -7,9 +7,8 @@
 // anything `AsBytes`. Bytes cross to the runtime as `GcBuf<u8>` regions
 // `(buf, off, len)`, and become a `str` only through the UTF-8 check.
 //
-// Async methods take `self`: every `AsyncRead` / `AsyncWrite` value is a
-// handle, and copies share the stream and its position. The buffers and
-// `Cursor` keep their state in shared lists for that reason.
+// Async methods take `ref self`. A buffer or `Cursor` copy shares the
+// stream and its position: they keep their state in shared lists.
 
 // The runtime's numbering of the kinds (`rok_os_errno_kind`).
 const KIND_OTHER: i32 = 0;
@@ -715,9 +714,13 @@ async yield fn lines_of<R: AsyncBufRead>(r: R) throws (IoError) -> str {
 }
 
 /// `bytes_async()`: a `TryStream` of the bytes.
-#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
+#[must_use("stream is lazy and does nothing unless polled: walk it with `try for await`, or call `try await {}.collect()`")]
 pub struct BytesStream {
     s: TryAsyncStream<u8, IoError>;
+}
+
+impl Debug for BytesStream {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("BytesStream") }
 }
 
 impl TryStream for BytesStream {
@@ -729,9 +732,13 @@ impl TryStream for BytesStream {
 }
 
 /// `lines_async()`: a `TryStream` of the lines.
-#[must_use("stream is lazy and does nothing unless polled: walk it with `for await`, or call `await {}.collect()`")]
+#[must_use("stream is lazy and does nothing unless polled: walk it with `try for await`, or call `try await {}.collect()`")]
 pub struct LinesStream {
     s: TryAsyncStream<str, IoError>;
+}
+
+impl Debug for LinesStream {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("LinesStream") }
 }
 
 impl TryStream for LinesStream {
@@ -745,7 +752,7 @@ impl TryStream for LinesStream {
 // iterators and adapters
 
 /// `r.lines()`: each line without `\n` / `\r\n`; a failed read throws.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct Lines<R> {
     r: R;
 }
@@ -765,10 +772,14 @@ impl<R: BufRead> TryIterator for Lines<R> {
 }
 
 /// `r.split(delim)`: the pieces between `delim` bytes.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct Split<R> {
     r: R;
     delim: u8;
+}
+
+impl<R> Debug for Split<R> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Split") }
 }
 
 impl<R: BufRead> TryIterator for Split<R> {
@@ -784,7 +795,7 @@ impl<R: BufRead> TryIterator for Split<R> {
 
 /// `r.bytes()`: the bytes one at a time; a failed read throws, and the
 /// next `next` reads on.
-#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `try for`, or call `try {}.collect()`")]
 pub struct Bytes<R> {
     r: R;
     one: List<u8>;
@@ -807,6 +818,10 @@ impl<R: Read> TryIterator for Bytes<R> {
 pub struct Take<R> {
     r: R;
     left: List<u64>;
+}
+
+impl<R> Debug for Take<R> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Take") }
 }
 
 impl<R> Take<R> {
@@ -835,6 +850,10 @@ pub struct Chain<A, B> {
     a: A;
     b: B;
     first: List<bool>;
+}
+
+impl<A, B> Debug for Chain<A, B> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Chain") }
 }
 
 impl<A, B> Chain<A, B> {
@@ -891,7 +910,7 @@ impl<R> BufReader<R> {
     #[track_caller]
     const fn take_buffered(self, n: usize) {
         if n > self.buffer_len() {
-            panic(f"consume: {n} bytes past the {self.buffer_len()} buffered");
+            panic(f"BufReader::consume: {n} bytes past the {self.buffer_len()} buffered; consume at most what fill_buf returned");
         }
         self.at[0] += n;
     }
@@ -1133,6 +1152,10 @@ pub struct Cursor<T> {
     pos: List<u64>;
 }
 
+impl<T> Debug for Cursor<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Cursor") }
+}
+
 impl<T> Cursor<T> {
     /// A cursor over `inner` at position 0.
     pub const fn new(inner: T) -> Cursor<T> { Cursor { inner: inner, pos: [0u64] } }
@@ -1141,7 +1164,7 @@ impl<T> Cursor<T> {
     /// Move the cursor to `pos`; past the end, reads give nothing.
     pub const fn set_position(self, pos: u64) { self.pos[0] = pos; }
     /// The underlying buffer.
-    pub const fn get_ref(self) -> T { self.inner }
+    pub const fn inner(self) -> T { self.inner }
     /// The underlying buffer, giving up the cursor.
     pub const fn into_inner(self) -> T { self.inner }
 }
@@ -1171,7 +1194,7 @@ impl<T: AsBytes> BufRead for Cursor<T> {
 
     #[track_caller]
     fn consume(ref self, n: usize) {
-        if n > self.rest().len() { panic(f"consume: {n} bytes past the {self.rest().len()} left"); }
+        if n > self.rest().len() { panic(f"Cursor::consume: {n} bytes past the {self.rest().len()} buffered; consume at most what fill_buf returned"); }
         self.pos[0] += n as u64;
     }
 }
@@ -1240,11 +1263,23 @@ impl AsyncWrite for Cursor<List<u8>> {
 
 /// `empty()`: a stream at its end.
 pub struct Empty {}
+
+impl Debug for Empty {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Empty") }
+}
 /// `sink()`: a writer that discards everything.
 pub struct Sink {}
+
+impl Debug for Sink {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Sink") }
+}
 /// `repeat(byte)`: an endless stream of one byte.
 pub struct Repeat {
     byte: u8;
+}
+
+impl Debug for Repeat {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Repeat") }
 }
 
 /// A reader at its end.
@@ -1405,7 +1440,7 @@ impl BufRead for Stdin {
 
     #[track_caller]
     fn consume(ref self, n: usize) {
-        if n > self.held() { panic(f"consume: {n} bytes past the {self.held()} buffered"); }
+        if n > self.held() { panic(f"Stdin::consume: {n} bytes past the {self.held()} buffered; consume at most what fill_buf returned"); }
         self.at[0] += n;
     }
 }
