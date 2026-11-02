@@ -1,0 +1,132 @@
+// only-os: windows
+// needs: process
+// expect-exit: 0
+// expect-stdout:
+// file runs leak: 0
+// file: [run 29]
+// failed spawn leak: 0 NotFound
+// rerun: InvalidInput
+// rerun leak: 0
+// taken: [piped]
+// taken again: true true
+// taken leak: 0
+// left in child leak: 0
+// output leak: 0
+
+// The Windows twin of the `Stdio` ownership rules: a `File` moved into
+// `Stdio::File` is closed by the run, success or failure; taken pipes
+// close with their owner, the rest with the `Child`. Counted in process
+// handles, after a warm-up round: the first spawn opens a few handles
+// that stay for good.
+use rok::bare::ptr::{Ptr, addr_of};
+use rok::core::io::{IoError, IoErrorKind};
+use rok::std::env;
+use rok::std::fs;
+use rok::std::fs::File;
+use rok::std::path::Path;
+use rok::std::process::{Command, Stdio};
+
+#[link("kernel32")]
+extern "system" {
+    fn GetCurrentProcess() -> usize;
+    fn GetProcessHandleCount(process: usize, count: Ptr<u32>) -> i32;
+}
+
+fn handles() -> i64 {
+    let n = 0u32;
+    if unsafe { GetProcessHandleCount(GetCurrentProcess(), addr_of(n)) } == 0 {
+        panic("GetProcessHandleCount failed");
+    }
+    n as i64
+}
+
+fn cmd(script: str) -> Command {
+    Command::new("cmd").args(["/c", script])
+}
+
+fn echo_back() -> Command {
+    Command::new("findstr").arg("^")
+}
+
+fn piped_round() throws (IoError) -> str {
+    let child = try echo_back().stdin(Stdio::Piped).stdout(Stdio::Piped).spawn();
+    let si = child.take_stdin() ?? panic("stdin not piped");
+    try si.write_all("piped\n");
+    try si.close();
+    let so = child.take_stdout() ?? panic("stdout not piped");
+    let text = try so.read_to_str();
+    try so.close();
+    if !(try child.wait()).success() { panic("findstr failed"); }
+    text.trim()
+}
+
+fn warm_up(out: Path) throws (IoError) {
+    let f = try File::create(out);
+    _ = try cmd("echo warm").stdout(Stdio::File(f)).status();
+    let g = try File::open(out);
+    try Command::new("no-such-program-rok").stdin(Stdio::File(g)).spawn() catch _ {};
+    _ = try piped_round();
+    let child = try cmd("echo left").stdin(Stdio::Piped).stdout(Stdio::Piped).stderr(Stdio::Piped).spawn();
+    _ = try child.wait();
+    _ = try cmd("echo out& echo err 1>&2").output();
+}
+
+fn main() throws (IoError) {
+    let out = env::temp_dir() / "rok_stdio_ownership_windows.txt";
+    try warm_up(out);
+
+    let before = handles();
+    for i in 0..30 {
+        let f = try File::create(out);
+        let st = try cmd(f"echo run {i}").stdout(Stdio::File(f)).status();
+        if !st.success() { panic("cmd failed"); }
+    }
+    println(f"file runs leak: {handles() - before}");
+    println(f"file: [{(try fs::read_to_str(out)).trim()}]");
+
+    before = handles();
+    let kind = IoErrorKind::Other;
+    for _ in 0..10 {
+        let f = try File::open(out);
+        try Command::new("no-such-program-rok").stdin(Stdio::File(f)).spawn() catch e {
+            kind = e.kind();
+            continue;
+        };
+        panic("spawned a missing program");
+    }
+    println(f"failed spawn leak: {handles() - before} {kind:?}");
+
+    before = handles();
+    let f = try File::open(out);
+    let c = echo_back().stdin(Stdio::File(f)).stdout(Stdio::Null);
+    _ = try c.status();
+    try c.status() catch e { println(f"rerun: {e.kind():?}"); };
+    println(f"rerun leak: {handles() - before}");
+
+    before = handles();
+    let text = "";
+    for _ in 0..20 {
+        text = try piped_round();
+    }
+    println(f"taken: [{text}]");
+    let child = try cmd("exit 0").stdout(Stdio::Piped).spawn();
+    println(f"taken again: {child.take_stdin() is none} {child.take_stderr() is none}");
+    let so = child.take_stdout() ?? panic("stdout not piped");
+    try so.close();
+    _ = try child.wait();
+    println(f"taken leak: {handles() - before}");
+
+    before = handles();
+    for _ in 0..20 {
+        let child = try cmd("echo left").stdin(Stdio::Piped).stdout(Stdio::Piped).stderr(Stdio::Piped).spawn();
+        _ = try child.wait();
+    }
+    println(f"left in child leak: {handles() - before}");
+
+    before = handles();
+    for _ in 0..20 {
+        _ = try cmd("echo out& echo err 1>&2").output();
+    }
+    println(f"output leak: {handles() - before}");
+    try fs::remove_file(out);
+}
