@@ -1336,16 +1336,31 @@ impl Summary {
 }
 
 /// The name prefix of a ROKHIR entry for the functions used as values
-/// with these parameter types (`e`: a closure, its environment first).
+/// with these parameter types (`e`: a closure, its environment first),
+/// then `RET_KEY` and the return type when it is one `ret_key` keeps.
 const FN_VALUE: &str = "#fn";
+const RET_KEY: char = '\u{1e}';
 
 /// A function used as a value: a call through a function value of its
-/// parameter types may reach it.
+/// parameter and return types may reach it.
 struct Cand {
     /// A closure: parameter 0 is its environment.
     env: bool,
     keys: Vec<String>,
+    /// `None`: any call of these parameter types may reach it.
+    ret: Option<String>,
     from: CandFrom,
+}
+
+/// The key a call through a function value matches on its return type.
+/// `None` for a type a function's own return type may differ from in
+/// form: unknown or generic, a sum, a function or closure type.
+fn ret_key(ctx: &LowerCtx<'_>, t: &HirTy) -> Option<String> {
+    let loose = matches!(
+        t,
+        HirTy::Unknown | HirTy::Any | HirTy::Sum(_) | HirTy::Fn(..) | HirTy::Closure { .. }
+    ) || super::bounds::has_param(ctx, t);
+    (!loose).then(|| t.stable_key())
 }
 
 enum CandFrom {
@@ -1895,7 +1910,12 @@ pub(super) fn check(
             let Some(s) = sums.get(id).filter(|s| !s.is_empty()) else {
                 continue;
             };
-            let name = std::iter::once(format!("{FN_VALUE}{}", if k.env { "e" } else { "" }))
+            let ret = k
+                .ret
+                .as_ref()
+                .map_or_else(String::new, |r| format!("{RET_KEY}{r}"));
+            let head = format!("{FN_VALUE}{}{ret}", if k.env { "e" } else { "" });
+            let name = std::iter::once(head)
                 .chain(k.keys.iter().cloned())
                 .collect::<Vec<_>>()
                 .join("\u{1f}");
@@ -1941,6 +1961,7 @@ fn candidates(
         out.entry(keys.len()).or_default().push(Cand {
             env,
             keys,
+            ret: ret_key(c.ctx, &f.ret_ty),
             from: CandFrom::Fn(id),
         });
     }
@@ -1952,10 +1973,15 @@ fn candidates(
         let Some(s) = Summary::decode(text) else {
             continue;
         };
+        let (env, ret) = match head.split_once(RET_KEY) {
+            Some((env, ret)) => (env, Some(ret.to_owned())),
+            None => (head, None),
+        };
         let keys: Vec<String> = parts.map(str::to_owned).collect();
         out.entry(keys.len()).or_default().push(Cand {
-            env: head == "e",
+            env: env == "e",
             keys,
+            ret,
             from: CandFrom::Stored(Rc::new(s)),
         });
     }
@@ -4313,7 +4339,7 @@ impl<'h> Walk<'_, 'h> {
                     HirExprKind::FnRef(id) => {
                         self.callee(*id).map(|s| Rc::new(s.remap(&|i| Some(i + 1))))
                     }
-                    _ => self.indirect(args),
+                    _ => self.indirect(args, &e.ty),
                 };
                 if let Some(s) = s {
                     self.kept_views(&s, &all, e, Some(callee));
@@ -4325,7 +4351,7 @@ impl<'h> Walk<'_, 'h> {
                 all.extend(args.iter());
                 let s = match &closure.kind {
                     HirExprKind::ClosureValue { fn_id, .. } => self.callee(*fn_id),
-                    _ => self.indirect(args),
+                    _ => self.indirect(args, &e.ty),
                 };
                 if let Some(s) = s {
                     self.kept_views(&s, &all, e, Some(closure));
@@ -4802,17 +4828,17 @@ impl<'h> Walk<'_, 'h> {
         self.c.summary(id).filter(|s| !s.is_empty())
     }
 
-    /// A call through a function value with these arguments: every
-    /// function used as a value with their types (argument 0 is the
-    /// function value).
-    fn indirect(&mut self, args: &[HirExpr]) -> Option<Rc<Summary>> {
+    /// A call through a function value with these arguments, of type
+    /// `ret`: every function used as a value with their types.
+    fn indirect(&mut self, args: &[HirExpr], ret: &HirTy) -> Option<Rc<Summary>> {
         let c = self.c;
         let cands = c.cands.get(&args.len())?;
+        let ret = ret_key(c.ctx, ret);
         let mut out = Summary::default();
         for k in cands {
             let fits = k.keys.iter().zip(args).all(|(key, a)| {
                 matches!(a.ty, HirTy::Unknown | HirTy::Any) || *key == a.ty.stable_key()
-            });
+            }) && (k.ret.is_none() || ret.is_none() || k.ret == ret);
             if !fits {
                 continue;
             }

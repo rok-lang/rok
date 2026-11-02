@@ -1,0 +1,19 @@
+// needs: threads
+// expect-error: `items` was sent through a channel
+// A call through a function value reaches the functions of its type: the
+// one that sends its argument takes `items` away.
+use rok::std::thread;
+
+fn pick(f: fn(List<i32>) -> i32) -> fn(List<i32>) -> i32 { f }
+
+fn main() {
+    let (tx, rx) = channel::<List<i32>>();
+    let send: fn(List<i32>) -> i32 = |x| { try! tx.send(x); 0 };
+    let g = pick(send);
+    let t = thread::spawn(|| { if let l: List<i32> = rx.recv() { for i in 0..200000 { l.push(i); } } 0 });
+    let items: List<i32> = [1];
+    let n = g(items);
+    items.push(2);
+    let _ = try! t.join();
+    println(f"{n} {items.len()}");
+}
