@@ -145,6 +145,7 @@ impl<'src> Lexer<'src> {
                         | TokenKind::FStrEnd(_)
                         | TokenKind::CharLit(_)
                         | TokenKind::CCharLit(_)
+                        | TokenKind::ByteCharLit(_)
                         | TokenKind::RParen
                         | TokenKind::RBracket
                         | TokenKind::RBrace
@@ -293,7 +294,8 @@ impl<'src> Lexer<'src> {
                 self.fstr.push(Frame::Text { triple, start });
                 TokenKind::FStrStart(triple)
             }
-            b'c' if next == Some(b'\'') => self.lex_char_lit(true),
+            b'c' if next == Some(b'\'') => self.lex_char_lit(Some('c')),
+            b'b' if next == Some(b'\'') => self.lex_char_lit(Some('b')),
             b'b' if next == Some(b'"') => self.lex_byte_str_lit(),
             d if d.is_ascii_digit() => self.lex_number(),
             _ if !self.ext_ops.is_empty() && self.peek_ext_op().is_some() => {
@@ -935,12 +937,14 @@ impl<'src> Lexer<'src> {
             }
             (self.pos, self.line, self.col) = save;
         }
-        self.lex_char_lit(false)
+        self.lex_char_lit(None)
     }
 
-    fn lex_char_lit(&mut self, c_char: bool) -> TokenKind {
+    /// `'x'`, `c'x'` or (`prefix` `b`) the byte `b'x'`.
+    fn lex_char_lit(&mut self, prefix: Option<char>) -> TokenKind {
         let lit_start = self.pos;
-        self.advance(usize::from(c_char) + 1); // optional `c`, then `'`
+        let c_char = prefix.is_some();
+        self.advance(usize::from(c_char) + 1); // optional `c` / `b`, then `'`
         let start = self.pos;
         let Some(end) = self.scan_quoted(b'\'') else {
             self.error_from(Code::UNTERMINATED, lit_start, "unterminated char literal");
@@ -964,7 +968,9 @@ impl<'src> Lexer<'src> {
                                 Code::CHAR_LITERAL_LENGTH,
                                 lit_start,
                                 format!(
-                                    "`c'{body}'` must be one byte; write non-ASCII bytes as `\\xHH`"
+                                    "`{}'{body}'` must be one byte; write non-ASCII bytes as \
+                                     `\\xHH`",
+                                    prefix.unwrap_or('c')
                                 ),
                             );
                         }
@@ -977,7 +983,9 @@ impl<'src> Lexer<'src> {
                 }
             }
         }
-        if c_char {
+        if prefix == Some('b') {
+            TokenKind::ByteCharLit(body)
+        } else if c_char {
             TokenKind::CCharLit(body)
         } else {
             TokenKind::CharLit(body)

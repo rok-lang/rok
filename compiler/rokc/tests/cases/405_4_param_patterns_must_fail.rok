@@ -1,0 +1,8 @@
+// expect-error: 5:10: this pattern can't destructure a value of type `i32` here - it must be irrefutable
+// expect-error: 6:11: tuple destructure length mismatch: pattern has 3 elements, value has 2
+
+// A parameter pattern is irrefutable and matches the parameter's type.
+fn first((a, 1): (i32, i32)) -> i32 { a }
+fn second((a, b, c): (i32, i32)) -> i32 { a + b + c }
+
+fn main() {}

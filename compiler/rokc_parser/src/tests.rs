@@ -1405,16 +1405,34 @@ fn raw_contextual_keyword_is_a_name() {
 }
 
 #[test]
-fn try_coalesce_needs_parentheses() {
-    assert_eq!(
-        parse_errors("fn f() { let a = try? g() ?? 1; }"),
-        ["`try? g() ?? 1` needs parentheses"]
-    );
+fn try_optional_ends_at_coalesce() {
+    // `try? g() ?? 1` is `(try? g()) ?? 1`; `try` keeps covering `??`.
+    let tail = |src: &str| {
+        let p = parse(src);
+        let Item::Fn(f) = &p.items[0] else { panic!() };
+        let body = f.body.as_ref().unwrap();
+        let StmtKind::Let { init, .. } = &body.stmts[0].kind else {
+            panic!()
+        };
+        init.clone()
+    };
+    for src in [
+        "fn f() { let a = try? g() ?? 1; }",
+        "fn f() { let a = try! g() ?? 1; }",
+    ] {
+        let ExprKind::NullishCoalesce(l, _) = tail(src).kind else {
+            panic!("{src}")
+        };
+        assert!(matches!(l.kind, ExprKind::Try { .. }), "{src}");
+    }
+    let ExprKind::Try { operand, .. } = tail("fn f() { let a = try g() ?? 1; }").kind else {
+        panic!()
+    };
+    assert!(matches!(operand.kind, ExprKind::NullishCoalesce(..)));
     for ok in [
         "fn f() { let a = (try? g()) ?? 1; }",
         "fn f() { let a = try? (g() ?? 1); }",
-        "fn f() { let a = try? g(); }",
-        "fn f() { let a = try g() ?? 1; }",
+        "fn f() { let a = try? g() ?? h() ?? 1; }",
     ] {
         assert!(parse_errors(ok).is_empty(), "{ok}");
     }

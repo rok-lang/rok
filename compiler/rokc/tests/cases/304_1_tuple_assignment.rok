@@ -1,8 +1,41 @@
-// expect-error: 7:5: invalid assignment target
-// expect-error: help: a tuple is not a place; destructure into new variables: `let (a, b) = (b, a);`
+// expect-exit: 0
+// expect-stdout:
+// 2 1
+// 55 89
+// [3, 2, 1]
+// 7 9
+// 4 6 5
+// rhs lhs
 
-// A tuple is not a place to assign to.
+// `(a, b) = (b, a + b)` assigns existing places: the right side is
+// evaluated in full first, then each place from left to right. Fields,
+// elements, nested tuples and `_` work on the left.
+struct P { x: i32; y: i32; }
+
+fn tag(s: str) -> i32 { print(f"{s} "); 0 }
+
 fn main() {
-    let a = 1; let b = 2;
+    let a = 1;
+    let b = 2;
     (a, b) = (b, a);
+    println(f"{a} {b}");
+    let x = 0;
+    let y = 1;
+    for _ in 0..10 {
+        (x, y) = (y, x + y);
+    }
+    println(f"{x} {y}");
+    let xs = [1, 2, 3];
+    (xs[0], xs[2]) = (xs[2], xs[0]);
+    println(f"{xs:?}");
+    let p = P { x: 0, y: 0 };
+    (p.x, _, p.y) = (7, 8, 9);
+    println(f"{p.x} {p.y}");
+    let (c, d, e) = (0, 0, 0);
+    let t = (4, (5, 6));
+    (c, (e, d)) = t;
+    println(f"{c} {d} {e}");
+    let k = [0, 0];
+    (k[tag("lhs")], a) = (tag("rhs"), 1);
+    println("");
 }

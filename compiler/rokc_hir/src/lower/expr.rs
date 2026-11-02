@@ -600,13 +600,18 @@ fn lower_stmt_inner(ctx: &mut LowerCtx<'_>, stmt: &Stmt) -> Option<HirStmt> {
             }
             Some(s)
         }
-        StmtKind::Return(_) if ctx.implicit_main => {
+        // A bare `return;` ends a script (exit code 0).
+        StmtKind::Return(Some(v)) if ctx.implicit_main => {
+            let code = ctx.src(v.span).unwrap_or("code").to_owned();
             ctx.emit_error(
                 Code::TOP_LEVEL_RETURN,
-                "`return` is not allowed in top-level statements; use \
-                 `process::exit(code)` or an explicit `fn main() -> i32`"
+                "top-level `return` takes no value: the program's statements return nothing"
                     .to_owned(),
             );
+            ctx.help_last(Some(format!(
+                "write `return;` to end the program, or `process::exit({code});` for an \
+                 exit code (`use rok::std::process;`)"
+            )));
             None
         }
         StmtKind::Return(value) => {
@@ -1535,7 +1540,14 @@ pub(super) fn lower_assign(
                 Code::INVALID_ASSIGNMENT,
                 format!("`{name}` is not declared; a variable is created only by `let`"),
             );
+            // `(a, b) = ..` reads each value from a parser temporary.
+            let value_text = snippet(value);
+            let in_tuple = value_text.starts_with("__destruct");
             ctx.help_last(Some(match near {
+                _ if in_tuple => format!(
+                    "declare `{name}` with `let` before this line, or declare every name at once \
+                     with `let (..) = ..;`"
+                ),
                 Some(n) => format!(
                     "did you mean `{n}`? To declare a new variable, write `let {name} = {};`",
                     snippet(value)
@@ -1901,15 +1913,8 @@ pub(super) fn lower_assign(
             super::mono::assign_place(ctx, &root_place, acc)
         }
         _ => {
-            let help = if matches!(target.kind, ExprKind::Tuple(_)) {
-                format!(
-                    "a tuple is not a place; destructure into new variables: `let {} = {};`",
-                    snippet(target),
-                    snippet(value)
-                )
-            } else {
-                "assign to a variable, a field (`s.x = v`) or an element (`xs[i] = v`)".to_owned()
-            };
+            let help =
+                "assign to a variable, a field (`s.x = v`) or an element (`xs[i] = v`)".to_owned();
             ctx.emit_error_at(
                 Code::INVALID_ASSIGNMENT,
                 target.span,

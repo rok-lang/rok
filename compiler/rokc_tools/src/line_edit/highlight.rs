@@ -94,6 +94,7 @@ pub fn spans(src: &str) -> Vec<(Range<usize>, Class)> {
             | T::ByteStrLit(_)
             | T::CharLit(_)
             | T::CCharLit(_)
+            | T::ByteCharLit(_)
             | T::FStrStart(_)
             | T::FStrText(_)
             | T::FStrEnd(_)

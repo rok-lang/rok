@@ -1,0 +1,10 @@
+// expect-error: 8:15: space between `!` and `in`
+// expect-error: help: write `x !in xs` (or `x ∉ xs`)
+// expect-error: 9:15: `not in` is not an operator
+
+fn main() {
+    let xs = [1, 2];
+    let x = 3;
+    let a = x ! in xs;
+    let b = x not in xs;
+}

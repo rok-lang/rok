@@ -5,8 +5,8 @@
 // expect-error: help: remove the `;` to return it: `a + b`
 // expect-error: 17:25: mismatched types: `let d` expects `Dict<str, i32>`, found `()`
 // expect-error: help: `{}` is an empty block, not an empty `Dict`; write `Dict::new()`
-// expect-error: 19:16: `str` can't be thrown: it does not implement `Error`
-// expect-error: help: throw a `ValueError`: `throw ValueError::new("negative");`
+// forbid-error: `str` can't be thrown
+// forbid-error: 19:16:
 // expect-error: 23:24: `Oops` can't be thrown: it does not implement `Error`
 // expect-error: help: add `impl Error for Oops {}` (it needs `Display` and `Debug`), or throw a `ValueError`: `throw ValueError::new(..);`
 // forbid-error: is not covered by the enclosing function

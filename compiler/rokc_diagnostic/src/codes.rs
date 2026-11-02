@@ -212,15 +212,17 @@ codes! {
      `static mut` outside an `extern` block, a statement in a module body, or a macro import \
      inside a function. Move it where the message says, usually to module level.";
 
-    18 TOP_LEVEL_RETURN Parse "`return` in top-level statements"
-    "A program's top-level statements are not a function, so `return` has nothing to return \
-     from. End the program with `process::exit(code)`, or write `fn main() -> i32` and \
-     return from it.";
+    18 TOP_LEVEL_RETURN Parse "`return` with a value in top-level statements"
+    "A bare `return;` in a program's top-level statements ends the program with exit code 0, \
+     but they return nothing, so `return v;` has no meaning there. Write `return;`, end the \
+     program with `process::exit(code)` for another exit code, or write \
+     `fn main() -> i32` and return from it.";
 
     19 NEEDS_PARENTHESES Parse "operators that need parentheses"
-    "Some operators do not chain: `a == b == c`, `a..b..c`, `try? x ?? y`, and one `[..]` \
-     that both indexes with `,` and slices with `:`. Add parentheses or separate brackets to \
-     say which you mean.";
+    "Some operators do not chain: comparisons in two directions (`a < b > c`), `a != b != c`, \
+     `x ∈ s == y`, `a..b..c`, and one `[..]` that both indexes with `,` and slices with \
+     `:`. Comparisons in one direction do chain (`0 <= i < n`). Join the parts \
+     with `&&`, or add parentheses or separate brackets to say which you mean.";
 
     20 TRAILING_CLOSURE_RETURN Parse "`return` in a trailing closure"
     "A bare `return` in a statement's trailing closure would leave only the closure, not the \

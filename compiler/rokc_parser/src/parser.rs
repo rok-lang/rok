@@ -116,6 +116,12 @@ pub struct Parser<'a> {
     /// Start of the expression statement being parsed: a trailing-closure
     /// call starting it ends it at its `}`.
     stmt_at: Option<u32>,
+    /// The bindings of each `using x = e;` statement, by its marker's
+    /// span start, until its block is done.
+    using_stmts: std::collections::HashMap<(u32, u32), Vec<UsingBinding>>,
+    /// Parameter patterns parsed so far, each with the temporary that
+    /// stands for its parameter; a fn or closure takes its own.
+    param_pats: Vec<(String, Pattern)>,
     /// Mount path of the package being parsed (`""`: the one being
     /// built); `pkg::name!` names its meta blocks.
     package: String,
@@ -135,6 +141,14 @@ struct RetFrame {
 
 /// Nesting limit for expressions, types, patterns and blocks.
 const MAX_DEPTH: u32 = 256;
+/// One `using` binding: its name (a temporary for a pattern), where it
+/// starts, the value and the pattern.
+type UsingBinding = (String, Span, Expr, Option<Pattern>);
+
+/// `in` / `!in`: the operator, its token count and a misspelling's
+/// error (where, what).
+type MemberOp = (&'static str, usize, Option<(Span, &'static str)>);
+
 /// Links in one left-nested operator / postfix chain.
 const MAX_CHAIN: u32 = 4096;
 /// The path of the type a variadic `xs: ...T` parameter has in the body
@@ -329,6 +343,8 @@ impl<'a> Parser<'a> {
             unparsed: Vec::new(),
             name_pos: false,
             stmt_at: None,
+            using_stmts: std::collections::HashMap::new(),
+            param_pats: Vec::new(),
             ret_frames: Vec::new(),
             closure_returns: std::collections::HashMap::new(),
             package: String::new(),
@@ -359,17 +375,19 @@ impl<'a> Parser<'a> {
     }
 
     fn backtracks<T>(&mut self, f: impl FnOnce(&mut Self) -> Option<T>) -> bool {
-        let (pos, n_diags, n_pending, n_lifted) = (
+        let (pos, n_diags, n_pending, n_lifted, n_pats) = (
             self.pos,
             self.diagnostics.len(),
             self.pending_stmts.len(),
             self.lifted.len(),
+            self.param_pats.len(),
         );
         let failed = f(self).is_none();
         self.pos = pos;
         self.diagnostics.truncate(n_diags);
         self.pending_stmts.truncate(n_pending);
         self.lifted.truncate(n_lifted);
+        self.param_pats.truncate(n_pats);
         failed
     }
 
@@ -471,6 +489,290 @@ impl<'a> Parser<'a> {
         Expr { kind, span }
     }
 
+    /// `target = value` for a tuple `target` of places (nested tuples and
+    /// `_` too): `let (t0, t1) = value;` then `p0 = t0; p1 = t1;`.
+    fn destructure_assign(&mut self, target: Expr, value: Expr, out: &mut Vec<Stmt>) {
+        let span = target.span;
+        let ExprKind::Tuple(elems) = target.kind else {
+            out.push(Stmt {
+                kind: StmtKind::Assign(target, value),
+                span,
+            });
+            return;
+        };
+        let mut names = Vec::new();
+        let mut rest = Vec::new();
+        for e in elems {
+            let discard = matches!(&e.kind, ExprKind::Path(p)
+                if p.segments.len() == 1 && p.segments[0].name == "_");
+            if discard {
+                names.push("_".to_owned());
+                continue;
+            }
+            let name = self.fresh_destructure_temp();
+            names.push(name.clone());
+            let read = Expr {
+                span: e.span,
+                kind: ExprKind::Path(Path::new(
+                    vec![PathSegment {
+                        name,
+                        generics: Vec::new(),
+                    }],
+                    e.span,
+                )),
+            };
+            rest.push((e, read));
+        }
+        out.push(Stmt {
+            kind: StmtKind::LetTuple {
+                names,
+                rest: None,
+                ty: None,
+                init: value,
+            },
+            span,
+        });
+        for (place, read) in rest {
+            self.destructure_assign(place, read, out);
+        }
+    }
+
+    /// `using a = e, b = f { body }` is
+    /// `{ let a = e; { let b = f; { body } finally { b.drop(); } }
+    /// finally { a.drop(); } }`: reverse order, every exit.
+    fn build_using(bindings: Vec<UsingBinding>, mut body: Block, start: Span) -> Expr {
+        // The patterns bind in source order, before the body.
+        let lets: Vec<Stmt> = bindings
+            .iter()
+            .filter_map(|(name, span, _, pat)| {
+                Some(Stmt {
+                    kind: StmtKind::LetPattern {
+                        pat: pat.clone()?,
+                        ty: None,
+                        init: Expr {
+                            span: *span,
+                            kind: ExprKind::Path(Path {
+                                segments: vec![PathSegment {
+                                    name: name.clone(),
+                                    generics: Vec::new(),
+                                }],
+                                span: *span,
+                                origin: None,
+                            }),
+                        },
+                    },
+                    span: *span,
+                })
+            })
+            .collect();
+        body.stmts.splice(0..0, lets);
+        let mut inner = Expr {
+            span: start,
+            kind: ExprKind::Block(body),
+        };
+        for (name, span, init, _) in bindings.into_iter().rev() {
+            let path = |name: &str| Expr {
+                span,
+                kind: ExprKind::Path(Path {
+                    segments: vec![PathSegment {
+                        name: name.to_owned(),
+                        generics: Vec::new(),
+                    }],
+                    span,
+                    origin: None,
+                }),
+            };
+            let drop_call = Stmt {
+                kind: StmtKind::Expr(Expr {
+                    span,
+                    kind: ExprKind::MethodCall {
+                        receiver: Box::new(path(&name)),
+                        method: rokc_ast::USING_DROP_METHOD.to_owned(),
+                        type_args: Vec::new(),
+                        args: Vec::new(),
+                        trailing_closure: None,
+                        origin: None,
+                    },
+                }),
+                span,
+            };
+            let guarded = Expr {
+                span: start,
+                kind: ExprKind::Catch {
+                    body: Box::new(inner),
+                    catches: Vec::new(),
+                    finally: Some(Block {
+                        stmts: vec![drop_call],
+                        trailing: None,
+                        span,
+                        label: None,
+                    }),
+                },
+            };
+            inner = Expr {
+                span: start,
+                kind: ExprKind::Block(Block {
+                    stmts: vec![Stmt {
+                        kind: StmtKind::Let {
+                            name,
+                            ty: None,
+                            init,
+                        },
+                        span,
+                    }],
+                    trailing: Some(Box::new(guarded)),
+                    span: start,
+                    label: None,
+                }),
+            };
+        }
+        inner
+    }
+
+    /// Each `using x = e;` marker in `stmts` (and `trailing`) takes the
+    /// statements after it as its body, innermost first.
+    fn fold_using_stmts(&mut self, stmts: &mut Vec<Stmt>, trailing: &mut Option<Box<Expr>>) {
+        if self.using_stmts.is_empty() {
+            return;
+        }
+        let mut i = stmts.len();
+        while i > 0 {
+            i -= 1;
+            let key = match &stmts[i].kind {
+                StmtKind::Expr(e) if matches!(&e.kind, ExprKind::Tuple(v) if v.is_empty()) => {
+                    (e.span.file, e.span.start)
+                }
+                _ => continue,
+            };
+            let Some(bindings) = self.using_stmts.remove(&key) else {
+                continue;
+            };
+            let start = stmts[i].span;
+            let rest: Vec<Stmt> = stmts.drain(i + 1..).collect();
+            stmts.pop();
+            let span = Span {
+                end: trailing
+                    .as_ref()
+                    .map(|t| t.span.end)
+                    .or_else(|| rest.last().map(|s| s.span.end))
+                    .unwrap_or(start.end),
+                ..start
+            };
+            let body = Block {
+                stmts: rest,
+                trailing: trailing.take(),
+                span,
+                label: None,
+            };
+            let e = Self::build_using(bindings, body, start);
+            *trailing = Some(Box::new(e));
+        }
+    }
+
+    /// `let pat = temp;` for each pattern parameter. A tuple of names,
+    /// `_` and tuples is a chain of `let (a, b) = ..` (checked for its
+    /// length), as a `let` statement parses.
+    fn param_lets(&mut self, pats: Vec<(String, Pattern)>) -> Vec<Stmt> {
+        let mut out = Vec::new();
+        for (name, pat) in pats {
+            self.param_let(name, pat, &mut out);
+        }
+        out
+    }
+
+    fn param_let(&mut self, name: String, pat: Pattern, out: &mut Vec<Stmt>) {
+        let span = pat.span;
+        let init = Expr {
+            span,
+            kind: ExprKind::Path(Path::new(
+                vec![PathSegment {
+                    name,
+                    generics: Vec::new(),
+                }],
+                span,
+            )),
+        };
+        let flat = matches!(&pat.kind, PatternKind::Tuple(ps) if ps.iter().all(|p| matches!(
+            p.kind,
+            PatternKind::Binding { sub: None, .. } | PatternKind::Wildcard | PatternKind::Tuple(_)
+        )));
+        let PatternKind::Tuple(ps) = pat.kind else {
+            out.push(Stmt {
+                kind: StmtKind::LetPattern {
+                    pat,
+                    ty: None,
+                    init,
+                },
+                span,
+            });
+            return;
+        };
+        if !flat {
+            out.push(Stmt {
+                kind: StmtKind::LetPattern {
+                    pat: Pattern {
+                        kind: PatternKind::Tuple(ps),
+                        span,
+                    },
+                    ty: None,
+                    init,
+                },
+                span,
+            });
+            return;
+        }
+        let mut names = Vec::new();
+        let mut nested = Vec::new();
+        for p in ps {
+            match p.kind {
+                PatternKind::Binding { name, .. } => names.push(name),
+                PatternKind::Wildcard => names.push("_".to_owned()),
+                _ => {
+                    let t = self.fresh_destructure_temp();
+                    names.push(t.clone());
+                    nested.push((t, p));
+                }
+            }
+        }
+        out.push(Stmt {
+            kind: StmtKind::LetTuple {
+                names,
+                rest: None,
+                ty: None,
+                init,
+            },
+            span,
+        });
+        for (t, p) in nested {
+            self.param_let(t, p, out);
+        }
+    }
+
+    /// A closure body with its pattern parameters destructured first.
+    fn with_param_lets(&mut self, body: Expr, pats: Vec<(String, Pattern)>) -> Expr {
+        if pats.is_empty() {
+            return body;
+        }
+        let span = body.span;
+        let stmts = self.param_lets(pats);
+        let block = match body.kind {
+            ExprKind::Block(mut b) if b.label.is_none() => {
+                b.stmts.splice(0..0, stmts);
+                b
+            }
+            kind => Block {
+                stmts,
+                trailing: Some(Box::new(Expr { kind, span })),
+                span,
+                label: None,
+            },
+        };
+        Expr {
+            span,
+            kind: ExprKind::Block(block),
+        }
+    }
+
     /// Recover from a failed item / statement that began at `from`: one
     /// diagnostic per mistake. Close braces opened since `from` (not
     /// parens / brackets: an unclosed one is often the error), then stop
@@ -569,6 +871,43 @@ impl<'a> Parser<'a> {
     /// by another `{`?
     fn braces_then_block(&self) -> bool {
         self.braces_then(true)
+    }
+
+    /// `Path { .. };` / `Path { .. },` at the cursor: a struct literal
+    /// ending a `using` statement's binding.
+    fn braces_then_semi(&self) -> bool {
+        let mut i = self.pos;
+        let kind = |i: usize| self.tokens.get(i).map(|t| &t.kind);
+        while matches!(kind(i), Some(TokenKind::Ident(_) | TokenKind::ColonColon)) {
+            i += 1;
+        }
+        if i == self.pos || !matches!(kind(i), Some(TokenKind::LBrace)) {
+            return false;
+        }
+        // Fields (`{ a: 1 }`), or `{}` ending the statement: not a body.
+        let fields = matches!(
+            (kind(i + 1), kind(i + 2)),
+            (Some(TokenKind::Ident(_)), Some(TokenKind::Colon))
+                | (Some(TokenKind::RBrace), Some(TokenKind::Semi))
+        );
+        if !fields {
+            return false;
+        }
+        let mut depth = 0u32;
+        while let Some(k) = kind(i) {
+            match k {
+                TokenKind::LBrace => depth += 1,
+                TokenKind::RBrace => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return matches!(kind(i + 1), Some(TokenKind::Semi | TokenKind::Comma));
+                    }
+                }
+                _ => {}
+            }
+            i += 1;
+        }
+        false
     }
 
     /// `braces_then_block`; with `strict` off, a continued head
@@ -1301,6 +1640,14 @@ impl<'a> Parser<'a> {
                 self.recover(from, Recover::Stmt);
             }
         }
+        let mut tail = None;
+        self.fold_using_stmts(&mut stmts, &mut tail);
+        if let Some(e) = tail {
+            stmts.push(Stmt {
+                span: e.span,
+                kind: StmtKind::Expr(*e),
+            });
+        }
         self.statement_closure_returns(&stmts, None);
         // Untyped `throws` in fn types that no `rethrows` claimed keep the
         // marker; HIR reads it as `any Error`.
@@ -1372,20 +1719,11 @@ impl<'a> Parser<'a> {
     }
 
     /// Top-level statement of the entry file. Block-like
-    /// expressions need no `;`; no tail expression, no `return`.
+    /// expressions need no `;`; no tail expression. A bare `return;`
+    /// ends the program (exit code 0); `return v;` is an error.
     fn parse_top_stmt(&mut self) -> Option<Stmt> {
-        let span = self.peek_span();
         let (stmt, _) = self.parse_stmt()?;
         match stmt.kind {
-            StmtKind::Return(_) => {
-                self.error(
-                    Code::TOP_LEVEL_RETURN,
-                    span,
-                    "top-level `return` is not allowed; use `process::exit(code)` \
-                     or an explicit `fn main() -> i32`",
-                );
-                None
-            }
             StmtKind::Trailing(expr) if !ends_stmt(&expr) => {
                 let d = self.expected(&TokenKind::Semi, "`;` after top-level expression");
                 self.diagnostics.push(d);
@@ -1835,6 +2173,10 @@ impl<'a> Parser<'a> {
             TokenKind::CCharLit(s) => {
                 self.bump();
                 Literal::CChar(s)
+            }
+            TokenKind::ByteCharLit(s) => {
+                self.bump();
+                byte_lit(&s)
             }
             TokenKind::True => {
                 self.bump();
@@ -3573,6 +3915,7 @@ impl<'a> Parser<'a> {
         };
         self.expect(&TokenKind::LParen, "`(`")?;
         let untyped_mark = self.untyped_throws.len();
+        let pats_mark = self.param_pats.len();
         let mut params = Vec::new();
         let mut attrs = attrs;
         while !matches!(self.peek(), TokenKind::RParen | TokenKind::Eof) {
@@ -3591,6 +3934,7 @@ impl<'a> Parser<'a> {
         }
         self.expect(&TokenKind::RParen, "`)`")?;
         let rparen = self.prev_span();
+        let pats: Vec<(String, Pattern)> = self.param_pats.drain(pats_mark..).collect();
 
         let mut generics = generics;
         self.desugar_variadic(&mut params);
@@ -3632,7 +3976,9 @@ impl<'a> Parser<'a> {
             self.doc_attrs_at(self.pos + 1, true, &mut attrs);
             let (b, _) = self.ret_frame(None, Self::parse_block);
             self.fn_names.pop();
-            Some(b?)
+            let mut b = b?;
+            b.stmts.splice(0..0, self.param_lets(pats));
+            Some(b)
         } else {
             self.expect(&TokenKind::Semi, "`;` or function body")?;
             None
@@ -3910,7 +4256,28 @@ impl<'a> Parser<'a> {
             });
         }
 
-        let name = if let TokenKind::Ident(n) = self.peek().clone() {
+        // `(a, b): (i32, i32)` / `P { x, y }: P`: a temporary parameter,
+        // destructured at the start of the body (`param_pats`).
+        let pattern_start = matches!(self.peek(), TokenKind::LParen)
+            || matches!(self.peek(), TokenKind::Ident(_))
+                && matches!(
+                    self.peek_next(),
+                    Some(TokenKind::LBrace | TokenKind::ColonColon)
+                );
+        let name = if pattern_start {
+            let pat = self.with_struct_expr(true, Self::parse_pattern_atom)?;
+            if by_ref {
+                self.error_help(
+                    Code::SYNTAX,
+                    start,
+                    "a `ref` parameter is a name, not a pattern",
+                    "write `ref p: T` and destructure `p` in the body",
+                );
+            }
+            let name = self.fresh_destructure_temp();
+            self.param_pats.push((name.clone(), pat));
+            name
+        } else if let TokenKind::Ident(n) = self.peek().clone() {
             self.bump();
             n
         } else {
@@ -3918,7 +4285,10 @@ impl<'a> Parser<'a> {
             self.error(
                 Code::SYNTAX,
                 s,
-                format!("expected parameter name, found {}", self.peek().describe()),
+                format!(
+                    "expected parameter name or pattern, found {}",
+                    self.peek().describe()
+                ),
             );
             return None;
         };
@@ -5049,6 +5419,7 @@ impl<'a> Parser<'a> {
             }
         }
         self.expect(&TokenKind::RBrace, "`}`")?;
+        self.fold_using_stmts(&mut stmts, &mut trailing);
         Some(Block {
             stmts,
             trailing,
@@ -5467,9 +5838,31 @@ impl<'a> Parser<'a> {
                     self.bump();
                     let value = self.parse_expr()?;
                     self.stmt_semi()?;
+                    if !matches!(expr.kind, ExprKind::Tuple(_)) {
+                        return Some((
+                            Stmt {
+                                kind: StmtKind::Assign(expr, value),
+                                span: start,
+                            },
+                            false,
+                        ));
+                    }
+                    // `(a, b) = (b, a + b)`: the right side first, then
+                    // each place from left to right.
+                    let mut stmts = Vec::new();
+                    self.destructure_assign(expr, value, &mut stmts);
+                    let block = Block {
+                        stmts,
+                        trailing: None,
+                        span: start,
+                        label: None,
+                    };
                     return Some((
                         Stmt {
-                            kind: StmtKind::Assign(expr, value),
+                            kind: StmtKind::Expr(Expr {
+                                kind: ExprKind::Block(block),
+                                span: start,
+                            }),
                             span: start,
                         },
                         false,
@@ -5640,6 +6033,8 @@ impl<'a> Parser<'a> {
             | TokenKind::Comma
             | TokenKind::Semi
             | TokenKind::FatArrow
+            | TokenKind::HoleEnd
+            | TokenKind::HoleSpec
             | TokenKind::Eq
             | TokenKind::Eof => false,
             TokenKind::LBrace => self.struct_expr_allowed,
@@ -5672,8 +6067,11 @@ impl<'a> Parser<'a> {
             self.parse_primary()?
         };
 
-        // Precedence of the last non-associative op, to reject `a < b < c`.
-        let mut last_none_prec: Option<u32> = None;
+        // The last non-associative op and its level: `a < b < c` chains,
+        // `a < b > c` is an error.
+        let mut last_none: Option<(u32, String)> = None;
+        // A comparison chain so far: its operands and operators.
+        let mut cmp_chain: Option<(Vec<Expr>, Vec<String>)> = None;
 
         loop {
             self.chain_link()?;
@@ -5710,7 +6108,11 @@ impl<'a> Parser<'a> {
             if self.incr_decr(&lhs) {
                 break;
             }
-            let Some((sym, _)) = self.peek_op_symbol(Fixity::Infix) else {
+            let member = self.peek_member_op();
+            let Some((sym, _)) = member
+                .map(|(s, _, _)| (s.to_owned(), lhs.span))
+                .or_else(|| self.peek_op_symbol(Fixity::Infix))
+            else {
                 break;
             };
             // `??` is a language-level desugar, level 1,
@@ -5738,21 +6140,37 @@ impl<'a> Parser<'a> {
             if left_bp < min_bp || self.closure_stmt_ends(&lhs) {
                 break;
             }
-            // Non-associative ops don't chain. Without this
-            // the loop would build `(a < b) < c`.
-            if last_none_prec == Some(prec) {
-                let span = self.peek_span();
-                self.error(
-                    Code::NEEDS_PARENTHESES,
-                    span,
-                    format!(
-                        "non-associative operator `{sym}` cannot be chained \
-                         (parenthesise to disambiguate)"
-                    ),
-                );
+            // Comparisons of one direction chain (`a < b <= c` is
+            // `a < b && b <= c`); other non-associative ops don't.
+            if let Some((_, prev)) = last_none.as_ref().filter(|(p, _)| *p == prec) {
+                let prev = prev.clone();
+                let at = self.peek_span();
+                if cmp_dir(&prev).is_some() && cmp_dir(&prev) == cmp_dir(&sym) {
+                    let (mut operands, mut ops) = match (cmp_chain.take(), lhs.kind) {
+                        (Some(c), _) => c,
+                        (None, ExprKind::OpInfix { op, lhs: a, rhs: b }) => {
+                            (vec![*a, *b], vec![op])
+                        }
+                        (None, kind) => unreachable!("a comparison before `{sym}`: {kind:?}"),
+                    };
+                    self.bump();
+                    let rhs = self.parse_expr_bp(right_bp)?;
+                    operands.push(rhs);
+                    ops.push(sym.clone());
+                    let span = self.to_prev(operands[0].span);
+                    lhs = self.fold_cmp_chain(&operands, &ops, span);
+                    cmp_chain = Some((operands, ops));
+                    last_none = Some((prec, sym));
+                    continue;
+                }
+                self.unchained(&prev, &sym, at);
             }
-            self.bump();
-            let rhs = self.parse_expr_bp(right_bp)?;
+            self.bump_infix(member);
+            let rhs = if matches!(sym.as_str(), "∈" | "∉") {
+                self.parse_member_rhs(right_bp)?
+            } else {
+                self.parse_expr_bp(right_bp)?
+            };
             let span = self.to_prev(lhs.span);
             lhs = Expr {
                 kind: ExprKind::OpInfix {
@@ -5762,7 +6180,8 @@ impl<'a> Parser<'a> {
                 },
                 span,
             };
-            last_none_prec = matches!(assoc, Assoc::None).then_some(prec);
+            last_none = matches!(assoc, Assoc::None).then(|| (prec, op_of(&lhs)));
+            cmp_chain = None;
         }
         if min_bp == 0 && self.ternary_ahead() {
             return self.ternary(lhs);
@@ -5770,70 +6189,112 @@ impl<'a> Parser<'a> {
         Some(lhs)
     }
 
-    /// `try? f() ?? d` (operand from token `from`) is an error: it would
-    /// be `try? (f() ?? d)`, where an error gives `none`, not `d`.
-    fn try_coalesce(&mut self, at: Span, from: usize, operand: &Expr) {
-        if !matches!(operand.kind, ExprKind::NullishCoalesce(..)) || self.pending.is_some() {
-            return;
-        }
-        let toks = &self.tokens[from..self.pos];
-        let mut depth = 0i32;
-        let mut split = None;
-        let mut closed = None;
-        for (i, t) in toks.iter().enumerate() {
-            match t.kind {
-                TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace => depth += 1,
-                TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace => {
-                    depth -= 1;
-                    if depth == 0 && closed.is_none() {
-                        closed = Some(i);
-                    }
-                }
-                TokenKind::QuestionQuestion if depth == 0 && split.is_none() => split = Some(i),
-                _ => {}
-            }
-        }
-        // `try? (f() ?? d)`: already grouped.
-        if toks.first().is_some_and(|t| t.kind == TokenKind::LParen)
-            && closed == Some(toks.len() - 1)
-        {
-            return;
-        }
-        let Some(split) = split else { return };
-        let Some(last) = toks.last() else { return };
-        let (l, r) = (tokens_text(&toks[..split]), tokens_text(&toks[split + 1..]));
-        let whole = Span {
-            end: last.span.end,
-            ..at
-        };
-        // Long operands read better as placeholders.
-        let (sl, sr) = if l.len() + r.len() > 60 {
-            ("x", "d")
+    /// `prev` then `sym` without parentheses, where they do not chain.
+    fn unchained(&mut self, prev: &str, sym: &str, at: Span) {
+        let help = if cmp_dir(prev).is_some() && cmp_dir(sym).is_some() {
+            format!(
+                "a chain compares in one direction (`a < b <= c`, `a > b >= c`, \
+                 `a == b == c`); write `a {prev} b && b {sym} c`"
+            )
         } else {
-            (l.as_str(), r.as_str())
+            format!("write `a {prev} b && b {sym} c`, or parenthesise one side")
         };
-        self.diagnostics.push(
-            RokDiagnostic::error(
-                Code::NEEDS_PARENTHESES,
-                at,
-                format!("`try? {sl} ?? {sr}` needs parentheses"),
-            )
-            .with_file(self.file.clone())
-            .with_help(format!(
-                "write `(try? {sl}) ?? {sr}` to get `{sr}` on an error, or \
-                 `try? ({sl} ?? {sr})` to get `none` on an error"
-            ))
-            .with_fix(
-                whole,
-                format!("(try? {l}) ?? {r}"),
-                format!("write `(try? {sl}) ?? {sr}`"),
-            )
-            .with_fix(
-                whole,
-                format!("try? ({l} ?? {r})"),
-                format!("write `try? ({sl} ?? {sr})`"),
-            ),
+        self.error_help(
+            Code::NEEDS_PARENTHESES,
+            at,
+            format!("`{prev}` and `{sym}` cannot be chained"),
+            help,
         );
+    }
+
+    /// Past an infix operator: one token, or `!in` / a misspelt one.
+    fn bump_infix(&mut self, member: Option<MemberOp>) {
+        if let Some((_, _, Some((at, msg)))) = member {
+            self.error_help(Code::SYNTAX, at, msg, "write `x !in xs` (or `x ∉ xs`)");
+        }
+        for _ in 0..member.map_or(1, |(_, n, _)| n) {
+            self.bump();
+        }
+    }
+
+    /// `e0 o1 e1 o2 e2 ..` as `e0 o1 e1 && e1 o2 e2 && ..`, each operand
+    /// evaluated once and in order, the rest skipped once one is false.
+    /// A middle operand other than a name, field or literal goes in a
+    /// temporary (and then so does a left operand that may have effects).
+    fn fold_cmp_chain(&mut self, operands: &[Expr], ops: &[String], span: Span) -> Expr {
+        let [first, mid, rest @ ..] = operands else {
+            unreachable!("a chain has two operands or more")
+        };
+        let infix = |op: &str, a: Expr, b: Expr| Expr {
+            span: Span {
+                end: b.span.end,
+                ..a.span
+            },
+            kind: ExprKind::OpInfix {
+                op: op.to_owned(),
+                lhs: Box::new(a),
+                rhs: Box::new(b),
+            },
+        };
+        if rest.is_empty() {
+            return infix(&ops[0], first.clone(), mid.clone());
+        }
+        let mut lets = Vec::new();
+        let mut temp = |p: &mut Self, e: &Expr| {
+            let name = p.fresh_destructure_temp();
+            lets.push(Stmt {
+                kind: StmtKind::Let {
+                    name: name.clone(),
+                    ty: None,
+                    init: e.clone(),
+                },
+                span: e.span,
+            });
+            Expr {
+                span: e.span,
+                kind: ExprKind::Path(Path::new(
+                    vec![PathSegment {
+                        name,
+                        generics: Vec::new(),
+                    }],
+                    e.span,
+                )),
+            }
+        };
+        let (first, mid) = if is_plain_operand(mid) {
+            (first.clone(), mid.clone())
+        } else if effect_free(first) {
+            (first.clone(), temp(self, mid))
+        } else {
+            let f = temp(self, first);
+            (f, temp(self, mid))
+        };
+        let mut tail = vec![mid.clone()];
+        tail.extend(rest.iter().cloned());
+        let tail_span = Span {
+            start: mid.span.start,
+            ..span
+        };
+        let and = Expr {
+            span,
+            kind: ExprKind::OpInfix {
+                op: "&&".to_owned(),
+                lhs: Box::new(infix(&ops[0], first, mid)),
+                rhs: Box::new(self.fold_cmp_chain(&tail, &ops[1..], tail_span)),
+            },
+        };
+        if lets.is_empty() {
+            return and;
+        }
+        Expr {
+            span,
+            kind: ExprKind::Block(Block {
+                stmts: lets,
+                trailing: Some(Box::new(and)),
+                span,
+                label: None,
+            }),
+        }
     }
 
     /// `f` parsing a closure or fn body whose `return@name` may name
@@ -5960,6 +6421,63 @@ impl<'a> Parser<'a> {
     /// after it starts a new statement (`run { .. }` then `-x;`).
     fn closure_stmt_ends(&self, lhs: &Expr) -> bool {
         self.stmt_at == Some(lhs.span.start) && !is_block_like(lhs) && ends_stmt(lhs)
+    }
+
+    /// `in` / `!in` (the ASCII `∈` / `∉`) at the cursor: the operator,
+    /// its token count and, for a misspelling (`! in`, Python's
+    /// `not in`), the error to give when it is taken.
+    fn peek_member_op(&self) -> Option<MemberOp> {
+        if self.pending.is_some() {
+            return None;
+        }
+        let tok = |k: usize| self.tokens.get(self.pos + k);
+        let is_in = |t: Option<&Token>| {
+            t.is_some_and(|t| !t.raw && matches!(&t.kind, TokenKind::Ident(w) if w == "in"))
+        };
+        if is_in(tok(0)) {
+            return Some(("∈", 1, None));
+        }
+        let (Some(first), true) = (tok(0), is_in(tok(1))) else {
+            return None;
+        };
+        let glued = tok(1).is_some_and(|t| t.span.start == first.span.end);
+        let bad = match &first.kind {
+            TokenKind::Bang if glued => None,
+            TokenKind::Bang => Some("space between `!` and `in`"),
+            TokenKind::Ident(w) if w == "not" && !first.raw => Some("`not in` is not an operator"),
+            _ => return None,
+        };
+        Some(("∉", 2, bad.map(|m| (first.span, m))))
+    }
+
+    /// The right side of `∈` / `∉`: a range needs no parentheses
+    /// (`i in 0..n`), its end binding like the left side's operand.
+    fn parse_member_rhs(&mut self, right_bp: u32) -> Option<Expr> {
+        let span = self.peek_span();
+        let start = if matches!(self.peek(), TokenKind::DotDot | TokenKind::DotDotEq) {
+            None
+        } else {
+            let e = self.parse_expr_bp(right_bp)?;
+            if !matches!(self.peek(), TokenKind::DotDot | TokenKind::DotDotEq) {
+                return Some(e);
+            }
+            Some(Box::new(e))
+        };
+        let inclusive = matches!(self.peek(), TokenKind::DotDotEq);
+        self.bump();
+        let end = if !inclusive && !self.can_start_range_end() {
+            None
+        } else {
+            Some(Box::new(self.parse_expr_bp(right_bp)?))
+        };
+        Some(Expr {
+            span: self.to_prev(span),
+            kind: ExprKind::Range {
+                start,
+                end,
+                inclusive,
+            },
+        })
     }
 
     /// The current token as a `fixity` operator; tokens that are also
@@ -6339,14 +6857,11 @@ impl<'a> Parser<'a> {
                 }
                 ExprKind::Unsafe(self.parse_block()?)
             }
-            // `using a = e, b = f { body }` is
-            // `{ let a = e; { let b = f; { body } finally { b.drop(); } }
-            // finally { a.drop(); } }`: reverse order, every exit.
             TokenKind::Using => {
                 self.bump();
                 // `using_binding ::= pattern "=" expr`: a name,
                 // or any irrefutable pattern over a temp that is dropped.
-                let mut bindings: Vec<(String, Span, Expr, Option<Pattern>)> = Vec::new();
+                let mut bindings: Vec<UsingBinding> = Vec::new();
                 loop {
                     let span = self.peek_span();
                     let (name, pat) = match self.peek().clone() {
@@ -6360,99 +6875,38 @@ impl<'a> Parser<'a> {
                         }
                     };
                     self.expect(&TokenKind::Eq, "`=`")?;
-                    let init = self.parse_head()?;
+                    // `using r = R { .. };`: no body follows the literal.
+                    let init = if self.braces_then_semi() {
+                        self.with_struct_expr(true, Self::parse_expr)?
+                    } else {
+                        self.parse_head()?
+                    };
                     bindings.push((name, span, init, pat));
                     if !self.eat(&TokenKind::Comma) {
                         break;
                     }
                 }
-                let mut body = self.parse_block()?;
-                // The patterns bind in source order, before the body.
-                let lets: Vec<Stmt> = bindings
-                    .iter()
-                    .filter_map(|(name, span, _, pat)| {
-                        Some(Stmt {
-                            kind: StmtKind::LetPattern {
-                                pat: pat.clone()?,
-                                ty: None,
-                                init: Expr {
-                                    span: *span,
-                                    kind: ExprKind::Path(Path {
-                                        segments: vec![PathSegment {
-                                            name: name.clone(),
-                                            generics: Vec::new(),
-                                        }],
-                                        span: *span,
-                                        origin: None,
-                                    }),
-                                },
-                            },
-                            span: *span,
-                        })
-                    })
-                    .collect();
-                body.stmts.splice(0..0, lets);
-                let mut inner = Expr {
-                    span: start,
-                    kind: ExprKind::Block(body),
-                };
-                for (name, span, init, _) in bindings.into_iter().rev() {
-                    let path = |name: &str| Expr {
-                        span,
-                        kind: ExprKind::Path(Path {
-                            segments: vec![PathSegment {
-                                name: name.to_owned(),
-                                generics: Vec::new(),
-                            }],
-                            span,
-                            origin: None,
-                        }),
-                    };
-                    let drop_call = Stmt {
-                        kind: StmtKind::Expr(Expr {
-                            span,
-                            kind: ExprKind::MethodCall {
-                                receiver: Box::new(path(&name)),
-                                method: rokc_ast::USING_DROP_METHOD.to_owned(),
-                                type_args: Vec::new(),
-                                args: Vec::new(),
-                                trailing_closure: None,
-                                origin: None,
-                            },
-                        }),
-                        span,
-                    };
-                    let guarded = Expr {
-                        span: start,
-                        kind: ExprKind::Catch {
-                            body: Box::new(inner),
-                            catches: Vec::new(),
-                            finally: Some(Block {
-                                stmts: vec![drop_call],
-                                trailing: None,
-                                span,
-                                label: None,
-                            }),
-                        },
-                    };
-                    inner = Expr {
-                        span: start,
-                        kind: ExprKind::Block(Block {
-                            stmts: vec![Stmt {
-                                kind: StmtKind::Let {
-                                    name,
-                                    ty: None,
-                                    init,
-                                },
-                                span,
-                            }],
-                            trailing: Some(Box::new(guarded)),
+                // `using x = e;`: scoped to the rest of the block, which
+                // `fold_using_stmts` makes its body.
+                if matches!(self.peek(), TokenKind::Semi) {
+                    if self.stmt_at == Some(start.start) {
+                        self.using_stmts.insert((start.file, start.start), bindings);
+                        return Some(Expr {
                             span: start,
-                            label: None,
-                        }),
-                    };
+                            kind: ExprKind::Tuple(Vec::new()),
+                        });
+                    }
+                    self.error_help(
+                        Code::SYNTAX,
+                        start,
+                        "`using x = e;` is a statement: it covers the rest of its block",
+                        "start a statement with it, or write the block form \
+                         `using x = e { .. }` here",
+                    );
+                    return None;
                 }
-                inner.kind
+                let body = self.parse_block()?;
+                Self::build_using(bindings, body, start).kind
             }
             TokenKind::True => {
                 self.bump();
@@ -6473,6 +6927,10 @@ impl<'a> Parser<'a> {
             TokenKind::CCharLit(s) => {
                 self.bump();
                 ExprKind::Literal(Literal::CChar(s))
+            }
+            TokenKind::ByteCharLit(s) => {
+                self.bump();
+                ExprKind::Literal(byte_lit(&s))
             }
             TokenKind::LParen => {
                 self.bump();
@@ -6636,16 +7094,18 @@ impl<'a> Parser<'a> {
                 } else {
                     TryKind::Plain
                 };
-                let from = self.pos;
                 // `try for x in g { .. } (a, b)`: the loop ends there, the
                 // `(` starts the next expression.
                 if matches!(self.peek(), TokenKind::For) {
                     self.stmt_head = true;
                 }
-                let operand = self.parse_expr_bp(0)?;
-                if kind == TryKind::Optional {
-                    self.try_coalesce(try_span, from, &operand);
-                }
+                // `??` ends the operand of `try?` / `try!`: `try? f() ?? d`
+                // is `(try? f()) ?? d`, `d` on an error.
+                let operand = if kind == TryKind::Plain {
+                    self.parse_expr_bp(0)?
+                } else {
+                    self.parse_expr_bp(COALESCE_PREC + 1)?
+                };
                 ExprKind::Try {
                     kind,
                     operand: Box::new(operand),
@@ -7680,10 +8140,12 @@ impl<'a> Parser<'a> {
     /// `parse_closure_expr` for a trailing closure of a call to `label`
     /// (`span`: the closure's).
     fn closure_expr(&mut self, label: Option<String>, span: Span) -> Option<ExprKind> {
+        let mark = self.param_pats.len();
         let (params, ret_ty) = self.parse_closure_head()?;
+        let pats: Vec<(String, Pattern)> = self.param_pats.drain(mark..).collect();
         let body_at = self.peek_span();
         let (body, bare) = self.ret_frame(label, Self::parse_expr);
-        let body = body?;
+        let body = self.with_param_lets(body?, pats);
         // `-> T` only before a block body.
         if ret_ty.is_some() && !matches!(&body.kind, ExprKind::Block(b) if b.label.is_none()) {
             self.error_help(
@@ -7728,10 +8190,13 @@ impl<'a> Parser<'a> {
             return None;
         }
         let span = self.peek_span();
+        let mark = self.param_pats.len();
         let (params, ret_ty) = self.parse_closure_head()?;
+        let pats: Vec<(String, Pattern)> = self.param_pats.drain(mark..).collect();
         let body_span = self.peek_span();
         let (block, bare) = self.ret_frame(label, Self::parse_block);
-        let block = block?;
+        let mut block = block?;
+        block.stmts.splice(0..0, self.param_lets(pats));
         self.note_closure_returns(span, bare);
         Some(Box::new(Expr {
             span,
@@ -7974,6 +8439,10 @@ impl<'a> Parser<'a> {
                 self.bump();
                 Some(Literal::CChar(s))
             }
+            TokenKind::ByteCharLit(s) => {
+                self.bump();
+                Some(byte_lit(&s))
+            }
             TokenKind::Minus => {
                 self.bump();
                 match self.peek().clone() {
@@ -8180,6 +8649,10 @@ impl<'a> Parser<'a> {
             TokenKind::CCharLit(s) => {
                 self.bump();
                 return Some(self.maybe_extend_range(span, Literal::CChar(s)));
+            }
+            TokenKind::ByteCharLit(s) => {
+                self.bump();
+                return Some(self.maybe_extend_range(span, byte_lit(&s)));
             }
             TokenKind::True => {
                 self.bump();
@@ -8450,17 +8923,51 @@ fn path_name(e: &Expr) -> Option<String> {
 }
 
 /// Tokens as source, one space where the source had any.
-fn tokens_text(toks: &[Token]) -> String {
-    let mut out = String::new();
-    let mut end = None;
-    for t in toks {
-        if end.is_some_and(|e| e != t.span.start) {
-            out.push(' ');
-        }
-        out.push_str(&t.kind.text());
-        end = Some(t.span.end);
+/// `b'x'`: the `u8` literal of its byte (the lexer checked the body).
+fn byte_lit(body: &str) -> Literal {
+    let v = rokc_ast::escape::unescape(body, rokc_ast::escape::EscapeMode::CChar)
+        .ok()
+        .and_then(|s| s.chars().next())
+        .map_or(0, u32::from);
+    Literal::Int(format!("{v}u8"))
+}
+
+/// The direction a comparison chains in: `<` / `<=`, `>` / `>=`, `==`.
+fn cmp_dir(op: &str) -> Option<u8> {
+    match op {
+        "<" | "<=" => Some(0),
+        ">" | ">=" => Some(1),
+        "==" => Some(2),
+        _ => None,
     }
-    out
+}
+
+/// The operator of an infix `e` (empty for anything else).
+fn op_of(e: &Expr) -> String {
+    match &e.kind {
+        ExprKind::OpInfix { op, .. } => op.clone(),
+        _ => String::new(),
+    }
+}
+
+/// A name, a field of one or a literal: read again rather than kept in a
+/// temporary, so a literal still takes its type from the other side.
+fn is_plain_operand(e: &Expr) -> bool {
+    match &e.kind {
+        ExprKind::Path(_) | ExprKind::SelfLower | ExprKind::Literal(_) => true,
+        ExprKind::Field(b, _) | ExprKind::TupleField(b, _) => is_plain_operand(b),
+        ExprKind::OpPrefix { op, operand } => op == "-" && is_plain_operand(operand),
+        _ => false,
+    }
+}
+
+/// No call, index, block or other code that may have an effect.
+fn effect_free(e: &Expr) -> bool {
+    match &e.kind {
+        ExprKind::OpInfix { lhs, rhs, .. } => effect_free(lhs) && effect_free(rhs),
+        ExprKind::OpPrefix { operand, .. } | ExprKind::Cast(operand, _) => effect_free(operand),
+        _ => is_plain_operand(e),
+    }
 }
 
 const fn is_block_like(e: &Expr) -> bool {

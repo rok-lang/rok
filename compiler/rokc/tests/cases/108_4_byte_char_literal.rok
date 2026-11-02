@@ -1,0 +1,27 @@
+// expect-exit: 0
+// expect-stdout:
+// 48 10 255 39 92
+// 2 1 25
+// true
+
+// `b'x'` is a `u8`: one ASCII character or an escape up to `\xFF`.
+fn digits(s: str) -> i32 {
+    let n = 0;
+    for c in s.as_bytes() {
+        match c {
+            b'0'..=b'9' => { n += 1; }
+            _ => {}
+        }
+    }
+    n
+}
+
+fn main() {
+    let zero = b'0';
+    let x: u8 = b'\xFF';
+    println(f"{zero} {b'\n'} {x} {b'\''} {b'\\'}");
+    let bytes = "a1b2".as_bytes();
+    let a = if bytes[0] == b'a' { 1 } else { 0 };
+    println(f"{digits("a1b2")} {a} {b'z' - b'a'}");
+    println(b'A' is u8);
+}

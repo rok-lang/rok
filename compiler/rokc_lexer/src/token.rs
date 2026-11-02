@@ -75,6 +75,8 @@ pub enum TokenKind {
     CharLit(String),
     /// `c'A'` (primitive `c_char`).
     CCharLit(String),
+    /// `b'A'` (a `u8`).
+    ByteCharLit(String),
     /// `"hello"`.
     StrLit(String),
     /// `r"raw"` or `r#"raw"#`.
@@ -261,6 +263,7 @@ impl TokenKind {
             }
             Self::CharLit(s) => return format!("'{s}'"),
             Self::CCharLit(s) => return format!("c'{s}'"),
+            Self::ByteCharLit(s) => return format!("b'{s}'"),
             Self::StrLit(s) => return format!("\"{s}\""),
             Self::ByteStrLit(s) => return format!("b\"{s}\""),
             Self::FStrStart(t) => return if *t { "f\"\"\"" } else { "f\"" }.to_owned(),
@@ -366,7 +369,9 @@ impl TokenKind {
             Self::Ident(s) => format!("identifier `{s}`"),
             Self::IntLit(s) => format!("integer literal `{s}`"),
             Self::FloatLit(s) => format!("float literal `{s}`"),
-            Self::CharLit(_) | Self::CCharLit(_) => format!("character literal `{}`", self.text()),
+            Self::CharLit(_) | Self::CCharLit(_) | Self::ByteCharLit(_) => {
+                format!("character literal `{}`", self.text())
+            }
             Self::StrLit(_) | Self::RawStrLit(_) => "string literal".to_owned(),
             Self::ByteStrLit(_) => "byte string literal".to_owned(),
             Self::FStrStart(_) | Self::FStrText(_) | Self::FStrEnd(_) => "f-string".to_owned(),
@@ -582,4 +587,5 @@ rokc_core::codec_enum!(TokenKind {
     HashLBracket,
     HashBangLBracket,
     Eof,
+    ByteCharLit(x0),
 });

@@ -4,7 +4,9 @@
 
 use std::path::Path;
 
-use rokc_ast::{Block, FnDef, Generics, Item, Stmt, ThrowsKind, TyKind};
+use rokc_ast::{
+    Block, Expr, ExprKind, FnDef, Generics, Item, Stmt, StmtKind, ThrowsKind, TryKind, TyKind,
+};
 use rokc_diagnostic::{Code, RokDiagnostic, Span};
 
 pub fn stmts_outside_entry(file: &Path) -> RokDiagnostic {
@@ -46,6 +48,18 @@ pub fn resolve_entry(
         }
         (Some(f), true) => {
             check_main_signature(f, diags);
+            // `fn main()` throws like the top-level statements: an
+            // escaping error is printed and exits 1.
+            if let Some(Item::Fn(f)) = items.iter_mut().find_map(|(m, i)| {
+                (m.is_empty() && matches!(i, Item::Fn(f) if f.name == "main")).then_some(i)
+            }) {
+                if f.ret_ty.is_none()
+                    && matches!(f.throws, ThrowsKind::None)
+                    && f.body.as_ref().is_some_and(|b| may_throw(b))
+                {
+                    f.throws = ThrowsKind::Typed(vec![rokc_ast::untyped_throws_ty(f.span)]);
+                }
+            }
             false
         }
         // Items only: form 2 with no statements, an empty implicit `main`.
@@ -54,6 +68,42 @@ pub fn resolve_entry(
             true
         }
     }
+}
+
+/// `body` has a `throw` or a `try` outside any closure, coroutine block
+/// or nested item: an error may escape it.
+fn may_throw(body: &Block) -> bool {
+    struct V {
+        depth: u32,
+        found: bool,
+    }
+    impl rokc_hir::walk::AstVisitor for V {
+        fn stmt(&mut self, s: &Stmt) {
+            self.found |= self.depth == 0 && matches!(s.kind, StmtKind::Throw(_));
+        }
+        fn expr(&mut self, e: &Expr) {
+            self.found |= self.depth == 0
+                && matches!(
+                    e.kind,
+                    ExprKind::Try {
+                        kind: TryKind::Plain,
+                        ..
+                    }
+                );
+        }
+        fn enter_body(&mut self) {
+            self.depth += 1;
+        }
+        fn leave_body(&mut self) {
+            self.depth -= 1;
+        }
+    }
+    let mut v = V {
+        depth: 0,
+        found: false,
+    };
+    rokc_hir::walk::walk_block(&mut v, body);
+    v.found
 }
 
 fn implicit_main(stmts: Vec<Stmt>) -> FnDef {

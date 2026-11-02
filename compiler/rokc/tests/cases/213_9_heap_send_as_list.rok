@@ -10,7 +10,7 @@ use rok::std::thread;
 fn main() {
     let (tx, rx) = channel::channel::<List<i32>>();
     let t = thread::spawn(|| {
-        let items: List<i32> = try! rx.recv() ?? [];
+        let items: List<i32> = try! (rx.recv() ?? []);
         let h: BinaryHeap<i32> = items.into_iter().collect();
         let out: List<i32> = [];
         while let x: i32 = h.pop() { out.push(x); }

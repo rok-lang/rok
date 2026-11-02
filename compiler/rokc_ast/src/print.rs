@@ -1278,7 +1278,15 @@ impl Printer {
                     TryKind::Optional => "try? ",
                     TryKind::Force => "try! ",
                 });
-                self.expr(operand);
+                // `??` ends the operand of `try?` / `try!`.
+                if *kind != TryKind::Plain && matches!(operand.kind, ExprKind::NullishCoalesce(..))
+                {
+                    self.s("(");
+                    self.expr(operand);
+                    self.s(")");
+                } else {
+                    self.expr(operand);
+                }
             }
             ExprKind::Catch {
                 body,

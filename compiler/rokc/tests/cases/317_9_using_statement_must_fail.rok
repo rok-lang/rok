@@ -1,0 +1,14 @@
+// expect-error: 11:13: `using x = e;` is a statement: it covers the rest of its block
+// expect-error: help: start a statement with it, or write the block form `using x = e { .. }` here
+
+// The statement form starts a statement.
+struct R { n: i32; }
+impl Drop for R {
+    fn drop(ref self) {}
+}
+
+fn a() {
+    let x = using r = R { n: 1 };
+}
+
+fn main() {}

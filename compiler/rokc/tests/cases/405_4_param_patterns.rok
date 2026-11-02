@@ -1,0 +1,36 @@
+// expect-exit: 0
+// expect-stdout:
+// a1 b2
+// 3 7
+// 11
+// 6
+// 5 1
+// x=1 y=2
+
+// Closure and fn parameters take irrefutable patterns: tuples (nested),
+// structs and `_`, as in `let`.
+struct P { x: i32; y: i32; }
+
+fn add((a, b): (i32, i32)) -> i32 { a + b }
+
+fn swap_sum((a, (b, _)): (i32, (i32, str)), k: i32) -> i32 { a * k + b }
+
+fn show(P { x, y }: P) -> str { f"x={x} y={y}" }
+
+fn main() {
+    let names = ["a", "b"];
+    let xs = [1, 2];
+    let pairs = [(names[0], xs[0]), (names[1], xs[1])];
+    println(pairs.iter().map(|(n, x)| f"{n}{x}").collect::<List<str>>().join(" "));
+    println(f"{add((1, 2))} {[(3, 4)].iter().map(|(a, b): (i32, i32)| a + b).sum()}");
+    println(swap_sum((5, (1, "z")), 2));
+    let total = 0;
+    for (_, v) in [(0, 1), (1, 2), (2, 3)] {
+        total += v;
+    }
+    println(total);
+    let f = |(a, b): (i32, i32), _| { (b, a) };
+    let (c, d) = f((1, 5), 0);
+    println(f"{c} {d}");
+    println(show(P { x: 1, y: 2 }));
+}

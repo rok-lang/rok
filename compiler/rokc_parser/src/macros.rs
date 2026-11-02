@@ -411,6 +411,7 @@ const fn is_literal(k: &TokenKind) -> bool {
             | TokenKind::RawStrLit(_)
             | TokenKind::ByteStrLit(_)
             | TokenKind::CharLit(_)
+            | TokenKind::ByteCharLit(_)
     )
 }
 

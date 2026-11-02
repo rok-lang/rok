@@ -1,0 +1,19 @@
+// expect-error: 12:25: error `ValueError` is not covered by the enclosing function's `throws (E)`
+// expect-error: help: `throw ".."` throws a `ValueError`: add it to the list (`throws (E | ValueError)`), or throw one of the listed errors
+// expect-error: 16:5: error `ValueError` is not handled
+// expect-error: help: `throw ".."` throws a `ValueError`: declare `throws` on the function, or catch it here
+
+// `throw "msg"` throws a `ValueError`, which a typed `throws` must list
+// and a function without `throws` must catch.
+#[derive(Debug)]
+struct E {}
+impl Display for E { fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("E") } }
+impl Error for E {}
+fn typed() throws (E) { throw "no"; }
+
+fn helper() -> i32 {
+    // Only `fn main()` throws without `throws`.
+    throw "no";
+}
+
+fn main() {}

@@ -1,0 +1,7 @@
+// expect-error: 5:10: a `ref` parameter is a name, not a pattern
+// expect-error: help: write `ref p: T` and destructure `p` in the body
+
+// A `ref` parameter names the caller's variable, so it is a name.
+fn third(ref (a, b): (i32, i32)) {}
+
+fn main() {}
