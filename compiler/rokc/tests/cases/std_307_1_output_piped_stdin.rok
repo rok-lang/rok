@@ -1,0 +1,18 @@
+// only-os: macos linux
+// needs: process
+// expect-exit: 0
+// expect-stdout:
+// output: true 0
+// status: true
+
+// `output()` closes a piped stdin at once: nothing can write to it, and a
+// child reading to end of input (`cat`) must still finish.
+use rok::std::path::Path;
+use rok::std::process::{Command, Stdio};
+
+fn main() {
+    let o = try! Command::new(Path::new("/bin/sh")).args(["-c", "cat"]).stdin(Stdio::Piped).output();
+    println(f"output: {o.status.success()} {o.stdout.len()}");
+    let s = try! Command::new(Path::new("/bin/sh")).args(["-c", "cat"]).stdin(Stdio::Piped).stdout(Stdio::Null).status();
+    println(f"status: {s.success()}");
+}

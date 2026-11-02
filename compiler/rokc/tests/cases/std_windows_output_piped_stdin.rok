@@ -1,0 +1,17 @@
+// only-os: windows
+// expect-exit: 0
+// expect-stdout:
+// output: 0
+// status: done
+
+// `output()` closes a piped stdin at once: nothing can write to it, and a
+// child reading to end of input (`findstr "^"`) must still finish. With
+// no input findstr matches nothing; only the return matters.
+use rok::std::process::{Command, Stdio};
+
+fn main() {
+    let o = try! Command::new("findstr").arg("^").stdin(Stdio::Piped).output();
+    println(f"output: {o.stdout.len()}");
+    _ = try! Command::new("findstr").arg("^").stdin(Stdio::Piped).stdout(Stdio::Null).status();
+    println("status: done");
+}
