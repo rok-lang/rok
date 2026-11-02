@@ -809,7 +809,8 @@ impl TryStream for ReadDirStream {
 }
 
 /// Read the next batch of `rd` on the blocking lane; `rd` moves there
-/// and comes back with the batch.
+/// and comes back with the batch. Not `[move rd]`: `poll_next` would then
+/// hand over part of `self`, which a `for await` context may reach (E0107).
 fn refill(rd: ReadDir) -> Task<(ReadDir, List<Result<DirEntry, IoError>>)> {
     let moved = unsafe { Handoff::new(rd) };
     task::spawn_blocking(|| {
@@ -952,15 +953,15 @@ impl AsyncRead for File {
 impl AsyncWrite for File {
     async fn write_async<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize {
         // A fresh copy: nothing else reaches it.
-        let s = unsafe { Handoff::new(buf.byte_slice().to_list()) };
-        try await off(|| try self.write(s.get()))
+        let s = buf.byte_slice().to_list();
+        try await off([move s] || try self.write(s))
     }
 
     async fn flush_async(ref self) throws (IoError) {}
 
     async fn write_all_async<B: AsBytes>(ref self, buf: B) throws (IoError) {
-        let s = unsafe { Handoff::new(buf.byte_slice().to_list()) };
-        try await off(|| try self.write_all(s.get()));
+        let s = buf.byte_slice().to_list();
+        try await off([move s] || try self.write_all(s));
     }
 }
 
@@ -1646,14 +1647,14 @@ pub async fn read_to_str_async<P: AsPath>(path: P) throws (IoError) -> str {
 pub async fn write_async<P: AsPath, D: AsBytes>(path: P, data: D) throws (IoError) {
     let p = path.as_path();
     // A fresh copy for the lane: a cancelled caller owns `data` again.
-    let s = unsafe { Handoff::new(data.byte_slice().to_list()) };
-    try await off(|| try write(p, s.get()));
+    let s = data.byte_slice().to_list();
+    try await off([move s] || try write(p, s));
 }
 /// `fs::write_atomic` on the blocking lane: the task waits, its thread does not.
 pub async fn write_atomic_async<P: AsPath, D: AsBytes>(path: P, data: D) throws (IoError) {
     let p = path.as_path();
-    let s = unsafe { Handoff::new(data.byte_slice().to_list()) };
-    try await off(|| try write_atomic(p, s.get()));
+    let s = data.byte_slice().to_list();
+    try await off([move s] || try write_atomic(p, s));
 }
 /// `fs::metadata` on the blocking lane: the task waits, its thread does not.
 pub async fn metadata_async<P: AsPath>(path: P) throws (IoError) -> Metadata {
