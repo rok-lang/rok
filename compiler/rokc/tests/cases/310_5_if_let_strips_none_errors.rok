@@ -1,0 +1,24 @@
+// expect-error: 17:13: operator `+` cannot be applied to `i32 | none` and `i32`
+// expect-error: help: `o` may be `none`; unwrap it first: `o ?? 0`, `if let n = o { .. }`, or `o?`
+// expect-error: 20:13: operator `+` cannot be applied to `i32 | none` and `i32`
+// expect-error: 23:13: operator `+` cannot be applied to `i32 | none` and `i32`
+
+// A narrowing lasts only where the test holds: after a reassignment that
+// may be `none`, without an exit, and outside the tested branch.
+
+fn get(n: i32) -> i32 | none { if n > 0 { n } else { none } }
+
+fn main() {
+    let o = get(1);
+    if o == none { return; }
+    println(o + 1);
+    o = get(0);
+    if o != none { println(o + 1); }
+    println(o + 1);
+    let p = get(2);
+    if p == none { println("none"); }
+    println(p + 1);
+    let q = get(3);
+    if q != none { println(q + 1); }
+    println(q + 1);
+}

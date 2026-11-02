@@ -84,7 +84,13 @@ pub(super) fn lower_block(ctx: &mut LowerCtx<'_>, block: &Block) -> HirBlock {
             }
             _ => {
                 if let Some(stmt) = lower_stmt(ctx, s) {
+                    let guard = guard_narrowings(ctx, s, &stmt);
                     stmts.push(stmt);
+                    // `if x == none { return; }`: `x` is not `none` after it.
+                    if !guard.is_empty() {
+                        let lets = bind_narrowings(ctx, guard, s.span);
+                        stmts.extend(lets);
+                    }
                 }
             }
         }
@@ -1023,11 +1029,25 @@ fn unnarrow(ctx: &mut LowerCtx<'_>, name: &str, local: LocalId, value: &Expr) ->
             .iter()
             .rposition(|s| s.get(name) == Some(&rebound))
         {
-            ctx.scopes[i].remove(name);
+            end_narrowing(ctx, i, name, rebound);
             ctx.unnarrowed.push((name.to_owned(), rebound, i));
         }
     }
     target
+}
+
+/// `name` in scope `i` no longer names the narrowed `local`: its origin
+/// when that was declared in the same scope (a guard's narrowing).
+fn end_narrowing(ctx: &mut LowerCtx<'_>, i: usize, name: &str, local: LocalId) {
+    let origin = ctx.narrowed.get(&local).map(|(o, _)| *o);
+    match origin {
+        Some(o) if ctx.scopes[..i].iter().all(|s| s.get(name) != Some(&o)) => {
+            ctx.scopes[i].insert(name.to_owned(), o);
+        }
+        _ => {
+            ctx.scopes[i].remove(name);
+        }
+    }
 }
 
 /// Restore narrowings ended since `mark` for the next branch;
@@ -1047,11 +1067,13 @@ pub(super) fn branch_unnarrowings(
 
 pub(super) fn rejoin_unnarrowings(ctx: &mut LowerCtx<'_>, ended: Vec<(String, LocalId, usize)>) {
     for (name, local, i) in ended {
-        if let Some(scope) = ctx.scopes.get_mut(i) {
-            if scope.get(&name) == Some(&local) {
-                scope.remove(&name);
-                ctx.unnarrowed.push((name, local, i));
-            }
+        if ctx
+            .scopes
+            .get(i)
+            .is_some_and(|s| s.get(&name) == Some(&local))
+        {
+            end_narrowing(ctx, i, &name, local);
+            ctx.unnarrowed.push((name, local, i));
         }
     }
 }
@@ -4055,7 +4077,17 @@ pub(super) fn lower_if(
         rejoin_unnarrowings(ctx, ended);
         return build(cond_h, then_h, None, HirTy::Unit);
     };
-    let mut else_h = lower_expr(ctx, else_e);
+    // `if x == none { .. } else { x is not none here }`.
+    let else_list = else_narrowings(ctx, cond);
+    let mut else_h = if else_list.is_empty() {
+        lower_expr(ctx, else_e)
+    } else {
+        ctx.push_scope();
+        let lets = bind_narrowings(ctx, else_list, cond.span);
+        let e = lower_expr(ctx, else_e);
+        ctx.pop_scope();
+        with_lets(lets, e)
+    };
     rejoin_unnarrowings(ctx, ended);
     // An unsuffixed integer literal branch takes the other branch's
     // integer type: `if c { 1 } else { n }` with `n: usize`.
@@ -4218,9 +4250,59 @@ fn fit_if_branch(
     v
 }
 
-/// The `x is T` conjuncts of `cond` (`a && b && ..`): locals
-/// that are `T` wherever `cond` holds.
-fn narrowings(ctx: &LowerCtx<'_>, cond: &Expr) -> Vec<(String, rokc_ast::Ty)> {
+/// What a condition says about a local: it is `T`, or it is not `none`.
+pub(super) enum Narrow {
+    Ty(rokc_ast::Ty),
+    Some,
+}
+
+/// Is `e` a local whose type has `none` in it?
+fn optional_local(ctx: &LowerCtx<'_>, e: &Expr) -> Option<String> {
+    let ExprKind::Path(p) = &e.kind else {
+        return None;
+    };
+    let [seg] = p.segments.as_slice() else {
+        return None;
+    };
+    let l = ctx.lookup(&seg.name)?;
+    matches!(ctx.var_ty(l), HirTy::Sum(vs) if vs.contains(&HirTy::None)).then(|| seg.name.clone())
+}
+
+/// `x == none` / `none == x` / `x is none` (`eq`) or `x != none`: the
+/// optional local.
+fn none_test(ctx: &LowerCtx<'_>, cond: &Expr, eq: bool) -> Option<String> {
+    let none = |e: &Expr| matches!(e.kind, ExprKind::Literal(AstLit::None));
+    match &cond.kind {
+        ExprKind::OpInfix { op, lhs, rhs } if op == if eq { "==" } else { "!=" } => {
+            if none(rhs) {
+                optional_local(ctx, lhs)
+            } else if none(lhs) {
+                optional_local(ctx, rhs)
+            } else {
+                None
+            }
+        }
+        ExprKind::Is(operand, pat)
+            if eq && matches!(pat.kind, AstPatternKind::Literal(AstLit::None)) =>
+        {
+            optional_local(ctx, operand)
+        }
+        _ => None,
+    }
+}
+
+/// The `x is T` and `x != none` conjuncts of `cond` (`a && b && ..`):
+/// locals that are `T` (not `none`) wherever `cond` holds.
+fn narrowings(ctx: &LowerCtx<'_>, cond: &Expr) -> Vec<(String, Narrow)> {
+    if let Some(x) = none_test(ctx, cond, false) {
+        return vec![(x, Narrow::Some)];
+    }
+    // `!(x is none)`.
+    if let ExprKind::OpPrefix { op, operand } = &cond.kind {
+        if let Some(x) = none_test(ctx, operand, true).filter(|_| op == "!") {
+            return vec![(x, Narrow::Some)];
+        }
+    }
     match &cond.kind {
         ExprKind::OpInfix { op, lhs, rhs } if op == "&&" => {
             let mut v = narrowings(ctx, lhs);
@@ -4238,11 +4320,62 @@ fn narrowings(ctx: &LowerCtx<'_>, cond: &Expr) -> Vec<(String, rokc_ast::Ty)> {
                             && !matches!(ctx.resolve_ast_ty(ty), HirTy::Sum(ws) if ws.contains(&lt))
                     }) =>
             {
-                vec![(p.segments[0].name.clone(), ty.clone())]
+                vec![(p.segments[0].name.clone(), Narrow::Ty(ty.clone()))]
             }
             _ => Vec::new(),
         },
         _ => Vec::new(),
+    }
+}
+
+/// The `x == none` disjuncts of `cond` (`a || b || ..`): locals that are
+/// not `none` wherever `cond` fails.
+pub(super) fn else_narrowings(ctx: &LowerCtx<'_>, cond: &Expr) -> Vec<(String, Narrow)> {
+    if let Some(x) = none_test(ctx, cond, true) {
+        return vec![(x, Narrow::Some)];
+    }
+    match &cond.kind {
+        ExprKind::OpInfix { op, lhs, rhs } if op == "||" => {
+            let mut v = else_narrowings(ctx, lhs);
+            v.extend(else_narrowings(ctx, rhs));
+            v
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// What holds after an `if` statement one of whose branches always
+/// leaves: the other branch's narrowings.
+fn guard_narrowings(ctx: &LowerCtx<'_>, s: &Stmt, h: &HirStmt) -> Vec<(String, Narrow)> {
+    let (StmtKind::Expr(Expr {
+        kind: ExprKind::If { cond, .. },
+        ..
+    })
+    | StmtKind::Trailing(Expr {
+        kind: ExprKind::If { cond, .. },
+        ..
+    })) = &s.kind
+    else {
+        return Vec::new();
+    };
+    let HirStmt::Expr(HirExpr {
+        kind:
+            HirExprKind::If {
+                then_block,
+                else_branch,
+                ..
+            },
+        ..
+    }) = h
+    else {
+        return Vec::new();
+    };
+    if hir_block_diverges(then_block) {
+        else_narrowings(ctx, cond)
+    } else if else_branch.as_deref().is_some_and(hir_expr_diverges) {
+        narrowings(ctx, cond)
+    } else {
+        Vec::new()
     }
 }
 
@@ -4251,24 +4384,42 @@ fn narrowings(ctx: &LowerCtx<'_>, cond: &Expr) -> Vec<(String, rokc_ast::Ty)> {
 /// (`narrowed`). A `[ref]` cell is re-tested on every read (`cell_views`),
 /// since a capture may store a non-`T`.
 fn bind_narrowed(ctx: &mut LowerCtx<'_>, cond: &Expr) -> Vec<HirStmt> {
+    let list = narrowings(ctx, cond);
+    bind_narrowings(ctx, list, cond.span)
+}
+
+pub(super) fn bind_narrowings(
+    ctx: &mut LowerCtx<'_>,
+    list: Vec<(String, Narrow)>,
+    at: rokc_diagnostic::Span,
+) -> Vec<HirStmt> {
     let mut lets = Vec::new();
-    for (name, ty) in narrowings(ctx, cond) {
+    for (name, how) in list {
         // A `for ref` element is read afresh at each use: not narrowed.
         let Some(orig) = ctx.lookup(&name).filter(|l| !ctx.places.contains_key(l)) else {
             continue;
         };
         let orig_ty = ctx.var_ty(orig);
-        let pat = rokc_ast::Pattern {
-            kind: AstPatternKind::TypeCheck {
-                binder: Some(name.clone()),
-                ty,
-            },
-            span: cond.span,
+        let pat_h = match (how, &orig_ty) {
+            (Narrow::Ty(ty), _) => {
+                let pat = rokc_ast::Pattern {
+                    kind: AstPatternKind::TypeCheck {
+                        binder: Some(name.clone()),
+                        ty,
+                    },
+                    span: at,
+                };
+                lower_pattern(ctx, &pat, &orig_ty)
+            }
+            (Narrow::Some, HirTy::Sum(vs)) => {
+                let idxs: Vec<usize> = (0..vs.len()).filter(|i| vs[*i] != HirTy::None).collect();
+                super::pattern::narrow_to(ctx, &name, &orig_ty, &idxs, at)
+            }
+            (Narrow::Some, _) => continue,
         };
-        let pat_h = lower_pattern(ctx, &pat, &orig_ty);
         // A narrowing rebinding is never a `[ref]` cell.
         ctx.pending_cells.clear();
-        let resums = ctx.take_resums(cond.span);
+        let resums = ctx.take_resums(at);
         let Some(new) = ctx.lookup_in_current_scope(&name) else {
             continue;
         };
@@ -4277,7 +4428,7 @@ fn bind_narrowed(ctx: &mut LowerCtx<'_>, cond: &Expr) -> Vec<HirStmt> {
         let mut arms = vec![HirMatchArm {
             pat: pat_h,
             guard: None,
-            body: with_lets(resums, hir_local(new, &new_ty, cond.span)),
+            body: with_lets(resums, hir_local(new, &new_ty, at)),
         }];
         let is_cell = ctx.is_boxed(orig) || ctx.cell_views.contains_key(&orig);
         if is_cell {
@@ -4295,23 +4446,23 @@ fn bind_narrowed(ctx: &mut LowerCtx<'_>, cond: &Expr) -> Vec<HirStmt> {
                             ctx,
                             "rok_panic_at",
                             &msg,
-                            cond.span,
+                            at,
                         ))],
                         trailing: None,
                         label: None,
                     })),
                     ty: new_ty.clone(),
-                    span: cond.span,
+                    span: at,
                 },
             });
         }
         let read = HirExpr {
             kind: HirExprKind::Match {
-                scrutinee: Box::new(ctx.read_local(orig, cond.span)),
+                scrutinee: Box::new(ctx.read_local(orig, at)),
                 arms,
             },
             ty: new_ty,
-            span: cond.span,
+            span: at,
         };
         if is_cell {
             ctx.cell_views.insert(new, read.clone());
@@ -12229,7 +12380,6 @@ fn operand_help(
     }
     for (side, t) in [(&l, lhs.1), (&r, rhs.1)] {
         if let Some(inner) = optional(t) {
-            let inner_name = ctx.ty_name(&inner);
             let default = match inner {
                 HirTy::Prim(p) if p.is_float() => "0.0",
                 HirTy::Prim(p) if p.is_int() => "0",
@@ -12237,8 +12387,8 @@ fn operand_help(
                 _ => "..",
             };
             return Some(format!(
-                "`{side}` may be `none`; unwrap it first: `{side} ?? {default}`, `if let n: \
-                 {inner_name} = {side} {{ .. }}`, or `{side}?`"
+                "`{side}` may be `none`; unwrap it first: `{side} ?? {default}`, `if let n = \
+                 {side} {{ .. }}`, or `{side}?`"
             ));
         }
         if future(t) {

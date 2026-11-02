@@ -1,7 +1,7 @@
 // `unwrap` and kin on `T | none`: rok has none of them; the help shows
 // `??`, `if let` and `match`, or the direct form.
 // expect-error: 14:9: `v` is `i32 | none` and may be none; rok has no `unwrap`
-// expect-error: help: write `v ?? 0`, `if let x: i32 = v { .. }`, or `match v { x: i32 => .., none => .. }`
+// expect-error: help: write `v ?? 0`, `if let x = v { .. }`, or `match v { x: i32 => .., none => .. }`
 // expect-error: 15:9: `v` is `i32 | none` and may be none; rok has no `unwrap_or`
 // expect-error: help: write `v ?? 7`
 // expect-error: 16:9: `v` is `i32 | none` and may be none; rok has no `is_none`

@@ -25,11 +25,21 @@ pub(super) fn lower_match(
     // A pattern that failed to lower stands in as `_`: reachability
     // over it would report errors of its own.
     let mut bad_pattern = false;
-    for arm in arms {
+    // `if let` / `while let` / `let .. else`: `pat` then a `_` the parser
+    // wrote (at the `if` / `while`, or spanning the `else` block).
+    let let_form = matches!(arms, [_, w] if w.guard.is_none()
+        && matches!(w.pat.kind, AstPatternKind::Wildcard)
+        && ((w.pat.span.file == span.file && w.pat.span.start == span.start)
+            || w.pat.span == w.body.span
+            || matches!(&arms[0].pat.kind, AstPatternKind::Binding { name, .. } if name == "__letelse_v")));
+    for (i, arm) in arms.iter().enumerate() {
         let mark = ctx.unnarrowed.len();
         ctx.push_scope();
         let since = ctx.env.sink.diagnostics.borrow().len();
-        let pat = inner_layer_binding(ctx, &arm.pat, &scrut_ty, &arm_h)
+        let pat = (let_form && i == 0)
+            .then(|| some_pattern(ctx, &arm.pat, &scrut_ty))
+            .flatten()
+            .or_else(|| inner_layer_binding(ctx, &arm.pat, &scrut_ty, &arm_h))
             .unwrap_or_else(|| lower_pattern(ctx, &arm.pat, &scrut_ty));
         if super::mono::writable_place(ctx, &scrut_h) {
             if let HirPattern::Binding { local, .. }
@@ -132,6 +142,66 @@ pub(super) fn lower_match(
         },
         ty: result_ty,
         span,
+    }
+}
+
+/// A plain name in `if let x = e` / `while let` / `let x = e else` on an
+/// optional `e` binds the value without its `none` (one layer: `x` of a
+/// `(T | none)?` is `T | none`).
+fn some_pattern(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy) -> Option<HirPattern> {
+    let (HirTy::Sum(vs), AstPatternKind::Binding { name, sub: None }) = (scrut_ty, &pat.kind)
+    else {
+        return None;
+    };
+    if name == "_" || ctx.enum_path(&[name.as_str()]).is_some() {
+        return None;
+    }
+    let none = vs.iter().position(|v| *v == HirTy::None)?;
+    let rest: Vec<usize> = (0..vs.len()).filter(|i| *i != none).collect();
+    Some(narrow_to(ctx, name, scrut_ty, &rest, pat.span))
+}
+
+/// Bind `name` to the members `idxs` of sum `scrut_ty` (one: that member's
+/// type; several: their sum).
+pub(super) fn narrow_to(
+    ctx: &mut LowerCtx<'_>,
+    name: &str,
+    scrut_ty: &HirTy,
+    idxs: &[usize],
+    at: rokc_diagnostic::Span,
+) -> HirPattern {
+    let HirTy::Sum(vs) = scrut_ty else {
+        unreachable!("narrowing a sum")
+    };
+    let index = |i: usize| u32::try_from(i).expect("variant overflow");
+    if let [i] = idxs {
+        let t = vs[*i].clone();
+        let local = ctx.declare_bound(name, t.clone(), at);
+        return HirPattern::SumVariant {
+            sum_ty: scrut_ty.clone(),
+            variant_index: index(*i),
+            binder: Some(local),
+            payload_ty: Some(t),
+        };
+    }
+    let target = HirTy::Sum(idxs.iter().map(|i| vs[*i].clone()).collect());
+    let alts = HirPattern::Or(
+        idxs.iter()
+            .map(|i| HirPattern::SumVariant {
+                sum_ty: scrut_ty.clone(),
+                variant_index: index(*i),
+                binder: None,
+                payload_ty: None,
+            })
+            .collect(),
+    );
+    let binder = ctx.declare_bound(name, target, at);
+    let whole = ctx.declare(None, scrut_ty.clone());
+    ctx.pending_resums.push((binder, whole));
+    HirPattern::At {
+        local: whole,
+        ty: scrut_ty.clone(),
+        sub: Box::new(alts),
     }
 }
 

@@ -396,7 +396,7 @@ pub(super) fn optional_forms(ctx: &LowerCtx<'_>, v: &str, some: &HirTy) -> Strin
     let d = default_lit(some).unwrap_or("default");
     let x = if v == "x" { "y" } else { "x" };
     format!(
-        "write `{v} ?? {d}`, `if let {x}: {t} = {v} {{ .. }}`, or \
+        "write `{v} ?? {d}`, `if let {x} = {v} {{ .. }}`, or \
          `match {v} {{ {x}: {t} => .., none => .. }}`"
     )
 }

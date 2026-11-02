@@ -2433,10 +2433,7 @@ fn mismatch_help(ctx: &LowerCtx<'_>, slot: &HirTy, v: &HirExpr) {
             (Some(s), Some(d)) => {
                 let fix = format!("{s} ?? {d}");
                 ctx.fix_last(v.span, fix.clone(), format!("use `{fix}`"));
-                format!(
-                    "`{s}` may be none: write `{fix}`, or `if let x: {} = {s} {{ .. }}`",
-                    ctx.ty_name(slot)
-                )
+                format!("`{s}` may be none: write `{fix}`, or `if let x = {s} {{ .. }}`")
             }
             _ => format!(
                 "`{name}` may be none: {}",

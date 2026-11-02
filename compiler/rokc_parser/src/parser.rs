@@ -1543,7 +1543,7 @@ impl<'a> Parser<'a> {
         };
         Some(format!(
             "rok has no `!` to unwrap; for a value that may be none, write `{v} ?? default`, \
-             `if let x: T = {v} {{ .. }}`, or `match {v} {{ x: T => .., none => .. }}`"
+             `if let x = {v} {{ .. }}`, or `match {v} {{ x: T => .., none => .. }}`"
         ))
     }
 
