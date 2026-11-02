@@ -1,0 +1,64 @@
+// needs: threads
+// expect-error: `a` was spawned as a task at line 27
+// expect-error: `b` was spawned as a task at line 36
+// expect-error: `c` was spawned as a task at line 47
+// expect-error: `d` was spawned as a task at line 56
+// expect-error: `e` was spawned as a task at line 63
+
+// Every function that takes a closure as `fn(..) + Send` (not `Sync`)
+// may run it on another thread, so a closure that owns moved values goes
+// to the first one: `par::join`, `par::scope`'s and `par::try_scope`'s
+// `spawn`, `spawn_blocking_with_arg`'s `f`, and a function of the
+// program's own.
+use rok::core::io::IoError;
+
+fn main() {
+    let n = joined() + scoped() + try_scoped() + with_arg() + own();
+    println(f"{n}");
+}
+
+fn own_spawn(f: fn() -> usize + Send) -> usize {
+    task::block_on(task::spawn_blocking(f))
+}
+
+fn joined() -> usize {
+    let xs: List<i32> = [1];
+    let a = [move xs] || xs.len();
+    let (p, q) = par::join(a, || 1usize);
+    p + q + a()
+}
+
+fn scoped() -> usize {
+    let n = Atomic::new(0usize);
+    par::scope(|s| {
+        let ys: List<i32> = [1];
+        let b = [move ys] || ys.len();
+        let h = s.spawn(b);
+        n.store(h.join() + b());
+    });
+    n.load()
+}
+
+fn try_scoped() -> usize {
+    let n = Atomic::new(0usize);
+    try! par::try_scope::<IoError>(|s| {
+        let zs: List<i32> = [1];
+        let c = [move zs] || zs.len();
+        let h = s.spawn(c);
+        n.store((try h.join()) + c());
+    });
+    n.load()
+}
+
+fn with_arg() -> usize {
+    let ws: List<i32> = [1];
+    let d = [move ws] |k: usize| ws.len() + k;
+    let t = task::spawn_blocking_with_arg(1usize, d);
+    task::block_on(t) + d(0)
+}
+
+fn own() -> usize {
+    let vs: List<i32> = [1];
+    let e = [move vs] || vs.len();
+    own_spawn(e) + e()
+}

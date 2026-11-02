@@ -1,7 +1,7 @@
 // needs: threads
 // expect-error: error[E0040]: mismatched types: argument 1 of `spawn_blocking` expects `fn() -> usize + Send`, found `closure() -> usize`
 // expect-error: note: the closure captures `xs` (type `List<i32>`), which is not `Sync`
-// expect-error: help: move `xs` into the closure, which then owns its own copy: `[move xs] || ..`, or pass it as the argument: `task::spawn_blocking_with(xs, |xs| ..)`
+// expect-error: help: move `xs` into the closure, which then owns its own copy: `[move xs] || ..`, or pass it as the argument: `task::spawn_blocking_with_arg(xs, |xs| ..)`
 // expect-error: error[E0040]: mismatched types: argument 1 of `thread::spawn` expects `fn() -> usize + Send`
 // expect-error: note: the closure captures `names` (type `List<str>`), which is not `Sync`
 // expect-error: help: move `names` into the closure, which then owns its own copy: `[move names] || ..`

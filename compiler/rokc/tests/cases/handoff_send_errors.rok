@@ -41,7 +41,7 @@ async fn sent_async(tx: Sender<List<i32>>) -> i64 {
 
 fn handed() -> i64 {
     let xs: List<i32> = [1, 2];
-    let t = task::spawn_blocking_with(xs, |v: List<i32>| v.len());
+    let t = task::spawn_blocking_with_arg(xs, |v: List<i32>| v.len());
     let k = xs.len();
     let ys: List<i32> = [3];
     let h = thread::spawn([move ys] || ys.len());

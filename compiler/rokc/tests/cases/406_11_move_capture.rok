@@ -13,7 +13,7 @@
 // (they stay shared with the code that made it). `[move x]` gives `x` to
 // the closure instead: it needs only `Send`, so a collection can go. The
 // closure gets its own copy of every collection `x` reaches. A value can
-// also be passed as the argument: `task::spawn_blocking_with(x, f)`.
+// also be passed as the argument: `task::spawn_blocking_with_arg(x, f)`.
 use rok::std::thread;
 use rok::std::fs::File;
 
@@ -35,7 +35,7 @@ fn main() {
     println(f"thread {try! h.join()}");
 
     let ws: List<i32> = [7, 8, 9];
-    let w = task::spawn_blocking_with(ws, |ws: List<i32>| { ws.push(10); ws.len() });
+    let w = task::spawn_blocking_with_arg(ws, |ws: List<i32>| { ws.push(10); ws.len() });
     println(f"arg {task::block_on(w)}");
 
     // The closure owns its copy: a list it moved in and changes stays its

@@ -1,5 +1,5 @@
 // expect-error: is internal to the Rok toolchain
-// expect-error: help: move the value into the closure (`[move x] || ..`), or pass it as the argument: `task::spawn_blocking_with(x, |x| ..)`
+// expect-error: help: move the value into the closure (`[move x] || ..`), or pass it as the argument: `task::spawn_blocking_with_arg(x, |x| ..)`
 
 // `Handoff` is the toolchain's own: a program moves the value into the
 // closure or hands it over instead.

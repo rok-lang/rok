@@ -2336,7 +2336,7 @@ fn coerce(
             d.notes.push(if send && !wants_sync {
                 let arg = if what().ends_with("`spawn_blocking`") {
                     format!(
-                        ", or pass it as the argument: `task::spawn_blocking_with({name}, \
+                        ", or pass it as the argument: `task::spawn_blocking_with_arg({name}, \
                          |{name}| ..)`"
                     )
                 } else {
