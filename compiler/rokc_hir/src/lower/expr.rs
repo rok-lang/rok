@@ -1384,11 +1384,23 @@ pub(super) fn lower_assign(
             }
             // Only `let` declares. Declare it anyway so later uses don't
             // report again.
+            // Spec 5.1.2: a misspelt name is the likelier mistake.
+            let near = rokc_diagnostic::suggest(
+                name,
+                ctx.scopes.iter().flat_map(|s| s.keys().map(String::as_str)),
+            )
+            .map(str::to_owned);
             ctx.emit_error(
                 Code::INVALID_ASSIGNMENT,
                 format!("`{name}` is not declared; a variable is created only by `let`"),
             );
-            ctx.help_last(Some(format!("write `let {name} = {};`", snippet(value))));
+            ctx.help_last(Some(match near {
+                Some(n) => format!(
+                    "did you mean `{n}`? To declare a new variable, write `let {name} = {};`",
+                    snippet(value)
+                ),
+                None => format!("write `let {name} = {};`", snippet(value)),
+            }));
             let v = lower_expected(ctx, value, HirTy::Unknown);
             Some(ctx.declare_var(name, v.ty.clone(), v, span))
         }
@@ -1748,10 +1760,21 @@ pub(super) fn lower_assign(
             super::mono::assign_place(ctx, &root_place, acc)
         }
         _ => {
-            ctx.emit_error(
+            let help = if matches!(target.kind, ExprKind::Tuple(_)) {
+                format!(
+                    "a tuple is not a place; destructure into new variables: `let {} = {};`",
+                    snippet(target),
+                    snippet(value)
+                )
+            } else {
+                "assign to a variable, a field (`s.x = v`) or an element (`xs[i] = v`)".to_owned()
+            };
+            ctx.emit_error_at(
                 Code::INVALID_ASSIGNMENT,
-                format!("invalid assignment target (spec 3.4) at line {}", span.line),
+                target.span,
+                "invalid assignment target (spec 3.4)".to_owned(),
             );
+            ctx.help_last(Some(help));
             None
         }
     }
@@ -3476,7 +3499,7 @@ pub(super) fn field_access(
                 Code::UNSAFE_REQUIRED,
                 format!(
                     "reading field `{name}` of union `{}` needs an `unsafe` block \
-                     (the bits may not be a valid `{name}`; spec 4.15.2)",
+                     (the bits may not be a valid value of the field's type; spec 4.15.2)",
                     ctx.ty_name(&HirTy::Struct(struct_id))
                 ),
             );
@@ -3685,6 +3708,8 @@ pub(super) fn lower_if(
     let else_ty = else_h.ty.clone();
     let then_div = hir_block_diverges(&then_h);
     let else_div = hir_expr_diverges(&else_h);
+    // Branches already fitted to the slot are not coerced again.
+    let mut fitted = false;
     let result_ty = if expected == Some(HirTy::Unit) {
         // Statement position: branch values are discarded.
         HirTy::Unit
@@ -3714,6 +3739,7 @@ pub(super) fn lower_if(
                 }
             };
         }
+        fitted = true;
         t
     } else {
         // Branches of different types are an error, not an inferred
@@ -3731,7 +3757,7 @@ pub(super) fn lower_if(
         );
         HirTy::Unknown
     };
-    if matches!(result_ty, HirTy::Sum(_) | HirTy::AnyTrait(_)) {
+    if !fitted && matches!(result_ty, HirTy::Sum(_) | HirTy::AnyTrait(_)) {
         let what = || "the `if` branch".to_owned();
         if let Some(t) = then_h.trailing.take() {
             then_h.trailing = Some(coerce(ctx, &result_ty, t, &what));
@@ -4086,8 +4112,62 @@ pub(super) fn lower_args_for(
 
 /// `lower_args_for`, also returning each `ref` parameter's argument
 /// place (by parameter index) for the copy-out (spec 4.7).
-#[allow(clippy::cognitive_complexity)]
 pub(super) fn lower_args_ref(
+    ctx: &mut LowerCtx<'_>,
+    sig: &FnSig,
+    callee: &str,
+    receiver: Option<HirExpr>,
+    args: &[CallArg],
+    span: rokc_diagnostic::Span,
+) -> (Vec<HirExpr>, Vec<HirStmt>, Vec<Option<HirExpr>>) {
+    // Spec 4.8.3: a trailing closure fills the last parameter only; for
+    // a function parameter elsewhere, its mismatches say little.
+    let fn_like = |t: &HirTy| {
+        matches!(
+            t,
+            HirTy::Fn(..)
+                | HirTy::Closure { .. }
+                | HirTy::Unknown
+                | HirTy::Param(_)
+                | HirTy::Var(_)
+                | HirTy::Path(_)
+                | HirTy::AnyTrait(_)
+        )
+    };
+    let misplaced = !sig.variadic
+        && matches!(args.last(), Some(CallArg::Positional(e)) if is_trailing_closure(e))
+        && sig.param_tys.last().is_some_and(|t| !fn_like(t))
+        && sig
+            .param_tys
+            .iter()
+            .any(|t| matches!(t, HirTy::Fn(..) | HirTy::Closure { .. }));
+    let since = ctx.env.sink.diagnostics.borrow().len();
+    let out = lower_args_ref_inner(ctx, sig, callee, receiver, args, span);
+    if misplaced {
+        retain_since(ctx, since, |d| {
+            !matches!(
+                d.code,
+                Code::MISMATCHED_TYPES | Code::TYPE_ANNOTATIONS_NEEDED
+            )
+        });
+        let last = sig.param_names.last().cloned().unwrap_or_default();
+        ctx.emit_error_at(
+            Code::MISMATCHED_TYPES,
+            span,
+            format!(
+                "a trailing closure fills the last parameter, `{last}`, which is not a \
+                 function (spec 4.8.3)"
+            ),
+        );
+        ctx.help_last(Some(
+            "pass the closure inside the parentheses, in its parameter's position".to_owned(),
+        ));
+    }
+    out
+}
+
+#[allow(clippy::cognitive_complexity)]
+fn lower_args_ref_inner(
     ctx: &mut LowerCtx<'_>,
     sig: &FnSig,
     callee: &str,
@@ -4276,14 +4356,17 @@ pub(super) fn lower_args_ref(
                         dict_lits.push(e);
                         dicts.push((name, k, v));
                     }
-                    other => ctx.emit_error(
-                        Code::SPREAD_ARGUMENT,
-                        format!(
-                            "spread `f(..x)` needs a tuple, a `List`, a `Slice`, an array or a \
-                             `Dict<str, V>`, found `{}` (spec 4.2.6)",
-                            ctx.ty_name(&other)
-                        ),
-                    ),
+                    other => {
+                        ctx.emit_error(
+                            Code::SPREAD_ARGUMENT,
+                            format!(
+                                "spread `f(..x)` needs a tuple, a `List`, a `Slice`, an array or \
+                                 a `Dict<str, V>`, found `{}` (spec 4.2.6)",
+                                ctx.ty_name(&other)
+                            ),
+                        );
+                        spread_range_help(ctx, e, &other);
+                    }
                 }
             }
         }
@@ -4328,11 +4411,12 @@ pub(super) fn lower_args_ref(
                      is not `ref` (spec 4.7.3)"
                 ),
             ),
-            Some(ArgSrc::Ast(_)) if by_ref && !is_receiver => ctx.emit_error(
+            Some(ArgSrc::Ast(e)) if by_ref && !is_receiver => ctx.emit_error(
                 Code::REF_ARGUMENT,
                 format!(
-                    "parameter `{pname}` of `{callee}` is `ref` - pass `ref x` at the call \
-                     site (spec 4.7.3)"
+                    "parameter `{pname}` of `{callee}` is `ref` - pass `ref {}` at the call \
+                     site (spec 4.7.3)",
+                    snippet(e)
                 ),
             ),
             Some(ArgSrc::Ast(e)) => reads.extend(crate::walk::free_places(&[], e)),
@@ -5121,8 +5205,16 @@ fn check_path_receiver(
         Some(false) if by_ref => ctx.emit_error(
             Code::REF_ARGUMENT,
             format!(
-                "parameter `{pname}` of `{callee}` is `ref` - pass `ref x` at the call site \
-                 (spec 4.7.3)"
+                "parameter `{pname}` of `{callee}` is `ref` - pass `ref {}` at the call site \
+                 (spec 4.7.3)",
+                match &arg.kind {
+                    HirExprKind::Local(l) => ctx
+                        .locals
+                        .get(l.0 as usize)
+                        .and_then(|x| x.name.clone())
+                        .unwrap_or_else(|| "x".to_owned()),
+                    _ => "x".to_owned(),
+                }
             ),
         ),
         Some(true) if !by_ref => ctx.emit_error(
@@ -7138,6 +7230,19 @@ pub(super) fn method_call_on(
         retain_since(ctx, since, |d| {
             d.tag != rokc_diagnostic::Tag::ClosureParamInfer
         });
+        // `s[a:b:k]` desugars to `.slice(..).step(k)` (spec 3.6.2).
+        if method == "step" && recv_h.ty == HirTy::Prim(PrimTy::Str) {
+            let e = ctx.error_expr(
+                Code::INVALID_INDEX,
+                span,
+                "a `str` slice has no step: `s[a:b:k]` is for lists and arrays (spec 3.6.2)"
+                    .to_owned(),
+            );
+            ctx.help_last(Some(
+                "step over the characters: `s.chars().step_by(k)`".to_owned(),
+            ));
+            return e;
+        }
         let e = ctx.error_expr(
             Code::NO_METHOD,
             span,
@@ -8468,11 +8573,22 @@ pub(super) fn call_value(
             );
         }
     };
+    if args.iter().any(|a| matches!(a, CallArg::Named { .. })) {
+        let h = ctx.error_expr(
+            Code::NAMED_ARGUMENT,
+            span,
+            "a `fn` value takes no named arguments: its type has no parameter names \
+             (spec 4.4.11)"
+                .to_owned(),
+        );
+        ctx.help_last(Some("pass the arguments by position".to_owned()));
+        return h;
+    }
     if args.iter().any(|a| !matches!(a, CallArg::Positional(_))) {
         return ctx.error_expr(
             Code::SPREAD_ARGUMENT,
             span,
-            "named / spread arguments need a statically known callee (spec 4.2.4)".to_owned(),
+            "spread arguments need a statically known callee (spec 4.2.6)".to_owned(),
         );
     }
     let sig = FnSig {
@@ -8782,6 +8898,7 @@ fn generic_positional_args(
                                 ctx.ty_name(other)
                             ),
                         );
+                        spread_range_help(ctx, e, other);
                         return None;
                     }
                 };
@@ -8971,9 +9088,10 @@ fn call_generic_positional(
                     )
                 } else {
                     format!(
-                        "parameter {} of `{callee}` is `ref` - pass `ref x` at the call site \
+                        "parameter {} of `{callee}` is `ref` - pass `ref {}` at the call site \
                          (spec 4.7.3)",
-                        i + 1
+                        i + 1,
+                        snippet(e)
                     )
                 },
             );
@@ -9309,6 +9427,16 @@ fn bind_explicit_generics(
     }
     ctx.explicit_generics = bound;
     true
+}
+
+/// `g(..5)` spreads `5`; a range argument needs parentheses.
+fn spread_range_help(ctx: &LowerCtx<'_>, e: &Expr, ty: &HirTy) {
+    if matches!(ty, HirTy::Prim(p) if p.is_int()) {
+        ctx.help_last(Some(format!(
+            "to pass the range `..{0}`, write it in parentheses: `(..{0})`",
+            snippet(e)
+        )));
+    }
 }
 
 /// A `::<T>` argument; a name that resolves to no type is E0028 here,
@@ -10091,16 +10219,39 @@ fn qpath_call(
     }
     let call = call_impl_method(ctx, &t, method, Some(&key), recv, rest, &display, span);
     ctx.explicit_recv = None;
-    call.unwrap_or_else(|| {
-        ctx.error_expr(
+    call.unwrap_or_else(|| qualified_miss(ctx, &t, &key, method, span))
+}
+
+/// `<T as Tr>::m` that resolves to nothing: the trait lacks `m`, or `T`
+/// lacks the impl.
+fn qualified_miss(
+    ctx: &LowerCtx<'_>,
+    t: &HirTy,
+    key: &str,
+    method: &str,
+    span: rokc_diagnostic::Span,
+) -> HirExpr {
+    let tr = leaf_name(key);
+    let methods: Option<Vec<String>> = ctx.env.trait_of(key).map(|info| info.methods.clone());
+    match methods {
+        Some(ms) if !ms.iter().any(|m| m == method) => {
+            let h = ctx.error_expr(
+                Code::NO_METHOD,
+                span,
+                format!("trait `{tr}` has no method `{method}`"),
+            );
+            if !ms.is_empty() {
+                let list: Vec<String> = ms.iter().map(|m| format!("`{m}`")).collect();
+                ctx.help_last(Some(format!("its methods: {}", list.join(", "))));
+            }
+            h
+        }
+        _ => ctx.error_expr(
             Code::NO_METHOD,
             span,
-            format!(
-                "`{}` has no `{key}` impl providing `{method}`",
-                ctx.ty_name(&t)
-            ),
-        )
-    })
+            format!("`{}` does not implement `{tr}`", ctx.ty_name(t)),
+        ),
+    }
 }
 
 /// The concrete `method` of `t` from the impl of `key` with the arguments
@@ -10215,16 +10366,7 @@ fn path_call_via_impls(
         }
         let call = call_impl_method(ctx, &t, method, Some(&key), recv, rest, display, span);
         ctx.explicit_recv = None;
-        return Some(call.unwrap_or_else(|| {
-            ctx.error_expr(
-                Code::NO_METHOD,
-                span,
-                format!(
-                    "`{}` has no `{key}` impl providing `{method}`",
-                    ctx.ty_name(&t)
-                ),
-            )
-        }));
+        return Some(call.unwrap_or_else(|| qualified_miss(ctx, &t, &key, method, span)));
     }
     // Only paths the struct / enum lookup can't take: type parameters,
     // primitives, `Self`, associated types (2.8.3).

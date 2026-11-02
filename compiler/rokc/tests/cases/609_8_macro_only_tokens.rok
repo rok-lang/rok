@@ -1,0 +1,16 @@
+// spec: §6.9.8
+// expect-error: `@concat` belongs to `@macro` templates only
+
+// `@concat` and `@for` are macro-only.
+trait Named { fn name_of() -> str; }
+
+#[impl_derive(Named)] @derive {
+    impl Named for @Self {
+        fn name_of() -> str { @concat(x, y); "" }
+    }
+}
+
+#[derive(Named)]
+struct S {}
+
+fn main() {}

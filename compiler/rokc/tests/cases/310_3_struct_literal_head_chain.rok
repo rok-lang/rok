@@ -1,0 +1,12 @@
+// spec: §3.10.3
+// expect-error: 10:8: a struct literal can't start a block's head
+// expect-error: 11:11: a struct literal can't start a block's head
+// expect-error: help: wrap the struct literal in parentheses: `(S { a: 1 })`
+
+// A struct literal starting a head is reported even when the head goes on.
+struct S { a: i32; }
+impl S { fn ok(self) -> bool { self.a > 0 } }
+fn main() {
+    if S { a: 1 }.ok() { println("y"); }
+    while S { a: 1 }.a > 5 { }
+}

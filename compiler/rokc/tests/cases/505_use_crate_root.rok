@@ -1,0 +1,9 @@
+// spec: §5.5 §5.7
+// expect-error: unresolved import: `crate::c::a` does not exist
+// expect-error: help: this package's root is `pkg`: write `use pkg::..`
+
+// `crate::` is `pkg::` in Rok.
+mod c { pub fn a() {} }
+use crate::c::a;
+
+fn main() {}

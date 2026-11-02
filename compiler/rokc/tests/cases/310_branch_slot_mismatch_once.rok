@@ -1,0 +1,9 @@
+// spec: §3.10.2
+// expect-error: mismatched types: the `else` branch of `if` expects `f64 | i32`, found `str`
+// forbid-error: the `if` branch expects
+
+// A branch that does not fit the slot is reported once.
+fn main() {
+    let c = true;
+    let d: i32 | f64 = if c { 1i32 } else { "hi" };
+}

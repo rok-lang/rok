@@ -1,0 +1,12 @@
+// spec: §5.6.5
+// expect-error: function `p::q::f` is `pub(sub)`: visible only in module `p::q` and its descendants
+// expect-error: help: make `f` `pub(pkg)` or `pub` to use it here
+
+// A `pub(sub)` item used from outside its subtree says so.
+mod p {
+    pub mod q {
+        pub(sub) fn f() {}
+    }
+}
+
+fn main() { p::q::f(); }

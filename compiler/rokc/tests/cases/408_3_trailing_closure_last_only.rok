@@ -1,5 +1,6 @@
 // spec: §4.8.3
-// expect-error: argument `t` of `process` expects `fn(str) -> str`, found `str`
+// expect-error: a trailing closure fills the last parameter, `output`, which is not a function
+// expect-error: help: pass the closure inside the parentheses
 
 // Spec 4.8.3: a trailing closure fills only the last argument; a
 // closure in the middle needs the parentheses.

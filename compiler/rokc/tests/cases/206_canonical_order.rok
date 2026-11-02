@@ -1,0 +1,11 @@
+// spec: §2.6.4
+// expect-error: found `Point | i32 | str`
+
+// Sum terms are ordered by key: a type's full path, a primitive's name
+// (`Point` before `i32` before `str`), whatever the written order.
+struct Point { x: i32; }
+
+fn main() {
+    let v: str | i32 | Point = 1;
+    let b: bool = v;
+}

@@ -656,7 +656,7 @@ pub(super) fn resolve_ty_with_structs(
                 let written = segs.join("::");
                 sc.names.error_help(
                     Code::TRAIT_AS_TYPE,
-                    sc.at,
+                    if p.span.is_dummy() { sc.at } else { p.span },
                     format!("trait `{full}` cannot be used as a type directly"),
                     format!(
                         "use `any {written}` for a value of any type implementing it, or a \

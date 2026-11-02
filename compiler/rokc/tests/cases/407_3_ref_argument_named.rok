@@ -1,0 +1,10 @@
+// spec: §4.7.3
+// expect-error: parameter `n` of `inc` is `ref` - pass `ref a` at the call site
+
+// The `ref` hint names the argument written.
+fn inc(ref n: i32) { n += 1; }
+
+fn main() {
+    let a = 1;
+    inc(a);
+}

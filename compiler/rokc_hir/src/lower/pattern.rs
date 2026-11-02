@@ -578,8 +578,15 @@ pub(super) fn check_match_arms(
         let exempt = synthetic.get(i).copied().unwrap_or(false)
             || (foreign.is_some() && hir_pattern_irrefutable(&a.pat));
         if !exempt && !instance && !useful(ctx, &rows, std::slice::from_ref(&p), &tys) {
-            ctx.emit_error(
+            // At the arm (its body), not the whole `match`.
+            let at = if a.body.span.is_dummy() {
+                ctx.here()
+            } else {
+                a.body.span
+            };
+            ctx.emit_error_at(
                 Code::UNREACHABLE_ARM,
+                at,
                 format!(
                     "unreachable match arm {}: earlier arms already match every value it \
                      matches (spec 3.12.6)",
@@ -1292,8 +1299,9 @@ fn lower_pattern_here(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy
                     if !extra.is_empty() {
                         detail.push_str(&format!(" extra {extra}"));
                     }
-                    ctx.emit_error(
+                    ctx.emit_error_at(
                         Code::OR_PATTERN_BINDINGS,
+                        alts[i].span,
                         format!(
                             "or-pattern alternatives bind different name sets \
                              (alternative {i}:{detail}, spec 3.11.4)"

@@ -9,7 +9,8 @@
 //!                          8=NOMOVE, 9=NOEVAC its evacuation bits,
 //!                          12=WIPE: zeroed when freed; 13..=31 a `par`
 //!                          visit's, `VISIT_*`)
-//!   8  : `gc_word`   u64 (forwarding pointer or LOS payload size)
+//!   8  : `gc_word`   u64 (the object's total size; the forwarding pointer
+//!                          once evacuated)
 //!   16 : payload     ...
 
 use core::mem::{align_of, offset_of, size_of};
@@ -83,7 +84,7 @@ const _: () = {
 
 impl ObjectHeader {
     /// Write a fresh header (702 §7.2.4): `type_id`, `gc_flags = 0`,
-    /// `gc_word = 0`.
+    /// `gc_word = 0`; the allocator then stores the size in `gc_word`.
     ///
     /// # Safety
     /// `obj` must be valid for writes of `HEADER_SIZE` bytes and

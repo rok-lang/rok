@@ -1,5 +1,5 @@
 // spec: §4.7.3
-// expect-error: parameter `self` of `Bump::bump` is `ref` - pass `ref x`
+// expect-error: parameter `self` of `Bump::bump` is `ref` - pass `ref c`
 
 struct Counter { c: i32; }
 impl Counter {
@@ -20,4 +20,4 @@ fn main() {
     Box2::set(b, 5);
     println(f"{c.c} {b.v}");
 }
-// expect-error: parameter 1 of `Box2::set` is `ref` - pass `ref x`
+// expect-error: parameter 1 of `Box2::set` is `ref` - pass `ref b`

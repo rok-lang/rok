@@ -1,0 +1,8 @@
+// spec: §4.4.11 §4.14.7
+// expect-error: a function type has no parameter names
+// expect-error: help: write the types only
+
+// A function type names no parameters.
+fn apply(f: fn(x: i32) -> i32) -> i32 { f(1) }
+
+fn main() {}

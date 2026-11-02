@@ -1,0 +1,9 @@
+// spec: §3.6.2
+// expect-error: a `str` slice has no step
+// expect-error: help: step over the characters: `s.chars().step_by(k)`
+
+// `str` slices take no step.
+fn main() {
+    let s = "abc";
+    let t = s[::2];
+}

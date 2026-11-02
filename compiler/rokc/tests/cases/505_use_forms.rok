@@ -1,78 +1,8 @@
-// spec: §5.5.1 §5.5.2 §5.5.3 §5.5.6 §5.5.7 §5.5.8 §5.5.9 §5.5.10 §5.5.11 §5.5.12 §5.5.13 §5.5.14
-// expect-exit: 0
-// expect-stdout:
-// 2 3 3 30
-// 1 4
-// circle true sq
-// ok 7 err
-// 5 6
-// 2 9
+// spec: §5.5
+// expect-error: expected an import path, found keyword `self`
+// expect-error: help: a `use` path has no `self`
 
-// Spec 5.5: `use` forms. Groups nest and mix `as` and `*`; a function
-// may import locally; an explicit import settles a glob clash; enum
-// variants and modules import like items; `rok::core` needs no `use`.
-mod foo {
-    pub fn item() -> i32 { 1 }
-    pub mod bar {
-        pub fn x() -> i32 { 2 }
-        pub fn y() -> i32 { 3 }
-    }
-    pub mod baz {
-        pub fn thirty() -> i32 { 30 }
-    }
-    pub mod geom {
-        pub struct Point { pub x: i32; pub y: i32; }
-    }
-}
+// `use` has no `self::`.
+use self::x;
 
-mod other {
-    pub fn item() -> i32 { 4 }
-    pub struct Item { pub v: i32; }
-}
-
-mod api {
-    pub(pkg) use pkg::other::Item;
-}
-
-enum Shape { Circle(i32), Square(i32), Dot }
-
-use foo::{bar::{x, y as why}, baz::*};
-use foo::*;
-use other::*;
-use foo::item;
-use foo::item;
-use other::item as other_item;
-use foo::geom;
-use Shape::{Circle};
-use Shape::{Square as Sq};
-
-fn name(s: Shape) -> str {
-    match s {
-        Circle(_) => "circle",
-        Sq(_) => "sq",
-        Shape::Dot => "dot",
-    }
-}
-
-fn local() -> i32 {
-    use foo::bar::y;
-    return y() + 3;
-}
-
-fn parse(s: str) -> Result<i32, str> {
-    if s == "7" { return Ok(7); }
-    return Err("err");
-}
-
-println(f"{x()} {why()} {y_of()} {thirty()}");
-println(f"{item()} {other_item()}");
-println(f"{name(Shape::Circle(1))} {Shape::Square(2) is Shape::Square} {name(Sq(3))}");
-let a = match parse("7") { Ok(v) => f"ok {v}", Err(e) => e };
-let b = match parse("x") { Ok(v) => f"{v}", Err(e) => e };
-println(f"{a} {b}");
-let p = geom::Point { x: 5, y: 6 };
-println(f"{p.x} {p.y}");
-let it = api::Item { v: 9 };
-println(f"{bar::x()} {it.v}");
-
-fn y_of() -> i32 { local() - 3 }
+fn main() {}

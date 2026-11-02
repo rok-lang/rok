@@ -923,11 +923,27 @@ impl Expander<'_> {
         let head = match b.get(k + 1).map(|t| &t.kind) {
             Some(TokenKind::SelfUpper) => "Self".to_owned(),
             Some(TokenKind::Ident(n)) => n.clone(),
+            // Spec 6.9.8: `@for` and `@concat` are macro-only.
+            Some(TokenKind::For) => {
+                self.err(
+                    k,
+                    "`@for` belongs to `@macro` templates only; a derive or attribute \
+                     repeats with `@for_fields { .. }` / `@for_variants { .. }` (spec 6.9.8)",
+                );
+                return k + 2;
+            }
             _ => {
                 self.err(k, "expected a template token name after `@` (spec 6.9.1)");
                 return k + 1;
             }
         };
+        if head == "concat" {
+            self.err(
+                k,
+                "`@concat` belongs to `@macro` templates only (spec 6.9.8)",
+            );
+            return k + 2;
+        }
         let mut j = k + 2;
         let members: &[&str] = match head.as_str() {
             "field" => &[

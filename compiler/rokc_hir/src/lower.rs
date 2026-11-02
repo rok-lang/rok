@@ -2496,7 +2496,8 @@ fn convert_help(ctx: &LowerCtx<'_>, slot: &HirTy, v: &HirExpr, ann: Option<Span>
             if *to == PrimTy::Str
                 && *from != PrimTy::CChar
                 && !s.contains('"')
-                && !what.contains("operand of `+`") =>
+                && !what.contains("operand of `+`")
+                && !what.starts_with("the pattern") =>
         {
             let fix = format!("f\"{{{s}}}\"");
             ctx.help_last(Some(format!("to make text from it, write `{fix}`")));
@@ -4835,6 +4836,22 @@ impl<'a> LowerCtx<'a> {
                 }
             });
             self.help_last(Some(help));
+            return false;
+        }
+        if vis == Visibility::Sub {
+            self.emit_error(
+                Code::PRIVATE_ITEM,
+                format!(
+                    "{what} `{full}` is `pub(sub)`: visible only in module `{}` and its \
+                     descendants, not from `{}` (spec 5.6.5)",
+                    module_display(&def_module),
+                    module_display(&from)
+                ),
+            );
+            self.help_last(Some(format!(
+                "make `{}` `pub(pkg)` or `pub` to use it here",
+                leaf_name(full)
+            )));
             return false;
         }
         self.emit_error(

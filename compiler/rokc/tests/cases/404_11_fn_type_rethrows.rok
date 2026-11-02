@@ -1,0 +1,7 @@
+// spec: §4.14.7
+// expect-error: a function type cannot be `rethrows`
+
+// `rethrows` is for declarations only.
+fn apply(f: fn(i32) rethrows -> i32) -> i32 { 1 }
+
+fn main() {}

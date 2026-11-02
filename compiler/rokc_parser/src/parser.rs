@@ -38,6 +38,9 @@ pub struct Parser<'a> {
     /// Whether `Path { .. }` is a struct literal here; off in `if` /
     /// `while` / `for` heads so the `{` opens the body.
     struct_expr_allowed: bool,
+    /// One struct literal allowed at the start of a block head, already
+    /// reported (E0013), so the rest of the head parses as written.
+    head_struct_lit: bool,
     /// `|` mid-type expands to sum-type alternation. Inside closure
     /// parameter lists the closing `|` must end the list instead.
     type_sum_allowed: bool,
@@ -297,6 +300,7 @@ impl<'a> Parser<'a> {
             file: file.into(),
             diagnostics: Vec::new(),
             struct_expr_allowed: true,
+            head_struct_lit: false,
             stmt_head: false,
             type_sum_allowed: true,
             pending: None,
@@ -539,6 +543,12 @@ impl<'a> Parser<'a> {
     /// From a path (`a::E`) at the cursor: is its `{ .. }` group followed
     /// by another `{`?
     fn braces_then_block(&self) -> bool {
+        self.braces_then(true)
+    }
+
+    /// `braces_then_block`; with `strict` off, a continued head
+    /// (`S { a: 1 }.ok() {`) counts too.
+    fn braces_then(&self, strict: bool) -> bool {
         let mut i = self.pos;
         let kind = |i: usize| self.tokens.get(i).map(|t| &t.kind);
         while matches!(kind(i), Some(TokenKind::Ident(_) | TokenKind::ColonColon)) {
@@ -554,7 +564,8 @@ impl<'a> Parser<'a> {
                 TokenKind::RBrace => {
                     depth -= 1;
                     if depth == 0 {
-                        return matches!(kind(i + 1), Some(TokenKind::LBrace));
+                        return matches!(kind(i + 1), Some(TokenKind::LBrace))
+                            || !strict && self.continued_head(i + 1);
                     }
                 }
                 _ => {}
@@ -564,10 +575,73 @@ impl<'a> Parser<'a> {
         false
     }
 
+    /// At token `i`: a member access or an operator, then (at bracket
+    /// depth 0) the `{` of the block.
+    fn continued_head(&self, i: usize) -> bool {
+        let kind = |i: usize| self.tokens.get(i).map(|t| &t.kind);
+        if !matches!(
+            kind(i),
+            Some(
+                TokenKind::Dot
+                    | TokenKind::Gt
+                    | TokenKind::Lt
+                    | TokenKind::GtEq
+                    | TokenKind::LtEq
+                    | TokenKind::EqEq
+                    | TokenKind::NotEq
+            )
+        ) {
+            return false;
+        }
+        let mut depth = 0i32;
+        for j in i.. {
+            match kind(j) {
+                Some(TokenKind::LParen | TokenKind::LBracket) => depth += 1,
+                Some(TokenKind::RParen | TokenKind::RBracket) => depth -= 1,
+                Some(TokenKind::LBrace) if depth == 0 => return true,
+                None | Some(TokenKind::Semi | TokenKind::LBrace | TokenKind::RBrace) => {
+                    return false;
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
+    /// A `fn(..)` type's parameter types through `)`. It names no
+    /// parameters (spec 4.4.11) and is never `rethrows` (4.14.7).
+    fn fn_type_params(&mut self) -> Option<Vec<Ty>> {
+        if matches!(self.peek(), TokenKind::Ident(_))
+            && matches!(self.peek_next(), Some(TokenKind::Colon))
+        {
+            let s = self.peek_span();
+            self.error_help(
+                Code::SYNTAX,
+                s,
+                "a function type has no parameter names (spec 4.4.11)",
+                "write the types only: `fn(i32, str) -> bool`",
+            );
+            return None;
+        }
+        let args = self.nested_type_list(TokenKind::RParen)?;
+        self.expect(&TokenKind::RParen, "`)`")?;
+        if self.at_kw("rethrows") {
+            let s = self.peek_span();
+            self.error_help(
+                Code::SYNTAX,
+                s,
+                "a function type cannot be `rethrows` (spec 4.14.7)",
+                "write the error it throws: `fn(i32) throws (E) -> i32`",
+            );
+            return None;
+        }
+        Some(args)
+    }
+
     /// `S { a: 1 } {` at the cursor: a struct literal at the top of a
     /// block head, where its `{` reads as the body (spec 3.10.3).
     fn struct_lit_head(&self) -> bool {
-        if !self.braces_then_block() {
+        if !self.braces_then(false) {
             return false;
         }
         let kind = |i: usize| self.tokens.get(i).map(|t| &t.kind);
@@ -589,7 +663,9 @@ impl<'a> Parser<'a> {
                 TokenKind::RBrace => {
                     depth -= 1;
                     if depth == 0 {
-                        return true;
+                        // `S { a: 1 } {` or `S { a: 1 }.ok() {`.
+                        return matches!(kind(i + 1), Some(TokenKind::LBrace))
+                            || self.continued_head(i + 1);
                     }
                 }
                 TokenKind::FatArrow if depth == 1 => return false,
@@ -605,6 +681,44 @@ impl<'a> Parser<'a> {
     fn parse_head(&mut self) -> Option<Expr> {
         if !self.struct_lit_head() {
             return self.with_struct_expr(false, Self::parse_expr);
+        }
+        // The literal's closing `}`.
+        let close = (self.pos..self.tokens.len())
+            .find(|&i| matches!(self.tokens[i].kind, TokenKind::LBrace))
+            .and_then(|open| {
+                let mut depth = 0u32;
+                (open..self.tokens.len()).find(|&i| {
+                    match self.tokens[i].kind {
+                        TokenKind::LBrace => depth += 1,
+                        TokenKind::RBrace => depth -= 1,
+                        _ => {}
+                    }
+                    depth == 0
+                })
+            });
+        if let Some(close) = close.filter(|&c| {
+            !matches!(
+                self.tokens.get(c + 1).map(|t| &t.kind),
+                Some(TokenKind::LBrace)
+            )
+        }) {
+            // `S { a: 1 }.ok() {`: the literal, then the rest of the head.
+            let lit_span = Span {
+                end: self.tokens[close].span.end,
+                ..self.peek_span()
+            };
+            self.head_struct_lit = true;
+            let head = self.with_struct_expr(false, Self::parse_expr);
+            self.head_struct_lit = false;
+            let text = self.text_in(lit_span);
+            self.error_help(
+                Code::STRUCT_LITERAL_IN_HEAD,
+                lit_span,
+                "a struct literal can't start a block's head: its `{` would open the body \
+                 (spec 3.10.3)",
+                format!("wrap the struct literal in parentheses: `({text})`"),
+            );
+            return head;
         }
         let lit = self.with_struct_expr(true, Self::parse_primary)?;
         let text = self.text_in(lit.span);
@@ -2067,11 +2181,12 @@ impl<'a> Parser<'a> {
         // which doesn't come through here.
         if is_mut {
             let mut_span = self.peek_span();
-            self.error(
+            self.error_help(
                 Code::MISPLACED_ITEM,
                 mut_span,
-                "`static mut` is only allowed inside `extern \"C\" { ... }` (FFI). \
-                 General code should use `Atomic`/`Mutex`/`Cell` (spec 5.3)",
+                "`static mut` is only allowed inside `extern \"C\" { ... }` (FFI) (spec 5.3)",
+                "a static is shared by every thread: hold the value in an `Atomic` or a \
+                 `Mutex`, as in `static N: Atomic<i32> = Atomic::new(0);`",
             );
         }
         let name = if let TokenKind::Ident(n) = self.peek().clone() {
@@ -2811,7 +2926,23 @@ impl<'a> Parser<'a> {
                 n
             } else {
                 let s = self.peek_span();
-                self.error(Code::SYNTAX, s, "expected an import path");
+                let help = match self.peek() {
+                    TokenKind::SelfLower => Some(
+                        "a `use` path has no `self`: name a child module directly \
+                         (`use c::x;`), a module itself as `use a::b;`, this package's root \
+                         as `pkg::` (spec 5.5)",
+                    ),
+                    TokenKind::ColonColon => Some(
+                        "a `use` path starts with a name: `pkg::` for this package's root, \
+                         a dependency's or `rok`'s name otherwise (spec 5.5)",
+                    ),
+                    _ => None,
+                };
+                let msg = format!("expected an import path, found {}", self.peek().describe());
+                match help {
+                    Some(h) => self.error_help(Code::SYNTAX, s, msg, h),
+                    None => self.error(Code::SYNTAX, s, msg),
+                }
                 return None;
             };
             segments.push(PathSegment {
@@ -2845,12 +2976,23 @@ impl<'a> Parser<'a> {
                 self.bump();
                 // `**` is two consecutive Stars - the second `*` follows
                 // immediately when there's no space.
-                if matches!(self.peek(), TokenKind::Star) {
+                let kind = if matches!(self.peek(), TokenKind::Star) {
                     self.bump();
                     rokc_ast::UseTreeKind::GlobRecursive
                 } else {
                     rokc_ast::UseTreeKind::Glob
+                };
+                if matches!(self.peek(), TokenKind::As) {
+                    let s = self.peek_span();
+                    self.error_help(
+                        Code::SYNTAX,
+                        s,
+                        "a glob import takes no alias (spec 5.5)",
+                        "import the module under another name instead: `use a as x;`",
+                    );
+                    return None;
                 }
+                kind
             }
             TokenKind::LBrace => {
                 self.bump();
@@ -3519,6 +3661,31 @@ impl<'a> Parser<'a> {
     /// Spec 4.2.5: `xs: ...T` is `xs: Slice<T>` over the trailing
     /// arguments, so there is no instance per argument count. Last only.
     fn desugar_variadic(&mut self, params: &mut [Param]) {
+        // Spec 4.2.3: defaults are trailing. A variadic may follow them,
+        // and so may a last `fn` parameter, which a trailing closure
+        // fills (4.8.9).
+        if let Some(first) = params.iter().position(|p| p.default.is_some()) {
+            let last = params.len() - 1;
+            let late = params[first + 1..].iter().enumerate().find_map(|(k, p)| {
+                let closure_slot = first + 1 + k == last
+                    && p.ty
+                        .as_ref()
+                        .is_some_and(|t| matches!(t.kind, TyKind::Fn(..)));
+                (p.default.is_none() && !p.variadic && !closure_slot).then_some(p)
+            });
+            if let Some(p) = late {
+                let msg = format!(
+                    "parameter `{}` has no default but follows one that does; defaults are \
+                     trailing (spec 4.2.3)",
+                    p.name
+                );
+                let help = format!(
+                    "give `{}` a default, or move it before `{}`",
+                    p.name, params[first].name
+                );
+                self.error_help(Code::INVALID_SIGNATURE, p.span, msg, help);
+            }
+        }
         let last = params.len().saturating_sub(1);
         for (i, p) in params.iter_mut().enumerate() {
             if !p.variadic {
@@ -3878,8 +4045,7 @@ impl<'a> Parser<'a> {
             TokenKind::Fn => {
                 self.bump();
                 self.expect(&TokenKind::LParen, "`(`")?;
-                let args = self.nested_type_list(TokenKind::RParen)?;
-                self.expect(&TokenKind::RParen, "`)`")?;
+                let args = self.fn_type_params()?;
                 let throws_span = self.peek_span();
                 let throws = self.parse_throws();
                 // `fn(..) -> R` binds tighter than `|` (spec 2.1.10):
@@ -6633,7 +6799,11 @@ impl<'a> Parser<'a> {
                         last.generics = generics;
                     }
                 }
-                if self.struct_expr_allowed && matches!(self.peek(), TokenKind::LBrace) {
+                if std::mem::take(&mut self.head_struct_lit)
+                    && matches!(self.peek(), TokenKind::LBrace)
+                {
+                    self.parse_struct_init_body(path)?
+                } else if self.struct_expr_allowed && matches!(self.peek(), TokenKind::LBrace) {
                     // `Path { .. }`: struct init or 0-arg trailing closure
                     // (spec 2.3 vs 4.8.1), by the body's first tokens:
                     //   `}`, `..rest`, `ident :|,|}`  → struct init

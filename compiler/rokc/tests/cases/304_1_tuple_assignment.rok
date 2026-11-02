@@ -1,0 +1,9 @@
+// spec: §3.4.1 §3.15
+// expect-error: 8:5: invalid assignment target
+// expect-error: help: a tuple is not a place; destructure into new variables: `let (a, b) = (b, a);`
+
+// A tuple is not a place to assign to.
+fn main() {
+    let a = 1; let b = 2;
+    (a, b) = (b, a);
+}
