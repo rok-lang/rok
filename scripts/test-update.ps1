@@ -127,8 +127,11 @@ try {
         }
 
         # The project moves to the staged series and builds as it was locked.
-        $m = (Get-Content -Raw rok.rokon) -replace 'toolchain: "[^"]*"', "toolchain: `"$series`""
-        Set-Content -NoNewline rok.rokon $m
+        # [IO.File] resolves a relative path against the process, not the
+        # location: name the file in full.
+        $manifest = Join-Path $app 'rok.rokon'
+        $m = [IO.File]::ReadAllText($manifest) -replace 'toolchain: "[^"]*"', "toolchain: `"$series`""
+        [IO.File]::WriteAllText($manifest, $m)
         Must "$h\bin\rok.exe" build
         $out = (& "$h\bin\rok.exe" -q run) -join "`n"
         if ($LASTEXITCODE -or $out -ne '1') { throw "the project prints '$out', not 1" }
