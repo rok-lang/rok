@@ -1,0 +1,55 @@
+// needs: process threads
+// only-os: macos linux
+// expect-exit: 0
+// expect-stdout:
+// 50 rounds: no signal error
+// killed while waited on: true
+// handle id: true
+// after the end: ok
+
+// `Child::handle`: another thread signals the child while the owner
+// waits on it. A signal after the child has ended and is being reaped
+// is a no-op, not an error, and never reaches a reused pid.
+use rok::std::process::{Child, ChildHandle, Command, Signal};
+use rok::std::os::unix::process::ExitStatusExt;
+use rok::std::thread;
+use rok::core::io::IoError;
+use rok::core::time::Duration;
+
+fn pester(h: ChildHandle) -> i32 {
+    let errors = 0;
+    for _ in 0..200 {
+        try h.send_signal(Signal::Continue) catch _ { errors += 1; };
+    }
+    errors
+}
+
+fn kill_later(h: ChildHandle) -> i32 {
+    thread::sleep(Duration::ms(50));
+    try h.kill() catch _ { return 1; };
+    0
+}
+
+fn main() throws (IoError | thread::JoinError) {
+    let bad = 0;
+    for _ in 0..50 {
+        let c: Child = try Command::new("sleep").arg("0.01").spawn();
+        let h = c.handle();
+        let t = thread::spawn(|| pester(h));
+        let st = try c.wait();
+        bad += try t.join();
+        if !st.success() { bad += 1; }
+    }
+    println(f"50 rounds: {if bad == 0 { "no signal error" } else { f"{bad} bad" }}");
+
+    let c = try Command::new("sleep").arg("10").spawn();
+    let h = c.handle();
+    let t = thread::spawn(|| kill_later(h));
+    let st = try c.wait();
+    _ = try t.join();
+    println(f"killed while waited on: {st.signal() == Signal::Kill}");
+    println(f"handle id: {h.id() == c.id()}");
+    try h.kill();
+    try h.send_signal(Signal::Terminate);
+    println("after the end: ok");
+}

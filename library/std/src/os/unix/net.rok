@@ -11,8 +11,8 @@ use rok::std::fs::off;
 use rok::std::sys::{check, would_block, region, mut_region};
 use rok::core::time::Duration;
 use rok::std::path::{AsPath, Path};
-use rok::std::net::{Shutdown, Sock, sock_of, ADDR_WORDS};
-use rok::std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
+use rok::std::net::{Shutdown, Sock, sock_of, ADDR_WORDS, Duplex, ReadHalf, WriteHalf, rejoin};
+use rok::std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 use rok::bare::mem::{GcBuf, buf_new};
 
 /// A Unix stream socket. Copies share the socket; `close()` (or leaving
@@ -270,8 +270,26 @@ impl UnixStream {
     /// A second handle to the same socket.
     pub fn try_clone(self) throws (IoError) -> UnixStream { UnixStream { sock: try self.sock.try_clone() } }
 
+    /// Split into a read half and a write half, as
+    /// `TcpStream::split`.
+    pub fn split(self) -> (ReadHalf<UnixStream>, WriteHalf<UnixStream>) {
+        let d = Duplex::of(self.sock.moved(), none);
+        // Already moved: closes nothing, and marks `self` taken.
+        try self.close() catch _ {};
+        (ReadHalf { d }, WriteHalf { d })
+    }
+
     /// Close now, throwing the OS's error.
     pub fn close(self) throws (IoError) { try self.sock.close(); }
+}
+
+impl ReadHalf<UnixStream> {
+    /// The stream again, from this half and the `WriteHalf` that
+    /// `split` gave with it. Panics on a write half of another stream.
+    #[track_caller]
+    pub fn unsplit(self, w: WriteHalf<UnixStream>) -> UnixStream {
+        UnixStream { sock: rejoin(self, w).sock() }
+    }
 }
 
 impl Read for UnixStream {
@@ -429,4 +447,16 @@ impl FromRawFd for UnixListener {
 
 impl FromRawFd for UnixDatagram {
     unsafe fn from_raw_fd(fd: RawFd) -> UnixDatagram { UnixDatagram { sock: sock_of(fd) } }
+}
+
+impl IntoRawFd for UnixStream {
+    fn into_raw_fd(self) -> RawFd { self.sock.give_up() }
+}
+
+impl IntoRawFd for UnixListener {
+    fn into_raw_fd(self) -> RawFd { self.sock.give_up() }
+}
+
+impl IntoRawFd for UnixDatagram {
+    fn into_raw_fd(self) -> RawFd { self.sock.give_up() }
 }

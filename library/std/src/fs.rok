@@ -22,7 +22,7 @@
 
 use rok::core::convert::AsBytes;
 use rok::core::io::{Close, IoError, IoErrorKind, Read, Write, Seek, SeekFrom, AsyncRead, AsyncWrite, AsyncSeek, AsyncClose};
-use rok::std::sys::{check, region, mut_region, read_all, take_handle, write_region, text_of, byte_buf, list_of, use_begin, use_end, use_close};
+use rok::std::sys::{check, region, mut_region, read_all, take_handle, write_region, text_of, byte_buf, list_of, use_begin, use_end, use_close, word_at};
 use rok::bare::mem::{GcBuf, buf_new, transmute_unchecked};
 use rok::std::path::{Path, AsPath, Component};
 use rok::std::env;
@@ -33,11 +33,11 @@ use rok::core::task::Task;
 #[cfg(target_family = "unix")]
 use rok::std::os::unix::fs::{OsOpenFlags, OsCreateFlags, check_custom};
 #[cfg(target_family = "unix")]
-use rok::std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
+use rok::std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 #[cfg(target_os = "windows")]
 use rok::std::os::windows::fs::{OsOpenFlags, OsCreateFlags};
 #[cfg(target_os = "windows")]
-use rok::std::os::windows::io::{AsRawHandle, FromRawHandle, RawHandle, raw_handle, handle_fd};
+use rok::std::os::windows::io::{AsRawHandle, FromRawHandle, IntoRawHandle, RawHandle, raw_handle, handle_fd};
 
 // `OpenHow.access` / `.disposition` (the runtime's `rok_os_open`).
 const ACCESS_READ: u32 = 0u32;
@@ -396,6 +396,13 @@ impl File {
             let fd = take_handle(self.fd, 0, -1);
             if fd >= 0 { _ = rok_os_close(fd); }
         }
+    }
+
+    /// The fd, given up: the cell keeps -1, so nothing closes it (`-1`
+    /// once closed).
+    pub(pkg) fn give_up(self) -> i32 {
+        if (word_at(self.fd, 1) & 1) != 0 { return -1; }
+        take_handle(self.fd, 0, -1)
     }
 
     /// Close now; later calls fail with `InvalidInput`. Closing twice is a
@@ -838,6 +845,11 @@ impl AsRawFd for File {
     const fn as_raw_fd(self) -> RawFd { self.fd() }
 }
 
+#[cfg(target_family = "unix")]
+impl IntoRawFd for File {
+    fn into_raw_fd(self) -> RawFd { self.give_up() }
+}
+
 /// Its errors name it `fd N`.
 #[cfg(target_family = "unix")]
 impl FromRawFd for File {
@@ -847,6 +859,11 @@ impl FromRawFd for File {
 #[cfg(target_os = "windows")]
 impl AsRawHandle for File {
     fn as_raw_handle(self) -> RawHandle { raw_handle(self.fd()) }
+}
+
+#[cfg(target_os = "windows")]
+impl IntoRawHandle for File {
+    fn into_raw_handle(self) -> RawHandle { raw_handle(self.give_up()) }
 }
 
 /// Its errors name it `handle N`; a value that is no kernel handle

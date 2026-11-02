@@ -5,10 +5,9 @@
 // client updates: ok
 // server: wrote ok, read 4000 bytes, intact true
 
-// One connection's reader and writer on one worker: the reader answers
-// KeyUpdate requests while the writer's large write waits on a full
-// socket, and its records must not land inside the write's.
-use rok::core::marker::share;
+// One connection split into a reader and a writer on one worker: the
+// reader answers KeyUpdate requests while the writer's large write waits
+// on a full socket, and its records must not land inside the write's.
 use rok::std::net::{TcpListener, SocketAddr};
 use rok::std::net;
 use rok::std::net::tls::{Client, Server, ClientConfig, ServerConfig, Certificate, PrivateKey};
@@ -63,45 +62,42 @@ let cfg = try! ServerConfig::new(try! Certificate::from_pem(CERT), try! PrivateK
 let server = task::spawn_local(async {
     let (s, _) = try! await l.accept_async();
     try! l.close();
-    let srv_own = try! await Server::new_async(s, cfg);
-    let srv = unsafe { share(srv_own) };
+    let (r, w) = (try! await Server::new_async(s, cfg)).split();
     // A reader answering the client's KeyUpdate requests beside a writer
     // whose large write waits on a full socket.
     let reader = task::spawn_local(async {
         let err = "";
-        let got = try await srv.read_to_end_async() catch e {
+        let got = try await r.read_to_end_async() catch e {
             err = f"read: {e.message()}";
             List::<u8>::new()
         };
+        try! r.close();
         if err.len() > 0 { err } else { f"{got.len()} bytes, intact {got == data(ROUNDS * 100)}" }
     });
     let wrote = "ok";
-    try await srv.write_all_async(data(BIG)) catch e { wrote = f"write: {e.message()}"; };
-    let _ = try? await srv.close_notify_async();
-    let r = await reader;
-    try! srv_own.close();
-    f"wrote {wrote}, read {r}"
+    try await w.write_all_async(data(BIG)) catch e { wrote = f"write: {e.message()}"; };
+    let _ = try? await w.close_async();
+    f"wrote {wrote}, read {await reader}"
 });
 // Only the test CA: the host's trust store (`SSL_CERT_FILE` from cargo)
 // may be out of a wasm sandbox's reach.
 let ccfg = ClientConfig { root_certs: try! Certificate::from_pem(CA) };
 let s = try! await net::tcp_connect_async(f"{addr}");
-let c_own = try! await Client::with_config_async(s, "localhost", ccfg);
-let c = unsafe { share(c_own) };
+let (r, w) = (try! await Client::with_config_async(s, "localhost", ccfg)).split();
 let updates = task::spawn_local(async {
     let chunk = data(ROUNDS * 100);
-    let r = "ok";
+    let res = "ok";
     for i in 0..ROUNDS {
-        try await c.write_all_async(chunk[i * 100:(i + 1) * 100]) catch e { r = f"write: {e.message()}"; };
-        try await c.key_update_async() catch e { r = f"key update: {e.message()}"; };
-        if r != "ok" { break; }
+        try await w.write_all_async(chunk[i * 100:(i + 1) * 100]) catch e { res = f"write: {e.message()}"; };
+        try await w.key_update_async() catch e { res = f"key update: {e.message()}"; };
+        if res != "ok" { break; }
         await task::yield_now();
     }
-    let _ = try? await c.close_notify_async();
-    r
+    let _ = try? await w.close_async();
+    res
 });
-let back = try await c.read_to_end_async() catch e { println(f"client read: {e.message()}"); [] };
+let back = try await r.read_to_end_async() catch e { println(f"client read: {e.message()}"); [] };
 println(f"client got {back.len()} bytes, intact {back == data(BIG)}");
 println(f"client updates: {await updates}");
 println(f"server: {await server}");
-try! c_own.close();
+try! r.close();

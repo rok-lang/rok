@@ -10,8 +10,9 @@
 // X25519MLKEM768 hybrid when `enable_post_quantum` is on. Either side
 // signs with Ed25519, ECDSA P-256 / P-384 or RSA-PSS; the server may ask
 // for a client certificate. Sessions resume from single-use tickets
-// (psk_dhe_ke), optionally with 0-RTT data. A connection is used by one
-// thread, and one operation, at a time.
+// (psk_dhe_ke), optionally with 0-RTT data. A connection has one owner;
+// `split` gives a read half and a write half that two threads or tasks
+// use at once.
 
 pub(pkg) mod der;
 pub(pkg) mod pem;
@@ -20,7 +21,7 @@ pub(pkg) mod ocsp;
 pub(pkg) mod conn;
 
 use rok::bare::mem::{GcBuf, buf_new};
-use rok::std::net::{TcpStream, Shutdown};
+use rok::std::net::{TcpStream, Shutdown, Duplex, ReadHalf, WriteHalf, rejoin};
 use rok::core::task;
 use rok::core::convert::AsBytes;
 use rok::core::io::{Close, IoError, IoErrorKind, Read, Write, AsyncRead, AsyncWrite, AsyncClose};
@@ -636,13 +637,31 @@ fn io_err(e: TlsError) -> IoError {
     IoError::new(kind, f"tls: {e.msg}")
 }
 
-/// One side of a connection; `Client` and `Server` are views of it.
-struct Shared {
+/// One side of a connection; `Client` and `Server` are views of it, as
+/// are the two halves of a split one, which a reader and a writer use
+/// from two threads at once.
+pub(pkg) struct Shared {
     c: GcBuf<Conn>;
-    /// Held by an async operation from its step until its records are
-    /// written: a reader answering a KeyUpdate while a write waits on
-    /// the socket would otherwise put its records inside that write's.
+    /// Held while queued records are written (`flush`): one writer at a
+    /// time keeps them in the order they were made, so a reader's
+    /// KeyUpdate answer never lands inside a write's records.
     wl: Mutex<i32>;
+    /// Held while `c` is read and written back; never across I/O.
+    sl: Mutex<i32>;
+    /// 1 once the connection moved to another owner (`split`).
+    gone: GcBuf<i32>;
+}
+
+// Every read and write of `c` holds `sl`, and record output holds `wl`,
+// so the halves of a split connection use it from two threads at once.
+unsafe impl Sync for Shared {}
+
+/// What one step of an operation left: its result (`none`: it needs
+/// more input), its failure, and the connection as the step saw it.
+struct Step {
+    r: usize | none;
+    failure: TlsError | none;
+    c: Conn;
 }
 
 impl Shared {
@@ -650,34 +669,197 @@ impl Shared {
         unsafe {
             let b: GcBuf<Conn> = buf_new(1);
             b[0] = c;
-            Shared { c: b, wl: Mutex::new_unshared(0) }
+            Shared { c: b, wl: Mutex::new_unshared(0), sl: Mutex::new_unshared(0), gone: buf_new(1) }
         }
     }
 
-    const fn check(self) throws (IoError) {
-        unsafe {
-            match self.c[0].failed {
-                m: str => throw IoError::new(IoErrorKind::InvalidData, f"tls: connection failed: {m}"),
-                none => {},
+    /// The connection for a new owner; this view sees it gone, and its
+    /// close closes nothing.
+    fn moved(self) -> Shared {
+        let s = Shared::new(self.conn());
+        unsafe { self.gone[0] = 1; }
+        s
+    }
+
+    fn check(self) throws (IoError) {
+        if unsafe { self.gone[0] } != 0 {
+            throw IoError::new(IoErrorKind::InvalidInput, "tls: the connection was split; use its halves");
+        }
+        if let m: str = self.conn().failed {
+            throw IoError::new(IoErrorKind::InvalidData, f"tls: connection failed: {m}");
+        }
+    }
+
+    /// The connection, for what the handshake fixed (ALPN, the peer's
+    /// certificates): no lock, since those never change after it.
+    const fn info(self) -> Conn { unsafe { self.c[0] } }
+
+    /// The connection now.
+    fn conn(self) -> Conn {
+        let c = unsafe { self.c[0] };
+        using g = self.sl.lock() { c = unsafe { self.c[0] }; }
+        c
+    }
+
+    /// One `Conn::step` of `op`, without blocking. The records it makes
+    /// stay queued in the connection (`out`) in the order the steps made
+    /// them, for `drain`.
+    fn step(self, op: u8, buf: SliceMut<u8>, data: Slice<u8>) -> Step {
+        let st = Step { r: none, failure: none, c: unsafe { self.c[0] } };
+        using g = self.sl.lock() {
+            let c = unsafe { self.c[0] };
+            match c.failed {
+                m: str => st.failure = TlsError { kind: TlsErrorKind::Protocol, msg: f"connection failed: {m}", alert: 0u8 },
+                none => {
+                    c.nb = true;
+                    c.need = false;
+                    st.r = try c.step(op, buf, data) catch e {
+                        if !c.need {
+                            c.fail(e);
+                            st.failure = e;
+                        }
+                        none
+                    };
+                    c.nb = false;
+                    unsafe { self.c[0] = c; }
+                },
+            }
+            st.c = c;
+        }
+        st
+    }
+
+    /// Mark the connection failed with `e` (unless it is already); `e`.
+    fn failed_with(self, e: TlsError) -> TlsError {
+        using g = self.sl.lock() {
+            let cur = unsafe { self.c[0] };
+            cur.fail(e);
+            unsafe { self.c[0] = cur; }
+        }
+        e
+    }
+
+    fn feed(self, b: Slice<u8>) {
+        using g = self.sl.lock() {
+            let cur = unsafe { self.c[0] };
+            cur.feed(b);
+            unsafe { self.c[0] = cur; }
+        }
+    }
+
+    /// Take the queued records.
+    fn take_out(self) -> List<u8> {
+        let out: List<u8> = [];
+        using g = self.sl.lock() {
+            let cur = unsafe { self.c[0] };
+            out = cur.out;
+            cur.out = [];
+            unsafe { self.c[0] = cur; }
+        }
+        out
+    }
+
+    fn queued(self) -> bool { self.conn().out.len() > 0 }
+
+    /// Write the queued records until none are left; the caller holds
+    /// `wl`.
+    fn drain(self) throws (TlsError) {
+        loop {
+            let out = self.take_out();
+            if out.len() == 0 { return; }
+            try self.conn().sock().write_all(out) catch e { throw self.failed_with(io_tls(e)); };
+        }
+    }
+
+    async fn drain_async(self) throws (TlsError) {
+        loop {
+            let out = self.take_out();
+            if out.len() == 0 { return; }
+            try await self.conn().sock().write_all_async(out) catch e { throw self.failed_with(io_tls(e)); };
+        }
+    }
+
+    // Who writes the queue: an operation that writes waits for `wl` and
+    // drains, so its records are out when it returns. A read only
+    // drains when no one holds `wl`: the holder writes what the read
+    // queued before it lets go. A reader waiting on a writer blocked on
+    // a full socket would stop reading, and two peers doing that would
+    // wait on each other.
+
+    /// Write the queued records (`wait`: until they are out).
+    fn flush(self, wait: bool) throws (TlsError) {
+        if wait {
+            using g = self.wl.lock() { try self.drain(); }
+        }
+        // Queued after the holder's last look, before it let go.
+        while self.queued() {
+            match self.wl.try_lock() {
+                g: MutexGuard<i32> => { using h = g { try self.drain(); } },
+                none => return,
             }
         }
     }
 
-    fn read(self, buf: SliceMut<u8>) throws (IoError) -> usize {
-        try self.check();
-        unsafe {
-            let c = self.c[0];
-            let r = try c.read_app(buf) catch e {
-                c.fail(e);
-                self.c[0] = c;
-                throw io_err(e);
-            };
-            self.c[0] = c;
-            r
+    async fn flush_async(self, wait: bool) throws (TlsError) {
+        if wait {
+            using g = await self.wl.lock_async() { try await self.drain_async(); }
+        }
+        while self.queued() {
+            match self.wl.try_lock() {
+                g: MutexGuard<i32> => { using h = g { try await self.drain_async(); } },
+                none => return,
+            }
         }
     }
 
-    fn read_to_end(self) throws (IoError) -> List<u8> {
+    /// Run `op` to completion: step, write what it queued, read more
+    /// input while it needs some. A failure sends its alert first.
+    fn pump(self, op: u8, buf: SliceMut<u8>, data: Slice<u8>) throws (TlsError) -> usize {
+        loop {
+            let st = self.step(op, buf, data);
+            if let e: TlsError = st.failure {
+                try self.flush(op != OP_READ) catch _ {};
+                throw e;
+            }
+            try self.flush(op != OP_READ);
+            if let n: usize = st.r { return n; }
+            let b = byte_buf(16384 + 2048);
+            let n = try st.c.sock().read(b) catch e { throw self.failed_with(io_tls(e)); };
+            self.feed(b[0:n]);
+        }
+    }
+
+    /// `pump` that suspends the task instead of blocking.
+    async fn pump_async(self, op: u8, buf: SliceMut<u8>, data: Slice<u8>) throws (TlsError) -> usize {
+        loop {
+            let st = self.step(op, buf, data);
+            if let e: TlsError = st.failure {
+                try await self.flush_async(op != OP_READ) catch _ {};
+                throw e;
+            }
+            try await self.flush_async(op != OP_READ);
+            if let n: usize = st.r { return n; }
+            let b = byte_buf(16384 + 2048);
+            let n = try await st.c.sock().read_async(b) catch e { throw self.failed_with(io_tls(e)); };
+            self.feed(b[0:n]);
+        }
+    }
+
+    fn op(self, op: u8, buf: SliceMut<u8>, data: Slice<u8>) throws (IoError) -> usize {
+        try self.check();
+        try self.pump(op, buf, data) catch e { throw io_err(e); }
+    }
+
+    async fn op_async(self, op: u8, buf: SliceMut<u8>, data: Slice<u8>) throws (IoError) -> usize {
+        try self.check();
+        try await self.pump_async(op, buf, data) catch e { throw io_err(e); }
+    }
+
+    pub(pkg) fn read(self, buf: SliceMut<u8>) throws (IoError) -> usize { try self.op(OP_READ, buf, nothing()) }
+
+    pub(pkg) async fn read_async(self, buf: SliceMut<u8>) throws (IoError) -> usize { try await self.op_async(OP_READ, buf, nothing()) }
+
+    pub(pkg) fn read_to_end(self) throws (IoError) -> List<u8> {
         let out: List<u8> = [];
         let buf = byte_buf(16384);
         loop {
@@ -687,153 +869,7 @@ impl Shared {
         }
     }
 
-    fn write(self, data: Slice<u8>) throws (IoError) {
-        try self.check();
-        unsafe {
-            let c = self.c[0];
-            try c.write_app(data) catch e {
-                c.fail(e);
-                self.c[0] = c;
-                throw io_err(e);
-            };
-            self.c[0] = c;
-        }
-    }
-
-    fn close_notify(self) throws (IoError) {
-        try self.check();
-        unsafe {
-            let c = self.c[0];
-            try c.close_notify() catch e {
-                self.c[0] = c;
-                throw io_err(e);
-            };
-            self.c[0] = c;
-        }
-    }
-
-    fn key_update(self) throws (IoError) {
-        try self.check();
-        unsafe {
-            let c = self.c[0];
-            try c.key_update(true) catch e {
-                c.fail(e);
-                self.c[0] = c;
-                throw io_err(e);
-            };
-            self.c[0] = c;
-        }
-    }
-
-    /// close_notify (if the connection is healthy; its failure is not
-    /// reported), then close the socket, throwing the OS's error. The
-    /// keys are wiped either way.
-    fn close(self) throws (IoError) {
-        unsafe {
-            let c = self.c[0];
-            if c.failed is none && c.done { try c.close_notify() catch _ {}; }
-            let err: IoError | none = none;
-            try c.sock().close() catch e { err = e; };
-            c.wipe();
-            self.c[0] = c;
-            if let e: IoError = err { throw e; }
-        }
-    }
-
-    /// `close` that suspends the task while close_notify is sent.
-    async fn close_async(self) throws (IoError) {
-        let c = unsafe { self.c[0] };
-        if c.failed is none && c.done {
-            _ = try await self.op_async(OP_CLOSE_NOTIFY, no_buf(), nothing()) catch _ { 0 };
-        }
-        let cur = unsafe { self.c[0] };
-        let err: IoError | none = none;
-        try await cur.sock().close_async() catch e { err = e; };
-        cur.wipe();
-        unsafe { self.c[0] = cur; }
-        if let e: IoError = err { throw e; }
-    }
-
-    const fn conn(self) -> Conn { unsafe { self.c[0] } }
-
-    /// Run `op` (`Conn::step`) without blocking: the connection's
-    /// records are written and more input read asynchronously until the
-    /// operation completes. A failure sends its alert first.
-    async fn pump(self, op: u8, buf: SliceMut<u8>, data: Slice<u8>) throws (TlsError) -> usize {
-        loop {
-            let c = unsafe { self.c[0] };
-            let failure: TlsError | none = none;
-            let r: usize | none = none;
-            using g = await self.wl.lock_async() {
-                c = unsafe { self.c[0] };
-                match c.failed {
-                    m: str => failure = TlsError { kind: TlsErrorKind::Protocol, msg: f"connection failed: {m}", alert: 0u8 },
-                    none => {
-                        c.nb = true;
-                        c.need = false;
-                        r = try c.step(op, buf, data) catch e {
-                            if !c.need {
-                                c.fail(e);
-                                failure = e;
-                            }
-                            none
-                        };
-                        c.nb = false;
-                        let out = c.out;
-                        c.out = [];
-                        unsafe { self.c[0] = c; }
-                        if out.len() > 0 {
-                            let werr: TlsError | none = none;
-                            try await c.sock().write_all_async(out) catch e { werr = io_tls(e); };
-                            if let e: TlsError = werr {
-                                if failure is none {
-                                    unsafe {
-                                        let cur = self.c[0];
-                                        cur.fail(e);
-                                        self.c[0] = cur;
-                                    }
-                                    failure = e;
-                                }
-                            }
-                        }
-                    },
-                }
-            }
-            match failure {
-                e: TlsError => throw e,
-                none => {},
-            }
-            match r {
-                n: usize => return n,
-                none => {},
-            }
-            // More input.
-            let b = byte_buf(16384 + 2048);
-            let n = try await c.sock().read_async(b) catch e {
-                let t = io_tls(e);
-                unsafe {
-                    let cur = self.c[0];
-                    cur.fail(t);
-                    self.c[0] = cur;
-                }
-                throw t;
-            };
-            unsafe {
-                let cur = self.c[0];
-                cur.feed(b[0:n]);
-                self.c[0] = cur;
-            }
-        }
-    }
-
-    async fn op_async(self, op: u8, buf: SliceMut<u8>, data: Slice<u8>) throws (IoError) -> usize {
-        try self.check();
-        try await self.pump(op, buf, data) catch e { throw io_err(e); }
-    }
-
-    async fn read_async(self, buf: SliceMut<u8>) throws (IoError) -> usize { try await self.op_async(OP_READ, buf, nothing()) }
-
-    async fn read_to_end_async(self) throws (IoError) -> List<u8> {
+    pub(pkg) async fn read_to_end_async(self) throws (IoError) -> List<u8> {
         let out: List<u8> = [];
         let buf = byte_buf(16384);
         loop {
@@ -841,6 +877,66 @@ impl Shared {
             if n == 0 { return out; }
             for i in 0..n { out.push(buf[i]); }
         }
+    }
+
+    pub(pkg) fn write(self, data: Slice<u8>) throws (IoError) { _ = try self.op(OP_WRITE, no_buf(), data); }
+
+    pub(pkg) async fn write_async(self, data: Slice<u8>) throws (IoError) { _ = try await self.op_async(OP_WRITE, no_buf(), data); }
+
+    pub(pkg) fn close_notify(self) throws (IoError) { _ = try self.op(OP_CLOSE_NOTIFY, no_buf(), nothing()); }
+
+    pub(pkg) async fn close_notify_async(self) throws (IoError) { _ = try await self.op_async(OP_CLOSE_NOTIFY, no_buf(), nothing()); }
+
+    pub(pkg) fn key_update(self) throws (IoError) { _ = try self.op(OP_KEY_UPDATE, no_buf(), nothing()); }
+
+    pub(pkg) async fn key_update_async(self) throws (IoError) { _ = try await self.op_async(OP_KEY_UPDATE, no_buf(), nothing()); }
+
+    /// Whether close_notify belongs before the close: a healthy
+    /// connection past its handshake.
+    fn healthy(self) -> bool {
+        let c = self.conn();
+        c.failed is none && c.done
+    }
+
+    /// Wipe the keys, then throw `err`, the socket close's error.
+    fn finish(self, err: IoError | none) throws (IoError) {
+        using g = self.sl.lock() {
+            let cur = unsafe { self.c[0] };
+            cur.wipe();
+            unsafe { self.c[0] = cur; }
+        }
+        if let e: IoError = err { throw e; }
+    }
+
+    /// close_notify (if the connection is healthy; its failure is not
+    /// reported), then close the socket, throwing the OS's error. The
+    /// keys are wiped either way. Nothing once the connection moved.
+    pub(pkg) fn close(self) throws (IoError) {
+        if unsafe { self.gone[0] } != 0 { return; }
+        if self.healthy() { _ = try self.pump(OP_CLOSE_NOTIFY, no_buf(), nothing()) catch _ { 0 }; }
+        // A failed read's alert may still be queued.
+        try self.flush(true) catch _ {};
+        let err: IoError | none = none;
+        try self.conn().sock().close() catch e { err = e; };
+        try self.finish(err);
+    }
+
+    /// `close` that suspends the task while close_notify is sent.
+    pub(pkg) async fn close_async(self) throws (IoError) {
+        if unsafe { self.gone[0] } != 0 { return; }
+        if self.healthy() { _ = try await self.pump_async(OP_CLOSE_NOTIFY, no_buf(), nothing()) catch _ { 0 }; }
+        try await self.flush_async(true) catch _ {};
+        let err: IoError | none = none;
+        try await self.conn().sock().close_async() catch e { err = e; };
+        try self.finish(err);
+    }
+}
+
+/// The TLS state that the halves of a split TLS connection name.
+fn tls_of(d: Duplex) -> Shared {
+    match d.shared() {
+        s: Shared => s,
+        none => panic("tls: a half of a plain connection"),
     }
 }
 
@@ -968,7 +1064,7 @@ impl Client {
         };
         let s = Shared::new(c);
         let failed: TlsError | none = none;
-        try await s.pump(OP_HANDSHAKE, no_buf(), nothing()) catch e {
+        try await s.pump_async(OP_HANDSHAKE, no_buf(), nothing()) catch e {
             failed = e;
             0
         };
@@ -986,27 +1082,61 @@ impl Client {
     pub fn key_update(self) throws (IoError) { try self.s.key_update(); }
 
     /// `close_notify`, awaiting the socket instead of blocking.
-    pub async fn close_notify_async(ref self) throws (IoError) { _ = try await self.s.op_async(OP_CLOSE_NOTIFY, no_buf(), nothing()); }
+    pub async fn close_notify_async(ref self) throws (IoError) { try await self.s.close_notify_async(); }
     /// `key_update`, awaiting the socket instead of blocking.
-    pub async fn key_update_async(ref self) throws (IoError) { _ = try await self.s.op_async(OP_KEY_UPDATE, no_buf(), nothing()); }
+    pub async fn key_update_async(ref self) throws (IoError) { try await self.s.key_update_async(); }
 
     /// close_notify (if the connection is healthy), then close the
     /// socket, throwing the OS's error.
     pub fn close(self) throws (IoError) { try self.s.close(); }
 
     /// The ALPN protocol the server chose; `none` when none was negotiated.
-    pub const fn negotiated_alpn(self) -> List<u8> | none { self.s.conn().alpn }
+    pub const fn negotiated_alpn(self) -> List<u8> | none { self.s.info().alpn }
 
     /// The server's certificate chain as sent, leaf first (on a resumed
     /// connection, the original connection's).
-    pub const fn peer_certificates(self) -> List<Certificate> { self.s.conn().peer }
+    pub const fn peer_certificates(self) -> List<Certificate> { self.s.info().peer }
 
     /// Whether the handshake resumed a session.
-    pub const fn is_resumed(self) -> bool { self.s.conn().resumed }
+    pub const fn is_resumed(self) -> bool { self.s.info().resumed }
 
     /// Whether the server took `ClientConfig::early_data` as 0-RTT data
     /// (else it was sent after the handshake).
-    pub const fn is_early_data_accepted(self) -> bool { self.s.conn().early_accepted }
+    pub const fn is_early_data_accepted(self) -> bool { self.s.info().early_accepted }
+}
+
+impl Client {
+    /// Split into a read half and a write half that two tasks or
+    /// threads can use at once: a reader may answer the peer's
+    /// KeyUpdate while a write waits on the socket. Closing the write
+    /// half sends close_notify and ends the stream; the socket closes
+    /// when both halves are closed. `ReadHalf::unsplit` joins them
+    /// again.
+    pub fn split(self) -> (ReadHalf<Client>, WriteHalf<Client>) {
+        let s = self.s.moved();
+        let d = Duplex::of(s.info().sock().raw_sock(), s);
+        // Already moved: closes nothing, and marks `self` taken.
+        try self.close() catch _ {};
+        (ReadHalf { d }, WriteHalf { d })
+    }
+}
+
+impl ReadHalf<Client> {
+    /// The connection again, from this half and the `WriteHalf` that
+    /// `split` gave with it. Panics on a write half of another
+    /// connection.
+    #[track_caller]
+    pub fn unsplit(self, w: WriteHalf<Client>) -> Client {
+        Client { s: tls_of(rejoin(self, w)) }
+    }
+}
+
+impl WriteHalf<Client> {
+    /// Switch to the next write key and ask the peer to do the same.
+    pub fn key_update(self) throws (IoError) { try tls_of(self.d).key_update(); }
+
+    /// `key_update`, awaiting the socket instead of blocking.
+    pub async fn key_update_async(ref self) throws (IoError) { try await tls_of(self.d).key_update_async(); }
 }
 
 impl Read for Client {
@@ -1036,12 +1166,12 @@ impl AsyncRead for Client {
 impl AsyncWrite for Client {
     async fn write_async<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize {
         let b = buf.byte_slice();
-        _ = try await self.s.op_async(OP_WRITE, no_buf(), b);
+        try await self.s.write_async(b);
         b.len()
     }
     async fn flush_async(ref self) throws (IoError) {}
     async fn write_all_async<B: AsBytes>(ref self, buf: B) throws (IoError) {
-        _ = try await self.s.op_async(OP_WRITE, no_buf(), buf.byte_slice());
+        try await self.s.write_async(buf.byte_slice());
     }
 }
 
@@ -1096,7 +1226,7 @@ impl Server {
         c.server_start(cfg);
         let s = Shared::new(c);
         let failed: TlsError | none = none;
-        try await s.pump(OP_HANDSHAKE, no_buf(), nothing()) catch e {
+        try await s.pump_async(OP_HANDSHAKE, no_buf(), nothing()) catch e {
             failed = e;
             0
         };
@@ -1113,29 +1243,63 @@ impl Server {
     pub fn key_update(self) throws (IoError) { try self.s.key_update(); }
 
     /// `close_notify`, awaiting the socket instead of blocking.
-    pub async fn close_notify_async(ref self) throws (IoError) { _ = try await self.s.op_async(OP_CLOSE_NOTIFY, no_buf(), nothing()); }
+    pub async fn close_notify_async(ref self) throws (IoError) { try await self.s.close_notify_async(); }
     /// `key_update`, awaiting the socket instead of blocking.
-    pub async fn key_update_async(ref self) throws (IoError) { _ = try await self.s.op_async(OP_KEY_UPDATE, no_buf(), nothing()); }
+    pub async fn key_update_async(ref self) throws (IoError) { try await self.s.key_update_async(); }
     /// close_notify (if the connection is healthy), then close the
     /// socket, throwing the OS's error.
     pub fn close(self) throws (IoError) { try self.s.close(); }
     /// The ALPN protocol chosen for the client; `none` when none was
     /// negotiated.
-    pub const fn negotiated_alpn(self) -> List<u8> | none { self.s.conn().alpn }
+    pub const fn negotiated_alpn(self) -> List<u8> | none { self.s.info().alpn }
 
     /// The client's validated certificate chain, leaf first (empty: it
     /// sent none; on a resumed connection, the original connection's).
-    pub const fn peer_certificates(self) -> List<Certificate> { self.s.conn().peer }
+    pub const fn peer_certificates(self) -> List<Certificate> { self.s.info().peer }
 
     /// Whether the handshake resumed a session.
-    pub const fn is_resumed(self) -> bool { self.s.conn().resumed }
+    pub const fn is_resumed(self) -> bool { self.s.info().resumed }
 
     /// The 0-RTT data accepted from the client (empty: none); `read`
     /// returns what follows it.
-    pub const fn early_data(self) -> List<u8> { self.s.conn().early }
+    pub const fn early_data(self) -> List<u8> { self.s.info().early }
 
     /// The server name the client asked for (SNI).
-    pub const fn server_name(self) -> str | none { self.s.conn().sni }
+    pub const fn server_name(self) -> str | none { self.s.info().sni }
+}
+
+impl Server {
+    /// Split into a read half and a write half that two tasks or
+    /// threads can use at once: a reader may answer the peer's
+    /// KeyUpdate while a write waits on the socket. Closing the write
+    /// half sends close_notify and ends the stream; the socket closes
+    /// when both halves are closed. `ReadHalf::unsplit` joins them
+    /// again.
+    pub fn split(self) -> (ReadHalf<Server>, WriteHalf<Server>) {
+        let s = self.s.moved();
+        let d = Duplex::of(s.info().sock().raw_sock(), s);
+        // Already moved: closes nothing, and marks `self` taken.
+        try self.close() catch _ {};
+        (ReadHalf { d }, WriteHalf { d })
+    }
+}
+
+impl ReadHalf<Server> {
+    /// The connection again, from this half and the `WriteHalf` that
+    /// `split` gave with it. Panics on a write half of another
+    /// connection.
+    #[track_caller]
+    pub fn unsplit(self, w: WriteHalf<Server>) -> Server {
+        Server { s: tls_of(rejoin(self, w)) }
+    }
+}
+
+impl WriteHalf<Server> {
+    /// Switch to the next write key and ask the peer to do the same.
+    pub fn key_update(self) throws (IoError) { try tls_of(self.d).key_update(); }
+
+    /// `key_update`, awaiting the socket instead of blocking.
+    pub async fn key_update_async(ref self) throws (IoError) { try await tls_of(self.d).key_update_async(); }
 }
 
 impl Read for Server {
@@ -1165,12 +1329,12 @@ impl AsyncRead for Server {
 impl AsyncWrite for Server {
     async fn write_async<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize {
         let b = buf.byte_slice();
-        _ = try await self.s.op_async(OP_WRITE, no_buf(), b);
+        try await self.s.write_async(b);
         b.len()
     }
     async fn flush_async(ref self) throws (IoError) {}
     async fn write_all_async<B: AsBytes>(ref self, buf: B) throws (IoError) {
-        _ = try await self.s.op_async(OP_WRITE, no_buf(), buf.byte_slice());
+        try await self.s.write_async(buf.byte_slice());
     }
 }
 

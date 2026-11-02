@@ -1,0 +1,137 @@
+// needs: net threads
+// expect-exit: 0
+// expect-stdout:
+// tcp: read 200000 bytes, peer got 200000
+// write half closed: echo ping
+// unsplit: pong
+// read half closed first: peer got late
+// async: read 100000 bytes, peer got 100000
+
+// `split` gives a read half and a write half that two threads or tasks
+// use at once; each owns its direction and is closed on its own, the
+// socket closes with the last, and `unsplit` joins them again.
+use rok::std::net::{TcpListener, TcpStream, WriteHalf};
+use rok::std::net;
+use rok::std::thread;
+use rok::core::io::IoError;
+
+fn text(b: List<u8>) -> str { try! str::from_utf8(b) }
+
+/// Write `n` bytes, then close: the peer reads end of stream.
+fn send(w: WriteHalf<TcpStream>, n: usize, b: u8) -> i32 {
+    try! w.write_all(List::filled(n, b));
+    try! w.close();
+    0
+}
+
+/// Both directions at once: the write half on its own thread.
+fn duplex(s: TcpStream, n: usize, b: u8) -> usize {
+    let (r, w) = s.split();
+    let t = thread::spawn(|| send(w, n, b));
+    let got = try! r.read_to_end();
+    try! r.close();
+    _ = try! t.join();
+    got.len()
+}
+
+fn serve_duplex(l: TcpListener) -> usize {
+    let (s, _) = try! l.accept();
+    try! l.close();
+    duplex(s, 200000, 7u8)
+}
+
+fn serve_echo(l: TcpListener) -> i32 {
+    let (s, _) = try! l.accept();
+    try! l.close();
+    let msg = try! s.read_to_end();
+    try! s.write_all(f"echo {text(msg)}");
+    try! s.close();
+    0
+}
+
+fn serve_pong(l: TcpListener) -> i32 {
+    let (s, _) = try! l.accept();
+    try! l.close();
+    let buf = List::filled(4, 0u8);
+    try! s.read_exact(buf);
+    try! s.write_all("pong");
+    try! s.close();
+    0
+}
+
+async fn send_async(w: WriteHalf<TcpStream>, b: u8) -> i32 {
+    try! await w.write_all_async(List::filled(100000, b));
+    try! await w.close_async();
+    0
+}
+
+async fn duplex_async(s: TcpStream, b: u8) -> usize {
+    let (r, w) = s.split();
+    let t = task::spawn(send_async(w, b));
+    let got = try! await r.read_to_end_async();
+    try! await r.close_async();
+    _ = await t;
+    got.len()
+}
+
+async fn serve_async(l: TcpListener) -> usize {
+    let (s, _) = try! await l.accept_async();
+    try! l.close();
+    await duplex_async(s, 1u8)
+}
+
+fn main() throws (IoError | thread::JoinError) {
+    // Each side writes more than the socket buffers hold before it reads.
+    let l = try TcpListener::bind("127.0.0.1:0");
+    let addr = try l.local_addr();
+    let peer = thread::spawn(|| serve_duplex(l));
+    let got = duplex(try TcpStream::connect(addr), 200000, 9u8);
+    println(f"tcp: read {got} bytes, peer got {try peer.join()}");
+
+    // The write half closed alone ends the stream for the peer; the read
+    // half still reads the reply.
+    let l2 = try TcpListener::bind("127.0.0.1:0");
+    let addr2 = try l2.local_addr();
+    let peer2 = thread::spawn(|| serve_echo(l2));
+    let (r2, w2) = (try TcpStream::connect(addr2)).split();
+    try w2.write_all("ping");
+    try w2.close();
+    println(f"write half closed: {text(try r2.read_to_end())}");
+    try r2.close();
+    _ = try peer2.join();
+
+    // `unsplit` gives the stream back.
+    let l3 = try TcpListener::bind("127.0.0.1:0");
+    let addr3 = try l3.local_addr();
+    let peer3 = thread::spawn(|| serve_pong(l3));
+    let (r3, w3) = (try TcpStream::connect(addr3)).split();
+    try w3.write_all("ping");
+    let s: TcpStream = r3.unsplit(w3);
+    let back = List::filled(4, 0u8);
+    try s.read_exact(back);
+    println(f"unsplit: {text(back)}");
+    try s.close();
+    _ = try peer3.join();
+
+    // The read half closed first leaves the socket open for the write
+    // half; its close then closes the socket.
+    using l = try TcpListener::bind("127.0.0.1:0") {
+        let (r, w) = (try TcpStream::connect(try l.local_addr())).split();
+        let (p, _) = try l.accept();
+        try r.close();
+        try w.write_all("late");
+        try w.close();
+        println(f"read half closed first: peer got {text(try p.read_to_end())}");
+        try p.close();
+    }
+
+    // Async: a task writes while this one reads.
+    let n = task::block_on(async {
+        let l = try! net::tcp_listen("127.0.0.1:0");
+        let addr = try! l.local_addr();
+        let peer = task::spawn(serve_async(l));
+        let got = await duplex_async(try! await TcpStream::connect_async(addr), 2u8);
+        f"read {got} bytes, peer got {await peer}"
+    });
+    println(f"async: {n}");
+}

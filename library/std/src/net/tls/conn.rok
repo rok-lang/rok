@@ -698,7 +698,8 @@ impl Conn {
                 self.rd.wipe();
                 self.rd = dir_of(self.suite, next);
                 next.wipe();
-                if body[0] == 1u8 { try self.key_update(false); }
+                // Nothing goes out after our close_notify, not even the answer.
+                if body[0] == 1u8 && !self.closed { try self.key_update(false); }
             } else if t == NEW_SESSION_TICKET && self.is_client {
                 try self.ticket(body);
             } else {
