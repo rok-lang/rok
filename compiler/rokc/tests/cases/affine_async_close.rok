@@ -29,7 +29,7 @@ async fn read_back(p: Path) throws (IoError) -> str {
     s
 }
 
-let p = env::temp_dir().join(Path::from(f"rok-affine-async-{rok::std::process::id()}.txt"));
+let p = env::temp_dir().join(Path::from("rok-affine-async.txt"));
 println(f"wrote {await write_then_close(try! fs::create(p))}");
 println(f"read {try! await read_back(p)}");
 try! fs::remove_file(p);

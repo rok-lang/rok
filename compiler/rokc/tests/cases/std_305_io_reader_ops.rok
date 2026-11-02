@@ -17,11 +17,10 @@ use rok::core::io::{IoError, IoErrorKind};
 use rok::std::fs;
 use rok::std::fs::File;
 use rok::std::env;
-use rok::std::process;
 
 fn main() throws (IoError) {
-    let p = env::temp_dir() / f"rok_probe_305_{process::id()}.txt";
-    let q = env::temp_dir() / f"rok_probe_305_{process::id()}.out";
+    let p = env::temp_dir() / "rok_probe_305.txt";
+    let q = env::temp_dir() / "rok_probe_305.out";
     try fs::write(p, "abcdef\ng");
     let f = try File::open(p);
     let buf: List<u8> = [0u8, 0u8, 0u8];

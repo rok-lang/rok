@@ -17,7 +17,6 @@ use rok::core::convert::AsBytes;
 use rok::core::io::{IoError, IoErrorKind};
 use rok::std::fs;
 use rok::std::env;
-use rok::std::process;
 
 struct Point { x: i32; y: i32; }
 
@@ -70,7 +69,7 @@ fn main() throws (IoError) {
     let (q, n, x) = (Point { x: 3, y: 4 }, 42, 2.5);
     try out.write_display(f"p = {q}, n = {n}, x = {x}!\n");
 
-    let p = env::temp_dir() / f"rok_std_io_write_display_{process::id()}.txt";
+    let p = env::temp_dir() / "rok_std_io_write_display.txt";
     using file = try fs::create(p) {
         try file.write_display("ab ");
         try file.write_display(Point { x: 5, y: 6 });

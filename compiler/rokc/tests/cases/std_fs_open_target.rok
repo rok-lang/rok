@@ -14,10 +14,9 @@ use rok::std::fs;
 use rok::std::fs::{File, OpenFlags};
 use rok::core::io::{IoError, IoErrorKind};
 use rok::std::env;
-use rok::std::process;
 
 fn main() throws (IoError) {
-    let dir = env::temp_dir() / f"rok_fs_open_target_{process::id()}";
+    let dir = env::temp_dir() / "rok_fs_open_target";
     try fs::create_dir_all(dir);
     let p = dir / "f";
     try fs::write(p, "old");

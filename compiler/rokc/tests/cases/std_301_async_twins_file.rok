@@ -20,7 +20,7 @@ use rok::std::path::Path;
 use rok::core::io::{IoError, SeekFrom, AsyncSeek, AsyncClose, BufWriter};
 
 async fn main() throws (IoError) {
-    let p = env::temp_dir().join(Path::new(f"rok-twins-{rok::std::process::id()}.txt"));
+    let p = env::temp_dir().join(Path::new("rok-twins.txt"));
     let f = try await File::create_async(p, CreateFlags { read: true });
     try await f.write_all_async("hello");
     println(f"at {try await f.seek_async(SeekFrom::Current(0))}");

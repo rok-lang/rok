@@ -17,10 +17,9 @@ use rok::std::fs;
 use rok::std::fs::{Dir, File};
 use rok::core::io::IoError;
 use rok::std::env;
-use rok::std::process;
 
 fn main() throws (IoError) {
-    let base = env::temp_dir() / f"rok_probe_301_{process::id()}";
+    let base = env::temp_dir() / "rok_probe_301";
     try fs::create_dir_all(base / "sub");
     let d = try Dir::root().open_dir(base);
     let f = try d.create("x.txt");

@@ -36,7 +36,7 @@ fn main() throws (IoError) {
     println(f"pair {n} {try str::from_utf8(buf[0:n])}");
 
     let dir = env::temp_dir();
-    let path = dir.join(Path::new(f"rok-ux-{rok::std::process::id()}.sock"));
+    let path = dir.join(Path::new("rok-ux.sock"));
     try fs::remove_file(path) catch _ {};
     let l = try UnixListener::bind(path);
     println(f"bound {(try l.local_addr()) == path}");

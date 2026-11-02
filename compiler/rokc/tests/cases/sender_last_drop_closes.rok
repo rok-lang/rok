@@ -1,3 +1,4 @@
+// needs: threads
 // expect-exit: 0
 // expect-stdout:
 // got 6

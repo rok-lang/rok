@@ -21,7 +21,6 @@ use rok::std::time::{SystemTime, BootTime, UNIX_EPOCH};
 use rok::std::fs;
 use rok::std::env;
 use rok::core::io::IoError;
-use rok::std::process;
 
 fn main() throws (IoError) {
     let d = Duration::ms(1234);
@@ -44,7 +43,7 @@ fn main() throws (IoError) {
     let bt = BootTime::now();
     println(f"boot {bt.elapsed() >= Duration::ZERO}");
 
-    let path = env::temp_dir() / f"rok_std_time_probe_{process::id()}.txt";
+    let path = env::temp_dir() / "rok_std_time_probe.txt";
     try fs::write(path, "x");
     let m = try (try fs::metadata(path)).modified();
     let age = m.elapsed();

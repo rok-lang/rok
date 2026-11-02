@@ -3,14 +3,20 @@
 // expect-exit: 0
 // expect-stdout:
 // new: none InvalidInput bad name
-// os: 2 NotFound true
+// os: true NotFound true
 // context: true
 // open: true NotFound
 
 // `os_code()` is the OS number for an OS failure and `none` for one the
-// library raised. Code 2 is ENOENT and Windows' ERROR_FILE_NOT_FOUND.
+// library raised. Code 2 is ENOENT and Windows' ERROR_FILE_NOT_FOUND;
+// WASI numbers ENOENT 44.
 use rok::core::io::{IoError, IoErrorKind};
 use rok::std::fs;
+
+#[cfg(target_family = "wasm")]
+const ENOENT: i32 = 44;
+#[cfg(not(target_family = "wasm"))]
+const ENOENT: i32 = 2;
 
 fn shown(c: i32 | none) -> str {
     match c {
@@ -22,9 +28,10 @@ fn shown(c: i32 | none) -> str {
 fn main() {
     let e = IoError::new(IoErrorKind::InvalidInput, "bad name");
     println(f"new: {shown(e.os_code())} {e.kind():?} {e.message()}");
-    let o = IoError::from_os_code(2);
-    println(f"os: {shown(o.os_code())} {o.kind():?} {o.message().len() > 0}");
-    let c = IoError::from_os_code(2, "x.txt");
+    let o = IoError::from_os_code(ENOENT);
+    let same = shown(o.os_code()) == f"{ENOENT}";
+    println(f"os: {same} {o.kind():?} {o.message().len() > 0}");
+    let c = IoError::from_os_code(ENOENT, "x.txt");
     println(f"context: {c.message().starts_with("x.txt: ")}");
     try fs::read_to_str("ioerror_os_code_none.missing") catch f {
         println(f"open: {f.os_code() is i32} {f.kind():?}");
