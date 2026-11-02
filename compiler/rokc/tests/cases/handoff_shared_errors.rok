@@ -19,4 +19,4 @@ fn main() {
 }
 
 // expect-error: handoff_shared_errors.rok:11:26: this returns a value out of the `Mutex`, and `g`'s `using` block releases the lock before the caller uses it
-// expect-error: handoff_shared_errors.rok:16:32: `l` can't be sent through a channel: it is this thread's `ThreadLocal` value, lent to `with`'s closure
+// expect-error: handoff_shared_errors.rok:16:32: `l` can't be sent through a channel: it is the value `with` lends to its closure (a `ThreadLocal`'s, a locked `Mutex`'s)

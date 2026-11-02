@@ -1,5 +1,5 @@
 // needs: threads
-// expect-error: `W { l: l }` can't be sent through a channel: it is this thread's `ThreadLocal` value, lent to `with`'s closure
+// expect-error: `W { l: l }` can't be sent through a channel: it is the value `with` lends to its closure (a `ThreadLocal`'s, a locked `Mutex`'s)
 // A thread-local's value sent inside a struct.
 use rok::std::thread;
 static TL: thread::ThreadLocal<List<i32>> = thread::local(|| { let l: List<i32> = []; l });
