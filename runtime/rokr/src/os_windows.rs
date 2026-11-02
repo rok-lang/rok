@@ -2044,6 +2044,22 @@ pub extern "C" fn rok_os_raise(sig: i32) -> i32 {
     }
 }
 
+/// Whether `TerminateProcess` failed only because `hd` has already
+/// ended: Windows refuses it with access denied then, where POSIX
+/// signals a zombie without complaint.
+fn exited(hd: HANDLE) -> bool {
+    if errno() != win::ERROR_ACCESS_DENIED {
+        return false;
+    }
+    let mut code = 0;
+    // SAFETY: a live process handle. The wait catches a real exit code
+    // of `STILL_ACTIVE`.
+    unsafe {
+        win::GetExitCodeProcess(hd, &mut code) != 0
+            && (code != win::STILL_ACTIVE || win::WaitForSingleObject(hd, 0) == win::WAIT_OBJECT_0)
+    }
+}
+
 /// End process `pid` (`TerminateProcess`, exit code 1) for any `sig`
 /// but 0, which only checks that the process exists.
 #[unsafe(no_mangle)]
@@ -2054,7 +2070,7 @@ pub extern "C" fn rok_os_kill(pid: i32, sig: i32) -> i32 {
         // SAFETY: plain call; closed below.
         None => unsafe {
             win::OpenProcess(
-                win::PROCESS_TERMINATE | win::PROCESS_QUERY_LIMITED_INFORMATION,
+                win::PROCESS_TERMINATE | win::PROCESS_QUERY_LIMITED_INFORMATION | win::SYNCHRONIZE,
                 0,
                 pid as DWORD,
             )
@@ -2064,7 +2080,7 @@ pub extern "C" fn rok_os_kill(pid: i32, sig: i32) -> i32 {
         return fail();
     }
     // SAFETY: a live process handle.
-    let r = if sig == 0 || unsafe { win::TerminateProcess(hd, 1) } != 0 {
+    let r = if sig == 0 || unsafe { win::TerminateProcess(hd, 1) } != 0 || exited(hd) {
         0
     } else {
         fail()
