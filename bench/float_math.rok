@@ -1,0 +1,20 @@
+// f64 rounding, abs, min / max, copysign and mul_add in a loop: the
+// float methods that are single instructions or LLVM intrinsics.
+fn main() -> i32 {
+    let acc = 0.0;
+    let lo = 1.0e300;
+    let hi = -1.0e300;
+    let x = 0.5;
+    let i = 0;
+    while i < 20000000 {
+        let t = x * 7.31 - 3.17;
+        let f = t.floor() + t.ceil() + t.round() + t.trunc();
+        lo = lo.min(t);
+        hi = hi.max(t);
+        acc = f.abs().copysign(t).mul_add(0.25, acc);
+        x = (x * 1.000001).fract() + 0.001;
+        i += 1;
+    }
+    println(f"{acc:.6} {lo:.6} {hi:.6}");
+    0
+}

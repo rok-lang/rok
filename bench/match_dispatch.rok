@@ -1,0 +1,40 @@
+// Bytecode interpreter: a 12-arm `match` on an enum per step.
+enum Op { Push(i64), Add, Sub, Mul, Dup, Swap, Drop, Inc, Dec, Neg, Shl, Jz(usize) }
+
+fn run(code: List<Op>, iters: i64) -> i64 {
+    let stack: List<i64> = [0, 0, 0, 0, 0, 0, 0, 0];
+    let total: i64 = 0;
+    let n: i64 = 0;
+    while n < iters {
+        let sp: usize = 1;
+        stack[0] = n;
+        let pc: usize = 0;
+        while pc < code.len() {
+            match code[pc] {
+                Op::Push(v) => { stack[sp] = v; sp += 1; }
+                Op::Add => { sp -= 1; stack[sp - 1] = stack[sp - 1] + stack[sp]; }
+                Op::Sub => { sp -= 1; stack[sp - 1] = stack[sp - 1] - stack[sp]; }
+                Op::Mul => { sp -= 1; stack[sp - 1] = (stack[sp - 1] * stack[sp]) & 65535; }
+                Op::Dup => { stack[sp] = stack[sp - 1]; sp += 1; }
+                Op::Swap => { let t = stack[sp - 1]; stack[sp - 1] = stack[sp - 2]; stack[sp - 2] = t; }
+                Op::Drop => { sp -= 1; }
+                Op::Inc => { stack[sp - 1] += 1; }
+                Op::Dec => { stack[sp - 1] -= 1; }
+                Op::Neg => { stack[sp - 1] = -stack[sp - 1]; }
+                Op::Shl => { stack[sp - 1] = (stack[sp - 1] << 1) & 1048575; }
+                Op::Jz(to) => { if stack[sp - 1] == 0 { pc = to; } }
+            }
+            pc += 1;
+        }
+        total += stack[sp - 1];
+        n += 1;
+    }
+    total
+}
+
+fn main() -> i32 {
+    let code: List<Op> = [Op::Push(3), Op::Add, Op::Dup, Op::Mul, Op::Inc, Op::Push(7), Op::Swap, Op::Sub,
+        Op::Neg, Op::Shl, Op::Dup, Op::Drop, Op::Dec, Op::Jz(14), Op::Push(5), Op::Mul, Op::Inc, Op::Shl];
+    println(f"{run(code, 5000000)}");
+    0
+}
