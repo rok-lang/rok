@@ -664,6 +664,8 @@ struct Walk<'c, 'a, 'e> {
     /// binding's type and the arm's body.
     arm_open: HashMap<usize, (LocalId, HirTy, Span)>,
     scopes: Vec<Vec<usize>>,
+    /// Root -> the `let` that redeclared its variable in its scope.
+    hidden: HashMap<usize, Span>,
     targets: Vec<Target>,
     out: Summary,
     /// Params (and captures) owned at entry.
@@ -734,6 +736,7 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             why: HashMap::new(),
             arm_open: HashMap::new(),
             scopes: vec![Vec::new()],
+            hidden: HashMap::new(),
             targets: Vec::new(),
             out: Summary::default(),
             owned_params: HashSet::new(),
@@ -758,6 +761,20 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             .or_else(|| self.f.locals.iter().find(|x| x.id == l))
             .and_then(|x| x.name.as_deref())
             .filter(|n| !n.starts_with('#') && !n.starts_with("__"))
+    }
+
+    /// A `let` of `l` that redeclares a followed variable of this
+    /// scope: the old value stays as it was, out of reach by name.
+    fn note_hidden(&mut self, l: LocalId, at: Span) {
+        let (Some(name), Some(scope)) = (self.local_name(l), self.scopes.last()) else {
+            return;
+        };
+        for &r in scope {
+            let root = &self.roots[r];
+            if root.named && root.name == name && self.root_of.get(&l) != Some(&r) {
+                self.hidden.entry(r).or_insert(at);
+            }
+        }
     }
 
     /// `prime_frame(captures, ..)`: a frame's captures, copied on a
@@ -1236,7 +1253,17 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
         } else {
             format!("{who} holds a `{ty}` that is never closed")
         };
-        let help = if root.named {
+        let hidden = self.hidden.get(&r).copied();
+        let help = if let Some(h) = hidden {
+            format!(
+                "help: a new `let` does not close the old `{name}`; close or move it before \
+                 redeclaring it: add `try {}.close();` before line {}, or move it into the new \
+                 value (`let {name} = io::BufReader::new({name});`)",
+                self.place_text(r, &path),
+                h.line,
+                name = root.name
+            )
+        } else if root.named {
             format!(
                 "help: closing a `{ty}` can fail, so it is not closed for you: add `try {}.close();` \
                  before it leaves its scope, or bind it with `using {} = .. {{ .. }}`",
@@ -1249,9 +1276,12 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                  `let x = ..;` and add `try x.close();`, or use `using x = .. {{ .. }}`"
             )
         };
+        let (at, why) = match hidden {
+            Some(h) => (h, "it is still open when a new `let` hides it here"),
+            None => (at, "it is still open when it leaves here"),
+        };
         self.error(Code::UNCLOSED_RESOURCE, bound, msg, |d| {
-            d.with_secondary(at, "it is still open when it leaves here")
-                .with_note(help)
+            d.with_secondary(at, why).with_note(help)
         });
     }
 
@@ -1302,7 +1332,10 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
     fn stmt(&mut self, s: &'a HirStmt, st: State) -> State {
         st.as_ref()?;
         match s {
-            HirStmt::Let { local, init } => self.let_stmt(*local, init, st),
+            HirStmt::Let { local, init } => {
+                self.note_hidden(*local, init.span);
+                self.let_stmt(*local, init, st)
+            }
             HirStmt::Assign { local, value } => {
                 if self.flag_locals.contains(local) {
                     self.flag_init(*local, value);

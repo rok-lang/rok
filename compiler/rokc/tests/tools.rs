@@ -1661,13 +1661,18 @@ fn add(a: i32, b: i32) -> i32
     ] {
         assert!(stderr.contains(e), "{e}: {stderr}");
     }
-    // The script declares each name once per scope; read back, it runs
-    // the cells again, one by one: `xs` is the last one declared.
+    // The script keeps each cell as typed, a name declared again
+    // redeclared; read back, it runs the cells again, one by one: `xs`
+    // is the last one declared.
     let script = std::fs::read_to_string(&saved).unwrap();
-    assert!(script.contains("\nbase = 40i32;\n"), "{script}");
+    assert_eq!(
+        script.matches("\nlet base = 40i32;\n").count(),
+        2,
+        "{script}"
+    );
     assert!(script.contains("\nlet it = add(base, 2);\n"), "{script}");
     assert!(
-        script.contains("\n{\n// :cell\nlet xs = \"s\";\n}\n"),
+        script.ends_with("\n// :cell\nlet xs = \"s\";\n"),
         "{script}"
     );
     let out = piped(
@@ -1708,7 +1713,7 @@ fn load_of_saved_session_keeps_redeclared_binding() {
     let stderr = text(&out.stderr);
     assert_eq!(out.status.code(), Some(0), "{stderr}");
     assert_eq!(text(&out.stdout), "s\n", "{stderr}");
-    // `rok run` of the script still works: a block holds the new `a`.
+    // `rok run` of the script still works: the second `let a` redeclares it.
     let out = piped(ROKC, &["run", "-q", "--rokr", &rokr, &saved], "");
     assert_eq!(out.status.code(), Some(0), "{}", text(&out.stderr));
     let _ = std::fs::remove_dir_all(&dir);

@@ -1,0 +1,16 @@
+// expect-error: 501_4_let_shadow_view_must_fail.rok:14:17: `ls` is a view of `f` (made at line 12), used after `f` was moved at line 13
+
+// A view made from the old binding still reads through it: once that
+// value moves into the new binding, the view is over.
+use rok::std::fs;
+use rok::core::io::{BufRead, BufReader, IoError};
+
+struct Holder { r: BufReader<fs::File> }
+
+fn main() throws (IoError) {
+    let f = BufReader::new(try fs::open("/dev/null"));
+    let ls = f.lines();
+    let f = Holder { r: f };
+    let _ = try ls.next();
+    try f.r.close();
+}

@@ -1,0 +1,28 @@
+// expect-exit: 0
+// expect-stdout: 2 a,b 4
+
+// Moving a must-close value into the new one is the way to redeclare
+// it: the reader owns the file, and closing it closes both.
+use rok::std::fs;
+use rok::core::io;
+use rok::core::io::{BufRead, IoError};
+
+fn main() throws (IoError) {
+    let path = rok::std::env::temp_dir() / f"rok_let_shadow_{rok::std::process::id()}.txt";
+    try fs::write(path, "a\nb\n");
+    let f = try fs::File::open(path);
+    let f = io::BufReader::new(f);
+    let seen = List::new();
+    try for l in f.lines() { seen.push(l); }
+    try f.close();
+    let seen = (seen.len(), seen.join(","));
+    let n = 0;
+    for _ in 0..2 {
+        let f = try fs::File::open(path);
+        let f = io::BufReader::new(f);
+        try for _l in f.lines() { n += 1; }
+        try f.close();
+    }
+    println(f"{seen.0} {seen.1} {n}");
+    try fs::remove_file(path);
+}

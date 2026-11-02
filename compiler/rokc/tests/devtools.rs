@@ -85,7 +85,7 @@ fn main() {
     let q = 3i32;
     let w = q.clone();
     println(f\"{w} {f:.2} {z}\");
-    for i in 0..3 { let i = 5; println(f\"{i}\"); }
+    for i in 0..3 { let i = i + 5; println(f\"{i}\"); }
     let t = true;
     if t == true { println(\"t\"); }
     let k = 1;
@@ -153,7 +153,6 @@ fn lint_finds_each_kind_and_honors_levels() {
         "comparing with `none` using `==`",
         "casting to the same type `f64`",
         "redundant `.clone()`",
-        "`i` shadows the loop variable `i`",
         "comparison with `true`",
         "`k` is assigned to itself",
         "unused result of `important`",

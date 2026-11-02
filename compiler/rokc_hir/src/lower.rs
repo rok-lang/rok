@@ -5888,8 +5888,7 @@ impl<'a> LowerCtx<'a> {
         None
     }
 
-    /// Look up a name only in the innermost scope, for the `let`
-    /// redeclaration check: nested scopes can rebind, the same one cannot.
+    /// Look up a name only in the innermost scope.
     fn lookup_in_current_scope(&self, name: &str) -> Option<LocalId> {
         self.scopes.last().and_then(|s| s.get(name).copied())
     }

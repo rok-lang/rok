@@ -306,10 +306,9 @@ codes! {
      this build: it was built under another name or for another toolchain, or it may not be \
      used from here. Rebuild it, or fix the dependency list.";
 
-    38 REDECLARED_LOCAL Resolve "local declared twice"
-    "A `let` declares a name that is already declared in the same scope, or a variable and \
-     a nested function share a name. Rok does not let a second `let` hide the first: assign \
-     to it (`x = ..`) or pick a new name.";
+    38 REDECLARED_LOCAL Resolve "variable named like a nested function"
+    "A variable and a nested function in the same block share a name. A nested function is \
+     visible in the whole block, so the name would mean both: rename one of them.";
 
     39 OUTER_LOCAL Resolve "nested item uses an outer local"
     "A nested `fn`, `struct` or `impl` cannot use the locals or generic parameters of the \

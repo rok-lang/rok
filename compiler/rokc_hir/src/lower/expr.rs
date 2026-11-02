@@ -173,11 +173,12 @@ fn declare_nested_fns(ctx: &mut LowerCtx<'_>, block: &Block) {
                 ctx.emit_error_at(
                     Code::REDECLARED_LOCAL,
                     s.span,
-                    format!(
-                        "`{n}` names both a variable and a nested function in this block \
-                        "
-                    ),
+                    format!("`{n}` names both a variable and a nested function in this block"),
                 );
+                ctx.help_last(Some(format!(
+                    "a nested function is seen in its whole block, so rename one of them: \
+                     `let {n}2 = ..` or `fn {n}2(..)`"
+                )));
             }
         }
     }
@@ -571,26 +572,6 @@ pub(super) fn lower_stmt(ctx: &mut LowerCtx<'_>, stmt: &Stmt) -> Option<HirStmt>
 fn lower_stmt_inner(ctx: &mut LowerCtx<'_>, stmt: &Stmt) -> Option<HirStmt> {
     match &stmt.kind {
         StmtKind::Let { name, ty, init } => {
-            // Same-scope redeclaration is an error (typo guard, no
-            // shadowing); an inner scope makes a fresh binding.
-            if name != "_" && ctx.lookup_in_current_scope(name).is_some() {
-                ctx.emit_error(
-                    Code::REDECLARED_LOCAL,
-                    format!(
-                        "`{name}` is already declared in this scope, and rok does not \
-                         let a second `let` hide it"
-                    ),
-                );
-                let rhs = snippet(init);
-                let ann = ty
-                    .as_ref()
-                    .map(|t| format!(": {}", rokc_ast::print::print_ty(t)))
-                    .unwrap_or_default();
-                ctx.help_last(Some(format!(
-                    "to change its value write `{name} = {rhs};`, or give the new value its \
-                     own name: `let {name}2{ann} = {rhs};`"
-                )));
-            }
             // The declared type (if any) is the init's expected type, so
             // literals and generic-enum leaves (`Box::None`) pick it up.
             let pre_ty = ty.as_ref().map(|t| ctx.resolve_ast_ty(t));

@@ -73,10 +73,6 @@ pub const LINTS: &[Lint] = &[
         "ignored_error",
         "a `try? f();` statement silently drops the error",
     ),
-    warn(
-        "shadowed_loop_var",
-        "a `let` in a `for` body re-binds the loop variable",
-    ),
     Lint {
         name: "nan_comparison",
         default: Level::Deny,
@@ -189,6 +185,8 @@ pub const REMOVED_LINTS: &[&str] = &[
     // Errors now: trait scope and meta names.
     "trait_not_in_scope",
     "unqualified_meta",
+    // Retired: `let` may redeclare a name.
+    "shadowed_loop_var",
 ];
 
 /// A lint added in 0.1.6 (tests build a later-release table with it).
@@ -1056,7 +1054,6 @@ struct Binding {
     name: String,
     span: Span,
     used: bool,
-    is_loop: bool,
     /// A `ref` parameter: a write reaches the caller, so it is a use.
     by_ref: bool,
 }
@@ -1077,8 +1074,6 @@ struct Cx<'a> {
     assign_targets: HashSet<(u32, u32)>,
     /// Spans of `ref` parameters.
     ref_params: HashSet<(u32, u32)>,
-    /// Spans of `for` patterns and their parts.
-    loop_pats: HashSet<(u32, u32)>,
     /// Names mentioned in the current file / any user file.
     file_names: HashSet<String>,
     all_names: HashSet<String>,
@@ -1152,7 +1147,6 @@ impl<'a> Cx<'a> {
             exempt_next: false,
             assign_targets: HashSet::new(),
             ref_params: HashSet::new(),
-            loop_pats: HashSet::new(),
             file_names: HashSet::new(),
             all_names: HashSet::new(),
             casts: HashSet::new(),
@@ -1949,27 +1943,6 @@ fn use_leaves(t: &UseTree, prefix: &mut Vec<String>, out: &mut Vec<(String, Stri
     prefix.truncate(n);
 }
 
-/// Every pattern span in `p` (a `for` pattern's binders).
-fn pat_spans(p: &Pattern, out: &mut HashSet<(u32, u32)>) {
-    out.insert(key(p.span));
-    match &p.kind {
-        PatternKind::Binding { sub: Some(s), .. } => pat_spans(s, out),
-        PatternKind::Tuple(ps)
-        | PatternKind::Or(ps)
-        | PatternKind::EnumVariant { args: ps, .. } => {
-            ps.iter().for_each(|x| pat_spans(x, out));
-        }
-        PatternKind::Struct { fields, .. } => {
-            for f in fields {
-                if let Some(x) = &f.pat {
-                    pat_spans(x, out);
-                }
-            }
-        }
-        _ => {}
-    }
-}
-
 /// Path names a pattern mentions (enum / struct / constant paths).
 fn pat_names(p: &Pattern, out: &mut HashSet<String>) {
     match &p.kind {
@@ -2040,27 +2013,12 @@ impl AstVisitor for Cx<'_> {
         {
             return;
         }
-        let is_loop = self.loop_pats.contains(&key(at));
-        if !is_loop {
-            let shadows = self
-                .scopes
-                .iter()
-                .any(|s| s.bindings.iter().any(|b| b.is_loop && b.name == name));
-            if shadows {
-                self.hit(
-                    "shadowed_loop_var",
-                    at,
-                    format!("`{name}` shadows the loop variable `{name}`"),
-                );
-            }
-        }
         self.name_lint("variable", name, at, 0);
         if let Some(s) = self.scopes.last_mut() {
             s.bindings.push(Binding {
                 name: name.to_owned(),
                 span: at,
                 used: false,
-                is_loop,
                 by_ref: self.ref_params.contains(&key(at)),
             });
         }
@@ -2189,7 +2147,6 @@ impl AstVisitor for Cx<'_> {
                 self.block(body);
             }
             ExprKind::For { pat, body, .. } => {
-                pat_spans(pat, &mut self.loop_pats);
                 pat_names(pat, &mut self.file_names);
                 self.block(body);
             }

@@ -43,8 +43,8 @@ const HELP: &str = "  <expr>         evaluate and print its value (`Display`, el
                  else its type); `it` holds the last value shown (a
                  binding named `it` wins)
   <expr>?        evaluate and print its `Debug` form
-  let x = ..     bind (a top-level `let` may rebind a name; a cell's
-                 last `let` or assignment needs no `;`)
+  let x = ..     bind (`let` may redeclare a name; a cell's last
+                 `let` or assignment needs no `;`)
   fn / struct / enum / impl / trait / use ..   define (a new `fn f`,
                  `struct S` or `impl Tr for S` replaces the old one, an
                  `impl S` the one with its methods; one cell may define
@@ -209,13 +209,12 @@ struct Binding {
 }
 
 /// A cell `:save` writes: its statements, then the expression whose
-/// value it showed (`it`: kept as `it`), and the bindings it made.
+/// value it showed (`it`: kept as `it`).
 #[derive(Default)]
 struct Saved {
     stmts: String,
     expr: Option<String>,
     it: bool,
-    declares: Vec<(String, String)>,
 }
 
 /// The host and its channel. Field order matters: the channel closes
@@ -984,19 +983,15 @@ impl Repl {
         }
     }
 
-    /// The session as a script (`:save`). A file may not declare a name
-    /// twice in one scope: a cell that declares one again with
-    /// the same type assigns it; otherwise it opens a block that lasts
-    /// to the end. `SAVED` heads it and `CELL` marks each cell, so
-    /// `:load` replays the cells (`replay`) and keeps what a block hides.
+    /// The session as a script (`:save`): each cell as typed, a
+    /// redeclared name a new binding as in a file. `SAVED` heads it and
+    /// `CELL` marks each cell, so `:load` replays the cells (`replay`).
     fn script(&self) -> String {
         let mut out = format!("{SAVED}\n");
         for item in &self.state.items {
             out.push_str(&item.text);
             out.push('\n');
         }
-        let mut scope: HashMap<&str, &str> = HashMap::new();
-        let mut open = 0;
         for (i, s) in self.history.iter().enumerate() {
             let mut read = false;
             for later in &self.history[i + 1..] {
@@ -1006,43 +1001,15 @@ impl Repl {
                     break;
                 }
             }
-            // `it` is declared only where a later cell reads it.
-            let declares: Vec<(&str, &str)> = s
-                .declares
-                .iter()
-                .map(|(n, t)| (n.as_str(), t.as_str()))
-                .filter(|(n, _)| read || !(s.it && *n == "it"))
-                .collect();
-            let stmts = match s.stmts.strip_suffix("\n;") {
-                Some(t) => format!("{t};"),
-                None => s.stmts.clone(),
-            };
-            let mut text = stmts.clone();
-            let (mut assign_it, mut block) = (false, false);
-            for &(n, t) in &declares {
-                match scope.get(n) {
-                    None => {}
-                    Some(&old) if old == t && s.it && n == "it" => assign_it = true,
-                    Some(&old) if old == t => match assign_instead(&text, n) {
-                        Some(a) => text = a,
-                        None => block = true,
-                    },
-                    Some(_) => block = true,
-                }
-            }
-            if block {
-                out.push_str("{\n");
-                open += 1;
-                scope.clear();
-                (text, assign_it) = (stmts, false);
-            }
-            scope.extend(declares);
             let _ = writeln!(out, "{CELL}");
-            out.push_str(&text);
-            match &s.expr {
-                Some(e) if assign_it => {
-                    let _ = write!(out, "it = {e};");
+            match s.stmts.strip_suffix("\n;") {
+                Some(t) => {
+                    let _ = write!(out, "{t};");
                 }
+                None => out.push_str(&s.stmts),
+            }
+            // `it` is declared only where a later cell reads it.
+            match &s.expr {
                 Some(e) if read => {
                     let _ = write!(out, "let it = {e};");
                 }
@@ -1053,15 +1020,7 @@ impl Repl {
             }
             out.push('\n');
         }
-        out.push_str(&"}\n".repeat(open));
         out
-    }
-
-    /// The bindings (name, type) the last cell built made.
-    fn declared(&self) -> Vec<(String, String)> {
-        let made = format!("__rok_repl_{}_", self.built);
-        let mine = self.bindings.iter().filter(|b| b.sym.starts_with(&made));
-        mine.map(|b| (b.name.clone(), b.ty.clone())).collect()
     }
 
     /// Run the prelude (`repl <lib>`), as no numbered cell.
@@ -1089,7 +1048,6 @@ impl Repl {
             stmts: stmts.to_owned(),
             expr: expr.map(str::to_owned),
             it,
-            declares: Vec::new(),
         };
         let (r, ran) = match classify(last) {
             // A statement (a `let` too) shows nothing.
@@ -1120,8 +1078,7 @@ impl Repl {
             }
         };
         if r.is_ok() {
-            let declares = self.declared();
-            self.history.push(Saved { declares, ..ran });
+            self.history.push(ran);
         }
         r
     }
@@ -1342,7 +1299,7 @@ impl Repl {
         for b in &self.bindings {
             let _ = writeln!(src, "let {} = {};", b.name, b.sym);
         }
-        // Its own block: a `let` may rebind a name. None
+        // The cell runs in a block of its own. None
         // without a body: a loaded program's `fn main` is the entry then.
         if body.is_empty() && show.is_none() {
             return src;
@@ -2132,7 +2089,6 @@ impl Repl {
                     Ok(_) => {
                         self.history.push(Saved {
                             stmts: text.trim().to_owned(),
-                            declares: self.declared(),
                             ..Saved::default()
                         });
                         break;
@@ -2200,7 +2156,8 @@ fn saved_cells(text: &str) -> Vec<String> {
             c.push('\n');
         }
     }
-    // A block opens on its own line before a cell and closes at the end.
+    // An older save opens a block on its own line before a cell and
+    // closes it at the end.
     let mut open = 0;
     for c in &mut cells {
         while let Some(t) = c.strip_suffix("{\n") {
@@ -2282,33 +2239,6 @@ fn header(item: &str) -> String {
         }
     }
     rest[..end].split_whitespace().collect::<Vec<_>>().join(" ")
-}
-
-/// `stmts` with its top-level `let name =` (or `let mut name =`) turned
-/// into the assignment `name =`; `None` without one.
-fn assign_instead(stmts: &str, name: &str) -> Option<String> {
-    use rokc_lexer::TokenKind as T;
-    let (tokens, _) = rokc_lexer::Lexer::new(stmts, REPL_FILE).lex_all();
-    let kind = |i: usize| tokens.get(i).map(|t| &t.kind);
-    let mut depth = 0i32;
-    for (i, t) in tokens.iter().enumerate() {
-        match &t.kind {
-            T::LParen | T::LBracket | T::LBrace | T::HashLBracket | T::HashBangLBracket => {
-                depth += 1;
-            }
-            T::RParen | T::RBracket | T::RBrace => depth -= 1,
-            T::Let if depth == 0 => {
-                let j = i + 1 + usize::from(matches!(kind(i + 1), Some(T::Ident(m)) if m == "mut"));
-                if matches!(kind(j), Some(T::Ident(n)) if n == name) && kind(j + 1) == Some(&T::Eq)
-                {
-                    let (from, to) = (t.span.start as usize, tokens[j].span.start as usize);
-                    return Some(format!("{}{}", &stmts[..from], &stmts[to..]));
-                }
-            }
-            _ => {}
-        }
-    }
-    None
 }
 
 /// Whether a `.rok` file under `dir` defines an item `name`.
@@ -3320,15 +3250,11 @@ mod tests {
         }
     }
 
-    fn saved(stmts: &str, expr: Option<&str>, it: bool, declares: &[(&str, &str)]) -> Saved {
+    fn saved(stmts: &str, expr: Option<&str>, it: bool) -> Saved {
         Saved {
             stmts: stmts.to_owned(),
             expr: expr.map(str::to_owned),
             it,
-            declares: declares
-                .iter()
-                .map(|(n, t)| ((*n).to_owned(), (*t).to_owned()))
-                .collect(),
         }
     }
 
@@ -3489,24 +3415,23 @@ mod tests {
     }
 
     #[test]
-    fn save_writes_a_script_that_declares_each_name_once() {
+    fn save_writes_each_cell_as_typed() {
         let mut r = repl();
         r.state.items.push(Item::new(
             Some("fn twice".to_owned()),
             "fn twice(x: i32) -> i32 { x * 2 }".to_owned(),
         ));
         r.history = vec![
-            saved("let a = 1\n;", None, false, &[("a", "i32")]),
+            saved("let a = 1\n;", None, false),
             // Read by the next cell: kept as `it`.
-            saved("", Some("twice(a)"), true, &[("it", "i32")]),
-            saved("", Some("it + 1"), true, &[("it", "i32")]),
+            saved("", Some("twice(a)"), true),
+            saved("", Some("it + 1"), true),
             // Not read again: a statement.
-            saved("", Some("it * 2"), true, &[("it", "i32")]),
-            // Declared again with its type: an assignment.
-            saved("let a = 5;", None, false, &[("a", "i32")]),
-            // With another type: a block of its own.
-            saved("let a = \"s\"; println(a);", None, false, &[("a", "str")]),
-            saved("", Some("a"), true, &[("it", "str")]),
+            saved("", Some("it * 2"), true),
+            // Declared again, with another type too: a new binding.
+            saved("let a = 5;", None, false),
+            saved("let a = \"s\"; println(a);", None, false),
+            saved("", Some("a"), true),
         ];
         assert_eq!(
             r.script(),
@@ -3518,29 +3443,26 @@ let a = 1;
 // :cell
 let it = twice(a);
 // :cell
-it = it + 1;
+let it = it + 1;
 // :cell
 it * 2;
 // :cell
-a = 5;
-{
+let a = 5;
 // :cell
 let a = \"s\"; println(a);
 // :cell
 a;
-}
 "
         );
-        // `:load` replays the cells, the blocks dropped.
         assert_eq!(
             saved_cells(&r.script()),
             [
                 "fn twice(x: i32) -> i32 { x * 2 }",
                 "let a = 1;",
                 "let it = twice(a);",
-                "it = it + 1;",
+                "let it = it + 1;",
                 "it * 2;",
-                "a = 5;",
+                "let a = 5;",
                 "let a = \"s\"; println(a);",
                 "a;",
             ]
@@ -3548,12 +3470,6 @@ a;
         let path = r.tmp.path().join("s.rok");
         r.save(&path.display().to_string());
         assert_eq!(std::fs::read_to_string(&path).unwrap(), r.script());
-        assert_eq!(
-            assign_instead("f(); let b = 2; b", "b").as_deref(),
-            Some("f(); b = 2; b")
-        );
-        assert_eq!(assign_instead("{ let b = 2; }", "b"), None);
-        assert_eq!(assign_instead("let b: i32 = 2;", "b"), None);
     }
 
     #[test]
