@@ -818,8 +818,7 @@ fn compile_unit_in(
         .filter(|d| holds(&d.file, &d.cfg))
         .collect();
     let keywords = keyword_tables(kw_defs, path, &root_dir_kw, &roots, &mut diags);
-    let (lib_lits, user_lits) =
-        literal_tables(metas.literals, path, &root_dir_kw, &roots, &ext, &mut diags);
+    let lits = literal_tables(metas.literals, path, &root_dir_kw, &roots, &ext, &mut diags);
     // Per package: the user's, then each library root's.
     let metas: Vec<MetaCtx> = (0..=roots.len())
         .map(|i| MetaCtx {
@@ -828,7 +827,7 @@ fn compile_unit_in(
                 .map_or_else(String::new, |r| roots[r].0.join("::")),
             table: std::sync::Arc::clone(&meta_table),
             keywords: keywords.get(i).cloned().unwrap_or_default(),
-            literals: std::sync::Arc::clone(if i == 0 { &user_lits } else { &lib_lits }),
+            literals: std::sync::Arc::clone(&lits[i]),
             key: std::sync::OnceLock::new(),
             target: config.target.clone(),
             cfg: cfgs[i].clone(),
@@ -2420,7 +2419,7 @@ struct MetaCtx {
     package: String,
     table: std::sync::Arc<MetaTable>,
     keywords: KeywordTable,
-    /// `#[literal]` patterns: the libraries', plus the package's own.
+    /// `#[literal]` patterns: the package's own, plus the standard libraries'.
     literals: std::sync::Arc<LiteralTable>,
     /// `tables_key`, once asked for.
     key: std::sync::OnceLock<u64>,
@@ -2563,9 +2562,10 @@ fn handler_path(
     Some((i, path))
 }
 
-/// The `#[literal]` patterns the parser matches: the libraries'
-/// (for everyone) and the package's own. HIR dispatches the built-in
-/// shapes; the real parse reports bad patterns.
+/// The `#[literal]` patterns the parser matches, per package (the
+/// package being built first): its own, then the standard libraries',
+/// which apply everywhere. A dependency's own stay in its source.
+/// HIR dispatches the built-in shapes; the real parse reports bad patterns.
 fn literal_tables(
     defs: Vec<LiteralDef>,
     entry: &Path,
@@ -2573,9 +2573,11 @@ fn literal_tables(
     roots: &[LibRoot],
     ext: &ExtOps,
     diags: &mut Vec<RokDiagnostic>,
-) -> (std::sync::Arc<LiteralTable>, std::sync::Arc<LiteralTable>) {
+) -> Vec<std::sync::Arc<LiteralTable>> {
     let pkgs = package_roots(user_dir, roots);
-    let (mut lib, mut user) = (LiteralTable::default(), LiteralTable::default());
+    let std_pkg = |i: usize| pkgs[i].1.first().is_some_and(|s| s == "rok");
+    let mut own: Vec<Vec<LitRule>> = vec![Vec::new(); pkgs.len()];
+    let mut std = Vec::new();
     for d in defs {
         if d.handler.is_empty() {
             diags.push(RokDiagnostic::error(
@@ -2601,10 +2603,14 @@ fn literal_tables(
             handler,
             span: d.span,
         };
-        if i == 0 { &mut user } else { &mut lib }.rules.push(rule);
+        if std_pkg(i) { &mut std } else { &mut own[i] }.push(rule);
     }
-    user.rules.extend(lib.rules.iter().cloned());
-    (std::sync::Arc::new(lib), std::sync::Arc::new(user))
+    own.into_iter()
+        .map(|mut rules| {
+            rules.extend(std.iter().cloned());
+            std::sync::Arc::new(LiteralTable { rules })
+        })
+        .collect()
 }
 
 /// Mount tests/ (or benches/) beside src/ as a synthetic root module:

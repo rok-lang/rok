@@ -1,0 +1,8 @@
+// rokc-arg: --extern litdep=tests/cases/605_2_literal_dep
+// expect-error: unknown numeric literal suffix `port`
+
+// A dependency's `#[literal]` does not change how its dependents parse.
+use litdep::Port;
+
+let p: Port = 80port;
+println(f"{p.n}");
