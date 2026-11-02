@@ -306,6 +306,8 @@ enum Tie {
     Shared,
     /// It is the guard (a copy of `g` stored or captured).
     Itself,
+    /// A view of a stream that was then moved (`Walk::moved_at`).
+    Moved,
 }
 
 impl Gone {
@@ -1050,8 +1052,9 @@ struct Summary {
     /// The parts of parameters the call hands over.
     gives: BTreeMap<Root, Why>,
     edges: BTreeSet<SEdge>,
-    /// `(guard parameter, root)`: tied to that guard.
-    ties: BTreeSet<(u32, Root)>,
+    /// `(guard, root)`: tied to the guard that parameter part is (a
+    /// closure's captured guard is a part of it).
+    ties: BTreeSet<(Root, Root)>,
     /// Exit tag (of the return value; `ANY`: not known) -> the parts of
     /// `gives` handed over on those exits. Empty: every exit hands over
     /// all of them.
@@ -1158,7 +1161,7 @@ impl Summary {
             ties: self
                 .ties
                 .iter()
-                .filter_map(|(g, r)| Some((map(*g)?, root(r)?)))
+                .filter_map(|(g, r)| Some((root(g)?, root(r)?)))
                 .collect(),
             exits: self
                 .exits
@@ -1228,7 +1231,7 @@ impl Summary {
             out.push_str(&format!("{k}\t{}\t{}\n", root(a), root(b)));
         }
         for (g, r) in &self.ties {
-            out.push_str(&format!("t\t{g}\t{}\n", root(r)));
+            out.push_str(&format!("t\t{}\t{}\n", root(g), root(r)));
         }
         for r in &self.dups {
             out.push_str(&format!("d\t{}\n", root(r)));
@@ -1316,7 +1319,7 @@ impl Summary {
                     s.renews.insert(root(r)?);
                 }
                 ["t", g, r] => {
-                    s.ties.insert((g.parse().ok()?, root(r)?));
+                    s.ties.insert((root(g)?, root(r)?));
                 }
                 ["x", t, ref rest @ ..] if rest.len() <= 1 => {
                     let t = if t == "*" { ANY } else { t.parse().ok()? };
@@ -1384,6 +1387,113 @@ fn place(e: &HirExpr) -> Option<Place> {
     }
 }
 
+/// The expressions whose values `e` yields: a block's trailing value and
+/// the `break` values that leave it, every `if` / `match` arm, a loop's
+/// `break` values. Others yield their own.
+fn value_exits<'e>(e: &'e HirExpr, out: &mut Vec<&'e HirExpr>) {
+    match &e.kind {
+        HirExprKind::Block(b) => block_exits(b, out),
+        HirExprKind::If {
+            then_block,
+            else_branch,
+            ..
+        } => {
+            block_exits(then_block, out);
+            if let Some(x) = else_branch {
+                value_exits(x, out);
+            }
+        }
+        HirExprKind::Match { arms, .. } => arms.iter().for_each(|a| value_exits(&a.body, out)),
+        HirExprKind::Loop { label, body, .. } => {
+            let mut v = Vec::new();
+            breaks_to(body, label.as_deref(), true, false, &mut v);
+            v.into_iter().for_each(|x| value_exits(x, out));
+        }
+        _ => out.push(e),
+    }
+}
+
+fn block_exits<'e>(b: &'e HirBlock, out: &mut Vec<&'e HirExpr>) {
+    if let Some(l) = b.label.as_deref() {
+        let mut v = Vec::new();
+        breaks_to(b, Some(l), false, false, &mut v);
+        v.into_iter().for_each(|x| value_exits(x, out));
+    }
+    if let Some(t) = &b.trailing {
+        value_exits(t, out);
+    }
+}
+
+/// The values of the `break`s in `b` that leave the loop or block
+/// `label` (`is_loop`: an unlabelled one too, outside inner loops).
+fn breaks_to<'e>(
+    b: &'e HirBlock,
+    label: Option<&str>,
+    is_loop: bool,
+    inner: bool,
+    out: &mut Vec<&'e HirExpr>,
+) {
+    fn ex<'e>(
+        e: &'e HirExpr,
+        label: Option<&str>,
+        is_loop: bool,
+        inner: bool,
+        out: &mut Vec<&'e HirExpr>,
+    ) {
+        match &e.kind {
+            HirExprKind::Loop { body, .. } => breaks_to(body, label, is_loop, true, out),
+            HirExprKind::While { cond, body, .. } => {
+                ex(cond, label, is_loop, inner, out);
+                breaks_to(body, label, is_loop, true, out);
+            }
+            HirExprKind::Match { scrutinee, arms } => {
+                ex(scrutinee, label, is_loop, inner, out);
+                for a in arms {
+                    if let Some(g) = &a.guard {
+                        ex(g, label, is_loop, inner, out);
+                    }
+                    ex(&a.body, label, is_loop, inner, out);
+                }
+            }
+            _ => each_child(e, &mut |c| match c {
+                Child::E(x) => ex(x, label, is_loop, inner, out),
+                Child::B(b) => breaks_to(b, label, is_loop, inner, out),
+            }),
+        }
+    }
+    for s in &b.stmts {
+        match s {
+            HirStmt::Break { label: l, value } => {
+                let hit = match l.as_deref() {
+                    Some(l) => label == Some(l),
+                    None => is_loop && !inner,
+                };
+                if let Some(v) = value {
+                    if hit {
+                        out.push(v);
+                    } else {
+                        ex(v, label, is_loop, inner, out);
+                    }
+                }
+            }
+            HirStmt::Let { init: e, .. }
+            | HirStmt::Assign { value: e, .. }
+            | HirStmt::StaticAssign { value: e, .. }
+            | HirStmt::Expr(e)
+            | HirStmt::Panic(e)
+            | HirStmt::Return(Some(e)) => ex(e, label, is_loop, inner, out),
+            HirStmt::ArrayAssign { index, value, .. } => {
+                ex(index, label, is_loop, inner, out);
+                ex(value, label, is_loop, inner, out);
+            }
+            HirStmt::Return(None) | HirStmt::Continue { .. } => {}
+        }
+    }
+    if let Some(t) = &b.trailing {
+        ex(t, label, is_loop, inner, out);
+    }
+}
+
 struct Frame<'h> {
     label: Option<&'h str>,
     is_loop: bool,
@@ -1433,6 +1543,9 @@ struct Checker<'a> {
     unsafe_regions: RefCell<HashMap<u32, Vec<(u32, u32)>>>,
     /// A hand-off call (its span start) -> its argument as written.
     handed: RefCell<HashMap<(u32, u32), String>>,
+    /// Hand-off calls (span start) of a `fn` value that may own moved
+    /// values.
+    fn_owners: RefCell<HashSet<(u32, u32)>>,
     /// Errors (by position) about a value a call handed over, with the
     /// call: dropped when an error inside the call (a closure's) is the
     /// cause.
@@ -1681,6 +1794,7 @@ pub(super) fn check(
         direct: RefCell::default(),
         unsafe_regions: RefCell::default(),
         handed: RefCell::default(),
+        fn_owners: RefCell::default(),
         via_at: RefCell::default(),
     };
     let mut c = c;
@@ -2058,6 +2172,9 @@ fn walk(c: &Checker<'_>, f: &HirFunction) -> WalkOut {
         not_renewed: BTreeSet::new(),
         deps: HashSet::new(),
         diags: Vec::new(),
+        guard_copies: HashMap::new(),
+        guard_parts: HashMap::new(),
+        moved_at: HashMap::new(),
     };
     // Each parameter as it came in: what the caller passed.
     for (i, p) in f.params.iter().enumerate() {
@@ -2183,6 +2300,12 @@ struct Walk<'c, 'h> {
     /// The summaries this walk read.
     deps: HashSet<FunctionId>,
     diags: Vec<RokDiagnostic>,
+    /// A guard local copied from a place (`let g = env.0`).
+    guard_copies: HashMap<LocalId, Place>,
+    /// A closure's part that is a captured guard local.
+    guard_parts: HashMap<Place, LocalId>,
+    /// A stream local moved while it had views: where.
+    moved_at: HashMap<LocalId, Span>,
 }
 
 impl<'h> Walk<'_, 'h> {
@@ -2453,6 +2576,23 @@ impl<'h> Walk<'_, 'h> {
             d.notes = vec![format!(
                 "help: store separate values (`.clone()` what you store), or hand over \
                  `{given}.clone()`"
+            )];
+        } else if in_elems
+            && matches!(g, Gone::To(site, What::Task)
+                if self.c.fn_owners.borrow().contains(&(site.file, site.start)))
+        {
+            // A closure that owns moved values, spawned out of a
+            // collection: the element moves once.
+            let line = self.line(origin, at);
+            d.code = Code::USE_AFTER_MOVE;
+            d.message = format!(
+                "{handed} was spawned as a task at {line}: it may own values moved into it \
+                 (`[move ..]`), so it can be handed over only once"
+            );
+            let take = self.take_out(p, &x);
+            d.notes = vec![format!(
+                "help: take it out of `{x}` ({take}) and hand that over once, or make another \
+                 closure for the second use (moving in a `.clone()` of what it needs)"
             )];
         } else if in_elems {
             let line = self.line(origin, at);
@@ -2792,6 +2932,37 @@ impl<'h> Walk<'_, 'h> {
                     }
                 ))
             }
+            Gone::Guard(site, guard, Tie::Moved) if self.stream_view(guard) => {
+                let gname = self.name(guard);
+                let who = who.split('.').next().unwrap_or(who);
+                let line = self.line(site, at);
+                let moved = self.moved_at.get(&guard).copied();
+                let d = RokDiagnostic::error(
+                    Code::STREAM_VIEW_ESCAPE,
+                    at,
+                    format!(
+                        "`{who}` is a view of `{gname}` (made at {line}), used after `{gname}` \
+                         was moved{}",
+                        moved.map_or_else(String::new, |m| format!(" at {}", self.line(m, at)))
+                    ),
+                )
+                .with_secondary(site, format!("a view of `{gname}` made here"));
+                let d = match moved {
+                    Some(m) => d.with_secondary(m, format!("`{gname}` moved here")),
+                    None => d,
+                };
+                let made = self
+                    .c
+                    .src(site)
+                    .filter(|t| t.len() <= 40 && !t.contains('\n') && owning_form(t).is_some())
+                    .map_or_else(|| format!("{gname}.lines()"), str::to_owned);
+                let own = owning_form(&made).unwrap_or_else(|| format!("{gname}.into_lines()"));
+                d.with_note(format!(
+                    "help: `{who}` reads through `{gname}`, so it ends where `{gname}` moves; \
+                     finish with `{who}` before moving `{gname}`, or take the owning form \
+                     `{own}` and move that instead"
+                ))
+            }
             Gone::Guard(site, guard, _) if self.stream_view(guard) => {
                 let gname = self.name(guard);
                 let who = who.split('.').next().unwrap_or(who);
@@ -3104,6 +3275,38 @@ impl<'h> Walk<'_, 'h> {
         }
     }
 
+    /// `owns_moved`, also for a closure whose type lost what it moved in
+    /// (stored in a tuple, a field, a list): it is a closure that did.
+    fn moves_own(&self, e: &HirExpr) -> bool {
+        if self.owns_moved(e) {
+            return true;
+        }
+        if !matches!(e.ty, HirTy::Fn(..) | HirTy::Closure { .. }) {
+            return false;
+        }
+        let mut fl = Vec::new();
+        self.flows_any(e, &mut fl);
+        let owner = |q: &Place| {
+            q.1.is_empty()
+                && matches!(self.local_ty(q.0), Some(ref t @ HirTy::Closure { moved, .. })
+                    if moved != 0 && self.c.tracked(t))
+        };
+        self.cur.0.iter().any(|(_, st)| {
+            let mut seen: HashSet<Place> = HashSet::new();
+            let mut work: Vec<Place> = fl.iter().map(|(_, q)| q.clone()).collect();
+            while let Some(q) = work.pop() {
+                if owner(&q) {
+                    return true;
+                }
+                if seen.len() > 64 || !seen.insert(q.clone()) {
+                    continue;
+                }
+                work.extend(step(st, &q));
+            }
+            false
+        })
+    }
+
     /// A parameter typed `fn(..) + Send` without `Sync` is one the callee
     /// may run on another thread: an argument that may own moved values
     /// goes there, whoever the callee is.
@@ -3127,10 +3330,35 @@ impl<'h> Walk<'_, 'h> {
             }
         }
         for a in owners {
-            if !self.owns_moved(a) || self.c.in_unsafe(at) {
+            if !self.moves_own(a) || self.c.in_unsafe(at) {
                 continue;
             }
-            let Some(p) = place(a) else { continue };
+            self.c.fn_owners.borrow_mut().insert((at.file, at.start));
+            // Whatever the value came through (a call returning its
+            // argument, an element, an arm), the places it is go along. One
+            // an earlier argument of this call took is used twice.
+            let mut fl = Vec::new();
+            self.flows(a, &mut fl);
+            for (_, q) in &fl {
+                let shown = place(a).is_some().then_some(a);
+                self.use_place(q, &a.ty, shown, a.span);
+            }
+            let Some(p) = place(a) else {
+                if let Some(t) = self
+                    .c
+                    .src(a.span)
+                    .filter(|t| t.len() <= 40 && !t.contains('\n'))
+                {
+                    self.c
+                        .handed
+                        .borrow_mut()
+                        .insert((at.file, at.start), format!("`{t}`"));
+                }
+                for (_, q) in fl {
+                    self.mark_gone(q, Gone::To(at, What::Task));
+                }
+                continue;
+            };
             if let Some(t) = self
                 .c
                 .src(a.span)
@@ -3143,9 +3371,12 @@ impl<'h> Walk<'_, 'h> {
             }
             let why = Gone::To(at, What::Task);
             // A `fn` local: only that place (what it owns was followed from
-            // the closure that made it).
-            let closure = matches!(&a.kind, HirExprKind::Local(l)
-                if matches!(self.local_ty(*l), Some(HirTy::Closure { .. })));
+            // the closure that made it). A closure, or a part holding one,
+            // goes with its aliases.
+            let closure = !p.1.is_empty()
+                || matches!(a.ty, HirTy::Closure { .. })
+                || matches!(&a.kind, HirExprKind::Local(l)
+                    if matches!(self.local_ty(*l), Some(HirTy::Closure { .. })));
             if closure {
                 self.mark_gone(p, why);
             } else {
@@ -3159,7 +3390,16 @@ impl<'h> Walk<'_, 'h> {
 
     /// What `e`'s value carries, of the places this walk knows.
     fn flows(&self, e: &HirExpr, out: &mut Vec<Flow>) {
-        if self.owns_moved(e) || self.c.tracked(&e.ty) {
+        // A literal holding a closure that owns moved values carries it,
+        // whatever its own type says.
+        let literal = matches!(
+            e.kind,
+            HirExprKind::Tuple { .. }
+                | HirExprKind::StructInit { .. }
+                | HirExprKind::ArrayInit { .. }
+                | HirExprKind::EnumVariantInit { .. }
+        );
+        if literal || self.owns_moved(e) || self.c.tracked(&e.ty) || self.moves_own(e) {
             self.flows_any(e, out);
         }
     }
@@ -3247,18 +3487,14 @@ impl<'h> Walk<'_, 'h> {
             | HirExprKind::EnumVariantInit { args: xs, .. } => {
                 xs.iter().for_each(|x| as_kind(self, x, &Fk::Both, out));
             }
-            HirExprKind::Block(b) => self.block_flows(b, out),
-            HirExprKind::If {
-                then_block,
-                else_branch,
-                ..
-            } => {
-                self.block_flows(then_block, out);
-                if let Some(x) = else_branch {
-                    self.flows(x, out);
-                }
+            HirExprKind::Block(_)
+            | HirExprKind::If { .. }
+            | HirExprKind::Match { .. }
+            | HirExprKind::Loop { .. } => {
+                let mut v = Vec::new();
+                value_exits(e, &mut v);
+                v.into_iter().for_each(|x| self.flows(x, out));
             }
-            HirExprKind::Match { arms, .. } => arms.iter().for_each(|a| self.flows(&a.body, out)),
             // An element of the buffer: what was stored into it.
             HirExprKind::BufGet { buf, .. } => {
                 let mut hs = Vec::new();
@@ -3316,12 +3552,6 @@ impl<'h> Walk<'_, 'h> {
         }
     }
 
-    fn block_flows(&self, b: &HirBlock, out: &mut Vec<Flow>) {
-        if let Some(t) = &b.trailing {
-            self.flows(t, out);
-        }
-    }
-
     /// `p` now holds `e`'s value (`part`: a part of it).
     fn store(&mut self, p: &Place, e: &HirExpr, part: bool) {
         self.assign(p);
@@ -3360,8 +3590,8 @@ impl<'h> Walk<'_, 'h> {
                 mark_gone(s, q, why);
             }
         }
-        if let Some(g) = self.got_from(e) {
-            self.tie(g, p.clone(), e.span, Tie::Taken);
+        if let Some((g, at)) = self.got_from(e) {
+            self.tie(g, p.clone(), at, Tie::Taken);
         }
     }
 
@@ -3381,6 +3611,10 @@ impl<'h> Walk<'_, 'h> {
         }
         let k = self.key(e);
         self.expr_to(e, &k);
+        self.note_guard(&p, e);
+        if place(e).is_none_or(|q| q.0 != p.0) {
+            self.stream_moved(e, e.span);
+        }
         self.store(&p, e, false);
         self.retag(&k, &p);
         // The variable that holds a new lock / `Handoff`: named in hints.
@@ -3407,6 +3641,58 @@ impl<'h> Walk<'_, 'h> {
         }
     }
 
+    /// The place guard local `g` was copied from, as far as it goes.
+    fn guard_source(&self, mut g: LocalId) -> Place {
+        let mut path = Vec::new();
+        for _ in 0..8 {
+            let Some(q) = self.guard_copies.get(&g) else {
+                break;
+            };
+            path = [&q.1[..], &path[..]].concat();
+            g = q.0;
+        }
+        (g, path)
+    }
+
+    /// The guard local place `p` is: `p` itself, or a guard a closure
+    /// captured.
+    fn guard_at(&self, p: &Place) -> Option<LocalId> {
+        if p.1.is_empty() {
+            return Some(p.0);
+        }
+        self.guard_parts.get(p).copied()
+    }
+
+    /// Note where a guard in `e` lands when `p` becomes `e`.
+    fn note_guard(&mut self, p: &Place, e: &HirExpr) {
+        if !p.1.is_empty() {
+            return;
+        }
+        // A guard copy, or a closure's capture (a stream it reads).
+        let capture = |q: &Place| {
+            self.f
+                .params
+                .iter()
+                .any(|x| x.local == q.0 && x.name == "__env")
+        };
+        if let Some(q) = place(e).filter(|q| self.is_guard(p.0) || capture(q)) {
+            self.guard_copies.insert(p.0, q);
+            return;
+        }
+        if let HirExprKind::ClosureValue { env, .. } = &e.kind {
+            if let HirExprKind::Tuple { fields } = &env.kind {
+                for (i, x) in fields.iter().enumerate() {
+                    if let Some((l, path)) = place(x) {
+                        if path.is_empty() {
+                            #[allow(clippy::cast_possible_truncation)]
+                            self.guard_parts.insert(extend(p, &[i as u32 | TUPLE]), l);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     fn tie(&mut self, guard: LocalId, p: Place, at: Span, given: Tie) {
         for s in self.cur.states() {
             s.tied
@@ -3417,18 +3703,23 @@ impl<'h> Walk<'_, 'h> {
         }
     }
 
-    /// The guard a `g.get()` (or a field of it) reads from.
-    fn got_from(&self, e: &HirExpr) -> Option<LocalId> {
-        match &e.kind {
+    /// The guard a `g.get()` (or a field of it) reads from, through any
+    /// form that yields it (a block, an arm, a loop's `break`), and the
+    /// expression that took it out.
+    fn got_from(&self, e: &HirExpr) -> Option<(LocalId, Span)> {
+        let mut v = Vec::new();
+        value_exits(e, &mut v);
+        v.into_iter().find_map(|x| match &x.kind {
             HirExprKind::Call { callee, args } if self.c.ops.get(callee) == Some(&Op::Get) => {
-                Some(place(args.first()?)?.0)
+                Some((place(args.first()?)?.0, x.span))
             }
-            HirExprKind::FieldRead { target: x, .. }
-            | HirExprKind::TupleField { target: x, .. }
-            | HirExprKind::SumWrap { value: Some(x), .. } => self.got_from(x),
-            HirExprKind::Block(b) if b.stmts.is_empty() => self.got_from(b.trailing.as_ref()?),
+            HirExprKind::FieldRead { target: y, .. }
+            | HirExprKind::TupleField { target: y, .. }
+            | HirExprKind::SumWrap { value: Some(y), .. } => {
+                self.got_from(y).map(|(g, _)| (g, x.span))
+            }
             _ => None,
-        }
+        })
     }
 
     fn block(&mut self, b: &'h HirBlock) {
@@ -3915,10 +4206,11 @@ impl<'h> Walk<'_, 'h> {
         }
         match &e.kind {
             HirExprKind::Call { callee, args } => {
+                self.stream_released(*callee, args);
+                self.args_moved(*callee, args);
                 if let Some(op) = self.c.ops.get(callee).copied() {
                     return self.op(op, args, e.span);
                 }
-                self.stream_released(*callee, args);
                 let args: Vec<&HirExpr> = args.iter().collect();
                 if self.c.passes.contains(callee) {
                     let mut fl = Vec::new();
@@ -4024,6 +4316,15 @@ impl<'h> Walk<'_, 'h> {
                     self.hold(&c, value);
                 }
             }
+            // A capture moves into the closure.
+            HirExprKind::ClosureValue { env, .. } => match &env.kind {
+                HirExprKind::Tuple { fields } => {
+                    for x in fields {
+                        self.stream_moved(x, e.span);
+                    }
+                }
+                _ => self.stream_moved(env, e.span),
+            },
             _ => {}
         }
     }
@@ -4549,11 +4850,11 @@ impl<'h> Walk<'_, 'h> {
         }
         for (g, r) in &s.ties {
             let guard = args
-                .get(*g as usize)
+                .get(g.0 as usize)
                 .and_then(|a| place(a))
-                .filter(|p| p.1.is_empty());
+                .and_then(|p| self.guard_at(&extend(&p, &g.1)));
             if let (Some(guard), Some(p)) = (guard, map(r)) {
-                self.tie(guard.0, p, e.span, Tie::Taken);
+                self.tie(guard, p, e.span, Tie::Taken);
             }
         }
         let given: Vec<(&Root, Place, Gone)> = s
@@ -4565,7 +4866,7 @@ impl<'h> Walk<'_, 'h> {
                 let arg = args.get(r.0 as usize).filter(|_| r.1.is_empty());
                 if matches!(why.what, What::Task | What::Closure)
                     && arg.is_some_and(|a| {
-                        matches!(a.ty, HirTy::Fn(..) | HirTy::Closure { .. }) && !self.owns_moved(a)
+                        matches!(a.ty, HirTy::Fn(..) | HirTy::Closure { .. }) && !self.moves_own(a)
                     })
                 {
                     return None;
@@ -4688,7 +4989,7 @@ impl<'h> Walk<'_, 'h> {
                 // `Sync`); only one that owns a `[move x]` goes along.
                 if what == What::Task
                     && args.get(i).is_some_and(|a| {
-                        matches!(a.ty, HirTy::Fn(..) | HirTy::Closure { .. }) && !self.owns_moved(a)
+                        matches!(a.ty, HirTy::Fn(..) | HirTy::Closure { .. }) && !self.moves_own(a)
                     })
                 {
                     return;
@@ -4708,6 +5009,9 @@ impl<'h> Walk<'_, 'h> {
                     return;
                 }
                 self.sends |= what != What::Handoff;
+                if what == What::Task && args.get(i).is_some_and(|a| self.moves_own(a)) {
+                    self.c.fn_owners.borrow_mut().insert((at.file, at.start));
+                }
                 if let Some(a) = args.get(i).filter(|a| place(a).is_some()) {
                     let shown = self.show(a);
                     self.c
@@ -4818,6 +5122,53 @@ impl<'h> Walk<'_, 'h> {
             }
             if let Some(span) = at_tie {
                 holders_go(s, &before, Gone::Guard(span, g, Tie::Shared));
+            }
+        }
+    }
+
+    /// `e` moves what it carries (stored, passed by value, captured): a
+    /// stream among it ends its views, as a close would.
+    fn stream_moved(&mut self, e: &HirExpr, at: Span) {
+        let mut fl = Vec::new();
+        match place(e) {
+            Some(p) => fl.push((Fk::Is(Vec::new()), p)),
+            None => self.flows(e, &mut fl),
+        }
+        for (_, q) in fl {
+            let g = q.0;
+            if !q.1.is_empty() || !self.stream_view(g) || self.is_guard(g) {
+                continue;
+            }
+            let mut any = false;
+            for s in self.cur.states() {
+                let Some(tied) = s.tied.remove(&g) else {
+                    continue;
+                };
+                any = true;
+                let at_tie = tied.values().next().map(|(sp, _)| *sp);
+                let before: BTreeSet<Place> = s.gone.keys().cloned().collect();
+                for (q, (span, _)) in tied {
+                    mark_gone(s, q, Gone::Guard(span, g, Tie::Moved));
+                }
+                if let Some(span) = at_tie {
+                    holders_go(s, &before, Gone::Guard(span, g, Tie::Moved));
+                }
+            }
+            if any {
+                self.moved_at.insert(g, at);
+            }
+        }
+    }
+
+    /// The by-value arguments of a direct call move what they carry.
+    fn args_moved(&mut self, callee: FunctionId, args: &[HirExpr]) {
+        let Some(f) = self.c.fns.get(&callee) else {
+            return;
+        };
+        let by_val: Vec<bool> = f.params.iter().map(|p| !p.by_ref).collect();
+        for (a, v) in args.iter().zip(by_val) {
+            if v {
+                self.stream_moved(a, a.span);
             }
         }
     }
@@ -4946,7 +5297,7 @@ impl<'h> Walk<'_, 'h> {
     /// The guard (or `VIEW`) whose protected value `arg` (carrying `qs`)
     /// is or holds, and where it was taken out.
     fn view_of(&self, qs: &[Place], arg: &HirExpr) -> Option<(LocalId, Span)> {
-        let mut hit: Option<(LocalId, Span)> = self.got_from(arg).map(|g| (g, arg.span));
+        let mut hit: Option<(LocalId, Span)> = self.got_from(arg);
         for (_, s) in &self.cur.0 {
             for (g, tied) in &s.tied {
                 let mut probe = St {
@@ -5217,8 +5568,8 @@ impl<'h> Walk<'_, 'h> {
         if depth > 8 {
             return None;
         }
-        if let Some(g) = self.got_from(e) {
-            return Some((g, e.span));
+        if let Some(hit) = self.got_from(e) {
+            return Some(hit);
         }
         match &e.kind {
             HirExprKind::StructInit { fields: xs, .. }
@@ -5631,12 +5982,13 @@ impl<'h> Walk<'_, 'h> {
             }
         }
         for (g, tied) in &exit.tied {
-            let Some(i) = self.f.params.iter().position(|p| p.local == *g) else {
+            let (gl, gpath) = self.guard_source(*g);
+            let Some(i) = self.f.params.iter().position(|p| p.local == gl) else {
                 continue;
             };
             // A stream taken by value is this function's own: an owning
             // adapter holds it beside its view.
-            if !self.f.params[i].by_ref && self.stream_view(*g) {
+            if !self.f.params[i].by_ref && gpath.is_empty() && self.stream_view(*g) {
                 continue;
             }
             let mut probe = St {
@@ -5652,7 +6004,7 @@ impl<'h> Walk<'_, 'h> {
             for q in probe.gone.keys() {
                 if let Some(r) = root_of(q.0) {
                     #[allow(clippy::cast_possible_truncation)]
-                    s.ties.insert((i as u32, (r, q.1.clone())));
+                    s.ties.insert(((i as u32, gpath.clone()), (r, q.1.clone())));
                 }
             }
         }

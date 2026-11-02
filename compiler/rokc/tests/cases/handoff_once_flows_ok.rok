@@ -1,0 +1,39 @@
+// needs: threads
+// expect-exit: 0
+// expect-stdout: 1 2 3 4 5 6 17
+
+// Distinct closures in one call, one hand-over through a function that
+// returns its argument, one per `if` arm, elements taken out one by one.
+use rok::std::thread;
+
+fn id<T>(x: T) -> T { x }
+fn c() -> bool { true }
+
+fn sp(f: fn() -> usize + Send, g: fn() -> usize + Send) -> usize {
+    let a = thread::spawn(f);
+    let b = thread::spawn(g);
+    (try! a.join()) + (try! b.join())
+}
+
+fn main() {
+    let xs: List<i32> = [1];
+    let ys: List<i32> = [1, 2];
+    let f = [move xs] || xs.len();
+    let g = [move ys] || ys.len();
+    let (p, q) = par::join(f, g);
+    let zs: List<i32> = [1, 2, 3];
+    let h = [move zs] || zs.len();
+    let a = thread::spawn(id(h));
+    let ws: List<i32> = [1, 2, 3, 4];
+    let k = [move ws] || ws.len();
+    let b = if c() { thread::spawn(k) } else { thread::spawn(k) };
+    let us: List<i32> = [1, 2, 3, 4, 5];
+    let vs: List<i32> = [1, 2, 3, 4, 5, 6];
+    let fs = [[move us] || us.len(), [move vs] || vs.len()];
+    let d = thread::spawn(fs.remove(0));
+    let e = thread::spawn(fs.remove(0));
+    let m: List<i32> = [1, 2, 3, 4, 5, 6, 7, 8];
+    let n: List<i32> = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+    let t = sp([move m] || m.len(), [move n] || n.len());
+    println(f"{p} {q} {try! a.join()} {try! b.join()} {try! d.join()} {try! e.join()} {t}");
+}

@@ -1,0 +1,30 @@
+// needs: threads
+// expect-exit: 0
+// expect-stdout: 2 2
+
+// A view used up before its stream moves is fine, and the owning form
+// moves with what it reads.
+use rok::std::fs;
+use rok::std::thread;
+use rok::core::io::{BufRead, BufReader, IoError};
+
+fn main() throws (IoError) {
+    let path = rok::std::env::temp_dir() / f"rok_view_moved_{rok::std::process::id()}.txt";
+    try fs::write(path, "a\nb\n");
+    let f = BufReader::new(try fs::open(path));
+    let ls = f.lines();
+    let n = 0;
+    try for l in ls { n += 1; }
+    let t = thread::spawn([move f] || { try! f.close(); });
+    try! t.join();
+    let g = BufReader::new(try fs::open(path));
+    let own = g.into_lines();
+    let u = thread::spawn([move own] || {
+        let k = 0;
+        try! for l in own { k += 1; }
+        try! own.close();
+        k
+    });
+    println(f"{n} {try! u.join()}");
+    try fs::remove_file(path);
+}
