@@ -9,7 +9,7 @@
 // 7
 // done
 
-// std::thread (304): `thread::local` gives each thread its own value
+// std::thread: `thread::local` gives each thread its own value
 // (made by `init` on first use); `park` / `unpark` / `park_timeout`;
 // `JoinHandle::detach`.
 use rok::core::sync::{LoadOrdering, StoreOrdering};

@@ -3,7 +3,7 @@
 // fallible `try_into` (throws `TryFrom::Error`, `OverflowError` for
 // numbers), `saturating_into`, and `wrapping_into` (= `as`).
 //
-// The spec writes `trait Into<T> { fn into(self) -> T; }`, but a blanket
+// Not `trait Into<T> { fn into(self) -> T; }`: a blanket
 // `impl<T, U: From<T>> Into<U> for T` cannot fix `U` from the receiver,
 // so each `*Into` trait has one generic method (`T` from the expected
 // type, like `parse`) and one blanket impl; the conversions are the

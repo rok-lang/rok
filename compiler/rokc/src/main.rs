@@ -1,7 +1,7 @@
 //! `rokc`, the rok compiler. Arguments are parsed by hand: the
 //! workspace takes no external crates.
 //!
-//! Exit codes (901.6): 0 ok, 1 user error (compile error / failed test),
+//! Exit codes: 0 ok, 1 user error (compile error / failed test),
 //! 2 usage error, 70 internal error. `run` exits with the program's own
 //! code.
 
@@ -194,7 +194,7 @@ fn parse_args(raw: Vec<String>, mut tail: Vec<OsString>) -> Args {
                 a.run_args = it.by_ref().map(OsString::from).collect();
                 a.run_args.append(&mut tail);
             }
-            // Global options (901.5), accepted before or after the command.
+            // Global options, accepted before or after the command.
             "-v" | "--verbose" => a.verbose += 1,
             "-vv" => a.verbose += 2,
             "-q" | "--quiet" => a.quiet = true,
@@ -343,7 +343,7 @@ fn parse_args(raw: Vec<String>, mut tail: Vec<OsString>) -> Args {
                 process::exit(0);
             }
             "--version" | "-V" if a.cmd.is_empty() => "version".clone_into(&mut a.cmd),
-            // `-` alone is a positional (stdin, 901.9).
+            // `-` alone is a positional (stdin).
             s if s.starts_with('-') && s.len() > 1 => {
                 usage_error(&format!("unknown option `{s}`{}", suggest_flag(&a.cmd, s)));
             }
@@ -447,7 +447,7 @@ fn parse_lib(v: &str) -> (String, bool) {
 }
 
 /// `--extern name=path`: a package directory, its
-/// `src/lib.rok`, or a prebuilt `<name>.rokhir` / `lib<name>.a` (904).
+/// `src/lib.rok`, or a prebuilt `<name>.rokhir` / `lib<name>.a`.
 fn parse_extern(v: &str) -> (String, PathBuf) {
     let Some((name, path)) = v.split_once('=') else {
         usage_error(&format!("`--extern {v}`: expected <name>=<path>"));
@@ -938,7 +938,7 @@ fn progress(a: &Args, verb: &str, pkg: &Package) {
 }
 
 /// Front end for `pkg`: reports warnings (also returned, rendered), exits
-/// 1 on errors, prints the 901.8 progress line unless `-q`. The instant
+/// 1 on errors, prints the progress line unless `-q`. The instant
 /// is the command's start, for `finished`.
 fn compile(a: &Args, pkg: &Package, mode: Mode) -> (CompileResult, String, Instant) {
     let t = Instant::now();
@@ -1085,7 +1085,7 @@ fn build_lib(a: &Args, pkg: &Package, out: Option<PathBuf>) -> PathBuf {
     out
 }
 
-/// `-v`: per-stage timing (909.5).
+/// `-v`: per-stage timing.
 fn stage(a: &Args, what: &str, since: Instant) {
     if a.verbose > 0 && !a.quiet {
         eprintln!("   Stage: {what} ({}ms)", since.elapsed().as_millis());
@@ -1238,7 +1238,7 @@ fn build_fresh(a: &Args, pkg: &Package, fp: Fingerprint, link: impl FnOnce(&Args
     finished(a, started);
 }
 
-/// Codegen-unit build options reusing unchanged units' objects (902.16);
+/// Codegen-unit build options reusing unchanged units' objects;
 /// a lone file gets its own directory under the target dir.
 fn unit_opts(a: &Args, pkg: &Package, unit: &str) -> BuildOptions {
     let mut opts = a.opts.clone();
@@ -1471,7 +1471,7 @@ fn sweep_scripts(root: &Path, keep: &Path) {
 /// `deny` lint. A package with both roots checks the library, then the
 /// executable on top of it.
 fn cmd_check(mut a: Args, codegen: bool) {
-    // `check -`: the source is stdin (901.9), an anonymous package.
+    // `check -`: the source is stdin, an anonymous package.
     let stdin = a.positional.first().is_some_and(|p| p == "-");
     let pkg = if stdin {
         Package::stdin()
@@ -1523,7 +1523,7 @@ fn cmd_check(mut a: Args, codegen: bool) {
 }
 
 fn cmd_repl(mut a: Args) {
-    // Standard input is the cell input (901.2).
+    // Standard input is the cell input.
     if a.positional.first().is_some_and(|p| p == "-") {
         usage_error("`rokc repl -`: standard input is the cell input; give a path or none");
     }
@@ -1558,7 +1558,7 @@ fn banner() -> String {
 }
 
 /// What a session on `pkg` loads: a library becomes a session dependency
-/// with `use <name>::*;` as the first cell (901.2); a program is loaded,
+/// with `use <name>::*;` as the first cell; a program is loaded,
 /// with its package's library as a dependency.
 fn repl_load(a: &mut Args, pkg: Option<&Package>) -> (Option<String>, Option<(PathBuf, bool)>) {
     let Some(p) = pkg else {

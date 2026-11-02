@@ -7,7 +7,7 @@
 // inherited listeners: 0
 
 // std::net with tasks only, no threads: a TCP echo server task and
-// its client, UDP round trips, all through the I/O driver (707). On a
+// its client, UDP round trips, all through the I/O driver. On a
 // target without threads (wasm32-wasip2) the one thread polls the sockets
 // itself while it has nothing to run.
 use rok::std::net::{TcpListener, UdpSocket, SocketAddr};

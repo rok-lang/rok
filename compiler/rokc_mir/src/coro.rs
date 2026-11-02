@@ -12,7 +12,7 @@
 //!   (state 0) and stores the arguments.
 //!
 //! The frame is a GC object of `(i32 state, locals..)`, traced through
-//! its `ScanTable` rather than the shadow stack (704); inside `resume`
+//! its `ScanTable` rather than the shadow stack; inside `resume`
 //! the locals are ordinary roots. Only locals live into a resume point
 //! (`live_in`) get a slot; a pinned local's slot holds ambiguous words
 //! so its referent cannot move while the coroutine is suspended.

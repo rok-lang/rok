@@ -8,7 +8,7 @@
 // timed out: true
 // connections: 80 clients x 5 rounds ok, peak open >= 40: true
 
-// std::net (302): UDP round trips (blocking, async, connected), the
+// std::net: UDP round trips (blocking, async, connected), the
 // non-blocking / timeout modes, and many concurrent TCP connections
 // served by tasks on the pool.
 use rok::std::net::{TcpListener, TcpStream, UdpSocket, SocketAddr};

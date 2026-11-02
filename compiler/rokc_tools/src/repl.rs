@@ -1,5 +1,5 @@
-//! `repl` (906): cells JIT-linked into one session, the implicit
-//! `main.rok` (907.1).
+//! `repl`: cells JIT-linked into one session, the implicit
+//! `main.rok`.
 //!
 //! Each cell is compiled to an object (native backend at `-O0`, LLVM
 //! above) and sent to a long-lived host (`repl_host.c`) that links and
@@ -578,7 +578,7 @@ pub struct Repl {
     checked: std::cell::RefCell<Option<(String, Analysis, String)>>,
 }
 
-/// A running cell's stdin (907.10).
+/// A running cell's stdin.
 pub enum CellStdin {
     /// Empty: a read is the end of input.
     Null,
@@ -1083,7 +1083,7 @@ impl Repl {
         if let Cell::Item(_) = classify(cell) {
             return self.item(cell).then_some(None).ok_or(());
         }
-        // The cell's value is its last top-level statement's (907.7).
+        // The cell's value is its last top-level statement's.
         let (stmts, last) = split_last(cell);
         let saved = |stmts: &str, expr: Option<&str>, it: bool| Saved {
             stmts: stmts.to_owned(),
@@ -1092,7 +1092,7 @@ impl Repl {
             declares: Vec::new(),
         };
         let (r, ran) = match classify(last) {
-            // A statement (a `let` too) shows nothing (907.1).
+            // A statement (a `let` too) shows nothing.
             Cell::Item(_) | Cell::Let | Cell::Stmt => {
                 (self.run_once(cell, None, false), saved(cell, None, false))
             }
@@ -1342,7 +1342,7 @@ impl Repl {
         for b in &self.bindings {
             let _ = writeln!(src, "let {} = {};", b.name, b.sym);
         }
-        // Its own block: a `let` may rebind a name (907.3). None
+        // Its own block: a `let` may rebind a name. None
         // without a body: a loaded program's `fn main` is the entry then.
         if body.is_empty() && show.is_none() {
             return src;
@@ -2858,7 +2858,7 @@ fn matching(s: &str, open: usize) -> Option<usize> {
     None
 }
 
-/// The input needs more lines (907.8 `...` continuation): an open
+/// The input needs more lines (`...` continuation): an open
 /// bracket, string or block comment, a last token that cannot end a
 /// statement, or an item header still waiting for its body.
 pub(crate) fn incomplete(src: &str) -> bool {
@@ -2915,8 +2915,7 @@ pub(crate) fn open_brackets(src: &str) -> usize {
     })
 }
 
-/// `cell` with the `;` its last top-level `let` or assignment may lack
-/// (907.8).
+/// `cell` with the `;` its last top-level `let` or assignment may lack.
 fn close_stmt(cell: &str) -> String {
     use rokc_lexer::TokenKind as T;
     let last = split_last(cell).1;

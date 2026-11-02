@@ -1015,7 +1015,7 @@ fn resolve_root(segs: &[String], module_path: &str, earlier: &[UseEntry]) -> Vec
         return rooted;
     }
     match segs[0].as_str() {
-        // A dependency's name is a top-level name in every module (902.3).
+        // A dependency's name is a top-level name in every module.
         first if crate::lower::is_dependency(first) => segs.to_vec(),
         // A name an earlier `use` of this module brought in
         // (`use a::b; use b::c;`).

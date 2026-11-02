@@ -86,7 +86,7 @@ pub struct CompilerConfig {
     pub buffers: Vec<(PathBuf, String)>,
     /// Dependencies (`--extern name=path`), each mounted at
     /// top-level `name`: a `lib.rok` compiles with the package, a
-    /// `<name>.rokhir` (904) is prebuilt and links its `lib<name>.a`.
+    /// `<name>.rokhir` is prebuilt and links its `lib<name>.a`.
     /// A name whose path an earlier one has is an alias of that one.
     pub externs: Vec<(String, PathBuf)>,
     /// The extern that is the package's own library (`src/lib.rok` of
@@ -414,7 +414,7 @@ pub struct SourceFile {
     pub template_names: Vec<String>,
 }
 
-/// A user module named like a dependency would merge with it (902.3).
+/// A user module named like a dependency would merge with it.
 /// Empty modules can't clash.
 fn check_dependency_names(
     items: &[ModItem],

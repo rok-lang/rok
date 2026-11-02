@@ -125,7 +125,7 @@ pub(super) fn resolve_name(
     if (set.exists)(&candidate) {
         return Ok(Some(candidate));
     }
-    // A dependency's name is a top-level name in every module (902.3).
+    // A dependency's name is a top-level name in every module.
     if !absolute && segments.first().is_some_and(|s| is_dependency(s)) && (set.exists)(&suffix) {
         return Ok(Some(suffix));
     }

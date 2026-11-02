@@ -5,7 +5,7 @@
 // config: myapp.toml true
 // PATH dirs: true
 
-// The spec's CLI flow - a missing variable falls back with
+// A CLI's env handling: a missing variable falls back with
 // `try?`, `home_dir` / `/` build a config path, `split_paths` walks PATH,
 // and with no input argument the tool prints its usage to stderr and
 // exits 1. `set_var` is called first thing.

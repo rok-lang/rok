@@ -7,7 +7,7 @@
 // 99
 
 // `rok::bare` raw pointers, casts, mem over raw
-// allocation, with the spec's signatures: arithmetic is safe,
+// allocation: arithmetic is safe,
 // `read` / `write` need `unsafe`.
 use rok::bare::alloc::{Layout, LayoutError, alloc, dealloc};
 use rok::bare::mem::{copy_nonoverlapping, size_of, swap, write_bytes};

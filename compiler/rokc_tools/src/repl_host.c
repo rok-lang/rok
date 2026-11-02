@@ -23,7 +23,7 @@
 // memory back (`rollback`) and returns there (`run_cell`).
 //
 // A symbol redefined by a later cell is renamed `<name>.r<cell>`; later
-// references resolve to the newest (907), earlier code keeps its own.
+// references resolve to the newest, earlier code keeps its own.
 //
 // The loader is one linker over generic sections, symbols and relocations
 // (`struct obj`, `fix`), fed by per-format readers (`map_object`,
@@ -1499,7 +1499,7 @@ static void cell_stdin(const char *mode) {
 #if defined(_WIN32)
 void rok_runtime_yield(void);
 void rok_leave_native(void);
-// This thread's runtime TLS block (803) via the runtime's accessor: clang
+// This thread's runtime TLS block via the runtime's accessor: clang
 // guards C `extern __declspec(thread)` with `__dyn_tls_on_demand_init`,
 // which needs the MSVC CRT. `ROK_TLS_YIELD_FLAG` comes from build.rs.
 unsigned char *rok_tls_addr(void);

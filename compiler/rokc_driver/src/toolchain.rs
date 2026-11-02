@@ -367,7 +367,7 @@ pub fn link_executable(
 ///
 /// By codegen units with `opts.incremental`, else as many members as LLVM
 /// compiles in parallel. A prebuilt-library build writes `foo.rokhir`
-/// beside it (904), a sibling rather than a member so no object-section
+/// beside it, a sibling rather than a member so no object-section
 /// reader is needed.
 pub fn build_archive(
     module: &CompiledModule,

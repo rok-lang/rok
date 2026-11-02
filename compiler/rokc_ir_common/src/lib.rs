@@ -228,7 +228,7 @@ pub struct FnFacts {
     /// `wasm_import_module` block: the symbol it links to.
     pub link_name: Option<String>,
     pub role: FnRole,
-    /// A generic instance's mangled type arguments (905.2); the name ends
+    /// A generic instance's mangled type arguments; the name ends
     /// in `MONO_MARK` + these.
     pub mono_args: Option<String>,
     /// `#[track_caller]`: the last parameter is the caller's location

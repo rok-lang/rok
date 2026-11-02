@@ -18,7 +18,7 @@ use rok::bare::ptr::{CPtr, Ptr};
 use rok::bare::ptr_cast;
 
 fn main() throws (LayoutError) {
-    // The spec's example.
+    // A `u32` array: alloc, write, read, dealloc.
     let layout = try Layout::array::<u32>(1000);
     let p: CPtr<u8> = unsafe { alloc(layout) };
     match p.as_ptr() {
