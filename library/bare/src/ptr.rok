@@ -31,6 +31,28 @@ impl<T> Debug for Ptr<T> {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"Ptr({self.address:#x})") }
 }
 
+// An address is a value: compared, ordered and hashed by address.
+impl<T> Clone for Ptr<T> {
+    const fn clone(self) -> Ptr<T> { self }
+}
+impl<T> Copy for Ptr<T> {}
+impl<T> PartialEq for Ptr<T> {
+    const fn eq(self, rhs: Ptr<T>) -> bool { self.address == rhs.address }
+}
+impl<T> Eq for Ptr<T> {}
+impl<T> PartialOrd for Ptr<T> {
+    const fn lt(self, rhs: Ptr<T>) -> bool { self.address < rhs.address }
+    const fn gt(self, rhs: Ptr<T>) -> bool { self.address > rhs.address }
+    const fn le(self, rhs: Ptr<T>) -> bool { self.address <= rhs.address }
+    const fn ge(self, rhs: Ptr<T>) -> bool { self.address >= rhs.address }
+}
+impl<T> Ord for Ptr<T> {
+    const fn cmp(self, rhs: Ptr<T>) -> Ordering { self.address.cmp(rhs.address) }
+}
+impl<T> Hash for Ptr<T> {
+    const fn hash<H: Hasher>(self, ref h: H) { h.write_usize(self.address) }
+}
+
 impl<T> Ptr<T> {
     /// Well aligned, never dereferenceable.
     pub const fn dangling() -> Ptr<T> { Ptr { address: align_of::<T>() } }
@@ -107,6 +129,27 @@ impl<T> Debug for ConstPtr<T> {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"ConstPtr({self.address:#x})") }
 }
 
+impl<T> Clone for ConstPtr<T> {
+    const fn clone(self) -> ConstPtr<T> { self }
+}
+impl<T> Copy for ConstPtr<T> {}
+impl<T> PartialEq for ConstPtr<T> {
+    const fn eq(self, rhs: ConstPtr<T>) -> bool { self.address == rhs.address }
+}
+impl<T> Eq for ConstPtr<T> {}
+impl<T> PartialOrd for ConstPtr<T> {
+    const fn lt(self, rhs: ConstPtr<T>) -> bool { self.address < rhs.address }
+    const fn gt(self, rhs: ConstPtr<T>) -> bool { self.address > rhs.address }
+    const fn le(self, rhs: ConstPtr<T>) -> bool { self.address <= rhs.address }
+    const fn ge(self, rhs: ConstPtr<T>) -> bool { self.address >= rhs.address }
+}
+impl<T> Ord for ConstPtr<T> {
+    const fn cmp(self, rhs: ConstPtr<T>) -> Ordering { self.address.cmp(rhs.address) }
+}
+impl<T> Hash for ConstPtr<T> {
+    const fn hash<H: Hasher>(self, ref h: H) { h.write_usize(self.address) }
+}
+
 impl<T> ConstPtr<T> {
     /// Well aligned, never dereferenceable.
     pub const fn dangling() -> ConstPtr<T> { ConstPtr { address: align_of::<T>() } }
@@ -147,6 +190,27 @@ pub struct ManyPtr<T> {
 
 impl<T> Debug for ManyPtr<T> {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"ManyPtr({self.address:#x})") }
+}
+
+impl<T> Clone for ManyPtr<T> {
+    const fn clone(self) -> ManyPtr<T> { self }
+}
+impl<T> Copy for ManyPtr<T> {}
+impl<T> PartialEq for ManyPtr<T> {
+    const fn eq(self, rhs: ManyPtr<T>) -> bool { self.address == rhs.address }
+}
+impl<T> Eq for ManyPtr<T> {}
+impl<T> PartialOrd for ManyPtr<T> {
+    const fn lt(self, rhs: ManyPtr<T>) -> bool { self.address < rhs.address }
+    const fn gt(self, rhs: ManyPtr<T>) -> bool { self.address > rhs.address }
+    const fn le(self, rhs: ManyPtr<T>) -> bool { self.address <= rhs.address }
+    const fn ge(self, rhs: ManyPtr<T>) -> bool { self.address >= rhs.address }
+}
+impl<T> Ord for ManyPtr<T> {
+    const fn cmp(self, rhs: ManyPtr<T>) -> Ordering { self.address.cmp(rhs.address) }
+}
+impl<T> Hash for ManyPtr<T> {
+    const fn hash<H: Hasher>(self, ref h: H) { h.write_usize(self.address) }
 }
 
 impl<T> ManyPtr<T> {
@@ -200,6 +264,27 @@ pub struct CPtr<T> {
 
 impl<T> Debug for CPtr<T> {
     fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"CPtr({self.address:#x})") }
+}
+
+impl<T> Clone for CPtr<T> {
+    const fn clone(self) -> CPtr<T> { self }
+}
+impl<T> Copy for CPtr<T> {}
+impl<T> PartialEq for CPtr<T> {
+    const fn eq(self, rhs: CPtr<T>) -> bool { self.address == rhs.address }
+}
+impl<T> Eq for CPtr<T> {}
+impl<T> PartialOrd for CPtr<T> {
+    const fn lt(self, rhs: CPtr<T>) -> bool { self.address < rhs.address }
+    const fn gt(self, rhs: CPtr<T>) -> bool { self.address > rhs.address }
+    const fn le(self, rhs: CPtr<T>) -> bool { self.address <= rhs.address }
+    const fn ge(self, rhs: CPtr<T>) -> bool { self.address >= rhs.address }
+}
+impl<T> Ord for CPtr<T> {
+    const fn cmp(self, rhs: CPtr<T>) -> Ordering { self.address.cmp(rhs.address) }
+}
+impl<T> Hash for CPtr<T> {
+    const fn hash<H: Hasher>(self, ref h: H) { h.write_usize(self.address) }
 }
 
 impl<T> CPtr<T> {

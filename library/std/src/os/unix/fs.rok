@@ -25,6 +25,7 @@ impl PermissionsExt for Permissions {
 
 /// Unix knobs of `Dir::open` / `File::open` (`OpenFlags.os`).
 #[non_exhaustive]
+#[derive(Debug)]
 pub struct OsOpenFlags {
     /// More `O_*` flags for open(2): `O_NOATIME`, `O_DIRECT`, `O_SYNC`,
     /// `O_NONBLOCK`, ... The bits the open function decides (access,
@@ -36,6 +37,7 @@ pub struct OsOpenFlags {
 /// Unix knobs of the functions that may create the file
 /// (`CreateFlags.os`); the create mode is `CreateFlags.permissions`.
 #[non_exhaustive]
+#[derive(Debug)]
 pub struct OsCreateFlags {
     /// As `OsOpenFlags.custom_flags`.
     pub custom_flags: i32 = 0;

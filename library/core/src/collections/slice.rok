@@ -715,6 +715,10 @@ pub struct SliceMutIter<T> {
     back: usize = 0;
 }
 
+impl<T> Debug for SliceMutIter<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("SliceMutIter") }
+}
+
 impl<T> Iterator for SliceMutIter<T> {
     type Item = T;
     #[track_caller]

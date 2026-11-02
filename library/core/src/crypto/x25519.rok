@@ -106,7 +106,7 @@ impl Drop for PrivateKey {
 
 /// Nothing of the key.
 impl Debug for PrivateKey {
-    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("PrivateKey(..)") }
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("PrivateKey { .. }") }
 }
 
 impl PublicKey {

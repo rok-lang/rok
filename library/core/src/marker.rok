@@ -113,6 +113,10 @@ impl<T> Handoff<T> {
     }
 }
 
+impl<T> Debug for Handoff<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Handoff") }
+}
+
 unsafe impl<T: Send> Send for Handoff<T> {}
 unsafe impl<T: Send> Sync for Handoff<T> {}
 
@@ -396,6 +400,7 @@ pub unsafe fn share<T>(x: T) -> T { x }
 
 /// Put `value` into `dest` and return what it held: the way to move a
 /// part out of a struct (`replace(ref child.stdout, none)`).
+#[discardable]
 pub fn replace<T>(ref dest: T, value: T) -> T {
     let old = dest;
     dest = value;
@@ -403,6 +408,7 @@ pub fn replace<T>(ref dest: T, value: T) -> T {
 }
 
 /// `replace(ref dest, T::default())`.
+#[discardable]
 pub fn take<T: Default>(ref dest: T) -> T {
     let old = dest;
     dest = T::default();

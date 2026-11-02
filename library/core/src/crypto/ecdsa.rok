@@ -653,7 +653,7 @@ impl SigningKey {
 /// The scalar not shown.
 impl Debug for SigningKey {
     const fn fmt(self, ref f: Formatter) throws (FmtError) {
-        try f.write_str(f"SigningKey({self.public.curve:?})")
+        try f.write_str(f"SigningKey {{ curve: {self.public.curve:?}, .. }}")
     }
 }
 

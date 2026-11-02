@@ -593,6 +593,10 @@ pub struct TryMap<S, U> {
     f: fn(S::Item) throws (S::Error) -> U;
 }
 
+impl<S: TryStream, U> Debug for TryMap<S, U> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TryMap") }
+}
+
 impl<S: TryStream, U> TryStream for TryMap<S, U> {
     type Item = U;
     type Error = S::Error;
@@ -614,6 +618,10 @@ impl<S: TryStream, U> TryStream for TryMap<S, U> {
 pub struct TryFilter<S> {
     s: S;
     pred: fn(S::Item) throws (S::Error) -> bool;
+}
+
+impl<S: TryStream> Debug for TryFilter<S> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TryFilter") }
 }
 
 impl<S: TryStream> TryStream for TryFilter<S> {
@@ -646,6 +654,10 @@ pub struct MapErr<S, E2> {
     f: fn(S::Error) -> E2;
 }
 
+impl<S: TryStream, E2> Debug for MapErr<S, E2> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("MapErr") }
+}
+
 impl<S: TryStream, E2> TryStream for MapErr<S, E2> {
     type Item = S::Item;
     type Error = E2;
@@ -661,6 +673,10 @@ impl<S: TryStream, E2> TryStream for MapErr<S, E2> {
 pub struct TryTake<S> {
     s: S;
     left: usize;
+}
+
+impl<S: TryStream> Debug for TryTake<S> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TryTake") }
 }
 
 impl<S: TryStream> TryStream for TryTake<S> {
@@ -687,6 +703,10 @@ impl<S: TryStream> TryStream for TryTake<S> {
 pub struct TrySkip<S> {
     s: S;
     n: usize;
+}
+
+impl<S: TryStream> Debug for TrySkip<S> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("TrySkip") }
 }
 
 impl<S: TryStream> TryStream for TrySkip<S> {
@@ -719,6 +739,10 @@ pub struct Results<S> {
     s: S;
 }
 
+impl<S: TryStream> Debug for Results<S> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Results") }
+}
+
 impl<S: TryStream> Stream for Results<S> {
     type Item = Result<S::Item, S::Error>;
     const fn poll_next(ref self, ref ctx: Context) -> Poll<Result<S::Item, S::Error> | none> {
@@ -742,6 +766,10 @@ impl<S: TryStream> Stream for Results<S> {
 #[must_use("stream is lazy and does nothing unless polled: walk it with `try for await`, or call `try await {}.collect()`")]
 pub struct FromResults<S, T, E> {
     s: S;
+}
+
+impl<S: Stream<Item = Result<T, E>>, T, E> Debug for FromResults<S, T, E> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("FromResults") }
 }
 
 impl<S: Stream<Item = Result<T, E>>, T, E> TryStream for FromResults<S, T, E> {

@@ -96,6 +96,7 @@ pub const SECURITY_EFFECTIVE_ONLY: u32 = 0x80000u32;
 
 /// Windows knobs of `Dir::open` / `File::open` (`OpenFlags.os`).
 #[non_exhaustive]
+#[derive(Debug)]
 pub struct OsOpenFlags {
     /// What other opens of the file may do meanwhile.
     pub share_mode: u32 = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
@@ -110,9 +111,13 @@ pub struct OsOpenFlags {
 /// Windows knobs of the functions that may create the file
 /// (`CreateFlags.os`).
 #[non_exhaustive]
+#[derive(Debug)]
 pub struct OsCreateFlags {
+    /// As `OsOpenFlags.share_mode`.
     pub share_mode: u32 = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+    /// As `OsOpenFlags.custom_flags`.
     pub custom_flags: u32 = 0u32;
+    /// As `OsOpenFlags.security_qos_flags`.
     pub security_qos_flags: u32 = 0u32;
     /// `FILE_ATTRIBUTE_*` bits of a created file (`FILE_ATTRIBUTE_HIDDEN`,
     /// ...); `create` also adds them to a file it empties.
@@ -121,14 +126,19 @@ pub struct OsCreateFlags {
 
 /// The parameters of `CreateFile2`, as the OS has them.
 #[non_exhaustive]
+#[derive(Debug)]
 pub struct CreateFileParams {
     /// `GENERIC_READ`, `FILE_APPEND_DATA`, ...; 0 opens for metadata only.
     pub access: u32;
     /// `CREATE_NEW` .. `TRUNCATE_EXISTING`.
     pub disposition: u32;
+    /// `FILE_SHARE_*` bits: what other opens may do meanwhile.
     pub share_mode: u32 = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+    /// `FILE_ATTRIBUTE_*` bits of a created file.
     pub attributes: u32 = 0u32;
+    /// `FILE_FLAG_*` bits.
     pub flags: u32 = 0u32;
+    /// `SECURITY_*` bits (`SECURITY_SQOS_PRESENT` is added when non-zero).
     pub security_qos_flags: u32 = 0u32;
 }
 

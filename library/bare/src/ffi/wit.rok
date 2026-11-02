@@ -111,6 +111,10 @@ pub struct Blocks {
     list: List<i32>;
 }
 
+impl Debug for Blocks {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Blocks") }
+}
+
 impl Blocks {
     /// No blocks yet.
     pub const fn new() -> Blocks { Blocks { list: List::new() } }
@@ -165,6 +169,10 @@ pub struct Handle {
     owned: bool;
 }
 
+impl Debug for Handle {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Handle") }
+}
+
 impl Handle {
     /// An owned handle `h`: it can be passed on as `own`.
     pub const fn own(h: i32) -> Handle { Handle { cell: [h], owned: true } }
@@ -207,6 +215,10 @@ impl Handle {
 pub struct Table<T> {
     slots: List<T?>;
     free: List<i32>;
+}
+
+impl<T> Debug for Table<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Table") }
 }
 
 // A component instance runs on one thread at a time.
@@ -266,6 +278,10 @@ extern "C" {
 /// passed between components.
 pub struct ErrorContext {
     handle: i32;
+}
+
+impl Debug for ErrorContext {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"ErrorContext {{ handle: {self.handle} }}") }
 }
 
 #[cfg(target_os = "wasi")]

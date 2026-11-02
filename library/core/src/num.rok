@@ -567,6 +567,11 @@ impl Hash for c_char {
     const fn hash<H: Hasher>(self, ref h: H) { h.write_u8(self as u8) }
 }
 
+/// The byte as a number (`65`).
+impl Debug for c_char {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try Debug::fmt(self as u8, ref f) }
+}
+
 // `&&` / `||` (stdlib 2.3.9): on two `bool`s the compiler short-circuits
 // without calling these.
 

@@ -353,8 +353,7 @@ impl<T> ScopeHandle<T> {
 /// the children"). The first error cancels the scope: tasks that have
 /// not started never run (a running one finishes: a sync closure has no
 /// cancellation point), `try_scope` waits for the rest and throws that
-/// error. Not in spec 2.19, whose `scope` takes a non-throwing
-/// `fn(Scope)`.
+/// error.
 pub fn try_scope<E: Send>(f: fn(TryScope<E>) throws (E)) throws (E) {
     unsafe {
         let err: GcBuf<E> = buf_new(1);

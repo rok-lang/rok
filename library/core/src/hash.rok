@@ -53,7 +53,9 @@ pub trait Hasher {
 /// Makes the `Hasher`s of a `Dict` / `Set`: every one it builds hashes
 /// equal values alike.
 pub trait BuildHasher {
+    /// The hasher it builds.
     type Hasher: Hasher;
+    /// A new hasher; every one starts from the same state.
     fn build_hasher(self) -> Self::Hasher;
 }
 
@@ -154,6 +156,11 @@ impl Clone for DefaultHasher {
     const fn clone(self) -> DefaultHasher { self }
 }
 
+/// Shows no key or state.
+impl Debug for DefaultHasher {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("DefaultHasher { .. }") }
+}
+
 /// SipHash-1-3 under a caller's key. Its output for the bytes written
 /// is the reference SipHash and stable across releases; `write_<int>`
 /// writes the integer's little-endian bytes (`write_usize` 8). The
@@ -183,6 +190,11 @@ impl Clone for SipHasher13 {
     const fn clone(self) -> SipHasher13 { self }
 }
 
+/// Shows no key or state.
+impl Debug for SipHasher13 {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("SipHasher13 { .. }") }
+}
+
 /// SipHash-2-4 under a caller's key: as `SipHasher13`, with the
 /// original paper's rounds.
 pub struct SipHasher24 {
@@ -209,6 +221,11 @@ impl Clone for SipHasher24 {
     const fn clone(self) -> SipHasher24 { self }
 }
 
+/// Shows no key or state.
+impl Debug for SipHasher24 {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("SipHasher24 { .. }") }
+}
+
 /// Builds `H::default()`: for a `Dict` / `Set` with a fixed hasher of
 /// the caller's (`Dict<K, V, BuildHasherDefault<MyHasher>>`). Use one
 /// only when keys cannot come from an attacker.
@@ -217,6 +234,10 @@ pub struct BuildHasherDefault<H> {}
 impl<H: Hasher + Default> BuildHasherDefault<H> {
     /// The builder; it holds nothing.
     pub const fn new() -> BuildHasherDefault<H> { BuildHasherDefault {} }
+}
+
+impl<H> Debug for BuildHasherDefault<H> {
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("BuildHasherDefault") }
 }
 
 impl<H: Hasher + Default> BuildHasher for BuildHasherDefault<H> {

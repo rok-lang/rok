@@ -98,7 +98,7 @@ impl Drop for SigningKey {
 /// The public key only.
 impl Debug for SigningKey {
     const fn fmt(self, ref f: Formatter) throws (FmtError) {
-        try f.write_str(f"SigningKey({self.public:?})")
+        try f.write_str(f"SigningKey {{ verifying_key: {self.public:?}, .. }}")
     }
 }
 

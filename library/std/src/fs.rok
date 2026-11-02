@@ -54,6 +54,7 @@ const SHARE_ALL: u32 = 7u32;
 
 /// What `open` opens an existing file for (3.1.1a).
 #[non_exhaustive]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Access {
     ReadOnly,
     WriteOnly,
@@ -76,25 +77,9 @@ impl Access {
     }
 }
 
-impl PartialEq for Access {
-    const fn eq(self, rhs: Access) -> bool { self.index() == rhs.index() }
-    const fn ne(self, rhs: Access) -> bool { self.index() != rhs.index() }
-}
-
-impl Debug for Access {
-    const fn fmt(self, ref f: Formatter) throws (FmtError) {
-        try f.write_str(match self {
-            Access::ReadOnly => "ReadOnly",
-            Access::WriteOnly => "WriteOnly",
-            Access::ReadWrite => "ReadWrite",
-            Access::Append => "Append",
-            Access::ReadAppend => "ReadAppend",
-        })
-    }
-}
-
 /// Knobs of `open` (3.1.1a).
 #[non_exhaustive]
+#[derive(Debug)]
 pub struct OpenFlags {
     /// `false`: a final symbolic link is `FilesystemLoop`, not followed.
     pub follow_symlinks: bool = true;
@@ -105,6 +90,7 @@ pub struct OpenFlags {
 
 /// Knobs of the functions that may create the file (3.1.1a).
 #[non_exhaustive]
+#[derive(Debug)]
 pub struct CreateFlags {
     /// Open for reading too.
     pub read: bool = false;
@@ -121,11 +107,13 @@ pub struct CreateFlags {
 /// No target knobs here.
 #[cfg(not(any(target_family = "unix", target_os = "windows")))]
 #[non_exhaustive]
+#[derive(Debug)]
 pub struct OsOpenFlags {}
 
 /// No target knobs here.
 #[cfg(not(any(target_family = "unix", target_os = "windows")))]
 #[non_exhaustive]
+#[derive(Debug)]
 pub struct OsCreateFlags {}
 
 /// The `os` record's part of an `OpenHow`.

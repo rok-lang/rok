@@ -281,9 +281,13 @@ pub struct DecapsulationKey768 {
 impl !Sync for DecapsulationKey768 {}
 
 /// An ML-KEM-768 encapsulation key, checked (FIPS 203 7.2).
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct EncapsulationKey768 {
     ek: List<u8>;
+}
+
+impl Debug for EncapsulationKey768 {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("EncapsulationKey768 { .. }") }
 }
 
 impl DecapsulationKey768 {
@@ -392,7 +396,7 @@ impl Drop for DecapsulationKey768 {
 
 /// Nothing of the key.
 impl Debug for DecapsulationKey768 {
-    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("DecapsulationKey768(..)") }
+    const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("DecapsulationKey768 { .. }") }
 }
 
 impl EncapsulationKey768 {

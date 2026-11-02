@@ -1496,8 +1496,8 @@ impl<T> Join<T> {
 }
 
 /// Identifies a task for as long as the process runs (ids are never
-/// reused): `Task::id`, `task::id()`. Not in spec 2.18 (tokio's
-/// `task::Id`).
+/// reused): `Task::id`, `task::id()`.
+#[derive(Clone, Copy)]
 pub struct TaskId {
     id: u64;
 }

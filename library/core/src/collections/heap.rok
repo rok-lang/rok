@@ -147,6 +147,10 @@ pub struct HeapIter<T> {
     it: ListIter<T>;
 }
 
+impl<T> Debug for HeapIter<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("HeapIter") }
+}
+
 impl<T> Iterator for HeapIter<T> {
     type Item = T;
     const fn next(ref self) -> T | none {

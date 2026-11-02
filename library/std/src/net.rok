@@ -1027,7 +1027,7 @@ impl Sock {
 
 /// An address family.
 #[non_exhaustive]
-#[derive(PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Domain {
     /// `AF_INET`.
     Ipv4,
@@ -1051,7 +1051,7 @@ impl Domain {
 
 /// A socket type.
 #[non_exhaustive]
-#[derive(PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum SocketType {
     /// `SOCK_STREAM`: TCP over IP.
     Stream,
@@ -1072,7 +1072,7 @@ impl SocketType {
 }
 
 /// An IP protocol number (the IANA registry).
-#[derive(PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Protocol {
     number: i32;
 }
@@ -1101,6 +1101,10 @@ impl Protocol {
 /// moves it.
 pub struct Socket {
     sock: Sock;
+}
+
+impl Debug for Socket {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Socket") }
 }
 
 impl Socket {

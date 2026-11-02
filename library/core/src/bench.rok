@@ -38,8 +38,11 @@ pub struct Bench {
     items: i64;
 }
 
+impl Debug for Bench {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"Bench {{ name: {self.name:?}, .. }}") }
+}
+
 impl Bench {
-    // The generated harness builds this from argv.
     /// The generated harness builds this from argv.
     pub(pkg) fn new(name: str, iters: i64, samples: i64, tty: bool, width: usize) -> Bench {
         Bench {
@@ -54,10 +57,10 @@ impl Bench {
     }
 
     /// Report throughput: `n` bytes processed per call.
-    pub fn bytes(ref self, n: i64) { self.bytes = n; }
+    pub fn set_bytes(ref self, n: i64) { self.bytes = n; }
 
     /// Report throughput: `n` items processed per call.
-    pub fn items(ref self, n: i64) { self.items = n; }
+    pub fn set_items(ref self, n: i64) { self.items = n; }
 
     /// Measure `f`. Calibrate (unless fixed), warm up, sample, report.
     pub fn iter<T>(ref self, f: fn() -> T) {

@@ -124,6 +124,10 @@ pub struct Waiting {
     call: i32;
 }
 
+impl Debug for Waiting {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Waiting") }
+}
+
 impl Future for Waiting {
     type Output = i32;
     const fn poll(ref self, ref ctx: Context) -> Poll<i32> {
@@ -360,12 +364,19 @@ pub async fn catching_async<T, E>(f: TryAsyncFuture<T, E>) -> Result<T, E> {
 /// What one future type's values need: the component model's built-ins
 /// for it and its values' layout.
 pub struct FutureOps<T> {
+    /// `future.new`: both ends' handles, packed.
     pub new: fn() -> i64;
+    /// `future.read` into an address.
     pub read: fn(i32, i32) -> i32;
+    /// `future.write` from an address.
     pub write: fn(i32, i32) -> i32;
+    /// `future.drop-readable`.
     pub drop_readable: fn(i32);
+    /// `future.drop-writable`.
     pub drop_writable: fn(i32);
+    /// A value's size in bytes.
     pub size: i32;
+    /// A value's alignment in bytes.
     pub align: i32;
     /// The value at an address (freeing what it points to).
     pub lift: fn(i32) -> T;
@@ -373,17 +384,34 @@ pub struct FutureOps<T> {
     pub lower: fn(T, i32, Blocks);
 }
 
+impl<T> Debug for FutureOps<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("FutureOps") }
+}
+
 /// `stream<T>`'s: as `FutureOps`, copies of many values.
 pub struct StreamOps<T> {
+    /// `stream.new`: both ends' handles, packed.
     pub new: fn() -> i64;
+    /// `stream.read` of up to a count of values into an address.
     pub read: fn(i32, i32, i32) -> i32;
+    /// `stream.write` of a count of values from an address.
     pub write: fn(i32, i32, i32) -> i32;
+    /// `stream.drop-readable`.
     pub drop_readable: fn(i32);
+    /// `stream.drop-writable`.
     pub drop_writable: fn(i32);
+    /// A value's size in bytes.
     pub size: i32;
+    /// A value's alignment in bytes.
     pub align: i32;
+    /// As `FutureOps.lift`.
     pub lift: fn(i32) -> T;
+    /// As `FutureOps.lower`.
     pub lower: fn(T, i32, Blocks);
+}
+
+impl<T> Debug for StreamOps<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("StreamOps") }
 }
 
 /// The readable end of future `h` as a rok future.

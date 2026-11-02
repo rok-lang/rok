@@ -76,13 +76,19 @@ pub struct Closed;
 
 // By hand: a derive's `Closed` would also name the send errors'
 // variant.
+impl Clone for Empty { const fn clone(self) -> Empty { self } }
+impl Copy for Empty {}
 impl PartialEq for Empty { const fn eq(self, rhs: Empty) -> bool { true } }
 impl Eq for Empty {}
+impl Hash for Empty { const fn hash<H: Hasher>(self, ref h: H) {} }
 impl Debug for Empty {
     const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Empty") }
 }
+impl Clone for Closed { const fn clone(self) -> Closed { self } }
+impl Copy for Closed {}
 impl PartialEq for Closed { const fn eq(self, rhs: Closed) -> bool { true } }
 impl Eq for Closed {}
+impl Hash for Closed { const fn hash<H: Hasher>(self, ref h: H) {} }
 impl Debug for Closed {
     const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Closed") }
 }

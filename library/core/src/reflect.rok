@@ -71,7 +71,7 @@ pub trait Inspect: Reflect {
 /// (`f64` for `v: T` in `Box<f64>`); `name` is `"0"`, `"1"`, .. for a
 /// tuple struct; `is_pub` is true only for a plain `pub` field.
 #[non_exhaustive]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct FieldInfo {
     pub name: str;
     pub type_name: str;
@@ -82,7 +82,7 @@ pub struct FieldInfo {
 /// `is_static`, 2.12 `name` / `arg_types` / `return_type`: both are here.
 /// `arity` and `arg_types` leave out `self`.
 #[non_exhaustive]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct MethodInfo {
     pub name: str;
     pub arity: usize;
