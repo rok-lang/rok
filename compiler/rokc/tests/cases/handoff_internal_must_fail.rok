@@ -1,0 +1,12 @@
+// expect-error: is internal to the Rok toolchain
+// expect-error: help: move the value into the closure (`[move x] || ..`), or pass it as the argument: `task::spawn_blocking_with(x, |x| ..)`
+
+// `Handoff` is the toolchain's own: a program moves the value into the
+// closure or hands it over instead.
+use rok::core::marker::Handoff;
+
+fn main() {
+    let xs: List<i32> = [1, 2];
+    let h = unsafe { Handoff::new(xs) };
+    println(f"{h.get().len()}");
+}

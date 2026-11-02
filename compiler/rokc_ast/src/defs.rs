@@ -534,6 +534,8 @@ pub enum CallArg {
 pub enum CaptureSpec {
     Value(String),
     Ref(String),
+    /// `[move x]`: `x` belongs to the closure from its creation on.
+    Move(String),
 }
 
 #[derive(Clone, Debug)]

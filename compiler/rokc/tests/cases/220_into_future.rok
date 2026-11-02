@@ -4,6 +4,7 @@
 // handle 7
 // thread 12
 // list 3
+// moved 2
 
 // `await` goes through `IntoFuture`: a `Future` (a `Task`) is
 // its own future, and a thread's `JoinHandle` is awaited in the blocking
@@ -19,4 +20,7 @@ async fn main() {
     println(f"thread {await h}");
     let l = thread::spawn(|| [1, 2, 3]);
     println(f"list {(await l).len()}");
+    let xs: List<i32> = [4, 5];
+    let m = thread::spawn([move xs] || xs.len());
+    println(f"moved {await m}");
 }

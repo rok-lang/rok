@@ -7,13 +7,13 @@
 
 mod m {
     pub fn twice(x: i32) -> i32 { x * 2 }
-    pub static G: fn(i32) -> i32 + Send = twice;
+    pub static G: fn(i32) -> i32 + Send + Sync = twice;
 }
 
 fn inc(x: i32) -> i32 { x + 1 }
 
-static F: fn(i32) -> i32 + Send = inc;
-static K: fn(i32) -> i32 + Send = |x: i32| x * 10;
+static F: fn(i32) -> i32 + Send + Sync = inc;
+static K: fn(i32) -> i32 + Send + Sync = |x: i32| x * 10;
 const C: fn(i32) -> i32 = inc;
 
 fn main() -> i32 {

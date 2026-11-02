@@ -219,9 +219,7 @@ impl<T: Send> IntoFuture for JoinHandle<T> {
     type Output = T;
     type IntoFuture = Task<T>;
     fn into_future(self) -> Task<T> {
-        // Handed to the lane, not shared: only `T: Send` is needed.
-        let h = unsafe { rok::core::marker::Handoff::new(self) };
-        rok::core::task::spawn_blocking(|| try! h.get().join())
+        rok::core::task::spawn_blocking([move self] || try! self.join())
     }
 }
 
@@ -258,7 +256,7 @@ impl Builder {
             // Written once by the thread, read by `join` after it.
             let cell = Handoff::new(result);
             let name = self.name;
-            let run: fn() + Send = || {
+            let run: fn() + Send = [move f] || {
                 if let n: str = name {
                     unsafe { rok_thread_set_name(n) };
                 }

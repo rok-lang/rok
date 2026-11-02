@@ -571,7 +571,7 @@ impl Drop for Mmap {
 
 /// `f()` on a blocking thread, its error thrown here.
 pub(pkg) async fn off<T: Send>(f: fn() throws (IoError) -> T + Send) throws (IoError) -> T {
-    let r = await task::spawn_blocking(|| Result::catching(f));
+    let r = await task::spawn_blocking([move f] || Result::catching(f));
     try r.get()
 }
 

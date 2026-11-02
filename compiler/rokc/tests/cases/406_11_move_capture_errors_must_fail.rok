@@ -1,0 +1,58 @@
+// needs: threads
+// expect-error: error[E0040]: mismatched types: argument 1 of `spawn_blocking` expects `fn() -> usize + Send`, found `closure() -> usize`
+// expect-error: note: the closure captures `xs` (type `List<i32>`), which is not `Sync`
+// expect-error: help: move `xs` into the closure, which then owns its own copy: `[move xs] || ..`, or pass it as the argument: `task::spawn_blocking_with(xs, |xs| ..)`
+// expect-error: error[E0040]: mismatched types: argument 1 of `thread::spawn` expects `fn() -> usize + Send`
+// expect-error: note: the closure captures `names` (type `List<str>`), which is not `Sync`
+// expect-error: help: move `names` into the closure, which then owns its own copy: `[move names] || ..`
+// expect-error: error[E0040]: mismatched types: argument 2 of `for_each` expects `fn(i32) -> () + Send + Sync`
+// expect-error: note: the closure captures `rows` (type `List<i32>`), which is not `Sync`
+// expect-error: help: drop the capture
+// expect-error: error[E0040]: mismatched types: argument 1 of `spawn_blocking` expects `fn() -> i32 + Send`
+// expect-error: note: the closure captures `f` (type `fn() -> i32 + Send`), which is not `Sync`
+// expect-error: help: move `f` into the closure
+// expect-error: 406_11_move_capture_errors_must_fail.rok:55:13: `n` can't be both `[ref n]` and `[move n]`
+// expect-error: `[move nope]` names no variable in scope
+// expect-error: error[E0105]: `ys` was moved into a closure at line 34
+// expect-error: help: the closure owns it now; use it inside the closure
+// expect-error: error[E0105]: `g` was spawned as a task at line 40
+// expect-error: help: the task owns the closure and what it moved in
+
+// A plain capture stays shared with the code that made the closure, so a
+// closure that crosses threads needs it `Sync`; `[move x]` gives `x` to
+// the closure, and `x` is not usable after.
+use rok::std::thread;
+
+fn main() {
+    let xs: List<i32> = [1, 2];
+    let t = task::spawn_blocking(|| xs.len());
+
+    let names: List<str> = ["a"];
+    let h = thread::spawn(|| names.len());
+
+    let ys: List<i32> = [1];
+    let u = task::spawn_blocking([move ys] || ys.len());
+    let k = ys.len();
+
+    // The closure goes with what it moved in.
+    let zs: List<i32> = [1];
+    let g = [move zs] || zs.len();
+    let h2 = thread::spawn(g);
+    let again = g();
+
+    // Workers share `par`'s closure: moving does not make it `Sync`.
+    let rows: List<i32> = [1, 2];
+    par::for_each([1, 2], |i: i32| { _ = rows.len() + i as usize; });
+
+    println(f"{task::block_on(t)} {try! h.join()} {task::block_on(u)} {k} {try! h2.join()} {again}");
+    println(f"{shared(|| 1)}");
+}
+
+// A `+ Send` value may own what a `[move x]` gave it: it is not `Sync`.
+fn shared(f: fn() -> i32 + Send) -> i32 {
+    let t = task::spawn_blocking(|| f());
+    let n = 1;
+    let r = [ref n, move n] || n;
+    let q = [move nope] || 1;
+    task::block_on(t) + r() + q()
+}

@@ -301,9 +301,11 @@ pub fn home_of(exe: &Path) -> Option<PathBuf> {
 /// The standard library's package name.
 pub const STD_PKG: &str = "rok";
 
-/// Reserved keywords; the lexer's list. The last six
-/// ([`UNUSED_KEYWORDS`]) have no syntax yet: the lexer gives them as
-/// identifiers and the parser rejects them where a name is expected.
+/// Reserved keywords; the lexer's list.
+///
+/// The last six ([`UNUSED_KEYWORDS`]) have no syntax yet (but `move` in a
+/// capture list): the lexer gives them as identifiers and the parser
+/// rejects them where a name is expected.
 pub const KEYWORDS: &[&str] = &[
     "let", "fn", "if", "else", "match", "while", "loop", "for", "return", "break", "continue",
     "try", "throw", "async", "await", "yield", "unsafe", "using", "struct", "enum", "trait",
@@ -311,7 +313,8 @@ pub const KEYWORDS: &[&str] = &[
     "macro", "defer", "dyn", "move", "gen", "do",
 ];
 
-/// Reserved keywords no syntax uses yet: a name spelled so needs `r#`.
+/// Reserved keywords no syntax uses yet (`move` only in `[move x]`): a
+/// name spelled so needs `r#`.
 pub const UNUSED_KEYWORDS: &[&str] = &["macro", "defer", "dyn", "move", "gen", "do"];
 
 /// Why `name` (code name: `-` spelled `_`) can't be a package name: code

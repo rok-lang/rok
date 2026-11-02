@@ -95,7 +95,8 @@ pub trait Sync {}
 /// A value handed between threads under an outside protocol (a join,
 /// a lock, a channel hand-off) that keeps any two threads from using it
 /// at once: `Send + Sync` whenever the value is `Send`, even when it is
-/// not `Sync` (a collection).
+/// not `Sync` (a collection). The toolchain's own: code elsewhere moves
+/// the value into the closure (`[move x]`) or hands it over.
 pub struct Handoff<T> {
     value: T;
 }
@@ -103,6 +104,7 @@ pub struct Handoff<T> {
 impl<T> Handoff<T> {
     /// The caller guarantees the protocol: no two threads use `value`
     /// (or another copy of its handle) at the same time.
+    #[internal("move the value into the closure (`[move x] || ..`), or pass it as the argument: `task::spawn_blocking_with(x, |x| ..)`")]
     pub const unsafe fn new(value: T) -> Handoff<T> {
         Handoff { value }
     }
@@ -426,6 +428,11 @@ pub fn take<T: Default>(ref dest: T) -> T {
 #[intrinsic("rok.hand_over")]
 #[internal]
 pub fn hand_over<T>(x: T) -> T;
+
+/// A `[move x]` capture's value: `x` handed over to the closure (the
+/// compiler calls it where the closure is made).
+#[track_caller]
+pub(pkg) fn move_into<T>(x: T) -> T { hand_over::<T>(x) }
 
 /// `hand_over` of `x` into a slot that holds `kept`: what `kept` reaches
 /// by value is not copied (a guard's `update`).

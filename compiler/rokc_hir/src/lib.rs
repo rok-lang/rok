@@ -918,6 +918,9 @@ pub enum HirTy {
         /// It captures a `[ref x]` cell, which the creator keeps using:
         /// never `Send` / `Sync`.
         shares: bool,
+        /// Bit `i`: env field `i` is a `[move x]` capture, which the
+        /// creator no longer uses, so it needs only `Send`.
+        moved: u64,
     },
     // `throws (err) -> ok` carrier `{ is_err, ok, err }` (no unwinding);
     // only as a return type, unpacked by `try`.

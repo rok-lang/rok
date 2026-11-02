@@ -110,11 +110,13 @@ pub(super) fn zonk(ctx: &LowerCtx<'_>, t: &HirTy) -> HirTy {
             ret,
             env,
             shares,
+            moved,
         } => HirTy::Closure {
             args: all(args),
             ret: Box::new(rec(ret)),
             env: Box::new(rec(env)),
             shares: *shares,
+            moved: *moved,
         },
         HirTy::Throws { ok, err } => HirTy::Throws {
             ok: Box::new(rec(ok)),
@@ -314,11 +316,13 @@ pub(super) fn lower_let(
                 ret,
                 env,
                 shares,
+                moved,
             } if has_var(ctx, &ret) => HirTy::Closure {
                 args,
                 ret: Box::new(HirTy::Unknown),
                 env,
                 shares,
+                moved,
             },
             HirTy::Fn(args, ret, b) if has_var(ctx, &ret) => {
                 HirTy::Fn(args, Box::new(HirTy::Unknown), b)
