@@ -1,0 +1,18 @@
+// expect-exit: 0
+// expect-stdout: p
+// forbid-warning: this `try` covers no throwing call
+
+// An impl method may throw less than its trait. The library's `try` that
+// calls it through the trait is not the user's to drop, so it gives no
+// warning.
+struct P { x: i32; }
+
+impl Display for P {
+    fn fmt(self, ref f: Formatter) {
+        try! f.write_str("p");
+    }
+}
+
+fn main() {
+    println(f"{P { x: 1 }}");
+}

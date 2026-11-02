@@ -1,0 +1,19 @@
+// expect-error: 11:5: cannot assign to `arr()[0]`: a call result is not a place
+// expect-error: help: bind the value to a variable and change that: `let v = arr(); v[0] = 5;`
+// expect-error: 12:5: cannot use `+=` on `arr()[1]`: a temporary is not a place
+// expect-error: 13:5: cannot use `+=` on `s().a[0]`: a temporary is not a place
+// expect-error: help: bind the value to a variable and change that: `let v = s(); v.a[0] += 1;`
+
+// A fixed array is a value: an element of one a call returns is no place,
+// unlike an element of a returned `List`, which is shared.
+fn main() {
+    let ok = arr();
+    arr()[0] = 5;
+    arr()[1] += 5;
+    s().a[0] += 1;
+    ok[0] += 1;
+}
+
+struct S { a: [i32; 2]; }
+fn arr() -> [i32; 3] { [1, 2, 3] }
+fn s() -> S { S { a: [1, 2] } }

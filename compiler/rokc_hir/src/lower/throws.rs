@@ -1204,8 +1204,13 @@ pub(super) fn lower_try(
     let mark = ctx.env.sink.diagnostics.borrow().len();
     ctx.try_for = matches!(operand.kind, ExprKind::For { .. }).then_some(ctx.try_depth);
     // An operand that failed to lower (an error, or a poisoned value) may
-    // hide its throwing call.
+    // hide its throwing call. In an instance of a library template the
+    // call is the user's impl, which may throw less than its trait; the
+    // `try` there is not the user's to drop.
     let warn_if_idle = |ctx: &LowerCtx<'_>, e: &HirExpr| {
+        if super::pattern::in_instance(ctx) && ctx.current_module.starts_with("rok::") {
+            return;
+        }
         let failed = ctx
             .env
             .sink

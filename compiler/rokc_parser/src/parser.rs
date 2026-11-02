@@ -402,6 +402,24 @@ impl<'a> Parser<'a> {
         r
     }
 
+    /// The target of `op=`: the field chain down to its root stays as
+    /// written, so a root that is no place (`f() += 1`) reaches HIR and is
+    /// rejected there instead of updating a temp; the rest is `hoist_place`.
+    fn hoist_target(&mut self, e: Expr, temps: &mut Vec<Stmt>) -> Expr {
+        let span = e.span;
+        let kind = match e.kind {
+            ExprKind::Field(base, name) => {
+                ExprKind::Field(Box::new(self.hoist_target(*base, temps)), name)
+            }
+            ExprKind::TupleField(base, i) => {
+                ExprKind::TupleField(Box::new(self.hoist_target(*base, temps)), i)
+            }
+            ExprKind::Index(..) => return self.hoist_place(e, temps),
+            other => other,
+        };
+        Expr { kind, span }
+    }
+
     /// Rebuild an assignment target so each side-effecting sub-expression
     /// runs once, into `let` temps; variables, `self`,
     /// literals and field chains on them stay.
@@ -5458,7 +5476,7 @@ impl<'a> Parser<'a> {
                     let value = self.parse_expr()?;
                     self.stmt_semi()?;
                     let mut stmts = Vec::new();
-                    let target = self.hoist_place(expr, &mut stmts);
+                    let target = self.hoist_target(expr, &mut stmts);
                     let assign = Stmt {
                         kind: StmtKind::CompoundAssign {
                             target,

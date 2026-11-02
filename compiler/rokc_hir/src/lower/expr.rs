@@ -603,11 +603,15 @@ fn lower_stmt_inner(ctx: &mut LowerCtx<'_>, stmt: &Stmt) -> Option<HirStmt> {
                 }
             }
             let ann = ty.as_ref().and_then(|t| ann_span(ctx, stmt.span, t.span));
+            let lit = ty.is_none().then(|| bare_num_lit(ctx, ast_init)).flatten();
             let (declared_ty, init) = lower_let_init(ctx, name, pre_ty, ann, init);
             let ty = declared_ty.clone();
             let fresh = ctx.sole_names.contains(name.as_str()) && fresh_future(ctx, ast_init);
             let s = ctx.declare_var(name, declared_ty, init, stmt.span);
             if let HirStmt::Let { local, .. } = s {
+                if let Some(lit) = lit {
+                    ctx.lit_lets.insert(local, lit);
+                }
                 ctx.track_guard(local, &ty, stmt.span, name);
                 if fresh {
                     ctx.sole_fresh.insert(local, ctx.breakables.len());
@@ -714,26 +718,14 @@ fn lower_stmt_inner(ctx: &mut LowerCtx<'_>, stmt: &Stmt) -> Option<HirStmt> {
         // The parser keeps no other item in a block.
         StmtKind::Item(_) => unreachable!("a block item other than `fn` / `const` / `use`"),
         StmtKind::Assign(target, value) => {
+            if !is_place(ctx, target, "=", value) {
+                return None;
+            }
             let a = lower_assign(ctx, target, value, stmt.span);
             write_through(ctx, a, stmt.span)
         }
         StmtKind::CompoundAssign { target, op, value } => {
-            if let Some(call) = assign_trait_call(ctx, target, op, value, stmt.span) {
-                return Some(HirStmt::Expr(call));
-            }
-            // Without an `*Assign` impl, `a = a op b`
-            // (also a primitive's intrinsic impl: its call is the op).
-            let op = op.trim_end_matches('=').to_owned();
-            let combined = Expr {
-                span: stmt.span,
-                kind: ExprKind::OpInfix {
-                    op,
-                    lhs: Box::new(target.clone()),
-                    rhs: Box::new(value.clone()),
-                },
-            };
-            let a = lower_assign(ctx, target, &combined, stmt.span);
-            write_through(ctx, a, stmt.span)
+            lower_compound_assign(ctx, target, op, value, stmt.span)
         }
         StmtKind::LetTuple { .. } | StmtKind::LetStruct { .. } | StmtKind::LetPattern { .. } => {
             unreachable!("destructuring lets are expanded by lower_block")
@@ -846,6 +838,149 @@ fn check_let_inferable(ctx: &LowerCtx<'_>, name: &str, init: &HirExpr) {
         Code::TYPE_ANNOTATIONS_NEEDED,
         format!("cannot infer the type of `{name}`: {why}"),
     );
+}
+
+/// `target op= value;`
+fn lower_compound_assign(
+    ctx: &mut LowerCtx<'_>,
+    target: &Expr,
+    op: &str,
+    value: &Expr,
+    span: rokc_diagnostic::Span,
+) -> Option<HirStmt> {
+    if !is_place(ctx, target, op, value) {
+        return None;
+    }
+    if let Some(call) = assign_trait_call(ctx, target, op, value, span) {
+        return Some(HirStmt::Expr(call));
+    }
+    // Without an `*Assign` impl, `a = a op b`
+    // (also a primitive's intrinsic impl: its call is the op).
+    let combined = Expr {
+        span,
+        kind: ExprKind::OpInfix {
+            op: op.trim_end_matches('=').to_owned(),
+            lhs: Box::new(target.clone()),
+            rhs: Box::new(value.clone()),
+        },
+    };
+    let a = lower_assign(ctx, target, &combined, span);
+    write_through(ctx, a, span)
+}
+
+/// The target of `=` / `op=` is a variable, `self`, or a field or element
+/// chain on one; an element of a shared collection is a place whatever
+/// holds the collection. A call result or other temporary is reported,
+/// since the write would be lost with it.
+fn is_place(ctx: &mut LowerCtx<'_>, target: &Expr, op: &str, value: &Expr) -> bool {
+    let mut root = target;
+    let what = loop {
+        match &root.kind {
+            ExprKind::Field(inner, _) | ExprKind::TupleField(inner, _) => root = inner,
+            // An array is a value: its element is a place only if the
+            // array is one.
+            ExprKind::Index(base, _) => {
+                let mark = ctx.probe_mark();
+                let ty = lower_expected(ctx, base, HirTy::Unknown).ty;
+                ctx.rollback(&mark);
+                if !matches!(ty, HirTy::Array(..)) {
+                    return true;
+                }
+                root = base;
+            }
+            // The parser's temp for a hoisted `op=` operand.
+            ExprKind::Path(p)
+                if p.segments.len() == 1 && p.segments[0].name.starts_with("__destruct") =>
+            {
+                break "a temporary";
+            }
+            ExprKind::Path(_) | ExprKind::SelfLower => return true,
+            // A tuple target keeps the destructuring help.
+            ExprKind::Tuple(_) if op == "=" => return true,
+            ExprKind::Call { .. } | ExprKind::MethodCall { .. } => break "a call result",
+            ExprKind::Tuple(_) => break "a tuple",
+            ExprKind::Literal(_) => break "a literal",
+            _ => break "a computed value",
+        }
+    };
+    let src = |e: &Expr| ctx.src(e.span).map_or_else(|| snippet(e), str::to_owned);
+    let text = src(target);
+    let msg = if op == "=" {
+        format!("cannot assign to `{text}`: {what} is not a place")
+    } else {
+        format!("cannot use `{op}` on `{text}`: {what} is not a place, so the change would be lost")
+    };
+    let v = src(value);
+    let held = matches!(
+        root.kind,
+        ExprKind::Path(_) | ExprKind::Call { .. } | ExprKind::MethodCall { .. }
+    );
+    let help = match entry_write_back(root) {
+        Some((dict, key, init)) => {
+            let bin = op.trim_end_matches('=');
+            match init {
+                Some(init) if op != "=" => format!(
+                    "write the entry back: `{dict}[{key}] = ({dict}.get({key}) ?? {init}) {bin} {v};`"
+                ),
+                _ if op == "=" => format!("assign the element: `{dict}[{key}] = {v};`"),
+                _ => format!("update the element: `{dict}[{key}] {op} {v};`"),
+            }
+        }
+        // `let v = f(); v = 3;` would be no fix.
+        None if held && !(op == "=" && std::ptr::eq(root, target)) => {
+            let r = src(root);
+            let bound = if std::ptr::eq(root, target) {
+                "v".to_owned()
+            } else {
+                text.replacen(&r, "v", 1)
+            };
+            format!(
+                "bind the value to a variable and change that: `let v = {r}; {bound} {op} {v};`"
+            )
+        }
+        None => "assign to a variable, a field (`s.x = v`) or an element (`xs[i] = v`)".to_owned(),
+    };
+    if !matches!(root.kind, ExprKind::Path(_)) {
+        let _ = lower_expected(ctx, root, HirTy::Unknown);
+    }
+    let _ = lower_expected(ctx, value, HirTy::Unknown);
+    ctx.emit_error_help(Code::NOT_A_PLACE, target.span, msg, help);
+    false
+}
+
+/// `d.entry(k).or_insert(v)` (`init` is `v`) or `d.get(k)`: the
+/// collection, key and default as written.
+fn entry_write_back(e: &Expr) -> Option<(String, String, Option<String>)> {
+    let ExprKind::MethodCall {
+        receiver,
+        method,
+        args,
+        ..
+    } = &e.kind
+    else {
+        return None;
+    };
+    let one = |args: &[CallArg]| match args {
+        [CallArg::Positional(a)] => Some(snippet(a)),
+        _ => None,
+    };
+    match method.as_str() {
+        "get" => Some((snippet(receiver), one(args)?, None)),
+        "or_insert" => {
+            let ExprKind::MethodCall {
+                receiver: dict,
+                method: entry,
+                args: key,
+                ..
+            } = &receiver.kind
+            else {
+                return None;
+            };
+            (entry == "entry").then_some(())?;
+            Some((snippet(dict), one(key)?, Some(one(args)?)))
+        }
+        _ => None,
+    }
 }
 
 /// `name = value;` for local `local`.
@@ -3628,6 +3763,90 @@ pub(super) fn hir_binop(
 pub(super) fn decode_str_escapes(s: &str) -> String {
     rokc_ast::escape::unescape(s, rokc_ast::escape::EscapeMode::Str)
         .unwrap_or_else(|_| s.to_owned())
+}
+
+/// An unsuffixed number literal, `-` allowed: its text and span.
+fn bare_num_lit(ctx: &LowerCtx<'_>, e: &Expr) -> Option<(String, rokc_diagnostic::Span)> {
+    let lit = match &e.kind {
+        ExprKind::OpPrefix { op, operand } if op == "-" => &**operand,
+        _ => e,
+    };
+    let bare = match &lit.kind {
+        ExprKind::Literal(AstLit::Int(t) | AstLit::Float(t)) => {
+            !has_int_suffix(t.as_str()) && !t.ends_with("f32") && !t.ends_with("f64")
+        }
+        _ => false,
+    };
+    bare.then(|| Some((ctx.src(e.span)?.to_owned(), e.span)))
+        .flatten()
+}
+
+/// `v` is a local whose type came from the literal in its `let`, and the
+/// literal can take `to`: help that types the declaration instead of a
+/// cast at each use. False when it does not apply.
+pub(super) fn lit_decl_help(ctx: &LowerCtx<'_>, v: &HirExpr, to: PrimTy) -> bool {
+    match &v.kind {
+        HirExprKind::Local(l) => lit_local_help(ctx, *l, &v.ty, to),
+        _ => false,
+    }
+}
+
+/// `lit_decl_help` for an operand of a mixed-number operator: the side
+/// that is such a local takes the other side's type.
+fn lit_operand_help(ctx: &LowerCtx<'_>, lhs: (&Expr, &HirTy), rhs: (&Expr, &HirTy)) -> bool {
+    for (side, other) in [(lhs, rhs), (rhs, lhs)] {
+        let (ExprKind::Path(p), HirTy::Prim(to)) = (&side.0.kind, other.1) else {
+            continue;
+        };
+        let local = match &p.segments[..] {
+            [one] => ctx.lookup(&one.name),
+            _ => None,
+        };
+        if local.is_some_and(|l| lit_local_help(ctx, l, side.1, *to)) {
+            return true;
+        }
+    }
+    false
+}
+
+fn lit_local_help(ctx: &LowerCtx<'_>, l: LocalId, ty: &HirTy, to: PrimTy) -> bool {
+    if !matches!(ty, HirTy::Prim(p) if *p != to) {
+        return false;
+    }
+    let Some((text, at)) = ctx.lit_lets.get(&l) else {
+        return false;
+    };
+    let digits = text.trim_start_matches('-');
+    let fits = match parse_int_literal(digits) {
+        Some((n, _)) if !digits.contains('.') => {
+            to.is_int() && int_fits(if text.starts_with('-') { -n } else { n }, to)
+        }
+        _ => to.is_float(),
+    };
+    let Some(name) = ctx.locals.get(l.0 as usize).and_then(|x| x.name.clone()) else {
+        return false;
+    };
+    if !fits || name.starts_with('#') {
+        return false;
+    }
+    let from = ctx.ty_name(ty);
+    let t = to.name();
+    ctx.help_last(Some(format!(
+        "`{name}` is `{from}` from its literal; declare it as `{t}`: \
+         `let {name}: {t} = {text};` or `let {name} = {text}{t};`"
+    )));
+    ctx.fix_last(
+        *at,
+        format!("{text}{t}"),
+        format!("declare `{name}` as `{t}`"),
+    );
+    ctx.with_last(|d| {
+        d.secondary.push(rokc_diagnostic::Label {
+            span: *at,
+            message: format!("`{name}` gets `{from}` here"),
+        });
+    });
+    true
 }
 
 pub(super) fn has_int_suffix(text: &str) -> bool {
@@ -11626,7 +11845,9 @@ pub(super) fn lower_infix(
     let since = ctx.env.sink.diagnostics.borrow().len();
     let tys = (lhs_h.ty.clone(), rhs_h.ty.clone());
     let e = lower_infix_typed(ctx, op, lhs_h, rhs_h, rhs, span);
-    if ctx.env.sink.diagnostics.borrow().len() > since {
+    if ctx.env.sink.diagnostics.borrow().len() > since
+        && !lit_operand_help(ctx, (lhs, &tys.0), (rhs, &tys.1))
+    {
         if let Some(help) = operand_help(ctx, op, (lhs, &tys.0), (rhs, &tys.1)) {
             ctx.help_since(since, help);
         }

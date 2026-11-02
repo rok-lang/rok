@@ -807,7 +807,7 @@ fn add_arms_fix(ctx: &LowerCtx<'_>, arms: &[String]) {
 
 /// Is a generic body being lowered for concrete type arguments (not
 /// for its definition check)?
-fn in_instance(ctx: &LowerCtx<'_>) -> bool {
+pub(super) fn in_instance(ctx: &LowerCtx<'_>) -> bool {
     !ctx.ty_subst.is_empty()
         && !ctx
             .ty_subst

@@ -2493,6 +2493,7 @@ fn convert_help(ctx: &LowerCtx<'_>, slot: &HirTy, v: &HirExpr, ann: Option<Span>
     let to_name = to.name();
     let mut helped = true;
     match src {
+        _ if num(to) && num(from) && expr::lit_decl_help(ctx, v, *to) => {}
         Some(s) if num(to) && num(from) => {
             let fix = format!("{} as {to_name}", wrap(s));
             ctx.help_last(Some(format!("convert it with `as`: `{fix}`")));
@@ -3177,6 +3178,10 @@ struct LowerCtx<'a> {
     /// Lock guards bound but not yet released by `using` (local, depth,
     /// span, binder, type); an error when their scope ends.
     guard_lets: Vec<(LocalId, usize, Span, String, &'static str)>,
+    /// Locals bound by an unannotated `let` to an unsuffixed number
+    /// literal: its text and span. A type error on one points at the
+    /// declaration.
+    lit_lets: HashMap<LocalId, (String, Span)>,
     /// Expressions (by address) where a guard may stay unreleased:
     /// initializers, assigned values, `return`, the body's value
     /// (`expr::guard_sink`). Elsewhere a produced guard is never released
@@ -3257,6 +3262,7 @@ impl<'a> LowerCtx<'a> {
         self.narrowed.retain(|l, _| kept(l));
         self.cell_views.retain(|l, _| kept(l));
         self.guard_lets.retain(|g| kept(&g.0));
+        self.lit_lets.retain(|l, _| kept(l));
         self.unnarrowed.retain(|u| kept(&u.1));
         let sink = &self.env.sink;
         let old = |id: &FunctionId| id.0 < mark.next_id;
@@ -3361,6 +3367,7 @@ impl<'a> LowerCtx<'a> {
             cell_views: HashMap::new(),
             unnarrowed: Vec::new(),
             guard_lets: Vec::new(),
+            lit_lets: HashMap::new(),
             guard_sinks: std::collections::HashSet::new(),
             sole_names: std::collections::HashSet::new(),
             sole_fresh: HashMap::new(),

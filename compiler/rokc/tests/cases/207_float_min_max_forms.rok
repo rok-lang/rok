@@ -1,0 +1,11 @@
+// expect-exit: 0
+// expect-stdout: 2.5 0.5 0.5
+
+// The float forms the `Ord` help points at.
+fn main() {
+    let xs: List<f64> = [1.5, 2.5, 0.5];
+    let m = xs.iter().reduce(|a, b| a.max(b)) ?? 0.0;
+    let n = xs.iter().reduce(|a, b| a.min(b)) ?? 0.0;
+    xs.sort_by(|a, b| a.partial_cmp(b) ?? Ordering::Equal);
+    println(f"{m} {n} {xs[0]}");
+}
