@@ -21,6 +21,10 @@ pub const CARD_SHIFT: u32 = 9;
 /// Objects this large (header included) go to the large-object space,
 /// never to a TLAB.
 pub const LOS_THRESHOLD: u32 = 8 << 10;
+/// Payload alignment of a large object: a cache line, enough for any
+/// SIMD width, so a big numeric buffer can be handed to vector code or
+/// BLAS as is.
+pub const LOS_ALIGN: u32 = 64;
 /// First type id of the compiler-assigned range.
 pub const USER_TYPE_BASE: u32 = 0x10000;
 /// Type id of a buffer with no references (runtime strings, byte buffers).
