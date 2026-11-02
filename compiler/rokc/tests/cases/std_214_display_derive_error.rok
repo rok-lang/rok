@@ -1,0 +1,48 @@
+// expect-exit: 0
+// expect-stdout:
+// no key a
+// line 3: x / empty input / code 7
+// B! <2.5> (1, 2)
+// caught: no key zz (NotFound { key: "zz" })
+// empty input
+
+// #[display("..")] writes Display from an f-string (on a struct, an enum,
+// or each variant: named fields by name, tuple fields as _0 ..);
+// #[derive(Error)] implements Error; an impl method without throws takes
+// its trait method's.
+#[derive(Debug, Error)]
+#[display("no key {self.key}")]
+struct NotFound { key: str; }
+
+#[derive(Debug, Error)]
+enum ParseErr {
+    #[display("line {line}: {reason}")]
+    Bad { line: i32; reason: str; },
+    #[display("empty input")]
+    Empty,
+    #[display("code {_0}")]
+    Code(i32),
+}
+
+#[derive(Debug)]
+#[display("{self:?}!")]
+enum Tag { A, B }
+
+#[display("<{self.v}>")]
+struct Wrap<T> { v: T; }
+
+struct Pt { x: i32; y: i32; }
+
+// `throws (FmtError)` comes from `Display::fmt`.
+impl Display for Pt {
+    fn fmt(self, ref f: Formatter) { try f.write_str(f"({self.x}, {self.y})"); }
+}
+
+fn find(k: str) throws (NotFound) -> i32 { throw NotFound { key: k }; }
+
+println(f"{NotFound { key: "a" }}");
+println(f"{ParseErr::Bad { line: 3, reason: "x" }} / {ParseErr::Empty} / {ParseErr::Code(7)}");
+println(f"{Tag::B} {Wrap { v: 2.5 }} {Pt { x: 1, y: 2 }}");
+try find("zz") catch e { println(f"caught: {e} ({e:?})"); };
+let any_err: any Error = ParseErr::Empty;
+println(f"{any_err}");

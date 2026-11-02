@@ -1878,10 +1878,12 @@ fn collect<'a>(
         // Methods this impl provides: their trait defaults are skipped.
         let mut explicit_methods: HashMap<String, Span> = HashMap::new();
         for ii in &impl_def.items {
-            let m = match ii {
+            let orig = match ii {
                 AstImplItem::Method(m) => m,
                 AstImplItem::Const(_) | AstImplItem::AssocType { .. } => continue,
             };
+            let inherited = trait_def.and_then(|td| inherit_throws(orig, td));
+            let m = inherited.as_ref().unwrap_or(orig);
             let leaf = leaf_name(&m.name).to_owned();
             if let Some(first) = explicit_methods.get(&leaf) {
                 pre_diags.push(dup(&leaf, m.span, Some(*first)));
@@ -2035,7 +2037,10 @@ fn collect<'a>(
                 link_names.insert(decls.len(), name);
             }
             decls.push(MethodOrFn::Method {
-                fn_def: std::borrow::Cow::Borrowed(m),
+                fn_def: match &inherited {
+                    Some(d) => std::borrow::Cow::Owned(d.clone()),
+                    None => std::borrow::Cow::Borrowed(orig),
+                },
                 self_ty: target_ty.clone(),
                 module: module.clone(),
                 key,
@@ -4728,6 +4733,50 @@ fn sig_mismatch(
     true
 }
 
+/// Impl method `m` without `throws` takes its trait method's, the error
+/// types resolving in the trait's module; `None` when nothing changes.
+fn inherit_throws(m: &FnDef, td: &rokc_ast::TraitDef) -> Option<FnDef> {
+    if !matches!(m.throws, rokc_ast::ThrowsKind::None) {
+        return None;
+    }
+    let leaf = leaf_name(&m.name);
+    let tm = td.items.iter().find_map(|ti| match ti {
+        rokc_ast::TraitItem::Method(tm) if tm.name == leaf => Some(tm),
+        _ => None,
+    })?;
+    if !is_throwing(&tm.throws) {
+        return None;
+    }
+    let mut d = m.clone();
+    d.throws = tm.throws.clone();
+    if let rokc_ast::ThrowsKind::Typed(ts) = &mut d.throws {
+        let module = resolve::module_of(&td.name);
+        ts.iter_mut().for_each(|t| set_origin(t, &module));
+    }
+    Some(d)
+}
+
+/// Resolve the paths of `t` in `module`, where they were written.
+fn set_origin(t: &mut Ty, module: &str) {
+    match &mut t.kind {
+        AstTyKind::Path(p) => {
+            p.origin.get_or_insert_with(|| module.to_owned());
+            for g in p.segments.iter_mut().flat_map(|s| &mut s.generics) {
+                set_origin(g, module);
+            }
+        }
+        AstTyKind::AnyTrait(bounds) => {
+            for p in bounds {
+                p.origin.get_or_insert_with(|| module.to_owned());
+            }
+        }
+        AstTyKind::Sum(parts) | AstTyKind::Tuple(parts) => {
+            parts.iter_mut().for_each(|k| set_origin(k, module));
+        }
+        _ => {}
+    }
+}
+
 fn is_throwing(t: &rokc_ast::ThrowsKind) -> bool {
     match t {
         rokc_ast::ThrowsKind::None => false,
@@ -4827,7 +4876,11 @@ fn generic_trait_impl(
             ));
             continue;
         }
-        methods.insert(leaf.clone(), template(m, module));
+        let inherited = trait_def.and_then(|td| inherit_throws(m, td));
+        methods.insert(
+            leaf.clone(),
+            template(inherited.as_ref().unwrap_or(m), module),
+        );
     }
     if let Some(td) = trait_def {
         let trait_module = module_of(&td.name);
@@ -5402,7 +5455,8 @@ fn check_derives(env: &Env<'_>, program: &Program) -> Vec<rokc_diagnostic::Span>
         ctx.at.set(item.span());
         check_pod(&ctx, attrs, name, self_ty.as_ref(), &fields);
         for (tr, at) in rokc_parser::derive::derive_names(attrs) {
-            let Some(key) = rokc_parser::derive::derivable(&tr) else {
+            // `Error` asks nothing of the fields.
+            let Some(key) = rokc_parser::derive::derivable(&tr).filter(|_| tr != "Error") else {
                 continue;
             };
             ctx.at.set(at);

@@ -27,7 +27,10 @@ const DERIVABLE: &[(&str, &str)] = &[
     ("PartialOrd", "rok::core::ops::PartialOrd"),
     ("Ord", "rok::core::cmp::Ord"),
     ("Hash", "rok::core::cmp::Hash"),
+    ("Error", "rok::core::error::Error"),
 ];
+
+const DISPLAY: &str = "rok::core::fmt::Display";
 
 const ORDERING: &str = "rok::core::cmp::Ordering";
 
@@ -108,9 +111,9 @@ pub(crate) fn derive_items(item: &Item, file: &str) -> (Vec<Item>, Vec<RokDiagno
         }
         let Some(path) = derivable(&tr) else {
             let why = if tr == "Display" {
-                "`Display` is written by hand - its format is the type's own choice \
-                "
-                .to_owned()
+                "its text is the type's own choice: write it with \
+                 `#[display(\"..\")]` or an `impl Display`"
+                    .to_owned()
             } else {
                 format!(
                     "`{tr}` is not a derivable trait (derivable: {})",
@@ -129,6 +132,7 @@ pub(crate) fn derive_items(item: &Item, file: &str) -> (Vec<Item>, Vec<RokDiagno
             continue;
         };
         let body = match item {
+            _ if tr == "Error" => Some(String::new()),
             Item::Struct(s) => Some(struct_body(&tr, s)),
             Item::Enum(e) => enum_body(&tr, e),
             _ => None,
@@ -147,6 +151,14 @@ pub(crate) fn derive_items(item: &Item, file: &str) -> (Vec<Item>, Vec<RokDiagno
         src.push_str(&format!(
             "impl{} {path} for {name}{} {{\n{body}}}\n",
             impl_params(generics, path),
+            self_args(generics)
+        ));
+    }
+    if let Some((at, body)) = display_body(item, &mut diags) {
+        span = Some(at);
+        src.push_str(&format!(
+            "impl{} {DISPLAY} for {name}{} {{\n{body}}}\n",
+            impl_params(generics, DISPLAY),
             self_args(generics)
         ));
     }
@@ -178,6 +190,7 @@ pub(crate) fn derive_items(item: &Item, file: &str) -> (Vec<Item>, Vec<RokDiagno
 /// user's.
 const COMPILER_PATHS: &[&str] = &[
     ORDERING,
+    DISPLAY,
     "rok::core::fmt::Formatter",
     "rok::core::fmt::FmtError",
     "rok::core::marker::default_of",
@@ -221,6 +234,93 @@ fn compiler_written(tokens: &mut [rokc_lexer::Token]) {
             }
         }
         k = end;
+    }
+}
+
+/// The text of a `#[display("..")]` attribute, with its span.
+fn display_text(attrs: &[rokc_ast::Attribute]) -> Option<(String, Span)> {
+    let a = attrs.iter().find(|a| a.path == ["display"])?;
+    let text = match &a.body {
+        AttrBody::Args(xs) => match xs.as_slice() {
+            [AttrArg::Lit(rokc_ast::Literal::Str(t) | rokc_ast::Literal::RawStr(t))] => t.clone(),
+            _ => return None,
+        },
+        _ => return None,
+    };
+    Some((text, a.span))
+}
+
+/// The text as an f-string literal.
+fn fstring_of(text: &str) -> String {
+    let mut out = String::from("f\"");
+    for c in text.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\t' => out.push_str("\\t"),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
+/// `fn fmt` of the `Display` impl that `#[display("..")]` asks for: on a
+/// struct, or on an enum (every variant) or each of its variants. A
+/// variant's text sees its named fields by name and tuple fields as `_0`,
+/// `_1`, ..; every text sees `self`.
+fn display_body(item: &Item, diags: &mut Vec<RokDiagnostic>) -> Option<(Span, String)> {
+    let write = |text: &str| format!("try f.write_str({})", fstring_of(text));
+    let body = |inner: String| {
+        format!(
+            "    fn fmt(self, ref f: rok::core::fmt::Formatter) throws (rok::core::fmt::FmtError) {{\n{inner}    }}\n"
+        )
+    };
+    match item {
+        Item::Struct(s) => {
+            let (text, at) = display_text(&s.attrs)?;
+            Some((at, body(format!("        {};\n", write(&text)))))
+        }
+        Item::Enum(e) => {
+            if let Some((text, at)) = display_text(&e.attrs) {
+                return Some((at, body(format!("        {};\n", write(&text)))));
+            }
+            let at = e.variants.iter().find_map(|v| display_text(&v.attrs))?.1;
+            let mut arms = String::new();
+            for v in &e.variants {
+                let Some((text, _)) = display_text(&v.attrs) else {
+                    diags.push(RokDiagnostic::error(
+                        Code::CANNOT_DERIVE,
+                        v.span,
+                        format!(
+                            "variant `{}::{}` has no `#[display(\"..\")]`; with one on any \
+                             variant, every variant needs its own (or put one on the enum)",
+                            e.name, v.name
+                        ),
+                    ));
+                    return None;
+                };
+                let path = format!("{}::{}", e.name, v.name);
+                let pat = match &v.kind {
+                    EnumVariantKind::Unit | EnumVariantKind::Value(_) => path,
+                    EnumVariantKind::Tuple(tys) => {
+                        let names: Vec<String> = (0..tys.len()).map(|i| format!("_{i}")).collect();
+                        format!("{path}({})", names.join(", "))
+                    }
+                    EnumVariantKind::Named(fs) => {
+                        let names: Vec<&str> = fs.iter().map(|f| f.name.as_str()).collect();
+                        format!("{path} {{ {} }}", names.join(", "))
+                    }
+                };
+                arms.push_str(&format!("            {pat} => {{ {}; }}\n", write(&text)));
+            }
+            Some((
+                at,
+                body(format!("        match self {{\n{arms}        }}\n")),
+            ))
+        }
+        _ => None,
     }
 }
 

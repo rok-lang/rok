@@ -226,6 +226,14 @@ impl Cx<'_> {
             }
             "derive" => (&[P::Struct, P::Enum], words(a, false)),
             "repr" => (&[P::Struct, P::Enum, P::Union], None),
+            "display" => (
+                &[P::Struct, P::Enum, P::Variant],
+                (!matches!(&a.body, AttrBody::Args(xs) if matches!(
+                    xs.as_slice(),
+                    [AttrArg::Lit(Literal::Str(_) | Literal::RawStr(_))]
+                )))
+                .then_some("one text: `#[display(\"line {self.line}\")]`"),
+            ),
             "inline" => (
                 &fns,
                 match &a.body {
