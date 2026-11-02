@@ -7,8 +7,9 @@
 // anything `AsBytes`. Bytes cross to the runtime as `GcBuf<u8>` regions
 // `(buf, off, len)`, and become a `str` only through the UTF-8 check.
 //
-// Async methods take `ref self`. A buffer or `Cursor` copy shares the
-// stream and its position: they keep their state in shared lists.
+// Async methods take `ref self`. A buffer owns its inner stream; over a
+// stream that is not affine, and for a `Cursor`, copies share the state
+// (it lives in lists).
 
 // The runtime's numbering of the kinds (`rok_os_errno_kind`).
 const KIND_OTHER: i32 = 0;
@@ -1011,7 +1012,7 @@ impl<A: Read, B: Read> Read for Chain<A, B> {
 // buffers
 
 /// Reads `inner` in chunks, so small reads (`read_line`, `bytes`) do not
-/// each cost a system call. A handle: copies share the buffer.
+/// each cost a system call. It owns `inner`.
 pub struct BufReader<R> {
     inner: R;
     /// Bytes read but not yet handed out: `chunk[at[0]..at[1]]`.
@@ -1124,8 +1125,7 @@ impl<R: AsyncRead> AsyncBufRead for BufReader<R> {
 }
 
 /// Collects writes and passes them to `inner` in batches of `cap` bytes.
-/// `close()` (or `into_inner()`) writes out the rest. A handle: copies
-/// share the buffer.
+/// `close()` (or `into_inner()`) writes out the rest. It owns `inner`.
 pub struct BufWriter<W> {
     inner: W;
     cap: usize;

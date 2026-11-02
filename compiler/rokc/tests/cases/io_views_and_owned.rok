@@ -21,6 +21,7 @@
 // `into_inner`. `chain` owns both streams.
 use rok::std::fs;
 use rok::std::env;
+use rok::std::process;
 use rok::std::path::Path;
 use rok::std::net;
 use rok::std::thread;
@@ -38,7 +39,7 @@ fn lines_of(p: Path) throws (IoError) -> Owned<Lines<BufReader<fs::File>>, BufRe
 }
 
 async fn main() throws (IoError) {
-    let p = env::temp_dir() / "rok_io_views.txt";
+    let p = env::temp_dir() / f"rok_io_views_{process::id()}.txt";
     try fs::write(p, "one\ntwo\nthree\n");
 
     using r = BufReader::new(try fs::open(p)) {

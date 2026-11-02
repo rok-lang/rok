@@ -1925,6 +1925,16 @@ fn keeps_param(
 }
 
 /// `t` (`g.get()`, `xs`) as a deep copy: `g.get_clone()`, `xs.clone()`.
+/// What a coroutine call returns: its frame holds the arguments.
+const CORO_TYPES: &[&str] = &[
+    "rok::core::future::AsyncFuture",
+    "rok::core::future::TryAsyncFuture",
+    "rok::core::iter::GenIter",
+    "rok::core::iter::TryGenIter",
+    "rok::core::stream::AsyncStream",
+    "rok::core::stream::TryAsyncStream",
+];
+
 /// The stream adapters that make views, longest first.
 const VIEW_METHODS: &[&str] = &[
     ".lines_async(",
@@ -4639,6 +4649,17 @@ impl<'h> Walk<'_, 'h> {
         }
     }
 
+    /// `ty` is the future, generator or stream a coroutine call returns.
+    fn is_coroutine(&self, ty: &HirTy) -> bool {
+        let HirTy::Struct(id) = ty else { return false };
+        let structs = self.c.env.defs.structs.borrow();
+        structs.get(id.0 as usize).is_some_and(|s| {
+            let base = s.name.split("__").next().unwrap_or_default();
+            let base = base.split('<').next().unwrap_or_default();
+            CORO_TYPES.contains(&base)
+        })
+    }
+
     /// A tie to `g` is a view of a stream, not of what a lock protects.
     fn stream_view(&self, g: LocalId) -> bool {
         g != VIEW && !self.is_guard(g)
@@ -4792,6 +4813,14 @@ impl<'h> Walk<'_, 'h> {
                 .is_some_and(|f| TRUSTED.iter().any(|m| f.name.starts_with(m))),
             _ => false,
         };
+        let coroutine = match &call.kind {
+            HirExprKind::Call { callee, .. } => self
+                .c
+                .fns
+                .get(callee)
+                .is_some_and(|f| self.is_coroutine(&f.ret_ty)),
+            _ => false,
+        };
         let params: HashSet<LocalId> = self.f.params.iter().map(|p| p.local).collect();
         for &i in &s.keeps {
             let Some(arg) = args.get(i as usize).copied() else {
@@ -4819,6 +4848,11 @@ impl<'h> Walk<'_, 'h> {
             let Some((g, site)) = self.view_of(&qs, arg) else {
                 continue;
             };
+            // A coroutine keeps its arguments in the frame it returns,
+            // which stays tied to the stream.
+            if coroutine && self.stream_view(g) {
+                continue;
+            }
             {
                 let mut k = self.c.kept_at.borrow_mut();
                 for sp in [site, call.span, arg.span] {

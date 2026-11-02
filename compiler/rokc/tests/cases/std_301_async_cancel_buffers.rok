@@ -9,12 +9,13 @@
 // read the caller's later bytes (write).
 use rok::std::fs;
 use rok::std::env;
+use rok::std::process;
 use rok::core::io::IoError;
 
 async fn main() throws (IoError) {
     let n = 1usize << 16;
-    let src = env::temp_dir() / "rok_cancel_buf_src.bin";
-    let dst = env::temp_dir() / "rok_cancel_buf_dst.bin";
+    let src = env::temp_dir() / f"rok_cancel_buf_src_{process::id()}.bin";
+    let dst = env::temp_dir() / f"rok_cancel_buf_dst_{process::id()}.bin";
     try fs::write(src, List::filled(n, 0u8));
 
     let clean = true;
@@ -22,8 +23,10 @@ async fn main() throws (IoError) {
     for _ in 0..200 {
         let buf = List::filled(n, 7u8);
         let g = try f.try_clone();
+        let back = Atomic::new(0);
         let t = task::spawn_local(async {
             let k = try await g.read_async(buf) catch _ { 0 };
+            back.store(1);
             try g.close() catch _ {};
             k
         });
@@ -31,8 +34,11 @@ async fn main() throws (IoError) {
         await task::yield_now();
         t.cancel();
         _ = try await t.join() catch _: task::CancellationError { 0 };
-        await task::sleep(Duration::us(200));
-        for b in buf { if b != 7u8 { clean = false; } }
+        // A read that came back before the cancel filled `buf` itself.
+        if back.load() == 0 {
+            await task::sleep(Duration::us(200));
+            for b in buf { if b != 7u8 { clean = false; } }
+        }
         _ = try f.seek(io::SeekFrom::Start(0u64));
     }
     try f.close();
