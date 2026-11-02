@@ -4,7 +4,7 @@
 // none none
 // 7 8 none
 // 254 none none
-// 4611686018427387904 2
+// 2147483648 2
 // 0 3 6 9
 
 // `nth` and `step_by` on a range take one `forward_checked`, so a huge
@@ -39,8 +39,9 @@ fn main() {
     let rf2 = 250u8..;
     let j = rf2.nth(100);
     println(f"{show8(h)} {show8(i)} {show8(j)}");
-    let big = (0i64..i64::MAX).nth(1usize << 62);
-    let steps: List<i64> = (0i64..i64::MAX).step_by(1usize << 62).collect();
+    // `1usize << 31` fits a 32-bit `usize`.
+    let big = (0i64..i64::MAX).nth(1usize << 31);
+    let steps: List<u32> = (0u32..u32::MAX).step_by(1usize << 31).collect();
     println(f"{show(big)} {steps.len()}");
     let small: List<i64> = (0i64..10).step_by(3).collect();
     println(f"{small[0]} {small[1]} {small[2]} {small[3]}");
