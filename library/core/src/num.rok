@@ -12,7 +12,10 @@ pub mod floats;
 pub mod bigint;
 pub mod bigfloat;
 pub mod niche;
+pub mod complex;
 pub mod assign;
+
+pub use rok::core::num::complex::Complex;
 
 /// The additive identity - where `Iterator::sum` starts (an empty sum is
 /// `0`).
@@ -25,6 +28,133 @@ pub trait Zero {
 pub trait One {
     /// `1` of `Self`.
     fn one() -> Self;
+}
+
+/// Arithmetic every primitive number type has: `+ - * /`, `0`, `1` and
+/// comparison. The integer and float primitives implement it; write
+/// `T: Num` for code over any of them.
+pub trait Num: Copy + Zero + One + Add<Output = Self> + Sub<Output = Self> + Mul<Output = Self> + Div<Output = Self> + PartialEq + PartialOrd {}
+
+/// The binary floating-point types `f32` and `f64` (not the unbounded
+/// `float`): their constants and math as one bound, `T: FloatingPoint`.
+/// Each method is the type's own of the same name. Swift's name;
+/// Rust's `num::Float`.
+pub trait FloatingPoint: Num + Neg<Output = Self> {
+    /// Not a number.
+    const NAN: Self;
+    /// Positive infinity.
+    const INFINITY: Self;
+    /// Negative infinity.
+    const NEG_INFINITY: Self;
+    /// The gap between `1` and the next larger value.
+    const EPSILON: Self;
+    /// π.
+    const PI: Self;
+    /// Euler's number e.
+    const E: Self;
+
+    /// The absolute value.
+    fn abs(self) -> Self;
+
+    /// The square root; NaN for a negative value.
+    fn sqrt(self) -> Self;
+
+    /// The cube root.
+    fn cbrt(self) -> Self;
+
+    /// `e^self`.
+    fn exp(self) -> Self;
+
+    /// The natural logarithm.
+    fn ln(self) -> Self;
+
+    /// The base-2 logarithm.
+    fn log2(self) -> Self;
+
+    /// The base-10 logarithm.
+    fn log10(self) -> Self;
+
+    /// `self^n`.
+    fn powi(self, n: i32) -> Self;
+
+    /// `self^exp`.
+    fn pow(self, exp: Self) -> Self;
+
+    /// The sine (radians).
+    fn sin(self) -> Self;
+
+    /// The cosine (radians).
+    fn cos(self) -> Self;
+
+    /// The tangent (radians).
+    fn tan(self) -> Self;
+
+    /// The arcsine.
+    fn asin(self) -> Self;
+
+    /// The arccosine.
+    fn acos(self) -> Self;
+
+    /// The arctangent.
+    fn atan(self) -> Self;
+
+    /// The angle of the point `(other, self)`.
+    fn atan2(self, other: Self) -> Self;
+
+    /// The hyperbolic sine.
+    fn sinh(self) -> Self;
+
+    /// The hyperbolic cosine.
+    fn cosh(self) -> Self;
+
+    /// The hyperbolic tangent.
+    fn tanh(self) -> Self;
+
+    /// `√(self² + other²)` without overflow on the way.
+    fn hypot(self, other: Self) -> Self;
+
+    /// Rounded down.
+    fn floor(self) -> Self;
+
+    /// Rounded up.
+    fn ceil(self) -> Self;
+
+    /// Rounded to the nearest, half away from zero.
+    fn round(self) -> Self;
+
+    /// Rounded toward zero.
+    fn trunc(self) -> Self;
+
+    /// `1` / `-1` by the sign; NaN for NaN.
+    fn signum(self) -> Self;
+
+    /// `self * a + b` with one rounding.
+    fn mul_add(self, a: Self, b: Self) -> Self;
+
+    /// The smaller of the two; a NaN loses to a number.
+    fn min(self, other: Self) -> Self;
+
+    /// The larger of the two; a NaN loses to a number.
+    fn max(self, other: Self) -> Self;
+
+    /// `true` for NaN.
+    fn is_nan(self) -> bool;
+
+    /// `true` for either infinity.
+    fn is_infinite(self) -> bool;
+
+    /// `true` for neither NaN nor an infinity.
+    fn is_finite(self) -> bool;
+
+    /// The IEEE 754 total order (`-NaN < -inf < .. < -0 < +0 < .. < inf < NaN`).
+    fn total_cmp(self, other: Self) -> rok::core::cmp::Ordering;
+
+    /// `self` widened or kept as an `f64`.
+    fn to_f64(self) -> f64;
+    /// `x` rounded to `Self` (to nearest).
+    fn from_f64(x: f64) -> Self;
+    /// `n` as `Self`, rounded to nearest past 2^24 (`f32`) / 2^53 (`f64`).
+    fn from_usize(n: usize) -> Self;
 }
 
 // Integer operator impls, one block per type. The bodies
@@ -587,6 +717,150 @@ impl LogicalAnd for bool {
 
 impl LogicalOr for bool {
     const fn logical_or(self, rhs: bool) -> bool { self || rhs }
+}
+
+// `Num` for every primitive number type.
+impl Num for i8 {}
+impl Num for i16 {}
+impl Num for i32 {}
+impl Num for i64 {}
+impl Num for isize {}
+impl Num for u8 {}
+impl Num for u16 {}
+impl Num for u32 {}
+impl Num for u64 {}
+impl Num for usize {}
+impl Num for f32 {}
+impl Num for f64 {}
+
+impl FloatingPoint for f32 {
+    const NAN: f32 = f32::NAN;
+    const INFINITY: f32 = f32::INFINITY;
+    const NEG_INFINITY: f32 = f32::NEG_INFINITY;
+    const EPSILON: f32 = f32::EPSILON;
+    const PI: f32 = f32::PI;
+    const E: f32 = f32::E;
+    fn abs(self) -> f32 { f32::abs(self) }
+    fn sqrt(self) -> f32 { f32::sqrt(self) }
+    fn cbrt(self) -> f32 { f32::cbrt(self) }
+    fn exp(self) -> f32 { f32::exp(self) }
+    fn ln(self) -> f32 { f32::ln(self) }
+    fn log2(self) -> f32 { f32::log2(self) }
+    fn log10(self) -> f32 { f32::log10(self) }
+    fn powi(self, n: i32) -> f32 { f32::powi(self, n) }
+    fn pow(self, exp: f32) -> f32 { f32::pow(self, exp) }
+    fn sin(self) -> f32 { f32::sin(self) }
+    fn cos(self) -> f32 { f32::cos(self) }
+    fn tan(self) -> f32 { f32::tan(self) }
+    fn asin(self) -> f32 { f32::asin(self) }
+    fn acos(self) -> f32 { f32::acos(self) }
+    fn atan(self) -> f32 { f32::atan(self) }
+    fn atan2(self, other: f32) -> f32 { f32::atan2(self, other) }
+    fn sinh(self) -> f32 { f32::sinh(self) }
+    fn cosh(self) -> f32 { f32::cosh(self) }
+    fn tanh(self) -> f32 { f32::tanh(self) }
+    fn hypot(self, other: f32) -> f32 { f32::hypot(self, other) }
+    fn floor(self) -> f32 { f32::floor(self) }
+    fn ceil(self) -> f32 { f32::ceil(self) }
+    fn round(self) -> f32 { f32::round(self) }
+    fn trunc(self) -> f32 { f32::trunc(self) }
+    fn signum(self) -> f32 { f32::signum(self) }
+    fn mul_add(self, a: f32, b: f32) -> f32 { f32::mul_add(self, a, b) }
+    fn min(self, other: f32) -> f32 { f32::min(self, other) }
+    fn max(self, other: f32) -> f32 { f32::max(self, other) }
+    fn is_nan(self) -> bool { f32::is_nan(self) }
+    fn is_infinite(self) -> bool { f32::is_infinite(self) }
+    fn is_finite(self) -> bool { f32::is_finite(self) }
+    fn total_cmp(self, other: f32) -> rok::core::cmp::Ordering { f32::total_cmp(self, other) }
+    fn to_f64(self) -> f64 { self as f64 }
+    fn from_f64(x: f64) -> f32 { x as f32 }
+    fn from_usize(n: usize) -> f32 { n as f32 }
+}
+
+impl FloatingPoint for f64 {
+    const NAN: f64 = f64::NAN;
+    const INFINITY: f64 = f64::INFINITY;
+    const NEG_INFINITY: f64 = f64::NEG_INFINITY;
+    const EPSILON: f64 = f64::EPSILON;
+    const PI: f64 = f64::PI;
+    const E: f64 = f64::E;
+    fn abs(self) -> f64 { f64::abs(self) }
+    fn sqrt(self) -> f64 { f64::sqrt(self) }
+    fn cbrt(self) -> f64 { f64::cbrt(self) }
+    fn exp(self) -> f64 { f64::exp(self) }
+    fn ln(self) -> f64 { f64::ln(self) }
+    fn log2(self) -> f64 { f64::log2(self) }
+    fn log10(self) -> f64 { f64::log10(self) }
+    fn powi(self, n: i32) -> f64 { f64::powi(self, n) }
+    fn pow(self, exp: f64) -> f64 { f64::pow(self, exp) }
+    fn sin(self) -> f64 { f64::sin(self) }
+    fn cos(self) -> f64 { f64::cos(self) }
+    fn tan(self) -> f64 { f64::tan(self) }
+    fn asin(self) -> f64 { f64::asin(self) }
+    fn acos(self) -> f64 { f64::acos(self) }
+    fn atan(self) -> f64 { f64::atan(self) }
+    fn atan2(self, other: f64) -> f64 { f64::atan2(self, other) }
+    fn sinh(self) -> f64 { f64::sinh(self) }
+    fn cosh(self) -> f64 { f64::cosh(self) }
+    fn tanh(self) -> f64 { f64::tanh(self) }
+    fn hypot(self, other: f64) -> f64 { f64::hypot(self, other) }
+    fn floor(self) -> f64 { f64::floor(self) }
+    fn ceil(self) -> f64 { f64::ceil(self) }
+    fn round(self) -> f64 { f64::round(self) }
+    fn trunc(self) -> f64 { f64::trunc(self) }
+    fn signum(self) -> f64 { f64::signum(self) }
+    fn mul_add(self, a: f64, b: f64) -> f64 { f64::mul_add(self, a, b) }
+    fn min(self, other: f64) -> f64 { f64::min(self, other) }
+    fn max(self, other: f64) -> f64 { f64::max(self, other) }
+    fn is_nan(self) -> bool { f64::is_nan(self) }
+    fn is_infinite(self) -> bool { f64::is_infinite(self) }
+    fn is_finite(self) -> bool { f64::is_finite(self) }
+    fn total_cmp(self, other: f64) -> rok::core::cmp::Ordering { f64::total_cmp(self, other) }
+    fn to_f64(self) -> f64 { self as f64 }
+    fn from_f64(x: f64) -> f64 { x as f64 }
+    fn from_usize(n: usize) -> f64 { n as f64 }
+}
+
+/// `n` evenly spaced values from `start` to `stop`, both included (one
+/// value, `start`, when `n` is 1; none when 0). Value `i` is
+/// `start + i * step` with `step = (stop - start) / (n - 1)`, and the
+/// last is `stop` exactly. NumPy / Julia: `linspace(start, stop, n)`.
+pub fn linspace<T: FloatingPoint>(start: T, stop: T, n: usize) -> List<T> {
+    let out: List<T> = List::with_capacity(n);
+    if n == 0 {
+        return out;
+    }
+    if n == 1 {
+        out.push(start);
+        return out;
+    }
+    let step = (stop - start) / T::from_usize(n - 1);
+    for i in 0..n - 1 {
+        out.push(start + T::from_usize(i) * step);
+    }
+    out.push(stop);
+    out
+}
+
+/// The values `start + i * step` for `i` from 0 while they stay before
+/// `stop` (`ceil((stop - start) / step)` of them); each is computed from
+/// `i`, so no error builds up. A zero or NaN `step` panics. NumPy:
+/// `arange(start, stop, step)`.
+#[track_caller]
+pub fn arange<T: FloatingPoint>(start: T, stop: T, step: T) -> List<T> {
+    if step == T::zero() || step.is_nan() {
+        panic("num::arange: step is zero or NaN; pass a step that moves toward `stop`");
+    }
+    let span = ((stop - start) / step).ceil();
+    let out: List<T> = List::new();
+    if !(span > T::zero()) {
+        return out;
+    }
+    let n = span.to_f64() as usize;
+    for i in 0..n {
+        out.push(start + T::from_usize(i) * step);
+    }
+    out
 }
 
 // √: `llvm.intr.sqrt`. The body's `self.sqrt()`

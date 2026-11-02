@@ -97,6 +97,17 @@ pub trait Display {
     fn fmt(self, ref f: Formatter) throws (FmtError);
 }
 
+/// `x.to_str()`: a `Display` value's text, as `f"{x}"`. Python:
+/// `str(x)`. Every `Display` type has it; a type's own `to_str` wins.
+pub trait ToStr {
+    /// The `Display` text of `self`.
+    fn to_str(self) -> str;
+}
+
+impl<T: Display> ToStr for T {
+    const fn to_str(self) -> str { f"{self}" }
+}
+
 /// What `f"{x:?}"` writes.
 #[lang("debug_trait")]
 pub trait Debug {

@@ -1,0 +1,44 @@
+// expect-exit: 0
+// expect-stdout:
+// [1, 1, 2, 3] [3, 2, 1, 1] [3, 1, 2, 1]
+// ["a", "a", "a", "bb", "bb", "ccc"]
+// ["ccc", "bb", "bb", "a", "a", "a"]
+// ["ccc", "bb", "bb", "a", "a", "a"]
+// {"bb", "a", "ccc"}
+// {"x": 3, "y": 2}
+// {"bb": 2, "a": 3, "ccc": 1}
+// [("a", 3), ("bb", 2)]
+// [("a", 3), ("bb", 2), ("ccc", 1)]
+// 1. bb
+// 2. a
+// 3. ccc
+// n: 3
+// s: 5
+// [0, 1, 2, 3]
+
+// Materialising terminals: to_list / to_set / to_dict, sorted (stable,
+// `reverse:`), sorted_by_key, sorted_by; counts + most_common (Python's
+// Counter), group_by into a Dict, enumerate(start:).
+struct Sale { region: str; units: i32; }
+
+let xs = [3, 1, 2, 1];
+println(f"{xs.sorted():?} {xs.sorted(reverse: true):?} {xs:?}");
+let words = ["bb", "a", "ccc", "a", "bb", "a"];
+println(f"{words.sorted_by_key(|w| w.len()):?}");
+println(f"{words.sorted_by_key(|w| w.len(), reverse: true):?}");
+println(f"{words.sorted_by(|a, b| b.cmp(a)):?}");
+println(f"{words.to_set():?}");
+println(f"{[("x", 1), ("y", 2), ("x", 3)].to_dict():?}");
+let c = words.counts();
+println(f"{c:?}");
+println(f"{c.most_common(2):?}");
+println(f"{c.most_common():?}");
+for (i, w) in words.take(3).enumerate(start: 1) {
+    println(f"{i}. {w}");
+}
+let sales = [Sale { region: "n", units: 2 }, Sale { region: "s", units: 5 }, Sale { region: "n", units: 1 }];
+let by = sales.group_by(|s| s.region);
+for (r, g) in by {
+    println(f"{r}: {g.map(|s| s.units).sum()}");
+}
+println(f"{(0..4).to_list():?}");

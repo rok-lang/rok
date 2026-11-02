@@ -193,10 +193,17 @@ const RET_ROOT: u32 = u32::MAX;
 /// (an `unsafe impl Sync` type's field, a thread-local's slot).
 const WORLD: LocalId = LocalId(0x7fff_fffd);
 const WORLD_ROOT: u32 = u32::MAX - 1;
-/// The guard of a `ThreadLocal::with` closure's value: it lives for the
-/// whole closure body.
+/// The guard of a `with` closure's value (`ThreadLocal::with`,
+/// `Mutex::with`, ..): it lives for the whole closure body.
 const VIEW: LocalId = LocalId(0x7fff_fffc);
-const WITH: &str = "rok::std::thread::ThreadLocal__with";
+/// The functions that lend argument 0's value to the closure in
+/// argument 1.
+const WITH: &[&str] = &[
+    "rok::std::thread::ThreadLocal__with",
+    "rok::core::sync::Mutex__with",
+    "rok::core::sync::RwLock__read_with",
+    "rok::core::sync::RwLock__write_with",
+];
 /// A path step: the elements of the buffer the place holds.
 const ELEM: u32 = 0x3fff_fffe;
 /// A path step: argument `i` of an enum value's variant `v`
@@ -2101,7 +2108,10 @@ fn with_closures<'h>(all: &[&'h HirFunction]) -> HashMap<FunctionId, usize> {
             let HirExprKind::Call { callee, args } = &e.kind else {
                 return;
             };
-            if !ids.get(callee).is_some_and(|n| is_fn(n, WITH)) {
+            if !ids
+                .get(callee)
+                .is_some_and(|n| WITH.iter().any(|w| is_fn(n, w)))
+            {
                 return;
             }
             let mut x = args.get(1);
@@ -2336,9 +2346,9 @@ fn walk(c: &Checker<'_>, f: &HirFunction) -> WalkOut {
                 RokDiagnostic::error(
                     Code::THREAD_LOCAL_ESCAPE,
                     f.span,
-                    "an `async` closure can't be given to `with`: its future would keep this \
-                     thread's `ThreadLocal` value past the call, and may resume on another \
-                     thread",
+                    "an `async` closure can't be given to `with`: its future would keep the \
+                     value `with` lends (a `ThreadLocal`'s, a locked `Mutex`'s) past the call, \
+                     and may resume on another thread",
                 )
                 .with_note(
                     "help: give `with` a plain closure, and `await` outside it on a copy \
@@ -5447,13 +5457,13 @@ impl<'h> Walk<'_, 'h> {
                     Code::THREAD_LOCAL_ESCAPE,
                     arg.span,
                     format!(
-                        "{text} can't be {to}: it is this thread's `ThreadLocal` value, lent to \
-                         `with`'s closure"
+                        "{text} can't be {to}: it is the value `with` lends to its closure (a \
+                         `ThreadLocal`'s, a locked `Mutex`'s)"
                     ),
                 )
                 .with_note(format!(
-                    "help: hand over a separate copy (`{}.clone()`), or take the value out with \
-                     `replace` / `take`",
+                    "help: hand over a separate copy (`{}.clone()`), or take a `ThreadLocal`'s \
+                     value out with `replace` / `take`",
                     self.c.src(arg.span).unwrap_or("value")
                 )),
             );
@@ -5608,13 +5618,13 @@ impl<'h> Walk<'_, 'h> {
                     Code::THREAD_LOCAL_ESCAPE,
                     arg.span,
                     format!(
-                        "{shown} is this thread's `ThreadLocal` value, lent to `with`'s closure, \
-                         and {who} keeps it past the call"
+                        "{shown} is the value `with` lends to its closure, and {who} keeps it \
+                         past the call"
                     ),
                 )
                 .with_note(format!(
-                    "help: the value may not leave the closure; pass a copy (`{}`), or take it \
-                     out with `replace` / `take`",
+                    "help: the value may not leave the closure; pass a copy (`{}`), or take a \
+                     `ThreadLocal`'s value out with `replace` / `take`",
                     deep_copy(text.unwrap_or("value"))
                 ))
             } else if self.stream_view(g) {
@@ -5670,13 +5680,13 @@ impl<'h> Walk<'_, 'h> {
                 Code::THREAD_LOCAL_ESCAPE,
                 at,
                 format!(
-                    "this closure keeps `{name}`, this thread's `ThreadLocal` value, past \
-                     `with`: the value is only lent to the closure"
+                    "this closure keeps `{name}`, the value `with` lends, past `with`: the \
+                     value is only lent to the closure"
                 ),
             )
             .with_note(format!(
-                "help: keep a copy (`{name}.clone()`), or take the value out with `replace` / \
-                 `take`"
+                "help: keep a copy (`{name}.clone()`), or take a `ThreadLocal`'s value out with \
+                 `replace` / `take`"
             )),
         );
     }
@@ -5860,13 +5870,13 @@ impl<'h> Walk<'_, 'h> {
                 Code::THREAD_LOCAL_ESCAPE,
                 at,
                 format!(
-                    "this {how} this thread's `ThreadLocal` value out of `with`'s closure: the \
-                     value is only lent to it"
+                    "this {how} the value `with` lends out of its closure: the value is only \
+                     lent to it"
                 ),
             );
             self.diags.push(d.with_note(
-                "help: return a copy (`.clone()`) or what you computed from it, or take the \
-                 value out with `replace` / `take`",
+                "help: return a copy (`.clone()`) or what you computed from it, or take a \
+                 `ThreadLocal`'s value out with `replace` / `take`",
             ));
             return;
         }

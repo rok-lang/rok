@@ -1,11 +1,11 @@
-// expect-error: no method `count` found for type `Dict<i32, i32>`
+// expect-error: no method `name_count` found for type `Dict<i32, i32>`
 
 // `type Names<V> = Dict<str, V>`: an impl on `Names<V>` covers only the
 // `Dict`s keyed by `str`.
 type Names<V> = Dict<str, V>;
-impl<V> Names<V> { fn count(self) -> usize { return self.len(); } }
+impl<V> Names<V> { fn name_count(self) -> usize { return self.len(); } }
 
 fn main() -> i32 {
     let d: Dict<i32, i32> = Dict::new();
-    return d.count() as i32;
+    return d.name_count() as i32;
 }

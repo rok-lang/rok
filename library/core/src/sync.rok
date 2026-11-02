@@ -349,6 +349,17 @@ impl<T> Mutex<T> {
         MutexGuard { mutex: self, noted: notes && unsafe { rok_lock_note(self.state, 0) } != 0 }
     }
 
+    /// `f` of the protected value, with the lock held for the call
+    /// (`lock` and `using` in one). The value is the guard's scoped view:
+    /// it may not leave `f` (returned, stored, sent), so `f` is not
+    /// `async`. Hold the guard itself to keep the lock across statements
+    /// or an `await` (`lock_async`).
+    pub fn with<R>(self, f: fn(T) -> R) -> R {
+        using g = self.lock() {
+            f(g.get())
+        }
+    }
+
     /// The guard if the lock is free now, else `none`; never blocks.
     pub fn try_lock(self) -> MutexGuard<T> | none {
         let notes = lock_notes();
@@ -563,6 +574,22 @@ impl<T> RwLock<T> {
                 return RwLockWriteGuard { lock: self, noted: notes && unsafe { rok_lock_note(self.state, 2) } != 0 };
             }
             wait(self.state, s);
+        }
+    }
+
+    /// `f` of the value, with a read lock held for the call. The value
+    /// is a scoped view, as in `Mutex::with`.
+    pub fn read_with<R>(self, f: fn(T) -> R) -> R {
+        using g = self.read() {
+            f(g.get())
+        }
+    }
+
+    /// `f` of the value, with the write lock held for the call. The
+    /// value is a scoped view, as in `Mutex::with`.
+    pub fn write_with<R>(self, f: fn(T) -> R) -> R {
+        using g = self.write() {
+            f(g.get())
         }
     }
 

@@ -53,6 +53,21 @@ impl f64 {
     /// log₁₀ e.
     pub const LOG10_E: f64 = 0.434294481903251827651128918916605082;
 
+    /// The square root; NaN for a negative value (as `√self`).
+    #[must_use]
+    pub const fn sqrt(self) -> f64 { rok::core::ops::Sqrt::sqrt(self) }
+
+    /// The IEEE 754 total order: `-NaN < -inf < .. < -0 < +0 < .. < inf <
+    /// NaN`. Sorting by it never fails: `xs.sort_by(f64::total_cmp)`.
+    #[must_use]
+    pub const fn total_cmp(self, other: f64) -> rok::core::cmp::Ordering {
+        let a = self.to_bits() as i64;
+        let b = other.to_bits() as i64;
+        a = a ^ (((a >> 63) as u64) >> 1) as i64;
+        b = b ^ (((b >> 63) as u64) >> 1) as i64;
+        a.cmp(b)
+    }
+
     /// The IEEE 754 bit pattern.
     #[must_use]
     pub const fn to_bits(self) -> u64 { unsafe { F64Bits { f: self }.u } }
@@ -311,6 +326,21 @@ impl f32 {
     pub const LOG2_E: f32 = 1.44269504088896340735992468100189214;
     /// log₁₀ e.
     pub const LOG10_E: f32 = 0.434294481903251827651128918916605082;
+
+    /// The square root; NaN for a negative value (as `√self`).
+    #[must_use]
+    pub const fn sqrt(self) -> f32 { rok::core::ops::Sqrt::sqrt(self) }
+
+    /// The IEEE 754 total order: `-NaN < -inf < .. < -0 < +0 < .. < inf <
+    /// NaN`. Sorting by it never fails: `xs.sort_by(f32::total_cmp)`.
+    #[must_use]
+    pub const fn total_cmp(self, other: f32) -> rok::core::cmp::Ordering {
+        let a = self.to_bits() as i32;
+        let b = other.to_bits() as i32;
+        a = a ^ (((a >> 31) as u32) >> 1) as i32;
+        b = b ^ (((b >> 31) as u32) >> 1) as i32;
+        a.cmp(b)
+    }
 
     /// The IEEE 754 bit pattern.
     #[must_use]

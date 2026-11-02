@@ -1,0 +1,13 @@
+// expect-error: 10:1: print functions take values, `sep:` and `end:`; not `step:`
+// expect-error: 11:12: `,` groups decimal digits; group `x` digits by 4 with `_`
+// expect-error: 12:12: `,` groups the digits of a number, found `str`
+// expect-error: 13:20: this returns the value `with` lends out of its closure
+
+// Print calls take only values, `sep:` and `end:`; digit grouping is for
+// numbers (`,` decimal only); `Mutex::with` lends its value to the
+// closure, which cannot return it.
+let m = Mutex::new([1, 2]);
+println(1, step: 2);
+println(f"{255:,x}");
+println(f"{"s":,}");
+let v = m.with(|v| v);

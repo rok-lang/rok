@@ -1,4 +1,4 @@
-// expect-error: cannot derive `Display` for `P`: `Display` is written by hand
+// expect-error: cannot derive `Display` for `P`: its text is the type's own choice: write it with `#[display("..")]` or an `impl Display`
 // `Display` is not derivable.
 #[derive(Display)]
 struct P { x: i32; }

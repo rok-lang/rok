@@ -1,7 +1,8 @@
 // rok::std::random - cryptographically secure random bytes from the OS
 // (`getrandom` on Linux, `getentropy` on macOS, `BCryptGenRandom` on
-// Windows, `random_get` on WASI). A failing source is not recoverable:
-// it panics. The algorithms that use them are `rok::core::crypto`.
+// Windows, `random_get` on WASI), and seedable generators (`Rng`). A
+// failing OS source is not recoverable: it panics. The algorithms that
+// use the bytes are `rok::core::crypto`.
 
 use rok::bare::mem::GcBuf;
 use rok::core::crypto::Secret;
@@ -37,4 +38,259 @@ fn fill_raw(what: str, b: GcBuf<u8>, off: usize, len: usize) {
     if len == 0 { return; }
     let r = unsafe { rok_os_random(b, off, len) };
     if r != 0 { panic(f"{what}: the OS random source failed (error {-r})"); }
+}
+
+// Generators. `Rng` is the interface: one required `next_u64`, the rest
+// derived from it in ways the spec fixes, so a seeded generator gives the
+// same values on every target and release. A new algorithm gets a new
+// type; a type's stream never changes.
+
+/// A source of random `u64`s and the values derived from them.
+pub trait Rng {
+    /// The next 64 random bits.
+    fn next_u64(ref self) -> u64;
+
+    /// A value in `[0, 1)`: the top 53 bits of `next_u64` times 2^-53.
+    /// Python: `random.random()`.
+    const fn f64(ref self) -> f64 {
+        (self.next_u64() >> 11) as f64 * 1.1102230246251565e-16
+    }
+
+    /// A value in `[0, n)`, every one equally likely (bits below the
+    /// last whole multiple of `n` are drawn again). Panics when `n` is 0.
+    #[track_caller]
+    const fn below(ref self, n: u64) -> u64 {
+        if n == 0 {
+            panic("Rng::below: n is 0; pass a positive bound");
+        }
+        let floor = 0u64.wrapping_sub(n) % n;
+        loop {
+            let x = self.next_u64();
+            if x >= floor {
+                return x % n;
+            }
+        }
+    }
+
+    /// A value of `r` (`a..b`), every one equally likely. Panics when
+    /// `r` is empty. Python: `random.randrange(a, b)`.
+    #[track_caller]
+    const fn range(ref self, r: Range<i64>) -> i64 {
+        if r.end <= r.start {
+            panic(f"Rng::range: {r.start}..{r.end} is empty");
+        }
+        let n = (r.end as u64).wrapping_sub(r.start as u64);
+        r.start.wrapping_add(self.below(n) as i64)
+    }
+
+    /// A value of `r` (`a..=b`), every one equally likely. Panics when
+    /// `r` is empty. Python: `random.randint(a, b)`.
+    #[track_caller]
+    const fn range_inclusive(ref self, r: RangeInclusive<i64>) -> i64 {
+        if r.end < r.start {
+            panic(f"Rng::range_inclusive: {r.start}..={r.end} is empty");
+        }
+        let n = (r.end as u64).wrapping_sub(r.start as u64).wrapping_add(1);
+        if n == 0 {
+            return self.next_u64() as i64;
+        }
+        r.start.wrapping_add(self.below(n) as i64)
+    }
+
+    /// A value in `[lo, hi)`: `lo + (hi - lo) * self.f64()`. Python:
+    /// `random.uniform(lo, hi)`.
+    const fn uniform(ref self, lo: f64, hi: f64) -> f64 {
+        lo + (hi - lo) * self.f64()
+    }
+
+    /// `true` with probability `p` (`self.f64() < p`).
+    const fn bool(ref self, p: f64 = 0.5) -> bool {
+        self.f64() < p
+    }
+
+    /// A normal deviate (Box-Muller: `u1 = 1 - f64()`, `u2 = f64()`,
+    /// `mean + std * √(-2 ln u1) cos(2π u2)`). Python:
+    /// `random.gauss(mean, std)`.
+    const fn normal(ref self, mean: f64 = 0.0, std: f64 = 1.0) -> f64 {
+        let u1 = 1.0 - self.f64();
+        let u2 = self.f64();
+        mean + std * (-2.0 * u1.ln()).sqrt() * (f64::TAU * u2).cos()
+    }
+
+    /// The items of `xs` in a random order, in place (Fisher-Yates from
+    /// the back: position `i` swaps with `below(i + 1)`).
+    const fn shuffle<T>(ref self, xs: List<T>) {
+        let i = xs.len();
+        while i > 1 {
+            let j = self.below(i as u64) as usize;
+            i -= 1;
+            xs.swap(i, j);
+        }
+    }
+
+    /// One item of `xs` (`xs[below(len)]`), or `none` when it is empty.
+    /// Python: `random.choice(xs)`.
+    const fn choice<T>(ref self, xs: List<T>) -> T | none {
+        if xs.is_empty() {
+            return none;
+        }
+        xs[self.below(xs.len() as u64) as usize]
+    }
+
+    /// `k` items of `xs` at distinct positions, in the order drawn (a
+    /// partial Fisher-Yates over the positions). Panics when `k` is more
+    /// than `xs.len()`. Python: `random.sample(xs, k)`.
+    #[track_caller]
+    const fn sample<T>(ref self, xs: List<T>, k: usize) -> List<T> {
+        let n = xs.len();
+        if k > n {
+            panic(f"Rng::sample: {k} items asked from {n}");
+        }
+        let pos: List<usize> = List::from_fn(n, |i| i);
+        let out: List<T> = List::with_capacity(k);
+        for i in 0..k {
+            let j = i + self.below((n - i) as u64) as usize;
+            pos.swap(i, j);
+            out.push(xs[pos[i]]);
+        }
+        out
+    }
+}
+
+/// Xoshiro256++ (Blackman and Vigna; Julia's default): 256 bits of
+/// state, period 2^256 - 1. Fast and statistically strong, not for
+/// secrets (use the OS source: `random::bytes`, `OsRng`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Xoshiro256PlusPlus {
+    s0: u64;
+    s1: u64;
+    s2: u64;
+    s3: u64;
+}
+
+impl Xoshiro256PlusPlus {
+    /// The generator for `seed`: its state is four outputs of SplitMix64
+    /// started at `seed`. The same seed gives the same stream on every
+    /// target and release.
+    pub const fn seed(seed: u64) -> Xoshiro256PlusPlus {
+        let x = seed;
+        x = x.wrapping_add(0x9e3779b97f4a7c15);
+        let a = splitmix(x);
+        x = x.wrapping_add(0x9e3779b97f4a7c15);
+        let b = splitmix(x);
+        x = x.wrapping_add(0x9e3779b97f4a7c15);
+        let c = splitmix(x);
+        x = x.wrapping_add(0x9e3779b97f4a7c15);
+        let d = splitmix(x);
+        Xoshiro256PlusPlus { s0: a, s1: b, s2: c, s3: d }
+    }
+
+    /// A generator seeded from the OS source: a different stream each
+    /// time.
+    pub fn from_os() -> Xoshiro256PlusPlus {
+        let o = OsRng {};
+        Xoshiro256PlusPlus::seed(o.next_u64())
+    }
+
+    /// A generator for another stream, for a parallel task: a copy of
+    /// this one, which then jumps 2^128 steps ahead (Vigna's `jump`), so
+    /// the two never overlap in practice. The streams depend only on the
+    /// seed and the order of the calls, not on threads or timing.
+    pub fn split(ref self) -> Xoshiro256PlusPlus {
+        let child = self;
+        self.jump();
+        child
+    }
+
+    /// Advance 2^128 steps.
+    fn jump(ref self) {
+        let jumps: List<u64> = [0x180ec6d33cfd0aba, 0xd5a61266f0c9392c, 0xa9582618e03fc9aa, 0x39abdc4529b1661c];
+        let (a, b, c, d) = (0u64, 0u64, 0u64, 0u64);
+        for j in jumps {
+            for bit in 0u64..64u64 {
+                if j & (1u64 << bit) != 0 {
+                    a ^= self.s0;
+                    b ^= self.s1;
+                    c ^= self.s2;
+                    d ^= self.s3;
+                }
+                _ = self.next_u64();
+            }
+        }
+        self.s0 = a;
+        self.s1 = b;
+        self.s2 = c;
+        self.s3 = d;
+    }
+}
+
+impl Rng for Xoshiro256PlusPlus {
+    const fn next_u64(ref self) -> u64 {
+        let out = self.s0.wrapping_add(self.s3).rotate_left(23).wrapping_add(self.s0);
+        let t = self.s1 << 17;
+        self.s2 ^= self.s0;
+        self.s3 ^= self.s1;
+        self.s1 ^= self.s2;
+        self.s0 ^= self.s3;
+        self.s2 ^= t;
+        self.s3 = self.s3.rotate_left(45);
+        out
+    }
+}
+
+const fn splitmix(x: u64) -> u64 {
+    let z = x;
+    z = (z ^ (z >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94d049bb133111eb);
+    z ^ (z >> 31)
+}
+
+/// The OS source as an `Rng`: every value read from it (a system call
+/// each), never reproducible.
+#[derive(Clone, Copy, Debug)]
+pub struct OsRng {}
+
+impl Rng for OsRng {
+    fn next_u64(ref self) -> u64 {
+        let b = bytes(8);
+        let x = 0u64;
+        for i in 0..8 {
+            x = (x << 8) | b[i] as u64;
+        }
+        x
+    }
+}
+
+/// A generator seeded from the OS source (`Xoshiro256PlusPlus::from_os`).
+/// For a stream that repeats, use `Xoshiro256PlusPlus::seed(n)`.
+pub fn rng() -> Xoshiro256PlusPlus {
+    Xoshiro256PlusPlus::from_os()
+}
+
+// One-call forms over the OS source, for a few values; make an `rng()`
+// once for many.
+
+/// `OsRng::f64`: a value in `[0, 1)`.
+pub fn f64() -> f64 {
+    let o = OsRng {};
+    o.f64()
+}
+
+/// `OsRng::range`: a value of `r`.
+#[track_caller]
+pub fn range(r: Range<i64>) -> i64 {
+    let o = OsRng {};
+    o.range(r)
+}
+
+/// `OsRng::shuffle`: `xs` in a random order, in place.
+pub fn shuffle<T>(xs: List<T>) {
+    let o = OsRng {};
+    o.shuffle(xs);
+}
+
+/// `OsRng::choice`: one item of `xs`, or `none` when it is empty.
+pub fn choice<T>(xs: List<T>) -> T | none {
+    let o = OsRng {};
+    o.choice(xs)
 }

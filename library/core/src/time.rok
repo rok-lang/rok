@@ -48,35 +48,58 @@ pub struct Duration {
     ns: i64;
 }
 
+// The constructors take any integer type that converts to `i64` without
+// loss (`i8` .. `i64`, `u8` .. `u32`); `u64` / `usize` need `try_into`.
 impl Duration {
     /// `n` nanoseconds.
     #[must_use]
-    pub const fn ns(n: i64) -> Duration { Duration { ns: n } }
+    pub const fn ns<N>(n: N) -> Duration where i64: From<N> {
+        let n: i64 = n.into();
+        Duration { ns: n }
+    }
     /// `n` microseconds; overflow panics where `i64 *` does, else saturates.
     #[track_caller]
     #[must_use]
-    pub const fn us(n: i64) -> Duration { Duration { ns: ns_mul(n, 1000) } }
+    pub const fn us<N>(n: N) -> Duration where i64: From<N> {
+        let n: i64 = n.into();
+        Duration { ns: ns_mul(n, 1000) }
+    }
     /// `n` milliseconds; overflow panics where `i64 *` does, else saturates.
     #[track_caller]
     #[must_use]
-    pub const fn ms(n: i64) -> Duration { Duration { ns: ns_mul(n, 1000000) } }
+    pub const fn ms<N>(n: N) -> Duration where i64: From<N> {
+        let n: i64 = n.into();
+        Duration { ns: ns_mul(n, 1000000) }
+    }
     /// `n` seconds; overflow panics where `i64 *` does, else saturates.
     #[track_caller]
     #[must_use]
-    pub const fn secs(n: i64) -> Duration { Duration { ns: ns_mul(n, 1000000000) } }
+    pub const fn secs<N>(n: N) -> Duration where i64: From<N> {
+        let n: i64 = n.into();
+        Duration { ns: ns_mul(n, 1000000000) }
+    }
     /// `n` minutes; overflow panics where `i64 *` does, else saturates.
     #[track_caller]
     #[must_use]
-    pub const fn mins(n: i64) -> Duration { Duration { ns: ns_mul(n, 60000000000) } }
+    pub const fn mins<N>(n: N) -> Duration where i64: From<N> {
+        let n: i64 = n.into();
+        Duration { ns: ns_mul(n, 60000000000) }
+    }
     /// `n` hours; overflow panics where `i64 *` does, else saturates.
     #[track_caller]
     #[must_use]
-    pub const fn hours(n: i64) -> Duration { Duration { ns: ns_mul(n, 3600000000000) } }
+    pub const fn hours<N>(n: N) -> Duration where i64: From<N> {
+        let n: i64 = n.into();
+        Duration { ns: ns_mul(n, 3600000000000) }
+    }
     /// `n` days of 24 hours; overflow panics where `i64 *` does, else
     /// saturates.
     #[track_caller]
     #[must_use]
-    pub const fn days(n: i64) -> Duration { Duration { ns: ns_mul(n, 86400000000000) } }
+    pub const fn days<N>(n: N) -> Duration where i64: From<N> {
+        let n: i64 = n.into();
+        Duration { ns: ns_mul(n, 86400000000000) }
+    }
 
     /// No time.
     pub const ZERO: Duration = Duration { ns: 0 };

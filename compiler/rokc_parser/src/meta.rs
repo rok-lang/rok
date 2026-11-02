@@ -134,6 +134,7 @@ pub const BUILTIN_ATTRS: &[&str] = &[
     "deprecated_safe",
     "derive",
     "discardable",
+    "display",
     "doc",
     "export_name",
     "impl_attribute",

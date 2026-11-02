@@ -1,0 +1,33 @@
+// expect-exit: 0
+// expect-stdout:
+// 5 5 6 0.75
+// [0.0, 0.25, 0.5, 0.75, 1.0]
+// [0.0, 0.25, 0.5, 0.75] [1.0, 0.5] 3
+// [-1.0, -0.0, 0.0, 2.0, inf, NaN]
+// 1.4142135623730951 3.141592653589793 Less
+// NaN 1.0
+
+// FloatingPoint / Num bounds, linspace / arange, total_cmp sorting, NaN
+// propagating min / max on a float collection.
+use rok::core::num::{FloatingPoint, Num, linspace, arange};
+
+fn norm<T: FloatingPoint>(xs: List<T>) -> T {
+    let s = T::zero();
+    for x in xs { s = s + x * x; }
+    s.sqrt()
+}
+
+fn total<T: Num>(xs: List<T>) -> T {
+    let s = T::zero();
+    for x in xs { s = s + x; }
+    s
+}
+
+println(norm([3.0, 4.0]), norm([3.0f32, 4.0f32]), total([1, 2, 3]), total([0.5, 0.25]));
+println(f"{linspace(0.0, 1.0, 5):?}");
+println(f"{arange(0.0, 1.0, 0.25):?} {arange(1.0, 0.0, -0.5):?} {arange(0.0, 0.3, 0.1).len()}");
+let v = [2.0, -0.0, 0.0, f64::NAN, -1.0, f64::INFINITY];
+v.sort_by(f64::total_cmp);
+println(f"{v:?}");
+println(f"{2.0.sqrt()} {f64::PI} {(-1.5f32).total_cmp(1.0f32):?}");
+println(f"{[1.0, f64::NAN].max():?} {[3.0, 1.0].min():?}");

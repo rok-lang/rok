@@ -1,0 +1,11 @@
+// expect-exit: 0
+// expect-stdout:
+// 3 2 4 5 60
+
+// Duration constructors take any integer type that converts to i64
+// without loss.
+const T: Duration = Duration::secs(5);
+let u: u32 = 3;
+let b: u8 = 2;
+let i: i64 = 4;
+println(Duration::ms(u).as_ms(), Duration::secs(b).as_secs(), Duration::us(i).as_us(), T.as_secs(), Duration::mins(1).as_secs());

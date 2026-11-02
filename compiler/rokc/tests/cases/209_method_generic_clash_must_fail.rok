@@ -1,0 +1,18 @@
+// expect-error: 10:5: generic parameter `K` of `get` is already a parameter of its `impl`
+// expect-error: help: rename the method's (`fn get<K2>`), or drop it to use the impl's `K`
+// expect-error: 17:5: generic parameter `T` of `show` is already a parameter of its `impl`
+
+// A method written in an impl may not reuse a name of the impl's generic
+// parameters: inside it the name could mean either.
+struct W<K> { k: K; }
+
+impl<K> W<K> {
+    fn get<K>(self, x: K) -> K { x }
+}
+
+trait Show { fn show<U>(self, u: U) -> str; }
+
+impl<T> Show for W<T> {
+    // The trait's own parameter name is free; the impl's `T` is not.
+    fn show<T>(self, u: T) -> str { "w" }
+}

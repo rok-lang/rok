@@ -1,0 +1,256 @@
+// rok::core::num::complex: `Complex<T>` over `f32` / `f64`. The
+// literal suffix `i` makes the imaginary part: `3.0 + 4.0i` is
+// `Complex { re: 3.0, im: 4.0 }`.
+
+use rok::core::num::{FloatingPoint, Zero, One};
+
+/// A complex number `re + im·i`. Arithmetic with another `Complex` or
+/// with a real `T` on either side (`2.0 * z`, `z + 1.0`); `==` compares
+/// both parts. Shown as `1+2i` / `1-2i`.
+#[derive(Clone, Copy, PartialEq)]
+pub struct Complex<T> {
+    /// The real part.
+    pub re: T;
+    /// The imaginary part.
+    pub im: T;
+}
+
+impl<T> Complex<T> {
+    /// `re + im·i`.
+    pub const fn new(re: T, im: T) -> Complex<T> {
+        Complex { re: re, im: im }
+    }
+}
+
+impl<T: FloatingPoint> Complex<T> {
+    /// `i`.
+    pub const fn i() -> Complex<T> {
+        Complex { re: T::zero(), im: T::one() }
+    }
+
+    /// The number of modulus `r` and argument `theta`: `r·e^(iθ)`.
+    pub fn from_polar(r: T, theta: T) -> Complex<T> {
+        Complex { re: r * theta.cos(), im: r * theta.sin() }
+    }
+
+    /// The modulus `|z|` (`hypot(re, im)`).
+    pub fn abs(self) -> T {
+        self.re.hypot(self.im)
+    }
+
+    /// `re² + im²`.
+    pub const fn norm_sqr(self) -> T {
+        self.re * self.re + self.im * self.im
+    }
+
+    /// The argument in `(-π, π]` (`atan2(im, re)`).
+    pub fn arg(self) -> T {
+        self.im.atan2(self.re)
+    }
+
+    /// The conjugate `re - im·i`.
+    pub const fn conj(self) -> Complex<T> {
+        Complex { re: self.re, im: -self.im }
+    }
+
+    /// `1 / self`.
+    pub const fn recip(self) -> Complex<T> {
+        let d = self.norm_sqr();
+        Complex { re: self.re / d, im: -self.im / d }
+    }
+
+    /// `e^self`.
+    pub fn exp(self) -> Complex<T> {
+        let m = self.re.exp();
+        Complex { re: m * self.im.cos(), im: m * self.im.sin() }
+    }
+
+    /// The principal natural logarithm: `ln|z| + arg(z)·i`.
+    pub fn ln(self) -> Complex<T> {
+        Complex { re: self.abs().ln(), im: self.arg() }
+    }
+
+    /// The principal square root (`re >= 0`).
+    pub fn sqrt(self) -> Complex<T> {
+        if self.re == T::zero() && self.im == T::zero() {
+            return self;
+        }
+        let two = T::one() + T::one();
+        let r = self.abs();
+        let re = ((r + self.re) / two).sqrt();
+        let im = ((r - self.re) / two).sqrt();
+        Complex { re: re, im: if self.im < T::zero() { -im } else { im } }
+    }
+
+    /// `self^n` by repeated squaring.
+    pub fn powi(self, n: i32) -> Complex<T> {
+        let base = if n < 0 { self.recip() } else { self };
+        let k = if n < 0 { -(n as i64) } else { n as i64 };
+        let out = Complex { re: T::one(), im: T::zero() };
+        while k > 0 {
+            if k % 2 == 1 {
+                out = out * base;
+            }
+            base = base * base;
+            k /= 2;
+        }
+        out
+    }
+
+    /// `self^w` on the principal branch: `e^(w·ln self)`; `0^w` is 0.
+    pub fn pow(self, w: Complex<T>) -> Complex<T> {
+        if self.re == T::zero() && self.im == T::zero() {
+            return self;
+        }
+        (w * self.ln()).exp()
+    }
+
+    /// `true` when either part is NaN.
+    pub const fn is_nan(self) -> bool {
+        self.re.is_nan() || self.im.is_nan()
+    }
+}
+
+impl<T: FloatingPoint> Zero for Complex<T> {
+    const fn zero() -> Complex<T> { Complex { re: T::zero(), im: T::zero() } }
+}
+
+impl<T: FloatingPoint> One for Complex<T> {
+    const fn one() -> Complex<T> { Complex { re: T::one(), im: T::zero() } }
+}
+
+impl<T: FloatingPoint> Add for Complex<T> {
+    type Output = Complex<T>;
+    const fn add(self, rhs: Complex<T>) -> Complex<T> {
+        Complex { re: self.re + rhs.re, im: self.im + rhs.im }
+    }
+}
+
+impl<T: FloatingPoint> Sub for Complex<T> {
+    type Output = Complex<T>;
+    const fn sub(self, rhs: Complex<T>) -> Complex<T> {
+        Complex { re: self.re - rhs.re, im: self.im - rhs.im }
+    }
+}
+
+impl<T: FloatingPoint> Mul for Complex<T> {
+    type Output = Complex<T>;
+    const fn mul(self, rhs: Complex<T>) -> Complex<T> {
+        Complex {
+            re: self.re * rhs.re - self.im * rhs.im,
+            im: self.re * rhs.im + self.im * rhs.re,
+        }
+    }
+}
+
+impl<T: FloatingPoint> Div for Complex<T> {
+    type Output = Complex<T>;
+    const fn div(self, rhs: Complex<T>) -> Complex<T> {
+        let d = rhs.norm_sqr();
+        Complex {
+            re: (self.re * rhs.re + self.im * rhs.im) / d,
+            im: (self.im * rhs.re - self.re * rhs.im) / d,
+        }
+    }
+}
+
+impl<T: FloatingPoint> Neg for Complex<T> {
+    type Output = Complex<T>;
+    const fn neg(self) -> Complex<T> { Complex { re: -self.re, im: -self.im } }
+}
+
+// A real on either side.
+
+impl<T: FloatingPoint> Add<T> for Complex<T> {
+    type Output = Complex<T>;
+    const fn add(self, rhs: T) -> Complex<T> { Complex { re: self.re + rhs, im: self.im } }
+}
+
+impl<T: FloatingPoint> Sub<T> for Complex<T> {
+    type Output = Complex<T>;
+    const fn sub(self, rhs: T) -> Complex<T> { Complex { re: self.re - rhs, im: self.im } }
+}
+
+impl<T: FloatingPoint> Mul<T> for Complex<T> {
+    type Output = Complex<T>;
+    const fn mul(self, rhs: T) -> Complex<T> { Complex { re: self.re * rhs, im: self.im * rhs } }
+}
+
+impl<T: FloatingPoint> Div<T> for Complex<T> {
+    type Output = Complex<T>;
+    const fn div(self, rhs: T) -> Complex<T> { Complex { re: self.re / rhs, im: self.im / rhs } }
+}
+
+impl Add<Complex<f64>> for f64 {
+    type Output = Complex<f64>;
+    const fn add(self, rhs: Complex<f64>) -> Complex<f64> { Complex { re: self + rhs.re, im: rhs.im } }
+}
+
+impl Sub<Complex<f64>> for f64 {
+    type Output = Complex<f64>;
+    const fn sub(self, rhs: Complex<f64>) -> Complex<f64> { Complex { re: self - rhs.re, im: -rhs.im } }
+}
+
+impl Mul<Complex<f64>> for f64 {
+    type Output = Complex<f64>;
+    const fn mul(self, rhs: Complex<f64>) -> Complex<f64> { Complex { re: self * rhs.re, im: self * rhs.im } }
+}
+
+impl Div<Complex<f64>> for f64 {
+    type Output = Complex<f64>;
+    const fn div(self, rhs: Complex<f64>) -> Complex<f64> { Complex { re: self, im: 0.0 } / rhs }
+}
+
+impl Add<Complex<f32>> for f32 {
+    type Output = Complex<f32>;
+    const fn add(self, rhs: Complex<f32>) -> Complex<f32> { Complex { re: self + rhs.re, im: rhs.im } }
+}
+
+impl Sub<Complex<f32>> for f32 {
+    type Output = Complex<f32>;
+    const fn sub(self, rhs: Complex<f32>) -> Complex<f32> { Complex { re: self - rhs.re, im: -rhs.im } }
+}
+
+impl Mul<Complex<f32>> for f32 {
+    type Output = Complex<f32>;
+    const fn mul(self, rhs: Complex<f32>) -> Complex<f32> { Complex { re: self * rhs.re, im: self * rhs.im } }
+}
+
+impl Div<Complex<f32>> for f32 {
+    type Output = Complex<f32>;
+    const fn div(self, rhs: Complex<f32>) -> Complex<f32> { Complex { re: self, im: 0.0f32 } / rhs }
+}
+
+/// `1+2i`, `1-2i`, `0+1i`; each part as its type's `Display` (the spec's
+/// precision applies to both).
+impl<T: FloatingPoint + Display> Display for Complex<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) {
+        try Display::fmt(self.re, ref f);
+        if self.im < T::zero() || (self.im == T::zero() && self.im.total_cmp(T::zero()).is_lt()) {
+            try f.write_str("-");
+            try Display::fmt(-self.im, ref f);
+        } else {
+            try f.write_str("+");
+            try Display::fmt(self.im, ref f);
+        }
+        try f.write_str("i")
+    }
+}
+
+/// `Complex { re: 1.0, im: 2.0 }`.
+impl<T: Debug> Debug for Complex<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) {
+        try f.write_str("Complex { re: ");
+        try Debug::fmt(self.re, ref f);
+        try f.write_str(", im: ");
+        try Debug::fmt(self.im, ref f);
+        try f.write_str(" }")
+    }
+}
+
+/// `2i`, `0.5i`: the imaginary `Complex<f64>` of a number with the
+/// suffix `i`. Priority -1: a package's own `i` handler wins.
+#[literal(number "i", priority = -1)]
+pub(pkg) const fn imaginary_literal(n: f64) -> Complex<f64> {
+    Complex { re: 0.0, im: n }
+}

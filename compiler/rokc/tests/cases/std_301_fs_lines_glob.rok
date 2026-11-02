@@ -1,0 +1,47 @@
+// expect-exit: 0
+// expect-stdout:
+// [one]
+// [two]
+// [three]
+// ["/a.rok"]
+// ["/a.rok", "/sub/c.rok", "/sub/deep/d.rok"]
+// ["/a.rok", "/b.txt"]
+// ["/b.txt"]
+// ["/.hidden.rok"]
+// []
+
+// fs::lines reads a file line by line and closes it; fs::glob matches *, ?,
+// [..] and ** components, sorted, skipping dot files unless asked.
+use rok::std::env;
+use rok::std::fs;
+use rok::std::path::Path;
+
+// The paths below the base (a temp dir may end in a separator).
+fn show(ps: List<Path>) -> List<str> {
+    ps.map(|p| match p.as_str().split_once("rok_w2_glob") {
+        t: (str, str) => t.1,
+        none => "?",
+    }).to_list()
+}
+
+fn main() throws {
+    let base = f"{env::temp_dir()}/rok_w2_glob";
+    if fs::exists(base) {
+        try fs::remove_dir_all(base);
+    }
+    try fs::create_dir_all(f"{base}/sub/deep");
+    try fs::write(f"{base}/lines.txt", "one\ntwo\r\nthree");
+    try for line in fs::lines(f"{base}/lines.txt") {
+        println(f"[{line}]");
+    }
+    for name in ["a.rok", "b.txt", "sub/c.rok", "sub/deep/d.rok", ".hidden.rok"] {
+        try fs::write(f"{base}/{name}", "");
+    }
+    println(f"{show(try fs::glob(f"{base}/*.rok")):?}");
+    println(f"{show(try fs::glob(f"{base}/**/*.rok")):?}");
+    println(f"{show(try fs::glob(f"{base}/[ab].*")):?}");
+    println(f"{show(try fs::glob(f"{base}/?.t*")):?}");
+    println(f"{show(try fs::glob(f"{base}/.*")):?}");
+    println(f"{show(try fs::glob(f"{base}/nothing/*")):?}");
+    try fs::remove_dir_all(base);
+}

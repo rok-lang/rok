@@ -191,6 +191,84 @@ impl str {
     /// Unicode scalar values, in order.
     #[must_use]
     pub const fn chars(self) -> Chars { Chars { s: self, pos: 0 } }
+
+    /// The characters in reverse order (code points; a combining mark
+    /// moves with them). Python: `s[::-1]`.
+    #[must_use]
+    pub const fn reversed(self) -> str {
+        let cs: List<char> = List::new();
+        for c in self.chars() {
+            cs.push(c);
+        }
+        let out = StrBuf::with_capacity(self.len());
+        let i = cs.len();
+        while i > 0 {
+            i -= 1;
+            out.push(cs[i]);
+        }
+        out.to_str()
+    }
+
+    /// The number of non-overlapping occurrences of `pat`, left to right;
+    /// for an empty `pat`, one more than the number of characters (as
+    /// Python's `count`).
+    #[must_use]
+    pub const fn count(self, pat: str) -> usize {
+        if pat.is_empty() {
+            return self.char_count() + 1;
+        }
+        let n: usize = 0;
+        let rest = self;
+        while let at: usize = rest.find(pat) {
+            n += 1;
+            rest = rest[at + pat.len():];
+        }
+        n
+    }
+
+    /// `replace` of the first `n` occurrences only, left to right.
+    #[must_use]
+    pub const fn replacen(self, from: str, to: str, n: usize) -> str {
+        if from.is_empty() || n == 0 {
+            return self;
+        }
+        let out = StrBuf::with_capacity(self.len());
+        let rest = self;
+        let left = n;
+        while left > 0 {
+            match rest.find(from) {
+                at: usize => {
+                    out.push_str(rest[:at]);
+                    out.push_str(to);
+                    rest = rest[at + from.len():];
+                    left -= 1;
+                }
+                none => break,
+            }
+        }
+        out.push_str(rest);
+        out.to_str()
+    }
+
+    /// Each word's first letter in title case and its other letters in
+    /// lowercase (full mappings). A word starts at a letter that does
+    /// not follow a letter, a digit or an apostrophe. Python:
+    /// `s.title()`, but `"don't"` stays one word.
+    #[must_use]
+    pub const fn to_titlecase(self) -> str {
+        let out = StrBuf::with_capacity(self.len());
+        let inside = false;
+        for c in self.chars() {
+            if c.is_alphabetic() {
+                out.push_str(if inside { c.to_lowercase() } else { c.to_titlecase() });
+                inside = true;
+            } else {
+                out.push(c);
+                inside = c.is_numeric() || c == '\'' || c == '\u{2019}';
+            }
+        }
+        out.to_str()
+    }
     /// UTF-8 bytes, in order.
     #[must_use]
     pub fn bytes(self) -> Bytes { self.as_bytes().iter() }

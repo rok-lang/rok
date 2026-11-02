@@ -1,0 +1,44 @@
+// expect-exit: 0
+// expect-stdout:
+// 12
+// 6 6 3
+// [2]
+// 3 1
+// [6, 7]
+// 3
+// true
+// true 3
+// 90
+// {3, 1, 2}
+
+// A collection without the method answers its iterator's:
+// `xs.map(f)` is `xs.iter().map(f)` (any type with a parameterless
+// `iter()`); its own methods win, but for a bare `min()` / `max()`.
+// `collect()` with nothing to pick the collection makes a `List`.
+struct Bag { items: List<i32>; }
+
+impl Bag {
+    fn iter(self) -> rok::core::collections::list::ListIter<i32> { self.items.iter() }
+}
+
+let xs = [3, 1, 2];
+println(xs.map(|x| x * 2).sum());
+println(f"{xs.sum()} {xs.product()} {xs.count()}");
+let evens = xs.filter(|x| x % 2 == 0).collect();
+println(f"{evens:?}");
+println(f"{xs.max():?} {xs.min():?}");
+let s: Set<i32> = {5, 6};
+println(f"{s.map(|x| x + 1).to_list():?}");
+let d: Dict<str, i32> = Dict::new();
+d["a"] = 1;
+d["b"] = 2;
+println(d.map(|p| p.1).sum());
+let q: Deque<i32> = Deque::new();
+q.push_back(7);
+q.push_back(8);
+println(f"{q.any(|x| x == 8)}");
+println(f"{xs.contains(2)} {xs.len()}");
+let b = Bag { items: [4, 5] };
+println(b.map(|x| x * 10).sum());
+let picked: Set<i32> = xs.iter().collect();
+println(f"{picked:?}");

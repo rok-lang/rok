@@ -52,8 +52,12 @@ pub struct Lexer<'src> {
 enum Frame {
     /// Literal text of the f-string opened at `start`.
     Text { triple: bool, start: usize },
-    /// Hole code; `depth` counts open brackets.
-    Hole { triple: bool, depth: u32 },
+    /// Hole code from byte `start`; `depth` counts open brackets.
+    Hole {
+        triple: bool,
+        depth: u32,
+        start: usize,
+    },
     /// A hole's format spec after `:`.
     Spec { triple: bool },
 }
@@ -1058,11 +1062,35 @@ impl<'src> Lexer<'src> {
     /// Inside a hole: `}` / `:` at depth 0 end or split it;
     /// `None` lexes `b` as code.
     fn hole_punct(&mut self, b: u8, next: Option<u8>) -> Option<TokenKind> {
-        let Some(Frame::Hole { triple, depth }) = self.fstr.last_mut() else {
+        let Some(Frame::Hole {
+            triple,
+            depth,
+            start,
+        }) = self.fstr.last_mut()
+        else {
             return None;
         };
-        let triple = *triple;
+        let (triple, start) = (*triple, *start);
         match b {
+            // `{x=}` / `{x = :.2}`: the hole's text up to here, as
+            // `FStrText` (never a hole's token otherwise).
+            b'=' if *depth == 0 => {
+                let mut end = self.pos + 1;
+                while self.bytes.get(end) == Some(&b' ') {
+                    end += 1;
+                }
+                let echo = match self.bytes.get(end) {
+                    Some(b'}') => true,
+                    Some(b':') => self.bytes.get(end + 1) != Some(&b':'),
+                    _ => false,
+                };
+                if !echo {
+                    return None;
+                }
+                let text = self.src[start..end].to_owned();
+                self.advance(end - self.pos);
+                Some(TokenKind::FStrText(text))
+            }
             b'}' if *depth == 0 => {
                 self.fstr.pop();
                 self.advance(1);
@@ -1161,7 +1189,11 @@ impl<'src> Lexer<'src> {
                 }
                 b => {
                     self.advance(if b == b'$' { 2 } else { 1 });
-                    self.fstr.push(Frame::Hole { triple, depth: 0 });
+                    self.fstr.push(Frame::Hole {
+                        triple,
+                        depth: 0,
+                        start: self.pos,
+                    });
                     TokenKind::HoleStart
                 }
             }

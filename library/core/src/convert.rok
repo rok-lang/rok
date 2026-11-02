@@ -103,6 +103,11 @@ impl From<i8> for i32 {
     const fn from(value: i8) -> i32 { value as i32 }
 }
 
+/// The identity, so `i64: From<N>` holds for an `i64` `N` too.
+impl From<i64> for i64 {
+    const fn from(value: i64) -> i64 { value }
+}
+
 impl From<i8> for i64 {
     #[intrinsic("rok.cast.i8.i64")]
     const fn from(value: i8) -> i64 { value as i64 }

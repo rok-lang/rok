@@ -1,0 +1,11 @@
+// expect-error: 10:5: type `f64` does not satisfy trait bound `Ord` required by `List::sort`
+// expect-error: help: floats are not `Ord`, since NaN has no order; sort by the total order: `xs.sort_by(f64::total_cmp)`
+
+// `List::sort` needs `Ord`, which floats lack; the help names the total
+// order. `Iterator::min` / `max` need only `PartialOrd`, so floats have
+// them.
+fn main() {
+    let xs: List<f64> = [2.5, 1.5];
+    println(f"{xs.iter().max():?} {xs.min():?}");
+    xs.sort();
+}

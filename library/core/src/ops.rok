@@ -541,6 +541,48 @@ impl<T: Hash> Intersect for Set<T> {
     const fn intersection(self, rhs: Set<T>) -> Set<T> { Set::intersection(self, rhs) }
 }
 
+/// `a | b`: the union, as `∪`. Python: `a | b` on sets.
+impl<T: Hash, S: BuildHasher> BitOr for Set<T, S> {
+    type Output = Set<T, S>;
+    #[must_use]
+    const fn bitor(self, rhs: Set<T, S>) -> Set<T, S> { Set::union(self, rhs) }
+}
+
+/// `a & b`: the intersection, as `∩`.
+impl<T: Hash, S: BuildHasher> BitAnd for Set<T, S> {
+    type Output = Set<T, S>;
+    #[must_use]
+    const fn bitand(self, rhs: Set<T, S>) -> Set<T, S> { Set::intersection(self, rhs) }
+}
+
+/// `a - b`: the members of `a` not in `b`.
+impl<T: Hash, S: BuildHasher> Sub for Set<T, S> {
+    type Output = Set<T, S>;
+    #[must_use]
+    const fn sub(self, rhs: Set<T, S>) -> Set<T, S> { Set::difference(self, rhs) }
+}
+
+/// `a ^ b`: the members of exactly one of the two.
+impl<T: Hash, S: BuildHasher> BitXor for Set<T, S> {
+    type Output = Set<T, S>;
+    #[must_use]
+    const fn bitxor(self, rhs: Set<T, S>) -> Set<T, S> { Set::symmetric_difference(self, rhs) }
+}
+
+/// `xs + ys`: a new list, `xs`'s items then `ys`'s; neither operand
+/// changes (`xs += ys` appends in place). Element-wise addition is
+/// `.+`.
+impl<T> Add for List<T> {
+    type Output = List<T>;
+    #[must_use]
+    const fn add(self, rhs: List<T>) -> List<T> {
+        let out: List<T> = List::with_capacity(self.len() + rhs.len());
+        out.extend(self);
+        out.extend(rhs);
+        out
+    }
+}
+
 /// `(f ∘ g)(x) = f(g(x))`.
 impl<A, B, C> Compose<fn(A) -> B> for fn(B) -> C {
     type Output = fn(A) -> C;

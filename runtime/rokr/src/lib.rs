@@ -898,6 +898,7 @@ mod tests {
                 alt: true,
                 zero: true,
                 width: Some(10),
+                grouping: 0,
                 precision: Some(3),
                 ty: b'e',
             }

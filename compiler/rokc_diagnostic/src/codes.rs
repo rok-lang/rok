@@ -793,7 +793,14 @@ codes! {
      tuple. Assigning to it would change a temporary that is dropped right after. Assign \
      to a variable, a field of one (`s.x += 1`) or an element (`xs[i] += 1`). To keep a \
      call's result, bind it first: `let v = f(); v += 1;`. To count in a dictionary, \
-     write the entry back: `d[k] = (d.get(k) ?? 0) + 1;`.";
+     index with a default: `d[k, default: 0] += 1;`.";
+
+    142 GENERIC_PARAM_SHADOWS Resolve "method generic parameter named like its impl's"
+    "A method written in an `impl` block declares a generic parameter with the name of one \
+     of the impl's (`impl<K> W<K> { fn f<K>(..) }`): inside the method the name could mean \
+     either. Rename the method's parameter (`fn f<K2>`), or drop it and use the impl's. A \
+     trait's default method is not written in the impl, so its parameters shadow the \
+     impl's without an error.";
 }
 
 #[cfg(test)]

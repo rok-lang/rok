@@ -292,6 +292,23 @@ impl<K: Hash, V, S: BuildHasher> Dict<K, V, S> {
         }
     }
 
+    /// The value under `k`; `default` when `k` is absent. The dict is
+    /// not changed. Python: `d.get(k, default)`.
+    pub const fn get_or(self, k: K, default: V) -> V {
+        self.get(k) ?? default
+    }
+
+    /// The value under `k`, first inserting `default` when `k` is
+    /// absent. `d[k, default: v]` as an assignment target uses it.
+    #[discardable]
+    pub const fn get_or_insert(self, k: K, default: V) -> V {
+        if let v: V = self.get(k) {
+            return v;
+        }
+        self.insert(k, default);
+        default
+    }
+
     /// `true` when `k` has an entry.
     pub const fn contains_key(self, k: K) -> bool {
         self.find(k, self.hash_of(k)) != ABSENT
@@ -381,6 +398,20 @@ impl<K: Hash, V, S: BuildHasher> Dict<K, V, S> {
     /// `k`'s place in the dict, present or not.
     pub const fn entry(self, k: K) -> Entry<K, V, S> {
         Entry { d: self, key: k }
+    }
+}
+
+impl<K: Hash, S: BuildHasher> Dict<K, usize, S> {
+    /// The `n` largest counts (all when `n` is `none`) as `(key,
+    /// count)`, largest first; equal counts keep first-seen order.
+    /// Python: `Counter.most_common(n)`; build the counts with
+    /// `xs.counts()`.
+    pub const fn most_common(self, n: usize | none = none) -> List<(K, usize)> {
+        let out = self.iter().sorted_by_key(|p: (K, usize)| p.1, reverse: true);
+        if let k: usize = n {
+            out.truncate(k);
+        }
+        out
     }
 }
 

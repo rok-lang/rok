@@ -1,0 +1,26 @@
+// expect-exit: 0
+// expect-stdout:
+// 3 1x 7.5 3+4i
+
+// In a bound `T: Add<U, Output = V>` the impl, and so `V`, is picked once
+// both `T` and `U` are known from the arguments, whatever other impls of
+// `Add` the type has.
+use rok::core::ops::Add;
+
+struct M { n: i32; }
+
+impl Add<i32> for M {
+    type Output = i32;
+    fn add(self, rhs: i32) -> i32 { self.n + rhs }
+}
+
+impl Add<str> for M {
+    type Output = str;
+    fn add(self, rhs: str) -> str { f"{self.n}{rhs}" }
+}
+
+fn plus<T, U, V>(a: T, b: U) -> V where T: Add<U, Output = V> {
+    a + b
+}
+
+println(plus(M { n: 1 }, 2), plus(M { n: 1 }, "x"), plus(7.0, 0.5), plus(3.0, 4.0i));

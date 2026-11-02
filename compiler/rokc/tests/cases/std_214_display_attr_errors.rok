@@ -1,0 +1,9 @@
+// expect-error: 8:5: variant `E::B` has no `#[display("..")]`; with one on any variant, every variant needs its own (or put one on the enum)
+
+// With `#[display]` on some variant, each variant needs one.
+#[derive(Debug)]
+enum E {
+    #[display("a")]
+    A,
+    B,
+}

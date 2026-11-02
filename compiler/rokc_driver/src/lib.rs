@@ -2992,6 +2992,7 @@ mod tests {
         "println",
         "eprint",
         "eprintln",
+        "dbg",
         "panic",
         "assert",
         "assert_eq",

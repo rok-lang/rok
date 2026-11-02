@@ -178,9 +178,19 @@ fn type_param_names(fn_def: &FnDef) -> std::collections::HashSet<String> {
         .collect()
 }
 
+/// An `Assoc = T` binding in a bound on a bare parameter or `Self`.
+struct AssocBinding<'a> {
+    subject: String,
+    assoc: &'a str,
+    target: &'a Ty,
+    /// The bound's trait arguments (`U` of `Add<U, Output = V>`).
+    trait_args: Vec<&'a Ty>,
+    span: rokc_diagnostic::Span,
+}
+
 /// Each `Assoc = T` binding in `fn_def`'s bounds and `where` clause on a
-/// bare parameter or `Self`: `(subject, assoc, T, bound span)`.
-fn assoc_bindings(fn_def: &FnDef) -> Vec<(String, &str, &Ty, rokc_diagnostic::Span)> {
+/// bare parameter or `Self`.
+fn assoc_bindings(fn_def: &FnDef) -> Vec<AssocBinding<'_>> {
     let bare = |t: &Ty| match &t.kind {
         rokc_ast::TyKind::Path(p) => match p.segments.as_slice() {
             [s] if s.generics.is_empty() => Some(s.name.clone()),
@@ -211,9 +221,19 @@ fn assoc_bindings(fn_def: &FnDef) -> Vec<(String, &str, &Ty, rokc_diagnostic::Sp
             let rokc_ast::TyKind::Path(bp) = &b.kind else {
                 continue;
             };
-            for g in bp.segments.iter().flat_map(|s| &s.generics) {
+            let generics = || bp.segments.iter().flat_map(|s| &s.generics);
+            let trait_args: Vec<&Ty> = generics()
+                .filter(|g| rokc_ast::as_assoc_binding(g).is_none())
+                .collect();
+            for g in generics() {
                 if let Some((assoc, target)) = rokc_ast::as_assoc_binding(g) {
-                    out.push((subject.clone(), assoc, target, b.span));
+                    out.push(AssocBinding {
+                        subject: subject.clone(),
+                        assoc,
+                        target,
+                        trait_args: trait_args.clone(),
+                        span: b.span,
+                    });
                 }
             }
         }
@@ -265,15 +285,19 @@ fn bind_assoc_bindings(
     subst: &mut HashMap<String, HirTy>,
 ) {
     let names = type_param_names(fn_def);
-    for (subject, assoc, target, span) in assoc_bindings(fn_def) {
-        let open = names
+    let unbound = |t: &Ty, subst: &HashMap<String, HirTy>| {
+        names
             .iter()
-            .any(|n| !subst.contains_key(n) && super::expr::ast_ty_mentions(target, n));
-        if !open {
+            .any(|n| !subst.contains_key(n) && super::expr::ast_ty_mentions(t, n))
+    };
+    for b in assoc_bindings(fn_def) {
+        // The impl, and so the associated type, is picked by the trait's
+        // arguments too: read it once they are known.
+        if !unbound(b.target, subst) || b.trait_args.iter().any(|a| unbound(a, subst)) {
             continue;
         }
-        if let Some(t) = project_assoc(ctx, fn_def, subst, self_hir, &subject, assoc, span) {
-            unify_param_ty_with(target, &t, &names, subst, ctx);
+        if let Some(t) = project_assoc(ctx, fn_def, subst, self_hir, &b.subject, b.assoc, b.span) {
+            unify_param_ty_with(b.target, &t, &names, subst, ctx);
         }
     }
 }
@@ -316,53 +340,52 @@ fn assoc_shape_error(
     subst: &HashMap<String, HirTy>,
 ) -> Option<String> {
     let names = type_param_names(fn_def);
-    assoc_bindings(fn_def)
-        .into_iter()
-        .find_map(|(subject, assoc, target, span)| {
-            // Only a tuple or fn form can mismatch in shape; a bare `T`
-            // is left to the bound check.
-            let shaped = matches!(
-                target.kind,
-                rokc_ast::TyKind::Tuple(_) | rokc_ast::TyKind::Fn(..)
-            );
-            if !shaped
-                || !names
-                    .iter()
-                    .any(|n| super::expr::ast_ty_mentions(target, n))
-            {
-                return None;
-            }
-            let owner = match subject.as_str() {
-                "Self" => self_hir,
-                s => subst.get(s),
-            };
-            // A generic body's call: the owner is still a parameter.
-            if owner.is_none_or(|o| super::bounds::has_param(ctx, o)) {
-                return None;
-            }
-            let t = project_assoc(ctx, fn_def, subst, self_hir, &subject, assoc, span)?;
-            if !shape_differs(target, &t) {
-                return None;
-            }
-            let owner = owner.map_or_else(|| subject.clone(), |o| ctx.ty_name(o));
-            let leaf = leaf_name(&fn_def.name);
-            // An impl's copy of a trait method is `__impl<tag>_<name>`.
-            let shown = leaf
-                .strip_prefix("__impl")
-                .and_then(|r| r.split_once('_'))
-                .map_or(leaf, |(_, m)| m);
-            let want = rokc_ast::print::print_ty(target);
-            let fix = if assoc == "Item" {
-                format!(" - turn each item into `{want}` first, e.g. with `.map(|x| ..)`")
-            } else {
-                format!(" - pass a type whose `{assoc}` is `{want}`")
-            };
-            Some(format!(
-                "`{shown}` needs `{assoc}` of the form `{want}`, but `{owner}` has \
+    assoc_bindings(fn_def).into_iter().find_map(|b| {
+        let (subject, assoc, target, span) = (b.subject, b.assoc, b.target, b.span);
+        // Only a tuple or fn form can mismatch in shape; a bare `T`
+        // is left to the bound check.
+        let shaped = matches!(
+            target.kind,
+            rokc_ast::TyKind::Tuple(_) | rokc_ast::TyKind::Fn(..)
+        );
+        if !shaped
+            || !names
+                .iter()
+                .any(|n| super::expr::ast_ty_mentions(target, n))
+        {
+            return None;
+        }
+        let owner = match subject.as_str() {
+            "Self" => self_hir,
+            s => subst.get(s),
+        };
+        // A generic body's call: the owner is still a parameter.
+        if owner.is_none_or(|o| super::bounds::has_param(ctx, o)) {
+            return None;
+        }
+        let t = project_assoc(ctx, fn_def, subst, self_hir, &subject, assoc, span)?;
+        if !shape_differs(target, &t) {
+            return None;
+        }
+        let owner = owner.map_or_else(|| subject.clone(), |o| ctx.ty_name(o));
+        let leaf = leaf_name(&fn_def.name);
+        // An impl's copy of a trait method is `__impl<tag>_<name>`.
+        let shown = leaf
+            .strip_prefix("__impl")
+            .and_then(|r| r.split_once('_'))
+            .map_or(leaf, |(_, m)| m);
+        let want = rokc_ast::print::print_ty(target);
+        let fix = if assoc == "Item" {
+            format!(" - turn each item into `{want}` first, e.g. with `.map(|x| ..)`")
+        } else {
+            format!(" - pass a type whose `{assoc}` is `{want}`")
+        };
+        Some(format!(
+            "`{shown}` needs `{assoc}` of the form `{want}`, but `{owner}` has \
                  `{assoc} = {}`{fix}",
-                ctx.ty_name(&t)
-            ))
-        })
+            ctx.ty_name(&t)
+        ))
+    })
 }
 
 /// Resolve `ty` under the substitution of a monomorphization in
@@ -824,9 +847,6 @@ pub(super) fn check_call_bounds(
 /// float method that works instead.
 fn float_order_help(fn_name: &str) -> String {
     let form = match fn_name.rsplit("::").next() {
-        Some(m @ ("min" | "max")) => {
-            format!("fold with the float method: `.reduce(|a, b| a.{m}(b))`")
-        }
         Some(m @ ("min_by_key" | "max_by_key")) => {
             let op = if m == "min_by_key" { '<' } else { '>' };
             format!(
@@ -834,10 +854,7 @@ fn float_order_help(fn_name: &str) -> String {
                  `.reduce(|a, b| if k(b) {op} k(a) {{ b }} else {{ a }})`"
             )
         }
-        Some("sort") => {
-            "sort with `partial_cmp`: `xs.sort_by(|a, b| a.partial_cmp(b) ?? Ordering::Equal)`"
-                .to_owned()
-        }
+        Some("sort") => "sort by the total order: `xs.sort_by(f64::total_cmp)`".to_owned(),
         _ => "compare with `<` / `>` or `partial_cmp`, which floats have".to_owned(),
     };
     format!("floats are not `Ord`, since NaN has no order; {form}")
