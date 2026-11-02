@@ -789,6 +789,11 @@ pub(super) fn check_call_bounds(
                         super::expr::sum_order_help()
                     )));
                 }
+                if super::expr::is_order_trait(ctx, &want.path)
+                    && matches!(concrete, HirTy::Prim(p) if p.is_float())
+                {
+                    ctx.help_last(Some(float_order_help(&ctx.display_path(&fn_def.name))));
+                }
                 // `int` / `float` into a float rounds, so it is no `From`.
                 let to = ctx.ty_name(concrete);
                 let from = ctx.trait_name(&want);
@@ -813,6 +818,29 @@ pub(super) fn check_call_bounds(
             }
         }
     }
+}
+
+/// Floats are not ordered (NaN), so `fn_name` needing an order gets the
+/// float method that works instead.
+fn float_order_help(fn_name: &str) -> String {
+    let form = match fn_name.rsplit("::").next() {
+        Some(m @ ("min" | "max")) => {
+            format!("fold with the float method: `.reduce(|a, b| a.{m}(b))`")
+        }
+        Some(m @ ("min_by_key" | "max_by_key")) => {
+            let op = if m == "min_by_key" { '<' } else { '>' };
+            format!(
+                "compare the keys in `.reduce`, `k` being your key: \
+                 `.reduce(|a, b| if k(b) {op} k(a) {{ b }} else {{ a }})`"
+            )
+        }
+        Some("sort") => {
+            "sort with `partial_cmp`: `xs.sort_by(|a, b| a.partial_cmp(b) ?? Ordering::Equal)`"
+                .to_owned()
+        }
+        _ => "compare with `<` / `>` or `partial_cmp`, which floats have".to_owned(),
+    };
+    format!("floats are not `Ord`, since NaN has no order; {form}")
 }
 
 /// Is `id`'s return type being inferred (a call of it from its own

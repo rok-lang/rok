@@ -397,8 +397,9 @@ codes! {
 
     57 INVALID_ASSIGNMENT Type "invalid assignment"
     "The left side of `=` cannot be assigned: a const, a static, a variable not declared \
-     with `let`, a value captured by a closure without `[ref name]`, or an expression that \
-     is not a place. Assign to a `let` variable, a field of one, or an element of one.";
+     with `let`, or a value captured by a closure without `[ref name]`. Assign to a `let` \
+     variable, a field of one, or an element of one. A left side that is a value, such as \
+     a call result, is E0141.";
 
     58 INVALID_CAPTURE Type "invalid closure capture"
     "A closure's capture list (`[ref x]`) names something it cannot capture: no variable of \
@@ -785,6 +786,14 @@ codes! {
      collect what you need (`try r.lines().collect()`), or take the owning form \
      (`r.into_lines()`), which owns `r`, closes it with itself and can be returned or \
      moved into a task.";
+
+    141 NOT_A_PLACE Type "assignment to a value that is not a place"
+    "The left side of `=` or of a compound assignment (`+=`, `-=`, ...) is a value, not a \
+     place: a call result (`f()`, `d.entry(k).or_insert(0)`), an operator result or a \
+     tuple. Assigning to it would change a temporary that is dropped right after. Assign \
+     to a variable, a field of one (`s.x += 1`) or an element (`xs[i] += 1`). To keep a \
+     call's result, bind it first: `let v = f(); v += 1;`. To count in a dictionary, \
+     write the entry back: `d[k] = (d.get(k) ?? 0) + 1;`.";
 }
 
 #[cfg(test)]

@@ -1,0 +1,20 @@
+// expect-error: 12:5: cannot use `+=` on `f()`: a call result is not a place
+// expect-error: help: bind the value to a variable and change that: `let v = f(); v += 1;`
+// expect-error: 13:5: cannot use `+=` on `d.entry("a").or_insert(0)`
+// expect-error: help: write the entry back: `d["a"] = (d.get("a") ?? 0) + 1;`
+// expect-error: 14:5: cannot use `*=` on `p().x`
+// expect-error: help: bind the value to a variable and change that: `let v = p(); v.x *= 2;`
+// expect-error: 15:5: cannot use `-=` on `(f() + 1)`: a computed value is not a place
+
+// A compound assignment to a call result would change a temporary.
+fn main() {
+    let d: Dict<str, i32> = Dict::new();
+    f() += 1;
+    d.entry("a").or_insert(0) += 1;
+    p().x *= 2;
+    (f() + 1) -= 2;
+}
+
+struct P { x: i32; }
+fn f() -> i32 { 1 }
+fn p() -> P { P { x: 1 } }

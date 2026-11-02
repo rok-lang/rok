@@ -1,10 +1,14 @@
-// expect-error: 7:5: invalid assignment target
-// expect-error: 8:5: invalid assignment target
+// expect-error: 10:5: cannot assign to `f()`: a call result is not a place
+// expect-error: 11:5: cannot assign to `(f() + 1)`: a computed value is not a place
+// expect-error: 12:5: cannot assign to `d.entry("a").or_insert(0)`
+// expect-error: help: assign the element: `d["a"] = 2;`
 
 // A call result or an arithmetic result is not a place.
 fn f() -> i32 { 1 }
 fn main() -> i32 {
+    let d: Dict<str, i32> = Dict::new();
     f() = 2;
     (f() + 1) = 2;
+    d.entry("a").or_insert(0) = 2;
     return 0;
 }

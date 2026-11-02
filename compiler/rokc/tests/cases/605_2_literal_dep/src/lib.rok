@@ -1,0 +1,5 @@
+// A library that registers a `#[literal]` suffix.
+pub struct Port { pub n: i64; }
+
+#[literal(number "port")]
+pub fn port_literal(n: i64) -> Port { Port { n: n } }

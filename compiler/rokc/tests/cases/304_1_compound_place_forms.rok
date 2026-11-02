@@ -1,0 +1,29 @@
+// expect-exit: 0
+// expect-stdout:
+// 2 1
+// 11 21
+// 7 3
+
+// The forms that write through: the dictionary entry written back, and an
+// element of a list a call returns (a list is shared, not copied).
+fn same(xs: List<i32>) -> List<i32> { xs }
+
+struct Box2 { xs: List<i32>; n: i32; }
+
+fn main() {
+    let d: Dict<str, i32> = Dict::new();
+    for w in ["a", "b", "a"] {
+        d[w] = (d.get(w) ?? 0) + 1;
+    }
+    println(f"{d["a"]} {d["b"]}");
+
+    let xs = [1, 20];
+    same(xs)[0] += 10;
+    same(xs)[1] += 1;
+    println(f"{xs[0]} {xs[1]}");
+
+    let b = Box2 { xs: [4], n: 1 };
+    b.xs[0] += 3;
+    b.n += 2;
+    println(f"{b.xs[0]} {b.n}");
+}
