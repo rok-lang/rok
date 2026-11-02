@@ -1369,20 +1369,11 @@ impl<'a> Parser<'a> {
     }
 
     /// Top-level statement of the entry file. Block-like
-    /// expressions need no `;`; no tail expression, no `return`.
+    /// expressions need no `;`; no tail expression. A bare `return;`
+    /// ends the program (exit code 0); `return v;` is an error.
     fn parse_top_stmt(&mut self) -> Option<Stmt> {
-        let span = self.peek_span();
         let (stmt, _) = self.parse_stmt()?;
         match stmt.kind {
-            StmtKind::Return(_) => {
-                self.error(
-                    Code::TOP_LEVEL_RETURN,
-                    span,
-                    "top-level `return` is not allowed; use `process::exit(code)` \
-                     or an explicit `fn main() -> i32`",
-                );
-                None
-            }
             StmtKind::Trailing(expr) if !ends_stmt(&expr) => {
                 let d = self.expected(&TokenKind::Semi, "`;` after top-level expression");
                 self.diagnostics.push(d);
@@ -8569,6 +8560,15 @@ fn path_name(e: &Expr) -> Option<String> {
 }
 
 /// Tokens as source, one space where the source had any.
+/// `b'x'`: the `u8` literal of its byte (the lexer checked the body).
+fn byte_lit(body: &str) -> Literal {
+    let v = rokc_ast::escape::unescape(body, rokc_ast::escape::EscapeMode::CChar)
+        .ok()
+        .and_then(|s| s.chars().next())
+        .map_or(0, u32::from);
+    Literal::Int(format!("{v}u8"))
+}
+
 /// The direction a comparison chains in: `<` / `<=`, `>` / `>=`, `==`.
 fn cmp_dir(op: &str) -> Option<u8> {
     match op {

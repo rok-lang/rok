@@ -600,13 +600,18 @@ fn lower_stmt_inner(ctx: &mut LowerCtx<'_>, stmt: &Stmt) -> Option<HirStmt> {
             }
             Some(s)
         }
-        StmtKind::Return(_) if ctx.implicit_main => {
+        // A bare `return;` ends a script (exit code 0).
+        StmtKind::Return(Some(v)) if ctx.implicit_main => {
+            let code = ctx.src(v.span).unwrap_or("code").to_owned();
             ctx.emit_error(
                 Code::TOP_LEVEL_RETURN,
-                "`return` is not allowed in top-level statements; use \
-                 `process::exit(code)` or an explicit `fn main() -> i32`"
+                "top-level `return` takes no value: the program's statements return nothing"
                     .to_owned(),
             );
+            ctx.help_last(Some(format!(
+                "write `return;` to end the program, or `process::exit({code});` for an \
+                 exit code (`use rok::std::process;`)"
+            )));
             None
         }
         StmtKind::Return(value) => {

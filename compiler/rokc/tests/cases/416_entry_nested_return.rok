@@ -1,8 +1,9 @@
-// expect-error: `return` is not allowed in top-level statements
+// expect-error: 8:5: top-level `return` takes no value
+// expect-error: help: write `return;` to end the program, or `process::exit(x + 1);` for an exit code
 
-// A `return` nested in a top-level block is still a
-// top-level `return`.
+// The top-level statements return nothing: `return v;` is an error,
+// nested in a block too.
 let x = 1;
 if x > 0 {
-    return;
+    return x + 1;
 }

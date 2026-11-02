@@ -1,5 +1,24 @@
-// expect-error: top-level `return` is not allowed
+// expect-exit: 0
+// expect-stdout:
+// 1
+// 3
 
-// No `return` in the implicit `main`.
+// A bare `return;` in the top-level statements ends the program with
+// exit code 0, from a nested block or `let .. else` too.
+fn first_even(xs: List<i32>) -> i32? {
+    for x in xs {
+        if x % 2 == 0 { return x; }
+    }
+    none
+}
+
 println(f"{1}");
-return;
+let n = first_even([1, 3, 5]) ?? 3;
+println(n);
+if n > 5 {
+    return;
+}
+let even: i32 = first_even([1, 3]) else {
+    return;
+};
+println(f"not reached {even}");

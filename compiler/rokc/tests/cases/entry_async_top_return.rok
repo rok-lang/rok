@@ -1,9 +1,11 @@
-// expect-error: 7:13: `return` is not allowed in top-level statements
+// expect-exit: 0
+// expect-stdout:
+// before
 
-// No top-level `return`, async implicit `main` included.
+// A top-level `return;` in an async implicit `main` ends the program.
 async fn f() -> i32 { 1 }
 
+println("before");
 let x = await f();
 if x == 1 { return; }
 println(f"{x}");
-

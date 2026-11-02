@@ -212,10 +212,11 @@ codes! {
      `static mut` outside an `extern` block, a statement in a module body, or a macro import \
      inside a function. Move it where the message says, usually to module level.";
 
-    18 TOP_LEVEL_RETURN Parse "`return` in top-level statements"
-    "A program's top-level statements are not a function, so `return` has nothing to return \
-     from. End the program with `process::exit(code)`, or write `fn main() -> i32` and \
-     return from it.";
+    18 TOP_LEVEL_RETURN Parse "`return` with a value in top-level statements"
+    "A bare `return;` in a program's top-level statements ends the program with exit code 0, \
+     but they return nothing, so `return v;` has no meaning there. Write `return;`, end the \
+     program with `process::exit(code)` for another exit code, or write \
+     `fn main() -> i32` and return from it.";
 
     19 NEEDS_PARENTHESES Parse "operators that need parentheses"
     "Some operators do not chain: comparisons in two directions (`a < b > c`), `a != b != c`, \
