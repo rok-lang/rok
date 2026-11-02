@@ -824,9 +824,6 @@ pub(super) fn check_call_bounds(
 /// float method that works instead.
 fn float_order_help(fn_name: &str) -> String {
     let form = match fn_name.rsplit("::").next() {
-        Some(m @ ("min" | "max")) => {
-            format!("fold with the float method: `.reduce(|a, b| a.{m}(b))`")
-        }
         Some(m @ ("min_by_key" | "max_by_key")) => {
             let op = if m == "min_by_key" { '<' } else { '>' };
             format!(
@@ -834,10 +831,7 @@ fn float_order_help(fn_name: &str) -> String {
                  `.reduce(|a, b| if k(b) {op} k(a) {{ b }} else {{ a }})`"
             )
         }
-        Some("sort") => {
-            "sort with `partial_cmp`: `xs.sort_by(|a, b| a.partial_cmp(b) ?? Ordering::Equal)`"
-                .to_owned()
-        }
+        Some("sort") => "sort by the total order: `xs.sort_by(f64::total_cmp)`".to_owned(),
         _ => "compare with `<` / `>` or `partial_cmp`, which floats have".to_owned(),
     };
     format!("floats are not `Ord`, since NaN has no order; {form}")

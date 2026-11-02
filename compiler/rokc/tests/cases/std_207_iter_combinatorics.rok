@@ -1,0 +1,26 @@
+// expect-exit: 0
+// expect-stdout:
+// [["a", "b"], ["a", "c"], ["b", "c"]]
+// [[]] 0
+// [["a", "b", "c"], ["a", "c", "b"], ["b", "a", "c"], ["b", "c", "a"], ["c", "a", "b"], ["c", "b", "a"]]
+// [["a", "b"], ["a", "c"], ["b", "a"], ["b", "c"], ["c", "a"], ["c", "b"]]
+// 1 0
+// 20 20
+// [3, 5, 7]
+// 0 2
+// [[1, 2, 3], [4, 5, 6], [7]]
+// [[1, 2], [2, 3], [3, 4]]
+
+// itertools vocabulary: combinations / permutations in position order
+// (lists), pairwise, chunks, windows.
+let xs = ["a", "b", "c"];
+println(f"{xs.combinations(2).to_list():?}");
+println(f"{xs.combinations(0).to_list():?} {xs.combinations(4).count()}");
+println(f"{xs.permutations().to_list():?}");
+println(f"{xs.permutations(2).to_list():?}");
+println(f"{xs.permutations(0).count()} {xs.permutations(5).count()}");
+println(f"{(0..6).combinations(3).count()} {(0..5).permutations(2).count()}");
+println(f"{[1, 4, 9, 16].pairwise().map(|p| p.1 - p.0).to_list():?}");
+println(f"{[1].pairwise().count()} {[1, 2, 3].pairwise().count()}");
+println(f"{(1..8).chunks(3).to_list():?}");
+println(f"{(1..5).windows(2).to_list():?}");

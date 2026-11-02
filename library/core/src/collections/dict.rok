@@ -384,6 +384,20 @@ impl<K: Hash, V, S: BuildHasher> Dict<K, V, S> {
     }
 }
 
+impl<K: Hash, S: BuildHasher> Dict<K, usize, S> {
+    /// The `n` largest counts (all when `n` is `none`) as `(key,
+    /// count)`, largest first; equal counts keep first-seen order.
+    /// Python: `Counter.most_common(n)`; build the counts with
+    /// `xs.counts()`.
+    pub const fn most_common(self, n: usize | none = none) -> List<(K, usize)> {
+        let out = self.iter().sorted_by(|a: (K, usize), b: (K, usize)| b.1.cmp(a.1));
+        if let k: usize = n {
+            out.truncate(k);
+        }
+        out
+    }
+}
+
 /// `d.entry(k)`: read or fill one key's slot. Each call looks the key
 /// up again.
 pub struct Entry<K, V, S = RandomState> {

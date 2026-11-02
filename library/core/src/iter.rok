@@ -26,9 +26,9 @@ pub trait Iterator {
         Filter { it: self, pred: pred }
     }
 
-    /// `(index, item)` pairs.
-    const fn enumerate(self) -> Enumerate<Self> {
-        Enumerate { it: self, i: 0 }
+    /// `(index, item)` pairs, the index counting from `start`.
+    const fn enumerate(self, start: usize = 0usize) -> Enumerate<Self> {
+        Enumerate { it: self, i: start }
     }
 
     /// Pairs of this iterator's and `other`'s items, until either ends.
@@ -145,8 +145,16 @@ pub trait Iterator {
         n
     }
 
-    /// The items added up; `0` for none.
+    /// The items added up; `0` for none. `f32` / `f64` items are summed
+    /// pairwise: blocks of 128 items, each added left to right, and the
+    /// block sums combined as a binary counter merges equal-sized partial
+    /// sums, the rest added last to first. The order depends only on the
+    /// item count, so the result is the same on every target.
     const fn sum(self) -> Item where Item: Add<Output = Item> + Zero {
+        let t = Item::type_name();
+        if t == "f64" || t == "f32" {
+            return pairwise_sum(self);
+        }
         let acc = Item::zero();
         for x in self {
             acc += x;
@@ -269,14 +277,19 @@ pub trait Iterator {
         none
     }
 
-    /// The smallest item (the first of equals).
+    /// The smallest item (the first of equals). An item unordered with
+    /// itself (a float NaN) is the result: NaN propagates, as IEEE 754
+    /// `minimum` and NumPy `min`.
     #[must_use]
-    const fn min(self) -> Item | none where Item: Ord {
+    const fn min(self) -> Item | none where Item: PartialOrd {
         let best: Item | none = none;
         for x in self {
+            if !x.le(x) {
+                return x;
+            }
             match best {
                 b: Item => {
-                    if x.cmp(b).is_lt() {
+                    if x.lt(b) {
                         best = x;
                     }
                 }
@@ -288,14 +301,19 @@ pub trait Iterator {
         best
     }
 
-    /// The largest item (the last of equals).
+    /// The largest item (the last of equals). An item unordered with
+    /// itself (a float NaN) is the result: NaN propagates, as IEEE 754
+    /// `maximum` and NumPy `max`.
     #[must_use]
-    const fn max(self) -> Item | none where Item: Ord {
+    const fn max(self) -> Item | none where Item: PartialOrd {
         let best: Item | none = none;
         for x in self {
+            if !x.le(x) {
+                return x;
+            }
             match best {
                 b: Item => {
-                    if !x.cmp(b).is_lt() {
+                    if !x.lt(b) {
                         best = x;
                     }
                 }
@@ -378,11 +396,176 @@ pub trait Iterator {
         }
     }
 
-    /// Gather the items into a `FromIterator` collection (the slot's
-    /// type picks it: `let v: List<i32> = it.collect();`).
-    const fn collect<C: FromIterator<Item>>(self) -> C {
+    /// Gather the items into a `FromIterator` collection: the slot's
+    /// type picks it (`let s: Set<i32> = it.collect();`), a `List` when
+    /// nothing does.
+    const fn collect<C: FromIterator<Item> = List<Item>>(self) -> C {
         C::from_iter(self)
     }
+
+    /// The items in a new `List`.
+    const fn to_list(self) -> List<Item> {
+        let out: List<Item> = List::with_capacity(self.exact_len() ?? 0);
+        for x in self {
+            out.push(x);
+        }
+        out
+    }
+
+    /// The items in a new `Set` (first occurrences, in order).
+    const fn to_set(self) -> Set<Item> where Item: Hash {
+        let out: Set<Item> = Set::new();
+        for x in self {
+            out.insert(x);
+        }
+        out
+    }
+
+    /// The `(key, value)` items in a new `Dict`; a later key's value
+    /// replaces an earlier one's.
+    const fn to_dict<Key: Hash, Value>(self) -> Dict<Key, Value> where Self: Iterator<Item = (Key, Value)> {
+        let out: Dict<Key, Value> = Dict::new();
+        for (k, v) in self {
+            out[k] = v;
+        }
+        out
+    }
+
+    /// The items in a new sorted `List`, largest first when `reverse`.
+    /// The sort is stable. Python: `sorted(xs, reverse=...)`.
+    const fn sorted(self, reverse: bool = false) -> List<Item> where Item: Ord {
+        let out = self.to_list();
+        if reverse {
+            out.sort_by(|a: Item, b: Item| b.cmp(a));
+        } else {
+            out.sort();
+        }
+        out
+    }
+
+    /// The items in a new `List` sorted by `key`, largest key first when
+    /// `reverse`; equal keys keep their order. Python:
+    /// `sorted(xs, key=f, reverse=...)`.
+    const fn sorted_by_key<Key: Ord>(self, key: fn(Item) -> Key, reverse: bool = false) -> List<Item> {
+        let out = self.to_list();
+        if reverse {
+            out.sort_by(|a: Item, b: Item| key(b).cmp(key(a)));
+        } else {
+            out.sort_by_key(key);
+        }
+        out
+    }
+
+    /// The items in a new `List` sorted by `cmp`; equal items keep
+    /// their order.
+    const fn sorted_by(self, cmp: fn(Item, Item) -> rok::core::cmp::Ordering) -> List<Item> {
+        let out = self.to_list();
+        out.sort_by(cmp);
+        out
+    }
+
+    /// How often each item occurs, keyed in first-seen order. Python:
+    /// `collections.Counter(xs)`; `most_common(n)` on the result ranks
+    /// them.
+    const fn counts(self) -> Dict<Item, usize> where Item: Hash {
+        let out: Dict<Item, usize> = Dict::new();
+        for x in self {
+            out[x] = (out.get(x) ?? 0) + 1;
+        }
+        out
+    }
+
+    /// The items grouped by `key`: each key, in first-seen order, with
+    /// its items in order. Unlike Python's `itertools.groupby`, equal
+    /// keys need not be adjacent.
+    const fn group_by<Key: Hash>(self, key: fn(Item) -> Key) -> Dict<Key, List<Item>> {
+        let out: Dict<Key, List<Item>> = Dict::new();
+        for x in self {
+            let k = key(x);
+            if let g: List<Item> = out.get(k) {
+                g.push(x);
+            } else {
+                out[k] = [x];
+            }
+        }
+        out
+    }
+
+    /// Each item paired with the next: `(x0, x1), (x1, x2), ..`;
+    /// nothing for fewer than two items.
+    const fn pairwise(self) -> Pairwise<Self> {
+        Pairwise { it: self, prev: none }
+    }
+
+    /// Every choice of `k` items in item order, as lists, in
+    /// lexicographic order of positions. The items are gathered first.
+    /// Python: `itertools.combinations(xs, k)`.
+    const fn combinations(self, k: usize) -> Combinations<Item> {
+        let pool = self.to_list();
+        let idx: List<usize> = List::new();
+        for i in 0..k {
+            idx.push(i);
+        }
+        Combinations { pool: pool, idx: idx, started: false, done: k > pool.len() }
+    }
+
+    /// Every ordering of `k` distinct-position items (all items when
+    /// `k` is `none`), as lists, in lexicographic order of positions.
+    /// The items are gathered first. Python:
+    /// `itertools.permutations(xs, k)`.
+    const fn permutations(self, k: usize | none = none) -> Permutations<Item> {
+        let pool = self.to_list();
+        let n = pool.len();
+        let r = k ?? n;
+        let idx: List<usize> = List::new();
+        for i in 0..n {
+            idx.push(i);
+        }
+        let cycles: List<usize> = List::new();
+        for i in 0..r.min(n) {
+            cycles.push(n - i);
+        }
+        Permutations { pool: pool, idx: idx, cycles: cycles, r: r, started: false, done: r > n }
+    }
+}
+
+/// Pairwise summation for floats (`Iterator::sum`): blocks of 128
+/// summed left to right, block sums merged like a binary counter.
+const fn pairwise_sum<I: Iterator>(it: I) -> I::Item where I::Item: Add<Output = I::Item> + Zero {
+    let parts: List<I::Item> = List::new();
+    let sizes: List<usize> = List::new();
+    let block = I::Item::zero();
+    let n: usize = 0;
+    for x in it {
+        block += x;
+        n += 1;
+        if n == 128 {
+            push_part(parts, sizes, block);
+            block = I::Item::zero();
+            n = 0;
+        }
+    }
+    if n > 0 {
+        push_part(parts, sizes, block);
+    }
+    let total = parts.pop() ?? I::Item::zero();
+    while let p: I::Item = parts.pop() {
+        total = p + total;
+    }
+    total
+}
+
+const fn push_part<T: Add<Output = T>>(parts: List<T>, sizes: List<usize>, x: T) {
+    let s: T = x;
+    let size: usize = 1;
+    while sizes.len() > 0 && sizes[sizes.len() - 1] == size {
+        let l = parts.pop() ?? s;
+        sizes.pop();
+        s = l + s;
+        size *= 2;
+    }
+    parts.push(s);
+    sizes.push(size);
 }
 
 /// An iterator that can also step from the back.
@@ -500,7 +683,8 @@ impl<I: DoubleEndedIterator> DoubleEndedIterator for Filter<I> {
     }
 }
 
-/// The iterator `enumerate` returns: `(index, item)` pairs from 0.
+/// The iterator `enumerate` returns: `(index, item)` pairs from the
+/// start index.
 #[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
 pub struct Enumerate<I> {
     it: I;
@@ -1143,6 +1327,140 @@ impl<I: Iterator> Iterator for Windows<I> {
     }
 }
 
+/// The iterator `pairwise` returns: each item with the next.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+pub struct Pairwise<I> {
+    it: I;
+    prev: I::Item | none;
+}
+
+impl<I: Iterator> Debug for Pairwise<I> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Pairwise") }
+}
+
+impl<I: Iterator> Iterator for Pairwise<I> {
+    type Item = (I::Item, I::Item);
+    const fn next(ref self) -> (I::Item, I::Item) | none {
+        let a = match self.prev {
+            p: I::Item => p,
+            none => self.it.next()?,
+        };
+        let b = self.it.next()?;
+        self.prev = b;
+        (a, b)
+    }
+
+    const fn exact_len(self) -> usize | none {
+        let n = self.it.exact_len()?;
+        match self.prev {
+            _: I::Item => n,
+            none => if n == 0 { 0 } else { n - 1 },
+        }
+    }
+}
+
+/// The iterator `combinations` returns: each choice of `k` items as a
+/// list.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+pub struct Combinations<T> {
+    pool: List<T>;
+    idx: List<usize>;
+    started: bool;
+    done: bool;
+}
+
+impl<T> Debug for Combinations<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Combinations") }
+}
+
+impl<T> Iterator for Combinations<T> {
+    type Item = List<T>;
+    const fn next(ref self) -> List<T> | none {
+        if self.done {
+            return none;
+        }
+        let n = self.pool.len();
+        let r = self.idx.len();
+        if self.started {
+            let i = r;
+            loop {
+                if i == 0 {
+                    self.done = true;
+                    return none;
+                }
+                i -= 1;
+                if self.idx[i] != i + n - r {
+                    break;
+                }
+            }
+            self.idx[i] += 1;
+            for j in i + 1..r {
+                self.idx[j] = self.idx[j - 1] + 1;
+            }
+        }
+        self.started = true;
+        pick(self.pool, self.idx, r)
+    }
+}
+
+/// The iterator `permutations` returns: each ordering of `k` items as a
+/// list.
+#[must_use("iterator is lazy and does nothing unless consumed: walk it with `for`, or call `{}.collect()`")]
+pub struct Permutations<T> {
+    pool: List<T>;
+    idx: List<usize>;
+    cycles: List<usize>;
+    r: usize;
+    started: bool;
+    done: bool;
+}
+
+impl<T> Debug for Permutations<T> {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Permutations") }
+}
+
+impl<T> Iterator for Permutations<T> {
+    type Item = List<T>;
+    const fn next(ref self) -> List<T> | none {
+        if self.done {
+            return none;
+        }
+        let n = self.pool.len();
+        let r = self.r;
+        if !self.started {
+            self.started = true;
+            return pick(self.pool, self.idx, r);
+        }
+        let i = r;
+        while i > 0 {
+            i -= 1;
+            self.cycles[i] -= 1;
+            if self.cycles[i] == 0 {
+                let first = self.idx[i];
+                for j in i..n - 1 {
+                    self.idx[j] = self.idx[j + 1];
+                }
+                self.idx[n - 1] = first;
+                self.cycles[i] = n - i;
+            } else {
+                let j = n - self.cycles[i];
+                self.idx.swap(i, j);
+                return pick(self.pool, self.idx, r);
+            }
+        }
+        self.done = true;
+        none
+    }
+}
+
+const fn pick<T>(pool: List<T>, idx: List<usize>, r: usize) -> List<T> {
+    let out: List<T> = List::with_capacity(r);
+    for i in 0..r {
+        out.push(pool[idx[i]]);
+    }
+    out
+}
+
 // generators
 
 /// The value of a `yield fn` call / `yield { .. }` block: an iterator
@@ -1239,9 +1557,9 @@ pub trait TryIterator {
         MapErr { it: self, f: f }
     }
 
-    /// `(index, item)` pairs.
-    const fn enumerate(self) -> TryEnumerate<Self> {
-        TryEnumerate { it: self, i: 0 }
+    /// `(index, item)` pairs, the index counting from `start`.
+    const fn enumerate(self, start: usize = 0usize) -> TryEnumerate<Self> {
+        TryEnumerate { it: self, i: start }
     }
 
     /// Pairs of this iterator's items and a plain iterator's, until

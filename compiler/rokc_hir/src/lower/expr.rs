@@ -7327,6 +7327,14 @@ pub(super) fn method_call_on(
             }
         }
     };
+    // `Ord::min` / `max` take an argument: `xs.max()` is the items'.
+    let unary_ord = args.is_empty() && matches!(method, "min" | "max");
+    if pick.is_none() || unary_ord {
+        if let Some(it) = iter_forward(ctx, &recv_h, method, span) {
+            ctx.method_type_args = type_args;
+            return method_call_on(ctx, it, method, args, span);
+        }
+    }
     let fn_id = match pick {
         Some(MethodPick::Concrete(id)) => Some(id),
         Some(MethodPick::Generic(_)) | None => None,
@@ -7475,6 +7483,38 @@ pub(super) fn method_call_on(
         );
     }
     call_sig(ctx, &sig, method, Some(recv_h), args, span)
+}
+
+/// `xs.m(..)` on a collection without `m` is `xs.iter().m(..)` when
+/// `xs` has a parameterless `iter()` whose iterator has `m`.
+fn iter_forward(
+    ctx: &mut LowerCtx<'_>,
+    recv_h: &HirExpr,
+    method: &str,
+    span: rokc_diagnostic::Span,
+) -> Option<HirExpr> {
+    if method == "iter"
+        || matches!(
+            recv_h.ty,
+            HirTy::Param(_) | HirTy::Unknown | HirTy::Sum(_) | HirTy::AnyTrait(_)
+        )
+    {
+        return None;
+    }
+    if !matches!(pick_method(ctx, &recv_h.ty, "iter", None), Ok(Some(_))) {
+        return None;
+    }
+    let since = ctx.env.sink.diagnostics.borrow().len();
+    let it = method_call_on(ctx, recv_h.clone(), "iter", &[], span);
+    let clean = ctx.env.sink.diagnostics.borrow().len() == since;
+    if clean
+        && it.ty != HirTy::Unknown
+        && matches!(pick_method(ctx, &it.ty, method, None), Ok(Some(_)))
+    {
+        return Some(it);
+    }
+    ctx.env.sink.diagnostics.borrow_mut().truncate(since);
+    None
 }
 
 /// Keep only the diagnostics after the first `since` that `keep` accepts.

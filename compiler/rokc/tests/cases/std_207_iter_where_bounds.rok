@@ -1,11 +1,13 @@
-// expect-error: type `f64` does not satisfy trait bound `Ord`
+// expect-error: type `P` does not satisfy trait bound `PartialOrd`
 // expect-error: type `str` does not satisfy trait bound `Zero`
 
-// `min` / `max` need `Item: Ord`, `sum` needs
+// `min` / `max` need `Item: PartialOrd`, `sum` needs
 // `Item: Add<Output = Item> + Zero` (method `where` bounds on a trait's
 // default methods).
+struct P { x: i32; }
+
 fn main() {
-    let xs: List<f64> = [1.5, 0.5];
+    let xs: List<P> = [P { x: 1 }, P { x: 2 }];
     let m = xs.into_iter().min();
     let ss: List<str> = ["a", "b"];
     let s = ss.into_iter().sum();
