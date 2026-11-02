@@ -1,0 +1,64 @@
+// needs: threads
+// expect-exit: 0
+// expect-stdout:
+// plain 6
+// moved 3 4
+// thread 2
+// arg 4
+// owned 1
+// file hi
+// mixed 2 5
+
+// A closure may cross threads when its plain captures are `Send + Sync`
+// (they stay shared with the code that made it). `[move x]` gives `x` to
+// the closure instead: it needs only `Send`, so a collection can go. The
+// closure gets its own copy of every collection `x` reaches. A value can
+// also be passed as the argument: `task::spawn_blocking_with(x, f)`.
+use rok::std::thread;
+use rok::std::fs::File;
+
+fn main() {
+    // Plain captures that are `Send + Sync`: an array and a number.
+    let a: [i32; 3] = [1, 2, 3];
+    let k = 0;
+    let t = task::spawn_blocking(|| a[0] + a[1] + a[2] + k);
+    println(f"plain {task::block_on(t)}");
+
+    let xs: List<i32> = [1, 2];
+    let u = task::spawn_blocking([move xs] || { xs.push(3); xs.len() });
+    let ys: List<i32> = [1, 2, 3];
+    let v = task::spawn_blocking([move ys] || { ys.push(4); ys.len() });
+    println(f"moved {task::block_on(u)} {task::block_on(v)}");
+
+    let zs: List<str> = ["a", "b"];
+    let h = thread::spawn([move zs] || zs.len());
+    println(f"thread {try! h.join()}");
+
+    let ws: List<i32> = [7, 8, 9];
+    let w = task::spawn_blocking_with(ws, |ws: List<i32>| { ws.push(10); ws.len() });
+    println(f"arg {task::block_on(w)}");
+
+    // The closure owns its copy: a list it moved in and changes stays its
+    // own, called on this thread too.
+    let own: List<i32> = [];
+    let add = [move own] || { own.push(1); own.len() };
+    println(f"owned {add()}");
+
+    // A file moved in is the closure's to close.
+    let path = rok::std::env::temp_dir() / f"rok_move_capture_{rok::std::process::id()}.txt";
+    let f = try! File::create(path);
+    let fh = thread::spawn([move f] || {
+        try! f.write_all("hi".as_bytes());
+        try! f.close();
+    });
+    try! fh.join();
+    println(f"file {try! rok::std::fs::read_to_str(path)}");
+    try! rok::std::fs::remove_file(path);
+
+    // `move` and plain captures together.
+    let base = 3;
+    let more: List<i32> = [1, 1];
+    let m = task::spawn_blocking([move more] || (more.len() as i32, more.len() as i32 + base));
+    let (p, q) = task::block_on(m);
+    println(f"mixed {p} {q}");
+}

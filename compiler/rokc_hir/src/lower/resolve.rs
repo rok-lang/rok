@@ -892,15 +892,21 @@ pub(super) fn ty_mangle(ty: &HirTy) -> String {
             ret,
             env,
             shares,
+            moved,
         } => {
             let inner: Vec<String> = args.iter().map(ty_mangle).collect();
             format!(
-                "Closure{}of{}_to_{}_env{}{}",
+                "Closure{}of{}_to_{}_env{}{}{}",
                 args.len(),
                 inner.join("x"),
                 ty_mangle(ret),
                 ty_mangle(env),
-                if *shares { "_ref" } else { "" }
+                if *shares { "_ref" } else { "" },
+                if *moved == 0 {
+                    String::new()
+                } else {
+                    format!("_move{moved:x}")
+                }
             )
         }
         HirTy::Throws { ok, err } => format!("Throws{}_or_{}", ty_mangle(ok), ty_mangle(err)),

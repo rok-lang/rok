@@ -363,12 +363,14 @@ impl Codec for HirTy {
                 ret,
                 env,
                 shares,
+                moved,
             } => {
                 e.u(17);
                 args.enc(e);
                 ret.enc(e);
                 env.enc(e);
                 shares.enc(e);
+                moved.enc(e);
             }
             Self::Throws { ok, err } => {
                 e.u(18);
@@ -411,6 +413,7 @@ impl Codec for HirTy {
                 ret: Codec::dec(d)?,
                 env: Codec::dec(d)?,
                 shares: Codec::dec(d)?,
+                moved: Codec::dec(d)?,
             },
             18 => Self::Throws {
                 ok: Codec::dec(d)?,

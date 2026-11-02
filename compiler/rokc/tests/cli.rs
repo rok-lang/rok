@@ -3728,7 +3728,7 @@ fn prebuilt_dependency_is_linked_and_instantiated() {
     let info = text(&out.stdout);
     for want in [
         "Package: geo\n",
-        "ROKHIR version: 8\n",
+        "ROKHIR version: 9\n",
         "Exports:\n",
         "  pub fn check(x: i32) throws -> i32\n",
         "Generic items (ROKHIR):\n  pub struct Stack<T>\n",
@@ -3818,7 +3818,7 @@ fn stale_rokhir_is_rejected() {
     // then at the body offset the cut files and hand-off summaries.
     let word = |i: usize| u32::from_le_bytes(good[i..i + 4].try_into().unwrap());
     assert_eq!(&good[..4], b"ROKH");
-    assert_eq!((word(4), word(8)), (8, 0));
+    assert_eq!((word(4), word(8)), (9, 0));
     let varint = |at: &mut usize| -> usize {
         let extra = good[*at].leading_ones() as usize;
         let mut v = usize::from(good[*at] & 0xffu8.checked_shr(extra as u32 + 1).unwrap_or(0));

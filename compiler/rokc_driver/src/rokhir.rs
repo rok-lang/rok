@@ -26,7 +26,7 @@ use crate::SourceFile;
 use rokc_diagnostic::SourceMap;
 
 /// Bumped on any change to the layout or to what the body holds.
-pub const VERSION: u32 = 8;
+pub const VERSION: u32 = 9;
 const MAGIC: &[u8; 4] = b"ROKH";
 
 #[derive(Clone, Debug, Default)]

@@ -2,14 +2,14 @@
 // expect-error: handoff_send_errors.rok:27:5: `xs` was sent through a channel at line 26
 // expect-error: help: the receiver owns it now; hand over `xs.clone()` to keep a separate copy, or give `xs` a new value before using it again
 // expect-error: handoff_send_errors.rok:33:5: `ys` was sent through a channel at line 32
-// expect-error: handoff_send_errors.rok:46:13: `xs` was handed to a `Handoff` at line 44
+// expect-error: handoff_send_errors.rok:45:13: `xs` was handed to a task at line 44
+// expect-error: handoff_send_errors.rok:48:13: `ys` was moved into a closure at line 47
 // expect-error: handoff_send_errors.rok:39:5: `zs` was sent through a channel at line 38
 // needs: threads
 
-// A value sent through a channel, or wrapped in `Handoff` for another
-// thread, is shared with the receiver: using the sender's handle
-// afterwards is a compile error.
-use rok::core::marker::Handoff;
+// A value sent through a channel, handed to a task or moved into a
+// closure for another thread belongs to the receiver: using the sender's
+// handle afterwards is a compile error.
 use rok::std::thread;
 
 fn main() {
@@ -41,10 +41,12 @@ async fn sent_async(tx: Sender<List<i32>>) -> i64 {
 
 fn handed() -> i64 {
     let xs: List<i32> = [1, 2];
-    let h = unsafe { Handoff::new(xs) };
-    let t = thread::spawn(|| h.get().len());
+    let t = task::spawn_blocking_with(xs, |v: List<i32>| v.len());
     let k = xs.len();
-    (try! t.join() + k) as i64
+    let ys: List<i32> = [3];
+    let h = thread::spawn([move ys] || ys.len());
+    let j = ys.len();
+    (task::block_on(t) + try! h.join() + k + j) as i64
 }
 
 // Also where a flag says it was sent, where the flag got a value the
@@ -87,6 +89,6 @@ fn next_pass(tx: Sender<List<i32>>) -> i64 {
     n
 }
 
-// expect-error: handoff_send_errors.rok:63:22: `xs` was sent through a channel at line 60
-// expect-error: handoff_send_errors.rok:75:23: `xs` was sent through a channel at line 71
-// expect-error: handoff_send_errors.rok:84:34: `xs` was already sent through a channel by this call, on an earlier pass of the loop
+// expect-error: handoff_send_errors.rok:65:22: `xs` was sent through a channel at line 62
+// expect-error: handoff_send_errors.rok:77:23: `xs` was sent through a channel at line 73
+// expect-error: handoff_send_errors.rok:86:34: `xs` was already sent through a channel by this call, on an earlier pass of the loop

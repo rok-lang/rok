@@ -1507,6 +1507,10 @@ impl Printer {
                             p.s("ref ");
                             p.s(n);
                         }
+                        CaptureSpec::Move(n) => {
+                            p.s("move ");
+                            p.s(n);
+                        }
                     });
                     self.s("] ");
                 }

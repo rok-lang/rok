@@ -2324,16 +2324,33 @@ fn coerce(
             )));
         }
         mismatch_help(ctx, slot, &v);
-        if let (Some(note), Some(d)) = (
+        if let (Some((note, name, send)), Some(d)) = (
             ctx.closure_bound_note(&v),
             ctx.env.sink.diagnostics.borrow_mut().last_mut(),
         ) {
             d.notes.push(note);
-            d.notes.push(
+            // A plain capture stays shared with the creator; a moved one
+            // (or an argument) is handed over instead, and needs only `Send`.
+            let sync = ctx.lang("sync_trait");
+            let wants_sync = matches!(slot, HirTy::Fn(_, _, b) if b.auto.iter().any(|k| k == sync));
+            d.notes.push(if send && !wants_sync {
+                let arg = if what().ends_with("`spawn_blocking`") {
+                    format!(
+                        ", or pass it as the argument: `task::spawn_blocking_with({name}, \
+                         |{name}| ..)`"
+                    )
+                } else {
+                    String::new()
+                };
+                format!(
+                    "help: move `{name}` into the closure, which then owns its own copy: \
+                     `[move {name}] || ..`{arg}"
+                )
+            } else {
                 "help: drop the capture: compute the value inside the closure, or capture a \
                  copy that is `Send + Sync` (an array, not a collection)"
-                    .to_owned(),
-            );
+                    .to_owned()
+            });
         }
     }
     v
@@ -4078,13 +4095,24 @@ impl<'a> LowerCtx<'a> {
         let ok = match ty {
             HirTy::Tuple(ts) | HirTy::Sum(ts) => ts.iter().all(&mut rec),
             HirTy::Array(e, _) | HirTy::GcBuf(e) => rec(e),
-            // A closure crossing threads shares its captures with the
-            // creator, so each must be `Sync` too; a `[ref x]` cell never is.
-            HirTy::Closure { env, shares, .. } => {
+            // A closure crossing threads shares its plain captures with the
+            // creator, so each must be `Sync` too; a `[move x]` capture is
+            // the closure's alone; a `[ref x]` cell is never either.
+            HirTy::Closure {
+                env, shares, moved, ..
+            } => {
                 let sync = self.lang("sync_trait");
+                let fields = match &**env {
+                    HirTy::Tuple(ts) => ts.as_slice(),
+                    t => std::slice::from_ref(t),
+                };
                 !shares
-                    && rec(env)
-                    && (key == sync || self.auto_trait(env, sync, depth, &mut AutoSeen::default()))
+                    && fields.iter().enumerate().all(|(i, t)| {
+                        rec(t)
+                            && (key == sync
+                                || (i < 64 && moved & (1 << i) != 0)
+                                || self.auto_trait(t, sync, depth, &mut AutoSeen::default()))
+                    })
             }
             HirTy::Throws { ok, err } => rec(ok) && rec(err),
             HirTy::Struct(id) => {
@@ -4101,11 +4129,9 @@ impl<'a> LowerCtx<'a> {
                 .variants
                 .iter()
                 .all(|v| v.payload_ty.as_ref().is_none_or(&mut rec)),
-            // A `+ Send` closure's captures are all `Sync` (above), so a
-            // `+ Send` value is also `Sync`.
-            HirTy::Fn(_, _, b) => b.auto.iter().any(|k| {
-                k == key || (key == self.lang("sync_trait") && *k == self.lang("send_trait"))
-            }),
+            // A `+ Send` closure may own a `[move x]` capture that is not
+            // `Sync`: only a written `+ Sync` makes a value `Sync`.
+            HirTy::Fn(_, _, b) => b.auto.iter().any(|k| k == key),
             // As for a `+ Send` closure: copies of an `any` share its box, so
             // crossing threads needs `Sync` too (no collection inside).
             HirTy::AnyTrait(b) => {
@@ -4248,8 +4274,9 @@ impl<'a> LowerCtx<'a> {
     }
 
     /// For a closure that does not fit a `fn .. + Send` slot: which
-    /// capture is not `Send` / `Sync`, and why.
-    fn closure_bound_note(&self, value: &HirExpr) -> Option<String> {
+    /// capture is not `Send` / `Sync`, and why; with the capture's name
+    /// and whether it is `Send` (only not `Sync`).
+    fn closure_bound_note(&self, value: &HirExpr) -> Option<(String, String, bool)> {
         let HirExprKind::ClosureValue { env, .. } = &value.kind else {
             return None;
         };
@@ -4282,11 +4309,12 @@ impl<'a> LowerCtx<'a> {
             } else {
                 String::new()
             };
-            Some(format!(
+            let note = format!(
                 "the closure captures `{name}` (type `{ty}`), which is not `{}`{}{read}",
                 leaf_name(key),
                 self.auto_trait_cause(&f.ty, key, 0)
-            ))
+            );
+            Some((note, name, *key != keys[0] && !guard))
         })
     }
 

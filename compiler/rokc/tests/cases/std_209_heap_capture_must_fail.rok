@@ -1,8 +1,9 @@
 // expect-error: argument 1 of `BinaryHeap::by_ordering` expects `fn(i32, i32) -> Ordering + Send`
 // expect-error: note: the closure captures `rank` (type `List<i32>`), which is not `Sync`
-// expect-error: help: drop the capture
+// expect-error: help: move `rank` into the closure, which then owns its own copy: `[move rank] || ..`
 
-// A heap's comparator is `Send`, so it cannot capture a collection.
+// A heap's comparator is `Send`, so it cannot share a collection with its
+// creator; it may move one in.
 fn main() {
     let rank: List<i32> = [2, 0, 1];
     let h: BinaryHeap<i32> = BinaryHeap::by_ordering(|a: i32, b: i32| rank[a as usize].cmp(rank[b as usize]));

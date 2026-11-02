@@ -21,9 +21,32 @@ pub(super) fn lower_closure_expr(
         .iter()
         .filter_map(|c| match c {
             rokc_ast::CaptureSpec::Ref(n) => Some(n.as_str()),
-            rokc_ast::CaptureSpec::Value(_) => None,
+            rokc_ast::CaptureSpec::Value(_) | rokc_ast::CaptureSpec::Move(_) => None,
         })
         .collect();
+    let moves: Vec<&str> = capture_list
+        .iter()
+        .filter_map(|c| match c {
+            rokc_ast::CaptureSpec::Move(n) => Some(n.as_str()),
+            _ => None,
+        })
+        .collect();
+    for n in &moves {
+        if by_ref.contains(n) {
+            ctx.emit_error(
+                Code::INVALID_CAPTURE,
+                format!(
+                    "`{n}` can't be both `[ref {n}]` and `[move {n}]`: keep `ref` to share it \
+                     with this code, or `move` to give it to the closure"
+                ),
+            );
+        } else if ctx.lookup(n).is_none() {
+            ctx.emit_error(
+                Code::INVALID_CAPTURE,
+                format!("`[move {n}]` names no variable in scope"),
+            );
+        }
+    }
     // Inside a narrowing of `x`, `[ref x]` shares the cell itself.
     let cell_of = |l: LocalId| {
         let mut l = l;
@@ -203,14 +226,38 @@ pub(super) fn lower_closure_expr(
             span,
         };
     };
-    // The env: captured values snapshotted at the creation site.
+    let mut moved = 0u64;
+    for (i, (name, ..)) in captures.iter().enumerate() {
+        if !moves.contains(&name.as_str()) {
+            continue;
+        }
+        if i >= 64 {
+            ctx.emit_error(
+                Code::INVALID_CAPTURE,
+                format!(
+                    "`[move {name}]`: a closure can move only its first 64 captures; move \
+                     fewer values, or gather them into a struct and move that"
+                ),
+            );
+        } else {
+            moved |= 1 << i;
+        }
+    }
+    // The env: captured values snapshotted at the creation site; a
+    // `[move x]` hands `x` over to the closure.
+    let move_into = ctx.env.generic_fn(MOVE_INTO);
     let env_value = HirExpr {
         kind: HirExprKind::Tuple {
             fields: captures
                 .iter()
-                .map(|(_, outer_local, ty, by_ref)| {
+                .enumerate()
+                .map(|(i, (name, outer_local, ty, by_ref))| {
                     if *by_ref {
                         hir_local(*outer_local, ty, span)
+                    } else if let Some(def) = move_into.filter(|_| i < 64 && moved & (1 << i) != 0)
+                    {
+                        let arg = CallArg::Positional(super::throws::path_expr(name, span));
+                        super::expr::call_generic(ctx, def, None, None, &[arg], MOVE_INTO, span)
                     } else {
                         ctx.read_local(*outer_local, span)
                     }
@@ -233,10 +280,14 @@ pub(super) fn lower_closure_expr(
             ret: Box::new(final_ret_ty),
             env: Box::new(env_ty_v),
             shares: captures.iter().any(|c| c.3),
+            moved,
         },
         span,
     }
 }
+
+/// What a `[move x]` capture's field is made with: `x` handed over.
+const MOVE_INTO: &str = "rok::core::marker::move_into";
 
 /// A closure capture: name, outer local, env field type (the cell for a
 /// `[ref]` capture) and whether it is by reference.

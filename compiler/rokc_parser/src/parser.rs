@@ -7512,14 +7512,14 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// At `[`: a capture list, `[ref x ..` or `[x, y] |..|`.
+    /// At `[`: a capture list, `[ref x ..`, `[move x ..` or `[x, y] |..|`.
     fn at_capture_list(&self) -> bool {
         let tok = |i: usize| self.tokens.get(self.pos + i).map(|t| &t.kind);
-        if matches!(tok(1), Some(TokenKind::Ref)) {
-            return true;
-        }
         let mut i = 1;
         loop {
+            if matches!(tok(i), Some(TokenKind::Ref)) || self.at_move(self.pos + i) {
+                return true;
+            }
             if !matches!(tok(i), Some(TokenKind::Ident(_) | TokenKind::SelfLower)) {
                 return false;
             }
@@ -7533,14 +7533,19 @@ impl<'a> Parser<'a> {
                 Some(TokenKind::RBracket) => break,
                 _ => return false,
             }
-            if matches!(tok(i), Some(TokenKind::Ref)) {
-                return true;
-            }
         }
         matches!(tok(i + 1), Some(TokenKind::Pipe | TokenKind::PipePipe))
     }
 
-    /// `[ref x, y] |..| body` - a closure with a capture list.
+    /// Token `at` is `move` (not `r#move`) before a capture name.
+    fn at_move(&self, at: usize) -> bool {
+        let t = |i: usize| self.tokens.get(i);
+        t(at).is_some_and(|t| !t.raw && matches!(&t.kind, TokenKind::Ident(n) if n == "move"))
+            && t(at + 1)
+                .is_some_and(|t| matches!(t.kind, TokenKind::Ident(_) | TokenKind::SelfLower))
+    }
+
+    /// `[ref x, move y, z] |..| body` - a closure with a capture list.
     fn parse_capture_closure(&mut self) -> Option<ExprKind> {
         self.bump(); // `[`
         let mut captures: Vec<rokc_ast::CaptureSpec> = Vec::new();
@@ -7559,6 +7564,11 @@ impl<'a> Parser<'a> {
                     return None;
                 };
                 captures.push(rokc_ast::CaptureSpec::Ref(name));
+            } else if self.at_move(self.pos) {
+                // `move` is reserved as a name: skip `bump`'s check.
+                self.pos += 1;
+                let name = self.capture_name()?;
+                captures.push(rokc_ast::CaptureSpec::Move(name));
             } else if let Some(n) = self.capture_name() {
                 captures.push(rokc_ast::CaptureSpec::Value(n));
             } else {

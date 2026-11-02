@@ -294,11 +294,11 @@ impl Debug for SignalError {
 }
 impl Error for SignalError {}
 
-static SIGNAL_HANDLERS: Mutex<Dict<i32, fn() + Send>> = unsafe { Mutex::new_unshared(Dict::new()) };
+static SIGNAL_HANDLERS: Mutex<Dict<i32, fn() + Send + Sync>> = unsafe { Mutex::new_unshared(Dict::new()) };
 
 /// Call `handler` (on the `rok-signal` thread) each time the process
 /// receives `sig`; a later `on_signal` for the same `sig` replaces it.
-pub fn on_signal(sig: Signal, handler: fn() + Send) throws (SignalError) {
+pub fn on_signal(sig: Signal, handler: fn() + Send + Sync) throws (SignalError) {
     // ERROR_NOT_SUPPORTED.
     if WINDOWS && !sig.on_windows(true) { throw SignalError { signal: sig, os_code: 50 }; }
     try install_handler(sig.number(), handler) catch e { throw SignalError { signal: sig, os_code: e.os_code() }; };
@@ -306,7 +306,7 @@ pub fn on_signal(sig: Signal, handler: fn() + Send) throws (SignalError) {
 
 /// Route OS signal number `sig` to `handler` (`os::windows` routes
 /// Ctrl-Break through here too).
-pub(pkg) fn install_handler(sig: i32, handler: fn() + Send) throws (IoError) {
+pub(pkg) fn install_handler(sig: i32, handler: fn() + Send + Sync) throws (IoError) {
     unsafe {
         using g = SIGNAL_HANDLERS.lock() { g.get().insert(sig, handler); }
         let fd: GcBuf<i32> = buf_new(1);
@@ -332,9 +332,9 @@ fn dispatch_signals(pipe: File) {
         let n = try pipe.read(buf) catch _ { return; };
         if n == 0usize { return; }
         for i in 0..n {
-            let h: (fn() + Send) | none = none;
+            let h: (fn() + Send + Sync) | none = none;
             using g = SIGNAL_HANDLERS.lock() { h = g.get().get(buf[i] as i32); }
-            if let f: fn() + Send = h { f(); }
+            if let f: fn() + Send + Sync = h { f(); }
         }
     }
 }
@@ -671,9 +671,8 @@ impl Command {
 
     /// `output` that suspends the task.
     pub async fn output_async(self) throws (IoError) -> Output {
-        // The task waits for the call: one thread uses the command at a time.
-        let c = unsafe { Handoff::new(self) };
-        try await off(|| try c.get().output())
+        let c = self.own();
+        try await off([move c] || try c.output())
     }
 
     /// Run to completion with inherited streams.
@@ -684,8 +683,25 @@ impl Command {
 
     /// `status` that suspends the task.
     pub async fn status_async(self) throws (IoError) -> ExitStatus {
-        let c = unsafe { Handoff::new(self) };
-        try await off(|| try c.get().status())
+        let c = self.own();
+        try await off([move c] || try c.status())
+    }
+
+    /// A copy that shares no list with this command, for a blocking
+    /// thread to run while this one stays usable.
+    fn own(self) -> Command {
+        Command {
+            program: self.program,
+            args: self.args.clone(),
+            envs: self.envs.clone(),
+            env_clear: self.env_clear,
+            stdin: self.stdin,
+            stdout: self.stdout,
+            stderr: self.stderr,
+            cwd: self.cwd,
+            kill_on_drop: self.kill_on_drop,
+            process_group: self.process_group,
+        }
     }
 
     fn start(self) throws (IoError) -> Child {
@@ -862,10 +878,11 @@ impl Child {
     pub async fn wait_async(ref self) throws (IoError) -> ExitStatus {
         if let si: ChildStdin = self.take_stdin() { try si.close(); }
         let pid = self.pid;
-        // The reaping state is atomics-guarded: any thread may reap.
-        let st = unsafe { Handoff::new(self.state) };
-        _ = try await off(|| try reap_pid(pid, st.get(), true));
-        ExitStatus { raw: unsafe { st.get()[1] } }
+        // The reaping state is atomics-guarded (and `Sync`): any thread
+        // may reap.
+        let st = self.state;
+        _ = try await off(|| try reap_pid(pid, st, true));
+        ExitStatus { raw: unsafe { st[1] } }
     }
 
     /// The status if it has ended, without blocking.

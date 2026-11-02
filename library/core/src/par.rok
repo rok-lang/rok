@@ -8,7 +8,7 @@ use rok::core::sync::{LoadOrdering, UpdateOrdering};
 
 /// Run `job(c)` for every `c` in `0..chunks` across the workers (this
 /// thread included); returns once all have finished.
-fn run_chunks(chunks: usize, job: fn(usize) + Send) {
+fn run_chunks(chunks: usize, job: fn(usize) + Send + Sync) {
     _ = task::in_pool(|| {
         let workers = task::worker_count();
         if workers > chunks {
@@ -226,7 +226,7 @@ pub fn join<T1: Send, T2: Send>(f1: fn() -> T1 + Send, f2: fn() -> T2 + Send) ->
         // Each result cell is written once, then read after both joined.
         let cells = Handoff::new((first, second));
         task::in_pool(|| {
-            let h = task::fork_job(|| {
+            let h = task::fork_job([move f2] || {
                 let (_, second) = cells.get();
                 second[0] = f2();
             });
@@ -313,7 +313,7 @@ impl Scope {
             // Written once by the task, read by `join` after it.
             let cell = Handoff::new(result);
             let task = ScopeTask {
-                handle: task::fork_job(|| {
+                handle: task::fork_job([move f] || {
                     if !cancelled.load() {
                         let result = cell.get();
                         result[0] = hand_over::<T>(f());
@@ -410,7 +410,7 @@ impl<E: Send> TryScope<E> {
             let status = Atomic::new(2);
             let me = self;
             let cells = Handoff::new((out, own));
-            let h = self.scope.spawn(|| {
+            let h = self.scope.spawn([move f] || {
                 status.store(0);
                 let (out, own) = cells.get();
                 let v = try f() catch e {

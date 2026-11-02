@@ -2310,7 +2310,7 @@ pub fn spawn_blocking<T: Send>(f: fn() -> T + Send) -> Task<T> {
         // The job returns its completion, which the lane runs once it is
         // idle again or holds its next job: a joiner that sees it done
         // before any wake still finds the thread there.
-        let job: fn() -> (fn() + Send) + Send = || -> (fn() + Send) {
+        let job: fn() -> (fn() + Send) + Send = [move f] || -> (fn() + Send) {
             if is_cancelled(t) {
                 atomic_xchg(t.state, 4, 1, SeqCst);
             } else {
@@ -2322,6 +2322,19 @@ pub fn spawn_blocking<T: Send>(f: fn() -> T + Send) -> Task<T> {
         };
         executor().blocking.submit(job);
         Task { task: t, slot: cell.get() }
+    }
+}
+
+/// `spawn_blocking` that hands `value` to `f` on the lane. `f`'s
+/// captures stay shared with the caller, so they must be `Send + Sync`;
+/// `value` only needs `Send`: it is handed over like a channel send (the
+/// task gets a copy of every collection it reaches, and the caller can no
+/// longer use it).
+pub fn spawn_blocking_with<V: Send, T: Send>(value: V, f: fn(V) -> T + Send) -> Task<T> {
+    unsafe {
+        // Only the lane reaches the copy.
+        let cell = Handoff::new(hand_over::<V>(value));
+        spawn_blocking([move f] || f(cell.get()))
     }
 }
 

@@ -629,7 +629,9 @@ impl Renames {
             } => {
                 for c in captures {
                     match c {
-                        CaptureSpec::Value(n) | CaptureSpec::Ref(n) => self.value(n),
+                        CaptureSpec::Value(n) | CaptureSpec::Ref(n) | CaptureSpec::Move(n) => {
+                            self.value(n);
+                        }
                     }
                 }
                 self.params(params);

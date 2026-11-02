@@ -62,6 +62,10 @@ enum What {
     Handoff,
     /// `task::spawn`: the task's future.
     Task,
+    /// `task::spawn_blocking_with`: the value its function gets.
+    TaskArg,
+    /// A `[move x]` capture.
+    Closure,
 }
 
 impl What {
@@ -71,7 +75,8 @@ impl What {
             Self::RwLock => "an `RwLock`",
             Self::Channel => "a channel",
             Self::Handoff => "a `Handoff`",
-            Self::Task => "a task",
+            Self::Task | Self::TaskArg => "a task",
+            Self::Closure => "a closure",
         }
     }
 
@@ -82,6 +87,8 @@ impl What {
             Self::Channel => "channel",
             Self::Handoff => "handoff",
             Self::Task => "task",
+            Self::TaskArg => "task_arg",
+            Self::Closure => "closure",
         }
     }
 
@@ -92,6 +99,8 @@ impl What {
             Self::Channel,
             Self::Handoff,
             Self::Task,
+            Self::TaskArg,
+            Self::Closure,
         ]
         .into_iter()
         .find(|w| w.tag() == s)
@@ -108,6 +117,13 @@ const HANDOFFS: &[(&str, usize, What)] = &[
     ("rok::core::marker::Handoff__new", 0, What::Handoff),
     ("rok::core::task::spawn", 0, What::Task),
     ("rok::core::task::spawn_plain", 0, What::Task),
+    ("rok::core::task::spawn_blocking_with", 0, What::TaskArg),
+    ("rok::core::marker::move_into", 0, What::Closure),
+    // A closure that owns a `[move x]` capture goes with it.
+    ("rok::core::task::spawn_blocking", 0, What::Task),
+    ("rok::std::thread::spawn", 0, What::Task),
+    ("rok::std::thread::Builder__spawn", 1, What::Task),
+    ("rok::core::par::Scope__spawn", 1, What::Task),
 ];
 
 /// Lock guards: `get` returns, `set` stores, and `update`'s closure
@@ -2597,6 +2613,8 @@ impl<'h> Walk<'_, 'h> {
                     What::Channel => ("sent through a channel", "sent here"),
                     What::Handoff => ("handed to a `Handoff`", "handed over here"),
                     What::Task => ("spawned as a task", "spawned here"),
+                    What::TaskArg => ("handed to a task", "handed to the task here"),
+                    What::Closure => ("moved into a closure", "moved into the closure here"),
                 };
                 // The hand-off itself again, on the loop's next pass.
                 if self.calls.last().is_some_and(|k| k.span == site) {
@@ -2617,8 +2635,22 @@ impl<'h> Walk<'_, 'h> {
                     None => (format!("`{who}` was {moved}"), who.to_owned()),
                 };
                 let keep = format!("hand over `{given}.clone()` to keep a separate copy");
-                let diag = err(Code::USE_AFTER_HANDOFF, format!("{head} at {line}"))
-                    .with_secondary(site, format!("`{given}` {here}"));
+                // A closure (or `fn` value) owning moved values moves once.
+                let fn_owner = what == What::Task
+                    && written
+                        .is_some_and(|e| matches!(e.ty, HirTy::Fn(..) | HirTy::Closure { .. }));
+                let diag = if fn_owner {
+                    err(
+                        Code::USE_AFTER_MOVE,
+                        format!(
+                            "{head} at {line}: it may own values moved into it (`[move ..]`), so \
+                             it can be handed over only once"
+                        ),
+                    )
+                } else {
+                    err(Code::USE_AFTER_HANDOFF, format!("{head} at {line}"))
+                }
+                .with_secondary(site, format!("`{given}` {here}"));
                 match what {
                     What::Mutex | What::RwLock => {
                         let (ty, lock) = if what == What::Mutex {
@@ -2652,8 +2684,8 @@ impl<'h> Walk<'_, 'h> {
                         "help: the receiver owns it now; {keep}, or give `{who}` a new value before \
                          using it again"
                     )),
-                    What::Task => {
-                        let future = written.is_some_and(|e| match &e.ty {
+                    What::Task | What::TaskArg => {
+                        let future = what == What::Task && written.is_some_and(|e| match &e.ty {
                             HirTy::Struct(id) => {
                                 let name = chk.ctx.struct_def(*id).name;
                                 name.starts_with("rok::core::future::AsyncFuture")
@@ -2661,7 +2693,13 @@ impl<'h> Walk<'_, 'h> {
                             }
                             _ => false,
                         });
-                        diag.with_note(if future {
+                        diag.with_note(if fn_owner {
+                            "help: the task owns the closure and what it moved in; make \
+                             another closure here (moving in a `.clone()` of what it needs), \
+                             or, for a `fn` value that moves nothing in, write `+ Send + Sync` \
+                             on its type"
+                                .to_owned()
+                        } else if future {
                             format!(
                                 "help: the task runs it now; call the async fn again for a \
                                  second future, or give `{who}` a new value before using it \
@@ -2675,6 +2713,11 @@ impl<'h> Walk<'_, 'h> {
                             )
                         })
                     }
+                    What::Closure => diag.with_note(format!(
+                        "help: the closure owns it now; use it inside the closure, capture it \
+                         without `move` if the closure stays on this thread, or move \
+                         `{given}.clone()` to keep a separate copy"
+                    )),
                     What::Handoff => {
                         let getter = owner.map_or_else(
                             || "the `Handoff`'s `get()`".to_owned(),
@@ -2701,6 +2744,8 @@ impl<'h> Walk<'_, 'h> {
                     What::Channel => "sent through a channel".to_owned(),
                     What::Handoff => "handed to a `Handoff`".to_owned(),
                     What::Task => "spawned as a task".to_owned(),
+                    What::TaskArg => "handed to a task".to_owned(),
+                    What::Closure => "moved into a closure".to_owned(),
                 };
                 let file = why.file.rsplit(['/', '\\']).next().unwrap_or(&why.file);
                 let inner = if chk.file_name(site.file) == why.file {
@@ -2713,6 +2758,27 @@ impl<'h> Walk<'_, 'h> {
                 } else {
                     format!("`{who}` shares what {call} {verb}")
                 };
+                let fn_owner = why.what == What::Task
+                    && written
+                        .is_some_and(|e| matches!(e.ty, HirTy::Fn(..) | HirTy::Closure { .. }));
+                if fn_owner {
+                    return err(
+                        Code::USE_AFTER_MOVE,
+                        format!(
+                            "{head} at {} (inside `{}`, {inner}): it may own values moved into it \
+                             (`[move ..]`), so it can be handed over only once",
+                            self.line(site, at),
+                            why.func
+                        ),
+                    )
+                    .with_secondary(site, format!("{verb} here"))
+                    .with_note(
+                        "help: make another closure for the second use (moving in a `.clone()` \
+                         of what it needs), or, for a `fn` value that moves nothing in, write \
+                         `+ Send + Sync` on its type"
+                            .to_owned(),
+                    );
+                }
                 err(Code::USE_AFTER_HANDOFF, format!(
                     "{head} at {} (inside `{}`, {inner})",
                     self.line(site, at),
@@ -2725,7 +2791,8 @@ impl<'h> Walk<'_, 'h> {
                     match why.what {
                         What::Channel => "the receiver owns it".to_owned(),
                         What::Handoff => "the `Handoff` owns it".to_owned(),
-                        What::Task => "the task owns it".to_owned(),
+                        What::Task | What::TaskArg => "the task owns it".to_owned(),
+                        What::Closure => "the closure owns it".to_owned(),
                         What::Mutex | What::RwLock => format!("it belongs to {}", why.what.noun()),
                     }
                 ))
@@ -3023,9 +3090,28 @@ impl<'h> Walk<'_, 'h> {
         s
     }
 
+    /// `e` may own a `[move x]` capture that is not `Sync`: a closure that
+    /// moved one in (its local keeps the closure type when a `fn` slot took
+    /// it), or a `fn` value whose type does not say `Sync`. Such a value
+    /// is handed over once.
+    fn owns_moved(&self, e: &HirExpr) -> bool {
+        let ty = match &e.kind {
+            // A closure made here: its captures were moved when it was made.
+            HirExprKind::ClosureValue { .. } => return false,
+            HirExprKind::Local(l) => self.local_ty(*l).unwrap_or_else(|| e.ty.clone()),
+            _ => e.ty.clone(),
+        };
+        // A `fn` value that is not `Sync` may own one.
+        match &ty {
+            HirTy::Closure { moved, .. } => *moved != 0 && self.c.tracked(&ty),
+            HirTy::Fn(..) => self.c.tracked(&ty),
+            _ => false,
+        }
+    }
+
     /// What `e`'s value carries, of the places this walk knows.
     fn flows(&self, e: &HirExpr, out: &mut Vec<Flow>) {
-        if self.c.tracked(&e.ty) {
+        if self.owns_moved(e) || self.c.tracked(&e.ty) {
             self.flows_any(e, out);
         }
     }
@@ -4420,6 +4506,16 @@ impl<'h> Walk<'_, 'h> {
             .gives
             .iter()
             .filter_map(|(r, why)| {
+                // A spawned closure goes along only when it may own moved
+                // values (as for a direct spawn).
+                let arg = args.get(r.0 as usize).filter(|_| r.1.is_empty());
+                if why.what == What::Task
+                    && arg.is_some_and(|a| {
+                        matches!(a.ty, HirTy::Fn(..) | HirTy::Closure { .. }) && !self.owns_moved(a)
+                    })
+                {
+                    return None;
+                }
                 let id = self.c.why_id(why.clone());
                 Some((r, map(r)?, Gone::Via(e.span, id)))
             })
@@ -4534,6 +4630,29 @@ impl<'h> Walk<'_, 'h> {
         let guard = args.first().and_then(place).map(|p| p.0);
         match op {
             Op::Handoff(i, what) => {
+                // A spawned closure shares its plain captures (they are
+                // `Sync`); only one that owns a `[move x]` goes along.
+                if what == What::Task
+                    && args.get(i).is_some_and(|a| {
+                        matches!(a.ty, HirTy::Fn(..) | HirTy::Closure { .. }) && !self.owns_moved(a)
+                    })
+                {
+                    return;
+                }
+                // A `fn` value moved into a closure: only that place goes;
+                // what it owns was followed from the closure that made it.
+                if let Some(a) = args
+                    .get(i)
+                    .filter(|a| what == What::Closure && matches!(a.ty, HirTy::Fn(..)))
+                {
+                    if let Some(p) = place(a).filter(|_| self.owns_moved(a)) {
+                        for s in self.cur.states() {
+                            s.gone.retain(|g, _| !within(g, &p));
+                            s.gone.insert(p.clone(), Gone::To(at, what));
+                        }
+                    }
+                    return;
+                }
                 self.sends |= what != What::Handoff;
                 if let Some(a) = args.get(i).filter(|a| place(a).is_some()) {
                     let shown = self.show(a);
@@ -4717,6 +4836,8 @@ impl<'h> Walk<'_, 'h> {
         let to = match what {
             What::Channel => "sent through a channel",
             What::Task => "spawned as a task",
+            What::TaskArg => "handed to a task",
+            What::Closure => "moved into a closure",
             _ => "moved into a lock",
         };
         if g == VIEW {
@@ -5275,6 +5396,8 @@ impl<'h> Walk<'_, 'h> {
         let to = match what {
             What::Channel => "sent through a channel",
             What::Task => "spawned as a task",
+            What::TaskArg => "handed to a task",
+            What::Closure => "moved into a closure",
             _ => "moved into a lock",
         };
         // The object it is read out of: a call's receiver (`TL.get()`).

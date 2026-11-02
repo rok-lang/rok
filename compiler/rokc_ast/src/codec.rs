@@ -269,7 +269,8 @@ codec_enum!(CallArg {
 });
 codec_enum!(CaptureSpec {
     Value(x0),
-    Ref(x0)
+    Ref(x0),
+    Move(x0)
 });
 codec_struct!(MatchArm { pat, guard, body });
 codec_enum!(TryKind {
