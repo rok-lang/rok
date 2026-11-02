@@ -1,9 +1,9 @@
 //! OS primitives shared by the runtime crates: POSIX (macOS, Linux)
 //! and WASI through wasi-libc.
 //!
-//! The heap reservation on WASI is linear memory (`memory.grow`). WASI
-//! without threads (no `atomics`: `wasm32-wasip2`, the browser) has one
-//! thread: locks are no-ops and a wait nobody can end is a deadlock;
+//! WASI has no reservations: the heap takes its blocks from `malloc`,
+//! which owns `memory.grow`. WASI without threads (no `atomics`:
+//! `wasm32-wasip2`, the browser) has one thread: locks are no-ops and a wait nobody can end is a deadlock;
 //! `wasm32-wasip1-threads` has wasi-libc's pthreads.
 
 // `static` primitives: `const fn new` is the constructor.
@@ -475,33 +475,10 @@ pub fn sleep_ns(ns: u64) {
     while unsafe { libc::nanosleep(&ts, &mut ts) } != 0 && errno() == libc::EINTR {}
 }
 
-/// Grow linear memory by `len` bytes (whole 64 KiB pages): the new
-/// pages read as zero. wasm memory cannot be reserved without being
-/// accessible; engines back it lazily. Null past the engine's limit.
-#[cfg(target_os = "wasi")]
-pub fn reserve(len: usize) -> *mut u8 {
-    let pages = len.div_ceil(64 << 10);
-    let old = core::arch::wasm32::memory_grow(0, pages);
-    if old == usize::MAX {
-        core::ptr::null_mut()
-    } else {
-        (old * (64 << 10)) as *mut u8
-    }
-}
-
-/// Reserved memory is already accessible.
-///
-/// # Safety
-/// The range must lie inside a [`reserve`]d region.
-#[cfg(target_os = "wasi")]
-pub const unsafe fn commit(_p: *mut u8, _len: usize) -> bool {
-    true
-}
-
 /// Pages cannot be returned to the engine: zero the range.
 ///
 /// # Safety
-/// The range must be committed and hold nothing anyone still uses.
+/// The range must be allocated and hold nothing anyone still uses.
 #[cfg(target_os = "wasi")]
 pub const unsafe fn reset(p: *mut u8, len: usize) -> bool {
     // SAFETY: caller contract.
