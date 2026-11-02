@@ -13,7 +13,7 @@ struct Box2 { xs: List<i32>; n: i32; }
 fn main() {
     let d: Dict<str, i32> = Dict::new();
     for w in ["a", "b", "a"] {
-        d[w] = (d.get(w) ?? 0) + 1;
+        d[w, default: 0] += 1;
     }
     println(f"{d["a"]} {d["b"]}");
 

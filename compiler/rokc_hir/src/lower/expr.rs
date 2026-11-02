@@ -902,16 +902,13 @@ fn is_place(ctx: &mut LowerCtx<'_>, target: &Expr, op: &str, value: &Expr) -> bo
         ExprKind::Path(_) | ExprKind::Call { .. } | ExprKind::MethodCall { .. }
     );
     let help = match entry_write_back(root) {
-        Some((dict, key, init)) => {
-            let bin = op.trim_end_matches('=');
-            match init {
-                Some(init) if op != "=" => format!(
-                    "write the entry back: `{dict}[{key}] = ({dict}.get({key}) ?? {init}) {bin} {v};`"
-                ),
-                _ if op == "=" => format!("assign the element: `{dict}[{key}] = {v};`"),
-                _ => format!("update the element: `{dict}[{key}] {op} {v};`"),
+        Some((dict, key, init)) => match init {
+            Some(init) if op != "=" => {
+                format!("index with a default: `{dict}[{key}, default: {init}] {op} {v};`")
             }
-        }
+            _ if op == "=" => format!("assign the element: `{dict}[{key}] = {v};`"),
+            _ => format!("update the element: `{dict}[{key}] {op} {v};`"),
+        },
         // `let v = f(); v = 3;` would be no fix.
         None if held && !(op == "=" && std::ptr::eq(root, target)) => {
             let r = src(root);
