@@ -15,6 +15,8 @@ some of them (same algorithm, same output). Not run by CI.
 | `throw_wide`     | throwing calls with a `str` result and a two-word error   |   |
 | `channel_contended` | 4 producer threads into one receiver, unbounded and bounded channels | |
 | `file_rw`        | 16-byte `File` writes, reads and seeks (syscall-bound)    |   |
+| `match_dispatch` | bytecode interpreter: a 12-arm `match` on an enum per step |   |
+| `float_math`     | `floor` / `ceil` / `round` / `trunc`, `abs`, `min` / `max`, `copysign`, `mul_add` |   |
 | `alloc_*`, `gc_*`, `store_heavy`, `wb_threads`, `timers`, `fstring_heavy` | allocation, collector, write barriers, timers, f-strings | |
 
 ## Running

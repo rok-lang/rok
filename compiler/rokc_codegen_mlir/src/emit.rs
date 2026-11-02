@@ -5058,8 +5058,43 @@ impl<'a> FnEmit<'a> {
 "
                 );
             }
-            _ => return false,
+            _ => return self.emit_float_op(dst, name, args),
         }
+        true
+    }
+
+    /// The exact `rok_f64_*` / `rok_f32_*` math functions (rounding,
+    /// `abs`, `copysign`, `min` / `max`, `mul_add`) as `math` / `arith`
+    /// ops: one instruction or an LLVM intrinsic, not a runtime call. The
+    /// transcendental ones stay libm calls.
+    fn emit_float_op(&mut self, dst: &str, name: &str, args: &[Operand]) -> bool {
+        let (prim, op) = match name.strip_prefix("rok_f64_") {
+            Some(op) => (PrimTy::F64, op),
+            None => match name.strip_prefix("rok_f32_") {
+                Some(op) => (PrimTy::F32, op),
+                None => return false,
+            },
+        };
+        let mlir_op = match op {
+            "floor" => "math.floor",
+            "ceil" => "math.ceil",
+            "round" => "math.round",
+            "trunc" => "math.trunc",
+            "abs" => "math.absf",
+            "copysign" => "math.copysign",
+            // `fmin` / `fmax`: a NaN operand is ignored.
+            "min" => "arith.minnumf",
+            "max" => "arith.maxnumf",
+            "mul_add" => "math.fma",
+            _ => return false,
+        };
+        let ty = MirTy::Prim(prim);
+        let vs: Vec<String> = args
+            .iter()
+            .map(|a| self.materialize_operand(a, &ty))
+            .collect();
+        let t = mlir_type(&ty, self.target);
+        let _ = writeln!(self.body, "    {dst} = {mlir_op} {} : {t}", vs.join(", "));
         true
     }
 
@@ -5557,10 +5592,7 @@ impl<'a> FnEmit<'a> {
                 let _ = writeln!(self.body, "    {dst} = arith.negf {v} : {ty}");
             }
             (PrimOp::Sqrt, p) if p.is_float() => {
-                let _ = writeln!(
-                    self.body,
-                    "    {dst} = llvm.intr.sqrt({v}) : ({ty}) -> {ty}"
-                );
+                let _ = writeln!(self.body, "    {dst} = math.sqrt {v} : {ty}");
             }
             (PrimOp::CountOnes | PrimOp::SwapBytes, p) if p.is_int() => {
                 let name = if op == PrimOp::CountOnes {

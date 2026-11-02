@@ -1,0 +1,32 @@
+// expect-exit: 0
+// spec: §8.7 std §2.1.4
+//
+// Rounding, `abs`, `copysign`, `min` / `max` and `mul_add` of values
+// only known at run time (MLIR `math` / `arith` ops, not runtime
+// calls): ties away from zero, signed zeros, NaN operands of `min` /
+// `max` skipped, one rounding in `mul_add`.
+// expect-stdout:
+// -3 -2 -3 -2 2.5
+// 2 3 3 2 -2.5
+// -1 -0 -1 -0 0.5
+// 0 1 1 0 -0.5
+// -0 -0 -0 -0 0
+// 0.0000000000000000555 -0.5 1 -0.5 1
+// 3 -2 -0 2 3
+// 0.00000001 1 -0 true 3
+
+fn main() {
+    let xs: List<f64> = [2.5, -2.5, 0.5, -0.5, 0.0];
+    for i in 0..xs.len() {
+        let x = -xs[i];
+        println(f"{x.floor()} {x.ceil()} {x.round()} {x.trunc()} {x.abs().copysign(-x)}");
+    }
+    let nan = xs[4] / xs[4];
+    let tenth = xs[2] / 5.0;
+    println(f"{tenth.mul_add(10.0, -1.0):.19} {xs[3].min(nan)} {nan.max(xs[2] * 2.0)} {xs[3].min(xs[2])} {xs[3].max(xs[2]) * 2.0}");
+    let fs: List<f32> = [2.5f32, -2.5f32, -0.0f32];
+    println(f"{fs[0].round()} {fs[1].ceil()} {fs[2].floor()} {fs[0].floor().abs()} {fs[1].trunc().abs().copysign(fs[0]) + 1.0f32}");
+    let t = fs[0] / 25.0f32;
+    let nf = fs[2] / fs[2];
+    println(f"{t.mul_add(10.0f32, -1.0f32):.8} {nf.min(1.0f32)} {fs[2].max(nf)} {nf.max(nf).is_nan()} {fs[0].max(fs[1]) + 0.5f32}");
+}

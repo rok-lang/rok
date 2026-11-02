@@ -1,4 +1,4 @@
-//! MIR → MLIR text in upstream dialects (`func`, `arith`, `cf`, `llvm`).
+//! MIR → MLIR text in upstream dialects (`func`, `arith`, `math`, `cf`, `llvm`).
 //! Passes, LLVM IR and codegen follow in `rokc_llvm`.
 
 pub mod abi;
