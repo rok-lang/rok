@@ -28,11 +28,11 @@ async fn main() throws (IoError) {
     println(f"status: code {st.code() ?? -1}");
 
     let child = try sh("cat").stdin(Stdio::Piped).stdout(Stdio::Piped).spawn();
-    if let si: ChildStdin = rok::core::marker::take(ref child.stdin) {
+    if let si: ChildStdin = child.take_stdin() {
         try await si.write_all_async("abc");
         try await si.close_async();
     }
-    if let so: ChildStdout = rok::core::marker::take(ref child.stdout) {
+    if let so: ChildStdout = child.take_stdout() {
         println(f"piped: [{try await so.read_to_str_async()}]");
         try await so.close_async();
     }
