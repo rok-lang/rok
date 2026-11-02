@@ -103,7 +103,7 @@ pub const CARD_SIZE: usize = 1 << rokr_common::gc_abi::CARD_SHIFT;
 /// block heap is capped at 64 GiB. 32-bit (a heap of about
 /// 3.5 GB): at most 2 GiB, the rest of the address space left to LOS
 /// objects, `malloc` and the program. wasm32 reserves nothing: see
-/// [`grow_blocks`].
+/// [`spare_block`].
 #[cfg(target_pointer_width = "64")]
 const RESERVE: usize = 64 << 30;
 #[cfg(all(target_pointer_width = "32", not(target_family = "wasm")))]
@@ -111,8 +111,9 @@ const RESERVE: usize = 2 << 30;
 #[cfg(not(target_family = "wasm"))]
 const RESERVE_MIN: usize = 64 << 20;
 
-/// Line state of a wasm32 block that `malloc` took (see [`grow_blocks`]):
-/// never handed out, swept or moved.
+/// Line state of wasm32 memory that is not a block of the heap: `malloc`'s,
+/// or a block of a chunk not handed out yet ([`spare_block`]). Never
+/// swept or moved.
 #[cfg(target_family = "wasm")]
 const FOREIGN: u8 = 4;
 
@@ -222,9 +223,9 @@ struct Heap {
     meta: *mut BlockMeta,
     /// Bytes reserved at `base`.
     reserved: usize,
-    /// wasm32: the end of the linear memory the heap grew for its blocks.
+    /// wasm32: the blocks of the last chunk not handed out yet.
     #[cfg(target_family = "wasm")]
-    grown: usize,
+    spare: [usize; 2],
     /// Next line (global index `block * LINES + line`) the small / medium
     /// refill looks at; both restart at 0 after every sweep.
     small_cursor: usize,
@@ -307,7 +308,7 @@ static HEAP: Global<Heap> = Global(UnsafeCell::new(Heap {
     nblocks: 0,
     reserved: 0,
     #[cfg(target_family = "wasm")]
-    grown: 0,
+    spare: [0; 2],
     meta: ptr::null_mut(),
     small_cursor: 0,
     medium_cursor: 0,
@@ -798,11 +799,14 @@ fn take_run(lines: usize, exact: bool) -> *mut u8 {
     }
     let b = new_block();
     let h = heap();
-    // SAFETY: `b` was just committed (no mark looks at it).
-    let m = unsafe { &mut *h.meta.add(b) };
-    m.lines[..lines].fill(state);
-    m.used = true;
-    m.released = false;
+    // SAFETY: `b < nblocks`; as above (wasm32: a running mark's view
+    // may cover it).
+    let m = unsafe { h.meta.add(b) };
+    for i in 0..lines {
+        set_line(m, i, state);
+    }
+    // SAFETY: fields the mark does not read.
+    unsafe { (*m).used = true };
     if exact {
         h.medium_cursor = b * LINES + lines;
     }
@@ -831,46 +835,59 @@ fn end_of_run(start: usize, mut end: usize) -> usize {
 /// With the lock held: commit one more (zeroed) block; its index.
 fn new_block() -> usize {
     let h = heap();
-    if h.base == 0 {
+    if h.meta.is_null() {
         reserve_blocks(h);
     }
     #[cfg(target_family = "wasm")]
-    grow_blocks(h);
-    if h.nblocks == h.reserved / BLOCK_SIZE {
-        rokr_common::oom();
-    }
-    let b = h.nblocks;
-    // Commit in 64 KiB steps (a multiple of every page size): block
-    // `b`'s metadata pages, unless block `b - 1`'s commit covered them.
-    let step = 64 << 10;
-    let (start, end) = (b * size_of::<BlockMeta>(), (b + 1) * size_of::<BlockMeta>());
-    let from = if b == 0 {
-        0
-    } else {
-        start.next_multiple_of(step)
+    let b = spare_block(h);
+    #[cfg(not(target_family = "wasm"))]
+    let b = {
+        if h.nblocks == h.reserved / BLOCK_SIZE {
+            rokr_common::oom();
+        }
+        let b = h.nblocks;
+        // Commit in 64 KiB steps (a multiple of every page size): block
+        // `b`'s metadata pages, unless block `b - 1`'s commit covered them.
+        let step = 64 << 10;
+        let (start, end) = (b * size_of::<BlockMeta>(), (b + 1) * size_of::<BlockMeta>());
+        let from = if b == 0 {
+            0
+        } else {
+            start.next_multiple_of(step)
+        };
+        let to = end.next_multiple_of(step);
+        // SAFETY: block `b` and its metadata lie inside our reservations.
+        let ok = unsafe {
+            sys::commit((h.base + b * BLOCK_SIZE) as *mut u8, BLOCK_SIZE)
+                && (from >= to || sys::commit(h.meta.cast::<u8>().add(from), to - from))
+        };
+        if !ok {
+            rokr_common::oom();
+        }
+        h.nblocks += 1;
+        b
     };
-    let to = end.next_multiple_of(step);
-    // SAFETY: block `b` and its metadata lie inside our reservations.
-    let ok = unsafe {
-        sys::commit((h.base + b * BLOCK_SIZE) as *mut u8, BLOCK_SIZE)
-            && (from >= to || sys::commit(h.meta.cast::<u8>().add(from), to - from))
-    };
-    if !ok {
-        rokr_common::oom();
-    }
-    // SAFETY: `b` is below the reserved count.
-    unsafe {
-        h.meta.add(b).write(BlockMeta {
-            lines: [FREE; LINES],
-            starts: [0; GRANULES / 64],
-            used: false,
-            parsed: false,
-            evac: false,
-            released: false,
-        });
-    }
-    h.nblocks += 1;
+    // SAFETY: `b` is below `nblocks`.
+    init_meta(unsafe { h.meta.add(b) }, FREE);
     b
+}
+
+/// Reset the metadata at `m` to a block of `state` lines holding no
+/// object. Lines are stored atomically: a concurrent mark may look up a
+/// word that lands in the block.
+fn init_meta(m: *mut BlockMeta, state: u8) {
+    for l in 0..LINES {
+        set_line(m, l, state);
+    }
+    // SAFETY: fields a concurrent mark does not read in a block without
+    // `TAKEN` lines.
+    unsafe {
+        (&raw mut (*m).starts).write([0; GRANULES / 64]);
+        (&raw mut (*m).used).write(false);
+        (&raw mut (*m).parsed).write(false);
+        (&raw mut (*m).evac).write(false);
+        (&raw mut (*m).released).write(state != FREE);
+    }
 }
 
 /// The block reservation: the first of the sizes from [`RESERVE`] down
@@ -898,65 +915,55 @@ fn reserve_blocks(h: &mut Heap) {
     }
 }
 
-/// wasm32 memory cannot be reserved without being grown: the blocks
-/// span the address space above the end of linear memory, grown by
-/// [`grow_blocks`] as they are needed. Their metadata is grown first
-/// (about 2.4% of the blocks' size), for the rest of the 4 GiB address
-/// space or, under a lower engine limit, the first of its halves it
-/// grants.
+/// wasm32 has one linear memory, which `malloc` grows too, in steps it
+/// assumes nobody else interleaves: the heap takes its blocks from
+/// `malloc` ([`spare_block`]) and never grows memory itself. Block `i`
+/// is at `i * BLOCK_SIZE` (`base` 0). The metadata covers the 4 GiB
+/// address space (about 2.4% of it, written only up to the highest
+/// block) or, under a lower engine limit, the first of its halves
+/// `malloc` grants.
 #[cfg(target_family = "wasm")]
 fn reserve_blocks(h: &mut Heap) {
-    let end = core::arch::wasm32::memory_size(0) * WASM_PAGE;
-    let mut len = usize::MAX - end;
+    let mut n = usize::MAX / BLOCK_SIZE;
     loop {
-        h.meta = sys::reserve(len / BLOCK_SIZE * size_of::<BlockMeta>()).cast();
+        // SAFETY: plain allocation, never freed.
+        h.meta = unsafe { libc::malloc(n * size_of::<BlockMeta>()) }.cast();
         if !h.meta.is_null() {
             break;
         }
-        len /= 2;
-        if len < 64 << 20 {
+        n /= 2;
+        if n * BLOCK_SIZE < 64 << 20 {
             rokr_common::oom();
         }
     }
-    h.base = core::arch::wasm32::memory_size(0) * WASM_PAGE;
-    h.grown = h.base;
-    // Whole blocks: `base + reserved` stays below 4 GiB.
-    h.reserved = len.min(usize::MAX - h.base) / BLOCK_SIZE * BLOCK_SIZE;
+    h.reserved = n * BLOCK_SIZE;
 }
 
+/// wasm32: the next block of the current chunk, taking a new chunk
+/// (1 MiB) from `malloc` when it is used up. The blocks between chunks
+/// are `malloc`'s and a chunk's stay its own until handed out, both
+/// [`FOREIGN`]. Chunks are never freed.
 #[cfg(target_family = "wasm")]
-const WASM_PAGE: usize = 64 << 10;
-
-/// wasm32, before block `nblocks` is used: grow linear memory for it
-/// (1 MiB at a time) unless an earlier growth covers it. `malloc` grows
-/// the same memory: the blocks over what it took since are skipped,
-/// [`FOREIGN`].
-#[cfg(target_family = "wasm")]
-fn grow_blocks(h: &mut Heap) {
-    const STEP: usize = 1 << 20;
-    if h.base + (h.nblocks + 1) * BLOCK_SIZE <= h.grown {
-        return;
-    }
-    let old = core::arch::wasm32::memory_grow(0, STEP / WASM_PAGE);
-    if old == usize::MAX {
-        rokr_common::oom();
-    }
-    let from = old * WASM_PAGE;
-    while h.base + h.nblocks * BLOCK_SIZE < from && h.nblocks < h.reserved / BLOCK_SIZE {
-        // SAFETY: metadata of a block of the reservation (grown up front).
-        unsafe {
-            h.meta.add(h.nblocks).write(BlockMeta {
-                lines: [FOREIGN; LINES],
-                starts: [0; GRANULES / 64],
-                used: false,
-                parsed: false,
-                evac: false,
-                released: true,
-            });
+fn spare_block(h: &mut Heap) -> usize {
+    const CHUNK: usize = 1 << 20;
+    if h.spare[0] == h.spare[1] {
+        let p = sys::alloc_aligned(CHUNK, BLOCK_SIZE) as usize;
+        if p == 0 || p > h.reserved - CHUNK {
+            rokr_common::oom();
         }
-        h.nblocks += 1;
+        // SAFETY: a fresh allocation of `CHUNK` bytes.
+        unsafe { ptr::write_bytes(p as *mut u8, 0, CHUNK) };
+        let end = (p + CHUNK) / BLOCK_SIZE;
+        while h.nblocks < end {
+            // SAFETY: `nblocks` is below the metadata's block count.
+            init_meta(unsafe { h.meta.add(h.nblocks) }, FOREIGN);
+            h.nblocks += 1;
+        }
+        h.spare = [p / BLOCK_SIZE, end];
     }
-    h.grown = from + STEP;
+    let b = h.spare[0];
+    h.spare[0] += 1;
+    b
 }
 
 /// LOS allocations from this size on (prefix and card table included)

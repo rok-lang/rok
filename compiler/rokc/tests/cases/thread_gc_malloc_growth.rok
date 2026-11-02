@@ -1,0 +1,63 @@
+// needs: threads
+// expect-exit: 0
+// expect-stdout: ok
+// The heap grows its blocks while other threads' large objects grow the
+// C heap, which (wasm32) owns the same linear memory: neither may take
+// memory the other holds. Every thread keeps small objects (new blocks)
+// and large lists (new `malloc` memory, nothing freed to reuse), then
+// checks both.
+use rok::std::thread;
+
+fn work(seed: i64) -> i64 {
+    let bad: i64 = 0;
+    let keep: List<List<i64>> = [];
+    let bigs: List<List<i64>> = [];
+    let round: i64 = 0;
+    while round < 12 {
+        let big: List<i64> = [];
+        let n = 8192 + round * 4096 + seed * 64;
+        let i: i64 = 0;
+        while i < n {
+            big.push(i ^ seed);
+            if i % 2 == 0 {
+                keep.push([seed, i]);
+            }
+            i += 1;
+        }
+        bigs.push(big);
+        round += 1;
+    }
+    for big in bigs {
+        let i: i64 = 0;
+        while i < (big.len() as i64) {
+            if big[i] != i ^ seed { bad += 1; }
+            i += 1;
+        }
+    }
+    for xs in keep {
+        if xs[0] != seed || xs[1] % 2 != 0 { bad += 1; }
+    }
+    bad
+}
+
+fn main() -> i32 {
+    let bad: i64 = 0;
+    let r: i64 = 0;
+    while r < 2 {
+        let hs: List<thread::JoinHandle<i64>> = [];
+        let t: i64 = 0;
+        while t < 8 {
+            let seed = r * 8 + t;
+            hs.push(thread::spawn(|| work(seed)));
+            t += 1;
+        }
+        for h in hs { bad += try! h.join(); }
+        r += 1;
+    }
+    if bad != 0 {
+        println(f"bad {bad}");
+        return 1;
+    }
+    println("ok");
+    return 0;
+}
