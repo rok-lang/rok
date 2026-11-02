@@ -7,8 +7,9 @@
 
 // GC: a large object gets pages of its own from the OS, already zero,
 // so the pages of a big buffer that is never written are never touched.
-// Eight 64 MiB buffers, one byte written in each, keep the peak
-// resident size far below one buffer.
+// Eight 64 MiB buffers, one byte written in each, grow the peak
+// resident size by far less than one buffer. Growth, not the absolute
+// peak: what the runtime touched before the loop varies with load.
 use rok::bare::ptr::{Ptr, addr_of};
 
 extern "C" {
@@ -23,7 +24,15 @@ const RSS_UNIT: i64 = 1;
 #[cfg(not(target_os = "macos"))]
 const RSS_UNIT: i64 = 1024;
 
+fn peak_rss() -> i64 {
+    let ru: [i64; 18] = [0; 18];
+    if unsafe { getrusage(0, addr_of(ru[0])) } != 0 { return -1; }
+    ru[4] * RSS_UNIT
+}
+
 fn main() -> i32 {
+    let base = peak_rss();
+    if base < 0 { return 1; }
     let total: i64 = 0;
     let r = 0;
     while r < 8 {
@@ -33,11 +42,9 @@ fn main() -> i32 {
         r += 1;
     }
     println(f"{total}");
-    let ru: [i64; 18] = [0; 18];
-    if unsafe { getrusage(0, addr_of(ru[0])) } != 0 { return 1; }
-    let peak = ru[4] * RSS_UNIT;
-    if peak >= 48 << 20 {
-        println(f"peak {peak >> 20} MiB");
+    let grown = peak_rss() - base;
+    if grown >= 32 << 20 {
+        println(f"peak grew {grown >> 20} MiB");
         return 2;
     }
     println("ok");
