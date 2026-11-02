@@ -1,0 +1,7 @@
+// spec: §2.14.2
+// expect-error: cannot cast `E` as `i32`: only an enum whose variants carry no payload casts to an integer
+
+// Only a payload-less enum casts to an integer.
+enum E { A(i32), B }
+
+fn main() { let x = E::B as i32; }

@@ -865,7 +865,7 @@ pub(super) fn lower_for(
         ctx.try_for_body = Some((body.span, d));
     }
     ctx.push_scope();
-    ctx.breakables.push((label.cloned(), true));
+    let loop_idx = super::expr::open_unit_loop(ctx, label);
     let while_expr = match &iter.kind {
         _ if is_await => {
             let s = lower_expected(ctx, iter, HirTy::Unknown);
@@ -926,7 +926,7 @@ pub(super) fn lower_for(
             }
         }
     };
-    ctx.breakables.pop();
+    super::expr::close_unit_loop(ctx, loop_idx);
     ctx.pop_scope();
     match while_expr {
         Some(w) => out.push(HirStmt::Expr(w)),

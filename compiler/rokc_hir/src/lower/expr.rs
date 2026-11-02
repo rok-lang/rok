@@ -741,7 +741,22 @@ fn lower_stmt_inner(ctx: &mut LowerCtx<'_>, stmt: &Stmt) -> Option<HirStmt> {
         StmtKind::Break { label, value } => {
             check_jump_target(ctx, "break", label.as_deref(), false);
             let depth = jump_index(ctx, label.as_deref(), false);
-            let value = if let Some(e) = value {
+            let value = if let Some(e) = value.as_ref().filter(|_| ctx.unit_loops.contains(&depth))
+            {
+                let _ = lower_expected(ctx, e, HirTy::Unknown);
+                ctx.emit_error(
+                    Code::OUTSIDE_CONTEXT,
+                    "`break` with a value inside a `while` or `for` loop, whose value is always \
+                     `()` (spec 3.13.1)"
+                        .to_owned(),
+                );
+                ctx.help_last(Some(
+                    "write `loop { ... break value; ... }` to leave with a value, or drop the \
+                     value: `break;`"
+                        .to_owned(),
+                ));
+                None
+            } else if let Some(e) = value {
                 Some(lower_break_value(ctx, depth, e))
             } else {
                 match ctx.break_tys.get(&depth).cloned() {
@@ -2051,11 +2066,25 @@ fn lower_cast(
                 format!("cannot cast to `{to_name}`: {h}"),
             );
         }
+        if let (HirTy::Enum(_), HirTy::Prim(p)) = (&from_ty, &to_ty) {
+            if p.is_int() {
+                return ctx.error_expr(
+                    Code::INVALID_CAST,
+                    span,
+                    format!(
+                        "cannot cast `{}` as `{to_name}`: only an enum whose variants carry no \
+                         payload casts to an integer (spec 2.14.2)",
+                        ctx.ty_name(&from_ty)
+                    ),
+                );
+            }
+        }
         return ctx.error_expr(
             Code::INVALID_CAST,
             span,
             format!(
-                "cannot cast `{}` as `{}` (only numeric / bool / char casts){}",
+                "cannot cast `{}` as `{}` (only numeric / bool / char casts, and a \
+                 payload-less enum to an integer){}",
                 ctx.ty_name(&from_ty),
                 ctx.ty_name(&to_ty),
                 optional_cast_hint(ty)
@@ -2253,11 +2282,11 @@ fn lower_expr_inner(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
         } => lower_if(ctx, cond, then_branch, else_branch.as_deref(), span),
         ExprKind::While { label, cond, body } => {
             let cond_h = lower_cond(ctx, cond);
-            ctx.breakables.push((label.clone(), true));
+            let idx = open_unit_loop(ctx, label.as_ref());
             ctx.push_expected(HirTy::Unit);
             let body_h = lower_narrowed_block(ctx, cond, body);
             ctx.pop_expected();
-            ctx.breakables.pop();
+            close_unit_loop(ctx, idx);
             HirExpr {
                 kind: HirExprKind::While {
                     label: label.clone(),
@@ -2559,6 +2588,21 @@ pub(super) fn lower_loop_body(ctx: &mut LowerCtx<'_>, body: &Block) -> HirBlock 
     };
     ctx.pop_expected();
     b
+}
+
+/// Enter a `while` / `for` body: a loop whose value is always `()`.
+pub(super) fn open_unit_loop(ctx: &mut LowerCtx<'_>, label: Option<&String>) -> usize {
+    let idx = ctx.breakables.len();
+    ctx.break_tys.remove(&idx);
+    ctx.unit_loops.insert(idx);
+    ctx.breakables.push((label.cloned(), true));
+    idx
+}
+
+pub(super) fn close_unit_loop(ctx: &mut LowerCtx<'_>, idx: usize) {
+    ctx.breakables.pop();
+    ctx.break_tys.remove(&idx);
+    ctx.unit_loops.remove(&idx);
 }
 
 /// Open a `loop` / labelled block at `breakables[idx]`; an annotated slot
@@ -3003,11 +3047,27 @@ pub(super) fn lower_struct_init(
         for (_, e) in fields {
             lower_expected(ctx, e, HirTy::Unknown);
         }
+        // Spec 4.8.4: `run { }` / `zero { n }` after a function's name is
+        // a struct literal; the closure needs the parentheses.
+        let written = segs.join("::");
+        if ctx.resolve_any_fn(&segs).is_some() {
+            return ctx.unknown_name(
+                Code::UNRESOLVED_TYPE,
+                span,
+                format!(
+                    "`{written} {{ .. }}` is a struct literal, but `{written}` is a function \
+                     (spec 4.8.4)"
+                ),
+                Some(format!(
+                    "write the closure in parentheses: `{written}(|| {{ .. }})`"
+                )),
+            );
+        }
         let help = ctx.type_help(&segs);
         return ctx.unknown_name(
             Code::UNRESOLVED_TYPE,
             span,
-            format!("cannot find struct `{}` in this scope", segs.join("::")),
+            format!("cannot find struct `{written}` in this scope"),
             help,
         );
     };
@@ -3075,6 +3135,11 @@ pub(super) fn lower_struct_init(
                             .and_then(HirTy::as_const)
                             .and_then(|v| super::mono::typed_const(ctx, name, ty, v));
                         let Some(c) = c else {
+                            // An annotation whose arguments were wrong,
+                            // reported there.
+                            if matches!(&hint, Some(HirTy::Path(p)) if *p == [full.clone()]) {
+                                return poison(span);
+                            }
                             ctx.emit_uninferred(format!(
                                 "cannot infer const parameter `{name}` of `{}` - \
                                  annotate the binding (`let v: {}<..> = ..`)",
@@ -3548,7 +3613,7 @@ pub(super) fn decode_str_escapes(s: &str) -> String {
 
 pub(super) fn has_int_suffix(text: &str) -> bool {
     const SUFFIXES: &[&str] = &[
-        "isize", "usize", "i64", "u64", "i32", "u32", "i16", "u16", "i8", "u8",
+        "isize", "usize", "i64", "u64", "i32", "u32", "i16", "u16", "i8", "u8", "c_char",
     ];
     SUFFIXES.iter().any(|s| text.ends_with(s))
 }
@@ -5452,7 +5517,7 @@ pub(super) fn bind_explicit(
     Ok(own
         .into_iter()
         .zip(targs)
-        .map(|(n, t)| (n.clone(), ctx.resolve_ast_ty(t)))
+        .map(|(n, t)| (n.clone(), turbofish_ty(ctx, t)))
         .collect())
 }
 
@@ -8542,10 +8607,15 @@ fn check_unsafe_call(ctx: &LowerCtx<'_>, callee: &str) {
             Code::UNSAFE_REQUIRED,
             format!(
                 "call to unsafe function `{}` outside an `unsafe` block or `unsafe fn` \
-                 (spec 4.15; C functions are implicitly unsafe)",
+                 (spec 4.15)",
                 leaf_name(callee)
             ),
         );
+        ctx.help_last(Some(
+            "wrap the call in `unsafe { .. }`; every `extern` function, `extern \"rok\"` \
+             included, is unsafe to call"
+                .to_owned(),
+        ));
     }
 }
 
@@ -9235,10 +9305,32 @@ fn bind_explicit_generics(
     for (gp, t) in def.generics.params.iter().zip(explicit) {
         let (rokc_ast::GenericParam::Type { name, .. }
         | rokc_ast::GenericParam::Const { name, .. }) = gp;
-        bound.insert(name.clone(), ctx.resolve_ast_ty(t));
+        bound.insert(name.clone(), turbofish_ty(ctx, t));
     }
     ctx.explicit_generics = bound;
     true
+}
+
+/// A `::<T>` argument; a name that resolves to no type is E0028 here,
+/// since nothing later sees it (`size_of::<Nope>()`).
+pub(super) fn turbofish_ty(ctx: &LowerCtx<'_>, t: &Ty) -> HirTy {
+    let ty = ctx.resolve_ast_ty(t);
+    let mut open = Vec::new();
+    super::collect::collect_unknown_paths(&ty, &mut open);
+    let Some(name) = open.into_iter().find(|n| {
+        n != "_"
+            && !ctx.ty_subst.contains_key(n)
+            && ctx.env.names.unknown_spans.borrow().contains_key(n)
+    }) else {
+        return ty;
+    };
+    let at = ctx.env.names.unknown_spans.borrow()[&name];
+    ctx.emit_error_at(
+        Code::UNRESOLVED_TYPE,
+        at,
+        format!("cannot find type `{name}` in this scope"),
+    );
+    HirTy::Unknown
 }
 
 pub(super) fn lower_call(
@@ -12146,7 +12238,7 @@ fn param_op(
             Code::INVALID_OPERATOR,
             span,
             format!(
-                "operator `{sym}` on `{t}` needs a `{}` bound on `{t}` (spec 2.10.9)",
+                "operator `{sym}` on `{t}` needs the bound `{t}: {}` (spec 2.10.9)",
                 leaf_name(op_trait)
             ),
         );
@@ -13220,6 +13312,7 @@ pub(super) fn parse_int_literal(text: &str) -> Option<(i128, PrimTy)> {
         ("u16", PrimTy::U16),
         ("i8", PrimTy::I8),
         ("u8", PrimTy::U8),
+        ("c_char", PrimTy::CChar),
     ];
 
     let (digits, ty) = SUFFIXES

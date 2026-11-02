@@ -772,7 +772,7 @@ pub(crate) fn name_type(enum_: bool, id: u32, base: &str, args: &[HirTy]) {
     let name = if args.is_empty() {
         base.to_owned()
     } else {
-        let args: Vec<String> = args.iter().map(HirTy::stable_key).collect();
+        let args: Vec<String> = args.iter().map(HirTy::canon_key).collect();
         format!("{base}<{}>", args.join(", "))
     };
     set_type_name(enum_, id, name);
@@ -961,8 +961,8 @@ impl HirTy {
     /// `item = i32 | none` is `(i32 | none)?`. Written sums are `spread`
     /// first. A canonical sum maps to itself.
     ///
-    /// Order: `none` last, the rest by `stable_key` (structs and enums by
-    /// full name), so tags agree across separately compiled packages.
+    /// Order (spec 2.6.4): `none` last, the rest by `canon_key`, so tags
+    /// agree across separately compiled packages.
     #[must_use]
     pub fn sum(parts: impl IntoIterator<Item = Self>) -> Self {
         let (generic, written): (Vec<Self>, Vec<Self>) =
@@ -988,12 +988,32 @@ impl HirTy {
                 t => out.push(t),
             }
         }
-        out.sort_by_cached_key(|t| (t.is_none(), t.stable_key()));
+        out.sort_by_cached_key(|t| (t.is_none(), t.canon_key()));
         out.dedup();
         if out.len() == 1 {
             out.pop().expect("one member")
         } else {
             Self::Sum(out)
+        }
+    }
+
+    /// A sum term's key in the canonical order (spec 2.6.4): a primitive
+    /// by its name, a struct or enum by its full path (an instance as
+    /// `path<arg keys>`), a layer as `(` + its terms' keys joined by `|`
+    /// + `)`. Other terms fall back to `stable_key`.
+    #[must_use]
+    pub fn canon_key(&self) -> String {
+        match self {
+            Self::Prim(p) => p.name().to_owned(),
+            Self::None => "none".to_owned(),
+            Self::Unit => "()".to_owned(),
+            Self::Struct(id) => type_name(false, id.0).unwrap_or_else(|| self.stable_key()),
+            Self::Enum(id) => type_name(true, id.0).unwrap_or_else(|| self.stable_key()),
+            Self::Sum(ps) => {
+                let keys: Vec<String> = ps.iter().map(Self::canon_key).collect();
+                format!("({})", keys.join("|"))
+            }
+            _ => self.stable_key(),
         }
     }
 

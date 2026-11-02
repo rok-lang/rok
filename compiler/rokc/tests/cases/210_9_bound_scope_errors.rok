@@ -4,7 +4,7 @@
 // expect-error: mismatched types: the return value expects `T`, found `T::Output`
 // expect-error: no method `title` on type parameter `Self`: its bounds (`Greet`) do not declare it
 // expect-error: no method `clone` on type parameter `B`: it has no bounds
-// expect-error: operator `*` on `T` needs a `Mul` bound on `T`
+// expect-error: operator `*` on `T` needs the bound `T: Mul`
 // expect-error: type `T` does not satisfy trait bound `Ord` required by `List::sort`
 // expect-error: type `T` does not satisfy trait bound `Send` required by `task::spawn`
 // expect-error: mismatched types: the body of `resize` expects `[T; M]`, found `[T; N]`

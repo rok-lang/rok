@@ -1,0 +1,14 @@
+// spec: §3.9.1
+// expect-error: 10:5: `g` is imported here and also defined in this block
+
+// An item and a `use` of its name in one block conflict (E0032), as at
+// module level.
+mod m { pub fn g() -> i32 { 3 } }
+
+fn f() -> i32 {
+    fn g() -> i32 { 2 }
+    use m::g;  use m::g as h;
+    g() + h()
+}
+
+fn main() { println(f()); }

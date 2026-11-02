@@ -1,0 +1,15 @@
+// spec: §3.13.1
+// expect-exit: 0
+// expect-stdout:
+// 3 x 4
+
+// Each loop types its own `break` values: a bare `break` of one loop
+// does not type the next loop at the same depth.
+fn main() {
+    for i in 0..2 { break; }
+    let a = loop { break 3; };
+    while true { break; }
+    let b = loop { break "x"; };
+    let c = 'l: { break 'l 4; };
+    println(f"{a} {b} {c}");
+}

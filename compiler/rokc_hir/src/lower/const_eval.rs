@@ -2003,7 +2003,7 @@ pub(super) fn eval_scalar(ctx: &LowerCtx<'_>, e: &Expr) -> Result<(i128, Option<
         Some(why) => Err(why),
         None => match eval_in(&cx, &h) {
             Ok(Value::Int(v, _)) => Ok((v, None)),
-            Ok(Value::Bool(b)) => Ok((i128::from(b), None)),
+            Ok(Value::Bool(b)) => Ok((i128::from(b), Some(PrimTy::Bool))),
             Ok(Value::Char(c)) if h.ty == HirTy::Prim(PrimTy::Char) => {
                 Ok((i128::from(c), Some(PrimTy::Char)))
             }

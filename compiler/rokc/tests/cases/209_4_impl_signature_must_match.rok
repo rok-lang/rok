@@ -1,0 +1,18 @@
+// spec: §2.9.4 §4.15.4
+// expect-error: 13:16: `f` does not match its declaration in trait `T`: parameter `a` is `str` where the trait's is `i32`
+// expect-error: help: write `a: i32`
+// expect-error: 14:5: `raw` does not match its declaration in trait `T`: the trait's is `unsafe fn` and it is not
+// expect-error: 15:5: `safe` does not match its declaration in trait `T`: it is `unsafe` where the trait's is not
+
+// An impl method takes the parameter types the trait declares, and is
+// `unsafe` exactly when the trait's method is.
+trait T { fn f(self, a: i32) -> i32; unsafe fn raw(self) -> i32; fn safe(self) -> i32; }
+struct S { x: i32; }
+
+impl T for S {
+    fn f(self, a: str) -> i32 { 1 }
+    fn raw(self) -> i32 { 2 }
+    unsafe fn safe(self) -> i32 { 3 }
+}
+
+fn main() {}

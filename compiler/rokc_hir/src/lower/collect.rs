@@ -3496,7 +3496,18 @@ pub(super) fn check_unresolved_types(
             note(&l.ty, f.span, &f.name);
         }
     }
+    // `List<Nope>` names `Nope`, where it is written.
+    let open_args = names.open_args.borrow();
+    unknown_types.retain(|(t, ..)| open_args.get(t.as_str()).is_none_or(|a| !a.is_empty()));
+    for (t, span, _) in &mut unknown_types {
+        if let Some(a) = open_args.get(t.as_str()).filter(|a| spans.contains_key(*a)) {
+            span.clone_from(&spans[a]);
+            t.clone_from(a);
+        }
+    }
+    drop(open_args);
     unknown_types.sort_by(|a, b| a.0.cmp(&b.0));
+    unknown_types.dedup_by(|a, b| a.0 == b.0);
     // Type keys a user may name: the package's own, and the library's
     // `pub` ones.
     let named: Vec<&str> = module
@@ -4686,6 +4697,11 @@ fn sig_mismatch(
             tm.params.len()
         ));
     }
+    match (m.is_unsafe, tm.is_unsafe) {
+        (true, false) => why.push("it is `unsafe` where the trait's is not".to_owned()),
+        (false, true) => why.push("the trait's is `unsafe fn` and it is not".to_owned()),
+        _ => {}
+    }
     let ret = |f: &FnDef| {
         f.ret_ty
             .as_ref()
@@ -4944,26 +4960,47 @@ fn impl_heads(
                 waiting.push(i);
                 continue;
             };
-            if let Some(r) = provides.as_ref().filter(|r| !r.args.is_empty()) {
+            if let Some(r) = provides.as_ref() {
                 if env
                     .impls
                     .refs_on(&ty)
                     .any(|o| o.path == r.path && o.args == r.args)
                 {
+                    // A clash with another package's impl is an orphan,
+                    // reported by `check_impl_rules`.
+                    let pkg = package_of(&p.module);
+                    let here = method_target_for(&ty)
+                        .and_then(|t| env.impls.by_target.get(&t))
+                        .into_iter()
+                        .flatten()
+                        .map(|&o| &env.impls.all[o])
+                        .any(|o| {
+                            package_of(&o.module) == pkg
+                                && o.concrete
+                                    .as_ref()
+                                    .and_then(|(_, r)| r.as_ref())
+                                    .is_some_and(|o| o.path == r.path && o.args == r.args)
+                        });
+                    if !here {
+                        continue;
+                    }
                     let shown = TraitRef::new(r.path.clone(), r.args.clone(), Vec::new());
                     let shown = shown.render(&r.path, |t| match t {
                         HirTy::Struct(id) => env.defs.structs.borrow()[id.0 as usize].name.clone(),
                         HirTy::Enum(id) => env.defs.enums.borrow()[id.0 as usize].name.clone(),
                         t => ty_mangle(t),
                     });
-                    diags.push(rokc_diagnostic::RokDiagnostic::error(
-                        Code::CONFLICTING_IMPLS,
-                        p.def.span,
-                        format!(
-                            "`{shown}` is implemented more than once for `{}`",
-                            impl_def_display(&p.def.self_ty)
-                        ),
-                    ));
+                    diags.push(
+                        rokc_diagnostic::RokDiagnostic::error(
+                            Code::CONFLICTING_IMPLS,
+                            p.def.span,
+                            format!(
+                                "`{shown}` is implemented more than once for `{}` (spec 2.9.3)",
+                                impl_def_display(&p.def.self_ty)
+                            ),
+                        )
+                        .with_help("keep one of the two impls; a type implements a trait once"),
+                    );
                     continue;
                 }
             }
@@ -6173,9 +6210,9 @@ fn check_impl_rules(
     }
 }
 
-/// Spec 2.9.4: a concrete impl's method returns the type the trait
-/// declares, with `Self`, the trait's parameters and associated types
-/// replaced by the impl's. Generic methods and unresolved types are left
+/// Spec 2.9.4: a concrete impl's method takes and returns the types the
+/// trait declares, with `Self`, the trait's parameters and associated
+/// types replaced by the impl's. Generic methods and unresolved types are left
 /// to the call sites.
 fn check_impl_returns(
     ctx: &LowerCtx<'_>,
@@ -6227,27 +6264,70 @@ fn check_impl_returns(
         if !m.generics.params.is_empty() || !tm.generics.params.is_empty() {
             continue;
         }
+        let mut def = m.clone();
+        subst_assoc_sig(&mut def, &assoc);
+        let mine_of = |t: &Ty| {
+            quiet(&|| {
+                let mut rc = LowerCtx::new(ctx.env, &subst, Some(target.clone()), m.span);
+                rc.current_module.clone_from(&ctx.current_module);
+                rc.resolve_ast_ty(t)
+            })
+        };
+        let theirs_of = |t: &Ty| {
+            quiet(&|| {
+                let mut rc = LowerCtx::new(ctx.env, &subst, Some(target.clone()), m.span);
+                rc.current_module.clone_from(&info.module);
+                let mut t = t.clone();
+                expr::strip_self_assoc(&mut t);
+                rc.resolve_ast_ty(&t)
+            })
+        };
+        let differ = |got: &HirTy, want: &HirTy| {
+            got != want && !mono::has_unknown(got) && !mono::has_unknown(want)
+        };
+        // Spec 2.9.4: written parameter types are the trait's; an untyped
+        // one takes the trait's.
+        if def.params.len() == tm.params.len() {
+            let bad = def.params.iter().zip(&tm.params).find_map(|(p, tp)| {
+                if p.name == "self" {
+                    return None;
+                }
+                let (got, want) = (mine_of(p.ty.as_ref()?), theirs_of(tp.ty.as_ref()?));
+                differ(&got, &want).then_some((p, got, want))
+            });
+            if let Some((p, got, want)) = bad {
+                ctx.env.sink.diagnostics.borrow_mut().push(
+                    rokc_diagnostic::RokDiagnostic::error(
+                        Code::IMPL_MISMATCH,
+                        p.span,
+                        format!(
+                            "`{leaf}` does not match its declaration in trait `{}`: parameter \
+                             `{}` is `{}` where the trait's is `{}`",
+                            leaf_name(key),
+                            p.name,
+                            ctx.ty_name(&got),
+                            ctx.ty_name(&want)
+                        ),
+                    )
+                    .with_help(format!(
+                        "write `{}: {}`, the trait's `{}`",
+                        p.name,
+                        ctx.ty_name(&want),
+                        rokc_ast::print::print_fn_sig(tm)
+                    )),
+                );
+                continue;
+            }
+        }
         let (Some(mine), Some(theirs)) = (&m.ret_ty, &tm.ret_ty) else {
             continue;
         };
         if unit(&m.ret_ty) || unit(&tm.ret_ty) {
             continue;
         }
-        let mut def = m.clone();
-        subst_assoc_sig(&mut def, &assoc);
-        let got = quiet(&|| {
-            let mut rc = LowerCtx::new(ctx.env, &subst, Some(target.clone()), m.span);
-            rc.current_module.clone_from(&ctx.current_module);
-            rc.resolve_ast_ty(def.ret_ty.as_ref().unwrap_or(mine))
-        });
-        let want = quiet(&|| {
-            let mut rc = LowerCtx::new(ctx.env, &subst, Some(target.clone()), m.span);
-            rc.current_module.clone_from(&info.module);
-            let mut t = theirs.clone();
-            expr::strip_self_assoc(&mut t);
-            rc.resolve_ast_ty(&t)
-        });
-        if got == want || mono::has_unknown(&got) || mono::has_unknown(&want) {
+        let got = mine_of(def.ret_ty.as_ref().unwrap_or(mine));
+        let want = theirs_of(theirs);
+        if !differ(&got, &want) {
             continue;
         }
         ctx.env.sink.diagnostics.borrow_mut().push(
@@ -8269,9 +8349,12 @@ fn check_assoc_shadowing(
                     it.span(),
                     format!(
                         "associated type `{a}` shadows the outer type `{a}` inside the {owner}; \
-                         there `{a}` and `Self::{a}` both mean the associated type (spec 2.8.3)"
+                         there a bare `{a}` is ambiguous (spec 2.8.3)"
                     ),
                 )
+                .with_help(format!(
+                    "write `Self::{a}` for the associated type{outer_help}"
+                ))
                 .with_lint("assoc_type_shadowing"));
             }
         }

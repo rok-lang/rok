@@ -1,0 +1,11 @@
+// spec: §2.9.5
+// expect-error: `impl Display for i32`: neither the trait nor the type is defined in this package
+// forbid-error: defined more than once
+
+// A std trait for a std type is an orphan (E0076), not a duplicate of
+// std's own impl.
+use rok::core::fmt::{Display, Formatter};
+
+impl Display for i32 { fn fmt(self, ref f: Formatter) {} }
+
+fn main() {}
