@@ -1,5 +1,5 @@
 //! f-string format spec:
-//! `[[fill]align][sign]['#']['0'][width]['.' precision][type]`.
+//! `[[fill]align][sign]['#']['0'][width][',' | '_']['.' precision][type]`.
 //!
 //! The one spec parser: the runtime parses every spec with it at format
 //! time and the compiler (`rokc_hir`, through `#[path]`) checks static
@@ -15,8 +15,10 @@ pub struct FmtSpec {
     pub alt: bool,
     pub zero: bool,
     pub width: Option<usize>,
+    /// `0` (none), `,` or `_`: a separator between digit groups.
+    pub grouping: u8,
     pub precision: Option<usize>,
-    /// `0` (none) or one of `d b o x X f e E g s ?`.
+    /// `0` (none) or one of `d b o x X f e E g s ? %`.
     pub ty: u8,
 }
 
@@ -33,6 +35,7 @@ pub fn parse(text: &str) -> Result<FmtSpec, &'static str> {
         alt: false,
         zero: false,
         width: None,
+        grouping: 0,
         precision: None,
         ty: 0,
     };
@@ -64,6 +67,10 @@ pub fn parse(text: &str) -> Result<FmtSpec, &'static str> {
         b = tail;
     }
     spec.width = number(&mut b)?;
+    if let [g @ (b',' | b'_'), tail @ ..] = b {
+        spec.grouping = *g;
+        b = tail;
+    }
     if let [b'.', tail @ ..] = b {
         b = tail;
         spec.precision = Some(number(&mut b)?.ok_or("precision expected after `.`")?);
@@ -71,9 +78,9 @@ pub fn parse(text: &str) -> Result<FmtSpec, &'static str> {
     if let [t, tail @ ..] = b {
         if !matches!(
             t,
-            b'd' | b'b' | b'o' | b'x' | b'X' | b'f' | b'e' | b'E' | b'g' | b's' | b'?'
+            b'd' | b'b' | b'o' | b'x' | b'X' | b'f' | b'e' | b'E' | b'g' | b's' | b'?' | b'%'
         ) {
-            return Err("unknown format type (expected one of `d b o x X f e E g s ?`)");
+            return Err("unknown format type (expected one of `d b o x X f e E g s ? %`)");
         }
         spec.ty = *t;
         b = tail;
@@ -81,7 +88,7 @@ pub fn parse(text: &str) -> Result<FmtSpec, &'static str> {
     if b.is_empty() {
         Ok(spec)
     } else {
-        Err("malformed spec (`[[fill]align][sign][#][0][width][.precision][type]`)")
+        Err("malformed spec (`[[fill]align][sign][#][0][width][,|_][.precision][type]`)")
     }
 }
 
@@ -114,8 +121,8 @@ pub const ALT: u64 = 1 << 56;
 
 /// `spec` as the two words `core::fmt::Formatter` carries: flags - fill
 /// (bits 0..32), align, sign, type (a byte each from bit 32; `s d` as
-/// none), `#` (bit 56), `0` (bit 57) - and counts - width, precision
-/// (32 bits each, all ones when absent).
+/// none), `#` (bit 56), `0` (bit 57), `,` (bit 58), `_` (bit 59) - and
+/// counts - width, precision (32 bits each, all ones when absent).
 #[must_use]
 pub fn pack(s: &FmtSpec) -> (u64, u64) {
     let ty = if matches!(s.ty, b's' | b'd') { 0 } else { s.ty };
@@ -124,7 +131,9 @@ pub fn pack(s: &FmtSpec) -> (u64, u64) {
         | (u64::from(s.sign) << 40)
         | (u64::from(ty) << 48)
         | (u64::from(s.alt) << 56)
-        | (u64::from(s.zero) << 57);
+        | (u64::from(s.zero) << 57)
+        | (u64::from(s.grouping == b',') << 58)
+        | (u64::from(s.grouping == b'_') << 59);
     let count = |v: Option<usize>| {
         v.map_or(NO_COUNT, |n| {
             u64::try_from(n).unwrap_or(NO_COUNT).min(NO_COUNT - 1)
@@ -146,6 +155,11 @@ pub fn unpack(flags: u64, counts: u64) -> FmtSpec {
         alt: (flags >> 56) & 1 != 0,
         zero: (flags >> 57) & 1 != 0,
         width: count(counts),
+        grouping: match (flags >> 58) & 3 {
+            1 => b',',
+            2 => b'_',
+            _ => 0,
+        },
         precision: count(counts >> 32),
         ty: byte(48),
     }

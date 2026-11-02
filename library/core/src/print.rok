@@ -1,9 +1,12 @@
-// rok::core::print - `print` / `println` / `eprint` / `eprintln`
-// (the prelude names them, so they need no `use`). Each
-// takes one value and renders it with `Display`; the argument defaults to
-// the empty string, so `println()` writes a blank line.
-// Format or combine several values with an f-string:
-// `println(f"total = {total}")`.
+// rok::core::print - `print` / `println` / `eprint` / `eprintln` and
+// `dbg` (the prelude names them, so they need no `use`).
+//
+// A direct call takes any number of values, written with `Display` (with
+// `Debug` for a type that has no `Display`), joined by `sep:` (default
+// " ") and followed by `end:` (default "\n" for the `ln` forms, else
+// nothing): `println("total:", n, xs)`. The functions below are what a
+// call through a function value (`xs.for_each(println)`) runs: one
+// `Display` value. A direct `dbg(e)` also shows `e`'s source text.
 //
 // They share the runtime's stream writers with `io::stdout()` /
 // `io::stderr()`; one call writes its line whole, so lines from
@@ -17,3 +20,9 @@ pub fn println<T: Display>(v: T = "")  { unsafe { rok_stdio_write(1, f"{v}", 1) 
 pub fn eprint<T: Display>(v: T = "")   { unsafe { rok_stdio_write(2, f"{v}", 0) }; }
 /// Writes `v` and a newline to stderr.
 pub fn eprintln<T: Display>(v: T = "") { unsafe { rok_stdio_write(2, f"{v}", 1) }; }
+/// Writes `value`'s `Debug` form to stderr and returns `value` (Rust
+/// `dbg!`). A direct call writes `[file:line:col] <source> = <value>`.
+pub fn dbg<T: Debug>(value: T) -> T {
+    unsafe { rok_stdio_write(2, f"{value:?}", 1) };
+    value
+}

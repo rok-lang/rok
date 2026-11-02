@@ -20,7 +20,20 @@ impl Parser<'_> {
                     parts.push(FStringPart::Lit(t));
                 }
                 TokenKind::HoleStart => {
-                    if let Some((expr, spec)) = self.parse_hole() {
+                    if let Some((expr, spec, echo)) = self.parse_hole() {
+                        // `{x=}`: the text, then the Debug form (the spec's
+                        // form when one is given).
+                        let spec = match echo {
+                            Some(text) => {
+                                parts.push(FStringPart::Lit(text));
+                                if spec.is_empty() {
+                                    vec![SpecPiece::Text("?".to_owned())]
+                                } else {
+                                    spec
+                                }
+                            }
+                            None => spec,
+                        };
                         parts.push(FStringPart::Hole { expr, spec });
                     }
                 }
@@ -35,9 +48,10 @@ impl Parser<'_> {
         ExprKind::FString(parts)
     }
 
-    /// `HoleStart expr (HoleSpec (SpecText | hole)*)? HoleEnd`; on an
-    /// error, skips to the hole's end.
-    fn parse_hole(&mut self) -> Option<(Expr, Vec<SpecPiece>)> {
+    /// `HoleStart expr echo? (HoleSpec (SpecText | hole)*)? HoleEnd`, the
+    /// echo (`=`, lexed as the hole's text) last; on an error, skips to
+    /// the hole's end.
+    fn parse_hole(&mut self) -> Option<(Expr, Vec<SpecPiece>, Option<String>)> {
         let span = self.peek_span();
         self.bump();
         if self.eat(&TokenKind::HoleEnd) {
@@ -45,6 +59,11 @@ impl Parser<'_> {
             return None;
         }
         let expr = self.with_struct_expr(true, Self::parse_expr);
+        let mut echo = None;
+        if let TokenKind::FStrText(t) = self.peek().clone() {
+            self.bump();
+            echo = Some(t);
+        }
         let mut spec = Vec::new();
         if expr.is_some() && self.eat(&TokenKind::HoleSpec) {
             loop {
@@ -56,7 +75,7 @@ impl Parser<'_> {
                     TokenKind::HoleStart => {
                         let at = self.peek_span();
                         match self.parse_hole() {
-                            Some((e, s)) if s.is_empty() => spec.push(SpecPiece::Expr(e)),
+                            Some((e, s, None)) if s.is_empty() => spec.push(SpecPiece::Expr(e)),
                             Some(_) => self.error(
                                 Code::FSTRING_SYNTAX,
                                 at,
@@ -70,7 +89,7 @@ impl Parser<'_> {
             }
         }
         if self.eat(&TokenKind::HoleEnd) {
-            return Some((expr?, spec));
+            return Some((expr?, spec, echo));
         }
         if expr.is_some() {
             let at = self.peek_span();

@@ -154,6 +154,191 @@ pub(super) fn lower_fstring(ctx: &mut LowerCtx<'_>, parts: &[FStringPart], span:
     }
 }
 
+/// The function `callee` names, unless a local shadows it.
+fn callee_fn(ctx: &LowerCtx<'_>, callee: &Expr) -> Option<String> {
+    let ExprKind::Path(p) = &callee.kind else {
+        return None;
+    };
+    // A compiler-written call is the function itself.
+    if p.origin.is_some() {
+        return None;
+    }
+    if let [s] = p.segments.as_slice() {
+        if ctx.lookup(&s.name).is_some() {
+            return None;
+        }
+    }
+    let segs: Vec<&str> = p.segments.iter().map(|s| s.name.as_str()).collect();
+    ctx.resolve_fn_name(&segs)
+        .or_else(|| ctx.resolve_generic_fn_name(&segs))
+}
+
+/// A direct `dbg(e)`: writes `[file:line:col] <e's source> = <e:?>` to
+/// stderr; its value is `e`'s.
+pub(super) fn lower_dbg(
+    ctx: &mut LowerCtx<'_>,
+    callee: &Expr,
+    args: &[CallArg],
+    span: Span,
+) -> Option<HirExpr> {
+    let [CallArg::Positional(e)] = args else {
+        return None;
+    };
+    if callee_fn(ctx, callee)? != "rok::core::print::dbg" {
+        return None;
+    }
+    ctx.push_scope();
+    let mut stmts = Vec::new();
+    let Some(v) = bind(ctx, &mut stmts, e) else {
+        ctx.pop_scope();
+        return Some(poison(span));
+    };
+    let at = point(span);
+    let text = ctx.src(e.span).unwrap_or("..").to_owned();
+    let parts = [
+        FStringPart::Lit(format!("[{}] {text} = ", ctx.env.sources.location(span))),
+        FStringPart::Hole {
+            expr: v.clone(),
+            spec: vec![SpecPiece::Text("?".to_owned())],
+        },
+    ];
+    let line = lower_fstring(ctx, &parts, at);
+    let t = bind_hir(ctx, &mut stmts, "#p", line, at);
+    let mut callee = path(&["eprintln"], callee.span);
+    callee.origin = Some("rok::core::print".to_owned());
+    let write = mk(
+        ExprKind::Call {
+            callee: Box::new(mk(ExprKind::Path(callee), at)),
+            args: vec![CallArg::Positional(t)],
+            trailing_closure: None,
+        },
+        at,
+    );
+    let w = lower_expr(ctx, &write);
+    stmts.push(HirStmt::Expr(w));
+    let value = lower_expr(ctx, &v);
+    ctx.pop_scope();
+    Some(HirExpr {
+        ty: value.ty.clone(),
+        kind: HirExprKind::Block(Box::new(HirBlock {
+            stmts,
+            trailing: Some(value),
+            label: None,
+        })),
+        span,
+    })
+}
+
+/// The stream and default `end` of a direct call of a prelude print
+/// function (`print` / `println` / `eprint` / `eprintln`).
+pub(super) fn print_target(ctx: &LowerCtx<'_>, callee: &Expr) -> Option<(usize, &'static str)> {
+    match callee_fn(ctx, callee)?.as_str() {
+        "rok::core::print::print" => Some((1, "")),
+        "rok::core::print::println" => Some((1, "\n")),
+        "rok::core::print::eprint" => Some((2, "")),
+        "rok::core::print::eprintln" => Some((2, "\n")),
+        _ => None,
+    }
+}
+
+/// A direct print call: the values, each with `Display` (`Debug` for a
+/// type without it), joined by `sep` (default `" "`) and followed by
+/// `end`, written in one call.
+pub(super) fn lower_print(
+    ctx: &mut LowerCtx<'_>,
+    (fd, nl): (usize, &str),
+    callee_at: Span,
+    args: &[CallArg],
+    span: Span,
+) -> HirExpr {
+    ctx.push_scope();
+    let mut stmts = Vec::new();
+    let mut values = Vec::new();
+    let (mut sep, mut end) = (None, None);
+    for a in args {
+        match a {
+            CallArg::Positional(e) => values.extend(bind(ctx, &mut stmts, e)),
+            CallArg::Named { name, value } if name == "sep" || name == "end" => {
+                let slot = if name == "sep" { &mut sep } else { &mut end };
+                if slot.is_some() {
+                    ctx.emit_error(Code::NAMED_ARGUMENT, format!("`{name}:` is given twice"));
+                }
+                *slot = bind(ctx, &mut stmts, value);
+            }
+            CallArg::Named { name, .. } => ctx.emit_error(
+                Code::NAMED_ARGUMENT,
+                format!("print functions take values, `sep:` and `end:`; not `{name}:`"),
+            ),
+            CallArg::Spread(_) | CallArg::Ref(_) => ctx.emit_error(
+                Code::WRONG_ARGUMENT_COUNT,
+                "print functions take values, `sep:` and `end:`".to_owned(),
+            ),
+        }
+    }
+    let at = point(span);
+    let hole = |e: &Expr| FStringPart::Hole {
+        expr: e.clone(),
+        spec: Vec::new(),
+    };
+    let mut parts = Vec::new();
+    for (i, v) in values.iter().enumerate() {
+        if i > 0 {
+            parts.push(
+                sep.as_ref()
+                    .map_or_else(|| FStringPart::Lit(" ".to_owned()), hole),
+            );
+        }
+        let ty = ctx.local_ty(local_of(ctx, v));
+        let display = kind_of(ctx, &ty) != Kind::Other
+            || ctx.has_trait(&ty, ctx.lang("display_trait"))
+            || !ctx.has_trait(&ty, ctx.lang("debug_trait"));
+        parts.push(FStringPart::Hole {
+            expr: v.clone(),
+            spec: if display {
+                Vec::new()
+            } else {
+                vec![SpecPiece::Text("?".to_owned())]
+            },
+        });
+    }
+    // The text goes through the library function (one write); `println`
+    // and `eprintln` add their own newline.
+    let f = match (fd, end.as_ref()) {
+        (1, None) if !nl.is_empty() => "println",
+        (2, None) if !nl.is_empty() => "eprintln",
+        (1, _) => "print",
+        _ => "eprint",
+    };
+    if let Some(e) = &end {
+        parts.push(hole(e));
+    }
+    let text = lower_fstring(ctx, &parts, at);
+    let t = bind_hir(ctx, &mut stmts, "#p", text, at);
+    // The user's name for it: hover and go-to find the function.
+    let mut callee = path(&[f], callee_at);
+    callee.origin = Some("rok::core::print".to_owned());
+    let write = mk(
+        ExprKind::Call {
+            callee: Box::new(mk(ExprKind::Path(callee), callee_at)),
+            args: vec![CallArg::Positional(t)],
+            trailing_closure: None,
+        },
+        span,
+    );
+    let w = lower_expr(ctx, &write);
+    stmts.push(HirStmt::Expr(w));
+    ctx.pop_scope();
+    HirExpr {
+        ty: HirTy::Unit,
+        kind: HirExprKind::Block(Box::new(HirBlock {
+            stmts,
+            trailing: None,
+            label: None,
+        })),
+        span,
+    }
+}
+
 /// The writes, in order, against one formatter state; the block's
 /// value is its text.
 fn write_all(
@@ -499,9 +684,30 @@ fn static_hole(ctx: &LowerCtx<'_>, value: Expr, ty: &HirTy, text: &str) -> Optio
     };
     let needs = match spec.ty {
         b'b' | b'o' | b'x' | b'X' if !int => Some("an integer"),
-        b'e' | b'E' | b'f' | b'g' if !int && !float => Some("a number"),
+        b'e' | b'E' | b'f' | b'g' | b'%' if !int && !float => Some("a number"),
         _ => None,
     };
+    if spec.grouping != 0 && !int && !float {
+        ctx.emit_error(
+            Code::INVALID_FORMAT,
+            format!(
+                "`{}` groups the digits of a number, found `{}`",
+                char::from(spec.grouping),
+                ctx.ty_name(ty)
+            ),
+        );
+        return None;
+    }
+    if spec.grouping == b',' && matches!(spec.ty, b'b' | b'o' | b'x' | b'X') {
+        ctx.emit_error(
+            Code::INVALID_FORMAT,
+            format!(
+                "`,` groups decimal digits; group `{}` digits by 4 with `_`",
+                char::from(spec.ty)
+            ),
+        );
+        return None;
+    }
     if let Some(needs) = needs {
         ctx.emit_error(
             Code::INVALID_FORMAT,
@@ -520,6 +726,7 @@ fn static_hole(ctx: &LowerCtx<'_>, value: Expr, ty: &HirTy, text: &str) -> Optio
     let nothing = matches!(spec.ty, 0 | b's' | b'd')
         && spec.width.is_none()
         && spec.precision.is_none()
+        && spec.grouping == 0
         && (!number || (spec.sign != b'+' && spec.sign != b' '));
     let spec = if nothing {
         Spec::None

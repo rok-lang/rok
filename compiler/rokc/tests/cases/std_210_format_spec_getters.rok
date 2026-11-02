@@ -1,7 +1,7 @@
 // expect-exit: 0
 // expect-stdout:
 // * 8 3 true false x
-// invalid format spec `>>>`: unknown format type (expected one of `d b o x X f e E g s ?`)
+// invalid format spec `>>>`: unknown format type (expected one of `d b o x X f e E g s ? %`)
 
 // `FormatSpec` has getters and a throwing `parse`; its fields are
 // private.

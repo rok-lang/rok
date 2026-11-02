@@ -1,0 +1,35 @@
+// expect-exit: 0
+// expect-stderr: [*:22:9] 3 * 2 = 6
+// expect-stderr: to stderr
+// expect-stdout:
+// total: 5 [1, 2]
+// 1, 2, 3
+// a-b!
+//
+// Pt(1, 2) P { x: 1 }
+// 7
+// x=5 x = 5 x=   5 xs=[1, 2] x * 2=10
+// 1,234,567 1_234_567 -1,234,567.89 12.3% 50.000000% 1_0000 300.000000%
+//    1,234,567|
+
+// A direct print call takes any number of values: `Display`, else
+// `Debug`, joined by `sep:` and ended by `end:`. `dbg(e)` writes
+// `[file:line:col] e = <e:?>` to stderr and is `e`. `{x=}` shows the
+// hole's text and its Debug form; `,` / `_` group digits, `%` scales.
+#[derive(Debug)]
+struct P { x: i32; }
+
+let x = dbg(3 * 2) + 1;
+let n = 5;
+let xs = [1, 2];
+println("total:", n, xs);
+println(1, 2, 3, sep: ", ");
+print("a", "b", sep: "-", end: "!\n");
+println();
+eprintln("to", "stderr");
+println(f"Pt({1}, {2})", P { x: 1 });
+println(x);
+x = 5;
+println(f"{x=} {x = } {x=:>4} {xs=} {x * 2=}");
+println(f"{1234567:,} {1234567:_} {-1234567.891:,.2} {0.1234:.1%} {0.5:%} {16:_b} {3:%}");
+println(f"{1234567:>12,}|");

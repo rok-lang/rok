@@ -378,6 +378,7 @@ pub mod tests {
                 alt: false,
                 zero: false,
                 width: None,
+                grouping: 0,
                 precision: None,
                 ty: 0
             })

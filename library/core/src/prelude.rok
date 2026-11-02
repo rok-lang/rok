@@ -54,5 +54,5 @@ pub use rok::std::os::linux::net::TcpStreamExt;
 
 // Functions.
 pub use rok::core::channel::{channel, channel_bounded};
-pub use rok::core::print::{print, println, eprint, eprintln};
+pub use rok::core::print::{print, println, eprint, eprintln, dbg};
 pub use rok::core::panic::{panic, assert, assert_eq, assert_ne, unreachable};

@@ -288,6 +288,8 @@ struct Body {
     upper: bool,
     /// `.` and this many `0`s after (`f` on an integer).
     zeros: usize,
+    /// After the digits (`%`).
+    suffix: &'static [u8],
 }
 
 /// A number: its sign, `prefix` under `#`, `body`, padded.
@@ -309,13 +311,40 @@ fn number<T: Text>(
     if how.upper {
         w.tail_mut(mid).make_ascii_uppercase();
     }
+    if spec.grouping != 0 && !how.text {
+        group(w, mid, spec);
+    }
     if how.zeros > 0 {
         w.put(b".");
         for _ in 0..how.zeros {
             w.put(b"0");
         }
     }
+    w.put(how.suffix);
     pad(w, spec, start, mid, !how.text);
+}
+
+/// The spec's separator between groups of the leading digits written
+/// from `mid`: 3 decimal digits, 4 in another radix.
+fn group(w: &mut impl Text, mid: usize, spec: &FmtSpec) {
+    let decimal = radix(spec.ty) == 10;
+    let n = w
+        .tail_mut(mid)
+        .iter()
+        .take_while(|c| {
+            if decimal {
+                c.is_ascii_digit()
+            } else {
+                c.is_ascii_hexdigit()
+            }
+        })
+        .count();
+    let step = if decimal { 3 } else { 4 };
+    let mut at = n;
+    while at > step {
+        at -= step;
+        w.insert(mid + at, char::from(spec.grouping), 1);
+    }
 }
 
 const fn radix_prefix(ty: u8) -> &'static [u8] {
@@ -366,6 +395,27 @@ pub fn digits(w: &mut impl Text, spec: &FmtSpec, neg: bool, d: &[u8]) {
         b'f' => {
             let zeros = spec.precision.unwrap_or(6);
             number(w, spec, neg, b"", |w| w.put(d), Body { zeros, ..plain });
+        }
+        b'%' => {
+            let zeros = spec.precision.unwrap_or(6);
+            let body = |w: &mut _| {
+                Text::put(w, d);
+                if d != b"0" {
+                    Text::put(w, b"00");
+                }
+            };
+            number(
+                w,
+                spec,
+                neg,
+                b"",
+                body,
+                Body {
+                    zeros,
+                    suffix: b"%",
+                    ..plain
+                },
+            );
         }
         _ => number(w, spec, neg, b"", |w| w.put(d), plain),
     }
@@ -419,16 +469,20 @@ pub fn float_number(
         return Err("invalid format spec: a float has no binary / octal / hex form");
     }
     let neg = v.is_sign_negative() && !v.is_nan();
+    let percent = spec.ty == b'%' && mode & FLOAT_DEBUG == 0;
     let how = Body {
         text: !v.is_finite(),
+        suffix: if percent { b"%" } else { b"" },
         ..Body::default()
     };
-    let ty = if mode & FLOAT_DEBUG != 0 {
-        b'?'
+    let (ty, v) = if mode & FLOAT_DEBUG != 0 {
+        (b'?', v)
+    } else if percent {
+        (b'f', v * 100.0)
     } else {
-        spec.ty
+        (spec.ty, v)
     };
-    let is_f32 = mode & FLOAT_F32 != 0;
+    let is_f32 = mode & FLOAT_F32 != 0 && !percent;
     let body = |w: &mut _| float(w, v.abs(), is_f32, ty, spec.precision, spec.alt);
     number(w, spec, neg, b"", body, how);
     Ok(())

@@ -2528,12 +2528,16 @@ fn lower_expr_inner(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
             if let ExprKind::Path(p) = &callee.kind {
                 check_direct_drop_path(ctx, p);
             }
-            let since = ctx.env.sink.diagnostics.borrow().len();
+            if let Some(target) = super::fstring::print_target(ctx, callee) {
+                return super::fstring::lower_print(ctx, target, callee.span, &all_args, span);
+            }
+            if let Some(e) = super::fstring::lower_dbg(ctx, callee, &all_args, span) {
+                return e;
+            }
             let call = match &callee.kind {
                 ExprKind::QPath(q) => qpath_call(ctx, q, &all_args, span),
                 _ => lower_call(ctx, callee, &all_args, span),
             };
-            print_args_help(ctx, callee, &all_args, since);
             unpack_call(ctx, call)
         }
         ExprKind::MethodCall { .. } => lower_method_call(ctx, expr),
@@ -7314,57 +7318,6 @@ fn str_index_help(ctx: &LowerCtx<'_>, s: &Expr, i: &Expr) {
              `{s}.chars().nth({i})`"
         )));
     }
-}
-
-/// Python's `println("x =", x)` as one f-string, `println(f"x = {x}")`.
-fn print_args_help(ctx: &LowerCtx<'_>, callee: &Expr, args: &[CallArg], since: usize) {
-    let Some(help) = print_args_text(ctx, callee, args) else {
-        return;
-    };
-    // It replaces the generic help showing the signature.
-    let mut diags = ctx.env.sink.diagnostics.borrow_mut();
-    if diags.len() > since {
-        if let Some(d) = diags.last_mut().filter(|d| d.is_error()) {
-            d.notes.retain(|n| !n.starts_with("help: "));
-            d.notes.push(format!("help: {help}"));
-        }
-    }
-}
-
-fn print_args_text(ctx: &LowerCtx<'_>, callee: &Expr, args: &[CallArg]) -> Option<String> {
-    let ExprKind::Path(p) = &callee.kind else {
-        return None;
-    };
-    let [seg] = p.segments.as_slice() else {
-        return None;
-    };
-    if args.len() < 2
-        || !matches!(
-            seg.name.as_str(),
-            "print" | "println" | "eprint" | "eprintln"
-        )
-    {
-        return None;
-    }
-    let mut parts = Vec::new();
-    for a in args {
-        let CallArg::Positional(e) = a else {
-            return None;
-        };
-        let t = ctx.src(e.span)?;
-        parts.push(match &e.kind {
-            ExprKind::Literal(AstLit::Str(_)) if t.len() >= 2 && t.starts_with('"') => {
-                t[1..t.len() - 1].replace('{', "{{").replace('}', "}}")
-            }
-            _ => format!("{{{t}}}"),
-        });
-    }
-    Some(format!(
-        "`{}` takes one string; put the values in an f-string: `{}(f\"{}\")`",
-        seg.name,
-        seg.name,
-        parts.join(" ")
-    ))
 }
 
 /// Python's `"a {} b".format(x)` as an f-string, `f"a {x} b"`.
