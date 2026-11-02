@@ -8,7 +8,7 @@
 // 10 10
 // 4 12
 
-// Adapter types as the spec names them, written in signatures and fields.
+// Adapter types by their public names, written in signatures and fields.
 use rok::core::iter::Map;
 
 fn first_two(p: iter::Peekable<collections::ListIter<i32>>) -> i32 {

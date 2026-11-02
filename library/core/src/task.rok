@@ -2325,7 +2325,7 @@ pub fn spawn_blocking<T: Send>(f: fn() -> T + Send) -> Task<T> {
     }
 }
 
-/// `spawn_blocking` that hands `arg` to `f` on the lane. `f`'s
+/// `spawn_blocking` that hands `arg` to `f` on the lane. `f`'s plain
 /// captures stay shared with the caller, so they must be `Send + Sync`;
 /// `arg` only needs `Send`: it is handed over like a channel send (the
 /// task gets a copy of every collection it reaches, and the caller can no

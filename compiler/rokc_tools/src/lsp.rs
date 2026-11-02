@@ -390,7 +390,7 @@ impl<W: Write> Server<W> {
         s
     }
 
-    /// Check `text` as buffer `path`: the package root (902.2) with this
+    /// Check `text` as buffer `path`: the package root with this
     /// buffer as root or the root as open / on disk; files outside any
     /// package are anonymous. Open buffers stand for their files. With both
     /// root files, a file the library reaches is the library's, any

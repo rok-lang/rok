@@ -6397,7 +6397,8 @@ fn is_drop_method(ctx: &LowerCtx<'_>, ty: &HirTy) -> bool {
     trait_name.as_deref() == Some(ctx.lang("drop_method"))
 }
 
-/// `Drop::drop` runs only on `using` exit; a direct call is
+/// `Drop::drop` runs where the owner releases the value (scope end or
+/// `using` exit); a direct call is
 /// an error outside `unsafe` bare-tier code.
 fn direct_drop_error(ctx: &LowerCtx<'_>, span: rokc_diagnostic::Span) -> Option<HirExpr> {
     if ctx.unsafe_depth > 0 && ctx.current_module.starts_with("rok::bare") {

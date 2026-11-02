@@ -470,7 +470,7 @@ fn ty_text(hir: &HirModule, ty: &HirTy, full: bool) -> String {
     let rec = |t: &HirTy| ty_text(hir, t, full);
     let list = |ts: &[HirTy]| ts.iter().map(rec).collect::<Vec<_>>().join(", ");
     // Types by their own name (`List<i32>`, not the module path), as
-    // the REPL shows them (907.7).
+    // the REPL shows them.
     let generic = |name: &str, args: &[HirTy]| {
         let base = name.split("__").next().unwrap_or(name);
         // An item in a block by its own name.

@@ -78,9 +78,9 @@ pub trait Drop {
 // Auto marker traits, derived by the compiler: a struct / enum / tuple /
 // array / sum has one iff every component does; primitives and `str`
 // have both; a closure is `Sync` iff its captures are and `Send` iff
-// they are `Send + Sync` (a capture copies a handle the creator keeps);
-// a `fn` type has those it names (`+ Send` implies `Sync`), a named
-// function both. `unsafe impl Send for T {}` opts in, `impl !Send for T
+// its plain captures are `Send + Sync` (a plain capture copies a handle
+// the creator keeps) and its `[move x]` captures are `Send`; a `fn` type
+// has exactly the bounds it names, a named function both. `unsafe impl Send for T {}` opts in, `impl !Send for T
 // {}` opts out. `Send`: safe to move to another thread. `Sync`: safe to
 // read through shared references from several threads.
 
@@ -407,7 +407,8 @@ pub unsafe fn share<T>(x: T) -> T { x }
 pub fn view<T>(x: T) -> T { x }
 
 /// Put `value` into `dest` and return what it held: the way to move a
-/// part out of a struct (`replace(ref child.stdout, none)`).
+/// part out of a struct (`replace(ref s.part, none)`, as
+/// `Child::take_stdout` does).
 #[discardable]
 pub fn replace<T>(ref dest: T, value: T) -> T {
     let old = dest;

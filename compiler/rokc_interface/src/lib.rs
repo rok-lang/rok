@@ -268,7 +268,7 @@ impl CompileResult {
         rokc_driver::emit(self.module()?, &self.source_map, kind, opts)
     }
 
-    /// `-vv` (909.5): the source files read, then the generic instances
+    /// `-vv`: the source files read, then the generic instances
     /// made, one progress line each.
     #[must_use]
     pub fn trace(&self) -> String {

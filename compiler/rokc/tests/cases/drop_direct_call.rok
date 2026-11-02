@@ -1,5 +1,5 @@
 // expect-error: `Drop::drop` cannot be called directly
-// `drop` runs only when a `using` block exits.
+// `drop` runs where the owner releases the value (scope end or `using`).
 struct File { fd: i32; }
 
 impl Drop for File {

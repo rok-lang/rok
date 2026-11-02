@@ -7,8 +7,8 @@
 // kept: still running
 
 // `status` / `output`, and a `kill_on_drop` child bound
-// with `using` is killed and reaped when the block ends; a child outside
-// `using` is not.
+// with `using` is killed and reaped when the block ends; a child still
+// owned keeps running.
 use rok::core::marker::share;
 use rok::std::process::{Command, ExitStatus, Stdio};
 use rok::std::env;

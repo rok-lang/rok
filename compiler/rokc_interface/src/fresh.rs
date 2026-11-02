@@ -1,4 +1,4 @@
-//! Package-level incremental builds (902.16): skip a build whose output
+//! Package-level incremental builds: skip a build whose output
 //! exists and whose inputs didn't change. The record (`.<out>.fp`) holds
 //! the key, the output's `file_stamp` and the rendered warnings, which a
 //! skipped build reprints.

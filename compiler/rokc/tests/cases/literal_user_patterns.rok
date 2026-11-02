@@ -1,5 +1,5 @@
 // User `#[literal]` patterns - a bracket matrix
-// with nested `%` repetitions, the spec's `(x, y)@` coordinate, and a
+// with nested `%` repetitions, an `(x, y)@` coordinate, and a
 // user handler for the `[..]` shape picked by the slot's type.
 // expect-exit: 0
 // expect-stdout:

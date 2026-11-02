@@ -19,7 +19,7 @@ pub struct Package {
     pub library: Option<PathBuf>,
 }
 
-/// The root file name standing for standard input (`check -`, 901.9).
+/// The root file name standing for standard input (`check -`).
 pub const STDIN: &str = "<stdin>";
 
 impl Package {
@@ -47,7 +47,7 @@ impl Package {
         })
     }
 
-    /// `target/`; `ROK_TARGET_DIR` overrides (901.7).
+    /// `target/`; `ROK_TARGET_DIR` overrides.
     #[must_use]
     pub fn target_dir(&self) -> PathBuf {
         std::env::var_os("ROK_TARGET_DIR").map_or_else(|| self.dir.join("target"), PathBuf::from)
@@ -80,7 +80,7 @@ pub fn root_file(dir: &Path) -> Option<PathBuf> {
 }
 
 /// The package of `path`: the nearest directory with `src/main.rok` /
-/// `src/lib.rok` (902.2); a file outside its `src/` is anonymous.
+/// `src/lib.rok`; a file outside its `src/` is anonymous.
 pub fn discover(path: &Path) -> Result<Package, String> {
     if !path.exists() {
         return Err(format!("`{}` does not exist", path.display()));

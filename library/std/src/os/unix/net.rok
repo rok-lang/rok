@@ -15,8 +15,8 @@ use rok::std::net::{Shutdown, Sock, sock_of, ADDR_WORDS, Duplex, ReadHalf, Write
 use rok::std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 use rok::bare::mem::{GcBuf, buf_new};
 
-/// A Unix stream socket. Copies share the socket; `close()` (or leaving
-/// a `using` block) closes it for all.
+/// A Unix stream socket. It has one owner (`let b = a` moves it); close
+/// it with `try s.close()` or `using`.
 pub struct UnixStream {
     sock: Sock;
 }

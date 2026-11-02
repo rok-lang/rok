@@ -1,5 +1,5 @@
 # Development shell for Linux hosts with nix (NixOS has no FHS paths):
-# what llvm/README.md lists for Linux, clang for the PGO build of the
+# LLVM's build tools (cmake, ninja, python3, ...), clang for the PGO build of the
 # pinned LLVM and for targets/build.sh, and the tools the tests run.
 #
 #   nix-shell            # then llvm/build.sh, cargo test, ...

@@ -484,7 +484,7 @@ impl<T> MutexGuard<T> {
     pub const fn get_clone(self) -> T where T: Clone {
         self.get().clone()
     }
-    /// Replace the protected value (instead of spec `deref_mut`: rok has
+    /// Replace the protected value (no `deref_mut`: rok has
     /// no `ref` returns).
     pub const fn set(self, value: T) {
         unsafe {
@@ -747,7 +747,7 @@ impl<T> Drop for RwLockWriteGuard<T> {
     }
 }
 
-/// A value made once and only read after (2.16.4b): any thread may read it
+/// A value made once and only read after: any thread may read it
 /// without a lock. `new` keeps a copy of the value's collections that
 /// nothing else reaches, and `get` gives each reader its own copy, so no
 /// one can change what the others read. `Sync` parts (a `Mutex`, a cache

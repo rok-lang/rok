@@ -116,7 +116,7 @@ pub struct Emitter {
     pub errors: Vec<(rokc_diagnostic::Span, String)>,
     /// Runtime symbols codegen uses on its own (`runtime_decl`).
     needs: BTreeSet<&'static str>,
-    /// `ScanTable` (802) of each GC object type: index `i` is type id
+    /// `ScanTable` of each GC object type: index `i` is type id
     /// `gc_type_base() + i`. A REPL cell starts with the earlier cells'.
     pub gc_types: Vec<Vec<u32>>,
     pkgs: crate::mangle::Pkgs,
@@ -194,7 +194,7 @@ enum Callee<'s> {
     Ptr(&'s str),
 }
 
-/// Declaration of runtime symbol `name` (805) that codegen calls itself;
+/// Declaration of runtime symbol `name` that codegen calls itself;
 /// `None` if not in the table. `str` is passed by pointer on Windows x64
 /// and wasm32 (`FnEmit::runtime_str`).
 fn runtime_decl(name: &str, target: &Target) -> Option<String> {
@@ -831,7 +831,7 @@ impl Emitter {
         self.out.push_str("}\n");
     }
 
-    /// The `ScanTable`s (802) and `rok.register_types`, which registers them
+    /// The `ScanTable`s and `rok.register_types`, which registers them
     /// and the static roots right after `rok_runtime_init`.
     fn emit_gc_support(&mut self, module: &MirModule) {
         let mut calls = String::new();
@@ -2268,7 +2268,7 @@ impl<'a> FnEmit<'a> {
         }
     }
 
-    /// Address of TLS slot `slot` (803), off `tls_base`, computed once per
+    /// Address of TLS slot `slot`, off `tls_base`, computed once per
     /// function so LLVM keeps it in a register.
     fn tls_addr(&mut self, slot: Slot) -> String {
         self.needs.insert("rok_tls");
@@ -6231,7 +6231,7 @@ fn mlir_prim(p: PrimTy, pointer_width: u32) -> String {
         PrimTy::F32 => "f32".to_owned(),
         PrimTy::F64 => "f64".to_owned(),
         PrimTy::Bool => "i1".to_owned(),
-        // `(ptr, len)` (808); a C function gets `rok_str_cstr`'s
+        // `(ptr, len)`; a C function gets `rok_str_cstr`'s
         // NUL-terminated pointer instead.
         PrimTy::Str => format!("!llvm.struct<(ptr, i{pointer_width})>"),
     }
@@ -6321,7 +6321,7 @@ pub fn gc_object_size(ty: &MirTy, target: &Target) -> (u32, u32) {
     (HEADER_SIZE + size.next_multiple_of(align), align)
 }
 
-/// The `ScanTable` (802) of `ty` objects (`array`: buffers of `ty`).
+/// The `ScanTable` of `ty` objects (`array`: buffers of `ty`).
 ///
 /// `u32` words: header `{total_size u32, version u16 = 1, num_entries
 /// u16}`, `{field_offset u32, field_kind u32}` entries, then sum

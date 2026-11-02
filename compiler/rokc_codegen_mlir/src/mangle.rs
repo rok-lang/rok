@@ -1,7 +1,7 @@
 //! Symbol mangling.
 //!
 //! `_Y<pkg8>_<path>_<name>_<typehash16>`; concrete items end in `_`
-//! (empty typehash). `extern` declarations keep their C name (905.8).
+//! (empty typehash). `extern` declarations keep their C name.
 //!
 //! Identifier bytes outside `[A-Za-z0-9]` are escaped so the `_`
 //! separators stay unambiguous: a literal `_` is `_0`, anything else is
@@ -98,7 +98,7 @@ pub fn mangled(f: &MirFunction, pkgs: &Pkgs) -> String {
 }
 
 /// Mangle a `::`-qualified item path. The package is the hash, so a
-/// library's `rok::` root is dropped (`rok::std::fs` → `std_fs`, 905.3).
+/// library's `rok::` root is dropped (`rok::std::fs` → `std_fs`).
 pub fn item(pkg: &str, qualified: &str, typehash: &str) -> String {
     let qualified = qualified.strip_prefix("rok::").unwrap_or(qualified);
     let mut segs: Vec<&str> = qualified.split("::").collect();
@@ -170,7 +170,7 @@ pub fn demangle(sym: &str) -> Option<Demangled> {
     }
     let rest = rest.strip_prefix('_')?;
     // A typehash is 16 hex digits after the last separator; a concrete
-    // item ends in the separator (empty typehash) or, per 905.2, omits it.
+    // item ends in the separator (empty typehash) or omits it.
     let (body, typehash) = if let Some(b) = rest.strip_suffix('_') {
         (b, None)
     } else {

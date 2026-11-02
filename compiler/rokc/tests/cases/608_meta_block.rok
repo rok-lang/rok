@@ -2,7 +2,7 @@
 // expect-stdout:
 // 7
 
-// The spec's own `#[impl_derive(MyHash)]` example -
+// A user `#[impl_derive(MyHash)]`:
 // `@Self`, `@for_fields`, `self.@field` over a struct.
 trait MyHash {
     fn my_hash(self) -> u64;

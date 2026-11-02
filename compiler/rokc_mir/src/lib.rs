@@ -132,7 +132,7 @@ pub struct DebugTypes {
 }
 
 /// The packages items belong to, and how this module links with
-/// prebuilt dependencies (their `lib<name>.a` + `<name>.rokhir`, 904).
+/// prebuilt dependencies (their `lib<name>.a` + `<name>.rokhir`).
 #[derive(Clone, Debug, Default)]
 pub struct Link {
     /// Package hash per item-path prefix (`rok::core`, ..., `""` for the
@@ -548,8 +548,8 @@ pub enum MirTy {
     Array(Box<MirTy>, u32),
     // First-class function pointer.
     Fn(Vec<MirTy>, Box<MirTy>),
-    /// Word that may hold a GC reference (an object's header address,
-    /// 801), lowered as a pointer-width integer: the payload of an `any`
+    /// Word that may hold a GC reference (an object's header
+    /// address), lowered as a pointer-width integer: the payload of an `any`
     /// value, which holds small primitives inline instead. Codegen roots
     /// and traces exactly these words; the collector ignores a word that
     /// is not an object address.
@@ -558,7 +558,7 @@ pub enum MirTy {
     /// words, laid out like `[GcRef; words]`, keeping each variant's
     /// `(stored tag, type)`. As aligned as its most aligned variant (an
     /// explicit layout past a word). A sum's payload slot
-    /// ([`UnionKind::Sum`]) is scanned per the `i32` tag before it (802
-    /// `SUM_PAYLOAD`); any other one as ambiguous words.
+    /// ([`UnionKind::Sum`]) is scanned per the `i32` tag before it
+    /// (`SUM_PAYLOAD`); any other one as ambiguous words.
     Union(Vec<(u32, MirTy)>, u32, UnionKind),
 }

@@ -11,11 +11,11 @@
 //!          varint n | n × (str function | str summary)
 //! ```
 //!
-//! `str` is a `PrefixVarInt` length + UTF-8 (904.7). The body is every
+//! `str` is a `PrefixVarInt` length + UTF-8. The body is every
 //! source file with concrete function bodies cut to `;` (line breaks kept
 //! for diagnostics), then the `.wit` files `ffi::wit` reads, then the
 //! use-after-hand-off summaries a cut body can't show.
-// Source rather than 904.9-11's binary sections: monomorphization works on
+// Source rather than binary sections: monomorphization works on
 // AST anyway, and a binary tree would only save the cheap parse.
 
 use std::path::{Path, PathBuf};
@@ -63,7 +63,7 @@ pub fn producer() -> String {
 }
 
 fn put_varint(out: &mut Vec<u8>, v: u64) {
-    // 904.7 PrefixVarInt: n leading 1 bits in the first byte = n more
+    // PrefixVarInt: n leading 1 bits in the first byte = n more
     // bytes; the value is big-endian over the remaining bits.
     let extra = (0..=8)
         .find(|&n| n == 8 || v < 1u64 << (7 * (n + 1)))
@@ -225,7 +225,7 @@ impl Rokhir {
         self.type_offset + self.type_count
     }
 
-    /// `rokc inspect --dump` (904.14): header fields, then every file.
+    /// `rokc inspect --dump`: header fields, then every file.
     #[must_use]
     pub fn text(&self) -> String {
         let mut s = format!(

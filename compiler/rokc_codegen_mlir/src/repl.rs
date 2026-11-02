@@ -1,11 +1,11 @@
-//! REPL cells compile only what is new (906): a function whose text equals
+//! REPL cells compile only what is new: a function whose text equals
 //! an earlier cell's definition of its symbol, with all callees likewise,
 //! becomes a declaration of it, so library code compiles once per session.
 //!
 //! Equal text is equal behaviour: symbols are stable across cells, and a
 //! function referring to anything this cell redefines is redefined too.
 //! The host renames redefined symbols so later cells get the newest
-//! (907). Works on MLIR text: a top-level op is a two-space-indented line
+//! definition. Works on MLIR text: a top-level op is a two-space-indented line
 //! up to the next.
 
 use std::collections::{HashMap, HashSet};

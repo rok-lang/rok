@@ -10,7 +10,7 @@
 // resolve localhost: true
 // refused: true
 
-// std::net (302): a TCP echo server and its clients in one program,
+// std::net: a TCP echo server and its clients in one program,
 // with the blocking API (an OS thread serves) and the async one (tasks
 // on the pool suspend in accept / read / write).
 use rok::std::net::{TcpListener, TcpStream, SocketAddr, Ipv4Addr, Ipv6Addr, Shutdown};
