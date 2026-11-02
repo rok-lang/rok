@@ -1,0 +1,15 @@
+// expect-error: mismatched types: `let n` expects `i32`, found `DirEntry`
+
+// `collect` on a `ReadDirStream` gathers `DirEntry`s (its `Item`, named
+// in the standard library's module): their type is checked as such.
+use rok::core::task;
+use rok::core::io::IoError;
+use rok::std::fs;
+
+async fn go() throws (IoError) {
+    let all = try await (try await fs::read_dir_async(".")).collect();
+    let n: i32 = all[0];
+    println(n);
+}
+
+fn main() throws (IoError) { try task::try_block_on(go()); }

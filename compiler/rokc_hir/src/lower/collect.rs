@@ -2113,7 +2113,7 @@ fn collect<'a>(
                     };
                     if let Some(base) = base {
                         let mut def = tm.clone();
-                        subst_assoc_sig(&mut def, &impl_assoc_types(impl_def));
+                        subst_assoc_sig(&mut def, &impl_assoc_types_from(impl_def, &module));
                         def.name = format!("{trait_module}::{}__{}", leaf_name(&base), tm.name);
                         let slot = generic_methods.entry((base, tm.name.clone())).or_default();
                         if !slot.is_empty() {
@@ -4879,7 +4879,7 @@ fn generic_trait_impl(
         ));
     };
     let target_display = impl_def_display(&impl_def.self_ty);
-    let assoc = impl_assoc_types(impl_def);
+    let assoc = impl_assoc_types_from(impl_def, module);
     let template = |m: &FnDef, def_module: &str, clashed: bool| {
         let mut def = m.clone();
         // Before the impl's associated types bring its names in.
@@ -7854,6 +7854,53 @@ pub(super) fn intrinsic_of(
         ));
     }
     Some(intrinsic)
+}
+
+/// `impl_assoc_types` for a trait default lowered in the trait's module:
+/// each type resolves in `module`, the impl's, which may name what the
+/// trait's module does not see (`type Item = DirEntry`). The impl's own
+/// type parameters (`params`) stay as written.
+fn impl_assoc_types_from(impl_def: &rokc_ast::ImplDef, module: &str) -> HashMap<String, Ty> {
+    fn stamp(t: &mut Ty, module: &str, params: &[&str]) {
+        let mut rec = |t: &mut Ty| stamp(t, module, params);
+        match &mut t.kind {
+            AstTyKind::Path(p) => {
+                let param =
+                    matches!(p.segments.as_slice(), [s] if params.contains(&s.name.as_str()));
+                if p.origin.is_none() && !param {
+                    p.origin = Some(module.to_owned());
+                }
+                for s in &mut p.segments {
+                    s.generics.iter_mut().for_each(&mut rec);
+                }
+            }
+            AstTyKind::Sum(ts) | AstTyKind::Tuple(ts) => ts.iter_mut().for_each(rec),
+            AstTyKind::Fn(ps, r, _) => {
+                ps.iter_mut().for_each(&mut rec);
+                rec(r);
+            }
+            AstTyKind::Nest(x) | AstTyKind::Binding(_, x) | AstTyKind::Array(x, _) => rec(x),
+            AstTyKind::Throws { ok, err } => {
+                rec(ok);
+                rec(err);
+            }
+            _ => {}
+        }
+    }
+    let params: Vec<&str> = impl_def
+        .generics
+        .params
+        .iter()
+        .map(|gp| match gp {
+            rokc_ast::GenericParam::Type { name, .. }
+            | rokc_ast::GenericParam::Const { name, .. } => name.as_str(),
+        })
+        .collect();
+    let mut assoc = impl_assoc_types(impl_def);
+    for t in assoc.values_mut() {
+        stamp(t, module, &params);
+    }
+    assoc
 }
 
 /// An impl's associated types: `type Item = T;` → `Item ↦ T`.
