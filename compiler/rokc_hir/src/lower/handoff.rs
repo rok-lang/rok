@@ -62,7 +62,7 @@ enum What {
     Handoff,
     /// `task::spawn`: the task's future.
     Task,
-    /// `task::spawn_blocking_with`: the value its function gets.
+    /// `task::spawn_blocking_with_arg`: the value its function gets.
     TaskArg,
     /// A `[move x]` capture.
     Closure,
@@ -117,13 +117,8 @@ const HANDOFFS: &[(&str, usize, What)] = &[
     ("rok::core::marker::Handoff__new", 0, What::Handoff),
     ("rok::core::task::spawn", 0, What::Task),
     ("rok::core::task::spawn_plain", 0, What::Task),
-    ("rok::core::task::spawn_blocking_with", 0, What::TaskArg),
+    ("rok::core::task::spawn_blocking_with_arg", 0, What::TaskArg),
     ("rok::core::marker::move_into", 0, What::Closure),
-    // A closure that owns a `[move x]` capture goes with it.
-    ("rok::core::task::spawn_blocking", 0, What::Task),
-    ("rok::std::thread::spawn", 0, What::Task),
-    ("rok::std::thread::Builder__spawn", 1, What::Task),
-    ("rok::core::par::Scope__spawn", 1, What::Task),
 ];
 
 /// Lock guards: `get` returns, `set` stores, and `update`'s closure
@@ -3109,6 +3104,59 @@ impl<'h> Walk<'_, 'h> {
         }
     }
 
+    /// A parameter typed `fn(..) + Send` without `Sync` is one the callee
+    /// may run on another thread: an argument that may own moved values
+    /// goes there, whoever the callee is.
+    fn send_fn_args(&mut self, args: &[HirExpr], at: Span) {
+        let send = self.c.ctx.lang("send_trait");
+        let sync = self.c.ctx.lang("sync_trait");
+        let mut owners = Vec::new();
+        for a in args {
+            let HirTy::Fn(_, _, b) = &a.ty else { continue };
+            if !b.auto.iter().any(|k| *k == send) || b.auto.iter().any(|k| *k == sync) {
+                continue;
+            }
+            // A `fn` value adapted to the slot (`throws` added) is a closure
+            // holding it.
+            match &a.kind {
+                HirExprKind::ClosureValue { env, .. } => match &env.kind {
+                    HirExprKind::Tuple { fields } => owners.extend(fields.iter()),
+                    _ => owners.push(env),
+                },
+                _ => owners.push(a),
+            }
+        }
+        for a in owners {
+            if !self.owns_moved(a) || self.c.in_unsafe(at) {
+                continue;
+            }
+            let Some(p) = place(a) else { continue };
+            if let Some(t) = self
+                .c
+                .src(a.span)
+                .filter(|t| t.len() <= 40 && !t.contains('\n'))
+            {
+                self.c
+                    .handed
+                    .borrow_mut()
+                    .insert((at.file, at.start), format!("`{t}`"));
+            }
+            let why = Gone::To(at, What::Task);
+            // A `fn` local: only that place (what it owns was followed from
+            // the closure that made it).
+            let closure = matches!(&a.kind, HirExprKind::Local(l)
+                if matches!(self.local_ty(*l), Some(HirTy::Closure { .. })));
+            if closure {
+                self.mark_gone(p, why);
+            } else {
+                for s in self.cur.states() {
+                    s.gone.retain(|g, _| !within(g, &p));
+                    s.gone.insert(p.clone(), why);
+                }
+            }
+        }
+    }
+
     /// What `e`'s value carries, of the places this walk knows.
     fn flows(&self, e: &HirExpr, out: &mut Vec<Flow>) {
         if self.owns_moved(e) || self.c.tracked(&e.ty) {
@@ -3859,6 +3907,12 @@ impl<'h> Walk<'_, 'h> {
 
     /// The effect of `e` once its operands ran.
     fn after(&mut self, e: &'h HirExpr) {
+        if let HirExprKind::Call { args, .. }
+        | HirExprKind::CallIndirect { args, .. }
+        | HirExprKind::CallClosure { args, .. } = &e.kind
+        {
+            self.send_fn_args(args, e.span);
+        }
         match &e.kind {
             HirExprKind::Call { callee, args } => {
                 if let Some(op) = self.c.ops.get(callee).copied() {
@@ -4509,7 +4563,7 @@ impl<'h> Walk<'_, 'h> {
                 // A spawned closure goes along only when it may own moved
                 // values (as for a direct spawn).
                 let arg = args.get(r.0 as usize).filter(|_| r.1.is_empty());
-                if why.what == What::Task
+                if matches!(why.what, What::Task | What::Closure)
                     && arg.is_some_and(|a| {
                         matches!(a.ty, HirTy::Fn(..) | HirTy::Closure { .. }) && !self.owns_moved(a)
                     })

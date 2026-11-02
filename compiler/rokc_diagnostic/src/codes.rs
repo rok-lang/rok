@@ -612,9 +612,10 @@ codes! {
      Remove the extra `..`.";
 
     105 USE_AFTER_HANDOFF Handoff "value used after it was handed over"
-    "The value was moved into a lock, sent through a channel, handed to a `Handoff` or a \
-     task, and is used again here; its new owner may be changing it. Pass `.clone()` to keep \
-     a separate copy, or give the variable a new value first.";
+    "The value was moved into a lock, sent through a channel, handed to a task (as \
+     `task::spawn_blocking_with_arg`'s argument, or as a spawned future), or moved into a \
+     closure with `[move x]`, and is used again here; its new owner may be changing it. \
+     Pass `.clone()` to keep a separate copy, or give the variable a new value first.";
 
     106 USE_AFTER_UNLOCK Handoff "value used after its lock was released"
     "The value came out of a `Mutex` or `RwLock`, and the `using` block that held the lock \
@@ -741,7 +742,11 @@ codes! {
     "A value whose type implements `Drop` (a `File`, a socket, a channel `Sender`) has one \
      owner. It was moved to another owner or closed, and is used, moved or closed again \
      here. Use the new owner, do the work before it is closed, or keep a copy with \
-     `.clone()` before it moves.";
+     `.clone()` before it moves. A closure that owns values moved into it (`[move x]`), or \
+     a `fn(..) + Send` value not marked `Sync`, is the same: passing it to a \
+     `fn(..) + Send` parameter (`thread::spawn`, `task::spawn_blocking`, `par::join`) \
+     hands it over once. Make another closure that moves in a `.clone()`, or write \
+     `+ Send + Sync` on a `fn` value that moves nothing in.";
 
     135 UNCLOSED_RESOURCE Handoff "resource not closed"
     "Closing this value can fail (its type implements `io::Close`), so it is not closed for \
@@ -769,8 +774,10 @@ codes! {
     "A `pub` or `pub(pkg)` function is called from other modules, so its signature is \
      written out, not inferred from the body. Give every parameter a type, `x: i32` (or a \
      type parameter, `fn f<T>(x: T)`, for any type). Without `->` it returns `()`; when \
-     the body gives a value, write its type, `-> i32`, as the fix-it shows. Trait impl \
-     methods take the trait's types and private functions keep inference.";
+     the body gives a value, write its type, `-> i32`, as the fix-it shows. Exempt: \
+     private and `pub(sub)` functions keep inference; trait impl methods take the trait's \
+     types; `self` and a variadic `...T` parameter need no type; `main` and generators \
+     may omit `->`; a function without a body (`extern`) is declared as written.";
 
     140 STREAM_VIEW_ESCAPE Handoff "stream view used past its stream"
     "`r.lines()`, `bytes`, `split`, `take`, their async streams and `incoming` read \

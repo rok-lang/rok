@@ -104,7 +104,7 @@ pub struct Handoff<T> {
 impl<T> Handoff<T> {
     /// The caller guarantees the protocol: no two threads use `value`
     /// (or another copy of its handle) at the same time.
-    #[internal("move the value into the closure (`[move x] || ..`), or pass it as the argument: `task::spawn_blocking_with(x, |x| ..)`")]
+    #[internal("move the value into the closure (`[move x] || ..`), or pass it as the argument: `task::spawn_blocking_with_arg(x, |x| ..)`")]
     pub const unsafe fn new(value: T) -> Handoff<T> {
         Handoff { value }
     }
