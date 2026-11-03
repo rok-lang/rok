@@ -5442,6 +5442,61 @@ fn impl_assoc_list(impl_def: &rokc_ast::ImplDef) -> Vec<(String, Ty)> {
         .collect()
 }
 
+/// What the impl's methods write where the trait's signatures name the
+/// associated type `name` (`-> i32 | none` for `-> Item | none`).
+fn assoc_from_sigs(t: &rokc_ast::TraitDef, i: &rokc_ast::ImplDef, name: &str) -> Option<String> {
+    fn find(theirs: &Ty, mine: &Ty, name: &str) -> Option<String> {
+        let names = |p: &rokc_ast::Path| match p.segments.as_slice() {
+            [s] if s.generics.is_empty() => s.name == name,
+            [o, s] if o.name == "Self" && s.generics.is_empty() => s.name == name,
+            _ => false,
+        };
+        let all = |a: &[Ty], b: &[Ty]| {
+            (a.len() == b.len())
+                .then(|| a.iter().zip(b).find_map(|(x, y)| find(x, y, name)))
+                .flatten()
+        };
+        match (&theirs.kind, &mine.kind) {
+            // The impl writing the name itself says nothing.
+            (AstTyKind::Path(_), AstTyKind::Path(q)) if names(q) => None,
+            (AstTyKind::Path(p), _) if names(p) => Some(rokc_ast::print::print_ty(mine)),
+            (AstTyKind::Path(a), AstTyKind::Path(b)) => {
+                let (x, y) = (a.segments.last()?, b.segments.last()?);
+                all(&x.generics, &y.generics)
+            }
+            (AstTyKind::Sum(a), AstTyKind::Sum(b)) | (AstTyKind::Tuple(a), AstTyKind::Tuple(b)) => {
+                all(a, b)
+            }
+            (AstTyKind::Nest(a), _) => find(a, mine, name),
+            (_, AstTyKind::Nest(b)) => find(theirs, b, name),
+            (AstTyKind::Array(a, _), AstTyKind::Array(b, _)) => find(a, b, name),
+            (AstTyKind::Throws { ok: a, err: x }, AstTyKind::Throws { ok: b, err: y }) => {
+                find(a, b, name).or_else(|| find(x, y, name))
+            }
+            _ => None,
+        }
+    }
+    i.items.iter().find_map(|it| {
+        let AstImplItem::Method(m) = it else {
+            return None;
+        };
+        let tm = t.items.iter().find_map(|ti| match ti {
+            rokc_ast::TraitItem::Method(tm) if tm.name == leaf_name(&m.name) => Some(tm),
+            _ => None,
+        })?;
+        let ret = match (&tm.ret_ty, &m.ret_ty) {
+            (Some(want), Some(got)) => find(want, got, name),
+            _ => None,
+        };
+        ret.or_else(|| {
+            tm.params
+                .iter()
+                .zip(&m.params)
+                .find_map(|(want, got)| find(want.ty.as_ref()?, got.ty.as_ref()?, name))
+        })
+    })
+}
+
 /// An impl's consts, plus a trait impl's omitted defaults: `(Type::NAME,
 /// type, value)` keyed by generic base or primitive name where one names
 /// it, and all of them.
@@ -5486,6 +5541,43 @@ fn impl_consts(
             })
     });
     if let Some(t) = trait_def.filter(|_| !i.negative) {
+        for ti in &t.items {
+            let rokc_ast::TraitItem::AssocType {
+                name,
+                default: None,
+                ..
+            } = ti
+            else {
+                continue;
+            };
+            let given = i
+                .items
+                .iter()
+                .any(|it| matches!(it, AstImplItem::AssocType { name: n, .. } if n == name));
+            if !given {
+                pre_diags.push(
+                    rokc_diagnostic::RokDiagnostic::error(
+                        Code::MISSING_TRAIT_ITEM,
+                        i.span,
+                        format!(
+                            "impl of `{}` for `{}` is missing associated type `{name}`",
+                            leaf_name(&t.name),
+                            impl_def_display(&i.self_ty)
+                        ),
+                    )
+                    .with_help(match assoc_from_sigs(t, i, name) {
+                        Some(ty) => format!(
+                            "the trait declares `type {name}` with no default: add \
+                             `type {name} = {ty};` to the impl"
+                        ),
+                        None => format!(
+                            "the trait declares `type {name}` with no default: add \
+                             `type {name} = ..;` to the impl, naming the type it stands for here"
+                        ),
+                    }),
+                );
+            }
+        }
         for ti in &t.items {
             let rokc_ast::TraitItem::Const { name, ty, default } = ti else {
                 continue;
@@ -6724,7 +6816,17 @@ fn check_impl_rules(
                 ),
             );
         }
-        check_impl_returns(&ctx, info, &key, i, &target);
+        // An associated type left out is reported once, not again in
+        // each signature that names it.
+        let missing = traits.get(key.as_str()).is_some_and(|td| {
+            td.items.iter().any(|ti| {
+                matches!(ti, rokc_ast::TraitItem::AssocType { name, default: None, .. }
+                    if !impl_assoc_types(i).contains_key(name))
+            })
+        });
+        if !missing {
+            check_impl_returns(&ctx, info, &key, i, &target);
+        }
         if let Some(td) = traits.get(key.as_str()) {
             ctx.self_ty = Some(target);
             check_assoc_bounds(&ctx, td, i);

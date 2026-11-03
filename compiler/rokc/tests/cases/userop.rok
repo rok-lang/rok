@@ -9,12 +9,14 @@ struct Vec2 {
 }
 
 impl ops::Add for Vec2 {
+    type Output = Vec2;
     fn add(self, rhs: Vec2) -> Vec2 {
         return Vec2 { x: self.x + rhs.x, y: self.y + rhs.y };
     }
 }
 
 impl ops::Sub for Vec2 {
+    type Output = Vec2;
     fn sub(self, rhs: Vec2) -> Vec2 {
         return Vec2 { x: self.x - rhs.x, y: self.y - rhs.y };
     }

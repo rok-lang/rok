@@ -39,6 +39,7 @@ impl<T: Num> Twice for T { fn once(self) -> i32 { return self.num(); } }
 // Operators dispatch through a generic impl of the operator trait.
 struct V2<T> { x: T; y: T; }
 impl<T: ops::Add<T, Output = T>> ops::Add for V2<T> {
+    type Output = V2<T>;
     fn add(self, rhs: V2<T>) -> V2<T> { return V2 { x: self.x + rhs.x, y: self.y + rhs.y }; }
 }
 
