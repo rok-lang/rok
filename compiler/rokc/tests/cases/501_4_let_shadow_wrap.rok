@@ -1,3 +1,4 @@
+// needs: fs
 // expect-exit: 0
 // expect-stdout: 2 a,b 4
 
