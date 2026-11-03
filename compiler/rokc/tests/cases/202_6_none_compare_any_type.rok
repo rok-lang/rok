@@ -1,0 +1,39 @@
+// expect-exit: 0
+// expect-stdout:
+// 3
+// true false
+// true true false
+// 2 true
+// 1
+
+// `x == none` and `x != none` test for `none`: the other members need no
+// `PartialEq`, and a generic `T | none` needs no bound. The test narrows.
+struct P { x: i64 }
+
+enum Shape { Dot, Line(i64) }
+
+fn has<T>(v: T | none) -> bool { v != none }
+fn missing<T>(v: T | none) -> bool { none == v }
+
+fn count<T>(xs: List<T | none>) -> i64 {
+    let n = 0;
+    for x in xs { if x != none { n += 1; } }
+    n
+}
+
+fn main() {
+    let p: P | none = P { x: 3 };
+    if p != none {
+        println(p.x);
+    }
+    let q: P | none = none;
+    println(f"{q == none} {q != none}");
+    println(f"{has(p)} {missing(q)} {has::<Shape>(none)}");
+    let ss: List<Shape | none> = [Shape::Dot, none, Shape::Line(2)];
+    let f = || -> i64 { 0 };
+    let g: (fn() -> i64) | none = f;
+    println(f"{count(ss)} {g != none}");
+    let r: P | str | none = "s";
+    if r == none { return; }
+    println(if r is str { 1 } else { 0 });
+}

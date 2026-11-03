@@ -1,0 +1,14 @@
+// expect-error: 11:13: operator `==` cannot be applied to `i64` and `none`
+// expect-error: help: `b` is `i64`, which is never `none`; for a value that may be absent, declare it `i64 | none`
+// expect-error: 13:13: operator `!=` cannot be applied to `none` and `none`
+// expect-error: help: `n` has type `none`, so it is always `none`; for a value that may be absent, declare it `T | none` with its type for `T`
+
+// Comparing with `none` needs an operand that may be `none` and may be
+// something else.
+
+fn main() {
+    let b: i64 = 4;
+    println(b == none);
+    let n: none = none;
+    println(n != none);
+}

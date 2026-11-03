@@ -4708,6 +4708,17 @@ fn lower_is(
     if scrut.ty == HirTy::Unknown {
         return scrut;
     }
+    lower_is_on(ctx, scrut, pat, true, span)
+}
+
+/// `scrut is pat`: `hit` when it matches, `!hit` otherwise.
+fn lower_is_on(
+    ctx: &mut LowerCtx<'_>,
+    scrut: HirExpr,
+    pat: &rokc_ast::Pattern,
+    hit: bool,
+    span: rokc_diagnostic::Span,
+) -> HirExpr {
     let lit = |b: bool| HirExpr {
         kind: HirExprKind::Const(ConstVal::Bool(b)),
         ty: HirTy::Prim(PrimTy::Bool),
@@ -4752,7 +4763,7 @@ fn lower_is(
             HirTy::Sum(ws) => ws.contains(&scrut.ty),
             t => t == scrut.ty,
         };
-        return with_lets(vec![HirStmt::Expr(scrut)], lit(same));
+        return with_lets(vec![HirStmt::Expr(scrut)], lit(same == hit));
     }
     ctx.push_scope();
     let pat_h = lower_pattern(ctx, pat, &scrut.ty);
@@ -4770,12 +4781,12 @@ fn lower_is(
                 HirMatchArm {
                     pat: pat_h,
                     guard: None,
-                    body: lit(true),
+                    body: lit(hit),
                 },
                 HirMatchArm {
                     pat: HirPattern::Wildcard,
                     guard: None,
-                    body: lit(false),
+                    body: lit(!hit),
                 },
             ],
         },
@@ -12918,6 +12929,25 @@ pub(super) fn lower_infix(
     if lhs_h.ty == HirTy::Unknown || rhs_h.ty == HirTy::Unknown {
         return poison(span);
     }
+    // `x == none` tests for `none`: the other members need no `PartialEq`.
+    if op == "==" || op == "!=" {
+        let none = |e: &Expr| matches!(e.kind, ExprKind::Literal(AstLit::None));
+        let optional = |t: &HirTy| matches!(t, HirTy::Sum(vs) if vs.contains(&HirTy::None));
+        let side = if none(rhs) && optional(&lhs_h.ty) {
+            Some((lhs_h.clone(), rhs.span))
+        } else if none(lhs) && optional(&rhs_h.ty) {
+            Some((rhs_h.clone(), lhs.span))
+        } else {
+            None
+        };
+        if let Some((scrut, at)) = side {
+            let pat = rokc_ast::Pattern {
+                kind: AstPatternKind::Literal(AstLit::None),
+                span: at,
+            };
+            return lower_is_on(ctx, scrut, &pat, op == "==", span);
+        }
+    }
     let open_tys = (lhs_h.ty.clone(), rhs_h.ty.clone());
     let open = super::infer::meet(ctx, &mut lhs_h, &mut rhs_h);
     let since = ctx.env.sink.diagnostics.borrow().len();
@@ -13031,6 +13061,28 @@ fn operand_help(
     let future = |t: &HirTy| {
         matches!(t, HirTy::Struct(_)) && matches!(pick_method(ctx, t, "poll", None), Ok(Some(_)))
     };
+    // `x == none` on a type without `none`.
+    let none = |e: &Expr| matches!(e.kind, ExprKind::Literal(AstLit::None));
+    if matches!(op, "==" | "!=") && none(lhs.0) != none(rhs.0) {
+        let (side, t) = if none(rhs.0) {
+            (&l, lhs.1)
+        } else {
+            (&r, rhs.1)
+        };
+        if *t == HirTy::None {
+            return Some(format!(
+                "`{side}` has type `none`, so it is always `none`; for a value that may be \
+                 absent, declare it `T | none` with its type for `T`"
+            ));
+        }
+        if optional(t).is_none() {
+            let t = ctx.ty_name(t);
+            return Some(format!(
+                "`{side}` is `{t}`, which is never `none`; for a value that may be absent, \
+                 declare it `{t} | none`"
+            ));
+        }
+    }
     if op == "+" && (is_str(lhs.1) != is_str(rhs.1)) {
         // A plain literal's text goes in as is; anything else as `{..}`.
         let piece = |e: &Expr, s: &str| match &e.kind {
