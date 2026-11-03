@@ -108,7 +108,7 @@ pub fn check_pred(arg: &AttrArg) -> Option<String> {
     }
 }
 
-/// `#[cfg_attr(p, a, b)]` → `a`, `b` when `p` holds, nothing otherwise.
+/// `#[cfg_attr(p, a, b)]` -> `a`, `b` when `p` holds, nothing otherwise.
 /// Other attributes pass through.
 pub fn expand_cfg_attr(env: &CfgEnv, a: Attribute, out: &mut Vec<Attribute>) {
     if a.path != ["cfg_attr"] {

@@ -332,7 +332,7 @@ impl PatParser<'_> {
         }
     }
 
-    /// `"tok"` → its one token.
+    /// `"tok"` -> its one token.
     fn quoted(&self, s: &str, span: Span) -> Result<(TokenKind, String), (Span, String)> {
         let (toks, diags) = Lexer::new(s, String::new())
             .with_ext_ops(self.ext.to_vec())
@@ -765,7 +765,7 @@ struct Snapshot {
     depth: u32,
 }
 
-/// `2i` → (`2`, `i`); `0x1F` → (`0x1F`, empty).
+/// `2i` -> (`2`, `i`); `0x1F` -> (`0x1F`, empty).
 fn split_suffix(text: &str) -> (&str, &str) {
     let hex = text.starts_with("0x") || text.starts_with("0X");
     let mut end = text.len();
