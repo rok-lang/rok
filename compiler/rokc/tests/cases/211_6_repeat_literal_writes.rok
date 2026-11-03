@@ -1,0 +1,64 @@
+// expect-exit: 0
+// expect-stdout:
+// 5 7 0
+// 5 0
+// 9 4
+// 3 0
+// 6 1
+// [[0, 4, 0], [0, 0, 6]] 10
+// [0, 7, 0] 7
+// [[0, 9], [0, 0]] 9
+
+// Element writes to a repeat literal whose element type a later use fixes
+// land in storage of that type, at any block depth: nested indexing, `if`,
+// `for`, `while` and `loop` bodies.
+use rok::core::array::Array;
+
+fn main() {
+    let g = [[0; 3]; 2];
+    g[1][2] = 5;
+    g[0][1] = 7;
+    let a: u8 = g[1][2];
+    println(f"{a} {g[0][1]} {g[0][2]}");
+
+    let h: [[i32; 3]; 2] = [[0; 3]; 2];
+    h[1][2] = 5;
+    println(f"{h[1][2]} {h[0][2]}");
+
+    let xs = [0; 4];
+    if xs.len() > 2 { xs[3] = 9; }
+    let i = 0;
+    while i < 1 { xs[0] = 4; i += 1; }
+    let b: i16 = xs[3];
+    println(f"{b} {xs[0]}");
+
+    let big = [[0; 100]; 3];
+    for r in 0..3 { big[r][99] = r + 1; }
+    let w: u32 = big[2][99];
+    println(f"{w} {big[0][0]}");
+
+    let cube = [[[0; 2]; 2]; 2];
+    loop {
+        cube[1][1][0] = 6;
+        cube[0][0][1] = 1;
+        break;
+    }
+    let c: i8 = cube[1][1][0];
+    println(f"{c} {cube[0][0][1]}");
+
+    let m = Array::full([2, 3], 0);
+    m[0, 1] = 4;
+    if true { m[1, 2] = 6; }
+    let s: i32 = m[0, 1] + m[1, 2];
+    println(f"{m:?} {s}");
+
+    let l = List::filled(3, 0);
+    if true { l[1] = 7; }
+    let t: u8 = l[1];
+    println(f"{l:?} {t}");
+
+    let ll = [List::filled(2, 0), List::filled(2, 0)];
+    ll[0][1] = 9;
+    let u: i64 = ll[0][1];
+    println(f"{ll:?} {u}");
+}

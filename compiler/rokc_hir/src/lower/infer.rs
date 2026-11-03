@@ -1527,17 +1527,30 @@ impl Fixer<'_, '_> {
     }
 
     fn block(&self, b: &mut HirBlock) {
+        self.stmts(b);
+        crate::each_block_mut(b, &mut |e| self.expr(e));
+    }
+
+    /// The statements of `b` itself; the expression walk reaches the
+    /// nested blocks.
+    fn stmts(&self, b: &mut HirBlock) {
         for s in &mut b.stmts {
             if let HirStmt::ArrayAssign { elem_ty, .. } = s {
                 self.ty(elem_ty);
             }
         }
-        crate::each_block_mut(b, &mut |e| self.expr(e));
     }
 
     fn expr(&self, e: &mut HirExpr) {
         self.fmt_call(e);
         self.ty(&mut e.ty);
+        if let HirExprKind::Block(b)
+        | HirExprKind::Loop { body: b, .. }
+        | HirExprKind::While { body: b, .. }
+        | HirExprKind::If { then_block: b, .. } = &mut e.kind
+        {
+            self.stmts(b);
+        }
         match &mut e.kind {
             HirExprKind::Const(c) => self.literal(c, &e.ty, e.span),
             HirExprKind::Call { callee: id, .. }
