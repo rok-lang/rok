@@ -609,7 +609,8 @@ impl Checker<'_, '_> {
     }
 
     /// The affine parts of `ty` below `path`: a struct without its own
-    /// `Drop` and a tuple are split into their fields.
+    /// `Drop` and a tuple are split into their fields, a sum into its
+    /// members (the index of the member is a path step).
     fn leaves(&self, ty: &HirTy, path: &mut Vec<u32>, out: &mut Vec<Vec<u32>>, depth: u32) {
         if affine(self.ctx, ty).is_none() {
             return;
@@ -627,7 +628,7 @@ impl Checker<'_, '_> {
                         .collect(),
                 )
             }
-            HirTy::Tuple(ts) if depth < 8 => Some(ts.clone()),
+            HirTy::Tuple(ts) | HirTy::Sum(ts) if depth < 8 => Some(ts.clone()),
             _ => None,
         };
         match fields {
@@ -704,7 +705,7 @@ struct Walk<'c, 'a, 'e> {
     captured: HashSet<Span>,
     /// Slot -> the match arm that left it open: its binding, the
     /// binding's type and the arm's body.
-    arm_open: HashMap<usize, (LocalId, HirTy, Span)>,
+    arm_open: HashMap<usize, (LocalId, HirTy, Span, Vec<u32>)>,
     scopes: Vec<Vec<usize>>,
     /// Root -> the `let` that redeclared its variable in its scope.
     hidden: HashMap<usize, Span>,
@@ -1033,7 +1034,11 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
     fn shown(&self, r: usize, path: &[u32]) -> String {
         let root = &self.roots[r];
         let place = self.place_text(r, path);
-        if root.named {
+        let alias = self
+            .alias_of
+            .iter()
+            .any(|(l, (x, q))| *x == r && path.starts_with(q) && self.local_name(*l).is_some());
+        if root.named || alias {
             return format!("`{place}`");
         }
         let of = if root.name.is_empty() {
@@ -1063,7 +1068,9 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                         .get(i as usize)
                         .map_or(HirTy::Unknown, |f| f.ty.clone())
                 }
-                HirTy::Tuple(ts) => ts.get(i as usize).cloned().unwrap_or(HirTy::Unknown),
+                HirTy::Tuple(ts) | HirTy::Sum(ts) => {
+                    ts.get(i as usize).cloned().unwrap_or(HirTy::Unknown)
+                }
                 _ => break,
             };
             out.push(i);
@@ -1083,21 +1090,39 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                     .fields
                     .get(i as usize)
                     .map_or(HirTy::Unknown, |f| f.ty.clone()),
-                HirTy::Tuple(ts) => ts.get(i as usize).cloned().unwrap_or(HirTy::Unknown),
+                HirTy::Tuple(ts) | HirTy::Sum(ts) => {
+                    ts.get(i as usize).cloned().unwrap_or(HirTy::Unknown)
+                }
                 _ => t,
             };
         }
         t
     }
 
+    /// The place `(r, path)` as written: from the pattern binding that
+    /// names the longest part of it, if one is in scope.
     fn place_text(&self, r: usize, path: &[u32]) -> String {
         let root = &self.roots[r];
-        let mut s = if root.named {
+        let bound = self
+            .alias_of
+            .iter()
+            .filter(|(_, (x, q))| *x == r && path.starts_with(q))
+            .filter_map(|(l, (_, q))| Some((q.len(), *l, self.local_name(*l)?)))
+            .max_by_key(|&(n, l, _)| (n, std::cmp::Reverse(l.0)));
+        if let Some((n, l, name)) = bound {
+            let ty = self.local_ty(l).cloned().unwrap_or(HirTy::Unknown);
+            return self.part_text(name.to_owned(), ty, &path[n..]);
+        }
+        let s = if root.named {
             root.name.clone()
         } else {
             String::new()
         };
-        let mut ty = root.ty.clone();
+        self.part_text(s, root.ty.clone(), path)
+    }
+
+    /// `s`, of type `ty`, followed by the fields `path` steps through.
+    fn part_text(&self, mut s: String, mut ty: HirTy, path: &[u32]) -> String {
         for &i in path {
             match &ty {
                 HirTy::Struct(sid) => {
@@ -1114,6 +1139,8 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                     s = format!("{s}.{i}");
                     ty = ts.get(i as usize).cloned().unwrap_or(HirTy::Unknown);
                 }
+                // The member a pattern narrowed to: not written.
+                HirTy::Sum(ts) => ty = ts.get(i as usize).cloned().unwrap_or(HirTy::Unknown),
                 _ => break,
             }
         }
@@ -1313,8 +1340,24 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             .filter(|&i| get(st, root.base + i) & LIVE != 0)
             .collect();
         let Some(&first) = open.first() else { return };
-        if let Some((l, ty, arm)) = self.arm_open.get(&(root.base + first)).cloned() {
+        if let Some((l, ty, arm, q)) = self.arm_open.get(&(root.base + first)).cloned() {
             if let Some(name) = self.local_name(l) {
+                // The part of the binding left open (`x.b`), when it
+                // closed the others.
+                let leaf = &root.leaves[first];
+                let rel = self.user_path(r, leaf);
+                let rel = rel
+                    .get(q.len()..)
+                    .filter(|_| rel.starts_with(&q))
+                    .unwrap_or(&[]);
+                let mut whole = q.clone();
+                whole.extend_from_slice(rel);
+                let ty = if rel.is_empty() {
+                    ty
+                } else {
+                    self.ty_at(r, &whole)
+                };
+                let name = self.part_text(name.to_owned(), self.ty_at(r, &q), rel);
                 let ty = self.c.ty_name(&ty);
                 let aty = article(&ty);
                 let msg = format!("`{name}` holds {aty} that this arm never closes");
@@ -2297,9 +2340,11 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
         for a in arms {
             pattern_bindings(&a.pat, &mut |_, ty| binds |= self.c.shape(ty).is_some());
         }
-        let at = self
-            .place(scrutinee)
-            .filter(|(r, p)| self.slots_at(*r, p).len() == 1);
+        // A sum's members are parts of their own: an arm binds the one it
+        // narrows to.
+        let at = self.place(scrutinee).filter(|(r, p)| {
+            matches!(scrutinee.ty, HirTy::Sum(_)) || self.slots_at(*r, p).len() == 1
+        });
         let mode_s = if binds && at.is_none() {
             Mode::Move
         } else {
@@ -2363,34 +2408,25 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                         _ => {}
                     }
                 }
-                let empty = here
-                    .iter()
-                    .all(|&i| ms.get(i as usize).copied().unwrap_or(None).is_none());
-                // Every member here is released for the program: the arm
-                // owes no close, the flag still releases what it holds.
-                let auto = here.iter().all(|&i| {
-                    ms.get(i as usize)
-                        .copied()
-                        .unwrap_or(None)
-                        .is_none_or(|k| k == Kind::Auto)
-                });
-                if empty || (auto && self.roots[*r].kind == Kind::Close) {
-                    for x in self.slots_at(*r, p) {
-                        let v = get(&s, x);
-                        if v & LIVE != 0 {
-                            set(&mut s, x, if empty { 0 } else { v & !LIVE });
-                        }
-                    }
-                }
+                let sum = matches!(scrutinee.ty, HirTy::Sum(_));
+                self.arm_members(*r, p, ms, &here, sum, &mut s);
             }
             self.scopes.push(Vec::new());
+            let mut parts = HashMap::new();
+            if let Some((r, p)) = &at {
+                pattern_places(&a.pat, &mut p.clone(), &mut |l, ty, q| {
+                    if self.c.shape(ty).is_some() {
+                        merge_place(&mut parts, l, q);
+                    }
+                });
+                for (&l, q) in &parts {
+                    self.alias_of.insert(l, (*r, q.clone()));
+                }
+            }
             let mut locals = Vec::new();
             pattern_bindings(&a.pat, &mut |l, ty| locals.push((l, ty.clone())));
             for (l, ty) in locals {
-                if let Some(p) = &at {
-                    if self.c.shape(&ty).is_some() {
-                        self.alias_of.insert(l, p.clone());
-                    }
+                if at.is_some() {
                     continue;
                 }
                 if sv == Val::Owned {
@@ -2403,8 +2439,8 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                 s = self.expr(g, s, Mode::Use).0;
             }
             let (s, v) = self.expr(&a.body, s, mode);
-            if let (Some((r, p)), true) = (&at, s.is_some()) {
-                self.arm_left_open(*r, p, &a.pat, &s, a.body.span);
+            if let (Some((r, _)), true) = (&at, s.is_some()) {
+                self.arm_left_open(*r, &parts, &a.pat, &s, a.body.span);
             }
             let depth = self.scopes.len() - 1;
             if s.is_some() {
@@ -2418,6 +2454,9 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                     set(&mut s, root.base + i, 0);
                 }
             }
+            for l in parts.keys() {
+                self.alias_of.remove(l);
+            }
             if s.is_some() {
                 val = Some(val.map_or(v, |x| combine(x, v)));
             }
@@ -2426,22 +2465,84 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
         (out, val.unwrap_or(Val::Plain))
     }
 
+    /// What the place `(r, p)` holds in an arm that sees the members
+    /// `here` of its type (`ms`: each member's release kind).
+    fn arm_members(
+        &self,
+        r: usize,
+        p: &[u32],
+        ms: &[Option<Kind>],
+        here: &[u32],
+        sum: bool,
+        s: &mut State,
+    ) {
+        let empty = here
+            .iter()
+            .all(|&i| ms.get(i as usize).copied().unwrap_or(None).is_none());
+        // Every member here is released for the program: the arm
+        // owes no close, the flag still releases what it holds.
+        let auto = here.iter().all(|&i| {
+            ms.get(i as usize)
+                .copied()
+                .unwrap_or(None)
+                .is_none_or(|k| k == Kind::Auto)
+        });
+        let close = self.roots[r].kind == Kind::Close;
+        if sum {
+            // Per member: one the arm cannot see holds nothing.
+            for (member, kind) in ms.iter().enumerate() {
+                let Ok(member) = u32::try_from(member) else {
+                    continue;
+                };
+                let seen = here.contains(&member);
+                if seen && !(close && *kind == Some(Kind::Auto)) {
+                    continue;
+                }
+                let mut part = p.to_vec();
+                part.push(member);
+                for slot in self.slots_at(r, &part) {
+                    let bits = get(s, slot);
+                    if bits & LIVE != 0 {
+                        set(s, slot, if seen { bits & !LIVE } else { 0 });
+                    }
+                }
+            }
+        } else if empty || (auto && close) {
+            for slot in self.slots_at(r, p) {
+                let bits = get(s, slot);
+                if bits & LIVE != 0 {
+                    set(s, slot, if empty { 0 } else { bits & !LIVE });
+                }
+            }
+        }
+    }
+
     /// Note the slots of `(r, p)` an arm binding a must-close member
     /// leaves open, so a missing close names that binding and that arm.
-    fn arm_left_open(&mut self, r: usize, p: &[u32], pat: &HirPattern, s: &State, body: Span) {
+    fn arm_left_open(
+        &mut self,
+        r: usize,
+        parts: &HashMap<LocalId, Vec<u32>>,
+        pat: &HirPattern,
+        s: &State,
+        body: Span,
+    ) {
         if self.roots[r].kind != Kind::Close {
             return;
         }
-        let mut bound = None;
+        let mut bound = Vec::new();
         pattern_bindings(pat, &mut |l, ty| {
-            if bound.is_none() && self.c.shape(ty).is_some_and(|x| x.0 == Kind::Close) {
-                bound = Some((l, ty.clone()));
+            if self.c.shape(ty).is_some_and(|x| x.0 == Kind::Close) {
+                bound.push((l, ty.clone()));
             }
         });
-        let Some((l, ty)) = bound else { return };
-        for x in self.slots_at(r, p) {
-            if get(s, x) & LIVE != 0 {
-                self.arm_open.insert(x, (l, ty.clone(), body));
+        // The first binding naming a slot is the one shown.
+        for (l, ty) in bound.into_iter().rev() {
+            let Some(q) = parts.get(&l) else { continue };
+            for x in self.slots_at(r, q) {
+                if get(s, x) & LIVE != 0 {
+                    self.arm_open.insert(x, (l, ty.clone(), body, q.clone()));
+                }
             }
         }
     }
@@ -2547,6 +2648,72 @@ fn pattern_bindings(p: &HirPattern, f: &mut impl FnMut(LocalId, &HirTy)) {
         HirPattern::SumMember { sub, .. } => pattern_bindings(sub, f),
         _ => {}
     }
+}
+
+/// The locals a pattern on the place `path` binds, with their types and
+/// the part of the place each one names.
+fn pattern_places(
+    p: &HirPattern,
+    path: &mut Vec<u32>,
+    f: &mut impl FnMut(LocalId, &HirTy, &[u32]),
+) {
+    let mut sub = |i: u32, q: &HirPattern, path: &mut Vec<u32>| {
+        path.push(i);
+        pattern_places(q, path, f);
+        path.pop();
+    };
+    match p {
+        HirPattern::Binding { local, ty } => f(*local, ty, path),
+        HirPattern::At { local, ty, sub, .. } => {
+            f(*local, ty, path);
+            pattern_places(sub, path, f);
+        }
+        HirPattern::Or(ps) => {
+            for q in ps {
+                pattern_places(q, path, f);
+            }
+        }
+        HirPattern::Tuple(ps) => {
+            for (i, q) in ps.iter().enumerate() {
+                sub(u32::try_from(i).unwrap_or(u32::MAX), q, path);
+            }
+        }
+        HirPattern::Struct { fields, .. } => {
+            for (i, q) in fields {
+                sub(*i, q, path);
+            }
+        }
+        // An enum is followed whole.
+        HirPattern::EnumVariant { args, .. } => {
+            for q in args {
+                pattern_places(q, path, f);
+            }
+        }
+        HirPattern::SumVariant {
+            variant_index,
+            binder: Some(l),
+            payload_ty: Some(ty),
+            ..
+        } => {
+            path.push(*variant_index);
+            f(*l, ty, path);
+            path.pop();
+        }
+        HirPattern::SumMember {
+            variant_index,
+            sub: q,
+            ..
+        } => sub(*variant_index, q, path),
+        _ => {}
+    }
+}
+
+/// `l` names `q`: an or-pattern binding it in two places names what
+/// holds both.
+fn merge_place(parts: &mut HashMap<LocalId, Vec<u32>>, l: LocalId, q: &[u32]) {
+    let e = parts.entry(l).or_insert_with(|| q.to_vec());
+    let n = e.iter().zip(q).take_while(|(a, b)| a == b).count();
+    e.truncate(n);
 }
 
 /// The direct subexpressions of `e`.
