@@ -7,7 +7,7 @@
 //! inlined accesses, so a store to one list doesn't clobber loads from
 //! another.
 
-use std::collections::{HashMap, HashSet};
+use rokc_core::{HashMap, HashSet};
 
 use rokc_ir_common::{FunctionId, Linkage};
 use rokc_mir::{MirFunction, MirModule, MirTy, Operand, RValue, Statement, Target, Terminator};
@@ -42,7 +42,7 @@ struct Defs<'a> {
 }
 
 fn defs(f: &MirFunction) -> Defs<'_> {
-    let mut by: HashMap<u32, Vec<&RValue>> = HashMap::new();
+    let mut by: HashMap<u32, Vec<&RValue>> = HashMap::default();
     let mut opaque: HashSet<u32> = f.params.iter().map(|p| p.0).collect();
     for b in &f.blocks {
         opaque.extend(b.params.iter().map(|p| p.0));
@@ -145,7 +145,7 @@ impl ListAlias {
                 Terminator::Return(Some(op)) => {
                     any = true;
                     let fresh = copy(op)
-                        .is_some_and(|l| self.fresh_local(d, l, lists, &mut HashSet::new()));
+                        .is_some_and(|l| self.fresh_local(d, l, lists, &mut HashSet::default()));
                     if !fresh {
                         return false;
                     }
@@ -189,7 +189,7 @@ impl ListAlias {
     /// `f` reaches only its first argument's list object and buffer, and
     /// writes no GC reference there.
     fn touches_own(&self, f: &MirFunction, d: &Defs<'_>, target: &Target) -> bool {
-        let mut part: HashMap<u32, Part> = HashMap::new();
+        let mut part: HashMap<u32, Part> = HashMap::default();
         part.insert(f.params[0].0, Part::List);
         loop {
             let before = part.len();

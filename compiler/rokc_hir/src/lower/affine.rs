@@ -27,8 +27,9 @@
 //! pointer are not followed. A cancelled task leaves through its
 //! cleanups: that path is not checked for a missing close.
 
+use rokc_core::{HashMap, HashSet};
 use std::cell::RefCell;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::BTreeSet;
 
 use rokc_ast::{Block, Expr, ExprKind, Stmt, StmtKind};
 use rokc_diagnostic::{Code, RokDiagnostic, Span};
@@ -727,8 +728,8 @@ struct Walk<'c, 'a, 'e> {
 
 impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
     fn new(c: &'c Checker<'a, 'e>, f: &'a HirFunction, report: bool) -> Self {
-        let mut flags = HashMap::new();
-        let mut flag_locals = HashSet::new();
+        let mut flags = HashMap::default();
+        let mut flag_locals = HashSet::default();
         for l in &f.locals {
             if let Some(n) = l.name.as_deref().and_then(|n| n.strip_prefix(OWN)) {
                 if let Ok(v) = n.parse::<u32>() {
@@ -737,7 +738,7 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                 }
             }
         }
-        let mut inits = HashMap::new();
+        let mut inits = HashMap::default();
         if let Some(b) = &f.body {
             let mut lets = |b: &'a HirBlock| {
                 for s in &b.stmts {
@@ -768,30 +769,30 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             report,
             quiet: false,
             dying: false,
-            primed: HashSet::new(),
+            primed: HashSet::default(),
             assigning: false,
             roots: Vec::new(),
-            root_of: HashMap::new(),
-            alias_of: HashMap::new(),
+            root_of: HashMap::default(),
+            alias_of: HashMap::default(),
             slots: 0,
-            why: HashMap::new(),
-            gave: HashMap::new(),
-            captured: HashSet::new(),
-            arm_open: HashMap::new(),
+            why: HashMap::default(),
+            gave: HashMap::default(),
+            captured: HashSet::default(),
+            arm_open: HashMap::default(),
             scopes: vec![Vec::new()],
-            hidden: HashMap::new(),
+            hidden: HashMap::default(),
             targets: Vec::new(),
             out: Summary::default(),
-            owned_params: HashSet::new(),
+            owned_params: HashSet::default(),
             flags,
             flag_locals,
-            bound: HashMap::new(),
+            bound: HashMap::default(),
             edits: Edits::default(),
             ref_result: Val::Plain,
             inits,
             env_local,
             errors: Vec::new(),
-            seen: HashSet::new(),
+            seen: HashSet::default(),
             last: f.span,
         }
     }
@@ -2328,7 +2329,7 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
             ),
             _ => None,
         };
-        let mut taken: HashSet<u32> = HashSet::new();
+        let mut taken: HashSet<u32> = HashSet::default();
         for a in arms {
             let mut s = st.clone();
             // The members this arm may see; none of them a resource: the
@@ -2574,7 +2575,7 @@ fn method_name(name: &str) -> &str {
 
 /// The parents of closure and coroutine bodies.
 fn parents(all: &[&HirFunction]) -> HashMap<FunctionId, FunctionId> {
-    let mut out = HashMap::new();
+    let mut out = HashMap::default();
     for f in all {
         let Some(body) = &f.body else { continue };
         crate::each_block(body, &mut |e| {
@@ -2625,7 +2626,7 @@ pub(super) fn summaries(
     if env.names.lang_item("drop_method").is_empty() {
         return Sums::default();
     }
-    let no_subst = HashMap::new();
+    let no_subst = HashMap::default();
     let ctx = LowerCtx::new(env, &no_subst, None, Span::DUMMY);
     let extras = env.sink.extras.borrow();
     let all: Vec<&HirFunction> = functions.iter().chain(extras.iter()).collect();
@@ -2633,7 +2634,7 @@ pub(super) fn summaries(
         .iter()
         .filter_map(|(n, s)| Some((n.strip_prefix(KEY)?, s.as_str())))
         .collect();
-    let mut sums = HashMap::new();
+    let mut sums = HashMap::default();
     for f in all.iter().filter(|f| f.body.is_none()) {
         if let Some(s) = by_name
             .get(f.name.as_str())
@@ -2686,7 +2687,7 @@ pub(super) fn check(
     if env.names.lang_item("drop_method").is_empty() {
         return Vec::new();
     }
-    let no_subst = HashMap::new();
+    let no_subst = HashMap::default();
     let ctx = LowerCtx::new(env, &no_subst, None, Span::DUMMY);
     let (out, edits) = {
         let extras = env.sink.extras.borrow();
@@ -2716,7 +2717,7 @@ pub(super) fn check(
         let mut order = walked.clone();
         order.sort_by_key(|f| depth(f.id));
         let mut diags = Vec::new();
-        let mut edits: HashMap<FunctionId, Edits> = HashMap::new();
+        let mut edits: HashMap<FunctionId, Edits> = HashMap::default();
         for f in &order {
             let mut w = Walk::new(&c, f, true);
             let keeps = c.summary(f.id).map(|s| s.keeps).unwrap_or_default();

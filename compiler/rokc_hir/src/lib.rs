@@ -157,7 +157,7 @@ pub struct HirModule {
     pub unlowered: Vec<FunctionId>,
     /// Every type-like item (struct, enum, union, alias, trait) by full
     /// name: its visibility (`type_visible`).
-    pub type_visibility: std::collections::HashMap<String, rokc_core::Visibility>,
+    pub type_visibility: rokc_core::HashMap<String, rokc_core::Visibility>,
     /// A prebuilt-library build's `any` seeds for its ROKHIR: `(module,
     /// rok source)` (see `lower::expr::any_link`).
     pub any_seeds: Vec<(String, String)>,

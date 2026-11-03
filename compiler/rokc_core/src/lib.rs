@@ -14,6 +14,7 @@ pub mod tmp;
 use std::path::{Path, PathBuf};
 
 pub use def::{DefId, DefInfo, DefKind, DefTable, Visibility};
+pub use hash::{HashMap, HashSet};
 
 /// `$ROK_HOME`, else the home the running executable sits in, else
 /// `~/.rok` (`%USERPROFILE%\.rok`).

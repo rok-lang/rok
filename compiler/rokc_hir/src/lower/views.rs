@@ -11,7 +11,8 @@
 //! this cannot see (a resize inside a callee, a view kept in a struct)
 //! the view's run-time version check catches.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use rokc_core::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use rokc_diagnostic::{Code, RokDiagnostic, Span};
 use rokc_ir_common::{FunctionId, LocalId};
@@ -514,7 +515,7 @@ pub(super) fn check(env: &Env<'_>, functions: &[HirFunction]) {
             locals,
             resizes: Vec::new(),
             loops: Vec::new(),
-            reported: HashSet::new(),
+            reported: HashSet::default(),
             diags: Vec::new(),
             names: &names,
         };
@@ -522,7 +523,7 @@ pub(super) fn check(env: &Env<'_>, functions: &[HirFunction]) {
         w.block(&mut st, body);
         diags.extend(w.diags);
     }
-    let mut seen = HashSet::new();
+    let mut seen = HashSet::default();
     diags.retain(|d: &RokDiagnostic| {
         let at = d.primary.as_ref().map(|l| (l.span.file, l.span.start));
         seen.insert((at, d.message.clone()))

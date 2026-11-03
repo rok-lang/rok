@@ -10,6 +10,7 @@ authors.workspace = true
 # parsed and resolved, and the rok bindings of `ffi::wit::import` /
 # `ffi::wit::export` generated from them.
 [dependencies]
+rokc_core = { workspace = true }
 rokc_lexer = { workspace = true }
 
 [lints]

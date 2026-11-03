@@ -5,7 +5,7 @@
 //! A block param is defined on block entry. An array write is a partial
 //! definition (the old elements stay), so it only uses the array.
 
-use std::collections::{HashMap, HashSet};
+use rokc_core::{HashMap, HashSet};
 
 use rokc_ir_common::{BlockId, LocalId};
 
@@ -389,7 +389,7 @@ pub fn live_out_of(
 ) -> HashMap<u32, Vec<LocalId>> {
     let flow = Flow::new(f, tracked);
     let n = flow.dense.ids.len();
-    let mut out = HashMap::new();
+    let mut out = HashMap::default();
     if n == 0 {
         return out;
     }
@@ -413,7 +413,7 @@ pub fn maybe_unassigned(
 ) -> HashSet<LocalId> {
     let flow = Flow::new(f, &tracked);
     let n = flow.dense.ids.len();
-    let mut out = HashSet::new();
+    let mut out = HashSet::default();
     if n == 0 || f.blocks.is_empty() {
         return out;
     }

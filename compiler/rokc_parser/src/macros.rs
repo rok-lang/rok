@@ -5,7 +5,7 @@
 //! shares the token-template model of `meta.rs` but matches caller input
 //! rather than a type's shape.
 
-use std::collections::HashSet;
+use rokc_core::HashSet;
 use std::sync::Arc;
 
 use rokc_diagnostic::{Code, RokDiagnostic, Span};
@@ -108,7 +108,7 @@ enum Binding {
     Many(Vec<Vec<Token>>),
 }
 
-type Bindings = std::collections::HashMap<String, Binding>;
+type Bindings = rokc_core::HashMap<String, Binding>;
 
 /// Split a macro block body into its rules: `( matcher ) => { template }`.
 fn parse_rules(body: &[Token], span: Span) -> Result<Vec<Rule>, RokDiagnostic> {
@@ -302,7 +302,7 @@ fn match_items(items: &[MatchItem], call: &[Token], out: &mut Bindings, sep: Opt
                 let names = sub_var_names(sub);
                 let mut seqs: Vec<Vec<Vec<Token>>> = vec![Vec::new(); names.len()];
                 while i < call.len() {
-                    let mut one = Bindings::new();
+                    let mut one = Bindings::default();
                     // Match one `sub` over the run up to the next separator.
                     let end = rsep
                         .as_deref()
@@ -435,7 +435,7 @@ pub(super) fn expand_macro(
         Err(d) => return (None, vec![d]),
     };
     for rule in &rules {
-        let mut binds = Bindings::new();
+        let mut binds = Bindings::default();
         if match_items(&rule.matcher, call, &mut binds, None) {
             let (mut out, errs) = transcribe(&rule.template, &binds, at, &def.origin());
             super::meta::place_declared(&mut out);
@@ -472,7 +472,7 @@ fn transcribe(
 
 /// Names the template binds itself (let / for / closure), to make hygienic.
 fn template_binders(template: &[Token], binds: &Bindings) -> HashSet<String> {
-    let mut names = HashSet::new();
+    let mut names = HashSet::default();
     for k in 0..template.len() {
         let prev_at = k > 0 && template[k - 1].kind == TokenKind::At;
         if prev_at {
@@ -687,7 +687,7 @@ fn emit_for(
         .filter_map(|(k, v)| matches!(v, Binding::Many(_)).then_some(k))
         .collect();
     for idx in 0..len {
-        let mut elem = Bindings::new();
+        let mut elem = Bindings::default();
         for nm in &many {
             if let Some(Binding::Many(v)) = binds.get(*nm) {
                 if let Some(t) = v.get(idx) {

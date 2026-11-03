@@ -4,7 +4,7 @@
 //! between that load and store, storing only field `f` is the same, and
 //! skips the write barrier of the fields that hold GC references.
 
-use std::collections::HashMap;
+use rokc_core::HashMap;
 
 use rokc_ir_common::{ConstVal, LocalId};
 
@@ -69,13 +69,13 @@ impl Known {
 /// The `BufStore`s of `b` (by statement index) that are partial stores.
 #[must_use]
 pub fn part_stores(b: &BasicBlock) -> HashMap<usize, PartStore> {
-    let mut vals: HashMap<LocalId, Val> = HashMap::new();
-    let mut known: HashMap<LocalId, Known> = HashMap::new();
+    let mut vals: HashMap<LocalId, Val> = HashMap::default();
+    let mut known: HashMap<LocalId, Known> = HashMap::default();
     let val = |vals: &HashMap<LocalId, Val>, o: &Operand| match o {
         Operand::Copy(x) => vals.get(x).cloned().unwrap_or(Val::Local(*x)),
         Operand::Const(c) => Val::Const(c.clone()),
     };
-    let mut out = HashMap::new();
+    let mut out = HashMap::default();
     for (at, s) in b.stmts.iter().enumerate() {
         match s {
             Statement::Assign { target, rvalue } => {

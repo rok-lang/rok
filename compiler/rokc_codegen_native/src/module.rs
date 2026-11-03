@@ -1,6 +1,6 @@
 //! A MIR module → one object, as the MLIR emitter's `emit_module`.
 
-use std::collections::{HashMap, HashSet};
+use rokc_core::{HashMap, HashSet};
 
 use rokc_codegen_mlir::abi;
 use rokc_codegen_mlir::mangle::{self, Pkgs};
@@ -86,7 +86,7 @@ pub fn compile(
     };
 
     // Signatures.
-    let mut fns: HashMap<FunctionId, Sig> = HashMap::new();
+    let mut fns: HashMap<FunctionId, Sig> = HashMap::default();
     let mut c_entries = Vec::new();
     for &f in &view {
         let c = match f.facts.abi {

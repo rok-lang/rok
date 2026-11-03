@@ -97,15 +97,15 @@ pub struct Parser<'a> {
     /// dropped.
     cfg_off: Vec<Attribute>,
     /// Lifted names given out so far.
-    lifted_names: std::collections::HashSet<String>,
+    lifted_names: rokc_core::HashSet<String>,
     /// The next primary starts a statement: if it is block-like, `(` / `[`
     /// after it begin a new statement (`while c {} (a, b)`), not a call.
     stmt_head: bool,
     /// `(token, inner)` whose doc comments became attributes.
-    docs_used: std::collections::HashSet<(usize, bool)>,
+    docs_used: rokc_core::HashSet<(usize, bool)>,
     /// Doc comments (by start) on what keeps no doc (a statement, a
     /// match arm, ..): what, and whether that is an error.
-    docs_dropped: std::collections::HashMap<u32, (&'static str, bool)>,
+    docs_dropped: rokc_core::HashMap<u32, (&'static str, bool)>,
     /// Token ranges no parse looks into (meta block bodies).
     unparsed: Vec<std::ops::Range<usize>>,
     /// The next `bump` takes a name where any keyword is one (`p.move`,
@@ -116,13 +116,13 @@ pub struct Parser<'a> {
     ret_frames: Vec<RetFrame>,
     /// The bare `return;`s of each trailing closure, by its span start:
     /// one in a statement's trailing closure is an error.
-    closure_returns: std::collections::HashMap<(u32, u32), Vec<Span>>,
+    closure_returns: rokc_core::HashMap<(u32, u32), Vec<Span>>,
     /// Start of the expression statement being parsed: a trailing-closure
     /// call starting it ends it at its `}`.
     stmt_at: Option<u32>,
     /// The bindings of each `using x = e;` statement, by its marker's
     /// span start, until its block is done.
-    using_stmts: std::collections::HashMap<(u32, u32), Vec<UsingBinding>>,
+    using_stmts: rokc_core::HashMap<(u32, u32), Vec<UsingBinding>>,
     /// Parameter patterns parsed so far, each with the temporary that
     /// stands for its parameter; a fn or closure takes its own.
     param_pats: Vec<(String, Pattern)>,
@@ -341,16 +341,16 @@ impl<'a> Parser<'a> {
             fn_names: Vec::new(),
             fn_owner: None,
             cfg_off: Vec::new(),
-            lifted_names: std::collections::HashSet::new(),
-            docs_used: std::collections::HashSet::new(),
-            docs_dropped: std::collections::HashMap::new(),
+            lifted_names: rokc_core::HashSet::default(),
+            docs_used: rokc_core::HashSet::default(),
+            docs_dropped: rokc_core::HashMap::default(),
             unparsed: Vec::new(),
             name_pos: false,
             stmt_at: None,
-            using_stmts: std::collections::HashMap::new(),
+            using_stmts: rokc_core::HashMap::default(),
             param_pats: Vec::new(),
             ret_frames: Vec::new(),
-            closure_returns: std::collections::HashMap::new(),
+            closure_returns: rokc_core::HashMap::default(),
             package: String::new(),
             meta_imports: Vec::new(),
         }
@@ -5337,7 +5337,7 @@ impl<'a> Parser<'a> {
     fn rename_local_items(&mut self, block: &mut Block, lifted: usize) {
         let mut r = rokc_ast::rename::Renames::default();
         // Per namespace (types, values): where each name is first.
-        let mut first: [std::collections::HashMap<String, Span>; 2] = Default::default();
+        let mut first: [rokc_core::HashMap<String, Span>; 2] = Default::default();
         for s in &block.stmts {
             let StmtKind::Item(item) = &s.kind else {
                 continue;

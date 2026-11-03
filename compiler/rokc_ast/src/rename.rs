@@ -9,7 +9,7 @@
 //! closure bodies (`headers_only`; the parser copies the `use`s into
 //! those).
 
-use std::collections::HashMap;
+use rokc_core::HashMap;
 
 use crate::{
     AccessTail, Block, CallArg, CaptureSpec, ConstExpr, EnumVariantKind, Expr, ExprKind,

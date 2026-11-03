@@ -14,7 +14,7 @@
 //! S:  if ctr < bound then E else exit
 //! ```
 
-use std::collections::{HashMap, HashSet};
+use rokc_core::{HashMap, HashSet};
 
 use rokc_ir_common::{BlockId, ConstVal, FunctionId, Linkage, LocalId, PrimOp, PrimTy};
 
@@ -55,7 +55,7 @@ fn block_quiet(b: &BasicBlock, leaf: &HashSet<FunctionId>, panics: bool) -> bool
 /// Functions without loops that reach no safepoint: a subset of what
 /// codegen finds quiet, which decides the polls.
 fn leaves(fns: &[MirFunction], panics: bool) -> HashSet<FunctionId> {
-    let mut out: HashSet<FunctionId> = HashSet::new();
+    let mut out: HashSet<FunctionId> = HashSet::default();
     loop {
         let before = out.len();
         for f in fns {
@@ -151,7 +151,7 @@ fn loop_test(func: &MirFunction, h: u32, ls: &[u32]) -> Option<Test> {
         test = Some(t);
     }
     let test = test?;
-    let mut preds: HashMap<u32, Vec<u32>> = HashMap::new();
+    let mut preds: HashMap<u32, Vec<u32>> = HashMap::default();
     for b in &func.blocks {
         for s in succs(b) {
             preds.entry(s).or_default().push(b.id.0);
@@ -165,7 +165,7 @@ fn loop_test(func: &MirFunction, h: u32, ls: &[u32]) -> Option<Test> {
     (!entries.is_empty()
         && entries
             .iter()
-            .all(|&p| holds(func, &preds, &test, p, h, &mut HashSet::new())))
+            .all(|&p| holds(func, &preds, &test, p, h, &mut HashSet::default())))
     .then_some(test)
 }
 
@@ -524,7 +524,7 @@ fn through(func: &MirFunction, body: &HashSet<u32>, from: u32, via: u32, to: u32
     if via == from {
         return true;
     }
-    let mut seen: HashSet<u32> = HashSet::from([from, via]);
+    let mut seen: HashSet<u32> = HashSet::from_iter([from, via]);
     let mut work = vec![from];
     while let Some(b) = work.pop() {
         if b == to {
@@ -721,7 +721,7 @@ pub fn strip(fns: &mut [MirFunction]) {
         if func.facts.linkage != Linkage::Defined || func.blocks.is_empty() {
             continue;
         }
-        let mut latches: HashMap<u32, Vec<u32>> = HashMap::new();
+        let mut latches: HashMap<u32, Vec<u32>> = HashMap::default();
         for (latch, hs) in back_edges(func) {
             for h in hs {
                 latches.entry(h).or_default().push(latch);
@@ -737,7 +737,7 @@ pub fn strip(fns: &mut [MirFunction]) {
         for (h, n) in &nests {
             nest_copy(func, *h, n);
         }
-        let mut latches: HashMap<u32, Vec<u32>> = HashMap::new();
+        let mut latches: HashMap<u32, Vec<u32>> = HashMap::default();
         for (latch, hs) in back_edges(func) {
             for h in hs {
                 latches.entry(h).or_default().push(latch);
@@ -870,7 +870,7 @@ mod tests {
                 .any(|b| b.id.0 == front && succs(b).contains(&1))
         );
         let edges = back_edges(f);
-        assert_eq!(edges[&2], HashSet::from([1]));
+        assert_eq!(edges[&2], HashSet::from_iter([1]));
         assert!(edges.values().any(|hs| hs.contains(&front)));
         // A loop that may reach a safepoint (a lazy static) is left alone.
         let mut g = counting();

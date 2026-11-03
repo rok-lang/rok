@@ -3,7 +3,7 @@
 //! store. ISA modules only pick instructions; everything else is decided
 //! here once for all targets.
 
-use std::collections::HashMap;
+use rokc_core::HashMap;
 
 /// A frame slot (a local, or a temporary).
 pub type Slot = u32;
@@ -560,7 +560,7 @@ pub fn waitable(f: &Func) -> (Waits, Vec<bool>) {
     for v in f.debug.iter().flat_map(|d| &d.vars) {
         u[v.slot as usize].opaque = true;
     }
-    let mut out = HashMap::new();
+    let mut out = HashMap::default();
     for (s, use_) in u.iter().enumerate() {
         let ps: Vec<_> = use_.parts.values().collect();
         // Every part written; no two overlapping (by offset: no two

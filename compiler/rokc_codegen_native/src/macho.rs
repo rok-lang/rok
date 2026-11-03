@@ -103,7 +103,7 @@ pub fn write(obj: &Obj) -> Vec<u8> {
         }
     };
     let mut outs: Vec<Out> = Vec::new();
-    let mut sect_index = std::collections::HashMap::new();
+    let mut sect_index = rokc_core::HashMap::default();
     for s in SECTS {
         let sec = &obj.sects[&s];
         if sec.data.is_empty() {

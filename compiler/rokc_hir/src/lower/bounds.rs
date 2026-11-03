@@ -126,7 +126,7 @@ fn complete(ctx: &LowerCtx<'_>, mut r: TraitRef, self_ty: &HirTy) -> TraitRef {
             rokc_ast::GenericParam::Type {
                 default: Some(d), ..
             } => {
-                let mut subst = TySubst::new();
+                let mut subst = TySubst::default();
                 in_trait(ctx, info, &r, self_ty, &mut subst).resolve_ast_ty(d)
             }
             // Left open by the bound (`S: Source<Item = i32>` of
@@ -166,7 +166,7 @@ pub(super) fn traits_of(ctx: &LowerCtx<'_>, p: u32) -> Vec<TraitRef> {
             continue;
         }
         if let Some(info) = ctx.env.trait_of(&r.path) {
-            let mut subst = TySubst::new();
+            let mut subst = TySubst::default();
             let rcx = in_trait(ctx, info, &r, &me, &mut subst);
             for st in info.super_tys.iter().rev() {
                 if let Some(s) = bound_on(&rcx, st, &info.module, &me) {
@@ -313,7 +313,7 @@ pub(super) fn project(
     let HirTy::Param(q) = t else {
         unreachable!("fresh makes a Param")
     };
-    let mut subst = TySubst::new();
+    let mut subst = TySubst::default();
     let rcx = in_trait(ctx, info, &r, &HirTy::Param(p), &mut subst);
     for b in decl {
         if let Some(b) = bound_on(&rcx, b, &info.module, &t) {
@@ -499,10 +499,10 @@ pub(super) fn templates(
     HashMap<(String, String), GenericMethod>,
     HashMap<String, String>,
 ) {
-    let mut out = HashMap::new();
-    let mut traits = HashMap::new();
+    let mut out = HashMap::default();
+    let mut traits = HashMap::default();
     for (key, info) in trait_info {
-        let mut assoc: HashMap<String, Ty> = HashMap::new();
+        let mut assoc: HashMap<String, Ty> = HashMap::default();
         let mut seen: Vec<&str> = Vec::new();
         let mut stack = vec![key.as_str()];
         while let Some(k) = stack.pop() {
@@ -643,7 +643,7 @@ pub(super) fn check_all(
     incr: Option<&super::incr::Incr<'_>>,
     wanted: impl Fn(&str) -> bool,
 ) {
-    let defaults: std::collections::HashSet<Span> = env
+    let defaults: rokc_core::HashSet<Span> = env
         .trait_info
         .values()
         .flat_map(|i| i.decls.values())
@@ -839,7 +839,7 @@ fn check_decl_types(env: &Env<'_>, wanted: &impl Fn(&str) -> bool) {
                     ctx.resolve_ast_ty(t);
                 }
                 let uses = env.names.alias_uses.borrow()[from..].to_vec();
-                let mut seen = std::collections::HashSet::new();
+                let mut seen = rokc_core::HashSet::default();
                 uses.iter()
                     .filter(|u| seen.insert((&u.0, u.3)))
                     .flat_map(|u| collect::alias_use_unmet(ctx, u, true, owner))
@@ -868,7 +868,7 @@ struct Snapshot {
     infer_vars: usize,
     name_diags: usize,
     alias_uses: usize,
-    unknown: std::collections::HashSet<String>,
+    unknown: rokc_core::HashSet<String>,
     /// Return types inferred so far: one inferred during the check may
     /// name a type instance the check made.
     inferred_ret: HashMap<FunctionId, Option<HirTy>>,
@@ -965,7 +965,7 @@ fn check_one(
             // A generic alias's bounds on these parameters
             // hold by theirs.
             let uses = env.names.alias_uses.borrow()[from..].to_vec();
-            let mut seen = std::collections::HashSet::new();
+            let mut seen = rokc_core::HashSet::default();
             for u in uses.iter().filter(|u| seen.insert((&u.0, u.3))) {
                 let errors = collect::alias_use_unmet(ctx, u, true, owner);
                 env.sink.diagnostics.borrow_mut().extend(errors);
@@ -994,7 +994,7 @@ pub(super) fn in_scope<R>(
     run: impl FnOnce(&mut LowerCtx<'_>, &TySubst, Option<HirTy>) -> R,
 ) -> (R, Vec<rokc_diagnostic::RokDiagnostic>) {
     let snapshot = Snapshot::take(env);
-    let mut subst = TySubst::new();
+    let mut subst = TySubst::default();
     let mut consts = Vec::new();
     for gp in generics {
         match gp {
@@ -1143,7 +1143,7 @@ pub(super) fn assoc_const(
     };
     let info = ctx.env.trait_of(&r.path).expect("a trait");
     let decl = info.consts.iter().find(|(n, _)| n == name)?.1.clone();
-    let mut subst = TySubst::new();
+    let mut subst = TySubst::default();
     let ty = in_trait(ctx, info, &r, &me, &mut subst).resolve_ast_ty(&decl);
     let shown = item_shown(ctx, p, &r, name);
     let value = match &ty {

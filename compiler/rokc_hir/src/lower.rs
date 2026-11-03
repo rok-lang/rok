@@ -1,6 +1,6 @@
 //! AST → HIR lowering.
 
-use std::collections::HashMap;
+use rokc_core::HashMap;
 
 use rokc_ast::{
     Block, CallArg, EnumDef as AstEnumDef, EnumVariantKind as AstEnumVariantKind, Expr, ExprKind,
@@ -102,18 +102,18 @@ struct NameSet<'b> {
 /// path resolves through `canon`.
 #[derive(Clone)]
 struct TypeNames {
-    names: std::collections::HashSet<String>,
-    traits: std::collections::HashSet<String>,
+    names: rokc_core::HashSet<String>,
+    traits: rokc_core::HashSet<String>,
     /// Structural auto traits (`#[lang("send_trait" | "sync_trait")]`):
     /// a type has them unless a component lacks them.
-    auto_traits: std::collections::HashSet<String>,
+    auto_traits: rokc_core::HashSet<String>,
     /// `unsafe trait`s: implemented only by `unsafe impl`.
-    unsafe_traits: std::collections::HashSet<String>,
+    unsafe_traits: rokc_core::HashSet<String>,
     /// The `#[lang]` slots.
     lang: rokc_parser::LangTable,
     /// Every enum variant as `a::E::V` (generic bases unmangled). A
     /// variant is as visible as its enum.
-    variants: std::collections::HashSet<String>,
+    variants: rokc_core::HashSet<String>,
     /// `pub use` alias key → the type its re-export chain ends at.
     reexports: HashMap<String, String>,
     visibility: HashMap<String, Visibility>,
@@ -130,7 +130,7 @@ struct TypeNames {
     /// Plain aliases being expanded (caps a cycle).
     alias_depth: std::cell::Cell<u32>,
     /// Plain aliases that are cyclic or name a projection that fails.
-    broken_aliases: std::cell::RefCell<std::collections::HashSet<String>>,
+    broken_aliases: std::cell::RefCell<rokc_core::HashSet<String>>,
     /// Every generic alias use: (alias, arguments, module, span), for
     /// its bounds check (`check_type_bounds`).
     alias_uses: std::cell::RefCell<Vec<AliasUse>>,
@@ -197,7 +197,7 @@ fn lint_diag(lint: &str, at: Span, msg: String, help: String) -> rokc_diagnostic
 type Leaves = HashMap<String, Vec<String>>;
 
 fn leaves<'k>(keys: impl IntoIterator<Item = &'k String>) -> Leaves {
-    let mut out: Leaves = HashMap::new();
+    let mut out: Leaves = HashMap::default();
     for k in keys {
         let leaf = k.rsplit("::").next().unwrap_or(k);
         out.entry(leaf.to_owned()).or_default().push(k.clone());
@@ -316,7 +316,7 @@ impl TypeNames {
             return None;
         }
         let mut out = body.clone();
-        self.absolutize(&mut out, &from, module, &HashMap::new(), at);
+        self.absolutize(&mut out, &from, module, &HashMap::default(), at);
         Some(out)
     }
 
@@ -897,7 +897,7 @@ impl TypeNames {
         self.traits.contains(k)
     }
 
-    fn all_traits(&self) -> &std::collections::HashSet<String> {
+    fn all_traits(&self) -> &rokc_core::HashSet<String> {
         incr::read(|| incr::Read::Traits);
         &self.traits
     }
@@ -982,7 +982,7 @@ struct Scope<'b> {
 // signatures, then lower function bodies.
 #[must_use]
 pub fn lower(program: &Program, prec: &PrecTable) -> HirModule {
-    let empty_uses: crate::uses::UseTable = HashMap::new();
+    let empty_uses: crate::uses::UseTable = HashMap::default();
     let empty_reexports: Vec<crate::uses::ReExport> = Vec::new();
     lower_full(
         program.clone(),
@@ -1226,7 +1226,7 @@ struct TypeDefs<'a> {
     generic_enums: HashMap<String, &'a AstEnumDef>,
     /// Leaf names of templates whose parameters all have defaults: their
     /// bare name is an instance.
-    defaulted_leaves: std::collections::HashSet<String>,
+    defaulted_leaves: rokc_core::HashSet<String>,
 }
 
 impl<'a> TypeDefs<'a> {
@@ -1440,7 +1440,7 @@ struct Tables<'a> {
     /// `fn_table` key of every function id (method signatures).
     key_of: HashMap<FunctionId, String>,
     /// Declarations whose return type is inferred from the body.
-    infer_ret: std::collections::HashSet<FunctionId>,
+    infer_ret: rokc_core::HashSet<FunctionId>,
     /// `RootMain::Implicit`.
     implicit_main: bool,
     /// The implicit `main`'s top-level `let`s: name → the `const` that
@@ -1450,9 +1450,9 @@ struct Tables<'a> {
     harness_main: bool,
     /// Bodies without `-> T` that may diverge on every path
     /// (`collect::may_diverge`), by span.
-    may_diverge: std::collections::HashSet<rokc_diagnostic::Span>,
+    may_diverge: rokc_core::HashSet<rokc_diagnostic::Span>,
     /// Definitions a later item of the same name repeats (reported).
-    duplicated: std::cell::RefCell<std::collections::HashSet<rokc_diagnostic::Span>>,
+    duplicated: std::cell::RefCell<rokc_core::HashSet<rokc_diagnostic::Span>>,
     method_info: HashMap<FunctionId, MethodInfo>,
     /// Every struct / union / enum, declared or instantiated.
     defs: TypeDefs<'a>,
@@ -1473,18 +1473,18 @@ struct Tables<'a> {
     generic_intrinsics: HashMap<String, collect::Intrinsic>,
     /// `extern "C"` functions: a `fn` argument must be a named fn (a C
     /// function pointer), not a closure or `fn` variable.
-    extern_fn_ids: std::collections::HashSet<FunctionId>,
+    extern_fn_ids: rokc_core::HashSet<FunctionId>,
     /// `extern "rok"` declarations: the runtime's own functions.
-    rok_externs: std::collections::HashSet<FunctionId>,
+    rok_externs: rokc_core::HashSet<FunctionId>,
     /// C variadic `extern` declarations (`fn printf(fmt: str, ...)`):
     /// extra arguments take the C default argument promotions.
-    c_variadic: std::collections::HashSet<FunctionId>,
+    c_variadic: rokc_core::HashSet<FunctionId>,
     /// `extern "C" fn` definitions: with `extern_fn_ids`,
     /// the named functions an `extern "C" fn(..)` value can point to.
-    c_defs: std::collections::HashSet<FunctionId>,
+    c_defs: rokc_core::HashSet<FunctionId>,
     /// `extern "system"` declarations and definitions where `"system"`
     /// is `stdcall` (else empty): `extern "system" fn(..)` values.
-    stdcall_fns: std::collections::HashSet<FunctionId>,
+    stdcall_fns: rokc_core::HashSet<FunctionId>,
     sink: ClosureSink,
     /// Visibility of every value-namespace item, keyed by full name.
     item_visibility: HashMap<String, Visibility>,
@@ -1493,9 +1493,9 @@ struct Tables<'a> {
     /// Every impl (bounds, dispatch, projections, associated consts).
     impls: Impls,
     /// `unsafe fn`s and C functions: calls need an unsafe scope.
-    unsafe_fns: std::collections::HashSet<FunctionId>,
+    unsafe_fns: rokc_core::HashSet<FunctionId>,
     /// `impl !Send for S {}` opt-outs: `(generic base of S, trait key)`.
-    neg_auto: std::collections::HashSet<(String, String)>,
+    neg_auto: rokc_core::HashSet<(String, String)>,
     /// `auto_trait` answers by type and trait, while the program no
     /// longer changes (`send_check`); `None` otherwise.
     auto_memo: std::cell::RefCell<Option<HashMap<String, HashMap<HirTy, bool>>>>,
@@ -1507,9 +1507,9 @@ struct Tables<'a> {
     statics: HashMap<String, HirTy>,
     static_leaves: std::cell::RefCell<(usize, Leaves)>,
     /// Statics that may be assigned (`extern` `static mut`).
-    mut_statics: std::collections::HashSet<String>,
+    mut_statics: rokc_core::HashSet<String>,
     /// Statics of `extern` blocks, C globals.
-    extern_statics: std::collections::HashSet<String>,
+    extern_statics: rokc_core::HashSet<String>,
     /// `#[literal]` handlers of the built-in literal shapes.
     literal_shapes: Vec<ShapeHandler>,
     names: TypeNames,
@@ -1517,9 +1517,9 @@ struct Tables<'a> {
     /// `sink.next_id`'s start).
     decls: Vec<MethodOrFn<'a>>,
     /// `#[non_exhaustive]` structs and enums, by name.
-    non_exhaustive: std::collections::HashSet<String>,
+    non_exhaustive: rokc_core::HashSet<String>,
     /// `#[sealed]` traits, by name.
-    sealed: std::collections::HashSet<String>,
+    sealed: rokc_core::HashSet<String>,
     /// Marked functions and methods: the name a
     /// warning shows (`P::new`), the marks.
     fn_marks: HashMap<FunctionId, (String, crate::marks::Mark)>,
@@ -1781,24 +1781,24 @@ impl ClosureSink {
         Self {
             extras: std::cell::RefCell::new(Vec::new()),
             next_id: std::cell::Cell::new(0),
-            mono_cache: std::cell::RefCell::new(HashMap::new()),
-            mono_sigs: std::cell::RefCell::new(HashMap::new()),
+            mono_cache: std::cell::RefCell::new(HashMap::default()),
+            mono_sigs: std::cell::RefCell::new(HashMap::default()),
             mono_depth: std::cell::Cell::new(0),
             uninferred: std::cell::Cell::new(0),
             any_tags: std::cell::RefCell::new(Vec::new()),
-            ref_out: std::cell::RefCell::new(HashMap::new()),
+            ref_out: std::cell::RefCell::new(HashMap::default()),
             any_dispatch: std::cell::RefCell::new(Vec::new()),
             projecting: std::cell::RefCell::new(Vec::new()),
-            thunks: std::cell::RefCell::new(HashMap::new()),
+            thunks: std::cell::RefCell::new(HashMap::default()),
             instances: std::cell::RefCell::new(Vec::new()),
             instance_warns: std::cell::RefCell::new(InstanceWarns::default()),
             diagnostics: std::cell::RefCell::new(Vec::new()),
             infer_vars: std::cell::RefCell::new(Vec::new()),
             infer_depth: std::cell::Cell::new(0),
             infer_floor: std::cell::Cell::new(0),
-            fn_origin: std::cell::RefCell::new(HashMap::new()),
-            track_caller: std::cell::RefCell::new(std::collections::HashSet::new()),
-            const_lowering: std::cell::RefCell::new(std::collections::HashSet::new()),
+            fn_origin: std::cell::RefCell::new(HashMap::default()),
+            track_caller: std::cell::RefCell::new(rokc_core::HashSet::default()),
+            const_lowering: std::cell::RefCell::new(rokc_core::HashSet::default()),
             const_stack: std::cell::RefCell::new(Vec::new()),
             inferred_ret: std::cell::RefCell::default(),
             inferred_fns: std::cell::RefCell::default(),
@@ -1832,54 +1832,54 @@ impl Tables<'_> {
     /// No item collected yet.
     fn empty() -> Self {
         Self {
-            fn_table: HashMap::new(),
+            fn_table: HashMap::default(),
             fn_leaves: std::cell::OnceCell::new(),
-            extern_fns: HashMap::new(),
-            method_table: HashMap::new(),
-            key_of: HashMap::new(),
-            infer_ret: std::collections::HashSet::new(),
+            extern_fns: HashMap::default(),
+            method_table: HashMap::default(),
+            key_of: HashMap::default(),
+            infer_ret: rokc_core::HashSet::default(),
             implicit_main: false,
-            main_lets: HashMap::new(),
+            main_lets: HashMap::default(),
             harness_main: false,
-            may_diverge: std::collections::HashSet::new(),
+            may_diverge: rokc_core::HashSet::default(),
             duplicated: std::cell::RefCell::default(),
-            method_info: HashMap::new(),
+            method_info: HashMap::default(),
             defs: TypeDefs::default(),
-            consts: HashMap::new(),
+            consts: HashMap::default(),
             const_leaves: std::cell::RefCell::default(),
-            generic_fns: HashMap::new(),
-            generic_methods: HashMap::new(),
-            intrinsics: HashMap::new(),
-            generic_intrinsics: HashMap::new(),
-            extern_fn_ids: std::collections::HashSet::new(),
-            rok_externs: std::collections::HashSet::new(),
-            c_variadic: std::collections::HashSet::new(),
-            c_defs: std::collections::HashSet::new(),
-            stdcall_fns: std::collections::HashSet::new(),
+            generic_fns: HashMap::default(),
+            generic_methods: HashMap::default(),
+            intrinsics: HashMap::default(),
+            generic_intrinsics: HashMap::default(),
+            extern_fn_ids: rokc_core::HashSet::default(),
+            rok_externs: rokc_core::HashSet::default(),
+            c_variadic: rokc_core::HashSet::default(),
+            c_defs: rokc_core::HashSet::default(),
+            stdcall_fns: rokc_core::HashSet::default(),
             sink: ClosureSink::new(),
-            item_visibility: HashMap::new(),
-            field_vis: HashMap::new(),
+            item_visibility: HashMap::default(),
+            field_vis: HashMap::default(),
             impls: Impls::default(),
-            unsafe_fns: std::collections::HashSet::new(),
-            neg_auto: std::collections::HashSet::new(),
+            unsafe_fns: rokc_core::HashSet::default(),
+            neg_auto: rokc_core::HashSet::default(),
             auto_memo: std::cell::RefCell::default(),
             affine_memo: std::cell::RefCell::default(),
-            trait_info: HashMap::new(),
-            statics: HashMap::new(),
+            trait_info: HashMap::default(),
+            statics: HashMap::default(),
             static_leaves: std::cell::RefCell::default(),
-            mut_statics: std::collections::HashSet::new(),
-            extern_statics: std::collections::HashSet::new(),
+            mut_statics: rokc_core::HashSet::default(),
+            extern_statics: rokc_core::HashSet::default(),
             literal_shapes: Vec::new(),
             names: TypeNames::empty(),
             decls: Vec::new(),
-            non_exhaustive: std::collections::HashSet::new(),
-            sealed: std::collections::HashSet::new(),
-            fn_marks: HashMap::new(),
-            marks: HashMap::new(),
+            non_exhaustive: rokc_core::HashSet::default(),
+            sealed: rokc_core::HashSet::default(),
+            fn_marks: HashMap::default(),
+            marks: HashMap::default(),
             mark_pkg: None,
             lint_library: false,
-            bound_methods: HashMap::new(),
-            bound_traits: HashMap::new(),
+            bound_methods: HashMap::default(),
+            bound_traits: HashMap::default(),
         }
     }
 }
@@ -1888,19 +1888,19 @@ impl TypeNames {
     /// No name declared yet.
     fn empty() -> Self {
         Self {
-            names: std::collections::HashSet::new(),
-            traits: std::collections::HashSet::new(),
-            auto_traits: std::collections::HashSet::new(),
-            unsafe_traits: std::collections::HashSet::new(),
+            names: rokc_core::HashSet::default(),
+            traits: rokc_core::HashSet::default(),
+            auto_traits: rokc_core::HashSet::default(),
+            unsafe_traits: rokc_core::HashSet::default(),
             lang: rokc_parser::LangTable::default(),
-            variants: std::collections::HashSet::new(),
-            reexports: HashMap::new(),
-            visibility: HashMap::new(),
-            mod_vis: HashMap::new(),
-            uses: HashMap::new(),
+            variants: rokc_core::HashSet::default(),
+            reexports: HashMap::default(),
+            visibility: HashMap::default(),
+            mod_vis: HashMap::default(),
+            uses: HashMap::default(),
             diags: std::cell::RefCell::new(Vec::new()),
-            generic_aliases: HashMap::new(),
-            plain_aliases: HashMap::new(),
+            generic_aliases: HashMap::default(),
+            plain_aliases: HashMap::default(),
             alias_depth: std::cell::Cell::new(0),
             broken_aliases: std::cell::RefCell::default(),
             alias_uses: std::cell::RefCell::new(Vec::new()),
@@ -1910,10 +1910,10 @@ impl TypeNames {
             canon_memo: std::cell::RefCell::default(),
             leaves: std::cell::OnceCell::new(),
             variant_leaves: std::cell::OnceCell::new(),
-            consts: HashMap::new(),
+            consts: HashMap::default(),
             const_leaves: std::cell::OnceCell::new(),
-            value_reexports: HashMap::new(),
-            some_types: HashMap::new(),
+            value_reexports: HashMap::default(),
+            some_types: HashMap::default(),
             some_concrete: std::cell::RefCell::default(),
             some_fields: Vec::new(),
         }
@@ -2977,11 +2977,11 @@ type TySubst = HashMap<String, HirTy>;
 
 #[derive(Clone, Default)]
 struct InstanceWarns {
-    instances: HashMap<rokc_diagnostic::Span, std::collections::HashSet<FunctionId>>,
+    instances: HashMap<rokc_diagnostic::Span, rokc_core::HashSet<FunctionId>>,
     warns: Vec<(
         rokc_diagnostic::Span,
         rokc_diagnostic::RokDiagnostic,
-        std::collections::HashSet<FunctionId>,
+        rokc_core::HashSet<FunctionId>,
     )>,
 }
 
@@ -3065,9 +3065,9 @@ struct ClosureSink {
     /// Every lowered function's `(const fn, standard library)`.
     fn_origin: std::cell::RefCell<HashMap<FunctionId, (bool, bool)>>,
     /// Lowered `#[track_caller]` functions (`caller`).
-    track_caller: std::cell::RefCell<std::collections::HashSet<FunctionId>>,
+    track_caller: std::cell::RefCell<rokc_core::HashSet<FunctionId>>,
     /// Declarations being lowered for a compile-time evaluation.
-    const_lowering: std::cell::RefCell<std::collections::HashSet<FunctionId>>,
+    const_lowering: std::cell::RefCell<rokc_core::HashSet<FunctionId>>,
     /// Const items being lowered, innermost last (cycle check).
     const_stack: std::cell::RefCell<Vec<String>>,
     /// Return types inferred from bodies, by function;
@@ -3096,10 +3096,10 @@ struct ClosureSink {
     params: std::cell::RefCell<Vec<bounds::ParamInfo>>,
     /// Templates whose definition check failed, by span: their
     /// instances (and a trait default's copies) report nothing more.
-    failed: std::cell::RefCell<std::collections::HashSet<Span>>,
+    failed: std::cell::RefCell<rokc_core::HashSet<Span>>,
     /// `pub` fns whose body gave a value without `->`, by span: one
     /// error for all their instances.
-    unit_ret_errs: std::cell::RefCell<std::collections::HashSet<Span>>,
+    unit_ret_errs: std::cell::RefCell<rokc_core::HashSet<Span>>,
     /// A body called a `-> some ..` fn (`mono::check_opaque_uses`).
     opaque_called: std::cell::Cell<bool>,
     /// Checking a body with each `-> some Tr` call's result an opaque
@@ -3113,7 +3113,7 @@ struct ClosureSink {
     some_params: std::cell::RefCell<HashMap<String, HirTy>>,
     /// Unsuffixed number literals typed by default (nothing expected one):
     /// a slot of the same kind retypes them (`coerce`).
-    default_lits: std::cell::RefCell<std::collections::HashSet<Span>>,
+    default_lits: std::cell::RefCell<rokc_core::HashSet<Span>>,
     /// The body whose unsuffixed literals are inference variables
     /// (`infer::open_scope`); each is recorded in `lit_vars`.
     lit_open: std::cell::Cell<Option<Span>>,
@@ -3175,7 +3175,7 @@ struct LowerCtx<'a> {
     await_write_back: Vec<HirStmt>,
     /// Bindings some closure captures as `[ref x]`, by name and
     /// span; they live in a one-element `GcBuf` cell.
-    ref_captured: std::collections::HashSet<(String, rokc_diagnostic::Span)>,
+    ref_captured: rokc_core::HashSet<(String, rokc_diagnostic::Span)>,
     /// Pattern bindings (`declare_bound`) still to be moved into their
     /// cells (`take_cells`) before the code in their scope runs.
     pending_cells: Vec<(String, LocalId, HirTy)>,
@@ -3184,7 +3184,7 @@ struct LowerCtx<'a> {
     pending_resums: Vec<(LocalId, LocalId)>,
     /// In a closure: locals holding a value capture (assigning one is an
     /// error).
-    value_captured: std::collections::HashSet<LocalId>,
+    value_captured: rokc_core::HashSet<LocalId>,
     /// Set by a path call whose first argument fills `self`: whether it was
     /// `ref`. Taken by that call's argument lowering.
     explicit_recv: Option<bool>,
@@ -3212,7 +3212,7 @@ struct LowerCtx<'a> {
     /// the annotated slot (`true` = inferred from the first `break`).
     break_tys: HashMap<usize, (HirTy, bool)>,
     /// `breakables` indices of `while` / `for` loops: their value is `()`.
-    unit_loops: std::collections::HashSet<usize>,
+    unit_loops: rokc_core::HashSet<usize>,
     /// Expected types. A sub-expression with its own slot pushes it (or
     /// `Unknown`), so leaves only see the slot they flow into.
     expected_ty_stack: Vec<HirTy>,
@@ -3295,10 +3295,10 @@ struct LowerCtx<'a> {
     /// initializers, assigned values, `return`, the body's value
     /// (`expr::guard_sink`). Elsewhere a produced guard is never released
     /// and a read guard variable is moved.
-    guard_sinks: std::collections::HashSet<usize>,
+    guard_sinks: rokc_core::HashSet<usize>,
     /// Names the function body binds once and names once after
     /// (`sole_names`): a fresh future in one is its only handle.
-    sole_names: std::collections::HashSet<String>,
+    sole_names: rokc_core::HashSet<String>,
     /// Locals holding a fresh future nothing else names
     /// (`expr::plain_fresh_future`), with the loop depth they were made
     /// at.
@@ -3428,7 +3428,7 @@ impl<'a> LowerCtx<'a> {
         Self {
             env,
             locals: Vec::new(),
-            scopes: vec![HashMap::new()],
+            scopes: vec![HashMap::default()],
             ty_subst,
             self_ty,
             fn_ret_ty: HirTy::Unit,
@@ -3440,10 +3440,10 @@ impl<'a> LowerCtx<'a> {
             ref_cells: false,
             awaited: None,
             await_write_back: Vec::new(),
-            ref_captured: std::collections::HashSet::new(),
+            ref_captured: rokc_core::HashSet::default(),
             pending_cells: Vec::new(),
             pending_resums: Vec::new(),
-            value_captured: std::collections::HashSet::new(),
+            value_captured: rokc_core::HashSet::default(),
             unsafe_depth: 0,
             hook_call: std::cell::Cell::new(false),
             discardable_calls: std::cell::RefCell::new(Vec::new()),
@@ -3452,15 +3452,15 @@ impl<'a> LowerCtx<'a> {
             want_view: false,
             dropped_ref_recv: Vec::new(),
             breakables: Vec::new(),
-            break_tys: HashMap::new(),
-            unit_loops: std::collections::HashSet::new(),
+            break_tys: HashMap::default(),
+            unit_loops: rokc_core::HashSet::default(),
             expected_ty_stack: Vec::new(),
             current_module: String::new(),
             access: std::cell::RefCell::new(None),
             local_uses: vec![Vec::new()],
-            nested_fns: vec![HashMap::new()],
+            nested_fns: vec![HashMap::default()],
             or_pattern_binders: Vec::new(),
-            explicit_generics: HashMap::new(),
+            explicit_generics: HashMap::default(),
             default_of: None,
             method_type_args: Vec::new(),
             fn_throws: None,
@@ -3470,27 +3470,27 @@ impl<'a> LowerCtx<'a> {
             in_try_for_body: 0,
             err_frames: Vec::new(),
             owe_params: Vec::new(),
-            owed_at: HashMap::new(),
+            owed_at: HashMap::default(),
             throws_probe: None,
             uncaught_in_main: false,
             throwing_calls: 0,
             next_synth: 0,
-            narrowed: HashMap::new(),
-            arm_bound: HashMap::new(),
-            cell_views: HashMap::new(),
-            places: HashMap::new(),
+            narrowed: HashMap::default(),
+            arm_bound: HashMap::default(),
+            cell_views: HashMap::default(),
+            places: HashMap::default(),
             unnarrowed: Vec::new(),
             guard_lets: Vec::new(),
-            lit_lets: HashMap::new(),
-            guard_sinks: std::collections::HashSet::new(),
-            sole_names: std::collections::HashSet::new(),
-            sole_fresh: HashMap::new(),
-            ty_bounds: HashMap::new(),
-            ty_bound_args: HashMap::new(),
+            lit_lets: HashMap::default(),
+            guard_sinks: rokc_core::HashSet::default(),
+            sole_names: rokc_core::HashSet::default(),
+            sole_fresh: HashMap::default(),
+            ty_bounds: HashMap::default(),
+            ty_bound_args: HashMap::default(),
             coro: None,
             assoc_names: Vec::new(),
             infer_vars: false,
-            splices: HashMap::new(),
+            splices: HashMap::default(),
             at: std::cell::Cell::new(at),
             temps: std::cell::Cell::new(0),
             let_ann: std::cell::Cell::new(None),
@@ -4653,7 +4653,7 @@ impl<'a> LowerCtx<'a> {
         if depth > 8 || matches!(ty, HirTy::Unknown) {
             return Err(None);
         }
-        let params: std::collections::HashSet<String> = gi
+        let params: rokc_core::HashSet<String> = gi
             .generics
             .params
             .iter()
@@ -4662,7 +4662,7 @@ impl<'a> LowerCtx<'a> {
                 | rokc_ast::GenericParam::Const { name, .. } => name.clone(),
             })
             .collect();
-        let mut subst = HashMap::new();
+        let mut subst = HashMap::default();
         unify_param_ty_with(&gi.self_ty, ty, &params, &mut subst, self);
         // Parameters only the trait arguments name are left to the call.
         let shown = collect::impl_def_display(&gi.self_ty);
@@ -5337,7 +5337,10 @@ impl<'a> LowerCtx<'a> {
     fn resolve_ast_ty(&self, ty: &rokc_ast::Ty) -> HirTy {
         let mut t = self.resolve_ty_inner(ty);
         if let Some(st) = &self.self_ty {
-            substitute_params(&mut t, &HashMap::from([("Self".to_owned(), st.clone())]));
+            substitute_params(
+                &mut t,
+                &HashMap::from_iter([("Self".to_owned(), st.clone())]),
+            );
         }
         t
     }
@@ -6134,9 +6137,9 @@ impl<'a> LowerCtx<'a> {
     }
 
     fn push_scope(&mut self) {
-        self.scopes.push(HashMap::new());
+        self.scopes.push(HashMap::default());
         self.local_uses.push(Vec::new());
-        self.nested_fns.push(HashMap::new());
+        self.nested_fns.push(HashMap::default());
     }
 
     fn pop_scope(&mut self) {
@@ -6268,11 +6271,11 @@ fn buf_store(cell: HirExpr, value: HirExpr) -> HirExpr {
 fn ref_captured_bindings(
     params: &[Param],
     body: &Block,
-) -> std::collections::HashSet<(String, rokc_diagnostic::Span)> {
+) -> rokc_core::HashSet<(String, rokc_diagnostic::Span)> {
     type Binding = (String, rokc_diagnostic::Span);
     struct V {
         scopes: Vec<Vec<Binding>>,
-        out: std::collections::HashSet<Binding>,
+        out: rokc_core::HashSet<Binding>,
     }
     impl crate::walk::AstVisitor for V {
         fn expr(&mut self, e: &Expr) {
@@ -6308,7 +6311,7 @@ fn ref_captured_bindings(
     }
     let mut v = V {
         scopes: vec![params.iter().map(|p| (p.name.clone(), p.span)).collect()],
-        out: std::collections::HashSet::new(),
+        out: rokc_core::HashSet::default(),
     };
     crate::walk::walk_block(&mut v, body);
     v.out

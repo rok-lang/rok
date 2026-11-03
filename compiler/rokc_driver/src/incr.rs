@@ -4,8 +4,8 @@
 //! paths and are renumbered on read; an entry that doesn't read back is a
 //! miss, computed afresh.
 
+use rokc_core::HashMap;
 use rokc_diagnostic::Code;
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -37,7 +37,7 @@ impl Store {
         Self {
             path,
             data: std::sync::Arc::from([]),
-            index: HashMap::new(),
+            index: HashMap::default(),
             kept: Mutex::new(Vec::new()),
         }
     }
@@ -54,7 +54,7 @@ impl Store {
             return s;
         }
         let mut d = Dec::new(&data[head.len()..]);
-        let mut index = HashMap::new();
+        let mut index = HashMap::default();
         while !d.done() {
             let (Some(k), Some(b)) = (d.u(), d.bytes()) else {
                 return s;
@@ -133,7 +133,7 @@ impl Store {
     /// the old file or the new one); not when they are the file's.
     pub fn save(&self, magic: &str) {
         let kept = std::mem::take(&mut *self.lock());
-        let old: std::collections::HashSet<u64> = kept
+        let old: rokc_core::HashSet<u64> = kept
             .iter()
             .filter_map(|(k, v)| matches!(v, Kept::Old(..)).then_some(*k))
             .collect();
@@ -143,11 +143,12 @@ impl Store {
         let mut e = Enc::new(true);
         e.buf.extend_from_slice(&header(magic));
         // The last entry at a key wins (a read one, then its new value).
-        let mut seen = std::collections::HashSet::new();
-        for (k, v) in kept.iter().rev() {
-            if !seen.insert(*k) {
-                continue;
-            }
+        // Written by key: threads push in no fixed order.
+        let mut seen = rokc_core::HashSet::default();
+        let mut last: Vec<&(u64, Kept)> =
+            kept.iter().rev().filter(|(k, _)| seen.insert(*k)).collect();
+        last.sort_unstable_by_key(|(k, _)| *k);
+        for (k, v) in last {
             e.u(*k);
             e.bytes(match v {
                 Kept::Old(a, b) => &self.data[*a..*b],

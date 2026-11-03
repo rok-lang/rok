@@ -16,7 +16,7 @@
 //! the unit records it. A lowering that errors or touches unlogged state
 //! makes no unit.
 
-use std::collections::{HashMap, HashSet};
+use rokc_core::{HashMap, HashSet};
 
 use rokc_ast::{FnDef, ImplItem, Item, Program};
 use rokc_core::codec::{Codec, Dec, Enc, IdKind};
@@ -692,11 +692,11 @@ impl<'a> Incr<'a> {
             global: global_key(env, input),
             plain,
             library: input.library.map(|k| (k, lib_decls)),
-            answers: std::cell::RefCell::new(HashMap::new()),
-            impl_fps: std::cell::RefCell::new(HashMap::new()),
+            answers: std::cell::RefCell::new(HashMap::default()),
+            impl_fps: std::cell::RefCell::new(HashMap::default()),
             impls_by: std::cell::OnceCell::new(),
             raw_keys: std::cell::OnceCell::new(),
-            lines: std::cell::RefCell::new(HashMap::new()),
+            lines: std::cell::RefCell::new(HashMap::default()),
             names: std::cell::RefCell::new(Names::default()),
             reuse: std::cell::Cell::new(BodyReuse::default()),
         }
@@ -799,9 +799,9 @@ impl<'a> Incr<'a> {
         REC.with(|r| {
             *r.borrow_mut() = Some(Rec {
                 lookups: Vec::new(),
-                seen: HashSet::new(),
+                seen: HashSet::default(),
                 reads: Vec::new(),
-                read_seen: HashSet::new(),
+                read_seen: HashSet::default(),
                 warns: Vec::new(),
                 touched: Vec::new(),
                 keys: Vec::new(),
@@ -1059,7 +1059,7 @@ impl<'a> Incr<'a> {
         end: Counts,
         written: impl Iterator<Item = (IdKind, u32)>,
     ) -> Option<Vec<(u8, u32, String)>> {
-        let mut seen = HashSet::new();
+        let mut seen = HashSet::default();
         let mut names = self.names.borrow_mut();
         names.update(env);
         let mut out = Vec::new();
@@ -1247,7 +1247,7 @@ impl<'a> Incr<'a> {
     /// The `fn_table` key whose `stable_name` is `k` (`k` when none).
     fn raw_key<'k>(&'k self, env: &'k Env<'_>, k: &'k str) -> &'k str {
         let keys = self.raw_keys.get_or_init(|| {
-            let mut m: HashMap<String, Option<String>> = HashMap::new();
+            let mut m: HashMap<String, Option<String>> = HashMap::default();
             for raw in env.fn_table.keys() {
                 let s = stable_name(raw);
                 if s != *raw {
@@ -1304,7 +1304,7 @@ impl Ids {
             start: head.start,
             end: head.end,
             now,
-            learned: std::cell::RefCell::new(HashMap::new()),
+            learned: std::cell::RefCell::new(HashMap::default()),
         }
     }
 

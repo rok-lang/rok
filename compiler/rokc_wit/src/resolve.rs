@@ -1,7 +1,7 @@
 //! Parsed WIT files to one resolved set of packages: every name bound to
 //! its definition, `use` turned into aliases, world `include`s merged.
 
-use std::collections::HashMap;
+use rokc_core::HashMap;
 use std::path::PathBuf;
 
 use crate::parse::{
@@ -355,8 +355,8 @@ impl Cx {
     }
 
     fn resolve(&mut self, r: &mut Resolve) -> Result<(), Error> {
-        self.iface_scope = vec![HashMap::new(); r.interfaces.len()];
-        self.world_scope = vec![HashMap::new(); r.worlds.len()];
+        self.iface_scope = vec![HashMap::default(); r.interfaces.len()];
+        self.world_scope = vec![HashMap::default(); r.worlds.len()];
         self.worlds_done = vec![false; r.worlds.len()];
         for i in 0..r.interfaces.len() {
             let items = std::mem::take(&mut self.iface_items[i]);
@@ -502,7 +502,7 @@ impl Cx {
             funcs: Vec::new(),
             file,
         });
-        self.iface_scope.push(HashMap::new());
+        self.iface_scope.push(HashMap::default());
         self.iface_items.push(Vec::new());
         self.scan_iface(r, id, items)?;
         Ok(UsePath::Local(format!("\0{id}")))
@@ -870,7 +870,7 @@ fn rename_entry(
 fn copy_iface(r: &mut Resolve, i: IfaceId, name: String, w: WorldId) -> IfaceId {
     let id = r.interfaces.len();
     let src = r.interfaces[i].clone();
-    let mut map = HashMap::new();
+    let mut map = HashMap::default();
     for (_, t) in &src.types {
         map.insert(*t, r.types.len() + map.len());
     }

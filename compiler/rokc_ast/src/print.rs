@@ -117,7 +117,7 @@ struct Printer {
     out: String,
     indent: usize,
     /// Lifted nested fns by lifted name.
-    lifted: std::collections::HashMap<String, FnDef>,
+    lifted: rokc_core::HashMap<String, FnDef>,
     /// Inside the trailing closure of a call to this: `return` prints
     /// as `return@name`.
     ret_label: Option<String>,

@@ -17,7 +17,8 @@
 //! (`live_in`) get a slot; a pinned local's slot holds ambiguous words
 //! so its referent cannot move while the coroutine is suspended.
 
-use std::collections::{BTreeSet, HashMap};
+use rokc_core::HashMap;
+use std::collections::BTreeSet;
 
 use rokc_ir_common::{BlockId, ConstVal, FunctionId, LocalId, PrimOp, PrimTy};
 
@@ -332,7 +333,7 @@ pub fn transform(
 /// Drop blocks the dispatcher no longer reaches (the continuation of
 /// the final suspend point): MLIR leaves their ops unconverted.
 fn prune_unreachable_blocks(f: &mut MirFunction) {
-    let index: std::collections::HashMap<BlockId, usize> = f
+    let index: rokc_core::HashMap<BlockId, usize> = f
         .blocks
         .iter()
         .enumerate()
@@ -520,7 +521,7 @@ fn successors_mut(t: &mut Terminator) -> Vec<&mut BlockId> {
 /// so every value survives the dispatcher's jumps (a block param is an
 /// SSA value only its predecessors define).
 fn remove_block_params(f: &mut MirFunction) {
-    let params: std::collections::HashMap<BlockId, Vec<LocalId>> = f
+    let params: rokc_core::HashMap<BlockId, Vec<LocalId>> = f
         .blocks
         .iter()
         .filter(|b| !b.params.is_empty())

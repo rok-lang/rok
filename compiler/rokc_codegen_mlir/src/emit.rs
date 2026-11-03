@@ -1,7 +1,8 @@
 //! Standard-MLIR text emission. SSA value numbering is local to each
 //! `func.func`.
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use rokc_core::{HashMap, HashSet};
+use std::collections::BTreeSet;
 use std::fmt::Write;
 
 use rokc_diagnostic::{SourceMap, Span};
@@ -498,7 +499,7 @@ impl Emitter {
             .as_ref()
             .map(|(c, _)| c.renamed.clone())
             .unwrap_or_default();
-        let mut fns: HashMap<FunctionId, FnSig> = HashMap::new();
+        let mut fns: HashMap<FunctionId, FnSig> = HashMap::default();
         let mut c_entries: Vec<(FunctionId, FnAbi)> = Vec::new();
         for &f in &view {
             let own = codegen_params(&f.name, self.target.pointer_width)
@@ -724,7 +725,7 @@ impl Emitter {
             .collect();
         // One declaration per symbol: externs may share one (`#[link_name]`)
         // or name a prebuilt dependency's `#[export_name]` function.
-        let mut declared: HashSet<&str> = HashSet::new();
+        let mut declared: HashSet<&str> = HashSet::default();
         for &f in view {
             let sym = fns[&f.id].name.as_str();
             if f.facts.linkage != Linkage::Defined
@@ -2003,7 +2004,7 @@ pub fn reentrant_functions(module: &MirModule) -> HashSet<FunctionId> {
         .enumerate()
         .map(|(i, f)| (f.id, i))
         .collect();
-    let mut out = HashSet::new();
+    let mut out = HashSet::default();
     let mut succs: Vec<Vec<usize>> = Vec::with_capacity(module.functions.len());
     for f in &module.functions {
         let mut next = Vec::new();
@@ -2123,8 +2124,8 @@ pub fn quiet_functions(
     pkgs: &crate::mangle::Pkgs,
     target: &Target,
 ) -> HashSet<FunctionId> {
-    let mut pending: HashMap<FunctionId, usize> = HashMap::new();
-    let mut callers: HashMap<FunctionId, Vec<FunctionId>> = HashMap::new();
+    let mut pending: HashMap<FunctionId, usize> = HashMap::default();
+    let mut callers: HashMap<FunctionId, Vec<FunctionId>> = HashMap::default();
     let all: HashSet<FunctionId> = module.functions.iter().map(|f| f.id).collect();
     // A prebuilt function's inline copy has its body here too.
     let candidates = module.functions.iter().filter(|f| {
@@ -2143,7 +2144,7 @@ pub fn quiet_functions(
         if body_safepoints(f, &all, pkgs, target) {
             continue;
         }
-        let mut callees: HashSet<FunctionId> = HashSet::new();
+        let mut callees: HashSet<FunctionId> = HashSet::default();
         for b in &f.blocks {
             let skip = rokc_mir::noreturn_call(b);
             for (i, s) in b.stmts.iter().enumerate() {
@@ -2168,7 +2169,7 @@ pub fn quiet_functions(
             pending.insert(f.id, 0);
         }
     }
-    let mut quiet = HashSet::new();
+    let mut quiet = HashSet::default();
     let mut ready: Vec<FunctionId> = pending
         .iter()
         .filter(|(_, n)| **n == 0)
@@ -2198,7 +2199,7 @@ impl<'a> FnEmit<'a> {
         sources: &'a SourceMap,
     ) -> Self {
         // Block params are SSA values; everything else gets a stack slot.
-        let mut block_param_set: HashSet<u32> = HashSet::new();
+        let mut block_param_set: HashSet<u32> = HashSet::default();
         for b in &f.blocks {
             for p in &b.params {
                 block_param_set.insert(p.0);
@@ -2215,7 +2216,7 @@ impl<'a> FnEmit<'a> {
             body: String::new(),
             local_names,
             slot_names: vec![None; f.locals.len()],
-            union_scratch: HashMap::new(),
+            union_scratch: HashMap::default(),
             at: f.span,
             block_param_set,
             next_ssa: 0,
@@ -2227,7 +2228,7 @@ impl<'a> FnEmit<'a> {
             gc_frame: None,
             poll_frame: None,
             links: None,
-            gc_param_slots: HashMap::new(),
+            gc_param_slots: HashMap::default(),
             next_check: 0,
             pkgs,
             sources,
@@ -2235,15 +2236,15 @@ impl<'a> FnEmit<'a> {
             gc_type_base: USER_TYPE_BASE,
             gc_pkg: None,
             gc_syms: BTreeSet::new(),
-            back_edges: HashMap::new(),
-            reentry: HashSet::new(),
+            back_edges: HashMap::default(),
+            reentry: HashSet::default(),
             edge_from: (0, false),
             rooted: None,
-            root_cells: HashMap::new(),
-            root_slots: HashSet::new(),
+            root_cells: HashMap::default(),
+            root_slots: HashSet::default(),
             real_roots: None,
-            poll_roots: HashSet::new(),
-            poll_live: HashMap::new(),
+            poll_roots: HashSet::default(),
+            poll_live: HashMap::default(),
             deaths: rokc_mir::Deaths::default(),
             block_pos: f
                 .blocks
@@ -2262,7 +2263,7 @@ impl<'a> FnEmit<'a> {
             entry_poll: true,
             eager_poll: true,
             sret_into: None,
-            tls: HashMap::new(),
+            tls: HashMap::default(),
             tls_arg: None,
             thunks: BTreeSet::new(),
         }
@@ -2658,7 +2659,7 @@ impl<'a> FnEmit<'a> {
     fn result_locals(&self, once: &[bool]) -> HashSet<LocalId> {
         let f = self.f;
         if !rok_by_ref(&f.ret_ty, self.target) {
-            return HashSet::new();
+            return HashSet::default();
         }
         let mut uses = vec![0u32; f.locals.len()];
         let mut dead = self.addressed.clone();
@@ -2734,8 +2735,8 @@ impl<'a> FnEmit<'a> {
         }
         // Where a lazy entry poll goes: before these statements, and at
         // the end of these blocks.
-        let mut poll_stmts: HashSet<*const Statement> = HashSet::new();
-        let mut poll_ends: HashSet<u32> = HashSet::new();
+        let mut poll_stmts: HashSet<*const Statement> = HashSet::default();
+        let mut poll_ends: HashSet<u32> = HashSet::default();
         if let (Some(links), true) = (&self.links, self.entry_poll) {
             for b in &self.f.blocks {
                 match links.at.get(&b.id.0) {
@@ -2938,9 +2939,9 @@ impl<'a> FnEmit<'a> {
                 |l| all.contains(&l) && !real.contains(&l),
                 |b| self.back_edges.contains_key(&b.0),
             ),
-            _ => HashSet::new(),
+            _ => HashSet::default(),
         };
-        let mut rooted = HashSet::new();
+        let mut rooted = HashSet::default();
         let addressed = rokc_mir::addressed(self.f);
         // `#[track_caller]`'s location is always a static literal.
         let caller = self.f.params.last().filter(|_| self.f.facts.track_caller);

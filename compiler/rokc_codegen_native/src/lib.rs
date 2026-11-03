@@ -36,7 +36,7 @@ pub struct Options {
     pub repl: Option<rokc_codegen_mlir::ReplCell>,
     /// A REPL cell: the exported functions it defines anew (the rest the
     /// session has: declared only, `rokc_codegen_mlir::ReplFn`).
-    pub fresh_fns: Option<std::collections::HashSet<String>>,
+    pub fresh_fns: Option<rokc_core::HashSet<String>>,
 }
 
 /// A compiled module.

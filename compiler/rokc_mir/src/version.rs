@@ -18,7 +18,7 @@
 //! and functions that store nowhere and call nothing indirectly:
 //! nothing else could shrink a list between the test and an access.
 
-use std::collections::{HashMap, HashSet};
+use rokc_core::{HashMap, HashSet};
 
 use rokc_ir_common::{BlockId, ConstVal, FunctionId, Linkage, LocalId, MONO_MARK, PrimOp, PrimTy};
 
@@ -178,7 +178,7 @@ fn accessor(func: &MirFunction, fns: &HashMap<FunctionId, &MirFunction>) -> Opti
 /// Functions that store nowhere, allocate or not: calls a loop may make
 /// without changing any list.
 fn storeless(fns: &[MirFunction]) -> HashSet<FunctionId> {
-    let mut out: HashSet<FunctionId> = HashSet::new();
+    let mut out: HashSet<FunctionId> = HashSet::default();
     loop {
         let before = out.len();
         for func in fns {
@@ -361,9 +361,9 @@ impl Scope<'_> {
         let Test { ctr, ty, hi, .. } = self.test;
         // Locals holding a counter's value plus a constant here (`hi`'s
         // when the flag is set), and those as a `usize`.
-        let mut at: HashMap<LocalId, (bool, i128)> = HashMap::from([(ctr, (false, 0))]);
+        let mut at: HashMap<LocalId, (bool, i128)> = HashMap::from_iter([(ctr, (false, 0))]);
         at.extend(hi.map(|h| (h, (true, 0))));
-        let mut as_index: HashMap<LocalId, (bool, i128)> = HashMap::new();
+        let mut as_index: HashMap<LocalId, (bool, i128)> = HashMap::default();
         if ty == PrimTy::Usize {
             as_index.clone_from(&at);
         }
@@ -557,8 +557,8 @@ fn plan(
         return None;
     }
     let mut needs: Vec<Need> = Vec::new();
-    let mut sites: HashMap<Site, FunctionId> = HashMap::new();
-    let mut refs: HashMap<Site, (LocalId, Option<Operand>)> = HashMap::new();
+    let mut sites: HashMap<Site, FunctionId> = HashMap::default();
+    let mut refs: HashMap<Site, (LocalId, Option<Operand>)> = HashMap::default();
     for id in &body {
         let found = scope.scan(blocks[id])?;
         // A two-pointer header runs its statements before its test.
@@ -667,7 +667,7 @@ fn conditions(func: &mut MirFunction, p: &Plan) -> (Vec<Statement>, Vec<LocalId>
         ));
         Operand::Copy(l)
     };
-    let mut lens: HashMap<(LocalId, FunctionId), LocalId> = HashMap::new();
+    let mut lens: HashMap<(LocalId, FunctionId), LocalId> = HashMap::default();
     for need in &p.needs {
         let (xs, len) = match need {
             Need::NonNeg => {
@@ -824,12 +824,12 @@ fn promotable(func: &MirFunction, p: &Plan) -> Option<(Vec<Promoted>, Vec<LocalI
         return None;
     }
     let ctr = p.test.ctr;
-    let mut lists: HashMap<LocalId, Option<Operand>> = HashMap::new();
-    let mut loads: HashMap<LocalId, (FunctionId, Operand, MirTy)> = HashMap::new();
-    let mut stores: HashMap<LocalId, (FunctionId, Operand)> = HashMap::new();
+    let mut lists: HashMap<LocalId, Option<Operand>> = HashMap::default();
+    let mut loads: HashMap<LocalId, (FunctionId, Operand, MirTy)> = HashMap::default();
+    let mut stores: HashMap<LocalId, (FunctionId, Operand)> = HashMap::default();
     let mut fixed_lists: Vec<LocalId> = Vec::new();
     let mut ctr_lists: Vec<LocalId> = Vec::new();
-    let mut clash: HashSet<LocalId> = HashSet::new();
+    let mut clash: HashSet<LocalId> = HashSet::default();
     let mut ids: Vec<u32> = p.body.iter().copied().collect();
     ids.sort_unstable();
     for id in ids {
@@ -968,7 +968,7 @@ fn promote(
         ));
         a
     };
-    let mut addrs: HashMap<LocalId, LocalId> = HashMap::new();
+    let mut addrs: HashMap<LocalId, LocalId> = HashMap::default();
     for xs in fixed_lists.iter().chain(&ctr_lists) {
         if !addrs.contains_key(xs) {
             let a = addr(func, &mut stmts, *xs);
@@ -1055,7 +1055,7 @@ fn promote(
         ));
         c
     });
-    let mut vals: HashMap<LocalId, LocalId> = HashMap::new();
+    let mut vals: HashMap<LocalId, LocalId> = HashMap::default();
     let mut loads = Vec::new();
     for k in &kept {
         let v = fresh(func, k.ty.clone());
@@ -1322,12 +1322,12 @@ pub fn version(fns: &mut Vec<MirFunction>, pointer_width: u32) {
     }
     let storeless = storeless(fns);
     let mut next = fns.iter().map(|f| f.id.0 + 1).max().unwrap_or(0);
-    let mut made: HashMap<FunctionId, FunctionId> = HashMap::new();
+    let mut made: HashMap<FunctionId, FunctionId> = HashMap::default();
     for func in fns.iter_mut() {
         if func.facts.linkage != Linkage::Defined || func.blocks.is_empty() {
             continue;
         }
-        let mut latches: HashMap<u32, Vec<u32>> = HashMap::new();
+        let mut latches: HashMap<u32, Vec<u32>> = HashMap::default();
         for (latch, hs) in back_edges(func) {
             for header in hs {
                 latches.entry(header).or_default().push(latch);

@@ -146,13 +146,82 @@ pub fn hmac_sha256(key: &[u8], parts: &[&[u8]]) -> [u8; 32] {
     sha256(&outer)
 }
 
+const FX_K: u64 = 0xf135_7aea_2e62_a9c5;
+
+/// The compiler's map hasher: multiply-add over words, no random seed.
+///
+/// A map iterates the same way every run, so work order does not vary
+/// between builds. Weak against chosen keys; compiler keys are not.
+#[derive(Clone, Copy, Default)]
+pub struct FxHasher(u64);
+
+impl FxHasher {
+    #[inline]
+    const fn add(&mut self, w: u64) {
+        self.0 = self.0.wrapping_add(w).wrapping_mul(FX_K);
+    }
+}
+
+impl std::hash::Hasher for FxHasher {
+    #[inline]
+    fn write(&mut self, bytes: &[u8]) {
+        let mut words = bytes.chunks_exact(8);
+        for w in &mut words {
+            let mut b = [0u8; 8];
+            b.copy_from_slice(w);
+            self.add(u64::from_le_bytes(b));
+        }
+        let rest = words.remainder();
+        if !rest.is_empty() {
+            let mut b = [0u8; 8];
+            b[..rest.len()].copy_from_slice(rest);
+            self.add(u64::from_le_bytes(b));
+        }
+    }
+    #[inline]
+    fn write_u8(&mut self, i: u8) {
+        self.add(u64::from(i));
+    }
+    #[inline]
+    fn write_u16(&mut self, i: u16) {
+        self.add(u64::from(i));
+    }
+    #[inline]
+    fn write_u32(&mut self, i: u32) {
+        self.add(u64::from(i));
+    }
+    #[inline]
+    fn write_u64(&mut self, i: u64) {
+        self.add(i);
+    }
+    #[inline]
+    fn write_u128(&mut self, i: u128) {
+        self.add(i as u64);
+        self.add((i >> 64) as u64);
+    }
+    #[inline]
+    fn write_usize(&mut self, i: usize) {
+        self.add(i as u64);
+    }
+    // hashbrown takes the top 7 bits for its tags and the low bits for the
+    // bucket: the rotate brings the well-mixed high bits down to both.
+    #[inline]
+    fn finish(&self) -> u64 {
+        self.0.rotate_left(26)
+    }
+}
+
+pub type FxBuild = std::hash::BuildHasherDefault<FxHasher>;
+pub type HashMap<K, V> = std::collections::HashMap<K, V, FxBuild>;
+pub type HashSet<T> = std::collections::HashSet<T, FxBuild>;
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn fast_hash_tells_inputs_apart() {
-        let mut seen = std::collections::HashSet::new();
+        let mut seen = crate::HashSet::default();
         // Lengths, tails, a byte moved, a byte changed.
         for n in 0..40usize {
             let v: Vec<u8> = (0..n).map(|i| u8::try_from(i * 7 % 251).unwrap()).collect();

@@ -16,7 +16,8 @@
 // Greedy, no backtracking: a root requirement both sides accept
 // (`rok add x@=1.2.0`) settles a conflict.
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use rokc_core::{HashMap, HashSet};
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use crate::git::Cache;
@@ -312,8 +313,8 @@ fn activate(
             .target
             .clone()
             .unwrap_or_else(|| rokc_target::TargetSpec::host().clone()),
-        on: HashMap::new(),
-        edges: HashSet::new(),
+        on: HashMap::default(),
+        edges: HashSet::default(),
         weak: Vec::new(),
     };
     let r = nodes.len();
@@ -566,10 +567,10 @@ impl<'a> Resolver<'a> {
             old,
             new: Lock::default(),
             fetched: Vec::new(),
-            seen: HashMap::new(),
-            names: HashMap::new(),
-            codes: HashMap::new(),
-            named_by: HashMap::new(),
+            seen: HashMap::default(),
+            names: HashMap::default(),
+            codes: HashMap::default(),
+            named_by: HashMap::default(),
             out: Vec::new(),
             natives: Vec::new(),
         })
@@ -980,7 +981,7 @@ impl<'a> Resolver<'a> {
     fn natives(&mut self) -> Result<Vec<native::Resolved>, String> {
         let mut out: Vec<native::Resolved> = Vec::new();
         // Per name: its place in `out`, identity, requirer and requirement.
-        let mut seen: HashMap<String, (usize, NativeId, String, String)> = HashMap::new();
+        let mut seen: HashMap<String, (usize, NativeId, String, String)> = HashMap::default();
         let mut i = 0;
         while i < self.natives.len() {
             let (dep, base, by, user) = self.natives[i].clone();
@@ -1185,7 +1186,7 @@ type StoneDeps = (Vec<Dep>, Vec<NativeDep>, Features, Option<String>);
 
 /// At most one package of the graph links each native library.
 fn check_links(nodes: &[Node]) -> Result<(), String> {
-    let mut seen: HashMap<&str, &str> = HashMap::new();
+    let mut seen: HashMap<&str, &str> = HashMap::default();
     for n in nodes {
         let Some(l) = n.links.as_deref() else {
             continue;

@@ -1,7 +1,7 @@
 //! `use` declarations flattened into per-module `UseEntry` lists, read
 //! when a bare name misses the local scopes and module ancestors.
 
-use std::collections::{HashMap, HashSet};
+use rokc_core::{HashMap, HashSet};
 
 use rokc_ast::{UseTree, UseTreeKind};
 use rokc_core::Visibility;
@@ -45,7 +45,7 @@ pub fn build_use_table(
     packages: &[String],
 ) -> (UseTable, Vec<ReExport>) {
     crate::lower::set_packages(packages.to_vec());
-    let mut table: UseTable = HashMap::new();
+    let mut table: UseTable = HashMap::default();
     let mut reexports: Vec<ReExport> = Vec::new();
     for (module_path, vis, tree) in raw {
         let mut entries = Vec::new();
@@ -91,7 +91,7 @@ pub fn check_use_clashes(
     let mut diags = Vec::new();
     // Values are a namespace of their own, as where items are declared: a
     // name may import a module or type and a function (`channel`).
-    let mut first: HashMap<(&str, String, bool), String> = HashMap::new();
+    let mut first: HashMap<(&str, String, bool), String> = HashMap::default();
     for (module_path, _, tree) in raw {
         let earlier = table.get(module_path).map_or(&[][..], Vec::as_slice);
         let mut leaves = Vec::new();
@@ -263,8 +263,8 @@ pub fn glob_reexports(
             )
         })
         .collect();
-    let mut expanded: HashSet<String> = HashSet::new();
-    let mut reported = HashSet::new();
+    let mut expanded: HashSet<String> = HashSet::default();
+    let mut reported = HashSet::default();
     // To a fixed point: a glob may reach what another glob re-exported.
     loop {
         let mut added = false;
@@ -442,7 +442,7 @@ pub fn check_use_targets(
     if raw.is_empty() {
         return (Vec::new(), Vec::new());
     }
-    let mut known: HashSet<String> = HashSet::new();
+    let mut known: HashSet<String> = HashSet::default();
     for item in items {
         match *item {
             Item::Fn(f) => drop(known.insert(f.name.clone())),
@@ -509,7 +509,7 @@ pub fn check_use_targets(
     let mut hiding = Vec::new();
     let mut diags = Vec::new();
     for (module_path, use_vis, tree) in raw {
-        let mut written = HashMap::new();
+        let mut written = HashMap::default();
         written_leaves(tree, &mut Vec::new(), &mut written);
         let bare = tree.prefix.segments.first().is_some_and(|s| {
             crate::lower::root_path(&[s.name.as_str(), ""], module_path).is_none()
@@ -671,7 +671,7 @@ const TYPE: u8 = 2;
 /// tuple or unit struct or variant is a value too.
 fn namespaces(items: &[&rokc_ast::Item]) -> HashMap<String, (u8, Span)> {
     use rokc_ast::{EnumVariantKind, ExternItem, Item, StructKind};
-    let mut out = HashMap::new();
+    let mut out = HashMap::default();
     for item in items {
         match *item {
             Item::Fn(f) => drop(out.insert(f.name.clone(), (VALUE, f.span))),
@@ -828,7 +828,7 @@ impl GlobNames {
     #[must_use]
     pub fn new(items: &[&rokc_ast::Item], reexports: &[ReExport]) -> Self {
         use rokc_ast::{ExternItem, Item};
-        let mut out = HashMap::new();
+        let mut out = HashMap::default();
         let mut variants = Vec::new();
         let module = |k: &str| {
             k.rsplit_once("::")
@@ -898,10 +898,10 @@ impl GlobNames {
             }
             k
         };
-        let mut out: HashMap<String, Vec<String>> = HashMap::new();
+        let mut out: HashMap<String, Vec<String>> = HashMap::default();
         for globs in blocks {
-            let mut here: HashMap<&str, (String, Vec<String>)> = HashMap::new();
-            let mut ambiguous = HashSet::new();
+            let mut here: HashMap<&str, (String, Vec<String>)> = HashMap::default();
+            let mut ambiguous = HashSet::default();
             for written in globs {
                 let segs: Vec<String> = written.split("::").map(str::to_owned).collect();
                 let prefix = resolve_root(&segs, module, earlier).join("::");

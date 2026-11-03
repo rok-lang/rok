@@ -117,7 +117,7 @@ pub(super) fn lower_block(ctx: &mut LowerCtx<'_>, block: &Block) -> HirBlock {
 /// (hoisted): the ones declared here over those of enclosing blocks.
 fn declare_nested_fns(ctx: &mut LowerCtx<'_>, block: &Block) {
     // Name → the statement and the fn of its first definition here.
-    let mut own: HashMap<&str, (rokc_diagnostic::Span, rokc_diagnostic::Span)> = HashMap::new();
+    let mut own: HashMap<&str, (rokc_diagnostic::Span, rokc_diagnostic::Span)> = HashMap::default();
     for inherited in [true, false] {
         if !inherited {
             // A `use` of the block hides the nested fns of the blocks
@@ -250,7 +250,7 @@ fn check_local_item(ctx: &LowerCtx<'_>, item: &Item) {
         Some(n) => (format!("`{}`", rokc_core::local::leaf(n)), true),
         None => ("this `impl`".to_owned(), false),
     };
-    let mut seen = std::collections::HashSet::new();
+    let mut seen = rokc_core::HashSet::default();
     for (name, span) in &free.values {
         if ctx.lookup(name).is_none() || !seen.insert(name) {
             continue;
@@ -3018,7 +3018,7 @@ fn lower_expr_inner(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
         ExprKind::Await(inner) => super::coro::lower_await(ctx, inner, span),
         ExprKind::InModule(module, inner) => {
             let module = std::mem::replace(&mut ctx.current_module, module.clone());
-            let scopes = std::mem::replace(&mut ctx.scopes, vec![HashMap::new()]);
+            let scopes = std::mem::replace(&mut ctx.scopes, vec![HashMap::default()]);
             let e = lower_expr(ctx, inner);
             ctx.scopes = scopes;
             ctx.current_module = module;
@@ -3287,7 +3287,7 @@ fn infer_enum_instance(
     arg_tys: Option<&[HirTy]>,
     segs: &[&str],
 ) -> Option<EnumId> {
-    let names: std::collections::HashSet<String> = def
+    let names: rokc_core::HashSet<String> = def
         .generics
         .params
         .iter()
@@ -3308,7 +3308,7 @@ fn infer_enum_instance(
         rokc_ast::EnumVariantKind::Named(fs) => fs.iter().map(|f| &f.ty).collect(),
         rokc_ast::EnumVariantKind::Unit | rokc_ast::EnumVariantKind::Value(_) => Vec::new(),
     };
-    let mut subst: HashMap<String, HirTy> = HashMap::new();
+    let mut subst: HashMap<String, HirTy> = HashMap::default();
     for (t, a) in payload.iter().zip(arg_tys.unwrap_or_default()) {
         if *a != HirTy::Unknown {
             unify_param_ty_with(t, a, &names, &mut subst, ctx);
@@ -3372,7 +3372,7 @@ pub(super) fn variant_arg_tys(v: &HirEnumVariant) -> Vec<HirTy> {
 }
 
 fn check_duplicate_fields(ctx: &LowerCtx<'_>, segs: &[&str], fields: &[(String, Expr)]) {
-    let mut seen = std::collections::HashSet::new();
+    let mut seen = rokc_core::HashSet::default();
     for (n, _) in fields {
         if !seen.insert(n.as_str()) {
             ctx.emit_error(
@@ -3624,7 +3624,7 @@ pub(super) fn lower_struct_init(
                 *h
             }
             _ => {
-                let generic_names: std::collections::HashSet<String> = generics
+                let generic_names: rokc_core::HashSet<String> = generics
                     .params
                     .iter()
                     .map(|gp| match gp {
@@ -3632,7 +3632,7 @@ pub(super) fn lower_struct_init(
                         | rokc_ast::GenericParam::Const { name, .. } => name.clone(),
                     })
                     .collect();
-                let mut subst: HashMap<String, HirTy> = HashMap::new();
+                let mut subst: HashMap<String, HirTy> = HashMap::default();
                 for (i, (n, e)) in fields.iter().enumerate() {
                     let v = lower_expected(ctx, e, HirTy::Unknown);
                     if let Some((_, ty)) = decl_fields.iter().find(|(name, _)| name == n) {
@@ -3836,7 +3836,7 @@ pub(super) fn field_default(
     let module = module_of(enum_base_name(owner));
     let saved_module = std::mem::replace(&mut ctx.current_module, module);
     let saved_uses = std::mem::replace(&mut ctx.local_uses, vec![Vec::new()]);
-    let saved_scopes = std::mem::replace(&mut ctx.scopes, vec![HashMap::new()]);
+    let saved_scopes = std::mem::replace(&mut ctx.scopes, vec![HashMap::default()]);
     let what = format!("the default of field `{field}`");
     let v = super::infer::scoped(ctx, |ctx| {
         let v = lower_expected(ctx, value, ty.clone());
@@ -4800,7 +4800,7 @@ fn lower_is_on(
 thread_local! {
     /// Spans of trailing closures: they fill the last parameter
     ///, past defaulted or named ones.
-    static TRAILING_CLOSURES: std::cell::RefCell<std::collections::HashSet<(u32, u32)>> =
+    static TRAILING_CLOSURES: std::cell::RefCell<rokc_core::HashSet<(u32, u32)>> =
         std::cell::RefCell::default();
 }
 
@@ -6402,7 +6402,7 @@ fn generic_fn_args_from_slot(ctx: &LowerCtx<'_>, def: &FnDef) -> Option<HashMap<
     if ptys.len() != def.params.len() {
         return None;
     }
-    let names: std::collections::HashSet<String> = def
+    let names: rokc_core::HashSet<String> = def
         .generics
         .params
         .iter()
@@ -6411,7 +6411,7 @@ fn generic_fn_args_from_slot(ctx: &LowerCtx<'_>, def: &FnDef) -> Option<HashMap<
             | rokc_ast::GenericParam::Const { name, .. } => name.clone(),
         })
         .collect();
-    let mut subst = HashMap::new();
+    let mut subst = HashMap::default();
     for (p, t) in def.params.iter().zip(ptys) {
         super::mono::unify_param_ty_with(p.ty.as_ref()?, t, &names, &mut subst, ctx);
     }
@@ -8434,7 +8434,7 @@ fn any_method_call(
             super::mono::arity_msg(method, 0, 0, type_args.len()),
         );
     }
-    let mut method_subst = HashMap::new();
+    let mut method_subst = HashMap::default();
     if let (Some(def), false) = (decl, own.is_empty()) {
         match any_method_generics(ctx, &provider, &bound, def, &own, type_args, args, &recv_ty) {
             // Each instantiation dispatches on its own: open literals take
@@ -8683,7 +8683,7 @@ fn any_method_generics(
         .zip(type_args.iter().map(|t| ctx.resolve_ast_ty(t)))
         .collect();
     let outer = trait_subst(info, bound).unwrap_or_default();
-    let names: std::collections::HashSet<String> = own.iter().cloned().collect();
+    let names: rokc_core::HashSet<String> = own.iter().cloned().collect();
     let params: Vec<&rokc_ast::Param> = def.params.iter().filter(|p| p.name != "self").collect();
     let mark = ctx.probe_mark();
     let mut next = 0;
@@ -8867,7 +8867,7 @@ pub(super) fn any_link(
     env: &Env<'_>,
     lib: Option<&str>,
 ) -> (Vec<(String, String)>, Vec<(FunctionId, String)>) {
-    let empty = HashMap::new();
+    let empty = HashMap::default();
     let c = LowerCtx::new(env, &empty, None, rokc_diagnostic::Span::DUMMY);
     let dispatch = env.sink.any_dispatch.borrow().clone();
     let names = |tys: &[HirTy]| tys.iter().map(|t| c.ty_name(t)).collect::<Vec<_>>();
@@ -8967,7 +8967,7 @@ pub(super) fn any_link(
 /// Every type the program stores into an `any` slot that source can
 /// name (`HirModule::any_types`), as `ty_name` prints it.
 pub(super) fn any_types(env: &Env<'_>) -> Vec<String> {
-    let empty = HashMap::new();
+    let empty = HashMap::default();
     let c = LowerCtx::new(env, &empty, None, rokc_diagnostic::Span::DUMMY);
     let stored: Vec<HirTy> = env
         .sink
@@ -9008,7 +9008,7 @@ pub(super) fn build_any_dispatchers(env: &Env<'_>) {
 
 fn build_dispatcher(env: &Env<'_>, d: &AnyDispatch) -> HirFunction {
     let span = d.span;
-    let empty = HashMap::new();
+    let empty = HashMap::default();
     let mut c = LowerCtx::new(env, &empty, None, span);
     let HirTy::AnyTrait(bounds) = &d.recv_ty else {
         unreachable!("dispatcher on a non-`any` type")
@@ -11604,7 +11604,7 @@ fn pick_generic_by_bounds<'e>(
     }
     let holds = |gm: &GenericMethod| {
         let def = &gm.def;
-        let mut subst: HashMap<String, HirTy> = HashMap::new();
+        let mut subst: HashMap<String, HirTy> = HashMap::default();
         for (p, ty) in def.params.iter().zip(&tys) {
             let Some(rokc_ast::TyKind::Path(path)) = p.ty.as_ref().map(|t| &t.kind) else {
                 continue;
@@ -12014,7 +12014,7 @@ fn lower_nd_literal(
     let name = ctx.lang("array_literal_fn").to_owned();
     if let Some(def) = ctx.env.generic_fn(&name) {
         if let Some(ret) = def.ret_ty.as_ref() {
-            let names: std::collections::HashSet<String> = def
+            let names: rokc_core::HashSet<String> = def
                 .generics
                 .params
                 .iter()
@@ -12023,7 +12023,7 @@ fn lower_nd_literal(
                     | rokc_ast::GenericParam::Const { name, .. } => name.clone(),
                 })
                 .collect();
-            let mut subst = HashMap::new();
+            let mut subst = HashMap::default();
             super::mono::unify_param_ty_with(ret, &expected, &names, &mut subst, ctx);
             ctx.explicit_generics = subst;
         }
@@ -14099,7 +14099,7 @@ fn generic_op_by_rhs<'e>(
             Some(arg) => {
                 // Parameters only `Rhs` names (`impl<A, B, C> Compose<fn(A)
                 // -> B> for fn(B) -> C`) bind from the right operand.
-                let open: std::collections::HashSet<String> = gi
+                let open: rokc_core::HashSet<String> = gi
                     .generics
                     .params
                     .iter()
@@ -14240,7 +14240,7 @@ fn alias_path(ctx: &LowerCtx<'_>, p: &AstPath) -> Result<Option<AstPath>, String
                 let AstTyKind::Path(bp) = &mut body.kind else {
                     return Ok(None);
                 };
-                let mut seen = std::collections::HashSet::new();
+                let mut seen = rokc_core::HashSet::default();
                 let open = bp.segments.last_mut().filter(|s| {
                     s.generics.iter().all(|g| {
                         matches!(&g.kind, AstTyKind::Path(gp) if gp.segments.len() == 1
@@ -14268,7 +14268,7 @@ fn alias_path(ctx: &LowerCtx<'_>, p: &AstPath) -> Result<Option<AstPath>, String
             None => match names.plain_alias_ty(&full) {
                 Some(t) => {
                     let mut body = t.clone();
-                    let none = HashMap::new();
+                    let none = HashMap::default();
                     names.absolutize(&mut body, &module_of(&full), &ctx.current_module, &none, at);
                     body
                 }
@@ -14318,7 +14318,7 @@ pub(super) fn assoc_const_hits<'e>(
         .filter_map(|imp| {
             let (subst, have) = if let Some((t, r)) = &imp.concrete {
                 (
-                    (t == ty).then(HashMap::new)?,
+                    (t == ty).then(HashMap::default)?,
                     r.as_ref().map(|r| r.args.clone()).unwrap_or_default(),
                 )
             } else {
@@ -14388,7 +14388,7 @@ fn lower_assoc_const(
     let saved_module = std::mem::replace(&mut ctx.current_module, imp.module.clone());
     let saved_self = std::mem::replace(&mut ctx.self_ty, Some(ty.clone()));
     let saved_uses = std::mem::replace(&mut ctx.local_uses, vec![Vec::new()]);
-    let saved_scopes = std::mem::replace(&mut ctx.scopes, vec![HashMap::new()]);
+    let saved_scopes = std::mem::replace(&mut ctx.scopes, vec![HashMap::default()]);
     let key = format!("{}::{name}", ctx.ty_name(ty));
     let span = ctx.here();
     let v = super::const_eval::guard(ctx, &key, span, |ctx| {
@@ -14656,7 +14656,7 @@ pub(super) fn lower_path(
         // The value's names (and field privacy) are the defining module's.
         let saved_module = std::mem::replace(&mut ctx.current_module, module);
         let saved_uses = std::mem::replace(&mut ctx.local_uses, vec![Vec::new()]);
-        let saved_scopes = std::mem::replace(&mut ctx.scopes, vec![HashMap::new()]);
+        let saved_scopes = std::mem::replace(&mut ctx.scopes, vec![HashMap::default()]);
         let Some(v) = super::const_eval::guard(ctx, &full, span, |ctx| {
             let v = lower_expected(ctx, &value, ty.clone());
             coerce(ctx, &ty, v, &|| format!("const `{full}`"))
@@ -15412,7 +15412,7 @@ fn lower_magic(
         def.and_then(|d| d.ret_ty.as_ref()),
         slot_leaf.is_some() && handler_ret_leaf(ctx, &name) == slot_leaf,
     ) {
-        let names: std::collections::HashSet<String> = def
+        let names: rokc_core::HashSet<String> = def
             .generics
             .params
             .iter()
@@ -15421,7 +15421,7 @@ fn lower_magic(
                 | rokc_ast::GenericParam::Const { name, .. } => name.clone(),
             })
             .collect();
-        let mut subst = HashMap::new();
+        let mut subst = HashMap::default();
         super::mono::unify_param_ty_with(ret, &expected, &names, &mut subst, ctx);
         ctx.explicit_generics = subst;
     }

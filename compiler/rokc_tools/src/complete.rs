@@ -2,7 +2,7 @@
 //! `recv.`, path items after `a::b::` (and in `use`), else the names in
 //! scope.
 
-use std::collections::HashSet;
+use rokc_core::HashSet;
 
 use rokc_ast::Item;
 use rokc_diagnostic::Span;
@@ -43,7 +43,7 @@ pub fn complete(
     let head = before.trim_end_matches(is_ident_char);
     let partial = &before[head.len()..];
     let mut out: Vec<Candidate> = Vec::new();
-    let mut seen = HashSet::new();
+    let mut seen = HashSet::default();
     let mut push = |label: &str, kind: u32, detail: String| {
         if label.starts_with(partial) && !label.starts_with("__") && seen.insert(label.to_owned()) {
             out.push((label.to_owned(), kind, detail));
@@ -237,8 +237,8 @@ fn list_members(a: &Analysis, ty: &HirTy, push: &mut impl FnMut(&str, u32, Strin
 /// (an item, or a shown member for `Type__method`). Items with no source are kept.
 fn visible(a: &Analysis) -> impl Fn(&str, Span) -> bool + '_ {
     let hidden = a.hidden_spans();
-    let mut own = HashSet::new();
-    let mut foreign = HashSet::new();
+    let mut own = HashSet::default();
+    let mut foreign = HashSet::default();
     for f in &a.sources {
         if f.package.is_empty() {
             own.insert(f.file_id);

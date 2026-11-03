@@ -34,7 +34,7 @@ pub struct Lexer<'src> {
     /// First occurrence of each distinct (normalized) identifier, for
     /// the confusable check; `any_non_ascii` gates it.
     idents: Vec<(String, Span)>,
-    seen: std::collections::HashSet<String>,
+    seen: rokc_core::HashSet<String>,
     any_non_ascii: bool,
     /// Registered extension operator tokens, longest first.
     ext_ops: Vec<String>,
@@ -80,7 +80,7 @@ impl<'src> Lexer<'src> {
             rules_depth: None,
             prev_minus: false,
             idents: Vec::new(),
-            seen: std::collections::HashSet::new(),
+            seen: rokc_core::HashSet::default(),
             any_non_ascii: false,
             ext_ops: Vec::new(),
             docs: Vec::new(),
@@ -200,8 +200,8 @@ impl<'src> Lexer<'src> {
         if !self.any_non_ascii {
             return;
         }
-        let mut by_skel: std::collections::HashMap<String, &(String, Span)> =
-            std::collections::HashMap::new();
+        let mut by_skel: rokc_core::HashMap<String, &(String, Span)> =
+            rokc_core::HashMap::default();
         let mut warns = Vec::new();
         for id in &self.idents {
             match by_skel.entry(skeleton(&id.0)) {

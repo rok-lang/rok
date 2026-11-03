@@ -4,7 +4,7 @@
 //! `fp`-relative slots within lexical blocks, their types (as the LLVM
 //! path describes them), and a line table.
 
-use std::collections::HashMap;
+use rokc_core::HashMap;
 use std::path::{Path, PathBuf};
 
 use rokc_ir_common::PrimTy;
@@ -335,7 +335,7 @@ const ANY_SELF: u32 = u32::MAX;
 struct AnyOpen {
     fixups: Vec<usize>,
     held: Vec<String>,
-    held_offs: std::collections::HashSet<u32>,
+    held_offs: rokc_core::HashSet<u32>,
     /// The last reference to it or to a held type.
     last: Option<usize>,
 }
@@ -853,10 +853,10 @@ pub fn write(obj: &mut Obj, m: &MirModule, sources: &rokc_diagnostic::SourceMap)
     let mut info = Info {
         b: Vec::new(),
         relocs: Vec::new(),
-        types: HashMap::new(),
+        types: HashMap::default(),
         t,
         m,
-        building: HashMap::new(),
+        building: HashMap::default(),
         any_open: None,
         ranges: Vec::new(),
         ranges_relocs: Vec::new(),

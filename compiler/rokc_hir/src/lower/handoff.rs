@@ -41,8 +41,9 @@
 //! into another takes them to be distinct objects unless the source may hold
 //! one twice.
 
+use rokc_core::{HashMap, HashSet};
 use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
 use rokc_diagnostic::{Code, RokDiagnostic, Span};
@@ -798,7 +799,7 @@ fn taken_through(one: bool, a: (&Place, bool, u8), b: (&Place, bool, u8)) -> Opt
 /// what holds it may hold `p` and goes.
 fn mark_gone_whole(st: &mut St, place: Place, why: Gone, guards: &HashSet<LocalId>) {
     let first = place.clone();
-    let mut seen: HashSet<Place> = HashSet::new();
+    let mut seen: HashSet<Place> = HashSet::default();
     // (place, a direct copy of `place`)
     let mut work = vec![(place, true)];
     while let Some((q, direct)) = work.pop() {
@@ -992,7 +993,7 @@ fn summary_edges(
 /// may hold one twice.
 fn reach(s: &St, start: &Place, own: &[Place]) -> (Vec<Place>, Vec<Place>) {
     let (mut inner, mut stops) = (Vec::new(), Vec::new());
-    let mut seen: HashSet<Place> = HashSet::new();
+    let mut seen: HashSet<Place> = HashSet::default();
     let mut work = vec![start.clone()];
     while let Some(q) = work.pop() {
         if q.1.len() > MAX_DEPTH || !seen.insert(q.clone()) {
@@ -1105,8 +1106,8 @@ impl<'s> SameEnds<'s> {
     fn new(s: &'s St) -> Self {
         Self {
             s,
-            by: HashMap::new(),
-            ids: HashMap::new(),
+            by: HashMap::default(),
+            ids: HashMap::default(),
             places: Vec::new(),
             next: Vec::new(),
             seen: Vec::new(),
@@ -1982,11 +1983,12 @@ pub(super) fn check(
             GUARDS.iter().any(|(g, _)| *g == base)
         })
     };
-    let mut ops = HashMap::new();
-    let mut polls = HashSet::new();
-    let (mut takes, mut passes, mut par) = (HashSet::new(), HashSet::new(), HashSet::new());
-    let mut literals = HashSet::new();
-    let (mut clears, mut copies) = (HashSet::new(), HashSet::new());
+    let mut ops = HashMap::default();
+    let mut polls = HashSet::default();
+    let (mut takes, mut passes, mut par) =
+        (HashSet::default(), HashSet::default(), HashSet::default());
+    let mut literals = HashSet::default();
+    let (mut clears, mut copies) = (HashSet::default(), HashSet::default());
     for f in &all {
         if let Some(op) = op_of(&f.name, guard(f)) {
             ops.insert(f.id, op);
@@ -2023,13 +2025,13 @@ pub(super) fn check(
         .map(|(i, _)| StructId(i as u32))
         .collect();
     drop(structs);
-    let no_subst = HashMap::new();
+    let no_subst = HashMap::default();
     let ctx = LowerCtx::new(env, &no_subst, None, Span::DUMMY);
     let by_name: HashMap<&str, &str> = stored
         .iter()
         .map(|(n, s)| (n.as_str(), s.as_str()))
         .collect();
-    let mut sums = HashMap::new();
+    let mut sums = HashMap::default();
     for f in all.iter().filter(|f| f.body.is_none()) {
         if let Some(s) = by_name
             .get(f.name.as_str())
@@ -2057,7 +2059,7 @@ pub(super) fn check(
         callees: RefCell::default(),
         views: with_closures(&all),
         kept_at: RefCell::default(),
-        cands: HashMap::new(),
+        cands: HashMap::default(),
         tracked_memo: RefCell::default(),
         whys: RefCell::default(),
         owners: RefCell::default(),
@@ -2086,13 +2088,13 @@ pub(super) fn check(
 
     // Summaries to a fixpoint, callees first.
     let order = postorder(&walked);
-    let mut readers: HashMap<FunctionId, HashSet<FunctionId>> = HashMap::new();
+    let mut readers: HashMap<FunctionId, HashSet<FunctionId>> = HashMap::default();
     let mut queue: std::collections::VecDeque<FunctionId> = order.iter().copied().collect();
     let mut queued: HashSet<FunctionId> = queue.iter().copied().collect();
     let mut budget = 40 * order.len() + 1000;
     // A function's last walk saw its callees' final summaries (a change
     // walks its readers again): its errors are those of that walk.
-    let mut found: HashMap<FunctionId, Vec<RokDiagnostic>> = HashMap::new();
+    let mut found: HashMap<FunctionId, Vec<RokDiagnostic>> = HashMap::default();
     while let Some(id) = queue.pop_front() {
         queued.remove(&id);
         let f = c.fns[&id];
@@ -2122,7 +2124,7 @@ pub(super) fn check(
         .filter_map(|f| found.remove(&f.id))
         .flatten()
         .collect();
-    let mut seen = HashSet::new();
+    let mut seen = HashSet::default();
     diags.retain(|d: &RokDiagnostic| {
         let at = d.primary.as_ref().map(|l| (l.span.file, l.span.start));
         seen.insert((at, d.message.clone()))
@@ -2203,7 +2205,7 @@ fn candidates(
             _ => {}
         });
     }
-    let mut out: HashMap<usize, Vec<Cand>> = HashMap::new();
+    let mut out: HashMap<usize, Vec<Cand>> = HashMap::default();
     for (id, env) in used {
         let Some(f) = c.fns.get(&id) else { continue };
         if c.ops.contains_key(&id) {
@@ -2249,10 +2251,10 @@ fn candidates(
 /// name, or a variable bound to one) -> their value parameter.
 fn with_closures<'h>(all: &[&'h HirFunction]) -> HashMap<FunctionId, usize> {
     let ids: HashMap<FunctionId, &str> = all.iter().map(|f| (f.id, f.name.as_str())).collect();
-    let mut out = HashMap::new();
+    let mut out = HashMap::default();
     for f in all {
         let Some(body) = &f.body else { continue };
-        let mut inits: HashMap<LocalId, &'h HirExpr> = HashMap::new();
+        let mut inits: HashMap<LocalId, &'h HirExpr> = HashMap::default();
         let mut note = |b: &'h HirBlock| {
             for s in &b.stmts {
                 if let HirStmt::Let { local, init } = s {
@@ -2349,7 +2351,7 @@ fn deep_copy(t: &str) -> String {
 
 /// Each closure's and coroutine body's function -> the one making it.
 fn parents(all: &[&HirFunction]) -> HashMap<FunctionId, FunctionId> {
-    let mut out = HashMap::new();
+    let mut out = HashMap::default();
     for f in all {
         let Some(body) = &f.body else { continue };
         crate::each_block(body, &mut |e| {
@@ -2387,7 +2389,7 @@ fn postorder(fns: &[&HirFunction]) -> Vec<FunctionId> {
             (f.id, v)
         })
         .collect();
-    let mut done = HashSet::new();
+    let mut done = HashSet::default();
     let mut out = Vec::new();
     for f in fns {
         let mut stack = vec![(f.id, 0usize)];
@@ -2420,13 +2422,13 @@ fn walk(c: &Checker<'_>, f: &HirFunction) -> WalkOut {
         frames: Vec::new(),
         exits: BTreeMap::new(),
         mixed: false,
-        keys: HashMap::new(),
+        keys: HashMap::default(),
         dests: Vec::new(),
-        pinned: HashSet::new(),
-        reported: HashSet::new(),
-        temps: HashMap::new(),
-        temp_tys: HashMap::new(),
-        results: HashMap::new(),
+        pinned: HashSet::default(),
+        reported: HashSet::default(),
+        temps: HashMap::default(),
+        temp_tys: HashMap::default(),
+        results: HashMap::default(),
         calls: Vec::new(),
         scopes: Vec::new(),
         returning: false,
@@ -2436,11 +2438,11 @@ fn walk(c: &Checker<'_>, f: &HirFunction) -> WalkOut {
         sent_from: BTreeSet::new(),
         renewed: BTreeSet::new(),
         not_renewed: BTreeSet::new(),
-        deps: HashSet::new(),
+        deps: HashSet::default(),
         diags: Vec::new(),
-        guard_copies: HashMap::new(),
-        guard_parts: HashMap::new(),
-        moved_at: HashMap::new(),
+        guard_copies: HashMap::default(),
+        guard_parts: HashMap::default(),
+        moved_at: HashMap::default(),
     };
     // Each parameter as it came in: what the caller passed.
     for (i, p) in f.params.iter().enumerate() {
@@ -3713,7 +3715,7 @@ impl<'h> Walk<'_, 'h> {
                     if moved != 0 && self.c.tracked(t))
         };
         self.cur.0.iter().any(|(_, st)| {
-            let mut seen: HashSet<Place> = HashSet::new();
+            let mut seen: HashSet<Place> = HashSet::default();
             let mut work: Vec<Place> = fl.iter().map(|(_, q)| q.clone()).collect();
             while let Some(q) = work.pop() {
                 if owner(&q) {
@@ -5315,7 +5317,7 @@ impl<'h> Walk<'_, 'h> {
         let key = addr(e);
         let used: BTreeSet<u32> = s.roots().map(|r| r.0).collect();
         // Each parameter's object: a local holding the argument.
-        let mut slot: HashMap<u32, Place> = HashMap::new();
+        let mut slot: HashMap<u32, Place> = HashMap::default();
         for (i, a) in args.iter().enumerate() {
             #[allow(clippy::cast_possible_truncation)]
             let i = i as u32;
@@ -6430,7 +6432,7 @@ impl<'h> Walk<'_, 'h> {
         };
         // One walk per place: a recursive value's exit has thousands of
         // `Taken` ends over the same places.
-        let mut roots_of: HashMap<Place, Rc<Vec<Root>>> = HashMap::new();
+        let mut roots_of: HashMap<Place, Rc<Vec<Root>>> = HashMap::default();
         let mut to_roots = |p: &Place| -> Rc<Vec<Root>> {
             roots_of
                 .entry(p.clone())

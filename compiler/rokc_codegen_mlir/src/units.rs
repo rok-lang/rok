@@ -23,7 +23,8 @@
 //! the signatures and facts of its callees in other units, the statics and
 //! GC types it uses, and the build options (`salt`).
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use rokc_core::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 use std::sync::Arc;
 

@@ -2,7 +2,7 @@
 //! `#[infix]` / `#[prefix]` / `#[postfix]` only bind tokens to trait
 //! methods; `PrecTable` records that for HIR.
 
-use std::collections::HashMap;
+use rokc_core::HashMap;
 
 use rokc_ast::{AttrArg, AttrBody, Attribute, Item, Literal, Program, TraitItem};
 use rokc_diagnostic::{Code, RokDiagnostic};

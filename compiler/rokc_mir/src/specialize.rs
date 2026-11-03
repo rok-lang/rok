@@ -3,7 +3,7 @@
 //! that calls it goes to a copy of the callee where that code is
 //! constant, so the call through it becomes direct (and inlinable).
 
-use std::collections::HashMap;
+use rokc_core::HashMap;
 
 use rokc_ir_common::{FunctionId, LocalId, MONO_MARK};
 
@@ -19,7 +19,7 @@ fn is_fn_value(ty: &MirTy) -> bool {
 
 /// Locals of `f` assigned exactly once.
 fn single_defs(f: &MirFunction) -> HashMap<LocalId, &RValue> {
-    let mut defs: HashMap<LocalId, Option<&RValue>> = HashMap::new();
+    let mut defs: HashMap<LocalId, Option<&RValue>> = HashMap::default();
     for s in f.blocks.iter().flat_map(|b| &b.stmts) {
         if let Statement::Assign { target, rvalue } = s {
             defs.entry(*target)
@@ -67,7 +67,7 @@ fn known_code(
 /// Parameters of `f` that are function values never written: copies of
 /// `f` may take their code as known.
 fn fixed_fn_params(f: &MirFunction) -> Vec<usize> {
-    let written: std::collections::HashSet<LocalId> = f
+    let written: rokc_core::HashSet<LocalId> = f
         .blocks
         .iter()
         .flat_map(|b| &b.stmts)
@@ -108,12 +108,13 @@ pub fn closures(
         .filter(|(_, ps)| !ps.is_empty())
         .collect();
     // (callee, parameter, code) → copy.
-    let mut copies: HashMap<(FunctionId, usize, FunctionId), FunctionId> = HashMap::new();
-    let mut count: HashMap<FunctionId, usize> = HashMap::new();
-    let mut built: std::collections::HashSet<FunctionId> = std::collections::HashSet::new();
+    let mut copies: HashMap<(FunctionId, usize, FunctionId), FunctionId> = HashMap::default();
+    let mut count: HashMap<FunctionId, usize> = HashMap::default();
+    let mut built: rokc_core::HashSet<FunctionId> = rokc_core::HashSet::default();
     // Functions to scan, with the parameters known in each.
-    let mut work: Vec<(usize, HashMap<LocalId, FunctionId>)> =
-        (0..functions.len()).map(|i| (i, HashMap::new())).collect();
+    let mut work: Vec<(usize, HashMap<LocalId, FunctionId>)> = (0..functions.len())
+        .map(|i| (i, HashMap::default()))
+        .collect();
     while let Some((fi, known)) = work.pop() {
         let mut rewrites: Vec<(usize, usize, FunctionId)> = Vec::new();
         {
@@ -199,7 +200,7 @@ pub fn closures(
                 }
             }
             functions.push(copy);
-            work.push((functions.len() - 1, HashMap::from([(param, g)])));
+            work.push((functions.len() - 1, HashMap::from_iter([(param, g)])));
         }
     }
     made

@@ -1,7 +1,7 @@
 //! HIR → MIR lowering: basic blocks over locals, block parameters at
 //! joins.
 
-use std::collections::{HashMap, HashSet};
+use rokc_core::{HashMap, HashSet};
 
 use rokc_hir::{
     HirBlock, HirExpr, HirExprKind, HirFunction, HirMatchArm, HirModule, HirPattern, HirStmt, HirTy,
@@ -79,8 +79,7 @@ pub fn lower(module: &HirModule, target: &Target) -> MirModule {
     };
     // The stubs no lowered body reaches are not code, nor what the roots
     // do not reach.
-    let unlowered: std::collections::HashSet<FunctionId> =
-        module.unlowered.iter().copied().collect();
+    let unlowered: rokc_core::HashSet<FunctionId> = module.unlowered.iter().copied().collect();
     let reached = module.roots.as_ref().map(|r| reached(module, r));
     let lowered: Vec<&HirFunction> = module
         .functions
@@ -239,7 +238,7 @@ struct FnValues {
     /// Coroutine body → its constructor (`coro::transform`).
     coro_ctors: std::cell::RefCell<std::collections::BTreeMap<FunctionId, FunctionId>>,
     /// C `extern` declarations: their `fn` parameters are bare C pointers.
-    c_externs: std::collections::HashSet<FunctionId>,
+    c_externs: rokc_core::HashSet<FunctionId>,
 }
 
 impl FnValues {
@@ -266,7 +265,7 @@ impl PtrTypes {
                 .filter(|s| s.name.starts_with("rok::bare::ptr::"))
                 .map(|s| s.id)
                 .collect(),
-            enums: HashSet::new(),
+            enums: HashSet::default(),
         };
         loop {
             let n = p.structs.len() + p.enums.len();
@@ -418,7 +417,7 @@ fn finish_fn_values(functions: &mut Vec<MirFunction>, fnv: &FnValues) {
 fn reached(module: &HirModule, roots: &[FunctionId]) -> HashSet<FunctionId> {
     let index: HashMap<FunctionId, &HirFunction> =
         module.functions.iter().map(|f| (f.id, f)).collect();
-    let mut live = HashSet::new();
+    let mut live = HashSet::default();
     let mut work = roots.to_vec();
     while let Some(id) = work.pop() {
         if !live.insert(id) {
@@ -447,7 +446,7 @@ fn retain_reachable(functions: &mut Vec<MirFunction>, roots: Vec<FunctionId>) {
         .enumerate()
         .map(|(i, f)| (f.id, i))
         .collect();
-    let mut live: std::collections::HashSet<FunctionId> = std::collections::HashSet::new();
+    let mut live: rokc_core::HashSet<FunctionId> = rokc_core::HashSet::default();
     let mut work = roots;
     while let Some(id) = work.pop() {
         if !live.insert(id) {
@@ -583,7 +582,7 @@ struct FnBuilder<'a> {
     /// Set of block ids that have been explicitly terminated. Once a
     /// block is terminated further `push_stmt` / `terminate` calls are
     /// dropped - the rest of the source path is dead code.
-    terminated: std::collections::HashSet<u32>,
+    terminated: rokc_core::HashSet<u32>,
     /// Lexical scope being lowered (`Statement::Loc`), and the last id.
     scope: crate::Scope,
     scopes: u32,
@@ -605,7 +604,7 @@ impl<'a> FnBuilder<'a> {
             fn_ret_tys,
             fnv,
             loop_stack: Vec::new(),
-            terminated: std::collections::HashSet::new(),
+            terminated: rokc_core::HashSet::default(),
             scope: crate::Scope::default(),
             scopes: 0,
         }
