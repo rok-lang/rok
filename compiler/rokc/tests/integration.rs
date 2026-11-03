@@ -38,16 +38,21 @@ fn end_to_end_cases() {
         })
         .collect();
     cases.sort();
-    if let Some(f) = std::env::var_os("ROK_TEST_FILTER") {
-        // `a,b`: a case runs when its name contains any of them.
-        let f = f.to_string_lossy().into_owned();
-        let parts: Vec<&str> = f
-            .split(',')
-            .map(str::trim)
-            .filter(|p| !p.is_empty())
-            .collect();
+    // `a,b`: a case runs when its name contains any of them. CI sets the
+    // variable empty for the whole corpus.
+    let filter = std::env::var("ROK_TEST_FILTER").unwrap_or_default();
+    let parts: Vec<&str> = filter
+        .split(',')
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .collect();
+    if !parts.is_empty() {
         cases.retain(|(name, _)| parts.iter().any(|p| name.contains(p)));
     }
+    assert!(
+        !cases.is_empty(),
+        "ROK_TEST_FILTER={filter:?} selects no case"
+    );
     let cases = shard(cases);
 
     let results = par_map(&cases, |(name, path)| {
