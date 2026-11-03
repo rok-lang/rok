@@ -22,32 +22,45 @@ const fn check_len_in(what: str, len: usize, want: usize) {
     }
 }
 
+/// A list of `n` elements for a fused loop to fill by index, so the
+/// loop holds no `push` capacity check and can vectorize. Every slot
+/// is written before anything reads it.
+#[track_caller]
+#[lang("fused_list_alloc_fn")]
+pub(pkg) const fn fused_list_alloc<T>(n: usize) -> List<T> {
+    let out: List<T> = List::with_capacity(n);
+    unsafe { out.set_len(n) };
+    out
+}
+
 /// `[f(a[i], b[i])]`; panics, naming `what`, when the lengths differ.
 #[track_caller]
 const fn zip_with<A, B, C>(what: str, a: List<A>, b: List<B>, f: fn(A, B) -> C) -> List<C> {
     let n = a.len();
     check_len_in(what, b.len(), n);
-    let out: List<C> = List::with_capacity(n);
+    let out: List<C> = fused_list_alloc(n);
     for i in 0..n {
-        out.push(f(a[i], b[i]));
+        out[i] = f(a[i], b[i]);
     }
     out
 }
 
 /// `[f(a[i], b)]`.
 const fn map_right<A, B, C>(a: List<A>, b: B, f: fn(A, B) -> C) -> List<C> {
-    let out: List<C> = List::with_capacity(a.len());
-    for x in a {
-        out.push(f(x, b));
+    let n = a.len();
+    let out: List<C> = fused_list_alloc(n);
+    for i in 0..n {
+        out[i] = f(a[i], b);
     }
     out
 }
 
 /// `[f(a, b[i])]`.
 const fn map_left<A, B, C>(a: A, b: List<B>, f: fn(A, B) -> C) -> List<C> {
-    let out: List<C> = List::with_capacity(b.len());
-    for x in b {
-        out.push(f(a, x));
+    let n = b.len();
+    let out: List<C> = fused_list_alloc(n);
+    for i in 0..n {
+        out[i] = f(a, b[i]);
     }
     out
 }

@@ -1,7 +1,7 @@
 //! Broadcast: a tree of dot operators and `f.(..)`
 //! over core `List` / `Slice` / arrays lowers to one fused loop with no
 //! intermediates: `let #n = #b0.len(); (lengths checked) let #out
-//! = List::with_capacity(#n); for #i in 0..#n { #out.push(..) }`. All-array
+//! = fused_list_alloc(#n); for #i in 0..#n { #out[#i] = .. }`. All-array
 //! trees give an array (lengths checked at compile time). A tree over
 //! `Broadcastable` operands (`Array`) fuses the same way through the
 //! `fused_*` hooks of `rok::core::array`, and `.=` / `.+=` .. write
@@ -417,15 +417,21 @@ pub(super) fn lower(ctx: &mut LowerCtx<'_>, e: &Expr) -> HirExpr {
             span,
         });
     }
+    // Filled by index like `.=`: a `push` per element keeps the loop
+    // from vectorizing.
     let new = ast(ExprKind::Call {
-        callee: Box::new(super::bignum::path_expr(LIST, "with_capacity", span)),
+        callee: Box::new(ast(ExprKind::Path(super::expr::lang_fn(
+            "collections::broadcast",
+            "fused_list_alloc",
+            span,
+        )))),
         args: vec![CallArg::Positional(path(&n))],
         trailing_closure: None,
     });
     let_of(&mut stmts, &out, new);
-    let push = StmtKind::Expr(method(path(&out), "push", vec![item]));
+    let store = StmtKind::Assign(spread_item_at(&out, &path(&i), span), item);
     stmts.push(Stmt {
-        kind: StmtKind::Expr(for_range(usize_lit(0), path(&n), push)),
+        kind: StmtKind::Expr(for_range(usize_lit(0), path(&n), store)),
         span,
     });
     lower_expr(ctx, &block_of(stmts, path(&out), span))
