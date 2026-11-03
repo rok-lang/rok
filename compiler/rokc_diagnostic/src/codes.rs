@@ -410,8 +410,9 @@ codes! {
      with `let`, or a value captured by a closure without `[ref name]`. Assign to a `let` \
      variable, a field of one, or an element of one. A left side that is a value, such as \
      a call result, is E0141. A field set on a copy that nothing reads afterwards (a \
-     by-value `self` or parameter, a `for` binding, a `let` of `xs[i]`) is lost: take \
-     `ref self` or a `ref` parameter, write `for ref x in xs`, or write the element back.";
+     by-value `self` or parameter, a closure's argument, a `for` binding, a `let` of \
+     `xs[i]`) is lost: take `ref self` or a `ref` parameter, return the argument from the \
+     closure and use the result, write `for ref x in xs`, or write the element back.";
 
     58 INVALID_CAPTURE Type "invalid closure capture"
     "A closure's capture list (`[ref x]`) names something it cannot capture: no variable of \
@@ -819,7 +820,8 @@ codes! {
      tuple. Assigning to it would change a temporary that is dropped right after. Assign \
      to a variable, a field of one (`s.x += 1`) or an element (`xs[i] += 1`). To keep a \
      call's result, bind it first: `let v = f(); v += 1;`. To count in a dictionary, \
-     index with a default: `d[k, default: 0] += 1;`.";
+     index with a default: `d[k, default: 0] += 1;`. A lock guard's `get()` is a copy \
+     too: change the stored value with `g.update(|v| { v.x += 1; v })` or `g.set(v)`.";
 
     142 GENERIC_PARAM_SHADOWS Resolve "method generic parameter named like its impl's"
     "A method written in an `impl` block declares a generic parameter with the name of one \
