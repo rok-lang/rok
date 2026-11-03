@@ -4516,10 +4516,10 @@ impl<'a> Parser<'a> {
             self.error_help(
                 Code::SYNTAX,
                 start,
-                "`some Trait` is only a function's parameter or return type",
+                "`some Trait` is only a function's parameter or return type, or the whole right side of a `type` alias",
                 "for a variable, leave the type out (`let x = ..`); for a field or a type \
-                 argument, declare `<T: Trait>` and write `T`; for a value of several types, \
-                 write `any Trait`",
+                 argument, declare `<T: Trait>` and write `T`, or name the type with \
+                 `type Name = some Trait;`; for a value of several types, write `any Trait`",
             );
             return self.parse_some_type();
         }
@@ -8405,7 +8405,7 @@ impl<'a> Parser<'a> {
                         p.error_help(
                             Code::SYNTAX,
                             t.span,
-                            "`some Trait` is only a function's parameter or return type",
+                            "`some Trait` is only a function's parameter or return type, or the whole right side of a `type` alias",
                             "a closure parameter has one type: write it, or leave it out for \
                              the call to give it",
                         );
