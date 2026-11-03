@@ -477,8 +477,8 @@ codes! {
      and for a generic parameter `T: Trait`.";
 
     72 MISSING_TRAIT_ITEM Type "impl is missing a trait item"
-    "A trait impl must define every method and associated constant the trait declares \
-     without a default. Add the missing items.";
+    "A trait impl must define every method, associated type and associated constant the \
+     trait declares without a default. Add the missing items (`type Item = i32;`).";
 
     73 NOT_A_TRAIT_MEMBER Type "impl item is not in the trait"
     "A trait impl defines a method or an associated type the trait does not declare. Remove \

@@ -1,0 +1,27 @@
+// expect-exit: 0
+// expect-stdout:
+// [0, 9] [1] [2]
+// 2 [7, 7, 7]
+// 5 6
+
+// `array::from_fn` builds each element of a fixed array on its own, where
+// `[v; N]` would copy one: an element that is not `Clone`, or a resource.
+use rok::core::sync::Mutex;
+
+struct Bag { xs: List<usize>; }
+
+fn fill<T, const N: usize>(f: fn() -> T) -> [T; N] {
+    array::from_fn::<T, N>(|_| f())
+}
+
+fn main() {
+    let b = array::from_fn::<Bag, 3>(|i| Bag { xs: [i] });
+    b[0].xs.push(9);
+    println(f"{b[0].xs:?} {b[1].xs:?} {b[2].xs:?}");
+    let c: [Bag; 2] = array::from_fn(|_| Bag { xs: [] });
+    let e: [i64; 3] = fill(|| 7);
+    println(f"{c.len()} {e:?}");
+    let m = array::from_fn::<Mutex<i64>, 2>(|i| Mutex::new(i as i64 + 5));
+    using g = m[0].lock() { print(f"{g.get()} "); }
+    using g = m[1].lock() { println(f"{g.get()}"); }
+}

@@ -1,0 +1,62 @@
+// expect-error: error[E0134]: `x.a` was closed at line 30, and is used here
+// expect-error: affine_narrowed_fields_error.rok:31:9: `x.a` was closed at line 30, and is used here
+// expect-error: help: a `Sender<i64>` is released once; do the work before it is closed, or open a new one
+// expect-error: affine_narrowed_fields_error.rok:39:13: `q` was closed at line 38, and is used here
+// expect-error: affine_narrowed_fields_error.rok:47:13: `m.b` was closed at line 46, and is used here
+// expect-error: error[E0135]: `x.b` holds a `File` that this arm never closes
+// expect-error: help: closing a `File` can fail, so it is not closed for you: add `try x.b.close();` at the end of this arm
+
+// Narrowing a sum does not make a part usable twice, nor the whole
+// usable after a part was closed, nor leave a part that must be closed
+// open.
+
+use rok::core::channel::{Sender, channel};
+use rok::core::io::IoError;
+use rok::std::fs;
+use rok::std::fs::File;
+use rok::std::path::Path;
+
+struct Pair { a: Sender<i64>; b: Sender<i64>; }
+
+fn pair() -> Pair {
+    let (t1, _r1) = channel::<i64>();
+    let (t2, _r2) = channel::<i64>();
+    Pair { a: t1, b: t2 }
+}
+
+fn twice() {
+    let p: Pair | none = pair();
+    if let x: Pair = p {
+        x.a.close();
+        x.a.close();
+        x.b.close();
+    }
+}
+
+fn after() {
+    let q: Pair | none = pair();
+    if let x: Pair = q { x.a.close(); }
+    let w = q;
+}
+
+fn arms() {
+    let p: Pair | none = pair();
+    match p {
+        m: Pair => {
+            m.b.close();
+            m.b.close();
+        }
+        none => {}
+    }
+}
+
+struct Link { a: File; b: File; }
+
+fn open(p: Path) throws (IoError) {
+    let l: Link | none = Link { a: try fs::create(p), b: try fs::create(p) };
+    if let x: Link = l {
+        try x.a.close();
+    }
+}
+
+fn main() {}

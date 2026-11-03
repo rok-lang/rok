@@ -1,5 +1,5 @@
-// expect-error: `s` was moved at line 31, and is used here
-// expect-error: help: an `S | none` has one owner, and `s` gave it away; use the new owner
+// expect-error: `x` was moved at line 31, and is used here
+// expect-error: help: an `S` has one owner, and `x` gave it away; use the new owner
 
 // A `match` arm's binding of a stream that owns a resource has one owner:
 // moving it in the arm leaves nothing to walk under the old name.

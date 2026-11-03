@@ -1,11 +1,11 @@
 // expect-error: 24:13: `[v; N]` copies `v` into each element with `clone()`, but `Bag` is not `Clone`
-// expect-error: help: build each element on its own: `List::from_fn(3, |_| ..)`
+// expect-error: help: build each element on its own: `array::from_fn::<Bag, 3>(|_| ..)`
 // expect-error: 25:13: `[v; N]` copies `v` into each element with `clone()`, but `Mutex<i64>` is not `Clone`
 // expect-error: 26:13: `[v; N]` copies `v` into each element, but a `File` has one owner
-// expect-error: help: build each element on its own: `List::from_fn(2, |_| ..)`
+// expect-error: help: build each element on its own: `array::from_fn::<File, 2>(|_| ..)`
 // expect-error: 27:29: `[v; N]` copies `v` into each element, but a `File` has one owner
 // expect-error: 20:5: `[v; N]` copies `v` into each element with `clone()`, but `T` is not `Clone`
-// expect-error: help: add a `T: Clone` bound, or build each element on its own: `List::from_fn(N, |_| ..)`
+// expect-error: help: add a `T: Clone` bound, or build each element on its own: `array::from_fn::<T, N>(|_| ..)`
 
 // A repeat literal clones its value into each element: an element type
 // without `Clone`, or a resource with one owner, is an error.

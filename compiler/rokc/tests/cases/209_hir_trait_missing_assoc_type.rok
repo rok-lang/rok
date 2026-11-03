@@ -1,0 +1,46 @@
+// expect-error: error[E0072]: impl of `Iterator` for `Count` is missing associated type `Item`
+// expect-error: help: the trait declares `type Item` with no default: add `type Item = i32;` to the impl
+// expect-error: 30:1: impl of `Shape` for `Sq` is missing associated type `Unit`
+// expect-error: help: the trait declares `type Unit` with no default: add `type Unit = ..;` to the impl, naming the type it stands for here
+// expect-error: 42:1: impl of `Pairs` for `Two` is missing associated type `Key`
+// expect-error: help: the trait declares `type Key` with no default: add `type Key = str;` to the impl
+// forbid-error: does not match its declaration
+// forbid-error: `Val`
+
+// A trait impl leaves out an associated type the trait declares without
+// a default: an error naming the line to add.
+
+struct Count { n: i32; }
+
+impl Iterator for Count {
+    fn next(ref self) -> i32 | none {
+        if self.n > 2 { return none; }
+        self.n += 1;
+        self.n
+    }
+}
+
+trait Shape {
+    type Unit;
+    fn area(self) -> f64;
+}
+
+struct Sq { s: f64; }
+
+impl Shape for Sq {
+    fn area(self) -> f64 { self.s * self.s }
+}
+
+trait Pairs {
+    type Key;
+    type Val = i64;
+    fn first(self) -> (Key, Val);
+}
+
+struct Two;
+
+impl Pairs for Two {
+    fn first(self) -> (str, i64) { ("a", 1) }
+}
+
+fn main() {}

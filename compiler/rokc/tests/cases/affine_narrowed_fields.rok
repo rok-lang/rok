@@ -1,0 +1,111 @@
+// needs: fs
+// expect-exit: 0
+// expect-stdout:
+// closed 2 2 2 2 2
+// shut a
+
+// The parts of a member a pattern narrows a sum to are followed one by
+// one, as on a plain struct: closing one field leaves the others open.
+
+use rok::core::channel::{Sender, Receiver, channel};
+use rok::core::io::IoError;
+use rok::std::env;
+use rok::std::fs;
+use rok::std::fs::File;
+use rok::std::path::Path;
+
+struct Pair { a: Sender<i64>; b: Sender<i64>; }
+struct Outer { p: Pair | none; n: i32; }
+
+fn pair() -> (Pair, Receiver<i64>, Receiver<i64>) {
+    let (t1, r1) = channel::<i64>();
+    let (t2, r2) = channel::<i64>();
+    (Pair { a: t1, b: t2 }, r1, r2)
+}
+
+// Both receivers see their sender closed.
+fn ended(r1: Receiver<i64>, r2: Receiver<i64>) -> i32 {
+    let n = 0;
+    if r1.recv() == none { n += 1; }
+    if r2.recv() == none { n += 1; }
+    n
+}
+
+fn by_if_let() -> i32 {
+    let (q, r1, r2) = pair();
+    let p: Pair | none = q;
+    if let x: Pair = p {
+        if let s: Sender<i64> = x.a { s.close(); }
+        if let s: Sender<i64> = x.b { s.close(); }
+    }
+    ended(r1, r2)
+}
+
+fn by_match() -> i32 {
+    let (q, r1, r2) = pair();
+    let p: Pair | none = q;
+    match p {
+        x: Pair => {
+            x.b.close();
+            x.a.close();
+        }
+        none => {}
+    }
+    ended(r1, r2)
+}
+
+fn by_let_else() -> i32 {
+    let (q, r1, r2) = pair();
+    let p: Pair | none = q;
+    let x: Pair = p else { return 0; };
+    x.a.close();
+    x.b.close();
+    ended(r1, r2)
+}
+
+fn nested() -> i32 {
+    let (q, r1, r2) = pair();
+    let o: Outer | none = Outer { p: q, n: 1 };
+    if let i: Outer = o {
+        if let x: Pair = i.p {
+            x.a.close();
+            x.b.close();
+        }
+    }
+    ended(r1, r2)
+}
+
+fn two_members() -> i32 {
+    let (q, r1, r2) = pair();
+    let p: Pair | Sender<i64> | none = q;
+    match p {
+        x: Pair => {
+            x.a.close();
+            x.b.close();
+        }
+        s: Sender<i64> => s.close(),
+        none => {}
+    }
+    ended(r1, r2)
+}
+
+// A part whose close can fail: each one closed through the narrowed
+// binding, none left open.
+struct Link { a: File; b: File; }
+
+fn shut(p: Path) throws (IoError) -> str {
+    let l: Link | none = Link { a: try fs::create(p), b: try fs::create(p) };
+    if let x: Link = l {
+        try x.a.write_all("a");
+        try x.a.close();
+        try x.b.close();
+    }
+    let s = try fs::read_to_str(p);
+    try fs::remove_file(p);
+    s
+}
+
+fn main() throws (IoError) {
+    println(f"closed {by_if_let()} {by_match()} {by_let_else()} {nested()} {two_members()}");
+    println(f"shut {try shut(env::temp_dir() / "rok_affine_narrowed_fields.txt")}");
+}
