@@ -2960,6 +2960,14 @@ fn continues(kind: &rokc_lexer::TokenKind) -> bool {
         | T::DotCaret
         | T::DotShl
         | T::DotShr
+        | T::DotQuestionQuestion
+        | T::DotEq
+        | T::DotPlusEq
+        | T::DotMinusEq
+        | T::DotStarEq
+        | T::DotStarStarEq
+        | T::DotSlashEq
+        | T::DotPercentEq
         | T::Eq
         | T::PlusEq
         | T::MinusEq

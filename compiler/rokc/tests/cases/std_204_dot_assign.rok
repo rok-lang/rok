@@ -1,25 +1,34 @@
 // expect-exit: 0
 // expect-stdout:
 // [11, 22, 33] [10, 40, 90] [0, 2, 0]
-// [5, 2, 9] [2, 4]
+// [5, 2, 9] [2, 4] [7, 7]
+// [1.0, 2.0, 3.0] [0.5, 1.5, 2.5] [1.0, 4.0, 9.0]
 
-// Broadcast in place through `dot_*_assign` methods
-// (there is no `.+=` token).
+// Broadcast in place: `.=` and `.+=` `.-=` `.*=` `./=` `.%=` `.**=`
+// on a list or fixed array write its elements; other operators go
+// through `.=`.
 fn main() {
     let xs: List<i32> = [1, 2, 3];
     let ys: List<i32> = [10, 20, 30];
-    xs.dot_add_assign(ys);
+    xs .+= ys;
     let m: List<i32> = [1, 2, 3];
-    m.dot_mul_assign(ys);
+    m .*= ys;
     let r: List<i32> = [-3, 5, 9];
-    let three: List<i32> = [3, 3, 3];
-    r.dot_modulo_assign(three);
+    r .= r .%% 3;
     println(f"{xs:?} {m:?} {r:?}");
     let w: List<i32> = [5, 32, 9];
     let four: List<i32> = [0, 4, 0];
-    w.dot_shr_assign(four);
-    let b: List<u8> = [1, 2];
-    let one: List<u8> = [1, 1];
-    b.dot_shl_assign(one);
-    println(f"{w:?} {b:?}");
+    w .= w .>> four;
+    let b: [u8; 2] = [1, 2];
+    b .= b .<< 1;
+    let f: [i32; 2] = [0, 0];
+    f .= 7;
+    println(f"{w:?} {b:?} {f:?}");
+    let v: List<f64> = [2.0, 4.0, 6.0];
+    v ./= 2.0;
+    let h: List<f64> = [1.0, 2.0, 3.0];
+    h .-= 0.5;
+    let p: List<f64> = [1.0, 2.0, 3.0];
+    p .**= 2.0;
+    println(f"{v:?} {h:?} {p:?}");
 }

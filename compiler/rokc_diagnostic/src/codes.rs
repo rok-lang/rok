@@ -558,7 +558,11 @@ codes! {
 
     91 BROADCAST Type "invalid broadcast"
     "A broadcast call `f.(xs)` maps over a `List`, `Slice` or array, and arrays given \
-     together must have the same length. Pass collections of matching length.";
+     together must have the same length. Pass collections of matching length. One dot \
+     expression takes core collections or `Broadcastable` types (`Array`), not both: make \
+     a list an array with `Array::from_list(xs, [xs.len()])`. `.=` / `.+=` .. write into a \
+     `List`, fixed array or `Array` (a view of one included), whose shape the operands \
+     must fit; `.??` needs a container operand.";
 
     92 EXPLICIT_DROP Type "`Drop::drop` called directly"
     "`drop` runs on its own when a `using` block ends, and calling it again would release \

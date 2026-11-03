@@ -410,6 +410,8 @@ pub struct LiteralDef {
     pub file: String,
     /// The `#[literal(..)]` attribute.
     pub span: Span,
+    /// The handler is `pub`: packages that depend on this one see it.
+    pub public: bool,
 }
 
 /// Every `#[literal(..)] .. fn handler` in `tokens` (a whole file).
@@ -434,9 +436,36 @@ pub fn collect_literals(tokens: &[Token], file: &str) -> Vec<LiteralDef> {
             handler,
             file: file.to_owned(),
             span: w[0].span,
+            // `close` is the `)`; `]` follows.
+            public: is_pub_fn(tokens.get(close + 2..).unwrap_or_default()),
         });
     }
     out
+}
+
+/// The item after the attributes in `rest` is a `pub fn` (`pub const
+/// fn`, ..), not `pub(pkg)`.
+fn is_pub_fn(rest: &[Token]) -> bool {
+    let mut i = 0;
+    // Further attributes: `#[..]`.
+    while rest
+        .get(i)
+        .is_some_and(|t| t.kind == TokenKind::HashLBracket)
+    {
+        let mut depth = 1usize;
+        i += 1;
+        while depth > 0 {
+            match rest.get(i).map(|t| &t.kind) {
+                Some(TokenKind::HashLBracket | TokenKind::LBracket) => depth += 1,
+                Some(TokenKind::RBracket) => depth -= 1,
+                Some(_) => {}
+                None => return false,
+            }
+            i += 1;
+        }
+    }
+    rest.get(i).is_some_and(|t| t.kind == TokenKind::Pub)
+        && rest.get(i + 1).is_some_and(|t| t.kind != TokenKind::LParen)
 }
 
 /// The index of the `)` closing the `(` at `open`.
@@ -596,12 +625,16 @@ impl Parser<'_> {
             .collect();
         self.bump();
         if cands.is_empty() {
-            self.error(
+            self.error_help(
                 Code::INVALID_LITERAL_HANDLER,
                 span,
                 format!(
                     "unknown numeric literal suffix `{suffix}` - no `#[literal(number \
                      \"{suffix}\")]` handler is registered"
+                ),
+                format!(
+                    "register one, `#[literal(number \"{suffix}\")] fn ..`, here or as a \
+                     `pub fn` in a package this one depends on"
                 ),
             );
             return Some(arg);
@@ -761,8 +794,16 @@ pub fn user_suffix(text: &str) -> Option<&str> {
 /// A handler's call: written by the compiler, so seen from the handler's
 /// own module, and the handler may have any visibility.
 fn path_of(segs: &[String], span: Span) -> Path {
+    // `pkg@<package>::m::f` (`literal_tables`) is in module `<package>::m`.
     let module = segs.split_last().map(|(_, m)| match m.split_first() {
-        Some((root, rest)) if root == "pkg" => rest.join("::"),
+        Some((root, rest)) if root.starts_with(crate::PKG_ROOT) => {
+            let package = &root[crate::PKG_ROOT.len()..];
+            std::iter::once(package)
+                .chain(rest.iter().map(String::as_str))
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+                .join("::")
+        }
         _ => m.join("::"),
     });
     Path {
@@ -875,7 +916,8 @@ rokc_core::codec_struct!(LiteralDef {
     tokens,
     handler,
     file,
-    span
+    span,
+    public
 });
 
 rokc_core::codec_enum!(Shape {

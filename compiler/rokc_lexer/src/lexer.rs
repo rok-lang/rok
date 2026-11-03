@@ -570,11 +570,30 @@ impl<'src> Lexer<'src> {
     fn try_broadcast(&mut self) -> Option<TokenKind> {
         // `.+` `.-` `.*` `./` `.%` `.%%` `.&` `.|` `.^` `.<<` `.>>`
         // `.==` `.!=` `.<` `.>` `.<=` `.>=` `.&&` `.||`
+        // `.=` `.+=` `.-=` `.*=` `./=` `.%=` `.**=` `.??`
         let p = self.pos + 1;
         let b1 = *self.bytes.get(p)?;
         let b2 = self.bytes.get(p + 1).copied();
+        let b3 = self.bytes.get(p + 2).copied();
 
-        let (len, kind) = match (b1, b2) {
+        let (len, kind) = match (b1, b2, b3) {
+            (b'*', Some(b'*'), Some(b'=')) => (4, TokenKind::DotStarStarEq),
+            (b'+', Some(b'='), _) => (3, TokenKind::DotPlusEq),
+            (b'-', Some(b'='), _) => (3, TokenKind::DotMinusEq),
+            (b'*', Some(b'='), _) => (3, TokenKind::DotStarEq),
+            (b'/', Some(b'='), _) => (3, TokenKind::DotSlashEq),
+            (b'%', Some(b'='), _) => (3, TokenKind::DotPercentEq),
+            (b'?', Some(b'?'), _) => (3, TokenKind::DotQuestionQuestion),
+            (b'=', b2, _) if b2 != Some(b'=') => (2, TokenKind::DotEq),
+            _ => Self::try_broadcast_op(b1, b2)?,
+        };
+        self.advance(len);
+        Some(kind)
+    }
+
+    /// The dot operator `.` `b1` `b2` starts, with its length.
+    const fn try_broadcast_op(b1: u8, b2: Option<u8>) -> Option<(usize, TokenKind)> {
+        Some(match (b1, b2) {
             (b'<', Some(b'<')) => (3, TokenKind::DotShl),
             (b'>', Some(b'>')) => (3, TokenKind::DotShr),
             (b'<', Some(b'=')) => (3, TokenKind::DotLtEq),
@@ -596,9 +615,7 @@ impl<'src> Lexer<'src> {
             (b'<', _) => (2, TokenKind::DotLt),
             (b'>', _) => (2, TokenKind::DotGt),
             _ => return None,
-        };
-        self.advance(len);
-        Some(kind)
+        })
     }
 
     fn lex_colon(&mut self) -> TokenKind {
@@ -1574,6 +1591,37 @@ mod tests {
         let (t, d) = lex(src);
         assert!(d.is_empty(), "{src:?}: {d:?}");
         t
+    }
+
+    /// In-place broadcast and `.??`: longest match, `.==` kept.
+    #[test]
+    fn dot_assign_tokens() {
+        let id = |s: &str| T::Ident(s.to_owned());
+        assert_eq!(
+            ok("y .= x .+= x .-= x .*= x ./= x .%= x .**= x .?? x .== x"),
+            [
+                id("y"),
+                T::DotEq,
+                id("x"),
+                T::DotPlusEq,
+                id("x"),
+                T::DotMinusEq,
+                id("x"),
+                T::DotStarEq,
+                id("x"),
+                T::DotSlashEq,
+                id("x"),
+                T::DotPercentEq,
+                id("x"),
+                T::DotStarStarEq,
+                id("x"),
+                T::DotQuestionQuestion,
+                id("x"),
+                T::DotEqEq,
+                id("x"),
+                T::Eof,
+            ]
+        );
     }
 
     fn err(src: &str) {

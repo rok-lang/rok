@@ -175,6 +175,17 @@ impl<T, const N: usize> !Sync for Array<T, N> {}
 
 impl<T, const N: usize> AxisIndexed for Array<T, N> {}
 
+impl<T, const N: usize> Broadcastable<N> for Array<T, N> {
+    type Elem = T;
+    fn broadcast_view(self) -> Array<T, N> { self }
+}
+
+/// A fused expression led by an array gives an array.
+impl<T, U, const N: usize> Materialize<U, N> for Array<T, N> {
+    type Output = Array<U, N>;
+    fn materialize(self, out: Array<U, N>) -> Array<U, N> { out }
+}
+
 /// The element count of `shape`; panics past what one buffer can hold.
 #[track_caller]
 const fn shape_count<const N: usize>(shape: [usize; N]) -> usize {
@@ -320,6 +331,18 @@ impl<T, const N: usize> Array<T, N> {
             p += idx[k] as isize * self.strides[k];
         }
         p as usize
+    }
+
+    /// The lowest and highest buffer positions of the elements (the
+    /// array is not empty).
+    pub(pkg) const fn span(self) -> (isize, isize) {
+        let lo = self.off as isize;
+        let hi = lo;
+        for k in 0..N {
+            let reach = (self.shape[k] as isize - 1) * self.strides[k];
+            if reach < 0 { lo += reach; } else { hi += reach; }
+        }
+        (lo, hi)
     }
 
     /// The element at `idx`, `none` when an index is past its axis.
@@ -738,6 +761,157 @@ pub(pkg) const fn next_index<const N: usize>(ref idx: [usize; N], shape: [usize;
         }
         idx[k] = 0;
     }
+}
+
+// The hooks of a fused dot expression over `Broadcastable` operands
+// (`rokc_hir` lower/broadcast.rs). Each operand is viewed as an array
+// stretched to the result's shape (`fused_view`); the loop reads it
+// at buffer positions: `fused_row` gives the first of a row of the
+// last axis, `fused_step` the step along it. When every view is
+// contiguous the whole result is one row.
+
+/// `acc` and `s` stretched to one shape (`broadcast_shape`); `s` may
+/// have fewer axes, which count from the last.
+#[track_caller]
+#[lang("fused_shape_fn")]
+pub(pkg) const fn fused_shape<const M: usize, const N: usize>(acc: [usize; M], s: [usize; N]) -> [usize; M] {
+    let out = acc;
+    for k in 0..N {
+        let a = M - N + k;
+        if acc[a] == 1 {
+            out[a] = s[k];
+        } else if s[k] != acc[a] && s[k] != 1 {
+            panic(f"broadcast: shapes {acc:?} and {s:?} differ on axis {a}; each axis must match or have length 1");
+        }
+    }
+    out
+}
+
+/// `v` seen with shape `s`: its axes are the last of `s`, a length 1
+/// and each missing axis repeat (stride 0).
+#[lang("fused_view_fn")]
+pub(pkg) const fn fused_view<T, const N: usize, const M: usize>(v: Array<T, N>, s: [usize; M]) -> Array<T, M> {
+    let strides: [isize; M] = [0; M];
+    for k in 0..N {
+        let a = M - N + k;
+        if v.shape[k] == s[a] {
+            strides[a] = v.strides[k];
+        }
+    }
+    Array { buf: v.buf, off: v.off, shape: s, strides }
+}
+
+/// A fresh row-major array of shape `s` for the result; the fused loop
+/// writes every element before anything reads it.
+#[track_caller]
+#[lang("fused_alloc_fn")]
+pub(pkg) const fn fused_alloc<T, const M: usize>(s: [usize; M]) -> Array<T, M> {
+    unsafe { Array::alloc(s) }
+}
+
+/// `v` is contiguous: position `off + i` is its element `i`.
+#[lang("fused_flat_fn")]
+pub(pkg) const fn fused_flat<T, const M: usize>(v: Array<T, M>) -> bool { v.is_contiguous() }
+
+/// The length of a row: the last axis, the whole array if rank 0.
+#[lang("fused_inner_fn")]
+pub(pkg) const fn fused_inner<const M: usize>(s: [usize; M]) -> usize {
+    if M == 0 { 1 } else { s[M - 1] }
+}
+
+/// The number of rows of `inner` elements in `n`.
+#[lang("fused_rows_fn")]
+pub(pkg) const fn fused_rows(n: usize, inner: usize) -> usize {
+    if inner == 0 { 0 } else { n / inner }
+}
+
+/// The buffer position of the first element of row `r` (rows of
+/// `inner` elements in row-major order).
+#[lang("fused_row_fn")]
+pub(pkg) const fn fused_row<T, const M: usize>(v: Array<T, M>, r: usize, inner: usize) -> isize {
+    let p = v.off as isize;
+    if inner == 0 {
+        return p;
+    }
+    let rest = r * inner;
+    let k = M;
+    while k > 0 {
+        k -= 1;
+        let len = v.shape[k];
+        if len != 0 {
+            p += (rest % len) as isize * v.strides[k];
+            rest /= len;
+        }
+    }
+    p
+}
+
+/// The step along the last axis (0 for rank 0).
+#[lang("fused_step_fn")]
+pub(pkg) const fn fused_step<T, const M: usize>(v: Array<T, M>) -> isize {
+    if M == 0 { 0 } else { v.strides[M - 1] }
+}
+
+/// Element `i` of a contiguous run from buffer position `o`
+/// (unchecked: the loop's own).
+#[lang("fused_at_fn")]
+pub(pkg) const fn fused_at<T, const M: usize>(v: Array<T, M>, o: isize, i: usize) -> T {
+    unsafe { v.buf[o as usize + i] }
+}
+
+/// Store `x` as element `i` of a contiguous run from position `o`.
+#[lang("fused_put_fn")]
+pub(pkg) const fn fused_put<T, const M: usize>(v: Array<T, M>, o: isize, i: usize, x: T) {
+    unsafe { v.buf[o as usize + i] = x; }
+}
+
+/// Element `i` of a row from buffer position `o` with step `step`.
+#[lang("fused_get_fn")]
+pub(pkg) const fn fused_get<T, const M: usize>(v: Array<T, M>, o: isize, i: usize, step: isize) -> T {
+    unsafe { v.buf[(o + i as isize * step) as usize] }
+}
+
+/// Store `x` as element `i` of a row from `o` with step `step`.
+#[lang("fused_set_fn")]
+pub(pkg) const fn fused_set<T, const M: usize>(v: Array<T, M>, o: isize, i: usize, step: isize, x: T) {
+    unsafe { v.buf[(o + i as isize * step) as usize] = x; }
+}
+
+/// The operands of an in-place broadcast stretch to the destination's
+/// shape `d` (`s`, their shape with `d` folded in, is `d`).
+#[track_caller]
+#[lang("fused_dest_fn")]
+pub(pkg) const fn fused_dest<const M: usize>(d: [usize; M], s: [usize; M]) {
+    for k in 0..M {
+        if s[k] != d[k] {
+            panic(f"broadcast: the result has shape {s:?}, which does not fit the destination of shape {d:?}; the destination is not stretched");
+        }
+    }
+}
+
+/// Source view `w` of an in-place broadcast into `d`: a copy when it
+/// reads elements of `d`'s buffer that the loop writes before reading
+/// them (`a .= a[::-1]`); `w` itself when it is `d` or apart from it.
+#[lang("fused_source_fn")]
+pub(pkg) const fn fused_source<T, U, const M: usize>(d: Array<T, M>, w: Array<U, M>) -> Array<U, M> {
+    if !buf_same(buf_erase(d.buf), buf_erase(w.buf)) || d.len() == 0 {
+        return w;
+    }
+    let same = d.off == w.off;
+    for k in 0..M {
+        if d.shape[k] > 1 && d.strides[k] != w.strides[k] {
+            same = false;
+        }
+    }
+    if same {
+        return w;
+    }
+    let (dlo, dhi) = d.span();
+    let (wlo, whi) = w.span();
+    if dhi < wlo || whi < dlo {
+        return w;
+    }
+    w.copy()
 }
 
 /// The elements of an array in row-major order.

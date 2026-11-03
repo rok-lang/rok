@@ -873,8 +873,19 @@ fn lower_compound_assign(
     value: &Expr,
     span: rokc_diagnostic::Span,
 ) -> Option<HirStmt> {
-    if !is_place(ctx, target, op, value) {
+    // `.=` `.+=` ..: element-wise into the target; a slice of an array
+    // is a view, so writing it writes the array.
+    let view = matches!(
+        target.kind,
+        ExprKind::Index(..) | ExprKind::Slice { .. } | ExprKind::AxisSlice { .. }
+    );
+    if !(op.starts_with('.') && view || is_place(ctx, target, op, value)) {
         return None;
+    }
+    if op.starts_with('.') {
+        return Some(HirStmt::Expr(super::broadcast::lower_into(
+            ctx, target, op, value, span,
+        )));
     }
     if let Some(call) = assign_trait_call(ctx, target, op, value, span) {
         return Some(HirStmt::Expr(call));
@@ -6194,8 +6205,10 @@ fn arm_value_ty(e: &HirExpr) -> Option<HirTy> {
 }
 
 /// The value of integer arithmetic over literals (`2 * 200`), if it is
-/// one; `None` past an overflow (reported where it happened).
-fn const_int(e: &HirExpr) -> Option<i128> {
+/// one; `None` past an overflow (reported where it happened), and for a
+/// `const` parameter of the generic body being checked (`stand_in`):
+/// its stand-in value is not the instance's (`M - N`).
+fn const_int(e: &HirExpr, stand_in: &dyn Fn(i128) -> bool) -> Option<i128> {
     let HirTy::Prim(p) = e.ty else {
         return None;
     };
@@ -6203,16 +6216,17 @@ fn const_int(e: &HirExpr) -> Option<i128> {
         return None;
     }
     let v = match &e.kind {
+        HirExprKind::Const(ConstVal::Int { value, .. }) if stand_in(*value) => return None,
         HirExprKind::Const(ConstVal::Int { value, .. }) => *value,
         HirExprKind::Const(ConstVal::UInt { value, .. }) => i128::try_from(*value).ok()?,
         HirExprKind::PrimUnaryOp {
             op: PrimOp::Neg,
             operand,
-        } => const_int(operand)?.checked_neg()?,
+        } => const_int(operand, stand_in)?.checked_neg()?,
         HirExprKind::PrimBinOp { op, lhs, rhs } => {
             // The right side first: a left-leaning chain's is shallow.
-            let b = const_int(rhs)?;
-            const_arith(*op, const_int(lhs)?, b)?
+            let b = const_int(rhs, stand_in)?;
+            const_arith(*op, const_int(lhs, stand_in)?, b)?
         }
         _ => return None,
     };
@@ -6257,10 +6271,11 @@ fn check_const_overflow(
     {
         return;
     }
-    let Some(b) = const_int(rhs) else {
+    let stand_in = |v: i128| super::bounds::const_name(ctx.env, v).is_some();
+    let Some(b) = const_int(rhs, &stand_in) else {
         return;
     };
-    let Some(a) = const_int(lhs) else {
+    let Some(a) = const_int(lhs, &stand_in) else {
         return;
     };
     let msg = match const_arith(op, a, b) {
@@ -15017,8 +15032,15 @@ fn lower_shape(
 /// The full name of a literal handler's path (`pkg::` is the root).
 fn handler_name(c: &rokc_ast::LitCand) -> String {
     let segs: Vec<&str> = c.handler.segments.iter().map(|s| s.name.as_str()).collect();
+    // `pkg@<package>::..` (rokc_driver's `literal_tables`).
     match segs.split_first() {
-        Some((&"pkg", rest)) => rest.join("::"),
+        Some((root, rest)) if root.starts_with(rokc_parser::PKG_ROOT) => {
+            std::iter::once(&root[rokc_parser::PKG_ROOT.len()..])
+                .chain(rest.iter().copied())
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+                .join("::")
+        }
         _ => segs.join("::"),
     }
 }

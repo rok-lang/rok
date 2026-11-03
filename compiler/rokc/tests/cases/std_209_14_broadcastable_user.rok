@@ -1,0 +1,31 @@
+// expect-exit: 0
+// expect-stdout:
+// Signal { data: [1.5, 2.5, 3.5] } 1
+// Signal { data: [3.0, 5.0, 7.0] }
+
+// A type of your own fuses like `Array`: `Broadcastable` views its
+// elements as an array, `Materialize` builds the result when it leads.
+use rok::core::array::Array;
+use rok::core::ops::{Broadcastable, Materialize};
+
+#[derive(Debug)]
+struct Signal { data: Array<f64, 1>; }
+
+impl Broadcastable<1> for Signal {
+    type Elem = f64;
+    fn broadcast_view(self) -> Array<f64, 1> { self.data }
+}
+
+impl Materialize<f64, 1> for Signal {
+    type Output = Signal;
+    fn materialize(self, out: Array<f64, 1>) -> Signal { Signal { data: out } }
+}
+
+fn main() {
+    let s = Signal { data: [1.0, 2.0, 3.0] };
+    let k: Array<f64, 1> = [0.5];
+    let t = s .+ k;
+    println(f"{t:?} {t.data.ndim()}");
+    t .*= 2.0;
+    println(f"{t:?}");
+}

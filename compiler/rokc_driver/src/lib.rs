@@ -818,7 +818,16 @@ fn compile_unit_in(
         .filter(|d| holds(&d.file, &d.cfg))
         .collect();
     let keywords = keyword_tables(kw_defs, path, &root_dir_kw, &roots, &mut diags);
-    let lits = literal_tables(metas.literals, path, &root_dir_kw, &roots, &ext, &mut diags);
+    let lits = literal_tables(
+        metas.literals,
+        path,
+        &root_dir_kw,
+        &roots,
+        &deps,
+        lib,
+        &ext,
+        &mut diags,
+    );
     // Per package: the user's, then each library root's.
     let metas: Vec<MetaCtx> = (0..=roots.len())
         .map(|i| MetaCtx {
@@ -2507,19 +2516,21 @@ fn keyword_tables(
 
 /// (package dir, path root) of the user package, then each library root.
 fn package_roots(user_dir: &Path, roots: &[LibRoot]) -> Vec<(PathBuf, Vec<String>)> {
-    let mut pkgs: Vec<(PathBuf, Vec<String>)> =
-        vec![(user_dir.to_path_buf(), vec!["pkg".to_owned()])];
+    let mut pkgs: Vec<(PathBuf, Vec<String>)> = vec![(
+        user_dir.to_path_buf(),
+        vec![rokc_parser::PKG_ROOT.to_owned()],
+    )];
     for (prefix, r) in roots {
         let dir = r
             .parent()
             .map_or_else(|| PathBuf::from("."), Path::to_path_buf);
-        // A dependency's handlers live under `pkg::<dep>`.
+        // A package's handlers are named from its root, `pkg@<dep>`
+        // (the user's `pkg@`): the same item whichever package's source
+        // the call lands in.
         let path = if prefix.first().is_some_and(|p| p == "rok") {
             prefix.clone()
         } else {
-            std::iter::once("pkg".to_owned())
-                .chain(prefix.iter().cloned())
-                .collect()
+            vec![format!("{}{}", rokc_parser::PKG_ROOT, prefix.join("::"))]
         };
         pkgs.push((dir, path));
     }
@@ -2563,20 +2574,26 @@ fn handler_path(
 }
 
 /// The `#[literal]` patterns the parser matches, per package (the
-/// package being built first): its own, then the standard libraries',
-/// which apply everywhere. A dependency's own stay in its source.
-/// HIR dispatches the built-in shapes; the real parse reports bad patterns.
+/// package being built first): its own, the `pub` ones of the packages
+/// it depends on (`deps`), then the standard libraries', which apply
+/// everywhere. `lib` is the library being built, when it is one of
+/// `roots`. HIR dispatches the built-in shapes; the real parse reports
+/// bad patterns.
+#[allow(clippy::too_many_arguments)]
 fn literal_tables(
     defs: Vec<LiteralDef>,
     entry: &Path,
     user_dir: &Path,
     roots: &[LibRoot],
+    deps: &[String],
+    lib: Option<&str>,
     ext: &ExtOps,
     diags: &mut Vec<RokDiagnostic>,
 ) -> Vec<std::sync::Arc<LiteralTable>> {
     let pkgs = package_roots(user_dir, roots);
     let std_pkg = |i: usize| pkgs[i].1.first().is_some_and(|s| s == "rok");
     let mut own: Vec<Vec<LitRule>> = vec![Vec::new(); pkgs.len()];
+    let mut exported: Vec<(usize, LitRule)> = Vec::new();
     let mut std = Vec::new();
     for d in defs {
         if d.handler.is_empty() {
@@ -2603,10 +2620,26 @@ fn literal_tables(
             handler,
             span: d.span,
         };
-        if std_pkg(i) { &mut std } else { &mut own[i] }.push(rule);
+        if std_pkg(i) {
+            std.push(rule);
+            continue;
+        }
+        if d.public {
+            exported.push((i, rule.clone()));
+        }
+        own[i].push(rule);
     }
+    // The packages built from this source: the user's and `lib`.
+    let name = |i: usize| i.checked_sub(1).map(|r| roots[r].0.join("::"));
+    let built = |i: usize| i == 0 || (lib.is_some() && name(i).as_deref() == lib);
+    let dep = |j: usize| name(j).is_some_and(|n| deps.contains(&n));
     own.into_iter()
-        .map(|mut rules| {
+        .enumerate()
+        .map(|(i, mut rules)| {
+            if built(i) {
+                let from = exported.iter().filter(|(j, _)| *j != i && dep(*j));
+                rules.extend(from.map(|(_, r)| r.clone()));
+            }
             rules.extend(std.iter().cloned());
             std::sync::Arc::new(LiteralTable { rules })
         })

@@ -1,0 +1,22 @@
+// expect-error: a dot expression over both a `List` / `Slice` / fixed array and an `Array`
+// expect-error: make the list an array first: `Array::from_list(xs, [xs.len()])`
+// expect-error: `.??` fills the `none` elements of a `List`, `Slice`, array or `Array`, but no operand here is one
+// expect-error: `.+=` writes element-wise into a `List`, fixed array or `Array`, not `i64`
+// expect-error: write the operation out: `x = x .+ ..;`
+// expect-error: an operand of rank 2 does not fit a destination of rank 1
+// expect-error: an in-place broadcast cannot write into a `Slice`
+
+use rok::core::array::Array;
+
+fn main() {
+    let a: Array<f64, 1> = [1.0, 2.0];
+    let xs = [1.0, 2.0];
+    let b = a .+ xs;
+    let c = 1.0 .?? 2.0;
+    let n = 3;
+    n .+= 1;
+    let m: Array<f64, 2> = [[1.0, 2.0]];
+    a .= m;
+    let s = xs[0:1];
+    s .= 0.0;
+}
