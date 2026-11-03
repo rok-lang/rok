@@ -1680,6 +1680,39 @@ fn nested_fn_item_names() {
     }
 }
 
+/// `[v; N]` of a Copy element is one fill; of a `List` element, a
+/// `clone()` per element but the last.
+#[test]
+fn repeat_literal_fills_copy_and_clones_the_rest() {
+    let dir = scratch("repeat_fill");
+    put(
+        dir.join("src/main.rok"),
+        "struct P {\n    x: i32;\n}\nfn main() {\n    let w = [[7u8; 64]; 64];\n    \
+         let p = [P { x: 1 }; 32];\n    println(f\"{w[0][0]} {p[0].x}\");\n}\n",
+    )
+    .unwrap();
+    let out = rokc(None, &dir, &["emit", "--emit=hir", "-o", "h.txt"]);
+    assert_exit(&out, 0);
+    let hir = fs::read_to_string(dir.join("h.txt")).unwrap();
+    let main = &hir[hir.find("fn main()").unwrap()..];
+    let main = &main[..main.find("\n}\n").unwrap()];
+    assert!(
+        main.contains("[_0; 64]") && !main.contains("while"),
+        "{main}"
+    );
+
+    put(
+        dir.join("src/main.rok"),
+        "fn main() {\n    let q = [List::<i32>::new(); 40];\n    println(f\"{q.len()}\");\n}\n",
+    )
+    .unwrap();
+    let out = rokc(None, &dir, &["emit", "--emit=hir", "-o", "h.txt"]);
+    assert_exit(&out, 0);
+    let hir = fs::read_to_string(dir.join("h.txt")).unwrap();
+    let main = &hir[hir.find("fn main()").unwrap()..];
+    assert!(main.contains("39usize") && main.contains("while"), "{main}");
+}
+
 /// A fresh future kept in a local nothing else names is spawned with no
 /// hand-off; one with a second handle still goes through the copy.
 #[test]

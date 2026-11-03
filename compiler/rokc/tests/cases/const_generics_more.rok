@@ -21,7 +21,7 @@
 // return type, inferred from the expected type.
 fn zeros<const N: usize>() -> [f64; N] { return [0.0; N]; }
 
-fn replicate<T, const N: usize>(value: T) -> [T; N] { return [value; N]; }
+fn replicate<T: Clone, const N: usize>(value: T) -> [T; N] { return [value; N]; }
 
 fn total<const N: usize>(a: [i32; N]) -> i32 {
     let s = 0;

@@ -1,0 +1,28 @@
+// expect-error: 24:13: `[v; N]` copies `v` into each element with `clone()`, but `Bag` is not `Clone`
+// expect-error: help: build each element on its own: `List::from_fn(3, |_| ..)`
+// expect-error: 25:13: `[v; N]` copies `v` into each element with `clone()`, but `Mutex<i64>` is not `Clone`
+// expect-error: 26:13: `[v; N]` copies `v` into each element, but a `File` has one owner
+// expect-error: help: build each element on its own: `List::from_fn(2, |_| ..)`
+// expect-error: 27:29: `[v; N]` copies `v` into each element, but a `File` has one owner
+// expect-error: 20:5: `[v; N]` copies `v` into each element with `clone()`, but `T` is not `Clone`
+// expect-error: help: add a `T: Clone` bound, or build each element on its own: `List::from_fn(N, |_| ..)`
+
+// A repeat literal clones its value into each element: an element type
+// without `Clone`, or a resource with one owner, is an error.
+use rok::core::sync::Mutex;
+use rok::std::fs::File;
+
+struct Bag {
+    xs: List<int>;
+}
+
+fn two<T, const N: usize>(x: T) -> [T; N] {
+    [x; N]
+}
+
+fn main() throws {
+    let b = [Bag { xs: [] }; 3];
+    let m = [Mutex::new(0); 2];
+    let f = [try File::open("x"); 2];
+    let n: [[File; 1]; 2] = [[try File::open("x")]; 2];
+}

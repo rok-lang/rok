@@ -387,6 +387,7 @@ pub(super) fn lower(ctx: &mut LowerCtx<'_>, e: &Expr) -> HirExpr {
             ast(ExprKind::ArrayRepeat {
                 value: Box::new(first),
                 len: rokc_ast::ConstExpr::Literal(AstLit::Int(fixed[0].to_string())),
+                fill: true,
             }),
         );
         let store = StmtKind::Assign(spread_item_at(&out, &path(&i), span), item);

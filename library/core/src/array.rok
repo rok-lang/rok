@@ -21,9 +21,17 @@ impl<T: Clone, const N: usize> Clone for [T; N] {
 impl<T: Copy, const N: usize> Copy for [T; N] {}
 
 impl<T: Default, const N: usize> Default for [T; N] {
+    // Each element its own default: zero bytes until each slot is written.
     const fn default() -> [T; N] {
-        let d: T = rok::core::marker::default_of();
-        [d; N]
+        let r = unsafe {
+            let zero: GcBuf<[T; N]> = buf_new(1);
+            zero[0]
+        };
+        for i in 0..N {
+            let d: T = rok::core::marker::default_of();
+            r[i] = d;
+        }
+        r
     }
 }
 
@@ -117,9 +125,9 @@ impl<T, const N: usize> [T; N] {
     /// A new array of `f` applied to each element, in order.
     pub const fn map<U>(self, f: fn(T) -> U) -> [U; N] {
         unsafe {
-            // A zero `U` fills the slots until `f` writes each one.
-            let zero: GcBuf<U> = buf_new(1);
-            let out = [zero[0]; N];
+            // Zero bytes fill the slots until `f` writes each one.
+            let zero: GcBuf<[U; N]> = buf_new(1);
+            let out = zero[0];
             for i in 0..N {
                 out[i] = f(self[i]);
             }

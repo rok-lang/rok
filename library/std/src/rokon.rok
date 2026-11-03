@@ -773,10 +773,13 @@ impl<T: FromRokon, const N: usize> FromRokon for [T; N] {
         if xs.len() != N {
             throw RokonError::new(f"expected {N} items, found {xs.len()}");
         }
-        // The array is seeded with its first item: `[T; 0]` cannot be read.
         if N == 0 { throw RokonError::new("cannot read a zero-length array"); }
-        let out: [T; N] = [xs[0]; N];
-        for i in 1..N { out[i] = xs[i]; }
+        // Zero bytes fill the slots until each item is written.
+        let out = unsafe {
+            let zero: rok::bare::mem::GcBuf<[T; N]> = rok::bare::mem::buf_new(1);
+            zero[0]
+        };
+        for i in 0..N { out[i] = xs[i]; }
         out
     }
 

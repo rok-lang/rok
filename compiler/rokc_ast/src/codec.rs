@@ -159,7 +159,7 @@ codec_enum!(ExprKind {
     SelfUpper,
     Tuple(x0),
     List(x0),
-    ArrayRepeat { value, len },
+    ArrayRepeat { value, len, fill },
     Dict(x0),
     Set(x0),
     MagicLiteral(x0),

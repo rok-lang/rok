@@ -7572,6 +7572,7 @@ impl<'a> Parser<'a> {
                     ExprKind::ArrayRepeat {
                         value: Box::new(items.pop()?),
                         len,
+                        fill: false,
                     }
                 } else {
                     self.expect(&TokenKind::RBracket, "`]`")?;

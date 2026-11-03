@@ -283,7 +283,7 @@ pub fn walk_expr(v: &mut impl AstVisitor, e: &Expr) {
                 walk_expr(v, i);
             }
         }
-        ExprKind::ArrayRepeat { value, len } => {
+        ExprKind::ArrayRepeat { value, len, .. } => {
             walk_expr(v, value);
             if let rokc_ast::ConstExpr::Expr(e) = len {
                 walk_expr(v, e);

@@ -2903,7 +2903,9 @@ fn lower_expr_inner(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
             }
         }
         ExprKind::List(items) => lower_list_lit(ctx, items, span),
-        ExprKind::ArrayRepeat { value, len } => lower_array_repeat(ctx, value, len, span),
+        ExprKind::ArrayRepeat { value, len, fill } => {
+            lower_array_repeat(ctx, value, len, *fill, span)
+        }
         // `d[k, default: v]` read: `d.get_or(k, v)`, the dict unchanged.
         ExprKind::Index(d, idx) if rokc_ast::as_index_default(idx).is_some() => {
             lower_expr(ctx, &index_default_call(d, idx, "get_or"))
@@ -12030,11 +12032,14 @@ fn lower_nd_literal(
 }
 
 /// `[v; N]`: `v` evaluated once, then copied into each element (one
-/// node per element up to `REPEAT_UNROLL`, a fill loop beyond).
+/// node per element up to `REPEAT_UNROLL`, a fill loop beyond). An element
+/// a bitwise copy does not duplicate gets `v.clone()` in elements `0..N-1`
+/// and `v` itself in the last.
 fn lower_array_repeat(
     ctx: &mut LowerCtx<'_>,
     value: &Expr,
     len: &rokc_ast::ConstExpr,
+    fill: bool,
     span: rokc_diagnostic::Span,
 ) -> HirExpr {
     let elem_hint = match ctx.current_expected() {
@@ -12055,6 +12060,15 @@ fn lower_array_repeat(
         );
     };
     let elem_ty = v.ty.clone();
+    if !fill {
+        let copies = repeat_copies(ctx, &elem_ty, 0);
+        if let Some(err) = repeat_clone_error(ctx, &elem_ty, copies, len, n, span) {
+            return err;
+        }
+        if !copies {
+            return repeat_cloned(ctx, v, n, span);
+        }
+    }
     let tmp = ctx.declare(None, elem_ty.clone());
     let ty = HirTy::Array(Box::new(elem_ty.clone()), n);
     HirExpr {
@@ -12084,6 +12098,155 @@ fn lower_array_repeat(
         ty,
         span,
     }
+}
+
+/// Does a bitwise copy of a `ty` make an independent value: `Copy`, or
+/// nothing in it reaches shared mutable storage? An open type counts as
+/// one (an untyped literal).
+fn repeat_copies(ctx: &LowerCtx<'_>, ty: &HirTy, depth: u32) -> bool {
+    if depth > DROP_GLUE_DEPTH {
+        return false;
+    }
+    let rec = |t: &HirTy| repeat_copies(ctx, t, depth + 1);
+    let ty = super::infer::resolve(ctx, ty);
+    match &ty {
+        HirTy::Unknown
+        | HirTy::Any
+        | HirTy::Var(_)
+        | HirTy::Prim(_)
+        | HirTy::Unit
+        | HirTy::None
+        | HirTy::NoThrow
+        | HirTy::Fn(..)
+        | HirTy::Closure { .. } => true,
+        HirTy::Array(e, _) => rec(e),
+        HirTy::Tuple(ts) | HirTy::Sum(ts) => ts.iter().all(rec),
+        _ if ctx.has_trait(&ty, COPY_TRAIT) => true,
+        HirTy::Struct(sid) => {
+            let def = ctx.struct_def(*sid);
+            match &def.union_kind {
+                Some(u) => u.aliases.iter().all(|(_, t)| rec(t)),
+                None => def.fields.iter().all(|f| rec(&f.ty)),
+            }
+        }
+        HirTy::Enum(eid) => ctx
+            .enum_def(*eid)
+            .variants
+            .iter()
+            .flat_map(variant_arg_tys)
+            .all(|t| rec(&t)),
+        _ => false,
+    }
+}
+
+/// `[v; N]` of an element `clone()` cannot copy: an owned resource (one
+/// owner per value), or a type without `Clone`.
+fn repeat_clone_error(
+    ctx: &LowerCtx<'_>,
+    elem_ty: &HirTy,
+    copies: bool,
+    len: &rokc_ast::ConstExpr,
+    n: u32,
+    span: rokc_diagnostic::Span,
+) -> Option<HirExpr> {
+    let mut inner = elem_ty;
+    while let HirTy::Array(e, _) = inner {
+        inner = e;
+    }
+    let name = ctx.ty_name(elem_ty);
+    let msg = if super::affine::affine(ctx, inner).is_some() {
+        format!(
+            "`[v; N]` copies `v` into each element, but a `{}` has one owner",
+            ctx.ty_name(inner)
+        )
+    } else {
+        let clone = ctx.lang("clone_trait");
+        if copies || clone.is_empty() || ctx.has_trait(elem_ty, clone) {
+            return None;
+        }
+        format!("`[v; N]` copies `v` into each element with `clone()`, but `{name}` is not `Clone`")
+    };
+    let len = match len {
+        rokc_ast::ConstExpr::Literal(_) => n.to_string(),
+        rokc_ast::ConstExpr::Path(p) => {
+            let names: Vec<&str> = p.segments.iter().map(|s| s.name.as_str()).collect();
+            names.join("::")
+        }
+        rokc_ast::ConstExpr::Expr(e) => rokc_ast::print::print_expr(e),
+    };
+    let from_fn = format!("build each element on its own: `List::from_fn({len}, |_| ..)`");
+    let help = match elem_ty {
+        HirTy::Param(_) => format!("add a `{name}: Clone` bound, or {from_fn}"),
+        _ => from_fn,
+    };
+    let err = ctx.error_expr(Code::UNSATISFIED_BOUND, span, msg);
+    ctx.help_last(Some(help));
+    Some(err)
+}
+
+/// `{ let #r = v; let #a = [#r; n] (a fill); for #i in 0..n - 1 {
+/// #a[#i] = #r.clone(); } #a }`.
+fn repeat_cloned(
+    ctx: &mut LowerCtx<'_>,
+    v: HirExpr,
+    n: u32,
+    span: rokc_diagnostic::Span,
+) -> HirExpr {
+    let rep = tmp_path(ctx, "rep", span);
+    let arr = tmp_path(ctx, "repa", span);
+    let idx = tmp_path(ctx, "repi", span);
+    let ast = |kind: ExprKind| Expr { kind, span };
+    let usize_lit = |n: u32| ast(ExprKind::Literal(AstLit::Int(format!("{n}usize"))));
+    let init = splice(ctx, v);
+    let clone = ast(ExprKind::MethodCall {
+        receiver: Box::new(rep.clone()),
+        method: "clone".to_owned(),
+        type_args: Vec::new(),
+        args: Vec::new(),
+        trailing_closure: None,
+        origin: None,
+    });
+    let store = Stmt {
+        kind: StmtKind::Assign(spread_item_at(&path_name(&arr), &idx, span), clone),
+        span,
+    };
+    let fill = ast(ExprKind::ArrayRepeat {
+        value: Box::new(rep.clone()),
+        len: rokc_ast::ConstExpr::Literal(AstLit::Int(n.to_string())),
+        fill: true,
+    });
+    let each = ast(ExprKind::For {
+        label: None,
+        pat: rokc_ast::Pattern {
+            kind: rokc_ast::PatternKind::Binding {
+                name: path_name(&idx),
+                sub: None,
+            },
+            span,
+        },
+        iter: Box::new(ast(ExprKind::Range {
+            start: Some(Box::new(usize_lit(0))),
+            end: Some(Box::new(usize_lit(n.saturating_sub(1)))),
+            inclusive: false,
+        })),
+        body: rokc_ast::Block {
+            stmts: vec![store],
+            trailing: None,
+            span,
+            label: None,
+        },
+        is_await: false,
+        by_ref: false,
+    });
+    let stmts = vec![
+        let_stmt(&rep, init),
+        let_stmt(&arr, fill),
+        Stmt {
+            kind: StmtKind::Expr(each),
+            span,
+        },
+    ];
+    lower_expr(ctx, &block_of(stmts, arr, span))
 }
 
 /// Longest `[v; N]` lowered element by element.
