@@ -1,0 +1,27 @@
+// expect-exit: 0
+// expect-stdout:
+// <5> <hi> 12.5 2 18
+// 1/true [c] 3 true
+
+// `x: some Tr` is an anonymous type parameter: one static type per call,
+// taken from the argument. Each `some` parameter is its own type
+// (`both(1, 2.5)`); `some fn(A) -> R` takes the function value.
+trait Shape { fn area(self) -> f64; }
+struct Sq { s: f64; }
+impl Shape for Sq { fn area(self) -> f64 { self.s * self.s } }
+
+fn show(x: some Display) -> str { f"<{x}>" }
+fn both(a: some Display, b: some Display) -> str { f"{a}{b}" }
+fn total(s: some Shape, k: f64) -> f64 { s.area() * k }
+fn twice(f: some fn(i32) -> i32, x: i32) -> i32 { f(f(x)) }
+fn pair<T: Display>(t: T, x: some Display) -> str { f"{t}/{x}" }
+fn count(it: some Iterator<Item = i32>) -> usize { it.count() }
+fn shown(x: some (Display + Clone)) -> bool { f"{x.clone()}" == f"{x}" }
+
+struct W {}
+impl W { fn put(self, v: some Display) -> str { f"[{v}]" } }
+
+fn main() {
+    println(f"{show(5)} {show("hi")} {both(1, 2.5)} {total(Sq { s: 2.0 }, 0.5)} {twice(|x| x * 3, 2)}");
+    println(f"{pair::<i32>(1, true)} {W {}.put('c')} {count([1, 2, 3].iter())} {shown(7)}");
+}

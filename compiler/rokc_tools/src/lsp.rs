@@ -663,6 +663,10 @@ pub(crate) fn hover(a: &Analysis, key: &str, text: &str, off: usize) -> Option<S
     let with_doc = |f: &rokc_hir::HirFunction| {
         let doc = a.fn_doc(f.span);
         let mut sig = signature(hir, f);
+        // `x: some Tr`: the parameter as written, not the instance's type.
+        for (name, some) in a.some_params(f.span) {
+            sig = with_param_ty(&sig, &name, &some);
+        }
         // `-> some Tr`: the body's type stays hidden.
         if let Some(some) = a.opaque_ret(f.span) {
             if let Some(i) = sig.rfind(" -> ") {
@@ -748,6 +752,52 @@ pub(crate) fn hover(a: &Analysis, key: &str, text: &str, off: usize) -> Option<S
         }
     }
     None
+}
+
+/// `sig` with parameter `name`'s type replaced by `ty`.
+fn with_param_ty(sig: &str, name: &str, ty: &str) -> String {
+    let Some(open) = sig.find('(') else {
+        return sig.to_owned();
+    };
+    let mut depth = 0;
+    let mut start = open + 1;
+    let mut out = sig[..=open].to_owned();
+    for (i, c) in sig[open + 1..]
+        .char_indices()
+        .map(|(i, c)| (i + open + 1, c))
+    {
+        let end = match c {
+            '(' | '<' | '[' => {
+                depth += 1;
+                None
+            }
+            ')' | '>' | ']' if depth > 0 => {
+                depth -= 1;
+                None
+            }
+            ',' if depth == 0 => Some(i),
+            ')' => Some(i),
+            _ => None,
+        };
+        if let Some(end) = end {
+            let part = &sig[start..end];
+            let label = format!("{name}: ");
+            match part.trim_start().strip_prefix(&label) {
+                Some(_) => {
+                    let lead = &part[..part.len() - part.trim_start().len()];
+                    out.push_str(&format!("{lead}{label}{ty}"));
+                }
+                None => out.push_str(part),
+            }
+            out.push(c);
+            start = end + 1;
+            if c == ')' {
+                out.push_str(&sig[start..]);
+                return out;
+            }
+        }
+    }
+    sig.to_owned()
 }
 
 /// The type of the local a `let` at `off` declares: the nearest `let

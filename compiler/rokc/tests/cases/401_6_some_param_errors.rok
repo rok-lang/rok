@@ -1,0 +1,16 @@
+// expect-error: 13:13: `show` takes no generic arguments but 1 was given
+// expect-error: help: the type of a `some` parameter (`x`) can't be written at the call: it is the argument's own type; pass the argument, or declare a named parameter `<T: Trait>` to choose `T` with `::<..>`
+// expect-error: 14:13: `pick` takes 1 generic argument but 2 were given
+// expect-error: 15:13: type `P` does not satisfy trait bound `Display` required by `show`
+// expect-error-extra: allow
+
+// A `some` parameter's type is the argument's: it has no name to write
+// at the call, and the argument must have the bounds.
+fn show(x: some Display) -> str { f"{x}" }
+fn pick<T: Display>(t: T, x: some Display) -> str { f"{t}{x}" }
+struct P {}
+fn main() {
+    println(show::<i32>(5));
+    println(pick::<i32, bool>(1, true));
+    println(show(P {}));
+}

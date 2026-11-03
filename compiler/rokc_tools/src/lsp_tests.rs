@@ -1425,6 +1425,41 @@ println(it.count());
     );
 }
 
+/// A `some Tr` parameter hovers as written, at the call and the definition.
+#[test]
+fn hover_some_param() {
+    let src = "\
+fn show(x: some Display) -> str {
+    f\"{x}\"
+}
+println(show(5));
+";
+    let msgs = std_session("lsp-hover-some-param", src, |uri| {
+        vec![
+            request(1, "textDocument/hover", at(uri, 3, 9)),
+            request(2, "textDocument/hover", at(uri, 0, 4)),
+        ]
+    });
+    let value = |id| {
+        reply(&msgs, id)
+            .get("contents")
+            .get("value")
+            .as_str()
+            .unwrap_or("")
+            .to_owned()
+    };
+    assert!(
+        value(1).contains("fn show(x: some Display) -> str"),
+        "{}",
+        value(1)
+    );
+    assert!(
+        value(2).contains("fn show(x: some Display) -> str"),
+        "{}",
+        value(2)
+    );
+}
+
 /// A symbol's range covers the whole item; its selection range is the
 /// name.
 #[test]

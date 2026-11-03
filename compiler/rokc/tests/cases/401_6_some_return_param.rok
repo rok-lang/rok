@@ -1,7 +1,0 @@
-// expect-error: 5:13: `some Trait` is only a function's return type
-// expect-error: help: for a parameter, declare `<T: Trait>` and write `T`
-
-// `some` is a return type only.
-fn take(it: some Iterator<Item = i32>) {}
-
-fn main() {}

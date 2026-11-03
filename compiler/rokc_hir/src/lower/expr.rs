@@ -6206,20 +6206,45 @@ pub(super) fn bind_explicit(
                 .map_or(0, |t| t.generics.params.len()),
         )
         .filter(|n| !self_ty.is_some_and(|t| ast_ty_mentions(t, n)))
+        .filter(|n| !n.starts_with(rokc_ast::SOME_PARAM_PREFIX))
         .collect();
     if targs.len() > own.len() {
-        return Err(super::mono::arity_msg(
-            leaf_name(callee),
-            own.len(),
-            own.len(),
-            targs.len(),
-        ));
+        let msg = super::mono::arity_msg(leaf_name(callee), own.len(), own.len(), targs.len());
+        return Err(match some_params_note(def) {
+            Some(note) => format!("{msg}; {note}"),
+            None => msg,
+        });
     }
     Ok(own
         .into_iter()
         .zip(targs)
         .map(|(n, t)| (n.clone(), turbofish_ty(ctx, t)))
         .collect())
+}
+
+/// What to write when `::<..>` names more types than `def` has names
+/// for: its `some` parameters take their types from the arguments.
+fn some_params_note(def: &FnDef) -> Option<String> {
+    let some: Vec<String> = def
+        .params
+        .iter()
+        .filter(|p| {
+            p.ty.as_ref().is_some_and(|t| {
+                matches!(&t.kind, rokc_ast::TyKind::Path(path)
+                    if path.segments.len() == 1
+                        && path.segments[0].name.starts_with(rokc_ast::SOME_PARAM_PREFIX))
+            })
+        })
+        .map(|p| format!("`{}`", p.name))
+        .collect();
+    (!some.is_empty()).then(|| {
+        format!(
+            "the type of a `some` parameter ({}) can't be written at the call: it is the \
+             argument's own type; pass the argument, or declare a named parameter `<T: Trait>` \
+             to choose `T` with `::<..>`",
+            some.join(", ")
+        )
+    })
 }
 
 /// Every type argument of generic fn `def` inferred from the expected
@@ -10132,21 +10157,28 @@ fn bind_explicit_generics(
     explicit: &[rokc_ast::Ty],
     full: &str,
 ) -> bool {
-    if explicit.len() > def.generics.params.len() {
+    // A `some` parameter's type has no name to give.
+    let named: Vec<&rokc_ast::GenericParam> = def
+        .generics
+        .params
+        .iter()
+        .filter(|gp| {
+            let (rokc_ast::GenericParam::Type { name, .. }
+            | rokc_ast::GenericParam::Const { name, .. }) = gp;
+            !name.starts_with(rokc_ast::SOME_PARAM_PREFIX)
+        })
+        .collect();
+    if explicit.len() > named.len() {
         ctx.emit_error(
             Code::GENERIC_ARGUMENTS,
-            super::mono::arity_msg(
-                leaf_name(full),
-                def.generics.params.len(),
-                def.generics.params.len(),
-                explicit.len(),
-            ),
+            super::mono::arity_msg(leaf_name(full), named.len(), named.len(), explicit.len()),
         );
+        ctx.help_last(some_params_note(def));
         return false;
     }
     // Seeded by a literal handler call (`lower_magic`); empty otherwise.
     let mut bound = std::mem::take(&mut ctx.explicit_generics);
-    for (gp, t) in def.generics.params.iter().zip(explicit) {
+    for (gp, t) in named.into_iter().zip(explicit) {
         let (rokc_ast::GenericParam::Type { name, .. }
         | rokc_ast::GenericParam::Const { name, .. }) = gp;
         bound.insert(name.clone(), turbofish_ty(ctx, t));

@@ -296,6 +296,33 @@ impl Analysis {
         matches!(t.kind, rokc_ast::TyKind::Some(_)).then(|| rokc_ast::print::print_ty(t))
     }
 
+    /// The `some ..` parameters of the function defined at `span`, by
+    /// name.
+    pub fn some_params(&self, span: Span) -> Vec<(String, String)> {
+        fn find(items: &[Item], span: Span) -> Option<&rokc_ast::FnDef> {
+            items.iter().find_map(|item| match item {
+                Item::Fn(f) if f.span == span => Some(f),
+                Item::Impl(i) => i.items.iter().find_map(|ii| match ii {
+                    ImplItem::Method(m) if m.span == span => Some(m),
+                    _ => None,
+                }),
+                Item::Mod(m) => find(m.items.as_deref().unwrap_or_default(), span),
+                _ => None,
+            })
+        }
+        let Some(f) = self.items_of(span.file).find_map(|items| find(items, span)) else {
+            return Vec::new();
+        };
+        f.params
+            .iter()
+            .filter_map(|p| {
+                let t = p.ty.as_ref()?;
+                matches!(t.kind, rokc_ast::TyKind::Some(_))
+                    .then(|| (p.name.clone(), rokc_ast::print::print_ty(t)))
+            })
+            .collect()
+    }
+
     /// `t` as the user knows it: the `some ..` of a function returning
     /// that concrete type, else its name.
     pub fn shown_ty(&self, hir: &HirModule, t: &HirTy) -> String {

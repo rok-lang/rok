@@ -4392,6 +4392,9 @@ impl<'a> Parser<'a> {
                 let (ty, is_mut) = self.rust_ref_type(Some(&name))?;
                 by_ref |= is_mut;
                 (Some(ty), false)
+            } else if self.at_some_type() {
+                // `x: some Tr`: an anonymous type parameter.
+                (Some(self.parse_some_type()?), false)
             } else {
                 (Some(self.parse_type()?), false)
             }
@@ -4479,9 +4482,10 @@ impl<'a> Parser<'a> {
             self.error_help(
                 Code::SYNTAX,
                 start,
-                "`some Trait` is only a function's return type",
-                "for a parameter, declare `<T: Trait>` and write `T`; for a variable, leave \
-                 the type out (`let x = ..`); for a value of several types, write `any Trait`",
+                "`some Trait` is only a function's parameter or return type",
+                "for a variable, leave the type out (`let x = ..`); for a field or a type \
+                 argument, declare `<T: Trait>` and write `T`; for a value of several types, \
+                 write `any Trait`",
             );
             return self.parse_some_type();
         }
@@ -8360,7 +8364,23 @@ impl<'a> Parser<'a> {
             params = self.with_type_sum(false, |p| {
                 let mut params = Vec::new();
                 while !matches!(p.peek(), TokenKind::Pipe | TokenKind::Eof) {
-                    params.push(p.parse_param()?);
+                    let param = p.parse_param()?;
+                    if let Some(
+                        t @ Ty {
+                            kind: TyKind::Some(_),
+                            ..
+                        },
+                    ) = &param.ty
+                    {
+                        p.error_help(
+                            Code::SYNTAX,
+                            t.span,
+                            "`some Trait` is only a function's parameter or return type",
+                            "a closure parameter has one type: write it, or leave it out for \
+                             the call to give it",
+                        );
+                    }
+                    params.push(param);
                     if !p.eat(&TokenKind::Comma) {
                         break;
                     }

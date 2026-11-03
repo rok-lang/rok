@@ -183,6 +183,72 @@ fn implicit_generics(program: &mut Program) {
     }
 }
 
+/// `x: some Tr` is an anonymous type parameter (`fn f<S#x: Tr>(x: S#x)`):
+/// one static type per call, which the caller cannot name. `x: some
+/// fn(A) -> R` takes the function value.
+fn some_params(program: &mut Program) {
+    let fix = |f: &mut FnDef| {
+        for p in &mut f.params {
+            let Some(Ty {
+                kind: AstTyKind::Some(bounds),
+                span,
+            }) = &p.ty
+            else {
+                continue;
+            };
+            let span = *span;
+            if let [
+                one @ Ty {
+                    kind: AstTyKind::Fn(..),
+                    ..
+                },
+            ] = bounds.as_slice()
+            {
+                p.ty = Some(one.clone());
+                continue;
+            }
+            let name = format!("{}{}", rokc_ast::SOME_PARAM_PREFIX, p.name);
+            let bounds = bounds.clone();
+            p.ty = Some(Ty {
+                kind: AstTyKind::Path(rokc_ast::Path {
+                    segments: vec![rokc_ast::PathSegment {
+                        name: name.clone(),
+                        generics: Vec::new(),
+                    }],
+                    span,
+                    origin: None,
+                }),
+                span,
+            });
+            f.generics.params.push(rokc_ast::GenericParam::Type {
+                name,
+                bounds,
+                default: None,
+            });
+        }
+    };
+    for item in &mut program.items {
+        match item {
+            Item::Fn(f) => fix(f),
+            Item::Impl(i) => {
+                for it in &mut i.items {
+                    if let AstImplItem::Method(f) = it {
+                        fix(f);
+                    }
+                }
+            }
+            Item::Trait(t) => {
+                for it in &mut t.items {
+                    if let rokc_ast::TraitItem::Method(f) = it {
+                        fix(f);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 fn add_lazy_static_inits(program: &mut Program) {
     let inits: Vec<Item> = program
         .items
@@ -648,6 +714,7 @@ fn collect<'a>(
     add_lazy_static_inits(owned);
     pub_signatures(owned, &mut pre_diags);
     implicit_generics(owned);
+    some_params(owned);
     let err = |code: Code, pre: &mut Vec<rokc_diagnostic::RokDiagnostic>, at: Span, msg: String| {
         pre.push(rokc_diagnostic::RokDiagnostic::error(code, at, msg));
     };
