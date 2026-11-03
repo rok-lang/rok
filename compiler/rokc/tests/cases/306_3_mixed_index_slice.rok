@@ -1,4 +1,4 @@
-// expect-error: `List<i32>` is indexed along one axis, but this index has 2 parts with a slice among them
+// expect-error: `List<i64>` is indexed along one axis, but this index has 2 parts with a slice among them
 
 fn main() {
     let xs = [1, 2, 3];

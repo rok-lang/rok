@@ -12911,7 +12911,10 @@ fn lower_pow(
 ) -> HirExpr {
     let lhs_h = lower_expected(ctx, lhs, lhs_expected);
     let lit = is_untyped_literal(rhs);
-    let rhs_want = match &lhs_h.ty {
+    // An open literal base (`2 ** n`) is classed by its default.
+    let base = super::infer::zonk(ctx, &lhs_h.ty);
+    let base = super::infer::literal_default(ctx, &base).unwrap_or(base);
+    let rhs_want = match &base {
         HirTy::Prim(p) if p.is_int() && !matches!(p, PrimTy::Char | PrimTy::CChar) => {
             if lit && matches!(&rhs.kind, ExprKind::OpPrefix { op, .. } if op == "-") {
                 ctx.emit_error_help(
@@ -12919,7 +12922,7 @@ fn lower_pow(
                     rhs.span,
                     format!(
                         "`{}` to a negative power is a fraction, not an integer",
-                        ctx.ty_name(&lhs_h.ty)
+                        ctx.ty_name(&base)
                     ),
                     if is_untyped_literal(lhs) {
                         format!(
