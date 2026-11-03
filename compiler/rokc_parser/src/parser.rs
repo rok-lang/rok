@@ -6962,7 +6962,6 @@ impl<'a> Parser<'a> {
     #[allow(clippy::cognitive_complexity)] // one arm per primary-expression token
     fn parse_primary(&mut self) -> Option<Expr> {
         let stmt_head = std::mem::take(&mut self.stmt_head);
-        self.python_pow();
         if let Some(e) = self
             .try_magic_literal()
             .or_else(|| self.cfg_macro())

@@ -1,28 +1,26 @@
-// expect-error: 31:14: expected `{`, found identifier `and`
+// expect-error: 29:14: expected `{`, found identifier `and`
 // expect-error: help: Rok writes `and` as `&&`: `a && b`
-// expect-error: 35:14: expected `{`, found identifier `or`
+// expect-error: 33:14: expected `{`, found identifier `or`
 // expect-error: help: Rok writes `or` as `||`: `a || b`
-// expect-error: 39:8: expected `{`, found identifier `done`
+// expect-error: 37:8: expected `{`, found identifier `done`
 // expect-error: help: Rok writes `not` as `!`: `!done`
-// expect-error: 43:13: Rok has no `is not` operator
+// expect-error: 41:13: Rok has no `is not` operator
 // expect-error: help: write `x != none`
-// expect-error: 47:15: Rok has no `a if c else b` expression
+// expect-error: 45:15: Rok has no `a if c else b` expression
 // expect-error: help: `if` is an expression: `if c { 1 } else { 2 }`
-// expect-error: 51:13: expected `;`, found identifier `x`
+// expect-error: 49:13: expected `;`, found identifier `x`
 // expect-error: help: a closure is written `|x| x + 1`
-// expect-error: 55:15: Rok has no `**` operator
-// expect-error: help: write `x.pow(2)`
-// expect-error: 59:14: Rok has no list comprehensions
+// expect-error: 53:14: Rok has no list comprehensions
 // expect-error: help: chain iterator methods: `xs.filter(|x| x > 1).map(|x| x * x).to_list()`
-// expect-error: 63:13: Rok has no dict comprehensions
+// expect-error: 57:13: Rok has no dict comprehensions
 // expect-error: help: chain iterator methods: `xs.map(|x| (x, x * x)).to_dict()`
-// expect-error: 67:13: Rok has no set comprehensions
+// expect-error: 61:13: Rok has no set comprehensions
 // expect-error: help: chain iterator methods: `xs.map(|x| x % 3).to_set()`
-// expect-error: 71:19: Rok has no list comprehensions
+// expect-error: 65:19: Rok has no list comprehensions
 // expect-error: help: chain iterator methods: `(0..10).map(|i| i * i).to_list()`
-// expect-error: 75:19: a named argument is written with `:`, not `=`
+// expect-error: 69:19: a named argument is written with `:`, not `=`
 // expect-error: help: write `end: ""`
-// expect-error: 79:17: Rok has no `!r` conversion
+// expect-error: 73:17: Rok has no `!r` conversion
 // expect-error: help: write `{x:?}`: `:?` formats with `Debug`, as `repr` does
 
 // Python habits in expressions: each error names the Rok form.
@@ -49,10 +47,6 @@ fn ternary(c: bool) {
 
 fn lambda_word() {
     let f = lambda x: x + 1;
-}
-
-fn power(x: i32) {
-    let y = x ** 2;
 }
 
 fn list_comp(xs: List<i32>) {
