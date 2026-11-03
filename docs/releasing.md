@@ -69,8 +69,12 @@ Pushing a `v<version>` tag runs `release.yml`:
    `release.sh --dir dist` to verify that every target's archives and
    checksums are present and match and that every toolchain archive keeps
    the installer contract (below), records the build provenance
-   attestation, and runs `release.sh --dir dist --publish` to create the
-   `v<version>` GitHub release and upload every asset with the `gh` CLI.
+   attestation, writes `dist/notes.md` from the version's `CHANGELOG.md`
+   section (`scripts/release-notes.sh`), and runs
+   `release.sh --dir dist --publish` to create the `v<version>` GitHub
+   release with those notes as its body and upload every asset with the
+   `gh` CLI. `release.sh` refuses a tag that is not `v` plus the archives'
+   `rok-version`, and `--publish` refuses a missing `notes.md`.
    `install.sh` / `install.ps1` download `v<version>` by default;
    `rok-version` is served from `releases/latest/`.
 
@@ -132,7 +136,11 @@ old one made and locked. Run it (`jobs: dist`) before tagging.
 - The version must agree across `Cargo.toml` (the source of truth, baked
   into `rokc --version`), `install.sh` and `install.ps1`; `dist-native.sh`
   fails the build if they disagree.
-- `CHANGELOG.md` has a dated `## <version>` section.
+- `CHANGELOG.md` has a dated, non-empty `## <version> (<date>)` section;
+  it becomes the release notes, and the release fails without it. An rc
+  uses its own `## <version>-rc.N` section if there is one, else the
+  section of the final version (`## 0.2.0` for `0.2.0-rc.1`). Check with
+  `scripts/release-notes.sh <version>`.
 - The release commit (version bump and changelog) goes straight to `main`,
   and its `ci` run there has a green `ci-gate`. `ci-green` refuses the tag
   otherwise; a green `release.yml` manual run is not a substitute.
@@ -148,9 +156,9 @@ Once `release.yml` has published and the assets are downloadable:
   `chore(nix): install <version>` through the merge queue. It cannot be in
   the release commit: the checksums exist only once the archives are
   published.
-- Roadmap: close the version's milestone, and move what shipped on the
-  rok-lang.org roadmap. That page lives in its own repository and deploys
-  on its own; the toolchain release does not touch it.
+- Roadmap: close the version's milestone, and move what shipped in
+  `roadmap.md` in rok-lang/www (the rok-lang.org roadmap). That repository
+  deploys on its own; the toolchain release does not touch it.
 
 ## Building an archive by hand
 
