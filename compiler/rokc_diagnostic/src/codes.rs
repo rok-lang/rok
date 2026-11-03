@@ -466,7 +466,10 @@ codes! {
 
     69 UNSATISFIED_BOUND Type "trait bound not satisfied"
     "A type does not implement a trait that a generic parameter, an associated type or a \
-     slot requires. Implement the trait for the type, or use a type that has it.";
+     slot requires. Implement the trait for the type, or use a type that has it. A repeat \
+     literal `[v; N]` clones `v` into each element, so `v` must be `Clone` and not a \
+     resource with one owner; build such an array element by element with \
+     `array::from_fn::<T, N>(|_| ..)`.";
 
     70 NOT_A_TRAIT Type "not a trait"
     "A trait is expected here (after `as`, in an `any` bound, or in a `fn` type bound), but \
@@ -767,7 +770,9 @@ codes! {
      a `fn(..) + Send` value not marked `Sync`, is the same: passing it to a \
      `fn(..) + Send` parameter (`thread::spawn`, `task::spawn_blocking`, `par::join`) \
      hands it over once. Make another closure that moves in a `.clone()`, or write \
-     `+ Send + Sync` on a `fn` value that moves nothing in.";
+     `+ Send + Sync` on a `fn` value that moves nothing in. Each field is its own owner, \
+     also through a binding that narrows a sum (`if let x: Pair = p`): closing `x.a` \
+     leaves `x.b` open.";
 
     135 UNCLOSED_RESOURCE Handoff "resource not closed"
     "Closing this value can fail (its type implements `io::Close`), so it is not closed for \

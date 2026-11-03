@@ -24,6 +24,13 @@ cargo test         # compiler and runtime tests
 
 Format before sending a change (`just fmt`).
 
+`cargo test` includes the end-to-end corpus (`compiler/rokc/tests/cases`,
+`cargo test -p rokc --test integration`), which builds and runs every case.
+To run a subset, set `ROK_TEST_FILTER` to a comma-separated list of name
+parts: `ROK_TEST_FILTER=affine,std_201 cargo test -p rokc --test integration`.
+Empty or unset runs every case; a filter that selects no case fails, so a
+typo never passes. CI runs the whole corpus.
+
 ## Changes that affect behavior
 
 The language and standard library are defined by the spec (`rok-lang/spec`,
@@ -39,5 +46,6 @@ or decorative headers, ASCII only. Match the conventions of the file you edit.
 
 Open a pull request against `main` with the checks above passing. Leave
 `CHANGELOG.md` alone: it is written at release time from the merged pull
-requests. By contributing you agree that your work is licensed under both MIT
-and Apache-2.0, the project's dual license.
+requests, and its section for the version becomes the GitHub release notes
+(`docs/releasing.md`). By contributing you agree that your work is licensed
+under both MIT and Apache-2.0, the project's dual license.

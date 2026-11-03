@@ -10,9 +10,10 @@
 # contract (scripts/check-archive.sh), so a release never ships a missing
 # archive or one 0.1.x clients cannot install. --publish creates the tag and
 # uploads the assets with gh, with <dir>/notes.md (scripts/release-notes.sh)
-# as the body; run it only when the release is meant to go out. A -rc.N version is published as a prerelease, so it never becomes
-# latest/ and a bare `rok toolchain update` never installs it. It does not
-# deploy the sites or publish stones.
+# as the body; run it only when the release is meant to go out. A -rc.N
+# version is published as a prerelease, so it never becomes latest/ and a
+# bare `rok toolchain update` never installs it. A tag build whose tag is
+# not v<rok-version> fails. It does not deploy the sites or publish stones.
 set -eu
 
 dir=dist

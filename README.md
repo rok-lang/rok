@@ -85,6 +85,9 @@ ROK_REQUIRE_LLVM=1 cargo test --no-fail-fast
 ./target/debug/rokc fmt --check library
 ```
 
+`ROK_TEST_FILTER=a,b cargo test -p rokc --test integration` runs only the
+corpus cases whose name contains `a` or `b`; empty or unset runs every case.
+
 Packaging (`dist-*.sh`), the cross-target and wasm corpus, and the CI tiers are
 documented in [docs/ci.md](docs/ci.md).
 

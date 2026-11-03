@@ -1,6 +1,8 @@
 //! Hashes for build keys, symbol names and message signing: FNV-1a 64,
 //! a fast word-at-a-time 64-bit hash, FIPS 180-4 SHA-256, RFC 2104
 //! HMAC-SHA256, lowercase hex.
+//!
+//! Also the compiler's fixed-seed map hasher (`HashMap`, `HashSet`).
 
 use std::fmt::Write as _;
 

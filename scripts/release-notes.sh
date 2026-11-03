@@ -3,9 +3,9 @@
 #
 #   scripts/release-notes.sh <version> [<changelog>]
 #
-# An -rc.N takes its own `## <version>` section if there is one, else the
-# section of the final version it leads to. Fails if the section is
-# missing or empty.
+# The section is `## <version>` or `## <version> (<date>)`. An -rc.N
+# takes its own `## 0.2.0-rc.1` section if there is one, else the final
+# version's. Fails if the section is missing or empty.
 set -eu
 
 [ $# -ge 1 ] || {
