@@ -1,4 +1,4 @@
-//! A MIR module → one object, as the MLIR emitter's `emit_module`.
+//! A MIR module -> one object, as the MLIR emitter's `emit_module`.
 
 use rokc_core::{HashMap, HashSet};
 

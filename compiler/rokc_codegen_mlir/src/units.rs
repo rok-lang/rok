@@ -1,6 +1,5 @@
-//! Codegen units: a package cut into parts compiled to
-//! separate objects; an incremental build recompiles only units whose key
-//! changed.
+//! Codegen units: a package cut into parts compiled to separate objects;
+//! an incremental build recompiles only units whose key changed.
 //!
 //! A function's unit is its home module (a library's generic instance also
 //! keys on its type arguments). The *glue* unit holds what belongs to the
@@ -74,7 +73,7 @@ pub struct Core {
     pub quiet: Arc<HashSet<FunctionId>>,
     pub reentrant: Arc<HashSet<FunctionId>>,
     pub entered: Arc<HashSet<FunctionId>>,
-    /// Lazy statics: name → symbol of the initializer.
+    /// Lazy statics: name -> symbol of the initializer.
     pub lazy_statics: HashMap<String, String>,
     /// Per unit: the functions it refers to but does not define
     /// (through prebuilt bodies kept for inlining too).

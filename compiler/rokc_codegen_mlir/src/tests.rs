@@ -293,7 +293,7 @@ fn frames_link_before_the_first_safepoint() {
     let ret = || Terminator::Return(None);
     let f = |blocks| function(0, "f", (&I32, &MirTy::Unit), vec![], blocks);
 
-    // 0 → 1 (returns) | 2 (safepoint at 1, returns).
+    // 0 -> 1 (returns) | 2 (safepoint at 1, returns).
     let g = f(vec![
         block(0, vec![nop()], branch(1, 2)),
         block(1, vec![nop()], ret()),
@@ -304,7 +304,7 @@ fn frames_link_before_the_first_safepoint() {
     assert_eq!(l.at[&2], 1);
     assert!(l.linked.contains(&2) && !l.linked.contains(&1) && !l.linked.contains(&0));
 
-    // 0 → 1 (header) → 2 (back edge, polls) → 1 | 3: linked before the
+    // 0 -> 1 (header) -> 2 (back edge, polls) -> 1 | 3: linked before the
     // loop, at the end of 0.
     let g = f(vec![
         block(0, vec![], goto(1)),

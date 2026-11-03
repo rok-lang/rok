@@ -106,8 +106,7 @@ struct RokCompile {
   const char *features;
   int opt;
   int emit;
-  // rok_tls (the TLS block) uses the initial-exec
-  // TLS model.
+  // rok_tls (the TLS block) uses the initial-exec TLS model.
   int tls_initial_exec;
   // A textual MLIR pass pipeline on builtin.module, mlir-opt syntax
   // without the anchor: "canonicalize,cse,convert-scf-to-cf,...".
@@ -154,9 +153,9 @@ void init_llvm() {
   });
 }
 
-// Dialects rokc lowers to, with what lowering them needs (ub
-// and DLTI for the LLVM conversions). No others: the linker leaves the
-// rest of MLIR out.
+// Dialects rokc lowers to, with what lowering them needs (ub and DLTI
+// for the LLVM conversions). No others: the linker leaves the rest of
+// MLIR out.
 void register_dialects(mlir::DialectRegistry &r) {
   using namespace mlir;
   r.insert<arith::ArithDialect, cf::ControlFlowDialect, DLTIDialect,
@@ -1089,7 +1088,6 @@ int rok_llvm_data_layout(const RokCompile *o, RokBuf *out, RokBuf *err) {
   return 0;
 }
 
-// The triple LLVM was configured to run on.
 // dsymutil's command line (argv[0] is "dsymutil"); it reports on stderr.
 int rok_llvm_dsymutil(const char *const *argv, size_t argc) {
   static std::mutex lock;

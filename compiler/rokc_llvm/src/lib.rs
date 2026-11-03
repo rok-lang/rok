@@ -1,4 +1,4 @@
-//! In-process backend: MLIR → LLVM IR → object → executable with the
+//! In-process backend: MLIR -> LLVM IR -> object -> executable with the
 //! statically linked LLVM, MLIR and lld; no subprocesses or textual
 //! hand-offs. Without an LLVM prefix [`AVAILABLE`] is false and every entry
 //! point fails.
@@ -67,8 +67,7 @@ pub struct Compile<'a> {
     pub target: &'a Target,
     pub opt: OptLevel,
     pub emit: Emit,
-    /// `rok_tls` uses the initial-exec TLS model;
-    /// off for JIT'd code.
+    /// `rok_tls` uses the initial-exec TLS model; off for JIT'd code.
     pub tls_initial_exec: bool,
     /// The MLIR pass pipeline ([`mlir_pipeline`]).
     pub mlir_pipeline: &'a str,
@@ -115,12 +114,12 @@ pub fn mlir_pipeline(optimize: bool) -> String {
     .join(",")
 }
 
-/// MLIR text in the standard dialects → `c.emit`.
+/// MLIR text in the standard dialects -> `c.emit`.
 pub fn compile_mlir(src: &str, c: &Compile<'_>) -> Result<Vec<u8>, String> {
     ffi::compile(true, src, c, 1).map(|(mut v, _)| v.remove(0))
 }
 
-/// MLIR text → `c.emit`; an object split into `parts` objects compiled
+/// MLIR text -> `c.emit`; an object split into `parts` objects compiled
 /// in parallel (some may be empty). Also what LLVM warned about.
 pub fn compile_mlir_split(
     src: &str,
@@ -169,7 +168,7 @@ pub fn compile_units(
     ffi::compile_units(units, alloc, c, cache, library)
 }
 
-/// LLVM IR text → `c.emit` (`LlvmIr` only applies the TLS model).
+/// LLVM IR text -> `c.emit` (`LlvmIr` only applies the TLS model).
 pub fn compile_llvm_ir(src: &str, c: &Compile<'_>) -> Result<Vec<u8>, String> {
     ffi::compile(false, src, c, 1).map(|(mut v, _)| v.remove(0))
 }

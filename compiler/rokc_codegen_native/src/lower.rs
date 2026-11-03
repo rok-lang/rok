@@ -1,4 +1,4 @@
-//! MIR → LIR, one function at a time, with the MLIR emitter's semantics
+//! MIR -> LIR, one function at a time, with the MLIR emitter's semantics
 //! construct by construct (layouts, GC frames, barriers, allocation, polls,
 //! checks, panic messages), so programs behave the same on both backends.
 
@@ -101,8 +101,8 @@ pub enum Val {
     Unit,
 }
 
-/// A panic site: message, location (a literal, or the
-/// `#[track_caller]` parameter).
+/// A panic site: message, location (a literal, or the `#[track_caller]`
+/// parameter).
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct Panic {
     msg: &'static str,
@@ -297,8 +297,8 @@ impl<'c, 'a> FnLower<'c, 'a> {
         s
     }
 
-    /// Slot `slot` of this thread's TLS block `rok_tls`:
-    /// the block's address is taken once, in the prologue.
+    /// Slot `slot` of this thread's TLS block `rok_tls`: the block's address is
+    /// taken once, in the prologue.
     fn tls(&mut self, slot: tls_abi::Slot) -> Mem {
         let out = &mut self.out;
         let base = *self.tls.get_or_insert_with(|| out.slot(8, 8));
@@ -373,8 +373,7 @@ impl<'c, 'a> FnLower<'c, 'a> {
         });
     }
 
-    /// Safepoint poll: `rok_runtime_yield` when this
-    /// thread's yield flag is set.
+    /// Safepoint poll: `rok_runtime_yield` when the thread's yield flag is set.
     fn poll(&mut self) {
         let flag = self.tls(tls_abi::YIELD_FLAG);
         let v = self.tmp_k(K::I8);
@@ -892,8 +891,7 @@ impl<'c, 'a> FnLower<'c, 'a> {
     }
 
     /// Call a runtime function codegen uses itself: `call_sym`, with `str`
-    /// passed as a pointer to a copy on Windows x64
-    /// (`abi::classify_rok`).
+    /// passed as a pointer to a copy on Windows x64 (`abi::classify_rok`).
     fn call_runtime(
         &mut self,
         sym: SymId,
@@ -943,8 +941,8 @@ impl<'c, 'a> FnLower<'c, 'a> {
         }
     }
 
-    /// Shapes of a rok signature: by-address arguments are pointer
-    /// words; a by-address result comes through a leading pointer (`true`).
+    /// Shapes of a rok signature: by-address arguments are pointer words; a
+    /// by-address result comes through a leading pointer (`true`).
     fn rok_shapes(
         &self,
         params: &[MirTy],
@@ -1230,7 +1228,8 @@ impl<'c, 'a> FnLower<'c, 'a> {
                 }
             }
         }
-        // Not for a `rok_*` runtime symbol declared `extern "C"` (as emit.rs).
+        // The thread parks for a C call, except into a `rok_*` runtime symbol
+        // declared `extern "C"` (it may allocate).
         let parked = !abi.rok
             && !matches!(callee, Callee::Sym(s) if self.c.obj.syms[s as usize].name.starts_with("rok_"));
         if parked {
@@ -1367,8 +1366,8 @@ impl<'c, 'a> FnLower<'c, 'a> {
         obj
     }
 
-    /// Write barrier before storing a reference into `obj` at
-    /// address `slot` (both word slots), `len` bytes.
+    /// Write barrier before storing a reference into `obj` at address `slot`
+    /// (both word slots), `len` bytes.
     fn write_barrier(&mut self, obj: Slot, slot: Slot, len: u32) {
         let w = self.word();
         let flags = self.tmp_k(K::I32);
