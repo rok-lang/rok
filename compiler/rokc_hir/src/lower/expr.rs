@@ -13334,6 +13334,19 @@ fn operand_help(
                 "`{side}` is a future, not its value; did you forget `await`? `await {side}`"
             ));
         }
+        // `v: i64 | str`: one member at a time.
+        if let HirTy::Sum(parts) = t {
+            let arms: Vec<String> = parts
+                .iter()
+                .map(|p| format!("x: {} => ..", ctx.ty_name(p)))
+                .collect();
+            return Some(format!(
+                "`{side}` is one of several types; take one first: `match {side} {{ {} }}`, \
+                 or `if {side} is {} {{ .. }}`",
+                arms.join(", "),
+                ctx.ty_name(&parts[0])
+            ));
+        }
     }
     if numeric(lhs.1) && numeric(rhs.1) && lhs.1 != rhs.1 {
         let name = |t: &HirTy| ctx.ty_name(t);
