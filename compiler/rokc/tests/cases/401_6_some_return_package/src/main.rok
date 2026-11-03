@@ -1,0 +1,23 @@
+// rokc-arg: --name app
+// expect-exit: 0
+// expect-stdout:
+// 12
+// 60
+// 7
+// 3
+
+// `-> some Tr` across packages: the library's concrete types stay its
+// own; the executable uses what the bounds give.
+
+use app::{adder, evens};
+
+fn main() {
+    let t = 0;
+    for x in evens(7) { t += x; }
+    println(t);
+    let it = evens(5);
+    println(it.map(|x| x * 10).sum());
+    let f = adder(3);
+    println(f(4));
+    println(evens(6).count());
+}

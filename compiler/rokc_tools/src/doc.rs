@@ -623,6 +623,10 @@ impl Docs {
                     .collect();
                 format!("any {}", b.join(" + "))
             }
+            TyKind::Some(ts) => match ts.as_slice() {
+                [t] => format!("some {}", self.ty(t)),
+                _ => format!("some ({})", list(ts, " + ")),
+            },
             TyKind::None => "none".to_owned(),
             TyKind::SelfUpper => "Self".to_owned(),
             TyKind::Never => "!".to_owned(),

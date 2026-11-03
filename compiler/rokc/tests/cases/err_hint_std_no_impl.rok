@@ -1,7 +1,7 @@
 // An unknown method of a standard type lists methods it has; it never
 // says to add an impl to the standard type. A user type keeps that help.
-// expect-error: 12:9: no method `zzqx` found for type `List<i32>`
-// expect-error: help: `List<i32>` is a standard type; call one of its methods, such as
+// expect-error: 12:9: no method `zzqx` found for type `List<i64>`
+// expect-error: help: `List<i64>` is a standard type; call one of its methods, such as
 // expect-error: 13:9: no method `zzqx` found for type `str`
 // expect-error: help: `str` is a standard type; call one of its methods, such as
 // expect-error: 14:9: no method `zzqx` found for type `P`

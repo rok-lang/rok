@@ -2,7 +2,7 @@
 // expect-error: help: add `#[derive(Inspect)]` to `Point` to use `fields`
 // expect-error: 18:13: no method `variant_name` found for type `Shape`
 // expect-error: help: add `#[derive(Inspect)]` to `Shape` to use `variant_name`
-// expect-error: 19:13: no method `get_field` found for type `Box<i32>`
+// expect-error: 19:13: no method `get_field` found for type `Box<i64>`
 // expect-error: help: add `#[derive(Inspect)]` to `Box` to use `get_field`
 // expect-error: 20:13: no method `field_names_of_val` found for type `Point`
 // expect-error: help: add `#[derive(Inspect)]` to `Point` to use `field_names_of_val`

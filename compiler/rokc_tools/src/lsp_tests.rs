@@ -1388,6 +1388,78 @@ fn hover_library_signature_and_doc() {
     assert!(value(2).contains("fn println("), "{}", value(2));
 }
 
+/// A `-> some Tr` function hovers as written, and so do the values it
+/// returns: the concrete type stays hidden.
+#[test]
+fn hover_some_return_type() {
+    let src = "\
+fn evens(n: i32) -> some Iterator<Item = i32> {
+    (0..n).filter(|x| x % 2 == 0)
+}
+let it = evens(4);
+println(it.count());
+";
+    let msgs = std_session("lsp-hover-some", src, |uri| {
+        vec![
+            request(1, "textDocument/hover", at(uri, 3, 10)),
+            request(2, "textDocument/hover", at(uri, 4, 9)),
+        ]
+    });
+    let value = |id| {
+        reply(&msgs, id)
+            .get("contents")
+            .get("value")
+            .as_str()
+            .unwrap_or("")
+            .to_owned()
+    };
+    assert!(
+        value(1).contains("-> some Iterator<Item = i32>"),
+        "{}",
+        value(1)
+    );
+    assert!(
+        value(2).contains("it: some Iterator<Item = i32>"),
+        "{}",
+        value(2)
+    );
+}
+
+/// A `some Tr` parameter hovers as written, at the call and the definition.
+#[test]
+fn hover_some_param() {
+    let src = "\
+fn show(x: some Display) -> str {
+    f\"{x}\"
+}
+println(show(5));
+";
+    let msgs = std_session("lsp-hover-some-param", src, |uri| {
+        vec![
+            request(1, "textDocument/hover", at(uri, 3, 9)),
+            request(2, "textDocument/hover", at(uri, 0, 4)),
+        ]
+    });
+    let value = |id| {
+        reply(&msgs, id)
+            .get("contents")
+            .get("value")
+            .as_str()
+            .unwrap_or("")
+            .to_owned()
+    };
+    assert!(
+        value(1).contains("fn show(x: some Display) -> str"),
+        "{}",
+        value(1)
+    );
+    assert!(
+        value(2).contains("fn show(x: some Display) -> str"),
+        "{}",
+        value(2)
+    );
+}
+
 /// A symbol's range covers the whole item; its selection range is the
 /// name.
 #[test]

@@ -1,9 +1,9 @@
 // expect-error: `T::Output` is ambiguous: the bounds `Add<i32>` and `Add<f64>` of `T` both give it - name the bound (`<T as Add<i32>>::Output`)
-// expect-error: operator `+` on `T`: the literal fits several `Add` bounds (`i64`, `u8`); add a suffix or `as`
+// expect-error: operator `+` on `T`: the literal fits several `Add` bounds (`i32`, `u8`); add a suffix or `as`
 // expect-error: operator `+` on `T` needs a bound `Add<str>`, but `T` has `Add<i32>` and `Add<f64>`
 // expect-error: `make` on `T` is ambiguous: the arguments do not choose between its bounds `Tag<i32>` and `Tag<bool>` - name one (`<T as Tag<i32>>::make(..)`)
 // expect-error: `T::ID` is ambiguous: the bounds `Tag<i32>` and `Tag<bool>` of `T` both give it - name the bound (`<T as Tag<i32>>::ID`)
-// expect-error: `T::from` on `T`: the literal fits several of its bounds (`i64`, `u8`); add a suffix or `as`
+// expect-error: `T::from` on `T`: the literal fits several of its bounds (`i32`, `u8`); add a suffix or `as`
 // expect-error: `tag` on `T` needs a bound `Tag<str>`, but `T` has `Tag<i32>` and `Tag<bool>`
 // expect-error: method `go` on `T` is ambiguous: traits `Fast`, `Slow` all provide it
 
@@ -19,11 +19,11 @@ trait Fast { fn go(self) -> i32; }
 trait Slow { fn go(self) -> i32; }
 
 fn proj<T: Add<i32> + Add<f64>>(x: T) -> T::Output { x + 1 }
-fn lit<T: Add<i64> + Add<u8>>(x: T) { let _ = x + 1; }
+fn lit<T: Add<i32> + Add<u8>>(x: T) { let _ = x + 1; }
 fn nomatch<T: Add<i32> + Add<f64>>(x: T) { let _ = x + "s"; }
 fn pick<T: Tag<i32> + Tag<bool>>(x: T) { let _ = x.make(); }
 fn id<T: Tag<i32> + Tag<bool>>() -> u32 { T::ID }
-fn from<T: From<i64> + From<u8>>() -> T { T::from(1) }
+fn from<T: From<i32> + From<u8>>() -> T { T::from(1) }
 fn arg<T: Tag<i32> + Tag<bool>>(x: T) -> i32 { x.tag("s") }
 fn two<T: Fast + Slow>(x: T) -> i32 { x.go() }
 

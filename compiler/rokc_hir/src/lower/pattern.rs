@@ -26,11 +26,21 @@ pub(super) fn lower_match(
     // A pattern that failed to lower stands in as `_`: reachability
     // over it would report errors of its own.
     let mut bad_pattern = false;
-    for arm in arms {
+    // `if let` / `while let` / `let .. else`: `pat` then a `_` the parser
+    // wrote (at the `if` / `while`, or spanning the `else` block).
+    let let_form = matches!(arms, [_, w] if w.guard.is_none()
+        && matches!(w.pat.kind, AstPatternKind::Wildcard)
+        && ((w.pat.span.file == span.file && w.pat.span.start == span.start)
+            || w.pat.span == w.body.span
+            || matches!(&arms[0].pat.kind, AstPatternKind::Binding { name, .. } if name == "__letelse_v")));
+    for (i, arm) in arms.iter().enumerate() {
         let mark = ctx.unnarrowed.len();
         ctx.push_scope();
         let since = ctx.env.sink.diagnostics.borrow().len();
-        let pat = inner_layer_binding(ctx, &arm.pat, &scrut_ty, &arm_h)
+        let pat = (let_form && i == 0)
+            .then(|| some_pattern(ctx, &arm.pat, &scrut_ty))
+            .flatten()
+            .or_else(|| inner_layer_binding(ctx, &arm.pat, &scrut_ty, &arm_h))
             .unwrap_or_else(|| lower_pattern(ctx, &arm.pat, &scrut_ty));
         if super::mono::writable_place(ctx, &scrut_h) {
             if let HirPattern::Binding { local, .. }
@@ -88,14 +98,48 @@ pub(super) fn lower_match(
     // Result type: the expected slot, else the first arm that produces
     // a value; every other value-producing arm must agree.
     let inferred = expected.is_none();
+    // An unsuffixed integer arm follows the others' integer type, as an
+    // `if` branch does: `none => 0` beside `p => p.number`.
+    let lit_arm = |i: usize| {
+        let body = &arms[i].body;
+        match &body.kind {
+            ExprKind::Block(b) if b.stmts.is_empty() => b
+                .trailing
+                .as_deref()
+                .is_some_and(super::expr::is_untyped_int),
+            _ => super::expr::is_untyped_int(body),
+        }
+    };
     let result_ty = expected.unwrap_or_else(|| {
-        arm_h
-            .iter()
-            .find(|a| !hir_expr_diverges(&a.body))
-            .map_or(HirTy::Unit, |a| a.body.ty.clone())
+        let values = || {
+            arm_h
+                .iter()
+                .enumerate()
+                .filter(|(_, a)| !hir_expr_diverges(&a.body))
+        };
+        values()
+            .find(|(i, _)| !lit_arm(*i))
+            .or_else(|| values().next())
+            .map_or(HirTy::Unit, |(_, a)| a.body.ty.clone())
     });
+    // The arm the result type came from, for open arms to meet.
+    let first_value = (inferred && super::infer::active(ctx))
+        .then(|| {
+            arm_h
+                .iter()
+                .find(|a| a.body.ty == result_ty)
+                .map(|a| a.body.clone())
+        })
+        .flatten();
     let mut out = Vec::with_capacity(arm_h.len());
     for (i, mut a) in arm_h.into_iter().enumerate() {
+        if inferred
+            && lit_arm(i)
+            && a.body.ty != result_ty
+            && matches!(result_ty, HirTy::Prim(p) if p.is_int())
+        {
+            a.body = lower_expected(ctx, &arms[i].body, result_ty.clone());
+        }
         // A unit-typed match (statement position) discards arm values.
         if !hir_expr_diverges(&a.body) && (result_ty != HirTy::Unit || is_let_else) {
             if is_let_else && i == 1 {
@@ -107,6 +151,9 @@ pub(super) fn lower_match(
                 );
             } else if inferred
                 && a.body.ty != HirTy::Unknown
+                && !first_value
+                    .as_ref()
+                    .is_some_and(|f| super::infer::join(ctx, f, &a.body))
                 && !coercible(ctx, &result_ty, &a.body.ty)
             {
                 // No sum type is inferred from differing arms.
@@ -135,6 +182,66 @@ pub(super) fn lower_match(
         },
         ty: result_ty,
         span,
+    }
+}
+
+/// A plain name in `if let x = e` / `while let` / `let x = e else` on an
+/// optional `e` binds the value without its `none` (one layer: `x` of a
+/// `(T | none)?` is `T | none`).
+fn some_pattern(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy) -> Option<HirPattern> {
+    let (HirTy::Sum(vs), AstPatternKind::Binding { name, sub: None }) = (scrut_ty, &pat.kind)
+    else {
+        return None;
+    };
+    if name == "_" || ctx.enum_path(&[name.as_str()]).is_some() {
+        return None;
+    }
+    let none = vs.iter().position(|v| *v == HirTy::None)?;
+    let rest: Vec<usize> = (0..vs.len()).filter(|i| *i != none).collect();
+    Some(narrow_to(ctx, name, scrut_ty, &rest, pat.span))
+}
+
+/// Bind `name` to the members `idxs` of sum `scrut_ty` (one: that member's
+/// type; several: their sum).
+pub(super) fn narrow_to(
+    ctx: &mut LowerCtx<'_>,
+    name: &str,
+    scrut_ty: &HirTy,
+    idxs: &[usize],
+    at: rokc_diagnostic::Span,
+) -> HirPattern {
+    let HirTy::Sum(vs) = scrut_ty else {
+        unreachable!("narrowing a sum")
+    };
+    let index = |i: usize| u32::try_from(i).expect("variant overflow");
+    if let [i] = idxs {
+        let t = vs[*i].clone();
+        let local = ctx.declare_bound(name, t.clone(), at);
+        return HirPattern::SumVariant {
+            sum_ty: scrut_ty.clone(),
+            variant_index: index(*i),
+            binder: Some(local),
+            payload_ty: Some(t),
+        };
+    }
+    let target = HirTy::Sum(idxs.iter().map(|i| vs[*i].clone()).collect());
+    let alts = HirPattern::Or(
+        idxs.iter()
+            .map(|i| HirPattern::SumVariant {
+                sum_ty: scrut_ty.clone(),
+                variant_index: index(*i),
+                binder: None,
+                payload_ty: None,
+            })
+            .collect(),
+    );
+    let binder = ctx.declare_bound(name, target, at);
+    let whole = ctx.declare(None, scrut_ty.clone());
+    ctx.pending_resums.push((binder, whole));
+    HirPattern::At {
+        local: whole,
+        ty: scrut_ty.clone(),
+        sub: Box::new(alts),
     }
 }
 
@@ -1137,10 +1244,14 @@ fn lower_pattern_here(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy
                 payload_ty: member,
             }
         }
-        AstPatternKind::Literal(lit) => match literal_to_const(ctx, lit, scrut_ty) {
-            Some((value, prim)) => HirPattern::Literal { value, prim },
-            None => mismatch(ctx, "this literal pattern".to_owned()),
-        },
+        // On an open literal, as the type it holds; the body's end
+        // retypes it with the scrutinee (`infer::Fixer`).
+        AstPatternKind::Literal(lit) => {
+            match literal_to_const(ctx, lit, &super::infer::zonk(ctx, scrut_ty)) {
+                Some((value, prim)) => HirPattern::Literal { value, prim },
+                None => mismatch(ctx, "this literal pattern".to_owned()),
+            }
+        }
         AstPatternKind::TypeCheck { binder, ty } => {
             // `name: T` - narrow a sum scrutinee to variant `T` (or, on a
             // non-sum of exactly type `T`, bind it).
@@ -1166,6 +1277,17 @@ fn lower_pattern_here(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy
                     .as_ref()
                     .map(|name| ctx.declare_bound(name, target_ty.clone(), pat.span))
             };
+            // `x: MutexGuard<i32>` on an open `MutexGuard<#var> | none`.
+            if let HirTy::Sum(vs) = scrut_ty {
+                let open: Vec<&HirTy> = vs
+                    .iter()
+                    .filter(|v| super::infer::has_var(ctx, v))
+                    .collect();
+                if let [one] = open.as_slice() {
+                    super::infer::unify_member(ctx, std::slice::from_ref(&target_ty), one);
+                }
+            }
+            let scrut_ty = &super::infer::resolve(ctx, scrut_ty);
             if let HirTy::Sum(variants) = scrut_ty {
                 if let Some(idx) = sum_variant_index(variants, &target_ty) {
                     let bind_local = bind(ctx);
@@ -1427,6 +1549,7 @@ fn lower_pattern_here(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy
             end,
             inclusive,
         } => {
+            let scrut_ty = &super::infer::zonk(ctx, scrut_ty);
             let prim = match scrut_ty {
                 HirTy::Prim(p) if p.is_int() => *p,
                 _ => return mismatch(ctx, "a range pattern".to_owned()),

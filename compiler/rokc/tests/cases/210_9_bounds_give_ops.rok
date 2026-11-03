@@ -112,6 +112,6 @@ fn main() {
     println(f"{last([1, 101])} {pad([1, 2], 3)[2]}");
     println(f"{sum3(1, 2, 3)} {last(pad([4, 5, 6, 7, 8], 9))}");
     println(listed([5, 6]));
-    println(f"{kind(1i64)} {boxed(2) is i32} {maybe(3, false) is none}");
+    println(f"{kind(1i64)} {boxed(2) is i64} {maybe(3, false) is none}");
     println("done");
 }

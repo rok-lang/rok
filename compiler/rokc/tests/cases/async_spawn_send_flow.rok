@@ -1,10 +1,10 @@
-// expect-error: it captures `by_param: Cell<i32>`, which is not `Send`
+// expect-error: it captures `by_param: Cell<i64>`, which is not `Send`
 // expect-error: it holds `in_field: Cell<i32>`, which is not `Send`, across an `await`
 // expect-error: it captures `from_helper: Cell<i32>`, which is not `Send`
 // expect-error: it holds a temporary `Cell<i32>`, which is not `Send`, across an `await`
 // expect-error: it holds `nested: Cell<i32>`, which is not `Send`, across an `await`
-// expect-error: it holds `to_thread: Cell<i32>`, which is not `Send`, across an `await`
-// expect-error: it captures `via_closure: Cell<i32>`, which is not `Send`
+// expect-error: it holds `to_thread: Cell<i64>`, which is not `Send`, across an `await`
+// expect-error: it captures `via_closure: Cell<i64>`, which is not `Send`
 
 // `task::spawn`'s `Send` check follows a non-`Send` frame wherever it goes.
 use rok::std::thread;

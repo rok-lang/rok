@@ -1,4 +1,4 @@
-// expect-error: 315_destructure_error_location_must_fail.rok:14:5: tuple destructure of a non-tuple value of type `i32`
+// expect-error: 315_destructure_error_location_must_fail.rok:14:5: tuple destructure of a non-tuple value of type `i64`
 // expect-error: 315_destructure_error_location_must_fail.rok:15:5: struct `P` has no field `z`
 // expect-error: 315_destructure_error_location_must_fail.rok:16:5: tuple destructure length mismatch
 

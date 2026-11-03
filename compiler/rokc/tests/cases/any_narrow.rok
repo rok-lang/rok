@@ -14,14 +14,14 @@
 // slot (the value converted back to the slot's type).
 struct P { a: i32; }
 let v: any = 41;
-if v is i32 && v > 40 { println(f"{v}"); }
-let ok = v is i32 && v + 1i32 == 42;
+if v is i64 && v > 40 { println(f"{v}"); }
+let ok = v is i64 && v + 1 == 42;
 if ok { println(f"{1}"); }
-if v is i32 { v = v + 10; }
-if v is i32 { println(f"{v}"); }
+if v is i64 { v = v + 10; }
+if v is i64 { println(f"{v}"); }
 let w: any = 3;
-while w is i32 && w < 6 { w = w + 1; }
-if w is i32 { println(f"{w}"); }
+while w is i64 && w < 6 { w = w + 1; }
+if w is i64 { println(f"{w}"); }
 let p: any = P { a: 1 };
 if p is P { p.a = 9; }
 if p is P { println(f"{p.a}"); }
@@ -30,6 +30,6 @@ if o is i32 { o = o * 5; }
 match o { n: i32 => println(f"{n}"), none => println(f"{0}"), }
 // Nested narrowing writes back through both levels.
 let q: any = 1;
-if q is i32 { if q is i32 { q = 3; } }
-if q is i32 { println(f"{q}"); }
+if q is i64 { if q is i64 { q = 3; } }
+if q is i64 { println(f"{q}"); }
 

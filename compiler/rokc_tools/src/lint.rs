@@ -79,7 +79,6 @@ pub const LINTS: &[Lint] = &[
         desc: "comparing with NaN is always false (`!=`: true)",
         since: "0.1.0",
     },
-    warn("none_comparison", "`x == none` instead of `x is none`"),
     warn(
         "bool_comparison",
         "comparing a `bool` with `true` / `false`",
@@ -1719,18 +1718,6 @@ impl<'a> Cx<'a> {
             _ => None,
         };
         match (lit(lhs), lit(rhs)) {
-            (Some(Literal::None), _) | (_, Some(Literal::None)) => {
-                let fix = if op == "==" {
-                    "x is none"
-                } else {
-                    "!(x is none)"
-                };
-                self.hit(
-                    "none_comparison",
-                    e.span,
-                    format!("comparing with `none` using `{op}`; write `{fix}`"),
-                );
-            }
             (Some(Literal::Bool(b)), _) | (_, Some(Literal::Bool(b))) => {
                 let same = (op == "==") == b;
                 self.hit(

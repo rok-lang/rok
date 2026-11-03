@@ -1,18 +1,9 @@
-// expect-error: 21:5: mismatched types: the body of `count` expects `i64`, found `i32`
-// expect-error: help: `c` is `i32` from its literal; declare it as `i64`: `let c: i64 = 0;` or `let c = 0i64;`
-// expect-error: `c` gets `i32` here
-// expect-error: 26:5: operator `+` cannot be applied to `i32` and `i64`
-// expect-error: 31:10: mismatched types: argument `x` of `take` expects `f32`, found `f64`
-// expect-error: 34:8: operator `<` cannot be applied to `i32` and `u8`
-// expect-error: 36:17: mismatched types: `let k` expects `u8`, found `i32`
-// expect-error: help: `t` is `i32` from its literal; declare it as `i64`: `let t: i64 = 3;` or `let t = 3i64;`
-// expect-error: help: `s` is `f64` from its literal; declare it as `f32`: `let s: f32 = -1.5;` or `let s = -1.5f32;`
-// expect-error: help: `w` is `i32` from its literal; declare it as `u8`: `let w: u8 = 2;` or `let w = 2u8;`
-// expect-error: help: convert it with `as`: `big as u8`
+// expect-error: 26:15: integer literal `300` out of range for `u8`
 
-// A variable that took its type from an unsuffixed literal gets the fix at
-// its declaration, not a cast at the use; a value the type can't hold
-// keeps the cast.
+// A variable that took its type from an unsuffixed literal gets it from
+// its uses (`c`, `t`, `s`, `w` here); a value the type the uses give it
+// can't hold is reported at the literal.
+
 fn take(x: f32) {}
 
 fn count() -> i64 {

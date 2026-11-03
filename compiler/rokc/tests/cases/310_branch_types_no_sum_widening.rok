@@ -1,5 +1,5 @@
-// expect-error: 7:13: `if` branches have different types `i32` and `str` - rok does not infer a sum type; annotate the slot
-// expect-error: 8:13: `match` arms have different types `i32` and `str` (arm 2) - rok does not infer a sum type
+// expect-error: 7:13: `if` branches have different types `i64` and `str` - rok does not infer a sum type; annotate the slot
+// expect-error: 8:13: `match` arms have different types `str` and `i64` (arm 1) - rok does not infer a sum type
 
 // Branch results are not widened to a sum on their own; an expected sum
 // type (an annotated slot) accepts them.

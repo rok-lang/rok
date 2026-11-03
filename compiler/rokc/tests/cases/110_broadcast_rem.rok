@@ -1,4 +1,4 @@
-// expect-error: operator `.%` cannot be applied to `i32`
+// expect-error: operator `.%` cannot be applied to `i64`
 
 // `.%` is a fixed token; arithmetic needs a `DotRem` impl, which the
 // library does not register for primitives.

@@ -1,6 +1,6 @@
 // expect-error: this pattern can't destructure a value of type `Sh` here - it must be irrefutable
 // expect-error: 12:18: mismatched types: `let v` expects `i32`, found `i32 | none`
-// expect-error: the pattern `b` expects `str`, found `i32`
+// expect-error: the pattern `b` expects `str`, found `i64`
 //
 
 // `let` takes only irrefutable patterns (no `enum` variant,

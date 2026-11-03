@@ -404,7 +404,17 @@ pub(super) fn closure_ctx<'a>(
     let mut cell_prelude: Vec<HirStmt> = Vec::new();
     for (pi, p) in params.iter().enumerate() {
         let ty = match &p.ty {
-            Some(t) => ctx.resolve_ast_ty(t),
+            Some(t) => {
+                let t = ctx.resolve_ast_ty(t);
+                // `apply(2, |x: i32| x + 1)`: the annotation fixes the
+                // slot's open literal.
+                if let Some(e) = expected_param_tys.as_ref().and_then(|v| v.get(pi)) {
+                    if super::infer::active(ctx) && super::infer::has_var(ctx, e) {
+                        super::infer::unify(ctx, e, &t);
+                    }
+                }
+                t
+            }
             None => match expected_param_tys.as_ref().and_then(|v| v.get(pi)) {
                 Some(t) if *t != HirTy::Unknown => t.clone(),
                 _ if ctx.infer_vars => super::infer::fresh(ctx),

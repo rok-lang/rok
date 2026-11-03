@@ -1278,10 +1278,7 @@ pub(super) fn lower_try(
                 span,
                 format!("`{word}` is for calls that throw; `{op}` gives `{t}`, which may be none"),
             )
-            .with_help(format!(
-                "write `{fix}`, or `if let x: {} = {op} {{ .. }}`",
-                ctx.ty_name(&some)
-            ))
+            .with_help(format!("write `{fix}`, or `if let x = {op} {{ .. }}`"))
             .with_fix(span, fix.clone(), format!("use `{fix}`")),
         );
         Some(poison(span))

@@ -37,7 +37,7 @@ fn main() -> i32 {
     }
     let a: any = 1;
     let n = 0;
-    while a is i32 {
+    while a is i64 {
         n += a;
         if n > 1 { a = "x"; } else { a = a + 1; }
     }

@@ -1,5 +1,5 @@
 // expect-error: 9:5: conflicting uses of `c`
-// expect-error: `str` here, but `i32` fixed at 8:5
+// expect-error: `str` here, but `i64` fixed at 8:5
 
 // Two later uses that disagree: the error names both sites.
 

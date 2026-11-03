@@ -3,7 +3,7 @@
 // help is the rok form, from the code as written.
 // expect-error: 13:9: no method `format` found for type `str`
 // expect-error: help: use an f-string: `f"hello {name}, {n}"`
-// expect-error: 14:9: struct `List<i32>` has no field `length`
+// expect-error: 14:9: struct `List<i64>` has no field `length`
 // expect-error: help: the length is a method: `xs.len()`
 // expect-error: 15:15: cannot index into a value of type `str`
 // expect-error: help: a `str` is UTF-8 text, not an array of characters; take one with `name.chars().nth(0)`

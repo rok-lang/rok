@@ -396,7 +396,7 @@ pub(super) fn optional_forms(ctx: &LowerCtx<'_>, v: &str, some: &HirTy) -> Strin
     let d = default_lit(some).unwrap_or("default");
     let x = if v == "x" { "y" } else { "x" };
     format!(
-        "write `{v} ?? {d}`, `if let {x}: {t} = {v} {{ .. }}`, or \
+        "write `{v} ?? {d}`, `if let {x} = {v} {{ .. }}`, or \
          `match {v} {{ {x}: {t} => .., none => .. }}`"
     )
 }
@@ -449,7 +449,7 @@ pub(super) fn optional_method(
         }
         ("is_none" | "is_some", _) => {
             let fix = if method == "is_none" {
-                format!("{v} is none")
+                format!("{v} == none")
             } else {
                 format!("{v} != none")
             };
@@ -484,7 +484,7 @@ fn has_method(ctx: &LowerCtx<'_>, ty: &HirTy, name: &str) -> bool {
 pub(super) fn truthy_help(ctx: &LowerCtx<'_>, c: &HirExpr) -> Option<String> {
     let x = ctx.src(c.span).unwrap_or("x");
     let test = match &c.ty {
-        HirTy::Sum(ms) if ms.contains(&HirTy::None) => format!("!({x} is none)"),
+        HirTy::Sum(ms) if ms.contains(&HirTy::None) => format!("{x} != none"),
         HirTy::Prim(p) if p.is_int() => format!("{x} != 0"),
         HirTy::Prim(p) if p.is_float() => format!("{x} != 0.0"),
         ty if has_method(ctx, ty, "is_empty") => format!("!{}.is_empty()", receiver(x)),
@@ -509,7 +509,7 @@ pub(super) fn op_habit_help(
         Some(r)
             if sym == "*"
                 && lhs.ty == HirTy::Prim(PrimTy::Str)
-                && matches!(r.ty, HirTy::Prim(p) if p.is_int()) =>
+                && matches!(super::infer::zonk(ctx, &r.ty), HirTy::Prim(p) if p.is_int()) =>
         {
             Some(format!(
                 "write `{x}.repeat({})`",

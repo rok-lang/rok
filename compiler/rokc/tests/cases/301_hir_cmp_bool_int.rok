@@ -1,5 +1,5 @@
 // Comparing bool with an integer is a type error.
-// expect-error: operator `==` cannot be applied to `bool` and `i32`
+// expect-error: operator `==` cannot be applied to `bool` and `i64`
 
 fn main() -> i32 {
     let b = true;

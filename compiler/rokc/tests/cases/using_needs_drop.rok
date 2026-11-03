@@ -1,4 +1,4 @@
-// expect-error: `using` needs a resource whose type implements `Drop`; `i32` does not implement `Drop`
+// expect-error: `using` needs a resource whose type implements `Drop`; `i64` does not implement `Drop`
 // The bound value must implement `Drop`.
 fn main() -> i32 {
     using x = 42 { x }

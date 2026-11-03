@@ -1,0 +1,12 @@
+// expect-error: 10:13: `[ref count]` can't be used in a closure that may run on another thread: both threads could change `count` at once
+// expect-error: help: write `let count = Atomic::new(count);` before the closure, capture `count` without `ref`, and use `count.load()` / `count.store(..)`; or return the value from the closure instead
+
+// An unsuffixed literal is an open integer while the body is lowered;
+// the help still names `Atomic`, as for its `i64` default.
+use rok::std::thread;
+
+fn main() {
+    let count = 0;
+    let t = thread::spawn([ref count] || { count += 1; });
+    try! t.join();
+}

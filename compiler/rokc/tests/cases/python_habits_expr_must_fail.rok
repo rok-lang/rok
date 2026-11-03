@@ -5,7 +5,7 @@
 // expect-error: 39:8: expected `{`, found identifier `done`
 // expect-error: help: Rok writes `not` as `!`: `!done`
 // expect-error: 43:13: Rok has no `is not` operator
-// expect-error: help: write `!(x is none)`
+// expect-error: help: write `x != none`
 // expect-error: 47:15: Rok has no `a if c else b` expression
 // expect-error: help: `if` is an expression: `if c { 1 } else { 2 }`
 // expect-error: 51:13: expected `;`, found identifier `x`

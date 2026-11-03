@@ -37,7 +37,7 @@ fn main() {
     let m: num::niche::NonZero<i32> | none = num::niche::NonZero::new(7);
     println(f"{n.get()} {z is none} {m is none} {n} {n:?}");
     let b: num::niche::NonZero<i32> = num::niche::NonZero::new(6) ?? panic("zero");
-    println(f"{n * b} {n + b} {n - b} {n / b} {84 / b} {n == b} {n > b} {n.cmp(b):?} {hash_of(n) == hash_of(42)}");
+    println(f"{n * b} {n + b} {n - b} {n / b} {84 / b} {n == b} {n > b} {n.cmp(b):?} {hash_of(n) == hash_of(42i32)}");
     let e = try num::niche::NonZero::<i32>::try_from(0) catch err: num::niche::ZeroError { println(f"caught {err}"); n };
     let t: num::niche::NonZero<i32> = try 5.try_into() catch _ { n };
     let v: i32 = t.into();

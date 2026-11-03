@@ -1,0 +1,27 @@
+// expect-error: 15:20: `wrong` returns `ListIter<i64>`, which is not `Iterator<Item = str>`
+// expect-error: 18:1: the return paths of `two` have different types
+// expect-error: help: `some Iterator<Item = i32>` is one concrete type; to return several types, write `-> any Iterator<Item = i32>`
+// expect-error: 25:13: no method `contains` on `some Iterator<Item = i32>`: callers see only its bounds
+// expect-error: 26:25: mismatched types: `let b` expects `Range<i32>`, found `some Iterator<Item = i32>`
+
+// `some Tr` is one concrete type that has `Tr`, written only as a
+// return type; callers get only what `Tr` gives.
+
+fn r(n: i32) -> some Iterator<Item = i32> {
+    0..n
+}
+
+// The body's value must have the bound.
+fn wrong() -> some Iterator<Item = str> { [1, 2].into_iter() }
+
+// One concrete type: no sum is made of two paths.
+fn two(b: bool) -> some Iterator<Item = i32> {
+    if b { return 0..3i32; }
+    [1, 2].into_iter()
+}
+
+fn main() {
+    let a = r(5);
+    println(a.contains(3));
+    let b: Range<i32> = r(5);
+}

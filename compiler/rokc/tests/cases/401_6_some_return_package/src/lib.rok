@@ -1,0 +1,11 @@
+//! A library whose pub fns hide their return types behind `some`.
+
+/// The even numbers below `n`.
+pub fn evens(n: i32) -> some Iterator<Item = i32> {
+    (0..n).filter(|x| x % 2 == 0)
+}
+
+/// Adds `k`.
+pub fn adder(k: i32) -> some fn(i32) -> i32 {
+    |x| x + k
+}

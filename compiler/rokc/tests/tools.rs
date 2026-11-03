@@ -277,7 +277,7 @@ fn repl_edits_lines_on_a_terminal() {
     let rokr = env.rokr.display().to_string();
     let home = scratch("repl-line-edit");
     let steps: [&[u8]; 7] = [
-        b"let x = 4\r",
+        b"let x: i32 = 4\r",
         b"\x1b[200~fn f(a: i32) -> i32 {\r\n    a * 2\r\n}\r\n\x1b[201~\r",
         b"f(x)\r",
         b"prin\tln(f(1))\r",
@@ -305,7 +305,7 @@ fn repl_edits_lines_on_a_terminal() {
     let history = std::fs::read_to_string(home.join("repl_history")).unwrap();
     assert_eq!(
         history,
-        "#rok repl_history 2\nlet x = 4\nfn f(a: i32) -> i32 {\\n    a * 2\\n}\nf(x)\n\
+        "#rok repl_history 2\nlet x: i32 = 4\nfn f(a: i32) -> i32 {\\n    a * 2\\n}\nf(x)\n\
          println(f(1))\nf(x)\n:exit\n"
     );
 }
@@ -1245,7 +1245,7 @@ fn lsp_survives_a_compiler_panic() {
         ),
     );
     let hover = next(r#""id":2"#);
-    assert!(hover.contains("i32"), "{hover}");
+    assert!(hover.contains("i64"), "{hover}");
     send(
         &mut stdin,
         r#"{"jsonrpc":"2.0","id":3,"method":"shutdown"}"#.into(),
@@ -1451,20 +1451,20 @@ a + 1
     assert_eq!(
         stderr,
         "\
-error[E0040]: mismatched types: `let b` expects `str`, found `i32`
+error[E0040]: mismatched types: `let b` expects `str`, found `i64`
   --> <repl>:1:25
    |
  1 | let a = 1; let b: str = 2;
    |                         ^
    |
    = help: to make text from it, write `f\"{2}\"`
-   = help: or, to keep the `i32`, drop `: str`
-error[E0054]: operator `+` cannot be applied to `i32` and `bool`
+   = help: or, to keep the `i64`, drop `: str`
+error[E0054]: operator `+` cannot be applied to `i64` and `bool`
   --> <repl>:1:25
    |
  1 | let é = \"é\"; let w = 3; w + true
    |                         ^^^^^^^^
-error[E0040]: mismatched types: the right operand of `+` expects `str`, found `i32`
+error[E0040]: mismatched types: the right operand of `+` expects `str`, found `i64`
   --> <repl>:2:25
    |
  2 |   2); println(p); f() + p
@@ -1498,7 +1498,7 @@ fn repl_await_cells_and_it() {
     let rokr = env.rokr.display().to_string();
     let input = "\
 async fn af() -> i32 { return 3; }
-let w = 10;
+let w: i32 = 10;
 let v = await af(); println(f\"got {v}\");
 v + w
 await af()

@@ -1,5 +1,5 @@
 // The rhs type of an operator trait method is checked.
-// expect-error: the right operand of `+` expects `V`, found `i32`
+// expect-error: the right operand of `+` expects `V`, found `i64`
 
 struct V { x: i32; }
 impl ops::Add for V { fn add(self, o: V) -> V { return V { x: self.x + o.x }; } }

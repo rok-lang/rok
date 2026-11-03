@@ -1,4 +1,4 @@
-// expect-error: non-exhaustive match on `i32`
+// expect-error: non-exhaustive match on `i64`
 
 // Integers have unbounded values, so a catch-all (`_` or binding) is required.
 fn main() -> i32 {

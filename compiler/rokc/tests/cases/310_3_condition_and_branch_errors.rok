@@ -1,4 +1,4 @@
-// expect-error: 8:8: mismatched types: the condition expects `bool`, found `i32`
+// expect-error: 8:8: mismatched types: the condition expects `bool`, found `i64`
 // expect-error: 9:44: mismatched types: the `else` branch of `if` expects `i32`, found `f64`
 
 // No truthy conversion, a condition is `bool`. 3.10.2:

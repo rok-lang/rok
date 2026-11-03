@@ -8,7 +8,7 @@
 
 // `type_name_of_val` on an `any` slot; a type pattern on a sum.
 fn handle(x: any) -> str {
-    if x.type_name_of_val() == "i32" { return "int"; }
+    if x.type_name_of_val() == "i64" { return "int"; }
     else if x.type_name_of_val() == "str" { return "str"; }
     return "other";
 }

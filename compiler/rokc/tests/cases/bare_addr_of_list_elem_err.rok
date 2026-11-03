@@ -1,5 +1,5 @@
 // expect-error: 14:13: `many_addr_of` needs a place, but `buf[..]` is an `Index` call
-// expect-error: let buf: [i32; N] = [..];
+// expect-error: let buf: [i64; N] = [..];
 
 // A `[..]` literal without a `[T; N]` slot is a `List`; its `buf[i]` is
 // an `Index::index` call returning a copy, not a place. A

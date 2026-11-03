@@ -47,6 +47,17 @@ fn fresh(env: &Env<'_>, name: String) -> HirTy {
     HirTy::Param(u32::try_from(ps.len() - 1).expect("type parameter overflow"))
 }
 
+/// A type parameter `name` that has only `bounds` (a `some` return).
+pub(super) fn opaque_param(env: &Env<'_>, name: String, bounds: Vec<TraitRef>) -> HirTy {
+    let p = fresh(env, name);
+    if let HirTy::Param(i) = p {
+        for r in bounds {
+            add_bound(env, i, r);
+        }
+    }
+    p
+}
+
 fn add_bound(env: &Env<'_>, p: u32, r: TraitRef) {
     let mut ps = env.sink.params.borrow_mut();
     let info = &mut ps[p as usize];
@@ -1171,6 +1182,20 @@ pub(super) fn no_method(ctx: &LowerCtx<'_>, p: u32, method: &str, span: Span) ->
     } else {
         format!("its bounds ({}) do not declare it", bounds.join(", "))
     };
+    // A `-> some Tr` call's result: callers have only `Tr`.
+    if t.starts_with("some ") {
+        let e = ctx.error_expr(
+            Code::NO_METHOD,
+            span,
+            format!("no method `{method}` on `{t}`: callers see only its bounds"),
+        );
+        ctx.help_last(Some(format!(
+            "use a method of {}, or have the function return its concrete type in place of \
+             `{t}`",
+            bounds.join(" / ")
+        )));
+        return e;
+    }
     let e = ctx.error_expr(
         Code::NO_METHOD,
         span,

@@ -1,6 +1,6 @@
 // expect-exit: 0
 // expect-stdout:
-// i32 1
+// i64 1
 // i64 2
 // s
 

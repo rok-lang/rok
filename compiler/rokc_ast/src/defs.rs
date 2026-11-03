@@ -113,6 +113,10 @@ pub const BLOCK_GLOB_ATTR: &str = "#block_glob";
 /// contexts, evaluated at compile time there.
 pub const CONST_FN_ATTR: &str = "#const_fn";
 
+/// The type parameter a `x: some Tr` parameter stands for: `S#x`, a name
+/// no source can write.
+pub const SOME_PARAM_PREFIX: &str = "S#";
+
 /// Marker attribute of a C variadic declaration `fn printf(fmt: str, ...)`.
 pub const C_VARIADIC_ATTR: &str = "#c_variadic";
 
@@ -695,6 +699,11 @@ pub enum TyKind {
     Any,
     /// `any Tr` / `any (A + B)` - a dynamic slot bounded by traits.
     AnyTrait(Vec<Path>),
+    /// `some Tr` / `some (A + B)` / `some fn(A) -> R`: a function's
+    /// return type, one concrete type that callers see only through the
+    /// bounds; a parameter's, an anonymous type parameter
+    /// (`SOME_PARAM_PREFIX`).
+    Some(Vec<Ty>),
     /// `none` (used inside sum types).
     None,
     /// Self type.

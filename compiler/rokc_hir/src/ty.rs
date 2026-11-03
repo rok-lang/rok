@@ -69,6 +69,8 @@ pub fn resolve_ty(ty: &Ty) -> HirTy {
                 })
                 .collect(),
         ),
+        // The body's type (`mono::infers_ret`).
+        TyKind::Some(_) => HirTy::Unknown,
         TyKind::None => HirTy::None,
         TyKind::SelfUpper => HirTy::Path(vec!["Self".to_owned()]),
         TyKind::Array(elem, len) => {

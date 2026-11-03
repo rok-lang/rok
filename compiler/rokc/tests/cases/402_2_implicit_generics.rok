@@ -38,7 +38,7 @@ fn main() -> i32 {
     println(f"{S { v: 4 }.scale(3)} {id(1.5)}");
     println(f"{typed_ret(5)}");
     let d = dyn_id(7);
-    if d is i32 {
+    if d is i64 {
         println("int");
     }
     return 0;

@@ -44,8 +44,8 @@ println(f"{i2(9)} {i2(9)} {i3("hi")}");
 
 let d: fn(any) -> any = dyn_f;
 let r = d(5);
-let label = if r is i32 { "any" } else { "?" };
-let v = match r { n: i32 => n, _ => 0 };
+let label = if r is i64 { "any" } else { "?" };
+let v = match r { n: i64 => n, _ => 0 };
 println(f"{v} {label}");
 
 let never: fn() -> i32 = || panic("never");

@@ -33,7 +33,7 @@ fn main() -> i32 {
     println(f"{make(-7, 3)} {make(-7.0, 3.0)} {(-7).modulo(3)} {Modulo::modulo(7, -3)}");
     let any_v: any = -9;
     match any_v %% 4 {
-        i: i32 => println(f"{i}"),
+        i: i64 => println(f"{i}"),
         _ => println("?"),
     }
     let xs = [-3, -2, -1, 0, 1, 2, 3];

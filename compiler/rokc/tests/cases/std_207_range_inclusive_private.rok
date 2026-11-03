@@ -1,4 +1,4 @@
-// expect-error: field `exhausted` of `RangeInclusive<i32>` is private
+// expect-error: field `exhausted` of `RangeInclusive<i64>` is private
 
 // `RangeInclusive`'s fields other than `start` / `end`
 // are private.

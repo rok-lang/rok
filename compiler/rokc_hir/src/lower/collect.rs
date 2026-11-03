@@ -34,6 +34,7 @@ fn lazy_init_fn_name(static_name: &str) -> String {
 /// ones an ROKHIR interface cuts to `;`).
 fn in_archive(f: &FnDef) -> bool {
     f.generics.params.is_empty()
+        && mono::opaque_bounds(f).is_none()
         && !f.is_async
         && !f.is_generator
         && !rokc_ast::inline_wanted(&f.attrs)
@@ -173,6 +174,72 @@ fn implicit_generics(program: &mut Program) {
             Item::Impl(i) if i.trait_path.is_none() => {
                 for it in &mut i.items {
                     if let AstImplItem::Method(f) = it {
+                        fix(f);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// `x: some Tr` is an anonymous type parameter (`fn f<S#x: Tr>(x: S#x)`):
+/// one static type per call, which the caller cannot name. `x: some
+/// fn(A) -> R` takes the function value.
+fn some_params(program: &mut Program) {
+    let fix = |f: &mut FnDef| {
+        for p in &mut f.params {
+            let Some(Ty {
+                kind: AstTyKind::Some(bounds),
+                span,
+            }) = &p.ty
+            else {
+                continue;
+            };
+            let span = *span;
+            if let [
+                one @ Ty {
+                    kind: AstTyKind::Fn(..),
+                    ..
+                },
+            ] = bounds.as_slice()
+            {
+                p.ty = Some(one.clone());
+                continue;
+            }
+            let name = format!("{}{}", rokc_ast::SOME_PARAM_PREFIX, p.name);
+            let bounds = bounds.clone();
+            p.ty = Some(Ty {
+                kind: AstTyKind::Path(rokc_ast::Path {
+                    segments: vec![rokc_ast::PathSegment {
+                        name: name.clone(),
+                        generics: Vec::new(),
+                    }],
+                    span,
+                    origin: None,
+                }),
+                span,
+            });
+            f.generics.params.push(rokc_ast::GenericParam::Type {
+                name,
+                bounds,
+                default: None,
+            });
+        }
+    };
+    for item in &mut program.items {
+        match item {
+            Item::Fn(f) => fix(f),
+            Item::Impl(i) => {
+                for it in &mut i.items {
+                    if let AstImplItem::Method(f) = it {
+                        fix(f);
+                    }
+                }
+            }
+            Item::Trait(t) => {
+                for it in &mut t.items {
+                    if let rokc_ast::TraitItem::Method(f) = it {
                         fix(f);
                     }
                 }
@@ -647,6 +714,7 @@ fn collect<'a>(
     add_lazy_static_inits(owned);
     pub_signatures(owned, &mut pre_diags);
     implicit_generics(owned);
+    some_params(owned);
     let err = |code: Code, pre: &mut Vec<rokc_diagnostic::RokDiagnostic>, at: Span, msg: String| {
         pre.push(rokc_diagnostic::RokDiagnostic::error(code, at, msg));
     };
@@ -3991,9 +4059,6 @@ pub(super) fn collect_unknown_paths(ty: &HirTy, out: &mut Vec<String>) {
         HirTy::Path(p) => {
             out.push(p.join("::"));
         }
-        // Open until inference or a binding fixes them (an inference
-        // variable shows as `_`).
-        HirTy::Var(_) => out.push("_".to_owned()),
         HirTy::OpenConst(n) => out.push(n.clone()),
         HirTy::NoThrow => out.push("#nothrow".to_owned()),
         HirTy::Sum(parts) | HirTy::Tuple(parts) => {
@@ -4673,7 +4738,9 @@ fn ast_ty_needs(ty: &rokc_ast::Ty, params: &[&str], assoc: &[&str], out: &mut Ve
             .iter()
             .flat_map(|b| b.segments.iter().flat_map(|s| &s.generics))
             .collect(),
-        AstTyKind::Sum(parts) | AstTyKind::Tuple(parts) => parts.iter().collect(),
+        AstTyKind::Sum(parts) | AstTyKind::Tuple(parts) | AstTyKind::Some(parts) => {
+            parts.iter().collect()
+        }
         AstTyKind::Fn(args, ret, _) => args.iter().chain(std::iter::once(&**ret)).collect(),
         AstTyKind::Throws { ok, err } => vec![&**ok, &**err],
         AstTyKind::Array(elem, _) | AstTyKind::Nest(elem) | AstTyKind::Binding(_, elem) => {
@@ -6056,7 +6123,8 @@ fn unmet_bounds(
     }
     let mut out = Vec::new();
     for (ty, bounds) in goals {
-        if ty == HirTy::Unknown {
+        // An instance over an inference variable is a probe's, dropped.
+        if ty == HirTy::Unknown || super::infer::has_var(&rcx, &ty) {
             continue;
         }
         for b in bounds {
@@ -8303,7 +8371,7 @@ fn may_diverge(
     let open: Vec<&FnDef> = fns
         .into_iter()
         .filter(|f| {
-            f.ret_ty.is_none()
+            (f.ret_ty.is_none() || mono::opaque_bounds(f).is_some())
                 && f.body.is_some()
                 && !f.attrs.iter().any(|a| a.path == [rokc_ast::UNIT_RET_ATTR])
         })

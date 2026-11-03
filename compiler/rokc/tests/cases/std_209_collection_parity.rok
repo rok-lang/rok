@@ -163,7 +163,7 @@ fn main() {
     println(f"oset key {byset[{1, 2}]} hash-eq {hash_of(x1) == hash_of(x2)}");
     let bydict: Set<Dict<str, i32>> = Set::new();
     bydict.insert({"a": 1, "b": 2});
-    let y1 = {"a": 1, "b": 2};
+    let y1: Dict<str, i32> = {"a": 1, "b": 2};
     let y2 = {"b": 2, "a": 1};
     println(f"odict key {if bydict.contains(y2) { 7 } else { 0 }} hash-eq {hash_of(y1) == hash_of(y2)}");
 }

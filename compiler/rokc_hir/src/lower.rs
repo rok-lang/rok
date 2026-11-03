@@ -1780,6 +1780,14 @@ impl ClosureSink {
             params: std::cell::RefCell::default(),
             failed: std::cell::RefCell::default(),
             unit_ret_errs: std::cell::RefCell::default(),
+            opaque_called: std::cell::Cell::default(),
+            opaque_check: std::cell::Cell::default(),
+            opaque_params: std::cell::RefCell::default(),
+            default_lits: std::cell::RefCell::default(),
+            lit_open: std::cell::Cell::default(),
+            implicit_depth: std::cell::Cell::default(),
+            lit_vars: std::cell::RefCell::default(),
+            open_insts: std::cell::RefCell::default(),
             bodies: std::cell::RefCell::default(),
             assumed: std::cell::RefCell::default(),
             const_names: std::cell::RefCell::default(),
@@ -2226,9 +2234,17 @@ fn coerce(
     what: &dyn Fn() -> String,
 ) -> HirExpr {
     let ann = ctx.let_ann.take();
-    if infer::unify_value(ctx, slot, &value) {
+    let mut value = value;
+    if infer::unify_value(ctx, slot, &mut value) {
         return value;
     }
+    if let Some(d) = infer::let_literal_conflict(ctx, slot, &value) {
+        ctx.env.sink.diagnostics.borrow_mut().push(d);
+        return value;
+    }
+    // Linked variables compare as their roots below.
+    let slot = &infer::resolve(ctx, slot);
+    let value = expr::retype_default_literal(ctx, slot, value);
     // A diverging block has type `!`: it fits any slot.
     if hir_expr_diverges(&value) {
         return value;
@@ -2265,7 +2281,9 @@ fn coerce(
     // its captures meet the slot's bounds (`+ Send`).
     let closure_fits = |v: &HirExpr| match (slot, &v.ty) {
         (HirTy::Fn(_, _, want), HirTy::Closure { .. }) => {
-            ty_compatible(slot, &v.ty) && want.auto.iter().all(|b| ctx.has_trait(&v.ty, b))
+            let held = infer::zonk(ctx, &v.ty);
+            ty_compatible(&infer::zonk(ctx, slot), &held)
+                && want.auto.iter().all(|b| ctx.has_trait(&held, b))
         }
         _ => false,
     };
@@ -2292,6 +2310,9 @@ fn coerce(
                     ),
                 );
                 if let Some(d) = ctx.env.sink.diagnostics.borrow_mut().last_mut() {
+                    // An open literal (`let count = 0;`) helps as its default.
+                    let x = infer::zonk(ctx, &x);
+                    let x = infer::literal_default(ctx, &x).unwrap_or(x);
                     d.notes.push(ref_capture_help(&name, &x));
                 }
                 return v;
@@ -2433,10 +2454,7 @@ fn mismatch_help(ctx: &LowerCtx<'_>, slot: &HirTy, v: &HirExpr) {
             (Some(s), Some(d)) => {
                 let fix = format!("{s} ?? {d}");
                 ctx.fix_last(v.span, fix.clone(), format!("use `{fix}`"));
-                format!(
-                    "`{s}` may be none: write `{fix}`, or `if let x: {} = {s} {{ .. }}`",
-                    ctx.ty_name(slot)
-                )
+                format!("`{s}` may be none: write `{fix}`, or `if let x = {s} {{ .. }}`")
             }
             _ => format!(
                 "`{name}` may be none: {}",
@@ -2793,6 +2811,27 @@ fn coercible(ctx: &LowerCtx<'_>, slot: &HirTy, ty: &HirTy) -> bool {
         if bs.iter().all(|b| meets(ctx, ty, b)))
 }
 
+/// A tuple or list literal into a sum takes the one member of its shape as
+/// its expected type (`let t: (i32, Id) | none = (13, Id(1))`), so its
+/// literals take that member's types.
+fn sum_member_for(ctx: &LowerCtx<'_>, e: &Expr, ty: &HirTy) -> Option<HirTy> {
+    let HirTy::Sum(ms) = ty else {
+        return None;
+    };
+    let fits = |m: &HirTy| match (&e.kind, m) {
+        (ExprKind::Tuple(es), HirTy::Tuple(ts)) => es.len() == ts.len() && !es.is_empty(),
+        (ExprKind::List(_), HirTy::Struct(id)) => {
+            ctx.struct_def(*id).name.split("__").next() == Some(expr::LIST)
+        }
+        _ => false,
+    };
+    let mut hits = ms.iter().filter(|m| fits(m));
+    match (hits.next(), hits.next()) {
+        (Some(one), None) => Some(one.clone()),
+        _ => None,
+    }
+}
+
 /// Lower `e` with `ty` as its expected type (`Unknown` = no expectation).
 fn lower_expected(ctx: &mut LowerCtx<'_>, e: &Expr, ty: HirTy) -> HirExpr {
     ctx.push_expected(ty);
@@ -3024,6 +3063,24 @@ struct ClosureSink {
     /// `pub` fns whose body gave a value without `->`, by span: one
     /// error for all their instances.
     unit_ret_errs: std::cell::RefCell<std::collections::HashSet<Span>>,
+    /// A body called a `-> some ..` fn (`mono::check_opaque_uses`).
+    opaque_called: std::cell::Cell<bool>,
+    /// Checking a body with each `-> some Tr` call's result an opaque
+    /// type parameter bounded by `Tr`.
+    opaque_check: std::cell::Cell<bool>,
+    opaque_params: std::cell::RefCell<HashMap<FunctionId, HirTy>>,
+    /// Unsuffixed number literals typed by default (nothing expected one):
+    /// a slot of the same kind retypes them (`coerce`).
+    default_lits: std::cell::RefCell<std::collections::HashSet<Span>>,
+    /// The body whose unsuffixed literals are inference variables
+    /// (`infer::open_scope`); each is recorded in `lit_vars`.
+    lit_open: std::cell::Cell<Option<Span>>,
+    /// Lowering an implicit generic's body for its open arguments
+    /// (`mono::implicit_body_uses`): not again inside it.
+    implicit_depth: std::cell::Cell<u32>,
+    lit_vars: std::cell::RefCell<Vec<(Span, u32)>>,
+    /// Instances asked for over open literal types, made once solved.
+    open_insts: std::cell::RefCell<Vec<mono::OpenInst>>,
     /// The declarations whose bodies are being lowered, innermost last.
     bodies: std::cell::RefCell<Vec<Span>>,
     /// The `where` clauses on other types than a parameter of the body
@@ -3923,7 +3980,10 @@ impl<'a> LowerCtx<'a> {
                 format!("any ({})", b.join(" + "))
             }
             HirTy::Unknown => "{unknown}".to_owned(),
-            HirTy::Var(_) => "_".to_owned(),
+            HirTy::Var(_) => match infer::zonk(self, ty) {
+                HirTy::Var(_) => "_".to_owned(),
+                t => self.ty_name(&t),
+            },
             HirTy::Param(p) => self.env.sink.params.borrow()[*p as usize].name.clone(),
             HirTy::Path(p) => p.join("::"),
             HirTy::None => "none".to_owned(),
@@ -4034,6 +4094,31 @@ impl<'a> LowerCtx<'a> {
     /// structural rule does (auto traits, sum members, `any` bounds,
     /// `Reflect`).
     fn implements_trait(&self, ty: &HirTy, want: &TraitRef, depth: u32) -> bool {
+        // Linked literal variables compare as their roots.
+        let open = |t: &HirTy| infer::has_var(self, t);
+        if infer::active(self)
+            && (open(ty)
+                || want
+                    .args
+                    .iter()
+                    .chain(want.binds.iter().map(|(_, t)| t))
+                    .any(open))
+        {
+            let want = TraitRef {
+                path: want.path.clone(),
+                args: want.args.iter().map(|t| infer::resolve(self, t)).collect(),
+                binds: want
+                    .binds
+                    .iter()
+                    .map(|(n, t)| (n.clone(), infer::resolve(self, t)))
+                    .collect(),
+            };
+            return self.implements_trait_here(&infer::resolve(self, ty), &want, depth);
+        }
+        self.implements_trait_here(ty, want, depth)
+    }
+
+    fn implements_trait_here(&self, ty: &HirTy, want: &TraitRef, depth: u32) -> bool {
         let trait_key = want.path.as_str();
         if trait_key == reflect::REFLECT {
             return true;
@@ -4368,6 +4453,71 @@ impl<'a> LowerCtx<'a> {
                 .any(|(gi, subst)| {
                     want.is_plain() || self.generic_impl_ref(gi, &subst).satisfies(want)
                 })
+            || self.unify_impl(ty, want, depth)
+    }
+
+    /// During an inference, `List<i32>: FromIterator<#var>`: the one impl
+    /// of the trait for `ty` fixes the open arguments.
+    fn unify_impl(&self, ty: &HirTy, want: &TraitRef, depth: u32) -> bool {
+        // An open literal with the trait on one number type of its kind.
+        if matches!(ty, HirTy::Var(_)) {
+            let works = |t: &HirTy| self.implements_trait(t, want, depth + 1);
+            // Its default has it: the variable stays open.
+            if infer::literal_default(self, ty).is_some_and(|d| infer::trial(self, &|| works(&d)))
+                || infer::pick_literal_type(self, ty, &works).is_some()
+            {
+                return true;
+            }
+        }
+        let open = |t: &HirTy| infer::has_var(self, t);
+        if !infer::active(self)
+            || !(open(ty) || want.args.iter().any(open) || want.binds.iter().any(|(_, t)| open(t)))
+        {
+            return false;
+        }
+        // `Box<#var>: Width` with `impl Width for Box<i32>`: the one choice
+        // of number types with the impl.
+        let mut lits = Vec::new();
+        infer::open_literals_in(self, ty, &mut lits);
+        let open_want = want.args.iter().any(open) || want.binds.iter().any(|(_, t)| open(t));
+        if !lits.is_empty() && !matches!(ty, HirTy::Var(_)) && !open_want {
+            let works = |t: &HirTy| self.implements_trait(t, want, depth + 1);
+            if infer::trial(self, &|| works(&infer::zonk(self, ty))) {
+                return true;
+            }
+            infer::pick_literals_or(self, ty, &works, &|_| false, false);
+            let solved = infer::resolve(self, ty);
+            if solved != *ty && !infer::has_var(self, &solved) {
+                return works(&solved);
+            }
+        }
+        let mut cands: Vec<TraitRef> = self.env.impls.refs_of(ty, &want.path).cloned().collect();
+        cands.extend(
+            self.generic_impls(ty, Pick::Trait(&want.path), depth)
+                .map(|(gi, subst)| self.generic_impl_ref(gi, &subst)),
+        );
+        // `ListIter<#var>: Iterator<Item = i32>`: the impl's `Item`
+        // meets the wanted one. Of several impls (`Add<i32>`, `Add<str>`
+        // for `M + 2`), the one the open arguments can take.
+        let fits = |one: &TraitRef| {
+            one.args.len() == want.args.len()
+                && one
+                    .args
+                    .iter()
+                    .zip(&want.args)
+                    .all(|(a, b)| infer::unify(self, a, b))
+                && want.binds.iter().all(|(n, b)| {
+                    one.binds
+                        .iter()
+                        .find(|(m, _)| m == n)
+                        .is_none_or(|(_, a)| infer::unify(self, a, b))
+                })
+        };
+        let mut open = cands.iter().filter(|c| infer::trial(self, &|| fits(c)));
+        match (open.next(), open.next()) {
+            (Some(one), None) => fits(one),
+            _ => false,
+        }
     }
 
     /// Generic impls `keep` picks (`trait_key` `""`: inherent) covering
@@ -4505,6 +4655,12 @@ impl<'a> LowerCtx<'a> {
             goals.push((rcx.resolve_ast_ty(&w.ty), &w.bounds));
         }
         for (bty, bounds) in goals {
+            // An open variable is checked once solved; an open literal
+            // takes the one number type that meets the bound.
+            let bty = infer::resolve(self, &bty);
+            if infer::unsolved(self, &bty) {
+                continue;
+            }
             for b in bounds {
                 let Some(want) = self.bound_ref(b, &gi.module, |t| rcx.resolve_ast_ty(t)) else {
                     continue;
@@ -4574,6 +4730,7 @@ impl<'a> LowerCtx<'a> {
             }
             self.check_const_args(g, &args)?;
         }
+        infer::unify_def_bounds(self, base, &args);
         self.env.defs.instantiate_struct(base, args, span, in_base)
     }
 
@@ -4615,6 +4772,7 @@ impl<'a> LowerCtx<'a> {
             }
             self.check_const_args(&def.generics, &args)?;
         }
+        infer::unify_def_bounds(self, base, &args);
         self.env
             .defs
             .instantiate_enum(base, args, span, |def, subst| {
@@ -5561,6 +5719,12 @@ impl<'a> LowerCtx<'a> {
         if let HirTy::Param(p) = base {
             return bounds::project(self, *p, name, traits, args);
         }
+        // An open literal: as the type it holds, `Self` there staying
+        // the literal (`<#var as Add>::Output`).
+        if let Some(d) = infer::literal_default(self, base) {
+            let r = self.project(&d, name, traits, args)?;
+            return Some(if r == d { base.clone() } else { r });
+        }
         let key = (
             base.clone(),
             name.to_owned(),
@@ -5576,6 +5740,10 @@ impl<'a> LowerCtx<'a> {
         let args_fit = |t: &str, have: &[HirTy]| {
             args.iter().filter(|w| w.path == t).all(|want| {
                 want.args.iter().zip(have).all(|(w, h)| {
+                    // An open literal fits what it can become.
+                    if infer::literal_default(self, w).is_some() {
+                        return infer::trial(self, &|| infer::unify(self, w, h));
+                    }
                     let mut open = Vec::new();
                     collect_unknown_paths(w, &mut open);
                     collect_unknown_paths(h, &mut open);
@@ -5844,7 +6012,10 @@ impl<'a> LowerCtx<'a> {
     fn sig_of_key(&self, key: &str) -> FnSig {
         let mut sig = self.env.sig(key).expect("a signature").clone();
         if self.env.infers_ret(sig.id) {
-            sig.ret_ty = mono::decl_ret(self, sig.id, sig.ret_ty);
+            sig.ret_ty = match mono::opaque_ret(self, sig.id) {
+                Some(p) => mono::with_ok(sig.ret_ty, p),
+                None => mono::decl_ret(self, sig.id, sig.ret_ty),
+            };
         }
         sig
     }

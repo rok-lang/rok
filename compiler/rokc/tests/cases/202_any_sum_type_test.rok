@@ -11,8 +11,8 @@
 // member's tag; the binder is the value narrowed to the sum.
 fn wide(w: any) -> str {
     match w {
-        x: i32 | str => match x {
-            n: i32 => f"num {n}",
+        x: i64 | str => match x {
+            n: i64 => f"num {n}",
             s: str => f"str {s}",
         },
         _ => "other",
@@ -22,13 +22,13 @@ fn wide(w: any) -> str {
 fn main() {
     let w: any = 5;
     let w2: any = 1.5;
-    println(f"{w is (i32 | str)}");
-    println(f"{w2 is (i32 | str)}");
+    println(f"{w is (i64 | str)}");
+    println(f"{w2 is (i64 | str)}");
     println(wide(w));
     println(wide("q"));
     println(wide(w2));
     // A sum value stored whole matches its own type pattern too.
-    let s: i32 | str = "whole";
+    let s: i64 | str = "whole";
     println(wide(s));
 }
 

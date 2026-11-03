@@ -566,6 +566,11 @@ pub fn walk_ty(v: &mut impl AstVisitor, t: &Ty) {
                 walk_path_generics(v, b);
             }
         }
+        TyKind::Some(bounds) => {
+            for b in bounds {
+                walk_ty(v, b);
+            }
+        }
         TyKind::Throws { ok, err } => {
             walk_ty(v, ok);
             walk_ty(v, err);

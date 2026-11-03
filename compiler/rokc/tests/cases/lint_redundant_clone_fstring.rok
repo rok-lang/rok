@@ -1,6 +1,6 @@
 // expect-exit: 0
-// expect-lint: 21:13 redundant `.clone()` of a `i32`: the value is copied anyway
-// expect-lint: 22:16 redundant `.clone()` of a `i32`: the value is copied anyway
+// expect-lint: 21:13 redundant `.clone()` of a `i64`: the value is copied anyway
+// expect-lint: 22:16 redundant `.clone()` of a `i64`: the value is copied anyway
 // expect-stdout:
 // [1, 2] 2 1
 // {"a": 1} 2

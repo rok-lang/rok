@@ -1653,7 +1653,7 @@ fn very_verbose_lists_files_and_instances() {
     let stderr = text(&out.stderr);
     assert!(stderr.contains("     Reading src/main.rok\n"), "{stderr}");
     assert!(
-        stderr.contains(" Specialized id(x: i32) -> i32\n"),
+        stderr.contains(" Specialized id(x: i64) -> i64\n"),
         "{stderr}"
     );
     let out = rokc(None, &app, &["emit", "-v", "--emit=hir"]);

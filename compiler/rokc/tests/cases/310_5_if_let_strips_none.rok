@@ -1,0 +1,74 @@
+// expect-exit: 0
+// expect-stdout:
+// 4
+// 2
+// 1
+// idx 2
+// a b
+// 11
+// 20
+// none
+// 30
+// pos
+// one
+// 2
+// ok
+
+// `if let x = e`, `while let x = e` and `let x = e else { .. }` on an
+// optional `e` bind the value without its `none`; `x != none`,
+// `x == none` with an `else`, and a guard that leaves narrow `x`.
+
+fn find(xs: List<i32>, v: i32) -> usize | none {
+    for i in 0..xs.len() { if xs[i] == v { return i; } }
+    none
+}
+
+fn pair(s: str) -> (str, str) | none { s.split_once("=") }
+
+fn three(n: i32) -> i32 | str | none {
+    if n == 0 { return none; }
+    if n == 1 { return "one"; }
+    n
+}
+
+fn parse_opt(s: str) throws -> i32 | none {
+    if s == "" { return none; }
+    try s.parse::<i32>()
+}
+
+fn first_word(s: str) -> str {
+    let w = s.split(" ").next() else { return ""; };
+    w
+}
+
+fn main() {
+    let xs: List<i32> = [1, 2, 3];
+    if let x = xs.pop() { println(x + 1); }
+    let jobs: List<List<i32>> = [[1], [2, 3]];
+    while let job = jobs.pop() { println(job.len()); }
+    let i = find([5, 6, 7], 7) else { return; };
+    println(f"idx {i}");
+    if let (k, v) = pair("a=b") { println(f"{k} {v}"); }
+    let o = find(xs, 1);
+    if o != none { println(o + 11); }
+    if o == none { println("none"); } else { println(o + 20); }
+    let p = find(xs, 9);
+    if p == none { println("none"); } else { println(p); }
+    let q = find(xs, 2);
+    if q == none { return; }
+    println(q + 29);
+    let u = find(xs, 2);
+    if u != none && u > 0 { println("pos"); }
+    // A wider sum keeps its other members.
+    let t = three(1);
+    if let w = t {
+        match w {
+            s: str => println(s),
+            n: i32 => println(f"{n}"),
+        }
+    }
+    // One layer: `try?` of an optional result is `(T | none)?`.
+    let r = try? parse_opt("2");
+    if let y = r { println(y ?? 0); }
+    if first_word("ok go") == "ok" { println("ok"); }
+}

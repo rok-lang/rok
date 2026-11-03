@@ -1,4 +1,4 @@
 // `NonZero(0)` outside its module would break the niche; only `new` builds one.
-// expect-error: field `0` of `NonZero<i32>` is private
+// expect-error: field `0` of `NonZero<i64>` is private
 
 fn main() -> i32 { let n = num::niche::NonZero(0); return n.get(); }
