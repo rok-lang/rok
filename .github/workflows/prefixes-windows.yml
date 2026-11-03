@@ -3,7 +3,7 @@ name: prefixes (windows)
 # Build the pinned Windows LLVM prefix in CI and publish it to S3 at
 # llvm/<version>/x86_64-pc-windows-msvc/llvm.tar.gz (for llvm-prefix). A cold
 # build is ~6 h on a 2-core runner (the job limit); a larger runner finishes
-# well under it, so no box or pre-staged llvm-src.tar.gz. Run once per version,
+# well under it. Run once per version,
 # or when a build script or the PGO profile changes. Keyless OIDC
 # (rok-ci-artifacts).
 #
