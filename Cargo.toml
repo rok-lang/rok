@@ -109,6 +109,11 @@ panic = "abort"
 [profile.dev.package.rokc_parser]
 opt-level = 1
 
+# The hand-off check is BTreeMap and Vec heavy: unoptimized, a debug
+# `rokc check` spends ~5x as long in it.
+[profile.dev.package.rokc_hir]
+opt-level = 1
+
 # The runtime is linked into every program a dev rokc builds: unoptimized,
 # its collector is ~6x slower and GC-heavy programs (tests included) crawl.
 [profile.dev.package.rokr]
