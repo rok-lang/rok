@@ -841,4 +841,3 @@ impl<const N: usize> DotLogicalOr for [bool; N] {
         array_zip(self, self, rhs, |a: bool, b: bool| -> bool { a || b })
     }
 }
-
