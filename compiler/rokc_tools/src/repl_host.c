@@ -1641,6 +1641,9 @@ static struct book {
     // The runtime's threads the last rollback ended or found ended.
     uint64_t lost[THREADS];
     size_t nlost;
+    // Idle pool workers kept suspended while the cell runs (`park`).
+    HANDLE parked[THREADS];
+    size_t nparked;
     // Allocations not saved or freed: stacks, TEBs, the bookkeeping.
     char *excl[2 * THREADS + 4];
     size_t nexcl;
@@ -1660,6 +1663,8 @@ enum { BOOK_SIZE = 16 << 20 };
 static DWORD main_thread;
 // ntdll's image: where the system thread pool's workers start.
 static const char *ntdll;
+// The syscall stub idle pool workers wait in.
+static const char *pool_wait;
 // The main thread's yield flag, and the bit of it that interrupts the
 // cell (the runtime raises and clears only bit 0).
 static unsigned char *main_yield;
@@ -1860,6 +1865,8 @@ static int save_watched(void) {
     return 1;
 }
 
+static void park(void);
+
 // Save the session before the cell. 0: no room; -1: Ctrl-C while waiting
 // for quiet, so the cell doesn't run.
 static int checkpoint(void) {
@@ -1924,6 +1931,7 @@ static int checkpoint(void) {
         memcpy(book->copy + t->copy, t->sp, (size_t)(t->base - t->sp));
     }
     ok = ok && save_watched();
+    park();
     resume_others();
     rok_session_resume();
     return ok;
@@ -2057,6 +2065,30 @@ static int pool_worker(size_t i) {
     // 9: ThreadQuerySetWin32StartAddress.
     return !NtQueryInformationThread(book->handle[i], 9, &start, sizeof start, NULL) &&
            VirtualQuery(start, &m, sizeof m) == sizeof m && m.alloc == ntdll;
+}
+
+// At the checkpoint: idle pool workers (the loader's from process start,
+// the system pool's) stay suspended until the cell ends. One that woke
+// or timed out and exited during the cell would leave restored pool
+// memory pointing at a gone thread and stack; suspended, the pool makes
+// new workers for work the cell posts. Busy ones may hold a lock the
+// cell needs, so they run on.
+static void park(void) {
+    for (size_t i = 0; i < book->nthreads; i++) {
+        const struct before *t = &book->before[i];
+        const char *pc = (const char *)ctx_word(&t->ctx, CTX_PC);
+        if (t->rok || !pool_wait || pc < pool_wait || pc >= pool_wait + 32 || !pool_worker(i)) continue;
+        book->parked[book->nparked++] = book->handle[i];
+        book->handle[i] = NULL;
+    }
+}
+
+static void unpark(void) {
+    for (size_t i = 0; i < book->nparked; i++) {
+        ResumeThread(book->parked[i]);
+        CloseHandle(book->parked[i]);
+    }
+    book->nparked = 0;
 }
 
 static void rollback(void) {
@@ -2195,6 +2227,7 @@ int main(void) {
     book->cap = (BOOK_SIZE - sizeof *book) / sizeof *book->regions;
     main_thread = GetCurrentThreadId();
     ntdll = (const char *)GetModuleHandleA("ntdll.dll");
+    pool_wait = GetProcAddress((HANDLE)ntdll, "NtWaitForWorkViaWorkerFactory");
     main_yield = rok_tls_addr() + ROK_TLS_YIELD_FLAG;
     rok_set_exit_hook(on_exit_hook);
     SetUnhandledExceptionFilter(on_fault);
@@ -2240,6 +2273,7 @@ int main(void) {
             book->nwhy = 11;
         }
         int ok = saved > 0 && run_cell(ir, n);
+        unpark();
         free(ir);
         if (!ok) {
             // The stack's guard page again, after an overflow.
