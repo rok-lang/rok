@@ -2498,7 +2498,12 @@ impl<'a> Parser<'a> {
         let generics = self.parse_generic_params();
         let mut where_clause = self.parse_where_clause();
         self.expect(&TokenKind::Eq, "`=`")?;
-        let ty = self.parse_type()?;
+        // `type X = some Tr;`: a named opaque type.
+        let ty = if self.at_some_type() {
+            self.parse_some_type()?
+        } else {
+            self.parse_type()?
+        };
         // `type A<T> = B<T> where T: X;` reads the same.
         where_clause.extend(self.parse_where_clause());
         self.expect(&TokenKind::Semi, "`;`")?;

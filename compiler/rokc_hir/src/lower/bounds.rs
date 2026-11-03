@@ -1196,6 +1196,21 @@ pub(super) fn no_method(ctx: &LowerCtx<'_>, p: u32, method: &str, span: Span) ->
         )));
         return e;
     }
+    // `type X = some Tr;` outside its module.
+    if let Some(x) = super::mono::some_of_param(ctx.env, &HirTy::Param(p)) {
+        let home = super::mono::some_home(&x);
+        let e = ctx.error_expr(
+            Code::NO_METHOD,
+            span,
+            format!("no method `{method}` on `{t}`: outside {home}, only its bounds are visible"),
+        );
+        ctx.help_last(Some(format!(
+            "use a method of {}, or call `{method}` in a function of {home}, where `{t}` is \
+             its concrete type",
+            bounds.join(" / ")
+        )));
+        return e;
+    }
     let e = ctx.error_expr(
         Code::NO_METHOD,
         span,

@@ -274,10 +274,33 @@ fn cut(f: &FnDef) -> bool {
         && !f.attrs.iter().any(|a| a.path == [rokc_ast::EXTERN_FN_ATTR])
 }
 
+/// Whether `f` returns one of its module's `type X = some Tr;` (named in
+/// `some`): it defines `X`, so dependents need its body.
+fn defines_some(f: &FnDef, some: &[&str]) -> bool {
+    let Some(rokc_ast::TyKind::Path(p)) = f.ret_ty.as_ref().map(|t| &t.kind) else {
+        return false;
+    };
+    match p.segments.as_slice() {
+        [s] => some.contains(&s.name.as_str()),
+        [m, s] => m.name == "self" && some.contains(&s.name.as_str()),
+        _ => false,
+    }
+}
+
 fn cut_spans(items: &[Item], out: &mut Vec<(rokc_diagnostic::Span, rokc_diagnostic::Span)>) {
+    let some: Vec<&str> = (items.iter())
+        .filter_map(|i| match i {
+            Item::TypeAlias(a) if matches!(a.ty.kind, rokc_ast::TyKind::Some(_)) => {
+                Some(a.name.as_str())
+            }
+            _ => None,
+        })
+        .collect();
     for item in items {
         match item {
-            Item::Fn(f) if cut(f) => out.push((f.span, f.body.as_ref().map_or(f.span, |b| b.span))),
+            Item::Fn(f) if cut(f) && !defines_some(f, &some) => {
+                out.push((f.span, f.body.as_ref().map_or(f.span, |b| b.span)));
+            }
             Item::Impl(i) if i.generics.params.is_empty() => {
                 for it in &i.items {
                     if let ImplItem::Method(m) = it {

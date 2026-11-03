@@ -6092,7 +6092,11 @@ pub(super) fn call_sig(
     }
     let (lowered, lets, places) = lower_args_ref(ctx, sig, callee, receiver, args, span);
     let out = ctx.env.sink.ref_out.borrow().get(&sig.id).cloned();
-    if let Some(out) = out {
+    if let Some(mut out) = out {
+        // The caller's view of a named `some` result.
+        if ctx.env.sink.opaque_check.get() {
+            out.ret.clone_from(&sig.ret_ty);
+        }
         let tys: Vec<HirTy> = out.refs.iter().map(|(_, t)| t.clone()).collect();
         // `rok.OP_assign.TYPE`: the op's result is the new `ref self`.
         let kind = match (ctx.env.intrinsic(sig.id), <[HirExpr; 2]>::try_from(lowered)) {

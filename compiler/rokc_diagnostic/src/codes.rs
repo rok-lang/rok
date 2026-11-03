@@ -828,6 +828,21 @@ codes! {
     "`b ** e` on an integer base gives an integer, so the exponent is a `u32`: `2 ** -1` \
      would be `0.5`, which no integer holds. Raise a float (`2.0 ** -1.0`, or \
      `x as f64 ** -1.0`), or keep the exponent non-negative.";
+
+    146 SOME_TYPE_DEFINITION Type "named `some` type not defined by its module"
+    "`type X = some Tr;` is one concrete type, and the functions of X's module that \
+     return `X` (`fn make() -> X { .. }`) give it from their bodies. The module has none, \
+     they give different types, or one is generic. Add a function in that module that \
+     returns `X`, return the same type from every one (have the others call the first), \
+     or keep the type parameter out of it: a generic opaque result is written \
+     `fn f<T>(..) -> some Tr`.";
+
+    147 SOME_TYPE_HIDDEN Type "named `some` type used as its concrete type"
+    "Outside the module that declares `type X = some Tr;`, `X` is a type of its own that \
+     has only `Tr`: its concrete type cannot be named, and a value of another type is not \
+     an `X`. Keep the value as `X` (fields, `let x: X`, `List<X>` and parameters can all \
+     hold one), use it through `Tr`, and get new ones from the functions of X's module. \
+     Code that needs the concrete type goes in that module.";
 }
 
 #[cfg(test)]

@@ -276,7 +276,7 @@ impl Analysis {
     }
 
     /// The `some ..` a function defined at `span` writes as its return
-    /// type.
+    /// type, or the named `some` type (`type X = some Tr;`) it returns.
     pub fn opaque_ret(&self, span: Span) -> Option<String> {
         fn find(items: &[Item], span: Span) -> Option<&rokc_ast::FnDef> {
             items.iter().find_map(|item| match item {
@@ -293,7 +293,48 @@ impl Analysis {
             .items_of(span.file)
             .find_map(|items| find(items, span))?;
         let t = f.ret_ty.as_ref()?;
-        matches!(t.kind, rokc_ast::TyKind::Some(_)).then(|| rokc_ast::print::print_ty(t))
+        let shown = match &t.kind {
+            rokc_ast::TyKind::Some(_) => true,
+            rokc_ast::TyKind::Path(p) => p
+                .segments
+                .last()
+                .is_some_and(|s| self.names_some(span.file, &s.name)),
+            _ => false,
+        };
+        shown.then(|| rokc_ast::print::print_ty(t))
+    }
+
+    /// `type name = some ..;` as declared in the compile's sources.
+    pub fn some_alias(&self, name: &str) -> Option<String> {
+        fn find(items: &[Item], name: &str) -> Option<String> {
+            items.iter().find_map(|item| match item {
+                Item::TypeAlias(a)
+                    if a.name == name && matches!(a.ty.kind, rokc_ast::TyKind::Some(_)) =>
+                {
+                    Some(format!(
+                        "type {name} = {}",
+                        rokc_ast::print::print_ty(&a.ty)
+                    ))
+                }
+                Item::Mod(m) => find(m.items.as_deref().unwrap_or_default(), name),
+                _ => None,
+            })
+        }
+        self.sources.iter().find_map(|f| find(&f.items, name))
+    }
+
+    /// Whether `file` declares `type name = some ..;`.
+    fn names_some(&self, file: u32, name: &str) -> bool {
+        fn find(items: &[Item], name: &str) -> bool {
+            items.iter().any(|item| match item {
+                Item::TypeAlias(a) => {
+                    a.name == name && matches!(a.ty.kind, rokc_ast::TyKind::Some(_))
+                }
+                Item::Mod(m) => find(m.items.as_deref().unwrap_or_default(), name),
+                _ => false,
+            })
+        }
+        self.items_of(file).any(|items| find(items, name))
     }
 
     /// The `some ..` parameters of the function defined at `span`, by

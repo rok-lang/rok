@@ -1425,6 +1425,46 @@ println(it.count());
     );
 }
 
+/// A named `some` type hovers as its name: its defining function, the
+/// values it gives, and the alias itself as declared.
+#[test]
+fn hover_named_some_type() {
+    let src = "\
+type Evens = some Iterator<Item = i32>;
+fn evens(n: i32) -> Evens {
+    (0..n).filter(|x| x % 2 == 0)
+}
+let it = evens(4);
+println(it.count());
+";
+    let msgs = std_session("lsp-hover-named-some", src, |uri| {
+        vec![
+            request(1, "textDocument/hover", at(uri, 4, 10)),
+            request(2, "textDocument/hover", at(uri, 5, 9)),
+            request(3, "textDocument/hover", at(uri, 0, 6)),
+        ]
+    });
+    let value = |id| {
+        reply(&msgs, id)
+            .get("contents")
+            .get("value")
+            .as_str()
+            .unwrap_or("")
+            .to_owned()
+    };
+    assert!(
+        value(1).contains("fn evens(n: i32) -> Evens"),
+        "{}",
+        value(1)
+    );
+    assert!(value(2).contains("it: Evens"), "{}", value(2));
+    assert!(
+        value(3).contains("type Evens = some Iterator<Item = i32>"),
+        "{}",
+        value(3)
+    );
+}
+
 /// A `some Tr` parameter hovers as written, at the call and the definition.
 #[test]
 fn hover_some_param() {

@@ -1,0 +1,48 @@
+//! A library that exports named `some` types: dependents see only the
+//! bounds, and its own module sees the concrete types.
+
+/// The even numbers below a bound.
+pub type Evens = some Iterator<Item = i64>;
+
+/// A value that prints.
+pub type Label = some Display;
+
+/// A private concrete type behind `Label`.
+struct Tag { n: i64; }
+
+impl Display for Tag {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"tag {self.n}") }
+}
+
+fn below(n: i64) -> Range<i64> { 0..n }
+
+/// The even numbers below `n`.
+pub fn evens(n: i64) -> Evens {
+    below(n).filter(|x| x % 2 == 0)
+}
+
+/// A label for `n`.
+pub fn label(n: i64) -> Label {
+    Tag { n: n }
+}
+
+/// The label's number: here `Label` is `Tag`.
+pub fn number(l: Label) -> i64 {
+    l.n
+}
+
+/// A number, as far as dependents know only one that prints.
+pub type Count = some Display;
+
+/// Three.
+pub fn three() -> Count { 3 }
+
+/// A counter that hands out labels.
+pub struct Labels { pub next: i64; }
+
+impl Labels {
+    pub fn take(ref self) -> Label {
+        self.next += 1;
+        label(self.next)
+    }
+}

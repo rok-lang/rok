@@ -652,6 +652,11 @@ pub(super) fn resolve_ty_with_structs(
                 }
                 return HirTy::Path(segs.iter().map(|s| (*s).to_owned()).collect());
             };
+            // Named `some`: fixed once its defining functions are lowered.
+            if sc.names.some_types.contains_key(&full) {
+                let known = sc.names.some_concrete.borrow().get(&full).cloned();
+                return known.unwrap_or_else(|| HirTy::Path(vec![full]));
+            }
             if sc.names.is_trait(&full) {
                 let written = segs.join("::");
                 sc.names.error_help(
