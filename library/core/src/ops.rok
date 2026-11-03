@@ -62,7 +62,7 @@ pub trait Rem<Rhs = Self> {
 /// `**`: power. Binds tighter than prefix `-` and to the right:
 /// `-x**2` is `-(x**2)`, `2**3**2` is `2**(3**2)`. An integer base
 /// takes a `u32` exponent (overflow is the arithmetic's); a float base
-/// a float (`powf`) or an `i32` (`powi`).
+/// a float (`pow`) or an `i32` (`powi`).
 pub trait Pow<Rhs = Self> {
     type Output;
     /// `self ** rhs`.

@@ -4,8 +4,8 @@
 // expect-error: 25:13: no method `contains` on `some Iterator<Item = i32>`: callers see only its bounds
 // expect-error: 26:25: mismatched types: `let b` expects `Range<i32>`, found `some Iterator<Item = i32>`
 
-// `some Tr` is one concrete type that has `Tr`, written only as a
-// return type; callers get only what `Tr` gives.
+// A `some Tr` return type is one concrete type that has `Tr`;
+// callers get only what `Tr` gives.
 
 fn r(n: i32) -> some Iterator<Item = i32> {
     0..n

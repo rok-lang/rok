@@ -8,7 +8,7 @@
 // name = str
 // email = str
 
-// The `User` example - an `i32` literal sets a `u64`
+// The `User` example - an unsuffixed literal sets a `u64`
 // field (it fits) - and `dump_struct` over `T: Inspect`.
 #[derive(Inspect)]
 struct User {

@@ -47,7 +47,7 @@ fn main() -> i32 {
     }
     println(f"{total}");
 
-    // Inferred from the first entry: `Dict<i32, bool>` / `Set<i32>`.
+    // From the entries and later uses: `Dict<i64, bool>` / `Set<i32>`.
     let flags = {1: true, 2: false, 3: true};
     println(f"{flags.len() as i32}");
     let s = {1, 2, 3};

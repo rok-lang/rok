@@ -12,7 +12,7 @@
 // `int` never wraps (the 10^42 example), `/` truncates
 // (`7 / 2 = 3`, `-7 / 2 = -3`), Eq / Ord / Hash; `let big: int
 // = 9999999999;`; `int + int = int`, `a + int::from_i32(b)`;
-// 2.1.5 Zero / One drive `sum` / `product`; 2.13.10 default is 0.
+// `Zero` / `One` drive `sum` / `product`; the `Default` is 0.
 fn main() {
     let big: int = 1;
     big = big * 1000;

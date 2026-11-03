@@ -7,7 +7,7 @@
 // W { v = 5 }
 // true
 
-// / 6.9.2-6.9.3: a user derive generating a trait impl over
+// A user derive generating a trait impl over
 // the fields (`@Self`, `@for_fields`, `@field`, `@field.name`,
 // `@field.type`, `.as_str()`), on named / tuple / generic structs.
 fn fmt_show<T: Display>(v: T) -> str { f"{v}" }

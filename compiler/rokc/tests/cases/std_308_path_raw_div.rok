@@ -10,7 +10,7 @@
 // maximal a��b�
 // bytes 3
 
-// `Div<str>` and `Div<Path>` on `Path` (and `/=`); 3.8.4 /
+// `Div<str>` and `Div<Path>` on `Path` (and `/=`);
 // `RawPath` (`from_bytes`, `as_bytes`, `to_path`,
 // `to_path_lossy`), `Path::to_raw`, `Path::try_from(raw)` throwing
 // `Utf8Error`.

@@ -41,7 +41,7 @@ fn fill_raw(what: str, b: GcBuf<u8>, off: usize, len: usize) {
 }
 
 // Generators. `Rng` is the interface: one required `next_u64`, the rest
-// derived from it in ways the spec fixes, so a seeded generator gives the
+// derived from it in fixed ways, so a seeded generator gives the
 // same values on every target and release. A new algorithm gets a new
 // type; a type's stream never changes.
 

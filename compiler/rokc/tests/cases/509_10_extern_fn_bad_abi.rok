@@ -1,7 +1,7 @@
 // expect-error: 5:19: `extern "fastcall" fn f`: unsupported ABI (`"C"` or `"system"`)
 
-// An `extern "ABI" fn` definition takes one of the ABIs of
-// 5.9.2 that a definition can have.
+// An `extern "ABI" fn` definition takes one of the ABIs a
+// definition can have.
 extern "fastcall" fn f(x: i32) -> i32 { x }
 
 println(f"{f(1)}");

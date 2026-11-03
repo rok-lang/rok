@@ -3,9 +3,9 @@
 // i64 f64 i64 2147483648
 // i8 i16 u8 u16 u32 u64 isize usize f32 bool c_char char str int float
 
-// An unsuffixed literal is `i32` / `f64` without an
-// expected type and follows one when there is; `int` promotes past the
-// `i32` range instead of overflowing. The primitive names and the
+// An unsuffixed literal is `i64` / `f64` when nothing fixes its type
+// and follows the expected type or its uses otherwise; `int` grows past
+// any fixed width instead of overflowing. The primitive names and the
 // `int` / `float` keywords.
 fn main() {
     let n = 0;

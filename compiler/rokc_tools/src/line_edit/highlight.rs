@@ -33,7 +33,7 @@ impl Class {
 /// Keywords in place only; identifiers to the lexer.
 pub const CONTEXTUAL: &[&str] = &[
     "type", "any", "in", "where", "throws", "rethrows", "catch", "finally", "const", "static",
-    "extern", "mut", "union", "pkg",
+    "extern", "mut", "union", "some", "pkg",
 ];
 
 const PRIMITIVES: &[&str] = &[
@@ -217,6 +217,10 @@ mod tests {
         assert_eq!(classes("let s = \"abc"), [("let", Keyword), ("\"abc", Str)]);
         assert_eq!(classes("/* open"), [("/* open", Comment)]);
         assert_eq!(classes("#[test"), [("#[test", Attribute)]);
+        assert_eq!(
+            classes("fn f(x: some Display)"),
+            [("fn", Keyword), ("some", Keyword), ("Display", Type)]
+        );
         assert_eq!(classes("x.한글 + 1"), [("1", Number)]);
     }
 }
