@@ -9901,6 +9901,12 @@ fn generic_positional_args(
     ok.then_some(out)
 }
 
+/// An empty `[]` for an open `List<T>` waits for the other arguments to
+/// bind `T` (`first_or([], 9)`).
+fn empty_list_waits(e: &Expr, hint: &HirTy) -> bool {
+    matches!(&e.kind, ExprKind::List(v) if v.is_empty()) && super::mono::has_unknown(hint)
+}
+
 /// `call_generic_on` with positional (and `ref`) arguments only.
 #[allow(clippy::too_many_arguments)]
 fn call_generic_positional(
@@ -10045,7 +10051,8 @@ fn call_generic_positional(
                     && matches!(a, CallArg::Positional(x) if !is_untyped_literal(x))
             })
         });
-        if hint == HirTy::Unknown && !is_ref && bare_param && is_untyped_literal(e) {
+        let literal = hint == HirTy::Unknown && bare_param && is_untyped_literal(e);
+        if !is_ref && (literal || args.len() > 1 && empty_list_waits(e, &hint)) {
             deferred.push((i, e));
             lowered.push(poison(e.span));
             continue;
