@@ -1,0 +1,45 @@
+// expect-exit: 0
+// expect-stdout:
+// trait 3
+// inherent hi
+// by i64 7 by str s
+// false true
+
+// In a trait's default body, `self.m(..)` with `m` of that trait is the
+// impl's own `m`, also when the type has an inherent `m` or implements
+// the trait for other arguments.
+struct Box { n: i64 }
+
+impl Box {
+    fn get(self, s: str) -> str { f"inherent {s}" }
+}
+
+trait Get<T> {
+    fn get(self, x: T) -> str;
+    fn twice(self, x: T) -> str { self.get(x) }
+}
+
+impl Get<i64> for Box {
+    fn get(self, x: i64) -> str { f"trait {x}" }
+}
+
+trait Name<T> {
+    fn name(self, x: T) -> str;
+    fn show(self, x: T) -> str { self.name(x) }
+}
+
+impl Name<i64> for Box {
+    fn name(self, x: i64) -> str { f"by i64 {x}" }
+}
+
+impl Name<str> for Box {
+    fn name(self, x: str) -> str { f"by str {x}" }
+}
+
+fn main() {
+    let b = Box { n: 1 };
+    println(b.twice(3));
+    println(b.get("hi"));
+    println(f"{b.show(7)} {b.show("s")}");
+    println(f"{"ll" !in "hello"} {'z' !in "hello"}");
+}

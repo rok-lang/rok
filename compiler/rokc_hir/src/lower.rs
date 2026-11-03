@@ -1957,6 +1957,8 @@ enum MethodOrFn<'a> {
         /// A trait default body's trait parameters → this impl's
         /// arguments (`trait Dim<const D: usize>` + `impl Dim<3>`).
         subst: HashMap<String, HirTy>,
+        /// The trait's default body, not a method the impl wrote.
+        default: bool,
     },
 }
 
@@ -3201,6 +3203,9 @@ struct LowerCtx<'a> {
     /// `f::<T, 3>(..)` arguments for the generic call being lowered,
     /// read by `monomorphize_on` (empty otherwise).
     explicit_generics: HashMap<String, HirTy>,
+    /// In a trait's default body: the trait and the impl's arguments,
+    /// so `self.m(..)` is that impl's `m`, not an inherent one.
+    default_of: Option<(String, Vec<HirTy>)>,
     /// `x.m::<T>(..)`: the method call's explicit type arguments, taken
     /// by `method_call_on`.
     method_type_args: Vec<Ty>,
@@ -3427,6 +3432,7 @@ impl<'a> LowerCtx<'a> {
             nested_fns: vec![HashMap::new()],
             or_pattern_binders: Vec::new(),
             explicit_generics: HashMap::new(),
+            default_of: None,
             method_type_args: Vec::new(),
             fn_throws: None,
             try_depth: 0,

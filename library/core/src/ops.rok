@@ -568,6 +568,13 @@ impl Contains<str> for str {
     const fn contains(self, item: str) -> bool { str::contains(self, item) }
 }
 
+/// A character.
+impl Contains<char> for str {
+    const fn contains(self, item: char) -> bool {
+        str::contains(self, unsafe { rok_str_from_char(item as u32) })
+    }
+}
+
 /// `start <= item < end`.
 impl<T: PartialOrd> Contains<T> for Range<T> {
     const fn contains(self, item: T) -> bool { self.start <= item && item < self.end }

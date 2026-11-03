@@ -32,13 +32,13 @@ pub trait Iterator {
     }
 
     /// Pairs of this iterator's and `other`'s items, until either ends.
-    const fn zip<J: Iterator>(self, other: J) -> Zip<Self, J> {
-        Zip { a: self, b: other }
+    const fn zip<J: IntoIterator>(self, other: J) -> Zip<Self, J::IntoIter> {
+        Zip { a: self, b: other.into_iter() }
     }
 
     /// This iterator's items, then `other`'s (with the same item type).
-    const fn chain<J: Iterator<Item = Item>>(self, other: J) -> Chain<Self, J> {
-        Chain { a: self, b: other, first: true }
+    const fn chain<J: IntoIterator<Item = Item>>(self, other: J) -> Chain<Self, J::IntoIter> {
+        Chain { a: self, b: other.into_iter(), first: true }
     }
 
     /// At most the first `n` items.

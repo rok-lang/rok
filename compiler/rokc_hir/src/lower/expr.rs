@@ -7866,7 +7866,7 @@ pub(super) fn method_call_on(
     if let HirTy::AnyTrait(bounds) = recv_h.ty.clone() {
         return any_method_call(ctx, recv_h, &bounds, method, None, &type_args, args, span);
     }
-    let pick = match pick_method(ctx, &recv_h.ty, method, None) {
+    let pick = match pick_call_method(ctx, &recv_h.ty, method) {
         Ok(None) if trait_out_of_scope(ctx, &recv_h.ty, method, span) => {
             lower_args_only(ctx);
             return poison(span);
@@ -8085,6 +8085,42 @@ fn iter_forward(
     }
     ctx.env.sink.diagnostics.borrow_mut().truncate(since);
     None
+}
+
+/// The method a call `x.m(..)` names: `pick_method`, after `default_member`.
+fn pick_call_method<'e>(
+    ctx: &LowerCtx<'e>,
+    ty: &HirTy,
+    method: &str,
+) -> Result<Option<MethodPick<'e>>, String> {
+    match default_member(ctx, ty, method) {
+        Some(id) => Ok(Some(MethodPick::Concrete(id))),
+        None => pick_method(ctx, ty, method, None),
+    }
+}
+
+/// In a trait's default body, `self.m(..)` with `m` of that trait is the
+/// impl's own `m`: an inherent method of the same name does not win, nor
+/// another impl of the trait for other arguments.
+fn default_member(ctx: &LowerCtx<'_>, ty: &HirTy, method: &str) -> Option<FunctionId> {
+    let (key, args) = ctx.default_of.as_ref()?;
+    if ctx.self_ty.as_ref() != Some(ty) {
+        return None;
+    }
+    let mut own = ctx
+        .env
+        .methods_on(ty, method)?
+        .iter()
+        .copied()
+        .filter(|id| {
+            ctx.env
+                .method_info(*id)
+                .is_some_and(|i| i.trait_name.as_ref() == Some(key) && i.trait_args == *args)
+        });
+    match (own.next(), own.next()) {
+        (Some(id), None) => Some(id),
+        _ => None,
+    }
 }
 
 /// Keep only the diagnostics after the first `since` that `keep` accepts.

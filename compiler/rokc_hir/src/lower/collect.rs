@@ -2119,6 +2119,7 @@ fn collect<'a>(
                 module: module.clone(),
                 key,
                 subst: HashMap::new(),
+                default: false,
             });
             lib_decl.push(!package_of(&module).is_empty());
         }
@@ -2280,6 +2281,7 @@ fn collect<'a>(
                     module: trait_module.clone(),
                     key,
                     subst: body_subst,
+                    default: true,
                 });
                 // A library default in a user impl is checked with it.
                 lib_decl.push(!package_of(&module).is_empty());

@@ -493,6 +493,7 @@ fn enc_collected(c: &Collected<'_>, at: &Locs, e: &mut Enc) -> Option<()> {
                 module,
                 key,
                 subst,
+                default,
             } => {
                 match fn_def {
                     Cow::Borrowed(f) => {
@@ -508,6 +509,7 @@ fn enc_collected(c: &Collected<'_>, at: &Locs, e: &mut Enc) -> Option<()> {
                 module.enc(e);
                 key.enc(e);
                 subst.enc(e);
+                e.u(u64::from(*default));
             }
         }
     }
@@ -661,6 +663,7 @@ fn dec_borrows(p: &'static Program, d: &mut Dec<'_>, c: &mut Collected<'static>)
                 module: Codec::dec(d)?,
                 key: Codec::dec(d)?,
                 subst: Codec::dec(d)?,
+                default: d.u()? != 0,
             })
         })
         .collect::<Option<_>>()?;

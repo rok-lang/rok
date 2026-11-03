@@ -1461,6 +1461,7 @@ fn decl_ret_ok(env: &Env<'_>, id: FunctionId) -> HirTy {
                 module,
                 key,
                 subst,
+                ..
             } => {
                 let self_ty = Some(self_ty.clone());
                 let start = env.sink.next_id.get();
@@ -1795,6 +1796,11 @@ fn lower_fn_with(
         .borrow_mut()
         .insert(id, (is_const, is_std));
     let mut ctx = LowerCtx::new(env, subst, self_ty, fn_def.span);
+    if let Some(MethodOrFn::Method { default: true, .. }) = env.decl(id) {
+        ctx.default_of = env
+            .method_info(id)
+            .and_then(|i| Some((i.trait_name.clone()?, i.trait_args.clone())));
+    }
     let scope = fn_def
         .body
         .as_ref()

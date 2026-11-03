@@ -1,0 +1,39 @@
+// expect-exit: 0
+// expect-stdout:
+// true false true true
+// 1a 2b 3c
+// 5 7
+// 1 2 3 4 5
+// 10 20 30
+// [(0, 'x'), (1, 'y')]
+
+// A collection answers `zip` and `chain` directly, and both take anything
+// iterable; `c in s` tests a `char` in a `str`.
+fn main() {
+    let s = "hello";
+    let c = 'e';
+    println(f"{c in s} {'z' in s} {'z' !in s} {'l' ∈ s}");
+    let xs = [1, 2, 3];
+    let ys = ["a", "b", "c"];
+    let pairs: List<str> = [];
+    for (x, y) in xs.zip(ys) {
+        pairs.push(f"{x}{y}");
+    }
+    println(pairs.join(" "));
+    let sums: List<str> = [];
+    for (a, b) in xs.iter().zip([4, 5]) {
+        sums.push(f"{a + b}");
+    }
+    println(sums.join(" "));
+    let all: List<str> = [];
+    for v in xs.chain([4, 5]) {
+        all.push(f"{v}");
+    }
+    println(all.join(" "));
+    let d = [10, 20];
+    let more: List<i64> = d.chain([30]).collect();
+    println(f"{more[0]} {more[1]} {more[2]}");
+    let ks: List<i64> = [0, 1];
+    let z: List<(i64, char)> = ks.zip("xy".chars()).collect();
+    println(f"{z:?}");
+}
