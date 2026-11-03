@@ -1,0 +1,36 @@
+// rokc-arg: --extern somedep=tests/cases/401_6_named_some_dep
+// expect-exit: 0
+// expect-stdout:
+// 20
+// 3
+// tag 7
+// 7
+// tag 1 tag 2
+// 2
+
+// A dependency's `pub type X = some Tr;`: stored, passed and returned
+// as `X`, used through its bounds.
+
+use somedep::{Evens, Label, Labels};
+
+struct Shelf {
+    evens: Evens;
+    labels: List<Label>;
+}
+
+fn sum(e: Evens) -> i64 { e.sum() }
+
+fn again(l: Label) -> Label { l }
+
+fn main() {
+    println(sum(somedep::evens(10)));
+    let e: Evens = somedep::evens(6);
+    println(e.count());
+    let l = again(somedep::label(7));
+    println(l);
+    println(somedep::number(l));
+    let ls = Labels { next: 0 };
+    let shelf = Shelf { evens: somedep::evens(4), labels: [ls.take(), ls.take()] };
+    println(f"{shelf.labels[0]} {shelf.labels[1]}");
+    println(shelf.evens.count());
+}

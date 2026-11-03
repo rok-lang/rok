@@ -1,0 +1,67 @@
+// expect-error: 25:9: `Lost` has no defining function
+// expect-error: help: a function in this module that returns `Lost` gives its type: `fn make() -> Lost { .. }`
+// expect-error: 23:9: `odds` returns `Map<Range<i64>, i64>`, but `Evens` is `Filter<Range<i64>>` (from `evens`)
+// expect-error: help: `Evens` is one concrete type: return a `Filter<Range<i64>>` here too, or call `evens` for it
+// expect-error: 27:9: named `some` type `Gen` cannot take type parameters
+// expect-error: 31:9: generic function `count` cannot define `Count`
+// expect-error: 33:25: `bad` returns `List<i64>`, which is not `Display`
+// expect-error: help: the body's value is the one concrete type behind `some Display`: return a value that is `Display`, or write the type it has: `type Bad = List<i64>;`
+// expect-error: 51:13: no method `len` on `Evens`: outside `nums`, only its bounds are visible
+// expect-error: help: use a method of `Iterator`, or call `len` in a function of `nums`, where `Evens` is its concrete type
+// expect-error: 52:18: mismatched types: `let n` expects `i64`, found `Shown`: outside `nums`, `Shown` is opaque
+// expect-error: help: only `nums` sees what `Shown` is: keep the value as `Shown` and use it through its bounds, get one from `nums::shown`, or move this code into `nums`
+// expect-error: 47:28: mismatched types: the body of `mine` expects `Shown`, found `i64`: outside `nums`, `Shown` is opaque
+// expect-error: 64:22: mismatched types: `let r` expects `i64`, found `Root`: outside the root module, `Root` is opaque
+// expect-error: 44:29: no method `len` on `Evens`: outside `nums`, only its bounds are visible
+
+mod nums {
+    pub type Evens = some Iterator<Item = i64>;
+
+    pub fn evens(n: i64) -> Evens { (0..n).filter(|x| x % 2 == 0) }
+
+    // A second defining function must give the same type.
+    pub fn odds(n: i64) -> Evens { (0..n).map(|x| x * 2 + 1) }
+
+    pub type Lost = some Display;
+
+    pub type Gen<T> = some Iterator<Item = T>;
+
+    pub type Count = some Display;
+
+    pub fn count<T>(x: T) -> Count { 1 }
+
+    pub type Bad = some Display;
+
+    pub fn bad() -> Bad { [1, 2] }
+
+    pub type Shown = some Display;
+
+    pub fn shown() -> Shown { 5 }
+}
+
+struct Holder { e: nums::Evens; }
+
+fn take(h: Holder) -> i64 { h.e.len() }
+
+// Only `nums` defines `Shown`.
+fn mine() -> nums::Shown { 7 }
+
+fn main() {
+    let a = nums::evens(10);
+    println(a.len());
+    let n: i64 = nums::shown();
+    println(take(Holder { e: nums::evens(3) }) + n);
+    println(mine());
+}
+
+// In the root module too: other modules see only the bound.
+type Root = some Display;
+
+fn root() -> Root { 1 }
+
+mod user {
+    pub fn read() -> i64 {
+        let r: i64 = sup::root();
+        r
+    }
+}

@@ -739,6 +739,9 @@ pub(crate) fn hover(a: &Analysis, key: &str, text: &str, off: usize) -> Option<S
     {
         return Some(fenced(format!("{name}: {}", ty_name(hir, &ty))));
     }
+    if let Some(decl) = a.some_alias(name) {
+        return Some(fenced(decl));
+    }
     let doc_fns = hir
         .functions
         .iter()

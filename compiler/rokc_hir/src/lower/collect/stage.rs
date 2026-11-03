@@ -10,8 +10,8 @@ use rokc_core::codec::{Codec, Dec, Enc, Keep};
 use rokc_core::{codec_enum, codec_struct};
 
 use super::super::{
-    ClosureSink, Impl, Impls, InstanceWarns, MethodOrFn, MethodTarget, ShapeHandler, TypeDefs,
-    TypeNames,
+    ClosureSink, Impl, Impls, InstanceWarns, MethodOrFn, MethodTarget, ShapeHandler, SomeType,
+    TypeDefs, TypeNames,
 };
 use super::{Collected, Intrinsic};
 use crate::lower::{AstEnumDef, AstStructDef, Expr, FnDef, Item, Program, Ty};
@@ -702,6 +702,9 @@ impl Codec for TypeNames {
         self.canon_memo.enc(e);
         self.consts.enc(e);
         self.value_reexports.enc(e);
+        self.some_types.enc(e);
+        self.some_concrete.enc(e);
+        self.some_fields.enc(e);
     }
     fn dec(d: &mut Dec<'_>) -> Option<Self> {
         let mut n = Self::empty();
@@ -725,6 +728,9 @@ impl Codec for TypeNames {
         n.canon_memo = Codec::dec(d)?;
         n.consts = Codec::dec(d)?;
         n.value_reexports = Codec::dec(d)?;
+        n.some_types = Codec::dec(d)?;
+        n.some_concrete = Codec::dec(d)?;
+        n.some_fields = Codec::dec(d)?;
         Some(n)
     }
 }
@@ -764,6 +770,8 @@ codec_struct!(ClosureSink {
     opaque_called,
     opaque_check,
     opaque_params,
+    some_view,
+    some_params,
     default_lits,
     lit_open,
     implicit_depth,
@@ -775,6 +783,11 @@ codec_struct!(ClosureSink {
     dropped_at,
 });
 codec_struct!(InstanceWarns { instances, warns });
+codec_struct!(SomeType {
+    bounds,
+    definers,
+    span
+});
 codec_struct!(Impl {
     trait_key,
     trait_args,

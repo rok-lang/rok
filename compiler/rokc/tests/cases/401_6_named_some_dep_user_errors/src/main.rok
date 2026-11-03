@@ -1,0 +1,17 @@
+// rokc-arg: --extern somedep=tests/cases/401_6_named_some_dep
+// expect-error: 13:13: no field `n` on type `Label`: outside `somedep`, only its bounds are visible
+// expect-error: 14:18: mismatched types: `let n` expects `i64`, found `Count`: outside `somedep`, `Count` is opaque
+// expect-error: help: only `somedep` sees what `Count` is
+// expect-error: 17:22: mismatched types: the body of `mine` expects `Label`, found `str`: outside `somedep`, `Label` is opaque
+
+// Outside the library, `Evens` and `Label` have only their bounds.
+
+use somedep::{Evens, Label};
+
+fn main() {
+    let l = somedep::label(3);
+    println(l.n);
+    let n: i64 = somedep::three();
+}
+
+fn mine() -> Label { "mine" }

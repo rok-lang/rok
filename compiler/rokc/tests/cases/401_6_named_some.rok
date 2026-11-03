@@ -1,0 +1,96 @@
+// expect-exit: 0
+// expect-stdout:
+// 20
+// 2 4 6
+// 9
+// 30 true
+// 23
+// 7
+// 41
+// 12
+// 5
+
+// `type X = some Tr;`: one concrete type, given by the functions of X's
+// module that return `X`. Other modules store, pass and return `X` and
+// use only its bounds; X's own module sees the concrete type.
+
+mod nums {
+    pub type Evens = some Iterator<Item = i64>;
+
+    pub fn evens(n: i64) -> Evens {
+        (0..n).filter(|x| x % 2 == 0)
+    }
+
+    // A second defining function with the same concrete type.
+    pub fn evens_from(a: i64, n: i64) -> Evens {
+        (a..n).filter(|x| x % 2 == 0)
+    }
+
+    pub type Pair = some (Display + Ord);
+
+    pub fn pair(a: i64) -> Pair {
+        a * 10
+    }
+
+    // Here `Pair` is `i64`.
+    pub fn tens(p: Pair) -> i64 { p / 10 }
+
+    pub type Step = some fn(i64) -> i64;
+
+    pub fn step(k: i64) -> Step {
+        |x| x + k
+    }
+
+    pub struct Counter { pub n: i64; }
+
+    impl Counter {
+        pub fn evens(self) -> Evens { evens(self.n) }
+    }
+}
+
+mod store {
+    use sup::nums::Evens;
+
+    // A field and a parameter of another module's named `some` type.
+    pub struct Shelf { pub evens: Evens; pub more: List<Evens>; }
+
+    pub fn total(s: Shelf) -> i64 {
+        let t = s.evens.sum();
+        for e in s.more { t += e.sum(); }
+        t
+    }
+}
+
+// In the root module too.
+type Twice = some fn(i64) -> i64;
+
+fn twice(f: nums::Step) -> Twice {
+    |x| f(f(x))
+}
+
+// `any Tr` stays an alias of a dynamic slot.
+type Shown = any Display;
+
+fn show(xs: List<Shown>) -> str {
+    let out = "";
+    for x in xs { out = f"{out}{x}"; }
+    out
+}
+
+fn pass(e: nums::Evens) -> nums::Evens { e }
+
+fn main() {
+    println(pass(nums::evens(10)).sum());
+    let e: nums::Evens = nums::evens_from(1, 7);
+    println(e.map(|x| f"{x}").collect::<List<str>>().join(" "));
+    println(nums::evens(6).chain(nums::evens(4)).count() + 4);
+    let p = nums::pair(3);
+    println(f"{p} {p < nums::pair(4)}");
+    let s = store::Shelf { evens: nums::evens(5), more: [nums::evens(7), nums::evens(5)] };
+    println(store::total(s) - 1);
+    let f = nums::step(2);
+    println(f(5));
+    println(twice(nums::step(20))(1));
+    println(nums::Counter { n: 7 }.evens().sum());
+    println(show([nums::tens(p) + 2]));
+}

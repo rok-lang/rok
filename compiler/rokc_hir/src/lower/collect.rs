@@ -249,6 +249,124 @@ fn some_params(program: &mut Program) {
     }
 }
 
+/// `type X = some Tr;`: the free functions of X's module that return `X`
+/// define it. Each becomes `-> some Tr` (its type comes from its body);
+/// `X` is that type, opaque outside the module.
+fn some_types(
+    program: &mut Program,
+    diags: &mut Vec<rokc_diagnostic::RokDiagnostic>,
+) -> HashMap<String, super::SomeType> {
+    let mut out: HashMap<String, super::SomeType> = HashMap::new();
+    for item in &program.items {
+        let Item::TypeAlias(a) = item else { continue };
+        let AstTyKind::Some(bounds) = &a.ty.kind else {
+            continue;
+        };
+        if !a.generics.params.is_empty() || !a.where_clause.is_empty() {
+            let leaf = leaf_name(&a.name);
+            diags.push(
+                rokc_diagnostic::RokDiagnostic::error(
+                    Code::SOME_TYPE_DEFINITION,
+                    a.span,
+                    format!("named `some` type `{leaf}` cannot take type parameters"),
+                )
+                .with_help(format!(
+                    "return the opaque type from a generic function instead: `fn \
+                     {}<T>(..) -> {}`",
+                    leaf.to_lowercase(),
+                    rokc_ast::print::print_ty(&a.ty)
+                )),
+            );
+            continue;
+        }
+        out.insert(
+            a.name.clone(),
+            super::SomeType {
+                bounds: bounds.clone(),
+                definers: Vec::new(),
+                span: a.span,
+            },
+        );
+    }
+    if out.is_empty() {
+        return out;
+    }
+    let mut generic = std::collections::HashSet::new();
+    for item in &mut program.items {
+        let Item::Fn(f) = item else { continue };
+        let Some(Ty {
+            kind: AstTyKind::Path(p),
+            span,
+        }) = &f.ret_ty
+        else {
+            continue;
+        };
+        let module = module_of(&f.name);
+        let full = match p.segments.as_slice() {
+            [s] | [_, s] if p.segments.len() == 1 || p.segments[0].name == "self" => {
+                if !s.generics.is_empty() {
+                    continue;
+                }
+                if module.is_empty() {
+                    s.name.clone()
+                } else {
+                    format!("{module}::{}", s.name)
+                }
+            }
+            _ => continue,
+        };
+        let Some(st) = out.get_mut(&full) else {
+            continue;
+        };
+        if !f.generics.params.is_empty() {
+            generic.insert(full.clone());
+            diags.push(
+                rokc_diagnostic::RokDiagnostic::error(
+                    Code::SOME_TYPE_DEFINITION,
+                    f.span,
+                    format!(
+                        "generic function `{}` cannot define `{}`",
+                        leaf_name(&f.name),
+                        leaf_name(&full)
+                    ),
+                )
+                .with_help(format!(
+                    "`{}` is one type, which a generic body would make per call: drop the \
+                     type parameters, or write `-> {}` for a type per call",
+                    leaf_name(&full),
+                    rokc_ast::print::print_ty(&Ty {
+                        kind: AstTyKind::Some(st.bounds.clone()),
+                        span: *span,
+                    })
+                )),
+            );
+            continue;
+        }
+        st.definers.push(f.name.clone());
+        f.ret_ty = Some(Ty {
+            kind: AstTyKind::Some(st.bounds.clone()),
+            span: *span,
+        });
+    }
+    for (name, st) in &out {
+        if st.definers.is_empty() && !generic.contains(name) {
+            let leaf = leaf_name(name);
+            diags.push(
+                rokc_diagnostic::RokDiagnostic::error(
+                    Code::SOME_TYPE_DEFINITION,
+                    st.span,
+                    format!("`{leaf}` has no defining function"),
+                )
+                .with_help(format!(
+                    "a function in this module that returns `{leaf}` gives its type: `fn \
+                     make() -> {leaf} {{ .. }}`"
+                )),
+            );
+        }
+    }
+    out
+}
+
 fn add_lazy_static_inits(program: &mut Program) {
     let inits: Vec<Item> = program
         .items
@@ -715,6 +833,7 @@ fn collect<'a>(
     pub_signatures(owned, &mut pre_diags);
     implicit_generics(owned);
     some_params(owned);
+    let some_tys = some_types(owned, &mut pre_diags);
     let err = |code: Code, pre: &mut Vec<rokc_diagnostic::RokDiagnostic>, at: Span, msg: String| {
         pre.push(rokc_diagnostic::RokDiagnostic::error(code, at, msg));
     };
@@ -859,7 +978,11 @@ fn collect<'a>(
         .mod_vis
         .extend(super::resolve::module_visibility(&program.items));
     names.uses.clone_from(uses);
+    names.some_types.extend(some_tys);
     for it in &program.items {
+        if matches!(it, Item::TypeAlias(a) if matches!(a.ty.kind, AstTyKind::Some(_))) {
+            continue;
+        }
         match it {
             Item::TypeAlias(a) if !a.generics.params.is_empty() || !a.where_clause.is_empty() => {
                 names.generic_aliases.insert(a.name.clone(), a.clone());
@@ -1067,6 +1190,23 @@ fn collect<'a>(
             .enumerate()
             .map(|(i, s)| (struct_id(i), *s)),
     );
+    if !names.some_types.is_empty() {
+        let leaves: Vec<&str> = names.some_types.keys().map(|x| leaf_name(x)).collect();
+        for (i, s) in new_structs.iter().enumerate() {
+            let tys: Vec<Ty> = match &s.kind {
+                rokc_ast::StructKind::Named(fs) => fs.iter().map(|f| f.ty.clone()).collect(),
+                rokc_ast::StructKind::Tuple(fs) => fs.iter().map(|f| f.ty.clone()).collect(),
+                rokc_ast::StructKind::Unit => continue,
+            };
+            let mut v = mono::SomePaths(Vec::new());
+            for t in &tys {
+                crate::walk::walk_ty(&mut v, t);
+            }
+            if s.generics.params.is_empty() && v.0.iter().any(|l| leaves.contains(&l.as_str())) {
+                names.some_fields.push((struct_id(i), tys));
+            }
+        }
+    }
 
     // Pass 1c: module-level `const`s, kept as AST and inlined at each
     // use; `static`s get global storage (`HirStaticDef`).
@@ -1246,7 +1386,7 @@ fn collect<'a>(
     // (a use expands the alias where it is resolved).
     for item in &program.items {
         if let Item::TypeAlias(a) = item {
-            if !a.generics.params.is_empty() {
+            if !a.generics.params.is_empty() || matches!(a.ty.kind, AstTyKind::Some(_)) {
                 continue;
             }
             let module = module_of(&a.name);
@@ -1265,7 +1405,11 @@ fn collect<'a>(
             .items
             .iter()
             .filter_map(|i| match i {
-                Item::TypeAlias(a) if a.generics.params.is_empty() => Some((a.name.as_str(), a)),
+                Item::TypeAlias(a)
+                    if a.generics.params.is_empty() && !matches!(a.ty.kind, AstTyKind::Some(_)) =>
+                {
+                    Some((a.name.as_str(), a))
+                }
                 _ => None,
             })
             .collect();
@@ -2476,7 +2620,30 @@ fn collect<'a>(
         sigs.insert(id, sig);
     }
     install_sigs(&mut env.fn_table, &sigs);
+    if !env.names.some_types.is_empty() {
+        // Named `some` types: their defining bodies give them, and the
+        // signatures that wrote one take it.
+        mono::solve_some_types(&env);
+        let open: HashMap<FunctionId, FnSig> = (first_decl..env.decls.len())
+            .filter_map(|i| {
+                let id = FunctionId(u32::try_from(i).expect("FunctionId overflow"));
+                let base = &env.fn_table[&env.key_of[&id]];
+                let mut paths = Vec::new();
+                for t in base.param_tys.iter().chain([&base.ret_ty]) {
+                    collect_unknown_paths(t, &mut paths);
+                }
+                paths
+                    .iter()
+                    .any(|p| env.names.some_types.contains_key(p))
+                    .then(|| (id, mono::decl_sig(&env, i, base)))
+            })
+            .collect();
+        install_sigs(&mut env.fn_table, &open);
+        sigs.extend(open);
+        env.sink.opaque_called.set(false);
+    }
     resolve_open_members(&env, &struct_decls, &enum_decls);
+    env.sink.opaque_called.set(false);
     // One extern namespace; a second declaration with another
     // signature is an error, reported against the runtime's declaration
     // (`rok::core::rt`) when one is involved.

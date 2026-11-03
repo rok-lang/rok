@@ -158,6 +158,25 @@ struct TypeNames {
     /// `pub use` alias key → the `const` / `static` its re-export chain
     /// ends at (both keys are in the const / static tables).
     value_reexports: HashMap<String, String>,
+    /// `type X = some Tr;` by full name.
+    some_types: HashMap<String, SomeType>,
+    /// Each named `some` type's concrete type, once its defining
+    /// functions are lowered.
+    some_concrete: std::cell::RefCell<HashMap<String, HirTy>>,
+    /// Non-generic structs with a field that writes a named `some` type:
+    /// every field's type as written.
+    some_fields: Vec<(StructId, Vec<Ty>)>,
+}
+
+/// A named opaque type `type X = some Tr;`: one concrete type, fixed by
+/// the functions of X's module that return `X`. Outside that module only
+/// the bounds are visible.
+#[derive(Clone, Debug)]
+struct SomeType {
+    bounds: Vec<Ty>,
+    /// The defining functions' full names, in source order.
+    definers: Vec<String>,
+    span: Span,
 }
 
 /// An unknown name's help: the `use` that brings it in, else a close
@@ -1794,6 +1813,8 @@ impl ClosureSink {
             opaque_called: std::cell::Cell::default(),
             opaque_check: std::cell::Cell::default(),
             opaque_params: std::cell::RefCell::default(),
+            some_view: std::cell::RefCell::default(),
+            some_params: std::cell::RefCell::default(),
             default_lits: std::cell::RefCell::default(),
             lit_open: std::cell::Cell::default(),
             implicit_depth: std::cell::Cell::default(),
@@ -1892,6 +1913,9 @@ impl TypeNames {
             consts: HashMap::new(),
             const_leaves: std::cell::OnceCell::new(),
             value_reexports: HashMap::new(),
+            some_types: HashMap::new(),
+            some_concrete: std::cell::RefCell::default(),
+            some_fields: Vec::new(),
         }
     }
 }
@@ -3080,6 +3104,11 @@ struct ClosureSink {
     /// type parameter bounded by `Tr`.
     opaque_check: std::cell::Cell<bool>,
     opaque_params: std::cell::RefCell<HashMap<FunctionId, HirTy>>,
+    /// The module whose body `opaque_check` checks: named `some` types of
+    /// other modules are opaque there.
+    some_view: std::cell::RefCell<Option<String>>,
+    /// A named `some` type as an opaque parameter, by full name.
+    some_params: std::cell::RefCell<HashMap<String, HirTy>>,
     /// Unsuffixed number literals typed by default (nothing expected one):
     /// a slot of the same kind retypes them (`coerce`).
     default_lits: std::cell::RefCell<std::collections::HashSet<Span>>,
@@ -5450,6 +5479,11 @@ impl<'a> LowerCtx<'a> {
                 let param =
                     matches!(p.segments.as_slice(), [s] if self.ty_subst.contains_key(&s.name));
                 let names = &self.env.names;
+                if !param && !names.some_types.is_empty() {
+                    if let Some(x) = self.some_type_name(p, module) {
+                        return mono::some_type_ty(self, &x);
+                    }
+                }
                 let alias = (!param && names.alias_depth.get() < 32)
                     .then(|| names.plain_alias(ty, module, self.here()))
                     .flatten();
@@ -6039,6 +6073,19 @@ impl<'a> LowerCtx<'a> {
         }
     }
 
+    /// The named `some` type path `p` names in `module`.
+    fn some_type_name(&self, p: &rokc_ast::Path, module: &str) -> Option<String> {
+        if !p.segments.last()?.generics.is_empty() {
+            return None;
+        }
+        let segs: Vec<&str> = p.segments.iter().map(|s| s.name.as_str()).collect();
+        let module = p.origin.as_deref().unwrap_or(module);
+        self.env
+            .names
+            .canon(&segs, module, &[], self.here())
+            .filter(|full| self.env.names.some_types.contains_key(full))
+    }
+
     /// Signature of function `id` (a method's, whatever its key).
     fn sig_by_id(&self, id: FunctionId) -> FnSig {
         self.sig_of_key(self.env.fn_key(id).expect("a declaration"))
@@ -6048,6 +6095,21 @@ impl<'a> LowerCtx<'a> {
     /// the declaration omits it.
     fn sig_of_key(&self, key: &str) -> FnSig {
         let mut sig = self.env.sig(key).expect("a signature").clone();
+        // Named `some` types of other modules: seen through their bounds.
+        if !self.env.names.some_types.is_empty() {
+            if let Some(decl) = self.env.decl(sig.id) {
+                let xs = mono::sig_some_types(self.env, decl.def());
+                let sink = &self.env.sink;
+                if sink.opaque_check.get() {
+                    let view = sink.some_view.borrow().clone();
+                    if view.is_some_and(|v| xs.iter().any(|x| !mono::sees_some(&v, x))) {
+                        sig = mono::decl_sig(self.env, sig.id.0 as usize, &sig);
+                    }
+                } else if xs.iter().any(|x| !mono::sees_some(&self.current_module, x)) {
+                    sink.opaque_called.set(true);
+                }
+            }
+        }
         if self.env.infers_ret(sig.id) {
             sig.ret_ty = match mono::opaque_ret(self, sig.id) {
                 Some(p) => mono::with_ok(sig.ret_ty, p),
