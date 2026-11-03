@@ -5784,7 +5784,11 @@ impl<'a> LowerCtx<'a> {
         args: &[TraitRef],
     ) -> Option<HirTy> {
         if let HirTy::Param(p) = base {
-            return bounds::project(self, *p, name, traits, args);
+            // No bound gives it: a blanket impl over the bounds may
+            // (`I: Iterator` has `IntoIterator::IntoIter`).
+            if let Some(t) = bounds::project(self, *p, name, traits, args) {
+                return Some(t);
+            }
         }
         // An open literal: as the type it holds, `Self` there staying
         // the literal (`<#var as Add>::Output`).

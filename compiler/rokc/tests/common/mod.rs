@@ -59,7 +59,8 @@
 //!   - `ROK_TEST_OPT=-O2` (or `--release`, `-O3`, ...) - build every case
 //!     at that optimization level instead of the default `-O0`.
 //!   - `ROK_TEST_FILTER=text` - only the integration cases whose name
-//!     contains `text`; `a,b` runs those containing any of them.
+//!     contains `text`; `a,b` runs those containing any of them; empty
+//!     runs every case.
 //!   - `ROK_TEST_SHARD=i/n` - only every n-th integration case of the
 //!     sorted list from the i-th (1-based), and every n-th differential
 //!     suite: CI splits a corpus over n jobs.

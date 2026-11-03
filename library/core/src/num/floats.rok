@@ -22,8 +22,8 @@ impl f64 {
     pub const MIN: f64 = -1.7976931348623157e308;
     /// The smallest positive normal value.
     pub const MIN_POSITIVE: f64 = 2.2250738585072014e-308;
-    /// Not a number.
-    pub const NAN: f64 = 0.0 / 0.0;
+    /// Not a number: the quiet NaN with the sign bit clear on every target.
+    pub const NAN: f64 = f64::from_bits(0x7ff8_0000_0000_0000);
     /// Positive infinity.
     pub const INFINITY: f64 = 1.0 / 0.0;
     /// Negative infinity.
@@ -296,8 +296,8 @@ impl f32 {
     pub const MIN: f32 = -3.40282347e38;
     /// The smallest positive normal value.
     pub const MIN_POSITIVE: f32 = 1.17549435e-38;
-    /// Not a number.
-    pub const NAN: f32 = 0.0 / 0.0;
+    /// Not a number: the quiet NaN with the sign bit clear on every target.
+    pub const NAN: f32 = f32::from_bits(0x7fc0_0000);
     /// Positive infinity.
     pub const INFINITY: f32 = 1.0 / 0.0;
     /// Negative infinity.

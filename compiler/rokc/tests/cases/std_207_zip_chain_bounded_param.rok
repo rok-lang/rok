@@ -1,0 +1,23 @@
+// expect-exit: 0
+// expect-stdout:
+// 5 2
+// 5 3
+// 0 1 2 0 1
+
+// `zip` / `chain` take an `IntoIterator`: an iterator known only by its
+// bound (a type parameter, `-> some Iterator`) is one through the blanket
+// impl.
+fn both<I: Iterator<Item = i64>>(a: I, b: I) -> (usize, usize) {
+    let n = a.chain(b).count();
+    (n, 2)
+}
+
+fn upto(n: i64) -> some Iterator<Item = i64> { 0..n }
+
+fn main() {
+    let (n, m) = both(0..3, 0..2);
+    println(f"{n} {m}");
+    println(f"{upto(3).chain(upto(2)).count()} {upto(3).zip(upto(4)).count()}");
+    let xs: List<str> = upto(3).chain(upto(2)).map(|x| f"{x}").to_list();
+    println(xs.join(" "));
+}

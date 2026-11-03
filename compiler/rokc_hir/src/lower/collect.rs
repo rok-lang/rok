@@ -9252,7 +9252,7 @@ pub(super) fn subst_assoc_sig(def: &mut FnDef, assoc: &HashMap<String, Ty>) {
     if let rokc_ast::ThrowsKind::Typed(ts) = &mut def.throws {
         ts.iter_mut().for_each(|t| subst_assoc_ty(t, assoc));
     }
-    // Bounds and defaults too: `fn chain<J: Iterator<Item = Item>>`,
+    // Bounds and defaults too: `fn chain<J: IntoIterator<Item = Item>>`,
     // `fn collect<C = List<Item>>`.
     for gp in &mut def.generics.params {
         if let rokc_ast::GenericParam::Type {

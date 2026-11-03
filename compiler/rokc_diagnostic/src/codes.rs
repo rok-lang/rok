@@ -386,9 +386,10 @@ codes! {
      a function, not a value of the same name.";
 
     53 INVALID_CAST Type "invalid cast"
-    "`as` converts between numbers, `bool` and `char`; other conversions are methods. Only \
-     `u8` casts to `char` (use `char::from_u32(n)` for wider values). Use the conversion \
-     method the message suggests.";
+    "`as` converts between numbers, `bool` and `char`, and a payload-less enum to an \
+     integer; other conversions are methods. Only `u8` casts to `char` (use \
+     `char::from_u32(n)` for wider values), and nothing casts to `bool` (compare: \
+     `n != 0`). Use the conversion method the message suggests.";
 
     54 INVALID_OPERATOR Type "operator cannot be applied"
     "An operator is used on types that do not support it. For your own types, implement the \
@@ -458,9 +459,10 @@ codes! {
      expression and has no `;`. Add `;` to drop the value, or bind it with `let`.";
 
     68 NOT_ITERABLE Type "value cannot be iterated"
-    "`for` iterates an integer range with both bounds, an array, or a type that implements \
-     `IntoIterator` or `Iterator` (whose `next` returns `T | none`). Iterate one of those, or \
-     call the method that gives an iterator.";
+    "`for` iterates an integer range with a start (`0..n`, `0..`), an array, or a type that \
+     implements `IntoIterator` or `Iterator` (whose `next` returns `T | none`); `try for` \
+     iterates a `TryIterator`. Iterate one of those, or call the method that gives an \
+     iterator.";
 
     69 UNSATISFIED_BOUND Type "trait bound not satisfied"
     "A type does not implement a trait that a generic parameter, an associated type or a \
@@ -479,8 +481,10 @@ codes! {
      without a default. Add the missing items.";
 
     73 NOT_A_TRAIT_MEMBER Type "impl item is not in the trait"
-    "A trait impl defines a method the trait does not declare. Remove it, or move it to an \
-     inherent `impl` of the type.";
+    "A trait impl defines a method or an associated type the trait does not declare. Remove \
+     it, or move a method to an inherent `impl` of the type. A trait's generic parameters \
+     are not associated types: write them in the header, `impl IndexSet<usize, V> for T`, \
+     not as `type V = ..`.";
 
     74 IMPL_MISMATCH Type "impl item does not match the trait"
     "A method in a trait impl differs from the trait's declaration in its parameters, return \
@@ -619,8 +623,10 @@ codes! {
      names in each, or give the binding a sum type.";
 
     103 BINDING_SHADOWS_VARIANT Pattern "binding looks like a variant"
-    "A bare name in a pattern is a new variable that matches everything, not the variant of \
-     that name. Write the variant's path, `Color::Red`, to match it.";
+    "A bare name in a pattern is a new variable that matches every value, unless it is \
+     exactly a variant of the matched enum. This name is a const or static, or is close to \
+     a variant's name, so it would bind everything. Write the variant's path, `Color::Red`, \
+     or compare in a guard: `x if x == LIMIT`.";
 
     104 REST_PATTERN Pattern "invalid rest pattern"
     "A pattern has at most one `..`, and a rest pattern goes only where the message says. \
