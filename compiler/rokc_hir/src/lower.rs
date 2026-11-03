@@ -4520,6 +4520,22 @@ impl<'a> LowerCtx<'a> {
         }
     }
 
+    /// The trait arguments of `ty`'s impl of trait `key` (a bound's,
+    /// for a parameter), the first found.
+    fn impl_trait_args(&self, ty: &HirTy, key: &str) -> Option<Vec<HirTy>> {
+        if let HirTy::Param(p) = ty {
+            return bounds::of_trait(self, *p, key)
+                .into_iter()
+                .next()
+                .map(|r| r.args);
+        }
+        if let Some(r) = self.env.impls.refs_of(ty, key).next() {
+            return Some(r.args.clone());
+        }
+        let (gi, subst) = self.generic_impls(ty, Pick::Trait(key), 0).next()?;
+        Some(self.generic_impl_ref(gi, &subst).args)
+    }
+
     /// Generic impls `keep` picks (`trait_key` `""`: inherent) covering
     /// `ty`, with their bindings.
     fn generic_impls<'s>(

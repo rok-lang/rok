@@ -1,0 +1,20 @@
+// expect-exit: 0
+// expect-stdout: 2 [0, 2, 3]
+
+// Arithmetic over const parameters is checked per instance: `M - N`
+// is not an overflow in the generic body.
+fn gap<const M: usize, const N: usize>() -> usize { M - N }
+
+fn tail<const M: usize, const N: usize>(acc: [usize; M], s: [usize; N]) -> [usize; M] {
+    let out = acc;
+    for k in 0..N {
+        out[M - N + k] = s[k];
+    }
+    out
+}
+
+fn main() {
+    let a: [usize; 3] = [0, 0, 0];
+    let b: [usize; 2] = [2, 3];
+    println(f"{gap::<3, 1>()} {tail(a, b):?}");
+}

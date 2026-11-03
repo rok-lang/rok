@@ -6687,6 +6687,7 @@ impl<'a> Parser<'a> {
             (TokenKind::DotCaret, Fixity::Infix) => ".^".into(),
             (TokenKind::DotShl, Fixity::Infix) => ".<<".into(),
             (TokenKind::DotShr, Fixity::Infix) => ".>>".into(),
+            (TokenKind::DotQuestionQuestion, Fixity::Infix) => ".??".into(),
             // Prefix-only tokens.
             (TokenKind::Bang, Fixity::Prefix) => "!".into(),
             (TokenKind::Tilde, Fixity::Prefix) => "~".into(),
@@ -9298,6 +9299,13 @@ const fn compound_assign_op(tok: &rokc_lexer::TokenKind) -> Option<&'static str>
         T::CaretEq => "^",
         T::ShlEq => "<<",
         T::ShrEq => ">>",
+        T::DotEq => ".",
+        T::DotPlusEq => ".+",
+        T::DotMinusEq => ".-",
+        T::DotStarEq => ".*",
+        T::DotStarStarEq => ".**",
+        T::DotSlashEq => "./",
+        T::DotPercentEq => ".%",
         _ => return None,
     })
 }

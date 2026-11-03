@@ -449,6 +449,29 @@ pub trait DotShr<Rhs = Self> {
     fn dot_shr(self, rhs: Rhs) -> Output;
 }
 
+/// An operand of a fused dot expression: its elements seen as an
+/// `N`-axis array, with no copy. A dot expression whose containers are
+/// all `Broadcastable` (and whose other operands are primitives or an
+/// element type) runs as one loop with no intermediate arrays, and
+/// `.=` / `.+=` .. write into one in place. `Array` implements it; a
+/// type of your own that keeps its elements in an `Array` returns that.
+#[lang("broadcastable_trait")]
+pub trait Broadcastable<const N: usize> {
+    type Elem;
+    /// The elements as an array: a view sharing the storage.
+    fn broadcast_view(self) -> rok::core::array::Array<Elem, N>;
+}
+
+/// The container a fused dot expression returns when `Self` is its
+/// leading operand (the first of the highest rank): `out` holds the
+/// result's elements, `U`, in a fresh row-major array.
+#[lang("materialize_trait")]
+pub trait Materialize<U, const N: usize> {
+    type Output;
+    /// The result built around `out`.
+    fn materialize(self, out: rok::core::array::Array<U, N>) -> Output;
+}
+
 // Unicode math operators. Each method has an ASCII
 // name, so it can be called by name too. `÷` is `Div`, and `≡ ≠ ≤ ≥`
 // are the comparison traits (the lexer reads them as `== != <= >=`).

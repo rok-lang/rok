@@ -3,3 +3,9 @@ pub struct Port { pub n: i64; }
 
 #[literal(number "port")]
 pub fn port_literal(n: i64) -> Port { Port { n: n } }
+
+/// Not `pub`: only this package's source takes `80hport`.
+#[literal(number "hport")]
+pub(pkg) fn hidden_port(n: i64) -> Port { Port { n: n + 1 } }
+
+pub fn own() -> Port { 7hport }

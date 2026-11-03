@@ -50,6 +50,8 @@ pub fn fixed_prec(symbol: &str, fixity: Fixity) -> Option<(u32, Assoc)> {
         // The postfix row (`?`, member access). `?` itself is language
         // syntax; it is here only as a `like` target.
         Fixity::Postfix => (symbol == "?").then_some((14, Assoc::Left)),
+        // `.??`: element-wise `??`, its level.
+        Fixity::Infix if symbol == ".??" => Some((COALESCE_PREC, Assoc::Right)),
         Fixity::Infix => Some(match base {
             "**" => (POW_PREC, Assoc::Right),
             "∘" => (11, Assoc::Left),

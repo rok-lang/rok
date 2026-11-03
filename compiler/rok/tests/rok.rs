@@ -271,6 +271,41 @@ fn renamed_target_and_links_dependencies() {
     );
 }
 
+/// A library's `#[literal]` handlers work in its own source when it is
+/// built as a dependency; its `pub` ones also apply in the packages
+/// that depend on it, its others do not.
+#[test]
+fn literal_handlers_across_packages() {
+    let root = scratch("literal-dep");
+    let home = root.join("home");
+    let units = root.join("units");
+    write(
+        &units.join("src/lib.rok"),
+        "pub struct Meters { pub v: f64; }\n\
+         #[literal(number \"m\")]\n\
+         pub fn meters(n: f64) -> Meters { Meters { v: n } }\n\
+         #[literal(number \"km\")]\n\
+         pub(pkg) fn km(n: f64) -> Meters { Meters { v: n * 1000.0 } }\n\
+         pub fn marathon() -> Meters {\n let k = 42.0km;\n let m = 195.0m;\n Meters { v: k.v + m.v }\n}\n",
+    );
+    write(&units.join("rok.rokon"), "Package { name: \"units\" }\n");
+    let app = root.join("app");
+    write(
+        &app.join("rok.rokon"),
+        "Package { name: \"app\", deps: { \"units\": Dep::path(\"../units\") } }\n",
+    );
+    write(
+        &app.join("src/main.rok"),
+        "let d = 2.5m;\nprintln(f\"{units::marathon().v} {d.v}\");\n",
+    );
+    assert_eq!(ok(&rok(&home, &app, &["run", "-q"])), "42195 2.5\n");
+    write(&app.join("src/main.rok"), "let d = 1.0km;\nprintln(d.v);\n");
+    fails(
+        &rok(&home, &app, &["build"]),
+        "unknown numeric literal suffix `km`",
+    );
+}
+
 /// Dependents may call one package by different names: each name is
 /// one package, built once, so its types are the same under both. A
 /// name may not stand for two packages.

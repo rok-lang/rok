@@ -1,0 +1,8 @@
+// rokc-arg: --extern litdep=tests/cases/605_2_literal_dep
+// expect-exit: 0
+// expect-stdout: 80 8
+
+// A dependency's `pub` `#[literal]` handler applies in its dependents;
+// its own source uses its other ones.
+let p = 80port;
+println(f"{p.n} {litdep::own().n}");
