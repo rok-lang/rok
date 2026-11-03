@@ -428,6 +428,74 @@ pub(super) fn resolve_in_mono(
     rcx.resolve_ast_ty(ty)
 }
 
+/// `Set::from(xs)` names `Set` with `S` omitted: an impl parameter that
+/// the arguments leave unbound and that stands for a defaulted parameter
+/// of `Self`'s type (`impl<T, S> .. for Set<T, S>`, `S = RandomState`)
+/// takes that default.
+fn omitted_self_defaults(
+    ctx: &LowerCtx<'_>,
+    fn_def: &FnDef,
+    self_ty: &Ty,
+    subst: &mut HashMap<String, HirTy>,
+) {
+    let rokc_ast::TyKind::Path(p) = &self_ty.kind else {
+        return;
+    };
+    let Some(last) = p.segments.last() else {
+        return;
+    };
+    let segs: Vec<&str> = p.segments.iter().map(|s| s.name.as_str()).collect();
+    let module = module_of(&fn_def.name);
+    let at = ctx.here();
+    let Some(full) = ctx
+        .env
+        .names
+        .canon(&segs, p.origin.as_deref().unwrap_or(&module), &[], at)
+    else {
+        return;
+    };
+    let (decl_name, decl) = match ctx.env.defs.generic_struct(&full) {
+        Some(d) => (&d.name, &d.generics),
+        None => match ctx.env.defs.generic_enum(&full) {
+            Some(d) => (&d.name, &d.generics),
+            None => return,
+        },
+    };
+    let own: rokc_core::HashSet<&str> = fn_def
+        .generics
+        .params
+        .iter()
+        .filter_map(|gp| match gp {
+            rokc_ast::GenericParam::Type { name, .. } => Some(name.as_str()),
+            rokc_ast::GenericParam::Const { .. } => None,
+        })
+        .collect();
+    // The declaration's parameters as this call binds them, for a
+    // default naming an earlier one (`S = Hasher<T>`).
+    let mut decl_subst: HashMap<String, HirTy> = HashMap::default();
+    for (gp, arg) in decl.params.iter().zip(&last.generics) {
+        let (name, default) = match gp {
+            rokc_ast::GenericParam::Type { name, default, .. } => (name, default.as_ref()),
+            rokc_ast::GenericParam::Const { name, .. } => (name, None),
+        };
+        let bare = match &arg.kind {
+            rokc_ast::TyKind::Path(ap) if ap.segments.len() == 1 => {
+                Some(ap.segments[0].name.as_str()).filter(|n| own.contains(n))
+            }
+            _ => None,
+        };
+        let open = bare.filter(|n| !subst.contains_key(*n));
+        if let (Some(n), Some(d)) = (open, default) {
+            let mut rcx = LowerCtx::new(ctx.env, &decl_subst, None, at);
+            rcx.current_module = module_of(decl_name);
+            subst.insert(n.to_owned(), rcx.resolve_ast_ty(d));
+        }
+        if let Some(t) = bare.and_then(|n| subst.get(n)) {
+            decl_subst.insert(name.clone(), t.clone());
+        }
+    }
+}
+
 /// Instantiation limits: deeper nesting means the generic recursion
 /// never reaches a fixed point (`fn r<T>(x: T) { r((x, x)) }`).
 pub(super) const MONO_DEPTH_LIMIT: u32 = 64;
@@ -577,6 +645,10 @@ pub(super) fn monomorphize_on(
                 subst.insert(name.clone(), resolved);
             }
         }
+    }
+
+    if let (Some(t), None) = (self_ty, self_hint) {
+        omitted_self_defaults(ctx, fn_def, t, &mut subst);
     }
 
     if let Some(msg) = assoc_shape_error(ctx, fn_def, self_hint, &subst) {

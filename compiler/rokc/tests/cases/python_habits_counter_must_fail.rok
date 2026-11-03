@@ -1,0 +1,17 @@
+// Python's `Counter(xs)` and `.most_common(n)`: one error each, with the
+// Rok form.
+
+fn ranked(words: List<str>) {
+    let c = Counter(words);
+}
+
+fn top(words: List<str>) {
+    println(words.most_common(2));
+}
+
+fn main() {}
+
+// expect-error: 5:13: cannot find function `Counter`
+// expect-error: help: write `words.counts()`
+// expect-error: 9:13: no method `most_common` found for type `List<str>`
+// expect-error: help: `most_common` is a method of the counts: write `words.counts().most_common(..)`

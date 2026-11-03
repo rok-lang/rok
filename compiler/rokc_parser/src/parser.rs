@@ -2784,7 +2784,8 @@ impl<'a> Parser<'a> {
                 let at = self.peek_span();
                 if !comma_reported {
                     let field = fields.last().map_or_else(String::new, |f: &NamedField| {
-                        format!("{}: {};", f.name, self.text_in(f.ty.span))
+                        // To the `,`: `List<T>` and a default too.
+                        format!("{}: {};", f.name, self.text_in(self.to_prev(f.ty.span)))
                     });
                     self.error_help(
                         Code::SYNTAX,
@@ -8316,6 +8317,39 @@ impl<'a> Parser<'a> {
         let body_at = self.peek_span();
         let (body, bare) = self.ret_frame(label, Self::parse_expr);
         let body = self.with_param_lets(body?, pats);
+        // `|v| v += i`: an assignment is a statement, so it needs a block.
+        if !matches!(body.kind, ExprKind::Block(_))
+            && (matches!(self.peek(), TokenKind::Eq) || compound_assign_op(self.peek()).is_some())
+        {
+            let op_at = self.peek_span();
+            let op = compound_assign_op(self.peek());
+            let target = self.text_in(self.to_prev(body_at));
+            self.bump();
+            let rhs_at = self.peek_span();
+            self.parse_expr()?;
+            let rhs = self.text_in(self.to_prev(rhs_at));
+            let head = self.text_in(Span {
+                end: body_at.start,
+                ..span
+            });
+            let stmt = self.text_in(self.to_prev(body_at));
+            let mut help = format!("put the body in a block: `{head} {{ {stmt}; }}`");
+            // A parameter is the closure's own copy: the write ends with it.
+            if params.iter().any(|p| p.name == target) {
+                let value = op.map_or_else(|| rhs.clone(), |o| format!("{target} {o} {rhs}"));
+                help = format!(
+                    "{help}; `{target}` is the closure's own copy, so to hand back the new \
+                     value return it: `{head} {value}`"
+                );
+            }
+            self.error_help(
+                Code::SYNTAX,
+                op_at,
+                "a closure body without braces is an expression, and an assignment is a \
+                 statement",
+                help,
+            );
+        }
         // `-> T` only before a block body.
         if ret_ty.is_some() && !matches!(&body.kind, ExprKind::Block(b) if b.label.is_none()) {
             self.error_help(

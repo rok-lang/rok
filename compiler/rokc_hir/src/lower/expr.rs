@@ -940,6 +940,23 @@ fn is_place(ctx: &mut LowerCtx<'_>, target: &Expr, op: &str, value: &Expr) -> bo
             _ => break "a computed value",
         }
     };
+    // `g.get().total += 7`: `get` hands out a copy (a guard's, a cell's);
+    // the receiver's `update` / `set` store the change.
+    let getter = match &root.kind {
+        ExprKind::MethodCall {
+            receiver,
+            method,
+            args,
+            trailing_closure: None,
+            ..
+        } if method == "get" && args.is_empty() => {
+            let mark = ctx.probe_mark();
+            let ty = lower_expected(ctx, receiver, HirTy::Unknown).ty;
+            ctx.rollback(&mark);
+            Some((&**receiver, ty))
+        }
+        _ => None,
+    };
     let src = |e: &Expr| ctx.src(e.span).map_or_else(|| snippet(e), str::to_owned);
     let text = src(target);
     let msg = if op == "=" {
@@ -952,7 +969,34 @@ fn is_place(ctx: &mut LowerCtx<'_>, target: &Expr, op: &str, value: &Expr) -> bo
         root.kind,
         ExprKind::Path(_) | ExprKind::Call { .. } | ExprKind::MethodCall { .. }
     );
-    let help = match entry_write_back(root) {
+    let bound = |r: &str| {
+        if std::ptr::eq(root, target) {
+            "v".to_owned()
+        } else {
+            text.replacen(r, "v", 1)
+        }
+    };
+    let store_back = getter.and_then(|(g, ty)| {
+        let has = |m: &str| matches!(pick_method(ctx, &ty, m, None), Ok(Some(_)));
+        let g = src(g);
+        let b = bound(&src(root));
+        if op == "=" && std::ptr::eq(root, target) && has("set") {
+            Some(format!("store the new value: `{g}.set({v});`"))
+        } else if has("update") {
+            Some(format!(
+                "`{g}.get()` is a copy; change the stored value with `update`: \
+                 `{g}.update(|v| {{ {b} {op} {v}; v }});`"
+            ))
+        } else if has("set") {
+            Some(format!(
+                "`{g}.get()` is a copy; change it and store it back: \
+                 `let v = {g}.get(); {b} {op} {v}; {g}.set(v);`"
+            ))
+        } else {
+            None
+        }
+    });
+    let help = store_back.unwrap_or_else(|| match entry_write_back(root) {
         Some((dict, key, init)) => match init {
             Some(init) if op != "=" => {
                 format!("index with a default: `{dict}[{key}, default: {init}] {op} {v};`")
@@ -963,17 +1007,11 @@ fn is_place(ctx: &mut LowerCtx<'_>, target: &Expr, op: &str, value: &Expr) -> bo
         // `let v = f(); v = 3;` would be no fix.
         None if held && !(op == "=" && std::ptr::eq(root, target)) => {
             let r = src(root);
-            let bound = if std::ptr::eq(root, target) {
-                "v".to_owned()
-            } else {
-                text.replacen(&r, "v", 1)
-            };
-            format!(
-                "bind the value to a variable and change that: `let v = {r}; {bound} {op} {v};`"
-            )
+            let b = bound(&r);
+            format!("bind the value to a variable and change that: `let v = {r}; {b} {op} {v};`")
         }
         None => "assign to a variable, a field (`s.x = v`) or an element (`xs[i] = v`)".to_owned(),
-    };
+    });
     if !matches!(root.kind, ExprKind::Path(_)) {
         let _ = lower_expected(ctx, root, HirTy::Unknown);
     }
@@ -10928,13 +10966,11 @@ fn lower_path_call(
                             HirTy::Enum(id) => enum_base_name(&ctx.enum_def(*id).name) == full,
                             _ => false,
                         };
-                        if let Some(t) = ctx.current_expected().cloned().filter(|t| of_base(ctx, t))
+                        let expected = ctx.current_expected().cloned().filter(|t| of_base(ctx, t));
+                        if let Some(r) =
+                            static_call_on_base(ctx, expected, &full, &method, args, &display, span)
                         {
-                            if let Some(r) =
-                                call_impl_method(ctx, &t, &method, None, None, args, &display, span)
-                            {
-                                return r;
-                            }
+                            return r;
                         }
                         if let Some((a @ (CallArg::Positional(e) | CallArg::Ref(e)), rest)) =
                             args.split_first()
@@ -10991,6 +11027,57 @@ fn lower_path_call(
     }
 
     call_item_value(ctx, p, &segs, &display, args, span)
+}
+
+/// `Base::f(..)` on a generic base `full`: `Self` is the `expected` type
+/// (`let b: Box<i32> = Box::zero()`); without one, a static method of a
+/// generic trait impl on the base (`impl<T> From<List<T>> for Set<T>`)
+/// infers it from the arguments (`Set::from(xs)`). `None`: neither, or
+/// several such impls.
+fn static_call_on_base(
+    ctx: &mut LowerCtx<'_>,
+    expected: Option<HirTy>,
+    full: &str,
+    method: &str,
+    args: &[CallArg],
+    display: &str,
+    span: rokc_diagnostic::Span,
+) -> Option<HirExpr> {
+    if let Some(t) = expected {
+        if let Some(r) = call_impl_method(ctx, &t, method, None, None, args, display, span) {
+            return Some(r);
+        }
+    }
+    let env = ctx.env;
+    let cands: Vec<&GenericMethod> = env
+        .impls
+        .generic_by(super::Pick::Method(method))
+        .filter(|gi| !gi.trait_key.is_empty() && trait_in_scope(ctx, &gi.trait_key, true))
+        .filter(|gi| {
+            let AstTyKind::Path(p) = &gi.self_ty.kind else {
+                return false;
+            };
+            let segs: Vec<&str> = p.segments.iter().map(|s| s.name.as_str()).collect();
+            let module = p.origin.as_deref().unwrap_or(&gi.module);
+            env.names.canon(&segs, module, &[], span).as_deref() == Some(full)
+        })
+        .filter_map(|gi| gi.methods.get(method))
+        .filter(|gm| gm.def.params.first().is_none_or(|p| p.name != "self"))
+        .collect();
+    let [gm] = cands.as_slice() else {
+        return None;
+    };
+    check_method_info_visible(ctx, &gm.info, method);
+    Some(call_generic_on(
+        ctx,
+        &gm.def,
+        Some(&gm.self_ty),
+        None,
+        None,
+        args,
+        display,
+        span,
+    ))
 }
 
 /// The rest of a path call: a `const` / `static` of `fn(...)` type is

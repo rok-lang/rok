@@ -1,0 +1,21 @@
+// expect-error: 13:9: cannot use `+=` on `g.get().total`: a call result is not a place
+// expect-error: help: `g.get()` is a copy; change the stored value with `update`: `g.update(|v| { v.total += 7; v });`
+// expect-error: 14:9: cannot assign to `g.get()`: a call result is not a place
+// expect-error: help: store the new value: `g.set(Acc { total: 1 });`
+// expect-error: 17:9: cannot assign to `w.get().total`: a call result is not a place
+// expect-error: help: `w.get()` is a copy; change the stored value with `update`: `w.update(|v| { v.total = 9; v });`
+
+// A write through a guard's `get()` would change a copy: the help names
+// the guard's `update` / `set`, which store it.
+fn main() {
+    let m = Mutex::new(Acc { total: 0 });
+    using g = m.lock() {
+        g.get().total += 7;
+        g.get() = Acc { total: 1 };
+    }
+    using w = RwLock::new(Acc { total: 0 }).write() {
+        w.get().total = 9;
+    }
+}
+
+struct Acc { total: i64; }

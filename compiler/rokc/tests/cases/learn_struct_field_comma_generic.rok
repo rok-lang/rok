@@ -1,0 +1,7 @@
+// The `;` help for a `,` after a field keeps the field's whole type.
+// expect-error: 5:16: expected `;` after a struct field, found `,`
+// expect-error: help: struct fields end with `;`: `xs: List<T>;`
+struct Bag<T> {
+    xs: List<T>,
+    n: i64,
+}

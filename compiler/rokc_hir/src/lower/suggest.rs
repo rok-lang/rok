@@ -197,6 +197,12 @@ pub(super) fn no_method_help(
         }
         return help;
     }
+    // Python's `Counter(xs).most_common(n)`: the counts are a `Dict`.
+    if method == "most_common" && !shown.starts_with("Dict<") && (has("iter") || has("counts")) {
+        return format!(
+            "`most_common` is a method of the counts: write `{r}.counts().most_common(..)`"
+        );
+    }
     // `n.to_f64()`: a number converts with `as` (only floats have `to_f64`).
     if let (HirTy::Prim(p), Some(to)) = (ty, method.strip_prefix("to_")) {
         let num = |t: &PrimTy| t.is_int() || t.is_float();
@@ -555,6 +561,7 @@ pub(super) fn python_builtin_help(name: &str, args: &[&str]) -> Option<String> {
         ("repr", 1) => format!("write `f\"{{{}:?}}\"`", args[0]),
         ("list", 1) => method("to_list"),
         ("set", 1) => method("to_set"),
+        ("Counter", 1) => method("counts"),
         ("zip", 2) => format!("write `{}.zip({}.iter())`", r(0), r(1)),
         ("any" | "all", 1) => format!("write `{}.{name}(|x| x)`", r(0)),
         ("map" | "filter", 2) => format!("write `{}.{name}({})`", r(1), args[0]),
