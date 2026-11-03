@@ -110,6 +110,7 @@ pub const KNOWN_SLOTS: &[&str] = &[
     "fused_set_fn",
     "fused_dest_fn",
     "fused_source_fn",
+    "fused_list_alloc_fn",
     // method slots
     "drop_method",
     // trait slot of a close that can fail (`library/std/src/io.rok`)

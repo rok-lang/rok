@@ -66,8 +66,9 @@ impl<T> List<T> {
     /// `n` items, item `i` being `f(i)`.
     pub const fn from_fn(n: usize, f: fn(usize) -> T) -> List<T> {
         let out: List<T> = List::with_capacity(n);
+        unsafe { out.set_len(n) };
         for i in 0..n {
-            out.push(f(i));
+            out[i] = f(i);
         }
         out
     }
