@@ -9,7 +9,7 @@ use rok::core::io;
 use rok::core::io::{BufRead, IoError};
 
 fn main() throws (IoError) {
-    let path = rok::std::env::temp_dir() / f"rok_temp_closed_{rok::std::process::id()}.txt";
+    let path = rok::std::env::temp_dir() / "rok_temp_closed.txt";
     try fs::write(path, "a\nb\n");
     let s = using f = try File::open(path) { try f.read_to_str() };
     try (try File::open(path)).close();

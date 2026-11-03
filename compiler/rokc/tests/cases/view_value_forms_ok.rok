@@ -44,7 +44,7 @@ fn closure_inside() -> usize {
 fn main() throws (IoError) {
     let a = copied();
     a.push(9);
-    let path = rok::std::env::temp_dir() / f"rok_view_forms_{rok::std::process::id()}.txt";
+    let path = rok::std::env::temp_dir() / "rok_view_forms.txt";
     try fs::write(path, "a\nb\n");
     println(f"{copied().len()} {arm().len()} {counted()} {try used(path)} {closure_inside()}");
     try fs::remove_file(path);

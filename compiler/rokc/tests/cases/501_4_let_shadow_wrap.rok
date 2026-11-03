@@ -8,7 +8,7 @@ use rok::core::io;
 use rok::core::io::{BufRead, IoError};
 
 fn main() throws (IoError) {
-    let path = rok::std::env::temp_dir() / f"rok_let_shadow_{rok::std::process::id()}.txt";
+    let path = rok::std::env::temp_dir() / "rok_let_shadow.txt";
     try fs::write(path, "a\nb\n");
     let f = try fs::File::open(path);
     let f = io::BufReader::new(f);

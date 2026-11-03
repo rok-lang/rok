@@ -11,7 +11,7 @@ use rok::std::fs;
 fn cap_of(r: BufReader<fs::File>) -> usize { r.capacity() }
 
 fn main() throws (IoError) {
-    let path = rok::std::env::temp_dir() / f"rok_view_lent_{rok::std::process::id()}.txt";
+    let path = rok::std::env::temp_dir() / "rok_view_lent.txt";
     try fs::write(path, "a\nb\nc\n");
     let r = BufReader::new(try fs::open(path));
     let ls = r.lines();
