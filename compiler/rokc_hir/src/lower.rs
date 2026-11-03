@@ -2382,6 +2382,17 @@ fn coerce(
                 "`{{}}` is an empty block, not an empty `{base}`; write `{base}::new()`"
             )));
         }
+        // `let fs = []; fs.push(|x| x + k); fs` into `List<fn(..)>`: the
+        // closures took their own type where the list was made.
+        let name = ctx
+            .src(v.span)
+            .filter(|s| s.chars().all(|c| c.is_alphanumeric() || c == '_'));
+        if let Some(name) = name.filter(|_| closure_for_fn(ctx, slot, &v.ty, 0)) {
+            ctx.help_last(Some(format!(
+                "the closures in `{name}` keep their own type unless `{name}` is typed where \
+                 it is made: `let {name}: {slot_name} = ..;`"
+            )));
+        }
         mismatch_help(ctx, slot, &v);
         if let (Some((note, name, send)), Some(d)) = (
             ctx.closure_bound_note(&v),
@@ -2470,6 +2481,30 @@ fn sig_text<'n>(callee: &str, params: impl IntoIterator<Item = (&'n str, String)
 /// Help for a value of type `v.ty` in a `slot` it does not fit: an
 /// optional where its value is wanted, or a collection of other
 /// elements.
+/// `have` is `want` with a closure type inside a type argument where
+/// `want` has a `fn` type (`List<closure(i64) -> i64>` for
+/// `List<fn(i64) -> i64>`).
+fn closure_for_fn(ctx: &LowerCtx<'_>, want: &HirTy, have: &HirTy, depth: u32) -> bool {
+    match (want, have) {
+        (HirTy::Fn(..), HirTy::Closure { .. }) => depth > 0,
+        (HirTy::Struct(a), HirTy::Struct(b)) => {
+            let (a, b) = (ctx.struct_def(*a), ctx.struct_def(*b));
+            expr::enum_base_name(&a.name) == expr::enum_base_name(&b.name)
+                && a.generic_args.len() == b.generic_args.len()
+                && a.generic_args
+                    .iter()
+                    .zip(&b.generic_args)
+                    .any(|(w, h)| closure_for_fn(ctx, w, h, depth + 1))
+        }
+        (HirTy::Tuple(ws), HirTy::Tuple(hs)) if ws.len() == hs.len() => ws
+            .iter()
+            .zip(hs)
+            .any(|(w, h)| closure_for_fn(ctx, w, h, depth + 1)),
+        (HirTy::Array(w, n), HirTy::Array(h, m)) if n == m => closure_for_fn(ctx, w, h, depth + 1),
+        _ => false,
+    }
+}
+
 fn mismatch_help(ctx: &LowerCtx<'_>, slot: &HirTy, v: &HirExpr) {
     let src = suggest::short_src(ctx, v.span);
     if suggest::some_part(&v.ty).as_ref() == Some(slot) {

@@ -1,0 +1,16 @@
+// expect-error: 11:5: mismatched types: the body of `adders` expects `List<fn(i64) -> i64>`, found `List<closure(i64) -> i64>`
+// expect-error: help: the closures in `fs` keep their own type unless `fs` is typed where it is made: `let fs: List<fn(i64) -> i64> = ..;`
+
+// A list of closures built untyped names the annotation that gives them
+// the `fn` type.
+fn adders() -> List<fn(i64) -> i64> {
+    let fs = [];
+    for k in 0..3 {
+        fs.push(|x| x + k);
+    }
+    fs
+}
+
+fn main() {
+    println(adders().len());
+}
