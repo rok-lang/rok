@@ -1,0 +1,39 @@
+// expect-exit: 0
+// expect-stdout:
+// 3 true
+// 2 3
+// 2 2
+// 5 0
+
+// `Set::from(xs)` / `Dict::from(pairs)` with no annotation: the element
+// types come from the argument, an omitted `S` is its default; the same
+// for a user type's generic `From` impl and an inherent constructor.
+struct Bag<T, N = i64> {
+    items: List<T>;
+    n: N;
+}
+
+impl<T, N: Default> From<List<T>> for Bag<T, N> {
+    fn from(items: List<T>) -> Bag<T, N> {
+        Bag { items: items, n: N::default() }
+    }
+}
+
+impl<T, N: Default> Bag<T, N> {
+    fn one(v: T) -> Bag<T, N> {
+        Bag { items: [v], n: N::default() }
+    }
+}
+
+fn main() {
+    let s = Set::from([1, 2, 3, 2]);
+    println(s.len(), 2 in s);
+    let words = ["a", "b", "a"];
+    let d = Dict::from([("x", 1), ("y", 3)]);
+    println(Set::from(words).len(), d["y"]);
+    let b = Bag::from(["p", "q"]);
+    println(b.items.len(), Bag::one(2).items[0]);
+    let e = Set::default();
+    e.insert(5);
+    println(e.len() + 4, b.n);
+}

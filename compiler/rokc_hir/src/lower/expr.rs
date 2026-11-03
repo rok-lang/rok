@@ -10928,13 +10928,11 @@ fn lower_path_call(
                             HirTy::Enum(id) => enum_base_name(&ctx.enum_def(*id).name) == full,
                             _ => false,
                         };
-                        if let Some(t) = ctx.current_expected().cloned().filter(|t| of_base(ctx, t))
+                        let expected = ctx.current_expected().cloned().filter(|t| of_base(ctx, t));
+                        if let Some(r) =
+                            static_call_on_base(ctx, expected, &full, &method, args, &display, span)
                         {
-                            if let Some(r) =
-                                call_impl_method(ctx, &t, &method, None, None, args, &display, span)
-                            {
-                                return r;
-                            }
+                            return r;
                         }
                         if let Some((a @ (CallArg::Positional(e) | CallArg::Ref(e)), rest)) =
                             args.split_first()
@@ -10991,6 +10989,57 @@ fn lower_path_call(
     }
 
     call_item_value(ctx, p, &segs, &display, args, span)
+}
+
+/// `Base::f(..)` on a generic base `full`: `Self` is the `expected` type
+/// (`let b: Box<i32> = Box::zero()`); without one, a static method of a
+/// generic trait impl on the base (`impl<T> From<List<T>> for Set<T>`)
+/// infers it from the arguments (`Set::from(xs)`). `None`: neither, or
+/// several such impls.
+fn static_call_on_base(
+    ctx: &mut LowerCtx<'_>,
+    expected: Option<HirTy>,
+    full: &str,
+    method: &str,
+    args: &[CallArg],
+    display: &str,
+    span: rokc_diagnostic::Span,
+) -> Option<HirExpr> {
+    if let Some(t) = expected {
+        if let Some(r) = call_impl_method(ctx, &t, method, None, None, args, display, span) {
+            return Some(r);
+        }
+    }
+    let env = ctx.env;
+    let cands: Vec<&GenericMethod> = env
+        .impls
+        .generic_by(super::Pick::Method(method))
+        .filter(|gi| !gi.trait_key.is_empty() && trait_in_scope(ctx, &gi.trait_key, true))
+        .filter(|gi| {
+            let AstTyKind::Path(p) = &gi.self_ty.kind else {
+                return false;
+            };
+            let segs: Vec<&str> = p.segments.iter().map(|s| s.name.as_str()).collect();
+            let module = p.origin.as_deref().unwrap_or(&gi.module);
+            env.names.canon(&segs, module, &[], span).as_deref() == Some(full)
+        })
+        .filter_map(|gi| gi.methods.get(method))
+        .filter(|gm| gm.def.params.first().is_none_or(|p| p.name != "self"))
+        .collect();
+    let [gm] = cands.as_slice() else {
+        return None;
+    };
+    check_method_info_visible(ctx, &gm.info, method);
+    Some(call_generic_on(
+        ctx,
+        &gm.def,
+        Some(&gm.self_ty),
+        None,
+        None,
+        args,
+        display,
+        span,
+    ))
 }
 
 /// The rest of a path call: a `const` / `static` of `fn(...)` type is
