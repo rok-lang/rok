@@ -12174,7 +12174,8 @@ fn repeat_clone_error(
         }
         rokc_ast::ConstExpr::Expr(e) => rokc_ast::print::print_expr(e),
     };
-    let from_fn = format!("build each element on its own: `List::from_fn({len}, |_| ..)`");
+    let from_fn =
+        format!("build each element on its own: `array::from_fn::<{name}, {len}>(|_| ..)`");
     let help = match elem_ty {
         HirTy::Param(_) => format!("add a `{name}: Clone` bound, or {from_fn}"),
         _ => from_fn,

@@ -155,6 +155,21 @@ impl<T: PartialEq, const N: usize> [T; N] {
     }
 }
 
+/// A fixed array whose element `i` is `f(i)`, called in order: each
+/// element its own value, where `[v; N]` copies one (`v` a resource, or
+/// not `Clone`). `N` comes from the expected type or `::<T, N>`.
+pub const fn from_fn<T, const N: usize>(f: fn(usize) -> T) -> [T; N] {
+    unsafe {
+        // Zero bytes fill the slots until `f` writes each one.
+        let zero: GcBuf<[T; N]> = buf_new(1);
+        let out = zero[0];
+        for i in 0..N {
+            out[i] = f(i);
+        }
+        out
+    }
+}
+
 /// An `N`-dimensional array of `T` (`N` is the rank): a shared element
 /// buffer seen through a shape and per-axis strides. Copies share the
 /// buffer, as with `List`; a basic index (`a[1:, ::2]`, `a.t()`,
