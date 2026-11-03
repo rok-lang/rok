@@ -3899,6 +3899,32 @@ fn check_library_checks_every_body() {
     assert!(!err.contains("is never used"), "{err}");
 }
 
+/// A recursive value in a recursive function gives the hand-off walk
+/// thousands of aliases at its exit. Each `args.push(eval(..))` line
+/// once cost seconds in a release rokc; a debug one ran past the bound.
+#[test]
+fn check_recursive_value_aliases_quickly() {
+    let dir = scratch("check-recursive-aliases");
+    let pushes = "    for i in 1..items.len() { args.push(eval(items[i], env)); }\n".repeat(2);
+    let src = format!(
+        "enum Value {{\n    Sym(str),\n    List(List<Value>),\n    Lambda(List<Value>, Env),\n}}\n\
+         struct Env {{ frames: List<Dict<str, Value>>; }}\n\n\
+         fn eval(x: Value, env: Env) -> Value {{\n    \
+             let items = match x {{\n        Value::List(items) => items,\n        _ => return x,\n    }};\n    \
+             match items[0] {{\n        Value::Sym(s) => {{\n            \
+                 let v = eval(items[2], env);\n            env.frames[0].insert(s, v);\n            \
+                 return v;\n        }},\n        _ => {{}},\n    }}\n    \
+             let args: List<Value> = [];\n{pushes}    apply(eval(items[0], env), args)\n}}\n\n\
+         fn apply(f: Value, args: List<Value>) -> Value {{\n    \
+             let Value::Lambda(body, captured) = f else {{ return f; }};\n    \
+             eval(body[0], Env {{ frames: captured.frames }})\n}}\n\n\
+         println(f\"{{eval(Value::Sym(\"a\"), Env {{ frames: [Dict::new()] }}) is Value}}\");\n"
+    );
+    put(dir.join("interp.rok"), src).unwrap();
+    let out = rokc_within(&dir, &dir, &["check", "interp.rok"]);
+    assert_exit(&out, 0);
+}
+
 /// `-C target-feature` / `-C target-cpu` reach LLVM; the native backend
 /// builds for the baseline.
 #[test]
