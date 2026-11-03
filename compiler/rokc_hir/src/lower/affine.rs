@@ -2412,7 +2412,7 @@ impl<'c, 'a, 'e> Walk<'c, 'a, 'e> {
                 self.arm_members(*r, p, ms, &here, sum, &mut s);
             }
             self.scopes.push(Vec::new());
-            let mut parts = HashMap::new();
+            let mut parts = HashMap::default();
             if let Some((r, p)) = &at {
                 pattern_places(&a.pat, &mut p.clone(), &mut |l, ty, q| {
                     if self.c.shape(ty).is_some() {
