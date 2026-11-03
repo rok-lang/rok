@@ -245,9 +245,9 @@ pub(super) fn narrow_to(
     }
 }
 
-/// Patterns act on a nested sum's outer layer; a
-/// catch-all after arms covering every outer member binds the inner one
-/// (`none => .., v => ..` on `(i32 | none)?` gives `v: i32 | none`).
+/// Patterns act on a nested sum's outer layer; a catch-all after arms
+/// covering every outer member binds the inner one (`none => .., v => ..`
+/// on `(i32 | none)?` gives `v: i32 | none`).
 fn inner_layer_binding(
     ctx: &mut LowerCtx<'_>,
     pat: &AstPattern,
@@ -317,8 +317,7 @@ enum Ctor {
     /// The only constructor of a tuple / struct.
     Single,
     /// An integer / `char` literal or range as `lo..=hi`. Ranges never make a
-    /// match exhaustive but subsume each other for unreachable arms
-    ///.
+    /// match exhaustive but subsume each other for unreachable arms.
     Int(i128, i128),
     /// A literal of another open domain (strings, floats): only equal
     /// spellings are the same constructor.
@@ -679,8 +678,8 @@ fn ctor_text(ctx: &LowerCtx<'_>, ty: &HirTy, c: &Ctor, args: &[String]) -> Strin
     }
 }
 
-/// Report an arm no value can reach (an error),
-/// then check that the unguarded arms cover the scrutinee's type.
+/// Report an arm no value can reach (an error), then check that the
+/// unguarded arms cover the scrutinee's type.
 pub(super) fn check_match_arms(
     ctx: &LowerCtx<'_>,
     scrut_ty: &HirTy,
@@ -1178,7 +1177,7 @@ fn lower_pattern_here(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy
             at(ctx, local)
         }
         AstPatternKind::Literal(AstLit::None) => {
-            // `none` against a sum scrutinee → match the none variant.
+            // `none` against a sum scrutinee -> match the none variant.
             if let HirTy::Sum(variants) = scrut_ty {
                 if let Some(idx) = variants.iter().position(HirTy::is_none) {
                     return HirPattern::SumVariant {
@@ -1253,8 +1252,8 @@ fn lower_pattern_here(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy
             }
         }
         AstPatternKind::TypeCheck { binder, ty } => {
-            // `name: T` - narrow a sum scrutinee to variant `T` (or, on a
-            // non-sum of exactly type `T`, bind it).
+            // `name: T`: narrow a sum scrutinee to variant `T` (or, on a non-sum
+            // of exactly type `T`, bind it).
             let target_ty = ctx.resolve_ast_ty(ty);
             // An unknown name, said as such (not as a mismatch).
             let mut unknown = Vec::new();
@@ -1394,9 +1393,8 @@ fn lower_pattern_here(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy
                     ty: scrut_ty.clone(),
                 };
             }
-            // Every type supports `is`. A test on a type
-            // parameter is opaque at the definition check and decided per
-            // instance.
+            // Every type supports `is`. A test on a type parameter is opaque at
+            // the definition check and decided per instance.
             if super::bounds::has_param(ctx, scrut_ty) || super::bounds::has_param(ctx, &target_ty)
             {
                 let binder = bind(ctx);
@@ -1414,8 +1412,8 @@ fn lower_pattern_here(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy
             mismatch(ctx, format!("type pattern `{}`", ctx.ty_name(&target_ty)))
         }
         AstPatternKind::Or(alts) => {
-            // Every alternative binds the same names. One
-            // shared local per name, typed by the first alternative.
+            // Every alternative binds the same names: one shared local per name,
+            // typed by the first alternative.
             let name_sets: Vec<std::collections::BTreeSet<String>> =
                 alts.iter().map(pattern_bound_names).collect();
             let bound_names = name_sets.first().cloned().unwrap_or_default();
@@ -1639,7 +1637,7 @@ fn lower_pattern_here(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy
                 let field_ty = def.fields[idx].ty.clone();
                 let sub = match &fp.pat {
                     Some(p) => lower_pattern(ctx, p, &field_ty),
-                    // Shorthand `Foo { x }` - bind a local of the field's name.
+                    // Shorthand `Foo { x }`: bind a local of the field's name.
                     None => {
                         let local = ctx.declare_bound(&fp.name, field_ty.clone(), pat.span);
                         HirPattern::Binding {
@@ -1665,7 +1663,7 @@ fn lower_pattern_here(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy
     }
 }
 
-/// `Pair(x, 4)` - a tuple struct's positional fields.
+/// `Pair(x, 4)`: a tuple struct's positional fields.
 fn tuple_struct_pattern(
     ctx: &mut LowerCtx<'_>,
     segs: &[&str],

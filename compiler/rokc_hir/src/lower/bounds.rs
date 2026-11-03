@@ -12,10 +12,10 @@
 //!
 //! Monomorphization stays the code path; an instance of a template that
 //! failed its check reports nothing more (`failed`). Implicit type
-//! parameters are checked per instance only. A `const`
-//! parameter gets a distinct prime past the unrolled array lengths, so
-//! `[T; N]` and `[T; M]` differ but `[T; M * N]` and `[T; N * M]` agree;
-//! diagnostics show its name.
+//! parameters are checked per instance only. A `const` parameter gets a
+//! distinct prime past the unrolled array lengths, so `[T; N]` and
+//! `[T; M]` differ but `[T; M * N]` and `[T; N * M]` agree; diagnostics
+//! show its name.
 
 #[allow(clippy::wildcard_imports)]
 use super::*;
@@ -28,7 +28,7 @@ pub(super) struct ParamInfo {
     bounds: Vec<TraitRef>,
     /// `bounds` with every supertrait, once asked for.
     all: Option<Vec<TraitRef>>,
-    /// Associated types projected so far: (bound, name) → type.
+    /// Associated types projected so far: (bound, name) -> type.
     projs: Vec<(TraitRef, String, HirTy)>,
     /// A bound names no trait (reported where it is written): method
     /// lookups through the parameter stay quiet.
@@ -373,8 +373,8 @@ pub(super) fn bind_trait_args(
 }
 
 /// With `p` bounded by the trait more than once, the bound a call goes
-/// through: the one whose arguments the call bound. None or
-/// several is an error.
+/// through: the one whose arguments the call bound. None or several is
+/// an error.
 pub(super) fn pick_bound(
     ctx: &LowerCtx<'_>,
     fn_def: &FnDef,
@@ -492,7 +492,7 @@ pub(super) fn slot_choices(ctx: &LowerCtx<'_>, fn_def: &FnDef, p: u32, i: usize)
 
 /// `bound_methods` templates: each trait method's declaration with the
 /// trait's parameters first, no body, bare associated types read as
-/// `Self::X`; plus template name → trait.
+/// `Self::X`; plus template name -> trait.
 pub(super) fn templates(
     trait_info: &HashMap<String, TraitInfo>,
 ) -> (
@@ -962,8 +962,7 @@ fn check_one(
             let id = FunctionId(env.sink.next_id.get());
             env.sink.next_id.set(id.0 + 1);
             mono::lower_fn_inner(env, f, id, f.name.clone(), self_hir, module, subst);
-            // A generic alias's bounds on these parameters
-            // hold by theirs.
+            // A generic alias's bounds on these parameters hold by theirs.
             let uses = env.names.alias_uses.borrow()[from..].to_vec();
             let mut seen = rokc_core::HashSet::default();
             for u in uses.iter().filter(|u| seen.insert((&u.0, u.3))) {

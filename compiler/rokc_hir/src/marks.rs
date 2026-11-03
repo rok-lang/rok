@@ -1,6 +1,5 @@
-//! `#[deprecated]`, `#[deprecated_safe]`,
-//! `#[internal]` and `#[discardable]`: what an item's
-//! attributes say about using it.
+//! `#[deprecated]`, `#[deprecated_safe]`, `#[internal]` and
+//! `#[discardable]`: what an item's attributes say about using it.
 
 use rokc_ast::{AttrArg, AttrBody, Attribute, Literal};
 use rokc_core::codec_struct;
@@ -64,7 +63,7 @@ fn text(l: &Literal) -> Option<String> {
 }
 
 /// `#[deprecated]`, `#[deprecated = "note"]`, `#[deprecated("note")]` or
-/// `#[deprecated(since = "0.1.6", note = "..")]`; `None` when malformed.
+/// `#[deprecated(since = "..", note = "..")]`; `None` when malformed.
 #[must_use]
 pub fn deprecation(a: &Attribute) -> Option<Deprecation> {
     let mut d = Deprecation::default();
@@ -107,7 +106,7 @@ pub fn deprecation(a: &Attribute) -> Option<Deprecation> {
     Some(d)
 }
 
-/// `0.1.6`: dot-separated numbers.
+/// A release number: dot-separated numbers.
 fn is_release(s: &str) -> bool {
     !s.is_empty()
         && s.split('.')

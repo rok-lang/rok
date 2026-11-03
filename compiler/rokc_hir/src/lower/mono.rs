@@ -6,7 +6,7 @@ use super::*;
 use rokc_diagnostic::Code;
 
 /// Match an AST parameter type against an argument's `HirTy` to bind
-/// generic parameters (`[T; N]` against `[i32; 4]` binds `T → i32`).
+/// generic parameters (`[T; N]` against `[i32; 4]` binds `T -> i32`).
 pub(super) fn unify_param_ty_with(
     param_ty: &rokc_ast::Ty,
     arg_ty: &HirTy,
@@ -190,7 +190,6 @@ pub(super) fn expected_subst(ctx: &LowerCtx<'_>, fn_def: &FnDef) -> HashMap<Stri
     out
 }
 
-/// The type parameter names of `fn_def`.
 fn type_param_names(fn_def: &FnDef) -> rokc_core::HashSet<String> {
     fn_def
         .generics
@@ -527,7 +526,7 @@ pub(super) fn monomorphize(
 }
 
 /// Bind the impl parameters of `self_ty` (`Box<T>`) from the known
-/// `Self` type `hint` (`Box<i32>` → `T = i32`).
+/// `Self` type `hint` (`Box<i32>` -> `T = i32`).
 pub(super) fn bind_self(
     ctx: &LowerCtx<'_>,
     fn_def: &FnDef,
@@ -1318,7 +1317,7 @@ pub(super) fn lower_fn_inner(
     f
 }
 
-/// Whether a local of `f` is a struct with a named `some` field.
+/// A local of `f` is a struct with a named `some` field.
 fn holds_some(env: &Env<'_>, f: &HirFunction) -> bool {
     fn has(t: &HirTy, ids: &[StructId]) -> bool {
         match t {
@@ -1897,9 +1896,8 @@ pub(super) fn with_ok(declared: HirTy, ok: HirTy) -> HirTy {
 }
 
 /// Lower the body with an open return type and join its `return` and tail
-/// types (they must agree). With
-/// `keep`, a body whose paths agree (no `throws`, no `ref` parameter) is
-/// final as lowered; otherwise it is rolled back.
+/// types (they must agree). With `keep`, a body whose paths agree (no
+/// `throws`, no `ref` parameter) is final as lowered; else rolled back.
 #[allow(clippy::too_many_arguments)]
 fn infer_ret_of(
     env: &Env<'_>,
@@ -2354,8 +2352,7 @@ fn lower_fn_with(
     f
 }
 
-/// The `#[inline]` hint of a function; `#[cold]`
-/// unless it is `#[inline(always)]`.
+/// The `#[inline]` hint; `#[cold]` wins unless `#[inline(always)]`.
 fn inline_hint(attrs: &[rokc_ast::Attribute]) -> rokc_ir_common::Inline {
     use rokc_ast::{AttrArg, AttrBody};
     use rokc_ir_common::Inline;
@@ -2374,7 +2371,7 @@ fn inline_hint(attrs: &[rokc_ast::Attribute]) -> rokc_ir_common::Inline {
     hint
 }
 
-/// `{T → arg}` for a generic item's type parameters.
+/// `{T -> arg}` for a generic item's type parameters.
 pub(super) fn generic_subst(
     generics: &rokc_ast::Generics,
     args: &[HirTy],
@@ -2876,10 +2873,10 @@ pub(super) fn ref_slot_ty(deferred: bool, t: HirTy) -> HirTy {
     }
 }
 
-/// A function with `ref` parameters returns `(ret, r1, ..)` (no unit `ret`;
-/// one field unwrapped). A throwing function's whole carrier is `ret`, so
-/// `ref` values come back on the error path too while the
-/// payload overlays ok and error.
+/// A function with `ref` parameters returns `(ret, r1, ..)` (unit `ret`
+/// dropped, one field unwrapped). A throwing function's whole carrier is
+/// `ret`, so `ref` values come back on the error path too; the payload
+/// overlays ok and error.
 pub(super) fn ref_packed(ret: &HirTy, refs: &[HirTy]) -> HirTy {
     if refs.is_empty() {
         return ret.clone();
@@ -3038,7 +3035,7 @@ pub(super) fn ref_unpack(
         }
     }
     let value = (lead == 1).then(|| field(0));
-    // A carrier: now route a thrown error on.
+    // A carrier: route a thrown error on.
     let (trailing, ty) = match value {
         Some(c) if matches!(out.ret, HirTy::Throws { .. }) => {
             let v = unpack_call(ctx, c);

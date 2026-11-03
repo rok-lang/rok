@@ -1,5 +1,5 @@
-//! A `SliceMut` used after its list was resized is an
-//! error where one function shows both.
+//! A `SliceMut` used after its list was resized is an error where one
+//! function shows both.
 //!
 //! A forward flow over structured HIR, per function. A view local holds
 //! the lists it views: a list made into a view (`xs` or `xs[a:b]` in a

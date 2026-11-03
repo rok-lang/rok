@@ -1,27 +1,26 @@
-//! `task::spawn` moves a future to another worker, so its
-//! coroutine frame must be `Send`. Future types are shared wrappers
-//! (`AsyncFuture<T>` is `Send` when `T` is) and say nothing about the
-//! frame, so this pass checks frames:
+//! `task::spawn` moves a future to another worker, so its coroutine frame
+//! must be `Send`. Future types (`AsyncFuture<T>` is `Send` when `T` is) say
+//! nothing about the frame, so this pass checks frames:
 //!
 //! 1. A frame is not `Send` when a capture, or a local or temporary held
 //!    across an `await` (`f(cell, await x)`), is not. "Held across" is read
 //!    off the HIR in evaluation order; loop bodies are walked twice.
 //! 2. A whole-program flow tracks which such coroutines each value may
-//!    hold: through locals, parameters, returns and yields, fields, buffers
-//!    a callee stores into, captures, calls and other frames.
+//!    hold: through locals, parameters, returns, yields, fields, buffers a
+//!    callee stores into, captures, calls and other frames.
 //! 3. No argument of `task::spawn`, `thread::spawn`, `Builder::spawn`,
 //!    `Scope::spawn`, `task::spawn_blocking` or `par` may hold one. A frame
 //!    whose captures are `Send` but not `Sync` may still be a task:
-//!    `task::spawn` hands the future over, and the frame takes copies of
-//!    them (`Context::prime`); a `[ref x]` cell stays shared.
+//!    `task::spawn` hands the future over and the frame takes copies
+//!    (`Context::prime`); a `[ref x]` cell stays shared.
 //!
 //! A type with no `fn` / closure value inside, or with an explicit
 //! `unsafe impl Send` (`Task<T>`: the future stays with its worker), holds
 //! none.
 // The flow is context-insensitive, and a store through an alias the callee
 // did not get as a parameter is missed: two `List<AsyncFuture<i32>>` filled
-// by `push` look like one. Exact would be per-coroutine future types
-// checked by the `Send` bound itself.
+// by `push` look like one. Exact would be per-coroutine future types checked
+// by the `Send` bound itself.
 
 use rokc_core::{HashMap, HashSet};
 use rokc_diagnostic::Code;
@@ -673,8 +672,8 @@ impl Flow<'_> {
             }
             HirStmt::Break { value: Some(e), .. } => {
                 let v = self.expr(e);
-                // Labels are not matched: every enclosing loop / labelled
-                // block may get the value.
+                // Labels are not matched: every enclosing loop / labelled block may get
+                // the value.
                 for b in &mut self.breaks {
                     b.extend(v.iter().copied());
                 }

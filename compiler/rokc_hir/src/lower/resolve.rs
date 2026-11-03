@@ -1,5 +1,5 @@
 //! Name resolution: the module-aware path resolver shared by the value
-//! and type namespaces, visibility, and AST type → `HirTy` resolution.
+//! and type namespaces, visibility, and AST type -> `HirTy` resolution.
 
 #[allow(clippy::wildcard_imports)]
 use super::*;
@@ -257,8 +257,7 @@ pub const COPY_TRAIT: &str = "rok::core::marker::Copy";
 pub const EQ_TRAIT: &str = "rok::core::cmp::Eq";
 pub const DEFAULT_TRAIT: &str = "rok::core::marker::Default";
 
-/// A string literal (`"name"`).
-/// expression.
+/// The text of a string literal expression.
 pub(super) fn str_lit_of(e: &rokc_ast::Expr) -> Option<&str> {
     match &e.kind {
         rokc_ast::ExprKind::Literal(rokc_ast::Literal::Str(s) | rokc_ast::Literal::RawStr(s)) => {
@@ -321,8 +320,7 @@ pub fn set_packages(names: Vec<String>) {
 }
 
 thread_local! {
-    /// The modules without the implicit import
-    /// (`HirInput::no_implicit_rok`).
+    /// The modules without the implicit import (`HirInput::no_implicit_rok`).
     static NO_IMPLICIT: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
@@ -335,8 +333,7 @@ pub fn is_dependency(name: &str) -> bool {
 }
 
 thread_local! {
-    /// The dependency that is the package's own library
-    /// (`HirInput::own_library`).
+    /// The dependency that is the package's own library (`HirInput::own_library`).
     static OWN_LIBRARY: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
 }
 
@@ -377,14 +374,13 @@ pub(super) fn own_library_import<'a>(
     })
 }
 
-/// The package of `module`: `rok::<tier>` (each tier its own), a
-/// dependency's name, or `""` for the one being compiled.
-/// Whether `module` is in one of the toolchain's packages (`rok::bare`,
-/// `rok::core`, `rok::std`).
+/// In one of the toolchain's packages (`rok::bare`, `rok::core`, `rok::std`).
 pub(super) fn is_toolchain_module(module: &str) -> bool {
     package_of(module).starts_with("rok::")
 }
 
+/// The package of `module`: `rok::<tier>` (each tier its own), a
+/// dependency's name, or `""` for the one being compiled.
 pub(super) fn package_of(module: &str) -> &str {
     let first = module.split("::").next().unwrap_or_default();
     if first == "rok" {
@@ -422,8 +418,8 @@ pub(super) const fn module_display(m: &str) -> &str {
     if m.is_empty() { "<root>" } else { m }
 }
 
-/// Module path → visibility of its `mod`, from the flattened
-/// module stubs (`Item::Mod` named by its full path).
+/// Module path -> visibility of its `mod`, from the flattened module stubs
+/// (`Item::Mod` named by its full path).
 pub fn module_visibility<'i>(
     items: impl IntoIterator<Item = &'i Item>,
 ) -> HashMap<String, Visibility> {
@@ -436,8 +432,8 @@ pub fn module_visibility<'i>(
         .collect()
 }
 
-/// The first module on `full`'s path that code in
-/// `cur` can't see (a module is visible inside itself and below).
+/// The first module on `full`'s path that code in `cur` can't see (a
+/// module is visible inside itself and below).
 pub fn hidden_module(
     mod_vis: &HashMap<String, Visibility>,
     cur: &str,
@@ -470,8 +466,7 @@ pub fn hidden_module_msg(full: &str, module: &str, cur: &str) -> String {
     )
 }
 
-/// Order of reach: a re-export may not be wider than its
-/// item.
+/// Order of reach: a re-export may not be wider than its item.
 pub const fn visibility_rank(v: Visibility) -> u8 {
     match v {
         Visibility::Private => 0,
@@ -482,7 +477,7 @@ pub const fn visibility_rank(v: Visibility) -> u8 {
 }
 
 /// Module path of an item after the driver flattened the module tree
-/// (`a::b::name` → `a::b`). Impl blocks carry it on their methods.
+/// (`a::b::name` -> `a::b`). Impl blocks carry it on their methods.
 pub(super) fn item_module(item: &Item) -> String {
     match item {
         Item::Fn(f) => module_of(&f.name),
@@ -502,7 +497,7 @@ pub(super) fn impl_module(i: &rokc_ast::ImplDef) -> String {
     i.module.clone()
 }
 
-/// Leaf of a driver-qualified name (`a::b::f` → `f`).
+/// Leaf of a driver-qualified name (`a::b::f` -> `f`).
 pub(super) fn leaf_name(name: &str) -> &str {
     name.rsplit_once("::").map_or(name, |(_, l)| l)
 }
@@ -747,8 +742,8 @@ pub(super) fn resolve_ty_with_structs(
             };
             HirTy::Array(Box::new(rec(elem)), n)
         }
-        // `T | U` - recurse so Path("Counter") resolves to Struct(id), not
-        // an opaque path the MIR layer would treat as `Any`.
+        // `T | U`: recurse so `Counter` resolves to its struct, not an opaque
+        // path MIR would treat as `Any`.
         AstTyKind::Sum(parts) => {
             crate::ty::written_sum(parts, |n| params.is_some_and(|ps| ps.contains_key(n)), rec)
         }
@@ -841,7 +836,7 @@ pub(super) fn trait_args(
     (args, binds)
 }
 
-/// Table key of a generic instantiation: `a::Pair` + `[i32, bool]` →
+/// Table key of a generic instantiation: `a::Pair` + `[i32, bool]` ->
 /// `a::Pair__i32_bool`.
 pub(super) fn mangle_inst(base: &str, args: &[HirTy]) -> String {
     format!(

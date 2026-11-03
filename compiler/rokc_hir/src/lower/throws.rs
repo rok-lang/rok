@@ -60,8 +60,6 @@ impl CatchFrame {
     }
 }
 
-/// Can an arm filtering `filter` (`None`: any) take `ety`? Unresolved
-/// filters are kept so lowering the arm reports them.
 /// Whether a catch arm of `pat` (filter `filter`) takes every error of
 /// type `ety`: `_`, a binding, or `e: T` with `T` covering `ety`.
 fn takes_all(pat: &AstPattern, filter: Option<&HirTy>, ety: &HirTy) -> bool {
@@ -82,6 +80,8 @@ fn takes_all(pat: &AstPattern, filter: Option<&HirTy>, ety: &HirTy) -> bool {
     }
 }
 
+/// Can an arm filtering `filter` (`None`: any) take `ety`? Unresolved
+/// filters are kept so lowering the arm reports them.
 fn may_take(filter: Option<&HirTy>, ety: &HirTy) -> bool {
     let parts = |t: &HirTy| match t {
         HirTy::Sum(vs) => vs.clone(),
@@ -133,7 +133,7 @@ pub(super) fn sig_ret_ast(f: &FnDef) -> Ty {
     }
 }
 
-/// Unbound error parameters (`#E0` or plain `E`) → `Unknown`, so a
+/// Unbound error parameters (`#E0` or plain `E`) -> `Unknown`, so a
 /// `fn(i32) throws (E) -> i32` hint still types a closure argument.
 pub(super) fn erase_unbound_errors(ty: &mut HirTy) {
     match ty {
@@ -207,7 +207,7 @@ const fn err_index(ok: &HirTy) -> u32 {
     if no_ok_slot(ok) { 1 } else { 2 }
 }
 
-/// Build a carrier: `Ok(v)` → `(false, v, _)`, `Err(e)` → `(true, _, e)`.
+/// Build a carrier: `Ok(v)` -> `(false, v, _)`, `Err(e)` -> `(true, _, e)`.
 pub(super) fn carrier(
     ok: &HirTy,
     err: &HirTy,
@@ -1324,8 +1324,8 @@ pub(super) fn lower_try(
         return shell(ctx, &frame, body, ty, (report, None), span);
     }
     dropped_resources(ctx, &frame, span);
-    // `try?` in statement position just drops the error; elsewhere a
-    // `()` operand gives `() | none`.
+    // `try?` in statement position drops the error; elsewhere a `()`
+    // operand gives `() | none`.
     if expected == HirTy::Unit {
         if !frame.hit {
             return body;
@@ -1685,8 +1685,8 @@ pub(super) fn finish_throwing_body(ctx: &LowerCtx<'_>, block: &mut HirBlock) {
 }
 
 /// Reject `return`, `break` and `continue` that leave `fin`: they would
-/// drop an error in flight. Jumps inside a closure, or to a loop or labelled
-/// block within `fin`, stay.
+/// drop an error in flight. Jumps inside a closure, or to a loop or
+/// labelled block within `fin`, stay.
 fn finally_jumps(ctx: &LowerCtx<'_>, fin: &Block) {
     #[derive(Default)]
     struct Jumps {

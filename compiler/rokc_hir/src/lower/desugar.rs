@@ -475,7 +475,7 @@ pub(super) fn without_none(some: &[(usize, HirTy)]) -> HirTy {
 
 /// `match scrut { v: T_k => wrap(v), ..., none => none_body }` with one
 /// arm per non-none variant; each payload is re-wrapped into `result_ty`.
-#[allow(clippy::too_many_arguments)] // match pieces are independent inputs; a bundle struct only adds noise
+#[allow(clippy::too_many_arguments)] // independent match pieces
 pub(super) fn optional_match(
     ctx: &mut LowerCtx<'_>,
     scrut: HirExpr,
@@ -537,7 +537,7 @@ pub(super) fn sum_none(sum_ty: &HirTy, span: rokc_diagnostic::Span) -> HirExpr {
     )
 }
 
-/// `x?.tail` → `match x { v: T => v.tail, none => none }`, typed
+/// `x?.tail` -> `match x { v: T => v.tail, none => none }`, typed
 /// `tail_ty | none` (`?.` chains compose).
 pub(super) fn desugar_question_dot(
     ctx: &mut LowerCtx<'_>,
@@ -676,9 +676,9 @@ pub(super) fn apply_access_tail(
     }
 }
 
-/// `expr?`: unwrap `T | none` or return `none` from the
-/// enclosing function (whose return must hold `none`). Several payload
-/// members keep the rest of the sum.
+/// `expr?`: unwrap `T | none` or return `none` from the enclosing
+/// function (whose return must hold `none`). Several payload members keep
+/// the rest of the sum.
 pub(super) fn desugar_try_q(
     ctx: &mut LowerCtx<'_>,
     inner: HirExpr,
@@ -920,10 +920,9 @@ pub(super) fn bind_irrefutable(
     }
 }
 
-/// `for pat in iter` over an integer range (bounds evaluated
-/// once) or an array: `{ setup; while cond { step; let pat = ..; body } }`,
-/// stepping first so `continue` can't skip it; `label` goes on the
-/// `While`.
+/// `for pat in iter` over an integer range (bounds evaluated once) or an
+/// array: `{ setup; while cond { step; let pat = ..; body } }`, stepping
+/// first so `continue` can't skip it; `label` goes on the `While`.
 pub(super) fn lower_for(
     ctx: &mut LowerCtx<'_>,
     label: Option<&String>,
@@ -983,9 +982,8 @@ pub(super) fn lower_for(
                 )),
                 HirTy::Unknown => None,
                 _ => {
-                    // A generator the loop made (not one in a variable,
-                    // which may go on after the loop) is closed when the
-                    // loop leaves early.
+                    // A generator the loop made (not one in a variable, which may go on
+                    // after the loop) is closed when the loop leaves early.
                     let owned = !matches!(
                         iter.kind,
                         ExprKind::Path(_)
@@ -1329,8 +1327,8 @@ fn is_generator(ctx: &LowerCtx<'_>, ty: &HirTy) -> bool {
         .any(|base| def.name == mangle_inst(base, &def.generic_args))
 }
 
-/// `for await pat in s`: `s.into_stream()` unless already
-/// a `Stream`, then loop awaiting `poll_next(ref ctx)`.
+/// `for await pat in s`: `s.into_stream()` unless already a `Stream`,
+/// then loop awaiting `poll_next(ref ctx)`.
 #[allow(clippy::too_many_arguments)]
 fn lower_for_stream(
     ctx: &mut LowerCtx<'_>,

@@ -13,10 +13,10 @@ use rokc_diagnostic::{Code, RokDiagnostic, Span};
 pub enum UseEntry {
     /// `use foo::bar [as baz];`: `local` resolves to `full`.
     Single { local: String, full: String },
-    /// `use foo::*;` - bare name `name` is tried as `prefix::name`.
+    /// `use foo::*;`: bare `name` is tried as `prefix::name`.
     Glob { prefix: String },
-    /// `use foo::**;` - bare name `name` is tried as `prefix::name` and,
-    /// recursively, in any descendant of `prefix`.
+    /// `use foo::**;`: bare `name` is tried as `prefix::name` and in every
+    /// descendant of `prefix`.
     GlobDeep { prefix: String },
 }
 
@@ -79,8 +79,7 @@ pub fn build_use_table(
 }
 
 /// A short name imported twice in one module whose paths reach different
-/// items. Two paths to one item, as through a `pub use`, are
-/// one import.
+/// items. Two paths to one item (through a `pub use`) are one import.
 #[must_use]
 pub fn check_use_clashes(
     raw: &[(String, Visibility, UseTree)],
@@ -181,8 +180,8 @@ fn alias_for(full: &str, local: &str) -> String {
 
 /// `reexports` plus one per item a `pub use p::*` / `p::**` reaches,
 /// through re-exported modules too. Items the module can't see are left
-/// out; narrower ones keep their reach. A name that
-/// already means something else in the module is an error.
+/// out; narrower ones keep their reach. A name that already means
+/// something else in the module is an error.
 #[must_use]
 pub fn glob_reexports(
     raw: &[(String, Visibility, UseTree)],
@@ -423,13 +422,12 @@ impl Missing<'_> {
     }
 }
 
-/// Unresolved module-level imports, reported at the leaf.
+/// Unresolved module-level imports, reported at the leaf, and each item
+/// hiding a named import of its name, with its error.
 ///
-/// A leaf names an
-/// item, variant, module or re-export; a path rooted at a bare name may
-/// also start with something a glob or the implicit core glob brings in
-/// (`use Result::*`). Separately: each item hiding a named import of its
-/// name, with its error.
+/// A leaf names an item, variant, module or re-export; a path rooted at a
+/// bare name may also start with what a glob or the implicit core glob
+/// brings in (`use Result::*`).
 #[must_use]
 pub fn check_use_targets(
     raw: &[(String, Visibility, UseTree)],
@@ -565,8 +563,7 @@ pub fn check_use_targets(
                     ));
                     continue;
                 }
-                // A named re-export reaches no further than
-                // its item.
+                // A named re-export reaches no further than its item.
                 if let Some(&vis) = item_vis.get(full.as_str()) {
                     let rank = crate::lower::visibility_rank;
                     if *use_vis != Visibility::Private && rank(*use_vis) > rank(vis) {
@@ -587,8 +584,8 @@ pub fn check_use_targets(
             if path.is_empty() || known.contains(path) {
                 continue;
             }
-            // A bare root may also be a name this module sees
-            // through a glob of its own or the implicit import.
+            // A bare root may also be a name this module sees through a glob of
+            // its own or the implicit import.
             if bare {
                 let written = path
                     .strip_prefix(module_path.as_str())
@@ -820,7 +817,7 @@ const fn vis_word(v: Visibility) -> &'static str {
     }
 }
 
-/// Item keys a glob can reach (variants and re-exports too) → (visibility,
+/// Item keys a glob can reach (variants and re-exports too) -> (visibility,
 /// its module, the item it ends at).
 pub struct GlobNames(HashMap<String, (Visibility, String, String)>);
 
@@ -948,8 +945,7 @@ fn through_module(reexported: &HashMap<String, &str>, known: &HashSet<String>, p
     })
 }
 
-/// Public alias of `flatten_tree` for the lower pass to expand a
-/// function-local `use` into entries against the function's module.
+/// `flatten_tree` for a function-local `use`, against the function's module.
 pub fn flatten_tree_for_local(tree: &UseTree, module_path: &str, out: &mut Vec<UseEntry>) {
     let mut leaves = Vec::new();
     flatten_tree(tree, None, module_path, &[], &mut leaves);
@@ -983,7 +979,7 @@ fn flatten_tree(
 
     match &tree.kind {
         UseTreeKind::Simple(alias) => {
-            // `use a::b::c` → local `c` (or alias) → full `a::b::c`.
+            // `use a::b::c` -> local `c` (or alias) -> full `a::b::c`.
             let Some(leaf) = prefix_segs.last().cloned() else {
                 return;
             };
@@ -1028,8 +1024,7 @@ fn resolve_root(segs: &[String], module_path: &str, earlier: &[UseEntry]) -> Vec
     match segs[0].as_str() {
         // A dependency's name is a top-level name in every module.
         first if crate::lower::is_dependency(first) => segs.to_vec(),
-        // A name an earlier `use` of this module brought in
-        // (`use a::b; use b::c;`).
+        // A name an earlier `use` of this module brought in (`use a::b; use b::c;`).
         first
             if earlier
                 .iter()

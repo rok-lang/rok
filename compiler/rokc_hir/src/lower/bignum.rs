@@ -1,6 +1,5 @@
-//! `int` / `float` are library structs the compiler
-//! knows by path; an unsuffixed literal in such a slot becomes a
-//! constructor call:
+//! `int` / `float` are library structs the compiler knows by path; an
+//! unsuffixed literal in such a slot becomes a constructor call:
 //!
 //! ```text
 //! let a: int = 5;          ==>  Int::from_i64(5i64)
@@ -10,7 +9,7 @@
 //! ```
 //!
 //! `x as T` with `int` / `float` on either side is a conversion trait call:
-//! `Int as i32` → `i32::wrapping_from(x)`, `i32 as int` →
+//! `Int as i32` -> `i32::wrapping_from(x)`, `i32 as int` ->
 //! `Int::from(x)`.
 
 #[allow(clippy::wildcard_imports)]
@@ -42,9 +41,8 @@ pub(super) fn big_of(ctx: &LowerCtx<'_>, ty: &HirTy) -> Option<Big> {
         .find(|b| ctx.lookup_struct(ctx.lang(b.slot())) == Some(*id))
 }
 
-/// `full::leaf`, written by the compiler: it resolves and is
-/// access-checked from the module that defines it, so the
-/// item may be `pub(pkg)`.
+/// `full::leaf`, written by the compiler: it resolves and is access-checked
+/// from the module that defines it, so the item may be `pub(pkg)`.
 pub(super) fn path_expr(full: &str, leaf: &str, span: Span) -> Expr {
     // `full` names a module, or a type in one.
     let module = match full.rsplit_once("::") {

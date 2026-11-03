@@ -259,8 +259,7 @@ pub(super) fn pick_literals(ctx: &LowerCtx<'_>, t: &HirTy, works: &dyn Fn(&HirTy
 
 /// `pick_literals`, falling back on `then` when `works` picks no one
 /// choice (`3.wave()` with `Wave` out of scope: its impl's type, for the
-/// error to name the trait); without `default`, no choice leaves them
-/// open.
+/// error to name the trait); without `default`, no choice leaves them open.
 pub(super) fn pick_literals_or(
     ctx: &LowerCtx<'_>,
     t: &HirTy,
@@ -358,7 +357,8 @@ pub(super) fn meet(ctx: &LowerCtx<'_>, l: &mut HirExpr, r: &mut HirExpr) -> Opti
     if !active(ctx) || !(has_var(ctx, &l.ty) || has_var(ctx, &r.ty)) {
         return None;
     }
-    // Only numbers meet: `1 ∈ s` leaves the literal to `s.contains`.
+    // Only numbers meet: a literal tested for membership in `s` (U+2208)
+    // is left to `s.contains`.
     let number = |t: &HirTy| {
         matches!(t, HirTy::Var(_))
             || matches!(zonk(ctx, t), HirTy::Prim(p) if p.is_int() || p.is_float())
@@ -614,9 +614,9 @@ pub(super) fn unify_value(ctx: &LowerCtx<'_>, slot: &HirTy, value: &mut HirExpr)
         }
         HirTy::Any => pick_literals(ctx, &value.ty, &|_| false),
         _ => {
-            // Agreeing types need nothing more; a closure into a `fn` slot
-            // still meets the slot's bounds (`coerce`).
-            // A typed slot is a use that fixes the literal.
+            // A typed slot is a use that fixes the literal. Agreeing types need
+            // nothing more; a closure into a `fn` slot still meets the slot's
+            // bounds (`coerce`).
             let weak = is_default(ctx, value) && has_var(ctx, slot);
             if unify_weak(ctx, slot, &value.ty, weak) {
                 value.ty = resolve(ctx, &value.ty);

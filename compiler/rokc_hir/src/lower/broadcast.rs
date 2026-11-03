@@ -1,12 +1,12 @@
-//! Broadcast: a tree of dot operators and `f.(..)`
-//! over core `List` / `Slice` / arrays lowers to one fused loop with no
-//! intermediates: `let #n = #b0.len(); (lengths checked) let #out
-//! = fused_list_alloc(#n); for #i in 0..#n { #out[#i] = .. }`. All-array
-//! trees give an array (lengths checked at compile time). A tree over
-//! `Broadcastable` operands (`Array`) fuses the same way through the
-//! `fused_*` hooks of `rok::core::array`, and `.=` / `.+=` .. write
-//! into the target. `.&&` / `.||` don't short-circuit. Anything else
-//! dispatches the dot trait.
+//! Broadcast: a tree of dot operators and `f.(..)` over core `List` /
+//! `Slice` / arrays lowers to one fused loop with no intermediates:
+//! `let #n = #b0.len(); (lengths checked) let #out = fused_list_alloc(#n);
+//! for #i in 0..#n { #out[#i] = .. }`. All-array trees give an array
+//! (lengths checked at compile time). A tree over `Broadcastable` operands
+//! (`Array`) fuses the same way through the `fused_*` hooks of
+//! `rok::core::array`, and `.=` / `.+=` .. write into the target.
+//! `.&&` / `.||` don't short-circuit. Anything else dispatches the dot
+//! trait.
 
 use super::expr::{block_of, lower_infix, splice, spread_item_at};
 #[allow(clippy::wildcard_imports)]
@@ -1121,9 +1121,9 @@ fn spread_item_at_expr(target: &Expr, at: &Expr, span: Span) -> Expr {
     }
 }
 
-/// A `T | none` operand propagates `none`. The first optional
-/// leaf is matched; its `T` arm runs the tree (recursing for further
-/// optional operands), anything else gives `none`.
+/// A `T | none` operand propagates `none`. The first optional leaf is
+/// matched; its `T` arm runs the tree (recursing for further optional
+/// operands), anything else gives `none`.
 fn propagate_none(ctx: &mut LowerCtx<'_>, e: &Expr, leaves: Vec<Leaf>, tag: usize) -> HirExpr {
     let span = e.span;
     let path = |n: &str| super::throws::path_expr(n, span);

@@ -1,9 +1,9 @@
 //! `#[track_caller]`: the function takes its caller's location
-//! (`path:line:col`) as a hidden last `str`. A call passes its own position,
-//! or inside another `#[track_caller]` function the one that received, so
-//! panics report the first caller outside the chain. On an `extern`
-//! declaration the runtime receives it; a function value of one is a shim
-//! passing where the value was taken.
+//! (`path:line:col`) as a hidden last `str`. A call passes its own
+//! position, or inside another `#[track_caller]` function the one it
+//! received, so panics report the first caller outside the chain. On an
+//! `extern` declaration the runtime receives it; a function value of one
+//! is a shim passing where the value was taken.
 
 use rokc_core::{HashMap, HashSet};
 

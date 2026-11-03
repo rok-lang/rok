@@ -1,5 +1,5 @@
-//! `f"..."` written into one runtime
-//! text (a `core::fmt::Formatter`'s; `rok_fmt_*` return it, maybe moved):
+//! `f"..."` written into one runtime text (a `core::fmt::Formatter`'s;
+//! `rok_fmt_*` return it, maybe moved):
 //!
 //! ```text
 //! f"a {n} b {s:^5} {p:?}"   (n: i32, s: str, p: P)
@@ -40,8 +40,7 @@ struct Hole {
     spec: Spec,
     /// `?`: the Debug.
     debug: bool,
-    /// Implements `Display` / `Debug` (picked at run time for a dynamic
-    /// spec).
+    /// Implements `Display` / `Debug` (picked at run time for a dynamic spec).
     both: bool,
 }
 
@@ -550,7 +549,7 @@ fn plain_write(t: &Expr, value: Expr, kind: Kind, debug: bool, flags: Expr, coun
     }
 }
 
-/// `let #fN = e;` - the temp's path, or `None` when `e` didn't type.
+/// `let #fN = e;`: the temp's path, or `None` when `e` didn't type.
 fn bind(ctx: &mut LowerCtx<'_>, stmts: &mut Vec<HirStmt>, e: &Expr) -> Option<Expr> {
     // A hole has no expected type: the f-string's own `str` slot is not it.
     ctx.push_expected(HirTy::Unknown);
@@ -562,7 +561,7 @@ fn bind(ctx: &mut LowerCtx<'_>, stmts: &mut Vec<HirStmt>, e: &Expr) -> Option<Ex
     Some(bind_hir(ctx, stmts, "#f", init, point(e.span)))
 }
 
-/// `let <prefix>N = init;` - the temp's path.
+/// `let <prefix>N = init;`: the temp's path.
 fn bind_hir(
     ctx: &mut LowerCtx<'_>,
     stmts: &mut Vec<HirStmt>,

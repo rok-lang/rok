@@ -1,8 +1,8 @@
-//! `Reflect`: every type has it without
-//! an impl. Calls nothing else answers land here: `T::type_name()` /
-//! `size()` / `align()` are constants; `x.type_name_of_val()` / `x.size_of_val()`
-//! switch on an `any` or sum's held variant. Also `rok.any_cast`,
-//! `rok.method_table` and `rok.field_table`, behind `#[derive(Inspect)]`.
+//! `Reflect`: every type has it without an impl. Calls nothing else
+//! answers land here: `T::type_name()` / `size()` / `align()` are
+//! constants; `x.type_name_of_val()` / `x.size_of_val()` switch on an
+//! `any` or sum's held variant. Also `rok.any_cast`, `rok.method_table` and
+//! `rok.field_table`, behind `#[derive(Inspect)]`.
 
 #[allow(clippy::wildcard_imports)]
 use super::*;
@@ -124,8 +124,7 @@ fn constant(ctx: &LowerCtx<'_>, ty: &HirTy, method: &str, span: rokc_diagnostic:
     }
 }
 
-/// `T::type_name()` / `T::size()` / `T::align()`; `None` for any other
-/// call.
+/// `T::type_name()` / `T::size()` / `T::align()`; `None` for any other call.
 pub(super) fn static_call(
     ctx: &LowerCtx<'_>,
     ty: &HirTy,
@@ -150,8 +149,8 @@ pub(super) fn method_call(
     Ok(dynamic(ctx, recv, method))
 }
 
-/// `Reflect::type_name_of_val(x)` / `Reflect::type_name()` - the trait named
-/// as the path.
+/// `Reflect::type_name_of_val(x)` / `Reflect::type_name()`: the trait
+/// named as the path.
 pub(super) fn trait_call(
     ctx: &mut LowerCtx<'_>,
     self_ty: &HirTy,
@@ -422,8 +421,8 @@ fn int_fits(x: HirExpr, from: PrimTy, to: PrimTy, span: rokc_diagnostic::Span) -
 }
 
 /// `ty`'s inherent methods (concrete and generic-impl ones), sorted by
-/// name: `name \t static \t return \t args..` per line.
-// A generic impl's method shows its types as written (`T`).
+/// name: `name \t static \t return \t args..` per line. A generic impl's
+/// method shows its types as written (`T`).
 fn method_table(ctx: &LowerCtx<'_>, ty: &HirTy) -> String {
     let mut rows: Vec<(String, String)> = Vec::new();
     let target = super::resolve::method_target_for(ty);

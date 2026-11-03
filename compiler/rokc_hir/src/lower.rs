@@ -1,4 +1,4 @@
-//! AST → HIR lowering.
+//! AST -> HIR lowering.
 
 use rokc_core::HashMap;
 
@@ -114,10 +114,10 @@ struct TypeNames {
     /// Every enum variant as `a::E::V` (generic bases unmangled). A
     /// variant is as visible as its enum.
     variants: rokc_core::HashSet<String>,
-    /// `pub use` alias key → the type its re-export chain ends at.
+    /// `pub use` alias key -> the type its re-export chain ends at.
     reexports: HashMap<String, String>,
     visibility: HashMap<String, Visibility>,
-    /// Module path → its `mod` visibility (the driver's flattened stubs).
+    /// Module path -> its `mod` visibility (the driver's flattened stubs).
     mod_vis: HashMap<String, Visibility>,
     uses: crate::uses::UseTable,
     diags: std::cell::RefCell<Vec<rokc_diagnostic::RokDiagnostic>>,
@@ -141,7 +141,7 @@ struct TypeNames {
     /// leftover one is "needs generic arguments", not "cannot find").
     bare_generics: std::cell::RefCell<HashMap<String, rokc_diagnostic::Span>>,
     /// A generic type left unresolved by an unknown argument (`List<Nope>`)
-    /// → that argument, which the report names instead; `""` when a bad
+    /// -> that argument, which the report names instead; `""` when a bad
     /// argument was reported already.
     open_args: std::cell::RefCell<HashMap<String, String>>,
     /// `canon` results without local `use`s or diagnostics, by (path,
@@ -155,7 +155,7 @@ struct TypeNames {
     /// signatures and fields (`[i32; N]`).
     consts: HashMap<String, (Ty, rokc_ast::Expr)>,
     const_leaves: std::cell::OnceCell<Leaves>,
-    /// `pub use` alias key → the `const` / `static` its re-export chain
+    /// `pub use` alias key -> the `const` / `static` its re-export chain
     /// ends at (both keys are in the const / static tables).
     value_reexports: HashMap<String, String>,
     /// `type X = some Tr;` by full name.
@@ -230,7 +230,7 @@ impl TypeNames {
         })
     }
 
-    /// `Row<3>` → `[i32; 3]` for a generic alias; the body is resolved in
+    /// `Row<3>` -> `[i32; 3]` for a generic alias; the body is resolved in
     /// the alias's module and written absolute.
     fn expand_alias(&self, ty: &Ty, module: &str, at: Span) -> Option<Ty> {
         let AstTyKind::Path(p) = &ty.kind else {
@@ -307,7 +307,7 @@ impl TypeNames {
             .filter(|full| self.plain_alias_ty(full).is_some())
     }
 
-    /// `B` → `<A as P>::Out` for a plain alias of a projection, expanded in
+    /// `B` -> `<A as P>::Out` for a plain alias of a projection, expanded in
     /// body context (after impl registration).
     fn projection_alias(&self, full: &str, module: &str, at: Span) -> Option<Ty> {
         let body = self.plain_alias_ty(full)?;
@@ -553,7 +553,7 @@ impl TypeNames {
         Some(full)
     }
 
-    /// A bare (imported) variant name → its `a::E::V` key. Use entries
+    /// A bare (imported) variant name -> its `a::E::V` key. Use entries
     /// may name the enum relative to the module (`use Result::{Ok}`).
     fn canon_variant(
         &self,
@@ -978,8 +978,7 @@ struct Scope<'b> {
     at: Span,
 }
 
-// AST → HIR. Three passes: register struct names, then function
-// signatures, then lower function bodies.
+/// Lower `program` alone: no `use` tables, default driver input.
 #[must_use]
 pub fn lower(program: &Program, prec: &PrecTable) -> HirModule {
     let empty_uses: crate::uses::UseTable = HashMap::default();
@@ -1432,7 +1431,7 @@ struct Tables<'a> {
     /// complete before any body is lowered).
     fn_leaves: std::cell::OnceCell<Leaves>,
     /// `extern` fns: one global C namespace callable by bare
-    /// name; name → declaring module (where its signature resolves).
+    /// name; name -> declaring module (where its signature resolves).
     extern_fns: HashMap<String, String>,
     /// Concrete methods by `(type, name)`: several when traits share a
     /// method name (`pick_method` chooses).
@@ -1443,7 +1442,7 @@ struct Tables<'a> {
     infer_ret: rokc_core::HashSet<FunctionId>,
     /// `RootMain::Implicit`.
     implicit_main: bool,
-    /// The implicit `main`'s top-level `let`s: name → the `const` that
+    /// The implicit `main`'s top-level `let`s: name -> the `const` that
     /// would make it visible to a `fn` (a hint for a `fn` that names one).
     main_lets: HashMap<String, String>,
     /// `RootMain::Harness`.
@@ -1488,7 +1487,7 @@ struct Tables<'a> {
     sink: ClosureSink,
     /// Visibility of every value-namespace item, keyed by full name.
     item_visibility: HashMap<String, Visibility>,
-    /// Struct name → field name → visibility.
+    /// Struct name -> field name -> visibility.
     field_vis: HashMap<String, HashMap<String, Visibility>>,
     /// Every impl (bounds, dispatch, projections, associated consts).
     impls: Impls,
@@ -1501,9 +1500,9 @@ struct Tables<'a> {
     auto_memo: std::cell::RefCell<Option<HashMap<String, HashMap<HirTy, bool>>>>,
     /// `affine::affine` answers by type.
     affine_memo: std::cell::RefCell<HashMap<HirTy, Option<affine::Kind>>>,
-    /// Trait key → declared methods + supertraits (`any Tr` calls).
+    /// Trait key -> declared methods + supertraits (`any Tr` calls).
     trait_info: HashMap<String, TraitInfo>,
-    /// Module-level `static` items by name → declared type.
+    /// Module-level `static` items by name -> declared type.
     statics: HashMap<String, HirTy>,
     static_leaves: std::cell::RefCell<(usize, Leaves)>,
     /// Statics that may be assigned (`extern` `static mut`).
@@ -1520,8 +1519,8 @@ struct Tables<'a> {
     non_exhaustive: rokc_core::HashSet<String>,
     /// `#[sealed]` traits, by name.
     sealed: rokc_core::HashSet<String>,
-    /// Marked functions and methods: the name a
-    /// warning shows (`P::new`), the marks.
+    /// Marked functions and methods: the name a warning shows (`P::new`),
+    /// the marks.
     fn_marks: HashMap<FunctionId, (String, crate::marks::Mark)>,
     /// Marked fields (`m::P.x`), consts and statics, by key.
     marks: HashMap<String, crate::marks::Mark>,
@@ -1532,7 +1531,7 @@ struct Tables<'a> {
     /// Per `(trait, method)`: the template a call on a type parameter
     /// bounded by the trait goes through (`bounds::templates`).
     bound_methods: HashMap<(String, String), GenericMethod>,
-    /// A `bound_methods` template's name → its trait.
+    /// A `bound_methods` template's name -> its trait.
     bound_traits: HashMap<String, String>,
 }
 
@@ -1944,7 +1943,7 @@ struct TraitInfo {
     decls: HashMap<String, rokc_ast::FnDef>,
     /// The trait's module (to resolve `decls`).
     module: String,
-    /// The trait's type parameters, in order (`Index<K>` → `[K]`).
+    /// The trait's type parameters, in order (`Index<K>` -> `[K]`).
     params: Vec<String>,
     /// Its generic parameters as declared (defaults included).
     generics: rokc_ast::Generics,
@@ -1978,7 +1977,7 @@ enum MethodOrFn<'a> {
         module: String,
         /// `fn_table` key, also the function's name.
         key: String,
-        /// A trait default body's trait parameters → this impl's
+        /// A trait default body's trait parameters -> this impl's
         /// arguments (`trait Dim<const D: usize>` + `impl Dim<3>`).
         subst: HashMap<String, HirTy>,
         /// The trait's default body, not a method the impl wrote.
@@ -2478,9 +2477,6 @@ fn sig_text<'n>(callee: &str, params: impl IntoIterator<Item = (&'n str, String)
     format!("{}({})", short_callee(callee), parts.join(", "))
 }
 
-/// Help for a value of type `v.ty` in a `slot` it does not fit: an
-/// optional where its value is wanted, or a collection of other
-/// elements.
 /// `have` is `want` with a closure type inside a type argument where
 /// `want` has a `fn` type (`List<closure(i64) -> i64>` for
 /// `List<fn(i64) -> i64>`).
@@ -2505,6 +2501,8 @@ fn closure_for_fn(ctx: &LowerCtx<'_>, want: &HirTy, have: &HirTy, depth: u32) ->
     }
 }
 
+/// Help for a value of type `v.ty` in a `slot` it does not fit: an
+/// optional where its value is wanted, or a collection of other elements.
 fn mismatch_help(ctx: &LowerCtx<'_>, slot: &HirTy, v: &HirExpr) {
     let src = suggest::short_src(ctx, v.span);
     if suggest::some_part(&v.ty).as_ref() == Some(slot) {
@@ -2754,7 +2752,7 @@ fn fn_bounds_fit(want: &crate::FnBounds, have: &crate::FnBounds) -> bool {
 }
 
 /// A `fn` with extra auto-trait bounds takes the slot's type, so
-/// `fn() + Send` → `fn()` (or `fn() | none`) needs no conversion.
+/// `fn() + Send` -> `fn()` (or `fn() | none`) needs no conversion.
 fn drop_fn_bounds(slot: &HirTy, mut value: HirExpr) -> HirExpr {
     let HirTy::Fn(va, vr, have) = &value.ty else {
         return value;
@@ -2811,7 +2809,7 @@ fn any_slot_for<'s>(slot: &'s HirTy, ty: &HirTy) -> Option<&'s HirTy> {
 }
 
 /// Store into `any Tr`: check every bound and box as `SumWrap { tag,
-/// value }` (program-wide type number, heap copy). `any (A + B)` → `any A`
+/// value }` (program-wide type number, heap copy). `any (A + B)` -> `any A`
 /// keeps the value (same tags).
 fn box_into_any(ctx: &LowerCtx<'_>, slot: &HirTy, value: HirExpr) -> HirExpr {
     let Some(target @ HirTy::AnyTrait(bounds)) = any_slot_for(slot, &value.ty) else {
@@ -2822,8 +2820,8 @@ fn box_into_any(ctx: &LowerCtx<'_>, slot: &HirTy, value: HirExpr) -> HirExpr {
             ty: target.clone(),
             ..value
         },
-        // No implicit `any` → `any Tr` (it would hide a
-        // runtime check); `any Tr` → `any` is the arm above.
+        // No implicit `any` -> `any Tr` (it would hide a
+        // runtime check); `any Tr` -> `any` is the arm above.
         HirTy::AnyTrait(_) => ctx.error_expr(
             Code::MISMATCHED_TYPES,
             value.span,
@@ -2946,7 +2944,7 @@ fn hir_expr_diverges(e: &HirExpr) -> bool {
 }
 
 /// Does `b` contain a `break` that exits the loop labelled `label`?
-/// `direct` = we're not inside a nested loop (unlabelled breaks count).
+/// `direct`: not inside a nested loop, so unlabelled breaks count.
 fn block_breaks_out(b: &HirBlock, label: Option<&str>, direct: bool) -> bool {
     let in_expr = |e: &HirExpr| expr_breaks_out(e, label, direct);
     b.stmts.iter().any(|s| match s {
@@ -3063,7 +3061,7 @@ struct ClosureSink {
     ref_out: std::cell::RefCell<HashMap<FunctionId, RefOut>>,
     next_id: std::cell::Cell<u32>,
     /// Cached monomorphizations: `(generic_fn_name, concrete_type_args)`
-    /// → specialized `FunctionId`.
+    /// -> specialized `FunctionId`.
     mono_cache: std::cell::RefCell<HashMap<(String, Vec<String>), FunctionId>>,
     /// Specialized `FnSig` per monomorphization for call-site lookup.
     mono_sigs: std::cell::RefCell<HashMap<FunctionId, FnSig>>,
@@ -3171,7 +3169,7 @@ struct ClosureSink {
     dropped_at: std::cell::Cell<Option<usize>>,
 }
 
-/// Per-function lowering state: scoped name → local-id map plus the
+/// Per-function lowering state: scoped name -> local-id map plus the
 /// running list of local declarations, on top of the shared `Env`.
 #[derive(Clone)]
 #[allow(clippy::struct_excessive_bools)] // independent per-body modes
@@ -3240,10 +3238,10 @@ struct LowerCtx<'a> {
     /// Lowering `addr_of`'s place: taking an extern static's address
     /// reads nothing.
     addr_place: bool,
-    /// Enclosing breakable constructs, innermost last: `(label,
-    /// is_loop)` - labelled blocks accept `break 'l` but not `continue`.
+    /// Enclosing breakable constructs, innermost last: `(label, is_loop)`.
+    /// A labelled block takes `break 'l` but not `continue`.
     breakables: Vec<(Option<String>, bool)>,
-    /// `breakables` index → the type its `break` values must have:
+    /// `breakables` index -> the type its `break` values must have:
     /// the annotated slot (`true` = inferred from the first `break`).
     break_tys: HashMap<usize, (HirTy, bool)>,
     /// `breakables` indices of `while` / `for` loops: their value is `()`.
@@ -3259,9 +3257,9 @@ struct LowerCtx<'a> {
     /// Block-scoped `use`s, one level per `push_scope`, searched before
     /// module uses.
     local_uses: Vec<Vec<crate::uses::UseEntry>>,
-    /// Per scope: nested fns by name → lifted fn key.
+    /// Per scope: nested fns by name -> lifted fn key.
     nested_fns: Vec<HashMap<String, String>>,
-    /// Or-pattern binders: name → preset local, so every alternative binds
+    /// Or-pattern binders: name -> preset local, so every alternative binds
     /// `x` once with one type.
     or_pattern_binders: Vec<HashMap<String, LocalId>>,
     /// `f::<T, 3>(..)` arguments for the generic call being lowered,
@@ -3304,16 +3302,16 @@ struct LowerCtx<'a> {
     throwing_calls: u32,
     /// Counter for synthesized labels and local names.
     next_synth: u32,
-    /// Narrowed rebinding → (original local, its type);
+    /// Narrowed rebinding -> (original local, its type);
     /// assignments to the rebinding also store into the original.
     narrowed: HashMap<LocalId, (LocalId, HirTy)>,
     /// A `match` arm's binding of the whole matched place -> that place:
     /// a loop stepping the binding in place writes it back there.
     arm_bound: HashMap<LocalId, HirExpr>,
-    /// Narrowing of a `[ref]` cell → the read of its rebinding: each read
+    /// Narrowing of a `[ref]` cell -> the read of its rebinding: each read
     /// tests the cell again, as a capture may have changed it.
     cell_views: HashMap<LocalId, HirExpr>,
-    /// A `for ref` binding → the element place it names (`xs[i]`). Reads
+    /// A `for ref` binding -> the element place it names (`xs[i]`). Reads
     /// and writes of the binding lower that place instead.
     places: HashMap<LocalId, Expr>,
     /// Narrowings ended by assignment: (name, rebinding, scope
@@ -3338,10 +3336,10 @@ struct LowerCtx<'a> {
     /// (`expr::plain_fresh_future`), with the loop depth they were made
     /// at.
     sole_fresh: HashMap<LocalId, usize>,
-    /// Type parameter → its trait bounds and their supertraits (trait
+    /// Type parameter -> its trait bounds and their supertraits (trait
     /// keys): `T::Item` resolves through them (`set_bounds`).
     ty_bounds: HashMap<String, Vec<String>>,
-    /// Type parameter → its bounds as written, so `T::Error` takes the
+    /// Type parameter -> its bounds as written, so `T::Error` takes the
     /// `TryFrom<S>` impl, not any `TryFrom`.
     ty_bound_args: HashMap<String, Vec<AstPath>>,
     /// Lowering a coroutine body (`yield` / `await` are allowed).
@@ -3546,9 +3544,8 @@ impl<'a> LowerCtx<'a> {
         r
     }
 
-    /// The module whose scope and access the name being resolved has:
-    /// its definition's for a name from a meta template,
-    /// else the current one.
+    /// The module whose scope and access the name being resolved has: its
+    /// definition's for a name from a meta template, else the current one.
     fn access_module(&self) -> AccessModule<'_> {
         match self.access.borrow().as_ref() {
             Some(m) => AccessModule::Def(std::rc::Rc::clone(m)),
@@ -4770,9 +4767,9 @@ impl<'a> LowerCtx<'a> {
         Ok(subst)
     }
 
-    /// `any` tag of `ty`: a hash of its name, so separately compiled
-    /// packages agree.
-    // 31 bits; a collision probes to the next free tag, then build-local.
+    /// `any` tag of `ty`: a 31-bit hash of its name, so separately compiled
+    /// packages agree. A collision probes to the next free tag, which is
+    /// then stable only within this build.
     fn any_tag(&self, ty: &HirTy) -> u32 {
         let mut tags = self.env.sink.any_tags.borrow_mut();
         let found = tags.iter().find(|(t, _)| t == ty).map(|(_, tag)| *tag);
@@ -5269,10 +5266,9 @@ impl<'a> LowerCtx<'a> {
         }
     }
 
-    /// A use at `at` of `name`, a `what` with marks `mark`: an
-    /// error for an `internal` one, else a `deprecated`
-    /// warning, and outside `unsafe` a `deprecated_safe` one. Only the
-    /// built package's own uses are checked.
+    /// A use at `at` of `name`, a `what` with marks `mark`: an error for an
+    /// `internal` one, else a `deprecated` warning, and outside `unsafe` a
+    /// `deprecated_safe` one. Only the built package's own uses are checked.
     fn use_marked(&self, what: &str, name: &str, mark: &crate::marks::Mark, at: Span) {
         if at.is_dummy() {
             return;
@@ -5380,8 +5376,8 @@ impl<'a> LowerCtx<'a> {
         t
     }
 
-    /// A compile-time integer (literal, const
-    /// parameter, or const expression via `const_eval`).
+    /// A compile-time integer (literal, const parameter, or const
+    /// expression via `const_eval`).
     fn eval_const(&self, c: &rokc_ast::ConstExpr) -> Option<i128> {
         self.eval_const_msg(c).ok()
     }
@@ -5563,8 +5559,7 @@ impl<'a> LowerCtx<'a> {
                                 return t;
                             }
                         }
-                        // A `const` item as a const generic argument
-                        // (`Grid<W, 3>`).
+                        // A `const` item as a const generic argument (`Grid<W, 3>`).
                         if self.canon_type(&[seg.name.as_str()]).is_none()
                             && self.resolve_in(&[seg.name.as_str()], false).is_some()
                         {
@@ -5623,8 +5618,7 @@ impl<'a> LowerCtx<'a> {
                                 .or_insert_with(|| leftover[0].clone());
                             return HirTy::Path(vec![full]);
                         }
-                        // Reported (an out-of-range const argument): not
-                        // also an unknown type.
+                        // Reported (an out-of-range const argument): not also an unknown type.
                         if self.env.sink.diagnostics.borrow().len() > mark {
                             self.env
                                 .names
@@ -5813,7 +5807,7 @@ impl<'a> LowerCtx<'a> {
     }
 
     /// Associated type `name` of concrete type `base`, from its trait
-    /// impls (concrete or generic) - of `traits` only, when given.
+    /// impls (concrete or generic), of `traits` only when given.
     fn project(
         &self,
         base: &HirTy,
