@@ -37,7 +37,7 @@ const fn ends_operand(k: &TokenKind) -> bool {
 }
 
 /// A token an operand starts with.
-const fn starts_operand(k: &TokenKind) -> bool {
+pub(super) const fn starts_operand(k: &TokenKind) -> bool {
     use TokenKind as T;
     matches!(
         k,
@@ -86,19 +86,19 @@ pub(super) fn python_module(name: &str) -> Option<&'static str> {
 }
 
 impl Parser<'_> {
-    fn tok(&self, i: usize) -> Option<&Token> {
+    pub(super) fn tok(&self, i: usize) -> Option<&Token> {
         self.tokens.get(i)
     }
 
     /// `tokens[i]` is the plain word `w`, written at the use site.
-    fn word_at(&self, i: usize, w: &str) -> bool {
+    pub(super) fn word_at(&self, i: usize, w: &str) -> bool {
         self.tokens.get(i).is_some_and(|t| {
             !t.raw && t.origin.is_none() && matches!(&t.kind, TokenKind::Ident(n) if n == w)
         })
     }
 
     /// Text of `tokens[a..b]`.
-    fn tokens_text(&self, a: usize, b: usize) -> String {
+    pub(super) fn tokens_text(&self, a: usize, b: usize) -> String {
         match (self.tok(a), b.checked_sub(1).and_then(|l| self.tok(l))) {
             (Some(x), Some(y)) if a < b => self.text_in(Span {
                 end: y.span.end,

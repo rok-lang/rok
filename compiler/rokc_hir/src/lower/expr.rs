@@ -7558,6 +7558,9 @@ pub(super) fn method_call_on(
         if let Some(e) = sum_no_method(ctx, &recv_h, method, args.is_empty(), span) {
             return e;
         }
+        if let Some(e) = super::rust::throwing_receiver(ctx, &recv_h, method, args, span) {
+            return e;
+        }
         // No method, so no parameter types for its closures: drop the
         // "cannot infer" errors they gave.
         retain_since(ctx, since, |d| {
@@ -9825,6 +9828,7 @@ pub(super) fn turbofish_ty(ctx: &LowerCtx<'_>, t: &Ty) -> HirTy {
         at,
         format!("cannot find type `{name}` in this scope"),
     );
+    ctx.help_last(super::rust::type_help(&name, None));
     HirTy::Unknown
 }
 
@@ -10375,6 +10379,11 @@ fn call_item_value(
         .filter(|_| segs.len() == 1)
         .and_then(|n| ctx.variant_not_in_scope(n))
     {
+        let arg = match args {
+            [CallArg::Positional(e)] => ctx.src(e.span),
+            _ => None,
+        };
+        let help = super::rust::result_help(segs[0], arg, ctx.fn_throws.is_some(), help);
         return ctx.unknown_name(Code::UNRESOLVED_VARIANT, span, msg, Some(help));
     }
     let help = habit_call_help(ctx, segs, args).or_else(|| ctx.value_help(segs));
@@ -10483,7 +10492,7 @@ fn habit_call_help(ctx: &LowerCtx<'_>, segs: &[&str], args: &[CallArg]) -> Optio
         ([name], _) if texts.len() == args.len() => {
             super::suggest::python_builtin_help(name, &texts)
         }
-        _ => None,
+        _ => super::rust::call_help(segs, &texts),
     }
 }
 

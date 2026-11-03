@@ -1,0 +1,68 @@
+// expect-error: Rok has no `macro_rules!`
+// expect-error: help: write a meta definition, called as `sq!(..)`: `#[impl_macro(sq)] @macro { ( @x: expr ) => { .. } }`
+// expect-error: `println` is a function in Rok, not a macro
+// expect-error: help: call it: `println(f"{x} and {y:?}")`
+// expect-error: help: call it: `println(f"{n} {x}")`
+// expect-error: help: call it: `println("plain")`
+// expect-error: Rok has no `format!`
+// expect-error: help: write `f"{x}-{y}"`: an f-string formats its holes
+// expect-error: Rok has no `vec!`
+// expect-error: help: write `[1, 2, 3]`: a list literal is a `List`
+// expect-error: help: write `List::filled(n, 0)`
+// expect-error: `assert_eq` is a function in Rok, not a macro
+// expect-error: help: call it: `assert_eq(x, 1)`
+// expect-error: `assert` is a function in Rok, not a macro
+// expect-error: help: call it: `assert(x > 0, f"bad {x}")`
+// expect-error: `panic` is a function in Rok, not a macro
+// expect-error: help: call it: `panic(f"no {x}")`
+// expect-error: Rok has no `todo!`
+// expect-error: help: write `panic("not yet implemented")`
+// expect-error: Rok has no `writeln!`
+// expect-error: help: write `try f.write_str(f"{x}\n");`
+// expect-error: Rok has no `pub(crate)`
+// expect-error: help: write `pub(pkg)`: visible in this package
+// expect-error: Rok has no `pub(super)`
+// expect-error: help: write `pub(pkg)`: Rok has no reach for the parent module alone
+// expect-error: Rok has no `pub(self)`
+// expect-error: help: delete it: an item is private to its module already
+// expect-error: Rok has no lifetimes
+// expect-error: help: delete `'static`: the GC keeps a value alive while anything refers to it
+// expect-error: help: delete `'a`: the GC keeps a value alive while anything refers to it
+
+// Rust's macros, visibility and lifetimes: each error names the Rok form.
+
+macro_rules! sq {
+    ($x:expr) => { $x * $x };
+}
+
+fn prints() {
+    let x = 1;
+    let y = [2];
+    let n = 3;
+    println!("{} and {:?}", x, y);
+    println!("{n} {}", x);
+    println!("plain");
+    let s = format!("{}-{}", x, y);
+    let v = vec![1, 2, 3];
+    let w = vec![0; n];
+    assert_eq!(x, 1);
+    assert!(x > 0, "bad {}", x);
+    panic!("no {x}");
+}
+
+fn later() -> i32 { todo!() }
+
+fn show(f: Formatter, x: i32) { writeln!(f, "{}", x); }
+
+pub(crate) fn a() {}
+
+mod m {
+    pub(super) fn b() {}
+    pub(self) fn c() {}
+}
+
+fn keep<T: Clone + 'static>(x: T) {}
+
+struct Wrap<'a> { s: str; }
+
+fn main() {}

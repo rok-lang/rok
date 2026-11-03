@@ -1,0 +1,56 @@
+// expect-error: 31:12: Rok has no `&` references
+// expect-error: help: write `p: Point`: a struct is passed as a copy, a `List` or `Dict` as the same object
+// expect-error: 32:12: Rok has no `&mut` references
+// expect-error: help: write `ref p: Point`: the function changes the caller's value, and each call writes `ref`
+// expect-error: 33:12: Rok has no `&` references
+// expect-error: help: write `str`: Rok has one string type
+// expect-error: 34:14: Rok has no slice references
+// expect-error: help: write `List<i32>`: a `List` is passed as the same object
+// expect-error: 35:10: Rok has no lifetimes
+// expect-error: help: delete `'a`: the GC keeps a value alive while anything refers to it
+// expect-error: 35:17: Rok has no `&` references
+// expect-error: help: write `str`: Rok has one string type; there are no lifetimes
+// expect-error: 38:12: Rok has no `&self`
+// expect-error: help: write `self`: a method gets its receiver as a copy (`ref self` to change it)
+// expect-error: 39:12: Rok has no `&mut self`
+// expect-error: help: write `ref self`: the method changes its receiver
+// expect-error: 40:14: Rok has no `mut self`
+// expect-error: 43:8: Rok has no `mut` parameters
+// expect-error: help: drop `mut`: write `n`; a parameter can be reassigned already
+// expect-error: 44:14: Rok has no `impl Trait`
+// expect-error: help: write `some Shape`: one type, picked by the compiler, that implements it
+// expect-error: 45:12: Rok has no `impl Trait`
+// expect-error: 46:17: Rok has no `Box<dyn Trait>`
+// expect-error: help: write `any Shape`: it holds a value of any type that implements it
+// expect-error: 47:17: Rok has no `dyn Trait`
+// expect-error: 48:13: Rok has no `impl Fn`
+// expect-error: help: write `fn(i32) -> i32`: one function type holds any function or closure
+// expect-error: 49:12: Rok has no `Fn` traits
+// expect-error: 50:12: Rok has no `Box<dyn FnMut>`
+// Rust habits in types and parameters: each error names the Rok form.
+fn read(p: &Point) -> i32 { p.x }
+fn bump(p: &mut Point) { p.x += 1; }
+fn name(s: &str) -> usize { s.len() }
+fn total(xs: &[i32]) -> usize { xs.len() }
+fn first<'a>(s: &'a str) -> str { s }
+
+impl Point {
+    fn get(&self) -> i32 { self.x }
+    fn set(&mut self) { self.x = 1; }
+    fn moved(mut self) -> Point { self }
+}
+
+fn inc(mut n: i32) -> i32 { n + 1 }
+fn make() -> impl Shape { Point { x: 1 } }
+fn show(s: impl Shape) {}
+fn all(xs: List<Box<dyn Shape>>) {}
+fn one(xs: List<dyn Shape>) {}
+fn apply(f: impl Fn(i32) -> i32) {}
+fn call<F: Fn(i32) -> i32>(f: F) {}
+fn hold(f: Box<dyn FnMut()>) {}
+
+trait Shape { fn area(self) -> i32; }
+struct Point { x: i32; }
+impl Shape for Point { fn area(self) -> i32 { self.x } }
+
+fn main() {}

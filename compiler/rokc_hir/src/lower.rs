@@ -40,6 +40,7 @@ mod mono;
 mod pattern;
 mod reflect;
 mod resolve;
+mod rust;
 pub use resolve::{hidden_module, hidden_module_msg, module_visibility, visibility_rank};
 pub use resolve::{implicit_use, is_dependency, root_path, set_packages, visible_from};
 mod send_check;
@@ -3654,6 +3655,9 @@ impl<'a> LowerCtx<'a> {
     /// "did you mean" for an unknown type path: types of the current
     /// module and the primitives.
     fn type_help(&self, segs: &[&str]) -> Option<String> {
+        if let Some(h) = rust::path_help(segs) {
+            return Some(h);
+        }
         let name = segs.last()?;
         if let (1, Some(h)) = (segs.len(), wide_int_help(name)) {
             return Some(h);
@@ -3684,6 +3688,9 @@ impl<'a> LowerCtx<'a> {
     /// scope, then functions / constants / statics of the current module.
     fn value_help(&self, segs: &[&str]) -> Option<String> {
         let [name] = segs else {
+            if let Some(h) = rust::path_help(segs) {
+                return Some(h);
+            }
             if let Some(h) = segs
                 .first()
                 .filter(|_| segs.len() == 2)
