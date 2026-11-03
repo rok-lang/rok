@@ -1660,14 +1660,10 @@ pub(super) fn lower_assign(
                 let idx = axis_parts(ctx, idx_expr);
                 let rest = [CallArg::Positional(value.clone())];
                 let span = target.span;
-                return Some(HirStmt::Expr(index_call(
-                    ctx,
-                    arr_h,
-                    "index_set",
-                    &idx,
-                    &rest,
-                    span,
-                )));
+                let (since, ty) = (ctx.probe_mark().diagnostics, arr_h.ty.clone());
+                let set = index_call(ctx, arr_h, "index_set", &idx, &rest, span);
+                no_axis_form(ctx, since, &ty, idx_expr, span);
+                return Some(HirStmt::Expr(set));
             }
             if one_axis_misuse(ctx, &arr_h.ty, idx_expr, target.span) {
                 return None;
@@ -15709,8 +15705,11 @@ fn axis_index_read(
 ) -> Result<HirExpr, HirExpr> {
     let arr_h = lower_expected(ctx, arr, HirTy::Unknown);
     if axis_indexed(ctx, &arr_h.ty) {
-        let idx = axis_parts(ctx, idx);
-        return Ok(index_call(ctx, arr_h, "index", &idx, &[], span));
+        let parts = axis_parts(ctx, idx);
+        let (since, ty) = (ctx.probe_mark().diagnostics, arr_h.ty.clone());
+        let read = index_call(ctx, arr_h, "index", &parts, &[], span);
+        no_axis_form(ctx, since, &ty, idx, span);
+        return Ok(read);
     }
     if one_axis_misuse(ctx, &arr_h.ty, idx, span) {
         return Ok(poison(span));
@@ -15798,6 +15797,41 @@ fn slice_arg(
             trailing_closure: None,
         },
         span,
+    }
+}
+
+/// An axis index whose form no `Index` / `IndexSet` impl of `ty` takes
+/// fails as an ambiguous call (the impls differ only in that form): say
+/// what it is instead.
+fn no_axis_form(ctx: &LowerCtx<'_>, since: usize, ty: &HirTy, idx: &Expr, span: Span) {
+    let part = |p: &Expr| match &p.kind {
+        ExprKind::AxisSlice { .. } => "slice",
+        ExprKind::Literal(AstLit::None) => "none",
+        ExprKind::Range {
+            start: None,
+            end: None,
+            inclusive: false,
+        } => "..",
+        _ => "position",
+    };
+    let form = match &idx.kind {
+        ExprKind::Tuple(parts) if parts.len() >= 2 => {
+            parts.iter().map(part).collect::<Vec<_>>().join(", ")
+        }
+        _ => part(idx).to_owned(),
+    };
+    let name = ctx.ty_name(ty);
+    let mut diags = ctx.env.sink.diagnostics.borrow_mut();
+    for d in diags[since..].iter_mut().filter(|d| {
+        d.code == Code::AMBIGUOUS_ITEM
+            && d.primary
+                .as_ref()
+                .is_some_and(|l| l.span.start == span.start)
+    }) {
+        d.message = format!("`{name}` takes no index of the form `[{form}]`");
+        d.notes = vec![
+            "help: index in two brackets, each a form it takes (`a[:, none][.., 0]`)".to_owned(),
+        ];
     }
 }
 

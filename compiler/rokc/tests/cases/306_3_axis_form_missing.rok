@@ -1,0 +1,13 @@
+// expect-error: 11:16: `Array<i64, 2>` takes no index of the form `[slice, none, slice]`
+// expect-error: help: index in two brackets, each a form it takes (`a[:, none][.., 0]`)
+// expect-error: 12:5: `Array<i64, 2>` takes no index of the form `[none, position, slice]`
+
+// An axis index whose form the type's `Index` / `IndexSet` impls do not
+// take names the form (it read as an ambiguous call).
+use rok::core::array::Array;
+
+fn main() {
+    let m: Array<i64, 2> = [[1, 2], [3, 4]];
+    println(f"{m[:, none, :]:?}");
+    m[none, 0, :] = 5;
+}
