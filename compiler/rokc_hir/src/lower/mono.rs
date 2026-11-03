@@ -2129,7 +2129,7 @@ pub(super) fn declared(name: &str, generics: &rokc_ast::Generics) -> String {
     format!("{name}<{}>", params.join(", "))
 }
 
-fn param_name(p: &rokc_ast::GenericParam) -> &str {
+pub(super) fn param_name(p: &rokc_ast::GenericParam) -> &str {
     let (rokc_ast::GenericParam::Type { name, .. } | rokc_ast::GenericParam::Const { name, .. }) =
         p;
     name
