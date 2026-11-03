@@ -1552,6 +1552,26 @@ fn tuple_struct_pattern(
             format!("cannot find enum variant `{}`", segs.join("::")),
         );
         ctx.help_last(ctx.value_help(segs));
+        // Rust's `Ok(v)` / `Err(e)` on a call that throws.
+        let throwing = || {
+            ctx.env
+                .sink
+                .diagnostics
+                .borrow()
+                .iter()
+                .any(|d| d.message.starts_with("this call can throw"))
+        };
+        if let (["Ok" | "Err"], [arg], true) = (segs, args, throwing()) {
+            let x = ctx.src(arg.span).unwrap_or("v");
+            ctx.help_last(Some(if segs[0] == "Ok" {
+                format!(
+                    "a call that throws gives its value, not a `Result`: write \
+                     `let {x} = try f() catch e {{ .. }};`"
+                )
+            } else {
+                format!("a call that throws is not a `Result`: write `try f() catch {x} {{ .. }}`")
+            }));
+        }
         // Rust's `Some(x)` on a `T | none`: a type-test pattern.
         if let (["Some"], [arg], HirTy::Sum(vs)) = (segs, args, scrut_ty) {
             let inner: Vec<String> = vs

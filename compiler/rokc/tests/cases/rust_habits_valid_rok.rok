@@ -1,0 +1,80 @@
+// expect-exit: 0
+// expect-stdout:
+// 1 3 true
+// Point { x: 11 } Point { x: 0 }
+// [10, 20]
+// 2 8
+// 42 42
+// 7 8
+// 5 0
+// 6
+// done
+
+// Rok that looks like the Rust habits the compiler reports: `&` and `*`
+// as operators, `ref`, `[move x]`, labels, `pub(pkg)`, `pkg::` paths,
+// `any Trait`, `fn` types, a user `Box`, and a meta macro named `vec`.
+
+#[derive(Debug, Clone)]
+struct Point { x: i32; }
+
+impl Point {
+    fn shift(ref self, d: i32) { self.x += d; }
+}
+
+fn reset(ref p: Point) { p.x = 0; }
+
+trait Shape { fn area(self) -> i32; }
+impl Shape for Point { fn area(self) -> i32 { self.x } }
+
+fn total(xs: List<any Shape>) -> i32 { xs.map(|s| s.area()).fold(0, |a, b| a + b) }
+fn apply(f: fn(i32) -> i32, x: i32) -> i32 { f(x) }
+fn first<T: Clone>(xs: List<T>) -> T where T: Clone { xs[0].clone() }
+
+struct Box<T> { v: T; }
+
+mod geo {
+    pub(pkg) fn two() -> i32 { 2 }
+    pub mod unit {
+        pub(sub) fn five() -> i32 { 5 }
+        pub fn get() -> i32 { five() + sup::two() - 2 }
+    }
+}
+
+#[impl_macro(vec)] @macro {
+    ( @e: expr ) => { { let v = @e; (v, v) } }
+}
+
+fn parse(s: str) -> Result<i32, str> {
+    if s == "" { Result::Err("empty") } else { Result::Ok(s.len() as i32) }
+}
+
+fn main() {
+    let a = 3;
+    let mut_ = 1;
+    println(f"{a & mut_} {a | 2} {a > 0 && mut_ * 2 == 2}");
+    let p = Point { x: 1 };
+    let q = p.clone();
+    p.shift(10);
+    reset(ref q);
+    println(f"{p:?} {q:?}");
+    let ps = [Point { x: 1 }, Point { x: 2 }];
+    for ref s in ps { s.x *= 10; }
+    println(f"{ps.map(|s| s.x).to_list():?}");
+    println(f"{pkg::geo::two()} {geo::unit::get() + 3}");
+    let (x, y) = vec!(42);
+    println(f"{x} {y}");
+    let rows = [3, 1, 2];
+    let f = [move rows] || rows.len() as i32;
+    println(f"{apply(|n| n + 4, f())} {Box { v: 8 }.v}");
+    let hits = 0;
+    'outer: for i in 0..3 {
+        for j in 0..3 {
+            if i * j == 2 { break 'outer; }
+            hits += 1;
+        }
+    }
+    let r = match parse("") { Ok(n) => n, Err(_) => 0 };
+    println(f"{hits} {r}");
+    println(total([Point { x: 1 }, Point { x: 5 }]) + first([0]));
+    println("done");
+}

@@ -27,6 +27,8 @@ pub use macros::expand_to_text;
 pub mod meta;
 #[path = "python.rs"]
 mod python;
+#[path = "rust.rs"]
+mod rust;
 
 /// `rest` of a `let (..)` tuple pattern: splice index + optional name.
 type LetTupleRest = (usize, Option<String>);
@@ -1679,10 +1681,11 @@ impl<'a> Parser<'a> {
     /// Positioned at `name!( .. )` for a registered macro:
     /// at module level it is an item (it may expand to items).
     fn at_item_macro_call(&self) -> bool {
-        !self.meta.is_empty()
-            && self
-                .macro_head()
-                .is_some_and(|(q, n, _)| !q.is_empty() || self.meta.find_macro(&n).is_some())
+        self.at_macro_rules()
+            || !self.meta.is_empty()
+                && self
+                    .macro_head()
+                    .is_some_and(|(q, n, _)| !q.is_empty() || self.meta.find_macro(&n).is_some())
     }
 
     fn at_item_start(&self) -> bool {
@@ -2302,6 +2305,10 @@ impl<'a> Parser<'a> {
     fn parse_item_lifting(&mut self) -> Option<Item> {
         let span = self.peek_span();
         let from = self.pos;
+        if self.rust_macro_rules() {
+            self.vanished = true;
+            return None;
+        }
         // A `name!(..)` macro at item position expands to items.
         if let Some(items) = self.macro_call_items() {
             let mut it = items.into_iter();
@@ -2773,7 +2780,8 @@ impl<'a> Parser<'a> {
         // (`impl <A as P>::Out { .. }`).
         let tok = |i: usize| self.tokens.get(self.pos + i).map(|t| &t.kind);
         let params = match (tok(1), tok(2)) {
-            (Some(TokenKind::Gt), _)
+            // `impl<'a>`: a lifetime, reported with the parameters.
+            (Some(TokenKind::Gt | TokenKind::Label(_)), _)
             | (
                 Some(TokenKind::Ident(_)),
                 Some(TokenKind::Colon | TokenKind::Comma | TokenKind::Gt | TokenKind::Eq),
@@ -3804,6 +3812,9 @@ impl<'a> Parser<'a> {
         if !self.eat(&TokenKind::LParen) {
             return Visibility::Pub;
         }
+        if let Some(v) = self.rust_visibility() {
+            return v;
+        }
         // `pub(reach)`. Contextual identifier; only valid inside `pub(...)`.
         let v = if let TokenKind::Ident(name) = self.peek().clone() {
             match name.as_str() {
@@ -4096,6 +4107,9 @@ impl<'a> Parser<'a> {
         }
         let mut defaulted = false;
         while !matches!(self.peek(), TokenKind::Gt | TokenKind::Eof) {
+            if self.rust_lifetime(true) {
+                continue;
+            }
             let start = self.peek_span();
             if matches!(self.peek_next(), Some(TokenKind::Ident(_))) && self.eat_kw("const") {
                 let TokenKind::Ident(name) = self.peek().clone() else {
@@ -4184,7 +4198,8 @@ impl<'a> Parser<'a> {
     fn parse_bounds(&mut self) -> Vec<Ty> {
         let mut bounds = Vec::new();
         loop {
-            if let Some(t) = self.parse_type() {
+            if self.rust_lifetime(false) {
+            } else if let Some(t) = self.parse_type() {
                 bounds.push(t);
             }
             if !self.eat(&TokenKind::Plus) {
@@ -4253,7 +4268,10 @@ impl<'a> Parser<'a> {
 
     fn parse_param(&mut self) -> Option<Param> {
         let start = self.peek_span();
-        let by_ref = self.eat(&TokenKind::Ref);
+        if let Some(p) = self.rust_param() {
+            return Some(p);
+        }
+        let mut by_ref = self.eat(&TokenKind::Ref);
 
         // `self` / `ref self`; its type is filled in with the trait or impl.
         if matches!(self.peek(), TokenKind::SelfLower) {
@@ -4311,6 +4329,10 @@ impl<'a> Parser<'a> {
                 // `...T` - three dots. Lexed as `..` then `.`.
                 let elem = self.parse_type()?;
                 (Some(elem), true)
+            } else if matches!(self.peek(), TokenKind::Amp | TokenKind::AmpAmp) {
+                let (ty, is_mut) = self.rust_ref_type(Some(&name))?;
+                by_ref |= is_mut;
+                (Some(ty), false)
             } else {
                 (Some(self.parse_type()?), false)
             }
@@ -4390,6 +4412,9 @@ impl<'a> Parser<'a> {
         if let Some(ty) = self.macro_call_type() {
             return Some(ty);
         }
+        if let Some(ty) = self.rust_type() {
+            return ty;
+        }
         let start = self.peek_span();
         let kind = match self.peek().clone() {
             // `any` | `any Tr` | `any (A + B)`. The bound binds
@@ -4451,50 +4476,7 @@ impl<'a> Parser<'a> {
             TokenKind::Lt | TokenKind::Shl => TyKind::QPath(Box::new(self.parse_qpath()?)),
             TokenKind::Fn => {
                 self.bump();
-                self.expect(&TokenKind::LParen, "`(`")?;
-                let args = self.fn_type_params()?;
-                let throws_span = self.peek_span();
-                let throws = self.parse_throws();
-                // `fn(..) -> R` binds tighter than `|`:
-                // `fn() -> A | B` is `(fn() -> A) | B`.
-                let mut ret = if self.eat(&TokenKind::Arrow) {
-                    self.parse_type_atom()?
-                } else {
-                    Ty {
-                        kind: TyKind::Tuple(Vec::new()),
-                        span: start,
-                    }
-                };
-                let err = match throws {
-                    ThrowsKind::None => None,
-                    // Claimed by an enclosing `rethrows` signature, else
-                    // reported at the end of the parse.
-                    ThrowsKind::Untyped => {
-                        self.untyped_throws.push(throws_span);
-                        Some(rokc_ast::untyped_throws_ty(throws_span))
-                    }
-                    ThrowsKind::Typed(mut tys) if tys.len() == 1 => tys.pop(),
-                    ThrowsKind::Typed(tys) => Some(Ty {
-                        kind: TyKind::Sum(tys),
-                        span: throws_span,
-                    }),
-                };
-                if let Some(err) = err {
-                    let span = ret.span;
-                    ret = Ty {
-                        kind: TyKind::Throws {
-                            ok: Box::new(ret),
-                            err: Box::new(err),
-                        },
-                        span,
-                    };
-                }
-                // `fn(..) -> R + Send + Sync` - auto-trait bounds.
-                let mut bounds = rokc_ast::FnTyBounds::default();
-                while self.eat(&TokenKind::Plus) {
-                    bounds.auto.push(self.parse_type_path()?);
-                }
-                TyKind::Fn(args, Box::new(ret), bounds)
+                self.fn_type_rest(start)?
             }
             TokenKind::LParen => {
                 // `()` unit, `(T)` grouping, `(T,)` / `(A, B)` tuple.
@@ -4548,6 +4530,54 @@ impl<'a> Parser<'a> {
         Some(Ty { kind, span: start })
     }
 
+    /// `(..) -> R` of a `fn` type, after `fn`.
+    fn fn_type_rest(&mut self, start: Span) -> Option<TyKind> {
+        self.expect(&TokenKind::LParen, "`(`")?;
+        let args = self.fn_type_params()?;
+        let throws_span = self.peek_span();
+        let throws = self.parse_throws();
+        // `fn(..) -> R` binds tighter than `|`:
+        // `fn() -> A | B` is `(fn() -> A) | B`.
+        let mut ret = if self.eat(&TokenKind::Arrow) {
+            self.parse_type_atom()?
+        } else {
+            Ty {
+                kind: TyKind::Tuple(Vec::new()),
+                span: start,
+            }
+        };
+        let err = match throws {
+            ThrowsKind::None => None,
+            // Claimed by an enclosing `rethrows` signature, else
+            // reported at the end of the parse.
+            ThrowsKind::Untyped => {
+                self.untyped_throws.push(throws_span);
+                Some(rokc_ast::untyped_throws_ty(throws_span))
+            }
+            ThrowsKind::Typed(mut tys) if tys.len() == 1 => tys.pop(),
+            ThrowsKind::Typed(tys) => Some(Ty {
+                kind: TyKind::Sum(tys),
+                span: throws_span,
+            }),
+        };
+        if let Some(err) = err {
+            let span = ret.span;
+            ret = Ty {
+                kind: TyKind::Throws {
+                    ok: Box::new(ret),
+                    err: Box::new(err),
+                },
+                span,
+            };
+        }
+        // `fn(..) -> R + Send + Sync` - auto-trait bounds.
+        let mut bounds = rokc_ast::FnTyBounds::default();
+        while self.eat(&TokenKind::Plus) {
+            bounds.auto.push(self.parse_type_path()?);
+        }
+        Some(TyKind::Fn(args, Box::new(ret), bounds))
+    }
+
     /// Comma-separated types up to (not including) `close`. Sum types are
     /// allowed inside the brackets even where a bare `|` would end a type.
     fn nested_type_list(&mut self, close: TokenKind) -> Option<Vec<Ty>> {
@@ -4561,6 +4591,9 @@ impl<'a> Parser<'a> {
                     TokenKind::Eof | TokenKind::Shr | TokenKind::GtEq | TokenKind::ShrEq
                 )
             {
+                if p.rust_lifetime(true) {
+                    continue;
+                }
                 // Const argument: a literal, `-lit`, or
                 // `{ expr }`.
                 if matches!(
@@ -5444,7 +5477,7 @@ impl<'a> Parser<'a> {
     #[allow(clippy::cognitive_complexity)] // one arm per statement form
     fn parse_stmt(&mut self) -> Option<(Stmt, bool)> {
         let start = self.peek_span();
-        if let Some(s) = self.python_stmt() {
+        if let Some(s) = self.python_stmt().or_else(|| self.rust_stmt()) {
             return Some((s, false));
         }
         if self.at_nested_fn() {
@@ -6085,6 +6118,8 @@ impl<'a> Parser<'a> {
                 },
                 span: self.to_prev(span),
             }
+        } else if let Some(e) = self.rust_prefix() {
+            e?
         } else {
             self.parse_primary()?
         };
@@ -6829,6 +6864,7 @@ impl<'a> Parser<'a> {
             .or_else(|| self.cfg_macro())
             .or_else(|| self.include_macro())
             .or_else(|| self.macro_call_expr())
+            .or_else(|| self.rust_macro())
         {
             return Some(e);
         }
@@ -8610,6 +8646,9 @@ impl<'a> Parser<'a> {
     fn parse_pattern_atom_inner(&mut self) -> Option<Pattern> {
         if let Some(pat) = self.macro_call_pattern() {
             return Some(pat);
+        }
+        if let Some(pat) = self.rust_pattern() {
+            return pat;
         }
         let span = self.peek_span();
         let num = match self.peek() {

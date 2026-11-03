@@ -1,0 +1,50 @@
+// expect-error: Rok has no `&` borrows
+// expect-error: help: write `p`: a struct is passed as a copy, a `List` or `Dict` as the same object
+// expect-error: Rok has no `&mut` borrows
+// expect-error: help: write `ref p`, for a parameter declared `ref p: T`: the function changes the caller's value
+// expect-error: help: write `for x in xs`: the loop reads the list itself
+// expect-error: help: write `for ref x in xs`: each `x` is then the element
+// expect-error: Rok has no `*` dereference
+// expect-error: help: write `n`: a value needs no dereference
+// expect-error: Rok has no `&` patterns
+// expect-error: help: write `x`: the pattern matches the value itself
+// expect-error: help: write `x`: the parameter holds the value itself
+// expect-error: Rok has no `mut` bindings
+// expect-error: help: drop `mut`: write `b`; every variable can be reassigned
+// expect-error: Rok has no `mut` parameters
+// expect-error: Rok has no `move` closures
+// expect-error: help: write `[move rows] || ..`: a closure copies what it captures, and `[move x]` hands `x` over
+
+// Rust habits in expressions and patterns: each error names the Rok
+// form, and the code after it still parses.
+
+struct Point { x: i32; }
+
+fn read(p: Point) -> i32 { p.x }
+fn reset(ref p: Point) { p.x = 0; }
+
+fn borrows() {
+    let p = Point { x: 1 };
+    println(read(&p));
+    reset(&mut p);
+    let xs = [1, 2];
+    for x in &xs { println(x); }
+    for x in &mut xs { println(x); }
+    let n = 3;
+    println(*n + 1);
+}
+
+fn patterns() {
+    let xs = [1, 2];
+    for &x in xs { println(x); }
+    let ys = xs.map(|&x| x * 2);
+    let (a, mut b) = (1, 2);
+    let zs = xs.map(|mut x| x + 1);
+}
+
+fn threads() {
+    let rows = [3, 1, 2];
+    let f = move || rows.len();
+}
+
+fn main() {}

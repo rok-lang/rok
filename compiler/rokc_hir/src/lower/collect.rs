@@ -3434,8 +3434,8 @@ pub(super) fn collect_field_visibility(
     out
 }
 
-/// What rok writes for `Option<T>`: `T | none`, `T` as written at
-/// `span`.
+/// What Rok writes for another language's type, such as `Option<T>`,
+/// with `T` as written at `span`.
 fn habit_type_help(
     name: &str,
     span: rokc_diagnostic::Span,
@@ -3458,6 +3458,9 @@ fn habit_type_help(
         })?;
         Some(r[..end].trim())
     });
+    if let Some(h) = super::rust::type_help(name, args) {
+        return Some(h);
+    }
     (name == "Option").then(|| {
         format!(
             "rok has no `Option`: an optional is `T | none`; write `{} | none`",

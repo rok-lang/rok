@@ -45,6 +45,9 @@ pub struct Lexer<'src> {
     /// Start of the outermost f-string a hole error (backslash,
     /// newline) was reported in: one per literal.
     hole_reported: Option<usize>,
+    /// Bracket depth inside a Rust `macro_rules! m { .. }` body, whose
+    /// `$` the parser reports with the macro.
+    rules_depth: Option<u32>,
 }
 
 /// One level of f-string nesting. `triple`: of the f-string it is in.
@@ -74,6 +77,7 @@ impl<'src> Lexer<'src> {
             col: 1,
             diagnostics: Vec::new(),
             prev_ends_expr: false,
+            rules_depth: None,
             prev_minus: false,
             idents: Vec::new(),
             seen: std::collections::HashSet::new(),
@@ -156,6 +160,7 @@ impl<'src> Lexer<'src> {
                         | TokenKind::None
                         | TokenKind::Question
                 );
+                self.track_rules(&tokens, &tok.kind);
                 tokens.push(tok);
             }
         }
@@ -309,6 +314,10 @@ impl<'src> Lexer<'src> {
                     self.advance(c.len_utf8());
                     math_op(c)?
                 }
+                Some('$') if self.rules_depth.is_some() => {
+                    self.advance(1);
+                    return None;
+                }
                 _ => {
                     self.skip_invalid();
                     return None;
@@ -327,6 +336,34 @@ impl<'src> Lexer<'src> {
         };
         let span = Self::make_span(start, self.pos, line, col);
         Some(Token::new(kind, span))
+    }
+
+    /// Follow the brackets of a `macro_rules! m { .. }` body; `kind` comes
+    /// after `tokens`.
+    fn track_rules(&mut self, tokens: &[Token], kind: &TokenKind) {
+        let open = matches!(
+            kind,
+            TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace
+        );
+        let close = matches!(
+            kind,
+            TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace
+        );
+        self.rules_depth = match self.rules_depth {
+            Some(d) if open => Some(d + 1),
+            Some(d) if close => d.checked_sub(1).filter(|&d| d > 0),
+            None if open => match tokens {
+                [.., a, b, c]
+                    if matches!(&a.kind, TokenKind::Ident(n) if n == "macro_rules")
+                        && b.kind == TokenKind::Bang
+                        && matches!(c.kind, TokenKind::Ident(_)) =>
+                {
+                    Some(1)
+                }
+                _ => None,
+            },
+            d => d,
+        };
     }
 
     /// Report and skip a run of characters that cannot start a token

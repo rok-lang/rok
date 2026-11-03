@@ -1,0 +1,72 @@
+// expect-error: unresolved import: `std::collections::HashMap` does not exist
+// expect-error: help: `List`, `Dict`, `Set` and `Deque` are in the prelude: delete this `use`
+// expect-error: cannot find type `Vec` in this scope
+// expect-error: help: Rok has no `Vec`: write `List<i32>`
+// expect-error: cannot find type `String` in this scope
+// expect-error: help: Rok has no `String`: write `str`, its one string type
+// expect-error: cannot find type `HashMap` in this scope
+// expect-error: help: Rok has no `HashMap`: write `Dict<str, i32>`
+// expect-error: cannot find type `Arc` in this scope
+// expect-error: help: Rok has no `Arc`: write `Mutex<i32>`; copies of a `Mutex` share one lock
+// expect-error: cannot find type `Box` in this scope
+// expect-error: help: Rok has no `Box`: write `Node`; the GC frees a value once nothing refers to it
+// expect-error: cannot find function `Vec::new` in this scope
+// expect-error: help: write `[]`, or `List::new()`
+// expect-error: cannot find function `String::from` in this scope
+// expect-error: help: write `"x"`: a string literal is a `str` already
+// expect-error: cannot find function `Rc::new` in this scope
+// expect-error: help: write `p`: Rok has no `Rc` or `RefCell`
+// expect-error: cannot find function `RefCell::new` in this scope
+// expect-error: help: write `p`: Rok has no `RefCell`
+// expect-error: cannot find function `crate::geo::dist` in this scope
+// expect-error: help: this package's root is `pkg`: write `pkg::geo::dist`
+// expect-error: cannot find function `super::dist` in this scope
+// expect-error: help: the parent module is `sup`: write `sup::dist`
+// expect-error: `Ok` is not in scope: it is the variant `Result::Ok`
+// expect-error: help: a `throws` function returns the value itself: write `n`
+// expect-error: help: a `throws` function needs no `Ok(())`: delete it (`return;` leaves early)
+// expect-error: `Err` is not in scope: it is the variant `Result::Err`
+// expect-error: help: write `throw "negative"`
+// expect-error: `parse(s)` throws instead of returning a `Result`: Rok has no `unwrap` on it
+// expect-error: help: write `try! parse(s)`: it panics on the error
+// expect-error: `parse(s)` throws instead of returning a `Result`: Rok has no `expect` on it
+// expect-error: help: write `try! parse(s)`, or `try parse(s) catch e { panic(f"bad port: {e}") }`
+
+// Rust's standard names and `Result` habits: each error names the Rok form.
+
+use std::collections::HashMap;
+
+struct Point { x: i32; }
+struct Node { next: Box<Node> | none; }
+
+fn sizes(a: Vec<i32>, b: String, c: HashMap<str, i32>, d: Arc<Mutex<i32>>) {}
+
+fn make() {
+    let v: List<i32> = Vec::new();
+    let s = String::from("x");
+    let p = Point { x: 1 };
+    let shared = Rc::new(RefCell::new(p));
+    crate::geo::dist();
+}
+
+mod geo {
+    pub fn dist() {}
+    pub mod unit {
+        pub fn f() { super::dist(); }
+    }
+}
+
+fn parse(s: str) throws -> i32 {
+    let n = try s.parse::<i32>();
+    if n < 0 { return Err("negative"); }
+    Ok(n)
+}
+
+fn done() throws { Ok(()) }
+
+fn ports(s: str) {
+    let a = parse(s).unwrap();
+    let b = parse(s).expect("bad port");
+}
+
+fn main() {}

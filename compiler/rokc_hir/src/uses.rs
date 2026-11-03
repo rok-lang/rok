@@ -637,8 +637,19 @@ pub fn check_use_targets(
                         || k.strip_suffix(r).is_some_and(|s| s.ends_with("::"))
                 })
             };
-            if let Some((help, note)) = root
-                .filter(|r| bare && unknown(r))
+            // Rust's `std::` / `core::`, with no module of that name.
+            let rust_root = |r: &str| {
+                matches!(r, "std" | "core")
+                    && !known
+                        .iter()
+                        .any(|k| k == r || k.starts_with(&format!("{r}::")))
+            };
+            if bare && path.starts_with("std::collections::") && rust_root("std") {
+                d = d.with_help(
+                    "`List`, `Dict`, `Set` and `Deque` are in the prelude: delete this `use`",
+                );
+            } else if let Some((help, note)) = root
+                .filter(|r| bare && (unknown(r) || rust_root(r)))
                 .zip(missing.as_ref())
                 .and_then(|(r, m)| m.help(r, module_path))
             {
