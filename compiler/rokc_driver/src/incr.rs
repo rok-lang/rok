@@ -143,11 +143,12 @@ impl Store {
         let mut e = Enc::new(true);
         e.buf.extend_from_slice(&header(magic));
         // The last entry at a key wins (a read one, then its new value).
+        // Written by key: threads push in no fixed order.
         let mut seen = std::collections::HashSet::new();
-        for (k, v) in kept.iter().rev() {
-            if !seen.insert(*k) {
-                continue;
-            }
+        let mut last: Vec<&(u64, Kept)> =
+            kept.iter().rev().filter(|(k, _)| seen.insert(*k)).collect();
+        last.sort_unstable_by_key(|(k, _)| *k);
+        for (k, v) in last {
             e.u(*k);
             e.bytes(match v {
                 Kept::Old(a, b) => &self.data[*a..*b],

@@ -3234,6 +3234,100 @@ fn check_x86_pe(t: &str, b: &[u8]) {
     );
 }
 
+/// Clean builds of the same package and dependency write the same bytes:
+/// objects, archives, ROKHIRs and the incremental stores. The `.fp`
+/// records hold file stamps and are left out.
+#[test]
+fn clean_builds_are_byte_identical() {
+    let Some(env) = setup() else { return };
+    let dir = scratch("deterministic");
+    put(
+        dir.join("greet/src/lib.rok"),
+        "pub mod words;\npub mod shapes;\nuse pkg::words::hello;\n\
+         pub fn greet(n: i32) -> i32 { return hello() + n; }\n",
+    )
+    .unwrap();
+    put(
+        dir.join("greet/src/words.rok"),
+        "pub fn hello() -> i32 { return 40; }\n\
+         pub fn names() -> Dict<str, i32> { return {\"a\": 1, \"b\": 2, \"c\": 3}; }\n",
+    )
+    .unwrap();
+    put(
+        dir.join("greet/src/shapes.rok"),
+        "pub enum Shape { Circle(f64), Square(f64), Tri(f64, f64) }\n\
+         pub trait Area { fn area(self) -> f64; }\n\
+         impl Area for Shape {\n    fn area(self) -> f64 {\n        match self {\n            \
+         Shape::Circle(r) => 3.0 * r * r,\n            Shape::Square(s) => s * s,\n            \
+         Shape::Tri(b, h) => b * h / 2.0,\n        }\n    }\n}\n",
+    )
+    .unwrap();
+    // Enough files that parsing them in parallel finishes in no fixed order.
+    let mut main = String::from("mod sub;\nuse greet::greet;\nuse greet::shapes::{Area, Shape};\n");
+    let mut sum = String::from("0");
+    for i in 0..24 {
+        main += &format!("mod m{i};\n");
+        sum += &format!(" + m{i}::f({i})");
+        put(
+            dir.join(format!("app/src/m{i}.rok")),
+            format!(
+                "pub fn f(x: i64) -> i64 {{ return x * {i} + {}; }}\n",
+                i * 7
+            ),
+        )
+        .unwrap();
+    }
+    main += &format!(
+        "let s: Set<str> = Set::new();\nfor (k, _) in greet::words::names() {{ s.insert(k); }}\n\
+         println(f\"{{greet(1)}} {{sub::two()}} {{Shape::Tri(2.0, 3.0).area()}} {{s.len()}} {{{sum}}}\");\n"
+    );
+    put(dir.join("app/src/main.rok"), main).unwrap();
+    put(
+        dir.join("app/src/sub.rok"),
+        "use greet::words::hello;\npub fn two() -> i32 { return hello() + 2; }\n",
+    )
+    .unwrap();
+    let build = || {
+        let _ = fs::remove_dir_all(dir.join("app/target"));
+        let out = rokc(
+            Some(&env),
+            &dir,
+            &["build", "app", "--extern", "greet=greet"],
+        );
+        assert_exit(&out, 0);
+        let mut files = Vec::new();
+        let mut todo = vec![dir.join("app/target")];
+        while let Some(d) = todo.pop() {
+            for e in fs::read_dir(&d).unwrap() {
+                let p = e.unwrap().path();
+                if p.is_dir() {
+                    todo.push(p);
+                } else if p.extension().is_none_or(|x| x != "fp") {
+                    let bytes = fs::read(&p).unwrap();
+                    files.push((p, bytes));
+                }
+            }
+        }
+        files.sort();
+        files
+    };
+    // The first build may make the toolchain's library stage, which
+    // later builds read instead of keeping their own parses.
+    build();
+    let first = build();
+    assert!(
+        first.iter().any(|(p, _)| p.ends_with("deps/greet.rokhir")),
+        "{:?}",
+        first.iter().map(|(p, _)| p).collect::<Vec<_>>()
+    );
+    let second = build();
+    let names = |f: &[(PathBuf, Vec<u8>)]| f.iter().map(|(p, _)| p.clone()).collect::<Vec<_>>();
+    assert_eq!(names(&first), names(&second));
+    for ((p, a), (_, b)) in first.iter().zip(&second) {
+        assert!(a == b, "{} differs between two clean builds", p.display());
+    }
+}
+
 #[test]
 fn extern_dependencies_are_top_level_names() {
     let Some(env) = setup() else { return };
