@@ -1,0 +1,10 @@
+// expect-error: conflicting implementations of trait
+
+// `0x1` and `1usize` are the same const argument.
+struct W<T, const N: usize> { v: T; }
+trait Tag { fn tag(self) -> i32; }
+
+impl<T> Tag for W<T, 0x1> { fn tag(self) -> i32 { return 1; } }
+impl<T> Tag for W<T, 1usize> { fn tag(self) -> i32 { return 2; } }
+
+fn main() -> i32 { return 0; }

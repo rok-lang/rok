@@ -1,0 +1,24 @@
+// expect-exit: 0
+// expect-stdout: 1 4 6
+
+// Const arguments compare by value: `N + 1` and `N + 2` never meet, an
+// unsigned `N + 1` is never `0`, and `0x1` is not `2`.
+struct V<const N: usize> { x: i32; }
+struct W<T, const N: usize> { v: T; }
+trait Grow<R> { fn grow(self) -> i32; }
+trait Tag { fn tag(self) -> i32; }
+
+impl<const N: usize> Grow<V<{ N + 1 }>> for V<N> { fn grow(self) -> i32 { return 1; } }
+impl<const N: usize> Grow<V<{ 2 + N }>> for V<N> { fn grow(self) -> i32 { return 2; } }
+impl<T, const N: usize> Tag for W<T, { N + 1 }> { fn tag(self) -> i32 { return 3; } }
+impl<T> Tag for W<T, 0> { fn tag(self) -> i32 { return 4; } }
+impl<T> Grow<i32> for W<T, 0x1> { fn grow(self) -> i32 { return 5; } }
+impl<T> Grow<i32> for W<T, { 1 + 1 }> { fn grow(self) -> i32 { return 6; } }
+
+fn main() -> i32 {
+    let v: V<3> = V { x: 0 };
+    let z: W<i32, 0> = W { v: 0 };
+    let two: W<i32, 2> = W { v: 0 };
+    print(f"{v.x + 1} {z.tag()} {two.grow()}");
+    return 0;
+}

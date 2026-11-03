@@ -1,0 +1,10 @@
+// expect-error: conflicting implementations of trait
+
+// `N + 1` meets another impl's free `M`.
+struct V<const N: usize> { x: i32; }
+trait Grow<R> { fn grow(self) -> i32; }
+
+impl<const N: usize> Grow<V<{ N + 1 }>> for V<N> { fn grow(self) -> i32 { return 1; } }
+impl<const N: usize, const M: usize> Grow<V<M>> for V<N> { fn grow(self) -> i32 { return 2; } }
+
+fn main() -> i32 { return 0; }
