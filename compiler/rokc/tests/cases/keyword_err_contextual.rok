@@ -1,0 +1,6 @@
+// expect-error: `#[keyword("some")]`: `some` is already a keyword
+// A contextual keyword can't be registered either.
+#[keyword("some")]
+fn some_handler() {}
+
+fn main() {}

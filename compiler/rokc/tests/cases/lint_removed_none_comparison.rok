@@ -1,0 +1,9 @@
+// expect-exit: 0
+// expect-stdout: done
+// forbid-warning: unknown lint
+// A removed lint's name is accepted and does nothing.
+#[allow(none_comparison)]
+fn main() {
+    let x: i64 | none = none;
+    if x == none { println("done"); }
+}

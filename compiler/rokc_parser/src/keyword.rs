@@ -35,7 +35,7 @@ pub struct KeywordDef {
 /// (contextual keywords, path roots).
 const CONTEXTUAL: &[&str] = &[
     "type", "any", "in", "where", "throws", "rethrows", "catch", "finally", "const", "static",
-    "extern", "mut", "union", "pkg", "sub", "sup", "rok",
+    "extern", "mut", "union", "some", "pkg", "sub", "sup", "rok",
 ];
 
 /// Every `#[keyword("..")]` in `items` (inline `mod`s included). One on

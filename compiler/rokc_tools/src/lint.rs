@@ -184,6 +184,8 @@ pub const REMOVED_LINTS: &[&str] = &[
     "shadowed_loop_var",
     // Error now: a field write on a copy nothing reads.
     "write_to_copy",
+    // Retired: `x == none` narrows like `x is none`.
+    "none_comparison",
 ];
 
 /// A lint added in 0.1.6 (tests build a later-release table with it).

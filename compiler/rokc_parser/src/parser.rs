@@ -9374,7 +9374,7 @@ fn import_help(file: &str, tokens: &[Token], name: &str) -> Option<String> {
 pub(crate) fn keyword_hint(word: &str) -> Option<&'static str> {
     const CONTEXTUAL: &[&str] = &[
         "type", "any", "in", "where", "throws", "rethrows", "catch", "finally", "const", "static",
-        "extern", "mut", "union",
+        "extern", "mut", "union", "some",
     ];
     keyword_alias(word).or_else(|| {
         rokc_diagnostic::suggest(
