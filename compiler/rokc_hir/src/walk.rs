@@ -421,6 +421,11 @@ pub fn walk_expr(v: &mut impl AstVisitor, e: &Expr) {
                 walk_expr(v, x);
             }
         }
+        ExprKind::AxisSlice { start, end, step } => {
+            for x in [start, end, step].into_iter().flatten() {
+                walk_expr(v, x);
+            }
+        }
         ExprKind::Range { start, end, .. } => {
             for x in [start, end].into_iter().flatten() {
                 walk_expr(v, x);

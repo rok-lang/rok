@@ -16,8 +16,7 @@ impl index::Index<(usize, usize)> for Grid {
     fn index(self, idx: (usize, usize)) -> i32 { self.cells[idx.0 * self.w + idx.1] }
 }
 
-impl index::IndexSet<(usize, usize)> for Grid {
-    type Value = i32;
+impl index::IndexSet<(usize, usize), i32> for Grid {
     fn index_set(self, idx: (usize, usize), value: i32) { self.cells[idx.0 * self.w + idx.1] = value; }
 }
 

@@ -671,8 +671,7 @@ impl<T> Index<usize> for List<T> {
 }
 
 /// `xs[i] = v`; panics out of bounds.
-impl<T> IndexSet<usize> for List<T> {
-    type Value = T;
+impl<T> IndexSet<usize, T> for List<T> {
     #[track_caller]
     const fn index_set(self, idx: usize, value: T) {
         unsafe {

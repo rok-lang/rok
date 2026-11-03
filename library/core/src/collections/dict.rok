@@ -620,8 +620,7 @@ const fn key_missing<K, V>(k: K) -> ! {
 }
 
 /// `d[k] = v` inserts or replaces.
-impl<K: Hash, V, S: BuildHasher> IndexSet<K> for Dict<K, V, S> {
-    type Value = V;
+impl<K: Hash, V, S: BuildHasher> IndexSet<K, V> for Dict<K, V, S> {
     const fn index_set(self, k: K, v: V) {
         self.insert(k, v);
     }

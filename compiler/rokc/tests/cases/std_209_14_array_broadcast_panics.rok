@@ -1,0 +1,16 @@
+// expect-exit: 101
+// expect-stderr: thread 'main' panicked at tests/cases/std_209_14_array_broadcast_panics.rok:15:16:
+// expect-stderr: broadcast: shapes [2, 3] and [2, 2] differ on axis 1; each axis must match or have length 1
+// expect-stdout: [[2, 4, 6], [5, 7, 9]]
+
+// Element-wise operands stretch an axis of length 1; other lengths must
+// match, and a mismatch names both shapes.
+use rok::core::array::Array;
+
+fn main() {
+    let a: Array<i64, 2> = [[1, 2, 3], [4, 5, 6]];
+    let r: Array<i64, 2> = [[1, 2, 3]];
+    println(f"{a .+ r:?}");
+    let b: Array<i64, 2> = [[1, 2], [3, 4]];
+    println(f"{a .+ b:?}");
+}

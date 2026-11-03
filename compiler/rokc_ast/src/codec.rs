@@ -214,6 +214,7 @@ codec_enum!(ExprKind {
         end,
         step
     },
+    AxisSlice { start, end, step },
     Range {
         start,
         end,

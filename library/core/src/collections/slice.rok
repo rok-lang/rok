@@ -782,8 +782,7 @@ impl<T> Index<usize> for SliceMut<T> {
 }
 
 /// `s[i] = x` writes element `i` of the list; panics out of bounds.
-impl<T> IndexSet<usize> for SliceMut<T> {
-    type Value = T;
+impl<T> IndexSet<usize, T> for SliceMut<T> {
     #[track_caller]
     const fn index_set(self, i: usize, value: T) {
         self.live();

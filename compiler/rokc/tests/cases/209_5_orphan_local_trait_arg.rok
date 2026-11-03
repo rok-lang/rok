@@ -1,0 +1,35 @@
+// expect-exit: 0
+// expect-stdout: V(3, 6) V(0.5, 1) V(2, 4) true
+
+// A foreign trait may be implemented for a foreign type when one of the
+// trait's type arguments is defined here (before any bare type
+// parameter): `impl Mul<V> for f64` lets a scalar stand on the left.
+#[derive(Clone, Copy, PartialEq)]
+struct V { x: f64; y: f64; }
+
+impl Display for V {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"V({self.x}, {self.y})") }
+}
+
+impl ops::Mul<V> for f64 {
+    type Output = V;
+    fn mul(self, v: V) -> V { V { x: self * v.x, y: self * v.y } }
+}
+
+impl ops::DotDiv<V> for f64 {
+    type Output = V;
+    fn dot_div(self, v: V) -> V { V { x: v.x / self, y: v.y / self } }
+}
+
+impl ops::Add<V> for [f64; 2] {
+    type Output = V;
+    fn add(self, v: V) -> V { V { x: self[0] + v.x, y: self[1] + v.y } }
+}
+
+fn main() {
+    let v = V { x: 1.0, y: 2.0 };
+    let w = 3.0 * v;
+    let h = 2.0 ./ v;
+    let p: [f64; 2] = [1.0, 2.0];
+    println(f"{w} {h} {2.0 * v} {p + v == V { x: 2.0, y: 4.0 }}");
+}

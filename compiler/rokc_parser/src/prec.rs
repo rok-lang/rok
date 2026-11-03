@@ -26,6 +26,9 @@ pub enum Assoc {
 /// Binding power of the prefix unary operators and `await`
 /// (right-assoc).
 pub const PREFIX_PREC: u32 = 13;
+/// Binding power of `**` / `.**` (right-assoc): tighter than the
+/// prefix operators, so `-x**2` is `-(x**2)`.
+pub const POW_PREC: u32 = 13;
 /// Binding power of `as` / `is` (left-assoc).
 pub const CAST_PREC: u32 = 12;
 /// Binding power of `??` (level 1, right-assoc).
@@ -48,6 +51,7 @@ pub fn fixed_prec(symbol: &str, fixity: Fixity) -> Option<(u32, Assoc)> {
         // syntax; it is here only as a `like` target.
         Fixity::Postfix => (symbol == "?").then_some((14, Assoc::Left)),
         Fixity::Infix => Some(match base {
+            "**" => (POW_PREC, Assoc::Right),
             "∘" => (11, Assoc::Left),
             "*" | "/" | "%" | "%%" | "×" | "⋅" | "÷" | "∩" => (10, Assoc::Left),
             "+" | "-" | "∪" => (9, Assoc::Left),
@@ -70,7 +74,7 @@ pub fn fixed_prec(symbol: &str, fixity: Fixity) -> Option<(u32, Assoc)> {
 pub fn is_assign_token(symbol: &str) -> bool {
     matches!(
         symbol,
-        "+=" | "-=" | "*=" | "/=" | "%=" | "%%=" | "&=" | "|=" | "^=" | "<<=" | ">>="
+        "+=" | "-=" | "*=" | "**=" | "/=" | "%=" | "%%=" | "&=" | "|=" | "^=" | "<<=" | ">>="
     )
 }
 

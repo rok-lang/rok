@@ -1,0 +1,9 @@
+// expect-error: this row has 3 elements, the first row at its depth has 2
+// expect-error: an `Array` of rank 2 is written with 2 levels of `[..]`, and this element is not a list
+
+use rok::core::array::Array;
+
+fn main() {
+    let a: Array<f64, 2> = [[1.0, 2.0], [3.0, 4.0, 5.0]];
+    let b: Array<f64, 2> = [1.0, 2.0];
+}

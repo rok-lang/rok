@@ -14,8 +14,7 @@ impl index::Index<(i32, i32)> for Grid {
     type Output = str;
     fn index(self, at: (i32, i32)) -> str { f"grid {at.0 + at.1}" }
 }
-impl index::IndexSet<i32> for Grid {
-    type Value = i32;
+impl index::IndexSet<i32, i32> for Grid {
     fn index_set(ref self, i: i32, v: i32) { self.cells[i] = v; }
 }
 impl index::Sliceable<Range<usize>> for Grid {

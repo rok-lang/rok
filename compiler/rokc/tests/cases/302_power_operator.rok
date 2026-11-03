@@ -1,0 +1,29 @@
+// expect-exit: 0
+// expect-stdout:
+// 1024 512 -4 4 9
+// 2.25 0.5 1.4142135623730951 8 0.125
+// 81 6.25 [1, 4, 9] [1.0, 0.25]
+// 0.000001 true
+
+// `**` binds tighter than prefix `-` and to the right (`2**3**2` is
+// `2**(3**2)`); an integer base takes a `u32` exponent, a float base a
+// float or an `i32`. `.**` is element-wise.
+use rok::core::array::Array;
+
+fn main() {
+    let n: i32 = 2;
+    let k: u32 = 9;
+    println(f"{n ** 10} {2 ** 3 ** 2} {-2 ** 2} {(-2) ** 2} {3 ** 2}");
+    let x = 1.5;
+    let e: i32 = -3;
+    println(f"{x ** 2} {2.0 ** -1} {2.0 ** 0.5} {2.0 ** 3} {2.0 ** e}");
+    let y = 3;
+    y **= 4;
+    let z = 2.5;
+    z **= 2;
+    let xs = [1, 2, 3];
+    let a: Array<f64, 1> = [1.0, 0.5];
+    println(f"{y} {z} {xs .** 2:?} {a .** 2.0:?}");
+    let tiny = 10.0 ** -6;
+    println(f"{tiny} {2 ** k == 512}");
+}

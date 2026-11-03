@@ -94,6 +94,8 @@ const LINES: usize = BLOCK_SIZE / LINE_SIZE;
 const GRANULES: usize = BLOCK_SIZE / 8;
 /// Objects this large (header included) go to the LOS.
 pub const LOS_THRESHOLD: usize = rokr_common::gc_abi::LOS_THRESHOLD as usize;
+/// Payload alignment of a LOS object of at least [`LOS_THRESHOLD`] bytes.
+pub const LOS_ALIGN: usize = rokr_common::gc_abi::LOS_ALIGN as usize;
 /// Card size of an old LOS object (`FLAG_CARDED`): a reference store
 /// dirties the card(s) of its slot and a minor collection scans only
 /// dirty cards, not the whole object.
@@ -979,9 +981,15 @@ const fn los_total(p: &Prefix) -> usize {
 
 /// A large (or over-aligned) object: its own zeroed allocation, header
 /// flags `LARGE | flags`. The payload (after the header) is
-/// `align`-aligned.
+/// `align`-aligned, and at least [`LOS_ALIGN`]-aligned from
+/// [`LOS_THRESHOLD`] on.
 fn alloc_large(size: usize, align: usize, type_id: u32, flags: u32) -> *mut u8 {
-    let align = align.max(HEADER_ALIGN);
+    let floor = if size >= LOS_THRESHOLD {
+        LOS_ALIGN
+    } else {
+        HEADER_ALIGN
+    };
+    let align = align.max(floor);
     let offset = (size_of::<Prefix>() + HEADER_SIZE).next_multiple_of(align) - HEADER_SIZE;
     let Some(total) = size
         .checked_add(offset)
@@ -3299,6 +3307,9 @@ mod tests {
             assert_eq!(live_bytes(), base);
             *top = ptr::null_mut();
         }
+        // A large payload starts on a cache line, for vector code.
+        let l = alloc(LOS_THRESHOLD + 24, 8, PLAIN_TYPE_ID);
+        assert_eq!((l as usize + HEADER_SIZE) % LOS_ALIGN, 0);
         // An over-aligned payload starts on its alignment.
         for align in [16, 32, 64, 4096] {
             let o = alloc(40, align, USER_TYPE_BASE + 1);

@@ -5764,6 +5764,16 @@ impl<'a> LowerCtx<'a> {
             let Some((_, ty)) = gi.assoc.iter().find(|(n, _)| n == name) else {
                 continue;
             };
+            // A parameter only the trait arguments name (`N` of
+            // `impl<T, const N: usize> DotAdd<Array<T, N>> for T`) leaves
+            // them open: not this projection's impl.
+            let open = gi.generics.params.iter().any(|gp| match gp {
+                rokc_ast::GenericParam::Type { name, .. }
+                | rokc_ast::GenericParam::Const { name, .. } => !subst.contains_key(name),
+            });
+            if open {
+                continue;
+            }
             let mut rcx = LowerCtx::new(self.env, &subst, None, self.here());
             rcx.current_module.clone_from(&gi.module);
             rcx.set_bounds(&gi.generics, &gi.where_clause);

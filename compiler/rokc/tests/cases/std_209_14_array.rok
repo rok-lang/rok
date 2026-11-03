@@ -1,0 +1,45 @@
+// expect-exit: 0
+// expect-stdout:
+// [[1, 2, 3], [4, 5, 6]] [2, 3] 6 2
+// [[1, 4], [2, 5], [3, 6]] [[1, 2], [3, 4], [5, 6]] true
+// [[1, 5], [3, 7]] 7
+// [0, 0, 0] [1, 1] [[7, 7]]
+// [[0.0, 2.0, 6.0], [12.0, 20.0, 30.0]] [[2.0, 4.0, 6.0], [5.0, 7.0, 9.0]] [[0.5, 0.25, 0.16666666666666666], [0.125, 0.1, 0.08333333333333333]]
+// [[11, 12, 13], [14, 15, 16]] [[false, true, false], [true, false, true]]
+// [2, 4, 6] 21 [1, 4, 9, 16, 25, 36]
+// 1 2 3 4 5 6
+// true false true
+// [] [0] [[]] [1, 0]
+
+// `Array<T, N>`: a rank-`N` array over one shared buffer, with shape and
+// strides; transposes, basic slices and reshapes of contiguous arrays are
+// views. A nested list literal in an `Array` slot builds one.
+use rok::core::array::{Array, Matrix};
+
+fn main() {
+    let a: Matrix<i64> = [[1, 2, 3],
+                          [4, 5, 6]];
+    println(f"{a:?} {a.shape():?} {a.len()} {a.ndim()}");
+    println(f"{a.t():?} {a.reshape([3, 2]):?} {a.t().t() == a}");
+    let c: Array<i64, 3> = [[[1, 2], [3, 4]], [[5, 6], [7, 8]]];
+    println(f"{c[:, :, 0].t():?} {c.permute([2, 1, 0])[0, 1, 1]}");
+    let z: Array<i64, 1> = Array::zeros([3]);
+    let o: Array<i64, 1> = Array::ones([2]);
+    println(f"{z:?} {o:?} {Array::full([1, 2], 7):?}");
+    let f: Array<f64, 2> = [[1, 2, 3], [4, 5, 6]];
+    let row: Array<f64, 2> = [[1, 2, 3]];
+    println(f"{f .* f .- f:?} {f .+ row:?} {0.5 ./ f:?}");
+    println(f"{a .+ 10:?} {a .% 2 .== 0:?}");
+    let evens = a[a .% 2 .== 0];
+    println(f"{evens:?} {a.sum()} {a.map(|x: i64| -> i64 { x * x }).to_list():?}");
+    let seen: List<str> = [];
+    for x in a {
+        seen.push(f"{x}");
+    }
+    println(seen.join(" "));
+    let t = a.t();
+    println(f"{a.is_contiguous()} {t.is_contiguous()} {t.copy().is_contiguous()}");
+    let e: Array<i64, 1> = [];
+    let e2: Array<i64, 2> = [[]];
+    println(f"{e:?} {e.shape():?} {e2:?} {e2.shape():?}");
+}

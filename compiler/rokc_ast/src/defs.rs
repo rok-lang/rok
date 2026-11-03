@@ -447,6 +447,13 @@ pub enum ExprKind {
         end: Option<Box<Expr>>,
         step: Option<Box<Expr>>,
     },
+    /// `a:b:k` as one part of a multi-part index (`m[1:, 0]`): only
+    /// inside the index tuple of an `Index`.
+    AxisSlice {
+        start: Option<Box<Expr>>,
+        end: Option<Box<Expr>>,
+        step: Option<Box<Expr>>,
+    },
     Range {
         start: Option<Box<Expr>>,
         end: Option<Box<Expr>>,

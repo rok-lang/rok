@@ -6341,7 +6341,10 @@ fn check_impl_rules(
         let pkg = package_of(&module);
         let owner_module = module_of(&key);
         let owner = package_of(&owner_module);
-        if owner != pkg && target_package(env, i, &module).as_deref() != Some(pkg) {
+        if owner != pkg
+            && target_package(env, i, &module).as_deref() != Some(pkg)
+            && !local_type_first(env, i, tp, &module, pkg)
+        {
             env.sink
                 .diagnostics
                 .borrow_mut()
@@ -6829,6 +6832,42 @@ fn target_package(env: &Env<'_>, i: &rokc_ast::ImplDef, module: &str) -> Option<
     Some("rok::core".to_owned())
 }
 
+/// A foreign trait's impl is this package's when, among `Self` and the
+/// trait's type arguments in that order, a type defined here comes
+/// before any bare type parameter (Rust's rule): `impl Mul<Matrix> for
+/// f64` is, `impl<T> Mul<Matrix> for T` is not, since another package
+/// could write the same impl for its own `T`.
+fn local_type_first(
+    env: &Env<'_>,
+    i: &rokc_ast::ImplDef,
+    tp: &rokc_ast::Path,
+    module: &str,
+    pkg: &str,
+) -> bool {
+    let args = tp
+        .segments
+        .last()
+        .map_or(&[][..], |s| s.generics.as_slice());
+    for t in std::iter::once(&i.self_ty).chain(args) {
+        let AstTyKind::Path(p) = &t.kind else {
+            continue;
+        };
+        let segs: Vec<&str> = p.segments.iter().map(|s| s.name.as_str()).collect();
+        let param = i.generics.params.iter().any(
+            |gp| matches!(gp, rokc_ast::GenericParam::Type { name, .. } if segs == [name.as_str()]),
+        );
+        if param {
+            return false;
+        }
+        if let Some(full) = env.names.canon(&segs, module, &[], i.span) {
+            if package_of(&module_of(&full)) == pkg {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 fn check_impl_overlap(env: &Env<'_>, own: &dyn Fn(&str) -> bool) {
     let no_subst = HashMap::new();
     let ctx = LowerCtx::new(env, &no_subst, None, Span::DUMMY);
@@ -6951,8 +6990,17 @@ fn trait_args_overlap(
             !subst.contains_key(name)
         }
     });
-    if gi.trait_args.is_empty() || open {
+    if gi.trait_args.is_empty() {
         return true;
+    }
+    if open {
+        // A parameter only the trait arguments name: they still differ
+        // where a named type heads both (`DotDiv<Array<T, N>>` against
+        // `DotDiv<V>`).
+        return ctx
+            .concrete_impls(ty)
+            .filter(|r| r.path == gi.trait_key)
+            .any(|r| trait_heads_may_match(ctx, gi, &r.args));
     }
     let want = ctx.generic_impl_ref(gi, subst);
     if want.args.contains(&HirTy::Unknown) {
@@ -6960,6 +7008,42 @@ fn trait_args_overlap(
     }
     ctx.concrete_impls(ty)
         .any(|r| r.path == want.path && r.args == want.args)
+}
+
+/// `false` when some trait argument of `gi` names a type whose head
+/// differs from the concrete argument's.
+fn trait_heads_may_match(ctx: &LowerCtx<'_>, gi: &Impl, args: &[HirTy]) -> bool {
+    let params: Vec<&str> = gi
+        .generics
+        .params
+        .iter()
+        .map(|gp| match gp {
+            rokc_ast::GenericParam::Type { name, .. }
+            | rokc_ast::GenericParam::Const { name, .. } => name.as_str(),
+        })
+        .collect();
+    for (t, have) in gi.trait_args.iter().zip(args) {
+        let AstTyKind::Path(p) = &t.kind else {
+            continue;
+        };
+        let segs: Vec<&str> = p.segments.iter().map(|s| s.name.as_str()).collect();
+        if segs.len() == 1 && params.contains(&segs[0]) {
+            continue;
+        }
+        let Some(want) = ctx.env.names.canon(&segs, &gi.module, &[], t.span) else {
+            continue;
+        };
+        let head = match have {
+            HirTy::Struct(id) => enum_base_name(&ctx.struct_def(*id).name).to_owned(),
+            HirTy::Enum(id) => enum_base_name(&ctx.enum_def(*id).name).to_owned(),
+            HirTy::Prim(p) => p.name().to_owned(),
+            _ => continue,
+        };
+        if want != head && leaf_name(&want) != head {
+            return false;
+        }
+    }
+    true
 }
 
 /// Concrete impl targets and generic struct / enum instantiations: the

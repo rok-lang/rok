@@ -574,49 +574,6 @@ impl Parser<'_> {
         Some(a)
     }
 
-    /// The second `*` of `a ** b` at the cursor, where an operand
-    /// starts: reported and skipped, so `a ** b` reads as `a * b`.
-    pub(super) fn python_pow(&mut self) {
-        let i = self.pos;
-        let (Some(star), Some(first)) = (self.tok(i), i.checked_sub(1).and_then(|p| self.tok(p)))
-        else {
-            return;
-        };
-        if self.pending.is_some()
-            || star.kind != TokenKind::Star
-            || first.kind != TokenKind::Star
-            || first.span.end != star.span.start
-        {
-            return;
-        }
-        let simple = |k: usize| {
-            self.tok(k)
-                .filter(|t| {
-                    matches!(
-                        t.kind,
-                        TokenKind::Ident(_) | TokenKind::IntLit(_) | TokenKind::FloatLit(_)
-                    )
-                })
-                .map(|t| t.kind.text())
-        };
-        let base = i
-            .checked_sub(2)
-            .and_then(simple)
-            .unwrap_or_else(|| "x".to_owned());
-        let exp = simple(i + 1).unwrap_or_else(|| "n".to_owned());
-        let at = Span {
-            end: star.span.end,
-            ..first.span
-        };
-        self.error_help(
-            Code::FOREIGN_SYNTAX,
-            at,
-            "Rok has no `**` operator",
-            format!("write `{base}.pow({exp})`"),
-        );
-        self.bump();
-    }
-
     /// After `x is` (not `as`): Python's `is not` (`not` at the cursor).
     /// Reports it and skips `not`; `lhs` is `x`'s span.
     pub(super) fn python_is_not(&mut self, lhs: Span, is_cast: bool) {

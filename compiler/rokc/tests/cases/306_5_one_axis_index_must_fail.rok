@@ -1,0 +1,11 @@
+// expect-error: `List<i64>` is indexed along one axis, but this index has 2 parts with a slice among them
+// expect-error: a stepped slice of a list cannot be assigned
+// expect-error: cannot assign to a slice of `str`
+
+fn main() {
+    let xs = [1, 2, 3];
+    let y = xs[0:1, 2];
+    xs[::2] = [0, 0];
+    let s = "abc";
+    s[0:1] = "x";
+}

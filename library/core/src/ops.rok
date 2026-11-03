@@ -59,6 +59,17 @@ pub trait Rem<Rhs = Self> {
     fn rem(self, rhs: Rhs) -> Output;
 }
 
+/// `**`: power. Binds tighter than prefix `-` and to the right:
+/// `-x**2` is `-(x**2)`, `2**3**2` is `2**(3**2)`. An integer base
+/// takes a `u32` exponent (overflow is the arithmetic's); a float base
+/// a float (`powf`) or an `i32` (`powi`).
+pub trait Pow<Rhs = Self> {
+    type Output;
+    /// `self ** rhs`.
+    #[infix("**")]
+    fn pow(self, rhs: Rhs) -> Output;
+}
+
 /// Prefix `-`: negation.
 #[lang("neg_trait")]
 pub trait Neg {
@@ -212,6 +223,13 @@ pub trait MulAssign<Rhs = Self> {
     fn mul_assign(ref self, rhs: Rhs);
 }
 
+/// `**=`
+pub trait PowAssign<Rhs = Self> {
+    /// Raises `self` to `rhs` in place.
+    #[infix("**=")]
+    fn pow_assign(ref self, rhs: Rhs);
+}
+
 /// `/=`
 pub trait DivAssign<Rhs = Self> {
     /// Divides `self` by `rhs` in place.
@@ -293,6 +311,14 @@ pub trait DotMul<Rhs = Self> {
     /// `self .* rhs`.
     #[infix(".*")]
     fn dot_mul(self, rhs: Rhs) -> Output;
+}
+
+/// `.**`: element-wise power.
+pub trait DotPow<Rhs = Self> {
+    type Output;
+    /// `self .** rhs`.
+    #[infix(".**")]
+    fn dot_pow(self, rhs: Rhs) -> Output;
 }
 
 /// `./`: element-wise division.
