@@ -16,7 +16,7 @@ struct Matrix<const R: usize, const C: usize> { cells: [f64; R * C]; }
 
 const SIZE: usize = 2;
 
-fn replicate<T, const N: usize>(value: T) -> [T; N] { [value; N] }
+fn replicate<T: Clone, const N: usize>(value: T) -> [T; N] { [value; N] }
 
 fn zeros<const N: usize>() -> [f64; N] { [0.0; N] }
 

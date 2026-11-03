@@ -347,10 +347,14 @@ pub enum ExprKind {
     SelfUpper,
     Tuple(Vec<Expr>),
     List(Vec<Expr>),
-    /// `[v; N]` - `v` repeated `N` times, a `[T; N]`.
+    /// `[v; N]`: `v` evaluated once, then cloned into each element, a
+    /// `[T; N]`.
     ArrayRepeat {
         value: Box<Expr>,
         len: ConstExpr,
+        /// Compiler-made: a placeholder fill whose elements after the first
+        /// are written next, so `v` is copied as is.
+        fill: bool,
     },
     Dict(Vec<(Expr, Expr)>),
     Set(Vec<Expr>),

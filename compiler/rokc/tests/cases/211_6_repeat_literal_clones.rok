@@ -1,0 +1,87 @@
+// expect-exit: 0
+// expect-stdout:
+// make
+// 0 5
+// 1 0 0
+// [[[9], []], [[], []]]
+// [1, 2] [1, 2] [1, 2, 3]
+// [Cell { xs: [] }, Cell { xs: [4] }]
+// [[8], [0], [0]]
+// [[1], [], []]
+// clone clone done
+// 7 1 100 99
+
+// `[v; N]` evaluates `v` once and clones it into each element, so a
+// write through one element leaves the others as they were. Copy
+// elements are filled as they are.
+
+fn make() -> List<int> {
+    println("make");
+    [1, 2]
+}
+
+#[derive(Clone, Debug)]
+struct Cell {
+    xs: List<int>;
+}
+
+struct Point {
+    x: i32;
+    y: i32;
+}
+
+struct Loud {
+    n: List<int>;
+}
+
+impl Clone for Loud {
+    fn clone(self) -> Loud {
+        print("clone ");
+        Loud { n: self.n.clone() }
+    }
+}
+
+fn three<T: Clone>(x: T) -> [T; 3] {
+    [x; 3]
+}
+
+fn main() {
+    let big = [make(); 20];
+    let g = [[0; 3]; 2];
+    g[0][1] = 5;
+    println(f"{g[1][1]} {g[0][1]}");
+
+    let h = [List::<int>::new(); 3];
+    h[0].push(1);
+    println(f"{h[0].len()} {h[1].len()} {h[2].len()}");
+
+    let nested = [[List::<int>::new(); 2]; 2];
+    nested[0][0].push(9);
+    println(f"{nested:?}");
+
+    big[19].push(3);
+    println(f"{big[0]:?} {big[18]:?} {big[19]:?}");
+
+    let c = [Cell { xs: [] }; 2];
+    c[1].xs.push(4);
+    println(f"{c:?}");
+
+    let r = three([0]);
+    r[0][0] = 8;
+    println(f"{r:?}");
+
+    let d: [List<int>; 3] = Default::default();
+    d[0].push(1);
+    println(f"{d:?}");
+
+    // N - 1 clones; the last element is `v` itself.
+    let l = [Loud { n: [] }; 3];
+    l[2].n.push(1);
+    println(f"done");
+
+    let p = [Point { x: 1, y: 2 }; 3];
+    p[0].x = 7;
+    let w = [99u8; 4096];
+    w[0] = 100;
+    println(f"{p[0].x} {p[1].x} {w[0]} {w[4095]}");
+}

@@ -244,7 +244,10 @@ fn main() {
         // An array of any length is walked; its one list stays one.
         let (tz, rz) = channel::<[List<i32>; 300]>();
         let one2: List<i32> = [];
-        let arr: [List<i32>; 300] = [one2; 300];
+        let arr: [List<i32>; 300] = [[]; 300];
+        for i in 0..300 {
+            arr[i] = one2;
+        }
         try! tz.send(arr);
         if let r: [List<i32>; 300] = rz.recv() {
             r[0].push(1);

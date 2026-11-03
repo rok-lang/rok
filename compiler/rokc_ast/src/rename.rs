@@ -466,7 +466,7 @@ impl Renames {
             ExprKind::Tuple(xs) | ExprKind::List(xs) | ExprKind::Set(xs) => {
                 xs.iter_mut().for_each(|x| self.expr(x));
             }
-            ExprKind::ArrayRepeat { value, len } => {
+            ExprKind::ArrayRepeat { value, len, .. } => {
                 self.expr(value);
                 self.const_expr(len);
             }

@@ -1164,7 +1164,7 @@ impl Printer {
                 self.list(xs, ", ", Self::expr);
                 self.s("]");
             }
-            ExprKind::ArrayRepeat { value, len } => {
+            ExprKind::ArrayRepeat { value, len, .. } => {
                 self.s("[");
                 self.expr(value);
                 self.s("; ");
