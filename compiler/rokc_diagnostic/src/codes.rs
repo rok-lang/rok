@@ -219,10 +219,12 @@ codes! {
      `fn main() -> i32` and return from it.";
 
     19 NEEDS_PARENTHESES Parse "operators that need parentheses"
-    "Some operators do not chain: comparisons in two directions (`a < b > c`), `a != b != c`, \
-     `x ∈ s == y`, `a..b..c`, and one `[..]` that both indexes with `,` and slices with \
-     `:`. Comparisons in one direction do chain (`0 <= i < n`). Join the parts \
-     with `&&`, or add parentheses or separate brackets to say which you mean.";
+    "A chain of comparisons takes its operators from one group: `<` and `<=` \
+     (`0 <= i < n`), `>` and `>=` (`a > b >= c`), or `==` (`a == b == c`); each pair is \
+     joined with `&&`. Other chains are an error: mixed groups (`a < b > c`, \
+     `a < b == c`), `a != b != c`, `x ∈ s == y` and `a..b..c`. Join the parts with `&&` \
+     (`a < b && b > c`), or add parentheses to say which you mean. An index with several \
+     parts on a one-axis type (`xs[1:, 0]`) is E0144.";
 
     20 TRAILING_CLOSURE_RETURN Parse "`return` in a trailing closure"
     "A bare `return` in a statement's trailing closure would leave only the closure, not the \
@@ -323,9 +325,13 @@ codes! {
      Convert the value (`as i32`, `.to_str()`), change the expected type, or remove the `;`.";
 
     41 BRANCH_TYPES Type "branches of different types"
-    "The branches of an `if`, `match` or the `break`s of a loop give values of different \
-     types. Rok does not invent a sum type for them: annotate the slot with the sum, \
-     `let v: i32 | str = if c { 1 } else { \"a\" };`, or make the branches agree.";
+    "The branches of an `if` or `match`, the `break`s of a loop, or the return paths of a \
+     function without a written return type give values of different types. Rok does not \
+     invent a sum type for them: annotate the slot with the sum, \
+     `let v: i64 | str = if c { 1 } else { \"a\" };`, write the return type \
+     (`-> i64 | str`), or make the branches agree. An unsuffixed literal takes the other \
+     branches' type (`if c { 1 } else { 2u8 }` is `u8`), but an integer literal is never a \
+     float: write `1.0`.";
 
     42 TYPE_ANNOTATIONS_NEEDED Type "type annotations needed"
     "The compiler cannot work out a type from the code: an empty literal, a closure \
@@ -390,8 +396,9 @@ codes! {
      bound.";
 
     55 AMBIGUOUS_LITERAL Type "literal fits several types"
-    "An unsuffixed literal could be any of several types the call or operator accepts, so \
-     its type is unclear. Add a suffix (`1i64`) or an `as`.";
+    "An unsuffixed literal could be any of several types the call or operator accepts. When \
+     one of them is the literal's default (`i64` for an integer, `f64` for a float), the \
+     literal takes it; otherwise its type is unclear. Add a suffix (`1i32`) or an `as`.";
 
     56 INVALID_INDEX Type "invalid indexing"
     "The value cannot be indexed, or the index is not an integer. Index arrays, lists and \

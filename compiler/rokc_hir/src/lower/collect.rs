@@ -2263,6 +2263,7 @@ fn collect<'a>(
                 module: module.clone(),
                 key,
                 subst: HashMap::new(),
+                default: false,
             });
             lib_decl.push(!package_of(&module).is_empty());
         }
@@ -2424,6 +2425,7 @@ fn collect<'a>(
                     module: trait_module.clone(),
                     key,
                     subst: body_subst,
+                    default: true,
                 });
                 // A library default in a user impl is checked with it.
                 lib_decl.push(!package_of(&module).is_empty());
@@ -5946,14 +5948,15 @@ fn check_templates(env: &Env<'_>, templates: &[crate::TemplateRefs]) {
 }
 
 /// Every trait in a bound position must exist, with no more type arguments
-/// than parameters.
+/// than parameters. An impl gives every parameter without a default, and
+/// only the associated types its trait declares.
 fn check_bound_names(
     program: &Program,
     names: &TypeNames,
     base: &HashMap<String, &rokc_ast::TraitDef>,
     pre_diags: &mut Vec<rokc_diagnostic::RokDiagnostic>,
 ) {
-    let arity: HashMap<&str, &rokc_ast::Generics> = program
+    let traits: HashMap<&str, &rokc_ast::TraitDef> = program
         .items
         .iter()
         .filter_map(|item| match item {
@@ -5961,10 +5964,10 @@ fn check_bound_names(
             _ => None,
         })
         .chain(base.values().copied())
-        .map(|t| (t.name.as_str(), &t.generics))
+        .map(|t| (t.name.as_str(), t))
         .collect();
     // `role` says where the trait was written: "in a bound", "in an impl", ..
-    let mut check = |b: &Ty, module: &str, role: &str| {
+    let mut check = |b: &Ty, module: &str, role: &str, imp: Option<&rokc_ast::ImplDef>| {
         let AstTyKind::Path(p) = &b.kind else {
             return;
         };
@@ -6001,9 +6004,10 @@ fn check_bound_names(
                 .filter(|g| rokc_ast::as_assoc_binding(g).is_none())
                 .count()
         });
-        let Some(&g) = arity.get(found.as_str()) else {
+        let Some(&td) = traits.get(found.as_str()) else {
             return;
         };
+        let g = &td.generics;
         // Fewer is allowed: the bound holds for any of the rest
         // (`S: Source<Item = i32>`).
         let max = g.params.len();
@@ -6014,22 +6018,29 @@ fn check_bound_names(
                     .with_help(help),
             );
         }
+        if let Some(i) = imp {
+            check_impl_header(i, td, &segs, written, b.span, pre_diags);
+        }
     };
     let mut generics = |g: &rokc_ast::Generics, w: &[rokc_ast::WherePred], module: &str| {
         for gp in &g.params {
             if let rokc_ast::GenericParam::Type { bounds, .. } = gp {
-                bounds.iter().for_each(|b| check(b, module, "in a bound"));
+                bounds
+                    .iter()
+                    .for_each(|b| check(b, module, "in a bound", None));
             }
         }
         for p in w {
-            p.bounds.iter().for_each(|b| check(b, module, "in a bound"));
+            p.bounds
+                .iter()
+                .for_each(|b| check(b, module, "in a bound", None));
         }
     };
     let fn_bounds =
         |f: &FnDef, generics: &mut dyn FnMut(&rokc_ast::Generics, &[rokc_ast::WherePred], &str)| {
             generics(&f.generics, &f.where_clause, &module_of(&f.name));
         };
-    let mut impl_paths: Vec<(Ty, String, &str)> = Vec::new();
+    let mut impl_paths: Vec<(Ty, String, &str, Option<&rokc_ast::ImplDef>)> = Vec::new();
     for item in &program.items {
         let module = item_module(item);
         match item {
@@ -6041,7 +6052,7 @@ fn check_bound_names(
             Item::Trait(t) => {
                 generics(&t.generics, &t.where_clause, &module);
                 for s in &t.supertraits {
-                    impl_paths.push((s.clone(), module.clone(), "as a supertrait"));
+                    impl_paths.push((s.clone(), module.clone(), "as a supertrait", None));
                 }
                 for ti in &t.items {
                     match ti {
@@ -6053,7 +6064,7 @@ fn check_bound_names(
                             impl_paths.extend(
                                 bounds
                                     .iter()
-                                    .map(|b| (b.clone(), module.clone(), "in a bound")),
+                                    .map(|b| (b.clone(), module.clone(), "in a bound", None)),
                             );
                         }
                         rokc_ast::TraitItem::Const { .. } => {}
@@ -6071,6 +6082,7 @@ fn check_bound_names(
                         },
                         module.clone(),
                         "in an impl",
+                        Some(i),
                     ));
                 }
                 for ii in &i.items {
@@ -6082,8 +6094,138 @@ fn check_bound_names(
             _ => {}
         }
     }
-    for (t, module, role) in &impl_paths {
-        check(t, module, role);
+    for (t, module, role, imp) in &impl_paths {
+        check(t, module, role, *imp);
+    }
+}
+
+/// `impl Tr<..> for X`: a missing parameter, or a `type Name = ..` the
+/// trait does not declare. An undeclared associated type standing in for
+/// a missing parameter (the old `IndexSet` with `type Value`) moves into
+/// the header in the help.
+fn check_impl_header(
+    i: &rokc_ast::ImplDef,
+    td: &rokc_ast::TraitDef,
+    segs: &[&str],
+    written: usize,
+    at: Span,
+    pre_diags: &mut Vec<rokc_diagnostic::RokDiagnostic>,
+) {
+    if i.negative {
+        return;
+    }
+    let declared: Vec<&str> = td
+        .items
+        .iter()
+        .filter_map(|ti| match ti {
+            rokc_ast::TraitItem::AssocType { name, .. } => Some(name.as_str()),
+            _ => None,
+        })
+        .collect();
+    let extra: Vec<(&str, &Ty)> = i
+        .items
+        .iter()
+        .filter_map(|ii| match ii {
+            AstImplItem::AssocType { name, ty } if !declared.contains(&name.as_str()) => {
+                Some((name.as_str(), ty))
+            }
+            _ => None,
+        })
+        .collect();
+    let g = &td.generics;
+    let min = g
+        .params
+        .iter()
+        .take_while(|p| {
+            !matches!(
+                p,
+                rokc_ast::GenericParam::Type {
+                    default: Some(_),
+                    ..
+                }
+            )
+        })
+        .count();
+    let name = leaf_name(&td.name);
+    let self_ty = impl_def_display(&i.self_ty);
+    let mut moved = false;
+    if written < min {
+        let missing: Vec<&str> = g.params[written..min]
+            .iter()
+            .map(mono::param_name)
+            .collect();
+        moved = extra.len() == missing.len();
+        let fill: Vec<String> = if moved {
+            extra
+                .iter()
+                .map(|(_, t)| rokc_ast::print::print_ty(t))
+                .collect()
+        } else {
+            missing.iter().map(|&p| p.to_owned()).collect()
+        };
+        let args: Vec<String> = i
+            .trait_path
+            .iter()
+            .filter_map(|tp| tp.segments.last())
+            .flat_map(|s| &s.generics)
+            .filter(|t| rokc_ast::as_assoc_binding(t).is_none())
+            .map(rokc_ast::print::print_ty)
+            .chain(fill)
+            .collect();
+        let header = format!(
+            "impl {}<{}> for {self_ty}",
+            segs.join("::"),
+            args.join(", ")
+        );
+        let help = if moved {
+            format!(
+                "`{name}` is declared `{}`; its parameters are not associated types: \
+                 write `{header}` and remove {}",
+                mono::declared(name, g),
+                extra
+                    .iter()
+                    .map(|(n, _)| format!("`type {n}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        } else {
+            format!(
+                "`{name}` is declared `{}`; write `{header}` with a type for {}",
+                mono::declared(name, g),
+                missing
+                    .iter()
+                    .map(|p| format!("`{p}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        };
+        pre_diags.push(
+            rokc_diagnostic::RokDiagnostic::error(
+                Code::GENERIC_ARGUMENTS,
+                at,
+                mono::arity_msg(name, min, g.params.len(), written),
+            )
+            .with_help(help),
+        );
+    }
+    if moved {
+        return;
+    }
+    for (n, t) in extra {
+        let help = if declared.is_empty() {
+            format!("remove `type {n}`; `{name}` declares no associated types")
+        } else {
+            let names: Vec<String> = declared.iter().map(|d| format!("`{d}`")).collect();
+            format!("remove `type {n}`; `{name}` declares {}", names.join(", "))
+        };
+        pre_diags.push(
+            rokc_diagnostic::RokDiagnostic::error(
+                Code::NOT_A_TRAIT_MEMBER,
+                t.span,
+                format!("associated type `{n}` is not a member of trait `{name}`"),
+            )
+            .with_help(help),
+        );
     }
 }
 

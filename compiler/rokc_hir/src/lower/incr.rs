@@ -1445,13 +1445,15 @@ fn fp_decl(f: &mut Fp, d: &MethodOrFn<'_>) {
             module,
             key,
             subst,
+            default,
         } => {
             f.add(&1u8)
                 .add(&**fn_def)
                 .add(self_ty)
                 .add(module)
                 .add(&stable_name(key))
-                .add(subst);
+                .add(subst)
+                .add(&u8::from(*default));
         }
     }
 }

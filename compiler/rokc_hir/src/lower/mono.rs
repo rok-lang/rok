@@ -1763,6 +1763,7 @@ fn decl_ret_ok(env: &Env<'_>, id: FunctionId) -> HirTy {
                 module,
                 key,
                 subst,
+                ..
             } => {
                 let self_ty = Some(self_ty.clone());
                 let start = env.sink.next_id.get();
@@ -2097,6 +2098,11 @@ fn lower_fn_with(
         .borrow_mut()
         .insert(id, (is_const, is_std));
     let mut ctx = LowerCtx::new(env, subst, self_ty, fn_def.span);
+    if let Some(MethodOrFn::Method { default: true, .. }) = env.decl(id) {
+        ctx.default_of = env
+            .method_info(id)
+            .and_then(|i| Some((i.trait_name.clone()?, i.trait_args.clone())));
+    }
     let scope = fn_def
         .body
         .as_ref()
@@ -2431,7 +2437,7 @@ pub(super) fn declared(name: &str, generics: &rokc_ast::Generics) -> String {
     format!("{name}<{}>", params.join(", "))
 }
 
-fn param_name(p: &rokc_ast::GenericParam) -> &str {
+pub(super) fn param_name(p: &rokc_ast::GenericParam) -> &str {
     let (rokc_ast::GenericParam::Type { name, .. } | rokc_ast::GenericParam::Const { name, .. }) =
         p;
     name

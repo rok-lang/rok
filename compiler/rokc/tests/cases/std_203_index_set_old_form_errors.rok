@@ -1,0 +1,29 @@
+// expect-error: 15:6: `IndexSet` takes 2 generic arguments but 1 was given
+// expect-error: help: `IndexSet` is declared `IndexSet<I, V>`; its parameters are not associated types: write `impl IndexSet<usize, i64> for Grid` and remove `type Value`
+// expect-error: 21:6: `Put` takes 2 generic arguments but 1 was given
+// expect-error: help: `Put` is declared `Put<I, V>`; write `impl Put<usize, V> for Grid` with a type for `V`
+// expect-error: 25:18: associated type `Extra` is not a member of trait `Show`
+// expect-error: help: remove `type Extra`; `Show` declares no associated types
+
+// An impl gives every trait parameter that has no default, and only the
+// associated types the trait declares. `IndexSet` takes its value type as
+// a parameter.
+use rok::core::index::IndexSet;
+
+struct Grid { cells: List<i64> }
+
+impl IndexSet<usize> for Grid {
+    type Value = i64;
+    fn index_set(self, i: usize, v: i64) { self.cells[i] = v; }
+}
+
+trait Put<I, V> { fn put(self, i: I, v: V); }
+impl Put<usize> for Grid { fn put(self, i: usize, v: i64) {} }
+
+trait Show { fn show(self) -> i64; }
+impl Show for Grid {
+    type Extra = i64;
+    fn show(self) -> i64 { 1 }
+}
+
+fn main() {}
