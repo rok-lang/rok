@@ -1,0 +1,18 @@
+// Python forms that are one mistake each: one error, with the Rok form.
+
+struct Point { x: i32; }
+
+fn check(p: Point | none) -> bool {
+    isinstance(p, Point)
+}
+
+fn count() {
+    total += 1;
+}
+
+fn main() {}
+
+// expect-error: 6:5: cannot find function `isinstance`
+// expect-error: help: write `p is Point`
+// expect-error: 10:5: `total` is not declared
+// expect-error: help: declare `total` first: `let total = ..;` before this line

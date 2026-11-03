@@ -1,0 +1,41 @@
+// Rust's nested wrappers: one error on the outer constructor or type,
+// its help the whole Rok form.
+
+struct Point { x: i32; }
+
+fn shared_count() {
+    let c = Rc::new(RefCell::new(0));
+}
+
+fn shared_list() {
+    let xs = Rc::new(RefCell::new(Vec::new()));
+}
+
+fn locked() {
+    let m = Arc::new(Mutex::new(HashMap::new()));
+}
+
+fn boxed() {
+    let p = Rc::new(RefCell::new(Box::new(Point { x: 1 })));
+}
+
+fn counter(c: Rc<RefCell<i32>>) {}
+fn table(m: Arc<Mutex<HashMap<String, Vec<i32>>>>) {}
+fn maybe(c: Option<Rc<RefCell<i32>>>) {}
+
+fn main() {}
+
+// expect-error: 7:13: cannot find function `Rc::new`
+// expect-error: help: write `Cell::new(0)`: Rok has no `Rc` or `RefCell`; copies of a `Cell` share one value
+// expect-error: 11:14: cannot find function `Rc::new`
+// expect-error: help: write `[]`: Rok has no `Rc` or `RefCell`; it is one object however many hold it
+// expect-error: 15:13: cannot find function `Arc::new`
+// expect-error: help: write `Mutex::new(Dict::new())`: copies of a `Mutex` share one lock
+// expect-error: 19:13: cannot find function `Rc::new`
+// expect-error: help: write `Cell::new(Point { x: 1 })`
+// expect-error: 22:15: cannot find type `Rc`
+// expect-error: help: Rok has no `Rc` or `RefCell`: write `Cell<i32>`; copies of a `Cell` share one value
+// expect-error: 23:13: cannot find type `Arc`
+// expect-error: help: Rok has no `Arc`: write `Mutex<Dict<str, List<i32>>>`; copies of a `Mutex` share one lock
+// expect-error: 24:13: cannot find type `Option`
+// expect-error: write `Cell<i32> | none`

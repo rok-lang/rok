@@ -1,0 +1,17 @@
+// Python's `def f(x):` and its indented body: one error, with the `fn`
+// to write.
+
+def area(w, h) -> i32:
+    a = w * h
+    return a
+
+fn main() {
+    def twice(x):
+        return x * 2
+    println(1);
+}
+
+// expect-error: 4:1: Rok has no `def`
+// expect-error: help: write `fn area(w: T, h: T) -> i32 { .. }`: a body goes in braces, and each parameter has a type
+// expect-error: 9:5: Rok has no `def`
+// expect-error: help: write `fn twice(x: T) { .. }`

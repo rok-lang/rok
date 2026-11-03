@@ -1,0 +1,55 @@
+// Rust's `Ok(v)` / `Err(e)` patterns on a call that throws: one error
+// each, with the `try` form to write. An unhandled call elsewhere, an
+// arm's body included, still has its own error.
+
+fn parse(s: str) throws -> i32 {
+    if s == "" {
+        throw "empty";
+    }
+    1
+}
+
+fn by_match() -> i32 {
+    match parse("1") { Ok(v) => v, Err(e) => 0 }
+}
+
+fn by_if_let() {
+    if let Ok(v) = parse("1") { println(v); }
+}
+
+fn by_let_else() -> i32 {
+    let Ok(x) = parse("1") else { return 0; };
+    x
+}
+
+fn by_arms() {
+    match parse("1") { Ok(v) => println(v), Err(e) => println(e) }
+}
+
+fn err_only() {
+    if let Err(e) = parse("1") { println(e); }
+}
+
+fn arm_throws() -> i32 {
+    match parse("1") { Ok(v) => parse("2"), Err(e) => 0 }
+}
+
+fn unhandled() -> i32 {
+    parse("3")
+}
+
+fn main() {}
+
+// expect-error: 13:5: `parse("1")` throws instead of returning a `Result`: it has no `Ok` or `Err` to match
+// expect-error: help: write `try parse("1") catch e { 0 }`
+// expect-error: 17:5: `parse("1")` throws instead of returning a `Result`
+// expect-error: help: write `if let v: i32 = try? parse("1")`
+// expect-error: 21:17: `parse("1")` throws instead of returning a `Result`
+// expect-error: help: write `let x = try parse("1") catch _ { .. };`
+// expect-error: 26:5: `parse("1")` throws instead of returning a `Result`
+// expect-error: help: write `let v = try parse("1") catch e { .. };`, or keep the arms: `match Result::catching(|| try parse("1")) { .. }`
+// expect-error: 30:5: `parse("1")` throws instead of returning a `Result`
+// expect-error: help: write `try parse("1") catch e { .. }`
+// expect-error: 34:5: `parse("1")` throws instead of returning a `Result`
+// expect-error: 34:33: this call can throw
+// expect-error: 38:5: this call can throw

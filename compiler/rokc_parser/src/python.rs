@@ -143,6 +143,16 @@ impl Parser<'_> {
         if self.pending.is_some() {
             return None;
         }
+        let span = self.peek_span();
+        if self.skip_python_def() {
+            return Some(Stmt {
+                kind: StmtKind::Expr(Expr {
+                    kind: ExprKind::Tuple(Vec::new()),
+                    span,
+                }),
+                span,
+            });
+        }
         let i = self.pos;
         let (first, next) = (self.tok(i)?, self.tok(i + 1)?);
         let same = next.span.line == first.span.line;
@@ -179,6 +189,89 @@ impl Parser<'_> {
             kind: StmtKind::Expr(unit),
             span,
         })
+    }
+
+    /// `def f(x):` and its body at the cursor: reported and skipped.
+    pub(super) fn skip_python_def(&mut self) -> bool {
+        if self.pending.is_some() {
+            return false;
+        }
+        let Some((end, help)) = self.python_def(self.pos) else {
+            return false;
+        };
+        let span = self.peek_span();
+        self.error_help(Code::FOREIGN_SYNTAX, span, "Rok has no `def`", help);
+        while self.pos < end {
+            self.bump();
+        }
+        true
+    }
+
+    /// `def f(x) -> T:` and its indented body at `tokens[i]`: where the
+    /// body ends and the `fn` to write. `None` for another form (`def f()
+    /// { .. }` is a misspelled `fn`).
+    fn python_def(&self, i: usize) -> Option<(usize, String)> {
+        let def = self.tok(i)?;
+        let TokenKind::Ident(name) = &self.tok(i + 1)?.kind else {
+            return None;
+        };
+        if !self.word_at(i, "def") || self.tok(i + 2)?.kind != TokenKind::LParen {
+            return None;
+        }
+        let mut depth = 0u32;
+        let close = (i + 2..self.tokens.len()).find(|&k| {
+            match self.tokens[k].kind {
+                TokenKind::LParen => depth += 1,
+                TokenKind::RParen => depth -= 1,
+                _ => {}
+            }
+            depth == 0
+        })?;
+        let colon = (close + 1..self.python_stmt_end(close + 1))
+            .find(|&k| self.tok(k).is_some_and(|t| t.kind == TokenKind::Colon))?;
+        let ret = self.tokens_text(close + 1, colon);
+        if !ret.is_empty() && !ret.starts_with("->") {
+            return None;
+        }
+        // The body: the rest of the `def` line, then each line indented
+        // past it.
+        let mut end = colon + 1;
+        while let Some(t) = self.tok(end) {
+            let closer = matches!(
+                t.kind,
+                TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace | TokenKind::Eof
+            );
+            if closer || (t.span.line != def.span.line && t.span.col <= def.span.col) {
+                break;
+            }
+            end = self.python_stmt_end(end).max(end + 1);
+        }
+        let params: Vec<String> = self
+            .tokens_text(i + 3, close)
+            .split(',')
+            .map(str::trim)
+            .filter(|p| !p.is_empty() && *p != "self")
+            .map(|p| {
+                if p.contains(':') {
+                    p.to_owned()
+                } else {
+                    format!("{p}: T")
+                }
+            })
+            .collect();
+        let ret = if ret.is_empty() {
+            String::new()
+        } else {
+            format!(" {ret}")
+        };
+        Some((
+            end,
+            format!(
+                "write `fn {name}({}){ret} {{ .. }}`: a body goes in braces, and each parameter \
+                 has a type",
+                params.join(", ")
+            ),
+        ))
     }
 
     /// `with EXPR as NAME`: the `using` statement it becomes.

@@ -1,10 +1,9 @@
-// Rust's `f()?` on a throwing call: the first error says `?` is for
-// `T | none` and gives the `try` form; the errors `?` caused follow.
-// expect-error: 9:18: `?` only works on `T | none`; it does not pass errors on
+// Rust's `f()?` on a throwing call: one error says `?` is for
+// `T | none` and gives the `try` form, in place of those `?` caused.
+// expect-error: 8:18: `?` only works on `T | none`; it does not pass errors on
 // expect-error: help: in a `throws` function, write `try s.parse()`
-// expect-error: 13:13: `?` only works on `T | none`; it does not pass errors on
+// expect-error: 12:13: `?` only works on `T | none`; it does not pass errors on
 // expect-error: help: in a `throws` function, write `try s.parse::<i32>()`
-// expect-error: 13:13: this call can throw `ParseError` and must be marked with `try`
 fn parse_it(s: str) throws -> i32 {
     let n: i32 = s.parse()?;
     n + 1
@@ -13,4 +12,3 @@ fn parse_two(s: str) throws -> i32 {
     let n = s.parse::<i32>()?;
     n * 2
 }
-// expect-error: 9:18: type annotations needed: cannot infer type parameter `T` of `str::parse`
