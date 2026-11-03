@@ -1,6 +1,6 @@
 //! A field write on a copy nothing reads afterwards is an error: the
-//! change is lost. Structs are values, so by-value parameters, `for`
-//! bindings and `let x = xs[i]` hold copies.
+//! change is lost. Structs are values, so by-value parameters (closures'
+//! too), `for` bindings and `let x = xs[i]` hold copies.
 //!
 //! Reported when no read of the variable can follow: none later, and none
 //! in a loop around the write that the variable outlives. A read feeding
@@ -32,6 +32,8 @@ enum Kind {
     Loop(String, Span),
     /// A `let` of an element read (`xs[i]`, as written).
     Element(String),
+    /// A by-value closure parameter.
+    ClosureParam,
 }
 
 struct Write {
@@ -64,6 +66,7 @@ struct V {
     params: HashMap<(u32, u32), Kind>,
     loop_binds: HashMap<(u32, u32), (String, Span)>,
     element_lets: HashMap<(u32, u32), String>,
+    closure_params: HashSet<(u32, u32)>,
     /// Roots of write targets: not reads.
     skip: HashSet<(u32, u32)>,
     vars: Vec<Var>,
@@ -301,6 +304,17 @@ impl V {
                     }),
                 )
             }
+            Kind::ClosureParam => (
+                format!(
+                    "`{target}` is set on a copy of the closure's argument, so the change is \
+                     lost when the closure returns"
+                ),
+                format!(
+                    "return `{name}` from the closure and use the result, or change the \
+                     original in place (`for ref {name} in ..`, a lock guard's `set`)"
+                ),
+                None,
+            ),
             Kind::Element(from) => (
                 format!("`{target}` is set on a copy of `{from}`, so `{from}` does not change"),
                 format!("write it back afterwards: `{from} = {name};`"),
@@ -335,6 +349,16 @@ impl AstVisitor for V {
             }
             ExprKind::While { .. } | ExprKind::Loop { .. } => {
                 self.loops.push((e.span.start, e.span.end));
+            }
+            ExprKind::Closure {
+                params,
+                is_async: false,
+                is_generator: false,
+                ..
+            } => {
+                for p in params.iter().filter(|p| !p.by_ref) {
+                    self.closure_params.insert(key(p.span));
+                }
             }
             _ => {}
         }
@@ -386,11 +410,17 @@ impl AstVisitor for V {
             .remove(&k)
             .or_else(|| self.loop_binds.remove(&k).map(|(i, s)| Kind::Loop(i, s)))
             .or_else(|| self.element_lets.remove(&k).map(Kind::Element));
+        // Bound before the closure's body is entered: reads in the body
+        // are its own, not a capture.
+        let (kind, depth) = match kind {
+            None if self.closure_params.remove(&k) => (Some(Kind::ClosureParam), self.depth + 1),
+            k => (k, self.depth),
+        };
         self.vars.push(Var {
             name: name.to_owned(),
             kind,
             decl: at.start,
-            depth: self.depth,
+            depth,
             reads: Vec::new(),
             writes: Vec::new(),
             escaped: false,

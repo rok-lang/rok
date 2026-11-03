@@ -1,0 +1,12 @@
+// expect-exit: 0
+// expect-stdout:
+// 4 9 x
+
+// An empty `[]` argument for an open `List<T>` takes `T` from the other
+// arguments.
+fn first_or<T: Clone>(xs: List<T>, d: T) -> T { if xs.len() > 0 { xs[0].clone() } else { d } }
+
+fn main() {
+    let a: i64 = 4;
+    println(first_or([], a), first_or([], 9), first_or(["x"], "y"));
+}

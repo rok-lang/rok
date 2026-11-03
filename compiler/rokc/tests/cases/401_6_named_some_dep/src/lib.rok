@@ -26,6 +26,11 @@ pub fn label(n: i64) -> Label {
     Tag { n: n }
 }
 
+/// Labels for `1..=n`.
+pub fn labels(n: i64) -> List<Label> {
+    List::from_fn(n as usize, |i| label(i as i64 + 1))
+}
+
 /// The label's number: here `Label` is `Tag`.
 pub fn number(l: Label) -> i64 {
     l.n

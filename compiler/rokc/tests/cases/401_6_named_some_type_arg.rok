@@ -1,0 +1,24 @@
+// expect-exit: 0
+// expect-stdout:
+// 2 2 2
+// 3
+// 4 5
+
+// A named `some` type inside a type argument of a signature (`List<X>`,
+// `Dict<str, X>`, `X | none`), called from another module.
+mod m {
+    pub type Label = some Display;
+    pub fn label(n: i64) -> Label { n }
+    pub fn labels() -> List<Label> { [label(1), label(2)] }
+    pub fn keep(xs: List<Label>) -> usize { xs.len() }
+    pub fn opt() -> Label | none { label(3) }
+    pub fn pair() -> (Label, Dict<str, Label>) { (label(4), {"a": label(5)}) }
+}
+
+fn main() {
+    let ls = m::labels();
+    println(ls.len(), f"{ls[1]}", m::keep(ls));
+    println(f"{m::opt() ?? m::label(0)}");
+    let (a, d) = m::pair();
+    println(f"{a} {d["a"]}");
+}

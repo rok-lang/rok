@@ -197,6 +197,17 @@ pub(super) fn no_method_help(
         }
         return help;
     }
+    // `n.to_f64()`: a number converts with `as` (only floats have `to_f64`).
+    if let (HirTy::Prim(p), Some(to)) = (ty, method.strip_prefix("to_")) {
+        let num = |t: &PrimTy| t.is_int() || t.is_float();
+        if num(p) && crate::ty::prim_named(to).is_some_and(|t| num(&t)) {
+            return if p.is_int() && to.starts_with(['i', 'u']) {
+                format!("convert with `{r} as {to}` (wraps), or `try {r}.try_into::<{to}>()`")
+            } else {
+                format!("a number converts with `as`: `{r} as {to}`")
+            };
+        }
+    }
     let pick = rokc_diagnostic::suggest_or_synonym(
         method,
         names.iter().map(String::as_str),

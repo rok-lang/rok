@@ -1,0 +1,11 @@
+// expect-error: 6:5: operator `+` cannot be applied to `i64 | str` and `i64`
+// expect-error: help: `v` is one of several types; take one first: `match v { x: i64 => .., x: str => .. }`, or `if v is i64 { .. }`
+
+// An operand that is a sum of several types names how to take one.
+fn bump(v: i64 | str) -> i64 {
+    v + 1
+}
+
+fn main() {
+    println(bump(1));
+}

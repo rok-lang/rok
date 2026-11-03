@@ -1,0 +1,12 @@
+// expect-error: 9:13: no method `to_f64` found for type `i64`
+// expect-error: help: a number converts with `as`: `q as f64`
+// expect-error: 10:13: no method `to_i32` found for type `i64`
+// expect-error: help: convert with `q as i32` (wraps), or `try q.try_into::<i32>()`
+
+// Only floats have `to_f64`; a number converts with `as`.
+fn main() {
+    let q: i64 = 3;
+    let k = q.to_f64();
+    let j = q.to_i32();
+    println(k, j);
+}

@@ -178,7 +178,9 @@ pub fn receiver<R>(
     let at_end = rest.split('\n').next().is_some_and(|l| l.trim().is_empty());
     let edited = format!("{}{}{rest}", &text[..dot], if at_end { ";" } else { "" });
     let fresh = compile(&edited);
-    let starts = |s: Span| s.start as usize == start;
+    // Ends before the dot: the last good compile has `h.count` where
+    // `h.co|` is being completed.
+    let starts = |s: Span| s.start as usize == start && s.end as usize <= dot;
     let found = fresh
         .find_expr(key, starts, true)
         .map(|e| (&fresh, e.ty.clone()))

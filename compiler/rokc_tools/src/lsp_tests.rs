@@ -1265,6 +1265,25 @@ fn completion_partial_method() {
     assert_eq!(labels(&msgs, 2), ["push"]);
 }
 
+/// `h.count|` on a complete member: `h`'s members, not `h.count`'s,
+/// also when the buffer without the member does not check.
+#[test]
+fn completion_member_of_receiver() {
+    let src = "\
+struct H { count: i64; name: str; }
+let h = H { count: 1, name: \"a\" };
+println(h.count);
+";
+    let msgs = std_session("lsp-member-receiver", src, |uri| {
+        vec![
+            request(1, "textDocument/completion", at(uri, 2, 15)),
+            request(2, "textDocument/completion", at(uri, 2, 10)),
+        ]
+    });
+    assert_eq!(labels(&msgs, 1), ["count"]);
+    assert_eq!(labels(&msgs, 2), ["count", "name"]);
+}
+
 #[test]
 fn completion_bare_prelude() {
     let msgs = std_session("lsp-bare", "pri\n", |uri| {

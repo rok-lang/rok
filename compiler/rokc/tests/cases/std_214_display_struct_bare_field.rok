@@ -1,0 +1,11 @@
+// expect-error: 6:1: `{code}` in a struct's `#[display]`: the fields are read through `self`
+// expect-error: help: write `{self.code}`; only an enum variant's text sees its fields by name
+
+// A struct's `#[display]` text reads its fields through `self`.
+#[derive(Debug, Error)]
+#[display("bad thing: {code:>4} at {{x}}")]
+struct BadThing { code: i64; }
+
+fn main() {
+    println(f"{BadThing { code: 1 }}");
+}

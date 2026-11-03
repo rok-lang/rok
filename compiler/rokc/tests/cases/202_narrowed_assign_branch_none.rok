@@ -1,0 +1,24 @@
+// expect-exit: 0
+// expect-stdout:
+// none 2
+// none
+// 11
+
+// Assigning a narrowed optional a value that may be `none` (an `if` with
+// a `none` branch) ends the narrowing; the value reads the narrowed
+// binding.
+fn main() {
+    let e: i64 | none = 10;
+    let i = 0;
+    while e != none && i < 3 {
+        e = if i == 1 { none } else { e + 1 };
+        i += 1;
+    }
+    println(f"{e:?} {i}");
+    let f: i64 | none = 1;
+    if f != none { f = if f > 0 { none } else { f + 1 }; }
+    println(f"{f:?}");
+    let g: i64 | none = 10;
+    if g != none { g = if g < 0 { none } else { g + 1 }; }
+    println(g ?? 0);
+}

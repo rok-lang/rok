@@ -250,6 +250,28 @@ fn display_text(attrs: &[rokc_ast::Attribute]) -> Option<(String, Span)> {
     Some((text, a.span))
 }
 
+/// The leading names of the holes of f-string text `text` (`{a.b:x}`
+/// gives `a`).
+fn hole_names(text: &str) -> Vec<&str> {
+    let mut out = Vec::new();
+    let mut rest = text;
+    while let Some(i) = rest.find('{') {
+        rest = &rest[i + 1..];
+        if let Some(r) = rest.strip_prefix('{') {
+            rest = r;
+            continue;
+        }
+        let t = rest.trim_start();
+        let end = t
+            .find(|c: char| !(c.is_alphanumeric() || c == '_'))
+            .unwrap_or(t.len());
+        if end > 0 && !t.starts_with(|c: char| c.is_ascii_digit()) {
+            out.push(&t[..end]);
+        }
+    }
+    out
+}
+
 /// The text as an f-string literal.
 fn fstring_of(text: &str) -> String {
     let mut out = String::from("f\"");
@@ -280,6 +302,22 @@ fn display_body(item: &Item, diags: &mut Vec<RokDiagnostic>) -> Option<(Span, St
     match item {
         Item::Struct(s) => {
             let (text, at) = display_text(&s.attrs)?;
+            if let rokc_ast::StructKind::Named(fs) = &s.kind {
+                let field = |n: &str| fs.iter().any(|f| f.name == n);
+                if let Some(n) = hole_names(&text).into_iter().find(|n| field(n)) {
+                    diags.push(
+                        RokDiagnostic::error(
+                            Code::CANNOT_DERIVE,
+                            at,
+                            format!("`{{{n}}}` in a struct's `#[display]`: the fields are read through `self`"),
+                        )
+                        .with_help(format!(
+                            "write `{{self.{n}}}`; only an enum variant's text sees its fields by name"
+                        )),
+                    );
+                    return None;
+                }
+            }
             Some((at, body(format!("        {};\n", write(&text)))))
         }
         Item::Enum(e) => {

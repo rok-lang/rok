@@ -1022,20 +1022,50 @@ fn assign_local(ctx: &mut LowerCtx<'_>, name: &str, local: LocalId, value: &Expr
     let mark = ctx.probe_mark();
     let mut v = lower_expected(ctx, value, ctx.var_ty(local));
     let mut local = local;
-    if ctx.narrowed.contains_key(&local) && !coercible(ctx, &ctx.var_ty(local), &v.ty) {
+    // A value that fails against the narrowed type alone (`if c { none }
+    // else { x + 1 }`) also goes to a wider binding.
+    let clean = ctx.probe_clean(&mark);
+    if ctx.narrowed.contains_key(&local) && (!clean || !coercible(ctx, &ctx.var_ty(local), &v.ty)) {
         ctx.rollback(&mark);
-        local = unnarrow(ctx, name, local, value);
-        v = lower_expected(ctx, value, ctx.var_ty(local));
+        if clean || wider_fits(ctx, local, value) {
+            (local, v) = unnarrow(ctx, name, local, value);
+        } else {
+            v = lower_expected(ctx, value, ctx.var_ty(local));
+        }
     }
     let slot_ty = ctx.var_ty(local);
     let value = coerce(ctx, &slot_ty, v, &|| format!("assignment to `{name}`"));
     ctx.store_local(local, value)
 }
 
+/// Does `value` lower cleanly against a binding the narrowed `local`
+/// came from?
+fn wider_fits(ctx: &mut LowerCtx<'_>, local: LocalId, value: &Expr) -> bool {
+    let mut cur = local;
+    while let Some((orig, orig_ty)) = ctx.narrowed.get(&cur).cloned() {
+        let mark = ctx.probe_mark();
+        let mut probe = ctx.clone();
+        let pv = lower_expected(&mut probe, value, orig_ty.clone());
+        let fits = probe.probe_clean(&mark) && coercible(ctx, &orig_ty, &pv.ty);
+        ctx.rollback(&mark);
+        if fits {
+            return true;
+        }
+        cur = orig;
+    }
+    false
+}
+
 /// Assigning a value the narrowed `local` can't hold ends the
 /// narrowing for the rest of the scope; the value goes to the innermost
 /// binding that takes it (else the declared one, which reports it).
-fn unnarrow(ctx: &mut LowerCtx<'_>, name: &str, local: LocalId, value: &Expr) -> LocalId {
+/// The value is lowered first: it reads the narrowed binding.
+fn unnarrow(
+    ctx: &mut LowerCtx<'_>,
+    name: &str,
+    local: LocalId,
+    value: &Expr,
+) -> (LocalId, HirExpr) {
     let mut chain = vec![local];
     while let Some((orig, orig_ty)) = ctx.narrowed.get(chain.last().unwrap()).cloned() {
         chain.push(orig);
@@ -1049,6 +1079,7 @@ fn unnarrow(ctx: &mut LowerCtx<'_>, name: &str, local: LocalId, value: &Expr) ->
         }
     }
     let target = chain.pop().expect("narrowed local has an origin");
+    let v = lower_expected(ctx, value, ctx.var_ty(target));
     for rebound in chain {
         if let Some(i) = ctx
             .scopes
@@ -1059,7 +1090,7 @@ fn unnarrow(ctx: &mut LowerCtx<'_>, name: &str, local: LocalId, value: &Expr) ->
             ctx.unnarrowed.push((name.to_owned(), rebound, i));
         }
     }
-    target
+    (target, v)
 }
 
 /// `name` in scope `i` no longer names the narrowed `local`: its origin
@@ -1660,14 +1691,10 @@ pub(super) fn lower_assign(
                 let idx = axis_parts(ctx, idx_expr);
                 let rest = [CallArg::Positional(value.clone())];
                 let span = target.span;
-                return Some(HirStmt::Expr(index_call(
-                    ctx,
-                    arr_h,
-                    "index_set",
-                    &idx,
-                    &rest,
-                    span,
-                )));
+                let (since, ty) = (ctx.probe_mark().diagnostics, arr_h.ty.clone());
+                let set = index_call(ctx, arr_h, "index_set", &idx, &rest, span);
+                no_axis_form(ctx, since, &ty, idx_expr, span);
+                return Some(HirStmt::Expr(set));
             }
             if one_axis_misuse(ctx, &arr_h.ty, idx_expr, target.span) {
                 return None;
@@ -8727,6 +8754,22 @@ fn any_method_generics(
     if let Some(want) = expected.filter(|t| !matches!(t, HirTy::Unknown | HirTy::Unit)) {
         super::mono::unify_param_ty_with(&sig_ret_ast(def), &want, &names, &mut subst, ctx);
     }
+    // The rest take their defaults (`C = List<Item>`).
+    for gp in &def.generics.params {
+        if let rokc_ast::GenericParam::Type {
+            name,
+            default: Some(d),
+            ..
+        } = gp
+        {
+            if names.contains(name) && !subst.contains_key(name) {
+                let mut all = outer.clone();
+                all.extend(subst.iter().map(|(k, v)| (k.clone(), v.clone())));
+                let t = trait_decl_ty(ctx, info, &all, d);
+                subst.insert(name.clone(), t);
+            }
+        }
+    }
     if let Some(n) = own.iter().find(|n| !subst.contains_key(*n)) {
         return Err(Some(format!(
             "cannot call `{method}` on `{}`: its type parameter `{n}` can't be inferred from \
@@ -9889,6 +9932,12 @@ fn generic_positional_args(
     ok.then_some(out)
 }
 
+/// An empty `[]` for an open `List<T>` waits for the other arguments to
+/// bind `T` (`first_or([], 9)`).
+fn empty_list_waits(e: &Expr, hint: &HirTy) -> bool {
+    matches!(&e.kind, ExprKind::List(v) if v.is_empty()) && super::mono::has_unknown(hint)
+}
+
 /// `call_generic_on` with positional (and `ref`) arguments only.
 #[allow(clippy::too_many_arguments)]
 fn call_generic_positional(
@@ -10033,7 +10082,8 @@ fn call_generic_positional(
                     && matches!(a, CallArg::Positional(x) if !is_untyped_literal(x))
             })
         });
-        if hint == HirTy::Unknown && !is_ref && bare_param && is_untyped_literal(e) {
+        let literal = hint == HirTy::Unknown && bare_param && is_untyped_literal(e);
+        if !is_ref && (literal || args.len() > 1 && empty_list_waits(e, &hint)) {
             deferred.push((i, e));
             lowered.push(poison(e.span));
             continue;
@@ -13284,6 +13334,19 @@ fn operand_help(
                 "`{side}` is a future, not its value; did you forget `await`? `await {side}`"
             ));
         }
+        // `v: i64 | str`: one member at a time.
+        if let HirTy::Sum(parts) = t {
+            let arms: Vec<String> = parts
+                .iter()
+                .map(|p| format!("x: {} => ..", ctx.ty_name(p)))
+                .collect();
+            return Some(format!(
+                "`{side}` is one of several types; take one first: `match {side} {{ {} }}`, \
+                 or `if {side} is {} {{ .. }}`",
+                arms.join(", "),
+                ctx.ty_name(&parts[0])
+            ));
+        }
     }
     if numeric(lhs.1) && numeric(rhs.1) && lhs.1 != rhs.1 {
         let name = |t: &HirTy| ctx.ty_name(t);
@@ -13849,7 +13912,11 @@ pub(super) fn dispatch_user_op_lit(
     // The impl must be of the trait that registered the operator (by its
     // full path), not another trait that happens to share its name.
     let is_op_trait = |t: &str| t == op_trait;
-    let shown = leaf_name(op_trait);
+    // A core operator trait is not in the prelude: `impl ops::Add for V`.
+    let shown = op_trait
+        .strip_prefix("rok::core::")
+        .filter(|t| t.starts_with("ops::"))
+        .unwrap_or_else(|| leaf_name(op_trait));
     // `180°`, `2 ∈ [1, 2]`: open literals take the number types with the
     // operator, else their defaults, here.
     let mut lhs = lhs;
@@ -15693,8 +15760,11 @@ fn axis_index_read(
 ) -> Result<HirExpr, HirExpr> {
     let arr_h = lower_expected(ctx, arr, HirTy::Unknown);
     if axis_indexed(ctx, &arr_h.ty) {
-        let idx = axis_parts(ctx, idx);
-        return Ok(index_call(ctx, arr_h, "index", &idx, &[], span));
+        let parts = axis_parts(ctx, idx);
+        let (since, ty) = (ctx.probe_mark().diagnostics, arr_h.ty.clone());
+        let read = index_call(ctx, arr_h, "index", &parts, &[], span);
+        no_axis_form(ctx, since, &ty, idx, span);
+        return Ok(read);
     }
     if one_axis_misuse(ctx, &arr_h.ty, idx, span) {
         return Ok(poison(span));
@@ -15782,6 +15852,41 @@ fn slice_arg(
             trailing_closure: None,
         },
         span,
+    }
+}
+
+/// An axis index whose form no `Index` / `IndexSet` impl of `ty` takes
+/// fails as an ambiguous call (the impls differ only in that form): say
+/// what it is instead.
+fn no_axis_form(ctx: &LowerCtx<'_>, since: usize, ty: &HirTy, idx: &Expr, span: Span) {
+    let part = |p: &Expr| match &p.kind {
+        ExprKind::AxisSlice { .. } => "slice",
+        ExprKind::Literal(AstLit::None) => "none",
+        ExprKind::Range {
+            start: None,
+            end: None,
+            inclusive: false,
+        } => "..",
+        _ => "position",
+    };
+    let form = match &idx.kind {
+        ExprKind::Tuple(parts) if parts.len() >= 2 => {
+            parts.iter().map(part).collect::<Vec<_>>().join(", ")
+        }
+        _ => part(idx).to_owned(),
+    };
+    let name = ctx.ty_name(ty);
+    let mut diags = ctx.env.sink.diagnostics.borrow_mut();
+    for d in diags[since..].iter_mut().filter(|d| {
+        d.code == Code::AMBIGUOUS_ITEM
+            && d.primary
+                .as_ref()
+                .is_some_and(|l| l.span.start == span.start)
+    }) {
+        d.message = format!("`{name}` takes no index of the form `[{form}]`");
+        d.notes = vec![
+            "help: index in two brackets, each a form it takes (`a[:, none][.., 0]`)".to_owned(),
+        ];
     }
 }
 
