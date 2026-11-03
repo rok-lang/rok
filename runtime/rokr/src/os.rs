@@ -122,8 +122,6 @@ fn until_nul(buf: &[u8]) -> &[u8] {
     &buf[..buf.iter().position(|&b| b == 0).unwrap_or(buf.len())]
 }
 
-// Errors
-
 /// First resolver code: `getaddrinfo` failure `e` is `EAI_BASE + |e|`.
 pub const EAI_BASE: i32 = 100_000;
 
@@ -200,8 +198,6 @@ pub extern "C" fn rok_os_strerror(code: i32) -> RokStr {
     unsafe { libc::strerror_r(code, buf.as_mut_ptr().cast(), buf.len()) };
     build(&[until_nul(&buf)])
 }
-
-// File descriptors
 
 /// `AT_FDCWD` for a negative `dir` (the root / cwd capability).
 const fn at(dir: i32) -> i32 {
@@ -530,7 +526,7 @@ pub const extern "C" fn rok_os_flock(_fd: i32, _op: i32) -> i32 {
     UNSUPPORTED
 }
 
-/// Copy `src` → `dst` from their current offsets to EOF: bytes or `-errno`.
+/// Copy `src` -> `dst` from their current offsets to EOF: bytes or `-errno`.
 /// The kernel moves the bytes where the pair of descriptor kinds allows
 /// ([`kernel_copy`]); every other pair, and one the kernel or file system
 /// refuses before a byte moved, takes the read / write loop. Non-blocking
@@ -644,9 +640,9 @@ fn pump(
 }
 
 /// The in-kernel copy for this pair of descriptor kinds (Linux):
-/// `copy_file_range` file → file (a reflink or server-side copy where the
-/// file system can), `sendfile` file → anything else, `splice` to or from
-/// a pipe, and a socket → file / socket through a pipe. `None` where it
+/// `copy_file_range` file -> file (a reflink or server-side copy where the
+/// file system can), `sendfile` file -> anything else, `splice` to or from
+/// a pipe, and a socket -> file / socket through a pipe. `None` where it
 /// does not apply.
 #[cfg(target_os = "linux")]
 fn kernel_copy(src: i32, dst: i32, total: &mut i64) -> Option<Result<i64, i32>> {
@@ -669,7 +665,7 @@ fn kernel_copy(src: i32, dst: i32, total: &mut i64) -> Option<Result<i64, i32>> 
     }
 }
 
-/// The in-kernel copy for this pair (macOS): `sendfile` file → socket,
+/// The in-kernel copy for this pair (macOS): `sendfile` file -> socket,
 /// from the file's offset, which then moves past what was sent.
 #[cfg(target_os = "macos")]
 fn kernel_copy(src: i32, dst: i32, total: &mut i64) -> Option<Result<i64, i32>> {
@@ -700,7 +696,7 @@ const fn kernel_copy(_src: i32, _dst: i32, _total: &mut i64) -> Option<Result<i6
     None
 }
 
-/// Socket → file / socket with `splice(2)` through a pipe of our own.
+/// Socket -> file / socket with `splice(2)` through a pipe of our own.
 #[cfg(target_os = "linux")]
 fn splice_through_pipe(src: i32, dst: i32, total: &mut i64) -> Option<Result<i64, i32>> {
     let mut p = [0i32; 2];
@@ -791,8 +787,6 @@ fn rw_copy(src: i32, dst: i32, mut total: i64) -> Result<i64, i32> {
         total += n as i64;
     }
 }
-
-// Paths and directories
 
 /// Reflink `from` (a regular file) to a new `to`, both under `dir`
 /// (macOS `clonefileat`: same-volume APFS copies share their blocks).
@@ -980,7 +974,7 @@ pub extern "C" fn rok_os_rename(dir: i32, from: RokStr, to_dir: i32, to: RokStr)
     if r < 0 { -e } else { 0 }
 }
 
-/// `hard == 0`: symlink `link` → `target`; else hard link.
+/// `hard == 0`: symlink `link` -> `target`; else hard link.
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_os_link(dir: i32, target: RokStr, link: RokStr, hard: i32) -> i32 {
     // SAFETY: both are C strings.
@@ -1140,8 +1134,6 @@ pub const extern "C" fn rok_os_current_exe(_buf: *mut u8, _off: usize, _len: usi
     UNSUPPORTED as isize
 }
 
-// Environment
-
 /// `environ` (Apple: through `_NSGetEnviron`, as executables only see it
 /// there; WASI: wasi-libc's, filled on first use).
 fn environ() -> *mut *const CStrPtr {
@@ -1270,7 +1262,7 @@ fn wasi_args() -> (usize, *const CStrPtr) {
     }
 }
 
-/// C string `p` as a GC `str` (null → `""`).
+/// C string `p` as a GC `str` (null -> `""`).
 fn from_c(p: CStrPtr) -> RokStr {
     if p.is_null() {
         return build(&[]);
@@ -1343,8 +1335,6 @@ pub extern "C" fn rok_os_setenv(name: RokStr, value: RokStr, unset: i32) -> i32 
     };
     ret(r as isize) as i32
 }
-
-// Processes
 
 /// Pointers to the NUL-separated pieces of `blob` (`count` of them),
 /// null-terminated, in a malloc block.

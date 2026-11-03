@@ -516,9 +516,9 @@ const fn packed(n: usize) -> usize {
     n.div_ceil(PER)
 }
 
-//
-// The `u32` digits of both operands are coefficients; their cyclic
-// convolution is computed modulo three primes p < 2^30 with 2^23 | p - 1
+// NTT multiplication. The `u32` digits of both operands are
+// coefficients; their cyclic convolution is computed modulo three
+// primes p < 2^30 with 2^23 | p - 1
 // (Montgomery arithmetic, R = 2^32) and put back together by Garner's
 // CRT. A coefficient of the product is below min(len) 2^64 <= 2^86 <
 // p1 p2 p3 (2^88.2), so transform lengths up to 2^23 are exact. The
@@ -842,7 +842,7 @@ const fn digits32(a: &[L]) -> &[u32] {
     unsafe { slice::from_raw_parts(a.as_ptr().cast::<u32>(), a.len() * PER) }
 }
 
-/// Transform length (`u32` coefficients) for an `n` × `m` product.
+/// Transform length (`u32` coefficients) for an `n` x `m` product.
 const fn ntt_len(n: usize, m: usize) -> usize {
     ((n + m) * PER).next_power_of_two()
 }
@@ -988,7 +988,7 @@ fn ntt_mul(r: &mut [L], a: &[L], b: &[L], t: &mut [L]) {
     debug_assert!(c == 0);
 }
 
-/// The transform length `rok_nat_mul` takes for an `an` × `bn` product
+/// The transform length `rok_nat_mul` takes for an `an` x `bn` product
 /// (`u32` limbs), 0 when it does not use the NTT.
 #[unsafe(no_mangle)]
 pub const extern "C" fn rok_nat_ntt_len(an: usize, bn: usize) -> usize {
@@ -1075,7 +1075,7 @@ pub unsafe extern "C" fn rok_nat_ntt_mul(
     });
 }
 
-/// Whether `rok_nat_mulmod` takes an `an` × `bn` product mod `B^m - 1`
+/// Whether `rok_nat_mulmod` takes an `an` x `bn` product mod `B^m - 1`
 /// as one cyclic transform of length `m`.
 const fn wrap_ntt(an: usize, bn: usize, m: usize) -> bool {
     let lo = if an < bn { an } else { bn };
@@ -1083,7 +1083,7 @@ const fn wrap_ntt(an: usize, bn: usize, m: usize) -> bool {
 }
 
 /// The modulus length `m >= n` (`B^m - 1`) `rok_nat_mulmod` serves best
-/// for an `an` × `bn` product: a transform length, or `n` itself.
+/// for an `an` x `bn` product: a transform length, or `n` itself.
 #[unsafe(no_mangle)]
 pub const extern "C" fn rok_nat_mulmod_len(an: usize, bn: usize, n: usize) -> usize {
     let m = n.next_power_of_two();
@@ -1190,7 +1190,7 @@ fn unpack(dst: &mut [u32], src: &[L]) {
     };
 }
 
-/// `u32` limbs of scratch `rok_nat_mul` needs for an `an` × `bn` product.
+/// `u32` limbs of scratch `rok_nat_mul` needs for an `an` x `bn` product.
 #[unsafe(no_mangle)]
 pub const extern "C" fn rok_nat_mul_scratch(an: usize, bn: usize) -> usize {
     let (na, nb) = (packed(an), packed(bn));
@@ -1332,7 +1332,7 @@ pub unsafe extern "C" fn rok_nat_put_digits(
 }
 
 /// floor((B^2 - 1) / d) - B for a normalized `d` (top bit set): the
-/// reciprocal of Möller and Granlund, "Improved division by invariant
+/// reciprocal of Moller and Granlund, "Improved division by invariant
 /// integers" (2011).
 const fn reciprocal(d: L) -> L {
     (((((!d) as W) << LB) | L::MAX as W) / d as W) as L
@@ -1395,7 +1395,7 @@ fn shr_in(r: &mut [L], s: u32) {
 }
 
 /// Knuth TAOCP 4.3.1 algorithm D: `u` (`m + n + 1` limbs, `u[m + n] <
-/// v[n - 1]`) / `v` (`n` limbs, top bit set) → `q[0..=m]`, the
+/// v[n - 1]`) / `v` (`n` limbs, top bit set) -> `q[0..=m]`, the
 /// remainder left in `u[..n]`.
 fn knuth_d(q: &mut [L], u: &mut [L], v: &[L]) {
     let n = v.len();
@@ -1414,14 +1414,14 @@ fn knuth_d(q: &mut [L], u: &mut [L], v: &[L]) {
     for j in (0..q.len()).rev() {
         let (u1, u0, u2) = (u[j + n], u[j + n - 1], u[j + n - 2]);
         let (mut qhat, mut rhat, mut big) = if u1 >= top {
-            // q̂ = B - 1; r̂ = u1 B + u0 - (B - 1) top = u0 + top.
+            // qhat = B - 1; rhat = u1 B + u0 - (B - 1) top = u0 + top.
             let (r, o) = u0.overflowing_add(top);
             (L::MAX, r, o)
         } else {
             let (q, r) = div2by1(u1, u0, top, inv);
             (q, r, false)
         };
-        // At most two steps make q̂ exact or one too big.
+        // At most two steps make qhat exact or one too big.
         while !big && qhat as W * next as W > (((rhat as W) << LB) | u2 as W) {
             qhat -= 1;
             (rhat, big) = rhat.overflowing_add(top);
@@ -1832,11 +1832,11 @@ fn less(x: &[L], y: &[L]) -> bool {
     x.iter().rev().cmp(y.iter().rev()) == core::cmp::Ordering::Less
 }
 
-/// `(a, b) = M^-1 (a, b)` for `a = α B^p + a_lo`, `b = β B^p + b_lo`
-/// where `(α, β)` already is `M^-1` of the old high parts, ordered so
+/// `(a, b) = M^-1 (a, b)` for `a = alpha B^p + a_lo`, `b = beta B^p + b_lo`
+/// where `(alpha, beta)` already is `M^-1` of the old high parts, ordered so
 /// that `a >= b` (`M`'s columns swap when needed). With `M^-1 = det
-/// [[m11, -m01], [-m10, m00]]`: `a = α B^p + det (m11 a_lo - m01
-/// b_lo)`, the same for `b`. Both stay positive when α, β are at least
+/// [[m11, -m01], [-m10, m00]]`: `a = alpha B^p + det (m11 a_lo - m01
+/// b_lo)`, the same for `b`. Both stay positive when alpha, beta are at least
 /// B^s and the entries below B^(k - s) for high parts of `k <= 2s`
 /// limbs (what `hgcd` leaves): the low terms are below B^(k - s + p).
 fn adjust(a: &mut [L], b: &mut [L], p: usize, m: &mut Mat<'_>, t: &mut [L]) {
@@ -1937,7 +1937,7 @@ fn hgcd_step(a: &mut [L], b: &mut [L], s: usize, m: &mut Mat<'_>, t: &mut [L]) -
     true
 }
 
-/// Half gcd (Möller, "On Schönhage's algorithm and subquadratic integer
+/// Half gcd (Moller, "On Schonhage's algorithm and subquadratic integer
 /// gcd computation", 2008): reduces `a >= b` (`n` significant limbs) by
 /// Euclid steps while both stay at least B^s, `s = n/2 + 1`, into `M`
 /// (the identity on entry, entries of at least `n - s + 1` limbs);

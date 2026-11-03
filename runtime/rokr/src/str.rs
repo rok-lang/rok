@@ -66,7 +66,7 @@ pub fn build(parts: &[&[u8]]) -> RokStr {
     RokStr { ptr: p, len }
 }
 
-/// `strlen` for a `char*` a C function returned; null → 0.
+/// `strlen` for a `char*` a C function returned; null -> 0.
 ///
 /// # Safety
 /// `s` must be null or a valid NUL-terminated string.

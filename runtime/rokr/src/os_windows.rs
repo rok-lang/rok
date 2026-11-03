@@ -240,8 +240,6 @@ pub extern "C" fn rok_os_socket_fd(s: u64) -> i32 {
     fd_of(s as win::SOCKET)
 }
 
-// Errors
-
 /// `IoErrorKind` discriminants (library/core/src/io.rok declares the same).
 mod kind {
     pub const OTHER: i32 = 0;
@@ -347,8 +345,6 @@ fn decimal(v: i32, out: &mut [u8; 12]) -> &[u8] {
     &out[i..]
 }
 
-// Paths
-
 /// `path` under directory capability `dir` (negative: the process's
 /// own resolution, relative to the working directory) as a Win32 path.
 fn path_w(dir: i32, path: RokStr) -> Result<Wide, i32> {
@@ -387,8 +383,8 @@ fn final_path(h: HANDLE) -> Result<Wide, i32> {
     Ok(w)
 }
 
-/// A `\\?\` path as the user would write it: `\\?\C:\x` → `C:\x`,
-/// `\\?\UNC\srv\x` → `\\srv\x`.
+/// A `\\?\` path as the user would write it: `\\?\C:\x` -> `C:\x`,
+/// `\\?\UNC\srv\x` -> `\\srv\x`.
 fn friendly(w: &[u16]) -> MBuf<u16> {
     let mut out = MBuf::new();
     let unc = ascii_w(br"\\?\UNC\");
@@ -455,8 +451,6 @@ fn open_meta(path: &mut Wide, follow: bool) -> Result<Owned, i32> {
         Ok(Owned(hd))
     }
 }
-
-// Handles
 
 /// `FILE_GENERIC_WRITE` without `FILE_WRITE_DATA`: appends only.
 const APPEND_ACCESS: DWORD = 0x0012_0114;
@@ -1030,7 +1024,7 @@ pub extern "C" fn rok_os_flock(fd: i32, op: i32) -> i32 {
     }
 }
 
-/// Copy `src` → `dst` from their current offsets to EOF: bytes or `-error`.
+/// Copy `src` -> `dst` from their current offsets to EOF: bytes or `-error`.
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_os_copy_fd(src: i32, dst: i32) -> i64 {
     let (r, e) = native(|| {
@@ -1054,8 +1048,6 @@ pub extern "C" fn rok_os_copy_fd(src: i32, dst: i32) -> i64 {
     });
     if r < 0 { -i64::from(e) } else { r }
 }
-
-// Paths and directories
 
 /// Copy `from` to a new `to`, both under `dir` (`CopyFileExW`: block
 /// cloning where the volume supports it, attributes included). 0 or
@@ -1277,7 +1269,7 @@ fn rename_posix(from: &mut Wide, to: &mut Wide) -> Result<(), i32> {
     if ok == 0 { Err(errno()) } else { Ok(()) }
 }
 
-/// `hard == 0`: symlink `link` → `target` (`target` kept as given,
+/// `hard == 0`: symlink `link` -> `target` (`target` kept as given,
 /// separators as `\`; a directory symlink if it names a directory);
 /// else a hard link to `target` under `dir`.
 #[unsafe(no_mangle)]
@@ -1452,8 +1444,6 @@ pub extern "C" fn rok_os_current_exe(buf: *mut u8, off: usize, len: usize) -> is
     }
 }
 
-// Arguments and environment
-
 fn args() -> &'static Args {
     static ARGS: AtomicPtr<Args> = AtomicPtr::new(ptr::null_mut());
     let a = ARGS.load(Ordering::Acquire);
@@ -1560,8 +1550,6 @@ pub extern "C" fn rok_os_setenv(name: RokStr, value: RokStr, unset: i32) -> i32 
         e
     }
 }
-
-// Processes
 
 /// Children not reaped yet: `(pid, process handle)`.
 struct Children {
