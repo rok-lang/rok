@@ -1,5 +1,5 @@
 // `+` dispatches only through the add_trait (Add) impl, not another trait's `add`.
-// expect-error: it needs `impl Add for V`
+// expect-error: it needs `impl ops::Add for V`
 
 trait Plus { fn add(self, o: V) -> V; }
 struct V { x: i32; }

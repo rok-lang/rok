@@ -1,4 +1,4 @@
-// expect-error: operator `&` cannot be applied to `f32`: it needs `impl BitAnd for f32`
+// expect-error: operator `&` cannot be applied to `f32`: it needs `impl ops::BitAnd for f32`
 // expect-error: cannot index into a value of type `str`
 // expect-error: cannot index into a value of type `(i64, i64)`
 

@@ -13912,7 +13912,11 @@ pub(super) fn dispatch_user_op_lit(
     // The impl must be of the trait that registered the operator (by its
     // full path), not another trait that happens to share its name.
     let is_op_trait = |t: &str| t == op_trait;
-    let shown = leaf_name(op_trait);
+    // A core operator trait is not in the prelude: `impl ops::Add for V`.
+    let shown = op_trait
+        .strip_prefix("rok::core::")
+        .filter(|t| t.starts_with("ops::"))
+        .unwrap_or_else(|| leaf_name(op_trait));
     // `180°`, `2 ∈ [1, 2]`: open literals take the number types with the
     // operator, else their defaults, here.
     let mut lhs = lhs;
