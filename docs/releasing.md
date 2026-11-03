@@ -143,7 +143,10 @@ old one made and locked. Run it (`jobs: dist`) before tagging.
   `scripts/release-notes.sh <version>`.
 - The release commit (version bump and changelog) goes straight to `main`,
   and its `ci` run there has a green `ci-gate`. `ci-green` refuses the tag
-  otherwise; a green `release.yml` manual run is not a substitute.
+  otherwise; a green `release.yml` manual run is not a substitute. That
+  run's `corpus` jobs build and run every integration case: each shard
+  reports its share of the corpus, and one that selects no case fails
+  (an empty `ROK_TEST_FILTER` is the whole corpus).
 - The stones, the sites and CI version and deploy on their own terms; this
   file covers only the toolchain release.
 

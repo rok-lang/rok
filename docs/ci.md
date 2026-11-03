@@ -35,7 +35,8 @@ arm64, `windows-2022` x86_64, `windows-11-arm` aarch64 (cross only). x86_64-appl
   hash:i/3`, with no build but `librokr.a` (`ROK_TEST_PREBUILT=1`).
 - `corpus`, per host, level and shard: the `integration` and `differential` binaries from the same archive
   with `ROK_TEST_SHARD=i/4`. A shard takes every fourth integration case of the sorted list (and every fourth
-  differential suite); unset, the tests run everything.
+  differential suite); unset, the tests run everything. `ROK_TEST_FILTER` comes from the plan: empty (the
+  whole corpus) except in a manual run that sets `filter`. A filter that selects no case fails the job.
 - rustc runs through sccache (`.github/actions/sccache`), cached in the `rok-lang-artifacts` bucket under
   `sccache/<os>-<arch>/` (expired after 14 days). Pull requests read it; other events write it through the
   `rok-ci-sccache` role. A cache error builds without it.
