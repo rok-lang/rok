@@ -8,7 +8,7 @@
 
 // Static methods (no `self`) of generic impls, called by path: `Self`
 // comes from the expected type or the type parameter, and binds the
-// impl's parameters (`Box<i32>` → `T = i32`).
+// impl's parameters (`Box<i32>` -> `T = i32`).
 
 trait Origin { fn origin() -> Self; }
 trait Make { fn make(n: i32) -> Self; }

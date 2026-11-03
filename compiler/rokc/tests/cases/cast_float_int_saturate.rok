@@ -6,8 +6,8 @@
 // 9223372036854775807 -9223372036854775808 18446744073709551615 0
 // -7 7 3
 
-// Float → int truncates toward zero, saturates out of
-// range, NaN → 0, at every opt level. Values come through a `List` so
+// Float -> int truncates toward zero, saturates out of
+// range, NaN -> 0, at every opt level. Values come through a `List` so
 // the optimizer cannot fold them.
 fn main() -> i32 {
     let xs: List<f64> = List::new();

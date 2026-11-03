@@ -307,7 +307,7 @@ fn mutate_lines(rng: &mut Rng, pool: &Pool, src: &str) -> String {
 }
 
 /// Random programs from a small grammar: mostly ill-typed, which is the
-/// point - every path from parse to codegen must end in a diagnostic.
+/// point: every path from parse to codegen must end in a diagnostic.
 struct Gen<'r> {
     rng: &'r mut Rng,
     depth: u32,

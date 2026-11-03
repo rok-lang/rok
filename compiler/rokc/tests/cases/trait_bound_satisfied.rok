@@ -2,7 +2,7 @@
 // expect-stdout: 14
 
 // `T: Tally` bound: monomorphization checks that `Counter` has an
-// `impl Tally for Counter` block. It does → call lowers normally.
+// `impl Tally for Counter` block. It does, so the call lowers.
 trait Tally {
     fn tally(self) -> i32;
 }

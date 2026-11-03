@@ -17,8 +17,8 @@
 // expect-error: call to unsafe function `set_var` outside an `unsafe` block
 // expect-error: call to unsafe function `from_ptr` outside an `unsafe` block
 
-// Items 0.2.0 removed give a plain error; `set_var`, `remove_var`,
-// and `CStr::from_ptr` are `unsafe fn`s.
+// Removed items give a plain error; `set_var`, `remove_var` and
+// `CStr::from_ptr` are `unsafe fn`s.
 use rok::bare::ffi::CStr;
 use rok::bare::ptr::ConstPtr;
 use rok::std::env;

@@ -100,12 +100,11 @@ fn declarative_macros_run_end_to_end() {
     .unwrap();
     let out = rokc(Some(&env), &app, &["-q", "run"]);
     assert_exit(&out, 0);
-    // (10 + 10)^2 = 400; the caller's `v` is untouched by `sq!`'s own `v`.
+    // (10 + 10)^2; `sq!`'s own `v` leaves the caller's alone.
     assert_eq!(text(&out.stdout), "400 1\n");
 }
 
-// WrappingFrom (the as-cast conversion matrix) is macro-generated in
-// convert.rok; check a couple of wrapping conversions.
+// `WrappingFrom` (the `as` matrix) is macro-generated in convert.rok.
 #[test]
 fn macro_generated_wrapping_casts_work() {
     let Some(env) = setup() else { return };
@@ -127,7 +126,7 @@ fn macro_generated_wrapping_casts_work() {
 }
 
 // The integer operator impls (Add, Sub, .. Ord) are macro-generated in
-// num.rok; check arithmetic across signed and unsigned.
+// num.rok.
 #[test]
 fn macro_generated_integer_ops_work() {
     let Some(env) = setup() else { return };
@@ -152,8 +151,7 @@ fn macro_generated_integer_ops_work() {
     assert_eq!(text(&out.stdout), "10 4 21 2 1 2 7 5 8 4 -5 1 1 201\n");
 }
 
-// The integer `*Assign` impls are macro-generated; check a
-// few compound assignments across types actually work at runtime.
+// The integer `*Assign` impls are macro-generated.
 #[test]
 fn macro_generated_compound_assigns_work() {
     let Some(env) = setup() else { return };
@@ -181,8 +179,7 @@ fn new_bin_package_runs_from_its_directory() {
     assert_eq!(text(&out.stdout), "Hello, world!\n");
     assert!(text(&out.stderr).contains("Compiling app"));
 
-    // A file inside the package builds the package, and `-q`
-    // silences progress.
+    // A file inside the package builds the package; `-q` silences progress.
     put(app.join("src/util/x.rok"), "fn unused() {}\n").unwrap();
     let out = rokc(Some(&env), &dir, &["-q", "build", "app/src/util/x.rok"]);
     assert_exit(&out, 0);
@@ -674,8 +671,7 @@ fn compiler_warning_with_lint_can_be_allowed() {
     );
 }
 
-/// A lint added in 0.1.6: `-D warnings`, `-D all` and its own name deny
-/// it.
+/// `-D warnings`, `-D all` and its own name deny a newer lint.
 #[test]
 fn literal_spread_mismatch_is_in_warnings() {
     let dir = scratch("lint-spread");
@@ -705,15 +701,13 @@ fn literal_spread_mismatch_is_in_warnings() {
     );
 }
 
-/// The 0.1.6 semantic warnings that are errors now are gone from
-/// `--list`.
+/// Semantic warnings that became errors are gone from `--list`.
 #[test]
 fn semantic_warnings_are_in_warnings() {
     let dir = scratch("lint-semantic");
     let app = new_package(&dir, "app", false);
     let out = rokc(None, &app, &["lint", "--list"]);
     let list = text(&out.stdout);
-    // Lints that became errors are gone from the list.
     for name in [
         "capture_field_write",
         "const_item_mutation",
@@ -1980,8 +1974,7 @@ fn bench_format_json_separates_noise() {
     assert!(human.contains("bench result: ok. 1 run;"), "{human}");
 }
 
-/// The `#rokbench` line is frozen as 0.1.5 prints it; new fields go only
-/// in the JSON records.
+/// The `#rokbench` line is frozen; new fields go only in the JSON records.
 #[test]
 fn rokbench_line_unchanged() {
     let Some(env) = setup() else { return };
@@ -4027,9 +4020,8 @@ fn check_library_checks_every_body() {
 }
 
 /// A recursive value in a recursive function gives the hand-off walk
-/// thousands of aliases at its exit, more with each `Env` field. Walking
-/// them by rescanning a local's edges at each step took ~14x the work of
-/// the indexed walk: minutes in a debug rokc against seconds.
+/// thousands of aliases at its exit, more with each `Env` field; a walk
+/// that rescans a local's edges per step takes minutes in a debug rokc.
 #[test]
 fn check_recursive_value_aliases_quickly() {
     let dir = scratch("check-recursive-aliases");
@@ -6275,7 +6267,7 @@ fn interop_certs(o: &Path, dir: &Path) {
     }
 }
 
-/// Our client against `openssl s_server -rev` with `server` arguments:
+/// rok's client against `openssl s_server -rev` with `server` arguments:
 /// the client's report.
 fn vs_s_server(o: &Path, probe: &Path, dir: &Path, server: &str, client: &str) -> String {
     use std::io::{BufRead, BufReader};
@@ -6323,7 +6315,7 @@ fn vs_s_server(o: &Path, probe: &Path, dir: &Path, server: &str, client: &str) -
 }
 
 /// `openssl s_client` (`args`, once per `conns`, resuming after the
-/// first) against our server: per connection what `s_client` saw, then
+/// first) against rok's server: per connection what `s_client` saw, then
 /// the server's report.
 fn vs_s_client(
     o: &Path,

@@ -10,7 +10,7 @@
 // boot monotonic true
 
 // `SystemTime` is ns from `UNIX_EPOCH`; `from_unix` /
-// `unix_secs` / `unix_nanos`, `± Duration`, and `duration_since`
+// `unix_secs` / `unix_nanos`, `+` / `-` a `Duration`, and `duration_since`
 // negative when `earlier` is later. `BootTime`.
 use rok::std::time::{BootTime, SystemTime, UNIX_EPOCH};
 

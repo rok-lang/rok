@@ -3,9 +3,9 @@
 // expect-stdout:
 // tasks 64 pushed 128000
 
-// The 0.1 race: 64 tasks each held a thread-local list across an `await`
-// and pushed to it after resuming on another worker. `with` keeps each
-// use on one thread, between two `await`s.
+// 64 tasks hold a thread-local list across an `await` and resume on
+// other workers. `with` keeps each use on one thread, between two
+// `await`s.
 use rok::std::thread;
 
 static TL: thread::ThreadLocal<List<i64>> = thread::local(|| -> List<i64> { [] });

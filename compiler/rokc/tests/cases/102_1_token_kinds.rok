@@ -5,7 +5,7 @@
 // A 65 true false true
 // 7 [2, 3]
 
-// The token kinds - identifiers (`count`, `α`, `Δt`), keywords,
+// The token kinds: identifiers (`count`, `α`, `Δt`), keywords,
 // numeric literals, the string forms (plain, raw, format, byte), the
 // character forms, `true` / `false` / `none`, operators and punctuation.
 fn main() {

@@ -29,14 +29,14 @@ fn run(f: fn(i32) throws (Q), x: i32) throws (Q) { try f(x); }
 fn main() -> i32 {
     let p: fn(i32) throws (P) -> i32 = |s: i32| s * 3;
     println(f"{try call(p, 2) catch _ { -1 }}");
-    // non-throwing → throwing
+    // non-throwing -> throwing
     println(f"{try call(inc, 2) catch _ { -1 }}");
     println(f"{try call(half, 3) catch _ { -1 }}");
-    // `throws (P)` → `throws (P | Q)`
+    // `throws (P)` -> `throws (P | Q)`
     println(f"{try call2(half, 4) catch _ { -1 }}");
     let r = try call2(half, 5) catch e: P { -2 } catch _ { -1 };
     println(f"{r}");
-    // `throws (NotFound)` → untyped `throws` (`any Error`)
+    // `throws (NotFound)` -> untyped `throws` (`any Error`)
     let q: fn(i32) throws -> i32 = find;
     let r2 = try q(60) catch e: any Error { -3 };
     println(f"{r2}");

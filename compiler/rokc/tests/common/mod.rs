@@ -30,9 +30,9 @@
 //!   - `// needs: threads net process fs posix-fs native-run` - skipped
 //!     on a target without one of them: threads only on `wasm32-wasip1-threads`
 //!     among the wasm32 targets, sockets only on `wasm32-wasip2`, no
-//!     processes or signals on wasm32 (3.x availability;
-//!     `process` also covers POSIX C calls), a browser no file system
-//!     (`fs`), WASI no `dup` / `flock` / `mmap` (`posix-fs`)
+//!     processes or signals on wasm32 (`process` also covers POSIX C
+//!     calls), a browser no file system (`fs`), WASI no `dup` / `flock` /
+//!     `mmap` (`posix-fs`)
 //!   - `// only-target: wasm32-wasip2 ..` - run only on the listed
 //!     `ROK_TEST_TARGET`s (what one target reports that the others do
 //!     not, e.g. its `Unsupported` APIs)
@@ -54,10 +54,10 @@
 //!     (zerocopy, process and signal details) are not faithfully emulated.
 //!
 //! Environment:
-//!   - `ROK_REQUIRE_LLVM=1` - a rokc built without LLVM is a failure
-//!     instead of a skip (CI sets this).
+//!   - `ROK_REQUIRE_LLVM=1` - a rokc built without LLVM fails instead of
+//!     skipping (CI sets this).
 //!   - `ROK_TEST_OPT=-O2` (or `--release`, `-O3`, ...) - build every case
-//!     at that optimization level instead of the default `-O0`.
+//!     at that level instead of `-O0`.
 //!   - `ROK_TEST_FILTER=text` - only the integration cases whose name
 //!     contains `text`; `a,b` runs those containing any of them; empty
 //!     runs every case.
@@ -67,8 +67,7 @@
 //!   - `ROK_TEST_TARGET=<triple>` - build for that target (with a runtime
 //!     built for it), e.g. `x86_64-apple-darwin` run under Rosetta.
 //!     `wasm32-wasip2` and `wasm32-wasip1-threads` run each module with
-//!     `ROK_TEST_WASM_RUNNER` (a `wasmtime` that still has wasi-threads:
-//!     The last);
+//!     `ROK_TEST_WASM_RUNNER` (a `wasmtime` with wasi-threads);
 //!     `wasm32-unknown-unknown` with `node` and the toolchain's `rok.mjs`
 //!     host (all need `targets/build.sh <triple>` for the C library).
 //!   - `ROK_TEST_RUNNER=<program> [args]` - run a native target's case

@@ -5,7 +5,7 @@
 // true 3
 // i8 u8 i32 u64 i64
 
-// Floating-point → integer `TryFrom` truncates toward zero and throws
+// Floating-point -> integer `TryFrom` truncates toward zero and throws
 // `OverflowError` for NaN, infinities and out-of-range values.
 
 fn ok() throws (OverflowError) {

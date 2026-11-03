@@ -7,7 +7,7 @@
 // 20000
 // 30049990000
 
-// channel: `close()` ends the stream (`recv` → `none`); four
+// channel: `close()` ends the stream (`recv` -> `none`); four
 // producer threads, each with its own cloned `Sender`, feed a bounded
 // channel (4 slots, so senders block) drained by `for v in rx.iter()`.
 use rok::std::thread;
