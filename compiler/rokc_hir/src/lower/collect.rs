@@ -2647,7 +2647,7 @@ fn finish<'a>(
     } else {
         &programs[1..]
     };
-    check_impl_overlap(&env, &own);
+    rokc_diagnostic::time("hir impl overlap", || check_impl_overlap(&env, &own));
     check_impl_rules(&env, checked, &programs, &own);
     check_internal_marks(&env, checked, &own);
     check_templates(&env, &input.templates);
@@ -6717,6 +6717,8 @@ fn rigid(t: &CanonTy) -> CanonTy {
         CanonTy::Tuple(a) => CanonTy::Tuple(a.iter().map(rigid).collect()),
         CanonTy::Sum(a) => CanonTy::Sum(a.iter().map(rigid).collect()),
         CanonTy::Array(e, n) => CanonTy::Array(Box::new(rigid(e)), Box::new(rigid(n))),
+        // Its `#r.` terms are never bound.
+        CanonTy::Const(l) => CanonTy::Const(l.clone()),
     }
 }
 
@@ -6726,6 +6728,7 @@ fn has_rigid(t: &CanonTy) -> bool {
         CanonTy::Named(n, a) => n.starts_with("#r.") || a.iter().any(has_rigid),
         CanonTy::Tuple(a) | CanonTy::Sum(a) => a.iter().any(has_rigid),
         CanonTy::Array(e, n) => has_rigid(e) || has_rigid(n),
+        CanonTy::Const(l) => l.terms.keys().any(|v| v.starts_with("#r.")),
     }
 }
 
@@ -7109,6 +7112,15 @@ fn symbolic_overlap(ctx: &LowerCtx<'_>, a: &Impl, b: &Impl) -> Option<Option<Str
         args.push((canon(a, &va, x)?, canon(b, &vb, y)?));
     }
     let mut u = Unifier::default();
+    for (gi, tag) in [(a, "#a."), (b, "#b.")] {
+        for gp in &gi.generics.params {
+            if let rokc_ast::GenericParam::Const { name, ty } = gp {
+                if is_unsigned(ty) {
+                    u.nonneg.insert(format!("{tag}{name}"));
+                }
+            }
+        }
+    }
     if u.unify(&a_self, &b_self).is_none() || args.iter().any(|(x, y)| u.unify(x, y).is_none()) {
         return Some(None);
     }
@@ -7146,6 +7158,16 @@ fn symbolic_overlap(ctx: &LowerCtx<'_>, a: &Impl, b: &Impl) -> Option<Option<Str
         }
     }
     Some(Some(u.walk(&a_self).to_string()))
+}
+
+fn is_unsigned(t: &Ty) -> bool {
+    let AstTyKind::Path(p) = &t.kind else {
+        return false;
+    };
+    matches!(
+        p.segments.as_slice(),
+        [s] if matches!(s.name.as_str(), "usize" | "u8" | "u16" | "u32" | "u64" | "u128")
+    )
 }
 
 /// May non-variable `subject` implement `key`? Concrete types are asked
@@ -7200,7 +7222,7 @@ fn canon_head(t: &CanonTy) -> String {
         CanonTy::Tuple(ts) => format!("({})", ts.len()),
         CanonTy::Array(..) => "[]".to_owned(),
         CanonTy::Sum(_) => "|".to_owned(),
-        CanonTy::Var(_) => String::new(),
+        CanonTy::Var(_) | CanonTy::Const(_) => String::new(),
     }
 }
 
@@ -7211,9 +7233,11 @@ enum CanonTy {
     Var(String),
     Named(String, Vec<CanonTy>),
     Tuple(Vec<CanonTy>),
-    /// Element and length (a literal `Named` or a const parameter).
+    /// Element and length (a `Const` or a const parameter).
     Array(Box<CanonTy>, Box<CanonTy>),
     Sum(Vec<CanonTy>),
+    /// A const argument that isn't a lone parameter.
+    Const(Lin),
 }
 
 fn canon_ast_ty(
@@ -7303,29 +7327,164 @@ fn canon_ast_ty(
         AstTyKind::Throws { ok, err } => {
             CanonTy::Named("throws".to_owned(), vec![rec(ok)?, rec(err)?])
         }
-        AstTyKind::Array(e, rokc_ast::ConstExpr::Literal(rokc_ast::Literal::Int(n))) => {
-            CanonTy::Array(
-                Box::new(rec(e)?),
-                Box::new(CanonTy::Named(n.clone(), Vec::new())),
-            )
-        }
         AstTyKind::Array(e, len) => {
-            let p = match len {
-                rokc_ast::ConstExpr::Path(p) => p,
-                rokc_ast::ConstExpr::Expr(x) => match &x.kind {
-                    ExprKind::Path(p) => p,
-                    _ => return None,
-                },
-                rokc_ast::ConstExpr::Literal(_) => return None,
-            };
-            let [seg] = p.segments.as_slice() else {
-                return None;
-            };
-            let v = vars.get(&seg.name)?;
-            CanonTy::Array(Box::new(rec(e)?), Box::new(CanonTy::Var(v.clone())))
+            CanonTy::Array(Box::new(rec(e)?), Box::new(canon_const(ctx, vars, len)))
         }
+        AstTyKind::Const(c) => canon_const(ctx, vars, c),
         _ => return None,
     })
+}
+
+/// A const argument by value: a linear form over const parameters
+/// (`N + 1`, `M - N`, `0x1`). Anything else is a variable of its own,
+/// which unifies with anything (may overlap).
+fn canon_const(
+    ctx: &LowerCtx<'_>,
+    vars: &HashMap<String, String>,
+    c: &rokc_ast::ConstExpr,
+) -> CanonTy {
+    let lin = match c {
+        rokc_ast::ConstExpr::Literal(_) => ctx.eval_const(c).map(Lin::num),
+        rokc_ast::ConstExpr::Path(p) => match p.segments.as_slice() {
+            [seg] if vars.contains_key(&seg.name) => Some(Lin::var(&vars[&seg.name])),
+            _ => ctx.eval_const(c).map(Lin::num),
+        },
+        rokc_ast::ConstExpr::Expr(x) => lin_of(ctx, vars, x),
+    };
+    lin.map_or_else(|| CanonTy::Var(format!("#k.{c:p}")), Lin::canon)
+}
+
+fn lin_of(ctx: &LowerCtx<'_>, vars: &HashMap<String, String>, e: &Expr) -> Option<Lin> {
+    let rec = |e: &Expr| lin_of(ctx, vars, e);
+    match &e.kind {
+        ExprKind::Literal(rokc_ast::Literal::Int(s)) => {
+            Some(Lin::num(expr::parse_int_literal(s)?.0))
+        }
+        ExprKind::Path(p) if p.segments.len() == 1 && vars.contains_key(&p.segments[0].name) => {
+            Some(Lin::var(&vars[&p.segments[0].name]))
+        }
+        ExprKind::Block(b) if b.stmts.is_empty() => rec(b.trailing.as_deref()?),
+        ExprKind::OpPrefix { op, operand } if op == "-" => rec(operand)?.scale(-1),
+        ExprKind::OpInfix { op, lhs, rhs } if matches!(op.as_str(), "+" | "-" | "*") => {
+            let (l, r) = (rec(lhs)?, rec(rhs)?);
+            match op.as_str() {
+                "+" => l.add(&r, 1),
+                "-" => l.add(&r, -1),
+                _ if l.terms.is_empty() => r.scale(l.k),
+                _ if r.terms.is_empty() => l.scale(r.k),
+                _ => None,
+            }
+        }
+        _ if !mentions(e, vars) => {
+            let c = rokc_ast::ConstExpr::Expr(Box::new(e.clone()));
+            ctx.eval_const(&c).map(Lin::num)
+        }
+        _ => None,
+    }
+}
+
+/// Does `e` name an impl parameter? Then it can't be evaluated alone.
+fn mentions(e: &Expr, vars: &HashMap<String, String>) -> bool {
+    match &e.kind {
+        ExprKind::Path(p) => p.segments.len() == 1 && vars.contains_key(&p.segments[0].name),
+        ExprKind::Literal(_) => false,
+        ExprKind::Block(b) if b.stmts.is_empty() => {
+            b.trailing.as_deref().is_some_and(|t| mentions(t, vars))
+        }
+        ExprKind::OpPrefix { operand, .. } => mentions(operand, vars),
+        ExprKind::OpInfix { lhs, rhs, .. } => mentions(lhs, vars) || mentions(rhs, vars),
+        _ => true,
+    }
+}
+
+/// `k + sum of c * v`; no zero coefficients, so equal values compare equal.
+#[derive(Clone, Debug, PartialEq)]
+struct Lin {
+    k: i128,
+    terms: std::collections::BTreeMap<String, i128>,
+}
+
+impl Lin {
+    const fn num(k: i128) -> Self {
+        Self {
+            k,
+            terms: std::collections::BTreeMap::new(),
+        }
+    }
+
+    fn var(v: &str) -> Self {
+        let mut l = Self::num(0);
+        l.terms.insert(v.to_owned(), 1);
+        l
+    }
+
+    fn scale(mut self, by: i128) -> Option<Self> {
+        if by == 0 {
+            return Some(Self::num(0));
+        }
+        self.k = self.k.checked_mul(by)?;
+        for c in self.terms.values_mut() {
+            *c = c.checked_mul(by)?;
+        }
+        Some(self)
+    }
+
+    /// `self + sign * o`.
+    fn add(mut self, o: &Self, sign: i128) -> Option<Self> {
+        self.k = self.k.checked_add(o.k.checked_mul(sign)?)?;
+        for (v, c) in &o.terms {
+            let n = self.terms.get(v).copied().unwrap_or(0);
+            let n = n.checked_add(c.checked_mul(sign)?)?;
+            if n == 0 {
+                self.terms.remove(v);
+            } else {
+                self.terms.insert(v.clone(), n);
+            }
+        }
+        Some(self)
+    }
+
+    /// A lone parameter stays a plain variable (or rigid name).
+    fn canon(self) -> CanonTy {
+        match self.terms.iter().next() {
+            Some((v, 1)) if self.k == 0 && self.terms.len() == 1 => {
+                if v.starts_with("#r.") {
+                    CanonTy::Named(v.clone(), Vec::new())
+                } else {
+                    CanonTy::Var(v.clone())
+                }
+            }
+            _ => CanonTy::Const(self),
+        }
+    }
+}
+
+impl std::fmt::Display for Lin {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.terms.is_empty() {
+            return write!(f, "{}", self.k);
+        }
+        let mut out = String::new();
+        for (v, c) in &self.terms {
+            let name = v.rsplit('.').next().unwrap_or(v);
+            let mag = match c.unsigned_abs() {
+                1 => name.to_owned(),
+                m => format!("{m} * {name}"),
+            };
+            let sign = match (out.is_empty(), *c < 0) {
+                (true, false) => "",
+                (true, true) => "-",
+                (false, false) => " + ",
+                (false, true) => " - ",
+            };
+            out = format!("{out}{sign}{mag}");
+        }
+        match self.k {
+            0 => write!(f, "{{ {out} }}"),
+            k if k < 0 => write!(f, "{{ {out} - {} }}", k.unsigned_abs()),
+            k => write!(f, "{{ {out} + {k} }}"),
+        }
+    }
 }
 
 /// A concrete `CanonTy` as a type: a primitive or a non-generic struct
@@ -7387,6 +7546,7 @@ impl std::fmt::Display for CanonTy {
             Self::Tuple(ts) => write!(f, "({})", list(ts, ", ")),
             Self::Sum(ts) => write!(f, "{}", list(ts, " | ")),
             Self::Array(e, n) => write!(f, "[{e}; {n}]"),
+            Self::Const(l) => write!(f, "{l}"),
         }
     }
 }
@@ -7396,6 +7556,8 @@ impl std::fmt::Display for CanonTy {
 #[derive(Default)]
 struct Unifier {
     sub: HashMap<String, CanonTy>,
+    /// Const variables of an unsigned type.
+    nonneg: std::collections::HashSet<String>,
 }
 
 impl Unifier {
@@ -7416,6 +7578,17 @@ impl Unifier {
             CanonTy::Tuple(ts) => CanonTy::Tuple(ts.iter().map(|a| self.walk(a)).collect()),
             CanonTy::Sum(ts) => CanonTy::Sum(ts.iter().map(|a| self.walk(a)).collect()),
             CanonTy::Array(e, n) => CanonTy::Array(Box::new(self.walk(e)), Box::new(self.walk(n))),
+            CanonTy::Const(l) => {
+                let mut out = Lin::num(l.k);
+                for (v, c) in &l.terms {
+                    let t = as_lin(&self.resolve(v)).unwrap_or_else(|| Lin::var(v));
+                    match t.scale(*c).and_then(|t| out.clone().add(&t, 1)) {
+                        Some(n) => out = n,
+                        None => return CanonTy::Const(l.clone()),
+                    }
+                }
+                out.canon()
+            }
         }
     }
 
@@ -7423,6 +7596,9 @@ impl Unifier {
     fn unify(&mut self, x: &CanonTy, y: &CanonTy) -> Option<()> {
         match (self.walk(x), self.walk(y)) {
             (CanonTy::Var(v), CanonTy::Var(w)) if v == w => Some(()),
+            (a, b) if matches!(a, CanonTy::Const(_)) || matches!(b, CanonTy::Const(_)) => {
+                self.unify_const(&a, &b)
+            }
             // No cyclic binding (`T` against `List<T>`): no overlap.
             (CanonTy::Var(v), t) | (t, CanonTy::Var(v)) => {
                 if occurs(&v, &t) {
@@ -7448,6 +7624,43 @@ impl Unifier {
         }
     }
 
+    /// Is `x - y == 0` solvable over the integers? Solve for a unit
+    /// coefficient variable when there is one; otherwise assume it is.
+    fn unify_const(&mut self, x: &CanonTy, y: &CanonTy) -> Option<()> {
+        let d = as_lin(x)?;
+        let Some(d) = d.add(&as_lin(y)?, -1) else {
+            return Some(());
+        };
+        if d.terms.is_empty() {
+            return (d.k == 0).then_some(());
+        }
+        let g = d.terms.values().fold(0, |g, c| gcd(g, c.unsigned_abs()));
+        if d.k.unsigned_abs() % g != 0 {
+            return None;
+        }
+        // Unsigned terms all of the constant's sign can't cancel it.
+        if d.k != 0
+            && d.terms
+                .iter()
+                .all(|(v, c)| self.nonneg.contains(v) && (*c > 0) == (d.k > 0))
+        {
+            return None;
+        }
+        let unit = d
+            .terms
+            .iter()
+            .find(|(v, c)| c.unsigned_abs() == 1 && !v.starts_with("#r."))
+            .map(|(v, c)| (v.clone(), *c));
+        if let Some((v, c)) = unit {
+            let mut rest = d;
+            rest.terms.remove(&v);
+            if let Some(val) = rest.scale(-c) {
+                self.sub.insert(v, val.canon());
+            }
+        }
+        Some(())
+    }
+
     /// Sums are sets: some pairing of the members unifies.
     fn unify_set(&mut self, xs: &[CanonTy], ys: &[CanonTy]) -> Option<()> {
         let Some((x, rest)) = xs.split_first() else {
@@ -7466,6 +7679,20 @@ impl Unifier {
     }
 }
 
+/// A const variable, rigid parameter or `Const` as a linear form.
+fn as_lin(t: &CanonTy) -> Option<Lin> {
+    match t {
+        CanonTy::Var(v) => Some(Lin::var(v)),
+        CanonTy::Named(n, a) if a.is_empty() && n.starts_with("#r.") => Some(Lin::var(n)),
+        CanonTy::Const(l) => Some(l.clone()),
+        _ => None,
+    }
+}
+
+fn gcd(a: u128, b: u128) -> u128 {
+    if b == 0 { a } else { gcd(b, a % b) }
+}
+
 /// Does variable `v` occur in `t` (already walked)?
 fn occurs(v: &str, t: &CanonTy) -> bool {
     match t {
@@ -7474,6 +7701,7 @@ fn occurs(v: &str, t: &CanonTy) -> bool {
             ts.iter().any(|t| occurs(v, t))
         }
         CanonTy::Array(e, n) => occurs(v, e) || occurs(v, n),
+        CanonTy::Const(l) => l.terms.contains_key(v),
     }
 }
 

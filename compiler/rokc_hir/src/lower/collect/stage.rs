@@ -49,6 +49,7 @@ impl LibraryStage {
             impls.by_target.enc(b);
             impls.by_trait.enc(b);
             impls.generic_of.enc(b);
+            impls.generic_with.enc(b);
         });
         let mut methods: Vec<_> = self.c.t.generic_methods.iter().collect();
         methods.sort_by(|a, b| a.0.cmp(b.0));
@@ -103,12 +104,13 @@ impl LibraryStage {
         }));
         let mut c = c?;
         dec_borrows(lib, d, &mut c)?;
-        let (by_target, by_trait, generic_of) = index?;
+        let (by_target, by_trait, generic_of, generic_with) = index?;
         c.t.impls = Impls {
             all: all?,
             by_target,
             by_trait,
             generic_of,
+            generic_with,
         };
         c.t.generic_methods = methods?.into_iter().collect();
         Some(Self { c, lib, type_names })
@@ -117,6 +119,7 @@ impl LibraryStage {
 
 type ImplIndex = (
     HashMap<MethodTarget, Vec<usize>>,
+    HashMap<String, Vec<usize>>,
     HashMap<String, Vec<usize>>,
     HashMap<String, Vec<usize>>,
 );
@@ -788,7 +791,8 @@ codec_struct!(Impls {
     all,
     by_target,
     by_trait,
-    generic_of
+    generic_of,
+    generic_with
 });
 codec_struct!(ShapeHandler {
     shape,

@@ -1,0 +1,10 @@
+// expect-error: conflicting implementations of trait
+
+// A generic `N` covers the literal `3`.
+struct W<T, const N: usize> { v: T; }
+trait Tag { fn tag(self) -> i32; }
+
+impl<T, const N: usize> Tag for W<T, N> { fn tag(self) -> i32 { return 1; } }
+impl<T> Tag for W<T, 3> { fn tag(self) -> i32 { return 2; } }
+
+fn main() -> i32 { return 0; }

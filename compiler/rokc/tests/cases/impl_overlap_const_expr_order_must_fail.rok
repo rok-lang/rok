@@ -1,0 +1,10 @@
+// expect-error: conflicting implementations of trait
+
+// `{ N + 1 }` and `{ 1 + N }` are the same argument.
+struct V<const N: usize> { x: i32; }
+trait Grow<R> { fn grow(self) -> i32; }
+
+impl<const N: usize> Grow<V<{ N + 1 }>> for V<N> { fn grow(self) -> i32 { return 1; } }
+impl<const N: usize> Grow<V<{ 1 + N }>> for V<N> { fn grow(self) -> i32 { return 2; } }
+
+fn main() -> i32 { return 0; }

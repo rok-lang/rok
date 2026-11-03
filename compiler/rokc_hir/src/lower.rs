@@ -1060,6 +1060,8 @@ struct Impls {
     by_trait: HashMap<String, Vec<usize>>,
     /// Generic impls by trait key (`""`: inherent), in source order.
     generic_of: HashMap<String, Vec<usize>>,
+    /// Generic impls by method name, in source order.
+    generic_with: HashMap<String, Vec<usize>>,
 }
 
 impl Impls {
@@ -1074,6 +1076,12 @@ impl Impls {
                 .entry(i.trait_key.clone())
                 .or_default()
                 .push(self.all.len());
+            for m in i.methods.keys() {
+                self.generic_with
+                    .entry(m.clone())
+                    .or_default()
+                    .push(self.all.len());
+            }
         }
         self.all.push(std::sync::Arc::new(i));
     }
@@ -1110,8 +1118,11 @@ impl Impls {
             Pick::Method(m) => {
                 incr::read(|| incr::Read::GenericImplsWith(m.to_owned()));
                 Box::new(
-                    self.iter()
-                        .filter(move |i| i.is_generic() && i.methods.contains_key(m)),
+                    self.generic_with
+                        .get(m)
+                        .map_or(&[][..], Vec::as_slice)
+                        .iter()
+                        .map(|&i| &*self.all[i]),
                 )
             }
             Pick::Where(keep) => Box::new(self.generic().filter(move |i| keep(i))),
