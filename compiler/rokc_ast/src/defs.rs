@@ -239,9 +239,9 @@ pub enum StmtKind {
     },
     /// `let (a, b, ...) [: ty] = init;`; `_` discards. `rest` is a `..` /
     /// `..name` spliced in before `names[index]`:
-    ///   `(first, ..rest)`      → `names=["first"], rest=(1, Some("rest"))`
-    ///   `(head, ..mid, tail)`  → `names=["head","tail"], rest=(1, Some("mid"))`
-    ///   `(..)`                 → `names=[], rest=(0, None)`
+    ///   `(first, ..rest)`      -> `names=["first"], rest=(1, Some("rest"))`
+    ///   `(head, ..mid, tail)`  -> `names=["head","tail"], rest=(1, Some("mid"))`
+    ///   `(..)`                 -> `names=[], rest=(0, None)`
     LetTuple {
         names: Vec<String>,
         rest: Option<(usize, Option<String>)>,
