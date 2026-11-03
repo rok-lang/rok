@@ -2634,9 +2634,15 @@ fn collect<'a>(
                 for t in base.param_tys.iter().chain([&base.ret_ty]) {
                     collect_unknown_paths(t, &mut paths);
                 }
-                paths
-                    .iter()
-                    .any(|p| env.names.some_types.contains_key(p))
+                // Inside a type argument (`List<X>`) the open path is the
+                // generic type's: the declaration names the `some` type.
+                let named = || {
+                    !paths.is_empty()
+                        && env
+                            .decl(id)
+                            .is_some_and(|d| !mono::sig_some_types(&env, d.def()).is_empty())
+                };
+                (paths.iter().any(|p| env.names.some_types.contains_key(p)) || named())
                     .then(|| (id, mono::decl_sig(&env, i, base)))
             })
             .collect();

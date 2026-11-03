@@ -7,6 +7,7 @@
 // 7
 // tag 1 tag 2
 // 2
+// 3 tag 3
 
 // A dependency's `pub type X = some Tr;`: stored, passed and returned
 // as `X`, used through its bounds.
@@ -33,4 +34,6 @@ fn main() {
     let shelf = Shelf { evens: somedep::evens(4), labels: [ls.take(), ls.take()] };
     println(f"{shelf.labels[0]} {shelf.labels[1]}");
     println(shelf.evens.count());
+    let more = somedep::labels(3);
+    println(f"{more.len()} {more[2]}");
 }
