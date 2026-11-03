@@ -23,8 +23,9 @@
 // by `push` look like one. Exact would be per-coroutine future types
 // checked by the `Send` bound itself.
 
+use rokc_core::{HashMap, HashSet};
 use rokc_diagnostic::Code;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::BTreeSet;
 
 use rokc_ir_common::{FunctionId, LocalId};
 
@@ -77,20 +78,20 @@ pub(super) fn check(env: &Env<'_>, functions: &[HirFunction]) {
         return;
     }
     let sync = Some(env.names.lang_item("sync_trait").to_owned()).filter(|s| !s.is_empty());
-    let no_subst = HashMap::new();
+    let no_subst = HashMap::default();
     let ctx = LowerCtx::new(env, &no_subst, None, rokc_diagnostic::Span::DUMMY);
 
     // 1. Each coroutine's own frame.
-    let mut bad: HashMap<FunctionId, String> = HashMap::new();
+    let mut bad: HashMap<FunctionId, String> = HashMap::default();
     // Frames that capture a `Send` but not `Sync` value: fine inside
     // one task, not as a task of their own (the spawner keeps its copy).
-    let mut shared: HashMap<FunctionId, String> = HashMap::new();
+    let mut shared: HashMap<FunctionId, String> = HashMap::default();
     // Frames with a `[ref x]` capture: never a task of their own
     // (`task::spawn` copies the other captures).
-    let mut cells: HashMap<FunctionId, String> = HashMap::new();
+    let mut cells: HashMap<FunctionId, String> = HashMap::default();
     // Of those, frames whose capture is a lock guard.
-    let mut guards: HashSet<FunctionId> = HashSet::new();
-    let mut held: HashMap<FunctionId, Vec<LocalId>> = HashMap::new();
+    let mut guards: HashSet<FunctionId> = HashSet::default();
+    let mut held: HashMap<FunctionId, Vec<LocalId>> = HashMap::default();
     let mut ids: Vec<FunctionId> = all.keys().copied().collect();
     ids.sort();
     for &id in &ids {
@@ -125,17 +126,17 @@ pub(super) fn check(env: &Env<'_>, functions: &[HirFunction]) {
         bad: &bad,
         shared: &shared,
         held: &held,
-        nodes: HashMap::new(),
-        readers: HashMap::new(),
+        nodes: HashMap::default(),
+        readers: HashMap::default(),
         dirty: ids.iter().copied().collect(),
-        cut: HashMap::new(),
-        holds: HashMap::new(),
+        cut: HashMap::default(),
+        holds: HashMap::default(),
         cur: FunctionId(0),
         ref_params: Vec::new(),
         breaks: Vec::new(),
         sinks: Vec::new(),
     };
-    let mut sinks = HashMap::new();
+    let mut sinks = HashMap::default();
     while let Some(id) = flow.dirty.pop_first() {
         flow.function(all[&id]);
         sinks.insert(id, std::mem::take(&mut flow.sinks));
@@ -144,7 +145,7 @@ pub(super) fn check(env: &Env<'_>, functions: &[HirFunction]) {
     // 3. The sinks.
     let mut sinks: Vec<_> = sinks.into_values().flatten().collect();
     sinks.sort_by_key(|(span, _, _)| (span.file, span.start));
-    let mut seen = HashSet::new();
+    let mut seen = HashSet::default();
     for (span, sink, items) in sinks {
         // `task::spawn` copies what the future captured, but a cell stays
         // shared; other sinks run the future with its captures as they are.
@@ -240,7 +241,7 @@ fn frame(ctx: &LowerCtx<'_>, send: &str, sync: Option<&str>, f: &HirFunction) ->
         non_send_ty: &non_send,
         env_params: &env_params,
         declared: Vec::new(),
-        crossed: HashSet::new(),
+        crossed: HashSet::default(),
         held: env_params.clone(),
         suspends: 0,
         found: None,

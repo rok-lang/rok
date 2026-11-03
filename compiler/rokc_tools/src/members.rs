@@ -2,7 +2,7 @@
 //! name (`List`, `str`, `i32`), from the ASTs of a check. Completion,
 //! hover and definition after `recv.` read it.
 
-use std::collections::HashMap;
+use rokc_core::HashMap;
 use std::sync::{Arc, Mutex};
 
 use rokc_ast::{ImplItem, Item, StructKind, TraitItem, TyKind, doc_hidden};

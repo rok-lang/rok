@@ -1446,7 +1446,7 @@ fn lower_pattern_here(ctx: &mut LowerCtx<'_>, pat: &AstPattern, scrut_ty: &HirTy
                     );
                 }
             }
-            let mut shared: HashMap<String, LocalId> = HashMap::new();
+            let mut shared: HashMap<String, LocalId> = HashMap::default();
             for name in &bound_names {
                 let local = ctx.declare(Some(name.clone()), HirTy::Unknown);
                 shared.insert(name.clone(), local);

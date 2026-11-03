@@ -10,7 +10,7 @@ use rokc_diagnostic::Code;
 pub(super) fn unify_param_ty_with(
     param_ty: &rokc_ast::Ty,
     arg_ty: &HirTy,
-    generic_names: &std::collections::HashSet<String>,
+    generic_names: &rokc_core::HashSet<String>,
     subst: &mut HashMap<String, HirTy>,
     ctx: &LowerCtx<'_>,
 ) {
@@ -152,7 +152,7 @@ pub(super) fn bind_from_arg(
     let Some(t) = param.ty.as_ref().or(self_param) else {
         return;
     };
-    let generic_names: std::collections::HashSet<String> = fn_def
+    let generic_names: rokc_core::HashSet<String> = fn_def
         .generics
         .params
         .iter()
@@ -168,7 +168,7 @@ pub(super) fn bind_from_arg(
 /// What the expected type of a call of `fn_def` says of its type
 /// parameters (none for a loose slot: `any`, `()`).
 pub(super) fn expected_subst(ctx: &LowerCtx<'_>, fn_def: &FnDef) -> HashMap<String, HirTy> {
-    let mut out = HashMap::new();
+    let mut out = HashMap::default();
     let Some(expected) = ctx.current_expected().filter(|t| {
         !matches!(
             t,
@@ -191,7 +191,7 @@ pub(super) fn expected_subst(ctx: &LowerCtx<'_>, fn_def: &FnDef) -> HashMap<Stri
 }
 
 /// The type parameter names of `fn_def`.
-fn type_param_names(fn_def: &FnDef) -> std::collections::HashSet<String> {
+fn type_param_names(fn_def: &FnDef) -> rokc_core::HashSet<String> {
     fn_def
         .generics
         .params
@@ -467,7 +467,7 @@ pub(super) fn bind_self(
     hint: &HirTy,
     subst: &mut HashMap<String, HirTy>,
 ) {
-    let names: std::collections::HashSet<String> = fn_def
+    let names: rokc_core::HashSet<String> = fn_def
         .generics
         .params
         .iter()
@@ -508,7 +508,7 @@ pub(super) fn monomorphize_on(
     for (i, arg) in args.iter().enumerate().filter(|(_, a)| !default_lit(a)) {
         bind_from_arg(ctx, fn_def, self_ty, i, &arg.ty, &mut subst);
     }
-    let before: std::collections::HashSet<String> = subst.keys().cloned().collect();
+    let before: rokc_core::HashSet<String> = subst.keys().cloned().collect();
     for (i, arg) in args.iter().enumerate().filter(|(_, a)| default_lit(a)) {
         bind_from_arg(ctx, fn_def, self_ty, i, &arg.ty, &mut subst);
     }
@@ -524,7 +524,7 @@ pub(super) fn monomorphize_on(
             .iter()
             .filter_map(|k| Some((k.clone(), subst.remove(k)?)))
             .collect();
-        let names: std::collections::HashSet<String> = fn_def
+        let names: rokc_core::HashSet<String> = fn_def
             .generics
             .params
             .iter()
@@ -1327,7 +1327,7 @@ pub(super) fn opaque_ret(ctx: &LowerCtx<'_>, id: FunctionId) -> Option<HirTy> {
 /// An opaque type parameter `name` that has only `bounds` (written in
 /// `module`).
 fn bound_param(env: &Env<'_>, module: &str, bounds: &[Ty], name: String, at: Span) -> HirTy {
-    let none = HashMap::new();
+    let none = HashMap::default();
     let mut rcx = LowerCtx::new(env, &none, None, at);
     module.clone_into(&mut rcx.current_module);
     let refs: Vec<TraitRef> = bounds
@@ -1461,7 +1461,7 @@ pub(super) fn solve_some_types(env: &Env<'_>) {
             if other == t || has_unknown(&other) || has_unknown(&t) {
                 continue;
             }
-            let none = HashMap::new();
+            let none = HashMap::default();
             let rcx = LowerCtx::new(env, &none, None, st.span);
             let (a, b) = (rcx.ty_name(&t), rcx.ty_name(&other));
             let at = env.decl(sig.id).map_or(st.span, |f| f.def().span);
@@ -1592,7 +1592,7 @@ fn some_fields_view(env: &Env<'_>) -> Vec<(usize, Vec<HirField>)> {
     for (id, tys) in &env.names.some_fields {
         let i = id.0 as usize;
         let home = module_of(&env.defs.structs.borrow()[i].name);
-        let none = HashMap::new();
+        let none = HashMap::default();
         let mut rcx = LowerCtx::new(env, &none, None, Span::DUMMY);
         rcx.current_module = home;
         let fresh: Vec<HirTy> = tys.iter().map(|t| rcx.resolve_ast_ty(t)).collect();
@@ -1752,8 +1752,16 @@ fn decl_ret_ok(env: &Env<'_>, id: FunctionId) -> HirTy {
                 let module = fn_module(env, f);
                 let start = env.sink.next_id.get();
                 let keep = !env.sink.bodies_done.get();
-                let (t, done) =
-                    infer_ret_of(env, f, id, &f.name, None, &module, &HashMap::new(), keep);
+                let (t, done) = infer_ret_of(
+                    env,
+                    f,
+                    id,
+                    &f.name,
+                    None,
+                    &module,
+                    &HashMap::default(),
+                    keep,
+                );
                 keep_inferred(env, id, start, done);
                 t
             }
@@ -2298,7 +2306,7 @@ pub(super) fn generic_subst(
     generics: &rokc_ast::Generics,
     args: &[HirTy],
 ) -> HashMap<String, HirTy> {
-    let mut subst = HashMap::new();
+    let mut subst = HashMap::default();
     for (i, gp) in generics.params.iter().enumerate() {
         let (rokc_ast::GenericParam::Type { name, .. }
         | rokc_ast::GenericParam::Const { name, .. }) = gp;
@@ -2594,14 +2602,14 @@ pub(super) fn lower_fn(
         name,
         method_self_ty,
         module,
-        &HashMap::new(),
+        &HashMap::default(),
     )
 }
 
 /// Parameter and return types of declaration `i` resolved as its body
 /// sees them: in its module, `Self` and trait parameters bound.
 pub(super) fn decl_sig(env: &Env<'_>, i: usize, base: &FnSig) -> FnSig {
-    let no_subst = HashMap::new();
+    let no_subst = HashMap::default();
     let id = FunctionId(u32::try_from(i).expect("FunctionId overflow"));
     let (f, self_ty, module, subst) = match env.decl(id).expect("a declaration") {
         MethodOrFn::Fn(f) => (*f, None, fn_module(env, f), &no_subst),
@@ -3057,7 +3065,7 @@ fn inferred_ret(env: &Env<'_>, id: FunctionId) -> Option<Option<HirTy>> {
 /// Names `body` binds exactly once and writes exactly once as a path
 /// after: a value in one has no other handle in this function (nested
 /// closures and blocks count too).
-fn sole_names(body: &rokc_ast::Block) -> std::collections::HashSet<String> {
+fn sole_names(body: &rokc_ast::Block) -> rokc_core::HashSet<String> {
     #[derive(Default)]
     struct Count {
         binds: HashMap<String, u32>,

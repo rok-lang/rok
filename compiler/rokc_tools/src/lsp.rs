@@ -2,7 +2,7 @@
 //! framing). Full-text sync; every query runs on the last check of the
 //! buffer (`analysis::check`: front end and lints, no codegen).
 
-use std::collections::HashMap;
+use rokc_core::HashMap;
 use std::io::{BufRead, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
@@ -75,7 +75,7 @@ pub fn serve(
         bootstrap,
         externs,
         levels: levels.into(),
-        docs: HashMap::new(),
+        docs: HashMap::default(),
         initialized: false,
         shutdown: false,
     };
@@ -1679,7 +1679,7 @@ fn semantic_tokens(text: &str) -> Vec<u32> {
     // User-defined literal suffixes registered in this file by
     // `#[literal(number "x")]` - only these are highlighted, so
     // `5kg` lights up when the user defined `kg`, not for any stray suffix.
-    let suffixes: std::collections::HashSet<String> = rokc_parser::collect_literals(&toks, "")
+    let suffixes: rokc_core::HashSet<String> = rokc_parser::collect_literals(&toks, "")
         .iter()
         .filter_map(|d| match d.tokens.as_slice() {
             [a, b] if matches!(&a.kind, TokenKind::Ident(n) if n == "number") => match &b.kind {
@@ -1692,7 +1692,7 @@ fn semantic_tokens(text: &str) -> Vec<u32> {
     // User-defined keywords (#[keyword]) and derives / attributes (meta
     // blocks); the macro / operator / literal forms are recognised from the
     // token stream directly.
-    let keywords: std::collections::HashSet<String> =
+    let keywords: rokc_core::HashSet<String> =
         rokc_parser::collect_keywords(&parse_doc(text, "").items, "")
             .into_iter()
             .map(|k| k.name)

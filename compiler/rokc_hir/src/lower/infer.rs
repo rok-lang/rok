@@ -1343,9 +1343,9 @@ enum Root<'r> {
 fn fix_body(ctx: &LowerCtx<'_>, s: &Scope, mut root: Root<'_>, ret_tys: Option<&mut Vec<HirTy>>) {
     let sink = &ctx.env.sink;
     // Instances the body calls, made for the solved arguments.
-    let mut insts: HashMap<FunctionId, Option<FunctionId>> = HashMap::new();
+    let mut insts: HashMap<FunctionId, Option<FunctionId>> = HashMap::default();
     {
-        let pending: std::collections::HashSet<FunctionId> = sink.open_insts.borrow()[s.insts..]
+        let pending: rokc_core::HashSet<FunctionId> = sink.open_insts.borrow()[s.insts..]
             .iter()
             .map(|p| p.id)
             .collect();

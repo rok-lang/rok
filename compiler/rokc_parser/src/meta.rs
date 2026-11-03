@@ -20,7 +20,7 @@
     clippy::too_many_lines
 )]
 
-use std::collections::HashSet;
+use rokc_core::HashSet;
 use std::sync::Arc;
 
 use rokc_ast::{AttrArg, AttrBody, Attribute, EnumVariantKind, GenericParam, Item, StructKind};
@@ -738,7 +738,7 @@ impl Expander<'_> {
     fn scan_binders(&mut self) {
         let body = &self.def.body;
         let mut names = Vec::new();
-        let mut pos = HashSet::new();
+        let mut pos = HashSet::default();
         let mut mark = |k: usize, end: usize, names: &mut Vec<(String, usize, usize)>| {
             if let TokenKind::Ident(n) = &body[k].kind {
                 if n != "mut" && n != "in" && n != "_" {
@@ -2336,7 +2336,7 @@ impl Parser<'_> {
             diags: Vec::new(),
             where_all: Vec::new(),
             bound: Vec::new(),
-            bind_pos: HashSet::new(),
+            bind_pos: HashSet::default(),
         };
         ex.scan_binders();
         ex.expand(0, def.body.len(), Ctx::default());
@@ -2436,7 +2436,7 @@ pub(crate) fn use_site_path(arg: &[Token]) -> Option<Vec<Token>> {
 /// names it declares there are looked up there too.
 pub(crate) fn place_declared(tokens: &mut [Token]) {
     let mut depth = 0i32;
-    let mut names = HashSet::new();
+    let mut names = HashSet::default();
     for k in 0..tokens.len() {
         match &tokens[k].kind {
             TokenKind::LBrace | TokenKind::LParen | TokenKind::LBracket => depth += 1,

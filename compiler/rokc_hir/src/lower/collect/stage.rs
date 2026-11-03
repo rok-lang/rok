@@ -2,8 +2,8 @@
 //! the same library skips collecting it. Borrows into the items are
 //! written as (item, member) positions and re-borrowed on read.
 
+use rokc_core::HashMap;
 use std::borrow::Cow;
-use std::collections::HashMap;
 
 use rokc_ast::{ExternItem, ImplItem, TraitDef, TraitItem};
 use rokc_core::codec::{Codec, Dec, Enc, Keep};
@@ -271,7 +271,7 @@ fn addr<T>(r: &T) -> usize {
 
 impl Locs {
     fn of(p: &Program) -> Self {
-        let mut m = HashMap::new();
+        let mut m = HashMap::default();
         for (i, item) in (0u32..).zip(&p.items) {
             let mut put = |k: Kind, a: usize, j: u32| {
                 m.insert((k, a), (i, j));
@@ -443,7 +443,7 @@ fn dec_refs<K: Codec + Eq + std::hash::Hash, T: Located>(
     d: &mut Dec<'_>,
 ) -> Option<HashMap<K, &'static T>> {
     let n = d.u()?;
-    let mut m = HashMap::new();
+    let mut m = HashMap::default();
     for _ in 0..n {
         let key = K::dec(d)?;
         m.insert(key, T::read(p, d)?);
@@ -594,9 +594,9 @@ fn dec_plain(d: &mut Dec<'_>) -> Option<Collected<'static>> {
         struct_table: Codec::dec(d)?,
         enums: Codec::dec(d)?,
         enum_table: Codec::dec(d)?,
-        generic_structs: HashMap::new(),
-        generic_unions: HashMap::new(),
-        generic_enums: HashMap::new(),
+        generic_structs: HashMap::default(),
+        generic_unions: HashMap::default(),
+        generic_enums: HashMap::default(),
         defaulted_leaves: Codec::dec(d)?,
     };
     t.consts = Codec::dec(d)?;

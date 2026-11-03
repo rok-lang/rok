@@ -8,7 +8,7 @@
 //! definition. Works on MLIR text: a top-level op is a two-space-indented line
 //! up to the next.
 
-use std::collections::{HashMap, HashSet};
+use rokc_core::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 
 /// A function this cell defines anew: symbol, text hash, and referenced
@@ -216,7 +216,7 @@ mod tests {
 
     #[test]
     fn known_functions_become_declarations() {
-        let (_, _, fresh, fns) = reuse(CELL, &HashMap::new());
+        let (_, _, fresh, fns) = reuse(CELL, &HashMap::default());
         assert_eq!(fns.len(), 3);
         assert!(fresh.contains(&"S".to_owned()) && !fresh.contains(&"T".to_owned()));
         assert_eq!(fns[0].refs, ["g"]);

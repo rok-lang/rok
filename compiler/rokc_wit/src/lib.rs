@@ -15,7 +15,7 @@ mod bind;
 pub mod parse;
 pub mod resolve;
 
-use std::collections::HashMap;
+use rokc_core::HashMap;
 use std::path::{Component, Path, PathBuf};
 
 pub use bind::{Bindings, bind};

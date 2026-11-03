@@ -8,7 +8,8 @@
 //! (`REF_ONLY_CALLS`). The counter's step moves into the bottom test
 //! (`sink_step`).
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use rokc_core::{HashMap, HashSet};
+use std::collections::BTreeMap;
 
 use rokc_ir_common::{BlockId, ConstVal, LocalId, PrimOp};
 
@@ -39,7 +40,7 @@ pub fn back_edges(f: &MirFunction) -> HashMap<u32, HashSet<u32>> {
         .enumerate()
         .map(|(i, b)| (b.id.0, i))
         .collect();
-    let mut out: HashMap<u32, HashSet<u32>> = HashMap::new();
+    let mut out: HashMap<u32, HashSet<u32>> = HashMap::default();
     // 0 = unvisited, 1 = on the DFS path, 2 = done.
     let mut state = vec![0u8; f.blocks.len()];
     let mut stack: Vec<(usize, Vec<u32>)> = Vec::new();
@@ -101,13 +102,13 @@ pub const SHORT_TRIPS: i128 = 64;
 /// iteration; or `strip` made it (`MirFunction::strips`).
 #[must_use]
 pub fn short_loops(f: &MirFunction) -> HashMap<u32, HashSet<u32>> {
-    let mut latches: HashMap<u32, Vec<u32>> = HashMap::new();
+    let mut latches: HashMap<u32, Vec<u32>> = HashMap::default();
     for (l, hs) in back_edges(f) {
         for h in hs {
             latches.entry(h).or_default().push(l);
         }
     }
-    let mut defs: Defs<'_> = HashMap::new();
+    let mut defs: Defs<'_> = HashMap::default();
     let mut other_defs: HashSet<LocalId> = crate::addressed(f);
     other_defs.extend(f.params.iter().copied());
     for b in &f.blocks {
@@ -150,7 +151,7 @@ fn every_iteration(
     if x == h {
         return true;
     }
-    let mut seen: HashSet<u32> = HashSet::from([h, x]);
+    let mut seen: HashSet<u32> = HashSet::from_iter([h, x]);
     let mut work = vec![h];
     while let Some(b) = work.pop() {
         if ls.contains(&b) {
@@ -477,13 +478,13 @@ fn sink_step(f: &mut MirFunction, h: u32, copy: u32, body: &HashSet<u32>) {
 /// The blocks of the loop of header `h` (back edges from `latches`): the
 /// ones reaching a latch without passing `h`.
 pub fn loop_body(f: &MirFunction, h: u32, latches: &[u32]) -> HashSet<u32> {
-    let mut preds: HashMap<u32, Vec<u32>> = HashMap::new();
+    let mut preds: HashMap<u32, Vec<u32>> = HashMap::default();
     for b in &f.blocks {
         for s in succs(b) {
             preds.entry(s).or_default().push(b.id.0);
         }
     }
-    let mut body: HashSet<u32> = HashSet::from([h]);
+    let mut body: HashSet<u32> = HashSet::from_iter([h]);
     let mut work: Vec<u32> = latches.to_vec();
     while let Some(b) = work.pop() {
         if body.insert(b) {
@@ -520,7 +521,7 @@ fn counted(f: &MirFunction, hb: &BasicBlock, body: &HashSet<u32>) -> bool {
     }) else {
         return false;
     };
-    let mut moved: HashSet<LocalId> = HashSet::new();
+    let mut moved: HashSet<LocalId> = HashSet::default();
     for b in f.blocks.iter().filter(|b| body.contains(&b.id.0)) {
         moved.extend(b.params.iter().copied());
         for s in &b.stmts {
@@ -657,7 +658,7 @@ mod tests {
     fn short_loops_have_a_small_constant_count() {
         let short = short_loops(&constant_count(0, SHORT_TRIPS as u128));
         assert_eq!(short.keys().collect::<Vec<_>>(), [&1]);
-        assert_eq!(short[&1], HashSet::from([1, 2]));
+        assert_eq!(short[&1], HashSet::from_iter([1, 2]));
         assert!(short_loops(&constant_count(0, SHORT_TRIPS as u128 + 1)).is_empty());
         assert_eq!(short_loops(&constant_count(10, 70)).len(), 1);
         // Rotated, the bottom test bounds it the same.
@@ -681,7 +682,7 @@ mod tests {
         assert_eq!(succs(&f.blocks[4]), vec![2, 3]);
         let edges = back_edges(&f);
         assert_eq!(edges.len(), 1);
-        assert_eq!(edges[&4], HashSet::from([2]));
+        assert_eq!(edges[&4], HashSet::from_iter([2]));
         // The step moved in front of the bottom test.
         assert!(f.blocks[2].stmts.is_empty());
         assert_eq!(f.blocks[4].stmts.len(), 2);

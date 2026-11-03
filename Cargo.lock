@@ -224,6 +224,7 @@ dependencies = [
 name = "rokc_wit"
 version = "0.1.6"
 dependencies = [
+ "rokc_core",
  "rokc_lexer",
 ]
 

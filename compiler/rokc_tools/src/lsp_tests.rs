@@ -1145,7 +1145,7 @@ fn semantic_tokens_all_user_defined() {
         other => panic!("not an array: {other}"),
     };
     // The token type is the 4th int of each 5-tuple.
-    let types: std::collections::HashSet<u32> = data.chunks(5).map(|c| c[3]).collect();
+    let types: rokc_core::HashSet<u32> = data.chunks(5).map(|c| c[3]).collect();
     for ty in [0u32, 1, 2, 3] {
         assert!(
             types.contains(&ty),

@@ -13,8 +13,9 @@
 
 mod clang;
 
+use rokc_core::{HashMap, HashSet};
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::VecDeque;
 use std::ffi::c_int;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -86,7 +87,7 @@ pub fn generate(libclang: &Libclang, opts: &Options<'_>) -> Result<String, Strin
             .parent()
             .unwrap_or_else(|| Path::new("/"))
             .to_path_buf(),
-        files: RefCell::new(HashMap::new()),
+        files: RefCell::new(HashMap::default()),
     };
     let macros = eval_macros(&roots, &unit, &header, &args, &decls);
     let mut g = Gen {
@@ -97,11 +98,11 @@ pub fn generate(libclang: &Libclang, opts: &Options<'_>) -> Result<String, Strin
         underscore: opts.triple.contains("-apple-") || opts.stdcall,
         items: String::new(),
         blocks: [String::new(), String::new()],
-        types: HashSet::new(),
-        values: HashSet::new(),
-        typedefs: HashMap::new(),
-        anon: HashMap::new(),
-        layouts: HashMap::new(),
+        types: HashSet::default(),
+        values: HashSet::default(),
+        typedefs: HashMap::default(),
+        anon: HashMap::default(),
+        layouts: HashMap::default(),
         queue: VecDeque::new(),
         cptr: false,
     };
@@ -204,7 +205,7 @@ fn eval_macros(
             names.push(clang.spelling(d));
         }
     }
-    let mut out = HashMap::new();
+    let mut out = HashMap::default();
     if names.is_empty() {
         return out;
     }
@@ -1175,7 +1176,7 @@ impl Gen<'_> {
         let api = self.c.api();
         let f = self.function_type(t).ok_or("not a function type")?;
         let abi = self.abi(f)?;
-        let mut seen = HashSet::new();
+        let mut seen = HashSet::default();
         let mut params = Vec::new();
         // SAFETY: a function and its parameters, of a live unit.
         unsafe {

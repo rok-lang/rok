@@ -50,7 +50,7 @@ pub struct DebugInfo {
     /// An optimized build (the unit's `isOptimized`).
     optimized: bool,
     /// Struct name and field names by `StructId` (`MirModule::struct_names`).
-    pub struct_names: std::collections::HashMap<u32, (String, Vec<String>)>,
+    pub struct_names: rokc_core::HashMap<u32, (String, Vec<String>)>,
     /// `MirModule::debug`.
     pub debug: DebugTypes,
 }
@@ -96,7 +96,7 @@ impl DebugInfo {
             next: 0,
             target,
             optimized,
-            struct_names: std::collections::HashMap::new(),
+            struct_names: rokc_core::HashMap::default(),
             debug: DebugTypes::default(),
         }
     }

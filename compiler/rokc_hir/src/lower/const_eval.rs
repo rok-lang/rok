@@ -12,8 +12,8 @@
 // `a` / `b` operands, `p` their primitive, `f` the frame, `v` a value.
 #![allow(clippy::many_single_char_names)]
 
+use rokc_core::HashMap;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
 
 use rokc_diagnostic::{Code, Span};
@@ -348,7 +348,7 @@ impl<'b> Interp<'b> {
     }
 
     pub(super) fn eval(&mut self, e: &HirExpr) -> R<Value> {
-        self.expr(e, &mut Frame::new())
+        self.expr(e, &mut Frame::default())
     }
 
     fn step(&mut self, span: Span) -> R<()> {
@@ -1371,10 +1371,10 @@ fn bad_spec(spec: &str, why: &str) -> Ext {
 /// evaluated or not. Lifted closures are checked with their definer.
 pub(super) fn check_const_fns(env: &Env<'_>, fns: &[&HirFunction]) {
     let Some(first) = fns.first() else { return };
-    let no_subst = HashMap::new();
+    let no_subst = HashMap::default();
     let ctx = LowerCtx::new(env, &no_subst, None, first.span);
     let mut bodies = CtxBodies::new(&ctx);
-    let mut memo: HashMap<FunctionId, Option<String>> = HashMap::new();
+    let mut memo: HashMap<FunctionId, Option<String>> = HashMap::default();
     for f in fns {
         let Some(body) = &f.body else { continue };
         if let Some((at, why)) = impure(&mut bodies, body, &mut memo) {
@@ -1398,8 +1398,8 @@ fn impure(
 ) -> Option<(Span, String)> {
     // A panic's message is never needed: reaching the panic fails the
     // evaluation anyway.
-    let mut in_panic: std::collections::HashSet<*const HirExpr> = std::collections::HashSet::new();
-    let mark = |b: &HirBlock, in_panic: &mut std::collections::HashSet<*const HirExpr>| {
+    let mut in_panic: rokc_core::HashSet<*const HirExpr> = rokc_core::HashSet::default();
+    let mark = |b: &HirBlock, in_panic: &mut rokc_core::HashSet<*const HirExpr>| {
         for s in &b.stmts {
             if let HirStmt::Panic(p) = s {
                 crate::each_expr(p, &mut |x| {
@@ -1750,7 +1750,7 @@ impl<'c, 'a> CtxBodies<'c, 'a> {
     pub(super) fn new(ctx: &'c LowerCtx<'a>) -> Self {
         Self {
             ctx,
-            cache: HashMap::new(),
+            cache: HashMap::default(),
         }
     }
 }
@@ -2019,7 +2019,7 @@ pub(super) fn eval_scalar(ctx: &LowerCtx<'_>, e: &Expr) -> Result<(i128, Option<
 /// Evaluate every const item of the user's package once,
 /// so an unused one is checked too.
 pub(super) fn check_user_consts(env: &Env<'_>) {
-    let no_subst = HashMap::new();
+    let no_subst = HashMap::default();
     let mut keys: Vec<&String> = env
         .consts
         .keys()
@@ -2069,7 +2069,7 @@ pub(super) fn check_user_consts(env: &Env<'_>) {
 /// A static's initializer function, run now: its value
 /// when it is a primitive constant; `None` keeps the lazy initializer.
 pub(super) fn static_init(env: &Env<'_>, init_fn: &HirFunction) -> Option<ConstVal> {
-    let no_subst = HashMap::new();
+    let no_subst = HashMap::default();
     let ctx = LowerCtx::new(env, &no_subst, None, init_fn.span);
     let body = init_fn.body.as_ref()?;
     if super::collect::hir_block_has_unknown(body) {
@@ -2077,7 +2077,7 @@ pub(super) fn static_init(env: &Env<'_>, init_fn: &HirFunction) -> Option<ConstV
     }
     let mut bodies = CtxBodies::new(&ctx);
     let mut interp = Interp::new(&mut bodies);
-    let (Ok(v) | Err(Stop::Return(v))) = interp.block(body, &mut Frame::new()) else {
+    let (Ok(v) | Err(Stop::Return(v))) = interp.block(body, &mut Frame::default()) else {
         return None;
     };
     if let (HirTy::Array(e, _), Value::Array(vs)) = (&init_fn.ret_ty, &v) {

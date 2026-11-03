@@ -157,8 +157,8 @@ pub use rokc_core::STD_PKG;
 thread_local! {
     /// Files served instead of the disk: the interface sources of the
     /// prebuilt dependencies (`rokhir::Rokhir::files`) at their old paths.
-    static OVERLAY: std::cell::RefCell<std::collections::HashMap<PathBuf, String>> =
-        std::cell::RefCell::new(std::collections::HashMap::new());
+    static OVERLAY: std::cell::RefCell<rokc_core::HashMap<PathBuf, String>> =
+        std::cell::RefCell::new(rokc_core::HashMap::default());
     /// The source files this compile read from disk.
     static READ: std::cell::RefCell<Vec<PathBuf>> = const { std::cell::RefCell::new(Vec::new()) };
 }
@@ -1289,7 +1289,7 @@ fn package_hashes(
 /// `/` paths, each `path \0 content \0`; the first 8 hex digits. Cached
 /// per process by a fast hash of the files (a REPL rehashes every cell).
 fn hash_package(files: &mut Vec<(String, &str)>) -> String {
-    static DONE: std::sync::Mutex<Option<std::collections::HashMap<u64, String>>> =
+    static DONE: std::sync::Mutex<Option<rokc_core::HashMap<u64, String>>> =
         std::sync::Mutex::new(None);
     files.sort_unstable();
     files.dedup();
@@ -1301,7 +1301,7 @@ fn hash_package(files: &mut Vec<(String, &str)>) -> String {
     let mut done = DONE
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    done.get_or_insert_with(std::collections::HashMap::new)
+    done.get_or_insert_with(rokc_core::HashMap::default)
         .entry(key)
         .or_insert_with(|| rokc_codegen_mlir::pkg_hash(&blob))
         .clone()
@@ -1396,7 +1396,7 @@ fn template_refs(defs: &[MetaDef], deps: &[String]) -> Vec<rokc_hir::TemplateRef
 }
 
 /// Pre-pass parses by path, with their file ids.
-type PreFiles = std::collections::HashMap<PathBuf, (u32, Prepassed)>;
+type PreFiles = rokc_core::HashMap<PathBuf, (u32, Prepassed)>;
 
 /// `job(i)` for each `i < n` on a thread per core (`stack` bytes each);
 /// `None` where no thread got to it.
@@ -1451,8 +1451,8 @@ fn prepass_parse(
     sources: &mut SourceMap,
     store: Option<&incr::Store>,
 ) -> PreFiles {
-    let mut files = std::collections::HashMap::new();
-    let mut seen = std::collections::HashSet::new();
+    let mut files = rokc_core::HashMap::default();
+    let mut seen = rokc_core::HashSet::default();
     let mut level = roots;
     while !level.is_empty() {
         let jobs: Vec<(PathBuf, Option<PathBuf>, String, u32)> = level
@@ -1750,8 +1750,8 @@ fn cross_file_confusables(idents: Vec<(String, rokc_diagnostic::Span)>) -> Vec<R
     if idents.iter().all(|(n, _)| n.is_ascii()) {
         return Vec::new();
     }
-    let mut first: std::collections::HashMap<String, &(String, rokc_diagnostic::Span)> =
-        std::collections::HashMap::new();
+    let mut first: rokc_core::HashMap<String, &(String, rokc_diagnostic::Span)> =
+        rokc_core::HashMap::default();
     let mut out = Vec::new();
     for id in &idents {
         match first.entry(rokc_lexer::unicode::skeleton(&id.0)) {
@@ -1789,7 +1789,7 @@ fn relex_metas(metas: &mut PrePass, ext: &rokc_parser::ExtOps) {
     }
     // What the module tree gave each block: its package, module and the
     // cfgs of enclosing modules.
-    let placed: std::collections::HashMap<_, _> = std::mem::take(&mut metas.metas)
+    let placed: rokc_core::HashMap<_, _> = std::mem::take(&mut metas.metas)
         .into_iter()
         .map(|d| ((d.file, d.span), (d.package, d.module, d.cfg)))
         .collect();
@@ -1881,8 +1881,8 @@ impl Summary {
         source: &str,
     ) -> Self {
         use rokc_lexer::TokenKind as T;
-        let mut seen = std::collections::HashSet::new();
-        let mut kinds = std::collections::HashSet::new();
+        let mut seen = rokc_core::HashSet::default();
+        let mut kinds = rokc_core::HashSet::default();
         let mut sum = Self {
             skeleton: skeleton(&program.items),
             quiet,
@@ -1988,10 +1988,10 @@ fn skeleton(items: &[rokc_ast::Item]) -> Vec<rokc_ast::Item> {
 thread_local! {
     /// This compile's pre-pass parses by file path, with their file ids.
     static PREPASSED: std::cell::RefCell<PreFiles> =
-        std::cell::RefCell::new(std::collections::HashMap::new());
+        std::cell::RefCell::new(rokc_core::HashMap::default());
     /// This compile's real parses by file path (`real_parse`).
-    static PARSED: std::cell::RefCell<std::collections::HashMap<PathBuf, Parsed>> =
-        std::cell::RefCell::new(std::collections::HashMap::new());
+    static PARSED: std::cell::RefCell<rokc_core::HashMap<PathBuf, Parsed>> =
+        std::cell::RefCell::new(rokc_core::HashMap::default());
     /// The modules whose file opts out of the implicit import
     /// (`#![no_implicit_rok]`).
     static NO_IMPLICIT: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };

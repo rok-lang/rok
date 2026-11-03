@@ -40,10 +40,10 @@ pub struct MirModule {
     pub functions: Vec<MirFunction>,
     pub statics: Vec<MirStaticDef>,
     /// Struct name and field names by `StructId` (`-g` DWARF types).
-    pub struct_names: std::collections::HashMap<u32, (String, Vec<String>)>,
+    pub struct_names: rokc_core::HashMap<u32, (String, Vec<String>)>,
     /// Each struct's build-independent name by `StructId` (the ids are
     /// handed out in lowering order): what incremental keys name it by.
-    pub struct_keys: std::collections::HashMap<u32, String>,
+    pub struct_keys: rokc_core::HashMap<u32, String>,
     /// `-g` types the `MirTy`s do not tell.
     pub debug: DebugTypes,
     pub target: Target,
@@ -122,9 +122,9 @@ impl MirTy {
 /// loses something (a sum's variants, a GC reference's pointee).
 #[derive(Clone, Debug, Default)]
 pub struct DebugTypes {
-    pub locals: std::collections::HashMap<(FunctionId, LocalId), DebugTy>,
+    pub locals: rokc_core::HashMap<(FunctionId, LocalId), DebugTy>,
     /// Every field's, by `StructId`.
-    pub fields: std::collections::HashMap<u32, Vec<DebugTy>>,
+    pub fields: rokc_core::HashMap<u32, Vec<DebugTy>>,
     /// The types stored into `any` slots, `(stored tag, name, payload)`:
     /// the payload word is the value, or [`DebugTy::Boxed`] (the tag's
     /// `ANY_BOXED` bit set).

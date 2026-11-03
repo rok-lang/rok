@@ -13,7 +13,7 @@
 //!
 //! `repl <path>` loads a program first (`load_program`).
 
-use std::collections::{HashMap, HashSet};
+use rokc_core::{HashMap, HashSet};
 use std::fmt::Write as _;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
@@ -656,7 +656,7 @@ impl Repl {
             bootstrap,
             externs: Vec::new(),
             deps_dir: PathBuf::new(),
-            linked: HashSet::new(),
+            linked: HashSet::default(),
             program: None,
             prelude: None,
             tmp: TempDir::new(opts.keep_temps).map_err(|d| d.message)?,
@@ -665,11 +665,11 @@ impl Repl {
             host: None,
             starting: None,
             bindings: Vec::new(),
-            statics: HashSet::new(),
+            statics: HashSet::default(),
             any_types: std::collections::BTreeSet::new(),
             built: 0,
             gc_tables: Vec::new(),
-            known: HashMap::new(),
+            known: HashMap::default(),
             input: String::new(),
             cell_no: CellNo::default(),
             next: None,
@@ -1373,7 +1373,7 @@ impl Repl {
         // `-g` cells compile everything (their text carries
         // locations, which differ from cell to cell anyway).
         let known = if opts.debug {
-            HashMap::new()
+            HashMap::default()
         } else {
             self.known
                 .iter()

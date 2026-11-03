@@ -2,7 +2,7 @@
 //! construct by construct (layouts, GC frames, barriers, allocation, polls,
 //! checks, panic messages), so programs behave the same on both backends.
 
-use std::collections::{HashMap, HashSet};
+use rokc_core::{HashMap, HashSet};
 
 use rokc_codegen_mlir::abi::{ArgAbi, FnAbi, RetAbi, rok_by_ref};
 use rokc_codegen_mlir::emit::{
@@ -192,8 +192,8 @@ impl<'c, 'a> FnLower<'c, 'a> {
         let back_edges = rokc_codegen_mlir::emit::polled_back_edges(f, c.quiet, c.pkgs, c.t)
             .into_keys()
             .collect();
-        let mut block_label = HashMap::new();
-        let mut block_params = HashMap::new();
+        let mut block_label = HashMap::default();
+        let mut block_params = HashMap::default();
         for b in &f.blocks {
             block_label.insert(b.id.0, out.label());
             block_params.insert(b.id.0, b.params.clone());
@@ -208,7 +208,7 @@ impl<'c, 'a> FnLower<'c, 'a> {
             tls: None,
             lowering: false,
             gc_frame: None,
-            rooted: HashSet::new(),
+            rooted: HashSet::default(),
             deaths: rokc_mir::Deaths::default(),
             back_edges,
             panics: Vec::new(),
@@ -1761,7 +1761,7 @@ impl<'c, 'a> FnLower<'c, 'a> {
     fn debug_facts(&self) -> crate::lir::FnDebug {
         let f = self.f;
         let mut scopes: Vec<(u32, u32)> = Vec::new();
-        let mut decl: HashMap<u32, (u32, u32)> = HashMap::new();
+        let mut decl: HashMap<u32, (u32, u32)> = HashMap::default();
         let (mut line, mut scope) = (f.span.line, 0);
         for s in f.blocks.iter().flat_map(|b| &b.stmts) {
             match s {

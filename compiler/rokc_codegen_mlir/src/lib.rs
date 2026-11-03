@@ -44,7 +44,7 @@ pub struct ReplCell {
     pub gc_tables: Vec<Vec<u32>>,
     /// Functions the session has (symbol → text hash, `repl::reuse`):
     /// declared, not defined, when this cell's text is the same.
-    pub known: std::collections::HashMap<String, u64>,
+    pub known: rokc_core::HashMap<String, u64>,
     /// `extern` statics this cell defines (zeroed, exported, GC roots):
     /// the slots of the session's new bindings.
     pub define: Vec<String>,

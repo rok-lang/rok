@@ -5,7 +5,7 @@
 //! declaration the runtime receives it; a function value of one is a shim
 //! passing where the value was taken.
 
-use std::collections::{HashMap, HashSet};
+use rokc_core::{HashMap, HashSet};
 
 use rokc_ir_common::{FunctionId, LocalId, PrimTy};
 
@@ -24,7 +24,7 @@ pub(super) fn lower(
         return;
     }
     let str_ty = HirTy::Prim(PrimTy::Str);
-    let mut sigs: HashMap<FunctionId, (Vec<HirParam>, HirTy)> = HashMap::new();
+    let mut sigs: HashMap<FunctionId, (Vec<HirParam>, HirTy)> = HashMap::default();
     for f in functions.iter_mut().filter(|f| tracked.contains(&f.id)) {
         sigs.insert(f.id, (f.params.clone(), f.ret_ty.clone()));
         let local = LocalId(u32::try_from(f.locals.len()).expect("LocalId overflow"));
@@ -43,7 +43,7 @@ pub(super) fn lower(
         f.facts.track_caller = true;
     }
     let mut next_id = functions.iter().map(|f| f.id.0 + 1).max().unwrap_or(0);
-    let mut shims: HashMap<(FunctionId, String), FunctionId> = HashMap::new();
+    let mut shims: HashMap<(FunctionId, String), FunctionId> = HashMap::default();
     let mut new_fns = Vec::new();
     for f in functions.iter_mut() {
         let Some(body) = &mut f.body else { continue };

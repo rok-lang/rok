@@ -5,7 +5,7 @@
 //! the HIR in order (branches merge, loops walked twice); pointers in
 //! temporaries or fields aren't seen.
 
-use std::collections::HashSet;
+use rokc_core::HashSet;
 
 use rokc_diagnostic::{Code, Span};
 use rokc_ir_common::LocalId;
@@ -16,9 +16,9 @@ use crate::{HirBlock, HirExpr, HirExprKind, HirFunction, HirStmt, HirTy};
 
 pub(super) fn check(env: &Env<'_>, functions: &[HirFunction]) {
     let extras = env.sink.extras.borrow();
-    let no_subst = std::collections::HashMap::new();
+    let no_subst = rokc_core::HashMap::default();
     let ctx = LowerCtx::new(env, &no_subst, None, Span::DUMMY);
-    let mut seen = HashSet::new();
+    let mut seen = HashSet::default();
     for f in functions.iter().chain(extras.iter()) {
         let Some(body) = f.body.as_ref().filter(|_| f.is_async || f.is_generator) else {
             continue;
@@ -32,8 +32,8 @@ pub(super) fn check(env: &Env<'_>, functions: &[HirFunction]) {
             .collect();
         let mut w = Walk {
             ptr_local: &ptr_local,
-            frame: HashSet::new(),
-            crossed: HashSet::new(),
+            frame: HashSet::default(),
+            crossed: HashSet::default(),
             uses: Vec::new(),
         };
         w.block(body);

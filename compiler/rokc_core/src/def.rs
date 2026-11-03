@@ -1,6 +1,6 @@
 //! Definition ids, assigned by name resolution and carried to codegen.
 
-use std::collections::HashMap;
+use crate::HashMap;
 
 /// 32-bit index into `DefTable`.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]

@@ -4,7 +4,7 @@
 //! by-address result written straight into it, instead of in `t`'s
 //! and copied.
 
-use std::collections::HashSet;
+use rokc_core::HashSet;
 
 use rokc_ir_common::LocalId;
 
@@ -15,7 +15,7 @@ pub fn copy_into(f: &mut MirFunction) {
     let once = block_local(f);
     let addressed = crate::addressed(f);
     let mut uses = vec![0u32; f.locals.len()];
-    let mut block_params: HashSet<LocalId> = HashSet::new();
+    let mut block_params: HashSet<LocalId> = HashSet::default();
     for b in &f.blocks {
         block_params.extend(&b.params);
         let stmts = b.stmts.iter().flat_map(|s| stmt_uses(s).0);
@@ -33,7 +33,7 @@ pub fn copy_into(f: &mut MirFunction) {
             )
             && l.name.as_deref().is_none_or(|n| !crate::debug_visible(n))
     };
-    let mut gone: HashSet<LocalId> = HashSet::new();
+    let mut gone: HashSet<LocalId> = HashSet::default();
     for b in &mut f.blocks {
         let mut at = 0;
         while at < b.stmts.len() {

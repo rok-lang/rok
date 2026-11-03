@@ -16,7 +16,7 @@
 //! Capitalized names aren't tracked as locals (a pattern `Foo` may be a
 //! constant).
 
-use std::collections::{HashMap, HashSet};
+use rokc_core::{HashMap, HashSet};
 
 use rokc_ast::{
     AccessTail, AttrArg, AttrBody, Attribute, Block, CallArg, CaptureSpec, Expr, ExprKind,
@@ -899,7 +899,7 @@ fn collect_variants(items: &[Item], out: &mut HashSet<String>) {
 /// Every function in `items` by short name: per attribute in `attrs`, its
 /// message, for names no unmarked function shares.
 fn marked_fns<const N: usize>(items: &[&[Item]], attrs: [&str; N]) -> [HashMap<String, String>; N] {
-    let mut marked: [HashMap<String, String>; N] = std::array::from_fn(|_| HashMap::new());
+    let mut marked: [HashMap<String, String>; N] = std::array::from_fn(|_| HashMap::default());
     for i in items {
         each_fn(i, &mut |f| {
             for (k, a) in attrs.iter().enumerate() {
@@ -956,7 +956,7 @@ fn marked_types(
             }
         }
     }
-    let mut out = HashMap::new();
+    let mut out = HashMap::default();
     for f in files {
         let mut at: Vec<&str> = std::iter::once(f.package.as_str())
             .chain(f.module.iter().map(String::as_str))
@@ -1121,8 +1121,8 @@ impl<'a> Cx<'a> {
             .map(|f| f.items.as_slice())
             .chain(library.map(|p| p.items.as_slice()))
             .collect();
-        let mut traits = HashSet::new();
-        let mut variants = HashSet::new();
+        let mut traits = HashSet::default();
+        let mut variants = HashSet::default();
         for items in &all {
             collect_traits(items, &mut traits);
             collect_variants(items, &mut variants);
@@ -1144,16 +1144,16 @@ impl<'a> Cx<'a> {
             findings: Vec::new(),
             scopes: Vec::new(),
             exempt_next: false,
-            assign_targets: HashSet::new(),
-            ref_params: HashSet::new(),
-            file_names: HashSet::new(),
-            all_names: HashSet::new(),
-            casts: HashSet::new(),
-            clones: HashSet::new(),
+            assign_targets: HashSet::default(),
+            ref_params: HashSet::default(),
+            file_names: HashSet::default(),
+            all_names: HashSet::default(),
+            casts: HashSet::default(),
+            clones: HashSet::default(),
             must_use,
             must_use_types: marked_types(all_files, library, "must_use"),
-            stmt_exprs: HashMap::new(),
-            let_inits: HashMap::new(),
+            stmt_exprs: HashMap::default(),
+            let_inits: HashMap::default(),
             types,
             impl_head: false,
             impl_of: None,
@@ -1478,7 +1478,7 @@ impl<'a> Cx<'a> {
     fn hir(&mut self, hir: &rokc_hir::HirModule, user: &[&SourceFile]) {
         let files: HashSet<u32> = user.iter().map(|f| f.file_id).collect();
         let mut hits: Vec<(&'static str, Span, String)> = Vec::new();
-        let mut cloned: HashSet<(u32, u32)> = HashSet::new();
+        let mut cloned: HashSet<(u32, u32)> = HashSet::default();
         // The package's own bodies.
         let own: Vec<&rokc_hir::HirFunction> = hir
             .functions

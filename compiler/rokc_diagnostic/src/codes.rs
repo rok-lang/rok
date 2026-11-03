@@ -858,7 +858,7 @@ mod tests {
 
     #[test]
     fn serial_unique_and_described() {
-        let mut names = std::collections::HashSet::new();
+        let mut names = rokc_core::HashSet::default();
         for (i, e) in Code::all().iter().enumerate() {
             assert_eq!(usize::from(e.code.0), i + 1, "{} out of order", e.name);
             assert!(names.insert(e.name), "{} twice", e.name);

@@ -7,7 +7,7 @@
 //! only a write to the same variable (`p.x = p.x + 1`) counts only if that
 //! write is read. Variables a closure or coroutine mentions are skipped.
 
-use std::collections::{HashMap, HashSet};
+use rokc_core::{HashMap, HashSet};
 
 use rokc_ast::{Expr, ExprKind, FnDef, ImplItem, Item, PatternKind, Stmt, StmtKind, TraitItem};
 use rokc_diagnostic::{Code, RokDiagnostic, Span};
@@ -79,7 +79,7 @@ const fn key(s: Span) -> (u32, u32) {
 
 /// The lost writes in the bodies of `items`, as errors.
 pub fn check(items: &[Item]) -> Vec<RokDiagnostic> {
-    let mut seen = HashSet::new();
+    let mut seen = HashSet::default();
     let mut out = Vec::new();
     let mut each = |f: &FnDef| {
         for l in check_fn(f) {

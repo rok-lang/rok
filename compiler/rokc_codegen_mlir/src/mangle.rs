@@ -18,12 +18,12 @@ use rokc_mir::{Link, MirFunction};
 pub struct Pkgs {
     pub link: Link,
     /// `extern` statics: they keep their C name.
-    pub extern_statics: std::collections::HashSet<String>,
+    pub extern_statics: rokc_core::HashSet<String>,
     /// Windows: DLL `extern` statics, reached via `__imp_<name>` (import
     /// libraries define only that for data).
-    pub dll_statics: std::collections::HashSet<String>,
+    pub dll_statics: rokc_core::HashSet<String>,
     /// Lazily initialized statics: name → symbol of their initializer.
-    pub lazy_statics: std::collections::HashMap<String, String>,
+    pub lazy_statics: rokc_core::HashMap<String, String>,
     /// Unit builds: a library's own copies of other packages' statics are
     /// `<symbol>.copy_Y<hash>_`, shared by its units and distinct from other
     /// packages' copies.

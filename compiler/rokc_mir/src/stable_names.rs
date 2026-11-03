@@ -7,7 +7,7 @@
 //! `<creator>::{coroutine#k}`, and `Struct<id>__m` becomes
 //! `<type path>__m`.
 
-use std::collections::HashMap;
+use rokc_core::HashMap;
 
 use rokc_core::hash::{hex, sha256};
 use rokc_ir_common::FunctionId;
@@ -47,7 +47,7 @@ pub fn stable_names(
     // Each closure's creators (what refers to it or to a function made
     // from it, `__fnval`, other than those), with its rank among the
     // closures each one refers to.
-    let mut made_by: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
+    let mut made_by: HashMap<usize, Vec<(usize, usize)>> = HashMap::default();
     for (g, f) in functions.iter().enumerate() {
         let own = closure_token(&f.name);
         let mut seen: Vec<usize> = Vec::new();
@@ -74,8 +74,8 @@ pub fn stable_names(
             }
         }
     }
-    let mut names: HashMap<usize, Option<String>> = HashMap::new();
-    let mut map: HashMap<String, String> = HashMap::new();
+    let mut names: HashMap<usize, Option<String>> = HashMap::default();
+    let mut map: HashMap<String, String> = HashMap::default();
     for (&id, &i) in &closures {
         if let Some(n) = closure_name(i, functions, &closures, &made_by, &mut names) {
             map.insert(id.to_owned(), n);

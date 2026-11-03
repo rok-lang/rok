@@ -2,7 +2,7 @@
 //! constants) hoisted into the entry block once each, identical panic
 //! blocks merged. LLVM folds them anyway; this only means less to read.
 
-use std::collections::{HashMap, HashSet};
+use rokc_core::{HashMap, HashSet};
 
 /// Ops whose result is a constant when every operand is one.
 const CONST_OPS: [&str; 6] = [
@@ -66,9 +66,9 @@ fn map_values(text: &str, mut f: impl FnMut(&str) -> Option<String>) -> String {
 /// Compact one function body (its entry block first, unlabeled).
 #[must_use]
 pub fn compact(body: &str) -> String {
-    let mut rename: HashMap<String, String> = HashMap::new();
-    let mut consts: HashSet<String> = HashSet::new();
-    let mut seen: HashMap<String, String> = HashMap::new();
+    let mut rename: HashMap<String, String> = HashMap::default();
+    let mut consts: HashSet<String> = HashSet::default();
+    let mut seen: HashMap<String, String> = HashMap::default();
     let mut hoisted = String::new();
     let mut kept: Vec<&str> = Vec::new();
     for line in body.lines() {
@@ -123,8 +123,8 @@ fn merge_panic_blocks(lines: Vec<String>) -> Vec<String> {
         l.strip_prefix("  ^")
             .map(|_| l.trim_end_matches(':').trim().to_owned())
     };
-    let mut first: HashMap<String, String> = HashMap::new();
-    let mut alias: HashMap<String, String> = HashMap::new();
+    let mut first: HashMap<String, String> = HashMap::default();
+    let mut alias: HashMap<String, String> = HashMap::default();
     let mut drop = vec![false; lines.len()];
     let mut i = 0;
     while i < lines.len() {

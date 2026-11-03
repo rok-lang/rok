@@ -256,7 +256,7 @@ fn some_types(
     program: &mut Program,
     diags: &mut Vec<rokc_diagnostic::RokDiagnostic>,
 ) -> HashMap<String, super::SomeType> {
-    let mut out: HashMap<String, super::SomeType> = HashMap::new();
+    let mut out: HashMap<String, super::SomeType> = HashMap::default();
     for item in &program.items {
         let Item::TypeAlias(a) = item else { continue };
         let AstTyKind::Some(bounds) = &a.ty.kind else {
@@ -291,7 +291,7 @@ fn some_types(
     if out.is_empty() {
         return out;
     }
-    let mut generic = std::collections::HashSet::new();
+    let mut generic = rokc_core::HashSet::default();
     for item in &mut program.items {
         let Item::Fn(f) = item else { continue };
         let Some(Ty {
@@ -424,7 +424,7 @@ pub(super) struct Collected<'a> {
     enum_decls: Vec<(EnumId, &'a AstEnumDef)>,
     struct_decls: Vec<(StructId, &'a AstStructDef)>,
     /// Inherent associated consts (`S::N`).
-    inherent_keys: std::collections::HashSet<String>,
+    inherent_keys: rokc_core::HashSet<String>,
     static_defs: Vec<HirStaticDef>,
     /// Per static: its type as written, module and initializer.
     static_asts: Vec<(&'a Ty, String)>,
@@ -435,17 +435,17 @@ pub(super) struct Collected<'a> {
     link_names: HashMap<usize, String>,
     /// Generic impls with method templates by tag (`generic_trait_impl`).
     templated: HashMap<String, usize>,
-    system_fns: std::collections::HashSet<FunctionId>,
-    no_safepoint: std::collections::HashSet<FunctionId>,
+    system_fns: rokc_core::HashSet<FunctionId>,
+    no_safepoint: rokc_core::HashSet<FunctionId>,
     wasm_imports: HashMap<FunctionId, (String, String)>,
     extern_symbols: HashMap<FunctionId, String>,
     trait_defs: HashMap<String, &'a rokc_ast::TraitDef>,
     exports: Vec<(FunctionId, String)>,
-    prebuilt: std::collections::HashSet<FunctionId>,
-    inline_copies: std::collections::HashSet<FunctionId>,
+    prebuilt: rokc_core::HashSet<FunctionId>,
+    inline_copies: rokc_core::HashSet<FunctionId>,
     c_defs: Vec<FunctionId>,
     /// Leaf names of the functions that diverge (`may_diverge`).
-    diverging: std::collections::HashSet<String>,
+    diverging: rokc_core::HashSet<String>,
 }
 
 impl Collected<'_> {
@@ -457,22 +457,22 @@ impl Collected<'_> {
             reexports: Vec::new(),
             enum_decls: Vec::new(),
             struct_decls: Vec::new(),
-            inherent_keys: std::collections::HashSet::new(),
+            inherent_keys: rokc_core::HashSet::default(),
             static_defs: Vec::new(),
             static_asts: Vec::new(),
             lib_decl: Vec::new(),
-            link_names: HashMap::new(),
-            templated: HashMap::new(),
-            system_fns: std::collections::HashSet::new(),
-            no_safepoint: std::collections::HashSet::new(),
-            wasm_imports: HashMap::new(),
-            extern_symbols: HashMap::new(),
-            trait_defs: HashMap::new(),
+            link_names: HashMap::default(),
+            templated: HashMap::default(),
+            system_fns: rokc_core::HashSet::default(),
+            no_safepoint: rokc_core::HashSet::default(),
+            wasm_imports: HashMap::default(),
+            extern_symbols: HashMap::default(),
+            trait_defs: HashMap::default(),
             exports: Vec::new(),
-            prebuilt: std::collections::HashSet::new(),
-            inline_copies: std::collections::HashSet::new(),
+            prebuilt: rokc_core::HashSet::default(),
+            inline_copies: rokc_core::HashSet::default(),
             c_defs: Vec::new(),
-            diverging: std::collections::HashSet::new(),
+            diverging: rokc_core::HashSet::default(),
         }
     }
 }
@@ -806,7 +806,7 @@ fn collect<'a>(
         input.lib.is_none().then_some(missing),
     );
     early.extend(use_diags);
-    let values: std::collections::HashSet<&str> = (all_items.iter())
+    let values: rokc_core::HashSet<&str> = (all_items.iter())
         .filter_map(|i| match i {
             Item::Fn(f) => Some(f.name.as_str()),
             Item::Const(c) => Some(c.name.as_str()),
@@ -903,7 +903,7 @@ fn collect<'a>(
         .canon_memo
         .get_mut()
         .retain(|(_, module), _| !package_of(module).is_empty());
-    let mut type_spans: HashMap<&str, Span> = HashMap::new();
+    let mut type_spans: HashMap<&str, Span> = HashMap::default();
     for item in &program.items {
         let (name, vis) = match item {
             Item::Struct(s) => (&s.name, s.vis),
@@ -915,7 +915,7 @@ fn collect<'a>(
                 if t.is_unsafe {
                     names.unsafe_traits.insert(t.name.clone());
                 }
-                let mut methods: HashMap<&str, Span> = HashMap::new();
+                let mut methods: HashMap<&str, Span> = HashMap::default();
                 for ti in &t.items {
                     let rokc_ast::TraitItem::Method(m) = ti else {
                         continue;
@@ -1005,7 +1005,7 @@ fn collect<'a>(
     names.leaves = std::cell::OnceCell::new();
     names.variant_leaves = std::cell::OnceCell::new();
     names.const_leaves = std::cell::OnceCell::new();
-    let statics: std::collections::HashSet<&str> = program
+    let statics: rokc_core::HashSet<&str> = program
         .items
         .iter()
         .filter_map(|it| match it {
@@ -1212,14 +1212,14 @@ fn collect<'a>(
     // use; `static`s get global storage (`HirStaticDef`).
     let mut consts = consts;
     // Per impl item: its associated consts, for its `Impl`.
-    let mut impl_const_lists: HashMap<usize, Vec<AssocConst>> = HashMap::new();
+    let mut impl_const_lists: HashMap<usize, Vec<AssocConst>> = HashMap::default();
     // Where this stage's consts are, for a later item of their name.
-    let mut const_spans: HashMap<String, Span> = HashMap::new();
+    let mut const_spans: HashMap<String, Span> = HashMap::default();
     // Module-level consts and statics: one value namespace with fns.
-    let mut value_spans: HashMap<String, (Span, &str)> = HashMap::new();
+    let mut value_spans: HashMap<String, (Span, &str)> = HashMap::default();
     // The kept definition of each name defined again (`Env::duplicated`),
     // and each item hiding an import.
-    let mut duplicated: std::collections::HashSet<Span> = hiding.into_iter().collect();
+    let mut duplicated: rokc_core::HashSet<Span> = hiding.into_iter().collect();
     // A tuple or unit struct's constructor is a value too.
     for item in &program.items {
         if let Item::Struct(s) = item {
@@ -1443,7 +1443,7 @@ fn collect<'a>(
             .values()
             .filter(|a| {
                 let mut stack = mentions(a);
-                let mut seen = std::collections::HashSet::new();
+                let mut seen = rokc_core::HashSet::default();
                 while let Some(n) = stack.pop() {
                     if n == a.name {
                         return true;
@@ -1885,7 +1885,7 @@ fn collect<'a>(
             where_clause: impl_def.where_clause.clone(),
             self_ty: impl_def.self_ty.clone(),
             module,
-            methods: HashMap::new(),
+            methods: HashMap::default(),
             consts,
             concrete: None,
         });
@@ -1927,7 +1927,7 @@ fn collect<'a>(
 
     // Pass 3: function bodies.
     let (bound_methods, bound_traits) = super::bounds::templates(&trait_info);
-    let mut_statics: std::collections::HashSet<String> = mut_statics
+    let mut_statics: rokc_core::HashSet<String> = mut_statics
         .into_iter()
         .chain(
             static_defs
@@ -1936,7 +1936,7 @@ fn collect<'a>(
                 .map(|s| s.name.clone()),
         )
         .collect();
-    let extern_statics: std::collections::HashSet<String> = extern_statics
+    let extern_statics: rokc_core::HashSet<String> = extern_statics
         .into_iter()
         .chain(
             static_defs
@@ -1958,7 +1958,7 @@ fn collect<'a>(
             main_lets: if input.root_main == crate::RootMain::Implicit {
                 main_lets(program)
             } else {
-                HashMap::new()
+                HashMap::default()
             },
             harness_main: input.root_main == crate::RootMain::Harness,
             may_diverge: base_may_diverge
@@ -1988,7 +1988,7 @@ fn collect<'a>(
             item_visibility,
             field_vis,
             impls,
-            unsafe_fns: std::collections::HashSet::new(),
+            unsafe_fns: rokc_core::HashSet::default(),
             neg_auto,
             auto_memo: std::cell::RefCell::default(),
             affine_memo: std::cell::RefCell::default(),
@@ -2021,7 +2021,7 @@ fn collect<'a>(
                     _ => None,
                 }))
                 .collect(),
-            fn_marks: HashMap::new(),
+            fn_marks: HashMap::default(),
             marks: marks.into_iter().chain(item_marks(program)).collect(),
             // The std's own uses never warn.
             mark_pkg: match input.lib.as_deref() {
@@ -2091,7 +2091,7 @@ fn collect<'a>(
             )
         };
         // Methods this impl provides: their trait defaults are skipped.
-        let mut explicit_methods: HashMap<String, Span> = HashMap::new();
+        let mut explicit_methods: HashMap<String, Span> = HashMap::default();
         for ii in &impl_def.items {
             let orig = match ii {
                 AstImplItem::Method(m) => m,
@@ -2262,7 +2262,7 @@ fn collect<'a>(
                 self_ty: target_ty.clone(),
                 module: module.clone(),
                 key,
-                subst: HashMap::new(),
+                subst: HashMap::default(),
                 default: false,
             });
             lib_decl.push(!package_of(&module).is_empty());
@@ -2561,7 +2561,7 @@ fn collect<'a>(
             );
         }
     }
-    let mut key_of: HashMap<FunctionId, String> = HashMap::new();
+    let mut key_of: HashMap<FunctionId, String> = HashMap::default();
     for (k, s) in &fn_table {
         // Re-export aliases share the id; keep the shortest (original) key.
         let e = key_of.entry(s.id).or_insert_with(|| k.clone());
@@ -2649,7 +2649,7 @@ fn collect<'a>(
     // One extern namespace; a second declaration with another
     // signature is an error, reported against the runtime's declaration
     // (`rok::core::rt`) when one is involved.
-    let no_subst = HashMap::new();
+    let no_subst = HashMap::default();
     for (f, rok_abi, first) in &extern_redecls {
         let (params, ret) = mono::sig_tys(&env, f, None, fn_module(&env, f), &no_subst);
         // The first declaration may be an earlier stage's.
@@ -2718,7 +2718,7 @@ fn collect<'a>(
     ref_out.sort_by_key(|(id, _)| *id);
     env.sink.ref_out.borrow_mut().extend(ref_out);
     // Every static's type, now that every item is registered.
-    let no_subst = HashMap::new();
+    let no_subst = HashMap::default();
     let static_types: Vec<HirTy> = static_defs[first_static..]
         .iter()
         .zip(&static_asts[first_static..])
@@ -2797,7 +2797,7 @@ fn finish<'a>(
     let env = Env { sources, prec, t };
     // The files of the package's declarations, and of the library's.
     let decl_files = {
-        let files = |lib: bool| -> std::collections::HashSet<u32> {
+        let files = |lib: bool| -> rokc_core::HashSet<u32> {
             (env.decls.iter().zip(&lib_decl))
                 .filter(|(_, l)| **l == lib)
                 .map(|(d, _)| d.def().span.file)
@@ -2832,8 +2832,7 @@ fn finish<'a>(
         .get("main")
         .map(|s| s.id)
         .filter(|id| !env.extern_fn_ids.contains(id) && !env.rok_externs.contains(id));
-    let exported: std::collections::HashSet<FunctionId> =
-        exports.iter().map(|(id, _)| *id).collect();
+    let exported: rokc_core::HashSet<FunctionId> = exports.iter().map(|(id, _)| *id).collect();
     let decl_roots: Vec<bool> = env
         .decls
         .iter()
@@ -2925,7 +2924,7 @@ fn finish<'a>(
     check_type_bounds(&env);
     check_statics_sync(&env, checked);
     rokc_diagnostic::time("hir send check", || {
-        *env.auto_memo.borrow_mut() = Some(HashMap::new());
+        *env.auto_memo.borrow_mut() = Some(HashMap::default());
         super::send_check::check(&env, &functions);
         *env.auto_memo.borrow_mut() = None;
     });
@@ -2933,13 +2932,13 @@ fn finish<'a>(
     super::views::check(&env, &functions);
     // What each call keeps of its arguments, which both checks follow.
     let keeps = rokc_diagnostic::time("hir affine summaries", || {
-        *env.auto_memo.borrow_mut() = Some(HashMap::new());
+        *env.auto_memo.borrow_mut() = Some(HashMap::default());
         let k = super::affine::summaries(&env, &functions, &input.summaries);
         *env.auto_memo.borrow_mut() = None;
         k
     });
     let summaries = rokc_diagnostic::time("hir handoff check", || {
-        *env.auto_memo.borrow_mut() = Some(HashMap::new());
+        *env.auto_memo.borrow_mut() = Some(HashMap::default());
         let s = super::handoff::check(
             &env,
             &functions,
@@ -2952,7 +2951,7 @@ fn finish<'a>(
     });
     let mut summaries = summaries;
     rokc_diagnostic::time("hir affine check", || {
-        *env.auto_memo.borrow_mut() = Some(HashMap::new());
+        *env.auto_memo.borrow_mut() = Some(HashMap::default());
         summaries.extend(super::affine::check(
             &env,
             &mut functions,
@@ -3114,7 +3113,7 @@ fn finish<'a>(
     check_packed(&mut module);
     // One cause can be reached from several passes; report each message
     // once per place.
-    let mut seen = std::collections::HashSet::new();
+    let mut seen = rokc_core::HashSet::default();
     module
         .diagnostics
         .retain(|d| seen.insert((d.primary.as_ref().map(|l| l.span), d.message.clone())));
@@ -3141,7 +3140,7 @@ fn finish<'a>(
     });
     // A block-local item's capture error says why its name
     // is not found there.
-    let captured: std::collections::HashSet<_> = (module.diagnostics.iter())
+    let captured: rokc_core::HashSet<_> = (module.diagnostics.iter())
         .filter(|d| d.message.contains(" and can't use `"))
         .filter_map(|d| d.primary.as_ref().map(|l| l.span))
         .collect();
@@ -3176,7 +3175,7 @@ fn show_local_names(program: &Program, diags: &mut [rokc_diagnostic::RokDiagnost
     if lifted.is_empty() {
         return;
     }
-    let mut count: HashMap<std::borrow::Cow<'_, str>, usize> = HashMap::new();
+    let mut count: HashMap<std::borrow::Cow<'_, str>, usize> = HashMap::default();
     for n in &names {
         *count.entry(leaf(n)).or_default() += 1;
     }
@@ -3457,7 +3456,7 @@ fn qualify(item: &mut Item, module: &str) {
 /// body; a broken one is `{unknown}` where used.
 fn resolve_projection_aliases(env: &Env<'_>, program: &Program) {
     let names = &env.names;
-    let stage: std::collections::HashSet<&str> = program
+    let stage: rokc_core::HashSet<&str> = program
         .items
         .iter()
         .filter_map(|it| match it {
@@ -3475,7 +3474,7 @@ fn resolve_projection_aliases(env: &Env<'_>, program: &Program) {
         })
         .collect();
     aliases.sort_by_key(|(full, _)| *full);
-    let no_subst = HashMap::new();
+    let no_subst = HashMap::default();
     for (full, body) in aliases {
         let count = || names.diags.borrow().len() + env.sink.diagnostics.borrow().len();
         let before = count();
@@ -3493,7 +3492,7 @@ fn resolve_projection_aliases(env: &Env<'_>, program: &Program) {
 /// and a value at once (`channel`); a chain goes on through a key with
 /// one target only.
 fn reexport_aliases(reexports: &[crate::uses::ReExport]) -> Vec<(String, String)> {
-    let mut direct: HashMap<String, Vec<&str>> = HashMap::new();
+    let mut direct: HashMap<String, Vec<&str>> = HashMap::default();
     for re in reexports {
         let to = direct.entry(reexport_key(re)).or_default();
         if !to.contains(&re.full_path.as_str()) {
@@ -3501,10 +3500,10 @@ fn reexport_aliases(reexports: &[crate::uses::ReExport]) -> Vec<(String, String)
         }
     }
     let mut out: Vec<(String, String)> = Vec::new();
-    let mut have = std::collections::HashSet::new();
+    let mut have = rokc_core::HashSet::default();
     for re in reexports {
         let alias = reexport_key(re);
-        let mut seen = std::collections::HashSet::from([alias.as_str()]);
+        let mut seen = rokc_core::HashSet::from_iter([alias.as_str()]);
         let mut end = re.full_path.as_str();
         while let Some([next]) = direct
             .get(end)
@@ -3522,7 +3521,7 @@ fn reexport_aliases(reexports: &[crate::uses::ReExport]) -> Vec<(String, String)
 
 /// Alias → end, the first re-export of a key winning.
 fn first_alias<'p>(pairs: impl Iterator<Item = &'p (String, String)>) -> HashMap<String, String> {
-    let mut out = HashMap::new();
+    let mut out = HashMap::default();
     for (alias, end) in pairs {
         out.entry(alias.clone()).or_insert_with(|| end.clone());
     }
@@ -3643,7 +3642,7 @@ fn item_marks(program: &Program) -> Vec<(String, crate::marks::Mark)> {
 pub(super) fn collect_field_visibility(
     program: &Program,
 ) -> HashMap<String, HashMap<String, Visibility>> {
-    let mut out: HashMap<String, HashMap<String, Visibility>> = HashMap::new();
+    let mut out: HashMap<String, HashMap<String, Visibility>> = HashMap::default();
     for item in &program.items {
         match item {
             Item::Struct(s) => {
@@ -3921,7 +3920,7 @@ const MAX_VALUE_BYTES: u64 = 1 << 32;
 /// order can initialize. A cycle through a function call
 /// stays the run-time panic.
 fn check_static_cycles(module: &mut HirModule) {
-    use std::collections::HashMap;
+    use rokc_core::HashMap;
     let bodies: HashMap<FunctionId, &crate::HirFunction> =
         module.functions.iter().map(|f| (f.id, f)).collect();
     let index: HashMap<&str, usize> = (module.statics.iter().enumerate())
@@ -3998,7 +3997,7 @@ fn check_static_cycles(module: &mut HirModule) {
 }
 
 fn check_value_types(module: &mut HirModule) {
-    use std::collections::{HashMap, HashSet};
+    use rokc_core::{HashMap, HashSet};
     #[derive(Clone, Copy, PartialEq, Eq, Hash)]
     enum Def {
         S(usize),
@@ -4115,7 +4114,7 @@ fn check_value_types(module: &mut HirModule) {
     let mut errs = Vec::new();
     for &d in &all {
         let mut stack = defs.edges(d);
-        let mut seen = HashSet::new();
+        let mut seen = HashSet::default();
         while let Some(x) = stack.pop() {
             if x == d {
                 let (name, span, kind) = defs.name_span(d);
@@ -4135,7 +4134,7 @@ fn check_value_types(module: &mut HirModule) {
         }
     }
     if errs.is_empty() {
-        let mut memo = HashMap::new();
+        let mut memo = HashMap::default();
         for &d in &all {
             let t = match d {
                 Def::S(i) => HirTy::Struct(module.structs[i].id),
@@ -4616,7 +4615,7 @@ fn check_repr_attrs(program: &rokc_ast::Program, diags: &mut Vec<rokc_diagnostic
 /// Value variants: all or none; each value a const integer
 /// that fits the tag type and is unique.
 fn assign_discriminants(env: &Env<'_>, decls: &[(EnumId, &AstEnumDef)]) {
-    let no_subst = HashMap::new();
+    let no_subst = HashMap::default();
     for &(id, decl) in decls {
         let i = id.0 as usize;
         let values = decl
@@ -4641,7 +4640,7 @@ fn assign_discriminants(env: &Env<'_>, decls: &[(EnumId, &AstEnumDef)]) {
             continue;
         }
         let tag_ty = ctx.enum_def(id).repr.int.unwrap_or(PrimTy::I32);
-        let mut seen: HashMap<i128, &str> = HashMap::new();
+        let mut seen: HashMap<i128, &str> = HashMap::default();
         let mut tags = Vec::new();
         for v in &decl.variants {
             let AstEnumVariantKind::Value(e) = &v.kind else {
@@ -5033,7 +5032,7 @@ fn shadow_outer_generics(def: &mut FnDef, outer: &rokc_ast::Generics, clashed: b
             name.clone()
         }
     };
-    let taken: std::collections::HashSet<String> = outer.params.iter().map(name).collect();
+    let taken: rokc_core::HashSet<String> = outer.params.iter().map(name).collect();
     if clashed {
         def.generics.params.retain(|p| !taken.contains(&name(p)));
         return;
@@ -5121,7 +5120,7 @@ fn generic_trait_impl(
     module: &str,
     tag: &str,
     diags: &mut Vec<rokc_diagnostic::RokDiagnostic>,
-    duplicated: &mut std::collections::HashSet<Span>,
+    duplicated: &mut rokc_core::HashSet<Span>,
 ) -> Impl {
     let err = |code: Code, pre: &mut Vec<rokc_diagnostic::RokDiagnostic>, msg: String| {
         pre.push(rokc_diagnostic::RokDiagnostic::error(
@@ -5167,9 +5166,9 @@ fn generic_trait_impl(
             },
         }
     };
-    let mut methods: HashMap<String, GenericMethod> = HashMap::new();
+    let mut methods: HashMap<String, GenericMethod> = HashMap::default();
     // Methods unlike the trait's: reported, not missing.
-    let mut mismatched = std::collections::HashSet::new();
+    let mut mismatched = rokc_core::HashSet::default();
     for ii in &impl_def.items {
         let AstImplItem::Method(m) = ii else {
             continue;
@@ -5296,7 +5295,7 @@ fn impl_heads(
         *t == HirTy::Unknown || !paths.is_empty()
     };
     let mut last = false;
-    let no_subst = HashMap::new();
+    let no_subst = HashMap::default();
     while !left.is_empty() {
         // One round's heads, against the impls resolved before it; one
         // still open waits (its diagnostics dropped) unless it is the last.
@@ -5607,8 +5606,8 @@ pub(super) fn lower_decl(env: &Env<'_>, i: usize, stub: bool) -> HirFunction {
 fn lower_bodies(
     env: &Env<'_>,
     roots: &[bool],
-    linked: &std::collections::HashSet<FunctionId>,
-    copies: &std::collections::HashSet<FunctionId>,
+    linked: &rokc_core::HashSet<FunctionId>,
+    copies: &rokc_core::HashSet<FunctionId>,
     incr: Option<&super::incr::Incr<'_>>,
 ) -> (Vec<HirFunction>, Vec<FunctionId>) {
     let decls = &env.decls;
@@ -5739,7 +5738,7 @@ fn sig_stub(env: &Env<'_>, i: usize) -> HirFunction {
 /// `Copy` excludes `Drop`. Returns the failed attributes' spans.
 fn check_derives(env: &Env<'_>, program: &Program) -> Vec<rokc_diagnostic::Span> {
     let mut failed = Vec::new();
-    let no_subst = HashMap::new();
+    let no_subst = HashMap::default();
     let ctx = LowerCtx::new(env, &no_subst, None, Span::DUMMY);
     for item in &program.items {
         let (attrs, name, generic, fields): (_, _, _, Vec<(String, HirTy)>) = match item {
@@ -6241,7 +6240,7 @@ fn check_type_bounds(env: &Env<'_>) {
         &'d [rokc_ast::WherePred],
         rokc_diagnostic::Span,
     );
-    let no_subst = HashMap::new();
+    let no_subst = HashMap::default();
     let ctx = LowerCtx::new(env, &no_subst, None, Span::DUMMY);
     let n_structs = env.defs.structs.borrow().len();
     let n_enums = env.defs.enums.borrow().len();
@@ -6325,7 +6324,7 @@ fn check_type_bounds(env: &Env<'_>) {
     // Generic alias uses naming a type parameter are checked where its
     // bounds are known: by the body's definition check, or here for impl
     // targets.
-    let mut seen = std::collections::HashSet::new();
+    let mut seen = rokc_core::HashSet::default();
     let uses = env.names.alias_uses.borrow().clone();
     for u in uses {
         if !seen.insert((u.0.clone(), u.3)) {
@@ -6471,7 +6470,7 @@ fn unmet_bounds(
 /// A `static` is read by every thread, so it must be `Sync`; the
 /// error suggests a `Mutex`, or an `Atomic` for a `Cell` of a number.
 fn check_statics_sync(env: &Env<'_>, programs: &[&Program]) {
-    let no_subst = HashMap::new();
+    let no_subst = HashMap::default();
     let ctx = LowerCtx::new(env, &no_subst, None, Span::DUMMY);
     let sync = ctx.lang("sync_trait");
     if sync.is_empty() {
@@ -6623,7 +6622,7 @@ fn check_impl_rules(
     all: &[&Program],
     own: &dyn Fn(&str) -> bool,
 ) {
-    let no_subst = HashMap::new();
+    let no_subst = HashMap::default();
     let traits: HashMap<&str, &rokc_ast::TraitDef> = all
         .iter()
         .flat_map(|p| &p.items)
@@ -6949,7 +6948,7 @@ fn check_generic_supers(
         return;
     };
     let target = rigid(&target);
-    let mut assume: HashMap<String, Vec<String>> = HashMap::new();
+    let mut assume: HashMap<String, Vec<String>> = HashMap::default();
     let mut add = |subject: &Ty, bounds: &[Ty]| {
         let AstTyKind::Path(p) = &subject.kind else {
             return;
@@ -7181,7 +7180,7 @@ fn local_type_first(
 }
 
 fn check_impl_overlap(env: &Env<'_>, own: &dyn Fn(&str) -> bool) {
-    let no_subst = HashMap::new();
+    let no_subst = HashMap::default();
     let ctx = LowerCtx::new(env, &no_subst, None, Span::DUMMY);
     let impls = &env.impls;
     let mine: Vec<bool> = impls.iter().map(|i| own(&i.module)).collect();
@@ -7567,7 +7566,7 @@ fn canon_ast_ty(
             let names = &ctx.env.names;
             if let Some(full) = names.plain_alias(t, module, ctx.here()) {
                 let body = names.plain_alias_ty(&full)?;
-                return canon_ast_ty(ctx, &module_of(&full), &HashMap::new(), body);
+                return canon_ast_ty(ctx, &module_of(&full), &HashMap::default(), body);
             }
             let full = names.canon(&segs, module, &[], ctx.here());
             if full
@@ -7866,7 +7865,7 @@ impl std::fmt::Display for CanonTy {
 struct Unifier {
     sub: HashMap<String, CanonTy>,
     /// Const variables of an unsigned type.
-    nonneg: std::collections::HashSet<String>,
+    nonneg: rokc_core::HashSet<String>,
 }
 
 impl Unifier {
@@ -8022,7 +8021,7 @@ fn check_auto_impl(
     impl_def: &rokc_ast::ImplDef,
     names: &TypeNames,
     module: &str,
-    neg: &mut std::collections::HashSet<(String, String)>,
+    neg: &mut rokc_core::HashSet<(String, String)>,
     diags: &mut Vec<rokc_diagnostic::RokDiagnostic>,
 ) -> bool {
     let err = |d: &mut Vec<rokc_diagnostic::RokDiagnostic>, msg: String| {
@@ -8215,7 +8214,7 @@ fn toolchain_symbol(name: &str) -> bool {
 /// GC types in the package's `extern "C"` blocks and
 /// `extern "C" fn` definitions.
 fn check_extern_ffi(env: &Env<'_>, programs: &[&Program]) {
-    let no_subst = HashMap::new();
+    let no_subst = HashMap::default();
     let report = |what: String, ty: &HirTy, at: Span| {
         let cx = LowerCtx::new(env, &no_subst, None, at);
         let shown = cx.ty_name(ty);
@@ -8662,7 +8661,7 @@ fn trait_param_args(t: &rokc_ast::TraitDef, impl_def: &rokc_ast::ImplDef) -> Has
         .as_ref()
         .and_then(|tp| tp.segments.last())
         .map_or(&[], |s| s.generics.as_slice());
-    let mut out = HashMap::new();
+    let mut out = HashMap::default();
     for (i, gp) in t.generics.params.iter().enumerate() {
         let (name, default) = match gp {
             rokc_ast::GenericParam::Type { name, default, .. } => (name, default),
@@ -8903,9 +8902,9 @@ fn assoc_defaults(
 /// `names` accumulates across stages.
 fn may_diverge(
     program: &Program,
-    names: &mut std::collections::HashSet<String>,
-) -> std::collections::HashSet<rokc_diagnostic::Span> {
-    use std::collections::HashSet;
+    names: &mut rokc_core::HashSet<String>,
+) -> rokc_core::HashSet<rokc_diagnostic::Span> {
+    use rokc_core::HashSet;
     fn tail_block(b: &Block, d: &HashSet<String>) -> bool {
         if let Some(t) = &b.trailing {
             return tail(t, d);
@@ -8997,7 +8996,7 @@ fn may_diverge(
                 && !f.attrs.iter().any(|a| a.path == [rokc_ast::UNIT_RET_ATTR])
         })
         .collect();
-    let mut out = HashSet::new();
+    let mut out = HashSet::default();
     loop {
         let before = out.len();
         for f in &open {
@@ -9019,7 +9018,7 @@ fn covers_base(i: &rokc_ast::ImplDef) -> bool {
         return false;
     };
     let args = p.segments.last().map_or(&[][..], |s| s.generics.as_slice());
-    let mut seen = std::collections::HashSet::new();
+    let mut seen = rokc_core::HashSet::default();
     args.iter().all(|a| {
         matches!(&a.kind, AstTyKind::Path(ap)
             if ap.segments.len() == 1
@@ -9437,7 +9436,8 @@ fn literal_handlers(
     let mut out = Vec::new();
     // (pattern, priority, return type leaf) → first handler; a second is
     // ambiguous wherever the pattern matches.
-    let mut seen: HashMap<(String, i64, String), (String, rokc_diagnostic::Span)> = HashMap::new();
+    let mut seen: HashMap<(String, i64, String), (String, rokc_diagnostic::Span)> =
+        HashMap::default();
     for item in &program.items {
         let Item::Fn(f) = item else { continue };
         let Some(attr) = f.attrs.iter().find(|a| a.name() == "literal") else {
@@ -9544,7 +9544,7 @@ fn main_lets(program: &Program) -> HashMap<String, String> {
         Item::Fn(f) if f.name == "main" => f.body.as_ref(),
         _ => None,
     });
-    let mut out = HashMap::new();
+    let mut out = HashMap::default();
     for s in main.iter().flat_map(|b| &b.stmts) {
         let StmtKind::Let { name, ty, init } = &s.kind else {
             continue;

@@ -5,7 +5,7 @@
 //! Slots are a closed set (`KNOWN_SLOTS`); an unknown one is an error
 //!.
 
-use std::collections::HashMap;
+use rokc_core::HashMap;
 
 use rokc_ast::{AttrArg, AttrBody, Attribute, FnDef, Item, Literal, Program};
 use rokc_diagnostic::{Code, RokDiagnostic};

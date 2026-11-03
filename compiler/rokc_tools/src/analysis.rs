@@ -1,7 +1,7 @@
 //! The check pipeline (`rokc check`, `rokc lint`, the language server)
 //! and the queries the language server and the REPL run on its result.
 
-use std::collections::HashSet;
+use rokc_core::HashSet;
 use std::path::Path;
 
 use rokc_ast::{ImplItem, Item, TraitItem, doc_hidden};
@@ -242,7 +242,7 @@ impl Analysis {
                 }
             }
         }
-        let mut out = HashSet::new();
+        let mut out = HashSet::default();
         for f in &self.sources {
             walk(&f.items, false, &mut out);
         }

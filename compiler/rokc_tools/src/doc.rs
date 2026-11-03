@@ -19,7 +19,8 @@
 //! signatures and code that name a documented item link to it.
 //! Signatures are printed from the AST as written.
 
-use std::collections::{BTreeMap, HashMap};
+use rokc_core::HashMap;
+use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
@@ -96,7 +97,7 @@ pub fn generate(
 
     let mut d = Docs {
         modules: BTreeMap::new(),
-        links: HashMap::new(),
+        links: HashMap::default(),
         private: Vec::new(),
     };
     // Pass 1: module docs and visibility, and every item's link target.
@@ -189,7 +190,7 @@ pub(crate) fn ty_text(t: &Ty) -> String {
 fn plain() -> Docs {
     Docs {
         modules: BTreeMap::new(),
-        links: HashMap::new(),
+        links: HashMap::default(),
         private: Vec::new(),
     }
 }
@@ -1019,7 +1020,7 @@ mod tests {
     use super::*;
 
     fn docs() -> Docs {
-        let mut links = HashMap::new();
+        let mut links = HashMap::default();
         links.insert("Point".to_owned(), "app/index.html#struct.Point".to_owned());
         Docs {
             modules: BTreeMap::new(),

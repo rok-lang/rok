@@ -1,7 +1,7 @@
 //! A relocatable object in the making: sections, symbols, relocations.
 //! The container format (`macho`, ..) only serializes it.
 
-use std::collections::HashMap;
+use rokc_core::HashMap;
 
 use crate::lir::SymId;
 
