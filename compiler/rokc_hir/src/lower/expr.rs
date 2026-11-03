@@ -931,8 +931,8 @@ fn is_place(ctx: &mut LowerCtx<'_>, target: &Expr, op: &str, value: &Expr) -> bo
                 break "a temporary";
             }
             ExprKind::Path(_) | ExprKind::SelfLower => return true,
-            // A tuple target keeps the destructuring help; `a[1:3] = v`
-            // stores through the slice (`lower_assign`).
+            // A tuple target is left to `lower_assign`'s own error;
+            // `a[1:3] = v` stores through the slice there.
             ExprKind::Tuple(_) | ExprKind::Slice { .. } if op == "=" => return true,
             ExprKind::Call { .. } | ExprKind::MethodCall { .. } => break "a call result",
             ExprKind::Tuple(_) => break "a tuple",

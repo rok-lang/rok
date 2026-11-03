@@ -1,4 +1,4 @@
-// A trait impl needs the trait or the type to be this package's own.
+// A trait impl needs this package's trait, type, or a trait argument before any bare parameter.
 // expect-error: 12:1: `impl Display for List<i32>`: neither the trait nor the type is defined in this package (orphan rule)
 // forbid-warning: `impl Mine
 

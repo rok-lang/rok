@@ -482,7 +482,7 @@ impl Parser<'_> {
             );
         let star = match here.kind {
             TokenKind::Amp | TokenKind::AmpAmp if operand => false,
-            // `a ** b` is Python's power, reported where it is read.
+            // A `*` beside another `*` (`a * * b`) is not read as a deref.
             TokenKind::Star
                 if operand
                     && *next != TokenKind::Star

@@ -8,8 +8,8 @@
 // static 8
 // mul 6
 
-// (choosing an impl) for any impl chosen by an argument's type: an
-// unsuffixed literal takes its default type's impl (`i32` / `f64`) if
+// For any impl chosen by an argument's type, an
+// unsuffixed literal takes its default type's impl (`i64` / `f64`) if
 // there is one, else the unique impl whose parameter it fits.
 
 struct Even { v: i64; }

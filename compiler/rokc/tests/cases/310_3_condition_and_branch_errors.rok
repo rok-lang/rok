@@ -1,8 +1,8 @@
 // expect-error: 8:8: mismatched types: the condition expects `bool`, found `i64`
 // expect-error: 9:44: mismatched types: the `else` branch of `if` expects `i32`, found `f64`
 
-// No truthy conversion, a condition is `bool`. 3.10.2:
-// branches of different types do not fit a single-type slot.
+// No truthy conversion, a condition is `bool`; branches of
+// different types do not fit a single-type slot.
 fn main() -> i32 {
     let x = 1;
     if x { return 1; }

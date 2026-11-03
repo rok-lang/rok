@@ -1,6 +1,6 @@
 // Small slips, each with the fix: a `;` that drops the return value,
-// `{}` for an empty dict, throwing a `str` or a type that is not an
-// `Error`.
+// `{}` for an empty dict, throwing a type that is not an `Error`. A
+// thrown `str` is a `ValueError`.
 // expect-error: 15:5: function `add` returns `i32`, but the `;` after its last expression drops the value
 // expect-error: help: remove the `;` to return it: `a + b`
 // expect-error: 17:25: mismatched types: `let d` expects `Dict<str, i32>`, found `()`

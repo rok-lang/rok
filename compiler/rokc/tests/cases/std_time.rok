@@ -16,7 +16,7 @@
 
 // `Duration` arithmetic / formatting / checked forms,
 // `Instant - Instant`, `SystemTime` + `UNIX_EPOCH`, `BootTime`, and
-// `Metadata::modified` (301 + 3.3.3).
+// `Metadata::modified`.
 use rok::std::time::{SystemTime, BootTime, UNIX_EPOCH};
 use rok::std::fs;
 use rok::std::env;
