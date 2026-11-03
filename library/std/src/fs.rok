@@ -271,8 +271,7 @@ impl Metadata {
     pub const fn is_symlink(self) -> bool { self.kind == 3 }
     /// The permission bits.
     pub const fn permissions(self) -> Permissions { Permissions { mode: self.mode } }
-    /// Last modification as a `SystemTime`. Never throws on
-    /// Unix; `throws` keeps room for platforms without the field.
+    /// Last modification as a `SystemTime`; never throws on Unix.
     pub const fn modified(self) throws (IoError) -> SystemTime { SystemTime::from_unix(self.mtime, self.mtime_ns as u32) }
     /// Last access as a `SystemTime`.
     pub const fn accessed(self) throws (IoError) -> SystemTime { SystemTime::from_unix(self.atime, self.atime_ns as u32) }
@@ -294,7 +293,7 @@ fn size_hint(fd: i32, path: str) -> usize {
     (try stat_at(-1, path, true, fd) catch _ { return 0; }).len as usize
 }
 
-/// `stat` through the runtime: `fd >= 0` → `fstat(fd)`.
+/// `stat` through the runtime: `fd >= 0` -> `fstat(fd)`.
 fn stat_at(dir: i32, path: str, follow: bool, fd: i32) throws (IoError) -> Metadata {
     unsafe {
         let out: GcBuf<i64> = buf_new(12);
@@ -500,8 +499,6 @@ impl File {
     }
 }
 
-// Mmap
-
 /// A read-only shared mapping from `File::mmap`. Unmapped by `unmap` or
 /// where its owner leaves scope; reads after that see an empty mapping.
 pub struct Mmap {
@@ -573,8 +570,6 @@ impl Mmap {
 impl Drop for Mmap {
     fn drop(ref self) { self.unmap(); }
 }
-
-// async (see the top)
 
 /// `f()` on a blocking thread, its error thrown here.
 pub(pkg) async fn off<T: Send>(f: fn() throws (IoError) -> T + Send) throws (IoError) -> T {
@@ -983,8 +978,6 @@ impl Drop for File {
     }
 }
 
-// Dir
-
 /// A directory capability. `fd < 0` is `root()`: the whole namespace,
 /// relative paths from the working directory.
 pub struct Dir {
@@ -1306,7 +1299,7 @@ impl Dir {
         n as u64
     }
 
-    /// `link` → `target` (a symbolic link; `target` is stored verbatim).
+    /// `link` -> `target` (a symbolic link; `target` is stored verbatim).
     pub fn symlink<P: AsPath, Q: AsPath>(self, target: P, link: Q) throws (IoError) {
         let l = try self.rel(link);
         try check(unsafe { rok_os_link(self.fd(), target.as_path().as_str(), l, 0) } as i64, self.shown(l));
@@ -1500,8 +1493,6 @@ impl TryIterator for Walk {
     }
 }
 
-// convenience functions over Dir::root()
-
 /// `File::open(path)`: an existing file, for reading. The other ways
 /// of opening are on `File` and `Dir`.
 pub fn open<P: AsPath>(path: P) throws (IoError) -> File { try Dir::root().open(path) }
@@ -1595,7 +1586,7 @@ pub fn rename<P: AsPath, Q: AsPath>(from: P, to: Q) throws (IoError) { try Dir::
 /// count.
 #[discardable]
 pub fn copy<P: AsPath, Q: AsPath>(from: P, to: Q) throws (IoError) -> u64 { try Dir::root().copy(from, to) }
-/// `link` → `target` (a symbolic link; `target` is stored verbatim).
+/// `link` -> `target` (a symbolic link; `target` is stored verbatim).
 pub fn symlink<P: AsPath, Q: AsPath>(target: P, link: Q) throws (IoError) { try Dir::root().symlink(target, link); }
 /// `link` as a second name for the file `target` (a hard link).
 pub fn hardlink<P: AsPath, Q: AsPath>(target: P, link: Q) throws (IoError) { try Dir::root().hardlink(target, link); }
@@ -1792,8 +1783,6 @@ pub fn walk<P: AsPath>(root: P) -> Walk {
     w.stack.push(DirEntry { path: p, name: p.file_name() ?? p.as_str(), meta: first });
     w
 }
-
-// async convenience functions (see the top)
 
 /// `fs::open` on the blocking lane: the task waits, its thread does not.
 pub async fn open_async<P: AsPath>(path: P) throws (IoError) -> File {

@@ -35,8 +35,6 @@ use rok::std::os::windows::io::{AsRawSocket, FromRawSocket, IntoRawSocket, RawSo
 
 pub mod tls;
 
-// addresses
-
 /// An IPv4 address.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Ipv4Addr {
@@ -510,8 +508,6 @@ const fn addr_at(w: GcBuf<i64>, at: usize) -> SocketAddr {
         SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(b(0) as u8, b(1) as u8, b(2) as u8, b(3) as u8), port))
     }
 }
-
-// DNS
 
 const MAX_ADDRS: usize = 32;
 
@@ -1037,8 +1033,6 @@ impl Sock {
     }
 }
 
-// sockets
-
 /// An address family.
 #[non_exhaustive]
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -1356,8 +1350,6 @@ impl Drop for Socket {
     fn drop(ref self) { self.sock.discard(); }
 }
 
-// TCP
-
 /// Which half of a connection `shutdown` closes.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum Shutdown {
@@ -1583,8 +1575,6 @@ impl AsyncClose for TcpStream {
 impl Drop for TcpStream {
     fn drop(ref self) { self.sock.discard(); }
 }
-
-// split halves
 
 const HALF_READ: i32 = 1;
 const HALF_WRITE: i32 = 2;
@@ -2030,8 +2020,6 @@ impl TryIterator for Incoming {
     }
 }
 
-// UDP
-
 /// A UDP socket. It has one owner: `let b = a` moves it.
 pub struct UdpSocket {
     sock: Sock;
@@ -2203,8 +2191,6 @@ impl Drop for UdpSocket {
     fn drop(ref self) { self.sock.discard(); }
 }
 
-// raw sockets
-
 #[cfg(target_family = "unix")]
 impl AsRawFd for TcpStream {
     const fn as_raw_fd(self) -> RawFd { self.sock.fd() }
@@ -2325,8 +2311,6 @@ impl IntoRawSocket for Socket {
     fn into_raw_socket(self) -> RawSocket { raw_socket(self.sock.give_up()) }
 }
 
-// zero-copy hooks (Linux)
-
 #[cfg(target_os = "linux")]
 impl TcpStreamExt for TcpStream {
     fn sendfile(self, ref file: File, offset: u64, count: u64) throws (IoError) -> u64 {
@@ -2373,8 +2357,6 @@ impl TcpStreamExt for TcpStream {
         }
     }
 }
-
-// conveniences
 
 /// `TcpStream::connect(addr)`.
 pub fn tcp_connect<A: ToSocketAddrs>(addr: A) throws (IoError) -> TcpStream {

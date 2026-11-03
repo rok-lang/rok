@@ -39,7 +39,7 @@ struct Rec {
     name: str | none;
     /// 1 = an `unpark` is pending.
     park: Atomic<i32>;
-    /// `ThreadLocal` key → that local's one-slot `List<T>` on this thread.
+    /// `ThreadLocal` key -> that local's one-slot `List<T>` on this thread.
     locals: Dict<u64, any>;
     /// Slots pinned by `ThreadLocal::as_ptr`, unpinned when the thread ends.
     pins: List<GcBuf<u8>>;

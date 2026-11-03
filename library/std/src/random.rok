@@ -109,7 +109,7 @@ pub trait Rng {
     }
 
     /// A normal deviate (Box-Muller: `u1 = 1 - f64()`, `u2 = f64()`,
-    /// `mean + std * √(-2 ln u1) cos(2π u2)`). Python:
+    /// `mean + std * sqrt(-2 ln u1) cos(2 pi u2)`). Python:
     /// `random.gauss(mean, std)`.
     const fn normal(ref self, mean: f64 = 0.0, std: f64 = 1.0) -> f64 {
         let u1 = 1.0 - self.f64();
