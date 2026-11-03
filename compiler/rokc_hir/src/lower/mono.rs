@@ -571,8 +571,9 @@ pub(super) fn monomorphize_on(
         } = gp
         {
             if !subst.contains_key(name) {
-                // Earlier parameters stay in scope: `C = List<T>`.
-                let resolved = resolve_in_mono(ctx, fn_def, &subst, None, d);
+                // Earlier parameters stay in scope: `C = List<T>`. A
+                // bound method's `C = List<Self::Item>` needs the receiver.
+                let resolved = resolve_in_mono(ctx, fn_def, &subst, self_hint.cloned(), d);
                 subst.insert(name.clone(), resolved);
             }
         }

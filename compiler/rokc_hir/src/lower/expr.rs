@@ -8727,6 +8727,22 @@ fn any_method_generics(
     if let Some(want) = expected.filter(|t| !matches!(t, HirTy::Unknown | HirTy::Unit)) {
         super::mono::unify_param_ty_with(&sig_ret_ast(def), &want, &names, &mut subst, ctx);
     }
+    // The rest take their defaults (`C = List<Item>`).
+    for gp in &def.generics.params {
+        if let rokc_ast::GenericParam::Type {
+            name,
+            default: Some(d),
+            ..
+        } = gp
+        {
+            if names.contains(name) && !subst.contains_key(name) {
+                let mut all = outer.clone();
+                all.extend(subst.iter().map(|(k, v)| (k.clone(), v.clone())));
+                let t = trait_decl_ty(ctx, info, &all, d);
+                subst.insert(name.clone(), t);
+            }
+        }
+    }
     if let Some(n) = own.iter().find(|n| !subst.contains_key(*n)) {
         return Err(Some(format!(
             "cannot call `{method}` on `{}`: its type parameter `{n}` can't be inferred from \

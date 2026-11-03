@@ -1,0 +1,19 @@
+// expect-exit: 0
+// expect-stdout:
+// [0, 2, 4, 6, 8]
+// 4 3 5
+
+// `collect()` with nothing to pick the collection makes a `List`, also on
+// an iterator known only by its bound (a type parameter, `some Iterator`,
+// `any Iterator`).
+fn evens(n: i64) -> some Iterator<Item = i64> { (0..n).filter(|x| x % 2 == 0) }
+fn count<I: Iterator<Item = i64>>(it: I) -> usize { let a = it.collect(); a.len() }
+fn count_some(it: some Iterator<Item = i64>) -> usize { let a = it.collect(); a.len() }
+
+fn main() {
+    let a = evens(9).collect();
+    println(f"{a:?}");
+    let it: any Iterator<Item = i64> = 0..5;
+    let c = it.collect();
+    println(count(0..4), count_some(0..3), c.len());
+}
