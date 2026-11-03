@@ -317,7 +317,7 @@ pub fn bootstrap_tiers(files: &[PathBuf]) -> Vec<PathBuf> {
     out
 }
 
-/// Each bootstrap file as `rok::<tier>` (`library/core/src/lib.rok` →
+/// Each bootstrap file as `rok::<tier>` (`library/core/src/lib.rok` ->
 /// `rok::core`), then each `--extern` dependency under its own name.
 fn lib_roots(config: &CompilerConfig) -> Vec<LibRoot> {
     let mut out: Vec<LibRoot> = bootstrap_tiers(&config.bootstrap_files)
@@ -925,13 +925,11 @@ fn compile_unit_in(
     // An entry file with neither `main` nor statements.
     let mut no_entry = false;
     if config.test || config.bench {
-        // Mount tests/ (a test build) or benches/ (a bench build) beside
-        // src/ as a synthetic root module, so the #[test] /
-        // #[bench] functions there are collected too. A synthesized body
-        // declares `mod <file>;` for each top-level .rok, and the usual
-        // machinery resolves the folder form and submodules under it.
-        // tests/ and benches/ sit beside src/, at the package root (the
-        // parent of this entry file's src/ directory).
+        // Mount tests/ (test build) or benches/ (bench build), beside src/
+        // at the package root, as a synthetic root module so their #[test] /
+        // #[bench] functions are collected. Its synthesized body declares
+        // `mod <file>;` per top-level .rok; the usual machinery resolves
+        // folder forms and submodules.
         if let Some(pkg_root) = root_dir.parent().filter(|_| !config.anonymous) {
             collect_extra_dir(
                 pkg_root,
@@ -1110,7 +1108,7 @@ fn compile_unit_in(
         return Err(diags);
     }
 
-    // Use trees → per-module resolution tables, plus the `pub use`
+    // Use trees -> per-module resolution tables, plus the `pub use`
     // re-exports.
     let (use_table, reexports) = rokc_diagnostic::time("use table", || {
         rokc_hir::build_use_table(&all_uses, &input.packages)

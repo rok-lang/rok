@@ -40,7 +40,7 @@ pub fn transform(
     let n_init = f.params.len() - n_resume;
     let resume_params: Vec<LocalId> = f.params[n_init..].to_vec();
 
-    // Old entry → a fresh id; the dispatcher becomes block 0.
+    // Old entry -> a fresh id; the dispatcher becomes block 0.
     let mut next_block = f.blocks.iter().map(|b| b.id.0 + 1).max().unwrap_or(0);
     let old_entry = BlockId(next_block);
     next_block += 1;
@@ -330,7 +330,7 @@ pub fn transform(
     ctor_fn
 }
 
-/// Drop blocks the dispatcher no longer reaches (the continuation of
+/// Drop blocks the dispatcher cannot reach (the continuation of
 /// the final suspend point): MLIR leaves their ops unconverted.
 fn prune_unreachable_blocks(f: &mut MirFunction) {
     let index: rokc_core::HashMap<BlockId, usize> = f

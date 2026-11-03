@@ -4,8 +4,8 @@
 
 use std::borrow::Cow;
 
-/// The name as written: `f/S` → `S`, `f/S/2` → `S`, a method of one
-/// `f/S/2.m` → `S.m`. Other names unchanged.
+/// The name as written: `f/S` -> `S`, `f/S/2` -> `S`, a method of one
+/// `f/S/2.m` -> `S.m`. Other names unchanged.
 #[must_use]
 pub fn leaf(name: &str) -> Cow<'_, str> {
     let Some((head, last)) = name.rsplit_once('/') else {
@@ -25,7 +25,7 @@ pub fn leaf(name: &str) -> Cow<'_, str> {
     }
 }
 
-/// The lifted path of the fn it is declared in: `f/g/S/2` → `f/g`.
+/// The lifted path of the fn it is declared in: `f/g/S/2` -> `f/g`.
 #[must_use]
 pub fn outer(name: &str) -> &str {
     let mut rest = name;
@@ -37,8 +37,8 @@ pub fn outer(name: &str) -> &str {
     rest.rsplit_once('/').map_or("", |(o, _)| o)
 }
 
-/// The name with the fns it is declared in: `f/g/S/2` → `f::g::S`,
-/// `Type.m/S` → `Type::m::S`.
+/// The name with the fns it is declared in: `f/g/S/2` -> `f::g::S`,
+/// `Type.m/S` -> `Type::m::S`.
 #[must_use]
 pub fn qualified(name: &str) -> String {
     name.split('/')

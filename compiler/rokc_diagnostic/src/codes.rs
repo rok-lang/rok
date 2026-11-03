@@ -22,7 +22,7 @@ pub struct Entry {
     pub title: &'static str,
     /// What it means and what to write instead.
     pub text: &'static str,
-    /// No longer emitted; the number stays reserved.
+    /// Not emitted; the number stays reserved.
     pub retired: bool,
 }
 

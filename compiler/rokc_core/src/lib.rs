@@ -304,7 +304,7 @@ pub const STD_PKG: &str = "rok";
 
 /// Reserved keywords; the lexer's list.
 ///
-/// The last six ([`UNUSED_KEYWORDS`]) have no syntax yet (but `move` in a
+/// The last six ([`UNUSED_KEYWORDS`]) have no syntax (but `move` in a
 /// capture list): the lexer gives them as identifiers and the parser
 /// rejects them where a name is expected.
 pub const KEYWORDS: &[&str] = &[
@@ -314,7 +314,7 @@ pub const KEYWORDS: &[&str] = &[
     "macro", "defer", "dyn", "move", "gen", "do",
 ];
 
-/// Reserved keywords no syntax uses yet (`move` only in `[move x]`): a
+/// Reserved keywords no syntax uses (`move` only in `[move x]`): a
 /// name spelled so needs `r#`.
 pub const UNUSED_KEYWORDS: &[&str] = &["macro", "defer", "dyn", "move", "gen", "do"];
 

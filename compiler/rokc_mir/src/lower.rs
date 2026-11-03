@@ -1,4 +1,4 @@
-//! HIR → MIR lowering: basic blocks over locals, block parameters at
+//! HIR -> MIR lowering: basic blocks over locals, block parameters at
 //! joins.
 
 use rokc_core::{HashMap, HashSet};
@@ -107,7 +107,7 @@ pub fn lower(module: &HirModule, target: &Target) -> MirModule {
                 .collect();
         }
     }
-    // Coroutine bodies → resume functions + constructors.
+    // Coroutine bodies -> resume functions + constructors.
     for (i, hf) in lowered.iter().enumerate() {
         if !(hf.is_async || hf.is_generator) || hf.body.is_none() {
             continue;
@@ -229,13 +229,13 @@ fn debug_types(
 /// What lowering function values (`{code, env}`) leaves to do
 /// once every body is lowered.
 struct FnValues {
-    /// Named fn → its `(env, args..)` wrapper (the code of `f` as a value).
+    /// Named fn -> its `(env, args..)` wrapper (the code of `f` as a value).
     wrappers: std::cell::RefCell<std::collections::BTreeMap<FunctionId, FunctionId>>,
-    /// Lifted closure body → its env's MIR type: the body gets the env as
+    /// Lifted closure body -> its env's MIR type: the body gets the env as
     /// a `GcRef` and loads it on entry.
     closures: std::cell::RefCell<std::collections::BTreeMap<FunctionId, MirTy>>,
     next_id: std::cell::Cell<u32>,
-    /// Coroutine body → its constructor (`coro::transform`).
+    /// Coroutine body -> its constructor (`coro::transform`).
     coro_ctors: std::cell::RefCell<std::collections::BTreeMap<FunctionId, FunctionId>>,
     /// C `extern` declarations: their `fn` parameters are bare C pointers.
     c_externs: rokc_core::HashSet<FunctionId>,
@@ -514,7 +514,7 @@ fn lower_fn(
             builder.terminate(term);
         }
     }
-    // No body → no blocks → emit declaration form in codegen.
+    // No body -> no blocks -> emit declaration form in codegen.
 
     MirFunction {
         id: f.id,

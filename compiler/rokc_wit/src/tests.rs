@@ -97,7 +97,7 @@ impl Type {
 #[test]
 fn canonical_layout() {
     let r = resolve(FS);
-    // stat: u64, u64, bool → 24 bytes, align 8.
+    // stat: u64, u64, bool -> 24 bytes, align 8.
     assert_eq!(
         (
             abi::size(&r, &ty(&r, "stat")),
@@ -105,7 +105,7 @@ fn canonical_layout() {
         ),
         (24, 8)
     );
-    // error: u8 discriminant, string payload at 4 → 12 bytes.
+    // error: u8 discriminant, string payload at 4 -> 12 bytes.
     assert_eq!(abi::size(&r, &ty(&r, "error")), 12);
     assert_eq!(
         abi::flatten(&r, &ty(&r, "error")),

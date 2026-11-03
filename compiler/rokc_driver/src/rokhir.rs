@@ -6,9 +6,9 @@
 //! producer str                      "rokc <version> (<compiler id>)"
 //! meta     str name | str hash | str source dir
 //!          varint gc type offset | varint gc type count
-//!          varint n | n × str feature
-//! body     varint n | n × (str path | str text)   (at body_offset)
-//!          varint n | n × (str function | str summary)
+//!          varint n | n x str feature
+//! body     varint n | n x (str path | str text)   (at body_offset)
+//!          varint n | n x (str function | str summary)
 //! ```
 //!
 //! `str` is a `PrefixVarInt` length + UTF-8. The body is every
