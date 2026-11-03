@@ -867,7 +867,7 @@ impl Int {
         m.low64()
     }
 
-    /// The nearest `f64` (ties to even; `±inf` past `f64::MAX`).
+    /// The nearest `f64` (ties to even; `+/-inf` past `f64::MAX`).
     #[must_use]
     pub fn to_f64(self) -> f64 {
         if self.big is none { return self.small as f64; }
@@ -1617,7 +1617,7 @@ impl From<u32> for Int { const fn from(value: u32) -> Int { Int::from_i64(value 
 impl From<u64> for Int { const fn from(value: u64) -> Int { Int::from_u64(value) } }
 impl From<usize> for Int { const fn from(value: usize) -> Int { Int::from_u64(value as u64) } }
 
-/// Rounds to nearest (ties to even); throws past `±f64::MAX`.
+/// Rounds to nearest (ties to even); throws past `+/-f64::MAX`.
 /// `to_f64` is the infallible form.
 impl TryFrom<Int> for f64 {
     type Error = OverflowError;
@@ -1628,7 +1628,7 @@ impl TryFrom<Int> for f64 {
     }
 }
 
-/// Rounds to nearest; `±f64::MAX` past the range.
+/// Rounds to nearest; `+/-f64::MAX` past the range.
 impl SaturatingFrom<Int> for f64 {
     fn saturating_from(value: Int) -> f64 {
         let r = value.to_f64();

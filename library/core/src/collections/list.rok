@@ -1,7 +1,7 @@
-// rok::core::collections::list - `List<T>`, a growable array:
-// one object holding the length, the capacity and the
-// current element buffer, swapped for a bigger one on growth. The buffer has one
-// slot past the capacity that is never written: a zero `T` that vacated
+// rok::core::collections::list - `List<T>`, a growable array: one
+// object holding the length, the capacity and the current element
+// buffer, swapped for a bigger one on growth. The buffer has one slot
+// past the capacity that is never written: a zero `T` that vacated
 // slots are overwritten with, so the list keeps no removed value alive.
 
 use rok::core::marker::{Memo, Transfer, buf_is_null, copy_shared};

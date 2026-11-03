@@ -28,29 +28,29 @@ impl f64 {
     pub const INFINITY: f64 = 1.0 / 0.0;
     /// Negative infinity.
     pub const NEG_INFINITY: f64 = -1.0 / 0.0;
-    /// π.
+    /// Pi.
     pub const PI: f64 = 3.14159265358979323846264338327950288;
-    /// τ = 2π.
+    /// tau = 2 pi.
     pub const TAU: f64 = 6.28318530717958647692528676655900577;
     /// Euler's number e.
     pub const E: f64 = 2.71828182845904523536028747135266250;
-    /// π/2.
+    /// pi/2.
     pub const FRAC_PI_2: f64 = 1.57079632679489661923132169163975144;
-    /// π/4.
+    /// pi/4.
     pub const FRAC_PI_4: f64 = 0.785398163397448309615660845819875721;
-    /// 1/π.
+    /// 1/pi.
     pub const FRAC_1_PI: f64 = 0.318309886183790671537767526745028724;
-    /// √2.
+    /// sqrt(2).
     pub const SQRT_2: f64 = 1.41421356237309504880168872420969808;
-    /// 1/√2.
+    /// 1/sqrt(2).
     pub const FRAC_1_SQRT_2: f64 = 0.707106781186547524400844362104849039;
     /// ln 2.
     pub const LN_2: f64 = 0.693147180559945309417232121458176568;
     /// ln 10.
     pub const LN_10: f64 = 2.30258509299404568401799145468436421;
-    /// log₂ e.
+    /// log2(e).
     pub const LOG2_E: f64 = 1.44269504088896340735992468100189214;
-    /// log₁₀ e.
+    /// log10(e).
     pub const LOG10_E: f64 = 0.434294481903251827651128918916605082;
 
     /// The square root; NaN for a negative value (as `√self`).
@@ -145,13 +145,13 @@ impl f64 {
     /// Tangent of `self` in radians.
     #[must_use]
     pub fn tan(self) -> f64 { unsafe { rok_f64_tan(self) } }
-    /// Arcsine in radians, in `[-π/2, π/2]`; NaN outside `[-1, 1]`.
+    /// Arcsine in radians, in `[-pi/2, pi/2]`; NaN outside `[-1, 1]`.
     #[must_use]
     pub fn asin(self) -> f64 { unsafe { rok_f64_asin(self) } }
-    /// Arccosine in radians, in `[0, π]`; NaN outside `[-1, 1]`.
+    /// Arccosine in radians, in `[0, pi]`; NaN outside `[-1, 1]`.
     #[must_use]
     pub fn acos(self) -> f64 { unsafe { rok_f64_acos(self) } }
-    /// Arctangent in radians, in `[-π/2, π/2]`.
+    /// Arctangent in radians, in `[-pi/2, pi/2]`.
     #[must_use]
     pub fn atan(self) -> f64 { unsafe { rok_f64_atan(self) } }
     /// Hyperbolic sine.
@@ -200,7 +200,7 @@ impl f64 {
     /// Angle of the point `(other, self)`.
     #[must_use]
     pub fn atan2(self, other: f64) -> f64 { unsafe { rok_f64_atan2(self, other) } }
-    /// `sqrt(self² + other²)` without overflow.
+    /// `sqrt(self^2 + other^2)` without overflow.
     #[must_use]
     pub fn hypot(self, other: f64) -> f64 { unsafe { rok_f64_hypot(self, other) } }
     /// `self`'s magnitude with `sign`'s sign.
@@ -302,29 +302,29 @@ impl f32 {
     pub const INFINITY: f32 = 1.0 / 0.0;
     /// Negative infinity.
     pub const NEG_INFINITY: f32 = -1.0 / 0.0;
-    /// π.
+    /// Pi.
     pub const PI: f32 = 3.14159265358979323846264338327950288;
-    /// τ = 2π.
+    /// tau = 2 pi.
     pub const TAU: f32 = 6.28318530717958647692528676655900577;
     /// Euler's number e.
     pub const E: f32 = 2.71828182845904523536028747135266250;
-    /// π/2.
+    /// pi/2.
     pub const FRAC_PI_2: f32 = 1.57079632679489661923132169163975144;
-    /// π/4.
+    /// pi/4.
     pub const FRAC_PI_4: f32 = 0.785398163397448309615660845819875721;
-    /// 1/π.
+    /// 1/pi.
     pub const FRAC_1_PI: f32 = 0.318309886183790671537767526745028724;
-    /// √2.
+    /// sqrt(2).
     pub const SQRT_2: f32 = 1.41421356237309504880168872420969808;
-    /// 1/√2.
+    /// 1/sqrt(2).
     pub const FRAC_1_SQRT_2: f32 = 0.707106781186547524400844362104849039;
     /// ln 2.
     pub const LN_2: f32 = 0.693147180559945309417232121458176568;
     /// ln 10.
     pub const LN_10: f32 = 2.30258509299404568401799145468436421;
-    /// log₂ e.
+    /// log2(e).
     pub const LOG2_E: f32 = 1.44269504088896340735992468100189214;
-    /// log₁₀ e.
+    /// log10(e).
     pub const LOG10_E: f32 = 0.434294481903251827651128918916605082;
 
     /// The square root; NaN for a negative value (as `√self`).
@@ -419,13 +419,13 @@ impl f32 {
     /// Tangent of `self` in radians.
     #[must_use]
     pub fn tan(self) -> f32 { unsafe { rok_f32_tan(self) } }
-    /// Arcsine in radians, in `[-π/2, π/2]`; NaN outside `[-1, 1]`.
+    /// Arcsine in radians, in `[-pi/2, pi/2]`; NaN outside `[-1, 1]`.
     #[must_use]
     pub fn asin(self) -> f32 { unsafe { rok_f32_asin(self) } }
-    /// Arccosine in radians, in `[0, π]`; NaN outside `[-1, 1]`.
+    /// Arccosine in radians, in `[0, pi]`; NaN outside `[-1, 1]`.
     #[must_use]
     pub fn acos(self) -> f32 { unsafe { rok_f32_acos(self) } }
-    /// Arctangent in radians, in `[-π/2, π/2]`.
+    /// Arctangent in radians, in `[-pi/2, pi/2]`.
     #[must_use]
     pub fn atan(self) -> f32 { unsafe { rok_f32_atan(self) } }
     /// Hyperbolic sine.
@@ -474,7 +474,7 @@ impl f32 {
     /// Angle of the point `(other, self)`.
     #[must_use]
     pub fn atan2(self, other: f32) -> f32 { unsafe { rok_f32_atan2(self, other) } }
-    /// `sqrt(self² + other²)` without overflow.
+    /// `sqrt(self^2 + other^2)` without overflow.
     #[must_use]
     pub fn hypot(self, other: f32) -> f32 { unsafe { rok_f32_hypot(self, other) } }
     /// `self`'s magnitude with `sign`'s sign.

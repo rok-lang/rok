@@ -800,7 +800,7 @@ impl TryFrom<usize> for u32 {
     }
 }
 
-// TryFrom (floating-point → integer): truncates toward zero;
+// TryFrom (floating-point to integer): truncates toward zero;
 // NaN, infinities and values outside the target's range throw.
 
 impl TryFrom<f32> for i8 {

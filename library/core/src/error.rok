@@ -1,7 +1,7 @@
 // rok::core::error - `Result<T, E>`, an error kept as a value.
 // Errors travel through `throws` / `try`; `Result` is for
-// holding one (collected results, callbacks, caches): "throw it →
-// `throws`; keep it → `Result`". `?` does not apply to it (`T | none`
+// holding one (collected results, callbacks, caches): "throw it:
+// `throws`; keep it: `Result`". `?` does not apply to it (`T | none`
 // only).
 //
 // `Ok` / `Err` are bare names where a `Result` is expected (the
