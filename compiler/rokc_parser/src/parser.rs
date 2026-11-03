@@ -2784,7 +2784,8 @@ impl<'a> Parser<'a> {
                 let at = self.peek_span();
                 if !comma_reported {
                     let field = fields.last().map_or_else(String::new, |f: &NamedField| {
-                        format!("{}: {};", f.name, self.text_in(f.ty.span))
+                        // To the `,`: `List<T>` and a default too.
+                        format!("{}: {};", f.name, self.text_in(self.to_prev(f.ty.span)))
                     });
                     self.error_help(
                         Code::SYNTAX,
