@@ -164,7 +164,7 @@ pub const REMOVED_LINTS: &[&str] = &[
     "ambiguous_int_literal",
     "finally_jump",
     "float_to_bool",
-    // Errors now: affine resources.
+    // Errors: affine resources.
     "unclosed_resource",
     "unclosed_sender",
     "using_twice",
@@ -173,22 +173,22 @@ pub const REMOVED_LINTS: &[&str] = &[
     "implicit_core_fn",
     "discarded_ref_write",
     "fstring_g_precision",
-    // Errors now: scoped guards.
+    // Errors: scoped guards.
     "guard_escape",
     // Retired: the `with(|v| ..)` shape prevents the case.
     "thread_local_across_await",
-    // Errors now: trait scope and meta names.
+    // Errors: trait scope and meta names.
     "trait_not_in_scope",
     "unqualified_meta",
     // Retired: `let` may redeclare a name.
     "shadowed_loop_var",
-    // Error now: a field write on a copy nothing reads.
+    // Error: a field write on a copy nothing reads.
     "write_to_copy",
     // Retired: `x == none` narrows like `x is none`.
     "none_comparison",
 ];
 
-/// A lint added in 0.1.6 (tests build a later-release table with it).
+/// A warning lint with `since: "0.1.6"`, for test tables with a newer lint.
 #[cfg(test)]
 const fn warn_since(name: &'static str, desc: &'static str) -> Lint {
     Lint {

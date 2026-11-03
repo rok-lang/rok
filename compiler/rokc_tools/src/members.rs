@@ -91,7 +91,7 @@ impl Members {
     }
 }
 
-/// `List<i32>` → `List`; a module path or a block-local name to its leaf.
+/// `List<i32>` -> `List`; a module path or a block-local name to its leaf.
 pub fn type_key(ty: &str) -> &str {
     let base = ty.split('<').next().unwrap_or(ty).trim();
     let base = base.rsplit("::").next().unwrap_or(base);

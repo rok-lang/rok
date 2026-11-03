@@ -54,7 +54,7 @@ pub fn check(
 /// aborts on panic, so a panicking thread is parked forever instead (the
 /// next compile gets a new thread); what it holds leaks, and a late panic
 /// of an abandoned compile may be blamed on the current one. A panic on
-/// the thread that called `isolate` is fatal as before.
+/// the thread that called `isolate` stays fatal.
 pub fn isolate<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> Result<T, String> {
     use std::sync::Mutex;
     use std::sync::mpsc::{Sender, channel};

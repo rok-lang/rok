@@ -28,7 +28,7 @@ pub enum PrimTy {
     Bool,
     /// C `char` (FFI; `c'A'`).
     CChar,
-    /// Unicode scalar value (`'가'`); 32-bit code point.
+    /// Unicode scalar value; 32-bit code point.
     Char,
     /// stdlib `str` (UTF-8 view, primitive).
     Str,

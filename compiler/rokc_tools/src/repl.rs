@@ -537,7 +537,7 @@ pub struct Repl {
     built: u32,
     /// The `ScanTable`s loaded cells registered (`ReplCell::gc_tables`).
     gc_tables: Vec<Vec<u32>>,
-    /// Symbol → (text hash, symbols used) of what the host has compiled;
+    /// Symbol -> (text hash, symbols used) of what the host has compiled;
     /// unchanged functions are declared, not recompiled.
     known: HashMap<String, (u64, Vec<String>)>,
     tmp: TempDir,
