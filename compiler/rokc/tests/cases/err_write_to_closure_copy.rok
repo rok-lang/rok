@@ -1,0 +1,22 @@
+// expect-error: 14:18: `a.total` is set on a copy of the closure's argument, so the change is lost when the closure returns
+// expect-error: help: return `a` from the closure and use the result, or change the original in place (`for ref a in ..`, a lock guard's `set`)
+// expect-error: 15:23: `a.total` is set on a copy of the closure's argument, so the change is lost when the closure returns
+// expect-error: 16:24: `p.total` is set on a copy of the closure's argument, so the change is lost when the closure returns
+
+// A struct argument of a closure is a copy, like a function's.
+use rok::core::sync::Mutex;
+
+struct Acc { total: i64; }
+
+fn main() {
+    let m = Mutex::new(Acc { total: 0 });
+    let xs = [Acc { total: 1 }];
+    m.with(|a| { a.total += 5; });
+    xs.for_each(|a| { a.total = 2; });
+    let f = |p: Acc| { p.total = 3; };
+    f(xs[0]);
+    // Read afterwards, or returned: kept.
+    let ys = xs.map(|a| { a.total *= 10; a }).to_list();
+    let n = m.with(|a| { a.total += 1; a.total });
+    println(ys.len(), n);
+}
