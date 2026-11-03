@@ -1,5 +1,5 @@
 {
-  description = "Rok: a statically-typed, compiled language with a rich library";
+  description = "Rok: compiled and safe, without the fight";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
