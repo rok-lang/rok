@@ -1022,20 +1022,50 @@ fn assign_local(ctx: &mut LowerCtx<'_>, name: &str, local: LocalId, value: &Expr
     let mark = ctx.probe_mark();
     let mut v = lower_expected(ctx, value, ctx.var_ty(local));
     let mut local = local;
-    if ctx.narrowed.contains_key(&local) && !coercible(ctx, &ctx.var_ty(local), &v.ty) {
+    // A value that fails against the narrowed type alone (`if c { none }
+    // else { x + 1 }`) also goes to a wider binding.
+    let clean = ctx.probe_clean(&mark);
+    if ctx.narrowed.contains_key(&local) && (!clean || !coercible(ctx, &ctx.var_ty(local), &v.ty)) {
         ctx.rollback(&mark);
-        local = unnarrow(ctx, name, local, value);
-        v = lower_expected(ctx, value, ctx.var_ty(local));
+        if clean || wider_fits(ctx, local, value) {
+            (local, v) = unnarrow(ctx, name, local, value);
+        } else {
+            v = lower_expected(ctx, value, ctx.var_ty(local));
+        }
     }
     let slot_ty = ctx.var_ty(local);
     let value = coerce(ctx, &slot_ty, v, &|| format!("assignment to `{name}`"));
     ctx.store_local(local, value)
 }
 
+/// Does `value` lower cleanly against a binding the narrowed `local`
+/// came from?
+fn wider_fits(ctx: &mut LowerCtx<'_>, local: LocalId, value: &Expr) -> bool {
+    let mut cur = local;
+    while let Some((orig, orig_ty)) = ctx.narrowed.get(&cur).cloned() {
+        let mark = ctx.probe_mark();
+        let mut probe = ctx.clone();
+        let pv = lower_expected(&mut probe, value, orig_ty.clone());
+        let fits = probe.probe_clean(&mark) && coercible(ctx, &orig_ty, &pv.ty);
+        ctx.rollback(&mark);
+        if fits {
+            return true;
+        }
+        cur = orig;
+    }
+    false
+}
+
 /// Assigning a value the narrowed `local` can't hold ends the
 /// narrowing for the rest of the scope; the value goes to the innermost
 /// binding that takes it (else the declared one, which reports it).
-fn unnarrow(ctx: &mut LowerCtx<'_>, name: &str, local: LocalId, value: &Expr) -> LocalId {
+/// The value is lowered first: it reads the narrowed binding.
+fn unnarrow(
+    ctx: &mut LowerCtx<'_>,
+    name: &str,
+    local: LocalId,
+    value: &Expr,
+) -> (LocalId, HirExpr) {
     let mut chain = vec![local];
     while let Some((orig, orig_ty)) = ctx.narrowed.get(chain.last().unwrap()).cloned() {
         chain.push(orig);
@@ -1049,6 +1079,7 @@ fn unnarrow(ctx: &mut LowerCtx<'_>, name: &str, local: LocalId, value: &Expr) ->
         }
     }
     let target = chain.pop().expect("narrowed local has an origin");
+    let v = lower_expected(ctx, value, ctx.var_ty(target));
     for rebound in chain {
         if let Some(i) = ctx
             .scopes
@@ -1059,7 +1090,7 @@ fn unnarrow(ctx: &mut LowerCtx<'_>, name: &str, local: LocalId, value: &Expr) ->
             ctx.unnarrowed.push((name.to_owned(), rebound, i));
         }
     }
-    target
+    (target, v)
 }
 
 /// `name` in scope `i` no longer names the narrowed `local`: its origin
