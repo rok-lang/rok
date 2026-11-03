@@ -1066,26 +1066,147 @@ fn is_dup(s: &St, b: &Place) -> bool {
 
 /// The places that are `start ++ sub` itself, through `Same` edges.
 fn same_reach(s: &St, start: &Place) -> Vec<(Vec<u32>, Place)> {
-    let mut seen = HashSet::new();
-    let mut out = Vec::new();
-    let mut work = vec![(Vec::new(), start.clone())];
-    while let Some((sub, c)) = work.pop() {
-        if c.1.len() > MAX_DEPTH || sub.len() > MAX_DEPTH || !seen.insert(c.clone()) {
-            continue;
+    SameEnds::new(s).reach(start)
+}
+
+/// What a `SameEnds` walk does at a place.
+enum Visit {
+    /// Follow its edges.
+    Step,
+    /// Do not follow its edges.
+    Skip,
+    /// End the walk.
+    Stop,
+}
+
+/// A `Same` edge's end on a local: (its path, order in `Edges::of`,
+/// the other end).
+type SameEnd<'s> = (&'s [u32], usize, &'s Place);
+
+/// A place's steps through `Same` edges: (added to `sub`, place id).
+type Steps = Vec<(Vec<u32>, usize)>;
+
+/// The `Same` edges of `St`, walked from many starts: each local's ends
+/// sorted by path, and each place's steps found once (a recursive value
+/// has thousands of edges on one local).
+struct SameEnds<'s> {
+    s: &'s St,
+    by: HashMap<LocalId, Vec<SameEnd<'s>>>,
+    ids: HashMap<Place, usize>,
+    places: Vec<Place>,
+    /// In `Edges::of` order.
+    next: Vec<Option<Steps>>,
+    /// The walk that last visited a place.
+    seen: Vec<u32>,
+    walk: u32,
+}
+
+impl<'s> SameEnds<'s> {
+    fn new(s: &'s St) -> Self {
+        Self {
+            s,
+            by: HashMap::new(),
+            ids: HashMap::new(),
+            places: Vec::new(),
+            next: Vec::new(),
+            seen: Vec::new(),
+            walk: 0,
         }
-        for e in s.edges.of(c.0) {
-            let Edge::Same(a, b) = e else { continue };
-            for (x, y) in [(a, b), (b, a)] {
-                if within(y, &c) {
-                    work.push(([&sub[..], &y.1[c.1.len()..]].concat(), x.clone()));
-                } else if within(&c, y) {
-                    work.push((sub.clone(), extend(x, &c.1[y.1.len()..])));
+    }
+
+    fn id(&mut self, p: Place) -> usize {
+        if let Some(&i) = self.ids.get(&p) {
+            return i;
+        }
+        let i = self.places.len();
+        self.ids.insert(p.clone(), i);
+        self.places.push(p);
+        self.next.push(None);
+        self.seen.push(0);
+        i
+    }
+
+    /// [`same_reach`] on this state.
+    fn reach(&mut self, start: &Place) -> Vec<(Vec<u32>, Place)> {
+        let mut out = Vec::new();
+        self.walk_from(start, |sub, c| {
+            out.push((sub.to_vec(), c.clone()));
+            Visit::Step
+        });
+        out
+    }
+
+    /// Visit each place that is `start ++ sub`, depth first; the first
+    /// visit of a place keeps its `sub`. True if `visit` stopped it.
+    fn walk_from(&mut self, start: &Place, mut visit: impl FnMut(&[u32], &Place) -> Visit) -> bool {
+        self.walk += 1;
+        let walk = self.walk;
+        let first = self.id(start.clone());
+        let mut work: Vec<(Vec<u32>, usize)> = vec![(Vec::new(), first)];
+        while let Some((sub, c)) = work.pop() {
+            if self.places[c].1.len() > MAX_DEPTH || sub.len() > MAX_DEPTH || self.seen[c] == walk {
+                continue;
+            }
+            self.seen[c] = walk;
+            match visit(&sub, &self.places[c]) {
+                Visit::Step => {}
+                Visit::Skip => continue,
+                Visit::Stop => return true,
+            }
+            if self.next[c].is_none() {
+                let steps = self.steps(c);
+                self.next[c] = Some(steps);
+            }
+            for (more, x) in self.next[c].iter().flatten() {
+                // Skipped when popped anyway.
+                if self.places[*x].1.len() > MAX_DEPTH
+                    || sub.len() + more.len() > MAX_DEPTH
+                    || self.seen[*x] == walk
+                {
+                    continue;
                 }
+                work.push(([&sub[..], more].concat(), *x));
             }
         }
-        out.push((sub, c));
+        false
     }
-    out
+
+    /// Where place `c` steps through one `Same` edge, in `Edges::of`
+    /// order: an end inside `c` adds its rest to `sub`, an end around `c`
+    /// carries `c`'s rest over to the other end.
+    fn steps(&mut self, c: usize) -> Steps {
+        let st = self.s;
+        let c = self.places[c].clone();
+        let ends = self.by.entry(c.0).or_insert_with(|| {
+            let mut list = Vec::new();
+            for (i, e) in st.edges.of(c.0).enumerate() {
+                let Edge::Same(one, two) = e else { continue };
+                for (k, (x, y)) in [(one, two), (two, one)].into_iter().enumerate() {
+                    if y.0 == c.0 {
+                        list.push((y.1.as_slice(), 2 * i + k, x));
+                    }
+                }
+            }
+            list.sort_unstable();
+            list
+        });
+        let mut hit: Vec<(usize, Vec<u32>, Place)> = Vec::new();
+        let lo = ends.partition_point(|e| e.0 < c.1.as_slice());
+        for &(y, i, x) in ends[lo..].iter().take_while(|e| e.0.starts_with(&c.1)) {
+            hit.push((i, y[c.1.len()..].to_vec(), x.clone()));
+        }
+        for n in 0..c.1.len() {
+            let pre = &c.1[..n];
+            let lo = ends.partition_point(|e| e.0 < pre);
+            for &(_, i, x) in ends[lo..].iter().take_while(|e| e.0 == pre) {
+                hit.push((i, Vec::new(), extend(x, &c.1[n..])));
+            }
+        }
+        hit.sort_unstable_by_key(|h| h.0);
+        hit.into_iter()
+            .map(|(_, more, x)| (more, self.id(x)))
+            .collect()
+    }
 }
 
 /// A parameter (`RET_ROOT`: the return value) and a path into it.
@@ -2181,37 +2302,16 @@ fn with_closures<'h>(all: &[&'h HirFunction]) -> HashMap<FunctionId, usize> {
 /// as what other threads reach. Elements shared both ways (`xs.extend(ys)`)
 /// and the return value do not count: the caller follows those.
 fn keeps_param(
-    exit: &St,
+    ends: &mut SameEnds<'_>,
     start: &Place,
     own: u32,
     root_of: &dyn Fn(LocalId) -> Option<u32>,
 ) -> bool {
-    let mut seen = HashSet::new();
-    let mut work = vec![(Vec::new(), start.clone())];
-    while let Some((sub, c)) = work.pop() {
-        if c.1.len() > MAX_DEPTH || sub.len() > MAX_DEPTH || !seen.insert(c.clone()) {
-            continue;
-        }
-        if let Some(r) = root_of(c.0).filter(|&r| r != own) {
-            if r == RET_ROOT {
-                continue;
-            }
-            if r == WORLD_ROOT || !c.1.is_empty() && !sub.contains(&ELEM) {
-                return true;
-            }
-        }
-        for e in exit.edges.of(c.0) {
-            let Edge::Same(a, b) = e else { continue };
-            for (x, y) in [(a, b), (b, a)] {
-                if within(y, &c) {
-                    work.push(([&sub[..], &y.1[c.1.len()..]].concat(), x.clone()));
-                } else if within(&c, y) {
-                    work.push((sub.clone(), extend(x, &c.1[y.1.len()..])));
-                }
-            }
-        }
-    }
-    false
+    ends.walk_from(start, |sub, c| match root_of(c.0).filter(|&r| r != own) {
+        Some(RET_ROOT) => Visit::Skip,
+        Some(r) if r == WORLD_ROOT || !c.1.is_empty() && !sub.contains(&ELEM) => Visit::Stop,
+        _ => Visit::Step,
+    })
 }
 
 /// `t` (`g.get()`, `xs`) as a deep copy: `g.get_clone()`, `xs.clone()`.
@@ -6307,6 +6407,7 @@ impl<'h> Walk<'_, 'h> {
             return s;
         };
         let exit = &exit;
+        let mut ends = SameEnds::new(exit);
         s.gives = self.gives(exit);
         if !self.mixed && self.exits.keys().any(|&t| t != ANY) {
             s.exits = self
@@ -6327,24 +6428,35 @@ impl<'h> Walk<'_, 'h> {
                 None
             }
         };
-        let to_roots = |p: &Place| -> Vec<Root> {
-            same_reach(exit, p)
-                .into_iter()
-                .filter(|(sub, _)| sub.is_empty())
-                .filter_map(|(_, x)| Some((root_of(x.0)?, x.1)))
-                .collect()
+        // One walk per place: a recursive value's exit has thousands of
+        // `Taken` ends over the same places.
+        let mut roots_of: HashMap<Place, Rc<Vec<Root>>> = HashMap::new();
+        let mut to_roots = |p: &Place| -> Rc<Vec<Root>> {
+            roots_of
+                .entry(p.clone())
+                .or_insert_with(|| {
+                    Rc::new(
+                        ends.reach(p)
+                            .into_iter()
+                            .filter(|(sub, _)| sub.is_empty())
+                            .filter_map(|(_, x)| Some((root_of(x.0)?, x.1)))
+                            .collect(),
+                    )
+                })
+                .clone()
         };
         for e in exit.edges.0.values().flatten() {
             if let Edge::Taken(a, b) = e {
-                for ra in to_roots(a) {
-                    for rb in to_roots(b) {
-                        s.edges.insert(SEdge::Taken(ra.clone(), rb));
+                let (ras, rbs) = (to_roots(a), to_roots(b));
+                for ra in ras.iter() {
+                    for rb in rbs.iter() {
+                        s.edges.insert(SEdge::Taken(ra.clone(), rb.clone()));
                     }
                 }
             }
         }
         for d in &exit.dup {
-            s.dups.extend(to_roots(d));
+            s.dups.extend(to_roots(d).iter().cloned());
         }
         let mut roots: Vec<(u32, Place)> = self
             .f
@@ -6362,7 +6474,7 @@ impl<'h> Walk<'_, 'h> {
         }
         roots.push((WORLD_ROOT, (WORLD, Vec::new())));
         for (r, start) in &roots {
-            let same = same_reach(exit, start);
+            let same = ends.reach(start);
             for (sub, q) in &same {
                 if let Some(r2) = root_of(q.0) {
                     if (r2, &q.1) != (*r, sub) {
@@ -6396,7 +6508,7 @@ impl<'h> Walk<'_, 'h> {
             }
         }
         for (r, start) in &roots {
-            if *r != RET_ROOT && *r != WORLD_ROOT && keeps_param(exit, start, *r, &root_of) {
+            if *r != RET_ROOT && *r != WORLD_ROOT && keeps_param(&mut ends, start, *r, &root_of) {
                 s.keeps.insert(*r);
             }
         }
