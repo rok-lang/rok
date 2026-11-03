@@ -10,6 +10,7 @@ pub(super) fn lower_match(
     arms: &[AstMatchArm],
     span: rokc_diagnostic::Span,
 ) -> HirExpr {
+    let since_match = ctx.env.sink.diagnostics.borrow().len();
     let scrut_h = lower_expected(ctx, scrutinee, HirTy::Unknown);
     let scrut_ty = scrut_h.ty.clone();
     if scrut_ty == HirTy::Unknown {
@@ -53,6 +54,9 @@ pub(super) fn lower_match(
         arm_h.push(HirMatchArm { pat, guard, body });
     }
     super::expr::rejoin_unnarrowings(ctx, ended);
+    if bad_pattern {
+        super::rust::result_match(ctx, scrutinee, arms, &scrut_ty, since_match, span);
+    }
     // `let x: T = v else { ... };` is parsed as a two-arm match whose
     // second arm is the else block (parser desugar).
     let is_let_else = matches!(
@@ -1552,26 +1556,6 @@ fn tuple_struct_pattern(
             format!("cannot find enum variant `{}`", segs.join("::")),
         );
         ctx.help_last(ctx.value_help(segs));
-        // Rust's `Ok(v)` / `Err(e)` on a call that throws.
-        let throwing = || {
-            ctx.env
-                .sink
-                .diagnostics
-                .borrow()
-                .iter()
-                .any(|d| d.message.starts_with("this call can throw"))
-        };
-        if let (["Ok" | "Err"], [arg], true) = (segs, args, throwing()) {
-            let x = ctx.src(arg.span).unwrap_or("v");
-            ctx.help_last(Some(if segs[0] == "Ok" {
-                format!(
-                    "a call that throws gives its value, not a `Result`: write \
-                     `let {x} = try f() catch e {{ .. }};`"
-                )
-            } else {
-                format!("a call that throws is not a `Result`: write `try f() catch {x} {{ .. }}`")
-            }));
-        }
         // Rust's `Some(x)` on a `T | none`: a type-test pattern.
         if let (["Some"], [arg], HirTy::Sum(vs)) = (segs, args, scrut_ty) {
             let inner: Vec<String> = vs

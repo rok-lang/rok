@@ -15,9 +15,7 @@
 // expect-error: cannot find function `String::from` in this scope
 // expect-error: help: write `"x"`: a string literal is a `str` already
 // expect-error: cannot find function `Rc::new` in this scope
-// expect-error: help: write `p`: Rok has no `Rc` or `RefCell`
-// expect-error: cannot find function `RefCell::new` in this scope
-// expect-error: help: write `p`: Rok has no `RefCell`
+// expect-error: help: write `Cell::new(p)`: Rok has no `Rc` or `RefCell`; copies of a `Cell` share one value
 // expect-error: cannot find function `crate::geo::dist` in this scope
 // expect-error: help: this package's root is `pkg`: write `pkg::geo::dist`
 // expect-error: cannot find function `super::dist` in this scope

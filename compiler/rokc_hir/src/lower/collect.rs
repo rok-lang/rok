@@ -3464,7 +3464,7 @@ fn habit_type_help(
     (name == "Option").then(|| {
         format!(
             "rok has no `Option`: an optional is `T | none`; write `{} | none`",
-            args.unwrap_or("T")
+            args.map_or_else(|| "T".to_owned(), super::rust::rok_type)
         )
     })
 }

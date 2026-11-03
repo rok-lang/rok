@@ -425,7 +425,7 @@ fn repl_quotes_cells_as_typed() {
         "{stderr}"
     );
     assert!(
-        stderr.contains("cannot find value `k`") && stderr.contains("| k += 1\n"),
+        stderr.contains("`k` is not declared") && stderr.contains("| k += 1\n"),
         "{stderr}"
     );
     assert!(

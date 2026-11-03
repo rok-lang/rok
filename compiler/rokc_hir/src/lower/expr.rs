@@ -1543,7 +1543,15 @@ pub(super) fn lower_assign(
             // `(a, b) = ..` reads each value from a parser temporary.
             let value_text = snippet(value);
             let in_tuple = value_text.starts_with("__destruct");
+            // `x += 1` reads `x` too: that is the same mistake.
+            let unknown = format!("cannot find value `{name}` in this scope");
+            let compound = matches!(&value.kind, ExprKind::OpInfix { lhs, .. }
+                if matches!(&lhs.kind, ExprKind::Path(p)
+                    if matches!(p.segments.as_slice(), [s] if s.name == *name)));
             ctx.help_last(Some(match near {
+                _ if compound => {
+                    format!("declare `{name}` first: `let {name} = ..;` before this line")
+                }
                 _ if in_tuple => format!(
                     "declare `{name}` with `let` before this line, or declare every name at once \
                      with `let (..) = ..;`"
@@ -1554,7 +1562,15 @@ pub(super) fn lower_assign(
                 ),
                 None => format!("write `let {name} = {};`", snippet(value)),
             }));
+            let since = ctx.env.sink.diagnostics.borrow().len();
             let v = lower_expected(ctx, value, HirTy::Unknown);
+            if compound {
+                let mut diags = ctx.env.sink.diagnostics.borrow_mut();
+                let tail = since.min(diags.len());
+                if let Some(at) = diags[tail..].iter().position(|d| d.message == unknown) {
+                    diags.remove(tail + at);
+                }
+            }
             Some(ctx.declare_var(name, v.ty.clone(), v, span))
         }
         // `ref self` names the caller's slot; `self = v` writes it
@@ -7317,7 +7333,7 @@ fn sum_no_method(
 }
 
 /// `inner?` (`inner_h` lowered). For Rust's `f()?` on a throwing call,
-/// errors about the call come after the one saying `?` isn't for errors.
+/// one error saying `?` isn't for errors replaces those about the call.
 fn lower_try_q(
     ctx: &mut LowerCtx<'_>,
     inner: &Expr,
@@ -7338,12 +7354,22 @@ fn lower_try_q(
 fn try_q_errors(ctx: &LowerCtx<'_>, text: &str, at: rokc_diagnostic::Span, since: usize) -> bool {
     let mut diags = ctx.env.sink.diagnostics.borrow_mut();
     // The two errors a throwing call under `?` gets, by message.
-    let hit = diags[since..].iter().any(|d| {
+    let caused = |d: &rokc_diagnostic::RokDiagnostic| {
         d.is_error()
             && (d.message.starts_with("this call can throw")
                 || d.message.starts_with("type annotations needed"))
-    });
+            && d.primary.as_ref().is_some_and(|l| l.span.start == at.start)
+    };
+    let hit = diags[since..].iter().any(caused);
     if hit {
+        let mut i = since;
+        while i < diags.len() {
+            if caused(&diags[i]) {
+                diags.remove(i);
+            } else {
+                i += 1;
+            }
+        }
         let d = rokc_diagnostic::RokDiagnostic::error(
             Code::OPTIONAL_OPERATOR,
             at,
@@ -10362,7 +10388,29 @@ fn call_item_value(
         let callee_h = lower_path(ctx, p, p.span);
         return call_value(ctx, callee_h, args, span);
     }
-    discard_args(ctx, args);
+    let since = ctx.env.sink.diagnostics.borrow().len();
+    // Python's `isinstance(x, T)`: `T` is a type, not an unknown value.
+    let typed = usize::from(segs == ["isinstance"] && args.len() == 2);
+    discard_args(ctx, &args[..args.len() - typed]);
+    // `Rc::new(RefCell::new(x))`: the outer call's one error has the
+    // whole Rok form.
+    let nested = super::rust::nested_ctors(ctx, segs, args);
+    if !nested.is_empty() {
+        let mut diags = ctx.env.sink.diagnostics.borrow_mut();
+        let mut i = since.min(diags.len());
+        while i < diags.len() {
+            let d = &diags[i];
+            if d.code == Code::UNRESOLVED_NAME
+                && d.primary
+                    .as_ref()
+                    .is_some_and(|l| nested.contains(&l.span.start))
+            {
+                diags.remove(i);
+            } else {
+                i += 1;
+            }
+        }
+    }
     if let Some(help) = (segs.len() > 1).then(|| ctx.import_help(segs)).flatten() {
         return ctx.unknown_name(
             Code::UNRESOLVED_NAME,
@@ -10492,7 +10540,7 @@ fn habit_call_help(ctx: &LowerCtx<'_>, segs: &[&str], args: &[CallArg]) -> Optio
         ([name], _) if texts.len() == args.len() => {
             super::suggest::python_builtin_help(name, &texts)
         }
-        _ => super::rust::call_help(segs, &texts),
+        _ => super::rust::call_help(ctx, segs, args),
     }
 }
 

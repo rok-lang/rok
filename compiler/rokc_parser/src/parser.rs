@@ -1638,6 +1638,10 @@ impl<'a> Parser<'a> {
                 }
                 continue;
             }
+            // Not a statement: it would also be one beside `fn main`.
+            if self.skip_python_def() {
+                continue;
+            }
             let attrs = self.cfg_only_attrs("a statement");
             let marks = (self.pending_stmts.len(), self.lifted.len());
             if let Some(stmt) = self.parse_top_stmt() {
