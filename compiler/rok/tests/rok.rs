@@ -148,7 +148,7 @@ fn ok(out: &Output) -> String {
     text(&out.stdout)
 }
 
-/// This rok's series (`0.1`), the pin `rok new` writes.
+/// This rok's series (`0.minor`, else `major`), the pin `rok new` writes.
 fn series() -> String {
     let v: Vec<&str> = env!("CARGO_PKG_VERSION").split('.').collect();
     if v[0] == "0" {
@@ -427,8 +427,8 @@ fn add_lock_update_offline_remove() {
     assert!(deps(&home, &app, &[])[0].1.contains(&c2));
     fails(&rok(&home, &app, &["update", "nope"]), "not a dependency");
 
-    // A version 1 lock (rok 0.1) is written as version 2 once, under
-    // --locked too: the pins stay.
+    // A version 1 lock is written as version 2 once, under --locked too:
+    // the pins stay.
     let v2 = read(&app.join("rok.lock"));
     write(
         &app.join("rok.lock"),
@@ -1294,8 +1294,8 @@ fn build_lints_using_through_prebuilt_std() {
          fn scoped(p: str) -> str {\n    using h = try! File::open(p) { try! h.read_to_str() }\n}\n\n\
          fn main() {\n    println(leaks(\"rok.rokon\"));\n    println(scoped(\"rok.rokon\"));\n}\n",
     );
-    // A `File` left open is an error now (closing can fail); the one
-    // bound with `using` is not reported.
+    // A `File` left open is an error (closing can fail); the one bound
+    // with `using` is not reported.
     let out = rok(&home, &app, &["build"]);
     assert!(!out.status.success());
     let err = text(&out.stderr);
@@ -3090,7 +3090,7 @@ fn publish_writes_toolchain() {
         pinned.ends_with(&format!("toolchain: \"{pin}\" }}\n")),
         "{pinned}"
     );
-    // The fields that came with 0.2, and an unknown one, which warns.
+    // The optional manifest fields, and an unknown one, which warns.
     let out = publish(
         "license_file: \"LICENSE\", categories: [\"math\"], include: [\"src/**\"], links: \
          \"m\", metadata: { a: 1 }, colour: \"red\", ",
@@ -3464,9 +3464,9 @@ fn token_goes_only_to_its_index() {
     }
 }
 
-/// 0.1's index settings: `ROK_REGISTRY` and `registry` in config.rokon
-/// no longer pick the index of a bare requirement and warn, naming what
-/// to write in sources.rokon; credentials.rokon's token is not read.
+/// `ROK_REGISTRY` and `registry` in config.rokon do not pick the index of
+/// a bare requirement and warn, naming what to write in sources.rokon;
+/// credentials.rokon's token is not read.
 #[test]
 fn old_registry_settings_warn() {
     let root = scratch("old-registry");
@@ -6071,7 +6071,7 @@ fn new_templates_build_run_and_test() {
         assert!(tests.contains("test result: ok"), "{name}: {tests}");
     }
     // The executable reaches its library's items and modules by the
-    // library's code name (`my-calc` → `my_calc`).
+    // library's code name (`my-calc` -> `my_calc`).
     let calc = root.join("my-calc");
     write(
         &calc.join("src/lib.rok"),
