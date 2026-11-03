@@ -550,7 +550,7 @@ impl Parser<'_> {
             Some(self.tokens_text(i + 1, end))
         };
         let help = match ty {
-            None => format!("write `!({x} is none)`"),
+            None => format!("write `{x} != none`"),
             Some(t) => format!("write `!({x} is {t})`"),
         };
         self.error_help(

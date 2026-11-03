@@ -21,7 +21,7 @@
 // expect-error: the condition expects `bool`, found `List<i32>`
 // expect-error: help: Rok has no truthiness: write `!xs.is_empty()`
 // expect-error: the condition expects `bool`, found `i32 | none`
-// expect-error: help: Rok has no truthiness: write `!(found is none)`
+// expect-error: help: Rok has no truthiness: write `found != none`
 // expect-error: the condition expects `bool`, found `i32`
 // expect-error: help: Rok has no truthiness: write `n != 0`
 // expect-error: operator `!` cannot be applied to `str`
