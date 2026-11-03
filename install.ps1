@@ -10,9 +10,8 @@
 #
 # Environment: ROK_HOME, ROK_VERSION (default below), ROK_DIST (where
 # releases are downloaded from), ROK_NO_MODIFY_PATH, NO_COLOR,
-# CLICOLOR_FORCE. Nothing
-# else is needed: rokc links with its own linker and import libraries (no
-# MSVC or Windows SDK).
+# CLICOLOR_FORCE. rokc links with its own linker and import libraries:
+# no MSVC or Windows SDK.
 #
 # It puts $ROK_HOME\bin first on the user's PATH and writes the PowerShell
 # completions to $ROK_HOME\completions\rok.ps1, loaded from the profile.

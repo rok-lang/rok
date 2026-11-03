@@ -1,6 +1,6 @@
 #!/bin/sh
 # Check toolchain archives against the installer contract,
-# which every 0.1.x `rok toolchain update` and install script relies on:
+# which every released `rok toolchain update` and install script relies on:
 #
 #   rok-<version>-<triple>.tar.gz / .tar.xz / .zip, one top directory
 #   rok-<version>-<triple>/ holding bin/rok, bin/rokc (.exe on Windows),

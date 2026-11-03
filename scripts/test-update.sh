@@ -1,18 +1,18 @@
 #!/bin/sh
-# Update a 0.1.x install to a staged release set: the
+# Update an older install to a staged release set: the
 # archives dist-native.sh / dist-linux-gnu.sh left in <dist>, served
 # over http in the GitHub releases' layout. Three updates, each on a
-# fresh ROK_HOME holding the 0.1.x release:
+# fresh ROK_HOME holding the older release:
 #
 #   - its `rok toolchain update`, then the staged rok builds and runs a
-#     project the 0.1.x rok made and locked (a git dependency), and
+#     project the older rok made and locked (a git dependency), and
 #     leaves its rok.lock in lock format 2;
 #   - its install.sh --archive with the staged archive;
 #   - the staged archive's own install.sh.
 #
 #   scripts/test-update.sh <dist>
 #
-# ROK_UPDATE_FROM names the 0.1.x release (default 0.1.6), downloaded
+# ROK_UPDATE_FROM names the older release (default 0.1.6), downloaded
 # from GitHub; ROK_UPDATE_PORT the local port (default 8765). Unix only;
 # Windows runs scripts/test-update.ps1.
 set -eu

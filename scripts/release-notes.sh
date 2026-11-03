@@ -4,7 +4,7 @@
 #   scripts/release-notes.sh <version> [<changelog>]
 #
 # The section is `## <version>` or `## <version> (<date>)`. An -rc.N
-# takes its own `## 0.2.0-rc.1` section if there is one, else the final
+# takes its own `## <version>-rc.N` section if there is one, else the final
 # version's. Fails if the section is missing or empty.
 set -eu
 

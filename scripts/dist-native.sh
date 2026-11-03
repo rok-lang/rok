@@ -174,7 +174,7 @@ if [ "$(uname -s)" = Linux ] && [ -z "$static" ]; then
     exit 1
   }
 fi
-# The installer contract: 0.1.x `rok toolchain update` reads
+# The installer contract: a released `rok toolchain update` reads
 # the version from `rokc <version>` and the host from `host: <triple>`.
 v=$("$stage/bin/rokc$exe" --version --verbose)
 printf '%s\n' "$v" | head -n 1 | grep -Eq "^rokc $version( |\$)" &&
