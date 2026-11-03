@@ -9,8 +9,8 @@
 # present and verifies, and that every toolchain archive keeps the installer
 # contract (scripts/check-archive.sh), so a release never ships a missing
 # archive or one 0.1.x clients cannot install. --publish creates the tag and
-# uploads the assets with gh; run it only when the release is meant to go
-# out. A -rc.N version is published as a prerelease, so it never becomes
+# uploads the assets with gh, with <dir>/notes.md (scripts/release-notes.sh)
+# as the body; run it only when the release is meant to go out. A -rc.N version is published as a prerelease, so it never becomes
 # latest/ and a bare `rok toolchain update` never installs it. It does not
 # deploy the sites or publish stones.
 set -eu
@@ -40,6 +40,12 @@ done
 }
 version=$(cat "$dir/rok-version")
 tag=v$version
+
+# A tag build must ship the version it was tagged for.
+if [ "${GITHUB_REF_TYPE-}" = tag ] && [ "${GITHUB_REF_NAME-}" != "$tag" ]; then
+  echo "release.sh: tag $GITHUB_REF_NAME but $dir/rok-version is $version; tag the commit that sets $version, or fix the version" >&2
+  exit 1
+fi
 
 # <triple> <archive> per target, from release-targets.json (the single
 # source of truth). unix: .tar.gz + .tar.xz. win: .zip. Intel Mac and
@@ -109,8 +115,10 @@ command -v gh > /dev/null || {
   echo "release.sh: --publish needs the gh CLI" >&2
   exit 1
 }
-notes="--generate-notes"
-[ -f "$dir/notes.md" ] && notes="--notes-file $dir/notes.md"
+[ -s "$dir/notes.md" ] || {
+  echo "release.sh: no $dir/notes.md; write it with scripts/release-notes.sh $version > $dir/notes.md" >&2
+  exit 1
+}
 # A release candidate is a prerelease: GitHub's latest/ skips it, so the
 # rok-version there keeps naming the last final release.
 pre=""
@@ -118,5 +126,5 @@ case $version in *-rc.*) pre=--prerelease ;; esac
 # rok-* already matches rok-version; naming it again uploads it twice (422).
 # shellcheck disable=SC2086
 gh release create "$tag" "$dir"/rok-* \
-  --target "$(git rev-parse HEAD)" --title "rok $version" $notes $pre
+  --target "$(git rev-parse HEAD)" --title "rok $version" --notes-file "$dir/notes.md" $pre
 echo "release.sh: created $tag${pre:+ (a prerelease)}"
