@@ -1,0 +1,10 @@
+// expect-error: 9:18: a closure body without braces is an expression, and an assignment is a statement
+// expect-error: help: put the body in a block: `|v| { v += i; }`; `v` is the closure's own copy, so to hand back the new value return it: `|v| v + i`
+
+// An assignment as a brace-less closure body names the block form, and
+// the returned value when the target is the parameter.
+fn main() {
+    let m = Mutex::new(0);
+    let i = 3;
+    m.with(|v| v += i);
+}
