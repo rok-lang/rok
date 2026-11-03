@@ -2310,6 +2310,9 @@ fn coerce(
                     ),
                 );
                 if let Some(d) = ctx.env.sink.diagnostics.borrow_mut().last_mut() {
+                    // An open literal (`let count = 0;`) helps as its default.
+                    let x = infer::zonk(ctx, &x);
+                    let x = infer::literal_default(ctx, &x).unwrap_or(x);
                     d.notes.push(ref_capture_help(&name, &x));
                 }
                 return v;
