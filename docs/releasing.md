@@ -35,6 +35,28 @@ without a version) never installs an rc. An rc is installed only by name:
 `rok toolchain update 0.2.0-rc.1`. `scripts/test-release.sh` checks this
 against a stubbed `gh` (CI `lint`).
 
+## Flow
+
+1. Land the release commit (version bump and `CHANGELOG.md`) on `main`.
+2. Run `release-ready` on it: Actions, release-ready, Run workflow, `ref`
+   `main` (or the commit's sha). It runs, on that exact commit:
+   - `scripts/check-version.sh` and `scripts/release-notes.sh <version>`;
+   - full `ci` (`hosts: all`, `jobs: all`: every host at `-O0` and `-O2`,
+     cross, wasm, bindgen, dist), reusing a passing manual or nightly run of
+     the commit, else dispatching one on the branch and waiting;
+   - a `release.yml` dry run (build and verify every archive, no
+     publish), reused or dispatched the same way.
+
+   When all pass it sets the `release-ready` status on the commit. A later
+   push to `main` does not matter: the status belongs to the commit.
+3. Tag that commit `v<version>` and push the tag. `release.yml` refuses a
+   commit without a passing `release-ready` run.
+
+A pushed tag is never moved or deleted, and a release is never re-cut. If
+something is wrong after the tag, the fix ships as the next patch version.
+`release.yml` checks right before it publishes that the tag still names
+the commit the archives were built from, and stops otherwise.
+
 ## Targets
 
 `release-targets.json` is the single list of release targets: `release.yml`
@@ -49,11 +71,13 @@ dropping a host is an edit there, not here.
 
 Pushing a `v<version>` tag runs `release.yml`:
 
-1. `ci-green`: the tagged commit must have a `ci` run on `main` (a push
-   event) whose `ci-gate` job succeeded. A run still in progress is waited
-   for; no run, or a gate that failed, fails the release before anything is
-   built. So the release commit is pushed to `main` first, and the tag goes
-   on only once that run is green.
+1. `ready` calls `release-ready.yml` with `verify_only`: the version and
+   notes checks again, the tag is `v` plus the version, and the commit has a
+   `release-ready` status set by a passing release-ready run. Then
+   `ci-green`: the tagged commit must have a `ci` run on `main` (a push
+   event, the newest not cancelled) whose `ci-gate` job succeeded. A run
+   still in progress is waited for; no run, or a gate that failed, fails the
+   release before anything is built.
 2. `plan`: reads the targets from `release-targets.json`.
 3. `build`, one independent job per target, all in parallel (`fail-fast`
    off, so one failure does not cancel the rest):
@@ -65,25 +89,30 @@ Pushing a `v<version>` tag runs `release.yml`:
      of its own architecture. The container's LLVM is downloaded from S3
      (`dist-llvm/<version>/<triple>/`), not built from source.
    - each uploads its `rok-<version>-<triple>` archives (`.tar.gz` +
-     `.tar.xz`; Windows a `.zip`), a `.sha256` beside each, and a
-     `rok-version` file.
-4. `publish`, once every build passed: gathers every archive, runs
-   `release.sh --dir dist` to verify that every target's archives and
-   checksums are present and match and that every toolchain archive keeps
-   the installer contract (below), records the build provenance
-   attestation, writes `dist/notes.md` from the version's `CHANGELOG.md`
-   section (`scripts/release-notes.sh`), and runs
-   `release.sh --dir dist --publish` to create the `v<version>` GitHub
-   release with those notes as its body and upload every asset with the
-   `gh` CLI. `release.sh` refuses a tag that is not `v` plus the archives'
-   `rok-version`, and `--publish` refuses a missing `notes.md`.
+     `.tar.xz`; Windows a `.zip`), a `.sha256` beside each, a
+     `rok-version` file, and the commit it built.
+4. `publish`, once every build passed: gathers every archive, checks every
+   build ran on the run's commit, runs `release.sh --dir dist` to verify
+   that every target's archives and checksums are present and match and
+   that every toolchain archive keeps the installer contract (below),
+   records the build provenance attestation, writes `dist/notes.md` from
+   the version's `CHANGELOG.md` section (`scripts/release-notes.sh`), and
+   runs `release.sh --dir dist --publish --commit <sha>`. That checks the
+   tag on origin still names `<sha>`, creates the `v<version>` release as a
+   draft with those notes as its body, uploads every planned asset, checks
+   the draft holds exactly them (every archive, its `.sha256`, and
+   `rok-version`, each at its local size), checks the tag again and only
+   then makes the release public. A draft that fails a check stays
+   unpublished; `latest/` never sees it. `release.sh` refuses a tag that is
+   not `v` plus the archives' `rok-version`, and `--publish` refuses a
+   missing `notes.md`.
    `install.sh` / `install.ps1` download `v<version>` by default;
    `rok-version` is served from `releases/latest/`.
 
-A manual `workflow_dispatch` run skips `ci-green`, then runs `plan`,
-`build` and the verify in `publish` exactly as a tag does. It stops there:
-no attestation, no release, nothing uploaded. Use it to check the pipeline
-on a commit before tagging it.
+A manual `workflow_dispatch` run skips `ready` and `ci-green`, then runs
+`plan`, `build` and the verify in `publish` exactly as a tag does. It stops
+there, also on a tag ref: no attestation, no release, nothing uploaded.
+`release-ready` uses it as the dry run.
 
 ## Update pointer
 
@@ -145,11 +174,12 @@ old one made and locked. Run it (`jobs: dist`) before tagging.
   section of the final version (`## 0.2.0` for `0.2.0-rc.1`). Check with
   `scripts/release-notes.sh <version>`.
 - The release commit (version bump and changelog) goes straight to `main`,
-  and its `ci` run there has a green `ci-gate`. `ci-green` refuses the tag
-  otherwise; a green `release.yml` manual run is not a substitute. That
-  run's `corpus` jobs build and run every integration case: each shard
-  reports its share of the corpus, and one that selects no case fails
-  (an empty `ROK_TEST_FILTER` is the whole corpus).
+  its `ci` run there has a green `ci-gate`, and a `release-ready` run passed
+  on it (Flow, above). `release.yml` refuses the tag otherwise. The
+  `corpus` jobs build and run every integration case: each shard reports
+  its share of the corpus, and one that selects no case, or runs fewer than
+  its share of the floor (docs/ci.md), fails (an empty `ROK_TEST_FILTER` is
+  the whole corpus).
 - The stones, the sites and CI version and deploy on their own terms; this
   file covers only the toolchain release.
 

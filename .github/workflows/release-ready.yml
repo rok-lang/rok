@@ -1,0 +1,154 @@
+name: release-ready
+
+# Everything a release commit must pass before it is tagged, on that exact
+# commit: full ci (every host, cross, wasm, bindgen, dist), a release.yml
+# dry run, the version and release-notes checks. A pass sets the
+# `release-ready` status on the commit; release.yml calls this with
+# verify_only to require it. Existing passing runs of the commit are
+# reused, else they are dispatched on the branch and waited for.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "The release commit: a branch at it (main) or its sha"
+        default: main
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: true
+      verify_only:
+        description: "Only check the commit is already release-ready"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+      version: ${{ steps.resolve.outputs.version }}
+      branch: ${{ steps.resolve.outputs.branch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+      - id: resolve
+        env:
+          REF: ${{ inputs.ref }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          version=$(sed -n '/^\[workspace\.package\]/,/^\[/ s/^version = "\(.*\)"/\1/p' Cargo.toml)
+          # A branch to dispatch the ci and dry runs on: the input if it is
+          # one at the commit, else main if it is there.
+          branch=""
+          for b in "$REF" main; do
+            if [ "$(git ls-remote origin "refs/heads/$b" | cut -f1)" = "$sha" ]; then
+              branch=$b
+              break
+            fi
+          done
+          echo "release commit $sha, version $version, dispatch branch ${branch:-none}"
+          {
+            echo "sha=$sha"
+            echo "version=$version"
+            echo "branch=$branch"
+          } >> "$GITHUB_OUTPUT"
+      - name: version consistency
+        run: scripts/check-version.sh
+      - name: release notes
+        env:
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: scripts/release-notes.sh "$VERSION" | tee -a "$GITHUB_STEP_SUMMARY"
+      # Called from a tag push: the tag names this version.
+      - name: tag names the version
+        if: github.ref_type == 'tag'
+        env:
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: |
+          if [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
+            echo "::error::tag $GITHUB_REF_NAME but Cargo.toml says $VERSION; tag the commit that sets $VERSION"
+            exit 1
+          fi
+
+  ci:
+    needs: checks
+    if: ${{ !inputs.verify_only }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.checks.outputs.sha }}
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ needs.checks.outputs.sha }}
+          BRANCH: ${{ needs.checks.outputs.branch }}
+        run: scripts/release-ready.sh ci "$SHA" "$BRANCH"
+
+  dry-run:
+    needs: checks
+    if: ${{ !inputs.verify_only }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.checks.outputs.sha }}
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ needs.checks.outputs.sha }}
+          BRANCH: ${{ needs.checks.outputs.branch }}
+        run: scripts/release-ready.sh dry-run "$SHA" "$BRANCH"
+
+  # Its name carries the sha; verify looks for it in the run the status
+  # points at.
+  ready:
+    needs: [checks, ci, dry-run]
+    name: ready (${{ needs.checks.outputs.sha }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      statuses: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ needs.checks.outputs.sha }}
+          VERSION: ${{ needs.checks.outputs.version }}
+          URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh api "repos/$GH_REPO/statuses/$SHA" -f state=success -f context=release-ready \
+            -f target_url="$URL" -f description="$VERSION: full ci, release dry run, version, notes"
+          echo "$SHA is release-ready for $VERSION; tag it v$VERSION"
+
+  verify:
+    needs: checks
+    if: ${{ inputs.verify_only }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+      statuses: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.checks.outputs.sha }}
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ needs.checks.outputs.sha }}
+        run: scripts/release-ready.sh verify "$SHA"

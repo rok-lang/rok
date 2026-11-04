@@ -79,6 +79,8 @@ jobs:
         run: just check-targets
       - name: release.sh against a stubbed gh
         run: just test-release
+      - name: no stray gitlinks or .claude/
+        run: just check-tree
       - name: PSScriptAnalyzer
         shell: pwsh
         run: |
@@ -627,18 +629,102 @@ jobs:
           Must build --release
           Must test
 
+  # A PR pushed again after it was queued must not merge its older head.
+  # Each commit of the queue group must have the tree its PR's current head
+  # merges to; else fail, and the PR goes back in with the new head.
+  queue-head:
+    if: github.event_name == 'merge_group'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: queued heads are the PRs' heads
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          BASE: ${{ github.event.merge_group.base_sha }}
+        run: |
+          # refs/heads/gh-readonly-queue/<base>/pr-<n>-<sha>
+          last=$(echo "$REF" | sed -n 's|^refs/heads/gh-readonly-queue/.*/pr-\([0-9][0-9]*\)-[0-9a-f]*$|\1|p')
+          [ -n "$last" ] || {
+            echo "::error::no PR number in $REF"
+            exit 1
+          }
+          commits=$(git rev-list --first-parent "$BASE..HEAD")
+          for c in $commits; do
+            subject=$(git log -1 --format=%s "$c")
+            n=$(echo "$subject" | sed -n -e 's/.*(#\([0-9][0-9]*\))$/\1/p' -e 's/^Merge pull request #\([0-9][0-9]*\) .*/\1/p')
+            if [ -z "$n" ]; then
+              [ "$(echo "$commits" | wc -l)" -eq 1 ] || {
+                echo "::error::no PR number in the subject of queued commit $c: $subject"
+                exit 1
+              }
+              n=$last
+            fi
+            head=$(gh api "repos/$GH_REPO/pulls/$n" --jq .head.sha)
+            git fetch -q --no-tags origin "$head"
+            if ! out=$(git merge-tree --write-tree "$c^1" "$head"); then
+              echo "::error::PR #$n head $head no longer merges onto the queue; update it and queue it again"
+              exit 1
+            fi
+            if [ "$(echo "$out" | head -n 1)" != "$(git rev-parse "$c^{tree}")" ]; then
+              echo "::error::PR #$n was pushed after it was queued: $c is not its head $head; it must be queued again with that head"
+              exit 1
+            fi
+            echo "PR #$n: queued $c matches head $head"
+          done
+
+  # A failing nightly opens one issue, or comments on it while it stays
+  # open; the next passing nightly closes it.
+  nightly-report:
+    needs: [lint, plan, llvm-prefix, check, test, corpus, cross-link, cross, wasm, bindgen, dist]
+    if: always() && github.event_name == 'schedule' && vars.ROK_NIGHTLY == 'on'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: open, update or close the nightly issue
+        run: |
+          title="Nightly CI is failing"
+          failed=$(gh api --paginate "repos/$GH_REPO/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100" \
+            --jq '.jobs[] | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out") | .name')
+          issue=$(gh issue list --state open --label "type: bug" --limit 200 --json number,title \
+            --jq "[.[] | select(.title == \"$title\")][0].number // empty")
+          if [ -n "$failed" ]; then
+            body=$(printf 'Nightly run %s failed on %s.\n\nFailed jobs:\n\n%s\n' "$RUN" "$GITHUB_SHA" "- ${failed//$'\n'/$'\n- '}")
+            if [ -n "$issue" ]; then
+              gh issue comment "$issue" --body "$body"
+            else
+              gh issue create --title "$title" --label "type: bug" --body "$body"
+            fi
+          elif [ -n "$issue" ]; then
+            gh issue close "$issue" --comment "Nightly run $RUN passed on $GITHUB_SHA."
+          fi
+
   # The one required check: passes when every job passed or was skipped,
   # fails if any failed or was cancelled. A skipped matrix job cannot block
   # the merge, and a lint failure (which skips the rest) cannot pass it.
   ci-gate:
-    needs: [lint, plan, llvm-prefix, check, test, corpus]
+    needs: [lint, plan, llvm-prefix, check, test, corpus, queue-head]
     if: always()
     runs-on: ubuntu-24.04
     steps:
       - name: gate result
         run: |
-          echo "lint=${{ needs.lint.result }} plan=${{ needs.plan.result }} llvm-prefix=${{ needs['llvm-prefix'].result }} check=${{ needs.check.result }} test=${{ needs.test.result }} corpus=${{ needs.corpus.result }}"
-          for r in "${{ needs.lint.result }}" "${{ needs.plan.result }}" "${{ needs['llvm-prefix'].result }}" "${{ needs.check.result }}" "${{ needs.test.result }}" "${{ needs.corpus.result }}"; do
+          echo "lint=${{ needs.lint.result }} plan=${{ needs.plan.result }} llvm-prefix=${{ needs['llvm-prefix'].result }} check=${{ needs.check.result }} test=${{ needs.test.result }} corpus=${{ needs.corpus.result }} queue-head=${{ needs['queue-head'].result }}"
+          for r in "${{ needs.lint.result }}" "${{ needs.plan.result }}" "${{ needs['llvm-prefix'].result }}" "${{ needs.check.result }}" "${{ needs.test.result }}" "${{ needs.corpus.result }}" "${{ needs['queue-head'].result }}"; do
             case "$r" in
               success | skipped) ;;
               *)
