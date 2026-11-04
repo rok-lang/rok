@@ -1,11 +1,12 @@
 #!/bin/sh
 # Dry runs of release.sh --publish against a stubbed gh (and git): an
 # -rc.N version is created as a prerelease, a final one is not, the body
-# is notes.md, and a missing notes.md, a tag that names another version or
-# an archive that breaks the installer contract stops the release before
-# gh runs. release-notes.sh picks the right CHANGELOG section. Fake
-# archives for every target in release-targets.json; nothing is built or
-# uploaded.
+# is notes.md, the release stays a draft until it holds every planned
+# asset, and a missing notes.md or archive, a tag that names another
+# version or sits on another commit, or an archive that breaks the
+# installer contract stops the release before gh runs. release-notes.sh
+# picks the right CHANGELOG section. Fake archives for every target in
+# release-targets.json; nothing is built or uploaded.
 #
 #   scripts/test-release.sh
 set -eu
@@ -15,15 +16,39 @@ root=$(pwd)
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/rok-test-release.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
-# gh records its arguments; git names a fixed commit.
+# gh records its arguments and serves back the files `release create` got,
+# less $GH_DROP. git puts the tag on $TAG_AT (empty: no tag), an annotated
+# tag when $TAG_OBJ is set.
+head=0123456789abcdef0123456789abcdef01234567
 mkdir "$tmp/stub"
 cat > "$tmp/stub/gh" << 'EOF'
 #!/bin/sh
 printf '%s\n' "$*" >> "$GH_LOG"
+case "$1 $2" in
+  "release create")
+    shift 3
+    : > "$GH_LOG.assets"
+    for a; do
+      case $a in --*) break ;; esac
+      [ "${a##*/}" = "${GH_DROP-}" ] || echo "${a##*/} $(wc -c < "$a" | tr -d ' ')" >> "$GH_LOG.assets"
+    done
+    ;;
+  "release view") cat "$GH_LOG.assets" ;;
+esac
 EOF
-cat > "$tmp/stub/git" << 'EOF'
+cat > "$tmp/stub/git" << EOF
 #!/bin/sh
-echo 0123456789abcdef0123456789abcdef01234567
+case \$1 in
+  ls-remote)
+    [ -n "\$TAG_AT" ] || exit 0
+    if [ -n "\${TAG_OBJ-}" ]; then
+      printf '%s\t%s\n' "\$TAG_OBJ" "\$3" "\$TAG_AT" "\$4"
+    else
+      printf '%s\t%s\n' "\$TAG_AT" "\$3"
+    fi
+    ;;
+  *) echo $head ;;
+esac
 EOF
 chmod +x "$tmp/stub/gh" "$tmp/stub/git"
 
@@ -76,8 +101,8 @@ fail() {
 # gh calls in $tmp/gh.log.
 publish() {
   : > "$tmp/gh.log"
-  GITHUB_REF_TYPE=${2:+tag} GITHUB_REF_NAME=${2-} GH_LOG=$tmp/gh.log PATH=$tmp/stub:$PATH \
-    "$root/scripts/release.sh" --dir "$tmp/dist-$1" --publish > "$tmp/out" 2>&1
+  GITHUB_REF_TYPE=${2:+tag} GITHUB_REF_NAME=${2-} GH_LOG=$tmp/gh.log TAG_AT=${TAG_AT-$head} \
+    PATH=$tmp/stub:$PATH "$root/scripts/release.sh" --dir "$tmp/dist-$1" --publish > "$tmp/out" 2>&1
 }
 
 release_set 0.2.0-rc.1
@@ -107,6 +132,50 @@ publish 0.2.0 v0.2.0 || {
   fail "release.sh --publish 0.2.0 on tag v0.2.0 failed"
 }
 echo "ok        tag v0.2.0 publishes 0.2.0"
+grep -q '^release create v0.2.0 .* --draft --verify-tag ' "$tmp/gh.log" ||
+  fail "0.2.0 is not created as a draft of the pushed tag: $(cat "$tmp/gh.log")"
+grep -q '^release view v0.2.0 ' "$tmp/gh.log" ||
+  fail "the 0.2.0 draft assets are not checked: $(cat "$tmp/gh.log")"
+[ "$(tail -n 1 "$tmp/gh.log")" = "release edit v0.2.0 --draft=false" ] ||
+  fail "0.2.0 is not made public last: $(cat "$tmp/gh.log")"
+echo "ok        v0.2.0 goes public only after the draft is checked"
+
+(TAG_OBJ=fedcba9876543210fedcba9876543210fedcba98 publish 0.2.0 v0.2.0) || {
+  cat "$tmp/out" >&2
+  fail "release.sh --publish 0.2.0 on an annotated tag failed"
+}
+echo "ok        an annotated tag on the built commit publishes"
+
+if (TAG_AT=fedcba9876543210fedcba9876543210fedcba98 publish 0.2.0 v0.2.0); then
+  fail "release.sh --publish ran with the tag on another commit"
+fi
+grep -q "^release.sh: tag v0.2.0 is on fedcba98" "$tmp/out" ||
+  fail "release.sh did not name the moved tag: $(cat "$tmp/out")"
+[ ! -s "$tmp/gh.log" ] || fail "gh ran with the tag on another commit"
+echo "ok        a moved tag stops the release"
+
+if (TAG_AT='' publish 0.2.0 v0.2.0); then
+  fail "release.sh --publish ran without the tag on origin"
+fi
+[ ! -s "$tmp/gh.log" ] || fail "gh ran without the tag on origin"
+echo "ok        a tag missing on origin stops the release"
+
+if (GH_DROP=rok-version publish 0.2.0 v0.2.0); then
+  fail "release.sh --publish made a release public without rok-version"
+fi
+grep -q '^release create ' "$tmp/gh.log" || fail "no draft was created: $(cat "$tmp/gh.log")"
+! grep -q '^release edit ' "$tmp/gh.log" || fail "a draft without rok-version went public"
+echo "ok        a draft missing an asset stays a draft"
+
+rm "$tmp/dist-0.2.0/rok-0.2.0-x86_64-pc-windows-msvc.zip"
+if publish 0.2.0; then
+  fail "release.sh --publish ran without the windows archive"
+fi
+grep -q '^missing   rok-0.2.0-x86_64-pc-windows-msvc.zip' "$tmp/out" ||
+  fail "release.sh did not name the missing archive: $(cat "$tmp/out")"
+[ ! -s "$tmp/gh.log" ] || fail "gh ran without the windows archive"
+echo "ok        a missing archive stops the release"
+release_set 0.2.0
 
 if publish 0.2.0 v0.2.1; then
   fail "release.sh --publish 0.2.0 ran on tag v0.2.1"

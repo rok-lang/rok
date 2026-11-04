@@ -64,6 +64,7 @@ fn end_to_end_cases() {
         }
         r.map_err(|e| format!("{name}: {e}"))
     });
+    let ran = results.iter().filter(|r| matches!(r, Ok(true))).count();
     let failures: Vec<String> = results.into_iter().filter_map(Result::err).collect();
     assert!(
         failures.is_empty(),
@@ -72,24 +73,49 @@ fn end_to_end_cases() {
         cases.len(),
         failures.join("\n  ")
     );
+    println!("{ran} of {} integration cases ran", cases.len());
+    if parts.is_empty() {
+        let floor = MIN_CASES / shard_count();
+        assert!(
+            ran >= floor,
+            "only {ran} integration cases ran, want at least {floor}; \
+             check tests/cases and the skip directives, or lower MIN_CASES if the corpus shrank"
+        );
+    }
 }
 
+/// Fewest cases the whole corpus must run on any target, so a broken
+/// checkout, case discovery or skip directive cannot pass with a handful.
+/// The corpus has about 2300 cases and at most about 350 skip on one
+/// target; shard `i/n` must run `MIN_CASES / n`.
+const MIN_CASES: usize = 1600;
+
+/// The n of `ROK_TEST_SHARD=i/n`, 1 when unset. `shard` already rejected a
+/// malformed spec.
+fn shard_count() -> usize {
+    std::env::var("ROK_TEST_SHARD")
+        .ok()
+        .and_then(|s| s.split_once('/')?.1.parse().ok())
+        .unwrap_or(1)
+}
+
+/// Build and run one case; `Ok(false)` when it does not apply to this target.
 fn run_case(
     env: &Env,
     name: &str,
     path: &PathBuf,
     scratch: &std::path::Path,
-) -> Result<(), String> {
+) -> Result<bool, String> {
     let source = fs::read_to_string(path).unwrap();
     if skipped_on_target(&source) {
-        return Ok(());
+        return Ok(false);
     }
     let case_dir = scratch.join(name);
     let _ = fs::create_dir_all(&case_dir);
     let plug = directive(&source, "wasm-plug:").map(str::trim);
     let wac = std::env::var_os("ROK_TEST_WAC").filter(|w| !w.is_empty());
     if plug.is_some() && wac.is_none() {
-        return Ok(());
+        return Ok(false);
     }
     let mut exe = case_dir.join(exe_name("out"));
 
@@ -99,7 +125,7 @@ fn run_case(
         if build.status.success() {
             return Err("build succeeded but `// expect-error:` expects failure".into());
         }
-        return check_expect_error(&source, &stderr);
+        return check_expect_error(&source, &stderr).map(|()| true);
     }
     check_lints(env, &source, path, &case_dir, &stderr)?;
     let Some(expected) = parse_expect_exit(&source) else {
@@ -196,7 +222,7 @@ fn run_case(
         check_run(&source, &exe, expected, &env)
             .map_err(|e| format!("gc-stress concurrent: {e}"))?;
     }
-    Ok(())
+    Ok(true)
 }
 
 /// `// expect-lint:`: the `E0132` diagnostics of `rokc lint`, as

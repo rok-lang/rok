@@ -17,9 +17,24 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # A tag publishes only a commit whose main `ci` run passed `ci-gate`;
-  # a run still in progress is waited for.
+  # A release-ready run passed on this exact commit (full ci, a release.yml
+  # dry run, version and notes); this re-checks the cheap parts on the tag.
+  ready:
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/release-ready.yml
+    with:
+      ref: ${{ github.sha }}
+      verify_only: true
+    # What release-ready's jobs ask for; in verify-only mode only reads run.
+    permissions:
+      actions: write
+      contents: read
+      statuses: write
+
+  # A tag publishes only a ready commit whose main `ci` run passed
+  # `ci-gate`; a run still in progress is waited for.
   ci-green:
+    needs: ready
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 180
@@ -31,9 +46,10 @@ jobs:
     steps:
       - name: main ci-gate on this commit
         run: |
+          # The newest main push run that was not cancelled.
           runs="repos/$GH_REPO/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&branch=main&event=push"
           while :; do
-            read -r id status < <(gh api "$runs" --jq '.workflow_runs[0] | "\(.id // "") \(.status // "")"')
+            read -r id status < <(gh api "$runs" --jq '[.workflow_runs[] | select(.conclusion != "cancelled")][0] | "\(.id // "") \(.status // "")"')
             if [ -z "$id" ]; then
               echo "::error::no main ci run for $GITHUB_SHA; push the commit to main first"
               exit 1
@@ -53,8 +69,9 @@ jobs:
   # of truth (release.sh and scripts/check-targets.sh read it too).
   plan:
     needs: ci-green
-    # A manual run skips ci-green and only verifies.
-    if: ${{ !cancelled() && needs.ci-green.result != 'failure' }}
+    # A manual run skips ci-green and only verifies. A tag needs it green:
+    # after a failed ready it is skipped, not failed.
+    if: ${{ !cancelled() && (github.event_name != 'push' || needs.ci-green.result == 'success') }}
     runs-on: ubuntu-24.04
     outputs:
       targets: ${{ steps.targets.outputs.targets }}
@@ -100,6 +117,10 @@ jobs:
         if: matrix.kind == 'musl'
         run: scripts/dist-linux-musl.sh --out "$PWD/dist"
 
+      # The commit this build checked out; publish holds the tag to it.
+      - name: built commit
+        shell: bash
+        run: git rev-parse HEAD > "dist/commit-${{ matrix.name }}"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist-${{ matrix.name }}
@@ -107,7 +128,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: build
+    needs: [plan, build]
     if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
@@ -123,21 +144,39 @@ jobs:
           merge-multiple: true
       - name: list
         run: ls -la dist
+      # Every build ran on the commit this run started for.
+      - name: built commit
+        id: built
+        env:
+          TARGETS: ${{ needs.plan.outputs.targets }}
+        run: |
+          want=$(echo "$TARGETS" | jq length)
+          n=$(find dist -maxdepth 1 -name 'commit-*' | wc -l)
+          got=$(cat dist/commit-* | sort -u)
+          if [ "$n" -ne "$want" ] || [ "$got" != "$GITHUB_SHA" ]; then
+            echo "::error::$n of $want builds report a commit ($(echo "$got" | tr '\n' ' ')); this run is for $GITHUB_SHA"
+            exit 1
+          fi
+          rm dist/commit-*
+          echo "sha=$got" >> "$GITHUB_OUTPUT"
       - name: verify
         run: scripts/release.sh --dir dist
       # Signed SLSA build provenance for the archives (tag releases only).
       - name: attest provenance (tag only)
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: |
             dist/*.tar.gz
             dist/*.tar.xz
             dist/*.zip
+      # A manual run on a tag ref only verifies. release.sh holds the tag to
+      # the built commit, uploads to a draft and checks it before going public.
       - name: publish (tag only)
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
+          SHA: ${{ steps.built.outputs.sha }}
         run: |
           scripts/release-notes.sh "$(cat dist/rok-version)" > dist/notes.md
-          scripts/release.sh --dir dist --publish
+          scripts/release.sh --dir dist --publish --commit "$SHA"

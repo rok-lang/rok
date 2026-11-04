@@ -58,3 +58,7 @@ check-targets:
 # archive that breaks the installer contract stops the release.
 test-release:
     scripts/test-release.sh
+
+# Fail on gitlinks .gitmodules does not list, or anything under .claude/.
+check-tree:
+    scripts/check-tree.sh

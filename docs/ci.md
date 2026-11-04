@@ -37,6 +37,8 @@ arm64, `windows-2022` x86_64, `windows-11-arm` aarch64 (cross only). x86_64-appl
   with `ROK_TEST_SHARD=i/4`. A shard takes every fourth integration case of the sorted list (and every fourth
   differential suite); unset, the tests run everything. `ROK_TEST_FILTER` comes from the plan: empty (the
   whole corpus) except in a manual run that sets `filter`. A filter that selects no case fails the job.
+  Without a filter, fewer than `MIN_CASES / n` cases run in shard `i/n` (`MIN_CASES / 1` unsharded; a case
+  skipped on the target does not count) fail it too, so a lost corpus or an over-eager skip cannot pass.
 - rustc runs through sccache (`.github/actions/sccache`), cached in the `rok-lang-artifacts` bucket under
   `sccache/<os>-<arch>/` (expired after 14 days). Pull requests read it; other events write it through the
   `rok-ci-sccache` role. A cache error builds without it.
@@ -71,10 +73,18 @@ arm64, `windows-2022` x86_64, `windows-11-arm` aarch64 (cross only). x86_64-appl
   build / test. Both then update the last 0.1.x release to that archive, served over a local http server
   (`scripts/test-update.sh`, `scripts/test-update.ps1`; docs/releasing.md "Installer contract").
 - `lint` also runs `scripts/test-release.sh`: `release.sh --publish` against a stubbed `gh`, an `-rc.N`
-  version a prerelease and an archive that breaks the installer contract refused.
-- `ci-gate`: the one required status check. It passes when `lint`, `plan`, `llvm-prefix`, `check`, `test` and
-  `corpus` passed or were skipped, and fails if any failed or was cancelled. A release tag needs it green
-  on `main` (docs/releasing.md).
+  version a prerelease, a draft made public only once it holds every planned asset, and a moved tag, a
+  missing archive or one that breaks the installer contract refused.
+- `lint` runs `scripts/check-tree.sh` too: a gitlink that `.gitmodules` does not list, or any tracked path
+  under `.claude/`, fails it.
+- `queue-head` (merge queue only): each commit of the queue group must have the tree its PR's current head
+  merges to. A PR pushed again after it was queued fails here and has to be queued again with the new head.
+- `nightly-report` (nightly only): when a job of the nightly failed, it opens the issue "Nightly CI is
+  failing" (label `type: bug`) with the failed jobs and the run link, or comments on it while it is open;
+  the next passing nightly closes it.
+- `ci-gate`: the one required status check. It passes when `lint`, `plan`, `llvm-prefix`, `check`, `test`,
+  `corpus` and `queue-head` passed or were skipped, and fails if any failed or was cancelled. A release tag
+  needs it green on `main` (docs/releasing.md).
 
 ## Self-hosted runners
 
