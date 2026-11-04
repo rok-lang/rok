@@ -7,50 +7,43 @@
 
 // A long `int` kernel runs parked: collections do not wait for it.
 
-static STARTED: Atomic<i64> = Atomic::new(0);
-
 extern "C" {
     fn rok_gc_collect();
+    fn rok_nat_parked_marks() -> usize;
 }
 
 // Two collections (under ROK_GC_CONCURRENT=always the pause that starts
-// a mark and the one that finishes it) from 20 ms into the product: when
-// they are done, in ns from the product's start, the product's time and
-// whether it is right. A collection that waited for the kernel would end
-// with it. On wasm32 one of this heap alone takes about 1 ms.
-fn attempt(a: int) -> (i64, i64, bool) {
-    STARTED.store(0);
+// a mark and the one that finishes it) once the product's kernel has
+// started: whether they ended with that kernel still running, and
+// whether the product is right. The runtime marks the kernel's end
+// before the thread can stop again, so a collection that waited for it
+// always sees the marks moved on.
+fn attempt(a: int) -> (bool, bool) {
+    let m0 = unsafe { rok_nat_parked_marks() };
     let t = rok::std::thread::spawn(|| {
-        STARTED.store(1);
-        let t0 = Instant::now();
         let p = a * a;
-        let took = t0.elapsed().as_ns();
         // (2^k - 1)^2 = 2^2k - 2^(k+1) + 1.
-        (took, p == (int::from(1) << 32000000u32) - (int::from(1) << 16000001u32) + int::from(1))
+        p == (int::from(1) << 32000000u32) - (int::from(1) << 16000001u32) + int::from(1)
     });
-    while STARTED.load() == 0 {}
-    let t0 = Instant::now();
-    // Past the product's allocations, into the kernel.
-    rok::std::thread::sleep(Duration::ms(20));
+    let m = m0;
+    while m == m0 { m = unsafe { rok_nat_parked_marks() }; }
     for _ in 0..2 { unsafe { rok_gc_collect() }; }
-    let done = t0.elapsed().as_ns();
-    let (took, ok) = try! t.join();
-    (done, took, ok)
+    let during = m == m0 + 1 && unsafe { rok_nat_parked_marks() } == m;
+    let ok = try! t.join();
+    (during, ok)
 }
 
 fn main() {
     let a = (int::from(1) << 16000000u32) - int::from(1);
-    // On a loaded machine a collection that did not wait may still be
-    // slow: ask only for an end well before the product's, and let a
-    // scheduling stall spoil an attempt or two. A collection that waits
-    // for the kernel spoils every one.
+    // This thread stalled past the kernel's end spoils an attempt; a
+    // collection that waits for the kernel spoils every one.
     let r = attempt(a);
     let tries = 1;
-    while r.2 && r.0 * 4 >= r.1 * 3 && tries < 3 {
+    while r.1 && !r.0 && tries < 5 {
         r = attempt(a);
         tries += 1;
     }
-    let (done, took, ok) = r;
-    println(if done * 4 < took * 3 { "collected while multiplying" } else { f"the collections waited for the product (done at {done} ns, product {took} ns)" });
+    let (during, ok) = r;
+    println(if during { "collected while multiplying" } else { "the collections waited for the product" });
     println(f"{(a * a).bit_length()} {ok}");
 }
