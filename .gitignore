@@ -5,7 +5,6 @@ Cargo.lock.bak
 /*.hir.rok
 /*.mir.rok
 /*.mlir
-.claude/
 /dist
 # rokc build fingerprints (beside -o outputs)
 .*.fp
