@@ -7,7 +7,7 @@
 #   scripts/release-ready.sh verify <sha>
 #
 # ci: a ci run with every host and job (jobs=all, hosts=all) passed on
-# <sha>. dry-run: a manual release.yml run (build and verify, no publish)
+# <sha>: every job its plan listed in the expected-jobs artifact. dry-run: a manual release.yml run (build and verify, no publish)
 # passed on <sha>. Either reuses a passing run of <sha> if there is one,
 # else dispatches one on <branch>, which must point at <sha>, and waits.
 # verify: the release-ready status on <sha> is success and was set by a
@@ -28,7 +28,8 @@ die() {
   exit 1
 }
 
-# The jobs a full ci run has, by name (ci.yml plan with hosts=all jobs=all).
+# The jobs a full ci run had before ci.yml's plan wrote expected-jobs.json.
+# Only for such runs; delete it once a release has passed on the artifact.
 full_ci_jobs() {
   for h in linux-x64 linux-arm64 macos-arm64 windows-x64; do
     echo "check ($h)"
@@ -50,13 +51,41 @@ full_ci_jobs() {
   echo ci-gate
 }
 
+# The job names run $1 must pass, from its expected-jobs artifact; fails,
+# saying why in $tmp/lacks, unless the plan was a full run.
+expected_jobs() {
+  rm -rf "$tmp/exp"
+  if ! gh run download "$1" -n expected-jobs -D "$tmp/exp" > /dev/null 2>&1; then
+    echo "release-ready.sh: run $1 has no expected-jobs artifact; checking the built-in list" >&2
+    full_ci_jobs
+    return
+  fi
+  f=$tmp/exp/expected-jobs.json
+  c=$(jq -r '.contract // empty' "$f")
+  if [ "$c" != expected-jobs/1 ]; then
+    echo "  expected-jobs.json of run $1 is ${c:-unversioned}, not expected-jobs/1" > "$tmp/lacks"
+    return 1
+  fi
+  if [ "$(jq -r .full "$f")" != true ]; then
+    jq -r '"  run \($r) is not a full run: \(.tier), hosts \(.hosts | join(" ")), jobs \(.jobs | join(" ")), filter \"\(.filter)\""' \
+      --arg r "$1" "$f" > "$tmp/lacks"
+    return 1
+  fi
+  jq -r '.names[]' "$f"
+}
+
 # Run $1 passed every job a full ci run has; prints what it lacks.
 full_ci() {
+  expected_jobs "$1" > "$tmp/expected" || return 1
+  grep -qx ci-gate "$tmp/expected" || {
+    echo "  expected-jobs.json of run $1 lists no ci-gate" > "$tmp/lacks"
+    return 1
+  }
   gh api --paginate "repos/$GH_REPO/actions/runs/$1/jobs?per_page=100" \
     --jq '.jobs[] | select(.conclusion == "success") | .name' > "$tmp/passed"
-  full_ci_jobs | while IFS= read -r j; do
+  while IFS= read -r j; do
     grep -qxF "$j" "$tmp/passed" || echo "  $j"
-  done > "$tmp/lacks"
+  done < "$tmp/expected" > "$tmp/lacks"
   [ ! -s "$tmp/lacks" ]
 }
 
@@ -106,7 +135,7 @@ case $cmd in
     id=$(dispatch ci.yml -f hosts=all -f jobs=all -f filter=)
     full_ci "$id" || {
       cat "$tmp/lacks" >&2
-      die "ci run $id on $sha did not pass these jobs"
+      die "ci run $id on $sha is not a passing full run"
     }
     echo "release-ready.sh: full ci passed on $sha in run $id"
     ;;

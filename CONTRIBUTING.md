@@ -44,8 +44,12 @@ or decorative headers, ASCII only. Match the conventions of the file you edit.
 
 ## Submitting
 
-Open a pull request against `main` with the checks above passing. Leave
-`CHANGELOG.md` alone: it is written at release time from the merged pull
-requests, and its section for the version becomes the GitHub release notes
+Open a pull request against `main` with the checks above passing. End its
+description with a `changelog:` block, one line per user-visible change as it
+should read in `CHANGELOG.md`, each starting with its kind (`added:`,
+`changed:`, `fixed:`, `removed:`), or `silent:` when nobody using Rok can see
+it; the pull request template shows the form and the `pr-lint` check reads it.
+Leave `CHANGELOG.md` alone: it is generated at release time from those blocks,
+and its section for the version becomes the GitHub release notes
 (`docs/releasing.md`). By contributing you agree that your work is licensed
 under both MIT and Apache-2.0, the project's dual license.

@@ -1,0 +1,24 @@
+name: changelog-lint
+
+# The CHANGELOG section on a release branch, hand-written blocks included,
+# on every push there (scripts/changelog-lint.sh). release-prep.yml's own
+# push does not trigger this; it runs the draft check itself.
+on:
+  push:
+    branches: ["release/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  changelog-lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      # The previous tag and the merged PRs come from the history.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - env:
+          BRANCH: ${{ github.ref_name }}
+        run: scripts/changelog-lint.sh "${BRANCH#release/}"

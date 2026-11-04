@@ -1,0 +1,26 @@
+name: pr-lint
+
+# The changelog: block of a PR description (scripts/pr-lint.sh); editing
+# the description runs it again.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-lint-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-lint:
+    # Dependabot writes no block; release-prep.sh counts its PRs silent.
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: scripts/pr-lint.sh

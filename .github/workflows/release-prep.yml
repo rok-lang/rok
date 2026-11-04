@@ -1,0 +1,78 @@
+name: release-prep
+
+# Make or refresh branch release/<version>: one `release: <version>` commit
+# on main with the version bump and a CHANGELOG section built from the
+# changelog: blocks of the PRs merged since the last tag
+# (scripts/release-prep.sh). Then fill its Summary and Highlights on the
+# branch; changelog-lint.yml checks every push there.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "The version to prepare, X.Y.Z"
+        required: true
+
+permissions:
+  contents: read
+
+# Shared with release.yml: nothing is prepared while a release runs.
+concurrency:
+  group: rok-release
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # Naming an environment that does not exist creates it, so look first.
+  environment:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      name: ${{ steps.env.outputs.name }}
+    steps:
+      - id: env
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::run release-prep from main, not $GITHUB_REF"
+            exit 1
+          fi
+          if gh api "repos/$GH_REPO/environments/release-prep" > /dev/null 2>&1; then
+            echo "name=release-prep" >> "$GITHUB_OUTPUT"
+          else
+            echo "no environment release-prep; preparing without one"
+            echo "name=" >> "$GITHUB_OUTPUT"
+          fi
+
+  prep:
+    needs: environment
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: ${{ needs.environment.outputs.name }}
+    permissions:
+      contents: write
+      issues: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+      # cargo update --offline needs the locked crates.
+      - name: toolchain (rust-toolchain.toml) and crates
+        run: rustup toolchain install && cargo fetch --locked
+      - name: release-prep.sh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ inputs.version }}
+          ACTOR: ${{ github.actor }}
+          ACTOR_ID: ${{ github.actor_id }}
+        run: |
+          git config user.name "$ACTOR"
+          git config user.email "$ACTOR_ID+$ACTOR@users.noreply.github.com"
+          scripts/release-prep.sh --push "$VERSION" | tee -a "$GITHUB_STEP_SUMMARY"

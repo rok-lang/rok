@@ -79,6 +79,8 @@ jobs:
         run: just check-targets
       - name: release.sh against a stubbed gh
         run: just test-release
+      - name: release-prep, changelog-lint, pr-lint against fixtures
+        run: just test-release-prep
       - name: no stray gitlinks or .claude/
         run: just check-tree
       - name: PSScriptAnalyzer
@@ -98,7 +100,9 @@ jobs:
 
   # Decide what runs. Outputs: hosts (gate hosts), prefixes (hosts whose LLVM
   # prefix a later job restores), runners (host -> runs-on; a repo variable can
-  # pick a self-hosted runner, never for a fork PR), cross (target + host).
+  # pick a self-hosted runner, never for a fork PR), cross (target + host),
+  # wasm (targets). The artifact expected-jobs names every job the run must
+  # pass (scripts/expected-jobs.sh); release-ready.sh checks a run against it.
   plan:
     # Gate the whole build on lint: a formatting or lint failure skips plan and
     # everything downstream, so no build runs for code that would not merge.
@@ -118,6 +122,7 @@ jobs:
       runners: ${{ steps.plan.outputs.runners }}
       opts: ${{ steps.plan.outputs.opts }}
       cross: ${{ steps.plan.outputs.cross }}
+      wasm: ${{ steps.plan.outputs.wasm }}
       jobs: ${{ steps.plan.outputs.jobs }}
       filter: ${{ steps.plan.outputs.filter }}
     steps:
@@ -217,7 +222,8 @@ jobs:
           *" cross "*) cross=$(echo "$cross" | jq -c --argjson p "$picked" '[.[] | select(.host | IN($p[].name))]') ;;
           *) cross='[]' ;;
           esac
-          bindgen='[]' dist='[]'
+          bindgen='[]' dist='[]' wasm='[]'
+          case " $jobs " in *" wasm "*) wasm='["wasm32-wasip2", "wasm32-wasip1-threads", "wasm32-unknown-unknown"]' ;; esac
           case " $jobs " in *" bindgen "*) bindgen=$(echo "$picked" | jq -c '[.[] | select(.name | IN("linux-x64", "windows-x64")) | .name]') ;; esac
           case " $jobs " in *" dist "*) dist=$(echo "$picked" | jq -c '[.[] | select(.name | IN("linux-x64", "windows-x64")) | .name]') ;; esac
           prefixes=$(jq -cn --argjson p "$picked" --argjson c "$cross" --argjson b "$bindgen" --argjson d "$dist" \
@@ -239,10 +245,21 @@ jobs:
             echo "runners=$runners"
             echo "opts=$opts"
             echo "cross=$cross"
+            echo "wasm=$wasm"
             echo "jobs=$jobs"
             echo "filter=$filter"
           } | tee -a "$GITHUB_OUTPUT"
           echo "tier: $tier"
+          TIER=$tier JOBS=$jobs FILTER=$filter ALL=$all PICKED=$picked GATE=$gate CROSS=$cross \
+            OPTS=$opts WASM=$wasm BINDGEN=$bindgen DIST=$dist PREFIXES=$prefixes \
+            scripts/expected-jobs.sh > "$RUNNER_TEMP/expected-jobs.json"
+          jq -r '.names[]' "$RUNNER_TEMP/expected-jobs.json" | sed 's/^/expected: /'
+      # The jobs release-ready.sh requires of this run.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: expected-jobs
+          path: ${{ runner.temp }}/expected-jobs.json
+          if-no-files-found: error
 
   # Restore each host's pinned LLVM prefix (llvm-prefix action: S3, with the
   # Actions cache on a hosted runner or ROK_CI_HOME on a self-hosted one).
@@ -341,7 +358,7 @@ jobs:
       matrix:
         host: ${{ fromJSON(needs.plan.outputs.hosts) }}
         opt: ${{ fromJSON(needs.plan.outputs.opts) }}
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4] # scripts/expected-jobs.sh names these
     name: corpus (${{ matrix.host }} ${{ matrix.opt }} ${{ matrix.shard }}/4)
     runs-on: ${{ fromJSON(needs.plan.outputs.runners)[matrix.host] }}
     timeout-minutes: 120
@@ -392,7 +409,7 @@ jobs:
       fail-fast: false
       matrix:
         host: ${{ fromJSON(needs.plan.outputs.hosts) }}
-        part: [1, 2, 3]
+        part: [1, 2, 3] # scripts/expected-jobs.sh names these
     name: test (${{ matrix.host }} ${{ matrix.part }}/3)
     runs-on: ${{ fromJSON(needs.plan.outputs.runners)[matrix.host] }}
     timeout-minutes: 60
@@ -520,11 +537,11 @@ jobs:
   # built too.
   wasm:
     needs: [plan, llvm-prefix, check]
-    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.check.result != 'failure' && contains(needs.plan.outputs.jobs, 'wasm') }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.check.result != 'failure' && needs.plan.outputs.wasm != '[]' }}
     strategy:
       fail-fast: false
       matrix:
-        target: [wasm32-wasip2, wasm32-wasip1-threads, wasm32-unknown-unknown]
+        target: ${{ fromJSON(needs.plan.outputs.wasm) }}
     name: wasm (${{ matrix.target }})
     runs-on: ${{ fromJSON(needs.plan.outputs.runners)['linux-x64'] }}
     timeout-minutes: 180

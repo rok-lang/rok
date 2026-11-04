@@ -12,8 +12,9 @@ on:
 permissions:
   contents: write
 
+# One release run at a time, whatever the tag or ref.
 concurrency:
-  group: release-${{ github.ref }}
+  group: rok-release
   cancel-in-progress: false
 
 jobs:

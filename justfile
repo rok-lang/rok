@@ -59,6 +59,11 @@ check-targets:
 test-release:
     scripts/test-release.sh
 
+# release-prep.sh, changelog-lint.sh, pr-lint.sh and release-ready.sh's
+# expected-jobs check against a fake history and a stubbed gh.
+test-release-prep:
+    scripts/test-release-prep.sh
+
 # Fail on gitlinks .gitmodules does not list, or anything under .claude/.
 check-tree:
     scripts/check-tree.sh
