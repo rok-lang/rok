@@ -6,7 +6,7 @@
 #   curl -fsSL https://rok-lang.org/install.sh | sh
 #   sh install.sh --archive rok-<version>-<triple>.tar.xz   (or .tar.gz)
 #   rok-<version>-<triple>/install.sh          (from an unpacked archive)
-#   sh install.sh --version 0.1.6              (that release)
+#   sh install.sh --version 0.2.0              (that release)
 #
 # Environment: ROK_HOME, ROK_VERSION (default below), ROK_DIST (where
 # releases are downloaded from), ROK_NO_MODIFY_PATH, NO_COLOR,
@@ -194,7 +194,7 @@ else
     triple=$(host_triple)
     case $version in
       [0-9]*.*.*) ;;
-      *) die "--version takes a full version like 0.1.6, not $version" ;;
+      *) die "--version takes a full version like 0.2.0, not $version" ;;
     esac
     base="$dist/download/v$version/rok-$version-$triple"
     status Downloading "rok $version ($triple)"

@@ -33,7 +33,7 @@ fn matches(pin: &str, version: &str) -> bool {
 
 /// What a pin may be, for messages.
 pub const PIN_FORMS: &str =
-    "write a version (`0.1`), a requirement (`^0.1.5`) or a toolchain directory name";
+    "write a version (`0.2`), a requirement (`^0.2.0`) or a toolchain directory name";
 
 /// A toolchain pin: a version or a prefix of one (`0.1`,
 /// `0.1.5`), a requirement (`^0.1.5`, `~0.1.5`, `=0.1.5`), or a toolchain
@@ -994,7 +994,7 @@ fn exact(want: &str, from: &str) -> Result<String, String> {
         ""
     };
     Err(format!(
-        "{from}: `{want}` is not a full version; write one like `0.1.6`{newest}"
+        "{from}: `{want}` is not a full version; write one like `0.2.0`{newest}"
     ))
 }
 
@@ -1133,11 +1133,11 @@ fn update(home: &Path, version: Option<&str>, quiet: bool, verbose: bool) -> Res
     if let Some(old) = old.filter(|n| *n != name) {
         let from = old.strip_suffix(&suffix).unwrap_or(&old);
         match series(from).filter(|s| series(&full).as_ref() != Some(s)) {
-            // Another series: say how to stay on the old one.
+            // Another series: only the newest gets fixes, so say to move.
             Some(s) => term::note(&format!(
-                "rok {from} stays installed; a project that must stay on {s} pins it \
-                 (`toolchain: \"{s}\"` in rok.rokon or a script's `//! rokon` block, as `rok \
-                 new` writes) or runs `rok +{s} ..`"
+                "rok {from} stays installed, but {s} gets no more fixes; move projects to \
+                 {full}. Until a project moves it can pin {s} (`toolchain: \"{s}\"` in \
+                 rok.rokon or a script's `//! rokon` block) or run `rok +{s} ..`"
             )),
             None => term::note(&format!(
                 "{old} stays installed (`rok toolchain remove {old}`)"
@@ -1321,7 +1321,7 @@ mod tests {
         assert!(ToolchainReq::parse(&dir).is_ok() && !m(&dir, "0.1.5"));
         for bad in ["banana", "", "latest", "^x", "0.1.x", "v0.1"] {
             let e = ToolchainReq::parse(bad).unwrap_err();
-            assert!(e.contains("write a version (`0.1`)"), "{bad}: {e}");
+            assert!(e.contains("write a version (`0.2`)"), "{bad}: {e}");
         }
     }
 
