@@ -75,6 +75,12 @@ arm64, `windows-2022` x86_64, `windows-11-arm` aarch64 (cross only). x86_64-appl
 - `lint` also runs `scripts/test-release.sh`: `release.sh --publish` against a stubbed `gh`, an `-rc.N`
   version a prerelease, a draft made public only once it holds every planned asset, and a moved tag, a
   missing archive or one that breaks the installer contract refused.
+- `lint` also runs `scripts/test-release-prep.sh`: `release-prep.sh`, `changelog-lint.sh` and `pr-lint.sh`
+  against a fake history and stubbed `gh` and `cargo`, and `release-ready.sh ci` against fake runs and their
+  `expected-jobs` artifacts.
+- `plan` uploads the artifact `expected-jobs` (`expected-jobs.json`, from `scripts/expected-jobs.sh`): every
+  job name the run must pass and whether it is a full run (every host and job, no filter). `release-ready`
+  requires a full run that passed all of them.
 - `lint` runs `scripts/check-tree.sh` too: a gitlink that `.gitmodules` does not list, or any tracked path
   under `.claude/`, fails it.
 - `queue-head` (merge queue only): each commit of the queue group must have the tree its PR's current head

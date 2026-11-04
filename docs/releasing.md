@@ -37,7 +37,10 @@ against a stubbed `gh` (CI `lint`).
 
 ## Flow
 
-1. Land the release commit (version bump and `CHANGELOG.md`) on `main`.
+1. Prepare the release commit: Actions, release-prep, Run workflow,
+   `version` `X.Y.Z` (below). Write the hand-written blocks on
+   `release/X.Y.Z` until `changelog-lint` passes, then land its commit on
+   `main`.
 2. Run `release-ready` on it: Actions, release-ready, Run workflow, `ref`
    `main` (or the commit's sha). It runs, on that exact commit:
    - `scripts/check-version.sh` and `scripts/release-notes.sh <version>`;
@@ -52,10 +55,71 @@ against a stubbed `gh` (CI `lint`).
 3. Tag that commit `v<version>` and push the tag. `release.yml` refuses a
    commit without a passing `release-ready` run.
 
+`release.yml` and `release-prep.yml` share the concurrency group
+`rok-release`: one runs at a time, the next waits.
+
 A pushed tag is never moved or deleted, and a release is never re-cut. If
 something is wrong after the tag, the fix ships as the next patch version.
 `release.yml` checks right before it publishes that the tag still names
 the commit the archives were built from, and stops otherwise.
+
+## Preparing the release commit
+
+`release-prep.yml` (manual, from `main`; in the environment `release-prep`
+when the repository has one) runs `scripts/release-prep.sh --push X.Y.Z`.
+It fails, listing each, when the milestone `X.Y.Z` has open issues or a PR
+merged since the previous tag has no valid `changelog:` block (fix the PR
+description, then run it again). Otherwise it pushes `release/X.Y.Z`: one
+commit `release: X.Y.Z` on `main` that sets the version in `Cargo.toml`,
+`Cargo.lock` (`cargo update --workspace --offline`), `install.sh` and
+`install.ps1`, and puts on top of `CHANGELOG.md`:
+
+```
+## X.Y.Z (YYYY-MM-DD)
+
+<!-- begin summary -->
+Summary: ...
+<!-- end summary -->
+
+<!-- begin highlights -->
+### Highlights
+...
+<!-- end highlights -->
+
+<!-- begin migration -->     (X.Y.0 only)
+### Migration
+...
+<!-- end migration -->
+
+### Added / ### Changed / ### Fixed / ### Removed
+- <the PR's line> (#N)
+
+<!-- silent: #N ... -->
+```
+
+The kinds and their lines come from each PR's `changelog:` block (the pull
+request template; `pr-lint` checks it on every PR). Silent lines and
+Dependabot PRs go only into the `silent` comment, so every PR stays
+accounted for. To change a generated line, edit the PR description and run
+release-prep again.
+
+The blocks between the `begin` / `end` markers are written by hand on the
+branch (the web editor is enough): the one `Summary:` line (the roadmap and
+rok-lang.org show it), the highlights, and for X.Y.0 the migration notes.
+Delete a block that has nothing to say. Every push to `release/*` runs
+`changelog-lint.yml` (`scripts/changelog-lint.sh X.Y.Z`): the first
+section is `## X.Y.Z (YYYY-MM-DD)` and the only one for X.Y.Z, `Cargo.toml`
+sets X.Y.Z, no heading is empty, every PR since the previous tag is cited
+as `(#N)` or listed silent, the Summary line is written and no `TODO` is
+left in a block.
+
+Running release-prep again refreshes the branch: when `main` has moved it
+rebases onto it, regenerates the PR lines and keeps the hand-written blocks
+(and their deletion). The branch may hold extra commits that touch only the
+release files; they are squashed into the one release commit. A branch that
+changes anything else is refused. When nothing changed it writes nothing.
+`scripts/release-prep.sh X.Y.Z` without `--push` does the same into the
+local branch only.
 
 ## Targets
 
@@ -173,7 +237,7 @@ old one made and locked. Run it (`jobs: dist`) before tagging.
   uses its own `## <version>-rc.N` section if there is one, else the
   section of the final version (`## 0.2.0` for `0.2.0-rc.1`). Check with
   `scripts/release-notes.sh <version>`.
-- The release commit (version bump and changelog) goes straight to `main`,
+- The release commit (version bump and changelog, from release-prep) goes straight to `main`,
   its `ci` run there has a green `ci-gate`, and a `release-ready` run passed
   on it (Flow, above). `release.yml` refuses the tag otherwise. The
   `corpus` jobs build and run every integration case: each shard reports
