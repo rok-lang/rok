@@ -18,9 +18,11 @@ standard library are meant to be stable.
 
 Releases are cut on demand, when a version's work is ready; there is no
 fixed schedule. A release is cut from `main` and tagged `v<version>`.
-There is no long-lived release branch: a maintenance branch (for example
-`0.1`) is made from a release tag only if a patch for an older minor is
-needed after `main` has moved on. A version may first go out as a release
+There is no release or maintenance branch: only the latest series gets
+fixes, so a fix always ships as the next release from `main`. Once a new
+series is out, the one before it is no longer supported (no fixes, no
+security releases); its archives stay downloadable. The 0.1 series is
+unsupported since 0.2.0 (`SECURITY.md`). A version may first go out as a release
 candidate (`v<version>-rc.N`) to exercise the pipeline before the final
 tag.
 
@@ -92,14 +94,15 @@ major version is 0 (`0.1` is 0.1.0, 0.1.1, ...), then `MAJOR`.
 any series; each release uploads it. A bare `rok toolchain update`
 installs what it names and makes it the default, as rustup does, also
 when that moves to a new series. The previous toolchain
-stays installed, and when the series changed `rok` says so once, with how
-to stay on the old one: pin it (`toolchain: "0.1"` in `rok.rokon`, or in
-a script's `//! rokon` block) or run `rok +0.1 ..`. Every 0.1.x client
+stays installed, and when the series changed `rok` says so once: the old
+series gets no more fixes, so move projects to the new one; until then a
+project can pin it (`toolchain: "0.1"` in `rok.rokon`, or in a script's
+`//! rokon` block) or run `rok +0.1 ..`. Every 0.1.x client
 reads this file the same way, so it must keep its name and format.
 
 Any other release is installed by its full version:
-`rok toolchain update 0.1.6`, `rok toolchain install 0.1.6`,
-`install.sh --version 0.1.6`, `install.ps1 -Version 0.1.6`. There is no
+`rok toolchain update 0.2.0`, `rok toolchain install 0.2.0`,
+`install.sh --version 0.2.0`, `install.ps1 -Version 0.2.0`. There is no
 series lookup and no channel file: an argument that is not a full version
 is an error. (rok 0.1.6 still looks for
 `download/channels/rok-version-<series>` when given a series; none is

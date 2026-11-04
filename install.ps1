@@ -6,7 +6,7 @@
 #   powershell -ExecutionPolicy Bypass -c "irm https://rok-lang.org/install.ps1 | iex"
 #   powershell -ExecutionPolicy Bypass -File install.ps1 -Archive rok-<version>-<triple>.zip
 #   rok-<version>-<triple>\install.ps1          (from an unpacked archive)
-#   powershell -ExecutionPolicy Bypass -File install.ps1 -Version 0.1.6   (that release)
+#   powershell -ExecutionPolicy Bypass -File install.ps1 -Version 0.2.0   (that release)
 #
 # Environment: ROK_HOME, ROK_VERSION (default below), ROK_DIST (where
 # releases are downloaded from), ROK_NO_MODIFY_PATH, NO_COLOR,
@@ -92,7 +92,7 @@ try {
             if (-not $Archive) {
                 $triple = HostTriple
                 if ($Version -notmatch '^\d+\.\d+\.\d+') {
-                    throw "-Version takes a full version like 0.1.6, not $Version"
+                    throw "-Version takes a full version like 0.2.0, not $Version"
                 }
                 $url ="$dist/download/v$Version/rok-$Version-$triple.zip"
                 Status 'Downloading' "rok $Version ($triple)"

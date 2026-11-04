@@ -1891,7 +1891,7 @@ fn pinned_toolchains() {
     let mut c = rok_cmd(&home, &root, &["toolchain", "install", "9.9"]);
     fails(
         &c.env("ROK_DIST", &empty).output().unwrap(),
-        "rok toolchain install: `9.9` is not a full version; write one like `0.1.6`",
+        "rok toolchain install: `9.9` is not a full version; write one like `0.2.0`",
     );
     assert_eq!(
         tc(&["install", "9.9.1", "--frm", "x"]).status.code(),
@@ -4529,7 +4529,7 @@ fn fake_dist(root: &Path, versions: &[&str]) -> String {
 }
 
 /// A bare update installs the newest release, also from another series,
-/// and says how to stay on the old one. An argument is an exact version;
+/// and says the old series gets no more fixes. An argument is an exact version;
 /// a series or a requirement is an error that says to write one.
 #[cfg(unix)]
 #[test]
@@ -4570,7 +4570,7 @@ fn update_newest_and_exact() {
         fails(
             &tc(&["update", bad]),
             &format!(
-                "rok toolchain update: `{bad}` is not a full version; write one like `0.1.6`, \
+                "rok toolchain update: `{bad}` is not a full version; write one like `0.2.0`, \
                  or nothing for the newest release"
             ),
         );
@@ -4584,9 +4584,9 @@ fn update_newest_and_exact() {
     assert!(err.contains("Updated rok 0.90.2 -> 0.91.0\n"), "{err}");
     assert!(
         err.ends_with(
-            "note: rok 0.90.2 stays installed; a project that must stay on 0.90 pins it \
-             (`toolchain: \"0.90\"` in rok.rokon or a script's `//! rokon` block, as `rok new` \
-             writes) or runs `rok +0.90 ..`\n"
+            "note: rok 0.90.2 stays installed, but 0.90 gets no more fixes; move projects to \
+             0.91.0. Until a project moves it can pin 0.90 (`toolchain: \"0.90\"` in \
+             rok.rokon or a script's `//! rokon` block) or run `rok +0.90 ..`\n"
         ),
         "{err}"
     );
@@ -4644,7 +4644,7 @@ fn install_by_version_without_from() {
     assert_eq!(ok(&c.output().unwrap()), "rokc 0.90.1: x\n");
     fails(
         &tc(&["install", "0.92"]),
-        "rok toolchain install: `0.92` is not a full version; write one like `0.1.6`",
+        "rok toolchain install: `0.92` is not a full version; write one like `0.2.0`",
     );
 }
 
@@ -4712,8 +4712,8 @@ fn bad_pin_warns() {
     let err = text(&out.stderr);
     assert!(
         err.contains(
-            "rok.rokon:1:35: `toolchain: \"banana\"`: write a version (`0.1`), a requirement \
-             (`^0.1.5`) or a toolchain directory name"
+            "rok.rokon:1:35: `toolchain: \"banana\"`: write a version (`0.2`), a requirement \
+             (`^0.2.0`) or a toolchain directory name"
         ),
         "{err}"
     );
@@ -4724,7 +4724,7 @@ fn bad_pin_warns() {
     );
     fails(
         &rok(&home, &root, &["check"]),
-        "`banana` is not a toolchain pin; write a version (`0.1`)",
+        "`banana` is not a toolchain pin; write a version (`0.2`)",
     );
 }
 
