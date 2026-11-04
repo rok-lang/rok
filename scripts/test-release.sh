@@ -4,7 +4,9 @@
 # is notes.md, the release stays a draft until it holds every planned
 # asset, and a missing notes.md or archive, a tag that names another
 # version or sits on another commit, or an archive that breaks the
-# installer contract stops the release before gh runs. release-notes.sh
+# installer contract stops the release before gh runs. A rerun leaves a
+# public release alone and makes a leftover draft again; --rehearse
+# checks a draft without a tag and deletes it. release-notes.sh
 # picks the right CHANGELOG section. Fake archives for every target in
 # release-targets.json; nothing is built or uploaded.
 #
@@ -17,7 +19,8 @@ tmp=$(mktemp -d "${TMPDIR:-/tmp}/rok-test-release.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
 # gh records its arguments and serves back the files `release create` got,
-# less $GH_DROP. git puts the tag on $TAG_AT (empty: no tag), an annotated
+# less $GH_DROP; $GH_EXISTING (true or false) is a draft or public release
+# already there. git puts the tag on $TAG_AT (empty: no tag), an annotated
 # tag when $TAG_OBJ is set.
 head=0123456789abcdef0123456789abcdef01234567
 mkdir "$tmp/stub"
@@ -33,7 +36,17 @@ case "$1 $2" in
       [ "${a##*/}" = "${GH_DROP-}" ] || echo "${a##*/} $(wc -c < "$a" | tr -d ' ')" >> "$GH_LOG.assets"
     done
     ;;
-  "release view") cat "$GH_LOG.assets" ;;
+  "release view")
+    # --json isDraft: the release as $GH_EXISTING has it (empty: none).
+    case "$*" in
+      *isDraft*)
+        [ -n "${GH_EXISTING-}" ] || exit 1
+        echo "$GH_EXISTING"
+        exit 0
+        ;;
+    esac
+    cat "$GH_LOG.assets"
+    ;;
 esac
 EOF
 cat > "$tmp/stub/git" << EOF
@@ -166,6 +179,47 @@ fi
 grep -q '^release create ' "$tmp/gh.log" || fail "no draft was created: $(cat "$tmp/gh.log")"
 ! grep -q '^release edit ' "$tmp/gh.log" || fail "a draft without rok-version went public"
 echo "ok        a draft missing an asset stays a draft"
+
+# A full publish, so the stub holds every asset, then the reruns.
+publish 0.2.0 v0.2.0 || fail "release.sh --publish 0.2.0 failed: $(cat "$tmp/out")"
+(GH_EXISTING=false publish 0.2.0 v0.2.0) || {
+  cat "$tmp/out" >&2
+  fail "release.sh --publish 0.2.0 failed on a rerun after it went public"
+}
+! grep -q '^release \(create\|edit\|delete\) ' "$tmp/gh.log" ||
+  fail "a rerun changed the public v0.2.0: $(cat "$tmp/gh.log")"
+grep -q "is already public with every planned asset" "$tmp/out" ||
+  fail "a rerun did not say v0.2.0 is done: $(cat "$tmp/out")"
+echo "ok        a rerun leaves a public release with every asset alone"
+
+echo "rok-version 1" > "$tmp/gh.log.assets"
+if (GH_EXISTING=false publish 0.2.0 v0.2.0); then
+  fail "release.sh --publish passed a public release with other assets"
+fi
+! grep -q '^release \(create\|edit\|delete\) ' "$tmp/gh.log" ||
+  fail "release.sh changed a public release with other assets: $(cat "$tmp/gh.log")"
+echo "ok        a public release with other assets stops the rerun"
+
+(GH_EXISTING=true publish 0.2.0 v0.2.0) || {
+  cat "$tmp/out" >&2
+  fail "release.sh --publish 0.2.0 failed over a leftover draft"
+}
+[ "$(grep '^release \(delete\|create\)' "$tmp/gh.log" | cut -d' ' -f1-3 | tr '\n' ' ')" = "release delete v0.2.0 release create v0.2.0 " ] ||
+  fail "a leftover draft is not dropped before the new one: $(cat "$tmp/gh.log")"
+echo "ok        a leftover draft is made again"
+
+: > "$tmp/gh.log"
+GH_LOG=$tmp/gh.log TAG_AT='' PATH=$tmp/stub:$PATH \
+  "$root/scripts/release.sh" --dir "$tmp/dist-0.2.0" --rehearse rehearsal-0.2.0-7 --commit "$head" > "$tmp/out" 2>&1 || {
+  cat "$tmp/out" >&2
+  fail "release.sh --rehearse failed"
+}
+grep -q "^release create rehearsal-0.2.0-7 .* --draft --target $head " "$tmp/gh.log" ||
+  fail "the rehearsal draft is not made on the commit: $(cat "$tmp/gh.log")"
+[ "$(tail -n 1 "$tmp/gh.log")" = "release delete rehearsal-0.2.0-7 --yes" ] ||
+  fail "the rehearsal draft is not deleted last: $(cat "$tmp/gh.log")"
+! grep -q '^release edit ' "$tmp/gh.log" || fail "a rehearsal went public"
+echo "ok        a rehearsal checks a draft without a tag and deletes it"
 
 rm "$tmp/dist-0.2.0/rok-0.2.0-x86_64-pc-windows-msvc.zip"
 if publish 0.2.0; then

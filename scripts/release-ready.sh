@@ -7,7 +7,7 @@
 #   scripts/release-ready.sh verify <sha>
 #
 # ci: a ci run with every host and job (jobs=all, hosts=all) passed on
-# <sha>: every job its plan listed in the expected-jobs artifact. dry-run: a manual release.yml run (build and verify, no publish)
+# <sha>: every job its plan listed in the expected-jobs artifact. dry-run: a release-build.yml run (build and verify, no publish)
 # passed on <sha>. Either reuses a passing run of <sha> if there is one,
 # else dispatches one on <branch>, which must point at <sha>, and waits.
 # verify: the release-ready status on <sha> is success and was set by a
@@ -140,13 +140,13 @@ case $cmd in
     echo "release-ready.sh: full ci passed on $sha in run $id"
     ;;
   dry-run)
-    id=$(passed_runs release.yml | head -n 1)
+    id=$(passed_runs release-build.yml | head -n 1)
     if [ -z "$id" ]; then
-      id=$(dispatch release.yml)
+      id=$(dispatch release-build.yml)
       c=$(gh api "repos/$GH_REPO/actions/runs/$id" --jq .conclusion)
-      [ "$c" = success ] || die "release.yml dry run $id on $sha: $c"
+      [ "$c" = success ] || die "release-build.yml dry run $id on $sha: $c"
     fi
-    echo "release-ready.sh: release.yml dry run passed on $sha in run $id"
+    echo "release-ready.sh: release-build.yml dry run passed on $sha in run $id"
     ;;
   verify)
     url=$(gh api "repos/$GH_REPO/commits/$sha/statuses?per_page=100" \

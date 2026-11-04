@@ -1,11 +1,10 @@
 # Releasing
 
 How a `rok` release is cut. A release ships one host archive set for every
-triple in `release-targets.json`; `release.yml` builds them all on
-GitHub-hosted runners and cuts the GitHub release on a tag push. Nothing
-runs on its own: a release happens only when a `v<version>` tag is pushed.
-A manual `workflow_dispatch` run builds and verifies the archives and never
-publishes.
+triple in `release-targets.json`, built on GitHub-hosted runners. Nothing
+runs on its own: a release starts only when someone dispatches
+`release.yml`, and only `release.yml`, through the `rok-lang-release` App,
+creates `v<version>` tags.
 
 ## Versioning and cadence
 
@@ -39,29 +38,69 @@ against a stubbed `gh` (CI `lint`).
 
 1. Prepare the release commit: Actions, release-prep, Run workflow,
    `version` `X.Y.Z` (below). Write the hand-written blocks on
-   `release/X.Y.Z` until `changelog-lint` passes, then land its commit on
-   `main`.
-2. Run `release-ready` on it: Actions, release-ready, Run workflow, `ref`
-   `main` (or the commit's sha). It runs, on that exact commit:
-   - `scripts/check-version.sh` and `scripts/release-notes.sh <version>`;
-   - full `ci` (`hosts: all`, `jobs: all`: every host at `-O0` and `-O2`,
-     cross, wasm, bindgen, dist), reusing a passing manual or nightly run of
-     the commit, else dispatching one on the branch and waiting;
-   - a `release.yml` dry run (build and verify every archive, no
-     publish), reused or dispatched the same way.
+   `release/X.Y.Z` until `changelog-lint` passes.
+2. Rehearse it: Actions, release, Run workflow, `version` `X.Y.Z`, `mode`
+   `rehearse` (the default). It runs every stage below on a copy of the
+   release commit (`rehearse/X.Y.Z`) and makes nothing public.
+3. Release it: the same with `mode` `release`, then approve the one
+   deployment review (environment `release`) when the run stops for it.
+   Its summary shows the version, the commit, every asset with size and
+   SHA-256, and the notes.
 
-   When all pass it sets the `release-ready` status on the commit. A later
-   push to `main` does not matter: the status belongs to the commit.
-3. Tag that commit `v<version>` and push the tag. `release.yml` refuses a
-   commit without a passing `release-ready` run.
-
-`release.yml` and `release-prep.yml` share the concurrency group
-`rok-release`: one runs at a time, the next waits.
+`release.yml`, `release-prep.yml` and nothing else share the concurrency
+group `rok-release`: one runs at a time, the next waits.
 
 A pushed tag is never moved or deleted, and a release is never re-cut. If
 something is wrong after the tag, the fix ships as the next patch version.
-`release.yml` checks right before it publishes that the tag still names
-the commit the archives were built from, and stops otherwise.
+The `immutable release tags` ruleset enforces it, and `tag-guard.yml`
+opens an `alarm` issue for any `v*` tag the App did not create.
+
+## What release.yml does
+
+Each job first looks at what is already done and skips it, so a run that
+failed or was cancelled resumes when the same version and mode are
+dispatched again. The record lives in the issue `Release X.Y.Z`
+(`Rehearsal X.Y.Z`, labels `release`, `rehearsal`): a table and a JSON
+block with the state reached, the evidence of each stage and, after a
+failure, `blocked` with the failed jobs.
+
+| Job | State | What it does | Rehearsal |
+|---|---|---|---|
+| `plan` | PLANNED | checks the version, opens or reuses the record | same |
+| `prepare` | PREPARED | `release-prep.sh --push` (a no-op when up to date), or finds `release: X.Y.Z` already on `main`; `changelog-lint` must pass | on `rehearse/X.Y.Z`, open milestone issues and a draft changelog only warn |
+| `land` | LANDED | fast-forwards `main` to the release commit (the App bypasses the `main` ruleset for this push); a `main` that moved fails, and the next dispatch rebases | skipped |
+| `ready`, `ci-green` | READY | `release-ready.yml` on the commit (full ci and a `release-build.yml` dry run, passing runs reused), then `main`'s own `ci-gate` | no `ci-green` |
+| `build-find`, `build`, `collect` | BUILT | reuses the dry run's `dist-*` artifacts (`scripts/release-dist.sh find`), else builds; checks every build is of the commit, `release.sh --dir dist` | same |
+| `tag` | TAGGED | the one approval (environment `release`), then the App creates the annotated tag; a tag already on the commit is kept, one on another commit stops the run | environment `rehearsal`: no reviewer, checks the tag is free and the App token mints |
+| `publish` | PUBLISHED | attestation, then `release.sh --publish`: draft, check, tag check, public; a public release with every asset is left alone | `release.sh --rehearse`: a draft without a tag, checked, deleted |
+| `smoke` | SMOKED | installs `vX.Y.Z` with `install-rok` on Linux, macOS and Windows; `latest/download/rok-version` names it | installs the build run's archives |
+| `finish` | | writes the furthest state, or `blocked`, and comments | closes the record, deletes `rehearse/X.Y.Z` |
+
+`mode` `abort` drops an attempt with no tag: it deletes `release/X.Y.Z`
+and `rehearse/X.Y.Z` and closes the record as ABANDONED. A commit that
+already landed stays on `main` (it is never rewritten); the next
+release-prep makes a new `release: X.Y.Z` commit over it. Once tagged, the
+version is burned: ship the next one.
+
+## Recovering
+
+Read the record's `blocked` and the failed job, fix the cause, then
+dispatch `release` again with the same version and mode.
+
+- `prepare` failed on changelog-lint: write the Summary and Highlights on
+  `release/X.Y.Z`. On open issues or a bad `changelog:` block: close or
+  move the issues, fix the PR description.
+- `land` failed because `main` moved: dispatch again; prepare rebases.
+- `ready` or `ci-green` failed: fix `main` (a red `ci-gate`) or rerun the
+  failed ci run, then dispatch again; passing runs are reused.
+- `build` failed: dispatch again; only a run that holds every `dist-*`
+  artifact is reused, so it builds again.
+- `tag` stopped on a tag on another commit: someone tagged by hand; the
+  version is burned (see `tag-guard`'s alarm), ship the next one.
+- `publish` failed after the tag: dispatch again; the leftover draft is
+  made again. A public release with other assets is not touched.
+- `smoke` failed: the release is public. Find why it does not install;
+  the fix ships as the next patch.
 
 ## Preparing the release commit
 
@@ -123,27 +162,21 @@ local branch only.
 
 ## Targets
 
-`release-targets.json` is the single list of release targets: `release.yml`
-builds its matrix from it, `scripts/release.sh` verifies exactly its
+`release-targets.json` is the single list of release targets:
+`release-build.yml` builds its matrix from it, `scripts/release.sh` verifies exactly its
 archives, and `scripts/check-targets.sh` checks the install scripts against
 it. Each entry names the triple, the runner image (`runs-on`), the build
 script (`kind`: `native` is `dist-native.sh`, `gnu` / `musl` the container
 scripts) and the archive set (`archive`: `unix`, `win` or `musl`). Adding or
 dropping a host is an edit there, not here.
 
-## What a tag push does
+## What a build does
 
-Pushing a `v<version>` tag runs `release.yml`:
+`release-build.yml` builds one commit; `release-ready` dispatches it as the
+dry run and `release.yml` reuses its artifacts:
 
-1. `ready` calls `release-ready.yml` with `verify_only`: the version and
-   notes checks again, the tag is `v` plus the version, and the commit has a
-   `release-ready` status set by a passing release-ready run. Then
-   `ci-green`: the tagged commit must have a `ci` run on `main` (a push
-   event, the newest not cancelled) whose `ci-gate` job succeeded. A run
-   still in progress is waited for; no run, or a gate that failed, fails the
-   release before anything is built.
-2. `plan`: reads the targets from `release-targets.json`.
-3. `build`, one independent job per target, all in parallel (`fail-fast`
+1. `plan`: reads the targets from `release-targets.json`.
+2. `build`, one independent job per target, all in parallel (`fail-fast`
    off, so one failure does not cancel the rest):
    - `native` targets (macOS, Windows) build with `dist-native.sh`, taking
      the pinned LLVM and libclang prefixes from the `rok-lang-artifacts` S3
@@ -155,28 +188,26 @@ Pushing a `v<version>` tag runs `release.yml`:
    - each uploads its `rok-<version>-<triple>` archives (`.tar.gz` +
      `.tar.xz`; Windows a `.zip`), a `.sha256` beside each, a
      `rok-version` file, and the commit it built.
-4. `publish`, once every build passed: gathers every archive, checks every
-   build ran on the run's commit, runs `release.sh --dir dist` to verify
-   that every target's archives and checksums are present and match and
-   that every toolchain archive keeps the installer contract (below),
-   records the build provenance attestation, writes `dist/notes.md` from
-   the version's `CHANGELOG.md` section (`scripts/release-notes.sh`), and
-   runs `release.sh --dir dist --publish --commit <sha>`. That checks the
-   tag on origin still names `<sha>`, creates the `v<version>` release as a
-   draft with those notes as its body, uploads every planned asset, checks
-   the draft holds exactly them (every archive, its `.sha256`, and
-   `rok-version`, each at its local size), checks the tag again and only
-   then makes the release public. A draft that fails a check stays
-   unpublished; `latest/` never sees it. `release.sh` refuses a tag that is
-   not `v` plus the archives' `rok-version`, and `--publish` refuses a
-   missing `notes.md`.
-   `install.sh` / `install.ps1` download `v<version>` by default;
-   `rok-version` is served from `releases/latest/`.
+3. `verify`: gathers every archive, checks every build ran on the commit
+   (`scripts/release-dist.sh check`) and runs `release.sh --dir dist`: every
+   target's archives and checksums are present and match, and every
+   toolchain archive keeps the installer contract (below).
 
-A manual `workflow_dispatch` run skips `ready` and `ci-green`, then runs
-`plan`, `build` and the verify in `publish` exactly as a tag does. It stops
-there, also on a tag ref: no attestation, no release, nothing uploaded.
-`release-ready` uses it as the dry run.
+`release.yml`'s `publish` then records the build provenance attestation,
+writes `dist/notes.md` from the version's `CHANGELOG.md` section
+(`scripts/release-notes.sh`) and runs `release.sh --dir dist --publish
+--commit <sha>`. That checks the tag on origin still names `<sha>`,
+creates the `v<version>` release as a draft with those notes as its body,
+uploads every planned asset, checks the draft holds exactly them (every
+archive, its `.sha256`, and `rok-version`, each at its local size), checks
+the tag again and only then makes the release public. A draft that fails a
+check stays unpublished; `latest/` never sees it. `install.sh` /
+`install.ps1` download `v<version>` by default; `rok-version` is served
+from `releases/latest/`.
+
+`release-legacy.yml` keeps the old path (a pushed tag builds and
+publishes) for one release, off unless the repository variable
+`ROK_RELEASE_LEGACY` is `on`.
 
 ## Update pointer
 
@@ -239,7 +270,7 @@ old one made and locked. Run it (`jobs: dist`) before tagging.
   `scripts/release-notes.sh <version>`.
 - The release commit (version bump and changelog, from release-prep) goes straight to `main`,
   its `ci` run there has a green `ci-gate`, and a `release-ready` run passed
-  on it (Flow, above). `release.yml` refuses the tag otherwise. The
+  on it; `release.yml` does all three and stops on the first that fails. The
   `corpus` jobs build and run every integration case: each shard reports
   its share of the corpus, and one that selects no case, or runs fewer than
   its share of the floor (docs/ci.md), fails (an empty `ROK_TEST_FILTER` is
@@ -249,7 +280,7 @@ old one made and locked. Run it (`jobs: dist`) before tagging.
 
 ## After the release
 
-Once `release.yml` has published and the assets are downloadable:
+Once `release.yml` reached SMOKED (its record says so):
 
 - Nix: run `scripts/nix-sources.sh <version>`, which rewrites
   `nix/sources.json` from the release's `.sha256` assets, and land it as
