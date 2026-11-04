@@ -14,6 +14,7 @@
 #![allow(clippy::cast_ptr_alignment)]
 
 use core::slice;
+use core::sync::atomic::{AtomicUsize, Ordering};
 
 use rokr_common::object_header::HEADER_SIZE;
 
@@ -68,9 +69,24 @@ fn parked<R>(work: usize, f: impl FnOnce() -> R) -> R {
         return f();
     }
     rokr_gc::world::enter_native();
+    PARKED_MARKS.fetch_add(1, Ordering::SeqCst);
     let r = f();
+    // Before any safepoint: a collection that waited for the kernel
+    // sees it ended.
+    PARKED_MARKS.fetch_add(1, Ordering::SeqCst);
     rokr_gc::world::leave_native();
     r
+}
+
+/// Parked kernels started plus those ended ([`rok_nat_parked_marks`]).
+static PARKED_MARKS: AtomicUsize = AtomicUsize::new(0);
+
+/// How many times a parked kernel started or ended: odd while one runs
+/// (tests: a collection that ends with the count unchanged did not wait
+/// for that kernel).
+#[unsafe(no_mangle)]
+pub extern "C" fn rok_nat_parked_marks() -> usize {
+    PARKED_MARKS.load(Ordering::SeqCst)
 }
 
 /// The first `n` limbs of the `GcBuf<u32>` at `buf`.
