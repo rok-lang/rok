@@ -2,7 +2,7 @@
 # Check a collected set of release archives and, with --publish, cut the
 # GitHub release.
 #
-#   scripts/release.sh [--dir <dir>] [--publish [--commit <sha>]]
+#   scripts/release.sh [--dir <dir>] [--publish | --rehearse <name>] [--commit <sha>]
 #
 # Gather every host's archives, their .sha256 sidecars and rok-version into
 # one <dir> (default dist). Without --publish it only checks the full set is
@@ -13,7 +13,10 @@
 # archives were built from, default HEAD). It uploads the planned assets to
 # a draft release with <dir>/notes.md (scripts/release-notes.sh) as the
 # body, checks the draft holds exactly them, checks the tag again and only
-# then makes the release public. A -rc.N version is published as a
+# then makes the release public. A rerun resumes: a published release
+# holding exactly the planned assets is left alone, a draft is dropped and
+# made again. --rehearse does the same into a draft called <name> on
+# <sha>, with no tag, and deletes it after the check. A -rc.N version is published as a
 # prerelease, so it never becomes latest/ and a bare `rok toolchain update`
 # never installs it. A tag build whose tag is not v<rok-version> fails. It
 # does not deploy the sites or publish stones.
@@ -21,6 +24,7 @@ set -eu
 
 dir=dist
 publish=""
+rehearse=""
 commit=""
 while [ $# -gt 0 ]; do
   case $1 in
@@ -32,12 +36,17 @@ while [ $# -gt 0 ]; do
       publish=1
       shift
       ;;
+    --rehearse)
+      publish=1
+      rehearse=$2
+      shift 2
+      ;;
     --commit)
       commit=$2
       shift 2
       ;;
     *)
-      echo "usage: scripts/release.sh [--dir <dir>] [--publish [--commit <sha>]]" >&2
+      echo "usage: scripts/release.sh [--dir <dir>] [--publish | --rehearse <name>] [--commit <sha>]" >&2
       exit 2
       ;;
   esac
@@ -156,7 +165,41 @@ tag_on_commit() {
     return 1
   fi
 }
-tag_on_commit
+# The release holds exactly the planned assets, each at its local size.
+assets_match() {
+  for a in $planned; do
+    echo "$a $(wc -c < "$dir/$a" | tr -d ' ')"
+  done | sort > "$dir/.release-want"
+  gh release view "$1" --json assets --jq '.assets[] | "\(.name) \(.size)"' | sort > "$dir/.release-got"
+  if cmp -s "$dir/.release-want" "$dir/.release-got"; then
+    rm -f "$dir/.release-want" "$dir/.release-got"
+    return 0
+  fi
+  echo "release.sh: $1 does not hold the $(echo "$planned" | wc -l | tr -d ' ') planned assets (< planned, > uploaded):" >&2
+  diff "$dir/.release-want" "$dir/.release-got" >&2 || true
+  rm -f "$dir/.release-want" "$dir/.release-got"
+  return 1
+}
+
+if [ -n "$rehearse" ]; then
+  name=$rehearse
+else
+  name=$tag
+  tag_on_commit
+  # A rerun: done if already public, a leftover draft is made again.
+  if draft=$(gh release view "$tag" --json isDraft --jq .isDraft 2> /dev/null); then
+    if [ "$draft" = false ]; then
+      assets_match "$tag" || {
+        echo "release.sh: $tag is public with other assets; a release never changes, ship the fix as the next version" >&2
+        exit 1
+      }
+      echo "release.sh: $tag is already public with every planned asset"
+      exit 0
+    fi
+    echo "release.sh: dropping the draft $tag a failed run left"
+    gh release delete "$tag" --yes
+  fi
+fi
 
 # A release candidate is a prerelease: GitHub's latest/ skips it, so the
 # rok-version there keeps naming the last final release.
@@ -168,25 +211,28 @@ for a in $planned; do
 done
 # A draft is not public and latest/ skips it, so a failed upload never
 # leaves a partial release behind.
-# shellcheck disable=SC2086
-gh release create "$tag" "$@" --draft --verify-tag \
-  --title "rok $version" --notes-file "$dir/notes.md" $pre
-
-# The draft holds exactly the planned assets, each at its local size.
-for a in $planned; do
-  echo "$a $(wc -c < "$dir/$a" | tr -d ' ')"
-done | sort > "$dir/.release-want"
-gh release view "$tag" --json assets --jq '.assets[] | "\(.name) \(.size)"' | sort > "$dir/.release-got"
-n=$(wc -l < "$dir/.release-want" | tr -d ' ')
-if ! cmp -s "$dir/.release-want" "$dir/.release-got"; then
-  echo "release.sh: draft $tag does not hold the $n planned assets (< planned, > uploaded):" >&2
-  diff "$dir/.release-want" "$dir/.release-got" >&2 || true
-  rm -f "$dir/.release-want" "$dir/.release-got"
-  echo "release.sh: the draft stays unpublished; delete it with 'gh release delete $tag' and rerun" >&2
-  exit 1
+if [ -n "$rehearse" ]; then
+  # shellcheck disable=SC2086
+  gh release create "$name" "$@" --draft --target "$commit" \
+    --title "rok $version (rehearsal)" --notes-file "$dir/notes.md" $pre
+else
+  # shellcheck disable=SC2086
+  gh release create "$tag" "$@" --draft --verify-tag \
+    --title "rok $version" --notes-file "$dir/notes.md" $pre
 fi
-rm -f "$dir/.release-want" "$dir/.release-got"
-echo "release.sh: draft $tag holds all $n planned assets"
+
+n=$(echo "$planned" | wc -l | tr -d ' ')
+assets_match "$name" || {
+  echo "release.sh: the draft $name stays unpublished; rerun to make it again" >&2
+  exit 1
+}
+echo "release.sh: draft $name holds all $n planned assets"
+
+if [ -n "$rehearse" ]; then
+  gh release delete "$name" --yes
+  echo "release.sh: rehearsal done, draft $name deleted"
+  exit 0
+fi
 
 tag_on_commit || {
   echo "release.sh: the draft stays unpublished" >&2

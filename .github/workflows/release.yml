@@ -1,58 +1,260 @@
 name: release
 
-# Build the six host archives and cut the GitHub release. macOS/Windows run
-# dist-native.sh; Linux gnu/musl run the container scripts. LLVM/libclang
-# prefixes come from S3 (published by prefixes.yml, Windows by
-# prefixes-windows.yml). A tag push publishes; a manual run only verifies.
+# A rok release from one dispatch: prepare, land, ready, build, approve,
+# tag, publish, smoke. Every job looks at what is already done and skips
+# it, so a failed or cancelled run resumes when the same version is
+# dispatched again. mode=rehearse (the default) runs every check and makes
+# nothing public: the release commit stays on rehearse/X.Y.Z, no tag is
+# created and the draft is deleted. mode=abort drops an attempt that has
+# no tag yet. The release issue holds the record (docs/releasing.md).
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      version:
+        description: "The version, X.Y.Z"
+        required: true
+      mode:
+        description: "rehearse checks everything and publishes nothing; release ships; abort drops an untagged attempt"
+        type: choice
+        options: [rehearse, release, abort]
+        default: rehearse
 
-permissions:
-  contents: write
+permissions: {}
 
-# One release run at a time, whatever the tag or ref.
+# One release run at a time; release-prep waits for it too.
 concurrency:
   group: rok-release
   cancel-in-progress: false
 
+defaults:
+  run:
+    shell: bash
+
+env:
+  VERSION: ${{ inputs.version }}
+  MODE: ${{ inputs.mode }}
+  GH_REPO: ${{ github.repository }}
+
 jobs:
-  # A release-ready run passed on this exact commit (full ci, a release.yml
-  # dry run, version and notes); this re-checks the cheap parts on the tag.
+  # Opens or reuses the record: issue "Release X.Y.Z" ("Rehearsal X.Y.Z").
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    outputs:
+      issue: ${{ steps.open.outputs.issue || steps.read.outputs.issue }}
+      state: ${{ steps.open.outputs.state || steps.read.outputs.state }}
+      branch: ${{ steps.plan.outputs.branch }}
+    steps:
+      - id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::run release from main, not $GITHUB_REF"
+            exit 1
+          fi
+          if ! echo "$VERSION" | grep -Eqx '[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "::error::'$VERSION' is not a release version; write X.Y.Z, such as 0.2.1"
+            exit 1
+          fi
+          prev=$(gh release list --exclude-drafts --exclude-pre-releases --json tagName,isLatest --jq '.[] | select(.isLatest) | .tagName')
+          prev=${prev#v}
+          event="patch"
+          [ "${prev%.*}" = "${VERSION%.*}" ] || event="series"
+          case $MODE in
+            rehearse) title="Rehearsal $VERSION" labels="release,rehearsal" branch="rehearse/$VERSION" ;;
+            *) title="Release $VERSION" labels="release" branch="release/$VERSION" ;;
+          esac
+          issue=$(gh issue list --state open --label release --limit 200 --json number,title \
+            --jq "map(select(.title == \"$title\"))[0].number // empty")
+          patch=$(jq -nc --arg v "$VERSION" --arg p "$prev" --arg e "$event" --arg m "$MODE" \
+            '{state: "PLANNED", version: $v, series: ($v | sub("\\.[0-9]+$"; "")), prev: $p, event: $e, mode: $m,
+              blocks: "rok-lang/.github@v1.0.0"}')
+          {
+            echo "issue=$issue"
+            echo "title=$title"
+            echo "labels=$labels"
+            echo "branch=$branch"
+            echo "patch=$patch"
+          } >> "$GITHUB_OUTPUT"
+          echo "$MODE $VERSION (prev $prev, $event), record ${issue:+#}${issue:-new}"
+      - id: open
+        if: steps.plan.outputs.issue == ''
+        uses: rok-lang/.github/actions/record@v1.0.0
+        with:
+          title: ${{ steps.plan.outputs.title }}
+          labels: ${{ steps.plan.outputs.labels }}
+          patch: ${{ steps.plan.outputs.patch }}
+      - id: read
+        if: steps.plan.outputs.issue != ''
+        uses: rok-lang/.github/actions/record@v1.0.0
+        with:
+          issue: ${{ steps.plan.outputs.issue }}
+
+  # The release commit on its branch, made or refreshed by release-prep.sh
+  # (a no-op when it is up to date), or found on main if it landed.
+  prepare:
+    needs: plan
+    if: inputs.mode != 'abort'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: release-prep
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    outputs:
+      sha: ${{ steps.found.outputs.sha || steps.prep.outputs.sha }}
+      landed: ${{ steps.found.outputs.landed }}
+      ready_ref: ${{ steps.found.outputs.ready_ref || steps.prep.outputs.ready_ref }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - id: found
+        run: |
+          c=""
+          if [ "$MODE" = release ]; then
+            c=$(git log origin/main --format=%H -n 1 --grep="^release: $VERSION\$")
+          fi
+          if [ -n "$c" ]; then
+            echo "release: $VERSION is on main at $c"
+            { echo "sha=$c"; echo "landed=true"; echo "ready_ref=$c"; } >> "$GITHUB_OUTPUT"
+          else
+            echo "landed=false" >> "$GITHUB_OUTPUT"
+          fi
+      - id: token
+        if: steps.found.outputs.landed != 'true'
+        uses: rok-lang/.github/actions/app-token@v1.0.0
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_KEY }}
+          repositories: rok
+          permissions: contents:write
+      # cargo update --offline needs the locked crates.
+      - name: toolchain (rust-toolchain.toml) and crates
+        if: steps.found.outputs.landed != 'true'
+        run: rustup toolchain install && cargo fetch --locked
+      - id: prep
+        if: steps.found.outputs.landed != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APP_TOKEN: ${{ steps.token.outputs.token }}
+          BRANCH: ${{ needs.plan.outputs.branch }}
+        run: |
+          git config user.name "rok-lang-release[bot]"
+          git config user.email "352646604+rok-lang-release[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:$APP_TOKEN@github.com/$GH_REPO"
+          set --
+          [ "$MODE" = release ] || set -- --allow-open
+          scripts/release-prep.sh --push --branch "$BRANCH" "$@" "$VERSION" | tee -a "$GITHUB_STEP_SUMMARY"
+          sha=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)
+          # release-ready dispatches its runs on a branch at the commit:
+          # main once it landed, the rehearse branch in a rehearsal.
+          ref=$sha
+          [ "$MODE" = release ] || ref=$BRANCH
+          { echo "sha=$sha"; echo "ready_ref=$ref"; } >> "$GITHUB_OUTPUT"
+      # The hand-written Summary and Highlights must be in before it lands.
+      - name: changelog-lint
+        env:
+          SHA: ${{ steps.found.outputs.sha || steps.prep.outputs.sha }}
+          BRANCH: ${{ needs.plan.outputs.branch }}
+        run: |
+          git fetch -q origin "$SHA"
+          if ! scripts/changelog-lint.sh --rev "$SHA" "$VERSION"; then
+            if [ "$MODE" = release ]; then
+              echo "::error::write the Summary line and the Highlights of $VERSION in CHANGELOG.md on $BRANCH, then dispatch release again"
+              exit 1
+            fi
+            echo "::warning::the $VERSION section is a draft; a release needs its Summary and Highlights written"
+            scripts/changelog-lint.sh --draft --rev "$SHA" "$VERSION"
+          fi
+      - id: ev
+        env:
+          SHA: ${{ steps.found.outputs.sha || steps.prep.outputs.sha }}
+          BRANCH: ${{ needs.plan.outputs.branch }}
+        run: |
+          echo "patch=$(jq -nc --arg b "$BRANCH" --arg c "$SHA" '{prepare: {branch: $b, commit: $c}}')" >> "$GITHUB_OUTPUT"
+      - uses: rok-lang/.github/actions/record@v1.0.0
+        with:
+          issue: ${{ needs.plan.outputs.issue }}
+          patch: ${{ steps.ev.outputs.patch }}
+
+  # Fast-forwards main to the release commit (the App bypasses the main
+  # ruleset for this push only). A main that moved means prepare again.
+  land:
+    needs: [plan, prepare]
+    if: inputs.mode == 'release' && needs.prepare.outputs.landed != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: release-prep
+    permissions:
+      issues: write
+    steps:
+      - id: token
+        uses: rok-lang/.github/actions/app-token@v1.0.0
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_KEY }}
+          repositories: rok
+          permissions: contents:write
+      - id: land
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          SHA: ${{ needs.prepare.outputs.sha }}
+        run: |
+          main=$(gh api "repos/$GH_REPO/git/ref/heads/main" --jq .object.sha)
+          parent=$(gh api "repos/$GH_REPO/commits/$SHA" --jq '.parents[0].sha')
+          if [ "$main" != "$parent" ]; then
+            echo "::error::main moved to $main since $SHA was prepared on $parent; dispatch release again to rebase it"
+            exit 1
+          fi
+          gh api -X PATCH "repos/$GH_REPO/git/refs/heads/main" -f sha="$SHA" -F force=false > /dev/null
+          echo "main: $main -> $SHA"
+          echo "patch=$(jq -nc --arg s "$SHA" --arg m "$main" '{land: {sha: $s, main_before: $m}}')" >> "$GITHUB_OUTPUT"
+      - uses: rok-lang/.github/actions/record@v1.0.0
+        with:
+          issue: ${{ needs.plan.outputs.issue }}
+          patch: ${{ steps.land.outputs.patch }}
+
+  # Full ci and a release-build dry run on the commit (passing runs are
+  # reused), then the release-ready status.
   ready:
-    if: github.event_name == 'push'
+    needs: [prepare, land]
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && (needs.land.result == 'success' || needs.land.result == 'skipped') }}
     uses: ./.github/workflows/release-ready.yml
     with:
-      ref: ${{ github.sha }}
-      verify_only: true
-    # What release-ready's jobs ask for; in verify-only mode only reads run.
+      ref: ${{ needs.prepare.outputs.ready_ref }}
     permissions:
       actions: write
       contents: read
       statuses: write
 
-  # A tag publishes only a ready commit whose main `ci` run passed
-  # `ci-gate`; a run still in progress is waited for.
+  # A release also needs main's own `ci` run green on the commit.
   ci-green:
-    needs: ready
-    if: github.event_name == 'push'
+    needs: [prepare, ready]
+    if: ${{ !cancelled() && inputs.mode == 'release' && needs.ready.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     permissions:
       actions: read
     env:
       GH_TOKEN: ${{ github.token }}
-      GH_REPO: ${{ github.repository }}
+      SHA: ${{ needs.prepare.outputs.sha }}
     steps:
-      - name: main ci-gate on this commit
+      - name: main ci-gate on the release commit
         run: |
           # The newest main push run that was not cancelled.
-          runs="repos/$GH_REPO/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&branch=main&event=push"
+          runs="repos/$GH_REPO/actions/workflows/ci.yml/runs?head_sha=$SHA&branch=main&event=push"
           while :; do
             read -r id status < <(gh api "$runs" --jq '[.workflow_runs[] | select(.conclusion != "cancelled")][0] | "\(.id // "") \(.status // "")"')
             if [ -z "$id" ]; then
-              echo "::error::no main ci run for $GITHUB_SHA; push the commit to main first"
+              echo "::error::no main ci run for $SHA"
               exit 1
             fi
             [ "$status" = completed ] && break
@@ -61,123 +263,382 @@ jobs:
           done
           gate=$(gh api "repos/$GH_REPO/actions/runs/$id/jobs?per_page=100" --jq '.jobs[] | select(.name == "ci-gate") | .conclusion')
           if [ "$gate" != success ]; then
-            echo "::error::ci-gate of run $id is '${gate:-missing}'; fix main (or rerun it) before tagging"
+            echo "::error::ci-gate of run $id is '${gate:-missing}'; fix main (or rerun it), then dispatch release again"
             exit 1
           fi
           echo "ci-gate passed in run $id"
 
-  # The six host archives come from release-targets.json, the single source
-  # of truth (release.sh and scripts/check-targets.sh read it too).
-  plan:
-    needs: ci-green
-    # A manual run skips ci-green and only verifies. A tag needs it green:
-    # after a failed ready it is skipped, not failed.
-    if: ${{ !cancelled() && (github.event_name != 'push' || needs.ci-green.result == 'success') }}
+  # The release-ready dry run already built every archive; build again
+  # only when its artifacts are gone.
+  build-find:
+    needs: [prepare, ready, ci-green]
+    if: ${{ !cancelled() && needs.ready.result == 'success' && (needs.ci-green.result == 'success' || needs.ci-green.result == 'skipped') }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
     outputs:
-      targets: ${{ steps.targets.outputs.targets }}
+      run: ${{ steps.find.outputs.run }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - id: targets
-        run: echo "targets=$(jq -c '.targets' release-targets.json)" >> "$GITHUB_OUTPUT"
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+      - id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ needs.prepare.outputs.sha }}
+        run: |
+          run=$(scripts/release-dist.sh find "$SHA")
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "${run:+reusing the dist-* artifacts of run $run}${run:-no run holds every dist-* artifact of $SHA; building}"
 
   build:
-    needs: plan
-    # plan ran even though ci-green was skipped; without this the skip
-    # carries over and a manual run builds nothing.
-    if: ${{ !cancelled() && needs.plan.result == 'success' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(needs.plan.outputs.targets) }}
-    name: build (${{ matrix.name }})
-    runs-on: ${{ matrix.runs-on }}
-    timeout-minutes: 360
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      # Native hosts (macOS, Windows): dist-native.sh with the host prefixes.
-      - uses: ./.github/actions/llvm-prefix
-        if: matrix.kind == 'native'
-      - uses: ./.github/actions/libclang-prefix
-        if: matrix.kind == 'native'
-      - name: rust toolchain
-        if: matrix.kind == 'native'
-        run: rustup toolchain install && rustc -vV
-      - name: dist-native.sh
-        if: matrix.kind == 'native'
-        shell: bash
-        run: scripts/dist-native.sh --out "$PWD/dist"
-
-      # Linux gnu/musl: the container scripts, LLVM from dist-llvm/ on S3
-      # (they fall back to building it).
-      - name: dist-linux-gnu.sh
-        if: matrix.kind == 'gnu'
-        run: scripts/dist-linux-gnu.sh --out "$PWD/dist"
-      - name: dist-linux-musl.sh
-        if: matrix.kind == 'musl'
-        run: scripts/dist-linux-musl.sh --out "$PWD/dist"
-
-      # The commit this build checked out; publish holds the tag to it.
-      - name: built commit
-        shell: bash
-        run: git rev-parse HEAD > "dist/commit-${{ matrix.name }}"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: dist-${{ matrix.name }}
-          path: dist
-          if-no-files-found: error
-
-  publish:
-    needs: [plan, build]
-    if: ${{ !cancelled() && needs.build.result == 'success' }}
-    runs-on: ubuntu-24.04
+    needs: [prepare, build-find]
+    if: ${{ !cancelled() && needs.build-find.result == 'success' && needs.build-find.outputs.run == '' }}
+    uses: ./.github/workflows/release-build.yml
+    with:
+      sha: ${{ needs.prepare.outputs.sha }}
     permissions:
-      contents: write      # create the GitHub release
-      id-token: write      # OIDC for the provenance attestation
-      attestations: write  # record the attestation
+      contents: read
+
+  # The archives checked as a set; the summary is what the approver sees.
+  collect:
+    needs: [plan, prepare, build-find, build]
+    if: ${{ !cancelled() && needs.build-find.result == 'success' && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    outputs:
+      run: ${{ steps.run.outputs.run }}
     steps:
+      - id: run
+        env:
+          FOUND: ${{ needs.build-find.outputs.run }}
+        run: echo "run=${FOUND:-$GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: dist-*
           path: dist
           merge-multiple: true
-      - name: list
-        run: ls -la dist
-      # Every build ran on the commit this run started for.
-      - name: built commit
-        id: built
+          run-id: ${{ steps.run.outputs.run }}
+          github-token: ${{ github.token }}
+      - name: verify
         env:
-          TARGETS: ${{ needs.plan.outputs.targets }}
+          SHA: ${{ needs.prepare.outputs.sha }}
         run: |
-          want=$(echo "$TARGETS" | jq length)
-          n=$(find dist -maxdepth 1 -name 'commit-*' | wc -l)
-          got=$(cat dist/commit-* | sort -u)
-          if [ "$n" -ne "$want" ] || [ "$got" != "$GITHUB_SHA" ]; then
-            echo "::error::$n of $want builds report a commit ($(echo "$got" | tr '\n' ' ')); this run is for $GITHUB_SHA"
+          scripts/release-dist.sh check dist "$SHA"
+          scripts/release.sh --dir dist
+      - id: ev
+        env:
+          SHA: ${{ needs.prepare.outputs.sha }}
+          RUN: ${{ steps.run.outputs.run }}
+        run: |
+          scripts/release-dist.sh assets dist > assets.jsonl
+          {
+            echo "## $MODE $VERSION at $SHA"
+            echo
+            echo "Archives from run [$RUN]($GITHUB_SERVER_URL/$GH_REPO/actions/runs/$RUN)."
+            echo
+            echo "| asset | size | sha256 |"
+            echo "|---|---:|---|"
+            jq -r '"| \(.name) | \(.size) | `\(.sha256)` |"' assets.jsonl
+            echo
+            echo "### Notes"
+            echo
+            scripts/release-notes.sh "$VERSION"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "patch=$(jq -sc --arg s "$SHA" --arg r "$RUN" '{ready: {sha: $s}, build: {run: $r, assets: .}}' assets.jsonl)" >> "$GITHUB_OUTPUT"
+      - uses: rok-lang/.github/actions/record@v1.0.0
+        with:
+          issue: ${{ needs.plan.outputs.issue }}
+          patch: ${{ steps.ev.outputs.patch }}
+
+  # The one approval (environment release), then the tag, created by the
+  # App. A rehearsal runs in environment rehearsal and only checks.
+  tag:
+    needs: [plan, prepare, collect]
+    if: ${{ !cancelled() && needs.collect.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: ${{ inputs.mode == 'release' && 'release' || 'rehearsal' }}
+    permissions:
+      actions: read
+      issues: write
+    steps:
+      - id: token
+        uses: rok-lang/.github/actions/app-token@v1.0.0
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_KEY }}
+          repositories: rok
+          permissions: contents:write
+      - id: tag
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          RUN_TOKEN: ${{ github.token }}
+          SHA: ${{ needs.prepare.outputs.sha }}
+        run: |
+          by=$(GH_TOKEN=$RUN_TOKEN gh api "repos/$GH_REPO/actions/runs/$GITHUB_RUN_ID/approvals" \
+            --jq '[.[] | select(.state == "approved")][-1].user.login // empty')
+          tag=v$VERSION
+          read -r type obj < <(gh api "repos/$GH_REPO/git/matching-refs/tags/$tag" \
+            --jq ".[] | select(.ref == \"refs/tags/$tag\") | \"\(.object.type) \(.object.sha)\"") || true
+          at=$obj
+          [ "${type:-}" != tag ] || at=$(gh api "repos/$GH_REPO/git/tags/$obj" --jq .object.sha)
+          if [ -n "$at" ] && [ "$at" != "$SHA" ]; then
+            echo "::error::$tag is on $at, not $SHA; a tag never moves, so ship the fix as the next version"
             exit 1
           fi
-          rm dist/commit-*
-          echo "sha=$got" >> "$GITHUB_OUTPUT"
-      - name: verify
-        run: scripts/release.sh --dir dist
-      # Signed SLSA build provenance for the archives (tag releases only).
-      - name: attest provenance (tag only)
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+          if [ "$MODE" != release ]; then
+            if [ -n "$at" ]; then
+              echo "::error::$tag already exists; rehearse the next version"
+              exit 1
+            fi
+            echo "rehearsal: $tag is free and the App token mints; no tag created"
+          elif [ -n "$at" ]; then
+            echo "$tag is already on $SHA"
+          else
+            obj=$(gh api "repos/$GH_REPO/git/tags" -f tag="$tag" -f message="rok $VERSION" \
+              -f object="$SHA" -f type=commit --jq .sha)
+            gh api "repos/$GH_REPO/git/refs" -f ref="refs/tags/$tag" -f sha="$obj" > /dev/null
+            echo "created $tag on $SHA"
+          fi
+          echo "patch=$(jq -nc --arg by "$by" --arg t "$tag" --arg s "$SHA" --arg m "$MODE" \
+            '{approval: {by: $by, at: (now | todate)}, tag: (if $m == "release" then {name: $t, sha: $s} else {checked: $t} end)}')" >> "$GITHUB_OUTPUT"
+      - uses: rok-lang/.github/actions/record@v1.0.0
+        with:
+          issue: ${{ needs.plan.outputs.issue }}
+          patch: ${{ steps.tag.outputs.patch }}
+
+  # Draft, checked, then public (release.sh). A rerun leaves a public
+  # release alone; a rehearsal deletes its draft.
+  publish:
+    needs: [plan, prepare, collect, tag]
+    if: ${{ !cancelled() && needs.tag.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      attestations: write
+      contents: write
+      id-token: write
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+          run-id: ${{ needs.collect.outputs.run }}
+          github-token: ${{ github.token }}
+      - name: built commit
+        env:
+          SHA: ${{ needs.prepare.outputs.sha }}
+        run: scripts/release-dist.sh check dist "$SHA"
+      - name: attest provenance
+        if: inputs.mode == 'release'
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: |
             dist/*.tar.gz
             dist/*.tar.xz
             dist/*.zip
-      # A manual run on a tag ref only verifies. release.sh holds the tag to
-      # the built commit, uploads to a draft and checks it before going public.
-      - name: publish (tag only)
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+      - id: publish
         env:
           GH_TOKEN: ${{ github.token }}
-          SHA: ${{ steps.built.outputs.sha }}
+          SHA: ${{ needs.prepare.outputs.sha }}
         run: |
-          scripts/release-notes.sh "$(cat dist/rok-version)" > dist/notes.md
-          scripts/release.sh --dir dist --publish --commit "$SHA"
+          scripts/release-notes.sh "$VERSION" > dist/notes.md
+          if [ "$MODE" = release ]; then
+            scripts/release.sh --dir dist --publish --commit "$SHA"
+            url=$(gh release view "v$VERSION" --json url --jq .url)
+            echo "patch=$(jq -nc --arg u "$url" '{release: {url: $u}}')" >> "$GITHUB_OUTPUT"
+          else
+            scripts/release.sh --dir dist --rehearse "rehearsal-$VERSION-$GITHUB_RUN_ID" --commit "$SHA"
+            echo "patch=$(jq -nc --arg n "rehearsal-$VERSION-$GITHUB_RUN_ID" '{release: {draft_checked: $n}}')" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: rok-lang/.github/actions/record@v1.0.0
+        with:
+          issue: ${{ needs.plan.outputs.issue }}
+          patch: ${{ steps.publish.outputs.patch }}
+
+  # The release as users get it, on three hosts; a rehearsal installs the
+  # archives of the build run instead.
+  smoke:
+    needs: [collect, publish]
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-26, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - id: rok
+        uses: rok-lang/.github/actions/install-rok@v1.0.0
+        with:
+          version: ${{ inputs.mode == 'release' && inputs.version || '' }}
+          candidate-run: ${{ inputs.mode != 'release' && needs.collect.outputs.run || '' }}
+          attest: ${{ inputs.mode == 'release' }}
+      - name: rok runs
+        env:
+          GOT: ${{ steps.rok.outputs.version }}
+        run: |
+          rok --version
+          if [ "$GOT" != "$VERSION" ]; then
+            echo "::error::installed rok $GOT, not $VERSION"
+            exit 1
+          fi
+      - name: latest/ names it
+        if: inputs.mode == 'release' && matrix.os == 'ubuntu-24.04'
+        run: |
+          got=$(curl -fsSL "https://github.com/$GH_REPO/releases/latest/download/rok-version")
+          if [ "$got" != "$VERSION" ]; then
+            echo "::error::releases/latest/download/rok-version is $got, not $VERSION"
+            exit 1
+          fi
+
+  # The furthest state reached goes into the record; a failure is noted as
+  # blocked with the jobs that failed. A finished rehearsal is closed.
+  finish:
+    needs: [plan, prepare, land, ready, ci-green, build-find, build, collect, tag, publish, smoke]
+    if: ${{ always() && needs.plan.result == 'success' && inputs.mode != 'abort' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - id: state
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          START: ${{ needs.plan.outputs.state }}
+          LANDED: ${{ needs.prepare.outputs.landed }}
+        run: |
+          r() { echo "$NEEDS" | jq -r ".[\"$1\"].result"; }
+          ok() { [ "$(r "$1")" = success ]; }
+          okskip() { case $(r "$1") in success | skipped) return 0 ;; esac; return 1; }
+          reached=PLANNED
+          if ok prepare; then
+            reached=PREPARED
+            if ok land || { [ "$(r land)" = skipped ] && { [ "$LANDED" = true ] || [ "$MODE" != release ]; }; }; then
+              reached=LANDED
+              if ok ready && okskip ci-green; then
+                reached=READY
+                if ok collect; then
+                  reached=BUILT
+                  if ok tag; then
+                    reached=TAGGED
+                    if ok publish; then
+                      reached=PUBLISHED
+                      ! ok smoke || reached=SMOKED
+                    fi
+                  fi
+                fi
+              fi
+            fi
+          fi
+          states="PLANNED PREPARED LANDED READY BUILT APPROVED TAGGED DRAFTED PUBLISHED SMOKED FANNED_OUT CONVERGED CLOSED"
+          rank() { echo "$states" | tr ' ' '\n' | grep -nx "$1" | cut -d: -f1; }
+          state=""
+          [ -n "$START" ] && [ "$(rank "$reached")" -le "$(rank "$START")" ] || state=$reached
+          failed=$(echo "$NEEDS" | jq -c '[to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | .key]')
+          url="$GITHUB_SERVER_URL/$GH_REPO/actions/runs/$GITHUB_RUN_ID"
+          if [ "$failed" = "[]" ]; then
+            patch=$(jq -nc --arg s "$state" '{blocked: null} + (if $s == "" then {} else {state: $s} end)')
+          else
+            patch=$(jq -nc --arg s "$state" --arg at "$reached" --argjson j "$failed" --arg u "$url" \
+              '{blocked: {after: $at, jobs: $j, run: $u}} + (if $s == "" then {} else {state: $s} end)')
+          fi
+          {
+            echo "reached=$reached"
+            echo "failed=$failed"
+            echo "patch=$patch"
+          } >> "$GITHUB_OUTPUT"
+          echo "reached $reached; failed: $failed"
+      - uses: rok-lang/.github/actions/record@v1.0.0
+        with:
+          issue: ${{ needs.plan.outputs.issue }}
+          patch: ${{ steps.state.outputs.patch }}
+      - name: report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ needs.plan.outputs.issue }}
+          REACHED: ${{ steps.state.outputs.reached }}
+          FAILED: ${{ steps.state.outputs.failed }}
+          BRANCH: ${{ needs.plan.outputs.branch }}
+        run: |
+          url="$GITHUB_SERVER_URL/$GH_REPO/actions/runs/$GITHUB_RUN_ID"
+          if [ "$FAILED" != "[]" ]; then
+            gh issue comment "$ISSUE" --body "Run [$GITHUB_RUN_ID]($url) stopped after **$REACHED**; failed: \`$FAILED\`. Fix it, then dispatch \`release\` with version $VERSION and mode $MODE again; it resumes (docs/releasing.md, Recovering)."
+            exit 1
+          fi
+          if [ "$MODE" = release ]; then
+            gh issue comment "$ISSUE" --body "Run [$GITHUB_RUN_ID]($url): v$VERSION is public and installs on the three hosts (**SMOKED**). The fan-out is next (docs/releasing.md, After the release)."
+          else
+            gh api -X DELETE "repos/$GH_REPO/git/refs/heads/$BRANCH" 2> /dev/null || true
+            gh issue comment "$ISSUE" --body "Rehearsal run [$GITHUB_RUN_ID]($url) passed every stage; nothing was published."
+          fi
+      - if: inputs.mode == 'rehearse' && steps.state.outputs.failed == '[]'
+        uses: rok-lang/.github/actions/record@v1.0.0
+        with:
+          issue: ${{ needs.plan.outputs.issue }}
+          patch: '{"state": "CLOSED"}'
+      - if: inputs.mode == 'rehearse' && steps.state.outputs.failed == '[]'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ needs.plan.outputs.issue }}
+        run: gh issue close "$ISSUE" --reason completed
+
+  # Drops an attempt that has no tag: its branches go, the record is
+  # ABANDONED and the version can be prepared again.
+  abort:
+    needs: plan
+    if: inputs.mode == 'abort'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: release-prep
+    permissions:
+      issues: write
+    steps:
+      - id: token
+        uses: rok-lang/.github/actions/app-token@v1.0.0
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_KEY }}
+          repositories: rok
+          permissions: contents:write
+      - env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+        run: |
+          if gh api "repos/$GH_REPO/git/ref/tags/v$VERSION" > /dev/null 2>&1; then
+            echo "::error::v$VERSION is tagged, so the version is burned; ship the fix as the next version"
+            exit 1
+          fi
+          for b in "release/$VERSION" "rehearse/$VERSION"; do
+            if gh api -X DELETE "repos/$GH_REPO/git/refs/heads/$b" 2> /dev/null; then echo "deleted $b"; fi
+          done
+      - uses: rok-lang/.github/actions/record@v1.0.0
+        with:
+          issue: ${{ needs.plan.outputs.issue }}
+          patch: '{"state": "ABANDONED"}'
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ needs.plan.outputs.issue }}
+        run: gh issue close "$ISSUE" --reason "not planned"

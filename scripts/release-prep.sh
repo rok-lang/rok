@@ -5,20 +5,21 @@
 # generated from the changelog: blocks of the PRs merged since the
 # previous tag and grouped by kind.
 #
-#   scripts/release-prep.sh [--push] [--branch <name>] <version>
+#   scripts/release-prep.sh [--push] [--branch <name>] [--allow-open] <version>
 #
 # The Summary, Highlights and Migration blocks between their markers are
 # written by hand on the branch; a refresh keeps them, rebases onto the
 # current main and regenerates the rest, so a PR's line is fixed in its
 # description, not on the branch. Nothing is written when the branch is
 # already up to date. Fails, listing each, on open issues in the version's
-# milestone and on merged PRs without a valid changelog: block. Without
+# milestone (only a warning with --allow-open, for a rehearsal) and on
+# merged PRs without a valid changelog: block. Without
 # --push the commit goes to the local branch only. Needs gh (GH_REPO,
 # GH_TOKEN), jq and cargo with the locked crates fetched.
 set -eu
 
 usage() {
-  echo "usage: scripts/release-prep.sh [--push] [--branch <name>] <version>" >&2
+  echo "usage: scripts/release-prep.sh [--push] [--branch <name>] [--allow-open] <version>" >&2
   exit 2
 }
 die() {
@@ -26,11 +27,15 @@ die() {
   exit 1
 }
 
-push=0 branch=""
+push=0 branch="" allow_open=0
 while [ $# -gt 0 ]; do
   case $1 in
     --push)
       push=1
+      shift
+      ;;
+    --allow-open)
+      allow_open=1
       shift
       ;;
     --branch)
@@ -90,7 +95,10 @@ ms=$(gh api "repos/$GH_REPO/milestones?state=all&per_page=100" \
 if [ -n "$ms" ]; then
   gh api --paginate "repos/$GH_REPO/issues?milestone=$ms&state=open&per_page=100" \
     --jq '.[] | "  #\(.number) \(.title)"' < /dev/null > "$tmp/open"
-  if [ -s "$tmp/open" ]; then
+  if [ -s "$tmp/open" ] && [ "$allow_open" = 1 ]; then
+    echo "release-prep.sh: warning: milestone $version has open issues:" >&2
+    cat "$tmp/open" >&2
+  elif [ -s "$tmp/open" ]; then
     {
       echo "milestone $version has open issues; close them or move them to a later milestone:"
       cat "$tmp/open"

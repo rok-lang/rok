@@ -1,0 +1,72 @@
+name: release-legacy
+
+# The old path: a pushed v* tag builds and publishes. Off unless the repo
+# variable ROK_RELEASE_LEGACY is "on"; a tag the release App created is
+# release.yml's and is ignored here. Goes once a release has shipped
+# through release.yml.
+on:
+  push:
+    tags: ["v*"]
+
+permissions: {}
+
+concurrency:
+  group: rok-release-legacy
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    if: vars.ROK_RELEASE_LEGACY == 'on' && github.actor != 'rok-lang-release[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - run: echo "legacy tag release of $GITHUB_REF_NAME; release.yml is the way to release"
+
+  ready:
+    needs: gate
+    uses: ./.github/workflows/release-ready.yml
+    with:
+      ref: ${{ github.sha }}
+      verify_only: true
+    permissions:
+      actions: write
+      contents: read
+      statuses: write
+
+  build:
+    needs: ready
+    uses: ./.github/workflows/release-build.yml
+    with:
+      sha: ${{ github.sha }}
+    permissions:
+      contents: read
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+      - run: scripts/release-dist.sh check dist "$GITHUB_SHA"
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.tar.xz
+            dist/*.zip
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          scripts/release-notes.sh "$(cat dist/rok-version)" > dist/notes.md
+          scripts/release.sh --dir dist --publish --commit "$GITHUB_SHA"

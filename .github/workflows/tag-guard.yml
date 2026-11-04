@@ -1,0 +1,32 @@
+name: tag-guard
+
+# Release tags come from release.yml, created by the rok-lang-release App.
+# Any other v* tag raises the alarm issue; tags never move, so it stays
+# until someone closes it with a note on what happened.
+on:
+  push:
+    tags: ["v*"]
+
+permissions: {}
+
+jobs:
+  guard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - id: who
+        env:
+          ACTOR: ${{ github.actor }}
+        run: |
+          ok=true
+          [ "$ACTOR" = "rok-lang-release[bot]" ] || ok=false
+          echo "ok=$ok" >> "$GITHUB_OUTPUT"
+          echo "$GITHUB_REF_NAME pushed by $ACTOR"
+      - if: steps.who.outputs.ok == 'false'
+        uses: rok-lang/.github/actions/alarm@v1.0.0
+        with:
+          title: "Tag ${{ github.ref_name }} not created by release.yml"
+          ok: "false"
+          body: "${{ github.ref_name }} on ${{ github.sha }} was pushed by ${{ github.actor }}, not by the rok-lang-release App. A tag never moves: check that it names the right commit and that a release was meant, then close this."

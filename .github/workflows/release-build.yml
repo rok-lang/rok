@@ -1,0 +1,107 @@
+name: release-build
+
+# Build the six host archives of one commit and verify the set
+# (scripts/release.sh --dir dist); publishes nothing. macOS/Windows run
+# dist-native.sh; Linux gnu/musl run the container scripts. LLVM/libclang
+# prefixes come from S3 (published by prefixes.yml, Windows by
+# prefixes-windows.yml). release-ready dispatches it as the release dry
+# run; release.yml reuses those dist-* artifacts, or calls it when they
+# are gone.
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      sha:
+        description: The commit to build
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  # The six host archives come from release-targets.json, the single source
+  # of truth (release.sh and scripts/check-targets.sh read it too).
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      targets: ${{ steps.targets.outputs.targets }}
+      sha: ${{ steps.targets.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+          persist-credentials: false
+      - id: targets
+        run: |
+          echo "targets=$(jq -c '.targets' release-targets.json)" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.targets) }}
+    name: build (${{ matrix.name }})
+    runs-on: ${{ matrix.runs-on }}
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          persist-credentials: false
+
+      # Native hosts (macOS, Windows): dist-native.sh with the host prefixes.
+      - uses: ./.github/actions/llvm-prefix
+        if: matrix.kind == 'native'
+      - uses: ./.github/actions/libclang-prefix
+        if: matrix.kind == 'native'
+      - name: rust toolchain
+        if: matrix.kind == 'native'
+        run: rustup toolchain install && rustc -vV
+      - name: dist-native.sh
+        if: matrix.kind == 'native'
+        shell: bash
+        run: scripts/dist-native.sh --out "$PWD/dist"
+
+      # Linux gnu/musl: the container scripts, LLVM from dist-llvm/ on S3
+      # (they fall back to building it).
+      - name: dist-linux-gnu.sh
+        if: matrix.kind == 'gnu'
+        run: scripts/dist-linux-gnu.sh --out "$PWD/dist"
+      - name: dist-linux-musl.sh
+        if: matrix.kind == 'musl'
+        run: scripts/dist-linux-musl.sh --out "$PWD/dist"
+
+      # The commit this build checked out; publish holds the tag to it.
+      - name: built commit
+        shell: bash
+        run: git rev-parse HEAD > "dist/commit-${{ matrix.name }}"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist-${{ matrix.name }}
+          path: dist
+          if-no-files-found: error
+
+  verify:
+    needs: [plan, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+      - name: built commit
+        env:
+          SHA: ${{ needs.plan.outputs.sha }}
+        run: scripts/release-dist.sh check dist "$SHA"
+      - name: verify
+        run: scripts/release.sh --dir dist
