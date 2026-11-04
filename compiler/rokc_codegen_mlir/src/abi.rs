@@ -292,19 +292,33 @@ pub const BY_REF_BYTES: u32 = 64;
 
 /// A rok-to-rok argument or result passed by address.
 ///
-/// An aggregate over [`BY_REF_BYTES`], or on 32-bit Arm an array of 1- or
-/// 2-byte elements (LLVM's Arm lowering writes their stack leaves in 4-byte
-/// slots but reads them packed). The argument is a pointer the callee
-/// copies from; the result goes through a pointer passed first and the
-/// function returns nothing.
+/// An aggregate over [`BY_REF_BYTES`], or on 32-bit Arm one whose stack
+/// leaves LLVM's Arm lowering writes in 4-byte slots but reads packed: an
+/// array of 1- or 2-byte elements, and a 4-byte aggregate of more than one
+/// leaf (at -O0 the callee takes the first leaf's slot as the whole value).
+/// The argument is a pointer the callee copies from; the result goes
+/// through a pointer passed first and the function returns nothing.
 #[must_use]
 pub fn rok_by_ref(ty: &MirTy, target: &Target) -> bool {
-    if let (MirTy::Array(elem, _), CAbi::ArmHf) = (ty, target.c_abi) {
-        if target.size_align(elem).0 < 4 {
-            return true;
+    if !is_aggregate(ty) {
+        return false;
+    }
+    let size = target.size_align(ty).0;
+    if target.c_abi == CAbi::ArmHf {
+        if let MirTy::Array(elem, _) = ty {
+            if target.size_align(elem).0 < 4 {
+                return true;
+            }
+        }
+        if size == 4 {
+            let mut ls = Vec::new();
+            leaves(ty, 0, target, &mut ls);
+            if ls.len() > 1 {
+                return true;
+            }
         }
     }
-    is_aggregate(ty) && target.size_align(ty).0 > BY_REF_BYTES
+    size > BY_REF_BYTES
 }
 
 /// The type a value of `ty` crosses the C boundary as: the field of a

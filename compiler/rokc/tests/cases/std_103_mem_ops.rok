@@ -6,7 +6,7 @@
 // copy (overlap): [1, 1, 2, 3, 8]
 // replace: 1 -> 40
 // volatile: 77
-// sizes: 8 8 8 4
+// sizes: 8 true 8 4
 
 // `MaybeUninit` written then taken out, the free raw memory
 // functions (`copy` allows overlap), and the size / align helpers.
@@ -15,6 +15,12 @@ use rok::bare::mem::{
 };
 use rok::bare::volatile;
 use rok::bare::ptr::{Ptr, addr_of};
+
+// i64's alignment is 4 in System V i386, 8 elsewhere.
+#[cfg(all(target_arch = "x86", not(target_os = "windows")))]
+const WIDE_ALIGN: usize = 4;
+#[cfg(not(all(target_arch = "x86", not(target_os = "windows"))))]
+const WIDE_ALIGN: usize = 8;
 
 struct Big { a: i64; b: i64; c: i64; }
 
@@ -48,5 +54,5 @@ fn main() {
 
     let w: i64 = 3;
     let f: f32 = 1.0;
-    println(f"sizes: {w.size_of_val()} {align_of::<i64>()} {size_of::<i64>()} {f.size_of_val()}");
+    println(f"sizes: {w.size_of_val()} {align_of::<i64>() == WIDE_ALIGN} {size_of::<i64>()} {f.size_of_val()}");
 }

@@ -9,7 +9,7 @@ use rok::std::thread;
 use rok::core::io::{BufRead, BufReader, IoError};
 
 fn main() throws (IoError) {
-    let path = rok::std::env::temp_dir() / f"rok_view_moved_{rok::std::process::id()}.txt";
+    let path = rok::std::env::temp_dir() / "rok_view_moved.txt";
     try fs::write(path, "a\nb\n");
     let f = BufReader::new(try fs::open(path));
     let ls = f.lines();

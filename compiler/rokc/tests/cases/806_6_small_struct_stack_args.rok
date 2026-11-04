@@ -1,0 +1,34 @@
+// expect-exit: 0
+// expect-stdout:
+// 4 3 2 1 / 1 2 / 7 8 / 5 6 / 1 1
+// true true
+
+// 4-byte aggregates of more than one leaf passed between rok functions
+// after the argument registers are used up (on 32-bit Arm they go by
+// address: at -O0 LLVM's callee reads the leaves packed from the first
+// one's 4-byte stack slot).
+use rok::std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
+
+#[derive(Clone, Copy)]
+struct Bytes { o: [u8; 4]; }
+
+#[derive(Clone, Copy)]
+struct Mixed { a: u8; b: u16; }
+
+#[derive(Clone, Copy)]
+struct Halves { a: u16; b: u16; }
+
+#[inline(never)]
+fn show(x: Bytes, y: Bytes, m: Mixed, h: Halves, t: (u8, u8, u8, u8), u: (bool, u8)) -> str {
+    f"{y.o[0]} {y.o[1]} {y.o[2]} {y.o[3]} / {m.a} {m.b} / {h.a} {h.b} / {t.0 + x.o[0]} {t.3 + x.o[3]} / {u.0 as u8} {u.1}"
+}
+
+fn main() {
+    let x = Bytes { o: [0u8, 0u8, 0u8, 0u8] };
+    let y = Bytes { o: [4u8, 3u8, 2u8, 1u8] };
+    println(show(x, y, Mixed { a: 1u8, b: 2u16 }, Halves { a: 7u16, b: 8u16 }, (5u8, 0u8, 0u8, 6u8), (true, 1u8)));
+    // `==` on a derived `PartialEq` passes both sides by value.
+    let d = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1)), 80);
+    let e = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(10, 0, 0, 1), 80));
+    println(f"{Ipv4Addr::new(10, 0, 0, 1) == Ipv4Addr::new(10, 0, 0, 1)} {d == e}");
+}
