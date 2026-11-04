@@ -53,7 +53,7 @@ fn main() {
     unsafe { free(buf) };
     println(f"from_const: {CPtr::from_const(c).is_null()}");
 
-    // Ptr ↔ ManyPtr, usize → CPtr.
+    // Ptr <-> ManyPtr, usize -> CPtr.
     let many: ManyPtr<i32> = p.as_many();
     let one: Ptr<i32> = many.as_one();
     println(f"many: {unsafe { many.read(2) }} one: {unsafe { one.read() }}");

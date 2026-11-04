@@ -20,8 +20,8 @@ pub trait AstVisitor {
     fn block(&mut self, _b: &Block) {}
     fn ty(&mut self, _t: &Ty) {}
     fn bind(&mut self, _name: &str) {}
-    /// `bind`, with the declaring construct's span (a `let` statement, a
-    /// parameter, a pattern) - what identifies the binding.
+    /// `bind`, with the span of the declaring construct (a `let`, a
+    /// parameter, a pattern), which identifies the binding.
     fn bind_at(&mut self, name: &str, _at: rokc_diagnostic::Span) {
         self.bind(name);
     }
@@ -597,7 +597,7 @@ pub fn free_names(params: &[rokc_ast::Param], body: &Expr) -> Vec<String> {
 }
 
 /// Every read of a name `body` doesn't bind, with the field chain read
-/// from it (`p.a.b` → `("p", ["a", "b"])`; a bare `p` has none).
+/// from it (`p.a.b` -> `("p", ["a", "b"])`; a bare `p` has none).
 pub fn free_places(params: &[rokc_ast::Param], body: &Expr) -> Vec<(String, Vec<String>)> {
     struct Free {
         scopes: Vec<Vec<String>>,

@@ -176,11 +176,11 @@ impl str {
         self[:j]
     }
 
-    /// Full Unicode case mapping (`"ß"` → `"SS"`, final `σ` → `ς`); no
+    /// Full Unicode case mapping (`"ß"` -> `"SS"`, final `σ` -> `ς`); no
     /// locale rules.
     #[must_use]
     pub const fn to_lowercase(self) -> str { unsafe { rok_str_case(self, 0) } }
-    /// Full Unicode uppercase mapping (`"ß"` → `"SS"`); no locale rules.
+    /// Full Unicode uppercase mapping (`"ß"` -> `"SS"`); no locale rules.
     #[must_use]
     pub const fn to_uppercase(self) -> str { unsafe { rok_str_case(self, 1) } }
     /// A copy with every non-overlapping `from` replaced by `to`, left to
@@ -785,13 +785,13 @@ impl char {
     }
 
     /// The full lowercase mapping, which may be several chars
-    /// (`'\u{130}'` → `"i\u{307}"`); locale-independent.
+    /// (`'\u{130}'` -> `"i\u{307}"`); locale-independent.
     pub const fn to_lowercase(self) -> str { unsafe { rok_str_case(rok_str_from_char(self as u32), 0) } }
-    /// The full uppercase mapping, which may be several chars (`'ß'` →
+    /// The full uppercase mapping, which may be several chars (`'ß'` ->
     /// `"SS"`).
     pub const fn to_uppercase(self) -> str { unsafe { rok_str_case(rok_str_from_char(self as u32), 1) } }
-    /// The full titlecase mapping, which may be several chars (`'ß'` →
-    /// `"Ss"`, `'ǆ'` → `"ǅ"`). Capitalize a word with
+    /// The full titlecase mapping, which may be several chars (`'ß'` ->
+    /// `"Ss"`, `'ǆ'` -> `"ǅ"`). Capitalize a word with
     /// `c.to_titlecase() + rest.to_lowercase()`.
     pub const fn to_titlecase(self) -> str { unsafe { rok_str_case(rok_str_from_char(self as u32), 2) } }
     /// The simple (one-char) lowercase mapping (UCD `slc`); `self` if
@@ -804,7 +804,7 @@ impl char {
     pub const fn to_simple_uppercase(self) -> char {
         unsafe { char::from_u32_unchecked(rok_char_to_case(self as u32, 1)) }
     }
-    /// The simple (one-char) titlecase mapping (UCD `stc`; `'ǆ'` →
+    /// The simple (one-char) titlecase mapping (UCD `stc`; `'ǆ'` ->
     /// `'ǅ'`); `self` if none.
     pub const fn to_simple_titlecase(self) -> char {
         unsafe { char::from_u32_unchecked(rok_char_to_case(self as u32, 2)) }

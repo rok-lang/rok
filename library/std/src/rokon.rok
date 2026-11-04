@@ -309,7 +309,7 @@ const fn mismatch<T>(v: Value) -> RokonError {
     RokonError::new(f"expected {T::type_name()}, found {v.kind_name()}")
 }
 
-/// The last `::` segment of a path (`a::b::Point` → `Point`).
+/// The last `::` segment of a path (`a::b::Point` -> `Point`).
 const fn last_seg(path: str) -> str {
     match path.rfind("::") {
         at: usize => path[at + 2:],
@@ -450,8 +450,8 @@ pub(pkg) const fn unknown_variant(v: str, ctx: str) -> RokonError {
     RokonError::new(f"`{ctx}::{v}` is not a variant of {ctx}")
 }
 
-/// `#[derive(Rokon)]`: `ToRokon` + `FromRokon` for a struct (named →
-/// `Name { f: v }`, tuple → `Name(a, b)`, unit → `Name {}`) or an enum
+/// `#[derive(Rokon)]`: `ToRokon` + `FromRokon` for a struct (named ->
+/// `Name { f: v }`, tuple -> `Name(a, b)`, unit -> `Name {}`) or an enum
 /// (`E::V`, `E::V(a)`, `E::V { f: v }`). A missing field takes its
 /// default (`f: T = expr`), else `none` for `T | none`, else is an error.
 /// A field the type does not have is skipped, so a format can grow;

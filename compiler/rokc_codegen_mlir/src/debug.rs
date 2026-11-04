@@ -29,7 +29,7 @@ use rokc_mir::{DebugTy, DebugTypes, MirFunction, MirTy, Statement, Target};
 
 /// Module-wide debug-info state.
 pub struct DebugInfo {
-    /// Source paths by `Span::file` (id − 1), made absolute.
+    /// Source paths by `Span::file` (id - 1), made absolute.
     paths: Vec<PathBuf>,
     /// Attribute alias definitions, in definition order.
     pub defs: String,

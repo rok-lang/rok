@@ -107,7 +107,7 @@ pub fn closures(
         .map(|f| (f.id, fixed_fn_params(f)))
         .filter(|(_, ps)| !ps.is_empty())
         .collect();
-    // (callee, parameter, code) → copy.
+    // (callee, parameter, code) -> copy.
     let mut copies: HashMap<(FunctionId, usize, FunctionId), FunctionId> = HashMap::default();
     let mut count: HashMap<FunctionId, usize> = HashMap::default();
     let mut built: rokc_core::HashSet<FunctionId> = rokc_core::HashSet::default();

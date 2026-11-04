@@ -1,4 +1,4 @@
-//! LIR → `x86_64` machine code (System V; Windows x64 in COFF objects).
+//! LIR -> `x86_64` machine code (System V; Windows x64 in COFF objects).
 //!
 //! Frame: `rbp` pushed, `rbp` = it, then the slots, outgoing arguments at
 //! `rsp`. Values: `rax rcx rdx r8 r9`, `xmm0`..`xmm3`; pointer bases `r10
@@ -114,8 +114,7 @@ struct Em<'a> {
     frame: u32,
     lines: Vec<(u32, u32, u32, u32)>,
     held: Vec<Held>,
-    /// Slots whose address is taken: a store through a pointer may
-    /// write them.
+    /// Slots whose address is taken: a store through a pointer may write them.
     escaped: Vec<bool>,
     pending: Vec<Pend>,
     waits: Waits,
@@ -346,8 +345,7 @@ impl Em<'_> {
         }
     }
 
-    /// `size` bytes at `m` are read from memory: what they hold must be
-    /// there.
+    /// `size` bytes at `m` are read from memory: what they hold must be there.
     fn rd(&mut self, m: Mem, size: u32) {
         if let Mem::Frame(s, o) = m {
             while let Some(i) = self
@@ -521,9 +519,8 @@ impl Em<'_> {
         }
     }
 
-    /// A register holding `v` as `k` extended by `signed`, not in `avoid`:
-    /// one already holding it, else a loaded value register; never `r10` /
-    /// `r11`.
+    /// A register holding `v` as `k` extended by `signed`, not in `avoid`: one
+    /// already holding it, else a loaded value register; never `r10` / `r11`.
     fn reg(&mut self, v: V, k: K, signed: bool, avoid: &[u32]) -> u32 {
         let signed = signed && !k.is_float();
         if let V::M(m) = v {
@@ -1270,8 +1267,7 @@ impl Em<'_> {
                 Loc::Sret => self.store(self.sret_reg(), *dst, K::I64),
             },
             Inst::Ret { vals } => {
-                // x87 results: the last pushed first, so `st0` is the
-                // first.
+                // x87 results: the last pushed first, so `st0` is the first.
                 let x87 = [3, 2]
                     .into_iter()
                     .filter_map(|n| vals.iter().find(|(p, _)| p.loc == Loc::Fp(n)));
@@ -1400,8 +1396,7 @@ impl Em<'_> {
         }
     }
 
-    /// `xchg [r10], rax` (sequentially consistent store); the old value
-    /// in rax.
+    /// `xchg [r10], rax` (sequentially consistent store); the old value in rax.
     fn xchg(&mut self, k: K) {
         self.sized(k, &[0x87], &[0x86], RAX, Rm::M(R10, 0));
     }
@@ -1635,7 +1630,7 @@ impl Em<'_> {
                     );
                 };
                 if !signed && from == K::I64 {
-                    // u64 ≥ 2^63: halve (keeping the low bit), convert,
+                    // u64 >= 2^63: halve (keeping the low bit), convert,
                     // double.
                     self.alu(0x85, true, RAX, RAX);
                     let big = self.jcc_fwd(CC_S);
@@ -1682,8 +1677,8 @@ impl Em<'_> {
         }
     }
 
-    /// Float → integer, saturating, NaN to 0 (`bits` of the destination
-    /// are the integer's).
+    /// Float -> integer, saturating, NaN to 0 (`bits` of the destination are
+    /// the integer's).
     fn f_to_i(&mut self, from: K, to: K, dst: Mem, a: V, signed: bool, bits: u32) {
         let pre = Self::sse(from);
         let ucomi_pre = if from == K::F64 { Some(0x66) } else { None };
@@ -1720,7 +1715,7 @@ impl Em<'_> {
             self.here(big);
             self.mov_imm(RAX, i64::MAX as u64);
         } else {
-            // ≥ 2^64: max; ≥ 2^63: through the sign bit.
+            // >= 2^64: max; >= 2^63: through the sign bit.
             self.bytes(&[0x0f, 0x57, 0xd2]); // xorps xmm2, xmm2
             ucomi(self, XMM0, 2);
             zeros.push(self.jcc_fwd(CC_B));

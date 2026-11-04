@@ -4,7 +4,7 @@
 // 3 true 2 7
 
 // Generic struct literals infer their type arguments from the field
-// values (`Box { v: 6i64 }` → `Box<i64>`), or take them from the expected
+// values (`Box { v: 6i64 }` -> `Box<i64>`), or take them from the expected
 // type; generic fns returning `Tagged<T>` instantiate on demand.
 struct Box<T> { v: T; }
 struct Tagged<T> { label: i32; value: T; }

@@ -617,7 +617,7 @@ impl Gen<'_> {
     }
 
     /// A typedef use: builtin typedefs outside the roots resolve
-    /// (`size_t` → `usize`), others keep their name.
+    /// (`size_t` -> `usize`), others keep their name.
     fn typedef_ref(&mut self, t: Type) -> Result<String, Skip> {
         let api = self.c.api();
         // SAFETY: a typedef type of a live unit.

@@ -246,7 +246,7 @@ static _Noreturn void host_uncaught(struct rok_str what) {
     host_uncaught_at(what, none);
 }
 
-// Symbols the session defines: name → its newest definition's name
+// Symbols the session defines: name -> its newest definition's name
 // (and a definition's address under its own name).
 struct sym {
     char *name, *now;
@@ -1629,7 +1629,7 @@ static struct book {
     // `why` the cell failed, which a rollback would undo.
     char why[sizeof why];
     size_t nwhy;
-    // The threads stopped now.
+    // The threads currently suspended.
     HANDLE handle[THREADS];
     DWORD id[THREADS];
     size_t nthreads;

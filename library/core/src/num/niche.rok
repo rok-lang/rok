@@ -1,5 +1,5 @@
 // rok::core::num::niche - wrappers that leave out values:
-// `NonZero<T>` (0), `NonNan<F>` (NaN), `Finite<F>` (NaN, ±∞),
+// `NonZero<T>` (0), `NonNan<F>` (NaN), `Finite<F>` (NaN, +/-inf),
 // `Positive<T>` (negatives). Each is a `#[niche(..)]`
 // newtype, so `NonZero<i32> | none` is 4 bytes and `NonNan<f64> | none`
 // 8. `new` checks; `new_unchecked` is `unsafe`: a
@@ -314,7 +314,7 @@ impl<F: NicheFloat> Debug for NonNan<F> {
     const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"NonNan({self.0:?})") }
 }
 
-/// May be NaN (`∞ - ∞`): a plain `F`.
+/// May be NaN (`inf - inf`): a plain `F`.
 impl<F: NicheFloat> Add for NonNan<F> {
     type Output = F;
     const fn add(self, rhs: NonNan<F>) -> F { self.0 + rhs.0 }
@@ -354,12 +354,12 @@ impl From<NonNan<f64>> for f64 {
 
 // Finite
 
-/// An `F` that is neither NaN nor ±∞.
+/// An `F` that is neither NaN nor +/-inf.
 #[niche(F::NAN, F::INFINITY, F::NEG_INFINITY)]
 pub struct Finite<F>(F);
 
 impl<F: NicheFloat> Finite<F> {
-    /// `value` as a `Finite`; `none` when it is NaN or ±∞.
+    /// `value` as a `Finite`; `none` when it is NaN or +/-inf.
     pub const fn new(value: F) -> Finite<F> | none {
         if value.niche_finite() { Finite(value) } else { none }
     }
@@ -415,7 +415,7 @@ impl<F: NicheFloat> Debug for Finite<F> {
     const fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"Finite({self.0:?})") }
 }
 
-/// Finite unless it overflows to ±∞.
+/// Finite unless it overflows to +/-inf.
 impl<F: NicheFloat> Add for Finite<F> {
     type Output = Result<Finite<F>, OverflowError>;
     const fn add(self, rhs: Finite<F>) -> Result<Finite<F>, OverflowError> { finite(self.0 + rhs.0, "add") }

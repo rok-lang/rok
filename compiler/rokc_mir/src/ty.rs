@@ -1,4 +1,4 @@
-//! HIR → MIR type lowering.
+//! HIR -> MIR type lowering.
 
 use rokc_hir::{HirModule, HirTy};
 use rokc_ir_common::PrimTy;

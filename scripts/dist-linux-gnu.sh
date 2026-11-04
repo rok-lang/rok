@@ -75,7 +75,7 @@ $engine run --rm $user \
     rustup toolchain install
     [ -n "$ROK_LLVM_JOBS" ] || unset ROK_LLVM_JOBS
     # Download the prebuilt LLVM/libclang prefix from S3; on any miss
-    # dist-native.sh builds it, as before.
+    # dist-native.sh builds it.
     v=$(sed -n "s/^VERSION=//p" llvm/build.sh)
     triple=$(uname -m)-unknown-linux-gnu
     mkdir -p /cache/rok

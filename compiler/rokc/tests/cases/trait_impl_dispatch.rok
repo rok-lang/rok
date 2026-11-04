@@ -38,7 +38,7 @@ impl Counter {
 
 fn main() -> i32 {
     let c = Counter { n: 5 };
-    // tally=10, bonus=10, raw=5 → 25; +5 = 30.
+    // tally=10, bonus=10, raw=5 -> 25; +5 = 30.
     println(f"{c.tally()} {c.bonus()} {c.raw()}");
     return c.tally() + c.bonus() + c.raw() + 5;
 }

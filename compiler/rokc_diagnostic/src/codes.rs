@@ -22,7 +22,7 @@ pub struct Entry {
     pub title: &'static str,
     /// What it means and what to write instead.
     pub text: &'static str,
-    /// No longer emitted; the number stays reserved.
+    /// Not emitted; the number stays reserved.
     pub retired: bool,
 }
 
@@ -809,10 +809,11 @@ codes! {
     140 STREAM_VIEW_ESCAPE Handoff "stream view used past its stream"
     "`r.lines()`, `bytes`, `split`, `take`, their async streams and `incoming` read \
      through `r` and stay in the scope of `r`'s owner: one is returned, stored past that \
-     scope, kept by a callee, or used after `r` was closed. Use it inside the scope and \
-     collect what you need (`try r.lines().collect()`), or take the owning form \
+     scope, kept by a callee, or used after `r` was closed or moved. Use it inside the \
+     scope and collect what you need (`try r.lines().collect()`), or take the owning form \
      (`r.into_lines()`), which owns `r`, closes it with itself and can be returned or \
-     moved into a task.";
+     moved into a task. When `r` is moved, finish with the view before the move, or move \
+     the owning form instead of `r`.";
 
     141 NOT_A_PLACE Type "assignment to a value that is not a place"
     "The left side of `=` or of a compound assignment (`+=`, `-=`, ...) is a value, not a \

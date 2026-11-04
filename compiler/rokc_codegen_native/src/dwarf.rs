@@ -1,8 +1,8 @@
 //! `-g`: DWARF 4 matching the MLIR emitter's debug info
-//! (`rokc_codegen_mlir::debug`): a subprogram per positioned function
-//! (and generated ones) named by rok path, parameters and named locals in
-//! `fp`-relative slots within lexical blocks, their types (as the LLVM
-//! path describes them), and a line table.
+//! (`rokc_codegen_mlir::debug`): a subprogram per positioned function (and
+//! generated ones) named by rok path, parameters and named locals in
+//! `fp`-relative slots within lexical blocks, their types (as the LLVM path
+//! describes them), and a line table.
 
 use rokc_core::HashMap;
 use std::path::{Path, PathBuf};
@@ -68,8 +68,8 @@ const DW_OP_PLUS_UCONST: u8 = 0x23;
 /// `DW_OP_reg29` (arm64 `x29`) / `DW_OP_reg6` (`x86_64` `rbp`).
 const DW_OP_REG29: u8 = 0x6d;
 const DW_OP_REG6: u8 = 0x56;
-/// Rust: the language debuggers read variant parts in (lldb only
-/// there); rok's types are C-like otherwise.
+/// Rust: the language debuggers read variant parts in (lldb only there); rok's
+/// types are C-like otherwise.
 const DW_LANG_RUST: u16 = 0x1c;
 
 const DW_ATE_BOOLEAN: u8 = 0x02;

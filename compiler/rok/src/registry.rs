@@ -37,8 +37,8 @@ use crate::semver::{Req, Version};
 /// The index of a bare requirement: rokstones.io's.
 pub const DEFAULT: &str = "https://github.com/rok-lang/rokstones.io-index";
 
-/// The index of a bare requirement, [`DEFAULT`]. `$ROK_REGISTRY` and
-/// `registry` of `$ROK_HOME/config.rokon` no longer pick it: either one
+/// The index of a bare requirement, always [`DEFAULT`]. `$ROK_REGISTRY` or
+/// `registry` in `$ROK_HOME/config.rokon` does not change it; either one
 /// set warns, naming what to write in sources.rokon instead.
 pub fn default_url(home: &Path) -> Result<String, String> {
     let env = std::env::var("ROK_REGISTRY").ok().filter(|u| !u.is_empty());
@@ -1312,7 +1312,7 @@ mod tests {
         let e = pick(None).unwrap_err();
         assert!(e.contains("malformed") && !e.contains("ghp_secret"), "{e}");
         std::fs::remove_file(&file).unwrap();
-        // 0.1's credentials.rokon is neither read nor written.
+        // credentials.rokon is neither read nor written.
         let cred = home.join("credentials.rokon");
         std::fs::write(&cred, "Credentials { token: \"ghp_old\" }").unwrap();
         assert!(pick(None).is_err());
@@ -1456,7 +1456,7 @@ mod tests {
         assert_eq!(back[0], e);
         assert_eq!(back[1].version.to_string(), "0.4.0");
         assert_eq!(best(&back, &Req::parse("^0.3").unwrap()), Some(&back[0]));
-        // A 0.1 line (`vers`, `cksum`) is not read.
+        // A line with `vers` and `cksum` is not read.
         let old = line.replace("version:", "vers:").replace("tree:", "cksum:");
         assert!(
             parse_file(&old, "f")

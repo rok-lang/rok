@@ -278,7 +278,7 @@ fn fine_timers() {
     static SET: AtomicBool = AtomicBool::new(false);
     if !SET.swap(true, Ordering::Relaxed) {
         let mut cur = 0;
-        // SAFETY: valid out-pointer; 10 000 × 100 ns = 1 ms.
+        // SAFETY: valid out-pointer; 10000 x 100 ns = 1 ms.
         unsafe { win::NtSetTimerResolution(10_000, 1, &mut cur) };
     }
 }

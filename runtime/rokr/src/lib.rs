@@ -160,8 +160,6 @@ core::arch::global_asm!(
     "bx lr",
 );
 
-// GC
-
 /// GC allocation.
 ///
 /// `size` includes the 16-byte
@@ -288,8 +286,6 @@ pub extern "C" fn rok_gc_stats_moved_bytes() -> u64 {
     rokr_gc::moved_bytes()
 }
 
-// Runtime
-
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_runtime_init() {
     init_thread(true);
@@ -400,9 +396,7 @@ pub extern "C" fn rok_thread_shutdown() {
     thread::thread_exit();
 }
 
-// Coroutine
-
-/// "Almost identical to `rok_gc_alloc_slow`".
+/// A coroutine frame: [`rok_gc_alloc_slow`] at header alignment.
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_coro_frame_alloc(size: usize, type_id: u32) -> *mut u8 {
     rok_gc_alloc_slow(size, HEADER_ALIGN, type_id)
@@ -428,8 +422,6 @@ pub unsafe extern "C" fn rok_coro_unpark(frame: *mut u8) {
     // SAFETY: as above.
     unsafe { (hooks().unpark)(frame) };
 }
-
-// Scheduler
 
 /// A GC object's address as a parking key: from now on the collector
 /// never moves it, so the key stays its own. Only for keys that outlive
@@ -527,8 +519,6 @@ pub extern "C" fn rok_time_realtime_ns() -> i64 {
 pub extern "C" fn rok_time_boot_ns() -> i64 {
     rokr_common::sys::boot_ns()
 }
-
-// I/O / timer
 
 // `rok_io_register` / `rok_timer_register` and the coroutine `rok_coro_park` /
 // `rok_coro_unpark` act on `rok::core::task`'s parking table and timers,
@@ -651,8 +641,6 @@ fn uncaught(parts: &[&[u8]]) -> ! {
     rokr_common::write_all(2, parts);
     exit(1)
 }
-
-// Diagnostics
 
 /// Unrecoverable panic: `thread '<name>' panicked:`, `msg` and `\n` to
 /// stderr, then exit 101.
@@ -938,7 +926,7 @@ mod tests {
         }
     }
 
-    /// `ROKR_WORKERS` sets the pool size; the old `ROK_WORKERS` is not
+    /// `ROKR_WORKERS` sets the pool size; `ROK_WORKERS` is not
     /// read. Not on Windows: `set_var` there does not reach the C
     /// runtime's copy that `getenv` reads.
     #[cfg(not(windows))]

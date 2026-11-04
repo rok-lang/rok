@@ -1,11 +1,10 @@
 //! COFF relocatable object writer (Windows), `x86_64` and arm64.
 //!
 //! A COMDAT section per function and data object so `/opt:ref` drops the
-//! unused; their relocations; `.pdata` / `.xdata` unwind tables (frame
-//! pointer frames; arm64 functions past 1 MiB in fragments) in COMDATs
-//! associated with the code; symbols and strings; `/bigobj` past 65279
-//! sections. No debug info: Windows `-g` builds go through LLVM's
-//! `CodeView`.
+//! unused; their relocations; `.pdata` / `.xdata` unwind tables (frame pointer
+//! frames; arm64 functions past 1 MiB in fragments) in COMDATs associated with
+//! the code; symbols and strings; `/bigobj` past 65279 sections. No debug info:
+//! Windows `-g` builds go through LLVM's `CodeView`.
 
 use crate::obj::{FnRange, Obj, RelKind, Reloc, Sect};
 
@@ -470,10 +469,9 @@ fn a64_xdata(obj: &Obj, f: &FnRange) -> Vec<(u32, Vec<u8>)> {
     out
 }
 
-/// `.xdata` of a `len`-byte fragment: an epilog scope per epilog, the
-/// shared codes. Later fragments have no prolog (codes start with
-/// `end_c`); without an epilog, the `E` form's epilog starts at that
-/// `end_c`.
+/// `.xdata` of a `len`-byte fragment: an epilog scope per epilog, the shared
+/// codes. Later fragments have no prolog (codes start with `end_c`); without an
+/// epilog, the `E` form's epilog starts at that `end_c`.
 fn a64_fragment(len: u32, epilogs: &[u32], prolog: bool) -> Vec<u8> {
     let words = len / 4;
     let n = epilogs.len() as u32;
@@ -506,7 +504,7 @@ mod tests {
 
     /// A function calling an undefined one, a string constant, a weak
     /// definition: section, symbol and relocation records as
-    /// `llvm-readobj` reads them (checked by hand once).
+    /// `llvm-readobj` reads them.
     #[test]
     fn x64_object_layout() {
         let mut o = Obj::new(true, false, true);

@@ -5,8 +5,8 @@
 // expect-stderr: right: 1
 // expect-stdout:
 
-// A `#[track_caller]` chain (user `outer` → user `inner` → library
-// `assert_eq` → `panic`) reports the first caller outside it; a check
+// A `#[track_caller]` chain (user `outer` -> user `inner` -> library
+// `assert_eq` -> `panic`) reports the first caller outside it; a check
 // in a `#[track_caller]` function reports its caller too.
 #[track_caller]
 fn inner(x: i32) {

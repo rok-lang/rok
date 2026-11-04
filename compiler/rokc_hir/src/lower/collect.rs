@@ -431,7 +431,7 @@ pub(super) struct Collected<'a> {
     /// Per decl: its body is library code (`rok::<tier>` / a dependency),
     /// lowered only when reached (`lower_bodies`).
     lib_decl: Vec<bool>,
-    /// Decl index → symbol path of a dependency's method.
+    /// Decl index -> symbol path of a dependency's method.
     link_names: HashMap<usize, String>,
     /// Generic impls with method templates by tag (`generic_trait_impl`).
     templated: HashMap<String, usize>,
@@ -894,9 +894,8 @@ fn collect<'a>(
         }
     }
 
-    // Pass 0: the type namespace. Every type-like (already qualified) name
-    // goes into one index; a duplicate is an error and skipped so ids stay
-    // consistent.
+    // The type namespace: every type-like (already qualified) name goes into
+    // one index; a duplicate is an error and skipped so ids stay consistent.
     let mut names = base_names;
     // An answer for a package module may change with its items.
     names
@@ -952,7 +951,7 @@ fn collect<'a>(
             ));
         }
     }
-    // `pub use` aliases → what they name, chains followed to the item.
+    // `pub use` aliases -> what they name, chains followed to the item.
     let aliases = reexport_aliases(&reexports);
     names.reexports = first_alias(aliases.iter().filter(|(_, end)| names.names.contains(end)));
     // `Enum::Variant` keys, so `use E::{A}` / `use E::*` (and the
@@ -1043,8 +1042,8 @@ fn collect<'a>(
     check_niche_attrs(program, &mut pre_diags);
     check_repr_attrs(program, &mut pre_diags);
 
-    // Pass 1a: every struct / union / enum gets its id before any type
-    // resolves; generic ones are templates instantiated in the same id space
+    // Every struct / union / enum gets its id before any type resolves;
+    // generic ones are templates instantiated in the same id space
     // (`TypeDefs`). Unions follow the structs.
     let mut defs = defs;
     let (first_enum, first_struct) = (defs.enums.borrow().len(), defs.structs.borrow().len());
@@ -1208,8 +1207,8 @@ fn collect<'a>(
         }
     }
 
-    // Pass 1c: module-level `const`s, kept as AST and inlined at each
-    // use; `static`s get global storage (`HirStaticDef`).
+    // Module-level `const`s, kept as AST and inlined at each use; `static`s
+    // get global storage (`HirStaticDef`).
     let mut consts = consts;
     // Per impl item: its associated consts, for its `Impl`.
     let mut impl_const_lists: HashMap<usize, Vec<AssocConst>> = HashMap::default();
@@ -1343,8 +1342,8 @@ fn collect<'a>(
                 span: s.span,
             });
         }
-        // `extern "C" { static errno: i32; }` - a C global,
-        // read (and with `mut` written) like a `static`.
+        // `extern "C" { static errno: i32; }`: a C global, read (and with
+        // `mut` written) like a `static`.
         if let Item::Extern(blk) = item {
             let dll_import = !links_static(&blk.attrs);
             for ei in &blk.items {
@@ -1382,8 +1381,8 @@ fn collect<'a>(
             }
         }
     }
-    // Pass 1d: each plain type alias resolved once, for its diagnostics
-    // (a use expands the alias where it is resolved).
+    // Each plain type alias resolved once, for its diagnostics (a use
+    // expands the alias where it is resolved).
     for item in &program.items {
         if let Item::TypeAlias(a) = item {
             if !a.generics.params.is_empty() || matches!(a.ty.kind, AstTyKind::Some(_)) {
@@ -1468,8 +1467,8 @@ fn collect<'a>(
         }
     }
 
-    // Pass 2: functions, then `impl` methods. Generic functions stay AST
-    // templates, monomorphized per call, outside `decls` / `fn_table`.
+    // Functions, then `impl` methods. Generic functions stay AST templates,
+    // monomorphized per call, outside `decls` / `fn_table`.
     let mut fn_table = fn_table;
     let mut extern_fns = extern_fns;
     // Later extern declarations of a name already declared: whether
@@ -1905,7 +1904,7 @@ fn collect<'a>(
         }
     }
 
-    // Name → Visibility for every value-namespace item (fns, consts,
+    // Name -> Visibility for every value-namespace item (fns, consts,
     // statics) plus type items; consulted by path resolution.
     let mut item_visibility = item_visibility;
     for item in &program.items {
@@ -1925,7 +1924,7 @@ fn collect<'a>(
     let mut field_vis = field_vis;
     field_vis.extend(collect_field_visibility(program));
 
-    // Pass 3: function bodies.
+    // Function bodies.
     let (bound_methods, bound_traits) = super::bounds::templates(&trait_info);
     let mut_statics: rokc_core::HashSet<String> = mut_statics
         .into_iter()
@@ -3525,7 +3524,7 @@ fn reexport_aliases(reexports: &[crate::uses::ReExport]) -> Vec<(String, String)
     out
 }
 
-/// Alias → end, the first re-export of a key winning.
+/// Alias -> end, the first re-export of a key winning.
 fn first_alias<'p>(pairs: impl Iterator<Item = &'p (String, String)>) -> HashMap<String, String> {
     let mut out = HashMap::default();
     for (alias, end) in pairs {
@@ -3585,7 +3584,6 @@ pub(super) fn impl_def_display(ty: &Ty) -> String {
     }
 }
 
-/// struct names; generic instantiations look up their base name).
 /// The name a warning shows for marked function `d`: `f`, `P::new`.
 fn mark_name(env: &Env<'_>, d: &MethodOrFn<'_>) -> String {
     let leaf = leaf_name(&d.def().name).to_owned();
@@ -3920,11 +3918,9 @@ const MAX_VALUE_LEAVES: u64 = 1 << 16;
 /// Largest value type, in (estimated) bytes.
 const MAX_VALUE_BYTES: u64 = 1 << 32;
 
-/// A struct / enum containing itself by value has no finite size; one past
-/// the layout caps is refused before MIR expands it.
 /// Statics whose initializers name each other directly form a cycle no
-/// order can initialize. A cycle through a function call
-/// stays the run-time panic.
+/// order can initialize. A cycle through a function call stays the
+/// run-time panic.
 fn check_static_cycles(module: &mut HirModule) {
     use rokc_core::HashMap;
     let bodies: HashMap<FunctionId, &crate::HirFunction> =
@@ -4002,6 +3998,8 @@ fn check_static_cycles(module: &mut HirModule) {
     module.diagnostics.extend(diags);
 }
 
+/// A struct / enum containing itself by value has no finite size; one past
+/// the layout caps is refused before MIR expands it.
 fn check_value_types(module: &mut HirModule) {
     use rokc_core::{HashMap, HashSet};
     #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -4366,7 +4364,7 @@ pub(super) fn lower_enum_def(
                     named_fields: Vec::new(),
                     arity: 0,
                 },
-                // Single-element tuple - store the payload type directly.
+                // Single-element tuple: store the payload type directly.
                 AstEnumVariantKind::Tuple(tys) if tys.len() == 1 => HirEnumVariant {
                     name: v.name.clone(),
                     tag,
@@ -4374,7 +4372,7 @@ pub(super) fn lower_enum_def(
                     named_fields: Vec::new(),
                     arity: 1,
                 },
-                // Multi-element tuple - pack into a tuple payload type.
+                // Multi-element tuple: pack into a tuple payload type.
                 AstEnumVariantKind::Tuple(tys) => HirEnumVariant {
                     name: v.name.clone(),
                     tag,
@@ -4772,7 +4770,7 @@ pub(super) fn lower_struct_def(
 }
 
 /// A `union` as one synthetic `HirStructDef` field `__data` of the chosen
-/// storage (`union_storage_strategy`); field → declared type in
+/// storage (`union_storage_strategy`); field -> declared type in
 /// `union_kind.aliases`.
 pub(super) fn lower_union_def(
     u: &rokc_ast::UnionDef,
@@ -4832,8 +4830,8 @@ pub(super) fn union_def(
     }
 }
 
-/// Union storage: all-primitive unions without `#[repr(C)]` use the widest
-/// primitive (model A); otherwise `[u8; size]` (model B).
+/// Union storage: an all-primitive union without `#[repr(C)]` is its widest
+/// primitive; any other is `[u8; size]`.
 pub(super) fn union_storage_strategy(
     aliases: &[(String, HirTy)],
     is_repr_c: bool,
@@ -5696,11 +5694,10 @@ pub(super) fn lower_decl(env: &Env<'_>, i: usize, stub: bool) -> HirFunction {
     }
 }
 
-/// Pass 3: bodies. The `roots` (user code, exports, lazy static inits) are
-/// lowered, then every decl a lowered body names, lowest id first. An
-/// unreached library body stays a signature-only stub that MIR drops;
-/// `--check-library` lowers all. Prebuilt (`linked`) functions keep only
-/// their signatures.
+/// The `roots` (user code, exports, lazy static inits) are lowered, then
+/// every decl a lowered body names, lowest id first. An unreached library
+/// body stays a signature-only stub that MIR drops; `--check-library`
+/// lowers all. Prebuilt (`linked`) functions keep only their signatures.
 fn lower_bodies(
     env: &Env<'_>,
     roots: &[bool],
@@ -6198,8 +6195,7 @@ fn check_bound_names(
 
 /// `impl Tr<..> for X`: a missing parameter, or a `type Name = ..` the
 /// trait does not declare. An undeclared associated type standing in for
-/// a missing parameter (the old `IndexSet` with `type Value`) moves into
-/// the header in the help.
+/// a missing parameter moves into the header in the help.
 fn check_impl_header(
     i: &rokc_ast::ImplDef,
     td: &rokc_ast::TraitDef,
@@ -8715,7 +8711,7 @@ fn impl_assoc_types_from(impl_def: &rokc_ast::ImplDef, module: &str) -> HashMap<
     assoc
 }
 
-/// An impl's associated types: `type Item = T;` → `Item ↦ T`.
+/// An impl's associated types: `type Item = T;` maps `Item` to `T`.
 fn impl_assoc_types(impl_def: &rokc_ast::ImplDef) -> HashMap<String, Ty> {
     impl_def
         .items
@@ -8761,7 +8757,7 @@ fn const_literal_ty(v: i128, span: rokc_diagnostic::Span) -> Ty {
     }
 }
 
-/// Trait type parameter → the impl's argument (or the parameter's
+/// Trait type parameter -> the impl's argument (or the parameter's
 /// default, `Self` meaning the impl target).
 fn trait_param_args(t: &rokc_ast::TraitDef, impl_def: &rokc_ast::ImplDef) -> HashMap<String, Ty> {
     let given: &[Ty] = impl_def
@@ -8856,8 +8852,7 @@ fn returns_self_generic(m: &FnDef) -> bool {
         if p.segments.iter().any(|s| s.generics.iter().any(|g| matches!(g.kind, AstTyKind::SelfUpper))))
 }
 
-/// Replace a default method's associated-type names (`Item`,
-/// `Self::Item`) in its signature with the impl's types.
+/// The one-segment path type `name`.
 fn path_ty_named(name: &str, span: rokc_diagnostic::Span) -> Ty {
     Ty {
         kind: AstTyKind::Path(rokc_ast::Path {
@@ -9393,7 +9388,7 @@ pub(super) fn subst_assoc_ty(ty: &mut Ty, assoc: &HashMap<String, Ty>) {
                 *ty = t.clone();
                 return;
             }
-            // `Item::IntoIter` → `List<T>::IntoIter` (a projection on
+            // `Item::IntoIter` -> `List<T>::IntoIter` (a projection on
             // the impl's type).
             if let [s, x] = p.segments.as_slice() {
                 if let (true, Some(AstTyKind::Path(ap))) = (
@@ -9542,7 +9537,7 @@ fn literal_handlers(
 ) -> Vec<super::ShapeHandler> {
     use rokc_parser::{ArgKind, PatKind, Pattern};
     let mut out = Vec::new();
-    // (pattern, priority, return type leaf) → first handler; a second is
+    // (pattern, priority, return type leaf) -> first handler; a second is
     // ambiguous wherever the pattern matches.
     let mut seen: HashMap<(String, i64, String), (String, rokc_diagnostic::Span)> =
         HashMap::default();

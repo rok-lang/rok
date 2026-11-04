@@ -51,7 +51,7 @@ runs:
         } >> "$GITHUB_ENV"
         if [ -n "${AWS_ACCESS_KEY_ID:-}" ]; then echo "sccache: read-write"; else echo "sccache: read-only"; fi
         # Start the server here, so a bucket error costs the cache, not the
-        # build (one 403 SignatureDoesNotMatch in 32 jobs failed a corpus).
+        # build (S3 sometimes answers 403 SignatureDoesNotMatch).
         export SCCACHE_BUCKET=rok-lang-artifacts SCCACHE_REGION=us-east-1 SCCACHE_S3_KEY_PREFIX=sccache/$os-$arch SCCACHE_IDLE_TIMEOUT=0
         [ -n "${AWS_ACCESS_KEY_ID:-}" ] || export SCCACHE_S3_NO_CREDENTIALS=true
         for i in 1 2 3; do

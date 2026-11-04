@@ -1,8 +1,8 @@
-//! In a coroutine a pointer to a local is valid only
-//! until the next suspend, since each resume reloads the frame into new
-//! slots. A `rok::bare::ptr` local built from such an address (or another
-//! such local) used after a suspend it was live at is an error. Read off
-//! the HIR in order (branches merge, loops walked twice); pointers in
+//! In a coroutine a pointer to a local is valid only until the next
+//! suspend: each resume reloads the frame into new slots. A
+//! `rok::bare::ptr` local built from such an address (or another such
+//! local) used after a suspend it was live at is an error. Read off the
+//! HIR in order (branches merge, loops walked twice); pointers in
 //! temporaries or fields aren't seen.
 
 use rokc_core::HashSet;

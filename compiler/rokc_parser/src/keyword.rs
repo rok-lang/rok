@@ -211,7 +211,7 @@ pub fn check_keyword(def: &KeywordDef) -> Option<RokDiagnostic> {
 /// path, and whether it is a type keyword.
 pub type KeywordTable = Vec<(String, Vec<String>, bool)>;
 
-/// Rewrite the package's registered keywords (`name` → handler path).
+/// Rewrite the package's registered keywords (`name` -> handler path).
 pub fn apply_keywords(tokens: &mut Vec<Token>, kws: &KeywordTable, diags: &mut Vec<RokDiagnostic>) {
     if kws.is_empty() {
         return;

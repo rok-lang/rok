@@ -496,9 +496,8 @@ pub(super) fn frame_end(ctx: &mut LowerCtx<'_>, span: rokc_diagnostic::Span) -> 
 /// Name prefix of the local an `await` polls its future in.
 pub(super) const AWAITED: &str = "#await";
 
-/// `await e`: poll `e` (or `e.into_future()`) until ready,
-/// suspending with `Pending`. A throwing `poll` needs a `try` like any
-/// throwing call.
+/// `await e`: poll `e` (or `e.into_future()`) until ready, suspending
+/// with `Pending`. A throwing `poll` needs a `try` like any throwing call.
 pub(super) fn lower_await(
     ctx: &mut LowerCtx<'_>,
     e: &Expr,
@@ -781,10 +780,9 @@ pub(super) fn poll_loop_on(
     }
 }
 
-/// A cancellation point: `if !#unwinding &&
-/// task::<check>(#ctx) { #unwinding = true; leave like a return }`,
-/// running the cleanups passed; the result is a zero value the executor
-/// drops. `None` in the probe pass.
+/// A cancellation point: `if !#unwinding && task::<check>(#ctx) {
+/// #unwinding = true; leave like a return }`, running the cleanups passed;
+/// the result is a zero value the executor drops. `None` in the probe pass.
 fn cancel_check(
     ctx: &mut LowerCtx<'_>,
     check: &str,
@@ -822,8 +820,8 @@ fn cancel_check(
     )))
 }
 
-/// `async || body` = `|| async { body }`: the
-/// closure body to lift (the body itself for a plain closure).
+/// `async || body` = `|| async { body }`: the closure body to lift (the
+/// body itself for a plain closure).
 pub(super) fn closure_body(body: &Expr, is_async: bool, is_generator: bool) -> Expr {
     if !(is_async || is_generator) {
         return body.clone();

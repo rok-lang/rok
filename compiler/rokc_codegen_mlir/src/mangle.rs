@@ -6,8 +6,8 @@
 //! Identifier bytes outside `[A-Za-z0-9]` are escaped so the `_`
 //! separators stay unambiguous: a literal `_` is `_0`, anything else is
 //! `_1<hex codepoint>_`. Identifiers never start with a digit, so a
-//! separator `_` is never followed by `0`/`1`. Thus `mod a { fn b }` →
-//! `..._a_b_` while a root `fn a__b` → `...__a_0_0b_`.
+//! separator `_` is never followed by `0`/`1`. Thus `mod a { fn b }` ->
+//! `..._a_b_` while a root `fn a__b` -> `...__a_0_0b_`.
 
 use rokc_core::hash::{hex, sha256};
 use rokc_ir_common::Linkage;
@@ -22,7 +22,7 @@ pub struct Pkgs {
     /// Windows: DLL `extern` statics, reached via `__imp_<name>` (import
     /// libraries define only that for data).
     pub dll_statics: rokc_core::HashSet<String>,
-    /// Lazily initialized statics: name → symbol of their initializer.
+    /// Lazily initialized statics: name -> symbol of their initializer.
     pub lazy_statics: rokc_core::HashMap<String, String>,
     /// Unit builds: a library's own copies of other packages' statics are
     /// `<symbol>.copy_Y<hash>_`, shared by its units and distinct from other
@@ -98,7 +98,7 @@ pub fn mangled(f: &MirFunction, pkgs: &Pkgs) -> String {
 }
 
 /// Mangle a `::`-qualified item path. The package is the hash, so a
-/// library's `rok::` root is dropped (`rok::std::fs` → `std_fs`).
+/// library's `rok::` root is dropped (`rok::std::fs` -> `std_fs`).
 pub fn item(pkg: &str, qualified: &str, typehash: &str) -> String {
     let qualified = qualified.strip_prefix("rok::").unwrap_or(qualified);
     let mut segs: Vec<&str> = qualified.split("::").collect();

@@ -1,8 +1,7 @@
-//! Compile-time evaluation: an interpreter over HIR for
-//! consts, array lengths, const generic arguments, static initializers and
-//! `const fn` literal handlers. Callees come from `Bodies`: lowered on
-//! demand with a context (`CtxBodies`), none in the pre-body pass
-//! (`syntactic_int`).
+//! Compile-time evaluation: an interpreter over HIR for consts, array
+//! lengths, const generic arguments, static initializers and `const fn`
+//! literal handlers. Callees come from `Bodies`: lowered on demand with a
+//! context (`CtxBodies`), none in the pre-body pass (`syntactic_int`).
 //!
 //! Integers are `i128` tagged with their primitive and range-checked:
 //! overflow, division by zero, bad shifts and failed float-to-int casts are
@@ -747,8 +746,8 @@ impl<'b> Interp<'b> {
             Callee::Refused(why) => return Err(Stop::Runtime(span, why)),
             Callee::Poisoned => return Err(Stop::Poisoned),
         };
-        // A hand-off's copy of a value built at compile
-        // time: nothing else reaches it, so it is the value itself.
+        // A hand-off's copy of a value built at compile time: nothing else
+        // reaches it, so it is the value itself.
         let base = func.name.split("__").next().unwrap_or(&func.name);
         if std && base == "rok::core::marker::hand_over_copy" && args.len() == 1 {
             return Ok(args.into_iter().next().expect("one argument"));
@@ -1912,9 +1911,8 @@ pub(super) fn constant(ctx: &LowerCtx<'_>, what: &str, v: HirExpr) -> HirExpr {
     }
 }
 
-/// A `#[literal]` handler call runs now when its arguments
-/// are constants; a panic or `throw` inside is a compile error at the
-/// literal.
+/// A `#[literal]` handler call runs now when its arguments are constants;
+/// a panic or `throw` inside is a compile error at the literal.
 pub(super) fn fold_literal(ctx: &LowerCtx<'_>, h: &mut HirExpr, at: Span) {
     if let HirExprKind::Call { callee, .. } = &h.kind {
         if is_const_fn(ctx, *callee) {
@@ -2016,8 +2014,8 @@ pub(super) fn eval_scalar(ctx: &LowerCtx<'_>, e: &Expr) -> Result<(i128, Option<
     r
 }
 
-/// Evaluate every const item of the user's package once,
-/// so an unused one is checked too.
+/// Evaluate every const item of the user's package once, so an unused one
+/// is checked too.
 pub(super) fn check_user_consts(env: &Env<'_>) {
     let no_subst = HashMap::default();
     let mut keys: Vec<&String> = env
@@ -2066,8 +2064,8 @@ pub(super) fn check_user_consts(env: &Env<'_>) {
     }
 }
 
-/// A static's initializer function, run now: its value
-/// when it is a primitive constant; `None` keeps the lazy initializer.
+/// A static's initializer function, run now: its value when it is a
+/// primitive constant; `None` keeps the lazy initializer.
 pub(super) fn static_init(env: &Env<'_>, init_fn: &HirFunction) -> Option<ConstVal> {
     let no_subst = HashMap::default();
     let ctx = LowerCtx::new(env, &no_subst, None, init_fn.span);

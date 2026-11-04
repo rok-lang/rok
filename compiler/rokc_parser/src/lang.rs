@@ -1,9 +1,8 @@
 //! `#[lang("slot")]`.
 //!
 //! Ties a stdlib item to a compiler-known slot used to desugar tokens
-//! (`+` → `add_trait::add`) and type literals (`none` → `none_type`).
-//! Slots are a closed set (`KNOWN_SLOTS`); an unknown one is an error
-//!.
+//! (`+` -> `add_trait::add`) and type literals (`none` -> `none_type`).
+//! Slots are a closed set (`KNOWN_SLOTS`); an unknown one is an error.
 
 use rokc_core::HashMap;
 
@@ -241,8 +240,7 @@ impl LangTable {
     }
 }
 
-/// Collect top-level `#[lang]` attributes; a slot used twice is an error
-///.
+/// Collect top-level `#[lang]` attributes; a slot used twice is an error.
 pub fn collect_lang_table(program: &Program) -> (LangTable, Vec<RokDiagnostic>) {
     collect_lang_table_onto(LangTable::default(), program)
 }
@@ -326,7 +324,7 @@ fn collect_attr(
         ));
         return;
     };
-    // Unknown slot name → error.
+    // Unknown slot name -> error.
     if !KNOWN_SLOTS.contains(&slot.as_str()) {
         diags.push(RokDiagnostic::error(
             Code::INVALID_LANG_ITEM,
@@ -343,7 +341,7 @@ fn collect_attr(
         ));
         return;
     }
-    // Same slot on two items → error.
+    // Same slot on two items -> error.
     if let Some(prev) = table.by_slot.get(&slot) {
         diags.push(RokDiagnostic::error(
             Code::DUPLICATE_REGISTRATION,

@@ -196,7 +196,7 @@ fn block_comments(src: &str, from: usize, to: usize, out: &mut Vec<(usize, usize
 }
 
 /// A minimal line diff (`--diff`): `-old` / `+new` lines with their
-/// 1-based line numbers. O(n·m) LCS: source files are small.
+/// 1-based line numbers. O(n*m) LCS: source files are small.
 #[must_use]
 pub fn line_diff(old: &str, new: &str) -> String {
     let a: Vec<&str> = old.lines().collect();

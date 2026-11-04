@@ -49,7 +49,7 @@ pub trait FloatingPoint: Num + Neg<Output = Self> {
     const NEG_INFINITY: Self;
     /// The gap between `1` and the next larger value.
     const EPSILON: Self;
-    /// π.
+    /// Pi.
     const PI: Self;
     /// Euler's number e.
     const E: Self;
@@ -111,7 +111,7 @@ pub trait FloatingPoint: Num + Neg<Output = Self> {
     /// The hyperbolic tangent.
     fn tanh(self) -> Self;
 
-    /// `√(self² + other²)` without overflow on the way.
+    /// `sqrt(self^2 + other^2)` without overflow on the way.
     fn hypot(self, other: Self) -> Self;
 
     /// Rounded down.
@@ -864,7 +864,7 @@ pub fn arange<T: FloatingPoint>(start: T, stop: T, step: T) -> List<T> {
     out
 }
 
-// √: `llvm.intr.sqrt`. The body's `self.sqrt()`
+// Prefix `√` (`Sqrt`): `llvm.intr.sqrt`. The body's `self.sqrt()`
 // is itself the intrinsic (a call of an intrinsic method is the op).
 
 impl Sqrt for f64 {

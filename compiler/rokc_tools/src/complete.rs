@@ -273,7 +273,7 @@ fn visible(a: &Analysis) -> impl Fn(&str, Span) -> bool + '_ {
     }
 }
 
-/// `a::b::` → the next segments of every item path under it, plus the
+/// `a::b::` -> the next segments of every item path under it, plus the
 /// associated functions / variants of a type named by the path: those
 /// `shown` takes (by HIR name and span).
 fn path_completions(
@@ -344,7 +344,7 @@ fn path_completions(
     }
 }
 
-/// `a::b::` → the public modules and items below `a::b` (what `use`
+/// `a::b::` -> the public modules and items below `a::b` (what `use`
 /// can name), from the ASTs.
 fn module_paths(a: &Analysis, segs: &[&str], push: &mut impl FnMut(&str, u32, String)) {
     let n = segs.len();

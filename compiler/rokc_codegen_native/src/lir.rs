@@ -151,7 +151,7 @@ pub enum Conv {
     FToI { signed: bool, bits: u32 },
     /// Float to float.
     FToF,
-    /// Bits reinterpreted (same size), int ↔ float.
+    /// Bits reinterpreted (same size), int <-> float.
     Bits,
 }
 
@@ -402,7 +402,7 @@ pub const fn scalar(size: u32) -> Option<K> {
     }
 }
 
-/// `(slot, offset)` → `(size, reads)` (`waitable`).
+/// `(slot, offset)` -> `(size, reads)` (`waitable`).
 pub type Waits = HashMap<(u32, u32), (u32, u32)>;
 
 /// How a slot is accessed.
@@ -424,7 +424,7 @@ impl Use {
     }
 }
 
-/// Scalar slot parts whose store may wait (`Pend`), `(slot, offset)` →
+/// Scalar slot parts whose store may wait (`Pend`), `(slot, offset)` ->
 /// `(size, reads)`: written once, read at most once as the same bytes, in a
 /// slot with non-overlapping parts, never addressed, copied whole or
 /// described to the debugger. Also: which slots are addressed.

@@ -970,7 +970,7 @@ fn meta_macro_rejects_builtin_bang_name() {
 
 #[test]
 fn meta_attribute_builtin_name_refused() {
-    // Every built-in attribute name is refused, those reserved late too.
+    // Every built-in attribute name is refused.
     let src = "#[impl_attribute(bench)] pub @attribute { @item }\n\
                #[impl_attribute(test)] pub @attribute { @item }\n";
     let (tokens, _) = Lexer::new(src, "test").lex_all();

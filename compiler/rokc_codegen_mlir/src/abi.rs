@@ -5,13 +5,14 @@
 //! through memory at the call site.
 //!
 //! - AAPCS64 (Linux / Windows / Apple arm64): a homogeneous float
-//!   aggregate (HFA, 1-4 members of one float type) goes in `v`
-//! - AAPCS64 (Linux / Windows / Apple arm64): a homogeneous float
 //!   aggregate (HFA, 1-4 members of one float type) goes in `v` registers
 //!   as `[n x fT]`; others up to 16 bytes as `i64` / `[2 x i64]` (results
-//!   ≤ 8 bytes as `iN`); bigger ones by pointer to a caller copy, returned
+//!   <= 8 bytes as `iN`); bigger ones by pointer to a caller copy, returned
 //!   through `x8` (`sret`). Apple differs only for variadics (all on the
 //!   stack; LLVM handles it) and small-integer extension (`c_ext_attr`).
+//! - x86-64 System V: each eightbyte of an aggregate up to 16 bytes is SSE
+//!   (`f32` / `f64` / `vector<2xf32>`) or INTEGER (`iN`) in `xmm` / GPRs
+//!   (short of registers, or with an unaligned field, the whole
 //!   aggregate is MEMORY), > 16 bytes are MEMORY (`byval` / `sret`).
 //! - Windows x64: 1 / 2 / 4 / 8-byte aggregates as `iN`, others by
 //!   reference / `sret`.
@@ -22,7 +23,7 @@
 //! - 32-bit ARM AAPCS-VFP: an HFA goes in `s` / `d` registers as
 //!   `[n x fT]`; other aggregates up to 64 bytes as `[n x i32]` (`i64`
 //!   when 8-aligned: an even register pair) through `r0`-`r3` and the
-//!   stack, bigger ones `byval`; results ≤ 4 bytes in `r0`, HFAs in
+//!   stack, bigger ones `byval`; results <= 4 bytes in `r0`, HFAs in
 //!   VFP registers, others through `sret`.
 //! - WebAssembly: an aggregate of one scalar (no padding) as that scalar,
 //!   others as a pointer to a caller copy (not `byval`: LLVM's -O2 then
@@ -227,8 +228,8 @@ pub fn classify(target: &Target, params: &[MirTy], ret: &MirTy, variadic: bool) 
     })
 }
 
-/// A runtime (`extern "rok"`) declaration: the C ABI, with
-/// `str` a by-value `(ptr, len)` C struct like `RokFn`.
+/// A runtime (`extern "rok"`) declaration: the C ABI, with `str` a by-value
+/// `(ptr, len)` C struct like `RokFn`.
 ///
 /// `None` means a plain call already matches C: LLVM splits a two-word pair
 /// (`str`, a `fn` value) into words, which agrees with C while all integer
@@ -486,7 +487,7 @@ fn riscv_arg(ty: &MirTy, target: &Target, gprs: &mut u32, fprs: &mut u32) -> Arg
 }
 
 /// A struct the RISC-V float convention passes as fields (one float, two
-/// floats, or a float and an integer ≤ 8 bytes, flattened; never a
+/// floats, or a float and an integer <= 8 bytes, flattened; never a
 /// union): its MLIR type and the integer and float registers it takes.
 fn riscv_fp(ty: &MirTy, target: &Target) -> Option<(String, u32, u32)> {
     fn has_union(ty: &MirTy) -> bool {
@@ -527,7 +528,7 @@ fn riscv_fp(ty: &MirTy, target: &Target) -> Option<(String, u32, u32)> {
     }
 }
 
-/// System V `x86_64` eightbyte classes of a ≤ 16-byte aggregate: the MLIR
+/// System V `x86_64` eightbyte classes of a <= 16-byte aggregate: the MLIR
 /// type of each eightbyte and whether it is SSE.
 fn sysv_eightbytes(ty: &MirTy, target: &Target) -> Vec<(String, bool)> {
     let size = target.size_align(ty).0;
@@ -677,7 +678,7 @@ mod tests {
             a(&st(&[F32, F64])),
             ArgAbi::Coerce("!llvm.array<2 x i64>".into())
         );
-        // 5 floats: too many for an HFA, 20 bytes → memory.
+        // 5 floats: too many for an HFA, 20 bytes -> memory.
         assert_eq!(a(&st(&[F32; 5])), ArgAbi::Indirect { byval: false });
         assert_eq!(r(&st(&[I64, I64, I64])), RetAbi::Sret);
         assert_eq!(a(&MirTy::Prim(I32)), ArgAbi::Direct);
@@ -706,7 +707,7 @@ mod tests {
             f(&[st(&[I64, I64, I64])], &MirTy::Unit).1,
             vec![ArgAbi::Indirect { byval: true }]
         );
-        // Five ints use five GPRs; a two-INTEGER struct no longer fits
+        // Five ints use five GPRs; a two-INTEGER struct then does not fit
         // and goes to memory whole, while a one-eightbyte one still fits.
         let ints = vec![MirTy::Prim(I64); 5];
         let mut ps = ints.clone();

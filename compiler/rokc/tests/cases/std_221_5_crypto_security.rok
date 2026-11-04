@@ -40,7 +40,7 @@ fn main() {
     let back = try! dk2.decapsulate(c);
     flag("mlkem round trip", constant_time_eq(back, k));
 
-    // A ciphertext that does not re-encrypt: K = J(z ‖ c) (FIPS 203).
+    // A ciphertext that does not re-encrypt: K = J(z || c) (FIPS 203).
     let bad = c.clone();
     bad[10] = bad[10] ^ 1u8;
     let rejected = try! dk.decapsulate(bad);

@@ -42,7 +42,7 @@ const fn ns_f64(x: f64) -> i64 {
     0
 }
 
-/// A span of time: `i64` nanoseconds (about ±292 years).
+/// A span of time: `i64` nanoseconds (about +/-292 years).
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Duration {
     ns: i64;

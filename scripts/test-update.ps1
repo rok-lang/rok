@@ -1,17 +1,17 @@
-# Update a 0.1.x install to a staged release set on
+# Update an older install to a staged release set on
 # Windows: the archives dist-native.sh left in -Dist, served over http
 # in the GitHub releases' layout. The counterpart of test-update.sh; three
-# updates, each on a fresh ROK_HOME holding the 0.1.x release:
+# updates, each on a fresh ROK_HOME holding the older release:
 #
 #   - its `rok toolchain update`, then the staged rok builds and runs a
-#     project the 0.1.x rok made and locked (a git dependency), and
+#     project the older rok made and locked (a git dependency), and
 #     leaves its rok.lock in lock format 2;
 #   - its install.ps1 -Version <staged> from the staged set;
 #   - the staged archive's own install.ps1 -Version <staged>.
 #
 #   pwsh scripts/test-update.ps1 -Dist <dist>
 #
-# ROK_UPDATE_FROM names the 0.1.x release (default 0.1.6), downloaded
+# ROK_UPDATE_FROM names the older release (default 0.1.6), downloaded
 # from GitHub; ROK_UPDATE_PORT the local port (default 8765).
 param([Parameter(Mandatory)][string]$Dist)
 $ErrorActionPreference = 'Stop'

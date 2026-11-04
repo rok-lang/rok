@@ -76,7 +76,7 @@ pub fn eq_at(h: &[u8], at: usize, n: &[u8]) -> bool {
 }
 
 /// `h` with every non-overlapping `f` replaced by `t`, piece by piece
-/// into `put`. An empty `f` matches at every char boundary: "ab" →
+/// into `put`. An empty `f` matches at every char boundary: "ab" ->
 /// "-a-b-".
 pub fn replace(h: &[u8], f: &[u8], t: &[u8], mut put: impl FnMut(&[u8])) {
     if f.is_empty() {

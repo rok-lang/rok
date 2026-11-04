@@ -708,7 +708,7 @@ fn catches(p: &HirPattern, v: u32, ty: &HirTy) -> bool {
     }
 }
 
-/// `q` and every place aliased to it go away in `s`.
+/// `p` and every place aliased to it go away in `s`.
 fn mark_gone(s: &mut St, p: Place, why: Gone) {
     let first = p.clone();
     // Each place with the buffer elements it must not reach: what was
@@ -2316,7 +2316,6 @@ fn keeps_param(
     })
 }
 
-/// `t` (`g.get()`, `xs`) as a deep copy: `g.get_clone()`, `xs.clone()`.
 /// What a coroutine call returns: its frame holds the arguments.
 const CORO_TYPES: &[&str] = &[
     "rok::core::future::AsyncFuture",
@@ -2344,6 +2343,7 @@ fn owning_form(made: &str) -> Option<String> {
     Some(format!("{}.into_{}", &made[..i], &made[i + 1..]))
 }
 
+/// `t` (`g.get()`, `xs`) as a deep copy: `g.get_clone()`, `xs.clone()`.
 fn deep_copy(t: &str) -> String {
     t.strip_suffix(".get()")
         .map_or_else(|| format!("{t}.clone()"), |g| format!("{g}.get_clone()"))
@@ -3468,7 +3468,6 @@ impl<'h> Walk<'_, 'h> {
         }
     }
 
-    /// The lock a guard local belongs to.
     /// Local `l` is a lock guard.
     fn is_guard(&self, l: LocalId) -> bool {
         let structs = self.c.env.defs.structs.borrow();
@@ -3615,7 +3614,7 @@ impl<'h> Walk<'_, 'h> {
             }
             return s;
         }
-        // Each end in `p`: (end, other end, other ⇒ end, end ⇒ other, same,
+        // Each end in `p`: (end, other end, other => end, end => other, same,
         // taken: 1 the end was taken out of the other, 2 the reverse).
         let mut ends: Vec<(Place, Place, bool, bool, bool, u8)> = Vec::new();
         for e in &touch {
@@ -3627,7 +3626,7 @@ impl<'h> Walk<'_, 'h> {
                 let (to_u, from_u, same) = match e {
                     Edge::Same(..) => (true, true, true),
                     Edge::In(..) => (true, true, false),
-                    // `Into(a, b)`: a ⇒ b; a taken element as one.
+                    // `Into(a, b)`: a => b; a taken element as one.
                     Edge::Into(..) | Edge::Taken(..) => (!fwd, fwd, false),
                 };
                 let taken = match e {
@@ -4881,9 +4880,6 @@ impl<'h> Walk<'_, 'h> {
         }
     }
 
-    /// A call that hands something over must not get one object through
-    /// two arguments (`f(tx, a, a)`, `h.go(tx, h.items)`): it may hand one
-    /// over and keep using the other.
     /// Handing over `qs`, taken out of a parameter's buffer: the call
     /// hands over that buffer's elements (`Summary::sent_from`).
     fn note_sent_from(&mut self, qs: &[Place]) {

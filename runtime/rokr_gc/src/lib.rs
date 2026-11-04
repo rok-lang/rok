@@ -547,8 +547,7 @@ fn before_alloc(want: usize) {
     }
 }
 
-/// Read the `ROKR_GC_*` knobs (old spelling `ROKR_GC_*`) once, before the
-/// first collection.
+/// Read the `ROKR_GC_*` knobs once, before the first collection.
 fn configure(h: &mut Heap) {
     if h.configured {
         return;

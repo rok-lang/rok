@@ -571,7 +571,7 @@ jobs:
   # windows-x64 (dist-native.sh). Windows installs it (install.ps1
   # -NoModifyPath into a scratch ROK_HOME): a program, and a package's
   # build / run / test, with nothing but the installed toolchain on PATH.
-  # Both then update the last 0.1.x release to it (test-update.sh /
+  # Both then update the last release to it (test-update.sh /
   # test-update.ps1).
   dist:
     needs: [plan, llvm-prefix, check, corpus, cross]
@@ -627,10 +627,9 @@ jobs:
           Must build --release
           Must test
 
-  # The one required status check. Passes when lint/plan/llvm-prefix/check/test/corpus passed or
-  # were skipped, fails if any failed or was cancelled. Requiring this instead
-  # of each matrix job keeps a skipped job from blocking the merge; including
-  # lint keeps a lint failure (which skips the rest) from passing the gate.
+  # The one required check: passes when every job passed or was skipped,
+  # fails if any failed or was cancelled. A skipped matrix job cannot block
+  # the merge, and a lint failure (which skips the rest) cannot pass it.
   ci-gate:
     needs: [lint, plan, llvm-prefix, check, test, corpus]
     if: always()

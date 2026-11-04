@@ -5,11 +5,11 @@
 // 0 -7 -7.9
 // f64 true true true
 
-// Fixed → int is lossless (`into`, `int::from_i32`);
-// int → i32 is `try_into` (throws `OverflowError`), `saturating_into`
-// (clamps) or `wrapping_into` / `as` (modular); int → f64 is `to_f64`
+// Fixed -> int is lossless (`into`, `int::from_i32`);
+// int -> i32 is `try_into` (throws `OverflowError`), `saturating_into`
+// (clamps) or `wrapping_into` / `as` (modular); int -> f64 is `to_f64`
 // (rounds), `try_into` (throws past `f64::MAX`) or `saturating_into`.
-// float → i32 / i64 `try_into` truncates.
+// float -> i32 / i64 `try_into` truncates.
 fn main() {
     let small: i32 = -42;
     let n: int = small.into();

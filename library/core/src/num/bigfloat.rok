@@ -2,10 +2,11 @@
 // routes the type name here; an unsuffixed literal in a `float` slot is
 // `Float::from_f64`, or `Float::from_literal` when `f64` can't hold it.
 //
-// A `float` has `f64`'s 53-bit significand and an `i64` exponent. In `f64`'s normal range it is an `f64`
-// (`e == 0`) with IEEE 754 operations. A finite result outside that range
-// is promoted to `m * 2^e`, `1 <= |m| < 2`, rounded to nearest-even
-// instead of becoming ±inf / 0 / subnormal, so arithmetic never
+// A `float` has `f64`'s 53-bit significand and an `i64` exponent. In
+// `f64`'s normal range it is an `f64` (`e == 0`) with IEEE 754
+// operations. A finite result outside that range is promoted to
+// `m * 2^e`, `1 <= |m| < 2`, rounded to nearest-even instead of
+// becoming +/-inf / 0 / subnormal, so arithmetic never
 // overflows; only `/ 0` and inf / NaN operands give inf / NaN.
 
 use rok::core::num::bigint::Int;
@@ -41,7 +42,7 @@ const fn split_f64(x: f64) -> (f64, i64) {
 fn pow10(k: i64) -> Int { Int::from_i64(10).pow(k as u32) }
 
 impl Float {
-    /// The value `x`, exactly (subnormals, NaN and ±inf included).
+    /// The value `x`, exactly (subnormals, NaN and +/-inf included).
     #[must_use]
     pub const fn from_f64(x: f64) -> Float {
         if x != 0.0 && exp_field(x) == 0 {
@@ -103,8 +104,8 @@ impl Float {
     #[must_use]
     pub const fn abs(self) -> Float { Float { m: self.m.abs(), e: self.e } }
 
-    /// The nearest `f64`: ±inf past `f64::MAX`, ties to even into the
-    /// subnormals, ±0 below them.
+    /// The nearest `f64`: +/-inf past `f64::MAX`, ties to even into the
+    /// subnormals, +/-0 below them.
     #[must_use]
     pub const fn to_f64(self) -> f64 {
         if self.e == 0 { return self.m; }
@@ -133,7 +134,7 @@ impl Float {
         round_scaled(n.is_negative(), n.abs(), 0, false)
     }
 
-    /// Truncated toward zero; `none` for NaN / ±inf.
+    /// Truncated toward zero; `none` for NaN / +/-inf.
     #[must_use]
     pub const fn to_int(self) -> Int | none {
         if !self.is_finite() { return none; }
@@ -149,7 +150,7 @@ impl Float {
     }
 
     /// `s` as a decimal (`-1.5e400`, `.5`, `inf`, `nan`), correctly
-    /// rounded; `none` when it isn't one. Decimal exponents past ±10^6
+    /// rounded; `none` when it isn't one. Decimal exponents past +/-10^6
     /// are `none`: the exact conversion would need a million-digit power
     /// of ten. Callers use `FromStr`, which throws.
     fn parse_decimal(s: str) -> Float | none {
@@ -247,9 +248,9 @@ impl Float {
     }
 
     /// `p` significant decimal digits of `|self|` (finite, non-zero;
-    /// ties to even) and the decimal exponent of the first: `|x| ≈
+    /// ties to even) and the decimal exponent of the first: `|x| ~=
     /// d.ddd * 10^k`. Exact through `int` arithmetic up to binary
-    /// exponents of ±2^20; beyond that the digits come from `f64`
+    /// exponents of +/-2^20; beyond that the digits come from `f64`
     /// logarithms (about 13 correct) instead of a multi-megabit division.
     fn sig_digits(self, p: i64) -> (str, i64) {
         let (m, e) = self.split();
@@ -316,7 +317,7 @@ impl Float {
     }
 }
 
-/// `±q 2^exp2` rounded to 53 bits (ties to even); `sticky`: more
+/// `+/-q 2^exp2` rounded to 53 bits (ties to even); `sticky`: more
 /// non-zero bits below `q` (only when `q` has more than 53 bits).
 fn round_scaled(neg: bool, q: Int, exp2: i64, sticky: bool) -> Float {
     let bits = q.bit_length();
@@ -338,7 +339,7 @@ fn round_scaled(neg: bool, q: Int, exp2: i64, sticky: bool) -> Float {
     Float::build(if neg { -mant } else { mant }, exp2 + shift)
 }
 
-/// `±digits * 10^k`, correctly rounded.
+/// `+/-digits * 10^k`, correctly rounded.
 fn decimal(neg: bool, digits: str, k: i64) -> Float | none {
     let d = (try? Int::parse_radix(digits, 10u32))?;
     if d.is_zero() { return Float::plain(if neg { -0.0 } else { 0.0 }); }
@@ -580,7 +581,7 @@ impl FromStr for Float {
 
 impl From<f32> for Float { const fn from(value: f32) -> Float { Float::from_f32(value) } }
 impl From<f64> for Float { const fn from(value: f64) -> Float { Float::from_f64(value) } }
-/// Rounds to nearest; throws when a finite value is past `±f64::MAX`
+/// Rounds to nearest; throws when a finite value is past `+/-f64::MAX`
 /// (as `TryFrom<f64> for f32`). `to_f64` is the infallible form.
 impl TryFrom<Float> for f64 {
     type Error = OverflowError;
@@ -591,7 +592,7 @@ impl TryFrom<Float> for f64 {
     }
 }
 
-/// Rounds to nearest; a finite value past the range is `±f64::MAX`.
+/// Rounds to nearest; a finite value past the range is `+/-f64::MAX`.
 impl SaturatingFrom<Float> for f64 {
     const fn saturating_from(value: Float) -> f64 {
         let r = value.to_f64();
@@ -600,7 +601,7 @@ impl SaturatingFrom<Float> for f64 {
     }
 }
 
-/// Truncated toward zero; NaN, ±inf or out of range throw.
+/// Truncated toward zero; NaN, +/-inf or out of range throw.
 impl TryFrom<Float> for i32 {
     type Error = OverflowError;
     const fn try_from(value: Float) throws (OverflowError) -> i32 {

@@ -808,8 +808,6 @@ pub extern "C" fn rok_net_resolve(host: RokStr, port: u16, out: *mut u8, max: us
     n as i32
 }
 
-// Unix domain sockets
-
 /// `path` as a `sockaddr_un` and its length; `None` when it does not fit
 /// `sun_path` (with its NUL).
 #[cfg(unix)]

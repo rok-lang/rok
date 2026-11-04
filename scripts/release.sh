@@ -8,7 +8,7 @@
 # one <dir> (default dist). Without --publish it only checks the full set is
 # present and verifies, and that every toolchain archive keeps the installer
 # contract (scripts/check-archive.sh), so a release never ships a missing
-# archive or one 0.1.x clients cannot install. --publish creates the tag and
+# archive or one a released client cannot install. --publish creates the tag and
 # uploads the assets with gh, with <dir>/notes.md (scripts/release-notes.sh)
 # as the body; run it only when the release is meant to go out. A -rc.N
 # version is published as a prerelease, so it never becomes latest/ and a
@@ -91,7 +91,7 @@ cat "$dir/.release-check"
 problems=$(grep -c '^\(missing\|no sha256\|bad sha\)' "$dir/.release-check" || true)
 rm -f "$dir/.release-check"
 
-# The toolchain archives keep the contract every 0.1.x client relies on.
+# The toolchain archives keep the contract every released client relies on.
 if [ "${problems:-0}" -eq 0 ]; then
   set --
   for a in "$dir/rok-$version"-*.tar.gz "$dir/rok-$version"-*.tar.xz "$dir/rok-$version"-*.zip; do

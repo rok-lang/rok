@@ -1,4 +1,4 @@
-//! Type lowering, AST `Ty` → `HirTy`. Primitive names are recognised by
+//! Type lowering, AST `Ty` -> `HirTy`. Primitive names are recognised by
 //! spelling, not `#[lang]` slots.
 
 use rokc_ast::{Path, Ty, TyKind};

@@ -124,7 +124,7 @@ pub fn generate(
 
 struct Docs {
     modules: BTreeMap<Key, Module>,
-    /// Item name → its URL from the doc root.
+    /// Item name -> its URL from the doc root.
     links: HashMap<String, String>,
     /// Modules that are not `pub` (and so neither is what is inside).
     private: Vec<Key>,

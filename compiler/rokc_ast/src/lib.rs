@@ -68,8 +68,7 @@ pub enum AttrArg {
 }
 
 impl Attribute {
-    /// Convenience: `name` of a single-segment attribute path. Returns
-    /// `""` for multi-segment paths so callers can fall back to `path`.
+    /// The name of a single-segment attribute path; `""` for a longer one.
     #[must_use]
     pub fn name(&self) -> &str {
         if self.path.len() == 1 {

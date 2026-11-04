@@ -3,13 +3,13 @@
 //! ABI, exports as `extern "C"` entries that lift, call the user's
 //! function and lower the result (a post-return frees it).
 //!
-//! Mapping: `record` → `struct`, `variant` / `enum` → `enum`, `flags` →
-//! a `struct` of `bool`s, `option<T>` → `T?`, `result<T, E>` →
+//! Mapping: `record` -> `struct`, `variant` / `enum` -> `enum`, `flags` ->
+//! a `struct` of `bool`s, `option<T>` -> `T?`, `result<T, E>` ->
 //! `Result<T, E>` (a function returning one `throws (E) -> T`),
-//! `tuple` → tuple, `list<T>` → `List<T>`, `list<T, N>` → `[T; N]`,
-//! `string` → `str`, `sN` / `uN` → `iN` / `uN`, `future<T>` →
-//! `AsyncFuture<T>`, `stream<T>` → a channel `Receiver<T>`,
-//! `error-context` → `ErrorContext`. An imported resource is a struct
+//! `tuple` -> tuple, `list<T>` -> `List<T>`, `list<T, N>` -> `[T; N]`,
+//! `string` -> `str`, `sN` / `uN` -> `iN` / `uN`, `future<T>` ->
+//! `AsyncFuture<T>`, `stream<T>` -> a channel `Receiver<T>`,
+//! `error-context` -> `ErrorContext`. An imported resource is a struct
 //! over its handle (`Drop` drops it); an exported one is the user's
 //! struct, kept in a table while the host holds a handle to it. An
 //! `async func` is an `async fn` both ways (the async canonical ABI:

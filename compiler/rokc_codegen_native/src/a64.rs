@@ -1,4 +1,4 @@
-//! LIR → arm64 machine code.
+//! LIR -> arm64 machine code.
 //!
 //! Frame: `fp` / `lr` pushed, `fp` = that pair, then the slots, outgoing
 //! arguments at `sp`. Only caller-saved registers are used (`x9`..`x17`,
@@ -74,9 +74,8 @@ enum Fix {
     B(Label),
 }
 
-/// A register that holds the `size` bytes at `off` of frame slot `slot`.
-/// `ext`: its upper bits are those bytes extended (`Some(signed)`), or
-/// unknown.
+/// A register that holds the `size` bytes at `off` of frame slot `slot`. `ext`:
+/// its upper bits are those bytes extended (`Some(signed)`), or unknown.
 #[derive(Clone, Copy)]
 struct Held {
     reg: u32,
@@ -87,8 +86,7 @@ struct Held {
     ext: Option<bool>,
 }
 
-/// A store not yet emitted: `reg` into byte `off` of `slot`, at
-/// `sp + at`.
+/// A store not yet emitted: `reg` into byte `off` of `slot`, at `sp + at`.
 #[derive(Clone, Copy)]
 struct Pend {
     reg: u32,
@@ -121,12 +119,11 @@ struct Em<'a> {
     frame: u32,
     lines: Vec<(u32, u32, u32, u32)>,
     held: Vec<Held>,
-    /// Slots whose address is taken: a store through a pointer may
-    /// write them.
+    /// Slots whose address is taken: a store through a pointer may write them.
     escaped: Vec<bool>,
     pending: Vec<Pend>,
-    /// `waitable`: read at most once, the store may wait; never read,
-    /// it is dead.
+    /// `waitable`: read at most once, the store may wait; never read, it is
+    /// dead.
     waits: Waits,
     /// The relocation of the next instruction.
     next_rel: Option<(RelKind, u32)>,
@@ -451,8 +448,7 @@ impl Em<'_> {
         }
     }
 
-    /// `(base register, offset)` of `m`; an indirect pointer goes into
-    /// `tmp`.
+    /// `(base register, offset)` of `m`; an indirect pointer goes into `tmp`.
     fn base(&mut self, m: Mem, tmp: u32) -> (u32, i64) {
         match m {
             Mem::Frame(s, o) => (SP, i64::from(self.slot_off[s as usize] + o)),
@@ -594,8 +590,7 @@ impl Em<'_> {
         self.hold(rs, false, m, k.size(), ext);
     }
 
-    /// Store `rs` (`op`, `size` bytes) at `m`: later, for a `once`
-    /// slot.
+    /// Store `rs` (`op`, `size` bytes) at `m`: later, for a `once` slot.
     fn put(&mut self, op: Ls, rs: u32, m: Mem, size: u32) {
         let (b, o) = self.base(m, X15);
         self.wrote(m, size);
@@ -701,8 +696,7 @@ impl Em<'_> {
         if n == 0 {
             return;
         }
-        // Touch every page on the way down (a guard page cannot be
-        // skipped).
+        // Touch every page on the way down (a guard page cannot be skipped).
         let pages = n / PAGE;
         if pages > 0 {
             if pages > 8 {

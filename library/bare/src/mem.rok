@@ -4,7 +4,7 @@
 // value has no address of its own): the value is stored there as `A`
 // and loaded as `B`, with nothing in between that could collect.
 // `reinterpret` checks the sizes when called (a `where
-// sizeof::<A>() == sizeof::<B>()` bound has no compile-time form yet).
+// sizeof::<A>() == sizeof::<B>()` bound has no compile-time form).
 
 use rok::bare::ptr::{ConstPtr, Ptr};
 

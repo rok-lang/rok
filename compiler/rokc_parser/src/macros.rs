@@ -1,9 +1,7 @@
-//! Declarative macro expansion: match a `name!(..)` call's
-//! token tree against a rule's matcher, bind the metavariables, and
-//! transcribe the rule's template. The output tokens are re-parsed at the
-//! call position by the parser. This is the call-site meta definition; it
-//! shares the token-template model of `meta.rs` but matches caller input
-//! rather than a type's shape.
+//! Declarative macros: match a `name!(..)` call's token tree against a
+//! rule's matcher, bind the metavariables, transcribe the template; the
+//! parser re-parses the output at the call. Same token-template model as
+//! `meta.rs`, but matched against caller input, not a type's shape.
 
 use rokc_core::HashSet;
 use std::sync::Arc;
@@ -350,9 +348,8 @@ fn sub_var_names(sub: &[MatchItem]) -> Vec<String> {
 fn boundary(call: &[Token], start: usize, sep: &str) -> Option<usize> {
     let mut depth = 0i32;
     for (i, t) in call.iter().enumerate().skip(start) {
-        // Check the separator before adjusting depth, so a closing-bracket
-        // separator (e.g. `)` ending a `( @t, @v )` sub-pattern) is found at
-        // the current level rather than swallowed as a depth decrement.
+        // Separator before depth, so a closing-bracket separator (`)` ending a
+        // `( @t, @v )` sub-pattern) is found at this level, not taken as a close.
         if depth == 0 && t.kind.text() == sep {
             return Some(i);
         }
@@ -523,9 +520,6 @@ fn interp(s: &str, binds: &Bindings, rep: Option<&Bindings>) -> String {
     out
 }
 
-/// Emit `template`, substituting metavariables and `@for` / `@concat`,
-/// renaming template-bound locals. `rep` is the current `@for` element's
-/// bindings, if inside one.
 /// Where a transcription lands: the call, and the definition its
 /// template tokens come from.
 struct Site<'a> {
@@ -549,6 +543,9 @@ impl Site<'_> {
     }
 }
 
+/// Emit `template`, substituting metavariables and `@for` / `@concat`,
+/// renaming template-bound locals. `rep`: the current `@for` element's
+/// bindings.
 fn emit(
     template: &[Token],
     binds: &Bindings,
@@ -661,7 +658,6 @@ fn emit_for(
     out: &mut Vec<Token>,
     errs: &mut Vec<RokDiagnostic>,
 ) -> usize {
-    // @ for @ name { body }
     let name_at = at_tok + 3; // At for At name
     let name = match template.get(at_tok + 2).map(|t| &t.kind) {
         Some(TokenKind::At) => match template.get(at_tok + 3).map(|t| &t.kind) {

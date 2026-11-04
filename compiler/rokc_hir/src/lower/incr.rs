@@ -1,7 +1,7 @@
-//! Incremental body lowering: a declaration's lowered
-//! body, with everything its lowering added to the shared state
-//! (closures, instances, type instances, `any` tags, warnings), is kept
-//! as a unit and replayed in a later build instead of lowered again.
+//! Incremental body lowering: a declaration's lowered body, with
+//! everything its lowering added to the shared state (closures,
+//! instances, type instances, `any` tags, warnings), is kept as a unit
+//! and replayed in a later build instead of lowered again.
 //!
 //! A unit is keyed by `global_key` (target, flags, operators, lang slots)
 //! and the declaration with its body and positions. Every read a lowering
@@ -9,7 +9,7 @@
 //! answer, shared-state reads (`Lookup`) with the answer. A unit replays
 //! when every read answers alike and the files its spans point into are
 //! unchanged; the functions, types and inference variables it made are
-//! renumbered from this build's counters. A miss just lowers again.
+//! renumbered from this build's counters. A miss lowers again.
 //!
 //! Only plain bodies (not generic, `const` or a trait default) make units.
 //! An inferred return type stays in the interface (`interface_key`) and
@@ -209,7 +209,7 @@ impl Key {
 pub struct Unit {
     head: Head,
     body: Vec<u8>,
-    /// The files `body`'s spans name (encoding), or the old → new file
+    /// The files `body`'s spans name (encoding), or the old -> new file
     /// ids to read it with (decoding).
     files: Vec<u32>,
 }
@@ -252,8 +252,7 @@ struct Body {
     alias_uses: Vec<AliasUse>,
 }
 
-/// The entries of one function in the tables by function (`None`:
-/// none).
+/// The entries of one function in the tables by function (`None`: none).
 #[derive(Clone)]
 struct Entries {
     id: FunctionId,

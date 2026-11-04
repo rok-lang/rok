@@ -272,8 +272,8 @@ impl Cx<'_> {
                     "no argument, a message string, or `(since = \"0.1.6\", note = \"..\")`",
                 ),
             ),
-            // A safe library function a later release makes
-            // `unsafe`. A meta block of the name from before keeps it.
+            // A safe library function slated to become `unsafe`. A meta
+            // attribute of the same name wins.
             "deprecated_safe" if !self.metas.knows_attribute("deprecated_safe") => {
                 (&[P::Fn, P::Method, P::ExternFn, P::Static], message(a))
             }

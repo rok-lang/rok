@@ -5,7 +5,7 @@
 // 10 20 1.5
 // 42
 
-// The four levels nest (pub ⊇ pub(pkg) ⊇ pub(sub) ⊇
+// The four levels nest (pub >= pub(pkg) >= pub(sub) >=
 // private); a glob pulls in only what reaches the importer, so a
 // private item of the same name neither hides nor clashes; every item
 // form takes a leading visibility.

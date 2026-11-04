@@ -1,4 +1,4 @@
-//! MIR → MLIR text in upstream dialects (`func`, `arith`, `math`, `cf`, `llvm`).
+//! MIR -> MLIR text in upstream dialects (`func`, `arith`, `math`, `cf`, `llvm`).
 //! Passes, LLVM IR and codegen follow in `rokc_llvm`.
 
 pub mod abi;
@@ -39,10 +39,10 @@ pub struct MlirOutput {
 /// roots and runs the user `main`.
 #[derive(Clone, Debug, Default)]
 pub struct ReplCell {
-    /// The `ScanTable`s earlier cells registered (type id
-    /// `USER_TYPE_BASE + i`): the same type keeps its id, new ones follow.
+    /// The `ScanTable`s earlier cells registered (type id `USER_TYPE_BASE + i`):
+    /// the same type keeps its id, new ones follow.
     pub gc_tables: Vec<Vec<u32>>,
-    /// Functions the session has (symbol → text hash, `repl::reuse`):
+    /// Functions the session has (symbol -> text hash, `repl::reuse`):
     /// declared, not defined, when this cell's text is the same.
     pub known: rokc_core::HashMap<String, u64>,
     /// `extern` statics this cell defines (zeroed, exported, GC roots):

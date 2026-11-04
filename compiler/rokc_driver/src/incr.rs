@@ -19,7 +19,7 @@ pub fn key(parts: &[&[u8]]) -> u64 {
 /// One store file.
 pub struct Store {
     path: PathBuf,
-    /// The file read at the start, and its entries (key → range).
+    /// The file read at the start, and its entries (key -> range).
     data: std::sync::Arc<[u8]>,
     index: HashMap<u64, (usize, usize)>,
     /// Entries to write back: read ones (their range) and new ones.

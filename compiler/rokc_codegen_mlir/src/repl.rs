@@ -5,8 +5,8 @@
 //! Equal text is equal behaviour: symbols are stable across cells, and a
 //! function referring to anything this cell redefines is redefined too.
 //! The host renames redefined symbols so later cells get the newest
-//! definition. Works on MLIR text: a top-level op is a two-space-indented line
-//! up to the next.
+//! definition. Works on MLIR text: a top-level op is a two-space-indented
+//! line up to the next.
 
 use rokc_core::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
@@ -176,7 +176,7 @@ fn op(text: &str) -> Op<'_> {
 }
 
 /// `  func.func @f(%arg0: T, ..) -> R [attributes {..}] {` and its body
-/// → `  func.func private @f(T, ..) -> R`.
+/// -> `  func.func private @f(T, ..) -> R`.
 fn declaration(def: &str) -> String {
     let first = def.lines().next().unwrap_or("");
     let first = first.trim_end().trim_end_matches('{').trim_end();

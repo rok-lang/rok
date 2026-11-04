@@ -80,9 +80,10 @@ pub trait Drop {
 // have both; a closure is `Sync` iff its captures are and `Send` iff
 // its plain captures are `Send + Sync` (a plain capture copies a handle
 // the creator keeps) and its `[move x]` captures are `Send`; a `fn` type
-// has exactly the bounds it names, a named function both. `unsafe impl Send for T {}` opts in, `impl !Send for T
-// {}` opts out. `Send`: safe to move to another thread. `Sync`: safe to
-// read through shared references from several threads.
+// has exactly the bounds it names, a named function both.
+// `unsafe impl Send for T {}` opts in, `impl !Send for T {}` opts out.
+// `Send`: safe to move to another thread. `Sync`: safe to read through
+// shared references from several threads.
 
 /// Safe to move to another thread.
 #[lang("send_trait")]

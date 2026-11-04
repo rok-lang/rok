@@ -109,7 +109,7 @@ fn map_full(s: &str, i: usize, c: char, mode: i32, f: &mut impl FnMut(char)) {
 }
 
 /// `text` mapped char by char into `f` (`mode` as `to_case`): full
-/// Unicode mappings (`ß` → `SS`, `Ss` in titlecase) plus `Final_Sigma`;
+/// Unicode mappings (`ß` -> `SS`, `Ss` in titlecase) plus `Final_Sigma`;
 /// no locale-specific rules and no word boundaries.
 pub fn case(text: &str, mode: i32, mut f: impl FnMut(char)) {
     for (i, c) in text.char_indices() {

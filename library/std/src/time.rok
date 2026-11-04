@@ -70,8 +70,7 @@ impl SystemTime {
         let s = self.ns / 1000000000;
         if self.ns % 1000000000 < 0 { s - 1 } else { s }
     }
-    /// Nanoseconds since the epoch, negative before it (`i64`: no
-    /// `i128` yet).
+    /// Nanoseconds since the epoch, negative before it.
     pub const fn unix_nanos(self) -> i64 { self.ns }
 }
 

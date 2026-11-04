@@ -2,8 +2,8 @@
 //! LLVM, for fast `-O0` builds and REPL cells. Both backends follow one
 //! runtime ABI, so their objects link together.
 //!
-//! MIR → LIR (`lower`: layouts, conventions, GC frames, barriers, checks)
-//! → machine code (one module per ISA) → object (one module per format).
+//! MIR -> LIR (`lower`: layouts, conventions, GC frames, barriers, checks)
+//! -> machine code (one module per ISA) -> object (one module per format).
 
 // Instruction selection names registers and encodings tersely; its
 // dispatch matches are long by nature.
