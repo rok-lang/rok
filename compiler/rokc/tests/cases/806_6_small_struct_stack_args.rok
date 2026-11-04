@@ -4,9 +4,9 @@
 // true true
 
 // 4-byte aggregates of more than one leaf passed between rok functions
-// after the argument registers are used up (on 32-bit Arm they go by
-// address: at -O0 LLVM's callee reads the leaves packed from the first
-// one's 4-byte stack slot).
+// after the argument registers are used up: each leaf has its own stack
+// slot, and the callee's copy must not take the first slot as the whole
+// value (LLVM's -O0 argument copy elision did).
 use rok::std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
 
 #[derive(Clone, Copy)]

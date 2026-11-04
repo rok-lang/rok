@@ -2876,21 +2876,15 @@ impl<'a> FnEmit<'a> {
                 self.local_names[p.0 as usize] = Some(arg);
                 continue;
             };
-            let ty = mlir_type(&local_ty, self.target);
             let tag = self.slot_tag(*p);
-            let _ = writeln!(
-                self.body,
-                "    llvm.store {arg}, {slot} {{tbaa = [{tag}]}} : {ty}, !llvm.ptr"
-            );
+            self.store_arg(&arg, &local_ty, &slot, tag);
             if let Some(cell) = self
                 .root_cells
                 .get(&p.0)
                 .filter(|_| !self.poll_roots.contains(&p.0))
+                .cloned()
             {
-                let _ = writeln!(
-                    self.body,
-                    "    llvm.store {arg}, {cell} {{tbaa = [#rok_tbaa_gcroot]}} : {ty}, !llvm.ptr"
-                );
+                self.store_arg(&arg, &local_ty, &cell, "#rok_tbaa_gcroot");
             }
         }
         // Entry poll, once the frame roots the arguments: only where a call
@@ -3170,6 +3164,37 @@ impl<'a> FnEmit<'a> {
             "#rok_tbaa_gcroot"
         } else {
             "#rok_tbaa_slot"
+        }
+    }
+
+    /// Spill argument `arg` of type `ty` to `slot`. An aggregate goes
+    /// element by element: LLVM's argument copy elision turns a store of a
+    /// whole argument into an alloca of its size into the first leaf's
+    /// stack slot, but a first-class aggregate's leaves sit in slots of
+    /// their own, so -O0 code read the later ones from the wrong bytes.
+    fn store_arg(&mut self, arg: &str, ty: &MirTy, slot: &str, tag: &str) {
+        let ty_str = mlir_type(ty, self.target);
+        if !crate::abi::is_aggregate(ty) {
+            let _ = writeln!(
+                self.body,
+                "    llvm.store {arg}, {slot} {{tbaa = [{tag}]}} : {ty_str}, !llvm.ptr"
+            );
+            return;
+        }
+        // A packed struct's fields may be misaligned.
+        let align = if self.target.explicit_layout(ty) {
+            "alignment = 1 : i64, "
+        } else {
+            ""
+        };
+        for (i, e) in mlir_elems(ty, self.target).iter().enumerate() {
+            let [v, p] = std::array::from_fn(|_| self.fresh_value());
+            let _ = writeln!(
+                self.body,
+                "    {v} = llvm.extractvalue {arg}[{i}] : {ty_str}
+    {p} = llvm.getelementptr {slot}[0, {i}] : (!llvm.ptr) -> !llvm.ptr, {ty_str}
+    llvm.store {v}, {p} {{{align}tbaa = [{tag}]}} : {e}, !llvm.ptr"
+            );
         }
     }
 
@@ -5947,17 +5972,38 @@ fn mlir_type(ty: &MirTy, target: &Target) -> String {
         MirTy::Unit => UNIT_TY.to_owned(),
         MirTy::Prim(p) => mlir_prim(*p, pointer_width),
         MirTy::Any => format!("i{pointer_width}"),
+        MirTy::Tuple(_) | MirTy::Struct(..) => {
+            let items = mlir_elems(ty, target).join(", ");
+            if target.explicit_layout(ty) {
+                format!("!llvm.struct<packed ({items})>")
+            } else {
+                format!("!llvm.struct<({items})>")
+            }
+        }
+        MirTy::Array(elem, n) => {
+            format!("!llvm.array<{n} x {}>", mlir_type(elem, target))
+        }
+        MirTy::Union(_, n, _) => format!("!llvm.array<{n} x i{pointer_width}>"),
+        // Function values are opaque pointers inside aggregates; each
+        // call site supplies the `(args) -> ret` shape.
+        MirTy::GcRef | MirTy::Fn(_, _) => "!llvm.ptr".to_owned(),
+    }
+}
+
+/// The LLVM element types of aggregate `ty`, in `mlir_type`'s order.
+fn mlir_elems(ty: &MirTy, target: &Target) -> Vec<String> {
+    match ty {
         MirTy::Tuple(parts) | MirTy::Struct(_, parts) => {
-            let inner: Vec<String> = parts.iter().map(|t| mlir_type(t, target)).collect();
+            let inner = parts.iter().map(|t| mlir_type(t, target));
             if !target.explicit_layout(ty) {
-                return format!("!llvm.struct<({})>", inner.join(", "));
+                return inner.collect();
             }
             // A packed LLVM struct with explicit `[k x i8]` padding, so
             // LLVM's offsets, size and array stride are ours.
             let (offsets, size) = (target.field_offsets(ty), target.size_align(ty).0);
             let mut items = Vec::new();
             let mut at = 0;
-            for ((t, p), off) in inner.into_iter().zip(parts).zip(offsets) {
+            for ((t, p), off) in inner.zip(parts).zip(offsets) {
                 if off > at {
                     items.push(format!("!llvm.array<{} x i8>", off - at));
                 }
@@ -5967,15 +6013,11 @@ fn mlir_type(ty: &MirTy, target: &Target) -> String {
             if size > at {
                 items.push(format!("!llvm.array<{} x i8>", size - at));
             }
-            format!("!llvm.struct<packed ({})>", items.join(", "))
+            items
         }
-        MirTy::Array(elem, n) => {
-            format!("!llvm.array<{n} x {}>", mlir_type(elem, target))
-        }
-        MirTy::Union(_, n, _) => format!("!llvm.array<{n} x i{pointer_width}>"),
-        // Function values are opaque pointers inside aggregates; each
-        // call site supplies the `(args) -> ret` shape.
-        MirTy::GcRef | MirTy::Fn(_, _) => "!llvm.ptr".to_owned(),
+        MirTy::Array(elem, n) => vec![mlir_type(elem, target); *n as usize],
+        MirTy::Union(_, n, _) => vec![format!("i{}", target.pointer_width); *n as usize],
+        _ => Vec::new(),
     }
 }
 
