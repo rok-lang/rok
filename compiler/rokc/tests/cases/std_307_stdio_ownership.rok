@@ -1,5 +1,5 @@
 // only-os: macos linux
-// needs: process
+// needs: process native-run
 // expect-exit: 0
 // expect-stdout:
 // file runs leak: 0
