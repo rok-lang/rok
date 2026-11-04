@@ -8,6 +8,10 @@ an error or gone (one, `try? f() ?? d`, changes meaning), and every error says w
 instead. Code that builds warning-free on 0.1.6 has the least to change; see "Migrating from
 0.1" at the end. Items under "Same code, new result" change behaviour without a compile error.
 
+The 0.1 series (0.1.0 to 0.1.6) is no longer supported: it gets no fixes or security
+releases. `rok toolchain update` moves to 0.2.0; the 0.1 toolchain stays installed until
+removed.
+
 ### Highlights
 
 - Less to write: literals take their type from their uses, integers default to `i64`, `let`
