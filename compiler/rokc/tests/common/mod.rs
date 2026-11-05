@@ -266,7 +266,8 @@ pub fn case_timeout_in(var: Option<&str>, source: &str, step: Step) -> Duration 
     })
 }
 
-/// `c.output()`, killed past `limit`: `Err("timed out after Ns")`.
+/// `c.output()`, killed past `limit`: `Err("timed out after Ns")`, on
+/// Linux followed by where each thread of the process waited.
 pub fn output_within(c: &mut Command, limit: Duration) -> Result<Output, String> {
     let mut child = c
         .stdin(Stdio::null())
@@ -286,10 +287,11 @@ pub fn output_within(c: &mut Command, limit: Duration) -> Result<Output, String>
                 nap = (nap * 2).min(Duration::from_millis(50));
             }
             Ok(None) => {
+                let threads = threads_of(child.id());
                 let _ = child.kill();
                 let _ = child.wait();
                 // The readers are left: a grandchild may still hold the pipes.
-                return Err(format!("timed out after {}s", limit.as_secs_f64()));
+                return Err(format!("timed out after {}s{threads}", limit.as_secs_f64()));
             }
             Err(e) => return Err(format!("wait: {e}")),
         }
@@ -299,6 +301,36 @@ pub fn output_within(c: &mut Command, limit: Duration) -> Result<Output, String>
         stdout: out.join().unwrap_or_default(),
         stderr: err.join().unwrap_or_default(),
     })
+}
+
+/// A hung case's threads, one line each: the name, the kernel function
+/// it sleeps in and its system call (number and arguments), from
+/// /proc. Empty elsewhere and when /proc tells nothing.
+fn threads_of(pid: u32) -> String {
+    let Ok(tasks) = std::fs::read_dir(format!("/proc/{pid}/task")) else {
+        return String::new();
+    };
+    let mut lines: Vec<String> = tasks
+        .flatten()
+        .map(|t| {
+            let p = t.path();
+            let get = |f: &str| {
+                std::fs::read_to_string(p.join(f))
+                    .unwrap_or_default()
+                    .trim()
+                    .to_owned()
+            };
+            format!(
+                "\n    thread {} {}: wchan {}, syscall {}",
+                t.file_name().to_string_lossy(),
+                get("comm"),
+                get("wchan"),
+                get("syscall")
+            )
+        })
+        .collect();
+    lines.sort();
+    lines.concat()
 }
 
 /// A thread reading `pipe` to its end.

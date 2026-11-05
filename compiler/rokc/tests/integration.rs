@@ -363,7 +363,12 @@ fn hung_case_times_out() {
     assert_eq!(limit, std::time::Duration::from_secs(1));
     let start = std::time::Instant::now();
     let got = output_within(&mut run_command(&exe), limit);
-    assert_eq!(got.err().as_deref(), Some("timed out after 1s"));
+    let msg = got.err().unwrap_or_default();
+    assert!(msg.starts_with("timed out after 1s"), "{msg}");
+    // Linux names the threads it found waiting.
+    if cfg!(target_os = "linux") {
+        assert!(msg.contains("\n    thread "), "{msg}");
+    }
     assert!(start.elapsed() < std::time::Duration::from_secs(30));
 }
 
