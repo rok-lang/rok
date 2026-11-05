@@ -59,8 +59,16 @@ fn main() {
         );
         return;
     };
-    // The prefix runs elsewhere: checking for another target.
-    if !for_target(&prefix) {
+    // The prefix runs elsewhere: checking for another target. A prefix
+    // named in ROK_LLVM_PREFIX must fit; building without LLVM then would
+    // be a silent surprise.
+    if let Err(e) = for_target(&prefix) {
+        assert!(
+            explicit.is_none(),
+            "ROK_LLVM_PREFIX={} is built for {e}; point it at a prefix for this \
+             host (llvm/build.sh or llvm/build.ps1)",
+            prefix.display()
+        );
         return;
     }
     println!("cargo:rustc-cfg=rok_llvm");
@@ -187,28 +195,71 @@ fn x1_patched(prefix: &Path) -> bool {
         .is_ok_and(|d| d.contains("arm64e_x1"))
 }
 
+/// `LLVM_HOST_TRIPLE` of the prefix.
+fn host_triple(prefix: &Path) -> Option<String> {
+    let config = std::fs::read_to_string(prefix.join("include/llvm/Config/llvm-config.h")).ok()?;
+    config.lines().find_map(|l| {
+        Some(
+            l.strip_prefix("#define LLVM_HOST_TRIPLE \"")?
+                .strip_suffix('"')?
+                .to_owned(),
+        )
+    })
+}
+
+/// A triple's arch and OS in cargo's names (`CARGO_CFG_TARGET_ARCH`,
+/// `CARGO_CFG_TARGET_OS`): i686 is x86, armv7 is arm, darwin is macos.
+fn cargo_arch_os(triple: &str) -> (&'static str, &'static str) {
+    let a = triple.split('-').next().unwrap_or("");
+    let arch = match a {
+        "aarch64" | "arm64" => "aarch64",
+        "x86_64" | "amd64" => "x86_64",
+        "i386" | "i486" | "i586" | "i686" => "x86",
+        _ if a.starts_with("arm") || a.starts_with("thumb") => "arm",
+        "riscv64" | "riscv64gc" => "riscv64",
+        "powerpc64le" => "powerpc64",
+        "s390x" => "s390x",
+        "loongarch64" => "loongarch64",
+        _ => "",
+    };
+    let os = [
+        ("darwin", "macos"),
+        ("macos", "macos"),
+        ("windows", "windows"),
+        ("linux", "linux"),
+        ("freebsd", "freebsd"),
+    ]
+    .into_iter()
+    .find(|(o, _)| triple.contains(&format!("-{o}")))
+    .map_or("", |(_, c)| c);
+    (arch, os)
+}
+
 /// Does the prefix run on the cargo target (`LLVM_HOST_TRIPLE`'s arch and
-/// OS)?
-fn for_target(prefix: &Path) -> bool {
-    let config = std::fs::read_to_string(prefix.join("include/llvm/Config/llvm-config.h"))
-        .unwrap_or_default();
-    let Some(host) = config.lines().find_map(|l| {
-        l.strip_prefix("#define LLVM_HOST_TRIPLE \"")?
-            .strip_suffix('"')
-    }) else {
-        return false;
-    };
-    let arch = match host.split('-').next().unwrap_or("") {
-        "arm64" => "aarch64",
-        "amd64" => "x86_64",
-        a => a,
-    };
-    let os = ["darwin", "macos", "windows", "linux"]
-        .into_iter()
-        .find(|o| host.contains(&format!("-{o}")))
-        .map_or("", |o| if o == "darwin" { "macos" } else { o });
-    env::var("CARGO_CFG_TARGET_ARCH").as_deref() == Ok(arch)
-        && env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok(os)
+/// OS)? Err: the prefix's triple, when it does not.
+fn for_target(prefix: &Path) -> Result<(), String> {
+    let host = host_triple(prefix).unwrap_or_default();
+    let (arch, os) = cargo_arch_os(&host);
+    let want = (
+        env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default(),
+        env::var("CARGO_CFG_TARGET_OS").unwrap_or_default(),
+    );
+    if !arch.is_empty() && (arch, os) == (want.0.as_str(), want.1.as_str()) {
+        Ok(())
+    } else {
+        Err(format!(
+            "{} (arch {}, os {}), not {} {}",
+            if host.is_empty() {
+                "no LLVM_HOST_TRIPLE"
+            } else {
+                &host
+            },
+            if arch.is_empty() { "?" } else { arch },
+            if os.is_empty() { "?" } else { os },
+            want.0,
+            want.1
+        ))
+    }
 }
 
 /// The prefix's LLVM was built against libc++ (`std::__1`), not
