@@ -1020,16 +1020,7 @@ pub(super) fn lower_for(
 /// Methods that change a list's length; `for x in xs` reads `xs` as it
 /// is at each step, so the loop sees the change.
 const RESIZERS: &[&str] = &[
-    "push",
-    "pop",
-    "insert",
-    "remove",
-    "clear",
-    "truncate",
-    "drain",
-    "retain",
-    "dedup",
-    "extend",
+    "push", "pop", "insert", "remove", "clear", "truncate", "drain", "retain", "dedup", "extend",
     "append",
 ];
 
