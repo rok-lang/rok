@@ -3114,7 +3114,7 @@ fn lower_expr_inner(ctx: &mut LowerCtx<'_>, expr: &Expr) -> HirExpr {
             super::coro::lower_coro_expr(ctx, &expr.kind, span)
         }
         ExprKind::Broadcast { .. } => super::broadcast::lower(ctx, expr),
-        ExprKind::FString(parts) => super::fstring::lower_fstring(ctx, parts, span),
+        ExprKind::FString(parts) => super::fstring::lower_fstring_expr(ctx, parts, span),
     }
 }
 

@@ -558,6 +558,13 @@ pub trait Write {
         }
     }
 
+    /// Write an f-string piece by piece, its holes through `Display`
+    /// into the writer, never as one `str` of the whole text:
+    /// `try w.write_fmt(f"{name}: {value}\n")`.
+    fn write_fmt(ref self, args: fmt::Arguments) throws (IoError) {
+        try self.write_display(args);
+    }
+
     /// Write `x` as `print` shows it (`Display`), in chunks as the text
     /// is made, so a large value is never held whole. A failed write is
     /// thrown as it is; a `Display` that fails on its own is `Other`.

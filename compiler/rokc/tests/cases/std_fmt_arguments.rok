@@ -1,0 +1,79 @@
+// expect-exit: 0
+// expect-stdout:
+// p=(1, -2) q=Q { a: 5 } pad=[     (1, -2)] dyn=[   7] hex=ff
+// [log] 1 2, then 2
+// str 1 2 | (1, -2) |    (1, -2)|
+// held: (3, 4)! "(3, 4)!"
+// rows: 44675 bytes in 11 writes, largest under 4200: true
+// first: [start row 0: (0, 0)]
+
+// An f-string in a `fmt::Arguments` slot is not made into a `str`: its
+// holes are evaluated where it stands, in order, and its text is
+// written piece by piece when it is formatted (`Write::write_fmt`,
+// `Formatter::write_fmt`, `Display`). A hole with no spec goes straight
+// through `Display::fmt`, so a large value reaches the writer in chunks.
+
+use rok::core::convert::AsBytes;
+use rok::core::io::{IoError, IoErrorKind};
+
+struct Memory { writes: List<str>; }
+
+impl Write for Memory {
+    fn write<B: AsBytes>(ref self, buf: B) throws (IoError) -> usize {
+        let s = try str::from_utf8(buf.byte_slice()) catch _ { throw IoError::new(IoErrorKind::Other, "not UTF-8"); };
+        self.writes.push(s);
+        s.len()
+    }
+    fn flush(ref self) throws (IoError) {}
+}
+
+struct P { x: i64; y: i64; }
+
+impl Display for P {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_fmt(f"({self.x}, {self.y})"); }
+}
+
+#[derive(Debug)]
+struct Q { a: i64; }
+
+/// `n` numbered lines: about 12 bytes each.
+struct Rows { n: i64; }
+
+impl Display for Rows {
+    fn fmt(self, ref f: Formatter) throws (FmtError) {
+        for i in 0..self.n { try f.write_fmt(f"row {i}: {P { x: i, y: -i }}\n"); }
+    }
+}
+
+fn next(ref n: i64) -> i64 { n += 1; n }
+
+fn log(args: fmt::Arguments) { println(f"[log] {args}"); }
+
+fn main() throws (IoError) {
+    let p = P { x: 1, y: -2 };
+    let w = 4;
+    let m = Memory { writes: [] };
+    try m.write_fmt(f"p={p} q={Q { a: 5 }:?} pad=[{p:>12}] dyn=[{7:${w}}] hex={255:x}\n");
+    print(m.writes[0]);
+
+    let k = 0;
+    log(f"{next(ref k)} {next(ref k)}, then {k}");
+    let s = 0;
+    let text = f"{next(ref s)} {next(ref s)}";
+    println(f"str {text} | {p} | {p:>10}|");
+
+    let held: fmt::Arguments = f"{P { x: 3, y: 4 }}!";
+    println(f"held: {held} {held:?}");
+
+    let r = Memory { writes: [] };
+    try r.write_fmt(f"start {Rows { n: 2000 }}");
+    let total = 0usize;
+    let largest = 0usize;
+    for c in r.writes {
+        total += c.len();
+        if c.len() > largest { largest = c.len(); }
+    }
+    println(f"rows: {total} bytes in {r.writes.len()} writes, largest under 4200: {largest < 4200}");
+    let first = r.writes[0];
+    println("first: [" + first[0:first.find("\n") ?? 0] + "]");
+}

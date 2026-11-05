@@ -359,6 +359,75 @@ const fn count_of(v: u64) -> usize | none {
     if n == 0xFFFFFFFFu64 { none } else { n as usize }
 }
 
+/// An f-string written where an `Arguments` is expected (a parameter
+/// `args: fmt::Arguments`): its holes are evaluated where it stands,
+/// in order, but its text is made only when it is formatted, piece by
+/// piece into the formatter, never as one `str`. `Display` writes it.
+pub struct Arguments {
+    run: fn(Formatter) throws (FmtError) -> Formatter;
+}
+
+impl Display for Arguments {
+    fn fmt(self, ref f: Formatter) throws (FmtError) {
+        let run = self.run;
+        f = try run(f);
+    }
+}
+
+impl Debug for Arguments {
+    /// As a `str` prints under `{:?}`: quoted and escaped.
+    fn fmt(self, ref f: Formatter) throws (FmtError) {
+        try Debug::fmt(f"{self}", ref f);
+    }
+}
+
+// What an `Arguments` f-string lowers to (HIR calls them by full path):
+// the closure threads the formatter through one call per piece.
+
+#[lang("fstr_args_fn")]
+pub(pkg) const fn fstr_args(run: fn(Formatter) throws (FmtError) -> Formatter) -> Arguments {
+    Arguments { run: run }
+}
+
+/// A literal piece, or a hole with a spec made into text first.
+#[lang("fstr_put_str_fn")]
+pub(pkg) const fn fstr_put_str(f: Formatter, s: str) throws (FmtError) -> Formatter {
+    try f.write_str(s);
+    f
+}
+
+/// `{v}`: straight into the formatter, with no spec of the caller's.
+#[lang("fstr_put_display_fn")]
+pub(pkg) const fn fstr_put_display<T: Display>(f: Formatter, v: T) throws (FmtError) -> Formatter {
+    let (flags, counts) = (f.flags, f.counts);
+    f.flags = PLAIN_FLAGS;
+    f.counts = PLAIN_COUNTS;
+    try Display::fmt(v, ref f);
+    f.flags = flags;
+    f.counts = counts;
+    f
+}
+
+/// `{v:?}`.
+#[lang("fstr_put_debug_fn")]
+pub(pkg) const fn fstr_put_debug<T: Debug>(f: Formatter, v: T) throws (FmtError) -> Formatter {
+    let (flags, counts) = (f.flags, f.counts);
+    f.flags = PLAIN_FLAGS;
+    f.counts = PLAIN_COUNTS;
+    try Debug::fmt(v, ref f);
+    f.flags = flags;
+    f.counts = counts;
+    f
+}
+
+impl Formatter {
+    /// Write `args` (an f-string) piece by piece, with no `str` of the
+    /// whole text: `try f.write_fmt(f"({self.x}, {self.y})")`.
+    pub const fn write_fmt(ref self, args: Arguments) throws (FmtError) {
+        try Display::fmt(args, ref self);
+    }
+}
+
 // f-string lowering targets (HIR calls them by full path, on the text
 // `t`; each returns it, maybe moved). Formatting to memory never fails.
 
