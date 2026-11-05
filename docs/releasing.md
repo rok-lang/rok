@@ -55,6 +55,14 @@ something is wrong after the tag, the fix ships as the next patch version.
 The `immutable release tags` ruleset enforces it, and `tag-guard.yml`
 opens an `alarm` issue for any `v*` tag the App did not create.
 
+Branches: `main` only, changed through the merge queue (squash) and, for
+the release commit, by the App's fast-forward. `release/X.Y.Z` and
+`rehearse/X.Y.Z` live for one release; the `release branches` ruleset lets
+only the App (and an org admin, to break glass) create or delete them,
+while anyone with write access pushes the hand-written blocks to
+`release/X.Y.Z`. There are no maintenance branches: only the latest series
+gets fixes.
+
 ## What release.yml does
 
 Each job first looks at what is already done and skips it, so a run that
@@ -74,7 +82,7 @@ failure, `blocked` with the failed jobs.
 | `tag` | TAGGED | the one approval (environment `release`), then the App creates the annotated tag; a tag already on the commit is kept, one on another commit stops the run | environment `rehearsal`: no reviewer, checks the tag is free and the App token mints |
 | `publish` | PUBLISHED | attestation, then `release.sh --publish`: draft, check, tag check, public; a public release with every asset is left alone | `release.sh --rehearse`: a draft without a tag, checked, deleted |
 | `smoke` | SMOKED | installs `vX.Y.Z` with `install-rok` on Linux, macOS and Windows; `latest/download/rok-version` names it | installs the build run's archives |
-| `finish` | | writes the furthest state, or `blocked`, and comments | closes the record, deletes `rehearse/X.Y.Z` |
+| `finish`, `cleanup` | | writes the furthest state, or `blocked`, and comments | closes the record, deletes `rehearse/X.Y.Z` |
 
 `mode` `abort` drops an attempt with no tag: it deletes `release/X.Y.Z`
 and `rehearse/X.Y.Z` and closes the record as ABANDONED. A commit that
@@ -104,8 +112,9 @@ dispatch `release` again with the same version and mode.
 
 ## Preparing the release commit
 
-`release-prep.yml` (manual, from `main`; in the environment `release-prep`
-when the repository has one) runs `scripts/release-prep.sh --push X.Y.Z`.
+`release-prep.yml` (manual, from `main`, in the environment `release-prep`)
+runs `scripts/release-prep.sh --push X.Y.Z` and pushes as the
+`rok-lang-release` App.
 It fails, listing each, when the milestone `X.Y.Z` has open issues or a PR
 merged since the previous tag has no valid `changelog:` block (fix the PR
 description, then run it again). Otherwise it pushes `release/X.Y.Z`: one

@@ -522,7 +522,6 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
-      contents: write
       issues: write
     steps:
       - id: state
@@ -592,7 +591,6 @@ jobs:
           if [ "$MODE" = release ]; then
             gh issue comment "$ISSUE" --body "Run [$GITHUB_RUN_ID]($url): v$VERSION is public and installs on the three hosts (**SMOKED**). The fan-out is next (docs/releasing.md, After the release)."
           else
-            gh api -X DELETE "repos/$GH_REPO/git/refs/heads/$BRANCH" 2> /dev/null || true
             gh issue comment "$ISSUE" --body "Rehearsal run [$GITHUB_RUN_ID]($url) passed every stage; nothing was published."
           fi
       - if: inputs.mode == 'rehearse' && steps.state.outputs.failed == '[]'
@@ -605,6 +603,31 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ISSUE: ${{ needs.plan.outputs.issue }}
         run: gh issue close "$ISSUE" --reason completed
+
+  # A passed rehearsal leaves no branch. Only the App creates or deletes
+  # release/* and rehearse/* (ruleset).
+  cleanup:
+    needs: [plan, finish]
+    if: ${{ always() && inputs.mode == 'rehearse' && needs.finish.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: release-prep
+    permissions: {}
+    steps:
+      - id: token
+        uses: rok-lang/.github/actions/app-token@v1.0.0
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_KEY }}
+          repositories: rok
+          permissions: contents:write
+      - env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          BRANCH: ${{ needs.plan.outputs.branch }}
+        run: |
+          if gh api -X DELETE "repos/$GH_REPO/git/refs/heads/$BRANCH" 2> /dev/null; then
+            echo "deleted $BRANCH"
+          fi
 
   # Drops an attempt that has no tag: its branches go, the record is
   # ABANDONED and the version can be prepared again.
