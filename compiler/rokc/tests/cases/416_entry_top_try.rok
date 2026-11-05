@@ -1,6 +1,7 @@
 // expect-exit: 1
 // expect-stderr: error: `main` returned an uncaught error: bad 7
-// expect-stderr: --> tests/cases/416_entry_top_try.rok:21:13
+// expect-stderr: --> tests/cases/416_entry_top_try.rok:22:13
+// expect-stderr: raised at tests/cases/416_entry_top_try.rok:16:16
 // expect-stdout:
 // 1
 

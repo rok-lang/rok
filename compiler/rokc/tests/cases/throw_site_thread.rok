@@ -1,0 +1,25 @@
+// expect-exit: 101
+// expect-stderr: thread 'main' panicked at tests/cases/throw_site_thread.rok:22:5:
+// expect-stderr: try! failed: bad 3
+// expect-stderr:   raised at tests/cases/throw_site_thread.rok:22:10
+// expect-stdout:
+// caught 9
+
+// An error from another thread is passed on by the library: no `throw`
+// site crosses threads, and the report names only the `try!` call.
+struct Bad { n: i32; }
+impl Display for Bad { fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"bad {self.n}") } }
+impl Debug for Bad { fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Bad") } }
+impl Error for Bad {}
+
+fn check(n: i32) throws (Bad) -> i32 {
+    if n == 3 || n == 9 { throw Bad { n: n }; }
+    n
+}
+
+fn main() {
+    let x = try check(9) catch e { println(f"caught {e.n}"); 0 };
+    try! par::try_scope(|s: par::TryScope<Bad>| {
+        _ = s.spawn(|| try check(3 + x));
+    });
+}

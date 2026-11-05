@@ -1,6 +1,7 @@
 // expect-exit: 1
 // expect-stderr: error: `main` returned an uncaught error: age -2 is negative
-// expect-stderr: --> *414_throw_str_main.rok:25:*
+// expect-stderr: --> *414_throw_str_main.rok:26:*
+// expect-stderr: raised at *414_throw_str_main.rok:13:*
 // expect-stdout:
 // caught: age -1 is negative
 // ValueError("bad")

@@ -2433,10 +2433,14 @@ fn failure(why: &str) -> String {
         );
     }
     if let Some(t) = why.strip_prefix("throw\n") {
-        let (at, value) = t.split_once('\n').unwrap_or(("", t));
+        let (at, t) = t.split_once('\n').unwrap_or(("", t));
+        let (raised, value) = t.split_once('\n').unwrap_or(("", t));
         let mut m = format!("the cell threw `{value}`; {SAME}");
         if !at.is_empty() {
             let _ = write!(m, "\n  --> {at}");
+        }
+        if !raised.is_empty() {
+            let _ = write!(m, "\n  raised at {raised}");
         }
         return m;
     }
@@ -3553,11 +3557,17 @@ a;
             format!("the cell called exit(3); {same} (`exit` or `:quit` ends the session)")
         );
         assert_eq!(
-            failure("throw\n<repl cell 2>:1:5\nbad"),
+            failure("throw\n<repl cell 2>:1:5\n\nbad"),
             format!("the cell threw `bad`; {same}\n  --> <repl cell 2>:1:5")
         );
         assert_eq!(
-            failure("throw\n\nbad"),
+            failure("throw\n<repl cell 2>:1:5\n<repl cell 1>:2:9\nbad"),
+            format!(
+                "the cell threw `bad`; {same}\n  --> <repl cell 2>:1:5\n  raised at <repl cell 1>:2:9"
+            )
+        );
+        assert_eq!(
+            failure("throw\n\n\nbad"),
             format!("the cell threw `bad`; {same}")
         );
         assert_eq!(
@@ -3566,7 +3576,7 @@ a;
         );
         assert_eq!(failure("panic"), format!("the cell panicked; {same}"));
         assert_eq!(failure(""), format!("the cell failed; {same}"));
-        for why in ["exit 3", "throw\n\nbad", "interrupted", "panic", ""] {
+        for why in ["exit 3", "throw\n\n\nbad", "interrupted", "panic", ""] {
             assert!(!failure(why).contains("main"), "{why}");
         }
     }

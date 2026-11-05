@@ -1172,18 +1172,21 @@ pub fn block_on<F: Future>(fut: F) -> F::Output {
     }
 }
 
-/// `block_on` for a throwing `async` body: its error is thrown here.
+/// `block_on` for a throwing `async` body: its error is thrown here, with
+/// the site of the `throw` that raised it (on whichever thread).
 pub fn try_block_on<T, E>(fut: TryAsyncFuture<T, E>) throws (E) -> T {
     unsafe {
         let cell: GcBuf<TryAsyncFuture<T, E>> = buf_new(1);
         cell[0] = fut;
         let out: GcBuf<T> = buf_new(1);
         let err: GcBuf<E> = buf_new(1);
+        let site: GcBuf<str> = buf_new(1);
         let failed: GcBuf<bool> = buf_new(1);
         run_guest(|ctx: Context| -> bool {
             let f = cell[0];
             let c = ctx;
             let r = try f.poll(ref c) catch e {
+                site[0] = rok_throw_site_take();
                 err[0] = hand_over::<E>(e);
                 failed[0] = true;
                 return true;
@@ -1196,6 +1199,7 @@ pub fn try_block_on<T, E>(fut: TryAsyncFuture<T, E>) throws (E) -> T {
             false
         });
         if failed[0] {
+            rok_throw_site(site[0]);
             throw err[0];
         }
         out[0]

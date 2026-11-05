@@ -1,6 +1,7 @@
 // expect-exit: 1
 // expect-stderr: error: `main` returned an uncaught error: bad 7
-// expect-stderr: --> tests/cases/entry_async_implicit_main_rules.rok:19:1
+// expect-stderr: --> tests/cases/entry_async_implicit_main_rules.rok:20:1
+// expect-stderr: raised at tests/cases/entry_async_implicit_main_rules.rok:16:16
 // expect-stdout:
 // 1
 

@@ -121,6 +121,9 @@ pub fn compile(
             }
             None => {}
         }
+        let throw_site = f.facts.linkage == Linkage::Extern
+            && f.facts.abi == Abi::Rok
+            && name == "rok_throw_site";
         let sym = obj.sym(&name);
         fns.insert(
             f.id,
@@ -132,6 +135,7 @@ pub fn compile(
                 c_entry,
                 local: false,
                 tls: f.facts.takes_tls(),
+                throw_site,
             },
         );
     }

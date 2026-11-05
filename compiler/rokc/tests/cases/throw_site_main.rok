@@ -1,0 +1,23 @@
+// expect-exit: 1
+// expect-stderr: error: `main` returned an uncaught error: empty input
+// expect-stderr:   --> tests/cases/throw_site_main.rok:21:17
+// expect-stderr:   raised at tests/cases/throw_site_main.rok:13:9
+// expect-stdout:
+
+// An error leaving a throwing `main` names where it left and the `throw`
+// that raised it.
+use rok::core::io::{IoError, IoErrorKind};
+
+fn parse(s: str) throws (IoError) -> i64 {
+    if s == "" {
+        throw IoError::new(IoErrorKind::InvalidData, "empty input");
+    }
+    1
+}
+
+fn load(s: str) throws (IoError) -> i64 { try parse(s) }
+
+fn main() throws (IoError) {
+    let v = try load("");
+    println(f"{v}");
+}

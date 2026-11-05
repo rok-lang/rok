@@ -721,8 +721,9 @@ impl<'b> Interp<'b> {
     fn call(&mut self, id: FunctionId, args: Vec<Value>, span: Span) -> R<Value> {
         let (func, std) = match self.bodies.callee(id) {
             Callee::Body(func, std) => (func, std),
-            Callee::Extern(name) if name.starts_with("rok_panic") => {
+            Callee::Extern(name) if panics(&name) => {
                 let msg = args.first().map_or_else(String::new, |a| match a {
+                    Value::Str(s) if name == "rok_try_failed" => format!(": try! failed: {s}"),
                     Value::Str(s) => format!(": {s}"),
                     _ => String::new(),
                 });
@@ -917,6 +918,8 @@ fn plain_size(ty: &HirTy) -> Option<u32> {
 /// (the target's may round differently) nor the `int` kernels.
 const EVALUABLE: &[&str] = &[
     "rok_hash_keys",
+    "rok_throw_site",
+    "rok_throw_site_take",
     "rok_str_len",
     "rok_str_char_count",
     "rok_str_byte",
@@ -978,7 +981,12 @@ const EVALUABLE: &[&str] = &[
 /// Whether extern `name` runs at compile time (`run_extern`, or a
 /// panic, which fails the evaluation).
 fn evaluable_extern(name: &str) -> bool {
-    name.starts_with("rok_panic") || EVALUABLE.contains(&name)
+    panics(name) || EVALUABLE.contains(&name)
+}
+
+/// A runtime function that panics: a failed `try!` is one.
+fn panics(name: &str) -> bool {
+    name.starts_with("rok_panic") || name == "rok_try_failed"
 }
 
 /// What a runtime function did at compile time.
@@ -1179,6 +1187,9 @@ fn run_extern(name: &str, args: &[Value]) -> Result<Value, Ext> {
             };
             Value::Int(at.map_or(-1, |i| i as i128), PrimTy::Isize)
         }
+        // No thread runs at compile time: nothing to note.
+        ("rok_throw_site", [_]) => Value::Unit,
+        ("rok_throw_site_take", []) => Value::Str(String::new().into()),
         ("rok_str_concat", [a, b]) => Value::Str(format!("{}{}", str_of(a)?, str_of(b)?).into()),
         // The caller's position comes last (`#[track_caller]`).
         ("rok_str_slice", [s, a, b, ..]) => {

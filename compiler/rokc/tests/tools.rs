@@ -1912,6 +1912,7 @@ boom 5
 error: the cell panicked; the session is unchanged
 error: the cell threw `bad`; the session is unchanged
   --> <repl cell 5>:1:16
+  raised at <repl cell 4>:1:17
 error: the cell called exit(3); the session is unchanged (`exit` or `:quit` ends the session)
 "
     );

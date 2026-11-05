@@ -1,0 +1,28 @@
+// expect-exit: 101
+// expect-stderr: thread 'main' panicked at tests/cases/throw_site_rethrow.rok:26:13:
+// expect-stderr: try! failed: 7
+// expect-stderr:   raised at tests/cases/throw_site_rethrow.rok:21:9
+// expect-stderr:   through tests/cases/throw_site_rethrow.rok:26:18
+// expect-stdout:
+// caught 7
+
+// A `throw` in a `catch` raises the error anew: the report names the
+// rethrow, not the first `throw`.
+fn half(x: i32) throws (i32) -> i32 {
+    if x % 2 == 1 {
+        throw x;
+    }
+    x / 2
+}
+
+fn load(x: i32) throws (i32) -> i32 {
+    try half(x) catch e: i32 {
+        println(f"caught {e}");
+        throw e;
+    }
+}
+
+fn main() {
+    let v = try! load(7);
+    println(f"{v}");
+}

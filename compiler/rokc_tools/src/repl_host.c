@@ -233,9 +233,17 @@ static _Noreturn void host_exit(int code) {
     rok_exit(code);
 }
 
+struct rok_str rok_throw_site_take(void);
+
+// `throw\n<where>\n<raised at>\n<error>`; `<raised at>` is empty when it
+// is not known or is `<where>`.
 static _Noreturn void host_uncaught_at(struct rok_str what, struct rok_str at) {
+    struct rok_str site = rok_throw_site_take();
     set_why("throw\n");
     add_why(at.ptr, at.len);
+    add_why("\n", 1);
+    if (site.len && (site.len != at.len || memcmp(site.ptr, at.ptr, at.len)))
+        add_why(site.ptr, site.len);
     add_why("\n", 1);
     add_why(what.ptr, what.len);
     rok_exit(1);

@@ -329,6 +329,18 @@ pub(super) fn raise(
     err: HirExpr,
     span: rokc_diagnostic::Span,
 ) -> Vec<HirStmt> {
+    raise_at(ctx, err, span, None)
+}
+
+/// `raise` from a `throw` at `site` (a `str`): noted for a report when the
+/// error leaves the function or reaches `try!` / throwing `main`; a
+/// handler clears it.
+fn raise_at(
+    ctx: &mut LowerCtx<'_>,
+    err: HirExpr,
+    span: rokc_diagnostic::Span,
+    site: Option<&HirExpr>,
+) -> Vec<HirStmt> {
     let ety = err.ty.clone();
     let tmp = ctx.declare(None, ety.clone());
     let mut out = vec![HirStmt::Let {
@@ -353,7 +365,7 @@ pub(super) fn raise(
                 .enumerate()
                 .map(|(i, v)| {
                     let b = ctx.declare(None, v.clone());
-                    let body = block_expr(raise(ctx, hir_local(b, v, span), span), span);
+                    let body = block_expr(raise_at(ctx, hir_local(b, v, span), span, site), span);
                     HirMatchArm {
                         pat: HirPattern::SumVariant {
                             sum_ty: ety.clone(),
@@ -414,15 +426,12 @@ pub(super) fn raise(
                     span,
                 ),
             });
-            if let Some(site) = c.site {
+            if let Some(local) = c.site {
                 out.push(HirStmt::Assign {
-                    local: site,
-                    value: HirExpr {
-                        kind: HirExprKind::Const(ConstVal::Str(ctx.env.sources.location(span))),
-                        ty: HirTy::Prim(PrimTy::Str),
-                        span,
-                    },
+                    local,
+                    value: str_const(ctx.env.sources.location(span), span),
                 });
+                out.extend(site.and_then(|s| note_site(ctx, s.clone())));
             }
         }
         if let ErrFrame::Catch(c) = &mut ctx.err_frames[i] {
@@ -447,6 +456,7 @@ pub(super) fn raise(
             let ok = carrier_ok(ctx);
             // `ref` parameters go back on the error path too.
             let c = super::mono::ref_pack(ctx, carrier(&ok, &decl, Err(v), span), span);
+            out.extend(site.and_then(|s| note_site(ctx, s.clone())));
             out.extend(super::coro::frame_end(ctx, span));
             out.push(HirStmt::Return(Some(c)));
             return out;
@@ -1102,8 +1112,22 @@ pub(super) fn lower_throw(
         },
         None => v,
     };
+    // A `catch` passing on an error no arm takes keeps its site. The
+    // library's own `throw`s are no place to point at and leave the slot
+    // alone: empty, or a site the library carried over.
+    let rethrow = match &value.kind {
+        ExprKind::Path(p) if p.segments.len() == 1 && p.segments[0].name.starts_with("#err") => {
+            ctx.rethrow_site
+        }
+        _ => None,
+    };
+    let site = match rethrow {
+        Some(l) => Some(hir_local(l, &HirTy::Prim(PrimTy::Str), span)),
+        None if ctx.current_module.starts_with("rok::") => None,
+        None => Some(str_const(ctx.env.sources.location(span), span)),
+    };
     let since = ctx.env.sink.diagnostics.borrow().len();
-    let stmts = raise(ctx, v, span);
+    let stmts = raise_at(ctx, v, span, site.as_ref());
     if wrapped {
         let decl = ctx.fn_throws.as_ref().map(|t| ctx.ty_name(t));
         let help = match decl {
@@ -1118,6 +1142,45 @@ pub(super) fn lower_throw(
         ctx.help_since(since, help);
     }
     HirStmt::Expr(block_expr(stmts, span))
+}
+
+const fn str_const(s: String, span: rokc_diagnostic::Span) -> HirExpr {
+    HirExpr {
+        kind: HirExprKind::Const(ConstVal::Str(s)),
+        ty: HirTy::Prim(PrimTy::Str),
+        span,
+    }
+}
+
+/// `rok_throw_site(at)`: the thread's note of where the error in flight
+/// was thrown (`""`: none). Nothing without the runtime (`rok::bare`).
+fn note_site(ctx: &LowerCtx<'_>, at: HirExpr) -> Option<HirStmt> {
+    let sig = ctx.env.sig("rok_throw_site")?;
+    let span = at.span;
+    Some(HirStmt::Expr(HirExpr {
+        kind: HirExprKind::Call {
+            callee: sig.id,
+            args: vec![at],
+        },
+        ty: HirTy::Unit,
+        span,
+    }))
+}
+
+/// Whether `e` calls `f`.
+fn calls(e: &HirExpr, f: FunctionId) -> bool {
+    let mut hit = false;
+    crate::each_expr(e, &mut |x| {
+        hit |= matches!(x.kind, HirExprKind::Call { callee, .. } if callee == f);
+    });
+    hit
+}
+
+/// A handler took the error: its site no longer applies.
+fn clear_site(ctx: &LowerCtx<'_>, span: rokc_diagnostic::Span) -> Vec<HirStmt> {
+    note_site(ctx, str_const(String::new(), span))
+        .into_iter()
+        .collect()
 }
 
 /// What `throw "msg"` throws.
@@ -1330,7 +1393,8 @@ pub(super) fn lower_try(
         if !frame.hit {
             return body;
         }
-        return shell(ctx, &frame, body, HirTy::Unit, (Vec::new(), None), span);
+        let clear = clear_site(ctx, span);
+        return shell(ctx, &frame, body, HirTy::Unit, (clear, None), span);
     }
     // `T?` with the operand as `T`: an optional operand
     // nests, so a thrown error and a returned `none` stay apart.
@@ -1344,7 +1408,8 @@ pub(super) fn lower_try(
         return body;
     }
     let none = sum_none(&result_ty, span);
-    shell(ctx, &frame, body, result_ty, (Vec::new(), Some(none)), span)
+    let clear = clear_site(ctx, span);
+    shell(ctx, &frame, body, result_ty, (clear, Some(none)), span)
 }
 
 /// `try?` drops the error it catches: one that can hold a value whose
@@ -1436,8 +1501,8 @@ pub(super) fn uncaught_in_main(
     }
 }
 
-/// A failed `try!`'s panic: the error as an uncaught one
-/// prints and where it was thrown; the panic's own position is
+/// A failed `try!`'s panic (`rok_try_failed`): the error, where it was
+/// thrown and where it reached the `try!`; the panic's own position is
 /// the `try!`.
 fn force_report(
     ctx: &mut LowerCtx<'_>,
@@ -1450,24 +1515,14 @@ fn force_report(
         span,
     );
     per_error(ctx, frame, span, |ctx, msg| {
-        let text = concat_strs(
-            ctx,
-            &[
-                Piece::Text("try! failed: "),
-                Piece::Value(msg),
-                Piece::Text("\\n  raised at "),
-                Piece::Value(site.clone()),
-            ],
-            span,
-        );
-        let call = hook_call(ctx, "rok_panic_at", "", span);
+        let call = hook_call(ctx, "rok_try_failed", "", span);
         let HirExprKind::Call { callee, .. } = call.kind else {
             return HirStmt::Panic(call);
         };
         HirStmt::Panic(HirExpr {
             kind: HirExprKind::Call {
                 callee,
-                args: vec![text],
+                args: vec![msg, site.clone()],
             },
             ty: HirTy::Unit,
             span,
@@ -1592,62 +1647,6 @@ pub(super) fn format_value(
         ty: HirTy::Prim(PrimTy::Str),
         kind: HirExprKind::Block(Box::new(HirBlock {
             stmts: vec![HirStmt::Let { local, init: v }],
-            trailing: Some(text),
-            label: None,
-        })),
-        span,
-    }
-}
-
-/// A piece of [`concat_strs`]: literal text as an f-string writes it, or
-/// a `str` value.
-enum Piece<'a> {
-    Text(&'a str),
-    Value(HirExpr),
-}
-
-/// `{ let #s0 = v0; ...; f"text{#s0}..." }`.
-fn concat_strs(
-    ctx: &mut LowerCtx<'_>,
-    pieces: &[Piece<'_>],
-    span: rokc_diagnostic::Span,
-) -> HirExpr {
-    ctx.push_scope();
-    let mut stmts = Vec::new();
-    let mut parts = Vec::new();
-    for p in pieces {
-        match p {
-            Piece::Text(t) => parts.push(rokc_ast::FStringPart::Lit((*t).to_owned())),
-            Piece::Value(v) => {
-                let name = format!("#s{}", ctx.locals.len());
-                let local = ctx.declare(Some(name.clone()), HirTy::Prim(PrimTy::Str));
-                stmts.push(HirStmt::Let {
-                    local,
-                    init: v.clone(),
-                });
-                parts.push(rokc_ast::FStringPart::Hole {
-                    expr: Expr {
-                        kind: ExprKind::Path(AstPath {
-                            segments: vec![rokc_ast::PathSegment {
-                                name,
-                                generics: Vec::new(),
-                            }],
-                            span,
-                            origin: None,
-                        }),
-                        span,
-                    },
-                    spec: Vec::new(),
-                });
-            }
-        }
-    }
-    let text = super::fstring::lower_fstring(ctx, &parts, span);
-    ctx.pop_scope();
-    HirExpr {
-        ty: HirTy::Prim(PrimTy::Str),
-        kind: HirExprKind::Block(Box::new(HirBlock {
-            stmts,
             trailing: Some(text),
             label: None,
         })),
@@ -1902,10 +1901,13 @@ fn lower_catch_arms(
     let which_name = format!("#which{n}");
     bind_name(ctx, &which_name, which);
     let mut branches = Vec::with_capacity(frame.errs.len());
+    let mut passes_on = false;
     for (k, (ety, local)) in frame.errs.iter().enumerate() {
         let name = format!("#err{n}_{k}");
         bind_name(ctx, &name, *local);
-        branches.push(dispatch_one(ctx, arms, &filters, ety, &name, span));
+        let (b, passes) = dispatch_one(ctx, arms, &filters, ety, &name, span);
+        passes_on |= passes;
+        branches.push(b);
     }
     let mut chain = branches.pop().expect("at least one parked error");
     for (k, b) in branches.into_iter().enumerate().rev() {
@@ -1939,8 +1941,33 @@ fn lower_catch_arms(
     } else {
         body_h.ty.clone()
     };
+    // The handler took the error, unless it passes it on: then its site
+    // is kept for the rethrow. A handler that calls `rok_throw_site_take`
+    // itself (the library carrying the site across threads) clears it
+    // that way.
+    let take = ctx.env.sig("rok_throw_site_take").map(|s| s.id);
+    let saved = take
+        .filter(|_| passes_on)
+        .map(|_| ctx.declare(None, HirTy::Prim(PrimTy::Str)));
+    let outer = std::mem::replace(&mut ctx.rethrow_site, saved);
     let handler = lower_expected(ctx, &chain, hint.clone());
+    ctx.rethrow_site = outer;
     ctx.pop_scope();
+    let first = match (saved, take) {
+        (Some(local), Some(callee)) => vec![HirStmt::Let {
+            local,
+            init: HirExpr {
+                kind: HirExprKind::Call {
+                    callee,
+                    args: Vec::new(),
+                },
+                ty: HirTy::Prim(PrimTy::Str),
+                span,
+            },
+        }],
+        _ if take.is_some_and(|t| calls(&handler, t)) => Vec::new(),
+        _ => clear_site(ctx, span),
+    };
     let result_ty = if hint == HirTy::Unknown {
         handler.ty.clone()
     } else {
@@ -1955,14 +1982,7 @@ fn lower_catch_arms(
     };
     let body_h = fit(ctx, body_h, "the `catch` body");
     let handler = fit(ctx, handler, "the `catch` handler");
-    shell(
-        ctx,
-        &frame,
-        body_h,
-        result_ty,
-        (Vec::new(), Some(handler)),
-        span,
-    )
+    shell(ctx, &frame, body_h, result_ty, (first, Some(handler)), span)
 }
 
 /// Lower a `catch` arm no error reaches only for its diagnostics; result,
@@ -2000,7 +2020,7 @@ fn check_dead_arm(
         }
         _ => {
             let filters = [filter.cloned()];
-            dispatch_one(ctx, std::slice::from_ref(arm), &filters, &ety, &name, span)
+            dispatch_one(ctx, std::slice::from_ref(arm), &filters, &ety, &name, span).0
         }
     };
     let h = lower_expected(ctx, &m, hint.clone());
@@ -2035,7 +2055,7 @@ pub(super) fn path_expr(name: &str, span: rokc_diagnostic::Span) -> Expr {
 }
 
 /// `match <err> { <arms that can take ety>, _ => throw <err> }`; the
-/// rethrow arm is left out when the arms cover `ety`.
+/// rethrow arm is left out when the arms cover `ety` (`false`).
 fn dispatch_one(
     ctx: &LowerCtx<'_>,
     arms: &[rokc_ast::CatchArm],
@@ -2043,7 +2063,7 @@ fn dispatch_one(
     ety: &HirTy,
     err_name: &str,
     span: rokc_diagnostic::Span,
-) -> Expr {
+) -> (Expr, bool) {
     let mut m_arms: Vec<AstMatchArm> = arms
         .iter()
         .zip(filters)
@@ -2083,7 +2103,8 @@ fn dispatch_one(
             }
         })
         .collect();
-    if !covers(ctx, &m_arms, ety) {
+    let passes = !covers(ctx, &m_arms, ety);
+    if passes {
         m_arms.push(AstMatchArm {
             pat: AstPattern {
                 kind: AstPatternKind::Wildcard,
@@ -2104,13 +2125,14 @@ fn dispatch_one(
             },
         });
     }
-    Expr {
+    let m = Expr {
         kind: ExprKind::Match {
             scrutinee: Box::new(path_expr(err_name, span)),
             arms: m_arms,
         },
         span,
-    }
+    };
+    (m, passes)
 }
 
 /// Do `arms` cover every `ety`: a catch-all, its exact type, type patterns
