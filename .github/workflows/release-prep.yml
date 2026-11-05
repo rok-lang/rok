@@ -3,8 +3,9 @@ name: release-prep
 # Make or refresh branch release/<version>: one `release: <version>` commit
 # on main with the version bump and a CHANGELOG section built from the
 # changelog: blocks of the PRs merged since the last tag
-# (scripts/release-prep.sh). Then fill its Summary and Highlights on the
-# branch; changelog-lint.yml checks every push there.
+# (scripts/release-prep.sh), pushed by the rok-lang-release App. Then fill
+# its Summary and Highlights on the branch; changelog-lint.yml checks every
+# push there.
 on:
   workflow_dispatch:
     inputs:
@@ -25,43 +26,34 @@ defaults:
     shell: bash
 
 jobs:
-  # Naming an environment that does not exist creates it, so look first.
-  environment:
+  prep:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    outputs:
-      name: ${{ steps.env.outputs.name }}
+    timeout-minutes: 30
+    # Only the App creates release/* branches (ruleset); its key is here.
+    environment: release-prep
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
     steps:
-      - id: env
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
+      - name: from main
         run: |
           if [ "$GITHUB_REF" != refs/heads/main ]; then
             echo "::error::run release-prep from main, not $GITHUB_REF"
             exit 1
           fi
-          if gh api "repos/$GH_REPO/environments/release-prep" > /dev/null 2>&1; then
-            echo "name=release-prep" >> "$GITHUB_OUTPUT"
-          else
-            echo "no environment release-prep; preparing without one"
-            echo "name=" >> "$GITHUB_OUTPUT"
-          fi
-
-  prep:
-    needs: environment
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    environment: ${{ needs.environment.outputs.name }}
-    permissions:
-      contents: write
-      issues: read
-      pull-requests: read
-    steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           fetch-depth: 0
+          persist-credentials: false
+      - id: token
+        uses: rok-lang/.github/actions/app-token@v1.0.0
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_KEY }}
+          repositories: rok
+          permissions: contents:write
       # cargo update --offline needs the locked crates.
       - name: toolchain (rust-toolchain.toml) and crates
         run: rustup toolchain install && cargo fetch --locked
@@ -69,10 +61,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          APP_TOKEN: ${{ steps.token.outputs.token }}
           VERSION: ${{ inputs.version }}
-          ACTOR: ${{ github.actor }}
-          ACTOR_ID: ${{ github.actor_id }}
         run: |
-          git config user.name "$ACTOR"
-          git config user.email "$ACTOR_ID+$ACTOR@users.noreply.github.com"
+          git config user.name "rok-lang-release[bot]"
+          git config user.email "352646604+rok-lang-release[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:$APP_TOKEN@github.com/$GH_REPO"
           scripts/release-prep.sh --push "$VERSION" | tee -a "$GITHUB_STEP_SUMMARY"
