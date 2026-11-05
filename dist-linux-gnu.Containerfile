@@ -3,8 +3,10 @@
 #
 # Debian's packages come from one snapshot; bullseye-security carries
 # clang 22.1.8, the pinned LLVM's, which reads llvm/rok.profdata.xz.
-# cmake is Kitware's (Debian 11's is older than LLVM's minimum). Rust
-# comes from rust-toolchain.toml through rustup-init, into the cache.
+# snapshot.debian.org drops requests under load, so apt retries each
+# download. cmake is Kitware's (Debian 11's is older than LLVM's
+# minimum). Rust comes from rust-toolchain.toml through rustup-init, into
+# the cache.
 FROM docker.io/library/debian:bullseye@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9
 
 ARG SNAPSHOT=20260901T000000Z
@@ -18,6 +20,7 @@ ARG RUSTUP_SHA256_AARCH64=e3853c5a252fca15252d07cb23a1bdd9377a8c6f3efa0153110928
 RUN s="deb [check-valid-until=no] http://snapshot.debian.org/archive" && \
 	printf '%s\n' "$s/debian/$SNAPSHOT bullseye main" "$s/debian/$SNAPSHOT bullseye-updates main" \
 		"$s/debian-security/$SNAPSHOT bullseye-security main" >/etc/apt/sources.list && \
+	printf '%s\n' 'Acquire::Retries "10";' 'Acquire::http::Timeout "120";' >/etc/apt/apt.conf.d/80retries && \
 	apt-get update && \
 	DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
 		ca-certificates curl binutils gcc g++ make patch xz-utils python3 git ninja-build \
