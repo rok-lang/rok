@@ -12,7 +12,10 @@
 // Cancelling a task that waits on `select` runs the started
 // children's cleanups to the end, awaits included: the first one to
 // finish them ends the `select`, the rest finish theirs in the
-// background, like the losers of a `select` that won.
+// background, like the losers of a `select` that won. The cancel waits
+// until both children are running, so a slow host does not cancel the
+// parent before its `select` started them.
+static STARTED: Atomic<i64> = Atomic::new(0);
 static ENDED: Atomic<i64> = Atomic::new(0);
 static DONE: Atomic<i64> = Atomic::new(0);
 
@@ -25,6 +28,7 @@ async fn until(a: Atomic<i64>, n: i64) {
 }
 
 async fn child(name: str, steps: i64) -> i64 {
+    STARTED.fetch_add(1);
     try {
         await task::sleep(Duration::ms(10000));
     } finally {
@@ -66,7 +70,7 @@ async fn winner() -> i64 {
 
 async fn main() {
     let t = task::spawn(parent());
-    await task::sleep(Duration::ms(20));
+    await until(STARTED, 2);
     t.cancel();
     let r = try await t.join() catch _: task::CancellationError { -1 };
     println(if r == -1 { "join -> cancelled" } else { "join -> value" });
