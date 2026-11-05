@@ -159,6 +159,167 @@ pub(super) fn lower_fstring(ctx: &mut LowerCtx<'_>, parts: &[FStringPart], span:
     }
 }
 
+/// An f-string where it is written: an `Arguments` in a
+/// `core::fmt::Arguments` slot, else a `str`.
+pub(super) fn lower_fstring_expr(
+    ctx: &mut LowerCtx<'_>,
+    parts: &[FStringPart],
+    span: Span,
+) -> HirExpr {
+    if wants_arguments(ctx) {
+        lower_fstring_args(ctx, parts, span)
+    } else {
+        lower_fstring(ctx, parts, span)
+    }
+}
+
+/// The slot is `core::fmt::Arguments`: the f-string is written later,
+/// piece by piece (`lower_fstring_args`), not made into a `str` here.
+fn wants_arguments(ctx: &LowerCtx<'_>) -> bool {
+    matches!(ctx.current_expected(), Some(HirTy::Struct(id))
+        if ctx.struct_def(*id).name == "rok::core::fmt::Arguments")
+}
+
+/// `f"a {x} b {y:>4}"` in an `Arguments` slot:
+///
+/// ```text
+///   ==>  { let #f0 = x; let #f1 = y;
+///          rok::core::fmt::fstr_args(|#fa: Formatter| -> Formatter {
+///              #fa = try fstr_put_str(#fa, "a ");
+///              #fa = try fstr_put_display(#fa, #f0);
+///              #fa = try fstr_put_str(#fa, " b ");
+///              #fa = try fstr_put_str(#fa, f"{#f1:>4}");
+///              #fa
+///          }) }
+/// ```
+///
+/// Holes and spec values are evaluated here, left to right, as for a
+/// `str`; a hole with no spec goes through `Display::fmt` / `Debug::fmt`
+/// straight into the formatter, one with a spec is made into its own
+/// text first (padding needs it whole).
+pub(super) fn lower_fstring_args(
+    ctx: &mut LowerCtx<'_>,
+    parts: &[FStringPart],
+    span: Span,
+) -> HirExpr {
+    let expected = ctx.current_expected().cloned().unwrap_or(HirTy::Unknown);
+    ctx.push_scope();
+    let mut stmts = Vec::new();
+    let f = "#fa";
+    let fp = || mk(ExprKind::Path(path(&[f], span)), span);
+    let mut body: Vec<rokc_ast::Stmt> = Vec::new();
+    let mut put = |piece: &str, arg: Expr| {
+        let call = hook(piece, vec![fp(), arg], span);
+        let tried = mk(
+            ExprKind::Try {
+                kind: rokc_ast::TryKind::Plain,
+                operand: Box::new(call),
+            },
+            span,
+        );
+        body.push(rokc_ast::Stmt {
+            kind: rokc_ast::StmtKind::Assign(fp(), tried),
+            span,
+        });
+    };
+    for part in parts {
+        match part {
+            FStringPart::Lit(text) => put(
+                "fstr_put_str",
+                mk(ExprKind::Literal(AstLit::Str(text.clone())), span),
+            ),
+            FStringPart::Hole { expr, spec } => {
+                let Some(value) = bind(ctx, &mut stmts, expr) else {
+                    continue;
+                };
+                let mut text = String::new();
+                let mut pieces = Vec::new();
+                for piece in spec {
+                    match piece {
+                        SpecPiece::Text(t) => {
+                            text.push_str(t);
+                            pieces.push(SpecPiece::Text(t.clone()));
+                        }
+                        SpecPiece::Expr(e) => {
+                            if let Some(v) = bind(ctx, &mut stmts, e) {
+                                pieces.push(SpecPiece::Expr(v));
+                            }
+                        }
+                    }
+                }
+                let plain = pieces.iter().all(|p| matches!(p, SpecPiece::Text(_)));
+                if plain && (text.is_empty() || text == "?") {
+                    let ty = ctx.local_ty(local_of(ctx, &value));
+                    let debug = text == "?";
+                    let outer = ctx.at.replace(expr.span);
+                    let ok = formattable(ctx, &ty, debug);
+                    ctx.at.set(outer);
+                    if ok {
+                        put(
+                            if debug {
+                                "fstr_put_debug"
+                            } else {
+                                "fstr_put_display"
+                            },
+                            value,
+                        );
+                    }
+                } else {
+                    let one = mk(
+                        ExprKind::FString(vec![FStringPart::Hole {
+                            expr: value,
+                            spec: pieces,
+                        }]),
+                        expr.span,
+                    );
+                    put("fstr_put_str", one);
+                }
+            }
+        }
+    }
+    let formatter = rokc_ast::Ty {
+        kind: rokc_ast::TyKind::Path(path(&["rok", "core", "fmt", "Formatter"], span)),
+        span,
+    };
+    let closure = mk(
+        ExprKind::Closure {
+            captures: Vec::new(),
+            params: vec![rokc_ast::Param {
+                name: f.to_owned(),
+                ty: Some(formatter.clone()),
+                by_ref: false,
+                default: None,
+                variadic: false,
+                span,
+            }],
+            ret_ty: Some(formatter),
+            body: Box::new(mk(
+                ExprKind::Block(rokc_ast::Block {
+                    stmts: body,
+                    trailing: Some(Box::new(fp())),
+                    span,
+                    label: None,
+                }),
+                span,
+            )),
+            is_async: false,
+            is_generator: false,
+        },
+        span,
+    );
+    let args = lower_expected(ctx, &hook("fstr_args", vec![closure], span), expected);
+    ctx.pop_scope();
+    HirExpr {
+        ty: args.ty.clone(),
+        kind: HirExprKind::Block(Box::new(HirBlock {
+            stmts,
+            trailing: Some(args),
+            label: None,
+        })),
+        span,
+    }
+}
+
 /// The function `callee` names, unless a local shadows it.
 fn callee_fn(ctx: &LowerCtx<'_>, callee: &Expr) -> Option<String> {
     let ExprKind::Path(p) = &callee.kind else {
