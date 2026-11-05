@@ -968,6 +968,7 @@ pub(super) fn lower_for(
         )),
         _ => {
             let iter_h = lower_expected(ctx, iter, HirTy::Unknown);
+            warn_resized_while_iterating(ctx, iter, &iter_h.ty, body);
             match iter_h.ty.clone() {
                 HirTy::Array(elem, len) => Some(lower_for_array(
                     ctx,
@@ -1013,6 +1014,92 @@ pub(super) fn lower_for(
         })),
         ty: HirTy::Unit,
         span,
+    }
+}
+
+/// Methods that change a list's length; `for x in xs` reads `xs` as it
+/// is at each step, so the loop sees the change.
+const RESIZERS: &[&str] = &[
+    "push", "pop", "insert", "remove", "clear", "truncate", "drain", "retain", "dedup", "extend",
+    "append",
+];
+
+/// `for x in xs { xs.push(..) }`: the loop walks the list it grows (or
+/// skips what a removal moved). A resize right before a `break`,
+/// `return` or `throw` is fine; a body that binds `xs` again is left
+/// alone.
+fn warn_resized_while_iterating(ctx: &LowerCtx<'_>, iter: &Expr, ty: &HirTy, body: &Block) {
+    let ExprKind::Path(p) = &iter.kind else {
+        return;
+    };
+    let [seg] = p.segments.as_slice() else {
+        return;
+    };
+    if !super::expr::is_list(ctx, ty) {
+        return;
+    }
+    let mut f = Resizes {
+        name: &seg.name,
+        found: None,
+        rebound: false,
+    };
+    crate::walk::walk_block(&mut f, body);
+    let Some((at, method)) = f.found.filter(|_| !f.rebound) else {
+        return;
+    };
+    let n = &seg.name;
+    ctx.emit_lint(
+        "resize_while_iterating",
+        at,
+        format!("`{n}.{method}` changes the length of `{n}` while this `for` walks it: the loop sees the change"),
+        format!("walk a copy (`for x in {n}.clone()`), or collect the changes and apply them after the loop"),
+    );
+}
+
+struct Resizes<'a> {
+    name: &'a str,
+    found: Option<(rokc_diagnostic::Span, String)>,
+    rebound: bool,
+}
+
+impl crate::walk::AstVisitor for Resizes<'_> {
+    fn bind(&mut self, name: &str) {
+        self.rebound |= name == self.name;
+    }
+
+    fn block(&mut self, b: &Block) {
+        if self.found.is_some() {
+            return;
+        }
+        for (i, st) in b.stmts.iter().enumerate() {
+            let StmtKind::Expr(e) = &st.kind else {
+                continue;
+            };
+            let ExprKind::MethodCall {
+                receiver, method, ..
+            } = &e.kind
+            else {
+                continue;
+            };
+            let ExprKind::Path(r) = &receiver.kind else {
+                continue;
+            };
+            if !matches!(r.segments.as_slice(), [s] if s.name == self.name)
+                || !RESIZERS.contains(&method.as_str())
+            {
+                continue;
+            }
+            let leaves = b.stmts[i + 1..].iter().any(|s| {
+                matches!(
+                    s.kind,
+                    StmtKind::Break { .. } | StmtKind::Return(_) | StmtKind::Throw(_)
+                )
+            });
+            if !leaves {
+                self.found = Some((e.span, method.clone()));
+                return;
+            }
+        }
     }
 }
 

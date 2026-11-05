@@ -142,6 +142,12 @@ pub const LINTS: &[Lint] = &[
         since: "0.2.0",
     },
     Lint {
+        name: "resize_while_iterating",
+        default: Level::Warn,
+        desc: "`for x in xs` whose body pushes to or removes from `xs`: the loop sees the new length",
+        since: "0.2.1",
+    },
+    Lint {
         name: "missing_docs",
         default: Level::Allow,
         desc: "a `pub` item, method or module without a `///` doc comment",

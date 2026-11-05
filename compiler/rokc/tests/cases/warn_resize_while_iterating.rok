@@ -1,0 +1,33 @@
+// expect-exit: 0
+// expect-lint: 18:20 `xs.push` changes the length of `xs` while this `for` walks it: the loop sees the change
+// expect-warning: help: walk a copy (`for x in xs.clone()`), or collect the changes and apply them after the loop
+// expect-stdout:
+// 5
+// 8
+
+// `for x in xs` reads `xs` as it is at each step: pushing to it inside
+// the loop keeps the loop going, removing from it skips elements. A
+// resize right before `break`, a walk over a copy and a body that binds
+// the name again are not reported.
+fn main() {
+    let xs: List<i64> = [1, 2, 3];
+    let n = 0;
+    for x in xs {
+        n += 1;
+        if n > 3 { break; }
+        if x < 3 { xs.push(x); }
+    }
+    println(f"{xs.len()}");
+    for x in xs {
+        if x == 2 {
+            xs.remove(0);
+            break;
+        }
+    }
+    for x in xs.clone() { xs.push(x); }
+    for x in xs {
+        let xs: List<i64> = [];
+        xs.push(x);
+    }
+    println(f"{xs.len()}");
+}
