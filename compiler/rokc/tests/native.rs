@@ -1955,7 +1955,7 @@ typedef __builtin_va_list va_list;
 typedef __SIZE_TYPE__ usize;
 #define long long long
 typedef struct { const char *p; usize n; } RokStr;
-__declspec(thread) __attribute__((aligned(8))) unsigned char rok_tls[13 * sizeof(void *) + 16];
+__declspec(thread) __attribute__((aligned(8))) unsigned char rok_tls[16 * sizeof(void *) + 16];
 int _write(int, const void *, unsigned);
 void *calloc(usize, usize);
 void exit(int);

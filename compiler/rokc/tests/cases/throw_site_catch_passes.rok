@@ -1,0 +1,34 @@
+// expect-exit: 101
+// expect-stderr: thread 'main' panicked at tests/cases/throw_site_catch_passes.rok:32:13:
+// expect-stderr: try! failed: Gone
+// expect-stderr:   raised at tests/cases/throw_site_catch_passes.rok:22:17
+// expect-stderr:   through tests/cases/throw_site_catch_passes.rok:32:18
+// expect-stdout:
+// 0
+
+// A `catch` whose arms do not take the error passes it on: the report
+// still names the first `throw`.
+#[derive(Debug)]
+enum Fault { Busy, Gone }
+
+impl Display for Fault {
+    fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"{self:?}") }
+}
+
+impl Error for Fault {}
+
+fn open(n: i32) throws (Fault) -> i32 {
+    if n == 1 { throw Fault::Busy; }
+    if n == 2 { throw Fault::Gone; }
+    n
+}
+
+fn retry(n: i32) throws (Fault) -> i32 {
+    try open(n) catch Fault::Busy { 0 }
+}
+
+fn main() {
+    println(f"{try! retry(1)}");
+    let v = try! retry(2);
+    println(f"{v}");
+}

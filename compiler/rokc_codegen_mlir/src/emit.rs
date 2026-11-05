@@ -313,9 +313,8 @@ fn runtime_fn_attrs(name: &str) -> &'static str {
         | "rok_oom"
         | "rok_exit"
         | "rok_uncaught_error"
-        | "rok_uncaught_error_at" => {
-            r#" attributes {passthrough = ["nounwind", "noreturn", "cold"]}"#
-        }
+        | "rok_uncaught_error_at"
+        | "rok_try_failed" => r#" attributes {passthrough = ["nounwind", "noreturn", "cold"]}"#,
         _ => r#" attributes {passthrough = ["nounwind"]}"#,
     }
 }
@@ -4994,6 +4993,24 @@ impl<'a> FnEmit<'a> {
         let str_ty = MirTy::Prim(PrimTy::Str);
         let sty = mlir_type(&str_ty, self.target);
         match (name, args) {
+            // A `throw`'s site: its address, one store into this thread's
+            // slot; null clears it.
+            ("rok_throw_site", [s]) => {
+                let a = self.tls_addr(tls_abi::THROW_SITE);
+                let p = self.fresh_value();
+                if matches!(s, Operand::Const(ConstVal::Str(t)) if t.is_empty()) {
+                    let _ = writeln!(self.body, "    {p} = llvm.mlir.zero : !llvm.ptr");
+                } else {
+                    let s = self.materialize_operand(s, &str_ty);
+                    let _ = writeln!(self.body, "    {p} = llvm.extractvalue {s}[0] : {sty}");
+                }
+                let _ = write!(
+                    self.body,
+                    "    llvm.store {p}, {a} : !llvm.ptr, !llvm.ptr
+    {dst} = arith.constant 0 : i1
+"
+                );
+            }
             ("rok_str_len", [s]) => {
                 let s = self.materialize_operand(s, &str_ty);
                 let _ = writeln!(self.body, "    {dst} = llvm.extractvalue {s}[1] : {sty}");

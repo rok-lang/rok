@@ -101,6 +101,10 @@ extern "rok" {
     // An error out of a throwing `main`: its description
     // and the position it escaped at, exit 1. Lowering calls it.
     fn rok_uncaught_error_at(what: str, at: str) -> !;
+    // A failed `try!`: the error's description and the position it
+    // reached the `try!` at. Lowering calls it.
+    #[track_caller]
+    fn rok_try_failed(what: str, at: str) -> !;
 
     // Errors and the standard streams.
     fn rok_os_strerror(code: i32) -> str;
@@ -211,6 +215,11 @@ extern "rok" {
 // checks this (`world::may_stop`).
 #[no_safepoint]
 extern "rok" {
+    // Where a `throw` ran (empty: a handled error); lowering calls it,
+    // codegen stores it inline. A `catch` handler that takes it first
+    // carries it on (`try_block_on`).
+    fn rok_throw_site(at: str);
+    fn rok_throw_site_take() -> str;
     fn rok_cpu_count() -> usize;
     fn rok_sched_workers() -> usize;
     fn rok_sched_mode() -> u32;

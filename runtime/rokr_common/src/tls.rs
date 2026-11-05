@@ -314,6 +314,7 @@ pub fn thread_init() {
         ] {
             at(s).cast::<usize>().write(0);
         }
+        throw_site().write(core::ptr::null());
         worker_id().write(new_worker_id());
         no_safepoint().write(0);
         attached().write(ATTACHED_INIT);
@@ -376,6 +377,13 @@ pub fn held_locks() -> *mut usize {
 #[allow(clippy::cast_ptr_alignment)] // pointer-aligned slot
 pub fn thread_name() -> *mut [usize; 2] {
     at(tls_abi::THREAD_NAME).cast()
+}
+
+/// Address of this thread's throw site, a NUL-terminated string or null
+/// (implementation-defined; written by compiled code at a `throw`).
+#[allow(clippy::cast_ptr_alignment)] // pointer-aligned slot
+pub fn throw_site() -> *mut *const u8 {
+    at(tls_abi::THROW_SITE).cast()
 }
 
 /// Address of this thread's executor lane (implementation-defined).

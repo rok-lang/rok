@@ -1,0 +1,24 @@
+// expect-exit: 101
+// expect-stderr: thread 'main' panicked at tests/cases/throw_site_try_force.rok:22:13:
+// expect-stderr: try! failed: empty input
+// expect-stderr:   raised at tests/cases/throw_site_try_force.rok:14:9
+// expect-stderr:   through tests/cases/throw_site_try_force.rok:22:18
+// expect-stdout:
+
+// A failed `try!` names the `throw` that raised the error, then where it
+// reached the `try!`.
+use rok::core::io::{IoError, IoErrorKind};
+
+fn parse(s: str) throws (IoError) -> i64 {
+    if s == "" {
+        throw IoError::new(IoErrorKind::InvalidData, "empty input");
+    }
+    1
+}
+
+fn load(s: str) throws (IoError) -> i64 { try parse(s) }
+
+fn main() {
+    let v = try! load("");
+    println(f"{v}");
+}

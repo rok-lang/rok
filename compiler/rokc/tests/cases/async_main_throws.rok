@@ -1,6 +1,7 @@
 // expect-exit: 1
 // expect-stderr: error: `main` returned an uncaught error: oops
-// expect-stderr: --> tests/cases/async_main_throws.rok:21:1
+// expect-stderr: --> tests/cases/async_main_throws.rok:22:1
+// expect-stderr: raised at tests/cases/async_main_throws.rok:18:16
 // expect-stdout:
 // step 0
 // step 1

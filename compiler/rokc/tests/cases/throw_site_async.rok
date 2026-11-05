@@ -1,0 +1,41 @@
+// expect-exit: 1
+// expect-stderr: error: `main` returned an uncaught error: oops 3
+// expect-stderr: --> tests/cases/throw_site_async.rok:32:1
+// expect-stderr: raised at tests/cases/throw_site_async.rok:19:16
+// expect-stdout:
+// handled 100
+
+// Tasks interleave and move between threads: each error keeps the
+// site of its own `throw`, and one a task handled is never named.
+struct Oops { n: i32; }
+impl Display for Oops { fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str(f"oops {self.n}") } }
+impl Debug for Oops { fn fmt(self, ref f: Formatter) throws (FmtError) { try f.write_str("Oops") } }
+impl Error for Oops {}
+
+fn fails(n: i32) throws (Oops) -> i32 { throw Oops { n: n }; }
+
+async fn step(n: i32) throws (Oops) -> i32 {
+    await task::yield_now();
+    if n > 2 { throw Oops { n: n }; }
+    n
+}
+
+async fn noisy() -> i32 {
+    let k = 0;
+    for i in 0..100 {
+        k += try fails(i) catch _ { 1 };
+        await task::yield_now();
+    }
+    k
+}
+
+async fn main() throws (Oops) {
+    let t = task::spawn(noisy());
+    let i = 0;
+    while i < 3 {
+        _ = try await step(i);
+        i = i + 1;
+    }
+    println(f"handled {await t}");
+    _ = try await step(i);
+}

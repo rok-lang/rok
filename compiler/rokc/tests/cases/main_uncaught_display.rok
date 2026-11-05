@@ -1,7 +1,8 @@
 // expect-exit: 1
 // expect-stdout: before
 // expect-stderr: error: `main` returned an uncaught error: not found
-// expect-stderr: --> tests/cases/main_uncaught_display.rok:20:31
+// expect-stderr: --> tests/cases/main_uncaught_display.rok:21:31
+// expect-stderr: raised at tests/cases/main_uncaught_display.rok:15:17
 
 // An error escaping a throwing `main` is printed through
 // its `Display` (here behind `any Error`), then exit status 1.

@@ -1,0 +1,22 @@
+// expect-exit: 101
+// expect-stderr: thread 'main' panicked at tests/cases/throw_site_handled.rok:20:13:
+// expect-stderr: try! failed: *
+// expect-stderr:   raised at tests/cases/throw_site_handled.rok:20:18
+// expect-stdout:
+// 0
+// none
+
+// A handled error's `throw` is not named by a later report: here the
+// later error comes from the library, so only the call is.
+fn fails() throws (str) -> i32 {
+    throw "boom";
+}
+
+fn main() {
+    let a = try fails() catch _ { 0 };
+    println(f"{a}");
+    let b = try? fails();
+    println(f"{b:?}");
+    let n = try! "x".parse::<i32>();
+    println(f"{n}");
+}

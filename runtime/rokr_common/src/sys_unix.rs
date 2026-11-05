@@ -27,12 +27,12 @@ pub fn errno() -> i32 {
 }
 
 /// Write `parts` to `fd` back to back with `writev`, finishing short
-/// writes and retrying `EINTR`: 0 or `-errno`. At most eight parts.
+/// writes and retrying `EINTR`: 0 or `-errno`. At most 16 parts.
 pub fn write_all(fd: i32, parts: &[&[u8]]) -> i32 {
     let mut iov = [libc::iovec {
         iov_base: core::ptr::null_mut(),
         iov_len: 0,
-    }; 8];
+    }; 16];
     let mut n = 0;
     for p in parts.iter().filter(|p| !p.is_empty()) {
         iov[n] = libc::iovec {

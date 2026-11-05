@@ -43,6 +43,10 @@ pub const STATIC_INITS: Slot = at(11, 16);
 pub const HELD_LOCKS: Slot = at(12, 16);
 /// The thread's name in reports, `{ptr, len}` (null: unnamed).
 pub const THREAD_NAME: Slot = at(13, 16);
+/// Where the error in flight was thrown: the address of a static,
+/// NUL-terminated `str` (null or empty: not known). Compiled code
+/// stores it at a `throw`.
+pub const THROW_SITE: Slot = at(15, 16);
 /// Size of the block; it is aligned to 8.
-pub const SIZE: Slot = at(15, 16);
+pub const SIZE: Slot = at(16, 16);
 pub const ALIGN: u32 = 8;

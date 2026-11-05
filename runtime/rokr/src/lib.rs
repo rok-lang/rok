@@ -618,8 +618,41 @@ pub unsafe extern "C" fn rok_timer_register(deadline: u64, waker: *mut u8) {
 
 // Errors
 // `throw` / `try` / `catch` are value-based (a throwing function returns
-// an `is_err` flag with its payload) and need no runtime support. Only
-// an error escaping a throwing `main` reaches the runtime.
+// an `is_err` flag with its payload). Each `throw` also stores its
+// `path:line:col` in the thread's throw site slot (inline in compiled
+// code; `rok_throw_site` otherwise), so a report names where the error
+// started; a handled error clears it.
+
+/// Note where the error in flight was thrown (empty: not known). `at` is
+/// a static, NUL-terminated `str`: only its address is kept.
+#[unsafe(no_mangle)]
+pub extern "C" fn rok_throw_site(at: RokStr) {
+    // SAFETY: this thread's own slot.
+    unsafe { tls::throw_site().write(at.ptr) };
+}
+
+/// Where the error in flight was thrown, cleared (a `catch` that may pass
+/// the error on keeps it).
+#[unsafe(no_mangle)]
+pub extern "C" fn rok_throw_site_take() -> RokStr {
+    // SAFETY: this thread's own slot.
+    let p = unsafe { tls::throw_site().replace(ptr::null()) };
+    // SAFETY: compiled code stores only NUL-terminated constants.
+    let len = unsafe { str::rok_cstr_len(p) };
+    RokStr { ptr: p, len }
+}
+
+/// Take where the error in flight was thrown, unless not known or `at`
+/// itself.
+fn raise_site(at: &[u8]) -> Option<&'static [u8]> {
+    let s = rok_throw_site_take();
+    if s.len == 0 {
+        return None;
+    }
+    // SAFETY: a static string of `len` bytes.
+    let site = unsafe { core::slice::from_raw_parts(s.ptr, s.len) };
+    (site != at).then_some(site)
+}
 
 /// Uncaught error out of `fn main() throws (..)`: a fixed
 /// prefix, the error's description, `\n` to stderr, then exit status 1.
@@ -631,11 +664,23 @@ pub extern "C" fn rok_uncaught_error(what: RokStr) -> ! {
 const UNCAUGHT: &[u8] = b"error: `main` returned an uncaught error: ";
 
 /// `rok_uncaught_error` plus the `path:line:col` the error left `main`
-/// at, on a second line.
+/// at, on a second line, and the `throw` that raised it when that was
+/// elsewhere.
 #[unsafe(no_mangle)]
 pub extern "C" fn rok_uncaught_error_at(what: RokStr, at: RokStr) -> ! {
-    uncaught(&[UNCAUGHT, what.bytes(), b"\n  --> ", at.bytes(), b"\n"])
+    let (sep, site) = raise_site(at.bytes()).map_or((&b""[..], &b""[..]), |s| (RAISED, s));
+    uncaught(&[
+        UNCAUGHT,
+        what.bytes(),
+        b"\n  --> ",
+        at.bytes(),
+        sep,
+        site,
+        b"\n",
+    ])
 }
+
+const RAISED: &[u8] = b"\n  raised at ";
 
 fn uncaught(parts: &[&[u8]]) -> ! {
     rokr_common::write_all(2, parts);
@@ -670,22 +715,21 @@ pub extern "C" fn rok_thread_panicking() -> i32 {
 /// A panic's report, `thread '<name>' panicked at <at>:\n<msg>\n` (no
 /// ` at <at>` without a location), then exit 101.
 pub(crate) fn panic_at(msg: &[u8], at: Option<&[u8]>) -> ! {
+    panic_parts(&[msg], at)
+}
+
+/// `panic_at` of a message in up to 8 parts.
+fn panic_parts(msg: &[&[u8]], at: Option<&[u8]>) -> ! {
     PANICKING.store(tls::thread_name() as usize, Ordering::Relaxed);
     let name = thread::name();
     let (sep, at) = at.map_or((&b""[..], &b""[..]), |a| (&b" at "[..], a));
-    rokr_common::write_all(
-        2,
-        &[
-            b"thread '",
-            name,
-            b"' panicked",
-            sep,
-            at,
-            b":\n",
-            msg,
-            b"\n",
-        ],
-    );
+    let mut parts: [&[u8]; 16] = [&[]; 16];
+    let head: [&[u8]; 6] = [b"thread '", name, b"' panicked", sep, at, b":\n"];
+    parts[..6].copy_from_slice(&head);
+    let n = msg.len().min(8);
+    parts[6..6 + n].copy_from_slice(&msg[..n]);
+    parts[6 + n] = b"\n";
+    rokr_common::write_all(2, &parts[..=6 + n]);
     exit(101)
 }
 
@@ -696,6 +740,25 @@ pub(crate) fn panic_at(msg: &[u8], at: Option<&[u8]>) -> ! {
 pub extern "C" fn rok_panic_at(msg: RokStr, at: RokStr) -> ! {
     panic_at(msg.bytes(), Some(at.bytes()))
 }
+
+/// A failed `try!` at `loc`: the error's description, the `throw` that
+/// raised it and the `path:line:col` it reached the `try!` through (`at`;
+/// alone when it was thrown there or the `throw` is not known).
+#[unsafe(no_mangle)]
+pub extern "C" fn rok_try_failed(what: RokStr, at: RokStr, loc: RokStr) -> ! {
+    let (site, through) = raise_site(at.bytes()).map_or((&b""[..], &b""[..]), |s| (s, THROUGH));
+    let msg: [&[u8]; 6] = [
+        b"try! failed: ",
+        what.bytes(),
+        RAISED,
+        site,
+        through,
+        at.bytes(),
+    ];
+    panic_parts(&msg, Some(loc.bytes()))
+}
+
+const THROUGH: &[u8] = b"\n  through ";
 
 /// `par` ran a call's items one at a time because two reach one collection:
 /// a warning, once per call site (`at` is a static string,

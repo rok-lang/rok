@@ -36,6 +36,8 @@ pub struct Sig {
     /// The rok body takes the caller's `rok_tls` address last
     /// (`FnFacts::takes_tls`).
     pub tls: bool,
+    /// `rok_throw_site`: a store into this thread's slot, not a call.
+    pub throw_site: bool,
 }
 
 /// Module-wide state the functions share.
@@ -2071,6 +2073,20 @@ impl<'c, 'a> FnLower<'c, 'a> {
             RValue::Call { callee, args, .. } => {
                 let fns = self.c.fns;
                 let sig = &fns[callee];
+                if let (true, [at]) = (sig.throw_site, args.as_slice()) {
+                    let str_ty = MirTy::Prim(PrimTy::Str);
+                    // Its address only (a NUL-terminated constant).
+                    let v = self.val(at, &str_ty);
+                    let m = self.mem_of(v, &str_ty);
+                    let slot = self.tls(tls_abi::THROW_SITE);
+                    let k = self.word();
+                    self.push(Inst::Mov {
+                        k,
+                        dst: slot,
+                        src: V::M(m),
+                    });
+                    return;
+                }
                 if let Some(abi) = &sig.c {
                     self.call_c(Callee::Sym(sig.sym), &sig.params, &sig.ret, abi, args, dst);
                     return;

@@ -3297,6 +3297,9 @@ struct LowerCtx<'a> {
     /// Lowering the body of `fn main() throws (E)`: an escaping error
     /// ends the process.
     uncaught_in_main: bool,
+    /// Lowering a `catch` dispatch: the local holding the site of the
+    /// error it passes on when no arm takes it.
+    rethrow_site: Option<LocalId>,
     /// Throwing calls lowered so far (a `try` covering none is
     /// pointless).
     throwing_calls: u32,
@@ -3506,6 +3509,7 @@ impl<'a> LowerCtx<'a> {
             owed_at: HashMap::default(),
             throws_probe: None,
             uncaught_in_main: false,
+            rethrow_site: None,
             throwing_calls: 0,
             next_synth: 0,
             narrowed: HashMap::default(),

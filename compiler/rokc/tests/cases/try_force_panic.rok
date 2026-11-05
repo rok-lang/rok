@@ -1,7 +1,8 @@
 // expect-exit: 101
-// expect-stderr: thread 'main' panicked at tests/cases/try_force_panic.rok:14:13:
+// expect-stderr: thread 'main' panicked at tests/cases/try_force_panic.rok:15:13:
 // expect-stderr: try! failed: 3
-// expect-stderr:   raised at tests/cases/try_force_panic.rok:14:18
+// expect-stderr:   raised at tests/cases/try_force_panic.rok:10:21
+// expect-stderr:   through tests/cases/try_force_panic.rok:15:18
 // expect-stdout:
 
 // `try!` on an error panics (exit 101); panics can't be caught.
