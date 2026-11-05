@@ -562,7 +562,19 @@ pub trait Write {
     /// into the writer, never as one `str` of the whole text:
     /// `try w.write_fmt(f"{name}: {value}\n")`.
     fn write_fmt(ref self, args: fmt::Arguments) throws (IoError) {
-        try self.write_display(args);
+        let failed: IoError | none = none;
+        let out = Formatter::from_sink([ref self, ref failed] |s: str| -> bool {
+            try self.write_all(s) catch err {
+                failed = err;
+                return false;
+            };
+            true
+        });
+        let ok = true;
+        try Display::fmt(args, ref out) catch _ { ok = false; };
+        if ok { try out.flush() catch _ { ok = false; }; }
+        if let err: IoError = failed { throw err; }
+        if !ok { throw IoError::new(IoErrorKind::Other, "a `Display` implementation failed (FmtError)"); }
     }
 
     /// Write `x` as `print` shows it (`Display`), in chunks as the text
@@ -1404,7 +1416,7 @@ impl Write for Cursor<List<u8>> {
 
     const fn flush(ref self) throws (IoError) {}
 
-    fn write_all<B: AsBytes>(ref self, buf: B) throws (IoError) { try self.write(buf); }
+    fn write_all<B: AsBytes>(ref self, buf: B) throws (IoError) { _ = try self.write(buf); }
 }
 
 impl AsyncWrite for Cursor<List<u8>> {
